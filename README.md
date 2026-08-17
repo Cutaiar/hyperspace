@@ -6,6 +6,19 @@ drive one plane via a Peak Controller-style transfer chain.
 
 Open `hyperspace.html` in a browser.
 
+## Running it
+
+Opening the file directly works for everything except live audio input. Chrome
+treats `file://` as an opaque origin and refuses the microphone outright — no
+prompt, no way to allow it. Serve the folder instead:
+
+```bash
+cd ~/Dev/hyperspace && python3 -m http.server 8000
+```
+
+Then open **http://localhost:8000/hyperspace.html**. `localhost` is a secure
+context, so live input prompts normally.
+
 ## Audio sources
 
 | Source | Key | Notes |
@@ -60,4 +73,4 @@ in an iframe that is not granted the microphone or screen capture, so the
 request is refused before any prompt appears — no amount of clicking "allow"
 helps. The page detects this and offers **Open in a new tab**, which reopens the
 same URL top-level, where both work normally. `file://` pages in Chrome are
-similarly hopeless; serve the folder over localhost instead.
+similarly hopeless; serve the folder over localhost as above.

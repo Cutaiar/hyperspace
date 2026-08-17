@@ -1707,9 +1707,23 @@ const knobUI = [];
     w.addEventListener("pointerdown", e => hint(t, e.pointerType !== "mouse"));
   });
 
+  // the two live-input buttons: each one's caveats are the other one's reason
+  // to exist, so both tips name the other route
+  const SRCTIP = {
+    tMic: "<b>Listen to mic</b> Opens whatever is chosen under Input device — so point it at a loopback device (BlackHole, with a Multi-Output Device so you still hear the audio) and this becomes every app on the machine, not just the microphone. A loopback device is detected by name and preselected. Needs https or localhost: a file:// page never even prompts.",
+    tSys: "<b>System audio</b> Captures one browser tab, no driver needed. In the picker stay on the Tab list, click the tab itself, and leave Also share tab audio on — Share stays greyed out until a tab is selected. Native apps never appear there, and on macOS a screen or window share comes back silent. Chrome and Edge only. For everything on the machine, use the BlackHole route on Listen to mic instead."
+  };
+  Object.keys(SRCTIP).forEach(id => {
+    const b = el(id), t = SRCTIP[id];
+    b.addEventListener("mouseover", () => hint(t));
+    b.addEventListener("mouseout", hintIdle);
+    b.addEventListener("focus", () => hint(t));
+    b.addEventListener("pointerdown", e => hint(t, e.pointerType !== "mouse"));
+  });
+
   const arow = el("audioRow");
   arow.addEventListener("mouseover", e => {
-    if (!e.target.closest(".meter, .shapers select, .krow, .mreset, .slider")) hint(null);
+    if (!e.target.closest(".meter, .shapers select, .krow, .mreset, .slider, .toggles button")) hint(null);
   });
   arow.addEventListener("mouseleave", hideHint);
   el("console").addEventListener("mouseleave", hideHint);
