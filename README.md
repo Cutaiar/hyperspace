@@ -8,20 +8,16 @@ drive one plane via a Peak Controller-style transfer chain.
 
 ## Running it
 
-The deployed link above is served over https, which is a secure context, so live
-audio input prompts normally there — nothing to install or run.
-
-Locally, `hyperspace.html` is one self-contained file with no build step and no
-dependencies, and opening it directly works for everything *except* live audio
-input. Chrome treats `file://` as an opaque origin and refuses the microphone
-outright — no prompt, no way to allow it. Serve the folder instead:
+`hyperspace.html` is self-contained — no build, no dependencies. Opening it
+directly works for everything except live audio: Chrome refuses the microphone
+on `file://`. Serve the folder instead:
 
 ```bash
 cd ~/Dev/hyperspace && python3 -m http.server 8000
 ```
 
-Then open **http://localhost:8000/hyperspace.html**. `localhost` is a secure
-context, so live input prompts normally.
+Then open **http://localhost:8000/hyperspace.html**, or just use the live link —
+both are secure contexts, so live input prompts normally.
 
 ## Audio sources
 
@@ -31,42 +27,28 @@ context, so live input prompts normally.
 | **System audio** | `s` | Captures a browser tab's audio. Chrome and Edge only. |
 | **Load a track** | — | Local mp3, wav, m4a or ogg, with play / pause / restart. |
 
-### Visualising system audio
+### System audio
 
-Two routes, because neither one covers everything.
+**A browser tab** — click **System audio**, pick the **Tab** list, tick **Share
+tab audio**. No install, but Chrome and Edge only, and on macOS screen and window
+shares come back silent.
 
-**A browser tab** — click **System audio**, choose the **Tab** list in the
-picker, and tick **Share tab audio**. No install, but Chrome and Edge only, and
-on macOS it captures tabs only: screen and window shares come back silent.
-
-**Anything on the machine** — use [BlackHole](https://existential.audio/blackhole/),
-a free virtual audio driver. It installs as an ordinary *input* device, so once
-your output is routed through it, everything playing on the Mac arrives through
-the normal microphone path — any app, any browser. This is the same approach
-[`samples`](https://github.com/Cutaiar/samples) uses.
+**Anything on the machine** — [BlackHole](https://existential.audio/blackhole/),
+a free virtual audio driver that installs as an ordinary *input* device, so
+routed audio arrives through the normal microphone path.
 
 ```bash
 brew install blackhole-2ch
 ```
 
-macOS may block the driver: **System Settings → Privacy & Security**, scroll to
-the bottom, allow the software from "Existential Audio", then restart.
+If macOS blocks the driver, allow "Existential Audio" at the bottom of **System
+Settings → Privacy & Security**, then restart. To hear the audio *and* visualise
+it, make a Multi-Output Device in **Audio MIDI Setup** containing BlackHole and
+your speakers, and set it as your output. Hyperspace preselects loopback devices,
+so **Listen to mic** then just works.
 
-To hear the audio *and* feed it to Hyperspace at the same time, create a
-Multi-Output Device:
-
-1. Open **Audio MIDI Setup**
-2. **+ → Create Multi-Output Device**
-3. Check both **BlackHole 2ch** and your speakers or headphones
-4. Set that Multi-Output Device as your output in **System Settings → Sound**
-5. In Hyperspace, pick **BlackHole 2ch** under **Input device** and click
-   **Listen to mic**
-
-Hyperspace detects a loopback device by name and preselects it, so in practice
-step 5 is already done for you.
-
-Once the Multi-Output Device exists, `scripts/audio-route` does steps 4 and 5
-for you and — the point of it — puts your normal devices back afterwards:
+Once that device exists, `scripts/audio-route` switches to it and back, and
+restores your normal devices afterwards — no dependency to install:
 
 ```bash
 scripts/audio-route on       # snapshot, then route output and input via BlackHole
@@ -74,28 +56,25 @@ scripts/audio-route off      # restore the snapshot and discard it
 scripts/audio-route status   # what is selected now, and whether a snapshot is held
 ```
 
-`on` takes the snapshot *before* it changes anything and stores device UIDs, so
-a renamed device still restores; running `on` twice keeps the first snapshot
-rather than overwriting it with the BlackHole state. There is no dependency to
-install — it compiles a small CoreAudio helper (`scripts/audiodev.swift`) on
-first run and caches it under `~/.cache/hyperspace`. Override the auto-detected
-targets with `HYPERSPACE_OUTPUT` / `HYPERSPACE_INPUT` (UID, exact name, or any
-substring).
+It snapshots by device UID before changing anything, so a renamed device still
+restores, and a second `on` keeps the first snapshot. `HYPERSPACE_OUTPUT` /
+`HYPERSPACE_INPUT` override the auto-detected targets.
 
-**AirPlay / wifi speakers** don't appear in Audio MIDI Setup and can't join a
-Multi-Output Device. [Loopback](https://rogueamoeba.com/loopback/) by Rogue
-Amoeba can capture per-app audio and route it to BlackHole regardless of where
-the app is sending its output.
+AirPlay speakers can't join a Multi-Output Device;
+[Loopback](https://rogueamoeba.com/loopback/) can capture per-app audio instead.
 
 ### If live input is refused
 
-Embedded previews (artifact viewers, cloud previews, doc embeds) render the page
-in an iframe that is not granted the microphone or screen capture, so the
-request is refused before any prompt appears — no amount of clicking "allow"
-helps. The page detects this and offers **Open in a new tab**, which reopens the
-same URL top-level, where both work normally. `file://` pages in Chrome are
-similarly hopeless; serve the folder over localhost as above, or just use the
-deployed link.
+Embedded previews (artifact viewers, doc embeds) run the page in an iframe with
+no microphone or screen capture, so the request fails before any prompt. Use the
+**Open in a new tab** button the page offers.
+
+## Deployment
+
+Hosted on Vercel as the project `hyperspace` under `cutaiar`. The repo is
+linked, so pushing to `main` deploys; `vercel deploy --prod` from the repo root
+ships manually. `vercel.json` rewrites `/` → `/hyperspace.html` and sends the
+`Permissions-Policy` header that lets the deployed origin use the microphone.
 
 ---
 
