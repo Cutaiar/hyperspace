@@ -1,0 +1,139 @@
+#!/usr/bin/env bash
+#
+# audio-route — point macOS at BlackHole so Hyperspace can see system audio,
+#               and put everything back exactly as it was.
+#
+#   audio-route on        snapshot the current devices, then route through
+#                         BlackHole: output to the Multi-Output Device,
+#                         input to BlackHole itself
+#   audio-route off       restore the snapshot and discard it
+#   audio-route status    what is selected now, and whether a snapshot is held
+#
+# The snapshot is taken *before* anything changes and stores device UIDs, not
+# names, so a renamed device still restores. `on` twice does not overwrite the
+# snapshot — the first one is the state you actually want back.
+#
+# Override the auto-detected targets with HYPERSPACE_OUTPUT / HYPERSPACE_INPUT
+# (a UID, an exact name, or any substring of a name).
+
+set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SRC="$HERE/audiodev.swift"
+CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/hyperspace"
+BIN="$CACHE/audiodev"
+STATE="${XDG_STATE_HOME:-$HOME/.local/state}/hyperspace"
+SNAP="$STATE/audio-snapshot"
+
+die() { printf 'audio-route: %s\n' "$1" >&2; exit "${2:-1}"; }
+
+# the helper is compiled once and reused; rebuilt only when its source changes
+build() {
+  [[ -f "$SRC" ]] || die "missing $SRC"
+  if [[ ! -x "$BIN" || "$SRC" -nt "$BIN" ]]; then
+    command -v swiftc >/dev/null || die "swiftc not found — install the Xcode command line tools: xcode-select --install"
+    mkdir -p "$CACHE"
+    swiftc -O -o "$BIN" "$SRC" || die "could not build the CoreAudio helper"
+  fi
+}
+
+name_of() { cut -f2- <<<"$1"; }        # a device line is UID<TAB>name
+uid_of()  { cut -f1  <<<"$1"; }
+
+# The Multi-Output Device is an output whose name mentions BlackHole but is not
+# a bare BlackHole device — "BlackHole + MBP Speakers" rather than "BlackHole
+# 2ch". That distinction matters: routing straight to BlackHole works, but you
+# stop hearing anything, which is never what someone wants.
+pick_output() {
+  local list; list="$("$BIN" list out)"
+  if [[ -n "${HYPERSPACE_OUTPUT:-}" ]]; then printf '%s\n' "$HYPERSPACE_OUTPUT"; return; fi
+  local multi bare
+  multi="$(grep -i 'blackhole' <<<"$list" | grep -iv $'\t''blackhole [0-9]*ch$' | head -1 || true)"
+  if [[ -n "$multi" ]]; then uid_of "$multi"; return; fi
+  bare="$(grep -i 'blackhole' <<<"$list" | head -1 || true)"
+  [[ -n "$bare" ]] || die "no BlackHole output device found. Install it with: brew install blackhole-2ch" 2
+  printf 'audio-route: no Multi-Output Device found, using "%s" directly — you will not hear the audio.\n' \
+    "$(name_of "$bare")" >&2
+  printf 'audio-route: make one in Audio MIDI Setup (+ > Create Multi-Output Device, tick BlackHole and your speakers).\n' >&2
+  uid_of "$bare"
+}
+
+pick_input() {
+  if [[ -n "${HYPERSPACE_INPUT:-}" ]]; then printf '%s\n' "$HYPERSPACE_INPUT"; return; fi
+  local bh; bh="$("$BIN" list in | grep -i 'blackhole' | head -1 || true)"
+  [[ -n "$bh" ]] || die "no BlackHole input device found. Install it with: brew install blackhole-2ch" 2
+  uid_of "$bh"
+}
+
+# set one default device and say so, or stop — never claim a set that failed
+apply() {   # kind spec label
+  local out
+  if ! out="$("$BIN" set "$1" "$2")"; then
+    die "could not set the $1put device. Nothing else changed; run \"audio-route off\" to undo the rest." 2
+  fi
+  printf '%-7s →  %s\n' "$3" "$(name_of "$out")"
+}
+
+cmd_on() {
+  local out_now in_now
+  out_now="$("$BIN" get out)"; in_now="$("$BIN" get in)"
+
+  if [[ -f "$SNAP" ]]; then
+    printf 'audio-route: snapshot already held from an earlier "on" — keeping it.\n'
+  else
+    mkdir -p "$STATE"
+    { printf 'out\t%s\n' "$out_now"; printf 'in\t%s\n' "$in_now"; } > "$SNAP"
+    printf 'Snapshot   out: %s\n           in:  %s\n' "$(name_of "$out_now")" "$(name_of "$in_now")"
+  fi
+
+  local target_out target_in
+  target_out="$(pick_output)"; target_in="$(pick_input)"
+  # a failed set must not be reported as success — and the snapshot is already
+  # written by now, so a half-applied change is still undoable with "off"
+  apply out "$target_out" "Output"
+  apply in  "$target_in"  "Input"
+  printf '\nSystem audio now reaches the browser. Run "audio-route off" to undo.\n'
+}
+
+cmd_off() {
+  [[ -f "$SNAP" ]] || die "no snapshot to restore — nothing to undo." 2
+  local failed=0 line kind spec
+  while IFS= read -r line; do
+    kind="$(cut -f1 <<<"$line")"; spec="$(cut -f2 <<<"$line")"
+    if out="$("$BIN" set "$kind" "$spec" 2>&1)"; then
+      printf '%-7s →  %s\n' "$([[ $kind == out ]] && echo Output || echo Input)" "$(name_of "$out")"
+    else
+      printf 'audio-route: could not restore the %sput device (%s) — it may be unplugged.\n' "$kind" "$out" >&2
+      failed=1
+    fi
+  done < "$SNAP"
+  rm -f "$SNAP"
+  (( failed == 0 )) || exit 2
+  printf '\nRestored. Snapshot discarded.\n'
+}
+
+cmd_status() {
+  printf 'Output     %s\n' "$(name_of "$("$BIN" get out)")"
+  printf 'Input      %s\n' "$(name_of "$("$BIN" get in)")"
+  if [[ -f "$SNAP" ]]; then
+    printf 'Snapshot   held (from "on"):\n'
+    while IFS= read -r line; do
+      printf '           %-4s %s\n' "$(cut -f1 <<<"$line")" "$(cut -f3 <<<"$line")"
+    done < "$SNAP"
+  else
+    printf 'Snapshot   none\n'
+  fi
+}
+
+case "${1:-status}" in
+  -h|--help|help) awk 'NR>1 && /^#/ {sub(/^# ?/, ""); print; next} NR>1 {exit}' "${BASH_SOURCE[0]}"; exit 0 ;;
+  on|off|restore|status) ;;
+  *)              die "unknown command \"$1\" — try on, off or status." ;;
+esac
+
+build
+case "${1:-status}" in
+  on)          cmd_on ;;
+  off|restore) cmd_off ;;
+  status)      cmd_status ;;
+esac

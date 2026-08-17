@@ -65,6 +65,23 @@ Multi-Output Device:
 Hyperspace detects a loopback device by name and preselects it, so in practice
 step 5 is already done for you.
 
+Once the Multi-Output Device exists, `scripts/audio-route` does steps 4 and 5
+for you and — the point of it — puts your normal devices back afterwards:
+
+```bash
+scripts/audio-route on       # snapshot, then route output and input via BlackHole
+scripts/audio-route off      # restore the snapshot and discard it
+scripts/audio-route status   # what is selected now, and whether a snapshot is held
+```
+
+`on` takes the snapshot *before* it changes anything and stores device UIDs, so
+a renamed device still restores; running `on` twice keeps the first snapshot
+rather than overwriting it with the BlackHole state. There is no dependency to
+install — it compiles a small CoreAudio helper (`scripts/audiodev.swift`) on
+first run and caches it under `~/.cache/hyperspace`. Override the auto-detected
+targets with `HYPERSPACE_OUTPUT` / `HYPERSPACE_INPUT` (UID, exact name, or any
+substring).
+
 **AirPlay / wifi speakers** don't appear in Audio MIDI Setup and can't join a
 Multi-Output Device. [Loopback](https://rogueamoeba.com/loopback/) by Rogue
 Amoeba can capture per-app audio and route it to BlackHole regardless of where
