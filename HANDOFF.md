@@ -341,6 +341,16 @@ breaks the artifact in the Claude preview.
   now `position:absolute; bottom:100%` inside `#console` — out of every flow,
   growing upward into empty canvas. Keep new transient UI out of the flow.
 - **No `localStorage`/`sessionStorage`** in artifacts. All state is in memory.
+- **Device labels are blank until *this origin* has been granted a capture, and
+  permissions do not travel between origins.** `enumerateDevices()` returns
+  entries with `label: ""` until then, and a blank label can never match
+  `isLoopback()` — so a loopback device is undetectable and unselectable on a
+  first visit. This is why system audio worked on `localhost:8000` (granted long
+  ago) and appeared broken on the fresh Vercel origin: same code, different
+  origin, no grant. `refreshInputs()` now renders the picker *disabled* in that
+  state saying "Allow the mic once to list devices" rather than hiding itself at
+  the one moment the user needs telling. One mic grant fixes it permanently for
+  that origin.
 
 ## 6. Testing
 
@@ -442,9 +452,10 @@ propose first. Ask before building — the three behave very differently.
   paths as unproven until someone does. Transport in mic mode is likewise only
   verified through the `stopAudio()` path.
 - Loopback **preselection** only fires on the startup path, and only when the site
-  already holds label permission from a prior grant. On a first visit labels are
-  blank, the picker stays hidden, and the user must click **Listen to mic** once
-  before BlackHole can be spotted. Read from source, never exercised.
+  already holds label permission from a prior grant. On a first visit the user
+  must click **Listen to mic** once before BlackHole can be spotted — the picker
+  now says so instead of hiding (see §5). Confirmed in the wild: system audio on
+  the deployed origin looked broken until the grant, then worked.
 - The dynamics chain has only been driven by synthetic brickwalled audio. It
   wants a real commercial MP3 next; the constants most likely to need tuning are
   `OPEN_SPAN` (what counts as a healthy natural range) and `CONF_LO/CONF_SPAN`
