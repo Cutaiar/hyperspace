@@ -85,14 +85,17 @@
   label.cap b{color:#fff;font-weight:500;letter-spacing:.08em}
 
   /* sliders: tall invisible hit area, hairline track */
+  /* pan-y: a vertical gesture belongs to #body's scroll, not to the fader */
   .slider{
     position:relative;height:30px;display:flex;align-items:center;
-    touch-action:none;cursor:pointer;
+    touch-action:pan-y;cursor:pointer;
+    -webkit-user-select:none;user-select:none;
   }
+  /* the range input is keyboard/focus only — all pointer work happens on .slider */
   .slider input[type=range]{
     -webkit-appearance:none;appearance:none;
     width:100%;height:30px;background:transparent;margin:0;
-    touch-action:none;cursor:pointer;
+    touch-action:pan-y;cursor:pointer;pointer-events:none;
   }
   .slider input[type=range]::-webkit-slider-runnable-track{height:30px;background:transparent}
   .slider input[type=range]::-moz-range-track{height:30px;background:transparent}
@@ -1027,28 +1030,64 @@ function bindSlider(input, onChange) {
     paint(input);
   };
 
+  // Axis lock. pointerdown does NOT claim the gesture: a vertical swipe that starts
+  // on a fader has to reach #body and scroll the panel. The first movement past
+  // LOCK px decides — horizontal captures the pointer and drives the value, vertical
+  // abandons it. No movement at all is a tap, and a tap still jumps the value.
+  const LOCK = 6;
+  let pending = false, sx = 0, sy = 0, moved = false;
+
   wrap.addEventListener("pointerdown", e => {
-    active = true;
-    wrap.setPointerCapture(e.pointerId);
-    input.focus({ preventScroll: true });
-    setFromX(e.clientX);
-    e.preventDefault();
+    pending = true; active = false; moved = false;
+    sx = e.clientX; sy = e.clientY;
+    // focus is NOT taken here: pointerdown is no longer preventDefault-ed, so the
+    // browser's own mousedown focus handling would immediately undo it. It is taken
+    // once the gesture is claimed, or on the tap.
   });
-  wrap.addEventListener("pointermove", e => { if (active) { setFromX(e.clientX); e.preventDefault(); } });
-  const stop = e => { if (active) { active = false; try { wrap.releasePointerCapture(e.pointerId); } catch (_) {} } };
+  wrap.addEventListener("pointermove", e => {
+    if (active) { setFromX(e.clientX); e.preventDefault(); return; }
+    if (!pending) return;
+    const dx = e.clientX - sx, dy = e.clientY - sy;
+    if (Math.abs(dx) < LOCK && Math.abs(dy) < LOCK) return;
+    moved = true;
+    if (Math.abs(dx) > Math.abs(dy)) {          // horizontal: this gesture is ours
+      active = true;
+      try { wrap.setPointerCapture(e.pointerId); } catch (_) {}
+      input.focus({ preventScroll: true });
+      setFromX(e.clientX);
+      e.preventDefault();
+    } else {                                     // vertical: let #body scroll
+      pending = false;
+    }
+  });
+  const stop = e => {
+    if (pending && !moved && !active) {                     // plain click / tap
+      input.focus({ preventScroll: true });
+      setFromX(e.clientX);
+    }
+    if (active) { try { wrap.releasePointerCapture(e.pointerId); } catch (_) {} }
+    pending = false; active = false; moved = false;
+  };
   wrap.addEventListener("pointerup", stop);
-  wrap.addEventListener("pointercancel", stop);
+  wrap.addEventListener("pointercancel", () => {
+    if (active) active = false;
+    pending = false; moved = false;
+  });
 
   // trackpad wheel: ~440 px of scroll sweeps the whole range. Deltas arrive as many
   // small fractions, so accumulate in step units and only apply whole steps.
   // Must be non-passive or the preventDefault that stops #body scrolling is ignored.
-  const SWEEP = 440, LINE = 16, PAGE = 320;
+  // Horizontal only. A trackpad's "vertical" scroll always carries a little deltaX,
+  // so a clear dominance ratio is required; anything else is left alone (no
+  // preventDefault) and passes through to #body.
+  const SWEEP = 440, LINE = 16, PAGE = 320, DOM = 2.5;
   let acc = 0, accT = -1e9;
   wrap.addEventListener("wheel", e => {
-    e.preventDefault();
     const unit = e.deltaMode === 1 ? LINE : e.deltaMode === 2 ? PAGE : 1;
     const dx = e.deltaX * unit, dy = e.deltaY * unit;
-    const d = Math.abs(dx) >= Math.abs(dy) ? dx : -dy;   // right / up increase
+    if (Math.abs(dx) < DOM * Math.abs(dy) || dx === 0) return;  // vertical → scroll the panel
+    e.preventDefault();
+    const d = dx;                                         // right increases
     if (e.timeStamp - accT > 250 || d * acc < 0) acc = 0; // new gesture, or reversal
     accT = e.timeStamp;
     acc += d * ((max - min) / step) / SWEEP;
