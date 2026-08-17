@@ -854,6 +854,26 @@ function bindSlider(input, onChange) {
   const stop = e => { if (active) { active = false; try { wrap.releasePointerCapture(e.pointerId); } catch (_) {} } };
   wrap.addEventListener("pointerup", stop);
   wrap.addEventListener("pointercancel", stop);
+
+  // trackpad wheel: ~440 px of scroll sweeps the whole range. Deltas arrive as many
+  // small fractions, so accumulate in step units and only apply whole steps.
+  // Must be non-passive or the preventDefault that stops #body scrolling is ignored.
+  const SWEEP = 440, LINE = 16, PAGE = 320;
+  let acc = 0, accT = -1e9;
+  wrap.addEventListener("wheel", e => {
+    e.preventDefault();
+    const unit = e.deltaMode === 1 ? LINE : e.deltaMode === 2 ? PAGE : 1;
+    const dx = e.deltaX * unit, dy = e.deltaY * unit;
+    const d = Math.abs(dx) >= Math.abs(dy) ? dx : -dy;   // right / up increase
+    if (e.timeStamp - accT > 250 || d * acc < 0) acc = 0; // new gesture, or reversal
+    accT = e.timeStamp;
+    acc += d * ((max - min) / step) / SWEEP;
+    const n = Math.trunc(acc);
+    if (!n) return;
+    acc -= n;
+    const val = clamp(+input.value + n * step, min, max);
+    if (val !== +input.value) { input.value = val; onChange(val); paint(input); }
+  }, { passive: false });
   // keyboard still uses the native input
   input.addEventListener("keydown", () => setTimeout(() => { onChange(+input.value); paint(input); }, 0));
   paint(input);
