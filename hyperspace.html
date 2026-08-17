@@ -195,13 +195,17 @@
   .meter.sel .tag{color:#fff}
   /* Hint readout — an LCD window in the same bezel, sitting directly ABOVE the
      console and out of every flow, so its height can change freely without
-     moving a single control. Never interactive: pointer-events stay off. */
+     moving a single control. Never interactive: pointer-events stay off.
+     The fill is fully opaque: this strip overlaps the readout block and the
+     animating canvas, and at 9px a translucent backdrop made it unreadable.
+     No backdrop-filter — pointless behind an opaque fill, and it would cost
+     a blur every frame over a canvas that never stops moving. */
   #hint{
-    position:absolute;left:0;right:0;bottom:100%;
+    position:absolute;left:0;right:0;bottom:100%;z-index:2;
     padding:11px 26px 12px;
     border-top:1px solid var(--line);border-right:1px solid var(--line);
-    background:rgba(0,0,0,.55);backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);
-    font-size:9px;line-height:1.6;letter-spacing:.06em;color:rgba(255,255,255,.5);
+    background:#050505;
+    font-size:9px;line-height:1.6;letter-spacing:.06em;color:rgba(255,255,255,.62);
     pointer-events:none;user-select:none;
     opacity:0;transform:translateY(5px);
     transition:opacity .18s ease,transform .18s ease;
