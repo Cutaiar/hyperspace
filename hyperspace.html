@@ -164,10 +164,20 @@
   .meter.sel .bar{border-color:var(--red)}
   .meter .col.over::after{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:var(--red);box-shadow:0 0 6px var(--red)}
   .meter.sel .tag{color:#fff}
+  /* Hint readout — an LCD window in the same bezel, sitting directly ABOVE the
+     console and out of every flow, so its height can change freely without
+     moving a single control. Never interactive: pointer-events stay off. */
   #hint{
+    position:absolute;left:0;right:0;bottom:100%;
+    padding:11px 26px 12px;
+    border-top:1px solid var(--line);border-right:1px solid var(--line);
+    background:rgba(0,0,0,.55);backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);
     font-size:9px;line-height:1.6;letter-spacing:.06em;color:rgba(255,255,255,.5);
-    margin-top:8px;min-height:26px;
+    pointer-events:none;user-select:none;
+    opacity:0;transform:translateY(5px);
+    transition:opacity .18s ease,transform .18s ease;
   }
+  #hint.on{opacity:1;transform:none}
   #hint b{color:var(--red);font-weight:500;letter-spacing:.14em;text-transform:uppercase}
   #strip{border:1px solid var(--line);padding:12px 13px 13px;margin-top:10px}
   #stripHead{
@@ -206,11 +216,13 @@
     #console{width:100%;border-right:0}
     #handle{padding:14px 18px}
     #body{padding:4px 18px 20px}
+    #hint{padding:10px 18px 11px;border-right:0}
     #keys{display:none}
     #cells{font-size:clamp(44px,15vw,72px)}
   }
   @media (prefers-reduced-motion:reduce){
-    #body,#chev{transition:none}
+    #body,#chev,#hint{transition:none}
+    #hint{transform:none}
   }
 </style>
 </head>
@@ -226,6 +238,7 @@
 </div>
 
 <div id="console">
+  <div id="hint" aria-hidden="true"></div>
   <button id="handle" aria-expanded="true" aria-controls="body">
     <span>Controls</span><span id="chev">▼</span>
   </button>
@@ -244,7 +257,6 @@
       <div class="meters" id="meters"></div>
       <div class="shapers" id="shapers"></div>
       <div class="legend"><span><i class="a"></i>input</span><span><i class="b"></i>fader out</span></div>
-      <div id="hint"></div>
       <div id="strip">
         <div id="stripHead"><span id="stripName">SUB</span><em id="stripPlane">ZW plane</em></div>
         <div id="knobs"></div>
@@ -883,8 +895,32 @@ let SELB = 0;                                   // band whose strip is open
 
 const DEFAULT_HINT = 'Pick a band to tune its window and drive. ' +
                      'Hover a transfer to see what it does.';
-function hint(html) {
-  el("hint").innerHTML = html || DEFAULT_HINT;
+
+/* ---- hint readout ----
+   The readout is absolutely positioned above the console, so nothing it says
+   can move a control — including the very row the pointer is resting on.
+   It lights while the pointer is inside the audio module and goes dark when
+   it leaves, which keeps the canvas clear the rest of the time.
+   Where there is no hover at all (touch), taps light it and it self-dismisses. */
+const hudEl = el("hint");
+const NOHOVER = !(window.matchMedia && window.matchMedia("(hover:hover)").matches);
+let hintRevert = 0, hintFade = 0;
+
+function hint(html, hold) {
+  clearTimeout(hintRevert); clearTimeout(hintFade);
+  hudEl.innerHTML = html || DEFAULT_HINT;
+  hudEl.classList.add("on");
+  if (hold) hintFade = setTimeout(hideHint, 5000);
+}
+/* leaving one control for another inside the module: fall back to the default
+   line, but only after a beat, so meter-to-meter travel does not flicker */
+function hintIdle() {
+  clearTimeout(hintRevert);
+  hintRevert = setTimeout(() => { hudEl.innerHTML = DEFAULT_HINT; }, 70);
+}
+function hideHint() {
+  clearTimeout(hintRevert); clearTimeout(hintFade);
+  hudEl.classList.remove("on");
 }
 
 /* knob spec: how each parameter maps between slider integers and PARAMS */
@@ -917,11 +953,11 @@ const knobUI = [];
       '<div class="bar"><div class="col"><div class="lvl"></div></div>' +
       '<div class="col"><div class="hit"></div></div></div>' +
       '<div class="tag">' + b.id + '</div><div class="pl">' + b.pl + '</div>';
-    m.addEventListener("click", () => selectBand(i));
-    m.addEventListener("mouseover", () =>
-      hint("<b>" + b.id + "</b> " + b.lo + "–" + b.hi + " Hz → " + b.pl +
-           " plane, " + (b.dir > 0 ? "forward" : "reverse") + "."));
-    m.addEventListener("mouseout", () => hint(null));
+    const bandTip = "<b>" + b.id + "</b> " + b.lo + "–" + b.hi + " Hz → " + b.pl +
+                    " plane, " + (b.dir > 0 ? "forward" : "reverse") + ".";
+    m.addEventListener("click", () => { selectBand(i); hint(bandTip, NOHOVER); });
+    m.addEventListener("mouseover", () => hint(bandTip));
+    m.addEventListener("mouseout", hintIdle);
     host.appendChild(m);
     meterEls.push({ el: m, lvl: m.querySelector(".lvl"), hit: m.querySelector(".hit") });
 
@@ -932,18 +968,20 @@ const knobUI = [];
       sel.appendChild(o);
     });
     sel.value = PARAMS[i].fn;
-    sel.title = SHAPERS[PARAMS[i].fn].name;
-    const describe = () => hint("<b>" + SHAPERS[PARAMS[i].fn].tag + "</b> " +
-                               SHAPERS[PARAMS[i].fn].name + " — driving " + b.pl + ".");
-    sel.addEventListener("mouseover", describe);
-    sel.addEventListener("focus", describe);
-    sel.addEventListener("mouseout", () => hint(null));
+    // no title= on the select itself: the readout already says this, and the
+    // native tooltip would only shadow it. The options keep theirs, because
+    // the open dropdown is a native popup the readout cannot reach.
+    sel.setAttribute("aria-label", b.id + " band transfer function");
+    const describe = hold => hint("<b>" + SHAPERS[PARAMS[i].fn].tag + "</b> " +
+                                  SHAPERS[PARAMS[i].fn].name + " — driving " + b.pl + ".", hold);
+    sel.addEventListener("mouseover", () => describe(false));
+    sel.addEventListener("focus", () => describe(NOHOVER));
+    sel.addEventListener("mouseout", hintIdle);
     sel.addEventListener("change", e => {
       PARAMS[i].fn = +e.target.value;
       AUDIO.st[i] = {};
-      sel.title = SHAPERS[PARAMS[i].fn].name;
       selectBand(i);
-      describe();
+      describe(NOHOVER);
     });
     shost.appendChild(sel);
     shaperSels.push(sel);
@@ -967,14 +1005,18 @@ const knobUI = [];
   KNOBS.forEach(spec => {
     const row = document.createElement("div");
     row.className = "krow";
-    row.title = spec.tip;
+    // no title= here: it duplicated the readout and arrived a second late
     row.innerHTML =
       '<label class="cap"><span>' + spec.label + '</span><b>–</b></label>' +
       '<div class="slider"><div class="track"></div><div class="fill"></div><div class="knob"></div>' +
       '<input type="range" min="' + spec.min + '" max="' + spec.max + '" step="' + spec.step + '"></div>';
     const input = row.querySelector("input"), read = row.querySelector("b");
-    row.addEventListener("mouseover", () => hint("<b>" + spec.label + "</b> " + spec.tip));
-    row.addEventListener("mouseout", () => hint(null));
+    const rowTip = "<b>" + spec.label + "</b> " + spec.tip;
+    input.setAttribute("aria-label", spec.label + ". " + spec.tip);
+    row.addEventListener("mouseover", () => hint(rowTip));
+    row.addEventListener("mouseout", hintIdle);
+    // touch has no hover, so grabbing the fader is what surfaces the tip
+    row.addEventListener("pointerdown", e => hint(rowTip, e.pointerType !== "mouse"));
     bindSlider(input, v => {
       PARAMS[SELB][spec.key] = v / spec.scale;
       read.textContent = spec.fmt(v);
@@ -983,8 +1025,17 @@ const knobUI = [];
     knobUI.push({ spec, input, read });
   });
 
+  // the readout belongs to the audio module: it lights on entry, reverts to the
+  // default line over blank space inside it, and goes dark on the way out
+  const arow = el("audioRow");
+  arow.addEventListener("mouseover", e => {
+    if (!e.target.closest(".meter, .shapers select, .krow")) hint(null);
+  });
+  arow.addEventListener("mouseleave", hideHint);
+  el("console").addEventListener("mouseleave", hideHint);
+
   selectBand(0);
-  hint(null);
+  hudEl.innerHTML = DEFAULT_HINT;      // primed, but dark until something asks for it
 })();
 
 function selectBand(i) {
@@ -1001,7 +1052,7 @@ function selectBand(i) {
 
 // re-sync every control after a scene change
 function refreshChain() {
-  shaperSels.forEach((sel, i) => { sel.value = PARAMS[i].fn; sel.title = SHAPERS[PARAMS[i].fn].name; });
+  shaperSels.forEach((sel, i) => { sel.value = PARAMS[i].fn; });
   selectBand(SELB);
 }
 
@@ -1167,6 +1218,7 @@ const cons = el("console"), handle = el("handle");
 function toggleConsole() {
   const collapsed = cons.classList.toggle("collapsed");
   handle.setAttribute("aria-expanded", String(!collapsed));
+  hideHint();
 }
 handle.addEventListener("click", toggleConsole);
 
