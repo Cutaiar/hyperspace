@@ -166,14 +166,21 @@
   .rule{border-top:1px solid var(--line);margin:18px 0 14px}
   .meters{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-top:10px}
   .meter{display:flex;flex-direction:column;align-items:center;gap:4px}
-  .meter .bar{position:relative;width:100%;height:42px;border:1px solid var(--line);display:flex;gap:1px;overflow:hidden}
+  .meter .bar{position:relative;width:100%;height:56px;border:1px solid var(--line);display:flex;gap:1px;overflow:hidden}
   .meter .col{position:relative;flex:1}
   .meter .lvl{position:absolute;left:0;right:0;bottom:0;height:0%;background:rgba(255,255,255,.9)}
   .meter .hit{position:absolute;left:0;right:0;bottom:0;height:0%;background:var(--red)}
-  .legend{display:flex;gap:14px;margin-top:8px;font-size:8.5px;letter-spacing:.14em;color:rgba(255,255,255,.38);text-transform:uppercase}
+  /* everything above the nominal line is headroom. The zone is tinted so an
+     idle meter still shows how much room it has left, and the part of a bar
+     that pushes into it turns red whichever column it is in. */
+  .meter .zone{position:absolute;left:0;right:0;top:0;background:rgba(255,43,43,.07);pointer-events:none}
+  .meter .nom{position:absolute;left:0;right:0;height:1px;background:rgba(255,255,255,.32);pointer-events:none;z-index:3}
+  .meter .ovr{position:absolute;left:0;right:0;height:0%;background:var(--red);box-shadow:0 0 5px rgba(255,43,43,.7);z-index:2}
+  .legend{display:flex;gap:12px;margin-top:8px;font-size:8.5px;letter-spacing:.13em;color:rgba(255,255,255,.38);text-transform:uppercase}
   .legend i{display:inline-block;width:7px;height:7px;margin-right:5px;vertical-align:-1px;font-style:normal}
   .legend .a{background:rgba(255,255,255,.9)}
   .legend .b{background:var(--red)}
+  .legend .c{background:rgba(255,43,43,.28);box-shadow:inset 0 1px 0 rgba(255,255,255,.32)}
   .shapers{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-top:7px}
   .shapers select{
     width:100%;font-family:inherit;font-size:8.5px;letter-spacing:.04em;text-align:center;
@@ -272,13 +279,18 @@
         <div class="track"></div><div class="fill"></div><div class="knob"></div>
         <input id="drive" type="range" min="0" max="300" step="5" value="100">
       </div>
+      <label class="cap" for="dyn">Dynamics <b id="dynVal">1.00</b></label>
+      <div class="slider" data-for="dyn">
+        <div class="track"></div><div class="fill"></div><div class="knob"></div>
+        <input id="dyn" type="range" min="0" max="150" step="5" value="100">
+      </div>
       <div class="row" id="sceneWrap" style="margin-bottom:14px">
         <label class="cap" for="scene">Scene</label>
         <select id="scene"></select>
       </div>
       <div class="meters" id="meters"></div>
       <div class="shapers" id="shapers"></div>
-      <div class="legend"><span><i class="a"></i>input</span><span><i class="b"></i>fader out</span></div>
+      <div class="legend"><span><i class="a"></i>input</span><span><i class="b"></i>fader out</span><span><i class="c"></i>headroom</span></div>
       <div id="strip">
         <div id="stripHead"><span id="stripName">SUB</span><em id="stripPlane">ZW plane</em></div>
         <div id="knobs"></div>
@@ -605,15 +617,26 @@ const BANDS = [
    RMS; the output is an automation signal, and the two need not
    look anything alike. Each entry gets its own scratch state so
    envelopes and LFOs can hold values between frames.
+
+   X now arrives with headroom — it runs 0..HEAD, where 1.0 is
+   nominal — so every shaper has to stay sane above 1. Most already
+   do, because they are monotone. Three did not: S-curve turns back
+   on itself past 1 (x²(3−2x) peaks at x=1 and falls), Gate threw the
+   overshoot away by returning a flat 1, and Invert went negative.
+   Those three are handled explicitly below; the rest pass headroom
+   through on their own.
 ------------------------------------------------------------ */
 const SHAPERS = [
   { tag: "LIN",  name: "Linear — Y = X",              f: (s, x) => x },
   { tag: "SQRT", name: "Sqrt — Y = √X, lifts quiet",  f: (s, x) => Math.sqrt(x) },
   { tag: "SQ",   name: "Squared — Y = X², punchier",  f: (s, x) => x * x },
   { tag: "CUBE", name: "Cubed — Y = X³, peaks only",  f: (s, x) => x * x * x },
-  { tag: "CURV", name: "S-curve — soft knee both ends", f: (s, x) => x * x * (3 - 2 * x) },
-  { tag: "GATE", name: "Gate — hard on above threshold", f: (s, x) => (x > 0.35 ? 1 : 0) },
-  { tag: "INV",  name: "Invert — loud stops, silence spins", f: (s, x) => 1 - x },
+  { tag: "CURV", name: "S-curve — soft knee both ends",
+    f: (s, x) => (x < 1 ? x * x * (3 - 2 * x) : x) },     // linear past nominal
+  { tag: "GATE", name: "Gate — hard on above threshold",
+    f: (s, x) => (x > 0.35 ? (x > 1 ? x : 1) : 0) },      // keep the overshoot
+  { tag: "INV",  name: "Invert — loud stops, silence spins",
+    f: (s, x) => (x < 1 ? 1 - x : 0) },                   // no headroom by nature
   { tag: "HOLD", name: "Peak hold — instant rise, slow fall",
     f: (s, x, dt) => { s.h = Math.max(x, (s.h || 0) - dt / 0.7); return s.h; } },
   { tag: "STAC", name: "Staccato — 4 ms attack, 75 ms decay",
@@ -636,42 +659,55 @@ const SHAPERS = [
 ];
 
 /* Every band owns its whole signal chain: window shape (attack +
-   decay), gate threshold, pre-drive into the transfer, the transfer
-   itself, and post-drive out to the rotation fader. */
+   decay), gate threshold, contrast and transient blend for the
+   dynamics recovery, pre-drive into the transfer, the transfer
+   itself, and post-drive out to the rotation fader.
+
+   `exp` is the expansion ratio applied about the band's own running
+   mean, and `trn` blends the fader from following level toward
+   following change. The lows get less transient than the mids and
+   highs, because a kick's transient lives in BASS/MIDB while SUB is
+   the sustained swell underneath it. */
 const PARAMS = [
-  { fn:  1, pre: 1, post: 1, atk: 0.250, dec: 0.850, thr: 0.075 },  // SUB  sqrt
-  { fn:  7, pre: 1, post: 1, atk: 0.015, dec: 0.130, thr: 0.075 },  // BASS hold
-  { fn:  8, pre: 1, post: 1, atk: 0.006, dec: 0.070, thr: 0.075 },  // MIDB staccato
-  { fn:  4, pre: 1, post: 1, atk: 0.050, dec: 0.300, thr: 0.075 },  // MID  s-curve
-  { fn:  0, pre: 1, post: 1, atk: 0.090, dec: 0.500, thr: 0.075 },  // UPR  linear
-  { fn: 12, pre: 1, post: 1, atk: 0.180, dec: 0.900, thr: 0.075 }   // AIR  slew
+  { fn:  1, pre: 1, post: 1, atk: 0.250, dec: 0.850, thr: 0.075, exp: 0.55, trn: 0.10 },  // SUB  sqrt
+  { fn:  7, pre: 1, post: 1, atk: 0.015, dec: 0.130, thr: 0.075, exp: 0.90, trn: 0.30 },  // BASS hold
+  { fn:  8, pre: 1, post: 1, atk: 0.006, dec: 0.070, thr: 0.075, exp: 0.95, trn: 0.38 },  // MIDB staccato
+  { fn:  4, pre: 1, post: 1, atk: 0.050, dec: 0.300, thr: 0.075, exp: 0.80, trn: 0.22 },  // MID  s-curve
+  { fn:  0, pre: 1, post: 1, atk: 0.090, dec: 0.500, thr: 0.075, exp: 0.85, trn: 0.28 },  // UPR  linear
+  { fn: 12, pre: 1, post: 1, atk: 0.180, dec: 0.900, thr: 0.075, exp: 0.85, trn: 0.32 }   // AIR  slew
 ];
 
+/* Fallbacks for any scene row written before contrast/transient existed. */
+const DEF_EXP = [0.55, 0.90, 0.95, 0.80, 0.85, 0.85];
+const DEF_TRN = [0.10, 0.30, 0.38, 0.22, 0.28, 0.32];
+
 /* Scenes — whole-chain snapshots. Each band is
-   [fn, pre, post, attack ms, decay ms, threshold]. */
+   [fn, pre, post, attack ms, decay ms, threshold, contrast, transient].
+   The last two are optional: a six-element row is still valid and
+   falls back to that band's DEF_EXP / DEF_TRN. */
 const PRESETS = [
-  { name: "Balanced", b: [[1,1,1,250,850,.075],[7,1,1,15,130,.075],[8,1,1,6,70,.075],
-                          [4,1,1,50,300,.075],[0,1,1,90,500,.075],[12,1,1,180,900,.075]] },
-  { name: "Kick & Sizzle", b: [[12,1,.5,300,900,.09],[7,1.4,1.8,4,180,.10],[5,1,1.2,5,60,.14],
-                               [0,1,.6,60,260,.08],[2,1.2,1,70,340,.07],[8,1.5,1.6,10,150,.08]] },
-  { name: "Glacial Drift", b: [[1,1.2,.9,400,1600,.05],[12,1,.8,300,1400,.05],[12,1,.7,250,1200,.05],
-                               [1,1,.8,300,1400,.05],[12,1.1,.8,350,1500,.05],[12,1.2,.9,400,1800,.05]] },
-  { name: "Strobe Cage", b: [[5,1.2,1.4,8,90,.12],[9,1,1.6,4,60,.12],[9,1.2,1.6,4,50,.12],
-                             [5,1,1.3,10,110,.12],[9,1,1.5,8,90,.12],[5,1.2,1.4,12,130,.12]] },
-  { name: "Bass Engine", b: [[1,1.4,1.6,200,700,.06],[7,1.5,2,8,140,.07],[8,1.4,1.8,5,70,.08],
-                             [0,1,.15,60,300,.10],[0,1,.1,90,500,.10],[0,1,0,180,900,.10]] },
-  { name: "Air & Lace", b: [[12,1,.12,300,1200,.10],[0,1,.15,20,160,.10],[0,1,.2,8,80,.10],
-                            [1,1.2,1.2,60,340,.06],[1,1.3,1.7,80,420,.05],[1,1.4,2,140,700,.05]] },
-  { name: "Inverse World", b: [[6,1,.7,260,900,.04],[6,1,.8,40,300,.04],[0,1,1,10,90,.07],
-                               [0,1,1,60,320,.07],[1,1,1.1,90,500,.06],[6,1,.7,200,900,.04]] },
-  { name: "Percussive", b: [[8,1.2,1.2,6,140,.09],[8,1.3,1.5,4,110,.09],[8,1.3,1.5,4,80,.09],
-                            [8,1.2,1.3,6,140,.09],[8,1.2,1.3,8,180,.09],[8,1.2,1.2,10,220,.09]] },
-  { name: "Tremolo Web", b: [[7,1,1,200,700,.07],[7,1.1,1.2,20,240,.07],[10,1.2,1.3,10,120,.08],
-                             [10,1.2,1.4,50,300,.07],[10,1.3,1.4,80,420,.06],[11,1.2,1.2,150,700,.06]] },
-  { name: "Harmonic Bloom", b: [[1,1.2,1,300,1000,.06],[1,1.2,1.1,60,420,.06],[4,1.1,1.1,20,200,.07],
-                                [4,1.2,1.2,80,420,.06],[1,1.3,1.3,120,600,.05],[1,1.3,1.2,200,900,.05]] },
-  { name: "Slow Bass / Fast Air", b: [[1,1.1,1,500,1800,.05],[1,1.1,1,300,1200,.05],[0,1,1,60,400,.07],
-                                      [0,1,1.1,20,160,.08],[2,1.2,1.4,8,90,.09],[8,1.3,1.6,4,60,.10]] }
+  { name: "Balanced", b: [[1,1,1,250,850,.075,.55,.10],[7,1,1,15,130,.075,.90,.30],[8,1,1,6,70,.075,.95,.38],
+                          [4,1,1,50,300,.075,.80,.22],[0,1,1,90,500,.075,.85,.28],[12,1,1,180,900,.075,.85,.32]] },
+  { name: "Kick & Sizzle", b: [[12,1,.5,300,900,.09,.50,.05],[7,1.4,1.8,4,180,.10,1.20,.60],[5,1,1.2,5,60,.14,1.20,.65],
+                               [0,1,.6,60,260,.08,.70,.20],[2,1.2,1,70,340,.07,.90,.35],[8,1.5,1.6,10,150,.08,1.10,.60]] },
+  { name: "Glacial Drift", b: [[1,1.2,.9,400,1600,.05,.45,0],[12,1,.8,300,1400,.05,.45,0],[12,1,.7,250,1200,.05,.45,0],
+                               [1,1,.8,300,1400,.05,.45,0],[12,1.1,.8,350,1500,.05,.50,0],[12,1.2,.9,400,1800,.05,.50,0]] },
+  { name: "Strobe Cage", b: [[5,1.2,1.4,8,90,.12,1.10,.45],[9,1,1.6,4,60,.12,1.30,.70],[9,1.2,1.6,4,50,.12,1.30,.75],
+                             [5,1,1.3,10,110,.12,1.10,.50],[9,1,1.5,8,90,.12,1.20,.65],[5,1.2,1.4,12,130,.12,1.20,.60]] },
+  { name: "Bass Engine", b: [[1,1.4,1.6,200,700,.06,.75,.15],[7,1.5,2,8,140,.07,1.25,.55],[8,1.4,1.8,5,70,.08,1.20,.55],
+                             [0,1,.15,60,300,.10,.60,.15],[0,1,.1,90,500,.10,.60,.15],[0,1,0,180,900,.10,.60,.15]] },
+  { name: "Air & Lace", b: [[12,1,.12,300,1200,.10,.50,.05],[0,1,.15,20,160,.10,.70,.20],[0,1,.2,8,80,.10,.80,.30],
+                            [1,1.2,1.2,60,340,.06,.95,.35],[1,1.3,1.7,80,420,.05,1.10,.50],[1,1.4,2,140,700,.05,1.15,.55]] },
+  { name: "Inverse World", b: [[6,1,.7,260,900,.04,.50,0],[6,1,.8,40,300,.04,.60,0],[0,1,1,10,90,.07,.95,.35],
+                               [0,1,1,60,320,.07,.80,.25],[1,1,1.1,90,500,.06,.85,.25],[6,1,.7,200,900,.04,.55,0]] },
+  { name: "Percussive", b: [[8,1.2,1.2,6,140,.09,1.10,.55],[8,1.3,1.5,4,110,.09,1.25,.75],[8,1.3,1.5,4,80,.09,1.25,.80],
+                            [8,1.2,1.3,6,140,.09,1.15,.70],[8,1.2,1.3,8,180,.09,1.15,.70],[8,1.2,1.2,10,220,.09,1.10,.65]] },
+  { name: "Tremolo Web", b: [[7,1,1,200,700,.07,.60,.10],[7,1.1,1.2,20,240,.07,.85,.25],[10,1.2,1.3,10,120,.08,.95,.30],
+                             [10,1.2,1.4,50,300,.07,.90,.25],[10,1.3,1.4,80,420,.06,.90,.25],[11,1.2,1.2,150,700,.06,.85,.20]] },
+  { name: "Harmonic Bloom", b: [[1,1.2,1,300,1000,.06,.55,.05],[1,1.2,1.1,60,420,.06,.80,.15],[4,1.1,1.1,20,200,.07,.85,.20],
+                                [4,1.2,1.2,80,420,.06,.85,.20],[1,1.3,1.3,120,600,.05,.90,.25],[1,1.3,1.2,200,900,.05,.90,.25]] },
+  { name: "Slow Bass / Fast Air", b: [[1,1.1,1,500,1800,.05,.45,0],[1,1.1,1,300,1200,.05,.55,.05],[0,1,1,60,400,.07,.85,.25],
+                                      [0,1,1.1,20,160,.08,1.00,.45],[2,1.2,1.4,8,90,.09,1.20,.65],[8,1.3,1.6,4,60,.10,1.25,.75]] }
 ];
 
 function applyPreset(k) {
@@ -679,15 +715,52 @@ function applyPreset(k) {
     const P = PARAMS[i];
     P.fn = p[0]; P.pre = p[1]; P.post = p[2];
     P.atk = p[3] / 1000; P.dec = p[4] / 1000; P.thr = p[5];
+    P.exp = p.length > 6 ? p[6] : DEF_EXP[i];   // six-element rows still load
+    P.trn = p.length > 7 ? p[7] : DEF_TRN[i];
     AUDIO.st[i] = {};
   });
 }
 
+/* ------------------------------------------------------------
+   Headroom and dynamics-recovery constants.
+
+   HEAD is where the ceiling sits relative to nominal: 1.0 is a band
+   working normally, and everything up to HEAD is room for it to push
+   into. Nothing in the chain clamps at 1.0 any more — that single
+   clamp is what made a limited master read as six bars glued to the
+   top, because a brickwalled band never comes back down far enough
+   to unstick them.
+
+   U_LO/U_SPAN set the dB window. It is deliberately wider than the
+   old 46 dB and lands nominal below full scale, so a loud band has
+   somewhere to go.
+------------------------------------------------------------ */
+const HEAD = 2.0;                     // ceiling on the input / transfer signal
+const CEIL = 2.5;                     // ceiling on the fader output
+const DRIVE = 3.2;                    // fader → rotation rate
+const U_LO = -80, U_SPAN = 56;        // dB → u, where u = 1.0 is nominal
+const PK_TAU = 2.5, VAL_TAU = 6.0;    // peak falls in 2.5 s, valley rises in 6 s
+const PK_MIN = 0.10, SPAN_MIN = 0.04; // SPAN_MIN ≈ 2.2 dB, the tightest window we stretch
+// Measured on real analyser output, band RMS for actual content lands between
+// about −26 and −65 dBFS, so confidence has to be fully open by −65 dB and only
+// close below that. Set it any higher and it throttles a real air band.
+const CONF_LO = 0.08, CONF_SPAN = 0.18;
+const OPEN_SPAN = 0.22;               // ≈ 12 dB of natural range counts as healthy
+const SQ_FLOOR = 0.35;                // contrast still applied to an already-dynamic band
+const MEAN_TAU = 2.5, TARGET = 0.68;  // expansion pivot, and where the mean lands
+const FAST_A = 0.003, FAST_R = 0.060, SLOW_T = 0.30;
+const FLUX_G = 3.2, FLUX_K = 0.15, FLUX_MIN = 0.12, TRN_HEAD = 1.4;
+
 const AUDIO = {
   on: false, ctx: null, an: null, stream: null, freq: null,
-  binLo: [], binHi: [], gain: 1.0,
-  env: new Float64Array(6),
-  peak: new Float64Array(6).fill(0.15),
+  binLo: [], binHi: [], gain: 1.0, dyn: 1.0, warm: 0,
+  env: new Float64Array(6),                 // level envelope, per-band atk/dec
+  fast: new Float64Array(6),                // transient path: fast envelope
+  slow: new Float64Array(6),                //     "          slow reference
+  fpk: new Float64Array(6).fill(0.2),       //     "          flux peak tracker
+  peak: new Float64Array(6).fill(0.25),     // window top
+  val: new Float64Array(6).fill(0.25),      // window bottom (valley tracker)
+  avg: new Float64Array(6).fill(0.5),       // running mean, the expansion pivot
   norm: new Float64Array(6),
   inp: new Float64Array(6),                 // post-analysis, what the IN meter shows
   out: new Float64Array(6),                 // post-transfer, what drives the fader
@@ -795,8 +868,25 @@ function audioStep(dt) {
   const A = AUDIO;
   A.an.getFloatFrequencyData(A.freq);
 
-  // band RMS from the power spectrum, mapped into a 0..1 loudness
+  const DYN = A.dyn;
+  const kPk = 1 - Math.exp(-dt / PK_TAU), kVal = 1 - Math.exp(-dt / VAL_TAU);
+  const kSlow = 1 - Math.exp(-dt / SLOW_T);
+  const fpkDec = Math.exp(-dt / 2.5);
+
+  // Warm-up. Every tracker here is adaptive, so on the first frames after a
+  // source is attached they hold their seeds rather than the track's actual
+  // statistics — and an expander running against a stale mean throws the
+  // whole set of bars at the ceiling for the first few seconds. Snap the
+  // window to the signal on the opening frames, then run the mean fast for
+  // about a second before settling into MEAN_TAU.
+  A.warm++;
+  const seeding = A.warm <= 3;
+  const kAvg = 1 - Math.exp(-dt / (A.warm < 60 ? 0.25 : MEAN_TAU));
+
   for (let i = 0; i < 6; i++) {
+    const P = PARAMS[i];
+
+    // band RMS from the power spectrum, into u where 1.0 is nominal
     let pw = 0, n = 0;
     for (let k = A.binLo[i]; k <= A.binHi[i]; k++) {
       const m = Math.pow(10, A.freq[k] / 20);
@@ -804,40 +894,90 @@ function audioStep(dt) {
     }
     const rms = Math.sqrt(pw / Math.max(n, 1));
     const db = 20 * Math.log10(rms + 1e-9);
-    const u = clamp((db + 72) / 46, 0, 1);
+    const u = clamp((db - U_LO) / U_SPAN, 0, 2.5);
 
-    // rolling window: asymmetric one-pole, per-band time constants
-    const tau = u > A.env[i] ? PARAMS[i].atk : PARAMS[i].dec;
+    // LEVEL path — rolling window, asymmetric one-pole, per-band taus
+    const tau = u > A.env[i] ? P.atk : P.dec;
     A.env[i] += (u - A.env[i]) * (1 - Math.exp(-dt / tau));
-  }
 
-  // each band self-calibrates against its own decaying peak, so a
-  // quiet hi-hat can drive as hard as a kick without a manual mixer
-  const dec = Math.exp(-dt / 4.0);
-  for (let i = 0; i < 6; i++) {
-    A.peak[i] = Math.max(A.env[i], A.peak[i] * dec, 0.12);
-    let n = clamp((A.env[i] - 0.05) / (A.peak[i] - 0.05 + 1e-6), 0, 1);
-    if (A.env[i] < PARAMS[i].thr) n = 0;    // gate: band goes quiet, plane stops
-    A.norm[i] = n;
+    // TRANSIENT path — fast envelope minus slow reference. A limiter
+    // flattens level but it cannot flatten *change*, so this is the one
+    // thing that still survives on a brickwalled master. Dividing by the
+    // slow envelope makes it a relative flux, so a quiet hat reads as
+    // hard a hit as a loud kick.
+    const ft = u > A.fast[i] ? FAST_A : FAST_R;
+    A.fast[i] += (u - A.fast[i]) * (1 - Math.exp(-dt / ft));
+    A.slow[i] += (u - A.slow[i]) * kSlow;
+    const flux = clamp((A.fast[i] - A.slow[i]) / (A.slow[i] + FLUX_K) * FLUX_G, 0, 1.5);
+    A.fpk[i] = Math.max(flux, A.fpk[i] * fpkDec, FLUX_MIN);
+    const trn = clamp(flux / A.fpk[i], 0, 1) * TRN_HEAD;   // hits punch into headroom
+
+    // WINDOW — peak snaps up and relaxes down, valley snaps down and
+    // relaxes up, so the band normalises between its own recent floor
+    // and its own recent ceiling. The old code tracked only the peak
+    // against a fixed 0.05 floor, which could pull a band down but
+    // never open it back up, so a loud constant band stayed at 1.
+    if (seeding) { A.peak[i] = A.val[i] = A.env[i]; }
+    A.peak[i] = Math.max(A.env[i], A.peak[i] + (A.env[i] - A.peak[i]) * kPk);
+    A.val[i] = Math.min(A.env[i], A.val[i] + (A.env[i] - A.val[i]) * kVal);
+
+    // If the source is so limited that peak and valley have converged,
+    // open the window symmetrically about its centre rather than letting
+    // it collapse — a collapsed window maps a dead-constant band to 1.0,
+    // which is exactly the pinning we are here to undo.
+    let lo = A.val[i], hi = Math.max(A.peak[i], PK_MIN);
+    if (hi - lo < SPAN_MIN) { const c = (hi + lo) * 0.5; lo = c - SPAN_MIN * 0.5; hi = c + SPAN_MIN * 0.5; }
+
+    // Confidence: how far this band's ceiling sits above the noise
+    // minimum. Without it the expander happily turns the hiss in an
+    // empty band into full-scale motion, because relative to itself
+    // hiss is as dynamic as a drum kit.
+    const conf = clamp((hi - CONF_LO) / CONF_SPAN, 0, 1);
+    const da = clamp(DYN, 0, 1) * conf;
+    const nDyn = clamp((A.env[i] - lo) / (hi - lo), 0, 1);
+    const nAbs = clamp(A.env[i] / Math.max(hi, PK_MIN), 0, 1);
+    const nrm = nAbs + (nDyn - nAbs) * da;
+    A.norm[i] = nrm;
+
+    // EXPANSION — push the band's own distribution apart about its
+    // running mean, which is precisely the inverse of what the mastering
+    // limiter did to it. Makeup puts the mean at TARGET, below nominal,
+    // so the peaks have somewhere to climb.
+    // How much expansion a band gets depends on how squashed it already
+    // is. A band that still has 12 dB of natural range gets a light touch;
+    // one the limiter flattened to nothing gets the lot. That is what lets
+    // a brickwalled MP3 come alive without wrecking a master that was
+    // never crushed in the first place — the knob means "recover what was
+    // taken", not "expand by this much regardless".
+    const squash = clamp(1 - (A.peak[i] - A.val[i]) / OPEN_SPAN, 0, 1);
+    if (seeding) A.avg[i] = nrm;              // no deviation to expand on frame one
+    A.avg[i] += (nrm - A.avg[i]) * kAvg;
+    const C = 1 + P.exp * DYN * conf * (SQ_FLOOR + (1 - SQ_FLOOR) * squash);
+    const lvl = TARGET * conf + (nrm - A.avg[i]) * C;
+
+    // blend the fader between following level and following change
+    let x = lvl + (trn * conf - lvl) * P.trn;
+    if (A.env[i] < P.thr) x = 0;              // gate: band goes quiet, plane stops
+    A.inp[i] = clamp(x, 0, HEAD);
   }
 
   // harmonic coupling: a band sounding together with the one above it
   // is an overtone-rich source, so it reads hotter than a pure tone.
   // This is still the INPUT stage — it is what the white meter shows.
   for (let i = 0; i < 6; i++) {
-    const up = A.norm[Math.min(i + 1, 5)];
-    const coh = Math.sqrt(A.norm[i] * up);
-    A.inp[i] = clamp(A.norm[i] * (1 + 0.7 * coh), 0, 1);
+    const up = Math.min(A.inp[Math.min(i + 1, 5)], 1);
+    const coh = Math.sqrt(Math.min(A.inp[i], 1) * up);
+    A.inp[i] = clamp(A.inp[i] * (1 + 0.7 * coh), 0, HEAD);
   }
 
   // TRANSFER stage — input is reshaped into an automation signal,
   // and only then does it reach the fader for its rotation plane.
   for (let i = 0; i < 6; i++) {
     const P = PARAMS[i];
-    const x = clamp(A.inp[i] * P.pre, 0, 1);          // pre-drive, saturating
+    const x = clamp(A.inp[i] * P.pre, 0, HEAD);       // pre-drive, ceiling at HEAD
     const y = SHAPERS[P.fn].f(A.st[i], x, dt);
-    A.out[i] = clamp(y * P.post, 0, 2);               // post-drive out to the fader
-    PLANEDRIVE[BANDS[i].plane] = BANDS[i].dir * A.out[i] * 3 * A.gain;
+    A.out[i] = clamp(y * P.post, 0, CEIL);            // post-drive out to the fader
+    PLANEDRIVE[BANDS[i].plane] = BANDS[i].dir * A.out[i] * DRIVE * A.gain;
   }
   paintMeters();
 }
@@ -941,6 +1081,10 @@ const meterEls = [];
 const shaperSels = [];
 let SELB = 0;                                   // band whose strip is open
 
+// meter scale: full height is METER_TOP, and nominal (1.0) sits at NOM_PCT
+const METER_TOP = 1.6;
+const NOM_PCT = 100 / METER_TOP;                // 62.5%
+
 const DEFAULT_HINT = 'Pick a band to tune its window and drive. ' +
                      'Hover a transfer to see what it does.';
 
@@ -973,9 +1117,15 @@ function hideHint() {
 
 /* knob spec: how each parameter maps between slider integers and PARAMS */
 const KNOBS = [
+  { key: "exp",  label: "Contrast",   min: 0, max: 200, step: 5, scale: 100,
+    fmt: v => "1:" + (1 + v / 100).toFixed(2),
+    tip: "Upward expansion about this band's own running average. Louder-than-average gets louder, quieter gets quieter — the inverse of what the mastering limiter did. This is what pulls dynamics back out of a brickwalled track." },
+  { key: "trn",  label: "Transient",  min: 0, max: 100, step: 5, scale: 100,
+    fmt: v => v + "%",
+    tip: "Blends the fader from following level toward following change — a fast envelope minus a slow one. A limiter flattens level but cannot flatten change, so this is where punch comes from on a squashed master. At 100% the plane only moves on hits." },
   { key: "pre",  label: "Pre-drive",  min: 0, max: 400, step: 5, scale: 100,
     fmt: v => (v / 100).toFixed(2) + "×",
-    tip: "Gain into the transfer function. Above 1× it saturates against the ceiling, so peaks flatten and quiet detail comes up." },
+    tip: "Gain into the transfer function. Nominal is 1.0 and the ceiling is 2.0, so there is a full 6 dB of headroom above nominal before anything flattens." },
   { key: "post", label: "Post-drive", min: 0, max: 400, step: 5, scale: 100,
     fmt: v => (v / 100).toFixed(2) + "×",
     tip: "Gain out of the transfer, straight to the rotation fader. This is how much this band contributes overall." },
@@ -998,8 +1148,12 @@ const knobUI = [];
     const m = document.createElement("div");
     m.className = "meter";
     m.innerHTML =
-      '<div class="bar"><div class="col"><div class="lvl"></div></div>' +
-      '<div class="col"><div class="hit"></div></div></div>' +
+      '<div class="bar">' +
+      '<div class="zone" style="height:' + (100 - NOM_PCT).toFixed(1) + '%"></div>' +
+      '<div class="col"><div class="lvl"></div><div class="ovr" style="bottom:' + NOM_PCT.toFixed(1) + '%"></div></div>' +
+      '<div class="col"><div class="hit"></div><div class="ovr" style="bottom:' + NOM_PCT.toFixed(1) + '%"></div></div>' +
+      '<div class="nom" style="bottom:' + NOM_PCT.toFixed(1) + '%"></div>' +
+      '</div>' +
       '<div class="tag">' + b.id + '</div><div class="pl">' + b.pl + '</div>';
     const bandTip = "<b>" + b.id + "</b> " + b.lo + "–" + b.hi + " Hz → " + b.pl +
                     " plane, " + (b.dir > 0 ? "forward" : "reverse") + ".";
@@ -1007,7 +1161,12 @@ const knobUI = [];
     m.addEventListener("mouseover", () => hint(bandTip));
     m.addEventListener("mouseout", hintIdle);
     host.appendChild(m);
-    meterEls.push({ el: m, lvl: m.querySelector(".lvl"), hit: m.querySelector(".hit") });
+    const ov = m.querySelectorAll(".ovr");
+    meterEls.push({
+      el: m, lvl: m.querySelector(".lvl"), hit: m.querySelector(".hit"),
+      inOvr: ov[0], outOvr: ov[1],
+      inCol: ov[0].parentNode, outCol: ov[1].parentNode
+    });
 
     const sel = document.createElement("select");
     SHAPERS.forEach((sh, k) => {
@@ -1104,15 +1263,29 @@ function refreshChain() {
   selectBand(SELB);
 }
 
+/* The meter reads 0..METER_TOP with nominal at 1.0, so the bars sit
+   around two thirds height when a band is working normally and the
+   red above the nominal line is genuine headroom being used. Six bars
+   glued to the ceiling used to mean "no idea how hard this is
+   pushing"; now the ceiling is somewhere you visibly reach. */
 function paintMeters() {
+  const A = AUDIO;
   for (let i = 0; i < 6; i++) {
-    meterEls[i].lvl.style.height = (AUDIO.inp[i] * 100).toFixed(1) + "%";
-    meterEls[i].hit.style.height = (Math.min(AUDIO.out[i], 1) * 100).toFixed(1) + "%";
-    meterEls[i].hit.parentNode.classList.toggle("over", AUDIO.out[i] > 1);
+    const m = meterEls[i], iv = A.inp[i], ov = A.out[i];
+    m.lvl.style.height = (Math.min(iv, 1) / METER_TOP * 100).toFixed(1) + "%";
+    m.hit.style.height = (Math.min(ov, 1) / METER_TOP * 100).toFixed(1) + "%";
+    m.inOvr.style.height = (clamp(iv - 1, 0, METER_TOP - 1) / METER_TOP * 100).toFixed(1) + "%";
+    m.outOvr.style.height = (clamp(ov - 1, 0, METER_TOP - 1) / METER_TOP * 100).toFixed(1) + "%";
+    m.inCol.classList.toggle("over", iv > METER_TOP);     // pinned against the top
+    m.outCol.classList.toggle("over", ov > METER_TOP);
   }
 }
 function clearMeters() {
-  for (const m of meterEls) { m.lvl.style.height = "0%"; m.hit.style.height = "0%"; }
+  for (const m of meterEls) {
+    m.lvl.style.height = "0%"; m.hit.style.height = "0%";
+    m.inOvr.style.height = "0%"; m.outOvr.style.height = "0%";
+    m.inCol.classList.remove("over"); m.outCol.classList.remove("over");
+  }
 }
 
 function say(text, isErr) {
@@ -1222,7 +1395,9 @@ function attach(ac, node, label) {
     AUDIO.binHi.push(Math.min(bins - 1, Math.max(2, Math.ceil(b.hi / nyq * bins))));
   }
   AUDIO.ctx = ac; AUDIO.an = an; AUDIO.freq = new Float32Array(bins);
-  AUDIO.env.fill(0); AUDIO.peak.fill(0.15);
+  AUDIO.env.fill(0); AUDIO.fast.fill(0); AUDIO.slow.fill(0);
+  AUDIO.fpk.fill(0.2); AUDIO.peak.fill(0.25); AUDIO.val.fill(0.25);
+  AUDIO.avg.fill(0.5); AUDIO.norm.fill(0); AUDIO.warm = 0;
   AUDIO.inp.fill(0); AUDIO.out.fill(0);
   AUDIO.st = [{}, {}, {}, {}, {}, {}];
   AUDIO.on = true;
@@ -1332,6 +1507,7 @@ el("fileIn").addEventListener("change", e => {
   e.target.value = "";
 });
 bindSlider(el("drive"), v => { AUDIO.gain = v / 100; el("driveVal").textContent = AUDIO.gain.toFixed(2); });
+bindSlider(el("dyn"), v => { AUDIO.dyn = v / 100; el("dynVal").textContent = AUDIO.dyn.toFixed(2); });
 
 el("planes").addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b) return;
