@@ -327,6 +327,12 @@
         <div class="detent" style="left:66.7%"></div><div class="knob"></div>
         <input id="dyn" type="range" min="0" max="120" step="1" value="80">
       </div>
+      <label class="cap" for="trim"><span>Input trim <i class="tp">lin</i></span> <b id="trimVal">0 dB</b></label>
+      <div class="slider" data-for="trim">
+        <div class="track"></div><div class="fill"></div>
+        <div class="detent" style="left:83.56%"></div><div class="knob"></div>
+        <input id="trim" type="range" min="0" max="72" step="1" value="61">
+      </div>
       <div class="row" id="sceneWrap" style="margin-bottom:14px">
         <div class="caprow">
           <label class="cap" for="scene">Scene</label>
@@ -714,10 +720,16 @@ const SHAPERS = [
     f: (s, x, dt) => { s.e = (s.e || 0) + (x - (s.e || 0)) * (1 - Math.exp(-dt / 0.8)); return s.e; } }
 ];
 
-/* Every band owns its whole signal chain: window shape (attack +
-   decay), gate threshold, contrast and transient blend for the
-   dynamics recovery, pre-drive into the transfer, the transfer
+/* Every band owns its whole signal chain: input trim, window shape
+   (attack + decay), gate threshold, contrast and transient blend for
+   the dynamics recovery, pre-drive into the transfer, the transfer
    itself, and post-drive out to the rotation fader.
+
+   `trim` is the head of the chain — a channel input trim in dB,
+   applied to what the band *hears* before anything else touches it.
+   It is deliberately not the same control as `pre`: `pre` is gain
+   into the transfer function, downstream of everything adaptive, and
+   `post` is gain out of it. Neither can turn a band's input down.
 
    `exp` is the expansion ratio applied about the band's own running
    mean, and `trn` blends the fader from following level toward
@@ -725,22 +737,26 @@ const SHAPERS = [
    highs, because a kick's transient lives in BASS/MIDB while SUB is
    the sustained swell underneath it. */
 const PARAMS = [
-  { fn:  1, pre: 1, post: 1, atk: 0.250, dec: 0.850, thr: 0.075, exp: 0.55, trn: 0.10 },  // SUB  sqrt
-  { fn:  7, pre: 1, post: 1, atk: 0.015, dec: 0.130, thr: 0.075, exp: 0.90, trn: 0.30 },  // BASS hold
-  { fn:  8, pre: 1, post: 1, atk: 0.006, dec: 0.070, thr: 0.075, exp: 0.95, trn: 0.38 },  // MIDB staccato
-  { fn:  4, pre: 1, post: 1, atk: 0.050, dec: 0.300, thr: 0.075, exp: 0.80, trn: 0.22 },  // MID  s-curve
-  { fn:  0, pre: 1, post: 1, atk: 0.090, dec: 0.500, thr: 0.075, exp: 0.85, trn: 0.28 },  // UPR  linear
-  { fn: 12, pre: 1, post: 1, atk: 0.180, dec: 0.900, thr: 0.075, exp: 0.85, trn: 0.32 }   // AIR  slew
+  { fn:  1, trim: 0, pre: 1, post: 1, atk: 0.250, dec: 0.850, thr: 0.075, exp: 0.55, trn: 0.10 },  // SUB  sqrt
+  { fn:  7, trim: 0, pre: 1, post: 1, atk: 0.015, dec: 0.130, thr: 0.075, exp: 0.90, trn: 0.30 },  // BASS hold
+  { fn:  8, trim: 0, pre: 1, post: 1, atk: 0.006, dec: 0.070, thr: 0.075, exp: 0.95, trn: 0.38 },  // MIDB staccato
+  { fn:  4, trim: 0, pre: 1, post: 1, atk: 0.050, dec: 0.300, thr: 0.075, exp: 0.80, trn: 0.22 },  // MID  s-curve
+  { fn:  0, trim: 0, pre: 1, post: 1, atk: 0.090, dec: 0.500, thr: 0.075, exp: 0.85, trn: 0.28 },  // UPR  linear
+  { fn: 12, trim: 0, pre: 1, post: 1, atk: 0.180, dec: 0.900, thr: 0.075, exp: 0.85, trn: 0.32 }   // AIR  slew
 ];
 
-/* Fallbacks for any scene row written before contrast/transient existed. */
+/* Fallbacks for any scene row written before contrast/transient/trim existed. */
 const DEF_EXP = [0.55, 0.90, 0.95, 0.80, 0.85, 0.85];
 const DEF_TRN = [0.10, 0.30, 0.38, 0.22, 0.28, 0.32];
+const DEF_TRIM = [0, 0, 0, 0, 0, 0];          // unity trim: a scene says nothing → 0 dB
 
 /* Scenes — whole-chain snapshots. Each band is
-   [fn, pre, post, attack ms, decay ms, threshold, contrast, transient].
-   The last two are optional: a six-element row is still valid and
-   falls back to that band's DEF_EXP / DEF_TRN. */
+   [fn, pre, post, attack ms, decay ms, threshold, contrast, transient, trim dB].
+   The last three are optional and are read positionally, so a six- or
+   eight-element row written before those knobs existed is still valid
+   and falls back to that band's DEF_EXP / DEF_TRN / DEF_TRIM. Most
+   scenes carry no trim column at all; only the ones that genuinely
+   want a band held down at the *input* spell it out. */
 const PRESETS = [
   { name: "Balanced", b: [[1,1,1,250,850,.075,.55,.10],[7,1,1,15,130,.075,.90,.30],[8,1,1,6,70,.075,.95,.38],
                           [4,1,1,50,300,.075,.80,.22],[0,1,1,90,500,.075,.85,.28],[12,1,1,180,900,.075,.85,.32]] },
@@ -750,10 +766,15 @@ const PRESETS = [
                                [1,1,.8,300,1400,.05,.45,0],[12,1.1,.8,350,1500,.05,.50,0],[12,1.2,.9,400,1800,.05,.50,0]] },
   { name: "Strobe Cage", b: [[5,1.2,1.4,8,90,.12,1.10,.45],[9,1,1.6,4,60,.12,1.30,.70],[9,1.2,1.6,4,50,.12,1.30,.75],
                              [5,1,1.3,10,110,.12,1.10,.50],[9,1,1.5,8,90,.12,1.20,.65],[5,1.2,1.4,12,130,.12,1.20,.60]] },
-  { name: "Bass Engine", b: [[1,1.4,1.6,200,700,.06,.75,.15],[7,1.5,2,8,140,.07,1.25,.55],[8,1.4,1.8,5,70,.08,1.20,.55],
-                             [0,1,.15,60,300,.10,.60,.15],[0,1,.1,90,500,.10,.60,.15],[0,1,0,180,900,.10,.60,.15]] },
-  { name: "Air & Lace", b: [[12,1,.12,300,1200,.10,.50,.05],[0,1,.15,20,160,.10,.70,.20],[0,1,.2,8,80,.10,.80,.30],
-                            [1,1.2,1.2,60,340,.06,.95,.35],[1,1.3,1.7,80,420,.05,1.10,.50],[1,1.4,2,140,700,.05,1.15,.55]] },
+  // The two "one end of the spectrum only" scenes carry the trim column.
+  // Turning the unwanted half down at the OUTPUT (as these scenes used to)
+  // leaves it fully alive on the input side, where it still lends harmonic
+  // coherence to its neighbour and still inflates that neighbour's meter.
+  // Holding it down at the input is the honest version of the same intent.
+  { name: "Bass Engine", b: [[1,1.4,1.6,200,700,.06,.75,.15,0],[7,1.5,2,8,140,.07,1.25,.55,0],[8,1.4,1.8,5,70,.08,1.20,.55,0],
+                             [0,1,.15,60,300,.10,.60,.15,-10],[0,1,.1,90,500,.10,.60,.15,-16],[0,1,0,180,900,.10,.60,.15,-24]] },
+  { name: "Air & Lace", b: [[12,1,.12,300,1200,.10,.50,.05,-20],[0,1,.15,20,160,.10,.70,.20,-14],[0,1,.2,8,80,.10,.80,.30,-8],
+                            [1,1.2,1.2,60,340,.06,.95,.35,0],[1,1.3,1.7,80,420,.05,1.10,.50,0],[1,1.4,2,140,700,.05,1.15,.55,0]] },
   { name: "Inverse World", b: [[6,1,.7,260,900,.04,.50,0],[6,1,.8,40,300,.04,.60,0],[0,1,1,10,90,.07,.95,.35],
                                [0,1,1,60,320,.07,.80,.25],[1,1,1.1,90,500,.06,.85,.25],[6,1,.7,200,900,.04,.55,0]] },
   { name: "Percussive", b: [[8,1.2,1.2,6,140,.09,1.10,.55],[8,1.3,1.5,4,110,.09,1.25,.75],[8,1.3,1.5,4,80,.09,1.25,.80],
@@ -776,6 +797,7 @@ function applyPresetBand(k, i) {
   P.atk = p[3] / 1000; P.dec = p[4] / 1000; P.thr = p[5];
   P.exp = p.length > 6 ? p[6] : DEF_EXP[i];   // six-element rows still load
   P.trn = p.length > 7 ? p[7] : DEF_TRN[i];
+  P.trim = p.length > 8 ? p[8] : DEF_TRIM[i]; // eight-element rows still load
   AUDIO.st[i] = {};
 }
 
@@ -815,7 +837,7 @@ const FLUX_G = 3.2, FLUX_K = 0.15, FLUX_MIN = 0.12, TRN_HEAD = 1.4;
 
 const AUDIO = {
   on: false, ctx: null, an: null, stream: null, freq: null,
-  binLo: [], binHi: [], gain: 1.0, dyn: 1.0, warm: 0,
+  binLo: [], binHi: [], gain: 1.0, dyn: 1.0, trim: 0, warm: 0,   // trim in dB, offsets all six bands
   env: new Float64Array(6),                 // level envelope, per-band atk/dec
   fast: new Float64Array(6),                // transient path: fast envelope
   slow: new Float64Array(6),                //     "          slow reference
@@ -956,7 +978,40 @@ function audioStep(dt) {
     }
     const rms = Math.sqrt(pw / Math.max(n, 1));
     const db = 20 * Math.log10(rms + 1e-9);
-    const u = clamp((db - U_LO) / U_SPAN, 0, 2.5);
+
+    /* INPUT TRIM — the head of the chain, per-band plus a global
+       offset, both in dB. The band level is already in dB right here,
+       so a trim is a plain addition and the control reads the way a
+       channel trim reads on a desk. −Infinity is the "off" notch and
+       propagates cleanly: it drives u to 0 and tU to −Infinity, both
+       of which clamp to silence without ever producing a NaN.
+
+       Applied in TWO places, and the second one is the whole trick.
+
+       (1) Here, before the envelope, so the trim moves the band
+           against every reference in the chain that does NOT adapt:
+           the gate `thr`, the confidence floor `CONF_LO`, `PK_MIN`,
+           and the top of the u window.
+
+       (2) As `tU` on the fader signal below, after the normaliser.
+           This is not optional garnish. The window normaliser is a
+           two-point auto-calibration that re-learns each band's own
+           peak and valley over seconds — by construction it removes
+           any static gain placed in front of it, so (1) alone is a
+           control that visibly works for two seconds and is gone by
+           five. The absolute references in (1) only bite 40 dB below
+           where a loud band lives, which is far too late to be a
+           mix tool. `tU` is the same trim expressed in u units
+           (dB / U_SPAN) and added as an OFFSET downstream of every
+           tracker, so nothing can chase it out. An offset is also
+           genuinely a different operation from `pre`/`post`, which
+           are multiplies — this shifts the band through the window
+           at exactly the rate the raw signal moves through it, so
+           −56 dB of trim walks a band the full height of the window
+           and off the bottom no matter how long you wait. */
+    const tDb = P.trim + A.trim;
+    const tU = tDb / U_SPAN;
+    const u = clamp((db + tDb - U_LO) / U_SPAN, 0, 2.5);
 
     // LEVEL path — rolling window, asymmetric one-pole, per-band taus
     const tau = u > A.env[i] ? P.atk : P.dec;
@@ -1017,8 +1072,11 @@ function audioStep(dt) {
     const C = 1 + P.exp * DYN * conf * (SQ_FLOOR + (1 - SQ_FLOOR) * squash);
     const lvl = TARGET * conf + (nrm - A.avg[i]) * C;
 
-    // blend the fader between following level and following change
-    let x = lvl + (trn * conf - lvl) * P.trn;
+    // blend the fader between following level and following change,
+    // then the trim offset from the top of this loop — after the
+    // blend, so it holds at any transient setting, and after every
+    // adaptive tracker, so none of them can learn it away.
+    let x = lvl + (trn * conf - lvl) * P.trn + tU;
     if (A.env[i] < P.thr) x = 0;              // gate: band goes quiet, plane stops
     A.inp[i] = clamp(x, 0, HEAD);
   }
@@ -1118,6 +1176,32 @@ const linT = (d, n) => ({
   unmap: v => clamp(Math.round(v * d), 0, n)
 });
 
+/* decibel trim: position 0 is a true −∞ (the band hears nothing), and
+   positions 1..n run linearly from `lo` dB to `hi` dB at exactly one
+   step per dB. The fader law is marked LIN and that is correct rather
+   than a shortcut — dB is already a logarithm, so linear travel in dB
+   is equal ratio per step, which is the same law the LOG gain faders
+   are reaching for by another route. Laying an exponential over a dB
+   scale would be taking the log twice.
+
+   The value is stored in dB, including −Infinity for off, which
+   round-trips through unmap → 0 like any other position. */
+const linDb = (lo, hi, n) => ({
+  steps: n, unity: 1 - lo * (n - 1) / (hi - lo), log: false,
+  map: p => (p <= 0 ? -Infinity : lo + (hi - lo) * (p - 1) / (n - 1)),
+  unmap: v => (isFinite(v) ? clamp(Math.round((v - lo) * (n - 1) / (hi - lo)) + 1, 1, n) : 0)
+});
+
+/* Input trim: off, then −60 dB to +12 dB in 1 dB steps, detent at 0.
+   The range is chosen against U_SPAN, the 56 dB window the whole chain
+   works in: 60 dB of cut is one full window and a little more, so the
+   bottom of the useful throw can push any band completely out of the
+   window and off the bottom, which is the "turn this band right down"
+   the control exists for. Boost is held to +12 — this is a trim, not a
+   second drive stage, and the ceiling above nominal is only 2.0. */
+const T_TRIM_LO = -60, T_TRIM_HI = 12;
+const T_TRIM = linDb(T_TRIM_LO, T_TRIM_HI, T_TRIM_HI - T_TRIM_LO + 1);
+
 /* 4D perspective is a special case. The projection is D/(D−w), so the
    amount of distortion goes as 1/(D−1) — the difference between 1.15
    and 1.5 is enormous and the difference between 8 and 12 is nothing.
@@ -1147,6 +1231,10 @@ const T_BRIGHT = expPure(60, 100);
 const T_SPEED = expZero(120, 160);
 
 const fmtGain = v => (v <= 0 ? "off" : v.toFixed(2) + "×");
+/* dB always carries its sign — "0 dB" and "−0 dB" would read as different
+   settings, so zero is bare and only non-zero takes a + or −. */
+const fmtDb = v => (!isFinite(v) ? "off"
+  : (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(0) + " dB");
 const fmtTime = s => {
   const ms = s * 1000;
   if (ms >= 1000) return (ms / 1000).toFixed(2) + " s";
@@ -1325,6 +1413,12 @@ const UNDO_MS = 8000;
    `fmt` takes the real value, not the slider position, so the readout
    stays truthful about a preset that lands between two fader notches. */
 const KNOBS = [
+  // LINEAR, and linear in dB is the log law — see linDb. First in the
+  // strip because it is first in the chain: everything below this row
+  // is acting on whatever this row lets through.
+  { key: "trim", label: "Input trim", t: T_TRIM,
+    fmt: fmtDb,
+    tip: "LIN, off then −60 dB to +12 dB in 1 dB steps, detent at 0. Input gain on what this band hears, ahead of the envelope, the window and the gate — the channel trim, not a drive. Independent of Pre-drive and Post-drive, which sit either side of the transfer. Down here a band stops feeding its plane and stops lending harmonic coherence to its neighbour; at the bottom notch it hears nothing at all." },
   // LINEAR. An expansion ratio is already a ratio; laying a second
   // logarithm over it would mean the number under your finger and the
   // curve of the fader disagreed about what "twice as much" is.
@@ -1430,8 +1524,8 @@ const knobUI = [];
   });
 
   // reset controls
-  const RB_TIP = "<b>Reset</b> Puts this band's whole strip — transfer, " +
-                 "contrast, transient, drives, attack, decay, threshold — back " +
+  const RB_TIP = "<b>Reset</b> Puts this band's whole strip — transfer, input " +
+                 "trim, contrast, transient, drives, attack, decay, threshold — back " +
                  "to the values the selected scene loaded with.";
   const AB_TIP = "<b>Reset all</b> Reloads the selected scene across all six " +
                  "bands. Undoable for " + (UNDO_MS / 1000) + " s afterwards.";
@@ -1484,7 +1578,8 @@ const knobUI = [];
   // outside the module and carries title= instead.
   const MODTIP = {
     drive: "<b>Audio drive</b> LOG, off then 0.03× to 8.00×, doubling every 20 steps, detent at unity. Master gain on the six band faders, after the transfer stage — it scales rotation rate directly and nothing downstream clamps it. It only does anything while a source is attached; with no mic and no track the shape runs on Rotation speed alone.",
-    dyn: "<b>Dynamics</b> LOG, bypass then 0.06× to 4.00×, detent at unity. How much of the range a limiter took is put back — window normalisation, upward expansion and transient blend all scale from here. At 0 the chain is a plain level follower."
+    dyn: "<b>Dynamics</b> LOG, bypass then 0.06× to 4.00×, detent at unity. How much of the range a limiter took is put back — window normalisation, upward expansion and transient blend all scale from here. At 0 the chain is a plain level follower.",
+    trim: "<b>Input trim</b> LIN, off then −60 dB to +12 dB in 1 dB steps, detent at 0. One offset added to all six per-band input trims, at the very head of the chain. This is the control for moving a whole song down into the working window — the chain runs on a 56 dB window, so 20 dB down here is a third of it. It is a trim, not a drive: Audio drive scales the finished fader output, this changes what the bands hear."
   };
   Object.keys(MODTIP).forEach(id => {
     const w = el(id).closest(".slider"), t = MODTIP[id];
@@ -1850,6 +1945,7 @@ function driveRead() {
 setInterval(driveRead, 400);   // catches a source being attached or torn down
 bindTaper(el("drive"), p => { AUDIO.gain = T_DRIVE.map(p); driveRead(); });
 bindTaper(el("dyn"),   p => { AUDIO.dyn  = T_DYN.map(p);   el("dynVal").textContent = fmtGain(AUDIO.dyn); });
+bindTaper(el("trim"),  p => { AUDIO.trim = T_TRIM.map(p);  el("trimVal").textContent = fmtDb(AUDIO.trim); });
 
 el("planes").addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b) return;
