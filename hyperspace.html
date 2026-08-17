@@ -140,6 +140,28 @@
   .fbtn[aria-pressed=true] .dot{background:var(--red);box-shadow:0 0 7px var(--red)}
   .fbtn input{position:absolute;inset:0;opacity:0;font-size:0;cursor:pointer}
 
+  /* transport — only live in file mode, dimmed but never removed so
+     nothing under it shifts when a track loads */
+  .transport{display:flex;gap:8px;margin-top:8px}
+  .transport button{
+    flex:1;font-family:inherit;font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+    padding:11px 0;background:transparent;color:rgba(255,255,255,.72);
+    border:1px solid var(--line);border-radius:0;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;gap:7px;
+    transition:color .15s,border-color .15s;
+  }
+  .transport button:hover:not(:disabled){color:#fff;border-color:rgba(255,255,255,.45)}
+  .transport button:focus-visible{outline:1px solid var(--red);outline-offset:2px}
+  .transport button:disabled{color:rgba(255,255,255,.17);border-color:rgba(255,255,255,.06);cursor:default}
+  .transport .g{color:var(--red);font-size:9px;letter-spacing:0}
+  .transport button:disabled .g{color:rgba(255,255,255,.17)}
+  #trTime{
+    flex:0 0 auto;display:flex;align-items:center;padding:0 11px;
+    border:1px solid var(--line);font-size:9.5px;letter-spacing:.12em;
+    color:rgba(255,255,255,.55);white-space:nowrap;
+  }
+  #trTime.off{color:rgba(255,255,255,.17);border-color:rgba(255,255,255,.06)}
+
   /* ---------- audio section ---------- */
   .rule{border-top:1px solid var(--line);margin:18px 0 14px}
   .meters{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-top:10px}
@@ -266,6 +288,11 @@
         <button id="tMic" aria-pressed="false"><span class="dot"></span>Listen to mic</button>
         <label class="fbtn" id="tFile" aria-pressed="false"><span class="dot"></span>Load a track<input id="fileIn" type="file" accept="audio/*"></label>
       </div>
+      <div class="transport">
+        <button id="trPlay" disabled><span class="g">&#9654;</span>Play</button>
+        <button id="trRestart" disabled><span class="g">&#8635;</span>Restart</button>
+        <div id="trTime" class="off">0:00 / 0:00</div>
+      </div>
     </div>
 
     <div class="rule"></div>
@@ -329,6 +356,7 @@
   <div><kbd>drag</kbd> turn view</div>
   <div><kbd>← →</kbd> shape &nbsp; <kbd>space</kbd> pause</div>
   <div><kbd>P</kbd> points &nbsp; <kbd>H</kbd> panel &nbsp; <kbd>R</kbd> reset</div>
+  <div><kbd>K</kbd> track &nbsp; <kbd>0</kbd> restart</div>
 </div>
 
 <script>
@@ -1099,6 +1127,88 @@ function say(text, isErr) {
    previews serve a CSP with no media-src, which blocks blob media. ---- */
 let fileSrc = null;
 
+/* ---- transport ----
+   An AudioBufferSourceNode is single-use: once stopped it can never be
+   started again. So pause stops the node and remembers the playhead, and
+   resume builds a fresh source started at that offset. Position is read
+   off ac.currentTime rather than counted per frame, so it stays exact
+   while the tab is throttled; the modulo folds loop wraps back in.
+
+   Analysis deliberately keeps running while paused — the hub is fed by
+   nothing, which is silence, so the band envelopes decay to zero on their
+   own time constants and the shape coasts to a stop instead of freezing. */
+const TR = { buf: null, hub: null, playing: false, offset: 0, since: 0 };
+
+function trPos() {
+  if (!TR.buf) return 0;
+  const d = TR.buf.duration;
+  if (!TR.playing || !AUDIO.ctx || d <= 0) return TR.offset;
+  return (TR.offset + (AUDIO.ctx.currentTime - TR.since)) % d;
+}
+
+function trStart(off) {
+  const ac = AUDIO.ctx;
+  if (!ac || !TR.buf) return;
+  const src = ac.createBufferSource();
+  src.buffer = TR.buf;
+  src.loop = true;
+  src.connect(TR.hub);
+  src.start(0, off);
+  fileSrc = src;
+  TR.offset = off; TR.since = ac.currentTime; TR.playing = true;
+  syncTransport();
+}
+
+function trStop() {
+  if (fileSrc) {
+    try { fileSrc.stop(); } catch (_) {}
+    try { fileSrc.disconnect(); } catch (_) {}
+    fileSrc = null;
+  }
+}
+
+function trPause() {
+  if (!TR.playing) return;
+  TR.offset = trPos();
+  TR.playing = false;
+  trStop();
+  syncTransport();
+}
+
+function trToggle() {
+  if (!TR.buf) return;
+  if (TR.playing) trPause();
+  else { AUDIO.ctx.resume(); trStart(TR.offset); }
+}
+
+// return to zero, keeping whatever transport state you were in — a DAW
+// that started playing every time you hit the start marker would be rude
+function trRestart() {
+  if (!TR.buf) return;
+  if (TR.playing) { trStop(); trStart(0); }
+  else { TR.offset = 0; syncTransport(); }
+}
+
+const mmss = s => {
+  s = Math.max(0, Math.floor(s));
+  return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+};
+
+function syncTransport() {
+  const live = !!TR.buf, t = el("trTime");
+  el("trPlay").disabled = !live;
+  el("trRestart").disabled = !live;
+  el("trPlay").innerHTML = TR.playing
+    ? '<span class="g">&#10074;&#10074;</span>Pause'
+    : '<span class="g">&#9654;</span>Play';
+  t.classList.toggle("off", !live);
+  t.textContent = live ? mmss(trPos()) + " / " + mmss(TR.buf.duration) : "0:00 / 0:00";
+}
+setInterval(() => { if (TR.buf && TR.playing) syncTransport(); }, 250);
+
+el("trPlay").addEventListener("click", trToggle);
+el("trRestart").addEventListener("click", trRestart);
+
 function attach(ac, node, label) {
   const an = ac.createAnalyser();
   an.fftSize = 4096;
@@ -1182,14 +1292,14 @@ function startFile(file) {
   rd.onerror = () => say("Could not read that file.", true);
   rd.onload = () => {
     ac.decodeAudioData(rd.result, buf => {
-      const src = ac.createBufferSource();
-      src.buffer = buf;
-      src.loop = true;
-      src.connect(ac.destination);          // so you hear it as well as see it
-      fileSrc = src;
+      // every source node feeds one fixed hub, so pause/resume can swap
+      // sources underneath without ever re-wiring the analyser
+      const hub = ac.createGain();
+      hub.connect(ac.destination);          // so you hear it as well as see it
       AUDIO.mode = "file";
-      attach(ac, src, file.name.slice(0, 20));
-      src.start();
+      attach(ac, hub, file.name.slice(0, 20));
+      TR.buf = buf; TR.hub = hub; TR.offset = 0;
+      trStart(0);
       el("tFile").setAttribute("aria-pressed", "true");
     }, () => {
       try { ac.close(); } catch (_) {}
@@ -1202,6 +1312,8 @@ function startFile(file) {
 function stopAudio(quiet) {
   if (AUDIO.stream) AUDIO.stream.getTracks().forEach(t => t.stop());
   if (fileSrc) { try { fileSrc.stop(); } catch (_) {} fileSrc = null; }
+  TR.buf = null; TR.hub = null; TR.playing = false; TR.offset = 0;
+  syncTransport();
   if (AUDIO.ctx) { try { AUDIO.ctx.close(); } catch (_) {} }
   AUDIO.on = false; AUDIO.ctx = null; AUDIO.an = null; AUDIO.stream = null; AUDIO.mode = null;
   PLANEDRIVE.fill(1);
@@ -1268,6 +1380,8 @@ window.addEventListener("keydown", e => {
   else if (k === "p") togglePoints();
   else if (k === "h") toggleConsole();
   else if (k === "m") toggleMic();
+  else if (k === "k") trToggle();
+  else if (k === "0") trRestart();
   else if (k === "r") { S.yaw = 0; S.pitch = 0; S.ang = [0, 0, 0, 0, 0, 0]; }
   else if (k === "arrowright") { S.shape = Math.min(SHAPES.length - 1, S.shape + 1); syncShape(); }
   else if (k === "arrowleft")  { S.shape = Math.max(0, S.shape - 1); syncShape(); }
