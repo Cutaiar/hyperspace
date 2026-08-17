@@ -279,12 +279,12 @@
   .krow .knob{top:5px;height:14px}
   #sceneWrap .caprow{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:4px}
   #sceneWrap .caprow label.cap{margin-bottom:0}
-  #sceneWrap select{
+  #sceneWrap select,#inputRow select{
     width:100%;font-family:inherit;font-size:10px;letter-spacing:.1em;
     padding:9px 8px;background:#000;color:#fff;border:1px solid var(--line);border-radius:0;
     -webkit-appearance:none;appearance:none;cursor:pointer;
   }
-  #sceneWrap select option{font-size:12px}
+  #sceneWrap select option,#inputRow select option{font-size:12px}
   .meter .tag{font-size:8px;letter-spacing:.08em;color:rgba(255,255,255,.45)}
   .meter .pl{font-size:8px;letter-spacing:.08em;color:var(--red)}
   #audioMsg{font-size:9.5px;line-height:1.6;letter-spacing:.05em;color:var(--dim);margin-top:10px;min-height:12px}
@@ -372,9 +372,16 @@
         <div id="knobs"></div>
       </div>
       <div id="audioMsg">Each band drives one rotation plane. Silence in a band stops that plane.</div>
+      <div class="row" id="inputRow" style="display:none;margin:10px 0 0">
+        <label class="cap" for="inDev">Input device</label>
+        <select id="inDev"></select>
+      </div>
       <div class="toggles" style="margin-top:10px">
         <button id="tMic" aria-pressed="false"><span class="dot"></span>Listen to mic</button>
         <label class="fbtn" id="tFile" aria-pressed="false"><span class="dot"></span>Load a track<input id="fileIn" type="file" accept="audio/*"></label>
+      </div>
+      <div class="toggles" style="margin-top:8px">
+        <button id="tSys" aria-pressed="false"><span class="dot"></span>System audio</button>
       </div>
       <div class="transport">
         <button id="trPlay" disabled><span class="g">&#9654;</span>Play</button>
@@ -903,7 +910,7 @@ function softCeil(x, knee, ceil) {
 }
 
 const AUDIO = {
-  on: false, ctx: null, an: null, stream: null, freq: null,
+  on: false, ctx: null, an: null, stream: null, freq: null, devId: null,
   binLo: [], binHi: [], gain: 1.0, dyn: 1.0, trim: 0, warm: 0,   // trim in dB, offsets all six bands
   env: new Float64Array(6),                 // level envelope, per-band atk/dec
   fast: new Float64Array(6),                // transient path: fast envelope
@@ -1700,9 +1707,23 @@ const knobUI = [];
     w.addEventListener("pointerdown", e => hint(t, e.pointerType !== "mouse"));
   });
 
+  // the two live-input buttons: each one's caveats are the other one's reason
+  // to exist, so both tips name the other route
+  const SRCTIP = {
+    tMic: "<b>Listen to mic</b> Opens whatever is chosen under Input device — so point it at a loopback device (BlackHole, with a Multi-Output Device so you still hear the audio) and this becomes every app on the machine, not just the microphone. A loopback device is detected by name and preselected. Needs https or localhost: a file:// page never even prompts.",
+    tSys: "<b>System audio</b> Captures one browser tab, no driver needed. In the picker stay on the Tab list, click the tab itself, and leave Also share tab audio on — Share stays greyed out until a tab is selected. Native apps never appear there, and on macOS a screen or window share comes back silent. Chrome and Edge only. For everything on the machine, use the BlackHole route on Listen to mic instead."
+  };
+  Object.keys(SRCTIP).forEach(id => {
+    const b = el(id), t = SRCTIP[id];
+    b.addEventListener("mouseover", () => hint(t));
+    b.addEventListener("mouseout", hintIdle);
+    b.addEventListener("focus", () => hint(t));
+    b.addEventListener("pointerdown", e => hint(t, e.pointerType !== "mouse"));
+  });
+
   const arow = el("audioRow");
   arow.addEventListener("mouseover", e => {
-    if (!e.target.closest(".meter, .shapers select, .krow, .mreset, .slider")) hint(null);
+    if (!e.target.closest(".meter, .shapers select, .krow, .mreset, .slider, .toggles button")) hint(null);
   });
   arow.addEventListener("mouseleave", hideHint);
   el("console").addEventListener("mouseleave", hideHint);
@@ -1981,14 +2002,17 @@ function newCtx() {
    ordinary page that can ask for the mic normally. ---- */
 const FRAMED = (() => { try { return window.self !== window.top; } catch (_) { return true; } })();
 
-// false = Permissions Policy has already refused; null = can't tell
-function micPolicy() {
+// false = Permissions Policy has already refused; null = can't tell.
+// "display-capture" gates getDisplayMedia the same way "microphone" gates
+// getUserMedia, and preview frames withhold both.
+function policyAllows(feature) {
   try {
     const pp = document.featurePolicy || document.permissionsPolicy;
-    if (pp && typeof pp.allowsFeature === "function") return pp.allowsFeature("microphone");
+    if (pp && typeof pp.allowsFeature === "function") return pp.allowsFeature(feature);
   } catch (_) {}
   return null;
 }
+const micPolicy = () => policyAllows("microphone");
 
 // only an http(s) page can be usefully reopened; blob:, data: and srcdoc
 // frames have no address a new tab could resolve
@@ -2011,12 +2035,12 @@ function copyAddress() {
 }
 
 // one dead end, one offer to get out of it
-function micBlocked(why) {
+function frameBlocked(why) {
   if (canEscape())
-    sayAction(why + " Open this page in its own tab and the mic prompt works normally.",
+    sayAction(why + " Open this page in its own tab and the browser prompts normally.",
               "Open in a new tab", escapeFrame);
   else if (FRAMED)
-    say(why + " Open hyperspace.html directly in a browser for mic input, or use Load a track here.", true);
+    say(why + " Open hyperspace.html directly in a browser for live input, or use Load a track here.", true);
   else
     say(why + " Use Load a track instead.", true);
 }
@@ -2039,7 +2063,7 @@ function diagnose(err) {
 async function startMic() {
   stopAudio(true);
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    if (FRAMED) micBlocked("This frame exposes no microphone API.");
+    if (FRAMED) frameBlocked("This frame exposes no microphone API.");
     else say(location.protocol === "file:"
       ? "No microphone API on file:// pages. Serve over localhost, or load a track."
       : "This browser exposes no microphone API. Load a track instead.", true);
@@ -2047,28 +2071,145 @@ async function startMic() {
   }
   // asking would only produce a prompt the policy has already overruled
   if (micPolicy() === false) {
-    micBlocked("This preview frame is not granted microphone permission, so the prompt can never succeed here.");
+    frameBlocked("This preview frame is not granted microphone permission, so the prompt can never succeed here.");
     return;
   }
-  say("Requesting microphone…");
+  say(AUDIO.devId ? "Opening input…" : "Requesting microphone…");
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
-    });
+    // every processing stage assumes untouched samples: the three -Suppression
+    // flags are voice-call DSP that would gate and duck the very dynamics the
+    // band analysis is looking for
+    const con = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
+    if (AUDIO.devId) con.deviceId = { exact: AUDIO.devId };
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: con });
     const ac = newCtx();
     AUDIO.stream = stream;
     AUDIO.mode = "mic";
-    attach(ac, ac.createMediaStreamSource(stream), "Microphone");
+    const track = stream.getAudioTracks()[0];
+    const name = (track && track.label) || "Microphone";
+    if (track) AUDIO.devId = track.getSettings().deviceId || AUDIO.devId;
+    attach(ac, ac.createMediaStreamSource(stream),
+           (isLoopback(name) ? "System · " : "") + name.slice(0, 24));
     el("tMic").setAttribute("aria-pressed", "true");
+    refreshInputs();                        // labels are only readable post-grant
   } catch (err) {
     AUDIO.on = false;
     el("tMic").setAttribute("aria-pressed", "false");
     const name = err && err.name;
+    // a remembered device can vanish — unplugged, or BlackHole uninstalled
+    if ((name === "OverconstrainedError" || name === "NotFoundError") && AUDIO.devId) {
+      AUDIO.devId = null;
+      say("That input is gone. Falling back to the default device…");
+      startMic();
+      return;
+    }
     // in a frame a refusal is usually the policy rather than the user, but
     // the two are indistinguishable from here — name both, offer the way out
     if (FRAMED && (name === "NotAllowedError" || name === "SecurityError"))
-      micBlocked("Microphone refused (" + name + ") — by you, or by the frame around this page.");
+      frameBlocked("Microphone refused (" + name + ") — by you, or by the frame around this page.");
     else say(diagnose(err), true);
+  }
+}
+
+/* ---- system audio ----
+   Two routes, because neither covers everything.
+
+   1. A virtual loopback driver — BlackHole on macOS, the same trick the
+      `samples` visualiser uses. It installs as an ordinary *input* device, so
+      once the user routes their output through it (Multi-Output Device in
+      Audio MIDI Setup, so they still hear it), everything playing on the
+      machine arrives through plain getUserMedia. Any app, any browser.
+      That is what the input picker below is for: the mic path already works,
+      it just needs to open BlackHole rather than the built-in mic.
+
+   2. getDisplayMedia with audio, which needs no driver at all but is narrow:
+      Chrome and Edge only, and on macOS it can capture audio from a *browser
+      tab* only — screen and window shares come back silent. Chrome also
+      refuses audio-only capture, so we ask for video and immediately throw
+      the video track away. ---- */
+const LOOPBACK = /blackhole|loopback|soundflower|vb-?cable|virtual|aggregate|multi-?output|stereo mix|what ?u ?hear/i;
+const isLoopback = label => LOOPBACK.test(label || "");
+
+// The device list is only useful once labels exist, and labels stay blank
+// until some capture has been granted — so this is called again after a
+// successful open, and whenever devices come and go.
+async function refreshInputs() {
+  const row = el("inputRow"), sel = el("inDev");
+  if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+  let devs = [];
+  try { devs = await navigator.mediaDevices.enumerateDevices(); } catch (_) { return; }
+  const ins = devs.filter(d => d.kind === "audioinput" && d.deviceId);
+  if (ins.length < 2 || !ins.some(d => d.label)) { row.style.display = "none"; return; }
+
+  sel.textContent = "";
+  for (const d of ins) {
+    const o = document.createElement("option");
+    o.value = d.deviceId;
+    o.textContent = (isLoopback(d.label) ? "◆ " : "") + (d.label || "Input " + (sel.length + 1));
+    sel.append(o);
+  }
+  sel.value = AUDIO.devId || ins[0].deviceId;
+  row.style.display = "";
+  return ins;
+}
+
+// switching device mid-listen re-opens the stream; otherwise just remember it
+el("inDev").addEventListener("change", e => {
+  AUDIO.devId = e.target.value;
+  if (AUDIO.on && AUDIO.mode === "mic") startMic();
+  else say("Input set. Click Listen to mic to open it.");
+});
+
+// what to tell someone who has no loopback device installed
+const BLACKHOLE_TIP =
+  "For audio from any app, install BlackHole (brew install blackhole-2ch), " +
+  "make a Multi-Output Device in Audio MIDI Setup with BlackHole plus your " +
+  "speakers, then pick BlackHole under Input device here.";
+
+async function startSys() {
+  stopAudio(true);
+  const gdm = navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia;
+  if (!gdm) {
+    const ins = await refreshInputs();
+    const lb = (ins || []).find(d => isLoopback(d.label));
+    if (lb) { AUDIO.devId = lb.deviceId; el("inDev").value = lb.deviceId; startMic(); return; }
+    say("This browser cannot capture tab audio. " + BLACKHOLE_TIP, true);
+    return;
+  }
+  if (policyAllows("display-capture") === false) {
+    frameBlocked("This preview frame is not granted screen capture, so tab audio can never be shared here.");
+    return;
+  }
+  say("Pick a tab, and tick Share tab audio…");
+  try {
+    const stream = await navigator.mediaDevices.getDisplayMedia({
+      video: true,                          // Chrome refuses audio-only capture
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+    });
+    const at = stream.getAudioTracks();
+    if (!at.length) {
+      stream.getTracks().forEach(t => t.stop());
+      say("That share carried no audio. Re-pick, choose a Tab, and tick Share tab audio. " +
+          BLACKHOLE_TIP, true);
+      return;
+    }
+    // the video track is pure overhead — a whole encoded screen we never draw
+    for (const v of stream.getVideoTracks()) { v.stop(); stream.removeTrack(v); }
+    const ac = newCtx();
+    AUDIO.stream = stream;
+    AUDIO.mode = "sys";
+    // Chrome's own "Stop sharing" bar ends the track behind our back
+    at[0].addEventListener("ended", () => { if (AUDIO.mode === "sys") stopAudio(); });
+    attach(ac, ac.createMediaStreamSource(stream), "System audio");
+    el("tSys").setAttribute("aria-pressed", "true");
+  } catch (err) {
+    AUDIO.on = false;
+    el("tSys").setAttribute("aria-pressed", "false");
+    const name = err && err.name;
+    if (name === "NotAllowedError" && FRAMED)
+      frameBlocked("Screen capture refused (" + name + ") — by you, or by the frame around this page.");
+    else if (name === "NotAllowedError") say("Share cancelled. " + BLACKHOLE_TIP);
+    else say("Could not capture tab audio (" + name + "). " + BLACKHOLE_TIP, true);
   }
 }
 
@@ -2111,12 +2252,15 @@ function stopAudio(quiet) {
   clearMeters();
   el("audioRow").classList.add("idle");
   el("tMic").setAttribute("aria-pressed", "false");
+  el("tSys").setAttribute("aria-pressed", "false");
   el("tFile").setAttribute("aria-pressed", "false");
   if (!quiet) say("Stopped. Rotation is back on the speed slider.");
 }
 
 const toggleMic = () => (AUDIO.on && AUDIO.mode === "mic" ? stopAudio() : startMic());
+const toggleSys = () => (AUDIO.on && AUDIO.mode === "sys" ? stopAudio() : startSys());
 el("tMic").addEventListener("click", toggleMic);
+el("tSys").addEventListener("click", toggleSys);
 el("fileIn").addEventListener("change", e => {
   const f = e.target.files && e.target.files[0];
   if (f) startFile(f);
@@ -2186,6 +2330,7 @@ window.addEventListener("keydown", e => {
   else if (k === "p") togglePoints();
   else if (k === "h") toggleConsole();
   else if (k === "m") toggleMic();
+  else if (k === "s") toggleSys();
   else if (k === "k") trToggle();
   else if (k === "0") trRestart();
   else if (k === "r") { S.yaw = 0; S.pitch = 0; S.ang = [0, 0, 0, 0, 0, 0]; }
@@ -2200,9 +2345,23 @@ window.addEventListener("keydown", e => {
     say(location.protocol === "file:"
       ? "Mic unavailable on file:// pages. Use Load a track, or serve over localhost."
       : "No microphone API here. Use Load a track.", true);
-  } else if (FRAMED && (noApi || micPolicy() === false)) {
-    micBlocked("This preview frame does not grant the microphone.");
+    return;
   }
+  if (FRAMED && (noApi || micPolicy() === false)) {
+    frameBlocked("This preview frame does not grant the microphone.");
+    return;
+  }
+  // a previously granted site keeps its labels, so a loopback device can be
+  // spotted and offered before the user has clicked anything
+  refreshInputs().then(ins => {
+    const lb = (ins || []).find(d => isLoopback(d.label));
+    if (!lb) return;
+    AUDIO.devId = lb.deviceId;
+    el("inDev").value = lb.deviceId;
+    say(lb.label + " found — selected as the input. Listen to mic now visualises system audio.");
+  });
+  if (navigator.mediaDevices.addEventListener)
+    navigator.mediaDevices.addEventListener("devicechange", refreshInputs);
 })();
 
 resize();
