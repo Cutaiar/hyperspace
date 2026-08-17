@@ -285,6 +285,9 @@
     -webkit-appearance:none;appearance:none;cursor:pointer;
   }
   #sceneWrap select option,#inputRow select option{font-size:12px}
+  /* the pre-grant state: present, so the control is discoverable, but visibly
+     not a thing you can pick from yet */
+  #inputRow select:disabled{color:var(--dim);border-style:dashed;cursor:default}
   .meter .tag{font-size:8px;letter-spacing:.08em;color:rgba(255,255,255,.45)}
   .meter .pl{font-size:8px;letter-spacing:.08em;color:var(--red)}
   #audioMsg{font-size:9.5px;line-height:1.6;letter-spacing:.05em;color:var(--dim);margin-top:10px;min-height:12px}
@@ -2139,7 +2142,24 @@ async function refreshInputs() {
   let devs = [];
   try { devs = await navigator.mediaDevices.enumerateDevices(); } catch (_) { return; }
   const ins = devs.filter(d => d.kind === "audioinput" && d.deviceId);
-  if (ins.length < 2 || !ins.some(d => d.label)) { row.style.display = "none"; return; }
+  if (!ins.length) { row.style.display = "none"; return; }
+
+  // Labels are blank until *this origin* has been granted a capture once, and a
+  // blank label can never match isLoopback — so on a first visit a loopback
+  // device is invisible. The picker used to hide itself at exactly the moment
+  // someone needed telling why, which reads as "system audio is broken" on a
+  // fresh deploy. Show it disabled instead, saying what to do about it.
+  if (!ins.some(d => d.label)) {
+    sel.textContent = "";
+    const o = document.createElement("option");
+    o.textContent = "Allow the mic once to list devices";
+    sel.append(o);
+    sel.disabled = true;
+    row.style.display = "";
+    return;
+  }
+  sel.disabled = false;
+  if (ins.length < 2) { row.style.display = "none"; return; }
 
   sel.textContent = "";
   for (const d of ins) {
