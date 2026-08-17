@@ -235,6 +235,11 @@
   .meter .pl{font-size:8px;letter-spacing:.08em;color:var(--red)}
   #audioMsg{font-size:9.5px;line-height:1.6;letter-spacing:.05em;color:var(--dim);margin-top:10px;min-height:12px}
   #audioMsg.err{color:var(--red)}
+  #audioMsg button{
+    display:inline-block;margin-top:6px;font:inherit;letter-spacing:.14em;text-transform:uppercase;
+    padding:5px 9px;background:#000;color:#fff;border:1px solid var(--line);border-radius:0;cursor:pointer;
+  }
+  #audioMsg button:hover{border-color:var(--red);color:var(--red)}
   #audioRow.idle .meters{opacity:.32}
 
   #keys{
@@ -1298,6 +1303,17 @@ function say(text, isErr) {
   n.classList.toggle("err", !!isErr);
 }
 
+// same line, plus a button — used where the message alone is a dead end
+// and there is exactly one thing the user can do about it
+function sayAction(text, label, fn, isErr) {
+  say(text, isErr);
+  const b = document.createElement("button");
+  b.type = "button";
+  b.textContent = label;
+  b.addEventListener("click", fn);
+  el("audioMsg").append(document.createElement("br"), b);
+}
+
 /* ---- sources: microphone, or a local audio file ----
    The file is read straight into an ArrayBuffer and decoded by the
    AudioContext. No <audio> element and no blob: URL, because embedded
@@ -1420,6 +1436,57 @@ function newCtx() {
   return ac;
 }
 
+/* ---- why the mic is denied in a preview, and the way out ----
+   Cloud previews, artifact viewers and doc embeds all render this page in
+   an iframe. An iframe only gets the microphone if the *parent* wrote
+   allow="microphone" on it, and none of them do. Nothing inside the frame
+   can grant it: the user can click "allow" every time and getUserMedia
+   still rejects with NotAllowedError, because Permissions Policy refused
+   before the prompt was ever reachable. The only real fix from in here is
+   to leave the frame — the same URL opened as its own top-level tab is an
+   ordinary page that can ask for the mic normally. ---- */
+const FRAMED = (() => { try { return window.self !== window.top; } catch (_) { return true; } })();
+
+// false = Permissions Policy has already refused; null = can't tell
+function micPolicy() {
+  try {
+    const pp = document.featurePolicy || document.permissionsPolicy;
+    if (pp && typeof pp.allowsFeature === "function") return pp.allowsFeature("microphone");
+  } catch (_) {}
+  return null;
+}
+
+// only an http(s) page can be usefully reopened; blob:, data: and srcdoc
+// frames have no address a new tab could resolve
+const canEscape = () => FRAMED && (location.protocol === "https:" || location.protocol === "http:");
+
+function escapeFrame() {
+  let w = null;
+  try { w = window.open(location.href, "_blank", "noopener"); } catch (_) {}
+  if (w) say("Opened in a new tab. Click Listen to mic there.");
+  else sayAction("The frame blocked the new tab. Allow pop-ups for this page, or copy the address below into a tab of your own.",
+                 "Copy address", copyAddress, true);
+}
+
+function copyAddress() {
+  const url = location.href;
+  const done = () => say("Address copied. Paste it into a new tab, then click Listen to mic.");
+  if (navigator.clipboard && navigator.clipboard.writeText)
+    navigator.clipboard.writeText(url).then(done, () => say(url));
+  else say(url);
+}
+
+// one dead end, one offer to get out of it
+function micBlocked(why) {
+  if (canEscape())
+    sayAction(why + " Open this page in its own tab and the mic prompt works normally.",
+              "Open in a new tab", escapeFrame);
+  else if (FRAMED)
+    say(why + " Open hyperspace.html directly in a browser for mic input, or use Load a track here.", true);
+  else
+    say(why + " Use Load a track instead.", true);
+}
+
 function diagnose(err) {
   const name = err && err.name ? err.name : "unknown";
   const local = location.protocol === "file:";
@@ -1438,9 +1505,15 @@ function diagnose(err) {
 async function startMic() {
   stopAudio(true);
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    say(location.protocol === "file:"
+    if (FRAMED) micBlocked("This frame exposes no microphone API.");
+    else say(location.protocol === "file:"
       ? "No microphone API on file:// pages. Serve over localhost, or load a track."
       : "This browser exposes no microphone API. Load a track instead.", true);
+    return;
+  }
+  // asking would only produce a prompt the policy has already overruled
+  if (micPolicy() === false) {
+    micBlocked("This preview frame is not granted microphone permission, so the prompt can never succeed here.");
     return;
   }
   say("Requesting microphone…");
@@ -1456,7 +1529,12 @@ async function startMic() {
   } catch (err) {
     AUDIO.on = false;
     el("tMic").setAttribute("aria-pressed", "false");
-    say(diagnose(err), true);
+    const name = err && err.name;
+    // in a frame a refusal is usually the policy rather than the user, but
+    // the two are indistinguishable from here — name both, offer the way out
+    if (FRAMED && (name === "NotAllowedError" || name === "SecurityError"))
+      micBlocked("Microphone refused (" + name + ") — by you, or by the frame around this page.");
+    else say(diagnose(err), true);
   }
 }
 
@@ -1569,13 +1647,13 @@ window.addEventListener("keydown", e => {
 
 // tell the user up front whether the mic can work here at all
 (function probeAudio() {
-  const framed = window.self !== window.top;
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+  const noApi = !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia;
+  if (noApi && !FRAMED) {
     say(location.protocol === "file:"
       ? "Mic unavailable on file:// pages. Use Load a track, or serve over localhost."
       : "No microphone API here. Use Load a track.", true);
-  } else if (framed) {
-    say("Embedded previews block the mic. Load a track here, or open the file in a browser for mic input.");
+  } else if (FRAMED && (noApi || micPolicy() === false)) {
+    micBlocked("This preview frame does not grant the microphone.");
   }
 })();
 

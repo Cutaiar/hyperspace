@@ -194,11 +194,20 @@ breaks the artifact in the Claude preview.
   file path therefore reads to an `ArrayBuffer` via `FileReader` and uses
   `decodeAudioData` + `AudioBufferSourceNode`. Nothing is *loaded*, so CSP has
   nothing to block. **Do not reintroduce an `<audio>` element.**
-- **Microphone is blocked in the preview.** The sandbox emits an unrecognised
-  `webrtc` CSP directive; `getUserMedia` will not work in-frame. It also cannot
-  work from `file://` in Chrome (opaque origin, no prompt). Mic input requires
-  Firefox, or serving over `localhost`. The page detects and states this rather
-  than failing silently.
+- **Microphone is blocked in every preview frame, and no amount of clicking
+  "allow" fixes it.** An iframe only receives the microphone if the *parent*
+  wrote `allow="microphone"` on it; artifact, cloud and doc embeds do not, so
+  Permissions Policy rejects `getUserMedia` with `NotAllowedError` before a
+  prompt is ever reachable. (The artifact sandbox additionally emits an
+  unrecognised `webrtc` CSP directive.) `file://` in Chrome is separately
+  hopeless — opaque origin, no prompt.
+  The page therefore checks `document.featurePolicy.allowsFeature("microphone")`
+  (`micPolicy()`) up front and on click, skips the pointless request, and offers
+  the one thing that actually works: `escapeFrame()` reopens the same URL as a
+  top-level tab, where the mic prompts normally. If the frame also blocks
+  `window.open` (no `allow-popups`), it falls back to copying the address.
+  Non-`http(s)` frames (`srcdoc`, `blob:`) have no reopenable address and get
+  told to open `hyperspace.html` in a browser instead.
 - **`vh` is wrong on iOS.** It measures the *large* viewport, so a panel capped
   at `88vh` grew taller than the visible area and pushed the collapse handle off
   the top edge. Use `dvh` with a `vh` fallback.
