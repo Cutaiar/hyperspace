@@ -222,12 +222,28 @@
     margin-bottom:11px;
   }
   #stripHead em{font-style:normal;color:rgba(255,255,255,.4);letter-spacing:.1em}
+  #stripHead .hr{display:flex;align-items:baseline;gap:9px}
+
+  /* micro reset controls — same hairline square family as .toggles /
+     .transport, one size down so they sit quietly inside a 9.5px header
+     instead of reading as a primary action */
+  .mreset{
+    font-family:inherit;font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;
+    padding:3px 7px;background:transparent;color:rgba(255,255,255,.34);
+    border:1px solid var(--line);border-radius:0;cursor:pointer;
+    transition:color .15s,border-color .15s;
+  }
+  .mreset:hover{color:#fff;border-color:rgba(255,255,255,.45)}
+  .mreset:focus-visible{outline:1px solid var(--red);outline-offset:2px}
+  .mreset.armed{color:var(--red);border-color:var(--red)}
   .krow{margin-bottom:7px}
   .krow:last-child{margin-bottom:0}
   .krow label.cap{margin-bottom:1px;font-size:9px;letter-spacing:.16em}
   .krow .slider{height:24px}
   .krow .track,.krow .fill{top:11.5px}
   .krow .knob{top:5px;height:14px}
+  #sceneWrap .caprow{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:4px}
+  #sceneWrap .caprow label.cap{margin-bottom:0}
   #sceneWrap select{
     width:100%;font-family:inherit;font-size:10px;letter-spacing:.1em;
     padding:9px 8px;background:#000;color:#fff;border:1px solid var(--line);border-radius:0;
@@ -292,14 +308,19 @@
         <input id="dyn" type="range" min="0" max="150" step="5" value="100">
       </div>
       <div class="row" id="sceneWrap" style="margin-bottom:14px">
-        <label class="cap" for="scene">Scene</label>
+        <div class="caprow">
+          <label class="cap" for="scene">Scene</label>
+          <button class="mreset" id="allReset" type="button">Reset all</button>
+        </div>
         <select id="scene"></select>
       </div>
       <div class="meters" id="meters"></div>
       <div class="shapers" id="shapers"></div>
       <div class="legend"><span><i class="a"></i>input</span><span><i class="b"></i>fader out</span><span><i class="c"></i>headroom</span></div>
       <div id="strip">
-        <div id="stripHead"><span id="stripName">SUB</span><em id="stripPlane">ZW plane</em></div>
+        <div id="stripHead"><span id="stripName">SUB</span>
+          <span class="hr"><em id="stripPlane">ZW plane</em><button class="mreset" id="bandReset" type="button">Reset</button></span>
+        </div>
         <div id="knobs"></div>
       </div>
       <div id="audioMsg">Each band drives one rotation plane. Silence in a band stops that plane.</div>
@@ -717,15 +738,21 @@ const PRESETS = [
                                       [0,1,1.1,20,160,.08,1.00,.45],[2,1.2,1.4,8,90,.09,1.20,.65],[8,1.3,1.6,4,60,.10,1.25,.75]] }
 ];
 
+/* One band's row out of one scene. Split out of applyPreset so a single
+   strip can be restored without disturbing the other five — the scratch
+   state goes with it, or a held envelope / LFO phase from the transfer
+   being replaced would survive the reset. */
+function applyPresetBand(k, i) {
+  const p = PRESETS[k].b[i], P = PARAMS[i];
+  P.fn = p[0]; P.pre = p[1]; P.post = p[2];
+  P.atk = p[3] / 1000; P.dec = p[4] / 1000; P.thr = p[5];
+  P.exp = p.length > 6 ? p[6] : DEF_EXP[i];   // six-element rows still load
+  P.trn = p.length > 7 ? p[7] : DEF_TRN[i];
+  AUDIO.st[i] = {};
+}
+
 function applyPreset(k) {
-  PRESETS[k].b.forEach((p, i) => {
-    const P = PARAMS[i];
-    P.fn = p[0]; P.pre = p[1]; P.post = p[2];
-    P.atk = p[3] / 1000; P.dec = p[4] / 1000; P.thr = p[5];
-    P.exp = p.length > 6 ? p[6] : DEF_EXP[i];   // six-element rows still load
-    P.trn = p.length > 7 ? p[7] : DEF_TRN[i];
-    AUDIO.st[i] = {};
-  });
+  for (let i = 0; i < PRESETS[k].b.length; i++) applyPresetBand(k, i);
 }
 
 /* ------------------------------------------------------------
@@ -1158,6 +1185,10 @@ function hideHint() {
   hudEl.classList.remove("on");
 }
 
+/* How long "Reset all" stays undoable. Declared up here because the UI
+   builder below runs immediately and quotes it in a tooltip. */
+const UNDO_MS = 8000;
+
 /* knob spec: how each parameter maps between slider integers and PARAMS */
 const KNOBS = [
   { key: "exp",  label: "Contrast",   min: 0, max: 200, step: 5, scale: 100,
@@ -1245,9 +1276,28 @@ const knobUI = [];
     sc.appendChild(o);
   });
   sc.addEventListener("change", e => {
+    clearUndo();                        // that snapshot belongs to the old scene
     applyPreset(+e.target.value);
     refreshChain();
     say("Scene: " + PRESETS[+e.target.value].name);
+  });
+
+  // reset controls
+  const RB_TIP = "<b>Reset</b> Puts this band's whole strip — transfer, " +
+                 "contrast, transient, drives, attack, decay, threshold — back " +
+                 "to the values the selected scene loaded with.";
+  const AB_TIP = "<b>Reset all</b> Reloads the selected scene across all six " +
+                 "bands. Undoable for " + (UNDO_MS / 1000) + " s afterwards.";
+  const wireReset = (id, tip, fn) => {
+    const b = el(id);
+    b.addEventListener("mouseover", () => hint(tip));
+    b.addEventListener("mouseout", hintIdle);
+    b.addEventListener("click", fn);
+  };
+  wireReset("bandReset", RB_TIP, () => { resetBand(SELB); hint(RB_TIP, NOHOVER); });
+  wireReset("allReset", AB_TIP, () => {
+    if (undoSnap) undoResetAll(); else resetAll();
+    hint(AB_TIP, NOHOVER);
   });
 
   // per-band strip
@@ -1279,7 +1329,7 @@ const knobUI = [];
   // default line over blank space inside it, and goes dark on the way out
   const arow = el("audioRow");
   arow.addEventListener("mouseover", e => {
-    if (!e.target.closest(".meter, .shapers select, .krow")) hint(null);
+    if (!e.target.closest(".meter, .shapers select, .krow, .mreset")) hint(null);
   });
   arow.addEventListener("mouseleave", hideHint);
   el("console").addEventListener("mouseleave", hideHint);
@@ -1304,6 +1354,71 @@ function selectBand(i) {
 function refreshChain() {
   shaperSels.forEach((sel, i) => { sel.value = PARAMS[i].fn; });
   selectBand(SELB);
+}
+
+/* ---- reset ------------------------------------------------------
+   "Where they started" is the currently selected scene, not the file's
+   hard-coded PARAMS defaults. Scenes are the unit of intent here: you
+   pick one and then fiddle, so undoing the fiddling means going back to
+   the scene, and on Balanced that happens to be the file defaults
+   anyway. The scene <select> is the source of truth for which one is
+   live — nothing else in the file writes to it, and every other path
+   that mutates PARAMS (a knob, a transfer <select>) is exactly the
+   fiddling we are undoing, so it must NOT move the scene.
+
+   Neither reset special-cases a no-op: re-applying the scene a band is
+   already sitting on rewrites identical numbers and clears scratch
+   state, which is harmless. ---------------------------------------- */
+function curScene() {
+  const k = +el("scene").value;
+  return PRESETS[k] ? k : 0;
+}
+
+function resetBand(i) {
+  const k = curScene();
+  applyPresetBand(k, i);
+  refreshChain();
+  say(BANDS[i].id + " reset to “" + PRESETS[k].name + "”.");
+}
+
+/* Reset-all wipes every strip, so it is guarded — but by an undo rather
+   than a confirm. A confirm taxes the intended path (the user came here
+   to fix an accident) to protect against something that is perfectly
+   reversible; an undo costs nothing when the reset was wanted, and when
+   it was not, one click puts the tuning back exactly. If the window
+   lapses you are still on a known-good scene, not in a broken state.
+   No modal — the button relabels itself in place. */
+let undoSnap = null, undoTimer = 0;
+
+function clearUndo() {
+  clearTimeout(undoTimer);
+  undoSnap = null;
+  const b = el("allReset");
+  b.classList.remove("armed");
+  b.textContent = "Reset all";
+}
+
+function resetAll() {
+  const k = curScene();
+  undoSnap = PARAMS.map(P => Object.assign({}, P));
+  applyPreset(k);
+  refreshChain();
+  clearTimeout(undoTimer);
+  const b = el("allReset");
+  b.classList.add("armed");
+  b.textContent = "Undo";
+  undoTimer = setTimeout(() => { if (undoSnap) clearUndo(); }, UNDO_MS);
+  say("All six bands reset to “" + PRESETS[k].name + "”. Undo within " +
+      (UNDO_MS / 1000) + " s.");
+}
+
+function undoResetAll() {
+  const snap = undoSnap;
+  clearUndo();
+  if (!snap) return;
+  snap.forEach((S, i) => { Object.assign(PARAMS[i], S); AUDIO.st[i] = {}; });
+  refreshChain();
+  say("Reset undone — your edits are back.");
 }
 
 /* The meter reads 0..METER_TOP with nominal at 1.0, so the bars sit
