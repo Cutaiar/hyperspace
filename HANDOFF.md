@@ -1,0 +1,247 @@
+# Hyperspace — handoff
+
+Single-file 4D polytope viewer with audio-reactive rotation. Built over one
+session. This document is written for another agent picking the work up cold.
+
+**Artifact:** `hyperspace.html` — one self-contained file, ~52 KB, no build step,
+no dependencies, no network calls. Open it in a browser and it runs.
+
+---
+
+## 1. What the user asked for, in order
+
+1. A rotating hypercube artifact — black background, white edges, red vertices,
+   a toggle for the points, and a slider to move between "hyper platonic
+   solids." Explicitly asked for a plan before execution.
+2. A brightness control (the depth-fade was blowing out on dense shapes and
+   burying far edges on sparse ones), a collapsible control drawer, and sliders
+   that actually drag on touch instead of only responding to taps.
+3. An FFT module on microphone audio. Six frequency bands, each mapped to one
+   rotation plane, with per-band rolling-window RMS. Low end and high end should
+   pull the shape in different directions. Bands go to zero → their plane stops.
+4. Bug reports: audio section invisible, mic never prompting.
+5. Pasted a browser console log revealing the real sandbox constraints.
+6. Decouple the input meter from the fader it drives — an FL Studio Fruity Peak
+   Controller, with a dropdown of transfer functions per band.
+7. Tooltips, per-band pre/post drive, per-band window size, per-band threshold /
+   attack / decay, and a scene preset dropdown across all bands.
+8. Commit to a new private git repo (blocked — see §8).
+
+**User's register:** technical, hands-on maker, comfortable with DSP and audio
+production vocabulary. Speaks in FL Studio / Ableton terms and expects those
+concepts to map directly. Prefers being told plainly when something can't be
+done over being given a workaround dressed up as a solution.
+
+---
+
+## 2. Geometry
+
+Vertices come from exact standard constructions; edges are recovered by
+connecting every pair at the minimum vertex distance (`edgesByMinDist`). This is
+valid for regular and uniform polytopes where all edges are the same length.
+Duoprisms and prisms build their edge lists explicitly instead.
+
+Helpers: `expand(base, mode)` applies all-or-even index permutations × all sign
+changes with dedup; `cyc3` does the 3D cyclic equivalent for the seed solids;
+`prism(V3)` extrudes a 3D solid along w; `duoprism(n, m)` spins two polygons in
+orthogonal planes.
+
+All 18 shapes, ordered by cell count (the slider index — cells are the 4D
+analogue of faces, which is how the "number of faces" request was honoured):
+
+| # | Shape | Cells | V | E |
+|---|---|---|---|---|
+| 1 | 5-cell (hypertetrahedron) | 5 | 5 | 10 |
+| 2 | 3,3-duoprism | 6 | 9 | 18 |
+| 3 | Cubic pyramid | 7 | 9 | 20 |
+| 4 | Tesseract (hypercube) | 8 | 16 | 32 |
+| 5 | Rectified 5-cell | 10 | 10 | 30 |
+| 6 | 4,8-duoprism | 12 | 32 | 64 |
+| 7 | 6,6-duoprism | 12 | 36 | 72 |
+| 8 | 16-cell (hyperoctahedron) | 16 | 8 | 24 |
+| 9 | 10,10-duoprism | 20 | 100 | 200 |
+| 10 | Icosahedral prism | 22 | 24 | 72 |
+| 11 | 24-cell | 24 | 24 | 96 |
+| 12 | Truncated tesseract | 24 | 64 | 128 |
+| 13 | 12,12-duoprism | 24 | 144 | 288 |
+| 14 | Dodecahedral prism | 32 | 40 | 80 |
+| 15 | 20,20-duoprism | 40 | 400 | 800 |
+| 16 | 120-cell (hyperdodecahedron) | 120 | 600 | 1200 |
+| 17 | 600-cell (hypericosahedron) | 600 | 120 | 720 |
+| 18 | Clifford torus (32×16) | — | 512 | 1024 |
+
+Geometry is built lazily on first selection and cached in `cache[]`, normalised
+to unit circumradius, stored as flat `Float64Array` / `Int32Array`.
+
+Two naming notes settled with the user: "hyper hexahedron" and "hypercube" are
+the same object (the tesseract); "hyper dodecagon" was read as the 120-cell, and
+a 12,12-duoprism was added so the literal dodecagon reading is covered too.
+
+## 3. Rendering
+
+Rotate in 4D across six planes → perspective project 4D→3D (`D4 / (D4 - w)`) →
+apply drag orientation (yaw/pitch) → perspective project 3D→2D → draw.
+
+- Canvas 2D, `alpha:false`, DPR-capped at 2.
+- Edges are painter-sorted on w-depth, alpha `(0.10 + 0.90·t²)·B` where `t` is
+  normalised w-depth. The near half glows, the far half recedes.
+- `B = brightness · density compensation`, where `dens = clamp(340/edges, .42, 1)`.
+  Without that term the 120-cell's 1200 edges clip to a solid white blob at the
+  same slider position that leaves the 5-cell invisible.
+- Points are red, radius and alpha both depth-cued.
+
+## 4. Audio chain
+
+Per band, in order:
+
+```
+FFT bins → power-sum RMS → dB → 0..1
+  → rolling window (asymmetric one-pole, per-band attack/decay)
+  → adaptive normalise (peak tracker, 4 s decay) + gate (per-band threshold)
+  → harmonic coupling            ← this is the INPUT meter (white)
+  → pre-drive (saturating)
+  → transfer function
+  → post-drive                    ← this is the OUTPUT meter (red)
+  → PLANEDRIVE[plane] = dir · out · 3 · masterGain
+```
+
+Analyser: `fftSize 4096`, `smoothingTimeConstant 0.15` (deliberately low — the
+per-band envelopes do the smoothing, and the analyser's own smoothing would
+fight the attack/decay knobs).
+
+**Harmonic coupling** boosts a band by the geometric-mean coherence with the
+band above it, so overtone-rich sources drive harder than pure tones. It's a
+proxy, not real integer-multiple peak detection — this was stated plainly to
+the user. It sits on the input side because it characterises the signal rather
+than shaping it; the user was told it could move downstream if preferred.
+
+**Band → plane map.** The three w-planes are the true 4D rotations that evert
+the shape, so the low end drives those; upper harmonics drive the ordinary 3D
+spins, with opposed signs so lows and highs pull in different directions.
+
+| Band | Range | Default window | Plane | Dir |
+|---|---|---|---|---|
+| SUB | 20–60 Hz | 250 / 850 ms | ZW | + |
+| BASS | 60–160 Hz | 15 / 130 ms | XW | + |
+| MIDB | 160–400 Hz | 6 / 70 ms | YW | − |
+| MID | 400–1200 Hz | 50 / 300 ms | XY | − |
+| UPR | 1.2–4 kHz | 90 / 500 ms | XZ | + |
+| AIR | 4–14 kHz | 180 / 900 ms | YZ | − |
+
+**13 transfer functions** (`SHAPERS`), each with per-band scratch state so
+envelopes and LFOs hold between frames: `LIN` `SQRT` `SQ` `CUBE` `CURV`
+(smoothstep) `GATE` `INV` `HOLD` (peak hold, 0.7 s fall) `STAC` (4 ms / 75 ms)
+`CHOP` (5 Hz square) `TREM` (6 Hz sine, 70% depth) `S&H` (180 ms) `SLEW`
+(800 ms). Changing a band's function resets that band's scratch state.
+
+**11 scenes** (`PRESETS`) snapshot the whole chain — function, both drives,
+attack, decay, threshold for all six bands: Balanced, Kick & Sizzle, Glacial
+Drift, Strobe Cage, Bass Engine, Air & Lace, Inverse World, Percussive, Tremolo
+Web, Harmonic Bloom, Slow Bass / Fast Air.
+
+**Per-band knobs** (`PARAMS[i]`, edited via the strip): pre-drive 0–4×, post-drive
+0–4×, attack 2–600 ms, decay 20 ms–2.5 s, threshold 0–0.5. Output clamps at 2,
+so a band can push 6× rotation; over-unity lights a red bar at the top of that
+meter column.
+
+---
+
+## 5. Sandbox constraints — hard-won, do not re-litigate
+
+These were each discovered from a real failure. Re-introducing any of them
+breaks the artifact in the Claude preview.
+
+- **No `blob:` URLs for media.** The artifact iframe serves
+  `default-src https://www.claudeusercontent.com` with no `media-src`, so an
+  `<audio>` element fed `URL.createObjectURL(file)` is refused outright. The
+  file path therefore reads to an `ArrayBuffer` via `FileReader` and uses
+  `decodeAudioData` + `AudioBufferSourceNode`. Nothing is *loaded*, so CSP has
+  nothing to block. **Do not reintroduce an `<audio>` element.**
+- **Microphone is blocked in the preview.** The sandbox emits an unrecognised
+  `webrtc` CSP directive; `getUserMedia` will not work in-frame. It also cannot
+  work from `file://` in Chrome (opaque origin, no prompt). Mic input requires
+  Firefox, or serving over `localhost`. The page detects and states this rather
+  than failing silently.
+- **`vh` is wrong on iOS.** It measures the *large* viewport, so a panel capped
+  at `88vh` grew taller than the visible area and pushed the collapse handle off
+  the top edge. Use `dvh` with a `vh` fallback.
+- **Programmatic `input.click()` on a file input is blocked** in sandboxed
+  frames. The file input is instead layered invisibly over its button
+  (`.fbtn input{position:absolute;inset:0;opacity:0}`) so the tap lands on the
+  real input with genuine user activation.
+- **Native range drag is unreliable on touch.** Sliders are custom: a 30 px
+  pointer-capture hit strip drives the value, with the `<input type=range>` kept
+  underneath for keyboard and focus only (its thumb is zero-sized). See
+  `bindSlider`.
+- **No `localStorage`/`sessionStorage`** in artifacts. All state is in memory.
+
+## 6. Testing
+
+The container has a real Chromium at
+`/opt/pw-browsers/chromium-1194/chrome-linux/chrome`, drivable via the puppeteer
+bundled inside mermaid-cli:
+
+```js
+const p = await import('/home/claude/.npm-global/lib/node_modules/@mermaid-js/mermaid-cli/node_modules/puppeteer/lib/esm/puppeteer/puppeteer.js');
+const b = await p.default.launch({
+  executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+  headless: 'new',
+  args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required']
+});
+```
+
+Use it. Two rounds of bugs in this session were diagnosed by guessing and only
+resolved once the page was actually run. Useful techniques already proven:
+
+- Multi-viewport hit-testing with `document.elementFromPoint` to confirm a
+  control is reachable, at 390×844, 390×560, 360×480 and 1200×800.
+- Feed audio without a mic by `uploadFile`-ing a WAV into `#fileIn`. Generate a
+  test tone with python `wave` — a 50 Hz + 3 kHz mix isolates SUB/BASS and UPR
+  and leaves MIDB/MID/AIR at exactly zero, which proves the gate works.
+- Reproduce the artifact sandbox with a `srcdoc` iframe under a restrictive CSP
+  meta tag to catch CSP regressions before the user does.
+- Syntax-check without a browser:
+  `new Function(html.match(/<script>([\s\S]*)<\/script>/)[1])`.
+
+## 7. Visual conventions
+
+Instrument-panel aesthetic, deliberately not a generic dashboard. Monospace
+throughout, `tabular-nums`, uppercase micro-labels with wide letter-spacing,
+hairline 1 px rules, square corners everywhere (no border-radius), red `#ff2b2b`
+as the only accent and it matches the vertex colour. The large cell-count
+readout in the top-left is the signature element. Keep new UI consistent with
+this — it is a considered look, not a default.
+
+## 8. Git state
+
+`~/dev/hyperspace` in the container: initialised, `main`, one commit `08c876b`
+containing `hyperspace.html`, `README.md` (270 chars), `.gitignore`. Packaged as
+`hyperspace-repo.tar.gz` for download.
+
+**Not pushed.** This container has no `gh` binary and the egress proxy returns
+`x-deny-reason: host_not_allowed` for GitHub. The user believed `gh` was
+available; it is not. They need to run
+`gh repo create hyperspace --private --source=. --push` on their own machine.
+Commit author is a placeholder — `git commit --amend --reset-author` after
+setting their real `user.email`.
+
+## 9. Open threads
+
+- Real harmonic detection (integer-multiple peak picking) to replace the
+  octave-coherence proxy.
+- Per-band LFO rate/depth as knobs rather than fixed inside the CHOP/TREM
+  presets.
+- Tempo sync — the user's background is flow props and beat-synced lighting, so
+  a BPM-locked chop is a natural fit.
+- User-saveable scenes (blocked on no storage in artifacts; would need export to
+  a JSON string the user copies out).
+- Mic path is written and correct but has never been exercised end-to-end, since
+  no environment available in this session could grant permission.
+
+## 10. User context
+
+Hands-on maker: electronics, optics, LED and flow props (flowtoys vision clubs),
+Arduino strobes, interactive visual art. Has iterated on this viewer across
+multiple sessions. Reads console output and pastes it when something breaks —
+take those logs seriously, the CSP fix came directly from one. Wants to be told
+when something is impossible rather than handed a workaround presented as a fix.
