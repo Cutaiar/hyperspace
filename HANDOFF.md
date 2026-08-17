@@ -184,6 +184,15 @@ scene value that lands between two notches still reads truthfully.
 `applyPreset` still accepts six-element rows and falls back to `DEF_EXP` /
 `DEF_TRN`, so older scene definitions keep loading.
 
+**Reset** resolves to the *currently selected scene* (`curScene()` reads
+`#scene`), not to the hard-coded `PARAMS` defaults — scenes are the unit of
+intent, and on Balanced the two coincide anyway. `resetBand(i)` and `resetAll()`
+write into `PARAMS` and repaint via `refreshChain()`; they deliberately know
+nothing about the taper mapping, which is what let tapers and reset be built in
+parallel without colliding. Reset-all is guarded by an 8 s **undo** (the button
+relabels itself) rather than a confirm, and the undo snapshot is discarded on a
+scene change because it belongs to the old scene.
+
 ## 4b. Transport
 
 The file source is a `AudioBufferSourceNode`, which cannot be restarted, so
@@ -223,9 +232,20 @@ breaks the artifact in the Claude preview.
 - **Native range drag is unreliable on touch.** Sliders are custom: a 30 px
   pointer-capture hit strip drives the value, with the `<input type=range>` kept
   underneath for keyboard and focus only (its thumb is zero-sized). See
-  `bindSlider`, which also handles trackpad wheel — that listener **must** stay
-  `{passive:false}` or the `preventDefault` that stops `#body` scrolling under
-  the cursor is silently ignored.
+  `bindSlider`.
+- **Sliders claim horizontal gestures only.** `#body` scrolls, so a fader that
+  swallowed vertical gestures made the panel unscrollable wherever a fader sat
+  under the cursor. The wheel handler ignores (and does not `preventDefault`)
+  anything that is not horizontally dominant by **2.5:1** — trackpads emit
+  off-axis noise, and at 2.0 an ordinary scroll still grabbed the fader. The
+  pointer path is an axis lock: `pointerdown` claims nothing, the first move
+  past 6 px decides, and a gesture that goes vertical is abandoned for good.
+  Two consequences that look like bugs but are load-bearing: `input.focus()`
+  happens where the gesture *resolves*, not on pointerdown (without the
+  pointerdown `preventDefault`, native mousedown handling clears focus right
+  after you set it), and `.slider input[type=range]` is `pointer-events:none`
+  (otherwise the native range widget handles its own drags and bypasses the
+  axis lock entirely). `touch-action` is `pan-y`, not `none`.
 - **Anything in `#body`'s flow that changes height on hover causes jitter.** The
   hint readout used to sit in flow and shoved every control below it down. It is
   now `position:absolute; bottom:100%` inside `#console` — out of every flow,
