@@ -396,11 +396,20 @@ BlackHole / tab capture) are merged and closed.
 **Deployed:** https://hyperspace-lake.vercel.app — Vercel project `hyperspace`
 under account `cutaiar`, already linked, so `vercel deploy --prod` from the repo
 root is the whole redeploy. `vercel.json` rewrites `/` → `/hyperspace.html`;
-`.vercelignore` keeps `.claude/` and this file out of the public bundle. Note
-that CLI deploys have hung at the upload step more than once — check
-`vercel ls hyperspace` for a `● Ready` line rather than trusting the command to
-return. The deployed site is https, hence a secure context, which is what makes
-live audio input work there with nothing installed.
+`.vercelignore` keeps `.claude/` and this file out of the public bundle. The
+deployed site is https, hence a secure context, which is what makes live audio
+input work there with nothing installed.
+
+**The deploys that stalled at `UNKNOWN` were not network failures.** Vercel's
+Git integration refuses to build a commit whose author email it cannot resolve
+to an account, and this repo carried a **local** `user.email` override of
+`dillon@users.noreply.github.com` — a malformed address (real GitHub noreply is
+`ID+username@users.noreply.github.com`), inherited from the container that first
+created the repo. The global config was correct all along, so the fix was
+`git config --unset user.email` in this repo, *not* the `--global` command the
+Vercel dialog suggests. Commits before `2f31e03` still carry the bad author;
+that is harmless history, but if a deploy is ever pinned to one of them it will
+refuse again.
 
 ## 9. Open threads
 
