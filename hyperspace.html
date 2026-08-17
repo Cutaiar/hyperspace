@@ -1,0 +1,1221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hyperspace — 4D polytope viewer</title>
+<style>
+  :root{
+    --red:#ff2b2b;
+    --line:rgba(255,255,255,.14);
+    --dim:rgba(255,255,255,.42);
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "IBM Plex Mono", Menlo, Consolas, monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:#000;overflow:hidden;overscroll-behavior:none}
+  body{
+    font-family:var(--mono);
+    color:#fff;
+    -webkit-font-smoothing:antialiased;
+    font-variant-numeric:tabular-nums;
+  }
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab;z-index:0}
+  canvas.dragging{cursor:grabbing}
+
+  /* ---------- readout ---------- */
+  #readout{
+    position:fixed;top:0;left:0;padding:22px 26px;
+    pointer-events:none;user-select:none;
+    transition:opacity .3s;
+  }
+  #cells{
+    font-size:clamp(52px,11vw,104px);
+    line-height:.84;font-weight:500;letter-spacing:-.05em;
+  }
+  #cells sub{
+    font-size:11px;letter-spacing:.22em;vertical-align:baseline;
+    color:var(--dim);margin-left:10px;text-transform:uppercase;
+  }
+  #name{margin-top:14px;font-size:15px;letter-spacing:.02em}
+  #alias{color:var(--red);font-size:11px;letter-spacing:.18em;text-transform:uppercase;margin-top:5px;min-height:13px}
+  #schlafli{color:var(--dim);font-size:12px;margin-top:9px;letter-spacing:.06em}
+  #counts{color:var(--dim);font-size:10.5px;letter-spacing:.13em;margin-top:3px;text-transform:uppercase}
+
+  /* ---------- console ---------- */
+  #console{
+    position:fixed;left:0;bottom:0;width:min(340px,100vw);
+    border-top:1px solid var(--line);border-right:1px solid var(--line);
+    background:rgba(0,0,0,.55);backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);
+    display:flex;flex-direction:column;z-index:10;
+    max-height:72vh;          /* fallback */
+    max-height:72dvh;         /* dvh tracks the visible viewport on iOS */
+  }
+  #handle{
+    display:flex;align-items:center;justify-content:space-between;width:100%;
+    padding:16px 26px;background:transparent;border:0;cursor:pointer;min-height:52px;
+    font-family:inherit;font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--dim);
+  }
+  #handle:hover{color:#fff}
+  #handle:focus-visible{outline:1px solid var(--red);outline-offset:-3px}
+  #chev{
+    display:inline-block;transition:transform .3s cubic-bezier(.4,0,.2,1);
+    color:var(--red);font-size:11px;letter-spacing:0;
+  }
+  #console.collapsed #chev{transform:rotate(180deg)}
+  #body{
+    padding:4px 26px 22px;
+    flex:1 1 auto;min-height:0;
+    overflow-y:auto;overscroll-behavior:contain;
+    -webkit-overflow-scrolling:touch;touch-action:pan-y;
+    transition:opacity .22s,padding .34s;
+  }
+  #body::-webkit-scrollbar{width:3px}
+  #body::-webkit-scrollbar-thumb{background:rgba(255,255,255,.28)}
+  #body::-webkit-scrollbar-track{background:transparent}
+  #console.collapsed #body{flex:0 0 0;height:0;opacity:0;padding-top:0;padding-bottom:0;overflow:hidden}
+
+  .row{margin-bottom:15px}
+  .row:last-child{margin-bottom:0}
+  label.cap{
+    display:flex;justify-content:space-between;align-items:baseline;
+    font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);
+    margin-bottom:4px;
+  }
+  label.cap b{color:#fff;font-weight:500;letter-spacing:.08em}
+
+  /* sliders: tall invisible hit area, hairline track */
+  .slider{
+    position:relative;height:30px;display:flex;align-items:center;
+    touch-action:none;cursor:pointer;
+  }
+  .slider input[type=range]{
+    -webkit-appearance:none;appearance:none;
+    width:100%;height:30px;background:transparent;margin:0;
+    touch-action:none;cursor:pointer;
+  }
+  .slider input[type=range]::-webkit-slider-runnable-track{height:30px;background:transparent}
+  .slider input[type=range]::-moz-range-track{height:30px;background:transparent}
+  .slider input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:0;height:0;border:0}
+  .slider input[type=range]::-moz-range-thumb{width:0;height:0;border:0}
+  .slider input[type=range]:focus-visible{outline:1px solid var(--red);outline-offset:-2px}
+  .track{position:absolute;left:0;right:0;top:14.5px;height:1px;background:rgba(255,255,255,.26);pointer-events:none}
+  .fill{position:absolute;left:0;top:14.5px;height:1px;background:rgba(255,255,255,.55);pointer-events:none}
+  .knob{
+    position:absolute;top:8px;width:3px;height:15px;background:var(--red);
+    transform:translateX(-1.5px);pointer-events:none;
+  }
+  .ticks{display:flex;justify-content:space-between;margin-top:1px;font-size:9px;color:rgba(255,255,255,.3);letter-spacing:.1em}
+
+  .planes{display:grid;grid-template-columns:repeat(6,1fr);gap:5px}
+  .planes button{
+    font-family:inherit;font-size:10px;letter-spacing:.06em;
+    padding:11px 0;background:transparent;color:rgba(255,255,255,.4);
+    border:1px solid var(--line);border-radius:0;cursor:pointer;
+    transition:color .15s,border-color .15s,background .15s;
+  }
+  .planes button[aria-pressed=true]{color:#fff;border-color:rgba(255,255,255,.55);background:rgba(255,255,255,.07)}
+  .planes button:focus-visible{outline:1px solid var(--red);outline-offset:2px}
+
+  .toggles{display:flex;gap:8px}
+  .toggles button{
+    flex:1;font-family:inherit;font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+    padding:12px 0;background:transparent;color:rgba(255,255,255,.4);
+    border:1px solid var(--line);border-radius:0;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;gap:7px;
+    transition:color .15s,border-color .15s;
+  }
+  .toggles button .dot{width:6px;height:6px;background:rgba(255,255,255,.22);border-radius:50%;transition:background .15s,box-shadow .15s}
+  .toggles button[aria-pressed=true]{color:#fff;border-color:rgba(255,255,255,.45)}
+  .toggles button[aria-pressed=true] .dot{background:var(--red);box-shadow:0 0 7px var(--red)}
+  .toggles button:focus-visible{outline:1px solid var(--red);outline-offset:2px}
+  .fbtn{
+    flex:1;position:relative;overflow:hidden;
+    font-family:inherit;font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+    padding:12px 0;color:rgba(255,255,255,.4);border:1px solid var(--line);cursor:pointer;
+    display:flex;align-items:center;justify-content:center;gap:7px;
+  }
+  .fbtn .dot{width:6px;height:6px;background:rgba(255,255,255,.22);border-radius:50%}
+  .fbtn[aria-pressed=true]{color:#fff;border-color:rgba(255,255,255,.45)}
+  .fbtn[aria-pressed=true] .dot{background:var(--red);box-shadow:0 0 7px var(--red)}
+  .fbtn input{position:absolute;inset:0;opacity:0;font-size:0;cursor:pointer}
+
+  /* ---------- audio section ---------- */
+  .rule{border-top:1px solid var(--line);margin:18px 0 14px}
+  .meters{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-top:10px}
+  .meter{display:flex;flex-direction:column;align-items:center;gap:4px}
+  .meter .bar{position:relative;width:100%;height:42px;border:1px solid var(--line);display:flex;gap:1px;overflow:hidden}
+  .meter .col{position:relative;flex:1}
+  .meter .lvl{position:absolute;left:0;right:0;bottom:0;height:0%;background:rgba(255,255,255,.9)}
+  .meter .hit{position:absolute;left:0;right:0;bottom:0;height:0%;background:var(--red)}
+  .legend{display:flex;gap:14px;margin-top:8px;font-size:8.5px;letter-spacing:.14em;color:rgba(255,255,255,.38);text-transform:uppercase}
+  .legend i{display:inline-block;width:7px;height:7px;margin-right:5px;vertical-align:-1px;font-style:normal}
+  .legend .a{background:rgba(255,255,255,.9)}
+  .legend .b{background:var(--red)}
+  .shapers{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-top:7px}
+  .shapers select{
+    width:100%;font-family:inherit;font-size:8.5px;letter-spacing:.04em;text-align:center;
+    padding:6px 1px;background:#000;color:#fff;border:1px solid var(--line);border-radius:0;
+    -webkit-appearance:none;appearance:none;cursor:pointer;
+  }
+  .shapers select:focus-visible{outline:1px solid var(--red);outline-offset:1px}
+  .shapers select option{background:#000;font-size:11px}
+  .meter{cursor:pointer}
+  .meter.sel .bar{border-color:var(--red)}
+  .meter .col.over::after{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:var(--red);box-shadow:0 0 6px var(--red)}
+  .meter.sel .tag{color:#fff}
+  #hint{
+    font-size:9px;line-height:1.6;letter-spacing:.06em;color:rgba(255,255,255,.5);
+    margin-top:8px;min-height:26px;
+  }
+  #hint b{color:var(--red);font-weight:500;letter-spacing:.14em;text-transform:uppercase}
+  #strip{border:1px solid var(--line);padding:12px 13px 13px;margin-top:10px}
+  #stripHead{
+    display:flex;justify-content:space-between;align-items:baseline;
+    font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--red);
+    margin-bottom:11px;
+  }
+  #stripHead em{font-style:normal;color:rgba(255,255,255,.4);letter-spacing:.1em}
+  .krow{margin-bottom:7px}
+  .krow:last-child{margin-bottom:0}
+  .krow label.cap{margin-bottom:1px;font-size:9px;letter-spacing:.16em}
+  .krow .slider{height:24px}
+  .krow .track,.krow .fill{top:11.5px}
+  .krow .knob{top:5px;height:14px}
+  #sceneWrap select{
+    width:100%;font-family:inherit;font-size:10px;letter-spacing:.1em;
+    padding:9px 8px;background:#000;color:#fff;border:1px solid var(--line);border-radius:0;
+    -webkit-appearance:none;appearance:none;cursor:pointer;
+  }
+  #sceneWrap select option{font-size:12px}
+  .meter .tag{font-size:8px;letter-spacing:.08em;color:rgba(255,255,255,.45)}
+  .meter .pl{font-size:8px;letter-spacing:.08em;color:var(--red)}
+  #audioMsg{font-size:9.5px;line-height:1.6;letter-spacing:.05em;color:var(--dim);margin-top:10px;min-height:12px}
+  #audioMsg.err{color:var(--red)}
+  #audioRow.idle .meters{opacity:.32}
+
+  #keys{
+    position:fixed;right:20px;bottom:16px;font-size:9.5px;letter-spacing:.14em;
+    color:rgba(255,255,255,.26);text-transform:uppercase;text-align:right;line-height:1.9;
+    pointer-events:none;user-select:none;
+  }
+  #keys kbd{font:inherit;color:rgba(255,255,255,.5)}
+
+  @media (max-width:640px){
+    #readout{padding:16px 18px}
+    #console{width:100%;border-right:0}
+    #handle{padding:14px 18px}
+    #body{padding:4px 18px 20px}
+    #keys{display:none}
+    #cells{font-size:clamp(44px,15vw,72px)}
+  }
+  @media (prefers-reduced-motion:reduce){
+    #body,#chev{transition:none}
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="readout">
+  <div id="cells">8<sub>cells</sub></div>
+  <div id="name">Tesseract</div>
+  <div id="alias">hypercube</div>
+  <div id="schlafli">{4,3,3}</div>
+  <div id="counts">16 vertices · 32 edges</div>
+</div>
+
+<div id="console">
+  <button id="handle" aria-expanded="true" aria-controls="body">
+    <span>Controls</span><span id="chev">▼</span>
+  </button>
+
+  <div id="body">
+    <div class="row idle" id="audioRow">
+      <label class="cap" for="drive">Audio drive <b id="driveVal">1.00</b></label>
+      <div class="slider" data-for="drive">
+        <div class="track"></div><div class="fill"></div><div class="knob"></div>
+        <input id="drive" type="range" min="0" max="300" step="5" value="100">
+      </div>
+      <div class="row" id="sceneWrap" style="margin-bottom:14px">
+        <label class="cap" for="scene">Scene</label>
+        <select id="scene"></select>
+      </div>
+      <div class="meters" id="meters"></div>
+      <div class="shapers" id="shapers"></div>
+      <div class="legend"><span><i class="a"></i>input</span><span><i class="b"></i>fader out</span></div>
+      <div id="hint"></div>
+      <div id="strip">
+        <div id="stripHead"><span id="stripName">SUB</span><em id="stripPlane">ZW plane</em></div>
+        <div id="knobs"></div>
+      </div>
+      <div id="audioMsg">Each band drives one rotation plane. Silence in a band stops that plane.</div>
+      <div class="toggles" style="margin-top:10px">
+        <button id="tMic" aria-pressed="false"><span class="dot"></span>Listen to mic</button>
+        <label class="fbtn" id="tFile" aria-pressed="false"><span class="dot"></span>Load a track<input id="fileIn" type="file" accept="audio/*"></label>
+      </div>
+    </div>
+
+    <div class="rule"></div>
+
+    <div class="row">
+      <label class="cap" for="shape">Shape <b id="shapePos">4 / 18</b></label>
+      <div class="slider" data-for="shape">
+        <div class="track"></div><div class="fill"></div><div class="knob"></div>
+        <input id="shape" type="range" min="0" max="17" step="1" value="3">
+      </div>
+      <div class="ticks"><span>5 cells</span><span>600 cells</span></div>
+    </div>
+
+    <div class="row">
+      <label class="cap" for="bright">Brightness <b id="brightVal">1.00</b></label>
+      <div class="slider" data-for="bright">
+        <div class="track"></div><div class="fill"></div><div class="knob"></div>
+        <input id="bright" type="range" min="15" max="220" step="1" value="100">
+      </div>
+    </div>
+
+    <div class="row">
+      <label class="cap" for="speed">Rotation speed <b id="speedVal">0.30</b></label>
+      <div class="slider" data-for="speed">
+        <div class="track"></div><div class="fill"></div><div class="knob"></div>
+        <input id="speed" type="range" min="0" max="150" step="1" value="30">
+      </div>
+    </div>
+
+    <div class="row">
+      <label class="cap" for="depth">4D perspective <b id="depthVal">2.6</b></label>
+      <div class="slider" data-for="depth">
+        <div class="track"></div><div class="fill"></div><div class="knob"></div>
+        <input id="depth" type="range" min="115" max="600" step="5" value="260">
+      </div>
+    </div>
+
+    <div class="row">
+      <label class="cap">Rotation planes</label>
+      <div class="planes" id="planes">
+        <button data-p="0" aria-pressed="false">XY</button>
+        <button data-p="1" aria-pressed="false">XZ</button>
+        <button data-p="2" aria-pressed="true">YZ</button>
+        <button data-p="3" aria-pressed="true">XW</button>
+        <button data-p="4" aria-pressed="false">YW</button>
+        <button data-p="5" aria-pressed="false">ZW</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="toggles">
+        <button id="tPoints" aria-pressed="true"><span class="dot"></span>Points</button>
+        <button id="tPlay" aria-pressed="true"><span class="dot"></span>Rotate</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="keys">
+  <div><kbd>drag</kbd> turn view</div>
+  <div><kbd>← →</kbd> shape &nbsp; <kbd>space</kbd> pause</div>
+  <div><kbd>P</kbd> points &nbsp; <kbd>H</kbd> panel &nbsp; <kbd>R</kbd> reset</div>
+</div>
+
+<script>
+"use strict";
+
+/* ============================================================
+   4D polytope construction
+   ============================================================ */
+const PHI = (1 + Math.sqrt(5)) / 2;
+const IP1 = 1 / PHI, IP2 = 1 / (PHI * PHI), PH2 = PHI * PHI, R5 = Math.sqrt(5);
+
+const kkey = v => v.map(x => Math.round(x * 1e6) / 1e6 + 0).join(",");
+
+const PERMS = (() => {
+  const out = [];
+  const walk = (cur, rest) => {
+    if (!rest.length) { out.push(cur.slice()); return; }
+    for (let i = 0; i < rest.length; i++)
+      walk(cur.concat(rest[i]), rest.slice(0, i).concat(rest.slice(i + 1)));
+  };
+  walk([], [0, 1, 2, 3]);
+  return out.map(p => {
+    let inv = 0;
+    for (let i = 0; i < 4; i++) for (let j = i + 1; j < 4; j++) if (p[i] > p[j]) inv++;
+    return { p, even: inv % 2 === 0 };
+  });
+})();
+
+function expand(base, mode, into) {
+  const map = into || new Map();
+  for (const { p, even } of PERMS) {
+    if (mode === "even" && !even) continue;
+    const v = [base[p[0]], base[p[1]], base[p[2]], base[p[3]]];
+    for (let s = 0; s < 16; s++) {
+      const w = [(s & 1) ? -v[0] : v[0], (s & 2) ? -v[1] : v[1], (s & 4) ? -v[2] : v[2], (s & 8) ? -v[3] : v[3]];
+      map.set(kkey(w), w);
+    }
+  }
+  return map;
+}
+
+const d2 = (a, b) => { let s = 0; for (let i = 0; i < a.length; i++) { const t = a[i] - b[i]; s += t * t; } return s; };
+
+function edgesByMinDist(V, tol = 1e-4) {
+  let min = Infinity;
+  for (let i = 0; i < V.length; i++)
+    for (let j = i + 1; j < V.length; j++) { const d = d2(V[i], V[j]); if (d < min) min = d; }
+  const lim = min * (1 + tol) + 1e-9, E = [];
+  for (let i = 0; i < V.length; i++)
+    for (let j = i + 1; j < V.length; j++) if (d2(V[i], V[j]) <= lim) E.push([i, j]);
+  return E;
+}
+const auto = V => ({ V, E: edgesByMinDist(V) });
+
+function cyc3(a, b, c) {
+  const map = new Map();
+  for (const t of [[a, b, c], [b, c, a], [c, a, b]])
+    for (let s = 0; s < 8; s++) {
+      const v = [(s & 1) ? -t[0] : t[0], (s & 2) ? -t[1] : t[1], (s & 4) ? -t[2] : t[2]];
+      map.set(kkey(v), v);
+    }
+  return [...map.values()];
+}
+const icosa3 = () => cyc3(0, 1, PHI);
+const dodeca3 = () => {
+  const m = new Map();
+  for (let s = 0; s < 8; s++) {
+    const v = [(s & 1) ? -1 : 1, (s & 2) ? -1 : 1, (s & 4) ? -1 : 1];
+    m.set(kkey(v), v);
+  }
+  for (const v of cyc3(0, IP1, PHI)) m.set(kkey(v), v);
+  return [...m.values()];
+};
+
+function prism(V3) {
+  const E3 = edgesByMinDist(V3);
+  let minL = Infinity;
+  for (const [a, b] of E3) minL = Math.min(minL, Math.sqrt(d2(V3[a], V3[b])));
+  const h = minL / 2, n = V3.length, V = [], E = [];
+  for (const v of V3) V.push([v[0], v[1], v[2], h]);
+  for (const v of V3) V.push([v[0], v[1], v[2], -h]);
+  for (const [a, b] of E3) { E.push([a, b]); E.push([a + n, b + n]); }
+  for (let i = 0; i < n; i++) E.push([i, i + n]);
+  return { V, E };
+}
+
+function duoprism(n, m, equalRadii) {
+  const r1 = equalRadii ? 1 : 1 / (2 * Math.sin(Math.PI / n));
+  const r2 = equalRadii ? 1 : 1 / (2 * Math.sin(Math.PI / m));
+  const V = [], E = [], idx = (i, j) => i * m + j;
+  for (let i = 0; i < n; i++) {
+    const a = 2 * Math.PI * i / n;
+    for (let j = 0; j < m; j++) {
+      const b = 2 * Math.PI * j / m;
+      V.push([r1 * Math.cos(a), r1 * Math.sin(a), r2 * Math.cos(b), r2 * Math.sin(b)]);
+    }
+  }
+  for (let i = 0; i < n; i++) for (let j = 0; j < m; j++) {
+    E.push([idx(i, j), idx((i + 1) % n, j)]);
+    E.push([idx(i, j), idx(i, (j + 1) % m)]);
+  }
+  return { V, E };
+}
+
+const simplex5 = () => [
+  [1, 1, 1, -1 / R5], [1, -1, -1, -1 / R5], [-1, 1, -1, -1 / R5],
+  [-1, -1, 1, -1 / R5], [0, 0, 0, 4 / R5]
+];
+
+const SHAPES = [
+  { name: "5-cell", alias: "hypertetrahedron", cells: 5, sym: "{3,3,3}",
+    build: () => { const V = simplex5(), E = []; for (let i = 0; i < 5; i++) for (let j = i + 1; j < 5; j++) E.push([i, j]); return { V, E }; } },
+
+  { name: "3,3-duoprism", alias: "triangle × triangle", cells: 6, sym: "{3}×{3}", build: () => duoprism(3, 3) },
+
+  { name: "Cubic pyramid", alias: "hyperpyramid", cells: 7, sym: "({4,3}) ∨ •",
+    build: () => {
+      const V = [], E = [];
+      for (let s = 0; s < 8; s++) V.push([(s & 1) ? 1 : -1, (s & 2) ? 1 : -1, (s & 4) ? 1 : -1, -0.25]);
+      V.push([0, 0, 0, 0.75]);
+      for (let i = 0; i < 8; i++) {
+        for (let b = 0; b < 3; b++) { const j = i ^ (1 << b); if (j > i) E.push([i, j]); }
+        E.push([i, 8]);
+      }
+      return { V, E };
+    } },
+
+  { name: "Tesseract", alias: "hypercube · hyperhexahedron", cells: 8, sym: "{4,3,3}",
+    build: () => {
+      const V = [], E = [];
+      for (let s = 0; s < 16; s++) V.push([(s & 1) ? 1 : -1, (s & 2) ? 1 : -1, (s & 4) ? 1 : -1, (s & 8) ? 1 : -1]);
+      for (let i = 0; i < 16; i++) for (let b = 0; b < 4; b++) { const j = i ^ (1 << b); if (j > i) E.push([i, j]); }
+      return { V, E };
+    } },
+
+  { name: "Rectified 5-cell", alias: "truncation series", cells: 10, sym: "r{3,3,3}",
+    build: () => {
+      const S = simplex5(), V = [];
+      for (let i = 0; i < 5; i++) for (let j = i + 1; j < 5; j++)
+        V.push([0, 1, 2, 3].map(k => (S[i][k] + S[j][k]) / 2));
+      return auto(V);
+    } },
+
+  { name: "4,8-duoprism", alias: "square × octagon", cells: 12, sym: "{4}×{8}", build: () => duoprism(4, 8) },
+  { name: "6,6-duoprism", alias: "hexagon × hexagon", cells: 12, sym: "{6}×{6}", build: () => duoprism(6, 6) },
+
+  { name: "16-cell", alias: "hyperoctahedron", cells: 16, sym: "{3,3,4}",
+    build: () => {
+      const V = [];
+      for (let a = 0; a < 4; a++) for (const s of [1, -1]) { const v = [0, 0, 0, 0]; v[a] = s; V.push(v); }
+      const E = [];
+      for (let i = 0; i < 8; i++) for (let j = i + 1; j < 8; j++) { const d = d2(V[i], V[j]); if (d > 1e-6 && d < 3.9) E.push([i, j]); }
+      return { V, E };
+    } },
+
+  { name: "10,10-duoprism", alias: "decagon × decagon", cells: 20, sym: "{10}×{10}", build: () => duoprism(10, 10) },
+  { name: "Icosahedral prism", alias: "hyperprism", cells: 22, sym: "{3,5}×{ }", build: () => prism(icosa3()) },
+
+  { name: "24-cell", alias: "no 3D counterpart exists", cells: 24, sym: "{3,4,3}",
+    build: () => auto([...expand([1, 1, 0, 0], "all").values()]) },
+
+  { name: "Truncated tesseract", alias: "truncation series", cells: 24, sym: "t{4,3,3}",
+    build: () => { const a = 1 + Math.SQRT2; return auto([...expand([1, a, a, a], "all").values()]); } },
+
+  { name: "12,12-duoprism", alias: "dodecagon × dodecagon", cells: 24, sym: "{12}×{12}", build: () => duoprism(12, 12) },
+  { name: "Dodecahedral prism", alias: "hyperprism", cells: 32, sym: "{5,3}×{ }", build: () => prism(dodeca3()) },
+  { name: "20,20-duoprism", alias: "icosagon × icosagon", cells: 40, sym: "{20}×{20}", build: () => duoprism(20, 20) },
+
+  { name: "120-cell", alias: "hyperdodecahedron", cells: 120, sym: "{5,3,3}",
+    build: () => {
+      const m = new Map();
+      expand([0, 0, 2, 2], "all", m);
+      expand([1, 1, 1, R5], "all", m);
+      expand([IP2, PHI, PHI, PHI], "all", m);
+      expand([IP1, IP1, IP1, PH2], "all", m);
+      expand([0, IP2, 1, PH2], "even", m);
+      expand([0, IP1, PHI, R5], "even", m);
+      expand([IP1, 1, PHI, 2], "even", m);
+      return auto([...m.values()]);
+    } },
+
+  { name: "600-cell", alias: "hypericosahedron", cells: 600, sym: "{3,3,5}",
+    build: () => {
+      const m = new Map();
+      expand([2, 0, 0, 0], "all", m);
+      expand([1, 1, 1, 1], "all", m);
+      expand([PHI, 1, IP1, 0], "even", m);
+      return auto([...m.values()]);
+    } },
+
+  { name: "Clifford torus", alias: "flat torus on the 3-sphere", cells: 0, sym: "S¹ × S¹",
+    build: () => duoprism(32, 16, true) }
+];
+
+const cache = new Array(SHAPES.length);
+function geom(i) {
+  if (cache[i]) return cache[i];
+  const g = SHAPES[i].build();
+  let max = 0;
+  for (const v of g.V) max = Math.max(max, Math.hypot(v[0], v[1], v[2], v[3]));
+  const s = 1 / max;
+  const V = new Float64Array(g.V.length * 4);
+  g.V.forEach((v, k) => { for (let d = 0; d < 4; d++) V[k * 4 + d] = v[d] * s; });
+  const E = new Int32Array(g.E.length * 2);
+  g.E.forEach((e, k) => { E[k * 2] = e[0]; E[k * 2 + 1] = e[1]; });
+  return (cache[i] = { V, E, n: g.V.length, m: g.E.length });
+}
+
+/* ============================================================
+   State + render
+   ============================================================ */
+const cv = document.getElementById("c");
+const ctx = cv.getContext("2d", { alpha: false });
+
+const PLANES = [[0,1],[0,2],[1,2],[0,3],[1,3],[2,3]];
+const RATE   = [0.62, 0.47, 0.31, 1.00, 0.79, 0.55];
+
+/* ------------------------------------------------------------
+   Audio module — six bands, each with its own rolling RMS window,
+   each wired to one rotation plane.
+
+   atk/rel are the envelope time constants in seconds. Sub bass gets
+   a long window because it moves in sustained swells; bass is short
+   and punchy; mid bass is shorter still to catch tremolo and
+   syncopation; everything above lands in the quarter-second to
+   one-second range where human phrasing lives.
+
+   The three w-planes (XW/YW/ZW) are the true 4D rotations that turn
+   the shape inside out, so the low end drives those. The upper
+   harmonics drive the ordinary 3D spins, and the signs are opposed
+   so lows and highs pull the object in different directions.
+------------------------------------------------------------ */
+const BANDS = [
+  { id: "SUB",  plane: 5, pl: "ZW", lo: 20,   hi: 60,    atk: 0.250, rel: 0.850, dir:  1 },
+  { id: "BASS", plane: 3, pl: "XW", lo: 60,   hi: 160,   atk: 0.015, rel: 0.130, dir:  1 },
+  { id: "MIDB", plane: 4, pl: "YW", lo: 160,  hi: 400,   atk: 0.006, rel: 0.070, dir: -1 },
+  { id: "MID",  plane: 0, pl: "XY", lo: 400,  hi: 1200,  atk: 0.050, rel: 0.300, dir: -1 },
+  { id: "UPR",  plane: 1, pl: "XZ", lo: 1200, hi: 4000,  atk: 0.090, rel: 0.500, dir:  1 },
+  { id: "AIR",  plane: 2, pl: "YZ", lo: 4000, hi: 14000, atk: 0.180, rel: 0.900, dir: -1 }
+];
+
+
+/* ------------------------------------------------------------
+   Transfer stage — a Fruity Peak Controller between the band
+   meter and the fader it drives. The input is the rolling-window
+   RMS; the output is an automation signal, and the two need not
+   look anything alike. Each entry gets its own scratch state so
+   envelopes and LFOs can hold values between frames.
+------------------------------------------------------------ */
+const SHAPERS = [
+  { tag: "LIN",  name: "Linear — Y = X",              f: (s, x) => x },
+  { tag: "SQRT", name: "Sqrt — Y = √X, lifts quiet",  f: (s, x) => Math.sqrt(x) },
+  { tag: "SQ",   name: "Squared — Y = X², punchier",  f: (s, x) => x * x },
+  { tag: "CUBE", name: "Cubed — Y = X³, peaks only",  f: (s, x) => x * x * x },
+  { tag: "CURV", name: "S-curve — soft knee both ends", f: (s, x) => x * x * (3 - 2 * x) },
+  { tag: "GATE", name: "Gate — hard on above threshold", f: (s, x) => (x > 0.35 ? 1 : 0) },
+  { tag: "INV",  name: "Invert — loud stops, silence spins", f: (s, x) => 1 - x },
+  { tag: "HOLD", name: "Peak hold — instant rise, slow fall",
+    f: (s, x, dt) => { s.h = Math.max(x, (s.h || 0) - dt / 0.7); return s.h; } },
+  { tag: "STAC", name: "Staccato — 4 ms attack, 75 ms decay",
+    f: (s, x, dt) => {
+      const tau = x > (s.e || 0) ? 0.004 : 0.075;
+      s.e = (s.e || 0) + (x - (s.e || 0)) * (1 - Math.exp(-dt / tau));
+      return s.e > 0.12 ? s.e : 0;
+    } },
+  { tag: "CHOP", name: "Chop — square gate at 5 Hz",
+    f: (s, x, dt) => { s.p = ((s.p || 0) + dt * 5) % 1; return s.p < 0.5 ? x : 0; } },
+  { tag: "TREM", name: "Tremolo — 6 Hz sine, 70% depth",
+    f: (s, x, dt) => {
+      s.p = ((s.p || 0) + dt * 6) % 1;
+      return x * (0.3 + 0.7 * (0.5 + 0.5 * Math.sin(s.p * 6.2832)));
+    } },
+  { tag: "S&H",  name: "Sample & hold — re-samples every 180 ms",
+    f: (s, x, dt) => { s.t = (s.t || 0) + dt; if (s.t > 0.18) { s.t = 0; s.v = x; } return s.v || 0; } },
+  { tag: "SLEW", name: "Slew — 800 ms smoothing, glacial drift",
+    f: (s, x, dt) => { s.e = (s.e || 0) + (x - (s.e || 0)) * (1 - Math.exp(-dt / 0.8)); return s.e; } }
+];
+
+/* Every band owns its whole signal chain: window shape (attack +
+   decay), gate threshold, pre-drive into the transfer, the transfer
+   itself, and post-drive out to the rotation fader. */
+const PARAMS = [
+  { fn:  1, pre: 1, post: 1, atk: 0.250, dec: 0.850, thr: 0.075 },  // SUB  sqrt
+  { fn:  7, pre: 1, post: 1, atk: 0.015, dec: 0.130, thr: 0.075 },  // BASS hold
+  { fn:  8, pre: 1, post: 1, atk: 0.006, dec: 0.070, thr: 0.075 },  // MIDB staccato
+  { fn:  4, pre: 1, post: 1, atk: 0.050, dec: 0.300, thr: 0.075 },  // MID  s-curve
+  { fn:  0, pre: 1, post: 1, atk: 0.090, dec: 0.500, thr: 0.075 },  // UPR  linear
+  { fn: 12, pre: 1, post: 1, atk: 0.180, dec: 0.900, thr: 0.075 }   // AIR  slew
+];
+
+/* Scenes — whole-chain snapshots. Each band is
+   [fn, pre, post, attack ms, decay ms, threshold]. */
+const PRESETS = [
+  { name: "Balanced", b: [[1,1,1,250,850,.075],[7,1,1,15,130,.075],[8,1,1,6,70,.075],
+                          [4,1,1,50,300,.075],[0,1,1,90,500,.075],[12,1,1,180,900,.075]] },
+  { name: "Kick & Sizzle", b: [[12,1,.5,300,900,.09],[7,1.4,1.8,4,180,.10],[5,1,1.2,5,60,.14],
+                               [0,1,.6,60,260,.08],[2,1.2,1,70,340,.07],[8,1.5,1.6,10,150,.08]] },
+  { name: "Glacial Drift", b: [[1,1.2,.9,400,1600,.05],[12,1,.8,300,1400,.05],[12,1,.7,250,1200,.05],
+                               [1,1,.8,300,1400,.05],[12,1.1,.8,350,1500,.05],[12,1.2,.9,400,1800,.05]] },
+  { name: "Strobe Cage", b: [[5,1.2,1.4,8,90,.12],[9,1,1.6,4,60,.12],[9,1.2,1.6,4,50,.12],
+                             [5,1,1.3,10,110,.12],[9,1,1.5,8,90,.12],[5,1.2,1.4,12,130,.12]] },
+  { name: "Bass Engine", b: [[1,1.4,1.6,200,700,.06],[7,1.5,2,8,140,.07],[8,1.4,1.8,5,70,.08],
+                             [0,1,.15,60,300,.10],[0,1,.1,90,500,.10],[0,1,0,180,900,.10]] },
+  { name: "Air & Lace", b: [[12,1,.12,300,1200,.10],[0,1,.15,20,160,.10],[0,1,.2,8,80,.10],
+                            [1,1.2,1.2,60,340,.06],[1,1.3,1.7,80,420,.05],[1,1.4,2,140,700,.05]] },
+  { name: "Inverse World", b: [[6,1,.7,260,900,.04],[6,1,.8,40,300,.04],[0,1,1,10,90,.07],
+                               [0,1,1,60,320,.07],[1,1,1.1,90,500,.06],[6,1,.7,200,900,.04]] },
+  { name: "Percussive", b: [[8,1.2,1.2,6,140,.09],[8,1.3,1.5,4,110,.09],[8,1.3,1.5,4,80,.09],
+                            [8,1.2,1.3,6,140,.09],[8,1.2,1.3,8,180,.09],[8,1.2,1.2,10,220,.09]] },
+  { name: "Tremolo Web", b: [[7,1,1,200,700,.07],[7,1.1,1.2,20,240,.07],[10,1.2,1.3,10,120,.08],
+                             [10,1.2,1.4,50,300,.07],[10,1.3,1.4,80,420,.06],[11,1.2,1.2,150,700,.06]] },
+  { name: "Harmonic Bloom", b: [[1,1.2,1,300,1000,.06],[1,1.2,1.1,60,420,.06],[4,1.1,1.1,20,200,.07],
+                                [4,1.2,1.2,80,420,.06],[1,1.3,1.3,120,600,.05],[1,1.3,1.2,200,900,.05]] },
+  { name: "Slow Bass / Fast Air", b: [[1,1.1,1,500,1800,.05],[1,1.1,1,300,1200,.05],[0,1,1,60,400,.07],
+                                      [0,1,1.1,20,160,.08],[2,1.2,1.4,8,90,.09],[8,1.3,1.6,4,60,.10]] }
+];
+
+function applyPreset(k) {
+  PRESETS[k].b.forEach((p, i) => {
+    const P = PARAMS[i];
+    P.fn = p[0]; P.pre = p[1]; P.post = p[2];
+    P.atk = p[3] / 1000; P.dec = p[4] / 1000; P.thr = p[5];
+    AUDIO.st[i] = {};
+  });
+}
+
+const AUDIO = {
+  on: false, ctx: null, an: null, stream: null, freq: null,
+  binLo: [], binHi: [], gain: 1.0,
+  env: new Float64Array(6),
+  peak: new Float64Array(6).fill(0.15),
+  norm: new Float64Array(6),
+  inp: new Float64Array(6),                 // post-analysis, what the IN meter shows
+  out: new Float64Array(6),                 // post-transfer, what drives the fader
+  st: [{}, {}, {}, {}, {}, {}]              // scratch state per band
+};
+const PLANEDRIVE = new Float64Array(6).fill(1);
+
+const S = {
+  shape: 3, speed: 0.30, depth4: 2.6, bright: 1.0,
+  points: true, playing: true,
+  planes: [false, false, true, true, false, false],
+  ang: [0, 0, 0, 0, 0, 0],
+  yaw: 0, pitch: 0
+};
+
+let W = 0, H = 0, DPR = 1;
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = cv.clientWidth; H = cv.clientHeight;
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener("resize", resize);
+
+let px = new Float32Array(0), py = new Float32Array(0), pd = new Float32Array(0);
+let edepth = new Float32Array(0), ord = [];
+const CAM3 = 3.4;
+const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
+
+function draw() {
+  const g = geom(S.shape);
+  if (px.length < g.n) { px = new Float32Array(g.n); py = new Float32Array(g.n); pd = new Float32Array(g.n); }
+  if (edepth.length < g.m) { edepth = new Float32Array(g.m); }
+
+  const cs = [], sn = [];
+  for (let p = 0; p < 6; p++) { cs.push(Math.cos(S.ang[p])); sn.push(Math.sin(S.ang[p])); }
+  const cy = Math.cos(S.yaw), sy = Math.sin(S.yaw);
+  const cp = Math.cos(S.pitch), sp = Math.sin(S.pitch);
+
+  const scale = Math.min(W, H) * 0.30, cx = W / 2, cyy = H / 2, D4 = S.depth4;
+  let near = Infinity, far = -Infinity;
+  const v = [0, 0, 0, 0];
+
+  for (let i = 0; i < g.n; i++) {
+    v[0] = g.V[i * 4]; v[1] = g.V[i * 4 + 1]; v[2] = g.V[i * 4 + 2]; v[3] = g.V[i * 4 + 3];
+    for (let p = 0; p < 6; p++) {
+      const a = PLANES[p][0], b = PLANES[p][1];
+      const va = v[a], vb = v[b];
+      v[a] = va * cs[p] - vb * sn[p];
+      v[b] = va * sn[p] + vb * cs[p];
+    }
+    const k = D4 / (D4 - v[3]);
+    const x = v[0] * k, y = v[1] * k, z = v[2] * k;
+    let x1 = x * cy + z * sy, z1 = -x * sy + z * cy;
+    const y1 = y * cp - z1 * sp; z1 = y * sp + z1 * cp;
+    const k2 = CAM3 / (CAM3 - z1 * 0.9);
+    px[i] = cx + x1 * k2 * scale;
+    py[i] = cyy - y1 * k2 * scale;
+    pd[i] = v[3];
+    if (v[3] < near) near = v[3];
+    if (v[3] > far) far = v[3];
+  }
+
+  const span = Math.max(far - near, 1e-6);
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, W, H);
+
+  if (ord.length !== g.m) { ord = new Array(g.m); for (let e = 0; e < g.m; e++) ord[e] = e; }
+  for (let e = 0; e < g.m; e++) edepth[e] = (pd[g.E[e * 2]] + pd[g.E[e * 2 + 1]]) * 0.5;
+  ord.sort((a, b) => edepth[a] - edepth[b]);
+
+  // density compensation: dense hulls would otherwise clip to solid white
+  const dens = clamp(340 / Math.max(g.m, 1), 0.42, 1);
+  const B = S.bright * dens;
+  const heavy = g.m > 500;
+
+  ctx.lineCap = "round";
+  for (let q = 0; q < g.m; q++) {
+    const e = ord[q], i = g.E[e * 2], j = g.E[e * 2 + 1];
+    const t = (edepth[e] - near) / span;
+    const a = clamp((0.10 + 0.90 * t * t) * B, 0.015, 1);
+    ctx.strokeStyle = "rgba(255,255,255," + a.toFixed(3) + ")";
+    ctx.lineWidth = (heavy ? 0.35 + 0.85 * t : 0.5 + 1.5 * t) * clamp(0.75 + 0.35 * S.bright, 0.6, 1.35);
+    ctx.beginPath();
+    ctx.moveTo(px[i], py[i]);
+    ctx.lineTo(px[j], py[j]);
+    ctx.stroke();
+  }
+
+  if (S.points) {
+    const PB = S.bright * clamp(dens * 1.5, 0.55, 1);
+    for (let i = 0; i < g.n; i++) {
+      const t = (pd[i] - near) / span;
+      const r = (heavy ? 1.0 : 1.7) + 2.3 * t * t;
+      ctx.fillStyle = "rgba(255,43,43," + clamp((0.32 + 0.68 * t) * PB, 0.05, 1).toFixed(3) + ")";
+      ctx.beginPath();
+      ctx.arc(px[i], py[i], r, 0, 6.2832);
+      ctx.fill();
+    }
+  }
+}
+
+/* ---- per-frame audio analysis ---- */
+function audioStep(dt) {
+  const A = AUDIO;
+  A.an.getFloatFrequencyData(A.freq);
+
+  // band RMS from the power spectrum, mapped into a 0..1 loudness
+  for (let i = 0; i < 6; i++) {
+    let pw = 0, n = 0;
+    for (let k = A.binLo[i]; k <= A.binHi[i]; k++) {
+      const m = Math.pow(10, A.freq[k] / 20);
+      pw += m * m; n++;
+    }
+    const rms = Math.sqrt(pw / Math.max(n, 1));
+    const db = 20 * Math.log10(rms + 1e-9);
+    const u = clamp((db + 72) / 46, 0, 1);
+
+    // rolling window: asymmetric one-pole, per-band time constants
+    const tau = u > A.env[i] ? PARAMS[i].atk : PARAMS[i].dec;
+    A.env[i] += (u - A.env[i]) * (1 - Math.exp(-dt / tau));
+  }
+
+  // each band self-calibrates against its own decaying peak, so a
+  // quiet hi-hat can drive as hard as a kick without a manual mixer
+  const dec = Math.exp(-dt / 4.0);
+  for (let i = 0; i < 6; i++) {
+    A.peak[i] = Math.max(A.env[i], A.peak[i] * dec, 0.12);
+    let n = clamp((A.env[i] - 0.05) / (A.peak[i] - 0.05 + 1e-6), 0, 1);
+    if (A.env[i] < PARAMS[i].thr) n = 0;    // gate: band goes quiet, plane stops
+    A.norm[i] = n;
+  }
+
+  // harmonic coupling: a band sounding together with the one above it
+  // is an overtone-rich source, so it reads hotter than a pure tone.
+  // This is still the INPUT stage — it is what the white meter shows.
+  for (let i = 0; i < 6; i++) {
+    const up = A.norm[Math.min(i + 1, 5)];
+    const coh = Math.sqrt(A.norm[i] * up);
+    A.inp[i] = clamp(A.norm[i] * (1 + 0.7 * coh), 0, 1);
+  }
+
+  // TRANSFER stage — input is reshaped into an automation signal,
+  // and only then does it reach the fader for its rotation plane.
+  for (let i = 0; i < 6; i++) {
+    const P = PARAMS[i];
+    const x = clamp(A.inp[i] * P.pre, 0, 1);          // pre-drive, saturating
+    const y = SHAPERS[P.fn].f(A.st[i], x, dt);
+    A.out[i] = clamp(y * P.post, 0, 2);               // post-drive out to the fader
+    PLANEDRIVE[BANDS[i].plane] = BANDS[i].dir * A.out[i] * 3 * A.gain;
+  }
+  paintMeters();
+}
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min((now - last) / 1000, 0.05); last = now;
+  if (AUDIO.on) audioStep(dt);
+  if (S.playing) {
+    for (let p = 0; p < 6; p++)
+      if (S.planes[p]) S.ang[p] += dt * S.speed * RATE[p] * (AUDIO.on ? PLANEDRIVE[p] : 1);
+  }
+  draw();
+  requestAnimationFrame(frame);
+}
+
+/* ============================================================
+   Controls
+   ============================================================ */
+const el = id => document.getElementById(id);
+const shapeIn = el("shape");
+shapeIn.max = SHAPES.length - 1;
+
+// pointer-driven sliders: native range drag is unreliable on touch, so drive it directly
+function paint(input) {
+  const wrap = input.closest(".slider");
+  const min = +input.min, max = +input.max;
+  const r = (+input.value - min) / (max - min);
+  wrap.querySelector(".fill").style.width = (r * 100) + "%";
+  wrap.querySelector(".knob").style.left = (r * 100) + "%";
+}
+function bindSlider(input, onChange) {
+  const wrap = input.closest(".slider");
+  const min = +input.min, max = +input.max, step = +input.step || 1;
+  let active = false;
+
+  const setFromX = clientX => {
+    const rect = wrap.getBoundingClientRect();
+    const r = clamp((clientX - rect.left) / rect.width, 0, 1);
+    const raw = min + r * (max - min);
+    const val = clamp(Math.round(raw / step) * step, min, max);
+    if (val !== +input.value) { input.value = val; onChange(val); }
+    paint(input);
+  };
+
+  wrap.addEventListener("pointerdown", e => {
+    active = true;
+    wrap.setPointerCapture(e.pointerId);
+    input.focus({ preventScroll: true });
+    setFromX(e.clientX);
+    e.preventDefault();
+  });
+  wrap.addEventListener("pointermove", e => { if (active) { setFromX(e.clientX); e.preventDefault(); } });
+  const stop = e => { if (active) { active = false; try { wrap.releasePointerCapture(e.pointerId); } catch (_) {} } };
+  wrap.addEventListener("pointerup", stop);
+  wrap.addEventListener("pointercancel", stop);
+  // keyboard still uses the native input
+  input.addEventListener("keydown", () => setTimeout(() => { onChange(+input.value); paint(input); }, 0));
+  paint(input);
+}
+
+function syncShape() {
+  const s = SHAPES[S.shape], g = geom(S.shape);
+  el("cells").innerHTML = (s.cells || "∞") + "<sub>cells</sub>";
+  el("name").textContent = s.name;
+  el("alias").textContent = s.alias;
+  el("schlafli").textContent = s.sym;
+  el("counts").textContent = g.n + " vertices · " + g.m + " edges";
+  el("shapePos").textContent = (S.shape + 1) + " / " + SHAPES.length;
+  shapeIn.value = S.shape;
+  paint(shapeIn);
+}
+
+bindSlider(shapeIn, v => { S.shape = v; syncShape(); });
+bindSlider(el("bright"), v => { S.bright = v / 100; el("brightVal").textContent = S.bright.toFixed(2); });
+bindSlider(el("speed"),  v => { S.speed  = v / 100; el("speedVal").textContent  = S.speed.toFixed(2); });
+bindSlider(el("depth"),  v => { S.depth4 = v / 100; el("depthVal").textContent  = S.depth4.toFixed(1); });
+
+/* ---- audio UI ---- */
+const meterEls = [];
+const shaperSels = [];
+let SELB = 0;                                   // band whose strip is open
+
+const DEFAULT_HINT = 'Pick a band to tune its window and drive. ' +
+                     'Hover a transfer to see what it does.';
+function hint(html) {
+  el("hint").innerHTML = html || DEFAULT_HINT;
+}
+
+/* knob spec: how each parameter maps between slider integers and PARAMS */
+const KNOBS = [
+  { key: "pre",  label: "Pre-drive",  min: 0, max: 400, step: 5, scale: 100,
+    fmt: v => (v / 100).toFixed(2) + "×",
+    tip: "Gain into the transfer function. Above 1× it saturates against the ceiling, so peaks flatten and quiet detail comes up." },
+  { key: "post", label: "Post-drive", min: 0, max: 400, step: 5, scale: 100,
+    fmt: v => (v / 100).toFixed(2) + "×",
+    tip: "Gain out of the transfer, straight to the rotation fader. This is how much this band contributes overall." },
+  { key: "atk",  label: "Attack",     min: 2, max: 600, step: 2, scale: 1000,
+    fmt: v => v + " ms",
+    tip: "How fast the rolling window rises. Short catches transients; long ignores them and tracks the swell." },
+  { key: "dec",  label: "Decay",      min: 20, max: 2500, step: 10, scale: 1000,
+    fmt: v => (v >= 1000 ? (v / 1000).toFixed(2) + " s" : v + " ms"),
+    tip: "How fast the window falls. This sets how long the band keeps driving after the sound stops." },
+  { key: "thr",  label: "Threshold",  min: 0, max: 50, step: 1, scale: 100,
+    fmt: v => (v / 100).toFixed(2),
+    tip: "Gate. Below this the band outputs nothing and its rotation plane stops dead." }
+];
+const knobUI = [];
+
+(function buildAudioUI() {
+  const host = el("meters"), shost = el("shapers");
+
+  BANDS.forEach((b, i) => {
+    const m = document.createElement("div");
+    m.className = "meter";
+    m.innerHTML =
+      '<div class="bar"><div class="col"><div class="lvl"></div></div>' +
+      '<div class="col"><div class="hit"></div></div></div>' +
+      '<div class="tag">' + b.id + '</div><div class="pl">' + b.pl + '</div>';
+    m.addEventListener("click", () => selectBand(i));
+    m.addEventListener("mouseover", () =>
+      hint("<b>" + b.id + "</b> " + b.lo + "–" + b.hi + " Hz → " + b.pl +
+           " plane, " + (b.dir > 0 ? "forward" : "reverse") + "."));
+    m.addEventListener("mouseout", () => hint(null));
+    host.appendChild(m);
+    meterEls.push({ el: m, lvl: m.querySelector(".lvl"), hit: m.querySelector(".hit") });
+
+    const sel = document.createElement("select");
+    SHAPERS.forEach((sh, k) => {
+      const o = document.createElement("option");
+      o.value = k; o.textContent = sh.tag; o.title = sh.name;
+      sel.appendChild(o);
+    });
+    sel.value = PARAMS[i].fn;
+    sel.title = SHAPERS[PARAMS[i].fn].name;
+    const describe = () => hint("<b>" + SHAPERS[PARAMS[i].fn].tag + "</b> " +
+                               SHAPERS[PARAMS[i].fn].name + " — driving " + b.pl + ".");
+    sel.addEventListener("mouseover", describe);
+    sel.addEventListener("focus", describe);
+    sel.addEventListener("mouseout", () => hint(null));
+    sel.addEventListener("change", e => {
+      PARAMS[i].fn = +e.target.value;
+      AUDIO.st[i] = {};
+      sel.title = SHAPERS[PARAMS[i].fn].name;
+      selectBand(i);
+      describe();
+    });
+    shost.appendChild(sel);
+    shaperSels.push(sel);
+  });
+
+  // scene list
+  const sc = el("scene");
+  PRESETS.forEach((p, k) => {
+    const o = document.createElement("option");
+    o.value = k; o.textContent = p.name;
+    sc.appendChild(o);
+  });
+  sc.addEventListener("change", e => {
+    applyPreset(+e.target.value);
+    refreshChain();
+    say("Scene: " + PRESETS[+e.target.value].name);
+  });
+
+  // per-band strip
+  const kh = el("knobs");
+  KNOBS.forEach(spec => {
+    const row = document.createElement("div");
+    row.className = "krow";
+    row.title = spec.tip;
+    row.innerHTML =
+      '<label class="cap"><span>' + spec.label + '</span><b>–</b></label>' +
+      '<div class="slider"><div class="track"></div><div class="fill"></div><div class="knob"></div>' +
+      '<input type="range" min="' + spec.min + '" max="' + spec.max + '" step="' + spec.step + '"></div>';
+    const input = row.querySelector("input"), read = row.querySelector("b");
+    row.addEventListener("mouseover", () => hint("<b>" + spec.label + "</b> " + spec.tip));
+    row.addEventListener("mouseout", () => hint(null));
+    bindSlider(input, v => {
+      PARAMS[SELB][spec.key] = v / spec.scale;
+      read.textContent = spec.fmt(v);
+    });
+    kh.appendChild(row);
+    knobUI.push({ spec, input, read });
+  });
+
+  selectBand(0);
+  hint(null);
+})();
+
+function selectBand(i) {
+  SELB = i;
+  meterEls.forEach((m, k) => m.el.classList.toggle("sel", k === i));
+  el("stripName").textContent = BANDS[i].id + " · " + SHAPERS[PARAMS[i].fn].tag;
+  el("stripPlane").textContent = BANDS[i].lo + "–" + BANDS[i].hi + " Hz → " + BANDS[i].pl;
+  for (const k of knobUI) {
+    k.input.value = Math.round(PARAMS[i][k.spec.key] * k.spec.scale);
+    k.read.textContent = k.spec.fmt(+k.input.value);
+    paint(k.input);
+  }
+}
+
+// re-sync every control after a scene change
+function refreshChain() {
+  shaperSels.forEach((sel, i) => { sel.value = PARAMS[i].fn; sel.title = SHAPERS[PARAMS[i].fn].name; });
+  selectBand(SELB);
+}
+
+function paintMeters() {
+  for (let i = 0; i < 6; i++) {
+    meterEls[i].lvl.style.height = (AUDIO.inp[i] * 100).toFixed(1) + "%";
+    meterEls[i].hit.style.height = (Math.min(AUDIO.out[i], 1) * 100).toFixed(1) + "%";
+    meterEls[i].hit.parentNode.classList.toggle("over", AUDIO.out[i] > 1);
+  }
+}
+function clearMeters() {
+  for (const m of meterEls) { m.lvl.style.height = "0%"; m.hit.style.height = "0%"; }
+}
+
+function say(text, isErr) {
+  const n = el("audioMsg");
+  n.textContent = text;
+  n.classList.toggle("err", !!isErr);
+}
+
+/* ---- sources: microphone, or a local audio file ----
+   The file is read straight into an ArrayBuffer and decoded by the
+   AudioContext. No <audio> element and no blob: URL, because embedded
+   previews serve a CSP with no media-src, which blocks blob media. ---- */
+let fileSrc = null;
+
+function attach(ac, node, label) {
+  const an = ac.createAnalyser();
+  an.fftSize = 4096;
+  an.smoothingTimeConstant = 0.15;      // the envelopes below do the smoothing
+  node.connect(an);
+
+  const nyq = ac.sampleRate / 2, bins = an.frequencyBinCount;
+  AUDIO.binLo = []; AUDIO.binHi = [];
+  for (const b of BANDS) {
+    AUDIO.binLo.push(Math.max(1, Math.floor(b.lo / nyq * bins)));
+    AUDIO.binHi.push(Math.min(bins - 1, Math.max(2, Math.ceil(b.hi / nyq * bins))));
+  }
+  AUDIO.ctx = ac; AUDIO.an = an; AUDIO.freq = new Float32Array(bins);
+  AUDIO.env.fill(0); AUDIO.peak.fill(0.15);
+  AUDIO.inp.fill(0); AUDIO.out.fill(0);
+  AUDIO.st = [{}, {}, {}, {}, {}, {}];
+  AUDIO.on = true;
+
+  for (let p = 0; p < 6; p++) {
+    S.planes[p] = true;
+    el("planes").querySelector('[data-p="' + p + '"]').setAttribute("aria-pressed", "true");
+  }
+  el("audioRow").classList.remove("idle");
+  say(label + " · " + Math.round(ac.sampleRate / 1000) + " kHz · " + (nyq / bins).toFixed(1) + " Hz per bin");
+}
+
+function newCtx() {
+  const ac = new (window.AudioContext || window.webkitAudioContext)();
+  if (ac.state === "suspended") ac.resume();
+  return ac;
+}
+
+function diagnose(err) {
+  const name = err && err.name ? err.name : "unknown";
+  const local = location.protocol === "file:";
+  if (local)
+    return "Blocked (" + name + "). Chrome refuses microphone access on file:// pages. " +
+           "Use Firefox, or serve the folder over localhost, or load a track instead.";
+  if (!window.isSecureContext)
+    return "Blocked (" + name + "). The page is not a secure context — the microphone needs https or localhost.";
+  if (name === "NotAllowedError")
+    return "Permission denied. Check the mic icon in the address bar, or use Load a track.";
+  if (name === "NotFoundError")
+    return "No input device found. Plug in a microphone, or use Load a track.";
+  return "Microphone unavailable (" + name + "). Try Load a track.";
+}
+
+async function startMic() {
+  stopAudio(true);
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    say(location.protocol === "file:"
+      ? "No microphone API on file:// pages. Serve over localhost, or load a track."
+      : "This browser exposes no microphone API. Load a track instead.", true);
+    return;
+  }
+  say("Requesting microphone…");
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+    });
+    const ac = newCtx();
+    AUDIO.stream = stream;
+    AUDIO.mode = "mic";
+    attach(ac, ac.createMediaStreamSource(stream), "Microphone");
+    el("tMic").setAttribute("aria-pressed", "true");
+  } catch (err) {
+    AUDIO.on = false;
+    el("tMic").setAttribute("aria-pressed", "false");
+    say(diagnose(err), true);
+  }
+}
+
+function startFile(file) {
+  stopAudio(true);
+  say("Decoding " + file.name.slice(0, 24) + "…");
+  let ac;
+  try { ac = newCtx(); }
+  catch (err) { say("No audio engine available here (" + (err && err.name) + ").", true); return; }
+
+  const rd = new FileReader();
+  rd.onerror = () => say("Could not read that file.", true);
+  rd.onload = () => {
+    ac.decodeAudioData(rd.result, buf => {
+      const src = ac.createBufferSource();
+      src.buffer = buf;
+      src.loop = true;
+      src.connect(ac.destination);          // so you hear it as well as see it
+      fileSrc = src;
+      AUDIO.mode = "file";
+      attach(ac, src, file.name.slice(0, 20));
+      src.start();
+      el("tFile").setAttribute("aria-pressed", "true");
+    }, () => {
+      try { ac.close(); } catch (_) {}
+      say("Could not decode that file. MP3, WAV, M4A and OGG all work.", true);
+    });
+  };
+  rd.readAsArrayBuffer(file);
+}
+
+function stopAudio(quiet) {
+  if (AUDIO.stream) AUDIO.stream.getTracks().forEach(t => t.stop());
+  if (fileSrc) { try { fileSrc.stop(); } catch (_) {} fileSrc = null; }
+  if (AUDIO.ctx) { try { AUDIO.ctx.close(); } catch (_) {} }
+  AUDIO.on = false; AUDIO.ctx = null; AUDIO.an = null; AUDIO.stream = null; AUDIO.mode = null;
+  PLANEDRIVE.fill(1);
+  clearMeters();
+  el("audioRow").classList.add("idle");
+  el("tMic").setAttribute("aria-pressed", "false");
+  el("tFile").setAttribute("aria-pressed", "false");
+  if (!quiet) say("Stopped. Rotation is back on the speed slider.");
+}
+
+const toggleMic = () => (AUDIO.on && AUDIO.mode === "mic" ? stopAudio() : startMic());
+el("tMic").addEventListener("click", toggleMic);
+el("fileIn").addEventListener("change", e => {
+  const f = e.target.files && e.target.files[0];
+  if (f) startFile(f);
+  e.target.value = "";
+});
+bindSlider(el("drive"), v => { AUDIO.gain = v / 100; el("driveVal").textContent = AUDIO.gain.toFixed(2); });
+
+el("planes").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  const p = +b.dataset.p;
+  S.planes[p] = !S.planes[p];
+  b.setAttribute("aria-pressed", S.planes[p]);
+});
+
+const togglePoints = () => { S.points = !S.points; el("tPoints").setAttribute("aria-pressed", S.points); };
+const togglePlay   = () => { S.playing = !S.playing; el("tPlay").setAttribute("aria-pressed", S.playing); };
+el("tPoints").addEventListener("click", togglePoints);
+el("tPlay").addEventListener("click", togglePlay);
+
+// collapse the console downward, leaving only the handle
+const cons = el("console"), handle = el("handle");
+function toggleConsole() {
+  const collapsed = cons.classList.toggle("collapsed");
+  handle.setAttribute("aria-expanded", String(!collapsed));
+}
+handle.addEventListener("click", toggleConsole);
+
+// drag to turn the 3D view
+let drag = null;
+cv.addEventListener("pointerdown", e => {
+  drag = { x: e.clientX, y: e.clientY };
+  cv.setPointerCapture(e.pointerId);
+  cv.classList.add("dragging");
+});
+cv.addEventListener("pointermove", e => {
+  if (!drag) return;
+  S.yaw += (e.clientX - drag.x) * 0.008;
+  S.pitch = clamp(S.pitch + (e.clientY - drag.y) * 0.008, -1.5, 1.5);
+  drag = { x: e.clientX, y: e.clientY };
+});
+const endDrag = () => { drag = null; cv.classList.remove("dragging"); };
+cv.addEventListener("pointerup", endDrag);
+cv.addEventListener("pointercancel", endDrag);
+
+window.addEventListener("keydown", e => {
+  const k = e.key.toLowerCase();
+  if (e.target.tagName === "SELECT") return;
+  const inField = e.target.tagName === "INPUT";
+  if (inField && (k === "arrowleft" || k === "arrowright" || k === "arrowup" || k === "arrowdown")) return;
+  if (k === " ") { e.preventDefault(); togglePlay(); }
+  else if (k === "p") togglePoints();
+  else if (k === "h") toggleConsole();
+  else if (k === "m") toggleMic();
+  else if (k === "r") { S.yaw = 0; S.pitch = 0; S.ang = [0, 0, 0, 0, 0, 0]; }
+  else if (k === "arrowright") { S.shape = Math.min(SHAPES.length - 1, S.shape + 1); syncShape(); }
+  else if (k === "arrowleft")  { S.shape = Math.max(0, S.shape - 1); syncShape(); }
+});
+
+// tell the user up front whether the mic can work here at all
+(function probeAudio() {
+  const framed = window.self !== window.top;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    say(location.protocol === "file:"
+      ? "Mic unavailable on file:// pages. Use Load a track, or serve over localhost."
+      : "No microphone API here. Use Load a track.", true);
+  } else if (framed) {
+    say("Embedded previews block the mic. Load a track here, or open the file in a browser for mic input.");
+  }
+})();
+
+resize();
+syncShape();
+requestAnimationFrame(t => { last = t; frame(t); });
+</script>
+</body>
+</html>
