@@ -155,6 +155,32 @@ sd 0.018 (dyn 0) to sd 0.181 (dyn 1); MIDB from 0.080 to 0.697 with a full
 1.000. A band with genuinely no dynamics (a static pad) correctly stays flat —
 this recovers what a limiter took, it does not invent motion.
 
+**Input trim** (`PARAMS[i].trim`, `AUDIO.trim`, both dB) is the mixer-style
+input stage: off, then −60 dB to +12 dB at 1 dB/step with a detent at 0, tagged
+LIN because dB is already a logarithm. It is applied twice — added to `db`
+before `u` is formed (so it moves the band against the references that do *not*
+adapt: the gate `thr`, `CONF_LO`, `PK_MIN`) and again as `tDb / U_SPAN` offset
+onto the fader signal after the trackers. The second application exists because
+the window normaliser is a two-point auto-calibration and by construction
+removes any static gain placed in front of it: pre-envelope trim alone is a
+**placebo**, measured converging to the identical output within 30 s whether
+cut by 0 dB or 40 dB.
+
+> ⚠️ **Known limitation, measured on the merged build — do not trust the
+> per-agent numbers here.** Both the trim and the soft-ceiling work were
+> verified in isolation, but the trim's calibration depends on harmonic
+> coupling, which the ceiling work moved. On real material from a *fully
+> settled* state, BASS trim is non-monotonic through the range you would
+> actually reach for: 0 dB → `inp` 0.606 / `out` 0.867; −6 dB → 0.701 / **1.03**;
+> −12 dB → 0.649 / **1.01**; −20 dB → 0.463 / 0.748. Cutting 6–12 dB makes the
+> band drive *harder*, and it only starts attenuating around −20 dB. A hard off
+> (−60 dB) does correctly produce exactly 0 on `inp`, `out` and `PLANEDRIVE`.
+> The earlier clean monotonic table was produced against a *constant* band
+> level, where the trackers cannot re-calibrate the way they do on music.
+> The structural fix is one of: bias the adaptive window in proportion to trim,
+> apply trim as a post-normaliser multiplier on the band's contribution, or add
+> a per-band manual mode that bypasses adaptive normalisation entirely.
+
 Analyser: `fftSize 4096`, `smoothingTimeConstant 0.15` (deliberately low — the
 per-band envelopes do the smoothing, and the analyser's own smoothing would
 fight the attack/decay knobs).
