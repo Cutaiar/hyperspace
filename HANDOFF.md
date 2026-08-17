@@ -90,6 +90,33 @@ apply drag orientation (yaw/pitch) → perspective project 3D→2D → draw.
   same slider position that leaves the 5-cell invisible.
 - Points are red, radius and alpha both depth-cued.
 
+## 3b. Audio sources
+
+Three, all feeding the same `attach(ctx, node, label)` hub:
+
+- **Mic** (`m`, `startMic`) — `getUserMedia`, with `echoCancellation`,
+  `noiseSuppression` and `autoGainControl` all off. Those are voice-call DSP;
+  they gate and duck exactly the dynamics the band analysis exists to find.
+  **Do not turn them on.**
+- **System audio** (`s`, `startSys`) — `getDisplayMedia`. Chrome refuses
+  audio-only capture, so it asks for video and immediately stops and removes
+  the video track. On macOS only *tab* shares carry audio; screen and window
+  shares come back silent, hence the "no audio track" branch. The track's
+  `ended` event fires when the user hits Chrome's own "Stop sharing" bar, and
+  tears the graph down.
+- **File** (`startFile`) — see the CSP note in §5.
+
+**The BlackHole route is the one that actually covers everything**, and it is
+the same trick `samples` (~/Dev/samples) uses: a virtual loopback driver
+installs as an ordinary *input* device, so with the Mac's output routed through
+a Multi-Output Device, all system audio arrives through the plain mic path — any
+app, any browser, no `getDisplayMedia` needed. That is what `#inputRow` /
+`refreshInputs()` exist for; `LOOPBACK`/`isLoopback()` recognise such a device
+by name, preselect it and label the readout `System · …`. Device *labels* are
+blank until some capture has been granted, so `refreshInputs()` runs at startup
+(useful on a site already granted), again after every successful open, and on
+`devicechange`. README has the user-facing setup.
+
 ## 4. Audio chain
 
 Per band, in order:
@@ -201,10 +228,11 @@ breaks the artifact in the Claude preview.
   prompt is ever reachable. (The artifact sandbox additionally emits an
   unrecognised `webrtc` CSP directive.) `file://` in Chrome is separately
   hopeless — opaque origin, no prompt.
-  The page therefore checks `document.featurePolicy.allowsFeature("microphone")`
-  (`micPolicy()`) up front and on click, skips the pointless request, and offers
-  the one thing that actually works: `escapeFrame()` reopens the same URL as a
-  top-level tab, where the mic prompts normally. If the frame also blocks
+  The page therefore checks `document.featurePolicy.allowsFeature(…)`
+  (`policyAllows()`, for `"microphone"` and equally for `"display-capture"`) up
+  front and on click, skips the pointless request, and offers the one thing that
+  actually works: `escapeFrame()` reopens the same URL as a
+  top-level tab, where the browser prompts normally. If the frame also blocks
   `window.open` (no `allow-popups`), it falls back to copying the address.
   Non-`http(s)` frames (`srcdoc`, `blob:`) have no reopenable address and get
   told to open `hyperspace.html` in a browser instead.
