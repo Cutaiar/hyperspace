@@ -107,6 +107,24 @@
   }
   .ticks{display:flex;justify-content:space-between;margin-top:1px;font-size:9px;color:rgba(255,255,255,.3);letter-spacing:.1em}
 
+  /* taper tag — every fader states its own law in its caption, because a
+     fader that looks identical to its neighbour but answers to a different
+     curve is the kind of thing you only discover by being annoyed by it.
+     LOG carries the accent: those are the ones that behave like a mixer
+     fader, equal travel for equal ratio. LIN stays grey — a plain
+     proportion, nothing to know. */
+  label.cap .tp{
+    font-style:normal;font-size:7.5px;letter-spacing:.16em;text-transform:uppercase;
+    color:rgba(255,255,255,.3);border:1px solid rgba(255,255,255,.13);
+    padding:1px 3px 0;margin-left:8px;
+  }
+  label.cap .tp.log{color:var(--red);border-color:rgba(255,43,43,.34)}
+  /* unity detent — the notch a channel fader clicks into at 0 dB. Only on
+     the controls where 1.00× is a real landmark rather than an arbitrary
+     point on the way past. */
+  .detent{position:absolute;top:22.5px;width:1px;height:5px;background:rgba(255,255,255,.34);pointer-events:none}
+  .krow .detent{top:19px;height:4px}
+
   .planes{display:grid;grid-template-columns:repeat(6,1fr);gap:5px}
   .planes button{
     font-family:inherit;font-size:10px;letter-spacing:.06em;
@@ -278,15 +296,17 @@
 
   <div id="body">
     <div class="row idle" id="audioRow">
-      <label class="cap" for="drive">Audio drive <b id="driveVal">1.00</b></label>
+      <label class="cap" for="drive"><span>Audio drive <i class="tp log">log</i></span> <b id="driveVal">1.00×</b></label>
       <div class="slider" data-for="drive">
-        <div class="track"></div><div class="fill"></div><div class="knob"></div>
-        <input id="drive" type="range" min="0" max="300" step="5" value="100">
+        <div class="track"></div><div class="fill"></div>
+        <div class="detent" style="left:62.5%"></div><div class="knob"></div>
+        <input id="drive" type="range" min="0" max="160" step="1" value="100">
       </div>
-      <label class="cap" for="dyn">Dynamics <b id="dynVal">1.00</b></label>
+      <label class="cap" for="dyn"><span>Dynamics <i class="tp log">log</i></span> <b id="dynVal">1.00×</b></label>
       <div class="slider" data-for="dyn">
-        <div class="track"></div><div class="fill"></div><div class="knob"></div>
-        <input id="dyn" type="range" min="0" max="150" step="5" value="100">
+        <div class="track"></div><div class="fill"></div>
+        <div class="detent" style="left:66.7%"></div><div class="knob"></div>
+        <input id="dyn" type="range" min="0" max="120" step="1" value="80">
       </div>
       <div class="row" id="sceneWrap" style="margin-bottom:14px">
         <label class="cap" for="scene">Scene</label>
@@ -314,36 +334,44 @@
     <div class="rule"></div>
 
     <div class="row">
-      <label class="cap" for="shape">Shape <b id="shapePos">4 / 18</b></label>
+      <label class="cap" for="shape"><span>Shape <i class="tp">lin</i></span> <b id="shapePos">4 / 18</b></label>
       <div class="slider" data-for="shape">
         <div class="track"></div><div class="fill"></div><div class="knob"></div>
-        <input id="shape" type="range" min="0" max="17" step="1" value="3">
+        <input id="shape" type="range" min="0" max="17" step="1" value="3"
+               title="LINEAR — one step per shape, ordered by cell count. An index, not a quantity.">
       </div>
       <div class="ticks"><span>5 cells</span><span>600 cells</span></div>
     </div>
 
     <div class="row">
-      <label class="cap" for="bright">Brightness <b id="brightVal">1.00</b></label>
+      <label class="cap" for="bright"><span>Brightness <i class="tp log">log</i></span> <b id="brightVal">1.00×</b></label>
       <div class="slider" data-for="bright">
-        <div class="track"></div><div class="fill"></div><div class="knob"></div>
-        <input id="bright" type="range" min="15" max="220" step="1" value="100">
+        <div class="track"></div><div class="fill"></div>
+        <div class="detent" style="left:60%"></div><div class="knob"></div>
+        <input id="bright" type="range" min="0" max="100" step="1" value="60"
+               title="LOGARITHMIC — doubles every 20 steps. 0.13× to 4.00×, detent at 1.00×. Brightness is perceived in stops, so equal travel is equal stop.">
       </div>
+      <div class="ticks"><span>0.13×</span><span>4.00×</span></div>
     </div>
 
     <div class="row">
-      <label class="cap" for="speed">Rotation speed <b id="speedVal">0.30</b></label>
+      <label class="cap" for="speed"><span>Rotation speed <i class="tp log">log</i></span> <b id="speedVal">0.30</b></label>
       <div class="slider" data-for="speed">
         <div class="track"></div><div class="fill"></div><div class="knob"></div>
-        <input id="speed" type="range" min="0" max="150" step="1" value="30">
+        <input id="speed" type="range" min="0" max="160" step="1" value="85"
+               title="LOGARITHMIC — doubles every 20 steps, hard stop at the bottom of the throw. 0, then 0.016 to 4.00 rad/s.">
       </div>
+      <div class="ticks"><span>stop</span><span>4.00</span></div>
     </div>
 
     <div class="row">
-      <label class="cap" for="depth">4D perspective <b id="depthVal">2.6</b></label>
+      <label class="cap" for="depth"><span>4D perspective <i class="tp log">log</i></span> <b id="depthVal">2.60</b></label>
       <div class="slider" data-for="depth">
         <div class="track"></div><div class="fill"></div><div class="knob"></div>
-        <input id="depth" type="range" min="115" max="600" step="5" value="260">
+        <input id="depth" type="range" min="0" max="160" step="1" value="100"
+               title="LOGARITHMIC in perspective strength — the distortion goes as 1/(D−1), so the fader is even in that, not in D. 1.05 (violent) to 13.8 (near-orthographic).">
       </div>
+      <div class="ticks"><span>1.05</span><span>13.8</span></div>
     </div>
 
     <div class="row">
@@ -999,6 +1027,104 @@ function frame(now) {
 }
 
 /* ============================================================
+   Fader tapers
+   ------------------------------------------------------------
+   `bindSlider` hands every callback an integer slider position and
+   nothing else. These objects are what turns a position into a real
+   parameter value and back again, so the taper lives in one place
+   per control instead of being smeared across the callback, the
+   preset loader and the strip refresh.
+
+   Two laws, and every fader states which one it is on its caption:
+
+   LIN — value proportional to position. Correct only where the
+     quantity is already perceptually even: a blend in percent, an
+     expansion ratio, or a threshold whose units are dB to begin
+     with. On anything else it is the wrong answer that looks right.
+
+   LOG — value doubles every OCT positions, so equal travel is equal
+     ratio. This is how a channel fader, a tuning knob and an
+     envelope time all behave, because gain, rate and time are all
+     judged by ratio rather than by difference. A linear 2 ms–2.5 s
+     attack puts every musically useful setting in the first 4% of
+     the throw; this puts a fixed 5.9% per step everywhere.
+
+   Position 0 is reserved as a hard zero on the controls where "off"
+   is a real setting — the −∞ at the bottom of a channel fader. An
+   exponential curve can approach zero but never reach it, so the
+   bottom notch is spent buying it outright.
+
+   Every pair round-trips exactly: unmap(map(p)) === p over the whole
+   throw, which is what stops `selectBand` and `applyPreset` from
+   walking a fader sideways each time a scene is loaded.
+   ============================================================ */
+const OCT = 20;          // slider steps per doubling, gain-like controls
+const OCT_T = 12;        // slider steps per doubling, time constants
+
+/* exponential with a hard zero at position 0. `u` is the position of
+   1.00× (where the detent notch is drawn), `n` the top of the throw. */
+const expZero = (u, n) => ({
+  steps: n, unity: u, log: true,
+  map: p => (p <= 0 ? 0 : Math.pow(2, (p - u) / OCT)),
+  unmap: v => (v <= 0 ? 0 : clamp(Math.round(u + OCT * Math.log2(v)), 1, n))
+});
+/* exponential with no zero — for quantities that are never legitimately off */
+const expPure = (u, n) => ({
+  steps: n, unity: u, log: true,
+  map: p => Math.pow(2, (p - u) / OCT),
+  unmap: v => clamp(Math.round(u + OCT * Math.log2(Math.max(v, 1e-9))), 0, n)
+});
+/* exponential time constant. `v0` is the value in ms at position 0;
+   the parameter itself is stored in seconds, as the chain expects. */
+const expTime = (v0, n) => ({
+  steps: n, log: true,
+  map: p => v0 * Math.pow(2, p / OCT_T) / 1000,
+  unmap: s => clamp(Math.round(OCT_T * Math.log2(Math.max(s * 1000, 1e-6) / v0)), 0, n)
+});
+/* linear: value = position / d */
+const linT = (d, n) => ({
+  steps: n, log: false,
+  map: p => p / d,
+  unmap: v => clamp(Math.round(v * d), 0, n)
+});
+
+/* 4D perspective is a special case. The projection is D/(D−w), so the
+   amount of distortion goes as 1/(D−1) — the difference between 1.15
+   and 1.5 is enormous and the difference between 8 and 12 is nothing.
+   The fader is therefore exponential in (D−1), which makes it even in
+   the thing the eye is actually reading. Position 100 lands on 2.60
+   exactly, which is where the default has always been. */
+const T_DEPTH = {
+  steps: 160, log: true,
+  map: p => 1 + 0.05 * Math.pow(2, p / OCT),
+  unmap: v => clamp(Math.round(OCT * Math.log2(Math.max(v - 1, 1e-6) / 0.05)), 0, 160)
+};
+
+/* master audio drive: off, then 0.03× to 8.00×, unity at 100 (62.5%).
+   Five octaves of downward range is the point — the old linear law
+   spent half its throw on the single octave 1.5×–3× and gave the
+   whole region below 0.19× just six percent of the travel. */
+const T_DRIVE = expZero(100, 160);
+/* dynamics recovery: 0 is a true bypass, then 0.06× to 4.00× */
+const T_DYN   = expZero(80, 120);
+/* brightness: 0.13× to 4.00×, unity at 60. Never off — a black frame is
+   not a setting anyone reaches for on purpose, so no zero notch. Three
+   stops down covers the 1200-edge 120-cell, two up covers the 5-cell. */
+const T_BRIGHT = expPure(60, 100);
+/* rotation speed: hard stop, then 0.016 to 4.00 rad/s. The old linear
+   0–1.5 put every slow-drift setting in the bottom fifth of the throw;
+   now the drift region gets half of it. */
+const T_SPEED = expZero(120, 160);
+
+const fmtGain = v => (v <= 0 ? "off" : v.toFixed(2) + "×");
+const fmtTime = s => {
+  const ms = s * 1000;
+  if (ms >= 1000) return (ms / 1000).toFixed(2) + " s";
+  if (ms >= 100) return Math.round(ms) + " ms";
+  return (ms < 10 ? ms.toFixed(2) : ms.toFixed(1)) + " ms";
+};
+
+/* ============================================================
    Controls
    ============================================================ */
 const el = id => document.getElementById(id);
@@ -1075,10 +1201,15 @@ function syncShape() {
   paint(shapeIn);
 }
 
+/* bind and then fire once, so the state object takes its value from the
+   taper rather than from a duplicated literal that can drift out of step
+   with the slider's markup */
+function bindTaper(input, fn) { bindSlider(input, fn); fn(+input.value); }
+
 bindSlider(shapeIn, v => { S.shape = v; syncShape(); });
-bindSlider(el("bright"), v => { S.bright = v / 100; el("brightVal").textContent = S.bright.toFixed(2); });
-bindSlider(el("speed"),  v => { S.speed  = v / 100; el("speedVal").textContent  = S.speed.toFixed(2); });
-bindSlider(el("depth"),  v => { S.depth4 = v / 100; el("depthVal").textContent  = S.depth4.toFixed(1); });
+bindTaper(el("bright"), p => { S.bright = T_BRIGHT.map(p); el("brightVal").textContent = fmtGain(S.bright); });
+bindTaper(el("speed"),  p => { S.speed  = T_SPEED.map(p);  el("speedVal").textContent  = S.speed ? S.speed.toFixed(S.speed < 1 ? 3 : 2) : "stop"; });
+bindTaper(el("depth"),  p => { S.depth4 = T_DEPTH.map(p);  el("depthVal").textContent  = S.depth4.toFixed(2); });
 
 /* ---- audio UI ---- */
 const meterEls = [];
@@ -1119,29 +1250,45 @@ function hideHint() {
   hudEl.classList.remove("on");
 }
 
-/* knob spec: how each parameter maps between slider integers and PARAMS */
+/* knob spec: `t` is the taper, and it owns both directions of the
+   mapping between slider position and the value stored in PARAMS.
+   `fmt` takes the real value, not the slider position, so the readout
+   stays truthful about a preset that lands between two fader notches. */
 const KNOBS = [
-  { key: "exp",  label: "Contrast",   min: 0, max: 200, step: 5, scale: 100,
-    fmt: v => "1:" + (1 + v / 100).toFixed(2),
-    tip: "Upward expansion about this band's own running average. Louder-than-average gets louder, quieter gets quieter — the inverse of what the mastering limiter did. This is what pulls dynamics back out of a brickwalled track." },
-  { key: "trn",  label: "Transient",  min: 0, max: 100, step: 5, scale: 100,
-    fmt: v => v + "%",
-    tip: "Blends the fader from following level toward following change — a fast envelope minus a slow one. A limiter flattens level but cannot flatten change, so this is where punch comes from on a squashed master. At 100% the plane only moves on hits." },
-  { key: "pre",  label: "Pre-drive",  min: 0, max: 400, step: 5, scale: 100,
-    fmt: v => (v / 100).toFixed(2) + "×",
-    tip: "Gain into the transfer function. Nominal is 1.0 and the ceiling is 2.0, so there is a full 6 dB of headroom above nominal before anything flattens." },
-  { key: "post", label: "Post-drive", min: 0, max: 400, step: 5, scale: 100,
-    fmt: v => (v / 100).toFixed(2) + "×",
-    tip: "Gain out of the transfer, straight to the rotation fader. This is how much this band contributes overall." },
-  { key: "atk",  label: "Attack",     min: 2, max: 600, step: 2, scale: 1000,
-    fmt: v => v + " ms",
-    tip: "How fast the rolling window rises. Short catches transients; long ignores them and tracks the swell." },
-  { key: "dec",  label: "Decay",      min: 20, max: 2500, step: 10, scale: 1000,
-    fmt: v => (v >= 1000 ? (v / 1000).toFixed(2) + " s" : v + " ms"),
-    tip: "How fast the window falls. This sets how long the band keeps driving after the sound stops." },
-  { key: "thr",  label: "Threshold",  min: 0, max: 50, step: 1, scale: 100,
-    fmt: v => (v / 100).toFixed(2),
-    tip: "Gate. Below this the band outputs nothing and its rotation plane stops dead." }
+  // LINEAR. An expansion ratio is already a ratio; laying a second
+  // logarithm over it would mean the number under your finger and the
+  // curve of the fader disagreed about what "twice as much" is.
+  { key: "exp",  label: "Contrast",   t: linT(40, 160),
+    fmt: v => "1:" + (1 + v).toFixed(2),
+    tip: "LIN, 1:1 to 1:5. Upward expansion about this band's own running average. Louder-than-average gets louder, quieter gets quieter — the inverse of what the mastering limiter did. This is what pulls dynamics back out of a brickwalled track." },
+  // LINEAR. A blend between two signals in percent; 40% is exactly
+  // twice as much of the transient path as 20%, by construction.
+  { key: "trn",  label: "Transient",  t: linT(100, 100),
+    fmt: v => Math.round(v * 100) + "%",
+    tip: "LIN, 0–100%. Blends the fader from following level toward following change — a fast envelope minus a slow one. A limiter flattens level but cannot flatten change, so this is where punch comes from on a squashed master. At 100% the plane only moves on hits." },
+  // LOG. A gain stage. 0.06× to 8×, 42 dB of range at a constant
+  // 0.3 dB per step, with a hard off at the bottom of the throw.
+  { key: "pre",  label: "Pre-drive",  t: expZero(80, 140),
+    fmt: fmtGain,
+    tip: "LOG, off then 0.06× to 8.00×, detent at unity. Gain into the transfer function. The transfer ceiling is 2.0, so a band idling around 0.3 has real use for the top of this fader — it is not just 6 dB of overdrive." },
+  { key: "post", label: "Post-drive", t: expZero(80, 140),
+    fmt: fmtGain,
+    tip: "LOG, off then 0.06× to 8.00×, detent at unity. Gain out of the transfer, straight to the rotation fader. This is how much this band contributes overall." },
+  // LOG. The textbook case. Linear 2 ms–2.5 s crams every useful
+  // percussive setting into the first 4% of the throw; doubling every
+  // 12 steps gives a flat 5.9% per step from half a millisecond up.
+  { key: "atk",  label: "Attack",     t: expTime(0.5, 144),
+    fmt: fmtTime,
+    tip: "LOG, 0.5 ms to 2.05 s, doubling every 12 steps. How fast the rolling window rises. Short catches transients; long ignores them and tracks the swell." },
+  { key: "dec",  label: "Decay",      t: expTime(5, 144),
+    fmt: fmtTime,
+    tip: "LOG, 5 ms to 20.5 s, doubling every 12 steps. How fast the window falls — how long the band keeps driving after the sound stops. The top of this fader is where a plane coasts for most of a bar." },
+  // LINEAR. Threshold is compared against `u`, which is already
+  // (dB − U_LO)/U_SPAN. It is a dB scale wearing different units, so
+  // linear travel here is logarithmic in amplitude, which is right.
+  { key: "thr",  label: "Threshold",  t: linT(200, 120),
+    fmt: v => v.toFixed(3),
+    tip: "LIN, 0 to 0.60 in steps of 0.005 — and linear here IS logarithmic, because the signal it gates is already a dB scale (0.01 ≈ 0.56 dB). Below this the band outputs nothing and its rotation plane stops dead." }
 ];
 const knobUI = [];
 
@@ -1217,10 +1364,14 @@ const knobUI = [];
     const row = document.createElement("div");
     row.className = "krow";
     // no title= here: it duplicated the readout and arrived a second late
+    const det = spec.t.unity != null
+      ? '<div class="detent" style="left:' + (spec.t.unity / spec.t.steps * 100).toFixed(2) + '%"></div>'
+      : '';
     row.innerHTML =
-      '<label class="cap"><span>' + spec.label + '</span><b>–</b></label>' +
-      '<div class="slider"><div class="track"></div><div class="fill"></div><div class="knob"></div>' +
-      '<input type="range" min="' + spec.min + '" max="' + spec.max + '" step="' + spec.step + '"></div>';
+      '<label class="cap"><span>' + spec.label +
+      ' <i class="tp' + (spec.t.log ? ' log' : '') + '">' + (spec.t.log ? 'log' : 'lin') + '</i></span><b>–</b></label>' +
+      '<div class="slider"><div class="track"></div><div class="fill"></div>' + det + '<div class="knob"></div>' +
+      '<input type="range" min="0" max="' + spec.t.steps + '" step="1"></div>';
     const input = row.querySelector("input"), read = row.querySelector("b");
     const rowTip = "<b>" + spec.label + "</b> " + spec.tip;
     input.setAttribute("aria-label", spec.label + ". " + spec.tip);
@@ -1228,8 +1379,9 @@ const knobUI = [];
     row.addEventListener("mouseout", hintIdle);
     // touch has no hover, so grabbing the fader is what surfaces the tip
     row.addEventListener("pointerdown", e => hint(rowTip, e.pointerType !== "mouse"));
-    bindSlider(input, v => {
-      PARAMS[SELB][spec.key] = v / spec.scale;
+    bindSlider(input, p => {
+      const v = spec.t.map(p);
+      PARAMS[SELB][spec.key] = v;
       read.textContent = spec.fmt(v);
     });
     kh.appendChild(row);
@@ -1238,9 +1390,23 @@ const knobUI = [];
 
   // the readout belongs to the audio module: it lights on entry, reverts to the
   // default line over blank space inside it, and goes dark on the way out
+  // The two module-level faders sit inside the audio strip, so they use the
+  // strip's readout rather than a native title=. Everything below the rule is
+  // outside the module and carries title= instead.
+  const MODTIP = {
+    drive: "<b>Audio drive</b> LOG, off then 0.03× to 8.00×, doubling every 20 steps, detent at unity. Master gain on the six band faders, after the transfer stage — it scales rotation rate directly and nothing downstream clamps it. It only does anything while a source is attached; with no mic and no track the shape runs on Rotation speed alone.",
+    dyn: "<b>Dynamics</b> LOG, bypass then 0.06× to 4.00×, detent at unity. How much of the range a limiter took is put back — window normalisation, upward expansion and transient blend all scale from here. At 0 the chain is a plain level follower."
+  };
+  Object.keys(MODTIP).forEach(id => {
+    const w = el(id).closest(".slider"), t = MODTIP[id];
+    w.addEventListener("mouseover", () => hint(t));
+    w.addEventListener("mouseout", hintIdle);
+    w.addEventListener("pointerdown", e => hint(t, e.pointerType !== "mouse"));
+  });
+
   const arow = el("audioRow");
   arow.addEventListener("mouseover", e => {
-    if (!e.target.closest(".meter, .shapers select, .krow")) hint(null);
+    if (!e.target.closest(".meter, .shapers select, .krow, .slider")) hint(null);
   });
   arow.addEventListener("mouseleave", hideHint);
   el("console").addEventListener("mouseleave", hideHint);
@@ -1254,9 +1420,14 @@ function selectBand(i) {
   meterEls.forEach((m, k) => m.el.classList.toggle("sel", k === i));
   el("stripName").textContent = BANDS[i].id + " · " + SHAPERS[PARAMS[i].fn].tag;
   el("stripPlane").textContent = BANDS[i].lo + "–" + BANDS[i].hi + " Hz → " + BANDS[i].pl;
+  // The fader goes to the nearest notch its taper can express; the readout
+  // shows the value the chain is actually running. A scene can name 250 ms
+  // when the nearest notch is 256 ms, and lying about that in the number
+  // would be worse than the six milliseconds.
   for (const k of knobUI) {
-    k.input.value = Math.round(PARAMS[i][k.spec.key] * k.spec.scale);
-    k.read.textContent = k.spec.fmt(+k.input.value);
+    const v = PARAMS[i][k.spec.key];
+    k.input.value = k.spec.t.unmap(v);
+    k.read.textContent = k.spec.fmt(v);
     paint(k.input);
   }
 }
@@ -1510,8 +1681,21 @@ el("fileIn").addEventListener("change", e => {
   if (f) startFile(f);
   e.target.value = "";
 });
-bindSlider(el("drive"), v => { AUDIO.gain = v / 100; el("driveVal").textContent = AUDIO.gain.toFixed(2); });
-bindSlider(el("dyn"), v => { AUDIO.dyn = v / 100; el("dynVal").textContent = AUDIO.dyn.toFixed(2); });
+/* Audio drive is a gain on the audio-driven part of the rotation only —
+   `frame` substitutes a literal 1 for PLANEDRIVE when no source is
+   attached, so with the mic denied and no track loaded this fader is
+   inert across its entire throw. That is not a bug to paper over by
+   quietly turning it into a second rotation-speed control; it is a fact
+   about what the control is for, so the readout says `idle` and the
+   tooltip says why. */
+let driveLbl = "";
+function driveRead() {
+  const s = fmtGain(AUDIO.gain) + (AUDIO.on ? "" : " · idle");
+  if (s !== driveLbl) { driveLbl = s; el("driveVal").textContent = s; }
+}
+setInterval(driveRead, 400);   // catches a source being attached or torn down
+bindTaper(el("drive"), p => { AUDIO.gain = T_DRIVE.map(p); driveRead(); });
+bindTaper(el("dyn"),   p => { AUDIO.dyn  = T_DYN.map(p);   el("dynVal").textContent = fmtGain(AUDIO.dyn); });
 
 el("planes").addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b) return;

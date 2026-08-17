@@ -162,9 +162,23 @@ attack, decay, threshold for all six bands: Balanced, Kick & Sizzle, Glacial
 Drift, Strobe Cage, Bass Engine, Air & Lace, Inverse World, Percussive, Tremolo
 Web, Harmonic Bloom, Slow Bass / Fast Air.
 
-**Per-band knobs** (`PARAMS[i]`, edited via the strip): contrast 1:1–1:3,
-transient 0–100%, pre-drive 0–4×, post-drive 0–4×, attack 2–600 ms, decay
-20 ms–2.5 s, threshold 0–0.5.
+**Per-band knobs** (`PARAMS[i]`, edited via the strip): contrast 1:1–1:5,
+transient 0–100%, pre-drive off/0.06–8×, post-drive off/0.06–8×, attack
+0.5 ms–2.05 s, decay 5 ms–20.5 s, threshold 0–0.6.
+
+**Fader tapers.** Every fader is an integer position; a taper object owns
+both directions of the mapping (`map` / `unmap`) and `unmap(map(p)) === p`
+exactly over the whole throw, which is what keeps `selectBand` and
+`applyPreset` from walking a fader sideways. `expZero(u, n)` is exponential
+with a hard zero at position 0 and unity at `u`; `expPure` has no zero;
+`expTime(v0, n)` is an exponential time constant in ms stored as seconds;
+`linT(d, n)` is `p/d`. LOG is used for every gain and every time constant
+(equal travel, equal ratio); LIN only where the quantity is already
+perceptually even — a percent blend, an expansion ratio, and threshold,
+whose units are already dB. Each caption carries a `LOG`/`LIN` tag and the
+gain faders draw a unity detent notch. `KNOBS[].scale` is gone; specs carry
+`t` (the taper) and `fmt` now takes the real value, not the position, so a
+scene value that lands between two notches still reads truthfully.
 
 `PRESETS` rows are now `[fn, pre, post, atkMs, decMs, thr, exp, trn]`, but
 `applyPreset` still accepts six-element rows and falls back to `DEF_EXP` /
