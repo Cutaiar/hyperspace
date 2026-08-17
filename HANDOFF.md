@@ -385,12 +385,36 @@ Now on the user's own machine at `~/Dev/hyperspace`, `main`, with `origin` set
 to `github.com/Cutaiar/hyperspace.git` and the real commit author. The container
 blockers described in earlier versions of this document are resolved.
 
-The work above was built by four parallel agents in git worktrees under
+The work above was built by parallel agents in git worktrees under
 `.claude/worktrees/` and merged; `.gitignore` covers `worktrees`.
 `.claude/launch.json` (untracked) runs `python3 -m http.server 8123` — serving
 over localhost is what makes the **microphone** testable, unlike `file://`.
 
+`main` is pushed. PRs #1 (mic Permissions Policy) and #2 (system audio via
+BlackHole / tab capture) are merged and closed.
+
+**Deployed:** https://hyperspace-lake.vercel.app — Vercel project `hyperspace`
+under account `cutaiar`, already linked, so `vercel deploy --prod` from the repo
+root is the whole redeploy. `vercel.json` rewrites `/` → `/hyperspace.html`;
+`.vercelignore` keeps `.claude/` and this file out of the public bundle. Note
+that CLI deploys have hung at the upload step more than once — check
+`vercel ls hyperspace` for a `● Ready` line rather than trusting the command to
+return. The deployed site is https, hence a secure context, which is what makes
+live audio input work there with nothing installed.
+
 ## 9. Open threads
+
+**Next up, and the one live decision.** The input trim is non-monotonic through
+0 to −12 dB (measured in §4). The fix needs a choice Dillon has not made yet —
+he was asked and the session ended first:
+
+1. bias the adaptive window in proportion to trim,
+2. apply trim as a post-normaliser multiplier on the band's contribution, or
+3. give each band an **auto/manual** normalisation switch, so manual bypasses
+   adaptive normalisation entirely and the trim becomes a plain gain.
+
+(3) is probably closest to what a mix engineer expects, and it is the one to
+propose first. Ask before building — the three behave very differently.
 
 - Real harmonic detection (integer-multiple peak picking) to replace the
   octave-coherence proxy.
@@ -400,10 +424,18 @@ over localhost is what makes the **microphone** testable, unlike `file://`.
   a BPM-locked chop is a natural fit.
 - User-saveable scenes (blocked on no storage in artifacts; would need export to
   a JSON string the user copies out).
-- Mic path is still unexercised end-to-end. It is now *testable* — serve over
-  localhost with the launch config in §8 and the prompt will appear — but no
-  session has actually granted permission yet. Transport in mic mode is likewise
-  only verified via the `stopAudio()` path.
+- **No session has ever run a real audio capture.** Every live-input path — mic,
+  BlackHole loopback, tab capture — is verified by *stub* only: constraints
+  checked as they reach `getUserMedia`, device lists faked, `getDisplayMedia`
+  mocked. No browser available to any session has exposed a real audio device or
+  granted permission. The deployed site is the first place this can be tested for
+  real, and it is one click: open it and press **Listen to mic**. Treat all three
+  paths as unproven until someone does. Transport in mic mode is likewise only
+  verified through the `stopAudio()` path.
+- Loopback **preselection** only fires on the startup path, and only when the site
+  already holds label permission from a prior grant. On a first visit labels are
+  blank, the picker stays hidden, and the user must click **Listen to mic** once
+  before BlackHole can be spotted. Read from source, never exercised.
 - The dynamics chain has only been driven by synthetic brickwalled audio. It
   wants a real commercial MP3 next; the constants most likely to need tuning are
   `OPEN_SPAN` (what counts as a healthy natural range) and `CONF_LO/CONF_SPAN`
@@ -417,3 +449,15 @@ Arduino strobes, interactive visual art. Has iterated on this viewer across
 multiple sessions. Reads console output and pastes it when something breaks —
 take those logs seriously, the CSP fix came directly from one. Wants to be told
 when something is impossible rather than handed a workaround presented as a fix.
+
+Works by dispatching parallel sub-agents in git worktrees and merging afterwards.
+Two traps that have already cost a round each, both worth guarding every time:
+
+- **Worktree agents branch from the commit HEAD was at when the session started**,
+  not from current `main`. Open every agent prompt with `git merge main --no-edit`
+  plus a `grep -c` check for features that must exist, and have the agent stop and
+  report rather than edit if any are missing.
+- **An agent's measurements only describe its own branch.** Two agents touching one
+  subsystem can each be right and the merge still wrong — that is exactly how the
+  trim's non-monotonicity got in. Re-measure the merged build before reporting
+  anything as working, and keep it clear which numbers are first-hand.
