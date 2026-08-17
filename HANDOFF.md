@@ -107,10 +107,37 @@ FFT bins → power-sum RMS → dB → u (0..2.5; 1.0 is nominal, 56 dB window)
   → PLANEDRIVE[plane] = dir · out · 3.2 · masterGain
 ```
 
-**Headroom.** Nothing clamps at 1.0 any more. `HEAD = 2.0` on the input and
-transfer signal, `CEIL = 2.5` on the fader. Meters read 0..1.6 with the nominal
-line at 62.5% and a tinted zone above it, so a band visibly *reaches* the
-ceiling instead of living glued to it.
+**Headroom.** Nothing clamps anywhere. Four landmarks: `NOM = 1.0` (a band
+working normally), `KNEE = 1.25` (where the soft ceiling starts to bend),
+`HEAD = CEIL = 2.6` (asymptotes the signal approaches and never reaches).
+`softCeil(x, knee, ceil)` is the identity below the knee and
+`knee + r·t/√(1+t²)` above it — slope 1 at the knee with no curvature step,
+and a t⁻³ tail, so even a cubed signal driven ten times past nominal comes
+out strictly increasing. That property is the point: the old
+`clamp(x, 0, HEAD)` flat-topped four bands at once, and a flat top is not
+"loud", it is zero dynamics.
+
+The clipping the user reported was manufactured inside the chain, not
+delivered by the input — envelopes sat at 0.6–1.0 while the post-expander
+signal came out at 1.7–2.0. Two causes, both fixed: the expander had no
+gain-staging discipline on its makeup (see `DEV_AIM`), and harmonic coupling
+multiplied a value that had *already* been clamped and then clamped it again.
+Coupling is unchanged in depth but now sits immediately before the one and
+only saturation in the chain. Measured on a brickwalled WAV in the browser,
+steady state: time within 2% of the ceiling 0.3% → **0.0%**, input sd
+0.273 → **0.382**, fader-out sd 0.176 → **0.230**.
+
+`WARM_F` fades the expander in over the first second. It needs a settled mean
+to expand about and for that first second it has a seed instead; expanding
+against a stale mean is what threw every bar at the ceiling for the opening
+half second of every track (4.5% of warm-up frames flat against the clamp,
+peaking at 11% on MIDB — now 0.0%).
+
+Meters read 0..`CEIL` with the nominal line at 38.5% and the knee line at
+48.1%, two stacked tints so working / headroom / knee read as three shades.
+The bar top is an asymptote, so a column that sits against it for 0.5 s
+(`PIN_HOLD`) is genuinely over-driven and lights a blinking annunciator —
+"full" and "wrong" are now different-looking things.
 
 **Dynamics recovery** — the point of all this is that a brickwalled master
 carries almost no level variation, so the old fixed-floor peak normaliser
