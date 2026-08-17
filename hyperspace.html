@@ -187,21 +187,31 @@
   .rule{border-top:1px solid var(--line);margin:18px 0 14px}
   .meters{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-top:10px}
   .meter{display:flex;flex-direction:column;align-items:center;gap:4px}
-  .meter .bar{position:relative;width:100%;height:56px;border:1px solid var(--line);display:flex;gap:1px;overflow:hidden}
+  /* Taller than it was. The scale now runs to the absolute ceiling rather
+     than to 1.6, so nominal sits at 38% instead of 63% — at the old 56 px
+     the whole working range would have been squeezed into 21 px, and this
+     is a meter someone gain-stages by eye. */
+  .meter .bar{position:relative;width:100%;height:78px;border:1px solid var(--line);display:flex;gap:1px;overflow:hidden}
   .meter .col{position:relative;flex:1}
   .meter .lvl{position:absolute;left:0;right:0;bottom:0;height:0%;background:rgba(255,255,255,.9)}
   .meter .hit{position:absolute;left:0;right:0;bottom:0;height:0%;background:var(--red)}
-  /* everything above the nominal line is headroom. The zone is tinted so an
-     idle meter still shows how much room it has left, and the part of a bar
-     that pushes into it turns red whichever column it is in. */
+  /* Everything above the nominal line is headroom, and the two .zone panes
+     stack — one from nominal, one from the knee — so the bar reads as three
+     shades: working range, headroom, and the compressed peak zone where the
+     soft ceiling is holding the band back. An idle meter still shows how much
+     of each it has, and the part of a bar that pushes up turns red whichever
+     column it is in. */
   .meter .zone{position:absolute;left:0;right:0;top:0;background:rgba(255,43,43,.07);pointer-events:none}
   .meter .nom{position:absolute;left:0;right:0;height:1px;background:rgba(255,255,255,.32);pointer-events:none;z-index:3}
+  .meter .knee{position:absolute;left:0;right:0;height:1px;background:rgba(255,43,43,.38);pointer-events:none;z-index:3}
   .meter .ovr{position:absolute;left:0;right:0;height:0%;background:var(--red);box-shadow:0 0 5px rgba(255,43,43,.7);z-index:2}
   .legend{display:flex;gap:12px;margin-top:8px;font-size:8.5px;letter-spacing:.13em;color:rgba(255,255,255,.38);text-transform:uppercase}
   .legend i{display:inline-block;width:7px;height:7px;margin-right:5px;vertical-align:-1px;font-style:normal}
   .legend .a{background:rgba(255,255,255,.9)}
   .legend .b{background:var(--red)}
   .legend .c{background:rgba(255,43,43,.28);box-shadow:inset 0 1px 0 rgba(255,255,255,.32)}
+  .legend .d{background:rgba(255,43,43,.5);box-shadow:inset 0 1px 0 var(--red)}
+  .legend{flex-wrap:wrap;row-gap:4px}
   .shapers{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-top:7px}
   .shapers select{
     width:100%;font-family:inherit;font-size:8.5px;letter-spacing:.04em;text-align:center;
@@ -212,7 +222,14 @@
   .shapers select option{background:#000;font-size:11px}
   .meter{cursor:pointer}
   .meter.sel .bar{border-color:var(--red)}
-  .meter .col.over::after{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:var(--red);box-shadow:0 0 6px var(--red)}
+  /* Over marker. The ceiling is an asymptote, so a column can only sit
+     against the top by being driven there — an annunciator, not a peak
+     LED, and it blinks because a steady red cap would read as "full"
+     rather than "wrong". */
+  .meter .col.over::after{content:"";position:absolute;left:0;right:0;top:0;height:3px;
+    background:var(--red);box-shadow:0 0 7px var(--red);animation:ann 620ms steps(1) infinite}
+  @keyframes ann{0%,49%{opacity:1}50%,100%{opacity:.15}}
+  @media (prefers-reduced-motion:reduce){.meter .col.over::after{animation:none}}
   .meter.sel .tag{color:#fff}
   /* Hint readout — an LCD window in the same bezel, sitting directly ABOVE the
      console and out of every flow, so its height can change freely without
@@ -336,7 +353,7 @@
       </div>
       <div class="meters" id="meters"></div>
       <div class="shapers" id="shapers"></div>
-      <div class="legend"><span><i class="a"></i>input</span><span><i class="b"></i>fader out</span><span><i class="c"></i>headroom</span></div>
+      <div class="legend"><span><i class="a"></i>input</span><span><i class="b"></i>fader out</span><span><i class="c"></i>headroom</span><span><i class="d"></i>knee</span></div>
       <div id="strip">
         <div id="stripHead"><span id="stripName">SUB</span>
           <span class="hr"><em id="stripPlane">ZW plane</em><button class="mreset" id="bandReset" type="button">Reset</button></span>
@@ -674,13 +691,18 @@ const BANDS = [
    look anything alike. Each entry gets its own scratch state so
    envelopes and LFOs can hold values between frames.
 
-   X now arrives with headroom — it runs 0..HEAD, where 1.0 is
-   nominal — so every shaper has to stay sane above 1. Most already
-   do, because they are monotone. Three did not: S-curve turns back
-   on itself past 1 (x²(3−2x) peaks at x=1 and falls), Gate threw the
-   overshoot away by returning a flat 1, and Invert went negative.
-   Those three are handled explicitly below; the rest pass headroom
-   through on their own.
+   X arrives with headroom — it runs 0..HEAD, where 1.0 is nominal and
+   the soft ceiling has already bent everything above KNEE — so every
+   shaper has to stay sane above 1. Most already do, because they are
+   monotone. Three did not: S-curve turns back on itself past 1
+   (x²(3−2x) peaks at x=1 and falls), Gate threw the overshoot away by
+   returning a flat 1, and Invert went to a hard zero and stayed there,
+   so every loud frame read identically — the same dead top of range
+   the hard clamp used to give the other twelve, just upside down.
+   Invert now falls through the softCeil curve instead, which lets it
+   approach silence asymptotically and never actually arrive. Gate is
+   left flat on purpose: flatness between threshold and nominal is what
+   a gate *is*, and it still passes overshoot through above 1.
 ------------------------------------------------------------ */
 const SHAPERS = [
   { tag: "LIN",  name: "Linear — Y = X",              f: (s, x) => x },
@@ -692,7 +714,7 @@ const SHAPERS = [
   { tag: "GATE", name: "Gate — hard on above threshold",
     f: (s, x) => (x > 0.35 ? (x > 1 ? x : 1) : 0) },      // keep the overshoot
   { tag: "INV",  name: "Invert — loud stops, silence spins",
-    f: (s, x) => (x < 1 ? 1 - x : 0) },                   // no headroom by nature
+    f: (s, x) => 1 - softCeil(x, 0.5, 1) },               // approaches rest, never flat
   { tag: "HOLD", name: "Peak hold — instant rise, slow fall",
     f: (s, x, dt) => { s.h = Math.max(x, (s.h || 0) - dt / 0.7); return s.h; } },
   { tag: "STAC", name: "Staccato — 4 ms attack, 75 ms decay",
@@ -786,19 +808,30 @@ function applyPreset(k) {
 /* ------------------------------------------------------------
    Headroom and dynamics-recovery constants.
 
-   HEAD is where the ceiling sits relative to nominal: 1.0 is a band
-   working normally, and everything up to HEAD is room for it to push
-   into. Nothing in the chain clamps at 1.0 any more — that single
-   clamp is what made a limited master read as six bars glued to the
-   top, because a brickwalled band never comes back down far enough
-   to unstick them.
+   Three levels, not one. NOM is a band working normally. KNEE is
+   where the chain starts holding it back. HEAD/CEIL are asymptotes
+   the signal approaches and never reaches — see softCeil. Everything
+   between NOM and KNEE is untouched working headroom; everything
+   between KNEE and the asymptote is compressed peak.
+
+   The clamps that used to sit at HEAD were the actual clipping the
+   user was hearing about. They were not passing through an input that
+   arrived too hot — measured against a brickwalled WAV, the envelopes
+   sat at 0.6–1.0 while the post-expander signal came out at 1.7–2.0,
+   flat against the clamp. The gain was manufactured downstream, by an
+   expander with no gain-staging discipline and a coupling multiplier
+   stacked on top of it. A flat top is not "loud", it is zero dynamics,
+   which is the one thing this whole subsystem exists to recover, so
+   both are fixed at the source and the clamps are gone.
 
    U_LO/U_SPAN set the dB window. It is deliberately wider than the
    old 46 dB and lands nominal below full scale, so a loud band has
    somewhere to go.
 ------------------------------------------------------------ */
-const HEAD = 2.0;                     // ceiling on the input / transfer signal
-const CEIL = 2.5;                     // ceiling on the fader output
+const NOM  = 1.0;                     // nominal — a band working normally
+const KNEE = 1.25;                    // where the soft ceiling starts to bend
+const HEAD = 2.6;                     // asymptotic ceiling, input / transfer signal
+const CEIL = 2.6;                     // asymptotic ceiling, fader output
 const DRIVE = 3.2;                    // fader → rotation rate
 const U_LO = -80, U_SPAN = 56;        // dB → u, where u = 1.0 is nominal
 const PK_TAU = 2.5, VAL_TAU = 6.0;    // peak falls in 2.5 s, valley rises in 6 s
@@ -809,9 +842,38 @@ const PK_MIN = 0.10, SPAN_MIN = 0.04; // SPAN_MIN ≈ 2.2 dB, the tightest windo
 const CONF_LO = 0.08, CONF_SPAN = 0.18;
 const OPEN_SPAN = 0.22;               // ≈ 12 dB of natural range counts as healthy
 const SQ_FLOOR = 0.35;                // contrast still applied to an already-dynamic band
-const MEAN_TAU = 2.5, TARGET = 0.68;  // expansion pivot, and where the mean lands
+const MEAN_TAU = 2.5, TARGET = 0.72;  // expansion pivot, and where the mean lands
+// Gain staging for the expander. DEV_AIM is the RMS the expanded deviation
+// is allowed to reach before the stage starts pulling it back — roughly the
+// swing that puts a 2.5σ peak on the knee with the mean at TARGET. DEV_MIN
+// stops a band whose deviation is essentially zero from asking for enormous
+// makeup. WARM_F is how long the expander is faded in for: it needs a settled
+// mean to expand about, and for the first second after a source is attached
+// it has a seed instead. Expanding against a stale mean is what threw every
+// bar at the ceiling for the first half second of every track.
+const DEV_AIM = 0.70, DEV_MIN = 0.06, WARM_F = 60;
+const COUPLE = 0.7;                   // harmonic coupling depth — see below
 const FAST_A = 0.003, FAST_R = 0.060, SLOW_T = 0.30;
 const FLUX_G = 3.2, FLUX_K = 0.15, FLUX_MIN = 0.12, TRN_HEAD = 1.4;
+
+/* Soft ceiling. Below the knee this is exactly the identity, so the
+   whole working range passes through untouched. Above it the curve
+   bends toward `ceil` and never arrives:
+
+       y = knee + r · t/√(1+t²),   t = (x − knee)/r,  r = ceil − knee
+
+   Slope is 1 at the knee with no curvature step, so nothing kinks on
+   the way in, and the slope falls off as t⁻³ rather than exponentially,
+   so even a cubed signal driven ten times past nominal still comes out
+   strictly increasing. That last property is the point of the whole
+   function: a louder hit has to still read as louder, however slightly,
+   or the top of the range is dead — which is precisely what the old
+   clamp(x, 0, HEAD) did to four bands at once. */
+function softCeil(x, knee, ceil) {
+  if (x <= knee) return x > 0 ? x : 0;
+  const r = ceil - knee, t = (x - knee) / r;
+  return knee + r * t / Math.sqrt(1 + t * t);
+}
 
 const AUDIO = {
   on: false, ctx: null, an: null, stream: null, freq: null,
@@ -823,6 +885,7 @@ const AUDIO = {
   peak: new Float64Array(6).fill(0.25),     // window top
   val: new Float64Array(6).fill(0.25),      // window bottom (valley tracker)
   avg: new Float64Array(6).fill(0.5),       // running mean, the expansion pivot
+  dvr: new Float64Array(6).fill(DEV_AIM * DEV_AIM),  // mean square of the expanded deviation
   norm: new Float64Array(6),
   inp: new Float64Array(6),                 // post-analysis, what the IN meter shows
   out: new Float64Array(6),                 // post-transfer, what drives the fader
@@ -1015,33 +1078,62 @@ function audioStep(dt) {
     if (seeding) A.avg[i] = nrm;              // no deviation to expand on frame one
     A.avg[i] += (nrm - A.avg[i]) * kAvg;
     const C = 1 + P.exp * DYN * conf * (SQ_FLOOR + (1 - SQ_FLOOR) * squash);
-    const lvl = TARGET * conf + (nrm - A.avg[i]) * C;
+    let dev = (nrm - A.avg[i]) * C;
+
+    // GAIN STAGING. Expansion is a ratio, and the makeup that comes with
+    // it is meant to spread the band's distribution, not move it. The
+    // pivot term already holds the mean at TARGET, but nothing used to
+    // hold the *deviation* to anything, so a squashed band at high
+    // contrast produced swings of ±1.4 about 0.68 and spent most of its
+    // life flat against the clamp. Track the RMS of the expanded
+    // deviation and pull it back toward DEV_AIM. It only ever attenuates
+    // — this is a gain stage, not a second expander — so a band that is
+    // already well behaved passes through untouched and the contrast
+    // knob keeps its full range right up to the point where it would
+    // start clipping, which is exactly where it should stop buying more.
+    if (seeding) A.dvr[i] = dev * dev;
+    A.dvr[i] += (dev * dev - A.dvr[i]) * kAvg;
+    dev *= Math.min(1, DEV_AIM / Math.max(Math.sqrt(A.dvr[i]), DEV_MIN));
+    dev *= Math.min(1, A.warm / WARM_F);      // fade in against a settling mean
+    const lvl = TARGET * conf + dev;
 
     // blend the fader between following level and following change
     let x = lvl + (trn * conf - lvl) * P.trn;
     if (A.env[i] < P.thr) x = 0;              // gate: band goes quiet, plane stops
-    A.inp[i] = clamp(x, 0, HEAD);
+    A.inp[i] = x > 0 ? x : 0;                 // ceiling is applied once, below
   }
 
-  // harmonic coupling: a band sounding together with the one above it
-  // is an overtone-rich source, so it reads hotter than a pure tone.
+  // Harmonic coupling: a band sounding together with the one above it is
+  // an overtone-rich source, so it reads hotter than a pure tone. What was
+  // wrong with it was never the depth, it was the position — it multiplied
+  // a value that had *already* been clamped at HEAD and then clamped again,
+  // so on any coherent passage it was pushing against a ceiling the expander
+  // had already spent, and both stages flat-topped together. It is now the
+  // last thing before the one and only saturation in the chain, so the whole
+  // input stage has a single, soft, gain-staged ceiling instead of three
+  // hard ones fighting each other.
+  //
+  // Two gentler formulations were measured and both cost real dynamics on a
+  // brickwalled trace: lifting the band toward the knee instead of past it
+  // lost 40% of the input standard deviation, and expanding it about the
+  // pivot dropped the band's mean to ~0.55. Kept the multiplier at 0.7.
   // This is still the INPUT stage — it is what the white meter shows.
   for (let i = 0; i < 6; i++) {
     const up = Math.min(A.inp[Math.min(i + 1, 5)], 1);
     const coh = Math.sqrt(Math.min(A.inp[i], 1) * up);
-    A.inp[i] = clamp(A.inp[i] * (1 + 0.7 * coh), 0, HEAD);
+    A.inp[i] = softCeil(A.inp[i] * (1 + COUPLE * coh), KNEE, HEAD);
   }
 
   // TRANSFER stage — input is reshaped into an automation signal,
   // and only then does it reach the fader for its rotation plane.
   for (let i = 0; i < 6; i++) {
     const P = PARAMS[i];
-    const x = clamp(A.inp[i] * P.pre, 0, HEAD);       // pre-drive, ceiling at HEAD
+    const x = softCeil(A.inp[i] * P.pre, KNEE, HEAD);   // pre-drive into the knee
     const y = SHAPERS[P.fn].f(A.st[i], x, dt);
-    A.out[i] = clamp(y * P.post, 0, CEIL);            // post-drive out to the fader
+    A.out[i] = softCeil(y * P.post, KNEE, CEIL);        // post-drive out to the fader
     PLANEDRIVE[BANDS[i].plane] = BANDS[i].dir * A.out[i] * DRIVE * A.gain;
   }
-  paintMeters();
+  paintMeters(dt);
 }
 
 let last = performance.now();
@@ -1282,9 +1374,22 @@ const meterEls = [];
 const shaperSels = [];
 let SELB = 0;                                   // band whose strip is open
 
-// meter scale: full height is METER_TOP, and nominal (1.0) sits at NOM_PCT
-const METER_TOP = 1.6;
-const NOM_PCT = 100 / METER_TOP;                // 62.5%
+/* Meter scale. Full height is the chain's absolute ceiling, so the top of
+   the bar is a place the signal asymptotically approaches and cannot reach
+   — a bar hard against the top is therefore genuinely wrong rather than
+   merely full, which is the distinction the old 1.6 scale could not draw.
+   Three landmarks, bottom to top: the nominal line at NOM, the knee line
+   where the soft ceiling starts holding the band back, and the top itself.
+   Each zone is tinted cumulatively, so working / headroom / knee read as
+   three different shades at a glance. */
+const METER_TOP = CEIL;                         // 2.6
+const NOM_PCT = 100 * NOM / METER_TOP;          // 38.5%
+const KNEE_PCT = 100 * KNEE / METER_TOP;        // 48.1%
+// A band that rides the very top continuously is over-driven, not loud.
+// It has to sit there for PIN_HOLD before the marker lights, so a single
+// transient peak — which is what the headroom is *for* — never trips it.
+const PIN_AT = METER_TOP * 0.92, PIN_HOLD = 0.5;
+const pinIn = new Float64Array(6), pinOut = new Float64Array(6);
 
 const DEFAULT_HINT = 'Pick a band to tune its window and drive. ' +
                      'Hover a transfer to see what it does.';
@@ -1371,9 +1476,11 @@ const knobUI = [];
     m.innerHTML =
       '<div class="bar">' +
       '<div class="zone" style="height:' + (100 - NOM_PCT).toFixed(1) + '%"></div>' +
+      '<div class="zone" style="height:' + (100 - KNEE_PCT).toFixed(1) + '%"></div>' +
       '<div class="col"><div class="lvl"></div><div class="ovr" style="bottom:' + NOM_PCT.toFixed(1) + '%"></div></div>' +
       '<div class="col"><div class="hit"></div><div class="ovr" style="bottom:' + NOM_PCT.toFixed(1) + '%"></div></div>' +
       '<div class="nom" style="bottom:' + NOM_PCT.toFixed(1) + '%"></div>' +
+      '<div class="knee" style="bottom:' + KNEE_PCT.toFixed(1) + '%"></div>' +
       '</div>' +
       '<div class="tag">' + b.id + '</div><div class="pl">' + b.pl + '</div>';
     const bandTip = "<b>" + b.id + "</b> " + b.lo + "–" + b.hi + " Hz → " + b.pl +
@@ -1592,24 +1699,31 @@ function undoResetAll() {
   say("Reset undone — your edits are back.");
 }
 
-/* The meter reads 0..METER_TOP with nominal at 1.0, so the bars sit
-   around two thirds height when a band is working normally and the
-   red above the nominal line is genuine headroom being used. Six bars
-   glued to the ceiling used to mean "no idea how hard this is
-   pushing"; now the ceiling is somewhere you visibly reach. */
-function paintMeters() {
-  const A = AUDIO;
+/* The meter reads 0..CEIL with nominal at 1.0, so a band working
+   normally sits around 40% and the red above the nominal line is
+   genuine headroom being used. Above the knee line the tint doubles:
+   that is the soft ceiling holding the band back, still moving but
+   compressed. The very top is an asymptote, so a bar that reaches it
+   and stays for half a second lights the over marker — six bars glued
+   to the ceiling used to mean "no idea how hard this is pushing", and
+   now it means one specific, fixable thing. */
+function paintMeters(dt) {
+  const A = AUDIO, d = dt || 0;
   for (let i = 0; i < 6; i++) {
     const m = meterEls[i], iv = A.inp[i], ov = A.out[i];
-    m.lvl.style.height = (Math.min(iv, 1) / METER_TOP * 100).toFixed(1) + "%";
-    m.hit.style.height = (Math.min(ov, 1) / METER_TOP * 100).toFixed(1) + "%";
-    m.inOvr.style.height = (clamp(iv - 1, 0, METER_TOP - 1) / METER_TOP * 100).toFixed(1) + "%";
-    m.outOvr.style.height = (clamp(ov - 1, 0, METER_TOP - 1) / METER_TOP * 100).toFixed(1) + "%";
-    m.inCol.classList.toggle("over", iv > METER_TOP);     // pinned against the top
-    m.outCol.classList.toggle("over", ov > METER_TOP);
+    m.lvl.style.height = (Math.min(iv, NOM) / METER_TOP * 100).toFixed(1) + "%";
+    m.hit.style.height = (Math.min(ov, NOM) / METER_TOP * 100).toFixed(1) + "%";
+    m.inOvr.style.height = (clamp(iv - NOM, 0, METER_TOP - NOM) / METER_TOP * 100).toFixed(1) + "%";
+    m.outOvr.style.height = (clamp(ov - NOM, 0, METER_TOP - NOM) / METER_TOP * 100).toFixed(1) + "%";
+    // riding the ceiling is a sustained condition, not an instant one
+    pinIn[i] = iv >= PIN_AT ? pinIn[i] + d : 0;
+    pinOut[i] = ov >= PIN_AT ? pinOut[i] + d : 0;
+    m.inCol.classList.toggle("over", pinIn[i] >= PIN_HOLD);
+    m.outCol.classList.toggle("over", pinOut[i] >= PIN_HOLD);
   }
 }
 function clearMeters() {
+  pinIn.fill(0); pinOut.fill(0);
   for (const m of meterEls) {
     m.lvl.style.height = "0%"; m.hit.style.height = "0%";
     m.inOvr.style.height = "0%"; m.outOvr.style.height = "0%";
