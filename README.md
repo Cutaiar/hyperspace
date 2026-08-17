@@ -79,3 +79,9 @@ helps. The page detects this and offers **Open in a new tab**, which reopens the
 same URL top-level, where both work normally. `file://` pages in Chrome are
 similarly hopeless; serve the folder over localhost as above, or just use the
 deployed link.
+
+---
+
+Working on it? [`ENGINEERING.md`](ENGINEERING.md) is the reference: how the
+geometry, rendering and audio chain work, the constraints that are not worth
+rediscovering, how to verify a change, and what is still open.

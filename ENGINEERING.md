@@ -1,10 +1,17 @@
-# Hyperspace — handoff
+# Hyperspace — engineering
 
-Single-file 4D polytope viewer with audio-reactive rotation. Built over one
-session. This document is written for another agent picking the work up cold.
+Single-file 4D polytope viewer with audio-reactive rotation, built across many
+sessions. This is the working reference for anyone — human or agent — about to
+change it: how it works, what has already been tried and failed, how to verify a
+change, and what is still open.
 
-**Artifact:** `hyperspace.html` — one self-contained file, ~52 KB, no build step,
-no dependencies, no network calls. Open it in a browser and it runs.
+Read **§5 before touching anything**. Every entry there was paid for by a real
+failure, and several look like arbitrary style choices until you know why.
+
+**Artifact:** `hyperspace.html` — one self-contained file, no build step, no
+dependencies, no network calls. Open it in a browser and it runs.
+
+**Live:** https://hyperspace-lake.vercel.app
 
 ---
 
