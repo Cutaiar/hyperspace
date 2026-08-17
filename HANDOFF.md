@@ -95,15 +95,38 @@ apply drag orientation (yaw/pitch) → perspective project 3D→2D → draw.
 Per band, in order:
 
 ```
-FFT bins → power-sum RMS → dB → 0..1
-  → rolling window (asymmetric one-pole, per-band attack/decay)
-  → adaptive normalise (peak tracker, 4 s decay) + gate (per-band threshold)
-  → harmonic coupling            ← this is the INPUT meter (white)
-  → pre-drive (saturating)
-  → transfer function
-  → post-drive                    ← this is the OUTPUT meter (red)
-  → PLANEDRIVE[plane] = dir · out · 3 · masterGain
+FFT bins → power-sum RMS → dB → u (0..2.5; 1.0 is nominal, 56 dB window)
+  ├─ LEVEL:     rolling window (asymmetric one-pole, per-band attack/decay)
+  │               → peak/valley window + confidence + gate
+  │               → upward expansion about the band's running mean
+  └─ TRANSIENT: fast env − slow env → relative flux, peak-normalised
+  → blend(level, transient) per band          ← the `trn` knob
+  → harmonic coupling             ← this is the INPUT meter (white)
+  → pre-drive → transfer function → post-drive
+                                  ← this is the OUTPUT meter (red)
+  → PLANEDRIVE[plane] = dir · out · 3.2 · masterGain
 ```
+
+**Headroom.** Nothing clamps at 1.0 any more. `HEAD = 2.0` on the input and
+transfer signal, `CEIL = 2.5` on the fader. Meters read 0..1.6 with the nominal
+line at 62.5% and a tinted zone above it, so a band visibly *reaches* the
+ceiling instead of living glued to it.
+
+**Dynamics recovery** — the point of all this is that a brickwalled master
+carries almost no level variation, so the old fixed-floor peak normaliser
+mapped it to a flat 1.0 and the rotation became a constant rate. Three parts
+undo that: a **valley tracker** (window has a moving floor as well as a moving
+ceiling), **upward expansion** about the band's running mean scaled by how
+squashed the band already is, and a **transient path** (fast minus slow
+envelope) — a limiter flattens level but cannot flatten change. Global
+`Dynamics` slider (`AUDIO.dyn`) scales the lot; per-band `Contrast` (`exp`) and
+`Transient` (`trn`) knobs sit at the top of the strip.
+
+Measured on a synthetic brickwalled WAV, `AUDIO.out` for BASS moved from
+sd 0.018 (dyn 0) to sd 0.181 (dyn 1); MIDB from 0.080 to 0.697 with a full
+0→2.0 swing. Against the *old* chain on a limited signal: sd 0.000, pinned at
+1.000. A band with genuinely no dynamics (a static pad) correctly stays flat —
+this recovers what a limiter took, it does not invent motion.
 
 Analyser: `fftSize 4096`, `smoothingTimeConstant 0.15` (deliberately low — the
 per-band envelopes do the smoothing, and the analyser's own smoothing would
@@ -139,10 +162,24 @@ attack, decay, threshold for all six bands: Balanced, Kick & Sizzle, Glacial
 Drift, Strobe Cage, Bass Engine, Air & Lace, Inverse World, Percussive, Tremolo
 Web, Harmonic Bloom, Slow Bass / Fast Air.
 
-**Per-band knobs** (`PARAMS[i]`, edited via the strip): pre-drive 0–4×, post-drive
-0–4×, attack 2–600 ms, decay 20 ms–2.5 s, threshold 0–0.5. Output clamps at 2,
-so a band can push 6× rotation; over-unity lights a red bar at the top of that
-meter column.
+**Per-band knobs** (`PARAMS[i]`, edited via the strip): contrast 1:1–1:3,
+transient 0–100%, pre-drive 0–4×, post-drive 0–4×, attack 2–600 ms, decay
+20 ms–2.5 s, threshold 0–0.5.
+
+`PRESETS` rows are now `[fn, pre, post, atkMs, decMs, thr, exp, trn]`, but
+`applyPreset` still accepts six-element rows and falls back to `DEF_EXP` /
+`DEF_TRN`, so older scene definitions keep loading.
+
+## 4b. Transport
+
+The file source is a `AudioBufferSourceNode`, which cannot be restarted, so
+playback runs through a fixed `GainNode` hub (`hub → destination`, `hub →
+analyser`). Pause stores `trPos()` and tears the node down; resume builds a
+fresh source and `start(0, offset)`. Position is measured against
+`ac.currentTime`, not counted per frame, so it survives rAF throttling, and the
+modulo folds loop wraps back in. Restart is return-to-zero preserving transport
+state. Keys: `K` play/pause, `0` restart. Pausing lets the bands decay on their
+own time constants — the shape coasts to rest over ~4 s rather than freezing.
 
 ---
 
@@ -172,7 +209,13 @@ breaks the artifact in the Claude preview.
 - **Native range drag is unreliable on touch.** Sliders are custom: a 30 px
   pointer-capture hit strip drives the value, with the `<input type=range>` kept
   underneath for keyboard and focus only (its thumb is zero-sized). See
-  `bindSlider`.
+  `bindSlider`, which also handles trackpad wheel — that listener **must** stay
+  `{passive:false}` or the `preventDefault` that stops `#body` scrolling under
+  the cursor is silently ignored.
+- **Anything in `#body`'s flow that changes height on hover causes jitter.** The
+  hint readout used to sit in flow and shoved every control below it down. It is
+  now `position:absolute; bottom:100%` inside `#console` — out of every flow,
+  growing upward into empty canvas. Keep new transient UI out of the flow.
 - **No `localStorage`/`sessionStorage`** in artifacts. All state is in memory.
 
 ## 6. Testing
@@ -214,16 +257,14 @@ this — it is a considered look, not a default.
 
 ## 8. Git state
 
-`~/dev/hyperspace` in the container: initialised, `main`, one commit `08c876b`
-containing `hyperspace.html`, `README.md` (270 chars), `.gitignore`. Packaged as
-`hyperspace-repo.tar.gz` for download.
+Now on the user's own machine at `~/Dev/hyperspace`, `main`, with `origin` set
+to `github.com/Cutaiar/hyperspace.git` and the real commit author. The container
+blockers described in earlier versions of this document are resolved.
 
-**Not pushed.** This container has no `gh` binary and the egress proxy returns
-`x-deny-reason: host_not_allowed` for GitHub. The user believed `gh` was
-available; it is not. They need to run
-`gh repo create hyperspace --private --source=. --push` on their own machine.
-Commit author is a placeholder — `git commit --amend --reset-author` after
-setting their real `user.email`.
+The work above was built by four parallel agents in git worktrees under
+`.claude/worktrees/` and merged; `.gitignore` covers `worktrees`.
+`.claude/launch.json` (untracked) runs `python3 -m http.server 8123` — serving
+over localhost is what makes the **microphone** testable, unlike `file://`.
 
 ## 9. Open threads
 
@@ -235,8 +276,15 @@ setting their real `user.email`.
   a BPM-locked chop is a natural fit.
 - User-saveable scenes (blocked on no storage in artifacts; would need export to
   a JSON string the user copies out).
-- Mic path is written and correct but has never been exercised end-to-end, since
-  no environment available in this session could grant permission.
+- Mic path is still unexercised end-to-end. It is now *testable* — serve over
+  localhost with the launch config in §8 and the prompt will appear — but no
+  session has actually granted permission yet. Transport in mic mode is likewise
+  only verified via the `stopAudio()` path.
+- The dynamics chain has only been driven by synthetic brickwalled audio. It
+  wants a real commercial MP3 next; the constants most likely to need tuning are
+  `OPEN_SPAN` (what counts as a healthy natural range) and `CONF_LO/CONF_SPAN`
+  (which stop the expander turning an empty band's hiss into full-scale motion).
+- A scrub bar for the transport — the position math (`trPos`) already exists.
 
 ## 10. User context
 
