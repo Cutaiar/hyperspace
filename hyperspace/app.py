@@ -80,7 +80,7 @@ def main() -> None:
 
     audio = AudioEngine()
     control = Control(audio.chain)
-    panel = Panel(control, audio, s)
+    panel = Panel(control, audio, s, renderer)
     # panel state and chain must stay one object even after source changes
     keys = Keys(win)
     drag = {"btn": None, "x": 0.0, "y": 0.0}
@@ -181,7 +181,10 @@ def main() -> None:
         # ---- draw ----
         fbw, fbh = glfw.get_framebuffer_size(win)
         ctx.viewport = (0, 0, fbw, fbh)
-        renderer.draw(s, max(w, 1), max(h, 1), dpr=fbw / max(w, 1))
+        renderer.draw(
+            s, max(w, 1), max(h, 1), dpr=fbw / max(w, 1),
+            bands=audio.chain.out if audio.on else None,
+        )
 
         imgui.new_frame()
         panel.draw(dt, fps)

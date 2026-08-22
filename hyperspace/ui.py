@@ -62,11 +62,15 @@ def apply_style() -> None:
         s.set_color_(k, imgui.ImVec4(*v))
 
 
+PATTERNS = ["FLAT", "RINGS", "PLAID", "MOIRE", "BLOOM", "CAUSTIC"]
+
+
 class Panel:
-    def __init__(self, control: Control, audio: AudioEngine, view: ViewState):
+    def __init__(self, control: Control, audio: AudioEngine, view: ViewState, renderer=None):
         self.control = control
         self.audio = audio
         self.view = view
+        self.renderer = renderer
         self.devices = input_devices()
         self.device_sel = next(
             (k for k, d in enumerate(self.devices) if d["loopback"]), 0
@@ -220,6 +224,27 @@ class Panel:
                 "Synchronized copies in a grid — scroll to zoom out over the field, "
                 "right-drag to pan."
             )
+        if v.faces:
+            imgui.set_next_item_width(110)
+            changed, m = imgui.combo("##pat", v.pattern, PATTERNS)
+            if changed:
+                v.pattern = m
+            if imgui.is_item_hovered():
+                imgui.set_tooltip(
+                    "Face pattern — edit hyperspace/shaders/patterns.glsl while the "
+                    "app runs; it hot-reloads on save. Patterns read the six band "
+                    "outputs as uniforms."
+                )
+            if v.pattern:
+                imgui.same_line()
+                imgui.set_next_item_width(-1)
+                changed, mx = imgui.slider_float("##pmix", v.pattern_mix, 0.0, 1.0, "mix %.2f")
+                if changed:
+                    v.pattern_mix = mx
+            if self.renderer is not None and self.renderer.pattern_error:
+                imgui.text_colored(
+                    imgui.ImVec4(1, 0.4, 0.3, 1), f"GLSL: {self.renderer.pattern_error}"
+                )
         imgui.separator()
 
         # ---- audio sources ----

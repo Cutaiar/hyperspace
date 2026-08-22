@@ -114,3 +114,51 @@ def test_zoom_and_pan(ctx):
     ys2, xs2 = np.nonzero(panned.max(axis=2) > 8)
     assert abs((xs2.mean() - xs.mean()) - 150) < 4
     assert abs(ys2.mean() - ys.mean()) < 4
+
+
+def test_pattern_modes_render(ctx):
+    from hyperspace.ui import PATTERNS
+
+    flat = render_offscreen(
+        ViewState(shape=3, ang=list(VIEW["ang"]), faces=True, pattern=0), 600, 400, ctx=ctx
+    )
+    for mode in range(1, len(PATTERNS)):
+        img = render_offscreen(
+            ViewState(shape=3, ang=list(VIEW["ang"]), faces=True, pattern=mode),
+            600, 400, ctx=ctx,
+        )
+        assert ctx.error == "GL_NO_ERROR"
+        assert img.max() > 0
+        import numpy as np
+        assert np.abs(img.astype(int) - flat.astype(int)).mean() > 0.005, (
+            f"pattern {PATTERNS[mode]} indistinguishable from flat"
+        )
+
+
+def test_pattern_bands_uniform_react(ctx):
+    quiet = render_offscreen(
+        ViewState(shape=3, ang=list(VIEW["ang"]), faces=True, pattern=1),
+        600, 400, ctx=ctx, bands=(0.1,) * 6,
+    )
+    loud = render_offscreen(
+        ViewState(shape=3, ang=list(VIEW["ang"]), faces=True, pattern=1),
+        600, 400, ctx=ctx, bands=(2.0,) * 6,
+    )
+    import numpy as np
+    assert np.abs(loud.astype(int) - quiet.astype(int)).mean() > 0.001, (
+        "band uniforms must change the pattern"
+    )
+
+
+def test_face_uvs_shape():
+    import numpy as np
+
+    from hyperspace.geometry import face_triangles, face_uvs
+
+    for i in (0, 3, 7):
+        uv = face_uvs(i)
+        assert uv.shape == (len(face_triangles(i)) * 3, 2)
+        assert uv.min() >= 0.0 and uv.max() <= 1.0
+        # every face's corners sit on the same circumradius about (0.5, 0.5)
+        r = np.linalg.norm(uv - 0.5, axis=1)
+        assert abs(r.max() - 0.5) < 1e-9

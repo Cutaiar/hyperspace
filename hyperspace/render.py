@@ -21,12 +21,16 @@ trick, so far edges render correctly without MSAA.
 from __future__ import annotations
 
 import math
+import time
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import moderngl
 import numpy as np
 
-from .geometry import RATE, face_triangles, geom, project
+from .geometry import RATE, face_triangles, face_uvs, geom, project_h
+
+PATTERNS_GLSL = Path(__file__).parent / "shaders" / "patterns.glsl"
 
 BG = (0.0, 0.0, 0.0)
 RED = (1.0, 43 / 255, 43 / 255)
@@ -49,6 +53,52 @@ LINE_FS = """
 in float v_alpha;
 out vec4 f_color;
 void main() { f_color = vec4(1.0, 1.0, 1.0, v_alpha); }
+"""
+
+FACE_VS = """
+#version 330
+in vec2 in_pos;      // pixel coordinates, logical space
+in float in_wc;      // combined homogeneous divisor (perspective-correct uv)
+in vec2 in_uv;       // face-local coordinates
+in float in_alpha;
+in float in_fid;     // face index within the shape
+uniform vec2 u_size;
+out vec2 v_uv;
+out float v_alpha;
+out float v_fid;
+void main() {
+    float nx = 2.0 * in_pos.x / u_size.x - 1.0;
+    float ny = 1.0 - 2.0 * in_pos.y / u_size.y;
+    gl_Position = vec4(nx * in_wc, ny * in_wc, 0.0, in_wc);
+    v_uv = in_uv;
+    v_alpha = in_alpha;
+    v_fid = in_fid;
+}
+"""
+
+FACE_FS_HEAD = """
+#version 330
+in vec2 v_uv;
+in float v_alpha;
+in float v_fid;
+out vec4 f_color;
+uniform float u_time;
+uniform float u_bands[6];
+uniform int u_mode;
+uniform float u_mix;
+"""
+
+FACE_FS_TAIL = """
+void main() {
+    float shade = 1.0;
+    if (u_mode != 0) {
+        float v = clamp(pattern(u_mode, v_uv, v_fid), 0.0, 1.0);
+        shade = mix(1.0, 2.8 * v, u_mix);
+    }
+    float a = v_alpha * shade;
+    if (a <= 0.0) discard;
+    f_color = vec4(1.0, 1.0, 1.0, a);
+}
 """
 
 POINT_VS = """
@@ -102,6 +152,8 @@ class ViewState:
     zoom: float = 1.0            # camera magnification about the view centre
     pan: list[float] = field(default_factory=lambda: [0.0, 0.0])  # logical px
     instances: int = 1           # synchronized copies in a centred grid
+    pattern: int = 0             # face pattern mode (0 = flat fill)
+    pattern_mix: float = 1.0     # flat ↔ pattern blend
 
     def integrate(self, dt: float, planedrive=None) -> None:
         """The frame() angle update: ang[p] += dt·speed·RATE[p]·drive."""
@@ -121,20 +173,66 @@ class Renderer:
         self._points["u_color"].value = RED
         self._lbuf = ctx.buffer(reserve=1200 * 2 * 3 * 4, dynamic=True)
         self._pbuf = ctx.buffer(reserve=600 * 4 * 4, dynamic=True)
-        self._fbuf = ctx.buffer(reserve=2160 * 3 * 3 * 4, dynamic=True)
+        self._fbuf = ctx.buffer(reserve=2160 * 3 * 7 * 4, dynamic=True)
         self._lvao = ctx.vertex_array(self._lines, [(self._lbuf, "2f 1f", "in_pos", "in_alpha")])
-        self._fvao = ctx.vertex_array(self._lines, [(self._fbuf, "2f 1f", "in_pos", "in_alpha")])
         self._pvao = ctx.vertex_array(
             self._points, [(self._pbuf, "2f 1f 1f", "in_pos", "in_size", "in_alpha")]
         )
+        # face program is assembled around the user-editable patterns.glsl
+        self.pattern_error = ""
+        self._face_prog: moderngl.Program | None = None
+        self._fvao: moderngl.VertexArray | None = None
+        self._patterns_mtime = 0.0
+        self._reload_check = 0
+        self._t0 = time.perf_counter()
+        self._build_face_program()
         ctx.enable(moderngl.BLEND | moderngl.PROGRAM_POINT_SIZE)
         ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
 
-    def draw(self, s: ViewState, w: int, h: int, dpr: float = 1.0) -> None:
+    def _build_face_program(self) -> None:
+        try:
+            src = PATTERNS_GLSL.read_text()
+            self._patterns_mtime = PATTERNS_GLSL.stat().st_mtime
+            prog = self.ctx.program(
+                vertex_shader=FACE_VS,
+                fragment_shader=FACE_FS_HEAD + src + FACE_FS_TAIL,
+            )
+        except Exception as e:  # noqa: BLE001 — a bad edit must not kill the app
+            self.pattern_error = str(e).strip().splitlines()[-1][:160]
+            return
+        if self._face_prog is not None:
+            self._face_prog.release()
+        if self._fvao is not None:
+            self._fvao.release()
+        self._face_prog = prog
+        self._fvao = self.ctx.vertex_array(
+            prog,
+            [(self._fbuf, "2f 1f 2f 1f 1f", "in_pos", "in_wc", "in_uv", "in_alpha", "in_fid")],
+        )
+        self.pattern_error = ""
+
+    def _maybe_reload_patterns(self) -> None:
+        self._reload_check += 1
+        if self._reload_check % 30:
+            return
+        try:
+            mtime = PATTERNS_GLSL.stat().st_mtime
+        except OSError:
+            return
+        if mtime != self._patterns_mtime:
+            self._patterns_mtime = mtime
+            self._build_face_program()
+
+    def draw(
+        self, s: ViewState, w: int, h: int, dpr: float = 1.0,
+        bands=None, t_now: float | None = None,
+    ) -> None:
         """One frame at logical size (w, h); dpr scales point sizes only —
-        positions are logical and the viewport handles resolution."""
+        positions are logical and the viewport handles resolution. `bands`
+        feeds the pattern uniforms (chain fader outputs); `t_now` pins
+        pattern time for deterministic renders."""
         g = geom(s.shape)
-        px, py, pd = project(g["V"], s.ang, s.yaw, s.pitch, d4=s.depth4, w=w, h=h)
+        px, py, pd, wc = project_h(g["V"], s.ang, s.yaw, s.pitch, d4=s.depth4, w=w, h=h)
 
         # camera: zoom about the view centre, then pan (both in logical px)
         zoom = max(s.zoom, 1e-3)
@@ -180,7 +278,8 @@ class Renderer:
         self._lines["u_size"].value = (float(w), float(h))
 
         # ---- face fills, under the wireframe (agent-validated prototype) ----
-        if s.faces:
+        if s.faces and self._face_prog is not None:
+            self._maybe_reload_patterns()
             tris = face_triangles(s.shape)
             if len(tris):
                 td = (pd[tris[:, 0]] + pd[tris[:, 1]] + pd[tris[:, 2]]) / 3.0
@@ -190,14 +289,25 @@ class Renderer:
                 fdens = min(1.0, 24.0 / max(nfaces, 1))
                 fa = (0.010 + 0.055 * tt * tt) * s.bright * (0.35 + 0.65 * fdens)
                 to = tris[torder]
-                fverts = np.empty((len(tris) * 3, 3), dtype=np.float32)
+                uv = face_uvs(s.shape).reshape(-1, 3, 2)[torder]
+                fverts = np.empty((len(tris) * 3, 7), dtype=np.float32)
                 for corner in range(3):
                     fverts[corner::3, 0] = px[to[:, corner]]
                     fverts[corner::3, 1] = py[to[:, corner]]
-                    fverts[corner::3, 2] = fa
+                    fverts[corner::3, 2] = wc[to[:, corner]]
+                    fverts[corner::3, 3] = uv[:, corner, 0]
+                    fverts[corner::3, 4] = uv[:, corner, 1]
+                    fverts[corner::3, 5] = fa
+                    fverts[corner::3, 6] = to[:, 3]
                 fverts = self._tile(fverts, offs)
                 self._fbuf.orphan(fverts.nbytes)
                 self._fbuf.write(fverts.tobytes())
+                p = self._face_prog
+                p["u_size"].value = (float(w), float(h))
+                p["u_time"].value = t_now if t_now is not None else time.perf_counter() - self._t0
+                p["u_mode"].value = int(s.pattern)
+                p["u_mix"].value = float(s.pattern_mix)
+                p["u_bands"].value = tuple(bands) if bands is not None else (1.0,) * 6
                 self._fvao.render(moderngl.TRIANGLES, vertices=len(fverts))
 
         eo = E[order]
@@ -258,16 +368,18 @@ class Renderer:
 
 
 def render_offscreen(
-    s: ViewState, w: int = 1200, h: int = 800, ctx: moderngl.Context | None = None
+    s: ViewState, w: int = 1200, h: int = 800, ctx: moderngl.Context | None = None,
+    bands=None, t_now: float = 0.0,
 ) -> np.ndarray:
-    """Render one frame to an FBO; returns (h, w, 3) uint8. For tests/tools."""
+    """Render one frame to an FBO; returns (h, w, 3) uint8. For tests/tools.
+    Pattern time defaults to 0.0 so offscreen renders are deterministic."""
     own = ctx is None
     if own:
         ctx = moderngl.create_context(standalone=True)
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((w, h))])
     fbo.use()
     ctx.viewport = (0, 0, w, h)
-    Renderer(ctx).draw(s, w, h)
+    Renderer(ctx).draw(s, w, h, bands=bands, t_now=t_now)
     data = np.frombuffer(fbo.read(components=3), dtype=np.uint8).reshape(h, w, 3)[::-1]
     fbo.release()
     if own:

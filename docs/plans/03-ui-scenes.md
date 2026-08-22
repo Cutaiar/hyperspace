@@ -167,3 +167,30 @@ step if a live field becomes a performance feature). Showcase renders in
 **Environment note:** pyGLFW and imgui-bundle both ship libglfw; app.py
 points pyGLFW at imgui-bundle's copy before import to avoid macOS ObjC
 class collisions. imgui-bundle's GLFW backend needs `pyopengl` (added).
+
+
+## Addendum (2026-08-21, later): procedural face patterns
+
+The user redirected the bitmap-texturing idea to procedural shader
+patterns. Built:
+
+- **Face-local UVs** (`geometry.face_uvs`): each face's cycle projected
+  into its own plane basis, normalised to circumradius 0.5 about
+  (0.5, 0.5) with consistent winding — congruent faces carry identical
+  framing, which is the "regularity" for free.
+- **Perspective-correct interpolation** (`geometry.project_h`): the two
+  perspective divides compose to one projective map per planar face, so
+  the product of the divisors goes out as the homogeneous w and the GPU
+  interpolates UVs correctly — no affine texture warp.
+- **`hyperspace/shaders/patterns.glsl`** — the user-editable library.
+  Hot-reloads on save while the app runs; a compile error keeps the last
+  good program and surfaces the GLSL message in the panel (verified by a
+  break/fix test). Patterns get `u_time`, `u_bands[6]` (the chain's fader
+  outputs), face-local uv and the face index. Shipped modes: RINGS,
+  PLAID, MOIRE, BLOOM, CAUSTIC — interference/trig constructions, all
+  band-reactive. Pattern combo + mix slider in the panel; FLAT preserves
+  the plain fills bit-for-bit.
+- With patterns on, the per-pixel pattern math runs entirely on the GPU;
+  the CPU still only does the per-vertex transform.
+
+Showcase: `docs/plans/assets/03-pattern-*.png`. 126 tests green.
