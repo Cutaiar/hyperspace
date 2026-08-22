@@ -100,3 +100,40 @@ trace cadence.
 - Two agents porting `analysis.py` and `bands.py` in parallel is fine, but
   the parity numbers only count when measured on the merged build
   (ENGINEERING §10, trap 2).
+
+## Results (2026-08-21)
+
+**Bar change, decided by the user before execution:** frame-level audio
+parity was dropped. Geometry stays exact (it's cheap to prove); the audio
+chain is ported faithfully but verified by *behaviour* — the documented
+gate/dynamics/headroom properties — with the user's eye as the final judge
+from plan 02 on. `test_bands.py`/`test_analysis.py` were folded into one
+`tests/test_core.py` accordingly. Tapers moved to plan 04 with the UI they
+serve.
+
+What was delivered, all criteria met (63 tests green, ruff clean):
+
+- **`geometry.py` — exact parity.** All 18 constructions match the golden
+  `V`/`E` arrays to 1e-12 with identical vertex *order* (JS Map insertion
+  order == dict insertion order; `kkey` rounding ported half-up, not
+  banker's). The full `project()` transform matches every golden view to
+  float32-storage precision (the traces went through `Float32Array`).
+- **`analysis.py`** — AnalyserNode semantics: fftSize 4096, spec Blackman,
+  1/N-normalised rFFT, per-call linear-magnitude smoothing τ=0.15, dB per
+  `getFloatFrequencyData`, and the reference's exact band→bin rounding.
+- **`bands.py`** — the whole chain under its reference constant names, the
+  13 shapers with scratch-state semantics (including JS falsiness in S&H),
+  the 11 presets with 6/8/9-element row back-compat, and the trim
+  non-monotonicity ported on purpose (plan 06 fixes it).
+- **`offline.py`** — WAV → chain driver at a chosen fps, used by the tests
+  and later by plan-06 tuning.
+- **Behaviour evidence:** gate-prover reproduces the reference exactly in
+  kind (SUB/UPR driven, BASS via coupling, MIDB/MID/AIR at literal 0.0 and
+  their planes stopped). At the goldens' 120 fps cadence the settled
+  per-band sd on brickwalled matches the reference to ±0.08 in *both* dyn
+  settings — BASS 0.234/0.196 vs reference 0.235/0.203, UPR matching to
+  the third decimal. One real finding: output spread is cadence-sensitive
+  through the analyser's per-call smoothing (BASS sd 0.167 @60 fps vs
+  0.234 @120 fps), so behaviour comparisons must run at matched fps — and
+  plan 03's live loop should expect feel to vary slightly with display
+  refresh rate.
