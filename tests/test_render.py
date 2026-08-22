@@ -162,3 +162,19 @@ def test_face_uvs_shape():
         # every face's corners sit on the same circumradius about (0.5, 0.5)
         r = np.linalg.norm(uv - 0.5, axis=1)
         assert abs(r.max() - 0.5) < 1e-9
+
+
+def test_patterns_are_chromatic(ctx):
+    """Every non-flat pattern must leave the gray axis: some pixel with
+    meaningfully different channel values."""
+
+    from hyperspace.ui import PATTERNS
+
+    for mode in range(1, len(PATTERNS)):
+        img = render_offscreen(
+            ViewState(shape=3, ang=list(VIEW["ang"]), faces=True, pattern=mode,
+                      points=False),
+            600, 400, ctx=ctx, t_now=2.5,
+        ).astype(int)
+        spread = img.max(axis=2) - img.min(axis=2)
+        assert spread.max() > 25, f"{PATTERNS[mode]} renders effectively grayscale"

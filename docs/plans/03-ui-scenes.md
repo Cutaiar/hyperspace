@@ -193,4 +193,8 @@ patterns. Built:
 - With patterns on, the per-pixel pattern math runs entirely on the GPU;
   the CPU still only does the per-vertex transform.
 
-Showcase: `docs/plans/assets/03-pattern-*.png`. 126 tests green.
+Patterns are full colour: the contract is vec4 (rgb + intensity), with
+hsv() and a cosine-palette helper in the GLSL file; a chromaticity test
+keeps grayscale regressions out. Wireframe and vertices keep the
+red-on-black instrument look — colour lives in the faces.
+Showcase: `docs/plans/assets/03-pattern-*.png`. 127 tests green.

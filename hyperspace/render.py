@@ -90,14 +90,17 @@ uniform float u_mix;
 
 FACE_FS_TAIL = """
 void main() {
+    vec3 rgb = vec3(1.0);
     float shade = 1.0;
     if (u_mode != 0) {
-        float v = clamp(pattern(u_mode, v_uv, v_fid), 0.0, 1.0);
-        shade = mix(1.0, 2.8 * v, u_mix);
+        vec4 v = pattern(u_mode, v_uv, v_fid);
+        v = clamp(v, 0.0, 1.0);
+        shade = mix(1.0, 2.8 * v.a, u_mix);
+        rgb = mix(vec3(1.0), v.rgb, u_mix);
     }
     float a = v_alpha * shade;
     if (a <= 0.0) discard;
-    f_color = vec4(1.0, 1.0, 1.0, a);
+    f_color = vec4(rgb, a);
 }
 """
 
