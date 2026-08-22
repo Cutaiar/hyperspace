@@ -68,4 +68,4 @@ def test_audio_manifest():
         lines = trace.read_text().splitlines()
         assert len(lines) == entry["frames"]
         row = json.loads(lines[0])
-        assert len(row) == 19  # t + inp[6] + out[6] + planedrive[6]
+        assert len(row) == 20  # t + pos + inp[6] + out[6] + planedrive[6]

@@ -100,17 +100,20 @@ playwright). All exit criteria met except the user-supplied real track:
   `V`/`E` arrays (plan 01 gets construction parity for free). Byte-stable
   across two recording runs. 564 KB committed.
 - **Audio:** three generated clips (sha256 in the manifest; regenerate with
-  `tools/gen_test_audio.py`, fixed seed). Headless rAF ran at ~120 fps —
-  the chain is dt-based, so cadence is recorded per-sample, not assumed.
-  Run-to-run noise floors, all under the 0.05 budget:
+  `tools/gen_test_audio.py`, fixed seed) plus the user-supplied real
+  commercial master (`tests/fixtures/real.mp3`, gitignored,
+  sha256-pinned in the manifest, first 120 s recorded). Headless rAF ran
+  at ~120 fps — the chain is dt-based, so cadence is recorded per-sample,
+  not assumed. Each sample carries `trPos()` and runs are compared on the
+  **music-time axis** with the first 2 s (warm-up transient) excluded —
+  wall-time alignment inflated deltas on dynamic material; plan-01
+  comparisons must align the same way. Noise floors, all under budget:
   | clip | run | frames | noise floor (RMS) |
   |---|---|---|---|
-  | gate-prover | default | 1500 | 0.0381 |
-  | brickwalled | default | 1500 | 0.0222 |
-  | brickwalled | dyn0 | 1501 | 0.0142 |
-  | sweep | default | 1500 | 0.0066 |
+  | gate-prover | default | 1441 | 0.0088 |
+  | brickwalled | default | 1440 | 0.0260 |
+  | brickwalled | dyn0 | 1439 | 0.0134 |
+  | sweep | default | 1439 | 0.0069 |
+  | real (120 s) | default | 14401 | 0.0219 |
 - **Gate proof in the traces:** on gate-prover, settled means — SUB 0.94,
   UPR 0.54, BASS 0.52 (leakage + coupling), MIDB/MID/AIR exactly 0.0000.
-- **Outstanding:** `real.mp3` (user-supplied) not yet recorded — drop the
-  file in `tests/fixtures/`, uncomment its row in `AUDIO_RUNS` in
-  `tools/record_golden.py`, and re-run `audio` mode.

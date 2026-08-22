@@ -53,7 +53,8 @@ AUDIO_RUNS = [
     ("brickwalled.wav", "default", {}),
     ("brickwalled.wav", "dyn0", {"dyn": 0.0}),
     ("sweep.wav", "default", {}),
-    # ("real.mp3", "default", {}),  # user-supplied, recorded when present
+    # user-supplied commercial master; window capped so the trace stays small
+    ("real.mp3", "default", {"maxS": 120.0}),
 ]
 
 RAF_HOOK = """
@@ -154,11 +155,14 @@ def wav_duration(path: Path) -> float:
         return w.getnframes() / w.getframerate()
 
 
-def record_audio_run(pw, url: str, clip: Path, settings: dict) -> list[list[float]]:
+def record_audio_run(pw, url: str, clip: Path, settings: dict) -> tuple[list[list[float]], float]:
     browser, page = new_page(pw, url)
-    dur = wav_duration(clip)
     page.set_input_files("#fileIn", str(clip))
-    page.wait_for_function("AUDIO.on === true", timeout=15_000)
+    page.wait_for_function("AUDIO.on === true", timeout=30_000)
+    # duration from the decoded buffer, so mp3/m4a work as well as wav
+    dur = page.evaluate("TR.buf.duration")
+    if "maxS" in settings:
+        dur = min(dur, settings["maxS"])
     if "dyn" in settings:
         page.evaluate("d => { AUDIO.dyn = d; }", settings["dyn"])
     page.evaluate(
@@ -166,7 +170,7 @@ def record_audio_run(pw, url: str, clip: Path, settings: dict) -> list[list[floa
           window.__samples = [];
           window.__tick = t => {
             if (!AUDIO.on) return;
-            window.__samples.push([t, ...AUDIO.inp, ...AUDIO.out, ...PLANEDRIVE]);
+            window.__samples.push([t, trPos(), ...AUDIO.inp, ...AUDIO.out, ...PLANEDRIVE]);
           };
         }"""
     )
@@ -175,34 +179,52 @@ def record_audio_run(pw, url: str, clip: Path, settings: dict) -> list[list[floa
     browser.close()
     if len(samples) < dur * 30:
         sys.exit(f"only {len(samples)} frames for {clip.name} — page was not running at speed")
-    return samples
+    cutoff = samples[0][0] + dur * 1000
+    kept = []
+    for row in samples:
+        if row[0] > cutoff:
+            break
+        if kept and row[1] < kept[-1][1] - 0.5:
+            break  # transport looped — keep the monotonic first pass only
+        kept.append(row)
+    return kept, dur
 
 
-def resample(samples: list[list[float]], hz: float = 60.0) -> np.ndarray:
-    """Interpolate the 18 channels onto a fixed grid so two runs compare."""
+def resample(samples: list[list[float]], t_lo: float, t_hi: float, hz: float = 60.0) -> np.ndarray:
+    """Interpolate the 18 channels onto a fixed music-time grid (trPos axis).
+
+    Aligning on transport position rather than wall time is what lets two
+    runs compare — the sampler starts a variable beat after playback does.
+    """
     arr = np.asarray(samples)
-    t = arr[:, 0] - arr[0, 0]
-    grid = np.arange(0.0, t[-1], 1000.0 / hz)
-    return np.stack([np.interp(grid, t, arr[:, c]) for c in range(1, arr.shape[1])], axis=1)
+    pos = arr[:, 1]
+    grid = np.arange(t_lo, t_hi, 1.0 / hz)
+    return np.stack([np.interp(grid, pos, arr[:, c]) for c in range(2, arr.shape[1])], axis=1)
 
 
 def noise_floor(a: list[list[float]], b: list[list[float]]) -> float:
-    """RMS delta of AUDIO.out (channels 6..11) between two runs, common length."""
-    ra, rb = resample(a), resample(b)
-    n = min(len(ra), len(rb))
-    return float(np.sqrt(np.mean((ra[:n, 6:12] - rb[:n, 6:12]) ** 2)))
+    """RMS delta of AUDIO.out between two runs on the shared music-time span.
+
+    The first 2 s are excluded: the adaptive trackers spend ~1 s settling
+    from seeds (ENGINEERING §4, WARM_F) and that transient differs between
+    runs by construction. Plan-01 comparisons treat warm-up the same way.
+    """
+    lo = max(2.0, a[0][1], b[0][1])
+    hi = min(a[-1][1], b[-1][1])
+    ra, rb = resample(a, lo, hi), resample(b, lo, hi)
+    return float(np.sqrt(np.mean((ra[:, 6:12] - rb[:, 6:12]) ** 2)))
 
 
 def run_audio(pw, url: str) -> None:
-    manifest = {"sampleChannels": "t, inp[6], out[6], planedrive[6]", "clips": {}}
+    manifest = {"sampleChannels": "t, pos, inp[6], out[6], planedrive[6]", "clips": {}}
     for name, label, settings in AUDIO_RUNS:
         clip = FIXTURES / name
         if not clip.exists():
             print(f"audio: {name} not present — skipped (manifest notes it)")
             manifest["clips"][f"{name}:{label}"] = {"status": "missing"}
             continue
-        a = record_audio_run(pw, url, clip, settings)
-        b = record_audio_run(pw, url, clip, settings)
+        a, dur = record_audio_run(pw, url, clip, settings)
+        b, _ = record_audio_run(pw, url, clip, settings)
         nf = noise_floor(a, b)
         out = GOLDEN / "audio" / f"{Path(name).stem}-{label}.jsonl"
         out.parent.mkdir(parents=True, exist_ok=True)
@@ -212,7 +234,7 @@ def run_audio(pw, url: str) -> None:
             "status": "recorded",
             "file": out.name,
             "sha256": hashlib.sha256(clip.read_bytes()).hexdigest(),
-            "durationS": wav_duration(clip),
+            "durationS": round(dur, 3),
             "settings": settings,
             "frames": len(a),
             "noiseFloorRms": round(nf, 6),
