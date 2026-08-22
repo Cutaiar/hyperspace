@@ -4,6 +4,8 @@ version = "0.1.0"
 description = "Real-time 4D polytope visualizer — Python engine (see docs/BLUEPRINT.md)"
 requires-python = ">=3.12"
 dependencies = [
+    "glfw>=2.10.2",
+    "moderngl>=5.12.0",
     "numpy>=2.0",
 ]
 
@@ -12,6 +14,7 @@ dev = [
     "pytest>=8.0",
     "ruff>=0.8",
     "playwright>=1.49",
+    "pillow>=12.3.0",
 ]
 
 [build-system]
@@ -27,3 +30,6 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+
+[project.scripts]
+hyperspace = "hyperspace.app:main"
