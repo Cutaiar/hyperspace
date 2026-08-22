@@ -1,2 +1,8 @@
 .claude
 docs
+hyperspace
+tests
+tools
+pyproject.toml
+uv.lock
+.python-version

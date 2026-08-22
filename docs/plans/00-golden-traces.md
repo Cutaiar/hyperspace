@@ -87,3 +87,30 @@ the chain's reason to exist.
 - The old container harness (ENGINEERING §6) used puppeteer-inside-mermaid-cli
   because that's what the container had. On this machine use playwright's own
   chromium — same techniques, supported install.
+
+## Results (2026-08-21)
+
+Executed on the primary Mac (Apple Silicon, headless Chromium 151 via
+playwright). All exit criteria met except the user-supplied real track:
+
+- **Scaffold:** `uv sync` from `pyproject.toml` + committed `uv.lock`;
+  `uv run pytest` → 20 passed (`tests/test_golden.py` validates the traces
+  against the ENGINEERING §2 V/E table, unit circumradius, and the manifest).
+- **Geometry:** 18 shapes × 3 views at 1200×800, including full constructed
+  `V`/`E` arrays (plan 01 gets construction parity for free). Byte-stable
+  across two recording runs. 564 KB committed.
+- **Audio:** three generated clips (sha256 in the manifest; regenerate with
+  `tools/gen_test_audio.py`, fixed seed). Headless rAF ran at ~120 fps —
+  the chain is dt-based, so cadence is recorded per-sample, not assumed.
+  Run-to-run noise floors, all under the 0.05 budget:
+  | clip | run | frames | noise floor (RMS) |
+  |---|---|---|---|
+  | gate-prover | default | 1500 | 0.0381 |
+  | brickwalled | default | 1500 | 0.0222 |
+  | brickwalled | dyn0 | 1501 | 0.0142 |
+  | sweep | default | 1500 | 0.0066 |
+- **Gate proof in the traces:** on gate-prover, settled means — SUB 0.94,
+  UPR 0.54, BASS 0.52 (leakage + coupling), MIDB/MID/AIR exactly 0.0000.
+- **Outstanding:** `real.mp3` (user-supplied) not yet recorded — drop the
+  file in `tests/fixtures/`, uncomment its row in `AUDIO_RUNS` in
+  `tools/record_golden.py`, and re-run `audio` mode.

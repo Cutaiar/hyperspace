@@ -1,3 +1,7 @@
 .DS_Store
 node_modules/
 .vercel
+tests/fixtures/
+config.toml
+__pycache__/
+.venv/
