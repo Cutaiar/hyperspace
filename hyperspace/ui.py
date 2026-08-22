@@ -67,7 +67,7 @@ PATTERNS = ["FLAT", "RINGS", "PLAID", "MOIRE", "BLOOM", "CAUSTIC"]
 # the corner key legend, in the spirit of the HTML's #keys overlay
 CHEATSHEET = [
     ("drag", "orbit view"),
-    ("right-drag", "pan"),
+    ("⇧drag", "pan (or right-drag)"),
     ("scroll", "zoom about cursor"),
     ("← →", "previous / next shape"),
     ("space", "pause rotation"),

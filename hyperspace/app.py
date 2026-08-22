@@ -7,7 +7,7 @@ to it.
   ← / →  shape      space  pause      P  points     R  reset view
   [ / ]  brightness , / .  speed      1–6  planes   H  panel
   M  mic on/off     K  play/pause     0  restart    Esc/Q  quit
-  drag  orbit       right-drag  pan   scroll  zoom about cursor
+  drag  orbit       ⇧drag / right-drag  pan   scroll  zoom about cursor
   F  faces          ?  cheat sheet overlay
 
 The in-app cheat sheet (ui.CHEATSHEET) is the canonical list — keep the
@@ -101,6 +101,10 @@ def main() -> None:
                 glfw.set_window_should_close(win, True)
         glfw.poll_events()
         impl.process_inputs()
+        # the imgui frame starts BEFORE input handling: with the 1.87+ event
+        # queue, io.mouse_wheel and want_capture_* only hold this frame's
+        # values once new_frame() has run — reading them earlier sees zeros.
+        imgui.new_frame()
         now = time.perf_counter()
         dt = min(now - last, 0.05)
         last = now
@@ -157,7 +161,12 @@ def main() -> None:
             x, y = glfw.get_cursor_pos(win)
             left = glfw.get_mouse_button(win, glfw.MOUSE_BUTTON_LEFT) == glfw.PRESS
             right = glfw.get_mouse_button(win, glfw.MOUSE_BUTTON_RIGHT) == glfw.PRESS
-            btn = "orbit" if left else "pan" if right else None
+            shift = (
+                glfw.get_key(win, glfw.KEY_LEFT_SHIFT) == glfw.PRESS
+                or glfw.get_key(win, glfw.KEY_RIGHT_SHIFT) == glfw.PRESS
+            )
+            # shift+drag pans too — a trackpad has no right button to hold
+            btn = "pan" if (right or (left and shift)) else "orbit" if left else None
             if btn != drag["btn"]:
                 drag.update(btn=btn, x=x, y=y)
             elif btn == "orbit":
@@ -192,7 +201,6 @@ def main() -> None:
             bands=audio.chain.out if audio.on else None,
         )
 
-        imgui.new_frame()
         panel.draw(dt, fps)
         imgui.render()
         impl.render(imgui.get_draw_data())
