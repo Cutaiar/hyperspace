@@ -8,6 +8,10 @@ to it.
   [ / ]  brightness , / .  speed      1–6  planes   H  panel
   M  mic on/off     K  play/pause     0  restart    Esc/Q  quit
   drag  orbit       right-drag  pan   scroll  zoom about cursor
+  F  faces          ?  cheat sheet overlay
+
+The in-app cheat sheet (ui.CHEATSHEET) is the canonical list — keep the
+two in sync when adding bindings.
 """
 
 from __future__ import annotations
@@ -121,6 +125,8 @@ def main() -> None:
                 s.faces = not s.faces
             if keys.pressed(glfw.KEY_H):
                 panel.open = not panel.open
+            if keys.pressed(glfw.KEY_SLASH):
+                panel.cheatsheet = not panel.cheatsheet
             if keys.pressed(glfw.KEY_R):
                 s.ang = [0.0] * 6
                 s.yaw = s.pitch = 0.0

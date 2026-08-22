@@ -64,6 +64,23 @@ def apply_style() -> None:
 
 PATTERNS = ["FLAT", "RINGS", "PLAID", "MOIRE", "BLOOM", "CAUSTIC"]
 
+# the corner key legend, in the spirit of the HTML's #keys overlay
+CHEATSHEET = [
+    ("drag", "orbit view"),
+    ("right-drag", "pan"),
+    ("scroll", "zoom about cursor"),
+    ("← →", "previous / next shape"),
+    ("space", "pause rotation"),
+    ("P / F", "points / faces"),
+    ("1–6", "planes XY XZ YZ XW YW ZW"),
+    ("[ ]  , .", "brightness · speed"),
+    ("M", "mic on/off"),
+    ("K / 0", "play-pause / restart track"),
+    ("R", "reset view + camera"),
+    ("H / ?", "panel / this sheet"),
+    ("Esc / Q", "quit"),
+]
+
 
 class Panel:
     def __init__(self, control: Control, audio: AudioEngine, view: ViewState, renderer=None):
@@ -78,7 +95,28 @@ class Panel:
         self.pin_in = [0.0] * 6
         self.pin_out = [0.0] * 6
         self.open = True
+        self.cheatsheet = True
         self._file_dialog = None
+
+    def _draw_cheatsheet(self) -> None:
+        io = imgui.get_io()
+        imgui.set_next_window_pos(
+            imgui.ImVec2(12, io.display_size.y - 12), imgui.Cond_.always, imgui.ImVec2(0, 1)
+        )
+        imgui.set_next_window_bg_alpha(0.45)
+        flags = (
+            imgui.WindowFlags_.no_decoration
+            | imgui.WindowFlags_.always_auto_resize
+            | imgui.WindowFlags_.no_move
+            | imgui.WindowFlags_.no_focus_on_appearing
+            | imgui.WindowFlags_.no_nav
+        )
+        imgui.begin("##cheatsheet", None, flags)
+        for key, action in CHEATSHEET:
+            imgui.text_colored(RED, f"{key:>10s}")
+            imgui.same_line(104)
+            imgui.text_disabled(action)
+        imgui.end()
 
     # ---- taper-backed slider: integer positions, truthful readouts ----
 
@@ -157,6 +195,8 @@ class Panel:
     # ---- main draw ----
 
     def draw(self, dt: float, fps: float) -> None:
+        if self.cheatsheet:
+            self._draw_cheatsheet()
         if not self.open:
             return
         io = imgui.get_io()
