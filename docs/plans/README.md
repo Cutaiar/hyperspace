@@ -4,6 +4,7 @@ The migration described in [`BLUEPRINT.md`](../BLUEPRINT.md) §5, broken into
 executable plans. Run them in order — each one's exit criteria are the next
 one's prerequisites. Machine prerequisites for all of them live in
 [`docs/SETUP.md`](../SETUP.md); satisfy its tier A before plan 00.
+Current state and the pick-up list: [`docs/CHECKPOINT.md`](../CHECKPOINT.md).
 
 | Plan | Blueprint stage | Delivers |
 |---|---|---|
