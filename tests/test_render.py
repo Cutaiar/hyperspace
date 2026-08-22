@@ -81,3 +81,36 @@ def test_render_performance(ctx):
         fps = n / (time.perf_counter() - t0)
         assert fps > 60, f"{SHAPES[shape].name}: {fps:.0f} fps"
     fbo.release()
+
+
+def test_faces_render(ctx):
+    s = ViewState(shape=3, ang=list(VIEW["ang"]), faces=True)
+    img = render_offscreen(s, 600, 400, ctx=ctx)
+    assert ctx.error == "GL_NO_ERROR"
+    base = render_offscreen(ViewState(shape=3, ang=list(VIEW["ang"])), 600, 400, ctx=ctx)
+    # translucent fills must add lit pixels beyond the wireframe
+    assert (img > 8).sum() > (base > 8).sum()
+
+
+def test_instances_grid(ctx):
+    s = ViewState(shape=0, ang=list(VIEW["ang"]), instances=9, zoom=0.25)
+    img = render_offscreen(s, 800, 600, ctx=ctx)
+    assert ctx.error == "GL_NO_ERROR"
+    assert img.max() > 0
+    # nine copies spread wider than one: lit pixels in all four quadrants
+    for ys, xs in ((slice(0, 300), slice(0, 400)), (slice(0, 300), slice(400, 800)),
+                   (slice(300, 600), slice(0, 400)), (slice(300, 600), slice(400, 800))):
+        assert img[ys, xs].max() > 0, "instance grid missing from a quadrant"
+
+
+def test_zoom_and_pan(ctx):
+    base = render_offscreen(ViewState(shape=3, ang=list(VIEW["ang"])), 600, 400, ctx=ctx)
+    panned = render_offscreen(
+        ViewState(shape=3, ang=list(VIEW["ang"]), pan=[150.0, 0.0]), 600, 400, ctx=ctx
+    )
+    import numpy as np
+    # panning right moves the lit centroid right by ~the pan distance
+    ys, xs = np.nonzero(base.max(axis=2) > 8)
+    ys2, xs2 = np.nonzero(panned.max(axis=2) > 8)
+    assert abs((xs2.mean() - xs.mean()) - 150) < 4
+    assert abs(ys2.mean() - ys.mean()) < 4

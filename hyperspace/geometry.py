@@ -335,3 +335,114 @@ def project(
     px = w / 2 + x1 * k2 * scale
     py = h / 2 - y1 * k2 * scale
     return px, py, v[:, 3].copy()
+
+
+# ------------------------------------------------------------------ faces
+
+_face_cache: dict[int, list[list[int]]] = {}
+
+
+def _planar_cycles(g: dict, plane_tol: float = 1e-5, max_len: int = 64) -> list[list[int]]:
+    """Every closed cycle of edges lying in one 2-plane (walk from each edge
+    path a→b→c, stepping to the unique in-plane neighbour until closure)."""
+    V, E, n = g["V"], g["E"], g["n"]
+    adj: list[list[int]] = [[] for _ in range(n)]
+    for a, b in E:
+        adj[int(a)].append(int(b))
+        adj[int(b)].append(int(a))
+
+    found: set[frozenset] = set()
+    faces: list[list[int]] = []
+    for a in range(n):
+        for b in adj[a]:
+            for c in adj[b]:
+                if c == a:
+                    continue
+                e1 = V[b] - V[a]
+                e1 = e1 / np.linalg.norm(e1)
+                w = V[c] - V[b]
+                w2 = w - (w @ e1) * e1
+                nw = np.linalg.norm(w2)
+                if nw < plane_tol:
+                    continue  # collinear
+                e2 = w2 / nw
+
+                def inplane(p, origin=V[a], e1=e1, e2=e2):
+                    d = p - origin
+                    r = d - (d @ e1) * e1 - (d @ e2) * e2
+                    return np.linalg.norm(r) < plane_tol
+
+                cyc = [a, b, c]
+                ok = True
+                while True:
+                    prev, cur = cyc[-2], cyc[-1]
+                    nxt = None
+                    for cand in adj[cur]:
+                        if cand != prev and inplane(V[cand]):
+                            nxt = cand
+                            break
+                    if nxt is None or len(cyc) > max_len:
+                        ok = False
+                        break
+                    if nxt == a:
+                        break
+                    if nxt in cyc:
+                        ok = False
+                        break
+                    cyc.append(nxt)
+                if ok and len(cyc) >= 3:
+                    key = frozenset(cyc)
+                    if key not in found:
+                        found.add(key)
+                        faces.append(cyc)
+    return faces
+
+
+def _is_boundary_face(V: np.ndarray, cyc: list[int], tol: float = 1e-7) -> bool:
+    """Support test: a planar cycle is a true 2-face iff all other vertices,
+    projected into the plane's 2D orthogonal complement, fit in an open
+    half-plane (max angular gap > π). Rejects central cycles — equatorial
+    squares of the 16-cell, central hexagons of the 24-cell — which are real
+    planar edge cycles the 1-skeleton alone cannot tell from faces."""
+    idx = np.asarray(cyc)
+    P = V[idx]
+    centre = P.mean(axis=0)
+    e1 = P[1] - P[0]
+    e1 = e1 / np.linalg.norm(e1)
+    w = P[2] - P[1]
+    w = w - (w @ e1) * e1
+    e2 = w / np.linalg.norm(w)
+    A = np.stack([e1, e2]).T
+    q_basis, _ = np.linalg.qr(
+        np.hstack([A, np.random.default_rng(1).standard_normal((4, 2))])
+    )
+    o1, o2 = q_basis[:, 2], q_basis[:, 3]
+    mask = np.ones(len(V), bool)
+    mask[idx] = False
+    D = V[mask] - centre
+    q = np.stack([D @ o1, D @ o2], axis=1)
+    r = np.linalg.norm(q, axis=1)
+    q = q[r > tol]
+    if len(q) == 0:
+        return True
+    ang = np.sort(np.arctan2(q[:, 1], q[:, 0]))
+    gaps = np.diff(np.concatenate([ang, [ang[0] + 2 * np.pi]]))
+    return bool(gaps.max() > np.pi + 1e-9)
+
+
+def faces(i: int) -> list[list[int]]:
+    """Boundary 2-faces of shape i as vertex cycles. Cached like geom()."""
+    if i not in _face_cache:
+        g = geom(i)
+        _face_cache[i] = [c for c in _planar_cycles(g) if _is_boundary_face(g["V"], c)]
+    return _face_cache[i]
+
+
+def face_triangles(i: int) -> np.ndarray:
+    """Fan triangulation of faces(i): int32 (T, 3) vertex indices, plus the
+    face index each triangle came from in the fourth column."""
+    tris = []
+    for fi, cyc in enumerate(faces(i)):
+        for k in range(1, len(cyc) - 1):
+            tris.append((cyc[0], cyc[k], cyc[k + 1], fi))
+    return np.asarray(tris, dtype=np.int32).reshape(-1, 4)

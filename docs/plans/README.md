@@ -10,9 +10,9 @@ one's prerequisites. Machine prerequisites for all of them live in
 | [00 — Golden traces](00-golden-traces.md) | Stage 0 | Python scaffold, recording harness, reference traces from `hyperspace.html` |
 | [01 — Core parity](01-core-parity.md) | Stage 1 | `geometry.py` + `audio.py` + `bands.py`, headless, proven against traces |
 | [02 — Renderer](02-renderer.md) | Stage 2 | `render.py` — the moderngl window, all 18 shapes |
-| [03 — Live inputs](03-live-inputs.md) | Stage 3 | Audio capture, DJ Link, IMU, delay compensation |
-| [04 — UI & scenes](04-ui-scenes.md) | Stage 4 | `ui.py` — band strips, meters, scenes, transport |
-| [05 — DAW bridge](05-daw-bridge.md) | §3.6 (post-Stage 4) | `bridge.py` — optional MIDI/OSC in/out, FL Studio connectivity |
+| [03 — UI, scenes & audio](03-ui-scenes.md) | Stage 4 | `ui.py` + `audio.py` — band strips, meters, scenes, transport, capture |
+| [04 — Live inputs](04-live-inputs.md) | Stage 3 | DJ Link, IMU, delay compensation (needs booth hardware) |
+| [05 — DAW bridge](05-daw-bridge.md) | §3.6 (after 03–04) | `bridge.py` — optional MIDI/OSC in/out, FL Studio connectivity |
 | [06 — Divergence](06-divergence.md) | Stage 5 | Bug fixes and new features the HTML never had; HTML frozen |
 
 ## Conventions that apply to every plan

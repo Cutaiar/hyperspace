@@ -1,15 +1,18 @@
-# Plan 03 — Live inputs
+# Plan 04 — Live inputs (booth hardware)
 
-**Blueprint stage 3.** The three real-world sources: live audio capture,
-Pro DJ Link, and IMU — plus delay compensation tying them to a common clock.
+**Blueprint stage 3, executed fourth.** Renumbered 2026-08-21 — deferred
+until deck and IMU hardware access exists. The audio-capture task moved to
+plan 03 with the UI; what remains here is Pro DJ Link, the IMU network, and
+delay compensation tying metadata to the audio clock.
 This plan contains the project's first-ever real audio capture (ENGINEERING
 §9: every live path so far is stub-verified only) and its one genuine
 unknown (pure-Python DJ Link vs. current Pioneer hardware).
 
 ## Prerequisites
 
-Plans 01–02 complete. For task 2: physical access to the decks. For task 3:
-a flashed ESP32.
+Plans 01–03 complete. For task 2: physical access to the decks. For task 3:
+a flashed ESP32. Task 1 (audio capture) largely landed with plan 03; what
+remains here is verifying the booth interface input on real hardware.
 
 ## Deliverables
 
