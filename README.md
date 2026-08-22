@@ -78,6 +78,6 @@ ships manually. `vercel.json` rewrites `/` → `/hyperspace.html` and sends the
 
 ---
 
-Working on it? [`ENGINEERING.md`](ENGINEERING.md) is the reference: how the
+Working on it? [`docs/ENGINEERING.md`](docs/ENGINEERING.md) is the reference: how the
 geometry, rendering and audio chain work, the constraints that are not worth
 rediscovering, how to verify a change, and what is still open.
