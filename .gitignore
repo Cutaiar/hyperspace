@@ -5,3 +5,4 @@ tests/fixtures/
 config.toml
 __pycache__/
 .venv/
+.claude/
