@@ -10,6 +10,7 @@ AudioEngine / ViewState — this module only draws and forwards edits.
 from __future__ import annotations
 
 import math
+import os
 
 from imgui_bundle import imgui
 
@@ -26,6 +27,54 @@ DIM = imgui.ImVec4(0.62, 0.62, 0.62, 1.0)
 # meter landmarks (ENGINEERING §4): nominal 38.5%, knee 48.1% of full scale
 PIN_AT = CEIL * 0.92
 PIN_HOLD = 0.5
+
+# ---- monospace font atlas (ENGINEERING §7) ----
+# Three roles, one face: BASE for controls and readouts, MICRO for the
+# uppercase micro-labels (tracking baked in via glyph_extra_advance_x —
+# imgui has no letter-spacing), BIG for the signature cell-count readout.
+# With the 1.92 dynamic atlas one loaded font renders at every size.
+
+FONT_BASE = 13.0
+FONT_MICRO = 9.5
+FONT_BIG = 44.0
+
+_FONT_CANDIDATES = [
+    "/System/Library/Fonts/SFNSMono.ttf",          # macOS: SF Mono
+    "/System/Library/Fonts/Menlo.ttc",
+    "/System/Library/Fonts/Monaco.ttf",
+    "C:/Windows/Fonts/consola.ttf",                # Windows: Consolas
+    "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+]
+
+_FONTS: dict[str, imgui.ImFont | None] = {"mono": None, "micro": None}
+
+
+def load_fonts() -> None:
+    """Build the monospace atlas; call once after create_context.
+
+    Falls back silently to the imgui default face when no candidate file
+    exists — every helper below passes None to push_font, which keeps the
+    current face and only changes size, so nothing else needs to care.
+    """
+    io = imgui.get_io()
+    path = next((p for p in _FONT_CANDIDATES if os.path.exists(p)), None)
+    if path is None:
+        return
+    _FONTS["mono"] = io.fonts.add_font_from_file_ttf(path, FONT_BASE)
+    cfg = imgui.ImFontConfig()
+    cfg.glyph_extra_advance_x = 1.9  # ≈ .2em tracking at the micro size
+    _FONTS["micro"] = io.fonts.add_font_from_file_ttf(path, FONT_MICRO, cfg)
+    io.font_default = _FONTS["mono"]
+
+
+def _micro(text: str, color: imgui.ImVec4 | None = None) -> None:
+    """An uppercase micro-label in the tracked micro face."""
+    imgui.push_font(_FONTS["micro"], FONT_MICRO)
+    if color is None:
+        imgui.text_disabled(text.upper())
+    else:
+        imgui.text_colored(color, text.upper())
+    imgui.pop_font()
 
 
 def apply_style() -> None:
@@ -123,7 +172,7 @@ class Panel:
     def _taper_slider(self, label: str, taper: tapers.Taper, value: float, fmt, tip="") :
         pos = taper.unmap(value)
         imgui.push_id(label)
-        imgui.text_disabled(f"{label}  [{'log' if taper.log else 'lin'}]")
+        _micro(f"{label}  ·  {'log' if taper.log else 'lin'}")
         if tip and imgui.is_item_hovered():
             imgui.set_tooltip(tip)
         imgui.same_line(imgui.get_content_region_avail().x - 64)
@@ -132,6 +181,16 @@ class Panel:
         changed, pos2 = imgui.slider_int("##s", pos, 0, taper.steps, "")
         if tip and imgui.is_item_hovered():
             imgui.set_tooltip(tip)
+        if taper.unity is not None:
+            # detent notch: ticks at the fader position the grab centre
+            # occupies at unity (frame inset by grab padding + half grab)
+            r0, r1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+            half = imgui.get_style().grab_min_size / 2 + 2.0
+            nx = r0.x + half + (r1.x - r0.x - 2 * half) * taper.unity / taper.steps
+            dl = imgui.get_window_draw_list()
+            notch = imgui.color_convert_float4_to_u32(imgui.ImVec4(1, 1, 1, 0.35))
+            dl.add_line(imgui.ImVec2(nx, r0.y), imgui.ImVec2(nx, r0.y + 3), notch)
+            dl.add_line(imgui.ImVec2(nx, r1.y - 3), imgui.ImVec2(nx, r1.y), notch)
         imgui.pop_id()
         if changed and pos2 != pos:
             return True, taper.map(pos2)
@@ -140,43 +199,61 @@ class Panel:
     # ---- meters ----
 
     def _meters(self, dt: float) -> None:
+        # meter geometry per the reference (.meters / .meter .bar CSS):
+        # six full-width bars, 4 px apart, 78 px tall, two columns inside
+        # with a 1 px gap; red zone panes stack above the knee and nominal
+        # lines so the bar reads as working range / headroom / peak zone.
         a = self.audio.chain
         dl = imgui.get_window_draw_list()
         origin = imgui.get_cursor_screen_pos()
-        bw, gap, mh = 24.0, 10.0, 96.0
+        gap, mh = 4.0, 78.0
+        bw = (imgui.get_content_region_avail().x - 5 * gap) / 6
+        u32 = imgui.color_convert_float4_to_u32
+        zone = u32(imgui.ImVec4(1.0, 43 / 255, 43 / 255, 0.07))
+        blink = (imgui.get_time() % 0.62) < 0.31  # the 620 ms annunciator
         for i, band in enumerate(BANDS):
             x0 = origin.x + i * (bw + gap)
             y1 = origin.y + mh
             sel = i == self.control.selb
-            # frame
-            dl.add_rect(
-                imgui.ImVec2(x0, origin.y), imgui.ImVec2(x0 + bw, y1),
-                imgui.color_convert_float4_to_u32(RED if sel else imgui.ImVec4(0.3, 0.3, 0.3, 1)),
-            )
+            # headroom zones, stacked: one pane down to nominal, one to knee
+            for lv in (NOM, KNEE):
+                dl.add_rect_filled(
+                    imgui.ImVec2(x0 + 1, origin.y + 1),
+                    imgui.ImVec2(x0 + bw - 1, y1 - 1 - lv / CEIL * (mh - 2)),
+                    zone,
+                )
             for col, (val, pin) in enumerate(
                 ((a.inp[i], self.pin_in), (a.out[i], self.pin_out))
             ):
-                cx0 = x0 + 2 + col * (bw / 2 - 2)
-                cx1 = cx0 + bw / 2 - 4
-                hh = min(val, CEIL) / CEIL * (mh - 4)
-                pin[i] = pin[i] + dt if val >= PIN_AT else 0.0
-                over = pin[i] >= PIN_HOLD and (int(imgui.get_time() * 4) % 2 == 0)
-                color = (
-                    (1.0, 0.25, 0.25, 1.0) if over
-                    else (0.92, 0.92, 0.92, 0.9) if col == 0
-                    else (1.0, 43 / 255, 43 / 255, 0.9)
-                )
+                colw = (bw - 2 - 1) / 2  # 1 px frame each side, 1 px between
+                cx0 = x0 + 1 + col * (colw + 1)
+                cx1 = cx0 + colw
+                hh = min(val, CEIL) / CEIL * (mh - 2)
+                fill = (0.92, 0.92, 0.92, 0.9) if col == 0 else (1.0, 43 / 255, 43 / 255, 0.9)
                 dl.add_rect_filled(
-                    imgui.ImVec2(cx0, y1 - 2 - hh), imgui.ImVec2(cx1, y1 - 2),
-                    imgui.color_convert_float4_to_u32(imgui.ImVec4(*color)),
+                    imgui.ImVec2(cx0, y1 - 1 - hh), imgui.ImVec2(cx1, y1 - 1),
+                    u32(imgui.ImVec4(*fill)),
                 )
-            # landmarks: nominal and knee
-            for lv, alpha in ((NOM, 0.8), (KNEE, 0.5)):
-                ly = y1 - 2 - lv / CEIL * (mh - 4)
-                dl.add_line(
-                    imgui.ImVec2(x0, ly), imgui.ImVec2(x0 + bw, ly),
-                    imgui.color_convert_float4_to_u32(imgui.ImVec4(0.6, 0.6, 0.6, alpha)),
-                )
+                # over annunciator: a blinking cap on the driven column —
+                # the ceiling is an asymptote, a column only sits against
+                # the top by being pushed there
+                pin[i] = pin[i] + dt if val >= PIN_AT else 0.0
+                if pin[i] >= PIN_HOLD:
+                    cap = u32(imgui.ImVec4(1.0, 43 / 255, 43 / 255, 1.0 if blink else 0.15))
+                    dl.add_rect_filled(
+                        imgui.ImVec2(cx0, origin.y + 1),
+                        imgui.ImVec2(cx1, origin.y + 4),
+                        cap,
+                    )
+            # landmark hairlines over everything: nominal white, knee red
+            for lv, cc in ((NOM, (1, 1, 1, 0.32)), (KNEE, (1.0, 43 / 255, 43 / 255, 0.38))):
+                ly = y1 - 1 - lv / CEIL * (mh - 2)
+                dl.add_line(imgui.ImVec2(x0 + 1, ly), imgui.ImVec2(x0 + bw - 1, ly), u32(imgui.ImVec4(*cc)))
+            # frame
+            dl.add_rect(
+                imgui.ImVec2(x0, origin.y), imgui.ImVec2(x0 + bw, y1),
+                u32(RED if sel else imgui.ImVec4(0.25, 0.25, 0.25, 1)),
+            )
             # click to select
             imgui.set_cursor_screen_pos(imgui.ImVec2(x0, origin.y))
             if imgui.invisible_button(f"##meter{i}", imgui.ImVec2(bw, mh)):
@@ -186,11 +263,15 @@ class Panel:
                     f"{band.id} {band.lo:g}–{band.hi:g} Hz → {band.pl} plane, "
                     f"{'forward' if band.dir > 0 else 'reverse'}"
                 )
-        imgui.set_cursor_screen_pos(imgui.ImVec2(origin.x, origin.y + mh + 2))
+        # band tags, centred under their bars, in the micro face
+        imgui.push_font(_FONTS["micro"], FONT_MICRO)
         for i, band in enumerate(BANDS):
-            if i:
-                imgui.same_line(origin.x - imgui.get_window_pos().x + i * (bw + gap))
+            tw = imgui.calc_text_size(band.id).x
+            imgui.set_cursor_screen_pos(
+                imgui.ImVec2(origin.x + i * (bw + gap) + (bw - tw) / 2, origin.y + mh + 4)
+            )
             imgui.text_colored(RED if i == self.control.selb else DIM, band.id)
+        imgui.pop_font()
 
     # ---- main draw ----
 
@@ -213,12 +294,19 @@ class Panel:
         sh = SHAPES[v.shape]
         g = geom(v.shape)
 
-        # signature readout
-        imgui.text_colored(RED, f"{sh.cells or '—'}")
+        # signature readout — the big cell count is the panel's identity
+        # (reference #cells: large white numeral, dim micro sub-label)
+        imgui.push_font(_FONTS["mono"], FONT_BIG)
+        imgui.text(f"{sh.cells or '—'}")
+        big_h = imgui.get_item_rect_size().y
+        imgui.pop_font()
         imgui.same_line()
-        imgui.text_disabled("CELLS")
+        # sit the CELLS sub-label on the numeral's baseline
+        imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() + big_h - FONT_MICRO - 8)
+        _micro("cells")
         imgui.text(sh.name.upper())
-        imgui.text_disabled(f"{sh.alias.upper()}  ·  {g['n']}V {g['m']}E  ·  {sh.sym}")
+        _micro(sh.alias, RED)
+        _micro(f"{g['n']}V {g['m']}E  ·  {sh.sym}")
         imgui.separator()
 
         # shape + view
@@ -288,7 +376,7 @@ class Panel:
         imgui.separator()
 
         # ---- audio sources ----
-        imgui.text_disabled("AUDIO")
+        _micro("audio")
         mic_on = a.on and a.mode == "mic"
         if imgui.button("Stop mic" if mic_on else "Listen to mic"):
             if mic_on:
@@ -361,7 +449,7 @@ class Panel:
         imgui.separator()
 
         # scene + reset-all (relabels to Undo while the window is open)
-        imgui.text_disabled("SCENE")
+        _micro("scene")
         imgui.set_next_item_width(-92)
         changed, k = imgui.combo("##scene", c.scene, [p["name"] for p in PRESETS])
         if changed:
@@ -410,7 +498,7 @@ class Panel:
                 setattr(P, knob.key, val)
 
         imgui.separator()
-        imgui.text_disabled(f"{fps:5.1f} FPS")
+        _micro(f"{fps:5.1f} fps")
         imgui.end()
 
 

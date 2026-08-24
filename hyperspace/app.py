@@ -39,7 +39,7 @@ from .audio import AudioEngine
 from .control import Control
 from .geometry import SHAPES
 from .render import Renderer, ViewState, clamp
-from .ui import Panel, apply_style
+from .ui import Panel, apply_style, load_fonts
 
 TITLE = "Hyperspace"
 
@@ -79,6 +79,7 @@ def main() -> None:
 
     imgui.create_context()
     apply_style()
+    load_fonts()
     impl = GlfwRenderer(win)
     io = imgui.get_io()
 
