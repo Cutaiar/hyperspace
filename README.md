@@ -59,8 +59,8 @@ loopback/audio-route status   # what is selected now, and whether a snapshot is 
 ```
 
 It snapshots by device UID before changing anything, so a renamed device still
-restores, and a second `on` keeps the first snapshot. `HYPERSPACE_OUTPUT` /
-`HYPERSPACE_INPUT` override the auto-detected targets.
+restores, and a second `on` keeps the first snapshot. `LOOPBACK_OUTPUT` /
+`LOOPBACK_INPUT` override the auto-detected targets.
 
 AirPlay speakers can't join a Multi-Output Device;
 [Loopback](https://rogueamoeba.com/loopback/) can capture per-app audio instead.
