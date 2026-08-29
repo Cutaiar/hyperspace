@@ -133,9 +133,11 @@ three expansions the user requested (face shading, multi-instance, camera).
 - A headless imgui smoke test runs the entire panel with no window, so
   API breakage is caught by pytest, not by launching.
 - **Divergences from the HTML, accepted:** native tooltips replace the
-  hint-readout strip; the imgui default font replaces the monospace
-  styling pass (full aesthetic pass deferred); no per-fader detent notch
-  drawn yet.
+  hint-readout strip. *(The aesthetic pass originally deferred here landed
+  2026-08-23: monospace font atlas with tracked uppercase micro-labels,
+  per-fader detent notches at `Taper.unity`, meters rebuilt to the
+  reference geometry with zone panes and annunciator caps, and the big
+  cell-count readout.)*
 
 **Audio** (`audio.py`): sounddevice capture with device enumeration and
 loopback preselect; file playback (wav/mp3/flac/ogg via soundfile) with
