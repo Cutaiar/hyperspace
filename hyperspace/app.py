@@ -9,7 +9,7 @@ to it.
   M  mic on/off     K  play/pause     0  restart    Esc/Q  quit
   ↑ / ↓  4D perspective — holding accelerates toward the range limit
   drag  orbit       ⇧drag / right-drag  pan   scroll  zoom about cursor
-  F  faces          ?  cheat sheet overlay
+  L  lines          F  faces          ?  cheat sheet overlay
 
 The in-app cheat sheet (ui.CHEATSHEET) is the canonical list — keep the
 two in sync when adding bindings.
@@ -175,6 +175,8 @@ def main() -> None:
                 s.playing = not s.playing
             if keys.pressed(glfw.KEY_P):
                 s.points = not s.points
+            if keys.pressed(glfw.KEY_L):
+                s.lines = not s.lines
             if keys.pressed(glfw.KEY_F):
                 s.faces = not s.faces
             if keys.pressed(glfw.KEY_H):

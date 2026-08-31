@@ -77,7 +77,7 @@ CHEATSHEET = [
     ("scroll", "zoom about cursor"),
     ("← →", "previous / next shape"),
     ("space", "pause rotation"),
-    ("P / F", "points / faces"),
+    ("P / L / F", "points / lines / faces"),
     ("1–6", "planes XY XZ YZ XW YW ZW"),
     ("↑ ↓", "4D perspective (hold accelerates)"),
     ("[ ]  , .", "brightness · speed"),
@@ -256,6 +256,8 @@ class Panel:
                 v.planes[p] = not v.planes[p]
             imgui.pop_style_color()
         _, v.points = imgui.checkbox("Points", v.points)
+        imgui.same_line()
+        _, v.lines = imgui.checkbox("Lines", v.lines)
         imgui.same_line()
         _, v.playing = imgui.checkbox("Rotate", v.playing)
         imgui.same_line()

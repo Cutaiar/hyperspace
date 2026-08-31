@@ -160,6 +160,7 @@ class ViewState:
     depth4: float = 2.6
     bright: float = 1.0
     points: bool = True
+    lines: bool = True
     playing: bool = True
     planes: list[bool] = field(default_factory=lambda: [False, False, True, True, False, False])
     ang: list[float] = field(default_factory=lambda: [0.0] * 6)
@@ -411,32 +412,33 @@ class Renderer:
                     p["u_bmp_pos"].value = (s.bmp_amp * ox, s.bmp_amp * oy)
                 self._fvao.render(moderngl.TRIANGLES, vertices=len(fverts))
 
-        eo = E[order]
-        x0, y0 = px[eo[:, 0]], py[eo[:, 0]]
-        x1, y1 = px[eo[:, 1]], py[eo[:, 1]]
-        dx, dy = x1 - x0, y1 - y0
-        ln = np.maximum(np.hypot(dx, dy), 1e-6)
-        nx, ny = -dy / ln * draw_w * 0.5, dx / ln * draw_w * 0.5
+        if s.lines:
+            eo = E[order]
+            x0, y0 = px[eo[:, 0]], py[eo[:, 0]]
+            x1, y1 = px[eo[:, 1]], py[eo[:, 1]]
+            dx, dy = x1 - x0, y1 - y0
+            ln = np.maximum(np.hypot(dx, dy), 1e-6)
+            nx, ny = -dy / ln * draw_w * 0.5, dx / ln * draw_w * 0.5
 
-        m = g["m"]
-        verts = np.empty((m * 6, 3), dtype=np.float32)
-        ax, ay = x0 + nx, y0 + ny
-        bx, by = x0 - nx, y0 - ny
-        cx_, cy_ = x1 + nx, y1 + ny
-        ex, ey = x1 - nx, y1 - ny
-        # two triangles per edge: (a, b, c) and (b, e, c)
-        verts[0::6, 0], verts[0::6, 1] = ax, ay
-        verts[1::6, 0], verts[1::6, 1] = bx, by
-        verts[2::6, 0], verts[2::6, 1] = cx_, cy_
-        verts[3::6, 0], verts[3::6, 1] = bx, by
-        verts[4::6, 0], verts[4::6, 1] = ex, ey
-        verts[5::6, 0], verts[5::6, 1] = cx_, cy_
-        for k in range(6):
-            verts[k::6, 2] = alpha
-        verts = self._tile(verts, offs)
-        self._lbuf.orphan(verts.nbytes)
-        self._lbuf.write(verts.tobytes())
-        self._lvao.render(moderngl.TRIANGLES, vertices=len(verts))
+            m = g["m"]
+            verts = np.empty((m * 6, 3), dtype=np.float32)
+            ax, ay = x0 + nx, y0 + ny
+            bx, by = x0 - nx, y0 - ny
+            cx_, cy_ = x1 + nx, y1 + ny
+            ex, ey = x1 - nx, y1 - ny
+            # two triangles per edge: (a, b, c) and (b, e, c)
+            verts[0::6, 0], verts[0::6, 1] = ax, ay
+            verts[1::6, 0], verts[1::6, 1] = bx, by
+            verts[2::6, 0], verts[2::6, 1] = cx_, cy_
+            verts[3::6, 0], verts[3::6, 1] = bx, by
+            verts[4::6, 0], verts[4::6, 1] = ex, ey
+            verts[5::6, 0], verts[5::6, 1] = cx_, cy_
+            for k in range(6):
+                verts[k::6, 2] = alpha
+            verts = self._tile(verts, offs)
+            self._lbuf.orphan(verts.nbytes)
+            self._lbuf.write(verts.tobytes())
+            self._lvao.render(moderngl.TRIANGLES, vertices=len(verts))
 
         if s.points:
             tp = (pd - near) / span
