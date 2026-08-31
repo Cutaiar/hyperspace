@@ -9,6 +9,7 @@ to it.
   M  mic on/off     K  play/pause     0  restart    Esc/Q  quit
   drag  orbit       ⇧drag / right-drag  pan   scroll  zoom about cursor
   F  faces          ?  cheat sheet overlay
+  F1–F8  load theme (whole-surface save state)    ⇧F1–F8  save theme
 
 The in-app cheat sheet (ui.CHEATSHEET) is the canonical list — keep the
 two in sync when adding bindings.
@@ -38,6 +39,7 @@ from imgui_bundle.python_backends.glfw_backend import GlfwRenderer
 from .audio import AudioEngine
 from .control import Control
 from .geometry import SHAPES
+from .presets import SLOTS, Presets
 from .render import Renderer, ViewState, clamp
 from .ui import Panel, apply_style, load_fonts
 
@@ -85,7 +87,8 @@ def main() -> None:
 
     audio = AudioEngine()
     control = Control(audio.chain)
-    panel = Panel(control, audio, s, renderer)
+    presets = Presets(s, control, audio)
+    panel = Panel(control, audio, s, renderer, presets)
     # panel state and chain must stay one object even after source changes
     keys = Keys(win)
     drag = {"btn": None, "x": 0.0, "y": 0.0}
@@ -156,6 +159,14 @@ def main() -> None:
             for p in range(6):
                 if keys.pressed(glfw.KEY_1 + p):
                     s.planes[p] = not s.planes[p]
+            # F1–F8 flip whole-surface themes; with ⇧ held they save instead
+            save = (
+                glfw.get_key(win, glfw.KEY_LEFT_SHIFT) == glfw.PRESS
+                or glfw.get_key(win, glfw.KEY_RIGHT_SHIFT) == glfw.PRESS
+            )
+            for k in range(SLOTS):
+                if keys.pressed(glfw.KEY_F1 + k):
+                    (presets.save if save else presets.load)(k)
 
         w, h = glfw.get_window_size(win)
         if not io.want_capture_mouse:

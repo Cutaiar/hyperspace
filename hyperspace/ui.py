@@ -111,7 +111,7 @@ def apply_style() -> None:
         s.set_color_(k, imgui.ImVec4(*v))
 
 
-PATTERNS = ["FLAT", "RINGS", "PLAID", "MOIRE", "BLOOM", "CAUSTIC"]
+PATTERNS = ["FLAT", "RINGS", "PLAID", "MOIRE", "BLOOM", "CAUSTIC", "EMBER"]
 
 # the corner key legend, in the spirit of the HTML's #keys overlay
 CHEATSHEET = [
@@ -126,17 +126,20 @@ CHEATSHEET = [
     ("M", "mic on/off"),
     ("K / 0", "play-pause / restart track"),
     ("R", "reset view + camera"),
+    ("F1–F8", "load theme · ⇧ saves"),
     ("H / ?", "panel / this sheet"),
     ("Esc / Q", "quit"),
 ]
 
 
 class Panel:
-    def __init__(self, control: Control, audio: AudioEngine, view: ViewState, renderer=None):
+    def __init__(self, control: Control, audio: AudioEngine, view: ViewState, renderer=None,
+                 presets=None):
         self.control = control
         self.audio = audio
         self.view = view
         self.renderer = renderer
+        self.presets = presets
         self.devices = input_devices()
         self.device_sel = next(
             (k for k, d in enumerate(self.devices) if d["loopback"]), 0
@@ -373,6 +376,36 @@ class Panel:
                 imgui.text_colored(
                     imgui.ImVec4(1, 0.4, 0.3, 1), f"GLSL: {self.renderer.pattern_error}"
                 )
+        imgui.separator()
+
+        # ---- themes: whole-surface save states on F1–F8 ----
+        if self.presets is not None:
+            pr = self.presets
+            _micro("themes")
+            if imgui.is_item_hovered():
+                imgui.set_tooltip(
+                    "Whole-surface save states — view, faders, all six band "
+                    "strips. Click or F1–F8 loads; ⇧click or ⇧F1–F8 saves the "
+                    "current state into the slot."
+                )
+            for k, slot in enumerate(pr.slots):
+                if k:
+                    imgui.same_line()
+                lit = k == pr.active and slot is not None
+                imgui.push_style_color(
+                    imgui.Col_.text,
+                    RED if lit else DIM if slot is None else imgui.ImVec4(0.92, 0.92, 0.92, 1.0),
+                )
+                if imgui.small_button(f"{k + 1}##theme{k}"):
+                    if imgui.get_io().key_shift:
+                        pr.save(k)
+                    else:
+                        pr.load(k)
+                imgui.pop_style_color()
+                if imgui.is_item_hovered() and slot is not None:
+                    imgui.set_tooltip(slot["name"])
+            if pr.error:
+                imgui.text_colored(imgui.ImVec4(1, 0.4, 0.3, 1), pr.error)
         imgui.separator()
 
         # ---- audio sources ----
