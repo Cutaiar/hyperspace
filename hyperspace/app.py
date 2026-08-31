@@ -7,16 +7,24 @@ to it.
   ← / →  shape      space  pause      P  points     R  reset view
   [ / ]  brightness , / .  speed      1–6  planes   H  panel
   M  mic on/off     K  play/pause     0  restart    Esc/Q  quit
+  ↑ / ↓  4D perspective — holding accelerates toward the range limit
   drag  orbit       ⇧drag / right-drag  pan   scroll  zoom about cursor
   F  faces          ?  cheat sheet overlay
 
 The in-app cheat sheet (ui.CHEATSHEET) is the canonical list — keep the
 two in sync when adding bindings.
+
+The engine hot-reloads (hotreload.py): save any module under hyperspace/
+while the app runs and live objects pick the code up in place; a broken
+save keeps the last good version and shows the error in an overlay. This
+file is the one cold piece — its loop is on the stack — so keep it thin:
+put anything you'll want to iterate on live in the modules it calls.
 """
 
 from __future__ import annotations
 
 import importlib.util
+import math
 import os
 import time
 from pathlib import Path
@@ -38,24 +46,48 @@ from imgui_bundle.python_backends.glfw_backend import GlfwRenderer
 from .audio import AudioEngine
 from .control import Control
 from .geometry import SHAPES
+from .hotreload import HotReloader
 from .render import Renderer, ViewState, clamp
+from .tapers import T_DEPTH
 from .ui import Panel, apply_style
 
 TITLE = "Hyperspace"
 
+# 4D perspective hold keys move depth4 in the taper's own log space —
+# octaves of (depth − 1) — so travel feels even across the whole throw.
+# The rate eases in quadratically from a tap-sized nudge to full speed.
+D4_RATE0 = 0.45   # octaves/s at the instant of the press
+D4_RATE1 = 3.6    # octaves/s once the ramp completes
+D4_RAMP = 1.8     # seconds of hold to reach full rate
+D4_LO = T_DEPTH.map(0)
+D4_HI = T_DEPTH.map(T_DEPTH.steps)
+
+
+def _err(where: str, e: Exception) -> str:
+    return f"{where}: {type(e).__name__}: {e}"[:160]
+
 
 class Keys:
-    """Edge detection over polled key state."""
+    """Edge detection and hold timing over polled key state."""
 
     def __init__(self, win):
         self.win = win
         self.prev: dict[int, bool] = {}
+        self.down_since: dict[int, float] = {}
 
     def pressed(self, key: int) -> bool:
         down = glfw.get_key(self.win, key) == glfw.PRESS
         was = self.prev.get(key, False)
         self.prev[key] = down
         return down and not was
+
+    def held(self, key: int) -> float:
+        """Seconds the key has been continuously down; 0.0 when up."""
+        if glfw.get_key(self.win, key) != glfw.PRESS:
+            self.down_since.pop(key, None)
+            return 0.0
+        now = time.perf_counter()
+        return now - self.down_since.setdefault(key, now)
 
 
 def main() -> None:
@@ -81,11 +113,28 @@ def main() -> None:
     apply_style()
     impl = GlfwRenderer(win)
     io = imgui.get_io()
+    # hot-reloaded panel code can raise mid-window; let imgui unwind the
+    # stack itself instead of asserting the process away
+    io.config_error_recovery = True
+    io.config_error_recovery_enable_assert = False
 
     audio = AudioEngine()
     control = Control(audio.chain)
     panel = Panel(control, audio, s, renderer)
     # panel state and chain must stay one object even after source changes
+    # the live objects that get re-classed on a hot reload; re-evaluated
+    # each swap so recreated ones (the chain after a source attach) count
+    reloader = HotReloader(targets=lambda: [
+        (renderer, "render", "Renderer"),
+        (s, "render", "ViewState"),
+        (panel, "ui", "Panel"),
+        (control, "control", "Control"),
+        (audio, "audio", "AudioEngine"),
+        (audio.chain, "bands", "Chain"),
+        *[(p, "bands", "Params") for p in audio.chain.params],
+        *([(audio.analyser, "analysis", "Analyser")] if audio.analyser is not None else []),
+    ])
+    panel.reloader = reloader
     keys = Keys(win)
     drag = {"btn": None, "x": 0.0, "y": 0.0}
 
@@ -112,6 +161,7 @@ def main() -> None:
 
         # the chain object is recreated on source attach; keep bindings fresh
         control.chain = audio.chain
+        reloader.poll()
 
         # ---- polled input, deferring to imgui ----
         if not io.want_capture_keyboard:
@@ -155,6 +205,16 @@ def main() -> None:
             for p in range(6):
                 if keys.pressed(glfw.KEY_1 + p):
                     s.planes[p] = not s.planes[p]
+            # ↑/↓ ride depth4 toward its range limit, accelerating with hold
+            for key, sgn in ((glfw.KEY_UP, 1.0), (glfw.KEY_DOWN, -1.0)):
+                hold = keys.held(key)
+                if hold > 0.0:
+                    ramp = min(hold / D4_RAMP, 1.0)
+                    rate = D4_RATE0 + (D4_RATE1 - D4_RATE0) * ramp * ramp
+                    u = math.log2(max(s.depth4 - 1.0, 1e-6) / 0.05)
+                    s.depth4 = clamp(
+                        1.0 + 0.05 * 2.0 ** (u + sgn * rate * dt), D4_LO, D4_HI
+                    )
 
         w, h = glfw.get_window_size(win)
         if not io.want_capture_mouse:
@@ -189,19 +249,50 @@ def main() -> None:
         else:
             drag["btn"] = None
 
-        # ---- audio + rotation ----
-        audio.step(dt)
-        s.integrate(dt, audio.chain.planedrive if audio.on else None)
+        # ---- audio + rotation + draw, guarded: hot-reloaded code may raise;
+        # record it and keep the loop alive so the next save can fix it ----
+        ok = True
+        try:
+            audio.step(dt)
+            s.integrate(dt, audio.chain.planedrive if audio.on else None)
+        except Exception as e:  # noqa: BLE001
+            ok, reloader.runtime_error = False, _err("step", e)
 
-        # ---- draw ----
         fbw, fbh = glfw.get_framebuffer_size(win)
         ctx.viewport = (0, 0, fbw, fbh)
-        renderer.draw(
-            s, max(w, 1), max(h, 1), dpr=fbw / max(w, 1),
-            bands=audio.chain.out if audio.on else None,
-        )
+        try:
+            renderer.draw(
+                s, max(w, 1), max(h, 1), dpr=fbw / max(w, 1),
+                bands=audio.chain.out if audio.on else None,
+            )
+        except Exception as e:  # noqa: BLE001
+            ok, reloader.runtime_error = False, _err("render.draw", e)
 
-        panel.draw(dt, fps)
+        try:
+            panel.draw(dt, fps)
+        except Exception as e:  # noqa: BLE001
+            ok, reloader.runtime_error = False, _err("panel.draw", e)
+        if ok:
+            reloader.runtime_error = ""
+
+        if reloader.error or reloader.runtime_error:
+            imgui.set_next_window_pos(imgui.ImVec2(12, 12), imgui.Cond_.always)
+            imgui.set_next_window_bg_alpha(0.7)
+            imgui.begin(
+                "##hoterr", None,
+                imgui.WindowFlags_.no_decoration
+                | imgui.WindowFlags_.always_auto_resize
+                | imgui.WindowFlags_.no_move
+                | imgui.WindowFlags_.no_focus_on_appearing
+                | imgui.WindowFlags_.no_nav,
+            )
+            imgui.text_colored(
+                imgui.ImVec4(1, 0.4, 0.3, 1),
+                f"HOT RELOAD  {reloader.error or reloader.runtime_error}",
+            )
+            imgui.text_disabled("last good code keeps running — fix the file and save")
+            imgui.end()
+
         imgui.render()
         impl.render(imgui.get_draw_data())
 

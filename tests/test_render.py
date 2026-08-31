@@ -103,6 +103,80 @@ def test_instances_grid(ctx):
         assert img[ys, xs].max() > 0, "instance grid missing from a quadrant"
 
 
+def test_instance_motion(ctx):
+    import numpy as np
+
+    still = render_offscreen(
+        ViewState(shape=3, ang=list(VIEW["ang"]), instances=9), 800, 600,
+        ctx=ctx, t_now=2.0,
+    )
+    for motion in (1, 2, 3):
+        moving = render_offscreen(
+            ViewState(shape=3, ang=list(VIEW["ang"]), instances=9,
+                      inst_motion=motion, inst_amp=0.4),
+            800, 600, ctx=ctx, t_now=2.0,
+        )
+        assert np.abs(moving.astype(int) - still.astype(int)).mean() > 0.01, (
+            f"instance motion mode {motion} leaves the grid static"
+        )
+
+
+def test_bitmap_layer(ctx, tmp_path):
+    import numpy as np
+    from PIL import Image
+
+    f = tmp_path / "b.png"
+    Image.fromarray(np.full((8, 8, 4), (40, 220, 60, 255), dtype=np.uint8)).save(f)
+    base = render_offscreen(
+        ViewState(shape=3, ang=list(VIEW["ang"]), faces=True), 600, 400, ctx=ctx
+    )
+    lit = render_offscreen(
+        ViewState(shape=3, ang=list(VIEW["ang"]), faces=True, bmp_file=str(f)),
+        600, 400, ctx=ctx,
+    )
+    assert np.abs(lit.astype(int) - base.astype(int)).mean() > 0.005, (
+        "bitmap layer invisible"
+    )
+    # the alpha fader at 0 removes the layer entirely
+    faded = render_offscreen(
+        ViewState(shape=3, ang=list(VIEW["ang"]), faces=True, bmp_file=str(f),
+                  bmp_alpha=0.0),
+        600, 400, ctx=ctx,
+    )
+    assert np.array_equal(faded, base)
+    # a bad file records an error, renders the plain faces, and doesn't raise
+    bad = tmp_path / "bad.png"
+    bad.write_text("not an image")
+    junk = render_offscreen(
+        ViewState(shape=3, ang=list(VIEW["ang"]), faces=True, bmp_file=str(bad)),
+        600, 400, ctx=ctx,
+    )
+    assert np.array_equal(junk, base)
+
+
+def test_bitmap_path_oscillates(ctx, tmp_path):
+    import numpy as np
+    from PIL import Image
+
+    f = tmp_path / "b.png"
+    Image.fromarray(np.full((8, 8, 4), (220, 40, 200, 255), dtype=np.uint8)).save(f)
+
+    def shot(mode, t):
+        return render_offscreen(
+            ViewState(shape=3, ang=list(VIEW["ang"]), faces=True, bmp_file=str(f),
+                      bmp_mode=mode, bmp_amp=0.25, bmp_scale=0.4),
+            600, 400, ctx=ctx, t_now=t,
+        )
+
+    # STILL is time-invariant; every path mode moves the layer
+    assert np.array_equal(shot(0, 0.0), shot(0, 1.5))
+    for mode in (1, 2, 3):
+        a, b = shot(mode, 0.4), shot(mode, 1.9)
+        assert np.abs(a.astype(int) - b.astype(int)).mean() > 0.001, (
+            f"bitmap path mode {mode} does not move"
+        )
+
+
 def test_zoom_and_pan(ctx):
     base = render_offscreen(ViewState(shape=3, ang=list(VIEW["ang"])), 600, 400, ctx=ctx)
     panned = render_offscreen(

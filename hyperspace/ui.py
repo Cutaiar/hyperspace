@@ -62,7 +62,13 @@ def apply_style() -> None:
         s.set_color_(k, imgui.ImVec4(*v))
 
 
-PATTERNS = ["FLAT", "RINGS", "PLAID", "MOIRE", "BLOOM", "CAUSTIC"]
+PATTERNS = [
+    "FLAT", "RINGS", "PLAID", "MOIRE", "BLOOM", "CAUSTIC",
+    "HEX", "SPIRAL", "CELLS", "PLASMA", "WEAVE", "EMBER",
+]
+
+INST_MOTION = ["STILL", "ORBIT", "WAVE", "RIPPLE"]
+BMP_PATHS = ["STILL", "ORBIT", "FIG-8", "SWAY"]
 
 # the corner key legend, in the spirit of the HTML's #keys overlay
 CHEATSHEET = [
@@ -73,6 +79,7 @@ CHEATSHEET = [
     ("space", "pause rotation"),
     ("P / F", "points / faces"),
     ("1–6", "planes XY XZ YZ XW YW ZW"),
+    ("↑ ↓", "4D perspective (hold accelerates)"),
     ("[ ]  , .", "brightness · speed"),
     ("M", "mic on/off"),
     ("K / 0", "play-pause / restart track"),
@@ -97,6 +104,8 @@ class Panel:
         self.open = True
         self.cheatsheet = True
         self._file_dialog = None
+        self._bmp_dialog = None
+        self.reloader = None  # set by app.py; panel only reads status off it
 
     def _draw_cheatsheet(self) -> None:
         io = imgui.get_io()
@@ -264,6 +273,24 @@ class Panel:
                 "Synchronized copies in a grid — scroll to zoom out over the field, "
                 "right-drag to pan."
             )
+        if v.instances > 1:
+            imgui.set_next_item_width(110)
+            changed, m = imgui.combo("##imot", v.inst_motion, INST_MOTION)
+            if changed:
+                v.inst_motion = m
+            if imgui.is_item_hovered():
+                imgui.set_tooltip(
+                    "Trigonometric motion over the instance grid — each copy's "
+                    "phase comes from its grid position, so the field moves as "
+                    "one figure."
+                )
+            if v.inst_motion:
+                imgui.same_line()
+                imgui.set_next_item_width(92)
+                _, v.inst_amp = imgui.slider_float("##iamp", v.inst_amp, 0.0, 1.0, "amp %.2f")
+                imgui.same_line()
+                imgui.set_next_item_width(-1)
+                _, v.inst_rate = imgui.slider_float("##irate", v.inst_rate, 0.0, 6.0, "rate %.1f")
         if v.faces:
             imgui.set_next_item_width(110)
             changed, m = imgui.combo("##pat", v.pattern, PATTERNS)
@@ -285,6 +312,68 @@ class Panel:
                 imgui.text_colored(
                     imgui.ImVec4(1, 0.4, 0.3, 1), f"GLSL: {self.renderer.pattern_error}"
                 )
+            # bitmap layer, composited over the pattern in the face shader
+            if imgui.button("Load bitmap"):
+                try:
+                    from imgui_bundle import portable_file_dialogs as pfd
+
+                    self._bmp_dialog = pfd.open_file(
+                        "Choose a bitmap", "",
+                        ["Images", "*.png *.jpg *.jpeg *.bmp *.gif *.webp"],
+                    )
+                except Exception as e:  # noqa: BLE001 — dialog is best-effort
+                    if self.renderer is not None:
+                        self.renderer.bitmap_error = f"file dialog unavailable: {e}"
+            if imgui.is_item_hovered():
+                imgui.set_tooltip(
+                    "Image layered over the face pattern, with its own alpha "
+                    "fader and an oscillation path about the face centre."
+                )
+            if self._bmp_dialog is not None and self._bmp_dialog.ready():
+                picked = self._bmp_dialog.result()
+                self._bmp_dialog = None
+                if picked:
+                    v.bmp_file = picked[0]
+            if v.bmp_file:
+                imgui.same_line()
+                if imgui.small_button("Clear##bmp"):
+                    v.bmp_file = ""
+                else:
+                    imgui.same_line()
+                    imgui.text_disabled(v.bmp_file.rsplit("/", 1)[-1][:26])
+            if self.renderer is not None and self.renderer.bitmap_error:
+                imgui.text_colored(
+                    imgui.ImVec4(1, 0.4, 0.3, 1), f"bitmap: {self.renderer.bitmap_error}"
+                )
+            if v.bmp_file:
+                imgui.set_next_item_width(-1)
+                _, v.bmp_alpha = imgui.slider_float(
+                    "##balpha", v.bmp_alpha, 0.0, 1.0, "bitmap alpha %.2f"
+                )
+                imgui.set_next_item_width(-1)
+                _, v.bmp_scale = imgui.slider_float(
+                    "##bscale", v.bmp_scale, 0.05, 2.0, "bitmap size %.2f"
+                )
+                imgui.set_next_item_width(110)
+                changed, m = imgui.combo("##bpath", v.bmp_mode, BMP_PATHS)
+                if changed:
+                    v.bmp_mode = m
+                if imgui.is_item_hovered():
+                    imgui.set_tooltip(
+                        "The bitmap's own path about the face centre — "
+                        "independent of the instance-grid motion."
+                    )
+                if v.bmp_mode:
+                    imgui.same_line()
+                    imgui.set_next_item_width(92)
+                    _, v.bmp_amp = imgui.slider_float(
+                        "##bamp", v.bmp_amp, 0.0, 0.5, "amp %.2f"
+                    )
+                    imgui.same_line()
+                    imgui.set_next_item_width(-1)
+                    _, v.bmp_rate = imgui.slider_float(
+                        "##brate", v.bmp_rate, 0.0, 6.0, "rate %.1f"
+                    )
         imgui.separator()
 
         # ---- audio sources ----
@@ -411,6 +500,9 @@ class Panel:
 
         imgui.separator()
         imgui.text_disabled(f"{fps:5.1f} FPS")
+        if self.reloader is not None and self.reloader.status:
+            imgui.same_line()
+            imgui.text_disabled(f"·  {self.reloader.status}")
         imgui.end()
 
 

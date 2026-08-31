@@ -86,6 +86,11 @@ uniform float u_time;
 uniform float u_bands[6];
 uniform int u_mode;
 uniform float u_mix;
+uniform sampler2D u_bitmap;
+uniform int u_bmp_on;
+uniform float u_bmp_alpha;
+uniform vec2 u_bmp_pos;      // path offset about the face centre, UV units
+uniform vec2 u_bmp_scale;    // (w, h) in face-UV units, aspect preserved
 """
 
 FACE_FS_TAIL = """
@@ -97,6 +102,15 @@ void main() {
         v = clamp(v, 0.0, 1.0);
         shade = mix(1.0, 2.8 * v.a, u_mix);
         rgb = mix(vec3(1.0), v.rgb, u_mix);
+    }
+    if (u_bmp_on != 0) {
+        vec2 q = (v_uv - 0.5 - u_bmp_pos) / u_bmp_scale + 0.5;
+        if (q.x >= 0.0 && q.x <= 1.0 && q.y >= 0.0 && q.y <= 1.0) {
+            vec4 b = texture(u_bitmap, vec2(q.x, 1.0 - q.y));
+            float ba = b.a * u_bmp_alpha;
+            rgb = mix(rgb, b.rgb, ba);
+            shade = mix(shade, 2.8, ba);
+        }
     }
     float a = v_alpha * shade;
     if (a <= 0.0) discard;
@@ -155,8 +169,17 @@ class ViewState:
     zoom: float = 1.0            # camera magnification about the view centre
     pan: list[float] = field(default_factory=lambda: [0.0, 0.0])  # logical px
     instances: int = 1           # synchronized copies in a centred grid
+    inst_motion: int = 0         # grid motion: 0 still, 1 orbit, 2 wave, 3 ripple
+    inst_amp: float = 0.25       # motion amplitude, fraction of a grid cell
+    inst_rate: float = 1.0       # motion angular rate, rad/s
     pattern: int = 0             # face pattern mode (0 = flat fill)
     pattern_mix: float = 1.0     # flat ↔ pattern blend
+    bmp_file: str = ""           # bitmap layer over the face pattern, "" = none
+    bmp_alpha: float = 1.0       # bitmap opacity fader
+    bmp_scale: float = 0.9       # bitmap width, face-UV units (face spans 1.0)
+    bmp_mode: int = 0            # bitmap path: 0 still, 1 orbit, 2 fig-8, 3 sway
+    bmp_amp: float = 0.15        # path amplitude about the face centre, UV units
+    bmp_rate: float = 1.0        # path angular rate, rad/s
 
     def integrate(self, dt: float, planedrive=None) -> None:
         """The frame() angle update: ang[p] += dt·speed·RATE[p]·drive."""
@@ -171,16 +194,14 @@ class ViewState:
 class Renderer:
     def __init__(self, ctx: moderngl.Context):
         self.ctx = ctx
-        self._lines = ctx.program(vertex_shader=LINE_VS, fragment_shader=LINE_FS)
-        self._points = ctx.program(vertex_shader=POINT_VS, fragment_shader=POINT_FS)
-        self._points["u_color"].value = RED
         self._lbuf = ctx.buffer(reserve=1200 * 2 * 3 * 4, dynamic=True)
         self._pbuf = ctx.buffer(reserve=600 * 4 * 4, dynamic=True)
         self._fbuf = ctx.buffer(reserve=2160 * 3 * 7 * 4, dynamic=True)
-        self._lvao = ctx.vertex_array(self._lines, [(self._lbuf, "2f 1f", "in_pos", "in_alpha")])
-        self._pvao = ctx.vertex_array(
-            self._points, [(self._pbuf, "2f 1f 1f", "in_pos", "in_size", "in_alpha")]
-        )
+        self._build_wire_programs()
+        # bitmap layer over the faces, loaded from disk on demand
+        self.bitmap_error = ""
+        self._bmp_tex: moderngl.Texture | None = None
+        self._bmp_file = ""
         # face program is assembled around the user-editable patterns.glsl
         self.pattern_error = ""
         self._face_prog: moderngl.Program | None = None
@@ -191,6 +212,48 @@ class Renderer:
         self._build_face_program()
         ctx.enable(moderngl.BLEND | moderngl.PROGRAM_POINT_SIZE)
         ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
+
+    def _build_wire_programs(self) -> None:
+        ctx = self.ctx
+        self._lines = ctx.program(vertex_shader=LINE_VS, fragment_shader=LINE_FS)
+        self._points = ctx.program(vertex_shader=POINT_VS, fragment_shader=POINT_FS)
+        self._points["u_color"].value = RED
+        self._lvao = ctx.vertex_array(self._lines, [(self._lbuf, "2f 1f", "in_pos", "in_alpha")])
+        self._pvao = ctx.vertex_array(
+            self._points, [(self._pbuf, "2f 1f 1f", "in_pos", "in_size", "in_alpha")]
+        )
+
+    def on_reload(self) -> None:
+        """Hot-swap hook (hotreload.py): recompile every GL program so edits
+        to the shader strings in this module land; the buffers persist."""
+        # attributes newer than this live instance's __init__
+        if not hasattr(self, "_bmp_tex"):
+            self.bitmap_error, self._bmp_tex, self._bmp_file = "", None, ""
+        for res in (self._lvao, self._pvao, self._lines, self._points):
+            res.release()
+        self._build_wire_programs()
+        self._build_face_program()
+
+    def _sync_bitmap(self, path: str) -> None:
+        """(Re)load the overlay texture when the selected file changes."""
+        if path == self._bmp_file:
+            return
+        self._bmp_file = path
+        if self._bmp_tex is not None:
+            self._bmp_tex.release()
+            self._bmp_tex = None
+        self.bitmap_error = ""
+        if not path:
+            return
+        try:
+            from PIL import Image
+
+            img = Image.open(path).convert("RGBA")
+            self._bmp_tex = self.ctx.texture(img.size, 4, img.tobytes())
+            self._bmp_tex.build_mipmaps()
+            self._bmp_tex.filter = (moderngl.LINEAR_MIPMAP_LINEAR, moderngl.LINEAR)
+        except Exception as e:  # noqa: BLE001 — a bad file must not kill the app
+            self.bitmap_error = str(e).strip().splitlines()[-1][:160]
 
     def _build_face_program(self) -> None:
         try:
@@ -244,17 +307,31 @@ class Renderer:
 
         # synchronized instance grid, spaced pre-zoom so the camera sees a field
         n_inst = max(1, int(s.instances))
+        t_m = t_now if t_now is not None else time.perf_counter() - self._t0
         if n_inst > 1:
             cols = math.ceil(math.sqrt(n_inst))
             rows = math.ceil(n_inst / cols)
             cell = min(w, h) * 0.72 * zoom
-            offs = np.array(
-                [
-                    ((k % cols - (cols - 1) / 2) * cell, (k // cols - (rows - 1) / 2) * cell)
-                    for k in range(n_inst)
-                ],
-                dtype=np.float32,
-            )
+            k = np.arange(n_inst, dtype=np.float32)
+            gx = k % cols - (cols - 1) / 2      # grid position about the centre
+            gy = k // cols - (rows - 1) / 2
+            offs = np.stack([gx * cell, gy * cell], axis=1).astype(np.float32)
+            if s.inst_motion and s.inst_amp > 0.0:
+                # trigonometric motion over the grid: each instance's phase
+                # comes from its position, so the field moves as one figure
+                ph = t_m * s.inst_rate
+                if s.inst_motion == 1:    # ORBIT — circles in a traveling wave
+                    th = ph + (gx + gy) * 0.9
+                    dx, dy = np.cos(th), np.sin(th)
+                elif s.inst_motion == 2:  # WAVE — bob by column, sway by row
+                    dx = 0.35 * np.sin(ph * 0.7 + gy * 1.1)
+                    dy = np.sin(ph + gx * 1.1)
+                else:                     # RIPPLE — radial swell from the centre
+                    rr = np.hypot(gx, gy)
+                    u = np.sin(ph - rr * 1.2) / np.maximum(rr, 1.0)
+                    dx, dy = gx * u, gy * u
+                offs[:, 0] += s.inst_amp * cell * dx
+                offs[:, 1] += s.inst_amp * cell * dy
         else:
             offs = np.zeros((1, 2), dtype=np.float32)
 
@@ -307,10 +384,31 @@ class Renderer:
                 self._fbuf.write(fverts.tobytes())
                 p = self._face_prog
                 p["u_size"].value = (float(w), float(h))
-                p["u_time"].value = t_now if t_now is not None else time.perf_counter() - self._t0
+                p["u_time"].value = t_m
                 p["u_mode"].value = int(s.pattern)
                 p["u_mix"].value = float(s.pattern_mix)
                 p["u_bands"].value = tuple(bands) if bands is not None else (1.0,) * 6
+                self._sync_bitmap(s.bmp_file)
+                bmp_on = self._bmp_tex is not None and s.bmp_alpha > 0.0
+                p["u_bmp_on"].value = int(bmp_on)
+                if bmp_on:
+                    self._bmp_tex.use(location=0)
+                    p["u_bitmap"].value = 0
+                    tw, th = self._bmp_tex.size
+                    p["u_bmp_scale"].value = (s.bmp_scale, s.bmp_scale * th / tw)
+                    p["u_bmp_alpha"].value = float(s.bmp_alpha)
+                    # the bitmap's own path about the face centre — independent
+                    # of the instance-grid motion
+                    ph = t_m * s.bmp_rate
+                    if s.bmp_mode == 1:      # orbit
+                        ox, oy = math.cos(ph), math.sin(ph)
+                    elif s.bmp_mode == 2:    # figure-8
+                        ox, oy = math.sin(ph), math.sin(2.0 * ph) * 0.5
+                    elif s.bmp_mode == 3:    # sway
+                        ox, oy = math.sin(ph), 0.0
+                    else:                    # still
+                        ox = oy = 0.0
+                    p["u_bmp_pos"].value = (s.bmp_amp * ox, s.bmp_amp * oy)
                 self._fvao.render(moderngl.TRIANGLES, vertices=len(fverts))
 
         eo = E[order]
