@@ -1,10 +1,10 @@
-# Checkpoint — 2026-08-21
+# Checkpoint — 2026-08-23
 
-Where the Python re-platform stands after the first build day, and what to
+Where the Python re-platform stands after the first build days, and what to
 pick up next. Ground truth for behaviour: [`ENGINEERING.md`](ENGINEERING.md);
 architecture: [`BLUEPRINT.md`](BLUEPRINT.md); staged plans:
 [`plans/`](plans/README.md). Everything below is committed and pushed to
-`main` (through `85f5e02`).
+`main`.
 
 ## How to pick this up
 
@@ -53,9 +53,18 @@ in `config.toml` (not yet needed — nothing rig-specific exists until plan 04).
     helpers; five band-reactive interference patterns ship. UVs are
     face-local and perspective-correct (product of the two projection
     divisors as homogeneous w).
-  - *Camera* — scroll zoom about cursor, right-drag pan, R resets.
+  - *Camera* — scroll zoom about cursor, shift-drag or right-drag pan,
+    R resets. (The zoom needed a follow-up fix: imgui 1.87+ only publishes
+    `io.mouse_wheel` during `new_frame()`, so the frame now starts before
+    input handling.)
   - *Instances* — 1–100 synchronized copies in a grid (CPU path, measured
     51–132 fps at N=100 by the investigation agent).
+  - *Panel aesthetic pass* (2026-08-23) — monospace font atlas (SF Mono
+    with per-platform fallbacks, silently degrades to the imgui default),
+    tracked uppercase micro-labels, detent notches at each fader's unity
+    position (`Taper.unity`), meters rebuilt to the reference geometry
+    (78 px bars, stacked headroom zone panes, blinking over-annunciator
+    caps), and the big white cell-count readout as the panel signature.
 - **Verification culture:** 127 tests green; a headless imgui smoke draws
   the whole panel per pytest run; `HYPERSPACE_FRAMES=n` gives windowed
   smoke runs; `tools/compare_render.py` regenerates HTML-vs-Python shots.
@@ -70,22 +79,18 @@ in `config.toml` (not yet needed — nothing rig-specific exists until plan 04).
    Pro DJ Link spike against the CDJ-3000/XDJ-AZ (BLT+OSC is the standing
    fallback), ESP32+BNO055 IMU ingest (packet format specced in BLUEPRINT
    §3.4), Δt delay compensation + metronome calibration.
-3. **Aesthetic pass on the panel.** Semantics are ported; the look is
-   imgui-default-ish: monospace font atlas, uppercase micro-labels, detent
-   notches on gain faders, tighter meters, the big cell-count readout.
-   (Divergences listed in plan 03 Results.)
-4. **Instanced GPU field.** For a *live* field: per-instance rotation
+3. **Instanced GPU field.** For a *live* field: per-instance rotation
    phases and true instancing (agent prototype measured 621–845 fps at
    N=100; 1–2 days). Current synchronized-grid mode is the v1.
-5. **Plan 05 — DAW bridge** (optional, after 04): MIDI/OSC out with 14-bit
+4. **Plan 05 — DAW bridge** (optional, after 04): MIDI/OSC out with 14-bit
    CC pairs + pitch-bend lanes, MIDI clock from deck BPM, inbound control,
    FL-side fuser script. Nothing in the core may depend on it.
-6. **Plan 06 — divergence:** freeze/tag the HTML; **fix the trim
+5. **Plan 06 — divergence:** freeze/tag the HTML; **fix the trim
    non-monotonicity** (three candidate fixes in plan 06 / ENGINEERING §9 —
    needs the user's choice; the auto/manual switch is the one to propose);
    tempo-locked shapers once DJ Link exists; saveable scenes as JSON;
    per-band LFO knobs; real harmonic detection; scrub bar.
-7. **Ideas parked:** per-cell (3-cell) grouping for cell-wise
+6. **Ideas parked:** per-cell (3-cell) grouping for cell-wise
    colour/pattern assignment; bitmap textures (UV + perspective plumbing
    already built for patterns, so this is now mostly texture upload).
 

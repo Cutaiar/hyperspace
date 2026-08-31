@@ -47,18 +47,20 @@ it, make a Multi-Output Device in **Audio MIDI Setup** containing BlackHole and
 your speakers, and set it as your output. Hyperspace preselects loopback devices,
 so **Listen to mic** then just works.
 
-Once that device exists, `scripts/audio-route` switches to it and back, and
-restores your normal devices afterwards — no dependency to install:
+Once that device exists, [`loopback`](https://github.com/Cutaiar/loopback) —
+a small CLI extracted from this project — switches to it and back, and restores
+your normal devices afterwards:
 
 ```bash
-scripts/audio-route on       # snapshot, then route output and input via BlackHole
-scripts/audio-route off      # restore the snapshot and discard it
-scripts/audio-route status   # what is selected now, and whether a snapshot is held
+git clone https://github.com/Cutaiar/loopback.git
+loopback/audio-route on       # snapshot, then route output and input via BlackHole
+loopback/audio-route off      # restore the snapshot and discard it
+loopback/audio-route status   # what is selected now, and whether a snapshot is held
 ```
 
 It snapshots by device UID before changing anything, so a renamed device still
-restores, and a second `on` keeps the first snapshot. `HYPERSPACE_OUTPUT` /
-`HYPERSPACE_INPUT` override the auto-detected targets.
+restores, and a second `on` keeps the first snapshot. `LOOPBACK_OUTPUT` /
+`LOOPBACK_INPUT` override the auto-detected targets.
 
 AirPlay speakers can't join a Multi-Output Device;
 [Loopback](https://rogueamoeba.com/loopback/) can capture per-app audio instead.

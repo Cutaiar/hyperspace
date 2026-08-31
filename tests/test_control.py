@@ -205,7 +205,7 @@ def test_panel_draws_headless():
 
     from hyperspace.audio import AudioEngine
     from hyperspace.render import ViewState
-    from hyperspace.ui import Panel, apply_style
+    from hyperspace.ui import Panel, apply_style, load_fonts
 
     ctx = imgui.create_context()
     try:
@@ -213,6 +213,7 @@ def test_panel_draws_headless():
         io.display_size = imgui.ImVec2(1280, 820)
         io.backend_flags |= imgui.BackendFlags_.renderer_has_textures
         apply_style()
+        load_fonts()
         audio = AudioEngine()
         panel = Panel(Control(audio.chain), audio, ViewState())
         for _ in range(2):
