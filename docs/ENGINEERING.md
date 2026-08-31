@@ -53,8 +53,8 @@ changes with dedup; `cyc3` does the 3D cyclic equivalent for the seed solids;
 `prism(V3)` extrudes a 3D solid along w; `duoprism(n, m)` spins two polygons in
 orthogonal planes.
 
-All 18 shapes, ordered by cell count (the slider index — cells are the 4D
-analogue of faces, which is how the "number of faces" request was honoured):
+The first 18 shapes, ordered by cell count (the slider index — cells are the
+4D analogue of faces, which is how the "number of faces" request was honoured):
 
 | # | Shape | Cells | V | E |
 |---|---|---|---|---|
@@ -76,6 +76,31 @@ analogue of faces, which is how the "number of faces" request was honoured):
 | 16 | 120-cell (hyperdodecahedron) | 120 | 600 | 1200 |
 | 17 | 600-cell (hypericosahedron) | 600 | 120 | 720 |
 | 18 | Clifford torus (32×16) | — | 512 | 1024 |
+
+Appended after the polytopes (append-only: the slider index is the identity the
+golden traces key on) is a family of recognizable 3D shapes built from trig
+equations — polar curves r(θ), parametric curves (x(t), y(t)), spherical
+functions r(θ, φ), and (u, v) surface patches. They live in the w = 0
+hyperplane of the same pipeline; the XW/YW/ZW rotation planes tumble them
+through the fourth dimension, which reads as a perspective breathing (toggle
+the W planes off for a plain 3D spin). Because curved surfaces have no planar
+edge cycles for the polytope face extraction to find, these builders return
+explicit face cycles ("F"), and nonconvex caps (heart, star) are ear-clipped
+at triangulation time. Helpers: `polar_prism(r_fn)` / `curve_prism(xy_fn)` /
+`ring_prism(pts)` extrude a closed outline into a slab; `spherical_surface(
+r_fn)` samples r(θ, φ); `param_surface(fn)` samples any (u, v) patch;
+`tube(curve_fn)` sweeps a ring along a closed 3D curve with parallel-transport
+frames.
+
+| # | Shape | Equation | V | E |
+|---|---|---|---|---|
+| 19 | Heart | x=16 sin³t, y=13 cos t − 5 cos 2t − 2 cos 3t − cos 4t, extruded | 128 | 192 |
+| 20 | Star | {5/2} pentagram outline in polar vertices, extruded | 20 | 30 |
+| 21 | Rose | r = cos 2θ, extruded (no caps — the outline self-intersects) | 186 | 285 |
+| 22 | Torus | (R + r cos v)·e^{iu}, R=1, r=0.45, 32×16 | 512 | 1024 |
+| 23 | Trefoil knot | tube around ((2+cos 3t)e^{2it}, 1.5 sin 3t), 72×8 | 576 | 1152 |
+| 24 | Starfruit | r(θ, φ) = 1 + ½ cos 5θ sin⁵φ, 40×15 | 522 | 1080 |
+| 25 | Möbius strip | half-twist band; the flipped seam column merges by kkey | 320 | 576 |
 
 Geometry is built lazily on first selection and cached in `cache[]`, normalised
 to unit circumradius, stored as flat `Float64Array` / `Int32Array`.
