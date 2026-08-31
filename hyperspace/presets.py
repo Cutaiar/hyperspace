@@ -142,6 +142,17 @@ class Presets:
             chain.gain, chain.dyn, chain.trim = m["gain"], m["dyn"], m["trim"]
         self.active = k
 
+    def cycle(self, step: int = 1) -> None:
+        """Flip to the next saved slot — the gamepad's theme button."""
+        filled = [k for k, s in enumerate(self.slots) if s is not None]
+        if not filled:
+            return
+        if self.active in filled:
+            k = filled[(filled.index(self.active) + step) % len(filled)]
+        else:
+            k = filled[0]
+        self.load(k)
+
     # ---- persistence ----
 
     def _write(self) -> None:

@@ -129,6 +129,14 @@ CHEATSHEET = [
     ("F1–F8", "load theme · ⇧ saves"),
     ("H / ?", "panel / this sheet"),
     ("Esc / Q", "quit"),
+    # Xbox-layout gamepad, Bluetooth or USB (gamepad.py holds the map)
+    ("pad A B", "pause · next theme"),
+    ("pad X Y", "points · faces"),
+    ("LB / RB", "previous / next shape"),
+    ("d-pad", "brightness ↑↓ · speed ←→"),
+    ("sticks", "orbit · zoom — click resets"),
+    ("LT / RT", "4D depth out / in"),
+    ("view/menu", "panel / this sheet"),
 ]
 
 

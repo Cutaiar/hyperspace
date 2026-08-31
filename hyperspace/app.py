@@ -11,6 +11,12 @@ to it.
   F  faces          ?  cheat sheet overlay
   F1–F8  load theme (whole-surface save state)    ⇧F1–F8  save theme
 
+An Xbox-layout gamepad (Bluetooth or USB) is a second hand on the same
+controls — see gamepad.py for the index map and ui.CHEATSHEET for the
+bindings: A pause · B next theme · X points · Y faces · LB/RB shape ·
+d-pad brightness/speed · sticks orbit/zoom (click resets) · LT/RT 4D
+depth · View panel · Menu cheat sheet.
+
 The in-app cheat sheet (ui.CHEATSHEET) is the canonical list — keep the
 two in sync when adding bindings.
 """
@@ -18,6 +24,7 @@ two in sync when adding bindings.
 from __future__ import annotations
 
 import importlib.util
+import math
 import os
 import time
 from pathlib import Path
@@ -36,11 +43,14 @@ import moderngl
 from imgui_bundle import imgui
 from imgui_bundle.python_backends.glfw_backend import GlfwRenderer
 
+from . import gamepad
 from .audio import AudioEngine
 from .control import Control
+from .gamepad import Pad
 from .geometry import SHAPES
 from .presets import SLOTS, Presets
 from .render import Renderer, ViewState, clamp
+from .tapers import T_DEPTH
 from .ui import Panel, apply_style, load_fonts
 
 TITLE = "Hyperspace"
@@ -91,6 +101,7 @@ def main() -> None:
     panel = Panel(control, audio, s, renderer, presets)
     # panel state and chain must stay one object even after source changes
     keys = Keys(win)
+    pad = Pad()
     drag = {"btn": None, "x": 0.0, "y": 0.0}
 
     # smoke-test escape hatch: HYPERSPACE_FRAMES=n closes after n frames
@@ -167,6 +178,55 @@ def main() -> None:
             for k in range(SLOTS):
                 if keys.pressed(glfw.KEY_F1 + k):
                     (presets.save if save else presets.load)(k)
+
+        # ---- gamepad: a second hand on the same controls (imgui never
+        # claims it, so it works even while the panel has keyboard focus) ----
+        pad.poll()
+        if pad.on:
+            if pad.pressed(gamepad.A):
+                s.playing = not s.playing
+            if pad.pressed(gamepad.B):
+                presets.cycle()
+            if pad.pressed(gamepad.X):
+                s.points = not s.points
+            if pad.pressed(gamepad.Y):
+                s.faces = not s.faces
+            if pad.pressed(gamepad.LB):
+                s.shape = max(0, s.shape - 1)
+            if pad.pressed(gamepad.RB):
+                s.shape = min(len(SHAPES) - 1, s.shape + 1)
+            if pad.pressed(gamepad.VIEW):
+                panel.open = not panel.open
+            if pad.pressed(gamepad.MENU):
+                panel.cheatsheet = not panel.cheatsheet
+            if pad.pressed(gamepad.LSTICK) or pad.pressed(gamepad.RSTICK):
+                s.ang = [0.0] * 6
+                s.yaw = s.pitch = 0.0
+                s.zoom, s.pan = 1.0, [0.0, 0.0]
+            if pad.hat_pressed(gamepad.HAT_UP):
+                s.bright = clamp(s.bright + 0.1, 0.13, 4.0)
+            if pad.hat_pressed(gamepad.HAT_DOWN):
+                s.bright = clamp(s.bright - 0.1, 0.13, 4.0)
+            if pad.hat_pressed(gamepad.HAT_LEFT):
+                s.speed = clamp(s.speed - 0.05, 0.0, 4.0)
+            if pad.hat_pressed(gamepad.HAT_RIGHT):
+                s.speed = clamp(s.speed + 0.05, 0.0, 4.0)
+            # analog: left stick orbits, right-stick Y zooms about centre,
+            # triggers ride depth4 in its own log space (LT out, RT in)
+            s.yaw += pad.axis(gamepad.AX_LX) * 2.2 * dt
+            s.pitch = clamp(
+                s.pitch + pad.axis(gamepad.AX_LY) * 2.2 * dt, -1.55, 1.55
+            )
+            zoom_v = pad.axis(gamepad.AX_RY)
+            if zoom_v:
+                s.zoom = clamp(s.zoom * 2.0 ** (-zoom_v * 1.2 * dt), 0.05, 40.0)
+            d4 = pad.trigger(gamepad.AX_RT) - pad.trigger(gamepad.AX_LT)
+            if d4:
+                u = math.log2(max(s.depth4 - 1.0, 1e-6) / 0.05)
+                s.depth4 = clamp(
+                    1.0 + 0.05 * 2.0 ** (u + d4 * 2.4 * dt),
+                    T_DEPTH.map(0), T_DEPTH.map(T_DEPTH.steps),
+                )
 
         w, h = glfw.get_window_size(win)
         if not io.want_capture_mouse:
