@@ -85,3 +85,13 @@ def test_loaded_state_does_not_alias_the_slot(tmp_path):
     before = list(pr.slots[1]["view"]["planes"])
     pr.load(1)
     assert pr.slots[1]["view"]["planes"] == before
+
+
+def test_cycle_flips_through_saved_slots(tmp_path):
+    pr, view, *_ = make(tmp_path)
+    pr.cycle()
+    assert pr.active == 0 and view.shape == 17  # first filled slot
+    pr.cycle()
+    assert pr.active == 1 and view.shape == 10
+    pr.cycle()
+    assert pr.active == 0  # wraps over the empty slots
