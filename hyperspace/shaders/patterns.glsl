@@ -90,5 +90,20 @@ vec4 pattern(int mode, vec2 uv, float fid) {
         vec3 col = mix(vec3(0.02, 0.10, 0.35), vec3(0.55, 0.95, 1.0), v * v);
         return vec4(col, v);
     }
+    if (mode == 6) {
+        // EMBER — coals under a draught: a warm ramp from black-red up to
+        // white-hot, licks drifting upward; BASS stokes the glow, AIR fans
+        // sparks out toward the rim.
+        float y = p.y + t * 0.22;
+        float s = sin(p.x * 17.0 + sin(y * 9.0 + t * 0.7) * 1.8 + fid)
+                + sin((p.x * 0.7 + y) * 13.0 - t * 1.4)
+                + sin((p.x - y * 0.6) * 25.0 + t * 2.1);
+        float glow = clamp(0.5 + 0.5 * s / 3.0, 0.0, 1.0);
+        float heat = clamp(glow * (0.55 + 0.45 * u_bands[1]) + u_bands[5] * 0.25 * r, 0.0, 1.0);
+        vec3 col = pal(heat * 0.45,
+                       vec3(0.52, 0.18, 0.05), vec3(0.48, 0.42, 0.25),
+                       vec3(1.0), vec3(0.0, 0.18, 0.38));
+        return vec4(col, heat);
+    }
     return vec4(1.0);                        // mode 0: FLAT — plain white fill
 }
