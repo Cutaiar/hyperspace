@@ -245,6 +245,231 @@ def _build_600cell() -> dict:
     return auto(list(m.values()))
 
 
+# ------------------------------------------ 3D shapes from trig equations
+#
+# Recognizable 3D shapes built from polar curves r(θ), parametric curves
+# (x(t), y(t)), spherical functions r(θ, φ), and (u, v) surface patches.
+# They live in the w = 0 hyperplane of the same 4D pipeline; the rotation
+# planes that touch w (XW/YW/ZW) tumble them through the fourth dimension,
+# which reads as a perspective breathing — deliberate; toggle the W planes
+# off for a plain 3D spin.
+#
+# Curved surfaces have no planar edge cycles for the polytope face
+# extraction to find, so these builders return an extra "F" key — explicit
+# face cycles — which faces() honours ahead of extraction, and
+# face_triangles() ear-clips when a cap polygon is nonconvex.
+
+
+def _mesh3(grid, wrap_u: bool, wrap_v: bool) -> tuple[dict, list[list[int]]]:
+    """Index an (nu, nv) grid of 3D points into V/E/F, merging coincident
+    points (kkey) so poles, seams, and r = 0 pinches become shared
+    vertices. Quads that collapse below 3 distinct vertices are dropped,
+    as is any cycle that revisits a vertex non-consecutively (face UVs
+    need each cycle to be a simple polygon). Returns the geometry dict and
+    the deduplicated index grid."""
+    nu, nv = len(grid), len(grid[0])
+    vid: dict = {}
+    V: list[list[float]] = []
+    idx: list[list[int]] = []
+    for row in grid:
+        r = []
+        for p in row:
+            k = kkey(p)
+            if k not in vid:
+                vid[k] = len(V)
+                V.append([p[0], p[1], p[2], 0.0])
+            r.append(vid[k])
+        idx.append(r)
+
+    seen: set = set()
+    E: list[list[int]] = []
+
+    def edge(a: int, b: int) -> None:
+        if a != b and (a, b) not in seen:
+            seen.add((a, b))
+            seen.add((b, a))
+            E.append([a, b])
+
+    for i in range(nu if wrap_u else nu - 1):
+        for j in range(nv):
+            edge(idx[i][j], idx[(i + 1) % nu][j])
+    for i in range(nu):
+        for j in range(nv if wrap_v else nv - 1):
+            edge(idx[i][j], idx[i][(j + 1) % nv])
+
+    F: list[list[int]] = []
+    for i in range(nu if wrap_u else nu - 1):
+        for j in range(nv if wrap_v else nv - 1):
+            quad = [
+                idx[i][j],
+                idx[(i + 1) % nu][j],
+                idx[(i + 1) % nu][(j + 1) % nv],
+                idx[i][(j + 1) % nv],
+            ]
+            cyc = [v for k, v in enumerate(quad) if v != quad[k - 1]]
+            if len(cyc) >= 3 and len(set(cyc)) == len(cyc):
+                F.append(cyc)
+    return {"V": V, "E": E, "F": F}, idx
+
+
+def param_surface(
+    fn, nu: int, nv: int,
+    u1: float = 2 * math.pi, v1: float = 2 * math.pi,
+    wrap_u: bool = True, wrap_v: bool = True,
+) -> dict:
+    """Sample fn(u, v) -> (x, y, z) on an nu×nv grid. A wrapped axis is
+    sampled half-open (the seam closes by index); an unwrapped axis
+    includes its endpoint — coincident endpoints merge by kkey, which is
+    how the Möbius half-twist seam finds its flipped partner column."""
+    du = u1 / (nu if wrap_u else nu - 1)
+    dv = v1 / (nv if wrap_v else nv - 1)
+    grid = [[fn(i * du, j * dv) for j in range(nv)] for i in range(nu)]
+    return _mesh3(grid, wrap_u, wrap_v)[0]
+
+
+def spherical_surface(r_fn, n_theta: int = 32, n_phi: int = 17) -> dict:
+    """Surface r(θ, φ) in spherical coordinates: azimuth θ ∈ [0, 2π),
+    polar φ ∈ [0, π] measured from the +y pole (y is up on screen)."""
+
+    def fn(th: float, ph: float):
+        r = r_fn(th, ph)
+        return (
+            r * math.sin(ph) * math.cos(th),
+            r * math.cos(ph),
+            r * math.sin(ph) * math.sin(th),
+        )
+
+    return param_surface(fn, n_theta, n_phi, v1=math.pi, wrap_u=True, wrap_v=False)
+
+
+def ring_prism(pts, depth: float, caps: bool = True) -> dict:
+    """Extrude a closed 2D outline into a slab of the given thickness.
+    Sides are quads; each cap, when the deduplicated outline is a simple
+    polygon, is one big face (self-intersecting outlines like the rose
+    just skip caps)."""
+    grid = [[(x, y, depth / 2), (x, y, -depth / 2)] for x, y in pts]
+    g, idx = _mesh3(grid, wrap_u=True, wrap_v=False)
+    if caps:
+        for col in (0, 1):
+            ring = [r[col] for r in idx]
+            cyc = [v for k, v in enumerate(ring) if v != ring[k - 1]]
+            if len(cyc) >= 3 and len(set(cyc)) == len(cyc):
+                g["F"].append(cyc if col == 0 else cyc[::-1])
+    return g
+
+
+def curve_prism(xy_fn, n: int = 64, depth: float = 0.35,
+                t1: float = 2 * math.pi, caps: bool = True) -> dict:
+    """Extrude the closed parametric plane curve (x(t), y(t)), t ∈ [0, t1)."""
+    return ring_prism([xy_fn(t1 * k / n) for k in range(n)], depth, caps)
+
+
+def polar_prism(r_fn, n: int = 96, depth: float = 0.3, caps: bool = True) -> dict:
+    """Extrude the closed polar curve r(θ), θ ∈ [0, 2π). Negative r
+    reflects through the origin, as polar plotting conventions do."""
+    return curve_prism(
+        lambda t: (r_fn(t) * math.cos(t), r_fn(t) * math.sin(t)), n, depth, caps=caps
+    )
+
+
+def tube(curve_fn, n: int = 72, m: int = 8, radius: float = 0.32) -> dict:
+    """Circular tube around a closed 3D curve, with parallel-transport
+    frames; the loop's accumulated holonomy is unwound linearly along t so
+    the seam ring meets itself without shear."""
+    C = [np.asarray(curve_fn(2 * math.pi * i / n), dtype=np.float64) for i in range(n)]
+    T = []
+    for i in range(n):
+        t = C[(i + 1) % n] - C[i - 1]
+        T.append(t / np.linalg.norm(t))
+    a0 = np.array([0.0, 0.0, 1.0]) if abs(T[0][2]) < 0.9 else np.array([1.0, 0.0, 0.0])
+    N = [a0 - (a0 @ T[0]) * T[0]]
+    N[0] /= np.linalg.norm(N[0])
+    for i in range(1, n):
+        v = N[i - 1] - (N[i - 1] @ T[i]) * T[i]
+        N.append(v / np.linalg.norm(v))
+    v = N[-1] - (N[-1] @ T[0]) * T[0]
+    v /= np.linalg.norm(v)
+    holonomy = math.atan2(float(v @ np.cross(T[0], N[0])), float(v @ N[0]))
+    grid = []
+    for i in range(n):
+        B = np.cross(T[i], N[i])
+        off = -holonomy * i / n
+        row = []
+        for j in range(m):
+            aj = 2 * math.pi * j / m + off
+            p = C[i] + radius * (math.cos(aj) * N[i] + math.sin(aj) * B)
+            row.append((float(p[0]), float(p[1]), float(p[2])))
+        grid.append(row)
+    return _mesh3(grid, wrap_u=True, wrap_v=True)[0]
+
+
+def _heart_xy(t: float) -> tuple[float, float]:
+    """The classic parametric heart curve."""
+    return (
+        16 * math.sin(t) ** 3,
+        13 * math.cos(t) - 5 * math.cos(2 * t) - 2 * math.cos(3 * t) - math.cos(4 * t),
+    )
+
+
+def _build_heart() -> dict:
+    return curve_prism(_heart_xy, n=64, depth=8.0)
+
+
+def _build_star() -> dict:
+    # {5/2} pentagram outline: 10 polar vertices alternating outer radius 1
+    # and the pentagram's inner-vertex radius cos(2π/5)/cos(π/5) ≈ 0.382
+    ri = math.cos(2 * math.pi / 5) / math.cos(math.pi / 5)
+    pts = []
+    for k in range(10):
+        th = math.pi / 2 + k * math.pi / 5
+        r = 1.0 if k % 2 == 0 else ri
+        pts.append((r * math.cos(th), r * math.sin(th)))
+    return ring_prism(pts, depth=0.35)
+
+
+def _build_rose() -> dict:
+    return polar_prism(lambda th: math.cos(2 * th), n=96, depth=0.12, caps=False)
+
+
+def _build_torus3() -> dict:
+    R, r = 1.0, 0.45
+
+    def fn(u: float, v: float):
+        return (
+            (R + r * math.cos(v)) * math.cos(u),
+            r * math.sin(v),
+            (R + r * math.cos(v)) * math.sin(u),
+        )
+
+    return param_surface(fn, 32, 16)
+
+
+def _build_trefoil() -> dict:
+    def c(t: float):
+        return (
+            (2 + math.cos(3 * t)) * math.cos(2 * t),
+            (2 + math.cos(3 * t)) * math.sin(2 * t),
+            1.5 * math.sin(3 * t),
+        )
+
+    return tube(c, n=72, m=8, radius=0.55)
+
+
+def _build_starfruit() -> dict:
+    return spherical_surface(
+        lambda th, ph: 1.0 + 0.5 * math.cos(5 * th) * math.sin(ph) ** 5, 40, 15
+    )
+
+
+def _build_mobius() -> dict:
+    def fn(u: float, v: float):
+        h = v - 0.5
+        rr = 1 + 0.45 * h * math.cos(u / 2)
+        return (rr * math.cos(u), 0.45 * h * math.sin(u / 2), rr * math.sin(u))
+
+    return param_surface(fn, 65, 5, v1=1.0, wrap_u=False, wrap_v=False)
+
+
 @dataclass(frozen=True)
 class Shape:
     name: str
@@ -273,6 +498,14 @@ SHAPES = [
     Shape("120-cell", "hyperdodecahedron", 120, "{5,3,3}", _build_120cell),
     Shape("600-cell", "hypericosahedron", 600, "{3,3,5}", _build_600cell),
     Shape("Clifford torus", "flat torus on the 3-sphere", 0, "S¹ × S¹", lambda: duoprism(32, 16, True)),
+    # -------- 3D shapes from trig equations (appended: index is identity)
+    Shape("Heart", "3D · classic heart curve, extruded", 0, "x=16 sin³t", _build_heart),
+    Shape("Star", "3D · pentagram prism", 0, "{5/2} polar", _build_star),
+    Shape("Rose", "3D · four-petal rose, extruded", 0, "r=cos 2θ", _build_rose),
+    Shape("Torus", "3D · the donut", 0, "(R+r cos v)e^iu", _build_torus3),
+    Shape("Trefoil knot", "3D · tube round a (2,3) torus knot", 0, "sin 3t · e^2it", _build_trefoil),
+    Shape("Starfruit", "3D · spherical star", 0, "r=1+½cos 5θ sin⁵φ", _build_starfruit),
+    Shape("Möbius strip", "3D · one-sided band", 0, "half-twist band", _build_mobius),
 ]
 
 _cache: dict[int, dict] = {}
@@ -290,6 +523,8 @@ def geom(i: int) -> dict:
     V = np.asarray(g["V"], dtype=np.float64) / mx
     E = np.asarray(g["E"], dtype=np.int32)
     _cache[i] = {"V": V, "E": E, "n": len(g["V"]), "m": len(g["E"])}
+    if "F" in g:  # explicit face cycles from a 3D surface builder
+        _cache[i]["F"] = g["F"]
     return _cache[i]
 
 
@@ -431,21 +666,105 @@ def _is_boundary_face(V: np.ndarray, cyc: list[int], tol: float = 1e-7) -> bool:
 
 
 def faces(i: int) -> list[list[int]]:
-    """Boundary 2-faces of shape i as vertex cycles. Cached like geom()."""
+    """Boundary 2-faces of shape i as vertex cycles. Cached like geom().
+    Explicit "F" cycles from a builder (curved 3D surfaces, where no planar
+    edge cycles exist) win over planar-cycle extraction."""
     if i not in _face_cache:
         g = geom(i)
-        _face_cache[i] = [c for c in _planar_cycles(g) if _is_boundary_face(g["V"], c)]
+        if "F" in g:
+            _face_cache[i] = [list(c) for c in g["F"]]
+        else:
+            _face_cache[i] = [c for c in _planar_cycles(g) if _is_boundary_face(g["V"], c)]
     return _face_cache[i]
 
 
+def _face_xy(P: np.ndarray) -> np.ndarray:
+    """Project a face cycle onto its own centred 2-plane basis, oriented
+    CCW. Best-effort for the slightly non-planar quads of curved grids."""
+    c = P.mean(axis=0)
+    e1 = P[0] - c
+    e1 = e1 / np.linalg.norm(e1)
+    w = P[1] - c
+    w = w - (w @ e1) * e1
+    e2 = w / np.linalg.norm(w)
+    xy = np.stack([(P - c) @ e1, (P - c) @ e2], axis=1)
+    area = float(
+        np.sum(xy[:, 0] * np.roll(xy[:, 1], -1) - np.roll(xy[:, 0], -1) * xy[:, 1])
+    )
+    if area < 0:
+        xy[:, 1] = -xy[:, 1]
+    return xy
+
+
+def _ear_clip(xy: np.ndarray) -> list[tuple[int, int, int]]:
+    """Triangulate a simple CCW polygon by ear clipping; positions are
+    indices into xy. Falls back to a fan over whatever remains if no ear
+    is found (degenerate input)."""
+
+    def cross(o: int, a: int, b: int) -> float:
+        return float(
+            (xy[a, 0] - xy[o, 0]) * (xy[b, 1] - xy[o, 1])
+            - (xy[a, 1] - xy[o, 1]) * (xy[b, 0] - xy[o, 0])
+        )
+
+    idx = list(range(len(xy)))
+    out: list[tuple[int, int, int]] = []
+    while len(idx) > 3:
+        n = len(idx)
+        for k in range(n):
+            o, a, b = idx[k - 1], idx[k], idx[(k + 1) % n]
+            if cross(o, a, b) <= 1e-12:
+                continue  # reflex or collinear corner — not an ear
+            if any(
+                q not in (o, a, b)
+                and cross(o, a, q) >= -1e-12
+                and cross(a, b, q) >= -1e-12
+                and cross(b, o, q) >= -1e-12
+                for q in idx
+            ):
+                continue  # another vertex sits inside the candidate ear
+            out.append((o, a, b))
+            idx.pop(k)
+            break
+        else:
+            break
+    if len(idx) == 3:
+        out.append((idx[0], idx[1], idx[2]))
+    else:
+        out.extend((idx[0], idx[k], idx[k + 1]) for k in range(1, len(idx) - 1))
+    return out
+
+
+def _tri_cycle(cyc: list[int], V: np.ndarray) -> list[tuple[int, int, int]]:
+    """Triangulate one face cycle. Convex polygons keep the original fan
+    from cyc[0] (bit-identical to the old output for every polytope face);
+    nonconvex caps — hearts, stars — get ear-clipped."""
+    n = len(cyc)
+    if n == 3:
+        return [(cyc[0], cyc[1], cyc[2])]
+    xy = _face_xy(V[np.asarray(cyc)])
+    x, y = xy[:, 0], xy[:, 1]
+    xr, yr = np.roll(x, -1), np.roll(y, -1)
+    turn = (xr - x) * (np.roll(y, -2) - y) - (yr - y) * (np.roll(x, -2) - x)
+    if bool((turn > -1e-9).all()):
+        return [(cyc[0], cyc[k], cyc[k + 1]) for k in range(1, n - 1)]
+    return [(cyc[a], cyc[b], cyc[c]) for a, b, c in _ear_clip(xy)]
+
+
+_tri_cache: dict[int, np.ndarray] = {}
+
+
 def face_triangles(i: int) -> np.ndarray:
-    """Fan triangulation of faces(i): int32 (T, 3) vertex indices, plus the
-    face index each triangle came from in the fourth column."""
-    tris = []
-    for fi, cyc in enumerate(faces(i)):
-        for k in range(1, len(cyc) - 1):
-            tris.append((cyc[0], cyc[k], cyc[k + 1], fi))
-    return np.asarray(tris, dtype=np.int32).reshape(-1, 4)
+    """Triangulation of faces(i): int32 (T, 3) vertex indices, plus the
+    face index each triangle came from in the fourth column. Cached."""
+    if i not in _tri_cache:
+        V = geom(i)["V"]
+        tris = []
+        for fi, cyc in enumerate(faces(i)):
+            for a, b, c in _tri_cycle(cyc, V):
+                tris.append((a, b, c, fi))
+        _tri_cache[i] = np.asarray(tris, dtype=np.int32).reshape(-1, 4)
+    return _tri_cache[i]
 
 
 _uv_cache: dict[int, np.ndarray] = {}
