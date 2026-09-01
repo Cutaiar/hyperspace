@@ -21,9 +21,16 @@ def make(tmp_path):
 def test_seeded_slots(tmp_path):
     pr, *_ = make(tmp_path)
     assert len(pr.slots) == SLOTS
-    assert pr.slots[0]["name"] == "BIG BLUE WAVE"
-    assert pr.slots[1]["name"] == "EMBER ORBIT"
-    assert all(s is None for s in pr.slots[2:])
+    assert [s["name"] for s in pr.slots] == [
+        "BIG BLUE WAVE",
+        "EMBER ORBIT",
+        "STROBE CAGE",
+        "PLASMA HEART",
+        "WOVEN LATTICE",
+        "SPIRAL SILK",
+        "HEX ENGINE",
+        "INVERSE HALO",
+    ]
     assert pr.active == -1
 
 
@@ -73,7 +80,7 @@ def test_slots_persist_across_sessions(tmp_path):
     pr.save(6)
 
     pr2, view2, _, _ = make(tmp_path)
-    assert pr2.slots[6]["name"] == "THEME 7"
+    assert pr2.slots[6]["name"] == "HEX ENGINE"  # overwriting a seed keeps its name
     pr2.load(6)
     assert view2.shape == 12
 
@@ -90,8 +97,9 @@ def test_loaded_state_does_not_alias_the_slot(tmp_path):
 def test_cycle_flips_through_saved_slots(tmp_path):
     pr, view, *_ = make(tmp_path)
     pr.cycle()
-    assert pr.active == 0 and view.shape == 17  # first filled slot
+    assert pr.active == 0 and view.shape == 17  # first slot
     pr.cycle()
     assert pr.active == 1 and view.shape == 10
-    pr.cycle()
-    assert pr.active == 0  # wraps over the empty slots
+    for _ in range(7):  # every slot ships seeded, so a full lap is 8
+        pr.cycle()
+    assert pr.active == 0  # wraps past the end of the table
