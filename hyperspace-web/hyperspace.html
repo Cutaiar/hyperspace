@@ -322,6 +322,11 @@
 </style>
 </head>
 <body>
+<div id="deprecation" style="position:fixed;top:0;left:0;right:0;z-index:9999;padding:8px 40px 8px 12px;background:#2a1a1a;color:#f0d0d0;font:12px/1.4 system-ui,sans-serif;border-bottom:1px solid #5a2a2a;text-align:center">
+  This web version is no longer under active development.
+  <a href="https://github.com/Cutaiar/hyperspace" style="color:#ffb0b0;text-decoration:underline">See the repository on GitHub</a> for the current Python version.
+  <button onclick="this.parentElement.remove()" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:#f0d0d0;font-size:16px;cursor:pointer;padding:2px 8px" aria-label="Dismiss">×</button>
+</div>
 <canvas id="c"></canvas>
 
 <div id="readout">

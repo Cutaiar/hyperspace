@@ -34,6 +34,7 @@ import numpy as np
 from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parent.parent
+WEB_ROOT = ROOT.parent / "hyperspace-web"
 FIXTURES = ROOT / "tests" / "fixtures"
 GOLDEN = ROOT / "tests" / "golden"
 VIEWPORT = {"width": 1200, "height": 800}
@@ -248,7 +249,7 @@ def run_audio(pw, url: str) -> None:
 
 def main() -> None:
     modes = sys.argv[1:] or ["geometry", "audio"]
-    srv, port = serve(ROOT)
+    srv, port = serve(WEB_ROOT)
     url = f"http://127.0.0.1:{port}/hyperspace.html"
     try:
         with sync_playwright() as pw:

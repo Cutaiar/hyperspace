@@ -24,6 +24,7 @@ from playwright.sync_api import sync_playwright
 from hyperspace.render import ViewState, render_offscreen
 
 ROOT = Path(__file__).resolve().parent.parent
+WEB_ROOT = ROOT.parent / "hyperspace-web"
 ASSETS = ROOT / "docs" / "plans" / "assets"
 GOLDEN = ROOT / "tests" / "golden" / "geometry"
 W, H = 1200, 800
@@ -58,7 +59,7 @@ def html_shot(page, index: int, view: dict) -> Image.Image:
 
 def main() -> None:
     ASSETS.mkdir(parents=True, exist_ok=True)
-    srv, port = serve(ROOT)
+    srv, port = serve(WEB_ROOT)
     try:
         with sync_playwright() as pw:
             browser = pw.chromium.launch(headless=True)
