@@ -7,8 +7,9 @@ whatever audio is playing.
 This repository holds two iterations:
 
 - **[`hyperspace-python/`](hyperspace-python/)** — the Python re-platform. Where
-  active development happens. See [its README](hyperspace-python/docs/SETUP.md)
-  and [`docs/BLUEPRINT.md`](hyperspace-python/docs/BLUEPRINT.md) to get started.
+  active development happens. See
+  [its README](hyperspace-python/README.md) to get started, and
+  [`docs/BLUEPRINT.md`](hyperspace-python/docs/BLUEPRINT.md) for the design.
 
 - **[`hyperspace-web/`](hyperspace-web/)** — the original single-file HTML
   version. No longer under active development, kept for reference and as the

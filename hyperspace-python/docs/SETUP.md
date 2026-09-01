@@ -12,10 +12,8 @@ here, not to install it silently.
 - [ ] **macOS 13+**, Apple Silicon or Intel. The GL ceiling everywhere is
       OpenGL 4.1 core (deprecated-but-working; BLUEPRINT §6) — nothing to
       install, but nothing newer to rely on either.
-- [ ] **Xcode Command Line Tools** — `xcode-select --install`. Provides git,
-      clang (source-builds of any wheel-less dep), and `swiftc`, which
-      `scripts/audio-route` needs to compile its CoreAudio helper on first
-      run.
+- [ ] **Xcode Command Line Tools** — `xcode-select --install`. Provides git
+      and clang (source-builds of any wheel-less dep).
 - [ ] **Homebrew** — installer of record for everything below that isn't
       Python.
 - [ ] **uv** — `brew install uv`. Owns the Python toolchain: the interpreter
@@ -38,9 +36,9 @@ here, not to install it silently.
         committed (minus the real track, which is sha256-referenced — all
         tests except its trace run without it).
       - Zero rig-specific values in code. Device names, Δt, IMU port, MIDI
-        port names, bridge lanes live in a git-ignored `config.toml`, with
-        `config.example.toml` committed. A new Mac copies the example and
-        edits.
+        port names, bridge lanes live in a git-ignored `config.toml`. Once
+        rig-facing plans land, a `config.example.toml` will be committed for
+        new machines to copy and edit.
       - No absolute paths anywhere; nothing may reference this machine's
         checkout location.
 
@@ -59,8 +57,10 @@ here, not to install it silently.
 - [ ] **Multi-Output Device** in Audio MIDI Setup containing BlackHole +
       the speakers, so audio is heard *and* captured. Manual, per-machine,
       one-time. AirPlay outputs can't join one (README).
-- [ ] `scripts/audio-route status` runs (compiles the Swift helper on
-      first use — needs tier A's CLT) and sees the devices.
+- [ ] **Audio routing helper (optional)** — the CoreAudio switcher previously
+      shipped as `scripts/audio-route` has been extracted to the standalone
+      [`loopback`](https://github.com/Cutaiar/loopback) repo. Clone it if you
+      want a CLI to snapshot and swap default in/out devices.
 - [ ] **Audio interface** (booth-out capture): any class-compliant
       interface needs no driver; if the rig's interface isn't
       class-compliant, its vendor driver goes on the rig's own checklist.
@@ -101,10 +101,9 @@ here, not to install it silently.
 xcode-select --install
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 brew install uv blackhole-2ch
-git clone <repo> hyperspace && cd hyperspace
+git clone <repo> hyperspace && cd hyperspace/hyperspace-python
 uv sync
 uv run playwright install chromium   # only if re-recording golden traces
-cp config.example.toml config.toml   # then edit for this machine
 uv run pytest                        # tier-A verification
 # manual, one-time: Multi-Output Device in Audio MIDI Setup;
 # grant mic + local-network permission on first launch
