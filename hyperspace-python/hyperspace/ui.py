@@ -134,6 +134,7 @@ CHEATSHEET = [
     ("K / 0", "play-pause / restart track"),
     ("R", "reset view + camera"),
     ("F1–F8", "load theme · ⇧ saves"),
+    ("Cmd+R", "restart process"),
     ("H / ?", "panel / this sheet"),
     ("Esc / Q", "quit"),
     # Xbox-layout gamepad, Bluetooth or USB (gamepad.py holds the map)
@@ -166,6 +167,7 @@ class Panel:
         self._file_dialog = None
         self._bmp_dialog = None
         self.reloader = None  # set by app.py; panel only reads status off it
+        self.restart_requested = False  # main loop polls after draw() and execv's
 
     def _draw_cheatsheet(self) -> None:
         io = imgui.get_io()
@@ -634,6 +636,11 @@ class Panel:
         if self.reloader is not None and self.reloader.status:
             imgui.same_line()
             imgui.text_disabled(f"·  {self.reloader.status}")
+        imgui.same_line()
+        if imgui.small_button("Restart"):
+            self.restart_requested = True
+        if imgui.is_item_hovered():
+            imgui.set_tooltip("Restart the process (Cmd+R). Full cold reload; view state is lost.")
         imgui.end()
 
 

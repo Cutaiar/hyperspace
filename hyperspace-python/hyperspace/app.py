@@ -7,6 +7,7 @@ to it.
   ← / →  shape      space  pause      P  points     R  reset view
   [ / ]  brightness , / .  speed      1–6  planes   H  panel
   M  mic on/off     K  play/pause     0  restart    Esc/Q  quit
+  Cmd+R  restart the whole process (same terminal, cold reload)
   ↑ / ↓  4D perspective — holding accelerates toward the range limit
   drag  orbit       ⇧drag / right-drag  pan   scroll  zoom about cursor
   L  lines          F  faces          ?  cheat sheet overlay
@@ -33,6 +34,7 @@ from __future__ import annotations
 import importlib.util
 import math
 import os
+import sys
 import time
 from pathlib import Path
 
@@ -75,6 +77,27 @@ D4_HI = T_DEPTH.map(T_DEPTH.steps)
 
 def _err(where: str, e: Exception) -> str:
     return f"{where}: {type(e).__name__}: {e}"[:160]
+
+
+def _restart(audio, impl) -> None:
+    # execv swaps the process image in place — same PID, same terminal,
+    # same stdio — so stdout doesn't detach and the user's shell keeps
+    # owning the child. The OS reclaims the GL context and audio device
+    # on image swap; we still stop the audio stream first so Core Audio
+    # doesn't complain about a stream vanishing mid-callback.
+    try:
+        audio.stop()
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        impl.shutdown()
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        glfw.terminate()
+    except Exception:  # noqa: BLE001
+        pass
+    os.execv(sys.executable, [sys.executable, *sys.argv])
 
 
 class Keys:
@@ -196,10 +219,17 @@ def main() -> None:
                 panel.open = not panel.open
             if keys.pressed(glfw.KEY_SLASH):
                 panel.cheatsheet = not panel.cheatsheet
+            cmd = (
+                glfw.get_key(win, glfw.KEY_LEFT_SUPER) == glfw.PRESS
+                or glfw.get_key(win, glfw.KEY_RIGHT_SUPER) == glfw.PRESS
+            )
             if keys.pressed(glfw.KEY_R):
-                s.ang = [0.0] * 6
-                s.yaw = s.pitch = 0.0
-                s.zoom, s.pan = 1.0, [0.0, 0.0]
+                if cmd:
+                    _restart(audio, impl)
+                else:
+                    s.ang = [0.0] * 6
+                    s.yaw = s.pitch = 0.0
+                    s.zoom, s.pan = 1.0, [0.0, 0.0]
             if keys.pressed(glfw.KEY_LEFT_BRACKET):
                 s.bright = clamp(s.bright - 0.1, 0.13, 4.0)
             if keys.pressed(glfw.KEY_RIGHT_BRACKET):
@@ -346,6 +376,10 @@ def main() -> None:
             ok, reloader.runtime_error = False, _err("panel.draw", e)
         if ok:
             reloader.runtime_error = ""
+
+        if panel.restart_requested:
+            panel.restart_requested = False
+            _restart(audio, impl)
 
         if reloader.error or reloader.runtime_error:
             imgui.set_next_window_pos(imgui.ImVec2(12, 12), imgui.Cond_.always)
