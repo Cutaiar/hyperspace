@@ -23,7 +23,9 @@ def test_seeded_slots(tmp_path):
     assert len(pr.slots) == SLOTS
     assert pr.slots[0]["name"] == "BIG BLUE WAVE"
     assert pr.slots[1]["name"] == "EMBER ORBIT"
-    assert all(s is None for s in pr.slots[2:])
+    # every slot ships seeded with a distinct house theme
+    assert all(s is not None for s in pr.slots)
+    assert len({s["name"] for s in pr.slots}) == SLOTS
     assert pr.active == -1
 
 
@@ -73,7 +75,9 @@ def test_slots_persist_across_sessions(tmp_path):
     pr.save(6)
 
     pr2, view2, _, _ = make(tmp_path)
-    assert pr2.slots[6]["name"] == "THEME 7"
+    # saving over a seed keeps its name; the saved state replaces the seed
+    assert pr2.slots[6]["name"] == "HEX ENGINE"
+    assert "bands" in pr2.slots[6]
     pr2.load(6)
     assert view2.shape == 12
 
@@ -93,5 +97,10 @@ def test_cycle_flips_through_saved_slots(tmp_path):
     assert pr.active == 0 and view.shape == 17  # first filled slot
     pr.cycle()
     assert pr.active == 1 and view.shape == 10
+    for _ in range(SLOTS - 2):
+        pr.cycle()
+    assert pr.active == SLOTS - 1
     pr.cycle()
-    assert pr.active == 0  # wraps over the empty slots
+    assert pr.active == 0  # wraps at the end of the table
+    pr.cycle(-1)
+    assert pr.active == SLOTS - 1  # and backwards
