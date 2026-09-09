@@ -13,7 +13,7 @@ Current state and the pick-up list: [`docs/CHECKPOINT.md`](../CHECKPOINT.md).
 | [02 — Renderer](02-renderer.md) | Stage 2 | `render.py` — the moderngl window, all 18 shapes |
 | [03 — UI, scenes & audio](03-ui-scenes.md) | Stage 4 | `ui.py` + `audio.py` — band strips, meters, scenes, transport, capture |
 | [04 — Live inputs](04-live-inputs.md) | Stage 3 | DJ Link, IMU, delay compensation (needs booth hardware) |
-| [05 — DAW bridge](05-daw-bridge.md) | §3.6 (after 03–04) | `bridge.py` — optional MIDI/OSC in/out, FL Studio connectivity |
+| [05 — DAW bridge](05-daw-bridge.md) | §3.6 (after 03–04) | `params.py` registry + `midi.py`/`apc40.py` inbound control (done); `bridge.py` — outbound MIDI/OSC, FL Studio connectivity |
 | [06 — Divergence](06-divergence.md) | Stage 5 | Bug fixes and new features the HTML never had; HTML frozen |
 
 ## Conventions that apply to every plan

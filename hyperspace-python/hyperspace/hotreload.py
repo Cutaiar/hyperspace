@@ -35,7 +35,10 @@ from pathlib import Path
 
 # dependency order, leaves first: a change reloads its module and every
 # module after it, so cross-module imports always rebind fresh
-MODULES = ("analysis", "tapers", "geometry", "bands", "control", "audio", "render", "ui")
+MODULES = (
+    "analysis", "tapers", "geometry", "bands", "control", "audio", "render",
+    "params", "apc40", "midi", "ui",
+)
 
 
 def _backfill_dataclass(obj) -> None:

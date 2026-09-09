@@ -6,6 +6,18 @@ default; enabling an adapter is config, not code. **Nothing in the core may
 import from or depend on this module** — that rule is what keeps the runtime
 DAW-free.
 
+## Status (2026-09-08)
+
+Task 3's controller half landed ahead of the rest, driven by an APC40 on
+the desk: `params.py` is the parameter registry (every panel widget, hotkey
+and gamepad button goes through it), `midi.py` is the inbound MIDI adapter
+with soft pickup, LED/ring feedback and right-click Learn, `apc40.py` the
+first device profile, `config.py` the `[midi]` gate. The core-independence
+rule is tested (`test_core_does_not_import_the_midi_adapter`). Outbound
+lanes, OSC, MIDI clock, pitch-bend-as-14-bit-lane and the FL script remain
+as written below; the outbound side should reuse `MidiIO`'s port handling
+and the registry's `norm` as its lane values.
+
 ## Prerequisites
 
 Plan 04 complete. FL Studio available for the receiving-end tests.
@@ -13,7 +25,11 @@ Plan 04 complete. FL Studio available for the receiving-end tests.
 ## Deliverables
 
 ```
-hyperspace/bridge.py         # adapters, config-gated
+hyperspace/params.py         # parameter registry (done)
+hyperspace/midi.py           # inbound MIDI adapter + feedback (done)
+hyperspace/apc40.py          # device profile: port, SysEx, LEDs, default map (done)
+hyperspace/config.py         # [midi] section; [bridge] to follow (done)
+hyperspace/bridge.py         # outbound adapters, config-gated
 config: [bridge] section     # ports, channel maps, resolutions, rates
 fl/HyperspaceBridge/         # FL MIDI script fusing 14-bit CC pairs
 docs/plans/assets/05-fl.md   # FL-side setup walkthrough

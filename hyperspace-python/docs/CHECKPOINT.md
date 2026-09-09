@@ -68,6 +68,17 @@ in `config.toml` (not yet needed — nothing rig-specific exists until plan 04).
 - **Verification culture:** 127 tests green; a headless imgui smoke draws
   the whole panel per pytest run; `HYPERSPACE_FRAMES=n` gives windowed
   smoke runs; `tools/compare_render.py` regenerates HTML-vs-Python shots.
+- **Control registry + MIDI (2026-09-08).** `params.py` gives every
+  settable thing a stable id and one normalized interface (continuous /
+  enum / toggle / trigger; tapered params quantize to their throw). The
+  panel, `KEYMAP`/`PADMAP` and the MIDI map are all binding tables over it.
+  `midi.py` (mido + python-rtmidi, config-gated, core never imports it)
+  routes CC/note/pitch-bend with soft pickup, sends ring and LED feedback
+  change-gated every frame, and learns bindings from a right-click on any
+  panel control into `midi_map.json`. `apc40.py` is the first device
+  profile (mode SysEx, LED colours, a 109-binding default layout); the
+  numbers were checked against the desk's APC40, which dumps its fader
+  positions on mode entry exactly as mapped. 208 tests.
 
 ## Not done — in rough priority order
 

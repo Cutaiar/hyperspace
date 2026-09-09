@@ -1,10 +1,17 @@
-"""imgui control surface — port of the HTML drawer's semantics (plan 03).
+"""imgui control surface — every widget is a view onto one registry Param.
 
 Instrument-panel aesthetic per ENGINEERING §7: black ground, square corners
 everywhere, hairline rules, white text, red #ff2b2b as the only accent.
-The hint-readout system of the HTML is replaced by native tooltips (noted
-as a divergence in the plan results). All state lives in Control /
-AudioEngine / ViewState — this module only draws and forwards edits.
+The hint-readout system of the HTML is replaced by native tooltips.
+
+Nothing here owns state. The panel draws params.Registry entries through a
+handful of widget helpers (_fader, _slider, _combo, _check, _button) that
+read the live value, draw, and write back through the Param, so a value
+moved by a hotkey, the gamepad or a MIDI knob shows on the next frame with
+no extra plumbing. Right-clicking any widget opens the binding menu: it
+names the param id and, when a MIDI adapter is attached, offers Learn /
+Unbind. The layout — what sits where, which sections fold — is the one
+hand-arranged thing left in this module.
 """
 
 from __future__ import annotations
@@ -14,15 +21,25 @@ import os
 
 from imgui_bundle import imgui
 
-from . import tapers
 from .audio import AudioEngine, input_devices
-from .bands import BANDS, CEIL, KNEE, NOM, PRESETS, SHAPERS
+from .bands import BANDS, CEIL, KNEE, NOM, SHAPERS
 from .control import Control
 from .geometry import SHAPES, geom
+from .params import (  # noqa: F401 — PATTERNS et al. re-exported for callers
+    BMP_PATHS,
+    INST_MOTION,
+    PATTERNS,
+    PLANES,
+    Kind,
+    Param,
+    Registry,
+    build_registry,
+)
 from .render import ViewState
 
 RED = imgui.ImVec4(1.0, 43 / 255, 43 / 255, 1.0)
 DIM = imgui.ImVec4(0.62, 0.62, 0.62, 1.0)
+WARN = imgui.ImVec4(1, 0.4, 0.3, 1)
 
 # meter landmarks (ENGINEERING §4): nominal 38.5%, knee 48.1% of full scale
 PIN_AT = CEIL * 0.92
@@ -106,18 +123,11 @@ def apply_style() -> None:
         put.title_bg: (0.04, 0.04, 0.04, 1.0),
         put.title_bg_active: (0.07, 0.07, 0.07, 1.0),
         put.text: (0.92, 0.92, 0.92, 1.0),
+        put.popup_bg: (0.05, 0.05, 0.05, 0.98),
     }
     for k, v in colors.items():
         s.set_color_(k, imgui.ImVec4(*v))
 
-
-PATTERNS = [
-    "FLAT", "RINGS", "PLAID", "MOIRE", "BLOOM", "CAUSTIC",
-    "HEX", "SPIRAL", "CELLS", "PLASMA", "WEAVE", "EMBER",
-]
-
-INST_MOTION = ["STILL", "ORBIT", "WAVE", "RIPPLE"]
-BMP_PATHS = ["STILL", "ORBIT", "FIG-8", "SWAY"]
 
 # the corner key legend, in the spirit of the HTML's #keys overlay
 CHEATSHEET = [
@@ -145,17 +155,22 @@ CHEATSHEET = [
     ("sticks", "orbit · zoom — click resets"),
     ("LT / RT", "4D depth out / in"),
     ("view/menu", "panel / this sheet"),
+    # any control ↔ any MIDI message, through the registry (midi.py)
+    ("right-click", "a control: MIDI learn / unbind"),
 ]
 
 
 class Panel:
     def __init__(self, control: Control, audio: AudioEngine, view: ViewState, renderer=None,
-                 presets=None):
+                 presets=None, registry: Registry | None = None):
         self.control = control
         self.audio = audio
         self.view = view
         self.renderer = renderer
         self.presets = presets
+        self.reg = registry if registry is not None else build_registry(
+            view, control, audio, presets
+        )
         self.devices = input_devices()
         self.device_sel = next(
             (k for k, d in enumerate(self.devices) if d["loopback"]), 0
@@ -167,7 +182,178 @@ class Panel:
         self._file_dialog = None
         self._bmp_dialog = None
         self.reloader = None  # set by app.py; panel only reads status off it
+        self.midi = None      # set by app.py when an adapter is up (midi.MidiIO)
         self.restart_requested = False  # main loop polls after draw() and execv's
+        self._register_panel_params()
+
+    def _register_panel_params(self) -> None:
+        """Params that only exist once there is a panel and an audio device list."""
+        r = self.reg
+        if "ui.panel" in r:
+            return
+        r.toggle("ui.panel", "Control panel",
+                 lambda: self.open, lambda on: setattr(self, "open", bool(on)), group="ui")
+        r.toggle("ui.cheatsheet", "Cheat sheet",
+                 lambda: self.cheatsheet,
+                 lambda on: setattr(self, "cheatsheet", bool(on)), group="ui")
+        r.trigger("app.restart", "Restart process",
+                  lambda: setattr(self, "restart_requested", True), group="ui",
+                  tip="Restart the process (Cmd+R). Full cold reload; view state is lost.")
+        a = self.audio
+        r.toggle("audio.mic", "Mic",
+                 lambda: bool(a.on and a.mode == "mic"), self._set_mic, group="audio",
+                 tip="Listen to the selected input device.")
+        r.enum("audio.device", "Input device",
+               lambda: self.device_sel, lambda i: setattr(self, "device_sel", i),
+               lambda: [("● " if d["loopback"] else "") + d["name"] for d in self.devices],
+               group="audio")
+
+    def _set_mic(self, on: bool) -> None:
+        a = self.audio
+        if on and self.devices:
+            if not (a.on and a.mode == "mic"):
+                a.start_mic(self.devices[self.device_sel]["index"])
+        elif not on and a.on and a.mode == "mic":
+            a.stop()
+
+    # ---- binding menu: every widget gets one on right-click ----
+
+    def _ctx(self, p: Param) -> None:
+        """The param's context menu, attached to the last drawn item."""
+        if not imgui.begin_popup_context_item(f"##ctx.{p.id}"):
+            return
+        _micro(p.id, DIM)
+        m = self.midi
+        if m is None:
+            imgui.text_disabled("no MIDI adapter")
+        else:
+            b = m.binding_for(p.id)
+            if m.learning == p.id:
+                imgui.text_colored(RED, "move a control…")
+                if imgui.menu_item_simple("Cancel learn"):
+                    m.learn(None)
+            else:
+                if b is not None:
+                    imgui.text(b.describe())
+                if imgui.menu_item_simple("Learn MIDI"):
+                    m.learn(p.id)
+                if b is not None and imgui.menu_item_simple("Unbind"):
+                    m.unbind(p.id)
+        imgui.end_popup()
+
+    def _learn_frame(self, p: Param) -> None:
+        """Red outline around the last item while it is armed to learn."""
+        if self.midi is None or self.midi.learning != p.id:
+            return
+        r0, r1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        dl = imgui.get_window_draw_list()
+        dl.add_rect(
+            imgui.ImVec2(r0.x - 1, r0.y - 1), imgui.ImVec2(r1.x + 1, r1.y + 1),
+            imgui.color_convert_float4_to_u32(RED),
+        )
+
+    def _tip(self, p: Param, text: str | None = None) -> None:
+        t = p.tip if text is None else text
+        if t and imgui.is_item_hovered():
+            imgui.set_tooltip(t)
+
+    # ---- widgets: each one reads, draws and writes a Param ----
+
+    def _fader(self, pid: str) -> bool:
+        """Full-width taper fader: micro label, readout, detent notch."""
+        p = self.reg[pid]
+        pos = p.position()
+        imgui.push_id(pid)
+        tag = ("log" if p.taper.log else "lin") if p.taper is not None else "lin"
+        _micro(f"{p.label}  ·  {tag}")
+        self._tip(p)
+        imgui.same_line(imgui.get_content_region_avail().x - 64)
+        imgui.text(p.text())
+        imgui.set_next_item_width(-1)
+        changed, pos2 = imgui.slider_int("##s", pos, 0, p.steps, "")
+        self._tip(p)
+        self._ctx(p)
+        self._learn_frame(p)
+        if p.taper is not None and p.taper.unity is not None:
+            # detent notch: ticks at the fader position the grab centre
+            # occupies at unity (frame inset by grab padding + half grab)
+            r0, r1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+            half = imgui.get_style().grab_min_size / 2 + 2.0
+            nx = r0.x + half + (r1.x - r0.x - 2 * half) * p.taper.unity / p.steps
+            dl = imgui.get_window_draw_list()
+            notch = imgui.color_convert_float4_to_u32(imgui.ImVec4(1, 1, 1, 0.35))
+            dl.add_line(imgui.ImVec2(nx, r0.y), imgui.ImVec2(nx, r0.y + 3), notch)
+            dl.add_line(imgui.ImVec2(nx, r1.y - 3), imgui.ImVec2(nx, r1.y), notch)
+        imgui.pop_id()
+        if changed and pos2 != pos:
+            p.set_position(pos2)
+            return True
+        return False
+
+    def _slider(self, pid: str, width: float = -1) -> bool:
+        """Compact slider with the readout inside — untapered ranges."""
+        p = self.reg[pid]
+        imgui.set_next_item_width(width)
+        v = p.value
+        if p.integer:
+            changed, nv = imgui.slider_int(f"##{pid}", int(v), int(p.lo), int(p.hi), p.text())
+        else:
+            flags = imgui.SliderFlags_.logarithmic if p.log else 0
+            changed, nv = imgui.slider_float(f"##{pid}", float(v), p.lo, p.hi, p.text(), flags)
+        self._tip(p)
+        self._ctx(p)
+        self._learn_frame(p)
+        if changed:
+            p.set_value(nv)
+        return changed
+
+    def _combo(self, pid: str, width: float = -1, tip: str | None = None) -> bool:
+        p = self.reg[pid]
+        imgui.set_next_item_width(width)
+        changed, i = imgui.combo(f"##{pid}", p.value, p.names)
+        self._tip(p, tip)
+        self._ctx(p)
+        self._learn_frame(p)
+        if changed:
+            p.set(i)
+        return changed
+
+    def _check(self, pid: str) -> bool:
+        p = self.reg[pid]
+        changed, on = imgui.checkbox(f"{p.label}##{pid}", bool(p.value))
+        self._tip(p)
+        self._ctx(p)
+        self._learn_frame(p)
+        if changed:
+            p.set(on)
+        return changed
+
+    def _button(self, pid: str, label: str | None = None, small: bool = False) -> bool:
+        p = self.reg[pid]
+        text = f"{p.label if label is None else label}##{pid}"
+        hit = imgui.small_button(text) if small else imgui.button(text)
+        self._tip(p)
+        self._ctx(p)
+        self._learn_frame(p)
+        if hit:
+            p.toggle()  # fires a trigger, flips a toggle
+        return hit
+
+    def _lit_button(self, pid: str, label: str, lit: bool, small: bool = True,
+                    color: imgui.ImVec4 | None = None) -> bool:
+        """A toggle drawn as a red-when-on text button (plane keys, themes)."""
+        p = self.reg[pid]
+        imgui.push_style_color(imgui.Col_.text, color or (RED if lit else DIM))
+        hit = (imgui.small_button if small else imgui.button)(f"{label}##{pid}")
+        imgui.pop_style_color()
+        self._tip(p)
+        self._ctx(p)
+        self._learn_frame(p)
+        if hit:
+            p.toggle()
+        return hit
+
+    # ---- overlays ----
 
     def _draw_cheatsheet(self) -> None:
         io = imgui.get_io()
@@ -184,39 +370,10 @@ class Panel:
         )
         imgui.begin("##cheatsheet", None, flags)
         for key, action in CHEATSHEET:
-            imgui.text_colored(RED, f"{key:>10s}")
-            imgui.same_line(104)
+            imgui.text_colored(RED, f"{key:>11s}")
+            imgui.same_line(112)
             imgui.text_disabled(action)
         imgui.end()
-
-    # ---- taper-backed slider: integer positions, truthful readouts ----
-
-    def _taper_slider(self, label: str, taper: tapers.Taper, value: float, fmt, tip="") :
-        pos = taper.unmap(value)
-        imgui.push_id(label)
-        _micro(f"{label}  ·  {'log' if taper.log else 'lin'}")
-        if tip and imgui.is_item_hovered():
-            imgui.set_tooltip(tip)
-        imgui.same_line(imgui.get_content_region_avail().x - 64)
-        imgui.text(fmt(value))
-        imgui.set_next_item_width(-1)
-        changed, pos2 = imgui.slider_int("##s", pos, 0, taper.steps, "")
-        if tip and imgui.is_item_hovered():
-            imgui.set_tooltip(tip)
-        if taper.unity is not None:
-            # detent notch: ticks at the fader position the grab centre
-            # occupies at unity (frame inset by grab padding + half grab)
-            r0, r1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
-            half = imgui.get_style().grab_min_size / 2 + 2.0
-            nx = r0.x + half + (r1.x - r0.x - 2 * half) * taper.unity / taper.steps
-            dl = imgui.get_window_draw_list()
-            notch = imgui.color_convert_float4_to_u32(imgui.ImVec4(1, 1, 1, 0.35))
-            dl.add_line(imgui.ImVec2(nx, r0.y), imgui.ImVec2(nx, r0.y + 3), notch)
-            dl.add_line(imgui.ImVec2(nx, r1.y - 3), imgui.ImVec2(nx, r1.y), notch)
-        imgui.pop_id()
-        if changed and pos2 != pos:
-            return True, taper.map(pos2)
-        return False, value
 
     # ---- meters ----
 
@@ -279,12 +436,14 @@ class Panel:
             # click to select
             imgui.set_cursor_screen_pos(imgui.ImVec2(x0, origin.y))
             if imgui.invisible_button(f"##meter{i}", imgui.ImVec2(bw, mh)):
-                self.control.selb = i
+                self.reg["band.select"].set(i)
             if imgui.is_item_hovered():
                 imgui.set_tooltip(
                     f"{band.id} {band.lo:g}–{band.hi:g} Hz → {band.pl} plane, "
                     f"{'forward' if band.dir > 0 else 'reverse'}"
                 )
+            if i == 0:
+                self._ctx(self.reg["band.select"])
         # band tags, centred under their bars, in the micro face
         imgui.push_font(_FONTS["micro"], FONT_MICRO)
         for i, band in enumerate(BANDS):
@@ -312,7 +471,7 @@ class Panel:
             imgui.end()
             return
 
-        v, c, a = self.view, self.control, self.audio
+        v, c, a, r = self.view, self.control, self.audio, self.reg
         sh = SHAPES[v.shape]
         g = geom(v.shape)
 
@@ -332,151 +491,39 @@ class Panel:
         imgui.separator()
 
         # shape + view
-        changed, idx = imgui.slider_int("##shape", v.shape, 0, len(SHAPES) - 1, sh.name)
-        if changed:
-            v.shape = idx
-        ch, val = self._taper_slider("Brightness", tapers.T_BRIGHT, v.bright, tapers.fmt_gain)
-        if ch:
-            v.bright = val
-        ch, val = self._taper_slider(
-            "Speed", tapers.T_SPEED, v.speed,
-            lambda x: "stop" if x <= 0 else f"{x:.3f}" if x < 1 else f"{x:.2f}",
-        )
-        if ch:
-            v.speed = val
-        ch, val = self._taper_slider("4D depth", tapers.T_DEPTH, v.depth4, lambda x: f"{x:.2f}")
-        if ch:
-            v.depth4 = val
+        self._combo("view.shape")
+        self._fader("view.bright")
+        self._fader("view.speed")
+        self._fader("view.depth4")
 
         imgui.spacing()
-        for p, name in enumerate(("XY", "XZ", "YZ", "XW", "YW", "ZW")):
+        for p, name in enumerate(PLANES):
             if p:
                 imgui.same_line()
-            imgui.push_style_color(imgui.Col_.text, RED if v.planes[p] else DIM)
-            if imgui.small_button(name):
-                v.planes[p] = not v.planes[p]
-            imgui.pop_style_color()
-        _, v.points = imgui.checkbox("Points", v.points)
+            self._lit_button(f"view.plane.{name}", name, v.planes[p])
+        self._check("view.points")
         imgui.same_line()
-        _, v.lines = imgui.checkbox("Lines", v.lines)
+        self._check("view.lines")
         imgui.same_line()
-        _, v.playing = imgui.checkbox("Rotate", v.playing)
+        self._check("view.rotate")
         imgui.same_line()
-        _, v.faces = imgui.checkbox("Faces", v.faces)
-        if imgui.is_item_hovered():
-            imgui.set_tooltip(
-                "Translucent fills on the true 2-faces, under the wireframe. "
-                "First build per shape takes a moment (extraction is cached)."
-            )
-        changed, n = imgui.slider_int("##inst", v.instances, 1, 100, "%d instance(s)")
-        if changed:
-            v.instances = n
-        if imgui.is_item_hovered():
-            imgui.set_tooltip(
-                "Synchronized copies in a grid — scroll to zoom out over the field, "
-                "right-drag to pan."
-            )
+        self._check("view.faces")
+        self._slider("view.instances")
         if v.instances > 1:
-            imgui.set_next_item_width(110)
-            changed, m = imgui.combo("##imot", v.inst_motion, INST_MOTION)
-            if changed:
-                v.inst_motion = m
-            if imgui.is_item_hovered():
-                imgui.set_tooltip(
-                    "Trigonometric motion over the instance grid — each copy's "
-                    "phase comes from its grid position, so the field moves as "
-                    "one figure."
-                )
+            self._combo("view.inst_motion", 110)
             if v.inst_motion:
                 imgui.same_line()
-                imgui.set_next_item_width(92)
-                _, v.inst_amp = imgui.slider_float("##iamp", v.inst_amp, 0.0, 1.0, "amp %.2f")
+                self._slider("view.inst_amp", 92)
                 imgui.same_line()
-                imgui.set_next_item_width(-1)
-                _, v.inst_rate = imgui.slider_float("##irate", v.inst_rate, 0.0, 6.0, "rate %.1f")
+                self._slider("view.inst_rate")
         if v.faces:
-            imgui.set_next_item_width(110)
-            changed, m = imgui.combo("##pat", v.pattern, PATTERNS)
-            if changed:
-                v.pattern = m
-            if imgui.is_item_hovered():
-                imgui.set_tooltip(
-                    "Face pattern — edit hyperspace/shaders/patterns.glsl while the "
-                    "app runs; it hot-reloads on save. Patterns read the six band "
-                    "outputs as uniforms."
-                )
+            self._combo("view.pattern", 110)
             if v.pattern:
                 imgui.same_line()
-                imgui.set_next_item_width(-1)
-                changed, mx = imgui.slider_float("##pmix", v.pattern_mix, 0.0, 1.0, "mix %.2f")
-                if changed:
-                    v.pattern_mix = mx
+                self._slider("view.pattern_mix")
             if self.renderer is not None and self.renderer.pattern_error:
-                imgui.text_colored(
-                    imgui.ImVec4(1, 0.4, 0.3, 1), f"GLSL: {self.renderer.pattern_error}"
-                )
-            # bitmap layer, composited over the pattern in the face shader
-            if imgui.button("Load bitmap"):
-                try:
-                    from imgui_bundle import portable_file_dialogs as pfd
-
-                    self._bmp_dialog = pfd.open_file(
-                        "Choose a bitmap", "",
-                        ["Images", "*.png *.jpg *.jpeg *.bmp *.gif *.webp"],
-                    )
-                except Exception as e:  # noqa: BLE001 — dialog is best-effort
-                    if self.renderer is not None:
-                        self.renderer.bitmap_error = f"file dialog unavailable: {e}"
-            if imgui.is_item_hovered():
-                imgui.set_tooltip(
-                    "Image layered over the face pattern, with its own alpha "
-                    "fader and an oscillation path about the face centre."
-                )
-            if self._bmp_dialog is not None and self._bmp_dialog.ready():
-                picked = self._bmp_dialog.result()
-                self._bmp_dialog = None
-                if picked:
-                    v.bmp_file = picked[0]
-            if v.bmp_file:
-                imgui.same_line()
-                if imgui.small_button("Clear##bmp"):
-                    v.bmp_file = ""
-                else:
-                    imgui.same_line()
-                    imgui.text_disabled(v.bmp_file.rsplit("/", 1)[-1][:26])
-            if self.renderer is not None and self.renderer.bitmap_error:
-                imgui.text_colored(
-                    imgui.ImVec4(1, 0.4, 0.3, 1), f"bitmap: {self.renderer.bitmap_error}"
-                )
-            if v.bmp_file:
-                imgui.set_next_item_width(-1)
-                _, v.bmp_alpha = imgui.slider_float(
-                    "##balpha", v.bmp_alpha, 0.0, 1.0, "bitmap alpha %.2f"
-                )
-                imgui.set_next_item_width(-1)
-                _, v.bmp_scale = imgui.slider_float(
-                    "##bscale", v.bmp_scale, 0.05, 2.0, "bitmap size %.2f"
-                )
-                imgui.set_next_item_width(110)
-                changed, m = imgui.combo("##bpath", v.bmp_mode, BMP_PATHS)
-                if changed:
-                    v.bmp_mode = m
-                if imgui.is_item_hovered():
-                    imgui.set_tooltip(
-                        "The bitmap's own path about the face centre — "
-                        "independent of the instance-grid motion."
-                    )
-                if v.bmp_mode:
-                    imgui.same_line()
-                    imgui.set_next_item_width(92)
-                    _, v.bmp_amp = imgui.slider_float(
-                        "##bamp", v.bmp_amp, 0.0, 0.5, "amp %.2f"
-                    )
-                    imgui.same_line()
-                    imgui.set_next_item_width(-1)
-                    _, v.bmp_rate = imgui.slider_float(
-                        "##brate", v.bmp_rate, 0.0, 6.0, "rate %.1f"
-                    )
+                imgui.text_colored(WARN, f"GLSL: {self.renderer.pattern_error}")
+            self._bitmap_section()
         imgui.separator()
 
         # ---- themes: whole-surface save states on F1–F8 ----
@@ -493,30 +540,24 @@ class Panel:
                 if k:
                     imgui.same_line()
                 lit = k == pr.active and slot is not None
-                imgui.push_style_color(
-                    imgui.Col_.text,
-                    RED if lit else DIM if slot is None else imgui.ImVec4(0.92, 0.92, 0.92, 1.0),
-                )
+                color = RED if lit else DIM if slot is None else imgui.ImVec4(0.92, 0.92, 0.92, 1)
+                imgui.push_style_color(imgui.Col_.text, color)
+                pid = f"theme.{'save' if io.key_shift else 'load'}.{k}"
                 if imgui.small_button(f"{k + 1}##theme{k}"):
-                    if imgui.get_io().key_shift:
-                        pr.save(k)
-                    else:
-                        pr.load(k)
+                    r[pid].fire()
                 imgui.pop_style_color()
                 if imgui.is_item_hovered() and slot is not None:
                     imgui.set_tooltip(slot["name"])
+                self._ctx(r[f"theme.load.{k}"])
+                self._learn_frame(r[f"theme.load.{k}"])
             if pr.error:
-                imgui.text_colored(imgui.ImVec4(1, 0.4, 0.3, 1), pr.error)
+                imgui.text_colored(WARN, pr.error)
         imgui.separator()
 
         # ---- audio sources ----
         _micro("audio")
         mic_on = a.on and a.mode == "mic"
-        if imgui.button("Stop mic" if mic_on else "Listen to mic"):
-            if mic_on:
-                a.stop()
-            elif self.devices:
-                a.start_mic(self.devices[self.device_sel]["index"])
+        self._button("audio.mic", "Stop mic" if mic_on else "Listen to mic")
         imgui.same_line()
         if imgui.button("Load track"):
             try:
@@ -527,31 +568,26 @@ class Panel:
                 )
             except Exception as e:  # noqa: BLE001 — dialog is best-effort
                 a.error = f"file dialog unavailable: {e}"
-        if a.on and imgui.button("Stop"):
-            a.stop()
+        if a.on:
+            imgui.same_line()
+            self._button("audio.stop", "Stop")
         if self._file_dialog is not None and self._file_dialog.ready():
             picked = self._file_dialog.result()
             self._file_dialog = None
             if picked:
                 a.start_file(picked[0])
         if self.devices:
-            imgui.set_next_item_width(-1)
-            _, self.device_sel = imgui.combo(
-                "##dev", self.device_sel,
-                [("● " if d["loopback"] else "") + d["name"] for d in self.devices],
-            )
+            self._combo("audio.device")
         if a.error:
-            imgui.text_colored(imgui.ImVec4(1, 0.4, 0.3, 1), a.error)
+            imgui.text_colored(WARN, a.error)
         elif a.on:
             imgui.text_disabled(f"{a.label}  ·  {self.audio.sr / 1000:.0f} kHz")
 
         # transport
         if a.mode == "file":
-            if imgui.button("Pause" if a.playing else "Play"):
-                a.toggle_play()
+            self._button("audio.play", "Pause" if a.playing else "Play")
             imgui.same_line()
-            if imgui.button("Restart"):
-                a.restart()
+            self._button("audio.restart", "Restart")
             imgui.same_line()
             pos, dur = a.position(), a.duration()
             imgui.text_disabled(
@@ -559,42 +595,16 @@ class Panel:
             )
 
         # master faders
-        ch, val = self._taper_slider(
-            "Audio drive", tapers.T_DRIVE, a.chain.gain, tapers.fmt_gain,
-            "Master gain on the six band faders, after the transfer stage. Only does "
-            "anything while a source is attached.",
-        )
-        if ch:
-            a.chain.gain = val
-        ch, val = self._taper_slider(
-            "Dynamics", tapers.T_DYN, a.chain.dyn, tapers.fmt_gain,
-            "How much of the range a limiter took is put back. At 0 the chain is a "
-            "plain level follower.",
-        )
-        if ch:
-            a.chain.dyn = val
-        ch, val = self._taper_slider(
-            "Input trim", tapers.T_TRIM, a.chain.trim, tapers.fmt_db,
-            "One offset added to all six per-band trims, at the very head of the chain — "
-            "moves a whole song down into the 56 dB working window.",
-        )
-        if ch:
-            a.chain.trim = val
+        self._fader("master.gain")
+        self._fader("master.dyn")
+        self._fader("master.trim")
         imgui.separator()
 
         # scene + reset-all (relabels to Undo while the window is open)
         _micro("scene")
-        imgui.set_next_item_width(-92)
-        changed, k = imgui.combo("##scene", c.scene, [p["name"] for p in PRESETS])
-        if changed:
-            c.select_scene(k)
+        self._combo("scene.select", -92)
         imgui.same_line()
-        if imgui.button("Undo" if c.undo_armed else "Reset all"):
-            c.reset_all_clicked()
-        if imgui.is_item_hovered():
-            imgui.set_tooltip(
-                "Reloads the selected scene across all six bands. Undoable for 8 s."
-            )
+        self._button("scene.reset_all", "Undo" if c.undo_armed else "Reset all")
 
         imgui.spacing()
         self._meters(dt)
@@ -604,32 +614,20 @@ class Panel:
         for i in range(6):
             if i:
                 imgui.same_line()
-            imgui.set_next_item_width(46)
-            changed, fn = imgui.combo(f"##fn{i}", a.chain.params[i].fn,
-                                      [s.tag for s in SHAPERS])
-            if changed:
-                c.set_shaper(i, fn)
-            if imgui.is_item_hovered():
-                imgui.set_tooltip(SHAPERS[a.chain.params[i].fn].name)
+            self._combo(f"band.{i}.fn", 46, SHAPERS[a.chain.params[i].fn].name)
         imgui.separator()
 
-        # selected-band strip
+        # selected-band strip — the band.sel.* aliases follow the selection
         b = BANDS[c.selb]
         P = a.chain.params[c.selb]
         imgui.text_colored(RED, f"{b.id} · {SHAPERS[P.fn].tag}")
         imgui.same_line()
         imgui.text_disabled(f"{b.lo:g}–{b.hi:g} Hz → {b.pl}")
         imgui.same_line(imgui.get_content_region_avail().x - 40)
-        if imgui.small_button("Reset"):
-            c.reset_band()
-        if imgui.is_item_hovered():
-            imgui.set_tooltip("Puts this band's whole strip back to the selected scene.")
-        for knob in tapers.KNOBS:
-            ch, val = self._taper_slider(
-                knob.label, knob.t, getattr(P, knob.key), knob.fmt, knob.tip
-            )
-            if ch:
-                setattr(P, knob.key, val)
+        self._button("band.reset", "Reset", small=True)
+        for p in r.group("band"):
+            if p.id.startswith("band.sel.") and p.kind is Kind.CONTINUOUS:
+                self._fader(p.id)
 
         imgui.separator()
         imgui.text_disabled(f"{fps:5.1f} FPS")
@@ -637,11 +635,70 @@ class Panel:
             imgui.same_line()
             imgui.text_disabled(f"·  {self.reloader.status}")
         imgui.same_line()
-        if imgui.small_button("Restart"):
-            self.restart_requested = True
-        if imgui.is_item_hovered():
-            imgui.set_tooltip("Restart the process (Cmd+R). Full cold reload; view state is lost.")
+        self._button("app.restart", "Restart", small=True)
+        self._midi_status()
         imgui.end()
+
+    def _bitmap_section(self) -> None:
+        v = self.view
+        # bitmap layer, composited over the pattern in the face shader
+        if imgui.button("Load bitmap"):
+            try:
+                from imgui_bundle import portable_file_dialogs as pfd
+
+                self._bmp_dialog = pfd.open_file(
+                    "Choose a bitmap", "",
+                    ["Images", "*.png *.jpg *.jpeg *.bmp *.gif *.webp"],
+                )
+            except Exception as e:  # noqa: BLE001 — dialog is best-effort
+                if self.renderer is not None:
+                    self.renderer.bitmap_error = f"file dialog unavailable: {e}"
+        if imgui.is_item_hovered():
+            imgui.set_tooltip(
+                "Image layered over the face pattern, with its own alpha "
+                "fader and an oscillation path about the face centre."
+            )
+        if self._bmp_dialog is not None and self._bmp_dialog.ready():
+            picked = self._bmp_dialog.result()
+            self._bmp_dialog = None
+            if picked:
+                v.bmp_file = picked[0]
+        if v.bmp_file:
+            imgui.same_line()
+            if imgui.small_button("Clear##bmp"):
+                v.bmp_file = ""
+            else:
+                imgui.same_line()
+                imgui.text_disabled(v.bmp_file.rsplit("/", 1)[-1][:26])
+        if self.renderer is not None and self.renderer.bitmap_error:
+            imgui.text_colored(WARN, f"bitmap: {self.renderer.bitmap_error}")
+        if v.bmp_file:
+            self._slider("view.bmp_alpha")
+            self._slider("view.bmp_scale")
+            self._combo("view.bmp_mode", 110)
+            if v.bmp_mode:
+                imgui.same_line()
+                self._slider("view.bmp_amp", 92)
+                imgui.same_line()
+                self._slider("view.bmp_rate")
+
+    def _midi_status(self) -> None:
+        m = self.midi
+        if m is None:
+            return
+        if m.error:
+            imgui.text_colored(WARN, f"MIDI: {m.error}")
+            return
+        if not m.on:
+            imgui.text_disabled("MIDI: no device")
+            return
+        imgui.text_disabled(f"MIDI: {m.name}  ·  {len(m.map.bindings)} bindings")
+        if m.learning:
+            imgui.same_line()
+            imgui.text_colored(RED, f"learning {m.learning}")
+        elif m.last:
+            imgui.same_line()
+            imgui.text_disabled(f"·  {m.last}")
 
 
 def format_infinity(v: float) -> str:  # convenience for tests
