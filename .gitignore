@@ -3,6 +3,7 @@ node_modules/
 .vercel
 hyperspace-python/tests/fixtures/
 config.toml
+midi_map.json
 __pycache__/
 .venv/
 .claude/

@@ -13,14 +13,15 @@ to it.
   L  lines          F  faces          ?  cheat sheet overlay
   F1–F8  load theme (whole-surface save state)    ⇧F1–F8  save theme
 
-An Xbox-layout gamepad (Bluetooth or USB) is a second hand on the same
-controls — see gamepad.py for the index map and ui.CHEATSHEET for the
-bindings: A pause · B next theme · X points · Y faces · LB/RB shape ·
-d-pad brightness/speed · sticks orbit/zoom (click resets) · LT/RT 4D
-depth · View panel · Menu cheat sheet.
+Every input path — keys, the Xbox-layout gamepad, a MIDI controller —
+is a binding table over the parameter registry (params.py): a key names
+a param id and an operation, nothing touches state directly. KEYMAP,
+PADMAP and HATMAP below are the keyboard and gamepad tables; the MIDI
+table lives in midi_map.json (midi.py, apc40.py) and is editable from
+the panel by right-click → Learn.
 
-The in-app cheat sheet (ui.CHEATSHEET) is the canonical list — keep the
-two in sync when adding bindings.
+The in-app cheat sheet (ui.CHEATSHEET) is the canonical human list —
+keep it in sync when adding bindings.
 
 The engine hot-reloads (hotreload.py): save any module under hyperspace/
 while the app runs and live objects pick the code up in place; a broken
@@ -52,15 +53,14 @@ import moderngl
 from imgui_bundle import imgui
 from imgui_bundle.python_backends.glfw_backend import GlfwRenderer
 
-from . import gamepad
+from . import config, gamepad
 from .audio import AudioEngine
 from .control import Control
 from .gamepad import Pad
-from .geometry import SHAPES
 from .hotreload import HotReloader
+from .params import Registry, build_registry
 from .presets import SLOTS, Presets
-from .render import Renderer, ViewState, clamp
-from .tapers import T_DEPTH
+from .render import Renderer, ViewState
 from .ui import Panel, apply_style, load_fonts
 
 TITLE = "Hyperspace"
@@ -71,33 +71,101 @@ TITLE = "Hyperspace"
 D4_RATE0 = 0.45   # octaves/s at the instant of the press
 D4_RATE1 = 3.6    # octaves/s once the ramp completes
 D4_RAMP = 1.8     # seconds of hold to reach full rate
-D4_LO = T_DEPTH.map(0)
-D4_HI = T_DEPTH.map(T_DEPTH.steps)
+
+# ---- binding tables: (input, param id, op, arg) ----
+# op: "step" moves arg detents, "toggle" flips (or fires), "fire" fires.
+KEYMAP = [
+    (glfw.KEY_RIGHT, "view.shape", "step", 1),
+    (glfw.KEY_LEFT, "view.shape", "step", -1),
+    (glfw.KEY_SPACE, "view.rotate", "toggle", 0),
+    (glfw.KEY_P, "view.points", "toggle", 0),
+    (glfw.KEY_L, "view.lines", "toggle", 0),
+    (glfw.KEY_F, "view.faces", "toggle", 0),
+    (glfw.KEY_H, "ui.panel", "toggle", 0),
+    (glfw.KEY_SLASH, "ui.cheatsheet", "toggle", 0),
+    (glfw.KEY_LEFT_BRACKET, "view.bright", "step", -3),
+    (glfw.KEY_RIGHT_BRACKET, "view.bright", "step", 3),
+    (glfw.KEY_COMMA, "view.speed", "step", -4),
+    (glfw.KEY_PERIOD, "view.speed", "step", 4),
+    (glfw.KEY_M, "audio.mic", "toggle", 0),
+    (glfw.KEY_K, "audio.play", "toggle", 0),
+    (glfw.KEY_0, "audio.restart", "fire", 0),
+    *[(glfw.KEY_1 + p, f"view.plane.{n}", "toggle", 0)
+      for p, n in enumerate(("XY", "XZ", "YZ", "XW", "YW", "ZW"))],
+]
+PADMAP = [
+    (gamepad.A, "view.rotate", "toggle", 0),
+    (gamepad.B, "theme.next", "fire", 0),
+    (gamepad.X, "view.points", "toggle", 0),
+    (gamepad.Y, "view.faces", "toggle", 0),
+    (gamepad.LB, "view.shape", "step", -1),
+    (gamepad.RB, "view.shape", "step", 1),
+    (gamepad.VIEW, "ui.panel", "toggle", 0),
+    (gamepad.MENU, "ui.cheatsheet", "toggle", 0),
+    (gamepad.LSTICK, "camera.reset", "fire", 0),
+    (gamepad.RSTICK, "camera.reset", "fire", 0),
+]
+HATMAP = [
+    (gamepad.HAT_UP, "view.bright", "step", 3),
+    (gamepad.HAT_DOWN, "view.bright", "step", -3),
+    (gamepad.HAT_LEFT, "view.speed", "step", -4),
+    (gamepad.HAT_RIGHT, "view.speed", "step", 4),
+]
+
+
+def act(reg: Registry, pid: str, op: str, arg: int = 0) -> None:
+    p = reg.get(pid)
+    if p is None:
+        return
+    if op == "step":
+        p.step(arg)
+    elif op == "toggle":
+        p.toggle()
+    elif op == "fire":
+        p.fire()
 
 
 def _err(where: str, e: Exception) -> str:
     return f"{where}: {type(e).__name__}: {e}"[:160]
 
 
-def _restart(audio, impl) -> None:
+def _quiet(fn) -> None:
+    try:
+        fn()
+    except Exception:  # noqa: BLE001, S110 — teardown is best-effort
+        pass
+
+
+def _restart(audio, impl, midi_io) -> None:
     # execv swaps the process image in place — same PID, same terminal,
     # same stdio — so stdout doesn't detach and the user's shell keeps
     # owning the child. The OS reclaims the GL context and audio device
     # on image swap; we still stop the audio stream first so Core Audio
     # doesn't complain about a stream vanishing mid-callback.
-    try:
-        audio.stop()
-    except Exception:  # noqa: BLE001
-        pass
-    try:
-        impl.shutdown()
-    except Exception:  # noqa: BLE001
-        pass
-    try:
-        glfw.terminate()
-    except Exception:  # noqa: BLE001
-        pass
+    if midi_io is not None:
+        _quiet(midi_io.close)
+    _quiet(audio.stop)
+    _quiet(impl.shutdown)
+    _quiet(glfw.terminate)
     os.execv(sys.executable, [sys.executable, *sys.argv])
+
+
+def _open_midi(reg: Registry, cfg: dict):
+    """The adapter, only when configured — the core never imports it."""
+    mc = cfg.get("midi", {})
+    if not mc.get("enabled", True):
+        return None
+    try:
+        from . import midi
+    except ImportError as e:
+        print(f"midi: adapter unavailable ({e})", file=sys.stderr)
+        return None
+    try:
+        mapping = midi.MidiMap(Path(mc.get("map", "midi_map.json")), mc.get("profile", "apc40"))
+        return midi.MidiIO(reg, mapping, port=mc.get("port"), profile=mc.get("profile", "apc40"))
+    except Exception as e:  # noqa: BLE001 — a broken adapter must not stop the show
+        print(f"midi: {e}", file=sys.stderr)
+        return None
 
 
 class Keys:
@@ -121,6 +189,15 @@ class Keys:
             return 0.0
         now = time.perf_counter()
         return now - self.down_since.setdefault(key, now)
+
+    def down(self, *keys: int) -> bool:
+        return any(glfw.get_key(self.win, k) == glfw.PRESS for k in keys)
+
+
+def _ride_depth(p, octaves: float) -> None:
+    """Move 4D depth by a number of octaves of (depth − 1) — the taper's own space."""
+    u = math.log2(max(p.value - 1.0, 1e-6) / 0.05)
+    p.set_value(1.0 + 0.05 * 2.0 ** (u + octaves))
 
 
 def main() -> None:
@@ -152,10 +229,14 @@ def main() -> None:
     io.config_error_recovery = True
     io.config_error_recovery_enable_assert = False
 
+    cfg = config.load()
     audio = AudioEngine()
     control = Control(audio.chain)
     presets = Presets(s, control, audio)
-    panel = Panel(control, audio, s, renderer, presets)
+    reg = build_registry(s, control, audio, presets)
+    panel = Panel(control, audio, s, renderer, presets, registry=reg)
+    midi_io = _open_midi(reg, cfg)
+    panel.midi = midi_io
     # panel state and chain must stay one object even after source changes
     # the live objects that get re-classed on a hot reload; re-evaluated
     # each swap so recreated ones (the chain after a source attach) count
@@ -168,11 +249,15 @@ def main() -> None:
         (audio.chain, "bands", "Chain"),
         *[(p, "bands", "Params") for p in audio.chain.params],
         *([(audio.analyser, "analysis", "Analyser")] if audio.analyser is not None else []),
+        (reg, "params", "Registry"),
+        *[(p, "params", "Param") for p in reg],
+        *([(midi_io, "midi", "MidiIO"), (midi_io.map, "midi", "MidiMap")] if midi_io else []),
     ])
     panel.reloader = reloader
     keys = Keys(win)
     pad = Pad()
     drag = {"btn": None, "x": 0.0, "y": 0.0}
+    depth4, yaw, pitch, zoom = reg["view.depth4"], reg["camera.yaw"], reg["camera.pitch"], reg["camera.zoom"]
 
     # smoke-test escape hatch: HYPERSPACE_FRAMES=n closes after n frames
     frames_left = int(os.environ.get("HYPERSPACE_FRAMES", "0")) or None
@@ -203,137 +288,71 @@ def main() -> None:
         if not io.want_capture_keyboard:
             if keys.pressed(glfw.KEY_ESCAPE) or keys.pressed(glfw.KEY_Q):
                 glfw.set_window_should_close(win, True)
-            if keys.pressed(glfw.KEY_RIGHT):
-                s.shape = min(len(SHAPES) - 1, s.shape + 1)
-            if keys.pressed(glfw.KEY_LEFT):
-                s.shape = max(0, s.shape - 1)
-            if keys.pressed(glfw.KEY_SPACE):
-                s.playing = not s.playing
-            if keys.pressed(glfw.KEY_P):
-                s.points = not s.points
-            if keys.pressed(glfw.KEY_L):
-                s.lines = not s.lines
-            if keys.pressed(glfw.KEY_F):
-                s.faces = not s.faces
-            if keys.pressed(glfw.KEY_H):
-                panel.open = not panel.open
-            if keys.pressed(glfw.KEY_SLASH):
-                panel.cheatsheet = not panel.cheatsheet
-            cmd = (
-                glfw.get_key(win, glfw.KEY_LEFT_SUPER) == glfw.PRESS
-                or glfw.get_key(win, glfw.KEY_RIGHT_SUPER) == glfw.PRESS
-            )
+            for key, pid, op, arg in KEYMAP:
+                if keys.pressed(key):
+                    act(reg, pid, op, arg)
             if keys.pressed(glfw.KEY_R):
-                if cmd:
-                    _restart(audio, impl)
+                if keys.down(glfw.KEY_LEFT_SUPER, glfw.KEY_RIGHT_SUPER):
+                    _restart(audio, impl, midi_io)
                 else:
-                    s.ang = [0.0] * 6
-                    s.yaw = s.pitch = 0.0
-                    s.zoom, s.pan = 1.0, [0.0, 0.0]
-            if keys.pressed(glfw.KEY_LEFT_BRACKET):
-                s.bright = clamp(s.bright - 0.1, 0.13, 4.0)
-            if keys.pressed(glfw.KEY_RIGHT_BRACKET):
-                s.bright = clamp(s.bright + 0.1, 0.13, 4.0)
-            if keys.pressed(glfw.KEY_COMMA):
-                s.speed = clamp(s.speed - 0.05, 0.0, 4.0)
-            if keys.pressed(glfw.KEY_PERIOD):
-                s.speed = clamp(s.speed + 0.05, 0.0, 4.0)
-            if keys.pressed(glfw.KEY_M):
-                if audio.on and audio.mode == "mic":
-                    audio.stop()
-                elif panel.devices:
-                    audio.start_mic(panel.devices[panel.device_sel]["index"])
-            if keys.pressed(glfw.KEY_K):
-                audio.toggle_play()
-            if keys.pressed(glfw.KEY_0):
-                audio.restart()
-            for p in range(6):
-                if keys.pressed(glfw.KEY_1 + p):
-                    s.planes[p] = not s.planes[p]
+                    act(reg, "camera.reset", "fire")
             # ↑/↓ ride depth4 toward its range limit, accelerating with hold
             for key, sgn in ((glfw.KEY_UP, 1.0), (glfw.KEY_DOWN, -1.0)):
                 hold = keys.held(key)
                 if hold > 0.0:
                     ramp = min(hold / D4_RAMP, 1.0)
                     rate = D4_RATE0 + (D4_RATE1 - D4_RATE0) * ramp * ramp
-                    u = math.log2(max(s.depth4 - 1.0, 1e-6) / 0.05)
-                    s.depth4 = clamp(
-                        1.0 + 0.05 * 2.0 ** (u + sgn * rate * dt), D4_LO, D4_HI
-                    )
+                    _ride_depth(depth4, sgn * rate * dt)
             # F1–F8 flip whole-surface themes; with ⇧ held they save instead
-            save = (
-                glfw.get_key(win, glfw.KEY_LEFT_SHIFT) == glfw.PRESS
-                or glfw.get_key(win, glfw.KEY_RIGHT_SHIFT) == glfw.PRESS
-            )
+            save = keys.down(glfw.KEY_LEFT_SHIFT, glfw.KEY_RIGHT_SHIFT)
             for k in range(SLOTS):
                 if keys.pressed(glfw.KEY_F1 + k):
-                    (presets.save if save else presets.load)(k)
+                    act(reg, f"theme.{'save' if save else 'load'}.{k}", "fire")
 
         # ---- gamepad: a second hand on the same controls (imgui never
         # claims it, so it works even while the panel has keyboard focus) ----
         pad.poll()
         if pad.on:
-            if pad.pressed(gamepad.A):
-                s.playing = not s.playing
-            if pad.pressed(gamepad.B):
-                presets.cycle()
-            if pad.pressed(gamepad.X):
-                s.points = not s.points
-            if pad.pressed(gamepad.Y):
-                s.faces = not s.faces
-            if pad.pressed(gamepad.LB):
-                s.shape = max(0, s.shape - 1)
-            if pad.pressed(gamepad.RB):
-                s.shape = min(len(SHAPES) - 1, s.shape + 1)
-            if pad.pressed(gamepad.VIEW):
-                panel.open = not panel.open
-            if pad.pressed(gamepad.MENU):
-                panel.cheatsheet = not panel.cheatsheet
-            if pad.pressed(gamepad.LSTICK) or pad.pressed(gamepad.RSTICK):
-                s.ang = [0.0] * 6
-                s.yaw = s.pitch = 0.0
-                s.zoom, s.pan = 1.0, [0.0, 0.0]
-            if pad.hat_pressed(gamepad.HAT_UP):
-                s.bright = clamp(s.bright + 0.1, 0.13, 4.0)
-            if pad.hat_pressed(gamepad.HAT_DOWN):
-                s.bright = clamp(s.bright - 0.1, 0.13, 4.0)
-            if pad.hat_pressed(gamepad.HAT_LEFT):
-                s.speed = clamp(s.speed - 0.05, 0.0, 4.0)
-            if pad.hat_pressed(gamepad.HAT_RIGHT):
-                s.speed = clamp(s.speed + 0.05, 0.0, 4.0)
+            for btn, pid, op, arg in PADMAP:
+                if pad.pressed(btn):
+                    act(reg, pid, op, arg)
+            for bit, pid, op, arg in HATMAP:
+                if pad.hat_pressed(bit):
+                    act(reg, pid, op, arg)
             # analog: left stick orbits, right-stick Y zooms about centre,
             # triggers ride depth4 in its own log space (LT out, RT in)
-            s.yaw += pad.axis(gamepad.AX_LX) * 2.2 * dt
-            s.pitch = clamp(
-                s.pitch + pad.axis(gamepad.AX_LY) * 2.2 * dt, -1.55, 1.55
-            )
+            lx, ly = pad.axis(gamepad.AX_LX), pad.axis(gamepad.AX_LY)
+            if lx:
+                yaw.set_value(yaw.value + lx * 2.2 * dt)
+            if ly:
+                pitch.set_value(pitch.value + ly * 2.2 * dt)
             zoom_v = pad.axis(gamepad.AX_RY)
             if zoom_v:
-                s.zoom = clamp(s.zoom * 2.0 ** (-zoom_v * 1.2 * dt), 0.05, 40.0)
+                zoom.set_value(zoom.value * 2.0 ** (-zoom_v * 1.2 * dt))
             d4 = pad.trigger(gamepad.AX_RT) - pad.trigger(gamepad.AX_LT)
             if d4:
-                u = math.log2(max(s.depth4 - 1.0, 1e-6) / 0.05)
-                s.depth4 = clamp(
-                    1.0 + 0.05 * 2.0 ** (u + d4 * 2.4 * dt),
-                    T_DEPTH.map(0), T_DEPTH.map(T_DEPTH.steps),
-                )
+                _ride_depth(depth4, d4 * 2.4 * dt)
+
+        # ---- MIDI controller: routed through the same registry ----
+        if midi_io is not None:
+            try:
+                midi_io.poll()
+            except Exception as e:  # noqa: BLE001 — hot-reloaded code may raise
+                reloader.runtime_error = _err("midi", e)
 
         w, h = glfw.get_window_size(win)
         if not io.want_capture_mouse:
             x, y = glfw.get_cursor_pos(win)
             left = glfw.get_mouse_button(win, glfw.MOUSE_BUTTON_LEFT) == glfw.PRESS
             right = glfw.get_mouse_button(win, glfw.MOUSE_BUTTON_RIGHT) == glfw.PRESS
-            shift = (
-                glfw.get_key(win, glfw.KEY_LEFT_SHIFT) == glfw.PRESS
-                or glfw.get_key(win, glfw.KEY_RIGHT_SHIFT) == glfw.PRESS
-            )
+            shift = keys.down(glfw.KEY_LEFT_SHIFT, glfw.KEY_RIGHT_SHIFT)
             # shift+drag pans too — a trackpad has no right button to hold
             btn = "pan" if (right or (left and shift)) else "orbit" if left else None
             if btn != drag["btn"]:
                 drag.update(btn=btn, x=x, y=y)
             elif btn == "orbit":
-                s.yaw += (x - drag["x"]) * 0.005
-                s.pitch = clamp(s.pitch + (y - drag["y"]) * 0.005, -1.55, 1.55)
+                yaw.set_value(yaw.value + (x - drag["x"]) * 0.005)
+                pitch.set_value(pitch.value + (y - drag["y"]) * 0.005)
                 drag.update(x=x, y=y)
             elif btn == "pan":
                 s.pan[0] += x - drag["x"]
@@ -341,13 +360,13 @@ def main() -> None:
                 drag.update(x=x, y=y)
             if io.mouse_wheel:
                 factor = 2.0 ** (io.mouse_wheel * 0.15)
-                new_zoom = clamp(s.zoom * factor, 0.05, 40.0)
-                factor = new_zoom / s.zoom
+                old = s.zoom
+                zoom.set_value(old * factor)
+                factor = s.zoom / old
                 # zoom about the cursor: keep the point under it fixed
                 cx, cy = w / 2 + s.pan[0], h / 2 + s.pan[1]
                 s.pan[0] += (cx - x) * (factor - 1)
                 s.pan[1] += (cy - y) * (factor - 1)
-                s.zoom = new_zoom
         else:
             drag["btn"] = None
 
@@ -379,7 +398,7 @@ def main() -> None:
 
         if panel.restart_requested:
             panel.restart_requested = False
-            _restart(audio, impl)
+            _restart(audio, impl, midi_io)
 
         if reloader.error or reloader.runtime_error:
             imgui.set_next_window_pos(imgui.ImVec2(12, 12), imgui.Cond_.always)
@@ -404,6 +423,8 @@ def main() -> None:
 
         glfw.swap_buffers(win)
 
+    if midi_io is not None:
+        midi_io.close()
     audio.stop()
     impl.shutdown()
     glfw.terminate()
