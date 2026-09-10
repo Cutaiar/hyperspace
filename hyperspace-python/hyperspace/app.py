@@ -58,6 +58,7 @@ from .audio import AudioEngine
 from .control import Control
 from .gamepad import Pad
 from .hotreload import HotReloader
+from .overlay import GlfwBackend, Overlay
 from .params import Registry, build_registry
 from .presets import SLOTS, Presets
 from .render import Renderer, ViewState
@@ -90,6 +91,8 @@ KEYMAP = [
     (glfw.KEY_M, "audio.mic", "toggle", 0),
     (glfw.KEY_K, "audio.play", "toggle", 0),
     (glfw.KEY_0, "audio.restart", "fire", 0),
+    (glfw.KEY_T, "overlay.on", "toggle", 0),
+    (glfw.KEY_G, "overlay.passthrough", "toggle", 0),
     *[(glfw.KEY_1 + p, f"view.plane.{n}", "toggle", 0)
       for p, n in enumerate(("XY", "XZ", "YZ", "XW", "YW", "ZW"))],
 ]
@@ -150,6 +153,28 @@ def _restart(audio, impl, midi_io) -> None:
     os.execv(sys.executable, [sys.executable, *sys.argv])
 
 
+def _make_overlay(win, reg: Registry, panel, cfg: dict) -> Overlay:
+    """Overlay state with its params; entering hides the panel and sheet."""
+    shown = {}
+
+    def hide():
+        shown["panel"], shown["sheet"] = panel.open, panel.cheatsheet
+        panel.open = panel.cheatsheet = False
+
+    def restore():
+        panel.open = shown.get("panel", True)
+        panel.cheatsheet = shown.get("sheet", True)
+
+    ov = Overlay(win, GlfwBackend(glfw), on_enter=hide, on_leave=restore)
+    ov.register(reg)
+    oc = cfg.get("overlay", {})
+    ov.passthrough = bool(oc.get("passthrough", False))
+    ov.bg = float(oc.get("bg", 0.0))
+    ov.alpha = float(oc.get("alpha", 1.0))
+    ov.on = bool(oc.get("on_start", False))
+    return ov
+
+
 def _open_midi(reg: Registry, cfg: dict):
     """The adapter, only when configured — the core never imports it."""
     mc = cfg.get("midi", {})
@@ -208,6 +233,9 @@ def main() -> None:
     glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
     glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, True)
     glfw.window_hint(glfw.SAMPLES, 4)
+    # a creation-time hint: the framebuffer keeps alpha so overlay mode can
+    # clear to see-through; normal mode clears opaque (overlay.py)
+    glfw.window_hint(glfw.TRANSPARENT_FRAMEBUFFER, True)
     win = glfw.create_window(1280, 820, TITLE, None, None)
     if not win:
         glfw.terminate()
@@ -235,6 +263,8 @@ def main() -> None:
     presets = Presets(s, control, audio)
     reg = build_registry(s, control, audio, presets)
     panel = Panel(control, audio, s, renderer, presets, registry=reg)
+    overlay = _make_overlay(win, reg, panel, cfg)
+    panel.overlay = overlay
     midi_io = _open_midi(reg, cfg)
     panel.midi = midi_io
     # panel state and chain must stay one object even after source changes
@@ -251,6 +281,7 @@ def main() -> None:
         *([(audio.analyser, "analysis", "Analyser")] if audio.analyser is not None else []),
         (reg, "params", "Registry"),
         *[(p, "params", "Param") for p in reg],
+        (overlay, "overlay", "Overlay"),
         *([(midi_io, "midi", "MidiIO"), (midi_io.map, "midi", "MidiMap")] if midi_io else []),
     ])
     panel.reloader = reloader
@@ -339,6 +370,10 @@ def main() -> None:
                 midi_io.poll()
             except Exception as e:  # noqa: BLE001 — hot-reloaded code may raise
                 reloader.runtime_error = _err("midi", e)
+
+        # ---- overlay: window attributes follow the overlay.* params ----
+        overlay.apply()
+        renderer.bg_alpha = overlay.bg_alpha
 
         w, h = glfw.get_window_size(win)
         if not io.want_capture_mouse:

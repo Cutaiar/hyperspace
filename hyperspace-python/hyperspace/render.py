@@ -195,6 +195,9 @@ class ViewState:
 class Renderer:
     def __init__(self, ctx: moderngl.Context):
         self.ctx = ctx
+        # clear alpha: 1 is the opaque black ground; overlay mode lowers it
+        # so whatever is behind the window shows through (overlay.py)
+        self.bg_alpha = 1.0
         self._lbuf = ctx.buffer(reserve=1200 * 2 * 3 * 4, dynamic=True)
         self._pbuf = ctx.buffer(reserve=600 * 4 * 4, dynamic=True)
         self._fbuf = ctx.buffer(reserve=2160 * 3 * 7 * 4, dynamic=True)
@@ -355,7 +358,10 @@ class Renderer:
         draw_w = np.maximum(width, 1.0)
         alpha = alpha * np.minimum(width, 1.0)  # sub-pixel width folds into alpha
 
-        self.ctx.clear(*BG)
+        # premultiplied ground: black at bg_alpha, so SRC_ALPHA/ONE_MINUS
+        # blending leaves the framebuffer correctly composited for a
+        # transparent window (colour = Σ c·a, alpha = 1 − Π(1 − a))
+        self.ctx.clear(*BG, getattr(self, "bg_alpha", 1.0))
         self._lines["u_size"].value = (float(w), float(h))
 
         # ---- face fills, under the wireframe (agent-validated prototype) ----

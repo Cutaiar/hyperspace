@@ -66,3 +66,16 @@ next to `presets.json` (delete it to get the defaults back). Knobs use soft
 pickup — after a band switch or a theme load a knob does nothing until it
 sweeps through the current value. An optional `config.toml` names the port,
 profile and map file, or disables the adapter (see `hyperspace/config.py`).
+
+## Overlay mode
+
+Press `T` (or the APC40's master-select button) and the window drops its
+frame, covers the screen, sits above everything — including another app's
+fullscreen video on macOS — and clears to see-through, so only the shape is
+drawn over what is behind it. `G` (or the pan button) sends clicks through to
+the window underneath; the window then never takes focus, so the keyboard
+stops reaching it — drive it from MIDI or the gamepad, or ⌘-Tab to it and
+press `G` again. The crossfader fades the ground from see-through to black.
+The panel's Overlay section holds the same params (`overlay.on`,
+`overlay.passthrough`, `overlay.bg`, `overlay.alpha`, `overlay.monitor`),
+all learnable. `[overlay] on_start = true` in `config.toml` launches into it.

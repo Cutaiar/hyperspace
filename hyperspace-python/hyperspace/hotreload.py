@@ -37,7 +37,7 @@ from pathlib import Path
 # module after it, so cross-module imports always rebind fresh
 MODULES = (
     "analysis", "tapers", "geometry", "bands", "control", "audio", "render",
-    "params", "apc40", "midi", "ui",
+    "params", "overlay", "apc40", "midi", "ui",
 )
 
 
