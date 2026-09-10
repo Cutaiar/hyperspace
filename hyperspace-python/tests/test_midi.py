@@ -10,6 +10,7 @@ from hyperspace.analysis import Analyser
 from hyperspace.bands import Chain
 from hyperspace.control import Control
 from hyperspace.midi import PICKUP_TOL, Binding, MidiIO, MidiMap
+from hyperspace.overlay import Overlay
 from hyperspace.params import Kind, build_registry
 from hyperspace.presets import Presets
 from hyperspace.render import ViewState
@@ -55,6 +56,7 @@ def rig(tmp_path):
     reg.trigger("audio.restart", "Restart", lambda: None)
     reg.trigger("audio.stop", "Stop", lambda: None)
     reg.toggle("audio.play", "Play", lambda: False, lambda v: None)
+    Overlay(None, None).register(reg)
     inp, out = FakeIn(), FakeOut()
     m = MidiIO(reg, MidiMap(tmp_path / "midi_map.json"), inp=inp, out=out)
     return SimpleNamespace(reg=reg, view=view, control=control, audio=audio,

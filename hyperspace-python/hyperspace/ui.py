@@ -146,6 +146,7 @@ CHEATSHEET = [
     ("F1–F8", "load theme · ⇧ saves"),
     ("Cmd+R", "restart process"),
     ("H / ?", "panel / this sheet"),
+    ("T / G", "overlay mode · click-through"),
     ("Esc / Q", "quit"),
     # Xbox-layout gamepad, Bluetooth or USB (gamepad.py holds the map)
     ("pad A B", "pause · next theme"),
@@ -183,6 +184,7 @@ class Panel:
         self._bmp_dialog = None
         self.reloader = None  # set by app.py; panel only reads status off it
         self.midi = None      # set by app.py when an adapter is up (midi.MidiIO)
+        self.overlay = None   # set by app.py (overlay.Overlay); its params draw below
         self.restart_requested = False  # main loop polls after draw() and execv's
         self._register_panel_params()
 
@@ -525,6 +527,7 @@ class Panel:
                 imgui.text_colored(WARN, f"GLSL: {self.renderer.pattern_error}")
             self._bitmap_section()
         imgui.separator()
+        self._overlay_section()
 
         # ---- themes: whole-surface save states on F1–F8 ----
         if self.presets is not None:
@@ -681,6 +684,27 @@ class Panel:
                 self._slider("view.bmp_amp", 92)
                 imgui.same_line()
                 self._slider("view.bmp_rate")
+
+    def _overlay_section(self) -> None:
+        """Overlay mode: float the render over the screen (overlay.py)."""
+        if self.overlay is None or "overlay.on" not in self.reg:
+            return
+        _micro("overlay")
+        if imgui.is_item_hovered():
+            imgui.set_tooltip(
+                "Frameless, see-through, above everything — including a "
+                "fullscreen video. T toggles; G sends clicks through."
+            )
+        self._check("overlay.on")
+        imgui.same_line()
+        self._check("overlay.passthrough")
+        self._slider("overlay.bg")
+        self._slider("overlay.alpha")
+        if len(self.reg["overlay.monitor"].names) > 1:
+            self._combo("overlay.monitor")
+        if self.overlay.error:
+            imgui.text_colored(WARN, self.overlay.error)
+        imgui.separator()
 
     def _midi_status(self) -> None:
         m = self.midi

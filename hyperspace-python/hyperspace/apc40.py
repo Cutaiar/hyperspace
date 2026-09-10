@@ -127,7 +127,8 @@ DEFAULT_MAP: list[dict] = [
     *[_cc(f"band.{i}.post", CC_FADER, i, ring=0) for i in range(6)],
     _cc("master.dyn", CC_FADER, 6, ring=0), _cc("master.trim", CC_FADER, 7, ring=0),
     _cc("master.gain", CC_MASTER, 0, ring=0),
-    _cc("view.depth4", CC_XFADE, 0, ring=0),
+    # crossfader: the video behind (left) ↔ black ground (right) in overlay mode
+    _cc("overlay.bg", CC_XFADE, 0, ring=0),
     _cc("view.shape", CC_CUE, 0, mode="rel", ring=0),
     # track buttons, one strip per band
     *[_note("band.select", N_SELECT, i, mode="set", value=i) for i in range(6)],
@@ -156,4 +157,7 @@ DEFAULT_MAP: list[dict] = [
     _note("band.select", N_LEFT, mode="step", value=-1),
     _note("ui.panel", N_DEVICE_ON), _note("ui.cheatsheet", N_DETAIL),
     _note("audio.restart", N_CLIPTRACK),
+    # overlay: master-select floats the render over the screen, pan sends
+    # clicks through to what is underneath (the panel stops being clickable)
+    _note("overlay.on", N_MASTER_SEL), _note("overlay.passthrough", N_PAN),
 ]
