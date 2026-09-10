@@ -117,7 +117,7 @@ class Overlay:
         self.backend = backend
         self.on_enter, self.on_leave = on_enter, on_leave
         self.on = False
-        self.passthrough = False
+        self.passthrough = True  # an overlay should not block what is under it
         self.bg = 0.0
         self.alpha = 1.0
         self.monitor = -1        # index into backend.monitors(); −1 = the window's own
@@ -135,8 +135,10 @@ class Overlay:
                        "screen — above a fullscreen video. T toggles.")
         reg.toggle("overlay.passthrough", "Click-through", lambda: self.passthrough,
                    lambda v: setattr(self, "passthrough", bool(v)), group=g,
-                   tip="Send clicks to whatever is underneath. The window then never "
-                       "takes focus: drive it from MIDI, the pad, or ⌘-Tab to it and press G.")
+                   tip="On (the default): clicks go to whatever is underneath, so you can "
+                       "run the video behind. The window then never takes focus — to get "
+                       "clicks and keys back, ⌘-Tab to Hyperspace and press G, or use the "
+                       "pan button on the APC40.")
         reg.continuous("overlay.bg", "Ground", lambda: self.bg,
                        lambda v: setattr(self, "bg", float(v)), lo=0.0, hi=1.0,
                        fmt=lambda v: "clear" if v <= 0 else f"{v:.2f} black", group=g,

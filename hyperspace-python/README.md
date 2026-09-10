@@ -72,10 +72,12 @@ profile and map file, or disables the adapter (see `hyperspace/config.py`).
 Press `T` (or the APC40's master-select button) and the window drops its
 frame, covers the screen, sits above everything — including another app's
 fullscreen video on macOS — and clears to see-through, so only the shape is
-drawn over what is behind it. `G` (or the pan button) sends clicks through to
-the window underneath; the window then never takes focus, so the keyboard
-stops reaching it — drive it from MIDI or the gamepad, or ⌘-Tab to it and
-press `G` again. The crossfader fades the ground from see-through to black.
+drawn over what is behind it. Clicks pass straight through to the window
+underneath, so you can run the video behind as normal; that also means the
+overlay never takes focus and the keyboard stops reaching it. To get clicks
+and keys back, ⌘-Tab to Hyperspace and press `G` (or hit the APC40's pan
+button); `G` again hands them back. The crossfader fades the ground from
+see-through to black.
 The panel's Overlay section holds the same params (`overlay.on`,
 `overlay.passthrough`, `overlay.bg`, `overlay.alpha`, `overlay.monitor`),
 all learnable. `[overlay] on_start = true` in `config.toml` launches into it.

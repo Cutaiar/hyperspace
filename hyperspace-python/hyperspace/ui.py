@@ -146,7 +146,8 @@ CHEATSHEET = [
     ("F1–F8", "load theme · ⇧ saves"),
     ("Cmd+R", "restart process"),
     ("H / ?", "panel / this sheet"),
-    ("T / G", "overlay mode · click-through"),
+    ("T", "overlay: float over screen, clicks pass through"),
+    ("G", "overlay: take clicks back (⌘-Tab here first)"),
     ("Esc / Q", "quit"),
     # Xbox-layout gamepad, Bluetooth or USB (gamepad.py holds the map)
     ("pad A B", "pause · next theme"),

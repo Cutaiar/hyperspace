@@ -11,7 +11,7 @@ machine. Adapters are enabled here, not in code (BLUEPRINT §3.6).
 
     [overlay]
     on_start = false        # launch straight into overlay mode
-    passthrough = false     # clicks go to the window underneath
+    passthrough = true      # clicks go to the window underneath (G / pan toggles)
     bg = 0.0                # ground darkness in overlay: 0 see-through, 1 black
     alpha = 1.0             # whole-window opacity
 """
@@ -26,7 +26,7 @@ FILE = Path("config.toml")
 DEFAULTS: dict = {
     "midi": {"enabled": True, "port": None, "profile": "apc40", "map": "midi_map.json"},
     # overlay.py: start floating over the screen; ground 0 = see-through
-    "overlay": {"on_start": False, "passthrough": False, "bg": 0.0, "alpha": 1.0},
+    "overlay": {"on_start": False, "passthrough": True, "bg": 0.0, "alpha": 1.0},
 }
 
 

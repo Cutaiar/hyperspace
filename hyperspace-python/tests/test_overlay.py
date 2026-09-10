@@ -69,7 +69,7 @@ def test_params_registered(rig):
 def test_nothing_happens_until_apply(rig):
     rig.ov.apply()
     assert ("spaces", True) not in rig.b.calls
-    assert rig.b.calls == [("MOUSE_PASSTHROUGH", False), ("opacity", 1.0)]
+    assert rig.b.calls == [("MOUSE_PASSTHROUGH", False), ("opacity", 1.0)]  # off: clickable
 
 
 def test_enter_covers_the_windows_monitor_and_hides_panel(rig):
@@ -95,8 +95,8 @@ def test_leave_restores_everything(rig):
     assert rig.ov.bg_alpha == 1.0
 
 
-def test_passthrough_only_while_on(rig):
-    rig.reg["overlay.passthrough"].set(True)
+def test_passthrough_defaults_on_but_only_applies_while_on(rig):
+    assert rig.ov.passthrough is True
     rig.ov.apply()
     assert ("MOUSE_PASSTHROUGH", True) not in rig.b.calls
     rig.reg["overlay.on"].set(True)
