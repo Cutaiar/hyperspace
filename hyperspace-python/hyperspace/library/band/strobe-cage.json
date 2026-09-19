@@ -1,0 +1,95 @@
+{
+ "schema": "hyperspace.preset/1",
+ "group": "band",
+ "name": "Strobe Cage",
+ "layout": {
+  "bands": [
+   {
+    "f": 34.64101615137755,
+    "q": 0.8660254037844387,
+    "curve": "rect"
+   },
+   {
+    "f": 97.97958971132712,
+    "q": 0.9797958971132712,
+    "curve": "rect"
+   },
+   {
+    "f": 252.98221281347034,
+    "q": 1.0540925533894598,
+    "curve": "rect"
+   },
+   {
+    "f": 692.8203230275509,
+    "q": 0.8660254037844386,
+    "curve": "rect"
+   },
+   {
+    "f": 2190.8902300206646,
+    "q": 0.7824607964359517,
+    "curve": "rect"
+   },
+   {
+    "f": 7483.314773547882,
+    "q": 0.7483314773547882,
+    "curve": "rect"
+   }
+  ]
+ },
+ "values": {
+  "band.0.fn": 5,
+  "band.0.trim": 0,
+  "band.0.pre": 1.2,
+  "band.0.post": 1.4,
+  "band.0.atk": 0.008,
+  "band.0.dec": 0.09,
+  "band.0.thr": 0.12,
+  "band.0.exp": 1.1,
+  "band.0.trn": 0.45,
+  "band.1.fn": 9,
+  "band.1.trim": 0,
+  "band.1.pre": 1,
+  "band.1.post": 1.6,
+  "band.1.atk": 0.004,
+  "band.1.dec": 0.06,
+  "band.1.thr": 0.12,
+  "band.1.exp": 1.3,
+  "band.1.trn": 0.7,
+  "band.2.fn": 9,
+  "band.2.trim": 0,
+  "band.2.pre": 1.2,
+  "band.2.post": 1.6,
+  "band.2.atk": 0.004,
+  "band.2.dec": 0.05,
+  "band.2.thr": 0.12,
+  "band.2.exp": 1.3,
+  "band.2.trn": 0.75,
+  "band.3.fn": 5,
+  "band.3.trim": 0,
+  "band.3.pre": 1,
+  "band.3.post": 1.3,
+  "band.3.atk": 0.01,
+  "band.3.dec": 0.11,
+  "band.3.thr": 0.12,
+  "band.3.exp": 1.1,
+  "band.3.trn": 0.5,
+  "band.4.fn": 9,
+  "band.4.trim": 0,
+  "band.4.pre": 1,
+  "band.4.post": 1.5,
+  "band.4.atk": 0.008,
+  "band.4.dec": 0.09,
+  "band.4.thr": 0.12,
+  "band.4.exp": 1.2,
+  "band.4.trn": 0.65,
+  "band.5.fn": 5,
+  "band.5.trim": 0,
+  "band.5.pre": 1.2,
+  "band.5.post": 1.4,
+  "band.5.atk": 0.012,
+  "band.5.dec": 0.13,
+  "band.5.thr": 0.12,
+  "band.5.exp": 1.2,
+  "band.5.trn": 0.6
+ }
+}
