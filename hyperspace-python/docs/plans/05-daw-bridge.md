@@ -13,10 +13,17 @@ the desk: `params.py` is the parameter registry (every panel widget, hotkey
 and gamepad button goes through it), `midi.py` is the inbound MIDI adapter
 with soft pickup, LED/ring feedback and right-click Learn, `apc40.py` the
 first device profile, `config.py` the `[midi]` gate. The core-independence
-rule is tested (`test_core_does_not_import_the_midi_adapter`). Outbound
-lanes, OSC, MIDI clock, pitch-bend-as-14-bit-lane and the FL script remain
-as written below; the outbound side should reuse `MidiIO`'s port handling
-and the registry's `norm` as its lane values.
+rule is tested (`test_core_does_not_import_the_midi_adapter`). OSC, MIDI
+clock and the FL script remain as written below.
+
+**Status (2026-09-18, plan 07 WP4c):** task 1's MIDI half and task 3's
+external-lane half landed in `bridge.py`: the analyzer's lanes (and any
+param's effective norm) go out as per-channel pitch bend or 14-bit CC
+pairs, rate-limited and change-gated; the same forms in become the
+routing table's `ext:<i>` sources. `[bridge]` in config.py gates it, off
+by default; port handling is `midi.Ports`, shared with `MidiIO`. Setup
+and the FL link walkthrough: `assets/05-bridge.md`. MIDI clock waits for
+a beat source (DJ Link); the loopback round trip is `tests/test_bridge.py`.
 
 ## Prerequisites
 
@@ -29,10 +36,11 @@ hyperspace/params.py         # parameter registry (done)
 hyperspace/midi.py           # inbound MIDI adapter + feedback (done)
 hyperspace/apc40.py          # device profile: port, SysEx, LEDs, default map (done)
 hyperspace/config.py         # [midi] section; [bridge] to follow (done)
-hyperspace/bridge.py         # outbound adapters, config-gated
+hyperspace/bridge.py         # MIDI lanes out / ext lanes in, config-gated (done)
 config: [bridge] section     # ports, channel maps, resolutions, rates
 fl/HyperspaceBridge/         # FL MIDI script fusing 14-bit CC pairs
-docs/plans/assets/05-fl.md   # FL-side setup walkthrough
+docs/plans/assets/05-bridge.md   # IAC setup + FL link walkthrough (done)
+docs/plans/assets/05-fl.md   # FL-side script walkthrough
 ```
 
 ## Tasks
@@ -96,11 +104,11 @@ MIDI and OSC listeners feeding the parameter system and the bus:
 
 ## Exit criteria
 
-- [ ] Loopback round-trip test green on merged `main`.
+- [x] Loopback round-trip test green (`tests/test_bridge.py`, fake ports).
 - [ ] FL receives smooth 14-bit motion by both mechanisms; walkthrough
       written and followed once from scratch.
 - [ ] MIDI clock verified against a deck BPM change.
-- [ ] Core-independence test green; bridge disabled costs zero at runtime.
+- [x] Core-independence test green; bridge disabled costs zero at runtime.
 
 ## Risks / notes
 

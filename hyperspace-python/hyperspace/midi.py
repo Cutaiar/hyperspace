@@ -55,7 +55,7 @@ MAP_FILE = bindings_path()
 RECONNECT_S = 2.0
 PICKUP_TOL = 1.5 / 127   # a knob "reaches" the value within this
 
-__all__ = ["PICKUP_TOL", "Binding", "MidiIO", "MidiMap", "find_port"]
+__all__ = ["PICKUP_TOL", "Binding", "MidiIO", "MidiMap", "Ports", "find_port"]
 
 
 class MidiMap:
@@ -106,12 +106,97 @@ def find_port(names: list[str], match: str) -> str | None:
     return next((n for n in names if m in n.lower()), None)
 
 
+class Ports:
+    """An input and an output, found by name substring, reopened on their
+    own when they vanish — the port handling MidiIO and bridge.py share.
+
+    `inp`/`out` may be injected (tests hand in fakes with iter_pending()
+    and send()). A controller names both by one substring; the bridge
+    names each side on its own — None leaves that side closed. An error
+    on either side drops both, and `retry` reopens them after RECONNECT_S.
+    """
+
+    def __init__(self, in_match: str | None, out_match: str | None = None, *,
+                 inp=None, out=None, clock=time.monotonic):
+        self.in_match, self.out_match = in_match, out_match
+        self.clock = clock
+        self.inp, self.out = inp, out
+        self.injected = inp is not None or out is not None
+        self.name = "injected" if self.injected else ""
+        self.in_name = self.out_name = self.name
+        self.error = ""
+        self._next_try = 0.0
+
+    @property
+    def on(self) -> bool:
+        return self.inp is not None or self.out is not None
+
+    def connect(self) -> bool:
+        """Open whatever is present now; True when something opened."""
+        self._next_try = self.clock() + RECONNECT_S
+        try:
+            iname = find_port(mido.get_input_names(), self.in_match) if self.in_match else None
+            oname = find_port(mido.get_output_names(), self.out_match) if self.out_match else None
+        except Exception as e:  # noqa: BLE001 — backend missing / broken
+            self.error = f"{type(e).__name__}: {e}"[:120]
+            return False
+        if iname is None and oname is None:
+            self.inp = self.out = None
+            return False
+        try:
+            self.inp = mido.open_input(iname) if iname else None
+            self.out = mido.open_output(oname) if oname else None
+        except Exception as e:  # noqa: BLE001
+            self.error = f"open {iname or oname}: {e}"[:120]
+            self.inp = self.out = None
+            return False
+        self.in_name, self.out_name = iname or "", oname or ""
+        self.name = iname or oname
+        self.error = ""
+        return True
+
+    def retry(self) -> bool:
+        """Reconnect when due; True the frame the ports come back."""
+        if self.on or self.injected or self.clock() < self._next_try:
+            return False
+        return self.connect()
+
+    def recv(self) -> list:
+        """Drain the input; a read error drops the ports (retry reopens)."""
+        if self.inp is None:
+            return []
+        try:
+            return list(self.inp.iter_pending())
+        except Exception as e:  # noqa: BLE001
+            self.error = f"read: {e}"[:120]
+            self.inp = self.out = None
+            return []
+
+    def send(self, msg) -> None:
+        if self.out is None:
+            return
+        try:
+            self.out.send(msg)
+        except Exception as e:  # noqa: BLE001 — device yanked mid-frame
+            self.error = f"send: {e}"[:120]
+            self.inp = self.out = None
+
+    def close(self) -> None:
+        for port in (self.inp, self.out):
+            if port is not None and not self.injected:
+                try:
+                    port.close()
+                except Exception:  # noqa: BLE001, S110
+                    pass
+        self.inp = self.out = None
+
+
 class MidiIO:
     """One controller: opens the ports, routes input, sends feedback.
 
     `inp`/`out` may be injected (tests hand in fakes with iter_pending()
     and send()); otherwise the ports are found by substring and reopened
-    on their own if the device disappears.
+    on their own if the device disappears (`Ports`).
     """
 
     def __init__(self, registry: Registry, mapping: MidiMap | None = None, *,
@@ -121,50 +206,39 @@ class MidiIO:
         self.map = mapping if mapping is not None else MidiMap(profile=profile)
         self.profile = PROFILES.get(self.map.profile) or PROFILES[profile]
         self.port_match = port or self.profile.PORT_MATCH
-        self.clock = clock
-        self.inp, self.out = inp, out
-        self._injected = inp is not None or out is not None
-        self.name = ""
-        self.error = ""
+        self.ports = Ports(self.port_match, self.port_match, inp=inp, out=out, clock=clock)
         self.last = ""          # last message seen, for the status line
         self.learning: str | None = None
-        self._next_try = 0.0
         self._writes: dict[str, float] = {}  # param → norm we last wrote / saw
-        if self._injected:
-            self.name = "injected"
+        if self.ports.injected:
             self._enter()
-        else:
-            self._connect()
+        elif self.ports.connect():
+            self._connected()
 
     # ---- ports ----
 
     @property
     def on(self) -> bool:
-        return self.inp is not None
+        return self.ports.on
 
-    def _connect(self) -> None:
-        self._next_try = self.clock() + RECONNECT_S
-        try:
-            ins = mido.get_input_names()
-            outs = mido.get_output_names()
-        except Exception as e:  # noqa: BLE001 — backend missing / broken
-            self.error = f"{type(e).__name__}: {e}"[:120]
-            return
-        name = find_port(ins, self.port_match)
-        if name is None:
-            self.inp = self.out = None
-            return
-        try:
-            self.inp = mido.open_input(name)
-            oname = find_port(outs, self.port_match)
-            self.out = mido.open_output(oname) if oname else None
-        except Exception as e:  # noqa: BLE001
-            self.error = f"open {name}: {e}"[:120]
-            self.inp = self.out = None
-            return
-        self.name = name
-        self.error = ""
-        print(f"midi: {name} ({self.profile.__name__.rsplit('.', 1)[-1]}, "
+    @property
+    def inp(self):
+        return self.ports.inp
+
+    @property
+    def out(self):
+        return self.ports.out
+
+    @property
+    def name(self) -> str:
+        return self.ports.name
+
+    @property
+    def error(self) -> str:
+        return self.ports.error
+
+    def _connected(self) -> None:
+        print(f"midi: {self.name} ({self.profile.__name__.rsplit('.', 1)[-1]}, "
               f"{len(self.map.bindings)} bindings)", file=sys.stderr)
         self._enter()
 
@@ -185,22 +259,10 @@ class MidiIO:
                     self._send(msg)
             except Exception:  # noqa: BLE001, S110
                 pass
-        for port in (self.inp, self.out):
-            if port is not None and not self._injected:
-                try:
-                    port.close()
-                except Exception:  # noqa: BLE001, S110
-                    pass
-        self.inp = self.out = None
+        self.ports.close()
 
     def _send(self, msg) -> None:
-        if self.out is None:
-            return
-        try:
-            self.out.send(msg)
-        except Exception as e:  # noqa: BLE001 — device yanked mid-frame
-            self.error = f"send: {e}"[:120]
-            self.inp = self.out = None
+        self.ports.send(msg)
 
     # ---- learn / bindings ----
 
@@ -247,18 +309,12 @@ class MidiIO:
 
     def poll(self) -> None:
         if not self.on:
-            if not self._injected and self.clock() >= self._next_try:
-                self._connect()
+            if self.ports.retry():
+                self._connected()
             if not self.on:
                 return
         self._uncatch_moved()
-        try:
-            msgs = list(self.inp.iter_pending())
-        except Exception as e:  # noqa: BLE001
-            self.error = f"read: {e}"[:120]
-            self.inp = self.out = None
-            return
-        for msg in msgs:
+        for msg in self.ports.recv():
             self._handle(msg)
         self.feedback()
 

@@ -154,6 +154,18 @@ def _open_midi(reg: Registry, cfg: dict, table: Bindings):
         return None
 
 
+def _open_bridge(reg: Registry, cfg: dict):
+    """The lanes bridge (bridge.py), only when [bridge] enabled — the same rule."""
+    if not cfg.get("bridge", {}).get("enabled", False):
+        return None
+    try:
+        from . import bridge
+        return bridge.Bridge(reg, cfg["bridge"])
+    except Exception as e:  # noqa: BLE001 — a broken adapter must not stop the show
+        print(f"bridge: {e}", file=sys.stderr)
+        return None
+
+
 class Keys:
     """Edge detection and hold timing over polled key state."""
 
@@ -233,6 +245,7 @@ def main() -> None:
     ))
     midi_io = _open_midi(reg, cfg, router.table)
     panel.midi = midi_io
+    bridge_io = _open_bridge(reg, cfg)
     # panel state and chain must stay one object even after source changes
     # the live objects that get re-classed on a hot reload; re-evaluated
     # each swap so recreated ones (the chain after a source attach) count
@@ -250,6 +263,7 @@ def main() -> None:
         (overlay, "overlay", "Overlay"),
         (router, "routing", "Router"),
         *([(midi_io, "midi", "MidiIO"), (midi_io.map, "midi", "MidiMap")] if midi_io else []),
+        *([(bridge_io, "bridge", "Bridge")] if bridge_io else []),
     ])
     panel.reloader = reloader
     keys = Keys(win)
@@ -371,6 +385,8 @@ def main() -> None:
         ok = True
         try:
             audio.step(dt)
+            if bridge_io is not None:   # lanes out, external lanes in (bridge.py)
+                bridge_io.step(audio.chain if audio.on else None, router)
             # the lanes are a modulation source like any other (routing.py);
             # once every source has spoken for this frame, land base +
             # offsets on the objects before the integrator reads them
@@ -423,6 +439,8 @@ def main() -> None:
 
     if midi_io is not None:
         midi_io.close()
+    if bridge_io is not None:
+        bridge_io.close()
     audio.stop()
     impl.shutdown()
     glfw.terminate()
