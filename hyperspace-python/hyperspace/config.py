@@ -30,6 +30,12 @@ differs on this machine. Adapters are enabled here, not in code
     rate = 100              # messages a second per lane at most (0 = every frame)
     send = ["lane:*"]       # what goes out, in lane order: "lane:*", "lane:3", "param:<id>"
     in_lanes = 16           # size of the `ext` vector the inbound lanes fill
+
+    [dream]                 # the look-back's Deep Dream worker (dream.py, torch)
+    enabled = false         # true opens the worker; off, torch is never imported
+    device = "auto"         # "auto" (MPS when there, else CPU), "mps", "cpu"
+    precision = "fp32"      # or "fp16": ~10 % faster on VGG, more p99 outliers
+    weights_dir = ""        # pretrained weights; "" = <library home>/weights
 """
 
 from __future__ import annotations
@@ -48,6 +54,8 @@ DEFAULTS: dict = {
     # bridge.py: the analyzer's lanes out to a DAW, external lanes in — off by default
     "bridge": {"enabled": False, "out": "IAC", "in": "", "encoding": "pitch", "channel": 0,
                "cc": 16, "rate": 100, "send": ["lane:*"], "in_lanes": 16},
+    # dream.py: the temporal Deep Dream behind the look-back — off by default
+    "dream": {"enabled": False, "device": "auto", "precision": "fp32", "weights_dir": ""},
 }
 
 

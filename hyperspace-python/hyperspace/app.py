@@ -111,7 +111,7 @@ def _quiet(fn) -> None:
         pass
 
 
-def _restart(audio, impl, midi_io, ctrl_win) -> None:
+def _restart(audio, impl, midi_io, ctrl_win, dream_io=None) -> None:
     # execv swaps the process image in place — same PID, same terminal,
     # same stdio — so stdout doesn't detach and the user's shell keeps
     # owning the child. The OS reclaims the GL contexts and audio device
@@ -119,6 +119,8 @@ def _restart(audio, impl, midi_io, ctrl_win) -> None:
     # doesn't complain about a stream vanishing mid-callback.
     if midi_io is not None:
         _quiet(midi_io.close)
+    if dream_io is not None:
+        _quiet(dream_io.close)
     _quiet(audio.stop)
     _quiet(lambda: glfw.make_context_current(ctrl_win))  # imgui's GL objects live there
     _quiet(impl.shutdown)
@@ -202,6 +204,18 @@ def _open_bridge(reg: Registry, cfg: dict):
         return bridge.Bridge(reg, cfg["bridge"])
     except Exception as e:  # noqa: BLE001 — a broken adapter must not stop the show
         print(f"bridge: {e}", file=sys.stderr)
+        return None
+
+
+def _open_dream(reg: Registry, cfg: dict):
+    """The look-back's dream worker (dream.py, torch), only when [dream] enabled."""
+    if not cfg.get("dream", {}).get("enabled", False):
+        return None
+    try:
+        from . import dream
+        return dream.DreamWorker(reg, cfg["dream"])
+    except Exception as e:  # noqa: BLE001 — no torch, no GPU: the plain tracer runs
+        print(f"dream: {e}", file=sys.stderr)
         return None
 
 
@@ -366,6 +380,9 @@ def main() -> None:
     panel.midi = midi_io
     panel.router = router                  # the ROUTING page edits the live table
     bridge_io = _open_bridge(reg, cfg)
+    dream_io = _open_dream(reg, cfg)
+    if dream_io is not None:            # fills the look-back's dream slot
+        renderer.lookback.source = dream_io
     # panel state and chain must stay one object even after source changes
     # the live objects that get re-classed on a hot reload; re-evaluated
     # each swap so recreated ones (the chain after a source attach) count
@@ -386,6 +403,7 @@ def main() -> None:
         (router, "routing", "Router"),
         *([(midi_io, "midi", "MidiIO"), (midi_io.map, "midi", "MidiMap")] if midi_io else []),
         *([(bridge_io, "bridge", "Bridge")] if bridge_io else []),
+        *([(dream_io, "dream", "DreamWorker")] if dream_io else []),
     ], watchers=[library])
     panel.reloader = reloader
     keys = Keys(render_win, ctrl_win)
@@ -427,7 +445,7 @@ def main() -> None:
         router.keys(keys)
         if keys.pressed(glfw.KEY_R):
             if keys.down(glfw.KEY_LEFT_SUPER, glfw.KEY_RIGHT_SUPER):
-                _restart(audio, impl, midi_io, ctrl_win)
+                _restart(audio, impl, midi_io, ctrl_win, dream_io)
             else:
                 act(reg, "camera.reset", "fire")
         # ↑/↓ ride depth4 toward its range limit, accelerating with hold
@@ -516,7 +534,7 @@ def main() -> None:
 
         if panel.restart_requested:
             panel.restart_requested = False
-            _restart(audio, impl, midi_io, ctrl_win)
+            _restart(audio, impl, midi_io, ctrl_win, dream_io)
 
         if reloader.error or reloader.runtime_error:
             _hot_error_toast(reloader.error or reloader.runtime_error)
@@ -529,6 +547,8 @@ def main() -> None:
         midi_io.close()
     if bridge_io is not None:
         bridge_io.close()
+    if dream_io is not None:
+        dream_io.close()
     audio.stop()
     impl.shutdown()
     glfw.terminate()
