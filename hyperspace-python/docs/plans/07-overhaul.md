@@ -216,6 +216,62 @@ Owns new `ui_bands.py`.
   gesture that sets f/Q from the box.
 - Per-band strip below; routing matrix (lanes → params) from WP4b.
 
+### WP6 — Look-back pipeline: Deep-Dreamed frame history · after WP5 · L total
+
+The ask: keep a history of rendered frames, run them through a Deep Dream
+pass on the GPU asynchronously (arriving a few frames late is fine), and
+composite the dreamed history over the current frame, mostly transparent
+and darker, faded in proportion to age — a tracer where only the
+high-contrast regions of the scene leave a visibly dreamed wake.
+
+Decided (2026-09-19): the dream is **temporal**, not per-frame. One
+running buffer `D`: each frame `D ← blend(D, frame, k)`, then a few
+gradient-ascent steps on `D`, then `D` goes back to the compositor.
+Persistent content (silhouettes, edges) accumulates dozens of steps over
+a second and dreams deep; content that moved fades at `k` — which *is*
+the age-proportional tracer. dream-server's 60-step recipe on a single
+frame (~300–450 ms on an M3 Max) is neither feasible at the budget nor
+needed. Measured step cost on the M3 Max, MPS: VGG16→conv3_3 5.3 ms at
+256 px, →conv4_3 7.6 ms; MobileNetV2→block 7 4.3 ms; GL→torch→GL
+staging 3.4 ms. Nothing is fixed yet — resolution, net, layer, steps,
+octaves, history depth and the copy path are what WP6-0 decides.
+
+- **WP6-0 — performance spike (research, M).** Branch off `main`, a
+  `tools/dream_bench/` harness plus a report in
+  `docs/plans/assets/06-lookback-perf.md` with measured tables and sample
+  images. Questions: where the time goes on the GL↔GPU-compute copy path
+  and how it scales with resolution (sync `glReadPixels` vs async PBO,
+  pinned memory, unified memory); whether a zero-copy path exists from
+  Python on macOS (IOSurface-backed textures shared between OpenGL and
+  Metal via PyObjC; MLX's unified-memory arrays; a GLSL ping-pong
+  implementation of the conv forward/backward that never leaves
+  moderngl); GPU contention against the real render loop at 60 fps and
+  the levers that relieve it (resolution, layer depth, steps per frame,
+  dream every N frames, fp16, temporal octaves); net/layer choices that
+  produce the classic dream look (VGG16 conv layers, GoogLeNet/Inception
+  mixed layers, MobileNetV2, ResNet18) at each budget; temporal
+  stability (flicker, jitter, gradient normalization, blend `k`); and the
+  practical limit on history depth (memory and composite cost per layer
+  are both tiny — it is an aesthetic limit). Outputs the recommended
+  configuration space for WP6a/6b and the parameter ranges.
+- **WP6a — look-back core (M, no new dependency).** `render.py` draws the
+  scene to an FBO; new `lookback.py` keeps the history ring and the
+  age-weighted composite pass (must preserve scene alpha for the overlay
+  mode); `dream.*` params in the registry — `on mix decay darken contrast
+  steps step_size layer res every echoes octaves` — all presettable and
+  modulatable. With no dream worker this is a plain age-faded tracer,
+  headless-testable with the offscreen harness.
+- **WP6b — dream worker (M, `hyperspace[dream]` optional extra).**
+  `dream.py`, config-gated like midi/bridge, nothing in the core imports
+  it; missing torch/MLX degrades to the plain tracer with a note. Worker
+  thread (kernels release the GIL), double-buffered hand-off, latest
+  finished result wins; the copy path and framework are whatever WP6-0
+  found fastest. Reuses dream-server's hook/step code minus the octave
+  loop.
+- **WP6c — tuning at the machine (S, needs the user).** Layer/steps/grade
+  by eye with real audio, the GPU-contention number on the real scene,
+  two or three factory presets.
+
 ## Dependency graph
 
 ```
@@ -223,6 +279,8 @@ WP0 (done)
  ├─► WP1 two windows ─────────────────────────────┐
  ├─► WP2 presets/library ─────────────────┐       ├─► WP5a shell
  └─► WP4a analyzer ─► WP4b routing ─► WP4c MIDI lanes ─► WP5b band editor
+                                                              └─► WP6 look-back
+WP6-0 (the spike) is independent and may run any time.
 ```
 
 Merge order for the first round: WP1 → WP2 → WP4a (WP4a's registry
