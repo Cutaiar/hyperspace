@@ -4,9 +4,10 @@ Three sections on the dream group: the composite (on, the two mixes, the
 age fade and the grade), the history (depth, cadence, size, and a row of
 live thumbnails — the echoes newest first, straight from the atlas
 texture, with the dream buffer at the end when a worker has filled it),
-and the dream worker's own settings, which are presettable now and take
-effect once WP6b's worker is attached. One preset strip for the group,
-under the first title.
+and the dream worker's settings (dream.py) with its status line —
+device and copy path, ms per submit, frames behind, drops, NaN resets,
+the stability clamp — or why there is none. One preset strip for the
+group, under the first title.
 
 A function over the Panel, like ui_presets: it draws with the panel's
 widget helpers and keeps no state, so a hot reload of this module lands
@@ -31,7 +32,7 @@ def page(panel, dt: float) -> None:
     st = r["dream.on"]
     lb = getattr(panel.renderer, "lookback", None)
 
-    panel._section("look-back", "dream", note="echoes only until WP6b")
+    panel._section("look-back", "dream", note=_worker_note(lb))
     panel._check("dream.on")
     imgui.same_line(imgui.get_content_region_avail().x - 150)
     imgui.text_disabled(_status(lb, bool(st.base)))
@@ -55,7 +56,8 @@ def page(panel, dt: float) -> None:
     _thumbnails(panel, lb)
     imgui.spacing()
 
-    panel._section("dream worker", note="WP6b")
+    panel._section("dream worker", note="[dream] in config.toml")
+    imgui.text_disabled(_worker_status(lb))
     ui._micro("net")
     panel._tip(r["dream.layer"])
     imgui.same_line(ui.LABEL_W)
@@ -80,6 +82,26 @@ def _status(lb, on: bool) -> str:
     n = len(lb.thumbnails())
     dream = "dream" if lb.dream_frame >= 0 else "no dream"
     return f"{n} echo(es) · {dream}"
+
+
+def _worker(lb):
+    """The attached source if it is a worker with a status line."""
+    src = getattr(lb, "source", None)
+    return src if src is not None and hasattr(src, "status") else None
+
+
+def _worker_note(lb) -> str:
+    return "dream worker on" if _worker(lb) is not None else "echoes only: no worker"
+
+
+def _worker_status(lb) -> str:
+    w = _worker(lb)
+    if w is None:
+        return "no worker — [dream] enabled = true needs torch (uv sync --extra dream)"
+    try:
+        return w.status()
+    except Exception as e:  # noqa: BLE001 — a status line must not take the page down
+        return f"worker: {type(e).__name__}: {e}"[:120]
 
 
 def _echo_text(lb) -> str:
