@@ -16,6 +16,18 @@ dependencies = [
     "soundfile>=0.14.0",
 ]
 
+[project.optional-dependencies]
+# WP6 look-back (temporal Deep Dream) spike: tools/dream_bench/, never
+# imported by the hyperspace package.  `uv sync --extra dream`
+dream = [
+    "torch>=2.2",
+    "torchvision>=0.17",
+    "mlx>=0.20 ; sys_platform == 'darwin'",
+    "pyobjc-framework-metal>=12.2 ; sys_platform == 'darwin'",
+    "pyobjc-framework-quartz>=12.2 ; sys_platform == 'darwin'",
+    "pillow>=10",
+]
+
 [dependency-groups]
 dev = [
     "pytest>=8.0",
