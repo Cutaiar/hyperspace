@@ -9,6 +9,7 @@ import importlib
 import os
 import sys
 import textwrap
+from types import SimpleNamespace
 
 import pytest
 
@@ -147,3 +148,13 @@ def test_downstream_change_leaves_leaf_alone(pkg):
     assert mod_b.get() == 11
     assert t.speak() == "old"          # mod_a was not reloaded
     assert not hasattr(t, "rebuilt")   # and its instances were not touched
+
+
+def test_watchers_are_polled_on_the_same_cadence():
+    calls = []
+    w = SimpleNamespace(poll=lambda now: calls.append(now) or True, status="library: x")
+    r = HotReloader(list, package="hotpkg", modules=(), period=1.0, watchers=[w])
+    assert not r.poll(now=10.0)                       # no module changed
+    assert calls == [10.0] and r.status == "library: x"
+    r.poll(now=10.5)
+    assert calls == [10.0]                            # gated by the same period

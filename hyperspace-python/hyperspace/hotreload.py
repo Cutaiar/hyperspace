@@ -23,6 +23,10 @@ Contract for hot classes:
   - a changed __init__ does NOT re-run on live instances; attributes it
     would have added are missing until restart (the frame guard in app.py
     catches the resulting error and shows it instead of crashing)
+
+Data is watched the same way: `watchers` are objects with a ``poll(now)``
+(the preset library) that get polled on the same cadence, so a preset
+JSON saved in an editor lands like a module save does.
 """
 
 from __future__ import annotations
@@ -59,15 +63,17 @@ class HotReloader:
     it is re-evaluated each reload so recreated objects (the chain after a
     source attach) are picked up. `error` holds the last failed reload,
     `runtime_error` the last frame-guard failure (app.py writes it),
-    `status` the last successful swap.
+    `status` the last successful swap — or a watcher's own `status` when
+    one of those picked something up.
     """
 
     def __init__(self, targets, package: str = "hyperspace",
-                 modules: tuple[str, ...] = MODULES, period: float = 0.5):
+                 modules: tuple[str, ...] = MODULES, period: float = 0.5, watchers=()):
         self.targets = targets
         self.package = package
         self.modules = modules
         self.period = period
+        self.watchers = list(watchers)
         self.error = ""
         self.runtime_error = ""
         self.status = ""
@@ -88,6 +94,9 @@ class HotReloader:
         if now < self._next:
             return False
         self._next = now + self.period
+        for w in self.watchers:
+            if w.poll(now) and getattr(w, "status", ""):
+                self.status = w.status
         changed = []
         for name, f in self._files():
             try:

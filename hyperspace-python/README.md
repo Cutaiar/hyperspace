@@ -14,7 +14,7 @@ DJ-link, and DAW-bridge tiers — is in [`docs/SETUP.md`](docs/SETUP.md).
 ```bash
 uv sync
 uv run pytest          # 208 tests, ~5s
-uv run hyperspace      # opens the render window
+uv run hyperspace      # opens the render window and the control window
 ```
 
 ## Layout
@@ -62,22 +62,40 @@ The full default layout is at the bottom of `hyperspace/apc40.py`.
 
 To rebind anything: right-click the control in the panel → **Learn MIDI**,
 then move a knob or press a button. Bindings persist in `midi_map.json`
-next to `presets.json` (delete it to get the defaults back). Knobs use soft
+in the library home (delete it to get the defaults back). Knobs use soft
 pickup — after a band switch or a theme load a knob does nothing until it
 sweeps through the current value. An optional `config.toml` names the port,
 profile and map file, or disables the adapter (see `hyperspace/config.py`).
 
-## Overlay mode
+## Presets, projects and the library
 
-Press `T` (or the APC40's master-select button) and the window drops its
-frame, covers the screen, sits above everything — including another app's
-fullscreen video on macOS — and clears to see-through, so only the shape is
-drawn over what is behind it. Clicks pass straight through to the window
-underneath, so you can run the video behind as normal; that also means the
-overlay never takes focus and the keyboard stops reaching it. To get clicks
-and keys back, ⌘-Tab to Hyperspace and press `G` (or hit the APC40's pan
-button); `G` again hands them back. The crossfader fades the ground from
-see-through to black.
-The panel's Overlay section holds the same params (`overlay.on`,
-`overlay.passthrough`, `overlay.bg`, `overlay.alpha`, `overlay.monitor`),
-all learnable. `[overlay] on_start = true` in `config.toml` launches into it.
+Every registry group (view, camera, band…) has a preset library, and a
+*project* (`*.hyp.json`) saves everything at once, including the F1–F8
+theme bank. Factory presets live in `hyperspace/library/`; yours go in
+`$HYPERSPACE_HOME` (default `~/Hyperspace`) in the same tree, with
+`projects/`, `config.toml` and `midi_map.json` next to them — a user file
+shadows a factory file of the same name. The files are plain JSON: edit one
+in a text editor while the app runs and the loaded preset updates in place.
+See `hyperspace/library.py` for the formats and the API the panel uses.
+
+## Two windows: output and controls
+
+The *render* window is pure output — what goes on the projector or TV —
+and the *control* window holds the panel, the cheat sheet and the
+hot-reload notices. Keys work from either; the mouse orbits, pans and zooms
+in the render window. The panel's Output section (`output.monitor`,
+`output.fullscreen`, `output.overlay`, `output.passthrough`, `output.bg`,
+`output.alpha`, all learnable) says where the render window goes:
+fullscreen on a chosen screen, or overlay mode.
+
+**Overlay mode.** Press `T` (or the APC40's master-select button) and the
+render window drops its frame, covers the screen, sits above everything —
+including another app's fullscreen video on macOS — and clears to
+see-through, so only the shape is drawn over what is behind it. Clicks pass
+straight through to the window underneath, so you can run the video behind
+as normal; that also means the render window never takes focus — keys keep
+working from the control window, and `G` (or the APC40's pan button) takes
+clicks back for orbiting. The crossfader fades the ground from see-through
+to black. The pre-split `overlay.*` ids remain as aliases, so old MIDI maps
+keep working. `[output] fullscreen = true` or `on_start = true` (overlay) in
+`config.toml` launches straight into a mode; `monitor = 1` picks the screen.
