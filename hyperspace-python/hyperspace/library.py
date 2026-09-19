@@ -348,6 +348,13 @@ class Project:
         self.lib._sync(self.path)
         return self.path
 
+    def is_dirty(self) -> bool:
+        """Does the live state differ from the file? Never saved counts as dirty."""
+        reg = self.lib.reg
+        if reg is None:
+            return False
+        return self.path is None or self.values != reg.snapshot()
+
 
 # ---------------------------------------------------------------- library
 
