@@ -220,5 +220,13 @@ def test_panel_draws_headless():
             imgui.new_frame()
             panel.draw(1 / 60, 60.0)
             imgui.end_frame()
+        # the strip follows the analyzer's band count, not the legacy six
+        for change in (panel.reg["band.remove"].fire, panel.reg["band.add"].fire,
+                       panel.reg["band.add"].fire):
+            change()
+            imgui.new_frame()
+            panel.draw(1 / 60, 60.0)
+            imgui.end_frame()
+        assert audio.chain.n == 7
     finally:
         imgui.destroy_context(ctx)

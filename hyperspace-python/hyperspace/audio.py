@@ -1,7 +1,7 @@
 """Audio sources — live capture and file playback (plan 03 task 0).
 
-Both feed the same Analyser+Chain pair, mirroring the reference's single
-attach() hub. Transport semantics are the reference's (ENGINEERING §4b):
+Both feed the same Analyser+Analyzer pair (`chain` — the N-band analyzer,
+plan 07), mirroring the reference's single attach() hub. Transport semantics are the reference's (ENGINEERING §4b):
 position is measured against the stream clock, not counted per frame;
 pause freezes position and keeps the chain stepping on silence so the
 bands decay on their own time constants; restart is return-to-zero
@@ -21,7 +21,7 @@ import sounddevice as sd
 import soundfile as sf
 
 from .analysis import Analyser
-from .bands import Chain
+from .analyzer import Analyzer
 
 LOOPBACK_NAMES = ("blackhole", "loopback", "soundflower")
 
@@ -83,12 +83,12 @@ class _Ring:
 
 
 class AudioEngine:
-    """One live source at a time (mic or file), driving one Analyser+Chain."""
+    """One live source at a time (mic or file), driving one Analyser+Analyzer."""
 
     def __init__(self, sample_rate: float = 48_000.0):
         self.sr = sample_rate
         self.analyser = Analyser(sample_rate)
-        self.chain = Chain(self.analyser)
+        self.chain = Analyzer(self.analyser)
         self.on = False
         self.mode: str | None = None     # "mic" | "file"
         self.label = ""
@@ -119,13 +119,18 @@ class AudioEngine:
         self._played = 0
         self.chain.planedrive.fill(1.0)
 
+    def _fresh_chain(self) -> Analyzer:
+        """New trackers on the current analyser; the user's bands and tuning
+        (layout, per-band params, master faders) carry across sources."""
+        old = self.chain
+        new = Analyzer(self.analyser, old.params, layout=old.layout())
+        new.gain, new.dyn, new.trim = old.gain, old.dyn, old.trim
+        return new
+
     def _attach(self, mode: str, label: str) -> None:
         # fresh trackers per source, like the reference's attach()
         self.analyser = Analyser(self.sr)
-        params = self.chain.params      # keep the user's tuning across sources
-        gain, dyn, trim = self.chain.gain, self.chain.dyn, self.chain.trim
-        self.chain = Chain(self.analyser, params)
-        self.chain.gain, self.chain.dyn, self.chain.trim = gain, dyn, trim
+        self.chain = self._fresh_chain()
         self._ring = _Ring(int(self.sr * 2))
         self.mode = mode
         self.label = label
@@ -177,10 +182,7 @@ class AudioEngine:
         self.analyser = None  # rebuilt at track rate below
         self._attach("file", Path(path).name[:20])
         self.analyser = Analyser(self._track_sr)
-        params = self.chain.params
-        gain, dyn, trim = self.chain.gain, self.chain.dyn, self.chain.trim
-        self.chain = Chain(self.analyser, params)
-        self.chain.gain, self.chain.dyn, self.chain.trim = gain, dyn, trim
+        self.chain = self._fresh_chain()
         self._offset = 0
         self._played = 0
         self.playing = True

@@ -58,7 +58,8 @@ from enum import Enum
 from typing import Any
 
 from . import tapers
-from .bands import BANDS, PRESETS, SHAPERS
+from .analyzer import CURVES, F_HI, F_LO, Q_HI, Q_LO
+from .bands import PRESETS, SHAPERS
 from .geometry import SHAPES
 from .tapers import Taper
 
@@ -674,17 +675,37 @@ def build_registry(view, control, audio, presets=None) -> Registry:
               tip="Reloads the selected scene across all six bands. Undoable for 8 s.")
 
     # ---- bands ----
-    g = "band"
-    r.enum("band.select", "Band", lambda: control.selb,
-           lambda i: setattr(control, "selb", i), [b.id for b in BANDS], group=g,
-           persist=False, modulatable=False,
-           tip="Which band's strip is open — the band.sel.* params follow it.")
-    r.trigger("band.reset", "Reset band", control.reset_band, group=g,
-              tip="Puts this band's whole strip back to the selected scene.")
+    # The analyzer has N bands (plan 07), so this block is a function: it
+    # drops every band.* id and declares them again for the current N, and
+    # runs whenever the layout changes (a band added, removed or moved, a
+    # preset's layout applied) — control.on_layout is that hook.
     shaper_tags = [s.tag for s in SHAPERS]
+    curve_tags = [c.tag for c in CURVES]
+    fmt_hz = lambda v: f"{v:.0f} Hz" if v < 1000 else f"{v / 1000:.2f} kHz"
 
     def band_params(prefix: str, idx: Callable[[], int], label_of: Callable[[str], str],
                     alias: bool = False):
+        g = "band"
+        # where the band listens: centre, Q and curve retune the analyzer in
+        # place (weights recomputed, trackers keep running)
+        r.continuous(f"{prefix}.f", label_of("Centre"),
+                     lambda: chain().spec[idx()].f,
+                     lambda v: chain().set_band(idx(), f=v),
+                     lo=F_LO, hi=F_HI, log=True, fmt=fmt_hz, group=g, alias=alias,
+                     tip="LOG, 20 Hz to 20 kHz. The band's centre frequency; the edges "
+                         "follow from it and Q.")
+        r.continuous(f"{prefix}.q", label_of("Q"),
+                     lambda: chain().spec[idx()].q,
+                     lambda v: chain().set_band(idx(), q=v),
+                     lo=Q_LO, hi=Q_HI, log=True, fmt=lambda v: f"Q {v:.2f}", group=g,
+                     alias=alias,
+                     tip="LOG, 0.1 to 20. Centre over bandwidth: 1 is an octave-ish "
+                         "band, 0.1 spans most of the spectrum, 20 is a sliver.")
+        r.enum(f"{prefix}.curve", label_of("Curve"),
+               lambda: chain().spec[idx()].curve,
+               lambda c: chain().set_band(idx(), curve=c), curve_tags, group=g, alias=alias,
+               tip="How the FFT bins between the edges are weighted: RECT is every "
+                   "bin equally (the reference), the others taper toward the edges.")
         r.enum(f"{prefix}.fn", label_of("Transfer"),
                lambda: chain().params[idx()].fn,
                lambda fn: control.set_shaper(idx(), fn), shaper_tags, group=g, alias=alias)
@@ -696,12 +717,30 @@ def build_registry(view, control, audio, presets=None) -> Registry:
                 taper=knob.t, fmt=knob.fmt, tip=knob.tip, group=g, alias=alias,
             )
 
-    for i, band in enumerate(BANDS):
-        band_params(f"band.{i}", (lambda i=i: i), lambda lb, b=band.id: f"{b} {lb}")
-        r.trigger(f"band.{i}.reset", f"{band.id} reset",
-                  lambda i=i: control.reset_band(i), group=g)
-    # the selected band's strip: views onto band.{selb}.*, never saved or driven
-    band_params("band.sel", lambda: control.selb, lambda lb: lb, alias=True)
+    def build_bands():
+        g = "band"
+        r.remove_prefix("band.")
+        r.enum("band.select", "Band", lambda: control.selb,
+               lambda i: setattr(control, "selb", i), lambda: chain().band_names, group=g,
+               persist=False, modulatable=False,
+               tip="Which band's strip is open — the band.sel.* params follow it.")
+        # structural: never lane-driven (they rebuild this very block)
+        r.trigger("band.add", "Add band", control.add_band, group=g, modulatable=False,
+                  tip="A new band in the widest gap between the others; it becomes "
+                      "the open strip.")
+        r.trigger("band.remove", "Remove band", control.remove_band, group=g,
+                  modulatable=False, tip="Drops the open band. The last one stays.")
+        r.trigger("band.reset", "Reset band", control.reset_band, group=g,
+                  tip="Puts this band's whole strip back to the selected scene.")
+        for i, name in enumerate(chain().band_names):
+            band_params(f"band.{i}", (lambda i=i: i), lambda lb, b=name: f"{b} {lb}")
+            r.trigger(f"band.{i}.reset", f"{name} reset",
+                      lambda i=i: control.reset_band(i), group=g)
+        # the selected band's strip: views onto band.{selb}.*, never saved or driven
+        band_params("band.sel", lambda: control.selb, lambda lb: lb, alias=True)
+
+    build_bands()
+    control.on_layout = build_bands
 
     # ---- themes ----
     if presets is not None:

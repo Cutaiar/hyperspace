@@ -21,6 +21,7 @@ import os
 
 from imgui_bundle import imgui
 
+from .analyzer import N_MAX
 from .audio import AudioEngine, input_devices
 from .bands import BANDS, CEIL, KNEE, NOM, SHAPERS
 from .control import Control
@@ -177,8 +178,8 @@ class Panel:
         self.device_sel = next(
             (k for k, d in enumerate(self.devices) if d["loopback"]), 0
         )
-        self.pin_in = [0.0] * 6
-        self.pin_out = [0.0] * 6
+        self.pin_in = [0.0] * N_MAX
+        self.pin_out = [0.0] * N_MAX
         self.open = True
         self.cheatsheet = True
         self._file_dialog = None
@@ -393,11 +394,12 @@ class Panel:
         dl = imgui.get_window_draw_list()
         origin = imgui.get_cursor_screen_pos()
         gap, mh = 4.0, 78.0
-        bw = (imgui.get_content_region_avail().x - 5 * gap) / 6
+        n = a.n   # N bands (plan 07); WP5b replaces this strip
+        bw = (imgui.get_content_region_avail().x - (n - 1) * gap) / n
         u32 = imgui.color_convert_float4_to_u32
         zone = u32(imgui.ImVec4(1.0, 43 / 255, 43 / 255, 0.07))
         blink = (imgui.get_time() % 0.62) < 0.31  # the 620 ms annunciator
-        for i, band in enumerate(BANDS):
+        for i, name in enumerate(a.band_names):
             x0 = origin.x + i * (bw + gap)
             y1 = origin.y + mh
             sel = i == self.control.selb
@@ -445,20 +447,21 @@ class Panel:
             if imgui.invisible_button(f"##meter{i}", imgui.ImVec2(bw, mh)):
                 self.reg["band.select"].set(i)
             if imgui.is_item_hovered():
-                imgui.set_tooltip(
-                    f"{band.id} {band.lo:g}–{band.hi:g} Hz → {band.pl} plane, "
-                    f"{'forward' if band.dir > 0 else 'reverse'}"
-                )
+                lo, hi = a.edges(i)
+                # the legacy plane table drives six lanes by position until WP4b routes
+                plane = (f" → {BANDS[i].pl} plane, {'forward' if BANDS[i].dir > 0 else 'reverse'}"
+                         if n == 6 else "")
+                imgui.set_tooltip(f"{name} {lo:.0f}–{hi:.0f} Hz{plane}")
             if i == 0:
                 self._ctx(self.reg["band.select"])
         # band tags, centred under their bars, in the micro face
         imgui.push_font(_FONTS["micro"], FONT_MICRO)
-        for i, band in enumerate(BANDS):
-            tw = imgui.calc_text_size(band.id).x
+        for i, name in enumerate(a.band_names):
+            tw = imgui.calc_text_size(name).x
             imgui.set_cursor_screen_pos(
                 imgui.ImVec2(origin.x + i * (bw + gap) + (bw - tw) / 2, origin.y + mh + 4)
             )
-            imgui.text_colored(RED if i == self.control.selb else DIM, band.id)
+            imgui.text_colored(RED if i == self.control.selb else DIM, name)
         imgui.pop_font()
 
     # ---- main draw ----
@@ -619,18 +622,18 @@ class Panel:
         imgui.spacing()
 
         # per-band transfer selects
-        for i in range(6):
+        for i in range(a.chain.n):
             if i:
                 imgui.same_line()
             self._combo(f"band.{i}.fn", 46, SHAPERS[a.chain.params[i].fn].name)
         imgui.separator()
 
         # selected-band strip — the band.sel.* aliases follow the selection
-        b = BANDS[c.selb]
         P = a.chain.params[c.selb]
-        imgui.text_colored(RED, f"{b.id} · {SHAPERS[P.fn].tag}")
+        lo, hi = a.chain.edges(c.selb)
+        imgui.text_colored(RED, f"{a.chain.band_names[c.selb]} · {SHAPERS[P.fn].tag}")
         imgui.same_line()
-        imgui.text_disabled(f"{b.lo:g}–{b.hi:g} Hz → {b.pl}")
+        imgui.text_disabled(f"{lo:.0f}–{hi:.0f} Hz")
         imgui.same_line(imgui.get_content_region_avail().x - 40)
         self._button("band.reset", "Reset", small=True)
         for p in r.group("band"):

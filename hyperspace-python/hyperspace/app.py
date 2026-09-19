@@ -374,6 +374,9 @@ def main() -> None:
     library = Library()                    # presets, projects, the theme bank
     presets = library.bank
     reg = build_registry(s, control, audio, presets)
+    # an analyzer preset carries its band layout; the library hands it to
+    # control before restoring values (07-overhaul contracts)
+    library.on_layout("band", control.apply_layout)
     library.attach(reg)
     panel = Panel(control, audio, s, renderer, presets, registry=reg)
     output = _make_output(render_win, reg, cfg)
