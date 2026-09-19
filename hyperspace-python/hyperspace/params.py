@@ -61,6 +61,7 @@ from . import tapers
 from .analyzer import CURVES, F_HI, F_LO, Q_HI, Q_LO
 from .bands import CEIL, DRIVE, PRESETS, SHAPERS
 from .geometry import SHAPES
+from .lookback import LAYERS, MAX_ECHOES, OCTAVES, RES, DreamState
 from .tapers import Taper
 
 PATTERNS = [
@@ -548,15 +549,19 @@ def _item(get_list, i):
     return (lambda: get_list()[i]), (lambda v: get_list().__setitem__(i, v))
 
 
-def build_registry(view, control, audio, presets=None) -> Registry:
+def build_registry(view, control, audio, presets=None, dream=None) -> Registry:
     """Declare every parameter the surface owns.
 
     `audio` only needs a `.chain` attribute (tests pass a namespace); the
     chain is looked up on every access because a source attach replaces it.
-    Panel- and app-level actions (panel toggle, restart…) are added by the
-    caller with `trigger()` / `toggle()` once those objects exist.
+    `dream` is the renderer's lookback state (lookback.DreamState); a fresh
+    one stands in when there is no renderer, so the group is always
+    declared. Panel- and app-level actions (panel toggle, restart…) are
+    added by the caller with `trigger()` / `toggle()` once those objects
+    exist.
     """
     r = Registry()
+    dream = dream if dream is not None else DreamState()
     chain = lambda: audio.chain
     fmt_speed = lambda x: "stop" if x <= 0 else f"{x:.3f}" if x < 1 else f"{x:.2f}"
 
@@ -656,6 +661,66 @@ def build_registry(view, control, audio, presets=None) -> Registry:
 
     r.trigger("camera.reset", "Reset view", reset_view, group=g,
               tip="Reset rotation phases, orbit, zoom and pan.")
+
+    # ---- look-back: the frame history composited over the scene ----
+    # lookback.py reads these every frame; the dream worker (WP6b) reads
+    # the second half. Cadence and size rebuild the ring, so no lane drives
+    # them; everything else is a live fader.
+    g = "dream"
+    r.toggle("dream.on", "Look-back", *_attr(dream, "on"), group=g,
+             tip="Composite the frame history over the scene: raw echoes now, the "
+                 "dreamed wake once a worker is attached.")
+    r.continuous("dream.mix", "Dream mix", *_attr(dream, "mix"), lo=0.0, hi=1.0,
+                 fmt=lambda v: f"dream {v:.2f}", group=g,
+                 tip="The dream buffer's opacity under the scene.")
+    r.continuous("dream.echo_mix", "Echo mix", *_attr(dream, "echo_mix"), lo=0.0, hi=1.0,
+                 fmt=lambda v: f"echo {v:.2f}", group=g,
+                 tip="The echoes' opacity at age zero; each frame of age multiplies "
+                     "by the decay.")
+    r.continuous("dream.decay", "Decay", *_attr(dream, "decay"), lo=0.0, hi=1.0,
+                 fmt=lambda v: f"{v:.3f} / frame", group=g,
+                 tip="Per-frame fade of an echo with its age.")
+    r.continuous("dream.darken", "Darken", *_attr(dream, "darken"), lo=0.0, hi=1.0,
+                 fmt=lambda v: f"×{1.0 - v:.2f}", group=g,
+                 tip="How much darker the wake is than the frames it came from.")
+    r.continuous("dream.contrast", "Contrast", *_attr(dream, "contrast"), lo=0.5, hi=3.0,
+                 fmt=lambda v: f"^{v:.2f}", group=g,
+                 tip="A power curve on every layer: above 1 only the bright, "
+                     "high-contrast regions of the history read.")
+    r.continuous("dream.echoes", "Echoes", *_attr(dream, "echoes"), lo=0, hi=MAX_ECHOES,
+                 integer=True, fmt=lambda v: f"{int(v)} echo(es)", group=g,
+                 tip="Frames kept in the history; 0 composites the dream buffer alone.")
+    r.continuous("dream.every", "Every", *_attr(dream, "every"), lo=1, hi=8, integer=True,
+                 fmt=lambda v: f"every {int(v)}", group=g, modulatable=False,
+                 tip="Capture cadence in frames: the spacing between echoes.")
+    r.enum("dream.res", "Resolution", *_attr(dream, "res"), [str(v) for v in RES], group=g,
+           modulatable=False,
+           tip="The history's short side in pixels; the render's aspect is kept.")
+    # the worker's (WP6b) — presets carry them from day one
+    r.continuous("dream.steps", "Steps", *_attr(dream, "steps"), lo=1, hi=3, integer=True,
+                 fmt=lambda v: f"{int(v)} step(s)", group=g,
+                 tip="Gradient-ascent steps per frame on the dream buffer; 1 flickers.")
+    r.continuous("dream.step", "Step size", *_attr(dream, "step"), lo=0.005, hi=0.06,
+                 fmt=lambda v: f"{v:.3f}", group=g,
+                 tip="How far each step pushes; step × steps should stay under ~0.6 k.")
+    r.continuous("dream.k", "Blend k", *_attr(dream, "k"), lo=0.03, hi=0.3,
+                 fmt=lambda v: f"k {v:.3f}", group=g,
+                 tip="How much of the new frame enters the dream buffer each frame — "
+                     "its memory, 33 frames down to 3.")
+    r.enum("dream.layer", "Layer", *_attr(dream, "layer"), LAYERS, group=g,
+           tip="The net layer the dream maximises: conv2_2 fine grain, conv3_3 the "
+               "classic swirl, conv4_3 blotchier, inception the eyes-and-dogs curls.")
+    r.enum("dream.octaves", "Octaves", *_attr(dream, "octaves"), OCTAVES, group=g,
+           tip="Scales the dream runs at, one per frame in rotation — larger forms "
+               "for the same cost.")
+    r.continuous("dream.mask_decay", "Mask decay", *_attr(dream, "mask_decay"),
+                 lo=0.9, hi=0.995, fmt=lambda v: f"{v:.3f}", group=g,
+                 tip="How long a wake persists after content leaves: the content "
+                     "mask's per-frame decay, 10 to 200 frames.")
+    r.continuous("dream.jitter", "Jitter", *_attr(dream, "jitter"), lo=0, hi=16,
+                 integer=True, fmt=lambda v: f"{int(v)} px", group=g,
+                 tip="Random pixel offset per step, the classic trick that turns pixel "
+                     "noise into coherent texture.")
 
     # ---- master faders ----
     g = "master"

@@ -268,3 +268,98 @@ def test_patterns_are_chromatic(ctx):
         ).astype(int)
         spread = img.max(axis=2) - img.min(axis=2)
         assert spread.max() > 25, f"{PATTERNS[mode]} renders effectively grayscale"
+
+
+# ---- WP6a: the scene goes through a texture and a post pass; off, that
+# must be invisible — bit-identical to drawing straight into the target ----
+
+def _direct(ctx, r, s, fbo, w, h, t):
+    """The scene pass alone into `fbo` — what draw() did before the post pass."""
+    fbo.use()
+    ctx.viewport = (0, 0, w, h)
+    r.draw_scene(s, w, h, t_now=t)
+
+
+def _via_post(ctx, r, s, fbo, w, h, t):
+    fbo.use()
+    ctx.viewport = (0, 0, w, h)
+    r.draw(s, w, h, t_now=t)
+
+
+def _rgba(ctx, fbo, w, h, samples=0):
+    """Pixels of `fbo`; a multisampled one is resolved by blit first, the
+    way the window's is at swap."""
+    import numpy as np
+
+    if samples:
+        flat = ctx.framebuffer(color_attachments=[ctx.renderbuffer((w, h))])
+        ctx.copy_framebuffer(flat, fbo)
+        data = flat.read(components=4)
+        flat.release()
+    else:
+        data = fbo.read(components=4)
+    return np.frombuffer(data, dtype=np.uint8).reshape(h, w, 4).copy()
+
+
+@pytest.mark.parametrize("samples", [0, 4], ids=["plain", "msaa"])
+@pytest.mark.parametrize("bg_alpha", [1.0, 0.0], ids=["opaque", "overlay"])
+def test_post_pass_off_is_pixel_identical(ctx, samples, bg_alpha):
+    import numpy as np
+
+    from hyperspace.render import Renderer
+
+    w, h = 640, 400
+    if samples and ctx.info["GL_MAX_SAMPLES"] < samples:
+        pytest.skip("no MSAA")
+    fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((w, h), samples=samples)])
+    r = Renderer(ctx)
+    r.bg_alpha = bg_alpha
+    assert not r.lookback.state.on
+    for shape, faces, pattern, t in ((3, False, 0, 0.0), (10, True, 2, 1.7), (14, True, 5, 0.4)):
+        s = ViewState(shape=shape, ang=list(VIEW["ang"]), yaw=VIEW["yaw"], pitch=VIEW["pitch"],
+                      faces=faces, pattern=pattern)
+        _direct(ctx, r, s, fbo, w, h, t)
+        want = _rgba(ctx, fbo, w, h, samples)
+        _via_post(ctx, r, s, fbo, w, h, t)
+        got = _rgba(ctx, fbo, w, h, samples)
+        assert ctx.error == "GL_NO_ERROR"
+        assert want.max() > 0
+        assert np.array_equal(got, want), (
+            f"shape {shape}: {np.abs(got.astype(int) - want.astype(int)).max()} max diff"
+        )
+    # the ring was never built: nothing captured, nothing allocated
+    assert r.lookback.atlas is None and r.lookback.layers() == []
+    fbo.release()
+
+
+def test_scene_target_follows_the_viewport(ctx):
+    from hyperspace.render import Renderer
+
+    r = Renderer(ctx)
+    s = ViewState(shape=3, ang=list(VIEW["ang"]))
+    for w, h in ((320, 200), (640, 400), (320, 200)):
+        fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((w, h))])
+        fbo.use()
+        ctx.viewport = (0, 0, w, h)
+        r.draw(s, w, h)
+        assert r.scene.size == (w, h) and r.scene.tex.size == (w, h)
+        assert ctx.fbo is fbo, "draw must leave the target bound"
+        fbo.release()
+    assert ctx.error == "GL_NO_ERROR"
+
+
+def test_render_offscreen_unchanged_by_the_post_pass(ctx):
+    """render_offscreen is the parity harness; its output must be the scene pass."""
+    import numpy as np
+
+    from hyperspace.render import Renderer
+
+    s = ViewState(shape=3, ang=list(VIEW["ang"]), faces=True, pattern=1)
+    w, h = 600, 400
+    fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((w, h))])
+    fbo.use()
+    ctx.viewport = (0, 0, w, h)
+    Renderer(ctx).draw_scene(s, w, h, t_now=0.0)
+    want = np.frombuffer(fbo.read(components=3), dtype=np.uint8).reshape(h, w, 3)[::-1]
+    fbo.release()
+    assert np.array_equal(render_offscreen(s, w, h, ctx=ctx), want)
