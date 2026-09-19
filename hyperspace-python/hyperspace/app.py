@@ -346,7 +346,9 @@ def main() -> None:
     control = Control(audio.chain)
     library = Library()                    # presets, projects, the theme bank
     presets = library.bank
-    reg = build_registry(s, control, audio, presets)
+    # dream.* drives the renderer's look-back (lookback.py); the post pass
+    # runs inside renderer.draw
+    reg = build_registry(s, control, audio, presets, dream=renderer.lookback.state)
     # an analyzer preset carries its band layout; the library hands it to
     # control before restoring values (07-overhaul contracts)
     library.on_layout("band", control.apply_layout)
@@ -368,6 +370,8 @@ def main() -> None:
     # each swap so recreated ones (the chain after a source attach) count
     reloader = HotReloader(targets=lambda: [
         (renderer, "render", "Renderer"),
+        (renderer.lookback, "lookback", "Lookback"),
+        (renderer.lookback.state, "lookback", "DreamState"),
         (s, "render", "ViewState"),
         (panel, "ui", "Panel"),
         (control, "control", "Control"),

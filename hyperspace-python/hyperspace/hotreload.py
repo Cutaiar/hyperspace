@@ -40,9 +40,9 @@ from pathlib import Path
 # dependency order, leaves first: a change reloads its module and every
 # module after it, so cross-module imports always rebind fresh
 MODULES = (
-    "analysis", "tapers", "geometry", "bands", "analyzer", "control", "audio", "render",
-    "params", "library", "presets", "overlay", "apc40", "routing", "midi", "bridge",
-    "ui_presets", "ui",
+    "analysis", "tapers", "geometry", "bands", "analyzer", "control", "audio", "lookback",
+    "render", "params", "library", "presets", "overlay", "apc40", "routing", "midi", "bridge",
+    "ui_presets", "ui_lookback", "ui",
 )
 
 

@@ -29,7 +29,7 @@ import os
 
 from imgui_bundle import imgui
 
-from . import ui_presets
+from . import ui_lookback, ui_presets
 from .analyzer import N_MAX
 from .audio import AudioEngine, input_devices
 from .bands import BANDS, CEIL, KNEE, NOM, SHAPERS
@@ -197,6 +197,7 @@ PAGES = [
     ("faces", "faces", "pattern"),
     ("bitmap", "bitmap", None),
     ("camera", "camera", "camera"),
+    ("lookback", "lookback", "dream"),
     ("audio", "audio", None),
     ("analyzer", "analyzer", "band"),
     ("presets", "presets", None),
@@ -834,6 +835,9 @@ class Panel:
         self._button("camera.reset", "Reset view")
         imgui.same_line()
         imgui.text_disabled("R  ·  stick click")
+
+    def _page_lookback(self, dt: float) -> None:
+        ui_lookback.page(self, dt)     # the frame history and its composite
 
     def _page_audio(self, dt: float) -> None:
         a = self.audio

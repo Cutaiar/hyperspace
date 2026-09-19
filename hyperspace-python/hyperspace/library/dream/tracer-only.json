@@ -1,0 +1,23 @@
+{
+ "schema": "hyperspace.preset/1",
+ "group": "dream",
+ "name": "tracer-only",
+ "values": {
+  "dream.on": true,
+  "dream.mix": 0.0,
+  "dream.echo_mix": 0.6,
+  "dream.decay": 0.9,
+  "dream.darken": 0.3,
+  "dream.contrast": 1.0,
+  "dream.echoes": 8,
+  "dream.every": 2,
+  "dream.res": 2,
+  "dream.steps": 2,
+  "dream.step": 0.03,
+  "dream.k": 0.08,
+  "dream.layer": 1,
+  "dream.octaves": 0,
+  "dream.mask_decay": 0.97,
+  "dream.jitter": 8
+ }
+}
