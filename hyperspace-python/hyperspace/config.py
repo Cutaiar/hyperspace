@@ -18,6 +18,18 @@ differs on this machine. Adapters are enabled here, not in code
     passthrough = true      # clicks go to the window underneath (G / pan toggles)
     bg = 0.0                # ground darkness in overlay: 0 see-through, 1 black
     alpha = 1.0             # whole-window opacity
+
+    [bridge]                # lanes out / external lanes in over MIDI (bridge.py)
+    enabled = false         # true opens the bridge; off, it is never imported
+    out = "IAC"             # substring of the virtual port the lanes go out on ("" = none)
+    in = ""                 # substring of the port external lanes come in on ("" = none)
+    encoding = "pitch"      # "pitch": lane i → pitch bend on channel+i (16 lanes)
+                            # "cc14": lane i → CC cc+i (MSB) / cc+i+32 (LSB) on channel
+    channel = 0             # 0-based: the first lane's channel (pitch) / the pair channel
+    cc = 16                 # cc14: the first lane's MSB controller, 0–31 (32−cc lanes)
+    rate = 100              # messages a second per lane at most (0 = every frame)
+    send = ["lane:*"]       # what goes out, in lane order: "lane:*", "lane:3", "param:<id>"
+    in_lanes = 16           # size of the `ext` vector the inbound lanes fill
 """
 
 from __future__ import annotations
@@ -33,6 +45,9 @@ DEFAULTS: dict = {
     "midi": {"enabled": True, "port": None, "profile": "apc40", "map": "midi_map.json"},
     # overlay.py: start floating over the screen; ground 0 = see-through
     "overlay": {"on_start": False, "passthrough": True, "bg": 0.0, "alpha": 1.0},
+    # bridge.py: the analyzer's lanes out to a DAW, external lanes in — off by default
+    "bridge": {"enabled": False, "out": "IAC", "in": "", "encoding": "pitch", "channel": 0,
+               "cc": 16, "rate": 100, "send": ["lane:*"], "in_lanes": 16},
 }
 
 
