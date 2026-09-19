@@ -81,6 +81,14 @@ shadows a factory file of the same name. The files are plain JSON: edit one
 in a text editor while the app runs and the loaded preset updates in place.
 See `hyperspace/library.py` for the formats and the API the panel uses.
 
+The panel is a rail of pages — Output · View · Faces · Bitmap · Camera ·
+Audio · Analyzer · Presets · System — and every section that is a
+registry group carries its preset strip: `◀ name ▶`, save, save-as,
+reset, and a red dot once the group has moved off its preset. The
+Presets page holds the project row (save / save-as / load / new) and the
+F1–F8 theme bank. A param a lane is driving shows its *setting* as the
+handle and the *effective* value as a red hairline.
+
 ## Two windows: output and controls
 
 The *render* window is pure output — what goes on the projector or TV —

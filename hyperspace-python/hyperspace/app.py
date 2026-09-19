@@ -351,7 +351,7 @@ def main() -> None:
     # control before restoring values (07-overhaul contracts)
     library.on_layout("band", control.apply_layout)
     library.attach(reg)
-    panel = Panel(control, audio, s, renderer, presets, registry=reg)
+    panel = Panel(control, audio, s, renderer, presets, registry=reg, library=library)
     output = _make_output(render_win, reg, cfg)
     panel.output = output
     # one binding table for keys, pad, MIDI and lanes (an old midi_map.json migrates)

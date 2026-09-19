@@ -205,7 +205,7 @@ def test_panel_draws_headless():
 
     from hyperspace.audio import AudioEngine
     from hyperspace.render import ViewState
-    from hyperspace.ui import Panel, apply_style, load_fonts
+    from hyperspace.ui import PAGE_KEYS, PAGES, Panel, apply_style, load_fonts
 
     ctx = imgui.create_context()
     try:
@@ -215,12 +215,16 @@ def test_panel_draws_headless():
         apply_style()
         load_fonts()
         audio = AudioEngine()
-        panel = Panel(Control(audio.chain), audio, ViewState())
-        for _ in range(2):
-            imgui.new_frame()
-            panel.draw(1 / 60, 60.0)
-            imgui.end_frame()
+        panel = Panel(Control(audio.chain), audio, ViewState())  # no library: no strips
+        # every page of the rail, twice (the second frame has layout state)
+        for k in range(len(PAGES)):
+            panel.reg["ui.page"].set(k)
+            for _ in range(2):
+                imgui.new_frame()
+                panel.draw(1 / 60, 60.0)
+                imgui.end_frame()
         # the strip follows the analyzer's band count, not the legacy six
+        panel.reg["ui.page"].set(PAGE_KEYS.index("analyzer"))
         for change in (panel.reg["band.remove"].fire, panel.reg["band.add"].fire,
                        panel.reg["band.add"].fire):
             change()
