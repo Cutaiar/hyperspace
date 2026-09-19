@@ -29,10 +29,10 @@ import os
 
 from imgui_bundle import imgui
 
-from . import ui_presets
+from . import ui_bands, ui_presets, ui_routing
 from .analyzer import N_MAX
 from .audio import AudioEngine, input_devices
-from .bands import BANDS, CEIL, KNEE, NOM, SHAPERS
+from .bands import BANDS, CEIL, KNEE, NOM
 from .control import Control
 from .geometry import SHAPES, geom
 from .params import (  # noqa: F401 — PATTERNS et al. re-exported for callers
@@ -189,8 +189,8 @@ CHEATSHEET = [
 # One page per registry group where a group is a module of its own; the
 # view group is big enough to split into View / Faces & Pattern / Bitmap,
 # and those two sub-pages say so in their section notes. The analyzer
-# page holds today's master faders, scene, meters and band strip as they
-# are — WP5b replaces that one section with the band editor.
+# page holds the master faders, scene and meters, then the band editor
+# (ui_bands.py); the routing page is the matrix (ui_routing.py).
 PAGES = [
     ("output", "output", "output"),
     ("view", "view", "view"),
@@ -199,6 +199,7 @@ PAGES = [
     ("camera", "camera", "camera"),
     ("audio", "audio", None),
     ("analyzer", "analyzer", "band"),
+    ("routing", "routing", None),
     ("presets", "presets", None),
     ("system", "system", None),
 ]
@@ -233,6 +234,7 @@ class Panel:
         self._bmp_dialog = None
         self.reloader = None  # set by app.py; panel only reads status off it
         self.midi = None      # set by app.py when an adapter is up (midi.MidiIO)
+        self.router = None    # set by app.py (routing.Router); else found via midi's table
         self.output = None    # set by app.py (overlay.Output); its params draw below
         self.restart_requested = False  # main loop polls after draw() and execv's
         self._register_panel_params()
@@ -300,6 +302,7 @@ class Panel:
                     m.learn(p.id)
                 if b is not None and imgui.menu_item_simple("Unbind"):
                     m.unbind(p.id)
+        ui_routing.ctx_item(self, p)    # "Route a lane here…" — the routing matrix
         imgui.end_popup()
 
     def _learn_frame(self, p: Param) -> None:
@@ -879,16 +882,16 @@ class Panel:
             )
 
     def _page_analyzer(self, dt: float) -> None:
-        """Master faders, scene, meters and the selected band's strip — the
-        six-band chain as it is today. WP5b replaces the band section."""
-        c, a, r = self.control, self.audio, self.reg
+        """Master faders, scene, meters, then the band editor (ui_bands.py):
+        the spectrogram with the bands over it and the selected band's strip."""
+        c = self.control
         self._section("master", "master")
         self._fader("master.gain")
         self._fader("master.dyn")
         self._fader("master.trim")
         imgui.spacing()
 
-        # ---- bands (WP5b: the editor goes here) ----
+        # ---- bands ----
         self._section("bands", "band")
         # scene + reset-all (relabels to Undo while the window is open)
         _micro("scene")
@@ -898,29 +901,11 @@ class Panel:
         self._button("scene.reset_all", "Undo" if c.undo_armed else "Reset all")
         imgui.spacing()
         self._meters(dt)
-        # per-band transfer selects
-        for i in range(a.chain.n):
-            if i:
-                imgui.same_line()
-            self._combo(f"band.{i}.fn", 46, SHAPERS[a.chain.params[i].fn].name)
-        imgui.separator()
-        # selected-band strip — the band.sel.* aliases follow the selection
-        P = a.chain.params[c.selb]
-        lo, hi = a.chain.edges(c.selb)
-        imgui.text_colored(RED, f"{a.chain.band_names[c.selb]} · {SHAPERS[P.fn].tag}")
-        imgui.same_line()
-        imgui.text_disabled(f"{lo:.0f}–{hi:.0f} Hz")
-        imgui.same_line()
-        self._combo("band.sel.curve", 64)
-        imgui.same_line(imgui.get_content_region_avail().x - 40)
-        self._button("band.reset", "Reset", small=True)
-        # ten faders (f, q, the eight knobs) in two columns so the page fits
-        if imgui.begin_table("##bandstrip", 2, imgui.TableFlags_.sizing_stretch_same):
-            for p in r.group("band"):
-                if p.id.startswith("band.sel.") and p.kind is Kind.CONTINUOUS:
-                    imgui.table_next_column()
-                    self._fader(p.id)
-            imgui.end_table()
+        ui_bands.section(self, dt)
+
+    def _page_routing(self, dt: float) -> None:
+        """The routing matrix — lanes → params (ui_routing.py)."""
+        ui_routing.page(self, dt)
 
     def _page_presets(self, dt: float) -> None:
         """The project and everything it carries: the theme bank, the modules."""
