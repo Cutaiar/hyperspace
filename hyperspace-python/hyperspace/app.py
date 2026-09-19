@@ -289,6 +289,7 @@ def main() -> None:
     pad = Pad()
     drag = {"btn": None, "x": 0.0, "y": 0.0}
     depth4, yaw, pitch, zoom = reg["view.depth4"], reg["camera.yaw"], reg["camera.pitch"], reg["camera.zoom"]
+    pan_x, pan_y = reg["camera.pan.x"], reg["camera.pan.y"]
 
     # smoke-test escape hatch: HYPERSPACE_FRAMES=n closes after n frames
     frames_left = int(os.environ.get("HYPERSPACE_FRAMES", "0")) or None
@@ -390,8 +391,8 @@ def main() -> None:
                 pitch.set_value(pitch.value + (y - drag["y"]) * 0.005)
                 drag.update(x=x, y=y)
             elif btn == "pan":
-                s.pan[0] += x - drag["x"]
-                s.pan[1] += y - drag["y"]
+                pan_x.set_value(pan_x.value + x - drag["x"])
+                pan_y.set_value(pan_y.value + y - drag["y"])
                 drag.update(x=x, y=y)
             if io.mouse_wheel:
                 factor = 2.0 ** (io.mouse_wheel * 0.15)
@@ -400,8 +401,8 @@ def main() -> None:
                 factor = s.zoom / old
                 # zoom about the cursor: keep the point under it fixed
                 cx, cy = w / 2 + s.pan[0], h / 2 + s.pan[1]
-                s.pan[0] += (cx - x) * (factor - 1)
-                s.pan[1] += (cy - y) * (factor - 1)
+                pan_x.set_value(pan_x.value + (cx - x) * (factor - 1))
+                pan_y.set_value(pan_y.value + (cy - y) * (factor - 1))
         else:
             drag["btn"] = None
 
@@ -410,6 +411,9 @@ def main() -> None:
         ok = True
         try:
             audio.step(dt)
+            # every modulation source has spoken for this frame: land
+            # base + offsets on the objects before the integrator reads them
+            reg.apply()
             s.integrate(dt, audio.chain.planedrive if audio.on else None)
         except Exception as e:  # noqa: BLE001
             ok, reloader.runtime_error = False, _err("step", e)

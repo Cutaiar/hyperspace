@@ -181,15 +181,19 @@ class ViewState:
     bmp_mode: int = 0            # bitmap path: 0 still, 1 orbit, 2 fig-8, 3 sway
     bmp_amp: float = 0.15        # path amplitude about the face centre, UV units
     bmp_rate: float = 1.0        # path angular rate, rad/s
+    # modulation targets (params.py rot.rate.* / pattern.mod.*): per-plane
+    # rate multipliers and the face patterns' inputs — 1.0 is the undriven look
+    rate: list[float] = field(default_factory=lambda: [1.0] * 6)
+    pattern_mod: list[float] = field(default_factory=lambda: [1.0] * 8)
 
     def integrate(self, dt: float, planedrive=None) -> None:
-        """The frame() angle update: ang[p] += dt·speed·RATE[p]·drive."""
+        """The frame() angle update: ang[p] += dt·speed·RATE[p]·rate[p]·drive."""
         if not self.playing:
             return
         for p in range(6):
             if self.planes[p]:
                 drive = 1.0 if planedrive is None else planedrive[p]
-                self.ang[p] += dt * self.speed * RATE[p] * drive
+                self.ang[p] += dt * self.speed * RATE[p] * self.rate[p] * drive
 
 
 class Renderer:
@@ -394,7 +398,9 @@ class Renderer:
                 p["u_time"].value = t_m
                 p["u_mode"].value = int(s.pattern)
                 p["u_mix"].value = float(s.pattern_mix)
-                p["u_bands"].value = tuple(bands) if bands is not None else (1.0,) * 6
+                p["u_bands"].value = (
+                    tuple(bands) if bands is not None else tuple(s.pattern_mod[:6])
+                )
                 self._sync_bitmap(s.bmp_file)
                 bmp_on = self._bmp_tex is not None and s.bmp_alpha > 0.0
                 p["u_bmp_on"].value = int(bmp_on)

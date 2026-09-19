@@ -150,6 +150,7 @@ class Overlay:
                        tip="Opacity of the whole window, shape and panel alike.")
         reg.enum("overlay.monitor", "Screen", lambda: max(self.monitor, 0),
                  lambda i: setattr(self, "monitor", int(i)), self.monitor_names, group=g,
+                 persist=False, modulatable=False,
                  tip="Which screen the overlay covers.")
 
     def monitor_names(self) -> list[str]:

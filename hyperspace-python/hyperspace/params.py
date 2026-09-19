@@ -7,7 +7,7 @@ core's own contract (BLUEPRINT §3.6 inbound: "addressed by the same
 parameter registry the UI uses"), so nothing in it may import from an
 adapter — midi.py depends on this module, never the other way round.
 
-Four kinds, one normalized interface:
+Five kinds, one normalized interface:
 
   CONTINUOUS  value in a range; exposes norm ∈ [0, 1] both ways. Tapered
               params (tapers.Taper) quantize to the taper's integer throw so
@@ -16,6 +16,8 @@ Four kinds, one normalized interface:
   ENUM        an index into a list of choice names.
   TOGGLE      a bool.
   TRIGGER     an action; fire() and nothing else.
+  TEXT        a string (a file path). Presets save it; every numeric
+              surface ignores it — no norm, no step, no modulation.
 
 ``step(n)`` moves any non-trigger param by n detents — taper positions, a
 hundredth of an untapered range, one choice, or a flip — which is what
@@ -24,6 +26,27 @@ keys, d-pads and relative encoders all want.
 Values are read live through getters, never cached, so a param stays true
 after a hot reload or after the chain object is recreated on a source
 attach (getters go through ``audio.chain``, not a captured chain).
+
+Two flags say what a param is *for*: ``persist`` (it belongs in a preset —
+off for UI state, transport and rig-specific choices) and ``modulatable``
+(a continuous source such as an audio lane may drive it — off for things
+like which screen the output is on). An ``alias`` (band.sel.*) is neither.
+
+Modulation — the one control concept every source shares — lives here.
+Any source (an audio band, an LFO, an external MIDI lane) calls
+``modulate(u)`` on a param each frame with an offset in the param's
+normalized space, and once per frame ``Registry.apply()`` writes
+``effective = base + Σ offsets`` into the live object. The *base* is what
+the user set and what presets save; the object holds the effective value
+the renderer reads. Base is adopted from the object the first time a
+param is modulated; the param-level setters (set / set_norm / step…)
+write the base while it is modulated; a direct write to the object by
+other code shifts the base by the same delta (so the rotation integrator
+keeps adding to ``ang`` while a lane adds a phase offset on top); and when
+the last source lets go the base is written back. Continuous params are
+mapped as floats — no detents — so a lane never zippers; enum and toggle
+targets move with hysteresis so a noisy lane cannot flap them; a trigger
+fires on a rising edge.
 """
 
 from __future__ import annotations
@@ -49,12 +72,19 @@ PLANES = ["XY", "XZ", "YZ", "XW", "YW", "ZW"]
 
 RAW_STEPS = 100  # detents across an untapered continuous range
 
+# modulation hysteresis: a toggle or trigger goes high above ON and low
+# below OFF; an enum or integer only moves once the target is this far
+# past the midpoint between two choices
+MOD_ON, MOD_OFF = 0.6, 0.4
+MOD_DEADBAND = 0.15
+
 
 class Kind(Enum):
     CONTINUOUS = "continuous"
     ENUM = "enum"
     TOGGLE = "toggle"
     TRIGGER = "trigger"
+    TEXT = "text"
 
 
 def _clamp(x, a, b):
@@ -67,7 +97,7 @@ class Param:
     label: str
     kind: Kind
     get: Callable[[], Any] = field(repr=False, default=lambda: None)
-    set: Callable[[Any], None] = field(repr=False, default=lambda v: None)
+    put: Callable[[Any], None] = field(repr=False, default=lambda v: None)  # raw object write
     fire: Callable[[], None] = field(repr=False, default=lambda: None)
     group: str = ""
     tip: str = ""
@@ -81,12 +111,62 @@ class Param:
     fmt: Callable[[float], str] = field(repr=False, default=lambda v: f"{v:.2f}")
     # ENUM: a list, or a callable returning one (theme names change on save)
     choices: list[str] | Callable[[], list[str]] = field(default_factory=list)
+    # what the param is for
+    persist: bool = True         # belongs in a preset
+    modulatable: bool = True     # a lane may drive it
+    alias: bool = False          # a view onto another param (band.sel.*)
+    # modulation state — runtime only
+    _base: float | None = field(default=None, repr=False)   # norm; None = not modulated
+    _mod: float = field(default=0.0, repr=False)            # this frame's offsets
+    _held: bool = field(default=False, repr=False)          # a source called this frame
+    _last: float | None = field(default=None, repr=False)   # norm we last wrote
+    _disc: float | None = field(default=None, repr=False)   # last discrete effective
+    _armed: bool = field(default=True, repr=False)          # trigger edge detector
+
+    def __post_init__(self):
+        if self.alias:
+            self.persist = self.modulatable = False
+        if self.kind is Kind.TRIGGER:
+            self.persist = False
+        if self.kind is Kind.TEXT:
+            self.modulatable = False
 
     # ---- generic value access ----
 
     @property
     def value(self):
+        """The live (effective) value — what the renderer sees."""
         return self.get()
+
+    @property
+    def modulated(self) -> bool:
+        return self._base is not None
+
+    @property
+    def base(self):
+        """What the user set, in the param's own units — what a preset saves.
+
+        Equal to `value` unless a source is modulating the param; then the
+        object holds base + offsets and this is the underlying setting.
+        Every surface-facing reader below (norm, position, text, step…)
+        works on the base, so a fader shows and moves the setting while
+        the lane rides on top of it.
+        """
+        if self._base is None:
+            return self.get()
+        return self._value_of_norm(self._base)
+
+    @property
+    def eff_norm(self) -> float:
+        """The effective (object) value as a float in [0, 1]."""
+        return self._norm_of(self.get())
+
+    def set(self, v) -> None:
+        """Write a raw value — to the object, or to the base while modulated."""
+        if self._base is None:
+            self.put(v)
+        else:
+            self._base = self._norm_of(v)
 
     @property
     def names(self) -> list[str]:
@@ -105,6 +185,38 @@ class Param:
             return max(len(self.names) - 1, 0)
         return 1
 
+    # ---- norm ↔ value, both ways, without detents ----
+
+    def _norm_of(self, v) -> float:
+        k = self.kind
+        if k is Kind.CONTINUOUS:
+            if self.taper is not None:
+                return self.taper.unmap(v) / self.taper.steps
+            return self._raw_norm(v)
+        if k is Kind.ENUM:
+            n = self.steps
+            return 0.0 if n == 0 else _clamp(int(v) / n, 0.0, 1.0)
+        if k is Kind.TOGGLE:
+            return 1.0 if v else 0.0
+        return 0.0
+
+    def _value_of_norm(self, u: float):
+        """The value at a float position — the un-detented map a lane uses.
+
+        Every taper's map() is a closed form in the position, so it takes a
+        float as happily as an int; only unmap() rounds.
+        """
+        k = self.kind
+        if k is Kind.CONTINUOUS:
+            if self.taper is not None:
+                return self.taper.map(u * self.taper.steps)
+            return self._raw_value(u)
+        if k is Kind.ENUM:
+            return round(u * self.steps)
+        if k is Kind.TOGGLE:
+            return u >= 0.5
+        return None
+
     # ---- CONTINUOUS ----
 
     def set_value(self, v: float) -> None:
@@ -122,7 +234,9 @@ class Param:
         self.set(round(v) if self.integer else v)
 
     def position(self) -> int:
-        """Detent index of the current value, 0..steps."""
+        """Detent index of the current setting, 0..steps."""
+        if self._base is not None:
+            return round(self._base * self.steps)
         v = self.get()
         if self.taper is not None:
             return self.taper.unmap(v)
@@ -156,18 +270,10 @@ class Param:
 
     @property
     def norm(self) -> float:
-        """Current state as a float in [0, 1]."""
-        k = self.kind
-        if k is Kind.CONTINUOUS:
-            if self.taper is not None:
-                return self.taper.unmap(self.get()) / self.taper.steps
-            return self._raw_norm(self.get())
-        if k is Kind.ENUM:
-            n = self.steps
-            return 0.0 if n == 0 else _clamp(self.get() / n, 0.0, 1.0)
-        if k is Kind.TOGGLE:
-            return 1.0 if self.get() else 0.0
-        return 0.0
+        """The setting as a float in [0, 1] (the base while modulated)."""
+        if self._base is not None:
+            return self._base
+        return self._norm_of(self.get())
 
     def set_norm(self, u: float) -> None:
         """Set from a float in [0, 1] — what a MIDI value or a fader is."""
@@ -179,7 +285,7 @@ class Param:
             self.set(round(u * self.steps))
         elif k is Kind.TOGGLE:
             self.set(u >= 0.5)
-        elif u >= 0.5:
+        elif k is Kind.TRIGGER and u >= 0.5:
             self.fire()
 
     # ---- discrete moves ----
@@ -189,29 +295,29 @@ class Param:
         k = self.kind
         if k is Kind.CONTINUOUS:
             if self.wrap and self.taper is None:
-                self.set_value(self.get() + n * (self.hi - self.lo) / self.steps)
+                self.set_value(self.base + n * (self.hi - self.lo) / self.steps)
             else:
                 self.set_position(self.position() + n)
         elif k is Kind.ENUM:
             m = len(self.names)
             if m:
-                self.set(_clamp(self.get() + n, 0, m - 1))
+                self.set(_clamp(self.base + n, 0, m - 1))
         elif k is Kind.TOGGLE:
             if n:
-                self.set(not self.get())
-        else:
+                self.set(not self.base)
+        elif k is Kind.TRIGGER:
             self.fire()
 
     def cycle(self, n: int = 1) -> None:
         """Like step, but an enum wraps around."""
         if self.kind is Kind.ENUM and self.names:
-            self.set((self.get() + n) % len(self.names))
+            self.set((self.base + n) % len(self.names))
         else:
             self.step(n)
 
     def toggle(self) -> None:
         if self.kind is Kind.TOGGLE:
-            self.set(not self.get())
+            self.set(not self.base)
         elif self.kind is Kind.TRIGGER:
             self.fire()
 
@@ -219,15 +325,85 @@ class Param:
 
     def text(self) -> str:
         k = self.kind
+        v = self.base
         if k is Kind.CONTINUOUS:
-            return self.fmt(self.get())
+            return self.fmt(v)
         if k is Kind.ENUM:
             names = self.names
-            i = self.get()
-            return names[i] if 0 <= i < len(names) else "—"
+            return names[v] if 0 <= v < len(names) else "—"
         if k is Kind.TOGGLE:
-            return "on" if self.get() else "off"
+            return "on" if v else "off"
+        if k is Kind.TEXT:
+            return str(v or "")
         return ""
+
+    # ---- modulation: any source, one rule ----
+
+    def modulate(self, u: float) -> None:
+        """Add a source's offset for this frame, in normalized units.
+
+        A source calls this every frame it is routed here, even with 0 —
+        holding the param is what keeps its base apart from the object;
+        the frame nothing calls, `apply()` writes the base back.
+        """
+        if not self.modulatable:
+            return
+        if self._base is None:
+            self._base = self._norm_of(self.get())   # adopt the user's setting
+            self._last = self._base
+            self._disc = None
+        self._mod += float(u)
+        self._held = True
+
+    def apply(self) -> None:
+        """End of frame: write base + offsets to the object, or let go."""
+        if self._base is None:
+            return
+        held, mod = self._held, self._mod
+        self._held, self._mod = False, 0.0
+        k = self.kind
+        if not held:                          # last source left: restore base
+            if k is not Kind.TRIGGER:
+                self.put(self._value_of_norm(self._base))
+            self._base = self._last = self._disc = None
+            return
+        if k is not Kind.TRIGGER:
+            # something wrote the object since we did (the rotation
+            # integrator, presets.load…): that delta belongs to the base
+            cur = self._norm_of(self.get())
+            if self._last is not None and cur != self._last:
+                self._base += cur - self._last
+                self._base = self._base % 1.0 if self.wrap else _clamp(self._base, 0.0, 1.0)
+        target = self._base + mod
+        if k is Kind.CONTINUOUS:
+            target = target % 1.0 if self.wrap else _clamp(target, 0.0, 1.0)
+            if self.integer:
+                self.put(self._raw_value(self._snap(target * self.steps) / self.steps))
+            else:
+                self.put(self._value_of_norm(target))
+        elif k is Kind.ENUM:
+            self.put(int(self._snap(target * self.steps)))
+        elif k is Kind.TOGGLE:
+            on = self._disc == 1.0
+            on = target > MOD_OFF if on else target >= MOD_ON
+            self._disc = 1.0 if on else 0.0
+            self.put(on)
+        else:  # TRIGGER: fire on the rising edge, re-arm below the low mark
+            if self._armed and target >= MOD_ON:
+                self._armed = False
+                self.fire()
+            elif not self._armed and target < MOD_OFF:
+                self._armed = True
+            return
+        self._last = self._norm_of(self.get())
+
+    def _snap(self, x: float) -> float:
+        """Nearest integer, moving only once past the midpoint + deadband."""
+        cur = self._disc
+        if cur is None or abs(x - cur) > 0.5 + MOD_DEADBAND:
+            cur = float(round(_clamp(x, 0, self.steps)))
+        self._disc = cur
+        return cur
 
 
 class Registry:
@@ -263,26 +439,96 @@ class Registry:
     def group(self, name: str) -> list[Param]:
         return [p for p in self if p.group == name]
 
+    def remove(self, pid: str) -> Param | None:
+        """Drop a param (a band that was deleted). Bindings to it go dormant —
+        every adapter already treats an unknown id as a no-op."""
+        p = self._p.pop(pid, None)
+        if p is not None and p.modulated:
+            p._held = False
+            p.apply()            # hand the object its base back
+        return p
+
+    def remove_prefix(self, prefix: str) -> list[Param]:
+        return [self.remove(pid) for pid in list(self._p) if pid.startswith(prefix)]
+
+    # ---- frame ----
+
+    def apply(self) -> None:
+        """Once per frame, after every source has called modulate()."""
+        # over a copy: a modulated trigger may add or remove params
+        # (a band layout change) while we are still walking the table
+        for p in list(self._p.values()):
+            if p._base is not None:
+                p.apply()
+
+    # ---- persistence: the one serialization every preset is made of ----
+
+    def snapshot(self, group: str | None = None, *, ids=None) -> dict[str, Any]:
+        """{id: base value} for every persistent param (or one group / id set)."""
+        out: dict[str, Any] = {}
+        for p in self._p.values():
+            if not p.persist:
+                continue
+            if group is not None and p.group != group:
+                continue
+            if ids is not None and p.id not in ids:
+                continue
+            v = p.base
+            out[p.id] = list(v) if isinstance(v, list) else v
+        return out
+
+    def restore(self, values: dict[str, Any]) -> list[str]:
+        """Set every param named; returns the ids this registry doesn't have."""
+        missing = []
+        for pid, v in values.items():
+            p = self._p.get(pid)
+            if p is None:
+                missing.append(pid)
+                continue
+            k = p.kind
+            if k is Kind.CONTINUOUS:
+                # raw, not set_value: a saved value lands exactly where it
+                # was, detent or not (the base is detented only while modulated)
+                p.set(float(v))
+            elif k is Kind.ENUM:
+                p.set(int(v))
+            elif k is Kind.TOGGLE:
+                p.set(bool(v))
+            elif k is Kind.TEXT:
+                p.set(str(v))
+        return missing
+
     # ---- declaration helpers ----
 
     def continuous(self, pid, label, get, set, *, taper=None, lo=0.0, hi=1.0, log=False,
-                   integer=False, wrap=False, fmt=None, group="", tip="") -> Param:
+                   integer=False, wrap=False, fmt=None, group="", tip="",
+                   persist=True, modulatable=True, alias=False) -> Param:
         if fmt is None:
             fmt = (lambda v: f"{int(v)}") if integer else (lambda v: f"{v:.2f}")
         return self.add(Param(
             pid, label, Kind.CONTINUOUS, get, set, group=group, tip=tip, taper=taper,
             lo=lo, hi=hi, log=log, integer=integer, wrap=wrap, fmt=fmt,
+            persist=persist, modulatable=modulatable, alias=alias,
         ))
 
-    def enum(self, pid, label, get, set, choices, *, group="", tip="") -> Param:
+    def enum(self, pid, label, get, set, choices, *, group="", tip="",
+             persist=True, modulatable=True, alias=False) -> Param:
         return self.add(Param(pid, label, Kind.ENUM, get, set, group=group, tip=tip,
-                              choices=choices))
+                              choices=choices, persist=persist, modulatable=modulatable,
+                              alias=alias))
 
-    def toggle(self, pid, label, get, set, *, group="", tip="") -> Param:
-        return self.add(Param(pid, label, Kind.TOGGLE, get, set, group=group, tip=tip))
+    def toggle(self, pid, label, get, set, *, group="", tip="",
+               persist=True, modulatable=True, alias=False) -> Param:
+        return self.add(Param(pid, label, Kind.TOGGLE, get, set, group=group, tip=tip,
+                              persist=persist, modulatable=modulatable, alias=alias))
 
-    def trigger(self, pid, label, fire, *, group="", tip="") -> Param:
-        return self.add(Param(pid, label, Kind.TRIGGER, fire=fire, group=group, tip=tip))
+    def trigger(self, pid, label, fire, *, group="", tip="", modulatable=True) -> Param:
+        return self.add(Param(pid, label, Kind.TRIGGER, fire=fire, group=group, tip=tip,
+                              modulatable=modulatable))
+
+    def text(self, pid, label, get, set, *, group="", tip="", persist=True) -> Param:
+        return self.add(Param(pid, label, Kind.TEXT, get, set, group=group, tip=tip,
+                              persist=persist))
 
 
 # ---------------------------------------------------------------- builder
@@ -352,6 +598,35 @@ def build_registry(view, control, audio, presets=None) -> Registry:
                  fmt=lambda v: f"amp {v:.2f}", group=g)
     r.continuous("view.bmp_rate", "Bitmap rate", *_attr(view, "bmp_rate"), lo=0.0, hi=6.0,
                  fmt=lambda v: f"rate {v:.1f}", group=g)
+    r.text("view.bmp_file", "Bitmap file", *_attr(view, "bmp_file"), group=g,
+           tip="Image drawn over the face pattern; empty for none.")
+    # the face pattern's modulation inputs — what the shaders read as
+    # u_bands today. Base 1.0 is the un-driven look; a routed lane rides on it.
+    for k in range(len(view.pattern_mod)):
+        r.continuous(f"pattern.mod.{k}", f"Pattern mod {k + 1}",
+                     *_item(lambda: view.pattern_mod, k), lo=0.0, hi=2.6,
+                     fmt=lambda v: f"{v:.2f}", group="pattern",
+                     tip="A modulation input the face patterns read (patterns.glsl). "
+                         "Route an audio band here to drive the pattern.")
+
+    # ---- rotation: per-plane rate and phase ----
+    # rate multiplies dt·speed·RATE[p]; signed so a lane can spin a plane
+    # backwards. phase is the integrated angle, folded to one turn: not a
+    # preset value (a theme changes the look, not where the spin is) but a
+    # modulation target — a lane adds a phase offset on top of the integrator.
+    g = "rot"
+    fold = lambda a: math.remainder(a, 2 * math.pi)   # ±π stay put, the rest folds
+    for p, name in enumerate(PLANES):
+        r.continuous(f"rot.rate.{name}", f"{name} rate", *_item(lambda: view.rate, p),
+                     lo=-8.0, hi=8.0, fmt=lambda v: f"{v:+.2f}×", group=g,
+                     tip=f"Rotation rate multiplier for the {name} plane; negative reverses.")
+    for p, name in enumerate(PLANES):
+        r.continuous(f"rot.phase.{name}", f"{name} phase",
+                     (lambda p=p: fold(view.ang[p])),
+                     (lambda v, p=p: view.ang.__setitem__(p, v)),
+                     lo=-math.pi, hi=math.pi, wrap=True,
+                     fmt=lambda v: f"{math.degrees(v):.0f}°", group=g, persist=False,
+                     tip=f"Where the {name} plane is in its turn right now.")
 
     # ---- camera ----
     g = "camera"
@@ -361,6 +636,9 @@ def build_registry(view, control, audio, presets=None) -> Registry:
                  wrap=True, fmt=lambda v: f"{math.degrees(v):.0f}°", group=g)
     r.continuous("camera.pitch", "Pitch", *_attr(view, "pitch"), lo=-1.55, hi=1.55,
                  fmt=lambda v: f"{math.degrees(v):.0f}°", group=g)
+    for i, axis in enumerate("xy"):
+        r.continuous(f"camera.pan.{axis}", f"Pan {axis.upper()}", *_item(lambda: view.pan, i),
+                     lo=-4000.0, hi=4000.0, fmt=lambda v: f"{v:+.0f} px", group=g)
 
     def reset_view():
         view.ang = [0.0] * 6
@@ -399,28 +677,31 @@ def build_registry(view, control, audio, presets=None) -> Registry:
     g = "band"
     r.enum("band.select", "Band", lambda: control.selb,
            lambda i: setattr(control, "selb", i), [b.id for b in BANDS], group=g,
+           persist=False, modulatable=False,
            tip="Which band's strip is open — the band.sel.* params follow it.")
     r.trigger("band.reset", "Reset band", control.reset_band, group=g,
               tip="Puts this band's whole strip back to the selected scene.")
     shaper_tags = [s.tag for s in SHAPERS]
 
-    def band_params(prefix: str, idx: Callable[[], int], label_of: Callable[[str], str]):
+    def band_params(prefix: str, idx: Callable[[], int], label_of: Callable[[str], str],
+                    alias: bool = False):
         r.enum(f"{prefix}.fn", label_of("Transfer"),
                lambda: chain().params[idx()].fn,
-               lambda fn: control.set_shaper(idx(), fn), shaper_tags, group=g)
+               lambda fn: control.set_shaper(idx(), fn), shaper_tags, group=g, alias=alias)
         for knob in tapers.KNOBS:
             r.continuous(
                 f"{prefix}.{knob.key}", label_of(knob.label),
                 (lambda k=knob.key: getattr(chain().params[idx()], k)),
                 (lambda v, k=knob.key: setattr(chain().params[idx()], k, v)),
-                taper=knob.t, fmt=knob.fmt, tip=knob.tip, group=g,
+                taper=knob.t, fmt=knob.fmt, tip=knob.tip, group=g, alias=alias,
             )
 
     for i, band in enumerate(BANDS):
         band_params(f"band.{i}", (lambda i=i: i), lambda lb, b=band.id: f"{b} {lb}")
         r.trigger(f"band.{i}.reset", f"{band.id} reset",
                   lambda i=i: control.reset_band(i), group=g)
-    band_params("band.sel", lambda: control.selb, lambda lb: lb)
+    # the selected band's strip: views onto band.{selb}.*, never saved or driven
+    band_params("band.sel", lambda: control.selb, lambda lb: lb, alias=True)
 
     # ---- themes ----
     if presets is not None:
@@ -429,13 +710,15 @@ def build_registry(view, control, audio, presets=None) -> Registry:
             s["name"] if s else f"THEME {k + 1}" for k, s in enumerate(presets.slots)
         ]
         # active is −1 until a theme loads: no choice selected, no LED lit
+        # meta-controls: they *apply* presets, so no preset stores them
         r.enum("theme.select", "Theme", lambda: presets.active, presets.load, names,
-               group=g, tip="Whole-surface save states — view, faders, all six band strips.")
+               group=g, persist=False, modulatable=False,
+               tip="Whole-surface save states — view, faders, all six band strips.")
         for k in range(len(presets.slots)):
             r.trigger(f"theme.load.{k}", f"Load theme {k + 1}",
                       lambda k=k: presets.load(k), group=g)
             r.trigger(f"theme.save.{k}", f"Save theme {k + 1}",
-                      lambda k=k: presets.save(k), group=g)
+                      lambda k=k: presets.save(k), group=g, modulatable=False)
         r.trigger("theme.next", "Next theme", lambda: presets.cycle(1), group=g)
         r.trigger("theme.prev", "Previous theme", lambda: presets.cycle(-1), group=g)
 
@@ -445,7 +728,7 @@ def build_registry(view, control, audio, presets=None) -> Registry:
         r.toggle("audio.play", "Play",
                  lambda: bool(getattr(audio, "playing", False)),
                  lambda on: audio.toggle_play() if on != bool(audio.playing) else None,
-                 group=g, tip="Play / pause the loaded track.")
+                 group=g, persist=False, tip="Play / pause the loaded track.")
         r.trigger("audio.restart", "Restart track", audio.restart, group=g)
-        r.trigger("audio.stop", "Stop source", audio.stop, group=g)
+        r.trigger("audio.stop", "Stop source", audio.stop, group=g, modulatable=False)
     return r
