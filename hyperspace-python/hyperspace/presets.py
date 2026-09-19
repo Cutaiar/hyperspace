@@ -219,13 +219,12 @@ class Presets:
 
     def capture(self, name: str) -> dict:
         v, chain = self.view, self.audio.chain
+        # lists are copied so a slot never aliases the live state
         view = {
-            f.name: getattr(v, f.name)
+            f.name: list(x) if isinstance(x := getattr(v, f.name), list) else x
             for f in dataclasses.fields(v)
             if f.name not in VIEW_SKIP
         }
-        view["planes"] = list(v.planes)
-        view["pan"] = list(v.pan)
         return {
             "name": name,
             "scene": self.control.scene,

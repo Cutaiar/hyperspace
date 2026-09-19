@@ -195,21 +195,25 @@ class Panel:
         if "ui.panel" in r:
             return
         r.toggle("ui.panel", "Control panel",
-                 lambda: self.open, lambda on: setattr(self, "open", bool(on)), group="ui")
+                 lambda: self.open, lambda on: setattr(self, "open", bool(on)), group="ui",
+                 persist=False, modulatable=False)
         r.toggle("ui.cheatsheet", "Cheat sheet",
                  lambda: self.cheatsheet,
-                 lambda on: setattr(self, "cheatsheet", bool(on)), group="ui")
+                 lambda on: setattr(self, "cheatsheet", bool(on)), group="ui",
+                 persist=False, modulatable=False)
         r.trigger("app.restart", "Restart process",
                   lambda: setattr(self, "restart_requested", True), group="ui",
+                  modulatable=False,
                   tip="Restart the process (Cmd+R). Full cold reload; view state is lost.")
         a = self.audio
         r.toggle("audio.mic", "Mic",
                  lambda: bool(a.on and a.mode == "mic"), self._set_mic, group="audio",
+                 persist=False,
                  tip="Listen to the selected input device.")
         r.enum("audio.device", "Input device",
                lambda: self.device_sel, lambda i: setattr(self, "device_sel", i),
                lambda: [("● " if d["loopback"] else "") + d["name"] for d in self.devices],
-               group="audio")
+               group="audio", persist=False, modulatable=False)
 
     def _set_mic(self, on: bool) -> None:
         a = self.audio
@@ -297,7 +301,7 @@ class Panel:
         """Compact slider with the readout inside — untapered ranges."""
         p = self.reg[pid]
         imgui.set_next_item_width(width)
-        v = p.value
+        v = p.base
         if p.integer:
             changed, nv = imgui.slider_int(f"##{pid}", int(v), int(p.lo), int(p.hi), p.text())
         else:
@@ -313,7 +317,7 @@ class Panel:
     def _combo(self, pid: str, width: float = -1, tip: str | None = None) -> bool:
         p = self.reg[pid]
         imgui.set_next_item_width(width)
-        changed, i = imgui.combo(f"##{pid}", p.value, p.names)
+        changed, i = imgui.combo(f"##{pid}", p.base, p.names)
         self._tip(p, tip)
         self._ctx(p)
         self._learn_frame(p)
@@ -323,7 +327,7 @@ class Panel:
 
     def _check(self, pid: str) -> bool:
         p = self.reg[pid]
-        changed, on = imgui.checkbox(f"{p.label}##{pid}", bool(p.value))
+        changed, on = imgui.checkbox(f"{p.label}##{pid}", bool(p.base))
         self._tip(p)
         self._ctx(p)
         self._learn_frame(p)
