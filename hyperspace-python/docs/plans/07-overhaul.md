@@ -1,8 +1,13 @@
 # Plan 07 — The overhaul: two windows, presets, N-band analyzer, one control concept
 
-**Status (2026-09-18):** WP0 landed. WP1, WP2 and WP4a run in parallel from
-it; the rest follow in dependency order. Each work package is one branch,
-one worktree, one PR against `main`.
+**Status (2026-09-19):** everything below WP6c is on `main` — WP0 (#9),
+WP1 (#10/#16), WP2 (#11), WP4a (#12), WP4b (#13, with the `replace` op),
+WP4c (#14), WP6-0 (#15), WP5a (#17), WP6a (#18), WP5b (#19), WP6b (#20).
+423 tests. Each work package was one branch, one worktree, one PR.
+Left: **WP6c** (tuning at the machine) and the hand checks listed in
+`CHECKPOINT.md`'s successor — second monitor / DPI (WP1), APC40
+plug/unplug (WP4c's `Ports`), IAC + FL Studio (WP4c), mouse feel of the
+band editor and routing matrix (WP5b), the dream look (WP6b).
 
 ## Why
 
