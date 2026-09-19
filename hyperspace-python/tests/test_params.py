@@ -9,8 +9,8 @@ from hyperspace.analysis import Analyser
 from hyperspace.bands import BANDS, PRESETS, Chain
 from hyperspace.control import Control
 from hyperspace.geometry import SHAPES
+from hyperspace.library import Library
 from hyperspace.params import Kind, Registry, build_registry
-from hyperspace.presets import Presets
 from hyperspace.render import ViewState
 
 
@@ -19,8 +19,10 @@ def make(tmp_path):
     control = Control(chain)
     audio = SimpleNamespace(chain=chain)
     view = ViewState()
-    presets = Presets(view, control, audio, path=tmp_path / "presets.json")
+    lib = Library(tmp_path)
+    presets = lib.bank
     reg = build_registry(view, control, audio, presets)
+    lib.attach(reg)
     return reg, view, control, audio, presets
 
 
@@ -179,7 +181,7 @@ def test_theme_params(rig):
     assert presets.active == 1
     view.shape = 12
     reg["theme.save.5"].fire()
-    assert presets.slots[5]["view"]["shape"] == 12
+    assert presets.slots[5]["values"]["view.shape"] == 12
 
 
 def test_scene_names_match_presets(rig):

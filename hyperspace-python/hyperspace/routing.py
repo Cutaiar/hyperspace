@@ -38,6 +38,13 @@ Ops — what a row does to its target:
              names (an attenuator on the depth; 1 when it names none).
              Rows to unknown or unmodulatable params, or with an unknown
              scale param, are dormant no-ops.
+  replace    like mod, but the source *is* the value: while it is live the
+             target's effective value is ``value · scale · u`` in the
+             param's own units, whatever the base; when it stops, the base
+             returns. Done through the same modulate() — the offset is
+             ``norm_of(value · scale · u) − base_norm`` — so range, wrap
+             and dormancy are exactly mod's. One replace row per target
+             is the meaningful case (two sum their departures from the base).
 
 Lane normalization: ``u = lane / CEIL`` — the analyzer's lanes are in
 [0, CEIL) (bands.CEIL, the fader asymptote), so a lane at the asymptote
@@ -55,28 +62,31 @@ next step() reads it, one frame late, like every other modulated value.
 
 Legacy 6 — the parity anchor. The reference drove the planes with
 ``PLANEDRIVE[plane] = dir · out[i] · DRIVE · gain`` in place of the
-constant 1, and the shaders read ``u_bands[i] = out[i]``. As routes:
-lane i → ``rot.rate.<plane>`` with depth ``dir · ROT_DEPTH`` scaled by
-``master.gain`` on a base of 0, and lane i → ``pattern.mod.i`` with
-depth 1 on a base of 0. With ``rot.rate`` spanning ±ROT_RATE_MAX =
+constant 1 — and 1 again the moment the source stopped — and the shaders
+read ``u_bands[i] = out[i]``. As routes: lane i → ``rot.rate.<plane>``
+*replace* with value ``dir · DRIVE · CEIL`` scaled by ``master.gain``
+(u = out / CEIL, so that is ``dir · out · DRIVE · gain`` in rate units:
+the un-driven base of 1 spins the shape, audio replaces it exactly, a
+gated band stops its plane at 0.0, and the base is back the frame the
+source stops); and lane i → ``pattern.mod.i`` *mod*
+with depth 1 on a base of 0. ``rot.rate`` spans ±ROT_RATE_MAX =
 ±(CEIL · DRIVE · 8) — the largest drive the reference could produce, at
-the drive fader's 8× — the depth comes out to exactly 1/16 and the
-effective rate is the reference's number to round-off (a value passes
-through the registry's normalized space and back: within an ulp of the
-range, the same float32 the GPU sees; params.py says why the range is
-that wide). `PRESETS["legacy6"]` carries the routes *and* the two base
-sets (`values`), because the additive model reproduces "audio replaces
-the constant" only on a base of 0; the factory table ships the same
-routes on WP0's bases of 1, so an un-driven start still spins and a lane
-rides on top of that.
+the drive fader's 8× — so nothing clamps at any gain, and the effective
+rate is the reference's number to round-off (a value passes through the
+registry's normalized space and back: within an ulp of the range, the
+same float32 the GPU sees; params.py says why the range is that wide).
+`PRESETS["legacy6"]` carries the routes and the pattern bases (`values`,
+zeros: an additive row reproduces "audio replaces the constant" only on
+0); the factory table ships the same routes on WP0's pattern base of 1,
+so the patterns keep their un-driven look and a lane rides on top.
 
 File format (``bindings.json``, schema ``hyperspace.bindings/1``):
 
   {"schema": "hyperspace.bindings/1", "profile": "apc40",
    "bindings": [{"source": "key:RIGHT", "target": "view.shape",
                  "op": "step", "value": 1},
-                {"source": "lane:0", "target": "rot.rate.ZW", "op": "mod",
-                 "value": 0.0625, "scale": "master.gain"}, …],
+                {"source": "lane:0", "target": "rot.rate.ZW", "op": "replace",
+                 "value": 8.32, "scale": "master.gain"}, …],
    "values": {…}}            # optional: bases a routing preset assumes
 
 Rows carry only what differs from the defaults. `Bindings.load` reads the
@@ -109,14 +119,16 @@ FACTORY_DIR = Path(__file__).parent / "library" / "bindings"
 MIDI_SCHEMES = ("cc", "note", "pitch")
 INPUT_SCHEMES = ("key", "pad", "hat", *MIDI_SCHEMES)
 LANE_SCHEMES = ("lane", "ext", "lfo")          # continuous, read by the Router
-OPS = ("fire", "toggle", "step", "set", "abs", "rel", "rel64", "momentary", "mod")
+MOD_OPS = ("mod", "replace")                   # the Router's per-frame rows
+OPS = ("fire", "toggle", "step", "set", "abs", "rel", "rel64", "momentary", *MOD_OPS)
 
 # midi_map.json's `mode` → op
 MODE_TO_OP = {"abs": "abs", "rel": "rel", "rel64": "rel64", "trigger": "toggle",
               "momentary": "momentary", "set": "set", "step": "step"}
 
-# a lane at the reference's full drive (out = CEIL, gain 8) must land on
-# rot.rate's end stop exactly: depth · (CEIL · 8 / CEIL) · 2 · ROT_RATE_MAX
+# the additive twin of the legacy rate route — a `mod` row on a base of 0
+# lands the reference's drive too: a lane at full drive (out = CEIL, gain 8)
+# reaches rot.rate's end stop when depth · (CEIL · 8 / CEIL) · 2 · ROT_RATE_MAX
 # = CEIL · DRIVE · 8  →  depth = DRIVE · CEIL / (2 · ROT_RATE_MAX) = 1/16
 ROT_DEPTH = DRIVE * CEIL / (2 * ROT_RATE_MAX)
 
@@ -320,9 +332,14 @@ def padmap() -> list[Binding]:
 
 
 def legacy6_routes() -> list[Binding]:
-    """The reference's band → plane table and shader inputs, as routes."""
-    rows = [Binding(f"lane:{i}", f"rot.rate.{b.pl}", "mod", b.dir * ROT_DEPTH, scale="master.gain")
-            for i, b in enumerate(BANDS)]
+    """The reference's band → plane table and shader inputs, as routes.
+
+    The rate rows replace: value · gain · u with u = out / CEIL, so a value
+    of dir · DRIVE · CEIL puts dir · out · DRIVE · gain on the plane in
+    rate units. The pattern rows add on the base.
+    """
+    rows = [Binding(f"lane:{i}", f"rot.rate.{b.pl}", "replace", b.dir * DRIVE * CEIL,
+                    scale="master.gain") for i, b in enumerate(BANDS)]
     rows += [Binding(f"lane:{i}", f"pattern.mod.{i}", "mod", 1.0) for i in range(len(BANDS))]
     return rows
 
@@ -330,10 +347,7 @@ def legacy6_routes() -> list[Binding]:
 # routing presets: {name: (routes, values)} — `values` are the bases the
 # routes assume; None leaves the user's settings alone
 PRESETS: dict[str, tuple[list[Binding], dict | None]] = {
-    "legacy6": (legacy6_routes(), {
-        **{f"rot.rate.{n}": 0.0 for n in PLANES},
-        **{f"pattern.mod.{i}": 0.0 for i in range(len(BANDS))},
-    }),
+    "legacy6": (legacy6_routes(), {f"pattern.mod.{i}": 0.0 for i in range(len(BANDS))}),
 }
 
 
@@ -434,8 +448,8 @@ class Bindings:
         return self.of(*MIDI_SCHEMES)
 
     def mods(self) -> list[Binding]:
-        """The enabled modulation rows, in table order."""
-        return [b for b in self.bindings if b.op == "mod" and b.enabled]
+        """The enabled modulation rows (mod and replace), in table order."""
+        return [b for b in self.bindings if b.op in MOD_OPS and b.enabled]
 
     def route(self, kind: str, channel: int, number: int) -> list[Binding]:
         return [b for b in self.bindings if b.matches(kind, channel, number)]
@@ -444,7 +458,7 @@ class Bindings:
         return next((b for b in self.bindings if b.target == pid and b.scheme in schemes), None)
 
     def routes_to(self, pid: str) -> list[Binding]:
-        return [b for b in self.bindings if b.op == "mod" and b.target == pid]
+        return [b for b in self.bindings if b.op in MOD_OPS and b.target == pid]
 
     # ---- edits ----
 
@@ -482,7 +496,7 @@ class Bindings:
 
     def set_routes(self, routes: Iterable[Binding]) -> None:
         """Replace every modulation row, keeping the input bindings."""
-        self.bindings = [b for b in self.bindings if b.op != "mod"] + list(routes)
+        self.bindings = [b for b in self.bindings if b.op not in MOD_OPS] + list(routes)
 
 
 # ---------------------------------------------------------------- router
@@ -547,7 +561,17 @@ class Router:
                 if sp is None:
                     continue
                 depth *= float(sp.value)
-            p.modulate(depth * float(vec[i]))
+            x = depth * float(vec[i])
+            if b.op == "replace":
+                # the source is the value: land it as the offset from the
+                # base (p.norm is the base while modulated, the object before);
+                # a circular range folds the value first, as set_value does
+                if p.kind is Kind.TEXT or not p.modulatable:
+                    continue
+                if p.wrap and p.taper is None:
+                    x = p.lo + (x - p.lo) % (p.hi - p.lo)
+                x = p._norm_of(x) - p.norm
+            p.modulate(x)
 
     # ---- presets ----
 

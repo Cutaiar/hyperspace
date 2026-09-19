@@ -462,7 +462,9 @@ class Registry:
 
     def apply(self) -> None:
         """Once per frame, after every source has called modulate()."""
-        for p in self._p.values():
+        # over a copy: a modulated trigger may add or remove params
+        # (a band layout change) while we are still walking the table
+        for p in list(self._p.values()):
             if p._base is not None:
                 p.apply()
 

@@ -24,10 +24,10 @@ from hyperspace.analyzer import Analyzer, legacy_layout
 from hyperspace.bands import BANDS, CEIL, DRIVE, default_params
 from hyperspace.control import Control
 from hyperspace.geometry import RATE
+from hyperspace.library import Library
 from hyperspace.offline import load_wav
-from hyperspace.overlay import Overlay
+from hyperspace.overlay import Output
 from hyperspace.params import PLANES, ROT_RATE_MAX, build_registry
-from hyperspace.presets import Presets
 from hyperspace.render import N_MOD, ViewState
 from hyperspace.routing import (
     PRESETS,
@@ -56,8 +56,11 @@ def rig(sr: float = 48_000.0, tmp_path: Path | None = None, full: bool = False):
     control = Control(chain)
     audio = SimpleNamespace(chain=chain, on=True)
     view = ViewState()
-    presets = Presets(view, control, audio, path=tmp_path / "presets.json") if full else None
+    lib = Library(tmp_path) if full else None
+    presets = lib.bank if full else None
     reg = build_registry(view, control, audio, presets)
+    if full:
+        lib.attach(reg)
     if full:
         reg.toggle("ui.panel", "Panel", lambda: True, lambda v: None)
         reg.toggle("ui.cheatsheet", "Sheet", lambda: True, lambda v: None)
@@ -65,7 +68,7 @@ def rig(sr: float = 48_000.0, tmp_path: Path | None = None, full: bool = False):
         reg.trigger("audio.restart", "Restart", lambda: None)
         reg.trigger("audio.stop", "Stop", lambda: None)
         reg.toggle("audio.play", "Play", lambda: False, lambda v: None)
-        Overlay(None, None).register(reg)
+        Output(None, None).register(reg)
     return SimpleNamespace(reg=reg, view=view, control=control, audio=audio, chain=chain)
 
 
@@ -84,16 +87,22 @@ def legacy_integrate(view: ViewState, dt: float, planedrive) -> None:
     ("gate-prover", 60, 1.0, 1.0), ("brickwalled", 60, 1.0, 1.0), ("sweep", 60, 1.0, 1.0),
     ("brickwalled", 120, 0.0, 1.0), ("sweep", 60, 1.0, 2.5), ("gate-prover", 60, 1.0, 8.0),
 ])
+@pytest.mark.parametrize("table", ["factory", "legacy6"])
 def test_legacy6_reproduces_planedrive_and_u_bands(
-    fixture_wavs, clip, fps, dyn, gain,  # noqa: F811 — the fixture
+    fixture_wavs, table, clip, fps, dyn, gain,  # noqa: F811 — the fixture
 ):
     """Side by side: the old chain → PLANEDRIVE → old integrate and
-    u_bands = out, against the analyzer → legacy6 routes → reg.apply →
-    integrate and pattern.mod. Rates and angles agree to round-off every
-    frame (the shader inputs to an ulp), and all are the same float32 the
-    GPU sees; the drive fader keeps meaning (it scales the rotation routes, so
-    a change lands the same frame it did before, and leaves the pattern
-    inputs raw as the reference did)."""
+    u_bands = out, against the analyzer → routes → reg.apply → integrate
+    and pattern.mod, through the reference's three states — no source
+    (rate 1), a source (rate = PLANEDRIVE; a gated band's plane at exactly
+    0.0), and the source gone again (rate 1). Rates and angles agree to
+    round-off every frame, the shader inputs to an ulp, and all are the
+    same float32 the GPU sees; the drive fader keeps meaning (it scales the
+    rotation routes, so a change lands the same frame it did before, and
+    leaves the pattern inputs raw as the reference did). The factory table
+    and the legacy6 preset carry the same rate rows (replace on a base of
+    1); only the preset zeroes the pattern bases, so the pattern check is
+    the preset's."""
     samples, sr = load_wav(fixture_wavs / f"{clip}.wav")
     old_an, r = Analyser(sr), rig(sr)
     old = LegacyChain(old_an)
@@ -102,10 +111,23 @@ def test_legacy6_reproduces_planedrive_and_u_bands(
     old_view, view = ViewState(), r.view
     old_view.planes = view.planes = [True] * 6
     router = Router(r.reg, Bindings.factory())
-    assert router.apply_preset("legacy6") == []
-    assert view.rate == [0.0] * 6 and view.pattern_mod[:6] == [0.0] * 6
+    if table == "legacy6":
+        assert router.apply_preset("legacy6") == []
+        assert view.pattern_mod[:6] == [0.0] * 6
+    assert view.rate == [1.0] * 6                          # WP0's un-driven base
+    ticks = list(frames(samples, sr, fps))
+    idle = np.ones(6)
     n = 0
-    for chunk, dt in frames(samples, sr, fps):
+    # 1. no source yet: the reference integrates a literal 1 — so do we
+    for _chunk, dt in ticks[:20]:
+        legacy_integrate(old_view, dt, idle)
+        router.modulate(None)
+        r.reg.apply()
+        view.integrate(dt)
+        assert view.rate == [1.0] * 6 and not r.reg["rot.rate.XY"].modulated
+        assert view.ang == old_view.ang
+    # 2. the source runs: audio replaces the constant
+    for chunk, dt in ticks:
         old_an.feed(chunk)
         r.chain.an.feed(chunk)
         old_view.speed = view.speed = 0.3 if n < 200 else 1.7   # speed moves mid-run
@@ -119,21 +141,30 @@ def test_legacy6_reproduces_planedrive_and_u_bands(
         view.integrate(dt)
         np.testing.assert_allclose(view.rate, planedrive, rtol=RTOL, atol=ATOL_RATE)
         assert np.array_equal(np.float32(view.rate), np.float32(planedrive))
-        np.testing.assert_allclose(view.pattern_mod[:6], old.out, rtol=RTOL, atol=1e-15)
-        assert np.array_equal(np.float32(view.pattern_mod[:6]), np.float32(old.out))
+        for i in range(6):                                       # gated → stopped, exactly
+            if old.out[i] == 0.0:
+                assert view.rate[BANDS[i].plane] == 0.0
+        if table == "legacy6":
+            np.testing.assert_allclose(view.pattern_mod[:6], old.out, rtol=RTOL, atol=1e-15)
+            assert np.array_equal(np.float32(view.pattern_mod[:6]), np.float32(old.out))
         np.testing.assert_allclose(view.ang, old_view.ang, rtol=RTOL, atol=ATOL_ANG)
         assert np.array_equal(np.float32(view.ang), np.float32(old_view.ang))
         n += 1
     assert n > 500
-    # a gated band drives 0: the plane stopped, exactly as the reference says
     if clip == "gate-prover":
-        for i in (2, 3, 5):
-            assert view.rate[BANDS[i].plane] == 0.0
-    # the source goes away: the bases (0 under legacy6) come back next frame
-    router.modulate(None)
-    r.reg.apply()
-    assert view.rate == [0.0] * 6 and view.pattern_mod[:6] == [0.0] * 6
-    assert not r.reg["rot.rate.XY"].modulated
+        assert all(view.rate[BANDS[i].plane] == 0.0 for i in (2, 3, 5))
+        assert r.reg[f"rot.rate.{BANDS[2].pl}"].base == 1.0     # the setting is untouched
+    # 3. the source goes away: the reference's literal 1 is our base, back
+    # the very next frame, and the integrators agree again
+    for _chunk, dt in ticks[:20]:
+        legacy_integrate(old_view, dt, idle)
+        router.modulate(None)
+        r.reg.apply()
+        view.integrate(dt)
+        assert view.rate == [1.0] * 6 and not r.reg["rot.rate.XY"].modulated
+        np.testing.assert_allclose(view.ang, old_view.ang, rtol=RTOL, atol=ATOL_ANG)
+    if table == "legacy6":
+        assert view.pattern_mod[:6] == [0.0] * 6
 
 
 def test_legacy6_matches_the_golden_traces():
@@ -171,7 +202,6 @@ def test_rot_rate_range_holds_the_reference_drive():
     r = rig()
     p = r.reg["rot.rate.ZW"]
     assert (p.lo, p.hi) == (-ROT_RATE_MAX, ROT_RATE_MAX)
-    r.view.rate = [0.0] * 6
     r.chain.out[:] = CEIL
     r.chain.gain = 8.0
     Router(r.reg, Bindings(routing.legacy6_routes())).modulate(r.chain)
@@ -179,6 +209,15 @@ def test_rot_rate_range_holds_the_reference_drive():
     assert r.view.rate[BANDS[0].plane] == pytest.approx(ROT_RATE_MAX, rel=1e-12)
     assert r.view.rate[BANDS[2].plane] == pytest.approx(-ROT_RATE_MAX, rel=1e-12)
     assert r.view.pattern_mod[:6] == [CEIL] * 6                 # base 1 + 1·u, clamped
+    r.reg.apply()                                               # nothing held: bases back
+    assert r.view.rate == [1.0] * 6
+    # the additive twin lands the same number from a base of 0
+    r.view.rate = [0.0] * 6
+    rows = [Binding(f"lane:{i}", f"rot.rate.{b.pl}", "mod", b.dir * ROT_DEPTH, scale="master.gain")
+            for i, b in enumerate(BANDS)]
+    Router(r.reg, Bindings(rows)).modulate(r.chain)
+    r.reg.apply()
+    assert r.view.rate[BANDS[0].plane] == pytest.approx(ROT_RATE_MAX, rel=1e-12)
 
 
 # ----------------------------------------------------------------- model
@@ -426,6 +465,52 @@ def test_modulate_normalizes_lanes_and_lets_go():
     assert not b.modulated and r.view.bright == 1.0
 
 
+def test_replace_op_is_the_value_while_live():
+    """replace: effective = value · scale · u in the param's units, the base
+    untouched and back when the source stops; the offset goes through
+    modulate() as norm_of(want) − base_norm, so range and wrap are mod's."""
+    r = rig()
+    rate, yaw = r.reg["rot.rate.XY"], r.reg["camera.yaw"]
+    rate.set_value(1.0)
+    yaw.set_value(3.0)
+    t = Bindings([
+        Binding("lane:0", "rot.rate.XY", "replace", -10.0),
+        Binding("lane:1", "camera.yaw", "replace", 2 * np.pi, scale="view.speed"),
+        Binding("lane:2", "gone.param", "replace", 1.0),               # dormant
+        Binding("lane:2", "band.select", "replace", 1.0),              # dormant
+        Binding("lane:2", "rot.rate.XZ", "replace", 1.0, scale="nope"),  # dormant
+    ])
+    router = Router(r.reg, t)
+    r.chain.out[:] = [CEIL / 2, CEIL, 1.0, 0, 0, 0]                  # u = 0.5, 1, …
+    r.view.speed = 0.25
+    router.modulate(r.chain)
+    r.reg.apply()
+    assert r.view.rate[0] == pytest.approx(-5.0, abs=1e-13) and rate.base == 1.0
+    assert r.view.yaw == pytest.approx(np.pi / 2, abs=1e-12) and yaw.base == pytest.approx(3.0)
+    assert r.view.rate[1] == 1.0 and not r.reg["rot.rate.XZ"].modulated
+    r.chain.out[0] = CEIL                                            # u = 1: −10, in range
+    r.view.speed = 1.25                                              # 2.5π: wraps to π/2
+    router.modulate(r.chain)
+    r.reg.apply()
+    assert r.view.rate[0] == pytest.approx(-10.0, abs=1e-13)
+    assert r.view.yaw == pytest.approx(np.pi / 2, abs=1e-12)
+    t.mods()[0].value = -1000.0                                      # clamps at the end stop
+    router.modulate(r.chain)
+    r.reg.apply()
+    assert r.view.rate[0] == -ROT_RATE_MAX
+    router.modulate(None)
+    r.reg.apply()
+    assert r.view.rate[0] == 1.0 and r.view.yaw == pytest.approx(3.0)
+    assert not rate.modulated and not yaw.modulated
+    # a tapered target lands on the taper's own detent of the value
+    b = r.reg["view.bright"]
+    b.set_value(1.0)
+    Router(r.reg, Bindings([Binding("lane:1", "view.bright", "replace", 2.0)])).modulate(r.chain)
+    r.reg.apply()
+    assert r.view.bright == b.taper.map(b.taper.unmap(2.0)) and b.base == 1.0
+    assert Binding.from_json(Binding("lane:1", "x", "replace", 2.0).to_json()).op == "replace"
+
+
 def test_routes_sum_and_dormant_rows_are_no_ops():
     r = rig()
     b = r.reg["view.bright"]
@@ -464,9 +549,13 @@ def test_routes_are_editable_at_runtime():
     r.chain.out[:] = 1.0
     router.modulate(r.chain)
     r.reg.apply()
-    assert r.view.rate[BANDS[0].plane] == pytest.approx(1.0 + DRIVE, rel=1e-12)   # base 1 + drive
+    assert r.view.rate[BANDS[0].plane] == pytest.approx(DRIVE, rel=1e-12)   # replaced the base 1
     row = router.table.routes_to(f"rot.rate.{BANDS[0].pl}")[0]
-    row.value = 0.0                                    # depth to zero: held at the base
+    row.value = 0.0                                    # replace with 0: the plane stops
+    router.modulate(r.chain)
+    r.reg.apply()
+    assert r.view.rate[BANDS[0].plane] == 0.0
+    row.op = "mod"                                     # additive now: held at the base
     router.modulate(r.chain)
     r.reg.apply()
     assert r.view.rate[BANDS[0].plane] == pytest.approx(1.0)
@@ -505,12 +594,13 @@ def test_apply_preset_replaces_routes_and_lands_bases(tmp_path):
     assert router.apply_preset("legacy6") == []
     assert len(router.table.mods()) == 12 and not router.table.routes_to("view.bright")
     assert len(router.table.of(*routing.INPUT_SCHEMES)) == n_inputs
-    assert r.view.rate == [0.0] * 6 and r.view.pattern_mod == [0.0] * 6 + [1.0] * (N_MOD - 6)
+    assert r.view.pattern_mod == [0.0] * 6 + [1.0] * (N_MOD - 6)
+    assert r.view.rate == [2.0] + [1.0] * 5              # rate bases are the user's
     for name in PLANES:
-        assert r.reg[f"rot.rate.{name}"].base == 0.0
+        assert router.table.routes_to(f"rot.rate.{name}")[0].op == "replace"
     # the preset's rows are copies: editing one never edits the preset
     router.table.mods()[0].value = 99
-    assert PRESETS["legacy6"][0][0].value == ROT_DEPTH
+    assert PRESETS["legacy6"][0][0].value == DRIVE * CEIL
 
 
 def test_midi_view_shares_the_table(tmp_path):
