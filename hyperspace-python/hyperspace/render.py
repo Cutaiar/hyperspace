@@ -16,6 +16,13 @@ width at 1 px, and the first comparison shots showed the near-edge weight
 hierarchy (width 0.5–2 px scaled by depth and brightness) is a visible part
 of the look. Widths below 1 px fold into alpha, the standard thin-line
 trick, so far edges render correctly without MSAA.
+
+The scene is drawn into a texture (SceneTarget — an FBO at the bound
+framebuffer's size and sample count), and a post pass puts it on the
+window over the look-back history (lookback.py): with the pipeline off
+that pass is a copy and the output is bit-identical to drawing straight
+to the window. `draw_scene` is the scene pass alone, for anything that
+wants the raw frame.
 """
 
 from __future__ import annotations
@@ -29,6 +36,7 @@ import moderngl
 import numpy as np
 
 from .geometry import RATE, face_triangles, face_uvs, geom, project_h
+from .lookback import DreamState, Lookback
 
 PATTERNS_GLSL = Path(__file__).parent / "shaders" / "patterns.glsl"
 
@@ -198,12 +206,76 @@ class ViewState:
                 self.ang[p] += dt * self.speed * RATE[p] * self.rate[p]
 
 
-class Renderer:
+def _samples_of(ctx: moderngl.Context, fbo: moderngl.Framebuffer) -> int:
+    """The bound framebuffer's MSAA sample count. moderngl leaves `samples`
+    unset on the detected default framebuffer, so the window is asked
+    directly (GL_SAMPLES); a framebuffer we made knows its own."""
+    if fbo is ctx.screen:
+        try:
+            from OpenGL import GL
+
+            return int(GL.glGetIntegerv(GL.GL_SAMPLES)) if GL.glGetIntegerv(
+                GL.GL_SAMPLE_BUFFERS) else 0
+        except Exception:  # noqa: BLE001 — no PyOpenGL: draw without MSAA
+            return 0
+    return int(fbo.samples or 0)
+
+
+class SceneTarget:
+    """The texture the scene is drawn into: RGBA8 at the output's pixel
+    size, through an MSAA renderbuffer that resolves into it when the
+    output is multisampled. Recreated on resize, DPI change, or a target
+    with a different sample count."""
+
     def __init__(self, ctx: moderngl.Context):
+        self.ctx = ctx
+        self.size = (0, 0)
+        self.samples = -1
+        self.tex: moderngl.Texture | None = None
+        self.fbo: moderngl.Framebuffer | None = None      # on the texture
+        self._msaa: moderngl.Framebuffer | None = None    # on the renderbuffer, if any
+
+    def ensure(self, size: tuple[int, int], samples: int) -> None:
+        if size == self.size and samples == self.samples and self.tex is not None:
+            return
+        self.release()
+        self.size, self.samples = size, samples
+        self.tex = self.ctx.texture(size, 4)
+        self.tex.repeat_x = self.tex.repeat_y = False
+        self.fbo = self.ctx.framebuffer(color_attachments=[self.tex])
+        if samples > 0:
+            rb = self.ctx.renderbuffer(size, 4, samples=samples)
+            self._msaa = self.ctx.framebuffer(color_attachments=[rb])
+
+    @property
+    def draw_fbo(self) -> moderngl.Framebuffer:
+        return self._msaa if self._msaa is not None else self.fbo
+
+    def resolve(self) -> None:
+        """After the scene pass: the multisampled draw into the texture."""
+        if self._msaa is not None:
+            self.ctx.copy_framebuffer(self.fbo, self._msaa)
+
+    def release(self) -> None:
+        for res in (self._msaa, self.fbo, self.tex):
+            if res is not None:
+                res.release()
+        self._msaa = self.fbo = self.tex = None
+        self.size, self.samples = (0, 0), -1
+
+
+class Renderer:
+    def __init__(self, ctx: moderngl.Context, dream: DreamState | None = None):
         self.ctx = ctx
         # clear alpha: 1 is the opaque black ground; overlay mode lowers it
         # so whatever is behind the window shows through (overlay.py)
         self.bg_alpha = 1.0
+        # the scene texture and the look-back post pass over it; the blank
+        # texture takes the sampler units before the scene pass, so the
+        # scene texture is never bound while it is the render target
+        self.scene = SceneTarget(ctx)
+        self.lookback = Lookback(ctx, dream)
+        self._blank = ctx.texture((1, 1), 4)
         self._lbuf = ctx.buffer(reserve=1200 * 2 * 3 * 4, dynamic=True)
         self._pbuf = ctx.buffer(reserve=600 * 4 * 4, dynamic=True)
         self._fbuf = ctx.buffer(reserve=2160 * 3 * 7 * 4, dynamic=True)
@@ -239,6 +311,9 @@ class Renderer:
         # attributes newer than this live instance's __init__
         if not hasattr(self, "_bmp_tex"):
             self.bitmap_error, self._bmp_tex, self._bmp_file = "", None, ""
+        if not hasattr(self, "lookback"):
+            self.scene, self.lookback = SceneTarget(self.ctx), Lookback(self.ctx)
+            self._blank = self.ctx.texture((1, 1), 4)
         for res in (self._lvao, self._pvao, self._lines, self._points):
             res.release()
         self._build_wire_programs()
@@ -303,10 +378,35 @@ class Renderer:
         self, s: ViewState, w: int, h: int, dpr: float = 1.0,
         t_now: float | None = None,
     ) -> None:
-        """One frame at logical size (w, h); dpr scales point sizes only —
-        positions are logical and the viewport handles resolution. The
-        pattern uniforms come from `s.pattern_mod`; `t_now` pins pattern
-        time for deterministic renders."""
+        """One frame at logical size (w, h) into the bound framebuffer's
+        viewport; dpr scales point sizes only — positions are logical and
+        the viewport handles resolution. The scene goes to its texture,
+        then the post pass (lookback.py) puts it on the target."""
+        ctx = self.ctx
+        target = ctx.fbo
+        if target is None:
+            raise RuntimeError("Renderer.draw: no framebuffer bound (call fbo.use())")
+        vx, vy, vw, vh = target.viewport
+        self.scene.ensure((max(vw, 1), max(vh, 1)), _samples_of(ctx, target))
+        for unit in range(3):
+            self._blank.use(location=unit)
+        self.scene.draw_fbo.use()
+        ctx.viewport = (0, 0, max(vw, 1), max(vh, 1))
+        self.draw_scene(s, w, h, dpr, t_now)
+        self.scene.resolve()
+        lb = self.lookback
+        target.viewport = (vx, vy, vw, vh)
+        lb.pull()
+        lb.composite(self.scene.tex, target)
+        lb.capture(self.scene.tex, target)
+
+    def draw_scene(
+        self, s: ViewState, w: int, h: int, dpr: float = 1.0,
+        t_now: float | None = None,
+    ) -> None:
+        """The scene pass alone, into whatever is bound: clear, faces, edges,
+        points. The pattern uniforms come from `s.pattern_mod`; `t_now` pins
+        pattern time for deterministic renders."""
         g = geom(s.shape)
         px, py, pd, wc = project_h(g["V"], s.ang, s.yaw, s.pitch, d4=s.depth4, w=w, h=h)
 

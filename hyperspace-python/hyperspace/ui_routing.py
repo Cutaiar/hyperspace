@@ -235,10 +235,10 @@ def strip(panel, router: Router) -> None:
 # ---- the rows ----
 
 def _sources(panel, router: Router) -> list[tuple[str, str]]:
-    """(source, label) the combo offers: every lane, and the ext lanes
-    once the bridge feeds them or a row names one."""
+    """(source, label) the combo offers: every lane as "i NAME", and the
+    ext lanes once the bridge feeds them or a row names one."""
     chain = panel.audio.chain
-    out = [(f"lane:{i}", f"lane {i} {name}") for i, name in enumerate(chain.band_names)]
+    out = [(f"lane:{i}", f"{i} {name}") for i, name in enumerate(chain.band_names)]
     ext = router.feeds.get("ext") is not None or any(
         b.scheme == "ext" for b in router.table.bindings)
     if ext:
@@ -315,14 +315,14 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
     sources = _sources(panel, router)
     labels = [lb for _, lb in sources]
     cur = next((i for i, (s, _) in enumerate(sources) if s == b.source), -1)
-    imgui.set_next_item_width(102)
+    imgui.set_next_item_width(76)
     if cur < 0:
         labels, cur = labels + [b.source], len(labels)
     changed, i = imgui.combo("##src", cur, labels)
     if changed and i < len(sources):
         b.source = sources[i][0]
     imgui.same_line()
-    picked = _param_combo(panel, "##target", b.target, 108, _targets(panel))
+    picked = _param_combo(panel, "##target", b.target, 130, _targets(panel))
     if picked:
         b.target = picked
     if p is None:
