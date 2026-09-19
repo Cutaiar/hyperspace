@@ -24,10 +24,10 @@ from hyperspace.analyzer import Analyzer, legacy_layout
 from hyperspace.bands import BANDS, CEIL, DRIVE, default_params
 from hyperspace.control import Control
 from hyperspace.geometry import RATE
+from hyperspace.library import Library
 from hyperspace.offline import load_wav
-from hyperspace.overlay import Overlay
+from hyperspace.overlay import Output
 from hyperspace.params import PLANES, ROT_RATE_MAX, build_registry
-from hyperspace.presets import Presets
 from hyperspace.render import N_MOD, ViewState
 from hyperspace.routing import (
     PRESETS,
@@ -56,8 +56,11 @@ def rig(sr: float = 48_000.0, tmp_path: Path | None = None, full: bool = False):
     control = Control(chain)
     audio = SimpleNamespace(chain=chain, on=True)
     view = ViewState()
-    presets = Presets(view, control, audio, path=tmp_path / "presets.json") if full else None
+    lib = Library(tmp_path) if full else None
+    presets = lib.bank if full else None
     reg = build_registry(view, control, audio, presets)
+    if full:
+        lib.attach(reg)
     if full:
         reg.toggle("ui.panel", "Panel", lambda: True, lambda v: None)
         reg.toggle("ui.cheatsheet", "Sheet", lambda: True, lambda v: None)
@@ -65,7 +68,7 @@ def rig(sr: float = 48_000.0, tmp_path: Path | None = None, full: bool = False):
         reg.trigger("audio.restart", "Restart", lambda: None)
         reg.trigger("audio.stop", "Stop", lambda: None)
         reg.toggle("audio.play", "Play", lambda: False, lambda v: None)
-        Overlay(None, None).register(reg)
+        Output(None, None).register(reg)
     return SimpleNamespace(reg=reg, view=view, control=control, audio=audio, chain=chain)
 
 

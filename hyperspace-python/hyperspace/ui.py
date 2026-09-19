@@ -147,8 +147,8 @@ CHEATSHEET = [
     ("F1–F8", "load theme · ⇧ saves"),
     ("Cmd+R", "restart process"),
     ("H / ?", "panel / this sheet"),
-    ("T", "overlay: float over screen, clicks pass through"),
-    ("G", "overlay: take clicks back (⌘-Tab here first)"),
+    ("T", "overlay: float the render over the screen"),
+    ("G", "overlay: clicks through / back (orbit again)"),
     ("Esc / Q", "quit"),
     # Xbox-layout gamepad, Bluetooth or USB (gamepad.py holds the map)
     ("pad A B", "pause · next theme"),
@@ -186,7 +186,7 @@ class Panel:
         self._bmp_dialog = None
         self.reloader = None  # set by app.py; panel only reads status off it
         self.midi = None      # set by app.py when an adapter is up (midi.MidiIO)
-        self.overlay = None   # set by app.py (overlay.Overlay); its params draw below
+        self.output = None    # set by app.py (overlay.Output); its params draw below
         self.restart_requested = False  # main loop polls after draw() and execv's
         self._register_panel_params()
 
@@ -535,7 +535,7 @@ class Panel:
                 imgui.text_colored(WARN, f"GLSL: {self.renderer.pattern_error}")
             self._bitmap_section()
         imgui.separator()
-        self._overlay_section()
+        self._output_section()
 
         # ---- themes: whole-surface save states on F1–F8 ----
         if self.presets is not None:
@@ -693,25 +693,27 @@ class Panel:
                 imgui.same_line()
                 self._slider("view.bmp_rate")
 
-    def _overlay_section(self) -> None:
-        """Overlay mode: float the render over the screen (overlay.py)."""
-        if self.overlay is None or "overlay.on" not in self.reg:
+    def _output_section(self) -> None:
+        """Where the render window shows: screen, fullscreen, overlay (overlay.py)."""
+        if self.output is None or "output.overlay" not in self.reg:
             return
-        _micro("overlay")
+        _micro("output")
         if imgui.is_item_hovered():
             imgui.set_tooltip(
-                "Frameless, see-through, above everything — including a "
-                "fullscreen video. T toggles; G sends clicks through."
+                "The render window. Fullscreen covers a screen opaque; overlay "
+                "floats it frameless and see-through above everything — "
+                "including a fullscreen video. T toggles; G sends clicks through."
             )
-        self._check("overlay.on")
+        if len(self.reg["output.monitor"].names) > 1:
+            self._combo("output.monitor")
+        self._check("output.fullscreen")
         imgui.same_line()
-        self._check("overlay.passthrough")
-        self._slider("overlay.bg")
-        self._slider("overlay.alpha")
-        if len(self.reg["overlay.monitor"].names) > 1:
-            self._combo("overlay.monitor")
-        if self.overlay.error:
-            imgui.text_colored(WARN, self.overlay.error)
+        self._check("output.overlay")
+        self._check("output.passthrough")
+        self._slider("output.bg")
+        self._slider("output.alpha")
+        if self.output.error:
+            imgui.text_colored(WARN, self.output.error)
         imgui.separator()
 
     def _midi_status(self) -> None:

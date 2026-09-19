@@ -1,4 +1,4 @@
-"""Overlay mode: the window state machine, headless, against a fake backend."""
+"""Output settings: the render window's state machine, headless, against a fake backend."""
 
 from types import SimpleNamespace
 
@@ -7,7 +7,7 @@ import pytest
 from hyperspace.analysis import Analyser
 from hyperspace.bands import Chain
 from hyperspace.control import Control
-from hyperspace.overlay import Overlay
+from hyperspace.overlay import Output
 from hyperspace.params import Kind, build_registry
 from hyperspace.render import ViewState
 
@@ -36,6 +36,14 @@ class FakeBackend:
         self.rect = (x, y, w, h)
         self.calls.append(("rect", (x, y, w, h)))
 
+    def set_fullscreen(self, win, m):
+        self.rect = self.monitor_rect(m)
+        self.calls.append(("fullscreen", m))
+
+    def set_windowed(self, win, x, y, w, h):
+        self.rect = (x, y, w, h)
+        self.calls.append(("windowed", (x, y, w, h)))
+
     def set_attrib(self, win, name, on):
         self.calls.append((name, on))
 
@@ -46,101 +54,214 @@ class FakeBackend:
         self.calls.append(("spaces", on))
 
 
+def _registry():
+    chain = Chain(Analyser())
+    return build_registry(ViewState(), Control(chain), SimpleNamespace(chain=chain))
+
+
 @pytest.fixture()
 def rig():
-    chain = Chain(Analyser())
-    reg = build_registry(ViewState(), Control(chain), SimpleNamespace(chain=chain))
+    reg = _registry()
     b = FakeBackend()
-    shown = {"panel": True}
-    ov = Overlay("win", b, on_enter=lambda: shown.update(panel=False),
-                 on_leave=lambda: shown.update(panel=True))
-    ov.register(reg)
-    return SimpleNamespace(reg=reg, ov=ov, b=b, shown=shown)
+    out = Output("win", b)
+    out.register(reg)
+    return SimpleNamespace(reg=reg, out=out, b=b)
 
+
+# ---- params ----
 
 def test_params_registered(rig):
     r = rig.reg
-    assert r["overlay.on"].kind is Kind.TOGGLE
-    assert r["overlay.bg"].kind is Kind.CONTINUOUS
-    assert r["overlay.monitor"].names == ["Built-in", "Studio"]
-    assert r["overlay.bg"].text() == "clear"
+    assert r["output.fullscreen"].kind is Kind.TOGGLE
+    assert r["output.overlay"].kind is Kind.TOGGLE
+    assert r["output.passthrough"].kind is Kind.TOGGLE
+    assert r["output.bg"].kind is Kind.CONTINUOUS
+    assert r["output.alpha"].kind is Kind.CONTINUOUS
+    assert r["output.monitor"].kind is Kind.ENUM
+    assert r["output.monitor"].names == ["Built-in", "Studio"]
+    assert r["output.bg"].text() == "clear"
+    assert all(p.group == "output" for p in r.group("output"))
 
+
+def test_rig_settings_never_persist_or_modulate(rig):
+    r = rig.reg
+    for pid in ("output.monitor", "output.fullscreen", "output.overlay", "output.passthrough"):
+        assert not r[pid].persist, pid
+        assert not r[pid].modulatable, pid
+    # ground and opacity are a look: a preset keeps them, a lane may drive them
+    for pid in ("output.bg", "output.alpha"):
+        assert r[pid].persist and r[pid].modulatable, pid
+    saved = r.snapshot("output")
+    assert set(saved) == {"output.bg", "output.alpha"}
+
+
+def test_legacy_overlay_ids_are_views(rig):
+    r = rig.reg
+    for old, new in (("on", "overlay"), ("passthrough", "passthrough"), ("bg", "bg"),
+                     ("alpha", "alpha"), ("monitor", "monitor")):
+        p = r[f"overlay.{old}"]
+        assert p.alias and not p.persist and not p.modulatable
+        assert p.kind is r[f"output.{new}"].kind
+    # a MIDI map bound to the old id moves the new param, and reads it back
+    r["overlay.on"].toggle()
+    assert rig.out.overlay is True and r["output.overlay"].base is True
+    r["output.bg"].set_norm(0.5)
+    assert r["overlay.bg"].norm == pytest.approx(0.5)
+    assert r["overlay.monitor"].names == ["Built-in", "Studio"]
+
+
+# ---- state machine ----
 
 def test_nothing_happens_until_apply(rig):
-    rig.ov.apply()
+    rig.out.apply()
     assert ("spaces", True) not in rig.b.calls
     assert rig.b.calls == [("MOUSE_PASSTHROUGH", False), ("opacity", 1.0)]  # off: clickable
 
 
-def test_enter_covers_the_windows_monitor_and_hides_panel(rig):
-    rig.reg["overlay.on"].set(True)
-    rig.ov.apply()
+def test_fullscreen_is_glfws_own_on_the_windows_monitor(rig):
+    rig.reg["output.fullscreen"].set(True)
+    rig.out.apply()
+    c = rig.b.calls
+    assert ("fullscreen", "Built-in") in c
+    assert rig.b.rect == (0, 0, 1728, 1117)
+    # opaque and ordinary: no float, no see-through, clicks stay with us
+    assert ("FLOATING", True) not in c and ("spaces", True) not in c
+    assert ("MOUSE_PASSTHROUGH", True) not in c
+    assert rig.out.mode == "fullscreen" and rig.out.bg_alpha == 1.0
+    rig.b.calls.clear()
+    rig.reg["output.fullscreen"].set(False)
+    rig.out.apply()
+    assert ("windowed", (100, 100, 1280, 820)) in rig.b.calls
+    assert rig.b.rect == (100, 100, 1280, 820)
+
+
+def test_overlay_covers_floats_and_clears(rig):
+    rig.reg["output.overlay"].set(True)
+    rig.out.apply()
     c = rig.b.calls
     assert ("DECORATED", False) in c and ("FLOATING", True) in c and ("spaces", True) in c
+    assert not any(k == "fullscreen" for k, _ in c)
     assert rig.b.rect == (0, 0, 1728, 1117)
-    assert rig.shown["panel"] is False
-    assert rig.ov.bg_alpha == 0.0
+    assert rig.out.mode == "overlay" and rig.out.bg_alpha == 0.0
 
 
 def test_leave_restores_everything(rig):
-    rig.reg["overlay.on"].set(True)
-    rig.ov.apply()
+    rig.reg["output.overlay"].set(True)
+    rig.out.apply()
     rig.b.calls.clear()
-    rig.reg["overlay.on"].set(False)
-    rig.ov.apply()
+    rig.reg["output.overlay"].set(False)
+    rig.out.apply()
     c = rig.b.calls
     assert ("spaces", False) in c and ("FLOATING", False) in c and ("DECORATED", True) in c
     assert rig.b.rect == (100, 100, 1280, 820)
-    assert rig.shown["panel"] is True
-    assert rig.ov.bg_alpha == 1.0
+    assert rig.out.mode == "window" and rig.out.bg_alpha == 1.0
 
 
-def test_passthrough_defaults_on_but_only_applies_while_on(rig):
-    assert rig.ov.passthrough is True
-    rig.ov.apply()
+def test_overlay_wins_and_mode_changes_go_through_the_plain_window(rig):
+    rig.reg["output.fullscreen"].set(True)
+    rig.out.apply()
+    rig.b.calls.clear()
+    rig.reg["output.overlay"].set(True)
+    rig.out.apply()
+    c = rig.b.calls
+    # fullscreen left first (back to the saved rect), then the cover entered
+    assert c.index(("windowed", (100, 100, 1280, 820))) < c.index(("DECORATED", False))
+    assert ("FLOATING", True) in c and ("spaces", True) in c
+    assert rig.b.rect == (0, 0, 1728, 1117)
+    rig.b.calls.clear()
+    # overlay off but fullscreen still on: the cover goes, GLFW fullscreen returns
+    rig.reg["output.overlay"].set(False)
+    rig.out.apply()
+    c = rig.b.calls
+    assert c.index(("DECORATED", True)) < c.index(("fullscreen", "Built-in"))
+    assert rig.out.mode == "fullscreen" and rig.b.rect == (0, 0, 1728, 1117)
+    rig.b.calls.clear()
+    rig.reg["output.fullscreen"].set(False)
+    rig.out.apply()
+    assert rig.b.rect == (100, 100, 1280, 820)  # the original rect survived the trip
+
+
+def test_passthrough_defaults_on_but_only_applies_in_overlay(rig):
+    assert rig.out.passthrough is True
+    rig.reg["output.fullscreen"].set(True)
+    rig.out.apply()
     assert ("MOUSE_PASSTHROUGH", True) not in rig.b.calls
-    rig.reg["overlay.on"].set(True)
-    rig.ov.apply()
+    rig.reg["output.overlay"].set(True)
+    rig.out.apply()
     assert ("MOUSE_PASSTHROUGH", True) in rig.b.calls
     rig.b.calls.clear()
-    rig.reg["overlay.on"].set(False)
-    rig.ov.apply()
+    rig.reg["output.overlay"].set(False)
+    rig.out.apply()
     assert ("MOUSE_PASSTHROUGH", False) in rig.b.calls
 
 
 def test_bg_and_alpha(rig):
-    rig.reg["overlay.bg"].set_norm(0.5)
-    rig.reg["overlay.alpha"].set_norm(0.25)
-    rig.ov.apply()
-    assert rig.ov.bg_alpha == 1.0  # off: opaque, opacity untouched
+    rig.reg["output.bg"].set_norm(0.5)
+    rig.reg["output.alpha"].set_norm(0.25)
+    rig.out.apply()
+    assert rig.out.bg_alpha == 1.0  # off: opaque, opacity untouched
     assert ("opacity", 0.25) not in rig.b.calls
-    rig.reg["overlay.on"].set(True)
-    rig.ov.apply()
-    assert rig.ov.bg_alpha == pytest.approx(0.5)
+    rig.reg["output.overlay"].set(True)
+    rig.out.apply()
+    assert rig.out.bg_alpha == pytest.approx(0.5)
     assert ("opacity", 0.25) in rig.b.calls
     rig.b.calls.clear()
-    rig.ov.apply()
+    rig.out.apply()
     assert rig.b.calls == []  # change-gated: a quiet frame sends nothing
 
 
 def test_monitor_switch_while_on(rig):
-    rig.reg["overlay.on"].set(True)
-    rig.ov.apply()
-    rig.reg["overlay.monitor"].set(1)
-    rig.ov.apply()
+    rig.reg["output.fullscreen"].set(True)
+    rig.out.apply()
+    rig.reg["output.monitor"].set(1)
+    rig.out.apply()
+    assert ("fullscreen", "Studio") in rig.b.calls
+    assert rig.b.rect == (1728, 0, 2560, 1440)
+    rig.b.calls.clear()
+    # leaving puts the window back where it was, whichever screen it covered
+    rig.reg["output.fullscreen"].set(False)
+    rig.out.apply()
+    assert rig.b.rect == (100, 100, 1280, 820)
+    rig.reg["output.overlay"].set(True)
+    rig.out.apply()
+    assert rig.b.rect == (1728, 0, 2560, 1440)
+    rig.reg["output.monitor"].set(0)
+    rig.out.apply()
+    assert rig.b.rect == (0, 0, 1728, 1117)
+
+
+def test_monitor_chosen_beforehand_is_the_target(rig):
+    rig.reg["output.monitor"].set(1)
+    rig.out.apply()
+    assert not any(k in ("rect", "fullscreen") for k, _ in rig.b.calls)  # a plain window stays put
+    rig.reg["output.overlay"].set(True)
+    rig.out.apply()
     assert rig.b.rect == (1728, 0, 2560, 1440)
 
 
-def test_headless_overlay_still_tracks_enter_leave():
-    chain = Chain(Analyser())
-    reg = build_registry(ViewState(), Control(chain), SimpleNamespace(chain=chain))
-    seen = []
-    ov = Overlay(None, None, on_enter=lambda: seen.append("in"),
-                 on_leave=lambda: seen.append("out"))
-    ov.register(reg)
-    reg["overlay.on"].toggle()
-    ov.apply()
-    reg["overlay.on"].toggle()
-    ov.apply()
-    assert seen == ["in", "out"]
-    assert reg["overlay.monitor"].names == ["screen"]
+def test_no_monitors_means_nothing_to_cover(rig):
+    rig.b.mons = []
+    rig.reg["output.fullscreen"].set(True)
+    rig.out.apply()
+    assert rig.b.rect == (100, 100, 1280, 820) and rig.out.error == ""
+    assert rig.reg["output.monitor"].names == []
+
+
+def test_backend_error_is_reported_not_raised(rig):
+    def boom(*a):
+        raise RuntimeError("no cocoa")
+
+    rig.b.set_attrib = boom
+    rig.reg["output.overlay"].set(True)
+    rig.out.apply()
+    assert rig.out.error.startswith("output: no cocoa")
+
+
+def test_headless_output_has_no_window_to_push_to():
+    reg = _registry()
+    out = Output(None, None)
+    out.register(reg)
+    reg["output.overlay"].toggle()
+    out.apply()
+    assert out.overlay is True and out.bg_alpha == 0.0
+    assert reg["output.monitor"].names == ["screen"]
