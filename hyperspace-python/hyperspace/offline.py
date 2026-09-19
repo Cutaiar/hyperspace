@@ -14,6 +14,7 @@ import numpy as np
 
 from .analysis import Analyser
 from .bands import Chain, Params
+from .routing import legacy_planedrive
 
 
 def load_wav(path: Path) -> tuple[np.ndarray, float]:
@@ -46,7 +47,7 @@ def run_wav(
         t.append(start / sr)
         inp.append(chain.inp.copy())
         out.append(chain.out.copy())
-        drive.append(chain.planedrive.copy())
+        drive.append(legacy_planedrive(chain.out, chain.gain))   # the reference's PLANEDRIVE
     return {
         "t": np.asarray(t),
         "inp": np.asarray(inp),

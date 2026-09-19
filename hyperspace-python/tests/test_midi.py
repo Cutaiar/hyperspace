@@ -73,9 +73,9 @@ def push(r, *msgs):
 def test_default_map_binds_only_real_params(rig):
     ids = set(rig.reg.ids())
     for b in rig.midi.map.bindings:
-        assert b.param in ids, b
-        if b.mode == "set" and rig.reg[b.param].kind is Kind.ENUM:
-            assert 0 <= int(b.value) < len(rig.reg[b.param].names), b
+        assert b.target in ids, b
+        if b.op == "set" and rig.reg[b.target].kind is Kind.ENUM:
+            assert 0 <= int(b.value) < len(rig.reg[b.target].names), b
 
 
 def test_default_map_has_no_two_controls_on_one_key(rig):
@@ -122,7 +122,7 @@ def test_pickup_catches_when_knob_reaches_value(rig):
 
 def test_fader_without_pickup_jumps(rig):
     for x in rig.midi.map.bindings:
-        if x.param == "master.gain":
+        if x.target == "master.gain":
             x.pickup = False
     g = rig.reg["master.gain"]
     push(rig, cc(apc40.CC_MASTER, 0))
@@ -256,15 +256,15 @@ def test_learn_binds_next_message_and_persists(rig, tmp_path):
     push(rig, cc(0x57, 40))                   # send-A knob-ish: an unused CC
     assert m.learning is None
     b = m.binding_for("view.inst_amp")
-    assert b is not None and b.kind == "cc" and b.number == 0x57 and b.mode == "abs"
+    assert b is not None and b.kind == "cc" and b.number == 0x57 and b.op == "abs"
     assert "CC 87" in b.describe()
     # the learning message itself did not move the param
     assert rig.view.inst_amp == 0.25
     # persisted, and read back by a fresh map
     m2 = MidiMap(tmp_path / "midi_map.json")
-    assert any(x.param == "view.inst_amp" and x.number == 0x57 for x in m2.bindings)
+    assert any(x.target == "view.inst_amp" and x.number == 0x57 for x in m2.bindings)
     # the old track-knob binding for the same param is gone
-    assert not any(x.param == "view.inst_amp" and x.number == 0x34 for x in m2.bindings)
+    assert not any(x.target == "view.inst_amp" and x.number == 0x34 for x in m2.bindings)
 
 
 def test_learn_a_button_on_a_toggle(rig):
@@ -283,7 +283,7 @@ def test_learn_takes_over_a_key_from_its_old_param(rig):
     m = rig.midi
     m.learn("view.pattern_mix")
     push(rig, cc(0x30, 64))                   # the brightness knob
-    assert not [x for x in m.map.bindings if x.param == "view.bright" and x.kind == "cc"]
+    assert not [x for x in m.map.bindings if x.target == "view.bright" and x.kind == "cc"]
     assert m.binding_for("view.bright").kind == "note"  # its step buttons survive
     assert m.binding_for("view.pattern_mix").number == 0x30
     m.unbind("view.pattern_mix")
@@ -295,7 +295,7 @@ def test_learn_takes_over_a_key_from_its_old_param(rig):
 def test_relative_cc_learn_keeps_encoder_mode(rig):
     rig.midi.learn("view.instances")
     push(rig, cc(apc40.CC_CUE, 1))
-    assert rig.midi.binding_for("view.instances").mode == "rel"
+    assert rig.midi.binding_for("view.instances").op == "rel"
 
 
 # ---------------------------------------------------------------- map file
@@ -304,7 +304,7 @@ def test_map_round_trips_json(tmp_path):
     path = tmp_path / "m.json"
     mm = MidiMap(path)
     n = len(mm.bindings)
-    mm.bind(Binding("view.zoom", "pitch", channel=3))
+    mm.bind(Binding("pitch:3", "view.zoom", "abs"))
     mm2 = MidiMap(path)
     assert len(mm2.bindings) == n + 1
     b = mm2.for_param("view.zoom")
@@ -313,7 +313,7 @@ def test_map_round_trips_json(tmp_path):
 
 
 def test_pitch_bend(rig):
-    rig.midi.map.bind(Binding("camera.pitch", "pitch", channel=0, pickup=False))
+    rig.midi.map.bind(Binding("pitch:0", "camera.pitch", "abs", pickup=False))
     rig.inp.queue.append(mido.Message("pitchwheel", channel=0, pitch=8191))
     rig.midi.poll()
     assert rig.reg["camera.pitch"].norm == pytest.approx(1.0, abs=1e-3)

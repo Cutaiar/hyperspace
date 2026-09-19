@@ -13,12 +13,12 @@ to it.
   L  lines          F  faces          ?  cheat sheet overlay
   F1–F8  load theme (whole-surface save state)    ⇧F1–F8  save theme
 
-Every input path — keys, the Xbox-layout gamepad, a MIDI controller —
-is a binding table over the parameter registry (params.py): a key names
-a param id and an operation, nothing touches state directly. KEYMAP,
-PADMAP and HATMAP below are the keyboard and gamepad tables; the MIDI
-table lives in midi_map.json (midi.py, apc40.py) and is editable from
-the panel by right-click → Learn.
+Every input path — keys, the Xbox-layout gamepad, a MIDI controller, the
+analyzer's lanes — is one binding table over the parameter registry
+(params.py, routing.py): a row names a source, a param id and an
+operation, nothing touches state directly. The table is bindings.json
+(factory default in routing.py; MIDI rows editable from the panel by
+right-click → Learn).
 
 The in-app cheat sheet (ui.CHEATSHEET) is the canonical human list —
 keep it in sync when adding bindings.
@@ -62,6 +62,7 @@ from .overlay import GlfwBackend, Overlay
 from .params import Registry, build_registry
 from .presets import SLOTS, Presets
 from .render import Renderer, ViewState
+from .routing import Bindings, Router, bindings_path
 from .ui import Panel, apply_style, load_fonts
 
 TITLE = "Hyperspace"
@@ -73,47 +74,7 @@ D4_RATE0 = 0.45   # octaves/s at the instant of the press
 D4_RATE1 = 3.6    # octaves/s once the ramp completes
 D4_RAMP = 1.8     # seconds of hold to reach full rate
 
-# ---- binding tables: (input, param id, op, arg) ----
-# op: "step" moves arg detents, "toggle" flips (or fires), "fire" fires.
-KEYMAP = [
-    (glfw.KEY_RIGHT, "view.shape", "step", 1),
-    (glfw.KEY_LEFT, "view.shape", "step", -1),
-    (glfw.KEY_SPACE, "view.rotate", "toggle", 0),
-    (glfw.KEY_P, "view.points", "toggle", 0),
-    (glfw.KEY_L, "view.lines", "toggle", 0),
-    (glfw.KEY_F, "view.faces", "toggle", 0),
-    (glfw.KEY_H, "ui.panel", "toggle", 0),
-    (glfw.KEY_SLASH, "ui.cheatsheet", "toggle", 0),
-    (glfw.KEY_LEFT_BRACKET, "view.bright", "step", -3),
-    (glfw.KEY_RIGHT_BRACKET, "view.bright", "step", 3),
-    (glfw.KEY_COMMA, "view.speed", "step", -4),
-    (glfw.KEY_PERIOD, "view.speed", "step", 4),
-    (glfw.KEY_M, "audio.mic", "toggle", 0),
-    (glfw.KEY_K, "audio.play", "toggle", 0),
-    (glfw.KEY_0, "audio.restart", "fire", 0),
-    (glfw.KEY_T, "overlay.on", "toggle", 0),
-    (glfw.KEY_G, "overlay.passthrough", "toggle", 0),
-    *[(glfw.KEY_1 + p, f"view.plane.{n}", "toggle", 0)
-      for p, n in enumerate(("XY", "XZ", "YZ", "XW", "YW", "ZW"))],
-]
-PADMAP = [
-    (gamepad.A, "view.rotate", "toggle", 0),
-    (gamepad.B, "theme.next", "fire", 0),
-    (gamepad.X, "view.points", "toggle", 0),
-    (gamepad.Y, "view.faces", "toggle", 0),
-    (gamepad.LB, "view.shape", "step", -1),
-    (gamepad.RB, "view.shape", "step", 1),
-    (gamepad.VIEW, "ui.panel", "toggle", 0),
-    (gamepad.MENU, "ui.cheatsheet", "toggle", 0),
-    (gamepad.LSTICK, "camera.reset", "fire", 0),
-    (gamepad.RSTICK, "camera.reset", "fire", 0),
-]
-HATMAP = [
-    (gamepad.HAT_UP, "view.bright", "step", 3),
-    (gamepad.HAT_DOWN, "view.bright", "step", -3),
-    (gamepad.HAT_LEFT, "view.speed", "step", -4),
-    (gamepad.HAT_RIGHT, "view.speed", "step", 4),
-]
+# the key / pad / MIDI / lane binding tables live in routing.py (bindings.json)
 
 
 def act(reg: Registry, pid: str, op: str, arg: int = 0) -> None:
@@ -175,7 +136,7 @@ def _make_overlay(win, reg: Registry, panel, cfg: dict) -> Overlay:
     return ov
 
 
-def _open_midi(reg: Registry, cfg: dict):
+def _open_midi(reg: Registry, cfg: dict, table: Bindings):
     """The adapter, only when configured — the core never imports it."""
     mc = cfg.get("midi", {})
     if not mc.get("enabled", True):
@@ -186,7 +147,7 @@ def _open_midi(reg: Registry, cfg: dict):
         print(f"midi: adapter unavailable ({e})", file=sys.stderr)
         return None
     try:
-        mapping = midi.MidiMap(Path(mc.get("map", "midi_map.json")), mc.get("profile", "apc40"))
+        mapping = midi.MidiMap(table=table)
         return midi.MidiIO(reg, mapping, port=mc.get("port"), profile=mc.get("profile", "apc40"))
     except Exception as e:  # noqa: BLE001 — a broken adapter must not stop the show
         print(f"midi: {e}", file=sys.stderr)
@@ -265,7 +226,12 @@ def main() -> None:
     panel = Panel(control, audio, s, renderer, presets, registry=reg)
     overlay = _make_overlay(win, reg, panel, cfg)
     panel.overlay = overlay
-    midi_io = _open_midi(reg, cfg)
+    # one binding table for keys, pad, MIDI and lanes (an old midi_map.json migrates)
+    mc = cfg.get("midi", {})
+    router = Router(reg, Bindings.load(
+        bindings_path(), mc.get("profile", "apc40"), Path(mc.get("map", "midi_map.json")),
+    ))
+    midi_io = _open_midi(reg, cfg, router.table)
     panel.midi = midi_io
     # panel state and chain must stay one object even after source changes
     # the live objects that get re-classed on a hot reload; re-evaluated
@@ -282,6 +248,7 @@ def main() -> None:
         (reg, "params", "Registry"),
         *[(p, "params", "Param") for p in reg],
         (overlay, "overlay", "Overlay"),
+        (router, "routing", "Router"),
         *([(midi_io, "midi", "MidiIO"), (midi_io.map, "midi", "MidiMap")] if midi_io else []),
     ])
     panel.reloader = reloader
@@ -320,9 +287,7 @@ def main() -> None:
         if not io.want_capture_keyboard:
             if keys.pressed(glfw.KEY_ESCAPE) or keys.pressed(glfw.KEY_Q):
                 glfw.set_window_should_close(win, True)
-            for key, pid, op, arg in KEYMAP:
-                if keys.pressed(key):
-                    act(reg, pid, op, arg)
+            router.keys(keys)
             if keys.pressed(glfw.KEY_R):
                 if keys.down(glfw.KEY_LEFT_SUPER, glfw.KEY_RIGHT_SUPER):
                     _restart(audio, impl, midi_io)
@@ -345,12 +310,7 @@ def main() -> None:
         # claims it, so it works even while the panel has keyboard focus) ----
         pad.poll()
         if pad.on:
-            for btn, pid, op, arg in PADMAP:
-                if pad.pressed(btn):
-                    act(reg, pid, op, arg)
-            for bit, pid, op, arg in HATMAP:
-                if pad.hat_pressed(bit):
-                    act(reg, pid, op, arg)
+            router.pad(pad)
             # analog: left stick orbits, right-stick Y zooms about centre,
             # triggers ride depth4 in its own log space (LT out, RT in)
             lx, ly = pad.axis(gamepad.AX_LX), pad.axis(gamepad.AX_LY)
@@ -411,20 +371,19 @@ def main() -> None:
         ok = True
         try:
             audio.step(dt)
-            # every modulation source has spoken for this frame: land
-            # base + offsets on the objects before the integrator reads them
+            # the lanes are a modulation source like any other (routing.py);
+            # once every source has spoken for this frame, land base +
+            # offsets on the objects before the integrator reads them
+            router.modulate(audio.chain if audio.on else None)
             reg.apply()
-            s.integrate(dt, audio.chain.planedrive if audio.on else None)
+            s.integrate(dt)
         except Exception as e:  # noqa: BLE001
             ok, reloader.runtime_error = False, _err("step", e)
 
         fbw, fbh = glfw.get_framebuffer_size(win)
         ctx.viewport = (0, 0, fbw, fbh)
         try:
-            renderer.draw(
-                s, max(w, 1), max(h, 1), dpr=fbw / max(w, 1),
-                bands=audio.chain.out if audio.on else None,
-            )
+            renderer.draw(s, max(w, 1), max(h, 1), dpr=fbw / max(w, 1))
         except Exception as e:  # noqa: BLE001
             ok, reloader.runtime_error = False, _err("render.draw", e)
 

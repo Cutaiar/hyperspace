@@ -59,7 +59,7 @@ from typing import Any
 
 from . import tapers
 from .analyzer import CURVES, F_HI, F_LO, Q_HI, Q_LO
-from .bands import PRESETS, SHAPERS
+from .bands import CEIL, DRIVE, PRESETS, SHAPERS
 from .geometry import SHAPES
 from .tapers import Taper
 
@@ -72,6 +72,12 @@ BMP_PATHS = ["STILL", "ORBIT", "FIG-8", "SWAY"]
 PLANES = ["XY", "XZ", "YZ", "XW", "YW", "ZW"]
 
 RAW_STEPS = 100  # detents across an untapered continuous range
+
+# rot.rate.* spans the largest drive the reference ever put on a plane — a
+# lane at the CEIL asymptote through DRIVE at the drive fader's 8× — so the
+# legacy6 routes (routing.py) land today's rate without clamping. Wide for
+# a slider (RAW_STEPS detents of 1.33×); WP5a can give it a finer widget.
+ROT_RATE_MAX = CEIL * DRIVE * tapers.T_DRIVE.map(tapers.T_DRIVE.steps)
 
 # modulation hysteresis: a toggle or trigger goes high above ON and low
 # below OFF; an enum or integer only moves once the target is this far
@@ -610,15 +616,17 @@ def build_registry(view, control, audio, presets=None) -> Registry:
 
     # ---- rotation: per-plane rate and phase ----
     # rate multiplies dt·speed·RATE[p]; signed so a lane can spin a plane
-    # backwards. phase is the integrated angle, folded to one turn: not a
-    # preset value (a theme changes the look, not where the spin is) but a
-    # modulation target — a lane adds a phase offset on top of the integrator.
+    # backwards, and as wide as the reference's plane drive (ROT_RATE_MAX).
+    # phase is the integrated angle, folded to one turn: not a preset value
+    # (a theme changes the look, not where the spin is) but a modulation
+    # target — a lane adds a phase offset on top of the integrator.
     g = "rot"
     fold = lambda a: math.remainder(a, 2 * math.pi)   # ±π stay put, the rest folds
     for p, name in enumerate(PLANES):
         r.continuous(f"rot.rate.{name}", f"{name} rate", *_item(lambda: view.rate, p),
-                     lo=-8.0, hi=8.0, fmt=lambda v: f"{v:+.2f}×", group=g,
-                     tip=f"Rotation rate multiplier for the {name} plane; negative reverses.")
+                     lo=-ROT_RATE_MAX, hi=ROT_RATE_MAX, fmt=lambda v: f"{v:+.2f}×", group=g,
+                     tip=f"Rotation rate multiplier for the {name} plane; negative reverses. "
+                         "Route an audio lane here (routing.py) to drive the plane.")
     for p, name in enumerate(PLANES):
         r.continuous(f"rot.phase.{name}", f"{name} phase",
                      (lambda p=p: fold(view.ang[p])),

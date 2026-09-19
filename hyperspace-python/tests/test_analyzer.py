@@ -66,7 +66,8 @@ def rig():
 ])
 def test_legacy_layout_is_bit_exact(fixture_wavs, clip, fps, dyn):
     """The non-negotiable: Legacy 6 reproduces the pre-refactor chain frame
-    for frame — inp, out and planedrive all array_equal, no tolerance."""
+    for frame — inp and out array_equal, no tolerance (the plane drive the
+    old chain also computed is the routing table's now: test_routing.py)."""
     samples, sr = load_wav(fixture_wavs / f"{clip}.wav")
     old_an, new_an = Analyser(sr), Analyser(sr)
     old = LegacyChain(old_an)
@@ -80,7 +81,6 @@ def test_legacy_layout_is_bit_exact(fixture_wavs, clip, fps, dyn):
         assert lanes is new.lanes and lanes is new.out
         assert np.array_equal(old.inp, new.inp)
         assert np.array_equal(old.out, new.out)
-        assert np.array_equal(old.planedrive, new.planedrive)
 
 
 def test_legacy_layout_bins_match_the_reference_rounding():
@@ -236,7 +236,6 @@ def test_sixteen_bands_stay_in_range(fixture_wavs):
         lanes = a.step(dt)
         assert lanes.shape == (16,) and np.all(np.isfinite(lanes))
         assert lanes.min() >= 0 and lanes.max() < CEIL
-    assert a.planedrive.tolist() == [1.0] * 6   # no legacy shim for N ≠ 6
 
 
 # ---------------------------------------------------------------- history
