@@ -98,17 +98,23 @@ def feedback_for(kind: str, channel: int, number: int) -> dict | None:
 
 
 # ---------------------------------------------------------------- default map
+# rows in routing.Binding's JSON form: {"source": "cc:<ch|*>:<n>" /
+# "note:<ch>:<n>", "target": param id, "op", …}; channel None = any
+
+def _src(kind, number, channel):
+    return f"{kind}:{'*' if channel is None else channel}:{number}"
+
 
 def _cc(param, number, channel=None, *, ring=RING_VOLUME, **kw):
-    b = {"param": param, "kind": "cc", "number": number, "channel": channel,
-         "mode": "abs", "feedback": "ring" if ring else None, "ring": ring}
+    b = {"source": _src("cc", number, channel), "target": param, "op": "abs",
+         "feedback": "ring" if ring else None, "ring": ring}
     b.update(kw)
     return b
 
 
-def _note(param, number, channel=0, *, mode="trigger", on=1, **kw):
-    b = {"param": param, "kind": "note", "number": number, "channel": channel,
-         "mode": mode, "feedback": "led", "on": on, "off": 0}
+def _note(param, number, channel=0, *, op="toggle", on=1, **kw):
+    b = {"source": _src("note", number, channel), "target": param, "op": op,
+         "feedback": "led", "on": on, "off": 0}
     b.update(kw)
     return b
 
@@ -129,19 +135,19 @@ DEFAULT_MAP: list[dict] = [
     _cc("master.gain", CC_MASTER, 0, ring=0),
     # crossfader: the video behind (left) ↔ black ground (right) in overlay mode
     _cc("overlay.bg", CC_XFADE, 0, ring=0),
-    _cc("view.shape", CC_CUE, 0, mode="rel", ring=0),
+    _cc("view.shape", CC_CUE, 0, op="rel", ring=0),
     # track buttons, one strip per band
-    *[_note("band.select", N_SELECT, i, mode="set", value=i) for i in range(6)],
+    *[_note("band.select", N_SELECT, i, op="set", value=i) for i in range(6)],
     *[_note(f"view.plane.{pl}", N_ACTIVATOR, i) for i, pl in enumerate(_BAND_PLANES)],
     *[_note(f"band.{i}.fn", N_SOLO, i) for i in range(6)],
     *[_note(f"band.{i}.reset", N_ARM, i) for i in range(6)],
     # clip grid: themes · scenes · grid motion · shapes
-    *[_note("theme.select", N_CLIP[0], k, mode="set", value=k, on=GREEN) for k in range(8)],
-    *[_note("scene.select", N_CLIP[1], k, mode="set", value=k, on=YELLOW) for k in range(8)],
-    *[_note("scene.select", N_CLIP[2], k, mode="set", value=8 + k, on=YELLOW) for k in range(3)],
-    *[_note("view.inst_motion", N_CLIP[2], 4 + k, mode="set", value=k, on=RED) for k in range(4)],
-    *[_note("view.shape", N_CLIP[3], k, mode="set", value=k, on=GREEN) for k in range(8)],
-    *[_note("view.shape", N_CLIP[4], k, mode="set", value=8 + k, on=GREEN) for k in range(8)],
+    *[_note("theme.select", N_CLIP[0], k, op="set", value=k, on=GREEN) for k in range(8)],
+    *[_note("scene.select", N_CLIP[1], k, op="set", value=k, on=YELLOW) for k in range(8)],
+    *[_note("scene.select", N_CLIP[2], k, op="set", value=8 + k, on=YELLOW) for k in range(3)],
+    *[_note("view.inst_motion", N_CLIP[2], 4 + k, op="set", value=k, on=RED) for k in range(4)],
+    *[_note("view.shape", N_CLIP[3], k, op="set", value=k, on=GREEN) for k in range(8)],
+    *[_note("view.shape", N_CLIP[4], k, op="set", value=8 + k, on=GREEN) for k in range(8)],
     # scene launch column: render toggles and the view reset
     _note("view.points", N_SCENE[0]), _note("view.lines", N_SCENE[1]),
     _note("view.faces", N_SCENE[2]), _note("view.rotate", N_SCENE[3]),
@@ -149,12 +155,12 @@ DEFAULT_MAP: list[dict] = [
     _note("scene.reset_all", N_STOP_ALL),
     # transport and the rest
     _note("audio.play", N_PLAY), _note("audio.stop", N_STOP), _note("audio.mic", N_REC),
-    _note("theme.next", N_TAP), _note("view.shape", N_NUDGE_P, mode="step", value=1),
-    _note("view.shape", N_NUDGE_M, mode="step", value=-1),
-    _note("view.bright", N_UP, mode="step", value=3),
-    _note("view.bright", N_DOWN, mode="step", value=-3),
-    _note("band.select", N_RIGHT, mode="step", value=1),
-    _note("band.select", N_LEFT, mode="step", value=-1),
+    _note("theme.next", N_TAP), _note("view.shape", N_NUDGE_P, op="step", value=1),
+    _note("view.shape", N_NUDGE_M, op="step", value=-1),
+    _note("view.bright", N_UP, op="step", value=3),
+    _note("view.bright", N_DOWN, op="step", value=-3),
+    _note("band.select", N_RIGHT, op="step", value=1),
+    _note("band.select", N_LEFT, op="step", value=-1),
     _note("ui.panel", N_DEVICE_ON), _note("ui.cheatsheet", N_DETAIL),
     _note("audio.restart", N_CLIPTRACK),
     # overlay: master-select floats the render over the screen, pan sends

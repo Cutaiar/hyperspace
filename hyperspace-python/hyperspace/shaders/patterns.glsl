@@ -7,8 +7,14 @@
 //   .a    intensity in [0, 1]; multiplies the face fill alpha
 // Available uniforms:
 //   u_time      seconds since launch
-//   u_bands[6]  the chain's fader outputs: SUB BASS MIDB MID UPR AIR
-//               (0..~2.6, 1.0 is nominal; all 1.0 when no audio source)
+//   u_mod[8]    the pattern's modulation inputs — pattern.mod.0–7 in the
+//               registry (0..2.6, base 1.0 = the un-driven look). What
+//               drives them is the routing table (routing.py): the
+//               factory "legacy6" routes put analyzer lane i on u_mod[i],
+//               so with the six reference bands 0–5 read SUB BASS MIDB MID
+//               UPR AIR — but any lane, LFO or MIDI lane can be routed to
+//               any of the eight, and the comments below name the legacy
+//               band each pattern was written against.
 //   fid         face index within the shape — vary phase per face with it
 // uv is face-local: (0.5, 0.5) is the face centre, circumradius 0.5,
 // identical framing on every congruent face.
@@ -59,8 +65,8 @@ vec4 pattern(int mode, vec2 uv, float fid) {
     if (mode == 1) {
         // RINGS — two ring sources beating; hue rides the ring phase, SUB
         // widens spacing, BASS drives the beat rate.
-        float f = 18.0 + 10.0 * u_bands[0];
-        float ph = r * f - t * (1.0 + 2.0 * u_bands[1]) / TAU;
+        float f = 18.0 + 10.0 * u_mod[0];
+        float ph = r * f - t * (1.0 + 2.0 * u_mod[1]) / TAU;
         float a = sin(ph * TAU * 0.5);
         float b = sin(r * f * TAU * 0.31 + t * 1.7 + fid * 0.7);
         float v = 0.5 + 0.5 * a * b;
@@ -71,8 +77,8 @@ vec4 pattern(int mode, vec2 uv, float fid) {
     if (mode == 2) {
         // PLAID — two coloured wave systems crossing; where they agree the
         // colours add (constructive), where they cancel the face goes dark.
-        float a = sin((p.x * (10.0 + 6.0 * u_bands[2])) * TAU + t);
-        float b = sin((p.y * (10.0 + 6.0 * u_bands[3])) * TAU - t * 1.3);
+        float a = sin((p.x * (10.0 + 6.0 * u_mod[2])) * TAU + t);
+        float b = sin((p.y * (10.0 + 6.0 * u_mod[3])) * TAU - t * 1.3);
         vec3 ca = vec3(1.0, 0.25, 0.35) * (0.5 + 0.5 * a);   // warm axis
         vec3 cb = vec3(0.15, 0.55, 1.0) * (0.5 + 0.5 * b);   // cool axis
         vec3 col = ca + cb;
@@ -93,8 +99,8 @@ vec4 pattern(int mode, vec2 uv, float fid) {
     }
     if (mode == 4) {
         // BLOOM — petals hue-rotate with AIR; UPR adds petals.
-        float n = floor(3.0 + 4.0 * min(u_bands[4], 1.5));
-        float petals = cos(th * n + t * (0.4 + u_bands[5]));
+        float n = floor(3.0 + 4.0 * min(u_mod[4], 1.5));
+        float petals = cos(th * n + t * (0.4 + u_mod[5]));
         float ring = exp(-abs(r - 0.30) * 9.0);
         float v = clamp(0.5 + 0.5 * petals, 0.0, 1.0) * ring * 1.6;
         vec3 col = hsv(fract(th / TAU + t * 0.05 + fid * 0.02),
@@ -107,21 +113,21 @@ vec4 pattern(int mode, vec2 uv, float fid) {
         float s = sin(p.x * 21.0 + t * 1.1)
                 + sin((p.x * 0.5 + p.y * 0.87) * 23.0 - t * 0.9)
                 + sin((p.x * 0.5 - p.y * 0.87) * 19.0 + t * 1.3 + fid);
-        float v = clamp(1.0 - pow(abs(s) / 3.0, 2.0 + 2.0 * u_bands[1]), 0.0, 1.0);
+        float v = clamp(1.0 - pow(abs(s) / 3.0, 2.0 + 2.0 * u_mod[1]), 0.0, 1.0);
         vec3 col = mix(vec3(0.02, 0.10, 0.35), vec3(0.55, 0.95, 1.0), v * v);
         return vec4(col, v);
     }
     if (mode == 6) {
         // HEX — honeycomb lattice, every cell firing on its own phase.
         // MIDB packs the cells tighter, AIR speeds the shimmer.
-        float scale = 6.0 + 4.0 * u_bands[2];
+        float scale = 6.0 + 4.0 * u_mod[2];
         vec2 q = p * scale;
         vec2 rep = vec2(1.0, 1.7320508);
         vec2 ha = mod(q, rep) - rep * 0.5;
         vec2 hb = mod(q - rep * 0.5, rep) - rep * 0.5;
         vec2 gv = dot(ha, ha) < dot(hb, hb) ? ha : hb;
         vec2 id = q - gv;
-        float pulse = 0.5 + 0.5 * sin(t * (1.0 + 2.0 * u_bands[5])
+        float pulse = 0.5 + 0.5 * sin(t * (1.0 + 2.0 * u_mod[5])
                                       + hash21(id) * TAU + fid);
         float cell = smoothstep(0.50, 0.40, length(gv));
         vec3 col = hsv(fract(hash21(id + 7.31) + t * 0.03), 0.7, 1.0);
@@ -130,10 +136,10 @@ vec4 pattern(int mode, vec2 uv, float fid) {
     if (mode == 7) {
         // SPIRAL — galaxy arms winding out of a hot core; MID adds arms,
         // BASS tightens the twist, colour runs outward along each arm.
-        float arms = floor(2.0 + 3.0 * min(u_bands[3], 1.5));
-        float twist = 5.0 + 3.0 * u_bands[1];
+        float arms = floor(2.0 + 3.0 * min(u_mod[3], 1.5));
+        float twist = 5.0 + 3.0 * u_mod[1];
         float ph = th * arms + log(max(r, 1e-4)) * twist
-                 - t * (0.8 + u_bands[3]) + fid * 0.5;
+                 - t * (0.8 + u_mod[3]) + fid * 0.5;
         float arm = pow(0.5 + 0.5 * cos(ph), 2.0);
         float core = exp(-r * 5.0);
         vec3 col = pal(r * 1.5 - t * 0.05,
@@ -144,7 +150,7 @@ vec4 pattern(int mode, vec2 uv, float fid) {
     if (mode == 8) {
         // CELLS — living voronoi: bright membranes between drifting nuclei.
         // UPR agitates the drift, each cell keeps its own slow hue.
-        vec2 q = p * (5.0 + 3.0 * u_bands[2]);
+        vec2 q = p * (5.0 + 3.0 * u_mod[2]);
         vec2 g = floor(q), f = fract(q);
         float d1 = 8.0, d2 = 8.0;
         vec2 best = vec2(0.0);
@@ -153,7 +159,7 @@ vec4 pattern(int mode, vec2 uv, float fid) {
             vec2 o = vec2(float(xx), float(yy));
             vec2 n = hash22(g + o);
             vec2 site = o + 0.5
-                      + 0.38 * sin(t * (0.5 + u_bands[4]) + n * TAU + fid) - f;
+                      + 0.38 * sin(t * (0.5 + u_mod[4]) + n * TAU + fid) - f;
             float d = dot(site, site);
             if (d < d1) { d2 = d1; d1 = d; best = g + o; }
             else if (d < d2) { d2 = d; }
@@ -165,21 +171,21 @@ vec4 pattern(int mode, vec2 uv, float fid) {
     if (mode == 9) {
         // PLASMA — the classic folded sin-field on the full hue wheel;
         // MID zooms the folds, SUB rolls the radial term.
-        vec2 q = p * (5.0 + 2.0 * u_bands[3]);
+        vec2 q = p * (5.0 + 2.0 * u_mod[3]);
         float s = sin(q.x + t) + sin(q.y + t * 0.7)
                 + sin(q.x + q.y + t * 1.3)
-                + sin(length(q) * 2.0 - t * (1.0 + u_bands[0]) + fid);
+                + sin(length(q) * 2.0 - t * (1.0 + u_mod[0]) + fid);
         vec3 col = hsv(fract(s * 0.15 + t * 0.02), 0.75, 1.0);
         return vec4(col, 0.55 + 0.45 * sin(s * TAU * 0.25));
     }
     if (mode == 10) {
         // WEAVE — warp and weft ribbons interlaced over/under on a checker;
         // MIDB adds threads, BASS breathes the ribbon width.
-        float n = 6.0 + 4.0 * u_bands[2];
+        float n = 6.0 + 4.0 * u_mod[2];
         vec2 q = p * n + 0.5;
         vec2 cell = floor(q);
         vec2 f = fract(q) - 0.5;
-        float wdt = 0.30 + 0.08 * sin(t + 2.0 * u_bands[1]);
+        float wdt = 0.30 + 0.08 * sin(t + 2.0 * u_mod[1]);
         float wx = smoothstep(wdt, wdt - 0.06,
                               abs(f.y + 0.08 * sin(q.x * 2.0 + t)));
         float wy = smoothstep(wdt, wdt - 0.06,
@@ -202,8 +208,8 @@ vec4 pattern(int mode, vec2 uv, float fid) {
             q = q * 2.03 + 11.7;
             amp *= 0.5;
         }
-        float heat = pow(clamp(nse + 0.35 * u_bands[1] - 0.25, 0.0, 1.2),
-                         1.8 - 0.7 * min(u_bands[0], 1.0));
+        float heat = pow(clamp(nse + 0.35 * u_mod[1] - 0.25, 0.0, 1.2),
+                         1.8 - 0.7 * min(u_mod[0], 1.0));
         vec3 col = mix(vec3(0.10, 0.01, 0.0), vec3(1.0, 0.35, 0.05),
                        clamp(heat * 1.4, 0.0, 1.0));
         col = mix(col, vec3(1.0, 0.95, 0.60),

@@ -26,9 +26,9 @@ calibration, the gate threshold and every constant keep their meaning.
 Harmonic coupling reads the next band *in frequency order*, which for the
 legacy layout is `i + 1` (and the top band reads itself), as before.
 
-Band → plane and `dir` are no longer the analyzer's business — the output
-is `lanes` and routing is WP4b. Until then `planedrive` / `out` are kept
-as a compatibility view (see `step`) so app.py keeps turning.
+Band → plane and `dir` are not the analyzer's business — the output is
+`lanes`, and what they drive is the routing table's (routing.py; the
+legacy table lives there as the "legacy6" preset).
 
 Spectrum history: a ring of the last HIST_S seconds of spectra on a
 log-frequency axis, for the heat map (WP5b). One column every HIST_DT of
@@ -56,7 +56,6 @@ from .bands import (
     DEF_TRN,
     DEV_AIM,
     DEV_MIN,
-    DRIVE,
     FAST_A,
     FAST_R,
     FLUX_G,
@@ -241,8 +240,6 @@ class Analyzer:
         self.warm = 0
         self.layout_version = 0     # bumped whenever the band set changes shape
         self._hist_init()
-        # legacy shim — see step(); deleted in WP4b
-        self.planedrive = np.ones(6)
         if layout is None:
             layout = legacy_layout()
             if params is None:
@@ -573,16 +570,6 @@ class Analyzer:
             x = soft_ceil(self.inp[i] * P.pre, KNEE, HEAD)
             y = SHAPERS[P.fn].f(self.st[i], x, dt)
             self.out[i] = soft_ceil(y * P.post, KNEE, CEIL)
-
-        # TEMPORARY (until WP4b routes lanes to rot.rate.*): the legacy
-        # band → plane table, indexed by strip position, drives the six
-        # planes whenever there are six lanes to drive them with. Any other
-        # N leaves the planes at their idle drive of 1.
-        if n == 6:
-            for i in range(6):
-                self.planedrive[BANDS[i].plane] = BANDS[i].dir * self.out[i] * DRIVE * self.gain
-        else:
-            self.planedrive.fill(1.0)
 
         return self.out
 

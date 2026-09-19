@@ -34,6 +34,7 @@ PATTERNS_GLSL = Path(__file__).parent / "shaders" / "patterns.glsl"
 
 BG = (0.0, 0.0, 0.0)
 RED = (1.0, 43 / 255, 43 / 255)
+N_MOD = 8   # pattern.mod.* inputs the face shader reads as u_mod[N_MOD]
 
 LINE_VS = """
 #version 330
@@ -76,14 +77,14 @@ void main() {
 }
 """
 
-FACE_FS_HEAD = """
+FACE_FS_HEAD = f"""
 #version 330
 in vec2 v_uv;
 in float v_alpha;
 in float v_fid;
 out vec4 f_color;
 uniform float u_time;
-uniform float u_bands[6];
+uniform float u_mod[{N_MOD}];  // pattern.mod.* — the routed pattern inputs
 uniform int u_mode;
 uniform float u_mix;
 uniform sampler2D u_bitmap;
@@ -182,18 +183,19 @@ class ViewState:
     bmp_amp: float = 0.15        # path amplitude about the face centre, UV units
     bmp_rate: float = 1.0        # path angular rate, rad/s
     # modulation targets (params.py rot.rate.* / pattern.mod.*): per-plane
-    # rate multipliers and the face patterns' inputs — 1.0 is the undriven look
+    # rate multipliers and the face patterns' inputs — 1.0 is the undriven
+    # look; an audio lane routed to them (routing.py) is what the reference
+    # called PLANEDRIVE and u_bands
     rate: list[float] = field(default_factory=lambda: [1.0] * 6)
-    pattern_mod: list[float] = field(default_factory=lambda: [1.0] * 8)
+    pattern_mod: list[float] = field(default_factory=lambda: [1.0] * N_MOD)
 
-    def integrate(self, dt: float, planedrive=None) -> None:
-        """The frame() angle update: ang[p] += dt·speed·RATE[p]·rate[p]·drive."""
+    def integrate(self, dt: float) -> None:
+        """The frame() angle update: ang[p] += dt·speed·RATE[p]·rate[p]."""
         if not self.playing:
             return
         for p in range(6):
             if self.planes[p]:
-                drive = 1.0 if planedrive is None else planedrive[p]
-                self.ang[p] += dt * self.speed * RATE[p] * self.rate[p] * drive
+                self.ang[p] += dt * self.speed * RATE[p] * self.rate[p]
 
 
 class Renderer:
@@ -299,12 +301,12 @@ class Renderer:
 
     def draw(
         self, s: ViewState, w: int, h: int, dpr: float = 1.0,
-        bands=None, t_now: float | None = None,
+        t_now: float | None = None,
     ) -> None:
         """One frame at logical size (w, h); dpr scales point sizes only —
-        positions are logical and the viewport handles resolution. `bands`
-        feeds the pattern uniforms (chain fader outputs); `t_now` pins
-        pattern time for deterministic renders."""
+        positions are logical and the viewport handles resolution. The
+        pattern uniforms come from `s.pattern_mod`; `t_now` pins pattern
+        time for deterministic renders."""
         g = geom(s.shape)
         px, py, pd, wc = project_h(g["V"], s.ang, s.yaw, s.pitch, d4=s.depth4, w=w, h=h)
 
@@ -398,9 +400,10 @@ class Renderer:
                 p["u_time"].value = t_m
                 p["u_mode"].value = int(s.pattern)
                 p["u_mix"].value = float(s.pattern_mix)
-                p["u_bands"].value = (
-                    tuple(bands) if bands is not None else tuple(s.pattern_mod[:6])
-                )
+                # the driver trims the array to the highest index a pattern
+                # reads; upload exactly that many
+                u_mod = p["u_mod"]
+                u_mod.value = tuple(float(v) for v in s.pattern_mod[: u_mod.array_length])
                 self._sync_bitmap(s.bmp_file)
                 bmp_on = self._bmp_tex is not None and s.bmp_alpha > 0.0
                 p["u_bmp_on"].value = int(bmp_on)
@@ -484,7 +487,7 @@ class Renderer:
 
 def render_offscreen(
     s: ViewState, w: int = 1200, h: int = 800, ctx: moderngl.Context | None = None,
-    bands=None, t_now: float = 0.0,
+    t_now: float = 0.0,
 ) -> np.ndarray:
     """Render one frame to an FBO; returns (h, w, 3) uint8. For tests/tools.
     Pattern time defaults to 0.0 so offscreen renders are deterministic."""
@@ -494,7 +497,7 @@ def render_offscreen(
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((w, h))])
     fbo.use()
     ctx.viewport = (0, 0, w, h)
-    Renderer(ctx).draw(s, w, h, bands=bands, t_now=t_now)
+    Renderer(ctx).draw(s, w, h, t_now=t_now)
     data = np.frombuffer(fbo.read(components=3), dtype=np.uint8).reshape(h, w, 3)[::-1]
     fbo.release()
     if own:

@@ -117,7 +117,6 @@ class AudioEngine:
         self.track = None
         self._offset = 0
         self._played = 0
-        self.chain.planedrive.fill(1.0)
 
     def _fresh_chain(self) -> Analyzer:
         """New trackers on the current analyser; the user's bands and tuning

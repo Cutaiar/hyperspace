@@ -209,19 +209,35 @@ def test_pattern_modes_render(ctx):
         )
 
 
-def test_pattern_bands_uniform_react(ctx):
+def test_pattern_mod_uniform_react(ctx):
+    """The patterns read u_mod[] — ViewState.pattern_mod, the pattern.mod.*
+    params a lane is routed to (routing.py); the draw takes nothing else."""
     quiet = render_offscreen(
-        ViewState(shape=3, ang=list(VIEW["ang"]), faces=True, pattern=1),
-        600, 400, ctx=ctx, bands=(0.1,) * 6,
+        ViewState(shape=3, ang=list(VIEW["ang"]), faces=True, pattern=1,
+                  pattern_mod=[0.1] * 8),
+        600, 400, ctx=ctx,
     )
     loud = render_offscreen(
-        ViewState(shape=3, ang=list(VIEW["ang"]), faces=True, pattern=1),
-        600, 400, ctx=ctx, bands=(2.0,) * 6,
+        ViewState(shape=3, ang=list(VIEW["ang"]), faces=True, pattern=1,
+                  pattern_mod=[2.0] * 8),
+        600, 400, ctx=ctx,
     )
     import numpy as np
     assert np.abs(loud.astype(int) - quiet.astype(int)).mean() > 0.001, (
-        "band uniforms must change the pattern"
+        "pattern.mod uniforms must change the pattern"
     )
+
+
+def test_every_pattern_reads_u_mod_only():
+    """patterns.glsl reads its inputs as u_mod[0..N_MOD); u_bands is gone."""
+    from hyperspace.render import N_MOD, PATTERNS_GLSL
+
+    src = PATTERNS_GLSL.read_text()
+    assert "u_bands" not in src
+    import re
+    code = "\n".join(ln for ln in src.splitlines() if not ln.lstrip().startswith("//"))
+    used = {int(i) for i in re.findall(r"u_mod\[(\d+)\]", code)}
+    assert used and max(used) < N_MOD
 
 
 def test_face_uvs_shape():
