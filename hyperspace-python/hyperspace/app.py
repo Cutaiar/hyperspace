@@ -364,6 +364,7 @@ def main() -> None:
     ))
     midi_io = _open_midi(reg, cfg, router.table)
     panel.midi = midi_io
+    panel.router = router                  # the ROUTING page edits the live table
     bridge_io = _open_bridge(reg, cfg)
     # panel state and chain must stay one object even after source changes
     # the live objects that get re-classed on a hot reload; re-evaluated

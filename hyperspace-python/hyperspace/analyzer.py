@@ -402,15 +402,18 @@ class Analyzer:
         w[self._wlo[i] : self._whi[i] + 1] = self._w[i]
         return w
 
-    def band_curve(self, i: int, freqs) -> np.ndarray:
+    def band_curve(self, i: int, freqs, f: float | None = None,
+                   q: float | None = None) -> np.ndarray:
         """Band i's weighting rasterised on a frequency axis, peak 1 — for
-        drawing over the spectrum history."""
+        drawing over the spectrum history. `f` / `q` override the band's
+        own (the editor draws the *base* while a lane modulates them)."""
         s = self.spec[i]
-        lo, hi = s.edges()
-        f = np.maximum(np.asarray(freqs, dtype=float), 1e-9)
+        fc = s.f if f is None else float(f)
+        lo, hi = edges(fc, s.q if q is None else float(q))
+        fx = np.maximum(np.asarray(freqs, dtype=float), 1e-9)
         if s.curve == RECT:       # compared in Hz so the edges themselves are inside
-            return ((f >= lo) & (f <= hi)).astype(float)
-        return np.asarray(CURVES[s.curve].f(np.log2(f / s.f), math.log2(hi / s.f)), dtype=float)
+            return ((fx >= lo) & (fx <= hi)).astype(float)
+        return np.asarray(CURVES[s.curve].f(np.log2(fx / fc), math.log2(hi / fc)), dtype=float)
 
     # ---- spectrum history ----
 

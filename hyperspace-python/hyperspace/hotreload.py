@@ -42,7 +42,7 @@ from pathlib import Path
 MODULES = (
     "analysis", "tapers", "geometry", "bands", "analyzer", "control", "audio", "lookback",
     "render", "params", "library", "presets", "overlay", "apc40", "routing", "midi", "bridge",
-    "ui_presets", "ui_lookback", "ui",
+    "ui_presets", "ui_lookback", "ui_bands", "ui_routing", "ui",
 )
 
 

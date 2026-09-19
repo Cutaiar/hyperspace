@@ -9,7 +9,7 @@ make and checks that every state the strip can be in draws.
 from types import SimpleNamespace
 
 import pytest
-from imgui_bundle import imgui
+from imgui_bundle import imgui, implot
 
 from hyperspace import ui_presets
 from hyperspace.analysis import Analyser
@@ -24,6 +24,7 @@ from hyperspace.ui import PAGE_KEYS, PAGES, Panel, apply_style, load_fonts
 @pytest.fixture()
 def rig(tmp_path):
     ctx = imgui.create_context()
+    pctx = implot.create_context()      # the band editor plots (ui_bands.py)
     io = imgui.get_io()
     io.display_size = imgui.ImVec2(820, 820)
     io.backend_flags |= imgui.BackendFlags_.renderer_has_textures
@@ -42,6 +43,7 @@ def rig(tmp_path):
     try:
         yield r
     finally:
+        implot.destroy_context(pctx)
         imgui.destroy_context(ctx)
 
 

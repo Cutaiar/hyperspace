@@ -95,6 +95,12 @@ file, or builds the factory table when there is none — and if an old
 the factory MIDI part and the merged table is written once, with a note.
 `bindings_path(home)` says where the file lives; `home` defaults to the
 working directory so WP2's library home can be dropped in.
+
+Routing presets are the same file format with only modulation rows:
+the factory exports in ``hyperspace/library/bindings/`` and the user's
+``<home>/bindings/*.json`` (`preset_files`). `Router.load_preset` replaces
+the routes from one and lands its bases; `Router.save_preset` writes the
+current routes to the user folder — the ROUTING page's strip (WP5b).
 """
 
 from __future__ import annotations
@@ -351,6 +357,31 @@ PRESETS: dict[str, tuple[list[Binding], dict | None]] = {
 }
 
 
+# routing preset *files*: the factory exports (write_factory) and the
+# user's <home>/bindings/*.json — what the ROUTING page's strip steps
+# through. A user file shadows a factory one of the same name.
+PRESET_DIR = "bindings"
+
+
+def preset_files(home: Path | str | None = None) -> dict[str, Path]:
+    """name → path of every routing preset file, user over factory."""
+    out: dict[str, Path] = {}
+    dirs = [FACTORY_DIR] + ([Path(home) / PRESET_DIR] if home is not None else [])
+    for d in dirs:
+        if d.is_dir():
+            out.update((p.name[:-5], p) for p in sorted(d.glob("*.json")))
+    return out
+
+
+def preset_names(home: Path | str | None = None) -> list[str]:
+    return sorted(preset_files(home), key=str.lower)
+
+
+def is_factory_preset(name: str, home: Path | str | None = None) -> bool:
+    p = preset_files(home).get(name)
+    return p is not None and FACTORY_DIR in p.parents
+
+
 def legacy_planedrive(lanes, gain: float = 1.0) -> np.ndarray:
     """The reference's PLANEDRIVE from six lanes — what the legacy6 routes
     must land on rot.rate.*; offline.py's per-frame `drive` history."""
@@ -450,6 +481,11 @@ class Bindings:
     def mods(self) -> list[Binding]:
         """The enabled modulation rows (mod and replace), in table order."""
         return [b for b in self.bindings if b.op in MOD_OPS and b.enabled]
+
+    def routes(self) -> list[Binding]:
+        """Every modulation row, disabled ones too — what the matrix lists
+        and a routing preset saves."""
+        return [b for b in self.bindings if b.op in MOD_OPS]
 
     def route(self, kind: str, channel: int, number: int) -> list[Binding]:
         return [b for b in self.bindings if b.matches(kind, channel, number)]
@@ -581,6 +617,30 @@ class Router:
         routes, values = PRESETS[name]
         self.table.set_routes(replace(b) for b in routes)
         return self.reg.restore(values) if values else []
+
+    def load_preset(self, name: str, home: Path | str | None = None) -> list[str]:
+        """`apply_preset` over the files: a routing preset by name from the
+        factory folder or the user's <home>/bindings/ (preset_files). Only
+        its modulation rows come in — a full table (default.json) works as
+        a preset too. A missing name raises FileNotFoundError, a bad file
+        ValueError, so the strip can show it."""
+        path = preset_files(home).get(name)
+        if path is None:
+            raise FileNotFoundError(f"no routing preset {name!r}")
+        t = Bindings.from_json(json.loads(path.read_text()))
+        self.table.set_routes(replace(b) for b in t.bindings if b.op in MOD_OPS)
+        return self.reg.restore(t.values) if t.values else []
+
+    def save_preset(self, name: str, home: Path | str) -> Path:
+        """The current routes — disabled ones too, no bases — as a user
+        preset file under <home>/bindings/; returns the path written."""
+        from .library import slug  # the library's file naming; no other tie
+
+        d = Path(home) / PRESET_DIR
+        d.mkdir(parents=True, exist_ok=True)
+        path = d / f"{slug(name)}.json"
+        path.write_text(Bindings(replace(b) for b in self.table.routes()).dumps())
+        return path
 
 
 def _resolve(scheme: str, name: str) -> int | None:
