@@ -9,10 +9,10 @@ from hyperspace import apc40
 from hyperspace.analysis import Analyser
 from hyperspace.bands import Chain
 from hyperspace.control import Control
+from hyperspace.library import Library
 from hyperspace.midi import PICKUP_TOL, Binding, MidiIO, MidiMap
 from hyperspace.overlay import Output
 from hyperspace.params import Kind, build_registry
-from hyperspace.presets import Presets
 from hyperspace.render import ViewState
 
 
@@ -48,8 +48,10 @@ def rig(tmp_path):
     control = Control(chain)
     audio = SimpleNamespace(chain=chain)
     view = ViewState()
-    presets = Presets(view, control, audio, path=tmp_path / "presets.json")
+    lib = Library(tmp_path)
+    presets = lib.bank
     reg = build_registry(view, control, audio, presets)
+    lib.attach(reg)
     reg.toggle("ui.panel", "Panel", lambda: True, lambda v: None)
     reg.toggle("ui.cheatsheet", "Sheet", lambda: True, lambda v: None)
     reg.toggle("audio.mic", "Mic", lambda: False, lambda v: None)

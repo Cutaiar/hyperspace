@@ -65,9 +65,10 @@ from .audio import AudioEngine
 from .control import Control
 from .gamepad import Pad
 from .hotreload import HotReloader
+from .library import Library
 from .overlay import GlfwBackend, Output
 from .params import Registry, build_registry
-from .presets import SLOTS, Presets
+from .presets import SLOTS
 from .render import Renderer, ViewState
 from .ui import Panel, apply_style, load_fonts
 
@@ -370,8 +371,10 @@ def main() -> None:
     cfg = config.load()
     audio = AudioEngine()
     control = Control(audio.chain)
-    presets = Presets(s, control, audio)
+    library = Library()                    # presets, projects, the theme bank
+    presets = library.bank
     reg = build_registry(s, control, audio, presets)
+    library.attach(reg)
     panel = Panel(control, audio, s, renderer, presets, registry=reg)
     output = _make_output(render_win, reg, cfg)
     panel.output = output
@@ -393,7 +396,7 @@ def main() -> None:
         *[(p, "params", "Param") for p in reg],
         (output, "overlay", "Output"),
         *([(midi_io, "midi", "MidiIO"), (midi_io.map, "midi", "MidiMap")] if midi_io else []),
-    ])
+    ], watchers=[library])
     panel.reloader = reloader
     keys = Keys(render_win, ctrl_win)
     mouse = Mouse(render_win, reg, s)

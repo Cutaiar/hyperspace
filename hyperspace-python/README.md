@@ -62,10 +62,21 @@ The full default layout is at the bottom of `hyperspace/apc40.py`.
 
 To rebind anything: right-click the control in the panel → **Learn MIDI**,
 then move a knob or press a button. Bindings persist in `midi_map.json`
-next to `presets.json` (delete it to get the defaults back). Knobs use soft
+in the library home (delete it to get the defaults back). Knobs use soft
 pickup — after a band switch or a theme load a knob does nothing until it
 sweeps through the current value. An optional `config.toml` names the port,
 profile and map file, or disables the adapter (see `hyperspace/config.py`).
+
+## Presets, projects and the library
+
+Every registry group (view, camera, band…) has a preset library, and a
+*project* (`*.hyp.json`) saves everything at once, including the F1–F8
+theme bank. Factory presets live in `hyperspace/library/`; yours go in
+`$HYPERSPACE_HOME` (default `~/Hyperspace`) in the same tree, with
+`projects/`, `config.toml` and `midi_map.json` next to them — a user file
+shadows a factory file of the same name. The files are plain JSON: edit one
+in a text editor while the app runs and the loaded preset updates in place.
+See `hyperspace/library.py` for the formats and the API the panel uses.
 
 ## Two windows: output and controls
 
