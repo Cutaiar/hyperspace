@@ -214,6 +214,198 @@ def test_composite_matches_numpy_reference(ctx):
     rig.release()
 
 
+LUMA = np.array([0.299, 0.587, 0.114])
+
+
+def rotate_hue(c, degrees):
+    """The shader's YIQ rotation: the chroma plane turned, luma kept."""
+    a = np.radians(degrees)
+    y = c @ LUMA
+    i = c @ np.array([0.596, -0.274, -0.322])
+    q = c @ np.array([0.211, -0.523, 0.312])
+    i2, q2 = i * np.cos(a) - q * np.sin(a), i * np.sin(a) + q * np.cos(a)
+    return np.stack([y + 0.956 * i2 + 0.621 * q2, y - 0.272 * i2 - 0.647 * q2,
+                     y - 1.106 * i2 + 1.703 * q2], axis=-1)
+
+
+def chroma(c, hue, sat, tint, tint_rgb):
+    """The shader's chroma stage in numpy on an (h, w, 3) float image."""
+    lum = (c @ LUMA)[..., None]
+    own = lum + (rotate_hue(c, hue) - lum) * sat
+    return np.clip(own * (1.0 - tint) + lum * np.asarray(tint_rgb) * tint, 0.0, 1.0)
+
+
+def scene_hue_tint(scene, sat):
+    """The tint colour the shader takes from the scene: the hue of its
+    mean colour at `sat`, full value — grey when the mean has no chroma."""
+    import colorsys
+
+    m = scene[..., :3].reshape(-1, 3).mean(axis=0)
+    if m.max() - m.min() < 1e-4:
+        return (1.0, 1.0, 1.0)
+    h, _, _ = colorsys.rgb_to_hsv(*m)
+    return colorsys.hsv_to_rgb(h, sat, 1.0)
+
+
+@pytest.mark.parametrize("chroma_kw, tint_rgb", [
+    # the net's own colours re-hued and half desaturated, no tint
+    ({"hue": 120.0, "sat": 0.5, "tint": 0.0}, None),
+    # pushed past the net's saturation, hue the other way, a touch of tint
+    ({"hue": -70.0, "sat": 1.6, "tint": 0.3, "tint_hue": 30.0, "tint_sat": 0.8}, None),
+    # fully tinted to one colour: luminance × green
+    ({"tint": 1.0, "tint_from": 0, "tint_hue": 120.0, "tint_sat": 1.0}, (0.0, 1.0, 0.0)),
+    # greyscale: fully tinted, the tint itself grey
+    ({"sat": 0.0, "tint": 1.0, "tint_sat": 0.0}, (1.0, 1.0, 1.0)),
+    # the scene's own hue
+    ({"tint": 1.0, "tint_from": 1, "tint_sat": 0.85}, "scene"),
+])
+def test_dream_chroma_matches_numpy_reference(ctx, chroma_kw, tint_rgb):
+    """The chroma stage on the dream buffer alone (no echoes): the shader
+    against the numpy transcription, tint colour included — the chosen
+    one, or the hue of the scene's mean, read off the newest echo at
+    capture."""
+    import colorsys
+
+    w, h = echo_size(128, 400, 256)
+    state = DreamState(on=True, echoes=0, every=1, res=0, darken=0.2, contrast=1.3, mix=0.6,
+                       **chroma_kw)
+    rig = Rig(ctx, w, h, dream=state)
+    rig.frame()
+    lb = rig.lb
+    # a scene with a decided colour cast, captured as the frame loop would
+    # (the echo is the scene itself here: target at the echo size)
+    scene8 = synthetic(h, w, 21)
+    scene8[..., :3] = (scene8[..., :3] * np.array([0.25, 0.55, 1.0])).round().astype(np.uint8)
+    rig.r.scene.tex.write(scene8)
+    rig.fbo.use()
+    ctx.viewport = (0, 0, w, h)
+    lb.capture(rig.r.scene.tex, rig.fbo)
+    dream8 = synthetic(h, w, 9)
+    lb.write_from(dream8, frame_index=lb.frame)
+    lb.composite(rig.r.scene.tex, rig.fbo)
+    out = rig.read().astype(np.float64) / 255.0
+    scene = scene8.astype(np.float64) / 255.0
+    dream = dream8.astype(np.float64)[..., :3] / 255.0
+    if tint_rgb == "scene":
+        from hyperspace.lookback import mean_colour, scene_tint
+
+        # the composite's colour is off the strided mean of the echo, which
+        # sits on the exact mean's hue to within a degree or so
+        exact = scene_hue_tint(scene, state.tint_sat)
+        assert max(exact) - min(exact) > 0.5, "the cast must give a real hue"
+        assert lb.scene_mean == pytest.approx(mean_colour(scene8), abs=1e-6)
+        assert lb.scene_mean == pytest.approx(scene[..., :3].reshape(-1, 3).mean(axis=0),
+                                              abs=0.01)
+        tint_rgb = lb.tint_rgb()
+        assert tint_rgb == pytest.approx(scene_tint(mean_colour(scene8), state.tint_sat))
+        assert tint_rgb == pytest.approx(exact, abs=0.03)
+    elif tint_rgb is None:
+        tint_rgb = colorsys.hsv_to_rgb(state.tint_hue / 360.0, state.tint_sat, 1.0)
+        assert lb.scene_mean is None, "colour mode never reads the echo back"
+    coloured = chroma(dream, state.hue, state.sat, state.tint, tint_rgb)
+    rgba = np.concatenate([coloured, np.ones(coloured.shape[:2] + (1,))], axis=2)
+    ref = reference(scene, [(rgba, 0.6)], 0.2, 1.3)
+    err = np.abs(out - ref)
+    assert err.max() <= 2.5 / 255, f"max error {err.max() * 255:.2f}/255"
+    assert err.mean() <= 0.4 / 255
+    assert np.abs(out - scene).mean() > 0.02, "the dream is really there"
+    # the black quarter of the dream adds nothing whatever its chroma
+    assert np.array_equal((out[:, : w // 4] * 255).round(), (scene[:, : w // 4] * 255).round())
+    rig.release()
+
+
+def test_dream_chroma_is_neutral_by_default(ctx):
+    """Fresh state: hue 0, sat 1, tint 0 leaves the dream as the net painted it."""
+    w, h = echo_size(128, 400, 256)
+    d = DreamState(on=True, echoes=0, every=1, res=0, darken=0.0, contrast=1.0, mix=1.0)
+    assert (d.hue, d.sat, d.tint) == (0.0, 1.0, 0.0)
+    rig = Rig(ctx, w, h, dream=d)
+    rig.frame()
+    dream8 = synthetic(h, w, 9)
+    rig.lb.write_from(dream8, frame_index=rig.lb.frame)
+    rig.r.scene.tex.write(np.zeros((h, w, 4), dtype=np.uint8))     # a black scene
+    rig.fbo.use()
+    ctx.viewport = (0, 0, w, h)
+    rig.lb.composite(rig.r.scene.tex, rig.fbo)
+    out = rig.read().astype(int)
+    # weight 1 over black: the composite is the dream itself (8-bit rounding)
+    assert np.abs(out[..., :3] - dream8.astype(int)[..., :3]).max() <= 1
+    rig.release()
+
+
+def test_dream_chroma_tints_the_dream_only(ctx):
+    """An echo keeps the scene's colours whatever the dream's tint."""
+    w, h = echo_size(128, 400, 256)
+    d = DreamState(on=True, echoes=1, every=1, res=0, darken=0.0, contrast=1.0, mix=0.0,
+                   echo_mix=1.0, decay=1.0, tint=1.0, tint_hue=120.0, tint_sat=1.0)
+    rig = Rig(ctx, w, h, dream=d)
+    rig.frame()
+    red = np.zeros((h, w, 4), dtype=np.uint8)
+    red[..., 0] = red[..., 3] = 255
+    rig.lb.write_slot(0, red, frame_index=rig.lb.frame)
+    rig.r.scene.tex.write(np.zeros((h, w, 4), dtype=np.uint8))
+    rig.fbo.use()
+    ctx.viewport = (0, 0, w, h)
+    rig.lb.composite(rig.r.scene.tex, rig.fbo)
+    out = rig.read()
+    assert out[..., 0].min() == 255 and out[..., 1:3].max() == 0, "the echo stays red"
+    rig.release()
+
+
+def test_tint_colour():
+    from hyperspace.lookback import TINT_FROM, mean_colour, scene_tint, tint_colour
+
+    assert TINT_FROM == ["colour", "scene"]
+    assert tint_colour(0.0, 1.0) == pytest.approx((1.0, 0.0, 0.0))
+    assert tint_colour(120.0, 1.0) == pytest.approx((0.0, 1.0, 0.0))
+    assert tint_colour(480.0, 1.0) == pytest.approx((0.0, 1.0, 0.0))   # wraps
+    assert tint_colour(200.0, 0.0) == pytest.approx((1.0, 1.0, 1.0))   # grey
+    assert tint_colour(240.0, 0.5) == pytest.approx((0.5, 0.5, 1.0))
+    # from a scene: its hue, the chosen saturation, full value
+    assert scene_tint((0.1, 0.1, 0.4), 1.0) == pytest.approx((0.0, 0.0, 1.0))
+    assert scene_tint((0.3, 0.2, 0.2), 0.5) == pytest.approx((1.0, 0.5, 0.5))
+    assert scene_tint((0.2, 0.2, 0.2), 1.0) == (1.0, 1.0, 1.0)         # no chroma: grey
+    assert scene_tint(None, 1.0) == (1.0, 1.0, 1.0)                    # nothing captured
+    # the mean samples a stride grid: 8 rows × 12 columns → 2 × 3 samples
+    img = np.zeros((8, 12, 4), dtype=np.uint8)
+    img[..., 0], img[..., 2], img[..., 3] = 255, 51, 255
+    img[:4, :, 0] = 0                    # half the rows red-less: mean r 0.5
+    assert mean_colour(img) == pytest.approx((0.5, 0.0, 0.2), abs=1e-6)
+    img[1::2, :, 1] = 255                # off the grid: not seen
+    assert mean_colour(img) == pytest.approx((0.5, 0.0, 0.2), abs=1e-6)
+
+
+def test_scene_tint_reads_the_echo_only_when_asked(ctx):
+    """Scene mode costs one echo read-back a frame, on the cadence or off
+    it; colour mode never reads. With a source attached the worker's own
+    read serves both. Switching off clears the mean."""
+    w, h = echo_size(128, 400, 256)
+    d = DreamState(on=True, echoes=2, every=3, res=0, tint_from=1)
+    rig = Rig(ctx, w, h, dream=d)
+    lb = rig.lb
+    for _ in range(4):
+        rig.frame()
+    assert lb.scene_mean is not None
+    assert len(lb.layers()) == 1, "an off-cadence frame is read for the mean, not kept"
+    mean = lb.scene_mean
+    d.tint_from = 0
+    lb.scene_mean = None
+    for _ in range(3):
+        rig.frame()
+    assert lb.scene_mean is None
+    d.tint_from = 1
+    src = Echo()
+    lb.source = src
+    n = src.buffers
+    rig.frame()
+    assert src.buffers == n + 1 and lb.scene_mean is not None
+    assert lb.scene_mean == pytest.approx(mean, abs=0.05)   # the same scene, near enough
+    d.on = False
+    rig.frame()
+    assert lb.scene_mean is None
+    rig.release()
+
+
 def test_composite_is_a_copy_when_nothing_is_layered(ctx):
     rig = Rig(ctx, 200, 128, dream=DreamState(on=True, echoes=0, every=1, res=0))
     rig.frame()
@@ -368,7 +560,9 @@ def registry(dream=None):
 
 DREAM_IDS = [
     "dream.on", "dream.mix", "dream.echo_mix", "dream.decay", "dream.darken",
-    "dream.contrast", "dream.echoes", "dream.every", "dream.res", "dream.steps", "dream.step",
+    "dream.contrast", "dream.hue", "dream.sat", "dream.tint", "dream.tint_from",
+    "dream.tint_hue", "dream.tint_sat",
+    "dream.echoes", "dream.every", "dream.res", "dream.steps", "dream.step",
     "dream.k", "dream.layer", "dream.octaves", "dream.mask_decay", "dream.jitter",
 ]
 

@@ -17,9 +17,17 @@ tools/dream_bench/common.py, made per-layer):
                                                         only the bright,
                                                         high-contrast regions
                                                         of a layer read
+    chroma(c) = mix(own, lum(c) · tint_rgb, tint)       the dream buffer only:
+                own = mix(lum(c), rotate(c, hue), sat)  its colours re-hued and
+                                                        (de)saturated about the
+                                                        grey axis, then crossed
+                                                        into a tint of its
+                                                        luminance — a chosen
+                                                        colour, or the scene's
+                                                        own mean hue
     layer i   = colour grade(L_i.rgb) at weight w_i,
                 w_i = echo_mix · decay^age_i   (echoes, age in frames)
-                w_D = mix                      (the dream buffer)
+                w_D = mix, on grade(chroma(D))  (the dream buffer)
     wake      = layers over one another, oldest → newest, premultiplied:
                 wake ← wake·(1 − a_i) + grade(L_i)·w_i,
                 a_i = w_i · max(grade(L_i))     the layer's own luminance is
@@ -37,6 +45,22 @@ only where content is or was. With an opaque ground ``scene.a`` is 1 and
 the union is 1: exactly today's frame plus the wake. With the pipeline off
 the post pass is a copy and the output is bit-identical to drawing the
 scene straight to the window (tests/test_render.py asserts it).
+
+The chroma stage is what makes the dream sit with the scene. The net's
+gradient paints in its own primaries — red, green and blue activation
+blobs whatever the frame's palette — so ``D`` is re-coloured here, on
+the way in, every frame: a hue rotation and a saturation scale on its
+own colours (sat 0 is greyscale), then a ``tint`` cross-fade to its
+luminance times one colour. That colour is either ``tint_hue`` /
+``tint_sat`` or, with ``tint_from`` on "scene", the hue of the scene's
+mean colour at ``tint_sat`` — a scene with no chroma tints grey. The
+mean is taken on the host from the newest echo at capture: with a
+worker attached those pixels are read back for it anyway (the copy path
+below), and without one scene mode does that read itself, one sync
+point a frame. It is a frame stale by construction, which no eye sees.
+The echoes are cut from the scene and already match it, so they pass
+untouched. Chroma runs before the grade, so darken and contrast read
+the same on every layer.
 
 The history lives in one atlas texture, MAX_ECHOES slots of the echo size
 stacked vertically, so a slot is an FBO viewport (no per-layer copies, no
@@ -67,6 +91,8 @@ composite. A result lands a frame or two after its submit by design.
 
 from __future__ import annotations
 
+import colorsys
+import math
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
@@ -77,6 +103,7 @@ MAX_ECHOES = 32
 RES = [128, 192, 256, 384]              # dream.res: the echo's short side, px
 LAYERS = ["conv2_2", "conv3_3", "conv4_3", "inception3b", "inception4c", "inception4e"]
 OCTAVES = ["1", "2 alt", "3 alt"]       # one octave a frame, in rotation (spike D)
+TINT_FROM = ["colour", "scene"]         # dream.tint_from: the tint's hue source
 
 
 @dataclass
@@ -85,9 +112,10 @@ class DreamState:
 
     Defaults are the spike's recommendation (docs/plans/assets/
     06-lookback-perf.md): conv3_3 at 256, two steps of 0.03, k 0.08,
-    jitter 8, mask decay 0.97; ``D`` darkened to 70 % at 40 % alpha. The
-    echoes — a raw trail under the dream, or the whole effect until a
-    worker exists — default to four, two frames apart.
+    jitter 8, mask decay 0.97; ``D`` darkened to 70 % at 40 % alpha, its
+    colours as the net painted them (tint 0). The echoes — a raw trail
+    under the dream, or the whole effect until a worker exists — default
+    to four, two frames apart.
     """
 
     on: bool = False
@@ -97,6 +125,13 @@ class DreamState:
     decay: float = 0.88       # per-frame age fade of an echo
     darken: float = 0.3       # 0 as bright as the frame … 1 black
     contrast: float = 1.0     # power curve on every layer; 1 is neutral
+    # the dream buffer's chroma, before the grade
+    hue: float = 0.0          # degrees of hue rotation on the net's own colours
+    sat: float = 1.0          # their saturation; 0 is greyscale, 1 as the net painted
+    tint: float = 0.0         # 0 those colours … 1 luminance × the tint colour
+    tint_from: int = 0        # index into TINT_FROM: a chosen colour, or the scene's hue
+    tint_hue: float = 200.0   # the tint colour's hue, degrees
+    tint_sat: float = 1.0     # …and saturation; 0 tints grey
     echoes: int = 4           # ring depth; 0 = only the dream buffer
     every: int = 2            # capture cadence, frames
     res: int = 2              # index into RES → 256
@@ -169,11 +204,36 @@ uniform float u_pad;         // half a texel in v: a slot never bleeds into its 
 uniform float u_dream_w;     // the dream buffer's weight; 0 = none
 uniform float u_darken;
 uniform float u_contrast;
+uniform float u_hue;         // the dream's hue rotation, radians
+uniform float u_sat;         // …and saturation scale about the grey axis
+uniform float u_tint;        // 0 the dream's own colours … 1 luminance × the tint
+uniform vec3 u_tint_rgb;     // the tint colour: chosen, or the scene's hue (Lookback.tint_rgb)
 in vec2 v_uv;
 out vec4 f_color;
 
+const vec3 LUMA = vec3(0.299, 0.587, 0.114);
+
 vec3 grade(vec3 c) {{
     return pow(max(c, vec3(1e-6)), vec3(u_contrast)) * (1.0 - u_darken);
+}}
+
+// the chroma plane turned about the grey axis (YIQ): luma is kept
+vec3 rotate_hue(vec3 c, float a) {{
+    float y = dot(c, LUMA);
+    float i = dot(c, vec3(0.596, -0.274, -0.322));
+    float q = dot(c, vec3(0.211, -0.523, 0.312));
+    float ca = cos(a), sa = sin(a);
+    float i2 = i * ca - q * sa, q2 = i * sa + q * ca;
+    return vec3(y + 0.956 * i2 + 0.621 * q2, y - 0.272 * i2 - 0.647 * q2,
+                y - 1.106 * i2 + 1.703 * q2);
+}}
+
+// the dream's colours, re-hued and (de)saturated, crossed into a tint of
+// its luminance
+vec3 chroma(vec3 c) {{
+    float l = dot(c, LUMA);
+    vec3 own = mix(vec3(l), rotate_hue(c, u_hue), u_sat);
+    return clamp(mix(own, l * u_tint_rgb, u_tint), 0.0, 1.0);
 }}
 
 // one layer over the wake so far, premultiplied; coverage is the graded
@@ -194,10 +254,38 @@ void main() {{
     for (int i = 0; i < u_n; i++)
         layer(texture(u_ring, vec2(v_uv.x, u_off[i] + y)), u_w[i], wake, wa);
     if (u_dream_w > 0.0)
-        layer(texture(u_dream, v_uv), u_dream_w, wake, wa);
+        layer(vec4(chroma(texture(u_dream, v_uv).rgb), 1.0), u_dream_w, wake, wa);
     f_color = vec4(min(scene.rgb + wake, 1.0), scene.a + wa - scene.a * wa);
 }}
 """
+
+
+def tint_colour(hue: float, sat: float) -> tuple[float, float, float]:
+    """The tint colour for `hue` in degrees at `sat`, full value."""
+    return colorsys.hsv_to_rgb((float(hue) / 360.0) % 1.0, max(0.0, min(float(sat), 1.0)), 1.0)
+
+
+def scene_tint(mean, sat: float) -> tuple[float, float, float]:
+    """The tint colour from a scene's mean colour (r, g, b in [0, 1]): its
+    hue at `sat`, full value; grey when the mean has no chroma, or there
+    is no mean yet."""
+    if mean is None:
+        return (1.0, 1.0, 1.0)
+    r, g, b = (float(v) for v in mean)
+    if max(r, g, b) - min(r, g, b) < 1e-4:
+        return (1.0, 1.0, 1.0)
+    return tint_colour(colorsys.rgb_to_hsv(r, g, b)[0] * 360.0, sat)
+
+
+MEAN_STRIDE = 4     # mean_colour samples every 4th row and column: 0.1 ms at 400×256
+
+
+def mean_colour(pixels: np.ndarray) -> tuple[float, float, float]:
+    """The mean r, g, b of an (h, w, 4) uint8 image, in [0, 1] — off a
+    MEAN_STRIDE grid of its pixels, which a hue cannot tell from the whole."""
+    sub = pixels[::MEAN_STRIDE, ::MEAN_STRIDE].reshape(-1, 4)[:, :3]
+    m = sub.mean(axis=0, dtype=np.float32) / 255.0
+    return (float(m[0]), float(m[1]), float(m[2]))
 
 
 def echo_size(res: int, w: int, h: int) -> tuple[int, int]:
@@ -218,6 +306,7 @@ class Lookback:
         self.source = source
         self.frame = 0                 # frames captured while on
         self.dream_frame = -1          # the submit `D` answers; −1 = nothing shown yet
+        self.scene_mean: tuple[float, float, float] | None = None   # newest echo's, scene mode
         self.echo = (0, 0)             # slot size (w, h)
         self.atlas: moderngl.Texture | None = None
         self.dream: moderngl.Texture | None = None
@@ -324,6 +413,11 @@ class Lookback:
         p["u_dream_w"].value = dream_w
         p["u_darken"].value = float(s.darken)
         p["u_contrast"].value = float(s.contrast)
+        if dream_w > 0.0:
+            p["u_hue"].value = math.radians(float(s.hue))
+            p["u_sat"].value = float(s.sat)
+            p["u_tint"].value = float(s.tint)
+            p["u_tint_rgb"].value = self.tint_rgb()
         self._post_vao.render(moderngl.TRIANGLES, vertices=3)
         ctx.enable(moderngl.BLEND)
 
@@ -338,7 +432,8 @@ class Lookback:
         self._ensure(w, h)
         self.frame += 1
         commit = self.frame % max(1, int(s.every)) == 0
-        if not commit and self.source is None:
+        want_mean = self.scene_tinted()
+        if not commit and self.source is None and not want_mean:
             return
         # the slot's previous occupant is the oldest capture; it goes even
         # when this frame is not committed, so an echo never shows a frame
@@ -349,11 +444,28 @@ class Lookback:
         if commit:
             self._captures.append((slot, self.frame))
             self._next = (slot + 1) % MAX_ECHOES
-        if self.source is not None:
+        if self.source is not None or want_mean:
+            # one read serves both: the worker's copy path and the scene's
+            # mean colour for the tint (taken before the worker owns the slot)
             buf = self._buffer(self.source)
             self.read_into(buf, slot)
-            self.source.submit(buf, self.frame)
+            if want_mean:
+                self.scene_mean = mean_colour(buf)
+            if self.source is not None:
+                self.source.submit(buf, self.frame)
         target.use()
+
+    def scene_tinted(self) -> bool:
+        """Whether the dream's tint takes its hue from the scene this frame."""
+        return int(self.state.tint_from) == 1
+
+    def tint_rgb(self) -> tuple[float, float, float]:
+        """The tint colour the composite uses this frame: the chosen hue and
+        saturation, or the newest echo's mean hue at that saturation."""
+        s = self.state
+        if self.scene_tinted():
+            return scene_tint(self.scene_mean, s.tint_sat)
+        return tint_colour(s.tint_hue, s.tint_sat)
 
     def pull(self) -> bool:
         """A finished dream result, if the source has a new one, into `D`."""
@@ -372,6 +484,7 @@ class Lookback:
         """Off: forget the history so a re-enable starts clean."""
         self._captures.clear()
         self.dream_frame = -1
+        self.scene_mean = None
 
     def _downsample(self, scene: moderngl.Texture, slot: int) -> None:
         scene.build_mipmaps()            # sets LINEAR_MIPMAP_LINEAR on the texture

@@ -1,7 +1,8 @@
 """The LOOKBACK page — the frame history and its composite (lookback.py).
 
-Three sections on the dream group: the composite (on, the two mixes, the
-age fade and the grade), the history (depth, cadence, size, and a row of
+Four sections on the dream group: the composite (on, the two mixes, the
+age fade and the grade), the chroma (the dream buffer's hue, saturation and
+tint — lookback.py's chroma()), the history (depth, cadence, size, and a row of
 live thumbnails — the echoes newest first, straight from the atlas
 texture, with the dream buffer at the end when a worker has filled it),
 and the dream worker's settings (dream.py) with its status line —
@@ -22,7 +23,7 @@ from __future__ import annotations
 from imgui_bundle import imgui
 
 from . import ui
-from .lookback import RES
+from .lookback import RES, tint_colour
 
 THUMB_H = 40        # thumbnail height, px; width follows the echo's aspect
 
@@ -41,6 +42,20 @@ def page(panel, dt: float) -> None:
     panel._row("dream.decay")
     panel._row("dream.darken")
     panel._row("dream.contrast")
+    imgui.spacing()
+
+    panel._section("chroma", note="the dream buffer's colour")
+    panel._row("dream.hue")
+    panel._row("dream.sat")
+    panel._row("dream.tint")
+    ui._micro("from")
+    panel._tip(r["dream.tint_from"])
+    imgui.same_line(ui.LABEL_W)
+    panel._combo("dream.tint_from", 72)
+    imgui.same_line()
+    _tint_swatch(r, lb)
+    panel._row("dream.tint_hue")
+    panel._row("dream.tint_sat")
     imgui.spacing()
 
     panel._section("history", note="rebuilds the ring")
@@ -82,6 +97,26 @@ def _status(lb, on: bool) -> str:
     n = len(lb.thumbnails())
     dream = "dream" if lb.dream_frame >= 0 else "no dream"
     return f"{n} echo(es) · {dream}"
+
+
+def _tint_swatch(r, lb) -> None:
+    """The tint colour the composite uses this frame, as a swatch: the
+    chosen one, or — from the scene — whatever hue the newest echo had."""
+    scene = int(r["dream.tint_from"].value) == 1
+    live = getattr(lb, "tint_rgb", None)         # None without a renderer
+    if live is not None:
+        rgb = live()
+    elif scene:
+        rgb = (1.0, 1.0, 1.0)
+    else:
+        rgb = tint_colour(r["dream.tint_hue"].value, r["dream.tint_sat"].value)
+    imgui.color_button("##tint", imgui.ImVec4(*rgb, 1.0),
+                       imgui.ColorEditFlags_.no_tooltip | imgui.ColorEditFlags_.no_alpha,
+                       imgui.ImVec2(36, imgui.get_frame_height()))
+    if scene:
+        imgui.same_line()
+        imgui.text_disabled("the scene's mean hue" if getattr(lb, "scene_mean", None)
+                            else "the scene's mean hue — nothing captured yet")
 
 
 def _worker(lb):

@@ -273,6 +273,16 @@ octaves, history depth and the copy path are what WP6-0 decides.
   finished result wins; the copy path and framework are whatever WP6-0
   found fastest. Reuses dream-server's hook/step code minus the octave
   loop.
+  - *Chroma (2026-09-20, follow-up).* The net paints in its own primaries
+    — red/green/blue activation blobs whatever the scene's palette — so
+    the compositor now re-colours `D` on its way in (`lookback.py`,
+    `chroma()`): `dream.hue` / `dream.sat` on the net's own colours (sat 0
+    is greyscale), then `dream.tint` cross-fades to luminance × one
+    colour — `dream.tint_hue` / `dream.tint_sat`, or with
+    `dream.tint_from` on "scene" the hue of the scene's mean colour, read
+    off the newest echo at capture (free with a worker attached: the
+    copy path reads those pixels anyway). All six are presettable and
+    modulatable; the echoes pass untouched. Defaults are neutral.
 - **WP6c — tuning at the machine (S, needs the user).** Layer/steps/grade
   by eye with real audio, the GPU-contention number on the real scene,
   two or three factory presets.
