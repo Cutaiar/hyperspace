@@ -36,6 +36,21 @@ differs on this machine. Adapters are enabled here, not in code
     device = "auto"         # "auto" (MPS when there, else CPU), "mps", "cpu"
     precision = "fp32"      # or "fp16": ~10 % faster on VGG, more p99 outliers
     weights_dir = ""        # pretrained weights; "" = <library home>/weights
+
+    [hands]                 # Ultraleap hands (hands.py, the `leap` bindings) — the rig;
+                            # the performance setup is the HANDS page / `hands` presets
+    enabled = false         # true opens the tracker; off, `leap` is never imported
+    mode = "desktop"        # camera looks up from below; "screentop" from above, "hmd"
+    dofs = ["x", "y", "z", "roll", "pitch", "yaw"]   # per hand, in axis order; also
+                            # grab, pinch, grab_angle, pinch_mm
+    out = "Hyperspace Hands"   # MIDI out for a DAW: port substring, else a new
+                               # virtual port of that name ("" = none)
+    channel = 16            # 1-based: the channel every axis starts on
+    cc = 102                # starting CCs: left hand cc…cc+n−1, right cc+n…cc+2n−1
+    presence = true         # note on/off to the DAW as a hand enters / leaves
+    note = 120              # left hand's presence note, right is note+1
+    min_confidence = 0.1
+    calibration = "hands.json"   # the box's ranges, relative to the library home
 """
 
 from __future__ import annotations
@@ -56,6 +71,9 @@ DEFAULTS: dict = {
                "cc": 16, "rate": 100, "send": ["lane:*"], "in_lanes": 16},
     # dream.py: the temporal Deep Dream behind the look-back — off by default
     "dream": {"enabled": False, "device": "auto", "precision": "fp32", "weights_dir": ""},
+    # hands.py: Ultraleap hands as MIDI CCs and hand lanes — off by default;
+    # the rest of its defaults live in hands.DEFAULTS
+    "hands": {"enabled": False, "calibration": "hands.json"},
 }
 
 
@@ -79,4 +97,7 @@ def load(path: Path | None = None) -> dict:
     m = cfg["midi"].get("map")
     if m and not Path(m).is_absolute():
         cfg["midi"]["map"] = str(path.parent / m)
+    c = cfg["hands"].get("calibration")
+    if c and not Path(c).is_absolute():
+        cfg["hands"]["calibration"] = str(path.parent / c)
     return cfg

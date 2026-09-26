@@ -1,0 +1,213 @@
+# Plan 08 — Ultraleap hands as the performing surface
+
+**After plan 07.** The hands are the main way to perform: two hands in an
+enclosed box over an Ultraleap camera, six axes each. The APC40 stays on
+presets, scenes and master controls. The goal is **few controls, each
+completely predictable**, not many. The 12 axes are shaped as analog
+signals, and there are no gesture vocabularies to teach.
+
+Code: the `hyperspace/hands/` package — `core.py` (source, setup,
+adapter), `signal.py` (the pure signal chain), `panel.py` (the HANDS
+page) — plus `tools/hands_probe.py`, `tests/test_hands.py`. The package
+is built to be lifted out whole: `core.py` and `signal.py` import
+nothing from hyperspace, everything they need arrives duck-typed as an
+argument, and `tests/test_hands_boundary.py` fails the build if that
+ever stops being true. `panel.py` is the one adapter to this host.
+Small hooks in
+`routing.py` (`hand:<i>` sources, `Router.drive`), `params.py`
+(`Param.glide`), `midi.py` (`MidiIO.learn_source`), `ui.py`, `config.py`
+and `app.py`.
+
+![HANDS page with two synthetic hands](assets/08-hands/hands.png)
+
+## Shape
+
+```
+Ultraleap service ─(leap bindings, SDK thread)─▶ LeapSource.latest()
+                                                      │ once per render frame
+                                                 HandsIO.poll(dt)
+                     per axis: norm → One Euro → dead zone/curve → attack/decay
+                               → rest spring / catch glide → y ∈ [0, 1]
+               ┌──────────────────────────────┴──────────────────────────────┐
+     Router.feed("hand") + drive              MIDI out port ("Hyperspace Hands")
+  hand:<i> in the routing table: Learn         per axis: 7-bit CC · 14-bit CC ·
+  binds a param (abs, float, no detents);      pitch bend · channel pressure,
+  ROUTING page mod/replace; presence lanes     rate-limited; presence notes
+```
+
+**Inside Hyperspace nothing goes through MIDI.** A learned hand drives
+its param at float precision (`Param.glide`: no 7-bit steps, no fader
+detents), and it never shares a channel with the APC40. MIDI encodings
+only exist for the DAW port.
+
+## What Ultraleap reports
+
+LeapC (through the `leap` Python bindings) reports, per hand per frame:
+- `palm.position` / `palm.velocity` in **mm**. The origin is the camera,
+  +y points away from it, and +z points toward the performer in desktop
+  mode.
+- `palm.normal` and `palm.direction` as **unit vectors**, plus
+  `palm.orientation` as a quaternion.
+- `grab_strength` / `pinch_strength` in **0–1**.
+- `grab_angle` in **radians**.
+- `pinch_distance` in **mm**.
+- `confidence` in 0–1, and `type` left/right.
+
+| Axis | Derived from | Unit | Default range | Shaped |
+|---|---|---|---|---|
+| `x` | palm.position.x | mm | left −220…20, right −20…220 | centred |
+| `y` (height) | palm.position.y | mm | 100…350 | from the bottom |
+| `z` (depth) | palm.position.z | mm | −100…100 | centred |
+| `roll` | atan2(n.x, −n.y) | ° | ±90 (thumb up = up, both hands) | centred |
+| `pitch` | atan2(d.y, −d.z) | ° | ±60 (fingers up = up) | centred |
+| `yaw` | atan2(d.x, −d.z) | ° | ±45 (fingers outward = up, both hands) | centred |
+
+`grab`, `pinch` (0–1), `grab_angle` (°) and `pinch_mm` (mm) are
+available through `[hands] dofs`, but the default stays the palm pose.
+
+## The analog chain (per axis, `hands/signal.py`)
+
+1. **Range.** `u = (v − lo) / (hi − lo)`. The ranges come from the box's
+   calibration (`<home>/hands.json`); the table above is only the
+   fallback. `invert` flips u.
+2. **One Euro filter.** Its cutoff is `Steadiness` at rest and rises by
+   `Response` × speed, so a still hand doesn't shimmer and a fast one
+   doesn't lag.
+3. **Dead zone.** On a *centred* axis it's a flat band at neutral, so a
+   level hand reads exactly neutral. Otherwise it sits at the bottom, so
+   "off" is easy to hit. The remaining throw is stretched so both ends
+   are still reachable.
+4. **Curve.** The exponent 4^c on the distance from neutral (or from the
+   bottom). + gives fine control near neutral, − the reverse.
+5. **Attack / decay.** A one-pole slew with separate rise and fall times,
+   the envelope you'd put on a CV.
+6. **On exit.** `hold` keeps the last value. `return` springs to `Rest`
+   over `Return` seconds (within about 2 %), with `Bounce` from a
+   critically damped glide up to a ringing spring.
+   **Catch:** a returning hand is glided onto over `Catch` seconds
+   rather than jumped to.
+7. **To MIDI.** `cc` and `pressure` are 0–127. `cc14` (MSB on n, LSB on
+   n + 32, n ≤ 31) and `pitch` are 0–16383. Each holds its last value
+   with hysteresis, so a still hand sends nothing, and each is limited
+   to `MIDI rate` messages a second per axis. The newest value always
+   lands once the limit allows.
+
+The HANDS page flags any output that can't be sent as set: a 14-bit
+number over 31, two axes on the same CC (including an LSB), or two bend
+or pressure axes on one channel.
+
+## Pinch switches (eight more signals)
+
+Each hand also reports the gap from the thumb tip to each fingertip,
+**divided by palm width** — a ratio, not millimetres, so one threshold
+fits any hand. They are ordinary features (`pinch_index`,
+`pinch_middle`, `pinch_ring`, `pinch_pinky`): name one in `[hands] dofs`
+and it becomes a full analog axis like any other.
+
+Each ratio also drives a switch, whether or not it was chosen as a dof:
+
+- a **Schmitt trigger** — closes under `pinch_close`, and only lets go
+  past the wider `pinch_open`. One threshold chatters where the fingers
+  hover; the gap between two does not.
+- then a **debounce** (`pinch_hold`), so a single noisy frame cannot flip
+  it.
+
+They leave as the last eight hand lanes — after the presence pair, so a
+saved `hand:<i>` binding keeps meaning the axis it always did — and as
+note on/off from `[hands] pinch_note`. A hand that leaves drops its
+switches, so nothing hangs on in the DAW.
+
+Measured on the camera at their closest: index 0.12, middle 0.14, pinky
+0.28. **Ring only reached 0.39 and never closed** — it is the weak one,
+as expected (occlusion when the palm turns away, and ring and pinky do
+not move independently). Whether that wants a looser per-finger
+threshold is still open; the page and the probe both print the live gap
+so it can be read off a real hand.
+
+## Gating: one hand movement, two meanings
+
+`Binding.when` names a second source that must read on before a row acts
+at all. Pinch and move and the param follows; open the hand and the same
+movement does nothing; let go and the value holds. An `abs` row stops
+following; a `mod` row stops modulating and `apply()` writes the base
+back. A gate whose source is not live holds the row **shut**, never open
+— no param should start moving because a camera was unplugged. Only fed
+sources (hand, ext, lfo) can gate; the analyzer's lanes are not switches.
+
+Three ways to set one, because gated rows live in two places — Learn
+writes `abs` rows the ROUTING page never lists, and that page edits `mod`
+rows Learn never makes:
+
+- **pinch while learning** and the pinch becomes the row's gate; the hand
+  that moved is asked for its own thumb first
+- **right-click a control → Gate**, for the `abs` rows Learn wrote
+- **the gate combo** on each ROUTING row, beside the scale
+
+The adapter publishes which of its lanes are switches on `router.gates`,
+so the routing UI offers them without importing anything from `hands`.
+
+## Setups, the page and the box
+
+- **A setup** is every per-axis and global setting above. They're
+  registry params in the `hands` group, so the library's preset strip
+  saves and loads setups, a project carries one, and a setting can itself
+  be Learned onto an APC40 knob. They're registered even with the tracker
+  off, so setups still edit and save offline.
+- **The HANDS page** has six parts:
+  - the preset strip, the tracker/port status and the last message out
+  - the box from above: palms as dots (left white, right red), size = height
+  - the eight pinch switches, each with its live gap
+  - a live row per axis: output bar, a red hairline where the hand is, a
+    tick at the rest value, and the MIDI out and value
+  - the selected axis's editor, with its transfer curve drawn and the
+    hand's live point on it, plus **mirror** (copy the feel to the other
+    hand) and **solo** (only this axis to the DAW, for a DAW's learn)
+  - feel & calibration: a 20 s sweep writes the box's ranges
+- **Learn:** right-click → Learn MIDI, then move one axis. The axis that
+  moved furthest wins, and the param follows it in floats. A panel edit
+  stands until the hand moves again. Pinch while learning and the row is
+  gated on that pinch. Unbind is in the same menu, and it leaves the
+  axis's routes alone.
+- **Rig** settings (tracking mode, which features, the port, presence
+  notes) are `[hands]` in config.toml. **Box** ranges are `hands.json`.
+  **Performance** settings are a setup. Each lives where it changes.
+
+## Install (the SDK is not on this machine yet)
+
+1. Install **Ultraleap Hand Tracking** for macOS (Gemini ≥ 5.17). This is
+   the one step that needs a person: the download, the licence, your
+   admin password, any macOS prompts, and the camera plugged in.
+2. The bindings are prebuilt only for Python 3.8, so build them for 3.12:
+   ```
+   git clone https://github.com/ultraleap/leapc-python-bindings
+   cd leapc-python-bindings
+   uv pip install build cffi
+   uv run python -m build leapc-cffi
+   uv pip install leapc-cffi/dist/leapc_cffi-0.0.1.tar.gz
+   uv pip install -e leapc-python-api
+   ```
+   (Set `LEAPSDK_INSTALL_LOCATION` if the SDK isn't in
+   `/Applications/Ultraleap Hand Tracking.app/Contents/LeapSDK`.)
+3. Set `[hands] enabled = true`, plus `mode = "screentop"` if the camera
+   looks down from the lid.
+4. Open the HANDS page and run **calibrate 20 s**, sweeping every axis
+   end to end. You can also run `uv run python tools/hands_probe.py
+   --calibrate 20` from a terminal.
+
+## Not yet verified (needs the camera and the box)
+
+- [ ] The bindings build against the installed Gemini on Apple Silicon / 3.12.
+- [ ] The listener's lost-event names (they only change the status text).
+- [ ] Angle signs in the box's actual mounting; check them on the page.
+- [ ] The default feel: Steadiness 1 Hz, Response 4, Catch 150 ms, return
+      500 ms / bounce 0.15, dead zone 0.04 on centred axes. Tune by hand
+      and save the result as the factory setup.
+- [ ] How independently yaw and pitch can be held without moving x and y.
+- [ ] Whether thumb-ring wants a looser threshold than thumb-index, or
+      whether the 0.39 above was simply not a deliberate pinch.
+- [ ] How a gated row feels on a second pinch at a different height: it
+      takes the hand at once today (`Binding.pickup` is ignored by hand
+      rows, and could be honoured instead).
+- [ ] End-to-end latency, hand to pixels and hand to DAW.
+- [ ] Oscillators (an `lfo:` source is already reserved in routing):
+      deferred on purpose.

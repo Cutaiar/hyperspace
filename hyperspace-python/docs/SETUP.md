@@ -95,6 +95,16 @@ here, not to install it silently.
       in `docs/plans/assets/05-fl.md`; the `fl/HyperspaceBridge` MIDI
       script copied into FL's user data folder per that walkthrough.
 
+## E. Ultraleap hands — plan 08, optional
+
+- [ ] **Ultraleap Hand Tracking** (Gemini ≥ 5.17, macOS) installed and the
+      camera seen by its control panel.
+- [ ] **`leap` bindings** built for Python 3.12 from
+      `ultraleap/leapc-python-bindings` (precompiled only for 3.8), with the
+      steps in [`plans/08-hands.md`](plans/08-hands.md#install-the-sdk-is-not-on-this-machine-yet).
+- [ ] `[hands] enabled = true` in config.toml; `tools/hands_probe.py
+      --calibrate 20` (or the HANDS page's calibrate) run once in the box.
+
 ## Quickstart transcript for a fresh Mac (tiers A+B)
 
 ```bash

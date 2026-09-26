@@ -1,7 +1,7 @@
 """Routing matrix — the lanes → params half of the binding table (WP5b).
 
 The ROUTING page. Rows are the router's `mod` / `replace` routes from
-`lane:i` (and `ext:i` when the bridge feeds them), two lines each:
+`lane:i` (and `ext:i` / `hand:i` when the bridge / hands feed them), two lines each:
 
   [on] source        target ▾            op ▾           ×
        depth ────────────  × scale ▾   ▮▮▮▯▯│ live
@@ -35,6 +35,8 @@ page opens on it.
 
 from __future__ import annotations
 
+import math
+
 from imgui_bundle import imgui
 
 from . import ui, ui_presets
@@ -48,6 +50,7 @@ N_EXT = 16                # ext lanes offered once any ext source is around
 BAR_W = 56.0
 SRC_W = 84.0             # the source combo: a lane's number and name
 DEPTH_W = 112.0
+GATE_W = 62.0            # the pinch-gate combo on line 2
 
 
 # ---- state on the panel ----
@@ -245,7 +248,36 @@ def _sources(panel, router: Router) -> list[tuple[str, str]]:
         b.scheme == "ext" for b in router.table.bindings)
     if ext:
         out += [(f"ext:{i}", f"ext {i}") for i in range(N_EXT)]
+    names = getattr(router, "labels", {}).get("hand") or []
+    if router.feeds.get("hand") is not None or names:
+        out += [(f"hand:{i}", f"hand {n}") for i, n in enumerate(names)]
     return out
+
+
+def _gates(router: Router) -> list[tuple[str, str]]:
+    """(address, label) for every switch an adapter offers as a gate."""
+    return [(f"{scheme}:{i}", lb)
+            for scheme, lanes in getattr(router, "gates", {}).items()
+            for i, lb in lanes]
+
+
+def _gate_combo(b: Binding, gates: list[tuple[str, str]], width: float) -> None:
+    """Which switch has to be held for this row to act, or none."""
+    labels = ["no gate"] + [lb for _, lb in gates]
+    addrs: list[str | None] = [None] + [a for a, _ in gates]
+    if b.when not in addrs:            # a gate no adapter is offering now
+        labels, addrs = labels + [b.when], addrs + [b.when]
+    cur = addrs.index(b.when)
+    imgui.set_next_item_width(width)
+    if imgui.begin_combo("##gate", labels[cur], imgui.ComboFlags_.no_arrow_button):
+        for i, lb in enumerate(labels):
+            sel, _ = imgui.selectable(lb, i == cur)
+            if sel:
+                b.when = addrs[i]
+        imgui.end_combo()
+    if imgui.is_item_hovered():
+        imgui.set_tooltip("A pinch switch that must be held for this route to act — "
+                          "the same hand movement can then mean two things")
 
 
 def _live(panel, router: Router, b: Binding) -> float | None:
@@ -259,7 +291,8 @@ def _live(panel, router: Router, b: Binding) -> float | None:
     vec = router.feeds.get(b.scheme)
     if vec is None or not 0 <= i < len(vec):
         return None
-    return float(vec[i])
+    u = float(vec[i])
+    return None if math.isnan(u) else u     # NaN: a hand out of view
 
 
 def _targets(panel) -> list[Param]:
@@ -374,7 +407,10 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
                                              else " — 1 is the full throw at a lane's asymptote")
                           + "\nctrl-click to type")
     imgui.same_line()
-    scale = _param_combo(panel, "##scale", b.scale, -(BAR_W + sp),
+    gates = _gates(router)
+    gate_w = GATE_W if gates else 0.0
+    scale = _param_combo(panel, "##scale", b.scale,
+                         -(BAR_W + gate_w + sp * (2 if gate_w else 1)),
                          [q for q in reg if q.kind is Kind.CONTINUOUS and not q.alias],
                          none="× 1")
     if scale is not False:
@@ -382,6 +418,9 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
     if imgui.is_item_hovered():
         imgui.set_tooltip("A param whose live value multiplies the depth (master.gain "
                           "on the rate routes)")
+    if gates:
+        imgui.same_line()
+        _gate_combo(b, gates, gate_w)
     imgui.same_line()
     _live_bar(panel, router, b, p)
     imgui.pop_id()

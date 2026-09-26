@@ -305,6 +305,20 @@ class MidiIO:
         self.map.bind(b)
         self.last = f"learned {pid} ← {b.describe()}"
 
+    def learn_source(self, source: str, when: str | None = None) -> None:
+        """Another adapter completes the learn with one of its own sources
+        (hands/core.py: ``hand:<i>``): the param follows it absolutely —
+        the Router applies the row — with no pickup and no device
+        feedback. `when` gates the row on a second source (a pinch held
+        while learning), so the row only acts while that reads on."""
+        pid = self.learning
+        self.learning = None
+        if pid is None or self.reg.get(pid) is None:
+            return
+        b = Binding(source, pid, "abs", pickup=False, when=when)
+        self.map.bind(b)
+        self.last = f"learned {pid} ← {b.describe()}"
+
     # ---- per frame ----
 
     def poll(self) -> None:

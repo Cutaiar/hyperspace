@@ -20,6 +20,9 @@ Sources are one string, ``scheme:address``:
   pitch:<ch>       MIDI pitch bend
   lane:<i>         analyzer lane i — continuous, held every frame it is live
   ext:<i>          an external MIDI lane (WP4c); lfo:<i> is reserved
+  hand:<i>         Ultraleap hand axis i's output in [0, 1] (hands.py),
+                   then one presence lane per hand; NaN before that hand
+                   was ever seen, and a NaN reading is not live
 
 Ops — what a row does to its target:
 
@@ -28,7 +31,10 @@ Ops — what a row does to its target:
   step       move `value` detents (signed)
   set        set `value`: an enum choice, a toggle state, a fader's norm
   abs        an absolute control's position → set_norm (MIDI cc / pitch,
-             with soft pickup); a trigger fires on the rising half
+             with soft pickup); a trigger fires on the rising half. On a
+             continuous source (``hand:<i>``) the Router applies it
+             (`drive`): the param follows the source whenever it moves,
+             so a panel edit stands until the hand moves again
   rel/rel64  a relative encoder's delta → step
   momentary  note-on sets a toggle on, note-off sets it off
   mod        a continuous source modulates: every frame the source is
@@ -45,6 +51,17 @@ Ops — what a row does to its target:
              ``norm_of(value · scale · u) − base_norm`` — so range, wrap
              and dormancy are exactly mod's. One replace row per target
              is the meaningful case (two sum their departures from the base).
+
+Gating (`when`): any row may name a second *fed* source address — one an
+adapter hands in with `feed` (hand, ext, lfo), which is where switch-like
+lanes live; the analyzer's own lanes are not gateable, since `drive` runs
+they are switches at all, so a row gated on one stays shut. A gate has to
+read on (≥ 0.5) before the row acts at all — a pinch switch over a hand
+axis, so the same movement means one thing pinched and nothing open. An
+`abs` row simply stops following while the gate is open, leaving the
+param where it was; a `mod` row stops modulating, and apply() writes the
+base back. A gate whose source is not live holds the row shut, never
+open: nothing should start moving because a camera was unplugged.
 
 Lane normalization: ``u = lane / CEIL`` — the analyzer's lanes are in
 [0, CEIL) (bands.CEIL, the fader asymptote), so a lane at the asymptote
@@ -106,6 +123,7 @@ current routes to the user folder — the ROUTING page's strip (WP5b).
 from __future__ import annotations
 
 import json
+import math
 import sys
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field, replace
@@ -124,7 +142,7 @@ FACTORY_DIR = Path(__file__).parent / "library" / "bindings"
 
 MIDI_SCHEMES = ("cc", "note", "pitch")
 INPUT_SCHEMES = ("key", "pad", "hat", *MIDI_SCHEMES)
-LANE_SCHEMES = ("lane", "ext", "lfo")          # continuous, read by the Router
+LANE_SCHEMES = ("lane", "ext", "lfo", "hand")          # continuous, read by the Router
 MOD_OPS = ("mod", "replace")                   # the Router's per-frame rows
 OPS = ("fire", "toggle", "step", "set", "abs", "rel", "rel64", "momentary", *MOD_OPS)
 
@@ -149,6 +167,9 @@ class Binding:
     value: float = 1.0           # set: the value · step: the detents · mod: the depth
     enabled: bool = True
     scale: str | None = None     # mod: a param whose value multiplies the depth
+    # a source address ("hand:14") that must read on for this row to apply:
+    # a pinch switch gating an axis, so the same hand move means two things
+    when: str | None = None
     # MIDI controls only (midi.py); other sources ignore them
     pickup: bool = True
     feedback: str | None = None  # "ring" | "led" | None
@@ -229,7 +250,8 @@ class Binding:
         for k in self._RUNTIME:
             d.pop(k)
         # only what differs from the defaults keeps the file readable
-        for k in ("value", "enabled", "scale", "pickup", "feedback", "on", "off", "ring"):
+        for k in ("value", "enabled", "scale", "when", "pickup", "feedback",
+                  "on", "off", "ring"):
             if d[k] == self.__dataclass_fields__[k].default:
                 d.pop(k)
         return d
@@ -262,6 +284,8 @@ class Binding:
         addr = ":".join(self.parts)
         if s == "hat":
             return f"d-pad {addr}"
+        if s in LANE_SCHEMES and self.op == "abs":
+            return f"{s} {addr}"
         if s in LANE_SCHEMES:
             by = f" × {self.scale}" if self.scale else ""
             return f"{s} {addr} → {self.op} {self.value:+.3g}{by}"
@@ -499,13 +523,23 @@ class Bindings:
     # ---- edits ----
 
     def bind(self, b: Binding) -> None:
-        """A MIDI control drives one param; a param keeps one control per role.
+        """A control drives one param; a param keeps one control per role.
 
         Drops whatever the key drove before, and the param's previous
         binding in the same role: a knob (any cc or pitch binding) when
         learning a knob, or a button of the same op and value when
         learning a button — so a param's step buttons survive a knob learn.
         """
+        if not b.is_midi:
+            # a learned continuous source (hand:<i> abs): it drives one param,
+            # a param follows one such source; its routes (mod rows) stay
+            self.bindings = [x for x in self.bindings if not (
+                x.op == b.op and x.scheme == b.scheme
+                and (x.source == b.source or x.target == b.target))]
+            self.bindings.append(b)
+            self.write()
+            return
+
         def same_role(x: Binding) -> bool:
             if x.target != b.target or not x.is_midi:
                 return False
@@ -543,7 +577,12 @@ class Router:
     def __init__(self, reg: Registry, table: Bindings):
         self.reg = reg
         self.table = table
-        self.feeds: dict[str, np.ndarray | None] = {}   # ext/lfo vectors, per frame
+        self.feeds: dict[str, np.ndarray | None] = {}   # ext/lfo/hand vectors, per frame
+        self.labels: dict[str, list[str]] = {}          # scheme → lane names, from the adapter
+        # scheme → the lanes an adapter offers as gates, [(index, label)]:
+        # switch-like lanes a row's `when` can wait on. The adapter says
+        # which of its lanes those are; nothing here knows about hands.
+        self.gates: dict[str, list[tuple[int, str]]] = {}
         self._codes: dict[str, int | None] = {}
 
     # ---- discrete adapters ----
@@ -578,6 +617,60 @@ class Router:
         (None: not live, its rows let go)."""
         self.feeds[scheme] = None if values is None else np.asarray(values, dtype=float)
 
+    def gated(self, b: Binding) -> bool:
+        """Is this row allowed to act this frame?
+
+        A row with no `when` always is. One with `when` waits on that
+        source address reading on (≥ 0.5) — a pinch switch, say, so the
+        same hand movement can mean two different things. A gate whose
+        source is not live holds the row shut rather than open: nothing
+        should start moving because a camera was unplugged. Only fed
+        sources gate — the analyzer's lanes are not switches and are not
+        in `feeds`, so a row gated on one stays shut in both passes
+        rather than working in one and not the other.
+        """
+        if b.when is None:
+            return True
+        scheme, _, addr = b.when.partition(":")
+        vec = self.feeds.get(scheme)
+        if vec is None:
+            return False
+        try:
+            i = int(addr)
+        except ValueError:
+            return False
+        if not 0 <= i < len(vec):
+            return False
+        u = float(vec[i])
+        return not math.isnan(u) and u >= 0.5
+
+    def drive(self, scheme: str) -> None:
+        """The `abs` rows of a fed source: each target takes the source's
+        reading when it has changed since the row last applied it, so a
+        param moved by hand on the panel stays put until the source moves."""
+        vec = self.feeds.get(scheme)
+        if vec is None:
+            return
+        for b in self.table.of(scheme):
+            i = b.index
+            if b.op != "abs" or not b.enabled or not 0 <= i < len(vec):
+                continue
+            if not self.gated(b):
+                continue
+            u = float(vec[i])
+            if math.isnan(u) or (b.last_hw is not None and abs(u - b.last_hw) < 1e-6):
+                continue
+            p = self.reg.get(b.target)
+            if p is None:
+                continue
+            b.last_hw = u
+            if p.kind is Kind.TRIGGER:
+                if u >= 0.5 > (b.last_out or 0.0):
+                    p.fire()
+                b.last_out = u
+            elif p.kind is not Kind.TEXT:
+                p.glide(u)
+
     def modulate(self, analyzer=None) -> None:
         """The frame's modulation pass: every enabled mod row whose source is
         live calls modulate on its target. `analyzer` is the live one, or
@@ -588,6 +681,11 @@ class Router:
             i = b.index
             if vec is None or not 0 <= i < len(vec):
                 continue
+            u = float(vec[i])
+            if math.isnan(u):    # this lane's source is out of view
+                continue
+            if not self.gated(b):
+                continue         # gate open: apply() writes the base back
             p = self.reg.get(b.target)
             if p is None:
                 continue
@@ -597,7 +695,7 @@ class Router:
                 if sp is None:
                     continue
                 depth *= float(sp.value)
-            x = depth * float(vec[i])
+            x = depth * u
             if b.op == "replace":
                 # the source is the value: land it as the offset from the
                 # base (p.norm is the base while modulated, the object before);
