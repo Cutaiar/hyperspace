@@ -20,6 +20,9 @@ Sources are one string, ``scheme:address``:
   pitch:<ch>       MIDI pitch bend
   lane:<i>         analyzer lane i — continuous, held every frame it is live
   ext:<i>          an external MIDI lane (WP4c); lfo:<i> is reserved
+  hand:<i>         Ultraleap hand axis i in [0, 1] (hands.py) — the same
+                   axis its CC carries, at float precision; NaN while that
+                   hand is out of view, and a NaN reading is not live
 
 Ops — what a row does to its target:
 
@@ -106,6 +109,7 @@ current routes to the user folder — the ROUTING page's strip (WP5b).
 from __future__ import annotations
 
 import json
+import math
 import sys
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field, replace
@@ -124,7 +128,7 @@ FACTORY_DIR = Path(__file__).parent / "library" / "bindings"
 
 MIDI_SCHEMES = ("cc", "note", "pitch")
 INPUT_SCHEMES = ("key", "pad", "hat", *MIDI_SCHEMES)
-LANE_SCHEMES = ("lane", "ext", "lfo")          # continuous, read by the Router
+LANE_SCHEMES = ("lane", "ext", "lfo", "hand")          # continuous, read by the Router
 MOD_OPS = ("mod", "replace")                   # the Router's per-frame rows
 OPS = ("fire", "toggle", "step", "set", "abs", "rel", "rel64", "momentary", *MOD_OPS)
 
@@ -543,7 +547,8 @@ class Router:
     def __init__(self, reg: Registry, table: Bindings):
         self.reg = reg
         self.table = table
-        self.feeds: dict[str, np.ndarray | None] = {}   # ext/lfo vectors, per frame
+        self.feeds: dict[str, np.ndarray | None] = {}   # ext/lfo/hand vectors, per frame
+        self.labels: dict[str, list[str]] = {}          # scheme → lane names, from the adapter
         self._codes: dict[str, int | None] = {}
 
     # ---- discrete adapters ----
@@ -588,6 +593,9 @@ class Router:
             i = b.index
             if vec is None or not 0 <= i < len(vec):
                 continue
+            u = float(vec[i])
+            if math.isnan(u):    # this lane's source is out of view
+                continue
             p = self.reg.get(b.target)
             if p is None:
                 continue
@@ -597,7 +605,7 @@ class Router:
                 if sp is None:
                     continue
                 depth *= float(sp.value)
-            x = depth * float(vec[i])
+            x = depth * u
             if b.op == "replace":
                 # the source is the value: land it as the offset from the
                 # base (p.norm is the base while modulated, the object before);

@@ -207,6 +207,20 @@ def _open_bridge(reg: Registry, cfg: dict):
         return None
 
 
+def _open_hands(cfg: dict):
+    """Ultraleap hands (hands.py), only when [hands] enabled — the same rule."""
+    hc = cfg.get("hands", {})
+    if not hc.get("enabled", False):
+        return None
+    try:
+        from . import hands
+        cal = hc.get("calibration")
+        return hands.HandsIO(hc, cal_path=Path(cal) if cal else None)
+    except Exception as e:  # noqa: BLE001 — a broken adapter must not stop the show
+        print(f"hands: {e}", file=sys.stderr)
+        return None
+
+
 def _open_dream(reg: Registry, cfg: dict):
     """The look-back's dream worker (dream.py, torch), only when [dream] enabled."""
     if not cfg.get("dream", {}).get("enabled", False):
@@ -380,6 +394,7 @@ def main() -> None:
     panel.midi = midi_io
     panel.router = router                  # the ROUTING page edits the live table
     bridge_io = _open_bridge(reg, cfg)
+    hands_io = _open_hands(cfg)
     dream_io = _open_dream(reg, cfg)
     if dream_io is not None:            # fills the look-back's dream slot
         renderer.lookback.source = dream_io
@@ -403,6 +418,7 @@ def main() -> None:
         (router, "routing", "Router"),
         *([(midi_io, "midi", "MidiIO"), (midi_io.map, "midi", "MidiMap")] if midi_io else []),
         *([(bridge_io, "bridge", "Bridge")] if bridge_io else []),
+        *([(hands_io, "hands", "HandsIO")] if hands_io else []),
         *([(dream_io, "dream", "DreamWorker")] if dream_io else []),
     ], watchers=[library])
     panel.reloader = reloader
@@ -487,6 +503,13 @@ def main() -> None:
             except Exception as e:  # noqa: BLE001 — hot-reloaded code may raise
                 reloader.runtime_error = _err("midi", e)
 
+        # ---- Ultraleap hands: CCs through the MIDI table, hand lanes to routes ----
+        if hands_io is not None:
+            try:
+                hands_io.poll(midi_io, router)
+            except Exception as e:  # noqa: BLE001
+                reloader.runtime_error = _err("hands", e)
+
         # ---- output: the render window follows the output.* params ----
         output.apply()
         renderer.bg_alpha = output.bg_alpha
@@ -547,6 +570,8 @@ def main() -> None:
         midi_io.close()
     if bridge_io is not None:
         bridge_io.close()
+    if hands_io is not None:
+        hands_io.close()
     if dream_io is not None:
         dream_io.close()
     audio.stop()

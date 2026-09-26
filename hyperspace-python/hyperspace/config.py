@@ -36,6 +36,24 @@ differs on this machine. Adapters are enabled here, not in code
     device = "auto"         # "auto" (MPS when there, else CPU), "mps", "cpu"
     precision = "fp32"      # or "fp16": ~10 % faster on VGG, more p99 outliers
     weights_dir = ""        # pretrained weights; "" = <library home>/weights
+
+    [hands]                 # Ultraleap hands → MIDI (hands.py, the `leap` bindings)
+    enabled = false         # true opens the tracker; off, `leap` is never imported
+    mode = "desktop"        # camera looks up from below; "screentop" from above, "hmd"
+    dofs = ["x", "y", "z", "roll", "pitch", "yaw"]   # per hand, in CC order; also
+                            # grab, pinch, grab_angle, pinch_mm
+    channel = 15            # 0-based (MIDI ch 16), clear of the APC40
+    cc = 102                # left hand cc…cc+n−1, right cc+n…cc+2n−1
+    presence = true         # note on/off as a hand enters / leaves
+    note = 120              # left hand's presence note, right is note+1
+    out = ""                # MIDI out for a DAW: port substring, else a new
+                            # virtual port of that name ("" = none)
+    min_confidence = 0.1
+    min_cutoff = 1.0        # smoothing at rest (Hz) — lower is steadier
+    beta = 4.0              # smoothing speed gain — higher follows fast moves closer
+    hysteresis = 0.35       # MIDI steps past the half-step before a value moves
+    calibration = "hands.json"   # ranges, relative to the library home
+                                 # (tools/hands_probe.py --calibrate writes it)
 """
 
 from __future__ import annotations
@@ -56,6 +74,9 @@ DEFAULTS: dict = {
                "cc": 16, "rate": 100, "send": ["lane:*"], "in_lanes": 16},
     # dream.py: the temporal Deep Dream behind the look-back — off by default
     "dream": {"enabled": False, "device": "auto", "precision": "fp32", "weights_dir": ""},
+    # hands.py: Ultraleap hands as MIDI CCs and hand lanes — off by default;
+    # the rest of its defaults live in hands.DEFAULTS
+    "hands": {"enabled": False, "calibration": "hands.json"},
 }
 
 
@@ -79,4 +100,7 @@ def load(path: Path | None = None) -> dict:
     m = cfg["midi"].get("map")
     if m and not Path(m).is_absolute():
         cfg["midi"]["map"] = str(path.parent / m)
+    c = cfg["hands"].get("calibration")
+    if c and not Path(c).is_absolute():
+        cfg["hands"]["calibration"] = str(path.parent / c)
     return cfg

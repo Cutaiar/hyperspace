@@ -16,6 +16,7 @@ Current state and the pick-up list: [`docs/CHECKPOINT.md`](../CHECKPOINT.md).
 | [05 — DAW bridge](05-daw-bridge.md) | §3.6 (after 03–04) | `params.py` registry + `midi.py`/`apc40.py` inbound control (done); `bridge.py` — outbound MIDI/OSC, FL Studio connectivity |
 | [06 — Divergence](06-divergence.md) | Stage 5 | Bug fixes and new features the HTML never had; HTML frozen |
 | [07 — Overhaul](07-overhaul.md) | after 05's controller half | Two windows, preset/project library, N-band analyzer, one modulation concept over the registry — WP0 foundation done; WP1/WP2/WP4a in flight |
+| [08 — Hands](08-hands.md) | after 07 | Ultraleap two-hand tracking → 12 axes as MIDI CCs (Learn, DAW port) and float `hand:` lanes; APC40 keeps presets/master |
 
 ## Conventions that apply to every plan
 

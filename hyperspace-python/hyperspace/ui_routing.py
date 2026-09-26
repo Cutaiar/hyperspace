@@ -1,7 +1,7 @@
 """Routing matrix — the lanes → params half of the binding table (WP5b).
 
 The ROUTING page. Rows are the router's `mod` / `replace` routes from
-`lane:i` (and `ext:i` when the bridge feeds them), two lines each:
+`lane:i` (and `ext:i` / `hand:i` when the bridge / hands feed them), two lines each:
 
   [on] source        target ▾            op ▾           ×
        depth ────────────  × scale ▾   ▮▮▮▯▯│ live
@@ -34,6 +34,8 @@ page opens on it.
 """
 
 from __future__ import annotations
+
+import math
 
 from imgui_bundle import imgui
 
@@ -243,6 +245,9 @@ def _sources(panel, router: Router) -> list[tuple[str, str]]:
         b.scheme == "ext" for b in router.table.bindings)
     if ext:
         out += [(f"ext:{i}", f"ext {i}") for i in range(N_EXT)]
+    names = getattr(router, "labels", {}).get("hand") or []
+    if router.feeds.get("hand") is not None or names:
+        out += [(f"hand:{i}", f"hand {n}") for i, n in enumerate(names)]
     return out
 
 
@@ -257,7 +262,8 @@ def _live(panel, router: Router, b: Binding) -> float | None:
     vec = router.feeds.get(b.scheme)
     if vec is None or not 0 <= i < len(vec):
         return None
-    return float(vec[i])
+    u = float(vec[i])
+    return None if math.isnan(u) else u     # NaN: a hand out of view
 
 
 def _targets(panel) -> list[Param]:
