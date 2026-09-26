@@ -247,6 +247,22 @@ def test_alpha_preserved_on_a_transparent_ground(ctx):
     rig.release()
 
 
+def test_cut_through_toggle_on_an_opaque_ground(ctx):
+    """Faces on an opaque ground: cut-through on (the default) lowers the
+    window's alpha under the fills; off, every pixel stays opaque."""
+    rig = Rig(ctx, 256, 256, bg_alpha=1.0)
+    rig.s.faces, rig.s.lines, rig.s.points = True, False, False
+    assert rig.s.cut_through
+    rig.frame()
+    assert rig.read()[..., 3].min() < 255, "the fills must cut the alpha"
+    rig.s.cut_through = False
+    rig.frame()
+    out = rig.read()
+    assert (out[..., 3] == 255).all()
+    assert out[..., :3].max() > 0, "the fills must still draw"
+    rig.release()
+
+
 # ---------------------------------------------------------------- the dream slot
 
 class Echo:

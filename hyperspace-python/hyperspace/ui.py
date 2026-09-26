@@ -1027,6 +1027,8 @@ class Panel:
         self._section("faces & pattern", note="saved with view")
         self._check("view.faces")
         imgui.same_line()
+        self._check("view.cut_through")
+        imgui.same_line()
         self._combo("view.pattern", 140)
         imgui.same_line()
         self._slider("view.pattern_mix")
