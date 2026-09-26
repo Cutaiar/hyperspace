@@ -261,16 +261,13 @@ def _gates(router: Router) -> list[tuple[str, str]]:
             for i, lb in lanes]
 
 
-def _gate_combo(panel, router: Router, b: Binding, width: float) -> None:
+def _gate_combo(b: Binding, gates: list[tuple[str, str]], width: float) -> None:
     """Which switch has to be held for this row to act, or none."""
-    gates = _gates(router)
-    if not gates:
-        return
     labels = ["no gate"] + [lb for _, lb in gates]
-    addrs = [None] + [a for a, _ in gates]
-    cur = addrs.index(b.when) if b.when in addrs else 0
-    if b.when is not None and b.when not in addrs:      # a gate we can't name
-        labels, addrs, cur = labels + [b.when], addrs + [b.when], len(labels)
+    addrs: list[str | None] = [None] + [a for a, _ in gates]
+    if b.when not in addrs:            # a gate no adapter is offering now
+        labels, addrs = labels + [b.when], addrs + [b.when]
+    cur = addrs.index(b.when)
     imgui.set_next_item_width(width)
     if imgui.begin_combo("##gate", labels[cur], imgui.ComboFlags_.no_arrow_button):
         for i, lb in enumerate(labels):
@@ -410,7 +407,8 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
                                              else " — 1 is the full throw at a lane's asymptote")
                           + "\nctrl-click to type")
     imgui.same_line()
-    gate_w = GATE_W if _gates(router) else 0.0
+    gates = _gates(router)
+    gate_w = GATE_W if gates else 0.0
     scale = _param_combo(panel, "##scale", b.scale,
                          -(BAR_W + gate_w + sp * (2 if gate_w else 1)),
                          [q for q in reg if q.kind is Kind.CONTINUOUS and not q.alias],
@@ -420,9 +418,9 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
     if imgui.is_item_hovered():
         imgui.set_tooltip("A param whose live value multiplies the depth (master.gain "
                           "on the rate routes)")
-    if gate_w:
+    if gates:
         imgui.same_line()
-        _gate_combo(panel, router, b, gate_w)
+        _gate_combo(b, gates, gate_w)
     imgui.same_line()
     _live_bar(panel, router, b, p)
     imgui.pop_id()

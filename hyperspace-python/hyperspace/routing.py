@@ -52,7 +52,10 @@ Ops — what a row does to its target:
              and dormancy are exactly mod's. One replace row per target
              is the meaningful case (two sum their departures from the base).
 
-Gating (`when`): any row may name a second source address that has to
+Gating (`when`): any row may name a second *fed* source address — one an
+adapter hands in with `feed` (hand, ext, lfo), which is where switch-like
+lanes live; the analyzer's own lanes are not gateable, since `drive` runs
+they are switches at all, so a row gated on one stays shut. A gate has to
 read on (≥ 0.5) before the row acts at all — a pinch switch over a hand
 axis, so the same movement means one thing pinched and nothing open. An
 `abs` row simply stops following while the gate is open, leaving the
@@ -614,19 +617,22 @@ class Router:
         (None: not live, its rows let go)."""
         self.feeds[scheme] = None if values is None else np.asarray(values, dtype=float)
 
-    def gated(self, b: Binding, lanes=None) -> bool:
+    def gated(self, b: Binding) -> bool:
         """Is this row allowed to act this frame?
 
         A row with no `when` always is. One with `when` waits on that
         source address reading on (≥ 0.5) — a pinch switch, say, so the
         same hand movement can mean two different things. A gate whose
         source is not live holds the row shut rather than open: nothing
-        should start moving because a camera was unplugged.
+        should start moving because a camera was unplugged. Only fed
+        sources gate — the analyzer's lanes are not switches and are not
+        in `feeds`, so a row gated on one stays shut in both passes
+        rather than working in one and not the other.
         """
         if b.when is None:
             return True
         scheme, _, addr = b.when.partition(":")
-        vec = lanes if scheme == "lane" else self.feeds.get(scheme)
+        vec = self.feeds.get(scheme)
         if vec is None:
             return False
         try:
@@ -678,7 +684,7 @@ class Router:
             u = float(vec[i])
             if math.isnan(u):    # this lane's source is out of view
                 continue
-            if not self.gated(b, lanes):
+            if not self.gated(b):
                 continue         # gate open: apply() writes the base back
             p = self.reg.get(b.target)
             if p is None:

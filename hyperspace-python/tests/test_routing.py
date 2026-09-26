@@ -651,3 +651,16 @@ def test_a_gate_holds_a_mod_row_and_lets_the_base_back():
     r.modulate()
     reg.apply()
     assert not p.modulated and p.value == pytest.approx(base)
+
+
+def test_only_fed_sources_can_gate_a_row():
+    """A lane gate is shut in both passes, not working in one only."""
+    reg = rig().reg
+    table = Bindings()
+    r = Router(reg, table)
+    b = Binding("hand:0", "view.bright", "mod", 0.5, when="lane:1")
+    table.add(b)
+    r.feed("hand", [1.0])
+    assert not r.gated(b)                 # never opens, whatever the lanes say
+    b.when = "hand:0"
+    assert r.gated(b)

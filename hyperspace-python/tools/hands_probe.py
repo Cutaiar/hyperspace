@@ -22,7 +22,7 @@ import time
 from pathlib import Path
 
 from hyperspace import config
-from hyperspace.hands import FEATURES, SIDES, HandSettings, HandsIO
+from hyperspace.hands import FEATURES, PINCHES, SIDES, HandSettings, HandsIO
 
 FPS = 60
 
@@ -87,9 +87,26 @@ def _draw(io: HandsIO, t: float) -> None:
             bar = "" if st.y is None else "█" * round(st.y * 30)
             q = "" if st.q is None else f"{a.out} {st.q}"
             rows.append(f"   {a.feature:10s} {raw}  y {y}  {q:12s} {bar}")
+        rows.append("   " + _pinch_line(io, side))
     rows.append(f"last: {io.last}")
     sys.stdout.write("\n".join(rows) + "\n")
     sys.stdout.flush()
+
+
+def _pinch_line(io: HandsIO, side: str) -> str:
+    """The four switches and their live gaps — what to watch when setting
+    the threshold: pinch each finger and read how near it actually gets.
+    Ring and pinky never come as close as index and middle."""
+    if not io.cfg.get("pinch_gates"):
+        return ""
+    feats = io.frame[side] or {}
+    close = io.settings.pinch_close
+    out = []
+    for f in PINCHES:
+        d = feats.get(f"pinch_{f}")
+        gap = "  —  " if d is None else f"{d:5.2f}"
+        out.append(f"{f[:3]} {'●' if io.gates[side][f].on else '○'}{gap}")
+    return f"pinch      {'  '.join(out)}   (close under {close:.2f})"
 
 
 if __name__ == "__main__":

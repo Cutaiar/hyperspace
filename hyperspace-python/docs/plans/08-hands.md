@@ -96,6 +96,56 @@ The HANDS page flags any output that can't be sent as set: a 14-bit
 number over 31, two axes on the same CC (including an LSB), or two bend
 or pressure axes on one channel.
 
+## Pinch switches (eight more signals)
+
+Each hand also reports the gap from the thumb tip to each fingertip,
+**divided by palm width** — a ratio, not millimetres, so one threshold
+fits any hand. They are ordinary features (`pinch_index`,
+`pinch_middle`, `pinch_ring`, `pinch_pinky`): name one in `[hands] dofs`
+and it becomes a full analog axis like any other.
+
+Each ratio also drives a switch, whether or not it was chosen as a dof:
+
+- a **Schmitt trigger** — closes under `pinch_close`, and only lets go
+  past the wider `pinch_open`. One threshold chatters where the fingers
+  hover; the gap between two does not.
+- then a **debounce** (`pinch_hold`), so a single noisy frame cannot flip
+  it.
+
+They leave as the last eight hand lanes — after the presence pair, so a
+saved `hand:<i>` binding keeps meaning the axis it always did — and as
+note on/off from `[hands] pinch_note`. A hand that leaves drops its
+switches, so nothing hangs on in the DAW.
+
+Measured on the camera at their closest: index 0.12, middle 0.14, pinky
+0.28. **Ring only reached 0.39 and never closed** — it is the weak one,
+as expected (occlusion when the palm turns away, and ring and pinky do
+not move independently). Whether that wants a looser per-finger
+threshold is still open; the page and the probe both print the live gap
+so it can be read off a real hand.
+
+## Gating: one hand movement, two meanings
+
+`Binding.when` names a second source that must read on before a row acts
+at all. Pinch and move and the param follows; open the hand and the same
+movement does nothing; let go and the value holds. An `abs` row stops
+following; a `mod` row stops modulating and `apply()` writes the base
+back. A gate whose source is not live holds the row **shut**, never open
+— no param should start moving because a camera was unplugged. Only fed
+sources (hand, ext, lfo) can gate; the analyzer's lanes are not switches.
+
+Three ways to set one, because gated rows live in two places — Learn
+writes `abs` rows the ROUTING page never lists, and that page edits `mod`
+rows Learn never makes:
+
+- **pinch while learning** and the pinch becomes the row's gate; the hand
+  that moved is asked for its own thumb first
+- **right-click a control → Gate**, for the `abs` rows Learn wrote
+- **the gate combo** on each ROUTING row, beside the scale
+
+The adapter publishes which of its lanes are switches on `router.gates`,
+so the routing UI offers them without importing anything from `hands`.
+
 ## Setups, the page and the box
 
 - **A setup** is every per-axis and global setting above. They're
@@ -103,10 +153,11 @@ or pressure axes on one channel.
   saves and loads setups, a project carries one, and a setting can itself
   be Learned onto an APC40 knob. They're registered even with the tracker
   off, so setups still edit and save offline.
-- **The HANDS page** has five parts:
+- **The HANDS page** has six parts:
   - the preset strip, the tracker/port status and the last message out
   - the box from above: palms as dots (left white, right red), size = height
-  - twelve live rows: output bar, a red hairline where the hand is, a
+  - the eight pinch switches, each with its live gap
+  - a live row per axis: output bar, a red hairline where the hand is, a
     tick at the rest value, and the MIDI out and value
   - the selected axis's editor, with its transfer curve drawn and the
     hand's live point on it, plus **mirror** (copy the feel to the other
@@ -114,8 +165,9 @@ or pressure axes on one channel.
   - feel & calibration: a 20 s sweep writes the box's ranges
 - **Learn:** right-click → Learn MIDI, then move one axis. The axis that
   moved furthest wins, and the param follows it in floats. A panel edit
-  stands until the hand moves again. Unbind is in the same menu, and it
-  leaves the axis's routes alone.
+  stands until the hand moves again. Pinch while learning and the row is
+  gated on that pinch. Unbind is in the same menu, and it leaves the
+  axis's routes alone.
 - **Rig** settings (tracking mode, which features, the port, presence
   notes) are `[hands]` in config.toml. **Box** ranges are `hands.json`.
   **Performance** settings are a setup. Each lives where it changes.
@@ -151,6 +203,11 @@ or pressure axes on one channel.
       500 ms / bounce 0.15, dead zone 0.04 on centred axes. Tune by hand
       and save the result as the factory setup.
 - [ ] How independently yaw and pitch can be held without moving x and y.
+- [ ] Whether thumb-ring wants a looser threshold than thumb-index, or
+      whether the 0.39 above was simply not a deliberate pinch.
+- [ ] How a gated row feels on a second pinch at a different height: it
+      takes the hand at once today (`Binding.pickup` is ignored by hand
+      rows, and could be honoured instead).
 - [ ] End-to-end latency, hand to pixels and hand to DAW.
 - [ ] Oscillators (an `lfo:` source is already reserved in routing):
       deferred on purpose.

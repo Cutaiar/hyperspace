@@ -5,10 +5,13 @@ Top to bottom:
   hands  ◀ setup ▶ …       the library strip for the `hands` group: a
                            setup is every per-axis and global setting
   status                   tracker, DAW port, the last MIDI sent
+  pinch                    the eight thumb-to-finger switches, each with
+                           the live gap that closes it — the number to
+                           watch when setting the threshold
   the box, from above      each palm as a dot (left white, right red),
                            its size the hand's height; the camera at the
                            centre
-  twelve axes              one row each: the output y as a white bar,
+  the axes                 one row each: the output y as a white bar,
                            where the hand is (the shaped target) as a
                            hairline, the rest value as a dim tick, the
                            MIDI out on the right. Click a row to edit it.
@@ -20,7 +23,8 @@ Top to bottom:
                            the same axis on the other hand; "solo" sends
                            only this axis to the DAW (for a DAW's learn).
   feel                     steadiness, response, catch, MIDI rate,
-                           hysteresis — the whole instrument
+                           hysteresis, and the pinch thresholds — the
+                           whole instrument
   calibrate                a timed sweep that writes the box's ranges
 
 Every control is a registry param (hands.register), so the widgets are
