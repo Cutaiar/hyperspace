@@ -152,13 +152,15 @@ def _pinches(io) -> None:
     for s in SIDES:
         imgui.text_colored(ui.DIM, f"{s[0].upper()} pinch")
         for f in PINCHES:
-            imgui.same_line()
             on = io.gates[s][f].on
             d = (io.frame[s] or {}).get(f"pinch_{f}")
             near = d is not None and d < close * 1.35   # closing in on the threshold
             col = ui.RED if on else (ui.TEXT if near else ui.FAINT)
-            gap = "—" if d is None else f"{d:.2f}"
-            imgui.text_colored(col, f"{f[:3]} {'●' if on else '○'}{gap}")
+            imgui.same_line()
+            imgui.text_colored(col, f"{f[:3]} {'●' if on else '○'}")
+            imgui.same_line(0.0, 2.0)
+            # the gap moves every frame: the readout face, so it can't jitter
+            ui._readout("  —  " if d is None else f"{d:.2f}", col)
 
 
 def _box(io) -> None:
