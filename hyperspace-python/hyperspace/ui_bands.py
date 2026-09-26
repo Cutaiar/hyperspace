@@ -40,7 +40,8 @@ from .analyzer import F_HI, F_LO, HIST_S, Q_HI, Q_LO, centre_q, edges
 from .bands import SHAPERS
 from .params import Kind, Registry
 
-PLOT_H = 136           # px; the page has to fit 820 with the meters and the strip
+PLOT_H = 136           # px; the page has to fit the control window with the meters and the strip
+FN_W = 84              # px; the strip's shaper and curve combos
 POOL = 2               # the heat map is max-pooled this much in both axes
 PROFILE_W = 0.16       # the weighting curves' width along the right edge, of the plot
 DB_LO, DB_HI = -90.0, -20.0   # the colour ramp's ends (u = 0 is −80 dB, u = 1 is −24)
@@ -346,8 +347,8 @@ def band_row(panel) -> None:
     if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
         imgui.set_tooltip("Move the band one strip later")
     imgui.same_line(0, 10)
-    panel._combo("band.select", 96)
-    imgui.same_line(imgui.get_content_region_avail().x - 40)
+    panel._combo("band.select", 120)
+    imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w("Reset"))
     panel._button("band.reset", "Reset", small=True)
 
 
@@ -359,10 +360,11 @@ def strip(panel) -> None:
     imgui.text_colored(ui.RED, f"{a.chain.band_names[c.selb]} · {SHAPERS[P.fn].tag}")
     imgui.same_line()
     imgui.text_disabled(f"{lo:.0f}–{hi:.0f} Hz")
-    imgui.same_line(imgui.get_content_region_avail().x - 136)
-    panel._combo("band.sel.fn", 64, SHAPERS[P.fn].name)
+    sp = imgui.get_style().item_spacing.x
+    imgui.same_line(imgui.get_content_region_avail().x - 2 * FN_W - sp)
+    panel._combo("band.sel.fn", FN_W, SHAPERS[P.fn].name)
     imgui.same_line()
-    panel._combo("band.sel.curve", 64)
+    panel._combo("band.sel.curve", FN_W)
     # the ten faders (f, q, the eight knobs) in two columns so the page fits
     if imgui.begin_table("##bandstrip", 2, imgui.TableFlags_.sizing_stretch_same):
         for p in r.group("band"):
