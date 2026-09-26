@@ -200,6 +200,7 @@ class ViewState:
     yaw: float = 0.0
     pitch: float = 0.0
     faces: bool = False          # translucent face fills under the wireframe
+    cut_through: bool = True     # fills lower the window's alpha: the desktop shows through
     zoom: float = 1.0            # camera magnification about the view centre
     pan: list[float] = field(default_factory=lambda: [0.0, 0.0])  # logical px
     instances: int = 1           # synchronized copies in a centred grid
@@ -561,6 +562,15 @@ class Renderer:
         # blending leaves the framebuffer correctly composited for a
         # transparent window (colour = Σ c·a, alpha = 1 − Π(1 − a))
         self.ctx.clear(*BG, getattr(self, "bg_alpha", 1.0))
+        # cut-through: the plain blend also blends alpha (a² + (1 − a)·dst),
+        # so a faint fill lowers the ground's alpha and a transparent window
+        # shows the desktop through it. Off: alpha composites over the ground
+        # (a + (1 − a)·dst), never below it — the lowest layer shows instead
+        if s.cut_through:
+            self.ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
+        else:
+            self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA,
+                                   moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA)
         self._lines["u_size"].value = (float(w), float(h))
 
         # ---- face fills, under the wireframe (agent-validated prototype) ----
