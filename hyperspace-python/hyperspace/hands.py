@@ -1,4 +1,4 @@
-"""Ultraleap hands — two tracked hands as twelve performance axes.
+"""Ultraleap hands — two tracked hands as twelve axes and eight switches.
 
 The hands are the performing surface; the APC40 stays on presets and
 master controls. Each hand gives the palm's rigid-body pose — six axes by
@@ -15,7 +15,7 @@ when it returns. The output y ∈ [0, 1] goes two ways:
   * outside, to a MIDI port for a DAW (a virtual "Hyperspace Hands" port
     unless [hands] out names another): per axis 7-bit CC, 14-bit CC,
     pitch bend or channel pressure on any channel, rate-limited, plus a
-    presence note per hand.
+    presence note per hand, and a note per pinch switch.
 
 What Ultraleap reports (LeapC through the ``leap`` Python bindings; units
 are the SDK's, coordinates right-handed with the origin at the camera, +y
@@ -30,6 +30,21 @@ away from it, +z toward the performer in desktop mode):
   pinch       pinch_strength                    0–1            0–1
   grab_angle  grab_angle                        rad → degrees  0–180
   pinch_mm    pinch_distance                    mm             15–100
+  pinch_index thumb tip → index tip  ÷ palm.width  ×palm        0.15–1.00
+  pinch_middle  … middle                                       0.15–1.05
+  pinch_ring    … ring                                         0.20–1.10
+  pinch_pinky   … pinky                                        0.25–1.15
+
+The four pinches are ratios, not distances: dividing by palm width makes
+one threshold fit every hand. Each also drives a switch (`Gate`) — eight
+more signals, on top of the analog axes: a Schmitt trigger so they don't
+chatter where the fingers hover, then a debounce so one noisy frame
+can't flip them. The switches work whether or not the ratios were chosen
+as dofs, and go out as the last eight hand lanes and as note on/off
+(`[hands] pinch_note`). Thumb-index is by far the most reliable; ring
+and pinky are weaker — occlusion when the palm turns away, and the two
+fingers don't move independently, so a thumb-ring pinch tends to bring
+the pinky with it.
 
 Roll and yaw are anatomical, not room-relative: thumb-up roll and
 fingers-outward yaw read as increasing on both hands, so the hands are
@@ -95,7 +110,15 @@ FEATURES: dict[str, tuple[str, float, float]] = {
     "pinch": ("0-1", 0.0, 1.0),
     "grab_angle": ("deg", 0.0, 180.0),
     "pinch_mm": ("mm", 15.0, 100.0),
+    # thumb tip to each finger tip, over palm width: hand-size independent
+    "pinch_index": ("×palm", 0.15, 1.00),
+    "pinch_middle": ("×palm", 0.15, 1.05),
+    "pinch_ring": ("×palm", 0.20, 1.10),
+    "pinch_pinky": ("×palm", 0.25, 1.15),
 }
+# the four thumb-to-finger pinches, in the order they are reported
+PINCHES = ("index", "middle", "ring", "pinky")
+PALM_W = 85.0            # mm, the fallback when the SDK reports no palm width
 # each hand works its own side of the camera
 X_RANGE = {"left": (-220.0, 20.0), "right": (-20.0, 220.0)}
 # shaped about their middle: a neutral hand reads 0.5
@@ -116,6 +139,9 @@ DEFAULTS: dict = {
     "note": 120,             # left hand's presence note; right is note+1
     "min_confidence": 0.1,
     "calibration": CAL_FILE,
+    "pinch_gates": True,     # the eight thumb-to-finger switches
+    "pinch_notes": True,     # each one as a note on/off to the DAW
+    "pinch_note": 100,       # left index…pinky = note…note+3, right = note+4…note+7
 }
 # config mode → leap.TrackingMode member
 TRACKING_MODES = {"desktop": "Desktop", "screentop": "ScreenTop", "hmd": "HMD"}
@@ -126,6 +152,30 @@ TRACKING_MODES = {"desktop": "Desktop", "screentop": "ScreenTop", "hmd": "HMD"}
 def _side(hand) -> str:
     t = getattr(hand.type, "name", None) or str(hand.type)
     return "left" if t.rsplit(".", 1)[-1].lower() == "left" else "right"
+
+
+def _tip(digit):
+    """The fingertip: the far end of the distal bone."""
+    return digit.distal.next_joint
+
+
+def pinches(hand) -> dict[str, float]:
+    """Thumb tip to each finger tip, divided by palm width.
+
+    A ratio, not a distance, so one threshold fits every hand: a big hand
+    and a small hand touching read alike. Empty when the bindings gave no
+    digits (the palm-only namespaces the tests build).
+    """
+    thumb = getattr(hand, "thumb", None)
+    if thumb is None:
+        return {}
+    t = _tip(thumb)
+    scale = float(getattr(hand.palm, "width", 0.0) or 0.0) or PALM_W
+    out = {}
+    for f in PINCHES:
+        d = _tip(getattr(hand, f))
+        out[f"pinch_{f}"] = math.dist((t.x, t.y, t.z), (d.x, d.y, d.z)) / scale
+    return out
 
 
 def features(hand) -> dict[str, float]:
@@ -149,6 +199,7 @@ def features(hand) -> dict[str, float]:
         "grab": float(hand.grab_strength), "pinch": float(hand.pinch_strength),
         "grab_angle": math.degrees(float(hand.grab_angle)),
         "pinch_mm": float(hand.pinch_distance),
+        **pinches(hand),
     }
 
 
@@ -187,6 +238,44 @@ class OneEuro:
 
 
 # ------------------------------------------------------------- settings
+
+class Gate:
+    """A pinch as a switch: Schmitt trigger, then a debounce.
+
+    Two thresholds, not one — a bare ``d < k`` chatters where the fingers
+    hover at k. It closes under `close`, and only lets go above `open_`,
+    which is deliberately the wider gap. A candidate edge then has to hold
+    for `hold` seconds before it counts, so a single noisy frame cannot
+    flip the switch.
+    """
+
+    __slots__ = ("_edge", "_since", "on")
+
+    def __init__(self) -> None:
+        self.on = False
+        self._edge: bool | None = None    # the flip being timed, if any
+        self._since = 0.0
+
+    def reset(self) -> None:
+        """The hand left: drop the switch and forget any pending edge."""
+        self.on = False
+        self._edge = None
+
+    def step(self, d: float | None, t: float, *, close: float, open_: float,
+             hold: float) -> bool:
+        if d is None or math.isnan(d):
+            return self.on
+        want = d < close if not self.on else not d > max(open_, close)
+        if want == self.on:
+            self._edge = None
+        else:
+            if self._edge != want:
+                self._edge, self._since = want, t
+            if t - self._since >= hold:
+                self.on = want
+                self._edge = None
+        return self.on
+
 
 @dataclass
 class AxisSettings:
@@ -227,6 +316,9 @@ class HandSettings:
     catch_s: float = 0.15        # glide onto a returning hand
     rate: int = 200              # MIDI messages a second per axis at most (0 = no cap)
     steady: float = 0.35         # 7-bit hysteresis, in steps past the half-step
+    pinch_close: float = 0.34    # ×palm: tips closer than this close the switch
+    pinch_open: float = 0.46     # ×palm: it only lets go past this — the wider gap
+    pinch_hold: float = 0.04     # s an edge must hold before it counts
 
     @classmethod
     def from_config(cls, cfg: dict | None = None) -> HandSettings:
@@ -238,6 +330,14 @@ class HandSettings:
         cc0, ch = int(cfg["cc"]), int(cfg["channel"])
         if cc0 < 0 or cc0 + 2 * len(dofs) - 1 > 127:
             raise ValueError(f"hands: cc {cc0} + {2 * len(dofs)} axes runs past 127")
+        if cfg["pinch_gates"] and cfg["pinch_notes"]:
+            n0, n1 = int(cfg["pinch_note"]), int(cfg["pinch_note"]) + 2 * len(PINCHES) - 1
+            note = int(cfg["note"])
+            if n0 < 0 or n1 > 127:
+                raise ValueError(f"hands: pinch_note {n0} + 8 switches runs past 127")
+            if cfg["presence"] and n0 <= note + 1 and note <= n1:
+                raise ValueError(f"hands: pinch notes {n0}–{n1} collide with the "
+                                 f"presence notes {note}–{note + 1}")
         axes = []
         for s, side in enumerate(SIDES):
             for k, feat in enumerate(dofs):
@@ -288,6 +388,16 @@ def register(reg, settings: HandSettings) -> None:
     cont(f"{GROUP}.steady", "Hysteresis", g, "steady", 0.0, 2.0,
          tip="How far past a 7-bit step a value must go before it's sent — "
              "stops a still hand flickering between two values.")
+    ratio = lambda v: f"{v:.2f}×palm"
+    cont(f"{GROUP}.pinch_close", "Pinch close", g, "pinch_close", 0.1, 1.0, fmt=ratio,
+         tip="How close thumb and fingertip must come to close a pinch switch, "
+             "as a fraction of palm width — so it fits any hand.")
+    cont(f"{GROUP}.pinch_open", "Pinch release", g, "pinch_open", 0.1, 1.5, fmt=ratio,
+         tip="How far they must part again to let go. Keep it above Pinch close: "
+             "the gap between the two is what stops the switch chattering.")
+    cont(f"{GROUP}.pinch_hold", "Pinch debounce", g, "pinch_hold", 0.0, 0.5, fmt=secs,
+         tip="How long a pinch must hold before it counts, so one noisy frame "
+             "can't flip the switch.")
     for a in g.axes:
         p = f"{GROUP}.{a.name}"
         flag(f"{p}.invert", "Invert", a, "invert", "Flip the axis end for end.")
@@ -518,6 +628,8 @@ class HandsIO:
         self.out = out if out is not None else _open_out(self.cfg.get("out") or "")
         self.out_name = getattr(self.out, "name", "") if self.out is not None else ""
         self.present = {s: False for s in SIDES}
+        # the eight pinch switches, whether or not the ratios are axes
+        self.gates = {s: {f: Gate() for f in PINCHES} for s in SIDES}
         self.frame: dict[str, dict | None] = {s: None for s in SIDES}  # native features
         self.solo: int | None = None      # axis index: only it goes to the DAW
         self.last = ""                    # the last MIDI sent, for the status line
@@ -535,7 +647,9 @@ class HandsIO:
 
     @property
     def lane_names(self) -> list[str]:
-        return [a.label for a in self.axes] + [f"{s[0].upper()} in" for s in SIDES]
+        return ([a.label for a in self.axes]
+                + [f"{s[0].upper()} in" for s in SIDES]
+                + [f"{s[0].upper()} {f[:3]}" for s in SIDES for f in PINCHES])
 
     @property
     def status(self) -> str:
@@ -547,9 +661,13 @@ class HandsIO:
 
     def lanes(self) -> list[float]:
         """Each axis's output y (NaN before its hand was ever seen), then
-        one presence lane per hand (1 in view, 0 not)."""
+        one presence lane per hand (1 in view, 0 not), then the eight
+        pinch switches. The switches come last so that a saved binding to
+        ``hand:<i>`` keeps meaning the axis it always did."""
         ys = [math.nan if st.y is None else st.y for st in self.state]
-        return ys + [1.0 if self.present[s] else 0.0 for s in SIDES]
+        return (ys
+                + [1.0 if self.present[s] else 0.0 for s in SIDES]
+                + [1.0 if self.gates[s][f].on else 0.0 for s in SIDES for f in PINCHES])
 
     # ---- per frame ----
 
@@ -574,6 +692,7 @@ class HandsIO:
                         "note_on" if here else "note_off",
                         channel=int(self.cfg["channel"]) - 1,
                         note=int(self.cfg["note"]) + s, velocity=127 if here else 0))
+            msgs += self._pinches(side, s, here, t)
         for i, (a, st) in enumerate(zip(self.axes, self.state)):
             h = hands.get(a.side) if self.present[a.side] else None
             if h is None:
@@ -617,6 +736,35 @@ class HandsIO:
             router.drive("hand")
         if midi is not None:
             self._learn(midi)
+        return msgs
+
+    def _pinches(self, side: str, s: int, here: bool, t: float) -> list[mido.Message]:
+        """Step one hand's four pinch switches; note on/off on each edge.
+
+        The ratios are read straight off the frame rather than through an
+        axis, so the switches work whether or not they were chosen as
+        dofs. A hand that leaves drops its switches (and sends the note
+        off), so nothing is left hanging on in the DAW.
+        """
+        g, cfg = self.settings, self.cfg
+        if not cfg["pinch_gates"]:
+            return []
+        feats = self.frame[side] or {}
+        msgs: list[mido.Message] = []
+        for k, f in enumerate(PINCHES):
+            gate = self.gates[side][f]
+            was = gate.on
+            if not here:
+                gate.reset()
+            else:
+                gate.step(feats.get(f"pinch_{f}"), t, close=g.pinch_close,
+                          open_=g.pinch_open, hold=g.pinch_hold)
+            if gate.on != was and cfg["pinch_notes"] and self.solo is None:
+                msgs.append(mido.Message(
+                    "note_on" if gate.on else "note_off",
+                    channel=int(cfg["channel"]) - 1,
+                    note=int(cfg["pinch_note"]) + s * len(PINCHES) + k,
+                    velocity=127 if gate.on else 0))
         return msgs
 
     def _learn(self, midi) -> None:

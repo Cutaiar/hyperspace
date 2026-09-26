@@ -28,11 +28,21 @@ def v3(x, y, z):
 
 
 def hand(side="right", pos=(0.0, 200.0, 0.0), normal=(0.0, -1.0, 0.0),
-         direction=(0.0, 0.0, -1.0), grab=0.0, pinch=0.0, conf=1.0):
-    return NS(type=NS(name=side.capitalize()), confidence=conf,
-              grab_strength=grab, pinch_strength=pinch, grab_angle=grab * math.pi,
-              pinch_distance=80.0,
-              palm=NS(position=v3(*pos), normal=v3(*normal), direction=v3(*direction)))
+         direction=(0.0, 0.0, -1.0), grab=0.0, pinch=0.0, conf=1.0,
+         tips=None, palm_w=0.0):
+    """A palm-only hand unless `tips` gives the four thumb-to-finger gaps
+    in mm (index, middle, ring, pinky), which builds the digits too."""
+    h = NS(type=NS(name=side.capitalize()), confidence=conf,
+           grab_strength=grab, pinch_strength=pinch, grab_angle=grab * math.pi,
+           pinch_distance=80.0,
+           palm=NS(position=v3(*pos), normal=v3(*normal), direction=v3(*direction),
+                   width=palm_w))
+    if tips is not None:
+        digit = lambda x: NS(distal=NS(next_joint=v3(x, 0.0, 0.0)))
+        h.thumb = digit(0.0)
+        for f, mm in zip(hands.PINCHES, tips):
+            setattr(h, f, digit(mm))
+    return h
 
 
 def tilt(rad):
@@ -79,6 +89,7 @@ def rig(tmp_path=None, **cfg):
     no filter, no catch, instant dynamics — each test turns on what it checks."""
     settings = HandSettings.from_config(cfg)
     settings.smooth, settings.response, settings.catch_s, settings.rate = 1e6, 0.0, 0.0, 0
+    settings.pinch_hold = 0.0          # debounce has its own tests
     for a in settings.axes:
         a.deadzone, a.rest = 0.0, "hold"
     clock = Clock()
@@ -271,7 +282,7 @@ def test_setup_is_registry_params_that_round_trip():
     hands.register(reg, s)
     hands.register(reg, s)                                   # idempotent
     ps = reg.group("hands")
-    assert len(ps) == 5 + 12 * 13 and not any(p.modulatable for p in ps)
+    assert len(ps) == 8 + 12 * 13 and not any(p.modulatable for p in ps)
     snap = reg.snapshot("hands")
     reg["hands.right.pitch.curve"].set_value(-0.5)
     reg["hands.right.pitch.rest"].set(0)
@@ -377,12 +388,15 @@ def test_low_confidence_counts_as_absent():
     assert run(r, 1, hand(conf=0.2)) == [] and not r.io.present["right"]
 
 
-def test_lanes_carry_outputs_then_presence():
+def test_lanes_carry_outputs_then_presence_then_pinches():
     r = rig()
     run(r, 1, hand())
     lanes = r.io.lanes()
-    assert len(lanes) == 14 and r.io.lane_names[-2:] == ["L in", "R in"]
-    assert all(math.isnan(u) for u in lanes[:6]) and lanes[12:] == [0.0, 1.0]
+    # 12 axes, 2 presence, 8 pinch switches
+    assert len(lanes) == 22 and r.io.lane_names[12:14] == ["L in", "R in"]
+    assert all(math.isnan(u) for u in lanes[:6]) and lanes[12:14] == [0.0, 1.0]
+    assert lanes[14:] == [0.0] * 8          # a palm-only hand pinches nothing
+    assert r.io.lane_names[14:16] == ["L ind", "L mid"]
 
 
 # ---------------------------------------------------------------- calibration
@@ -522,3 +536,99 @@ def test_hands_page_draws_live_and_offline(tmp_path):
         frame()
     finally:
         imgui.destroy_context(ctx)
+
+
+# ------------------------------------------------------------- pinch switches
+
+def test_pinch_ratios_are_palm_relative():
+    """The same gesture on a big and a small hand reads the same."""
+    small = features(hand(tips=(10.0, 20.0, 30.0, 40.0), palm_w=80.0))
+    big = features(hand(tips=(20.0, 40.0, 60.0, 80.0), palm_w=160.0))
+    for f in hands.PINCHES:
+        assert small[f"pinch_{f}"] == pytest.approx(big[f"pinch_{f}"])
+    assert small["pinch_index"] == pytest.approx(0.125)
+    assert small["pinch_pinky"] == pytest.approx(0.5)
+
+
+def test_pinch_ratios_fall_back_to_a_nominal_palm():
+    f = features(hand(tips=(17.0, 0.0, 0.0, 0.0)))     # width 0: use PALM_W
+    assert f["pinch_index"] == pytest.approx(17.0 / hands.PALM_W)
+
+
+def test_a_palm_only_hand_reports_no_pinches():
+    """The SDK-less namespaces older tests build must still work."""
+    assert hands.pinches(hand()) == {}
+    assert "pinch_index" not in features(hand())
+
+
+def test_pinch_gate_needs_the_wider_gap_to_let_go():
+    g, t = hands.Gate(), 0.0
+    step = lambda d: g.step(d, t, close=0.3, open_=0.5, hold=0.0)
+    assert not step(0.4)          # above close: still open
+    assert step(0.25)             # closes
+    assert step(0.4)              # between the two: hysteresis holds it shut
+    assert not step(0.55)         # past release
+
+
+def test_pinch_gate_debounces_a_single_noisy_frame():
+    g = hands.Gate()
+    close = {"close": 0.3, "open_": 0.5, "hold": 0.05}
+    assert not g.step(0.1, 0.00, **close)     # edge starts timing
+    assert not g.step(0.1, 0.02, **close)     # not held long enough
+    assert g.step(0.1, 0.06, **close)         # held: it counts
+    # one stray open frame is ignored
+    assert g.step(0.9, 0.07, **close)
+
+
+def test_pinches_drive_lanes_and_notes():
+    r = rig()
+    open_hand = lambda: hand(tips=(60.0, 60.0, 60.0, 60.0), palm_w=100.0)
+    # thumb to index only
+    pinched = lambda: hand(tips=(10.0, 60.0, 60.0, 60.0), palm_w=100.0)
+    run(r, 2, open_hand())
+    assert r.io.lanes()[14:] == [0.0] * 8
+    msgs = run(r, 2, pinched())
+    on = [m for m in msgs if m.type == "note_on"]
+    assert len(on) == 1 and on[0].note == 104          # right index = 100 + 4
+    assert r.io.gates["right"]["index"].on
+    assert r.io.lanes()[18] == 1.0                     # R ind: 14 + 4
+    off = [m for m in run(r, 2, open_hand()) if m.type == "note_off"]
+    assert len(off) == 1 and off[0].note == 104
+    assert not r.io.gates["right"]["index"].on
+
+
+def test_a_hand_that_leaves_releases_its_pinches():
+    r = rig()
+    msgs = run(r, 2, hand(tips=(10.0, 10.0, 60.0, 60.0), palm_w=100.0))
+    on = sorted(m.note for m in msgs if m.type == "note_on")
+    assert on == [104, 105, 121]          # index, middle, and the presence note
+    off = [m for m in run(r, 2) if m.type == "note_off"]   # no hands at all
+    assert sorted(m.note for m in off) == [104, 105, 121]  # index, middle, presence
+    assert r.io.lanes()[14:] == [0.0] * 8
+
+
+def test_pinch_gates_can_be_turned_off():
+    r = rig(pinch_gates=False)
+    msgs = run(r, 2, hand(tips=(10.0, 10.0, 10.0, 10.0), palm_w=100.0))
+    assert not any(m.note >= 100 and m.note < 120 for m in msgs if m.type == "note_on")
+    assert r.io.lanes()[14:] == [0.0] * 8
+
+
+def test_pinch_ratios_can_be_axes_too():
+    r = rig(dofs=["x", "pinch_index"])
+    run(r, 2, hand(tips=(10.0, 60.0, 60.0, 60.0), palm_w=100.0))
+    y = r.io.state[r.io.axis("right.pinch_index")].y
+    assert y is not None and y < 0.2          # a closed pinch sits near the bottom
+
+
+@pytest.mark.parametrize("cfg,why", [
+    ({"pinch_note": 125}, "past 127"),
+    ({"pinch_note": 118}, "collide"),      # 118–125 straddles presence 120–121
+])
+def test_bad_pinch_notes_are_refused(cfg, why):
+    with pytest.raises(ValueError, match=why):
+        HandSettings.from_config(cfg)
+
+
+def test_pinch_notes_may_sit_where_presence_is_off():
+    HandSettings.from_config({"pinch_note": 118, "presence": False})

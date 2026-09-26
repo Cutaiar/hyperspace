@@ -36,7 +36,7 @@ from imgui_bundle import imgui
 
 from . import ui
 from .hand_signal import shape
-from .hands import FEATURES, GROUP, SIDES, conflicts, mirror
+from .hands import FEATURES, GROUP, PINCHES, SIDES, conflicts, mirror
 
 ROW_LABEL_W = 62.0
 OUT_W = 100.0
@@ -84,13 +84,15 @@ def page(panel, dt: float) -> None:
         imgui.text_disabled("no hands setup — see [hands] in config.toml")
         return
     _status(io)
+    _pinches(io)
     _box(io)
     k = _axes(panel, io, settings)
     imgui.spacing()
     _editor(panel, io, settings, k)
     imgui.spacing()
     if imgui.collapsing_header("feel & calibration"):
-        for pid in ("smooth", "response", "catch", "rate", "steady"):
+        for pid in ("smooth", "response", "catch", "rate", "steady",
+                    "pinch_close", "pinch_open", "pinch_hold"):
             panel._row(f"{GROUP}.{pid}")
         _calibrate(io, settings, k)
 
@@ -107,6 +109,19 @@ def _status(io) -> None:
         imgui.text_colored(ui.WARN, io.error)
     elif io.last:
         imgui.text_disabled(f"last out  {io.last}")
+
+
+def _pinches(io) -> None:
+    """The eight thumb-to-finger switches, lit as they close."""
+    if io is None or not io.cfg.get("pinch_gates"):
+        return
+    for s in SIDES:
+        imgui.align_text_to_frame_padding()
+        lit = " ".join(f"{f[:3]}{'●' if io.gates[s][f].on else '○'}"
+                       for f in PINCHES)
+        imgui.text_disabled(f"{s[0].upper()} pinch  {lit}")
+        if s == SIDES[0]:
+            imgui.same_line(0.0, 24.0)
 
 
 def _box(io) -> None:
