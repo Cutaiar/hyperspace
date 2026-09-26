@@ -733,7 +733,10 @@ class Panel:
                     width: float = 0.0) -> bool:
         """A toggle drawn as a chip that goes solid red while on (plane keys, themes)."""
         p = self.reg[pid]
-        hit = lit_chip(f"{label}##{pid}", lit, color, imgui.ImVec2(width, 0))
+        # its own id space: the same param often has a check or slider on the
+        # same page (the FX strip under its chip), and two visible items with
+        # one id is an imgui conflict
+        hit = lit_chip(f"{label}##chip.{pid}", lit, color, imgui.ImVec2(width, 0))
         self._tip(p)
         self._ctx(p)
         self._learn_frame(p)
