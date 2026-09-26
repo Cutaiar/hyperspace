@@ -414,12 +414,33 @@ resolved once the page was actually run. Useful techniques already proven:
 
 ## 7. Visual conventions
 
-Instrument-panel aesthetic, deliberately not a generic dashboard. Monospace
-throughout, `tabular-nums`, uppercase micro-labels with wide letter-spacing,
-hairline 1 px rules, square corners everywhere (no border-radius), red `#ff2b2b`
-as the only accent and it matches the vertex colour. The large cell-count
-readout in the top-left is the signature element. Keep new UI consistent with
-this — it is a considered look, not a default.
+The control panel is operated mid-set, from a few feet back, in a dark room:
+**legibility at a distance comes first.** (The HTML reference was a square,
+hairline instrument panel; the Python panel keeps its palette and its
+signature, and softened the rest in 2026-09 after it proved unreadable at a
+party.)
+
+- **Palette.** Black ground, red `#ff2b2b` as the only accent (it matches the
+  vertex colour), three greys of text: `TEXT` for values and names, `DIM` for
+  labels and idle state, `FAINT` for notes. Nothing a user needs to read goes
+  below `FAINT`.
+- **Type.** Weight carries it. SF Rounded Medium (16 px) for words, SF Rounded
+  Bold uppercase with light tracking (12.5 px) for field labels, SF Mono
+  Semibold (16 px) for every number, so a moving readout never jitters. The
+  SF faces are variable fonts; `ui.load_fonts` picks the named weight through
+  FreeType's face index and falls back to other faces off macOS.
+- **Shape.** Rounded frames (8 px), pill chips (`ui.chip`) in place of small
+  buttons, a solid red pill for anything lit: the open page on the rail, a
+  spinning plane, the active theme slot, a checked box.
+- **Faders.** Every slider fills red from its origin (zero on a signed range)
+  to its value, so position reads at a glance. A slider with its readout
+  inside has no knob, only a red edge under the text; a modulated param shows
+  a white ghost bar at the effective value.
+- **Layout.** No page scrolls at `app.CONTROL_SIZE` (a test holds this).
+  Right-aligned groups are measured with `ui.chip_w` / `ui.button_w`, never
+  hard-coded offsets.
+- The large cell-count readout at the top of the view page is still the
+  signature element. Keep new UI consistent with this.
 
 ## 8. Git state
 

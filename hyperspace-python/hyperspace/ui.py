@@ -1,7 +1,9 @@
 """imgui control surface — every widget is a view onto one registry Param.
 
-Instrument-panel aesthetic per ENGINEERING §7: black ground, square corners
-everywhere, hairline rules, white text, red #ff2b2b as the only accent.
+Built to be read across a room (ENGINEERING §7): black ground, soft rounded
+controls, a rounded sans for words and a semibold mono for numbers, white
+text, red #ff2b2b as the only accent. A fader fills red up to its value so
+where it sits reads at a glance; the open page is a red pill on the rail.
 The hint-readout system of the HTML is replaced by native tooltips.
 
 Nothing here owns state. The panel draws params.Registry entries through a
@@ -15,11 +17,11 @@ Unbind.
 The surface is a left rail of pages (PAGES), one per registry group or
 two; each page is a stack of sections, and a section whose group the
 library knows carries its preset strip (ui_presets.py) under the title.
-Every page fits the control window's 820 px without scrolling. A
-modulated param draws its *base* as the handle and a red hairline ghost
-at the *effective* value (params.py: `base` vs `eff_norm`), so the
-setting stays where the user put it while a lane rides on top. The
-layout — what sits where — is the one hand-arranged thing left here.
+Every page fits the control window without scrolling. A modulated param
+draws its *base* as the handle and a white ghost bar at the *effective*
+value (params.py: `base` vs `eff_norm`), so the setting stays where the
+user put it while a lane rides on top. The layout — what sits where — is
+the one hand-arranged thing left here.
 """
 
 from __future__ import annotations
@@ -47,65 +49,99 @@ from .params import (  # noqa: F401 — PATTERNS et al. re-exported for callers
 )
 from .render import ViewState
 
+# ---- palette: black ground, three greys of text, one red ----
 RED = imgui.ImVec4(1.0, 43 / 255, 43 / 255, 1.0)
-DIM = imgui.ImVec4(0.62, 0.62, 0.62, 1.0)
-WARN = imgui.ImVec4(1, 0.4, 0.3, 1)
+TEXT = imgui.ImVec4(0.96, 0.96, 0.96, 1.0)      # values, names: what is read first
+DIM = imgui.ImVec4(0.70, 0.70, 0.72, 1.0)       # labels and idle state, still legible
+FAINT = imgui.ImVec4(0.58, 0.58, 0.61, 1.0)     # notes and hints, the quietest text
+WARN = imgui.ImVec4(1, 0.45, 0.35, 1)
+FILL = imgui.ImVec4(1.0, 43 / 255, 43 / 255, 0.42)  # a fader's value fill
+GHOST = imgui.ImVec4(1, 1, 1, 0.92)             # the effective value under modulation
+LINE = imgui.ImVec4(0.24, 0.24, 0.26, 1.0)      # rules and frames
 
 # meter landmarks (ENGINEERING §4): nominal 38.5%, knee 48.1% of full scale
 PIN_AT = CEIL * 0.92
 PIN_HOLD = 0.5
 
 # the panel: a rail of pages on the left, the page beside it, a footer
-PANEL_W = 420   # leaves the cheat sheet its column in an 820 px control window
-RAIL_W = 76
-LABEL_W = 78     # the micro-label column in a _row
+PANEL_W = 540   # leaves the cheat sheet its column in the control window (app.CONTROL_SIZE)
+RAIL_W = 112
+LABEL_W = 104    # the label column in a _row
+ROUND = 8.0      # corner radius of frames; chips and grabs go rounder
 
-# ---- monospace font atlas (ENGINEERING §7) ----
-# Three roles, one face: BASE for controls and readouts, MICRO for the
-# uppercase micro-labels (tracking baked in via glyph_extra_advance_x —
-# imgui has no letter-spacing), BIG for the signature cell-count readout.
-# With the 1.92 dynamic atlas one loaded font renders at every size.
+# ---- font atlas (ENGINEERING §7) ----
+# Four roles. UI for words (buttons, combos, names), MICRO for the
+# uppercase field labels (tracking baked in via glyph_extra_advance_x —
+# imgui has no letter-spacing), NUM for value readouts (monospaced, so a
+# moving number does not jitter), BIG for the signature cell-count
+# readout. With the 1.92 dynamic atlas each face renders at every size.
+#
+# Weight is what makes type read at a distance. The SF faces are variable
+# fonts and FreeType picks a named instance from the high 16 bits of the
+# face index: SF Rounded's list runs Ultrathin … Black, so 6 is Medium and
+# 8 Bold; SF Mono's runs Light … Heavy, so 4 is Semibold.
 
-FONT_BASE = 13.0
-FONT_MICRO = 9.5
-FONT_BIG = 44.0
+FONT_BASE = 16.0
+FONT_MICRO = 12.5
+FONT_NUM = 16.0
+FONT_BIG = 52.0
 
-_FONT_CANDIDATES = [
-    "/System/Library/Fonts/SFNSMono.ttf",          # macOS: SF Mono
-    "/System/Library/Fonts/Menlo.ttc",
-    "/System/Library/Fonts/Monaco.ttf",
-    "C:/Windows/Fonts/consola.ttf",                # Windows: Consolas
-    "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
-]
+_SF_ROUNDED = "/System/Library/Fonts/SFNSRounded.ttf"
+_SF_MONO = "/System/Library/Fonts/SFNSMono.ttf"
+# (path, face index) per role; the first that exists wins
+_FONT_CANDIDATES = {
+    "ui": [(_SF_ROUNDED, 6 << 16), ("/System/Library/Fonts/Avenir Next.ttc", 5),
+           ("C:/Windows/Fonts/seguisb.ttf", 0),
+           ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 0)],
+    "micro": [(_SF_ROUNDED, 8 << 16), ("/System/Library/Fonts/Avenir Next.ttc", 0),
+              ("C:/Windows/Fonts/segoeuib.ttf", 0),
+              ("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 0)],
+    "num": [(_SF_MONO, 4 << 16), ("/System/Library/Fonts/Menlo.ttc", 1),
+            ("C:/Windows/Fonts/consolab.ttf", 0),
+            ("/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf", 0)],
+}
+# glyphs a face lacks (arrows, ⇧, ●, ×) come from these, merged in behind it
+_FALLBACKS = [(_SF_MONO, 3 << 16), ("/System/Library/Fonts/Menlo.ttc", 0),
+              ("/System/Library/Fonts/Apple Symbols.ttf", 0)]
 
-_FONTS: dict[str, imgui.ImFont | None] = {"mono": None, "micro": None}
+_FONTS: dict[str, imgui.ImFont | None] = {"ui": None, "micro": None, "num": None}
+
+
+def _add_font(role: str, size: float, tracking: float = 0.0) -> None:
+    io = imgui.get_io()
+    hit = next(((p, n) for p, n in _FONT_CANDIDATES[role] if os.path.exists(p)), None)
+    if hit is None:
+        return
+    cfg = imgui.ImFontConfig()
+    cfg.font_no = hit[1]
+    cfg.glyph_extra_advance_x = tracking
+    _FONTS[role] = io.fonts.add_font_from_file_ttf(hit[0], size, cfg)
+    for path, no in _FALLBACKS:
+        if os.path.exists(path) and path != hit[0]:
+            m = imgui.ImFontConfig()
+            m.merge_mode = True
+            m.font_no = no
+            io.fonts.add_font_from_file_ttf(path, size, m)
 
 
 def load_fonts() -> None:
-    """Build the monospace atlas; call once after create_context.
+    """Build the atlas; call once after create_context.
 
-    Falls back silently to the imgui default face when no candidate file
-    exists — every helper below passes None to push_font, which keeps the
-    current face and only changes size, so nothing else needs to care.
+    A role with no candidate on disk stays None — push_font(None, size)
+    keeps the current face and only changes size, so the imgui default
+    face stands in and nothing else needs to care.
     """
-    io = imgui.get_io()
-    path = next((p for p in _FONT_CANDIDATES if os.path.exists(p)), None)
-    if path is None:
-        return
-    _FONTS["mono"] = io.fonts.add_font_from_file_ttf(path, FONT_BASE)
-    cfg = imgui.ImFontConfig()
-    cfg.glyph_extra_advance_x = 1.9  # ≈ .2em tracking at the micro size
-    _FONTS["micro"] = io.fonts.add_font_from_file_ttf(path, FONT_MICRO, cfg)
-    io.font_default = _FONTS["mono"]
+    _add_font("ui", FONT_BASE)
+    _add_font("micro", FONT_MICRO, tracking=1.1)   # ≈ .09em at the label size
+    _add_font("num", FONT_NUM)
+    if _FONTS["ui"] is not None:
+        imgui.get_io().font_default = _FONTS["ui"]
 
 
 def _micro(text: str, color: imgui.ImVec4 | None = None) -> None:
-    """An uppercase micro-label in the tracked micro face."""
+    """An uppercase field label in the tracked label face."""
     imgui.push_font(_FONTS["micro"], FONT_MICRO)
-    if color is None:
-        imgui.text_disabled(text.upper())
-    else:
-        imgui.text_colored(color, text.upper())
+    imgui.text_colored(DIM if color is None else color, text.upper())
     imgui.pop_font()
 
 
@@ -117,37 +153,127 @@ def _micro_width(text: str) -> float:
     return w
 
 
+def _readout(text: str, color: imgui.ImVec4 | None = None) -> None:
+    """A value in the readout face: semibold, monospaced, white."""
+    imgui.push_font(_FONTS["num"], FONT_NUM)
+    imgui.text_colored(TEXT if color is None else color, text)
+    imgui.pop_font()
+
+
+def _readout_width(text: str) -> float:
+    imgui.push_font(_FONTS["num"], FONT_NUM)
+    w = imgui.calc_text_size(text).x
+    imgui.pop_font()
+    return w
+
+
+def u32(c: imgui.ImVec4) -> int:
+    return imgui.color_convert_float4_to_u32(c)
+
+
+# ---- chips: the small rounded buttons the strips and rows are made of ----
+
+CHIP_PAD = imgui.ImVec2(10, 3)
+
+
+def chip(label: str, size: imgui.ImVec2 | None = None) -> bool:
+    """A compact pill button — small_button, with room to breathe."""
+    imgui.push_style_var(imgui.StyleVar_.frame_padding, CHIP_PAD)
+    imgui.push_style_var(imgui.StyleVar_.frame_rounding, 999.0)
+    hit = imgui.button(label, size if size is not None else imgui.ImVec2(0, 0))
+    imgui.pop_style_var(2)
+    return hit
+
+
+def lit_chip(label: str, lit: bool, color: imgui.ImVec4 | None = None,
+             size: imgui.ImVec2 | None = None) -> bool:
+    """A chip that is solid red while on — a lit key, readable from the floor."""
+    if lit:
+        imgui.push_style_color(imgui.Col_.button, RED)
+        imgui.push_style_color(imgui.Col_.button_hovered, imgui.ImVec4(1.0, 0.40, 0.40, 1))
+        imgui.push_style_color(imgui.Col_.button_active, imgui.ImVec4(0.8, 0.12, 0.12, 1))
+        imgui.push_style_color(imgui.Col_.text, imgui.ImVec4(1, 1, 1, 1))
+    else:
+        imgui.push_style_color(imgui.Col_.text, color or DIM)
+    hit = chip(label, size)
+    imgui.pop_style_color(4 if lit else 1)
+    return hit
+
+
+def chip_w(*labels: str) -> float:
+    """Width of chips in a row at the default spacing — flush a group of
+    them right with same_line(avail - chip_w(...))."""
+    s = imgui.get_style()
+    w = sum(imgui.calc_text_size(lb.split("##")[0]).x + 2 * CHIP_PAD.x for lb in labels)
+    return w + s.item_spacing.x * max(len(labels) - 1, 0)
+
+
+def button_w(*labels: str) -> float:
+    """chip_w for full-size buttons (frame padding from the style)."""
+    s = imgui.get_style()
+    w = sum(imgui.calc_text_size(lb.split("##")[0]).x + 2 * s.frame_padding.x for lb in labels)
+    return w + s.item_spacing.x * max(len(labels) - 1, 0)
+
+
 def apply_style() -> None:
     s = imgui.get_style()
-    for attr in (
-        "window_rounding", "child_rounding", "frame_rounding", "popup_rounding",
-        "scrollbar_rounding", "grab_rounding", "tab_rounding",
-    ):
-        setattr(s, attr, 0.0)  # square corners everywhere — considered, not default
+    s.window_rounding = 12.0
+    s.child_rounding = 10.0
+    s.popup_rounding = 10.0
+    s.frame_rounding = ROUND
+    s.grab_rounding = ROUND
+    s.scrollbar_rounding = 12.0
+    s.tab_rounding = ROUND
     s.window_border_size = 1.0
+    s.popup_border_size = 1.0
     s.frame_border_size = 0.0
+    s.window_padding = imgui.ImVec2(14, 12)
+    s.frame_padding = imgui.ImVec2(10, 6)
+    s.item_spacing = imgui.ImVec2(8, 7)
+    s.item_inner_spacing = imgui.ImVec2(7, 6)
+    s.grab_min_size = 18.0
+    s.scrollbar_size = 12.0
     put = imgui.Col_
     colors = {
-        put.window_bg: (0.02, 0.02, 0.02, 0.96),
+        put.window_bg: (0.035, 0.035, 0.04, 0.97),
         put.child_bg: (0.0, 0.0, 0.0, 0.0),
-        put.frame_bg: (0.09, 0.09, 0.09, 1.0),
-        put.frame_bg_hovered: (0.14, 0.14, 0.14, 1.0),
-        put.frame_bg_active: (0.18, 0.18, 0.18, 1.0),
+        put.frame_bg: (0.13, 0.13, 0.145, 1.0),
+        put.frame_bg_hovered: (0.18, 0.18, 0.20, 1.0),
+        put.frame_bg_active: (0.22, 0.22, 0.24, 1.0),
         put.slider_grab: (1.0, 43 / 255, 43 / 255, 1.0),
-        put.slider_grab_active: (1.0, 0.35, 0.35, 1.0),
-        put.button: (0.10, 0.10, 0.10, 1.0),
-        put.button_hovered: (0.18, 0.18, 0.18, 1.0),
-        put.button_active: (0.30, 0.08, 0.08, 1.0),
-        put.header: (0.14, 0.14, 0.14, 1.0),
-        put.header_hovered: (0.20, 0.20, 0.20, 1.0),
-        put.header_active: (0.24, 0.24, 0.24, 1.0),
-        put.check_mark: (1.0, 43 / 255, 43 / 255, 1.0),
-        put.separator: (0.22, 0.22, 0.22, 1.0),
-        put.border: (0.25, 0.25, 0.25, 1.0),
-        put.title_bg: (0.04, 0.04, 0.04, 1.0),
-        put.title_bg_active: (0.07, 0.07, 0.07, 1.0),
-        put.text: (0.92, 0.92, 0.92, 1.0),
-        put.popup_bg: (0.05, 0.05, 0.05, 0.98),
+        put.slider_grab_active: (1.0, 0.45, 0.45, 1.0),
+        put.button: (0.17, 0.17, 0.19, 1.0),
+        put.button_hovered: (0.24, 0.24, 0.27, 1.0),
+        put.button_active: (0.45, 0.10, 0.10, 1.0),
+        put.header: (0.20, 0.20, 0.22, 1.0),
+        put.header_hovered: (0.26, 0.26, 0.29, 1.0),
+        put.header_active: (0.30, 0.30, 0.33, 1.0),
+        put.check_mark: (1.0, 1.0, 1.0, 1.0),   # a white tick on a solid red box
+        put.checkbox_selected_bg: (1.0, 43 / 255, 43 / 255, 1.0),
+        put.resize_grip: (0.22, 0.22, 0.24, 0.6),
+        put.resize_grip_hovered: (0.36, 0.36, 0.40, 1.0),
+        put.resize_grip_active: (1.0, 43 / 255, 43 / 255, 1.0),
+        put.separator_hovered: (0.36, 0.36, 0.40, 1.0),
+        put.separator_active: (1.0, 43 / 255, 43 / 255, 1.0),
+        put.nav_cursor: (1.0, 43 / 255, 43 / 255, 1.0),
+        put.text_link: (1.0, 43 / 255, 43 / 255, 1.0),
+        put.drag_drop_target: (1.0, 43 / 255, 43 / 255, 1.0),
+        put.table_border_light: (0.16, 0.16, 0.18, 1.0),
+        put.table_border_strong: (LINE.x, LINE.y, LINE.z, 1.0),
+        put.table_header_bg: (0.10, 0.10, 0.11, 1.0),
+        put.separator: (LINE.x, LINE.y, LINE.z, 1.0),
+        put.border: (0.20, 0.20, 0.22, 1.0),
+        put.title_bg: (0.06, 0.06, 0.07, 1.0),
+        put.title_bg_active: (0.08, 0.08, 0.09, 1.0),
+        put.title_bg_collapsed: (0.06, 0.06, 0.07, 1.0),
+        put.text: (TEXT.x, TEXT.y, TEXT.z, 1.0),
+        put.text_disabled: (FAINT.x, FAINT.y, FAINT.z, 1.0),
+        put.popup_bg: (0.07, 0.07, 0.08, 0.98),
+        put.scrollbar_bg: (0.0, 0.0, 0.0, 0.0),
+        put.scrollbar_grab: (0.22, 0.22, 0.24, 1.0),
+        put.scrollbar_grab_hovered: (0.30, 0.30, 0.33, 1.0),
+        put.scrollbar_grab_active: (0.36, 0.36, 0.40, 1.0),
+        put.text_selected_bg: (1.0, 43 / 255, 43 / 255, 0.35),
     }
     for k, v in colors.items():
         s.set_color_(k, imgui.ImVec4(*v))
@@ -188,8 +314,9 @@ CHEATSHEET = [
 # ---- the pages: (key, rail label, the group whose dirty dot the rail shows) ----
 # One page per registry group where a group is a module of its own; the
 # view group is big enough to split into View / Faces & Pattern / Bitmap,
-# and those two sub-pages say so in their section notes. The analyzer
-# page holds the master faders, scene and meters, then the band editor
+# and those two sub-pages say so in their section notes. The audio page
+# holds the source and the master faders (the level into the analyser);
+# the analyzer page the scene and meters, then the band editor
 # (ui_bands.py); the routing page is the matrix (ui_routing.py); the hands
 # page is the Ultraleap live view and setup (ui_hands.py).
 PAGES = [
@@ -199,7 +326,7 @@ PAGES = [
     ("bitmap", "bitmap", None),
     ("camera", "camera", "camera"),
     ("lookback", "lookback", "dream"),
-    ("audio", "audio", None),
+    ("audio", "audio", "master"),
     ("analyzer", "analyzer", "band"),
     ("routing", "routing", None),
     ("hands", "hands", "hands"),
@@ -319,8 +446,8 @@ class Panel:
         r0, r1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
         dl = imgui.get_window_draw_list()
         dl.add_rect(
-            imgui.ImVec2(r0.x - 1, r0.y - 1), imgui.ImVec2(r1.x + 1, r1.y + 1),
-            imgui.color_convert_float4_to_u32(RED),
+            imgui.ImVec2(r0.x - 2, r0.y - 2), imgui.ImVec2(r1.x + 2, r1.y + 2),
+            u32(RED), ROUND + 2, 2.0,
         )
 
     def _tip(self, p: Param, text: str | None = None) -> None:
@@ -328,7 +455,7 @@ class Panel:
         if t and imgui.is_item_hovered():
             imgui.set_tooltip(t)
 
-    # ---- modulation ghosts: the base is the handle, the effective a hairline ----
+    # ---- modulation ghosts: the base is the handle, the effective a white bar ----
 
     @staticmethod
     def _eff_text(p: Param) -> str:
@@ -344,27 +471,98 @@ class Panel:
         return ""
 
     def _ghost(self, p: Param, inset: float = 0.0) -> None:
-        """A red hairline over the last slider at the effective position."""
+        """A white bar over the last slider at the effective position."""
         if not p.modulated:
             return
         r0, r1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
         x = r0.x + inset + (r1.x - r0.x - 2 * inset) * p.eff_norm
         dl = imgui.get_window_draw_list()
-        dl.add_line(imgui.ImVec2(x, r0.y + 1), imgui.ImVec2(x, r1.y - 1),
-                    imgui.color_convert_float4_to_u32(RED), 1.0)
+        dl.add_rect_filled(imgui.ImVec2(x - 1.5, r0.y + 3), imgui.ImVec2(x + 1.5, r1.y - 3),
+                           u32(GHOST), 1.5)
         self.ghosts += 1
 
     def _mod_dot(self, p: Param) -> None:
-        """A red tick in the corner of the last item: a discrete param is being driven."""
+        """A red dot in the corner of the last item: a discrete param is being driven."""
         if not p.modulated:
             return
         r0, r1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
         dl = imgui.get_window_draw_list()
-        dl.add_rect_filled(imgui.ImVec2(r1.x - 4, r0.y + 1), imgui.ImVec2(r1.x - 1, r0.y + 4),
-                           imgui.color_convert_float4_to_u32(RED))
+        dl.add_circle_filled(imgui.ImVec2(r1.x - 5, r0.y + 5), 3.5, u32(RED))
         if imgui.is_item_hovered():
             imgui.set_tooltip(f"{p.label}: {p.text()} → {self._eff_text(p)} (modulated)")
         self.ghosts += 1
+
+    # ---- the track: every slider's rounded ground and red value fill ----
+
+    @staticmethod
+    def _grab_half(width: float, steps: int = 0) -> float:
+        """Half the grab plus imgui's 2 px grab padding: how far in from
+        either end of the frame the grab's centre travels. An integer slider
+        with few steps widens its grab to a step's share of the throw."""
+        s = imgui.get_style()
+        usable = width - 4.0
+        g = s.grab_min_size
+        if steps:
+            g = max(usable / (steps + 1), g)
+        return min(g, usable) / 2 + 2.0
+
+    @staticmethod
+    def _origin(p: Param) -> float:
+        """Where the fill starts: zero on a range that spans it, else the left end."""
+        if p.kind is Kind.CONTINUOUS and p.lo < 0 < p.hi and not p.log:
+            try:
+                return p._norm_of(0.0)
+            except Exception:  # noqa: BLE001 — a taper that cannot place 0
+                return 0.0
+        return 0.0
+
+    def _track(self, draw, norm: float, origin: float = 0.0, steps: int = 0,
+               knob: bool = True) -> tuple:
+        """Draw a slider through `draw()` over a rounded track filled red
+        from `origin` to `norm` (both 0..1 along the throw); returns what
+        draw() returned.
+
+        The slider draws on the upper channel with its own frame colours
+        made clear, and the track goes in underneath once the item's rect
+        and hover state are known — so the grab and the readout sit on top
+        of the fill without imgui needing a filled-slider widget. Without
+        `knob` the grab is clear too and a bright edge under the fill's end
+        marks the value, so a readout drawn inside is never red-on-red.
+        """
+        dl = imgui.get_window_draw_list()
+        dl.channels_split(2)
+        dl.channels_set_current(1)
+        clear = imgui.ImVec4(0, 0, 0, 0)
+        cols = [imgui.Col_.frame_bg, imgui.Col_.frame_bg_hovered, imgui.Col_.frame_bg_active]
+        if not knob:
+            cols += [imgui.Col_.slider_grab, imgui.Col_.slider_grab_active]
+        for c in cols:
+            imgui.push_style_color(c, clear)
+        out = draw()
+        imgui.pop_style_color(len(cols))
+        r0, r1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        active, hovered = imgui.is_item_active(), imgui.is_item_hovered()
+        dl.channels_set_current(0)
+        bg = (imgui.Col_.frame_bg_active if active else
+              imgui.Col_.frame_bg_hovered if hovered else imgui.Col_.frame_bg)
+        dl.add_rect_filled(r0, r1, imgui.get_color_u32(bg), ROUND)
+        half = self._grab_half(r1.x - r0.x, steps)
+        span = r1.x - r0.x - 2 * half
+        xa = r0.x + half + span * origin
+        xb = r0.x + half + span * min(max(norm, 0.0), 1.0)
+        lo, hi = min(xa, xb), max(xa, xb)
+        if lo == r0.x + half:
+            lo = r0.x               # a fill from the left end runs into the corner
+        if hi - lo > 0.5:
+            flags = imgui.ImDrawFlags_.round_corners_left if lo == r0.x else 0
+            dl.add_rect_filled(imgui.ImVec2(lo, r0.y), imgui.ImVec2(hi, r1.y), u32(FILL),
+                               ROUND if flags else 0.0, flags)
+        if not knob:
+            edge = imgui.ImVec4(1.0, 0.45, 0.45, 1) if active or hovered else RED
+            dl.add_rect_filled(imgui.ImVec2(xb - 2, r0.y + 3), imgui.ImVec2(xb + 2, r1.y - 3),
+                               u32(edge), 2.0)
+        dl.channels_merge()
+        return out
 
     # ---- widgets: each one reads, draws and writes a Param ----
 
@@ -377,7 +575,7 @@ class Panel:
         return p
 
     def _fader(self, pid: str) -> bool:
-        """Full-width taper fader: micro label, readout, detent notch."""
+        """Full-width taper fader: label and readout over a filled track, detent notch."""
         a = self.reg[pid]           # what the widget is: id, label, tip, binding
         p = self._real(a)           # what it reads and writes
         pos = p.position()
@@ -388,31 +586,47 @@ class Panel:
         # the readout moves inside the fader frame, so nothing overprints.
         text = f"{p.text()} → {self._eff_text(p)}" if p.modulated else p.text()
         avail = imgui.get_content_region_avail().x
-        tw = imgui.calc_text_size(text).x
-        label = f"{a.label}  ·  {tag}"
-        if _micro_width(label) + tw + 12 > avail:
-            label = a.label
-        inside = _micro_width(label) + tw + 12 > avail
-        _micro(label)
+        tw = _readout_width(text)
+        tag_w = _micro_width(f"  ·  {tag}")
+        show_tag = _micro_width(a.label) + tag_w + tw + 16 <= avail
+        inside = _micro_width(a.label) + tw + 16 > avail
+        # label and readout share a baseline: the label steps down by the
+        # difference in the two faces' sizes
+        y0 = imgui.get_cursor_pos_y()
+        drop = (FONT_NUM - FONT_MICRO) * 0.8
+        imgui.set_cursor_pos_y(y0 + drop)
+        _micro(a.label)
         self._tip(a)
+        if show_tag:
+            imgui.same_line(0, 0)
+            imgui.set_cursor_pos_y(y0 + drop)
+            _micro(f"  ·  {tag}", FAINT)
         if not inside:
-            imgui.same_line(avail - tw - 4)
-            imgui.text(text)
+            imgui.same_line(avail - tw - 2)
+            imgui.set_cursor_pos_y(y0)
+            _readout(text, RED if p.modulated else None)
         imgui.set_next_item_width(-1)
-        changed, pos2 = imgui.slider_int("##s", pos, 0, p.steps, text if inside else "")
+        imgui.push_style_var(imgui.StyleVar_.frame_padding, imgui.ImVec2(10, 8))
+        imgui.push_font(_FONTS["num"], FONT_NUM)
+        changed, pos2 = self._track(
+            lambda: imgui.slider_int("##s", pos, 0, p.steps, text if inside else ""),
+            p.norm, self._origin(p), p.steps, knob=not inside,
+        )
+        imgui.pop_font()
+        imgui.pop_style_var()
         self._tip(a)
         self._ctx(a)
         self._learn_frame(a)
-        half = imgui.get_style().grab_min_size / 2 + 2.0
+        r0, r1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        half = self._grab_half(r1.x - r0.x, p.steps)
         if p.taper is not None and p.taper.unity is not None:
             # detent notch: ticks at the fader position the grab centre
             # occupies at unity (frame inset by grab padding + half grab)
-            r0, r1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
             nx = r0.x + half + (r1.x - r0.x - 2 * half) * p.taper.unity / p.steps
             dl = imgui.get_window_draw_list()
-            notch = imgui.color_convert_float4_to_u32(imgui.ImVec4(1, 1, 1, 0.35))
-            dl.add_line(imgui.ImVec2(nx, r0.y), imgui.ImVec2(nx, r0.y + 3), notch)
-            dl.add_line(imgui.ImVec2(nx, r1.y - 3), imgui.ImVec2(nx, r1.y), notch)
+            notch = u32(imgui.ImVec4(1, 1, 1, 0.55))
+            dl.add_line(imgui.ImVec2(nx, r0.y + 2), imgui.ImVec2(nx, r0.y + 6), notch, 2.0)
+            dl.add_line(imgui.ImVec2(nx, r1.y - 6), imgui.ImVec2(nx, r1.y - 2), notch, 2.0)
         self._ghost(p, half)
         imgui.pop_id()
         if changed and pos2 != pos:
@@ -427,25 +641,49 @@ class Panel:
         imgui.set_next_item_width(width)
         v = p.base
         text = f"{p.text()} → {self._eff_text(p)}" if p.modulated else p.text()
+        imgui.push_font(_FONTS["num"], FONT_NUM)
         if p.integer:
-            changed, nv = imgui.slider_int(f"##{pid}", int(v), int(p.lo), int(p.hi), text)
+            steps = int(p.hi) - int(p.lo)
+            changed, nv = self._track(lambda: imgui.slider_int(
+                f"##{pid}", int(v), int(p.lo), int(p.hi), text),
+                p.norm, self._origin(p), steps, knob=False)
         else:
+            steps = 0
             flags = imgui.SliderFlags_.logarithmic if p.log else 0
-            changed, nv = imgui.slider_float(f"##{pid}", float(v), p.lo, p.hi, text, flags)
+            changed, nv = self._track(lambda: imgui.slider_float(
+                f"##{pid}", float(v), p.lo, p.hi, text, flags),
+                p.norm, self._origin(p), knob=False)
+        imgui.pop_font()
         self._tip(a)
         self._ctx(a)
         self._learn_frame(a)
-        self._ghost(p, imgui.get_style().grab_min_size / 2 + 2.0)
+        r0, r1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        self._ghost(p, self._grab_half(r1.x - r0.x, steps))
         if changed:
             p.set_value(nv)
         return changed
 
-    def _row(self, pid: str, width: float = -1, label: str | None = None) -> bool:
-        """A labelled compact slider: micro label in a column, slider beside it."""
-        p = self.reg[pid]
-        _micro(p.label if label is None else label)
-        self._tip(p)
+    @staticmethod
+    def _label_cell(text: str, color: imgui.ImVec4 | None = None) -> None:
+        """A field label centred on the height of the control beside it.
+
+        Drawn, not laid out: a dummy one control tall is the item (tooltips
+        attach to it), so the row's height and baseline stay the control's
+        and anything after it on the line lines up with the first control."""
+        pos = imgui.get_cursor_screen_pos()
+        fh = FONT_NUM + 2 * imgui.get_style().frame_padding.y
+        imgui.push_font(_FONTS["micro"], FONT_MICRO)
+        imgui.get_window_draw_list().add_text(
+            imgui.ImVec2(pos.x, pos.y + (fh - FONT_MICRO) / 2 - 1),
+            u32(DIM if color is None else color), text.upper())
+        imgui.pop_font()
+        imgui.dummy(imgui.ImVec2(LABEL_W - 12, fh))
         imgui.same_line(LABEL_W)
+
+    def _row(self, pid: str, width: float = -1, label: str | None = None) -> bool:
+        """A labelled compact slider: label in a column, slider beside it."""
+        p = self.reg[pid]
+        self._label_cell(p.label if label is None else label)
         return self._slider(pid, width)
 
     def _combo(self, pid: str, width: float = -1, tip: str | None = None) -> bool:
@@ -476,7 +714,7 @@ class Panel:
     def _button(self, pid: str, label: str | None = None, small: bool = False) -> bool:
         p = self.reg[pid]
         text = f"{p.label if label is None else label}##{pid}"
-        hit = imgui.small_button(text) if small else imgui.button(text)
+        hit = chip(text) if small else imgui.button(text)
         self._tip(p)
         self._ctx(p)
         self._learn_frame(p)
@@ -484,13 +722,11 @@ class Panel:
             p.toggle()  # fires a trigger, flips a toggle
         return hit
 
-    def _lit_button(self, pid: str, label: str, lit: bool, small: bool = True,
-                    color: imgui.ImVec4 | None = None) -> bool:
-        """A toggle drawn as a red-when-on text button (plane keys, themes)."""
+    def _lit_button(self, pid: str, label: str, lit: bool, color: imgui.ImVec4 | None = None,
+                    width: float = 0.0) -> bool:
+        """A toggle drawn as a chip that goes solid red while on (plane keys, themes)."""
         p = self.reg[pid]
-        imgui.push_style_color(imgui.Col_.text, color or (RED if lit else DIM))
-        hit = (imgui.small_button if small else imgui.button)(f"{label}##{pid}")
-        imgui.pop_style_color()
+        hit = lit_chip(f"{label}##{pid}", lit, color, imgui.ImVec2(width, 0))
         self._tip(p)
         self._ctx(p)
         self._learn_frame(p)
@@ -503,28 +739,30 @@ class Panel:
         """A Kind.TEXT param (a file path): read-only name, full path on hover."""
         p = self.reg[pid]
         v = p.base or ""
-        imgui.text_disabled(v.rsplit("/", 1)[-1][:28] if v else "none")
+        imgui.align_text_to_frame_padding()
+        imgui.text_colored(TEXT if v else FAINT, v.rsplit("/", 1)[-1][:28] if v else "none")
         self._tip(p, v or p.tip)
         self._ctx(p)
         self._learn_frame(p)
         if v and clear:
             imgui.same_line()
-            if imgui.small_button(f"clear##{pid}"):
+            if chip(f"clear##{pid}"):
                 p.set("")
 
-    # ---- sections: a micro title, the group's preset strip, a hairline ----
+    # ---- sections: a title, the group's preset strip, a rule ----
 
     def _section(self, title: str, group: str | None = None, note: str | None = None) -> None:
         """Header of a section. `group` draws the library's strip for it; a
         section whose params are saved by another group says so in `note`."""
-        _micro(title)
+        _micro(title, TEXT)
         if note:
             imgui.same_line(imgui.get_content_region_avail().x - _micro_width(note) - 4)
-            _micro(note, DIM)
+            _micro(note, FAINT)
         lib = self.library
         if group is not None and lib is not None and lib.reg is not None:
             ui_presets.strip(self, group)
         imgui.separator()
+        imgui.dummy(imgui.ImVec2(0, 1))
 
     # ---- overlays ----
 
@@ -533,7 +771,7 @@ class Panel:
         imgui.set_next_window_pos(
             imgui.ImVec2(12, io.display_size.y - 12), imgui.Cond_.always, imgui.ImVec2(0, 1)
         )
-        imgui.set_next_window_bg_alpha(0.45)
+        imgui.set_next_window_bg_alpha(0.6)
         flags = (
             imgui.WindowFlags_.no_decoration
             | imgui.WindowFlags_.always_auto_resize
@@ -541,12 +779,17 @@ class Panel:
             | imgui.WindowFlags_.no_focus_on_appearing
             | imgui.WindowFlags_.no_nav
         )
+        imgui.push_style_var(imgui.StyleVar_.item_spacing, imgui.ImVec2(8, 4))
         imgui.begin("##cheatsheet", None, flags)
+        col = max(_readout_width(key) for key, _ in CHEATSHEET)
+        x0 = imgui.get_cursor_pos_x()
         for key, action in CHEATSHEET:
-            imgui.text_colored(RED, f"{key:>11s}")
-            imgui.same_line(100)
-            imgui.text_disabled(action)
+            imgui.set_cursor_pos_x(x0 + col - _readout_width(key))
+            _readout(key, RED)
+            imgui.same_line(x0 + col + 14)
+            imgui.text_colored(DIM, action)
         imgui.end()
+        imgui.pop_style_var()
 
     # ---- meters ----
 
@@ -602,10 +845,10 @@ class Panel:
             for lv, cc in ((NOM, (1, 1, 1, 0.32)), (KNEE, (1.0, 43 / 255, 43 / 255, 0.38))):
                 ly = y1 - 1 - lv / CEIL * (mh - 2)
                 dl.add_line(imgui.ImVec2(x0 + 1, ly), imgui.ImVec2(x0 + bw - 1, ly), u32(imgui.ImVec4(*cc)))
-            # frame
+            # frame: the selected band's goes red and heavier
             dl.add_rect(
                 imgui.ImVec2(x0, origin.y), imgui.ImVec2(x0 + bw, y1),
-                u32(RED if sel else imgui.ImVec4(0.25, 0.25, 0.25, 1)),
+                u32(RED if sel else LINE), 4.0, 2.0 if sel else 1.0,
             )
             # click to select
             imgui.set_cursor_screen_pos(imgui.ImVec2(x0, origin.y))
@@ -661,36 +904,44 @@ class Panel:
         imgui.end()
 
     def _rail(self, foot: float) -> None:
-        """The page list down the left: micro-labels, the open one red, a
-        dirty dot where the page's group has moved off its preset."""
+        """The page list down the left: one pill per page, the open one solid
+        red, a dot where the page's group has moved off its preset."""
         if not imgui.begin_child("##rail", imgui.ImVec2(RAIL_W, -foot)):
             imgui.end_child()
             return
         r0 = imgui.get_window_pos()
+        dl = imgui.get_window_draw_list()
+        w, h = RAIL_W - 12, FONT_MICRO + 16
         imgui.push_font(_FONTS["micro"], FONT_MICRO)
         for k, (_key, label, group) in enumerate(PAGES):
             lit = k == self.page
-            imgui.push_style_color(imgui.Col_.text, RED if lit else DIM)
-            hit, _ = imgui.selectable(f"{label.upper()}##page{k}", lit, 0,
-                                      imgui.ImVec2(RAIL_W - 14, 0))
-            imgui.pop_style_color()
-            if hit:
+            p0 = imgui.get_cursor_screen_pos()
+            if imgui.invisible_button(f"##page{k}", imgui.ImVec2(w, h)):
                 self.reg["ui.page"].set(k)
+            hov = imgui.is_item_hovered()
+            p1 = imgui.ImVec2(p0.x + w, p0.y + h)
+            if lit or hov:
+                dl.add_rect_filled(p0, p1, u32(RED) if lit else
+                                   imgui.get_color_u32(imgui.Col_.button_hovered), h / 2)
+            dl.add_text(imgui.ImVec2(p0.x + 12, p0.y + (h - FONT_MICRO) / 2 - 1),
+                        u32(imgui.ImVec4(1, 1, 1, 1) if lit else TEXT if hov else DIM),
+                        label.upper())
             if group is not None and ui_presets.dirty(self, group, polled=True):
-                imgui.same_line(RAIL_W - 14)
-                imgui.text_colored(RED, "●")
+                dl.add_circle_filled(imgui.ImVec2(p1.x - 11, p0.y + h / 2), 3.5,
+                                     u32(imgui.ImVec4(1, 1, 1, 1) if lit else RED))
         imgui.pop_font()
         self._ctx(self.reg["ui.page"])
-        # the hairline between rail and page
-        dl = imgui.get_window_draw_list()
+        # the rule between rail and page
         x = r0.x + RAIL_W - 1
         dl.add_line(imgui.ImVec2(x, r0.y), imgui.ImVec2(x, r0.y + imgui.get_window_height()),
-                    imgui.color_convert_float4_to_u32(imgui.ImVec4(0.22, 0.22, 0.22, 1)))
+                    u32(LINE))
         imgui.end_child()
 
     def _footer(self, fps: float) -> None:
         imgui.separator()
-        imgui.text_disabled(f"{fps:5.1f} FPS")
+        imgui.push_font(_FONTS["num"], FONT_MICRO + 1)
+        imgui.text_colored(FAINT, f"{fps:5.1f} FPS")
+        imgui.pop_font()
         if self.reloader is not None and self.reloader.status:
             imgui.same_line()
             imgui.text_disabled(f"·  {self.reloader.status}")
@@ -727,18 +978,20 @@ class Panel:
         sh = SHAPES[v.shape]
         g = geom(v.shape)
         # signature readout — the big cell count is the panel's identity
-        # (reference #cells: large white numeral, dim micro sub-label)
-        imgui.push_font(_FONTS["mono"], FONT_BIG)
+        # (reference #cells: large white numeral), the shape's names in a
+        # block beside it so the header costs the page one numeral's height
+        imgui.push_font(_FONTS["micro"], FONT_BIG)
         imgui.text(f"{sh.cells or '—'}")
-        big_h = imgui.get_item_rect_size().y
         imgui.pop_font()
-        imgui.same_line()
-        # sit the CELLS sub-label on the numeral's baseline
-        imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() + big_h - FONT_MICRO - 8)
-        _micro("cells")
+        imgui.same_line(0, 16)
+        imgui.begin_group()
+        _micro("cells", FAINT)
+        imgui.push_font(_FONTS["micro"], FONT_BASE + 4)
         imgui.text(sh.name.upper())
+        imgui.pop_font()
         _micro(sh.alias, RED)
         _micro(f"{g['n']}V {g['m']}E  ·  {sh.sym}")
+        imgui.end_group()
         imgui.spacing()
 
         self._section("view", "view")
@@ -747,10 +1000,13 @@ class Panel:
         self._fader("view.speed")
         self._fader("view.depth4")
         imgui.spacing()
+        # the plane keys tile the row, solid red while a plane spins
+        kw = (imgui.get_content_region_avail().x
+              - imgui.get_style().item_spacing.x * (len(PLANES) - 1)) / len(PLANES)
         for p, name in enumerate(PLANES):
             if p:
                 imgui.same_line()
-            self._lit_button(f"view.plane.{name}", name, v.planes[p])
+            self._lit_button(f"view.plane.{name}", name, v.planes[p], width=kw)
         self._check("view.points")
         imgui.same_line()
         self._check("view.lines")
@@ -760,10 +1016,10 @@ class Panel:
         self._check("view.faces")
         self._slider("view.instances")
         if v.instances > 1:
-            self._combo("view.inst_motion", 110)
+            self._combo("view.inst_motion", 140)
             if v.inst_motion:
                 imgui.same_line()
-                self._slider("view.inst_amp", 92)
+                self._slider("view.inst_amp", 110)
                 imgui.same_line()
                 self._slider("view.inst_rate")
         imgui.spacing()
@@ -777,7 +1033,7 @@ class Panel:
         self._section("faces & pattern", note="saved with view")
         self._check("view.faces")
         imgui.same_line()
-        self._combo("view.pattern", 110)
+        self._combo("view.pattern", 140)
         imgui.same_line()
         self._slider("view.pattern_mix")
         if self.renderer is not None and self.renderer.pattern_error:
@@ -824,12 +1080,11 @@ class Panel:
             return
         self._row("view.bmp_alpha")
         self._row("view.bmp_scale")
-        _micro("path")
-        imgui.same_line(LABEL_W)
-        self._combo("view.bmp_mode", 110)
+        self._label_cell("path")
+        self._combo("view.bmp_mode", 140)
         if v.bmp_mode:
             imgui.same_line()
-            self._slider("view.bmp_amp", 92)
+            self._slider("view.bmp_amp", 110)
             imgui.same_line()
             self._slider("view.bmp_rate")
 
@@ -887,26 +1142,25 @@ class Panel:
             self._button("audio.restart", "Restart")
             imgui.same_line()
             pos, dur = a.position(), a.duration()
-            imgui.text_disabled(
-                f"{int(pos // 60)}:{int(pos % 60):02d} / {int(dur // 60)}:{int(dur % 60):02d}"
-            )
+            imgui.align_text_to_frame_padding()
+            _readout(f"{int(pos // 60)}:{int(pos % 60):02d} / "
+                     f"{int(dur // 60)}:{int(dur % 60):02d}", DIM)
+        imgui.spacing()
 
-    def _page_analyzer(self, dt: float) -> None:
-        """Master faders, scene, meters, then the band editor (ui_bands.py):
-        the spectrogram with the bands over it and the selected band's strip."""
-        c = self.control
+        # the level into the analyser: what every band sees
         self._section("master", "master")
         self._fader("master.gain")
         self._fader("master.dyn")
         self._fader("master.trim")
-        imgui.spacing()
 
-        # ---- bands ----
+    def _page_analyzer(self, dt: float) -> None:
+        """Scene, meters, then the band editor (ui_bands.py): the
+        spectrogram with the bands over it and the selected band's strip."""
+        c = self.control
         self._section("bands", "band")
         # scene + reset-all (relabels to Undo while the window is open)
-        _micro("scene")
-        imgui.same_line(LABEL_W)
-        self._combo("scene.select", -92)
+        self._label_cell("scene")
+        self._combo("scene.select", -(button_w("Reset all") + imgui.get_style().item_spacing.x))
         imgui.same_line()
         self._button("scene.reset_all", "Undo" if c.undo_armed else "Reset all")
         imgui.spacing()

@@ -48,6 +48,8 @@ KEY = "bindings"          # the name-field / listing key on the panel's preset s
 DEPTH_MOD = 1.0           # ±, the `mod` depth slider's throw
 N_EXT = 16                # ext lanes offered once any ext source is around
 BAR_W = 56.0
+SRC_W = 84.0             # the source combo: a lane's number and name
+DEPTH_W = 112.0
 
 
 # ---- state on the panel ----
@@ -186,7 +188,7 @@ def strip(panel, router: Router) -> None:
     imgui.push_style_color(imgui.Col_.button, imgui.ImVec4(0, 0, 0, 0))
     imgui.push_style_color(imgui.Col_.text, ui.DIM if factory or cur is None else
                            imgui.ImVec4(0.92, 0.92, 0.92, 1))
-    if imgui.button(f"{label}##name", imgui.ImVec2(ui_presets.NAME_MAX * 7.4 + 8, 0)):
+    if imgui.button(f"{label}##name", imgui.ImVec2(ui_presets.name_w(), 0)):
         imgui.open_popup("list")
     imgui.pop_style_color(2)
     if imgui.is_item_hovered():
@@ -213,21 +215,21 @@ def strip(panel, router: Router) -> None:
             if picked:
                 load(panel, router, name)
         imgui.end_popup()
-    imgui.same_line(imgui.get_content_region_avail().x - 128)
+    imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w("save", "as…", "reset"))
     imgui.begin_disabled(cur is None or factory or _home(panel) is None)
-    if imgui.small_button("save"):
+    if ui.chip("save"):
         save_as(panel, router, cur)
     imgui.end_disabled()
     if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
         imgui.set_tooltip("Write the routes over the current preset"
                           + (" — a factory preset: save as… instead" if factory else ""))
     imgui.same_line()
-    if imgui.small_button("as…"):
+    if ui.chip("as…"):
         ui_presets._begin_naming(panel, KEY, cur or "")
     if imgui.is_item_hovered():
         imgui.set_tooltip("Save the routes as a new user preset (library/bindings/)")
     imgui.same_line()
-    if imgui.small_button("reset"):
+    if ui.chip("reset"):
         load(panel, router, "default")
     if imgui.is_item_hovered():
         imgui.set_tooltip("Back to the factory routes — legacy 6 on the pattern base of 1")
@@ -321,14 +323,20 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
     sources = _sources(panel, router)
     labels = [lb for _, lb in sources]
     cur = next((i for i, (s, _) in enumerate(sources) if s == b.source), -1)
-    imgui.set_next_item_width(76)
+    imgui.set_next_item_width(SRC_W)
     if cur < 0:
         labels, cur = labels + [b.source], len(labels)
-    changed, i = imgui.combo("##src", cur, labels)
-    if changed and i < len(sources):
-        b.source = sources[i][0]
+    if imgui.begin_combo("##src", labels[cur], imgui.ComboFlags_.no_arrow_button):
+        for i, lb in enumerate(labels):
+            sel, _ = imgui.selectable(lb, i == cur)
+            if sel and i < len(sources):
+                b.source = sources[i][0]
+        imgui.end_combo()
     imgui.same_line()
-    picked = _param_combo(panel, "##target", b.target, 130, _targets(panel))
+    sp = imgui.get_style().item_spacing.x
+    op_w = ui.chip_w("repl")
+    picked = _param_combo(panel, "##target", b.target, -(op_w + ui.chip_w("×") + 2 * sp),
+                          _targets(panel))
     if picked:
         b.target = picked
     if p is None:
@@ -337,28 +345,34 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
     elif not p.modulatable and imgui.is_item_hovered():
         imgui.set_tooltip(f"{b.target} is not modulatable — the row is dormant")
     imgui.same_line()
-    imgui.set_next_item_width(48)
-    changed, op = imgui.combo("##op", 1 if b.op == "replace" else 0, ["mod", "repl"])
-    if changed:
-        b.op = "replace" if op else "mod"
+    replace = b.op == "replace"
+    if ui.lit_chip("repl##op" if replace else "mod##op", replace, ui.DIM, imgui.ImVec2(op_w, 0)):
+        b.op = "mod" if replace else "replace"
     if imgui.is_item_hovered():
         imgui.set_tooltip("mod: depth × source added to the base\n"
-                          "repl: depth × source is the value while the source is live")
-    imgui.same_line(imgui.get_content_region_avail().x - 14)
+                          "repl: depth × source is the value while the source is live\n"
+                          "click to switch")
+    imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w("×"))
     imgui.push_style_color(imgui.Col_.text, ui.DIM)
-    kill = imgui.small_button("×")
+    kill = ui.chip("×")
     imgui.pop_style_color()
     if imgui.is_item_hovered():
         imgui.set_tooltip("Delete this route")
     # line 2: depth · scale · live
     imgui.dummy(imgui.ImVec2(18, 0))
     imgui.same_line()
-    imgui.set_next_item_width(112)
+    imgui.set_next_item_width(DEPTH_W)
     if b.op == "replace" and p is not None and p.kind is Kind.CONTINUOUS:
         lo, hi, fmt = float(p.lo), float(p.hi), "%.3g"
     else:
         lo, hi, fmt = -DEPTH_MOD, DEPTH_MOD, "%+.2f"
-    changed, v = imgui.slider_float("##depth", float(b.value), lo, hi, fmt)
+    span = (hi - lo) or 1.0
+    imgui.push_font(ui._FONTS["num"], ui.FONT_NUM)
+    changed, v = panel._track(
+        lambda: imgui.slider_float("##depth", float(b.value), lo, hi, fmt),
+        (float(b.value) - lo) / span, -lo / span if lo < 0 < hi else 0.0, knob=False,
+    )
+    imgui.pop_font()
     if changed:
         b.value = v
     if imgui.is_item_hovered():
@@ -366,7 +380,7 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
                                              else " — 1 is the full throw at a lane's asymptote")
                           + "\nctrl-click to type")
     imgui.same_line()
-    scale = _param_combo(panel, "##scale", b.scale, 100,
+    scale = _param_combo(panel, "##scale", b.scale, -(BAR_W + sp),
                          [q for q in reg if q.kind is Kind.CONTINUOUS and not q.alias],
                          none="× 1")
     if scale is not False:
@@ -389,14 +403,14 @@ def _live_bar(panel, router: Router, b: Binding, p: Param | None) -> None:
     u32 = imgui.color_convert_float4_to_u32
     x0, y0, x1, y1 = pos.x, pos.y + 3, pos.x + BAR_W, pos.y + h - 3
     dl.add_rect(imgui.ImVec2(x0, y0), imgui.ImVec2(x1, y1),
-                u32(imgui.ImVec4(0.25, 0.25, 0.25, 1)))
+                u32(ui.LINE), 4.0)
     if u is not None:
         w = (x1 - x0 - 2) * min(max(u, 0.0), 1.0)
         dl.add_rect_filled(imgui.ImVec2(x0 + 1, y0 + 1), imgui.ImVec2(x0 + 1 + w, y1 - 1),
-                           u32(imgui.ImVec4(0.92, 0.92, 0.92, 0.85)))
+                           u32(imgui.ImVec4(0.92, 0.92, 0.92, 0.85)), 3.0)
     if p is not None and p.modulated:
         x = x0 + 1 + (x1 - x0 - 2) * p.eff_norm
-        dl.add_line(imgui.ImVec2(x, y0), imgui.ImVec2(x, y1), u32(ui.RED), 1.0)
+        dl.add_line(imgui.ImVec2(x, y0), imgui.ImVec2(x, y1), u32(ui.RED), 2.0)
         panel.ghosts += 1
     imgui.dummy(imgui.ImVec2(BAR_W, h))
     if imgui.is_item_hovered():
@@ -422,8 +436,8 @@ def page(panel, dt: float) -> None:
     chain = panel.audio.chain
     live = "live" if getattr(panel.audio, "on", False) else "no source — lanes idle"
     imgui.text_disabled(f"{len(rows)} routes  ·  {chain.n} lanes  ·  {live}")
-    imgui.same_line(imgui.get_content_region_avail().x - 60)
-    if imgui.small_button("+ route"):
+    imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w("+ route"))
+    if ui.chip("+ route"):
         pid = f"pattern.mod.{panel.control.selb}"
         add_route(panel, pid if pid in panel.reg else _targets(panel)[0].id)
     if imgui.is_item_hovered():

@@ -24,7 +24,8 @@ from imgui_bundle import imgui
 from . import ui
 from .lookback import RES
 
-THUMB_H = 40        # thumbnail height, px; width follows the echo's aspect
+RES_W = 84          # the res and octaves combos
+THUMB_H = 48        # thumbnail height, px; width follows the echo's aspect
 
 
 def page(panel, dt: float) -> None:
@@ -34,8 +35,10 @@ def page(panel, dt: float) -> None:
 
     panel._section("look-back", "dream", note=_worker_note(lb))
     panel._check("dream.on")
-    imgui.same_line(imgui.get_content_region_avail().x - 150)
-    imgui.text_disabled(_status(lb, bool(st.base)))
+    status = _status(lb, bool(st.base))
+    imgui.same_line(imgui.get_content_region_avail().x - imgui.calc_text_size(status).x)
+    imgui.align_text_to_frame_padding()
+    imgui.text_disabled(status)
     panel._row("dream.mix")
     panel._row("dream.echo_mix")
     panel._row("dream.decay")
@@ -45,27 +48,25 @@ def page(panel, dt: float) -> None:
 
     panel._section("history", note="rebuilds the ring")
     panel._row("dream.echoes")
-    ui._micro("every")
+    panel._label_cell("every")
     panel._tip(r["dream.every"])
-    imgui.same_line(ui.LABEL_W)
-    panel._slider("dream.every", 92)
+    panel._slider("dream.every", -(RES_W + imgui.get_style().item_spacing.x))
     imgui.same_line()
-    panel._combo("dream.res", 62)
-    imgui.same_line()
-    imgui.text_disabled(_echo_text(lb))
+    panel._combo("dream.res", RES_W)
+    imgui.text_disabled(f"echo size  {_echo_text(lb)}")
     _thumbnails(panel, lb)
     imgui.spacing()
 
     panel._section("dream worker", note="[dream] in config.toml")
-    imgui.text_disabled(_worker_status(lb))
-    ui._micro("net")
+    imgui.push_style_color(imgui.Col_.text, ui.FAINT)
+    imgui.text_wrapped(_worker_status(lb))
+    imgui.pop_style_color()
+    panel._label_cell("net")
     panel._tip(r["dream.layer"])
-    imgui.same_line(ui.LABEL_W)
-    panel._combo("dream.layer", 100)
+    panel._combo("dream.layer", -(RES_W + imgui.get_style().item_spacing.x))
     imgui.same_line()
-    panel._combo("dream.octaves", 62)
-    imgui.same_line()
-    panel._slider("dream.steps")
+    panel._combo("dream.octaves", RES_W)
+    panel._row("dream.steps")
     panel._row("dream.step")
     panel._row("dream.k")
     panel._row("dream.mask_decay")
@@ -149,4 +150,4 @@ def _thumbnails(panel, lb) -> None:
     r1 = imgui.get_item_rect_max()
     dl = imgui.get_window_draw_list()
     dl.add_line(imgui.ImVec2(origin.x, r1.y + 2), imgui.ImVec2(r1.x, r1.y + 2),
-                imgui.color_convert_float4_to_u32(imgui.ImVec4(0.22, 0.22, 0.22, 1)))
+                ui.u32(ui.LINE))

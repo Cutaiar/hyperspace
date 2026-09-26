@@ -76,7 +76,7 @@ from .ui import Panel, apply_style, load_fonts
 TITLE = "Hyperspace"
 RENDER_SIZE = (1280, 820)
 # wide enough for the cheat sheet on the left and the panel on the right
-CONTROL_SIZE = (820, 820)
+CONTROL_SIZE = (960, 900)
 
 # 4D perspective hold keys move depth4 in the taper's own log space —
 # octaves of (depth − 1) — so travel feels even across the whole throw.

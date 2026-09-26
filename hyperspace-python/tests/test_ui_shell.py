@@ -13,6 +13,7 @@ from imgui_bundle import imgui, implot
 
 from hyperspace import ui_presets
 from hyperspace.analysis import Analyser
+from hyperspace.app import CONTROL_SIZE
 from hyperspace.bands import Chain
 from hyperspace.control import Control
 from hyperspace.library import Library
@@ -81,6 +82,24 @@ def test_panel_draws_factory_only(rig):
     assert rig.lib.project.path is None
     for page in ("view", "analyzer", "presets"):
         frame(rig.panel, page)
+
+
+def test_every_page_fits_the_control_window(rig, monkeypatch):
+    """No page scrolls at the app's control-window size: a control that has
+    to be scrolled to is one that cannot be found in a hurry."""
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    over = {}
+    for key in PAGE_KEYS:
+        draw = getattr(Panel, f"_page_{key}")
+
+        def measured(self, dt, _draw=draw, _key=key):
+            _draw(self, dt)
+            over[_key] = imgui.get_scroll_max_y()
+        monkeypatch.setattr(Panel, f"_page_{key}", measured)
+    for key in PAGE_KEYS:
+        for _ in range(3):              # the window settles its size, then its content
+            frame(rig.panel, key)
+    assert {k: v for k, v in over.items() if v > 0} == {}
 
 
 # ---------------------------------------------------------------- strip
@@ -230,7 +249,11 @@ def test_ghost_on_a_compact_slider_and_a_fader_in_a_table(rig):
     _hold(reg, {"camera.zoom": 0.1})   # a _row on the camera page (log range)
     frame(panel, "camera")
     assert panel.ghosts == 1
-    # the selected band's strip (two columns) and a master fader
+    # the selected band's strip (two columns) on the analyzer page, and a
+    # master fader, which sits with the source on the audio page
     _hold(reg, {"band.0.atk": 0.1, "master.gain": -0.1})
     frame(panel, "analyzer")
-    assert panel.ghosts == 2
+    assert panel.ghosts == 1
+    _hold(reg, {"band.0.atk": 0.1, "master.gain": -0.1})
+    frame(panel, "audio")
+    assert panel.ghosts == 1
