@@ -664,3 +664,25 @@ def test_only_fed_sources_can_gate_a_row():
     assert not r.gated(b)                 # never opens, whatever the lanes say
     b.when = "hand:0"
     assert r.gated(b)
+
+
+@pytest.mark.parametrize("name", ["hands-play", "hands-pinch", "hands-fx"])
+def test_the_hand_presets_name_params_and_lanes_that_exist(name):
+    """A preset whose target was renamed loads silently and does nothing.
+    These are shipped, so check every row lands somewhere real."""
+    from hyperspace.hands import PINCHES, SIDES, HandSettings
+
+    r = rig(full=True)
+    router = Router(r.reg, Bindings())
+    assert router.load_preset(name) == []          # no unknown target ids
+    rows = router.table.routes()
+    assert rows
+    axes = len(HandSettings.from_config({}).axes)
+    lanes = axes + len(SIDES) + len(SIDES) * len(PINCHES)
+    for b in rows:
+        p = r.reg.get(b.target)
+        assert p is not None and p.modulatable, f"{name}: {b.target} is dormant"
+        assert b.scheme == "hand" and 0 <= b.index < axes, f"{name}: {b.source}"
+        if b.when is not None:
+            i = int(b.when.split(":")[1])
+            assert axes + len(SIDES) <= i < lanes, f"{name}: {b.when} is not a switch"

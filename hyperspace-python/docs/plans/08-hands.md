@@ -146,6 +146,30 @@ rows Learn never makes:
 The adapter publishes which of its lanes are switches on `router.gates`,
 so the routing UI offers them without importing anything from `hands`.
 
+## Starting presets
+
+Three factory routing presets, in the ROUTING strip next to `default`
+and `legacy6`. They are routes only, so loading one leaves the keyboard,
+pad and MIDI bindings alone.
+
+| preset | what the hands do |
+| --- | --- |
+| `hands-play` | R height → brightness, L height → speed, R tilt → 4D depth. Nothing to hold; the quickest way to feel the shaping. |
+| `hands-pinch` | One hand, several instruments, the thumb picks which: R index → brightness, R middle → speed, L index → fx mix, L middle → zoom. An open hand changes nothing. |
+| `hands-fx` | The effect stack under both hands: R height → fx mix, R tilt → acid twist, L roll → acid speed, R yaw → acid bend, L height adds to brightness. |
+
+These use `replace` and `mod`, because a routing preset carries only
+modulation rows — Learn's `abs` rows are per-param and belong to the
+binding table, not a preset. The practical difference: **a `replace` row
+springs back to the panel value when the gate opens or the hand leaves**,
+where a gated `abs` row holds where you left it. Momentary versus latching
+— pick the one the gesture wants.
+
+The lane numbers in the files assume the default six dofs per hand
+(`hand:1` = L y, `hand:7` = R y, `hand:14`… = the switches). Change
+`[hands] dofs` and the axis indices move; `tests/test_routing.py`
+checks every shipped row still names a real param and a real lane.
+
 ## Setups, the page and the box
 
 - **A setup** is every per-axis and global setting above. They're

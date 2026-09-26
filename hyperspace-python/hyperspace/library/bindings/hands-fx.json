@@ -1,0 +1,11 @@
+{
+ "schema": "hyperspace.bindings/1",
+ "profile": "apc40",
+ "bindings": [
+  {"source": "hand:7", "target": "fx.mix", "op": "replace"},
+  {"source": "hand:10", "target": "fx.acid.twist", "op": "replace", "value": 3.14},
+  {"source": "hand:3", "target": "fx.acid.speed", "op": "replace", "value": 8.0},
+  {"source": "hand:1", "target": "view.bright", "op": "mod", "value": 0.4},
+  {"source": "hand:11", "target": "fx.acid.bend", "op": "replace", "value": 0.4}
+ ]
+}

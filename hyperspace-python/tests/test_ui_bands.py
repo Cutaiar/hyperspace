@@ -282,7 +282,7 @@ def test_routing_presets_step_load_save(rig, tmp_path):
     router = _with_router(rig, tmp_path)
     frame(panel, "routing")
     listing = ui_routing.names(panel)
-    assert listing == ["default", "legacy6"]    # the factory exports
+    assert listing == ["default", "hands-fx", "hands-pinch", "hands-play", "legacy6"]    # the factory exports
     # next from nothing: the first; prev wraps to the last
     assert ui_routing.step(panel, router, 1) == "default"
     assert ui_routing._state(panel)["current"] == "default"
@@ -304,7 +304,8 @@ def test_routing_presets_step_load_save(rig, tmp_path):
     assert ui_routing._state(panel)["current"] == "my-routes"
     assert not ui_routing.dirty(panel, router)
     ui_routing.invalidate(panel)
-    assert ui_routing.names(panel) == ["default", "legacy6", "my-routes"]
+    assert ui_routing.names(panel) == [
+        "default", "hands-fx", "hands-pinch", "hands-play", "legacy6", "my-routes"]
     assert not routing.is_factory_preset("my-routes", tmp_path)
     frame(panel)
     # load a factory preset back: the user route goes, the inputs stay
@@ -341,7 +342,7 @@ def test_router_preset_files_and_save(tmp_path):
 
     r = routing_rig(tmp_path=tmp_path, full=True)
     router = Router(r.reg, Bindings.factory())
-    assert routing.preset_names(tmp_path) == ["default", "legacy6"]
+    assert routing.preset_names(tmp_path) == ["default", "hands-fx", "hands-pinch", "hands-play", "legacy6"]
     assert routing.is_factory_preset("legacy6", tmp_path)
     router.table.add(Binding("lane:0", "view.bright", "mod", 0.5, enabled=False))
     path = router.save_preset("Show A", tmp_path)
