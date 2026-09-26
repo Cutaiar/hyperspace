@@ -283,6 +283,14 @@ octaves, history depth and the copy path are what WP6-0 decides.
     off the newest echo at capture (free with a worker attached: the
     copy path reads those pixels anyway). All six are presettable and
     modulatable; the echoes pass untouched. Defaults are neutral.
+  - *Occlude + louder defaults (2026-09-25, follow-up).* The composite
+    was purely additive, so the wake glowed over the shapes. `dream.occlude`
+    (default 1) makes the render cover the wake where it drew — its
+    brightness × 4 is its coverage — so the tracers only fill the space
+    between. (`dream.mask_decay` is a different mask: where the dream may
+    exist at all.) Defaults pushed so the wake lasts and reads while
+    tuning: mix 0.7, echo_mix 0.4, decay 0.95, darken 0.1, 8 echoes,
+    k 0.05, mask decay 0.99.
 - **WP6c — tuning at the machine (S, needs the user).** Layer/steps/grade
   by eye with real audio, the GPU-contention number on the real scene,
   two or three factory presets.

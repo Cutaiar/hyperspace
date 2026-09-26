@@ -9,6 +9,7 @@
   "dream.decay": 0.9,
   "dream.darken": 0.3,
   "dream.contrast": 1.0,
+  "dream.occlude": 1.0,
   "dream.hue": 0.0,
   "dream.sat": 1.0,
   "dream.tint": 0.0,

@@ -687,6 +687,11 @@ def build_registry(view, control, audio, presets=None, dream=None) -> Registry:
                  fmt=lambda v: f"^{v:.2f}", group=g,
                  tip="A power curve on every layer: above 1 only the bright, "
                      "high-contrast regions of the history read.")
+    r.continuous("dream.occlude", "Occlude", *_attr(dream, "occlude"), lo=0.0, hi=1.0,
+                 fmt=lambda v: f"occlude {v:.2f}", group=g,
+                 tip="The render over the wake: at 1 wherever this frame drew, the "
+                     "shape covers the dream and echoes beneath it, so the tracers "
+                     "only fill the space between; at 0 the wake glows over the shapes.")
     # the dream buffer's chroma — the net paints in its own primaries; these
     # re-colour D on its way into the composite (lookback.py, chroma())
     r.continuous("dream.hue", "Hue shift", *_attr(dream, "hue"), lo=-180.0, hi=180.0,
@@ -738,8 +743,9 @@ def build_registry(view, control, audio, presets=None, dream=None) -> Registry:
                "for the same cost.")
     r.continuous("dream.mask_decay", "Mask decay", *_attr(dream, "mask_decay"),
                  lo=0.9, hi=0.995, fmt=lambda v: f"{v:.3f}", group=g,
-                 tip="How long a wake persists after content leaves: the content "
-                     "mask's per-frame decay, 10 to 200 frames.")
+                 tip="How long the dream stays where content was, after it leaves: "
+                     "the content mask's per-frame decay, 10 to 200 frames. The mask "
+                     "decides where the dream may exist; what covers it is Occlude.")
     r.continuous("dream.jitter", "Jitter", *_attr(dream, "jitter"), lo=0, hi=16,
                  integer=True, fmt=lambda v: f"{int(v)} px", group=g,
                  tip="Random pixel offset per step, the classic trick that turns pixel "

@@ -658,12 +658,15 @@ class Panel:
         return changed
 
     @staticmethod
-    def _label_cell(text: str, color: imgui.ImVec4 | None = None) -> None:
+    def _label_cell(text: str, color: imgui.ImVec4 | None = None,
+                    width: float = LABEL_W) -> None:
         """A field label centred on the height of the control beside it.
 
         Drawn, not laid out: a dummy one control tall is the item (tooltips
         attach to it), so the row's height and baseline stay the control's
-        and anything after it on the line lines up with the first control."""
+        and anything after it on the line lines up with the first control.
+        `width` is the label column; a half-width table cell passes less
+        (the offset is from the cell's own start)."""
         pos = imgui.get_cursor_screen_pos()
         fh = FONT_NUM + 2 * imgui.get_style().frame_padding.y
         imgui.push_font(_FONTS["micro"], FONT_MICRO)
@@ -671,13 +674,14 @@ class Panel:
             imgui.ImVec2(pos.x, pos.y + (fh - FONT_MICRO) / 2 - 1),
             u32(DIM if color is None else color), text.upper())
         imgui.pop_font()
-        imgui.dummy(imgui.ImVec2(LABEL_W - 12, fh))
-        imgui.same_line(LABEL_W)
+        imgui.dummy(imgui.ImVec2(width - 12, fh))
+        imgui.same_line(width)
 
-    def _row(self, pid: str, width: float = -1, label: str | None = None) -> bool:
+    def _row(self, pid: str, width: float = -1, label: str | None = None,
+             label_w: float = LABEL_W) -> bool:
         """A labelled compact slider: label in a column, slider beside it."""
         p = self.reg[pid]
-        self._label_cell(p.label if label is None else label)
+        self._label_cell(p.label if label is None else label, width=label_w)
         return self._slider(pid, width)
 
     def _combo(self, pid: str, width: float = -1, tip: str | None = None) -> bool:

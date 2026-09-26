@@ -33,6 +33,11 @@ tools/dream_bench/common.py, made per-layer):
                 a_i = w_i · max(grade(L_i))     the layer's own luminance is
                                                 its coverage — a black pixel
                                                 covers nothing
+    wake     ×= 1 − occlude · min(4 · max(scene.rgb), 1)
+                                                the render over the wake: where
+                                                this frame drew, its brightness
+                                                is its coverage (occlude 0 is
+                                                the old additive glow over it)
     out.rgb   = min(scene.rgb + wake, 1)        additive under the scene, so
                                                 the wireframe stays white-hot
     out.a     = scene.a ∪ wake.a                (a + b − a·b)
@@ -104,27 +109,31 @@ RES = [128, 192, 256, 384]              # dream.res: the echo's short side, px
 LAYERS = ["conv2_2", "conv3_3", "conv4_3", "inception3b", "inception4c", "inception4e"]
 OCTAVES = ["1", "2 alt", "3 alt"]       # one octave a frame, in rotation (spike D)
 TINT_FROM = ["colour", "scene"]         # dream.tint_from: the tint's hue source
+OCCLUDE_GAIN = 4.0                      # scene brightness × this = its coverage of the wake
 
 
 @dataclass
 class DreamState:
     """The dream.* params' object (params.py binds to these fields).
 
-    Defaults are the spike's recommendation (docs/plans/assets/
-    06-lookback-perf.md): conv3_3 at 256, two steps of 0.03, k 0.08,
-    jitter 8, mask decay 0.97; ``D`` darkened to 70 % at 40 % alpha, its
-    colours as the net painted them (tint 0). The echoes — a raw trail
-    under the dream, or the whole effect until a worker exists — default
-    to four, two frames apart.
+    Defaults started as the spike's recommendation (docs/plans/assets/
+    06-lookback-perf.md: conv3_3 at 256, two steps of 0.03, k 0.08, mask
+    decay 0.97) and were pushed for a wake that lasts and reads at a
+    glance while tuning (2026-09-25): k 0.05 and mask decay 0.99, so the
+    dream holds ~20 frames and its region lingers ~100 after content
+    leaves; ``D`` at 70 % darkened only to 90 %; eight echoes, two frames
+    apart, fading 0.95 a frame. The render covers the wake where it drew
+    (occlude 1). Colours as the net painted them (tint 0).
     """
 
     on: bool = False
     # the composite
-    mix: float = 0.4          # the dream buffer's opacity
-    echo_mix: float = 0.3     # the echoes' opacity (times decay^age)
-    decay: float = 0.88       # per-frame age fade of an echo
-    darken: float = 0.3       # 0 as bright as the frame … 1 black
+    mix: float = 0.7          # the dream buffer's opacity
+    echo_mix: float = 0.4     # the echoes' opacity (times decay^age)
+    decay: float = 0.95       # per-frame age fade of an echo
+    darken: float = 0.1       # 0 as bright as the frame … 1 black
     contrast: float = 1.0     # power curve on every layer; 1 is neutral
+    occlude: float = 1.0      # 0 the wake adds over the render … 1 the render covers it
     # the dream buffer's chroma, before the grade
     hue: float = 0.0          # degrees of hue rotation on the net's own colours
     sat: float = 1.0          # their saturation; 0 is greyscale, 1 as the net painted
@@ -132,16 +141,16 @@ class DreamState:
     tint_from: int = 0        # index into TINT_FROM: a chosen colour, or the scene's hue
     tint_hue: float = 200.0   # the tint colour's hue, degrees
     tint_sat: float = 1.0     # …and saturation; 0 tints grey
-    echoes: int = 4           # ring depth; 0 = only the dream buffer
+    echoes: int = 8           # ring depth; 0 = only the dream buffer
     every: int = 2            # capture cadence, frames
     res: int = 2              # index into RES → 256
     # the dream worker's (WP6b) — declared here so presets carry them
     steps: int = 2
     step: float = 0.03
-    k: float = 0.08
+    k: float = 0.05           # step × steps / k = 1.2, under dream.py's 1.5 guard
     layer: int = 1            # index into LAYERS → conv3_3
     octaves: int = 0          # index into OCTAVES
-    mask_decay: float = 0.97
+    mask_decay: float = 0.99
     jitter: int = 8
 
 
@@ -204,7 +213,8 @@ uniform float u_pad;         // half a texel in v: a slot never bleeds into its 
 uniform float u_dream_w;     // the dream buffer's weight; 0 = none
 uniform float u_darken;
 uniform float u_contrast;
-uniform float u_hue;         // the dream's hue rotation, radians
+uniform float u_occlude;     // 0 the wake adds over the render … 1 the render covers it
+uniform float u_hue;        // the dream's hue rotation, radians
 uniform float u_sat;         // …and saturation scale about the grey axis
 uniform float u_tint;        // 0 the dream's own colours … 1 luminance × the tint
 uniform vec3 u_tint_rgb;     // the tint colour: chosen, or the scene's hue (Lookback.tint_rgb)
@@ -212,6 +222,7 @@ in vec2 v_uv;
 out vec4 f_color;
 
 const vec3 LUMA = vec3(0.299, 0.587, 0.114);
+const float OCCLUDE_GAIN = {OCCLUDE_GAIN};
 
 vec3 grade(vec3 c) {{
     return pow(max(c, vec3(1e-6)), vec3(u_contrast)) * (1.0 - u_darken);
@@ -255,6 +266,11 @@ void main() {{
         layer(texture(u_ring, vec2(v_uv.x, u_off[i] + y)), u_w[i], wake, wa);
     if (u_dream_w > 0.0)
         layer(vec4(chroma(texture(u_dream, v_uv).rgb), 1.0), u_dream_w, wake, wa);
+    // the render over the wake: where this frame drew, its brightness is
+    // its coverage and the wake beneath is held back by it
+    float cover = u_occlude * min(max(scene.r, max(scene.g, scene.b)) * OCCLUDE_GAIN, 1.0);
+    wake *= 1.0 - cover;
+    wa *= 1.0 - cover;
     f_color = vec4(min(scene.rgb + wake, 1.0), scene.a + wa - scene.a * wa);
 }}
 """
@@ -413,6 +429,7 @@ class Lookback:
         p["u_dream_w"].value = dream_w
         p["u_darken"].value = float(s.darken)
         p["u_contrast"].value = float(s.contrast)
+        p["u_occlude"].value = float(s.occlude)
         if dream_w > 0.0:
             p["u_hue"].value = math.radians(float(s.hue))
             p["u_sat"].value = float(s.sat)

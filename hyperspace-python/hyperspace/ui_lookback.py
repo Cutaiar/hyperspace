@@ -26,6 +26,11 @@ from . import ui
 from .lookback import RES, tint_colour
 
 RES_W = 84          # the res and octaves combos
+HALF_LABEL_W = 78   # the label column in a half-width cell, short labels
+# the half-width cells' labels: the registry's are too long for them
+SHORT = {"dream.mix": "dream", "dream.echo_mix": "echo", "dream.hue": "hue",
+         "dream.sat": "sat", "dream.tint_hue": "tint hue", "dream.tint_sat": "tint sat",
+         "dream.k": "blend k", "dream.mask_decay": "mask", "dream.step": "step"}
 THUMB_H = 48        # thumbnail height, px; width follows the echo's aspect
 
 
@@ -40,25 +45,29 @@ def page(panel, dt: float) -> None:
     imgui.same_line(imgui.get_content_region_avail().x - imgui.calc_text_size(status).x)
     imgui.align_text_to_frame_padding()
     imgui.text_disabled(status)
-    panel._row("dream.mix")
-    panel._row("dream.echo_mix")
-    panel._row("dream.decay")
-    panel._row("dream.darken")
-    panel._row("dream.contrast")
-    imgui.spacing()
-
-    panel._section("chroma", note="the dream buffer's colour")
-    panel._row("dream.hue")
-    panel._row("dream.sat")
-    panel._row("dream.tint")
-    ui._micro("from")
-    panel._tip(r["dream.tint_from"])
-    imgui.same_line(ui.LABEL_W)
-    panel._combo("dream.tint_from", 72)
-    imgui.same_line()
-    _tint_swatch(r, lb)
-    panel._row("dream.tint_hue")
-    panel._row("dream.tint_sat")
+    # the composite and the dream's chroma side by side, so the page fits
+    if imgui.begin_table("##lookback", 2, imgui.TableFlags_.sizing_stretch_same):
+        # the titles in a row of their own: a table aligns the text baseline
+        # across a row's cells, which would drop one title below the other
+        imgui.table_next_column()
+        panel._section("composite")
+        imgui.table_next_column()
+        panel._section("chroma")
+        imgui.table_next_column()
+        for pid in ("dream.mix", "dream.echo_mix", "dream.decay", "dream.darken",
+                    "dream.contrast", "dream.occlude"):
+            _half(panel, pid)
+        imgui.table_next_column()
+        for pid in ("dream.hue", "dream.sat", "dream.tint"):
+            _half(panel, pid)
+        panel._label_cell("from", width=HALF_LABEL_W)
+        panel._tip(r["dream.tint_from"])
+        panel._combo("dream.tint_from", 80)
+        imgui.same_line()
+        _tint_swatch(r, lb)
+        _half(panel, "dream.tint_hue")
+        _half(panel, "dream.tint_sat")
+        imgui.end_table()
     imgui.spacing()
 
     panel._section("history", note="rebuilds the ring")
@@ -81,11 +90,17 @@ def page(panel, dt: float) -> None:
     panel._combo("dream.layer", -(RES_W + imgui.get_style().item_spacing.x))
     imgui.same_line()
     panel._combo("dream.octaves", RES_W)
-    panel._row("dream.steps")
-    panel._row("dream.step")
-    panel._row("dream.k")
-    panel._row("dream.mask_decay")
-    panel._row("dream.jitter")
+    if imgui.begin_table("##worker", 2, imgui.TableFlags_.sizing_stretch_same):
+        for pid in ("dream.k", "dream.mask_decay", "dream.step", "dream.steps",
+                    "dream.jitter"):
+            imgui.table_next_column()
+            _half(panel, pid)
+        imgui.end_table()
+
+
+def _half(panel, pid: str) -> None:
+    """A labelled slider in a half-width table cell: short label, narrow column."""
+    panel._row(pid, label=SHORT.get(pid), label_w=HALF_LABEL_W)
 
 
 def _status(lb, on: bool) -> str:

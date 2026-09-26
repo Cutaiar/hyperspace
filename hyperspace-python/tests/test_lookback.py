@@ -149,7 +149,7 @@ def grade(c, contrast, darken):
     return np.power(np.maximum(c, 1e-6), contrast) * (1.0 - darken)
 
 
-def reference(scene, layers, darken, contrast):
+def reference(scene, layers, darken, contrast, occlude=1.0):
     """The shader's math in numpy: scene (h, w, 4) float, layers [(rgba, w)]
     oldest first; returns (h, w, 4) float."""
     wake = np.zeros(scene.shape[:2] + (3,), dtype=np.float64)
@@ -159,6 +159,9 @@ def reference(scene, layers, darken, contrast):
         a = w * c.max(axis=2)
         wake = wake * (1.0 - a)[..., None] + c * w
         wa = wa + a - wa * a
+    cover = occlude * np.minimum(scene[..., :3].max(axis=2) * 4.0, 1.0)
+    wake = wake * (1.0 - cover)[..., None]
+    wa = wa * (1.0 - cover)
     out = np.empty_like(scene)
     out[..., :3] = np.minimum(scene[..., :3] + wake, 1.0)
     out[..., 3] = scene[..., 3] + wa - scene[..., 3] * wa
@@ -267,8 +270,9 @@ def test_dream_chroma_matches_numpy_reference(ctx, chroma_kw, tint_rgb):
     import colorsys
 
     w, h = echo_size(128, 400, 256)
+    # occlude 0: the scene here is lit everywhere and would cover it all
     state = DreamState(on=True, echoes=0, every=1, res=0, darken=0.2, contrast=1.3, mix=0.6,
-                       **chroma_kw)
+                       occlude=0.0, **chroma_kw)
     rig = Rig(ctx, w, h, dream=state)
     rig.frame()
     lb = rig.lb
@@ -304,13 +308,45 @@ def test_dream_chroma_matches_numpy_reference(ctx, chroma_kw, tint_rgb):
         assert lb.scene_mean is None, "colour mode never reads the echo back"
     coloured = chroma(dream, state.hue, state.sat, state.tint, tint_rgb)
     rgba = np.concatenate([coloured, np.ones(coloured.shape[:2] + (1,))], axis=2)
-    ref = reference(scene, [(rgba, 0.6)], 0.2, 1.3)
+    ref = reference(scene, [(rgba, 0.6)], 0.2, 1.3, occlude=0.0)
     err = np.abs(out - ref)
     assert err.max() <= 2.5 / 255, f"max error {err.max() * 255:.2f}/255"
     assert err.mean() <= 0.4 / 255
     assert np.abs(out - scene).mean() > 0.02, "the dream is really there"
     # the black quarter of the dream adds nothing whatever its chroma
     assert np.array_equal((out[:, : w // 4] * 255).round(), (scene[:, : w // 4] * 255).round())
+    rig.release()
+
+
+@pytest.mark.parametrize("occlude", [0.0, 0.5, 1.0])
+def test_render_occludes_the_wake(ctx, occlude):
+    """The render over the wake: a lit shape covers the dream beneath it by
+    its brightness × occlude; between the shapes the dream shows whole."""
+    w, h = echo_size(128, 400, 256)
+    d = DreamState(on=True, echoes=0, every=1, res=0, darken=0.0, contrast=1.0, mix=1.0,
+                   occlude=occlude)
+    rig = Rig(ctx, w, h, dream=d)
+    rig.frame()
+    # a scene: a bright bar and a faint bar on black; a flat grey dream everywhere
+    scene8 = np.zeros((h, w, 4), dtype=np.uint8)
+    scene8[..., 3] = 255
+    scene8[:, 40:60, :3] = 200           # bright: covers fully at occlude 1
+    scene8[:, 100:120, :3] = 20          # faint: 20/255 × 4 ≈ 31 % coverage
+    rig.r.scene.tex.write(scene8)
+    dream8 = np.full((h, w, 4), 100, dtype=np.uint8)
+    rig.lb.write_from(dream8, frame_index=rig.lb.frame)
+    rig.fbo.use()
+    ctx.viewport = (0, 0, w, h)
+    rig.lb.composite(rig.r.scene.tex, rig.fbo)
+    out = rig.read().astype(np.float64) / 255.0
+    ref = reference(scene8 / 255.0, [(dream8 / 255.0, 1.0)], 0.0, 1.0, occlude=occlude)
+    assert np.abs(out - ref).max() <= 1.5 / 255
+    # between the shapes: the dream, whatever occlude is
+    assert np.abs(out[:, 150:, 0] - 100 / 255).max() <= 1 / 255
+    # on the bright bar: the render alone at occlude 1, render + dream at 0
+    bar = out[:, 40:60, 0]
+    want = 200 / 255 + (1.0 - occlude) * 100 / 255
+    assert np.abs(bar - min(want, 1.0)).max() <= 1.5 / 255
     rig.release()
 
 
@@ -560,7 +596,7 @@ def registry(dream=None):
 
 DREAM_IDS = [
     "dream.on", "dream.mix", "dream.echo_mix", "dream.decay", "dream.darken",
-    "dream.contrast", "dream.hue", "dream.sat", "dream.tint", "dream.tint_from",
+    "dream.contrast", "dream.occlude", "dream.hue", "dream.sat", "dream.tint", "dream.tint_from",
     "dream.tint_hue", "dream.tint_sat",
     "dream.echoes", "dream.every", "dream.res", "dream.steps", "dream.step",
     "dream.k", "dream.layer", "dream.octaves", "dream.mask_decay", "dream.jitter",
@@ -596,7 +632,7 @@ def test_dream_snapshot_round_trip():
     reg["dream.layer"].set(4)
     reg["dream.on"].set(True)
     assert reg.restore(snap) == []
-    assert d.mix == pytest.approx(0.4) and d.layer == 1 and d.on is False
+    assert d.mix == pytest.approx(0.7) and d.layer == 1 and d.on is False
 
 
 def test_factory_presets_load(tmp_path):
@@ -612,7 +648,7 @@ def test_factory_presets_load(tmp_path):
     assert lib.load("dream", "tracer-only") == []
     assert d.on and d.echoes == 8 and d.mix == 0.0 and d.echo_mix > 0
     assert lib.load("dream", "default") == []
-    assert not d.on and d.echoes == 4 and d.mix == pytest.approx(0.4)
+    assert not d.on and d.echoes == 8 and d.mix == pytest.approx(0.7)
     # the default preset is the fresh state: loading it leaves nothing dirty
     assert not lib.is_dirty("dream")
     fresh = DreamState()
