@@ -207,15 +207,29 @@ def _open_bridge(reg: Registry, cfg: dict):
         return None
 
 
-def _open_hands(cfg: dict):
+def _hand_settings(reg: Registry, cfg: dict):
+    """The hands setup as `hands.*` params — registered whether or not the
+    tracker is on, so a project or preset carries it either way. hands.py
+    imports the SDK only inside LeapSource, so this costs nothing."""
+    try:
+        from . import hands
+        settings = hands.HandSettings.from_config(cfg.get("hands"))
+        hands.register(reg, settings)
+        return settings
+    except Exception as e:  # noqa: BLE001 — a bad [hands] must not stop the show
+        print(f"hands: {e}", file=sys.stderr)
+        return None
+
+
+def _open_hands(cfg: dict, settings):
     """Ultraleap hands (hands.py), only when [hands] enabled — the same rule."""
     hc = cfg.get("hands", {})
-    if not hc.get("enabled", False):
+    if settings is None or not hc.get("enabled", False):
         return None
     try:
         from . import hands
         cal = hc.get("calibration")
-        return hands.HandsIO(hc, cal_path=Path(cal) if cal else None)
+        return hands.HandsIO(settings, hc, cal_path=Path(cal) if cal else None)
     except Exception as e:  # noqa: BLE001 — a broken adapter must not stop the show
         print(f"hands: {e}", file=sys.stderr)
         return None
@@ -380,6 +394,7 @@ def main() -> None:
     # an analyzer preset carries its band layout; the library hands it to
     # control before restoring values (07-overhaul contracts)
     library.on_layout("band", control.apply_layout)
+    hand_settings = _hand_settings(reg, cfg)   # before attach: "default" includes them
     library.attach(reg)
     panel = Panel(control, audio, s, renderer, presets, registry=reg, library=library)
     output = _make_output(render_win, reg, cfg)
@@ -394,7 +409,9 @@ def main() -> None:
     panel.midi = midi_io
     panel.router = router                  # the ROUTING page edits the live table
     bridge_io = _open_bridge(reg, cfg)
-    hands_io = _open_hands(cfg)
+    hands_io = _open_hands(cfg, hand_settings)
+    panel.hands = hands_io
+    panel.hand_settings = hand_settings
     dream_io = _open_dream(reg, cfg)
     if dream_io is not None:            # fills the look-back's dream slot
         renderer.lookback.source = dream_io
@@ -503,10 +520,10 @@ def main() -> None:
             except Exception as e:  # noqa: BLE001 — hot-reloaded code may raise
                 reloader.runtime_error = _err("midi", e)
 
-        # ---- Ultraleap hands: CCs through the MIDI table, hand lanes to routes ----
+        # ---- Ultraleap hands: hand lanes into the table, MIDI out to a DAW ----
         if hands_io is not None:
             try:
-                hands_io.poll(midi_io, router)
+                hands_io.poll(dt, midi_io, router)
             except Exception as e:  # noqa: BLE001
                 reloader.runtime_error = _err("hands", e)
 

@@ -1,21 +1,26 @@
-"""Ultraleap hands → MIDI: features, smoothing, quantizing, learn — fake hands, no SDK."""
+"""Ultraleap hands: features, the analog chain, MIDI out, learn, setups — fake hands, no SDK."""
 
+import itertools
+import json
 import math
 from types import SimpleNamespace as NS
 
 import numpy as np
 import pytest
 
+from hyperspace import hand_signal as hs
 from hyperspace import hands
 from hyperspace.analysis import Analyser
 from hyperspace.bands import Chain
 from hyperspace.control import Control
-from hyperspace.hands import HandsIO, OneEuro, features, make_axes, quantize
+from hyperspace.hands import HandSettings, HandsIO, features
 from hyperspace.library import Library
 from hyperspace.midi import MidiIO, MidiMap
-from hyperspace.params import build_registry
+from hyperspace.params import Registry, build_registry
 from hyperspace.render import ViewState
 from hyperspace.routing import Binding, Bindings, Router
+
+DT = 1 / 60
 
 
 def v3(x, y, z):
@@ -30,26 +35,38 @@ def hand(side="right", pos=(0.0, 200.0, 0.0), normal=(0.0, -1.0, 0.0),
               palm=NS(position=v3(*pos), normal=v3(*normal), direction=v3(*direction)))
 
 
+def tilt(rad):
+    """A right palm pitched up by rad."""
+    return (0.0, math.sin(rad), -math.cos(rad))
+
+
+class Clock:
+    def __init__(self):
+        self.t = 0.0
+
+    def __call__(self):
+        return self.t
+
+
 class FakeSource:
     """latest() like LeapSource; `put` is one tracking frame."""
 
-    def __init__(self):
-        self.seq, self.t, self.hands = 0, 0.0, {}
+    def __init__(self, clock):
+        self.clock = clock
+        self.seq, self.hands = 0, {}
         self.status, self.on = "tracking", True
 
-    def put(self, *hs, dt=1 / 90):
+    def put(self, *hs_):
         self.seq += 1
-        self.t += dt
-        self.hands = {}
-        for h in hs:
-            side = h.type.name.lower()
-            self.hands[side] = (features(h), h.confidence)
+        self.hands = {h.type.name.lower(): (features(h), h.confidence) for h in hs_}
 
     def latest(self):
-        return self.seq, self.t, self.hands
+        return self.seq, self.clock(), self.hands
 
 
 class FakeOut:
+    name = "fake"
+
     def __init__(self):
         self.sent = []
 
@@ -57,11 +74,33 @@ class FakeOut:
         self.sent.append(m)
 
 
-def io(**cfg):
-    src = FakeSource()
-    # no smoothing unless a test asks: values land exactly
-    cfg = {"min_cutoff": 1e6, "beta": 0.0, **cfg}
-    return HandsIO(cfg, source=src, out=FakeOut()), src
+def rig(tmp_path=None, **cfg):
+    """A HandsIO over fake hands, a fake clock and pass-through smoothing:
+    no filter, no catch, instant dynamics — each test turns on what it checks."""
+    settings = HandSettings.from_config(cfg)
+    settings.smooth, settings.response, settings.catch_s, settings.rate = 1e6, 0.0, 0.0, 0
+    for a in settings.axes:
+        a.deadzone, a.rest = 0.0, "hold"
+    clock = Clock()
+    src = FakeSource(clock)
+    io = HandsIO(settings, cfg, source=src, out=FakeOut(), clock=clock,
+                 cal_path=None if tmp_path is None else tmp_path / "hands.json")
+    return NS(io=io, src=src, clock=clock, s=settings)
+
+
+def run(r, frames=1, *hs_, midi=None, router=None, fresh=True):
+    """`frames` render frames; a new tracking frame on each when `fresh`."""
+    out = []
+    for _ in range(frames):
+        r.clock.t += DT
+        if fresh:
+            r.src.put(*hs_)
+        out += r.io.poll(DT, midi, router)
+    return out
+
+
+def ax(r, name):
+    return r.io.axis(name)
 
 
 # ---------------------------------------------------------------- features
@@ -85,169 +124,401 @@ def test_rotations_are_mirrored_between_hands(side, thumb_up_normal, outward):
 
 
 def test_fingers_up_is_positive_pitch():
-    d = (0.0, math.sin(0.5), -math.cos(0.5))
-    assert features(hand(direction=d))["pitch"] == pytest.approx(math.degrees(0.5))
+    assert features(hand(direction=tilt(0.5)))["pitch"] == pytest.approx(math.degrees(0.5))
 
 
-def test_grab_angle_in_degrees():
-    assert features(hand(grab=0.5))["grab_angle"] == pytest.approx(90)
+# ---------------------------------------------------------------- shape
+
+def test_linear_shape_is_the_identity():
+    for u in np.linspace(0, 1, 11):
+        assert hs.shape(u, bipolar=True, deadzone=0, c=0) == pytest.approx(u)
+        assert hs.shape(u, bipolar=False, deadzone=0, c=0) == pytest.approx(u)
 
 
-# ---------------------------------------------------------------- the axes
+def test_centred_dead_zone_is_flat_at_neutral_and_keeps_the_throw():
+    f = lambda u: hs.shape(u, bipolar=True, deadzone=0.2, c=0)
+    assert f(0.5) == f(0.55) == f(0.45) == 0.5          # |d| = 0.1 < 0.2
+    assert f(0.0) == 0.0 and f(1.0) == 1.0              # the ends still reach
+    assert f(0.8) > 0.5 > f(0.2)
 
-def test_cc_layout_left_then_right():
-    axes = make_axes({"dofs": ["x", "y", "grab"], "cc": 102})
-    assert [(a.name, a.cc) for a in axes] == [
-        ("left.x", 102), ("left.y", 103), ("left.grab", 104),
-        ("right.x", 105), ("right.y", 106), ("right.grab", 107)]
+
+def test_unipolar_dead_zone_sits_at_the_bottom():
+    f = lambda u: hs.shape(u, bipolar=False, deadzone=0.1, c=0)
+    assert f(0.05) == 0.0 and f(0.1) == 0.0 and f(1.0) == 1.0
+    assert f(0.55) == pytest.approx(0.5)
+
+
+def test_curve_is_symmetric_and_monotonic_about_centre():
+    f = lambda u: hs.shape(u, bipolar=True, deadzone=0, c=0.7)
+    xs = np.linspace(0, 1, 101)
+    ys = [f(x) for x in xs]
+    assert all(b >= a for a, b in itertools.pairwise(ys))
+    for x in xs:
+        assert f(x) - 0.5 == pytest.approx(0.5 - f(1 - x), abs=1e-12)
+    assert abs(f(0.6) - 0.5) < 0.1                    # + curve: fine near neutral
+
+
+# ---------------------------------------------------------------- dynamics
+
+def test_attack_and_decay_are_separate_time_constants():
+    y = 0.0
+    for _ in range(60):                                 # 1 s at attack 1 s: 1 − 1/e
+        y = hs.slew(y, 1.0, DT, attack=1.0, decay=0.1)
+    assert y == pytest.approx(1 - math.exp(-1), abs=1e-6)
+    for _ in range(6):                                  # 0.1 s at decay 0.1 s
+        y = hs.slew(y, 0.0, DT, attack=1.0, decay=0.1)
+    assert y == pytest.approx((1 - math.exp(-1)) * math.exp(-1), abs=1e-6)
+    assert hs.slew(0.2, 0.9, DT, 0.0, 0.0) == 0.9       # 0 is instant
+
+
+def test_spring_settles_in_time_and_bounce_overshoots():
+    y, v, peak = 1.0, 0.0, 1.0
+    for _ in range(30):                                  # 0.5 s settle, no bounce
+        y, v = hs.spring(y, v, 0.0, DT, 0.5, 0.0)
+        peak = min(peak, y)
+    assert abs(y) < 0.03 and peak > -1e-3               # there, and never past
+    y, v, low = 1.0, 0.0, 1.0
+    for _ in range(60):
+        y, v = hs.spring(y, v, 0.0, DT, 0.5, 0.8)
+        low = min(low, y)
+    assert low < -0.1                                    # it rang through rest
+
+
+def test_spring_is_stable_on_a_long_frame():
+    y, _ = hs.spring(1.0, 0.0, 0.0, 0.05, 0.05, 1.0)
+    assert math.isfinite(y) and abs(y) < 2
+
+
+def test_follower_catches_a_returning_hand_instead_of_jumping():
+    f = hs.Follower()
+    kw = {"attack": 0, "decay": 0, "catch_s": 0.2, "rest": "hold", "rest_value": 0.5,
+          "return_s": 0.5, "bounce": 0}
+    assert f.step(DT, 0.2, **kw) == 0.2                 # first sight: where the hand is
+    f.step(DT, None, **kw)                               # gone: hold
+    assert f.y == 0.2
+    y = f.step(DT, 0.9, **kw)                            # back, far away
+    assert 0.2 < y < 0.5
+    for _ in range(20):
+        y = f.step(DT, 0.9, **kw)
+    assert y == pytest.approx(0.9, abs=0.01) and f.mode == f.FOLLOW
+
+
+# ---------------------------------------------------------------- MIDI encoding
+
+def test_quantize_holds_at_a_step_boundary():
+    last, edge = 64, 64.5 / 127
+    for wobble in (-0.2, 0.2, -0.1, 0.3):
+        last = hs.quantize(edge + wobble / 127, last, 0.35)
+        assert last == 64
+    assert hs.quantize(65.0 / 127, last, 0.35) == 65
+    assert hs.quantize(1.0, None, 3, 16383) == 16383
+
+
+def test_encodings():
+    m = hs.encode("cc14", 15, 5, 0x1234)
+    assert [(x.control, x.value) for x in m] == [(5, 0x1234 >> 7), (37, 0x1234 & 0x7F)]
+    assert hs.encode("pitch", 3, 0, 8192)[0].pitch == 0
+    assert hs.encode("pitch", 3, 0, 16383)[0].pitch == 8191
+    p = hs.encode("pressure", 2, 0, 99)[0]
+    assert (p.type, p.channel, p.value) == ("aftertouch", 2, 99)
+    assert hs.encode("off", 0, 0, 1) == []
+    assert hs.valid("cc14", 40) and not hs.valid("cc14", 31) and not hs.valid("cc", 127)
+
+
+# ---------------------------------------------------------------- settings
+
+def test_default_layout_left_then_right():
+    s = HandSettings.from_config({"dofs": ["x", "y", "grab"], "cc": 102})
+    assert [(a.name, a.channel, a.number) for a in s.axes] == [
+        ("left.x", 16, 102), ("left.y", 16, 103), ("left.grab", 16, 104),
+        ("right.x", 16, 105), ("right.y", 16, 106), ("right.grab", 16, 107)]
+    assert [a.bipolar for a in s.axes[:3]] == [True, False, False]
 
 
 def test_bad_layouts_are_refused():
     with pytest.raises(ValueError, match="unknown"):
-        make_axes({"dofs": ["x", "wiggle"]})
+        HandSettings.from_config({"dofs": ["x", "wiggle"]})
     with pytest.raises(ValueError, match="past 127"):
-        make_axes({"cc": 120})
+        HandSettings.from_config({"cc": 120})
 
 
-def test_calibration_overrides_defaults(tmp_path):
-    axes = make_axes({}, {"right.y": {"lo": 50, "hi": 150, "invert": True}})
-    a = axes[[x.name for x in axes].index("right.y")]
-    assert (a.lo, a.hi, a.invert) == (50, 150, True)
-    assert a.norm(50) == 1.0 and a.norm(150) == 0.0
-    path = tmp_path / "hands.json"
-    hands.save_calibration(path, axes)
-    again = make_axes({}, hands.load_calibration(path))
-    assert [(x.lo, x.hi, x.invert) for x in again] == [(x.lo, x.hi, x.invert) for x in axes]
+def test_conflicts_name_clashing_outputs():
+    s = HandSettings.from_config({})
+    a, b = s.axes[0], s.axes[1]
+    a.out, a.number = "cc14", 40
+    assert "0–31" in hands.conflicts(s)[a.name]
+    a.out, a.number, a.channel = "cc14", 4, 16
+    b.out, b.number, b.channel = "cc", 36, 16                # a's LSB
+    assert "left.x" in hands.conflicts(s)[b.name]
+    a.out = b.out = "pitch"
+    assert hands.conflicts(s)[b.name]                        # one bend per channel
+    b.channel = 15
+    assert hands.conflicts(s) == {}
 
 
-# ---------------------------------------------------------------- quantize / filter
-
-def test_quantize_spans_the_midi_scale():
-    assert quantize(0.0, None, 0.35) == 0 and quantize(1.0, None, 0.35) == 127
-    assert quantize(0.5, None, 0.35) == 64
-
-
-def test_quantize_holds_at_a_step_boundary():
-    last = 64
-    edge = 64.5 / 127                          # exactly between 64 and 65
-    for wobble in (-0.2, 0.2, -0.1, 0.3):      # noise straddling the boundary
-        last = quantize(edge + wobble / 127, last, 0.35)
-        assert last == 64
-    assert quantize(65.0 / 127, last, 0.35) == 65   # a real move gets through
+def test_mirror_copies_the_feel_not_the_output():
+    s = HandSettings.from_config({})
+    src = s.axes[3]                                          # left.roll
+    src.curve, src.attack, src.rest, src.number = 0.6, 0.3, "hold", 1
+    dst = hands.mirror(s, "left.roll")
+    assert dst.name == "right.roll"
+    assert (dst.curve, dst.attack, dst.rest) == (0.6, 0.3, "hold") and dst.number != 1
 
 
-def test_one_euro_quiets_a_still_hand_and_follows_a_moving_one():
-    rng = np.random.default_rng(0)
-    f = OneEuro(1.0, 4.0)
-    still = [f(0.5 + rng.normal(0, 0.01), k / 90) for k in range(180)]
-    assert np.std(still[90:]) < 0.01 / 3       # jitter well under the raw noise
-    f.reset()
-    track = [f(k / 90, k / 90) for k in range(90)]  # a sweep of 1 u/s
-    assert track[-1] == pytest.approx(89 / 90, abs=0.05)
+def test_setup_is_registry_params_that_round_trip():
+    s = HandSettings.from_config({})
+    reg = Registry()
+    hands.register(reg, s)
+    hands.register(reg, s)                                   # idempotent
+    ps = reg.group("hands")
+    assert len(ps) == 5 + 12 * 13 and not any(p.modulatable for p in ps)
+    snap = reg.snapshot("hands")
+    reg["hands.right.pitch.curve"].set_value(-0.5)
+    reg["hands.right.pitch.rest"].set(0)
+    reg["hands.right.pitch.out"].set(hs.OUTS.index("pitch"))
+    reg["hands.smooth"].set_value(3.0)
+    a = s.axes[10]
+    assert (a.curve, a.rest, a.out, s.smooth) == (-0.5, "hold", "pitch", 3.0)
+    reg.restore(snap)
+    assert (a.curve, a.rest, a.out, s.smooth) == (0.0, "return", "cc", 1.0)
+
+
+def test_a_setup_saves_and_loads_through_the_library(tmp_path):
+    chain = Chain(Analyser())
+    reg = build_registry(ViewState(), Control(chain), NS(chain=chain))
+    s = HandSettings.from_config({})
+    hands.register(reg, s)
+    lib = Library(tmp_path)
+    lib.attach(reg)
+    assert "hands" in lib.groups()
+    s.axes[0].curve = 0.4
+    lib.save_as("hands", "Soft")
+    s.axes[0].curve = 0.0
+    lib.load("hands", "Soft")
+    assert s.axes[0].curve == pytest.approx(0.4)
 
 
 # ---------------------------------------------------------------- the adapter
 
-def test_hand_entering_sends_presence_then_its_ccs():
-    h, src = io()
-    src.put(hand("right", pos=(220.0, 350.0, 0.0)))   # right hand at x, y maxima
-    msgs = h.poll()
+def test_entering_sends_presence_then_the_axes():
+    r = rig()
+    msgs = run(r, 1, hand("right", pos=(220.0, 350.0, 0.0)))
     assert (msgs[0].type, msgs[0].note, msgs[0].channel) == ("note_on", 121, 15)
     ccs = {m.control: m.value for m in msgs if m.type == "control_change"}
     assert set(ccs) == set(range(108, 114))          # only the right hand's six
     assert ccs[108] == 127 and ccs[109] == 127       # x, y at the top of their ranges
     assert ccs[111] == 64                            # roll 0 sits mid-range
-    assert h.out.sent == msgs
+    assert r.io.out.sent == msgs
 
 
-def test_only_changes_are_sent_and_a_repeated_frame_is_held():
-    h, src = io()
-    src.put(hand())
-    h.poll()
-    assert h.poll() == []                     # same frame again: nothing
-    src.put(hand())
-    assert h.poll() == []                     # new frame, same pose: nothing
-    src.put(hand(pos=(0.0, 300.0, 0.0)))
-    assert [(m.control, m.value) for m in h.poll()] == [(109, round(200 / 250 * 127))]
+def test_a_still_hand_sends_nothing():
+    r = rig()
+    run(r, 1, hand())
+    assert run(r, 5, hand()) == []
+    assert run(r, 3, fresh=False) == []              # no new tracking frame: hold
+    msgs = run(r, 1, hand(pos=(0.0, 300.0, 0.0)))
+    assert [(m.control, m.value) for m in msgs] == [(109, round(200 / 250 * 127))]
 
 
-def test_leaving_holds_the_ccs_darkens_the_lanes_and_notes_off():
-    h, src = io()
-    src.put(hand("left"), hand("right"))
-    h.poll()
-    src.put(hand("right"))
-    msgs = h.poll()
-    assert [(m.type, m.note) for m in msgs] == [("note_off", 120)]
-    lanes = h.lanes()
-    assert all(math.isnan(u) for u in lanes[:6]) and not any(map(math.isnan, lanes[6:]))
+def test_leaving_springs_to_rest_and_hold_stays():
+    r = rig()
+    k = ax(r, "right.pitch")
+    a = r.s.axes[k]
+    a.rest, a.rest_value, a.return_s, a.bounce = "return", 0.5, 0.3, 0.0
+    run(r, 1, hand(direction=tilt(0.9)))             # pitched well up
+    y0 = r.io.state[k].y
+    msgs = run(r, 3)                                  # hand gone
+    assert ("note_off", 121) in [(m.type, getattr(m, "note", None)) for m in msgs]
+    assert 0.5 < r.io.state[k].y < y0                 # on its way home, not jumped
+    run(r, 30)
+    assert r.io.state[k].y == pytest.approx(0.5, abs=0.01)
+    assert r.io.state[k].q == 64                      # and the DAW heard it land
+    held = r.io.state[ax(r, "right.y")]
+    assert held.y == pytest.approx((200 - 100) / 250)  # a hold axis didn't move
 
 
-def test_low_confidence_counts_as_absent():
-    h, src = io(min_confidence=0.5)
-    src.put(hand(conf=0.2))
-    assert h.poll() == [] and not h.present["right"]
+def test_rate_limit_caps_messages_and_the_last_value_lands():
+    r = rig()
+    r.s.rate = 10                                     # 10/s: one per 6 frames at 60 fps
+    k = ax(r, "right.y")
+    sent = []
+    for j in range(60):                               # a 1 s sweep up
+        sent += [m for m in run(r, 1, hand(pos=(0.0, 100 + 250 * j / 59, 0.0)))
+                 if m.type == "control_change" and m.control == 109]
+    assert 9 <= len(sent) <= 11
+    run(r, 12, hand(pos=(0.0, 350.0, 0.0)))
+    assert r.io.state[k].q == 127
+
+
+def test_output_kinds_reach_the_port():
+    r = rig()
+    ax_ = r.s.axes
+    ax_[ax(r, "right.x")].out, ax_[ax(r, "right.x")].number = "cc14", 1
+    ax_[ax(r, "right.y")].out, ax_[ax(r, "right.y")].channel = "pitch", 2
+    ax_[ax(r, "right.z")].out, ax_[ax(r, "right.z")].channel = "pressure", 3
+    for name in ("right.roll", "right.pitch", "right.yaw"):
+        ax_[ax(r, name)].out = "off"
+    msgs = run(r, 1, hand(pos=(100.0, 225.0, 100.0)))[1:]      # past the presence note
+    kinds = sorted((m.type, m.channel) for m in msgs)
+    assert kinds == [("aftertouch", 2), ("control_change", 15), ("control_change", 15),
+                     ("pitchwheel", 1)]
+    bend = next(m for m in msgs if m.type == "pitchwheel")
+    assert bend.pitch == pytest.approx(0, abs=2)                  # y mid-range: centred
 
 
 def test_solo_lets_one_axis_through():
-    h, src = io()
-    h.solo = h.axis("right.z")
-    src.put(hand(pos=(10.0, 150.0, 40.0)))
-    assert [m.control for m in h.poll()] == [110]
+    r = rig()
+    r.io.solo = ax(r, "right.z")
+    assert [m.control for m in run(r, 1, hand(pos=(10.0, 150.0, 40.0)))] == [110]
+
+
+def test_low_confidence_counts_as_absent():
+    r = rig(min_confidence=0.5)
+    assert run(r, 1, hand(conf=0.2)) == [] and not r.io.present["right"]
+
+
+def test_lanes_carry_outputs_then_presence():
+    r = rig()
+    run(r, 1, hand())
+    lanes = r.io.lanes()
+    assert len(lanes) == 14 and r.io.lane_names[-2:] == ["L in", "R in"]
+    assert all(math.isnan(u) for u in lanes[:6]) and lanes[12:] == [0.0, 1.0]
+
+
+# ---------------------------------------------------------------- calibration
+
+def test_calibration_sweep_sets_and_saves_ranges(tmp_path):
+    r = rig(tmp_path)
+    r.io.start_calibration(1.0)
+    for j in range(70):
+        run(r, 1, hand(pos=(0.0, 150 + 100 * (j % 35) / 34, 0.0)))
+    assert not r.io.calibrating and "calibrated" in r.io.cal_note
+    st = r.io.state[ax(r, "right.y")]
+    assert st.lo == pytest.approx(150, abs=8) and st.hi == pytest.approx(250, abs=8)
+    saved = json.loads((tmp_path / "hands.json").read_text())["axes"]
+    assert saved["right.y"]["hi"] == pytest.approx(st.hi, abs=1e-3)
+    assert saved["left.y"] == {"lo": 100.0, "hi": 350.0}     # never reached: default
+    again = rig(tmp_path)
+    assert again.io.state[ax(again, "right.y")].hi == pytest.approx(st.hi, abs=1e-3)
+    again.io.reset_ranges()
+    assert again.io.state[ax(again, "right.y")].hi == 350.0
 
 
 # ---------------------------------------------------------------- through the table
 
 @pytest.fixture()
-def rig(tmp_path):
+def app(tmp_path):
     chain = Chain(Analyser())
     control = Control(chain)
     view = ViewState()
     lib = Library(tmp_path)
     reg = build_registry(view, control, NS(chain=chain), lib.bank)
     table = Bindings.load(tmp_path / "bindings.json", legacy_midi=None)
-    midi = MidiIO(reg, MidiMap(table=table), inp=_Quiet(), out=FakeOut())
-    return NS(reg=reg, view=view, midi=midi, router=Router(reg, table))
+
+    class Quiet:
+        def iter_pending(self):
+            return iter(())
+
+    midi = MidiIO(reg, MidiMap(table=table), inp=Quiet(), out=FakeOut())
+    return NS(reg=reg, view=view, midi=midi, router=Router(reg, table), table=table)
 
 
-class _Quiet:
-    def iter_pending(self):
-        return iter(())
+def test_learn_takes_the_axis_that_moved_as_a_float_row(app):
+    r = rig()
+    run(r, 1, hand(), midi=app.midi, router=app.router)
+    app.midi.learn("view.inst_amp")
+    for k in range(1, 8):                    # x jitters a little, pitch moves a lot
+        run(r, 1, hand(pos=(2.0 * k, 200.0, 0.0), direction=tilt(0.12 * k)),
+            midi=app.midi, router=app.router)
+    assert app.midi.learning is None
+    rows = [b for b in app.table.of("hand") if b.target == "view.inst_amp"]
+    assert [(b.source, b.op, b.pickup) for b in rows] == [
+        (f"hand:{ax(r, 'right.pitch')}", "abs", False)]
+    # the hand now drives it — in floats, off the fader's 100 detents
+    run(r, 1, hand(direction=tilt(math.radians(13.0))), midi=app.midi, router=app.router)
+    p = app.reg["view.inst_amp"]
+    u = (13.0 + 60) / 120
+    assert p.norm == pytest.approx(u, abs=1e-4)   # the filter at 1 MHz: all but exact
+    assert abs(p.norm * p.steps - round(p.norm * p.steps)) > 1e-3
 
 
-def test_learn_takes_the_axis_that_moved_and_skips_pickup(rig):
-    h, src = io()
-    src.put(hand())
-    h.poll(rig.midi, rig.router)
-    rig.midi.learn("view.inst_amp")
-    # everything jitters a little, pitch moves a lot: pitch is learned
-    for k in range(1, 8):
-        d = (0.0, math.sin(0.12 * k), -math.cos(0.12 * k))
-        src.put(hand(pos=(2.0 * k, 200.0, 0.0), direction=d))
-        h.poll(rig.midi, rig.router)
-    b = rig.midi.binding_for("view.inst_amp")
-    assert b is not None and b.source == "cc:15:112" and b.op == "abs"
-    assert b.pickup is False and b.feedback is None      # no APC ring, no pickup
-    # and now the hand drives it straight away
-    src.put(hand(direction=(0.0, math.sin(-1.0), -math.cos(-1.0))))   # pitch −57°
-    h.poll(rig.midi, rig.router)
-    p = rig.reg["view.inst_amp"]
-    # cc 3 of 127 (pitch −57° on ±60°), to the param's own step
-    assert p.norm == pytest.approx(round((-57.2958 + 60) / 120 * 127) / 127, abs=0.01)
+def test_a_panel_edit_stands_until_the_hand_moves(app):
+    r = rig()
+    app.table.add(Binding("hand:7", "view.inst_amp", "abs", pickup=False))   # right.y
+    run(r, 1, hand(), router=app.router)
+    p = app.reg["view.inst_amp"]
+    p.set_norm(0.9)
+    run(r, 3, hand(), router=app.router)
+    assert p.norm == pytest.approx(0.9)
+    run(r, 1, hand(pos=(0.0, 300.0, 0.0)), router=app.router)
+    assert p.norm == pytest.approx(0.8, abs=1e-4)
 
 
-def test_hand_lanes_modulate_and_let_go_when_the_hand_leaves(rig):
-    h, src = io()
-    p = rig.reg["view.inst_amp"]
+def test_learning_a_hand_again_moves_the_row_and_keeps_routes(app):
+    t = app.table
+    t.add(Binding("hand:3", "view.bright", "mod", 0.5))
+    t.bind(Binding("hand:3", "view.inst_amp", "abs", pickup=False))
+    t.bind(Binding("hand:3", "view.speed", "abs", pickup=False))      # same axis: moves
+    t.bind(Binding("hand:4", "view.speed", "abs", pickup=False))      # same param: swaps
+    rows = [(b.source, b.target, b.op) for b in t.of("hand")]
+    assert rows == [("hand:3", "view.bright", "mod"), ("hand:4", "view.speed", "abs")]
+
+
+def test_hand_lanes_modulate(app):
+    r = rig()
+    p = app.reg["view.inst_amp"]
     base = p.norm
-    rig.router.table.add(Binding("hand:6", "view.inst_amp", "mod", 0.5))   # right.x
-    src.put(hand(pos=(220.0, 200.0, 0.0)))                  # u = 1
-    h.poll(rig.midi, rig.router)
-    assert rig.router.labels["hand"][6] == "R x"
-    rig.router.modulate()
-    rig.reg.apply()
+    app.table.add(Binding("hand:6", "view.inst_amp", "mod", 0.5))   # right.x
+    run(r, 1, hand(pos=(220.0, 200.0, 0.0)), router=app.router)
+    assert app.router.labels["hand"][6] == "R x"
+    app.router.modulate()
+    app.reg.apply()
     assert p.eff_norm == pytest.approx(min(base + 0.5, 1.0), abs=1e-9)
-    src.put()                                              # hand gone
-    h.poll(rig.midi, rig.router)
-    rig.router.modulate()
-    rig.reg.apply()
-    assert p.eff_norm == pytest.approx(base, abs=1e-9)
+
+
+# ---------------------------------------------------------------- the page
+
+def test_hands_page_draws_live_and_offline(tmp_path):
+    from imgui_bundle import imgui
+
+    from hyperspace.ui import PAGE_KEYS, Panel, apply_style, load_fonts
+
+    ctx = imgui.create_context()
+    try:
+        io_ = imgui.get_io()
+        io_.display_size = imgui.ImVec2(820, 820)
+        io_.backend_flags |= imgui.BackendFlags_.renderer_has_textures
+        apply_style()
+        load_fonts()
+        chain = Chain(Analyser())
+        control = Control(chain)
+        audio = NS(chain=chain, on=False, mode="", error="", label="", sr=48000.0)
+        view = ViewState()
+        lib = Library(tmp_path, period=0.0)
+        reg = build_registry(view, control, audio, lib.bank)
+        r = rig()
+        hands.register(reg, r.s)
+        lib.attach(reg)
+        panel = Panel(control, audio, view, presets=lib.bank, registry=reg, library=lib)
+        panel.hand_settings = r.s
+        reg["ui.page"].set(PAGE_KEYS.index("hands"))
+
+        def frame():
+            imgui.new_frame()
+            panel.draw(DT, 60.0)
+            imgui.end_frame()
+
+        frame()                                       # tracker off: the setup still draws
+        panel.hands = r.io
+        run(r, 2, hand("left"), hand("right", direction=tilt(0.3)))
+        r.io.start_calibration(5.0)
+        for k in range(len(r.s.axes)):
+            panel._hands_sel = k
+            r.s.axes[k].out = hs.OUTS[k % len(hs.OUTS)]
+            r.s.axes[k].rest = hs.RESTS[k % 2]
+            frame()
+        r.s.axes[0].out, r.s.axes[0].number = "cc14", 99   # a conflict draws its warning
+        panel._hands_sel = 0
+        frame()
+    finally:
+        imgui.destroy_context(ctx)

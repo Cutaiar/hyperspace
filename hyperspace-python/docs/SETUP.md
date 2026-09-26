@@ -103,7 +103,7 @@ here, not to install it silently.
       `ultraleap/leapc-python-bindings` (precompiled only for 3.8), with the
       steps in [`plans/08-hands.md`](plans/08-hands.md#install-the-sdk-is-not-on-this-machine-yet).
 - [ ] `[hands] enabled = true` in config.toml; `tools/hands_probe.py
-      --calibrate 30` run once in the box.
+      --calibrate 20` (or the HANDS page's calibrate) run once in the box.
 
 ## Quickstart transcript for a fresh Mac (tiers A+B)
 

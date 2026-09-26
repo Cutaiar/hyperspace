@@ -20,9 +20,9 @@ Sources are one string, ``scheme:address``:
   pitch:<ch>       MIDI pitch bend
   lane:<i>         analyzer lane i — continuous, held every frame it is live
   ext:<i>          an external MIDI lane (WP4c); lfo:<i> is reserved
-  hand:<i>         Ultraleap hand axis i in [0, 1] (hands.py) — the same
-                   axis its CC carries, at float precision; NaN while that
-                   hand is out of view, and a NaN reading is not live
+  hand:<i>         Ultraleap hand axis i's output in [0, 1] (hands.py),
+                   then one presence lane per hand; NaN before that hand
+                   was ever seen, and a NaN reading is not live
 
 Ops — what a row does to its target:
 
@@ -31,7 +31,10 @@ Ops — what a row does to its target:
   step       move `value` detents (signed)
   set        set `value`: an enum choice, a toggle state, a fader's norm
   abs        an absolute control's position → set_norm (MIDI cc / pitch,
-             with soft pickup); a trigger fires on the rising half
+             with soft pickup); a trigger fires on the rising half. On a
+             continuous source (``hand:<i>``) the Router applies it
+             (`drive`): the param follows the source whenever it moves,
+             so a panel edit stands until the hand moves again
   rel/rel64  a relative encoder's delta → step
   momentary  note-on sets a toggle on, note-off sets it off
   mod        a continuous source modulates: every frame the source is
@@ -266,6 +269,8 @@ class Binding:
         addr = ":".join(self.parts)
         if s == "hat":
             return f"d-pad {addr}"
+        if s in LANE_SCHEMES and self.op == "abs":
+            return f"{s} {addr}"
         if s in LANE_SCHEMES:
             by = f" × {self.scale}" if self.scale else ""
             return f"{s} {addr} → {self.op} {self.value:+.3g}{by}"
@@ -503,13 +508,23 @@ class Bindings:
     # ---- edits ----
 
     def bind(self, b: Binding) -> None:
-        """A MIDI control drives one param; a param keeps one control per role.
+        """A control drives one param; a param keeps one control per role.
 
         Drops whatever the key drove before, and the param's previous
         binding in the same role: a knob (any cc or pitch binding) when
         learning a knob, or a button of the same op and value when
         learning a button — so a param's step buttons survive a knob learn.
         """
+        if not b.is_midi:
+            # a learned continuous source (hand:<i> abs): it drives one param,
+            # a param follows one such source; its routes (mod rows) stay
+            self.bindings = [x for x in self.bindings if not (
+                x.op == b.op and x.scheme == b.scheme
+                and (x.source == b.source or x.target == b.target))]
+            self.bindings.append(b)
+            self.write()
+            return
+
         def same_role(x: Binding) -> bool:
             if x.target != b.target or not x.is_midi:
                 return False
@@ -582,6 +597,31 @@ class Router:
         """An adapter hands in this frame's vector for `ext` / `lfo` sources
         (None: not live, its rows let go)."""
         self.feeds[scheme] = None if values is None else np.asarray(values, dtype=float)
+
+    def drive(self, scheme: str) -> None:
+        """The `abs` rows of a fed source: each target takes the source's
+        reading when it has changed since the row last applied it, so a
+        param moved by hand on the panel stays put until the source moves."""
+        vec = self.feeds.get(scheme)
+        if vec is None:
+            return
+        for b in self.table.of(scheme):
+            i = b.index
+            if b.op != "abs" or not b.enabled or not 0 <= i < len(vec):
+                continue
+            u = float(vec[i])
+            if math.isnan(u) or (b.last_hw is not None and abs(u - b.last_hw) < 1e-6):
+                continue
+            p = self.reg.get(b.target)
+            if p is None:
+                continue
+            b.last_hw = u
+            if p.kind is Kind.TRIGGER:
+                if u >= 0.5 > (b.last_out or 0.0):
+                    p.fire()
+                b.last_out = u
+            elif p.kind is not Kind.TEXT:
+                p.glide(u)
 
     def modulate(self, analyzer=None) -> None:
         """The frame's modulation pass: every enabled mod row whose source is

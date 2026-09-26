@@ -210,7 +210,6 @@ class MidiIO:
         self.last = ""          # last message seen, for the status line
         self.learning: str | None = None
         self._writes: dict[str, float] = {}  # param → norm we last wrote / saw
-        self._foreign = False   # inject(): the message isn't from this device
         if self.ports.injected:
             self._enter()
         elif self.ports.connect():
@@ -286,16 +285,6 @@ class MidiIO:
         if p is None:
             return
         b = Binding(Binding.midi_source(kind, channel, number), pid, "abs")
-        if self._foreign:
-            # another source (hands.py) speaking through the table: no
-            # device LEDs or relative encoders, and an absolute source
-            # that owns the value — no soft pickup
-            b.pickup = False
-            if kind == "note" or (kind == "cc" and p.kind is Kind.TRIGGER):
-                b.op = "toggle"
-            self.map.bind(b)
-            self.last = f"learned {pid} ← {b.describe()}"
-            return
         if kind == "cc":
             if self.profile.is_relative(number):
                 b.op = "rel"
@@ -316,6 +305,18 @@ class MidiIO:
         self.map.bind(b)
         self.last = f"learned {pid} ← {b.describe()}"
 
+    def learn_source(self, source: str) -> None:
+        """Another adapter completes the learn with one of its own sources
+        (hands.py: ``hand:<i>``): the param follows it absolutely — the
+        Router applies the row — with no pickup and no device feedback."""
+        pid = self.learning
+        self.learning = None
+        if pid is None or self.reg.get(pid) is None:
+            return
+        b = Binding(source, pid, "abs", pickup=False)
+        self.map.bind(b)
+        self.last = f"learned {pid} ← {b.describe()}"
+
     # ---- per frame ----
 
     def poll(self) -> None:
@@ -328,15 +329,6 @@ class MidiIO:
         for msg in self.ports.recv():
             self._handle(msg)
         self.feedback()
-
-    def inject(self, msg) -> None:
-        """A message from another source (hands.py) routed as if it came in
-        on this port: same table, same learn. Works with the port closed."""
-        self._foreign = True
-        try:
-            self._handle(msg)
-        finally:
-            self._foreign = False
 
     def _uncatch_moved(self) -> None:
         """A param that moved without us re-arms pickup on its knob."""

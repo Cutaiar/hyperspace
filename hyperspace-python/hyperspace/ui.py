@@ -29,7 +29,7 @@ import os
 
 from imgui_bundle import imgui
 
-from . import ui_bands, ui_lookback, ui_presets, ui_routing
+from . import ui_bands, ui_hands, ui_lookback, ui_presets, ui_routing
 from .analyzer import N_MAX
 from .audio import AudioEngine, input_devices
 from .bands import BANDS, CEIL, KNEE, NOM
@@ -190,7 +190,8 @@ CHEATSHEET = [
 # view group is big enough to split into View / Faces & Pattern / Bitmap,
 # and those two sub-pages say so in their section notes. The analyzer
 # page holds the master faders, scene and meters, then the band editor
-# (ui_bands.py); the routing page is the matrix (ui_routing.py).
+# (ui_bands.py); the routing page is the matrix (ui_routing.py); the hands
+# page is the Ultraleap live view and setup (ui_hands.py).
 PAGES = [
     ("output", "output", "output"),
     ("view", "view", "view"),
@@ -201,6 +202,7 @@ PAGES = [
     ("audio", "audio", None),
     ("analyzer", "analyzer", "band"),
     ("routing", "routing", None),
+    ("hands", "hands", "hands"),
     ("presets", "presets", None),
     ("system", "system", None),
 ]
@@ -237,6 +239,8 @@ class Panel:
         self.midi = None      # set by app.py when an adapter is up (midi.MidiIO)
         self.router = None    # set by app.py (routing.Router); else found via midi's table
         self.output = None    # set by app.py (overlay.Output); its params draw below
+        self.hands = None          # set by app.py when the tracker is on (hands.HandsIO)
+        self.hand_settings = None  # set by app.py (hands.HandSettings): the HANDS page
         self.restart_requested = False  # main loop polls after draw() and execv's
         self._register_panel_params()
 
@@ -293,7 +297,8 @@ class Panel:
         else:
             b = m.binding_for(p.id)
             if m.learning == p.id:
-                imgui.text_colored(RED, "move a control…")
+                imgui.text_colored(RED, "move a control or a hand…" if self.hands
+                                   else "move a control…")
                 if imgui.menu_item_simple("Cancel learn"):
                     m.learn(None)
             else:
@@ -303,6 +308,7 @@ class Panel:
                     m.learn(p.id)
                 if b is not None and imgui.menu_item_simple("Unbind"):
                     m.unbind(p.id)
+        ui_hands.ctx_rows(self, p)      # a hand axis bound to it, and Unbind
         ui_routing.ctx_item(self, p)    # "Route a lane here…" — the routing matrix
         imgui.end_popup()
 
@@ -910,6 +916,10 @@ class Panel:
     def _page_routing(self, dt: float) -> None:
         """The routing matrix — lanes → params (ui_routing.py)."""
         ui_routing.page(self, dt)
+
+    def _page_hands(self, dt: float) -> None:
+        """The Ultraleap hands: live view and setup (ui_hands.py)."""
+        ui_hands.page(self, dt)
 
     def _page_presets(self, dt: float) -> None:
         """The project and everything it carries: the theme bank, the modules."""
