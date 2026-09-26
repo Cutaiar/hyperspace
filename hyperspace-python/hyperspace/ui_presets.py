@@ -33,6 +33,8 @@ from .library import LibraryError
 LIST_POLL = 1.0      # seconds between re-listings of a group's presets
 NAME_MAX = 14        # chars of a preset name the strip shows before eliding
 PROJECT = "project"  # the listing / name-field key for the project row
+LOAD_W = 88          # the project row's load ▾ combo
+THEME_W = 40         # one F-key slot in the theme bank
 
 
 # ---- state on the panel, created on first use ----
@@ -82,6 +84,11 @@ def _elide(name: str) -> str:
     return name if len(name) <= NAME_MAX else name[: NAME_MAX - 1] + "…"
 
 
+def name_w() -> float:
+    """The strip's name button: NAME_MAX average characters and its padding."""
+    return imgui.calc_text_size("n" * NAME_MAX).x + 2 * imgui.get_style().frame_padding.x
+
+
 def _guard(panel, fn, *args):
     """Run a library call; a bad file or a full disk shows, never raises."""
     try:
@@ -98,7 +105,7 @@ def _name_field(panel, key: str, commit) -> bool:
     st = _state(panel)
     if st["naming"] != key:
         return False
-    imgui.set_next_item_width(-96)
+    imgui.set_next_item_width(-(ui.chip_w("ok", "×") + imgui.get_style().item_spacing.x))
     if st.pop("focus", False):          # the field takes the keyboard once, on open
         imgui.set_keyboard_focus_here()
     entered, st["buf"] = imgui.input_text_with_hint(
@@ -106,9 +113,9 @@ def _name_field(panel, key: str, commit) -> bool:
         imgui.InputTextFlags_.enter_returns_true | imgui.InputTextFlags_.auto_select_all,
     )
     imgui.same_line()
-    ok = imgui.small_button(f"ok##{key}") or entered
+    ok = ui.chip(f"ok##{key}") or entered
     imgui.same_line()
-    if imgui.small_button(f"×##{key}") or imgui.is_key_pressed(imgui.Key.escape):
+    if ui.chip(f"×##{key}") or imgui.is_key_pressed(imgui.Key.escape):
         st["naming"] = None
     if ok:
         name = st["buf"].strip()
@@ -148,7 +155,7 @@ def strip(panel, group: str) -> None:
     imgui.push_style_color(imgui.Col_.button, imgui.ImVec4(0, 0, 0, 0))
     imgui.push_style_color(imgui.Col_.text, ui.DIM if factory or cur is None else
                            imgui.ImVec4(0.92, 0.92, 0.92, 1))
-    if imgui.button(f"{label}##name", imgui.ImVec2(NAME_MAX * 7.4 + 8, 0)):
+    if imgui.button(f"{label}##name", imgui.ImVec2(name_w(), 0)):
         imgui.open_popup("list")
     imgui.pop_style_color(2)
     if imgui.is_item_hovered():
@@ -166,9 +173,9 @@ def strip(panel, group: str) -> None:
     _list_popup(panel, group, listing, cur)
 
     # save · as… · reset, flush right
-    imgui.same_line(imgui.get_content_region_avail().x - 128)
+    imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w("save", "as…", "reset"))
     imgui.begin_disabled(cur is None or factory)
-    if imgui.small_button("save"):
+    if ui.chip("save"):
         _guard(panel, lib.overwrite, group)
         invalidate(panel, group)
     imgui.end_disabled()
@@ -176,12 +183,12 @@ def strip(panel, group: str) -> None:
         imgui.set_tooltip("Write the group's settings over the current preset"
                           + (" — a factory preset: save as… instead" if factory else ""))
     imgui.same_line()
-    if imgui.small_button("as…"):
+    if ui.chip("as…"):
         _begin_naming(panel, group, cur or "")
     if imgui.is_item_hovered():
         imgui.set_tooltip("Save the group's settings as a new user preset")
     imgui.same_line()
-    if imgui.small_button("reset"):
+    if ui.chip("reset"):
         _guard(panel, lib.reset, group)
     if imgui.is_item_hovered():
         d = lib.default_name(group)
@@ -212,9 +219,9 @@ def _list_popup(panel, group: str, listing: list[str], cur: str | None) -> None:
         if picked:
             _guard(panel, lib.load, group, name)
         if not factory:  # a user file: deletable from here
-            imgui.same_line(imgui.get_content_region_avail().x - 8)
+            imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w("×"))
             imgui.push_style_color(imgui.Col_.text, ui.DIM)
-            if imgui.small_button(f"×##del.{name}"):
+            if ui.chip(f"×##del.{name}"):
                 _guard(panel, lib.delete, group, name)
                 invalidate(panel, group)
             imgui.pop_style_color()
@@ -245,18 +252,20 @@ def project_row(panel) -> None:
         imgui.text_colored(ui.RED, "●")
         if imgui.is_item_hovered():
             imgui.set_tooltip("the live state differs from the project file")
-    imgui.same_line(imgui.get_content_region_avail().x - 212)
-    if imgui.small_button("save"):
+    sp = imgui.get_style().item_spacing.x
+    imgui.same_line(imgui.get_content_region_avail().x
+                    - ui.chip_w("save", "as…", "new") - LOAD_W - sp)
+    if ui.chip("save"):
         _guard(panel, proj.save)
         invalidate(panel, PROJECT)
     if imgui.is_item_hovered():
         imgui.set_tooltip("Snapshot everything — every group, the theme bank — "
                           "into the project file")
     imgui.same_line()
-    if imgui.small_button("as…"):
+    if ui.chip("as…"):
         _begin_naming(panel, PROJECT, proj.name)
     imgui.same_line()
-    imgui.set_next_item_width(64)
+    imgui.set_next_item_width(LOAD_W)
     if imgui.begin_combo("##load", "load"):
         listing = names(panel, PROJECT)
         if not listing:
@@ -269,7 +278,7 @@ def project_row(panel) -> None:
     if imgui.is_item_hovered():
         imgui.set_tooltip("Open a project from the library")
     imgui.same_line()
-    if imgui.small_button("new"):
+    if ui.chip("new"):
         _guard(panel, proj.new)
     if imgui.is_item_hovered():
         imgui.set_tooltip("A fresh project: default state, the factory theme bank")
@@ -299,12 +308,10 @@ def theme_bank(panel) -> None:
         if k:
             imgui.same_line()
         lit = k == pr.active and slot is not None
-        color = ui.RED if lit else ui.DIM if slot is None else imgui.ImVec4(0.92, 0.92, 0.92, 1)
-        imgui.push_style_color(imgui.Col_.text, color)
         pid = f"theme.{'save' if io.key_shift else 'load'}.{k}"
-        if imgui.small_button(f"{k + 1}##theme{k}"):
+        if ui.lit_chip(f"{k + 1}##theme{k}", lit, ui.FAINT if slot is None else ui.TEXT,
+                       imgui.ImVec2(THEME_W, 0)):
             r[pid].fire()
-        imgui.pop_style_color()
         if imgui.is_item_hovered() and slot is not None:
             imgui.set_tooltip(slot["name"])
         panel._ctx(r[f"theme.load.{k}"])
@@ -332,7 +339,7 @@ def overview(panel) -> None:
     for group in groups(panel):
         cur = lib.current(group)
         imgui.text_disabled(f"{group:<8s}")
-        imgui.same_line(80)
+        imgui.same_line(ui.LABEL_W)
         imgui.text_colored(ui.DIM if cur is None else imgui.ImVec4(0.92, 0.92, 0.92, 1),
                            cur or "—")
         if dirty(panel, group, polled=True):
