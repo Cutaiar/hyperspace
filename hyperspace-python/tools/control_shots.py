@@ -74,7 +74,17 @@ class SynthHands:
         self.seq += 1
         t = self.seq / 60
         pal = lambda x, y, z, nrm, d: SimpleNamespace(
-            position=_v(x, y, z), normal=_v(*nrm), direction=_v(*d))
+            position=_v(x, y, z), normal=_v(*nrm), direction=_v(*d), width=90.0)
+
+        def digits(obj, phase):
+            """Fingers pinching in turn, so the switch row has something
+            to show: each finger closes a quarter-cycle after the last."""
+            obj.thumb = SimpleNamespace(distal=SimpleNamespace(next_joint=_v(0, 0, 0)))
+            for i, f in enumerate(hands.PINCHES):
+                gap = 12 + 48 * (0.5 + 0.5 * np.cos(t * 0.9 + phase + i * 1.6))
+                setattr(obj, f, SimpleNamespace(
+                    distal=SimpleNamespace(next_joint=_v(gap, 0, 0))))
+            return obj
         left = SimpleNamespace(
             type=SimpleNamespace(name="Left"), confidence=1.0, grab_strength=0.0,
             pinch_strength=0.0, grab_angle=0.0, pinch_distance=80.0,
@@ -86,7 +96,8 @@ class SynthHands:
             pinch_strength=0.0, grab_angle=0.0, pinch_distance=80.0,
             palm=pal(120, 150 + 150 * (0.5 + 0.5 * np.sin(t * 0.5)), -30,
                      (0, -1, 0), (0, np.sin(a), -np.cos(a))))
-        hs = {h.type.name.lower(): (hands.features(h), 1.0) for h in (left, right)}
+        hs = {h.type.name.lower(): (hands.features(h), 1.0)
+              for h in (digits(left, 0.0), digits(right, 2.2))}
         return self.seq, t, hs
 
 
@@ -120,7 +131,9 @@ def draw(self, dt, fps):
     k = min(n // SETTLE, len(schedule) - 1)
     self.reg["ui.page"].set(schedule[k][0])
     if HANDS and self.hand_settings is not None:
-        if self.hands is None:
+        if not isinstance(getattr(self.hands, "source", None), SynthHands):
+            if self.hands is not None:      # [hands] enabled: drop the real tracker,
+                self.hands.close()          # the shots must not depend on a camera
             self.hands = hands.HandsIO(self.hand_settings, source=SynthHands(), out=NullOut())
             self._hands_sel = self.hands.axis("right.pitch")
             a = self.hand_settings.axes[self._hands_sel]

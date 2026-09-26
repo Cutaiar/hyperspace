@@ -112,16 +112,23 @@ def _status(io) -> None:
 
 
 def _pinches(io) -> None:
-    """The eight thumb-to-finger switches, lit as they close."""
+    """The eight thumb-to-finger switches: lit as they close, each with
+    the live gap that closed it. The number is the tuning instrument —
+    watch how near a finger actually gets, then set Pinch close under
+    it. Ring and pinky never come as close as index and middle."""
     if io is None or not io.cfg.get("pinch_gates"):
         return
+    close = io.settings.pinch_close
     for s in SIDES:
-        imgui.align_text_to_frame_padding()
-        lit = " ".join(f"{f[:3]}{'●' if io.gates[s][f].on else '○'}"
-                       for f in PINCHES)
-        imgui.text_disabled(f"{s[0].upper()} pinch  {lit}")
-        if s == SIDES[0]:
-            imgui.same_line(0.0, 24.0)
+        imgui.text_colored(ui.DIM, f"{s[0].upper()} pinch")
+        for f in PINCHES:
+            imgui.same_line()
+            on = io.gates[s][f].on
+            d = (io.frame[s] or {}).get(f"pinch_{f}")
+            near = d is not None and d < close * 1.35   # closing in on the threshold
+            col = ui.RED if on else (ui.TEXT if near else ui.FAINT)
+            gap = "—" if d is None else f"{d:.2f}"
+            imgui.text_colored(col, f"{f[:3]} {'●' if on else '○'}{gap}")
 
 
 def _box(io) -> None:
