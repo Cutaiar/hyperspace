@@ -52,6 +52,14 @@ Ops — what a row does to its target:
              and dormancy are exactly mod's. One replace row per target
              is the meaningful case (two sum their departures from the base).
 
+Gating (`when`): any row may name a second source address that has to
+read on (≥ 0.5) before the row acts at all — a pinch switch over a hand
+axis, so the same movement means one thing pinched and nothing open. An
+`abs` row simply stops following while the gate is open, leaving the
+param where it was; a `mod` row stops modulating, and apply() writes the
+base back. A gate whose source is not live holds the row shut, never
+open: nothing should start moving because a camera was unplugged.
+
 Lane normalization: ``u = lane / CEIL`` — the analyzer's lanes are in
 [0, CEIL) (bands.CEIL, the fader asymptote), so a lane at the asymptote
 reads u = 1.0 and nominal (1.0) reads 1 / CEIL. u is not clamped; the
@@ -156,6 +164,9 @@ class Binding:
     value: float = 1.0           # set: the value · step: the detents · mod: the depth
     enabled: bool = True
     scale: str | None = None     # mod: a param whose value multiplies the depth
+    # a source address ("hand:14") that must read on for this row to apply:
+    # a pinch switch gating an axis, so the same hand move means two things
+    when: str | None = None
     # MIDI controls only (midi.py); other sources ignore them
     pickup: bool = True
     feedback: str | None = None  # "ring" | "led" | None
@@ -236,7 +247,8 @@ class Binding:
         for k in self._RUNTIME:
             d.pop(k)
         # only what differs from the defaults keeps the file readable
-        for k in ("value", "enabled", "scale", "pickup", "feedback", "on", "off", "ring"):
+        for k in ("value", "enabled", "scale", "when", "pickup", "feedback",
+                  "on", "off", "ring"):
             if d[k] == self.__dataclass_fields__[k].default:
                 d.pop(k)
         return d
@@ -598,6 +610,30 @@ class Router:
         (None: not live, its rows let go)."""
         self.feeds[scheme] = None if values is None else np.asarray(values, dtype=float)
 
+    def gated(self, b: Binding, lanes=None) -> bool:
+        """Is this row allowed to act this frame?
+
+        A row with no `when` always is. One with `when` waits on that
+        source address reading on (≥ 0.5) — a pinch switch, say, so the
+        same hand movement can mean two different things. A gate whose
+        source is not live holds the row shut rather than open: nothing
+        should start moving because a camera was unplugged.
+        """
+        if b.when is None:
+            return True
+        scheme, _, addr = b.when.partition(":")
+        vec = lanes if scheme == "lane" else self.feeds.get(scheme)
+        if vec is None:
+            return False
+        try:
+            i = int(addr)
+        except ValueError:
+            return False
+        if not 0 <= i < len(vec):
+            return False
+        u = float(vec[i])
+        return not math.isnan(u) and u >= 0.5
+
     def drive(self, scheme: str) -> None:
         """The `abs` rows of a fed source: each target takes the source's
         reading when it has changed since the row last applied it, so a
@@ -608,6 +644,8 @@ class Router:
         for b in self.table.of(scheme):
             i = b.index
             if b.op != "abs" or not b.enabled or not 0 <= i < len(vec):
+                continue
+            if not self.gated(b):
                 continue
             u = float(vec[i])
             if math.isnan(u) or (b.last_hw is not None and abs(u - b.last_hw) < 1e-6):
@@ -636,6 +674,8 @@ class Router:
             u = float(vec[i])
             if math.isnan(u):    # this lane's source is out of view
                 continue
+            if not self.gated(b, lanes):
+                continue         # gate open: apply() writes the base back
             p = self.reg.get(b.target)
             if p is None:
                 continue

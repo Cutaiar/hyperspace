@@ -632,3 +632,53 @@ def test_bad_pinch_notes_are_refused(cfg, why):
 
 def test_pinch_notes_may_sit_where_presence_is_off():
     HandSettings.from_config({"pinch_note": 118, "presence": False})
+
+
+# ------------------------------------------------- a pinch gating an axis
+
+def test_a_pinch_gates_the_axis_so_one_move_means_two_things(app):
+    """The point of the switches: pinched hand-up-down drives the param,
+    open hand-up-down leaves it alone, and letting go holds the value."""
+    r = rig()
+    gate = 14 + 4                                   # R index, after 12 axes + 2 presence
+    app.table.add(Binding("hand:7", "view.inst_amp", "abs",     # right.y
+                          pickup=False, when=f"hand:{gate}"))
+    p = app.reg["view.inst_amp"]
+    p.set_norm(0.5)
+    wide = {"tips": (60.0, 60.0, 60.0, 60.0), "palm_w": 100.0}
+    shut = {"tips": (10.0, 60.0, 60.0, 60.0), "palm_w": 100.0}
+
+    # open hand, moving: the param does not budge
+    run(r, 2, hand(pos=(0.0, 300.0, 0.0), **wide), router=app.router)
+    assert p.norm == pytest.approx(0.5)
+
+    # pinched, the same height: now it follows
+    run(r, 2, hand(pos=(0.0, 300.0, 0.0), **shut), router=app.router)
+    assert p.norm == pytest.approx(0.8, abs=1e-4)
+
+    # still pinched, moving: it tracks
+    run(r, 2, hand(pos=(0.0, 200.0, 0.0), **shut), router=app.router)
+    assert p.norm == pytest.approx(0.4, abs=1e-4)
+
+    # let go and keep moving: it holds where it was left
+    run(r, 2, hand(pos=(0.0, 350.0, 0.0), **wide), router=app.router)
+    assert p.norm == pytest.approx(0.4, abs=1e-4)
+
+
+def test_an_ungated_row_is_untouched_by_the_switches(app):
+    r = rig()
+    app.table.add(Binding("hand:7", "view.inst_amp", "abs", pickup=False))
+    run(r, 2, hand(pos=(0.0, 300.0, 0.0), tips=(60.0,) * 4, palm_w=100.0),
+        router=app.router)
+    assert app.reg["view.inst_amp"].norm == pytest.approx(0.8, abs=1e-4)
+
+
+def test_a_gate_whose_source_is_dark_holds_the_row_shut(app):
+    """No hands at all: the gate must not read as open."""
+    r = rig()
+    app.table.add(Binding("hand:7", "view.inst_amp", "abs",
+                          pickup=False, when="hand:18"))
+    p = app.reg["view.inst_amp"]
+    p.set_norm(0.5)
+    run(r, 2, router=app.router)                 # nothing in view
+    assert p.norm == pytest.approx(0.5)

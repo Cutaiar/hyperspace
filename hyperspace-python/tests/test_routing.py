@@ -618,3 +618,36 @@ def test_midi_view_shares_the_table(tmp_path):
     assert len(again.of("key")) == 23 and len(again.mods()) == 12
     m.unbind("view.zoom")
     assert Bindings.load(bindings_path(tmp_path)).for_param("view.zoom") is None
+
+
+def test_a_gated_row_round_trips_and_stays_out_of_ungated_files():
+    plain = Binding("hand:7", "view.bright", "abs")
+    assert "when" not in plain.to_json()
+    b = Binding("hand:7", "view.bright", "abs", when="hand:18")
+    d = b.to_json()
+    assert d["when"] == "hand:18" and Binding.from_json(d) == b
+
+
+def test_a_gate_holds_a_mod_row_and_lets_the_base_back():
+    """Gated off, the row simply does not modulate — apply() then writes
+    the base back, so the param returns to what the panel says."""
+    reg = rig().reg
+    table = Bindings()
+    r = Router(reg, table)
+    table.add(Binding("hand:0", "view.bright", "mod", 0.5, when="hand:2"))
+    p = reg["view.bright"]
+    p.set_norm(0.25)
+    r.feed("hand", [1.0, 0.0, 0.0])          # gate lane 2 is off
+    r.modulate()
+    reg.apply()
+    assert not p.modulated                   # nothing held it: the base stands
+    base = p.value
+    r.feed("hand", [1.0, 0.0, 1.0])          # gate on: the depth lands
+    r.modulate()
+    reg.apply()
+    assert p.modulated and p.value > base
+    assert p.norm == pytest.approx(0.25)     # the base itself never moved
+    r.feed("hand", [1.0, 0.0, 0.0])          # let go: back to the base
+    r.modulate()
+    reg.apply()
+    assert not p.modulated and p.value == pytest.approx(base)
