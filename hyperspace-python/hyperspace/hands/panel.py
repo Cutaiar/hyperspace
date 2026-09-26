@@ -65,13 +65,39 @@ def ctx_rows(panel, p) -> None:
         return
     names = getattr(router, "labels", {}).get("hand") or []
     rows = [b for b in router.table.of("hand") if b.op == "abs" and b.target == p.id]
+    label = lambda i: names[i] if 0 <= i < len(names) else str(i)
     for b in rows:
-        i = b.index
-        imgui.text(f"hand {names[i] if 0 <= i < len(names) else i}")
+        imgui.text(f"hand {label(b.index)}")
+    if rows and _gate_menu(router, rows):
+        router.table.write()
     if rows and imgui.menu_item_simple("Unbind hand"):
         for b in rows:                  # the abs rows only: its routes stay
             router.table.remove(b)
         router.table.write()
+
+
+def _gate_menu(router, rows) -> bool:
+    """Pick the pinch that has to be held for these rows to act."""
+    gates = getattr(router, "gates", {}).get("hand") or []
+    if not gates:
+        return False
+    cur = next((b.when for b in rows if b.when), None)
+    shown = next((lb for src, lb in gates if f"hand:{src}" == cur), None)
+    if not imgui.begin_menu(f"Gate: {shown or 'none'}"):
+        return False
+    hit = False
+    if imgui.menu_item_simple("none", selected=cur is None) and cur is not None:
+        for b in rows:
+            b.when = None
+        hit = True
+    for src, lb in gates:
+        addr = f"hand:{src}"
+        if imgui.menu_item_simple(lb, selected=cur == addr) and cur != addr:
+            for b in rows:
+                b.when = addr
+            hit = True
+    imgui.end_menu()
+    return hit
 
 
 # ---- the page ----

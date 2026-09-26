@@ -50,6 +50,7 @@ N_EXT = 16                # ext lanes offered once any ext source is around
 BAR_W = 56.0
 SRC_W = 84.0             # the source combo: a lane's number and name
 DEPTH_W = 112.0
+GATE_W = 62.0            # the pinch-gate combo on line 2
 
 
 # ---- state on the panel ----
@@ -253,6 +254,35 @@ def _sources(panel, router: Router) -> list[tuple[str, str]]:
     return out
 
 
+def _gates(router: Router) -> list[tuple[str, str]]:
+    """(address, label) for every switch an adapter offers as a gate."""
+    return [(f"{scheme}:{i}", lb)
+            for scheme, lanes in getattr(router, "gates", {}).items()
+            for i, lb in lanes]
+
+
+def _gate_combo(panel, router: Router, b: Binding, width: float) -> None:
+    """Which switch has to be held for this row to act, or none."""
+    gates = _gates(router)
+    if not gates:
+        return
+    labels = ["no gate"] + [lb for _, lb in gates]
+    addrs = [None] + [a for a, _ in gates]
+    cur = addrs.index(b.when) if b.when in addrs else 0
+    if b.when is not None and b.when not in addrs:      # a gate we can't name
+        labels, addrs, cur = labels + [b.when], addrs + [b.when], len(labels)
+    imgui.set_next_item_width(width)
+    if imgui.begin_combo("##gate", labels[cur], imgui.ComboFlags_.no_arrow_button):
+        for i, lb in enumerate(labels):
+            sel, _ = imgui.selectable(lb, i == cur)
+            if sel:
+                b.when = addrs[i]
+        imgui.end_combo()
+    if imgui.is_item_hovered():
+        imgui.set_tooltip("A pinch switch that must be held for this route to act — "
+                          "the same hand movement can then mean two things")
+
+
 def _live(panel, router: Router, b: Binding) -> float | None:
     """The source's normalized reading this frame, None while it isn't live."""
     i = b.index
@@ -380,7 +410,9 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
                                              else " — 1 is the full throw at a lane's asymptote")
                           + "\nctrl-click to type")
     imgui.same_line()
-    scale = _param_combo(panel, "##scale", b.scale, -(BAR_W + sp),
+    gate_w = GATE_W if _gates(router) else 0.0
+    scale = _param_combo(panel, "##scale", b.scale,
+                         -(BAR_W + gate_w + sp * (2 if gate_w else 1)),
                          [q for q in reg if q.kind is Kind.CONTINUOUS and not q.alias],
                          none="× 1")
     if scale is not False:
@@ -388,6 +420,9 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
     if imgui.is_item_hovered():
         imgui.set_tooltip("A param whose live value multiplies the depth (master.gain "
                           "on the rate routes)")
+    if gate_w:
+        imgui.same_line()
+        _gate_combo(panel, router, b, gate_w)
     imgui.same_line()
     _live_bar(panel, router, b, p)
     imgui.pop_id()

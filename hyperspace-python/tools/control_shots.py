@@ -49,7 +49,8 @@ state = {"frame": 0, "panel": None, "shot": None, "router": None, "t": 0.0}
 if HANDS:
     OUT = OUT.parent / "08-hands"
     SETTLE = 150
-    schedule = [(PAGE_KEYS.index("hands"), "hands")]
+    schedule = [(PAGE_KEYS.index("hands"), "hands"),
+                (PAGE_KEYS.index("routing"), "routing-gated")]
 elif BANDS:
     # the ring holds 4 s of frame time: settle long enough to fill it
     SETTLE = 600
@@ -139,6 +140,18 @@ def draw(self, dt, fps):
             a = self.hand_settings.axes[self._hands_sel]
             a.curve, a.deadzone, a.attack, a.decay = 0.5, 0.08, 0.05, 0.3
         self.hands.poll(1 / 60, self.midi, state["router"])
+        r = state["router"]
+        if r is not None and not any(b.when for b in r.table.bindings):
+            # just two hand routes, the same axis gated and not, so the
+            # shot shows the picker both ways instead of 13 band rows
+            for b in list(r.table.routes()):
+                r.table.remove(b)
+            y = self.hands.axis("right.y")
+            gate = self.hands.gate_lane("right", "index")
+            r.table.add(Binding(f"hand:{y}", "view.bright", "mod", 0.5,
+                                when=f"hand:{gate}"))
+            r.table.add(Binding(f"hand:{y}", "view.speed", "mod", 0.5))
+            self.router = r
     if MOD:
         for pid, u in MODULATED.items():
             self.reg[pid].modulate(u)

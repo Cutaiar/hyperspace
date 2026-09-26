@@ -659,6 +659,25 @@ class HandsIO:
         """Index of "left.pitch" etc.; ValueError when there is none."""
         return [a.name for a in self.axes].index(name)
 
+    def gate_lane(self, side: str, finger: str) -> int:
+        """Lane index of one pinch switch — what a `when` address names."""
+        return (len(self.axes) + len(SIDES)
+                + SIDES.index(side) * len(PINCHES) + PINCHES.index(finger))
+
+    def held_gate(self, side: str | None = None) -> str | None:
+        """The pinch being held right now as a source address, or None.
+
+        This is what lets a learn started while pinching wear the pinch:
+        the hand that learned the axis gets asked first, so a left-hand
+        move gated by a left-hand thumb is the natural reading.
+        """
+        order = ([side] + [s for s in SIDES if s != side]) if side else list(SIDES)
+        for s in order:
+            for f in PINCHES:
+                if self.gates[s][f].on:
+                    return f"hand:{self.gate_lane(s, f)}"
+        return None
+
     def lanes(self) -> list[float]:
         """Each axis's output y (NaN before its hand was ever seen), then
         one presence lane per hand (1 in view, 0 not), then the eight
@@ -733,6 +752,12 @@ class HandsIO:
             if not hasattr(router, "labels"):   # a Router from before a hot reload
                 router.labels = {}
             router.labels["hand"] = self.lane_names
+            if not hasattr(router, "gates"):
+                router.gates = {}
+            # the switches, so the routing UI can offer them without
+            # knowing anything about hands
+            router.gates["hand"] = [(self.gate_lane(s, f), f"{s[0].upper()} {f[:3]}")
+                                    for s in SIDES for f in PINCHES]
             router.drive("hand")
         if midi is not None:
             self._learn(midi)
@@ -785,7 +810,13 @@ class HandsIO:
         best = max(range(len(moved)), key=moved.__getitem__)
         if moved[best] >= LEARN_MOVE:
             self._learn_base = None
-            midi.learn_source(f"hand:{best}")
+            # pinched while learning: the pinch becomes the row's gate, so
+            # the same movement means this only while the thumb agrees
+            gate = self.held_gate(self.axes[best].side)
+            if gate is None:
+                midi.learn_source(f"hand:{best}")
+            else:
+                midi.learn_source(f"hand:{best}", when=gate)
 
     def _send(self, m: mido.Message) -> None:
         try:

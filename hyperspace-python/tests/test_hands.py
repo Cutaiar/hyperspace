@@ -682,3 +682,57 @@ def test_a_gate_whose_source_is_dark_holds_the_row_shut(app):
     p.set_norm(0.5)
     run(r, 2, router=app.router)                 # nothing in view
     assert p.norm == pytest.approx(0.5)
+
+
+def test_learning_while_pinched_gates_the_row_on_that_pinch(app):
+    """Pinch, learn, move: the row remembers the thumb as well as the axis."""
+    r = rig()
+    shut = {"tips": (10.0, 60.0, 60.0, 60.0), "palm_w": 100.0}
+    run(r, 1, hand(**shut), midi=app.midi, router=app.router)
+    app.midi.learn("view.inst_amp")
+    for k in range(1, 8):
+        run(r, 1, hand(pos=(2.0 * k, 200.0, 0.0), direction=tilt(0.12 * k), **shut),
+            midi=app.midi, router=app.router)
+    rows = [b for b in app.table.of("hand") if b.target == "view.inst_amp"]
+    assert len(rows) == 1
+    assert rows[0].when == f"hand:{r.io.gate_lane('right', 'index')}"
+
+
+def test_learning_with_an_open_hand_leaves_the_row_ungated(app):
+    r = rig()
+    wide = {"tips": (60.0, 60.0, 60.0, 60.0), "palm_w": 100.0}
+    run(r, 1, hand(**wide), midi=app.midi, router=app.router)
+    app.midi.learn("view.inst_amp")
+    for k in range(1, 8):
+        run(r, 1, hand(pos=(2.0 * k, 200.0, 0.0), direction=tilt(0.12 * k), **wide),
+            midi=app.midi, router=app.router)
+    rows = [b for b in app.table.of("hand") if b.target == "view.inst_amp"]
+    assert len(rows) == 1 and rows[0].when is None
+
+
+def test_the_learning_hand_chooses_its_own_thumb(app):
+    """Both hands pinching: the gate comes from the hand that moved."""
+    r = rig()
+    shut = {"tips": (10.0, 60.0, 60.0, 60.0), "palm_w": 100.0}
+    both = lambda k=0: (hand("left", pos=(-110.0, 200.0, 0.0), **shut),
+                        hand("right", pos=(2.0 * k, 200.0, 0.0),
+                             direction=tilt(0.12 * k), **shut))
+    run(r, 1, *both(), midi=app.midi, router=app.router)
+    app.midi.learn("view.inst_amp")
+    for k in range(1, 8):
+        run(r, 1, *both(k), midi=app.midi, router=app.router)
+    rows = [b for b in app.table.of("hand") if b.target == "view.inst_amp"]
+    assert rows[0].when == f"hand:{r.io.gate_lane('right', 'index')}"
+
+
+def test_the_adapter_publishes_its_switches_as_gates(app):
+    """The routing UI offers gates without importing anything hands."""
+    r = rig()
+    run(r, 1, hand(), router=app.router)
+    gates = app.router.gates["hand"]
+    assert len(gates) == 8
+    assert gates[0] == (r.io.gate_lane("left", "index"), "L ind")
+    assert gates[-1] == (r.io.gate_lane("right", "pinky"), "R pin")
+    # every published gate names a real lane
+    lanes = r.io.lanes()
+    assert all(0 <= i < len(lanes) for i, _ in gates)

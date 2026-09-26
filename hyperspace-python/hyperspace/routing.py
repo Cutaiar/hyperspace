@@ -576,6 +576,10 @@ class Router:
         self.table = table
         self.feeds: dict[str, np.ndarray | None] = {}   # ext/lfo/hand vectors, per frame
         self.labels: dict[str, list[str]] = {}          # scheme → lane names, from the adapter
+        # scheme → the lanes an adapter offers as gates, [(index, label)]:
+        # switch-like lanes a row's `when` can wait on. The adapter says
+        # which of its lanes those are; nothing here knows about hands.
+        self.gates: dict[str, list[tuple[int, str]]] = {}
         self._codes: dict[str, int | None] = {}
 
     # ---- discrete adapters ----
