@@ -2,7 +2,7 @@
 
 The hands are the performing surface; the APC40 stays on presets and
 master controls. Each hand gives the palm's rigid-body pose — six axes by
-default — and every axis is an analog signal (hand_signal.py): calibrated,
+default — and every axis is an analog signal (signal.py): calibrated,
 smoothed, shaped (dead zone, curve), enveloped (attack, decay), sprung
 back to a rest value when the hand leaves, and glided back onto the hand
 when it returns. The output y ∈ [0, 1] goes two ways:
@@ -77,7 +77,7 @@ from pathlib import Path
 
 import mido
 
-from .hand_signal import (
+from .signal import (
     FULL,
     HYST_14,
     OUTS,

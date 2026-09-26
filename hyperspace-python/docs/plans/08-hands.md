@@ -6,9 +6,14 @@ presets, scenes and master controls. The goal is **few controls, each
 completely predictable**, not many. The 12 axes are shaped as analog
 signals, and there are no gesture vocabularies to teach.
 
-Code: `hyperspace/hands.py` (source, setup, adapter), `hand_signal.py`
-(the pure signal chain), `ui_hands.py` (the HANDS page),
-`tools/hands_probe.py`, `tests/test_hands.py`. Small hooks in
+Code: the `hyperspace/hands/` package — `core.py` (source, setup,
+adapter), `signal.py` (the pure signal chain), `panel.py` (the HANDS
+page) — plus `tools/hands_probe.py`, `tests/test_hands.py`. The package
+is built to be lifted out whole: `core.py` and `signal.py` import
+nothing from hyperspace, everything they need arrives duck-typed as an
+argument, and `tests/test_hands_boundary.py` fails the build if that
+ever stops being true. `panel.py` is the one adapter to this host.
+Small hooks in
 `routing.py` (`hand:<i>` sources, `Router.drive`), `params.py`
 (`Param.glide`), `midi.py` (`MidiIO.learn_source`), `ui.py`, `config.py`
 and `app.py`.
@@ -60,7 +65,7 @@ LeapC (through the `leap` Python bindings) reports, per hand per frame:
 `grab`, `pinch` (0–1), `grab_angle` (°) and `pinch_mm` (mm) are
 available through `[hands] dofs`, but the default stays the palm pose.
 
-## The analog chain (per axis, `hand_signal.py`)
+## The analog chain (per axis, `hands/signal.py`)
 
 1. **Range.** `u = (v − lo) / (hi − lo)`. The ranges come from the box's
    calibration (`<home>/hands.json`); the table above is only the

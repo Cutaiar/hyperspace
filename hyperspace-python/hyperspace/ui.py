@@ -31,12 +31,13 @@ import os
 
 from imgui_bundle import imgui
 
-from . import ui_bands, ui_hands, ui_lookback, ui_presets, ui_routing
+from . import ui_bands, ui_lookback, ui_presets, ui_routing
 from .analyzer import N_MAX
 from .audio import AudioEngine, input_devices
 from .bands import BANDS, CEIL, KNEE, NOM
 from .control import Control
 from .geometry import SHAPES, geom
+from .hands import panel as ui_hands
 from .params import (  # noqa: F401 — PATTERNS et al. re-exported for callers
     BMP_PATHS,
     INST_MOTION,
@@ -318,7 +319,7 @@ CHEATSHEET = [
 # holds the source and the master faders (the level into the analyser);
 # the analyzer page the scene and meters, then the band editor
 # (ui_bands.py); the routing page is the matrix (ui_routing.py); the hands
-# page is the Ultraleap live view and setup (ui_hands.py).
+# page is the Ultraleap live view and setup (hands/panel.py).
 PAGES = [
     ("output", "output", "output"),
     ("view", "view", "view"),
@@ -1172,7 +1173,7 @@ class Panel:
         ui_routing.page(self, dt)
 
     def _page_hands(self, dt: float) -> None:
-        """The Ultraleap hands: live view and setup (ui_hands.py)."""
+        """The Ultraleap hands: live view and setup (hands/panel.py)."""
         ui_hands.page(self, dt)
 
     def _page_presets(self, dt: float) -> None:

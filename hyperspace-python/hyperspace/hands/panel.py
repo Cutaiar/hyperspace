@@ -34,9 +34,9 @@ import math
 
 from imgui_bundle import imgui
 
-from . import ui
-from .hand_signal import shape
-from .hands import FEATURES, GROUP, PINCHES, SIDES, conflicts, mirror
+from .. import ui
+from .core import FEATURES, GROUP, PINCHES, SIDES, conflicts, mirror
+from .signal import shape
 
 ROW_LABEL_W = 62.0
 OUT_W = 100.0

@@ -8,12 +8,12 @@ from types import SimpleNamespace as NS
 import numpy as np
 import pytest
 
-from hyperspace import hand_signal as hs
 from hyperspace import hands
 from hyperspace.analysis import Analyser
 from hyperspace.bands import Chain
 from hyperspace.control import Control
 from hyperspace.hands import HandSettings, HandsIO, features
+from hyperspace.hands import signal as hs
 from hyperspace.library import Library
 from hyperspace.midi import MidiIO, MidiMap
 from hyperspace.params import Registry, build_registry
