@@ -31,7 +31,7 @@ import os
 
 from imgui_bundle import imgui
 
-from . import ui_bands, ui_lookback, ui_presets, ui_routing
+from . import ui_bands, ui_fx, ui_lookback, ui_presets, ui_routing
 from .analyzer import N_MAX
 from .audio import AudioEngine, input_devices
 from .bands import BANDS, CEIL, KNEE, NOM
@@ -317,7 +317,8 @@ CHEATSHEET = [
 # and those two sub-pages say so in their section notes. The audio page
 # holds the source and the master faders (the level into the analyser);
 # the analyzer page the scene and meters, then the band editor
-# (ui_bands.py); the routing page is the matrix (ui_routing.py).
+# (ui_bands.py); the routing page is the matrix (ui_routing.py); the fx
+# page the effect stack (ui_fx.py).
 PAGES = [
     ("output", "output", "output"),
     ("view", "view", "view"),
@@ -325,6 +326,7 @@ PAGES = [
     ("bitmap", "bitmap", None),
     ("camera", "camera", "camera"),
     ("lookback", "lookback", "dream"),
+    ("fx", "fx", "fx"),
     ("audio", "audio", "master"),
     ("analyzer", "analyzer", "band"),
     ("routing", "routing", None),
@@ -1100,6 +1102,9 @@ class Panel:
 
     def _page_lookback(self, dt: float) -> None:
         ui_lookback.page(self, dt)     # the frame history and its composite
+
+    def _page_fx(self, dt: float) -> None:
+        ui_fx.page(self, dt)           # the effect stack over the frame
 
     def _page_audio(self, dt: float) -> None:
         a = self.audio

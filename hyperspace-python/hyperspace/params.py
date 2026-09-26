@@ -60,6 +60,8 @@ from typing import Any
 from . import tapers
 from .analyzer import CURVES, F_HI, F_LO, Q_HI, Q_LO
 from .bands import CEIL, DRIVE, PRESETS, SHAPERS
+from .fx import FxState
+from .fx import declare as declare_fx
 from .geometry import SHAPES
 from .lookback import LAYERS, MAX_ECHOES, OCTAVES, RES, TINT_FROM, DreamState
 from .tapers import Taper
@@ -549,14 +551,14 @@ def _item(get_list, i):
     return (lambda: get_list()[i]), (lambda v: get_list().__setitem__(i, v))
 
 
-def build_registry(view, control, audio, presets=None, dream=None) -> Registry:
+def build_registry(view, control, audio, presets=None, dream=None, fx=None) -> Registry:
     """Declare every parameter the surface owns.
 
     `audio` only needs a `.chain` attribute (tests pass a namespace); the
     chain is looked up on every access because a source attach replaces it.
     `dream` is the renderer's lookback state (lookback.DreamState); a fresh
     one stands in when there is no renderer, so the group is always
-    declared. Panel- and app-level actions (panel toggle, restart…) are
+    declared; `fx` (fx.FxState, the renderer's effect stack) likewise. Panel- and app-level actions (panel toggle, restart…) are
     added by the caller with `trigger()` / `toggle()` once those objects
     exist.
     """
@@ -750,6 +752,12 @@ def build_registry(view, control, audio, presets=None, dream=None) -> Registry:
                  integer=True, fmt=lambda v: f"{int(v)} px", group=g,
                  tip="Random pixel offset per step, the classic trick that turns pixel "
                      "noise into coherent texture.")
+
+    # ---- effects: one param per annotated uniform in shaders/fx/*.glsl ----
+    # (fx.py). A file edited into a new shape re-declares its own ids.
+    fx = fx if fx is not None else FxState()
+    declare_fx(r, fx)
+    fx.on_specs = lambda names: declare_fx(r, fx, names)
 
     # ---- master faders ----
     g = "master"

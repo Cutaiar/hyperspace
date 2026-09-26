@@ -1,0 +1,19 @@
+{
+ "schema": "hyperspace.preset/1",
+ "group": "fx",
+ "name": "mandala",
+ "note": "A generator piece: the plasma field folded through the kaleidoscope, with Noita's fractals glowing over the black and glints on top. Reads with every shape off.",
+ "no_scene": true,
+ "values": {
+  "fx.plasma.on": true,
+  "fx.plasma.level": 0.45,
+  "fx.kaleido.on": true,
+  "fx.kaleido.segments": 8,
+  "fx.kaleido.order": 8,
+  "fx.fractals.on": true,
+  "fx.fractals.ground": 0.6,
+  "fx.fractals.amount": 1.2,
+  "fx.glimmer.on": true,
+  "fx.glimmer.ground": 0.4
+ }
+}

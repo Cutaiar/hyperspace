@@ -21,8 +21,10 @@ The scene is drawn into a texture (SceneTarget — an FBO at the bound
 framebuffer's size and sample count), and a post pass puts it on the
 window over the look-back history (lookback.py): with the pipeline off
 that pass is a copy and the output is bit-identical to drawing straight
-to the window. `draw_scene` is the scene pass alone, for anything that
-wants the raw frame.
+to the window. With an effect on (fx.py) the post pass lands in the
+effect chain's texture instead and the last effect writes the window.
+`draw_scene` is the scene pass alone, for anything that wants the raw
+frame.
 """
 
 from __future__ import annotations
@@ -35,6 +37,7 @@ from pathlib import Path
 import moderngl
 import numpy as np
 
+from .fx import FxChain, FxState
 from .geometry import RATE, face_triangles, face_uvs, geom, project_h
 from .lookback import DreamState, Lookback
 
@@ -314,7 +317,8 @@ class CoverTarget:
 
 
 class Renderer:
-    def __init__(self, ctx: moderngl.Context, dream: DreamState | None = None):
+    def __init__(self, ctx: moderngl.Context, dream: DreamState | None = None,
+                 fx: FxState | None = None):
         self.ctx = ctx
         # clear alpha: 1 is the opaque black ground; overlay mode lowers it
         # so whatever is behind the window shows through (overlay.py)
@@ -324,6 +328,7 @@ class Renderer:
         # scene texture is never bound while it is the render target
         self.scene = SceneTarget(ctx)
         self.lookback = Lookback(ctx, dream)
+        self.fx = FxChain(ctx, fx)      # the effect stack after the post pass
         self.cover = CoverTarget(ctx)
         self._face_verts = 0           # face vertices in _fbuf from the last scene pass
         self._blank = ctx.texture((1, 1), 4)
@@ -369,6 +374,8 @@ class Renderer:
         if not hasattr(self, "lookback"):
             self.scene, self.lookback = SceneTarget(self.ctx), Lookback(self.ctx)
             self._blank = self.ctx.texture((1, 1), 4)
+        if not hasattr(self, "fx"):
+            self.fx = FxChain(self.ctx)
         olds = [self._lvao, self._pvao, self._lines, self._points]
         if hasattr(self, "_cvao"):
             olds += [self._cvao, self._cover_prog]
@@ -458,8 +465,18 @@ class Renderer:
         cover = self._draw_cover(w, h) if lb.wants_cover() else None
         target.viewport = (vx, vy, vw, vh)
         lb.pull()
-        lb.composite(self.scene.tex, target, cover)
-        lb.capture(self.scene.tex, target)
+        fx = self.fx
+        fx.tick()
+        if fx.active():
+            # the post pass into the chain's first texture; the chain ends
+            # on the window. The history captures the scene, not the effects.
+            buf = fx.begin(self.scene.size)
+            lb.composite(self.scene.tex, buf, cover)
+            lb.capture(self.scene.tex, buf)
+            fx.run(target, t_now)
+        else:
+            lb.composite(self.scene.tex, target, cover)
+            lb.capture(self.scene.tex, target)
 
     def _draw_cover(self, w: int, h: int) -> moderngl.Texture:
         """The faces again, solid, into the coverage mask — from the vertices
