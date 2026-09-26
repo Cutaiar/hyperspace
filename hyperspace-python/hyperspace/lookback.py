@@ -33,11 +33,16 @@ tools/dream_bench/common.py, made per-layer):
                 a_i = w_i · max(grade(L_i))     the layer's own luminance is
                                                 its coverage — a black pixel
                                                 covers nothing
-    wake     ×= 1 − occlude · min(4 · max(scene.rgb), 1)
+    wake     ×= 1 − occlude · max(min(4 · max(scene.rgb), 1), faces)
                                                 the render over the wake: where
-                                                this frame drew, its brightness
-                                                is its coverage (occlude 0 is
-                                                the old additive glow over it)
+                                                this frame drew a face (its
+                                                coverage mask, render.py — the
+                                                fills are a few percent alpha,
+                                                so their light would barely
+                                                cover) or anything bright, the
+                                                wake beneath is held back
+                                                (occlude 0 is the old additive
+                                                glow over it)
     out.rgb   = min(scene.rgb + wake, 1)        additive under the scene, so
                                                 the wireframe stays white-hot
     out.a     = scene.a ∪ wake.a                (a + b − a·b)
@@ -204,6 +209,8 @@ POST_FS = f"""
 uniform sampler2D u_scene;   // this frame, fetched exactly: off = a copy
 uniform sampler2D u_ring;    // the history atlas, MAX_ECHOES slots stacked in v
 uniform sampler2D u_dream;   // the dream buffer D
+uniform sampler2D u_cover;   // the faces' coverage mask at the scene's size (render.py)
+uniform int u_has_cover;     // 0 = no mask this frame: brightness alone covers
 uniform ivec2 u_origin;      // the target viewport's origin (gl_FragCoord is window-relative)
 uniform int u_n;             // echoes this frame, oldest first
 uniform float u_w[MAX_ECHOES];    // echo weight: echo_mix · decay^age
@@ -266,9 +273,13 @@ void main() {{
         layer(texture(u_ring, vec2(v_uv.x, u_off[i] + y)), u_w[i], wake, wa);
     if (u_dream_w > 0.0)
         layer(vec4(chroma(texture(u_dream, v_uv).rgb), 1.0), u_dream_w, wake, wa);
-    // the render over the wake: where this frame drew, its brightness is
-    // its coverage and the wake beneath is held back by it
-    float cover = u_occlude * min(max(scene.r, max(scene.g, scene.b)) * OCCLUDE_GAIN, 1.0);
+    // the render over the wake: where this frame drew, the wake beneath is
+    // held back — by the faces' geometry (drawn at a few percent alpha, so
+    // their brightness would barely cover) and by brightness (the wireframe)
+    float cover = min(max(scene.r, max(scene.g, scene.b)) * OCCLUDE_GAIN, 1.0);
+    if (u_has_cover != 0)
+        cover = max(cover, texelFetch(u_cover, ivec2(gl_FragCoord.xy) - u_origin, 0).r);
+    cover *= u_occlude;
     wake *= 1.0 - cover;
     wa *= 1.0 - cover;
     f_color = vec4(min(scene.rgb + wake, 1.0), scene.a + wa - scene.a * wa);
@@ -343,6 +354,7 @@ class Lookback:
         self._post["u_scene"].value = 0
         self._post["u_ring"].value = 1
         self._post["u_dream"].value = 2
+        self._post["u_cover"].value = 3
         self._post["u_slot"].value = 1.0 / MAX_ECHOES
         self._down["u_scene"].value = 0
 
@@ -401,13 +413,23 @@ class Lookback:
 
     # ---- the frame: pull → composite → capture ----
 
-    def composite(self, scene: moderngl.Texture, target: moderngl.Framebuffer) -> None:
-        """The post pass into `target`'s viewport: scene ⊕ wake, or a copy when off."""
+    def wants_cover(self) -> bool:
+        """Whether the renderer should draw the faces' coverage mask this
+        frame: only while the look-back is on and the render occludes."""
+        return bool(self.state.on) and float(self.state.occlude) > 0.0
+
+    def composite(self, scene: moderngl.Texture, target: moderngl.Framebuffer,
+                  cover: moderngl.Texture | None = None) -> None:
+        """The post pass into `target`'s viewport: scene ⊕ wake, or a copy when
+        off. `cover` is the faces' coverage mask at the scene's size (render.py
+        draws it when wants_cover()); without it brightness alone occludes."""
         s, ctx, p = self.state, self.ctx, self._post
         x, y, _, _ = target.viewport
         target.use()
         ctx.disable(moderngl.BLEND)      # the texture is already composited; write it
         scene.use(location=0)
+        (cover if cover is not None else scene).use(location=3)
+        p["u_has_cover"].value = int(cover is not None)
         n = 0
         dream_w = 0.0
         if s.on and self.atlas is not None:

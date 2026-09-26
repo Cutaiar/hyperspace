@@ -350,6 +350,39 @@ def test_render_occludes_the_wake(ctx, occlude):
     rig.release()
 
 
+@pytest.mark.parametrize("bg_alpha", [1.0, 0.0])
+def test_faces_occlude_the_dream_whatever_their_fill(ctx, bg_alpha):
+    """The bug this guards: faces are filled at a few percent alpha, so
+    their brightness alone barely covered the wake and the dream showed
+    through them at occlude 1. The faces' coverage mask covers it fully,
+    on an opaque ground and on overlay's see-through one."""
+    w, h = 320, 240
+    d = DreamState(on=True, echoes=0, every=1, res=0, mix=1.0, darken=0.0, occlude=1.0)
+    rig = Rig(ctx, w, h, bg_alpha=bg_alpha, dream=d)
+    rig.s.faces, rig.s.lines, rig.s.points = True, False, False
+    rig.frame()
+    lb = rig.lb
+    ew, eh = lb.echo
+    lb.write_from(np.full((eh, ew, 4), 180, dtype=np.uint8), frame_index=lb.frame)
+    rig.frame()
+    out, scene = rig.read().astype(int), rig.scene().astype(int)
+    faces = np.frombuffer(rig.r.cover.tex.read(), dtype=np.uint8).reshape(h, w) > 0
+    assert faces.mean() > 0.05, "the shape must cover some of the frame"
+    # brightness alone would have let the dream through most of the faces
+    assert (scene[..., :3].max(axis=2)[faces] * 4 < 255).mean() > 0.5
+    # …the mask does not: inside a face the output is the render, exactly
+    assert np.abs(out[faces] - scene[faces]).max() <= 1
+    # between the shapes the dream shows
+    assert (out[~faces][:, :3] > scene[~faces][:, :3] + 60).all(axis=1).mean() > 0.9
+    # and at occlude 0 it shows through the faces again
+    d.occlude = 0.0
+    rig.s.ang[3] -= 0.03                 # the same pose as the frame just read
+    rig.frame()
+    out0 = rig.read().astype(int)
+    assert (out0[faces][:, :3] > scene[faces][:, :3] + 60).all(axis=1).mean() > 0.9
+    rig.release()
+
+
 def test_dream_chroma_is_neutral_by_default(ctx):
     """Fresh state: hue 0, sat 1, tint 0 leaves the dream as the net painted it."""
     w, h = echo_size(128, 400, 256)
