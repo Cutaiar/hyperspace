@@ -1,0 +1,14 @@
+{
+ "schema": "hyperspace.preset/1",
+ "group": "fx",
+ "name": "noita tripping",
+ "note": "Noita's trip stages (data/entities/misc/effect_trip_0N.xml) are fx_add modifiers, so each stage's amounts add to the ones before: stage 0 alone — distortion 0.2, colour 0.05, fractals 0.1.",
+ "values": {
+  "fx.warp.on": true,
+  "fx.warp.amount": 0.2,
+  "fx.tripcolour.on": true,
+  "fx.tripcolour.amount": 0.05,
+  "fx.fractals.on": true,
+  "fx.fractals.amount": 0.1
+ }
+}

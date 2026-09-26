@@ -390,7 +390,8 @@ def main() -> None:
     presets = library.bank
     # dream.* drives the renderer's look-back (lookback.py); the post pass
     # runs inside renderer.draw
-    reg = build_registry(s, control, audio, presets, dream=renderer.lookback.state)
+    reg = build_registry(s, control, audio, presets, dream=renderer.lookback.state,
+                         fx=renderer.fx.state)
     # an analyzer preset carries its band layout; the library hands it to
     # control before restoring values (07-overhaul contracts)
     library.on_layout("band", control.apply_layout)
@@ -422,6 +423,8 @@ def main() -> None:
         (renderer, "render", "Renderer"),
         (renderer.lookback, "lookback", "Lookback"),
         (renderer.lookback.state, "lookback", "DreamState"),
+        (renderer.fx, "fx", "FxChain"),
+        (renderer.fx.state, "fx", "FxState"),
         (s, "render", "ViewState"),
         (panel, "ui", "Panel"),
         (control, "control", "Control"),

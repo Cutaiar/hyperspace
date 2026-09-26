@@ -1,7 +1,8 @@
 """The LOOKBACK page — the frame history and its composite (lookback.py).
 
-Three sections on the dream group: the composite (on, the two mixes, the
-age fade and the grade), the history (depth, cadence, size, and a row of
+Four sections on the dream group: the composite (on, the two mixes, the
+age fade and the grade), the chroma (the dream buffer's hue, saturation and
+tint — lookback.py's chroma()), the history (depth, cadence, size, and a row of
 live thumbnails — the echoes newest first, straight from the atlas
 texture, with the dream buffer at the end when a worker has filled it),
 and the dream worker's settings (dream.py) with its status line —
@@ -22,9 +23,14 @@ from __future__ import annotations
 from imgui_bundle import imgui
 
 from . import ui
-from .lookback import RES
+from .lookback import RES, tint_colour
 
 RES_W = 84          # the res and octaves combos
+HALF_LABEL_W = 78   # the label column in a half-width cell, short labels
+# the half-width cells' labels: the registry's are too long for them
+SHORT = {"dream.mix": "dream", "dream.echo_mix": "echo", "dream.hue": "hue",
+         "dream.sat": "sat", "dream.tint_hue": "tint hue", "dream.tint_sat": "tint sat",
+         "dream.k": "blend k", "dream.mask_decay": "mask", "dream.step": "step"}
 THUMB_H = 48        # thumbnail height, px; width follows the echo's aspect
 
 
@@ -39,11 +45,29 @@ def page(panel, dt: float) -> None:
     imgui.same_line(imgui.get_content_region_avail().x - imgui.calc_text_size(status).x)
     imgui.align_text_to_frame_padding()
     imgui.text_disabled(status)
-    panel._row("dream.mix")
-    panel._row("dream.echo_mix")
-    panel._row("dream.decay")
-    panel._row("dream.darken")
-    panel._row("dream.contrast")
+    # the composite and the dream's chroma side by side, so the page fits
+    if imgui.begin_table("##lookback", 2, imgui.TableFlags_.sizing_stretch_same):
+        # the titles in a row of their own: a table aligns the text baseline
+        # across a row's cells, which would drop one title below the other
+        imgui.table_next_column()
+        panel._section("composite")
+        imgui.table_next_column()
+        panel._section("chroma")
+        imgui.table_next_column()
+        for pid in ("dream.mix", "dream.echo_mix", "dream.decay", "dream.darken",
+                    "dream.contrast", "dream.occlude"):
+            _half(panel, pid)
+        imgui.table_next_column()
+        for pid in ("dream.hue", "dream.sat", "dream.tint"):
+            _half(panel, pid)
+        panel._label_cell("from", width=HALF_LABEL_W)
+        panel._tip(r["dream.tint_from"])
+        panel._combo("dream.tint_from", 80)
+        imgui.same_line()
+        _tint_swatch(r, lb)
+        _half(panel, "dream.tint_hue")
+        _half(panel, "dream.tint_sat")
+        imgui.end_table()
     imgui.spacing()
 
     panel._section("history", note="rebuilds the ring")
@@ -66,11 +90,17 @@ def page(panel, dt: float) -> None:
     panel._combo("dream.layer", -(RES_W + imgui.get_style().item_spacing.x))
     imgui.same_line()
     panel._combo("dream.octaves", RES_W)
-    panel._row("dream.steps")
-    panel._row("dream.step")
-    panel._row("dream.k")
-    panel._row("dream.mask_decay")
-    panel._row("dream.jitter")
+    if imgui.begin_table("##worker", 2, imgui.TableFlags_.sizing_stretch_same):
+        for pid in ("dream.k", "dream.mask_decay", "dream.step", "dream.steps",
+                    "dream.jitter"):
+            imgui.table_next_column()
+            _half(panel, pid)
+        imgui.end_table()
+
+
+def _half(panel, pid: str) -> None:
+    """A labelled slider in a half-width table cell: short label, narrow column."""
+    panel._row(pid, label=SHORT.get(pid), label_w=HALF_LABEL_W)
 
 
 def _status(lb, on: bool) -> str:
@@ -83,6 +113,26 @@ def _status(lb, on: bool) -> str:
     n = len(lb.thumbnails())
     dream = "dream" if lb.dream_frame >= 0 else "no dream"
     return f"{n} echo(es) · {dream}"
+
+
+def _tint_swatch(r, lb) -> None:
+    """The tint colour the composite uses this frame, as a swatch: the
+    chosen one, or — from the scene — whatever hue the newest echo had."""
+    scene = int(r["dream.tint_from"].value) == 1
+    live = getattr(lb, "tint_rgb", None)         # None without a renderer
+    if live is not None:
+        rgb = live()
+    elif scene:
+        rgb = (1.0, 1.0, 1.0)
+    else:
+        rgb = tint_colour(r["dream.tint_hue"].value, r["dream.tint_sat"].value)
+    imgui.color_button("##tint", imgui.ImVec4(*rgb, 1.0),
+                       imgui.ColorEditFlags_.no_tooltip | imgui.ColorEditFlags_.no_alpha,
+                       imgui.ImVec2(36, imgui.get_frame_height()))
+    if scene:
+        imgui.same_line()
+        imgui.text_disabled("the scene's mean hue" if getattr(lb, "scene_mean", None)
+                            else "the scene's mean hue — nothing captured yet")
 
 
 def _worker(lb):

@@ -31,7 +31,7 @@ import os
 
 from imgui_bundle import imgui
 
-from . import ui_bands, ui_lookback, ui_presets, ui_routing
+from . import ui_bands, ui_fx, ui_lookback, ui_presets, ui_routing
 from .analyzer import N_MAX
 from .audio import AudioEngine, input_devices
 from .bands import BANDS, CEIL, KNEE, NOM
@@ -318,8 +318,9 @@ CHEATSHEET = [
 # and those two sub-pages say so in their section notes. The audio page
 # holds the source and the master faders (the level into the analyser);
 # the analyzer page the scene and meters, then the band editor
-# (ui_bands.py); the routing page is the matrix (ui_routing.py); the hands
-# page is the Ultraleap live view and setup (hands/panel.py).
+# (ui_bands.py); the routing page is the matrix (ui_routing.py); the fx
+# page the effect stack (ui_fx.py); the hands page is the Ultraleap live
+# view and setup (hands/panel.py).
 PAGES = [
     ("output", "output", "output"),
     ("view", "view", "view"),
@@ -327,6 +328,7 @@ PAGES = [
     ("bitmap", "bitmap", None),
     ("camera", "camera", "camera"),
     ("lookback", "lookback", "dream"),
+    ("fx", "fx", "fx"),
     ("audio", "audio", "master"),
     ("analyzer", "analyzer", "band"),
     ("routing", "routing", None),
@@ -665,12 +667,15 @@ class Panel:
         return changed
 
     @staticmethod
-    def _label_cell(text: str, color: imgui.ImVec4 | None = None) -> None:
+    def _label_cell(text: str, color: imgui.ImVec4 | None = None,
+                    width: float = LABEL_W) -> None:
         """A field label centred on the height of the control beside it.
 
         Drawn, not laid out: a dummy one control tall is the item (tooltips
         attach to it), so the row's height and baseline stay the control's
-        and anything after it on the line lines up with the first control."""
+        and anything after it on the line lines up with the first control.
+        `width` is the label column; a half-width table cell passes less
+        (the offset is from the cell's own start)."""
         pos = imgui.get_cursor_screen_pos()
         fh = FONT_NUM + 2 * imgui.get_style().frame_padding.y
         imgui.push_font(_FONTS["micro"], FONT_MICRO)
@@ -678,13 +683,14 @@ class Panel:
             imgui.ImVec2(pos.x, pos.y + (fh - FONT_MICRO) / 2 - 1),
             u32(DIM if color is None else color), text.upper())
         imgui.pop_font()
-        imgui.dummy(imgui.ImVec2(LABEL_W - 12, fh))
-        imgui.same_line(LABEL_W)
+        imgui.dummy(imgui.ImVec2(width - 12, fh))
+        imgui.same_line(width)
 
-    def _row(self, pid: str, width: float = -1, label: str | None = None) -> bool:
+    def _row(self, pid: str, width: float = -1, label: str | None = None,
+             label_w: float = LABEL_W) -> bool:
         """A labelled compact slider: label in a column, slider beside it."""
         p = self.reg[pid]
-        self._label_cell(p.label if label is None else label)
+        self._label_cell(p.label if label is None else label, width=label_w)
         return self._slider(pid, width)
 
     def _combo(self, pid: str, width: float = -1, tip: str | None = None) -> bool:
@@ -1034,6 +1040,8 @@ class Panel:
         self._section("faces & pattern", note="saved with view")
         self._check("view.faces")
         imgui.same_line()
+        self._check("view.cut_through")
+        imgui.same_line()
         self._combo("view.pattern", 140)
         imgui.same_line()
         self._slider("view.pattern_mix")
@@ -1103,6 +1111,9 @@ class Panel:
 
     def _page_lookback(self, dt: float) -> None:
         ui_lookback.page(self, dt)     # the frame history and its composite
+
+    def _page_fx(self, dt: float) -> None:
+        ui_fx.page(self, dt)           # the effect stack over the frame
 
     def _page_audio(self, dt: float) -> None:
         a = self.audio
