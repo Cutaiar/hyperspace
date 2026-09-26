@@ -127,6 +127,27 @@ void main() {
 }
 """
 
+# the faces' coverage mask for the look-back's occlusion: the same
+# geometry as the face pass, written solid — a face covers the wake behind
+# it however faint its fill (fills are drawn at a few percent alpha)
+COVER_VS = """
+#version 330
+in vec2 in_pos;
+in float in_wc;
+uniform vec2 u_size;
+void main() {
+    float nx = 2.0 * in_pos.x / u_size.x - 1.0;
+    float ny = 1.0 - 2.0 * in_pos.y / u_size.y;
+    gl_Position = vec4(nx * in_wc, ny * in_wc, 0.0, in_wc);
+}
+"""
+
+COVER_FS = """
+#version 330
+out vec4 f_color;
+void main() { f_color = vec4(1.0); }
+"""
+
 POINT_VS = """
 #version 330
 in vec2 in_pos;
@@ -264,6 +285,34 @@ class SceneTarget:
         self.size, self.samples = (0, 0), -1
 
 
+class CoverTarget:
+    """The faces' coverage mask: one channel at the scene's pixel size, 1
+    where a face was drawn this frame. The look-back's occlusion reads it
+    (lookback.py, u_cover); single-sampled — the wake behind it is soft."""
+
+    def __init__(self, ctx: moderngl.Context):
+        self.ctx = ctx
+        self.size = (0, 0)
+        self.tex: moderngl.Texture | None = None
+        self.fbo: moderngl.Framebuffer | None = None
+
+    def ensure(self, size: tuple[int, int]) -> None:
+        if size == self.size and self.tex is not None:
+            return
+        self.release()
+        self.size = size
+        self.tex = self.ctx.texture(size, 1)
+        self.tex.repeat_x = self.tex.repeat_y = False
+        self.fbo = self.ctx.framebuffer(color_attachments=[self.tex])
+
+    def release(self) -> None:
+        for res in (self.fbo, self.tex):
+            if res is not None:
+                res.release()
+        self.fbo = self.tex = None
+        self.size = (0, 0)
+
+
 class Renderer:
     def __init__(self, ctx: moderngl.Context, dream: DreamState | None = None):
         self.ctx = ctx
@@ -275,6 +324,8 @@ class Renderer:
         # scene texture is never bound while it is the render target
         self.scene = SceneTarget(ctx)
         self.lookback = Lookback(ctx, dream)
+        self.cover = CoverTarget(ctx)
+        self._face_verts = 0           # face vertices in _fbuf from the last scene pass
         self._blank = ctx.texture((1, 1), 4)
         self._lbuf = ctx.buffer(reserve=1200 * 2 * 3 * 4, dynamic=True)
         self._pbuf = ctx.buffer(reserve=600 * 4 * 4, dynamic=True)
@@ -301,6 +352,10 @@ class Renderer:
         self._points = ctx.program(vertex_shader=POINT_VS, fragment_shader=POINT_FS)
         self._points["u_color"].value = RED
         self._lvao = ctx.vertex_array(self._lines, [(self._lbuf, "2f 1f", "in_pos", "in_alpha")])
+        # the coverage pass reads the face buffer's position and divisor only
+        self._cover_prog = ctx.program(vertex_shader=COVER_VS, fragment_shader=COVER_FS)
+        self._cvao = ctx.vertex_array(self._cover_prog,
+                                      [(self._fbuf, "2f 1f 16x", "in_pos", "in_wc")])
         self._pvao = ctx.vertex_array(
             self._points, [(self._pbuf, "2f 1f 1f", "in_pos", "in_size", "in_alpha")]
         )
@@ -314,7 +369,12 @@ class Renderer:
         if not hasattr(self, "lookback"):
             self.scene, self.lookback = SceneTarget(self.ctx), Lookback(self.ctx)
             self._blank = self.ctx.texture((1, 1), 4)
-        for res in (self._lvao, self._pvao, self._lines, self._points):
+        olds = [self._lvao, self._pvao, self._lines, self._points]
+        if hasattr(self, "_cvao"):
+            olds += [self._cvao, self._cover_prog]
+        else:
+            self.cover, self._face_verts = CoverTarget(self.ctx), 0
+        for res in olds:
             res.release()
         self._build_wire_programs()
         self._build_face_program()
@@ -388,17 +448,33 @@ class Renderer:
             raise RuntimeError("Renderer.draw: no framebuffer bound (call fbo.use())")
         vx, vy, vw, vh = target.viewport
         self.scene.ensure((max(vw, 1), max(vh, 1)), _samples_of(ctx, target))
-        for unit in range(3):
+        for unit in range(4):
             self._blank.use(location=unit)
         self.scene.draw_fbo.use()
         ctx.viewport = (0, 0, max(vw, 1), max(vh, 1))
         self.draw_scene(s, w, h, dpr, t_now)
         self.scene.resolve()
         lb = self.lookback
+        cover = self._draw_cover(w, h) if lb.wants_cover() else None
         target.viewport = (vx, vy, vw, vh)
         lb.pull()
-        lb.composite(self.scene.tex, target)
+        lb.composite(self.scene.tex, target, cover)
         lb.capture(self.scene.tex, target)
+
+    def _draw_cover(self, w: int, h: int) -> moderngl.Texture:
+        """The faces again, solid, into the coverage mask — from the vertices
+        the scene pass left in the face buffer."""
+        ctx = self.ctx
+        self.cover.ensure(self.scene.size)
+        self.cover.fbo.use()
+        ctx.viewport = (0, 0, *self.scene.size)
+        ctx.clear(0.0, 0.0, 0.0, 0.0)
+        if self._face_verts:
+            ctx.disable(moderngl.BLEND)
+            self._cover_prog["u_size"].value = (float(w), float(h))
+            self._cvao.render(moderngl.TRIANGLES, vertices=self._face_verts)
+            ctx.enable(moderngl.BLEND)
+        return self.cover.tex
 
     def draw_scene(
         self, s: ViewState, w: int, h: int, dpr: float = 1.0,
@@ -471,6 +547,7 @@ class Renderer:
         self._lines["u_size"].value = (float(w), float(h))
 
         # ---- face fills, under the wireframe (agent-validated prototype) ----
+        self._face_verts = 0
         if s.faces and self._face_prog is not None:
             self._maybe_reload_patterns()
             tris = face_triangles(s.shape)
@@ -526,6 +603,7 @@ class Renderer:
                         ox = oy = 0.0
                     p["u_bmp_pos"].value = (s.bmp_amp * ox, s.bmp_amp * oy)
                 self._fvao.render(moderngl.TRIANGLES, vertices=len(fverts))
+                self._face_verts = len(fverts)
 
         if s.lines:
             eo = E[order]

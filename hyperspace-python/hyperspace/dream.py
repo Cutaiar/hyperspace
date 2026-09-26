@@ -402,9 +402,9 @@ class DreamWorker:
         return {
             "steps": int(val("steps", 2)),
             "step": float(val("step", 0.03)),
-            "k": float(val("k", 0.08)),
+            "k": float(val("k", 0.05)),
             "jitter": int(val("jitter", 8)),
-            "mask_decay": float(val("mask_decay", 0.97)),
+            "mask_decay": float(val("mask_decay", 0.99)),
             "octaves": int(val("octaves", 0)),
             "layer": LAYERS[max(0, min(int(val("layer", 1)), len(LAYERS) - 1))],
         }

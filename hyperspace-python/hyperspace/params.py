@@ -61,7 +61,7 @@ from . import tapers
 from .analyzer import CURVES, F_HI, F_LO, Q_HI, Q_LO
 from .bands import CEIL, DRIVE, PRESETS, SHAPERS
 from .geometry import SHAPES
-from .lookback import LAYERS, MAX_ECHOES, OCTAVES, RES, DreamState
+from .lookback import LAYERS, MAX_ECHOES, OCTAVES, RES, TINT_FROM, DreamState
 from .tapers import Taper
 
 PATTERNS = [
@@ -687,6 +687,34 @@ def build_registry(view, control, audio, presets=None, dream=None) -> Registry:
                  fmt=lambda v: f"^{v:.2f}", group=g,
                  tip="A power curve on every layer: above 1 only the bright, "
                      "high-contrast regions of the history read.")
+    r.continuous("dream.occlude", "Occlude", *_attr(dream, "occlude"), lo=0.0, hi=1.0,
+                 fmt=lambda v: f"occlude {v:.2f}", group=g,
+                 tip="The render over the wake: at 1 wherever this frame drew, the "
+                     "shape covers the dream and echoes beneath it, so the tracers "
+                     "only fill the space between; at 0 the wake glows over the shapes.")
+    # the dream buffer's chroma — the net paints in its own primaries; these
+    # re-colour D on its way into the composite (lookback.py, chroma())
+    r.continuous("dream.hue", "Hue shift", *_attr(dream, "hue"), lo=-180.0, hi=180.0,
+                 wrap=True, fmt=lambda v: f"{v:+.0f}°", group=g,
+                 tip="Rotate the dream's own colours about the grey axis; luminance "
+                     "is kept.")
+    r.continuous("dream.sat", "Saturation", *_attr(dream, "sat"), lo=0.0, hi=2.0,
+                 fmt=lambda v: f"sat {v:.2f}", group=g,
+                 tip="The dream's own colours' saturation: 0 greyscale, 1 as the net "
+                     "painted them, above that pushed.")
+    r.continuous("dream.tint", "Tint", *_attr(dream, "tint"), lo=0.0, hi=1.0,
+                 fmt=lambda v: f"tint {v:.2f}", group=g,
+                 tip="Cross-fade from the dream's colours to its luminance in one "
+                     "colour — the tint colour below, or the scene's own hue.")
+    r.enum("dream.tint_from", "Tint from", *_attr(dream, "tint_from"), TINT_FROM, group=g,
+           tip="Where the tint's hue comes from: the tint hue fader, or the hue of "
+               "the scene's mean colour this frame.")
+    r.continuous("dream.tint_hue", "Tint hue", *_attr(dream, "tint_hue"), lo=0.0, hi=360.0,
+                 wrap=True, fmt=lambda v: f"{v:.0f}°", group=g,
+                 tip="The tint colour's hue; unused while the tint is from the scene.")
+    r.continuous("dream.tint_sat", "Tint sat", *_attr(dream, "tint_sat"), lo=0.0, hi=1.0,
+                 fmt=lambda v: f"sat {v:.2f}", group=g,
+                 tip="The tint colour's saturation: 0 tints grey — a greyscale dream.")
     r.continuous("dream.echoes", "Echoes", *_attr(dream, "echoes"), lo=0, hi=MAX_ECHOES,
                  integer=True, fmt=lambda v: f"{int(v)} echo(es)", group=g,
                  tip="Frames kept in the history; 0 composites the dream buffer alone.")
@@ -715,8 +743,9 @@ def build_registry(view, control, audio, presets=None, dream=None) -> Registry:
                "for the same cost.")
     r.continuous("dream.mask_decay", "Mask decay", *_attr(dream, "mask_decay"),
                  lo=0.9, hi=0.995, fmt=lambda v: f"{v:.3f}", group=g,
-                 tip="How long a wake persists after content leaves: the content "
-                     "mask's per-frame decay, 10 to 200 frames.")
+                 tip="How long the dream stays where content was, after it leaves: "
+                     "the content mask's per-frame decay, 10 to 200 frames. The mask "
+                     "decides where the dream may exist; what covers it is Occlude.")
     r.continuous("dream.jitter", "Jitter", *_attr(dream, "jitter"), lo=0, hi=16,
                  integer=True, fmt=lambda v: f"{int(v)} px", group=g,
                  tip="Random pixel offset per step, the classic trick that turns pixel "
