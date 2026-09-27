@@ -493,12 +493,13 @@ class Panel:
         return ""
 
     def _performer(self, p: Param) -> str:
-        """Who performs `p` — "performed by <row>" from the table's owner
-        (routing.py), or "" with no router attached or no owner (a source
-        the table doesn't name, a test holding the param by hand)."""
+        """Who performs `p` — "performed by <row>" from the table's owner,
+        named as its adapter names it ("R height positions",
+        `Router.describe`), or "" with no router attached or no owner (a
+        source the table doesn't name, a test holding the param by hand)."""
         r = self.router
         b = r.table.owner(p.id) if r is not None else None
-        return "" if b is None else f"performed by {b.describe()}"
+        return "" if b is None else f"performed by {r.describe(b)}"
 
     def _mod_text(self, p: Param) -> str:
         """`base → effective` — a modulated param's readout."""
@@ -932,6 +933,9 @@ class Panel:
     # ---- main draw: rail · page · footer ----
 
     def draw(self, dt: float, fps: float) -> None:
+        # Replace / Keep, its own window, before anything can return: a
+        # held hand learn is never parked behind a hidden or collapsed panel
+        ui_routing.modal(self)
         if self.cheatsheet:
             self._draw_cheatsheet()
         if not self.open:

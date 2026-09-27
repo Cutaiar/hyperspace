@@ -275,30 +275,112 @@ params; `app.py` steps them; `tests/test_tempo.py`, `tests/test_lfo.py`.
 - `Router.feed` is the only way a source reaches the table. No adapter
   calls `Param.set*` on a performer's behalf.
 
+## As built (deviations recorded while executing)
+
+Executed 2026-09-26 as PRs #34 (WP1), #35 (WP2), #36 (WP3), #33 (WP4)
+and #37 (WP5). Where the code differs from the text above, the code is
+right and the reason is here — one line each, for plan 10 to gather.
+
+- `Binding.rest` defaults to `None`, not `0.0`: *the source's own rest*,
+  resolved every frame through `Router.rest_of` from what its adapter
+  publishes in `Router.rests` (hands: each axis's configured rest,
+  presence and pinch lanes 0; LFOs 0.5; the analyzer's lanes and any
+  scheme that publishes nothing 0). A number on the row overrides it.
+  `to_json` writes `rest` only when it is not `None`.
+- `Owned(existing, new)` — the exception carries the row that asked as
+  well as the owner; the prompt needs both.
+- The factory `default` table keeps the legacy6 push rows on `rot.rate`
+  bases of **1**: idle spin stays, a lane rides on top (`1 + PLANEDRIVE`,
+  clamped). Only the `legacy6` preset zeroes the bases; that preset is
+  the parity anchor, driven.
+- Key modifiers: `key:<MOD>+<NAME>` (`MODIFIERS = ("SHIFT", "SUPER")`,
+  stacking). ⇧B is a table row (`key:SHIFT+B → lfo.trigger`), not loop
+  code; rows on one key are settled together so `B` and `⇧B` don't hear
+  each other. F1–F8 / ⇧F1–F8 and Cmd+R stay in the loop — out of scope.
+- `remap_factory` runs on **every** table load, whatever the schema —
+  the three APC40 buttons and the two keys plan 09 moved, added only
+  where nothing uses the source, noted, written back once, idempotent.
+  `migrate_v1` is the op rename only (`mod` → push, `span` → position,
+  lane `abs` → position, `replace` dropped); `referee` settles owners.
+- Macros persist as **routing-layer state** (`params.ROUTING_GROUPS`):
+  outside the whole-surface snapshot (a theme or project never carries
+  them), inside a routing preset's `values` and the live table's
+  `values` (refreshed on every `Bindings.write` through the Router's
+  `values_of`; landed at startup by `Router.restore_values`). Base 1.0.
+- `Clock.trigger` folds the current nudge into `t0` so beat 0 lands
+  exactly on the press whatever the nudge reads; a later nudge still
+  shifts the grid. A fresh clock's first tap is a downbeat the same way.
+- BPM is the mean interval of the burst's **last 8 taps**, not the whole
+  burst — a tempo change registers within a bar.
+- `Clock.tick(now)` once a frame: every clock call defaults to the frame
+  time, so a key-fired trigger and the LFO step in the same frame agree
+  (without it a synced LFO read phase ≈ 0.999 on the trigger frame).
+- A tapered param's norm is continuous between detents (`_taper_pos`), so
+  a sub-detent relative move (↑/↓ on 4D depth, a stick) holds under a
+  performer instead of snapping back each frame. `Param.nudge(delta)` and
+  `Param.scale(factor)` are the relative writers' one rule: on the base,
+  wrap or clamp, return what was applied.
+- A routing preset replaces learned hand rows too — a learn is an
+  ordinary `position` route, there is no separate class of rows a preset
+  leaves alone (decision 1, followed through).
+- `Router.describe(b)` names a row as its adapter does ("R height
+  positions while R ind", "LFO 1 pushes +0.5 × macro.1"); the prompt and
+  the tooltip use it; `Binding.describe()` stays the row's own words.
+- The prompt is drawn first thing in `Panel.draw`, as its own window —
+  on **every** page and with the panel hidden or collapsed, not only on
+  the ROUTING page: a learn can be armed from any of them and a held
+  learn is never silently parked. Every *Replace* (a new route, a
+  retarget, a row waking, a held learn) is one call,
+  `Bindings.replace_owner(new, *, target=None)`, which removes whoever
+  owns the target *when the answer comes* — a row that landed while the
+  question was up goes too.
+- The live table's `values` land in the registry when the Router is
+  built (`Router.missing_values` for the ids it lacks, reported through
+  the library), not by a separate startup call.
+
 ## Exit criteria (checked on merged `main`)
 
-1. The four audit simulations are tests and pass: relative writers hold
-   under modulation; two position rows on one target is impossible;
-   a knob and a hand cannot share a target; a hand cannot own a target
-   twice.
-2. `grep -n "def drive\|def glide\|\"replace\"\|def learned" hyperspace/`
-   is empty.
-3. Right-click → Learn on a parameter a preset already performs shows the
-   prompt; *Replace* swaps the owner and writes the file; *Keep* leaves
-   the table untouched.
-4. Loading `hands-pinch`, pinching L middle and scrolling: zoom does not
-   drift, and lands back on the scroll-set value when the pinch opens.
-5. Tap the APC40's TAP TEMPO four times at ~140 on an electronic track,
-   press METRONOME on the "one": `tempo.bpm` reads within ±1 and
-   `lfo-breathe`'s brightness swells on the bar from that press. Tapping
-   again without pressing METRONOME changes the readout, not the swell.
-6. With `lfo-breathe` loaded, raising the right hand deepens the swell;
-   nothing else moves.
-7. An APC knob turned on a hand-owned parameter moves the readout's base
-   and takes effect when the hand leaves the box.
-8. A v1 `bindings.json` from before this plan loads, migrates, is written
-   back once, and the migration note lists every dropped row.
-9. `pytest` green; `ruff` clean; every factory preset has one owner per target.
+Headless, verified in this package's tests:
+
+- [x] 1. The four audit simulations are tests and pass: relative writers
+      hold under modulation; two position rows on one target is
+      impossible; a knob on a hand-owned target moves the base and is
+      never the performer; a hand cannot own a target twice.
+- [x] 2. `grep -rn "def drive\|def glide\|def learned" hyperspace/` is
+      empty, and there is no replace *op* in the model: `"replace"` is not
+      in `routing.OPS` (asserted by `test_a_continuous_source_has_only_the_performer_ops`).
+      The word itself survives in two honest places — `routing.V1_REPLACE`,
+      kept only so `migrate_v1` can recognise a schema-1 row and say what
+      replaced it, and the modal's *Replace* button, a label — so the
+      original grep on the string is the wrong test and is not the criterion.
+- [x] 8. A v1 `bindings.json` from before this plan loads, migrates, is
+      written back once, and the migration note lists every dropped row
+      (`test_a_schema_1_file_migrates_once_and_names_what_it_dropped`;
+      the user's own file did the same on this machine — see PR #37).
+- [x] 9. `pytest` green; `ruff` clean; every factory preset has one owner
+      per target (`test_factory_files_match_the_code`,
+      `test_every_factory_preset_names_real_params_with_one_owner`).
+- [x] 3, headless half: a conflicting add or learn opens the prompt state;
+      *Replace* swaps the owner and writes the file; *Keep* leaves the
+      table untouched (`test_the_replace_prompt_swaps_the_owner_or_leaves_the_table`).
+
+Hand checks at the machine (the camera, the box, the APC40):
+
+- [ ] 3. Right-click → Learn on a parameter a preset already performs
+      shows the prompt; *Replace* swaps the owner and writes the file;
+      *Keep* leaves the table untouched.
+- [ ] 4. Loading `hands-pinch`, pinching L middle and scrolling: zoom does
+      not drift, and lands back on the scroll-set value when the pinch
+      opens.
+- [ ] 5. Tap the APC40's TAP TEMPO four times at ~140 on an electronic
+      track, press METRONOME on the "one": `tempo.bpm` reads within ±1 and
+      `lfo-breathe`'s brightness swells on the bar from that press.
+      Tapping again without pressing METRONOME changes the readout, not
+      the swell.
+- [ ] 6. With `lfo-breathe` loaded, raising the right hand deepens the
+      swell; nothing else moves.
+- [ ] 7. An APC knob turned on a hand-owned parameter moves the readout's
+      base and takes effect when the hand leaves the box.
 
 ## What comes after: plan 10
 

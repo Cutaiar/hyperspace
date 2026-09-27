@@ -83,15 +83,17 @@ One performer per parameter — the model (plan 09)::
 
 A *performer* is an enabled row whose source is a continuous scheme
 (LANE_SCHEMES) and whose op is in MOD_OPS. A target has at most one:
-`Bindings.add` / `bind` raise `Owned` when another enabled performer
-already has it (`Bindings.owner`), and the caller asks — the ROUTING
-page's prompt, a hand learn held pending on the MIDI adapter — before
-`replace_owner` swaps them. A preset or file with two rows on one target
-keeps the first and lists the rest in `Bindings.dropped` until the next
-edit. Disabled rows don't own. Layering is chaining, never stacking: a
-hand owns an LFO's depth, the LFO owns brightness. Scene-setters never
-prompt and are never blocked — an APC knob turned on a hand-owned param
-moves the value the hand returns to.
+`Bindings.add` / `bind` raise `Owned(existing, new)` when another enabled
+performer already has it (`Bindings.owner`), and the caller asks — the
+panel's Replace / Keep prompt (ui_routing.py), which a hand learn reaches
+through `MidiIO.pending` — before `replace_owner` swaps them. The prompt
+names the owner as its adapter does (`Router.describe`: "R height
+positions", from `labels` / `gates`). A preset or file with two rows on
+one target keeps the first and lists the rest in `Bindings.dropped` until
+the next edit. Disabled rows don't own. Layering is chaining, never
+stacking: a hand owns an LFO's depth, the LFO owns brightness. Scene-
+setters never prompt and are never blocked — an APC knob turned on a
+hand-owned param moves the value the hand returns to.
 
 Gating (`when`): any row may name a second *fed* source address — one an
 adapter hands in with `feed` (hand, ext, lfo), which is where switch-like
@@ -150,27 +152,39 @@ File format (``bindings.json``, schema ``hyperspace.bindings/2``):
                  "value": 0.0625, "scale": "master.gain"},
                 {"source": "hand:7", "target": "view.bright", "op": "position",
                  "when": "hand:18"}, …],
-   "values": {…}}            # optional: bases a routing preset assumes
+   "values": {…}}            # bases: a routing preset's, or the live table's macros
 
-Rows carry only what differs from the defaults. `Bindings.load` reads the
-file, or builds the factory table when there is none — and if an old
-``midi_map.json`` (midi.py's version-1 file) is present, its rows replace
-the factory MIDI part and the merged table is written once, with a note.
-A schema-1 file migrates the same way (`migrate_v1`: ``mod`` → push,
+Rows carry only what differs from the defaults. `values` in a routing
+preset are the bases its routes assume; in the live table they are the
+routing layer's own bases — the macros (params.ROUTING_GROUPS), which no
+theme or project carries — refreshed on every write through the thunk
+the Router gives the table (`Bindings.values_of`) and landed in the
+registry when the Router is built (`Router.restore_values`, the ids the
+registry lacks in `Router.missing_values`). `Bindings.load` reads the file, or builds the
+factory table when there is none — and if an old ``midi_map.json``
+(midi.py's version-1 file) is present, its rows replace the factory MIDI
+part and the merged table is written once, with a note. A schema-1 file
+migrates the same way (`migrate_v1`, the op rename only: ``mod`` → push,
 ``span`` → position, a lane-scheme ``abs`` → position at depth 1,
-``replace`` dropped, a second owner dropped, the three APC40 buttons plan
-09 WP4 moved remapped — each dropped or remapped row named on stderr, the
-file written back once; a user's preset file likewise, through
-`Router.load_preset`). A schema this code doesn't know is left alone and
-reported, like a file that won't parse. `bindings_path(home)` says
-where the file lives; `home` defaults to the working directory so WP2's
-library home can be dropped in.
+``replace`` dropped; then `referee`, a second owner dropped — each
+dropped row named on stderr, the file written back once; a user's preset
+file likewise, through `Router.load_preset`). Whatever the schema, every
+load runs `remap_factory`: the three APC40 buttons plan 09 WP4 gave to
+the clock and the B / ⇧B keys are brought up to date where the factory
+rows still stand, each change noted and written back once. A schema this
+code doesn't know is left alone and reported, like a file that won't
+parse. `bindings_path(home)` says where the file lives; `home` defaults
+to the working directory so WP2's library home can be dropped in.
 
 Routing presets are the same file format with only modulation rows:
-the factory exports in ``hyperspace/library/bindings/`` and the user's
+the factory exports in ``hyperspace/library/bindings/`` (`write_factory`:
+``default``, ``legacy6``, ``lfo-breathe`` from `PRESETS`, and the three
+hand-written ``hands-*`` files plan 08 ships) and the user's
 ``<home>/bindings/*.json`` (`preset_files`). `Router.load_preset` replaces
-the routes from one and lands its bases; `Router.save_preset` writes the
-current routes to the user folder — the ROUTING page's strip (WP5b).
+the routes from one — a hand's learned rows among them, since a learn
+is an ordinary position route — and lands its bases; `Router.save_preset`
+writes the current routes to the user folder — the ROUTING page's strip
+(WP5b).
 """
 
 from __future__ import annotations
@@ -178,7 +192,7 @@ from __future__ import annotations
 import json
 import math
 import sys
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 
@@ -186,6 +200,7 @@ import numpy as np
 
 from . import apc40
 from .bands import BANDS, CEIL, DRIVE
+from .lfo import SHAPES, SYNCS
 from .params import PLANES, ROT_RATE_MAX, ROUTING_GROUPS, Kind, Param, Registry
 
 SCHEMA = "hyperspace.bindings/2"
@@ -203,9 +218,11 @@ OPS = ("fire", "toggle", "step", "set", "abs", "rel", "rel64", "momentary", *MOD
 # midi_map.json's `mode` → op
 MODE_TO_OP = {"abs": "abs", "rel": "rel", "rel64": "rel64", "trigger": "toggle",
               "momentary": "momentary", "set": "set", "step": "step"}
-# schema 1's performer ops → schema 2's (migrate_v1); `replace` has no twin
-# but a push on a base of 0, which a file can't ask for, so it is dropped
+# schema 1's performer ops → schema 2's (migrate_v1); the value-replacing
+# op has no twin but a push on a base of 0, which a file can't ask for, so
+# it is dropped — its name is kept only to recognise it and say so
 V1_TO_OP = {"mod": "push", "span": "position", "abs": "position"}
+V1_REPLACE = "replace"     # schema 1's op, kept only to recognise it; not in OPS
 # key modifiers a row may name in front of the key ("SHIFT+B"); each is
 # a pair of GLFW keys the adapter reports as one state (app.Keys)
 MODIFIERS = ("SHIFT", "SUPER")
@@ -393,7 +410,12 @@ class Binding:
                 setattr(b, f, d[f])
         return b
 
-    def describe(self) -> str:
+    def describe(self, name: str | None = None, gate: str | None = None) -> str:
+        """One line for the row: "MIDI CC 48 ch1", "lane 2 pushes +0.5 ×
+        master.gain", "hand 7 positions while hand:18". `name` stands in
+        for a lane-scheme source's "scheme index" and `gate` for the
+        `when` address when the caller knows the adapter's labels —
+        `Router.describe` does; here the row knows only its strings."""
         s = self.scheme
         if self.is_midi:
             ch = "any ch" if self.channel is None else f"ch{self.channel + 1}"
@@ -405,14 +427,15 @@ class Binding:
         addr = ":".join(self.parts)
         if s == "hat":
             return f"d-pad {addr}"
+        who = name if name and s in LANE_SCHEMES else f"{s} {addr}"
         if s in LANE_SCHEMES and self.op in MOD_OPS:
             by = f" × {self.scale}" if self.scale else ""
-            gate = f" while {self.when}" if self.when else ""
+            when = f" while {gate or self.when}" if self.when else ""
             if self.op == "push":
-                return f"{s} {addr} pushes {self.value:+.3g}{by}{gate}"
+                return f"{who} pushes {self.value:+.3g}{by}{when}"
             depth = "" if self.value == 1.0 else f" {self.value:.3g}"
-            return f"{s} {addr} positions{depth}{by}{gate}"
-        return f"{s} {addr}"
+            return f"{who} positions{depth}{by}{when}"
+        return who
 
 
 # ------------------------------------------------------------------- ops
@@ -505,10 +528,28 @@ def legacy6_values() -> dict[str, float]:
             **{f"pattern.mod.{i}": 0.0 for i in range(len(BANDS))}}
 
 
+def lfo_breathe_routes() -> list[Binding]:
+    """The chaining demonstration (plan 09 decision 7): LFO 1 pushes
+    brightness on the bar; the right hand's height positions LFO 1's depth
+    — so raising the hand deepens the swell and nothing else moves; LFO 2
+    pushes the fx mix on the quarter, through macro 1 as its attenuator."""
+    return [Binding("lfo:0", "view.bright", "push", 0.5),
+            Binding("hand:7", "lfo.1.depth", "position"),
+            Binding("lfo:1", "fx.mix", "push", 0.3, scale="macro.1")]
+
+
+def lfo_breathe_values() -> dict[str, float]:
+    """The bases lfo-breathe assumes: LFO 1 a sine at one bar, LFO 2 at a
+    quarter, a depth the hand can deepen from, macro 1 wide open."""
+    return {"lfo.1.sync": SYNCS.index("1 bar"), "lfo.2.sync": SYNCS.index("1/4"),
+            "lfo.1.shape": SHAPES.index("sine"), "lfo.1.depth": 0.6, "macro.1": 1.0}
+
+
 # routing presets: {name: (routes, values)} — `values` are the bases the
 # routes assume; None leaves the user's settings alone
 PRESETS: dict[str, tuple[list[Binding], dict | None]] = {
     "legacy6": (legacy6_routes(), legacy6_values()),
+    "lfo-breathe": (lfo_breathe_routes(), lfo_breathe_values()),
 }
 
 
@@ -546,8 +587,9 @@ def migrate_v1(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
             continue
         op = V1_TO_OP.get(b.op)
         if op is None:
-            why = ("no such op — a push on a base of 0 is the additive twin"
-                   if b.op == "replace" else f"no such op in {SCHEMA}")
+            why = f"no such op in {SCHEMA}"
+            if b.op == V1_REPLACE:
+                why += " — a push on a base of 0 is the additive twin"
             notes.append(f"dropped {b.source} → {b.target} ({b.op}): {why}")
             continue
         if b.op == "abs":            # a learned hand: the whole throw, no pickup
@@ -632,6 +674,12 @@ class Bindings:
         self.path = path
         self.profile = profile
         self.values = values
+        # the live table carries the routing layer's own bases — the macros
+        # (params.ROUTING_GROUPS), which no theme or project saves — so a
+        # macro turned on the page is there at the next start. The table
+        # has no registry: the Router hands it this thunk, and every
+        # write() refreshes `values` through it before the file goes out
+        self.values_of: Callable[[], dict] | None = None
         self.error = ""
         # what the referee refused from the last preset or file, (row, why),
         # for the ROUTING page to show until the next edit
@@ -741,8 +789,12 @@ class Bindings:
         return text + "\n}\n"
 
     def write(self) -> None:
+        """The table to its file — with the routing layer's bases as
+        `values` when a Router has attached a registry (`values_of`)."""
         if self.path is None:
             return
+        if self.values_of is not None:
+            self.values = self.values_of() or None
         try:
             self.path.write_text(self.dumps())
             self.error = ""
@@ -841,16 +893,32 @@ class Bindings:
         self.dropped, self.notes = [], []
         return b
 
-    def replace_owner(self, new: Binding) -> Binding | None:
-        """The prompt's *Replace*: the target's performer goes, `new` comes
-        in. Returns the row removed (None when the target was free)."""
-        cur = self.owner(new.target)
+    def replace_owner(self, new: Binding, *, target: str | None = None) -> Binding | None:
+        """The prompt's *Replace*, and the one way a performer takes a
+        taken target: whoever performs it *now* goes — read here, at
+        commit, not when the question was asked, so a row that landed
+        while the prompt was up goes too — and `new` performs it. A row
+        not yet in the table is added (a new route, a learn); a row already
+        in it is retargeted to `target` when one is given and woken if it
+        slept. Returns the row removed (None when the target was free).
+        Raises only for what the referee can't allow whatever goes: a bad
+        op on a continuous source (`ValueError`), or a second owner still
+        standing after the swap (`Owned`)."""
+        pid = new.target if target is None else target
+        if new.scheme in LANE_SCHEMES and new.op not in MOD_OPS:
+            self._check(new)                     # says why, before anything moves
+        cur = self.owner(pid)
         if cur is new:
             return None
         if cur is not None:
             self.remove(cur)
-        if not any(x is new for x in self.bindings):
+        if any(x is new for x in self.bindings):
+            new.target, new.enabled = pid, True
+            self._check(new)
+        else:
+            new.target = pid
             self.add(new)
+        self.dropped, self.notes = [], []
         return cur
 
     def enable(self, b: Binding, on: bool = True) -> None:
@@ -899,6 +967,46 @@ class Router:
         # analyzer's lanes, and any scheme that publishes nothing, rest at 0
         self.rests: dict[str, list[float]] = {}
         self._codes: dict[str, int | None] = {}
+        # the live table saves the routing layer's bases (the macros) with
+        # its rows: every table.write() — a learn, the page, a hand unbind
+        # — reads them through here (Bindings.values_of), and the file's
+        # values land in the registry here, once. The first Router over a
+        # table is its registry's; a second one (the panel's fallback over
+        # the MIDI adapter's table) neither hijacks the thunk nor re-lands
+        self.missing_values: list[str] = []      # ids the file named that the registry hasn't
+        if table.values_of is None:
+            table.values_of = self.routing_values
+            self.missing_values = self.restore_values()
+
+    def routing_values(self) -> dict:
+        """{id: base} over params.ROUTING_GROUPS — what the live table and a
+        routing preset carry as `values`; empty when none are registered."""
+        values: dict = {}
+        for g in ROUTING_GROUPS:
+            values.update(self.reg.snapshot(g))
+        return values
+
+    def restore_values(self) -> list[str]:
+        """The table's `values` — the macros as last written — into the
+        registry (done once, on construction; `missing_values` keeps the
+        answer). Returns the ids the registry doesn't have (a hand-edited
+        file), for the library to report."""
+        return self.reg.restore(self.table.values) if self.table.values else []
+
+    def describe(self, b: Binding) -> str:
+        """`Binding.describe` with the adapter's names in place of the
+        addresses — "R height positions while R ind", "LFO 1 pushes +0.5 ×
+        macro.1" — from `labels` / `gates` where a scheme has published
+        them; otherwise the row's own "hand 7 positions while hand:18"."""
+        names = self.labels.get(b.scheme) or []
+        i = b.index
+        name = names[i] if 0 <= i < len(names) else None
+        gate = None
+        if b.when is not None:
+            scheme, _, addr = b.when.partition(":")
+            gate = next((lb for k, lb in self.gates.get(scheme) or []
+                         if str(k) == addr), None)
+        return b.describe(name, gate)
 
     # ---- discrete adapters ----
 
@@ -1066,11 +1174,8 @@ class Router:
         d = Path(home) / PRESET_DIR
         d.mkdir(parents=True, exist_ok=True)
         path = d / f"{slug(name)}.json"
-        values = {}
-        for g in ROUTING_GROUPS:
-            values.update(self.reg.snapshot(g))
         path.write_text(Bindings((replace(b) for b in self.table.routes()),
-                                 values=values or None).dumps())
+                                 values=self.routing_values() or None).dumps())
         return path
 
 

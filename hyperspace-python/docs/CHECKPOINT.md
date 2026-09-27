@@ -79,6 +79,24 @@ in `config.toml` (not yet needed — nothing rig-specific exists until plan 04).
   profile (mode SysEx, LED colours, a 109-binding default layout); the
   numbers were checked against the desk's APC40, which dumps its fader
   positions on mode entry exactly as mapped. 208 tests.
+- **Plan 09 executed (2026-09-26; PRs #33–#37).** One
+  path for every live source (`Router.modulate`; `drive` / `glide` /
+  `abs`-on-a-lane gone), one performer per parameter with the referee
+  (`Owned`) and the Replace / Keep prompt, two ops (`push` about the
+  source's rest, `position`), eight macro knobs as routing-layer state,
+  a tap-tempo clock (`B`, TAP TEMPO) with the global LFO trigger (`⇧B`,
+  METRONOME), four tempo-aware LFOs on their own page, `lfo-breathe`,
+  bindings schema 2 with the v1 migration and the factory remap. The
+  user's `~/Hyperspace/bindings.json` migrated on this machine: 7 rows
+  remapped or added, nothing dropped, six performers kept. 627 tests.
+  **Hand checks still owed** (plan 09, "Exit criteria"): the prompt from
+  a real Learn (3); `hands-pinch` zoom under pinch + scroll (4); TAP TEMPO
+  ×4 at ~140 then METRONOME on the one — `tempo.bpm` within ±1 and the
+  swell on the bar, a re-tap moves the readout not the swell (5); the
+  right hand deepening `lfo-breathe`'s swell alone (6); an APC knob on a
+  hand-owned param moving the base that shows when the hand leaves (7);
+  plus the METRONOME LED cadence and the LFO page by eye. **Plan 10 —
+  the architecture and documentation pass — is next**, once those pass.
 
 ## Not done — in rough priority order
 

@@ -447,6 +447,11 @@ def main() -> None:
         bindings_path(library.home), mc.get("profile", "apc40"),
         Path(mc.get("map", "midi_map.json")),
     ))
+    # the macros are the routing layer's, saved with the table and not in
+    # any theme; the Router landed them — what the file named and the
+    # registry hasn't goes where every other missing id goes
+    if router.missing_values:
+        library.report(router.missing_values, "bindings.json values")
     midi_io = _open_midi(reg, cfg, router.table)
     panel.midi = midi_io
     panel.router = router                  # the ROUTING page edits the live table

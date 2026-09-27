@@ -14,9 +14,9 @@ nothing from hyperspace, everything they need arrives duck-typed as an
 argument, and `tests/test_hands_boundary.py` fails the build if that
 ever stops being true. `panel.py` is the one adapter to this host.
 Small hooks in
-`routing.py` (`hand:<i>` sources, `Router.drive`), `params.py`
-(`Param.glide`), `midi.py` (`MidiIO.learn_source`), `ui.py`, `config.py`
-and `app.py`.
+`routing.py` (`hand:<i>` sources, `Router.rests` / `gates`), `midi.py`
+(`MidiIO.learn_source` → a `position` route, plan 09), `ui.py`,
+`config.py` and `app.py`.
 
 ![HANDS page with two synthetic hands](assets/08-hands/hands.png)
 
@@ -29,15 +29,17 @@ Ultraleap service ─(leap bindings, SDK thread)─▶ LeapSource.latest()
                      per axis: norm → One Euro → dead zone/curve → attack/decay
                                → rest spring / catch glide → y ∈ [0, 1]
                ┌──────────────────────────────┴──────────────────────────────┐
-     Router.feed("hand") + drive              MIDI out port ("Hyperspace Hands")
+     Router.feed("hand")                       MIDI out port ("Hyperspace Hands")
   hand:<i> in the routing table: Learn         per axis: 7-bit CC · 14-bit CC ·
-  binds a param (abs, float, no detents);      pitch bend · channel pressure,
-  ROUTING page mod/replace; presence lanes     rate-limited; presence notes
+  writes a `position` route (the hand is      pitch bend · channel pressure,
+  the fader: floats, no detents); ROUTING     rate-limited; presence notes
+  page push / position; presence lanes
 ```
 
-**Inside Hyperspace nothing goes through MIDI.** A learned hand drives
-its param at float precision (`Param.glide`: no 7-bit steps, no fader
-detents), and it never shares a channel with the APC40. MIDI encodings
+**Inside Hyperspace nothing goes through MIDI.** A learned hand is a
+`position` route like any other (plan 09: one path, `Router.modulate`),
+so it drives its param at float precision — no 7-bit steps, no fader
+detents — and it never shares a channel with the APC40. MIDI encodings
 only exist for the DAW port.
 
 ## What Ultraleap reports
@@ -128,19 +130,22 @@ so it can be read off a real hand.
 
 `Binding.when` names a second source that must read on before a row acts
 at all. Pinch and move and the param follows; open the hand and the same
-movement does nothing; let go and the value holds. An `abs` row stops
-following; a `mod` row stops modulating and `apply()` writes the base
-back. A gate whose source is not live holds the row **shut**, never open
-— no param should start moving because a camera was unplugged. Only fed
+movement does nothing; let go and the base is back. A gated-off row
+stops modulating and `apply()` writes the base back — for a `position`
+row that is the panel's value, for a `push` row the value it was adding
+to. A gate whose source is not live holds the row **shut**, never open —
+no param should start moving because a camera was unplugged. Only fed
 sources (hand, ext, lfo) can gate; the analyzer's lanes are not switches.
+A gate doesn't exempt a row from the referee: two rows on one target
+with different pinches are still two performers (plan 09, decision 2).
 
-Three ways to set one, because gated rows live in two places — Learn
-writes `abs` rows the ROUTING page never lists, and that page edits `mod`
-rows Learn never makes:
+Since plan 09 every gated row lives in one place — the routing table's
+`position` / `push` rows, which Learn writes and the ROUTING page lists —
+so there is one gate and three ways to set it:
 
 - **pinch while learning** and the pinch becomes the row's gate; the hand
   that moved is asked for its own thumb first
-- **right-click a control → Gate**, for the `abs` rows Learn wrote
+- **right-click a control → Gate**, on the hand rows that drive it
 - **the gate combo** on each ROUTING row, beside the scale
 
 The adapter publishes which of its lanes are switches on `router.gates`,
@@ -154,25 +159,32 @@ pad and MIDI bindings alone.
 
 | preset | what the hands do |
 | --- | --- |
-| `hands-play` | R height → brightness, L height → speed, R tilt → 4D depth. Nothing to hold; the quickest way to feel the shaping. |
-| `hands-pinch` | One hand, several instruments, the thumb picks which: R index → brightness, R middle → speed, L index → fx mix, L middle → zoom. An open hand changes nothing. |
-| `hands-fx` | The effect stack under both hands: R height → fx mix, R tilt → acid twist, L roll → acid speed, R yaw → acid bend, L height adds to brightness. |
+| `hands-play` | R height *positions* brightness, L height speed, R tilt 4D depth. Nothing to hold; the quickest way to feel the shaping. |
+| `hands-pinch` | One hand, several instruments, the thumb picks which: R index → brightness, R middle → speed, L index → fx mix, L middle → zoom — all `position`, each gated on its pinch. An open hand changes nothing. |
+| `hands-fx` | The effect stack under both hands: R height positions fx mix, R tilt acid twist, R yaw acid bend; L roll *pushes* acid speed about its rest (depth 0.5 on a base of 4: thumb-up 8, thumb-down 0); L height pushes brightness (+0.4). |
 
-These use `span`, `replace` and `mod`, because a routing preset carries
-only modulation rows — Learn's `abs` rows are per-param and belong to the
-binding table, not a preset. The practical difference: **a `span` or
-`replace` row springs back to the panel value when the gate opens or the
-hand leaves**, where a gated `abs` row holds where you left it. Momentary
-versus latching — pick the one the gesture wants.
+These use the two performer ops of plan 09, `position` and `push`,
+because a routing preset carries only performer rows — and since plan 09
+a learned hand *is* one (a `position` route), so **loading a preset
+replaces learned hand rows too**; there is no separate class of rows a
+preset leaves alone. Every performer row springs back to the base when
+the gate opens or the hand leaves: the hand grabs, and never yields
+(decision 4). Latching — a hand that "holds where you left it" — is not
+an op any more; set the base with the panel or a knob instead, which a
+performer never blocks.
 
-`span` is the one to reach for: the hand's 0–1 is the control's *position*,
-along its own taper, so the hand covers the whole fader exactly as a
-learned hand does (brightness 0.13×–4.00×, speed stop–4 rad/s, 4D depth
-1.05–13.8). `replace` puts `depth · u` in the control's *units* — right for
-an explicit slice (`hands-fx` runs acid speed over 0–8 of its ±range), but
-with the default depth of 1 it caps a hand at the value 1: 1.00×
-brightness, 1 rad/s, and 4D depth pinned at its floor. The first cut of
-these presets did exactly that.
+`position` is the one to reach for: the hand's 0–1 is the control's
+*position*, along its own taper, so the hand covers the whole fader
+exactly as a learned hand does (brightness 0.13×–4.00×, speed stop–4
+rad/s, 4D depth 1.05–13.8). `push` adds `depth · (u − rest)` to the base
+in norm units, centred where the axis rests (its configured rest value,
+published in `Router.rests`), so a level hand adds nothing — the right
+op for "a bit more of this on top" (`hands-fx`'s brightness) or an
+explicit slice about a base the preset sets (`hands-fx`'s acid speed,
+`values: {"fx.acid.speed": 4.0}`). The old `replace` op, which put
+`depth · u` in the control's *units* and capped a hand at the value 1
+with the default depth, is gone; the first cut of these presets used it
+and did exactly that.
 
 The lane numbers in the files assume the default six dofs per hand
 (`hand:1` = L y, `hand:7` = R y, `hand:14`… = the switches). Change
@@ -197,10 +209,19 @@ checks every shipped row still names a real param and a real lane.
     hand) and **solo** (only this axis to the DAW, for a DAW's learn)
   - feel & calibration: a 20 s sweep writes the box's ranges
 - **Learn:** right-click → Learn MIDI, then move one axis. The axis that
-  moved furthest wins, and the param follows it in floats. A panel edit
-  stands until the hand moves again. Pinch while learning and the row is
-  gated on that pinch. Unbind is in the same menu, and it leaves the
-  axis's routes alone.
+  moved furthest wins, and the learn writes a `position` route from it —
+  the hand is the fader, in floats, through the Router like every route.
+  A learned axis drives one param: learning it onto another *moves* it
+  (its old position row goes); learning it again onto the same param only
+  refreshes the gate. If the param already has a different performer the
+  learn is held and the panel asks — *"Brightness is already performed by
+  R height positions — Replace / Keep"* — Replace swaps the owner and
+  writes the file, Keep leaves the table as it was; moving the hands
+  learns nothing more while the question is up. A panel edit or a knob
+  moves the *base*, the value the hand returns to, and is never blocked.
+  Pinch while learning and the row is gated on that pinch. Unbind is in
+  the same menu, and it leaves the axis's other routes alone. Loading a
+  routing preset replaces learned rows along with every other route.
 - **Rig** settings (tracking mode, which features, the port, presence
   notes) are `[hands]` in config.toml. **Box** ranges are `hands.json`.
   **Performance** settings are a setup. Each lives where it changes.
@@ -248,8 +269,10 @@ arrived at ~119 fps through `LeapSource`.
 - [ ] Whether thumb-ring wants a looser threshold than thumb-index, or
       whether the 0.39 above was simply not a deliberate pinch.
 - [ ] How a gated row feels on a second pinch at a different height: it
-      takes the hand at once today (`Binding.pickup` is ignored by hand
-      rows, and could be honoured instead).
+      takes the hand at once — settled as the rule in plan 09 (decision
+      4: hands grab, they never yield; `pickup` is meaningless on a
+      performer row and is dropped), so this is a feel check, not a
+      design question.
 - [ ] End-to-end latency, hand to pixels and hand to DAW.
-- [ ] Oscillators (an `lfo:` source is already reserved in routing):
-      deferred on purpose.
+- [x] Oscillators: done in plan 09 — four tempo-aware LFOs are `lfo:<i>`
+      sources, and `lfo-breathe` chains R height into LFO 1's depth.
