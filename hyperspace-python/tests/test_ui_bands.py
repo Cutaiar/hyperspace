@@ -264,6 +264,54 @@ def test_routing_add_and_delete(rig, tmp_path):
     frame(panel)
 
 
+def _on_disk(tmp_path):
+    return Bindings.load(routing.bindings_path(tmp_path), legacy_midi=None)
+
+
+def test_routing_page_edits_land_in_bindings_json(rig, tmp_path):
+    """A route deleted on the page stays deleted: the page writes the table
+    once it changes, not only when a learn happens to."""
+    panel = rig.panel
+    router = _with_router(rig, tmp_path)
+    frame(panel, "routing")
+    for b in list(router.table.routes()):
+        router.table.remove(b)
+    frame(panel)
+    assert _on_disk(tmp_path).routes() == []
+    b = ui_routing.add_route(panel, "view.bright")   # the context menu's add, page unseen
+    assert [x.target for x in _on_disk(tmp_path).routes()] == ["view.bright"]
+    b.value = -0.25
+    frame(panel)
+    assert _on_disk(tmp_path).routes()[0].value == -0.25
+
+
+def test_learned_hand_rows_are_listed_and_cleared_on_the_routing_page(rig, tmp_path):
+    """A hand learn's abs rows are not routes, but they drive: with every
+    route gone the page still shows them, and clearing them unbinds."""
+    panel, reg = rig.panel, rig.reg
+    router = _with_router(rig, tmp_path)
+    for b in list(router.table.routes()):
+        router.table.remove(b)
+    router.table.bind(Binding("hand:7", "view.bright", "abs", pickup=False))
+    router.table.bind(Binding("hand:1", "view.speed", "abs", pickup=False, when="hand:14"))
+    router.feed("hand", [0.5] * 20)
+    router.labels["hand"] = [f"ax{i}" for i in range(12)]
+    router.gates["hand"] = [(14, "L ind")]
+    frame(panel, "routing")
+    assert [b.target for b in router.table.learned()] == ["view.bright", "view.speed"]
+    before = reg["view.bright"].get()
+    router.drive("hand")
+    assert reg["view.bright"].get() != before          # still driving, no routes at all
+    for b in list(router.table.learned()):              # what the page's × / clear do
+        router.table.remove(b)
+    frame(panel)
+    assert _on_disk(tmp_path).learned() == []
+    reg["view.bright"].set_norm(0.2)
+    router.feed("hand", [0.9] * 20)
+    router.drive("hand")
+    assert reg["view.bright"].norm == pytest.approx(0.2)
+
+
 def test_route_a_lane_here_jumps_to_the_page(rig, tmp_path):
     panel, reg = rig.panel, rig.reg
     _with_router(rig, tmp_path)

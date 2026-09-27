@@ -158,7 +158,9 @@ def add_route(panel, target: str, source: str | None = None, depth: float = 0.5)
     """A new `mod` row from the selected band's lane (or `source`) to target."""
     router = router_of(panel)
     src = source or f"lane:{panel.control.selb}"
-    return router.table.add(Binding(src, target, "mod", depth))
+    b = router.table.add(Binding(src, target, "mod", depth))
+    router.table.write()
+    return b
 
 
 def ctx_item(panel, p: Param) -> None:
@@ -475,7 +477,9 @@ def page(panel, dt: float) -> None:
     rows = router.table.routes()
     chain = panel.audio.chain
     live = "live" if getattr(panel.audio, "on", False) else "no source — lanes idle"
-    imgui.text_disabled(f"{len(rows)} routes  ·  {chain.n} lanes  ·  {live}")
+    n_learned = len(router.table.learned())
+    learned = f"  ·  {n_learned} learned" if n_learned else ""
+    imgui.text_disabled(f"{len(rows)} routes{learned}  ·  {chain.n} lanes  ·  {live}")
     imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w("+ route"))
     if ui.chip("+ route"):
         pid = f"pattern.mod.{panel.control.selb}"
@@ -496,4 +500,63 @@ def page(panel, dt: float) -> None:
             router.table.remove(dead)
         if not rows:
             imgui.text_disabled("no routes — the lanes drive nothing")
+        _learned(panel, router)
     imgui.end_child()
+    _save_edits(panel, router)
+
+
+def _learned(panel, router: Router) -> None:
+    """The learned hand rows: live like routes, so they are listed with
+    them — otherwise deleting every route still leaves the hands driving."""
+    rows = router.table.learned()
+    if not rows:
+        return
+    imgui.spacing()
+    ui._micro("learned")
+    imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w("clear"))
+    imgui.push_style_color(imgui.Col_.text, ui.DIM)
+    clear = ui.chip("clear##learned")
+    imgui.pop_style_color()
+    if imgui.is_item_hovered():
+        imgui.set_tooltip("Unbind every learned hand — the routes above stay")
+    names = getattr(router, "labels", {})
+    dead = list(rows) if clear else []
+    for k, b in enumerate(rows):
+        imgui.push_id(f"learned{k}")
+        changed, on = imgui.checkbox("##on", b.enabled)
+        if changed:
+            b.enabled = on
+        imgui.same_line()
+        lanes = names.get(b.scheme) or []
+        src = (f"{b.scheme} {lanes[b.index]}" if 0 <= b.index < len(lanes) else b.source)
+        gate = ""
+        if b.when:
+            offered = getattr(router, "gates", {}).get(b.scheme) or []
+            gl = {f"{b.scheme}:{i}": lb for i, lb in offered}
+            gate = f"  while {gl.get(b.when, b.when)}"
+        p = panel.reg.get(b.target)
+        imgui.text(f"{src}  →  {b.target}{gate}")
+        if p is None and imgui.is_item_hovered():
+            imgui.set_tooltip(f"{b.target}: no such param — the row is dormant")
+        imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w("×"))
+        imgui.push_style_color(imgui.Col_.text, ui.DIM)
+        if ui.chip("×"):
+            dead.append(b)
+        imgui.pop_style_color()
+        if imgui.is_item_hovered():
+            imgui.set_tooltip("Unbind: the param stops following this hand")
+        imgui.pop_id()
+    for b in dead:
+        router.table.remove(b)
+
+
+def _save_edits(panel, router: Router) -> None:
+    """The page edits the live table in place; land it in bindings.json once
+    it changes and nothing is mid-drag, so a delete stays deleted."""
+    st = _state(panel)
+    sig = [b.to_json() for b in router.table.routes() + router.table.learned()]
+    if st.get("saved") is None:
+        st["saved"] = sig                  # first sight: what's on disk already
+    elif sig != st["saved"] and not imgui.is_any_item_active():
+        router.table.write()
+        st["saved"] = sig
