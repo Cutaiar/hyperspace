@@ -1,11 +1,16 @@
-"""Plan-07 WP4b: the modulation bus and the unified binding table.
+"""Plan-07 WP4b: the modulation bus and the unified binding table; plan 09
+WP1: one performer per parameter.
 
 The parity guard first — the "legacy6" routing preset must put the
-reference's PLANEDRIVE on rot.rate.* and out[i] on pattern.mod.i, so the
-integrated angles and the shader inputs match the pre-WP4b path frame for
-frame on the fixture clips and the golden traces — then the table: the
-source grammar, the ops, JSON and the midi_map.json migration, the key /
-pad adapters, the Router's per-frame pass, presets and runtime edits.
+reference's PLANEDRIVE on rot.rate.* and out[i] on pattern.mod.i *while
+the source is live*, so the integrated angles and the shader inputs match
+the pre-WP4b path frame for frame on the fixture clips and the golden
+traces (idle, the planes now stand on their base of 0 where the reference
+spun at 1: plan 09's one accepted divergence) — then the table: the
+source grammar, the two performer ops, JSON, the midi_map.json and the
+schema-1 migrations, the key / pad adapters, the Router's per-frame pass,
+presets and runtime edits, and the referee: the four audit simulations of
+plan 09 as tests that pass because the situations are impossible.
 """
 
 import json
@@ -19,7 +24,7 @@ import pytest
 from legacy_chain import LegacyChain  # tests/legacy_chain.py — the frozen reference
 from test_analyzer import fixture_wavs, frames  # noqa: F401 — the fixture, re-exported
 
-from hyperspace import lfo, routing, tempo
+from hyperspace import apc40, lfo, routing, tempo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer, legacy_layout
 from hyperspace.bands import BANDS, CEIL, DRIVE, default_params
@@ -31,10 +36,13 @@ from hyperspace.overlay import Output
 from hyperspace.params import PLANES, ROT_RATE_MAX, build_registry
 from hyperspace.render import N_MOD, ViewState
 from hyperspace.routing import (
+    MOD_OPS,
     PRESETS,
     ROT_DEPTH,
+    SCHEMA,
     Binding,
     Bindings,
+    Owned,
     Router,
     bindings_path,
     legacy_planedrive,
@@ -97,16 +105,19 @@ def test_legacy6_reproduces_planedrive_and_u_bands(
 ):
     """Side by side: the old chain → PLANEDRIVE → old integrate and
     u_bands = out, against the analyzer → routes → reg.apply → integrate
-    and pattern.mod, through the reference's three states — no source
-    (rate 1), a source (rate = PLANEDRIVE; a gated band's plane at exactly
-    0.0), and the source gone again (rate 1). Rates and angles agree to
-    round-off every frame, the shader inputs to an ulp, and all are the
-    same float32 the GPU sees; the drive fader keeps meaning (it scales the
-    rotation routes, so a change lands the same frame it did before, and
-    leaves the pattern inputs raw as the reference did). The factory table
-    and the legacy6 preset carry the same rate rows (replace on a base of
-    1); only the preset zeroes the pattern bases, so the pattern check is
-    the preset's."""
+    and pattern.mod, through the reference's three states — no source, a
+    source, the source gone again. The legacy6 preset is the oracle: with
+    the source live, rates and angles agree to round-off every frame, the
+    shader inputs to an ulp, and all are the same float32 the GPU sees; a
+    gated band's plane sits at exactly 0.0; the drive fader keeps meaning
+    (it scales the rotation routes, so a change lands the same frame it
+    did before, and leaves the pattern inputs raw as the reference did).
+    Idle, the reference integrated a literal 1 where the preset's planes
+    now stand on their base of 0 — plan 09's accepted divergence, so the
+    parity anchor is the driven value and the integrators start together
+    when the source starts. The factory table carries the same push rows
+    on WP0's bases of 1: idle it spins at 1×, driven a lane rides on top
+    (1 + PLANEDRIVE, clamped) — checked here as that, not as parity."""
     samples, sr = load_wav(fixture_wavs / f"{clip}.wav")
     old_an, r = Analyser(sr), rig(sr)
     old = LegacyChain(old_an)
@@ -115,22 +126,29 @@ def test_legacy6_reproduces_planedrive_and_u_bands(
     old_view, view = ViewState(), r.view
     old_view.planes = view.planes = [True] * 6
     router = Router(r.reg, Bindings.factory())
+    assert view.rate == [1.0] * 6                          # WP0's un-driven base
     if table == "legacy6":
         assert router.apply_preset("legacy6") == []
-        assert view.pattern_mod[:6] == [0.0] * 6
-    assert view.rate == [1.0] * 6                          # WP0's un-driven base
+        assert view.pattern_mod[:6] == [0.0] * 6 and view.rate == [0.0] * 6
+    base = [0.0] * 6 if table == "legacy6" else [1.0] * 6
     ticks = list(frames(samples, sr, fps))
     idle = np.ones(6)
     n = 0
-    # 1. no source yet: the reference integrates a literal 1 — so do we
+    # 1. no source yet: the reference integrates a literal 1; the preset's
+    # planes stand (their base is 0), the factory's spin on their base of 1
     for _chunk, dt in ticks[:20]:
         legacy_integrate(old_view, dt, idle)
         router.modulate(None)
         r.reg.apply()
         view.integrate(dt)
-        assert view.rate == [1.0] * 6 and not r.reg["rot.rate.XY"].modulated
-        assert view.ang == old_view.ang
-    # 2. the source runs: audio replaces the constant
+        assert view.rate == base and not r.reg["rot.rate.XY"].modulated
+        if table == "legacy6":
+            assert view.ang == [0.0] * 6
+        else:
+            assert view.ang == old_view.ang
+    # the driven phase is the anchor: both integrators start it together
+    old_view.ang, view.ang = [0.0] * 6, [0.0] * 6
+    # 2. the source runs: audio pushes on the base of 0 — the constant, replaced
     for chunk, dt in ticks:
         old_an.feed(chunk)
         r.chain.an.feed(chunk)
@@ -143,32 +161,38 @@ def test_legacy6_reproduces_planedrive_and_u_bands(
         router.modulate(r.chain)
         r.reg.apply()
         view.integrate(dt)
+        if table == "factory":                                   # a lane rides on 1
+            ride = np.clip(1.0 + planedrive, -ROT_RATE_MAX, ROT_RATE_MAX)
+            np.testing.assert_allclose(view.rate, ride, rtol=RTOL, atol=ATOL_RATE)
+            n += 1
+            continue
         np.testing.assert_allclose(view.rate, planedrive, rtol=RTOL, atol=ATOL_RATE)
         assert np.array_equal(np.float32(view.rate), np.float32(planedrive))
         for i in range(6):                                       # gated → stopped, exactly
             if old.out[i] == 0.0:
                 assert view.rate[BANDS[i].plane] == 0.0
-        if table == "legacy6":
-            np.testing.assert_allclose(view.pattern_mod[:6], old.out, rtol=RTOL, atol=1e-15)
-            assert np.array_equal(np.float32(view.pattern_mod[:6]), np.float32(old.out))
+        np.testing.assert_allclose(view.pattern_mod[:6], old.out, rtol=RTOL, atol=1e-15)
+        assert np.array_equal(np.float32(view.pattern_mod[:6]), np.float32(old.out))
         np.testing.assert_allclose(view.ang, old_view.ang, rtol=RTOL, atol=ATOL_ANG)
         assert np.array_equal(np.float32(view.ang), np.float32(old_view.ang))
         n += 1
     assert n > 500
-    if clip == "gate-prover":
+    if clip == "gate-prover" and table == "legacy6":
         assert all(view.rate[BANDS[i].plane] == 0.0 for i in (2, 3, 5))
-        assert r.reg[f"rot.rate.{BANDS[2].pl}"].base == 1.0     # the setting is untouched
-    # 3. the source goes away: the reference's literal 1 is our base, back
-    # the very next frame, and the integrators agree again
+    assert r.reg[f"rot.rate.{BANDS[2].pl}"].base == base[0]    # the setting is untouched
+    # 3. the source goes away: the base is back the very next frame — the
+    # preset's planes stop where they are, the factory's spin at 1 again
+    ang = list(view.ang)
     for _chunk, dt in ticks[:20]:
         legacy_integrate(old_view, dt, idle)
         router.modulate(None)
         r.reg.apply()
         view.integrate(dt)
-        assert view.rate == [1.0] * 6 and not r.reg["rot.rate.XY"].modulated
-        np.testing.assert_allclose(view.ang, old_view.ang, rtol=RTOL, atol=ATOL_ANG)
+        assert view.rate == base and not r.reg["rot.rate.XY"].modulated
     if table == "legacy6":
-        assert view.pattern_mod[:6] == [0.0] * 6
+        assert view.ang == ang and view.pattern_mod[:6] == [0.0] * 6
+    else:
+        assert view.ang != ang
 
 
 def test_legacy6_matches_the_golden_traces():
@@ -200,28 +224,28 @@ def test_legacy_planedrive_is_the_reference_formula():
 
 def test_rot_rate_range_holds_the_reference_drive():
     """±ROT_RATE_MAX is the drive at out = CEIL, gain 8 — the largest the
-    reference could produce — and the legacy6 depth lands there exactly."""
+    reference could produce — and the legacy6 depth, pushing on a base of
+    0, lands there exactly; a silent lane pushes nothing."""
     assert ROT_RATE_MAX == CEIL * DRIVE * 8.0
     assert ROT_DEPTH == 1 / 16
     r = rig()
     p = r.reg["rot.rate.ZW"]
     assert (p.lo, p.hi) == (-ROT_RATE_MAX, ROT_RATE_MAX)
+    router = Router(r.reg, Bindings(routing.legacy6_routes()))
+    assert r.reg.restore(routing.legacy6_values()) == []
     r.chain.out[:] = CEIL
     r.chain.gain = 8.0
-    Router(r.reg, Bindings(routing.legacy6_routes())).modulate(r.chain)
+    router.modulate(r.chain)
     r.reg.apply()
     assert r.view.rate[BANDS[0].plane] == pytest.approx(ROT_RATE_MAX, rel=1e-12)
     assert r.view.rate[BANDS[2].plane] == pytest.approx(-ROT_RATE_MAX, rel=1e-12)
-    assert r.view.pattern_mod[:6] == [CEIL] * 6                 # base 1 + 1·u, clamped
-    r.reg.apply()                                               # nothing held: bases back
-    assert r.view.rate == [1.0] * 6
-    # the additive twin lands the same number from a base of 0
-    r.view.rate = [0.0] * 6
-    rows = [Binding(f"lane:{i}", f"rot.rate.{b.pl}", "mod", b.dir * ROT_DEPTH, scale="master.gain")
-            for i, b in enumerate(BANDS)]
-    Router(r.reg, Bindings(rows)).modulate(r.chain)
+    assert r.view.pattern_mod[:6] == [CEIL] * 6                 # base 0 + 1·u
+    r.chain.out[:] = 0.0                                        # silence: held at the base
+    router.modulate(r.chain)
     r.reg.apply()
-    assert r.view.rate[BANDS[0].plane] == pytest.approx(ROT_RATE_MAX, rel=1e-12)
+    assert r.view.rate == [0.0] * 6 and r.reg["rot.rate.ZW"].modulated
+    r.reg.apply()                                               # nothing held: bases back
+    assert r.view.rate == [0.0] * 6 and not r.reg["rot.rate.ZW"].modulated
 
 
 # ----------------------------------------------------------------- model
@@ -237,7 +261,7 @@ def test_source_grammar():
     assert (pw.kind, pw.channel, pw.number) == ("pitch", 2, 0) and pw.matches("pitch", 2, 99)
     assert Binding.midi_source("cc", None, 7) == "cc:*:7"
     assert Binding.midi_source("pitch", 1) == "pitch:1"
-    lane = Binding("lane:12", "view.bright", "mod", -0.3)
+    lane = Binding("lane:12", "view.bright", "push", -0.3)
     assert (lane.scheme, lane.index, lane.kind, lane.is_midi) == ("lane", 12, None, False)
     assert Binding("key:F1", "x").index == -1
     for src, text in (("key:R", "key R"), ("pad:LB", "pad LB"), ("hat:UP", "d-pad UP"),
@@ -245,9 +269,15 @@ def test_source_grammar():
                       ("pitch:3", "MIDI pitch bend ch4")):
         assert Binding(src, "x", "abs").describe() == text
     assert Binding("note:0:5", "x", "step", 2).describe() == "MIDI note 5 ch1 step"
-    assert Binding("lane:2", "x", "mod", 0.5).describe() == "lane 2 → mod +0.5"
-    assert Binding("lane:2", "x", "mod", -1, scale="master.gain").describe() == (
-        "lane 2 → mod -1 × master.gain")
+    assert Binding("lane:2", "x", "push", 0.5).describe() == "lane 2 pushes +0.5"
+    assert Binding("lane:2", "x", "push", -1, scale="master.gain").describe() == (
+        "lane 2 pushes -1 × master.gain")
+    assert Binding("hand:7", "x", "position").describe() == "hand 7 positions"
+    assert Binding("hand:7", "x", "position", 0.5, when="hand:18").describe() == (
+        "hand 7 positions 0.5 while hand:18")
+    assert Binding("hand:7", "x", "position").is_performer
+    assert not Binding("hand:7", "x", "position", enabled=False).is_performer
+    assert not Binding("cc:0:7", "x", "abs").is_performer
 
 
 def test_json_rows_carry_only_what_differs():
@@ -258,9 +288,14 @@ def test_json_rows_carry_only_what_differs():
     assert d == {"source": "cc:0:48", "target": "view.bright", "op": "abs",
                  "feedback": "ring", "pickup": False}
     assert "caught" not in d and Binding.from_json(d) == b
-    assert Binding.from_json({"source": "lane:1", "target": "x", "op": "mod", "value": -2,
+    assert Binding.from_json({"source": "lane:1", "target": "x", "op": "push", "value": -2,
                               "enabled": False, "junk": 1}) == Binding(
-        "lane:1", "x", "mod", -2, False)
+        "lane:1", "x", "push", -2, False)
+    # rest only when the row has its own — None (the source's) is the default
+    assert "rest" not in Binding("lane:1", "x", "push", 0.5).to_json()
+    d = Binding("lfo:0", "x", "push", 0.5, rest=0.5).to_json()
+    assert d["rest"] == 0.5 and Binding.from_json(d).rest == 0.5
+    assert Binding("lfo:0", "x", "push", rest=0.0).to_json()["rest"] == 0.0   # an override
 
 
 def test_midi_map_v1_rows_migrate():
@@ -283,7 +318,7 @@ def test_table_file_round_trip_and_path(tmp_path):
     assert bindings_path() == Path("bindings.json")
     t = Bindings.factory(path=path)
     n = len(t.bindings)
-    t.add(Binding("lane:2", "view.bright", "mod", 0.4))
+    t.add(Binding("lane:2", "view.bright", "push", 0.4))
     t.write()
     text = path.read_text()
     assert text.count("\n  {") == n + 1                 # one row per line
@@ -326,23 +361,48 @@ def test_factory_table_binds_only_real_params(tmp_path):
     for b in t.bindings:
         assert b.target in ids, b
         assert b.op in routing.OPS, b
-        if b.op == "mod":
+        if b.op in MOD_OPS:
             assert r.reg[b.target].modulatable, b
     keys = [b.key for b in t.bindings if b.scheme != "lane"]
     assert len(keys) == len(set(keys))
     assert len(t.of("key")) == 24 and len(t.of("pad")) == 10 and len(t.of("hat")) == 4
     assert len(t.midi()) == 113 and len(t.mods()) == 12
+    assert routing.referee(t.bindings)[1] == []           # one owner per target
+
+
+def test_the_apc_migration_tables_agree_with_the_default_map():
+    """WP1 wrote APC_REMAP / APC_NEW_ROWS before WP4's DEFAULT_MAP landed;
+    the map is the source of truth, so every row the migration produces
+    must be a factory row, and every row it remaps away must be gone."""
+    rows = {(b["source"], b["target"], b["op"], float(b.get("value", 1.0)))
+            for b in apc40.DEFAULT_MAP}
+    for old, (target, op, value) in routing.APC_REMAP.items():
+        assert old not in rows, old
+        assert (old[0], target, op, value) in rows, (old, target)
+    for source, target, op, value, _ in routing.APC_NEW_ROWS:
+        assert (source, target, op, value) in rows, (source, target)
+    led = {b["source"]: b for b in apc40.DEFAULT_MAP}
+    for source, *_ in routing.APC_NEW_ROWS:
+        assert led[source]["feedback"] == "led" and led[source]["on"] == 1
 
 
 def test_factory_files_match_the_code():
     """hyperspace/library/bindings/*.json are exports of the factory table
-    and the routing presets — `python -m hyperspace.routing` regenerates."""
+    and the routing presets — `python -m hyperspace.routing` regenerates —
+    and every file there, the hand-written hand presets included, is at
+    the current schema with one owner per target."""
     d = routing.FACTORY_DIR
     assert json.loads((d / "default.json").read_text()) == Bindings.factory().to_json()
     for name, (routes, values) in PRESETS.items():
         preset = Bindings(routes, values=values).to_json()
         assert json.loads((d / f"{name}.json").read_text()) == preset
     assert re.search(r'^  \{"source": "key:RIGHT"', (d / "default.json").read_text(), re.MULTILINE)
+    for path in sorted(d.glob("*.json")):
+        doc = json.loads(path.read_text())
+        assert doc["schema"] == SCHEMA, path.name
+        t = Bindings.from_json(doc)
+        assert not t.migrated and t.dropped == [], path.name
+        assert all(b.op in MOD_OPS for b in t.bindings if b.scheme in routing.LANE_SCHEMES)
 
 
 # -------------------------------------------------------------- adapters
@@ -444,7 +504,7 @@ def test_modulate_normalizes_lanes_and_lets_go():
     b = r.reg["view.bright"]
     b.set_value(1.0)
     base = b.norm
-    router = Router(r.reg, Bindings([Binding("lane:1", "view.bright", "mod", 0.2)]))
+    router = Router(r.reg, Bindings([Binding("lane:1", "view.bright", "push", 0.2)]))
     r.chain.out[:] = 0
     r.chain.out[1] = 1.3
     r.chain.gain = 2.0                 # the analyzer's gain is not in the lane
@@ -469,62 +529,71 @@ def test_modulate_normalizes_lanes_and_lets_go():
     assert not b.modulated and r.view.bright == 1.0
 
 
-def test_replace_op_is_the_value_while_live():
-    """replace: effective = value · scale · u in the param's units, the base
-    untouched and back when the source stops; the offset goes through
-    modulate() as norm_of(want) − base_norm, so range and wrap are mod's."""
+def test_push_is_centred_where_the_source_rests():
+    """push: offset = depth · scale · (u − rest). At u = rest the row holds
+    the param — modulated, so the base and the object stay apart — but
+    moves it nowhere; above rest it pushes up, below it pushes down. Without
+    this every LFO and every centred hand axis would sit half a depth off."""
     r = rig()
-    rate, yaw = r.reg["rot.rate.XY"], r.reg["camera.yaw"]
-    rate.set_value(1.0)
-    yaw.set_value(3.0)
-    t = Bindings([
-        Binding("lane:0", "rot.rate.XY", "replace", -10.0),
-        Binding("lane:1", "camera.yaw", "replace", 2 * np.pi, scale="view.speed"),
-        Binding("lane:2", "gone.param", "replace", 1.0),               # dormant
-        Binding("lane:2", "band.select", "replace", 1.0),              # dormant
-        Binding("lane:2", "rot.rate.XZ", "replace", 1.0, scale="nope"),  # dormant
-    ])
+    p = r.reg["view.bright"]
+    p.set_value(1.0)
+    base = p.norm
+    t = Bindings([Binding("hand:0", "view.bright", "push", 0.4, rest=0.5)])
     router = Router(r.reg, t)
-    r.chain.out[:] = [CEIL / 2, CEIL, 1.0, 0, 0, 0]                  # u = 0.5, 1, …
-    r.view.speed = 0.25
-    router.modulate(r.chain)
+    router.feed("hand", [0.5])                                       # idle: a no-op
+    router.modulate()
     r.reg.apply()
-    assert r.view.rate[0] == pytest.approx(-5.0, abs=1e-13) and rate.base == 1.0
-    assert r.view.yaw == pytest.approx(np.pi / 2, abs=1e-12) and yaw.base == pytest.approx(3.0)
-    assert r.view.rate[1] == 1.0 and not r.reg["rot.rate.XZ"].modulated
-    r.chain.out[0] = CEIL                                            # u = 1: −10, in range
-    r.view.speed = 1.25                                              # 2.5π: wraps to π/2
-    router.modulate(r.chain)
+    assert p.modulated and p.eff_norm == pytest.approx(base) and r.view.bright == 1.0
+    router.feed("hand", [1.0])                                       # full swing: +depth/2
+    router.modulate()
     r.reg.apply()
-    assert r.view.rate[0] == pytest.approx(-10.0, abs=1e-13)
-    assert r.view.yaw == pytest.approx(np.pi / 2, abs=1e-12)
-    t.mods()[0].value = -1000.0                                      # clamps at the end stop
-    router.modulate(r.chain)
+    assert p.eff_norm == pytest.approx(base + 0.2, abs=1e-9) and p.base == 1.0
+    router.feed("hand", [0.0])
+    router.modulate()
     r.reg.apply()
-    assert r.view.rate[0] == -ROT_RATE_MAX
-    router.modulate(None)
+    assert p.eff_norm == pytest.approx(base - 0.2, abs=1e-9)
+    t.mods()[0].scale = "view.speed"                                 # scale on the depth
+    r.view.speed = 0.5
+    router.modulate()
     r.reg.apply()
-    assert r.view.rate[0] == 1.0 and r.view.yaw == pytest.approx(3.0)
-    assert not rate.modulated and not yaw.modulated
-    # a tapered target lands on the taper's own detent of the value
-    b = r.reg["view.bright"]
-    b.set_value(1.0)
-    Router(r.reg, Bindings([Binding("lane:1", "view.bright", "replace", 2.0)])).modulate(r.chain)
+    assert p.eff_norm == pytest.approx(base - 0.1, abs=1e-9)
+    router.feed("hand", None)                                        # gone: the base
+    router.modulate()
     r.reg.apply()
-    assert r.view.bright == b.taper.map(b.taper.unmap(2.0)) and b.base == 1.0
-    assert Binding.from_json(Binding("lane:1", "x", "replace", 2.0).to_json()).op == "replace"
+    assert not p.modulated and r.view.bright == 1.0
+    # no rest of its own: the source's, as its adapter publishes it this
+    # frame — a hand axis's configured rest, an LFO's 0.5, a lane's 0
+    auto = Binding("hand:0", "view.bright", "push", 0.4)
+    assert auto.rest is None and "rest" not in auto.to_json()
+    router = Router(r.reg, Bindings([auto]))
+    router.rests["hand"] = [0.5]
+    router.feed("hand", [0.5])
+    router.modulate()
+    r.reg.apply()
+    assert p.modulated and p.eff_norm == pytest.approx(base)          # idle at 0.5
+    router.rests["hand"] = [0.2]                                      # the setup moved rest
+    router.modulate()
+    r.reg.apply()
+    assert p.eff_norm == pytest.approx(base + 0.4 * 0.3, abs=1e-9)    # 0.5 is a push now
+    auto.rest = 0.5                                                   # the row's own number
+    router.modulate()
+    r.reg.apply()
+    assert p.eff_norm == pytest.approx(base)
+    lane = Binding("lane:1", "view.bright", "push", 0.2)              # nothing published: 0
+    assert router.rest_of(lane.source) == 0.0
 
 
 @pytest.mark.parametrize("pid", ["view.bright", "view.speed", "view.depth4", "camera.zoom"])
-def test_span_op_is_the_position_across_the_whole_throw(pid):
-    """span: the source is the target's position — along its taper, off
-    the detents — so a 0–1 hand reaches both end stops, where replace of
-    the same reading tops out at the value 1 (1.00× brightness)."""
+def test_position_op_is_the_position_across_the_whole_throw(pid):
+    """position: the source is the target's position — along its taper,
+    off the detents — so a 0–1 hand reaches both end stops whatever the
+    units (what the old `replace` of the same reading could not: it topped
+    out at the value 1, 1.00× brightness)."""
     r = rig()
     p = r.reg[pid]
     p.set_norm(0.5)
     base = p.get()
-    router = Router(r.reg, Bindings([Binding("hand:0", pid, "span")]))
+    router = Router(r.reg, Bindings([Binding("hand:0", pid, "position")]))
     for u in (0.0, 0.37, 1.0):
         router.feed("hand", [u])
         router.modulate()
@@ -538,10 +607,10 @@ def test_span_op_is_the_position_across_the_whole_throw(pid):
     assert p.get() == pytest.approx(base) and not p.modulated
 
 
-def test_span_depth_is_a_fraction_of_the_throw_and_clamps():
+def test_position_depth_is_a_fraction_of_the_throw_and_clamps():
     r = rig()
     p = r.reg["view.bright"]
-    t = Bindings([Binding("hand:0", "view.bright", "span", 0.5)])
+    t = Bindings([Binding("hand:0", "view.bright", "position", 0.5)])
     router = Router(r.reg, t)
     router.feed("hand", [1.0])
     router.modulate()
@@ -551,39 +620,42 @@ def test_span_depth_is_a_fraction_of_the_throw_and_clamps():
     router.modulate()
     r.reg.apply()
     assert p.get() == pytest.approx(p.taper.map(p.taper.steps))
-    assert Binding.from_json(Binding("hand:0", "x", "span").to_json()).op == "span"
+    assert Binding.from_json(Binding("hand:0", "x", "position").to_json()).op == "position"
 
 
-def test_routes_sum_and_dormant_rows_are_no_ops():
+def test_dormant_rows_are_no_ops():
+    """A row that can't act — off, no such lane, an unmodulatable or
+    missing target, a feed nobody gave — does nothing, quietly."""
     r = rig()
     b = r.reg["view.bright"]
     b.set_value(1.0)
     base = b.norm
     t = Bindings([
-        Binding("lane:0", "view.bright", "mod", 0.2),
-        Binding("lane:1", "view.bright", "mod", -0.1),
-        Binding("lane:2", "view.bright", "mod", 5.0, enabled=False),   # off
-        Binding("lane:9", "view.bright", "mod", 5.0),                  # no such lane
-        Binding("lane:0", "band.select", "mod", 5.0),                  # not modulatable
-        Binding("lane:0", "gone.param", "mod", 5.0),                   # not a param
-        Binding("ext:0", "view.bright", "mod", 5.0),                   # no feed yet
+        Binding("lane:0", "view.bright", "push", 0.2),
+        Binding("lane:2", "view.bright", "push", 5.0, enabled=False),   # off: owns nothing
+        Binding("lane:9", "view.speed", "push", 5.0),                   # no such lane
+        Binding("lane:0", "band.select", "push", 5.0),                  # not modulatable
+        Binding("lane:0", "gone.param", "push", 5.0),                   # not a param
+        Binding("ext:0", "view.speed", "push", 5.0),                    # no feed yet
     ])
     router = Router(r.reg, t)
     r.chain.out[:] = CEIL                                              # u = 1 everywhere
     r.control.selb = 2
+    speed = r.reg["view.speed"].norm
     router.modulate(r.chain)
     r.reg.apply()
-    assert b.eff_norm == pytest.approx(base + 0.1, abs=1e-9)
+    assert b.eff_norm == pytest.approx(base + 0.2, abs=1e-9)
     assert r.control.selb == 2 and not r.reg["band.select"].modulated
+    assert not r.reg["view.speed"].modulated
     # WP4c's external lanes: a fed vector is a source like the analyzer's
     router.feed("ext", [0.5])
     router.modulate(r.chain)
     r.reg.apply()
-    assert b.eff_norm == pytest.approx(min(base + 0.1 + 2.5, 1.0), abs=1e-9)
+    assert r.reg["view.speed"].eff_norm == pytest.approx(min(speed + 2.5, 1.0), abs=1e-9)
     router.feed("ext", None)
     router.modulate(r.chain)
     r.reg.apply()
-    assert b.eff_norm == pytest.approx(base + 0.1, abs=1e-9)
+    assert not r.reg["view.speed"].modulated
 
 
 def test_routes_are_editable_at_runtime():
@@ -592,21 +664,22 @@ def test_routes_are_editable_at_runtime():
     r.chain.out[:] = 1.0
     router.modulate(r.chain)
     r.reg.apply()
-    assert r.view.rate[BANDS[0].plane] == pytest.approx(DRIVE, rel=1e-12)   # replaced the base 1
-    row = router.table.routes_to(f"rot.rate.{BANDS[0].pl}")[0]
-    row.value = 0.0                                    # replace with 0: the plane stops
+    plane, pid = BANDS[0].plane, f"rot.rate.{BANDS[0].pl}"
+    assert r.view.rate[plane] == pytest.approx(1.0 + BANDS[0].dir * DRIVE, rel=1e-12)  # on 1
+    row = router.table.routes_to(pid)[0]
+    row.value = 0.0                                    # push nothing: held at the base
     router.modulate(r.chain)
     r.reg.apply()
-    assert r.view.rate[BANDS[0].plane] == 0.0
-    row.op = "mod"                                     # additive now: held at the base
+    assert r.view.rate[plane] == 1.0 and r.reg[pid].modulated
+    row.op, row.value, row.scale = "position", 1.0, None   # the lane is the fader
     router.modulate(r.chain)
     r.reg.apply()
-    assert r.view.rate[BANDS[0].plane] == pytest.approx(1.0)
+    assert r.view.rate[plane] == pytest.approx(-ROT_RATE_MAX + 2 * ROT_RATE_MAX / CEIL)
     router.table.remove(row)
     router.modulate(r.chain)
     r.reg.apply()
-    assert not r.reg[f"rot.rate.{BANDS[0].pl}"].modulated and r.view.rate[BANDS[0].plane] == 1.0
-    added = router.table.add(Binding("lane:0", "view.bright", "mod", 0.5))
+    assert not r.reg[pid].modulated and r.view.rate[plane] == 1.0
+    added = router.table.add(Binding("lane:0", "view.bright", "push", 0.5))
     router.modulate(r.chain)
     r.reg.apply()
     assert r.reg["view.bright"].modulated
@@ -619,7 +692,7 @@ def test_a_lane_may_modulate_the_analyzer():
     thr = r.reg["band.3.thr"]
     thr.set_norm(0.2)
     base = thr.norm
-    router = Router(r.reg, Bindings([Binding("lane:0", "band.3.thr", "mod", 0.3)]))
+    router = Router(r.reg, Bindings([Binding("lane:0", "band.3.thr", "push", 0.3)]))
     r.chain.out[0] = CEIL
     router.modulate(r.chain)
     r.reg.apply()
@@ -631,19 +704,20 @@ def test_a_lane_may_modulate_the_analyzer():
 def test_apply_preset_replaces_routes_and_lands_bases(tmp_path):
     r = rig(tmp_path=tmp_path, full=True)
     router = Router(r.reg, Bindings.factory())
-    router.table.add(Binding("lane:0", "view.bright", "mod", 0.5))
+    router.table.add(Binding("lane:0", "view.bright", "push", 0.5))
     n_inputs = len(router.table.of(*routing.INPUT_SCHEMES))
     r.view.rate[0] = 2.0
     assert router.apply_preset("legacy6") == []
     assert len(router.table.mods()) == 12 and not router.table.routes_to("view.bright")
     assert len(router.table.of(*routing.INPUT_SCHEMES)) == n_inputs
     assert r.view.pattern_mod == [0.0] * 6 + [1.0] * (N_MOD - 6)
-    assert r.view.rate == [2.0] + [1.0] * 5              # rate bases are the user's
+    assert r.view.rate == [0.0] * 6                      # a push lands the drive only on 0
     for name in PLANES:
-        assert router.table.routes_to(f"rot.rate.{name}")[0].op == "replace"
+        assert router.table.routes_to(f"rot.rate.{name}")[0].op == "push"
+    assert router.table.dropped == []
     # the preset's rows are copies: editing one never edits the preset
     router.table.mods()[0].value = 99
-    assert PRESETS["legacy6"][0][0].value == DRIVE * CEIL
+    assert PRESETS["legacy6"][0][0].value == BANDS[0].dir * ROT_DEPTH
 
 
 def test_midi_view_shares_the_table(tmp_path):
@@ -664,20 +738,20 @@ def test_midi_view_shares_the_table(tmp_path):
 
 
 def test_a_gated_row_round_trips_and_stays_out_of_ungated_files():
-    plain = Binding("hand:7", "view.bright", "abs")
+    plain = Binding("hand:7", "view.bright", "position")
     assert "when" not in plain.to_json()
-    b = Binding("hand:7", "view.bright", "abs", when="hand:18")
+    b = Binding("hand:7", "view.bright", "position", when="hand:18")
     d = b.to_json()
     assert d["when"] == "hand:18" and Binding.from_json(d) == b
 
 
-def test_a_gate_holds_a_mod_row_and_lets_the_base_back():
+def test_a_gate_holds_a_push_row_and_lets_the_base_back():
     """Gated off, the row simply does not modulate — apply() then writes
     the base back, so the param returns to what the panel says."""
     reg = rig().reg
     table = Bindings()
     r = Router(reg, table)
-    table.add(Binding("hand:0", "view.bright", "mod", 0.5, when="hand:2"))
+    table.add(Binding("hand:0", "view.bright", "push", 0.5, when="hand:2"))
     p = reg["view.bright"]
     p.set_norm(0.25)
     r.feed("hand", [1.0, 0.0, 0.0])          # gate lane 2 is off
@@ -701,7 +775,7 @@ def test_only_fed_sources_can_gate_a_row():
     reg = rig().reg
     table = Bindings()
     r = Router(reg, table)
-    b = Binding("hand:0", "view.bright", "mod", 0.5, when="lane:1")
+    b = Binding("hand:0", "view.bright", "push", 0.5, when="lane:1")
     table.add(b)
     r.feed("hand", [1.0])
     assert not r.gated(b)                 # never opens, whatever the lanes say
@@ -719,7 +793,7 @@ def test_the_hand_presets_name_params_and_lanes_that_exist(name):
     router = Router(r.reg, Bindings())
     assert router.load_preset(name) == []          # no unknown target ids
     rows = router.table.routes()
-    assert rows
+    assert rows and router.table.dropped == []     # one owner per target
     axes = len(HandSettings.from_config({}).axes)
     lanes = axes + len(SIDES) + len(SIDES) * len(PINCHES)
     for b in rows:
@@ -740,7 +814,7 @@ def test_the_hand_presets_reach_both_ends_of_their_targets(name):
     router = Router(r.reg, Bindings())
     router.load_preset(name)
     for b in router.table.routes():
-        if b.op == "mod" or b.value != 1.0:
+        if b.op == "push" or b.value != 1.0:
             continue                                 # a deliberate depth or slice
         p = r.reg[b.target]
         for u in (0.0, 1.0):
@@ -751,3 +825,334 @@ def test_the_hand_presets_reach_both_ends_of_their_targets(name):
             r.reg.apply()
             if u == 1.0 or b.when is None:
                 assert p.eff_norm == pytest.approx(u, abs=1e-3), f"{name}: {b.target} at {u}"
+
+
+# --------------------------------------------------------------- the referee
+
+def _hand_rig():
+    r = rig()
+    router = Router(r.reg, Bindings())
+    return r, router, router.table
+
+
+def test_a_target_has_one_performer():
+    """`add` on an owned target raises `Owned` carrying the owner and the
+    row that asked, and the table is untouched; `replace_owner` swaps them
+    and returns what it removed; a free target takes a row silently."""
+    _r, _router, t = _hand_rig()
+    first = t.add(Binding("hand:0", "view.bright", "position"))
+    second = Binding("hand:1", "view.bright", "push", 0.5)
+    with pytest.raises(Owned) as e:
+        t.add(second)
+    assert e.value.existing is first and e.value.new is second
+    assert "view.bright is already performed by hand 0 positions" in str(e.value)
+    assert t.routes() == [first] and t.owner("view.bright") is first
+    assert t.performers() == [first]
+    # a different target is free; the same row again is its own owner
+    t.add(Binding("hand:0", "view.speed", "position"))       # one hand, two params
+    assert t.replace_owner(first) is None
+    assert t.replace_owner(second) is first
+    assert t.routes_to("view.bright") == [second] and t.owner("view.bright") is second
+    assert len(t.routes()) == 2
+    # `bind` is the learn's door: the same referee
+    with pytest.raises(Owned):
+        t.bind(Binding("hand:2", "view.bright", "position"))
+
+
+def test_disabling_releases_and_enabling_asks_again():
+    _r, _router, t = _hand_rig()
+    a = t.add(Binding("hand:0", "view.bright", "position"))
+    t.enable(a, False)
+    assert t.owner("view.bright") is None and not a.is_performer
+    b = t.add(Binding("hand:1", "view.bright", "push", 0.3))   # released: free to take
+    with pytest.raises(Owned) as e:
+        t.enable(a)                                            # waking: asks, stays off
+    assert e.value.existing is b and not a.enabled
+    t.enable(b, False)
+    t.enable(a)                                                # free again: wakes
+    assert a.enabled and t.owner("view.bright") is a
+    # a disabled row may join an owned target; a MIDI row is not a performer
+    t.add(Binding("lane:0", "view.bright", "push", 0.2, enabled=False))
+    t.add(Binding("cc:0:7", "view.bright", "abs"))
+    assert t.owner("view.bright") is a
+
+
+def test_a_continuous_source_has_only_the_performer_ops():
+    _r, _router, t = _hand_rig()
+    for op in ("abs", "set", "step", "fire"):
+        with pytest.raises(ValueError, match="not an op for a hand source"):
+            t.add(Binding("hand:0", "view.bright", op))
+    assert t.bindings == []
+    bad = Binding("hand:0", "view.bright", "abs", enabled=False)        # a stale row, off
+    t.bindings.append(bad)
+    with pytest.raises(ValueError):
+        t.enable(bad)                                                  # stays off
+    assert not bad.enabled
+
+
+def test_a_preset_with_two_owners_keeps_the_first_and_says_so():
+    _r, router, t = _hand_rig()
+    t.set_routes([Binding("hand:0", "view.bright", "position"),
+                  Binding("hand:1", "view.bright", "push", 0.5),          # dropped
+                  Binding("hand:1", "view.speed", "push", 0.5),
+                  Binding("hand:2", "view.bright", "push", 0.1, enabled=False)])  # keeps
+    assert [b.source for b in t.routes()] == ["hand:0", "hand:1", "hand:2"]
+    assert [(b.source, why) for b, why in t.dropped] == [
+        ("hand:1", "view.bright is already performed by hand 0 positions")]
+    t.add(Binding("lane:0", "view.depth4", "push", 0.2))                 # an edit clears it
+    assert t.dropped == []
+    # a file with two owners says so too
+    doc = Bindings([Binding("hand:7", "view.bright", "position"),
+                    Binding("hand:1", "view.bright", "position")]).to_json()
+    assert Bindings.from_json(doc).dropped[0][0].source == "hand:1"
+    # apply_preset: the factory presets have one owner per target
+    router.apply_preset("legacy6")
+    assert t.dropped == []
+
+
+def test_load_preset_lists_what_it_dropped(tmp_path):
+    r = rig(tmp_path=tmp_path, full=True)
+    router = Router(r.reg, Bindings.factory())
+    d = tmp_path / "bindings"
+    d.mkdir()
+    (d / "twice.json").write_text(Bindings([
+        Binding("hand:7", "view.bright", "position"),
+        Binding("hand:1", "view.bright", "position", when="hand:14"),   # a gate is no exemption
+    ]).dumps())
+    assert router.load_preset("twice", tmp_path) == []
+    assert [b.source for b in router.table.routes()] == ["hand:7"]
+    assert [b.source for b, _ in router.table.dropped] == ["hand:1"]
+    router.table.remove(router.table.routes()[0])
+    assert router.table.dropped == []
+
+
+# ------------------------------------------------------- the audit, as tests
+# plan 09 "Why": four situations reproduced against the old code, each now
+# impossible or harmless by construction.
+
+def test_audit_1_a_relative_writer_on_the_base_holds_under_modulation():
+    """Simulation 1 (WP2 owns the writers; this is the Param-level fact
+    they rely on): a relative writer that reads the *base* and writes it
+    back moves the base by exactly its delta while a performer rides on
+    top — the offset never folds in. Reading the effective value instead
+    is the runaway the audit saw (+0.32 asked as +0.01 per frame)."""
+    r = rig()
+    p = r.reg["camera.zoom"]
+    p.set_value(1.0)
+    router = Router(r.reg, Bindings([Binding("hand:0", "camera.zoom", "push", 0.3)]))
+    router.feed("hand", [1.0])
+    for _ in range(20):
+        p.set_value(p.base * 1.01)            # the scroll wheel, on the base
+        router.modulate()
+        r.reg.apply()
+    assert p.base == pytest.approx(1.01 ** 20, rel=1e-9)
+    assert p.eff_norm == pytest.approx(p.norm + 0.3, abs=1e-9)
+    router.feed("hand", None)
+    router.modulate()
+    r.reg.apply()
+    assert r.view.zoom == pytest.approx(1.01 ** 20, rel=1e-9)   # lands where the scroll put it
+
+
+def test_audit_2_two_position_rows_on_one_target_is_impossible():
+    """Simulation 2: two `span` rows summed their departures — both hands
+    at 0.2 read 0.00. The second row now raises; with one row the fader
+    is where the hand is."""
+    r, router, t = _hand_rig()
+    p = r.reg["view.bright"]
+    p.set_norm(0.5)
+    t.add(Binding("hand:0", "view.bright", "position"))
+    with pytest.raises(Owned):
+        t.add(Binding("hand:1", "view.bright", "position"))
+    router.feed("hand", [0.2, 0.2])
+    router.modulate()
+    r.reg.apply()
+    assert p.eff_norm == pytest.approx(0.2, abs=1e-3)
+
+
+def test_audit_3_a_knob_moves_the_return_value_under_a_hand():
+    """Simulation 3: a learned hand's `drive` rewrote the base every frame,
+    so the APC knob on the same param was dead. A MIDI `abs` row is a
+    scene-setter, not a performer: it coexists with the hand's position
+    row, moves the *base*, and the hand positions on top — the knob's
+    value is what shows when the hand leaves."""
+    r, router, t = _hand_rig()
+    p = r.reg["view.bright"]
+    p.set_norm(0.5)
+    hand = t.add(Binding("hand:0", "view.bright", "position"))
+    t.bind(Binding("cc:0:48", "view.bright", "abs"))            # no Owned: not a performer
+    assert t.owner("view.bright") is hand and t.for_param("view.bright").is_midi
+    router.feed("hand", [0.8])
+    router.modulate()
+    r.reg.apply()
+    assert p.eff_norm == pytest.approx(0.8, abs=1e-3) and p.norm == pytest.approx(0.5)
+    p.set_norm(0.3)                                               # the knob turns
+    router.modulate()
+    r.reg.apply()
+    assert p.norm == pytest.approx(0.3)                           # the base moved
+    assert p.eff_norm == pytest.approx(0.8, abs=1e-3)             # the hand still positions
+    router.feed("hand", [math.nan])                               # the hand leaves
+    router.modulate()
+    r.reg.apply()
+    assert not p.modulated and p.norm == pytest.approx(0.3)       # the knob's value shows
+
+
+def test_audit_4_a_hand_cannot_own_a_target_twice():
+    """Simulation 4: a hand `abs` row plus a hand `mod` row on one target
+    doubled the reading (0.5 → 1.00). The second row raises whatever its
+    op; the hand's 0.5 is 0.5."""
+    r, router, t = _hand_rig()
+    p = r.reg["view.bright"]
+    t.add(Binding("hand:0", "view.bright", "position"))
+    with pytest.raises(Owned):
+        t.add(Binding("hand:0", "view.bright", "push", 1.0))
+    router.feed("hand", [0.5])
+    router.modulate()
+    r.reg.apply()
+    assert p.eff_norm == pytest.approx(0.5, abs=1e-3)
+
+
+# ----------------------------------------------------------- schema 1 → 2
+
+V1_FILE = {
+    "schema": "hyperspace.bindings/1", "profile": "apc40",
+    "bindings": [
+        {"source": "key:RIGHT", "target": "view.shape", "op": "step"},
+        {"source": "cc:0:48", "target": "view.bright", "op": "abs", "feedback": "ring"},
+        # the three APC40 buttons plan 09 WP4 moves, as the old factory map had them
+        {"source": "note:0:99", "target": "theme.next", "op": "toggle", "feedback": "led"},
+        {"source": "note:0:100", "target": "view.shape", "op": "step", "value": 1,
+         "feedback": "led"},
+        {"source": "note:0:101", "target": "view.shape", "op": "step", "value": -1,
+         "feedback": "led"},
+        {"source": "lane:0", "target": "pattern.mod.0", "op": "mod", "value": 0.5},
+        {"source": "hand:3", "target": "view.inst_amp", "op": "mod", "value": 0.4},   # L roll
+        {"source": "hand:1", "target": "view.speed", "op": "mod", "value": 0.4},      # L y
+        {"source": "hand:7", "target": "view.depth4", "op": "span"},
+        {"source": "hand:7", "target": "camera.zoom", "op": "abs", "pickup": False,
+         "when": "hand:18"},
+        {"source": "lane:1", "target": "rot.rate.XY", "op": "replace", "value": 8.32,
+         "scale": "master.gain"},
+        {"source": "hand:2", "target": "view.depth4", "op": "span"},             # 2nd owner
+        {"source": "lfo:0", "target": "fx.mix", "op": "mod", "value": 0.3},
+    ],
+    "values": {"pattern.mod.0": 0.0},
+}
+
+
+def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsys):
+    """The plan's migration table, on a hand-written v1 file: mod → push
+    (resting where the source does — no table of rests here), span →
+    position, a lane-scheme abs → position at depth 1 with pickup
+    forgotten, replace dropped, a second owner dropped, the APC40 buttons
+    WP4 moved remapped — each dropped or changed row on stderr — and
+    written back at schema 2, after which the file rules and nothing is
+    said again."""
+    from hyperspace import apc40
+
+    assert (apc40.N_TAP, apc40.N_NUDGE_P, apc40.N_NUDGE_M) == (99, 100, 101)
+    path = bindings_path(tmp_path)
+    path.write_text(json.dumps(V1_FILE))
+    t = Bindings.load(path, legacy_midi=None)
+    err = capsys.readouterr().err
+    assert t.migrated and not t.error
+    assert "dropped lane:1 → rot.rate.XY (replace)" in err
+    assert "dropped hand:2 → view.depth4: view.depth4 is already performed by hand 7" in err
+    assert "remapped note:0:99: theme.next → tempo.tap" in err
+    assert "remapped note:0:100: view.shape → tempo.nudge" in err
+    assert f"added note:0:{apc40.N_METRO} → lfo.trigger" in err
+    assert f"added note:0:{apc40.N_QUANT} → theme.next" in err
+    assert f"migrated {path} to {SCHEMA} (2 rows dropped, 5 rows changed)" in err
+    rows = {(b.source, b.target): b for b in t.bindings}
+    assert rows[("key:RIGHT", "view.shape")].op == "step"
+    assert rows[("cc:0:48", "view.bright")].op == "abs"                       # MIDI keeps abs
+    for src, tgt in (("lane:0", "pattern.mod.0"), ("hand:3", "view.inst_amp"),
+                     ("hand:1", "view.speed"), ("lfo:0", "fx.mix")):
+        assert (rows[(src, tgt)].op, rows[(src, tgt)].rest) == ("push", None), src
+    assert rows[("hand:3", "view.inst_amp")].value == 0.4
+    assert rows[("hand:7", "view.depth4")].op == "position"
+    z = rows[("hand:7", "camera.zoom")]
+    assert (z.op, z.value, z.pickup, z.when) == ("position", 1.0, True, "hand:18")
+    assert ("lane:1", "rot.rate.XY") not in rows and ("hand:2", "view.depth4") not in rows
+    assert [b.source for b, _ in t.dropped] == ["hand:2"]
+    assert len(t.notes) == 7
+    # the APC40 rows: the old factory rows swapped for the new, the LED kept
+    tap = rows[("note:0:99", "tempo.tap")]
+    assert (tap.op, tap.feedback) == ("toggle", "led") and ("note:0:99", "theme.next") not in rows
+    assert (rows[("note:0:100", "tempo.nudge")].value, rows[("note:0:101", "tempo.nudge")].value) == (1, -1)
+    assert rows[(f"note:0:{apc40.N_METRO}", "lfo.trigger")].feedback == "led"
+    assert rows[(f"note:0:{apc40.N_QUANT}", "theme.next")].op == "toggle"
+    assert t.values == {"pattern.mod.0": 0.0}
+    # written back once, at schema 2; the second load is quiet
+    doc = json.loads(path.read_text())
+    assert doc["schema"] == SCHEMA and doc == t.to_json()
+    again = Bindings.load(path, legacy_midi=None)
+    assert not again.migrated and again.to_json() == t.to_json() and capsys.readouterr().err == ""
+    # a v1 preset file loads through the same door
+    r = rig(tmp_path=tmp_path, full=True)
+    router = Router(r.reg, Bindings.factory())
+    d = tmp_path / "bindings"
+    d.mkdir()
+    (d / "old.json").write_text(json.dumps(V1_FILE))
+    router.load_preset("old", tmp_path)
+    assert {b.op for b in router.table.routes()} == {"push", "position"}
+    assert [b.source for b, _ in router.table.dropped] == ["hand:2"]
+    assert len(router.table.notes) == 7 and "migrated" in capsys.readouterr().err
+    # a user's preset file is rewritten once at schema 2 …
+    assert json.loads((d / "old.json").read_text())["schema"] == SCHEMA
+    router.load_preset("old", tmp_path)
+    assert capsys.readouterr().err == "" and router.table.notes == []
+    router.table.add(Binding("lane:0", "view.bright", "push", 0.2))
+    assert router.table.dropped == [] and router.table.notes == []      # an edit clears both
+    # … a factory file never is (they are all at schema 2 already)
+    before = {q.name: q.read_text() for q in routing.FACTORY_DIR.glob("*.json")}
+    for name in routing.preset_names():
+        router.load_preset(name)
+    assert {q.name: q.read_text() for q in routing.FACTORY_DIR.glob("*.json")} == before
+
+
+def test_an_unknown_schema_is_reported_not_migrated(tmp_path):
+    """A file from a newer code (or a typo) is not this code's to rewrite:
+    the factory table stands in and the error says why, like a file that
+    won't parse. Only schema 1 — or none — goes through the migration."""
+    path = bindings_path(tmp_path)
+    text = json.dumps({"schema": "hyperspace.bindings/3", "bindings": [
+        {"source": "lane:0", "target": "view.bright", "op": "mod"}]})
+    path.write_text(text)
+    t = Bindings.load(path, legacy_midi=None)
+    assert t.error == "bindings: unknown schema 'hyperspace.bindings/3'"
+    assert not t.migrated and path.read_text() == text                  # left alone
+    assert t.to_json()["bindings"] == Bindings.factory().to_json()["bindings"]
+    with pytest.raises(ValueError, match="unknown schema"):
+        Bindings.from_json({"schema": "hyperspace.bindings/3", "bindings": []})
+    # no schema at all is schema 1
+    t = Bindings.from_json({"bindings": [{"source": "lane:0", "target": "x", "op": "mod"}]})
+    assert t.migrated and t.bindings[0].op == "push"
+
+
+def test_a_user_row_on_a_moved_apc_note_is_kept():
+    """The remap swaps only the old factory rows; a note the user learned
+    something else onto, or a note already in use, is left as it is."""
+    from hyperspace import apc40
+
+    rows = [Binding(f"note:0:{apc40.N_TAP}", "view.faces", "toggle", feedback="led"),
+            Binding(f"note:0:{apc40.N_NUDGE_P}", "view.shape", "step", 1),   # the factory row
+            Binding(f"note:0:{apc40.N_METRO}", "view.lines", "toggle")]      # METRONOME taken
+    out, notes = routing.migrate_v1(rows)
+    by = {(b.source, b.target) for b in out}
+    assert (f"note:0:{apc40.N_TAP}", "view.faces") in by
+    assert (f"note:0:{apc40.N_NUDGE_P}", "tempo.nudge") in by
+    assert (f"note:0:{apc40.N_METRO}", "view.lines") in by
+    assert not any(b.target in ("lfo.trigger", "tempo.tap") for b in out)
+    assert not any(b.source == f"note:0:{apc40.N_QUANT}" for b in out)   # theme.next stayed
+    assert len(notes) == 1 and notes[0].startswith("remapped")
+
+
+def test_rests_are_read_through_rest_of():
+    """An adapter publishes where its lanes idle next to their labels; a
+    push row with no rest of its own reads it through `Router.rest_of`."""
+    r = rig()
+    router = Router(r.reg, Bindings())
+    assert router.rest_of("lane:0") == 0.0 and router.rest_of("hand:3") == 0.0
+    router.rests["hand"] = [0.5, 0.0, 0.5]
+    assert router.rest_of("hand:0") == 0.5 and router.rest_of("hand:1") == 0.0
+    assert router.rest_of("hand:9") == 0.0 and router.rest_of("hand:x") == 0.0

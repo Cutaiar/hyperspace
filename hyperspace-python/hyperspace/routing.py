@@ -25,52 +25,79 @@ Sources are one string, ``scheme:address``:
                    then one presence lane per hand; NaN before that hand
                    was ever seen, and a NaN reading is not live
 
-Ops — what a row does to its target:
+Ops — what a row does to its target. The first group is the *scene-
+setters*: they write the param's base, the value a performer works from
+and returns to. The last two are the *performer* ops:
 
   fire       fire a trigger
   toggle     flip a toggle, next enum choice, or fire a trigger
   step       move `value` detents (signed)
   set        set `value`: an enum choice, a toggle state, a fader's norm
-  abs        an absolute control's position → set_norm (MIDI cc / pitch,
-             with soft pickup); a trigger fires on the rising half. On a
-             continuous source (``hand:<i>``) the Router applies it
-             (`drive`): the param follows the source whenever it moves,
-             so a panel edit stands until the hand moves again
+  abs        an absolute MIDI control's position → set_norm (cc / pitch,
+             with soft pickup); a trigger fires on the rising half. MIDI
+             only: a continuous source never sets the base
   rel/rel64  a relative encoder's delta → step
   momentary  note-on sets a toggle on, note-off sets it off
-  mod        a continuous source modulates: every frame the source is
-             live the row calls ``param.modulate(value · scale · u)`` —
-             `value` the signed depth, u the source's normalized reading,
-             and `scale` the live value of the param the row's `scale`
-             names (an attenuator on the depth; 1 when it names none).
-             Rows to unknown or unmodulatable params, or with an unknown
-             scale param, are dormant no-ops.
-  replace    like mod, but the source *is* the value: while it is live the
-             target's effective value is ``value · scale · u`` in the
-             param's own units, whatever the base; when it stops, the base
-             returns. Done through the same modulate() — the offset is
-             ``norm_of(value · scale · u) − base_norm`` — so range, wrap
-             and dormancy are exactly mod's. One replace row per target
-             is the meaningful case (two sum their departures from the base).
-  span       like replace, but in the target's *throw* rather than its
-             units: while live the target sits at position
-             ``value · scale · u`` of its range (clamped to [0, 1]), along
-             its own taper and without detents — exactly where a fader or
-             a learned hand (`abs`) would put it. So depth 1 is the whole
-             control whatever its units or curve; `replace` of a 0–1
-             source can only ever reach the value 1 (1.00× brightness).
-             What a hand preset wants: it can't carry `abs` rows.
+  push       the performer adds to the base: every frame the source is
+             live the row calls ``param.modulate(depth · scale · (u −
+             rest))`` — `value` the signed depth in norm units, u the
+             source's normalized reading, `rest` where the source sits
+             idle so that an idle source pushes nothing — the source's
+             own, as its adapter publishes it (`Router.rests`: a lane 0,
+             a hand axis its configured rest value, an LFO 0.5) unless
+             the row overrides it with a number — and `scale` the live
+             value of the param the row's `scale` names (an attenuator
+             on the depth; 1 when it names none)
+  position   the performer *is* the fader: while live the target sits at
+             position ``depth · scale · u`` of its throw (clamped to
+             [0, 1]), along its own taper and without detents; the base
+             returns when the source stops. Depth 1 is the whole control
+             whatever its units or curve — what a learned hand is
+
+Both go through the same modulate(): position's offset is ``clamp(depth ·
+scale · u) − base_norm``, so range, wrap and dormancy are push's. Rows to
+unknown or unmodulatable params, or with an unknown scale param, are
+dormant no-ops.
+
+One performer per parameter — the model (plan 09)::
+
+                       scene-setters (write the BASE, never prompt)
+    panel · keys · pad buttons · APC40 · presets · mouse/stick (relative, on base)
+                                   │
+                                   ▼
+   Param ─── base ──────────────────────────────▶ effective = base + offset
+                                   ▲
+                                   │  ONE route row, ONE per-frame path: Router.modulate
+              performer ───────────┘
+    lane:<i> · hand:<i> · ext:<i> · lfo:<i>      op = push | position
+                                                  depth · scale (a param, e.g. macro.3)
+                                                  rest (push; the source's, or a number) · when (a gate)
+
+   chaining:  hand:7 ──position──▶ lfo.1.depth      lfo:1 ──push──▶ view.bright
+              lane:0 ──push──▶ macro.2              hand:1 ──position──▶ fx.mix  ×scale macro.2
+
+A *performer* is an enabled row whose source is a continuous scheme
+(LANE_SCHEMES) and whose op is in MOD_OPS. A target has at most one:
+`Bindings.add` / `bind` raise `Owned` when another enabled performer
+already has it (`Bindings.owner`), and the caller asks — the ROUTING
+page's prompt, a hand learn held pending on the MIDI adapter — before
+`replace_owner` swaps them. A preset or file with two rows on one target
+keeps the first and lists the rest in `Bindings.dropped` until the next
+edit. Disabled rows don't own. Layering is chaining, never stacking: a
+hand owns an LFO's depth, the LFO owns brightness. Scene-setters never
+prompt and are never blocked — an APC knob turned on a hand-owned param
+moves the value the hand returns to.
 
 Gating (`when`): any row may name a second *fed* source address — one an
 adapter hands in with `feed` (hand, ext, lfo), which is where switch-like
-lanes live; the analyzer's own lanes are not gateable, since `drive` runs
-they are switches at all, so a row gated on one stays shut. A gate has to
-read on (≥ 0.5) before the row acts at all — a pinch switch over a hand
-axis, so the same movement means one thing pinched and nothing open. An
-`abs` row simply stops following while the gate is open, leaving the
-param where it was; a `mod` row stops modulating, and apply() writes the
-base back. A gate whose source is not live holds the row shut, never
-open: nothing should start moving because a camera was unplugged.
+lanes live; the analyzer's own lanes are not switches at all, so a row
+gated on one stays shut. A gate has to read on (≥ 0.5) before the row
+acts at all — a pinch switch over a hand axis, so the same movement means
+one thing pinched and nothing open. A gated-off row stops modulating and
+apply() writes the base back. A gate whose source is not live holds the
+row shut, never open: nothing should start moving because a camera was
+unplugged. Gates don't exempt a row from the referee: two rows on one
+target with different pinches are still two performers.
 
 Lane normalization: ``u = lane / CEIL`` — the analyzer's lanes are in
 [0, CEIL) (bands.CEIL, the fader asymptote), so a lane at the asymptote
@@ -81,46 +108,58 @@ how the drive fader keeps its meaning on the rotation routes without
 also scaling the pattern inputs the reference fed raw.
 
 Frame order (app.py) is fixed: input adapters (keys, pad, MIDI) →
-``audio.step`` (the analyzer) → ``Router.modulate`` (every live mod row
-calls modulate) → ``reg.apply()`` → ``integrate`` → ``draw``. A lane may
+``hands.poll`` (feeds `hand`) → ``audio.step`` (the analyzer) → bridge
+(feeds `ext`) → ``Router.modulate`` (every live performer row calls
+modulate) → ``reg.apply()`` → ``integrate`` → ``draw``. A lane may
 modulate the analyzer's own params: the offset lands in apply() and the
 next step() reads it, one frame late, like every other modulated value.
 
 Legacy 6 — the parity anchor. The reference drove the planes with
 ``PLANEDRIVE[plane] = dir · out[i] · DRIVE · gain`` in place of the
-constant 1 — and 1 again the moment the source stopped — and the shaders
-read ``u_bands[i] = out[i]``. As routes: lane i → ``rot.rate.<plane>``
-*replace* with value ``dir · DRIVE · CEIL`` scaled by ``master.gain``
-(u = out / CEIL, so that is ``dir · out · DRIVE · gain`` in rate units:
-the un-driven base of 1 spins the shape, audio replaces it exactly, a
-gated band stops its plane at 0.0, and the base is back the frame the
-source stops); and lane i → ``pattern.mod.i`` *mod*
-with depth 1 on a base of 0. ``rot.rate`` spans ±ROT_RATE_MAX =
-±(CEIL · DRIVE · 8) — the largest drive the reference could produce, at
-the drive fader's 8× — so nothing clamps at any gain, and the effective
-rate is the reference's number to round-off (a value passes through the
+constant 1, and the shaders read ``u_bands[i] = out[i]``. As routes: lane
+i → ``rot.rate.<plane>`` *push* with depth ``dir · ROT_DEPTH`` scaled by
+``master.gain`` on a base of 0 (u = out / CEIL and ROT_DEPTH is the depth
+that puts CEIL · DRIVE · 8 on the plane at the drive fader's 8×, so the
+offset is ``dir · out · DRIVE · gain`` in rate units: a gated band stops
+its plane at exactly 0.0); and lane i → ``pattern.mod.i`` *push* with
+depth 1 on a base of 0. ``rot.rate`` spans ±ROT_RATE_MAX = ±(CEIL ·
+DRIVE · 8) — the largest drive the reference could produce — so nothing
+clamps at any gain, and the effective rate is the reference's number to
+round-off *while the source is live* (a value passes through the
 registry's normalized space and back: within an ulp of the range, the
 same float32 the GPU sees; params.py says why the range is that wide).
-`PRESETS["legacy6"]` carries the routes and the pattern bases (`values`,
-zeros: an additive row reproduces "audio replaces the constant" only on
-0); the factory table ships the same routes on WP0's pattern base of 1,
-so the patterns keep their un-driven look and a lane rides on top.
+`PRESETS["legacy6"]` carries the routes and the bases (`values`: zeros
+for the rates and the pattern inputs — a push reproduces "audio replaces
+the constant" only on 0). Where the reference spun at 1× the moment the
+source stopped, the planes now stop: the base is 0 and the parity anchor
+is the driven value, not the idle one (plan 09, inside the relaxed bar).
+The factory table ships the same routes on WP0's bases of 1, so a plane
+keeps its un-driven spin and a lane rides on top.
 
-File format (``bindings.json``, schema ``hyperspace.bindings/1``):
+File format (``bindings.json``, schema ``hyperspace.bindings/2``):
 
-  {"schema": "hyperspace.bindings/1", "profile": "apc40",
+  {"schema": "hyperspace.bindings/2", "profile": "apc40",
    "bindings": [{"source": "key:RIGHT", "target": "view.shape",
                  "op": "step", "value": 1},
-                {"source": "lane:0", "target": "rot.rate.ZW", "op": "replace",
-                 "value": 8.32, "scale": "master.gain"}, …],
+                {"source": "lane:0", "target": "rot.rate.ZW", "op": "push",
+                 "value": 0.0625, "scale": "master.gain"},
+                {"source": "hand:7", "target": "view.bright", "op": "position",
+                 "when": "hand:18"}, …],
    "values": {…}}            # optional: bases a routing preset assumes
 
 Rows carry only what differs from the defaults. `Bindings.load` reads the
 file, or builds the factory table when there is none — and if an old
 ``midi_map.json`` (midi.py's version-1 file) is present, its rows replace
 the factory MIDI part and the merged table is written once, with a note.
-`bindings_path(home)` says where the file lives; `home` defaults to the
-working directory so WP2's library home can be dropped in.
+A schema-1 file migrates the same way (`migrate_v1`: ``mod`` → push,
+``span`` → position, a lane-scheme ``abs`` → position at depth 1,
+``replace`` dropped, a second owner dropped, the three APC40 buttons plan
+09 WP4 moved remapped — each dropped or remapped row named on stderr, the
+file written back once; a user's preset file likewise, through
+`Router.load_preset`). A schema this code doesn't know is left alone and
+reported, like a file that won't parse. `bindings_path(home)` says
+where the file lives; `home` defaults to the working directory so WP2's
+library home can be dropped in.
 
 Routing presets are the same file format with only modulation rows:
 the factory exports in ``hyperspace/library/bindings/`` and the user's
@@ -144,7 +183,8 @@ from . import apc40
 from .bands import BANDS, CEIL, DRIVE
 from .params import PLANES, ROT_RATE_MAX, Kind, Param, Registry
 
-SCHEMA = "hyperspace.bindings/1"
+SCHEMA = "hyperspace.bindings/2"
+SCHEMA_V1 = "hyperspace.bindings/1"
 FILE = "bindings.json"
 LEGACY_MIDI_FILE = Path("midi_map.json")
 FACTORY_DIR = Path(__file__).parent / "library" / "bindings"
@@ -152,18 +192,50 @@ FACTORY_DIR = Path(__file__).parent / "library" / "bindings"
 MIDI_SCHEMES = ("cc", "note", "pitch")
 INPUT_SCHEMES = ("key", "pad", "hat", *MIDI_SCHEMES)
 LANE_SCHEMES = ("lane", "ext", "lfo", "hand")          # continuous, read by the Router
-MOD_OPS = ("mod", "replace", "span")           # the Router's per-frame rows
+MOD_OPS = ("push", "position")                 # the performer ops: the Router's rows
 OPS = ("fire", "toggle", "step", "set", "abs", "rel", "rel64", "momentary", *MOD_OPS)
 
 # midi_map.json's `mode` → op
 MODE_TO_OP = {"abs": "abs", "rel": "rel", "rel64": "rel64", "trigger": "toggle",
               "momentary": "momentary", "set": "set", "step": "step"}
+# schema 1's performer ops → schema 2's (migrate_v1); `replace` has no twin
+# but a push on a base of 0, which a file can't ask for, so it is dropped
+V1_TO_OP = {"mod": "push", "span": "position", "abs": "position"}
+# plan 09 WP4 gives three APC40 buttons to the clock (apc40.DEFAULT_MAP):
+# TAP TEMPO taps it, NUDGE ± nudges it, and METRONOME fires the global
+# LFO trigger; the theme cycle TAP TEMPO used to do moves to QUANT. A v1
+# file carries the old factory rows; the migration swaps exactly those —
+# (source, target, op, value) → (target, op, value) — and leaves a row
+# the user put on one of the notes alone. Named here rather than read
+# from DEFAULT_MAP so the migration says the same thing whatever the map
+# of the day; the targets exist once WP4 lands and are dormant until then.
+APC_REMAP: dict[tuple[str, str, str, float], tuple[str, str, float]] = {
+    (f"note:0:{apc40.N_TAP}", "theme.next", "toggle", 1.0): ("tempo.tap", "toggle", 1.0),
+    (f"note:0:{apc40.N_NUDGE_P}", "view.shape", "step", 1.0): ("tempo.nudge", "step", 1.0),
+    (f"note:0:{apc40.N_NUDGE_M}", "view.shape", "step", -1.0): ("tempo.nudge", "step", -1.0),
+}
+# rows added when nothing uses the note: (source, target, op, value, only
+# when the theme cycle was remapped away)
+APC_NEW_ROWS = (
+    (f"note:0:{apc40.N_METRO}", "lfo.trigger", "toggle", 1.0, False),
+    (f"note:0:{apc40.N_QUANT}", "theme.next", "toggle", 1.0, True),
+)
 
-# the additive twin of the legacy rate route — a `mod` row on a base of 0
-# lands the reference's drive too: a lane at full drive (out = CEIL, gain 8)
-# reaches rot.rate's end stop when depth · (CEIL · 8 / CEIL) · 2 · ROT_RATE_MAX
-# = CEIL · DRIVE · 8  →  depth = DRIVE · CEIL / (2 · ROT_RATE_MAX) = 1/16
+# the legacy rate route: a push on a base of 0 lands the reference's
+# drive — a lane at full drive (out = CEIL, gain 8) reaches rot.rate's end
+# stop when depth · (CEIL · 8 / CEIL) · 2 · ROT_RATE_MAX = CEIL · DRIVE · 8
+# →  depth = DRIVE · CEIL / (2 · ROT_RATE_MAX) = 1/16
 ROT_DEPTH = DRIVE * CEIL / (2 * ROT_RATE_MAX)
+
+
+class Owned(Exception):
+    """The target already has a performer — `existing` is that row, `new`
+    the one that asked. The caller decides: `Bindings.replace_owner(new)`
+    or leave the table alone."""
+
+    def __init__(self, existing: Binding, new: Binding | None = None):
+        self.existing, self.new = existing, new
+        super().__init__(f"{existing.target} is already performed by {existing.describe()}")
 
 
 # ---------------------------------------------------------------- binding
@@ -173,12 +245,16 @@ class Binding:
     source: str                  # "scheme:address", see the module docstring
     target: str                  # param id
     op: str = "fire"
-    value: float = 1.0           # set: the value · step: the detents · mod: the depth
+    value: float = 1.0           # set: the value · step: the detents · push/position: the depth
     enabled: bool = True
-    scale: str | None = None     # mod: a param whose value multiplies the depth
+    scale: str | None = None     # push/position: a param whose value multiplies the depth
     # a source address ("hand:14") that must read on for this row to apply:
     # a pinch switch gating an axis, so the same hand move means two things
     when: str | None = None
+    # push: where the source sits idle — the reading that pushes nothing.
+    # None is the source's own rest, resolved every frame from what its
+    # adapter publishes (Router.rests / rest_of); a number overrides it
+    rest: float | None = None
     # MIDI controls only (midi.py); other sources ignore them
     pickup: bool = True
     feedback: str | None = None  # "ring" | "led" | None
@@ -240,6 +316,12 @@ class Binding:
         except (IndexError, ValueError):
             return -1
 
+    @property
+    def is_performer(self) -> bool:
+        """An enabled push / position row from a continuous source — what
+        owns a target. A disabled row keeps its settings and owns nothing."""
+        return self.enabled and self.scheme in LANE_SCHEMES and self.op in MOD_OPS
+
     @staticmethod
     def midi_source(kind: str, channel: int | None, number: int = 0) -> str:
         ch = "*" if channel is None else str(int(channel))
@@ -259,7 +341,7 @@ class Binding:
         for k in self._RUNTIME:
             d.pop(k)
         # only what differs from the defaults keeps the file readable
-        for k in ("value", "enabled", "scale", "when", "pickup", "feedback",
+        for k in ("value", "enabled", "scale", "when", "rest", "pickup", "feedback",
                   "on", "off", "ring"):
             if d[k] == self.__dataclass_fields__[k].default:
                 d.pop(k)
@@ -293,11 +375,13 @@ class Binding:
         addr = ":".join(self.parts)
         if s == "hat":
             return f"d-pad {addr}"
-        if s in LANE_SCHEMES and self.op == "abs":
-            return f"{s} {addr}"
-        if s in LANE_SCHEMES:
+        if s in LANE_SCHEMES and self.op in MOD_OPS:
             by = f" × {self.scale}" if self.scale else ""
-            return f"{s} {addr} → {self.op} {self.value:+.3g}{by}"
+            gate = f" while {self.when}" if self.when else ""
+            if self.op == "push":
+                return f"{s} {addr} pushes {self.value:+.3g}{by}{gate}"
+            depth = "" if self.value == 1.0 else f" {self.value:.3g}"
+            return f"{s} {addr} positions{depth}{by}{gate}"
         return f"{s} {addr}"
 
 
@@ -374,21 +458,87 @@ def padmap() -> list[Binding]:
 def legacy6_routes() -> list[Binding]:
     """The reference's band → plane table and shader inputs, as routes.
 
-    The rate rows replace: value · gain · u with u = out / CEIL, so a value
-    of dir · DRIVE · CEIL puts dir · out · DRIVE · gain on the plane in
-    rate units. The pattern rows add on the base.
+    The rate rows push dir · ROT_DEPTH · gain · u with u = out / CEIL, which
+    on a base of 0 is dir · out · DRIVE · gain on the plane in rate units.
+    The pattern rows push u on their base, 1 : 1 with out on a base of 0.
     """
-    rows = [Binding(f"lane:{i}", f"rot.rate.{b.pl}", "replace", b.dir * DRIVE * CEIL,
+    rows = [Binding(f"lane:{i}", f"rot.rate.{b.pl}", "push", b.dir * ROT_DEPTH,
                     scale="master.gain") for i, b in enumerate(BANDS)]
-    rows += [Binding(f"lane:{i}", f"pattern.mod.{i}", "mod", 1.0) for i in range(len(BANDS))]
+    rows += [Binding(f"lane:{i}", f"pattern.mod.{i}", "push", 1.0) for i in range(len(BANDS))]
     return rows
+
+
+def legacy6_values() -> dict[str, float]:
+    """The bases the legacy6 routes assume: a push lands the reference's
+    number only from 0."""
+    return {**{f"rot.rate.{n}": 0.0 for n in PLANES},
+            **{f"pattern.mod.{i}": 0.0 for i in range(len(BANDS))}}
 
 
 # routing presets: {name: (routes, values)} — `values` are the bases the
 # routes assume; None leaves the user's settings alone
 PRESETS: dict[str, tuple[list[Binding], dict | None]] = {
-    "legacy6": (legacy6_routes(), {f"pattern.mod.{i}": 0.0 for i in range(len(BANDS))}),
+    "legacy6": (legacy6_routes(), legacy6_values()),
 }
+
+
+def referee(rows: Iterable[Binding]) -> tuple[list[Binding], list[tuple[Binding, str]]]:
+    """First performer per target wins: (kept, [(dropped row, why)]).
+
+    What a preset or a file gets instead of a prompt — the loader asks
+    nothing, so the rule is fixed: table order decides.
+    """
+    kept: list[Binding] = []
+    dropped: list[tuple[Binding, str]] = []
+    owners: dict[str, Binding] = {}
+    for b in rows:
+        if b.is_performer:
+            cur = owners.get(b.target)
+            if cur is not None:
+                dropped.append((b, f"{b.target} is already performed by {cur.describe()}"))
+                continue
+            owners[b.target] = b
+        kept.append(b)
+    return kept, dropped
+
+
+def migrate_v1(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
+    """Schema 1 → 2: the performer ops renamed (`mod` → push with the
+    source's own rest, `span` → position, a lane-scheme `abs` → position
+    at depth 1), `replace` dropped, the APC40 buttons WP4 moved remapped
+    where the file still carries the old factory rows. Returns (rows, a
+    note per row dropped or remapped); `referee` then settles second owners."""
+    out: list[Binding] = []
+    notes: list[str] = []
+    moved_theme = False
+    for b in rows:
+        if b.scheme not in LANE_SCHEMES:
+            hit = APC_REMAP.get((b.source, b.target, b.op, float(b.value)))
+            if hit is not None:
+                target, op, value = hit
+                notes.append(f"remapped {b.source}: {b.target} → {target} (the APC40 map "
+                             "of plan 09)")
+                moved_theme = moved_theme or b.target == "theme.next"
+                b = replace(b, target=target, op=op, value=value)
+            out.append(b)
+            continue
+        op = V1_TO_OP.get(b.op)
+        if op is None:
+            why = ("no such op — a push on a base of 0 is the additive twin"
+                   if b.op == "replace" else f"no such op in {SCHEMA}")
+            notes.append(f"dropped {b.source} → {b.target} ({b.op}): {why}")
+            continue
+        if b.op == "abs":            # a learned hand: the whole throw, no pickup
+            b.value, b.pickup = 1.0, True
+        b.op = op
+        out.append(b)
+    used = {b.source for b in out}
+    for source, target, op, value, only_if_moved in APC_NEW_ROWS:
+        if source in used or (only_if_moved and not moved_theme):
+            continue
+        out.append(Binding(source, target, op, value, feedback="led"))
+        notes.append(f"added {source} → {target} (the APC40 map of plan 09)")
+    return out, notes
 
 
 # routing preset *files*: the factory exports (write_factory) and the
@@ -435,6 +585,14 @@ class Bindings:
         self.profile = profile
         self.values = values
         self.error = ""
+        # what the referee refused from the last preset or file, (row, why),
+        # for the ROUTING page to show until the next edit
+        self.dropped: list[tuple[Binding, str]] = []
+        # from_json read a schema-1 file: `notes` names every row it dropped
+        # or remapped (Bindings.load prints them, the ROUTING page shows them
+        # next to `dropped` until the next edit), so the file can be checked
+        self.migrated = False
+        self.notes: list[str] = []
 
     # ---- construction ----
 
@@ -449,16 +607,21 @@ class Bindings:
     def load(cls, path: Path | None, profile: str = "apc40",
              legacy_midi: Path | None = LEGACY_MIDI_FILE) -> Bindings:
         """The file at `path`, else the factory table — with an old
-        midi_map.json's rows in place of the factory MIDI part, written once."""
+        midi_map.json's rows in place of the factory MIDI part, written once.
+        A schema-1 file is migrated the same way: noted on stderr, written
+        back once, and from then on the file rules."""
         if path is not None and path.exists():
             try:
                 t = cls.from_json(json.loads(path.read_text()), path=path)
                 t.profile = t.profile or profile
-                return t
             except (OSError, ValueError, TypeError, KeyError) as e:
                 t = cls.factory(profile, path)
                 t.error = f"bindings: {e}"
                 return t
+            if t.migrated:
+                t.announce(path)
+                t.write()
+            return t
         t = cls.factory(profile, path)
         if legacy_midi is not None and legacy_midi.exists():
             try:
@@ -473,10 +636,39 @@ class Bindings:
                 t.error = f"bindings: {legacy_midi}: {e}"
         return t
 
+    def announce(self, path: Path) -> None:
+        """A migration's notes on stderr, one line per row, then the sum."""
+        for note in self.notes:
+            print(f"bindings: {path}: {note}", file=sys.stderr)
+        dropped = sum(n.startswith("dropped") for n in self.notes)
+        changed = len(self.notes) - dropped
+        tail = ", ".join(f"{n} rows {what}" for n, what in ((dropped, "dropped"),
+                                                              (changed, "changed")) if n)
+        print(f"bindings: migrated {path} to {SCHEMA}" + (f" ({tail})" if tail else ""),
+              file=sys.stderr)
+
     @classmethod
     def from_json(cls, data: dict, path: Path | None = None) -> Bindings:
-        return cls([Binding.from_json(b) for b in data.get("bindings", [])], path=path,
-                   profile=data.get("profile", "apc40"), values=data.get("values"))
+        """A file's dict. Schema 1 (or none) goes through `migrate_v1`; a
+        schema this code doesn't know raises ValueError, like a file that
+        won't parse — never rewritten. A schema-2 file with two owners on a
+        target keeps the first, the rest in `dropped` — the referee, not a
+        prompt, since nobody is asking."""
+        schema = data.get("schema")
+        if schema not in (SCHEMA, SCHEMA_V1, None):
+            raise ValueError(f"unknown schema {schema!r}")
+        rows = [Binding.from_json(b) for b in data.get("bindings", [])]
+        notes: list[str] = []
+        migrated = schema != SCHEMA
+        if migrated:
+            rows, notes = migrate_v1(rows)
+        t = cls(rows, path=path, profile=data.get("profile", "apc40"),
+                values=data.get("values"))
+        t.bindings, t.dropped = referee(t.bindings)
+        if migrated:
+            notes += [f"dropped {b.source} → {b.target}: {why}" for b, why in t.dropped]
+        t.migrated, t.notes = migrated, notes
+        return t
 
     def to_json(self) -> dict:
         d = {"schema": SCHEMA, "profile": self.profile,
@@ -513,21 +705,22 @@ class Bindings:
         return self.of(*MIDI_SCHEMES)
 
     def mods(self) -> list[Binding]:
-        """The enabled modulation rows (mod and replace), in table order."""
+        """The enabled performer rows, in table order — the Router's pass."""
         return [b for b in self.bindings if b.op in MOD_OPS and b.enabled]
 
     def routes(self) -> list[Binding]:
-        """Every modulation row, disabled ones too — what the matrix lists
+        """Every performer row, disabled ones too — what the matrix lists
         and a routing preset saves."""
         return [b for b in self.bindings if b.op in MOD_OPS]
 
-    def learned(self) -> list[Binding]:
-        """The rows a continuous source drives outside the matrix — a hand
-        learn's ``hand:<i>`` abs rows (`Router.drive`). Not routes, so a
-        preset leaves them alone, but live all the same: the ROUTING page
-        lists them so clearing the routes can't leave a hand driving."""
-        return [b for b in self.bindings
-                if b.scheme in LANE_SCHEMES and b.op not in MOD_OPS]
+    def performers(self) -> list[Binding]:
+        """The rows that own a target: enabled, a continuous source, push
+        or position (`Binding.is_performer`)."""
+        return [b for b in self.bindings if b.is_performer]
+
+    def owner(self, pid: str) -> Binding | None:
+        """The one performer on `pid`, or None — the referee's question."""
+        return next((b for b in self.bindings if b.is_performer and b.target == pid), None)
 
     def route(self, kind: str, channel: int, number: int) -> list[Binding]:
         return [b for b in self.bindings if b.matches(kind, channel, number)]
@@ -540,6 +733,20 @@ class Bindings:
 
     # ---- edits ----
 
+    def _check(self, b: Binding) -> None:
+        """The referee: a performer joining the table (or waking up) must
+        find its target free, or held by itself. A continuous source has
+        no other op — `abs` is MIDI's, the one path is Router.modulate."""
+        if b.scheme in LANE_SCHEMES and b.op not in MOD_OPS:
+            raise ValueError(f"{b.op!r} is not an op for a {b.scheme} source; "
+                             f"one of {', '.join(MOD_OPS)}")
+        if not b.is_performer:
+            return
+        cur = next((x for x in self.bindings
+                    if x is not b and x.is_performer and x.target == b.target), None)
+        if cur is not None:
+            raise Owned(cur, b)
+
     def bind(self, b: Binding) -> None:
         """A control drives one param; a param keeps one control per role.
 
@@ -547,14 +754,11 @@ class Bindings:
         binding in the same role: a knob (any cc or pitch binding) when
         learning a knob, or a button of the same op and value when
         learning a button — so a param's step buttons survive a knob learn.
+        A continuous source's row (a hand learn) is a performer like any
+        route: `add`, then written — `Owned` if the target is taken.
         """
         if not b.is_midi:
-            # a learned continuous source (hand:<i> abs): it drives one param,
-            # a param follows one such source; its routes (mod rows) stay
-            self.bindings = [x for x in self.bindings if not (
-                x.op == b.op and x.scheme == b.scheme
-                and (x.source == b.source or x.target == b.target))]
-            self.bindings.append(b)
+            self.add(b)
             self.write()
             return
 
@@ -567,24 +771,59 @@ class Bindings:
 
         self.bindings = [x for x in self.bindings if x.key != b.key and not same_role(x)]
         self.bindings.append(b)
+        self.dropped, self.notes = [], []
         self.write()
 
     def unbind(self, pid: str, schemes: tuple[str, ...] = MIDI_SCHEMES) -> None:
         self.bindings = [b for b in self.bindings
                          if not (b.target == pid and b.scheme in schemes)]
+        self.dropped, self.notes = [], []
         self.write()
 
     def add(self, b: Binding) -> Binding:
-        """A route (or any row) added at runtime — the routing matrix's edit."""
+        """A route (or any row) added at runtime — the routing matrix's
+        edit. Raises `Owned` when the target has another performer."""
+        self._check(b)
         self.bindings.append(b)
+        self.dropped, self.notes = [], []
         return b
+
+    def replace_owner(self, new: Binding) -> Binding | None:
+        """The prompt's *Replace*: the target's performer goes, `new` comes
+        in. Returns the row removed (None when the target was free)."""
+        cur = self.owner(new.target)
+        if cur is new:
+            return None
+        if cur is not None:
+            self.remove(cur)
+        if not any(x is new for x in self.bindings):
+            self.add(new)
+        return cur
+
+    def enable(self, b: Binding, on: bool = True) -> None:
+        """A row's checkbox. Waking a row is joining the table as far as
+        the referee is concerned — `Owned` if its target was taken while
+        it slept; the row stays off."""
+        if on and not b.enabled:
+            b.enabled = True
+            try:
+                self._check(b)
+            except (Owned, ValueError):
+                b.enabled = False
+                raise
+        b.enabled = on
+        self.dropped, self.notes = [], []
 
     def remove(self, b: Binding) -> None:
         self.bindings = [x for x in self.bindings if x is not b]
+        self.dropped, self.notes = [], []
 
     def set_routes(self, routes: Iterable[Binding]) -> None:
-        """Replace every modulation row, keeping the input bindings."""
-        self.bindings = [b for b in self.bindings if b.op not in MOD_OPS] + list(routes)
+        """Replace every performer row, keeping the input bindings. Two
+        rows on one target: the first stays, the rest go to `dropped`."""
+        kept, self.dropped = referee(routes)
+        self.notes = []
+        self.bindings = [b for b in self.bindings if b.op not in MOD_OPS] + kept
 
 
 # ---------------------------------------------------------------- router
@@ -601,6 +840,11 @@ class Router:
         # switch-like lanes a row's `when` can wait on. The adapter says
         # which of its lanes those are; nothing here knows about hands.
         self.gates: dict[str, list[tuple[int, str]]] = {}
+        # scheme → where each lane sits idle, published like `labels`: what
+        # a push row with no rest of its own uses, every frame (a hand axis
+        # its configured rest value, a presence lane 0, an LFO 0.5); the
+        # analyzer's lanes, and any scheme that publishes nothing, rest at 0
+        self.rests: dict[str, list[float]] = {}
         self._codes: dict[str, int | None] = {}
 
     # ---- discrete adapters ----
@@ -662,37 +906,23 @@ class Router:
         u = float(vec[i])
         return not math.isnan(u) and u >= 0.5
 
-    def drive(self, scheme: str) -> None:
-        """The `abs` rows of a fed source: each target takes the source's
-        reading when it has changed since the row last applied it, so a
-        param moved by hand on the panel stays put until the source moves."""
-        vec = self.feeds.get(scheme)
-        if vec is None:
-            return
-        for b in self.table.of(scheme):
-            i = b.index
-            if b.op != "abs" or not b.enabled or not 0 <= i < len(vec):
-                continue
-            if not self.gated(b):
-                continue
-            u = float(vec[i])
-            if math.isnan(u) or (b.last_hw is not None and abs(u - b.last_hw) < 1e-6):
-                continue
-            p = self.reg.get(b.target)
-            if p is None:
-                continue
-            b.last_hw = u
-            if p.kind is Kind.TRIGGER:
-                if u >= 0.5 > (b.last_out or 0.0):
-                    p.fire()
-                b.last_out = u
-            elif p.kind is not Kind.TEXT:
-                p.glide(u)
+    def rest_of(self, source: str) -> float:
+        """Where `source` rests right now, from its adapter's `rests` — 0
+        when the adapter published none (the analyzer's lanes, an unknown
+        address). What a push row without a rest of its own is centred on."""
+        scheme, _, addr = source.partition(":")
+        rests = self.rests.get(scheme) or []
+        try:
+            i = int(addr)
+        except ValueError:
+            return 0.0
+        return float(rests[i]) if 0 <= i < len(rests) else 0.0
 
     def modulate(self, analyzer=None) -> None:
-        """The frame's modulation pass: every enabled mod row whose source is
-        live calls modulate on its target. `analyzer` is the live one, or
-        None while no audio source runs (its lanes are then not a source)."""
+        """The frame's modulation pass — the one path a continuous source
+        has to a param: every enabled performer row whose source is live
+        calls modulate on its target. `analyzer` is the live one, or None
+        while no audio source runs (its lanes are then not a source)."""
         lanes = None if analyzer is None else analyzer.lanes / CEIL
         for b in self.table.mods():
             vec = lanes if b.scheme == "lane" else self.feeds.get(b.scheme)
@@ -713,28 +943,25 @@ class Router:
                 if sp is None:
                     continue
                 depth *= float(sp.value)
-            x = depth * u
-            if b.op == "replace":
-                # the source is the value: land it as the offset from the
-                # base (p.norm is the base while modulated, the object before);
-                # a circular range folds the value first, as set_value does
+            if b.op == "push":
+                # centred where the source rests — the row's own number, or
+                # the source's as published this frame: idle adds nothing
+                rest = b.rest if b.rest is not None else self.rest_of(b.source)
+                x = depth * (u - rest)
+            else:
+                # position: the source is the fader — the offset that lands
+                # it (p.norm is the base while modulated, the object before)
                 if p.kind is Kind.TEXT or not p.modulatable:
                     continue
-                if p.wrap and p.taper is None:
-                    x = p.lo + (x - p.lo) % (p.hi - p.lo)
-                x = p._norm_of(x) - p.norm
-            elif b.op == "span":
-                # the source is the position: the offset that lands it
-                if p.kind is Kind.TEXT or not p.modulatable:
-                    continue
-                x = min(1.0, max(0.0, x)) - p.norm
+                x = min(1.0, max(0.0, depth * u)) - p.norm
             p.modulate(x)
 
     # ---- presets ----
 
     def apply_preset(self, name: str) -> list[str]:
         """Replace the routes with a preset's; land its bases. Returns the
-        ids the registry doesn't have."""
+        ids the registry doesn't have. Two rows on one target: the first
+        stays, the rest wait in `table.dropped` for the page to show."""
         routes, values = PRESETS[name]
         self.table.set_routes(replace(b) for b in routes)
         return self.reg.restore(values) if values else []
@@ -742,14 +969,18 @@ class Router:
     def load_preset(self, name: str, home: Path | str | None = None) -> list[str]:
         """`apply_preset` over the files: a routing preset by name from the
         factory folder or the user's <home>/bindings/ (preset_files). Only
-        its modulation rows come in — a full table (default.json) works as
+        its performer rows come in — a full table (default.json) works as
         a preset too. A missing name raises FileNotFoundError, a bad file
         ValueError, so the strip can show it."""
         path = preset_files(home).get(name)
         if path is None:
             raise FileNotFoundError(f"no routing preset {name!r}")
-        t = Bindings.from_json(json.loads(path.read_text()))
+        t = Bindings.from_json(json.loads(path.read_text()), path=path)
+        if t.migrated and FACTORY_DIR not in path.parents:
+            t.announce(path)             # a user's v1 preset: rewritten once
+            t.write()
         self.table.set_routes(replace(b) for b in t.bindings if b.op in MOD_OPS)
+        self.table.dropped, self.table.notes = list(t.dropped), list(t.notes)
         return self.reg.restore(t.values) if t.values else []
 
     def save_preset(self, name: str, home: Path | str) -> Path:

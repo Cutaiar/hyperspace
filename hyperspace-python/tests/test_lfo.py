@@ -6,13 +6,11 @@ import pytest
 
 from hyperspace.lfo import DIVISIONS, RANDOM, REST, SHAPES, SYNCS, LFOs, register, wave
 from hyperspace.params import Kind, Registry
-from hyperspace.routing import MOD_OPS, Binding, Bindings, Router
+from hyperspace.routing import Binding, Bindings, Router
 from hyperspace.tempo import Clock
 from hyperspace.tempo import register as register_tempo
 
 DT = 1 / 60
-# plan 09 WP1 renames `mod` → `push`; until it lands the additive op is `mod`
-PUSH = "push" if "push" in MOD_OPS else "mod"
 
 
 def clock_at(bpm=120.0):
@@ -253,37 +251,43 @@ def test_the_trigger_param_moves_the_clock_and_the_synced_lfos():
 
 
 def test_an_lfo_owning_another_lfos_depth_changes_its_output_next_frame():
-    """The chain: LFO 1 → lfo.2.depth, LFO 2 → whatever. One frame of lag,
+    """The chain: LFO 1 pushes lfo.2.depth, centred on the LFO rest of 0.5
+    the router reads from `rests` (the row names none). One frame of lag,
     no recursion: the depth lands in apply(), the next step reads it."""
     reg, c, lfos = rig()
     one, two = lfos[0], lfos[1]
-    one.shape = SHAPES.index("square")          # +1 for the first half cycle
-    one.rate = 0.25                             # so the half lasts 2 s
-    two.depth = 0.0                             # silent on its own
-    two.shape, two.rate = SHAPES.index("square"), 0.25
-    table = Bindings([Binding("lfo:0", "lfo.2.depth", PUSH, 1.0)])
+    one.shape, one.rate = SHAPES.index("sine"), 1.0    # a quarter cycle per frame below
+    two.depth = 0.0                                     # silent on its own
+    two.shape, two.rate = SHAPES.index("square"), 1.0
+    table = Bindings([Binding("lfo:0", "lfo.2.depth", "push", 1.0)])
     router = Router(reg, table)
     depth = reg["lfo.2.depth"]
+    dt = 0.25
 
     def frame(t):
-        lfos.step(DT, t, c)
+        lfos.step(dt, t, c)
         lfos.publish(router)
         router.modulate(None)
         reg.apply()
 
-    frame(DT)
-    assert lfos.outputs[0] == pytest.approx(1.0)          # LFO 1 high
+    assert table.owner("lfo.2.depth") is table.bindings[0]
+    frame(0.25)
+    assert lfos.outputs[0] == pytest.approx(1.0)          # sine at its crest
     assert lfos.outputs[1] == pytest.approx(REST)          # LFO 2 stepped at depth 0
-    assert depth.modulated and depth.base == 0.0 and two.depth == pytest.approx(1.0)
-    frame(2 * DT)                                          # the next frame: it swings
-    assert lfos.outputs[1] == pytest.approx(1.0)
-    assert router.labels["lfo"][1] == "LFO 2" and router.rests["lfo"] == [REST] * 4
+    assert depth.modulated and depth.base == 0.0
+    assert two.depth == pytest.approx(0.5)                 # 1.0 · (1.0 − rest 0.5)
+    assert router.rests["lfo"] == [REST] * 4 and router.labels["lfo"][1] == "LFO 2"
+    frame(0.5)                                             # the next frame: it swings
+    assert lfos.outputs[1] == pytest.approx(REST - 0.25)   # square low at depth 0.5
+    assert lfos.outputs[0] == pytest.approx(REST, abs=1e-9)   # LFO 1 at its rest…
+    assert two.depth == pytest.approx(0.0, abs=1e-9)       # …pushes nothing: a no-op
+    frame(0.75)
+    assert lfos.outputs[1] == pytest.approx(REST)          # depth 0 read a frame late
+    assert two.depth == 0.0                                # the trough clamps at 0
     # the source lets go: the base comes back, and the output with it
     table.bindings.clear()
-    frame(3 * DT)
+    frame(1.0)
     assert not depth.modulated and two.depth == 0.0
-    frame(4 * DT)
-    assert lfos.outputs[1] == pytest.approx(REST)
 
 
 def test_lfo_source_is_fed_as_floats_in_range():

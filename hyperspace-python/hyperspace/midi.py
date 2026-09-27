@@ -50,7 +50,7 @@ import mido
 
 from . import apc40
 from .params import Kind, Param, Registry
-from .routing import Binding, Bindings, act, bindings_path
+from .routing import Binding, Bindings, Owned, act, bindings_path
 
 PROFILES = {"apc40": apc40}
 MAP_FILE = bindings_path()
@@ -211,6 +211,9 @@ class MidiIO:
         self.ports = Ports(self.port_match, self.port_match, inp=inp, out=out, clock=clock)
         self.last = ""          # last message seen, for the status line
         self.learning: str | None = None
+        # a hand learn the referee refused, (new row, the target's current
+        # performer), held until the panel's prompt calls resolve_pending
+        self.pending: tuple[Binding, Binding] | None = None
         self._writes: dict[str, float] = {}  # param → norm we last wrote / saw
         if self.ports.injected:
             self._enter()
@@ -269,7 +272,10 @@ class MidiIO:
     # ---- learn / bindings ----
 
     def learn(self, pid: str | None) -> None:
+        """Arm (or cancel) a learn. A learn the prompt hasn't answered yet
+        is forgotten: the new one is what the performer means now."""
         self.learning = pid
+        self.pending = None
 
     def binding_for(self, pid: str) -> Binding | None:
         return self.map.for_param(pid)
@@ -309,17 +315,63 @@ class MidiIO:
 
     def learn_source(self, source: str, when: str | None = None) -> None:
         """Another adapter completes the learn with one of its own sources
-        (hands/core.py: ``hand:<i>``): the param follows it absolutely —
-        the Router applies the row — with no pickup and no device
-        feedback. `when` gates the row on a second source (a pinch held
-        while learning), so the row only acts while that reads on."""
+        (hands/core.py: ``hand:<i>``): a `position` route at depth 1 — the
+        source is the whole fader, through the Router like every route,
+        with no pickup and no device feedback. `when` gates the row on a
+        second source (a pinch held while learning), so the row only acts
+        while that reads on.
+
+        A learned axis drives one param: learning it onto another *moves*
+        it (its other position rows go), and learning it again onto the
+        same param only refreshes the gate. If the param already has a
+        different performer the learn is held in `pending` for the panel's
+        prompt (`resolve_pending`) — the table untouched until it answers —
+        rather than taking the target or being lost. `learning` is cleared
+        first, so the hands adapter, which keys off it, cannot fire again.
+        """
         pid = self.learning
         self.learning = None
         if pid is None or self.reg.get(pid) is None:
             return
-        b = Binding(source, pid, "abs", pickup=False, when=when)
-        self.map.bind(b)
-        self.last = f"learned {pid} ← {b.describe()}"
+        b = Binding(source, pid, "position", 1.0, when=when)
+        table = self.map.table
+        cur = table.owner(pid)
+        if cur is not None and cur.source == source and cur.op == "position":
+            cur.when = when                          # the same axis again: no move
+            self.map.write()
+            self.last = f"learned {pid} ← {cur.describe()}"
+            return
+        if cur is not None:
+            self.pending = (b, cur)
+            self.last = f"{Owned(cur, b)} — replace?"
+            return
+        self._place(b)
+
+    def resolve_pending(self, replace: bool) -> Binding | None:
+        """The prompt's answer to a held learn: *Replace* swaps the target's
+        performer for the learned row and writes the file; *Keep* leaves
+        the table as it was. Returns the row now in the table, or None."""
+        if self.pending is None:
+            return None
+        new, old = self.pending
+        self.pending = None
+        if not replace:
+            self.last = f"kept {old.describe()} on {old.target}"
+            return None
+        self.map.table.remove(old)
+        self._place(new)
+        return new
+
+    def _place(self, b: Binding) -> None:
+        """The learned row into the table: the axis's other position rows
+        go first (one axis, one param), then the referee's `add`, then the
+        file. The caller has already seen to the target's owner."""
+        table = self.map.table
+        for x in [x for x in table.of(b.scheme) if x.source == b.source and x.op == "position"]:
+            table.remove(x)
+        table.add(b)
+        self.map.write()
+        self.last = f"learned {b.target} ← {b.describe()}"
 
     # ---- per frame ----
 

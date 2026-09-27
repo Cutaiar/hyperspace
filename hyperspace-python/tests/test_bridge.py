@@ -271,7 +271,7 @@ def test_both_forms_land_on_the_same_lane():
 
 def test_ext_route_modulates_a_param_end_to_end():
     r = rig()
-    router = Router(r.reg, Bindings([Binding("ext:0", "view.bright", "mod", 0.2)]))
+    router = Router(r.reg, Bindings([Binding("ext:0", "view.bright", "push", 0.2)]))
     p = r.reg["view.bright"]
     p.set_norm(0.5)
     base = p.norm
@@ -298,7 +298,7 @@ def test_ext_route_modulates_a_param_end_to_end():
 
 def test_lost_input_lets_the_rows_go():
     r = rig()
-    router = Router(r.reg, Bindings([Binding("ext:0", "view.bright", "mod", 0.2)]))
+    router = Router(r.reg, Bindings([Binding("ext:0", "view.bright", "push", 0.2)]))
     b, inp, _ = bridge(r.reg)
     inp.queue.append(pw(0, FULL))
     b.step(None, router)

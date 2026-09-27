@@ -44,6 +44,9 @@ def test_they_run_with_no_host_at_all():
     assert len(out) == 4 and all(0.0 <= u <= 1.0 for u in out)
 
     class Router:                        # the whole host contract for output
+        def __init__(self):
+            self.labels, self.rests = {}, {}   # routing.Router has both from __init__
+
         def feed(self, scheme, values):
             self.fed = (scheme, list(values))
 

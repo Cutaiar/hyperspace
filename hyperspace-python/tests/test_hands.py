@@ -437,54 +437,123 @@ def app(tmp_path):
     return NS(reg=reg, view=view, midi=midi, router=Router(reg, table), table=table)
 
 
-def test_learn_takes_the_axis_that_moved_as_a_float_row(app):
+def _frame(app):
+    """The rest of app.py's frame after hands.poll fed the lanes."""
+    app.router.modulate()
+    app.reg.apply()
+
+
+def test_learn_takes_the_axis_that_moved_as_a_position_route(app):
     r = rig()
     run(r, 1, hand(), midi=app.midi, router=app.router)
     app.midi.learn("view.inst_amp")
     for k in range(1, 8):                    # x jitters a little, pitch moves a lot
         run(r, 1, hand(pos=(2.0 * k, 200.0, 0.0), direction=tilt(0.12 * k)),
             midi=app.midi, router=app.router)
-    assert app.midi.learning is None
+    assert app.midi.learning is None and app.midi.pending is None
     rows = [b for b in app.table.of("hand") if b.target == "view.inst_amp"]
-    assert [(b.source, b.op, b.pickup) for b in rows] == [
-        (f"hand:{ax(r, 'right.pitch')}", "abs", False)]
-    # the hand now drives it — in floats, off the fader's 100 detents
+    assert [(b.source, b.op, b.value, b.when) for b in rows] == [
+        (f"hand:{ax(r, 'right.pitch')}", "position", 1.0, None)]
+    assert app.table.owner("view.inst_amp") is rows[0]
+    assert "learned view.inst_amp" in app.midi.last
+    # the hand is the fader — in floats, off its 100 detents — through the
+    # Router like every route; the base is what the panel set
     run(r, 1, hand(direction=tilt(math.radians(13.0))), midi=app.midi, router=app.router)
+    _frame(app)
     p = app.reg["view.inst_amp"]
     u = (13.0 + 60) / 120
-    assert p.norm == pytest.approx(u, abs=1e-4)   # the filter at 1 MHz: all but exact
-    assert abs(p.norm * p.steps - round(p.norm * p.steps)) > 1e-3
+    assert p.eff_norm == pytest.approx(u, abs=1e-4)   # the filter at 1 MHz: all but exact
+    assert abs(p.eff_norm * p.steps - round(p.eff_norm * p.steps)) > 1e-3
+    assert p.norm == pytest.approx(0.25) and p.modulated
+    # and it is in the file
+    on_disk = Bindings.load(app.table.path, legacy_midi=None)
+    assert on_disk.owner("view.inst_amp").source == rows[0].source
 
 
-def test_a_panel_edit_stands_until_the_hand_moves(app):
+def test_a_panel_edit_moves_the_return_value_under_a_hand(app):
+    """The panel (or a knob) sets the base; the hand positions on top of
+    it; the base is what shows when the hand leaves."""
     r = rig()
-    app.table.add(Binding("hand:7", "view.inst_amp", "abs", pickup=False))   # right.y
+    app.table.add(Binding("hand:7", "view.inst_amp", "position"))   # right.y
     run(r, 1, hand(), router=app.router)
+    _frame(app)
     p = app.reg["view.inst_amp"]
+    assert p.eff_norm == pytest.approx(0.4, abs=1e-4)                # y 200 of 100–350
     p.set_norm(0.9)
     run(r, 3, hand(), router=app.router)
-    assert p.norm == pytest.approx(0.9)
+    _frame(app)
+    assert p.norm == pytest.approx(0.9) and p.eff_norm == pytest.approx(0.4, abs=1e-4)
     run(r, 1, hand(pos=(0.0, 300.0, 0.0)), router=app.router)
-    assert p.norm == pytest.approx(0.8, abs=1e-4)
+    _frame(app)
+    assert p.eff_norm == pytest.approx(0.8, abs=1e-4) and p.norm == pytest.approx(0.9)
+    r.src.on = False                                                  # the camera goes
+    run(r, 1, router=app.router)
+    _frame(app)
+    assert not p.modulated and p.norm == pytest.approx(0.9)
 
 
-def test_learning_a_hand_again_moves_the_row_and_keeps_routes(app):
-    t = app.table
-    t.add(Binding("hand:3", "view.bright", "mod", 0.5))
-    t.bind(Binding("hand:3", "view.inst_amp", "abs", pickup=False))
-    t.bind(Binding("hand:3", "view.speed", "abs", pickup=False))      # same axis: moves
-    t.bind(Binding("hand:4", "view.speed", "abs", pickup=False))      # same param: swaps
-    rows = [(b.source, b.target, b.op) for b in t.of("hand")]
-    assert rows == [("hand:3", "view.bright", "mod"), ("hand:4", "view.speed", "abs")]
+def test_a_learn_on_a_performed_param_is_held_for_the_prompt(app):
+    """Learn onto a param another hand row performs: the row is not written
+    over it and not lost — it waits in `pending` for Replace / Keep."""
+    t, m = app.table, app.midi
+    old = t.add(Binding("hand:3", "view.inst_amp", "position"))
+    t.add(Binding("hand:3", "view.bright", "push", 0.5))             # one hand, two params
+    m.learn("view.inst_amp")
+    m.learn_source("hand:7", when="hand:18")
+    assert m.learning is None
+    new, existing = m.pending
+    assert existing is old and (new.source, new.op, new.when) == ("hand:7", "position", "hand:18")
+    assert t.owner("view.inst_amp") is old and "replace?" in m.last
+    assert m.resolve_pending(False) is None                          # Keep
+    assert m.pending is None and t.owner("view.inst_amp") is old and "kept" in m.last
+    t.add(Binding("hand:7", "view.speed", "position"))               # hand:7's old param
+    m.learn("view.inst_amp")
+    m.learn_source("hand:7")
+    new = m.resolve_pending(True)                                    # Replace
+    assert new is t.owner("view.inst_amp") and new.source == "hand:7"
+    assert old not in t.bindings and "learned view.inst_amp" in m.last
+    assert not t.routes_to("view.speed")                             # hand:7 moved here
+    assert t.routes_to("view.bright")                                # the other row stays
+    assert Bindings.load(t.path, legacy_midi=None).owner("view.inst_amp").source == "hand:7"
+    assert m.resolve_pending(True) is None                           # nothing pending
+
+
+def test_a_held_learn_is_not_fired_again_by_the_hands(app):
+    """The hands adapter keys off `midi.learning`, which is cleared before
+    the referee's answer is known: while the prompt is up, moving hands
+    learn nothing more; arming a new learn forgets the held one."""
+    r = rig()
+    t, m = app.table, app.midi
+    old = t.add(Binding("hand:3", "view.inst_amp", "position"))
+    run(r, 1, hand(), midi=m, router=app.router)
+    m.learn("view.inst_amp")
+    for k in range(1, 8):                                            # R pitch wins the learn
+        run(r, 1, hand(pos=(2.0 * k, 200.0, 0.0), direction=tilt(0.12 * k)),
+            midi=m, router=app.router)
+    assert m.learning is None and m.pending is not None
+    held = m.pending
+    for k in range(8, 20):                                           # keeps moving: nothing
+        run(r, 1, hand(pos=(2.0 * k, 200.0, 0.0), direction=tilt(0.12 * k)),
+            midi=m, router=app.router)
+    assert m.pending is held and t.owner("view.inst_amp") is old
+    assert [b.target for b in t.of("hand")] == ["view.inst_amp"]
+    m.learn("view.speed")                                            # a new learn: forgotten
+    assert m.pending is None and m.learning == "view.speed"
 
 
 def test_hand_lanes_modulate(app):
     r = rig()
     p = app.reg["view.inst_amp"]
     base = p.norm
-    app.table.add(Binding("hand:6", "view.inst_amp", "mod", 0.5))   # right.x
+    row = app.table.add(Binding("hand:6", "view.inst_amp", "push", 0.5))   # right.x
     run(r, 1, hand(pos=(220.0, 200.0, 0.0)), router=app.router)
     assert app.router.labels["hand"][6] == "R x"
+    app.router.modulate()
+    app.reg.apply()
+    # x is centred: the axis rests at 0.5, so a hand at the far right pushes
+    # half the depth; a row with a rest of its own pushes from there instead
+    assert p.eff_norm == pytest.approx(min(base + 0.25, 1.0), abs=1e-9)
+    row.rest = 0.0
     app.router.modulate()
     app.reg.apply()
     assert p.eff_norm == pytest.approx(min(base + 0.5, 1.0), abs=1e-9)
@@ -637,12 +706,14 @@ def test_pinch_notes_may_sit_where_presence_is_off():
 # ------------------------------------------------- a pinch gating an axis
 
 def test_a_pinch_gates_the_axis_so_one_move_means_two_things(app):
-    """The point of the switches: pinched hand-up-down drives the param,
-    open hand-up-down leaves it alone, and letting go holds the value."""
+    """The point of the switches: pinched hand-up-down positions the param,
+    open hand-up-down leaves it alone, and letting go returns it to the
+    base — the hand grabs, and gives back (plan 09: hands never yield, and
+    a position row springs back when the gate opens)."""
     r = rig()
     gate = 14 + 4                                   # R index, after 12 axes + 2 presence
-    app.table.add(Binding("hand:7", "view.inst_amp", "abs",     # right.y
-                          pickup=False, when=f"hand:{gate}"))
+    app.table.add(Binding("hand:7", "view.inst_amp", "position",     # right.y
+                          when=f"hand:{gate}"))
     p = app.reg["view.inst_amp"]
     p.set_norm(0.5)
     wide = {"tips": (60.0, 60.0, 60.0, 60.0), "palm_w": 100.0}
@@ -650,38 +721,43 @@ def test_a_pinch_gates_the_axis_so_one_move_means_two_things(app):
 
     # open hand, moving: the param does not budge
     run(r, 2, hand(pos=(0.0, 300.0, 0.0), **wide), router=app.router)
-    assert p.norm == pytest.approx(0.5)
+    _frame(app)
+    assert p.norm == pytest.approx(0.5) and not p.modulated
 
     # pinched, the same height: now it follows
     run(r, 2, hand(pos=(0.0, 300.0, 0.0), **shut), router=app.router)
-    assert p.norm == pytest.approx(0.8, abs=1e-4)
+    _frame(app)
+    assert p.eff_norm == pytest.approx(0.8, abs=1e-4) and p.norm == pytest.approx(0.5)
 
     # still pinched, moving: it tracks
     run(r, 2, hand(pos=(0.0, 200.0, 0.0), **shut), router=app.router)
-    assert p.norm == pytest.approx(0.4, abs=1e-4)
+    _frame(app)
+    assert p.eff_norm == pytest.approx(0.4, abs=1e-4)
 
-    # let go and keep moving: it holds where it was left
+    # let go and keep moving: back to what the panel says
     run(r, 2, hand(pos=(0.0, 350.0, 0.0), **wide), router=app.router)
-    assert p.norm == pytest.approx(0.4, abs=1e-4)
+    _frame(app)
+    assert not p.modulated and p.norm == pytest.approx(0.5)
 
 
 def test_an_ungated_row_is_untouched_by_the_switches(app):
     r = rig()
-    app.table.add(Binding("hand:7", "view.inst_amp", "abs", pickup=False))
+    app.table.add(Binding("hand:7", "view.inst_amp", "position"))
     run(r, 2, hand(pos=(0.0, 300.0, 0.0), tips=(60.0,) * 4, palm_w=100.0),
         router=app.router)
-    assert app.reg["view.inst_amp"].norm == pytest.approx(0.8, abs=1e-4)
+    _frame(app)
+    assert app.reg["view.inst_amp"].eff_norm == pytest.approx(0.8, abs=1e-4)
 
 
 def test_a_gate_whose_source_is_dark_holds_the_row_shut(app):
     """No hands at all: the gate must not read as open."""
     r = rig()
-    app.table.add(Binding("hand:7", "view.inst_amp", "abs",
-                          pickup=False, when="hand:18"))
+    app.table.add(Binding("hand:7", "view.inst_amp", "position", when="hand:18"))
     p = app.reg["view.inst_amp"]
     p.set_norm(0.5)
     run(r, 2, router=app.router)                 # nothing in view
-    assert p.norm == pytest.approx(0.5)
+    _frame(app)
+    assert p.norm == pytest.approx(0.5) and not p.modulated
 
 
 def test_learning_while_pinched_gates_the_row_on_that_pinch(app):
@@ -736,3 +812,15 @@ def test_the_adapter_publishes_its_switches_as_gates(app):
     # every published gate names a real lane
     lanes = r.io.lanes()
     assert all(0 <= i < len(lanes) for i, _ in gates)
+    # and where each lane rests — the axis's *configured* rest value (0.5
+    # for a centred axis, 0 for height by default), the switches at 0 — so
+    # a push row centred on it never sees a phantom push from an absent hand
+    rests = app.router.rests["hand"]
+    assert len(rests) == len(lanes)
+    assert rests[:len(r.s.axes)] == [a.rest_value for a in r.s.axes]
+    assert rests[r.io.axis("left.x")] == 0.5 and rests[r.io.axis("left.y")] == 0.0
+    assert rests[len(r.s.axes):] == [0.0] * 10
+    r.s.axes[r.io.axis("left.y")].rest_value = 0.2                     # the setup says so
+    run(r, 1, hand(), router=app.router)
+    assert app.router.rests["hand"][r.io.axis("left.y")] == 0.2
+    assert app.router.rest_of(f"hand:{r.io.axis('right.roll')}") == 0.5

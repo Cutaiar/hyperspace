@@ -34,7 +34,8 @@ moving the clock or the others; the global trigger clears those offsets.
 Frame order (app.py): the LFOs step after the bridge and before
 `Router.modulate`, so an LFO that owns another LFO's depth lands one frame
 before that LFO's output does — the same one-frame lag every modulated
-value has, and no recursion.
+value has, and no recursion. `publish` also hands the router the rest
+(0.5) a push row from an LFO is centred on (`Router.rests`).
 
 Nothing here imports from the host: the clock, the registry and the
 router are duck-typed arguments, the boundary rule hands/ has
@@ -167,11 +168,7 @@ class LFOs:
         """This frame's outputs to the router as the ``lfo`` source, with
         the lane names and the rest a push row on an LFO is centred on."""
         router.feed(GROUP, self.outputs)
-        if not hasattr(router, "labels"):    # a Router from before a hot reload
-            router.labels = {}
         router.labels[GROUP] = self.labels
-        if not hasattr(router, "rests"):     # plan 09 WP1 adds it; until then, here
-            router.rests = {}
         router.rests[GROUP] = [REST] * len(self.lfos)
 
 
