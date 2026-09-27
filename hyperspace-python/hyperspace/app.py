@@ -24,7 +24,9 @@ analyzer's lanes — is one binding table over the parameter registry
 (params.py, routing.py): a row names a source, a param id and an
 operation, nothing touches state directly. The table is bindings.json
 (factory default in routing.py; MIDI rows editable from the panel by
-right-click → Learn).
+right-click → Learn). The mouse and the sticks are the one thing outside
+the table — relative writers — and they nudge a param's *base*, so a
+performer's offset rides on the move rather than folding into it.
 
 The in-app cheat sheet (ui.CHEATSHEET) is the canonical human list —
 keep it in sync when adding bindings.
@@ -312,29 +314,48 @@ class Mouse:
         if btn != drag["btn"]:
             drag.update(btn=btn, x=x, y=y)
         elif btn == "orbit":
-            self.yaw.set_value(self.yaw.value + (x - drag["x"]) * 0.005)
-            self.pitch.set_value(self.pitch.value + (y - drag["y"]) * 0.005)
+            _nudge(self.yaw, (x - drag["x"]) * 0.005)
+            _nudge(self.pitch, (y - drag["y"]) * 0.005)
             drag.update(x=x, y=y)
         elif btn == "pan":
-            self.pan_x.set_value(self.pan_x.value + x - drag["x"])
-            self.pan_y.set_value(self.pan_y.value + y - drag["y"])
+            _nudge(self.pan_x, x - drag["x"])
+            _nudge(self.pan_y, y - drag["y"])
             drag.update(x=x, y=y)
         wheel, self._wheel = self._wheel, 0.0
         if wheel:
-            factor = 2.0 ** (wheel * 0.15)
-            old = s.zoom
-            self.zoom.set_value(old * factor)
-            factor = s.zoom / old
-            # zoom about the cursor: keep the point under it fixed
+            factor = _scale(self.zoom, 2.0 ** (wheel * 0.15))
+            # zoom about the cursor: keep the point under it fixed. The
+            # centre is where the picture *is* on screen (the effective
+            # pan); the correction lands on the pan's base like any nudge
             w, h = glfw.get_window_size(win)
             cx, cy = w / 2 + s.pan[0], h / 2 + s.pan[1]
-            self.pan_x.set_value(self.pan_x.value + (cx - x) * (factor - 1))
-            self.pan_y.set_value(self.pan_y.value + (cy - y) * (factor - 1))
+            _nudge(self.pan_x, (cx - x) * (factor - 1))
+            _nudge(self.pan_y, (cy - y) * (factor - 1))
+
+
+# ---- relative writers: the mouse, the sticks and ↑/↓ move a param by a
+# delta each frame. They read the *base* and write it back, never the
+# effective value: while a performer (a hand, a lane, an LFO — routing.py)
+# owns the param, its offset rides on the move instead of folding into the
+# base every frame (plan 09 decision 3; audit simulation 1). set_value
+# clamps or wraps, so the helpers are pure over any continuous Param.
+
+def _nudge(p, delta: float) -> None:
+    """Move a param by `delta` in its own units, on the base."""
+    p.set_value(p.base + delta)
+
+
+def _scale(p, factor: float) -> float:
+    """Multiply a param by `factor`, on the base. Returns the ratio the
+    range let through — a zoom at its stop moves less than asked."""
+    old = p.base
+    p.set_value(old * factor)
+    return p.base / old
 
 
 def _ride_depth(p, octaves: float) -> None:
     """Move 4D depth by a number of octaves of (depth − 1) — the taper's own space."""
-    u = math.log2(max(p.value - 1.0, 1e-6) / 0.05)
+    u = math.log2(max(p.base - 1.0, 1e-6) / 0.05)
     p.set_value(1.0 + 0.05 * 2.0 ** (u + octaves))
 
 
@@ -506,12 +527,12 @@ def main() -> None:
             # triggers ride depth4 in its own log space (LT out, RT in)
             lx, ly = pad.axis(gamepad.AX_LX), pad.axis(gamepad.AX_LY)
             if lx:
-                yaw.set_value(yaw.value + lx * 2.2 * dt)
+                _nudge(yaw, lx * 2.2 * dt)
             if ly:
-                pitch.set_value(pitch.value + ly * 2.2 * dt)
+                _nudge(pitch, ly * 2.2 * dt)
             zoom_v = pad.axis(gamepad.AX_RY)
             if zoom_v:
-                zoom.set_value(zoom.value * 2.0 ** (-zoom_v * 1.2 * dt))
+                _scale(zoom, 2.0 ** (-zoom_v * 1.2 * dt))
             d4 = pad.trigger(gamepad.AX_RT) - pad.trigger(gamepad.AX_LT)
             if d4:
                 _ride_depth(depth4, d4 * 2.4 * dt)
