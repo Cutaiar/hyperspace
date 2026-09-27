@@ -958,6 +958,7 @@ class Panel:
             getattr(self, f"_page_{PAGE_KEYS[self.page]}")(dt)
         imgui.end_child()
         self._footer(fps)
+        ui_routing.modal(self)      # Replace / Keep, whatever page asked
         imgui.end()
 
     def _rail(self, foot: float) -> None:

@@ -12,6 +12,7 @@ the tests call.
 
 import json
 import math
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -288,10 +289,10 @@ def test_routing_page_edits_land_in_bindings_json(rig, tmp_path):
 
 def test_the_routing_page_shows_the_referees_refusals(rig, tmp_path):
     """One performer per target: a preset's second owner is listed as
-    dropped until the next edit; adding a route on an owned target says
-    so in the strip (WP5 makes it the prompt) and leaves the table alone;
-    a new push row has no rest of its own (it rests where its source
-    does); one that has shows an "auto" chip."""
+    dropped until the next edit; adding a route on an owned target raises
+    the prompt and leaves the table alone until it is answered; a new
+    push row has no rest of its own (it rests where its source does); one
+    that has shows an "auto" chip."""
     panel = rig.panel
     router = _with_router(rig, tmp_path)
     router.table.set_routes([Binding("hand:7", "view.bright", "position"),
@@ -302,10 +303,15 @@ def test_the_routing_page_shows_the_referees_refusals(rig, tmp_path):
     router.gates["hand"] = [(14, "L ind")]
     frame(panel, "routing")
     assert [b.source for b, _ in router.table.dropped] == ["hand:1"]
-    assert ui_routing.add_route(panel, "view.bright") is None            # owned: refused
-    assert "already performed by hand 7 positions" in ui_routing._state(panel)["error"]
+    assert ui_routing.add_route(panel, "view.bright") is None            # owned: the prompt
+    old, new = ui_routing.prompt(panel)
+    assert (old.source, new.source, new.target) == ("hand:7", "lane:0", "view.bright")
+    assert ui_routing._state(panel)["error"] == ""
     assert [b.source for b in router.table.routes_to("view.bright")] == ["hand:7"]
-    frame(panel)                                                           # draws the notice
+    frame(panel)                                                           # the notice, the modal
+    ui_routing.answer(panel, False)                                        # Keep
+    assert ui_routing.prompt(panel) is None
+    assert [b.source for b in router.table.routes_to("view.bright")] == ["hand:7"]
     b = ui_routing.add_route(panel, "view.speed", source="hand:2")        # free: added
     assert (b.op, b.rest) == ("push", None) and router.table.dropped == []  # an edit clears
     assert router.rest_of(b.source) == 0.5                                 # what the row uses
@@ -322,6 +328,79 @@ def test_the_routing_page_shows_the_referees_refusals(rig, tmp_path):
         router.table.enable(off)
     assert not off.enabled
     frame(panel)
+
+
+def test_the_replace_prompt_swaps_the_owner_or_leaves_the_table(rig, tmp_path):
+    """Plan 09 WP5, exit criterion 3 without the mouse: a second performer
+    on a target is a question, not an error. *Replace* swaps the owner and
+    writes the file; *Keep* leaves the table untouched. The same modal
+    serves the page's own edits (add, a retarget, a row waking up) and a
+    hand learn the MIDI adapter is holding in `pending`, and it draws on
+    whatever page is open. The owner is named as its adapter names it."""
+    from test_midi import FakeIn, FakeOut
+
+    from hyperspace.midi import MidiIO, MidiMap
+
+    panel, reg = rig.panel, rig.reg
+    router = _with_router(rig, tmp_path)
+    table = router.table
+    table.set_routes([Binding("hand:7", "view.bright", "position", when="hand:18")])
+    router.labels["hand"] = ["L x", "L height"] + ["?"] * 5 + ["R height"] + ["?"] * 11
+    router.gates["hand"] = [(18, "R ind")]
+    router.labels["lfo"] = ["LFO 1", "LFO 2", "LFO 3", "LFO 4"]
+    owner = table.owner("view.bright")
+    assert router.describe(owner) == "R height positions while R ind"
+    assert owner.describe() == "hand 7 positions while hand:18"       # the row's own words
+    frame(panel, "view")                                               # nothing asked: no modal
+    assert not ui_routing._state(panel)["modal"] and ui_routing.prompt(panel) is None
+    # add: Replace swaps and writes
+    assert ui_routing.add_route(panel, "view.bright", source="lfo:0", depth=0.5) is None
+    old, new = ui_routing.prompt(panel)
+    assert old is owner and router.describe(new) == "LFO 1 pushes +0.5"
+    frame(panel)                                                       # the view page: the modal is up
+    assert ui_routing._state(panel)["modal"]
+    assert table.owner("view.bright") is owner                         # untouched while it asks
+    ui_routing.answer(panel, True)
+    assert table.owner("view.bright").source == "lfo:0" and owner not in table.bindings
+    assert _on_disk(tmp_path).owner("view.bright").source == "lfo:0"
+    frame(panel)
+    assert ui_routing.prompt(panel) is None
+    # a retarget onto an owned target asks; Keep leaves both rows where they were
+    speed = table.add(Binding("hand:1", "view.speed", "position"))
+    cur = table.owner("view.bright")
+    ui_routing.ask(panel, cur, replace(speed, target="view.bright"),
+                   lambda: (table.remove(cur), setattr(speed, "target", "view.bright")))
+    frame(panel, "routing")
+    ui_routing.answer(panel, False)
+    assert speed.target == "view.speed" and table.owner("view.bright") is cur
+    # a hand learn the adapter holds is the same question, answered through it
+    midi = panel.midi = MidiIO(reg, MidiMap(table=table), inp=FakeIn(), out=FakeOut())
+    midi.learn("view.bright")
+    midi.learn_source("hand:1", when="hand:18")
+    assert midi.pending is not None
+    old, new = ui_routing.prompt(panel)
+    assert old is cur and (new.source, new.when) == ("hand:1", "hand:18")
+    assert router.describe(new) == "L height positions while R ind"
+    frame(panel)
+    assert ui_routing._state(panel)["modal"]
+    ui_routing.answer(panel, False)                                    # Keep
+    assert midi.pending is None and table.owner("view.bright") is cur and "kept" in midi.last
+    midi.learn("view.bright")
+    midi.learn_source("hand:1")
+    ui_routing.answer(panel, True)                                     # Replace: the axis moves
+    got = table.owner("view.bright")
+    assert got.source == "hand:1" and cur not in table.bindings
+    assert not table.routes_to("view.speed")                           # one axis, one param
+    assert _on_disk(tmp_path).owner("view.bright").source == "hand:1"
+    frame(panel)
+    assert ui_routing.prompt(panel) is None and not ui_routing._state(panel)["modal"]
+    # the tooltip names the performer the same way
+    reg["view.bright"].modulate(0.1)
+    reg.apply()
+    assert panel._performer(reg["view.bright"]) == "performed by L height positions"
+    # nothing pending: answering is a no-op
+    ui_routing.answer(panel, True)
+    assert table.owner("view.bright") is got
 
 
 def test_the_macros_lead_the_scale_choices_and_show_their_owner(rig, tmp_path, monkeypatch):
@@ -413,12 +492,15 @@ def test_routing_presets_step_load_save(rig, tmp_path):
     router = _with_router(rig, tmp_path)
     frame(panel, "routing")
     listing = ui_routing.names(panel)
-    assert listing == ["default", "hands-fx", "hands-pinch", "hands-play", "legacy6"]    # the factory exports
+    assert listing == ["default", "hands-fx", "hands-pinch", "hands-play", "legacy6",
+                       "lfo-breathe"]                       # the factory exports
     # next from nothing: the first; prev wraps to the last
     assert ui_routing.step(panel, router, 1) == "default"
     assert ui_routing._state(panel)["current"] == "default"
     assert not ui_routing.dirty(panel, router)
     frame(panel)
+    assert ui_routing.step(panel, router, -1) == "lfo-breathe"
+    assert rig.reg["lfo.1.sync"].value == 3     # lfo-breathe lands its bases: 1 bar
     assert ui_routing.step(panel, router, -1) == "legacy6"
     assert rig.view.pattern_mod[0] == 0.0       # legacy6 lands its bases
     frame(panel)
@@ -436,7 +518,7 @@ def test_routing_presets_step_load_save(rig, tmp_path):
     assert not ui_routing.dirty(panel, router)
     ui_routing.invalidate(panel)
     assert ui_routing.names(panel) == [
-        "default", "hands-fx", "hands-pinch", "hands-play", "legacy6", "my-routes"]
+        "default", "hands-fx", "hands-pinch", "hands-play", "legacy6", "lfo-breathe", "my-routes"]
     assert not routing.is_factory_preset("my-routes", tmp_path)
     frame(panel)
     # load a factory preset back: the user route goes, the inputs stay
@@ -473,7 +555,8 @@ def test_router_preset_files_and_save(tmp_path):
 
     r = routing_rig(tmp_path=tmp_path, full=True)
     router = Router(r.reg, Bindings.factory())
-    assert routing.preset_names(tmp_path) == ["default", "hands-fx", "hands-pinch", "hands-play", "legacy6"]
+    assert routing.preset_names(tmp_path) == [
+        "default", "hands-fx", "hands-pinch", "hands-play", "legacy6", "lfo-breathe"]
     assert routing.is_factory_preset("legacy6", tmp_path)
     router.table.add(Binding("lane:0", "view.bright", "push", 0.5, enabled=False))
     r.reg["macro.2"].set_value(0.3)                  # routing-layer state: saved with the routes

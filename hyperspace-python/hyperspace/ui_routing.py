@@ -28,10 +28,19 @@ not stacking. They are routing-layer state (params.ROUTING_GROUPS): a
 theme or project never carries them, a routing preset saved here does.
 
 One performer per target: the table's referee (`routing.Owned`) refuses
-a row on a target another enabled row performs. For now the refusal
-shows in the strip's status line; plan 09 WP5 makes it the Replace / Keep
-prompt. Rows a preset had to drop for the same reason (`table.dropped`)
-are listed under the header until the next edit.
+a row on a target another enabled row performs, and the refusal is a
+question — the Replace / Keep prompt, an imgui modal the panel draws on
+every page (`modal`, from `Panel.draw`): "Brightness is already performed
+by R height positions — Replace / Keep". Two things raise it: an edit here
+(`add_route`, a row's target combo, a row's checkbox waking onto a taken
+target, "Route a lane here…") holds the question in the page's state
+with what *Replace* would do to the table (`ask`); a hand learn the MIDI
+adapter had to hold (`midi.pending`) is the same question, answered
+through `midi.resolve_pending`. `prompt` is whichever is up, `answer`
+settles it, and *Replace* writes the file. The owner is named the way
+its adapter names it (`Router.describe`). Rows a preset had to drop for
+the same reason (`table.dropped`) are listed under the header until the
+next edit.
 
 The strip under the title is the preset strip's look over routing
 preset *files* (routing.preset_files): prev / next / the list load
@@ -54,6 +63,8 @@ page opens on it.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
+from dataclasses import replace
 
 from imgui_bundle import imgui
 
@@ -78,6 +89,8 @@ AUTO = "auto"            # the chip that gives a push row its source's rest back
 GATE_W = 62.0            # the pinch-gate combo on line 2
 MACRO_COLS = 4           # the macro strip: eight knobs, two lines of four
 MACRO_LABEL_W = 22.0     # a knob's number beside it; the section says "macros"
+PROMPT = "replace##routing"   # the Replace / Keep modal's popup id
+PROMPT_W = 360.0
 
 
 # ---- state on the panel ----
@@ -86,7 +99,7 @@ def _state(panel) -> dict:
     st = getattr(panel, "_routing_state", None)
     if st is None:
         st = panel._routing_state = {"current": None, "snap": None, "error": "",
-                                     "names": None, "filter": ""}
+                                     "names": None, "filter": "", "prompt": None}
     return st
 
 
@@ -178,18 +191,103 @@ def save_as(panel, router: Router, name: str) -> None:
 def add_route(panel, target: str, source: str | None = None, depth: float = 0.5,
               op: str = "push") -> Binding | None:
     """A new `push` row from the selected band's lane (or `source`) to
-    target; it rests where its source does. None — and the strip says why —
-    when the target already has a performer (WP5's prompt goes here)."""
+    target; it rests where its source does. None when the target already
+    has a performer — the prompt is up, and *Replace* puts the row in."""
     router = router_of(panel)
     src = source or f"lane:{panel.control.selb}"
     b = Binding(src, target, op, depth)
     try:
         router.table.add(b)
     except Owned as e:
-        _state(panel)["error"] = f"routing: {e}"
+        ask(panel, e.existing, b, lambda: router.table.replace_owner(b))
         return None
     router.table.write()
     return b
+
+
+# ---- the prompt: one performer per target, so a second one asks ----
+
+def ask(panel, old: Binding, new: Binding, commit: Callable[[], object]) -> None:
+    """Hold the question: `old` performs the target now, `new` asks for it,
+    `commit` is what *Replace* does to the table (the file is written
+    after). Until it is answered the table is untouched."""
+    _state(panel)["prompt"] = (old, new, commit)
+
+
+def prompt(panel) -> tuple[Binding, Binding] | None:
+    """(old, new) — the question up now: the page's own first, else a hand
+    learn the MIDI adapter is holding (`midi.pending`); None when nothing
+    is being asked."""
+    held = _state(panel)["prompt"]
+    if held is not None:
+        return held[0], held[1]
+    m = panel.midi
+    if m is not None and getattr(m, "pending", None) is not None:
+        new, old = m.pending
+        return old, new
+    return None
+
+
+def answer(panel, replace_it: bool) -> None:
+    """*Replace* (True) or *Keep* (False) for whatever `prompt` shows. The
+    page's own question commits and writes the file; a held learn goes
+    back to the MIDI adapter, which does the same for its row."""
+    st = _state(panel)
+    held = st["prompt"]
+    if held is not None:
+        st["prompt"] = None
+        if replace_it:
+            held[2]()
+            router = router_of(panel)
+            if router is not None:
+                router.table.write()
+        return
+    m = panel.midi
+    if m is not None and getattr(m, "pending", None) is not None:
+        m.resolve_pending(replace_it)
+
+
+def modal(panel) -> None:
+    """The Replace / Keep modal, drawn by the panel every frame a question
+    is up — on any page, since a learn can come from any of them."""
+    st = _state(panel)
+    q = prompt(panel)
+    st["modal"] = False                 # did the modal draw this frame (tests read it)
+    if q is None:
+        return
+    old, new = q
+    router = router_of(panel)
+    if not imgui.is_popup_open(PROMPT):
+        imgui.open_popup(PROMPT)
+    vp = imgui.get_main_viewport()
+    imgui.set_next_window_pos(vp.get_center(), imgui.Cond_.appearing, imgui.ImVec2(0.5, 0.5))
+    imgui.set_next_window_size(imgui.ImVec2(PROMPT_W, 0))
+    opened, _ = imgui.begin_popup_modal(
+        PROMPT, None, imgui.WindowFlags_.no_saved_settings | imgui.WindowFlags_.no_resize
+        | imgui.WindowFlags_.no_title_bar)
+    st["modal"] = opened
+    if not opened:
+        return
+    p = panel.reg.get(new.target)
+    label = p.label if p is not None else new.target
+    who = router.describe(old) if router is not None else old.describe()
+    asks = router.describe(new) if router is not None else new.describe()
+    ui._micro("one performer per parameter")
+    imgui.text_wrapped(f"{label} is already performed by {who}.")
+    imgui.text_disabled(f"{asks} asks for it.")
+    imgui.spacing()
+    if ui.chip("Replace"):
+        answer(panel, True)
+        imgui.close_current_popup()
+    if imgui.is_item_hovered():
+        imgui.set_tooltip(f"{who} lets go; {asks}")
+    imgui.same_line()
+    if ui.chip("Keep"):
+        answer(panel, False)
+        imgui.close_current_popup()
+    if imgui.is_item_hovered():
+        imgui.set_tooltip("Leave the table as it is")
+    imgui.end_popup()
 
 
 def ctx_item(panel, p: Param) -> None:
@@ -409,6 +507,11 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
         try:
             router.table.enable(b, on)      # waking a row asks the referee
         except Owned as e:
+            def wake(cur=e.existing):
+                router.table.remove(cur)
+                router.table.enable(b, True)
+            ask(panel, e.existing, b, wake)
+        except ValueError as e:
             st["error"] = f"routing: {e}"
     if imgui.is_item_hovered():
         imgui.set_tooltip("Enabled — a dormant row keeps its settings and owns nothing")
@@ -435,7 +538,10 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
         if cur is None or cur is b or not b.is_performer:
             b.target = picked
         else:                               # the referee, on a retarget
-            st["error"] = f"routing: {Owned(cur, b)}"
+            def retarget(cur=cur, picked=picked):
+                router.table.remove(cur)
+                b.target = picked
+            ask(panel, cur, replace(b, target=picked), retarget)
     if p is None:
         if imgui.is_item_hovered():
             imgui.set_tooltip(f"{b.target}: no such param — the row is dormant")
