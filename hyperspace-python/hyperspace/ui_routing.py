@@ -12,11 +12,18 @@ a lane at the asymptote on the param's end stop), a fraction of the
 throw for `position`; `rest` (push rows only) is the source reading that
 pushes nothing — normally the source's own, what its adapter publishes
 in `Router.rests`, shown dimmed; dragging it makes the row's own number,
-"auto" gives it back; scale names an attenuator param or none. The live bar
-is the source's normalized reading (white) with a red hairline at the
-target's effective norm, so a route can be read working. Edits land on
-the table at once (the router reads it every frame) — nothing here is
-copied.
+"auto" gives it back; scale names an attenuator param or none — the eight
+macro knobs first, since that is what they are for. The live bar is the
+source's normalized reading (white) with a red hairline at the target's
+effective norm, so a route can be read working. Edits land on the table
+at once (the router reads it every frame) — nothing here is copied.
+
+The macros (`macro.1–8`, plan 09 decision 7) sit in a strip over the
+rows, two lines of four compact sliders: ordinary registry widgets, so a
+performer can own one (right-click: Learn, Route a lane here…) and its
+readout shows `base → effective` while it does. A macro does nothing of
+its own; a route that names it as its scale runs at depth × the macro,
+one frame behind whatever moves the macro — chaining, not stacking.
 
 One performer per target: the table's referee (`routing.Owned`) refuses
 a row on a target another enabled row performs. For now the refusal
@@ -67,6 +74,8 @@ DEPTH_W = 112.0
 REST_W = 44.0            # the push row's rest field
 AUTO = "auto"            # the chip that gives a push row its source's rest back
 GATE_W = 62.0            # the pinch-gate combo on line 2
+MACRO_COLS = 4           # the macro strip: eight knobs, two lines of four
+MACRO_LABEL_W = 22.0     # a knob's number beside it; the section says "macros"
 
 
 # ---- state on the panel ----
@@ -325,6 +334,14 @@ def _targets(panel) -> list[Param]:
     return [p for p in panel.reg if p.modulatable and not p.alias]
 
 
+def _scales(panel) -> list[Param]:
+    """What a row's scale may be: the macros first — they exist for this —
+    then every other continuous param (master.gain on the rate routes)."""
+    reg = panel.reg
+    return reg.group("macro") + [q for q in reg if q.kind is Kind.CONTINUOUS
+                                 and not q.alias and q.group != "macro"]
+
+
 def _param_combo(panel, label: str, current: str | None, width: float,
                  candidates: list[Param], none: str | None = None) -> str | None | bool:
     """A searchable combo over params, grouped: returns the id picked, None
@@ -467,13 +484,13 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
     gate_w = GATE_W if gates else 0.0
     scale = _param_combo(panel, "##scale", b.scale,
                          -(BAR_W + gate_w + sp * (2 if gate_w else 1)),
-                         [q for q in reg if q.kind is Kind.CONTINUOUS and not q.alias],
-                         none="× 1")
+                         _scales(panel), none="× 1")
     if scale is not False:
         b.scale = scale
     if imgui.is_item_hovered():
-        imgui.set_tooltip("A param whose live value multiplies the depth (master.gain "
-                          "on the rate routes)")
+        imgui.set_tooltip("A param whose live value multiplies the depth — a macro, "
+                          "to chain (own the macro with a hand or LFO), or master.gain "
+                          "on the rate routes")
     if gates:
         imgui.same_line()
         _gate_combo(b, gates, gate_w)
@@ -509,6 +526,26 @@ def _live_bar(panel, router: Router, b: Binding, p: Param | None) -> None:
         imgui.set_tooltip(f"source {src}  ·  target {tgt}")
 
 
+# ---- the macros ----
+
+def macros(panel) -> None:
+    """The eight macro knobs in two lines of four, each the panel's compact
+    slider with its number beside it — so Learn, "Route a lane here…" and
+    the `base → effective` readout under a performer come for free."""
+    ms = panel.reg.group("macro")
+    if not ms:
+        return
+    ui._micro("macros")
+    if imgui.is_item_hovered():
+        imgui.set_tooltip("Knobs that do nothing on their own: name one as a route's "
+                          "scale, and own it with a hand or LFO, to chain")
+    if imgui.begin_table("##macros", MACRO_COLS, imgui.TableFlags_.sizing_stretch_same):
+        for k, p in enumerate(ms):
+            imgui.table_next_column()
+            panel._row(p.id, label=str(k + 1), label_w=MACRO_LABEL_W)
+        imgui.end_table()
+
+
 # ---- the page ----
 
 def page(panel, dt: float) -> None:
@@ -540,7 +577,9 @@ def page(panel, dt: float) -> None:
         imgui.text_colored(ui.WARN, f"dropped {b.source} → {b.target}: {why}")
     for note in router.table.notes:
         imgui.text_disabled(note)
-    # the rows scroll if they must; the strip and the header stay put
+    macros(panel)
+    imgui.separator()
+    # the rows scroll if they must; the strips and the header stay put
     if imgui.begin_child("##routes", imgui.ImVec2(0, 0)):
         dead = None
         for k, b in enumerate(rows):
