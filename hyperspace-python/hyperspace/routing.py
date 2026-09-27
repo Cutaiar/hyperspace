@@ -186,7 +186,7 @@ import numpy as np
 
 from . import apc40
 from .bands import BANDS, CEIL, DRIVE
-from .params import PLANES, ROT_RATE_MAX, Kind, Param, Registry
+from .params import PLANES, ROT_RATE_MAX, ROUTING_GROUPS, Kind, Param, Registry
 
 SCHEMA = "hyperspace.bindings/2"
 SCHEMA_V1 = "hyperspace.bindings/1"
@@ -1057,14 +1057,20 @@ class Router:
         return self.reg.restore(t.values) if t.values else []
 
     def save_preset(self, name: str, home: Path | str) -> Path:
-        """The current routes — disabled ones too, no bases — as a user
-        preset file under <home>/bindings/; returns the path written."""
+        """The current routes — disabled ones too — with the macros' bases
+        as `values` (routing-layer state: no theme or project carries them,
+        params.ROUTING_GROUPS) as a user preset file under <home>/bindings/;
+        returns the path written."""
         from .library import slug  # the library's file naming; no other tie
 
         d = Path(home) / PRESET_DIR
         d.mkdir(parents=True, exist_ok=True)
         path = d / f"{slug(name)}.json"
-        path.write_text(Bindings(replace(b) for b in self.table.routes()).dumps())
+        values = {}
+        for g in ROUTING_GROUPS:
+            values.update(self.reg.snapshot(g))
+        path.write_text(Bindings((replace(b) for b in self.table.routes()),
+                                 values=values or None).dumps())
         return path
 
 

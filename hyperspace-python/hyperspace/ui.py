@@ -20,7 +20,8 @@ library knows carries its preset strip (ui_presets.py) under the title.
 Every page fits the control window without scrolling. A modulated param
 draws its *base* as the handle and a white ghost bar at the *effective*
 value (params.py: `base` vs `eff_norm`), so the setting stays where the
-user put it while a lane rides on top. The layout — what sits where — is
+user put it while a lane rides on top; its tooltip names the performer
+(routing.py: the table's owner row). The layout — what sits where — is
 the one hand-arranged thing left here.
 """
 
@@ -28,6 +29,7 @@ from __future__ import annotations
 
 import math
 import os
+from collections.abc import Callable
 
 from imgui_bundle import imgui
 
@@ -419,19 +421,26 @@ class Panel:
 
     # ---- binding menu: every widget gets one on right-click ----
 
-    def _ctx(self, p: Param) -> None:
-        """The param's context menu, attached to the last drawn item."""
-        if not imgui.begin_popup_context_item(f"##ctx.{p.id}"):
+    def _ctx(self, a: Param) -> None:
+        """The param's context menu, attached to the last drawn item.
+
+        `a` is the drawn param — the bindings hang off it; the modulation
+        line reads the one it stands for (a band.sel.* alias → its band)."""
+        if not imgui.begin_popup_context_item(f"##ctx.{a.id}"):
             return
-        _micro(p.id, DIM)
+        _micro(a.id, DIM)
+        p = self._real(a)
         if p.modulated:
-            imgui.text_disabled(f"modulated: {p.text()} → {self._eff_text(p)}")
+            imgui.text_disabled(f"modulated: {self._mod_text(p)}")
+            who = self._performer(p)
+            if who:
+                imgui.text_disabled(who)
         m = self.midi
         if m is None:
             imgui.text_disabled("no MIDI adapter")
         else:
-            b = m.binding_for(p.id)
-            if m.learning == p.id:
+            b = m.binding_for(a.id)
+            if m.learning == a.id:
                 imgui.text_colored(RED, "move a control or a hand…" if self.hands
                                    else "move a control…")
                 if imgui.menu_item_simple("Cancel learn"):
@@ -440,11 +449,11 @@ class Panel:
                 if b is not None:
                     imgui.text(b.describe())
                 if imgui.menu_item_simple("Learn MIDI"):
-                    m.learn(p.id)
+                    m.learn(a.id)
                 if b is not None and imgui.menu_item_simple("Unbind"):
-                    m.unbind(p.id)
-        ui_hands.ctx_rows(self, p)      # a hand axis bound to it, and Unbind
-        ui_routing.ctx_item(self, p)    # "Route a lane here…" — the routing matrix
+                    m.unbind(a.id)
+        ui_hands.ctx_rows(self, a)      # a hand axis bound to it, and Unbind
+        ui_routing.ctx_item(self, a)    # "Route a lane here…" — the routing matrix
         imgui.end_popup()
 
     def _learn_frame(self, p: Param) -> None:
@@ -458,9 +467,14 @@ class Panel:
             u32(RED), ROUND + 2, 2.0,
         )
 
-    def _tip(self, p: Param, text: str | None = None) -> None:
-        t = p.tip if text is None else text
-        if t and imgui.is_item_hovered():
+    def _tip(self, p: Param, text: str | Callable[[], str] | None = None) -> None:
+        """Tooltip on the last item: the param's tip, a string, or a
+        callable built only on hover (a table lookup for every widget
+        every frame is not worth it)."""
+        if not imgui.is_item_hovered():
+            return
+        t = p.tip if text is None else (text() if callable(text) else text)
+        if t:
             imgui.set_tooltip(t)
 
     # ---- modulation ghosts: the base is the handle, the effective a white bar ----
@@ -477,6 +491,33 @@ class Panel:
         if p.kind is Kind.TOGGLE:
             return "on" if v else "off"
         return ""
+
+    def _performer(self, p: Param) -> str:
+        """Who performs `p` — "performed by <row>" from the table's owner
+        (routing.py), or "" with no router attached or no owner (a source
+        the table doesn't name, a test holding the param by hand)."""
+        r = self.router
+        b = r.table.owner(p.id) if r is not None else None
+        return "" if b is None else f"performed by {b.describe()}"
+
+    def _mod_text(self, p: Param) -> str:
+        """`base → effective` — a modulated param's readout."""
+        return f"{p.text()} → {self._eff_text(p)}"
+
+    def _mod_line(self, p: Param) -> str:
+        """The tooltip's line: the readout with its label and who is doing it."""
+        who = self._performer(p)
+        text = f"{p.label}: {self._mod_text(p)}"
+        return f"{text}, {who}" if who else f"{text} (modulated)"
+
+    def _hint(self, a: Param, p: Param) -> str:
+        """A widget's tooltip: its tip, plus the modulation line while a
+        source rides it (`a` is the drawn param, `p` the one it reads).
+        Built on hover only — pass it to _tip as a callable."""
+        if not p.modulated:
+            return a.tip
+        line = self._mod_line(p)
+        return f"{a.tip}\n{line}" if a.tip else line
 
     def _ghost(self, p: Param, inset: float = 0.0) -> None:
         """A white bar over the last slider at the effective position."""
@@ -497,7 +538,7 @@ class Panel:
         dl = imgui.get_window_draw_list()
         dl.add_circle_filled(imgui.ImVec2(r1.x - 5, r0.y + 5), 3.5, u32(RED))
         if imgui.is_item_hovered():
-            imgui.set_tooltip(f"{p.label}: {p.text()} → {self._eff_text(p)} (modulated)")
+            imgui.set_tooltip(self._mod_line(p))
         self.ghosts += 1
 
     # ---- the track: every slider's rounded ground and red value fill ----
@@ -592,7 +633,7 @@ class Panel:
         # readout: the setting, or `base → effective` while a lane rides it.
         # In a narrow column (the band strip) the taper tag goes first, then
         # the readout moves inside the fader frame, so nothing overprints.
-        text = f"{p.text()} → {self._eff_text(p)}" if p.modulated else p.text()
+        text = self._mod_text(p) if p.modulated else p.text()
         avail = imgui.get_content_region_avail().x
         tw = _readout_width(text)
         tag_w = _micro_width(f"  ·  {tag}")
@@ -622,7 +663,7 @@ class Panel:
         )
         imgui.pop_font()
         imgui.pop_style_var()
-        self._tip(a)
+        self._tip(a, lambda: self._hint(a, p))
         self._ctx(a)
         self._learn_frame(a)
         r0, r1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
@@ -648,7 +689,7 @@ class Panel:
         p = self._real(a)
         imgui.set_next_item_width(width)
         v = p.base
-        text = f"{p.text()} → {self._eff_text(p)}" if p.modulated else p.text()
+        text = self._mod_text(p) if p.modulated else p.text()
         imgui.push_font(_FONTS["num"], FONT_NUM)
         if p.integer:
             steps = int(p.hi) - int(p.lo)
@@ -662,7 +703,7 @@ class Panel:
                 f"##{pid}", float(v), p.lo, p.hi, text, flags),
                 p.norm, self._origin(p), knob=False)
         imgui.pop_font()
-        self._tip(a)
+        self._tip(a, lambda: self._hint(a, p))
         self._ctx(a)
         self._learn_frame(a)
         r0, r1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()

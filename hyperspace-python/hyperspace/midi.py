@@ -23,8 +23,15 @@ that class — with a MIDI source (``cc:<ch>:<n>``, ``note:<ch>:<n>``,
        step     note-on → step(value)
   pitch abs     14-bit pitch bend → set_norm
 
+Every op here is a scene-setter (plan 09 decision 3): on a param a
+performer owns — a hand, a lane, an LFO riding it through routing.py —
+an `abs` knob moves the *return value*, the base the performer works
+from and the param comes back to when the performer leaves. Nothing
+prompts and nothing is blocked; the knob simply never sees the offset.
+
 Feedback runs every frame, change-gated: "ring" sends the param's norm
-back as the same CC (LED rings on knobs); "led" sends a note velocity
+— the base, so a ring shows the knob's own setting and never chases a
+performer — back as the same CC (LED rings on knobs); "led" sends a note velocity
 that tracks the param — a toggle's state, or whether an enum equals the
 binding's value — so the surface always shows what the engine has.
 Triggers echo their press so the button lights while held, or show a

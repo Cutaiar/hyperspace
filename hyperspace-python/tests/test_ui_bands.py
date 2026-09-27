@@ -35,6 +35,7 @@ from hyperspace.analyzer import (
     edges,
 )
 from hyperspace.bands import CEIL
+from hyperspace.params import Kind
 from hyperspace.routing import Binding, Bindings, Router
 from hyperspace.ui import PAGE_KEYS
 
@@ -323,6 +324,77 @@ def test_the_routing_page_shows_the_referees_refusals(rig, tmp_path):
     frame(panel)
 
 
+def test_the_macros_lead_the_scale_choices_and_show_their_owner(rig, tmp_path, monkeypatch):
+    """Plan 09 decision 7: the eight macro knobs come first in every row's
+    scale combo (then the other continuous params, master.gain among them),
+    are targets like any other, and draw in a strip over the rows as the
+    panel's own sliders — a hand that positions one shows as the usual
+    `base → effective` readout and a ghost."""
+    panel, reg = rig.panel, rig.reg
+    ids = [p.id for p in ui_routing._scales(panel)]
+    assert ids[:8] == [f"macro.{k}" for k in range(1, 9)]
+    assert "master.gain" in ids[8:] and not any(i.startswith("macro.") for i in ids[8:])
+    assert all(p.kind is Kind.CONTINUOUS and not p.alias for p in ui_routing._scales(panel))
+    assert {p.id for p in ui_routing._targets(panel)} >= set(ids[:8])
+    # never the row's own target (a self-scaled push strobes); any other macro, yes
+    own = [p.id for p in ui_routing._scales(panel, "macro.2")]
+    assert "macro.2" not in own and own[:7] == [f"macro.{k}" for k in (1, 3, 4, 5, 6, 7, 8)]
+    assert "view.bright" not in {p.id for p in ui_routing._scales(panel, "view.bright")}
+    router = panel.router = Router(reg, Bindings([
+        Binding("lane:0", "view.bright", "push", 0.5, scale="macro.2"),
+        Binding("hand:0", "macro.2", "position"),
+    ]))
+    router.feed("hand", [0.6])
+    router.labels["hand"] = ["R height"]
+    fmts: list[str] = []
+    real = imgui.slider_float
+    monkeypatch.setattr(imgui, "slider_float",
+                        lambda label, v, lo, hi, fmt="%.3f", *a: (
+                            fmts.append(fmt), real(label, v, lo, hi, fmt, *a))[1])
+    frame(panel, "routing")
+    assert panel.ghosts == 0 and "100 %" in fmts and "100 % → 60 %" not in fmts
+    router.modulate()
+    reg.apply()
+    macro = reg["macro.2"]
+    assert macro.modulated and macro.text() == "100 %" and panel._eff_text(macro) == "60 %"
+    fmts.clear()
+    frame(panel)
+    assert "100 % → 60 %" in fmts                  # the strip's slider, under a performer
+    assert panel.ghosts == 2                       # its ghost bar + the row's live hairline
+    router.feed("hand", None)
+    router.modulate()
+    reg.apply()
+    frame(panel)
+    assert not macro.modulated and panel.ghosts == 0
+
+
+def test_the_routing_page_has_no_conflicting_ids(rig, tmp_path, monkeypatch):
+    """Every widget on the ROUTING page has its own imgui id, the macro
+    strip's included — the rows are under push_id(k), so the ids are
+    resolved through the stack (get_id) rather than compared as labels."""
+    panel = rig.panel
+    router = _with_router(rig, tmp_path)
+    router.table.add(Binding("hand:0", "macro.2", "position"))
+    router.feed("hand", [0.5] * 20)
+    router.labels["hand"] = [f"ax{i}" for i in range(12)]
+    router.gates["hand"] = [(14, "L ind")]
+    ids: list[int] = []
+    for fn in ("button", "checkbox", "slider_float", "slider_int", "combo", "begin_combo",
+               "invisible_button", "arrow_button"):
+        real = getattr(imgui, fn)
+
+        def rec(label, *a, _real=real, **k):
+            ids.append(imgui.get_id(label))
+            return _real(label, *a, **k)
+        monkeypatch.setattr(imgui, fn, rec)
+    frame(panel, "routing")
+    ids.clear()
+    frame(panel)
+    assert len(ids) > 8 * 1 + 13 * 4              # eight knobs, four-plus widgets a row
+    dup = {i for i in ids if ids.count(i) > 1}
+    assert not dup, f"conflicting ids {sorted(dup)}"
+
+
 def test_route_a_lane_here_jumps_to_the_page(rig, tmp_path):
     panel, reg = rig.panel, rig.reg
     _with_router(rig, tmp_path)
@@ -404,15 +476,17 @@ def test_router_preset_files_and_save(tmp_path):
     assert routing.preset_names(tmp_path) == ["default", "hands-fx", "hands-pinch", "hands-play", "legacy6"]
     assert routing.is_factory_preset("legacy6", tmp_path)
     router.table.add(Binding("lane:0", "view.bright", "push", 0.5, enabled=False))
+    r.reg["macro.2"].set_value(0.3)                  # routing-layer state: saved with the routes
     path = router.save_preset("Show A", tmp_path)
     assert path == tmp_path / "bindings" / "show-a.json"
     saved = Bindings.from_json(json.loads(path.read_text()))
     assert len(saved.bindings) == 13 and not saved.bindings[-1].enabled
-    assert saved.values is None
+    assert saved.values == {f"macro.{k}": (0.3 if k == 2 else 1.0) for k in range(1, 9)}
     assert router.load_preset("legacy6", tmp_path) == []
     assert len(router.table.routes()) == 12
+    r.reg["macro.2"].set_value(0.9)
     assert router.load_preset("show-a", tmp_path) == []
-    assert len(router.table.routes()) == 13
+    assert len(router.table.routes()) == 13 and r.reg["macro.2"].value == pytest.approx(0.3)
     with pytest.raises(FileNotFoundError):
         router.load_preset("nope", tmp_path)
     assert imgui.get_version()

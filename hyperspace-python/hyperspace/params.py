@@ -75,6 +75,12 @@ BMP_PATHS = ["STILL", "ORBIT", "FIG-8", "SWAY"]
 PLANES = ["XY", "XZ", "YZ", "XW", "YW", "ZW"]
 
 RAW_STEPS = 100  # detents across an untapered continuous range
+N_MACROS = 8     # macro.1–8: knobs that exist to be a route's scale and to be owned
+# groups that are routing-layer state, not the scene's: persisted (a
+# routing preset carries them, `snapshot(group)` works) but outside the
+# whole-surface `snapshot()` — a theme, a project, the library's module
+# list — so a theme change never moves a macro under a route
+ROUTING_GROUPS = ("macro",)
 
 # rot.rate.* spans the largest drive the reference ever put on a plane — a
 # lane at the CEIL asymptote through DRIVE at the drive fader's 8× — so the
@@ -201,7 +207,7 @@ class Param:
         k = self.kind
         if k is Kind.CONTINUOUS:
             if self.taper is not None:
-                return self.taper.unmap(v) / self.taper.steps
+                return self._taper_pos(v) / self.taper.steps
             return self._raw_norm(v)
         if k is Kind.ENUM:
             n = self.steps
@@ -209,6 +215,29 @@ class Param:
         if k is Kind.TOGGLE:
             return 1.0 if v else 0.0
         return 0.0
+
+    def _taper_pos(self, v: float) -> float:
+        """A tapered value's position as a float: the detent when it sits on
+        one (set_value puts it there, so the check is exact), otherwise
+        found between the neighbouring detents by bisection on map(), a
+        monotonic closed form in a float position. This is what keeps a
+        sub-detent nudge in the base while a source rides the param."""
+        t = self.taper
+        p = t.unmap(v)
+        if t.map(p) == v:
+            return float(p)
+        lo, hi = max(p - 1, 0), min(p + 1, t.steps)
+        if v <= t.map(lo):
+            return float(lo)
+        if v >= t.map(hi):
+            return float(hi)
+        for _ in range(32):
+            mid = (lo + hi) / 2
+            if t.map(mid) < v:
+                lo = mid
+            else:
+                hi = mid
+        return (lo + hi) / 2
 
     def _value_of_norm(self, u: float):
         """The value at a float position — the un-detented map a lane uses.
@@ -280,7 +309,9 @@ class Param:
 
     @property
     def norm(self) -> float:
-        """The setting as a float in [0, 1] (the base while modulated)."""
+        """The setting as a float in [0, 1] (the base while modulated).
+        Continuous: a tapered value between detents reads between them;
+        `position()` is the detent."""
         if self._base is not None:
             return self._base
         return self._norm_of(self.get())
@@ -317,6 +348,53 @@ class Param:
                 self.set(not self.base)
         elif k is Kind.TRIGGER:
             self.fire()
+
+    # ---- relative moves in the param's own units: the mouse, the sticks, ↑/↓ ----
+    #
+    # Both work on the *base* and write it back, so while a performer owns
+    # the param its offset rides on the move instead of folding into it
+    # (plan 09 decision 3). Neither snaps to a detent: a drag or a held key
+    # moves a tapered param by a fraction of a step per frame, and
+    # set_value's unmap round-trip would land it back on the same detent
+    # every frame — so the value is written raw through set(), and a
+    # modulated base keeps its continuous position (_taper_pos).
+
+    def nudge(self, delta: float) -> float:
+        """Add `delta` to the base, wrapped or clamped into range; returns
+        the delta actually applied (less than asked at a stop)."""
+        if self.kind is not Kind.CONTINUOUS:
+            raise TypeError(f"{self.id} is {self.kind.value}, not continuous")
+        old = self.base
+        lo, hi = self._bounds()
+        if self.wrap:
+            v = lo + (old + delta - lo) % (hi - lo)
+        else:
+            v = _clamp(old + delta, lo, hi)
+        if self.integer:
+            v = round(v)
+        self.set(v)
+        return delta if self.wrap else v - old
+
+    def scale(self, factor: float) -> float:
+        """Multiply the base by `factor`, clamped into range; returns the
+        ratio actually applied. A ratio means nothing on a base of 0 or a
+        range that reaches 0 or below: then 1.0, and nothing moves."""
+        if self.kind is not Kind.CONTINUOUS:
+            raise TypeError(f"{self.id} is {self.kind.value}, not continuous")
+        old = self.base
+        lo, hi = self._bounds()
+        if lo <= 0.0 or old <= 0.0:
+            return 1.0
+        v = _clamp(old * factor, lo, hi)
+        if self.integer:
+            v = round(v)
+        self.set(v)
+        return v / old
+
+    def _bounds(self) -> tuple[float, float]:
+        """The range in the param's own units — the taper's ends, or lo..hi."""
+        t = self.taper
+        return (t.map(0), t.map(t.steps)) if t is not None else (self.lo, self.hi)
 
     def cycle(self, n: int = 1) -> None:
         """Like step, but an enum wraps around."""
@@ -474,14 +552,19 @@ class Registry:
     # ---- persistence: the one serialization every preset is made of ----
 
     def snapshot(self, group: str | None = None, *, ids=None) -> dict[str, Any]:
-        """{id: base value} for every persistent param (or one group / id set)."""
+        """{id: base value} for every persistent param (or one group / id set).
+        The whole-surface snapshot leaves the ROUTING_GROUPS out; asked for
+        by group or id they are there."""
         out: dict[str, Any] = {}
+        whole = group is None and ids is None
         for p in self._p.values():
             if not p.persist:
                 continue
             if group is not None and p.group != group:
                 continue
             if ids is not None and p.id not in ids:
+                continue
+            if whole and p.group in ROUTING_GROUPS:
                 continue
             v = p.base
             out[p.id] = list(v) if isinstance(v, list) else v
@@ -788,6 +871,23 @@ def build_registry(view, control, audio, presets=None, dream=None, fx=None) -> R
                  taper=tapers.T_TRIM, fmt=tapers.fmt_db, group=g,
                  tip="One offset added to all six per-band trims, at the very head of the "
                      "chain — moves a whole song down into the 56 dB working window.")
+
+    # ---- macros: the chaining knobs (plan 09, decision 7) ----
+    # Nothing reads a macro but the router: a route names one as its
+    # `scale`, and a performer may own it — so a hand that positions
+    # macro.2 deepens the lane pushing brightness × macro.2, one frame
+    # later, rather than two performers pulling on brightness. No object,
+    # so the values live in this list, and the slot clamps itself (a
+    # restore writes raw). Base 1: a route that names an untouched macro
+    # runs at its full depth, the same as "× 1".
+    g = "macro"
+    macros = [1.0] * N_MACROS
+    for k in range(N_MACROS):
+        r.continuous(f"macro.{k + 1}", f"Macro {k + 1}", (lambda k=k: macros[k]),
+                     (lambda v, k=k: macros.__setitem__(k, _clamp(float(v), 0.0, 1.0))),
+                     lo=0.0, hi=1.0, fmt=lambda v: f"{v * 100:.0f} %", group=g,
+                     tip="Does nothing on its own. Put it on a route as its scale, or own "
+                         "it with a hand or LFO, to chain.")
 
     # ---- scene ----
     g = "scene"
