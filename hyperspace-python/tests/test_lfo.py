@@ -142,6 +142,26 @@ def test_the_trigger_realigns_every_synced_lfo_together():
     assert c.t0 == 6.0
 
 
+def test_the_trigger_lands_phase_zero_whatever_the_nudge_and_nudge_then_moves_it():
+    lfos, c = LFOs(), clock_at(120.0)
+    c.nudge = 0.25
+    for i in range(3):
+        lfos[i].sync = SYNCS.index(("4 bars", "1 bar", "1/16")[i])
+        lfos[i].shape = SHAPES.index("saw")
+    lfos[3].sync, lfos[3].phase = SYNCS.index("1 bar"), 0.3
+    run(lfos, c, 0.0, 2.7)
+    c.tick(2.7)
+    lfos.trigger(c)
+    lfos.step(DT, 2.7, c)
+    assert all(lf.x == pytest.approx(0.0, abs=1e-12) for lf in lfos.lfos[:3])
+    assert lfos[3].x == pytest.approx(0.3)                    # + its own phase
+    assert c.nudge == 0.25
+    c.nudge = 0.35                                            # turned afterwards: it moves
+    lfos.step(DT, 2.7, c)
+    assert lfos[1].x == pytest.approx(0.1 / 4)                # a tenth of a beat, in bars
+    assert lfos[2].x == pytest.approx((0.1 * 4) % 1.0)
+
+
 def test_phase_offset_rides_on_top_in_both_modes():
     lfos, c = LFOs(), clock_at()
     lfos[0].sync, lfos[0].phase = SYNCS.index("1 bar"), 0.25

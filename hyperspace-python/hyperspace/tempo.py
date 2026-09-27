@@ -25,6 +25,9 @@ assumed), ``phase(t, ratio) = (beat · ratio) mod 1`` — `ratio` in cycles
 per beat, so a bar-long wave is 1/4 and a sixteenth is 4 (lfo.py's
 DIVISIONS). `nudge` shifts the downbeat by a fraction of a beat without
 touching the tempo — the APC40's NUDGE buttons step it by a hundredth.
+`trigger` places `t0` so that ``beat(now) == 0`` with the current nudge
+folded in: the swell lands on the "one" whatever the nudge reads, and a
+nudge turned afterwards still moves the grid.
 
 Time is handed in, never taken: `tick(t)` once a frame gives the clock
 the loop's own `now`, and every call that takes an optional `t` reads it
@@ -100,8 +103,13 @@ class Clock:
         self.bpm = bpm
 
     def trigger(self, t: float | None = None) -> None:
-        """The downbeat is now. Nudge is untouched; the burst keeps counting."""
-        self.t0 = self._t(t)
+        """The downbeat is now: ``beat(t) == 0`` exactly, so every synced
+        LFO reads phase 0 this frame whatever the nudge. The nudge value is
+        untouched — it is folded into where the downbeat is placed, so a
+        *later* change of it still shifts the running phase as it should.
+        The burst keeps counting."""
+        t = self._t(t)
+        self.t0 = t + self.nudge * 60.0 / self.bpm
         self._triggered = True
 
     # ---- phase ----

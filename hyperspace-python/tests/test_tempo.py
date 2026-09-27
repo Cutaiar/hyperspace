@@ -62,14 +62,24 @@ def test_a_fresh_clock_lines_up_on_its_first_tap():
     assert c.beat(10.5) == pytest.approx(1.0)
 
 
-def test_trigger_sets_the_downbeat_and_leaves_nudge():
+def test_trigger_lands_beat_zero_whatever_the_nudge():
+    """The nudge is folded into where the downbeat goes, not zeroed: the
+    trigger is the "one" exactly, and a nudge turned afterwards still moves
+    the grid."""
     c = Clock(now=lambda: 0.0)
     c.nudge = 0.2
     c.trigger(5.0)
-    assert c.t0 == 5.0 and c.nudge == 0.2
-    assert c.beat(5.0) == pytest.approx(0.2)
-    c.nudge = 0.0
-    assert c.phase(5.0, 4.0) == 0.0 and c.phase(5.5, 1.0) == pytest.approx(0.0)
+    assert c.nudge == 0.2 and c.t0 == pytest.approx(5.0 + 0.2 * 0.5)
+    assert c.beat(5.0) == pytest.approx(0.0, abs=1e-12)
+    for ratio in (1 / 16, 0.25, 1.0, 4.0):
+        assert c.phase(5.0, ratio) == pytest.approx(0.0, abs=1e-12)
+    assert c.phase(5.5, 1.0) == pytest.approx(0.0)          # the next beat, on the grid
+    c.nudge = 0.0                                             # turned later: the grid shifts
+    assert c.beat(5.0) == pytest.approx(-0.2)
+    c.nudge = 0.45
+    assert c.beat(5.0) == pytest.approx(0.25)
+    c.trigger(5.0)                                            # and re-triggering re-lands it
+    assert c.beat(5.0) == pytest.approx(0.0, abs=1e-12)
 
 
 def test_a_tap_after_the_trigger_keeps_the_beat_continuous():
@@ -86,6 +96,20 @@ def test_a_tap_after_the_trigger_keeps_the_beat_continuous():
     assert c.beat(t1) == pytest.approx(before, rel=1e-9)
     assert c.beat(t1 + 1.0) == pytest.approx(before + 140 / 60)
     assert c.t0 != 10.0                          # re-anchored, not the tap
+
+
+@pytest.mark.parametrize("nudge", [0.0, 0.25, -0.4])
+def test_a_retap_after_the_trigger_is_continuous_with_any_nudge(nudge):
+    c = Clock(now=lambda: 0.0)
+    c.nudge = nudge
+    c.trigger(10.0)
+    assert c.beat(10.0) == pytest.approx(0.0, abs=1e-12)
+    t1 = 20.0 + 60 / 150
+    before = c.beat(t1)
+    taps(c, 150, 3, start=20.0)
+    assert c.bpm == pytest.approx(150.0) and c.nudge == nudge
+    assert c.beat(t1) == pytest.approx(before, rel=1e-9)
+    assert c.beat(t1 + 2.0) == pytest.approx(before + 2 * 150 / 60)
 
 
 def test_set_bpm_from_the_panel_is_continuous_too():
