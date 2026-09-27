@@ -278,7 +278,7 @@ params; `app.py` steps them; `tests/test_tempo.py`, `tests/test_lfo.py`.
 ## As built (deviations recorded while executing)
 
 Executed 2026-09-26 as PRs #34 (WP1), #35 (WP2), #36 (WP3), #33 (WP4)
-and the WP5 PR. Where the code differs from the text above, the code is
+and #37 (WP5). Where the code differs from the text above, the code is
 right and the reason is here — one line each, for plan 10 to gather.
 
 - `Binding.rest` defaults to `None`, not `0.0`: *the source's own rest*,
@@ -342,7 +342,7 @@ Headless, verified in this package's tests:
 - [x] 8. A v1 `bindings.json` from before this plan loads, migrates, is
       written back once, and the migration note lists every dropped row
       (`test_a_schema_1_file_migrates_once_and_names_what_it_dropped`;
-      the user's own file did the same on this machine — see the WP5 PR).
+      the user's own file did the same on this machine — see PR #37).
 - [x] 9. `pytest` green; `ruff` clean; every factory preset has one owner
       per target (`test_factory_files_match_the_code`,
       `test_every_factory_preset_names_real_params_with_one_owner`).

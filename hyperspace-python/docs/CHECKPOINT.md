@@ -79,7 +79,7 @@ in `config.toml` (not yet needed — nothing rig-specific exists until plan 04).
   profile (mode SysEx, LED colours, a 109-binding default layout); the
   numbers were checked against the desk's APC40, which dumps its fader
   positions on mode entry exactly as mapped. 208 tests.
-- **Plan 09 executed (2026-09-26; PRs #33–#36 and the WP5 PR).** One
+- **Plan 09 executed (2026-09-26; PRs #33–#37).** One
   path for every live source (`Router.modulate`; `drive` / `glide` /
   `abs`-on-a-lane gone), one performer per parameter with the referee
   (`Owned`) and the Replace / Keep prompt, two ops (`push` about the
