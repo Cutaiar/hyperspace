@@ -94,6 +94,71 @@ def test_raw_ranges_clamp_int_and_log(rig):
     assert view.yaw == pytest.approx(-math.pi + 0.5)
 
 
+def test_nudge_and_scale_move_the_base_without_a_detent(rig):
+    """Plan 09 WP2: the relative writers' two moves. In the param's own
+    units, on the base, wrapped or clamped, returning what was applied —
+    and never snapped to a detent, so a tapered param takes a fraction of
+    a step per frame and adds it up."""
+    reg, view, *_ = rig
+    yaw, zoom, inst = reg["camera.yaw"], reg["camera.zoom"], reg["view.instances"]
+    # wrap: the whole delta always lands
+    yaw.set_value(math.pi - 0.1)
+    assert yaw.nudge(0.3) == 0.3
+    assert view.yaw == pytest.approx(-math.pi + 0.2)
+    # clamp: what the stop let through
+    zoom.set_value(39.0)
+    assert zoom.nudge(5.0) == pytest.approx(1.0) and view.zoom == 40.0
+    assert zoom.scale(2.0) == pytest.approx(1.0) and view.zoom == 40.0
+    zoom.set_value(2.0)
+    assert zoom.scale(1.5) == pytest.approx(1.5) and view.zoom == pytest.approx(3.0)
+    assert zoom.nudge(-0.5) == pytest.approx(-0.5) and view.zoom == pytest.approx(2.5)
+    # a ratio means nothing across zero: yaw's range does, a base of 0 does
+    assert yaw.scale(2.0) == 1.0 and view.yaw == pytest.approx(-math.pi + 0.2)
+    zoom.set_value(0.05)
+    assert zoom.scale(2.0) == pytest.approx(2.0)          # lo is above zero: fine
+    # an integer range stays integer
+    inst.set_value(4)
+    assert inst.nudge(0.4) == 0 and view.instances == 4
+    assert inst.nudge(0.6) == 1 and view.instances == 5
+    # a tapered param: 20 sub-detent nudges add up to one detent's move
+    d = reg["view.depth4"]
+    d.set_position(80)
+    one = d.taper.map(81) - d.taper.map(80)
+    for _ in range(20):
+        d.nudge(one / 20)
+    assert view.depth4 == pytest.approx(d.taper.map(81), rel=1e-9) and d.position() == 81
+    d.nudge(one / 20)
+    assert view.depth4 > d.taper.map(81)                    # raw: not parked on the detent
+    with pytest.raises(TypeError):
+        reg["view.shape"].nudge(1)
+
+
+def test_nudge_and_scale_under_modulation_move_the_base(rig):
+    """While a source holds the param, nudge and scale write the base — a
+    tapered one at a continuous position, so sub-detent moves still add
+    up — and the offset rides on top through apply()."""
+    reg, view, *_ = rig
+    zoom, d = reg["camera.zoom"], reg["view.depth4"]
+    zoom.set_value(1.0)
+    d.set_position(80)
+    one = d.taper.map(81) - d.taper.map(80)                  # a detent, in depth units
+    for _ in range(10):
+        zoom.scale(1.1)
+        d.nudge(one / 20)
+        zoom.modulate(0.1)
+        d.modulate(0.1)
+        reg.apply()
+    assert zoom.base == pytest.approx(1.1 ** 10, rel=1e-9)
+    assert zoom.eff_norm == pytest.approx(zoom.norm + 0.1, abs=1e-9)
+    want = d.taper.map(80) + one / 2                         # linear in value: half a detent
+    assert d.base == pytest.approx(want, rel=1e-9)
+    assert 80.0 < d.norm * d.steps < 81.0                    # a continuous position
+    assert view.depth4 == pytest.approx(d.taper.map(d.norm * d.steps + 16), rel=1e-9)  # + 0.1 × 160
+    reg.apply()                                              # the source lets go
+    assert view.zoom == pytest.approx(1.1 ** 10, rel=1e-9)
+    assert view.depth4 == pytest.approx(want, rel=1e-9)
+
+
 def test_enum_norm_and_stepping(rig):
     reg, view, *_ = rig
     s = reg["view.shape"]
