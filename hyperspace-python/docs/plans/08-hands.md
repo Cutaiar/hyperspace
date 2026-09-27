@@ -196,32 +196,41 @@ checks every shipped row still names a real param and a real lane.
   notes) are `[hands]` in config.toml. **Box** ranges are `hands.json`.
   **Performance** settings are a setup. Each lives where it changes.
 
-## Install (the SDK is not on this machine yet)
+## Install
 
-1. Install **Ultraleap Hand Tracking** for macOS (Gemini ≥ 5.17). This is
-   the one step that needs a person: the download, the licence, your
-   admin password, any macOS prompts, and the camera plugged in.
-2. The bindings are prebuilt only for Python 3.8, so build them for 3.12:
-   ```
-   git clone https://github.com/ultraleap/leapc-python-bindings
-   cd leapc-python-bindings
-   uv pip install build cffi
-   uv run python -m build leapc-cffi
-   uv pip install leapc-cffi/dist/leapc_cffi-0.0.1.tar.gz
-   uv pip install -e leapc-python-api
-   ```
-   (Set `LEAPSDK_INSTALL_LOCATION` if the SDK isn't in
-   `/Applications/Ultraleap Hand Tracking.app/Contents/LeapSDK`.)
-3. Set `[hands] enabled = true`, plus `mode = "screentop"` if the camera
-   looks down from the lid.
-4. Open the HANDS page and run **calibrate 20 s**, sweeping every axis
-   end to end. You can also run `uv run python tools/hands_probe.py
-   --calibrate 20` from a terminal.
+Verified 2026-09-26 on this machine: a Leap Motion Controller 2 (serial
+LE51000020000093A2-6710), Ultraleap Hand Tracking 6.2.0, Apple Silicon,
+Python 3.12. The service connected, the camera was seen, and frames
+arrived at ~119 fps through `LeapSource`.
+
+1. Install **Ultraleap Hand Tracking** for macOS. This is the one step
+   that needs a person: the download, the licence, the admin password,
+   macOS prompts, and the camera plugged in. On USB it shows up as
+   "Tracking Camera" (vendor 0x2936).
+2. `uv sync`. Nothing is compiled. The app ships a prebuilt cffi module
+   for Python 3.12 (`…/Contents/LeapSDK/leapc_cffi`). The project depends
+   on Ultraleap's pure-Python `leap` wrapper, which isn't on PyPI, so it's
+   pinned by commit in `[tool.uv.sources]`, plus `cffi` as that module's
+   runtime. `leap` finds the SDK at the default path. Set
+   `LEAPSDK_INSTALL_LOCATION` if the app is elsewhere. Its file check
+   still names SDK 5's `libLeapC.5.dylib`, but that only changes an
+   error message, and SDK 6's `libLeapC.6.dylib` imports fine.
+3. `[hands] enabled = true` in `~/Hyperspace/config.toml` (**not**
+   `pyproject.toml`, which the app never reads), plus `mode =
+   "screentop"` if the camera looks down from the lid.
+4. Check it: `uv run python tools/hands_probe.py` shows every axis live.
+   Then open the HANDS page and run **calibrate 20 s**, sweeping every
+   axis end to end.
 
 ## Not yet verified (needs the camera and the box)
 
-- [ ] The bindings build against the installed Gemini on Apple Silicon / 3.12.
-- [ ] The listener's lost-event names (they only change the status text).
+- [x] The bindings load against the installed Gemini 6.2 on Apple Silicon / 3.12
+      (prebuilt; no build step).
+- [x] The listener's event names match the `leap` API (`on_error` added so a
+      callback failure shows in the status line).
+- [x] `features()` reads every field, pinches included, off the SDK's real
+      `Hand` type.
+- [ ] Real hands through the probe and the HANDS page.
 - [ ] Angle signs in the box's actual mounting; check them on the page.
 - [ ] The default feel: Steadiness 1 Hz, Response 4, Catch 150 ms, return
       500 ms / bounce 0.15, dead zone 0.04 on centred axes. Tune by hand

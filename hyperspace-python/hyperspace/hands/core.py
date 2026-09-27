@@ -536,6 +536,12 @@ class LeapSource:
             def on_tracking_event(self, event):
                 src._frame(event.hands)
 
+            def on_error(self, error):
+                # the SDK's poll thread reports anything that raised in a
+                # callback here — _frame included — and otherwise drops it,
+                # so a hand that never shows would have no reason given
+                src.status = f"error: {type(error).__name__}: {error}"[:120]
+
         self.conn = leap.Connection()
         self.conn.add_listener(_Listener())
         tmode = getattr(leap.TrackingMode, TRACKING_MODES.get(mode.lower(), "Desktop"))
