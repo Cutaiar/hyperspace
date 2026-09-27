@@ -19,7 +19,8 @@ Sources are one string, ``scheme:address``:
   note:<ch>:<n>    MIDI note n
   pitch:<ch>       MIDI pitch bend
   lane:<i>         analyzer lane i — continuous, held every frame it is live
-  ext:<i>          an external MIDI lane (WP4c); lfo:<i> is reserved
+  ext:<i>          an external MIDI lane (WP4c)
+  lfo:<i>          LFO i's output in [0, 1], resting at 0.5 (lfo.py)
   hand:<i>         Ultraleap hand axis i's output in [0, 1] (hands.py),
                    then one presence lane per hand; NaN before that hand
                    was ever seen, and a NaN reading is not live
@@ -350,6 +351,7 @@ def keymap() -> list[Binding]:
         ("M", "audio.mic", "toggle"), ("K", "audio.play", "toggle"),
         ("0", "audio.restart", "fire"),
         ("T", "overlay.on", "toggle"), ("G", "overlay.passthrough", "toggle"),
+        ("B", "tempo.tap", "fire"),     # ⇧B is lfo.trigger, handled in app.py's loop
         *[(str(p + 1), f"view.plane.{n}", "toggle") for p, n in enumerate(PLANES)],
     ]
     return [Binding(f"key:{k}", pid, op, *arg) for k, pid, op, *arg in rows]

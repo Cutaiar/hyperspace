@@ -19,7 +19,7 @@ import pytest
 from legacy_chain import LegacyChain  # tests/legacy_chain.py — the frozen reference
 from test_analyzer import fixture_wavs, frames  # noqa: F401 — the fixture, re-exported
 
-from hyperspace import routing
+from hyperspace import lfo, routing, tempo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer, legacy_layout
 from hyperspace.bands import BANDS, CEIL, DRIVE, default_params
@@ -70,6 +70,9 @@ def rig(sr: float = 48_000.0, tmp_path: Path | None = None, full: bool = False):
         reg.trigger("audio.stop", "Stop", lambda: None)
         reg.toggle("audio.play", "Play", lambda: False, lambda v: None)
         Output(None, None).register(reg)
+        clock = tempo.Clock(now=lambda: 0.0)
+        tempo.register(reg, clock)
+        lfo.register(reg, lfo.LFOs(), clock)
     return SimpleNamespace(reg=reg, view=view, control=control, audio=audio, chain=chain)
 
 
@@ -327,8 +330,8 @@ def test_factory_table_binds_only_real_params(tmp_path):
             assert r.reg[b.target].modulatable, b
     keys = [b.key for b in t.bindings if b.scheme != "lane"]
     assert len(keys) == len(set(keys))
-    assert len(t.of("key")) == 23 and len(t.of("pad")) == 10 and len(t.of("hat")) == 4
-    assert len(t.midi()) == 111 and len(t.mods()) == 12
+    assert len(t.of("key")) == 24 and len(t.of("pad")) == 10 and len(t.of("hat")) == 4
+    assert len(t.midi()) == 113 and len(t.mods()) == 12
 
 
 def test_factory_files_match_the_code():
@@ -650,12 +653,12 @@ def test_midi_view_shares_the_table(tmp_path):
 
     t = Bindings.factory(path=bindings_path(tmp_path))
     m = MidiMap(table=t)
-    assert len(m.bindings) == 111 and all(b.is_midi for b in m.bindings)
+    assert len(m.bindings) == 113 and all(b.is_midi for b in m.bindings)
     m.bind(Binding("cc:0:99", "view.zoom", "abs"))
     assert m.for_param("view.zoom").number == 99
     again = Bindings.load(bindings_path(tmp_path))
     assert again.for_param("view.zoom").source == "cc:0:99"
-    assert len(again.of("key")) == 23 and len(again.mods()) == 12
+    assert len(again.of("key")) == 24 and len(again.mods()) == 12
     m.unbind("view.zoom")
     assert Bindings.load(bindings_path(tmp_path)).for_param("view.zoom") is None
 

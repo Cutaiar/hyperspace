@@ -27,7 +27,9 @@ Feedback runs every frame, change-gated: "ring" sends the param's norm
 back as the same CC (LED rings on knobs); "led" sends a note velocity
 that tracks the param — a toggle's state, or whether an enum equals the
 binding's value — so the surface always shows what the engine has.
-Triggers echo their press so the button lights while held.
+Triggers echo their press so the button lights while held, or show a
+light of their own when the param carries one (``Registry.trigger(lit=)``:
+the METRONOME LED blinks on the beat through ``lfo.trigger``).
 
 Bindings persist with every other source's in bindings.json (routing.py;
 an old midi_map.json is migrated on first run). With no file the device
@@ -463,6 +465,10 @@ class MidiIO:
             return p.value == int(b.value) if b.op == "set" else b.lit
         if p.kind is Kind.CONTINUOUS and b.op == "set":
             return abs(p.norm - float(b.value)) <= PICKUP_TOL
+        if p.kind is Kind.TRIGGER:
+            # the press echo, or a light the param carries itself (a trigger
+            # declared with `lit=`: the METRONOME LED blinking on the beat)
+            return b.lit or bool(p.get())
         return b.lit
 
     def _dark(self, b: Binding) -> None:
