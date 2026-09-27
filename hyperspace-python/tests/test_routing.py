@@ -9,6 +9,7 @@ pad adapters, the Router's per-frame pass, presets and runtime edits.
 """
 
 import json
+import math
 import re
 from pathlib import Path
 from types import SimpleNamespace
@@ -511,6 +512,45 @@ def test_replace_op_is_the_value_while_live():
     assert Binding.from_json(Binding("lane:1", "x", "replace", 2.0).to_json()).op == "replace"
 
 
+@pytest.mark.parametrize("pid", ["view.bright", "view.speed", "view.depth4", "camera.zoom"])
+def test_span_op_is_the_position_across_the_whole_throw(pid):
+    """span: the source is the target's position — along its taper, off
+    the detents — so a 0–1 hand reaches both end stops, where replace of
+    the same reading tops out at the value 1 (1.00× brightness)."""
+    r = rig()
+    p = r.reg[pid]
+    p.set_norm(0.5)
+    base = p.get()
+    router = Router(r.reg, Bindings([Binding("hand:0", pid, "span")]))
+    for u in (0.0, 0.37, 1.0):
+        router.feed("hand", [u])
+        router.modulate()
+        r.reg.apply()
+        assert p.eff_norm == pytest.approx(u, abs=0.5 / p.steps)   # read back on a detent
+        assert p.get() == pytest.approx(p._value_of_norm(u))   # what a learned hand gives
+        assert p.base == pytest.approx(base)
+    router.feed("hand", [math.nan])                            # out of view: base returns
+    router.modulate()
+    r.reg.apply()
+    assert p.get() == pytest.approx(base) and not p.modulated
+
+
+def test_span_depth_is_a_fraction_of_the_throw_and_clamps():
+    r = rig()
+    p = r.reg["view.bright"]
+    t = Bindings([Binding("hand:0", "view.bright", "span", 0.5)])
+    router = Router(r.reg, t)
+    router.feed("hand", [1.0])
+    router.modulate()
+    r.reg.apply()
+    assert p.eff_norm == pytest.approx(0.5)
+    t.mods()[0].value = 3.0
+    router.modulate()
+    r.reg.apply()
+    assert p.get() == pytest.approx(p.taper.map(p.taper.steps))
+    assert Binding.from_json(Binding("hand:0", "x", "span").to_json()).op == "span"
+
+
 def test_routes_sum_and_dormant_rows_are_no_ops():
     r = rig()
     b = r.reg["view.bright"]
@@ -686,3 +726,25 @@ def test_the_hand_presets_name_params_and_lanes_that_exist(name):
         if b.when is not None:
             i = int(b.when.split(":")[1])
             assert axes + len(SIDES) <= i < lanes, f"{name}: {b.when} is not a switch"
+
+
+@pytest.mark.parametrize("name", ["hands-play", "hands-pinch", "hands-fx"])
+def test_the_hand_presets_reach_both_ends_of_their_targets(name):
+    """A hand row with no depth of its own means the whole control: the
+    hand's 0 and 1 are the fader's end stops, whatever the taper. (They
+    were `replace` rows once, which cap a 0–1 hand at the *value* 1.)"""
+    r = rig(full=True)
+    router = Router(r.reg, Bindings())
+    router.load_preset(name)
+    for b in router.table.routes():
+        if b.op == "mod" or b.value != 1.0:
+            continue                                 # a deliberate depth or slice
+        p = r.reg[b.target]
+        for u in (0.0, 1.0):
+            for other in router.table.routes():
+                other.enabled = other is b
+            router.feed("hand", [u] * 32)           # every lane and gate at u = 1
+            router.modulate()
+            r.reg.apply()
+            if u == 1.0 or b.when is None:
+                assert p.eff_norm == pytest.approx(u, abs=1e-3), f"{name}: {b.target} at {u}"

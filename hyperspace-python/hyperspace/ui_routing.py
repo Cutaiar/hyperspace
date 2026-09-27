@@ -1,6 +1,6 @@
 """Routing matrix — the lanes → params half of the binding table (WP5b).
 
-The ROUTING page. Rows are the router's `mod` / `replace` routes from
+The ROUTING page. Rows are the router's `mod` / `replace` / `span` routes from
 `lane:i` (and `ext:i` / `hand:i` when the bridge / hands feed them), two lines each:
 
   [on] source        target ▾            op ▾           ×
@@ -9,7 +9,7 @@ The ROUTING page. Rows are the router's `mod` / `replace` routes from
 The target is a searchable combo over every modulatable param, grouped
 by registry group; depth is signed — ±1 for `mod` (norm units: 1 puts a
 lane at the asymptote on the param's end stop), the target's own range
-for `replace`; scale names an attenuator param or none. The live bar is
+for `replace`, a fraction of its throw for `span`; scale names an attenuator param or none. The live bar is
 the source's normalized reading (white) with a red hairline at the
 target's effective norm, so a route can be read working. Edits land on
 the table at once (the router reads it every frame) — nothing here is
@@ -46,6 +46,12 @@ from .routing import FACTORY_DIR, Binding, Router, preset_files
 
 KEY = "bindings"          # the name-field / listing key on the panel's preset state
 DEPTH_MOD = 1.0           # ±, the `mod` depth slider's throw
+# the op chip cycles mod → repl → span; what each one's depth means
+OP_CHIP = {"mod": "mod", "replace": "repl", "span": "span"}
+NEXT_OP = {"mod": "replace", "replace": "span", "span": "mod"}
+DEPTH_TIP = {"mod": " — 1 is the full throw at a lane's asymptote",
+             "replace": " — in the target's own units",
+             "span": " — a fraction of the target's throw; 1 is all of it"}
 N_EXT = 16                # ext lanes offered once any ext source is around
 BAR_W = 56.0
 SRC_W = 84.0             # the source combo: a lane's number and name
@@ -372,12 +378,14 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
     elif not p.modulatable and imgui.is_item_hovered():
         imgui.set_tooltip(f"{b.target} is not modulatable — the row is dormant")
     imgui.same_line()
-    replace = b.op == "replace"
-    if ui.lit_chip("repl##op" if replace else "mod##op", replace, ui.DIM, imgui.ImVec2(op_w, 0)):
-        b.op = "mod" if replace else "replace"
+    label = OP_CHIP.get(b.op, "mod")
+    if ui.lit_chip(f"{label}##op", b.op != "mod", ui.DIM, imgui.ImVec2(op_w, 0)):
+        b.op = NEXT_OP.get(b.op, "mod")
     if imgui.is_item_hovered():
         imgui.set_tooltip("mod: depth × source added to the base\n"
                           "repl: depth × source is the value while the source is live\n"
+                          "span: depth × source is the position across the whole\n"
+                          "      control, along its curve, while the source is live\n"
                           "click to switch")
     imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w("×"))
     imgui.push_style_color(imgui.Col_.text, ui.DIM)
@@ -403,8 +411,7 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
     if changed:
         b.value = v
     if imgui.is_item_hovered():
-        imgui.set_tooltip("Depth, signed" + (" — in the target's own units" if b.op == "replace"
-                                             else " — 1 is the full throw at a lane's asymptote")
+        imgui.set_tooltip("Depth, signed" + DEPTH_TIP.get(b.op, DEPTH_TIP["mod"])
                           + "\nctrl-click to type")
     imgui.same_line()
     gates = _gates(router)
