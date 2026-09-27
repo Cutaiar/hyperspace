@@ -117,7 +117,9 @@ Routing presets are the same file format with only modulation rows:
 the factory exports in ``hyperspace/library/bindings/`` and the user's
 ``<home>/bindings/*.json`` (`preset_files`). `Router.load_preset` replaces
 the routes from one and lands its bases; `Router.save_preset` writes the
-current routes to the user folder — the ROUTING page's strip (WP5b).
+current routes to the user folder, with the settings of every effect they
+reach into as bases (so a preset driving acid switches acid on) — the
+ROUTING page's strip (WP5b).
 """
 
 from __future__ import annotations
@@ -730,15 +732,36 @@ class Router:
         return self.reg.restore(t.values) if t.values else []
 
     def save_preset(self, name: str, home: Path | str) -> Path:
-        """The current routes — disabled ones too, no bases — as a user
-        preset file under <home>/bindings/; returns the path written."""
+        """The current routes — disabled ones too — as a user preset file
+        under <home>/bindings/; returns the path written. The only bases it
+        keeps are the effects' (`fx_values`): a route into a shader does
+        nothing unless that shader is on the stack."""
         from .library import slug  # the library's file naming; no other tie
 
         d = Path(home) / PRESET_DIR
         d.mkdir(parents=True, exist_ok=True)
         path = d / f"{slug(name)}.json"
-        path.write_text(Bindings(replace(b) for b in self.table.routes()).dumps())
+        routes = [replace(b) for b in self.table.routes()]
+        path.write_text(Bindings(routes, values=self.fx_values(routes) or None).dumps())
         return path
+
+    def fx_values(self, routes: Iterable[Binding]) -> dict:
+        """The effect stack a set of routes plays: ``fx.on`` and every
+        setting (on, mix, blend, order, its own faders) of each effect a
+        route targets, as the registry's bases — a chain-wide ``fx.*``
+        target's base too. Empty when no route reaches into fx."""
+        ids: set[str] = set()
+        for b in routes:
+            if not b.target.startswith("fx."):
+                continue
+            ids.add("fx.on")
+            parts = b.target.split(".")
+            if len(parts) > 2:
+                pre = f"fx.{parts[1]}."
+                ids.update(p.id for p in self.reg if p.id.startswith(pre))
+            else:
+                ids.add(b.target)
+        return self.reg.snapshot(ids=ids) if ids else {}
 
 
 def _resolve(scheme: str, name: str) -> int | None:

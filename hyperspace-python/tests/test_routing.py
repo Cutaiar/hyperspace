@@ -686,3 +686,40 @@ def test_the_hand_presets_name_params_and_lanes_that_exist(name):
         if b.when is not None:
             i = int(b.when.split(":")[1])
             assert axes + len(SIDES) <= i < lanes, f"{name}: {b.when} is not a switch"
+
+
+def test_a_preset_into_an_effect_switches_the_effect_on(tmp_path):
+    """Routes into a shader do nothing with the shader off: a saved preset
+    keeps the effect's settings, and loading it puts the effect back —
+    whatever the stack looked like in between."""
+    r = rig(tmp_path=tmp_path, full=True)
+    reg = r.reg
+    router = Router(reg, Bindings())
+    router.table.add(Binding("hand:0", "fx.acid.twist", "replace", 3.14))
+    router.table.add(Binding("hand:1", "view.bright", "mod", 0.4))
+    reg["fx.on"].set(True)
+    reg["fx.acid.on"].set(True)
+    reg["fx.acid.mix"].set(0.6)
+    path = router.save_preset("Trip", tmp_path)
+    values = Bindings.from_json(json.loads(path.read_text())).values
+    assert values["fx.on"] is True and values["fx.acid.on"] is True
+    assert values["fx.acid.mix"] == pytest.approx(0.6)
+    assert not any(k.startswith("view.") for k in values)     # only the effects' bases
+    assert not any(k.startswith("fx.") and not k.startswith(("fx.on", "fx.acid."))
+                   for k in values)                          # only the effect it reaches
+
+    reg["fx.on"].set(False)
+    reg["fx.acid.on"].set(False)
+    reg["fx.acid.mix"].set(1.0)
+    assert router.load_preset("trip", tmp_path) == []
+    assert reg["fx.on"].value and reg["fx.acid.on"].value
+    assert reg["fx.acid.mix"].value == pytest.approx(0.6)
+
+
+def test_hands_fx_turns_acid_on():
+    r = rig(full=True)
+    router = Router(r.reg, Bindings())
+    r.reg["fx.acid.on"].set(False)
+    r.reg["fx.on"].set(False)
+    assert router.load_preset("hands-fx") == []
+    assert r.reg["fx.on"].value and r.reg["fx.acid.on"].value

@@ -7,5 +7,18 @@
   {"source": "hand:3", "target": "fx.acid.speed", "op": "replace", "value": 8.0},
   {"source": "hand:1", "target": "view.bright", "op": "mod", "value": 0.4},
   {"source": "hand:11", "target": "fx.acid.bend", "op": "replace", "value": 0.4}
- ]
+ ],
+ "values": {
+  "fx.on": true,
+  "fx.mix": 1.0,
+  "fx.acid.on": true,
+  "fx.acid.mix": 1.0,
+  "fx.acid.speed": 4.0,
+  "fx.acid.blend": 0,
+  "fx.acid.order": 10,
+  "fx.acid.bend": 0.08,
+  "fx.acid.twist": 0.5,
+  "fx.acid.reach": 10.0,
+  "fx.acid.breathe": 0.35
+}
 }
