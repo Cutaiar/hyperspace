@@ -19,6 +19,7 @@ from hyperspace.control import Control
 from hyperspace.library import Library
 from hyperspace.params import build_registry
 from hyperspace.render import ViewState
+from hyperspace.routing import Binding, Bindings, Router
 from hyperspace.ui import PAGE_KEYS, PAGES, Panel, apply_style, load_fonts
 
 
@@ -242,6 +243,31 @@ def test_modulated_params_draw_a_ghost(rig):
     reg.apply()
     frame(panel)
     assert not bright.modulated and panel.ghosts == 0
+
+
+def test_tooltip_names_the_performer(rig):
+    """Plan 09 WP2: the modulation line reads `base → effective` and, with
+    a router attached, who is performing — the owner row's describe().
+    Without a router, or on a param nothing in the table owns, it says
+    only that the param is modulated."""
+    panel, reg = rig.panel, rig.reg
+    bright = reg["view.bright"]
+    _hold(reg, {"view.bright": 0.2})
+    assert panel._performer(bright) == ""                      # no router attached
+    assert panel._mod_text(bright) == f"{bright.text()} → {panel._eff_text(bright)} (modulated)"
+    assert panel._hint(bright, bright) == f"Brightness: {panel._mod_text(bright)}"
+    bright.tip = "How bright."                                 # a tip goes first
+    assert panel._hint(bright, bright) == f"How bright.\nBrightness: {panel._mod_text(bright)}"
+    panel.router = Router(reg, Bindings([Binding("hand:0", "view.bright", "push", 0.3)]))
+    panel.router.feed("hand", [1.0])
+    panel.router.modulate()
+    reg.apply()
+    assert panel._performer(bright) == "performed by hand 0 pushes +0.3"
+    assert panel._mod_text(bright).endswith(", performed by hand 0 pushes +0.3")
+    assert panel._performer(reg["view.speed"]) == ""           # owned by nothing
+    assert panel._hint(bright, reg["view.speed"]) == bright.tip   # not modulated: the tip
+    frame(panel, "view")                                       # draws with a router attached
+    assert panel.ghosts == 1
 
 
 def test_ghost_on_a_compact_slider_and_a_fader_in_a_table(rig):

@@ -20,7 +20,8 @@ library knows carries its preset strip (ui_presets.py) under the title.
 Every page fits the control window without scrolling. A modulated param
 draws its *base* as the handle and a white ghost bar at the *effective*
 value (params.py: `base` vs `eff_norm`), so the setting stays where the
-user put it while a lane rides on top. The layout — what sits where — is
+user put it while a lane rides on top; its tooltip names the performer
+(routing.py: the table's owner row). The layout — what sits where — is
 the one hand-arranged thing left here.
 """
 
@@ -421,6 +422,9 @@ class Panel:
         _micro(p.id, DIM)
         if p.modulated:
             imgui.text_disabled(f"modulated: {p.text()} → {self._eff_text(p)}")
+            who = self._performer(p)
+            if who:
+                imgui.text_disabled(who)
         m = self.midi
         if m is None:
             imgui.text_disabled("no MIDI adapter")
@@ -473,6 +477,28 @@ class Panel:
             return "on" if v else "off"
         return ""
 
+    def _performer(self, p: Param) -> str:
+        """Who performs `p` — "performed by <row>" from the table's owner
+        (routing.py), or "" with no router attached or no owner (a source
+        the table doesn't name, a test holding the param by hand)."""
+        r = self.router
+        b = r.table.owner(p.id) if r is not None else None
+        return "" if b is None else f"performed by {b.describe()}"
+
+    def _mod_text(self, p: Param) -> str:
+        """`base → effective` and who is doing it — the tooltip's line."""
+        text = f"{p.text()} → {self._eff_text(p)}"
+        who = self._performer(p)
+        return f"{text}, {who}" if who else f"{text} (modulated)"
+
+    def _hint(self, a: Param, p: Param) -> str:
+        """A widget's tooltip: its tip, plus the modulation line while a
+        source rides it (`a` is the drawn param, `p` the one it reads)."""
+        if not p.modulated:
+            return a.tip
+        line = f"{p.label}: {self._mod_text(p)}"
+        return f"{a.tip}\n{line}" if a.tip else line
+
     def _ghost(self, p: Param, inset: float = 0.0) -> None:
         """A white bar over the last slider at the effective position."""
         if not p.modulated:
@@ -492,7 +518,7 @@ class Panel:
         dl = imgui.get_window_draw_list()
         dl.add_circle_filled(imgui.ImVec2(r1.x - 5, r0.y + 5), 3.5, u32(RED))
         if imgui.is_item_hovered():
-            imgui.set_tooltip(f"{p.label}: {p.text()} → {self._eff_text(p)} (modulated)")
+            imgui.set_tooltip(f"{p.label}: {self._mod_text(p)}")
         self.ghosts += 1
 
     # ---- the track: every slider's rounded ground and red value fill ----
@@ -617,7 +643,7 @@ class Panel:
         )
         imgui.pop_font()
         imgui.pop_style_var()
-        self._tip(a)
+        self._tip(a, self._hint(a, p))
         self._ctx(a)
         self._learn_frame(a)
         r0, r1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
@@ -657,7 +683,7 @@ class Panel:
                 f"##{pid}", float(v), p.lo, p.hi, text, flags),
                 p.norm, self._origin(p), knob=False)
         imgui.pop_font()
-        self._tip(a)
+        self._tip(a, self._hint(a, p))
         self._ctx(a)
         self._learn_frame(a)
         r0, r1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
