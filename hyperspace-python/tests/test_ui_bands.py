@@ -401,6 +401,57 @@ def test_the_replace_prompt_swaps_the_owner_or_leaves_the_table(rig, tmp_path):
     # nothing pending: answering is a no-op
     ui_routing.answer(panel, True)
     assert table.owner("view.bright") is got
+    # the page's two in-place commits, and the race: a second performer
+    # lands on the target while the question is held — Replace removes
+    # whoever holds it then, and exactly one owner remains
+    asleep = table.add(Binding("lfo:1", "view.bright", "push", 0.2, enabled=False))
+    with pytest.raises(routing.Owned):
+        table.enable(asleep)
+    ui_routing.ask(panel, got, asleep, lambda: ui_routing._wake(router, asleep))
+    table.remove(got)
+    landed = table.add(Binding("lane:3", "view.bright", "push", 0.3))   # while the prompt was up
+    ui_routing.answer(panel, True)
+    assert asleep.enabled and table.owner("view.bright") is asleep and landed not in table.bindings
+    assert [b for b in table.performers() if b.target == "view.bright"] == [asleep]
+    assert ui_routing._state(panel)["saved"] == ui_routing._sig(router)  # on disk already…
+    before = routing.bindings_path(tmp_path).stat().st_mtime_ns
+    frame(panel, "routing")
+    assert routing.bindings_path(tmp_path).stat().st_mtime_ns == before  # …so no second write
+    mover = table.add(Binding("hand:2", "view.speed", "position"))
+    ui_routing.ask(panel, asleep, replace(mover, target="view.bright"),
+                   lambda: ui_routing._retarget(router, mover, "view.bright"))
+    ui_routing.answer(panel, True)
+    assert mover.target == "view.bright" and table.owner("view.bright") is mover
+    assert asleep not in table.bindings and _on_disk(tmp_path).owner("view.bright").source == "hand:2"
+    # the held learn's Replace goes through the same door: the row that
+    # took the target meanwhile goes, not the one the question named
+    midi.learn("view.bright")
+    midi.learn_source("hand:3")
+    assert midi.pending[1] is mover
+    table.remove(mover)
+    meanwhile = table.add(Binding("lane:4", "view.bright", "push", 0.3))
+    ui_routing.answer(panel, True)
+    assert table.owner("view.bright").source == "hand:3" and meanwhile not in table.bindings
+    assert len(table.routes_to("view.bright")) == 1
+    # the modal shows with the panel hidden, and a question withdrawn
+    # while it was up (a new learn armed) takes the popup down with it
+    midi.learn("view.bright")
+    midi.learn_source("hand:5")
+    assert midi.pending is not None
+    panel.open = False
+    frame(panel)
+    assert ui_routing._state(panel)["modal"]
+    midi.learn("view.speed")                                           # forgets the held learn
+    assert midi.pending is None
+    frame(panel)
+    frame(panel)
+    assert not ui_routing._state(panel)["modal"]
+    midi.learn("view.bright")                                          # and a new question opens again
+    midi.learn_source("hand:5")
+    frame(panel)
+    assert ui_routing._state(panel)["modal"]
+    ui_routing.answer(panel, False)
+    panel.open = True
 
 
 def test_the_macros_lead_the_scale_choices_and_show_their_owner(rig, tmp_path, monkeypatch):

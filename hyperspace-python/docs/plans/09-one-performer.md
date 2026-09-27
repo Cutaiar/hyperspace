@@ -326,8 +326,17 @@ right and the reason is here — one line each, for plan 10 to gather.
 - `Router.describe(b)` names a row as its adapter does ("R height
   positions while R ind", "LFO 1 pushes +0.5 × macro.1"); the prompt and
   the tooltip use it; `Binding.describe()` stays the row's own words.
-- The prompt is drawn from `Panel.draw` on **every** page, not only the
-  ROUTING page: a learn can be armed from any of them.
+- The prompt is drawn first thing in `Panel.draw`, as its own window —
+  on **every** page and with the panel hidden or collapsed, not only on
+  the ROUTING page: a learn can be armed from any of them and a held
+  learn is never silently parked. Every *Replace* (a new route, a
+  retarget, a row waking, a held learn) is one call,
+  `Bindings.replace_owner(new, *, target=None)`, which removes whoever
+  owns the target *when the answer comes* — a row that landed while the
+  question was up goes too.
+- The live table's `values` land in the registry when the Router is
+  built (`Router.missing_values` for the ids it lacks, reported through
+  the library), not by a separate startup call.
 
 ## Exit criteria (checked on merged `main`)
 
@@ -337,8 +346,13 @@ Headless, verified in this package's tests:
       hold under modulation; two position rows on one target is
       impossible; a knob on a hand-owned target moves the base and is
       never the performer; a hand cannot own a target twice.
-- [x] 2. `grep -rn "def drive\|def glide\|\"replace\"\|def learned" hyperspace/`
-      is empty (the modal's *Replace* button is a label, not the op).
+- [x] 2. `grep -rn "def drive\|def glide\|def learned" hyperspace/` is
+      empty, and there is no replace *op* in the model: `"replace"` is not
+      in `routing.OPS` (asserted by `test_a_continuous_source_has_only_the_performer_ops`).
+      The word itself survives in two honest places — `routing.V1_REPLACE`,
+      kept only so `migrate_v1` can recognise a schema-1 row and say what
+      replaced it, and the modal's *Replace* button, a label — so the
+      original grep on the string is the wrong test and is not the criterion.
 - [x] 8. A v1 `bindings.json` from before this plan loads, migrates, is
       written back once, and the migration note lists every dropped row
       (`test_a_schema_1_file_migrates_once_and_names_what_it_dropped`;

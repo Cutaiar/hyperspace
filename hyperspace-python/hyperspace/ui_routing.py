@@ -29,18 +29,22 @@ theme or project never carries them, a routing preset saved here does.
 
 One performer per target: the table's referee (`routing.Owned`) refuses
 a row on a target another enabled row performs, and the refusal is a
-question — the Replace / Keep prompt, an imgui modal the panel draws on
-every page (`modal`, from `Panel.draw`): "Brightness is already performed
-by R height positions — Replace / Keep". Two things raise it: an edit here
+question — the Replace / Keep prompt, an imgui modal the panel draws
+before anything else, on every page and with the panel hidden (`modal`,
+first thing in `Panel.draw`): "Brightness is already performed by R
+height positions — Replace / Keep". Two things raise it: an edit here
 (`add_route`, a row's target combo, a row's checkbox waking onto a taken
 target, "Route a lane here…") holds the question in the page's state
 with what *Replace* would do to the table (`ask`); a hand learn the MIDI
 adapter had to hold (`midi.pending`) is the same question, answered
-through `midi.resolve_pending`. `prompt` is whichever is up, `answer`
-settles it, and *Replace* writes the file. The owner is named the way
-its adapter names it (`Router.describe`). Rows a preset had to drop for
-the same reason (`table.dropped`) are listed under the header until the
-next edit.
+through `midi.resolve_pending`. `_question` is whichever is up; `prompt`
+reads it, `answer` settles it, and *Replace* writes the file. Every
+Replace — here, `_wake`, `_retarget`, the adapter's — is one call,
+`Bindings.replace_owner`, which removes whoever owns the target *when the
+answer comes*, so a row that landed while the question was up goes too
+and exactly one owner remains. The owner is named the way its adapter
+names it (`Router.describe`). Rows a preset had to drop for the same
+reason (`table.dropped`) are listed under the header until the next edit.
 
 The strip under the title is the preset strip's look over routing
 preset *files* (routing.preset_files): prev / next / the list load
@@ -201,8 +205,19 @@ def add_route(panel, target: str, source: str | None = None, depth: float = 0.5,
     except Owned as e:
         ask(panel, e.existing, b, lambda: router.table.replace_owner(b))
         return None
-    router.table.write()
+    _write(panel, router)
     return b
+
+
+def _sig(router: Router) -> list[dict]:
+    return [b.to_json() for b in router.table.routes()]
+
+
+def _write(panel, router: Router) -> None:
+    """The table to its file, and the page's record of what is on disk
+    with it, so `_save_edits` doesn't write the same table again."""
+    router.table.write()
+    _state(panel)["saved"] = _sig(router)
 
 
 # ---- the prompt: one performer per target, so a second one asks ----
@@ -210,53 +225,80 @@ def add_route(panel, target: str, source: str | None = None, depth: float = 0.5,
 def ask(panel, old: Binding, new: Binding, commit: Callable[[], object]) -> None:
     """Hold the question: `old` performs the target now, `new` asks for it,
     `commit` is what *Replace* does to the table (the file is written
-    after). Until it is answered the table is untouched."""
+    after). Until it is answered the table is untouched. Every commit goes
+    through `Bindings.replace_owner`, which reads the target's owner at
+    that moment — `old` is who to name, not who to remove."""
     _state(panel)["prompt"] = (old, new, commit)
 
 
-def prompt(panel) -> tuple[Binding, Binding] | None:
-    """(old, new) — the question up now: the page's own first, else a hand
-    learn the MIDI adapter is holding (`midi.pending`); None when nothing
-    is being asked."""
-    held = _state(panel)["prompt"]
-    if held is not None:
-        return held[0], held[1]
-    m = panel.midi
-    if m is not None and getattr(m, "pending", None) is not None:
-        new, old = m.pending
-        return old, new
-    return None
+def _wake(router: Router, b: Binding) -> Binding | None:
+    """Replace, for a row waking onto a taken target: the owner goes, `b`
+    comes on. Returns the row removed."""
+    return router.table.replace_owner(b)
 
 
-def answer(panel, replace_it: bool) -> None:
-    """*Replace* (True) or *Keep* (False) for whatever `prompt` shows. The
-    page's own question commits and writes the file; a held learn goes
-    back to the MIDI adapter, which does the same for its row."""
+def _retarget(router: Router, b: Binding, picked: str) -> Binding | None:
+    """Replace, for a row moved onto a taken target: the owner goes, `b`
+    now points at `picked`. Returns the row removed."""
+    return router.table.replace_owner(b, target=picked)
+
+
+def _question(panel) -> tuple[Binding, Binding, Callable[[bool], object]] | None:
+    """(old, new, settle) — the question up now and how to settle it:
+    the page's own first (settle(True) commits; the page then writes), else
+    a hand learn the MIDI adapter is holding (`midi.pending`; settle is its
+    `resolve_pending`, which writes for itself). None when nothing asks."""
     st = _state(panel)
     held = st["prompt"]
     if held is not None:
-        st["prompt"] = None
-        if replace_it:
-            held[2]()
-            router = router_of(panel)
-            if router is not None:
-                router.table.write()
-        return
+        old, new, commit = held
+
+        def settle(replace_it: bool) -> None:
+            st["prompt"] = None
+            if replace_it:
+                commit()
+        return old, new, settle
     m = panel.midi
-    if m is not None and getattr(m, "pending", None) is not None:
-        m.resolve_pending(replace_it)
+    if m is not None and m.pending is not None:
+        new, old = m.pending
+        return old, new, m.resolve_pending
+    return None
+
+
+def prompt(panel) -> tuple[Binding, Binding] | None:
+    """(old, new) of the question up now, or None."""
+    q = _question(panel)
+    return None if q is None else (q[0], q[1])
+
+
+def answer(panel, replace_it: bool) -> None:
+    """*Replace* (True) or *Keep* (False) for whatever `prompt` shows;
+    Replace lands in the file at once."""
+    q = _question(panel)
+    if q is None:
+        return
+    q[2](replace_it)
+    if replace_it:
+        _write(panel, router_of(panel))
 
 
 def modal(panel) -> None:
-    """The Replace / Keep modal, drawn by the panel every frame a question
-    is up — on any page, since a learn can come from any of them."""
+    """The Replace / Keep modal, drawn by the panel every frame — before
+    anything else it draws, so a question shows on any page, with the
+    panel hidden or collapsed; a learn can come from anywhere. A question
+    withdrawn while the modal was up (a new learn armed) closes it."""
     st = _state(panel)
-    q = prompt(panel)
+    q = _question(panel)
     st["modal"] = False                 # did the modal draw this frame (tests read it)
     if q is None:
+        if imgui.is_popup_open(PROMPT):                  # stale: the question went away
+            opened, _ = imgui.begin_popup_modal(PROMPT, None, imgui.WindowFlags_.no_title_bar)
+            if opened:
+                imgui.close_current_popup()
+                imgui.end_popup()
         return
-    old, new = q
-    router = router_of(panel)
+    old, new, _ = q
+    router = router_of(panel)           # a question exists only over a table: never None
     if not imgui.is_popup_open(PROMPT):
         imgui.open_popup(PROMPT)
     vp = imgui.get_main_viewport()
@@ -270,8 +312,7 @@ def modal(panel) -> None:
         return
     p = panel.reg.get(new.target)
     label = p.label if p is not None else new.target
-    who = router.describe(old) if router is not None else old.describe()
-    asks = router.describe(new) if router is not None else new.describe()
+    who, asks = router.describe(old), router.describe(new)
     ui._micro("one performer per parameter")
     imgui.text_wrapped(f"{label} is already performed by {who}.")
     imgui.text_disabled(f"{asks} asks for it.")
@@ -507,10 +548,7 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
         try:
             router.table.enable(b, on)      # waking a row asks the referee
         except Owned as e:
-            def wake(cur=e.existing):
-                router.table.remove(cur)
-                router.table.enable(b, True)
-            ask(panel, e.existing, b, wake)
+            ask(panel, e.existing, b, lambda: _wake(router, b))
         except ValueError as e:
             st["error"] = f"routing: {e}"
     if imgui.is_item_hovered():
@@ -538,10 +576,8 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
         if cur is None or cur is b or not b.is_performer:
             b.target = picked
         else:                               # the referee, on a retarget
-            def retarget(cur=cur, picked=picked):
-                router.table.remove(cur)
-                b.target = picked
-            ask(panel, cur, replace(b, target=picked), retarget)
+            ask(panel, cur, replace(b, target=picked),
+                lambda picked=picked: _retarget(router, b, picked))
     if p is None:
         if imgui.is_item_hovered():
             imgui.set_tooltip(f"{b.target}: no such param — the row is dormant")
@@ -726,7 +762,7 @@ def _save_edits(panel, router: Router) -> None:
     """The page edits the live table in place; land it in bindings.json once
     it changes and nothing is mid-drag, so a delete stays deleted."""
     st = _state(panel)
-    sig = [b.to_json() for b in router.table.routes()]
+    sig = _sig(router)
     if st.get("saved") is None:
         st["saved"] = sig                  # first sight: what's on disk already
     elif sig != st["saved"] and not imgui.is_any_item_active():

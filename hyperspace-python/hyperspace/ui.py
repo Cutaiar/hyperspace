@@ -933,6 +933,9 @@ class Panel:
     # ---- main draw: rail · page · footer ----
 
     def draw(self, dt: float, fps: float) -> None:
+        # Replace / Keep, its own window, before anything can return: a
+        # held hand learn is never parked behind a hidden or collapsed panel
+        ui_routing.modal(self)
         if self.cheatsheet:
             self._draw_cheatsheet()
         if not self.open:
@@ -958,7 +961,6 @@ class Panel:
             getattr(self, f"_page_{PAGE_KEYS[self.page]}")(dt)
         imgui.end_child()
         self._footer(fps)
-        ui_routing.modal(self)      # Replace / Keep, whatever page asked
         imgui.end()
 
     def _rail(self, foot: float) -> None:
