@@ -17,7 +17,8 @@ Current state and the pick-up list: [`docs/CHECKPOINT.md`](../CHECKPOINT.md).
 | [06 — Divergence](06-divergence.md) | Stage 5 | Bug fixes and new features the HTML never had; HTML frozen |
 | [07 — Overhaul](07-overhaul.md) | after 05's controller half | Two windows, preset/project library, N-band analyzer, one modulation concept over the registry — WP0 foundation done; WP1/WP2/WP4a in flight |
 | [08 — Hands](08-hands.md) | after 07 | Ultraleap two-hand tracking → 12 shaped analog axes (curve, dead zone, attack/decay, rest springs): float `hand:` sources + Learn in-app, 7/14-bit CC · bend · pressure to a DAW; HANDS page, setups as presets |
-| [09 — One performer](09-one-performer.md) | after 08 | One path for every live source, one performer per parameter with an FL-style replace prompt, two ops (`push` / `position`), macro knobs, tap-tempo clock, four chainable LFOs; bindings schema 2. Followed by plan 10, the architecture/documentation pass |
+| [09 — One performer](09-one-performer.md) | after 08 | One path for every live source, one performer per parameter with an FL-style replace prompt, two ops (`push` / `position`), macro knobs, tap-tempo clock, four chainable LFOs; bindings schema 2 — executed 2026-09-26 (PRs #33–#36, WP5 #N); hand checks pending |
+| 10 — Architecture & documentation pass | after 09's hand checks | A full system audit for the maintainers and the agents: component map, frame-order data flow, the control model as the canonical statement, per-module "shape" sections, a decisions log from plans 07–09, a refreshed ENGINEERING.md — with diagrams. No file yet |
 
 ## Conventions that apply to every plan
 
