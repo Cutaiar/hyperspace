@@ -584,9 +584,10 @@ def migrate_v1(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
             continue
         op = V1_TO_OP.get(b.op)
         if op is None:
-            why = ("no such op — a push on a base of 0 is the additive twin"
-                   if b.op == "replace" else f"no such op in {SCHEMA}")
-            notes.append(f"dropped {b.source} → {b.target} ({b.op}): {why}")
+            # schema 1's value-replacing op is the one that lands here: its
+            # twin is a push on a base of 0, which a file can't ask for
+            notes.append(f"dropped {b.source} → {b.target} ({b.op}): no such op in "
+                         f"{SCHEMA} — a push on a base of 0 is the additive twin")
             continue
         if b.op == "abs":            # a learned hand: the whole throw, no pickup
             b.value, b.pickup = 1.0, True
