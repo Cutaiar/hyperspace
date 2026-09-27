@@ -54,7 +54,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from .params import PLANES, Registry
+from .params import PLANES, ROUTING_GROUPS, Registry
 from .presets import SLOTS, Presets
 
 HOME_ENV = "HYPERSPACE_HOME"
@@ -429,8 +429,10 @@ class Library:
         yield self.home
 
     def groups(self) -> list[str]:
-        """Every group with a preset folder or a persisted param."""
-        out = {p.group for p in (self.reg or []) if p.persist and p.group}
+        """Every group with a preset folder or a persisted param — less the
+        routing layer's (params.ROUTING_GROUPS), which routing presets carry."""
+        out = {p.group for p in (self.reg or [])
+               if p.persist and p.group and p.group not in ROUTING_GROUPS}
         for root in self._roots():
             if root.is_dir():
                 out.update(d.name for d in root.iterdir()

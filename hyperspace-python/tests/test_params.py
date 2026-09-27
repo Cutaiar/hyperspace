@@ -253,6 +253,36 @@ def test_scene_names_match_presets(rig):
     assert rig[0]["scene.select"].names == [p["name"] for p in PRESETS]
 
 
+def test_macro_knobs_are_persisted_attenuators_with_no_object(rig):
+    """macro.1–8 (plan 09, decision 7): continuous 0–1, saved and drivable,
+    read as a percentage, base 1 (the "× 1" a route runs at unscaled). They
+    hold no object, so a snapshot is all there is to them: restoring one
+    brings every knob back."""
+    reg = rig[0]
+    ms = reg.group("macro")
+    assert [p.id for p in ms] == [f"macro.{k}" for k in range(1, 9)]
+    for k, p in enumerate(ms, 1):
+        assert (p.label, p.kind, p.lo, p.hi) == (f"Macro {k}", Kind.CONTINUOUS, 0.0, 1.0)
+        assert p.persist and p.modulatable and not p.alias and p.taper is None
+        assert p.value == 1.0 and p.text() == "100 %"
+        assert "scale" in p.tip
+    m = reg["macro.2"]
+    m.set_value(0.42)
+    assert m.text() == "42 %" and reg["macro.1"].value == 1.0   # its own slot
+    snap = reg.snapshot("macro")
+    assert snap == {f"macro.{k}": (0.42 if k == 2 else 1.0) for k in range(1, 9)}
+    m.set_value(0.0)
+    reg["macro.7"].set_norm(0.5)
+    assert reg.restore(snap) == []
+    assert m.value == pytest.approx(0.42) and reg["macro.7"].value == 1.0
+    # the slot bounds itself: a restore writes raw, and nothing else would clamp
+    assert reg.restore({"macro.3": 5.0, "macro.4": -2.0}) == []
+    assert reg["macro.3"].value == 1.0 and reg["macro.4"].value == 0.0
+    # routing-layer state (ROUTING_GROUPS): in a snapshot by group, out of the whole one
+    assert not any(k.startswith("macro.") for k in reg.snapshot())
+    assert set(reg.snapshot("macro")) == {p.id for p in ms}
+
+
 def test_core_does_not_import_the_midi_adapter():
     """BLUEPRINT §3.6: the bridge depends on the core, never the reverse."""
     import sys

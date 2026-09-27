@@ -75,6 +75,12 @@ BMP_PATHS = ["STILL", "ORBIT", "FIG-8", "SWAY"]
 PLANES = ["XY", "XZ", "YZ", "XW", "YW", "ZW"]
 
 RAW_STEPS = 100  # detents across an untapered continuous range
+N_MACROS = 8     # macro.1–8: knobs that exist to be a route's scale and to be owned
+# groups that are routing-layer state, not the scene's: persisted (a
+# routing preset carries them, `snapshot(group)` works) but outside the
+# whole-surface `snapshot()` — a theme, a project, the library's module
+# list — so a theme change never moves a macro under a route
+ROUTING_GROUPS = ("macro",)
 
 # rot.rate.* spans the largest drive the reference ever put on a plane — a
 # lane at the CEIL asymptote through DRIVE at the drive fader's 8× — so the
@@ -546,14 +552,19 @@ class Registry:
     # ---- persistence: the one serialization every preset is made of ----
 
     def snapshot(self, group: str | None = None, *, ids=None) -> dict[str, Any]:
-        """{id: base value} for every persistent param (or one group / id set)."""
+        """{id: base value} for every persistent param (or one group / id set).
+        The whole-surface snapshot leaves the ROUTING_GROUPS out; asked for
+        by group or id they are there."""
         out: dict[str, Any] = {}
+        whole = group is None and ids is None
         for p in self._p.values():
             if not p.persist:
                 continue
             if group is not None and p.group != group:
                 continue
             if ids is not None and p.id not in ids:
+                continue
+            if whole and p.group in ROUTING_GROUPS:
                 continue
             v = p.base
             out[p.id] = list(v) if isinstance(v, list) else v
@@ -853,6 +864,23 @@ def build_registry(view, control, audio, presets=None, dream=None, fx=None) -> R
                  taper=tapers.T_TRIM, fmt=tapers.fmt_db, group=g,
                  tip="One offset added to all six per-band trims, at the very head of the "
                      "chain — moves a whole song down into the 56 dB working window.")
+
+    # ---- macros: the chaining knobs (plan 09, decision 7) ----
+    # Nothing reads a macro but the router: a route names one as its
+    # `scale`, and a performer may own it — so a hand that positions
+    # macro.2 deepens the lane pushing brightness × macro.2, one frame
+    # later, rather than two performers pulling on brightness. No object,
+    # so the values live in this list, and the slot clamps itself (a
+    # restore writes raw). Base 1: a route that names an untouched macro
+    # runs at its full depth, the same as "× 1".
+    g = "macro"
+    macros = [1.0] * N_MACROS
+    for k in range(N_MACROS):
+        r.continuous(f"macro.{k + 1}", f"Macro {k + 1}", (lambda k=k: macros[k]),
+                     (lambda v, k=k: macros.__setitem__(k, _clamp(float(v), 0.0, 1.0))),
+                     lo=0.0, hi=1.0, fmt=lambda v: f"{v * 100:.0f} %", group=g,
+                     tip="Does nothing on its own. Put it on a route as its scale, or own "
+                         "it with a hand or LFO, to chain.")
 
     # ---- scene ----
     g = "scene"
