@@ -448,9 +448,10 @@ def main() -> None:
         Path(mc.get("map", "midi_map.json")),
     ))
     # the macros are the routing layer's, saved with the table and not in
-    # any theme: land them before anything reads a route's scale
-    for pid in router.restore_values():
-        print(f"bindings: values: no such param {pid}", file=sys.stderr)
+    # any theme; the Router landed them — what the file named and the
+    # registry hasn't goes where every other missing id goes
+    if router.missing_values:
+        library.report(router.missing_values, "bindings.json values")
     midi_io = _open_midi(reg, cfg, router.table)
     panel.midi = midi_io
     panel.router = router                  # the ROUTING page edits the live table

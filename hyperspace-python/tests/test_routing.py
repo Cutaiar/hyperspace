@@ -942,6 +942,48 @@ def test_a_continuous_source_has_only_the_performer_ops():
     with pytest.raises(ValueError):
         t.enable(bad)                                                  # stays off
     assert not bad.enabled
+    with pytest.raises(ValueError):
+        t.replace_owner(bad)                                           # Replace can't wake it either
+    assert not bad.enabled and t.owner("view.bright") is None
+    # and there is no replace *op* in the model (plan 09 exit criterion 2)
+    assert "replace" not in routing.OPS and "replace" not in MOD_OPS
+    assert routing.V1_REPLACE not in routing.OPS
+
+
+def test_replace_owner_is_the_one_door_onto_a_taken_target():
+    """Every *Replace* — a new route, a held learn, a row retargeted, a
+    row waking — is `replace_owner`. It removes whoever owns the target
+    *at commit*, not whoever did when the question was asked: a row that
+    landed while the prompt was up goes too, and exactly one owner
+    remains. A row already in the table is retargeted / woken in place."""
+    _r, _router, t = _hand_rig()
+    first = t.add(Binding("hand:0", "view.bright", "position"))
+    # a new row (add_route / a learn), with the race: the owner changed
+    # after the question was asked
+    asked = Binding("lfo:0", "view.bright", "push", 0.5)
+    t.remove(first)
+    other = t.add(Binding("lane:2", "view.bright", "push", 0.1))
+    assert t.replace_owner(asked) is other                             # whoever holds it now
+    assert t.owner("view.bright") is asked and t.performers() == [asked]
+    # a retarget in place: `b` keeps its identity, gains the target
+    mover = t.add(Binding("hand:3", "view.speed", "position"))
+    assert t.replace_owner(mover, target="view.bright") is asked
+    assert mover.target == "view.bright" and t.owner("view.bright") is mover
+    assert t.owner("view.speed") is None and t.routes() == [mover]
+    # a retarget onto a free target is a plain move; onto its own, nothing
+    assert t.replace_owner(mover, target="view.depth4") is None
+    assert mover.target == "view.depth4" and t.replace_owner(mover) is None
+    # a wake in place: the sleeping row comes on, the owner goes
+    sleeper = t.add(Binding("hand:5", "view.depth4", "push", 0.2, enabled=False))
+    assert t.owner("view.depth4") is mover
+    assert t.replace_owner(sleeper) is mover
+    assert sleeper.enabled and t.owner("view.depth4") is sleeper and mover not in t.bindings
+    # a table built by hand with two owners: the impossible remains, and says so
+    t.bindings += [Binding("hand:1", "view.zoom", "position"), Binding("hand:2", "view.zoom", "position")]
+    with pytest.raises(Owned):
+        t.replace_owner(Binding("hand:6", "view.zoom", "position"))
+    # the edit cleared the notices, as any edit does
+    assert t.dropped == [] and t.notes == []
 
 
 def test_a_preset_with_two_owners_keeps_the_first_and_says_so():
@@ -1428,19 +1470,30 @@ def test_the_live_table_carries_the_macros(tmp_path):
     r2 = rig(tmp_path=tmp_path, full=True)
     again = Bindings.load(path, legacy_midi=None)
     assert again.values == doc["values"]
-    router2 = Router(r2.reg, again)
     assert r2.reg["macro.3"].value == 1.0
-    assert router2.restore_values() == []
-    assert r2.reg["macro.3"].value == pytest.approx(0.25)
+    router2 = Router(r2.reg, again)                              # landed on construction
+    assert router2.missing_values == [] and r2.reg["macro.3"].value == pytest.approx(0.25)
+    # a second Router over the same table (the panel's fallback) neither
+    # takes the thunk nor lands the values again
+    r2.reg["macro.3"].set_value(0.9)
+    twin = Router(r2.reg, again)
+    assert again.values_of == router2.routing_values and twin.missing_values == []
+    assert r2.reg["macro.3"].value == pytest.approx(0.9)
     # a modulated macro saves its base, not the hand's position
-    r2.reg["macro.3"].modulate(0.5)
+    r2.reg["macro.3"].modulate(-0.5)
     r2.reg.apply()
+    assert r2.reg["macro.3"].value == pytest.approx(0.4)
     again.write()
-    assert json.loads(path.read_text())["values"]["macro.3"] == pytest.approx(0.25)
-    # an id the registry doesn't have is reported, not fatal
+    assert json.loads(path.read_text())["values"]["macro.3"] == pytest.approx(0.9)
+    # an id the registry doesn't have is reported (Router.missing_values,
+    # which app.py hands to the library), not fatal
     again.values = {"macro.3": 0.7, "no.such": 1}
     assert router2.restore_values() == ["no.such"]
     assert r2.reg["macro.3"].base == pytest.approx(0.7)          # the base; the offset rides on
+    r3 = rig(tmp_path=tmp_path, full=True)
+    fresh = Bindings(values={"macro.1": 0.4, "no.such": 1}, path=tmp_path / "x.json")
+    assert Router(r3.reg, fresh).missing_values == ["no.such"]
+    assert r3.reg["macro.1"].value == pytest.approx(0.4)
     # a registry with no routing groups: nothing to save
     bare = Router(Registry(), Bindings(path=tmp_path / "bare.json"))
     bare.table.write()

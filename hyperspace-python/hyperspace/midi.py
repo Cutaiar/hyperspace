@@ -365,18 +365,19 @@ class MidiIO:
         if not replace:
             self.last = f"kept {old.describe()} on {old.target}"
             return None
-        self.map.table.remove(old)
         self._place(new)
         return new
 
     def _place(self, b: Binding) -> None:
         """The learned row into the table: the axis's other position rows
-        go first (one axis, one param), then the referee's `add`, then the
-        file. The caller has already seen to the target's owner."""
+        go first (one axis, one param), then `replace_owner` — the one door
+        onto a target, which reads the owner *now* (a free target takes the
+        row; the prompt's Replace removes whoever holds it at this moment,
+        not whoever did when the question was asked) — then the file."""
         table = self.map.table
         for x in [x for x in table.of(b.scheme) if x.source == b.source and x.op == "position"]:
             table.remove(x)
-        table.add(b)
+        table.replace_owner(b)
         self.map.write()
         self.last = f"learned {b.target} ← {b.describe()}"
 

@@ -158,8 +158,9 @@ Rows carry only what differs from the defaults. `values` in a routing
 preset are the bases its routes assume; in the live table they are the
 routing layer's own bases — the macros (params.ROUTING_GROUPS), which no
 theme or project carries — refreshed on every write through the thunk
-the Router gives the table (`Bindings.values_of`) and landed at startup
-by `Router.restore_values`. `Bindings.load` reads the file, or builds the
+the Router gives the table (`Bindings.values_of`) and landed in the
+registry when the Router is built (`Router.restore_values`, the ids the
+registry lacks in `Router.missing_values`). `Bindings.load` reads the file, or builds the
 factory table when there is none — and if an old ``midi_map.json``
 (midi.py's version-1 file) is present, its rows replace the factory MIDI
 part and the merged table is written once, with a note. A schema-1 file
@@ -217,9 +218,11 @@ OPS = ("fire", "toggle", "step", "set", "abs", "rel", "rel64", "momentary", *MOD
 # midi_map.json's `mode` → op
 MODE_TO_OP = {"abs": "abs", "rel": "rel", "rel64": "rel64", "trigger": "toggle",
               "momentary": "momentary", "set": "set", "step": "step"}
-# schema 1's performer ops → schema 2's (migrate_v1); `replace` has no twin
-# but a push on a base of 0, which a file can't ask for, so it is dropped
+# schema 1's performer ops → schema 2's (migrate_v1); the value-replacing
+# op has no twin but a push on a base of 0, which a file can't ask for, so
+# it is dropped — its name is kept only to recognise it and say so
 V1_TO_OP = {"mod": "push", "span": "position", "abs": "position"}
+V1_REPLACE = "replace"     # schema 1's op, kept only to recognise it; not in OPS
 # key modifiers a row may name in front of the key ("SHIFT+B"); each is
 # a pair of GLFW keys the adapter reports as one state (app.Keys)
 MODIFIERS = ("SHIFT", "SUPER")
@@ -584,10 +587,10 @@ def migrate_v1(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
             continue
         op = V1_TO_OP.get(b.op)
         if op is None:
-            # schema 1's value-replacing op is the one that lands here: its
-            # twin is a push on a base of 0, which a file can't ask for
-            notes.append(f"dropped {b.source} → {b.target} ({b.op}): no such op in "
-                         f"{SCHEMA} — a push on a base of 0 is the additive twin")
+            why = f"no such op in {SCHEMA}"
+            if b.op == V1_REPLACE:
+                why += " — a push on a base of 0 is the additive twin"
+            notes.append(f"dropped {b.source} → {b.target} ({b.op}): {why}")
             continue
         if b.op == "abs":            # a learned hand: the whole throw, no pickup
             b.value, b.pickup = 1.0, True
@@ -890,16 +893,32 @@ class Bindings:
         self.dropped, self.notes = [], []
         return b
 
-    def replace_owner(self, new: Binding) -> Binding | None:
-        """The prompt's *Replace*: the target's performer goes, `new` comes
-        in. Returns the row removed (None when the target was free)."""
-        cur = self.owner(new.target)
+    def replace_owner(self, new: Binding, *, target: str | None = None) -> Binding | None:
+        """The prompt's *Replace*, and the one way a performer takes a
+        taken target: whoever performs it *now* goes — read here, at
+        commit, not when the question was asked, so a row that landed
+        while the prompt was up goes too — and `new` performs it. A row
+        not yet in the table is added (a new route, a learn); a row already
+        in it is retargeted to `target` when one is given and woken if it
+        slept. Returns the row removed (None when the target was free).
+        Raises only for what the referee can't allow whatever goes: a bad
+        op on a continuous source (`ValueError`), or a second owner still
+        standing after the swap (`Owned`)."""
+        pid = new.target if target is None else target
+        if new.scheme in LANE_SCHEMES and new.op not in MOD_OPS:
+            self._check(new)                     # says why, before anything moves
+        cur = self.owner(pid)
         if cur is new:
             return None
         if cur is not None:
             self.remove(cur)
-        if not any(x is new for x in self.bindings):
+        if any(x is new for x in self.bindings):
+            new.target, new.enabled = pid, True
+            self._check(new)
+        else:
+            new.target = pid
             self.add(new)
+        self.dropped, self.notes = [], []
         return cur
 
     def enable(self, b: Binding, on: bool = True) -> None:
@@ -950,8 +969,14 @@ class Router:
         self._codes: dict[str, int | None] = {}
         # the live table saves the routing layer's bases (the macros) with
         # its rows: every table.write() — a learn, the page, a hand unbind
-        # — reads them through here (Bindings.values_of)
-        table.values_of = self.routing_values
+        # — reads them through here (Bindings.values_of), and the file's
+        # values land in the registry here, once. The first Router over a
+        # table is its registry's; a second one (the panel's fallback over
+        # the MIDI adapter's table) neither hijacks the thunk nor re-lands
+        self.missing_values: list[str] = []      # ids the file named that the registry hasn't
+        if table.values_of is None:
+            table.values_of = self.routing_values
+            self.missing_values = self.restore_values()
 
     def routing_values(self) -> dict:
         """{id: base} over params.ROUTING_GROUPS — what the live table and a
@@ -962,9 +987,10 @@ class Router:
         return values
 
     def restore_values(self) -> list[str]:
-        """The live table's `values` — the macros as last written — into the
-        registry; app.py at startup, right after the table is loaded.
-        Returns the ids the registry doesn't have (a hand-edited file)."""
+        """The table's `values` — the macros as last written — into the
+        registry (done once, on construction; `missing_values` keeps the
+        answer). Returns the ids the registry doesn't have (a hand-edited
+        file), for the library to report."""
         return self.reg.restore(self.table.values) if self.table.values else []
 
     def describe(self, b: Binding) -> str:
