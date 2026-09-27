@@ -1137,3 +1137,50 @@ def test_rests_are_read_through_rest_of():
     router.rests["hand"] = [0.5, 0.0, 0.5]
     assert router.rest_of("hand:0") == 0.5 and router.rest_of("hand:1") == 0.0
     assert router.rest_of("hand:9") == 0.0 and router.rest_of("hand:x") == 0.0
+
+
+def test_a_macro_owned_by_a_hand_scales_a_lanes_push_one_frame_later():
+    """Chaining, not stacking (plan 09, decision 7): `hand:0` positions
+    `macro.2`, and `lane:0` pushes brightness at a depth × macro.2. The
+    modulation pass reads a scale param's *effective* value — what the
+    last apply() wrote — so the hand lands on the macro this frame and
+    reaches brightness on the next, and when the hand leaves the macro's
+    base is back a frame before the push is. The one-frame lag every
+    modulated value has; the model's documented cost of a chain."""
+    r = rig()
+    bright, macro = r.reg["view.bright"], r.reg["macro.2"]
+    bright.set_value(1.0)
+    base = bright.norm
+    at = lambda off: pytest.approx(bright._value_of_norm(base + off))
+    router = Router(r.reg, Bindings([
+        Binding("lane:0", "view.bright", "push", 0.5, scale="macro.2"),
+        Binding("hand:0", "macro.2", "position"),
+    ]))
+    r.chain.out[:] = 0
+    r.chain.out[0] = CEIL * 0.5                     # u = 0.5; a lane rests at 0
+    router.feed("hand", [0.6])
+    router.modulate(r.chain)
+    r.reg.apply()
+    # frame 1: the macro reads the hand; brightness was pushed × the macro's
+    # value going in — its untouched base of 1
+    assert macro.modulated and macro.value == pytest.approx(0.6) and macro.base == 1.0
+    assert bright.modulated and r.view.bright == at(0.5 * 1.0 * 0.5)
+    router.modulate(r.chain)
+    r.reg.apply()
+    assert r.view.bright == at(0.5 * 0.6 * 0.5)      # frame 2: × 0.6
+    router.feed("hand", [0.2])
+    router.modulate(r.chain)
+    r.reg.apply()
+    assert macro.value == pytest.approx(0.2) and r.view.bright == at(0.5 * 0.6 * 0.5)
+    router.modulate(r.chain)
+    r.reg.apply()
+    assert r.view.bright == at(0.5 * 0.2 * 0.5)
+    router.feed("hand", None)                       # the hand leaves: the macro lets go…
+    router.modulate(r.chain)
+    r.reg.apply()
+    assert not macro.modulated and macro.value == 1.0
+    assert r.view.bright == at(0.5 * 0.2 * 0.5)      # …the push still × 0.2 this frame
+    router.modulate(r.chain)
+    r.reg.apply()
+    assert r.view.bright == at(0.5 * 1.0 * 0.5)
+    assert bright.modulated and bright.norm == base  # the lane never touched the base
