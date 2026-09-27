@@ -270,7 +270,10 @@ class MidiIO:
     # ---- learn / bindings ----
 
     def learn(self, pid: str | None) -> None:
+        """Arm (or cancel) a learn. A learn the prompt hasn't answered yet
+        is forgotten: the new one is what the performer means now."""
         self.learning = pid
+        self.pending = None
 
     def binding_for(self, pid: str) -> Binding | None:
         return self.map.for_param(pid)
@@ -314,22 +317,33 @@ class MidiIO:
         source is the whole fader, through the Router like every route,
         with no pickup and no device feedback. `when` gates the row on a
         second source (a pinch held while learning), so the row only acts
-        while that reads on. If the param already has a performer the
-        learn is held in `pending` for the panel's prompt (`resolve_pending`)
-        rather than taking the target or being lost."""
+        while that reads on.
+
+        A learned axis drives one param: learning it onto another *moves*
+        it (its other position rows go), and learning it again onto the
+        same param only refreshes the gate. If the param already has a
+        different performer the learn is held in `pending` for the panel's
+        prompt (`resolve_pending`) — the table untouched until it answers —
+        rather than taking the target or being lost. `learning` is cleared
+        first, so the hands adapter, which keys off it, cannot fire again.
+        """
         pid = self.learning
         self.learning = None
         if pid is None or self.reg.get(pid) is None:
             return
         b = Binding(source, pid, "position", 1.0, when=when)
-        try:
-            self.map.table.add(b)
-        except Owned as e:
-            self.pending = (b, e.existing)
-            self.last = f"{e} — replace?"
+        table = self.map.table
+        cur = table.owner(pid)
+        if cur is not None and cur.source == source and cur.op == "position":
+            cur.when = when                          # the same axis again: no move
+            self.map.write()
+            self.last = f"learned {pid} ← {cur.describe()}"
             return
-        self.map.write()
-        self.last = f"learned {pid} ← {b.describe()}"
+        if cur is not None:
+            self.pending = (b, cur)
+            self.last = f"{Owned(cur, b)} — replace?"
+            return
+        self._place(b)
 
     def resolve_pending(self, replace: bool) -> Binding | None:
         """The prompt's answer to a held learn: *Replace* swaps the target's
@@ -342,10 +356,20 @@ class MidiIO:
         if not replace:
             self.last = f"kept {old.describe()} on {old.target}"
             return None
-        self.map.table.replace_owner(new)
-        self.map.write()
-        self.last = f"learned {new.target} ← {new.describe()}"
+        self.map.table.remove(old)
+        self._place(new)
         return new
+
+    def _place(self, b: Binding) -> None:
+        """The learned row into the table: the axis's other position rows
+        go first (one axis, one param), then the referee's `add`, then the
+        file. The caller has already seen to the target's owner."""
+        table = self.map.table
+        for x in [x for x in table.of(b.scheme) if x.source == b.source and x.op == "position"]:
+            table.remove(x)
+        table.add(b)
+        self.map.write()
+        self.last = f"learned {b.target} ← {b.describe()}"
 
     # ---- per frame ----
 

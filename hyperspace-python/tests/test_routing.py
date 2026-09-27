@@ -288,10 +288,11 @@ def test_json_rows_carry_only_what_differs():
     assert Binding.from_json({"source": "lane:1", "target": "x", "op": "push", "value": -2,
                               "enabled": False, "junk": 1}) == Binding(
         "lane:1", "x", "push", -2, False)
-    # rest only when it isn't 0 — a lane's rows stay as short as they were
+    # rest only when the row has its own — None (the source's) is the default
     assert "rest" not in Binding("lane:1", "x", "push", 0.5).to_json()
     d = Binding("lfo:0", "x", "push", 0.5, rest=0.5).to_json()
     assert d["rest"] == 0.5 and Binding.from_json(d).rest == 0.5
+    assert Binding("lfo:0", "x", "push", rest=0.0).to_json()["rest"] == 0.0   # an override
 
 
 def test_midi_map_v1_rows_migrate():
@@ -541,10 +542,26 @@ def test_push_is_centred_where_the_source_rests():
     router.modulate()
     r.reg.apply()
     assert not p.modulated and r.view.bright == 1.0
-    # a lane's rows rest at 0: the row as it always was
-    lane = Binding("lane:1", "view.bright", "push", 0.2)
-    assert lane.rest == 0.0
-    Router(r.reg, Bindings([lane])).modulate(r.chain)
+    # no rest of its own: the source's, as its adapter publishes it this
+    # frame — a hand axis's configured rest, an LFO's 0.5, a lane's 0
+    auto = Binding("hand:0", "view.bright", "push", 0.4)
+    assert auto.rest is None and "rest" not in auto.to_json()
+    router = Router(r.reg, Bindings([auto]))
+    router.rests["hand"] = [0.5]
+    router.feed("hand", [0.5])
+    router.modulate()
+    r.reg.apply()
+    assert p.modulated and p.eff_norm == pytest.approx(base)          # idle at 0.5
+    router.rests["hand"] = [0.2]                                      # the setup moved rest
+    router.modulate()
+    r.reg.apply()
+    assert p.eff_norm == pytest.approx(base + 0.4 * 0.3, abs=1e-9)    # 0.5 is a push now
+    auto.rest = 0.5                                                   # the row's own number
+    router.modulate()
+    r.reg.apply()
+    assert p.eff_norm == pytest.approx(base)
+    lane = Binding("lane:1", "view.bright", "push", 0.2)              # nothing published: 0
+    assert router.rest_of(lane.source) == 0.0
 
 
 @pytest.mark.parametrize("pid", ["view.bright", "view.speed", "view.depth4", "camera.zoom"])
@@ -847,6 +864,11 @@ def test_a_continuous_source_has_only_the_performer_ops():
         with pytest.raises(ValueError, match="not an op for a hand source"):
             t.add(Binding("hand:0", "view.bright", op))
     assert t.bindings == []
+    bad = Binding("hand:0", "view.bright", "abs", enabled=False)        # a stale row, off
+    t.bindings.append(bad)
+    with pytest.raises(ValueError):
+        t.enable(bad)                                                  # stays off
+    assert not bad.enabled
 
 
 def test_a_preset_with_two_owners_keeps_the_first_and_says_so():
@@ -977,6 +999,12 @@ V1_FILE = {
     "bindings": [
         {"source": "key:RIGHT", "target": "view.shape", "op": "step"},
         {"source": "cc:0:48", "target": "view.bright", "op": "abs", "feedback": "ring"},
+        # the three APC40 buttons plan 09 WP4 moves, as the old factory map had them
+        {"source": "note:0:99", "target": "theme.next", "op": "toggle", "feedback": "led"},
+        {"source": "note:0:100", "target": "view.shape", "op": "step", "value": 1,
+         "feedback": "led"},
+        {"source": "note:0:101", "target": "view.shape", "op": "step", "value": -1,
+         "feedback": "led"},
         {"source": "lane:0", "target": "pattern.mod.0", "op": "mod", "value": 0.5},
         {"source": "hand:3", "target": "view.inst_amp", "op": "mod", "value": 0.4},   # L roll
         {"source": "hand:1", "target": "view.speed", "op": "mod", "value": 0.4},      # L y
@@ -994,14 +1022,15 @@ V1_FILE = {
 
 def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsys):
     """The plan's migration table, on a hand-written v1 file: mod → push
-    with a rest by scheme (an LFO and a centred default hand axis 0.5,
-    else 0), span → position, a lane-scheme abs → position at depth 1 with
-    pickup forgotten, replace dropped, a second owner dropped — each
-    dropped row on stderr — and written back at schema 2, after which the
-    file rules and nothing is said again."""
-    from hyperspace.hands.core import BIPOLAR, DEFAULT_DOFS
+    (resting where the source does — no table of rests here), span →
+    position, a lane-scheme abs → position at depth 1 with pickup
+    forgotten, replace dropped, a second owner dropped, the APC40 buttons
+    WP4 moved remapped — each dropped or changed row on stderr — and
+    written back at schema 2, after which the file rules and nothing is
+    said again."""
+    from hyperspace import apc40
 
-    assert DEFAULT_DOFS[3] in BIPOLAR and DEFAULT_DOFS[1] not in BIPOLAR   # what 0.5 / 0 mean
+    assert (apc40.N_TAP, apc40.N_NUDGE_P, apc40.N_NUDGE_M) == (99, 100, 101)
     path = bindings_path(tmp_path)
     path.write_text(json.dumps(V1_FILE))
     t = Bindings.load(path, legacy_midi=None)
@@ -1009,22 +1038,30 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     assert t.migrated and not t.error
     assert "dropped lane:1 → rot.rate.XY (replace)" in err
     assert "dropped hand:2 → view.depth4: view.depth4 is already performed by hand 7" in err
-    assert f"migrated {path} to {SCHEMA} (2 rows dropped)" in err
+    assert "remapped note:0:99: theme.next → tempo.tap" in err
+    assert "remapped note:0:100: view.shape → tempo.nudge" in err
+    assert f"added note:0:{apc40.N_METRO} → lfo.trigger" in err
+    assert f"added note:0:{apc40.N_QUANT} → theme.next" in err
+    assert f"migrated {path} to {SCHEMA} (2 rows dropped, 5 rows changed)" in err
     rows = {(b.source, b.target): b for b in t.bindings}
     assert rows[("key:RIGHT", "view.shape")].op == "step"
     assert rows[("cc:0:48", "view.bright")].op == "abs"                       # MIDI keeps abs
-    pat, roll, height = (rows[("lane:0", "pattern.mod.0")], rows[("hand:3", "view.inst_amp")],
-                         rows[("hand:1", "view.speed")])
-    assert (pat.op, pat.rest) == ("push", 0.0)
-    assert (roll.op, roll.rest, roll.value) == ("push", 0.5, 0.4)
-    assert (height.op, height.rest) == ("push", 0.0)
+    for src, tgt in (("lane:0", "pattern.mod.0"), ("hand:3", "view.inst_amp"),
+                     ("hand:1", "view.speed"), ("lfo:0", "fx.mix")):
+        assert (rows[(src, tgt)].op, rows[(src, tgt)].rest) == ("push", None), src
+    assert rows[("hand:3", "view.inst_amp")].value == 0.4
     assert rows[("hand:7", "view.depth4")].op == "position"
     z = rows[("hand:7", "camera.zoom")]
     assert (z.op, z.value, z.pickup, z.when) == ("position", 1.0, True, "hand:18")
-    lfo = rows[("lfo:0", "fx.mix")]
-    assert (lfo.op, lfo.rest) == ("push", 0.5)
     assert ("lane:1", "rot.rate.XY") not in rows and ("hand:2", "view.depth4") not in rows
     assert [b.source for b, _ in t.dropped] == ["hand:2"]
+    assert len(t.notes) == 7
+    # the APC40 rows: the old factory rows swapped for the new, the LED kept
+    tap = rows[("note:0:99", "tempo.tap")]
+    assert (tap.op, tap.feedback) == ("toggle", "led") and ("note:0:99", "theme.next") not in rows
+    assert (rows[("note:0:100", "tempo.nudge")].value, rows[("note:0:101", "tempo.nudge")].value) == (1, -1)
+    assert rows[(f"note:0:{apc40.N_METRO}", "lfo.trigger")].feedback == "led"
+    assert rows[(f"note:0:{apc40.N_QUANT}", "theme.next")].op == "toggle"
     assert t.values == {"pattern.mod.0": 0.0}
     # written back once, at schema 2; the second load is quiet
     doc = json.loads(path.read_text())
@@ -1040,24 +1077,60 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     router.load_preset("old", tmp_path)
     assert {b.op for b in router.table.routes()} == {"push", "position"}
     assert [b.source for b, _ in router.table.dropped] == ["hand:2"]
+    assert len(router.table.notes) == 7 and "migrated" in capsys.readouterr().err
+    # a user's preset file is rewritten once at schema 2 …
+    assert json.loads((d / "old.json").read_text())["schema"] == SCHEMA
+    router.load_preset("old", tmp_path)
+    assert capsys.readouterr().err == "" and router.table.notes == []
+    router.table.add(Binding("lane:0", "view.bright", "push", 0.2))
+    assert router.table.dropped == [] and router.table.notes == []      # an edit clears both
+    # … a factory file never is (they are all at schema 2 already)
+    before = {q.name: q.read_text() for q in routing.FACTORY_DIR.glob("*.json")}
+    for name in routing.preset_names():
+        router.load_preset(name)
+    assert {q.name: q.read_text() for q in routing.FACTORY_DIR.glob("*.json")} == before
 
 
-def test_default_rest_follows_the_default_dof_layout():
-    from hyperspace.hands.core import BIPOLAR, DEFAULT_DOFS
+def test_an_unknown_schema_is_reported_not_migrated(tmp_path):
+    """A file from a newer code (or a typo) is not this code's to rewrite:
+    the factory table stands in and the error says why, like a file that
+    won't parse. Only schema 1 — or none — goes through the migration."""
+    path = bindings_path(tmp_path)
+    text = json.dumps({"schema": "hyperspace.bindings/3", "bindings": [
+        {"source": "lane:0", "target": "view.bright", "op": "mod"}]})
+    path.write_text(text)
+    t = Bindings.load(path, legacy_midi=None)
+    assert t.error == "bindings: unknown schema 'hyperspace.bindings/3'"
+    assert not t.migrated and path.read_text() == text                  # left alone
+    assert t.to_json()["bindings"] == Bindings.factory().to_json()["bindings"]
+    with pytest.raises(ValueError, match="unknown schema"):
+        Bindings.from_json({"schema": "hyperspace.bindings/3", "bindings": []})
+    # no schema at all is schema 1
+    t = Bindings.from_json({"bindings": [{"source": "lane:0", "target": "x", "op": "mod"}]})
+    assert t.migrated and t.bindings[0].op == "push"
 
-    n = len(DEFAULT_DOFS)
-    for side in range(2):
-        for k, dof in enumerate(DEFAULT_DOFS):
-            assert routing.default_rest(f"hand:{side * n + k}") == (0.5 if dof in BIPOLAR else 0.0)
-    assert routing.default_rest(f"hand:{2 * n}") == 0.0          # a presence lane
-    assert routing.default_rest("lfo:3") == 0.5
-    assert routing.default_rest("lane:0") == routing.default_rest("ext:2") == 0.0
-    assert routing.default_rest("hand:x") == 0.0
+
+def test_a_user_row_on_a_moved_apc_note_is_kept():
+    """The remap swaps only the old factory rows; a note the user learned
+    something else onto, or a note already in use, is left as it is."""
+    from hyperspace import apc40
+
+    rows = [Binding(f"note:0:{apc40.N_TAP}", "view.faces", "toggle", feedback="led"),
+            Binding(f"note:0:{apc40.N_NUDGE_P}", "view.shape", "step", 1),   # the factory row
+            Binding(f"note:0:{apc40.N_METRO}", "view.lines", "toggle")]      # METRONOME taken
+    out, notes = routing.migrate_v1(rows)
+    by = {(b.source, b.target) for b in out}
+    assert (f"note:0:{apc40.N_TAP}", "view.faces") in by
+    assert (f"note:0:{apc40.N_NUDGE_P}", "tempo.nudge") in by
+    assert (f"note:0:{apc40.N_METRO}", "view.lines") in by
+    assert not any(b.target in ("lfo.trigger", "tempo.tap") for b in out)
+    assert not any(b.source == f"note:0:{apc40.N_QUANT}" for b in out)   # theme.next stayed
+    assert len(notes) == 1 and notes[0].startswith("remapped")
 
 
-def test_rests_default_a_push_rows_rest():
-    """An adapter publishes where its lanes idle next to their labels; the
-    page reads it through `Router.rest_of` when it adds a push row."""
+def test_rests_are_read_through_rest_of():
+    """An adapter publishes where its lanes idle next to their labels; a
+    push row with no rest of its own reads it through `Router.rest_of`."""
     r = rig()
     router = Router(r.reg, Bindings())
     assert router.rest_of("lane:0") == 0.0 and router.rest_of("hand:3") == 0.0

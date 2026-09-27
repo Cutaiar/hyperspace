@@ -506,23 +506,54 @@ def test_a_learn_on_a_performed_param_is_held_for_the_prompt(app):
     assert t.owner("view.inst_amp") is old and "replace?" in m.last
     assert m.resolve_pending(False) is None                          # Keep
     assert m.pending is None and t.owner("view.inst_amp") is old and "kept" in m.last
+    t.add(Binding("hand:7", "view.speed", "position"))               # hand:7's old param
     m.learn("view.inst_amp")
     m.learn_source("hand:7")
     new = m.resolve_pending(True)                                    # Replace
     assert new is t.owner("view.inst_amp") and new.source == "hand:7"
     assert old not in t.bindings and "learned view.inst_amp" in m.last
+    assert not t.routes_to("view.speed")                             # hand:7 moved here
     assert t.routes_to("view.bright")                                # the other row stays
     assert Bindings.load(t.path, legacy_midi=None).owner("view.inst_amp").source == "hand:7"
     assert m.resolve_pending(True) is None                           # nothing pending
+
+
+def test_a_held_learn_is_not_fired_again_by_the_hands(app):
+    """The hands adapter keys off `midi.learning`, which is cleared before
+    the referee's answer is known: while the prompt is up, moving hands
+    learn nothing more; arming a new learn forgets the held one."""
+    r = rig()
+    t, m = app.table, app.midi
+    old = t.add(Binding("hand:3", "view.inst_amp", "position"))
+    run(r, 1, hand(), midi=m, router=app.router)
+    m.learn("view.inst_amp")
+    for k in range(1, 8):                                            # R pitch wins the learn
+        run(r, 1, hand(pos=(2.0 * k, 200.0, 0.0), direction=tilt(0.12 * k)),
+            midi=m, router=app.router)
+    assert m.learning is None and m.pending is not None
+    held = m.pending
+    for k in range(8, 20):                                           # keeps moving: nothing
+        run(r, 1, hand(pos=(2.0 * k, 200.0, 0.0), direction=tilt(0.12 * k)),
+            midi=m, router=app.router)
+    assert m.pending is held and t.owner("view.inst_amp") is old
+    assert [b.target for b in t.of("hand")] == ["view.inst_amp"]
+    m.learn("view.speed")                                            # a new learn: forgotten
+    assert m.pending is None and m.learning == "view.speed"
 
 
 def test_hand_lanes_modulate(app):
     r = rig()
     p = app.reg["view.inst_amp"]
     base = p.norm
-    app.table.add(Binding("hand:6", "view.inst_amp", "push", 0.5))   # right.x
+    row = app.table.add(Binding("hand:6", "view.inst_amp", "push", 0.5))   # right.x
     run(r, 1, hand(pos=(220.0, 200.0, 0.0)), router=app.router)
     assert app.router.labels["hand"][6] == "R x"
+    app.router.modulate()
+    app.reg.apply()
+    # x is centred: the axis rests at 0.5, so a hand at the far right pushes
+    # half the depth; a row with a rest of its own pushes from there instead
+    assert p.eff_norm == pytest.approx(min(base + 0.25, 1.0), abs=1e-9)
+    row.rest = 0.0
     app.router.modulate()
     app.reg.apply()
     assert p.eff_norm == pytest.approx(min(base + 0.5, 1.0), abs=1e-9)
@@ -781,11 +812,15 @@ def test_the_adapter_publishes_its_switches_as_gates(app):
     # every published gate names a real lane
     lanes = r.io.lanes()
     assert all(0 <= i < len(lanes) for i, _ in gates)
-    # and where each lane rests, for a push row's default: a centred axis
-    # at 0.5, height and the switches at 0
+    # and where each lane rests — the axis's *configured* rest value (0.5
+    # for a centred axis, 0 for height by default), the switches at 0 — so
+    # a push row centred on it never sees a phantom push from an absent hand
     rests = app.router.rests["hand"]
     assert len(rests) == len(lanes)
-    assert rests[:len(r.s.axes)] == [0.5 if a.bipolar else 0.0 for a in r.s.axes]
+    assert rests[:len(r.s.axes)] == [a.rest_value for a in r.s.axes]
     assert rests[r.io.axis("left.x")] == 0.5 and rests[r.io.axis("left.y")] == 0.0
     assert rests[len(r.s.axes):] == [0.0] * 10
+    r.s.axes[r.io.axis("left.y")].rest_value = 0.2                     # the setup says so
+    run(r, 1, hand(), router=app.router)
+    assert app.router.rests["hand"][r.io.axis("left.y")] == 0.2
     assert app.router.rest_of(f"hand:{r.io.axis('right.roll')}") == 0.5

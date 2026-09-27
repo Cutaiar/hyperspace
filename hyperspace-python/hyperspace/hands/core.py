@@ -767,9 +767,10 @@ class HandsIO:
                                     for s in SIDES for f in PINCHES]
             if not hasattr(router, "rests"):
                 router.rests = {}
-            # where each lane idles, so a push row defaults to pushing
-            # nothing from a neutral hand: a centred axis 0.5, else 0
-            router.rests["hand"] = ([0.5 if a.bipolar else 0.0 for a in self.axes]
+            # where each lane idles — the axis's own configured rest, so a
+            # push row centred on it pushes nothing from an absent hand
+            # whatever the setup says rest is; presence and pinches 0
+            router.rests["hand"] = ([float(a.rest_value) for a in self.axes]
                                     + [0.0] * (len(SIDES) + len(SIDES) * len(PINCHES)))
         if midi is not None:
             self._learn(midi)

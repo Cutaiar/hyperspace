@@ -289,7 +289,8 @@ def test_the_routing_page_shows_the_referees_refusals(rig, tmp_path):
     """One performer per target: a preset's second owner is listed as
     dropped until the next edit; adding a route on an owned target says
     so in the strip (WP5 makes it the prompt) and leaves the table alone;
-    a new push row rests where its source rests."""
+    a new push row has no rest of its own (it rests where its source
+    does); one that has shows an "auto" chip."""
     panel = rig.panel
     router = _with_router(rig, tmp_path)
     router.table.set_routes([Binding("hand:7", "view.bright", "position"),
@@ -305,8 +306,11 @@ def test_the_routing_page_shows_the_referees_refusals(rig, tmp_path):
     assert [b.source for b in router.table.routes_to("view.bright")] == ["hand:7"]
     frame(panel)                                                           # draws the notice
     b = ui_routing.add_route(panel, "view.speed", source="hand:2")        # free: added
-    assert (b.op, b.rest) == ("push", 0.5) and router.table.dropped == []  # an edit clears
-    assert ui_routing.add_route(panel, "view.depth4", source="hand:1").rest == 0.0
+    assert (b.op, b.rest) == ("push", None) and router.table.dropped == []  # an edit clears
+    assert router.rest_of(b.source) == 0.5                                 # what the row uses
+    assert ui_routing.add_route(panel, "view.depth4", source="hand:1").rest is None
+    b.rest = 0.1                                                           # the row's own: "auto" shows
+    frame(panel)
     frame(panel)
     assert [x.target for x in _on_disk(tmp_path).routes()] == [
         "view.bright", "view.speed", "view.depth4"]

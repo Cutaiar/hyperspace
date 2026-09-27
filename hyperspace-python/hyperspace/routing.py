@@ -41,10 +41,12 @@ and returns to. The last two are the *performer* ops:
              live the row calls ``param.modulate(depth · scale · (u −
              rest))`` — `value` the signed depth in norm units, u the
              source's normalized reading, `rest` where the source sits
-             idle (a lane 0, a centred hand axis or an LFO 0.5, so an
-             idle source pushes nothing), and `scale` the live value of
-             the param the row's `scale` names (an attenuator on the
-             depth; 1 when it names none)
+             idle so that an idle source pushes nothing — the source's
+             own, as its adapter publishes it (`Router.rests`: a lane 0,
+             a hand axis its configured rest value, an LFO 0.5) unless
+             the row overrides it with a number — and `scale` the live
+             value of the param the row's `scale` names (an attenuator
+             on the depth; 1 when it names none)
   position   the performer *is* the fader: while live the target sits at
              position ``depth · scale · u`` of its throw (clamped to
              [0, 1]), along its own taper and without detents; the base
@@ -68,7 +70,7 @@ One performer per parameter — the model (plan 09)::
               performer ───────────┘
     lane:<i> · hand:<i> · ext:<i> · lfo:<i>      op = push | position
                                                   depth · scale (a param, e.g. macro.3)
-                                                  rest (push only) · when (a gate)
+                                                  rest (push; the source's, or a number) · when (a gate)
 
    chaining:  hand:7 ──position──▶ lfo.1.depth      lfo:1 ──push──▶ view.bright
               lane:0 ──push──▶ macro.2              hand:1 ──position──▶ fx.mix  ×scale macro.2
@@ -148,10 +150,13 @@ Rows carry only what differs from the defaults. `Bindings.load` reads the
 file, or builds the factory table when there is none — and if an old
 ``midi_map.json`` (midi.py's version-1 file) is present, its rows replace
 the factory MIDI part and the merged table is written once, with a note.
-A schema-1 file migrates the same way (`migrate_v1`: ``mod`` → push with
-a rest by scheme, ``span`` → position, a lane-scheme ``abs`` → position at
-depth 1, ``replace`` dropped, a second owner dropped — each dropped row
-named on stderr, the file written back once). `bindings_path(home)` says
+A schema-1 file migrates the same way (`migrate_v1`: ``mod`` → push,
+``span`` → position, a lane-scheme ``abs`` → position at depth 1,
+``replace`` dropped, a second owner dropped, the three APC40 buttons plan
+09 WP4 moved remapped — each dropped or remapped row named on stderr, the
+file written back once; a user's preset file likewise, through
+`Router.load_preset`). A schema this code doesn't know is left alone and
+reported, like a file that won't parse. `bindings_path(home)` says
 where the file lives; `home` defaults to the working directory so WP2's
 library home can be dropped in.
 
@@ -195,6 +200,25 @@ MODE_TO_OP = {"abs": "abs", "rel": "rel", "rel64": "rel64", "trigger": "toggle",
 # schema 1's performer ops → schema 2's (migrate_v1); `replace` has no twin
 # but a push on a base of 0, which a file can't ask for, so it is dropped
 V1_TO_OP = {"mod": "push", "span": "position", "abs": "position"}
+# plan 09 WP4 gives three APC40 buttons to the clock (apc40.DEFAULT_MAP):
+# TAP TEMPO taps it, NUDGE ± nudges it, and METRONOME fires the global
+# LFO trigger; the theme cycle TAP TEMPO used to do moves to QUANT. A v1
+# file carries the old factory rows; the migration swaps exactly those —
+# (source, target, op, value) → (target, op, value) — and leaves a row
+# the user put on one of the notes alone. Named here rather than read
+# from DEFAULT_MAP so the migration says the same thing whatever the map
+# of the day; the targets exist once WP4 lands and are dormant until then.
+APC_REMAP: dict[tuple[str, str, str, float], tuple[str, str, float]] = {
+    (f"note:0:{apc40.N_TAP}", "theme.next", "toggle", 1.0): ("tempo.tap", "toggle", 1.0),
+    (f"note:0:{apc40.N_NUDGE_P}", "view.shape", "step", 1.0): ("tempo.nudge", "step", 1.0),
+    (f"note:0:{apc40.N_NUDGE_M}", "view.shape", "step", -1.0): ("tempo.nudge", "step", -1.0),
+}
+# rows added when nothing uses the note: (source, target, op, value, only
+# when the theme cycle was remapped away)
+APC_NEW_ROWS = (
+    (f"note:0:{apc40.N_METRO}", "lfo.trigger", "toggle", 1.0, False),
+    (f"note:0:{apc40.N_QUANT}", "theme.next", "toggle", 1.0, True),
+)
 
 # the legacy rate route: a push on a base of 0 lands the reference's
 # drive — a lane at full drive (out = CEIL, gain 8) reaches rot.rate's end
@@ -226,9 +250,10 @@ class Binding:
     # a source address ("hand:14") that must read on for this row to apply:
     # a pinch switch gating an axis, so the same hand move means two things
     when: str | None = None
-    # push: where the source sits idle — the reading that pushes nothing
-    # (Router.rests says what an adapter's lanes rest at)
-    rest: float = 0.0
+    # push: where the source sits idle — the reading that pushes nothing.
+    # None is the source's own rest, resolved every frame from what its
+    # adapter publishes (Router.rests / rest_of); a number overrides it
+    rest: float | None = None
     # MIDI controls only (midi.py); other sources ignore them
     pickup: bool = True
     feedback: str | None = None  # "ring" | "led" | None
@@ -475,45 +500,42 @@ def referee(rows: Iterable[Binding]) -> tuple[list[Binding], list[tuple[Binding,
     return kept, dropped
 
 
-def default_rest(source: str) -> float:
-    """Where a source of schema 1's `mod` rows rests, for the migration —
-    the table is fixed, the loader asks nothing: an LFO and a centred hand
-    axis (the default dofs' bipolar ones) at 0.5, everything else at 0."""
-    scheme, _, addr = source.partition(":")
-    if scheme == "lfo":
-        return 0.5
-    if scheme == "hand":
-        from .hands.core import BIPOLAR, DEFAULT_DOFS  # the default layout, nothing live
-
-        try:
-            i = int(addr)
-        except ValueError:
-            return 0.0
-        if 0 <= i < 2 * len(DEFAULT_DOFS) and DEFAULT_DOFS[i % len(DEFAULT_DOFS)] in BIPOLAR:
-            return 0.5
-    return 0.0
-
-
 def migrate_v1(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
-    """Schema 1 → 2: the performer ops renamed, `replace` dropped. Returns
-    (rows, a note per dropped row); `referee` then settles second owners."""
+    """Schema 1 → 2: the performer ops renamed (`mod` → push with the
+    source's own rest, `span` → position, a lane-scheme `abs` → position
+    at depth 1), `replace` dropped, the APC40 buttons WP4 moved remapped
+    where the file still carries the old factory rows. Returns (rows, a
+    note per row dropped or remapped); `referee` then settles second owners."""
     out: list[Binding] = []
     notes: list[str] = []
+    moved_theme = False
     for b in rows:
         if b.scheme not in LANE_SCHEMES:
+            hit = APC_REMAP.get((b.source, b.target, b.op, float(b.value)))
+            if hit is not None:
+                target, op, value = hit
+                notes.append(f"remapped {b.source}: {b.target} → {target} (the APC40 map "
+                             "of plan 09)")
+                moved_theme = moved_theme or b.target == "theme.next"
+                b = replace(b, target=target, op=op, value=value)
             out.append(b)
             continue
         op = V1_TO_OP.get(b.op)
         if op is None:
-            notes.append(f"dropped {b.source} → {b.target} ({b.op}): no such op — "
-                         "a push on a base of 0 is the additive twin")
+            why = ("no such op — a push on a base of 0 is the additive twin"
+                   if b.op == "replace" else f"no such op in {SCHEMA}")
+            notes.append(f"dropped {b.source} → {b.target} ({b.op}): {why}")
             continue
-        if b.op == "mod":
-            b.rest = default_rest(b.source)
-        elif b.op == "abs":          # a learned hand: the whole throw, no pickup
+        if b.op == "abs":            # a learned hand: the whole throw, no pickup
             b.value, b.pickup = 1.0, True
         b.op = op
         out.append(b)
+    used = {b.source for b in out}
+    for source, target, op, value, only_if_moved in APC_NEW_ROWS:
+        if source in used or (only_if_moved and not moved_theme):
+            continue
+        out.append(Binding(source, target, op, value, feedback="led"))
+        notes.append(f"added {source} → {target} (the APC40 map of plan 09)")
     return out, notes
 
 
@@ -565,7 +587,8 @@ class Bindings:
         # for the ROUTING page to show until the next edit
         self.dropped: list[tuple[Binding, str]] = []
         # from_json read a schema-1 file: `notes` names every row it dropped
-        # (Bindings.load prints them), so the machine's file can be checked
+        # or remapped (Bindings.load prints them, the ROUTING page shows them
+        # next to `dropped` until the next edit), so the file can be checked
         self.migrated = False
         self.notes: list[str] = []
 
@@ -594,11 +617,7 @@ class Bindings:
                 t.error = f"bindings: {e}"
                 return t
             if t.migrated:
-                for note in t.notes:
-                    print(f"bindings: {path}: {note}", file=sys.stderr)
-                print(f"bindings: migrated {path} to {SCHEMA}"
-                      + (f" ({len(t.notes)} rows dropped)" if t.notes else ""),
-                      file=sys.stderr)
+                t.announce(path)
                 t.write()
             return t
         t = cls.factory(profile, path)
@@ -615,14 +634,30 @@ class Bindings:
                 t.error = f"bindings: {legacy_midi}: {e}"
         return t
 
+    def announce(self, path: Path) -> None:
+        """A migration's notes on stderr, one line per row, then the sum."""
+        for note in self.notes:
+            print(f"bindings: {path}: {note}", file=sys.stderr)
+        dropped = sum(n.startswith("dropped") for n in self.notes)
+        changed = len(self.notes) - dropped
+        tail = ", ".join(f"{n} rows {what}" for n, what in ((dropped, "dropped"),
+                                                              (changed, "changed")) if n)
+        print(f"bindings: migrated {path} to {SCHEMA}" + (f" ({tail})" if tail else ""),
+              file=sys.stderr)
+
     @classmethod
     def from_json(cls, data: dict, path: Path | None = None) -> Bindings:
         """A file's dict. Schema 1 (or none) goes through `migrate_v1`; a
-        schema-2 file with two owners on a target keeps the first, the rest
-        in `dropped` — the referee, not a prompt, since nobody is asking."""
+        schema this code doesn't know raises ValueError, like a file that
+        won't parse — never rewritten. A schema-2 file with two owners on a
+        target keeps the first, the rest in `dropped` — the referee, not a
+        prompt, since nobody is asking."""
+        schema = data.get("schema")
+        if schema not in (SCHEMA, SCHEMA_V1, None):
+            raise ValueError(f"unknown schema {schema!r}")
         rows = [Binding.from_json(b) for b in data.get("bindings", [])]
         notes: list[str] = []
-        migrated = data.get("schema") != SCHEMA
+        migrated = schema != SCHEMA
         if migrated:
             rows, notes = migrate_v1(rows)
         t = cls(rows, path=path, profile=data.get("profile", "apc40"),
@@ -734,13 +769,13 @@ class Bindings:
 
         self.bindings = [x for x in self.bindings if x.key != b.key and not same_role(x)]
         self.bindings.append(b)
-        self.dropped = []
+        self.dropped, self.notes = [], []
         self.write()
 
     def unbind(self, pid: str, schemes: tuple[str, ...] = MIDI_SCHEMES) -> None:
         self.bindings = [b for b in self.bindings
                          if not (b.target == pid and b.scheme in schemes)]
-        self.dropped = []
+        self.dropped, self.notes = [], []
         self.write()
 
     def add(self, b: Binding) -> Binding:
@@ -748,7 +783,7 @@ class Bindings:
         edit. Raises `Owned` when the target has another performer."""
         self._check(b)
         self.bindings.append(b)
-        self.dropped = []
+        self.dropped, self.notes = [], []
         return b
 
     def replace_owner(self, new: Binding) -> Binding | None:
@@ -771,20 +806,21 @@ class Bindings:
             b.enabled = True
             try:
                 self._check(b)
-            except Owned:
+            except (Owned, ValueError):
                 b.enabled = False
                 raise
         b.enabled = on
-        self.dropped = []
+        self.dropped, self.notes = [], []
 
     def remove(self, b: Binding) -> None:
         self.bindings = [x for x in self.bindings if x is not b]
-        self.dropped = []
+        self.dropped, self.notes = [], []
 
     def set_routes(self, routes: Iterable[Binding]) -> None:
         """Replace every performer row, keeping the input bindings. Two
         rows on one target: the first stays, the rest go to `dropped`."""
         kept, self.dropped = referee(routes)
+        self.notes = []
         self.bindings = [b for b in self.bindings if b.op not in MOD_OPS] + kept
 
 
@@ -803,8 +839,9 @@ class Router:
         # which of its lanes those are; nothing here knows about hands.
         self.gates: dict[str, list[tuple[int, str]]] = {}
         # scheme → where each lane sits idle, published like `labels`: what
-        # a new push row's `rest` defaults to (a centred hand axis 0.5, a
-        # presence lane 0, an LFO 0.5); the analyzer's lanes rest at 0
+        # a push row with no rest of its own uses, every frame (a hand axis
+        # its configured rest value, a presence lane 0, an LFO 0.5); the
+        # analyzer's lanes, and any scheme that publishes nothing, rest at 0
         self.rests: dict[str, list[float]] = {}
         self._codes: dict[str, int | None] = {}
 
@@ -868,8 +905,9 @@ class Router:
         return not math.isnan(u) and u >= 0.5
 
     def rest_of(self, source: str) -> float:
-        """Where `source` rests, from its adapter's `rests` — 0 when the
-        adapter published none (the analyzer's lanes, an unknown address)."""
+        """Where `source` rests right now, from its adapter's `rests` — 0
+        when the adapter published none (the analyzer's lanes, an unknown
+        address). What a push row without a rest of its own is centred on."""
         scheme, _, addr = source.partition(":")
         rests = self.rests.get(scheme) or []
         try:
@@ -904,8 +942,10 @@ class Router:
                     continue
                 depth *= float(sp.value)
             if b.op == "push":
-                # centred where the source rests: an idle source adds nothing
-                x = depth * (u - b.rest)
+                # centred where the source rests — the row's own number, or
+                # the source's as published this frame: idle adds nothing
+                rest = b.rest if b.rest is not None else self.rest_of(b.source)
+                x = depth * (u - rest)
             else:
                 # position: the source is the fader — the offset that lands
                 # it (p.norm is the base while modulated, the object before)
@@ -933,9 +973,12 @@ class Router:
         path = preset_files(home).get(name)
         if path is None:
             raise FileNotFoundError(f"no routing preset {name!r}")
-        t = Bindings.from_json(json.loads(path.read_text()))
+        t = Bindings.from_json(json.loads(path.read_text()), path=path)
+        if t.migrated and FACTORY_DIR not in path.parents:
+            t.announce(path)             # a user's v1 preset: rewritten once
+            t.write()
         self.table.set_routes(replace(b) for b in t.bindings if b.op in MOD_OPS)
-        self.table.dropped = t.dropped + self.table.dropped
+        self.table.dropped, self.table.notes = list(t.dropped), list(t.notes)
         return self.reg.restore(t.values) if t.values else []
 
     def save_preset(self, name: str, home: Path | str) -> Path:

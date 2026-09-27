@@ -10,8 +10,9 @@ The target is a searchable combo over every modulatable param, grouped
 by registry group; depth is signed — ±1 in norm units for `push` (1 puts
 a lane at the asymptote on the param's end stop), a fraction of the
 throw for `position`; `rest` (push rows only) is the source reading that
-pushes nothing, defaulted from what the adapter says its lanes idle at
-(`Router.rests`); scale names an attenuator param or none. The live bar
+pushes nothing — normally the source's own, what its adapter publishes
+in `Router.rests`, shown dimmed; dragging it makes the row's own number,
+"auto" gives it back; scale names an attenuator param or none. The live bar
 is the source's normalized reading (white) with a red hairline at the
 target's effective norm, so a route can be read working. Edits land on
 the table at once (the router reads it every frame) — nothing here is
@@ -37,8 +38,8 @@ meant to set; until it does, the table is found through the MIDI
 adapter (it shares it) and a Router is made over it — everything works
 but the bridge's `ext` feeds, which that router never sees. Right-click
 on any widget elsewhere offers "Route a lane here…" (`ctx_item`): a
-`lane:<selected band>` → that param `push` route at depth 0.5, resting
-where the lane rests, and the page opens on it.
+`lane:<selected band>` → that param `push` route at depth 0.5, and the
+page opens on it.
 """
 
 from __future__ import annotations
@@ -64,6 +65,7 @@ BAR_W = 56.0
 SRC_W = 84.0             # the source combo: a lane's number and name
 DEPTH_W = 112.0
 REST_W = 44.0            # the push row's rest field
+AUTO = "auto"            # the chip that gives a push row its source's rest back
 GATE_W = 62.0            # the pinch-gate combo on line 2
 
 
@@ -165,11 +167,11 @@ def save_as(panel, router: Router, name: str) -> None:
 def add_route(panel, target: str, source: str | None = None, depth: float = 0.5,
               op: str = "push") -> Binding | None:
     """A new `push` row from the selected band's lane (or `source`) to
-    target, resting where the source rests. None — and the strip says why —
+    target; it rests where its source does. None — and the strip says why —
     when the target already has a performer (WP5's prompt goes here)."""
     router = router_of(panel)
     src = source or f"lane:{panel.control.selb}"
-    b = Binding(src, target, op, depth, rest=router.rest_of(src))
+    b = Binding(src, target, op, depth)
     try:
         router.table.add(b)
     except Owned as e:
@@ -436,16 +438,31 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
                           + "\nctrl-click to type")
     imgui.same_line()
     if b.op == "push":
+        auto = b.rest is None
+        rest = router.rest_of(b.source) if auto else float(b.rest)
         imgui.set_next_item_width(REST_W)
         imgui.push_font(ui._FONTS["num"], ui.FONT_NUM)
-        changed, v = imgui.slider_float("##rest", float(b.rest), 0.0, 1.0, "%.2f")
+        if auto:                                    # the source's own: shown, dimmed
+            imgui.push_style_color(imgui.Col_.text, ui.DIM)
+        changed, v = imgui.slider_float("##rest", rest, 0.0, 1.0, "%.2f")
+        if auto:
+            imgui.pop_style_color()
         imgui.pop_font()
         if changed:
-            b.rest = v
+            b.rest = v                              # dragged: the row's own number
         if imgui.is_item_hovered():
-            imgui.set_tooltip("Rest — the source reading that pushes nothing: 0 for a "
-                              "lane, 0.5 for a centred hand axis or an LFO\nctrl-click to type")
+            imgui.set_tooltip("Rest — the source reading that pushes nothing"
+                              + (" (the source's own)" if auto else " (this row's own)")
+                              + "\ndrag to set the row's own; ctrl-click to type")
         imgui.same_line()
+        if not auto:
+            imgui.push_style_color(imgui.Col_.text, ui.DIM)
+            if ui.chip(AUTO):
+                b.rest = None
+            imgui.pop_style_color()
+            if imgui.is_item_hovered():
+                imgui.set_tooltip("Back to the source's own rest")
+            imgui.same_line()
     gates = _gates(router)
     gate_w = GATE_W if gates else 0.0
     scale = _param_combo(panel, "##scale", b.scale,
@@ -517,9 +534,12 @@ def page(panel, dt: float) -> None:
                           "any control: Route a lane here…")
     if st["error"]:
         imgui.text_colored(ui.WARN, st["error"])
-    # what the referee refused from the last preset: one owner per target
+    # what the referee refused from the last preset (one owner per target)
+    # and what a migration dropped or moved, until the next edit
     for b, why in router.table.dropped:
         imgui.text_colored(ui.WARN, f"dropped {b.source} → {b.target}: {why}")
+    for note in router.table.notes:
+        imgui.text_disabled(note)
     # the rows scroll if they must; the strip and the header stay put
     if imgui.begin_child("##routes", imgui.ImVec2(0, 0)):
         dead = None
