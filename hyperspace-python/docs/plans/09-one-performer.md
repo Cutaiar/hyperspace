@@ -197,21 +197,31 @@ params; `app.py` steps them; `tests/test_tempo.py`, `tests/test_lfo.py`.
   60 / mean interval (clamped 20–300). `beat(t) = (t − t0) · bpm / 60 +
   nudge`, `bar(t) = beat mod 4`, `phase(t, ratio) = (beat · ratio) mod 1`.
   Params: `tempo.bpm` (continuous, persist), `tempo.tap` (trigger),
-  `tempo.nudge` (−0.5…0.5 beats, persist), `tempo.reset` (trigger: the
-  downbeat is now). Keys: `B` tap (add to `keymap()` and `ui.CHEATSHEET`),
-  `⇧B` reset. APC: the profile's physical TAP TEMPO and NUDGE +/− buttons
-  (`N_TAP`, `N_NUDGE_P`, `N_NUDGE_M` in `apc40.py`) currently fire
-  `theme.next` and step `view.shape`; `DEFAULT_MAP` reassigns them to
-  `tempo.tap` and `tempo.nudge` step ±, and `theme.next` moves to the
-  SHIFT-less scene-launch row's spare button (the implementer picks and
-  notes it in the profile docstring). Existing user files keep their rows.
+  `tempo.nudge` (−0.5…0.5 beats, persist), and **`lfo.trigger`** (trigger).
+  - **The global LFO trigger** is the one button the performer presses
+    after tapping a tempo (or any time): it sets the downbeat to *now*
+    (`t0 = now`, nudge untouched) and every LFO in a division mode
+    restarts at phase 0 (+ its own `phase`) in that instant, together.
+    Free-running Hz LFOs are untouched. Tapping alone never moves a
+    running LFO's phase — only the trigger does, so a re-tap mid-set
+    doesn't jolt the picture until the performer says so.
+  - Keys: `B` tap, `⇧B` trigger (add to `keymap()` and `ui.CHEATSHEET`).
+  - APC40 (`DEFAULT_MAP` in `apc40.py`): the physical TAP TEMPO (`N_TAP`)
+    → `tempo.tap`; NUDGE +/− (`N_NUDGE_P/M`) → `tempo.nudge` step ±; the
+    METRONOME button (0x41, free today) → `lfo.trigger`, with LED feedback
+    that blinks on the beat (`led`, driven from `clock.beat`). Those three
+    notes currently fire `theme.next` and step `view.shape`; `theme.next`
+    moves to a free button (QUANT 0x3F) and the shape steps go — the clip
+    grid already sets shapes. Existing user files keep their rows.
 - **`lfo.LFOs`.** Four. Per LFO the params `lfo.N.shape` (sine, tri, saw,
   square, random — random is sample-and-hold once per cycle), `lfo.N.rate`
   (Hz, log 0.01–20), `lfo.N.sync` (enum: Hz, 4 bars, 2 bars, 1 bar, 1/2,
   1/4, 1/8, 1/16), `lfo.N.depth` (0–1), `lfo.N.phase` (0–1), `lfo.N.reset`
-  (trigger: phase to 0 now). In Hz the phase integrates `rate · dt`; in a
-  division it is `clock.phase(t, ratio) + lfo.phase` so bar-length waves
-  land on the downbeat and a re-tap re-aligns them. Output
+  (trigger: this one LFO's phase to 0 now, in either mode — a per-LFO
+  gesture hook; the global `lfo.trigger` is the performer's button). In
+  Hz the phase integrates `rate · dt`; in a division it is
+  `clock.phase(t, ratio) + lfo.phase`, so bar-length waves land on the
+  downbeat and the global trigger re-aligns all of them at once. Output
   `u = 0.5 + 0.5 · depth · wave`, `wave ∈ [−1, 1]`; rest 0.5. Every
   param modulatable and persistent — that is what makes them chainable.
 - **Feed.** `lfos.step(dt, clock)` then `router.feed("lfo", [u1..u4])`,
@@ -219,13 +229,15 @@ params; `app.py` steps them; `tests/test_tempo.py`, `tests/test_lfo.py`.
   (a new `Router.rests` the ROUTING page uses to default a push row's
   `rest`; hands publish theirs the same way).
 - **Page.** `LFO` page key (`ui.PAGE_KEYS`): the clock strip (BPM
-  readout, a beat light, tap / reset / nudge) and four LFO strips, each
+  readout, a beat light, tap / **trigger** / nudge) and four LFO strips, each
   with a small scope of the last two cycles, the live output as a
   hairline, and its six controls. The strips' faders are ordinary
   registry widgets so Learn and ownership work on them.
 - **Tests.** Tap burst math (3 taps at 140 → 140.0; a gap restarts);
-  division phase lands 0 on the downbeat; shapes' extremes; random holds
-  within a cycle; reset; an LFO owning another LFO's depth changes the
+  division phase lands 0 on the downbeat; a tap after the trigger does
+  not move a running synced LFO, the trigger does — all synced LFOs read
+  phase 0 that frame, Hz ones don't; shapes' extremes; random holds
+  within a cycle; per-LFO reset; an LFO owning another LFO's depth changes the
   second's output next frame (chain, no recursion); output rests at 0.5
   at depth 0.
 
@@ -276,8 +288,10 @@ params; `app.py` steps them; `tests/test_tempo.py`, `tests/test_lfo.py`.
    the table untouched.
 4. Loading `hands-pinch`, pinching L middle and scrolling: zoom does not
    drift, and lands back on the scroll-set value when the pinch opens.
-5. Tap `B` four times at ~140 on an electronic track: `tempo.bpm` reads
-   within ±1; `lfo-breathe`'s brightness swells on the bar.
+5. Tap the APC40's TAP TEMPO four times at ~140 on an electronic track,
+   press METRONOME on the "one": `tempo.bpm` reads within ±1 and
+   `lfo-breathe`'s brightness swells on the bar from that press. Tapping
+   again without pressing METRONOME changes the readout, not the swell.
 6. With `lfo-breathe` loaded, raising the right hand deepens the swell;
    nothing else moves.
 7. An APC knob turned on a hand-owned parameter moves the readout's base
