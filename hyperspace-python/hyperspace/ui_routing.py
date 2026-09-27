@@ -1,19 +1,27 @@
 """Routing matrix — the lanes → params half of the binding table (WP5b).
 
-The ROUTING page. Rows are the router's `mod` / `replace` / `span` routes from
+The ROUTING page. Rows are the router's `push` / `position` routes from
 `lane:i` (and `ext:i` / `hand:i` when the bridge / hands feed them), two lines each:
 
   [on] source        target ▾            op ▾           ×
-       depth ────────────  × scale ▾   ▮▮▮▯▯│ live
+       depth ──────── rest  × scale ▾   ▮▮▮▯▯│ live
 
 The target is a searchable combo over every modulatable param, grouped
-by registry group; depth is signed — ±1 for `mod` (norm units: 1 puts a
-lane at the asymptote on the param's end stop), the target's own range
-for `replace`, a fraction of its throw for `span`; scale names an attenuator param or none. The live bar is
-the source's normalized reading (white) with a red hairline at the
+by registry group; depth is signed — ±1 in norm units for `push` (1 puts
+a lane at the asymptote on the param's end stop), a fraction of the
+throw for `position`; `rest` (push rows only) is the source reading that
+pushes nothing, defaulted from what the adapter says its lanes idle at
+(`Router.rests`); scale names an attenuator param or none. The live bar
+is the source's normalized reading (white) with a red hairline at the
 target's effective norm, so a route can be read working. Edits land on
 the table at once (the router reads it every frame) — nothing here is
 copied.
+
+One performer per target: the table's referee (`routing.Owned`) refuses
+a row on a target another enabled row performs. For now the refusal
+shows in the strip's status line; plan 09 WP5 makes it the Replace / Keep
+prompt. Rows a preset had to drop for the same reason (`table.dropped`)
+are listed under the header until the next edit.
 
 The strip under the title is the preset strip's look over routing
 preset *files* (routing.preset_files): prev / next / the list load
@@ -29,8 +37,8 @@ meant to set; until it does, the table is found through the MIDI
 adapter (it shares it) and a Router is made over it — everything works
 but the bridge's `ext` feeds, which that router never sees. Right-click
 on any widget elsewhere offers "Route a lane here…" (`ctx_item`): a
-`lane:<selected band>` → that param `mod` route at depth 0.5, and the
-page opens on it.
+`lane:<selected band>` → that param `push` route at depth 0.5, resting
+where the lane rests, and the page opens on it.
 """
 
 from __future__ import annotations
@@ -42,20 +50,20 @@ from imgui_bundle import imgui
 from . import ui, ui_presets
 from .bands import CEIL
 from .params import Kind, Param
-from .routing import FACTORY_DIR, Binding, Router, preset_files
+from .routing import FACTORY_DIR, Binding, Owned, Router, preset_files
 
 KEY = "bindings"          # the name-field / listing key on the panel's preset state
-DEPTH_MOD = 1.0           # ±, the `mod` depth slider's throw
-# the op chip cycles mod → repl → span; what each one's depth means
-OP_CHIP = {"mod": "mod", "replace": "repl", "span": "span"}
-NEXT_OP = {"mod": "replace", "replace": "span", "span": "mod"}
-DEPTH_TIP = {"mod": " — 1 is the full throw at a lane's asymptote",
-             "replace": " — in the target's own units",
-             "span": " — a fraction of the target's throw; 1 is all of it"}
+DEPTH_MOD = 1.0           # ±, the depth slider's throw
+# the op chip cycles push ↔ position; what each one's depth means
+OP_CHIP = {"push": "push", "position": "pos"}
+NEXT_OP = {"push": "position", "position": "push"}
+DEPTH_TIP = {"push": " — 1 is the full throw at a lane's asymptote",
+             "position": " — a fraction of the target's throw; 1 is all of it"}
 N_EXT = 16                # ext lanes offered once any ext source is around
 BAR_W = 56.0
 SRC_W = 84.0             # the source combo: a lane's number and name
 DEPTH_W = 112.0
+REST_W = 44.0            # the push row's rest field
 GATE_W = 62.0            # the pinch-gate combo on line 2
 
 
@@ -154,11 +162,19 @@ def save_as(panel, router: Router, name: str) -> None:
     invalidate(panel)
 
 
-def add_route(panel, target: str, source: str | None = None, depth: float = 0.5) -> Binding:
-    """A new `mod` row from the selected band's lane (or `source`) to target."""
+def add_route(panel, target: str, source: str | None = None, depth: float = 0.5,
+              op: str = "push") -> Binding | None:
+    """A new `push` row from the selected band's lane (or `source`) to
+    target, resting where the source rests. None — and the strip says why —
+    when the target already has a performer (WP5's prompt goes here)."""
     router = router_of(panel)
     src = source or f"lane:{panel.control.selb}"
-    b = router.table.add(Binding(src, target, "mod", depth))
+    b = Binding(src, target, op, depth, rest=router.rest_of(src))
+    try:
+        router.table.add(b)
+    except Owned as e:
+        _state(panel)["error"] = f"routing: {e}"
+        return None
     router.table.write()
     return b
 
@@ -345,15 +361,18 @@ def _param_combo(panel, label: str, current: str | None, width: float,
 
 def _row(panel, router: Router, b: Binding, k: int) -> bool:
     """One route, two lines; returns True when the row asked to be deleted."""
-    reg = panel.reg
+    reg, st = panel.reg, _state(panel)
     imgui.push_id(k)
     p = reg.get(b.target)
     # line 1: on · source · target · op · ×
     changed, on = imgui.checkbox("##on", b.enabled)
     if changed:
-        b.enabled = on
+        try:
+            router.table.enable(b, on)      # waking a row asks the referee
+        except Owned as e:
+            st["error"] = f"routing: {e}"
     if imgui.is_item_hovered():
-        imgui.set_tooltip("Enabled — a dormant row keeps its settings")
+        imgui.set_tooltip("Enabled — a dormant row keeps its settings and owns nothing")
     imgui.same_line()
     sources = _sources(panel, router)
     labels = [lb for _, lb in sources]
@@ -369,24 +388,27 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
         imgui.end_combo()
     imgui.same_line()
     sp = imgui.get_style().item_spacing.x
-    op_w = ui.chip_w("repl")
+    op_w = ui.chip_w("push")
     picked = _param_combo(panel, "##target", b.target, -(op_w + ui.chip_w("×") + 2 * sp),
                           _targets(panel))
     if picked:
-        b.target = picked
+        cur = router.table.owner(picked)
+        if cur is None or cur is b or not b.is_performer:
+            b.target = picked
+        else:                               # the referee, on a retarget
+            st["error"] = f"routing: {Owned(cur, b)}"
     if p is None:
         if imgui.is_item_hovered():
             imgui.set_tooltip(f"{b.target}: no such param — the row is dormant")
     elif not p.modulatable and imgui.is_item_hovered():
         imgui.set_tooltip(f"{b.target} is not modulatable — the row is dormant")
     imgui.same_line()
-    label = OP_CHIP.get(b.op, "mod")
-    if ui.lit_chip(f"{label}##op", b.op != "mod", ui.DIM, imgui.ImVec2(op_w, 0)):
-        b.op = NEXT_OP.get(b.op, "mod")
+    label = OP_CHIP.get(b.op, "push")
+    if ui.lit_chip(f"{label}##op", b.op != "push", ui.DIM, imgui.ImVec2(op_w, 0)):
+        b.op = NEXT_OP.get(b.op, "push")
     if imgui.is_item_hovered():
-        imgui.set_tooltip("mod: depth × source added to the base\n"
-                          "repl: depth × source is the value while the source is live\n"
-                          "span: depth × source is the position across the whole\n"
+        imgui.set_tooltip("push: depth × (source − rest) added to the base\n"
+                          "pos:  depth × source is the position across the whole\n"
                           "      control, along its curve, while the source is live\n"
                           "click to switch")
     imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w("×"))
@@ -395,14 +417,11 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
     imgui.pop_style_color()
     if imgui.is_item_hovered():
         imgui.set_tooltip("Delete this route")
-    # line 2: depth · scale · live
+    # line 2: depth · rest · scale · live
     imgui.dummy(imgui.ImVec2(18, 0))
     imgui.same_line()
     imgui.set_next_item_width(DEPTH_W)
-    if b.op == "replace" and p is not None and p.kind is Kind.CONTINUOUS:
-        lo, hi, fmt = float(p.lo), float(p.hi), "%.3g"
-    else:
-        lo, hi, fmt = -DEPTH_MOD, DEPTH_MOD, "%+.2f"
+    lo, hi, fmt = -DEPTH_MOD, DEPTH_MOD, "%+.2f"
     span = (hi - lo) or 1.0
     imgui.push_font(ui._FONTS["num"], ui.FONT_NUM)
     changed, v = panel._track(
@@ -413,9 +432,20 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
     if changed:
         b.value = v
     if imgui.is_item_hovered():
-        imgui.set_tooltip("Depth, signed" + DEPTH_TIP.get(b.op, DEPTH_TIP["mod"])
+        imgui.set_tooltip("Depth, signed" + DEPTH_TIP.get(b.op, DEPTH_TIP["push"])
                           + "\nctrl-click to type")
     imgui.same_line()
+    if b.op == "push":
+        imgui.set_next_item_width(REST_W)
+        imgui.push_font(ui._FONTS["num"], ui.FONT_NUM)
+        changed, v = imgui.slider_float("##rest", float(b.rest), 0.0, 1.0, "%.2f")
+        imgui.pop_font()
+        if changed:
+            b.rest = v
+        if imgui.is_item_hovered():
+            imgui.set_tooltip("Rest — the source reading that pushes nothing: 0 for a "
+                              "lane, 0.5 for a centred hand axis or an LFO\nctrl-click to type")
+        imgui.same_line()
     gates = _gates(router)
     gate_w = GATE_W if gates else 0.0
     scale = _param_combo(panel, "##scale", b.scale,
@@ -477,9 +507,7 @@ def page(panel, dt: float) -> None:
     rows = router.table.routes()
     chain = panel.audio.chain
     live = "live" if getattr(panel.audio, "on", False) else "no source — lanes idle"
-    n_learned = len(router.table.learned())
-    learned = f"  ·  {n_learned} learned" if n_learned else ""
-    imgui.text_disabled(f"{len(rows)} routes{learned}  ·  {chain.n} lanes  ·  {live}")
+    imgui.text_disabled(f"{len(rows)} routes  ·  {chain.n} lanes  ·  {live}")
     imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w("+ route"))
     if ui.chip("+ route"):
         pid = f"pattern.mod.{panel.control.selb}"
@@ -489,6 +517,9 @@ def page(panel, dt: float) -> None:
                           "any control: Route a lane here…")
     if st["error"]:
         imgui.text_colored(ui.WARN, st["error"])
+    # what the referee refused from the last preset: one owner per target
+    for b, why in router.table.dropped:
+        imgui.text_colored(ui.WARN, f"dropped {b.source} → {b.target}: {why}")
     # the rows scroll if they must; the strip and the header stay put
     if imgui.begin_child("##routes", imgui.ImVec2(0, 0)):
         dead = None
@@ -500,61 +531,15 @@ def page(panel, dt: float) -> None:
             router.table.remove(dead)
         if not rows:
             imgui.text_disabled("no routes — the lanes drive nothing")
-        _learned(panel, router)
     imgui.end_child()
     _save_edits(panel, router)
-
-
-def _learned(panel, router: Router) -> None:
-    """The learned hand rows: live like routes, so they are listed with
-    them — otherwise deleting every route still leaves the hands driving."""
-    rows = router.table.learned()
-    if not rows:
-        return
-    imgui.spacing()
-    ui._micro("learned")
-    imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w("clear"))
-    imgui.push_style_color(imgui.Col_.text, ui.DIM)
-    clear = ui.chip("clear##learned")
-    imgui.pop_style_color()
-    if imgui.is_item_hovered():
-        imgui.set_tooltip("Unbind every learned hand — the routes above stay")
-    names = getattr(router, "labels", {})
-    dead = list(rows) if clear else []
-    for k, b in enumerate(rows):
-        imgui.push_id(f"learned{k}")
-        changed, on = imgui.checkbox("##on", b.enabled)
-        if changed:
-            b.enabled = on
-        imgui.same_line()
-        lanes = names.get(b.scheme) or []
-        src = (f"{b.scheme} {lanes[b.index]}" if 0 <= b.index < len(lanes) else b.source)
-        gate = ""
-        if b.when:
-            offered = getattr(router, "gates", {}).get(b.scheme) or []
-            gl = {f"{b.scheme}:{i}": lb for i, lb in offered}
-            gate = f"  while {gl.get(b.when, b.when)}"
-        p = panel.reg.get(b.target)
-        imgui.text(f"{src}  →  {b.target}{gate}")
-        if p is None and imgui.is_item_hovered():
-            imgui.set_tooltip(f"{b.target}: no such param — the row is dormant")
-        imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w("×"))
-        imgui.push_style_color(imgui.Col_.text, ui.DIM)
-        if ui.chip("×"):
-            dead.append(b)
-        imgui.pop_style_color()
-        if imgui.is_item_hovered():
-            imgui.set_tooltip("Unbind: the param stops following this hand")
-        imgui.pop_id()
-    for b in dead:
-        router.table.remove(b)
 
 
 def _save_edits(panel, router: Router) -> None:
     """The page edits the live table in place; land it in bindings.json once
     it changes and nothing is mid-drag, so a delete stays deleted."""
     st = _state(panel)
-    sig = [b.to_json() for b in router.table.routes() + router.table.learned()]
+    sig = [b.to_json() for b in router.table.routes()]
     if st.get("saved") is None:
         st["saved"] = sig                  # first sight: what's on disk already
     elif sig != st["saved"] and not imgui.is_any_item_active():

@@ -229,7 +229,7 @@ def test_routing_page_live_lane_draws_ghost_and_bar(rig, tmp_path):
     panel, reg, chain = rig.panel, rig.reg, rig.chain
     # one route only: the factory table's replace rows would all hold their
     # targets (a replace at 0 is still a value), a ghost bar each
-    router = panel.router = Router(reg, Bindings([Binding("lane:1", "view.bright", "mod", 0.5)]))
+    router = panel.router = Router(reg, Bindings([Binding("lane:1", "view.bright", "push", 0.5)]))
     panel.audio.on = True
     chain.out[:] = 0.0
     chain.out[1] = CEIL * 0.5
@@ -252,7 +252,7 @@ def test_routing_add_and_delete(rig, tmp_path):
     router = _with_router(rig, tmp_path)
     frame(panel, "routing")
     b = ui_routing.add_route(panel, "view.bright")
-    assert b.source == "lane:0" and b.op == "mod" and b.value == 0.5
+    assert b.source == "lane:0" and b.op == "push" and b.value == 0.5
     assert router.table.routes_to("view.bright") == [b]
     frame(panel)
     reg["band.select"].set(3)
@@ -285,31 +285,38 @@ def test_routing_page_edits_land_in_bindings_json(rig, tmp_path):
     assert _on_disk(tmp_path).routes()[0].value == -0.25
 
 
-def test_learned_hand_rows_are_listed_and_cleared_on_the_routing_page(rig, tmp_path):
-    """A hand learn's abs rows are not routes, but they drive: with every
-    route gone the page still shows them, and clearing them unbinds."""
-    panel, reg = rig.panel, rig.reg
+def test_the_routing_page_shows_the_referees_refusals(rig, tmp_path):
+    """One performer per target: a preset's second owner is listed as
+    dropped until the next edit; adding a route on an owned target says
+    so in the strip (WP5 makes it the prompt) and leaves the table alone;
+    a new push row rests where its source rests."""
+    panel = rig.panel
     router = _with_router(rig, tmp_path)
-    for b in list(router.table.routes()):
-        router.table.remove(b)
-    router.table.bind(Binding("hand:7", "view.bright", "abs", pickup=False))
-    router.table.bind(Binding("hand:1", "view.speed", "abs", pickup=False, when="hand:14"))
+    router.table.set_routes([Binding("hand:7", "view.bright", "position"),
+                             Binding("hand:1", "view.bright", "push", 0.5)])
     router.feed("hand", [0.5] * 20)
     router.labels["hand"] = [f"ax{i}" for i in range(12)]
+    router.rests["hand"] = [0.5, 0.0] * 6 + [0.0] * 8
     router.gates["hand"] = [(14, "L ind")]
     frame(panel, "routing")
-    assert [b.target for b in router.table.learned()] == ["view.bright", "view.speed"]
-    before = reg["view.bright"].get()
-    router.drive("hand")
-    assert reg["view.bright"].get() != before          # still driving, no routes at all
-    for b in list(router.table.learned()):              # what the page's × / clear do
-        router.table.remove(b)
+    assert [b.source for b, _ in router.table.dropped] == ["hand:1"]
+    assert ui_routing.add_route(panel, "view.bright") is None            # owned: refused
+    assert "already performed by hand 7 positions" in ui_routing._state(panel)["error"]
+    assert [b.source for b in router.table.routes_to("view.bright")] == ["hand:7"]
+    frame(panel)                                                           # draws the notice
+    b = ui_routing.add_route(panel, "view.speed", source="hand:2")        # free: added
+    assert (b.op, b.rest) == ("push", 0.5) and router.table.dropped == []  # an edit clears
+    assert ui_routing.add_route(panel, "view.depth4", source="hand:1").rest == 0.0
     frame(panel)
-    assert _on_disk(tmp_path).learned() == []
-    reg["view.bright"].set_norm(0.2)
-    router.feed("hand", [0.9] * 20)
-    router.drive("hand")
-    assert reg["view.bright"].norm == pytest.approx(0.2)
+    assert [x.target for x in _on_disk(tmp_path).routes()] == [
+        "view.bright", "view.speed", "view.depth4"]
+    # the row's checkbox goes through the referee too: waking a row onto
+    # a taken target leaves it off and says why
+    off = router.table.add(Binding("hand:3", "view.speed", "push", 0.2, enabled=False))
+    with pytest.raises(routing.Owned):
+        router.table.enable(off)
+    assert not off.enabled
+    frame(panel)
 
 
 def test_route_a_lane_here_jumps_to_the_page(rig, tmp_path):
@@ -340,7 +347,7 @@ def test_routing_presets_step_load_save(rig, tmp_path):
     assert rig.view.pattern_mod[0] == 0.0       # legacy6 lands its bases
     frame(panel)
     # an edit dirties; save-as writes the routes to the user folder and cleans
-    router.table.add(Binding("lane:2", "view.bright", "mod", 0.3))
+    router.table.add(Binding("lane:2", "view.bright", "push", 0.3))
     assert ui_routing.dirty(panel, router)
     frame(panel)
     ui_routing.save_as(panel, router, "My Routes")
@@ -392,7 +399,7 @@ def test_router_preset_files_and_save(tmp_path):
     router = Router(r.reg, Bindings.factory())
     assert routing.preset_names(tmp_path) == ["default", "hands-fx", "hands-pinch", "hands-play", "legacy6"]
     assert routing.is_factory_preset("legacy6", tmp_path)
-    router.table.add(Binding("lane:0", "view.bright", "mod", 0.5, enabled=False))
+    router.table.add(Binding("lane:0", "view.bright", "push", 0.5, enabled=False))
     path = router.save_preset("Show A", tmp_path)
     assert path == tmp_path / "bindings" / "show-a.json"
     saved = Bindings.from_json(json.loads(path.read_text()))
