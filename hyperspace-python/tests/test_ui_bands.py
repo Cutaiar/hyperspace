@@ -336,6 +336,10 @@ def test_the_macros_lead_the_scale_choices_and_show_their_owner(rig, tmp_path, m
     assert "master.gain" in ids[8:] and not any(i.startswith("macro.") for i in ids[8:])
     assert all(p.kind is Kind.CONTINUOUS and not p.alias for p in ui_routing._scales(panel))
     assert {p.id for p in ui_routing._targets(panel)} >= set(ids[:8])
+    # never the row's own target (a self-scaled push strobes); any other macro, yes
+    own = [p.id for p in ui_routing._scales(panel, "macro.2")]
+    assert "macro.2" not in own and own[:7] == [f"macro.{k}" for k in (1, 3, 4, 5, 6, 7, 8)]
+    assert "view.bright" not in {p.id for p in ui_routing._scales(panel, "view.bright")}
     router = panel.router = Router(reg, Bindings([
         Binding("lane:0", "view.bright", "push", 0.5, scale="macro.2"),
         Binding("hand:0", "macro.2", "position"),
@@ -472,15 +476,17 @@ def test_router_preset_files_and_save(tmp_path):
     assert routing.preset_names(tmp_path) == ["default", "hands-fx", "hands-pinch", "hands-play", "legacy6"]
     assert routing.is_factory_preset("legacy6", tmp_path)
     router.table.add(Binding("lane:0", "view.bright", "push", 0.5, enabled=False))
+    r.reg["macro.2"].set_value(0.3)                  # routing-layer state: saved with the routes
     path = router.save_preset("Show A", tmp_path)
     assert path == tmp_path / "bindings" / "show-a.json"
     saved = Bindings.from_json(json.loads(path.read_text()))
     assert len(saved.bindings) == 13 and not saved.bindings[-1].enabled
-    assert saved.values is None
+    assert saved.values == {f"macro.{k}": (0.3 if k == 2 else 1.0) for k in range(1, 9)}
     assert router.load_preset("legacy6", tmp_path) == []
     assert len(router.table.routes()) == 12
+    r.reg["macro.2"].set_value(0.9)
     assert router.load_preset("show-a", tmp_path) == []
-    assert len(router.table.routes()) == 13
+    assert len(router.table.routes()) == 13 and r.reg["macro.2"].value == pytest.approx(0.3)
     with pytest.raises(FileNotFoundError):
         router.load_preset("nope", tmp_path)
     assert imgui.get_version()

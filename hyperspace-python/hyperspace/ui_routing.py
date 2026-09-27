@@ -18,12 +18,14 @@ source's normalized reading (white) with a red hairline at the target's
 effective norm, so a route can be read working. Edits land on the table
 at once (the router reads it every frame) — nothing here is copied.
 
-The macros (`macro.1–8`, plan 09 decision 7) sit in a strip over the
-rows, two lines of four compact sliders: ordinary registry widgets, so a
-performer can own one (right-click: Learn, Route a lane here…) and its
-readout shows `base → effective` while it does. A macro does nothing of
-its own; a route that names it as its scale runs at depth × the macro,
-one frame behind whatever moves the macro — chaining, not stacking.
+The macros (`macro.1–8`, plan 09 decision 7) sit in a strip at the head
+of the rows' scroll, two lines of four compact sliders: ordinary registry
+widgets, so a performer can own one (right-click: Learn, Route a lane
+here…) and its readout shows `base → effective` while it does. A macro
+does nothing of its own; a route that names it as its scale runs at
+depth × the macro, one frame behind whatever moves the macro — chaining,
+not stacking. They are routing-layer state (params.ROUTING_GROUPS): a
+theme or project never carries them, a routing preset saved here does.
 
 One performer per target: the table's referee (`routing.Owned`) refuses
 a row on a target another enabled row performs. For now the refusal
@@ -334,23 +336,31 @@ def _targets(panel) -> list[Param]:
     return [p for p in panel.reg if p.modulatable and not p.alias]
 
 
-def _scales(panel) -> list[Param]:
+def _scales(panel, target: str | None = None) -> list[Param]:
     """What a row's scale may be: the macros first — they exist for this —
-    then every other continuous param (master.gain on the rate routes)."""
+    then every other continuous param (master.gain on the rate routes), less
+    the row's own target: a row scaled by what it pushes strobes (the push
+    grows the scale grows the push, then clamps and lets go, every frame).
+    Two macros scaling each other's rows are allowed — the performer's rope."""
     reg = panel.reg
-    return reg.group("macro") + [q for q in reg if q.kind is Kind.CONTINUOUS
-                                 and not q.alias and q.group != "macro"]
+    return [q for q in reg.group("macro") if q.id != target] + [
+        q for q in reg if q.kind is Kind.CONTINUOUS and not q.alias
+        and q.group != "macro" and q.id != target]
 
 
 def _param_combo(panel, label: str, current: str | None, width: float,
-                 candidates: list[Param], none: str | None = None) -> str | None | bool:
+                 candidates, none: str | None = None) -> str | None | bool:
     """A searchable combo over params, grouped: returns the id picked, None
-    for the `none` entry, or False when nothing changed."""
+    for the `none` entry, or False when nothing changed. `candidates` is a
+    list of params or a thunk for one — called only while the combo is
+    open, so a closed row never walks the registry."""
     st = _state(panel)
     imgui.set_next_item_width(width)
     shown = current if current is not None else (none or "—")
     if not imgui.begin_combo(label, shown):
         return False
+    if callable(candidates):
+        candidates = candidates()
     picked: str | None | bool = False
     if imgui.is_window_appearing():
         st["filter"] = ""
@@ -409,7 +419,7 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
     sp = imgui.get_style().item_spacing.x
     op_w = ui.chip_w("push")
     picked = _param_combo(panel, "##target", b.target, -(op_w + ui.chip_w("×") + 2 * sp),
-                          _targets(panel))
+                          lambda: _targets(panel))
     if picked:
         cur = router.table.owner(picked)
         if cur is None or cur is b or not b.is_performer:
@@ -484,13 +494,14 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
     gate_w = GATE_W if gates else 0.0
     scale = _param_combo(panel, "##scale", b.scale,
                          -(BAR_W + gate_w + sp * (2 if gate_w else 1)),
-                         _scales(panel), none="× 1")
+                         lambda: _scales(panel, b.target), none="× 1")
     if scale is not False:
         b.scale = scale
     if imgui.is_item_hovered():
         imgui.set_tooltip("A param whose live value multiplies the depth — a macro, "
                           "to chain (own the macro with a hand or LFO), or master.gain "
-                          "on the rate routes")
+                          "on the rate routes. Never the row's own target; two macros "
+                          "scaling each other's routes is allowed, and is your rope.")
     if gates:
         imgui.same_line()
         _gate_combo(b, gates, gate_w)
@@ -577,10 +588,11 @@ def page(panel, dt: float) -> None:
         imgui.text_colored(ui.WARN, f"dropped {b.source} → {b.target}: {why}")
     for note in router.table.notes:
         imgui.text_disabled(note)
-    macros(panel)
-    imgui.separator()
-    # the rows scroll if they must; the strips and the header stay put
+    # the macros and the rows scroll together if they must, so the strip
+    # never shortens the list for good; the preset strip and the header stay put
     if imgui.begin_child("##routes", imgui.ImVec2(0, 0)):
+        macros(panel)
+        imgui.separator()
         dead = None
         for k, b in enumerate(rows):
             if _row(panel, router, b, k):

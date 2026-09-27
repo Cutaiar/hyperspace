@@ -210,6 +210,12 @@ def test_macro_knobs_are_persisted_attenuators_with_no_object(rig):
     reg["macro.7"].set_norm(0.5)
     assert reg.restore(snap) == []
     assert m.value == pytest.approx(0.42) and reg["macro.7"].value == 1.0
+    # the slot bounds itself: a restore writes raw, and nothing else would clamp
+    assert reg.restore({"macro.3": 5.0, "macro.4": -2.0}) == []
+    assert reg["macro.3"].value == 1.0 and reg["macro.4"].value == 0.0
+    # routing-layer state (ROUTING_GROUPS): in a snapshot by group, out of the whole one
+    assert not any(k.startswith("macro.") for k in reg.snapshot())
+    assert set(reg.snapshot("macro")) == {p.id for p in ms}
 
 
 def test_core_does_not_import_the_midi_adapter():

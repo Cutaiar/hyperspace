@@ -120,6 +120,28 @@ def test_slug():
     assert slug("***") == "untitled"
 
 
+def test_macros_are_routing_state_not_the_scenes(rig, tmp_path):
+    """params.ROUTING_GROUPS: the macros persist, but no theme, project or
+    module strip carries them — a theme change never moves a macro under a
+    route. A routing preset does (Router.save_preset, test_ui_bands)."""
+    lib, reg = rig.lib, rig.reg
+    assert "macro" not in lib.groups() and "view" in lib.groups()
+    m = reg["macro.2"]
+    m.set_value(0.3)
+    lib.bank.save(0)
+    assert not any(k.startswith("macro.") for k in lib.bank.slots[0]["values"])
+    m.set_value(0.7)
+    lib.bank.load(0)
+    assert m.value == pytest.approx(0.7)             # the theme left it alone
+    path = lib.project.save("Show")
+    doc = json.loads(path.read_text())
+    assert not any(k.startswith("macro.") for k in doc["values"]) and "macro" not in doc["modules"]
+    m.set_value(0.1)
+    assert not lib.project.is_dirty()                # a macro is not the project's to track
+    lib.project.load("Show")
+    assert m.value == pytest.approx(0.1)
+
+
 def test_list_user_shadows_factory(rig, tmp_path):
     lib = rig.lib
     assert lib.list("band") == sorted((s["name"] for s in PRESETS), key=str.lower)
