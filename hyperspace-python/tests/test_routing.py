@@ -33,7 +33,7 @@ from hyperspace.geometry import RATE
 from hyperspace.library import Library
 from hyperspace.offline import load_wav
 from hyperspace.overlay import Output
-from hyperspace.params import PLANES, ROT_RATE_MAX, build_registry
+from hyperspace.params import PLANES, ROT_RATE_MAX, Registry, build_registry
 from hyperspace.render import N_MOD, ViewState
 from hyperspace.routing import (
     MOD_OPS,
@@ -1310,3 +1310,166 @@ def test_a_macro_owned_by_a_hand_scales_a_lanes_push_one_frame_later():
     r.reg.apply()
     assert r.view.bright == at(0.5 * 1.0 * 0.5)
     assert bright.modulated and bright.norm == base  # the lane never touched the base
+
+
+# ------------------------------------------------------------- plan 09 WP5
+
+def test_every_factory_preset_names_real_params_with_one_owner(tmp_path):
+    """The routes `write_factory` exports (PRESETS) land on params the full
+    registry has, modulatable, with a scale it has too, and one owner per
+    target — the check the shipped files are held to."""
+    r = rig(tmp_path=tmp_path, full=True)
+    ids = set(r.reg.ids())
+    for name, (routes, values) in PRESETS.items():
+        for b in routes:
+            assert b.target in ids and r.reg[b.target].modulatable, (name, b)
+            assert b.scale is None or b.scale in ids, (name, b)
+            assert b.is_performer, (name, b)
+        assert routing.referee(routes)[1] == [], name
+        assert set(values or {}) <= ids, name
+    assert set(PRESETS) == {"legacy6", "lfo-breathe"}
+    assert (routing.FACTORY_DIR / "lfo-breathe.json").exists()
+
+
+def test_lfo_breathe_is_the_chain_the_plan_draws(tmp_path):
+    """The `lfo-breathe` preset (plan 09 WP5): LFO 1, a sine at one bar,
+    pushes brightness; the right hand's height *positions* LFO 1's depth,
+    so raising the hand deepens the swell a frame later and nothing else
+    moves; LFO 2 at a quarter pushes the fx mix through macro 1. Run with
+    the real clock and LFOs at 120 BPM: a bar-long sine peaks one beat
+    after the downbeat."""
+    r = rig(tmp_path=tmp_path, full=True)
+    reg = r.reg
+    router = Router(reg, Bindings())
+    assert router.load_preset("lfo-breathe") == []
+    assert reg["lfo.1.sync"].value == lfo.SYNCS.index("1 bar")
+    assert reg["lfo.2.sync"].value == lfo.SYNCS.index("1/4")
+    assert reg["lfo.1.shape"].value == lfo.SHAPES.index("sine")
+    assert reg["lfo.1.depth"].value == pytest.approx(0.6) and reg["macro.1"].value == 1.0
+    assert [(b.source, b.target, b.op) for b in router.table.routes()] == [
+        ("lfo:0", "view.bright", "push"), ("hand:7", "lfo.1.depth", "position"),
+        ("lfo:1", "fx.mix", "push")]
+    assert router.table.dropped == []
+    clock, lfos = tempo.Clock(now=lambda: 0.0), lfo.LFOs()
+    for i, lf in enumerate(lfos.lfos):                 # the registry's values into the bank
+        lf.sync, lf.shape, lf.depth = (reg[f"lfo.{i + 1}.sync"].value,
+                                       reg[f"lfo.{i + 1}.shape"].value,
+                                       reg[f"lfo.{i + 1}.depth"].value)
+    bright, mix, depth = reg["view.bright"], reg["fx.mix"], reg["lfo.1.depth"]
+    bright.set_value(1.0)
+    mix.set_value(0.5)
+    b0, m0 = bright.norm, mix.norm
+    at = lambda p, off: pytest.approx(p._value_of_norm(p.norm + off), rel=1e-9)
+    clock.trigger(0.0)                                  # the downbeat; 120 BPM: a beat is 0.5 s
+    t = 0.5                                             # one beat in: the bar-long sine peaks
+    clock.tick(t)
+    lfos.step(1 / 60, t, clock)
+    lfos.publish(router)
+    router.modulate()
+    reg.apply()
+    assert lfos[0].out == pytest.approx(0.5 + 0.5 * 0.6)
+    assert bright.value == at(bright, 0.5 * 0.5 * 0.6)  # depth 0.5 × (u − 0.5), u − 0.5 = 0.3
+    assert lfos[1].out == pytest.approx(0.5)            # a quarter-note sine: back at rest on the beat
+    assert mix.value == at(mix, 0.0) and not depth.modulated   # live, pushing nothing
+    # the right hand rises: LFO 1's depth is positioned by it; the swell
+    # follows a frame later, and brightness's base never moved
+    router.feed("hand", [float("nan")] * 7 + [1.0] + [float("nan")] * 12)
+    router.modulate()
+    reg.apply()
+    assert depth.modulated and depth.value == pytest.approx(1.0) and depth.norm == pytest.approx(0.6)
+    lfos[0].depth = depth.value                         # what the registry's setter did
+    lfos.step(1 / 60, t, clock)
+    lfos.publish(router)
+    router.modulate()
+    reg.apply()
+    assert lfos[0].out == pytest.approx(1.0) and bright.value == at(bright, 0.5 * 0.5)
+    assert bright.norm == b0 and mix.value == at(mix, 0.0)
+    # LFO 2 an eighth of a beat later, at the quarter-note wave's peak,
+    # through macro 1 — halve the macro, halve the push
+    t = 0.5 + 0.125
+    clock.tick(t)
+    lfos.step(1 / 60, t, clock)
+    lfos.publish(router)
+    router.modulate()
+    reg.apply()
+    assert lfos[1].out == pytest.approx(1.0)
+    assert mix.value == at(mix, 0.3 * 0.5) and mix.norm == m0
+    reg["macro.1"].set_value(0.5)
+    router.modulate()
+    reg.apply()
+    assert mix.value == at(mix, 0.3 * 0.5 * 0.5)
+    router.feed("hand", None)                           # the hand leaves: depth returns
+    router.modulate()
+    reg.apply()
+    assert not depth.modulated and depth.value == pytest.approx(0.6)
+
+
+def test_the_live_table_carries_the_macros(tmp_path):
+    """The macros are routing-layer state no theme saves (ROUTING_GROUPS);
+    the live table saves them as `values` on every write — through the
+    thunk the Router gives it — and `Router.restore_values` lands them at
+    the next start. A table nobody has attached a registry to writes no
+    values; a registry without macros writes none either."""
+    path = bindings_path(tmp_path)
+    r = rig(tmp_path=tmp_path, full=True)
+    t = Bindings.factory(path=path)
+    assert t.values_of is None
+    t.write()
+    assert "values" not in json.loads(path.read_text())          # no registry yet
+    router = Router(r.reg, t)
+    assert t.values_of is not None and router.routing_values() == {
+        f"macro.{k}": 1.0 for k in range(1, 9)}
+    r.reg["macro.3"].set_value(0.25)
+    t.bind(Binding("cc:0:99", "view.zoom", "abs"))               # a learn: the table writes
+    doc = json.loads(path.read_text())
+    assert doc["values"]["macro.3"] == pytest.approx(0.25) and doc["values"]["macro.1"] == 1.0
+    assert set(doc["values"]) == {f"macro.{k}" for k in range(1, 9)}
+    # the next start: the file's values into a fresh registry
+    r2 = rig(tmp_path=tmp_path, full=True)
+    again = Bindings.load(path, legacy_midi=None)
+    assert again.values == doc["values"]
+    router2 = Router(r2.reg, again)
+    assert r2.reg["macro.3"].value == 1.0
+    assert router2.restore_values() == []
+    assert r2.reg["macro.3"].value == pytest.approx(0.25)
+    # a modulated macro saves its base, not the hand's position
+    r2.reg["macro.3"].modulate(0.5)
+    r2.reg.apply()
+    again.write()
+    assert json.loads(path.read_text())["values"]["macro.3"] == pytest.approx(0.25)
+    # an id the registry doesn't have is reported, not fatal
+    again.values = {"macro.3": 0.7, "no.such": 1}
+    assert router2.restore_values() == ["no.such"]
+    assert r2.reg["macro.3"].base == pytest.approx(0.7)          # the base; the offset rides on
+    # a registry with no routing groups: nothing to save
+    bare = Router(Registry(), Bindings(path=tmp_path / "bare.json"))
+    bare.table.write()
+    assert "values" not in json.loads((tmp_path / "bare.json").read_text())
+    assert bare.restore_values() == []
+    # the factory files are unchanged by any of this
+    assert "values" not in Bindings.factory().to_json()
+
+
+def test_router_describe_uses_the_adapters_names():
+    """`Router.describe` puts the labels and gate names an adapter has
+    published in place of a row's addresses; without them it is the row's
+    own `describe`. MIDI and key rows are untouched."""
+    r = rig()
+    router = Router(r.reg, Bindings())
+    row = Binding("hand:7", "view.bright", "position", when="hand:18")
+    push = Binding("lfo:0", "macro.1", "push", 0.5, scale="macro.2")
+    assert router.describe(row) == row.describe() == "hand 7 positions while hand:18"
+    assert router.describe(push) == "lfo 0 pushes +0.5 × macro.2"
+    router.labels["hand"] = ["L x"] * 7 + ["R height"]
+    router.gates["hand"] = [(18, "R ind"), (19, "R mid")]
+    router.labels["lfo"] = ["LFO 1", "LFO 2", "LFO 3", "LFO 4"]
+    assert router.describe(row) == "R height positions while R ind"
+    assert router.describe(push) == "LFO 1 pushes +0.5 × macro.2"
+    assert router.describe(Binding("hand:19", "x", "position")) == "hand 19 positions"   # off the list
+    assert router.describe(Binding("hand:7", "x", "position", when="hand:99")) == (
+        "R height positions while hand:99")                                          # a gate unnamed
+    assert router.describe(Binding("hand:3", "view.bright", "position", 0.5)) == "L x positions 0.5"
+    midi = Binding("cc:0:48", "view.bright", "abs")
+    assert router.describe(midi) == midi.describe() == "MIDI CC 48 ch1"
+    key = Binding("key:SHIFT+B", "lfo.trigger", "fire")
+    assert router.describe(key) == key.describe() == "key SHIFT+B"

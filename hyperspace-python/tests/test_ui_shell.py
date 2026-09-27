@@ -271,6 +271,8 @@ def test_tooltip_names_the_performer(rig):
     assert panel._performer(bright) == "performed by hand 0 pushes +0.3"
     arrow = f"{bright.text()} → {panel._eff_text(bright)}"     # the push moved the effective
     assert panel._mod_line(bright) == f"Brightness: {arrow}, performed by hand 0 pushes +0.3"
+    panel.router.labels["hand"] = ["L height"]                 # the adapter's name for it
+    assert panel._performer(bright) == "performed by L height pushes +0.3"
     assert panel._performer(reg["view.speed"]) == ""           # owned by nothing
     assert panel._hint(bright, reg["view.speed"]) == bright.tip   # not modulated: the tip
     frame(panel, "view")                                       # draws with a router attached

@@ -447,6 +447,10 @@ def main() -> None:
         bindings_path(library.home), mc.get("profile", "apc40"),
         Path(mc.get("map", "midi_map.json")),
     ))
+    # the macros are the routing layer's, saved with the table and not in
+    # any theme: land them before anything reads a route's scale
+    for pid in router.restore_values():
+        print(f"bindings: values: no such param {pid}", file=sys.stderr)
     midi_io = _open_midi(reg, cfg, router.table)
     panel.midi = midi_io
     panel.router = router                  # the ROUTING page edits the live table
