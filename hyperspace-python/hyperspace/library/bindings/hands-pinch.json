@@ -2,9 +2,9 @@
  "schema": "hyperspace.bindings/1",
  "profile": "apc40",
  "bindings": [
-  {"source": "hand:7", "target": "view.bright", "op": "replace", "when": "hand:18"},
-  {"source": "hand:7", "target": "view.speed", "op": "replace", "when": "hand:19"},
-  {"source": "hand:1", "target": "fx.mix", "op": "replace", "when": "hand:14"},
-  {"source": "hand:1", "target": "camera.zoom", "op": "replace", "value": 24.0, "when": "hand:15"}
+  {"source": "hand:7", "target": "view.bright", "op": "span", "when": "hand:18"},
+  {"source": "hand:7", "target": "view.speed", "op": "span", "when": "hand:19"},
+  {"source": "hand:1", "target": "fx.mix", "op": "span", "when": "hand:14"},
+  {"source": "hand:1", "target": "camera.zoom", "op": "span", "when": "hand:15"}
  ]
 }

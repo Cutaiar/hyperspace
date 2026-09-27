@@ -2,8 +2,8 @@
  "schema": "hyperspace.bindings/1",
  "profile": "apc40",
  "bindings": [
-  {"source": "hand:7", "target": "view.bright", "op": "replace"},
-  {"source": "hand:1", "target": "view.speed", "op": "replace"},
-  {"source": "hand:10", "target": "view.depth4", "op": "replace"}
+  {"source": "hand:7", "target": "view.bright", "op": "span"},
+  {"source": "hand:1", "target": "view.speed", "op": "span"},
+  {"source": "hand:10", "target": "view.depth4", "op": "span"}
  ]
 }

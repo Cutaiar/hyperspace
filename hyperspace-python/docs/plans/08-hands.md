@@ -158,12 +158,21 @@ pad and MIDI bindings alone.
 | `hands-pinch` | One hand, several instruments, the thumb picks which: R index → brightness, R middle → speed, L index → fx mix, L middle → zoom. An open hand changes nothing. |
 | `hands-fx` | The effect stack under both hands: R height → fx mix, R tilt → acid twist, L roll → acid speed, R yaw → acid bend, L height adds to brightness. |
 
-These use `replace` and `mod`, because a routing preset carries only
-modulation rows — Learn's `abs` rows are per-param and belong to the
-binding table, not a preset. The practical difference: **a `replace` row
-springs back to the panel value when the gate opens or the hand leaves**,
-where a gated `abs` row holds where you left it. Momentary versus latching
-— pick the one the gesture wants.
+These use `span`, `replace` and `mod`, because a routing preset carries
+only modulation rows — Learn's `abs` rows are per-param and belong to the
+binding table, not a preset. The practical difference: **a `span` or
+`replace` row springs back to the panel value when the gate opens or the
+hand leaves**, where a gated `abs` row holds where you left it. Momentary
+versus latching — pick the one the gesture wants.
+
+`span` is the one to reach for: the hand's 0–1 is the control's *position*,
+along its own taper, so the hand covers the whole fader exactly as a
+learned hand does (brightness 0.13×–4.00×, speed stop–4 rad/s, 4D depth
+1.05–13.8). `replace` puts `depth · u` in the control's *units* — right for
+an explicit slice (`hands-fx` runs acid speed over 0–8 of its ±range), but
+with the default depth of 1 it caps a hand at the value 1: 1.00×
+brightness, 1 rad/s, and 4D depth pinned at its floor. The first cut of
+these presets did exactly that.
 
 The lane numbers in the files assume the default six dofs per hand
 (`hand:1` = L y, `hand:7` = R y, `hand:14`… = the switches). Change

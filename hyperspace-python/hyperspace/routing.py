@@ -51,6 +51,14 @@ Ops — what a row does to its target:
              ``norm_of(value · scale · u) − base_norm`` — so range, wrap
              and dormancy are exactly mod's. One replace row per target
              is the meaningful case (two sum their departures from the base).
+  span       like replace, but in the target's *throw* rather than its
+             units: while live the target sits at position
+             ``value · scale · u`` of its range (clamped to [0, 1]), along
+             its own taper and without detents — exactly where a fader or
+             a learned hand (`abs`) would put it. So depth 1 is the whole
+             control whatever its units or curve; `replace` of a 0–1
+             source can only ever reach the value 1 (1.00× brightness).
+             What a hand preset wants: it can't carry `abs` rows.
 
 Gating (`when`): any row may name a second *fed* source address — one an
 adapter hands in with `feed` (hand, ext, lfo), which is where switch-like
@@ -143,7 +151,7 @@ FACTORY_DIR = Path(__file__).parent / "library" / "bindings"
 MIDI_SCHEMES = ("cc", "note", "pitch")
 INPUT_SCHEMES = ("key", "pad", "hat", *MIDI_SCHEMES)
 LANE_SCHEMES = ("lane", "ext", "lfo", "hand")          # continuous, read by the Router
-MOD_OPS = ("mod", "replace")                   # the Router's per-frame rows
+MOD_OPS = ("mod", "replace", "span")           # the Router's per-frame rows
 OPS = ("fire", "toggle", "step", "set", "abs", "rel", "rel64", "momentary", *MOD_OPS)
 
 # midi_map.json's `mode` → op
@@ -705,6 +713,11 @@ class Router:
                 if p.wrap and p.taper is None:
                     x = p.lo + (x - p.lo) % (p.hi - p.lo)
                 x = p._norm_of(x) - p.norm
+            elif b.op == "span":
+                # the source is the position: the offset that lands it
+                if p.kind is Kind.TEXT or not p.modulatable:
+                    continue
+                x = min(1.0, max(0.0, x)) - p.norm
             p.modulate(x)
 
     # ---- presets ----
