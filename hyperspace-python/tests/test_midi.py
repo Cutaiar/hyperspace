@@ -226,6 +226,47 @@ def test_ring_feedback_is_change_gated(rig):
     assert rings[-1].value == round(0.25 * 127)
 
 
+def test_ring_shows_the_base_and_never_chases_a_performer(rig):
+    """Plan 09 WP2: a knob on a performed param is a scene-setter. The
+    ring tracks p.norm — the base — so a performer moving the effective
+    value sends nothing, the base moving does, and the knob itself turns
+    the base while the performer's offset stays exactly where it was."""
+    reg, b = rig.reg, rig.reg["view.bright"]
+
+    def rings():
+        return [m.value for m in rig.out.sent
+                if m.type == "control_change" and m.control == 0x30]
+
+    def perform(u):                   # the router's frame: offset in, apply, feedback
+        b.modulate(u)
+        reg.apply()
+        rig.midi.poll()
+
+    b.set_norm(0.5)
+    rig.midi.poll()
+    rig.out.sent.clear()
+    for u in (0.1, 0.2, 0.3):         # only the offset moves
+        perform(u)
+    assert b.modulated and b.eff_norm == pytest.approx(0.8, abs=1e-3) and rings() == []
+    b.set_norm(0.25)                  # the base moves (a fader, a preset)
+    perform(0.3)
+    assert rings() == [round(0.25 * 127)]
+    assert b.eff_norm == pytest.approx(0.55, abs=1e-3)
+    # the knob: caught at the base's value, then turned — the base follows
+    # it, the performer's 0.3 rides on top, the ring shows the knob
+    rig.out.sent.clear()
+    target = round(0.25 * 127)
+    push(rig, cc(0x30, target))
+    perform(0.3)
+    push(rig, cc(0x30, target + 40))
+    perform(0.3)
+    assert b.norm == pytest.approx((target + 40) / 127, abs=PICKUP_TOL)
+    assert b.eff_norm - b.norm == pytest.approx(0.3, abs=1e-3)
+    assert rings()[-1] == round(b.norm * 127)
+    reg.apply()                       # the performer leaves: the knob's value shows
+    assert not b.modulated and b.norm == pytest.approx((target + 40) / 127, abs=PICKUP_TOL)
+
+
 def test_ring_style_is_set_once(rig):
     styles = [m for m in rig.out.sent if m.type == "control_change" and m.control == 0x30 + 8]
     assert len(styles) == 1 and styles[0].value == apc40.RING_VOLUME
