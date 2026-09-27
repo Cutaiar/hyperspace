@@ -24,9 +24,10 @@ analyzer's lanes — is one binding table over the parameter registry
 (params.py, routing.py): a row names a source, a param id and an
 operation, nothing touches state directly. The table is bindings.json
 (factory default in routing.py; MIDI rows editable from the panel by
-right-click → Learn). The mouse and the sticks are the one thing outside
-the table — relative writers — and they nudge a param's *base*, so a
-performer's offset rides on the move rather than folding into it.
+right-click → Learn). The mouse, the sticks and ↑/↓ are the one thing
+outside the table — relative writers — and they nudge a param's *base*
+(Param.nudge / scale), so a performer's offset rides on the move rather
+than folding into it.
 
 The in-app cheat sheet (ui.CHEATSHEET) is the canonical human list —
 keep it in sync when adding bindings.
@@ -314,49 +315,49 @@ class Mouse:
         if btn != drag["btn"]:
             drag.update(btn=btn, x=x, y=y)
         elif btn == "orbit":
-            _nudge(self.yaw, (x - drag["x"]) * 0.005)
-            _nudge(self.pitch, (y - drag["y"]) * 0.005)
+            self.yaw.nudge((x - drag["x"]) * 0.005)
+            self.pitch.nudge((y - drag["y"]) * 0.005)
             drag.update(x=x, y=y)
         elif btn == "pan":
-            _nudge(self.pan_x, x - drag["x"])
-            _nudge(self.pan_y, y - drag["y"])
+            self.pan_x.nudge(x - drag["x"])
+            self.pan_y.nudge(y - drag["y"])
             drag.update(x=x, y=y)
         wheel, self._wheel = self._wheel, 0.0
         if wheel:
-            factor = _scale(self.zoom, 2.0 ** (wheel * 0.15))
-            # zoom about the cursor: keep the point under it fixed. The
-            # centre is where the picture *is* on screen (the effective
-            # pan); the correction lands on the pan's base like any nudge
             w, h = glfw.get_window_size(win)
-            cx, cy = w / 2 + s.pan[0], h / 2 + s.pan[1]
-            _nudge(self.pan_x, (cx - x) * (factor - 1))
-            _nudge(self.pan_y, (cy - y) * (factor - 1))
+            _zoom_about(self.zoom, self.pan_x, self.pan_y, s, wheel, x, y, w, h)
 
 
 # ---- relative writers: the mouse, the sticks and ↑/↓ move a param by a
-# delta each frame. They read the *base* and write it back, never the
-# effective value: while a performer (a hand, a lane, an LFO — routing.py)
-# owns the param, its offset rides on the move instead of folding into the
-# base every frame (plan 09 decision 3; audit simulation 1). set_value
-# clamps or wraps, so the helpers are pure over any continuous Param.
+# delta each frame, through Param.nudge / Param.scale — on the base, so a
+# performer's offset rides on the move (plan 09 decision 3; audit
+# simulation 1). The two helpers below are the moves with geometry of
+# their own; they take Params and a view, so they run without a window.
 
-def _nudge(p, delta: float) -> None:
-    """Move a param by `delta` in its own units, on the base."""
-    p.set_value(p.base + delta)
+def _zoom_about(zoom, pan_x, pan_y, view, wheel: float, x: float, y: float,
+                w: float, h: float) -> None:
+    """Wheel zoom about the cursor: keep the point under it fixed.
 
-
-def _scale(p, factor: float) -> float:
-    """Multiply a param by `factor`, on the base. Returns the ratio the
-    range let through — a zoom at its stop moves less than asked."""
-    old = p.base
-    p.set_value(old * factor)
-    return p.base / old
+    The picture moves by the *effective* ratio, not the base's — a
+    performer pinning the zoom at a stop means the wheel moves the return
+    value and nothing on screen, so the pan must not move either. apply()
+    runs later in the frame, so that ratio is predicted: the performer's
+    share is a ratio on a log range, and the effective lands clamped.
+    The centre is where the picture is (the effective pan); the
+    correction lands on the pan's base like any other nudge.
+    """
+    eff = min(max(view.zoom, zoom.lo), zoom.hi)     # apply()'s clamp, to the last bit
+    ratio = zoom.scale(2.0 ** (wheel * 0.15))
+    factor = min(max(eff * ratio, zoom.lo), zoom.hi) / eff
+    cx, cy = w / 2 + view.pan[0], h / 2 + view.pan[1]
+    pan_x.nudge((cx - x) * (factor - 1))
+    pan_y.nudge((cy - y) * (factor - 1))
 
 
 def _ride_depth(p, octaves: float) -> None:
     """Move 4D depth by a number of octaves of (depth − 1) — the taper's own space."""
     u = math.log2(max(p.base - 1.0, 1e-6) / 0.05)
-    p.set_value(1.0 + 0.05 * 2.0 ** (u + octaves))
+    p.nudge(1.0 + 0.05 * 2.0 ** (u + octaves) - p.base)
 
 
 def _hot_error_toast(msg: str) -> None:
@@ -527,12 +528,12 @@ def main() -> None:
             # triggers ride depth4 in its own log space (LT out, RT in)
             lx, ly = pad.axis(gamepad.AX_LX), pad.axis(gamepad.AX_LY)
             if lx:
-                _nudge(yaw, lx * 2.2 * dt)
+                yaw.nudge(lx * 2.2 * dt)
             if ly:
-                _nudge(pitch, ly * 2.2 * dt)
+                pitch.nudge(ly * 2.2 * dt)
             zoom_v = pad.axis(gamepad.AX_RY)
             if zoom_v:
-                _scale(zoom, 2.0 ** (-zoom_v * 1.2 * dt))
+                zoom.scale(2.0 ** (-zoom_v * 1.2 * dt))
             d4 = pad.trigger(gamepad.AX_RT) - pad.trigger(gamepad.AX_LT)
             if d4:
                 _ride_depth(depth4, d4 * 2.4 * dt)
