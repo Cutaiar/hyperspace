@@ -431,3 +431,59 @@ def test_the_page_draws_and_fits(tmp_path, monkeypatch):
     finally:
         implot.destroy_context(pctx)
         imgui.destroy_context(ictx)
+
+
+def test_the_page_has_no_conflicting_ids(tmp_path, monkeypatch):
+    """Every widget on the FX page has its own imgui id — the open effect's
+    chip and its strip's "on" check once shared one ("Fractals##fx.fractals.on"),
+    which imgui flags as two visible items with a conflicting id."""
+    from imgui_bundle import imgui, implot
+
+    from hyperspace import ui_fx
+    from hyperspace.analysis import Analyser
+    from hyperspace.bands import Chain
+    from hyperspace.control import Control
+    from hyperspace.library import Library
+    from hyperspace.params import build_registry
+    from hyperspace.render import ViewState
+    from hyperspace.ui import Panel, apply_style, load_fonts
+
+    ictx = imgui.create_context()
+    pctx = implot.create_context()
+    try:
+        io = imgui.get_io()
+        io.display_size = imgui.ImVec2(960, 900)
+        io.backend_flags |= imgui.BackendFlags_.renderer_has_textures
+        apply_style()
+        load_fonts()
+        chain = Chain(Analyser())
+        audio = SimpleNamespace(chain=chain, on=False, mode="", error="", label="", sr=48000.0)
+        st = FxState()
+        lib = Library(tmp_path, period=0.0)
+        view = ViewState()
+        reg = build_registry(view, Control(chain), audio, lib.bank, fx=st)
+        lib.attach(reg)
+        panel = Panel(Control(chain), audio, view, presets=lib.bank, registry=reg, library=lib)
+        panel.renderer = SimpleNamespace(fx=SimpleNamespace(state=st, error=lambda n: ""))
+        ids: list[str] = []
+        for fn in ("button", "checkbox", "slider_float", "slider_int", "combo",
+                   "invisible_button"):
+            real = getattr(imgui, fn)
+
+            def rec(label, *a, _real=real, **k):
+                ids.append(label.split("##", 1)[-1] if "##" in label else label)
+                return _real(label, *a, **k)
+            monkeypatch.setattr(imgui, fn, rec)
+        for k, name in enumerate(st.names()):     # every effect's strip open in turn
+            reg["fx.select"].set(k)
+            ids.clear()
+            imgui.new_frame()
+            imgui.begin("page")
+            ui_fx.page(panel, 1 / 60)
+            imgui.end()
+            imgui.end_frame()
+            dup = {i for i in ids if ids.count(i) > 1}
+            assert not dup, f"{name}: conflicting ids {sorted(dup)}"
+    finally:
+        implot.destroy_context(pctx)
+        imgui.destroy_context(ictx)
