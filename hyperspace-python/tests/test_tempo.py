@@ -36,6 +36,30 @@ def test_one_tap_sets_nothing_and_a_gap_restarts_the_burst():
     assert len(c.taps) == 3 and c.bpm == pytest.approx(128.0)
 
 
+def test_bpm_follows_the_last_eight_taps():
+    """A tempo change registers within a bar of tapping, not after the
+    whole burst has been averaged against it."""
+    c = Clock(now=lambda: 0.0)
+    t = taps(c, 120, 60)                        # half a minute at 120
+    assert c.bpm == pytest.approx(120.0)
+    taps(c, 128, 8, start=t + 60 / 128)         # eight more, at 128, no gap
+    assert len(c.taps) == 68
+    assert c.bpm == pytest.approx(128.0)
+    taps(c, 128, 3, start=t + 60 / 128 + 8 * 60 / 128)
+    assert c.bpm == pytest.approx(128.0)
+
+
+def test_a_fresh_clocks_first_tap_folds_the_nudge_like_the_trigger():
+    c = Clock(now=lambda: 0.0)
+    c.nudge = 0.25
+    taps(c, 120, 4, start=10.0)
+    assert c.beat(10.0) == pytest.approx(0.0, abs=1e-12)        # the tap is the "one"
+    assert c.phase(10.0, 0.25) == pytest.approx(0.0, abs=1e-12)
+    assert c.t0 == pytest.approx(10.0 + 0.25 * 0.5)
+    c.nudge = 0.0                                                # turned later: it moves
+    assert c.beat(10.0) == pytest.approx(-0.25)
+
+
 def test_bpm_is_clamped():
     c = Clock(now=lambda: 0.0)
     c.tap(0.0)
@@ -54,7 +78,7 @@ def test_a_fresh_clock_lines_up_on_its_first_tap():
     division reads phase 0 there and on every bar after."""
     c = Clock(now=lambda: 0.0)
     taps(c, 120, 4, start=10.0)
-    assert c.t0 == 10.0
+    assert c.t0 == 10.0 and not hasattr(c, "now")
     assert c.phase(10.0, 0.25) == pytest.approx(0.0)
     assert c.phase(12.0, 0.25) == pytest.approx(0.0)          # one bar later
     assert c.phase(11.0, 0.25) == pytest.approx(0.5)          # half a bar

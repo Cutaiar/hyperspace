@@ -265,18 +265,28 @@ def strip(panel, router: Router) -> None:
 
 # ---- the rows ----
 
+SOURCE_ORDER = ("hand", "lfo", "ext")   # the fed schemes, after the analyzer's lanes
+
+
 def _sources(panel, router: Router) -> list[tuple[str, str]]:
-    """(source, label) the combo offers: every lane as "i NAME", and the
-    ext lanes once the bridge feeds them or a row names one."""
+    """(source, label) the combo offers: every analyzer lane as "i NAME",
+    then each fed scheme (SOURCE_ORDER) that is around — its adapter has
+    published labels, it is being fed this frame, or a row names it — one
+    entry per lane, labelled as the adapter says ("lfo LFO 1") or by
+    index. Nothing here knows what a scheme is; the ext lanes are the one
+    case with a fixed count (N_EXT) since the bridge publishes no labels."""
     chain = panel.audio.chain
     out = [(f"lane:{i}", f"{i} {name}") for i, name in enumerate(chain.band_names)]
-    ext = router.feeds.get("ext") is not None or any(
-        b.scheme == "ext" for b in router.table.bindings)
-    if ext:
-        out += [(f"ext:{i}", f"ext {i}") for i in range(N_EXT)]
-    names = getattr(router, "labels", {}).get("hand") or []
-    if router.feeds.get("hand") is not None or names:
-        out += [(f"hand:{i}", f"hand {n}") for i, n in enumerate(names)]
+    labels = getattr(router, "labels", {})
+    for scheme in SOURCE_ORDER:
+        names = labels.get(scheme) or []
+        vec = router.feeds.get(scheme)
+        used = any(b.scheme == scheme for b in router.table.bindings)
+        if not (names or vec is not None or used):
+            continue
+        n = len(names) or (len(vec) if vec is not None else 0) or (N_EXT if scheme == "ext" else 0)
+        out += [(f"{scheme}:{i}", f"{scheme} {names[i] if i < len(names) else i}")
+                for i in range(n)]
     return out
 
 

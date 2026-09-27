@@ -15,10 +15,13 @@ Two things a tap must never do decide the shape of `Clock`:
     ``beat(t)`` is continuous at the instant of the change: the wave
     keeps its place and only its rate changes.
   * **The burst is its own bookkeeping.** Taps more than `GAP` apart
-    start a new burst, and the burst's first tap is only the burst's own
-    origin for the interval math. The one exception is a fresh clock
-    that has never been triggered: its first tap is also `t0`, so a new
-    app lines up without a second press.
+    start a new burst; the BPM is the mean interval of the burst's last
+    `TAPS` taps, so a tempo change registers within a bar of tapping
+    rather than being averaged against a minute of the old one. The
+    burst's first tap is only the burst's own origin for the interval
+    math. The one exception is a fresh clock that has never been
+    triggered: its first tap is also the downbeat (with the nudge folded
+    in, as `trigger` does), so a new app lines up without a second press.
 
 ``beat(t) = (t − t0) · bpm / 60 + nudge``, ``bar(t) = beat mod 4`` (4/4
 assumed), ``phase(t, ratio) = (beat · ratio) mod 1`` — `ratio` in cycles
@@ -43,6 +46,7 @@ from __future__ import annotations
 import time
 
 GAP = 2.0                # s between taps that starts a new burst
+TAPS = 8                 # the BPM is the mean of the burst's last this many
 BPM_LO, BPM_HI = 20.0, 300.0
 BEATS_PER_BAR = 4
 LIT = 0.15               # the fraction of a beat the beat light stays on
@@ -57,10 +61,9 @@ class Clock:
     """Tap tempo, a downbeat, and the phase of any division at any time."""
 
     def __init__(self, bpm: float = 120.0, now=time.perf_counter):
-        self.now = now
         self.bpm = float(bpm)
         self.nudge = 0.0
-        self.t = now()          # the frame's time (tick)
+        self.t = now()          # the frame's time; tick() keeps it current
         self.t0 = self.t        # the downbeat the LFOs read (trigger)
         self.taps: list[float] = []   # the current burst
         self._triggered = False
@@ -82,15 +85,17 @@ class Clock:
         if self.taps and t - self.taps[-1] > GAP:
             self.taps = []
         self.taps.append(t)
-        if len(self.taps) >= 2:
-            mean = (self.taps[-1] - self.taps[0]) / (len(self.taps) - 1)
+        recent = self.taps[-TAPS:]               # a tempo change lands within a bar
+        if len(recent) >= 2:
+            mean = (recent[-1] - recent[0]) / (len(recent) - 1)
             if mean > 0.0:                       # two in one frame is not a tempo
                 self.set_bpm(60.0 / mean, t)
         if not self._triggered:
-            # a fresh clock: the burst's first tap is the downbeat too, so a
-            # new app lines up without a second press. Once triggered, the
-            # downbeat is the performer's and a tap only re-anchors it.
-            self.t0 = self.taps[0]
+            # a fresh clock: the burst's first tap is the downbeat too — the
+            # nudge folded in exactly as trigger() does — so a new app lines
+            # up without a second press. Once triggered, the downbeat is the
+            # performer's and a tap only re-anchors it.
+            self.t0 = self.taps[0] + self.nudge * 60.0 / self.bpm
 
     def set_bpm(self, bpm: float, t: float | None = None) -> None:
         """A new tempo that keeps ``beat(t)`` where it is: the downbeat is

@@ -107,6 +107,31 @@ def test_the_page_has_no_conflicting_ids(rig, monkeypatch):
     assert len([lb for _, lb in ids if lb.endswith(".reset")]) == 4
 
 
+def test_the_lfos_are_offered_as_routing_sources(rig):
+    """The ROUTING page's source combo lists whatever the router has labels
+    for — lanes, then hand, lfo, ext — so LFO 1–4 can be routed."""
+    from hyperspace import ui_routing
+    from hyperspace.routing import Binding, Bindings, Router
+
+    router = Router(rig.reg, Bindings([]))
+    rig.panel.router = router
+    before = ui_routing._sources(rig.panel, router)
+    assert all(s.startswith("lane:") for s, _ in before)
+    rig.lfos.publish(router)
+    router.labels["hand"] = ["L x", "R x"]
+    router.feed("ext", [0.0] * 3)
+    srcs = ui_routing._sources(rig.panel, router)
+    order = [s.split(":")[0] for s, _ in srcs]
+    assert order == sorted(order, key=("lane", "hand", "lfo", "ext").index)
+    assert [(s, lb) for s, lb in srcs if s.startswith("lfo:")] == [
+        (f"lfo:{i}", f"lfo LFO {i + 1}") for i in range(4)]
+    assert ("hand:1", "hand R x") in srcs and ("ext:2", "ext 2") in srcs
+    # a row naming a scheme nobody feeds still shows it (fixed count for ext)
+    r2 = Router(rig.reg, Bindings([Binding("ext:5", "view.bright", "push", 0.1)]))
+    assert ("ext:15", "ext 15") in ui_routing._sources(rig.panel, r2)
+    frame(rig.panel)
+
+
 def test_the_buttons_fire_the_trigger_params(rig):
     """The chips are the trigger params: firing them does what a press would."""
     reg, clock, lfos = rig.reg, rig.clock, rig.lfos

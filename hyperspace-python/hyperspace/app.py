@@ -253,7 +253,11 @@ class Keys:
 
     A key counts as down when it is down in the render window, or in the
     control window while imgui is not typing (`typing` is io.want_capture_
-    keyboard, set each frame after new_frame()).
+    keyboard, set each frame after new_frame()). This is the `keys` the
+    router's key rows read: pressed() is an edge, shift() / super() the
+    modifier state a "key:SHIFT+B" row needs. F1–F8 (⇧ saves) and Cmd+R
+    stay in the loop below — they predate the table and are out of plan
+    09's scope.
     """
 
     def __init__(self, render_win, ctrl_win):
@@ -283,6 +287,13 @@ class Keys:
 
     def down(self, *keys: int) -> bool:
         return any(self._down(k) for k in keys)
+
+    # the modifier state the routing table's key rows read ("key:SHIFT+B")
+    def shift(self) -> bool:
+        return self.down(glfw.KEY_LEFT_SHIFT, glfw.KEY_RIGHT_SHIFT)
+
+    def super(self) -> bool:  # the modifier's name, as the table spells it
+        return self.down(glfw.KEY_LEFT_SUPER, glfw.KEY_RIGHT_SUPER)
 
 
 class Mouse:
@@ -490,13 +501,8 @@ def main() -> None:
         # ---- polled keys, from either window ----
         if keys.pressed(glfw.KEY_ESCAPE) or keys.pressed(glfw.KEY_Q):
             glfw.set_window_should_close(render_win, True)
-        shift = keys.down(glfw.KEY_LEFT_SHIFT, glfw.KEY_RIGHT_SHIFT)
-        # ⇧B is the global LFO trigger; B alone taps the tempo (the table's
-        # row). Checked before the table: pressed() consumes the edge, so
-        # the tap row does not also see this press.
-        if shift and keys.pressed(glfw.KEY_B):
-            act(reg, "lfo.trigger", "fire")
-        router.keys(keys)
+        shift = keys.shift()
+        router.keys(keys)         # B taps, ⇧B triggers: both are table rows
         if keys.pressed(glfw.KEY_R):
             if keys.down(glfw.KEY_LEFT_SUPER, glfw.KEY_RIGHT_SUPER):
                 _restart(audio, impl, midi_io, ctrl_win, dream_io)

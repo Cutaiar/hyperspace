@@ -20,6 +20,7 @@
   {"source": "key:T", "target": "overlay.on", "op": "toggle"},
   {"source": "key:G", "target": "overlay.passthrough", "op": "toggle"},
   {"source": "key:B", "target": "tempo.tap", "op": "fire"},
+  {"source": "key:SHIFT+B", "target": "lfo.trigger", "op": "fire"},
   {"source": "key:1", "target": "view.plane.XY", "op": "toggle"},
   {"source": "key:2", "target": "view.plane.XZ", "op": "toggle"},
   {"source": "key:3", "target": "view.plane.YZ", "op": "toggle"},

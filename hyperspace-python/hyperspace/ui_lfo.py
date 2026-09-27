@@ -30,8 +30,6 @@ says so and draws nothing else.
 
 from __future__ import annotations
 
-import itertools
-
 from imgui_bundle import imgui
 
 from . import ui
@@ -82,19 +80,22 @@ def _clock_strip(panel, clock) -> None:
     imgui.same_line(imgui.get_content_region_avail().x
                     - ui.chip_w("tap", "trigger", "−", "+") - 8)
     imgui.begin_group()
-    imgui.dummy(imgui.ImVec2(0, (h - imgui.get_frame_height()) / 2 - 4))
+    imgui.dummy(imgui.ImVec2(0, max(0.0, (h - imgui.get_frame_height()) / 2 - 4)))
     panel._button(f"{TEMPO_GROUP}.tap", "tap", small=True)
     imgui.same_line()
     panel._button(f"{LFO_GROUP}.trigger", "trigger", small=True)
     imgui.same_line()
     nudge = r[f"{TEMPO_GROUP}.nudge"]
-    if ui.chip(f"−##{nudge.id}.minus"):
-        nudge.step(-1)
-    panel._tip(nudge, "Nudge the downbeat back a hundredth of a beat (APC NUDGE −)")
-    imgui.same_line()
-    if ui.chip(f"+##{nudge.id}.plus"):
-        nudge.step(1)
-    panel._tip(nudge, "Nudge the downbeat on a hundredth of a beat (APC NUDGE +)")
+    for sign, tag, tip in ((-1, "−", "back"), (1, "+", "on")):
+        if sign > 0:
+            imgui.same_line()
+        # a step chip on the nudge param: the menu and the learn frame are
+        # the param's, like every other control that stands for one
+        if ui.chip(f"{tag}##{nudge.id}.{tag}"):
+            nudge.step(sign)
+        panel._tip(nudge, f"Nudge the downbeat {tip} a hundredth of a beat (APC NUDGE {tag})")
+        panel._ctx(nudge)
+        panel._learn_frame(nudge)
     imgui.end_group()
     # the two faders side by side, so the clock costs the page one row
     if imgui.begin_table("##clock", 2, imgui.TableFlags_.sizing_stretch_same):
@@ -187,8 +188,7 @@ def _scope(lf) -> None:
         x = j / SAMPLES                      # in cycles
         u = REST + 0.5 * lf.depth * lf.wave_at(x % 1.0 if j < n else 1.0 - 1e-9)
         pts.append(imgui.ImVec2(x0 + SCOPE_W * j / n, y0 + 2 + (SCOPE_H - 4) * (1 - u)))
-    for a, b in itertools.pairwise(pts):
-        dl.add_line(a, b, ui.u32(WAVE), 1.2)
+    dl.add_polyline(pts, ui.u32(WAVE), 1.2, 0)   # one call for the whole wave
     # the wave is at `x` in every cycle; the hairline sits in the last one
     hx = x0 + SCOPE_W * (CYCLES - 1 + lf.x) / CYCLES
     dl.add_line(imgui.ImVec2(hx, y0), imgui.ImVec2(hx, y1), ui.u32(ui.RED))

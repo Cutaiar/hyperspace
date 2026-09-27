@@ -313,7 +313,7 @@ CHEATSHEET = [
     ("right-click", "a control: MIDI learn / unbind"),
 ]
 
-# ---- the pages: (key, rail label, the group whose dirty dot the rail shows) ----
+# ---- the pages: (key, rail label, the group — or groups — whose dirty dot the rail shows) ----
 # One page per registry group where a group is a module of its own; the
 # view group is big enough to split into View / Faces & Pattern / Bitmap,
 # and those two sub-pages say so in their section notes. The audio page
@@ -334,7 +334,7 @@ PAGES = [
     ("audio", "audio", "master"),
     ("analyzer", "analyzer", "band"),
     ("routing", "routing", None),
-    ("lfo", "lfo", "lfo"),
+    ("lfo", "lfo", ("lfo", "tempo")),
     ("hands", "hands", "hands"),
     ("presets", "presets", None),
     ("system", "system", None),
@@ -941,7 +941,8 @@ class Panel:
             dl.add_text(imgui.ImVec2(p0.x + 12, p0.y + (h - FONT_MICRO) / 2 - 1),
                         u32(imgui.ImVec4(1, 1, 1, 1) if lit else TEXT if hov else DIM),
                         label.upper())
-            if group is not None and ui_presets.dirty(self, group, polled=True):
+            groups = (group,) if isinstance(group, str) else (group or ())
+            if any(ui_presets.dirty(self, g, polled=True) for g in groups):
                 dl.add_circle_filled(imgui.ImVec2(p1.x - 11, p0.y + h / 2), 3.5,
                                      u32(imgui.ImVec4(1, 1, 1, 1) if lit else RED))
         imgui.pop_font()
