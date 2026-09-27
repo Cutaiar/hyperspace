@@ -519,6 +519,14 @@ class Bindings:
         and a routing preset saves."""
         return [b for b in self.bindings if b.op in MOD_OPS]
 
+    def learned(self) -> list[Binding]:
+        """The rows a continuous source drives outside the matrix — a hand
+        learn's ``hand:<i>`` abs rows (`Router.drive`). Not routes, so a
+        preset leaves them alone, but live all the same: the ROUTING page
+        lists them so clearing the routes can't leave a hand driving."""
+        return [b for b in self.bindings
+                if b.scheme in LANE_SCHEMES and b.op not in MOD_OPS]
+
     def route(self, kind: str, channel: int, number: int) -> list[Binding]:
         return [b for b in self.bindings if b.matches(kind, channel, number)]
 
