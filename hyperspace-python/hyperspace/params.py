@@ -75,6 +75,7 @@ BMP_PATHS = ["STILL", "ORBIT", "FIG-8", "SWAY"]
 PLANES = ["XY", "XZ", "YZ", "XW", "YW", "ZW"]
 
 RAW_STEPS = 100  # detents across an untapered continuous range
+N_MACROS = 8     # macro.1–8: knobs that exist to be a route's scale and to be owned
 
 # rot.rate.* spans the largest drive the reference ever put on a plane — a
 # lane at the CEIL asymptote through DRIVE at the drive fader's 8× — so the
@@ -781,6 +782,21 @@ def build_registry(view, control, audio, presets=None, dream=None, fx=None) -> R
                  taper=tapers.T_TRIM, fmt=tapers.fmt_db, group=g,
                  tip="One offset added to all six per-band trims, at the very head of the "
                      "chain — moves a whole song down into the 56 dB working window.")
+
+    # ---- macros: the chaining knobs (plan 09, decision 7) ----
+    # Nothing reads a macro but the router: a route names one as its
+    # `scale`, and a performer may own it — so a hand that positions
+    # macro.2 deepens the lane pushing brightness × macro.2, one frame
+    # later, rather than two performers pulling on brightness. No object,
+    # so the values live in this list. Base 1: a route that names an
+    # untouched macro runs at its full depth, the same as "× 1".
+    g = "macro"
+    macros = [1.0] * N_MACROS
+    for k in range(N_MACROS):
+        r.continuous(f"macro.{k + 1}", f"Macro {k + 1}", *_item(lambda: macros, k),
+                     lo=0.0, hi=1.0, fmt=lambda v: f"{v * 100:.0f} %", group=g,
+                     tip="Does nothing on its own. Put it on a route as its scale, or own "
+                         "it with a hand or LFO, to chain.")
 
     # ---- scene ----
     g = "scene"
