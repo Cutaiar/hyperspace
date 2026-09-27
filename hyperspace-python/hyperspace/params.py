@@ -201,7 +201,7 @@ class Param:
         k = self.kind
         if k is Kind.CONTINUOUS:
             if self.taper is not None:
-                return self.taper.unmap(v) / self.taper.steps
+                return self._taper_pos(v) / self.taper.steps
             return self._raw_norm(v)
         if k is Kind.ENUM:
             n = self.steps
@@ -209,6 +209,29 @@ class Param:
         if k is Kind.TOGGLE:
             return 1.0 if v else 0.0
         return 0.0
+
+    def _taper_pos(self, v: float) -> float:
+        """A tapered value's position as a float: the detent when it sits on
+        one (set_value puts it there, so the check is exact), otherwise
+        found between the neighbouring detents by bisection on map(), a
+        monotonic closed form in a float position. This is what keeps a
+        sub-detent nudge in the base while a source rides the param."""
+        t = self.taper
+        p = t.unmap(v)
+        if t.map(p) == v:
+            return float(p)
+        lo, hi = max(p - 1, 0), min(p + 1, t.steps)
+        if v <= t.map(lo):
+            return float(lo)
+        if v >= t.map(hi):
+            return float(hi)
+        for _ in range(32):
+            mid = (lo + hi) / 2
+            if t.map(mid) < v:
+                lo = mid
+            else:
+                hi = mid
+        return (lo + hi) / 2
 
     def _value_of_norm(self, u: float):
         """The value at a float position — the un-detented map a lane uses.
@@ -280,7 +303,9 @@ class Param:
 
     @property
     def norm(self) -> float:
-        """The setting as a float in [0, 1] (the base while modulated)."""
+        """The setting as a float in [0, 1] (the base while modulated).
+        Continuous: a tapered value between detents reads between them;
+        `position()` is the detent."""
         if self._base is not None:
             return self._base
         return self._norm_of(self.get())
@@ -317,6 +342,53 @@ class Param:
                 self.set(not self.base)
         elif k is Kind.TRIGGER:
             self.fire()
+
+    # ---- relative moves in the param's own units: the mouse, the sticks, ↑/↓ ----
+    #
+    # Both work on the *base* and write it back, so while a performer owns
+    # the param its offset rides on the move instead of folding into it
+    # (plan 09 decision 3). Neither snaps to a detent: a drag or a held key
+    # moves a tapered param by a fraction of a step per frame, and
+    # set_value's unmap round-trip would land it back on the same detent
+    # every frame — so the value is written raw through set(), and a
+    # modulated base keeps its continuous position (_taper_pos).
+
+    def nudge(self, delta: float) -> float:
+        """Add `delta` to the base, wrapped or clamped into range; returns
+        the delta actually applied (less than asked at a stop)."""
+        if self.kind is not Kind.CONTINUOUS:
+            raise TypeError(f"{self.id} is {self.kind.value}, not continuous")
+        old = self.base
+        lo, hi = self._bounds()
+        if self.wrap:
+            v = lo + (old + delta - lo) % (hi - lo)
+        else:
+            v = _clamp(old + delta, lo, hi)
+        if self.integer:
+            v = round(v)
+        self.set(v)
+        return delta if self.wrap else v - old
+
+    def scale(self, factor: float) -> float:
+        """Multiply the base by `factor`, clamped into range; returns the
+        ratio actually applied. A ratio means nothing on a base of 0 or a
+        range that reaches 0 or below: then 1.0, and nothing moves."""
+        if self.kind is not Kind.CONTINUOUS:
+            raise TypeError(f"{self.id} is {self.kind.value}, not continuous")
+        old = self.base
+        lo, hi = self._bounds()
+        if lo <= 0.0 or old <= 0.0:
+            return 1.0
+        v = _clamp(old * factor, lo, hi)
+        if self.integer:
+            v = round(v)
+        self.set(v)
+        return v / old
+
+    def _bounds(self) -> tuple[float, float]:
+        """The range in the param's own units — the taper's ends, or lo..hi."""
+        t = self.taper
+        return (t.map(0), t.map(t.steps)) if t is not None else (self.lo, self.hi)
 
     def cycle(self, n: int = 1) -> None:
         """Like step, but an enum wraps around."""
