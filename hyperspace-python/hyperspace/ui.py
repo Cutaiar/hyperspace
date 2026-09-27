@@ -33,7 +33,7 @@ from collections.abc import Callable
 
 from imgui_bundle import imgui
 
-from . import ui_bands, ui_fx, ui_lookback, ui_presets, ui_routing
+from . import ui_bands, ui_fx, ui_lfo, ui_lookback, ui_presets, ui_routing
 from .analyzer import N_MAX
 from .audio import AudioEngine, input_devices
 from .bands import BANDS, CEIL, KNEE, NOM
@@ -297,6 +297,7 @@ CHEATSHEET = [
     ("K / 0", "play-pause / restart track"),
     ("R", "reset view + camera"),
     ("F1–F8", "load theme · ⇧ saves"),
+    ("B", "tap tempo · ⇧B LFO trigger"),
     ("Cmd+R", "restart process"),
     ("H / ?", "panel / this sheet"),
     ("T", "overlay: float over the screen"),
@@ -314,7 +315,7 @@ CHEATSHEET = [
     ("right-click", "a control: MIDI learn / unbind"),
 ]
 
-# ---- the pages: (key, rail label, the group whose dirty dot the rail shows) ----
+# ---- the pages: (key, rail label, the group — or groups — whose dirty dot the rail shows) ----
 # One page per registry group where a group is a module of its own; the
 # view group is big enough to split into View / Faces & Pattern / Bitmap,
 # and those two sub-pages say so in their section notes. The audio page
@@ -322,7 +323,8 @@ CHEATSHEET = [
 # the analyzer page the scene and meters, then the band editor
 # (ui_bands.py); the routing page is the matrix (ui_routing.py); the fx
 # page the effect stack (ui_fx.py); the hands page is the Ultraleap live
-# view and setup (hands/panel.py).
+# view and setup (hands/panel.py); the lfo page the clock and the four
+# LFOs (ui_lfo.py).
 PAGES = [
     ("output", "output", "output"),
     ("view", "view", "view"),
@@ -334,6 +336,7 @@ PAGES = [
     ("audio", "audio", "master"),
     ("analyzer", "analyzer", "band"),
     ("routing", "routing", None),
+    ("lfo", "lfo", ("lfo", "tempo")),
     ("hands", "hands", "hands"),
     ("presets", "presets", None),
     ("system", "system", None),
@@ -373,6 +376,8 @@ class Panel:
         self.output = None    # set by app.py (overlay.Output); its params draw below
         self.hands = None          # set by app.py when the tracker is on (hands.HandsIO)
         self.hand_settings = None  # set by app.py (hands.HandSettings): the HANDS page
+        self.clock = None          # set by app.py (tempo.Clock): the LFO page's beat light
+        self.lfos = None           # set by app.py (lfo.LFOs): the LFO page's scopes
         self.restart_requested = False  # main loop polls after draw() and execv's
         self._register_panel_params()
 
@@ -977,7 +982,8 @@ class Panel:
             dl.add_text(imgui.ImVec2(p0.x + 12, p0.y + (h - FONT_MICRO) / 2 - 1),
                         u32(imgui.ImVec4(1, 1, 1, 1) if lit else TEXT if hov else DIM),
                         label.upper())
-            if group is not None and ui_presets.dirty(self, group, polled=True):
+            groups = (group,) if isinstance(group, str) else (group or ())
+            if any(ui_presets.dirty(self, g, polled=True) for g in groups):
                 dl.add_circle_filled(imgui.ImVec2(p1.x - 11, p0.y + h / 2), 3.5,
                                      u32(imgui.ImVec4(1, 1, 1, 1) if lit else RED))
         imgui.pop_font()
@@ -1226,6 +1232,10 @@ class Panel:
     def _page_routing(self, dt: float) -> None:
         """The routing matrix — lanes → params (ui_routing.py)."""
         ui_routing.page(self, dt)
+
+    def _page_lfo(self, dt: float) -> None:
+        """The tap-tempo clock and the four LFOs (ui_lfo.py)."""
+        ui_lfo.page(self, dt)
 
     def _page_hands(self, dt: float) -> None:
         """The Ultraleap hands: live view and setup (hands/panel.py)."""

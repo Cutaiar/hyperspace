@@ -12,14 +12,20 @@ source like any other, read by the `Router` once per frame.
 Sources are one string, ``scheme:address``:
 
   key:<NAME>       a GLFW key by constant name without KEY_ ("R", "F1",
-                   "LEFT_BRACKET", "1")
+                   "LEFT_BRACKET", "1"); with a modifier in front,
+                   "SHIFT+B" or "SUPER+R" (MODIFIERS). A row with a
+                   modifier fires only while it is held; a row on the bare
+                   key then stays quiet while a modifier some other row on
+                   that key names is held, so "B" and "SHIFT+B" are two
+                   controls. F1–F8 / ⇧F1–F8 and Cmd+R are still app.py's own
   pad:<NAME>       a gamepad button by gamepad.py's name ("A", "LB", "LSTICK")
   hat:<DIR>        the d-pad: UP DOWN LEFT RIGHT
   cc:<ch>:<n>      MIDI control change n on 0-based channel ch, or * for any
   note:<ch>:<n>    MIDI note n
   pitch:<ch>       MIDI pitch bend
   lane:<i>         analyzer lane i — continuous, held every frame it is live
-  ext:<i>          an external MIDI lane (WP4c); lfo:<i> is reserved
+  ext:<i>          an external MIDI lane (WP4c)
+  lfo:<i>          LFO i's output in [0, 1], resting at 0.5 (lfo.py)
   hand:<i>         Ultraleap hand axis i's output in [0, 1] (hands.py),
                    then one presence lane per hand; NaN before that hand
                    was ever seen, and a NaN reading is not live
@@ -200,14 +206,22 @@ MODE_TO_OP = {"abs": "abs", "rel": "rel", "rel64": "rel64", "trigger": "toggle",
 # schema 1's performer ops → schema 2's (migrate_v1); `replace` has no twin
 # but a push on a base of 0, which a file can't ask for, so it is dropped
 V1_TO_OP = {"mod": "push", "span": "position", "abs": "position"}
+# key modifiers a row may name in front of the key ("SHIFT+B"); each is
+# a pair of GLFW keys the adapter reports as one state (app.Keys)
+MODIFIERS = ("SHIFT", "SUPER")
+
 # plan 09 WP4 gives three APC40 buttons to the clock (apc40.DEFAULT_MAP):
 # TAP TEMPO taps it, NUDGE ± nudges it, and METRONOME fires the global
-# LFO trigger; the theme cycle TAP TEMPO used to do moves to QUANT. A v1
-# file carries the old factory rows; the migration swaps exactly those —
-# (source, target, op, value) → (target, op, value) — and leaves a row
-# the user put on one of the notes alone. Named here rather than read
-# from DEFAULT_MAP so the migration says the same thing whatever the map
-# of the day; the targets exist once WP4 lands and are dormant until then.
+# LFO trigger; the theme cycle TAP TEMPO used to do moves to QUANT; and
+# the keyboard gets B / ⇧B. A file written before that — at either
+# schema — carries the old factory rows and lacks the new ones, so every
+# table load runs `remap_factory`: it swaps exactly the old factory rows
+# — (source, target, op, value) → (target, op, value) — adds the new rows
+# only where nothing uses the source, notes each change, and the file is
+# written back once. A row the user put on one of those sources is never
+# touched, and a second load finds nothing to do. Named here rather than
+# read from DEFAULT_MAP so the remap says the same thing whatever the map
+# of the day (test_routing pins the two together).
 APC_REMAP: dict[tuple[str, str, str, float], tuple[str, str, float]] = {
     (f"note:0:{apc40.N_TAP}", "theme.next", "toggle", 1.0): ("tempo.tap", "toggle", 1.0),
     (f"note:0:{apc40.N_NUDGE_P}", "view.shape", "step", 1.0): ("tempo.nudge", "step", 1.0),
@@ -218,6 +232,11 @@ APC_REMAP: dict[tuple[str, str, str, float], tuple[str, str, float]] = {
 APC_NEW_ROWS = (
     (f"note:0:{apc40.N_METRO}", "lfo.trigger", "toggle", 1.0, False),
     (f"note:0:{apc40.N_QUANT}", "theme.next", "toggle", 1.0, True),
+)
+# the keys WP4 added, likewise only where the key is free
+KEY_NEW_ROWS = (
+    ("key:B", "tempo.tap", "fire", 1.0),
+    ("key:SHIFT+B", "lfo.trigger", "fire", 1.0),
 )
 
 # the legacy rate route: a push on a base of 0 lands the reference's
@@ -306,6 +325,18 @@ class Binding:
         if not self.is_midi or self.scheme == "pitch" or len(self.parts) < 2:
             return 0
         return int(self.parts[1])
+
+    @property
+    def key_name(self) -> str:
+        """A key source's GLFW name without its modifiers ("SHIFT+B" → "B")."""
+        return self.parts[0].rsplit("+", 1)[-1] if self.parts else ""
+
+    @property
+    def modifiers(self) -> frozenset[str]:
+        """The modifiers a key row needs held ({"SHIFT"}); empty for the bare key."""
+        if self.scheme != "key" or not self.parts:
+            return frozenset()
+        return frozenset(self.parts[0].upper().split("+")[:-1])
 
     @property
     def index(self) -> int:
@@ -434,6 +465,7 @@ def keymap() -> list[Binding]:
         ("M", "audio.mic", "toggle"), ("K", "audio.play", "toggle"),
         ("0", "audio.restart", "fire"),
         ("T", "overlay.on", "toggle"), ("G", "overlay.passthrough", "toggle"),
+        ("B", "tempo.tap", "fire"), ("SHIFT+B", "lfo.trigger", "fire"),
         *[(str(p + 1), f"view.plane.{n}", "toggle") for p, n in enumerate(PLANES)],
     ]
     return [Binding(f"key:{k}", pid, op, *arg) for k, pid, op, *arg in rows]
@@ -503,21 +535,13 @@ def referee(rows: Iterable[Binding]) -> tuple[list[Binding], list[tuple[Binding,
 def migrate_v1(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
     """Schema 1 → 2: the performer ops renamed (`mod` → push with the
     source's own rest, `span` → position, a lane-scheme `abs` → position
-    at depth 1), `replace` dropped, the APC40 buttons WP4 moved remapped
-    where the file still carries the old factory rows. Returns (rows, a
-    note per row dropped or remapped); `referee` then settles second owners."""
+    at depth 1), `replace` dropped. Returns (rows, a note per row dropped);
+    `referee` then settles second owners, and `remap_factory` — run on
+    every table load, not only here — brings the factory rows up to date."""
     out: list[Binding] = []
     notes: list[str] = []
-    moved_theme = False
     for b in rows:
         if b.scheme not in LANE_SCHEMES:
-            hit = APC_REMAP.get((b.source, b.target, b.op, float(b.value)))
-            if hit is not None:
-                target, op, value = hit
-                notes.append(f"remapped {b.source}: {b.target} → {target} (the APC40 map "
-                             "of plan 09)")
-                moved_theme = moved_theme or b.target == "theme.next"
-                b = replace(b, target=target, op=op, value=value)
             out.append(b)
             continue
         op = V1_TO_OP.get(b.op)
@@ -530,12 +554,38 @@ def migrate_v1(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
             b.value, b.pickup = 1.0, True
         b.op = op
         out.append(b)
+    return out, notes
+
+
+def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
+    """The factory rows plan 09 WP4 moved, on a table of any schema: the
+    old APC40 factory rows swapped for the new (APC_REMAP), the METRONOME /
+    QUANT notes and the B / ⇧B keys added where nothing uses the source
+    (APC_NEW_ROWS, KEY_NEW_ROWS). Idempotent: a second pass finds every old
+    row gone and every source taken. Returns (rows, a note per change)."""
+    out: list[Binding] = []
+    notes: list[str] = []
+    moved_theme = False
+    for b in rows:
+        hit = APC_REMAP.get((b.source, b.target, b.op, float(b.value)))
+        if hit is not None:
+            target, op, value = hit
+            notes.append(f"remapped {b.source}: {b.target} → {target} (the APC40 map "
+                         "of plan 09)")
+            moved_theme = moved_theme or b.target == "theme.next"
+            b = replace(b, target=target, op=op, value=value)
+        out.append(b)
     used = {b.source for b in out}
     for source, target, op, value, only_if_moved in APC_NEW_ROWS:
         if source in used or (only_if_moved and not moved_theme):
             continue
         out.append(Binding(source, target, op, value, feedback="led"))
         notes.append(f"added {source} → {target} (the APC40 map of plan 09)")
+    for source, target, op, value in KEY_NEW_ROWS:
+        if source in used:
+            continue
+        out.append(Binding(source, target, op, value))
+        notes.append(f"added {source} → {target} (the keys of plan 09)")
     return out, notes
 
 
@@ -607,7 +657,10 @@ class Bindings:
         """The file at `path`, else the factory table — with an old
         midi_map.json's rows in place of the factory MIDI part, written once.
         A schema-1 file is migrated the same way: noted on stderr, written
-        back once, and from then on the file rules."""
+        back once, and from then on the file rules. Whatever the schema,
+        the factory rows plan 09 moved are brought up to date on every load
+        (`remap_factory`) — a change is noted and written back once, and a
+        table already current is left alone."""
         if path is not None and path.exists():
             try:
                 t = cls.from_json(json.loads(path.read_text()), path=path)
@@ -616,7 +669,9 @@ class Bindings:
                 t = cls.factory(profile, path)
                 t.error = f"bindings: {e}"
                 return t
-            if t.migrated:
+            t.bindings, remapped = remap_factory(t.bindings)
+            t.notes += remapped
+            if t.migrated or remapped:
                 t.announce(path)
                 t.write()
             return t
@@ -642,8 +697,8 @@ class Bindings:
         changed = len(self.notes) - dropped
         tail = ", ".join(f"{n} rows {what}" for n, what in ((dropped, "dropped"),
                                                               (changed, "changed")) if n)
-        print(f"bindings: migrated {path} to {SCHEMA}" + (f" ({tail})" if tail else ""),
-              file=sys.stderr)
+        what = f"migrated {path} to {SCHEMA}" if self.migrated else f"updated {path}"
+        print(f"bindings: {what}" + (f" ({tail})" if tail else ""), file=sys.stderr)
 
     @classmethod
     def from_json(cls, data: dict, path: Path | None = None) -> Bindings:
@@ -848,11 +903,31 @@ class Router:
     # ---- discrete adapters ----
 
     def keys(self, keys) -> None:
-        """One frame of keyboard rows; `keys` is anything with pressed(glfw_key)."""
+        """One frame of keyboard rows; `keys` is anything with
+        pressed(glfw_key) — an edge, asked once per key — and shift() /
+        super() for the modifier state (app.Keys).
+
+        Rows on one key are settled together: a row with modifiers fires
+        when all of them are held; the bare row fires unless a modifier
+        some row on this key names is held — so ``key:B`` taps and
+        ``key:SHIFT+B`` triggers, and neither hears the other's press.
+        """
+        by_code: dict[int, list[Binding]] = {}
         for b in self.table.of("key"):
             code = self._code(b)
-            if code is not None and keys.pressed(code):
-                act(self.reg, b)
+            if code is not None:
+                by_code.setdefault(code, []).append(b)
+        held: frozenset[str] | None = None
+        for code, rows in by_code.items():
+            if not keys.pressed(code):
+                continue
+            if held is None:
+                held = frozenset(m for m in MODIFIERS if getattr(keys, m.lower())())
+            used = frozenset().union(*(b.modifiers for b in rows))
+            for b in rows:
+                mods = b.modifiers
+                if (mods <= held) if mods else not (held & used):
+                    act(self.reg, b)
 
     def pad(self, pad) -> None:
         """One frame of pad / hat rows; `pad` is a gamepad.Pad."""
@@ -1005,7 +1080,7 @@ def _resolve(scheme: str, name: str) -> int | None:
     try:
         if scheme == "key":
             import glfw
-            return getattr(glfw, f"KEY_{name}")
+            return getattr(glfw, f"KEY_{name.rsplit('+', 1)[-1]}")   # SHIFT+B → KEY_B
         from . import gamepad
         return getattr(gamepad, f"HAT_{name}" if scheme == "hat" else name)
     except (ImportError, AttributeError):

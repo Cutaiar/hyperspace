@@ -615,9 +615,16 @@ class Registry:
         return self.add(Param(pid, label, Kind.TOGGLE, get, set, group=group, tip=tip,
                               persist=persist, modulatable=modulatable, alias=alias))
 
-    def trigger(self, pid, label, fire, *, group="", tip="", modulatable=True) -> Param:
-        return self.add(Param(pid, label, Kind.TRIGGER, fire=fire, group=group, tip=tip,
-                              modulatable=modulatable))
+    def trigger(self, pid, label, fire, *, group="", tip="", modulatable=True,
+                lit: Callable[[], bool] | None = None) -> Param:
+        """`lit`, if given, is the light the trigger's button shows on its
+        own — the METRONOME LED blinking on the beat (midi.py reads it as
+        the param's `get`); without it a button only echoes its press."""
+        p = Param(pid, label, Kind.TRIGGER, fire=fire, group=group, tip=tip,
+                  modulatable=modulatable)
+        if lit is not None:
+            p.get = lit
+        return self.add(p)
 
     def text(self, pid, label, get, set, *, group="", tip="", persist=True) -> Param:
         return self.add(Param(pid, label, Kind.TEXT, get, set, group=group, tip=tip,

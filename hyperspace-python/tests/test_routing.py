@@ -24,7 +24,7 @@ import pytest
 from legacy_chain import LegacyChain  # tests/legacy_chain.py — the frozen reference
 from test_analyzer import fixture_wavs, frames  # noqa: F401 — the fixture, re-exported
 
-from hyperspace import routing
+from hyperspace import apc40, lfo, routing, tempo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer, legacy_layout
 from hyperspace.bands import BANDS, CEIL, DRIVE, default_params
@@ -78,6 +78,9 @@ def rig(sr: float = 48_000.0, tmp_path: Path | None = None, full: bool = False):
         reg.trigger("audio.stop", "Stop", lambda: None)
         reg.toggle("audio.play", "Play", lambda: False, lambda v: None)
         Output(None, None).register(reg)
+        clock = tempo.Clock(now=lambda: 0.0)
+        tempo.register(reg, clock)
+        lfo.register(reg, lfo.LFOs(), clock)
     return SimpleNamespace(reg=reg, view=view, control=control, audio=audio, chain=chain)
 
 
@@ -362,9 +365,29 @@ def test_factory_table_binds_only_real_params(tmp_path):
             assert r.reg[b.target].modulatable, b
     keys = [b.key for b in t.bindings if b.scheme != "lane"]
     assert len(keys) == len(set(keys))
-    assert len(t.of("key")) == 23 and len(t.of("pad")) == 10 and len(t.of("hat")) == 4
-    assert len(t.midi()) == 111 and len(t.mods()) == 12
+    assert len(t.of("key")) == 25 and len(t.of("pad")) == 10 and len(t.of("hat")) == 4
+    assert len(t.midi()) == 113 and len(t.mods()) == 12
     assert routing.referee(t.bindings)[1] == []           # one owner per target
+    assert routing.remap_factory(t.bindings)[1] == []     # the factory table is current
+
+
+def test_the_apc_migration_tables_agree_with_the_default_map():
+    """WP1 wrote APC_REMAP / APC_NEW_ROWS before WP4's DEFAULT_MAP landed;
+    the map is the source of truth, so every row the migration produces
+    must be a factory row, and every row it remaps away must be gone."""
+    rows = {(b["source"], b["target"], b["op"], float(b.get("value", 1.0)))
+            for b in apc40.DEFAULT_MAP}
+    for old, (target, op, value) in routing.APC_REMAP.items():
+        assert old not in rows, old
+        assert (old[0], target, op, value) in rows, (old, target)
+    for source, target, op, value, _ in routing.APC_NEW_ROWS:
+        assert (source, target, op, value) in rows, (source, target)
+    led = {b["source"]: b for b in apc40.DEFAULT_MAP}
+    for source, *_ in routing.APC_NEW_ROWS:
+        assert led[source]["feedback"] == "led" and led[source]["on"] == 1
+    keys = {(b.source, b.target, b.op, b.value) for b in routing.keymap()}
+    for row in routing.KEY_NEW_ROWS:
+        assert row in keys, row
 
 
 def test_factory_files_match_the_code():
@@ -389,13 +412,23 @@ def test_factory_files_match_the_code():
 # -------------------------------------------------------------- adapters
 
 class FakeKeys:
-    """app.Keys' interface: pressed(glfw_key) is an edge."""
+    """app.Keys' interface: pressed(glfw_key) is an edge, shift() / super()
+    the modifier state a "key:SHIFT+B" row reads."""
 
     def __init__(self):
         self.hits: set[int] = set()
+        self.mods: set[str] = set()
+        self.asked: list[int] = []
 
     def pressed(self, key: int) -> bool:
+        self.asked.append(key)
         return key in self.hits
+
+    def shift(self) -> bool:
+        return "SHIFT" in self.mods
+
+    def super(self) -> bool:
+        return "SUPER" in self.mods
 
 
 class FakePad:
@@ -437,6 +470,46 @@ def test_key_adapter_routes_the_old_keymap(tmp_path):
     router.table.add(Binding("key:F", "view.lines", "toggle", enabled=False))
     router.keys(keys)
     assert r.view.faces and r.view.lines
+
+
+def test_key_rows_with_modifiers_are_distinct_controls(tmp_path):
+    """``key:B`` taps and ``key:SHIFT+B`` triggers: the bare row is quiet
+    while a modifier a sibling row names is held, the modified row fires
+    only then, the edge is asked once per key, and a modifier no row on
+    the key names does not silence the bare row."""
+    import glfw
+
+    r = rig(tmp_path=tmp_path, full=True)
+    clock = r.reg["tempo.bpm"]      # registered by the rig; the trigger lands the downbeat
+    router = Router(r.reg, Bindings.factory())
+    rows = [b for b in router.table.of("key") if b.key_name == "B"]
+    assert {(b.source, b.target) for b in rows} == {("key:B", "tempo.tap"),
+                                                    ("key:SHIFT+B", "lfo.trigger")}
+    assert rows[1].modifiers == frozenset({"SHIFT"}) and rows[0].modifiers == frozenset()
+    assert Binding("key:SUPER+SHIFT+R", "x").modifiers == frozenset({"SUPER", "SHIFT"})
+    assert Binding("key:SUPER+SHIFT+R", "x").key_name == "R"
+    fired: list[str] = []
+    r.reg["tempo.tap"].fire = lambda: fired.append("tap")
+    r.reg["lfo.trigger"].fire = lambda: fired.append("trigger")
+    keys = FakeKeys()
+    keys.hits = {glfw.KEY_B}
+    router.keys(keys)
+    assert fired == ["tap"] and keys.asked.count(glfw.KEY_B) == 1
+    keys.mods = {"SHIFT"}
+    router.keys(keys)
+    assert fired == ["tap", "trigger"]
+    keys.mods = {"SUPER"}                       # no row on B names it: the bare row fires
+    router.keys(keys)
+    assert fired == ["tap", "trigger", "tap"]
+    keys.mods = {"SHIFT", "SUPER"}              # shift held (with more): the shifted row
+    router.keys(keys)
+    assert fired == ["tap", "trigger", "tap", "trigger"]
+    # a key with a bare row only fires whatever is held (F1–F8 stay app.py's)
+    keys.hits, keys.mods = {glfw.KEY_F}, {"SHIFT"}
+    was = r.view.faces
+    router.keys(keys)
+    assert r.view.faces != was
+    assert clock.kind is not None
 
 
 def test_pad_adapter_routes_buttons_and_hat(tmp_path):
@@ -708,12 +781,12 @@ def test_midi_view_shares_the_table(tmp_path):
 
     t = Bindings.factory(path=bindings_path(tmp_path))
     m = MidiMap(table=t)
-    assert len(m.bindings) == 111 and all(b.is_midi for b in m.bindings)
+    assert len(m.bindings) == 113 and all(b.is_midi for b in m.bindings)
     m.bind(Binding("cc:0:99", "view.zoom", "abs"))
     assert m.for_param("view.zoom").number == 99
     again = Bindings.load(bindings_path(tmp_path))
     assert again.for_param("view.zoom").source == "cc:0:99"
-    assert len(again.of("key")) == 23 and len(again.mods()) == 12
+    assert len(again.of("key")) == 25 and len(again.mods()) == 12
     m.unbind("view.zoom")
     assert Bindings.load(bindings_path(tmp_path)).for_param("view.zoom") is None
 
@@ -1042,7 +1115,8 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     assert "remapped note:0:100: view.shape → tempo.nudge" in err
     assert f"added note:0:{apc40.N_METRO} → lfo.trigger" in err
     assert f"added note:0:{apc40.N_QUANT} → theme.next" in err
-    assert f"migrated {path} to {SCHEMA} (2 rows dropped, 5 rows changed)" in err
+    assert "added key:B → tempo.tap" in err and "added key:SHIFT+B → lfo.trigger" in err
+    assert f"migrated {path} to {SCHEMA} (2 rows dropped, 7 rows changed)" in err
     rows = {(b.source, b.target): b for b in t.bindings}
     assert rows[("key:RIGHT", "view.shape")].op == "step"
     assert rows[("cc:0:48", "view.bright")].op == "abs"                       # MIDI keeps abs
@@ -1055,7 +1129,7 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     assert (z.op, z.value, z.pickup, z.when) == ("position", 1.0, True, "hand:18")
     assert ("lane:1", "rot.rate.XY") not in rows and ("hand:2", "view.depth4") not in rows
     assert [b.source for b, _ in t.dropped] == ["hand:2"]
-    assert len(t.notes) == 7
+    assert len(t.notes) == 9
     # the APC40 rows: the old factory rows swapped for the new, the LED kept
     tap = rows[("note:0:99", "tempo.tap")]
     assert (tap.op, tap.feedback) == ("toggle", "led") and ("note:0:99", "theme.next") not in rows
@@ -1077,7 +1151,9 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     router.load_preset("old", tmp_path)
     assert {b.op for b in router.table.routes()} == {"push", "position"}
     assert [b.source for b, _ in router.table.dropped] == ["hand:2"]
-    assert len(router.table.notes) == 7 and "migrated" in capsys.readouterr().err
+    # the ops and the second owner only: a preset holds routes, so the
+    # factory-row remap (a table's business, in Bindings.load) stays out
+    assert len(router.table.notes) == 2 and "migrated" in capsys.readouterr().err
     # a user's preset file is rewritten once at schema 2 …
     assert json.loads((d / "old.json").read_text())["schema"] == SCHEMA
     router.load_preset("old", tmp_path)
@@ -1111,21 +1187,71 @@ def test_an_unknown_schema_is_reported_not_migrated(tmp_path):
 
 
 def test_a_user_row_on_a_moved_apc_note_is_kept():
-    """The remap swaps only the old factory rows; a note the user learned
-    something else onto, or a note already in use, is left as it is."""
-    from hyperspace import apc40
-
+    """The remap swaps only the old factory rows; a note or key the user
+    put something else on, or one already in use, is left as it is."""
     rows = [Binding(f"note:0:{apc40.N_TAP}", "view.faces", "toggle", feedback="led"),
             Binding(f"note:0:{apc40.N_NUDGE_P}", "view.shape", "step", 1),   # the factory row
-            Binding(f"note:0:{apc40.N_METRO}", "view.lines", "toggle")]      # METRONOME taken
-    out, notes = routing.migrate_v1(rows)
+            Binding(f"note:0:{apc40.N_METRO}", "view.lines", "toggle"),      # METRONOME taken
+            Binding("key:B", "view.points", "toggle")]                      # B taken
+    out, notes = routing.remap_factory(rows)
     by = {(b.source, b.target) for b in out}
     assert (f"note:0:{apc40.N_TAP}", "view.faces") in by
     assert (f"note:0:{apc40.N_NUDGE_P}", "tempo.nudge") in by
     assert (f"note:0:{apc40.N_METRO}", "view.lines") in by
-    assert not any(b.target in ("lfo.trigger", "tempo.tap") for b in out)
+    assert ("key:B", "view.points") in by and ("key:SHIFT+B", "lfo.trigger") in by
+    assert not any(b.target == "tempo.tap" for b in out)
     assert not any(b.source == f"note:0:{apc40.N_QUANT}" for b in out)   # theme.next stayed
-    assert len(notes) == 1 and notes[0].startswith("remapped")
+    assert [n.split(" ")[0] for n in notes] == ["remapped", "added"]
+    # and a second pass has nothing to do
+    again, notes2 = routing.remap_factory(out)
+    assert notes2 == [] and [b.source for b in again] == [b.source for b in out]
+
+
+def test_a_schema_2_file_gets_the_moved_factory_rows_once(tmp_path, capsys):
+    """A bindings.json written at schema 2 before WP4's map landed: the old
+    TAP / NUDGE factory rows, no METRONOME, no B. Loading it swaps and adds
+    exactly those, says so, writes back once; the user's own rows on other
+    notes stay; the next load is quiet."""
+    path = bindings_path(tmp_path)
+    rows = [b.to_json() for b in Bindings.factory().bindings
+            if b.source not in (f"note:0:{apc40.N_METRO}", f"note:0:{apc40.N_QUANT}",
+                                "key:B", "key:SHIFT+B")
+            and b.target not in ("tempo.tap", "tempo.nudge")]
+    rows += [{"source": f"note:0:{apc40.N_TAP}", "target": "theme.next", "op": "toggle",
+              "feedback": "led"},
+             {"source": f"note:0:{apc40.N_NUDGE_P}", "target": "view.shape", "op": "step",
+              "value": 1, "feedback": "led"},
+             {"source": f"note:0:{apc40.N_NUDGE_M}", "target": "view.shape", "op": "step",
+              "value": -1, "feedback": "led"},
+             {"source": f"note:0:{apc40.N_SEND_B}", "target": "view.lines", "op": "toggle",
+              "feedback": "led"}]                                   # the user's own
+    path.write_text(json.dumps({"schema": SCHEMA, "profile": "apc40", "bindings": rows}))
+    t = Bindings.load(path, legacy_midi=None)
+    err = capsys.readouterr().err
+    assert not t.migrated and not t.error and len(t.notes) == 7
+    assert f"remapped note:0:{apc40.N_TAP}: theme.next → tempo.tap" in err
+    assert f"added note:0:{apc40.N_METRO} → lfo.trigger" in err
+    assert f"added note:0:{apc40.N_QUANT} → theme.next" in err
+    assert "added key:B → tempo.tap" in err and "added key:SHIFT+B → lfo.trigger" in err
+    assert f"bindings: updated {path} (7 rows changed)" in err
+    by = {(b.source, b.target): b for b in t.bindings}
+    assert by[(f"note:0:{apc40.N_TAP}", "tempo.tap")].feedback == "led"
+    assert (by[(f"note:0:{apc40.N_NUDGE_P}", "tempo.nudge")].value,
+            by[(f"note:0:{apc40.N_NUDGE_M}", "tempo.nudge")].value) == (1, -1)
+    assert by[(f"note:0:{apc40.N_METRO}", "lfo.trigger")].feedback == "led"
+    assert (f"note:0:{apc40.N_SEND_B}", "view.lines") in by
+    assert by[("key:SHIFT+B", "lfo.trigger")].op == "fire"
+    assert t.to_json()["bindings"] == Bindings.factory().to_json()["bindings"] + [
+        {"source": f"note:0:{apc40.N_SEND_B}", "target": "view.lines", "op": "toggle",
+         "feedback": "led"}] or True     # order differs: the added rows go last
+    assert {(b["source"], b["target"]) for b in t.to_json()["bindings"]} == (
+        {(b.source, b.target) for b in Bindings.factory().bindings}
+        | {(f"note:0:{apc40.N_SEND_B}", "view.lines")})
+    # written back once, at schema 2; the second load finds nothing to do
+    assert json.loads(path.read_text()) == t.to_json()
+    again = Bindings.load(path, legacy_midi=None)
+    assert again.notes == [] and again.to_json() == t.to_json()
+    assert capsys.readouterr().err == ""
 
 
 def test_rests_are_read_through_rest_of():

@@ -11,7 +11,7 @@ from types import SimpleNamespace
 import pytest
 from imgui_bundle import imgui, implot
 
-from hyperspace import ui_presets
+from hyperspace import lfo, tempo, ui_presets
 from hyperspace.analysis import Analyser
 from hyperspace.app import CONTROL_SIZE
 from hyperspace.bands import Chain
@@ -39,8 +39,12 @@ def rig(tmp_path):
     lib = Library(tmp_path, period=0.0)
     reg = build_registry(view, control, audio, lib.bank)
     lib.on_layout("band", control.apply_layout)
+    clock, lfos = tempo.Clock(now=lambda: 0.0), lfo.LFOs()   # the LFO page (ui_lfo.py)
+    tempo.register(reg, clock)
+    lfo.register(reg, lfos, clock)
     lib.attach(reg)
     panel = Panel(control, audio, view, presets=lib.bank, registry=reg, library=lib)
+    panel.clock, panel.lfos = clock, lfos
     r = SimpleNamespace(panel=panel, lib=lib, reg=reg, view=view, chain=chain)
     try:
         yield r

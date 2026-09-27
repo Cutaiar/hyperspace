@@ -18,6 +18,7 @@ fullscreen, overlay) through the output.* params.
   L  lines          F  faces          ?  cheat sheet
   T  overlay: float the render over the screen    G  clicks through it
   F1–F8  load theme (whole-surface save state)    ⇧F1–F8  save theme
+  B  tap tempo      ⇧B  LFO trigger: the downbeat is now, synced LFOs restart
 
 Every input path — keys, the Xbox-layout gamepad, a MIDI controller, the
 analyzer's lanes — is one binding table over the parameter registry
@@ -63,7 +64,7 @@ import moderngl
 from imgui_bundle import imgui
 from imgui_bundle.python_backends.glfw_backend import GlfwRenderer
 
-from . import config, gamepad
+from . import config, gamepad, lfo, tempo
 from .audio import AudioEngine
 from .control import Control
 from .gamepad import Pad
@@ -255,7 +256,11 @@ class Keys:
 
     A key counts as down when it is down in the render window, or in the
     control window while imgui is not typing (`typing` is io.want_capture_
-    keyboard, set each frame after new_frame()).
+    keyboard, set each frame after new_frame()). This is the `keys` the
+    router's key rows read: pressed() is an edge, shift() / super() the
+    modifier state a "key:SHIFT+B" row needs. F1–F8 (⇧ saves) and Cmd+R
+    stay in the loop below — they predate the table and are out of plan
+    09's scope.
     """
 
     def __init__(self, render_win, ctrl_win):
@@ -285,6 +290,13 @@ class Keys:
 
     def down(self, *keys: int) -> bool:
         return any(self._down(k) for k in keys)
+
+    # the modifier state the routing table's key rows read ("key:SHIFT+B")
+    def shift(self) -> bool:
+        return self.down(glfw.KEY_LEFT_SHIFT, glfw.KEY_RIGHT_SHIFT)
+
+    def super(self) -> bool:  # the modifier's name, as the table spells it
+        return self.down(glfw.KEY_LEFT_SUPER, glfw.KEY_RIGHT_SUPER)
 
 
 class Mouse:
@@ -418,8 +430,15 @@ def main() -> None:
     # control before restoring values (07-overhaul contracts)
     library.on_layout("band", control.apply_layout)
     hand_settings = _hand_settings(reg, cfg)   # before attach: "default" includes them
+    # the tap-tempo clock and the four LFOs (tempo.py, lfo.py): their knobs
+    # are params too, so a preset carries a tempo and an LFO arrangement
+    clock = tempo.Clock()
+    lfos = lfo.LFOs()
+    tempo.register(reg, clock)
+    lfo.register(reg, lfos, clock)
     library.attach(reg)
     panel = Panel(control, audio, s, renderer, presets, registry=reg, library=library)
+    panel.clock, panel.lfos = clock, lfos     # the LFO page's scopes and beat light
     output = _make_output(render_win, reg, cfg)
     panel.output = output
     # one binding table for keys, pad, MIDI and lanes (an old midi_map.json migrates)
@@ -458,6 +477,9 @@ def main() -> None:
         *[(p, "params", "Param") for p in reg],
         (output, "overlay", "Output"),
         (router, "routing", "Router"),
+        (clock, "tempo", "Clock"),
+        (lfos, "lfo", "LFOs"),
+        *[(lf, "lfo", "LFO") for lf in lfos.lfos],
         *([(midi_io, "midi", "MidiIO"), (midi_io.map, "midi", "MidiMap")] if midi_io else []),
         *([(bridge_io, "bridge", "Bridge")] if bridge_io else []),
         *([(hands_io, "hands", "HandsIO")] if hands_io else []),
@@ -492,6 +514,7 @@ def main() -> None:
         dt = min(now - last, 0.05)
         last = now
         fps = fps * 0.95 + (1.0 / max(now and dt, 1e-6)) * 0.05
+        clock.tick(now)   # the clock's "now" for the frame: a trigger and the LFO step agree
 
         # the chain object is recreated on source attach; keep bindings fresh
         control.chain = audio.chain
@@ -500,7 +523,8 @@ def main() -> None:
         # ---- polled keys, from either window ----
         if keys.pressed(glfw.KEY_ESCAPE) or keys.pressed(glfw.KEY_Q):
             glfw.set_window_should_close(render_win, True)
-        router.keys(keys)
+        shift = keys.shift()
+        router.keys(keys)         # B taps, ⇧B triggers: both are table rows
         if keys.pressed(glfw.KEY_R):
             if keys.down(glfw.KEY_LEFT_SUPER, glfw.KEY_RIGHT_SUPER):
                 _restart(audio, impl, midi_io, ctrl_win, dream_io)
@@ -514,7 +538,6 @@ def main() -> None:
                 rate = D4_RATE0 + (D4_RATE1 - D4_RATE0) * ramp * ramp
                 _ride_depth(depth4, sgn * rate * dt)
         # F1–F8 flip whole-surface themes; with ⇧ held they save instead
-        shift = keys.down(glfw.KEY_LEFT_SHIFT, glfw.KEY_RIGHT_SHIFT)
         for k in range(SLOTS):
             if keys.pressed(glfw.KEY_F1 + k):
                 act(reg, f"theme.{'save' if shift else 'load'}.{k}", "fire")
@@ -566,6 +589,10 @@ def main() -> None:
             audio.step(dt)
             if bridge_io is not None:   # lanes out, external lanes in (bridge.py)
                 bridge_io.step(audio.chain if audio.on else None, router)
+            # the LFOs are a source like any other: stepped on the frame's
+            # clock, fed to the table as `lfo` before the modulation pass
+            lfos.step(dt, now, clock)
+            lfos.publish(router)
             # the lanes are a modulation source like any other (routing.py);
             # once every source has spoken for this frame, land base +
             # offsets on the objects before the integrator reads them

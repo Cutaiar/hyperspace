@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import mido
 import pytest
 
-from hyperspace import apc40
+from hyperspace import apc40, lfo, tempo
 from hyperspace.analysis import Analyser
 from hyperspace.bands import Chain
 from hyperspace.control import Control
@@ -59,10 +59,13 @@ def rig(tmp_path):
     reg.trigger("audio.stop", "Stop", lambda: None)
     reg.toggle("audio.play", "Play", lambda: False, lambda v: None)
     Output(None, None).register(reg)
+    clock = tempo.Clock(now=lambda: 0.0)       # the transport corner: tap, nudge, trigger
+    tempo.register(reg, clock)
+    lfo.register(reg, lfo.LFOs(), clock)
     inp, out = FakeIn(), FakeOut()
     m = MidiIO(reg, MidiMap(tmp_path / "midi_map.json"), inp=inp, out=out)
     return SimpleNamespace(reg=reg, view=view, control=control, audio=audio,
-                           presets=presets, midi=m, inp=inp, out=out)
+                           presets=presets, midi=m, inp=inp, out=out, clock=clock)
 
 
 def push(r, *msgs):
@@ -200,6 +203,46 @@ def test_step_buttons(rig):
     assert rig.control.selb == 0  # clamps at the first band
     push(rig, note(apc40.N_RIGHT))
     assert rig.control.selb == 1
+
+
+def test_transport_corner_is_the_clock(rig):
+    """TAP TEMPO taps, NUDGE ± steps a hundredth, QUANT cycles the theme."""
+    c = rig.clock
+    c.tick(1.0)
+    push(rig, note(apc40.N_TAP), note(apc40.N_TAP, 0))
+    c.tick(1.5)
+    push(rig, note(apc40.N_TAP), note(apc40.N_TAP, 0))
+    assert c.bpm == pytest.approx(120.0)
+    push(rig, note(apc40.N_NUDGE_P), note(apc40.N_NUDGE_P, 0))
+    assert c.nudge == pytest.approx(0.01)
+    push(rig, note(apc40.N_NUDGE_M), note(apc40.N_NUDGE_M, 0))
+    push(rig, note(apc40.N_NUDGE_M), note(apc40.N_NUDGE_M, 0))
+    assert c.nudge == pytest.approx(-0.01)
+    was = rig.presets.active
+    push(rig, note(apc40.N_QUANT))
+    assert rig.presets.active != was
+
+
+def test_metronome_fires_the_trigger_and_blinks_on_the_beat(rig):
+    """One row on the note: the press is the global LFO trigger, and its
+    LED follows the beat through the light the trigger param carries."""
+    c = rig.clock
+    c.tick(3.3)
+    push(rig, note(apc40.N_METRO), note(apc40.N_METRO, 0))
+    assert c.t0 == 3.3
+
+    def led():
+        return [m.velocity for m in rig.out.sent
+                if m.type == "note_on" and m.note == apc40.N_METRO][-1]
+
+    assert led() == 1                            # on the downbeat: lit
+    c.tick(3.3 + 0.25)                           # half a beat at 120: dark
+    rig.midi.poll()
+    assert led() == 0
+    c.tick(3.3 + 0.5)                            # the next beat
+    rig.midi.poll()
+    assert led() == 1
+    assert len(rig.midi.map.route("note", 0, apc40.N_METRO)) == 1
 
 
 def test_theme_grid_lights_the_active_theme(rig):

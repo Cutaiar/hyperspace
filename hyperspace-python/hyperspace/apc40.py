@@ -28,6 +28,16 @@ LEDs (out): note velocity on the button's own note. Clip-launch grid:
 blink. Every other button: 0 off · 1 on · 2 blink. Knob rings: the knob's
 own CC carries the value; CC number + 8 sets the ring style
 (0 off · 1 single · 2 volume · 3 pan).
+
+The default map's transport corner is the clock (plan 09): TAP TEMPO taps
+``tempo.tap``, NUDGE +/− step ``tempo.nudge`` by a hundredth of a beat,
+METRONOME fires ``lfo.trigger`` — the global LFO trigger — and QUANT cycles
+the theme. METRONOME's LED blinks on the beat through the ordinary ``led``
+feedback: one row, no second binding on the note. A trigger's LED is its
+press echo unless the param carries a light of its own
+(``Registry.trigger(lit=)``), and ``lfo.trigger`` is declared with the
+clock's ``on_beat`` — so midi.py's `_lit` reads the beat off the param
+and the row stays a plain trigger row that Learn can move like any other.
 """
 
 from __future__ import annotations
@@ -155,8 +165,12 @@ DEFAULT_MAP: list[dict] = [
     _note("scene.reset_all", N_STOP_ALL),
     # transport and the rest
     _note("audio.play", N_PLAY), _note("audio.stop", N_STOP), _note("audio.mic", N_REC),
-    _note("theme.next", N_TAP), _note("view.shape", N_NUDGE_P, op="step", value=1),
-    _note("view.shape", N_NUDGE_M, op="step", value=-1),
+    # the clock (tempo.py, lfo.py): TAP TEMPO taps, NUDGE ± shifts the downbeat
+    # by a hundredth of a beat, METRONOME is the global LFO trigger — its LED
+    # blinks on the beat (the trigger param carries the light; see the docstring)
+    _note("tempo.tap", N_TAP), _note("tempo.nudge", N_NUDGE_P, op="step", value=1),
+    _note("tempo.nudge", N_NUDGE_M, op="step", value=-1),
+    _note("lfo.trigger", N_METRO), _note("theme.next", N_QUANT),
     _note("view.bright", N_UP, op="step", value=3),
     _note("view.bright", N_DOWN, op="step", value=-3),
     _note("band.select", N_RIGHT, op="step", value=1),
