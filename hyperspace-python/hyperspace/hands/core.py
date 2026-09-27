@@ -8,10 +8,11 @@ back to a rest value when the hand leaves, and glided back onto the hand
 when it returns. The output y ∈ [0, 1] goes two ways:
 
   * inside Hyperspace, as ``hand:<i>`` sources in the routing table
-    (routing.py) at float precision: right-click → Learn binds one to a
-    param (op ``abs``: the param follows the hand), and the ROUTING page
-    can `mod` / `replace` anything with it. No MIDI in between, so no
-    7-bit steps and no channel shared with the APC40.
+    (routing.py) at float precision: right-click → Learn writes a
+    `position` route (the hand is the fader), and the ROUTING page can
+    `push` or `position` anything with it — one performer per param, the
+    table's referee asks before a hand takes over. No MIDI in between,
+    so no 7-bit steps and no channel shared with the APC40.
   * outside, to a MIDI port for a DAW (a virtual "Hyperspace Hands" port
     unless [hands] out names another): per axis 7-bit CC, 14-bit CC,
     pitch bend or channel pressure on any channel, rate-limited, plus a
@@ -764,7 +765,12 @@ class HandsIO:
             # knowing anything about hands
             router.gates["hand"] = [(self.gate_lane(s, f), f"{s[0].upper()} {f[:3]}")
                                     for s in SIDES for f in PINCHES]
-            router.drive("hand")
+            if not hasattr(router, "rests"):
+                router.rests = {}
+            # where each lane idles, so a push row defaults to pushing
+            # nothing from a neutral hand: a centred axis 0.5, else 0
+            router.rests["hand"] = ([0.5 if a.bipolar else 0.0 for a in self.axes]
+                                    + [0.0] * (len(SIDES) + len(SIDES) * len(PINCHES)))
         if midi is not None:
             self._learn(midi)
         return msgs

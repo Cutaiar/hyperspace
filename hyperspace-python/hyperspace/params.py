@@ -298,15 +298,6 @@ class Param:
         elif k is Kind.TRIGGER and u >= 0.5:
             self.fire()
 
-    def glide(self, u: float) -> None:
-        """Set from a float position without detents — a continuous source
-        (a hand) holding the value: set_norm would step a fader in its
-        detents. Other kinds take it as set_norm does."""
-        if self.kind is Kind.CONTINUOUS:
-            self.set(self._value_of_norm(_clamp(float(u), 0.0, 1.0)))
-        else:
-            self.set_norm(u)
-
     # ---- discrete moves ----
 
     def step(self, n: int = 1) -> None:

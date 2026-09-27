@@ -48,7 +48,7 @@ import mido
 
 from . import apc40
 from .params import Kind, Param, Registry
-from .routing import Binding, Bindings, act, bindings_path
+from .routing import Binding, Bindings, Owned, act, bindings_path
 
 PROFILES = {"apc40": apc40}
 MAP_FILE = bindings_path()
@@ -209,6 +209,9 @@ class MidiIO:
         self.ports = Ports(self.port_match, self.port_match, inp=inp, out=out, clock=clock)
         self.last = ""          # last message seen, for the status line
         self.learning: str | None = None
+        # a hand learn the referee refused, (new row, the target's current
+        # performer), held until the panel's prompt calls resolve_pending
+        self.pending: tuple[Binding, Binding] | None = None
         self._writes: dict[str, float] = {}  # param → norm we last wrote / saw
         if self.ports.injected:
             self._enter()
@@ -307,17 +310,42 @@ class MidiIO:
 
     def learn_source(self, source: str, when: str | None = None) -> None:
         """Another adapter completes the learn with one of its own sources
-        (hands/core.py: ``hand:<i>``): the param follows it absolutely —
-        the Router applies the row — with no pickup and no device
-        feedback. `when` gates the row on a second source (a pinch held
-        while learning), so the row only acts while that reads on."""
+        (hands/core.py: ``hand:<i>``): a `position` route at depth 1 — the
+        source is the whole fader, through the Router like every route,
+        with no pickup and no device feedback. `when` gates the row on a
+        second source (a pinch held while learning), so the row only acts
+        while that reads on. If the param already has a performer the
+        learn is held in `pending` for the panel's prompt (`resolve_pending`)
+        rather than taking the target or being lost."""
         pid = self.learning
         self.learning = None
         if pid is None or self.reg.get(pid) is None:
             return
-        b = Binding(source, pid, "abs", pickup=False, when=when)
-        self.map.bind(b)
+        b = Binding(source, pid, "position", 1.0, when=when)
+        try:
+            self.map.table.add(b)
+        except Owned as e:
+            self.pending = (b, e.existing)
+            self.last = f"{e} — replace?"
+            return
+        self.map.write()
         self.last = f"learned {pid} ← {b.describe()}"
+
+    def resolve_pending(self, replace: bool) -> Binding | None:
+        """The prompt's answer to a held learn: *Replace* swaps the target's
+        performer for the learned row and writes the file; *Keep* leaves
+        the table as it was. Returns the row now in the table, or None."""
+        if self.pending is None:
+            return None
+        new, old = self.pending
+        self.pending = None
+        if not replace:
+            self.last = f"kept {old.describe()} on {old.target}"
+            return None
+        self.map.table.replace_owner(new)
+        self.map.write()
+        self.last = f"learned {new.target} ← {new.describe()}"
+        return new
 
     # ---- per frame ----
 

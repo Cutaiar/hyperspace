@@ -300,6 +300,30 @@ def test_relative_cc_learn_keeps_encoder_mode(rig):
     assert rig.midi.binding_for("view.instances").op == "rel"
 
 
+def test_learn_source_writes_a_position_route(rig, tmp_path):
+    """Another adapter's source (a hand) completing a learn: a `position`
+    row at depth 1 through the table's referee, written to the file; the
+    MIDI view never sees it. On an owned target it is held in `pending`."""
+    from hyperspace.routing import Bindings
+
+    m = rig.midi
+    m.learn("view.inst_amp")
+    m.learn_source("hand:3", when="hand:14")
+    assert m.learning is None and m.pending is None
+    b = m.map.table.owner("view.inst_amp")
+    assert (b.source, b.op, b.value, b.when, b.pickup) == ("hand:3", "position", 1.0, "hand:14", True)
+    assert m.binding_for("view.inst_amp").is_midi            # the knob row is still there
+    assert "learned view.inst_amp" in m.last
+    assert Bindings.load(tmp_path / "midi_map.json").owner("view.inst_amp") == b
+    m.learn("view.inst_amp")
+    m.learn_source("hand:7")
+    assert m.pending is not None and m.pending[1] is b and "replace?" in m.last
+    assert m.map.table.owner("view.inst_amp") is b
+    m.learn("no.such.param")
+    m.learn_source("hand:7")                                  # unknown target: nothing
+    assert m.learning is None and m.map.table.owner("no.such.param") is None
+
+
 # ---------------------------------------------------------------- map file
 
 def test_map_round_trips_json(tmp_path):
