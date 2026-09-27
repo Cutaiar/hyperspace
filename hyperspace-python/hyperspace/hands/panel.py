@@ -68,14 +68,15 @@ def ctx_rows(panel, p) -> None:
     if router is None:
         return
     names = getattr(router, "labels", {}).get("hand") or []
-    rows = [b for b in router.table.of("hand") if b.op == "abs" and b.target == p.id]
+    rows = [b for b in router.table.of("hand") if b.target == p.id]
     label = lambda i: names[i] if 0 <= i < len(names) else str(i)
     for b in rows:
-        imgui.text(f"hand {label(b.index)}")
+        verb = "positions" if b.op == "position" else "pushes"
+        imgui.text(f"hand {label(b.index)} {verb}" + ("" if b.enabled else " (off)"))
     if rows and _gate_menu(router, rows):
         router.table.write()
     if rows and imgui.menu_item_simple("Unbind hand"):
-        for b in rows:                  # the abs rows only: its routes stay
+        for b in rows:                  # the hand's rows only: a lane's stay
             router.table.remove(b)
         router.table.write()
 

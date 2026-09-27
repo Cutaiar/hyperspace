@@ -148,9 +148,9 @@ def draw(self, dt, fps):
                 r.table.remove(b)
             y = self.hands.axis("right.y")
             gate = self.hands.gate_lane("right", "index")
-            r.table.add(Binding(f"hand:{y}", "view.bright", "mod", 0.5,
+            r.table.add(Binding(f"hand:{y}", "view.bright", "push", 0.5,
                                 when=f"hand:{gate}"))
-            r.table.add(Binding(f"hand:{y}", "view.speed", "mod", 0.5))
+            r.table.add(Binding(f"hand:{y}", "view.speed", "push", 0.5))
             self.router = r
     if MOD:
         for pid, u in MODULATED.items():
@@ -163,7 +163,7 @@ def draw(self, dt, fps):
             a.chain.warm = 0
             r = state["router"]
             if r is not None:
-                r.table.add(Binding("lane:1", "band.0.f", "mod", 0.25))
+                r.table.add(Binding("lane:1", "band.0.f", "push", 0.25))
                 self.router = r
         a.analyser.feed(synth(state["t"], int(a.sr / 60) + 64, a.sr))
         state["t"] += 1 / 60

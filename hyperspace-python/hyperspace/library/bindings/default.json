@@ -1,5 +1,5 @@
 {
- "schema": "hyperspace.bindings/1",
+ "schema": "hyperspace.bindings/2",
  "profile": "apc40",
  "bindings": [
   {"source": "key:RIGHT", "target": "view.shape", "op": "step"},
@@ -150,17 +150,17 @@
   {"source": "note:0:58", "target": "audio.restart", "op": "toggle", "feedback": "led"},
   {"source": "note:0:80", "target": "overlay.on", "op": "toggle", "feedback": "led"},
   {"source": "note:0:87", "target": "overlay.passthrough", "op": "toggle", "feedback": "led"},
-  {"source": "lane:0", "target": "rot.rate.ZW", "op": "replace", "value": 8.32, "scale": "master.gain"},
-  {"source": "lane:1", "target": "rot.rate.XW", "op": "replace", "value": 8.32, "scale": "master.gain"},
-  {"source": "lane:2", "target": "rot.rate.YW", "op": "replace", "value": -8.32, "scale": "master.gain"},
-  {"source": "lane:3", "target": "rot.rate.XY", "op": "replace", "value": -8.32, "scale": "master.gain"},
-  {"source": "lane:4", "target": "rot.rate.XZ", "op": "replace", "value": 8.32, "scale": "master.gain"},
-  {"source": "lane:5", "target": "rot.rate.YZ", "op": "replace", "value": -8.32, "scale": "master.gain"},
-  {"source": "lane:0", "target": "pattern.mod.0", "op": "mod"},
-  {"source": "lane:1", "target": "pattern.mod.1", "op": "mod"},
-  {"source": "lane:2", "target": "pattern.mod.2", "op": "mod"},
-  {"source": "lane:3", "target": "pattern.mod.3", "op": "mod"},
-  {"source": "lane:4", "target": "pattern.mod.4", "op": "mod"},
-  {"source": "lane:5", "target": "pattern.mod.5", "op": "mod"}
+  {"source": "lane:0", "target": "rot.rate.ZW", "op": "push", "value": 0.0625, "scale": "master.gain"},
+  {"source": "lane:1", "target": "rot.rate.XW", "op": "push", "value": 0.0625, "scale": "master.gain"},
+  {"source": "lane:2", "target": "rot.rate.YW", "op": "push", "value": -0.0625, "scale": "master.gain"},
+  {"source": "lane:3", "target": "rot.rate.XY", "op": "push", "value": -0.0625, "scale": "master.gain"},
+  {"source": "lane:4", "target": "rot.rate.XZ", "op": "push", "value": 0.0625, "scale": "master.gain"},
+  {"source": "lane:5", "target": "rot.rate.YZ", "op": "push", "value": -0.0625, "scale": "master.gain"},
+  {"source": "lane:0", "target": "pattern.mod.0", "op": "push"},
+  {"source": "lane:1", "target": "pattern.mod.1", "op": "push"},
+  {"source": "lane:2", "target": "pattern.mod.2", "op": "push"},
+  {"source": "lane:3", "target": "pattern.mod.3", "op": "push"},
+  {"source": "lane:4", "target": "pattern.mod.4", "op": "push"},
+  {"source": "lane:5", "target": "pattern.mod.5", "op": "push"}
  ]
 }

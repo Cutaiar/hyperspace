@@ -300,6 +300,52 @@ def test_relative_cc_learn_keeps_encoder_mode(rig):
     assert rig.midi.binding_for("view.instances").op == "rel"
 
 
+def test_learn_source_writes_a_position_route(rig, tmp_path):
+    """Another adapter's source (a hand) completing a learn: a `position`
+    row at depth 1 through the table's referee, written to the file; the
+    MIDI view never sees it. On an owned target it is held in `pending`."""
+    from hyperspace.routing import Bindings
+
+    m = rig.midi
+    m.learn("view.inst_amp")
+    m.learn_source("hand:3", when="hand:14")
+    assert m.learning is None and m.pending is None
+    b = m.map.table.owner("view.inst_amp")
+    assert (b.source, b.op, b.value, b.when, b.pickup) == ("hand:3", "position", 1.0, "hand:14", True)
+    assert m.binding_for("view.inst_amp").is_midi            # the knob row is still there
+    assert "learned view.inst_amp" in m.last
+    assert Bindings.load(tmp_path / "midi_map.json").owner("view.inst_amp") == b
+    m.learn("view.inst_amp")
+    m.learn_source("hand:7")
+    assert m.pending is not None and m.pending[1] is b and "replace?" in m.last
+    assert m.map.table.owner("view.inst_amp") is b
+    m.learn("no.such.param")
+    assert m.pending is None                                  # a new learn forgets it
+    m.learn_source("hand:7")                                  # unknown target: nothing
+    assert m.learning is None and m.map.table.owner("no.such.param") is None
+
+
+def test_a_learned_axis_drives_one_param(rig):
+    """Learning an axis onto another param moves it — its other position
+    rows go, its push rows stay; learning it again onto the same param is
+    no move and no prompt, only the gate refreshed."""
+    m = rig.midi
+    t = m.map.table
+    t.add(Binding("hand:3", "view.bright", "push", 0.5))      # a route on the same axis
+    m.learn("view.inst_amp")
+    m.learn_source("hand:3")
+    m.learn("view.speed")
+    m.learn_source("hand:3", when="hand:14")                  # moves: inst_amp lets go
+    assert t.owner("view.inst_amp") is None and m.pending is None
+    speed = t.owner("view.speed")
+    assert (speed.source, speed.when) == ("hand:3", "hand:14")
+    assert t.routes_to("view.bright")[0].op == "push"         # the push row stays
+    m.learn("view.speed")
+    m.learn_source("hand:3")                                  # same axis, same param
+    assert m.pending is None and t.owner("view.speed") is speed and speed.when is None
+    assert len(t.routes_to("view.speed")) == 1 and "learned view.speed" in m.last
+
+
 # ---------------------------------------------------------------- map file
 
 def test_map_round_trips_json(tmp_path):
