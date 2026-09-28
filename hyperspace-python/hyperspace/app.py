@@ -77,7 +77,6 @@ from .library import SLOTS, Library
 from .overlay import GlfwBackend, Output
 from .params import Registry, build_registry
 from .render import Renderer
-from .view import ViewState
 from .routing import Bindings, Router, bindings_path
 from .ui import Panel, apply_style, load_fonts
 from .view import ViewState
