@@ -62,11 +62,11 @@ differs on this machine. Adapters are enabled here, not in code
 
 from __future__ import annotations
 
+import copy
 import tomllib
 from pathlib import Path
 
 from . import library
-from .hands.core import DEFAULTS as HANDS_DEFAULTS
 
 FILE = Path("config.toml")
 
@@ -80,9 +80,10 @@ DEFAULTS: dict = {
                "cc": 16, "rate": 100, "send": ["lane:*"], "in_lanes": 16},
     # dream.py: the temporal Deep Dream behind the look-back — off by default
     "dream": {"enabled": False, "device": "auto", "precision": "fp32", "weights_dir": ""},
-    # hands/: Ultraleap hands as MIDI CCs and hand lanes — off by default;
-    # the one table is hands/core.py's (every key documented there)
-    "hands": HANDS_DEFAULTS,
+    # hands/: Ultraleap hands as MIDI CCs and hand lanes — off by default.
+    # Its section is not here: load() fills it from hands/core.py's DEFAULTS,
+    # the one table (every key documented there), read at call time so this
+    # module imports no adapter
 }
 
 
@@ -90,7 +91,10 @@ def load(path: Path | None = None) -> dict:
     """The config, defaults filled in; `path` defaults to the library home's."""
     if path is None:
         path = library.ensure_home() / FILE
-    cfg = {k: dict(v) for k, v in DEFAULTS.items()}
+    from .hands.core import DEFAULTS as HANDS  # the one [hands] table (audit N1)
+
+    cfg = copy.deepcopy(DEFAULTS)                 # a file may append to a list
+    cfg["hands"] = copy.deepcopy(HANDS)
     if path.exists():
         try:
             data = tomllib.loads(path.read_text())

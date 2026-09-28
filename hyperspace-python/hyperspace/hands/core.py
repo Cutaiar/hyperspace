@@ -68,6 +68,7 @@ registry.
 
 from __future__ import annotations
 
+import copy
 import json
 import math
 import sys
@@ -127,7 +128,10 @@ BIPOLAR = {"x", "z", "roll", "pitch", "yaw"}
 
 DEFAULT_DOFS = ["x", "y", "z", "roll", "pitch", "yaw"]
 DEADZONE_CENTRED = 0.04  # a level hand reads exactly neutral; a height axis starts at 0
-RECONNECT_S = 2.0        # a lost DAW port is reopened this often — midi.Ports' policy
+# a lost DAW port is looked for again this often. The same number and the
+# same policy as midi.Ports (reopen only a port that is back; never a new
+# one), spelled twice because this module imports nothing from the package.
+RECONNECT_S = 2.0
 
 # [hands] in config.toml — the rig, not the performance. The one table:
 # config.DEFAULTS["hands"] is this dict, HandSettings.from_config and
@@ -366,10 +370,12 @@ class HandSettings:
 
 
 def rig(cfg: dict | None) -> dict:
-    """A ``[hands]`` section with every default filled in. config.load
-    already does this; a caller without a config (tests, the probe's
-    overrides) gets the same table."""
-    return {**DEFAULTS, **(cfg or {})}
+    """A ``[hands]`` section with every default filled in, as a copy that
+    shares nothing with the table. Idempotent: config.load fills the
+    section from the same DEFAULTS, and `from_config` and `HandsIO` each
+    accept a partial one (tests, the probe's overrides), so the fill runs
+    wherever a section arrives and there is still one table."""
+    return copy.deepcopy({**DEFAULTS, **(cfg or {})})
 
 
 def register(reg, settings: HandSettings) -> None:
@@ -687,13 +693,16 @@ class HandsIO:
         self.layout = Layout(settings.axes)
         self._rests: list[float] | None = None      # the rests vector last published
         self.error = ""
-        # the DAW port: an injected one is the caller's and never reopened;
-        # one opened by name is retried after RECONNECT_S when it fails
+        # the DAW port: an injected one is the caller's and never reopened.
+        # One opened by name is looked for again every RECONNECT_S after it
+        # fails — an existing port only, unless the first open had to make a
+        # virtual one (then a virtual one is made again); the DAW is resynced
+        # when it comes back
         self._out_match = "" if out is not None else (self.cfg.get("out") or "")
+        self._out_virtual: bool | None = None      # what the first open made
         self._out_next = 0.0
+        self._lost = False
         self.out = out
-        if out is None:
-            self._open()
         self.present = {s: False for s in SIDES}
         # the eight pinch switches, whether or not the ratios are axes
         self.gates = {s: {f: Gate() for f in PINCHES} for s in SIDES}
@@ -706,6 +715,8 @@ class HandsIO:
         self._cal: dict[str, list[float]] | None = None
         self._cal_until = 0.0
         self.cal_note = ""
+        if out is None:
+            self._open()
 
     @property
     def axes(self) -> list[AxisSettings]:
@@ -795,6 +806,9 @@ class HandsIO:
         now = self.clock()
         fresh = seq != self._seq
         self._seq = seq
+        if self.out is None and self._out_match and now >= self._out_next:
+            self._open()              # the port was lost: look for it again, before
+            #                           the axes quantise, so a resync resends them now
         msgs: list[mido.Message] = []
         for s, side in enumerate(SIDES):
             h = hands.get(side)
@@ -837,14 +851,14 @@ class HandsIO:
                 st.next_ok = now + (1.0 / g.rate if g.rate > 0 else 0.0)
                 msgs += encode(a.out, a.channel - 1, a.number, q)
         self._finish_calibration(now)
-        if self.out is None and self._out_match and now >= self._out_next:
-            self._open()              # the port was lost: try again, as midi.Ports does
+        sent = None
         for m in msgs:
-            if self.out is None:      # lost mid-frame: the rest waits for the reopen
+            if self.out is None:      # no port: dropped; a reopen resyncs the DAW
                 break
-            self._send(m)
-        if msgs:
-            self.last = describe(msgs[-1])
+            if self._send(m):
+                sent = m
+        if sent is not None:
+            self.last = describe(sent)
         if router is not None:
             live = getattr(self.source, "on", True)
             router.feed("hand", self.lanes() if live else None)
@@ -912,20 +926,58 @@ class HandsIO:
 
     def _open(self) -> None:
         """Open the port the config names; on failure say why once and
-        try again in RECONNECT_S."""
+        look again in RECONNECT_S. After a loss, only a port that is back
+        (or, if the first open made a virtual port, a new virtual one),
+        and the DAW is brought up to date when it opens."""
         self._out_next = self.clock() + RECONNECT_S
-        self.out, err = _open_out(self._out_match)
+        self.out, err, virtual = _open_out(self._out_match,
+                                           virtual=self._out_virtual is not False)
         if err and err != self.error:
             print(f"hands: {err}", file=sys.stderr)
         self.error = err
+        if self.out is None:
+            return
+        if self._out_virtual is None:
+            self._out_virtual = virtual
+        if self._lost:
+            self._lost = False
+            self._resync()
 
-    def _send(self, m: mido.Message) -> None:
+    def _resync(self) -> None:
+        """The port is back after a gap the DAW did not hear: every axis
+        resends its value on the next change-check, and the notes that are
+        on right now (presence, pinches) go out again."""
+        cfg = self.cfg
+        for st in self.state:
+            st.q, st.next_ok = None, 0.0
+        if self.solo is not None:
+            return
+        ch = int(cfg["channel"]) - 1
+        for s, side in enumerate(SIDES):
+            if cfg["presence"] and self.present[side]:
+                self._send(mido.Message("note_on", channel=ch, note=int(cfg["note"]) + s,
+                                        velocity=127))
+            if cfg["pinch_gates"] and cfg["pinch_notes"]:
+                for k, f in enumerate(PINCHES):
+                    if self.gates[side][f].on:
+                        self._send(mido.Message(
+                            "note_on", channel=ch,
+                            note=int(cfg["pinch_note"]) + s * len(PINCHES) + k, velocity=127))
+
+    def _send(self, m: mido.Message) -> bool:
+        """One message to the port; False when the port went away under it."""
+        if self.out is None:
+            return False
         try:
             self.out.send(m)
+            return True
         except Exception as e:  # noqa: BLE001 — port yanked mid-frame
             self.error = f"send: {e}"[:120]
+            _close_port(self.out)
             self.out = None
+            self._lost = True
             self._out_next = self.clock() + RECONNECT_S
+            return False
 
     # ---- calibration ----
 
@@ -976,22 +1028,33 @@ class HandsIO:
             self.cal_note = f"save: {e}"[:120]
 
     def close(self) -> None:
-        if self.out is not None and hasattr(self.out, "close"):
-            try:
-                self.out.close()
-            except Exception:  # noqa: BLE001, S110
-                pass
+        _close_port(self.out)
         if hasattr(self.source, "close"):
             self.source.close()
 
 
-def _open_out(name: str) -> tuple:
-    """(port, error): an existing port matching `name`, else a virtual one
-    called `name`; (None, why) when the backend refuses."""
+def _close_port(port) -> None:
+    """Best effort: a dropped or finished port is closed, so a virtual one
+    is unregistered rather than left for the next open to find."""
+    if port is not None and hasattr(port, "close"):
+        try:
+            port.close()
+        except Exception:  # noqa: BLE001, S110
+            pass
+
+
+def _open_out(name: str, *, virtual: bool = True) -> tuple:
+    """(port, error, made_virtual): an existing port matching `name`, else
+    — when `virtual` — a new virtual one called `name`. (None, why, False)
+    when there is no such port or the backend refuses."""
     if not name:
-        return None, ""
+        return None, "", False
     try:
         hit = next((n for n in mido.get_output_names() if name.lower() in n.lower()), None)
-        return (mido.open_output(hit) if hit else mido.open_output(name, virtual=True)), ""
+        if hit:
+            return mido.open_output(hit), "", False
+        if not virtual:
+            return None, f"out {name!r}: no such port", False
+        return mido.open_output(name, virtual=True), "", True
     except Exception as e:  # noqa: BLE001 — no backend / virtual ports unsupported
-        return None, f"out {name!r}: {e}"[:120]
+        return None, f"out {name!r}: {e}"[:120], False
