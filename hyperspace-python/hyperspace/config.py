@@ -44,7 +44,8 @@ differs on this machine. Adapters are enabled here, not in code
     weights_dir = ""        # pretrained weights; "" = <library home>/weights
 
     [hands]                 # Ultraleap hands (hands/, the `leap` bindings) — the rig;
-                            # the performance setup is the HANDS page / `hands` presets
+                            # the performance setup is the HANDS page / `hands` presets.
+                            # The defaults are hands/core.py's DEFAULTS, the one table
     enabled = false         # true opens the tracker; off, `leap` is never imported
     mode = "desktop"        # camera looks up from below; "screentop" from above, "hmd"
     dofs = ["x", "y", "z", "roll", "pitch", "yaw"]   # per hand, in axis order; also
@@ -65,6 +66,7 @@ import tomllib
 from pathlib import Path
 
 from . import library
+from .hands.core import DEFAULTS as HANDS_DEFAULTS
 
 FILE = Path("config.toml")
 
@@ -79,8 +81,8 @@ DEFAULTS: dict = {
     # dream.py: the temporal Deep Dream behind the look-back — off by default
     "dream": {"enabled": False, "device": "auto", "precision": "fp32", "weights_dir": ""},
     # hands/: Ultraleap hands as MIDI CCs and hand lanes — off by default;
-    # the rest of its defaults live in hands.DEFAULTS
-    "hands": {"enabled": False, "calibration": "hands.json"},
+    # the one table is hands/core.py's (every key documented there)
+    "hands": HANDS_DEFAULTS,
 }
 
 
