@@ -569,6 +569,7 @@ def lfo_breathe_values() -> dict[str, float]:
 # result. docs/plans/12-presets.md is the design; the performer cards
 # are docs/plans/assets/12-presets/<name>.md.
 HAND_AXES = ("x", "y", "z", "roll", "pitch", "yaw")
+TURN = 0.25      # a phase push's depth: ±45° across a tilt's throw
 
 
 def hand(side: str, axis: str) -> str:
@@ -582,12 +583,14 @@ def _push(side: str, axis: str, target: str, depth: float, **kw) -> Binding:
 
 def _grip_rows() -> list[Binding]:
     """The left hand holds the object: roll, pitch and yaw of the palm add
-    a rigid turn (±90° at the ends of the throw) in the three 3D planes
-    on top of whatever the integrator is doing; a level hand adds nothing
-    and a hand that leaves springs the turn back over the axis's return."""
-    return [_push("L", "roll", "rot.phase.XY", 0.5),
-            _push("L", "pitch", "rot.phase.YZ", 0.5),
-            _push("L", "yaw", "rot.phase.XZ", 0.5)]
+    a rigid turn (±45° at the ends of the throw — a quarter turn maps the
+    cubic shapes onto themselves, so the eighth is the whole visible
+    range) in the three 3D planes on top of whatever the integrator is
+    doing; a level hand adds nothing and a hand that leaves springs the
+    turn back over the axis's return."""
+    return [_push("L", "roll", "rot.phase.XY", TURN),
+            _push("L", "pitch", "rot.phase.YZ", TURN),
+            _push("L", "yaw", "rot.phase.XZ", TURN)]
 
 
 def _lane_rows(skip_mods: tuple[int, ...] = ()) -> list[Binding]:
@@ -613,8 +616,8 @@ def party_tumble_routes() -> list[Binding]:
             _push("L", "y", "master.gain", 0.375),
             _push("R", "y", "view.speed", 0.45),
             _push("R", "z", "view.depth4", 0.35),
-            _push("R", "roll", "rot.phase.XW", 0.5),
-            _push("R", "yaw", "rot.phase.ZW", 0.5)]
+            _push("R", "roll", "rot.phase.XW", TURN),
+            _push("R", "yaw", "rot.phase.ZW", TURN)]
 
 
 def party_tumble_values() -> dict[str, float]:
@@ -623,15 +626,17 @@ def party_tumble_values() -> dict[str, float]:
 
 def party_faces_routes() -> list[Binding]:
     """The faces. Left hand grips; left height pushes brightness (the
-    faces glow). Right height pushes the pattern mix in, reaching in zooms
-    the camera onto the faces, right roll and pitch push the two spatial
-    pattern inputs (2 and 3) the lanes then leave alone."""
-    return [*_lane_rows(skip_mods=(2, 3)), *_grip_rows(),
-            _push("L", "y", "view.bright", 0.35),
+    faces glow, up to the 4× stop). Right height pushes the pattern mix
+    in, reaching in zooms the camera onto the faces, right roll pushes
+    pattern input 2 — the hex cells' scale, the one spatial input the
+    scene's pattern reads, which lane 2 then leaves alone — and fingers
+    up tip the camera to look down onto the faces."""
+    return [*_lane_rows(skip_mods=(2,)), *_grip_rows(),
+            _push("L", "y", "view.bright", 0.14),
             _push("R", "y", "view.pattern_mix", 0.6),
             _push("R", "z", "camera.zoom", -0.3),
-            _push("R", "roll", "pattern.mod.2", 0.5),
-            _push("R", "pitch", "pattern.mod.3", 0.5)]
+            _push("R", "roll", "pattern.mod.2", 0.7),
+            _push("R", "pitch", "camera.pitch", 0.5)]
 
 
 def party_faces_values() -> dict[str, float]:
@@ -648,11 +653,11 @@ def party_field_routes() -> list[Binding]:
             _push("R", "y", "view.instances", 0.6),
             _push("R", "y", "camera.zoom", -0.15),
             _push("R", "y", "view.bright", 0.1),
-            _push("R", "roll", "rot.phase.XW", 0.5),
-            _push("R", "yaw", "rot.phase.ZW", 0.5),
+            _push("R", "roll", "rot.phase.XW", TURN),
+            _push("R", "yaw", "rot.phase.ZW", TURN),
             _push("L", "x", "camera.pan.x", 0.1),
-            _push("L", "z", "camera.pan.y", -0.1),
-            _push("L", "y", "view.inst_amp", 0.6)]
+            _push("L", "z", "camera.pan.y", 0.1),
+            _push("L", "y", "view.inst_amp", 0.5)]
 
 
 def party_field_values() -> dict[str, float]:

@@ -17,11 +17,11 @@
   {"source": "hand:7", "target": "view.instances", "op": "push", "value": 0.6},
   {"source": "hand:7", "target": "camera.zoom", "op": "push", "value": -0.15},
   {"source": "hand:7", "target": "view.bright", "op": "push", "value": 0.1},
-  {"source": "hand:9", "target": "rot.phase.XW", "op": "push", "value": 0.5},
-  {"source": "hand:11", "target": "rot.phase.ZW", "op": "push", "value": 0.5},
+  {"source": "hand:9", "target": "rot.phase.XW", "op": "push", "value": 0.25},
+  {"source": "hand:11", "target": "rot.phase.ZW", "op": "push", "value": 0.25},
   {"source": "hand:0", "target": "camera.pan.x", "op": "push", "value": 0.1},
-  {"source": "hand:2", "target": "camera.pan.y", "op": "push", "value": -0.1},
-  {"source": "hand:1", "target": "view.inst_amp", "op": "push", "value": 0.6}
+  {"source": "hand:2", "target": "camera.pan.y", "op": "push", "value": 0.1},
+  {"source": "hand:1", "target": "view.inst_amp", "op": "push", "value": 0.5}
  ],
  "values": {
   "rot.rate.XY": 1.0,

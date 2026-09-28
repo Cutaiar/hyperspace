@@ -14,14 +14,14 @@
   {"source": "lane:3", "target": "pattern.mod.3", "op": "push"},
   {"source": "lane:4", "target": "pattern.mod.4", "op": "push"},
   {"source": "lane:5", "target": "pattern.mod.5", "op": "push"},
-  {"source": "hand:3", "target": "rot.phase.XY", "op": "push", "value": 0.5},
-  {"source": "hand:4", "target": "rot.phase.YZ", "op": "push", "value": 0.5},
-  {"source": "hand:5", "target": "rot.phase.XZ", "op": "push", "value": 0.5},
+  {"source": "hand:3", "target": "rot.phase.XY", "op": "push", "value": 0.25},
+  {"source": "hand:4", "target": "rot.phase.YZ", "op": "push", "value": 0.25},
+  {"source": "hand:5", "target": "rot.phase.XZ", "op": "push", "value": 0.25},
   {"source": "hand:1", "target": "master.gain", "op": "push", "value": 0.375},
   {"source": "hand:7", "target": "view.speed", "op": "push", "value": 0.45},
   {"source": "hand:8", "target": "view.depth4", "op": "push", "value": 0.35},
-  {"source": "hand:9", "target": "rot.phase.XW", "op": "push", "value": 0.5},
-  {"source": "hand:11", "target": "rot.phase.ZW", "op": "push", "value": 0.5}
+  {"source": "hand:9", "target": "rot.phase.XW", "op": "push", "value": 0.25},
+  {"source": "hand:11", "target": "rot.phase.ZW", "op": "push", "value": 0.25}
  ],
  "values": {
   "rot.rate.XY": 1.0,

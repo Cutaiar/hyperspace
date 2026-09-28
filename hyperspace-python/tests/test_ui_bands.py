@@ -544,12 +544,15 @@ def test_routing_presets_step_load_save(rig, tmp_path):
     frame(panel, "routing")
     listing = ui_routing.names(panel)
     assert listing == ["default", "hands-fx", "hands-pinch", "hands-play", "legacy6",
-                       "lfo-breathe"]                       # the factory exports
+                       "lfo-breathe", "party-faces", "party-field", "party-trip", "party-tumble", "party-wake"]     # the factory exports
     # next from nothing: the first; prev wraps to the last
     assert ui_routing.step(panel, router, 1) == "default"
     assert ui_routing._state(panel)["current"] == "default"
     assert not ui_routing.dirty(panel, router)
     frame(panel)
+    assert ui_routing.step(panel, router, -1) == "party-wake"
+    for _ in range(4):                          # back past the plan-12 presets
+        ui_routing.step(panel, router, -1)
     assert ui_routing.step(panel, router, -1) == "lfo-breathe"
     assert rig.reg["lfo.1.sync"].value == 3     # lfo-breathe lands its bases: 1 bar
     assert ui_routing.step(panel, router, -1) == "legacy6"
@@ -569,7 +572,8 @@ def test_routing_presets_step_load_save(rig, tmp_path):
     assert not ui_routing.dirty(panel, router)
     ui_routing.invalidate(panel)
     assert ui_routing.names(panel) == [
-        "default", "hands-fx", "hands-pinch", "hands-play", "legacy6", "lfo-breathe", "my-routes"]
+        "default", "hands-fx", "hands-pinch", "hands-play", "legacy6", "lfo-breathe", "my-routes",
+        "party-faces", "party-field", "party-trip", "party-tumble", "party-wake"]
     assert not routing.is_factory_preset("my-routes", tmp_path)
     frame(panel)
     # load a factory preset back: the user route goes, the inputs stay
@@ -607,7 +611,8 @@ def test_router_preset_files_and_save(tmp_path):
     r = routing_rig(tmp_path=tmp_path, full=True)
     router = Router(r.reg, Bindings.factory())
     assert routing.preset_names(tmp_path) == [
-        "default", "hands-fx", "hands-pinch", "hands-play", "legacy6", "lfo-breathe"]
+        "default", "hands-fx", "hands-pinch", "hands-play", "legacy6", "lfo-breathe",
+        "party-faces", "party-field", "party-trip", "party-tumble", "party-wake"]
     assert routing.is_factory_preset("legacy6", tmp_path)
     router.table.add(Binding("lane:0", "view.bright", "push", 0.5, enabled=False))
     r.reg["macro.2"].set_value(0.3)                  # routing-layer state: saved with the routes
