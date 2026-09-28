@@ -16,14 +16,20 @@ differs on this machine. Adapters are enabled here, not in code
                             # not exist yet (Bindings.load). Learn writes
                             # <home>/bindings.json (routing.py), not this file
 
-    [overlay]               # the render window's look when floating; an
-                            # [output] section is read the same way, merged
-                            # over it, and also takes `monitor` (index, -1 =
-                            # the window's own) and `fullscreen` (app.py)
+    [output]                # where the render window goes and how it looks
+                            # (overlay.py; app.py seeds the output.* params)
+    monitor = -1            # screen index for fullscreen; -1 = the window's own
+    fullscreen = false      # launch fullscreen on that screen
     on_start = false        # launch straight into overlay mode
     passthrough = true      # clicks go to the window underneath (G / pan toggles)
     bg = 0.0                # ground darkness in overlay: 0 see-through, 1 black
     alpha = 1.0             # whole-window opacity
+                            # [overlay] is the pre-split name of this section:
+                            # still read, merged under [output] (which wins),
+                            # and noted once on stderr so the file gets renamed
+
+A file that will not parse is not fatal: the defaults stand and
+``cfg["error"]`` carries the message, which the SYSTEM page shows.
 
     [bridge]                # lanes out / external lanes in over MIDI (bridge.py)
     enabled = false         # true opens the bridge; off, it is never imported
@@ -61,18 +67,21 @@ differs on this machine. Adapters are enabled here, not in code
 
 from __future__ import annotations
 
+import sys
 import tomllib
 from pathlib import Path
 
 from . import library
 
 FILE = Path("config.toml")
+LEGACY_OUTPUT = "overlay"   # the section [output] was called before the split
 
 DEFAULTS: dict = {
     # midi.map: the legacy midi_map.json, merged once when bindings.json is missing
     "midi": {"enabled": True, "port": None, "profile": "apc40", "map": "midi_map.json"},
-    # overlay.py: start floating over the screen; ground 0 = see-through
-    "overlay": {"on_start": False, "passthrough": True, "bg": 0.0, "alpha": 1.0},
+    # overlay.py: the render window's placement and look; ground 0 = see-through
+    "output": {"monitor": -1, "fullscreen": False, "on_start": False, "passthrough": True,
+               "bg": 0.0, "alpha": 1.0},
     # bridge.py: the analyzer's lanes out to a DAW, external lanes in — off by default
     "bridge": {"enabled": False, "out": "IAC", "in": "", "encoding": "pitch", "channel": 0,
                "cc": 16, "rate": 100, "send": ["lane:*"], "in_lanes": 16},
@@ -100,6 +109,13 @@ def load(path: Path | None = None) -> dict:
                 cfg.setdefault(section, {}).update(values)
             else:
                 cfg[section] = values
+        legacy = data.get(LEGACY_OUTPUT)
+        if isinstance(legacy, dict):
+            # the pre-split section name: its keys land under [output], a
+            # real [output] wins key by key, and the file is asked to catch up
+            cfg["output"] = {**DEFAULTS["output"], **legacy, **data.get("output", {})}
+            print(f"config: [{LEGACY_OUTPUT}] is now [output] — rename the section in "
+                  f"{path}", file=sys.stderr)
     # the MIDI map lives next to the config unless it says otherwise
     m = cfg["midi"].get("map")
     if m and not Path(m).is_absolute():

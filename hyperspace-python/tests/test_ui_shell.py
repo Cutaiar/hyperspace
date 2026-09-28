@@ -72,6 +72,17 @@ def test_every_page_draws_with_a_library(rig):
         assert PAGE_KEYS[k] == key
 
 
+def test_system_page_shows_a_config_error(rig):
+    """A config.toml that would not parse is reported on the SYSTEM page
+    (audit L4), beside the other rig notices."""
+    rig.panel.config_error = "config: Expected ']' at line 1"
+    frame(rig.panel, "system")
+    imgui.end_frame()
+    rig.panel.config_error = ""
+    frame(rig.panel, "system")
+    imgui.end_frame()
+
+
 def test_page_param_is_ui_state_not_a_preset(rig):
     p = rig.reg["ui.page"]
     assert p.group == "ui" and not p.persist and not p.modulatable

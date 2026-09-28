@@ -371,6 +371,7 @@ class Panel:
         self._file_dialog = None
         self._bmp_dialog = None
         self.reloader = None  # set by app.py; panel only reads status off it
+        self.config_error = ""  # set by app.py: config.toml failed to parse (SYSTEM page)
         self.midi = None      # set by app.py when an adapter is up (midi.MidiIO)
         self.router = None    # set by app.py (routing.Router); else found via midi's table
         self.output = None    # set by app.py (overlay.Output); its params draw below
@@ -1273,6 +1274,8 @@ class Panel:
             if imgui.is_item_hovered():
                 imgui.set_tooltip("$HYPERSPACE_HOME — presets and projects as JSON; "
                                   "edit a file and the app follows")
+        if self.config_error:
+            imgui.text_colored(WARN, self.config_error)
         imgui.spacing()
         self._section("midi")
         self._midi_status()

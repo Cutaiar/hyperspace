@@ -171,7 +171,8 @@ def _make_output(win, reg: Registry, cfg: dict) -> Output:
     """The render window's output settings, seeded from config."""
     out = Output(win, GlfwBackend(glfw))
     out.register(reg)
-    # [output] in config.toml; the pre-split [overlay] section still counts
+    # [output] in config.toml — config.load has already folded a pre-split
+    # [overlay] section under it; the merge here only covers a bare dict
     oc = {**cfg.get("overlay", {}), **cfg.get("output", {})}
     out.monitor = int(oc.get("monitor", -1))
     out.fullscreen = bool(oc.get("fullscreen", False))
@@ -492,6 +493,7 @@ def main() -> None:
         *([(dream_io, "dream", "DreamWorker")] if dream_io else []),
     ], watchers=[library])
     panel.reloader = reloader
+    panel.config_error = cfg.get("error", "")   # a config.toml that would not parse
     keys = Keys(render_win, ctrl_win)
     mouse = Mouse(render_win, reg, s)
     pad = Pad()
