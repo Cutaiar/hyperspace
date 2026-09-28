@@ -165,7 +165,7 @@ def draw(self, dt, fps):
             if r is not None:
                 r.table.add(Binding("lane:1", "band.0.f", "push", 0.25))
                 self.router = r
-        a.analyser.feed(synth(state["t"], int(a.sr / 60) + 64, a.sr))
+        a.analyser.feed(synth(state["t"], int(a.rate / 60) + 64, a.rate))
         state["t"] += 1 / 60
     try:
         _draw(self, dt, fps)
