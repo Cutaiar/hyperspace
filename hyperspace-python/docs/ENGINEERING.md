@@ -483,6 +483,12 @@ What holds what:
   (`tests/test_params.py:286`, `tests/test_bridge.py:381`,
   `tests/test_dream.py:55`); `hands/core.py`, `hands/signal.py`, `lfo.py`,
   `tempo.py` import nothing from the package (`tests/test_*_boundary.py`).
+- **Hot reload**: every module but `app.py`, `hotreload.py` and `offline.py`
+  is on the watch list in dependency order (leaves first), an optional
+  adapter that was never imported is skipped, every swap target `app.py`
+  registers is defined in a watched module, and an Enum a reloaded module
+  defines keeps its identity, so live params still recognise their `Kind`
+  (`tests/test_hotreload.py`; plan 11 WP2).
 - **Headless GL and imgui**: every shape renders offscreen; post passes off
   are bit-identical; every panel page draws headless and fits; every
   factory effect compiles and changes the frame.
