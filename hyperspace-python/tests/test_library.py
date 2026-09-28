@@ -12,8 +12,8 @@ import pytest
 
 from hyperspace import config, library
 from hyperspace.analysis import Analyser
-from hyperspace.bands import PRESETS, Chain
-from hyperspace.control import Control
+from hyperspace.bands import BANDS, Chain
+from hyperspace.control import SCENES, Control
 from hyperspace.library import FACTORY, Library, LibraryError, legacy_slot, migrate_doc, slug
 from hyperspace.params import build_registry
 from hyperspace.render import ViewState
@@ -104,7 +104,7 @@ def test_config_explicit_path_keeps_working(tmp_path):
 def test_factory_presets_ship_in_the_package():
     assert (FACTORY / "projects" / "default.hyp.json").is_file()
     names = {json.loads(p.read_text())["name"] for p in (FACTORY / "band").glob("*.json")}
-    assert names == {s["name"] for s in PRESETS}
+    assert names == set(SCENES)
     doc = json.loads((FACTORY / "band" / "balanced.json").read_text())
     assert doc["schema"] == "hyperspace.preset/1" and doc["group"] == "band"
     # the analyzer contract: a layout next to the flat band.{i}.* values
@@ -112,6 +112,8 @@ def test_factory_presets_ship_in_the_package():
     assert doc["layout"]["bands"][0]["f"] == pytest.approx((20 * 60) ** 0.5)
     assert doc["layout"]["bands"][0]["q"] == pytest.approx((20 * 60) ** 0.5 / 40)
     assert doc["values"]["band.1.atk"] == 0.015
+    # plan 11 (A1): the layout carries the band names, so a load keeps them
+    assert [b["name"] for b in doc["layout"]["bands"]] == [b.id for b in BANDS]
 
 
 def test_slug():
@@ -144,7 +146,7 @@ def test_macros_are_routing_state_not_the_scenes(rig, tmp_path):
 
 def test_list_user_shadows_factory(rig, tmp_path):
     lib = rig.lib
-    assert lib.list("band") == sorted((s["name"] for s in PRESETS), key=str.lower)
+    assert lib.list("band") == sorted(SCENES, key=str.lower)
     assert lib.is_factory("band", "Balanced")
     assert lib.list("nothing") == []
     assert "band" in lib.groups() and "view" in lib.groups()
@@ -212,6 +214,34 @@ def test_dirty_save_as_overwrite_reset(rig, tmp_path):
     reg["band.0.atk"].set(0.7)
     assert lib.overwrite("band") == tmp_path / "band" / "balanced.json"
     assert json.loads((FACTORY / "band" / "balanced.json").read_text())["values"]["band.0.atk"] == 0.25
+
+
+def test_a_band_preset_saved_from_the_strip_carries_its_layout(rig, tmp_path):
+    """Audit A2: save_as fills the group's `extra` from its hook, so an
+    eight-band preset restores eight bands — names included — onto a
+    six-band analyzer instead of six and two missing ids."""
+    lib, reg, control, chain = rig.lib, rig.reg, rig.control, rig.chain
+    lib.on_layout("band", control.apply_layout)
+    lib.extra("band", lambda: {"layout": chain.layout()})
+    control.add_band()
+    control.add_band()
+    chain.set_band(6, name="HIGH")
+    reg["band.7.atk"].set_value(0.333)
+    assert chain.n == 8
+    path = lib.save_as("band", "Eight")
+    doc = json.loads(path.read_text())
+    assert len(doc["layout"]["bands"]) == 8 and doc["layout"]["bands"][6]["name"] == "HIGH"
+    assert "band.7.atk" in doc["values"]
+    assert lib.overwrite("band") == path             # the save chip takes the same road
+    assert len(json.loads(path.read_text())["layout"]["bands"]) == 8
+
+    other = make(tmp_path)                            # a fresh six-band rig, same home
+    other.lib.on_layout("band", other.control.apply_layout)
+    assert other.chain.n == 6
+    assert other.lib.load("band", "Eight") == []      # nothing missing
+    assert other.chain.n == 8 and other.chain.band_names[6] == "HIGH"
+    assert other.chain.params[7].atk == chain.params[7].atk
+    assert other.lib.current("band") == "Eight" and not other.lib.is_dirty("band")
 
 
 def test_rename_and_delete_are_user_only(rig, tmp_path):

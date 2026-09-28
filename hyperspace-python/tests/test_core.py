@@ -66,14 +66,16 @@ def test_soft_ceil_properties():
 
 def test_presets_load():
     from hyperspace.analysis import Analyser
+    from hyperspace.control import SCENES
+    from hyperspace.library import factory_doc
 
     chain = bands.Chain(Analyser())
-    for k in range(len(bands.PRESETS)):
-        chain.apply_preset(k)
+    for name in SCENES:
+        chain.apply_scene(factory_doc("band", name)["values"])
         for p in chain.params:
             assert 0 <= p.fn < len(bands.SHAPERS)
             assert p.atk > 0 and p.dec > 0
-    assert len(bands.PRESETS) == 11
+    assert len(SCENES) == 11
 
 
 # ------------------------------------------------------ chain behaviours

@@ -430,6 +430,11 @@ def main() -> None:
     # an analyzer preset carries its band layout; the library hands it to
     # control before restoring values (07-overhaul contracts)
     library.on_layout("band", control.apply_layout)
+    # …and a saved band preset carries the layout back out (audit A2); the
+    # scene combo and the strip keep each other posted (audit A1)
+    library.extra("band", lambda: {"layout": audio.chain.layout()})
+    library.on_load("band", control.scene_loaded)
+    control.library = library
     hand_settings = _hand_settings(reg, cfg)   # before attach: "default" includes them
     # the tap-tempo clock and the four LFOs (tempo.py, lfo.py): their knobs
     # are params too, so a preset carries a tempo and an LFO arrangement

@@ -9,7 +9,12 @@ Two kinds of file, both plain JSON you can open in a text editor:
                   analyzer's presets also carry ``layout`` (see the
                   contract in docs/plans/07-overhaul.md): restore hands the
                   layout to a hook registered with ``on_layout`` *before*
-                  the values, so a preset can rebuild its params first.
+                  the values, so a preset can rebuild its params first,
+                  and a save asks the group's ``extra`` hook for it. The
+                  band presets are also the analyzer's *scenes*: the scene
+                  combo reads them (``read``, or ``factory_doc`` with no
+                  library) and ``adopt``s the one it landed; a strip load
+                  tells the combo through ``on_load`` (control.py).
   project         everything — ``{"schema": "hyperspace.project/1",
                   "name", "values": <full snapshot>, "modules": {group:
                   name | {"name", "values"}}, "bank": [8 × {"name",
@@ -179,6 +184,17 @@ def migrate_doc(doc: dict, kind: str) -> dict:
     if version > CURRENT[kind]:
         raise LibraryError(f"{schema} is newer than this build ({kind}/{CURRENT[kind]})")
     return doc
+
+
+def factory_doc(group: str, name: str, factory: Path = FACTORY) -> dict:
+    """A factory preset by name, without a Library: the file in the wheel,
+    lifted to the current schema. The scene combo reads its scenes this
+    way when no library is attached (control.py); with one, ``Library.read``
+    is the same file with the user's shadow honoured."""
+    path = factory / group / f"{slug(name)}.json"
+    if not path.is_file():
+        raise LibraryError(f"{group}: no factory preset {name!r}")
+    return migrate_doc(_read_json(path), "hyperspace.preset")
 
 
 # ---- the pre-registry theme format (presets.json) → {name, values} ----
@@ -382,6 +398,8 @@ class Library:
         self._current: dict[str, str | None] = {}     # group → loaded preset name
         self._loaded: dict[str, dict[str, Any]] = {}  # group → what that load produced
         self._layout_hooks: dict[str, Any] = {}
+        self._extra_hooks: dict[str, Any] = {}    # group → what a save adds beside values
+        self._load_hooks: dict[str, Any] = {}     # group → told the name after a load
         self._docs: dict[Path, tuple[float, dict]] = {}   # parsed files, by mtime
         self._mtimes: dict[Path, float] = {}
         self._next = 0.0
@@ -401,6 +419,17 @@ class Library:
     def on_layout(self, group: str, hook) -> None:
         """Register who rebuilds a group's params from a preset's `layout`."""
         self._layout_hooks[group] = hook
+
+    def extra(self, group: str, hook) -> None:
+        """Register what a save of this group writes beside its values — the
+        analyzer's ``{"layout": …}`` — so a preset saved from the strip
+        carries it without the caller knowing (plan 07 contract; audit A2)."""
+        self._extra_hooks[group] = hook
+
+    def on_load(self, group: str, hook) -> None:
+        """Register who is told the name a load of this group landed — the
+        scene combo, so a strip load moves the selected scene."""
+        self._load_hooks[group] = hook
 
     def _open_default(self) -> None:
         """The user's default project if there is one, else the factory's."""
@@ -554,7 +583,20 @@ class Library:
         self._loaded[group] = resolved
         self.report(missing, f"{group}/{name}")
         self.status = f"{group}: {self._current[group]}"
+        hook = self._load_hooks.get(group)
+        if hook is not None:
+            hook(self._current[group])
         return missing
+
+    def adopt(self, group: str, doc: dict) -> None:
+        """A preset applied by someone else (the scene combo lands a scene's
+        values on the analyzer itself): make it the group's current preset
+        so the strip's name and dirty dot agree with what is loaded."""
+        values = doc.get("values") or {}
+        self._current[group] = doc.get("name") or self._current.get(group)
+        if self.reg is not None:
+            self._loaded[group] = self._resolve(group, values)
+        self.status = f"{group}: {self._current[group]}"
 
     def _step(self, group: str, n: int) -> str | None:
         names = self.list(group)
@@ -576,7 +618,9 @@ class Library:
         reg = self._need_reg()
         doc = {"schema": PRESET_SCHEMA, "group": group, "name": name,
                "values": reg.snapshot(group)}
-        if extra:                                      # e.g. the analyzer's layout
+        if extra is None and group in self._extra_hooks:
+            extra = self._extra_hooks[group]()         # the analyzer's layout
+        if extra:
             doc.update(extra)
         path = self.home / group / f"{slug(name)}.json"
         _write_json(path, doc)

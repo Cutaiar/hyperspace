@@ -61,7 +61,7 @@ from typing import Any
 
 from . import tapers
 from .analyzer import CURVES, F_HI, F_LO, Q_HI, Q_LO
-from .bands import CEIL, DRIVE, PRESETS, SHAPERS
+from .bands import CEIL, DRIVE, SHAPERS
 from .fx import FxState
 from .fx import declare as declare_fx
 from .geometry import SHAPES
@@ -894,7 +894,9 @@ def build_registry(view, control, audio, presets=None, dream=None, fx=None) -> R
     # ---- scene ----
     g = "scene"
     r.enum("scene.select", "Scene", lambda: control.scene, control.select_scene,
-           [p["name"] for p in PRESETS], group=g)
+           control.scene_names, group=g,
+           tip="The eleven factory scenes, re-tuned onto the bands you have; the "
+               "preset strip loads a band file whole, layout included.")
     r.trigger("scene.reset_all", "Reset all", control.reset_all_clicked, group=g,
               tip="Reloads the selected scene across every band. Undoable for 8 s.")
 

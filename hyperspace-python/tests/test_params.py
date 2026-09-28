@@ -6,8 +6,8 @@ from types import SimpleNamespace
 import pytest
 
 from hyperspace.analysis import Analyser
-from hyperspace.bands import BANDS, PRESETS, Chain
-from hyperspace.control import Control
+from hyperspace.bands import BANDS, Chain
+from hyperspace.control import SCENES, Control
 from hyperspace.geometry import SHAPES
 from hyperspace.library import Library
 from hyperspace.params import Kind, Registry, build_registry
@@ -250,7 +250,7 @@ def test_theme_params(rig):
 
 
 def test_scene_names_match_presets(rig):
-    assert rig[0]["scene.select"].names == [p["name"] for p in PRESETS]
+    assert rig[0]["scene.select"].names == list(SCENES)
 
 
 def test_macro_knobs_are_persisted_attenuators_with_no_object(rig):
