@@ -160,6 +160,98 @@ def test_the_trigger_lands_phase_zero_whatever_the_nudge_and_nudge_then_moves_it
     assert lfos[2].x == pytest.approx((0.1 * 4) % 1.0)
 
 
+def test_a_trigger_after_this_frames_step_lands_phase_zero_on_the_next_step():
+    """The panel's chip and a performer-fired trigger run after `lfos.step`
+    (audit B6): the trigger is held and applied at the next step's own t,
+    so the first frame the LFOs see it reads exactly 0 — not dt·bpm/60·ratio."""
+    lfos, c = LFOs(), clock_at(120.0)
+    bar, hz = lfos[0], lfos[1]
+    bar.sync, bar.shape = SYNCS.index("1/16"), SHAPES.index("saw")   # the coarsest phase
+    hz.rate = 0.7
+    run(lfos, c, 0.0, 3.3)
+    c.tick(3.3)
+    lfos.step(DT, 3.3, c)                        # this frame's step has run…
+    x_hz = hz.x
+    lfos.trigger(c)                              # …then the chip fires (t defaults to clock.t)
+    assert lfos.pending and c.t0 == 0.0          # held; the clock has not moved yet
+    lfos.step(DT, 3.3 + DT, c)                   # next frame
+    assert c.t0 == pytest.approx(3.3 + DT) and bar.x == 0.0 and not lfos.pending
+    assert hz.x == pytest.approx((x_hz + DT * 0.7) % 1.0)          # Hz untouched
+    # fired before the step (a key): applied at once, phase 0 that frame
+    c.tick(4.0)
+    lfos.trigger(c)
+    assert not lfos.pending and c.t0 == 4.0
+    lfos.step(DT, 4.0, c)
+    assert bar.x == 0.0
+
+
+def test_a_per_lfo_reset_after_the_step_lands_phase_zero_next_step_in_either_mode():
+    lfos, c = LFOs(), clock_at(120.0)
+    hz, bar = lfos[0], lfos[1]
+    hz.rate, hz.shape = 3.0, SHAPES.index("saw")
+    bar.sync, bar.shape = SYNCS.index("1/16"), SHAPES.index("saw")
+    run(lfos, c, 0.0, 0.7)
+    c.tick(0.7)
+    lfos.step(DT, 0.7, c)
+    lfos.reset(0, c)                             # after the step: held
+    lfos.reset(1, c)
+    assert hz.pending and bar.pending
+    lfos.step(DT, 0.7 + DT, c)
+    assert hz.x == 0.0 and bar.x == pytest.approx(0.0, abs=1e-9)
+    assert not hz.pending and not bar.pending and c.t0 == 0.0     # the clock never moved
+    # the global trigger supersedes a held reset on a synced LFO
+    lfos.step(DT, 0.8, c)
+    lfos.reset(1, c, 0.8)
+    lfos.trigger(c, 0.8)
+    assert lfos.pending
+    lfos.step(DT, 0.8 + DT, c)
+    assert c.t0 == pytest.approx(0.8 + DT) and bar.x == 0.0 and bar.shift == 0.0
+    assert not lfos.pending and not bar.pending
+
+
+def test_switching_to_hz_carries_the_phase_and_a_division_lands_on_the_clock():
+    """Audit B7: leaving a division for Hz continues from the wave's position
+    (no stale accumulator); choosing a division lands on the clock's beat,
+    whether a knob or a preset set it."""
+    lfos, c = LFOs(), clock_at(120.0)
+    lf = lfos[0]
+    lf.shape, lf.rate, lf.phase = SHAPES.index("saw"), 0.9, 0.2
+    run(lfos, c, 0.0, 1.3)                       # Hz: mid-cycle somewhere
+    assert 0.05 < lf.x < 0.95
+    lf.sync = SYNCS.index("1 bar")               # to a division: on the bar, not carried
+    t = 1.3 + DT
+    lfos.step(DT, t, c)
+    assert lf.x == pytest.approx((c.beat(t) / 4 + 0.2) % 1.0, abs=1e-9)
+    run(lfos, c, t, 2.9)
+    x = lf.x
+    lf.sync = 0                                  # back to Hz: continuous, at the rate
+    lfos.step(DT, 2.9 + DT, c)
+    assert lf.x == pytest.approx((x + DT * 0.9) % 1.0, abs=1e-9)
+    assert lf.x != pytest.approx(0.2 + DT * 0.9, abs=0.05)   # not the stale accumulator
+    # a random LFO keeps its held value across the switch to Hz
+    rnd = lfos[1]
+    rnd.shape, rnd.rate, rnd.sync = RANDOM, 0.2, SYNCS.index("4 bars")
+    run(lfos, c, 2.9 + DT, 3.5)
+    held = rnd.hold
+    rnd.sync = 0
+    lfos.step(DT, 3.5 + DT, c)
+    assert rnd.hold == held
+
+
+def test_an_immediate_hz_reset_reads_phase_zero_on_its_first_step_too():
+    """A key-bound lfo.N.reset (before the step) and the panel chip (after
+    it) must agree: the landing step begins the cycle, it is not rate·dt in."""
+    lfos, c = LFOs(), clock_at(120.0)
+    hz = lfos[0]
+    hz.rate, hz.shape = 20.0, SHAPES.index("saw")
+    run(lfos, c, 0.0, 0.5)
+    lfos.reset(0, c, 0.9)                        # before the step at 0.9
+    lfos.step(DT, 0.9, c)
+    assert hz.x == 0.0 and not hz.fresh
+    lfos.step(DT, 0.9 + DT, c)
+    assert hz.x == pytest.approx(20.0 * DT % 1.0)
+
+
 def test_phase_offset_rides_on_top_in_both_modes():
     lfos, c = LFOs(), clock_at()
     lfos[0].sync, lfos[0].phase = SYNCS.index("1 bar"), 0.25
