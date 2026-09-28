@@ -52,13 +52,28 @@ def test_a_bad_file_keeps_the_defaults_and_carries_the_error(tmp_path):
     assert cfg["midi"]["enabled"] is True and cfg["output"] == config.DEFAULTS["output"]
     p.write_text("[midi]\nenabled = false\n")
     assert "error" not in config.load(p)
-    # an [output] that is not a table is an error, not a crash at launch
+
+
+def test_a_scalar_in_place_of_any_section_is_an_error_and_the_defaults_stand(tmp_path):
+    """`gamepad = false` or `midi = true` instead of a table must not crash
+    the _open_* gates: every section is guarded, each bad one is named."""
+    p = tmp_path / "config.toml"
+    p.write_text("midi = true\noutput = 3\n[bridge]\nenabled = true\n")
+    cfg = config.load(p)
+    assert cfg["midi"] == {**config.DEFAULTS["midi"], "map": str(tmp_path / "midi_map.json")}
+    assert cfg["output"] == config.DEFAULTS["output"]
+    assert cfg["bridge"]["enabled"] is True                    # the good section still lands
+    assert "[midi] must be a table" in cfg["error"] and "[output] must be a table" in cfg["error"]
+    assert cfg["error"].startswith("config:")
+
+
+def test_a_scalar_output_beside_a_legacy_overlay_is_reported_not_dropped(tmp_path):
+    p = tmp_path / "config.toml"
     p.write_text("output = true\n[overlay]\nbg = 0.2\n")
     cfg = config.load(p)
-    assert cfg["output"]["bg"] == 0.2 and "error" not in cfg  # the alias table still lands
-    p.write_text("output = true\n")
-    cfg = config.load(p)
-    assert cfg["output"] == config.DEFAULTS["output"] and "[output]" in cfg["error"]
+    assert cfg["output"]["bg"] == 0.2                          # the alias table still lands
+    assert "[output] must be a table" in cfg["error"]          # …and the scalar is named
+    assert cfg["notes"] and "overlay" not in cfg
 
 
 def test_every_test_runs_with_its_own_home(tmp_path, monkeypatch):
