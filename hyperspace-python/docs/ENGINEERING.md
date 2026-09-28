@@ -15,7 +15,7 @@ paragraph says so. The HTML-era sections (browser sandbox, deploy) are
 gone; `hyperspace-web/hyperspace.html` is frozen and matters here only as
 the oracle the golden traces were recorded from.
 
-**Run it:** `uv sync`, `uv run pytest` (664 tests, ~20 s), `uv run
+**Run it:** `uv sync`, `uv run pytest` (683 tests, ~20 s), `uv run
 hyperspace`. `?` in the app shows the controls cheat sheet.
 
 ---
@@ -482,7 +482,7 @@ unreadable at a party.
 
 ## 6. Testing
 
-`uv run pytest` — 664 tests, 11 skipped without torch, about 20 s. `ruff`
+`uv run pytest` — 683 tests, 11 skipped without torch, about 20 s. `ruff`
 is the linter. Every test runs with `HYPERSPACE_HOME` pointed at its own
 `tmp_path` (`tests/conftest.py`), so no test can touch `~/Hyperspace`.
 What holds what:
@@ -501,7 +501,8 @@ What holds what:
 - **Boundaries**: the core never imports `midi` / `bridge` / `dream`
   (`tests/test_params.py:286`, `tests/test_bridge.py:381`,
   `tests/test_dream.py:55`); `hands/core.py`, `hands/signal.py`, `lfo.py`,
-  `tempo.py` import nothing from the package (`tests/test_*_boundary.py`).
+  `tempo.py` import nothing from the package, and `routing.py` nothing
+  above it — no panel, host or adapter (`tests/test_*_boundary.py`).
 - **Hot reload**: every module but `app.py`, `hotreload.py` and `offline.py`
   is on the watch list in dependency order (leaves first), an optional
   adapter that was never imported is skipped, every swap target `app.py`
