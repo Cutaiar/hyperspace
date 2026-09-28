@@ -188,7 +188,7 @@ Three classes of writer, and the model is that they never fight:
 | Class | Writes | Who | Enforced by |
 |---|---|---|---|
 | **Scene-setter** | the **base** | panel widgets (`ui.py:683-807`); key / pad / hat rows via `routing.act` (`routing.py:454-479`); MIDI knobs, faders, buttons (`midi.py:434-485`); presets, themes, projects via `Registry.restore` (`library.py:523`, `routing.py:1005/1159/1176`); the relative writers — mouse orbit / pan / zoom, sticks, triggers, ↑/↓ — via `Param.nudge` / `scale` (`app.py:331-373, 560-568`); the loop keys `R`, F1–F8 via `app.act` (`app.py:96`) | every setter ends in `Param.set`, which writes `_base` while modulated (`params.py:182-187`); `nudge`/`scale` read `self.base` (`params.py:370, 385`); `tests/test_modulation.py:180`, `tests/test_app_relative.py`, `tests/test_midi.py:272` |
-| **Performer** | an **offset** | `Router.modulate` → `Param.modulate` (`routing.py:1149`) — the only caller in the package | grep; adapters only `feed` (`hands/core.py:758`, `lfo.py:174`, `bridge.py:228`). No test |
+| **Performer** | an **offset** | `Router.modulate` → `Param.modulate` (`routing.py:1149`) — the only caller in the package | `tests/test_routing_boundary.py` (an AST walk: one call site, in `Router.modulate`); adapters only `feed` (`hands/core.py:758`, `lfo.py:174`, `bridge.py:228`) |
 | **Object writer** | the live object, bypassing `Param` | the rotation integrator (`render.py:232`), `camera.reset` (`params.py:756-762`), `Control`'s scene / band resets (`control.py:57-134`), `mirror()` on the non-modulatable `hands.*` (`hands/core.py:449`) | `Param.apply` folds the delta into the base next frame (`params.py:460-466`, `tests/test_modulation.py:198`); non-modulatable params are never applied, so a direct write is simply the value |
 
 Consequences to hold onto:
@@ -429,11 +429,23 @@ downbeat (audit B2; the module docstring now says so).
 random = sample-and-hold per cycle), `rate` (Hz, log 0.01–20), `sync` (Hz
 or a bar division), `depth`, `phase`, and a `reset` trigger. In Hz the
 phase integrates `rate · dt`; in a division it is `clock.beat · ratio +
-phase` (`lfo.py:110-123`). Output `u = 0.5 + 0.5 · depth · wave`, rest
-0.5, published every frame (`lfo.py:171-176`). An LFO is a performer and
-every one of its knobs is ownable; it reads its knobs from its own
-dataclass fields, i.e. last frame's effective values, which is the whole
-one-frame-lag / no-recursion mechanism (§2).
+phase` (`lfo.py:110-123`). Switching `sync` carries the phase across, so
+the wave continues from where it is in either direction (plan 11 WP4;
+`test_switching_sync_carries_the_phase_both_ways`). Output `u = 0.5 +
+0.5 · depth · wave`, rest 0.5, published every frame (`lfo.py:171-176`).
+An LFO is a performer and every one of its knobs is ownable; it reads its
+knobs from its own dataclass fields, i.e. last frame's effective values,
+which is the whole one-frame-lag / no-recursion mechanism (§2).
+
+**Phase 0 on every trigger path.** A key row fires `lfo.trigger` before
+the frame's `lfos.step` (§2), so that step reads the new downbeat. The
+panel's chip and a performer-fired trigger run *after* the step; `LFOs`
+holds a trigger or a per-LFO `reset` that arrives at the time it last
+stepped and applies it at the start of the next step, at that step's own
+`t` — so the first frame the LFOs see it, every synced LFO reads exactly
+phase 0 (a Hz reset reads 0 too). One frame of latency on those paths,
+never a partial phase (plan 11 WP4;
+`test_a_trigger_after_this_frames_step_lands_phase_zero_on_the_next_step`).
 
 ### 3.10 What this section does not promise
 
@@ -447,7 +459,9 @@ filed in [`AUDIT-2026-09.md`](AUDIT-2026-09.md):
   `hands/signal.py:124-131` for the spring; with `rest = hold` it holds instead).
 - Hand Learn lives in the MIDI adapter object; with `[midi] enabled =
   false` there is no hand Learn.
-- Nothing in `Router.modulate` checks ownership.
+- Nothing in `Router.modulate` checks ownership; the referee is the
+  table's edit doors, and `tests/test_routing_boundary.py` holds that
+  `Router.modulate` is the only caller of `Param.modulate` (audit B8).
 - `tempo.tap`, `lfo.trigger` and `lfo.N.reset` are modulatable by default.
 
 ---
@@ -467,7 +481,7 @@ grep for; the module's docstring has the rest.
 | `routing.py` | The binding table: one row type for keys, pads, MIDI and performers; the file on disk; the referee; the per-frame modulation pass. | `Binding`, `Bindings` (the table and its edit doors), `Router` (the pass, `feed`, presets), `Owned`. | A lane-scheme row carries only `push` or `position`; a target never has two enabled performers through the edit doors; `modulate` never writes a base; an unknown-schema file is never rewritten. (`tests/test_routing.py:892-1009, 1212`) | `test_routing.py` |
 | `midi.py` + `apc40.py` | The MIDI adapter (ports, soft pickup, ring and LED feedback, Learn) and the APC40's device profile (port name, mode SysEx, LED colours, the 113-row default map). | `MidiIO`, `Ports`; `apc40.DEFAULT_MAP` and the button constants the clock uses. | The core never imports it; every write it makes is a base write; a ring shows the base and never chases a performer; a held Learn is never applied or dropped silently. (`tests/test_params.py:286`, `tests/test_midi.py:272, 387`) | `test_midi.py` |
 | `hands/` | The Ultraleap instrument: two hands as twelve shaped axes, two presence lanes and eight pinch switches, fed to the table; MIDI out to a DAW; box calibration; the HANDS page. | `HandsIO.poll(dt, midi, router)`, `HandSettings`, `register`; `panel.page`. | `core.py` and `signal.py` import nothing from the package — only `panel.py` knows the host; the lane order never changes under a saved `hand:<i>`; a gate never opens on a source that is not live; nothing learns while a question is up. (`tests/test_hands_boundary.py`, `tests/test_hands.py:391, 752, 521`) | `test_hands.py`, `test_hands_boundary.py` |
-| `lfo.py` + `tempo.py` | Four tempo-aware LFOs and the tap-tempo clock, as a source fed to the table like any other, with every knob an ordinary param. | `LFOs.step` / `publish`, `Clock` (`tap`, `trigger`, `beat`), the two `register` functions. | Import nothing from the package; read their own fields, never a `Param` (that is the one-frame lag); once triggered, a tap never moves a running synced LFO; the global trigger never touches a Hz LFO. (`tests/test_lfo_boundary.py`, `tests/test_lfo.py:98-156`) | `test_lfo.py`, `test_tempo.py`, `test_lfo_boundary.py` |
+| `lfo.py` + `tempo.py` | Four tempo-aware LFOs and the tap-tempo clock, as a source fed to the table like any other, with every knob an ordinary param. | `LFOs.step` / `publish`, `Clock` (`tap`, `trigger`, `beat`), the two `register` functions. | Import nothing from the package; read their own fields, never a `Param` (that is the one-frame lag); once triggered, a tap never moves a running synced LFO; the global trigger never touches a Hz LFO; a trigger that arrives after the frame's step lands at exactly phase 0 on the next; a sync change carries the phase. (`tests/test_lfo_boundary.py`, `tests/test_lfo.py:98-156`, the plan 11 WP4 tests in `test_lfo.py`) | `test_lfo.py`, `test_tempo.py`, `test_lfo_boundary.py` |
 | `geometry.py` | Builds the 25 shapes as unit-circumradius vertex, edge and face arrays, and holds the exact 4D → 2D transform. | `SHAPES`, `geom(i)`, `project_h` (the renderer's), `project` (the tests' oracle), faces and UVs. | The first 18 shapes' vertex and edge order never changes — the golden traces key on it. (`tests/test_core.py:33`, `tests/test_shapes3d.py:16`) | `test_core.py`, `test_shapes3d.py`, `test_golden.py` |
 | `render.py` | `ViewState`, the live object the view, rotation and camera params write, and `Renderer.draw`: scene pass, coverage mask, look-back, FX, to the window. | `ViewState` (and `integrate`, the one direct writer of `ang`), `Renderer`, `render_offscreen`. | Imports no audio, input or registry code; with look-back and FX off the output is bit-identical to the scene pass; the history never captures the effected frame. (`tests/test_render.py:306`) | `test_render.py` |
 | `fx.py` + `shaders/fx/` | Post effects as GLSL files whose `// @param` uniforms become registry params, run as a pass chain after the composite. | `FxState` (the params' object), `FxChain`, `declare`. | An effect is never defined in Python; a broken edit never takes the frame down; off is bit-identical. (`tests/test_fx.py:194, 268, 293`) | `test_fx.py` |
@@ -481,6 +495,7 @@ grep for; the module's docstring has the rest.
 | `audio.py` + `analysis.py` + `analyzer.py` + `bands.py` | The audio source (a capture device or a file, through a ring buffer), the FFT front end, and the one chain that runs: the N-band analyzer whose output is `lanes`. `bands.py` is its parts bin. | `AudioEngine` (`chain`, `step`, the transport), `Analyzer` (`lanes`, layout, scenes), `bands.PRESETS` and the constants. | The legacy six-band layout never diverges from the frozen oracle by a bit; a lane never reaches `CEIL`; the callbacks never do chain work; a source attach never loses the layout or the faders. (`tests/test_analyzer.py:63, 412`, `tests/test_core.py:58, 144`) | `test_analyzer.py`, `test_core.py` |
 
 Things no test holds today, in every row that says so above: the frame
-order in `app.py`, `routing.py`'s import boundary, "only `Router.modulate`
-calls `Param.modulate`", the audio stack's imports, the panel being a
-leaf. They are filed as audit items R11, A9 and P5.
+order in `app.py`, `routing.py`'s import boundary, the audio stack's
+imports, the panel being a leaf. They are filed as audit items R11, A9 and
+P5. ("Only `Router.modulate` calls `Param.modulate`" is held since plan 11
+WP4 by `tests/test_routing_boundary.py`.)
