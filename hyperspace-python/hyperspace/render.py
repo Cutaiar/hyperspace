@@ -358,14 +358,26 @@ class Renderer:
         live ones are replaced only once every new one exists, so a shader
         edit that fails to compile leaves the last good set drawing."""
         ctx = self.ctx
-        lines = ctx.program(vertex_shader=LINE_VS, fragment_shader=LINE_FS)
-        points = ctx.program(vertex_shader=POINT_VS, fragment_shader=POINT_FS)
-        points["u_color"].value = RED
-        lvao = ctx.vertex_array(lines, [(self._lbuf, "2f 1f", "in_pos", "in_alpha")])
-        # the coverage pass reads the face buffer's position and divisor only
-        cover_prog = ctx.program(vertex_shader=COVER_VS, fragment_shader=COVER_FS)
-        cvao = ctx.vertex_array(cover_prog, [(self._fbuf, "2f 1f 16x", "in_pos", "in_wc")])
-        pvao = ctx.vertex_array(points, [(self._pbuf, "2f 1f 1f", "in_pos", "in_size", "in_alpha")])
+        made: list = []          # released again if a later step raises
+        try:
+            lines = ctx.program(vertex_shader=LINE_VS, fragment_shader=LINE_FS)
+            made.append(lines)
+            points = ctx.program(vertex_shader=POINT_VS, fragment_shader=POINT_FS)
+            made.append(points)
+            points["u_color"].value = RED
+            lvao = ctx.vertex_array(lines, [(self._lbuf, "2f 1f", "in_pos", "in_alpha")])
+            made.append(lvao)
+            # the coverage pass reads the face buffer's position and divisor only
+            cover_prog = ctx.program(vertex_shader=COVER_VS, fragment_shader=COVER_FS)
+            made.append(cover_prog)
+            cvao = ctx.vertex_array(cover_prog, [(self._fbuf, "2f 1f 16x", "in_pos", "in_wc")])
+            made.append(cvao)
+            pvao = ctx.vertex_array(points,
+                                    [(self._pbuf, "2f 1f 1f", "in_pos", "in_size", "in_alpha")])
+        except Exception:
+            for res in made:
+                res.release()
+            raise
         self._lines, self._points, self._lvao, self._cover_prog, self._cvao, self._pvao = (
             lines, points, lvao, cover_prog, cvao, pvao)
 

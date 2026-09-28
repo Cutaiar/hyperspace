@@ -1268,6 +1268,8 @@ class Panel:
             imgui.text_disabled(f"hot reload: {self.reloader.status or 'watching'}")
             if self.reloader.error:
                 imgui.text_colored(WARN, self.reloader.error)
+            if self.reloader.restart:
+                imgui.text_colored(WARN, self.reloader.restart)
         if self.library is not None:
             imgui.text_disabled(f"library: {self.library.home}")
             if imgui.is_item_hovered():

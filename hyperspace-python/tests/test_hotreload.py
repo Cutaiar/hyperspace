@@ -321,9 +321,46 @@ def test_an_enum_a_reloaded_module_defines_keeps_its_identity(pkg):
     assert mod_a.Kind is kind and h.kind is mod_a.Kind.B and h.is_b()
 
     write(pkg, "mod_a", A_ENUM_V3)
-    assert r.poll(now=2.0)
+    assert r.poll(now=2.0) and r.error == ""
     assert mod_a.Kind is kind and h.is_b()          # identity still held…
-    assert "mod_a.Kind changed" in r.error          # …and the new member needs a restart
+    assert "mod_a.Kind changed" in r.restart        # …and the new member needs a restart
+
+    write(pkg, "mod_a", A_ENUM_V2)                  # a clean save later
+    assert r.poll(now=3.0) and r.error == ""
+    assert "mod_a.Kind changed" in r.restart        # the note stays until the restart
+
+
+def test_a_module_imported_after_the_reloader_is_seen_not_reloaded(pkg):
+    """A module that first lands in sys.modules after __init__ (an adapter
+    opened later) has no recorded mtime; the first poll records it and
+    reloads nothing. The next real edit to it reloads as usual."""
+    mod_a = importlib.import_module("hotpkg.mod_a")
+    t = mod_a.Thing()
+    r = _reloader(lambda: [(t, "mod_a", "Thing")])
+    mod_b = importlib.import_module("hotpkg.mod_b")   # after the reloader was built
+    assert not r.poll(now=1.0)
+    assert r.error == "" and r.status == ""
+    assert not hasattr(t, "rebuilt")
+
+    write(pkg, "mod_b", "from .mod_a import VALUE\n\ndef get():\n    return VALUE + 10\n")
+    assert r.poll(now=2.0)
+    assert mod_b.get() == 11
+
+
+def test_a_syntax_error_names_the_file_by_its_path(pkg):
+    """`hands/core.py:12`, not `hands.core.py:12`."""
+    sub = pkg / "sub"
+    sub.mkdir()
+    (sub / "__init__.py").write_text("")
+    write(sub, "leaf", "def get():\n    return 1\n")
+    importlib.invalidate_caches()
+    importlib.import_module("hotpkg.sub.leaf")
+    r = HotReloader(list, package="hotpkg", modules=("sub.leaf",), period=0.0)
+    write(sub, "leaf", "def (broken\n")
+    assert not r.poll(now=1.0)
+    assert r.error.startswith("hotpkg/sub/leaf.py:1:")
+    for name in ("hotpkg.sub", "hotpkg.sub.leaf"):
+        sys.modules.pop(name, None)
 
 
 def test_an_unimported_optional_module_is_skipped(pkg):

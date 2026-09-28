@@ -102,7 +102,8 @@ class HotReloader:
     source attach) are picked up. `error` holds the last failed reload,
     `runtime_error` the last frame-guard failure (app.py writes it),
     `status` the last successful swap — or a watcher's own `status` when
-    one of those picked something up.
+    one of those picked something up — and `restart` why the process
+    needs restarting (an Enum whose members changed), kept until it is.
     """
 
     def __init__(self, targets, package: str = "hyperspace",
@@ -115,10 +116,20 @@ class HotReloader:
         self.error = ""
         self.runtime_error = ""
         self.status = ""
+        self.restart = ""
         self._next = 0.0
         self._mtimes: dict[str, float] = {}
         for name, f in self._files():
             self._mtimes[name] = f.stat().st_mtime
+
+    def _rel(self, f: Path) -> str:
+        """A file's path from the package's parent (hyperspace/hands/core.py)."""
+        pkg = sys.modules.get(self.package)
+        root = Path(pkg.__file__).parent.parent if getattr(pkg, "__file__", None) else None
+        try:
+            return str(f.relative_to(root)) if root else f.name
+        except ValueError:
+            return f.name
 
     def _files(self):
         for name in self.modules:
@@ -141,7 +152,9 @@ class HotReloader:
                 mtime = f.stat().st_mtime
             except OSError:
                 continue
-            if mtime != self._mtimes.get(name):
+            if name not in self._mtimes:
+                self._mtimes[name] = mtime  # imported since __init__: seen, not changed
+            elif mtime != self._mtimes[name]:
                 self._mtimes[name] = mtime  # a bad save must not re-error every poll
                 changed.append((name, f))
         if not changed:
@@ -152,7 +165,7 @@ class HotReloader:
             try:
                 compile(f.read_text(), str(f), "exec")
             except SyntaxError as e:
-                self.error = f"{name}.py:{e.lineno}: {e.msg}"[:160]
+                self.error = f"{self._rel(f)}:{e.lineno}: {e.msg}"[:160]
                 return False
 
         first = min(self.modules.index(name) for name, _ in changed)
@@ -165,7 +178,7 @@ class HotReloader:
                 kept = _enums(mod)
                 importlib.reload(mod)
                 notes += [f"{name}.{e} changed — restart to use its new members"
-                          for e in _keep_enums(mod, kept)]
+                          for e in _keep_enums(mod, kept)]   # sticky: self.restart
         except Exception as e:  # noqa: BLE001 — a bad edit must not kill the app
             self.error = f"{type(e).__name__}: {e}"[:160]
             return False
@@ -185,7 +198,10 @@ class HotReloader:
             self.error = f"swap: {type(e).__name__}: {e}"[:160]
             return False
 
-        self.error = "; ".join(notes)[:160]
+        for note in notes:
+            if note not in self.restart:
+                self.restart = f"{self.restart}; {note}" if self.restart else note
+        self.error = ""
         self.runtime_error = ""
         names = ", ".join(name for name, _ in changed)
         self.status = f"hot: {names} · {time.strftime('%H:%M:%S')}"

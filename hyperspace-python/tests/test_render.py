@@ -385,3 +385,35 @@ def test_on_reload_rebuilds_the_wire_programs_and_still_draws(ctx):
     assert ctx.error == "GL_NO_ERROR"
     assert _rgba(ctx, fbo, w, h, 0).max() > 0
     fbo.release()
+
+
+def test_build_wire_programs_releases_what_it_made_when_a_step_raises():
+    """A VAO build that fails after the programs compiled must not leak them
+    (and the live set stays untouched) — headless, over a fake context."""
+    from types import SimpleNamespace
+
+    from hyperspace.render import Renderer
+
+    released = []
+
+    class Prog:
+        def __init__(self):
+            self.uniforms = {}
+
+        def __getitem__(self, k):
+            return self.uniforms.setdefault(k, SimpleNamespace())
+
+        def release(self):
+            released.append(self)
+
+    def vertex_array(*_):
+        raise RuntimeError("no VAO today")
+
+    r = Renderer.__new__(Renderer)
+    r.ctx = SimpleNamespace(program=lambda **_: Prog(), vertex_array=vertex_array)
+    r._lbuf = r._pbuf = r._fbuf = object()
+    r._lines = r._points = r._lvao = r._cover_prog = r._cvao = r._pvao = "live"
+    with pytest.raises(RuntimeError):
+        r._build_wire_programs()
+    assert len(released) == 2                      # both compiled programs
+    assert r._lines == "live" and r._lvao == "live"   # the old set was not replaced
