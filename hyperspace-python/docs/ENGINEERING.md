@@ -15,7 +15,7 @@ paragraph says so. The HTML-era sections (browser sandbox, deploy) are
 gone; `hyperspace-web/hyperspace.html` is frozen and matters here only as
 the oracle the golden traces were recorded from.
 
-**Run it:** `uv sync`, `uv run pytest` (664 tests, ~20 s), `uv run
+**Run it:** `uv sync`, `uv run pytest` (772 tests, ~20 s), `uv run
 hyperspace`. `?` in the app shows the controls cheat sheet.
 
 ---
@@ -513,7 +513,7 @@ unreadable at a party.
 
 ## 6. Testing
 
-`uv run pytest` — 664 tests, 11 skipped without torch, about 20 s. `ruff`
+`uv run pytest` — 772 tests, 11 skipped without torch, about 20 s. `ruff`
 is the linter. Every test runs with `HYPERSPACE_HOME` pointed at its own
 `tmp_path` (`tests/conftest.py`), so no test can touch `~/Hyperspace`.
 What holds what:
@@ -551,18 +551,17 @@ What holds what:
   Probes: `tools/midi_probe.py` (echoes a controller, lights an APC40),
   `tools/hands_probe.py` (every hand axis live; `--calibrate`).
 
-Untested today, and worth knowing before trusting a change there:
-`audio.py`'s streams, `analysis.py` on its own, `LeapSource` (audit). The
-frame order, `Keys`, `Mouse`, the `_open_*` gates and the host's import
-boundary are `tests/test_app_boundary.py` (the frame runs over stubs;
-the boundary in a subprocess).
 Untested today, and worth knowing before trusting a change there: the
-frame order in `app.py`, `Keys` and `Mouse`, the `_open_*` config gates,
-`audio.py`'s streams, `analysis.py` on its own (audit). `LeapSource`, the DAW
-port's open and retry run against a fake `leap` (`tests/test_hands_leap.py`).
-`LeapSource` (audit). `audio.py`'s streams and `analysis.py` are covered
-headless by `tests/test_audio.py` over a fake `sounddevice`, and the
-audio stack's import boundary by `tests/test_audio_boundary.py`.
+panel being a leaf and `routing.py`'s import boundary (audit R11, plan 11
+WP8). The frame order, `Keys`, `Mouse`, the `_open_*` gates and the host's
+import boundary are `tests/test_app_boundary.py` (the frame runs over
+stubs; the boundary in a subprocess); `audio.py`'s streams and
+`analysis.py` run headless over a fake `sounddevice`
+(`tests/test_audio.py`, the stack's boundary in `tests/test_audio_boundary.py`);
+`LeapSource` and the DAW port's open and retry run against a fake `leap`
+(`tests/test_hands_leap.py`); the loop-order and Learn paths in
+`tests/test_learn.py`. What only the machine can verify is
+[`plans/11-hand-checks.md`](plans/11-hand-checks.md).
 
 ## 7. Process
 
@@ -587,11 +586,13 @@ same PR; when it changes behaviour, the line here does.
 
 ## 8. Open threads
 
-- **Plan 09's hand checks at the machine** (CHECKPOINT): the prompt from a
-  real Learn, `hands-pinch` zoom under pinch + scroll, TAP TEMPO then
-  METRONOME, `lfo-breathe` under the right hand, a knob on a hand-owned
-  param. Audit B1 (a hand leaving the box did not release its rows) was
-  fixed by plan 11 WP1 before these are run.
+- **The hand checks at the machine** — plan 09's five, plan 08's
+  unverified list, plan 07's WP6c tuning, the first capture, the APC40,
+  the second monitor, IAC + FL Studio and the eyeballing owed for PRs #24–#26:
+  one numbered list with commands, presets, pass and fail in
+  [`plans/11-hand-checks.md`](plans/11-hand-checks.md). Audit B1 (a hand
+  leaving the box did not release its rows) was fixed by plan 11 WP1
+  before these are run.
 - **The trim decision** (plan 06): the owner picks one of the three fixes
   above; the oracle is re-frozen after.
 - **First real capture on this machine.** Every live path is code-complete;
