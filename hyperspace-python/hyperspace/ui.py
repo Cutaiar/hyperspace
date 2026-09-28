@@ -27,7 +27,6 @@ the one hand-arranged thing left here.
 
 from __future__ import annotations
 
-import math
 import os
 from collections.abc import Callable
 
@@ -35,21 +34,12 @@ from imgui_bundle import imgui
 
 from . import ui_bands, ui_fx, ui_lfo, ui_lookback, ui_presets, ui_routing
 from .analyzer import N_MAX
-from .audio import AudioEngine, input_devices
-from .bands import BANDS, CEIL, KNEE, NOM
+from .audio import AudioEngine
+from .bands import CEIL, KNEE, NOM
 from .control import Control
 from .geometry import SHAPES, geom
 from .hands import panel as ui_hands
-from .params import (  # noqa: F401 — PATTERNS et al. re-exported for callers
-    BMP_PATHS,
-    INST_MOTION,
-    PATTERNS,
-    PLANES,
-    Kind,
-    Param,
-    Registry,
-    build_registry,
-)
+from .params import PLANES, Kind, Param, Registry, build_registry
 from .render import ViewState
 
 # ---- palette: black ground, three greys of text, one red ----
@@ -60,7 +50,7 @@ FAINT = imgui.ImVec4(0.58, 0.58, 0.61, 1.0)     # notes and hints, the quietest 
 WARN = imgui.ImVec4(1, 0.45, 0.35, 1)
 FILL = imgui.ImVec4(1.0, 43 / 255, 43 / 255, 0.42)  # a fader's value fill
 GHOST = imgui.ImVec4(1, 1, 1, 0.92)             # the effective value under modulation
-LINE = imgui.ImVec4(0.24, 0.24, 0.26, 1.0)      # rules and frames
+LINE = imgui.ImVec4(0.24, 0.24, 0.26, 1.0)      # rules, frames, idle marks — the one grey line
 
 # meter landmarks (ENGINEERING §4): nominal 38.5%, knee 48.1% of full scale
 PIN_AT = CEIL * 0.92
@@ -70,6 +60,7 @@ PIN_HOLD = 0.5
 PANEL_W = 540   # leaves the cheat sheet its column in the control window (app.CONTROL_SIZE)
 RAIL_W = 112
 LABEL_W = 104    # the label column in a _row
+HALF_LABEL_W = 78    # the label column in a half-width table cell (Panel.half)
 ROUND = 8.0      # corner radius of frames; chips and grabs go rounder
 
 # ---- font atlas (ENGINEERING.md, control-surface conventions) ----
@@ -358,10 +349,6 @@ class Panel:
         self.reg = registry if registry is not None else build_registry(
             view, control, audio, self.presets
         )
-        self.devices = input_devices()
-        self.device_sel = next(
-            (k for k, d in enumerate(self.devices) if d["loopback"]), 0
-        )
         self.pin_in = [0.0] * N_MAX
         self.pin_out = [0.0] * N_MAX
         self.open = True
@@ -380,11 +367,13 @@ class Panel:
         self.hand_settings = None  # set by app.py (hands.HandSettings): the HANDS page
         self.clock = None          # set by app.py (tempo.Clock): the LFO page's beat light
         self.lfos = None           # set by app.py (lfo.LFOs): the LFO page's scopes
-        self.restart_requested = False  # main loop polls after draw() and execv's
         self._register_panel_params()
 
     def _register_panel_params(self) -> None:
-        """Params that only exist once there is a panel and an audio device list."""
+        """The panel's own state as ``ui.*`` params: the window, the sheet,
+        the page. Everything else the factory table names (``audio.mic``,
+        ``audio.device``, ``app.restart``) is declared by `build_registry`,
+        so a key row resolves with or without a panel."""
         r = self.reg
         if "ui.panel" in r:
             return
@@ -399,36 +388,17 @@ class Panel:
                lambda i: setattr(self, "page", int(i)), [lb for _, lb, _ in PAGES],
                group="ui", persist=False, modulatable=False,
                tip="Which page of the panel is open.")
-        r.trigger("app.restart", "Restart process",
-                  lambda: setattr(self, "restart_requested", True), group="ui",
-                  modulatable=False,
-                  tip="Restart the process (Cmd+R). Full cold reload; view state is lost.")
-        a = self.audio
-        r.toggle("audio.mic", "Mic",
-                 lambda: bool(a.on and a.mode == "mic"), self._set_mic, group="audio",
-                 persist=False,
-                 tip="Listen to the selected input device.")
-        r.enum("audio.device", "Input device",
-               lambda: self.device_sel, lambda i: setattr(self, "device_sel", i),
-               lambda: [("● " if d["loopback"] else "") + d["name"] for d in self.devices],
-               group="audio", persist=False, modulatable=False)
-
-    def _set_mic(self, on: bool) -> None:
-        a = self.audio
-        if on and self.devices:
-            if not (a.on and a.mode == "mic"):
-                a.start_mic(self.devices[self.device_sel]["index"])
-        elif not on and a.on and a.mode == "mic":
-            a.stop()
 
     # ---- binding menu: every widget gets one on right-click ----
 
-    def _ctx(self, a: Param) -> None:
+    def _ctx(self, a: Param, key: str = "") -> None:
         """The param's context menu, attached to the last drawn item.
 
         `a` is the drawn param — the bindings hang off it; the modulation
-        line reads the one it stands for (a band.sel.* alias → its band)."""
-        if not imgui.begin_popup_context_item(f"##ctx.{a.id}"):
+        line reads the one it stands for (a band.sel.* alias → its band).
+        `key` tells apart several items that stand for one param (the rail's
+        pills all set ``ui.page``), so each gets its own popup."""
+        if not imgui.begin_popup_context_item(f"##ctx.{a.id}{key}"):
             return
         _micro(a.id, DIM)
         p = self._real(a)
@@ -742,6 +712,27 @@ class Panel:
         self._label_cell(p.label if label is None else label, width=label_w)
         return self._slider(pid, width)
 
+    def half(self, pid: str, label: str | None = None, label_w: float = HALF_LABEL_W) -> bool:
+        """`_row` for a half-width table cell: a short label in a narrow column."""
+        return self._row(pid, label=label, label_w=label_w)
+
+    def _lane_plane(self, i: int) -> str:
+        """The meter tooltip's suffix: which rotation planes lane `i` drives,
+        read from the live table's ``rot.rate.*`` rows — none, no suffix. A
+        push row has a direction (the sign of its depth); a position row
+        only names the plane."""
+        router = self.router
+        if router is None:
+            return ""
+        planes = []
+        for b in router.table.of("lane"):
+            if b.index == i and b.enabled and b.target.startswith("rot.rate."):
+                plane = b.target.rsplit(".", 1)[-1]
+                if b.op == "push":
+                    plane += " forward" if b.value >= 0 else " reverse"
+                planes.append(plane)
+        return f" → {', '.join(planes)}" if planes else ""
+
     def _combo(self, pid: str, width: float = -1, tip: str | None = None) -> bool:
         a = self.reg[pid]
         p = self._real(a)
@@ -863,7 +854,6 @@ class Panel:
         gap, mh = 4.0, 78.0
         n = a.n   # the analyzer's N bands; the strip draws whatever it has
         bw = (imgui.get_content_region_avail().x - (n - 1) * gap) / n
-        u32 = imgui.color_convert_float4_to_u32
         zone = u32(imgui.ImVec4(1.0, 43 / 255, 43 / 255, 0.07))
         blink = (imgui.get_time() % 0.62) < 0.31  # the 620 ms annunciator
         for i, name in enumerate(a.band_names):
@@ -915,11 +905,7 @@ class Panel:
                 self.reg["band.select"].set(i)
             if imgui.is_item_hovered():
                 lo, hi = a.edges(i)
-                # the plane text comes from the static BANDS table, which only
-                # names the right plane while the legacy6 / default rows stand
-                plane = (f" → {BANDS[i].pl} plane, {'forward' if BANDS[i].dir > 0 else 'reverse'}"
-                         if n == 6 else "")
-                imgui.set_tooltip(f"{name} {lo:.0f}–{hi:.0f} Hz{plane}")
+                imgui.set_tooltip(f"{name} {lo:.0f}–{hi:.0f} Hz{self._lane_plane(i)}")
             if i == 0:
                 self._ctx(self.reg["band.select"])
         # band tags, centred under their bars, in the micro face
@@ -981,6 +967,9 @@ class Panel:
             p0 = imgui.get_cursor_screen_pos()
             if imgui.invisible_button(f"##page{k}", imgui.ImVec2(w, h)):
                 self.reg["ui.page"].set(k)
+            imgui.pop_font()            # the menu opens in the panel's own face
+            self._ctx(self.reg["ui.page"], f".{k}")
+            imgui.push_font(_FONTS["micro"], FONT_MICRO)
             hov = imgui.is_item_hovered()
             p1 = imgui.ImVec2(p0.x + w, p0.y + h)
             if lit or hov:
@@ -994,7 +983,6 @@ class Panel:
                 dl.add_circle_filled(imgui.ImVec2(p1.x - 11, p0.y + h / 2), 3.5,
                                      u32(imgui.ImVec4(1, 1, 1, 1) if lit else RED))
         imgui.pop_font()
-        self._ctx(self.reg["ui.page"])
         # the rule between rail and page
         x = r0.x + RAIL_W - 1
         dl.add_line(imgui.ImVec2(x, r0.y), imgui.ImVec2(x, r0.y + imgui.get_window_height()),
@@ -1195,7 +1183,7 @@ class Panel:
             self._file_dialog = None
             if picked:
                 a.start_file(picked[0])
-        if self.devices:
+        if getattr(a, "devices", None) and "audio.device" in self.reg:
             self._combo("audio.device")
         if a.error:
             imgui.text_colored(WARN, a.error)
@@ -1302,7 +1290,3 @@ class Panel:
             imgui.same_line()
             imgui.text_disabled(f"·  {m.last}")
         imgui.text_disabled("right-click any control to learn or unbind")
-
-
-def format_infinity(v: float) -> str:  # convenience for tests
-    return "off" if not math.isfinite(v) else f"{v:g}"

@@ -6,21 +6,37 @@ mouse, so each test drives the same library calls the strip's buttons
 make and checks that every state the strip can be in draws.
 """
 
+import re
 from types import SimpleNamespace
 
 import pytest
 from imgui_bundle import imgui, implot
 
-from hyperspace import lfo, tempo, ui_presets
+from hyperspace import hands, lfo, tempo, ui_presets, ui_routing
 from hyperspace.analysis import Analyser
-from hyperspace.app import CONTROL_SIZE
+from hyperspace.app import CONTROL_SIZE, LOOP_KEYS
 from hyperspace.bands import Chain
 from hyperspace.control import Control
 from hyperspace.library import Library
-from hyperspace.params import build_registry
+from hyperspace.overlay import Output
+from hyperspace.params import Kind, build_registry
 from hyperspace.render import ViewState
-from hyperspace.routing import Binding, Bindings, Router
-from hyperspace.ui import PAGE_KEYS, PAGES, Panel, apply_style, load_fonts
+from hyperspace.routing import Binding, Bindings, Owned, Router, keymap, padmap
+from hyperspace.ui import CHEATSHEET, PAGE_KEYS, PAGES, Panel, apply_style, load_fonts
+
+
+class FakeLeap:
+    """A tracker that sees no hands: enough for the HANDS page to draw every
+    part of itself (status, switches, box, axes, editor)."""
+
+    status = "tracking"
+    on = True
+
+    def latest(self):
+        return 0, 0.0, {}
+
+    def close(self):
+        pass
 
 
 @pytest.fixture()
@@ -39,13 +55,25 @@ def rig(tmp_path):
     lib = Library(tmp_path, period=0.0)
     reg = build_registry(view, control, audio, lib.bank)
     lib.on_layout("band", control.apply_layout)
+    # the rig has everything app.py gives the panel, so every page is
+    # measured full: a hands setup over a tracker that sees no hands, an
+    # Output, the factory table in a Router, the clock and the LFOs
+    settings = hands.HandSettings.from_config({})
+    hands.register(reg, settings)
+    hands_io = hands.HandsIO(settings, {"out": ""}, source=FakeLeap(), clock=lambda: 0.0)
     clock, lfos = tempo.Clock(now=lambda: 0.0), lfo.LFOs()   # the LFO page (ui_lfo.py)
     tempo.register(reg, clock)
     lfo.register(reg, lfos, clock)
+    output = Output(None, None)
+    output.register(reg)
     lib.attach(reg)
     panel = Panel(control, audio, view, presets=lib.bank, registry=reg, library=lib)
     panel.clock, panel.lfos = clock, lfos
-    r = SimpleNamespace(panel=panel, lib=lib, reg=reg, view=view, chain=chain)
+    panel.hands, panel.hand_settings = hands_io, settings
+    panel.output = output
+    router = Router(reg, Bindings.factory(path=tmp_path / "bindings.json"))
+    panel.router = router
+    r = SimpleNamespace(panel=panel, lib=lib, reg=reg, view=view, chain=chain, router=router)
     try:
         yield r
     finally:
@@ -112,9 +140,9 @@ def test_panel_draws_factory_only(rig):
         frame(rig.panel, page)
 
 
-def test_every_page_fits_the_control_window(rig, monkeypatch):
-    """No page scrolls at the app's control-window size: a control that has
-    to be scrolled to is one that cannot be found in a hurry."""
+def _page_scroll(rig, monkeypatch) -> dict[str, float]:
+    """Draw every page at the control size three times and read each page
+    child's scroll range after its own draw."""
     imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
     over = {}
     for key in PAGE_KEYS:
@@ -127,7 +155,119 @@ def test_every_page_fits_the_control_window(rig, monkeypatch):
     for key in PAGE_KEYS:
         for _ in range(3):              # the window settles its size, then its content
             frame(rig.panel, key)
+    return over
+
+
+def test_every_page_fits_the_control_window(rig, monkeypatch):
+    """No page scrolls at the app's control-window size: a control that has
+    to be scrolled to is one that cannot be found in a hurry. The rig has
+    a hands setup with a tracker, an Output and a Router with the factory
+    rows, so HANDS, OUTPUT and ROUTING are measured full (audit U1)."""
+    assert rig.panel.hands is not None and rig.panel.output is not None
+    assert rig.router.table.routes()
+    over = _page_scroll(rig, monkeypatch)
+    assert set(over) == set(PAGE_KEYS)
     assert {k: v for k, v in over.items() if v > 0} == {}
+
+
+def test_the_routing_rows_scroll_in_their_own_child(rig, monkeypatch):
+    """ROUTING is the one page whose list may outgrow the window: the rows
+    scroll inside a child and the page itself never does, so the preset
+    strip and the header stay put (by design; audit U1)."""
+    reg, table = rig.reg, rig.router.table
+    for p in reg:                       # enough rows to overflow: one per free target
+        if p.kind is Kind.CONTINUOUS and p.modulatable and table.owner(p.id) is None:
+            try:
+                table.add(Binding("lfo:1", p.id, "push", 0.1))
+            except Owned:
+                continue
+        if len(table.routes()) >= 40:
+            break
+    assert len(table.routes()) >= 40
+    inner = []
+    row = ui_routing._row
+
+    def measured(panel, router, b, k):
+        out = row(panel, router, b, k)
+        inner.append(imgui.get_scroll_max_y())   # inside the ##routes child
+        return out
+    monkeypatch.setattr(ui_routing, "_row", measured)
+    over = _page_scroll(rig, monkeypatch)
+    assert over["routing"] == 0, "the ROUTING page itself scrolled"
+    assert inner and inner[-1] > 0, "the rows' child did not scroll with 40 rows"
+
+
+def test_the_hands_page_fits_with_the_tracker_off(rig, monkeypatch):
+    """The setup still edits and saves with no tracker: the page draws
+    without the switches beside the box and still fits."""
+    rig.panel.hands = None
+    over = _page_scroll(rig, monkeypatch)
+    assert over["hands"] == 0
+
+
+def test_the_meter_tooltip_names_the_plane_from_the_live_table(rig):
+    """The suffix comes from the rot.rate rows, not a static table: the
+    factory rows push lane 0 on ZW; a lane with no such row has no suffix."""
+    panel, table = rig.panel, rig.router.table
+    assert panel._lane_plane(0) == " → ZW forward"
+    lane_rows = [b for b in table.of("lane") if b.target.startswith("rot.rate.")]
+    for b in lane_rows:
+        table.remove(b)
+    assert panel._lane_plane(0) == ""
+    table.add(Binding("lane:0", "rot.rate.XY", "position"))
+    assert panel._lane_plane(0) == " → XY"           # a position row has no direction
+    panel.router = None
+    assert panel._lane_plane(0) == ""
+
+
+# ---------------------------------------------------------------- cheat sheet
+
+_SYMBOLS = {"←": "LEFT", "→": "RIGHT", "↑": "UP", "↓": "DOWN", "space": "SPACE",
+            "[": "LEFT_BRACKET", "]": "RIGHT_BRACKET", ",": "COMMA", ".": "PERIOD",
+            "?": "SLASH", "Esc": "ESCAPE", "Cmd+R": "SUPER+R"}
+_PADS = {"pad A B": ["A", "B"], "pad X Y": ["X", "Y"], "LB / RB": ["LB", "RB"],
+         "view/menu": ["VIEW", "MENU"], "sticks": ["LSTICK", "RSTICK"]}
+_MOUSE = {"drag", "⇧drag", "scroll", "right-click", "d-pad", "LT / RT"}
+
+
+def _sheet_keys() -> tuple[set[str], set[str]]:
+    """The GLFW key names and pad buttons the sheet's key column names."""
+    keys, pads = set(), set()
+    for col, _ in CHEATSHEET:
+        if col in _MOUSE:
+            continue
+        if col in _PADS:
+            pads.update(_PADS[col])
+            continue
+        for tok in re.split(r"\s*/\s*|\s+", col):
+            if not tok:
+                continue
+            m = re.fullmatch(r"(F?)(\d+)–F?(\d+)", tok)   # 1–6, F1–F8
+            if m:
+                keys.update(f"{m[1]}{k}" for k in range(int(m[2]), int(m[3]) + 1))
+            else:
+                keys.add(_base(_SYMBOLS.get(tok, tok)))
+    return keys, pads
+
+
+def _base(name: str) -> str:
+    """SHIFT+B → B: the sheet names the key, the row may add a modifier."""
+    return name.rsplit("+", 1)[-1]
+
+
+def test_the_cheat_sheet_matches_the_tables_and_the_loop_keys():
+    """ui.CHEATSHEET is the canonical human list (app.py): every key row in
+    the factory table and every key the loop handles itself is on it, and
+    it names nothing that is neither (audit U2)."""
+    sheet_keys, sheet_pads = _sheet_keys()
+    table_keys = {b.key_name for b in keymap()}
+    known = table_keys | {_base(k) for k in LOOP_KEYS}
+    assert not table_keys - sheet_keys, "table rows missing from the sheet"
+    assert not {_base(k) for k in LOOP_KEYS} - sheet_keys, "loop keys missing from the sheet"
+    assert not sheet_keys - known, "the sheet names keys nothing handles"
+    table_pads = {b.source.split(":", 1)[1] for b in padmap() if b.scheme == "pad"}
+    assert table_pads == sheet_pads
+    assert any(b.scheme == "hat" for b in padmap()) and any(c == "d-pad" for c, _ in CHEATSHEET)
 
 
 # ---------------------------------------------------------------- strip
