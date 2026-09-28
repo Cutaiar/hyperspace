@@ -10,8 +10,9 @@ differs on this machine. Adapters are enabled here, not in code
     enabled = true          # false leaves the adapter out entirely
     port = "APC40"          # substring of the port name; default from the profile
     profile = "apc40"       # device profile (hyperspace/<profile>.py)
-    map = "midi_map.json"   # a pre-plan-09 MIDI map, relative to the library
-                            # home; read once, only when bindings.json does
+    map = "midi_map.json"   # a pre-plan-09 MIDI map, relative to this file's
+                            # folder (the library home when loaded from there);
+                            # read once, only when bindings.json does
                             # not exist yet (Bindings.load). Learn writes
                             # <home>/bindings.json (routing.py), not this file
 

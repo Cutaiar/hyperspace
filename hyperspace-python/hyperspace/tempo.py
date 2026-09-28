@@ -11,10 +11,10 @@ Two things a tap must never do decide the shape of `Clock`:
     sets the BPM; after the first `trigger` — the global LFO trigger,
     ``lfo.trigger``, the one button pressed after tapping — the downbeat
     the LFOs read (`t0`) is the performer's and a tap does not touch it.
-    So a re-tap mid-set changes the readout, not the picture, until the
-    performer says so. A BPM change re-anchors `t0` so that ``beat(t)``
-    is continuous at the instant of the change: the wave keeps its place
-    and only its rate changes.
+    So a re-tap mid-set changes the tempo, not the downbeat: a BPM change
+    re-anchors `t0` so that ``beat(t)`` is continuous at the instant of
+    the change, and every synced LFO keeps its place in the bar and runs
+    faster or slower from there.
   * **The burst is its own bookkeeping.** Taps more than `GAP` apart
     start a new burst; the BPM is the mean interval of the burst's last
     `TAPS` (8) taps, measured from the oldest of those — the burst's

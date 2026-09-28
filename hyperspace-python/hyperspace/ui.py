@@ -1,6 +1,6 @@
 """imgui control surface — every widget is a view onto one registry Param.
 
-Built to be read across a room (ENGINEERING §7): black ground, soft rounded
+Built to be read across a room (ENGINEERING.md, control-surface conventions): black ground, soft rounded
 controls, a rounded sans for words and a semibold mono for numbers, white
 text, red #ff2b2b as the only accent. A fader fills red up to its value so
 where it sits reads at a glance; the open page is a red pill on the rail.
@@ -72,7 +72,7 @@ RAIL_W = 112
 LABEL_W = 104    # the label column in a _row
 ROUND = 8.0      # corner radius of frames; chips and grabs go rounder
 
-# ---- font atlas (ENGINEERING §7) ----
+# ---- font atlas (ENGINEERING.md, control-surface conventions) ----
 # Four roles. UI for words (buttons, combos, names), MICRO for the
 # uppercase field labels (tracking baked in via glyph_extra_advance_x —
 # imgui has no letter-spacing), NUM for value readouts (monospaced, so a
