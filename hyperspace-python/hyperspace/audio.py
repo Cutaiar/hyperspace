@@ -96,6 +96,8 @@ class AudioEngine:
         self.mode: str | None = None     # "mic" | "file"
         self.label = ""
         self.error = ""
+        self._devices: list[dict] | None = None   # see `devices`
+        self._device_sel: int | None = None
         self._ring = _Ring(int(sample_rate * 2))
         self._stream: sd.InputStream | sd.OutputStream | None = None
         # transport (file mode)
@@ -104,6 +106,31 @@ class AudioEngine:
         self.playing = False
         self._offset = 0            # frames into the track at last start
         self._played = 0            # frames emitted since last start (callback-owned)
+
+    # ---- the input devices `audio.device` chooses from ----
+
+    @property
+    def devices(self) -> list[dict]:
+        """Read once, on first use (the panel's combo, a key row toggling the
+        mic) — not at construction, so a headless engine never scans the
+        hardware. A device plugged in later needs a restart (audit A3)."""
+        if self._devices is None:
+            try:
+                self._devices = input_devices()
+            except Exception as e:  # noqa: BLE001 — a failed scan is not fatal
+                self._devices, self.error = [], f"audio devices: {e}"
+        return self._devices
+
+    @property
+    def device_sel(self) -> int:
+        """Index into `devices`; a loopback driver is pre-selected."""
+        if self._device_sel is None:
+            self._device_sel = next((k for k, d in enumerate(self.devices) if d["loopback"]), 0)
+        return self._device_sel
+
+    @device_sel.setter
+    def device_sel(self, k: int) -> None:
+        self._device_sel = int(k)
 
     # ---- shared teardown ----
 

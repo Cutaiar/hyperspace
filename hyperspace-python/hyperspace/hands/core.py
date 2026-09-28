@@ -686,21 +686,25 @@ class HandsIO:
         return None
 
     def lanes(self) -> list[float]:
-        """Each axis's output y (NaN before its hand was ever seen), then
-        one presence lane per hand (1 in view, 0 not), then the eight
+        """Each axis's output y — NaN while its hand is out of the box (or
+        never seen), so a routing row lets go and the base returns the
+        frame the hand leaves; the spring and `hold` shape only the DAW
+        output (`Follower.live`; the catch glide on a returning hand is live).
+        Then one presence lane per hand (1 in view, 0 not), then the eight
         pinch switches. The switches come last so that a saved binding to
         ``hand:<i>`` keeps meaning the axis it always did."""
-        ys = [math.nan if st.y is None else st.y for st in self.state]
+        ys = [st.y if st.follow.live else math.nan for st in self.state]
         return (ys
                 + [1.0 if self.present[s] else 0.0 for s in SIDES]
                 + [1.0 if self.gates[s][f].on else 0.0 for s in SIDES for f in PINCHES])
 
     # ---- per frame ----
 
-    def poll(self, dt: float, midi=None, router=None) -> list[mido.Message]:
-        """One render frame. `midi` is the MidiIO whose learn state a hand
-        can complete; `router` the routing.Router fed the ``hand`` lanes.
-        Returns what went to the DAW port (for tests and the probe)."""
+    def poll(self, dt: float, learn=None, router=None) -> list[mido.Message]:
+        """One render frame. `learn` is the host's armed-param state (a
+        learn.Learn: `learning`, `learn_source`) a moved axis completes;
+        `router` the routing.Router fed the ``hand`` lanes. Returns what
+        went to the DAW port (for tests and the probe)."""
         g = self.settings
         seq, t, hands = self.source.latest()
         now = self.clock()
@@ -756,24 +760,18 @@ class HandsIO:
         if router is not None:
             live = getattr(self.source, "on", True)
             router.feed("hand", self.lanes() if live else None)
-            if not hasattr(router, "labels"):   # a Router from before a hot reload
-                router.labels = {}
             router.labels["hand"] = self.lane_names
-            if not hasattr(router, "gates"):
-                router.gates = {}
             # the switches, so the routing UI can offer them without
             # knowing anything about hands
             router.gates["hand"] = [(self.gate_lane(s, f), f"{s[0].upper()} {f[:3]}")
                                     for s in SIDES for f in PINCHES]
-            if not hasattr(router, "rests"):
-                router.rests = {}
             # where each lane idles — the axis's own configured rest, so a
             # push row centred on it pushes nothing from an absent hand
             # whatever the setup says rest is; presence and pinches 0
             router.rests["hand"] = ([float(a.rest_value) for a in self.axes]
                                     + [0.0] * (len(SIDES) + len(SIDES) * len(PINCHES)))
-        if midi is not None:
-            self._learn(midi)
+        if learn is not None:
+            self._learn(learn)
         return msgs
 
     def _pinches(self, side: str, s: int, here: bool, t: float) -> list[mido.Message]:
@@ -805,14 +803,16 @@ class HandsIO:
                     velocity=127 if gate.on else 0))
         return msgs
 
-    def _learn(self, midi) -> None:
-        """While the MIDI adapter is learning a param, the axis that has
-        moved furthest (≥ LEARN_MOVE) since the learn began takes it —
-        a hand moves all its axes at once, so first-to-move won't do."""
-        if getattr(midi, "learning", None) is None:
+    def _learn(self, learn) -> None:
+        """While a param is armed to learn, the axis that has moved
+        furthest (≥ LEARN_MOVE) since the learn began takes it — a hand
+        moves all its axes at once, so first-to-move won't do."""
+        if getattr(learn, "learning", None) is None:
             self._learn_base = None
             return
-        ys = [st.y for st in self.state]
+        # only a hand counts as movement: an axis whose hand is away reads
+        # None, so a return spring can never complete a learn
+        ys = [st.y if st.follow.live else None for st in self.state]
         if self._learn_base is None:
             self._learn_base = ys
             return
@@ -827,9 +827,9 @@ class HandsIO:
             # the same movement means this only while the thumb agrees
             gate = self.held_gate(self.axes[best].side)
             if gate is None:
-                midi.learn_source(f"hand:{best}")
+                learn.learn_source(f"hand:{best}")
             else:
-                midi.learn_source(f"hand:{best}", when=gate)
+                learn.learn_source(f"hand:{best}", when=gate)
 
     def _send(self, m: mido.Message) -> None:
         try:

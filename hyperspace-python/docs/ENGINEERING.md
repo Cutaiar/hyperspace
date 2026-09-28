@@ -226,8 +226,9 @@ Two, both through `AudioEngine._attach` (`audio.py:132-140`):
   (`audio.py:29-52, 157`). That is the one system-audio route: with the
   Mac's output on a Multi-Output Device, everything arrives through the
   plain input path. **Nothing captures at launch** — capture starts when
-  `audio.mic` is toggled (`M`), and the device list is read once at panel
-  construction, so a device plugged in later needs a restart (audit A3).
+  `audio.mic` is toggled (`M`), and the device list is read once, on first
+  use (`AudioEngine.devices`, which `audio.device` chooses from), so a
+  device plugged in later needs a restart (audit A3).
 - **A file** (`start_file(path)`; wav / mp3 / flac / ogg through
   `soundfile`): mono mean, played through an `OutputStream` at the
   **track's** sample rate, and the analyser is rebuilt at that rate
@@ -449,11 +450,21 @@ unreadable at a party.
   readout inside has no knob, only a red edge under the text. A performed
   param shows a **white** ghost bar at the effective value and names its
   owner in the tooltip.
-- **Layout.** No page scrolls at `app.CONTROL_SIZE` (`tests/test_ui_shell.py:92`
-  holds it for the pages that rig can fill; ROUTING's rows scroll in a
-  child by design). Right-aligned groups are measured with `ui.chip_w` /
-  `ui.button_w`, never hard-coded offsets. Every widget has its own imgui
-  id (`tests/test_ui_lfo.py:86`).
+- **Layout.** No page scrolls at `app.CONTROL_SIZE`
+  (`test_every_page_fits_the_control_window` in `tests/test_ui_shell.py`
+  measures every page with a hands setup, an `Output` and a routed table;
+  ROUTING's rows scroll in a child by design, and
+  `test_the_routing_rows_scroll_in_their_own_child` holds that). The
+  HANDS page puts its switches beside the box and its feel knobs two to a
+  row beside the transfer plot for that reason. Right-aligned groups are measured
+  with `ui.chip_w` / `ui.button_w`, never hard-coded offsets. Every widget
+  has its own imgui id (`tests/test_ui_lfo.py:86`). One grey (`ui.LINE`)
+  for every rule and frame, one `ui.u32`, one `Panel.half` for a slider
+  in a half-width cell.
+- **The cheat sheet** (`ui.CHEATSHEET`) is the canonical human list of the
+  keys; `test_the_cheat_sheet_matches_the_tables_and_the_loop_keys` parses
+  its key column against `routing.keymap()`, `padmap()` and the keys the
+  loop still handles itself (`app.LOOP_KEYS`).
 - The large cell-count readout at the top of the view page is still the
   signature element. Keep new UI consistent with this.
 
@@ -477,6 +488,12 @@ is the linter. What holds what:
   (`tests/test_params.py:286`, `tests/test_bridge.py:381`,
   `tests/test_dream.py:55`); `hands/core.py`, `hands/signal.py`, `lfo.py`,
   `tempo.py` import nothing from the package (`tests/test_*_boundary.py`).
+- **Hot reload**: every module but `app.py`, `hotreload.py` and `offline.py`
+  is on the watch list in dependency order (leaves first), an optional
+  adapter that was never imported is skipped, every swap target `app.py`
+  registers is defined in a watched module, and an Enum a reloaded module
+  defines keeps its identity, so live params still recognise their `Kind`
+  (`tests/test_hotreload.py`; plan 11 WP2).
 - **Headless GL and imgui**: every shape renders offscreen; post passes off
   are bit-identical; every panel page draws headless and fits; every
   factory effect compiles and changes the frame.
@@ -517,7 +534,8 @@ same PR; when it changes behaviour, the line here does.
 - **Plan 09's hand checks at the machine** (CHECKPOINT): the prompt from a
   real Learn, `hands-pinch` zoom under pinch + scroll, TAP TEMPO then
   METRONOME, `lfo-breathe` under the right hand, a knob on a hand-owned
-  param. Audit B1 predicts the last one fails as documented.
+  param. Audit B1 (a hand leaving the box did not release its rows) was
+  fixed by plan 11 WP1 before these are run.
 - **The trim decision** (plan 06): the owner picks one of the three fixes
   above; the oracle is re-frozen after.
 - **First real capture on this machine.** Every live path is code-complete;

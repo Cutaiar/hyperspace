@@ -104,6 +104,17 @@ class Follower:
         self.mode = self.HOLD
         self.t = 0.0                    # time in the current mode
 
+    @property
+    def live(self) -> bool:
+        """True while a hand is driving `y` — following, or being caught on
+        its return. False before the first sight and while the hand is
+        away, when the spring or the hold shape only the DAW output: the
+        routing lane reads NaN then, so a row lets go of its param the
+        frame the hand leaves (plan 11, audit B1). The catch stays live so
+        a one-frame tracking dropout costs one frame, not a catch-long
+        hole, and a push row keeps its glide onto a returning hand."""
+        return self.mode in (self.FOLLOW, self.CATCH)
+
     def step(self, dt: float, target: float | None, *, attack: float, decay: float,
              catch_s: float, rest: str, rest_value: float, return_s: float,
              bounce: float) -> float | None:

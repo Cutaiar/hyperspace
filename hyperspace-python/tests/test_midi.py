@@ -54,7 +54,6 @@ def rig(tmp_path):
     lib.attach(reg)
     reg.toggle("ui.panel", "Panel", lambda: True, lambda v: None)
     reg.toggle("ui.cheatsheet", "Sheet", lambda: True, lambda v: None)
-    reg.toggle("audio.mic", "Mic", lambda: False, lambda v: None)
     reg.trigger("audio.restart", "Restart", lambda: None)
     reg.trigger("audio.stop", "Stop", lambda: None)
     reg.toggle("audio.play", "Play", lambda: False, lambda v: None)
@@ -337,10 +336,10 @@ def test_selected_band_rings_follow_the_selection(rig):
 
 def test_learn_binds_next_message_and_persists(rig, tmp_path):
     m = rig.midi
-    m.learn("view.inst_amp")
-    assert m.learning == "view.inst_amp"
+    m.learner.arm("view.inst_amp")
+    assert m.learner.learning == "view.inst_amp"
     push(rig, cc(0x57, 40))                   # send-A knob-ish: an unused CC
-    assert m.learning is None
+    assert m.learner.learning is None
     b = m.binding_for("view.inst_amp")
     assert b is not None and b.kind == "cc" and b.number == 0x57 and b.op == "abs"
     assert "CC 87" in b.describe()
@@ -355,9 +354,9 @@ def test_learn_binds_next_message_and_persists(rig, tmp_path):
 
 def test_learn_a_button_on_a_toggle(rig):
     m = rig.midi
-    m.learn("view.lines")
+    m.learner.arm("view.lines")
     push(rig, note(apc40.N_METRO, 0))         # a release is not a binding
-    assert m.learning == "view.lines"
+    assert m.learner.learning == "view.lines"
     push(rig, note(apc40.N_METRO))
     b = m.binding_for("view.lines")
     assert b.kind == "note" and b.number == apc40.N_METRO and b.feedback == "led"
@@ -367,7 +366,7 @@ def test_learn_a_button_on_a_toggle(rig):
 
 def test_learn_takes_over_a_key_from_its_old_param(rig):
     m = rig.midi
-    m.learn("view.pattern_mix")
+    m.learner.arm("view.pattern_mix")
     push(rig, cc(0x30, 64))                   # the brightness knob
     assert not [x for x in m.map.bindings if x.target == "view.bright" and x.kind == "cc"]
     assert m.binding_for("view.bright").kind == "note"  # its step buttons survive
@@ -379,55 +378,24 @@ def test_learn_takes_over_a_key_from_its_old_param(rig):
 
 
 def test_relative_cc_learn_keeps_encoder_mode(rig):
-    rig.midi.learn("view.instances")
+    rig.midi.learner.arm("view.instances")
     push(rig, cc(apc40.CC_CUE, 1))
     assert rig.midi.binding_for("view.instances").op == "rel"
 
 
-def test_learn_source_writes_a_position_route(rig, tmp_path):
-    """Another adapter's source (a hand) completing a learn: a `position`
-    row at depth 1 through the table's referee, written to the file; the
-    MIDI view never sees it. On an owned target it is held in `pending`."""
-    from hyperspace.routing import Bindings
-
+def test_a_hand_learn_reaches_the_shared_learn_object(rig):
+    """The adapter arms and completes through the shared learn.Learn
+    (tests/test_learn.py has the rest); a hand completing it writes a
+    `position` row the MIDI view never sees, and the knob row stays."""
     m = rig.midi
-    m.learn("view.inst_amp")
-    m.learn_source("hand:3", when="hand:14")
-    assert m.learning is None and m.pending is None
+    m.learner.arm("view.inst_amp")
+    assert m.learner.learning == "view.inst_amp"
+    m.learner.learn_source("hand:3", when="hand:14")
+    assert m.learner.learning is None and m.learner.pending is None
     b = m.map.table.owner("view.inst_amp")
     assert (b.source, b.op, b.value, b.when, b.pickup) == ("hand:3", "position", 1.0, "hand:14", True)
     assert m.binding_for("view.inst_amp").is_midi            # the knob row is still there
-    assert "learned view.inst_amp" in m.last
-    assert Bindings.load(tmp_path / "midi_map.json").owner("view.inst_amp") == b
-    m.learn("view.inst_amp")
-    m.learn_source("hand:7")
-    assert m.pending is not None and m.pending[1] is b and "replace?" in m.last
-    assert m.map.table.owner("view.inst_amp") is b
-    m.learn("no.such.param")
-    assert m.pending is None                                  # a new learn forgets it
-    m.learn_source("hand:7")                                  # unknown target: nothing
-    assert m.learning is None and m.map.table.owner("no.such.param") is None
-
-
-def test_a_learned_axis_drives_one_param(rig):
-    """Learning an axis onto another param moves it — its other position
-    rows go, its push rows stay; learning it again onto the same param is
-    no move and no prompt, only the gate refreshed."""
-    m = rig.midi
-    t = m.map.table
-    t.add(Binding("hand:3", "view.bright", "push", 0.5))      # a route on the same axis
-    m.learn("view.inst_amp")
-    m.learn_source("hand:3")
-    m.learn("view.speed")
-    m.learn_source("hand:3", when="hand:14")                  # moves: inst_amp lets go
-    assert t.owner("view.inst_amp") is None and m.pending is None
-    speed = t.owner("view.speed")
-    assert (speed.source, speed.when) == ("hand:3", "hand:14")
-    assert t.routes_to("view.bright")[0].op == "push"         # the push row stays
-    m.learn("view.speed")
-    m.learn_source("hand:3")                                  # same axis, same param
-    assert m.pending is None and t.owner("view.speed") is speed and speed.when is None
-    assert len(t.routes_to("view.speed")) == 1 and "learned view.speed" in m.last
+    assert "learned view.inst_amp" in m.learner.last
 
 
 # ---------------------------------------------------------------- map file

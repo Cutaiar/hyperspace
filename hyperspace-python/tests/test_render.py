@@ -191,7 +191,7 @@ def test_zoom_and_pan(ctx):
 
 
 def test_pattern_modes_render(ctx):
-    from hyperspace.ui import PATTERNS
+    from hyperspace.params import PATTERNS
 
     flat = render_offscreen(
         ViewState(shape=3, ang=list(VIEW["ang"]), faces=True, pattern=0), 600, 400, ctx=ctx
@@ -258,7 +258,7 @@ def test_patterns_are_chromatic(ctx):
     """Every non-flat pattern must leave the gray axis: some pixel with
     meaningfully different channel values."""
 
-    from hyperspace.ui import PATTERNS
+    from hyperspace.params import PATTERNS
 
     for mode in range(1, len(PATTERNS)):
         img = render_offscreen(
@@ -363,3 +363,25 @@ def test_render_offscreen_unchanged_by_the_post_pass(ctx):
     want = np.frombuffer(fbo.read(components=3), dtype=np.uint8).reshape(h, w, 3)[::-1]
     fbo.release()
     assert np.array_equal(render_offscreen(s, w, h, ctx=ctx), want)
+
+
+def test_on_reload_rebuilds_the_wire_programs_and_still_draws(ctx):
+    """Hot-swap hook: every GL program is recompiled, the buffers and the
+    look-back / FX / cover objects persist, and the next frame draws. No
+    hasattr backfills — a missing attribute is the reloader's error to
+    report (audit H3)."""
+    from hyperspace.render import Renderer
+
+    w, h = 320, 200
+    fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((w, h))])
+    r = Renderer(ctx)
+    keep = (r.lookback, r.fx, r.cover, r._lbuf, r._pbuf, r._fbuf)
+    old = (r._lines, r._points, r._cover_prog)
+    r.on_reload()
+    assert (r.lookback, r.fx, r.cover, r._lbuf, r._pbuf, r._fbuf) == keep
+    assert all(a is not b for a, b in zip(old, (r._lines, r._points, r._cover_prog)))
+    s = ViewState(shape=10, ang=list(VIEW["ang"]), faces=True, pattern=2)
+    _direct(ctx, r, s, fbo, w, h, 0.3)
+    assert ctx.error == "GL_NO_ERROR"
+    assert _rgba(ctx, fbo, w, h, 0).max() > 0
+    fbo.release()
