@@ -39,7 +39,7 @@ runs the one frame loop.
 |---|---|---|---|---|---|
 | **Registry** | `params.py`, `tapers.py` | every `Param`: id, kind, taper, flags, base, this frame's offsets | the live objects through each param's `get` | the live objects, once per frame in `Registry.apply()` | imports no adapter (`tests/test_params.py:286` for `midi`); it does import `fx`/`lookback` for their state classes, so it needs GL bindings importable (see audit) |
 | **Routing table** | `routing.py` | `Binding` rows, the file `bindings.json`, the referee, the per-frame modulation pass | `Router.feeds` (what adapters fed), the analyzer's lanes, param bases | offsets via `Param.modulate` (`routing.py:1149`, the only caller in the package) | never imports `ui*`, `app`, `hands`; `glfw`/`gamepad` only lazily to resolve names (`routing.py:1193-1203`). Unenforced by a test |
-| **Input adapters** | `midi.py` + `apc40.py`, `hands/`, `gamepad.py`, `bridge.py`, `app.Keys` / `app.Mouse` | a device; its own learn or pickup state | the table (discrete rows), param bases (MIDI pickup, feedback) | MIDI/keys/pads: the **base**; hands/bridge: only `Router.feed` | the core never imports `midi` or `bridge` (`tests/test_params.py:286`, `tests/test_bridge.py:381`); `hands/core.py` + `signal.py` import nothing from the package (`tests/test_hands_boundary.py`) |
+| **Input adapters** | `midi.py` + `apc40.py`, `hands/`, `gamepad.py`, `bridge.py`, `app.Keys` / `app.Mouse` | a device; its own pickup state (the armed learn is the host's `learn.Learn`, which either adapter completes) | the table (discrete rows), param bases (MIDI pickup, feedback) | MIDI/keys/pads: the **base**; hands/bridge: only `Router.feed` | the core never imports `midi` or `bridge` (`tests/test_params.py:286`, `tests/test_bridge.py:381`); `hands/core.py` + `signal.py` import nothing from the package (`tests/test_hands_boundary.py`) |
 | **Audio source** | `audio.py`, `analysis.py`, `analyzer.py`, `bands.py` | capture / playback, the FFT, N band lanes | the audio device | `analyzer.lanes` (read by `Router.modulate`); `band.*` params are views onto its objects | imports nothing from routing, ui or the render stack |
 | **LFOs and clock** | `lfo.py`, `tempo.py` | four oscillators, one tap-tempo clock | their own dataclass fields (last frame's effective values) | `Router.feed("lfo", …)`, `labels`, `rests` | import **nothing** from `hyperspace` — registry, router, clock arrive as arguments (`tests/test_lfo_boundary.py`) |
 | **Render stack** | `geometry.py`, `render.py`, `fx.py`, `lookback.py`, `dream.py`, `shaders/`, `overlay.py` | GL resources, `ViewState`, the frame history, the dream worker, the window's placement | `ViewState` and the `FxState` / `DreamState` objects the registry writes | the screen; `ViewState.integrate` writes `ang` directly (folded into the base next frame) | zero registry traffic; `dream` is imported lazily by `app.py:248` under `[dream] enabled` (`tests/test_dream.py:55-72`) |
@@ -310,10 +310,16 @@ target).
 **The Replace / Keep prompt.** A conflicting learn or edit is *held*, not
 applied:
 
-- A hand learn goes through `MidiIO.learn_source` (`midi.py:326-358`): if
-  another performer owns the target the pair is parked in `MidiIO.pending`
-  and nothing is written. A learn onto a target the same axis already
-  positions only refreshes the gate.
+- Right-click → Learn arms a param id on the host's one `learn.Learn`
+  (`app.py` builds it over the live table whatever the MIDI gate says;
+  `panel.learn`). A hand completes it through `Learn.learn_source`
+  (`hands/core.py`, `_learn`): a `band.sel.*` alias resolves to the band
+  it stands for (`Learn.target_for`, the panel's `_real` rule handed in);
+  if another performer owns the target the pair is parked in
+  `Learn.pending` and nothing is written. A learn onto a target the same
+  axis already positions only refreshes the gate. A knob completes it
+  through `MidiIO._learned`, which binds the param as armed — alias
+  included, on purpose (`tests/test_learn.py`).
 - A ROUTING-page add, enable or retarget that raises `Owned` parks in the
   page's own state (`ui_routing.py:225-231`).
 - `ui_routing.modal` is drawn first thing in `Panel.draw`, on **every**
@@ -322,9 +328,10 @@ applied:
   `replace_owner` and the file is written; *Keep* → the table is untouched
   (`tests/test_ui_bands.py:333`,
   `test_the_replace_prompt_swaps_the_owner_or_leaves_the_table`;
-  `tests/test_midi.py:387`).
-- While a question is up `MidiIO.learning` is `None`, so moving the hands
-  learns nothing more (`hands/core.py:812-814`, `tests/test_hands.py:521`).
+  `tests/test_learn.py::test_the_prompts_answer_replaces_or_keeps`).
+- While a question is up `Learn.learning` is `None`, so moving the hands
+  learns nothing more (`hands/core.py`, `_learn`;
+  `test_a_held_learn_is_not_fired_again_by_the_hands`).
 
 ### 3.6 Chaining, not stacking
 
@@ -369,8 +376,8 @@ preset also writes four of them (`lfo.1.sync/shape/depth`, `lfo.2.sync`) as
 | a pinch | `hand:<14+…>` — a lane like any other, and a gate for rows whose `when` names it | offset, or opens / shuts a row | `hands/core.py:688-696`, `routing.py:1074` |
 | a DAW lane in | `ext:<i>` → its performer row | offset | `bridge.py:228` |
 | an LFO | `lfo:<i>` → its performer row | offset | `lfo.py:174` |
-| right-click → Learn, then move a hand | `MidiIO.learn_source` → a `position` row, or the prompt | the table | `hands/core.py:808-832` → `midi.py:326` |
-| right-click → Learn, then turn a knob | `MidiIO._learned` → an `abs` / `rel` / `toggle` MIDI row | the table | `midi.py:299-324` |
+| right-click → Learn, then move a hand | `Learn.learn_source` → a `position` row on the real param, or the prompt | the table | `hands/core.py` `_learn` → `learn.py` |
+| right-click → Learn, then turn a knob | `MidiIO._learned` (the armed id from the same `Learn`) → an `abs` / `rel` / `toggle` MIDI row | the table | `midi.py` |
 | a preset, theme or project | `Registry.restore` | base | `library.py:523` |
 | a routing preset | `Bindings.set_routes` + `reg.restore(values)` | the performer rows and the macros | `routing.py:1161-1176` |
 
@@ -444,8 +451,6 @@ one-frame-lag / no-recursion mechanism (§2).
 Behaviour the code has today that the model above does not describe, all
 filed in [`AUDIT-2026-09.md`](AUDIT-2026-09.md):
 
-- Hand Learn lives in the MIDI adapter object; with `[midi] enabled =
-  false` there is no hand Learn.
 - Nothing in `Router.modulate` checks ownership.
 - `tempo.tap`, `lfo.trigger` and `lfo.N.reset` are modulatable by default.
 
@@ -464,8 +469,9 @@ grep for; the module's docstring has the rest.
 | `params.py` | The parameter registry: one id per settable thing, the base-versus-effective split, and the once-per-frame `apply()` that lands everything on the live objects. | Every `Param` and the `Registry`; `build_registry` declares the whole surface. | Never imports an adapter; never puts a macro into a whole-surface snapshot; never snaps a modulated base to a detent. (`tests/test_params.py:286` for the import rule.) | `test_params.py`, `test_modulation.py` |
 | `tapers.py` | Turns a fader's integer position into a real value and back, exactly, for every knob. | The taper objects and the per-band knob specs. | The round trip position → value → position is exact on every detent. (`tests/test_control.py:27`) | `test_control.py` |
 | `routing.py` | The binding table: one row type for keys, pads, MIDI and performers; the file on disk; the referee; the per-frame modulation pass. | `Binding`, `Bindings` (the table and its edit doors), `Router` (the pass, `feed`, presets), `Owned`. | A lane-scheme row carries only `push` or `position`; a target never has two enabled performers through the edit doors; `modulate` never writes a base; an unknown-schema file is never rewritten. (`tests/test_routing.py:892-1009, 1212`) | `test_routing.py` |
-| `midi.py` + `apc40.py` | The MIDI adapter (ports, soft pickup, ring and LED feedback, Learn) and the APC40's device profile (port name, mode SysEx, LED colours, the 113-row default map). | `MidiIO`, `Ports`; `apc40.DEFAULT_MAP` and the button constants the clock uses. | The core never imports it; every write it makes is a base write; a ring shows the base and never chases a performer; a held Learn is never applied or dropped silently. (`tests/test_params.py:286`, `tests/test_midi.py:272, 387`) | `test_midi.py` |
-| `hands/` | The Ultraleap instrument: two hands as twelve shaped axes, two presence lanes and eight pinch switches, fed to the table; MIDI out to a DAW; box calibration; the HANDS page. | `HandsIO.poll(dt, midi, router)`, `HandSettings`, `register`; `panel.page`. | `core.py` and `signal.py` import nothing from the package — only `panel.py` knows the host; the lane order never changes under a saved `hand:<i>`; an axis whose hand is out of the box reads `NaN`, so its rows let go — the spring and `hold` shape only the DAW output; a gate never opens on a source that is not live; nothing learns while a question is up. (`tests/test_hands_boundary.py`; in `tests/test_hands.py`: `test_lanes_carry_outputs_then_presence_then_pinches`, `test_a_hand_leaving_the_box_releases_its_position_row`, `test_a_gate_whose_source_is_dark_holds_the_row_shut`, `test_a_held_learn_is_not_fired_again_by_the_hands`) | `test_hands.py`, `test_hands_boundary.py` |
+| `learn.py` | The armed param and the question the referee left: right-click → Learn arms an id here; a knob or a hand completes it; a refused learn waits in `pending` for the Replace / Keep prompt. | `Learn` (`arm`, `take`, `learn_source`, `resolve_pending`, `target_for`). | Imports nothing from the adapters or the panel; exists whatever the MIDI gate says; a `band.sel.*` alias learns onto the band it stands for; a held learn is never applied or dropped silently. (`tests/test_learn.py`, `tests/test_hands.py::test_a_hand_learn_needs_no_midi_adapter`) | `test_learn.py` |
+| `midi.py` + `apc40.py` | The MIDI adapter (ports, soft pickup, ring and LED feedback, the MIDI half of Learn) and the APC40's device profile (port name, mode SysEx, LED colours, the 113-row default map). | `MidiIO`, `Ports`; `apc40.DEFAULT_MAP` and the button constants the clock uses. | The core never imports it; every write it makes is a base write; a ring shows the base and never chases a performer; a learned knob binds the param as armed, alias included. (`tests/test_params.py:286`, `tests/test_midi.py:272`) | `test_midi.py` |
+| `hands/` | The Ultraleap instrument: two hands as twelve shaped axes, two presence lanes and eight pinch switches, fed to the table; MIDI out to a DAW; box calibration; the HANDS page. | `HandsIO.poll(dt, learn, router)`, `HandSettings`, `register`; `panel.page`. | `core.py` and `signal.py` import nothing from the package — only `panel.py` knows the host; the lane order never changes under a saved `hand:<i>`; an axis whose hand is out of the box reads `NaN`, so its rows let go — the spring and `hold` shape only the DAW output; a gate never opens on a source that is not live; nothing learns while a question is up. (`tests/test_hands_boundary.py`; in `tests/test_hands.py`: `test_lanes_carry_outputs_then_presence_then_pinches`, `test_a_hand_leaving_the_box_releases_its_position_row`, `test_a_gate_whose_source_is_dark_holds_the_row_shut`, `test_a_held_learn_is_not_fired_again_by_the_hands`) | `test_hands.py`, `test_hands_boundary.py` |
 | `lfo.py` + `tempo.py` | Four tempo-aware LFOs and the tap-tempo clock, as a source fed to the table like any other, with every knob an ordinary param. | `LFOs.step` / `publish`, `Clock` (`tap`, `trigger`, `beat`), the two `register` functions. | Import nothing from the package; read their own fields, never a `Param` (that is the one-frame lag); once triggered, a tap never moves a running synced LFO; the global trigger never touches a Hz LFO. (`tests/test_lfo_boundary.py`, `tests/test_lfo.py:98-156`) | `test_lfo.py`, `test_tempo.py`, `test_lfo_boundary.py` |
 | `geometry.py` | Builds the 25 shapes as unit-circumradius vertex, edge and face arrays, and holds the exact 4D → 2D transform. | `SHAPES`, `geom(i)`, `project_h` (the renderer's), `project` (the tests' oracle), faces and UVs. | The first 18 shapes' vertex and edge order never changes — the golden traces key on it. (`tests/test_core.py:33`, `tests/test_shapes3d.py:16`) | `test_core.py`, `test_shapes3d.py`, `test_golden.py` |
 | `render.py` | `ViewState`, the live object the view, rotation and camera params write, and `Renderer.draw`: scene pass, coverage mask, look-back, FX, to the window. | `ViewState` (and `integrate`, the one direct writer of `ang`), `Renderer`, `render_offscreen`. | Imports no audio, input or registry code; with look-back and FX off the output is bit-identical to the scene pass; the history never captures the effected frame. (`tests/test_render.py:306`) | `test_render.py` |
