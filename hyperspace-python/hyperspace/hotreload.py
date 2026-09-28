@@ -39,11 +39,17 @@ import time
 from pathlib import Path
 
 # dependency order, leaves first: a change reloads its module and every
-# module after it, so cross-module imports always rebind fresh
+# module after it, so cross-module imports always rebind fresh. Every
+# module in the package but app (the cold core) and this one is here; a
+# module that `from .x import Name`s another comes after it, and a
+# subpackage's modules are named with a dot (tests/test_hotreload.py
+# holds both rules against the package's own imports).
 MODULES = (
-    "analysis", "tapers", "geometry", "bands", "analyzer", "control", "audio", "lookback",
-    "dream", "render", "params", "library", "presets", "overlay", "apc40", "routing", "midi",
-    "bridge", "ui_presets", "ui_lookback", "ui_bands", "ui_routing", "ui",
+    "analysis", "tapers", "geometry", "bands", "analyzer", "control", "audio", "tempo", "lfo",
+    "lookback", "dream", "fx", "render", "params", "presets", "library", "config", "overlay",
+    "gamepad", "apc40", "routing", "midi", "bridge", "hands.signal", "hands.core", "hands",
+    "ui_presets", "ui_lookback", "ui_bands", "ui_routing", "ui_fx", "ui_lfo", "hands.panel",
+    "ui",
 )
 
 

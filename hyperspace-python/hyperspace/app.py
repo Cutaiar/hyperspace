@@ -476,7 +476,7 @@ def main() -> None:
         (panel, "ui", "Panel"),
         (control, "control", "Control"),
         (audio, "audio", "AudioEngine"),
-        (audio.chain, "bands", "Chain"),
+        (audio.chain, "analyzer", "Analyzer"),
         *[(p, "bands", "Params") for p in audio.chain.params],
         *([(audio.analyser, "analysis", "Analyser")] if audio.analyser is not None else []),
         (reg, "params", "Registry"),
@@ -488,8 +488,9 @@ def main() -> None:
         *[(lf, "lfo", "LFO") for lf in lfos.lfos],
         *([(midi_io, "midi", "MidiIO"), (midi_io.map, "midi", "MidiMap")] if midi_io else []),
         *([(bridge_io, "bridge", "Bridge")] if bridge_io else []),
-        *([(hands_io, "hands", "HandsIO")] if hands_io else []),
+        *([(hands_io, "hands.core", "HandsIO")] if hands_io else []),
         *([(dream_io, "dream", "DreamWorker")] if dream_io else []),
+        (pad, "gamepad", "Pad"),
     ], watchers=[library])
     panel.reloader = reloader
     keys = Keys(render_win, ctrl_win)
