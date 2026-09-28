@@ -8,7 +8,7 @@ import json
 from types import SimpleNamespace
 
 from hyperspace.analysis import Analyser
-from hyperspace.bands import Chain
+from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
 from hyperspace.library import Library
 from hyperspace.params import build_registry
@@ -17,7 +17,7 @@ from hyperspace.render import ViewState
 
 
 def make(tmp_path):
-    chain = Chain(Analyser())
+    chain = Analyzer(Analyser())
     control = Control(chain)
     audio = SimpleNamespace(chain=chain)
     view = ViewState()

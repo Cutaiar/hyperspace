@@ -140,10 +140,10 @@ def test_build_registry_declares_the_group():
     from hyperspace.params import build_registry
     audio = SimpleNamespace(chain=SimpleNamespace())
     from hyperspace.analysis import Analyser
-    from hyperspace.bands import Chain
+    from hyperspace.analyzer import Analyzer
     from hyperspace.control import Control
     from hyperspace.render import ViewState
-    chain = Chain(Analyser())
+    chain = Analyzer(Analyser())
     audio.chain = chain
     st = FxState()
     r = build_registry(ViewState(), Control(chain), audio, fx=st)
@@ -359,12 +359,12 @@ def test_a_generator_lights_a_transparent_ground(ctx):
 
 def test_factory_presets_name_only_real_params(tmp_path):
     from hyperspace.analysis import Analyser
-    from hyperspace.bands import Chain
+    from hyperspace.analyzer import Analyzer
     from hyperspace.control import Control
     from hyperspace.library import Library
     from hyperspace.params import build_registry
     from hyperspace.render import ViewState
-    chain = Chain(Analyser())
+    chain = Analyzer(Analyser())
     st = FxState()
     lib = Library(tmp_path, period=0.0)
     reg = build_registry(ViewState(), Control(chain), SimpleNamespace(chain=chain), lib.bank,
@@ -386,8 +386,8 @@ def test_the_page_draws_and_fits(tmp_path, monkeypatch):
     from imgui_bundle import imgui, implot
 
     from hyperspace.analysis import Analyser
+    from hyperspace.analyzer import Analyzer
     from hyperspace.app import CONTROL_SIZE
-    from hyperspace.bands import Chain
     from hyperspace.control import Control
     from hyperspace.library import Library
     from hyperspace.params import build_registry
@@ -402,7 +402,7 @@ def test_the_page_draws_and_fits(tmp_path, monkeypatch):
         io.backend_flags |= imgui.BackendFlags_.renderer_has_textures
         apply_style()
         load_fonts()
-        chain = Chain(Analyser())
+        chain = Analyzer(Analyser())
         audio = SimpleNamespace(chain=chain, on=False, mode="", error="", label="", sr=48000.0)
         st = FxState()
         lib = Library(tmp_path, period=0.0)
@@ -441,7 +441,7 @@ def test_the_page_has_no_conflicting_ids(tmp_path, monkeypatch):
 
     from hyperspace import ui_fx
     from hyperspace.analysis import Analyser
-    from hyperspace.bands import Chain
+    from hyperspace.analyzer import Analyzer
     from hyperspace.control import Control
     from hyperspace.library import Library
     from hyperspace.params import build_registry
@@ -456,7 +456,7 @@ def test_the_page_has_no_conflicting_ids(tmp_path, monkeypatch):
         io.backend_flags |= imgui.BackendFlags_.renderer_has_textures
         apply_style()
         load_fonts()
-        chain = Chain(Analyser())
+        chain = Analyzer(Analyser())
         audio = SimpleNamespace(chain=chain, on=False, mode="", error="", label="", sr=48000.0)
         st = FxState()
         lib = Library(tmp_path, period=0.0)

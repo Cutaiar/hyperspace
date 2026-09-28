@@ -23,11 +23,11 @@ from hyperspace.render import ViewState
 
 def registry(dream=None):
     from hyperspace.analysis import Analyser
-    from hyperspace.bands import Chain
+    from hyperspace.analyzer import Analyzer
     from hyperspace.control import Control
     from hyperspace.params import build_registry
 
-    chain = Chain(Analyser())
+    chain = Analyzer(Analyser())
     return build_registry(ViewState(), Control(chain), SimpleNamespace(chain=chain), None,
                           dream=dream)
 

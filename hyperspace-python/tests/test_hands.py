@@ -10,7 +10,7 @@ import pytest
 
 from hyperspace import hands
 from hyperspace.analysis import Analyser
-from hyperspace.bands import Chain
+from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
 from hyperspace.hands import HandSettings, HandsIO, features
 from hyperspace.hands import signal as hs
@@ -295,7 +295,7 @@ def test_setup_is_registry_params_that_round_trip():
 
 
 def test_a_setup_saves_and_loads_through_the_library(tmp_path):
-    chain = Chain(Analyser())
+    chain = Analyzer(Analyser())
     reg = build_registry(ViewState(), Control(chain), NS(chain=chain))
     s = HandSettings.from_config({})
     hands.register(reg, s)
@@ -422,7 +422,7 @@ def test_calibration_sweep_sets_and_saves_ranges(tmp_path):
 
 @pytest.fixture()
 def app(tmp_path):
-    chain = Chain(Analyser())
+    chain = Analyzer(Analyser())
     control = Control(chain)
     view = ViewState()
     lib = Library(tmp_path)
@@ -573,7 +573,7 @@ def test_hands_page_draws_live_and_offline(tmp_path):
         io_.backend_flags |= imgui.BackendFlags_.renderer_has_textures
         apply_style()
         load_fonts()
-        chain = Chain(Analyser())
+        chain = Analyzer(Analyser())
         control = Control(chain)
         audio = NS(chain=chain, on=False, mode="", error="", label="", sr=48000.0)
         view = ViewState()

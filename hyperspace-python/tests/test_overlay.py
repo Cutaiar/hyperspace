@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from hyperspace.analysis import Analyser
-from hyperspace.bands import Chain
+from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
 from hyperspace.overlay import Output
 from hyperspace.params import Kind, build_registry
@@ -55,7 +55,7 @@ class FakeBackend:
 
 
 def _registry():
-    chain = Chain(Analyser())
+    chain = Analyzer(Analyser())
     return build_registry(ViewState(), Control(chain), SimpleNamespace(chain=chain))
 
 
