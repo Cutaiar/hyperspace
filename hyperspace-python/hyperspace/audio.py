@@ -96,6 +96,14 @@ class AudioEngine:
         self.mode: str | None = None     # "mic" | "file"
         self.label = ""
         self.error = ""
+        # the input devices `audio.device` chooses from, read once here (a
+        # device plugged in later needs a restart); a loopback driver is
+        # pre-selected, the reference's heuristic
+        try:
+            self.devices = input_devices()
+        except Exception as e:  # noqa: BLE001 — no PortAudio is not fatal
+            self.devices, self.error = [], f"audio devices: {e}"
+        self.device_sel = next((k for k, d in enumerate(self.devices) if d["loopback"]), 0)
         self._ring = _Ring(int(sample_rate * 2))
         self._stream: sd.InputStream | sd.OutputStream | None = None
         # transport (file mode)

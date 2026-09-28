@@ -48,11 +48,6 @@ BOX_H = 92.0
 PLOT_W = 96.0
 CAL_SECONDS = 20.0
 LEFT = imgui.ImVec4(0.92, 0.92, 0.92, 1.0)
-DIM_LINE = imgui.ImVec4(0.25, 0.25, 0.25, 1.0)
-
-
-def _u32(c):
-    return imgui.color_convert_float4_to_u32(c)
 
 
 def _sel(panel, n: int) -> int:
@@ -67,12 +62,9 @@ def ctx_rows(panel, p) -> None:
     router = getattr(panel, "router", None)
     if router is None:
         return
-    names = getattr(router, "labels", {}).get("hand") or []
     rows = [b for b in router.table.of("hand") if b.target == p.id]
-    label = lambda i: names[i] if 0 <= i < len(names) else str(i)
-    for b in rows:
-        verb = "positions" if b.op == "position" else "pushes"
-        imgui.text(f"hand {label(b.index)} {verb}" + ("" if b.enabled else " (off)"))
+    for b in rows:                      # in the adapter's words: "R height positions …"
+        imgui.text(router.describe(b) + ("" if b.enabled else " (off)"))
     if rows and _gate_menu(router, rows):
         router.table.write()
     if rows and imgui.menu_item_simple("Unbind hand"):
@@ -170,9 +162,9 @@ def _box(io) -> None:
     pos = imgui.get_cursor_screen_pos()
     dl = imgui.get_window_draw_list()
     x0, y0, x1, y1 = pos.x, pos.y, pos.x + w, pos.y + BOX_H
-    dl.add_rect(imgui.ImVec2(x0, y0), imgui.ImVec2(x1, y1), _u32(DIM_LINE))
+    dl.add_rect(imgui.ImVec2(x0, y0), imgui.ImVec2(x1, y1), ui.u32(ui.LINE))
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
-    dl.add_circle_filled(imgui.ImVec2(cx, cy), 2.5, _u32(ui.DIM))      # the camera
+    dl.add_circle_filled(imgui.ImVec2(cx, cy), 2.5, ui.u32(ui.DIM))      # the camera
     if io is not None:
         for side, col in (("left", LEFT), ("right", ui.RED)):
             f = io.frame[side]
@@ -182,7 +174,7 @@ def _box(io) -> None:
             py = cy + f["z"] / 160.0 * (BOX_H / 2 - 6)
             px, py = min(max(px, x0 + 6), x1 - 6), min(max(py, y0 + 6), y1 - 6)
             r = 3.0 + 7.0 * min(max((f["y"] - 80.0) / 320.0, 0.0), 1.0)
-            dl.add_circle_filled(imgui.ImVec2(px, py), r, _u32(col))
+            dl.add_circle_filled(imgui.ImVec2(px, py), r, ui.u32(col))
     imgui.dummy(imgui.ImVec2(w, BOX_H))
     if imgui.is_item_hovered():
         imgui.set_tooltip("The box from above: the camera at the centre, the "
@@ -209,17 +201,17 @@ def _axes(panel, io, settings) -> int:
         dl = imgui.get_window_draw_list()
         bx0, by0, bx1, by1 = pos.x, pos.y + 3, pos.x + bar_w, pos.y + h - 3
         span = bx1 - bx0 - 2
-        dl.add_rect(imgui.ImVec2(bx0, by0), imgui.ImVec2(bx1, by1), _u32(DIM_LINE))
+        dl.add_rect(imgui.ImVec2(bx0, by0), imgui.ImVec2(bx1, by1), ui.u32(ui.LINE))
         if a.rest == "return":
             rx = bx0 + 1 + span * a.rest_value
-            dl.add_line(imgui.ImVec2(rx, by1), imgui.ImVec2(rx, by1 + 2), _u32(ui.DIM))
+            dl.add_line(imgui.ImVec2(rx, by1), imgui.ImVec2(rx, by1 + 2), ui.u32(ui.DIM))
         if st is not None and st.y is not None:
             dl.add_rect_filled(imgui.ImVec2(bx0 + 1, by0 + 1),
                                imgui.ImVec2(bx0 + 1 + span * st.y, by1 - 1),
-                               _u32(imgui.ImVec4(0.92, 0.92, 0.92, 0.85 if here else 0.35)))
+                               ui.u32(imgui.ImVec4(0.92, 0.92, 0.92, 0.85 if here else 0.35)))
         if st is not None and st.target is not None:
             tx = bx0 + 1 + span * st.target
-            dl.add_line(imgui.ImVec2(tx, by0 - 1), imgui.ImVec2(tx, by1 + 1), _u32(ui.RED))
+            dl.add_line(imgui.ImVec2(tx, by0 - 1), imgui.ImVec2(tx, by1 + 1), ui.u32(ui.RED))
         imgui.dummy(imgui.ImVec2(bar_w, h))
         if imgui.is_item_hovered():
             y = "—" if st is None or st.y is None else f"{st.y:.3f}"
@@ -297,18 +289,18 @@ def _transfer(a, st) -> None:
     dl = imgui.get_window_draw_list()
     s = PLOT_W
     x0, y0 = pos.x, pos.y
-    dl.add_rect(imgui.ImVec2(x0, y0), imgui.ImVec2(x0 + s, y0 + s), _u32(DIM_LINE))
-    dl.add_line(imgui.ImVec2(x0, y0 + s), imgui.ImVec2(x0 + s, y0), _u32(DIM_LINE))
+    dl.add_rect(imgui.ImVec2(x0, y0), imgui.ImVec2(x0 + s, y0 + s), ui.u32(ui.LINE))
+    dl.add_line(imgui.ImVec2(x0, y0 + s), imgui.ImVec2(x0 + s, y0), ui.u32(ui.LINE))
     n = 48
     pts = [imgui.ImVec2(x0 + s * j / n,
                         y0 + s * (1 - shape(j / n, bipolar=a.bipolar, deadzone=a.deadzone,
                                             c=a.curve)))
            for j in range(n + 1)]
     for p0, p1 in itertools.pairwise(pts):
-        dl.add_line(p0, p1, _u32(imgui.ImVec4(0.92, 0.92, 0.92, 1)), 1.2)
+        dl.add_line(p0, p1, ui.u32(imgui.ImVec4(0.92, 0.92, 0.92, 1)), 1.2)
     if st is not None and st.u is not None and st.target is not None:
         dl.add_circle_filled(imgui.ImVec2(x0 + s * st.u, y0 + s * (1 - st.target)), 3.0,
-                             _u32(ui.RED))
+                             ui.u32(ui.RED))
     imgui.dummy(imgui.ImVec2(s, s))
     if imgui.is_item_hovered():
         imgui.set_tooltip("Hand position across the calibrated range (→) against what "
