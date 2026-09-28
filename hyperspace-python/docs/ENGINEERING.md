@@ -159,9 +159,11 @@ in the file. Contract: `vec4 pattern(int mode, vec2 uv, float fid)`,
 reading `u_time` and `u_mod[8]` — the eight `pattern.mod.k` params, which
 any source may drive. The colour helpers (`TAU`, `LUMA`, `hsv`, `pal`,
 `hue_rotate`) come from `shaders/_common.glsl`, which `glsl.py` prepends
-to the patterns, every effect and the look-back's post pass alike; the
-pattern file keeps its own 2-D hashes, on which its cellular modes were
-tuned. Eleven patterned modes ship (plus flat, mode 0); their names live in
+to the patterns, every effect and the look-back's post pass alike, and
+which hot-reloads the same way (a broken edit there shows on the panel;
+the post pass, which every frame goes through, falls back to the copy as
+shipped); the pattern file keeps its own 2-D hashes, on which its
+cellular modes were tuned. Eleven patterned modes ship (plus flat, mode 0); their names live in
 `params.PATTERNS`, and a new mode needs both the GLSL case and the name.
 The bitmap layer (`view.bmp_*`) textures faces from a file; a bad file
 never raises and leaves the plain faces (`tests/test_render.py:147`).

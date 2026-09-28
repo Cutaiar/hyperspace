@@ -40,14 +40,13 @@ import numpy as np
 
 from .fx import FxChain, FxState
 from .geometry import face_triangles, face_uvs, geom, project_h
-from .glsl import common, common_mtime
+from .glsl import common, common_mtime, gl_error
 from .lookback import DreamState, Lookback
-from .view import N_MOD, ViewState  # re-exported for callers that had them from here
+from .view import N_MOD, RED, ViewState  # re-exported for callers that had them from here
 
 PATTERNS_GLSL = Path(__file__).parent / "shaders" / "patterns.glsl"
 
 BG = (0.0, 0.0, 0.0)
-RED = (1.0, 43 / 255, 43 / 255)   # the vertex colour, and the panel's one accent (ui.RED)
 
 LINE_VS = """
 #version 330
@@ -300,7 +299,7 @@ class Renderer:
         self.pattern_error = ""
         self._face_prog: moderngl.Program | None = None
         self._fvao: moderngl.VertexArray | None = None
-        self._patterns_mtime = 0.0
+        self._patterns_mtime = (0.0, 0.0)   # (patterns.glsl, _common.glsl)
         self._reload_check = 0
         self._t0 = time.perf_counter()   # the one wall clock: patterns, instances, effects
         self._build_face_program()
@@ -367,14 +366,15 @@ class Renderer:
         try:
             src = PATTERNS_GLSL.read_text()
             self._patterns_mtime = self._shader_mtime()
-            # the shared helpers first; #line makes an error name the line
-            # in patterns.glsl itself
+            # the shared helpers first (source string 1), then the file
+            # (string 2): an error names the file and its own line
             prog = self.ctx.program(
                 vertex_shader=FACE_VS,
-                fragment_shader=FACE_FS_HEAD + common() + "\n#line 1\n" + src + FACE_FS_TAIL,
+                fragment_shader=(FACE_FS_HEAD + "#line 1 1\n" + common() + "\n#line 1 2\n"
+                                 + src + FACE_FS_TAIL),
             )
         except Exception as e:  # noqa: BLE001 — a bad edit must not kill the app
-            self.pattern_error = str(e).strip().splitlines()[-1][:160]
+            self.pattern_error = gl_error(e, {1: "_common.glsl:", 2: "patterns.glsl:"})
             return
         if self._face_prog is not None:
             self._face_prog.release()
@@ -392,11 +392,15 @@ class Renderer:
         return t_now if t_now is not None else time.perf_counter() - self._t0
 
     @staticmethod
-    def _shader_mtime() -> float:
-        """patterns.glsl's or _common.glsl's, whichever was saved last."""
-        return max(PATTERNS_GLSL.stat().st_mtime, common_mtime())
+    def _shader_mtime() -> tuple[float, float]:
+        """patterns.glsl's and _common.glsl's mtimes — both, so a save of
+        either is a change even when it does not move the newer one."""
+        return PATTERNS_GLSL.stat().st_mtime, common_mtime()
 
     def _maybe_reload_patterns(self) -> None:
+        """Every 30 frames: rebuild the face program when patterns.glsl or
+        _common.glsl was saved — also after a build that failed, so a fix
+        lands — and have the look-back recompile on a _common.glsl save."""
         self._reload_check += 1
         if self._reload_check % 30:
             return
@@ -405,8 +409,11 @@ class Renderer:
         except OSError:
             return
         if mtime != self._patterns_mtime:
+            shared_changed = mtime[1] != self._patterns_mtime[1]
             self._patterns_mtime = mtime
             self._build_face_program()
+            if shared_changed:
+                self.lookback.on_reload()
 
     def draw(
         self, s: ViewState, w: int, h: int, dpr: float = 1.0,
@@ -545,8 +552,9 @@ class Renderer:
 
         # ---- face fills, under the wireframe (agent-validated prototype) ----
         self._face_verts = 0
-        if s.faces and self._face_prog is not None:
+        if s.faces:
             self._maybe_reload_patterns()
+        if s.faces and self._face_prog is not None:
             tris = face_triangles(s.shape)
             if len(tris):
                 td = (pd[tris[:, 0]] + pd[tris[:, 1]] + pd[tris[:, 2]]) / 3.0

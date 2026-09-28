@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from .geometry import RATE
 
 N_MOD = 8   # pattern.mod.* inputs the face shader reads as u_mod[N_MOD]
+RED = (1.0, 43 / 255, 43 / 255)   # the points' colour, and the panel's one accent (ui.RED)
 
 
 @dataclass

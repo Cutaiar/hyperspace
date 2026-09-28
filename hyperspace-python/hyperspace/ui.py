@@ -50,11 +50,11 @@ from .params import (  # noqa: F401 — PATTERNS et al. re-exported for callers
     Registry,
     build_registry,
 )
-from .render import RED as RED_RGB
+from .view import RED as RED_RGB
 from .view import ViewState
 
 # ---- palette: black ground, three greys of text, one red ----
-RED = imgui.ImVec4(*RED_RGB, 1.0)     # the vertex colour (render.RED): one red everywhere
+RED = imgui.ImVec4(*RED_RGB, 1.0)     # the points' colour (view.RED): one red everywhere
 TEXT = imgui.ImVec4(0.96, 0.96, 0.96, 1.0)      # values, names: what is read first
 DIM = imgui.ImVec4(0.70, 0.70, 0.72, 1.0)       # labels and idle state, still legible
 FAINT = imgui.ImVec4(0.58, 0.58, 0.61, 1.0)     # notes and hints, the quietest text
