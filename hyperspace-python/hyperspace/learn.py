@@ -26,17 +26,16 @@ Two things the object owns:
 for (audit B4): an alias is not modulatable, so a route on it would sit
 in the table doing nothing. The MIDI path binds the alias on purpose —
 a knob on "the selected band's threshold" should follow the selection —
-so that resolution is this object's, not the table's. `resolve` is the
-panel's own rule (``Panel._real``) handed in by the host; without it an
-alias learns onto itself, as before.
+so that resolution is this object's, not the table's. The rule itself is
+the registry's (``Registry.real``, installed by ``build_registry``), the
+same one the panel's widgets read through; a registry without it (a
+bare test rig) learns the alias as armed.
 
 Imports nothing from the adapters or the panel: the registry and the
 table are all it needs.
 """
 
 from __future__ import annotations
-
-from collections.abc import Callable
 
 from .params import Param, Registry
 from .routing import Binding, Bindings, Owned
@@ -45,11 +44,9 @@ from .routing import Binding, Bindings, Owned
 class Learn:
     """The armed param and the question the referee left for the panel."""
 
-    def __init__(self, reg: Registry, table: Bindings,
-                 resolve: Callable[[Param], Param] | None = None):
+    def __init__(self, reg: Registry, table: Bindings):
         self.reg = reg
         self.table = table
-        self.resolve = resolve
         self.learning: str | None = None
         self.pending: tuple[Binding, Binding] | None = None
         self.last = ""          # what the last learn did, for the status lines
@@ -76,7 +73,8 @@ class Learn:
         p = self.reg.get(pid)
         if p is None:
             return None
-        return self.resolve(p) if (p.alias and self.resolve is not None) else p
+        real = getattr(self.reg, "real", None)
+        return real(p) if real is not None else p
 
     def learn_source(self, source: str, when: str | None = None) -> None:
         """An adapter completes the learn with one of its own sources

@@ -336,10 +336,10 @@ def test_selected_band_rings_follow_the_selection(rig):
 
 def test_learn_binds_next_message_and_persists(rig, tmp_path):
     m = rig.midi
-    m.learn("view.inst_amp")
-    assert m.learning == "view.inst_amp"
+    m.learner.arm("view.inst_amp")
+    assert m.learner.learning == "view.inst_amp"
     push(rig, cc(0x57, 40))                   # send-A knob-ish: an unused CC
-    assert m.learning is None
+    assert m.learner.learning is None
     b = m.binding_for("view.inst_amp")
     assert b is not None and b.kind == "cc" and b.number == 0x57 and b.op == "abs"
     assert "CC 87" in b.describe()
@@ -354,9 +354,9 @@ def test_learn_binds_next_message_and_persists(rig, tmp_path):
 
 def test_learn_a_button_on_a_toggle(rig):
     m = rig.midi
-    m.learn("view.lines")
+    m.learner.arm("view.lines")
     push(rig, note(apc40.N_METRO, 0))         # a release is not a binding
-    assert m.learning == "view.lines"
+    assert m.learner.learning == "view.lines"
     push(rig, note(apc40.N_METRO))
     b = m.binding_for("view.lines")
     assert b.kind == "note" and b.number == apc40.N_METRO and b.feedback == "led"
@@ -366,7 +366,7 @@ def test_learn_a_button_on_a_toggle(rig):
 
 def test_learn_takes_over_a_key_from_its_old_param(rig):
     m = rig.midi
-    m.learn("view.pattern_mix")
+    m.learner.arm("view.pattern_mix")
     push(rig, cc(0x30, 64))                   # the brightness knob
     assert not [x for x in m.map.bindings if x.target == "view.bright" and x.kind == "cc"]
     assert m.binding_for("view.bright").kind == "note"  # its step buttons survive
@@ -378,20 +378,20 @@ def test_learn_takes_over_a_key_from_its_old_param(rig):
 
 
 def test_relative_cc_learn_keeps_encoder_mode(rig):
-    rig.midi.learn("view.instances")
+    rig.midi.learner.arm("view.instances")
     push(rig, cc(apc40.CC_CUE, 1))
     assert rig.midi.binding_for("view.instances").op == "rel"
 
 
 def test_a_hand_learn_reaches_the_shared_learn_object(rig):
-    """The adapter's `learn` / `learning` are the shared learn.Learn's
+    """The adapter arms and completes through the shared learn.Learn
     (tests/test_learn.py has the rest); a hand completing it writes a
     `position` row the MIDI view never sees, and the knob row stays."""
     m = rig.midi
-    m.learn("view.inst_amp")
-    assert m.learner.learning == "view.inst_amp" == m.learning
+    m.learner.arm("view.inst_amp")
+    assert m.learner.learning == "view.inst_amp"
     m.learner.learn_source("hand:3", when="hand:14")
-    assert m.learning is None and m.learner.pending is None
+    assert m.learner.learning is None and m.learner.pending is None
     b = m.map.table.owner("view.inst_amp")
     assert (b.source, b.op, b.value, b.when, b.pickup) == ("hand:3", "position", 1.0, "hand:14", True)
     assert m.binding_for("view.inst_amp").is_midi            # the knob row is still there

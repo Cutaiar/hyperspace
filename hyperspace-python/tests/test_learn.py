@@ -24,13 +24,7 @@ def rig(tmp_path):
     lib = Library(tmp_path)
     reg = build_registry(ViewState(), control, NS(chain=chain), lib.bank)
     table = Bindings.load(tmp_path / "bindings.json", legacy_midi=None)
-
-    def real(p):                      # the panel's rule (Panel._real), handed in by the host
-        if p.alias and p.id.startswith("band.sel."):
-            return reg.get(f"band.{control.selb}.{p.id[9:]}") or p
-        return p
-
-    return NS(reg=reg, control=control, table=table, learn=Learn(reg, table, resolve=real))
+    return NS(reg=reg, control=control, table=table, learn=Learn(reg, table))
 
 
 def test_learn_source_writes_a_position_route_without_any_midi(rig, tmp_path):
@@ -109,8 +103,8 @@ def test_a_learn_on_a_band_sel_alias_lands_on_the_selected_band(rig):
     lrn.arm("band.sel.thr")
     lrn.learn_source("hand:3")
     assert lrn.pending is not None and lrn.pending[1] is b
-    # no resolver (a host without the panel's rule): the alias learns as
-    # armed, the way it did before — nothing crashes, nothing moves
-    bare = Learn(reg, t)
-    bare.arm("band.sel.thr")
-    assert bare.target_for("band.sel.thr").id == "band.sel.thr"
+    # the rule is the registry's (Registry.real), the one the panel's
+    # widgets read through; a registry without one learns the alias as armed
+    assert reg.real(reg["band.sel.thr"]) is reg["band.2.thr"]
+    reg.real_of = None
+    assert Learn(reg, t).target_for("band.sel.thr").id == "band.sel.thr"

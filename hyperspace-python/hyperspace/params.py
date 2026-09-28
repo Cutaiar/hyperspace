@@ -502,6 +502,17 @@ class Registry:
 
     def __init__(self):
         self._p: dict[str, Param] = {}
+        # the one rule for what an alias stands for right now (band.sel.*
+        # → the selected band), installed by build_registry; the panel's
+        # widgets, the Learn object and the routing menu all ask here
+        self.real_of: Callable[[Param], Param] | None = None
+
+    def real(self, p: Param) -> Param:
+        """The param behind an alias — where the base and the modulation
+        state live — or `p` itself when it is not one."""
+        if p.alias and self.real_of is not None:
+            return self.real_of(p) or p
+        return p
 
     def add(self, p: Param) -> Param:
         if p.id in self._p:
@@ -970,6 +981,12 @@ def build_registry(view, control, audio, presets=None, dream=None, fx=None,
         # the selected band's strip: views onto band.{selb}.*, never saved or driven
         band_params("band.sel", lambda: control.selb, lambda lb: lb, alias=True)
 
+    def real_of(p: Param) -> Param:
+        if p.id.startswith("band.sel."):
+            return r.get(f"band.{control.selb}.{p.id[9:]}") or p
+        return p
+
+    r.real_of = real_of
     build_bands()
     control.on_layout = build_bands
 

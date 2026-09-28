@@ -256,7 +256,7 @@ def _question(panel) -> tuple[Binding, Binding, Callable[[bool], object]] | None
             if replace_it:
                 commit()
         return old, new, settle
-    lrn = getattr(panel, "learn", None)
+    lrn = panel.learn
     if lrn is not None and lrn.pending is not None:
         new, old = lrn.pending
         return old, new, lrn.resolve_pending

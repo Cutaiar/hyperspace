@@ -314,7 +314,8 @@ applied:
   (`app.py` builds it over the live table whatever the MIDI gate says;
   `panel.learn`). A hand completes it through `Learn.learn_source`
   (`hands/core.py`, `_learn`): a `band.sel.*` alias resolves to the band
-  it stands for (`Learn.target_for`, the panel's `_real` rule handed in);
+  it stands for (`Learn.target_for` → `Registry.real`, the one alias rule
+  `build_registry` installs and the panel's widgets read through);
   if another performer owns the target the pair is parked in
   `Learn.pending` and nothing is written. A learn onto a target the same
   axis already positions only refreshes the gate. A knob completes it

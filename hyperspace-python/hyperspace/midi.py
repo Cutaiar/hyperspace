@@ -282,14 +282,6 @@ class MidiIO:
 
     # ---- learn / bindings ----
 
-    def learn(self, pid: str | None) -> None:
-        """Arm (or cancel) a learn — the shared `Learn`'s `arm`."""
-        self.learner.arm(pid)
-
-    @property
-    def learning(self) -> str | None:
-        return self.learner.learning
-
     def binding_for(self, pid: str) -> Binding | None:
         return self.map.for_param(pid)
 
@@ -326,7 +318,7 @@ class MidiIO:
             b.feedback, b.ring = fb["feedback"], fb.get("ring", b.ring)
             b.on, b.off = fb.get("on", b.on), fb.get("off", b.off)
         self.map.bind(b)
-        self.last = self.learner.last = f"learned {pid} ← {b.describe()}"
+        self.learner.last = f"learned {pid} ← {b.describe()}"
 
     # ---- per frame ----
 

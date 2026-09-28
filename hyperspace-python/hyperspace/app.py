@@ -186,7 +186,7 @@ def _make_output(win, reg: Registry, cfg: dict) -> Output:
     return out
 
 
-def _open_midi(reg: Registry, cfg: dict, table: Bindings, learn=None):
+def _open_midi(reg: Registry, cfg: dict, table: Bindings, learn):
     """The adapter, only when configured — the core never imports it."""
     mc = cfg.get("midi", {})
     if not mc.get("enabled", True):
@@ -462,8 +462,8 @@ def main() -> None:
         library.report(router.missing_values, "bindings.json values")
     # one Learn over the live table, whatever the MIDI gate says: a knob
     # or a hand completes it, the panel's prompt settles what the referee
-    # refused (learn.py; the band.sel.* rule is the panel's _real)
-    learn = Learn(reg, router.table, resolve=panel._real)
+    # refused (learn.py; the band.sel.* rule is the registry's `real`)
+    learn = Learn(reg, router.table)
     panel.learn = learn
     midi_io = _open_midi(reg, cfg, router.table, learn)
     panel.midi = midi_io

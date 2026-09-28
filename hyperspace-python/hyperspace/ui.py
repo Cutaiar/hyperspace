@@ -406,24 +406,24 @@ class Panel:
             who = self._performer(p)
             if who:
                 imgui.text_disabled(who)
-        # Learn is the host's, not the MIDI adapter's: a hand completes it
-        # with no MIDI at all, a knob with the message it sends
+        # the MIDI row on it, whatever Learn there is
         m, lrn = self.midi, self.learn
         b = m.binding_for(a.id) if m is not None else None
+        if b is not None and (lrn is None or lrn.learning != a.id):
+            imgui.text(b.describe())
+        # Learn is the host's, not the MIDI adapter's: a hand completes it
+        # with no MIDI at all, a knob with the message it sends
         if lrn is None:
             imgui.text_disabled("no learn")
         elif lrn.learning == a.id:
             imgui.text_colored(RED, self._learn_hint())
             if imgui.menu_item_simple("Cancel learn"):
                 lrn.arm(None)
-        else:
-            if b is not None:
-                imgui.text(b.describe())
-            if imgui.menu_item_simple("Learn"):
-                lrn.arm(a.id)
-            if b is not None and imgui.menu_item_simple("Unbind"):
-                m.unbind(a.id)
-        ui_hands.ctx_rows(self, a)      # a hand axis bound to it, and Unbind
+        elif imgui.menu_item_simple("Learn"):
+            lrn.arm(a.id)
+        if b is not None and imgui.menu_item_simple("Unbind"):
+            m.unbind(a.id)
+        ui_hands.ctx_rows(self, p)      # the hand rows on it — a learn lands on the real param — and Unbind
         ui_routing.ctx_item(self, a)    # "Route a lane here…" — the routing matrix
         imgui.end_popup()
 
@@ -602,9 +602,7 @@ class Panel:
         """The param behind a band.sel.* alias — where the base and the
         modulation state live. An alias reads the object, so through it a
         fader would show the *effective* value and write the base back."""
-        if p.alias and p.id.startswith("band.sel."):
-            return self.reg.get(f"band.{self.control.selb}.{p.id[9:]}") or p
-        return p
+        return self.reg.real(p)
 
     def _fader(self, pid: str) -> bool:
         """Full-width taper fader: label and readout over a filled track, detent notch."""
@@ -1276,6 +1274,7 @@ class Panel:
         imgui.spacing()
         self._section("midi")
         self._midi_status()
+        self._learn_status()
 
     def _midi_status(self) -> None:
         m = self.midi
@@ -1289,10 +1288,18 @@ class Panel:
             imgui.text_disabled("MIDI: no device")
             return
         imgui.text_disabled(f"MIDI: {m.name}  ·  {len(m.map.bindings)} bindings")
-        if m.learner.learning:
-            imgui.same_line()
-            imgui.text_colored(RED, f"learning {m.learner.learning}")
-        elif m.last:
+        if m.last:
             imgui.same_line()
             imgui.text_disabled(f"·  {m.last}")
+
+    def _learn_status(self) -> None:
+        """The armed param and what the last learn did — a knob's or a
+        hand's, so the line is there with no MIDI adapter at all."""
+        lrn = self.learn
+        if lrn is None:
+            return
+        if lrn.learning:
+            imgui.text_colored(RED, f"learning {lrn.learning} — {self._learn_hint()}")
+        elif lrn.last:
+            imgui.text_disabled(f"learn: {lrn.last}")
         imgui.text_disabled("right-click any control to learn or unbind")
