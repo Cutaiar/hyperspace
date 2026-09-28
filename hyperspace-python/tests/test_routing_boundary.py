@@ -50,3 +50,73 @@ def test_only_router_modulate_calls_param_modulate():
             calls.setdefault(path.relative_to(PKG).as_posix(), []).append((line, fn, recv))
     assert list(calls) == ["routing.py"], calls
     assert calls["routing.py"] == [(calls["routing.py"][0][0], "modulate", "p")], calls
+
+
+# ---- the import boundary (audit R11) ----
+
+# what routing.py may never import, at module level or lazily: the panel,
+# the host, and every adapter that feeds it — they point at the table, the
+# table points at the registry (ARCHITECTURE §1)
+ABOVE = ("ui", "app", "hands", "midi", "bridge", "learn", "dream", "hotreload", "library")
+# the lazy imports routing.py is allowed: name resolution for key and pad
+# rows (§1's "only lazily to resolve names"), and a Library for the tests'
+# and tools' `Router.load_preset` road — pinned so a new one is a decision
+LAZY = {"glfw", "gamepad", "library"}
+
+
+def _imports(tree):
+    """(module, level, inside_a_def) for every import in the tree."""
+    out = []
+    stack = 0
+
+    class V(ast.NodeVisitor):
+        def visit_FunctionDef(self, node):
+            nonlocal stack
+            stack += 1
+            self.generic_visit(node)
+            stack -= 1
+
+        visit_AsyncFunctionDef = visit_FunctionDef
+
+        def visit_ImportFrom(self, node):
+            if node.level and not node.module:      # `from . import gamepad`
+                out.extend((a.name, node.level, stack > 0) for a in node.names)
+            else:
+                out.append((node.module or "", node.level, stack > 0))
+
+        def visit_Import(self, node):
+            out.extend((a.name, 0, stack > 0) for a in node.names)
+
+    V().visit(tree)
+    return out
+
+
+def test_routing_imports_nothing_above_it():
+    tree = ast.parse((PKG / "routing.py").read_text())
+    lazy = set()
+    for name, level, inside in _imports(tree):
+        if level == 0 and not name.startswith("hyperspace"):
+            if inside:
+                lazy.add(name)            # a third-party module imported lazily
+            continue                      # the standard library and numpy
+        head = name.split(".")[0] if name else ""
+        if inside:
+            lazy.add(head)                # allowed only if LAZY names it, below
+            continue
+        assert head not in ABOVE, f"routing.py imports {'.' * level}{name}"
+    assert lazy == LAZY, lazy
+
+
+def test_importing_routing_pulls_in_no_adapter_or_panel():
+    """Fresh interpreter: `import hyperspace.routing` leaves the panel,
+    the host and every adapter out of sys.modules."""
+    import subprocess
+    import sys
+
+    code = ("import sys, hyperspace.routing; "
+            "print(' '.join(sorted(m for m in sys.modules if m.startswith('hyperspace.'))))")
+    got = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
+                         check=True, cwd=PKG.parent).stdout.split()
+    bad = [m for m in got if m.split(".")[1] in ABOVE]
+    assert not bad, bad
+    assert "hyperspace.routing" in got and "hyperspace.params" in got

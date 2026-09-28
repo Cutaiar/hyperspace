@@ -111,7 +111,7 @@ def router_of(panel) -> Router | None:
     """The app's router, or one over the MIDI adapter's (shared) table."""
     r = getattr(panel, "router", None)
     if r is None and panel.midi is not None:
-        r = panel.router = Router(panel.reg, panel.midi.map.table)
+        r = panel.router = Router(panel.reg, panel.midi.table)
     return r
 
 
@@ -183,9 +183,11 @@ def _retarget(router: Router, b: Binding, picked: str) -> Binding | None:
 
 def _question(panel) -> tuple[Binding, Binding, Callable[[bool], object]] | None:
     """(old, new, settle) — the question up now and how to settle it:
-    the page's own first (settle(True) commits; the page then writes), else
-    a learn the referee refused (`panel.learn.pending`; settle is its
-    `resolve_pending`, which writes for itself). None when nothing asks."""
+    the page's own first (settle(True) commits and returns nothing; the
+    page then writes), else a learn the referee refused
+    (`panel.learn.pending`; settle is its `resolve_pending`, which writes
+    for itself and returns the row it placed — so `answer` writes only when
+    the settle did not, audit R9). None when nothing asks."""
     st = _state(panel)
     held = st["prompt"]
     if held is not None:
@@ -215,9 +217,13 @@ def answer(panel, replace_it: bool) -> None:
     q = _question(panel)
     if q is None:
         return
-    q[2](replace_it)
+    wrote = q[2](replace_it)
     if replace_it:
-        _write(panel, router_of(panel))
+        router = router_of(panel)
+        if wrote:                       # a learn's Replace wrote the file itself
+            _state(panel)["saved"] = _sig(router)
+        else:
+            _write(panel, router)
 
 
 def modal(panel) -> None:
@@ -288,15 +294,19 @@ SOURCE_ORDER = ("hand", "lfo", "ext")   # the fed schemes, after the analyzer's 
 
 
 def _sources(panel, router: Router) -> list[tuple[str, str]]:
-    """(source, label) the combo offers: every analyzer lane as "i NAME",
+    """(source, label) the combo offers: every analyzer lane as "i NAME"
+    (the names the audio engine publishes each frame, `AudioEngine.publish`),
     then each fed scheme (SOURCE_ORDER) that is around — its adapter has
     published labels, it is being fed this frame, or a row names it — one
     entry per lane, labelled as the adapter says ("lfo LFO 1") or by
     index. Nothing here knows what a scheme is; the ext lanes are the one
     case with a fixed count (N_EXT) since the bridge publishes no labels."""
-    chain = panel.audio.chain
-    out = [(f"lane:{i}", f"{i} {name}") for i, name in enumerate(chain.band_names)]
     labels = getattr(router, "labels", {})
+    # the lanes as the engine published them (AudioEngine.publish, each
+    # frame); until it has — a panel with no frame loop behind it — the
+    # chain's own names, so the combo always offers the lanes
+    lanes = labels.get("lane") or panel.audio.chain.band_names
+    out = [(f"lane:{i}", f"{i} {name}") for i, name in enumerate(lanes)]
     for scheme in SOURCE_ORDER:
         names = labels.get(scheme) or []
         vec = router.feeds.get(scheme)

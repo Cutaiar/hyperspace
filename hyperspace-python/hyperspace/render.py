@@ -42,6 +42,7 @@ from .fx import FxChain, FxState
 from .geometry import face_triangles, face_uvs, geom, project_h
 from .glsl import common, common_mtime, gl_error
 from .lookback import DreamState, Lookback
+from .tapers import clamp
 from .view import N_MOD, RED, ViewState  # re-exported for callers that had them from here
 
 PATTERNS_GLSL = Path(__file__).parent / "shaders" / "patterns.glsl"
@@ -181,8 +182,6 @@ void main() {
 """
 
 
-def clamp(x, a, b):
-    return a if x < a else min(x, b)
 
 
 def _samples_of(ctx: moderngl.Context, fbo: moderngl.Framebuffer) -> int:

@@ -20,6 +20,11 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
+# the package's one clamp (tapers.py, audit R10), re-exported under the
+# reference's name: the chain and the frozen oracle (tests/legacy_chain.py)
+# read it from here like every other reference constant
+from .tapers import clamp  # noqa: F401
+
 # ------------------------------------------------------------------ bands
 
 @dataclass
@@ -60,10 +65,6 @@ DEV_AIM, DEV_MIN, WARM_F = 0.70, 0.06, 60
 COUPLE = 0.7
 FAST_A, FAST_R, SLOW_T = 0.003, 0.060, 0.30
 FLUX_G, FLUX_K, FLUX_MIN, TRN_HEAD = 3.2, 0.15, 0.12, 1.4
-
-
-def clamp(x: float, a: float, b: float) -> float:
-    return a if x < a else min(x, b)
 
 
 def soft_ceil(x: float, knee: float, ceil: float) -> float:

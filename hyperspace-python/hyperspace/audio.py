@@ -286,3 +286,12 @@ class AudioEngine:
         if len(pending):
             self.analyser.feed(pending)
         self.chain.step(dt)
+
+    def publish(self, router) -> None:
+        """The lanes' names to the router, once a frame like every other
+        source (audit R8; lfo.py's `publish` is the pattern): a lane is
+        named by its band. It publishes no rests — a scheme that says
+        nothing rests at 0 (`Router.rest_of`), which is where a lane idles.
+        The lanes themselves are read by `Router.modulate`, which takes the
+        live chain."""
+        router.labels["lane"] = self.chain.band_names
