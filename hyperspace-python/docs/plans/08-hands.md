@@ -15,7 +15,7 @@ argument, and `tests/test_hands_boundary.py` fails the build if that
 ever stops being true. `panel.py` is the one adapter to this host.
 Small hooks in
 `routing.py` (`hand:<i>` sources, `Router.rests` / `gates`), `midi.py`
-(`MidiIO.learn_source` → a `position` route, plan 09), `ui.py`,
+(the MIDI half of Learn; the armed param itself is `learn.py`'s since plan 11, so a hand learns with no MIDI adapter at all), `ui.py`,
 `config.py` and `app.py`.
 
 ![HANDS page with two synthetic hands](assets/08-hands/hands.png)
@@ -205,14 +205,15 @@ checks every shipped row still names a real param and a real lane.
 - **The HANDS page** has six parts:
   - the preset strip, the tracker/port status and the last message out
   - the box from above: palms as dots (left white, right red), size = height
-  - the eight pinch switches, each with its live gap
+  - the eight pinch switches beside the box, each with its live gap
   - a live row per axis: output bar, a red hairline where the hand is, a
     tick at the rest value, and the MIDI out and value
   - the selected axis's editor, with its transfer curve drawn and the
     hand's live point on it, plus **mirror** (copy the feel to the other
     hand) and **solo** (only this axis to the DAW, for a DAW's learn)
   - feel & calibration: a 20 s sweep writes the box's ranges
-- **Learn:** right-click → Learn MIDI, then move one axis. The axis that
+- **Learn:** right-click → Learn, then move one axis (no MIDI adapter
+  needed — the armed param is the host's `learn.Learn`). The axis that
   moved furthest wins, and the learn writes a `position` route from it —
   the hand is the fader, in floats, through the Router like every route.
   A learned axis drives one param: learning it onto another *moves* it

@@ -191,7 +191,7 @@ def test_zoom_and_pan(ctx):
 
 
 def test_pattern_modes_render(ctx):
-    from hyperspace.ui import PATTERNS
+    from hyperspace.params import PATTERNS
 
     flat = render_offscreen(
         ViewState(shape=3, ang=list(VIEW["ang"]), faces=True, pattern=0), 600, 400, ctx=ctx
@@ -258,7 +258,7 @@ def test_patterns_are_chromatic(ctx):
     """Every non-flat pattern must leave the gray axis: some pixel with
     meaningfully different channel values."""
 
-    from hyperspace.ui import PATTERNS
+    from hyperspace.params import PATTERNS
 
     for mode in range(1, len(PATTERNS)):
         img = render_offscreen(

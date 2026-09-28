@@ -94,7 +94,7 @@ A *performer* is an enabled row whose source is a continuous scheme
 `Bindings.add` / `bind` raise `Owned(existing, new)` when another enabled
 performer already has it (`Bindings.owner`), and the caller asks — the
 panel's Replace / Keep prompt (ui_routing.py), which a hand learn reaches
-through `MidiIO.pending` — before `replace_owner` swaps them. The prompt
+through `learn.Learn.pending` — before `replace_owner` swaps them. The prompt
 names the owner as its adapter does (`Router.describe`: "R height
 positions", from `labels` / `gates`). A preset or file with two rows on
 one target keeps the first and lists the rest in `Bindings.dropped` until

@@ -700,10 +700,11 @@ class HandsIO:
 
     # ---- per frame ----
 
-    def poll(self, dt: float, midi=None, router=None) -> list[mido.Message]:
-        """One render frame. `midi` is the MidiIO whose learn state a hand
-        can complete; `router` the routing.Router fed the ``hand`` lanes.
-        Returns what went to the DAW port (for tests and the probe)."""
+    def poll(self, dt: float, learn=None, router=None) -> list[mido.Message]:
+        """One render frame. `learn` is the host's armed-param state (a
+        learn.Learn: `learning`, `learn_source`) a moved axis completes;
+        `router` the routing.Router fed the ``hand`` lanes. Returns what
+        went to the DAW port (for tests and the probe)."""
         g = self.settings
         seq, t, hands = self.source.latest()
         now = self.clock()
@@ -769,8 +770,8 @@ class HandsIO:
             # whatever the setup says rest is; presence and pinches 0
             router.rests["hand"] = ([float(a.rest_value) for a in self.axes]
                                     + [0.0] * (len(SIDES) + len(SIDES) * len(PINCHES)))
-        if midi is not None:
-            self._learn(midi)
+        if learn is not None:
+            self._learn(learn)
         return msgs
 
     def _pinches(self, side: str, s: int, here: bool, t: float) -> list[mido.Message]:
@@ -802,11 +803,11 @@ class HandsIO:
                     velocity=127 if gate.on else 0))
         return msgs
 
-    def _learn(self, midi) -> None:
-        """While the MIDI adapter is learning a param, the axis that has
-        moved furthest (≥ LEARN_MOVE) since the learn began takes it —
-        a hand moves all its axes at once, so first-to-move won't do."""
-        if getattr(midi, "learning", None) is None:
+    def _learn(self, learn) -> None:
+        """While a param is armed to learn, the axis that has moved
+        furthest (≥ LEARN_MOVE) since the learn began takes it — a hand
+        moves all its axes at once, so first-to-move won't do."""
+        if getattr(learn, "learning", None) is None:
             self._learn_base = None
             return
         # only a hand counts as movement: an axis whose hand is away reads
@@ -826,9 +827,9 @@ class HandsIO:
             # the same movement means this only while the thumb agrees
             gate = self.held_gate(self.axes[best].side)
             if gate is None:
-                midi.learn_source(f"hand:{best}")
+                learn.learn_source(f"hand:{best}")
             else:
-                midi.learn_source(f"hand:{best}", when=gate)
+                learn.learn_source(f"hand:{best}", when=gate)
 
     def _send(self, m: mido.Message) -> None:
         try:
