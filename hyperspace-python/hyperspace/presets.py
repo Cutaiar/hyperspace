@@ -1,8 +1,9 @@
 """Global interface themes — emulator-style save states for the whole surface.
 
 A theme snapshots everything the control surface can set in one go — the
-registry's full ``snapshot()``: view, camera, master faders, the selected
-scene and the six band strips. Loading one cuts the whole look over in a
+registry's whole-surface ``snapshot()``: every persisted parameter except
+the routing layer's macros (params.ROUTING_GROUPS), which the binding
+table carries. Loading one cuts the whole look over in a
 single frame, so two contrasting slots can be flipped between on the beat.
 
 F1–F8 load slots 1–8; ⇧F1–F8 save into them. The eight slots are the

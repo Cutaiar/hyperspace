@@ -1,6 +1,7 @@
 """Headless panel state — the non-visual logic behind the control surface.
 
-Ported semantics (ENGINEERING §4): scenes are the unit of intent, so Reset
+Ported semantics (ENGINEERING.md, audio chain section): scenes are the
+unit of intent, so Reset
 resolves to the currently selected scene, never to hard-coded defaults;
 Reset-all is guarded by an 8 s undo (the button relabels itself) whose
 snapshot is discarded on a scene change because it belongs to the old

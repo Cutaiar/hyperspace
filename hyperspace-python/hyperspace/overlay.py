@@ -25,7 +25,9 @@ back.
 Rig-specific settings (monitor, fullscreen, overlay, passthrough) never
 persist in a preset and cannot be modulated; ground and opacity are a look
 and can. The ``overlay.*`` ids from before the split stay registered as
-aliases of the ``output.*`` params, so existing MIDI maps keep working.
+aliases of the ``output.*`` params; the factory table (routing.py) and
+the APC40 profile bind the alias ids, so they are the live names for
+those rows, not a shim.
 
 The window is created with a transparent framebuffer from the start (a
 creation-time GLFW hint), so toggling is only attributes, position and
@@ -176,8 +178,8 @@ class Output:
                        fmt=lambda v: f"{v * 100:.0f}%", group=g,
                        tip="Opacity of the whole render window in overlay mode.")
         # the pre-split ids: views onto the params above, never saved or
-        # driven, so MIDI maps (apc40.py binds overlay.on / .passthrough /
-        # .bg) and muscle memory keep working
+        # driven. The factory table and apc40.py bind these (overlay.on /
+        # .passthrough / .bg), so they are what the rows name
         for old, new in (("on", "overlay"), ("passthrough", "passthrough"),
                          ("bg", "bg"), ("alpha", "alpha"), ("monitor", "monitor")):
             p = reg[f"output.{new}"]

@@ -859,7 +859,7 @@ class Panel:
         dl = imgui.get_window_draw_list()
         origin = imgui.get_cursor_screen_pos()
         gap, mh = 4.0, 78.0
-        n = a.n   # N bands (plan 07); WP5b replaces this strip
+        n = a.n   # the analyzer's N bands; the strip draws whatever it has
         bw = (imgui.get_content_region_avail().x - (n - 1) * gap) / n
         u32 = imgui.color_convert_float4_to_u32
         zone = u32(imgui.ImVec4(1.0, 43 / 255, 43 / 255, 0.07))
@@ -913,7 +913,8 @@ class Panel:
                 self.reg["band.select"].set(i)
             if imgui.is_item_hovered():
                 lo, hi = a.edges(i)
-                # the legacy plane table drives six lanes by position until WP4b routes
+                # the plane text comes from the static BANDS table, which only
+                # names the right plane while the legacy6 / default rows stand
                 plane = (f" → {BANDS[i].pl} plane, {'forward' if BANDS[i].dir > 0 else 'reverse'}"
                          if n == 6 else "")
                 imgui.set_tooltip(f"{name} {lo:.0f}–{hi:.0f} Hz{plane}")
@@ -1102,7 +1103,7 @@ class Panel:
         if self.renderer is not None and self.renderer.pattern_error:
             imgui.text_colored(WARN, f"GLSL: {self.renderer.pattern_error}")
         imgui.spacing()
-        # the pattern's modulation inputs — u_bands to the shaders today;
+        # the pattern's modulation inputs — u_mod[8] to the shaders;
         # base 1 is the un-driven look, a routed lane rides on it
         self._section("pattern inputs", "pattern")
         for k, p in enumerate(self.reg.group("pattern")):

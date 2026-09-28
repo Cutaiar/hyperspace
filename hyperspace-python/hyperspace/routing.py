@@ -17,7 +17,10 @@ Sources are one string, ``scheme:address``:
                    modifier fires only while it is held; a row on the bare
                    key then stays quiet while a modifier some other row on
                    that key names is held, so "B" and "SHIFT+B" are two
-                   controls. F1–F8 / ⇧F1–F8 and Cmd+R are still app.py's own
+                   controls. Still app.py's own, outside the table: R
+                   (camera.reset), F1–F8 / ⇧F1–F8 (themes), Cmd+R, Esc / Q,
+                   and the relative writers — ↑/↓, the mouse and the
+                   sticks, which nudge camera params directly
   pad:<NAME>       a gamepad button by gamepad.py's name ("A", "LB", "LSTICK")
   hat:<DIR>        the d-pad: UP DOWN LEFT RIGHT
   cc:<ch>:<n>      MIDI control change n on 0-based channel ch, or * for any
@@ -26,9 +29,14 @@ Sources are one string, ``scheme:address``:
   lane:<i>         analyzer lane i — continuous, held every frame it is live
   ext:<i>          an external MIDI lane (WP4c)
   lfo:<i>          LFO i's output in [0, 1], resting at 0.5 (lfo.py)
-  hand:<i>         Ultraleap hand axis i's output in [0, 1] (hands.py),
-                   then one presence lane per hand; NaN before that hand
-                   was ever seen, and a NaN reading is not live
+  hand:<i>         Ultraleap hand axis i's output in [0, 1] (hands/core.py),
+                   then one presence lane per hand, then the eight pinch
+                   switches (left then right, four fingers each; the
+                   `when` gates); NaN before that hand was ever seen, and
+                   a NaN reading is not live
+
+Source addresses are 0-based (``lfo:0`` is "LFO 1", ``hand:0`` the first
+axis); param ids are 1-based (``lfo.1.depth``, ``macro.1``).
 
 Ops — what a row does to its target. The first group is the *scene-
 setters*: they write the param's base, the value a performer works from
@@ -78,7 +86,7 @@ One performer per parameter — the model (plan 09)::
                                                   depth · scale (a param, e.g. macro.3)
                                                   rest (push; the source's, or a number) · when (a gate)
 
-   chaining:  hand:7 ──position──▶ lfo.1.depth      lfo:1 ──push──▶ view.bright
+   chaining:  hand:7 ──position──▶ lfo.1.depth      lfo:0 ──push──▶ view.bright
               lane:0 ──push──▶ macro.2              hand:1 ──position──▶ fx.mix  ×scale macro.2
 
 A *performer* is an enabled row whose source is a continuous scheme
@@ -115,15 +123,18 @@ how the drive fader keeps its meaning on the rotation routes without
 also scaling the pattern inputs the reference fed raw.
 
 Frame order (app.py) is fixed: input adapters (keys, pad, MIDI) →
-``hands.poll`` (feeds `hand`) → ``audio.step`` (the analyzer) → bridge
-(feeds `ext`) → ``Router.modulate`` (every live performer row calls
-modulate) → ``reg.apply()`` → ``integrate`` → ``draw``. A lane may
+``hands.poll`` (feeds `hand`) → ``output.apply`` → ``mouse.poll`` →
+``audio.step`` (the analyzer) → bridge (feeds `ext`) → ``lfos.step`` +
+``publish`` (feeds `lfo`) → ``Router.modulate`` (every live performer row
+calls modulate) → ``reg.apply()`` → ``integrate`` → ``draw`` →
+``panel.draw``. A lane may
 modulate the analyzer's own params: the offset lands in apply() and the
 next step() reads it, one frame late, like every other modulated value.
 
 Legacy 6 — the parity anchor. The reference drove the planes with
 ``PLANEDRIVE[plane] = dir · out[i] · DRIVE · gain`` in place of the
-constant 1, and the shaders read ``u_bands[i] = out[i]``. As routes: lane
+constant 1, and its shaders read ``u_bands[i] = out[i]`` (``u_mod[i]``
+here). As routes: lane
 i → ``rot.rate.<plane>`` *push* with depth ``dir · ROT_DEPTH`` scaled by
 ``master.gain`` on a base of 0 (u = out / CEIL and ROT_DEPTH is the depth
 that puts CEIL · DRIVE · 8 on the plane at the drive fader's 8×, so the
@@ -173,8 +184,8 @@ load runs `remap_factory`: the three APC40 buttons plan 09 WP4 gave to
 the clock and the B / ⇧B keys are brought up to date where the factory
 rows still stand, each change noted and written back once. A schema this
 code doesn't know is left alone and reported, like a file that won't
-parse. `bindings_path(home)` says where the file lives; `home` defaults
-to the working directory so WP2's library home can be dropped in.
+parse. `bindings_path(home)` says where the file lives; the app always
+passes the library home, and the working-directory default is for tests.
 
 Routing presets are the same file format with only modulation rows:
 the factory exports in ``hyperspace/library/bindings/`` (`write_factory`:

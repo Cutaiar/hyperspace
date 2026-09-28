@@ -18,7 +18,7 @@ Current state and the pick-up list: [`docs/CHECKPOINT.md`](../CHECKPOINT.md).
 | [07 — Overhaul](07-overhaul.md) | after 05's controller half | Two windows, preset/project library, N-band analyzer, one modulation concept over the registry — WP0 foundation done; WP1/WP2/WP4a in flight |
 | [08 — Hands](08-hands.md) | after 07 | Ultraleap two-hand tracking → 12 shaped analog axes (curve, dead zone, attack/decay, rest springs): float `hand:` sources + Learn in-app, 7/14-bit CC · bend · pressure to a DAW; HANDS page, setups as presets |
 | [09 — One performer](09-one-performer.md) | after 08 | One path for every live source, one performer per parameter with an FL-style replace prompt, two ops (`push` / `position`), macro knobs, tap-tempo clock, four chainable LFOs; bindings schema 2 — executed 2026-09-26 (PRs #33–#37); hand checks pending |
-| 10 — Architecture & documentation pass | after 09's hand checks | A full system audit for the maintainers and the agents: component map, frame-order data flow, the control model as the canonical statement, per-module "shape" sections, a decisions log from plans 07–09, a refreshed ENGINEERING.md — with diagrams. No file yet |
+| [10 — Architecture & documentation](10-architecture.md) | after 09 | The system as built, for maintainers and agents: `ARCHITECTURE.md` (component map, the frame, the control model as the canonical statement, module shapes), `DECISIONS.md` (dated, with the why), `ENGINEERING.md` refreshed for the Python app, `AUDIT-2026-09.md` (findings, sized, filed for plan 11) — executed 2026-09-27; docstrings were the only code touched |
 
 ## Conventions that apply to every plan
 

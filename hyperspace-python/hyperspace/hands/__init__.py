@@ -12,9 +12,11 @@ argument, duck-typed, never imported:
   HandsIO(settings, cfg,      `source` is anything with .latest(); `out`
           source=…, out=…)    anything with .send(). Both default to the
                               real ones, so tests and a host substitute.
-  HandsIO.poll(dt, midi,      `midi` needs .learning / .bind (MIDI learn),
-                router)       `router` needs .feed / .drive / .labels.
-                              Pass neither and the hands still run.
+  HandsIO.poll(dt, midi,      `midi` needs .learning / .learn_source(src,
+                router)       when=) (MIDI learn); `router` needs .feed and
+                              takes .labels / .gates / .rests dicts (poll
+                              creates any that are missing). Pass neither
+                              and the hands still run.
 
 panel.py is the one piece that knows this host: it draws the HANDS page
 with the host's imgui panel and palette. Extracting the package means

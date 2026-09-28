@@ -1,10 +1,13 @@
 """Audio sources — live capture and file playback (plan 03 task 0).
 
 Both feed the same Analyser+Analyzer pair (`chain` — the N-band analyzer,
-plan 07), mirroring the reference's single attach() hub. Transport semantics are the reference's (ENGINEERING §4b):
-position is measured against the stream clock, not counted per frame;
-pause freezes position and keeps the chain stepping on silence so the
-bands decay on their own time constants; restart is return-to-zero
+plan 07), mirroring the reference's single attach() hub. Transport
+semantics are the reference's (ENGINEERING.md, transport section):
+position is ``_offset + _played``, where ``_played`` counts the frames
+the output callback has handed PortAudio — not the frame loop's dt;
+pause freezes position and keeps the same stream open, emitting silence
+so the chain keeps stepping and the bands decay on their own time
+constants; restart is return-to-zero
 preserving transport state; playback loops.
 
 Callback discipline (plan 04 note, honoured here): stream callbacks only
@@ -96,7 +99,7 @@ class AudioEngine:
         self._ring = _Ring(int(sample_rate * 2))
         self._stream: sd.InputStream | sd.OutputStream | None = None
         # transport (file mode)
-        self.track: np.ndarray | None = None   # mono, at self.sr... no: track rate
+        self.track: np.ndarray | None = None   # mono, at the file's own rate (_track_sr)
         self._track_sr = sample_rate
         self.playing = False
         self._offset = 0            # frames into the track at last start

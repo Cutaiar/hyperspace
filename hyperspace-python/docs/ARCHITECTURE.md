@@ -129,13 +129,13 @@ sequenceDiagram
     W->>W: output.apply() (reads last frame's objects)  :584
     K->>P: mouse orbit / pan / zoom → nudge/scale → base  :588
     A->>A: audio.step(dt) — new lanes  :594
-    B->>R: feed("ext", …); reads eff_norm out  :596
-    L->>R: lfos.step; publish → feed("lfo", …)  :599-600
+    B->>R: feed("ext", …) · reads eff_norm out  :596
+    L->>R: lfos.step · publish → feed("lfo", …)  :599-600
     R->>P: modulate(): every live performer row → p.modulate(offset)  :604
     P->>V: reg.apply(): base + Σoffsets → every object  :605
     V->>V: integrate(dt): ang += rate · dt  :606
     D->>D: renderer.draw(view)  :617
-    D->>P: panel.draw(): widgets → base; modal → table  :626
+    D->>P: panel.draw(): widgets → base · modal → table  :626
 ```
 
 Two rules follow from the order.

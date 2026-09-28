@@ -19,7 +19,7 @@
 // uv is face-local: (0.5, 0.5) is the face centre, circumradius 0.5,
 // identical framing on every congruent face.
 //
-// Helpers below; add a case, and list the name in ui.py's PATTERNS.
+// Helpers below; add a case, and list the name in params.py's PATTERNS.
 
 const float TAU = 6.28318530718;
 
