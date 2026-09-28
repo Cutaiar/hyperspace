@@ -125,10 +125,11 @@ The one writer after `apply()` is the rotation integrator (`view.integrate`), wh
 writes the object directly; `Param.apply` adopts that as a delta on the
 base the next frame (`params.py:460-466`, `tests/test_modulation.py:198`).
 
-Guarding: the step block (`audio.step` through `integrate`), `renderer.draw`
-and `panel.draw`
-are each wrapped so hot-reloaded code that raises records
-`reloader.runtime_error` and the loop continues (`app.py:593-629`).
+Guarding: the MIDI and hands polls, the step block (`audio.step` through
+`integrate`), `renderer.draw` and `panel.draw` are each wrapped so
+hot-reloaded code that raises records `reloader.runtime_error` — kept
+until a clean frame — and the loop continues (`app.frame`;
+`tests/test_app_boundary.py`).
 
 ---
 

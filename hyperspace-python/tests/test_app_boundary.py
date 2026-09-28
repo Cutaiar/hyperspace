@@ -232,19 +232,24 @@ class Stub:
             return self.__dict__.get(f"{method}__returns")
         return call
 
+    def __getitem__(self, pid):
+        """reg["view.depth4"]: a param stub named by its id, recording its
+        relative writes (`nudge`, `scale`) on the same log."""
+        return Stub(pid, self._log, base=2.0, lo=1.0, hi=20.0)
 
-def _host(log: list[str], *, pad_on=True, pressed=(), super_=False):
+
+def _host(log: list[str], *, pad_on=True, pressed=(), held=(), super_=False, stick=0.0):
     """Every piece of the loop as a recording stub; the gates all open."""
     g = app.glfw
     down = set(pressed)
     keys = Stub("keys", log, typing=False)
     keys.pressed = lambda k: k in down
-    keys.held = lambda k, now: 0.0
+    keys.held = lambda k, now: 0.5 if k in held else 0.0
     keys.shift = lambda: False
     keys.super = lambda: super_
     keys.down = lambda *ks: any(k in down for k in ks)
     pad = Stub("pad", log, on=pad_on)
-    pad.axis = lambda i: 0.0
+    pad.axis = lambda i: stick
     pad.trigger = lambda i: 0.0
     chain = object()
     audio = Stub("audio", log, chain=chain, on=True)
@@ -318,13 +323,40 @@ def test_a_raising_step_is_recorded_and_the_windows_still_draw():
     assert h.reloader.runtime_error.startswith("step: RuntimeError: boom")
     assert "router.modulate" not in log              # the pass stopped where it raised
     assert log[-2:] == ["render.draw", "panel.draw"]
-    # a raising adapter is a note of its own and never stops the frame
-    log.clear()
+
+
+def test_a_raising_adapter_is_a_note_that_survives_the_frame():
+    """A MIDI or hands adapter that raises (hot-reloaded code with a bug)
+    is recorded like a raising step — and stays recorded until a clean
+    frame, rather than being wiped by the end-of-frame reset while the
+    loop silently drops its input."""
+    log: list[str] = []
     h = _host(log)
     h.midi_io.poll = _boom
+    assert app.frame(h, now=1.0, dt=1 / 60, fps=60.0) is False
+    assert h.reloader.runtime_error.startswith("midi: RuntimeError: boom")
+    assert "hands.poll" in log and "reg.apply" in log and "render.draw" in log
+    h.midi_io.poll = lambda: None
+    assert app.frame(h, now=1.0, dt=1 / 60, fps=60.0) is True
+    assert h.reloader.runtime_error == ""            # …and a clean frame clears it
+    h.hands_io.poll = _boom
+    assert app.frame(h, now=1.0, dt=1 / 60, fps=60.0) is False
+    assert h.reloader.runtime_error.startswith("hands: RuntimeError: boom")
+
+
+def test_the_relative_writers_run_with_the_setters_and_move_the_base():
+    """↑/↓ held and the pad's sticks are relative writers on the base
+    (`nudge` / `scale`), and they run in the scene-setter block — after the
+    key rows and the pad rows, before any source feeds."""
+    g = app.glfw
+    log: list[str] = []
+    h = _host(log, held={g.KEY_UP}, stick=0.5)
     app.frame(h, now=1.0, dt=1 / 60, fps=60.0)
-    assert h.reloader.runtime_error == ""            # the step block was clean…
-    assert "hands.poll" in log and "render.draw" in log
+    i = log.index
+    assert i("router.keys") < i("view.depth4.nudge") < i("pad.poll") < i("router.pad")
+    assert i("router.pad") < i("camera.yaw.nudge") < i("camera.pitch.nudge")
+    assert i("camera.pitch.nudge") < i("camera.zoom.scale") < i("midi.poll")
+    assert log.count("view.depth4.nudge") == 1     # the triggers rest, so no second ride
 
 
 def test_the_loop_keys_outside_the_table():

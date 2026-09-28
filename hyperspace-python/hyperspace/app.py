@@ -489,19 +489,22 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
             if d4:
                 _ride_depth(reg["view.depth4"], d4 * 2.4 * dt)
 
-    # ---- MIDI controller: routed through the same registry ----
+    # ---- MIDI controller: routed through the same registry. From here
+    # on a raising block records itself on the reloader and the frame goes
+    # on; `ok` keeps the note alive until a clean frame ----
+    ok = True
     if h.midi_io is not None:
         try:
             h.midi_io.poll()
         except Exception as e:  # noqa: BLE001 — hot-reloaded code may raise
-            reloader.runtime_error = _err("midi", e)
+            ok, reloader.runtime_error = False, _err("midi", e)
 
     # ---- Ultraleap hands: hand lanes into the table, MIDI out to a DAW ----
     if h.hands_io is not None:
         try:
             h.hands_io.poll(dt, h.midi_io, router)
         except Exception as e:  # noqa: BLE001
-            reloader.runtime_error = _err("hands", e)
+            ok, reloader.runtime_error = False, _err("hands", e)
 
     # ---- output: the render window follows the output.* params ----
     h.output.apply()
@@ -512,7 +515,6 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
 
     # ---- audio + rotation + draw, guarded: hot-reloaded code may raise;
     # record it and keep the loop alive so the next save can fix it ----
-    ok = True
     try:
         audio = h.audio
         audio.step(dt)
