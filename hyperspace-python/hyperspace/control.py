@@ -11,8 +11,10 @@ A scene *is* a band preset (plan 11, audit A1): the eleven files in
 library/band/*.json, named here in combo order (SCENES) because the APC40's
 clip grid and every saved project address them by index. The combo, the
 grid and Reset re-tune whatever bands are loaded from the scene's values
-— an object write on the analyzer's Params, folded into the base next
-frame (ARCHITECTURE §3.2) — and tell the library which scene is current;
+— through the registry when one is attached (a base write, as a strip
+load is, so a knob a performer holds keeps its offset and the strip reads
+clean at once), else straight onto the analyzer's Params — and tell the
+library which scene is current;
 a load from the preset strip (Library.load) goes the other way, layout
 included, and tells the combo. With no library attached the factory file
 is read directly (library.factory_doc), so the headless tests need none.
@@ -31,7 +33,7 @@ from __future__ import annotations
 import time
 from dataclasses import replace
 
-from .analyzer import Analyzer, scene_rows
+from .analyzer import Analyzer, scene_strip
 from .library import LibraryError, factory_doc
 
 UNDO_S = 8.0
@@ -143,10 +145,21 @@ class Control:
             self.clear_undo()
             self.scene = SCENES.index(name)
 
+    def _land(self, strip: dict) -> None:
+        """A scene's strip values onto the bands: through the registry when
+        the library has one (a base write — a performed knob keeps its
+        offset and is_dirty reads clean straight away), else onto the
+        analyzer's Params (the headless tests, no library)."""
+        lib = self.library
+        if lib is not None and lib.reg is not None:
+            lib.restore(strip)
+        else:
+            self.chain.apply_scene(strip)
+
     def _apply_scene(self) -> None:
         """The scene's values onto the bands loaded; the library is told,
         and re-applies it this way if the scene's file changes on disk."""
-        self.chain.apply_scene(self.scene_values())
+        self._land(scene_strip(self.scene_values(), self.chain.n))
         if self.library is not None:
             self.library.adopt(BAND_GROUP, SCENES[self.scene], self._apply_scene)
 
@@ -163,7 +176,7 @@ class Control:
 
     def reset_band(self, i: int | None = None) -> None:
         i = self.selb if i is None else i
-        self.chain.apply_scene_band(i, scene_rows(self.scene_values()).get(i))
+        self._land(scene_strip(self.scene_values(), self.chain.n, bands=(i,)))
 
     def reset_all_clicked(self) -> None:
         """The one button: resets, or undoes if the window is still open."""
