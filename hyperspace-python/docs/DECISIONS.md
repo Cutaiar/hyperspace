@@ -114,7 +114,7 @@ why, and a link from the plan or PR that made it.
 | 2026-09-18 | The library is watched like source: editing a preset file reflects in the running app. | The same contract `patterns.glsl` set. | plan 07 WP2 | standing (`hotreload.py`) |
 | 2026-09-26 | Routing presets are disposable: every factory file was rewritten for schema 2 rather than migrated. | Nothing is preserved that the new rules cannot express. | plan 09 d.10 | standing |
 | 2026-09-27 | The eleven JSON files under `library/band/` are the one scene store, each band named in the layout; `scene.select`, the APC grid, Reset and the strip all read them (the combo re-tunes the bands you have, the strip applies its layout). | Two copies of the scenes had already diverged on names. | plan 11 §2 row 9, PR #44 | standing (`control.SCENES`, `Analyzer.apply_scene`) |
-| 2026-09-27 | `Project.io` is deleted: the live binding table is `<home>/bindings.json` and a project never carries the routing layer. Routing presets are a document kind of the library (`Library.routing`), listed, shadowed and reloaded like every module preset. | One preset system over one folder tree; plan 07's "bindings with the project" never happened and the standing decision is one home file. | plan 11 §2 row 10, PRs #52 | standing |
+| 2026-09-27 | `Project.io` is deleted: the live binding table is `<home>/bindings.json` and a project never carries the routing layer. Routing presets are a document kind of the library (`Library.routing`), listed, shadowed and reloaded like every module preset. | One preset system over one folder tree; plan 07's "bindings with the project" never happened and the standing decision is one home file. | plan 11 §2 row 10, PR #52 | standing |
 
 ## UI
 

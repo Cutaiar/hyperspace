@@ -1,6 +1,7 @@
 """Plan-00 exit checks: the golden traces exist and are self-consistent."""
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -8,10 +9,24 @@ import pytest
 from hyperspace.geometry import SHAPES, geom
 
 GOLDEN = Path(__file__).parent / "golden"
+ENGINEERING = Path(__file__).parents[1] / "docs" / "ENGINEERING.md"
 
-# The expected V/E counts come from the code, not a third copy of the
-# table (audit D6): the trace's index is the slider index, so the shape it
-# was recorded from is geometry.SHAPES[index] and its counts are geom()'s.
+
+def ve_table() -> list[tuple[str, int, int]]:
+    """The V/E rows of ENGINEERING §1, parsed, in slider order — the one
+    table readers cite, so it is the one this file checks against the
+    code (audit D6: no third copy here). Both shape tables are read; a
+    row is `| # | name | … | V | E |`."""
+    text = ENGINEERING.read_text()
+    section = text[text.index("## 1. Geometry"):text.index("## 2. Rendering")]
+    rows = []
+    for line in section.splitlines():
+        m = re.match(r"\|\s*(\d+)\s*\|\s*([^|]+?)\s*\|.*\|\s*(\d+)\s*\|\s*(\d+)\s*\|$", line)
+        if m:
+            rows.append((m.group(2), int(m.group(3)), int(m.group(4))))
+    return rows
+
+
 def geometry_files() -> list[Path]:
     return sorted((GOLDEN / "geometry").glob("*.json"))
 
@@ -20,14 +35,27 @@ def test_geometry_traces_present():
     assert len(geometry_files()) == 18, "expected one trace per shape"
 
 
+def test_the_engineering_table_matches_the_code():
+    """ENGINEERING §1 lists every shape's V and E; the numbers are geom()'s."""
+    rows = ve_table()
+    assert len(rows) == len(SHAPES) == 25
+    for i, (name, n, m) in enumerate(rows):
+        g = geom(i)
+        first = SHAPES[i].name.split(" ")[0].lower()[:4]
+        assert name.lower().startswith(first), (i, name, SHAPES[i].name)
+        assert (g["n"], g["m"]) == (n, m), (
+            f"row {i + 1} {name}: ENGINEERING says {n}/{m}, geom {g['n']}/{g['m']}"
+        )
+
+
 @pytest.mark.parametrize("path", geometry_files(), ids=lambda p: p.stem)
 def test_geometry_trace_consistent(path):
+    """The trace is self-consistent and names the shape at its slider index
+    (its V/E against the code is test_core's `test_construction_exact`)."""
     data = json.loads(path.read_text())
     shape = SHAPES[data["index"]]
-    g = geom(data["index"])
-    n, m = g["n"], g["m"]
+    n, m = data["n"], data["m"]
     assert data["name"].startswith(shape.name.split(" ")[0]), (data["name"], shape.name)
-    assert data["n"] == n and data["m"] == m, f"{data['name']}: V/E mismatch vs geometry.geom"
     assert len(data["V"]) == n * 4
     assert len(data["E"]) == m * 2
     assert all(0 <= e < n for e in data["E"])

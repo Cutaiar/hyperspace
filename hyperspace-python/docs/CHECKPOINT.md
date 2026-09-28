@@ -13,7 +13,7 @@ is [`AUDIT-2026-09.md`](AUDIT-2026-09.md); the stages it was built in are
 ```bash
 git clone github.com/Cutaiar/hyperspace && cd hyperspace/hyperspace-python
 uv sync                 # whole environment, from the committed lockfile
-uv run pytest           # 777 tests, ~20 s (11 skipped without torch)
+uv run pytest           # 778 tests, ~20 s (11 skipped without torch)
 uv run hyperspace       # the app: ? shows the controls cheat sheet
 ```
 
@@ -30,8 +30,9 @@ rows (B1), hot reload watches every module and keeps `Kind` identity
 Learn object shared by MIDI and hands (B3, B4), one preset system with
 routing presets in the library (L1–L3, L5, L6, L8), exact trigger phase on
 every path (B6–B8), and one tidy-up sweep per component with the missing
-boundary and loop-order tests (R, N, V, A, L, U, P) — PRs #40–#52, WP8 and
-WP16 following, one PR per work package, each code-reviewed. Seven
+boundary and loop-order tests (R, N, V, A, L, U, P) — PRs #40–#54, one
+per work package, each code-reviewed, integrated on
+`plan-11-integration` (which is what the owner merges). Seven
 decisions are the owner's and pending (plan 11 §2, rows 1–7: B2, B5, R1,
 R6, A7, A10, R2+L2); the trim fix (A10) and the keys-into-the-table change
 (R2+L2) wait on them.

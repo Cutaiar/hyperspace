@@ -8,7 +8,7 @@ what to do, what a pass and a fail look like, and which audit item or
 code path a fail points at. Where a check can be simulated headless, the
 pytest node or `tools/` command that shows the expected behaviour is
 listed first — run it before touching hardware so you know what "right"
-looks like. Written against `plan-11-integration` (777 tests).
+looks like. Written against `plan-11-integration` (778 tests).
 
 **Before you start.** `git pull`, `uv sync`, `uv run pytest -q`. Your
 `~/Hyperspace/config.toml` today has `[midi] enabled = true`, `[output]`
@@ -52,8 +52,10 @@ rescan loses the selection → `AudioEngine.rescan` (PR #51).
 
 **4. The restyle by eye (PR #24) and every page fits (U1).**
 Headless: `uv run pytest -q tests/test_ui_shell.py::test_every_page_fits_the_control_window`
-and `uv run python tools/control_shots.py --hands --bands` (writes one
-PNG per page under `docs/plans/assets/`; look at them). In the app, walk
+and `uv run python tools/control_shots.py` (every page, one PNG each,
+under `docs/plans/assets/07-shell/`), then `… --hands` (the HANDS page
+and a gated ROUTING page, under `08-hands/`) and `… --bands` (the band
+editor with a filled spectrogram); look at them. In the app, walk
 the fourteen rail pills. *Pass:* from six feet, every label and number
 readable; no page shows a scrollbar (ROUTING's row list scrolls inside
 its own child, by design); the HANDS page (re-laid out by WP13) fits with

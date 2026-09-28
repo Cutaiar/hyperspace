@@ -15,7 +15,7 @@ paragraph says so. The HTML-era sections (browser sandbox, deploy) are
 gone; `hyperspace-web/hyperspace.html` is frozen and matters here only as
 the oracle the golden traces were recorded from.
 
-**Run it:** `uv sync`, `uv run pytest` (777 tests, ~20 s), `uv run
+**Run it:** `uv sync`, `uv run pytest` (778 tests, ~20 s), `uv run
 hyperspace`. `?` in the app shows the controls cheat sheet.
 
 ---
@@ -148,7 +148,7 @@ and FX off the output is bit-identical to the scene pass alone
 
 True 2-face extraction (cycle walk + support-plane filter) gives
 translucent painter-sorted fills; counts match the known values for all
-polytopes (`tests/test_control.py:184-196`; the 3D shapes' faces in
+polytopes (`tests/test_geometry.py`; the 3D shapes' faces in
 `tests/test_shapes3d.py`). UVs are face-local and
 perspective-correct (`geometry.face_uvs`).
 
@@ -461,7 +461,7 @@ on their own time constants — the shape coasts to rest rather than
 freezing. Position is `_offset + _played`, where `_played` counts the
 frames the callback has handed to PortAudio (so it leads the DAC by the
 buffer latency), folded by the track length for the loop (`audio.py:193-
-228`, `tests/test_control.py:126-146`). Restart is return-to-zero preserving
+228`, `tests/test_audio.py` `test_transport_position_math`). Restart is return-to-zero preserving
 the play / pause state. Keys, as table rows: `K` play / pause (`audio.play`),
 `0` restart, `M` capture on / off. In capture mode `stop()` closes the
 stream and `audio.on` goes false, so the chain freezes and every lane row
@@ -513,7 +513,7 @@ unreadable at a party.
 
 ## 6. Testing
 
-`uv run pytest` — 777 tests, 11 skipped without torch, about 20 s. `ruff`
+`uv run pytest` — 778 tests, 11 skipped without torch, about 20 s. `ruff`
 is the linter. Every test runs with `HYPERSPACE_HOME` pointed at its own
 `tmp_path` (`tests/conftest.py`), so no test can touch `~/Hyperspace`.
 What holds what:
@@ -533,8 +533,7 @@ What holds what:
   (`tests/test_params.py:286`, `tests/test_bridge.py:381`,
   `tests/test_dream.py:55`); `hands/core.py`, `hands/signal.py`, `lfo.py`,
   `tempo.py` import nothing from the package, and `routing.py` nothing
-  above it — no panel, host or adapter (`tests/test_*_boundary.py`).
-  `tempo.py` import nothing from the package (`tests/test_*_boundary.py`);
+  above it — no panel, host or adapter (`tests/test_*_boundary.py`);
   `config.py` reads the hands rig defaults from `hands/core.py` (the one table),
   never the reverse.
 - **Hot reload**: every module but `app.py`, `hotreload.py` and `offline.py`
@@ -554,8 +553,8 @@ What holds what:
   `tools/hands_probe.py` (every hand axis live; `--calibrate`).
 
 Untested today, and worth knowing before trusting a change there: the
-panel being a leaf and `routing.py`'s import boundary (audit R11, plan 11
-WP8). The frame order, `Keys`, `Mouse`, the `_open_*` gates and the host's
+panel being a leaf (no engine module imports `ui*`, by convention). The
+frame order, `Keys`, `Mouse`, the `_open_*` gates and the host's
 import boundary are `tests/test_app_boundary.py` (the frame runs over
 stubs; the boundary in a subprocess); `audio.py`'s streams and
 `analysis.py` run headless over a fake `sounddevice`
