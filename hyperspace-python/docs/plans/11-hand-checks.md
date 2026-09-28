@@ -3,7 +3,7 @@
 Everything only the owner can verify, in the order that costs the least
 time at the machine: laptop alone first, then the APC40, then the camera
 and the box (APC40 still plugged in for check 24), then the projector,
-then IAC + FL Studio, then one back on the laptop. Each check: the commands, the config, the preset,
+then IAC + FL Studio, then one back on the laptop, then plans 12 and 13's two. Each check: the commands, the config, the preset,
 what to do, what a pass and a fail look like, and which audit item or
 code path a fail points at. Where a check can be simulated headless, the
 pytest node or `tools/` command that shows the expected behaviour is
@@ -342,6 +342,52 @@ rewritten. Your real home's hand-made `.bak-plan09` and
 `.bak-2026-09-26` are never touched. *Fail:* no `.bak-v1` → `routing.backup`
 (`Bindings.load`, PR #53); an existing `.bak-*` overwritten → the dated
 copy path in `backup`.
+
+## G. Plans 12 and 13 — added 2026-09-28, after the rest
+
+**31. The APC40's knobs re-base from the host (plan 13 D7; the one hardware assumption the two-layer desk rests on).**
+No headless twin: it is the device's behaviour. Desk plugged in, the app
+on the `default` routing. Turn track knob 1 (brightness) to about a
+quarter; press F2 (a house theme with a different brightness). *Pass:*
+the knob's ring jumps to the theme's brightness at once, and the next
+turn of the knob continues from *there* — no jump back toward the
+quarter, no pickup. *Fail:* the first turn after F2 snaps brightness to
+where the knob physically was → the encoder keeps its own value and
+ignores the host's CC; plan 13 D7 then needs soft pickup on the knobs
+as well as the faders (`midi.py` `_apply`), and §3.1's "knobs jump" line
+is wrong. Either way, note it on plan 11 §2 row 12.
+
+**32. Plan 12's five party presets by eye (plan 12 §7, "what only the projector and the box can judge").**
+Headless first: `uv run pytest -q tests/test_plan12_presets.py` and
+`uv run python tools/preset_shots.py`, then look at
+`docs/plans/assets/12-presets/party-*-sheet.png` so you know the pose
+each tile expects. Projector and box on; PRESETS page → project → load ▾
+→ `party`; then per preset the F-key and the ROUTING strip's `party-*`
+(the cards under `docs/plans/assets/12-presets/` say which). *Pass*, one
+line each — **(a)** faces at 2.5× (FACES) and 2.0× (TUMBLE, WAKE) read
+on the projector in the room, and the left hand's headroom to 4× is
+usable rather than a white-out; **(b)** a tilt's ±45° feels like holding
+the object and the half-second spring on leaving reads as "let go", not
+a slip; **(c)** thumb up is up, fingers out is out, reaching in is away
+from you on every row (the cards' words); **(d)** FIELD at the right
+hand's top (68 copies, faces on) holds frame rate and the swing at 0.65
+of a cell is a look, not a mess; **(e)** WAKE with the dream worker on:
+the right roll turns the dream's hue round the wheel and fingers up
+brings the dream in, over sixteen echoes; **(f)** TRIP after TAP TEMPO ×8
+and METRONOME once: the left hand's height opens a pump on the beat and
+the burst at the right hand's top is light, not glare. *Fail* points:
+(a) the theme's `view.bright` in `library/projects/party.hyp.json`; (b)
+`routing.TURN` (0.25 → try 0.35) and the axes' `return` on the HANDS
+page; (c) the row's depth sign in `routing.party_*_routes` — a flipped
+axis is one sign; (d) `view.instances`' push depth (0.6) and
+`view.inst_amp`'s (0.5) in `party_field_routes`; (e) `[dream] enabled`
+and the worker line on the LOOKBACK page — without the worker those two
+rows do nothing by design; (f) B2 (plan 11 §2 row 1) if the pump hiccups
+on a re-tap, `fx.zoomblur.glow` in `library/fx/trip.json` if it glares.
+Anything that fails here is a number in a preset file, not code, unless
+(c) reveals the box's mounting flips an axis for every preset — then
+`hands.<axis>.invert` on the HANDS page, saved as the hands setup, is the
+fix and the cards stand.
 
 ## What this list does not ground
 
