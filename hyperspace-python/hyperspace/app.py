@@ -463,11 +463,14 @@ def main() -> None:
     dream_io = _open_dream(reg, cfg)
     if dream_io is not None:            # fills the look-back's dream slot
         renderer.lookback.source = dream_io
+    pad = Pad()
     # panel state and chain must stay one object even after source changes
     # the live objects that get re-classed on a hot reload; re-evaluated
     # each swap so recreated ones (the chain after a source attach) count
     reloader = HotReloader(targets=lambda: [
         (renderer, "render", "Renderer"),
+        (renderer.scene, "render", "SceneTarget"),
+        (renderer.cover, "render", "CoverTarget"),
         (renderer.lookback, "lookback", "Lookback"),
         (renderer.lookback.state, "lookback", "DreamState"),
         (renderer.fx, "fx", "FxChain"),
@@ -482,12 +485,16 @@ def main() -> None:
         (reg, "params", "Registry"),
         *[(p, "params", "Param") for p in reg],
         (output, "overlay", "Output"),
+        (output.backend, "overlay", "GlfwBackend"),
+        (library, "library", "Library"),
+        (presets, "presets", "Presets"),
         (router, "routing", "Router"),
         (clock, "tempo", "Clock"),
         (lfos, "lfo", "LFOs"),
         *[(lf, "lfo", "LFO") for lf in lfos.lfos],
         *([(midi_io, "midi", "MidiIO"), (midi_io.map, "midi", "MidiMap")] if midi_io else []),
         *([(bridge_io, "bridge", "Bridge")] if bridge_io else []),
+        *([(hand_settings, "hands.core", "HandSettings")] if hand_settings else []),
         *([(hands_io, "hands.core", "HandsIO")] if hands_io else []),
         *([(dream_io, "dream", "DreamWorker")] if dream_io else []),
         (pad, "gamepad", "Pad"),
@@ -495,7 +502,6 @@ def main() -> None:
     panel.reloader = reloader
     keys = Keys(render_win, ctrl_win)
     mouse = Mouse(render_win, reg, s)
-    pad = Pad()
     depth4, yaw, pitch, zoom = reg["view.depth4"], reg["camera.yaw"], reg["camera.pitch"], reg["camera.zoom"]
 
     # smoke-test escape hatch: HYPERSPACE_FRAMES=n closes after n frames

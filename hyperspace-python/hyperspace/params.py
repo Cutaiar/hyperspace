@@ -105,12 +105,6 @@ class Kind(Enum):
     TEXT = "text"
 
 
-# Hot reload (hotreload.py) re-executes this file inside the module's own
-# globals, so every live Param would keep a member of the *previous* Kind
-# class and `p.kind is Kind.TOGGLE` would be False for all of them. Keep
-# the first class the process built; adding a member needs a restart.
-Kind = _KIND = globals().get("_KIND", Kind)
-
 
 def _clamp(x, a, b):
     return a if x < a else min(x, b)

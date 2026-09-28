@@ -175,9 +175,7 @@ def _app_swap_targets() -> set[tuple[str, str]]:
     test and the app cannot drift apart."""
     import ast
 
-    from hyperspace import app
-
-    tree = ast.parse(Path(app.__file__).read_text())
+    tree = _tree("app")
     for node in ast.walk(tree):
         if isinstance(node, ast.Call) and getattr(node.func, "id", "") == "HotReloader":
             (lam,) = [k.value for k in node.keywords if k.arg == "targets"]
@@ -285,37 +283,93 @@ def test_dotted_names_reach_a_subpackage_module(pkg):
         sys.modules.pop(name, None)
 
 
-# --------------------------------------------------------- Kind survives a reload
+# ------------------------------------------------- an Enum survives a reload
+
+A_ENUM_V1 = """
+    from enum import Enum
+
+    VALUE = 1
+
+    class Kind(Enum):
+        A = "a"
+        B = "b"
+
+    class Holder:
+        def __init__(self):
+            self.kind = Kind.B
+
+        def is_b(self):
+            return self.kind is Kind.B
+"""
+
+A_ENUM_V2 = A_ENUM_V1.replace("return self.kind is Kind.B", "return self.kind is Kind.B  # edited")
+A_ENUM_V3 = A_ENUM_V1.replace('B = "b"', 'B = "b"\n        C = "c"')
+
+
+def test_an_enum_a_reloaded_module_defines_keeps_its_identity(pkg):
+    """Audit H2: re-executing a module built a new Enum class, so every
+    live member stopped matching `is`. The reloader puts the first class
+    back; a member added in the edit is reported and needs a restart."""
+    write(pkg, "mod_a", A_ENUM_V1)
+    mod_a = importlib.import_module("hotpkg.mod_a")
+    importlib.import_module("hotpkg.mod_b")
+    kind, h = mod_a.Kind, mod_a.Holder()
+    r = _reloader(lambda: [(h, "mod_a", "Holder")])
+
+    write(pkg, "mod_a", A_ENUM_V2)
+    assert r.poll(now=1.0) and r.error == ""
+    assert mod_a.Kind is kind and h.kind is mod_a.Kind.B and h.is_b()
+
+    write(pkg, "mod_a", A_ENUM_V3)
+    assert r.poll(now=2.0)
+    assert mod_a.Kind is kind and h.is_b()          # identity still held…
+    assert "mod_a.Kind changed" in r.error          # …and the new member needs a restart
+
+
+def test_an_unimported_optional_module_is_skipped(pkg):
+    """dream, bridge and midi are watched but only imported behind their
+    config gates; a cascade through one that is off must not KeyError."""
+    mod_a = importlib.import_module("hotpkg.mod_a")
+    write(pkg, "mod_opt", "VALUE = 0\n")            # on disk, never imported
+    t = mod_a.Thing()
+    r = HotReloader(lambda: [(t, "mod_a", "Thing")], package="hotpkg",
+                    modules=("mod_a", "mod_opt", "mod_b"), period=0.0)
+    write(pkg, "mod_a", A_V2)
+    assert r.poll(now=1.0), r.error
+    assert t.speak() == "new"
+    assert "hotpkg.mod_opt" not in sys.modules
+
 
 KIND_SCRIPT = """
-import importlib
-import hyperspace.params as P
+import sys
+from hyperspace.hotreload import HotReloader
+from hyperspace import params as P
 from hyperspace.params import Kind, Registry
 
 reg = Registry()
 st = {"on": False}
 p = reg.toggle("x.on", "X", lambda: st["on"], lambda v: st.__setitem__("on", v))
-before = Kind
-importlib.reload(P)
-assert P.Kind is before, "Kind was re-created by the reload"
+r = HotReloader(lambda: [(reg, "params", "Registry"), (p, "params", "Param")],
+                modules=("params",), period=0.0)
+r._mtimes["params"] = 0.0                    # as if params.py had just been saved
+assert r.poll(now=1.0), r.error
+assert P.Kind is Kind, "Kind was re-created by the reload"
 assert p.kind is P.Kind.TOGGLE
 p.toggle()
 assert st["on"] is True, "toggle() no longer recognises its own kind"
-# the reloader's re-class keeps working with the kept enum
-p.__class__ = P.Param
-assert p.kind is P.Kind.TOGGLE and p.text()
+assert type(p) is P.Param and p.text()
 print("ok")
 """
 
 
 def test_reloading_params_keeps_kind_identity():
-    """Audit H2: `importlib.reload(params)` used to build a new Kind enum,
-    so every live param's `kind` stopped matching and `toggle()` went
-    silent. In a subprocess, because a real reload of hyperspace.params
-    would leave this test session's other modules holding stale classes."""
+    """The same rule on the real module: a params.py reload through the
+    reloader keeps `Kind`, and a live toggle still toggles. In a subprocess,
+    because a real reload of hyperspace.params would leave this test
+    session's other modules holding stale classes."""
     import subprocess
 
-    out = subprocess.run([sys.executable, "-c", KIND_SCRIPT], capture_output=True, text=True, check=False,
-                         cwd=str(Path(__file__).parents[1]), timeout=120)
+    out = subprocess.run([sys.executable, "-c", KIND_SCRIPT], capture_output=True, text=True,
+                         check=False, cwd=str(Path(__file__).parents[1]), timeout=120)
     assert out.returncode == 0, out.stderr
     assert out.stdout.strip() == "ok"

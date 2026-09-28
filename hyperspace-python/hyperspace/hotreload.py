@@ -24,6 +24,14 @@ Contract for hot classes:
   - a changed __init__ does NOT re-run on live instances; attributes it
     would have added are missing until restart (the frame guard in app.py
     catches the resulting error and shows it instead of crashing)
+  - an Enum defined in a reloaded module keeps its identity: the class the
+    process first built is put back after the re-execution, so a live
+    object's member still `is` the module's (params.Kind was the case that
+    bit — audit H2). A member added or removed in the edit needs a restart
+    and `error` says so.
+
+A watched module that was never imported (an optional adapter behind its
+config gate — dream, bridge, midi) is skipped, not an error.
 
 Data is watched the same way: `watchers` are objects with a ``poll(now)``
 (the preset library) that get polled on the same cadence, so a preset
@@ -36,6 +44,7 @@ import dataclasses
 import importlib
 import sys
 import time
+from enum import Enum
 from pathlib import Path
 
 # dependency order, leaves first: a change reloads its module and every
@@ -51,6 +60,27 @@ MODULES = (
     "ui_presets", "ui_lookback", "ui_bands", "ui_routing", "ui_fx", "ui_lfo", "hands.panel",
     "ui",
 )
+
+
+def _enums(mod) -> dict[str, type[Enum]]:
+    """The Enum classes a module defines (not ones it imports)."""
+    return {name: obj for name, obj in vars(mod).items()
+            if isinstance(obj, type) and issubclass(obj, Enum) and obj is not Enum
+            and obj.__module__ == mod.__name__}
+
+
+def _keep_enums(mod, kept: dict[str, type[Enum]]) -> list[str]:
+    """After a reload, put each kept Enum class back under its name so live
+    members keep matching; returns the names whose members changed."""
+    changed = []
+    for name, old in kept.items():
+        new = vars(mod).get(name)
+        if new is old or not (isinstance(new, type) and issubclass(new, Enum)):
+            continue
+        if [(m.name, m.value) for m in new] != [(m.name, m.value) for m in old]:
+            changed.append(name)
+        setattr(mod, name, old)
+    return changed
 
 
 def _backfill_dataclass(obj) -> None:
@@ -126,9 +156,16 @@ class HotReloader:
                 return False
 
         first = min(self.modules.index(name) for name, _ in changed)
+        notes = []
         try:
             for name in self.modules[first:]:
-                importlib.reload(sys.modules[f"{self.package}.{name}"])
+                mod = sys.modules.get(f"{self.package}.{name}")
+                if mod is None:
+                    continue            # an optional adapter that is off
+                kept = _enums(mod)
+                importlib.reload(mod)
+                notes += [f"{name}.{e} changed — restart to use its new members"
+                          for e in _keep_enums(mod, kept)]
         except Exception as e:  # noqa: BLE001 — a bad edit must not kill the app
             self.error = f"{type(e).__name__}: {e}"[:160]
             return False
@@ -148,7 +185,7 @@ class HotReloader:
             self.error = f"swap: {type(e).__name__}: {e}"[:160]
             return False
 
-        self.error = ""
+        self.error = "; ".join(notes)[:160]
         self.runtime_error = ""
         names = ", ".join(name for name, _ in changed)
         self.status = f"hot: {names} · {time.strftime('%H:%M:%S')}"
