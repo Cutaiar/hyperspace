@@ -634,11 +634,11 @@ def test_copy_path_round_trip_under_budget(ctx):
 
 def registry(dream=None):
     from hyperspace.analysis import Analyser
-    from hyperspace.bands import Chain
+    from hyperspace.analyzer import Analyzer
     from hyperspace.control import Control
     from hyperspace.params import build_registry
 
-    chain = Chain(Analyser())
+    chain = Analyzer(Analyser())
     audio = SimpleNamespace(chain=chain)
     return build_registry(ViewState(), Control(chain), audio, None, dream=dream)
 
@@ -713,7 +713,7 @@ def test_lookback_page_draws_headless(tmp_path):
 
     from hyperspace import ui_lookback
     from hyperspace.analysis import Analyser
-    from hyperspace.bands import Chain
+    from hyperspace.analyzer import Analyzer
     from hyperspace.control import Control
     from hyperspace.library import Library
     from hyperspace.params import build_registry
@@ -727,7 +727,7 @@ def test_lookback_page_draws_headless(tmp_path):
         io.backend_flags |= imgui.BackendFlags_.renderer_has_textures
         apply_style()
         load_fonts()
-        chain = Chain(Analyser())
+        chain = Analyzer(Analyser())
         control = Control(chain)
         audio = SimpleNamespace(chain=chain, on=False, mode="", error="", label="", sr=48000.0)
         view = ViewState()

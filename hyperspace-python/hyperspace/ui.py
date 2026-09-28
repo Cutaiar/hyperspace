@@ -35,7 +35,7 @@ from imgui_bundle import imgui
 from . import ui_bands, ui_fx, ui_lfo, ui_lookback, ui_presets, ui_routing
 from .analyzer import N_MAX
 from .audio import AudioEngine
-from .bands import CEIL, KNEE, NOM
+from .bands import CEIL, KNEE
 from .control import Control
 from .geometry import SHAPES, geom
 from .hands import panel as ui_hands
@@ -48,6 +48,7 @@ TEXT = imgui.ImVec4(0.96, 0.96, 0.96, 1.0)      # values, names: what is read fi
 DIM = imgui.ImVec4(0.70, 0.70, 0.72, 1.0)       # labels and idle state, still legible
 FAINT = imgui.ImVec4(0.58, 0.58, 0.61, 1.0)     # notes and hints, the quietest text
 WARN = imgui.ImVec4(1, 0.45, 0.35, 1)
+NOM = 1.0  # the meters' nominal line — a band working normally (the chain has no use for it)
 FILL = imgui.ImVec4(1.0, 43 / 255, 43 / 255, 0.42)  # a fader's value fill
 GHOST = imgui.ImVec4(1, 1, 1, 0.92)             # the effective value under modulation
 LINE = imgui.ImVec4(0.24, 0.24, 0.26, 1.0)      # rules, frames, idle marks — the one grey line
@@ -1194,12 +1195,18 @@ class Panel:
             self._file_dialog = None
             if picked:
                 a.start_file(picked[0])
-        if getattr(a, "devices", None) and "audio.device" in self.reg:
-            self._combo("audio.device")
+        if "audio.device" in self.reg and (getattr(a, "devices", None) or "audio.rescan" in self.reg):
+            if getattr(a, "devices", None):
+                self._combo("audio.device", width=-(button_w("rescan") + 8))
+                imgui.same_line()
+            if "audio.rescan" in self.reg:
+                self._button("audio.rescan", "rescan")
         if a.error:
             imgui.text_colored(WARN, a.error)
         elif a.on:
-            imgui.text_disabled(f"{a.label}  ·  {self.audio.sr / 1000:.0f} kHz")
+            # the analyser's rate — the track's for a file, not the capture rate
+            rate = getattr(a, "rate", getattr(a, "sr", 0.0))
+            imgui.text_disabled(f"{a.label}  ·  {rate / 1000:.1f} kHz")
         else:
             imgui.text_disabled("no source — the shape spins on its own")
 

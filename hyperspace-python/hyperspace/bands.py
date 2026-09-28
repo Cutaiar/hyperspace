@@ -4,11 +4,15 @@ Every constant keeps its reference name (ENGINEERING §4). The known input-trim
 non-monotonicity is ported as-is; the fix belongs to plan 06, not the port.
 
 The chain itself lives in analyzer.py since plan 07 (N bands, not six);
-this module keeps what it is made of — the reference band table, the
-headroom constants, the transfer functions and the per-band Params. The
-scenes are the band presets in library/band/*.json (control.SCENES names
-them). `bands.Chain` still resolves, to the analyzer, for the code that
-constructs it by that name.
+this module keeps what it is made of — the reference band table (the six
+edges, planes and directions the legacy6 preset and the parity oracle
+need), the headroom constants, the transfer functions and the per-band
+Params. The scenes are the band presets in library/band/*.json
+(control.SCENES names them). The reference's per-band attack / release
+windows live once, in `default_params()`, and `balanced.json` is pinned
+to that table by a test. The constants that belong to other layers moved
+out in plan 11: `DRIVE` (fader → rotation rate) is `params.DRIVE`, the
+meter's nominal line is `ui.NOM`.
 """
 
 from __future__ import annotations
@@ -20,32 +24,31 @@ from dataclasses import dataclass, field
 
 @dataclass
 class Band:
+    """One reference band: its edges and the plane it drove. The attack /
+    release windows are not here — `default_params()` is their one home."""
+
     id: str
     plane: int
     pl: str
     lo: float
     hi: float
-    atk: float
-    rel: float
     dir: int
 
 
 BANDS = [
-    Band("SUB", 5, "ZW", 20, 60, 0.250, 0.850, 1),
-    Band("BASS", 3, "XW", 60, 160, 0.015, 0.130, 1),
-    Band("MIDB", 4, "YW", 160, 400, 0.006, 0.070, -1),
-    Band("MID", 0, "XY", 400, 1200, 0.050, 0.300, -1),
-    Band("UPR", 1, "XZ", 1200, 4000, 0.090, 0.500, 1),
-    Band("AIR", 2, "YZ", 4000, 14000, 0.180, 0.900, -1),
+    Band("SUB", 5, "ZW", 20, 60, 1),
+    Band("BASS", 3, "XW", 60, 160, 1),
+    Band("MIDB", 4, "YW", 160, 400, -1),
+    Band("MID", 0, "XY", 400, 1200, -1),
+    Band("UPR", 1, "XZ", 1200, 4000, 1),
+    Band("AIR", 2, "YZ", 4000, 14000, -1),
 ]
 
 # -------------------------------------------------------------- constants
 
-NOM = 1.0        # nominal — a band working normally
 KNEE = 1.25      # where the soft ceiling starts to bend
-HEAD = 2.6       # asymptotic ceiling, input / transfer signal
 CEIL = 2.6       # asymptotic ceiling, fader output
-DRIVE = 3.2      # fader → rotation rate
+HEAD = CEIL      # the reference's name for the same ceiling on the input / transfer signal
 U_LO, U_SPAN = -80.0, 56.0
 PK_TAU, VAL_TAU = 2.5, 6.0
 PK_MIN, SPAN_MIN = 0.10, 0.04
@@ -203,14 +206,3 @@ def default_band_params() -> Params:
 # library/band/*.json (control.SCENES names them in combo order); since
 # plan 11 this module holds no copy of them.
 
-
-# ------------------------------------------------------------------ chain
-
-def __getattr__(name: str):
-    """`bands.Chain` is the analyzer (plan 07): resolved lazily because
-    analyzer.py imports this module for the constants above."""
-    if name == "Chain":
-        from .analyzer import Analyzer
-
-        return Analyzer
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

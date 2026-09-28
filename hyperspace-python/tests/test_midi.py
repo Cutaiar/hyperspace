@@ -7,7 +7,7 @@ import pytest
 
 from hyperspace import apc40, lfo, tempo
 from hyperspace.analysis import Analyser
-from hyperspace.bands import Chain
+from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
 from hyperspace.library import Library
 from hyperspace.midi import PICKUP_TOL, Binding, MidiIO, MidiMap
@@ -44,7 +44,7 @@ def note(n, vel=127, channel=0):
 
 @pytest.fixture()
 def rig(tmp_path):
-    chain = Chain(Analyser())
+    chain = Analyzer(Analyser())
     control = Control(chain)
     audio = SimpleNamespace(chain=chain)
     view = ViewState()

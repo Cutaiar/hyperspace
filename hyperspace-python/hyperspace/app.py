@@ -425,6 +425,7 @@ def main() -> None:
 
     cfg = config.load()
     audio = AudioEngine()
+    audio.rescan()                         # the one PortAudio scan, here at startup — never mid-set on a first read
     control = Control(audio.chain)
     library = Library()                    # presets, projects, the theme bank (its project's)
     # dream.* drives the renderer's look-back (lookback.py); the post pass

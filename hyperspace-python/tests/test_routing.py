@@ -27,13 +27,13 @@ from test_analyzer import fixture_wavs, frames  # noqa: F401 — the fixture, re
 from hyperspace import apc40, lfo, routing, tempo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer, legacy_layout
-from hyperspace.bands import BANDS, CEIL, DRIVE, default_params
+from hyperspace.bands import BANDS, CEIL, default_params
 from hyperspace.control import Control
 from hyperspace.geometry import RATE
 from hyperspace.library import Library
 from hyperspace.offline import load_wav
 from hyperspace.overlay import Output
-from hyperspace.params import PLANES, ROT_RATE_MAX, Registry, build_registry
+from hyperspace.params import DRIVE, PLANES, ROT_RATE_MAX, Registry, build_registry
 from hyperspace.render import N_MOD, ViewState
 from hyperspace.routing import (
     MOD_OPS,

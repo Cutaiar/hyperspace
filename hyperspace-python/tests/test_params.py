@@ -6,7 +6,8 @@ from types import SimpleNamespace
 import pytest
 
 from hyperspace.analysis import Analyser
-from hyperspace.bands import BANDS, Chain
+from hyperspace.analyzer import Analyzer
+from hyperspace.bands import BANDS
 from hyperspace.control import SCENES, Control
 from hyperspace.geometry import SHAPES
 from hyperspace.library import Library
@@ -15,7 +16,7 @@ from hyperspace.render import ViewState
 
 
 def make(tmp_path):
-    chain = Chain(Analyser())
+    chain = Analyzer(Analyser())
     control = Control(chain)
     audio = SimpleNamespace(chain=chain)
     view = ViewState()
@@ -226,7 +227,7 @@ def test_selected_band_alias_follows_selection(rig):
 def test_params_survive_a_chain_swap(rig):
     """Getters resolve audio.chain live — a source attach replaces it."""
     reg, _view, control, audio, _ = rig
-    new = Chain(Analyser())
+    new = Analyzer(Analyser())
     new.gain = 3.3
     audio.chain = new
     control.chain = new

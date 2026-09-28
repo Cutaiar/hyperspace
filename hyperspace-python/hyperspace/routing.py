@@ -211,9 +211,9 @@ from pathlib import Path
 import numpy as np
 
 from . import apc40
-from .bands import BANDS, CEIL, DRIVE
+from .bands import BANDS, CEIL
 from .lfo import SHAPES, SYNCS
-from .params import PLANES, ROT_RATE_MAX, ROUTING_GROUPS, Kind, Param, Registry
+from .params import DRIVE, PLANES, ROT_RATE_MAX, ROUTING_GROUPS, Kind, Param, Registry
 
 SCHEMA = "hyperspace.bindings/2"
 SCHEMA_V1 = "hyperspace.bindings/1"
@@ -654,7 +654,8 @@ PRESET_DIR = "bindings"
 
 def legacy_planedrive(lanes, gain: float = 1.0) -> np.ndarray:
     """The reference's PLANEDRIVE from six lanes — what the legacy6 routes
-    must land on rot.rate.*; offline.py's per-frame `drive` history."""
+    must land on rot.rate.* (tests/test_core.py computes it from the
+    offline driver's `out`; offline.py itself ends at the lanes)."""
     drive = np.ones(6)
     for i, b in enumerate(BANDS[: len(lanes)]):
         drive[b.plane] = b.dir * lanes[i] * DRIVE * gain

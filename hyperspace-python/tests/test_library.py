@@ -12,7 +12,8 @@ import pytest
 
 from hyperspace import config, library
 from hyperspace.analysis import Analyser
-from hyperspace.bands import BANDS, Chain
+from hyperspace.analyzer import Analyzer
+from hyperspace.bands import BANDS
 from hyperspace.control import SCENES, Control
 from hyperspace.library import FACTORY, Library, LibraryError, legacy_slot, migrate_doc, slug
 from hyperspace.params import build_registry
@@ -35,7 +36,7 @@ def edit(path, fn):
 
 
 def make(home):
-    chain = Chain(Analyser())
+    chain = Analyzer(Analyser())
     control = Control(chain)
     audio = SimpleNamespace(chain=chain)
     view = ViewState()

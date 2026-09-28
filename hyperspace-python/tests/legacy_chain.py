@@ -20,7 +20,6 @@ from hyperspace.bands import (
     COUPLE,
     DEV_AIM,
     DEV_MIN,
-    DRIVE,
     FAST_A,
     FAST_R,
     FLUX_G,
@@ -47,6 +46,7 @@ from hyperspace.bands import (
     default_params,
     soft_ceil,
 )
+from hyperspace.params import DRIVE
 
 
 class LegacyChain:

@@ -6,7 +6,7 @@ import pytest
 
 from hyperspace import tapers
 from hyperspace.analysis import Analyser
-from hyperspace.bands import Chain
+from hyperspace.analyzer import Analyzer
 from hyperspace.control import SCENES, UNDO_S, Control
 from hyperspace.geometry import SHAPES, faces
 
@@ -67,7 +67,7 @@ class FakeClock:
 @pytest.fixture()
 def ctl():
     clock = FakeClock()
-    c = Control(Chain(Analyser()), clock=clock)
+    c = Control(Analyzer(Analyser()), clock=clock)
     return c, clock
 
 

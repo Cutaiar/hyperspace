@@ -560,3 +560,22 @@ def test_audio_engine_carries_the_layout_across_sources():
     new = eng._fresh_chain()
     assert new.n == 7 and new.layout() == eng.chain.layout()
     assert new.params[0].atk == 0.123 and new.gain == 2.0 and new.warm == 0
+
+
+def test_balanced_is_the_default_table_and_the_reference_edges():
+    """The reference's per-band windows live once in code (`default_params`);
+    the Balanced scene file is the same numbers as a preset, and its layout
+    is the six reference bands (audit A5: one table, the file pinned to it)."""
+    doc = factory_doc("band", "Balanced")
+    rows = A.scene_rows(doc["values"])
+    table = default_params()
+    assert sorted(rows) == list(range(6))
+    keys = ("fn", "trim", "pre", "post", "atk", "dec", "thr", "exp", "trn")
+    for i, p in enumerate(table):
+        for key in keys:
+            assert rows[i][key] == getattr(p, key), f"band {i} {key}: {rows[i][key]} vs {getattr(p, key)}"
+    lay = doc["layout"]["bands"]
+    assert [r["name"] for r in lay] == [b.id for b in BANDS]
+    for r, b in zip(lay, BANDS):
+        f, q = centre_q(b.lo, b.hi)
+        assert r["f"] == pytest.approx(f) and r["q"] == pytest.approx(q)
