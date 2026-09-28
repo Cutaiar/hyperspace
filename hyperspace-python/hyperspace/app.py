@@ -197,8 +197,7 @@ def _open_midi(reg: Registry, cfg: dict, table: Bindings, learn):
         print(f"midi: adapter unavailable ({e})", file=sys.stderr)
         return None
     try:
-        mapping = midi.MidiMap(table=table)
-        return midi.MidiIO(reg, mapping, port=mc.get("port"), profile=mc.get("profile", "apc40"),
+        return midi.MidiIO(reg, table, port=mc.get("port"), profile=mc.get("profile", "apc40"),
                            learner=learn)
     except Exception as e:  # noqa: BLE001 — a broken adapter must not stop the show
         print(f"midi: {e}", file=sys.stderr)
@@ -512,7 +511,7 @@ def main() -> None:
         (clock, "tempo", "Clock"),
         (lfos, "lfo", "LFOs"),
         *[(lf, "lfo", "LFO") for lf in lfos.lfos],
-        *([(midi_io, "midi", "MidiIO"), (midi_io.map, "midi", "MidiMap")] if midi_io else []),
+        *([(midi_io, "midi", "MidiIO")] if midi_io else []),
         *([(bridge_io, "bridge", "Bridge")] if bridge_io else []),
         *([(hand_settings, "hands.core", "HandSettings")] if hand_settings else []),
         *([(hands_io, "hands.core", "HandsIO")] if hands_io else []),

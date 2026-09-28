@@ -10,10 +10,11 @@ from hyperspace.analysis import Analyser
 from hyperspace.bands import Chain
 from hyperspace.control import Control
 from hyperspace.library import Library
-from hyperspace.midi import PICKUP_TOL, Binding, MidiIO, MidiMap
+from hyperspace.midi import PICKUP_TOL, Binding, MidiIO
 from hyperspace.overlay import Output
 from hyperspace.params import Kind, build_registry
 from hyperspace.render import ViewState
+from hyperspace.routing import Bindings
 
 
 class FakeIn:
@@ -62,7 +63,7 @@ def rig(tmp_path):
     tempo.register(reg, clock)
     lfo.register(reg, lfo.LFOs(), clock)
     inp, out = FakeIn(), FakeOut()
-    m = MidiIO(reg, MidiMap(tmp_path / "midi_map.json"), inp=inp, out=out)
+    m = MidiIO(reg, path=tmp_path / "midi_map.json", inp=inp, out=out)
     return SimpleNamespace(reg=reg, view=view, control=control, audio=audio,
                            presets=presets, midi=m, inp=inp, out=out, clock=clock)
 
@@ -76,14 +77,14 @@ def push(r, *msgs):
 
 def test_default_map_binds_only_real_params(rig):
     ids = set(rig.reg.ids())
-    for b in rig.midi.map.bindings:
+    for b in rig.midi.bindings:
         assert b.target in ids, b
         if b.op == "set" and rig.reg[b.target].kind is Kind.ENUM:
             assert 0 <= int(b.value) < len(rig.reg[b.target].names), b
 
 
 def test_default_map_has_no_two_controls_on_one_key(rig):
-    keys = [b.key for b in rig.midi.map.bindings]
+    keys = [b.key for b in rig.midi.bindings]
     assert len(keys) == len(set(keys))
 
 
@@ -125,7 +126,7 @@ def test_pickup_catches_when_knob_reaches_value(rig):
 
 
 def test_fader_without_pickup_jumps(rig):
-    for x in rig.midi.map.bindings:
+    for x in rig.midi.bindings:
         if x.target == "master.gain":
             x.pickup = False
     g = rig.reg["master.gain"]
@@ -144,7 +145,7 @@ def test_relative_encoder_steps_shape(rig):
 
 
 def test_faders_on_channels_pick_their_band(rig):
-    for x in rig.midi.map.bindings:
+    for x in rig.midi.bindings:
         x.pickup = False
     push(rig, cc(apc40.CC_FADER, 0, channel=2))
     assert rig.audio.chain.params[2].post == 0.0
@@ -241,7 +242,7 @@ def test_metronome_fires_the_trigger_and_blinks_on_the_beat(rig):
     c.tick(3.3 + 0.5)                            # the next beat
     rig.midi.poll()
     assert led() == 1
-    assert len(rig.midi.map.route("note", 0, apc40.N_METRO)) == 1
+    assert len(rig.midi.route("note", 0, apc40.N_METRO)) == 1
 
 
 def test_theme_grid_lights_the_active_theme(rig):
@@ -345,11 +346,11 @@ def test_learn_binds_next_message_and_persists(rig, tmp_path):
     assert "CC 87" in b.describe()
     # the learning message itself did not move the param
     assert rig.view.inst_amp == 0.25
-    # persisted, and read back by a fresh map
-    m2 = MidiMap(tmp_path / "midi_map.json")
-    assert any(x.target == "view.inst_amp" and x.number == 0x57 for x in m2.bindings)
+    # persisted, and read back by a fresh table
+    m2 = Bindings.load(tmp_path / "midi_map.json")
+    assert any(x.target == "view.inst_amp" and x.number == 0x57 for x in m2.midi())
     # the old track-knob binding for the same param is gone
-    assert not any(x.target == "view.inst_amp" and x.number == 0x34 for x in m2.bindings)
+    assert not any(x.target == "view.inst_amp" and x.number == 0x34 for x in m2.midi())
 
 
 def test_learn_a_button_on_a_toggle(rig):
@@ -368,7 +369,7 @@ def test_learn_takes_over_a_key_from_its_old_param(rig):
     m = rig.midi
     m.learner.arm("view.pattern_mix")
     push(rig, cc(0x30, 64))                   # the brightness knob
-    assert not [x for x in m.map.bindings if x.target == "view.bright" and x.kind == "cc"]
+    assert not [x for x in m.bindings if x.target == "view.bright" and x.kind == "cc"]
     assert m.binding_for("view.bright").kind == "note"  # its step buttons survive
     assert m.binding_for("view.pattern_mix").number == 0x30
     m.unbind("view.pattern_mix")
@@ -392,7 +393,7 @@ def test_a_hand_learn_reaches_the_shared_learn_object(rig):
     assert m.learner.learning == "view.inst_amp"
     m.learner.learn_source("hand:3", when="hand:14")
     assert m.learner.learning is None and m.learner.pending is None
-    b = m.map.table.owner("view.inst_amp")
+    b = m.table.owner("view.inst_amp")
     assert (b.source, b.op, b.value, b.when, b.pickup) == ("hand:3", "position", 1.0, "hand:14", True)
     assert m.binding_for("view.inst_amp").is_midi            # the knob row is still there
     assert "learned view.inst_amp" in m.learner.last
@@ -402,18 +403,18 @@ def test_a_hand_learn_reaches_the_shared_learn_object(rig):
 
 def test_map_round_trips_json(tmp_path):
     path = tmp_path / "m.json"
-    mm = MidiMap(path)
-    n = len(mm.bindings)
+    mm = Bindings.load(path)
+    n = len(mm.midi())
     mm.bind(Binding("pitch:3", "view.zoom", "abs"))
-    mm2 = MidiMap(path)
-    assert len(mm2.bindings) == n + 1
+    mm2 = Bindings.load(path)
+    assert len(mm2.midi()) == n + 1
     b = mm2.for_param("view.zoom")
     assert b.kind == "pitch" and b.channel == 3 and not hasattr(b.to_json(), "caught")
     assert "caught" not in b.to_json()
 
 
 def test_pitch_bend(rig):
-    rig.midi.map.bind(Binding("pitch:0", "camera.pitch", "abs", pickup=False))
+    rig.midi.bind(Binding("pitch:0", "camera.pitch", "abs", pickup=False))
     rig.inp.queue.append(mido.Message("pitchwheel", channel=0, pitch=8191))
     rig.midi.poll()
     assert rig.reg["camera.pitch"].norm == pytest.approx(1.0, abs=1e-3)

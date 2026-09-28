@@ -44,8 +44,8 @@ the METRONOME LED blinks on the beat through ``lfo.trigger``).
 Bindings persist with every other source's in bindings.json (routing.py;
 an old midi_map.json is migrated on first run). With no file the device
 profile's default map is used; right-click → Learn on any panel control
-writes the file. `MidiMap` is the MIDI-side view of that table — what
-MidiIO routes through and the panel edits. The profile (apc40.py is the
+writes the file. `MidiIO.bindings` is the MIDI-side view of that table —
+what this adapter routes through and the panel edits. The profile (apc40.py is the
 first) knows the device's port name, its power-up SysEx, which controls
 have rings, and what velocities its LEDs take.
 """
@@ -61,57 +61,13 @@ import mido
 from . import apc40
 from .learn import Learn
 from .params import Kind, Param, Registry
-from .routing import Binding, Bindings, act, bindings_path
+from .routing import Binding, Bindings, act
 
-PROFILES = {"apc40": apc40}
-MAP_FILE = bindings_path()
+PROFILES = {"apc40": apc40}          # config's `[midi] profile` names one of these
 RECONNECT_S = 2.0
 PICKUP_TOL = 1.5 / 127   # a knob "reaches" the value within this
 
-__all__ = ["PICKUP_TOL", "Binding", "MidiIO", "MidiMap", "Ports", "find_port"]
-
-
-class MidiMap:
-    """The MIDI rows of the binding table, indexed for routing.
-
-    Wraps a routing.Bindings — the app's shared one, or a table loaded
-    from `path` (a bindings.json; an old midi_map.json is migrated).
-    """
-
-    def __init__(self, path: Path | None = MAP_FILE, profile: str = "apc40",
-                 table: Bindings | None = None):
-        self.table = table if table is not None else Bindings.load(path, profile)
-
-    @property
-    def path(self) -> Path | None:
-        return self.table.path
-
-    @property
-    def profile(self) -> str:
-        return self.table.profile
-
-    @property
-    def error(self) -> str:
-        return self.table.error
-
-    @property
-    def bindings(self) -> list[Binding]:
-        return self.table.midi()
-
-    def route(self, kind: str, channel: int, number: int) -> list[Binding]:
-        return self.table.route(kind, channel, number)
-
-    def for_param(self, pid: str) -> Binding | None:
-        return self.table.for_param(pid)
-
-    def bind(self, b: Binding) -> None:
-        self.table.bind(b)
-
-    def unbind(self, pid: str) -> None:
-        self.table.unbind(pid)
-
-    def write(self) -> None:
-        self.table.write()
+__all__ = ["PICKUP_TOL", "Binding", "MidiIO", "Ports", "find_port"]
 
 
 def find_port(names: list[str], match: str) -> str | None:
@@ -212,19 +168,22 @@ class MidiIO:
     on their own if the device disappears (`Ports`).
     """
 
-    def __init__(self, registry: Registry, mapping: MidiMap | None = None, *,
-                 port: str | None = None, profile: str = "apc40", inp=None, out=None,
-                 clock=time.monotonic, learner: Learn | None = None):
+    def __init__(self, registry: Registry, table: Bindings | None = None, *,
+                 path: Path | None = None, port: str | None = None, profile: str = "apc40",
+                 inp=None, out=None, clock=time.monotonic, learner: Learn | None = None):
         self.reg = registry
-        self.map = mapping if mapping is not None else MidiMap(profile=profile)
-        self.profile = PROFILES.get(self.map.profile) or PROFILES[profile]
+        # the binding table — the app's shared one, or one loaded from
+        # `path` (a bindings.json; an old midi_map.json beside it is
+        # migrated), else the factory table; this adapter reads its MIDI rows
+        self.table = table if table is not None else Bindings.load(path, profile)
+        self.profile = PROFILES.get(self.table.profile) or PROFILES[profile]
         self.port_match = port or self.profile.PORT_MATCH
         self.ports = Ports(self.port_match, self.port_match, inp=inp, out=out, clock=clock)
         self.last = ""          # last message seen, for the status line
         # the armed param and the held question (learn.py) — the app's
         # shared one, so a hand can complete a learn this adapter never
         # sees; a bare adapter (tests, the probe) makes its own
-        self.learner = learner if learner is not None else Learn(registry, self.map.table)
+        self.learner = learner if learner is not None else Learn(registry, self.table)
         self._writes: dict[str, float] = {}  # param → norm we last wrote / saw
         if self.ports.injected:
             self._enter()
@@ -255,12 +214,12 @@ class MidiIO:
 
     def _connected(self) -> None:
         print(f"midi: {self.name} ({self.profile.__name__.rsplit('.', 1)[-1]}, "
-              f"{len(self.map.bindings)} bindings)", file=sys.stderr)
+              f"{len(self.bindings)} bindings)", file=sys.stderr)
         self._enter()
 
     def _enter(self) -> None:
         """Device power-up: mode SysEx and every ring/LED at its true value."""
-        for b in self.map.bindings:
+        for b in self.bindings:
             b.last_out = None
             b.caught = False
         if self.out is not None:
@@ -280,16 +239,35 @@ class MidiIO:
     def _send(self, msg) -> None:
         self.ports.send(msg)
 
+    # ---- the table's MIDI rows ----
+
+    @property
+    def bindings(self) -> list[Binding]:
+        """The MIDI rows of the shared table (`Bindings.midi`)."""
+        return self.table.midi()
+
+    def route(self, kind: str, channel: int, number: int) -> list[Binding]:
+        return self.table.route(kind, channel, number)
+
+    def for_param(self, pid: str) -> Binding | None:
+        return self.table.for_param(pid)
+
+    def bind(self, b: Binding) -> None:
+        self.table.bind(b)
+
+    def write(self) -> None:
+        self.table.write()
+
     # ---- learn / bindings ----
 
     def binding_for(self, pid: str) -> Binding | None:
-        return self.map.for_param(pid)
+        return self.table.for_param(pid)
 
     def unbind(self, pid: str) -> None:
-        b = self.map.for_param(pid)
+        b = self.table.for_param(pid)
         if b is not None and b.feedback:
             self._dark(b)
-        self.map.unbind(pid)
+        self.table.unbind(pid)
 
     def _learned(self, kind: str, channel: int, number: int, value: int) -> None:
         """A message while armed: the MIDI row. It binds the param as
@@ -307,17 +285,17 @@ class MidiIO:
                 b.op = "toggle"
         elif kind == "note":
             b.op = "toggle"
-        old = self.map.for_param(pid)
+        old = self.table.for_param(pid)
         if old is not None and old.feedback:
             self._dark(old)
-        for x in self.map.route(kind, channel, number):
+        for x in self.table.route(kind, channel, number):
             if x.feedback:
                 self._dark(x)
         fb = self.profile.feedback_for(kind, channel, number)
         if fb:
             b.feedback, b.ring = fb["feedback"], fb.get("ring", b.ring)
             b.on, b.off = fb.get("on", b.on), fb.get("off", b.off)
-        self.map.bind(b)
+        self.table.bind(b)
         self.learner.last = f"learned {pid} ← {b.describe()}"
 
     # ---- per frame ----
@@ -335,7 +313,7 @@ class MidiIO:
 
     def _uncatch_moved(self) -> None:
         """A param that moved without us re-arms pickup on its knob."""
-        for b in self.map.bindings:
+        for b in self.bindings:
             if b.kind not in ("cc", "pitch") or b.op != "abs" or not b.pickup:
                 continue
             p = self.reg.get(b.target)
@@ -362,7 +340,7 @@ class MidiIO:
             if kind != "note" or value > 0:
                 self._learned(kind, ch, number, value)
             return
-        for b in self.map.route(kind, ch, number):
+        for b in self.table.route(kind, ch, number):
             p = self.reg.get(b.target)
             if p is not None and b.enabled:
                 self._apply(b, p, value)
@@ -431,7 +409,7 @@ class MidiIO:
         """Push every bound param's state to its ring or LED, change-gated."""
         if self.out is None:
             return
-        for b in self.map.bindings:
+        for b in self.bindings:
             if not b.feedback:
                 continue
             p = self.reg.get(b.target)
@@ -482,5 +460,5 @@ class MidiIO:
 
     def on_reload(self) -> None:
         """Hot reload: re-send everything so the surface matches the code."""
-        for b in self.map.bindings:
+        for b in self.bindings:
             b.last_out = None

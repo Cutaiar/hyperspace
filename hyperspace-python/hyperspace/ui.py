@@ -1294,7 +1294,7 @@ class Panel:
         if not m.on:
             imgui.text_disabled("MIDI: no device")
             return
-        imgui.text_disabled(f"MIDI: {m.name}  ·  {len(m.map.bindings)} bindings")
+        imgui.text_disabled(f"MIDI: {m.name}  ·  {len(m.bindings)} bindings")
         if m.last:
             imgui.same_line()
             imgui.text_disabled(f"·  {m.last}")

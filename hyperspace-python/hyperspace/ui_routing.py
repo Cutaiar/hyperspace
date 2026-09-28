@@ -111,7 +111,7 @@ def router_of(panel) -> Router | None:
     """The app's router, or one over the MIDI adapter's (shared) table."""
     r = getattr(panel, "router", None)
     if r is None and panel.midi is not None:
-        r = panel.router = Router(panel.reg, panel.midi.map.table)
+        r = panel.router = Router(panel.reg, panel.midi.table)
     return r
 
 

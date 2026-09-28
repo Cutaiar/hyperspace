@@ -774,12 +774,19 @@ def test_apply_preset_replaces_routes_and_lands_bases(tmp_path):
 
 
 def test_midi_view_shares_the_table(tmp_path):
-    """midi.MidiMap over the app's table: a learn lands in bindings.json
+    """midi.MidiIO over the app's table: a learn lands in bindings.json
     next to the keys, and the MIDI view sees only MIDI rows."""
-    from hyperspace.midi import MidiMap
+    from hyperspace.midi import MidiIO
+
+    class Quiet:                 # a port that never speaks
+        def iter_pending(self):
+            return iter(())
+
+        def send(self, msg):
+            pass
 
     t = Bindings.factory(path=bindings_path(tmp_path))
-    m = MidiMap(table=t)
+    m = MidiIO(rig(tmp_path=tmp_path, full=True).reg, t, inp=Quiet(), out=Quiet())
     assert len(m.bindings) == 113 and all(b.is_midi for b in m.bindings)
     m.bind(Binding("cc:0:99", "view.zoom", "abs"))
     assert m.for_param("view.zoom").number == 99
