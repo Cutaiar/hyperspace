@@ -110,3 +110,5 @@ clicks back for orbiting. The crossfader fades the ground from see-through
 to black. The pre-split `overlay.*` ids remain as aliases, so old MIDI maps
 keep working. `[output] fullscreen = true` or `on_start = true` (overlay) in
 `config.toml` launches straight into a mode; `monitor = 1` picks the screen.
+An older `[overlay]` section is read as the same thing (with a note asking
+for the rename); the keys are documented in `hyperspace/config.py`.
