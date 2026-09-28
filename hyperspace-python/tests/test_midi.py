@@ -54,7 +54,6 @@ def rig(tmp_path):
     lib.attach(reg)
     reg.toggle("ui.panel", "Panel", lambda: True, lambda v: None)
     reg.toggle("ui.cheatsheet", "Sheet", lambda: True, lambda v: None)
-    reg.toggle("audio.mic", "Mic", lambda: False, lambda v: None)
     reg.trigger("audio.restart", "Restart", lambda: None)
     reg.trigger("audio.stop", "Stop", lambda: None)
     reg.toggle("audio.play", "Play", lambda: False, lambda v: None)

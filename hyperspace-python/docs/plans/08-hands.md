@@ -201,7 +201,7 @@ checks every shipped row still names a real param and a real lane.
 - **The HANDS page** has six parts:
   - the preset strip, the tracker/port status and the last message out
   - the box from above: palms as dots (left white, right red), size = height
-  - the eight pinch switches, each with its live gap
+  - the eight pinch switches beside the box, each with its live gap
   - a live row per axis: output bar, a red hairline where the hand is, a
     tick at the rest value, and the MIDI out and value
   - the selected axis's editor, with its transfer curve drawn and the

@@ -120,13 +120,15 @@ def _home(panel):
     return lib.home if lib is not None else None
 
 
-def _snapshot(router: Router) -> list[dict]:
+def _sig(router: Router) -> list[dict]:
+    """The performer rows as they would be written: the page's record of
+    what a preset loaded and of what is on disk."""
     return [b.to_json() for b in router.table.routes()]
 
 
 def dirty(panel, router: Router) -> bool:
     st = _state(panel)
-    return st["snap"] is not None and _snapshot(router) != st["snap"]
+    return st["snap"] is not None and _sig(router) != st["snap"]
 
 
 def files(panel) -> dict:
@@ -161,7 +163,7 @@ def load(panel, router: Router, name: str) -> None:
     except (OSError, ValueError, KeyError) as e:
         st["error"] = f"routing: {e}"
         return
-    st["current"], st["snap"], st["error"] = name, _snapshot(router), ""
+    st["current"], st["snap"], st["error"] = name, _sig(router), ""
     if missing and panel.library is not None:
         panel.library.report(missing, f"routing preset {name}")
 
@@ -188,7 +190,7 @@ def save_as(panel, router: Router, name: str) -> None:
     except OSError as e:
         st["error"] = f"routing: {e}"
         return
-    st["current"], st["snap"], st["error"] = path.name[:-5], _snapshot(router), ""
+    st["current"], st["snap"], st["error"] = path.name[:-5], _sig(router), ""
     invalidate(panel)
 
 
@@ -207,10 +209,6 @@ def add_route(panel, target: str, source: str | None = None, depth: float = 0.5,
         return None
     _write(panel, router)
     return b
-
-
-def _sig(router: Router) -> list[dict]:
-    return [b.to_json() for b in router.table.routes()]
 
 
 def _write(panel, router: Router) -> None:
@@ -409,7 +407,7 @@ def strip(panel, router: Router) -> None:
     if ui.chip("reset"):
         load(panel, router, "default")
     if imgui.is_item_hovered():
-        imgui.set_tooltip("Back to the factory routes — legacy 6 on the pattern base of 1")
+        imgui.set_tooltip("Back to the factory routes (the default preset); the bases stay")
     imgui.pop_id()
 
 
@@ -669,17 +667,16 @@ def _live_bar(panel, router: Router, b: Binding, p: Param | None) -> None:
     h = imgui.get_frame_height()
     pos = imgui.get_cursor_screen_pos()
     dl = imgui.get_window_draw_list()
-    u32 = imgui.color_convert_float4_to_u32
     x0, y0, x1, y1 = pos.x, pos.y + 3, pos.x + BAR_W, pos.y + h - 3
     dl.add_rect(imgui.ImVec2(x0, y0), imgui.ImVec2(x1, y1),
-                u32(ui.LINE), 4.0)
+                ui.u32(ui.LINE), 4.0)
     if u is not None:
         w = (x1 - x0 - 2) * min(max(u, 0.0), 1.0)
         dl.add_rect_filled(imgui.ImVec2(x0 + 1, y0 + 1), imgui.ImVec2(x0 + 1 + w, y1 - 1),
-                           u32(imgui.ImVec4(0.92, 0.92, 0.92, 0.85)), 3.0)
+                           ui.u32(imgui.ImVec4(0.92, 0.92, 0.92, 0.85)), 3.0)
     if p is not None and p.modulated:
         x = x0 + 1 + (x1 - x0 - 2) * p.eff_norm
-        dl.add_line(imgui.ImVec2(x, y0), imgui.ImVec2(x, y1), u32(ui.RED), 2.0)
+        dl.add_line(imgui.ImVec2(x, y0), imgui.ImVec2(x, y1), ui.u32(ui.RED), 2.0)
         panel.ghosts += 1
     imgui.dummy(imgui.ImVec2(BAR_W, h))
     if imgui.is_item_hovered():
