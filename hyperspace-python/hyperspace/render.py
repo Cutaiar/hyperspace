@@ -354,38 +354,33 @@ class Renderer:
         ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
 
     def _build_wire_programs(self) -> None:
+        """Compile the line, point and coverage programs and their VAOs; the
+        live ones are replaced only once every new one exists, so a shader
+        edit that fails to compile leaves the last good set drawing."""
         ctx = self.ctx
-        self._lines = ctx.program(vertex_shader=LINE_VS, fragment_shader=LINE_FS)
-        self._points = ctx.program(vertex_shader=POINT_VS, fragment_shader=POINT_FS)
-        self._points["u_color"].value = RED
-        self._lvao = ctx.vertex_array(self._lines, [(self._lbuf, "2f 1f", "in_pos", "in_alpha")])
+        lines = ctx.program(vertex_shader=LINE_VS, fragment_shader=LINE_FS)
+        points = ctx.program(vertex_shader=POINT_VS, fragment_shader=POINT_FS)
+        points["u_color"].value = RED
+        lvao = ctx.vertex_array(lines, [(self._lbuf, "2f 1f", "in_pos", "in_alpha")])
         # the coverage pass reads the face buffer's position and divisor only
-        self._cover_prog = ctx.program(vertex_shader=COVER_VS, fragment_shader=COVER_FS)
-        self._cvao = ctx.vertex_array(self._cover_prog,
-                                      [(self._fbuf, "2f 1f 16x", "in_pos", "in_wc")])
-        self._pvao = ctx.vertex_array(
-            self._points, [(self._pbuf, "2f 1f 1f", "in_pos", "in_size", "in_alpha")]
-        )
+        cover_prog = ctx.program(vertex_shader=COVER_VS, fragment_shader=COVER_FS)
+        cvao = ctx.vertex_array(cover_prog, [(self._fbuf, "2f 1f 16x", "in_pos", "in_wc")])
+        pvao = ctx.vertex_array(points, [(self._pbuf, "2f 1f 1f", "in_pos", "in_size", "in_alpha")])
+        self._lines, self._points, self._lvao, self._cover_prog, self._cvao, self._pvao = (
+            lines, points, lvao, cover_prog, cvao, pvao)
 
     def on_reload(self) -> None:
         """Hot-swap hook (hotreload.py): recompile every GL program so edits
-        to the shader strings in this module land; the buffers persist."""
-        # attributes newer than this live instance's __init__
-        if not hasattr(self, "_bmp_tex"):
-            self.bitmap_error, self._bmp_tex, self._bmp_file = "", None, ""
-        if not hasattr(self, "lookback"):
-            self.scene, self.lookback = SceneTarget(self.ctx), Lookback(self.ctx)
-            self._blank = self.ctx.texture((1, 1), 4)
-        if not hasattr(self, "fx"):
-            self.fx = FxChain(self.ctx)
-        olds = [self._lvao, self._pvao, self._lines, self._points]
-        if hasattr(self, "_cvao"):
-            olds += [self._cvao, self._cover_prog]
-        else:
-            self.cover, self._face_verts = CoverTarget(self.ctx), 0
+        to the shader strings in this module land; the buffers persist. The
+        old programs are released only after the new ones compiled, so a
+        bad edit keeps the last good set (the face program already does
+        this). An attribute a newer __init__ would have added is missing
+        until a restart, and the reloader reports the AttributeError rather
+        than this hook guessing at a value (audit H3)."""
+        olds = (self._lvao, self._pvao, self._cvao, self._lines, self._points, self._cover_prog)
+        self._build_wire_programs()
         for res in olds:
             res.release()
-        self._build_wire_programs()
         self._build_face_program()
 
     def _sync_bitmap(self, path: str) -> None:
