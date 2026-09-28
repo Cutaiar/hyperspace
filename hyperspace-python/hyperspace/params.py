@@ -61,7 +61,7 @@ from typing import Any
 
 from . import tapers
 from .analyzer import CURVES, F_HI, F_LO, Q_HI, Q_LO
-from .bands import CEIL, DRIVE, SHAPERS
+from .bands import CEIL, SHAPERS
 from .fx import FxState
 from .fx import declare as declare_fx
 from .geometry import SHAPES
@@ -84,6 +84,11 @@ N_MACROS = 8     # macro.1–8: knobs that exist to be a route's scale and to be
 # list — so a theme change never moves a macro under a route
 ROUTING_GROUPS = ("macro",)
 
+# the reference's fader → rotation-rate factor (its PLANEDRIVE was
+# dir · out · DRIVE · gain). It lives here, not in the chain, because it is
+# a routing constant: the rate range below and the legacy6 routes
+# (routing.ROT_DEPTH) both derive from it, and routing.py imports params.
+DRIVE = 3.2
 # rot.rate.* spans the largest drive the reference ever put on a plane — a
 # lane at the CEIL asymptote through DRIVE at the drive fader's 8× — so the
 # legacy6 routes (routing.py) land today's rate without clamping. Wide for
@@ -1017,6 +1022,10 @@ def build_registry(view, control, audio, presets=None, dream=None, fx=None,
            lambda: [("● " if d["loopback"] else "") + d["name"]
                     for d in (getattr(audio, "devices", None) or [])],
            group=g, persist=False, modulatable=False)
+    if hasattr(audio, "rescan"):
+        r.trigger("audio.rescan", "Rescan devices", audio.rescan, group=g, modulatable=False,
+                  tip="Read the input device list again — for a driver or an interface "
+                      "plugged in after launch.")
     r.trigger("app.restart", "Restart process",
               restart if restart is not None else (lambda: None), group="ui",
               modulatable=False,

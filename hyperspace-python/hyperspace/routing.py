@@ -210,9 +210,9 @@ from pathlib import Path
 import numpy as np
 
 from . import apc40
-from .bands import BANDS, CEIL, DRIVE
+from .bands import BANDS, CEIL
 from .lfo import SHAPES, SYNCS
-from .params import PLANES, ROT_RATE_MAX, ROUTING_GROUPS, Kind, Param, Registry
+from .params import DRIVE, PLANES, ROT_RATE_MAX, ROUTING_GROUPS, Kind, Param, Registry
 
 SCHEMA = "hyperspace.bindings/2"
 SCHEMA_V1 = "hyperspace.bindings/1"

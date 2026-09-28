@@ -18,7 +18,9 @@ import numpy as np
 import pytest
 
 from hyperspace import bands, geometry
+from hyperspace.analyzer import Analyzer
 from hyperspace.offline import run_wav
+from hyperspace.routing import legacy_planedrive
 
 ROOT = Path(__file__).parent.parent
 GOLDEN = Path(__file__).parent / "golden"
@@ -69,7 +71,7 @@ def test_presets_load():
     from hyperspace.control import SCENES
     from hyperspace.library import factory_doc
 
-    chain = bands.Chain(Analyser())
+    chain = Analyzer(Analyser())
     for name in SCENES:
         chain.apply_scene(factory_doc("band", name)["values"])
         for p in chain.params:
@@ -104,7 +106,9 @@ def test_gate_prover_behaviour(fixture_wavs):
         assert np.all(out[:, i] == 0.0), f"{name} must gate to exactly zero"
     # gated bands leave their planes at the +1 idle drive? No — a gated band
     # drives 0; the plane stops. That is the documented contract.
-    drive = settled(r["drive"], r["t"])
+    # the reference's PLANEDRIVE is a route now (routing.legacy_planedrive);
+    # offline.py ends at the lanes, so compute it here from `out`
+    drive = np.array([legacy_planedrive(row) for row in out])
     for i in (2, 3, 5):
         plane = bands.BANDS[i].plane
         assert np.all(drive[:, plane] == 0.0)
