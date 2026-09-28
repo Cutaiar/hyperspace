@@ -204,6 +204,7 @@ from __future__ import annotations
 import json
 import math
 import sys
+import time
 from collections.abc import Callable, Iterable
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
@@ -615,14 +616,21 @@ def migrate_v1(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
 
 
 def backup(path: Path, schema: str) -> Path | None:
-    """``<file>.bak-v<schema>`` beside a file the loader is about to rewrite
-    (a migration or a factory remap, audit R12), written once: a backup
-    already there — this one from an earlier run, or a copy the owner made
-    by hand under any ``.bak-*`` name — is never overwritten, and a copy
-    that cannot be made never stops the load. Returns the path written."""
+    """The file as it is, kept beside itself before the loader rewrites it
+    (a migration or a factory remap, audit R12): ``<file>.bak-v<schema>``
+    the first time, and ``<file>.bak-v<schema>-<stamp>`` when that name is
+    taken — so the oldest state and the one about to go are both kept, and
+    nothing already there, this loader's or a copy the owner made by hand
+    under any ``.bak-*`` name, is ever overwritten. A copy that cannot be
+    made never stops the load. Returns the path written."""
     bak = path.with_name(f"{path.name}.bak-v{schema}")
     if bak.exists():
-        return None
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        bak = path.with_name(f"{path.name}.bak-v{schema}-{stamp}")
+        n = 1
+        while bak.exists():
+            n += 1
+            bak = path.with_name(f"{path.name}.bak-v{schema}-{stamp}-{n}")
     try:
         bak.write_bytes(path.read_bytes())
     except OSError as e:

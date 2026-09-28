@@ -302,7 +302,11 @@ def _sources(panel, router: Router) -> list[tuple[str, str]]:
     index. Nothing here knows what a scheme is; the ext lanes are the one
     case with a fixed count (N_EXT) since the bridge publishes no labels."""
     labels = getattr(router, "labels", {})
-    out = [(f"lane:{i}", f"{i} {name}") for i, name in enumerate(labels.get("lane") or [])]
+    # the lanes as the engine published them (AudioEngine.publish, each
+    # frame); until it has — a panel with no frame loop behind it — the
+    # chain's own names, so the combo always offers the lanes
+    lanes = labels.get("lane") or panel.audio.chain.band_names
+    out = [(f"lane:{i}", f"{i} {name}") for i, name in enumerate(lanes)]
     for scheme in SOURCE_ORDER:
         names = labels.get(scheme) or []
         vec = router.feeds.get(scheme)

@@ -72,7 +72,6 @@ def rig(tmp_path):
     panel.hands, panel.hand_settings = hands_io, settings
     panel.output = output
     router = Router(reg, Bindings.factory(path=tmp_path / "bindings.json"))
-    router.labels["lane"] = list(chain.band_names)   # what audio.publish does each frame
     panel.router = router
     r = SimpleNamespace(panel=panel, lib=lib, reg=reg, view=view, chain=chain, router=router)
     try:

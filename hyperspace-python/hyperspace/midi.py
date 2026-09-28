@@ -61,7 +61,7 @@ import mido
 from . import apc40
 from .learn import Learn
 from .params import Kind, Param, Registry
-from .routing import Binding, Bindings, act
+from .routing import Binding, Bindings, act, bindings_path
 
 PROFILES = {"apc40": apc40}          # config's `[midi] profile` names one of these
 RECONNECT_S = 2.0
@@ -174,8 +174,11 @@ class MidiIO:
         self.reg = registry
         # the binding table — the app's shared one, or one loaded from
         # `path` (a bindings.json; an old midi_map.json beside it is
-        # migrated), else the factory table; this adapter reads its MIDI rows
-        self.table = table if table is not None else Bindings.load(path, profile)
+        # migrated) — the home's own when neither is given, resolved now,
+        # not at import; this adapter reads its MIDI rows off it
+        if table is None:
+            table = Bindings.load(bindings_path() if path is None else path, profile)
+        self.table = table
         self.profile = PROFILES.get(self.table.profile) or PROFILES[profile]
         self.port_match = port or self.profile.PORT_MATCH
         self.ports = Ports(self.port_match, self.port_match, inp=inp, out=out, clock=clock)
@@ -243,20 +246,9 @@ class MidiIO:
 
     @property
     def bindings(self) -> list[Binding]:
-        """The MIDI rows of the shared table (`Bindings.midi`)."""
+        """The MIDI rows of the shared table (`Bindings.midi`); the edits
+        (`bind`, `route`, `for_param`, `write`) are the table's own."""
         return self.table.midi()
-
-    def route(self, kind: str, channel: int, number: int) -> list[Binding]:
-        return self.table.route(kind, channel, number)
-
-    def for_param(self, pid: str) -> Binding | None:
-        return self.table.for_param(pid)
-
-    def bind(self, b: Binding) -> None:
-        self.table.bind(b)
-
-    def write(self) -> None:
-        self.table.write()
 
     # ---- learn / bindings ----
 

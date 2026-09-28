@@ -405,11 +405,11 @@ On load (`Bindings.load`, `routing.py:713-749`):
   source; idempotent;
 - anything migrated or remapped is announced on stderr and written back
   once, with the file as it was kept beside it as `bindings.json.bak-v1`
-  (a migration) or `.bak-v2` (a remap) — written once, never over an
+  (a migration) or `.bak-v2` (a remap), a dated `.bak-v2-<stamp>` when that name is taken — never over an
   existing `.bak-*` (`routing.backup`); an unknown schema is never
   rewritten — the factory table stands in and `Bindings.error` says why
   (`tests/test_routing.py:1138-1285`,
-  `test_a_backup_is_written_once_and_never_over_a_hand_made_one`).
+  `test_a_backup_is_kept_before_every_rewrite_and_never_over_a_hand_made_one`).
 - a performer row never carries `pickup`: the field is a MIDI knob's
   (soft pickup) and `to_json` drops it on every lane-scheme row
   (`test_pickup_never_rides_on_a_performer_row`).

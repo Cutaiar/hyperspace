@@ -290,6 +290,11 @@ def test_json_rows_carry_only_what_differs():
     assert Binding.from_json({"source": "lane:1", "target": "x", "op": "push", "value": -2,
                               "enabled": False, "junk": 1}) == Binding(
         "lane:1", "x", "push", -2, False)
+    # rest only when the row has its own — None (the source's) is the default
+    assert "rest" not in Binding("lane:1", "x", "push", 0.5).to_json()
+    d = Binding("lfo:0", "x", "push", 0.5, rest=0.5).to_json()
+    assert d["rest"] == 0.5 and Binding.from_json(d).rest == 0.5
+    assert Binding("lfo:0", "x", "push", rest=0.0).to_json()["rest"] == 0.0   # an override
 
 
 def test_pickup_never_rides_on_a_performer_row():
@@ -309,11 +314,6 @@ def test_the_apc40_band_planes_are_the_reference_tables():
     from hyperspace import apc40
 
     assert apc40._BAND_PLANES == tuple(b.pl for b in BANDS)
-    # rest only when the row has its own — None (the source's) is the default
-    assert "rest" not in Binding("lane:1", "x", "push", 0.5).to_json()
-    d = Binding("lfo:0", "x", "push", 0.5, rest=0.5).to_json()
-    assert d["rest"] == 0.5 and Binding.from_json(d).rest == 0.5
-    assert Binding("lfo:0", "x", "push", rest=0.0).to_json()["rest"] == 0.0   # an override
 
 
 def test_midi_map_v1_rows_migrate():
@@ -808,8 +808,8 @@ def test_midi_view_shares_the_table(tmp_path):
     t = Bindings.factory(path=bindings_path(tmp_path))
     m = MidiIO(rig(tmp_path=tmp_path, full=True).reg, t, inp=Quiet(), out=Quiet())
     assert len(m.bindings) == 113 and all(b.is_midi for b in m.bindings)
-    m.bind(Binding("cc:0:99", "view.zoom", "abs"))
-    assert m.for_param("view.zoom").number == 99
+    m.table.bind(Binding("cc:0:99", "view.zoom", "abs"))
+    assert m.table.for_param("view.zoom").number == 99
     again = Bindings.load(bindings_path(tmp_path))
     assert again.for_param("view.zoom").source == "cc:0:99"
     assert len(again.of("key")) == 25 and len(again.mods()) == 12
@@ -1214,40 +1214,6 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     assert json.loads(bak.read_text()) == V1_FILE and "kept as bindings.json.bak-v1" in err
     again = Bindings.load(path, legacy_midi=None)
     assert not again.migrated and again.to_json() == t.to_json() and capsys.readouterr().err == ""
-
-
-def test_a_backup_is_written_once_and_never_over_a_hand_made_one(tmp_path, capsys):
-    """Audit R12: the first rewrite keeps the file as it was as
-    `.bak-v<schema>`; a later rewrite of the same schema leaves that copy
-    alone (the oldest state is the one worth having), and a copy the owner
-    made by hand is a different name, untouched. A remap of a schema-2
-    file is a `.bak-v2`."""
-    path = bindings_path(tmp_path)
-    hand = path.with_name("bindings.json.bak-plan09")
-    hand.write_text("mine")
-    v2 = Bindings.factory().to_json()
-    v2["bindings"] = [b for b in v2["bindings"] if b["target"] != "tempo.tap"]  # an old table
-    path.write_text(json.dumps(v2))
-    t = Bindings.load(path, legacy_midi=None)
-    assert any(n.startswith("added key:B") for n in t.notes)
-    bak = path.with_name("bindings.json.bak-v2")
-    assert json.loads(bak.read_text()) == v2 and hand.read_text() == "mine"
-    # the same schema rewritten again: the first copy stands
-    v2["bindings"] = [b for b in v2["bindings"] if b["target"] != "lfo.trigger"]
-    path.write_text(json.dumps(v2))
-    Bindings.load(path, legacy_midi=None)
-    assert json.loads(bak.read_text()) != v2 and "tempo.tap" not in bak.read_text()
-    # a backup that cannot be made never stops the load
-    bad = tmp_path / "ro"
-    bad.mkdir()
-    p2 = bad / "bindings.json"
-    p2.write_text(json.dumps(v2))
-    bad.chmod(0o555)
-    try:
-        t2 = Bindings.load(p2, legacy_midi=None)
-    finally:
-        bad.chmod(0o755)
-    assert t2.error == "" and "no backup of" in capsys.readouterr().err
     # a v1 preset file loads through the same door
     r = rig(tmp_path=tmp_path, full=True)
     router = Router(r.reg, Bindings.factory())
@@ -1260,8 +1226,9 @@ def test_a_backup_is_written_once_and_never_over_a_hand_made_one(tmp_path, capsy
     # the ops and the second owner only: a preset holds routes, so the
     # factory-row remap (a table's business, in Bindings.load) stays out
     assert len(router.table.notes) == 2 and "migrated" in capsys.readouterr().err
-    # a user's preset file is rewritten once at schema 2 …
+    # a user's preset file is rewritten once at schema 2, kept beside it first (R12) …
     assert json.loads((d / "old.json").read_text())["schema"] == SCHEMA
+    assert json.loads((d / "old.json.bak-v1").read_text()) == V1_FILE
     router.load_preset("old", tmp_path)
     assert capsys.readouterr().err == "" and router.table.notes == []
     router.table.add(Binding("lane:0", "view.bright", "push", 0.2))
@@ -1271,6 +1238,44 @@ def test_a_backup_is_written_once_and_never_over_a_hand_made_one(tmp_path, capsy
     for q in sorted(routing.FACTORY_DIR.glob("*.json")):
         router.load_preset(q.name[:-5])
     assert {q.name: q.read_text() for q in routing.FACTORY_DIR.glob("*.json")} == before
+
+
+def test_a_backup_is_kept_before_every_rewrite_and_never_over_a_hand_made_one(tmp_path, capsys,
+                                                                              monkeypatch):
+    """Audit R12: a rewrite keeps the file as it was as `.bak-v<schema>`;
+    a later rewrite of the same schema keeps its own copy under a dated
+    name rather than touching the first (the oldest state is worth
+    having, and so is the one about to go), and a copy the owner made by
+    hand is a different name, untouched. A remap of a schema-2 file is a
+    `.bak-v2`; a copy that cannot be made never stops the load."""
+    path = bindings_path(tmp_path)
+    hand = path.with_name("bindings.json.bak-plan09")
+    hand.write_text("mine")
+    v2 = Bindings.factory().to_json()
+    v2["bindings"] = [b for b in v2["bindings"] if b["target"] != "tempo.tap"]  # an old table
+    path.write_text(json.dumps(v2))
+    t = Bindings.load(path, legacy_midi=None)
+    assert any(n.startswith("added key:B") for n in t.notes)
+    bak = path.with_name("bindings.json.bak-v2")
+    assert json.loads(bak.read_text()) == v2 and hand.read_text() == "mine"
+    # the same schema rewritten again: the first copy stands, the state
+    # about to go is kept under a dated name
+    v2b = dict(v2, bindings=[b for b in v2["bindings"] if b["target"] != "lfo.trigger"])
+    path.write_text(json.dumps(v2b))
+    Bindings.load(path, legacy_midi=None)
+    assert json.loads(bak.read_text()) == v2
+    dated = list(tmp_path.glob("bindings.json.bak-v2-*"))
+    assert len(dated) == 1 and json.loads(dated[0].read_text()) == v2b
+    # a backup that cannot be made never stops the load
+    path.write_text(json.dumps(v2))
+
+    def refuse(self, data):
+        raise OSError("read-only")
+
+    monkeypatch.setattr(Path, "write_bytes", refuse)
+    t2 = Bindings.load(path, legacy_midi=None)
+    assert t2.error == "" and "no backup of" in capsys.readouterr().err
+    assert any(n.startswith("added key:B") for n in t2.notes)
 
 
 def test_an_unknown_schema_is_reported_not_migrated(tmp_path):

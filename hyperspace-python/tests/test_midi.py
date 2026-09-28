@@ -242,7 +242,7 @@ def test_metronome_fires_the_trigger_and_blinks_on_the_beat(rig):
     c.tick(3.3 + 0.5)                            # the next beat
     rig.midi.poll()
     assert led() == 1
-    assert len(rig.midi.route("note", 0, apc40.N_METRO)) == 1
+    assert len(rig.midi.table.route("note", 0, apc40.N_METRO)) == 1
 
 
 def test_theme_grid_lights_the_active_theme(rig):
@@ -415,7 +415,7 @@ def test_map_round_trips_json(tmp_path):
 
 
 def test_pitch_bend(rig):
-    rig.midi.bind(Binding("pitch:0", "camera.pitch", "abs", pickup=False))
+    rig.midi.table.bind(Binding("pitch:0", "camera.pitch", "abs", pickup=False))
     rig.inp.queue.append(mido.Message("pitchwheel", channel=0, pitch=8191))
     rig.midi.poll()
     assert rig.reg["camera.pitch"].norm == pytest.approx(1.0, abs=1e-3)
