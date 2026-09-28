@@ -9,12 +9,35 @@ Two kinds of file, both plain JSON you can open in a text editor:
                   analyzer's presets also carry ``layout`` (see the
                   contract in docs/plans/07-overhaul.md): restore hands the
                   layout to a hook registered with ``on_layout`` *before*
-                  the values, so a preset can rebuild its params first.
+                  the values, so a preset can rebuild its params first,
+                  and a save asks the group's ``extra`` hook for it. The
+                  band presets are also the analyzer's *scenes*: the scene
+                  combo reads them (``read``, or ``factory_doc`` with no
+                  library) and ``adopt``s the one it landed; a strip load
+                  tells the combo through ``on_load`` (control.py).
   project         everything — ``{"schema": "hyperspace.project/1",
                   "name", "values": <full snapshot>, "modules": {group:
-                  name | {"name", "values"}}, "bank": [8 × {"name",
-                  "values"} | null], "io": {...}}``, in a ``*.hyp.json``
-                  file. The F1–F8 theme bank (presets.py) lives inside it.
+                  name | {"name", "values", …}}, "bank": [8 × {"name",
+                  "values"} | null]}``, in a ``*.hyp.json`` file. The
+                  F1–F8 theme bank is the project's (``Project.load_slot``
+                  / ``save_slot``): emulator-style save states of the
+                  whole surface, less the routing layer's macros. A
+                  module the project names by a preset that carries a
+                  ``layout`` gets that layout back on load, the same road
+                  a strip load takes. A project never carries the routing
+                  layer (its macros, or a routing preset): the live table
+                  is ``<home>/bindings.json``, one file for the rig.
+
+A third kind of document is *not* the library's own format but goes
+through the same doors: a **document kind** registered with ``kind()``
+— the routing presets, ``hyperspace.bindings/2`` under ``bindings/``,
+which the router loads and writes (``Router.apply_doc`` /
+``preset_doc``; ``Library.routing`` wires it). For such a group the
+library does the file half — list, user-shadows-factory, load / save as
+/ delete, the dirty dot, the watch — and the kind's hooks do the
+document half: ``load(doc, path)`` applies it, ``document(name)`` is
+what a save writes, ``signature()`` is what ``is_dirty`` compares. One
+strip (ui_presets.py) then serves every group.
 
 Library layout — the same tree in two places, the user's shadowing the
 factory's file of the same name:
@@ -52,12 +75,15 @@ import re
 import shutil
 import sys
 import time
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from .params import PLANES, ROUTING_GROUPS, Registry
-from .presets import SLOTS, Presets
 
+SLOTS = 8                 # the F1–F8 theme bank
+BINDINGS = "bindings"     # the routing presets' group: the one document kind (routing.PRESET_DIR)
 HOME_ENV = "HYPERSPACE_HOME"
 DEFAULT_HOME = Path("~/Hyperspace")
 FACTORY = Path(__file__).with_name("library")
@@ -90,12 +116,20 @@ def home() -> Path:
     return (Path(raw) if raw else DEFAULT_HOME).expanduser()
 
 
+_ensured: set[Path] = set()   # homes this process has already made and migrated
+
+
 def ensure_home(root: Path | None = None, cwd: Path | None = None) -> Path:
-    """Create the library home and pull in the working-directory files."""
+    """Create the library home and pull in the working-directory files —
+    once per home per process: config.load and Library() both ask, and
+    the first-run migration should not scan the working directory twice."""
     root = home() if root is None else root
+    if root in _ensured and (root / PROJECTS).is_dir():
+        return root
     (root / PROJECTS).mkdir(parents=True, exist_ok=True)
     for msg in migrate(root, cwd):
         print(msg, file=sys.stderr)
+    _ensured.add(root)
     return root
 
 
@@ -122,7 +156,7 @@ def migrate(root: Path, cwd: Path | None = None) -> list[str]:
         else:
             dst.parent.mkdir(parents=True, exist_ok=True)
             _write_json(dst, {"schema": PROJECT_SCHEMA, "name": DEFAULT_PROJECT,
-                              "values": {}, "modules": {}, "bank": bank, "io": {}})
+                              "values": {}, "modules": {}, "bank": bank})
             done.append(f"library: theme bank {src} → project {dst}")
     return done
 
@@ -145,9 +179,13 @@ def _read_json(path: Path) -> dict:
 
 
 def _write_json(path: Path, doc: dict) -> None:
+    _write_text(path, json.dumps(doc, indent=1) + "\n")
+
+
+def _write_text(path: Path, text: str) -> None:
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(doc, indent=1) + "\n")
+        path.write_text(text)
     except OSError as e:
         raise LibraryError(f"{path.name}: {e}") from e
 
@@ -179,6 +217,34 @@ def migrate_doc(doc: dict, kind: str) -> dict:
     if version > CURRENT[kind]:
         raise LibraryError(f"{schema} is newer than this build ({kind}/{CURRENT[kind]})")
     return doc
+
+
+@dataclass(frozen=True)
+class DocKind:
+    """A document format that is not the library's own but lives in its
+    tree and goes through its doors (the routing presets). `schema` is
+    the kind half of the file's ``schema`` string, `versions` the ones
+    `load` can take; `load(doc, path)` applies a file (returning the ids
+    it named that nothing has), `document(name)` is what a save writes,
+    `signature()` is the group's state as `is_dirty` compares it."""
+
+    schema: str
+    versions: tuple[int, ...]
+    load: Callable[[dict, Path | None], list[str]]
+    document: Callable[[str], dict]
+    signature: Callable[[], Any]
+    text: Callable[[dict], str] | None = None   # the file's text, when json.dumps is not it
+
+
+def factory_doc(group: str, name: str, factory: Path = FACTORY) -> dict:
+    """A factory preset by name, without a Library: the file in the wheel,
+    lifted to the current schema. The scene combo reads its scenes this
+    way when no library is attached (control.py); with one, ``Library.read``
+    is the same file with the user's shadow honoured."""
+    path = factory / group / f"{slug(name)}.json"
+    if not path.is_file():
+        raise LibraryError(f"{group}: no factory preset {name!r}")
+    return migrate_doc(_read_json(path), "hyperspace.preset")
 
 
 # ---- the pre-registry theme format (presets.json) → {name, values} ----
@@ -226,14 +292,26 @@ def legacy_slot(slot: dict) -> dict:
 # ---------------------------------------------------------------- project
 
 class Project:
-    """The open project: its file (None until saved) and its sections.
+    """The open project: its file (None until saved), its sections, and
+    the F1–F8 theme bank.
 
-    ``values`` / ``modules`` / ``io`` are what the *file* holds; only
-    ``save()`` refreshes them from the live state. ``write()`` puts the
-    in-memory document back on disk as it is — that is what a theme-slot
-    save uses, so F-key saves persist without turning the whole project
-    into a snapshot of the moment. ``io`` is kept verbatim for the
-    adapters (MIDI profile/map, audio device or track) to fill.
+    ``values`` / ``modules`` / ``bank`` are what the *file* holds; only
+    ``save()`` refreshes ``values`` and ``modules`` from the live state.
+    ``write()`` puts the in-memory document back on disk as it is — that
+    is what a theme-slot save uses, so F-key saves persist without turning
+    the whole project into a snapshot of the moment.
+
+    A theme (one of the eight slots) is a whole-surface save state: the
+    registry's ``snapshot()``, every persisted parameter except the routing
+    layer's macros (params.ROUTING_GROUPS), which the binding table carries.
+    Loading one cuts the whole look over in a single frame. A slot restores
+    the modules it names, whole: every id in a group the slot mentions is
+    set, from the slot or else from the group's defaults, so a theme is the
+    same state whatever it lands on — while a group it never mentions (the
+    seeds carry a scene, not band values; no master fader) is left alone.
+    Rotation phases are never in a slot: a theme changes the look, not where
+    the spin is. Empty slots come back seeded with the eight house moods
+    (hyperspace/library/projects/default.hyp.json).
     """
 
     def __init__(self, lib: Library):
@@ -243,7 +321,8 @@ class Project:
         self.values: dict[str, Any] = {}
         self.modules: dict[str, Any] = {}
         self.bank: list[dict | None] = [None] * SLOTS
-        self.io: dict[str, Any] = {}
+        self.active = -1          # last theme slot loaded, -1 until one is
+        self.bank_error = ""
 
     # ---- documents ----
 
@@ -254,7 +333,6 @@ class Project:
         self.path = path
         self.values = dict(doc.get("values") or {})
         self.modules = dict(doc.get("modules") or {})
-        self.io = dict(doc.get("io") or {})
         bank = list(doc.get("bank") or [])[:SLOTS]
         bank += [None] * (SLOTS - len(bank))
         # an empty slot is seeded from the factory bank, as it always was
@@ -263,28 +341,95 @@ class Project:
 
     def to_doc(self) -> dict:
         return {"schema": PROJECT_SCHEMA, "name": self.name, "values": self.values,
-                "modules": self.modules, "bank": self.bank, "io": self.io}
+                "modules": self.modules, "bank": self.bank}
 
     def _apply(self) -> list[str]:
-        """Push the document's state into the registry; returns unknown ids."""
+        """Push the document's state into the registry; returns unknown ids.
+        A module's `layout` lands first (a project saved on eight bands
+        comes back with eight, audit L8), then the project's own values —
+        the live state as saved, edits included — and each module is
+        recorded as the group's current preset, the reference its dirty
+        dot compares against, the way a strip load records it."""
         lib = self.lib
         lib._current.clear()
         lib._loaded.clear()
-        missing = lib.restore(self.values) if self.values else []
+        lib._adopted.clear()
+        docs: list[tuple[str, str, dict | None]] = []
         for group, ref in self.modules.items():
+            if group in lib._kinds or group == BINDINGS:   # never carried; an old file's is ignored
+                continue
             if isinstance(ref, dict):                 # inline copy of a preset
-                name = str(ref.get("name") or "")
-                vals = lib._resolve(group, ref.get("values") or {})
+                name, doc = str(ref.get("name") or ""), dict(ref)
             else:                                     # by name in the library
                 name = str(ref)
                 try:
-                    vals = lib._resolve(group, lib.read(group, name).get("values") or {})
-                except LibraryError:
-                    vals = lib.reg.snapshot(group)   # gone from the library: not dirty
-            lib._current[group] = name
-            lib._loaded[group] = vals
-        lib.bank.active = -1
+                    doc = lib.read(group, name)
+                except LibraryError:                  # gone from the library: not dirty
+                    doc = None
+            docs.append((group, name, doc))
+            hook = lib._layout_hooks.get(group)
+            if doc is not None and hook is not None and doc.get("layout") is not None:
+                hook(doc["layout"])                   # its params exist before the values land
+                lib._fresh_of(group)                  # …and their build values are "fresh"
+        missing = lib.restore(self.values) if self.values else []
+        for group, name, doc in docs:
+            vals = (lib.reg.snapshot(group) if doc is None
+                    else lib.resolved(group, doc.get("values") or {}))
+            lib._landed(group, name, vals)
+            hook = lib._load_hooks.get(group)
+            if hook is not None:
+                hook(name)
+        self.active = -1
         return missing
+
+    # ---- the theme bank: whole-surface save states inside the project ----
+
+    @property
+    def slots(self) -> list[dict | None]:
+        return self.bank
+
+    def capture(self, name: str) -> dict[str, Any]:
+        return {"name": name, "values": self.lib.reg.snapshot()}
+
+    def save_slot(self, k: int) -> None:
+        """⇧F<k+1>: the surface into slot k, and the project file with it."""
+        if not 0 <= k < SLOTS or self.lib.reg is None:
+            return
+        old = self.bank[k]
+        name = old["name"] if old else f"THEME {k + 1}"
+        self.bank[k] = self.capture(name)
+        self.active = k
+        try:
+            self.write()
+            self.bank_error = ""
+        except LibraryError as e:                     # a full disk must not stop the show
+            self.bank_error = f"themes: {e}"
+
+    def load_slot(self, k: int) -> None:
+        """F<k+1>: slot k onto the surface, whole per group it names."""
+        if not 0 <= k < SLOTS or self.bank[k] is None or self.lib.reg is None:
+            return
+        values = self.bank[k].get("values") or {}
+        lib, reg = self.lib, self.lib.reg
+        groups = {reg[pid].group for pid in values if pid in reg}
+        merged: dict[str, Any] = {}
+        for g in groups:
+            merged.update(lib.defaults(g))
+        merged.update(values)
+        missing = lib.restore(merged)
+        lib.report(missing, self.bank[k]["name"])
+        self.active = k
+
+    def cycle(self, step: int = 1) -> None:
+        """Flip to the next saved slot — the pad's and the APC's theme button."""
+        filled = [k for k, s in enumerate(self.bank) if s is not None]
+        if not filled:
+            return
+        if self.active in filled:
+            k = filled[(filled.index(self.active) + step) % len(filled)]
+        else:
+            k = filled[0]
+        self.load_slot(k)
 
     # ---- API ----
 
@@ -316,7 +461,8 @@ class Project:
         self._take(_read_json(lib.factory / PROJECTS / f"{DEFAULT_PROJECT}{PROJECT_SUFFIX}"),
                    None)
         self.name = name
-        lib.restore(lib._fresh)
+        lib._fresh_layouts()                          # the layout the app started with…
+        lib.restore(lib._fresh_all())                 # …and every group's fresh values
         self._apply()
         lib.status = f"project: new {name}"
 
@@ -331,12 +477,14 @@ class Project:
         self.values = lib.reg.snapshot()
         self.modules = {}
         for group, cur in lib._current.items():
-            if cur is None:
-                continue
+            if cur is None or group in lib._kinds or group == BINDINGS:
+                continue                              # the routing layer is the rig's, not the project's
             if lib.path_of(group, cur) is not None:
                 self.modules[group] = cur
             else:                                     # not in any library: keep a copy
-                self.modules[group] = {"name": cur, "values": lib.reg.snapshot(group)}
+                doc = lib.document(group, cur)
+                self.modules[group] = {k: v for k, v in doc.items()
+                                       if k not in ("schema", "group")}
         self.write()
         lib.status = f"project: saved {self.name}"
         return self.path
@@ -362,10 +510,12 @@ class Project:
 class Library:
     """Presets, projects and the theme bank over one registry.
 
-    Built before the registry (theme params need the bank), bound to it
-    with ``attach(reg)``, which also captures the fresh-object values and
-    opens the user's default project (or the factory one). `home` is the
-    user tree; tests pass a tmp_path and never touch ~/Hyperspace.
+    Built before the registry (the theme params need the project's bank),
+    bound to it with ``attach(reg)``, which also captures the fresh-object
+    values and opens the user's default project (or the factory one).
+    `home` is the user tree; tests pass a tmp_path and never touch
+    ~/Hyperspace. A document kind (`kind`, `routing`) adds a group whose
+    files the library keeps and someone else applies.
     """
 
     def __init__(self, home_dir: Path | None = None, *, factory: Path = FACTORY,
@@ -380,27 +530,106 @@ class Library:
         self.warning = ""
         self._fresh: dict[str, Any] = {}
         self._current: dict[str, str | None] = {}     # group → loaded preset name
-        self._loaded: dict[str, dict[str, Any]] = {}  # group → what that load produced
+        self._loaded: dict[str, Any] = {}             # group → what that load produced
         self._layout_hooks: dict[str, Any] = {}
+        self._extra_hooks: dict[str, Any] = {}    # group → what a save adds beside values
+        self._load_hooks: dict[str, Any] = {}     # group → told the name after a load
+        self._adopted: dict[str, Any] = {}        # group → how to re-apply an adopted preset
+        self._kinds: dict[str, DocKind] = {}      # group → a document kind of its own
+        self._fresh_extra: dict[str, dict] = {}   # group → its extra (layout) at attach
+        self._defaults: dict[str, dict[str, Any]] = {}   # defaults(group), until a file moves
         self._docs: dict[Path, tuple[float, dict]] = {}   # parsed files, by mtime
         self._mtimes: dict[Path, float] = {}
         self._next = 0.0
         self.project = Project(self)
-        self.bank = Presets(self)
         self._open_default()
         self._mtimes = self._scan()
 
     def attach(self, reg: Registry) -> list[str]:
-        """Bind the registry; its state right now is what "default" means."""
+        """Bind the registry; its state right now is what "default" means.
+        A group registered later is adopted the first time it is asked
+        about (`_fresh_of`), so ``reset`` and ``is_dirty`` work for it too."""
         self.reg = reg
         self._fresh = reg.snapshot()
+        # what a group's `extra` hook says now — the analyzer's layout as the
+        # app started — is the fresh layout `Project.new` goes back to
+        self._fresh_extra = {g: hook() for g, hook in self._extra_hooks.items()}
+        self._defaults.clear()
         missing = self.project._apply()
         self.report(missing, self.project.name)
         return missing
 
+    def _fresh_layouts(self) -> None:
+        """Every group with a layout hook back to the layout it started with."""
+        for group, extra in self._fresh_extra.items():
+            hook = self._layout_hooks.get(group)
+            if hook is not None and extra and extra.get("layout") is not None:
+                hook(extra["layout"])
+                self._fresh_of(group)
+
+    def _fresh_of(self, group: str) -> dict[str, Any]:
+        """The values a group's objects were built with — captured at
+        attach(), or, for a param registered after it (a band a layout
+        made, audit L6), the first time anyone asks about its group; a
+        newly adopted id drops the group's cached defaults."""
+        reg = self.reg
+        if reg is not None:
+            new = [k for k in reg.snapshot(group) if k not in self._fresh]
+            if new:
+                snap = reg.snapshot(group)
+                self._fresh.update((k, snap[k]) for k in new)
+                self._defaults.pop(group, None)
+        return {k: v for k, v in self._fresh.items() if reg is not None and k in reg
+                and reg[k].group == group}
+
+    def _fresh_all(self) -> dict[str, Any]:
+        for g in {p.group for p in (self.reg or []) if p.persist and p.group}:
+            self._fresh_of(g)
+        return dict(self._fresh)
+
+    def kind(self, group: str, schema: str, *, load, document, signature,
+             versions: tuple[int, ...] = (1,), text=None) -> None:
+        """Register a document kind for `group` (see DocKind): its files
+        live under ``<root>/<group>/`` like any preset's, the strip drives
+        them, and the hooks apply and produce them."""
+        self._kinds[group] = DocKind(schema, tuple(versions), load, document, signature, text)
+
+    def routing(self, router) -> None:
+        """The routing presets as a document kind: ``bindings/*.json``,
+        ``hyperspace.bindings/2`` (a user's schema-1 file is migrated by
+        the router and rewritten once), applied and written by the router.
+        The hooks look the router's methods up at call time, so a hot
+        reload that re-classes the router reaches them."""
+        from . import routing
+
+        versions = tuple(int(s.rpartition("/")[2]) for s in (routing.SCHEMA_V1, routing.SCHEMA))
+        self.kind(BINDINGS, routing.SCHEMA.rpartition("/")[0],
+                  load=lambda doc, path: router.apply_doc(doc, path),
+                  document=lambda name: router.preset_doc(name),
+                  signature=lambda: router.signature(),
+                  versions=versions, text=lambda doc: routing.dumps_doc(doc))
+
+    @property
+    def kinds(self) -> tuple[str, ...]:
+        return tuple(self._kinds)
+
     def on_layout(self, group: str, hook) -> None:
         """Register who rebuilds a group's params from a preset's `layout`."""
         self._layout_hooks[group] = hook
+
+    def extra(self, group: str, hook) -> None:
+        """Register what a save of this group writes beside its values — the
+        analyzer's ``{"layout": …}`` — so a preset saved from the strip
+        carries it without the caller knowing (plan 07 contract; audit A2).
+        Registered after attach(), what it says now is the group's fresh extra."""
+        self._extra_hooks[group] = hook
+        if self.reg is not None and group not in self._fresh_extra:
+            self._fresh_extra[group] = hook()
+
+    def on_load(self, group: str, hook) -> None:
+        """Register who is told the name a load of this group landed — the
+        scene combo, so a strip load moves the selected scene."""
+        self._load_hooks[group] = hook
 
     def _open_default(self) -> None:
         """The user's default project if there is one, else the factory's."""
@@ -430,12 +659,12 @@ class Library:
         yield self.home
 
     def groups(self) -> list[str]:
-        """Every group with a preset folder or a persisted param — less the
-        routing layer's (params.ROUTING_GROUPS), which routing presets carry.
-        The ``bindings`` folder still comes back from the folder scan; the
-        panel filters it (ui_presets.py)."""
+        """Every group with a preset folder, a persisted param or a document
+        kind — less the routing layer's params (params.ROUTING_GROUPS),
+        which the routing presets carry as their `values`."""
         out = {p.group for p in (self.reg or [])
                if p.persist and p.group and p.group not in ROUTING_GROUPS}
+        out.update(self._kinds)
         for root in self._roots():
             if root.is_dir():
                 out.update(d.name for d in root.iterdir()
@@ -487,7 +716,17 @@ class Library:
         path = self.path_of(group, name)
         if path is None:
             raise LibraryError(f"{group}: no preset {name!r}")
-        doc = migrate_doc(copy.deepcopy(self._doc(path)), "hyperspace.preset")
+        doc = copy.deepcopy(self._doc(path))
+        kind = self._kinds.get(group)
+        if kind is not None:                       # its own format: checked, not lifted
+            schema = str(doc.get("schema") or "")
+            k, _, v = schema.rpartition("/")
+            if not schema:                          # routing's v1 files carried none
+                return doc
+            if k != kind.schema or not v.isdigit() or int(v) not in kind.versions:
+                raise LibraryError(f"{path.name}: schema {schema!r} is not a {kind.schema}")
+            return doc
+        doc = migrate_doc(doc, "hyperspace.preset")
         if doc.get("group", group) != group:
             raise LibraryError(f"{path.name} is a {doc['group']} preset, not {group}")
         return doc
@@ -499,22 +738,55 @@ class Library:
         return name if self.path_of(group, name) is not None else None
 
     def defaults(self, group: str) -> dict[str, Any]:
-        """What reset(group) produces: the default preset over the fresh values."""
-        out = {k: v for k, v in self._fresh.items() if self.reg and k in self.reg
-               and self.reg[k].group == group}
+        """What reset(group) produces: the default preset over the fresh values.
+        Cached until a file in the tree moves (_sync, poll) or attach()."""
+        if group in self._kinds:                   # no values of its own to fall back on
+            return {}
+        out = self._fresh_of(group)
+        hit = self._defaults.get(group)
+        if hit is not None and hit.keys() == out.keys():   # a layout can change the ids
+            return dict(hit)
         name = self.default_name(group)
         if name is not None:
             try:
                 out.update(self.read(group, name).get("values") or {})
             except LibraryError as e:
                 self.error = f"library: {e}"
+                return out                             # not cached: the file may be fixed
+        self._defaults[group] = dict(out)
         return out
 
-    def _resolve(self, group: str, values: dict[str, Any]) -> dict[str, Any]:
-        """A preset's values over the group's defaults, ids this registry has."""
+    def resolved(self, group: str, values: dict[str, Any]) -> dict[str, Any]:
+        """A preset's values over the group's defaults, ids this registry
+        has — the one fill-in for a partial file, whichever road applies it
+        (a strip load, or the scene combo re-tuning from a scene)."""
         out = self.defaults(group)
         out.update(values)
         return {k: v for k, v in out.items() if k in self.reg}
+
+    def _landed(self, group: str, name: str | None, loaded: dict[str, Any] | None,
+                reapply=None) -> None:
+        """One place for what "the group's current preset" means: its name,
+        the values it produced (what is_dirty compares against) and, for a
+        preset someone else applied, how to apply it again when its file
+        changes on disk."""
+        self._current[group] = name
+        if loaded is None:
+            self._loaded.pop(group, None)
+        else:
+            self._loaded[group] = loaded
+        if reapply is None:
+            self._adopted.pop(group, None)
+        else:
+            self._adopted[group] = reapply
+
+    def landed(self, group: str) -> tuple:
+        """The group's landed state, opaque, for an undo to hand back."""
+        return (self._current.get(group), self._loaded.get(group), self._adopted.get(group))
+
+    def reland(self, group: str, mark: tuple) -> None:
+        """Put back what landed() returned — the analyzer's reset undo."""
+        self._landed(group, *mark)
 
     def restore(self, values: dict[str, Any]) -> list[str]:
         """restore() in registry order, whatever order the file had."""
@@ -541,20 +813,54 @@ class Library:
 
     def load(self, group: str, name: str) -> list[str]:
         """Apply a preset; returns the ids it names that this registry lacks."""
-        self._need_reg()
+        if group not in self._kinds:
+            self._need_reg()
         doc = self.read(group, name)
-        hook = self._layout_hooks.get(group)
-        if hook is not None and doc.get("layout") is not None:
-            hook(doc["layout"])                        # rebuild params first
-        values = doc.get("values") or {}
-        missing = [k for k in values if k not in self.reg]
-        resolved = self._resolve(group, values)
-        self.restore(resolved)
-        self._current[group] = doc.get("name") or name
-        self._loaded[group] = resolved
+        return self._apply_doc(group, name, doc, path=self.path_of(group, name))
+
+    def _apply_doc(self, group: str, name: str, doc: dict, *, path: Path | None = None,
+                   quiet: bool = False) -> list[str]:
+        """One road in for a preset document, wherever it came from — the
+        strip, the project's module list, a file edited on disk: a kind's
+        loader, or the layout hook first and then the values over the
+        group's defaults. `quiet` (a project load) leaves `status` alone."""
+        kind = self._kinds.get(group)
+        if kind is not None:
+            try:
+                missing = list(kind.load(doc, path) or [])
+            except (ValueError, KeyError, TypeError, AttributeError, OSError) as e:
+                raise LibraryError(f"{group}/{name}: {e}") from e
+            if path is not None:
+                self._sync(path)                       # a migrated user file, rewritten once
+            self._landed(group, doc.get("name") or name, kind.signature())
+        else:
+            hook = self._layout_hooks.get(group)
+            if hook is not None and doc.get("layout") is not None:
+                hook(doc["layout"])                    # rebuild params first
+                self._fresh_of(group)                  # …and their build values are "fresh"
+            values = doc.get("values") or {}
+            missing = [k for k in values if k not in self.reg]
+            resolved = self.resolved(group, values)
+            self.restore(resolved)
+            self._landed(group, doc.get("name") or name, resolved)
         self.report(missing, f"{group}/{name}")
-        self.status = f"{group}: {self._current[group]}"
+        if not quiet:
+            self.status = f"{group}: {self._current[group]}"
+        hook = self._load_hooks.get(group)
+        if hook is not None:
+            hook(self._current[group])
         return missing
+
+    def adopt(self, group: str, name: str, reapply) -> None:
+        """A preset applied by someone else — the scene combo landing a
+        scene's values on the analyzer itself: make it the group's current
+        preset, with the group's state as it now stands as what "clean"
+        means (the combo applies no layout, so the file's layout ids are
+        not the reference), and `reapply` as what poll() calls when the
+        file changes on disk, in place of a whole load."""
+        loaded = self.reg.snapshot(group) if self.reg is not None else None
+        self._landed(group, name, loaded, reapply)
+        self.status = f"{group}: {name}"
 
     def _step(self, group: str, n: int) -> str | None:
         names = self.list(group)
@@ -573,40 +879,41 @@ class Library:
 
     def save_as(self, group: str, name: str, *, extra: dict | None = None) -> Path:
         """Write the group's bases as a user preset and make it current."""
+        doc = self.document(group, name, extra=extra)
+        path = self.home / group / f"{slug(name)}.json"
+        kind = self._kinds.get(group)
+        if kind is not None and kind.text is not None:
+            _write_text(path, kind.text(doc))
+        else:
+            _write_json(path, doc)
+        self._sync(path)
+        self._landed(group, name, kind.signature() if kind is not None
+                     else self.resolved(group, doc["values"]))
+        self.status = f"{group}: saved {name}"
+        return path
+
+    def document(self, group: str, name: str, *, extra: dict | None = None) -> dict:
+        """The group's bases as a preset document — with whatever the
+        group's `extra` hook adds beside the values (the analyzer's layout),
+        unless the caller brought its own. Every band document the library
+        writes is built here: a file, or a project's inline module copy. A
+        document kind's is its own hook's."""
+        kind = self._kinds.get(group)
+        if kind is not None:
+            return kind.document(name)
         reg = self._need_reg()
         doc = {"schema": PRESET_SCHEMA, "group": group, "name": name,
                "values": reg.snapshot(group)}
-        if extra:                                      # e.g. the analyzer's layout
+        if extra is None and group in self._extra_hooks:
+            extra = self._extra_hooks[group]()
+        if extra:
             doc.update(extra)
-        path = self.home / group / f"{slug(name)}.json"
-        _write_json(path, doc)
-        self._sync(path)
-        self._current[group] = name
-        self._loaded[group] = self._resolve(group, doc["values"])
-        self.status = f"{group}: saved {name}"
-        return path
+        return doc
 
     def overwrite(self, group: str, *, extra: dict | None = None) -> Path | None:
         """Save over the current preset (a factory one gets a user shadow)."""
         cur = self.current(group)
         return None if cur is None else self.save_as(group, cur, extra=extra)
-
-    def rename(self, group: str, new: str, name: str | None = None) -> bool:
-        """Rename a user preset (factory ones are read-only)."""
-        name = self.current(group) if name is None else name
-        path = None if name is None else self.path_of(group, name)
-        if path is None or not self._is_user(path):
-            return False
-        doc = _read_json(path)
-        doc["name"] = new
-        dst = path.with_name(f"{slug(new)}.json")
-        _write_json(dst, doc)
-        if dst != path:
-            path.unlink()
-        self._sync(path, dst)
-        if self._current.get(group) == name:
-            self._current[group] = new
-        return True
 
     def delete(self, group: str, name: str) -> bool:
         """Remove a user preset; a factory one stays, a shadow just lifts."""
@@ -616,18 +923,21 @@ class Library:
         path.unlink()
         self._sync(path)
         if self._current.get(group) == name and self.path_of(group, name) is None:
-            self._current[group] = None
-            self._loaded.pop(group, None)
+            self._landed(group, None, None)
         return True
 
     def is_dirty(self, group: str) -> bool:
-        """Have the group's bases moved off the loaded (or default) preset?"""
+        """Have the group's bases moved off the loaded (or default) preset?
+        For a document kind: has its signature moved since the last load or
+        save (nothing loaded yet is never dirty)."""
+        kind = self._kinds.get(group)
+        if kind is not None:
+            ref = self._loaded.get(group)
+            return ref is not None and kind.signature() != ref
         reg = self._need_reg()
         ref = self._loaded.get(group)
         if ref is None:
-            ref = self._resolve(group, {})
-        # over the ids the preset governs: a param registered after attach()
-        # (the overlay's) is outside every preset until something saves it
+            ref = self.resolved(group, {})
         snap = reg.snapshot(group)
         return any(snap.get(k) != v for k, v in ref.items())
 
@@ -637,10 +947,11 @@ class Library:
         if name is not None:
             self.load(group, name)
             return name
+        if group in self._kinds:
+            return None
         self._need_reg()
-        self.restore(self._resolve(group, {}))
-        self._current[group] = None
-        self._loaded.pop(group, None)
+        self.restore(self.resolved(group, {}))
+        self._landed(group, None, None)
         return None
 
     # ---- watching: an editor save shows up in the running app ----
@@ -667,6 +978,7 @@ class Library:
             except OSError:
                 self._mtimes.pop(p, None)
             self._docs.pop(p, None)
+        self._defaults.clear()
 
     def poll(self, now: float | None = None) -> bool:
         """Re-apply whatever is loaded from a file that changed on disk."""
@@ -682,13 +994,18 @@ class Library:
             return False
         for p in changed:
             self._docs.pop(p, None)
+        self._defaults.clear()
         if self.reg is None:
             return True
         hit = []
         try:
             for group, name in list(self._current.items()):
                 if name is not None and self.path_of(group, name) in changed:
-                    self.load(group, name)
+                    reapply = self._adopted.get(group)
+                    if reapply is not None:            # by the road it came in
+                        reapply()
+                    else:
+                        self.load(group, name)
                     hit.append(f"{group}/{name}")
             if self.project.path in changed:
                 self.project.load(self.project.path)

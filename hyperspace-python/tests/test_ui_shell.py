@@ -53,7 +53,7 @@ def rig(tmp_path):
     audio = SimpleNamespace(chain=chain, on=False, mode="", error="", label="", sr=48000.0)
     view = ViewState()
     lib = Library(tmp_path, period=0.0)
-    reg = build_registry(view, control, audio, lib.bank)
+    reg = build_registry(view, control, audio, lib.project)
     lib.on_layout("band", control.apply_layout)
     # the rig has everything app.py gives the panel, so every page is
     # measured full: a hands setup over a tracker that sees no hands, an
@@ -67,7 +67,7 @@ def rig(tmp_path):
     output = Output(None, None)
     output.register(reg)
     lib.attach(reg)
-    panel = Panel(control, audio, view, presets=lib.bank, registry=reg, library=lib)
+    panel = Panel(control, audio, view, themes=lib.project, registry=reg, library=lib)
     panel.clock, panel.lfos = clock, lfos
     panel.hands, panel.hand_settings = hands_io, settings
     panel.output = output
@@ -98,6 +98,29 @@ def test_every_page_draws_with_a_library(rig):
         for _ in range(2):
             frame(rig.panel)
         assert PAGE_KEYS[k] == key
+
+
+def test_system_page_shows_a_config_error_and_notes(rig, monkeypatch):
+    """A config.toml that would not parse, or that still says [overlay], is
+    reported on the SYSTEM page (audit L4), beside the other rig notices."""
+    import hyperspace.ui as ui_mod
+
+    drawn: list[str] = []
+    real_colored, real_disabled = imgui.text_colored, imgui.text_disabled
+    monkeypatch.setattr(ui_mod.imgui, "text_colored",
+                        lambda col, s: (drawn.append(s), real_colored(col, s)))
+    monkeypatch.setattr(ui_mod.imgui, "text_disabled",
+                        lambda s: (drawn.append(s), real_disabled(s)))
+    rig.panel.config_error = "config: Expected ']' at line 1"
+    rig.panel.config_notes = ["config: [overlay] is now [output] — rename the section"]
+    frame(rig.panel, "system")
+    imgui.end_frame()
+    assert rig.panel.config_error in drawn and rig.panel.config_notes[0] in drawn
+    drawn.clear()
+    rig.panel.config_error, rig.panel.config_notes = "", []
+    frame(rig.panel, "system")
+    imgui.end_frame()
+    assert not any(s.startswith("config:") for s in drawn)
 
 
 def test_page_param_is_ui_state_not_a_preset(rig):
@@ -353,7 +376,7 @@ def test_theme_bank_keeps_its_behaviour(rig):
     frame(panel, "presets")
     reg["view.shape"].set(5)
     reg["theme.save.2"].fire()
-    assert lib.bank.active == 2 and lib.bank.slots[2]["values"]["view.shape"] == 5
+    assert lib.project.active == 2 and lib.project.slots[2]["values"]["view.shape"] == 5
     reg["view.shape"].set(1)
     reg["theme.load.2"].fire()
     assert rig.view.shape == 5

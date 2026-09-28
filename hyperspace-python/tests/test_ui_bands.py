@@ -36,6 +36,7 @@ from hyperspace.analyzer import (
     edges,
 )
 from hyperspace.bands import CEIL
+from hyperspace.library import Library, LibraryError
 from hyperspace.params import Kind
 from hyperspace.routing import Binding, Bindings, Router
 from hyperspace.ui import PAGE_KEYS
@@ -223,8 +224,8 @@ def test_routing_page_draws_routes(rig, tmp_path):
     assert len(router.table.routes()) == 12
     frame(panel)
     frame(panel)
-    assert ui_routing._state(panel)["current"] is None
-    assert not ui_routing.dirty(panel, router)
+    assert panel.library.current("bindings") is None      # the strip: nothing loaded
+    assert not panel.library.is_dirty("bindings")
 
 
 def test_routing_page_live_lane_draws_ghost_and_bar(rig, tmp_path):
@@ -538,52 +539,59 @@ def test_route_a_lane_here_jumps_to_the_page(rig, tmp_path):
 
 
 def test_routing_presets_step_load_save(rig, tmp_path):
-    panel = rig.panel
+    """The ROUTING page's strip is the library's (audit L1): the page
+    registers the bindings kind on first sight and every button is a
+    library call — list, prev / next, load, save as, delete, reset."""
+    panel, lib = rig.panel, rig.panel.library
     router = _with_router(rig, tmp_path)
     frame(panel, "routing")
-    listing = ui_routing.names(panel)
+    assert "bindings" in lib.kinds
+    listing = lib.list("bindings")
     assert listing == ["default", "hands-fx", "hands-pinch", "hands-play", "legacy6",
                        "lfo-breathe"]                       # the factory exports
     # next from nothing: the first; prev wraps to the last
-    assert ui_routing.step(panel, router, 1) == "default"
-    assert ui_routing._state(panel)["current"] == "default"
-    assert not ui_routing.dirty(panel, router)
+    assert lib.next("bindings") == "default"
+    assert lib.current("bindings") == "default"
+    assert not lib.is_dirty("bindings")
     frame(panel)
-    assert ui_routing.step(panel, router, -1) == "lfo-breathe"
+    assert lib.prev("bindings") == "lfo-breathe"
     assert rig.reg["lfo.1.sync"].value == 3     # lfo-breathe lands its bases: 1 bar
-    assert ui_routing.step(panel, router, -1) == "legacy6"
+    assert lib.prev("bindings") == "legacy6"
     assert rig.view.pattern_mod[0] == 0.0       # legacy6 lands its bases
     frame(panel)
     # an edit dirties; save-as writes the routes to the user folder and cleans
     router.table.add(Binding("lane:2", "view.bright", "push", 0.3))
-    assert ui_routing.dirty(panel, router)
+    assert lib.is_dirty("bindings")
     frame(panel)
-    ui_routing.save_as(panel, router, "My Routes")
-    path = tmp_path / "bindings" / "my-routes.json"
-    assert path.exists()
+    path = lib.save_as("bindings", "My Routes")
+    assert path == tmp_path / "bindings" / "my-routes.json"
     doc = json.loads(path.read_text())
     assert doc["schema"] == routing.SCHEMA and len(doc["bindings"]) == 13
+    assert doc["name"] == "My Routes"
     assert all(b["op"] in routing.MOD_OPS for b in doc["bindings"])
-    assert ui_routing._state(panel)["current"] == "my-routes"
-    assert not ui_routing.dirty(panel, router)
-    ui_routing.invalidate(panel)
-    assert ui_routing.names(panel) == [
-        "default", "hands-fx", "hands-pinch", "hands-play", "legacy6", "lfo-breathe", "my-routes"]
-    assert not routing.is_factory_preset("my-routes", tmp_path)
+    assert lib.current("bindings") == "My Routes"
+    assert not lib.is_dirty("bindings")
+    assert lib.list("bindings") == [
+        "default", "hands-fx", "hands-pinch", "hands-play", "legacy6", "lfo-breathe", "My Routes"]
+    assert not lib.is_factory("bindings", "My Routes")
     frame(panel)
     # load a factory preset back: the user route goes, the inputs stay
     n_inputs = len(router.table.of(*routing.INPUT_SCHEMES))
-    ui_routing.load(panel, router, "default")
+    lib.load("bindings", "default")
     assert not router.table.routes_to("view.bright")
     assert len(router.table.of(*routing.INPUT_SCHEMES)) == n_inputs
     # and the user file round-trips
-    ui_routing.load(panel, router, "my-routes")
+    lib.load("bindings", "My Routes")
     assert router.table.routes_to("view.bright")[0].value == 0.3
     frame(panel)
     # a bad name shows in the strip, never raises
-    ui_routing.load(panel, router, "no-such")
-    assert "no-such" in ui_routing._state(panel)["error"]
+    with pytest.raises(LibraryError):
+        lib.load("bindings", "no-such")
+    lib.error = "library: bindings: no preset 'no-such'"    # what the strip's guard records
     frame(panel)
+    # the page's reset chip: the factory default
+    lib.reset("bindings")
+    assert lib.current("bindings") == "default" and not lib.is_dirty("bindings")
 
 
 def test_routing_strip_name_field_draws(rig, tmp_path):
@@ -596,21 +604,25 @@ def test_routing_strip_name_field_draws(rig, tmp_path):
     frame(panel)
     ui_presets._state(panel)["naming"] = None
     frame(panel)
-    assert not ui_routing.dirty(panel, router)
+    assert not panel.library.is_dirty("bindings") and router is panel.router
 
 
-def test_router_preset_files_and_save(tmp_path):
-    """routing.py's side: the file listing and Router.load/save_preset."""
+def test_router_preset_documents_and_a_library_over_them(tmp_path):
+    """routing.py's side: `Router.apply_doc` / `preset_doc` / `signature`
+    are the bindings kind's hooks; `Router.load_preset` is the same road
+    through a Library over `home`, for tests and tools."""
     from test_routing import rig as routing_rig
 
     r = routing_rig(tmp_path=tmp_path, full=True)
     router = Router(r.reg, Bindings.factory())
-    assert routing.preset_names(tmp_path) == [
+    lib = Library(tmp_path)
+    lib.routing(router)
+    assert lib.list("bindings") == [
         "default", "hands-fx", "hands-pinch", "hands-play", "legacy6", "lfo-breathe"]
-    assert routing.is_factory_preset("legacy6", tmp_path)
+    assert lib.is_factory("bindings", "legacy6")
     router.table.add(Binding("lane:0", "view.bright", "push", 0.5, enabled=False))
     r.reg["macro.2"].set_value(0.3)                  # routing-layer state: saved with the routes
-    path = router.save_preset("Show A", tmp_path)
+    path = lib.save_as("bindings", "Show A")
     assert path == tmp_path / "bindings" / "show-a.json"
     saved = Bindings.from_json(json.loads(path.read_text()))
     assert len(saved.bindings) == 13 and not saved.bindings[-1].enabled
@@ -620,6 +632,7 @@ def test_router_preset_files_and_save(tmp_path):
     r.reg["macro.2"].set_value(0.9)
     assert router.load_preset("show-a", tmp_path) == []
     assert len(router.table.routes()) == 13 and r.reg["macro.2"].value == pytest.approx(0.3)
-    with pytest.raises(FileNotFoundError):
+    assert router.signature() == [b.to_json() for b in router.table.routes()]
+    with pytest.raises(LibraryError):
         router.load_preset("nope", tmp_path)
     assert imgui.get_version()

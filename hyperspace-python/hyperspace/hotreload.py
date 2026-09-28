@@ -54,11 +54,11 @@ from pathlib import Path
 # subpackage's modules are named with a dot (tests/test_hotreload.py
 # holds both rules against the package's own imports).
 MODULES = (
-    "analysis", "tapers", "geometry", "bands", "analyzer", "control", "audio", "tempo", "lfo",
-    "lookback", "dream", "fx", "render", "params", "presets", "library", "config", "overlay",
-    "gamepad", "apc40", "routing", "learn", "midi", "bridge", "hands.signal", "hands.core", "hands",
-    "ui_presets", "ui_lookback", "ui_bands", "ui_routing", "ui_fx", "ui_lfo", "hands.panel",
-    "ui",
+    "analysis", "tapers", "geometry", "bands", "analyzer", "audio", "tempo", "lfo",
+    "lookback", "dream", "fx", "render", "params", "library", "control", "config",
+    "overlay", "gamepad", "apc40", "routing", "learn", "midi", "bridge", "hands.signal",
+    "hands.core", "hands", "ui_presets", "ui_lookback", "ui_bands", "ui_routing", "ui_fx",
+    "ui_lfo", "hands.panel", "ui",
 )
 
 

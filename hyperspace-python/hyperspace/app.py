@@ -71,10 +71,9 @@ from .control import Control
 from .gamepad import Pad
 from .hotreload import HotReloader
 from .learn import Learn
-from .library import Library
+from .library import SLOTS, Library
 from .overlay import GlfwBackend, Output
 from .params import Registry, build_registry
-from .presets import SLOTS
 from .render import Renderer, ViewState
 from .routing import Bindings, Router, bindings_path
 from .ui import Panel, apply_style, load_fonts
@@ -175,8 +174,9 @@ def _make_output(win, reg: Registry, cfg: dict) -> Output:
     """The render window's output settings, seeded from config."""
     out = Output(win, GlfwBackend(glfw))
     out.register(reg)
-    # [output] in config.toml; the pre-split [overlay] section still counts
-    oc = {**cfg.get("overlay", {}), **cfg.get("output", {})}
+    # [output] in config.toml — config.load has already folded a pre-split
+    # [overlay] section under it, so this is the one place that reads it
+    oc = cfg.get("output", {})
     out.monitor = int(oc.get("monitor", -1))
     out.fullscreen = bool(oc.get("fullscreen", False))
     out.overlay = bool(oc.get("on_start", False))
@@ -426,17 +426,21 @@ def main() -> None:
     cfg = config.load()
     audio = AudioEngine()
     control = Control(audio.chain)
-    library = Library()                    # presets, projects, the theme bank
-    presets = library.bank
+    library = Library()                    # presets, projects, the theme bank (its project's)
     # dream.* drives the renderer's look-back (lookback.py); the post pass
     # runs inside renderer.draw
     want = {"restart": False}          # app.restart sets it; polled after the panel draws
-    reg = build_registry(s, control, audio, presets, dream=renderer.lookback.state,
+    reg = build_registry(s, control, audio, library.project, dream=renderer.lookback.state,
                          fx=renderer.fx.state,
                          restart=lambda: want.__setitem__("restart", True))
     # an analyzer preset carries its band layout; the library hands it to
     # control before restoring values (07-overhaul contracts)
     library.on_layout("band", control.apply_layout)
+    # …and a saved band preset carries the layout back out (audit A2); the
+    # scene combo and the strip keep each other posted (audit A1)
+    library.extra("band", lambda: {"layout": audio.chain.layout()})
+    library.on_load("band", control.scene_loaded)
+    control.library = library
     hand_settings = _hand_settings(reg, cfg)   # before attach: "default" includes them
     # the tap-tempo clock and the four LFOs (tempo.py, lfo.py): their knobs
     # are params too, so a preset carries a tempo and an LFO arrangement
@@ -444,10 +448,12 @@ def main() -> None:
     lfos = lfo.LFOs()
     tempo.register(reg, clock)
     lfo.register(reg, lfos, clock)
-    library.attach(reg)
-    panel = Panel(control, audio, s, renderer, presets, registry=reg, library=library)
-    panel.clock, panel.lfos = clock, lfos     # the LFO page's scopes and beat light
+    # the render window's placement registers before attach, so "default"
+    # includes output.* and reset / the dirty dot see them (audit L6)
     output = _make_output(render_win, reg, cfg)
+    library.attach(reg)
+    panel = Panel(control, audio, s, renderer, library.project, registry=reg, library=library)
+    panel.clock, panel.lfos = clock, lfos     # the LFO page's scopes and beat light
     panel.output = output
     # one binding table for keys, pad, MIDI and lanes (an old midi_map.json migrates)
     mc = cfg.get("midi", {})
@@ -460,6 +466,7 @@ def main() -> None:
     # registry hasn't goes where every other missing id goes
     if router.missing_values:
         library.report(router.missing_values, "bindings.json values")
+    library.routing(router)                # the routing presets: the library's files, the router's documents
     # one Learn over the live table, whatever the MIDI gate says: a knob
     # or a hand completes it, the panel's prompt settles what the referee
     # refused (learn.py; the band.sel.* rule is the registry's `real`)
@@ -499,7 +506,7 @@ def main() -> None:
         (output, "overlay", "Output"),
         (output.backend, "overlay", "GlfwBackend"),
         (library, "library", "Library"),
-        (presets, "presets", "Presets"),
+        (library.project, "library", "Project"),
         (router, "routing", "Router"),
         (learn, "learn", "Learn"),
         (clock, "tempo", "Clock"),
@@ -513,6 +520,8 @@ def main() -> None:
         (pad, "gamepad", "Pad"),
     ], watchers=[library])
     panel.reloader = reloader
+    panel.config_error = cfg.get("error", "")   # a config.toml that would not parse
+    panel.config_notes = cfg.get("notes", [])   # …or that wants a section renamed
     keys = Keys(render_win, ctrl_win)
     mouse = Mouse(render_win, reg, s)
     depth4, yaw, pitch, zoom = reg["view.depth4"], reg["camera.yaw"], reg["camera.pitch"], reg["camera.zoom"]

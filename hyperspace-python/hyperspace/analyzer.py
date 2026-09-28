@@ -50,10 +50,6 @@ from .bands import (
     CONF_LO,
     CONF_SPAN,
     COUPLE,
-    DEF_EXP,
-    DEF_ROW,
-    DEF_TRIM,
-    DEF_TRN,
     DEV_AIM,
     DEV_MIN,
     FAST_A,
@@ -67,7 +63,6 @@ from .bands import (
     OPEN_SPAN,
     PK_MIN,
     PK_TAU,
-    PRESETS,
     SHAPERS,
     SLOW_T,
     SPAN_MIN,
@@ -195,6 +190,21 @@ def legacy_layout() -> dict:
     return {"bands": rows}
 
 
+_SCENE_KEYS = ("fn", "trim", "pre", "post", "atk", "dec", "thr", "exp", "trn")
+
+
+def scene_rows(values: dict) -> dict[int, dict]:
+    """``{"band.3.atk": 0.05, …}`` → ``{3: {"atk": 0.05, …}}``, the strip
+    keys only (a layout knob such as ``band.3.f`` is not a scene row)."""
+    out: dict[int, dict] = {}
+    for pid, v in values.items():
+        parts = pid.split(".")
+        if (len(parts) == 3 and parts[0] == "band" and parts[1].isdigit()
+                and parts[2] in _SCENE_KEYS):
+            out.setdefault(int(parts[1]), {})[parts[2]] = v
+    return out
+
+
 def _spec_of(row: dict) -> BandSpec:
     return BandSpec(float(row["f"]), float(row["q"]),
                     curve_index(row.get("curve", RECT)), row.get("name") or None)
@@ -206,11 +216,6 @@ _SEEDS = (
     ("val", 0.25), ("avg", 0.5), ("dvr", DEV_AIM * DEV_AIM), ("norm", 0.0),
     ("inp", 0.0), ("out", 0.0),
 )
-
-
-def _def(table: list, i: int, fallback):
-    """A per-band default table entry, or the fallback past the six."""
-    return table[i] if i < len(table) else fallback
 
 
 # ---------------------------------------------------------------- analyzer
@@ -453,25 +458,26 @@ class Analyzer:
 
     # ---- scenes ----
 
-    def apply_preset_band(self, k: int, i: int) -> None:
-        rows = PRESETS[k]["b"]
-        p = rows[i] if i < len(rows) else DEF_ROW
-        P = self.params[i]
-        P.fn, P.pre, P.post = p[0], p[1], p[2]
-        P.atk, P.dec, P.thr = p[3] / 1000, p[4] / 1000, p[5]
-        P.exp = p[6] if len(p) > 6 else _def(DEF_EXP, i, 0.85)
-        P.trn = p[7] if len(p) > 7 else _def(DEF_TRN, i, 0.25)
-        P.trim = p[8] if len(p) > 8 else _def(DEF_TRIM, i, 0)
+    def apply_scene_band(self, i: int, row: dict | None) -> None:
+        """One band's strip from a scene: `row` is that band's values with
+        the ``band.{i}.`` prefix off ({"fn", "pre", …}); None, or a key the
+        scene lacks, takes the default strip (default_band_params)."""
+        P, d = self.params[i], default_band_params()
+        row = row or {}
+        for k in _SCENE_KEYS:
+            v = row.get(k, getattr(d, k))
+            setattr(P, k, int(v) if k == "fn" else v)
         self.st[i] = {}
 
-    def apply_preset(self, k: int) -> None:
-        """A scene's rows onto every band; a scene that carries a layout
-        applies that first. Bands past the scene's rows take DEF_ROW."""
-        layout = PRESETS[k].get("layout")
-        if layout is not None:
-            self.apply_layout(layout)
+    def apply_scene(self, values: dict) -> None:
+        """A scene's values onto every band loaded — the ``band.{i}.*``
+        entries of a band preset (library/band/*.json). Bands past the
+        scene's rows take the default strip. The layout is not this
+        method's: a strip load applies it first (Library.load); the scene
+        combo re-tunes whatever bands are loaded."""
+        rows = scene_rows(values)
         for i in range(self.n):
-            self.apply_preset_band(k, i)
+            self.apply_scene_band(i, rows.get(i))
 
     # ---- the frame ----
 

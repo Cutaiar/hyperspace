@@ -61,7 +61,7 @@ from typing import Any
 
 from . import tapers
 from .analyzer import CURVES, F_HI, F_LO, Q_HI, Q_LO
-from .bands import CEIL, DRIVE, PRESETS, SHAPERS
+from .bands import CEIL, DRIVE, SHAPERS
 from .fx import FxState
 from .fx import declare as declare_fx
 from .geometry import SHAPES
@@ -655,7 +655,7 @@ def _item(get_list, i):
     return (lambda: get_list()[i]), (lambda v: get_list().__setitem__(i, v))
 
 
-def build_registry(view, control, audio, presets=None, dream=None, fx=None,
+def build_registry(view, control, audio, themes=None, dream=None, fx=None,
                    restart=None) -> Registry:
     """Declare every parameter the surface owns.
 
@@ -912,7 +912,9 @@ def build_registry(view, control, audio, presets=None, dream=None, fx=None,
     # ---- scene ----
     g = "scene"
     r.enum("scene.select", "Scene", lambda: control.scene, control.select_scene,
-           [p["name"] for p in PRESETS], group=g)
+           control.scene_names, group=g,
+           tip="The eleven factory scenes, re-tuned onto the bands you have; the "
+               "preset strip loads a band file whole, layout included.")
     r.trigger("scene.reset_all", "Reset all", control.reset_all_clicked, group=g,
               tip="Reloads the selected scene across every band. Undoable for 8 s.")
 
@@ -991,24 +993,24 @@ def build_registry(view, control, audio, presets=None, dream=None, fx=None,
     control.on_layout = build_bands
 
     # ---- themes ----
-    if presets is not None:
+    if themes is not None:                 # library.Project: the F1–F8 bank
         g = "theme"
         names = lambda: [
-            s["name"] if s else f"THEME {k + 1}" for k, s in enumerate(presets.slots)
+            s["name"] if s else f"THEME {k + 1}" for k, s in enumerate(themes.slots)
         ]
         # active is −1 until a theme loads: no choice selected, no LED lit
-        # meta-controls: they *apply* presets, so no preset stores them
-        r.enum("theme.select", "Theme", lambda: presets.active, presets.load, names,
+        # meta-controls: they *apply* themes, so no preset stores them
+        r.enum("theme.select", "Theme", lambda: themes.active, themes.load_slot, names,
                group=g, persist=False, modulatable=False,
                tip="Whole-surface save states — every persisted parameter except "
                    "the routing layer's macros.")
-        for k in range(len(presets.slots)):
+        for k in range(len(themes.slots)):
             r.trigger(f"theme.load.{k}", f"Load theme {k + 1}",
-                      lambda k=k: presets.load(k), group=g)
+                      lambda k=k: themes.load_slot(k), group=g)
             r.trigger(f"theme.save.{k}", f"Save theme {k + 1}",
-                      lambda k=k: presets.save(k), group=g, modulatable=False)
-        r.trigger("theme.next", "Next theme", lambda: presets.cycle(1), group=g)
-        r.trigger("theme.prev", "Previous theme", lambda: presets.cycle(-1), group=g)
+                      lambda k=k: themes.save_slot(k), group=g, modulatable=False)
+        r.trigger("theme.next", "Next theme", lambda: themes.cycle(1), group=g)
+        r.trigger("theme.prev", "Previous theme", lambda: themes.cycle(-1), group=g)
 
     # ---- audio transport (only what the engine exposes headlessly) ----
     g = "audio"

@@ -337,17 +337,18 @@ PAGE_KEYS = [k for k, _, _ in PAGES]
 
 class Panel:
     def __init__(self, control: Control, audio: AudioEngine, view: ViewState, renderer=None,
-                 presets=None, registry: Registry | None = None, library=None):
+                 themes=None, registry: Registry | None = None, library=None):
         self.control = control
         self.audio = audio
         self.view = view
         self.renderer = renderer
         self.library = library      # library.Library, or None: no strips, no project row
-        self.presets = presets if presets is not None else (
-            library.bank if library is not None else None
+        # the F1–F8 theme bank is the open project's (library.Project)
+        self.themes = themes if themes is not None else (
+            library.project if library is not None else None
         )
         self.reg = registry if registry is not None else build_registry(
-            view, control, audio, self.presets
+            view, control, audio, self.themes
         )
         self.pin_in = [0.0] * N_MAX
         self.pin_out = [0.0] * N_MAX
@@ -358,6 +359,8 @@ class Panel:
         self._file_dialog = None
         self._bmp_dialog = None
         self.reloader = None  # set by app.py; panel only reads status off it
+        self.config_error = ""  # set by app.py: config.toml failed to parse (SYSTEM page)
+        self.config_notes: list[str] = []  # set by app.py: config.toml wants a rename
         self.midi = None      # set by app.py when an adapter is up (midi.MidiIO)
         self.learn = None     # set by app.py: the armed param and the held question (learn.Learn)
         self.router = None    # set by app.py (routing.Router); else found via midi's table
@@ -1271,6 +1274,10 @@ class Panel:
             if imgui.is_item_hovered():
                 imgui.set_tooltip("$HYPERSPACE_HOME — presets and projects as JSON; "
                                   "edit a file and the app follows")
+        if self.config_error:
+            imgui.text_colored(WARN, self.config_error)
+        for note in self.config_notes:
+            imgui.text_disabled(note)
         imgui.spacing()
         self._section("midi")
         self._midi_status()
