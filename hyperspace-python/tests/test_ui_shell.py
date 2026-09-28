@@ -174,6 +174,29 @@ def test_the_routing_rows_scroll_in_their_own_child(rig, monkeypatch):
     assert inner and inner[-1] > 0, "the rows' child did not scroll with 40 rows"
 
 
+def test_the_hands_page_fits_with_the_tracker_off(rig, monkeypatch):
+    """The setup still edits and saves with no tracker: the page draws
+    without the switches beside the box and still fits."""
+    rig.panel.hands = None
+    over = _page_scroll(rig, monkeypatch)
+    assert over["hands"] == 0
+
+
+def test_the_meter_tooltip_names_the_plane_from_the_live_table(rig):
+    """The suffix comes from the rot.rate rows, not a static table: the
+    factory rows push lane 0 on ZW; a lane with no such row has no suffix."""
+    panel, table = rig.panel, rig.router.table
+    assert panel._lane_plane(0) == " → ZW forward"
+    lane_rows = [b for b in table.of("lane") if b.target.startswith("rot.rate.")]
+    for b in lane_rows:
+        table.remove(b)
+    assert panel._lane_plane(0) == ""
+    table.add(Binding("lane:0", "rot.rate.XY", "position"))
+    assert panel._lane_plane(0) == " → XY"           # a position row has no direction
+    panel.router = None
+    assert panel._lane_plane(0) == ""
+
+
 # ---------------------------------------------------------------- cheat sheet
 
 _SYMBOLS = {"←": "LEFT", "→": "RIGHT", "↑": "UP", "↓": "DOWN", "space": "SPACE",

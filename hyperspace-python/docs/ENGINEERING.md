@@ -226,9 +226,9 @@ Two, both through `AudioEngine._attach` (`audio.py:132-140`):
   (`audio.py:29-52, 157`). That is the one system-audio route: with the
   Mac's output on a Multi-Output Device, everything arrives through the
   plain input path. **Nothing captures at launch** — capture starts when
-  `audio.mic` is toggled (`M`), and the device list is read once when the
-  engine starts (`AudioEngine.devices`, which `audio.device` chooses from),
-  so a device plugged in later needs a restart (audit A3).
+  `audio.mic` is toggled (`M`), and the device list is read once, on first
+  use (`AudioEngine.devices`, which `audio.device` chooses from), so a
+  device plugged in later needs a restart (audit A3).
 - **A file** (`start_file(path)`; wav / mp3 / flac / ogg through
   `soundfile`): mono mean, played through an `OutputStream` at the
   **track's** sample rate, and the analyser is rebuilt at that rate
@@ -455,8 +455,8 @@ unreadable at a party.
   measures every page with a hands setup, an `Output` and a routed table;
   ROUTING's rows scroll in a child by design, and
   `test_the_routing_rows_scroll_in_their_own_child` holds that). The
-  HANDS page lays its twelve axes out one column per hand and its feel
-  knobs two to a row for that reason. Right-aligned groups are measured
+  HANDS page puts its switches beside the box and its feel knobs two to a
+  row beside the transfer plot for that reason. Right-aligned groups are measured
   with `ui.chip_w` / `ui.button_w`, never hard-coded offsets. Every widget
   has its own imgui id (`tests/test_ui_lfo.py:86`). One grey (`ui.LINE`)
   for every rule and frame, one `ui.u32`, one `Panel.half` for a slider

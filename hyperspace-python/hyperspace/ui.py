@@ -715,16 +715,21 @@ class Panel:
         return self._row(pid, label=label, label_w=label_w)
 
     def _lane_plane(self, i: int) -> str:
-        """The meter tooltip's suffix: which rotation plane lane `i` pushes,
-        read from the live table's ``rot.rate.*`` rows — none, no suffix."""
+        """The meter tooltip's suffix: which rotation planes lane `i` drives,
+        read from the live table's ``rot.rate.*`` rows — none, no suffix. A
+        push row has a direction (the sign of its depth); a position row
+        only names the plane."""
         router = self.router
         if router is None:
             return ""
+        planes = []
         for b in router.table.of("lane"):
             if b.index == i and b.enabled and b.target.startswith("rot.rate."):
                 plane = b.target.rsplit(".", 1)[-1]
-                return f" → {plane} plane, {'forward' if b.value >= 0 else 'reverse'}"
-        return ""
+                if b.op == "push":
+                    plane += " forward" if b.value >= 0 else " reverse"
+                planes.append(plane)
+        return f" → {', '.join(planes)}" if planes else ""
 
     def _combo(self, pid: str, width: float = -1, tip: str | None = None) -> bool:
         a = self.reg[pid]
@@ -960,7 +965,9 @@ class Panel:
             p0 = imgui.get_cursor_screen_pos()
             if imgui.invisible_button(f"##page{k}", imgui.ImVec2(w, h)):
                 self.reg["ui.page"].set(k)
+            imgui.pop_font()            # the menu opens in the panel's own face
             self._ctx(self.reg["ui.page"], f".{k}")
+            imgui.push_font(_FONTS["micro"], FONT_MICRO)
             hov = imgui.is_item_hovered()
             p1 = imgui.ImVec2(p0.x + w, p0.y + h)
             if lit or hov:

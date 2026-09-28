@@ -667,17 +667,16 @@ def _live_bar(panel, router: Router, b: Binding, p: Param | None) -> None:
     h = imgui.get_frame_height()
     pos = imgui.get_cursor_screen_pos()
     dl = imgui.get_window_draw_list()
-    u32 = imgui.color_convert_float4_to_u32
     x0, y0, x1, y1 = pos.x, pos.y + 3, pos.x + BAR_W, pos.y + h - 3
     dl.add_rect(imgui.ImVec2(x0, y0), imgui.ImVec2(x1, y1),
-                u32(ui.LINE), 4.0)
+                ui.u32(ui.LINE), 4.0)
     if u is not None:
         w = (x1 - x0 - 2) * min(max(u, 0.0), 1.0)
         dl.add_rect_filled(imgui.ImVec2(x0 + 1, y0 + 1), imgui.ImVec2(x0 + 1 + w, y1 - 1),
-                           u32(imgui.ImVec4(0.92, 0.92, 0.92, 0.85)), 3.0)
+                           ui.u32(imgui.ImVec4(0.92, 0.92, 0.92, 0.85)), 3.0)
     if p is not None and p.modulated:
         x = x0 + 1 + (x1 - x0 - 2) * p.eff_norm
-        dl.add_line(imgui.ImVec2(x, y0), imgui.ImVec2(x, y1), u32(ui.RED), 2.0)
+        dl.add_line(imgui.ImVec2(x, y0), imgui.ImVec2(x, y1), ui.u32(ui.RED), 2.0)
         panel.ghosts += 1
     imgui.dummy(imgui.ImVec2(BAR_W, h))
     if imgui.is_item_hovered():

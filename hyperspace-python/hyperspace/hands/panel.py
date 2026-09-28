@@ -108,9 +108,10 @@ def page(panel, dt: float) -> None:
         imgui.text_disabled("no hands setup — see [hands] in config.toml")
         return
     _status(io)
-    _box(io)                    # the box and the switches side by side: the
-    imgui.same_line()           # page has to fit the control window
-    _pinches(io)
+    _box(io)
+    if _has_pinches(io):        # the switches beside the box: the page has
+        imgui.same_line()       # to fit the control window
+        _pinches(io)
     k = _axes(panel, io, settings)
     imgui.spacing()
     _editor(panel, io, settings, k)
@@ -141,7 +142,7 @@ def _pinches(io) -> None:
     the live gap that closed it. The number is the tuning instrument —
     watch how near a finger actually gets, then set Pinch close under
     it. Ring and pinky never come as close as index and middle."""
-    if io is None or not io.cfg.get("pinch_gates"):
+    if not _has_pinches(io):
         return
     close = io.settings.pinch_close
     imgui.begin_group()
@@ -159,6 +160,10 @@ def _pinches(io) -> None:
                 # the gap moves every frame: the readout face, so it can't jitter
                 ui._readout("  —  " if d is None else f"{d:.2f}", col)
     imgui.end_group()
+
+
+def _has_pinches(io) -> bool:
+    return io is not None and bool(io.cfg.get("pinch_gates"))
 
 
 def _box(io) -> None:
