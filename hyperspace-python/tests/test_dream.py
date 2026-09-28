@@ -18,7 +18,7 @@ import pytest
 
 from hyperspace import config
 from hyperspace.lookback import DreamState, LookbackSource, echo_size
-from hyperspace.render import ViewState
+from hyperspace.view import ViewState
 
 
 def registry(dream=None):

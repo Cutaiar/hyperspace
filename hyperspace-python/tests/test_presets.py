@@ -13,7 +13,7 @@ from hyperspace.control import Control
 from hyperspace.library import Library
 from hyperspace.params import build_registry
 from hyperspace.presets import SLOTS, Presets
-from hyperspace.render import ViewState
+from hyperspace.view import ViewState
 
 
 def make(tmp_path):

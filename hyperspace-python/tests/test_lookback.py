@@ -25,7 +25,8 @@ from hyperspace.lookback import (
     NullSource,
     echo_size,
 )
-from hyperspace.render import Renderer, ViewState
+from hyperspace.render import Renderer
+from hyperspace.view import ViewState
 
 VIEW = {"ang": [0.3, 0.7, 1.1, 0.5, 0.9, 1.3], "yaw": 0.4, "pitch": 0.25}
 

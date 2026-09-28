@@ -13,7 +13,8 @@ import pytest
 moderngl = pytest.importorskip("moderngl")
 
 from hyperspace.geometry import SHAPES, geom, project
-from hyperspace.render import ViewState, render_offscreen
+from hyperspace.render import render_offscreen
+from hyperspace.view import ViewState
 
 GOLDEN = Path(__file__).parent / "golden"
 

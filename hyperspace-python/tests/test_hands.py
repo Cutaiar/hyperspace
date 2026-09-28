@@ -17,8 +17,8 @@ from hyperspace.hands import signal as hs
 from hyperspace.library import Library
 from hyperspace.midi import MidiIO, MidiMap
 from hyperspace.params import Registry, build_registry
-from hyperspace.render import ViewState
 from hyperspace.routing import Binding, Bindings, Router
+from hyperspace.view import ViewState
 
 DT = 1 / 60
 

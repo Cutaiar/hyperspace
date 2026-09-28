@@ -16,7 +16,7 @@ from hyperspace.bands import PRESETS, Chain
 from hyperspace.control import Control
 from hyperspace.library import FACTORY, Library, LibraryError, legacy_slot, migrate_doc, slug
 from hyperspace.params import build_registry
-from hyperspace.render import ViewState
+from hyperspace.view import ViewState
 
 _clock = [1_000_000_000.0]
 

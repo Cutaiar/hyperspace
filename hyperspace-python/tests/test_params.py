@@ -11,7 +11,7 @@ from hyperspace.control import Control
 from hyperspace.geometry import SHAPES
 from hyperspace.library import Library
 from hyperspace.params import Kind, Registry, build_registry
-from hyperspace.render import ViewState
+from hyperspace.view import ViewState
 
 
 def make(tmp_path):

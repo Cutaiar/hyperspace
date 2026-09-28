@@ -22,8 +22,8 @@ from hyperspace.bridge import FULL, Bridge, Decoder, capacity, encode, quantize
 from hyperspace.control import Control
 from hyperspace.midi import Ports
 from hyperspace.params import build_registry
-from hyperspace.render import ViewState
 from hyperspace.routing import Binding, Bindings, Router
+from hyperspace.view import ViewState
 
 
 class FakeIn:

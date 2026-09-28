@@ -1,8 +1,9 @@
 """moderngl renderer — port of the draw() pipeline of hyperspace.html.
 
-The transform runs on the CPU through geometry.project_h(), the vectorised
-twin of the geometry.project() the parity tests proved against the golden
-traces (project stays as the tests' oracle); the GPU only rasterises. At
+The transform runs on the CPU through geometry.project_h(), the one
+transform (geometry.project, the parity oracle, is it without the divisor);
+the GPU only rasterises. The dataclass it draws, ViewState, lives in
+view.py so nothing has to import moderngl to hold a view. At
 ≤600 vertices / ≤1200 edges per shape the per-frame numpy cost is nothing,
 and reusing the proven path is what makes "visually indistinguishable"
 achievable by construction.
@@ -32,21 +33,20 @@ from __future__ import annotations
 
 import math
 import time
-from dataclasses import dataclass, field
 from pathlib import Path
 
 import moderngl
 import numpy as np
 
 from .fx import FxChain, FxState
-from .geometry import RATE, face_triangles, face_uvs, geom, project_h
+from .geometry import face_triangles, face_uvs, geom, project_h
 from .lookback import DreamState, Lookback
+from .view import N_MOD, ViewState  # re-exported for callers that had them from here
 
 PATTERNS_GLSL = Path(__file__).parent / "shaders" / "patterns.glsl"
 
 BG = (0.0, 0.0, 0.0)
 RED = (1.0, 43 / 255, 43 / 255)
-N_MOD = 8   # pattern.mod.* inputs the face shader reads as u_mod[N_MOD]
 
 LINE_VS = """
 #version 330
@@ -183,53 +183,6 @@ void main() {
 
 def clamp(x, a, b):
     return a if x < a else min(x, b)
-
-
-@dataclass
-class ViewState:
-    """Mirror of the reference's S object (render-relevant fields)."""
-
-    shape: int = 3
-    speed: float = 0.30
-    depth4: float = 2.6
-    bright: float = 1.0
-    points: bool = True
-    lines: bool = True
-    playing: bool = True
-    planes: list[bool] = field(default_factory=lambda: [False, False, True, True, False, False])
-    ang: list[float] = field(default_factory=lambda: [0.0] * 6)
-    yaw: float = 0.0
-    pitch: float = 0.0
-    faces: bool = False          # translucent face fills under the wireframe
-    cut_through: bool = True     # fills lower the window's alpha: the desktop shows through
-    zoom: float = 1.0            # camera magnification about the view centre
-    pan: list[float] = field(default_factory=lambda: [0.0, 0.0])  # logical px
-    instances: int = 1           # synchronized copies in a centred grid
-    inst_motion: int = 0         # grid motion: 0 still, 1 orbit, 2 wave, 3 ripple
-    inst_amp: float = 0.25       # motion amplitude, fraction of a grid cell
-    inst_rate: float = 1.0       # motion angular rate, rad/s
-    pattern: int = 0             # face pattern mode (0 = flat fill)
-    pattern_mix: float = 1.0     # flat ↔ pattern blend
-    bmp_file: str = ""           # bitmap layer over the face pattern, "" = none
-    bmp_alpha: float = 1.0       # bitmap opacity fader
-    bmp_scale: float = 0.9       # bitmap width, face-UV units (face spans 1.0)
-    bmp_mode: int = 0            # bitmap path: 0 still, 1 orbit, 2 fig-8, 3 sway
-    bmp_amp: float = 0.15        # path amplitude about the face centre, UV units
-    bmp_rate: float = 1.0        # path angular rate, rad/s
-    # modulation targets (params.py rot.rate.* / pattern.mod.*): per-plane
-    # rate multipliers and the face patterns' inputs — 1.0 is the undriven
-    # look; an audio lane routed to them (routing.py) is what the reference
-    # called PLANEDRIVE and u_bands (here the u_mod[8] uniform)
-    rate: list[float] = field(default_factory=lambda: [1.0] * 6)
-    pattern_mod: list[float] = field(default_factory=lambda: [1.0] * N_MOD)
-
-    def integrate(self, dt: float) -> None:
-        """The frame() angle update: ang[p] += dt·speed·RATE[p]·rate[p]."""
-        if not self.playing:
-            return
-        for p in range(6):
-            if self.planes[p]:
-                self.ang[p] += dt * self.speed * RATE[p] * self.rate[p]
 
 
 def _samples_of(ctx: moderngl.Context, fbo: moderngl.Framebuffer) -> int:

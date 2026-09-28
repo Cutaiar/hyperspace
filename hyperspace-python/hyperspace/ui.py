@@ -50,7 +50,7 @@ from .params import (  # noqa: F401 — PATTERNS et al. re-exported for callers
     Registry,
     build_registry,
 )
-from .render import ViewState
+from .view import ViewState
 
 # ---- palette: black ground, three greys of text, one red ----
 RED = imgui.ImVec4(1.0, 43 / 255, 43 / 255, 1.0)

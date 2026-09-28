@@ -142,7 +142,7 @@ def test_build_registry_declares_the_group():
     from hyperspace.analysis import Analyser
     from hyperspace.bands import Chain
     from hyperspace.control import Control
-    from hyperspace.render import ViewState
+    from hyperspace.view import ViewState
     chain = Chain(Analyser())
     audio.chain = chain
     st = FxState()
@@ -247,7 +247,8 @@ W, H = 320, 200
 
 
 def render(ctx, fx: FxState, frames: int = 3) -> np.ndarray:
-    from hyperspace.render import Renderer, ViewState
+    from hyperspace.render import Renderer
+    from hyperspace.view import ViewState
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((W, H))])
     r = Renderer(ctx, fx=fx)
     s = ViewState(shape=10, faces=True, pattern=2, bright=1.3)
@@ -363,7 +364,7 @@ def test_factory_presets_name_only_real_params(tmp_path):
     from hyperspace.control import Control
     from hyperspace.library import Library
     from hyperspace.params import build_registry
-    from hyperspace.render import ViewState
+    from hyperspace.view import ViewState
     chain = Chain(Analyser())
     st = FxState()
     lib = Library(tmp_path, period=0.0)
@@ -391,8 +392,8 @@ def test_the_page_draws_and_fits(tmp_path, monkeypatch):
     from hyperspace.control import Control
     from hyperspace.library import Library
     from hyperspace.params import build_registry
-    from hyperspace.render import ViewState
     from hyperspace.ui import PAGE_KEYS, Panel, apply_style, load_fonts
+    from hyperspace.view import ViewState
 
     ictx = imgui.create_context()
     pctx = implot.create_context()
@@ -445,8 +446,8 @@ def test_the_page_has_no_conflicting_ids(tmp_path, monkeypatch):
     from hyperspace.control import Control
     from hyperspace.library import Library
     from hyperspace.params import build_registry
-    from hyperspace.render import ViewState
     from hyperspace.ui import Panel, apply_style, load_fonts
+    from hyperspace.view import ViewState
 
     ictx = imgui.create_context()
     pctx = implot.create_context()

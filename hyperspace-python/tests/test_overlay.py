@@ -9,7 +9,7 @@ from hyperspace.bands import Chain
 from hyperspace.control import Control
 from hyperspace.overlay import Output
 from hyperspace.params import Kind, build_registry
-from hyperspace.render import ViewState
+from hyperspace.view import ViewState
 
 
 class FakeBackend:

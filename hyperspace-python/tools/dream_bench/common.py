@@ -35,7 +35,8 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from hyperspace.render import Renderer, ViewState
+from hyperspace.render import Renderer
+from hyperspace.view import ViewState
 
 ASSETS = ROOT / "docs" / "plans" / "assets" / "06-lookback"
 

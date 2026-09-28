@@ -18,9 +18,9 @@ from hyperspace.bands import Chain
 from hyperspace.control import Control
 from hyperspace.library import Library
 from hyperspace.params import build_registry
-from hyperspace.render import ViewState
 from hyperspace.routing import Binding, Bindings, Router
 from hyperspace.ui import PAGE_KEYS, PAGES, Panel, apply_style, load_fonts
+from hyperspace.view import ViewState
 
 
 @pytest.fixture()

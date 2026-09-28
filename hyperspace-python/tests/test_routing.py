@@ -34,7 +34,6 @@ from hyperspace.library import Library
 from hyperspace.offline import load_wav
 from hyperspace.overlay import Output
 from hyperspace.params import PLANES, ROT_RATE_MAX, Registry, build_registry
-from hyperspace.render import N_MOD, ViewState
 from hyperspace.routing import (
     MOD_OPS,
     PRESETS,
@@ -47,6 +46,7 @@ from hyperspace.routing import (
     bindings_path,
     legacy_planedrive,
 )
+from hyperspace.view import N_MOD, ViewState
 
 GOLDEN = Path(__file__).parent / "golden" / "audio"
 
@@ -85,7 +85,7 @@ def rig(sr: float = 48_000.0, tmp_path: Path | None = None, full: bool = False):
 
 
 def legacy_integrate(view: ViewState, dt: float, planedrive) -> None:
-    """render.ViewState.integrate as it was before WP4b, rate[p] = 1."""
+    """view.ViewState.integrate as it was before WP4b, rate[p] = 1."""
     if not view.playing:
         return
     for p in range(6):
