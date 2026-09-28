@@ -14,6 +14,7 @@ from hyperspace.bands import Chain
 from hyperspace.control import Control
 from hyperspace.hands import HandSettings, HandsIO, features
 from hyperspace.hands import signal as hs
+from hyperspace.learn import Learn
 from hyperspace.library import Library
 from hyperspace.midi import MidiIO, MidiMap
 from hyperspace.params import Registry, build_registry
@@ -99,14 +100,14 @@ def rig(tmp_path=None, **cfg):
     return NS(io=io, src=src, clock=clock, s=settings)
 
 
-def run(r, frames=1, *hs_, midi=None, router=None, fresh=True):
+def run(r, frames=1, *hs_, learn=None, router=None, fresh=True):
     """`frames` render frames; a new tracking frame on each when `fresh`."""
     out = []
     for _ in range(frames):
         r.clock.t += DT
         if fresh:
             r.src.put(*hs_)
-        out += r.io.poll(DT, midi, router)
+        out += r.io.poll(DT, learn, router)
     return out
 
 
@@ -433,8 +434,9 @@ def app(tmp_path):
         def iter_pending(self):
             return iter(())
 
-    midi = MidiIO(reg, MidiMap(table=table), inp=Quiet(), out=FakeOut())
-    return NS(reg=reg, view=view, midi=midi, router=Router(reg, table), table=table)
+    learn = Learn(reg, table)
+    midi = MidiIO(reg, MidiMap(table=table), inp=Quiet(), out=FakeOut(), learner=learn)
+    return NS(reg=reg, view=view, learn=learn, midi=midi, router=Router(reg, table), table=table)
 
 
 def _frame(app):
@@ -445,20 +447,20 @@ def _frame(app):
 
 def test_learn_takes_the_axis_that_moved_as_a_position_route(app):
     r = rig()
-    run(r, 1, hand(), midi=app.midi, router=app.router)
-    app.midi.learn("view.inst_amp")
+    run(r, 1, hand(), learn=app.learn, router=app.router)
+    app.learn.arm("view.inst_amp")
     for k in range(1, 8):                    # x jitters a little, pitch moves a lot
         run(r, 1, hand(pos=(2.0 * k, 200.0, 0.0), direction=tilt(0.12 * k)),
-            midi=app.midi, router=app.router)
-    assert app.midi.learning is None and app.midi.pending is None
+            learn=app.learn, router=app.router)
+    assert app.learn.learning is None and app.learn.pending is None
     rows = [b for b in app.table.of("hand") if b.target == "view.inst_amp"]
     assert [(b.source, b.op, b.value, b.when) for b in rows] == [
         (f"hand:{ax(r, 'right.pitch')}", "position", 1.0, None)]
     assert app.table.owner("view.inst_amp") is rows[0]
-    assert "learned view.inst_amp" in app.midi.last
+    assert "learned view.inst_amp" in app.learn.last
     # the hand is the fader — in floats, off its 100 detents — through the
     # Router like every route; the base is what the panel set
-    run(r, 1, hand(direction=tilt(math.radians(13.0))), midi=app.midi, router=app.router)
+    run(r, 1, hand(direction=tilt(math.radians(13.0))), learn=app.learn, router=app.router)
     _frame(app)
     p = app.reg["view.inst_amp"]
     u = (13.0 + 60) / 120
@@ -575,12 +577,12 @@ def test_a_return_spring_never_completes_a_learn(app):
     k = ax(r, "right.y")
     a = r.s.axes[k]
     a.rest, a.rest_value, a.return_s = "return", 0.0, 0.1
-    run(r, 1, hand(pos=(0.0, 300.0, 0.0)), midi=app.midi, router=app.router)
-    app.midi.learn("view.inst_amp")
-    run(r, 1, hand(pos=(0.0, 300.0, 0.0)), midi=app.midi, router=app.router)
-    run(r, 30, midi=app.midi, router=app.router)     # gone; y springs 0.8 → 0
+    run(r, 1, hand(pos=(0.0, 300.0, 0.0)), learn=app.learn, router=app.router)
+    app.learn.arm("view.inst_amp")
+    run(r, 1, hand(pos=(0.0, 300.0, 0.0)), learn=app.learn, router=app.router)
+    run(r, 30, learn=app.learn, router=app.router)     # gone; y springs 0.8 → 0
     assert r.io.state[k].y == pytest.approx(0.0, abs=0.01)
-    assert app.midi.learning == "view.inst_amp" and app.table.owner("view.inst_amp") is None
+    assert app.learn.learning == "view.inst_amp" and app.table.owner("view.inst_amp") is None
 
 
 def test_hold_shapes_the_daw_output_but_never_latches_a_row(app):
@@ -606,10 +608,10 @@ def test_hold_shapes_the_daw_output_but_never_latches_a_row(app):
 def test_a_learn_on_a_performed_param_is_held_for_the_prompt(app):
     """Learn onto a param another hand row performs: the row is not written
     over it and not lost — it waits in `pending` for Replace / Keep."""
-    t, m = app.table, app.midi
+    t, m = app.table, app.learn
     old = t.add(Binding("hand:3", "view.inst_amp", "position"))
     t.add(Binding("hand:3", "view.bright", "push", 0.5))             # one hand, two params
-    m.learn("view.inst_amp")
+    m.arm("view.inst_amp")
     m.learn_source("hand:7", when="hand:18")
     assert m.learning is None
     new, existing = m.pending
@@ -618,7 +620,7 @@ def test_a_learn_on_a_performed_param_is_held_for_the_prompt(app):
     assert m.resolve_pending(False) is None                          # Keep
     assert m.pending is None and t.owner("view.inst_amp") is old and "kept" in m.last
     t.add(Binding("hand:7", "view.speed", "position"))               # hand:7's old param
-    m.learn("view.inst_amp")
+    m.arm("view.inst_amp")
     m.learn_source("hand:7")
     new = m.resolve_pending(True)                                    # Replace
     assert new is t.owner("view.inst_amp") and new.source == "hand:7"
@@ -629,26 +631,50 @@ def test_a_learn_on_a_performed_param_is_held_for_the_prompt(app):
     assert m.resolve_pending(True) is None                           # nothing pending
 
 
+def test_a_hand_learn_needs_no_midi_adapter(tmp_path):
+    """Audit B3: Learn is the host's, not the MIDI adapter's. With no
+    MidiIO anywhere — `[midi] enabled = false`, or the adapter failed to
+    open — right-click → Learn, move a hand, and the row lands."""
+    chain = Chain(Analyser())
+    reg = build_registry(ViewState(), Control(chain), NS(chain=chain), Library(tmp_path).bank)
+    table = Bindings.load(tmp_path / "bindings.json", legacy_midi=None)
+    learn, router = Learn(reg, table), Router(reg, table)
+    r = rig()
+    run(r, 1, hand(), learn=learn, router=router)
+    learn.arm("view.inst_amp")
+    for k in range(1, 8):
+        run(r, 1, hand(pos=(2.0 * k, 200.0, 0.0), direction=tilt(0.12 * k)),
+            learn=learn, router=router)
+    b = table.owner("view.inst_amp")
+    assert (b.source, b.op) == (f"hand:{ax(r, 'right.pitch')}", "position")
+    assert learn.learning is None and "learned view.inst_amp" in learn.last
+    assert Bindings.load(table.path, legacy_midi=None).owner("view.inst_amp") == b
+    run(r, 1, hand(direction=tilt(math.radians(13.0))), learn=learn, router=router)
+    router.modulate()
+    reg.apply()
+    assert reg["view.inst_amp"].eff_norm == pytest.approx((13.0 + 60) / 120, abs=1e-4)
+
+
 def test_a_held_learn_is_not_fired_again_by_the_hands(app):
-    """The hands adapter keys off `midi.learning`, which is cleared before
+    """The hands adapter keys off `learn.learning`, which is cleared before
     the referee's answer is known: while the prompt is up, moving hands
     learn nothing more; arming a new learn forgets the held one."""
     r = rig()
-    t, m = app.table, app.midi
+    t, m = app.table, app.learn
     old = t.add(Binding("hand:3", "view.inst_amp", "position"))
-    run(r, 1, hand(), midi=m, router=app.router)
-    m.learn("view.inst_amp")
+    run(r, 1, hand(), learn=m, router=app.router)
+    m.arm("view.inst_amp")
     for k in range(1, 8):                                            # R pitch wins the learn
         run(r, 1, hand(pos=(2.0 * k, 200.0, 0.0), direction=tilt(0.12 * k)),
-            midi=m, router=app.router)
+            learn=m, router=app.router)
     assert m.learning is None and m.pending is not None
     held = m.pending
     for k in range(8, 20):                                           # keeps moving: nothing
         run(r, 1, hand(pos=(2.0 * k, 200.0, 0.0), direction=tilt(0.12 * k)),
-            midi=m, router=app.router)
+            learn=m, router=app.router)
     assert m.pending is held and t.owner("view.inst_amp") is old
     assert [b.target for b in t.of("hand")] == ["view.inst_amp"]
-    m.learn("view.speed")                                            # a new learn: forgotten
+    m.arm("view.speed")                                            # a new learn: forgotten
     assert m.pending is None and m.learning == "view.speed"
 
 
@@ -875,11 +901,11 @@ def test_learning_while_pinched_gates_the_row_on_that_pinch(app):
     """Pinch, learn, move: the row remembers the thumb as well as the axis."""
     r = rig()
     shut = {"tips": (10.0, 60.0, 60.0, 60.0), "palm_w": 100.0}
-    run(r, 1, hand(**shut), midi=app.midi, router=app.router)
-    app.midi.learn("view.inst_amp")
+    run(r, 1, hand(**shut), learn=app.learn, router=app.router)
+    app.learn.arm("view.inst_amp")
     for k in range(1, 8):
         run(r, 1, hand(pos=(2.0 * k, 200.0, 0.0), direction=tilt(0.12 * k), **shut),
-            midi=app.midi, router=app.router)
+            learn=app.learn, router=app.router)
     rows = [b for b in app.table.of("hand") if b.target == "view.inst_amp"]
     assert len(rows) == 1
     assert rows[0].when == f"hand:{r.io.gate_lane('right', 'index')}"
@@ -888,11 +914,11 @@ def test_learning_while_pinched_gates_the_row_on_that_pinch(app):
 def test_learning_with_an_open_hand_leaves_the_row_ungated(app):
     r = rig()
     wide = {"tips": (60.0, 60.0, 60.0, 60.0), "palm_w": 100.0}
-    run(r, 1, hand(**wide), midi=app.midi, router=app.router)
-    app.midi.learn("view.inst_amp")
+    run(r, 1, hand(**wide), learn=app.learn, router=app.router)
+    app.learn.arm("view.inst_amp")
     for k in range(1, 8):
         run(r, 1, hand(pos=(2.0 * k, 200.0, 0.0), direction=tilt(0.12 * k), **wide),
-            midi=app.midi, router=app.router)
+            learn=app.learn, router=app.router)
     rows = [b for b in app.table.of("hand") if b.target == "view.inst_amp"]
     assert len(rows) == 1 and rows[0].when is None
 
@@ -904,10 +930,10 @@ def test_the_learning_hand_chooses_its_own_thumb(app):
     both = lambda k=0: (hand("left", pos=(-110.0, 200.0, 0.0), **shut),
                         hand("right", pos=(2.0 * k, 200.0, 0.0),
                              direction=tilt(0.12 * k), **shut))
-    run(r, 1, *both(), midi=app.midi, router=app.router)
-    app.midi.learn("view.inst_amp")
+    run(r, 1, *both(), learn=app.learn, router=app.router)
+    app.learn.arm("view.inst_amp")
     for k in range(1, 8):
-        run(r, 1, *both(k), midi=app.midi, router=app.router)
+        run(r, 1, *both(k), learn=app.learn, router=app.router)
     rows = [b for b in app.table.of("hand") if b.target == "view.inst_amp"]
     assert rows[0].when == f"hand:{r.io.gate_lane('right', 'index')}"
 

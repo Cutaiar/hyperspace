@@ -335,11 +335,10 @@ def test_the_replace_prompt_swaps_the_owner_or_leaves_the_table(rig, tmp_path):
     on a target is a question, not an error. *Replace* swaps the owner and
     writes the file; *Keep* leaves the table untouched. The same modal
     serves the page's own edits (add, a retarget, a row waking up) and a
-    hand learn the MIDI adapter is holding in `pending`, and it draws on
-    whatever page is open. The owner is named as its adapter names it."""
-    from test_midi import FakeIn, FakeOut
-
-    from hyperspace.midi import MidiIO, MidiMap
+    hand learn the shared `Learn` is holding in `pending` — no MIDI adapter
+    anywhere (audit B3) — and it draws on whatever page is open. The owner
+    is named as its adapter names it."""
+    from hyperspace.learn import Learn
 
     panel, reg = rig.panel, rig.reg
     router = _with_router(rig, tmp_path)
@@ -373,9 +372,9 @@ def test_the_replace_prompt_swaps_the_owner_or_leaves_the_table(rig, tmp_path):
     frame(panel, "routing")
     ui_routing.answer(panel, False)
     assert speed.target == "view.speed" and table.owner("view.bright") is cur
-    # a hand learn the adapter holds is the same question, answered through it
-    midi = panel.midi = MidiIO(reg, MidiMap(table=table), inp=FakeIn(), out=FakeOut())
-    midi.learn("view.bright")
+    # a hand learn the Learn object holds is the same question, answered through it
+    midi = panel.learn = Learn(reg, table)
+    midi.arm("view.bright")
     midi.learn_source("hand:1", when="hand:18")
     assert midi.pending is not None
     old, new = ui_routing.prompt(panel)
@@ -385,7 +384,7 @@ def test_the_replace_prompt_swaps_the_owner_or_leaves_the_table(rig, tmp_path):
     assert ui_routing._state(panel)["modal"]
     ui_routing.answer(panel, False)                                    # Keep
     assert midi.pending is None and table.owner("view.bright") is cur and "kept" in midi.last
-    midi.learn("view.bright")
+    midi.arm("view.bright")
     midi.learn_source("hand:1")
     ui_routing.answer(panel, True)                                     # Replace: the axis moves
     got = table.owner("view.bright")
@@ -425,7 +424,7 @@ def test_the_replace_prompt_swaps_the_owner_or_leaves_the_table(rig, tmp_path):
     assert asleep not in table.bindings and _on_disk(tmp_path).owner("view.bright").source == "hand:2"
     # the held learn's Replace goes through the same door: the row that
     # took the target meanwhile goes, not the one the question named
-    midi.learn("view.bright")
+    midi.arm("view.bright")
     midi.learn_source("hand:3")
     assert midi.pending[1] is mover
     table.remove(mover)
@@ -435,18 +434,18 @@ def test_the_replace_prompt_swaps_the_owner_or_leaves_the_table(rig, tmp_path):
     assert len(table.routes_to("view.bright")) == 1
     # the modal shows with the panel hidden, and a question withdrawn
     # while it was up (a new learn armed) takes the popup down with it
-    midi.learn("view.bright")
+    midi.arm("view.bright")
     midi.learn_source("hand:5")
     assert midi.pending is not None
     panel.open = False
     frame(panel)
     assert ui_routing._state(panel)["modal"]
-    midi.learn("view.speed")                                           # forgets the held learn
+    midi.arm("view.speed")                                           # forgets the held learn
     assert midi.pending is None
     frame(panel)
     frame(panel)
     assert not ui_routing._state(panel)["modal"]
-    midi.learn("view.bright")                                          # and a new question opens again
+    midi.arm("view.bright")                                          # and a new question opens again
     midi.learn_source("hand:5")
     frame(panel)
     assert ui_routing._state(panel)["modal"]
