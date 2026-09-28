@@ -70,6 +70,7 @@ from .audio import AudioEngine
 from .control import Control
 from .gamepad import Pad
 from .hotreload import HotReloader
+from .learn import Learn
 from .library import Library
 from .overlay import GlfwBackend, Output
 from .params import Registry, build_registry
@@ -185,7 +186,7 @@ def _make_output(win, reg: Registry, cfg: dict) -> Output:
     return out
 
 
-def _open_midi(reg: Registry, cfg: dict, table: Bindings):
+def _open_midi(reg: Registry, cfg: dict, table: Bindings, learn=None):
     """The adapter, only when configured — the core never imports it."""
     mc = cfg.get("midi", {})
     if not mc.get("enabled", True):
@@ -197,7 +198,8 @@ def _open_midi(reg: Registry, cfg: dict, table: Bindings):
         return None
     try:
         mapping = midi.MidiMap(table=table)
-        return midi.MidiIO(reg, mapping, port=mc.get("port"), profile=mc.get("profile", "apc40"))
+        return midi.MidiIO(reg, mapping, port=mc.get("port"), profile=mc.get("profile", "apc40"),
+                           learner=learn)
     except Exception as e:  # noqa: BLE001 — a broken adapter must not stop the show
         print(f"midi: {e}", file=sys.stderr)
         return None
@@ -458,7 +460,12 @@ def main() -> None:
     # registry hasn't goes where every other missing id goes
     if router.missing_values:
         library.report(router.missing_values, "bindings.json values")
-    midi_io = _open_midi(reg, cfg, router.table)
+    # one Learn over the live table, whatever the MIDI gate says: a knob
+    # or a hand completes it, the panel's prompt settles what the referee
+    # refused (learn.py; the band.sel.* rule is the panel's _real)
+    learn = Learn(reg, router.table, resolve=panel._real)
+    panel.learn = learn
+    midi_io = _open_midi(reg, cfg, router.table, learn)
     panel.midi = midi_io
     panel.router = router                  # the ROUTING page edits the live table
     bridge_io = _open_bridge(reg, cfg)
@@ -494,6 +501,7 @@ def main() -> None:
         (library, "library", "Library"),
         (presets, "presets", "Presets"),
         (router, "routing", "Router"),
+        (learn, "learn", "Learn"),
         (clock, "tempo", "Clock"),
         (lfos, "lfo", "LFOs"),
         *[(lf, "lfo", "LFO") for lf in lfos.lfos],
@@ -589,7 +597,7 @@ def main() -> None:
         # ---- Ultraleap hands: hand lanes into the table, MIDI out to a DAW ----
         if hands_io is not None:
             try:
-                hands_io.poll(dt, midi_io, router)
+                hands_io.poll(dt, learn, router)
             except Exception as e:  # noqa: BLE001
                 reloader.runtime_error = _err("hands", e)
 

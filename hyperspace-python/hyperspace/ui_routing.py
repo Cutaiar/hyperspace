@@ -36,8 +36,8 @@ height positions — Replace / Keep". Two things raise it: an edit here
 (`add_route`, a row's target combo, a row's checkbox waking onto a taken
 target, "Route a lane here…") holds the question in the page's state
 with what *Replace* would do to the table (`ask`); a hand learn the MIDI
-adapter had to hold (`midi.pending`) is the same question, answered
-through `midi.resolve_pending`. `_question` is whichever is up; `prompt`
+(`learn.Learn`) had to hold (`panel.learn.pending`) is the same question,
+answered through its `resolve_pending`. `_question` is whichever is up; `prompt`
 reads it, `answer` settles it, and *Replace* writes the file. Every
 Replace — here, `_wake`, `_retarget`, the adapter's — is one call,
 `Bindings.replace_owner`, which removes whoever owns the target *when the
@@ -244,7 +244,7 @@ def _retarget(router: Router, b: Binding, picked: str) -> Binding | None:
 def _question(panel) -> tuple[Binding, Binding, Callable[[bool], object]] | None:
     """(old, new, settle) — the question up now and how to settle it:
     the page's own first (settle(True) commits; the page then writes), else
-    a hand learn the MIDI adapter is holding (`midi.pending`; settle is its
+    a learn the referee refused (`panel.learn.pending`; settle is its
     `resolve_pending`, which writes for itself). None when nothing asks."""
     st = _state(panel)
     held = st["prompt"]
@@ -256,10 +256,10 @@ def _question(panel) -> tuple[Binding, Binding, Callable[[bool], object]] | None
             if replace_it:
                 commit()
         return old, new, settle
-    m = panel.midi
-    if m is not None and m.pending is not None:
-        new, old = m.pending
-        return old, new, m.resolve_pending
+    lrn = getattr(panel, "learn", None)
+    if lrn is not None and lrn.pending is not None:
+        new, old = lrn.pending
+        return old, new, lrn.resolve_pending
     return None
 
 

@@ -56,7 +56,7 @@ from pathlib import Path
 MODULES = (
     "analysis", "tapers", "geometry", "bands", "analyzer", "control", "audio", "tempo", "lfo",
     "lookback", "dream", "fx", "render", "params", "presets", "library", "config", "overlay",
-    "gamepad", "apc40", "routing", "midi", "bridge", "hands.signal", "hands.core", "hands",
+    "gamepad", "apc40", "routing", "learn", "midi", "bridge", "hands.signal", "hands.core", "hands",
     "ui_presets", "ui_lookback", "ui_bands", "ui_routing", "ui_fx", "ui_lfo", "hands.panel",
     "ui",
 )

@@ -11,7 +11,7 @@ handful of widget helpers (_fader, _slider, _combo, _check, _button) that
 read the live value, draw, and write back through the Param, so a value
 moved by a hotkey, the gamepad or a MIDI knob shows on the next frame with
 no extra plumbing. Right-clicking any widget opens the binding menu: it
-names the param id and, when a MIDI adapter is attached, offers Learn /
+names the param id and offers Learn (the host's `learn.Learn`: a knob or a hand completes it) /
 Unbind.
 
 The surface is a left rail of pages (PAGES), one per registry group or
@@ -359,6 +359,7 @@ class Panel:
         self._bmp_dialog = None
         self.reloader = None  # set by app.py; panel only reads status off it
         self.midi = None      # set by app.py when an adapter is up (midi.MidiIO)
+        self.learn = None     # set by app.py: the armed param and the held question (learn.Learn)
         self.router = None    # set by app.py (routing.Router); else found via midi's table
         self.output = None    # set by app.py (overlay.Output); its params draw below
         self.hands = None          # set by app.py when the tracker is on (hands.HandsIO)
@@ -405,30 +406,41 @@ class Panel:
             who = self._performer(p)
             if who:
                 imgui.text_disabled(who)
-        m = self.midi
-        if m is None:
-            imgui.text_disabled("no MIDI adapter")
+        # Learn is the host's, not the MIDI adapter's: a hand completes it
+        # with no MIDI at all, a knob with the message it sends
+        m, lrn = self.midi, self.learn
+        b = m.binding_for(a.id) if m is not None else None
+        if lrn is None:
+            imgui.text_disabled("no learn")
+        elif lrn.learning == a.id:
+            imgui.text_colored(RED, self._learn_hint())
+            if imgui.menu_item_simple("Cancel learn"):
+                lrn.arm(None)
         else:
-            b = m.binding_for(a.id)
-            if m.learning == a.id:
-                imgui.text_colored(RED, "move a control or a hand…" if self.hands
-                                   else "move a control…")
-                if imgui.menu_item_simple("Cancel learn"):
-                    m.learn(None)
-            else:
-                if b is not None:
-                    imgui.text(b.describe())
-                if imgui.menu_item_simple("Learn MIDI"):
-                    m.learn(a.id)
-                if b is not None and imgui.menu_item_simple("Unbind"):
-                    m.unbind(a.id)
+            if b is not None:
+                imgui.text(b.describe())
+            if imgui.menu_item_simple("Learn"):
+                lrn.arm(a.id)
+            if b is not None and imgui.menu_item_simple("Unbind"):
+                m.unbind(a.id)
         ui_hands.ctx_rows(self, a)      # a hand axis bound to it, and Unbind
         ui_routing.ctx_item(self, a)    # "Route a lane here…" — the routing matrix
         imgui.end_popup()
 
+    def _learn_hint(self) -> str:
+        """What can complete the armed learn on this rig."""
+        knob, hand = self.midi is not None, self.hands is not None
+        if knob and hand:
+            return "move a control or a hand…"
+        if hand:
+            return "move a hand…"
+        if knob:
+            return "move a control…"
+        return "nothing to learn from (no MIDI, no hands)"
+
     def _learn_frame(self, p: Param) -> None:
         """Red outline around the last item while it is armed to learn."""
-        if self.midi is None or self.midi.learning != p.id:
+        if self.learn is None or self.learn.learning != p.id:
             return
         r0, r1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
         dl = imgui.get_window_draw_list()
@@ -1277,9 +1289,9 @@ class Panel:
             imgui.text_disabled("MIDI: no device")
             return
         imgui.text_disabled(f"MIDI: {m.name}  ·  {len(m.map.bindings)} bindings")
-        if m.learning:
+        if m.learner.learning:
             imgui.same_line()
-            imgui.text_colored(RED, f"learning {m.learning}")
+            imgui.text_colored(RED, f"learning {m.learner.learning}")
         elif m.last:
             imgui.same_line()
             imgui.text_disabled(f"·  {m.last}")
