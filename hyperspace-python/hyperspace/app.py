@@ -30,8 +30,8 @@ outside the table — relative writers — and they nudge a param's *base*
 (Param.nudge / scale), so a performer's offset rides on the move rather
 than folding into it.
 
-The in-app cheat sheet (ui.CHEATSHEET) is the canonical human list —
-keep it in sync when adding bindings.
+The in-app cheat sheet (ui.CHEATSHEET) is the canonical human list;
+tests/test_ui_shell.py checks it against the tables and LOOP_KEYS below.
 
 The engine hot-reloads (hotreload.py): save a module on its watch list
 (hotreload.MODULES) while the app runs and live objects pick the code up
@@ -90,7 +90,10 @@ D4_RATE0 = 0.45   # octaves/s at the instant of the press
 D4_RATE1 = 3.6    # octaves/s once the ramp completes
 D4_RAMP = 1.8     # seconds of hold to reach full rate
 
-# the key / pad / MIDI / lane binding tables live in routing.py (bindings.json)
+# the key / pad / MIDI / lane binding tables live in routing.py (bindings.json);
+# these are the keys the loop still handles itself (the cheat-sheet test reads it)
+LOOP_KEYS = ("R", "SUPER+R", "UP", "DOWN", "ESCAPE", "Q",
+             *[f"F{k + 1}" for k in range(SLOTS)], *[f"SHIFT+F{k + 1}" for k in range(SLOTS)])
 
 
 def act(reg: Registry, pid: str, op: str, arg: int = 0) -> None:
@@ -425,8 +428,10 @@ def main() -> None:
     presets = library.bank
     # dream.* drives the renderer's look-back (lookback.py); the post pass
     # runs inside renderer.draw
+    want = {"restart": False}          # app.restart sets it; polled after the panel draws
     reg = build_registry(s, control, audio, presets, dream=renderer.lookback.state,
-                         fx=renderer.fx.state)
+                         fx=renderer.fx.state,
+                         restart=lambda: want.__setitem__("restart", True))
     # an analyzer preset carries its band layout; the library hands it to
     # control before restoring values (07-overhaul contracts)
     library.on_layout("band", control.apply_layout)
@@ -463,11 +468,14 @@ def main() -> None:
     dream_io = _open_dream(reg, cfg)
     if dream_io is not None:            # fills the look-back's dream slot
         renderer.lookback.source = dream_io
+    pad = Pad()
     # panel state and chain must stay one object even after source changes
     # the live objects that get re-classed on a hot reload; re-evaluated
     # each swap so recreated ones (the chain after a source attach) count
     reloader = HotReloader(targets=lambda: [
         (renderer, "render", "Renderer"),
+        (renderer.scene, "render", "SceneTarget"),
+        (renderer.cover, "render", "CoverTarget"),
         (renderer.lookback, "lookback", "Lookback"),
         (renderer.lookback.state, "lookback", "DreamState"),
         (renderer.fx, "fx", "FxChain"),
@@ -476,25 +484,29 @@ def main() -> None:
         (panel, "ui", "Panel"),
         (control, "control", "Control"),
         (audio, "audio", "AudioEngine"),
-        (audio.chain, "bands", "Chain"),
+        (audio.chain, "analyzer", "Analyzer"),
         *[(p, "bands", "Params") for p in audio.chain.params],
         *([(audio.analyser, "analysis", "Analyser")] if audio.analyser is not None else []),
         (reg, "params", "Registry"),
         *[(p, "params", "Param") for p in reg],
         (output, "overlay", "Output"),
+        (output.backend, "overlay", "GlfwBackend"),
+        (library, "library", "Library"),
+        (presets, "presets", "Presets"),
         (router, "routing", "Router"),
         (clock, "tempo", "Clock"),
         (lfos, "lfo", "LFOs"),
         *[(lf, "lfo", "LFO") for lf in lfos.lfos],
         *([(midi_io, "midi", "MidiIO"), (midi_io.map, "midi", "MidiMap")] if midi_io else []),
         *([(bridge_io, "bridge", "Bridge")] if bridge_io else []),
-        *([(hands_io, "hands", "HandsIO")] if hands_io else []),
+        *([(hand_settings, "hands.core", "HandSettings")] if hand_settings else []),
+        *([(hands_io, "hands.core", "HandsIO")] if hands_io else []),
         *([(dream_io, "dream", "DreamWorker")] if dream_io else []),
+        (pad, "gamepad", "Pad"),
     ], watchers=[library])
     panel.reloader = reloader
     keys = Keys(render_win, ctrl_win)
     mouse = Mouse(render_win, reg, s)
-    pad = Pad()
     depth4, yaw, pitch, zoom = reg["view.depth4"], reg["camera.yaw"], reg["camera.pitch"], reg["camera.zoom"]
 
     # smoke-test escape hatch: HYPERSPACE_FRAMES=n closes after n frames
@@ -630,8 +642,8 @@ def main() -> None:
         if ok:
             reloader.runtime_error = ""
 
-        if panel.restart_requested:
-            panel.restart_requested = False
+        if want["restart"]:
+            want["restart"] = False
             _restart(audio, impl, midi_io, ctrl_win, dream_io)
 
         if reloader.error or reloader.runtime_error:

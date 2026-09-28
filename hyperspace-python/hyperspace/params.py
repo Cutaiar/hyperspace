@@ -105,6 +105,7 @@ class Kind(Enum):
     TEXT = "text"
 
 
+
 def _clamp(x, a, b):
     return a if x < a else min(x, b)
 
@@ -643,16 +644,22 @@ def _item(get_list, i):
     return (lambda: get_list()[i]), (lambda v: get_list().__setitem__(i, v))
 
 
-def build_registry(view, control, audio, presets=None, dream=None, fx=None) -> Registry:
+def build_registry(view, control, audio, presets=None, dream=None, fx=None,
+                   restart=None) -> Registry:
     """Declare every parameter the surface owns.
 
     `audio` only needs a `.chain` attribute (tests pass a namespace); the
     chain is looked up on every access because a source attach replaces it.
-    `dream` is the renderer's lookback state (lookback.DreamState); a fresh
-    one stands in when there is no renderer, so the group is always
-    declared; `fx` (fx.FxState, the renderer's effect stack) likewise. Panel- and app-level actions (panel toggle, restart…) are
-    added by the caller with `trigger()` / `toggle()` once those objects
-    exist.
+    Its capture side is optional too: with `start_mic` / `stop` and a
+    `devices` list (audio.AudioEngine) ``audio.mic`` and ``audio.device`` do
+    something; without them they are declared anyway, so a key row (`M`)
+    resolves with or without a panel. `dream` is the renderer's lookback
+    state (lookback.DreamState); a fresh one stands in when there is no
+    renderer, so the group is always declared; `fx` (fx.FxState, the
+    renderer's effect stack) likewise. `restart` is the host's request to
+    restart the process (``app.restart``; app.py polls a flag) — a no-op
+    without a host. Only the panel's own state (``ui.*``) is added by the
+    panel once it exists.
     """
     r = Registry()
     dream = dream if dream is not None else DreamState()
@@ -987,8 +994,32 @@ def build_registry(view, control, audio, presets=None, dream=None, fx=None) -> R
         r.trigger("theme.prev", "Previous theme", lambda: presets.cycle(-1), group=g)
 
     # ---- audio transport (only what the engine exposes headlessly) ----
+    g = "audio"
+
+    def mic_on() -> bool:
+        return bool(getattr(audio, "on", False) and getattr(audio, "mode", None) == "mic")
+
+    def set_mic(on: bool) -> None:
+        devices = getattr(audio, "devices", None) or []
+        if on and devices and not mic_on():
+            sel = min(max(int(getattr(audio, "device_sel", 0)), 0), len(devices) - 1)
+            audio.start_mic(devices[sel]["index"])
+        elif not on and mic_on():
+            audio.stop()
+
+    r.toggle("audio.mic", "Mic", mic_on, set_mic, group=g, persist=False,
+             tip="Listen to the selected input device.")
+    r.enum("audio.device", "Input device",
+           lambda: int(getattr(audio, "device_sel", 0)),
+           lambda i: setattr(audio, "device_sel", int(i)),
+           lambda: [("● " if d["loopback"] else "") + d["name"]
+                    for d in (getattr(audio, "devices", None) or [])],
+           group=g, persist=False, modulatable=False)
+    r.trigger("app.restart", "Restart process",
+              restart if restart is not None else (lambda: None), group="ui",
+              modulatable=False,
+              tip="Restart the process (Cmd+R). Full cold reload; view state is lost.")
     if hasattr(audio, "toggle_play"):
-        g = "audio"
         r.toggle("audio.play", "Play",
                  lambda: bool(getattr(audio, "playing", False)),
                  lambda on: audio.toggle_play() if on != bool(audio.playing) else None,

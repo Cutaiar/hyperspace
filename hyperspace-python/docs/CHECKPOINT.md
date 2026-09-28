@@ -109,10 +109,9 @@ in `config.toml` (not yet needed — nothing rig-specific exists until plan 04).
   before the plan 09 hand checks**: B1 predicts check 7 fails as
   documented (a hand leaving the box does not release a `position` row
   while the tracker is on), and B2 (a tap re-pins the downbeat until the
-  first ⇧B) shapes check 5. Two verified surprises for anyone hot-reloading:
-  the post-07 modules (`fx`, `lfo`, `tempo`, `hands/`, `ui_fx`, `ui_lfo`)
-  are not on the watch list, and a `params.py` reload orphans every
-  `Kind` (H1, H2).
+  first ⇧B) shapes check 5. Plan 11 WP2 closed the two hot-reload
+  surprises (H1, H2): every module but the cold core is watched and a
+  `params.py` reload keeps `Kind`'s identity.
 
 ## Not done — in rough priority order
 
