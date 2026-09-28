@@ -68,7 +68,9 @@ in the library home (delete it to get the defaults back; an older
 `midi_map.json` there is migrated into it on first run). Knobs use soft
 pickup — after a band switch or a theme load a knob does nothing until it
 sweeps through the current value. An optional `config.toml` names the port
-and profile, or disables the adapter (see `hyperspace/config.py`).
+and profile, or disables the adapter (see `hyperspace/config.py`); MIDI
+and the gamepad are the two adapters on by default (`[gamepad] enabled =
+false` stops polling for a pad), the bridge, dream and hands are off.
 
 ## Presets, projects and the library
 
@@ -109,6 +111,7 @@ working from the control window, and `G` (or the APC40's pan button) takes
 clicks back for orbiting. The crossfader fades the ground from see-through
 to black. The pre-split `overlay.*` ids remain as aliases, so old MIDI maps
 keep working. `[output] fullscreen = true` or `on_start = true` (overlay) in
-`config.toml` launches straight into a mode; `monitor = 1` picks the screen.
+`config.toml` launches straight into a mode; `monitor = 1` picks the screen
+(`-1`, the default, follows the window — the SYSTEM page says "follow window").
 An older `[overlay]` section is read as the same thing (with a note asking
 for the rename); the keys are documented in `hyperspace/config.py`.
