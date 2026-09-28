@@ -7,21 +7,23 @@ BPM and a division into a phase.
 
 Two things a tap must never do decide the shape of `Clock`:
 
-  * **A tap never moves a running synced LFO.** Tapping sets the BPM;
-    the downbeat the LFOs read (`t0`) is set only by `trigger` — the
-    global LFO trigger, ``lfo.trigger``, the one button pressed after
-    tapping. So a re-tap mid-set changes the readout, not the picture,
-    until the performer says so. A BPM change re-anchors `t0` so that
-    ``beat(t)`` is continuous at the instant of the change: the wave
-    keeps its place and only its rate changes.
+  * **Once triggered, a tap never moves a running synced LFO.** Tapping
+    sets the BPM; after the first `trigger` — the global LFO trigger,
+    ``lfo.trigger``, the one button pressed after tapping — the downbeat
+    the LFOs read (`t0`) is the performer's and a tap does not touch it.
+    So a re-tap mid-set changes the tempo, not the downbeat: a BPM change
+    re-anchors `t0` so that ``beat(t)`` is continuous at the instant of
+    the change, and every synced LFO keeps its place in the bar and runs
+    faster or slower from there.
   * **The burst is its own bookkeeping.** Taps more than `GAP` apart
     start a new burst; the BPM is the mean interval of the burst's last
-    `TAPS` taps, so a tempo change registers within a bar of tapping
-    rather than being averaged against a minute of the old one. The
-    burst's first tap is only the burst's own origin for the interval
-    math. The one exception is a fresh clock that has never been
-    triggered: its first tap is also the downbeat (with the nudge folded
-    in, as `trigger` does), so a new app lines up without a second press.
+    `TAPS` (8) taps, measured from the oldest of those — the burst's
+    first tap until the burst runs past eight, then the eighth-last — so
+    a tempo change registers within a bar of tapping rather than being
+    averaged against a minute of the old one. The one time a tap does set
+    the downbeat is a clock that has never been triggered: there every
+    tap places `t0` on the burst's first tap (with the nudge folded in,
+    as `trigger` does), so a new app lines up without a second press.
 
 ``beat(t) = (t − t0) · bpm / 60 + nudge``, ``bar(t) = beat mod 4`` (4/4
 assumed), ``phase(t, ratio) = (beat · ratio) mod 1`` — `ratio` in cycles
@@ -91,10 +93,11 @@ class Clock:
             if mean > 0.0:                       # two in one frame is not a tempo
                 self.set_bpm(60.0 / mean, t)
         if not self._triggered:
-            # a fresh clock: the burst's first tap is the downbeat too — the
-            # nudge folded in exactly as trigger() does — so a new app lines
-            # up without a second press. Once triggered, the downbeat is the
-            # performer's and a tap only re-anchors it.
+            # never triggered: every tap puts the downbeat on the burst's
+            # first tap — the nudge folded in exactly as trigger() does — so
+            # a new app lines up without a second press. Once triggered, a
+            # tap changes only the BPM; set_bpm above moved t0 just enough
+            # to keep beat(t) continuous.
             self.t0 = self.taps[0] + self.nudge * 60.0 / self.bpm
 
     def set_bpm(self, bpm: float, t: float | None = None) -> None:

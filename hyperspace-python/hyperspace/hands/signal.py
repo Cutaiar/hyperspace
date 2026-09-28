@@ -1,7 +1,7 @@
 """The hand axes as analog signals — shaping, dynamics, MIDI encoding.
 
 Pure functions and small state machines, no SDK and no registry, so
-hands.py composes them and the tests drive them directly. One axis, per
+core.py composes them and the tests drive them directly. One axis, per
 frame:
 
     raw ──norm──▶ u ──One Euro──▶ ──shape──▶ target ──Follower──▶ y ──encode──▶ MIDI

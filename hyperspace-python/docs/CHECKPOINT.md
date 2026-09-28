@@ -95,8 +95,24 @@ in `config.toml` (not yet needed — nothing rig-specific exists until plan 04).
   swell on the bar, a re-tap moves the readout not the swell (5); the
   right hand deepening `lfo-breathe`'s swell alone (6); an APC knob on a
   hand-owned param moving the base that shows when the hand leaves (7);
-  plus the METRONOME LED cadence and the LFO page by eye. **Plan 10 —
-  the architecture and documentation pass — is next**, once those pass.
+  plus the METRONOME LED cadence and the LFO page by eye.
+- **Plan 10 executed (2026-09-27).** The system as built, in four
+  documents: [`ARCHITECTURE.md`](ARCHITECTURE.md) (component map, the
+  frame with the one-frame-lag rule, the control model as the canonical
+  statement with a `file:line` or test per claim, one shape per module),
+  [`DECISIONS.md`](DECISIONS.md) (every settled call from plans 07–09 and
+  earlier, dated, with the why, superseded ones kept),
+  [`ENGINEERING.md`](ENGINEERING.md) refreshed for the Python app (HTML-era
+  sections removed, every sentence checked against a module), and
+  [`AUDIT-2026-09.md`](AUDIT-2026-09.md) — ~70 findings, sized, filed for
+  plan 11, none fixed except docstrings. **Read the audit's first table
+  before the plan 09 hand checks**: B1 predicts check 7 fails as
+  documented (a hand leaving the box does not release a `position` row
+  while the tracker is on), and B2 (a tap re-pins the downbeat until the
+  first ⇧B) shapes check 5. Two verified surprises for anyone hot-reloading:
+  the post-07 modules (`fx`, `lfo`, `tempo`, `hands/`, `ui_fx`, `ui_lfo`)
+  are not on the watch list, and a `params.py` reload orphans every
+  `Kind` (H1, H2).
 
 ## Not done — in rough priority order
 
@@ -115,7 +131,7 @@ in `config.toml` (not yet needed — nothing rig-specific exists until plan 04).
    CC pairs + pitch-bend lanes, MIDI clock from deck BPM, inbound control,
    FL-side fuser script. Nothing in the core may depend on it.
 5. **Plan 06 — divergence:** freeze/tag the HTML; **fix the trim
-   non-monotonicity** (three candidate fixes in plan 06 / ENGINEERING §9 —
+   non-monotonicity** (three candidate fixes in plan 06 / ENGINEERING.md's trim note in the audio-chain section —
    needs the user's choice; the auto/manual switch is the one to propose);
    tempo-locked shapers once DJ Link exists; saveable scenes as JSON;
    per-band LFO knobs; real harmonic detection; scrub bar.

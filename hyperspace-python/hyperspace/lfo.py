@@ -22,8 +22,9 @@ Per LFO:
   reset   a trigger: this one LFO's cycle restarts now, in either mode —
           a per-LFO gesture hook
 
-In a division the phase is the clock's, ``clock.phase(t, ratio) + phase``
-(tempo.py), so bar-long waves land on the downbeat and the **global
+In a division the cycle count is the clock's beat scaled to the
+division, ``clock.beat(t) · ratio + shift`` (+ phase; tempo.py), so
+bar-long waves land on the downbeat and the **global
 trigger** — ``lfo.trigger``, the one button pressed after tapping a tempo
 — re-aligns all of them at once: it sets the clock's downbeat to now and
 every synced LFO reads its own phase offset that same frame. Free-running
@@ -36,6 +37,9 @@ Frame order (app.py): the LFOs step after the bridge and before
 before that LFO's output does — the same one-frame lag every modulated
 value has, and no recursion. `publish` also hands the router the rest
 (0.5) a push row from an LFO is centred on (`Router.rests`).
+
+Addresses: the router's source addresses are 0-based (``lfo:0`` is
+"LFO 1") while the param ids are 1-based (``lfo.1.depth``).
 
 Nothing here imports from the host: the clock, the registry and the
 router are duck-typed arguments, the boundary rule hands/ has

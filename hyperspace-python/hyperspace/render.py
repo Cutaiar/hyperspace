@@ -1,7 +1,8 @@
 """moderngl renderer — port of the draw() pipeline of hyperspace.html.
 
-The transform runs on the CPU through geometry.project(), the exact code the
-parity tests proved against the golden traces; the GPU only rasterises. At
+The transform runs on the CPU through geometry.project_h(), the vectorised
+twin of the geometry.project() the parity tests proved against the golden
+traces (project stays as the tests' oracle); the GPU only rasterises. At
 ≤600 vertices / ≤1200 edges per shape the per-frame numpy cost is nothing,
 and reusing the proven path is what makes "visually indistinguishable"
 achievable by construction.
@@ -218,7 +219,7 @@ class ViewState:
     # modulation targets (params.py rot.rate.* / pattern.mod.*): per-plane
     # rate multipliers and the face patterns' inputs — 1.0 is the undriven
     # look; an audio lane routed to them (routing.py) is what the reference
-    # called PLANEDRIVE and u_bands
+    # called PLANEDRIVE and u_bands (here the u_mod[8] uniform)
     rate: list[float] = field(default_factory=lambda: [1.0] * 6)
     pattern_mod: list[float] = field(default_factory=lambda: [1.0] * N_MOD)
 

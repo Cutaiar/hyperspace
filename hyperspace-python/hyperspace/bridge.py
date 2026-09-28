@@ -170,7 +170,7 @@ class Bridge:
         self._last_t: list[float] = []           # per slot: when it went out
         self._n = 0                              # the analyzer's lane count, last seen
         self._fed = False                        # the router holds our vector
-        self.sent = 0                            # messages out, for the status line
+        self.sent = 0                            # messages out — counted; no panel shows it yet
         if not self.ports.injected and self.ports.connect():
             self._connected()
 

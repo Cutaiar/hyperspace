@@ -22,10 +22,11 @@ factory's file of the same name:
   hyperspace/library/<group>/<slug>.json     factory, read-only, in the wheel
   $HYPERSPACE_HOME/<group>/<slug>.json       user (default ~/Hyperspace)
   $HYPERSPACE_HOME/projects/<slug>.hyp.json  user projects
-  $HYPERSPACE_HOME/config.toml, midi_map.json
+  $HYPERSPACE_HOME/config.toml, bindings.json (a midi_map.json is only
+                                 migrated in and read once, routing.py)
 
-``home()`` is the one resolver for that folder (config.py and the MIDI map
-path go through it). On the first run the working-directory ``config.toml``
+``home()`` is the one resolver for that folder (config.py and the binding
+table path go through it). On the first run the working-directory ``config.toml``
 and ``midi_map.json`` are copied in and a legacy ``presets.json`` theme
 bank becomes the user's default project — originals are left alone.
 
@@ -430,7 +431,9 @@ class Library:
 
     def groups(self) -> list[str]:
         """Every group with a preset folder or a persisted param — less the
-        routing layer's (params.ROUTING_GROUPS), which routing presets carry."""
+        routing layer's (params.ROUTING_GROUPS), which routing presets carry.
+        The ``bindings`` folder still comes back from the folder scan; the
+        panel filters it (ui_presets.py)."""
         out = {p.group for p in (self.reg or [])
                if p.persist and p.group and p.group not in ROUTING_GROUPS}
         for root in self._roots():

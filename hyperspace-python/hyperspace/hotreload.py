@@ -1,6 +1,7 @@
-"""Live-code the whole engine — the patterns.glsl contract, for Python.
+"""Live-code the listed modules — the patterns.glsl contract, for Python.
 
-Save any watched module while the app runs and it picks the change up; a
+Save a module named in MODULES while the app runs and it picks the change
+up (a module not listed in MODULES needs a restart); a
 broken save keeps the last good version running and surfaces the error,
 never kills the app.
 

@@ -33,8 +33,9 @@ than folding into it.
 The in-app cheat sheet (ui.CHEATSHEET) is the canonical human list —
 keep it in sync when adding bindings.
 
-The engine hot-reloads (hotreload.py): save any module under hyperspace/
-while the app runs and live objects pick the code up in place; a broken
+The engine hot-reloads (hotreload.py): save a module on its watch list
+(hotreload.MODULES) while the app runs and live objects pick the code up
+in place; modules not listed need a restart; a broken
 save keeps the last good version and shows the error in the control
 window. This file is the one cold piece — its loop is on the stack — so
 keep it thin: put anything you'll want to iterate on live in the modules
@@ -213,7 +214,7 @@ def _open_bridge(reg: Registry, cfg: dict):
 
 def _hand_settings(reg: Registry, cfg: dict):
     """The hands setup as `hands.*` params — registered whether or not the
-    tracker is on, so a project or preset carries it either way. hands.py
+    tracker is on, so a project or preset carries it either way. hands/core.py
     imports the SDK only inside LeapSource, so this costs nothing."""
     try:
         from . import hands
@@ -226,7 +227,7 @@ def _hand_settings(reg: Registry, cfg: dict):
 
 
 def _open_hands(cfg: dict, settings):
-    """Ultraleap hands (hands.py), only when [hands] enabled — the same rule."""
+    """Ultraleap hands (hands/), only when [hands] enabled — the same rule."""
     hc = cfg.get("hands", {})
     if settings is None or not hc.get("enabled", False):
         return None

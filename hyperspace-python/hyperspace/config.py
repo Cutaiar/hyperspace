@@ -10,10 +10,16 @@ differs on this machine. Adapters are enabled here, not in code
     enabled = true          # false leaves the adapter out entirely
     port = "APC40"          # substring of the port name; default from the profile
     profile = "apc40"       # device profile (hyperspace/<profile>.py)
-    map = "midi_map.json"   # binding table, relative to the library home;
-                            # written by right-click → Learn
+    map = "midi_map.json"   # a pre-plan-09 MIDI map, relative to this file's
+                            # folder (the library home when loaded from there);
+                            # read once, only when bindings.json does
+                            # not exist yet (Bindings.load). Learn writes
+                            # <home>/bindings.json (routing.py), not this file
 
-    [overlay]
+    [overlay]               # the render window's look when floating; an
+                            # [output] section is read the same way, merged
+                            # over it, and also takes `monitor` (index, -1 =
+                            # the window's own) and `fullscreen` (app.py)
     on_start = false        # launch straight into overlay mode
     passthrough = true      # clicks go to the window underneath (G / pan toggles)
     bg = 0.0                # ground darkness in overlay: 0 see-through, 1 black
@@ -37,7 +43,7 @@ differs on this machine. Adapters are enabled here, not in code
     precision = "fp32"      # or "fp16": ~10 % faster on VGG, more p99 outliers
     weights_dir = ""        # pretrained weights; "" = <library home>/weights
 
-    [hands]                 # Ultraleap hands (hands.py, the `leap` bindings) — the rig;
+    [hands]                 # Ultraleap hands (hands/, the `leap` bindings) — the rig;
                             # the performance setup is the HANDS page / `hands` presets
     enabled = false         # true opens the tracker; off, `leap` is never imported
     mode = "desktop"        # camera looks up from below; "screentop" from above, "hmd"
@@ -63,6 +69,7 @@ from . import library
 FILE = Path("config.toml")
 
 DEFAULTS: dict = {
+    # midi.map: the legacy midi_map.json, merged once when bindings.json is missing
     "midi": {"enabled": True, "port": None, "profile": "apc40", "map": "midi_map.json"},
     # overlay.py: start floating over the screen; ground 0 = see-through
     "overlay": {"on_start": False, "passthrough": True, "bg": 0.0, "alpha": 1.0},
@@ -71,7 +78,7 @@ DEFAULTS: dict = {
                "cc": 16, "rate": 100, "send": ["lane:*"], "in_lanes": 16},
     # dream.py: the temporal Deep Dream behind the look-back — off by default
     "dream": {"enabled": False, "device": "auto", "precision": "fp32", "weights_dir": ""},
-    # hands.py: Ultraleap hands as MIDI CCs and hand lanes — off by default;
+    # hands/: Ultraleap hands as MIDI CCs and hand lanes — off by default;
     # the rest of its defaults live in hands.DEFAULTS
     "hands": {"enabled": False, "calibration": "hands.json"},
 }

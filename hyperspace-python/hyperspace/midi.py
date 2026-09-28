@@ -29,11 +29,14 @@ an `abs` knob moves the *return value*, the base the performer works
 from and the param comes back to when the performer leaves. Nothing
 prompts and nothing is blocked; the knob simply never sees the offset.
 
-Feedback runs every frame, change-gated: "ring" sends the param's norm
-— the base, so a ring shows the knob's own setting and never chases a
-performer — back as the same CC (LED rings on knobs); "led" sends a note velocity
-that tracks the param — a toggle's state, or whether an enum equals the
-binding's value — so the surface always shows what the engine has.
+Feedback runs every frame, change-gated: "ring" sends ``p.norm`` — the
+base, so a ring shows the knob's own setting and never chases a
+performer — back as the same CC (LED rings on knobs); "led" sends a note
+velocity from `_lit`: on a toggle, or on an enum `set` row, it reads
+``p.value``, the effective value, so it follows a performer; on a
+continuous `set` row it compares the base (``p.norm``) with the row's
+value; any other row echoes its own press. So the surface shows
+what the engine has, except a ring, which shows what the hand set.
 Triggers echo their press so the button lights while held, or show a
 light of their own when the param carries one (``Registry.trigger(lit=)``:
 the METRONOME LED blinks on the beat through ``lfo.trigger``).

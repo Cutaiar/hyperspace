@@ -33,9 +33,11 @@ off for UI state, transport and rig-specific choices) and ``modulatable``
 like which screen the output is on). An ``alias`` (band.sel.*) is neither.
 
 Modulation — the one control concept every source shares — lives here.
-Any source (an audio band, an LFO, an external MIDI lane) calls
-``modulate(u)`` on a param each frame with an offset in the param's
-normalized space, and once per frame ``Registry.apply()`` writes
+Sources (an audio band, an LFO, a hand axis, a MIDI lane) never touch a
+param directly: each adapter hands its lane values to ``router.feed`` and
+``Router.modulate`` (routing.py) is the one caller of ``modulate(u)``, once
+per frame per live row, with an offset in the param's normalized space.
+Once per frame ``Registry.apply()`` then writes
 ``effective = base + Σ offsets`` into the live object. The *base* is what
 the user set and what presets save; the object holds the effective value
 the renderer reads. Base is adopted from the object the first time a
@@ -693,7 +695,7 @@ def build_registry(view, control, audio, presets=None, dream=None, fx=None) -> R
                  fmt=lambda v: f"rate {v:.1f}", group=g)
     r.enum("view.pattern", "Pattern", *_attr(view, "pattern"), PATTERNS, group=g,
            tip="Face pattern — edit hyperspace/shaders/patterns.glsl while the app runs; "
-               "it hot-reloads on save. Patterns read the six band outputs as uniforms.")
+               "it hot-reloads on save. Patterns read the pattern inputs as u_mod[8].")
     r.continuous("view.pattern_mix", "Pattern mix", *_attr(view, "pattern_mix"),
                  lo=0.0, hi=1.0, fmt=lambda v: f"mix {v:.2f}", group=g)
     r.continuous("view.bmp_alpha", "Bitmap alpha", *_attr(view, "bmp_alpha"),
@@ -710,7 +712,7 @@ def build_registry(view, control, audio, presets=None, dream=None, fx=None) -> R
     r.text("view.bmp_file", "Bitmap file", *_attr(view, "bmp_file"), group=g,
            tip="Image drawn over the face pattern; empty for none.")
     # the face pattern's modulation inputs — what the shaders read as
-    # u_bands today. Base 1.0 is the un-driven look; a routed lane rides on it.
+    # u_mod[8]. Base 1.0 is the un-driven look; a routed lane rides on it.
     for k in range(len(view.pattern_mod)):
         r.continuous(f"pattern.mod.{k}", f"Pattern mod {k + 1}",
                      *_item(lambda: view.pattern_mod, k), lo=0.0, hi=2.6,
@@ -859,7 +861,7 @@ def build_registry(view, control, audio, presets=None, dream=None, fx=None) -> R
     r.continuous("master.gain", "Audio drive",
                  lambda: chain().gain, lambda v: setattr(chain(), "gain", v),
                  taper=tapers.T_DRIVE, fmt=tapers.fmt_gain, group=g,
-                 tip="Master gain on the six band faders, after the transfer stage. Only "
+                 tip="Master gain on every band fader, after the transfer stage. Only "
                      "does anything while a source is attached.")
     r.continuous("master.dyn", "Dynamics",
                  lambda: chain().dyn, lambda v: setattr(chain(), "dyn", v),
@@ -869,7 +871,7 @@ def build_registry(view, control, audio, presets=None, dream=None, fx=None) -> R
     r.continuous("master.trim", "Input trim",
                  lambda: chain().trim, lambda v: setattr(chain(), "trim", v),
                  taper=tapers.T_TRIM, fmt=tapers.fmt_db, group=g,
-                 tip="One offset added to all six per-band trims, at the very head of the "
+                 tip="One offset added to every per-band trim, at the very head of the "
                      "chain — moves a whole song down into the 56 dB working window.")
 
     # ---- macros: the chaining knobs (plan 09, decision 7) ----
@@ -894,7 +896,7 @@ def build_registry(view, control, audio, presets=None, dream=None, fx=None) -> R
     r.enum("scene.select", "Scene", lambda: control.scene, control.select_scene,
            [p["name"] for p in PRESETS], group=g)
     r.trigger("scene.reset_all", "Reset all", control.reset_all_clicked, group=g,
-              tip="Reloads the selected scene across all six bands. Undoable for 8 s.")
+              tip="Reloads the selected scene across every band. Undoable for 8 s.")
 
     # ---- bands ----
     # The analyzer has N bands (plan 07), so this block is a function: it
@@ -974,7 +976,8 @@ def build_registry(view, control, audio, presets=None, dream=None, fx=None) -> R
         # meta-controls: they *apply* presets, so no preset stores them
         r.enum("theme.select", "Theme", lambda: presets.active, presets.load, names,
                group=g, persist=False, modulatable=False,
-               tip="Whole-surface save states — view, faders, all six band strips.")
+               tip="Whole-surface save states — every persisted parameter except "
+                   "the routing layer's macros.")
         for k in range(len(presets.slots)):
             r.trigger(f"theme.load.{k}", f"Load theme {k + 1}",
                       lambda k=k: presets.load(k), group=g)

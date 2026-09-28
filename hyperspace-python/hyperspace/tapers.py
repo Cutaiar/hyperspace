@@ -4,8 +4,8 @@ A taper owns both directions of the mapping between an integer fader
 position and the real value stored in the chain, and every pair
 round-trips exactly: unmap(map(p)) == p over the whole throw. That law is
 what stops selecting a band or loading a scene from walking a fader
-sideways. LIN vs LOG per control is a considered decision (ENGINEERING
-§4, "Fader tapers") — don't re-litigate it here.
+sideways. LIN vs LOG per control is a considered decision (ENGINEERING.md,
+audio chain section, "Fader tapers") — don't re-litigate it here.
 """
 
 from __future__ import annotations

@@ -23,7 +23,8 @@ what the output is.
 Every control is a registry param, drawn with the panel's own widgets,
 so right-click → Learn and a performer's ownership work on them like on
 anything else. A function over the Panel, like ui_lookback: no state of
-its own, so a hot reload lands on the next frame. Without a clock and
+its own (whether a save lands live depends on hotreload.MODULES, which
+does not list this module today). Without a clock and
 LFOs attached (headless tests, a Panel built without app.py) the page
 says so and draws nothing else.
 """
