@@ -756,17 +756,11 @@ class HandsIO:
         if router is not None:
             live = getattr(self.source, "on", True)
             router.feed("hand", self.lanes() if live else None)
-            if not hasattr(router, "labels"):   # a Router from before a hot reload
-                router.labels = {}
             router.labels["hand"] = self.lane_names
-            if not hasattr(router, "gates"):
-                router.gates = {}
             # the switches, so the routing UI can offer them without
             # knowing anything about hands
             router.gates["hand"] = [(self.gate_lane(s, f), f"{s[0].upper()} {f[:3]}")
                                     for s in SIDES for f in PINCHES]
-            if not hasattr(router, "rests"):
-                router.rests = {}
             # where each lane idles — the axis's own configured rest, so a
             # push row centred on it pushes nothing from an absent hand
             # whatever the setup says rest is; presence and pinches 0
