@@ -32,8 +32,8 @@ Sources are one string, ``scheme:address``:
   hand:<i>         Ultraleap hand axis i's output in [0, 1] (hands/core.py),
                    then one presence lane per hand, then the eight pinch
                    switches (left then right, four fingers each; the
-                   `when` gates); NaN while that hand is out of the box,
-                   and a NaN reading is not live
+                   `when` gates); NaN while that hand is out of the box
+                   or was never seen, and a NaN reading is not live
 
 Source addresses are 0-based (``lfo:0`` is "LFO 1", ``hand:0`` the first
 axis); param ids are 1-based (``lfo.1.depth``, ``macro.1``).

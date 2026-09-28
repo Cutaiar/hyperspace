@@ -87,10 +87,10 @@ available through `[hands] dofs`, but the default stays the palm pose.
    over `Return` seconds (within about 2 %), with `Bounce` from a
    critically damped glide up to a ringing spring.
    **Catch:** a returning hand is glided onto over `Catch` seconds
-   rather than jumped to. The spring, the hold and the catch shape the
-   **DAW output only**: the routing lane reads NaN while the hand is out
-   of the box and until the catch has landed, so a row lets go the frame
-   the hand leaves and takes the param back on the hand (plan 11, B1).
+   rather than jumped to. The spring and the hold shape the **DAW output
+   only**: the routing lane reads NaN while the hand is out of the box,
+   so a row lets go the frame the hand leaves; the catch is live, so a
+   returning hand glides its rows back on (plan 11, B1).
 7. **To MIDI.** `cc` and `pressure` are 0–127. `cc14` (MSB on n, LSB on
    n + 32, n ≤ 31) and `pitch` are 0–16383. Each holds its last value
    with hysteresis, so a still hand sends nothing, and each is limited

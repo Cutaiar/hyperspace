@@ -687,9 +687,9 @@ class HandsIO:
 
     def lanes(self) -> list[float]:
         """Each axis's output y — NaN while its hand is out of the box (or
-        never seen) and while the catch glide is still landing, so a
-        routing row lets go and the base returns the frame the hand leaves;
-        the spring and `hold` shape only the DAW output (`Follower.live`).
+        never seen), so a routing row lets go and the base returns the
+        frame the hand leaves; the spring and `hold` shape only the DAW
+        output (`Follower.live`; the catch glide on a returning hand is live).
         Then one presence lane per hand (1 in view, 0 not), then the eight
         pinch switches. The switches come last so that a saved binding to
         ``hand:<i>`` keeps meaning the axis it always did."""
@@ -815,7 +815,9 @@ class HandsIO:
         if getattr(midi, "learning", None) is None:
             self._learn_base = None
             return
-        ys = [st.y for st in self.state]
+        # only a hand counts as movement: an axis whose hand is away reads
+        # None, so a return spring can never complete a learn
+        ys = [st.y if st.follow.live else None for st in self.state]
         if self._learn_base is None:
             self._learn_base = ys
             return

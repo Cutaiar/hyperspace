@@ -84,7 +84,7 @@ def _draw(io: HandsIO, t: float) -> None:
             unit = FEATURES[a.feature][0]
             raw = "      —     " if st.raw is None else f"{st.raw:8.2f} {unit:4s}"
             y = "  —  " if st.y is None else f"{st.y:5.3f}"
-            bar = "" if st.y is None else "█" * round(st.y * 30)
+            bar = "" if st.y is None else ("█" if st.follow.live else "░") * round(st.y * 30)
             q = "" if st.q is None else f"{a.out} {st.q}"
             rows.append(f"   {a.feature:10s} {raw}  y {y}  {q:12s} {bar}")
         rows.append("   " + _pinch_line(io, side))

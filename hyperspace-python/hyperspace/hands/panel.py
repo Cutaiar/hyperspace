@@ -214,15 +214,20 @@ def _axes(panel, io, settings) -> int:
             rx = bx0 + 1 + span * a.rest_value
             dl.add_line(imgui.ImVec2(rx, by1), imgui.ImVec2(rx, by1 + 2), _u32(ui.DIM))
         if st is not None and st.y is not None:
+            # dim while the hand is away: the bar is then the DAW output
+            # (spring or hold) and the routing lane reads NaN
+            live = st.follow.live
             dl.add_rect_filled(imgui.ImVec2(bx0 + 1, by0 + 1),
                                imgui.ImVec2(bx0 + 1 + span * st.y, by1 - 1),
-                               _u32(imgui.ImVec4(0.92, 0.92, 0.92, 0.85 if here else 0.35)))
+                               _u32(imgui.ImVec4(0.92, 0.92, 0.92, 0.85 if live else 0.35)))
         if st is not None and st.target is not None:
             tx = bx0 + 1 + span * st.target
             dl.add_line(imgui.ImVec2(tx, by0 - 1), imgui.ImVec2(tx, by1 + 1), _u32(ui.RED))
         imgui.dummy(imgui.ImVec2(bar_w, h))
         if imgui.is_item_hovered():
             y = "—" if st is None or st.y is None else f"{st.y:.3f}"
+            if st is not None and st.y is not None and not st.follow.live:
+                y += " (DAW only; lane —)"
             raw = "—" if st is None or st.raw is None else \
                 f"{st.raw:.1f} {FEATURES[a.feature][0]}"
             imgui.set_tooltip(f"{a.name}: out {y}  ·  hand {raw}")

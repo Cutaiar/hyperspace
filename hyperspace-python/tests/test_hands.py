@@ -523,9 +523,9 @@ def test_a_hand_leaving_the_box_releases_its_position_row(app):
     assert calls == [] and p.eff_norm == pytest.approx(base)
 
 
-def test_a_returning_hand_takes_the_row_back_on_the_hand_not_the_spring(app):
-    """During the catch glide the lane is still NaN; the param jumps from
-    the base to the hand once the catch lands, never through the spring."""
+def test_a_returning_hand_glides_its_row_back_on_through_the_catch(app):
+    """Away, the row is released (the spring is DAW-only); back, the catch
+    is live and glides the param from where the spring left it onto the hand."""
     r = rig()
     r.s.catch_s = 0.2
     k = ax(r, "right.y")
@@ -539,14 +539,48 @@ def test_a_returning_hand_takes_the_row_back_on_the_hand_not_the_spring(app):
     _frame(app)
     st = r.io.state[k]
     assert st.y == pytest.approx(0.0, abs=0.01) and not p.modulated
+    assert p.eff_norm == pytest.approx(base)
     run(r, 1, hand(pos=(0.0, 300.0, 0.0)), router=app.router)   # back, far away
     _frame(app)
-    assert 0.0 < st.y < 0.8 and st.follow.mode == st.follow.CATCH
-    assert math.isnan(app.router.feeds["hand"][k]) and not p.modulated
-    assert p.eff_norm == pytest.approx(base)
+    # the catch is live: the row takes the param back at once and glides
+    # it onto the hand, so a one-frame tracking dropout costs one frame
+    assert 0.0 < st.y < 0.8 and st.follow.mode == st.follow.CATCH and st.follow.live
+    assert app.router.feeds["hand"][k] == pytest.approx(st.y) and p.modulated
+    assert p.eff_norm == pytest.approx(st.y, abs=1e-4)
     run(r, 20, hand(pos=(0.0, 300.0, 0.0)), router=app.router)
     _frame(app)
-    assert st.follow.live and p.eff_norm == pytest.approx(0.8, abs=1e-3)
+    assert st.follow.mode == st.follow.FOLLOW and p.eff_norm == pytest.approx(0.8, abs=1e-3)
+
+
+def test_the_tracker_going_dark_feeds_none_and_releases_every_row(app):
+    r = rig()
+    k = ax(r, "right.y")
+    app.table.add(Binding(f"hand:{k}", "view.inst_amp", "position"))
+    p = app.reg["view.inst_amp"]
+    base = p.norm
+    run(r, 1, hand(pos=(0.0, 300.0, 0.0)), router=app.router)
+    _frame(app)
+    assert p.modulated
+    r.src.on = False                                 # the camera goes
+    run(r, 1, hand(pos=(0.0, 300.0, 0.0)), router=app.router)
+    assert app.router.feeds.get("hand") is None
+    _frame(app)
+    assert not p.modulated and p.eff_norm == pytest.approx(base)
+
+
+def test_a_return_spring_never_completes_a_learn(app):
+    """Learn armed, hand pulled out: the spring moves the DAW output a long
+    way, but a learn measures the hand, so nothing is bound."""
+    r = rig()
+    k = ax(r, "right.y")
+    a = r.s.axes[k]
+    a.rest, a.rest_value, a.return_s = "return", 0.0, 0.1
+    run(r, 1, hand(pos=(0.0, 300.0, 0.0)), midi=app.midi, router=app.router)
+    app.midi.learn("view.inst_amp")
+    run(r, 1, hand(pos=(0.0, 300.0, 0.0)), midi=app.midi, router=app.router)
+    run(r, 30, midi=app.midi, router=app.router)     # gone; y springs 0.8 → 0
+    assert r.io.state[k].y == pytest.approx(0.0, abs=0.01)
+    assert app.midi.learning == "view.inst_amp" and app.table.owner("view.inst_amp") is None
 
 
 def test_hold_shapes_the_daw_output_but_never_latches_a_row(app):
