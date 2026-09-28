@@ -229,6 +229,26 @@ def test_pattern_mod_uniform_react(ctx):
     )
 
 
+def test_one_clock_reaches_the_patterns_and_the_effects(ctx):
+    """audit V4: the renderer's clock is the frame's one `t` — pinned by
+    `t_now` or read once from perf_counter — and the effect chain runs on
+    that same number rather than on a clock of its own."""
+    from hyperspace.render import Renderer
+
+    r = Renderer(ctx)
+    seen = []
+    r.fx.run = lambda target, t: seen.append(t) or []
+    r.fx.active = lambda: True
+    fbo = ctx.framebuffer(color_attachments=[ctx.texture((64, 48), 4)])
+    fbo.use()
+    r.draw(ViewState(shape=3), 64, 48, t_now=2.5)
+    assert seen == [2.5]
+    r._t0 -= 100.0                              # the free-running clock, moved on
+    r.draw(ViewState(shape=3), 64, 48)
+    assert 100.0 <= seen[1] < 101.0 and seen[1] == pytest.approx(r.now(), abs=0.5)
+    fbo.release()
+
+
 def test_every_pattern_reads_u_mod_only():
     """patterns.glsl reads its inputs as u_mod[0..N_MOD); u_bands is gone."""
     from hyperspace.render import N_MOD, PATTERNS_GLSL

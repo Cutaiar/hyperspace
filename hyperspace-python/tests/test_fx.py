@@ -266,6 +266,29 @@ def test_every_factory_effect_compiles(ctx):
     assert FxChain(ctx).compile_all() == {}
 
 
+def test_the_shared_helpers_are_written_once(ctx):
+    """audit V2: TAU, LUMA, hsv, pal and the hue rotation live in
+    shaders/_common.glsl and nowhere else; it compiles on its own (it reads
+    no uniform); an edit to it counts as a change to every effect."""
+    import re
+
+    from hyperspace import glsl, lookback
+    from hyperspace.render import PATTERNS_GLSL
+
+    shared = glsl.common()
+    ctx.program(vertex_shader=glsl.QUAD_VS,
+                fragment_shader="#version 330\n" + shared
+                + "\nout vec4 f; void main() { f = vec4(hsv(0.1, 1.0, 1.0), luma(pal(0.0, "
+                  "vec3(0.5), vec3(0.5), vec3(1.0), vec3(0.0)))); }")
+    defs = re.compile(r"(?m)^(?:const\s+\w+\s+(TAU|LUMA)\b|vec3\s+(hsv|hsv2rgb|pal|hue_rotate|rotate_hue)\s*\()")
+    for text in (PATTERNS_GLSL.read_text(), (FX_DIR / "_lib.glsl").read_text(), lookback.POST_FS.replace(shared, "")):
+        assert not defs.search(text), defs.search(text).group(0)
+    assert lookback.QUAD_VS is glsl.QUAD_VS
+    assert "_common" in FxState()._scan()
+
+
+
+
 def test_off_is_the_old_frame_exactly(ctx):
     base = render(ctx, FxState())
     bypassed = FxState()

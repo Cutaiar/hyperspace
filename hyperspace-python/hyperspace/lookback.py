@@ -170,20 +170,6 @@ class LookbackSource(Protocol):
     def latest(self) -> tuple[np.ndarray, int] | None: ...
 
 
-class NullSource:
-    """The slot's no-op: keeps the newest frame, never answers."""
-
-    def __init__(self):
-        self.frame: np.ndarray | None = None
-        self.frame_index = -1
-
-    def submit(self, frame: np.ndarray, frame_index: int) -> None:
-        self.frame, self.frame_index = frame, frame_index
-
-    def latest(self) -> tuple[np.ndarray, int] | None:
-        return None
-
-
 # ---- GL: one fullscreen triangle (glsl.QUAD_VS), two fragment programs ----
 
 DOWN_FS = """

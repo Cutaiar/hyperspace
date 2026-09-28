@@ -22,7 +22,6 @@ from hyperspace.lookback import (
     RES,
     DreamState,
     LookbackSource,
-    NullSource,
     echo_size,
 )
 from hyperspace.render import Renderer
@@ -551,11 +550,8 @@ class Echo:
 
 
 def test_source_protocol():
-    assert isinstance(NullSource(), LookbackSource)
     assert isinstance(Echo(), LookbackSource)
-    n = NullSource()
-    n.submit(np.zeros((2, 2, 4), np.uint8), 7)
-    assert n.frame_index == 7 and n.latest() is None
+    assert not isinstance(object(), LookbackSource)
 
 
 def test_dream_slot_round_trip(ctx):

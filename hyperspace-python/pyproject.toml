@@ -17,21 +17,22 @@ dependencies = [
     "numpy>=2.0",
     "pyobjc-framework-cocoa>=12.2.2 ; sys_platform == 'darwin'",
     "pyopengl>=3.1.10",
+    "pillow>=10",
     "python-rtmidi>=1.5.8",
     "sounddevice>=0.5.6",
     "soundfile>=0.14.0",
 ]
 
 [project.optional-dependencies]
-# WP6 look-back (temporal Deep Dream) spike: tools/dream_bench/, never
-# imported by the hyperspace package.  `uv sync --extra dream`
+# the look-back's dream worker (dream.py, torch on MPS) and the bench in
+# tools/dream_bench/. Optional: dream.py is imported only under
+# `[dream] enabled` in config.toml.  `uv sync --extra dream`
 dream = [
     "torch>=2.2",
     "torchvision>=0.17",
     "mlx>=0.20 ; sys_platform == 'darwin'",
     "pyobjc-framework-metal>=12.2 ; sys_platform == 'darwin'",
     "pyobjc-framework-quartz>=12.2 ; sys_platform == 'darwin'",
-    "pillow>=10",
 ]
 
 [dependency-groups]
@@ -39,7 +40,6 @@ dev = [
     "pytest>=8.0",
     "ruff>=0.8",
     "playwright>=1.49",
-    "pillow>=12.3.0",
 ]
 
 [build-system]

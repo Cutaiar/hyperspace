@@ -46,7 +46,6 @@ over a transparent ground shows on the desktop.
 from __future__ import annotations
 
 import re
-import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -417,8 +416,7 @@ class FxChain:
         self._progs: dict[str, tuple[str, moderngl.Program, moderngl.VertexArray]] = {}
         self._tried: dict[str, str] = {}        # name → source of the last attempt
         self.errors: dict[str, str] = {}
-        self._t_last: float | None = None
-        self._t0 = time.perf_counter()
+        self._t_last: float | None = None      # the t of the previous run
         self._frame = 0
         self._build_copy()
 
@@ -467,14 +465,14 @@ class FxChain:
         self._fbo, self._tex = [], []
         self.size = (0, 0)
 
-    def run(self, target: moderngl.Framebuffer, t_now: float | None = None) -> list[str]:
+    def run(self, target: moderngl.Framebuffer, t: float) -> list[str]:
         """Every active effect over the frame `begin()` handed out, the last
         one into `target`'s viewport. Returns the effects that ran.
 
-        `t_now` pins the clock (offscreen renders); otherwise it is the
-        wall clock. Effects advance by the time since the previous run."""
+        `t` is the frame's time in seconds — the renderer's one clock
+        (Renderer.draw), pinned by callers that render offscreen. Effects
+        advance by the time since the previous run."""
         st = self.state
-        t = t_now if t_now is not None else time.perf_counter() - self._t0
         dt = 0.0 if self._t_last is None else max(0.0, min(t - self._t_last, 0.25))
         self._t_last = t
         st.advance(dt)

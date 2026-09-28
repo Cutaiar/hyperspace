@@ -47,7 +47,7 @@ from .view import N_MOD, ViewState  # re-exported for callers that had them from
 PATTERNS_GLSL = Path(__file__).parent / "shaders" / "patterns.glsl"
 
 BG = (0.0, 0.0, 0.0)
-RED = (1.0, 43 / 255, 43 / 255)
+RED = (1.0, 43 / 255, 43 / 255)   # the vertex colour, and the panel's one accent (ui.RED)
 
 LINE_VS = """
 #version 330
@@ -302,7 +302,7 @@ class Renderer:
         self._fvao: moderngl.VertexArray | None = None
         self._patterns_mtime = 0.0
         self._reload_check = 0
-        self._t0 = time.perf_counter()
+        self._t0 = time.perf_counter()   # the one wall clock: patterns, instances, effects
         self._build_face_program()
         ctx.enable(moderngl.BLEND | moderngl.PROGRAM_POINT_SIZE)
         ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
@@ -387,6 +387,10 @@ class Renderer:
         )
         self.pattern_error = ""
 
+    def now(self, t_now: float | None = None) -> float:
+        """Seconds on the renderer's clock, or `t_now` when a caller pins it."""
+        return t_now if t_now is not None else time.perf_counter() - self._t0
+
     @staticmethod
     def _shader_mtime() -> float:
         """patterns.glsl's or _common.glsl's, whichever was saved last."""
@@ -411,8 +415,12 @@ class Renderer:
         """One frame at logical size (w, h) into the bound framebuffer's
         viewport; dpr scales point sizes only — positions are logical and
         the viewport handles resolution. The scene goes to its texture,
-        then the post pass (lookback.py) puts it on the target."""
+        then the post pass (lookback.py) puts it on the target. `t_now`
+        pins the clock (offscreen renders and tests); otherwise the frame
+        reads the renderer's own, and the patterns, the instance motion
+        and the effect chain all see the same second."""
         ctx = self.ctx
+        t = self.now(t_now)
         target = ctx.fbo
         if target is None:
             raise RuntimeError("Renderer.draw: no framebuffer bound (call fbo.use())")
@@ -422,7 +430,7 @@ class Renderer:
             self._blank.use(location=unit)
         self.scene.draw_fbo.use()
         ctx.viewport = (0, 0, max(vw, 1), max(vh, 1))
-        self.draw_scene(s, w, h, dpr, t_now)
+        self.draw_scene(s, w, h, dpr, t)
         self.scene.resolve()
         lb = self.lookback
         cover = self._draw_cover(w, h) if lb.wants_cover() else None
@@ -436,7 +444,7 @@ class Renderer:
             buf = fx.begin(self.scene.size)
             lb.composite(self.scene.tex, buf, cover)
             lb.capture(self.scene.tex, buf)
-            fx.run(target, t_now)
+            fx.run(target, t)
         else:
             lb.composite(self.scene.tex, target, cover)
             lb.capture(self.scene.tex, target)
@@ -473,7 +481,7 @@ class Renderer:
 
         # synchronized instance grid, spaced pre-zoom so the camera sees a field
         n_inst = max(1, int(s.instances))
-        t_m = t_now if t_now is not None else time.perf_counter() - self._t0
+        t_m = self.now(t_now)
         if n_inst > 1:
             cols = math.ceil(math.sqrt(n_inst))
             rows = math.ceil(n_inst / cols)
