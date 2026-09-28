@@ -12,30 +12,41 @@ from pathlib import Path
 PKG = Path(__file__).resolve().parents[1] / "hyperspace"
 
 
-def _modulate_calls(path: Path):
-    """Every `<something>.modulate(...)` call in the file, as (line, enclosing def)."""
-    tree = ast.parse(path.read_text())
-    out = []
-    for node in ast.walk(tree):
-        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            continue
-        for n in ast.walk(node):
-            if (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
-                    and n.func.attr == "modulate"):
-                out.append((n.lineno, node.name))
-    return out
+class _Calls(ast.NodeVisitor):
+    """Every `<receiver>.modulate(...)` call in a module, module level
+    included, with the innermost enclosing def (or None)."""
+
+    def __init__(self):
+        self.stack: list[str] = []
+        self.found: list[tuple[int, str | None, str]] = []
+
+    def visit_FunctionDef(self, node):
+        self.stack.append(node.name)
+        self.generic_visit(node)
+        self.stack.pop()
+
+    visit_AsyncFunctionDef = visit_FunctionDef
+
+    def visit_Call(self, node):
+        f = node.func
+        if isinstance(f, ast.Attribute) and f.attr == "modulate":
+            recv = ast.unparse(f.value)
+            self.found.append((node.lineno, self.stack[-1] if self.stack else None, recv))
+        self.generic_visit(node)
 
 
 def test_only_router_modulate_calls_param_modulate():
     """The one performer path: `Param.modulate` has exactly one caller in
-    the package, `Router.modulate` in routing.py. Adapters only `feed`."""
+    the package, `Router.modulate` in routing.py. Adapters only `feed`.
+    Calls on a *router* (`router.modulate(...)`, the pass itself) are the
+    frame loop's and are the only ones excluded."""
     calls = {}
     for path in sorted(PKG.rglob("*.py")):
-        for line, fn in _modulate_calls(path):
-            calls.setdefault(path.relative_to(PKG).as_posix(), []).append((line, fn))
-    # app.py calls router.modulate(...) — the pass itself, not a Param write
-    calls.pop("app.py", None)
+        v = _Calls()
+        v.visit(ast.parse(path.read_text()))
+        for line, fn, recv in v.found:
+            if recv.split(".")[-1] == "router":
+                continue                      # the pass, not a Param write
+            calls.setdefault(path.relative_to(PKG).as_posix(), []).append((line, fn, recv))
     assert list(calls) == ["routing.py"], calls
-    assert calls["routing.py"] and all(fn == "modulate" for _, fn in calls["routing.py"]), \
-        calls["routing.py"]
-    assert len(calls["routing.py"]) == 1, calls["routing.py"]
+    assert calls["routing.py"] == [(calls["routing.py"][0][0], "modulate", "p")], calls

@@ -48,10 +48,12 @@ step, at that step's own time: the first frame the LFOs see it, they
 read phase 0 (+ their own `phase`). One frame of latency on those two
 paths, no partial phase on any.
 
-**A sync change carries the phase.** Switching between Hz and a division
-continues from where the wave is: to Hz the accumulator takes the current
-phase, to a division the LFO's `shift` is set so the clock's beat lands
-on it. A random LFO keeps its held value across the switch.
+**A switch to Hz carries the phase.** Leaving a division for Hz continues
+from where the wave is — the accumulator takes the current phase rather
+than resuming from a stale one — and a random LFO keeps its held value.
+Switching *to* a division is not carried: a division lands on the clock's
+beat, whether a knob or a preset set it, so a bar-long wave is on the bar
+the moment it is chosen.
 
 Addresses: the router's source addresses are 0-based (``lfo:0`` is
 "LFO 1") while the param ids are 1-based (``lfo.1.depth``).
@@ -111,6 +113,7 @@ class LFO:
     out: float = field(default=REST, repr=False)    # this frame's u
     last_sync: int | None = field(default=None, repr=False)  # the mode last stepped in
     pending: bool = field(default=False, repr=False)  # a reset held for the next step
+    fresh: bool = field(default=False, repr=False)    # restarted: the next step begins the cycle
 
     @property
     def synced(self) -> bool:
@@ -129,11 +132,16 @@ class LFO:
         if self.pending:                  # a reset held since the last step: now
             self.pending = False
             self.restart(clock, t)
-            dt = 0.0                      # Hz: the cycle begins at this step, not dt in
-        elif self.last_sync is not None and self.sync != self.last_sync:
-            self._carry(t, clock)         # a mode change: continue from the same phase
+        elif (self.last_sync is not None and self.sync != self.last_sync
+              and not self.synced):
+            # a division → Hz: the accumulator takes the wave's position so
+            # nothing jumps. Hz → a division is not carried: a division lands
+            # on the clock's beat, whether a knob or a preset set it.
+            self.acc = self.x - self.phase
             carried = True
         self.last_sync = self.sync
+        if self.fresh:                    # the cycle begins at this step, not dt into it
+            self.fresh, dt = False, 0.0
         if self.synced:
             cycles = clock.beat(t) * self.ratio + self.shift
         else:
@@ -150,32 +158,28 @@ class LFO:
         self.out = REST + 0.5 * self.depth * self.wave_at(self.x)
         return self.out
 
-    def _carry(self, t: float, clock) -> None:
-        """Sync changed since the last step: the wave continues from `x`."""
-        here = self.x - self.phase        # the cycle position without the offset
-        if self.synced:
-            self.shift = here - clock.beat(t) * self.ratio
-        else:
-            self.acc = here
-
     def restart(self, clock=None, t: float | None = None) -> None:
-        """The cycle begins now (its `phase` offset stays on top)."""
+        """The cycle begins now (its `phase` offset stays on top): the next
+        step reads phase 0 exactly, whether it comes before or after this."""
         if self.synced:
             self.shift = 0.0 if clock is None else -clock.beat(t) * self.ratio
         else:
             self.acc = 0.0
+        self.fresh = True
         self.cycle = None                 # random: a fresh draw
 
 
 class LFOs:
     """The bank of N: stepped once a frame, published as the ``lfo`` source."""
 
+    # class-level so a hot-reloaded instance from before these existed has them
+    stepped_at: float | None = None   # the t of the last step
+    pending = False                    # a global trigger held for the next step
+
     def __init__(self, n: int = N, seed: int | None = None):
         self.lfos = [LFO() for _ in range(n)]
         self.rng = random.Random(seed)
         self.outputs = [REST] * n
-        self.stepped_at: float | None = None   # the t of the last step
-        self.pending = False                   # a global trigger held for the next step
 
     def __len__(self) -> int:
         return len(self.lfos)
