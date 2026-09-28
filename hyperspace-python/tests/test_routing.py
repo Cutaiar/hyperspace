@@ -34,7 +34,6 @@ from hyperspace.library import Library
 from hyperspace.offline import load_wav
 from hyperspace.overlay import Output
 from hyperspace.params import DRIVE, PLANES, ROT_RATE_MAX, Registry, build_registry
-from hyperspace.view import N_MOD, ViewState
 from hyperspace.routing import (
     MOD_OPS,
     PRESETS,

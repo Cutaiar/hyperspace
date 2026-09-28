@@ -14,7 +14,7 @@ import pytest
 
 from hyperspace import app
 from hyperspace.analysis import Analyser
-from hyperspace.bands import Chain
+from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
 from hyperspace.params import build_registry
 from hyperspace.render import ViewState
@@ -47,13 +47,13 @@ def test_importing_app_leaves_every_gated_adapter_unimported():
 # ---- the gates ----
 
 def _registry():
-    chain = Chain(Analyser())
+    chain = Analyzer(Analyser())
     return build_registry(ViewState(), Control(chain), SimpleNamespace(chain=chain))
 
 
 def test_a_shut_gate_opens_nothing():
     reg = _registry()
-    assert app._open_midi(reg, {"midi": {"enabled": False}}, table=None) is None
+    assert app._open_midi(reg, {"midi": {"enabled": False}}, table=None, learn=None) is None
     assert app._open_bridge(reg, {"bridge": {"enabled": False}}) is None
     assert app._open_hands({"hands": {"enabled": False}}, settings=SimpleNamespace()) is None
     assert app._open_hands({"hands": {"enabled": True}}, settings=None) is None
@@ -86,7 +86,7 @@ def test_a_broken_adapter_is_a_note_not_a_crash(monkeypatch, capsys):
     monkeypatch.setattr(hyperspace.bridge, "Bridge", _boom)
     monkeypatch.setattr(hyperspace.hands, "HandsIO", _boom)
     monkeypatch.setitem(sys.modules, "hyperspace.dream", SimpleNamespace(DreamWorker=_boom))
-    assert app._open_midi(reg, {"midi": {"enabled": True}}, table=None) is None
+    assert app._open_midi(reg, {"midi": {"enabled": True}}, table=None, learn=None) is None
     assert app._open_bridge(reg, {"bridge": {"enabled": True}}) is None
     assert app._open_hands({"hands": {"enabled": True}}, settings=SimpleNamespace()) is None
     assert app._open_dream(reg, {"dream": {"enabled": True}}) is None

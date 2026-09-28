@@ -635,8 +635,8 @@ def test_a_hand_learn_needs_no_midi_adapter(tmp_path):
     """Audit B3: Learn is the host's, not the MIDI adapter's. With no
     MidiIO anywhere — `[midi] enabled = false`, or the adapter failed to
     open — right-click → Learn, move a hand, and the row lands."""
-    chain = Chain(Analyser())
-    reg = build_registry(ViewState(), Control(chain), NS(chain=chain), Library(tmp_path).bank)
+    chain = Analyzer(Analyser())
+    reg = build_registry(ViewState(), Control(chain), NS(chain=chain), Library(tmp_path).project)
     table = Bindings.load(tmp_path / "bindings.json", legacy_midi=None)
     learn, router = Learn(reg, table), Router(reg, table)
     r = rig()

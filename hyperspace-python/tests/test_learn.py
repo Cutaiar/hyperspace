@@ -8,7 +8,7 @@ from types import SimpleNamespace as NS
 import pytest
 
 from hyperspace.analysis import Analyser
-from hyperspace.bands import Chain
+from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
 from hyperspace.learn import Learn
 from hyperspace.library import Library
@@ -19,10 +19,10 @@ from hyperspace.routing import Binding, Bindings
 
 @pytest.fixture()
 def rig(tmp_path):
-    chain = Chain(Analyser())
+    chain = Analyzer(Analyser())
     control = Control(chain)
     lib = Library(tmp_path)
-    reg = build_registry(ViewState(), control, NS(chain=chain), lib.bank)
+    reg = build_registry(ViewState(), control, NS(chain=chain), lib.project)
     table = Bindings.load(tmp_path / "bindings.json", legacy_midi=None)
     return NS(reg=reg, control=control, table=table, learn=Learn(reg, table))
 
