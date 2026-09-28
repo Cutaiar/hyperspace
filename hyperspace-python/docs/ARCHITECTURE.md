@@ -196,8 +196,10 @@ Consequences to hold onto:
 - A knob turned on a hand-owned parameter moves the **return value**, which
   shows when the hand's row lets go. It never prompts and is never blocked
   (plan 09 decision 3, "scene-setters don't compete";
-  `tests/test_routing.py:1068`). Caveat, §3.10: today a hand leaving the
-  box does not make its `position` row let go; the tracker going dark does.
+  `tests/test_routing.py:1068`). A hand leaving the box makes its rows
+  let go that frame — its axes read `NaN` — and the base shows; the
+  tracker going dark feeds `None` and does the same (plan 11 WP1,
+  `tests/test_hands.py`, `test_a_hand_leaving_the_box_releases_its_position_row`).
 - A relative writer reads the base, never the effective value. Reading the
   effective value folded the whole offset into the base on every drag
   frame — plan 09's audit simulation 1 (`tests/test_app_relative.py:53`).
@@ -239,7 +241,8 @@ Every continuous source reaches a parameter through exactly one pass,
 
 1. Find the source's vector: the analyzer's lanes for `lane:`, otherwise
    `feeds[scheme]`. No vector, an out-of-range index or a `NaN` reading
-   (a hand never yet seen) → the row does nothing this frame.
+   (a hand out of the box, or still being caught on its return) → the row
+   does nothing this frame.
 2. If the row has a gate (`when`), the gate's source must be **fed** and
    read ≥ 0.5; a gate whose source is not live holds the row **shut**
    (`Router.gated`, `routing.py:1074-1099`). `lane:` can never gate.
@@ -440,11 +443,6 @@ one-frame-lag / no-recursion mechanism (§2).
 Behaviour the code has today that the model above does not describe, all
 filed in [`AUDIT-2026-09.md`](AUDIT-2026-09.md):
 
-- A hand leaving the box with the tracker still on does **not** release a
-  `position` row: the axis springs to its rest value and the row keeps
-  positioning the param there. Only the tracker going dark feeds `None`
-  (`hands/core.py:693` for the NaN rule, `:758` for the `None` feed,
-  `hands/signal.py:124-131` for the spring; with `rest = hold` it holds instead).
 - Hand Learn lives in the MIDI adapter object; with `[midi] enabled =
   false` there is no hand Learn.
 - Nothing in `Router.modulate` checks ownership.
@@ -466,7 +464,7 @@ grep for; the module's docstring has the rest.
 | `tapers.py` | Turns a fader's integer position into a real value and back, exactly, for every knob. | The taper objects and the per-band knob specs. | The round trip position → value → position is exact on every detent. (`tests/test_control.py:27`) | `test_control.py` |
 | `routing.py` | The binding table: one row type for keys, pads, MIDI and performers; the file on disk; the referee; the per-frame modulation pass. | `Binding`, `Bindings` (the table and its edit doors), `Router` (the pass, `feed`, presets), `Owned`. | A lane-scheme row carries only `push` or `position`; a target never has two enabled performers through the edit doors; `modulate` never writes a base; an unknown-schema file is never rewritten. (`tests/test_routing.py:892-1009, 1212`) | `test_routing.py` |
 | `midi.py` + `apc40.py` | The MIDI adapter (ports, soft pickup, ring and LED feedback, Learn) and the APC40's device profile (port name, mode SysEx, LED colours, the 113-row default map). | `MidiIO`, `Ports`; `apc40.DEFAULT_MAP` and the button constants the clock uses. | The core never imports it; every write it makes is a base write; a ring shows the base and never chases a performer; a held Learn is never applied or dropped silently. (`tests/test_params.py:286`, `tests/test_midi.py:272, 387`) | `test_midi.py` |
-| `hands/` | The Ultraleap instrument: two hands as twelve shaped axes, two presence lanes and eight pinch switches, fed to the table; MIDI out to a DAW; box calibration; the HANDS page. | `HandsIO.poll(dt, midi, router)`, `HandSettings`, `register`; `panel.page`. | `core.py` and `signal.py` import nothing from the package — only `panel.py` knows the host; the lane order never changes under a saved `hand:<i>`; a gate never opens on a source that is not live; nothing learns while a question is up. (`tests/test_hands_boundary.py`, `tests/test_hands.py:391, 752, 521`) | `test_hands.py`, `test_hands_boundary.py` |
+| `hands/` | The Ultraleap instrument: two hands as twelve shaped axes, two presence lanes and eight pinch switches, fed to the table; MIDI out to a DAW; box calibration; the HANDS page. | `HandsIO.poll(dt, midi, router)`, `HandSettings`, `register`; `panel.page`. | `core.py` and `signal.py` import nothing from the package — only `panel.py` knows the host; the lane order never changes under a saved `hand:<i>`; an axis whose hand is out of the box reads `NaN`, so its rows let go — the spring and `hold` shape only the DAW output; a gate never opens on a source that is not live; nothing learns while a question is up. (`tests/test_hands_boundary.py`, `tests/test_hands.py:391, 752, 521`, `test_a_hand_leaving_the_box_releases_its_position_row`) | `test_hands.py`, `test_hands_boundary.py` |
 | `lfo.py` + `tempo.py` | Four tempo-aware LFOs and the tap-tempo clock, as a source fed to the table like any other, with every knob an ordinary param. | `LFOs.step` / `publish`, `Clock` (`tap`, `trigger`, `beat`), the two `register` functions. | Import nothing from the package; read their own fields, never a `Param` (that is the one-frame lag); once triggered, a tap never moves a running synced LFO; the global trigger never touches a Hz LFO. (`tests/test_lfo_boundary.py`, `tests/test_lfo.py:98-156`) | `test_lfo.py`, `test_tempo.py`, `test_lfo_boundary.py` |
 | `geometry.py` | Builds the 25 shapes as unit-circumradius vertex, edge and face arrays, and holds the exact 4D → 2D transform. | `SHAPES`, `geom(i)`, `project_h` (the renderer's), `project` (the tests' oracle), faces and UVs. | The first 18 shapes' vertex and edge order never changes — the golden traces key on it. (`tests/test_core.py:33`, `tests/test_shapes3d.py:16`) | `test_core.py`, `test_shapes3d.py`, `test_golden.py` |
 | `render.py` | `ViewState`, the live object the view, rotation and camera params write, and `Renderer.draw`: scene pass, coverage mask, look-back, FX, to the window. | `ViewState` (and `integrate`, the one direct writer of `ang`), `Renderer`, `render_offscreen`. | Imports no audio, input or registry code; with look-back and FX off the output is bit-identical to the scene pass; the history never captures the effected frame. (`tests/test_render.py:306`) | `test_render.py` |

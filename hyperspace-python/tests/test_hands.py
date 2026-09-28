@@ -486,10 +486,87 @@ def test_a_panel_edit_moves_the_return_value_under_a_hand(app):
     run(r, 1, hand(pos=(0.0, 300.0, 0.0)), router=app.router)
     _frame(app)
     assert p.eff_norm == pytest.approx(0.8, abs=1e-4) and p.norm == pytest.approx(0.9)
-    r.src.on = False                                                  # the camera goes
-    run(r, 1, router=app.router)
+    run(r, 1, router=app.router)                    # the hand leaves; the camera stays on
     _frame(app)
-    assert not p.modulated and p.norm == pytest.approx(0.9)
+    assert r.src.on and not p.modulated and p.norm == pytest.approx(0.9)
+    assert p.eff_norm == pytest.approx(0.9)
+
+
+def test_a_hand_leaving_the_box_releases_its_position_row(app):
+    """Audit B1: with the tracker on, the frame the hand is absent its
+    axes read NaN, the row calls nothing, and apply() writes the base
+    back — the return spring shapes only the DAW output."""
+    r = rig()
+    k = ax(r, "right.y")
+    a = r.s.axes[k]
+    a.rest, a.rest_value, a.return_s, a.bounce = "return", 0.0, 0.3, 0.0
+    app.table.add(Binding(f"hand:{k}", "view.inst_amp", "position"))
+    p = app.reg["view.inst_amp"]
+    base = p.norm
+    run(r, 1, hand(pos=(0.0, 300.0, 0.0)), router=app.router)
+    _frame(app)
+    assert p.modulated and p.eff_norm == pytest.approx(0.8, abs=1e-4)
+    calls = []
+    p_mod = p.modulate
+    p.modulate = lambda off: (calls.append(off), p_mod(off))
+    run(r, 1, router=app.router)                    # gone, tracker still on
+    assert r.src.on and math.isnan(app.router.feeds["hand"][k])
+    _frame(app)
+    assert calls == [] and not p.modulated
+    assert p.eff_norm == pytest.approx(base) and p.norm == pytest.approx(base)
+    # the DAW path still springs home from where the hand was
+    st = r.io.state[k]
+    assert 0.0 < st.y < 0.8
+    run(r, 30, router=app.router)
+    _frame(app)
+    assert st.y == pytest.approx(0.0, abs=0.01) and st.q == 0
+    assert calls == [] and p.eff_norm == pytest.approx(base)
+
+
+def test_a_returning_hand_takes_the_row_back_on_the_hand_not_the_spring(app):
+    """During the catch glide the lane is still NaN; the param jumps from
+    the base to the hand once the catch lands, never through the spring."""
+    r = rig()
+    r.s.catch_s = 0.2
+    k = ax(r, "right.y")
+    a = r.s.axes[k]
+    a.rest, a.rest_value, a.return_s = "return", 0.0, 0.1
+    app.table.add(Binding(f"hand:{k}", "view.inst_amp", "position"))
+    p = app.reg["view.inst_amp"]
+    base = p.norm
+    run(r, 1, hand(pos=(0.0, 300.0, 0.0)), router=app.router)
+    run(r, 20, router=app.router)                   # away: home at 0
+    _frame(app)
+    st = r.io.state[k]
+    assert st.y == pytest.approx(0.0, abs=0.01) and not p.modulated
+    run(r, 1, hand(pos=(0.0, 300.0, 0.0)), router=app.router)   # back, far away
+    _frame(app)
+    assert 0.0 < st.y < 0.8 and st.follow.mode == st.follow.CATCH
+    assert math.isnan(app.router.feeds["hand"][k]) and not p.modulated
+    assert p.eff_norm == pytest.approx(base)
+    run(r, 20, hand(pos=(0.0, 300.0, 0.0)), router=app.router)
+    _frame(app)
+    assert st.follow.live and p.eff_norm == pytest.approx(0.8, abs=1e-3)
+
+
+def test_hold_shapes_the_daw_output_but_never_latches_a_row(app):
+    """Audit N6: `rest = hold` keeps the last value on the DAW port; the
+    routing row still lets go, so the param returns to its base."""
+    r = rig()                                        # every axis rests on hold
+    k = ax(r, "right.y")
+    app.table.add(Binding(f"hand:{k}", "view.inst_amp", "position"))
+    p = app.reg["view.inst_amp"]
+    base = p.norm
+    run(r, 1, hand(pos=(0.0, 300.0, 0.0)), router=app.router)
+    _frame(app)
+    assert p.eff_norm == pytest.approx(0.8, abs=1e-4)
+    st = r.io.state[k]
+    q = st.q
+    run(r, 5, router=app.router)
+    _frame(app)
+    assert st.y == pytest.approx(0.8, abs=1e-4) and st.q == q     # held for the DAW
+    assert not st.follow.live and not p.modulated
+    assert p.eff_norm == pytest.approx(base)
 
 
 def test_a_learn_on_a_performed_param_is_held_for_the_prompt(app):

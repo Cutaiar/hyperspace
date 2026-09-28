@@ -87,7 +87,10 @@ available through `[hands] dofs`, but the default stays the palm pose.
    over `Return` seconds (within about 2 %), with `Bounce` from a
    critically damped glide up to a ringing spring.
    **Catch:** a returning hand is glided onto over `Catch` seconds
-   rather than jumped to.
+   rather than jumped to. The spring, the hold and the catch shape the
+   **DAW output only**: the routing lane reads NaN while the hand is out
+   of the box and until the catch has landed, so a row lets go the frame
+   the hand leaves and takes the param back on the hand (plan 11, B1).
 7. **To MIDI.** `cc` and `pressure` are 0–127. `cc14` (MSB on n, LSB on
    n + 32, n ≤ 31) and `pitch` are 0–16383. Each holds its last value
    with hysteresis, so a still hand sends nothing, and each is limited
@@ -170,8 +173,9 @@ replaces learned hand rows too**; there is no separate class of rows a
 preset leaves alone. Every performer row springs back to the base when
 the gate opens or the hand leaves: the hand grabs, and never yields
 (decision 4). Latching — a hand that "holds where you left it" — is not
-an op any more; set the base with the panel or a knob instead, which a
-performer never blocks.
+an op any more, and not a setup either: `rest = hold` holds the DAW
+output, never a routed param (audit N6). Set the base with the panel or
+a knob instead, which a performer never blocks.
 
 `position` is the one to reach for: the hand's 0–1 is the control's
 *position*, along its own taper, so the hand covers the whole fader

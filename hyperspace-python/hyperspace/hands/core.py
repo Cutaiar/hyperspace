@@ -686,11 +686,14 @@ class HandsIO:
         return None
 
     def lanes(self) -> list[float]:
-        """Each axis's output y (NaN before its hand was ever seen), then
-        one presence lane per hand (1 in view, 0 not), then the eight
+        """Each axis's output y — NaN while its hand is out of the box (or
+        never seen) and while the catch glide is still landing, so a
+        routing row lets go and the base returns the frame the hand leaves;
+        the spring and `hold` shape only the DAW output (`Follower.live`).
+        Then one presence lane per hand (1 in view, 0 not), then the eight
         pinch switches. The switches come last so that a saved binding to
         ``hand:<i>`` keeps meaning the axis it always did."""
-        ys = [math.nan if st.y is None else st.y for st in self.state]
+        ys = [st.y if st.follow.live else math.nan for st in self.state]
         return (ys
                 + [1.0 if self.present[s] else 0.0 for s in SIDES]
                 + [1.0 if self.gates[s][f].on else 0.0 for s in SIDES for f in PINCHES])

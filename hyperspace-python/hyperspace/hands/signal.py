@@ -104,6 +104,16 @@ class Follower:
         self.mode = self.HOLD
         self.t = 0.0                    # time in the current mode
 
+    @property
+    def live(self) -> bool:
+        """True while `y` is the hand: seen, and the catch has landed. False
+        before the first sight, while the hand is away (the spring or the
+        hold shape only the DAW output then) and during the catch glide —
+        the lane reads NaN then, so a routing row lets go of its param
+        the moment the hand leaves and takes it back on the hand, not on
+        the spring (plan 11, audit B1)."""
+        return self.y is not None and self.mode == self.FOLLOW
+
     def step(self, dt: float, target: float | None, *, attack: float, decay: float,
              catch_s: float, rest: str, rest_value: float, return_s: float,
              bounce: float) -> float | None:

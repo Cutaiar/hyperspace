@@ -517,7 +517,8 @@ same PR; when it changes behaviour, the line here does.
 - **Plan 09's hand checks at the machine** (CHECKPOINT): the prompt from a
   real Learn, `hands-pinch` zoom under pinch + scroll, TAP TEMPO then
   METRONOME, `lfo-breathe` under the right hand, a knob on a hand-owned
-  param. Audit B1 predicts the last one fails as documented.
+  param. Audit B1 (a hand leaving the box did not release its rows) was
+  fixed by plan 11 WP1 before these are run.
 - **The trim decision** (plan 06): the owner picks one of the three fixes
   above; the oracle is re-frozen after.
 - **First real capture on this machine.** Every live path is code-complete;
