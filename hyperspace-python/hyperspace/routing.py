@@ -189,8 +189,9 @@ passes the library home, and the working-directory default is for tests.
 
 Routing presets are the same file format with only modulation rows:
 the factory exports in ``hyperspace/library/bindings/`` (`write_factory`:
-``default``, ``legacy6``, ``lfo-breathe`` from `PRESETS`, and the three
-hand-written ``hands-*`` files plan 08 ships) and the user's
+``default``, then ``legacy6``, ``lfo-breathe`` and plan 12's five
+``party-*`` from `PRESETS`, and the three hand-written ``hands-*`` files
+plan 08 ships) and the user's
 ``<home>/bindings/*.json`` (`preset_files`). `Router.load_preset` replaces
 the routes from one — a hand's learned rows among them, since a learn
 is an ordinary position route — and lands its bases; `Router.save_preset`
@@ -596,8 +597,8 @@ def _grip_rows() -> list[Binding]:
 def _lane_rows(skip_mods: tuple[int, ...] = ()) -> list[Binding]:
     """The legacy6 band → plane and band → pattern rows, less the pattern
     inputs a hand owns in this preset (one performer per parameter)."""
-    return [b for b in legacy6_routes()
-            if not (b.target.startswith("pattern.mod.") and b.index in skip_mods)]
+    skip = {f"pattern.mod.{i}" for i in skip_mods}
+    return [b for b in legacy6_routes() if b.target not in skip]
 
 
 def _driven_values() -> dict[str, float]:

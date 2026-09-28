@@ -170,6 +170,19 @@ class Stage:
                           out=NullOut(), clock=lambda: self.t)
         self.clock.trigger(0.0)
         self.renderer = Renderer(ctx, dream=self.dream, fx=self.fx) if ctx is not None else None
+        if self.renderer is not None:
+            errs = self.renderer.fx.compile_all()     # before any frame: a broken shader is a stop
+            if errs:
+                raise RuntimeError(f"fx shaders failed to build: {errs}")
+
+    def release(self) -> None:
+        """Free the renderer's GL objects (one Stage per pose, one context)."""
+        r = self.renderer
+        if r is not None:
+            r.scene.release()
+            r.cover.release()
+            r.lookback.release_ring()
+            r.fx.release_targets()
 
     def frame(self, hands: dict, fbo=None) -> None:
         """One frame in the app's order: hands → LFOs → modulate → apply → integrate → draw."""
@@ -269,9 +282,7 @@ def shots(name: str, ctx, frames: int) -> None:
         Image.fromarray(img.copy()).quantize(256, method=Image.Quantize.MEDIANCUT,
                                               dither=Image.Dither.FLOYDSTEINBERG).save(p, optimize=True)
         tiles.append((label, p))
-        errs = st.renderer.fx.compile_all()
-        if errs:
-            print("  fx errors:", errs)
+        st.release()
     sheet(tiles, OUT / f"{name}-sheet.png")
     print("wrote", (OUT / f"{name}-sheet.png").relative_to(ROOT))
     fbo.release()
@@ -284,6 +295,8 @@ def main() -> None:
     ap.add_argument("--no-shots", action="store_true")
     a = ap.parse_args()
     only = {x if x.startswith("party-") else f"party-{x}" for x in a.only.split(",") if x}
+    if unknown := only - set(POSES):
+        ap.error(f"no such preset: {', '.join(sorted(unknown))} (one of {', '.join(POSES)})")
     OUT.mkdir(parents=True, exist_ok=True)
     ctx = None if a.no_shots else moderngl.create_context(standalone=True)
     for name in POSES:

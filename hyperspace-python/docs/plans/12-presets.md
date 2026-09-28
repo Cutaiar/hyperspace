@@ -305,6 +305,23 @@ knobs*).
   each axis in the box's actual mounting (plan 08's open check) is what
   the cards' "thumb up", "reach in" assume.
 
+**From the code review, noted rather than built** (each is a change
+outside the preset files):
+
+- The `hand:<i>` lane numbers bake in the default dofs order, as the
+  `hands-*` files always have; a user `[hands] dofs` list scrambles every
+  shipped preset silently. The right fix is a named address
+  (`hand:left.roll`) resolved by the adapter, or a warning from `HandsIO`
+  when its lane names differ from the default — plan 11 material.
+- A theme resets a whole group by naming one id in it (`rot.rate.XY: 1.0`,
+  `fx.on: false`, …), which the project note explains and nothing else
+  guards; a slot-level "groups to reset" list in `Presets.load` would say
+  it outright.
+- The fake-hand harness now exists in `tests/test_hands.py`,
+  `tools/control_shots.py`, `tools/preset_shots.py` and
+  `tests/test_plan12_presets.py`; one shared fixture beside `hands/core.py`
+  would do.
+
 **What only the projector and the box can judge:**
 
 1. Brightness on the projector: faces at 2.5× (faces) and 2.0× (wake,

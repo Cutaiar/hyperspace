@@ -9,7 +9,7 @@
 uniform float u_amount; // @param 0 1 0.3 "Amount" How far each pixel smears toward the centre, as a fraction of its distance.
 uniform float u_cx;     // @param -1 1 0 "Centre X" Where the burst sits: −1 the left edge … +1 the right (frame heights from the middle).
 uniform float u_cy;     // @param -1 1 0 "Centre Y" Where the burst sits: −1 the bottom … +1 the top.
-uniform float u_glow;   // @param 0 2 0.6 "Glow" How much brighter the streaks get as the burst grows.
+uniform float u_glow;   // @param 0 2 0.6 "Glow" How much the light the streaks spread is lifted as the burst grows.
 uniform int u_taps;     // @param 4 32 16 "Taps" Samples along each streak — smoother costs more.
 
 vec4 effect(vec2 uv) {
@@ -28,6 +28,9 @@ vec4 effect(vec2 uv) {
         wsum += w;
     }
     acc /= wsum;
-    acc.rgb *= 1.0 + u_glow * u_amount * 2.0;    // the burst lights up as it reaches
+    // the glow lifts only what the streaks brought in — light spread into
+    // darker pixels — so the frame's own bright pixels never clip
+    vec3 spread = max(acc.rgb - texture(u_src, uv).rgb, 0.0);
+    acc.rgb += u_glow * u_amount * 2.0 * spread;
     return acc;
 }
