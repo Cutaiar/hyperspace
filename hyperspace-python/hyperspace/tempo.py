@@ -38,7 +38,10 @@ Time is handed in, never taken: `tick(t)` once a frame gives the clock
 the loop's own `now`, and every call that takes an optional `t` reads it
 by default, so a trigger fired from a key and the LFO step that follows
 it in the same frame agree on what "now" is — the frame the trigger
-fires, every synced LFO reads exactly phase 0. Nothing here imports from
+fires, every synced LFO reads exactly phase 0. A trigger that arrives
+*after* the frame's step (the panel's chip, a performer's rising edge)
+is held by `LFOs` and lands at the start of the next step, at that
+step's time, so it too reads exactly phase 0 (lfo.py). Nothing here imports from
 the host: `register` takes the registry as a duck-typed argument, the
 way hands/core.py does.
 """

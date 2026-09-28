@@ -38,6 +38,21 @@ before that LFO's output does — the same one-frame lag every modulated
 value has, and no recursion. `publish` also hands the router the rest
 (0.5) a push row from an LFO is centred on (`Router.rests`).
 
+**Exactly phase 0, on every path.** A key fires the trigger before the
+frame's step, so the step reads the new downbeat at once. The panel's
+chip and a performer-fired trigger (`Registry.apply`) run *after* it, and
+a downbeat placed then would be read a frame late at phase ≈ dt · bpm /
+60 · ratio. So a trigger or a per-LFO reset that arrives at the time the
+bank was last stepped is **held** and applied at the start of the next
+step, at that step's own time: the first frame the LFOs see it, they
+read phase 0 (+ their own `phase`). One frame of latency on those two
+paths, no partial phase on any.
+
+**A sync change carries the phase.** Switching between Hz and a division
+continues from where the wave is: to Hz the accumulator takes the current
+phase, to a division the LFO's `shift` is set so the clock's beat lands
+on it. A random LFO keeps its held value across the switch.
+
 Addresses: the router's source addresses are 0-based (``lfo:0`` is
 "LFO 1") while the param ids are 1-based (``lfo.1.depth``).
 
@@ -94,6 +109,8 @@ class LFO:
     cycle: int | None = field(default=None, repr=False)  # the cycle `hold` was drawn in
     x: float = field(default=0.0, repr=False)       # this frame's phase
     out: float = field(default=REST, repr=False)    # this frame's u
+    last_sync: int | None = field(default=None, repr=False)  # the mode last stepped in
+    pending: bool = field(default=False, repr=False)  # a reset held for the next step
 
     @property
     def synced(self) -> bool:
@@ -108,6 +125,15 @@ class LFO:
         return self.hold if self.shape == RANDOM else wave(self.shape, x)
 
     def step(self, dt: float, t: float, clock, rng: random.Random) -> float:
+        carried = False
+        if self.pending:                  # a reset held since the last step: now
+            self.pending = False
+            self.restart(clock, t)
+            dt = 0.0                      # Hz: the cycle begins at this step, not dt in
+        elif self.last_sync is not None and self.sync != self.last_sync:
+            self._carry(t, clock)         # a mode change: continue from the same phase
+            carried = True
+        self.last_sync = self.sync
         if self.synced:
             cycles = clock.beat(t) * self.ratio + self.shift
         else:
@@ -117,10 +143,20 @@ class LFO:
         self.x = cycles % 1.0
         if self.shape == RANDOM:
             k = math.floor(cycles)
+            if carried:
+                self.cycle = k            # the held value survives the switch
             if k != self.cycle:           # once per cycle: a new value, held
                 self.cycle, self.hold = k, rng.uniform(-1.0, 1.0)
         self.out = REST + 0.5 * self.depth * self.wave_at(self.x)
         return self.out
+
+    def _carry(self, t: float, clock) -> None:
+        """Sync changed since the last step: the wave continues from `x`."""
+        here = self.x - self.phase        # the cycle position without the offset
+        if self.synced:
+            self.shift = here - clock.beat(t) * self.ratio
+        else:
+            self.acc = here
 
     def restart(self, clock=None, t: float | None = None) -> None:
         """The cycle begins now (its `phase` offset stays on top)."""
@@ -138,6 +174,8 @@ class LFOs:
         self.lfos = [LFO() for _ in range(n)]
         self.rng = random.Random(seed)
         self.outputs = [REST] * n
+        self.stepped_at: float | None = None   # the t of the last step
+        self.pending = False                   # a global trigger held for the next step
 
     def __len__(self) -> int:
         return len(self.lfos)
@@ -150,23 +188,46 @@ class LFOs:
         return [f"LFO {i + 1}" for i in range(len(self.lfos))]
 
     def step(self, dt: float, t: float, clock) -> list[float]:
-        """One frame: every LFO's output for time t, in [0, 1]."""
+        """One frame: every LFO's output for time t, in [0, 1]. A trigger
+        held since the last step lands first, at this t."""
+        if self.pending:
+            self.pending = False
+            self._trigger(clock, t)
+        self.stepped_at = t
         self.outputs = [lf.step(dt, t, clock, self.rng) for lf in self.lfos]
         return self.outputs
 
+    def _late(self, clock, t: float | None) -> bool:
+        """Did this arrive after the bank already stepped at this frame's t?
+        Then it is held for the next step, which reads it at exactly phase 0."""
+        if t is None:
+            t = getattr(clock, "t", None)
+        return t is not None and t == self.stepped_at
+
     def reset(self, i: int, clock=None, t: float | None = None) -> None:
         """One LFO restarts now, in either mode; the clock and the rest stay."""
-        self.lfos[i].restart(clock, t)
+        if self._late(clock, t):
+            self.lfos[i].pending = True
+        else:
+            self.lfos[i].restart(clock, t)
 
     def trigger(self, clock=None, t: float | None = None) -> None:
         """The global trigger: the downbeat is now and every synced LFO
-        restarts together. Free-running (Hz) ones are untouched."""
+        restarts together. Free-running (Hz) ones are untouched. Fired
+        after this frame's step, it is held for the next one."""
+        if self._late(clock, t):
+            self.pending = True
+        else:
+            self._trigger(clock, t)
+
+    def _trigger(self, clock, t: float | None) -> None:
         if clock is not None:
             clock.trigger(t)
         for lf in self.lfos:
             if lf.synced:
                 lf.shift = 0.0
                 lf.cycle = None
+                lf.pending = False        # the global trigger supersedes a held reset
 
     def publish(self, router) -> None:
         """This frame's outputs to the router as the ``lfo`` source, with
