@@ -219,20 +219,25 @@ binds.
 Two, both through `AudioEngine._attach` (`audio.py:132-140`):
 
 - **A capture device** (`start_mic(index)`): a `sounddevice.InputStream`,
-  mono, at the engine's rate, callback → ring buffer. The device list is
-  every input-capable device (`input_devices`); a loopback driver
-  (BlackHole, Soundflower, anything named "loopback") is recognised by
-  name, pre-selected in the panel's combo, and labelled `System · …`
-  (`audio.py:29-52, 157`). That is the one system-audio route: with the
-  Mac's output on a Multi-Output Device, everything arrives through the
-  plain input path. **Nothing captures at launch** — capture starts when
-  `audio.mic` is toggled (`M`), and the device list is read once, on first
-  use (`AudioEngine.devices`, which `audio.device` chooses from), so a
-  device plugged in later needs a restart (audit A3).
+  mono, at the engine's capture rate (`sr`, 48 kHz), callback → ring
+  buffer. The device list is every input-capable device
+  (`input_devices`); a loopback driver (BlackHole, Soundflower, anything
+  named "loopback") is recognised by name, pre-selected by the one
+  heuristic `audio.preselect` (the first loopback, else the first
+  device), and labelled `System · …`. That is the one system-audio route:
+  with the Mac's output on a Multi-Output Device, everything arrives
+  through the plain input path. **Nothing captures at launch** — capture
+  starts when `audio.mic` is toggled (`M`). The device list is read once,
+  on first use (`AudioEngine.devices`, which `audio.device` chooses from);
+  the **rescan** button beside the combo (`audio.rescan`) reads it again
+  for an interface plugged in later, keeping the selection by name
+  (`tests/test_audio.py`).
 - **A file** (`start_file(path)`; wav / mp3 / flac / ogg through
   `soundfile`): mono mean, played through an `OutputStream` at the
-  **track's** sample rate, and the analyser is rebuilt at that rate
-  (`audio.py:165-191`).
+  **track's** sample rate. The analyser is built **once**, at that rate
+  (`AudioEngine._attach(mode, label, rate)`), and the source line on the
+  audio page shows the analyser's rate (`AudioEngine.rate`), not the
+  capture rate.
 
 The callbacks only copy samples into the ring; the FFT and the chain run
 on the frame loop in `audio.step(dt)` (`audio.py:235-242`). `audio.chain`
@@ -245,8 +250,13 @@ keeps the user's settings and restarts only the trackers and the warm-up
 
 One chain runs: `analyzer.Analyzer`, the six-band reference chain reshaped
 for N bands (1–16). `bands.py` is its parts bin — every constant under its
-reference name, `soft_ceil`, the shapers, the per-band `Params`, the scene
-rows — and `bands.Chain` is an alias to `Analyzer`. The reference chain
+reference name, `soft_ceil`, the shapers, the per-band `Params` and the
+one default table `default_params()` (the Balanced scene file is pinned to
+it by `test_balanced_is_the_default_table_and_the_reference_edges`).
+Two reference constants live where they are used rather than in the
+chain: `DRIVE` (fader → rotation rate) is `params.DRIVE`, the meters'
+nominal line is `ui.NOM`. The analyzer is constructed by its own name
+everywhere (the `bands.Chain` alias is gone). The reference chain
 survives as the frozen oracle `tests/legacy_chain.py`, and the "Legacy 6"
 layout reproduces it **bit for bit** on the golden fixtures at 60 and 120
 fps, dyn 0 and 1 (`tests/test_analyzer.py:63-83`). That test is the
@@ -288,8 +298,10 @@ The `band.{i}.*` params are rebuilt on every layout change through the
 `Control.on_layout` hook that `build_registry` installs (`control.py:36-45`).
 
 **Headroom.** Nothing hard-clamps the fader path. Four landmarks: `NOM =
-1.0` (a band working normally), `KNEE = 1.25` (where the soft ceiling
-starts to bend), `HEAD = CEIL = 2.6` (the asymptote). `soft_ceil(x, knee,
+1.0` (a band working normally — a meter landmark, `ui.NOM`), `KNEE = 1.25`
+(where the soft ceiling starts to bend), `HEAD = CEIL = 2.6` (the
+asymptote; one value, `HEAD` kept as the reference's name for it on the
+input and transfer stages). `soft_ceil(x, knee,
 ceil)` is the identity below the knee and `knee + r·t/√(1+t²)` above it —
 slope 1 at the knee, a t⁻³ tail, strictly increasing
 (`tests/test_core.py:58-64`). There are three of them, after coupling, after
@@ -514,7 +526,9 @@ is the linter. What holds what:
 
 Untested today, and worth knowing before trusting a change there: the
 frame order in `app.py`, `Keys` and `Mouse`, the `_open_*` config gates,
-`audio.py`'s streams, `analysis.py` on its own, `LeapSource` (audit).
+`LeapSource` (audit). `audio.py`'s streams and `analysis.py` are covered
+headless by `tests/test_audio.py` over a fake `sounddevice`, and the
+audio stack's import boundary by `tests/test_audio_boundary.py`.
 
 ## 7. Process
 
