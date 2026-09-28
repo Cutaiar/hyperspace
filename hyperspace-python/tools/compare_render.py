@@ -21,7 +21,8 @@ import numpy as np
 from PIL import Image, ImageDraw
 from playwright.sync_api import sync_playwright
 
-from hyperspace.render import ViewState, render_offscreen
+from hyperspace.render import render_offscreen
+from hyperspace.view import ViewState
 
 ROOT = Path(__file__).resolve().parent.parent
 WEB_ROOT = ROOT.parent / "hyperspace-web"

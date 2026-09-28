@@ -24,7 +24,7 @@ from hyperspace.control import SCENES, Control
 from hyperspace.library import FACTORY, Library, factory_doc
 from hyperspace.offline import load_wav
 from hyperspace.params import build_registry
-from hyperspace.render import ViewState
+from hyperspace.view import ViewState
 
 ROOT = Path(__file__).parent.parent
 FIXTURES = Path(__file__).parent / "fixtures"

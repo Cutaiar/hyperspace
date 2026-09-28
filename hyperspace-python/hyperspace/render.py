@@ -1,8 +1,9 @@
 """moderngl renderer — port of the draw() pipeline of hyperspace.html.
 
-The transform runs on the CPU through geometry.project_h(), the vectorised
-twin of the geometry.project() the parity tests proved against the golden
-traces (project stays as the tests' oracle); the GPU only rasterises. At
+The transform runs on the CPU through geometry.project_h(), the one
+transform (geometry.project, the parity oracle, is it without the divisor);
+the GPU only rasterises. The dataclass it draws, ViewState, lives in
+view.py so nothing has to import moderngl to hold a view. At
 ≤600 vertices / ≤1200 edges per shape the per-frame numpy cost is nothing,
 and reusing the proven path is what makes "visually indistinguishable"
 achievable by construction.
@@ -32,21 +33,20 @@ from __future__ import annotations
 
 import math
 import time
-from dataclasses import dataclass, field
 from pathlib import Path
 
 import moderngl
 import numpy as np
 
 from .fx import FxChain, FxState
-from .geometry import RATE, face_triangles, face_uvs, geom, project_h
+from .geometry import face_triangles, face_uvs, geom, project_h
+from .glsl import common, common_mtime, gl_error
 from .lookback import DreamState, Lookback
+from .view import N_MOD, RED, ViewState  # re-exported for callers that had them from here
 
 PATTERNS_GLSL = Path(__file__).parent / "shaders" / "patterns.glsl"
 
 BG = (0.0, 0.0, 0.0)
-RED = (1.0, 43 / 255, 43 / 255)
-N_MOD = 8   # pattern.mod.* inputs the face shader reads as u_mod[N_MOD]
 
 LINE_VS = """
 #version 330
@@ -185,53 +185,6 @@ def clamp(x, a, b):
     return a if x < a else min(x, b)
 
 
-@dataclass
-class ViewState:
-    """Mirror of the reference's S object (render-relevant fields)."""
-
-    shape: int = 3
-    speed: float = 0.30
-    depth4: float = 2.6
-    bright: float = 1.0
-    points: bool = True
-    lines: bool = True
-    playing: bool = True
-    planes: list[bool] = field(default_factory=lambda: [False, False, True, True, False, False])
-    ang: list[float] = field(default_factory=lambda: [0.0] * 6)
-    yaw: float = 0.0
-    pitch: float = 0.0
-    faces: bool = False          # translucent face fills under the wireframe
-    cut_through: bool = True     # fills lower the window's alpha: the desktop shows through
-    zoom: float = 1.0            # camera magnification about the view centre
-    pan: list[float] = field(default_factory=lambda: [0.0, 0.0])  # logical px
-    instances: int = 1           # synchronized copies in a centred grid
-    inst_motion: int = 0         # grid motion: 0 still, 1 orbit, 2 wave, 3 ripple
-    inst_amp: float = 0.25       # motion amplitude, fraction of a grid cell
-    inst_rate: float = 1.0       # motion angular rate, rad/s
-    pattern: int = 0             # face pattern mode (0 = flat fill)
-    pattern_mix: float = 1.0     # flat ↔ pattern blend
-    bmp_file: str = ""           # bitmap layer over the face pattern, "" = none
-    bmp_alpha: float = 1.0       # bitmap opacity fader
-    bmp_scale: float = 0.9       # bitmap width, face-UV units (face spans 1.0)
-    bmp_mode: int = 0            # bitmap path: 0 still, 1 orbit, 2 fig-8, 3 sway
-    bmp_amp: float = 0.15        # path amplitude about the face centre, UV units
-    bmp_rate: float = 1.0        # path angular rate, rad/s
-    # modulation targets (params.py rot.rate.* / pattern.mod.*): per-plane
-    # rate multipliers and the face patterns' inputs — 1.0 is the undriven
-    # look; an audio lane routed to them (routing.py) is what the reference
-    # called PLANEDRIVE and u_bands (here the u_mod[8] uniform)
-    rate: list[float] = field(default_factory=lambda: [1.0] * 6)
-    pattern_mod: list[float] = field(default_factory=lambda: [1.0] * N_MOD)
-
-    def integrate(self, dt: float) -> None:
-        """The frame() angle update: ang[p] += dt·speed·RATE[p]·rate[p]."""
-        if not self.playing:
-            return
-        for p in range(6):
-            if self.planes[p]:
-                self.ang[p] += dt * self.speed * RATE[p] * self.rate[p]
-
-
 def _samples_of(ctx: moderngl.Context, fbo: moderngl.Framebuffer) -> int:
     """The bound framebuffer's MSAA sample count. moderngl leaves `samples`
     unset on the detected default framebuffer, so the window is asked
@@ -346,9 +299,9 @@ class Renderer:
         self.pattern_error = ""
         self._face_prog: moderngl.Program | None = None
         self._fvao: moderngl.VertexArray | None = None
-        self._patterns_mtime = 0.0
+        self._patterns_mtime = (0.0, 0.0)   # (patterns.glsl, _common.glsl)
         self._reload_check = 0
-        self._t0 = time.perf_counter()
+        self._t0 = time.perf_counter()   # the one wall clock: patterns, instances, effects
         self._build_face_program()
         ctx.enable(moderngl.BLEND | moderngl.PROGRAM_POINT_SIZE)
         ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
@@ -419,13 +372,16 @@ class Renderer:
     def _build_face_program(self) -> None:
         try:
             src = PATTERNS_GLSL.read_text()
-            self._patterns_mtime = PATTERNS_GLSL.stat().st_mtime
+            self._patterns_mtime = self._shader_mtime()
+            # the shared helpers first (source string 1), then the file
+            # (string 2): an error names the file and its own line
             prog = self.ctx.program(
                 vertex_shader=FACE_VS,
-                fragment_shader=FACE_FS_HEAD + src + FACE_FS_TAIL,
+                fragment_shader=(FACE_FS_HEAD + "#line 1 1\n" + common() + "\n#line 1 2\n"
+                                 + src + FACE_FS_TAIL),
             )
         except Exception as e:  # noqa: BLE001 — a bad edit must not kill the app
-            self.pattern_error = str(e).strip().splitlines()[-1][:160]
+            self.pattern_error = gl_error(e, {1: "_common.glsl:", 2: "patterns.glsl:"})
             return
         if self._face_prog is not None:
             self._face_prog.release()
@@ -438,17 +394,33 @@ class Renderer:
         )
         self.pattern_error = ""
 
+    def now(self, t_now: float | None = None) -> float:
+        """Seconds on the renderer's clock, or `t_now` when a caller pins it."""
+        return t_now if t_now is not None else time.perf_counter() - self._t0
+
+    @staticmethod
+    def _shader_mtime() -> tuple[float, float]:
+        """patterns.glsl's and _common.glsl's mtimes — both, so a save of
+        either is a change even when it does not move the newer one."""
+        return PATTERNS_GLSL.stat().st_mtime, common_mtime()
+
     def _maybe_reload_patterns(self) -> None:
+        """Every 30 frames: rebuild the face program when patterns.glsl or
+        _common.glsl was saved — also after a build that failed, so a fix
+        lands — and have the look-back recompile on a _common.glsl save."""
         self._reload_check += 1
         if self._reload_check % 30:
             return
         try:
-            mtime = PATTERNS_GLSL.stat().st_mtime
+            mtime = self._shader_mtime()
         except OSError:
             return
         if mtime != self._patterns_mtime:
+            shared_changed = mtime[1] != self._patterns_mtime[1]
             self._patterns_mtime = mtime
             self._build_face_program()
+            if shared_changed:
+                self.lookback.on_reload()
 
     def draw(
         self, s: ViewState, w: int, h: int, dpr: float = 1.0,
@@ -457,8 +429,12 @@ class Renderer:
         """One frame at logical size (w, h) into the bound framebuffer's
         viewport; dpr scales point sizes only — positions are logical and
         the viewport handles resolution. The scene goes to its texture,
-        then the post pass (lookback.py) puts it on the target."""
+        then the post pass (lookback.py) puts it on the target. `t_now`
+        pins the clock (offscreen renders and tests); otherwise the frame
+        reads the renderer's own, and the patterns, the instance motion
+        and the effect chain all see the same second."""
         ctx = self.ctx
+        t = self.now(t_now)
         target = ctx.fbo
         if target is None:
             raise RuntimeError("Renderer.draw: no framebuffer bound (call fbo.use())")
@@ -468,7 +444,7 @@ class Renderer:
             self._blank.use(location=unit)
         self.scene.draw_fbo.use()
         ctx.viewport = (0, 0, max(vw, 1), max(vh, 1))
-        self.draw_scene(s, w, h, dpr, t_now)
+        self.draw_scene(s, w, h, dpr, t)
         self.scene.resolve()
         lb = self.lookback
         cover = self._draw_cover(w, h) if lb.wants_cover() else None
@@ -482,7 +458,7 @@ class Renderer:
             buf = fx.begin(self.scene.size)
             lb.composite(self.scene.tex, buf, cover)
             lb.capture(self.scene.tex, buf)
-            fx.run(target, t_now)
+            fx.run(target, t)
         else:
             lb.composite(self.scene.tex, target, cover)
             lb.capture(self.scene.tex, target)
@@ -519,7 +495,7 @@ class Renderer:
 
         # synchronized instance grid, spaced pre-zoom so the camera sees a field
         n_inst = max(1, int(s.instances))
-        t_m = t_now if t_now is not None else time.perf_counter() - self._t0
+        t_m = self.now(t_now)
         if n_inst > 1:
             cols = math.ceil(math.sqrt(n_inst))
             rows = math.ceil(n_inst / cols)
@@ -583,8 +559,9 @@ class Renderer:
 
         # ---- face fills, under the wireframe (agent-validated prototype) ----
         self._face_verts = 0
-        if s.faces and self._face_prog is not None:
+        if s.faces:
             self._maybe_reload_patterns()
+        if s.faces and self._face_prog is not None:
             tris = face_triangles(s.shape)
             if len(tris):
                 td = (pd[tris[:, 0]] + pd[tris[:, 1]] + pd[tris[:, 2]]) / 3.0

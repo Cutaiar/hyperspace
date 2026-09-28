@@ -98,10 +98,12 @@ dodecagon reading is covered too.
 
 The transform is the reference's, exactly: rotate in 4D across six planes →
 perspective project 4D→3D (`D4 / (D4 − w)`) → apply drag orientation
-(yaw / pitch) → perspective project 3D→2D (`geometry.project_h`,
-`geometry.py:818-844`; `project` is the same maths kept as the parity
-oracle for the tests). It runs on the CPU; the GPU rasterises. Geometry is
-exact to 1e-12 against the traces (`tests/test_core.py:33-53`).
+(yaw / pitch) → perspective project 3D→2D (`geometry.project_h`; the
+parity oracle `project` is that function without the homogeneous divisor,
+pinned equal to it on every shape — plan 11, V1). It runs on the CPU; the
+GPU rasterises. Geometry is exact to 1e-12 against the traces
+(`tests/test_core.py:33-53`). `ViewState`, the dataclass the renderer
+draws, lives in `view.py` so nothing needs moderngl to hold a view.
 
 `Renderer.draw` (`render.py:446-481`) is five stages, and with look-back
 and FX off the output is bit-identical to the scene pass alone
@@ -151,10 +153,17 @@ polytopes (`tests/test_control.py:184-196`; the 3D shapes' faces in
 perspective-correct (`geometry.face_uvs`).
 
 `shaders/patterns.glsl` is user-editable and hot-reloads on save by mtime
-(`render.py:434-444`); a bad edit keeps the last good program and shows
-the GLSL error on the panel. Contract: `vec4 pattern(int mode, vec2 uv,
-float fid)`, reading `u_time` and `u_mod[8]` — the eight `pattern.mod.k`
-params, which any source may drive. Eleven patterned modes ship (plus flat, mode 0); their names live in
+(`render.py`, `_maybe_reload_patterns`); a bad edit keeps the last good
+program and shows the GLSL error on the panel, with the line numbered as
+in the file. Contract: `vec4 pattern(int mode, vec2 uv, float fid)`,
+reading `u_time` and `u_mod[8]` — the eight `pattern.mod.k` params, which
+any source may drive. The colour helpers (`TAU`, `LUMA`, `hsv`, `pal`,
+`hue_rotate`) come from `shaders/_common.glsl`, which `glsl.py` prepends
+to the patterns, every effect and the look-back's post pass alike, and
+which hot-reloads the same way (a broken edit there shows on the panel;
+the post pass, which every frame goes through, falls back to the copy as
+shipped); the pattern file keeps its own 2-D hashes, on which its
+cellular modes were tuned. Eleven patterned modes ship (plus flat, mode 0); their names live in
 `params.PATTERNS`, and a new mode needs both the GLSL case and the name.
 The bitmap layer (`view.bmp_*`) textures faces from a file; a bad file
 never raises and leaves the plain faces (`tests/test_render.py:147`).
@@ -191,7 +200,8 @@ presettable, all modulatable.
 
 One GLSL file per effect under `shaders/fx/`. Every `// @param` uniform
 becomes a registry param `fx.<file>.<key>`, plus `on mix speed blend
-order` per file; `fx.on` and `fx.mix` govern the chain (`fx.py:114-164, 284-327`). Effects hot-reload by polling the folder every 30 frames; a
+order` per file; `fx.on` and `fx.mix` govern the chain (`fx.py:114-164, 284-327`). Every effect is compiled behind `_common.glsl` and `fx/_lib.glsl`, and
+runs on the renderer's one clock (`Renderer.now`). Effects hot-reload by polling the folder every 30 frames (the shared helper files count); a
 parse error keeps the last spec, a compile error skips the pass, all
 broken is a copy. Off is bit-identical (`tests/test_fx.py:268`). The
 blend modes are arithmetic in the shader, not GL blend state, and a pass

@@ -21,11 +21,12 @@ from hyperspace.lookback import (
     MAX_ECHOES,
     RES,
     DreamState,
+    Lookback,
     LookbackSource,
-    NullSource,
     echo_size,
 )
-from hyperspace.render import Renderer, ViewState
+from hyperspace.render import Renderer
+from hyperspace.view import ViewState
 
 VIEW = {"ang": [0.3, 0.7, 1.1, 0.5, 0.9, 1.3], "yaw": 0.4, "pitch": 0.25}
 
@@ -549,12 +550,25 @@ class Echo:
         return self.done
 
 
+def test_a_broken_common_glsl_leaves_the_post_pass_on_the_shipped_helpers(ctx, tmp_path, monkeypatch):
+    """audit V2 follow-up: the post pass runs every frame, so a bad edit to
+    _common.glsl falls back to the copy as shipped and says so; a fixed
+    file lands on the next rebuild."""
+    from hyperspace import glsl
+
+    bad = tmp_path / "_common.glsl"
+    bad.write_text("this is not glsl\n")
+    monkeypatch.setattr(glsl, "COMMON_GLSL", bad)
+    lb = Lookback(ctx)
+    assert lb.error.startswith("_common.glsl:1:")
+    bad.write_text(glsl.FALLBACK)
+    lb.on_reload()
+    assert lb.error == ""
+
+
 def test_source_protocol():
-    assert isinstance(NullSource(), LookbackSource)
     assert isinstance(Echo(), LookbackSource)
-    n = NullSource()
-    n.submit(np.zeros((2, 2, 4), np.uint8), 7)
-    assert n.frame_index == 7 and n.latest() is None
+    assert not isinstance(object(), LookbackSource)
 
 
 def test_dream_slot_round_trip(ctx):

@@ -13,7 +13,7 @@ from hyperspace.library import Library
 from hyperspace.midi import PICKUP_TOL, Binding, MidiIO, MidiMap
 from hyperspace.overlay import Output
 from hyperspace.params import Kind, build_registry
-from hyperspace.render import ViewState
+from hyperspace.view import ViewState
 
 
 class FakeIn:

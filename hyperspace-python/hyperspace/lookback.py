@@ -109,6 +109,8 @@ from typing import Any, Protocol, runtime_checkable
 import moderngl
 import numpy as np
 
+from .glsl import FALLBACK, QUAD_VS, common, gl_error
+
 MAX_ECHOES = 32
 RES = [128, 192, 256, 384]              # dream.res: the echo's short side, px
 LAYERS = ["conv2_2", "conv3_3", "conv4_3", "inception3b", "inception4c", "inception4e"]
@@ -168,32 +170,7 @@ class LookbackSource(Protocol):
     def latest(self) -> tuple[np.ndarray, int] | None: ...
 
 
-class NullSource:
-    """The slot's no-op: keeps the newest frame, never answers."""
-
-    def __init__(self):
-        self.frame: np.ndarray | None = None
-        self.frame_index = -1
-
-    def submit(self, frame: np.ndarray, frame_index: int) -> None:
-        self.frame, self.frame_index = frame, frame_index
-
-    def latest(self) -> tuple[np.ndarray, int] | None:
-        return None
-
-
-# ---- GL: one fullscreen triangle, two fragment programs ----
-
-QUAD_VS = """
-#version 330
-out vec2 v_uv;
-void main() {
-    // one triangle over the viewport; uv 0..1 across it
-    vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
-    v_uv = p;
-    gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
-}
-"""
+# ---- GL: one fullscreen triangle (glsl.QUAD_VS), two fragment programs ----
 
 DOWN_FS = """
 #version 330
@@ -203,9 +180,10 @@ out vec4 f_color;
 void main() { f_color = texture(u_scene, v_uv); }
 """
 
+# the post pass's fragment shader body — source string 2; string 1 is
+# shaders/_common.glsl (hue_rotate, LUMA), prepended by post_fs()
 POST_FS = f"""
-#version 330
-#define MAX_ECHOES {MAX_ECHOES}
+#line 1 2
 uniform sampler2D u_scene;   // this frame, fetched exactly: off = a copy
 uniform sampler2D u_ring;    // the history atlas, MAX_ECHOES slots stacked in v
 uniform sampler2D u_dream;   // the dream buffer D
@@ -228,29 +206,17 @@ uniform vec3 u_tint_rgb;     // the tint colour: chosen, or the scene's hue (Loo
 in vec2 v_uv;
 out vec4 f_color;
 
-const vec3 LUMA = vec3(0.299, 0.587, 0.114);
 const float OCCLUDE_GAIN = {OCCLUDE_GAIN};
 
 vec3 grade(vec3 c) {{
     return pow(max(c, vec3(1e-6)), vec3(u_contrast)) * (1.0 - u_darken);
 }}
 
-// the chroma plane turned about the grey axis (YIQ): luma is kept
-vec3 rotate_hue(vec3 c, float a) {{
-    float y = dot(c, LUMA);
-    float i = dot(c, vec3(0.596, -0.274, -0.322));
-    float q = dot(c, vec3(0.211, -0.523, 0.312));
-    float ca = cos(a), sa = sin(a);
-    float i2 = i * ca - q * sa, q2 = i * sa + q * ca;
-    return vec3(y + 0.956 * i2 + 0.621 * q2, y - 0.272 * i2 - 0.647 * q2,
-                y - 1.106 * i2 + 1.703 * q2);
-}}
-
 // the dream's colours, re-hued and (de)saturated, crossed into a tint of
 // its luminance
 vec3 chroma(vec3 c) {{
     float l = dot(c, LUMA);
-    vec3 own = mix(vec3(l), rotate_hue(c, u_hue), u_sat);
+    vec3 own = mix(vec3(l), hue_rotate(c, u_hue), u_sat);  // _common.glsl
     return clamp(mix(own, l * u_tint_rgb, u_tint), 0.0, 1.0);
 }}
 
@@ -285,6 +251,13 @@ void main() {{
     f_color = vec4(min(scene.rgb + wake, 1.0), scene.a + wa - scene.a * wa);
 }}
 """
+
+
+def post_fs(shared: str) -> str:
+    """The post pass's fragment shader over `shared`, the helpers from
+    shaders/_common.glsl — read when the programs are built, so an edit
+    lands on the next rebuild like everywhere else."""
+    return f"\n#version 330\n#define MAX_ECHOES {MAX_ECHOES}\n#line 1 1\n{shared}\n{POST_FS}"
 
 
 def tint_colour(hue: float, sat: float) -> tuple[float, float, float]:
@@ -343,11 +316,17 @@ class Lookback:
         self._host: np.ndarray | None = None          # staging for a source without buffer()
         self._w = np.zeros(MAX_ECHOES, dtype="f4")
         self._off = np.zeros(MAX_ECHOES, dtype="f4")
+        self.error = ""                # _common.glsl did not compile: on the fallback
         self._build_programs()
 
     def _build_programs(self) -> None:
         ctx = self.ctx
-        self._post = ctx.program(vertex_shader=QUAD_VS, fragment_shader=POST_FS)
+        try:
+            self._post = ctx.program(vertex_shader=QUAD_VS, fragment_shader=post_fs(common()))
+            self.error = ""
+        except Exception as e:  # noqa: BLE001 — a bad edit must not kill the show
+            self.error = gl_error(e, {1: "_common.glsl:", 2: "post pass line "})
+            self._post = ctx.program(vertex_shader=QUAD_VS, fragment_shader=post_fs(FALLBACK))
         self._down = ctx.program(vertex_shader=QUAD_VS, fragment_shader=DOWN_FS)
         self._post_vao = ctx.vertex_array(self._post, [])
         self._down_vao = ctx.vertex_array(self._down, [])
@@ -359,10 +338,13 @@ class Lookback:
         self._down["u_scene"].value = 0
 
     def on_reload(self) -> None:
-        """Hot-swap hook (hotreload.py): recompile the programs; the ring persists."""
-        for res in (self._post_vao, self._down_vao, self._post, self._down):
-            res.release()
+        """Hot-swap hook (hotreload.py), and the renderer's call when
+        _common.glsl is saved: recompile the programs; the ring persists.
+        The old programs go only once the new ones exist."""
+        old = (self._post_vao, self._down_vao, self._post, self._down)
         self._build_programs()
+        for res in old:
+            res.release()
 
     # ---- the ring ----
 

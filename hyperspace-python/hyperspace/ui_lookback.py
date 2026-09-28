@@ -44,6 +44,8 @@ def page(panel, dt: float) -> None:
     imgui.same_line(imgui.get_content_region_avail().x - imgui.calc_text_size(status).x)
     imgui.align_text_to_frame_padding()
     imgui.text_disabled(status)
+    if getattr(lb, "error", ""):
+        imgui.text_colored(ui.WARN, f"GLSL: {lb.error} — on the shipped helpers")
     # the composite and the dream's chroma side by side, so the page fits
     if imgui.begin_table("##lookback", 2, imgui.TableFlags_.sizing_stretch_same):
         # the titles in a row of their own: a table aligns the text baseline

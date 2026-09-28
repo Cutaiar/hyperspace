@@ -13,8 +13,8 @@ from hyperspace.app import CONTROL_SIZE
 from hyperspace.control import Control
 from hyperspace.library import Library
 from hyperspace.params import build_registry
-from hyperspace.render import ViewState
 from hyperspace.ui import PAGE_KEYS, Panel, apply_style, load_fonts
+from hyperspace.view import ViewState
 
 
 @pytest.fixture()

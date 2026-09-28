@@ -46,13 +46,14 @@ over a transparent ground shows on the desktop.
 from __future__ import annotations
 
 import re
-import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import moderngl
+
+from .glsl import QUAD_VS, common, common_mtime, gl_error
 
 FX_DIR = Path(__file__).parent / "shaders" / "fx"
 LIB_FILE = "_lib.glsl"          # helpers prepended to every effect; not an effect
@@ -183,6 +184,7 @@ class FxState:
         self.phase: dict[str, float] = {}
         self.errors: dict[str, str] = {}       # file → why it is not loaded
         self.lib = ""                          # _lib.glsl's text
+        self.common = ""                       # shaders/_common.glsl's text
         # the registry's re-declare hook (params.py sets it): called with
         # the effect names whose params changed shape on a reload
         self.on_specs: Callable[[set[str]], None] | None = None
@@ -192,7 +194,7 @@ class FxState:
     # ---- the folder ----
 
     def _scan(self) -> dict[str, float]:
-        out = {}
+        out = {"_common": common_mtime()}      # the shared helpers count as a change too
         if self.dir.is_dir():
             for p in self.dir.glob("*.glsl"):
                 try:
@@ -210,6 +212,7 @@ class FxState:
             self.lib = (self.dir / LIB_FILE).read_text()
         except OSError:
             self.lib = ""
+        self.common = common()
         changed: set[str] = set()
         found: dict[str, EffectSpec] = {}
         self.errors = {}
@@ -345,18 +348,9 @@ def _fmt(p: ParamSpec) -> Callable[[float], str]:
 
 # ---- GL ----
 
-QUAD_VS = """
-#version 330
-out vec2 v_uv;
-void main() {
-    vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
-    v_uv = p;
-    gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
-}
-"""
-
-# every effect is compiled inside this: the lib (string 1) and the effect
-# file (string 2) — #line makes a compile error name the file's own line
+# every effect is compiled inside this: the shared helpers (string 1,
+# shaders/_common.glsl), the lib (string 2) and the effect file (string 3)
+# — #line makes a compile error name the file's own line
 FS_HEAD = """#version 330
 uniform sampler2D u_src;   // the frame so far
 uniform vec2 u_res;        // its size, px
@@ -392,17 +386,10 @@ void main() { f_color = texture(u_src, v_uv); }
 """
 
 
-def fragment_source(lib: str, effect: str) -> str:
-    return f"{FS_HEAD}#line 1 1\n{lib}\n#line 1 2\n{effect}\n#line 1 3\n{FS_TAIL}"
-
-
-def _gl_error(e: Exception) -> str:
-    """The first compiler message, with its file named."""
-    lines = [ln.strip() for ln in str(e).splitlines() if ln.strip()]
-    msg = next((ln for ln in lines if "ERROR" in ln.upper()), lines[-1] if lines else str(e))
-    msg = re.sub(r"ERROR:\s*1:(\d+):", r"_lib.glsl:\1:", msg)
-    msg = re.sub(r"ERROR:\s*2:(\d+):", r"line \1:", msg)
-    return msg[:200]
+def fragment_source(lib: str, effect: str, shared: str | None = None) -> str:
+    shared = common() if shared is None else shared
+    return (f"{FS_HEAD}#line 1 1\n{shared}\n#line 1 2\n{lib}\n#line 1 3\n{effect}\n"
+            f"#line 1 4\n{FS_TAIL}")
 
 
 class FxChain:
@@ -419,8 +406,7 @@ class FxChain:
         self._progs: dict[str, tuple[str, moderngl.Program, moderngl.VertexArray]] = {}
         self._tried: dict[str, str] = {}        # name → source of the last attempt
         self.errors: dict[str, str] = {}
-        self._t_last: float | None = None
-        self._t0 = time.perf_counter()
+        self._t_last: float | None = None      # the t of the previous run
         self._frame = 0
         self._build_copy()
 
@@ -469,14 +455,14 @@ class FxChain:
         self._fbo, self._tex = [], []
         self.size = (0, 0)
 
-    def run(self, target: moderngl.Framebuffer, t_now: float | None = None) -> list[str]:
+    def run(self, target: moderngl.Framebuffer, t: float) -> list[str]:
         """Every active effect over the frame `begin()` handed out, the last
         one into `target`'s viewport. Returns the effects that ran.
 
-        `t_now` pins the clock (offscreen renders); otherwise it is the
-        wall clock. Effects advance by the time since the previous run."""
+        `t` is the frame's time in seconds — the renderer's one clock
+        (Renderer.draw), pinned by callers that render offscreen. Effects
+        advance by the time since the previous run."""
         st = self.state
-        t = t_now if t_now is not None else time.perf_counter() - self._t0
         dt = 0.0 if self._t_last is None else max(0.0, min(t - self._t_last, 0.25))
         self._t_last = t
         st.advance(dt)
@@ -522,14 +508,14 @@ class FxChain:
         spec = st.specs.get(name)
         if spec is None:
             return None
-        src = fragment_source(st.lib, spec.source)
+        src = fragment_source(st.lib, spec.source, st.common)
         have = self._progs.get(name)
         if (have is None or have[0] != src) and self._tried.get(name) != src:
             self._tried[name] = src
             try:
                 prog = self.ctx.program(vertex_shader=QUAD_VS, fragment_shader=src)
             except Exception as e:  # noqa: BLE001 — a bad edit must not kill the show
-                self.errors[name] = _gl_error(e)
+                self.errors[name] = gl_error(e, {1: "_common.glsl:", 2: "_lib.glsl:", 3: "line "})
             else:
                 if have is not None:
                     have[2].release()

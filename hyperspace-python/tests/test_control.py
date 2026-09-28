@@ -205,8 +205,8 @@ def test_panel_draws_headless():
     from imgui_bundle import imgui
 
     from hyperspace.audio import AudioEngine
-    from hyperspace.render import ViewState
     from hyperspace.ui import PAGE_KEYS, PAGES, Panel, apply_style, load_fonts
+    from hyperspace.view import ViewState
 
     ctx = imgui.create_context()
     try:

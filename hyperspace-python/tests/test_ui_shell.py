@@ -20,9 +20,9 @@ from hyperspace.control import Control
 from hyperspace.library import Library
 from hyperspace.overlay import Output
 from hyperspace.params import Kind, build_registry
-from hyperspace.render import ViewState
 from hyperspace.routing import Binding, Bindings, Owned, Router, keymap, padmap
 from hyperspace.ui import CHEATSHEET, PAGE_KEYS, PAGES, Panel, apply_style, load_fonts
+from hyperspace.view import ViewState
 
 
 class FakeLeap:

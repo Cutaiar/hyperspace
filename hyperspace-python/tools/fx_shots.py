@@ -27,7 +27,8 @@ if str(ROOT) not in sys.path:
 
 from hyperspace.fx import FxState
 from hyperspace.library import FACTORY
-from hyperspace.render import Renderer, ViewState
+from hyperspace.render import Renderer
+from hyperspace.view import ViewState
 
 OUT = ROOT / "docs" / "plans" / "assets" / "09-fx"
 W, H = 960, 600

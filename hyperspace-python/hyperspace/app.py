@@ -76,9 +76,11 @@ from .learn import Learn
 from .library import SLOTS, Library
 from .overlay import GlfwBackend, Output
 from .params import Registry, build_registry
-from .render import Renderer, ViewState
+from .render import Renderer
+from .view import ViewState
 from .routing import Bindings, Router, bindings_path
 from .ui import Panel, apply_style, load_fonts
+from .view import ViewState
 
 TITLE = "Hyperspace"
 RENDER_SIZE = (1280, 820)
@@ -674,7 +676,7 @@ def main() -> None:
         (renderer.lookback.state, "lookback", "DreamState"),
         (renderer.fx, "fx", "FxChain"),
         (renderer.fx.state, "fx", "FxState"),
-        (s, "render", "ViewState"),
+        (s, "view", "ViewState"),
         (panel, "ui", "Panel"),
         (control, "control", "Control"),
         (audio, "audio", "AudioEngine"),
