@@ -171,8 +171,9 @@ def _make_output(win, reg: Registry, cfg: dict) -> Output:
     """The render window's output settings, seeded from config."""
     out = Output(win, GlfwBackend(glfw))
     out.register(reg)
-    # [output] in config.toml; the pre-split [overlay] section still counts
-    oc = {**cfg.get("overlay", {}), **cfg.get("output", {})}
+    # [output] in config.toml — config.load has already folded a pre-split
+    # [overlay] section under it, so this is the one place that reads it
+    oc = cfg.get("output", {})
     out.monitor = int(oc.get("monitor", -1))
     out.fullscreen = bool(oc.get("fullscreen", False))
     out.overlay = bool(oc.get("on_start", False))
@@ -500,6 +501,8 @@ def main() -> None:
         (pad, "gamepad", "Pad"),
     ], watchers=[library])
     panel.reloader = reloader
+    panel.config_error = cfg.get("error", "")   # a config.toml that would not parse
+    panel.config_notes = cfg.get("notes", [])   # …or that wants a section renamed
     keys = Keys(render_win, ctrl_win)
     mouse = Mouse(render_win, reg, s)
     depth4, yaw, pitch, zoom = reg["view.depth4"], reg["camera.yaw"], reg["camera.pitch"], reg["camera.zoom"]

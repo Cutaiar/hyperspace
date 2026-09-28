@@ -212,7 +212,11 @@ only holds this frame's value after it. `overlay.Output` places the render
 window (window · fullscreen · overlay with passthrough and opacity) from
 the `output.*` params, applied once a frame through an injectable backend
 (`tests/test_overlay.py`); `overlay.*` are aliases the factory table
-binds.
+binds. The rig's placement comes from `[output]` in `config.toml`
+(`config.py`); a `[overlay]` section is the same thing under its pre-split
+name, still read and merged under `[output]`, with a note on stderr asking
+for the rename. A `config.toml` that will not parse keeps the defaults and
+shows its error on the SYSTEM page.
 
 ## 3. Audio sources
 
@@ -459,8 +463,10 @@ unreadable at a party.
 
 ## 6. Testing
 
-`uv run pytest` — 628 tests, 11 skipped without torch, about 15 s. `ruff`
-is the linter. What holds what:
+`uv run pytest` — 634 tests, 11 skipped without torch, about 20 s. `ruff`
+is the linter. Every test runs with `HYPERSPACE_HOME` pointed at its own
+`tmp_path` (`tests/conftest.py`), so no test can touch `~/Hyperspace`.
+What holds what:
 
 - **Golden traces** (`tests/golden/`, recorded once from the HTML by
   `tools/record_golden.py`): geometry exact to 1e-12 with vertex order,
