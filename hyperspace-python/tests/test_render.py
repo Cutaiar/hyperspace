@@ -363,3 +363,57 @@ def test_render_offscreen_unchanged_by_the_post_pass(ctx):
     want = np.frombuffer(fbo.read(components=3), dtype=np.uint8).reshape(h, w, 3)[::-1]
     fbo.release()
     assert np.array_equal(render_offscreen(s, w, h, ctx=ctx), want)
+
+
+def test_on_reload_rebuilds_the_wire_programs_and_still_draws(ctx):
+    """Hot-swap hook: every GL program is recompiled, the buffers and the
+    look-back / FX / cover objects persist, and the next frame draws. No
+    hasattr backfills — a missing attribute is the reloader's error to
+    report (audit H3)."""
+    from hyperspace.render import Renderer
+
+    w, h = 320, 200
+    fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((w, h))])
+    r = Renderer(ctx)
+    keep = (r.lookback, r.fx, r.cover, r._lbuf, r._pbuf, r._fbuf)
+    old = (r._lines, r._points, r._cover_prog)
+    r.on_reload()
+    assert (r.lookback, r.fx, r.cover, r._lbuf, r._pbuf, r._fbuf) == keep
+    assert all(a is not b for a, b in zip(old, (r._lines, r._points, r._cover_prog)))
+    s = ViewState(shape=10, ang=list(VIEW["ang"]), faces=True, pattern=2)
+    _direct(ctx, r, s, fbo, w, h, 0.3)
+    assert ctx.error == "GL_NO_ERROR"
+    assert _rgba(ctx, fbo, w, h, 0).max() > 0
+    fbo.release()
+
+
+def test_build_wire_programs_releases_what_it_made_when_a_step_raises():
+    """A VAO build that fails after the programs compiled must not leak them
+    (and the live set stays untouched) — headless, over a fake context."""
+    from types import SimpleNamespace
+
+    from hyperspace.render import Renderer
+
+    released = []
+
+    class Prog:
+        def __init__(self):
+            self.uniforms = {}
+
+        def __getitem__(self, k):
+            return self.uniforms.setdefault(k, SimpleNamespace())
+
+        def release(self):
+            released.append(self)
+
+    def vertex_array(*_):
+        raise RuntimeError("no VAO today")
+
+    r = Renderer.__new__(Renderer)
+    r.ctx = SimpleNamespace(program=lambda **_: Prog(), vertex_array=vertex_array)
+    r._lbuf = r._pbuf = r._fbuf = object()
+    r._lines = r._points = r._lvao = r._cover_prog = r._cvao = r._pvao = "live"
+    with pytest.raises(RuntimeError):
+        r._build_wire_programs()
+    assert len(released) == 2                      # both compiled programs
+    assert r._lines == "live" and r._lvao == "live"   # the old set was not replaced

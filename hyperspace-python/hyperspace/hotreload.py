@@ -24,6 +24,14 @@ Contract for hot classes:
   - a changed __init__ does NOT re-run on live instances; attributes it
     would have added are missing until restart (the frame guard in app.py
     catches the resulting error and shows it instead of crashing)
+  - an Enum defined in a reloaded module keeps its identity: the class the
+    process first built is put back after the re-execution, so a live
+    object's member still `is` the module's (params.Kind was the case that
+    bit — audit H2). A member added or removed in the edit needs a restart
+    and `error` says so.
+
+A watched module that was never imported (an optional adapter behind its
+config gate — dream, bridge, midi) is skipped, not an error.
 
 Data is watched the same way: `watchers` are objects with a ``poll(now)``
 (the preset library) that get polled on the same cadence, so a preset
@@ -36,15 +44,43 @@ import dataclasses
 import importlib
 import sys
 import time
+from enum import Enum
 from pathlib import Path
 
 # dependency order, leaves first: a change reloads its module and every
-# module after it, so cross-module imports always rebind fresh
+# module after it, so cross-module imports always rebind fresh. Every
+# module in the package but app (the cold core) and this one is here; a
+# module that `from .x import Name`s another comes after it, and a
+# subpackage's modules are named with a dot (tests/test_hotreload.py
+# holds both rules against the package's own imports).
 MODULES = (
-    "analysis", "tapers", "geometry", "bands", "analyzer", "control", "audio", "lookback",
-    "dream", "render", "params", "library", "presets", "overlay", "apc40", "routing", "midi",
-    "bridge", "ui_presets", "ui_lookback", "ui_bands", "ui_routing", "ui",
+    "analysis", "tapers", "geometry", "bands", "analyzer", "control", "audio", "tempo", "lfo",
+    "lookback", "dream", "fx", "render", "params", "presets", "library", "config", "overlay",
+    "gamepad", "apc40", "routing", "midi", "bridge", "hands.signal", "hands.core", "hands",
+    "ui_presets", "ui_lookback", "ui_bands", "ui_routing", "ui_fx", "ui_lfo", "hands.panel",
+    "ui",
 )
+
+
+def _enums(mod) -> dict[str, type[Enum]]:
+    """The Enum classes a module defines (not ones it imports)."""
+    return {name: obj for name, obj in vars(mod).items()
+            if isinstance(obj, type) and issubclass(obj, Enum) and obj is not Enum
+            and obj.__module__ == mod.__name__}
+
+
+def _keep_enums(mod, kept: dict[str, type[Enum]]) -> list[str]:
+    """After a reload, put each kept Enum class back under its name so live
+    members keep matching; returns the names whose members changed."""
+    changed = []
+    for name, old in kept.items():
+        new = vars(mod).get(name)
+        if new is old or not (isinstance(new, type) and issubclass(new, Enum)):
+            continue
+        if [(m.name, m.value) for m in new] != [(m.name, m.value) for m in old]:
+            changed.append(name)
+        setattr(mod, name, old)
+    return changed
 
 
 def _backfill_dataclass(obj) -> None:
@@ -66,7 +102,8 @@ class HotReloader:
     source attach) are picked up. `error` holds the last failed reload,
     `runtime_error` the last frame-guard failure (app.py writes it),
     `status` the last successful swap — or a watcher's own `status` when
-    one of those picked something up.
+    one of those picked something up — and `restart` why the process
+    needs restarting (an Enum whose members changed), kept until it is.
     """
 
     def __init__(self, targets, package: str = "hyperspace",
@@ -79,10 +116,20 @@ class HotReloader:
         self.error = ""
         self.runtime_error = ""
         self.status = ""
+        self.restart = ""
         self._next = 0.0
         self._mtimes: dict[str, float] = {}
         for name, f in self._files():
             self._mtimes[name] = f.stat().st_mtime
+
+    def _rel(self, f: Path) -> str:
+        """A file's path from the package's parent (hyperspace/hands/core.py)."""
+        pkg = sys.modules.get(self.package)
+        root = Path(pkg.__file__).parent.parent if getattr(pkg, "__file__", None) else None
+        try:
+            return str(f.relative_to(root)) if root else f.name
+        except ValueError:
+            return f.name
 
     def _files(self):
         for name in self.modules:
@@ -105,7 +152,9 @@ class HotReloader:
                 mtime = f.stat().st_mtime
             except OSError:
                 continue
-            if mtime != self._mtimes.get(name):
+            if name not in self._mtimes:
+                self._mtimes[name] = mtime  # imported since __init__: seen, not changed
+            elif mtime != self._mtimes[name]:
                 self._mtimes[name] = mtime  # a bad save must not re-error every poll
                 changed.append((name, f))
         if not changed:
@@ -116,13 +165,20 @@ class HotReloader:
             try:
                 compile(f.read_text(), str(f), "exec")
             except SyntaxError as e:
-                self.error = f"{name}.py:{e.lineno}: {e.msg}"[:160]
+                self.error = f"{self._rel(f)}:{e.lineno}: {e.msg}"[:160]
                 return False
 
         first = min(self.modules.index(name) for name, _ in changed)
+        notes = []
         try:
             for name in self.modules[first:]:
-                importlib.reload(sys.modules[f"{self.package}.{name}"])
+                mod = sys.modules.get(f"{self.package}.{name}")
+                if mod is None:
+                    continue            # an optional adapter that is off
+                kept = _enums(mod)
+                importlib.reload(mod)
+                notes += [f"{name}.{e} changed — restart to use its new members"
+                          for e in _keep_enums(mod, kept)]   # sticky: self.restart
         except Exception as e:  # noqa: BLE001 — a bad edit must not kill the app
             self.error = f"{type(e).__name__}: {e}"[:160]
             return False
@@ -142,6 +198,9 @@ class HotReloader:
             self.error = f"swap: {type(e).__name__}: {e}"[:160]
             return False
 
+        for note in notes:
+            if note not in self.restart:
+                self.restart = f"{self.restart}; {note}" if self.restart else note
         self.error = ""
         self.runtime_error = ""
         names = ", ".join(name for name, _ in changed)
