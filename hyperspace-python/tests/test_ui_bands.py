@@ -412,7 +412,7 @@ def test_the_replace_prompt_swaps_the_owner_or_leaves_the_table(rig, tmp_path):
     landed = table.add(Binding("lane:3", "view.bright", "push", 0.3))   # while the prompt was up
     ui_routing.answer(panel, True)
     assert asleep.enabled and table.owner("view.bright") is asleep and landed not in table.bindings
-    assert [b for b in table.performers() if b.target == "view.bright"] == [asleep]
+    assert [b for b in table.bindings if b.is_performer and b.target == "view.bright"] == [asleep]
     assert ui_routing._state(panel)["saved"] == ui_routing._sig(router)  # on disk already…
     before = routing.bindings_path(tmp_path).stat().st_mtime_ns
     frame(panel, "routing")
@@ -576,10 +576,11 @@ def test_routing_presets_step_load_save(rig, tmp_path):
     assert not lib.is_factory("bindings", "My Routes")
     frame(panel)
     # load a factory preset back: the user route goes, the inputs stay
-    n_inputs = len(router.table.of(*routing.INPUT_SCHEMES))
+    inputs = ("key", "pad", "hat", *routing.MIDI_SCHEMES)
+    n_inputs = len(router.table.of(*inputs))
     lib.load("bindings", "default")
     assert not router.table.routes_to("view.bright")
-    assert len(router.table.of(*routing.INPUT_SCHEMES)) == n_inputs
+    assert len(router.table.of(*inputs)) == n_inputs
     # and the user file round-trips
     lib.load("bindings", "My Routes")
     assert router.table.routes_to("view.bright")[0].value == 0.3

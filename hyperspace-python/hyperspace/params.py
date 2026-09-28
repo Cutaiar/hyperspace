@@ -67,6 +67,7 @@ from .fx import declare as declare_fx
 from .geometry import SHAPES
 from .lookback import LAYERS, MAX_ECHOES, OCTAVES, RES, TINT_FROM, DreamState
 from .tapers import Taper
+from .tapers import clamp as _clamp
 
 PATTERNS = [
     "FLAT", "RINGS", "PLAID", "MOIRE", "BLOOM", "CAUSTIC",
@@ -104,10 +105,6 @@ class Kind(Enum):
     TRIGGER = "trigger"
     TEXT = "text"
 
-
-
-def _clamp(x, a, b):
-    return a if x < a else min(x, b)
 
 
 @dataclass(eq=False)

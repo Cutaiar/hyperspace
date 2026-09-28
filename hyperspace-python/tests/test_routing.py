@@ -290,6 +290,25 @@ def test_json_rows_carry_only_what_differs():
     assert Binding.from_json({"source": "lane:1", "target": "x", "op": "push", "value": -2,
                               "enabled": False, "junk": 1}) == Binding(
         "lane:1", "x", "push", -2, False)
+
+
+def test_pickup_never_rides_on_a_performer_row():
+    """Audit R5: `pickup` is a knob's field (soft pickup on a MIDI abs
+    row). A performer grabs and never yields (plan 09 d.4), so the field
+    never reaches the file for a lane-scheme row, whatever it reads."""
+    for src in ("hand:3", "lane:0", "lfo:1", "ext:2"):
+        assert "pickup" not in Binding(src, "view.bright", "position", pickup=False).to_json()
+        assert "pickup" not in Binding(src, "view.bright", "push", 0.5, pickup=True).to_json()
+    assert Binding("cc:0:48", "view.bright", "abs", pickup=False).to_json()["pickup"] is False
+
+
+def test_the_apc40_band_planes_are_the_reference_tables():
+    """Audit R7: apc40.py hand-copies bands.BANDS[i].pl for the six
+    ACTIVATOR buttons rather than importing the audio stack; this pins
+    the copy to the table."""
+    from hyperspace import apc40
+
+    assert apc40._BAND_PLANES == tuple(b.pl for b in BANDS)
     # rest only when the row has its own — None (the source's) is the default
     assert "rest" not in Binding("lane:1", "x", "push", 0.5).to_json()
     d = Binding("lfo:0", "x", "push", 0.5, rest=0.5).to_json()
@@ -758,11 +777,12 @@ def test_apply_preset_replaces_routes_and_lands_bases(tmp_path):
     r = rig(tmp_path=tmp_path, full=True)
     router = Router(r.reg, Bindings.factory())
     router.table.add(Binding("lane:0", "view.bright", "push", 0.5))
-    n_inputs = len(router.table.of(*routing.INPUT_SCHEMES))
+    inputs = ("key", "pad", "hat", *routing.MIDI_SCHEMES)
+    n_inputs = len(router.table.of(*inputs))
     r.view.rate[0] = 2.0
     assert router.apply_preset("legacy6") == []
     assert len(router.table.mods()) == 12 and not router.table.routes_to("view.bright")
-    assert len(router.table.of(*routing.INPUT_SCHEMES)) == n_inputs
+    assert len(router.table.of(*inputs)) == n_inputs
     assert r.view.pattern_mod == [0.0] * 6 + [1.0] * (N_MOD - 6)
     assert r.view.rate == [0.0] * 6                      # a push lands the drive only on 0
     for name in PLANES:
@@ -907,7 +927,7 @@ def test_a_target_has_one_performer():
     assert e.value.existing is first and e.value.new is second
     assert "view.bright is already performed by hand 0 positions" in str(e.value)
     assert t.routes() == [first] and t.owner("view.bright") is first
-    assert t.performers() == [first]
+    assert [b for b in t.bindings if b.is_performer] == [first]
     # a different target is free; the same row again is its own owner
     t.add(Binding("hand:0", "view.speed", "position"))       # one hand, two params
     assert t.replace_owner(first) is None
@@ -970,7 +990,7 @@ def test_replace_owner_is_the_one_door_onto_a_taken_target():
     t.remove(first)
     other = t.add(Binding("lane:2", "view.bright", "push", 0.1))
     assert t.replace_owner(asked) is other                             # whoever holds it now
-    assert t.owner("view.bright") is asked and t.performers() == [asked]
+    assert t.owner("view.bright") is asked and [b for b in t.bindings if b.is_performer] == [asked]
     # a retarget in place: `b` keeps its identity, gains the target
     mover = t.add(Binding("hand:3", "view.speed", "position"))
     assert t.replace_owner(mover, target="view.bright") is asked
@@ -1174,7 +1194,8 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     assert rows[("hand:3", "view.inst_amp")].value == 0.4
     assert rows[("hand:7", "view.depth4")].op == "position"
     z = rows[("hand:7", "camera.zoom")]
-    assert (z.op, z.value, z.pickup, z.when) == ("position", 1.0, True, "hand:18")
+    assert (z.op, z.value, z.when) == ("position", 1.0, "hand:18")
+    assert "pickup" not in z.to_json()                         # dropped with the abs op
     assert ("lane:1", "rot.rate.XY") not in rows and ("hand:2", "view.depth4") not in rows
     assert [b.source for b, _ in t.dropped] == ["hand:2"]
     assert len(t.notes) == 9

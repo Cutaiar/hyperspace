@@ -394,7 +394,8 @@ def test_a_hand_learn_reaches_the_shared_learn_object(rig):
     m.learner.learn_source("hand:3", when="hand:14")
     assert m.learner.learning is None and m.learner.pending is None
     b = m.table.owner("view.inst_amp")
-    assert (b.source, b.op, b.value, b.when, b.pickup) == ("hand:3", "position", 1.0, "hand:14", True)
+    assert (b.source, b.op, b.value, b.when) == ("hand:3", "position", 1.0, "hand:14")
+    assert "pickup" not in b.to_json()                         # not a performer's field
     assert m.binding_for("view.inst_amp").is_midi            # the knob row is still there
     assert "learned view.inst_amp" in m.learner.last
 

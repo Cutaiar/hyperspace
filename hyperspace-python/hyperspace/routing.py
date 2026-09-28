@@ -222,7 +222,6 @@ LEGACY_MIDI_FILE = Path("midi_map.json")
 FACTORY_DIR = Path(__file__).parent / "library" / "bindings"
 
 MIDI_SCHEMES = ("cc", "note", "pitch")
-INPUT_SCHEMES = ("key", "pad", "hat", *MIDI_SCHEMES)
 LANE_SCHEMES = ("lane", "ext", "lfo", "hand")          # continuous, read by the Router
 MOD_OPS = ("push", "position")                 # the performer ops: the Router's rows
 OPS = ("fire", "toggle", "step", "set", "abs", "rel", "rel64", "momentary", *MOD_OPS)
@@ -404,6 +403,10 @@ class Binding:
                   "on", "off", "ring"):
             if d[k] == self.__dataclass_fields__[k].default:
                 d.pop(k)
+        # a performer never picks up (plan 09 d.4: hands grab, they never
+        # yield) — the field rides on the dataclass but never on the file
+        if self.scheme in LANE_SCHEMES:
+            d.pop("pickup", None)
         return d
 
     @classmethod
@@ -604,8 +607,8 @@ def migrate_v1(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
                 why += " — a push on a base of 0 is the additive twin"
             notes.append(f"dropped {b.source} → {b.target} ({b.op}): {why}")
             continue
-        if b.op == "abs":            # a learned hand: the whole throw, no pickup
-            b.value, b.pickup = 1.0, True
+        if b.op == "abs":            # a learned hand: the whole throw (pickup is
+            b.value = 1.0            # not a performer's field — to_json drops it)
         b.op = op
         out.append(b)
     return out, notes
@@ -820,11 +823,6 @@ class Bindings:
         """Every performer row, disabled ones too — what the matrix lists
         and a routing preset saves."""
         return [b for b in self.bindings if b.op in MOD_OPS]
-
-    def performers(self) -> list[Binding]:
-        """The rows that own a target: enabled, a continuous source, push
-        or position (`Binding.is_performer`)."""
-        return [b for b in self.bindings if b.is_performer]
 
     def owner(self, pid: str) -> Binding | None:
         """The one performer on `pid`, or None — the referee's question."""

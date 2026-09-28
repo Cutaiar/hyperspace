@@ -41,6 +41,7 @@ import numpy as np
 from .fx import FxChain, FxState
 from .geometry import RATE, face_triangles, face_uvs, geom, project_h
 from .lookback import DreamState, Lookback
+from .tapers import clamp
 
 PATTERNS_GLSL = Path(__file__).parent / "shaders" / "patterns.glsl"
 
@@ -179,10 +180,6 @@ void main() {
     f_color = vec4(u_color, a);
 }
 """
-
-
-def clamp(x, a, b):
-    return a if x < a else min(x, b)
 
 
 @dataclass
