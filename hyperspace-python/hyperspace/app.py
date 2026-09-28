@@ -172,8 +172,8 @@ def _make_output(win, reg: Registry, cfg: dict) -> Output:
     out = Output(win, GlfwBackend(glfw))
     out.register(reg)
     # [output] in config.toml — config.load has already folded a pre-split
-    # [overlay] section under it; the merge here only covers a bare dict
-    oc = {**cfg.get("overlay", {}), **cfg.get("output", {})}
+    # [overlay] section under it, so this is the one place that reads it
+    oc = cfg.get("output", {})
     out.monitor = int(oc.get("monitor", -1))
     out.fullscreen = bool(oc.get("fullscreen", False))
     out.overlay = bool(oc.get("on_start", False))
@@ -494,6 +494,7 @@ def main() -> None:
     ], watchers=[library])
     panel.reloader = reloader
     panel.config_error = cfg.get("error", "")   # a config.toml that would not parse
+    panel.config_notes = cfg.get("notes", [])   # …or that wants a section renamed
     keys = Keys(render_win, ctrl_win)
     mouse = Mouse(render_win, reg, s)
     pad = Pad()

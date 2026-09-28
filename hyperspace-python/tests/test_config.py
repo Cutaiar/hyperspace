@@ -25,8 +25,10 @@ def test_overlay_is_an_alias_merged_under_output_and_noted_once(tmp_path, capsys
     cfg = config.load(p)
     assert cfg["output"]["on_start"] is True and cfg["output"]["bg"] == 0.3
     assert cfg["output"]["monitor"] == -1
+    assert "overlay" not in cfg                                # folded, not kept beside
     err = capsys.readouterr().err
     assert err.count("[overlay] is now [output]") == 1 and str(p) in err
+    assert cfg["notes"] == [err.strip()]                       # the SYSTEM page shows it too
     # a real [output] wins over the alias, key by key — the owner's file
     # today has both: [output] commented out, [overlay] with the look
     p.write_text("[output]\nmonitor = 1\nbg = 0.9\n[overlay]\non_start = true\nbg = 0.3\n")
@@ -50,9 +52,17 @@ def test_a_bad_file_keeps_the_defaults_and_carries_the_error(tmp_path):
     assert cfg["midi"]["enabled"] is True and cfg["output"] == config.DEFAULTS["output"]
     p.write_text("[midi]\nenabled = false\n")
     assert "error" not in config.load(p)
+    # an [output] that is not a table is an error, not a crash at launch
+    p.write_text("output = true\n[overlay]\nbg = 0.2\n")
+    cfg = config.load(p)
+    assert cfg["output"]["bg"] == 0.2 and "error" not in cfg  # the alias table still lands
+    p.write_text("output = true\n")
+    cfg = config.load(p)
+    assert cfg["output"] == config.DEFAULTS["output"] and "[output]" in cfg["error"]
 
 
-def test_every_test_runs_with_its_own_home(tmp_path):
+def test_every_test_runs_with_its_own_home(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)   # ensure_home migrates a cwd config.toml; none here
     assert os.environ["HYPERSPACE_HOME"] == str(tmp_path / "home")
     assert library.home() == tmp_path / "home"
     assert library.home() != Path("~/Hyperspace").expanduser()

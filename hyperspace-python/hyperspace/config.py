@@ -29,7 +29,8 @@ differs on this machine. Adapters are enabled here, not in code
                             # and noted once on stderr so the file gets renamed
 
 A file that will not parse is not fatal: the defaults stand and
-``cfg["error"]`` carries the message, which the SYSTEM page shows.
+``cfg["error"]`` carries the message; ``cfg["notes"]`` carries requests
+like the rename above. The SYSTEM page shows both.
 
     [bridge]                # lanes out / external lanes in over MIDI (bridge.py)
     enabled = false         # true opens the bridge; off, it is never imported
@@ -109,13 +110,20 @@ def load(path: Path | None = None) -> dict:
                 cfg.setdefault(section, {}).update(values)
             else:
                 cfg[section] = values
-        legacy = data.get(LEGACY_OUTPUT)
+        legacy = cfg.pop(LEGACY_OUTPUT, None)
         if isinstance(legacy, dict):
             # the pre-split section name: its keys land under [output], a
             # real [output] wins key by key, and the file is asked to catch up
-            cfg["output"] = {**DEFAULTS["output"], **legacy, **data.get("output", {})}
-            print(f"config: [{LEGACY_OUTPUT}] is now [output] — rename the section in "
-                  f"{path}", file=sys.stderr)
+            # — on stderr and on the SYSTEM page (cfg["notes"])
+            real = data.get("output")
+            real = real if isinstance(real, dict) else {}
+            cfg["output"] = {**DEFAULTS["output"], **legacy, **real}
+            note = f"config: [{LEGACY_OUTPUT}] is now [output] — rename the section in {path}"
+            cfg["notes"] = [note]
+            print(note, file=sys.stderr)
+    if not isinstance(cfg["output"], dict):
+        cfg["error"] = f"config: [output] must be a table, not {cfg['output']!r}"
+        cfg["output"] = dict(DEFAULTS["output"])
     # the MIDI map lives next to the config unless it says otherwise
     m = cfg["midi"].get("map")
     if m and not Path(m).is_absolute():

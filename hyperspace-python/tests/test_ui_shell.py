@@ -72,15 +72,27 @@ def test_every_page_draws_with_a_library(rig):
         assert PAGE_KEYS[k] == key
 
 
-def test_system_page_shows_a_config_error(rig):
-    """A config.toml that would not parse is reported on the SYSTEM page
-    (audit L4), beside the other rig notices."""
+def test_system_page_shows_a_config_error_and_notes(rig, monkeypatch):
+    """A config.toml that would not parse, or that still says [overlay], is
+    reported on the SYSTEM page (audit L4), beside the other rig notices."""
+    import hyperspace.ui as ui_mod
+
+    drawn: list[str] = []
+    real_colored, real_disabled = imgui.text_colored, imgui.text_disabled
+    monkeypatch.setattr(ui_mod.imgui, "text_colored",
+                        lambda col, s: (drawn.append(s), real_colored(col, s)))
+    monkeypatch.setattr(ui_mod.imgui, "text_disabled",
+                        lambda s: (drawn.append(s), real_disabled(s)))
     rig.panel.config_error = "config: Expected ']' at line 1"
+    rig.panel.config_notes = ["config: [overlay] is now [output] — rename the section"]
     frame(rig.panel, "system")
     imgui.end_frame()
-    rig.panel.config_error = ""
+    assert rig.panel.config_error in drawn and rig.panel.config_notes[0] in drawn
+    drawn.clear()
+    rig.panel.config_error, rig.panel.config_notes = "", []
     frame(rig.panel, "system")
     imgui.end_frame()
+    assert not any(s.startswith("config:") for s in drawn)
 
 
 def test_page_param_is_ui_state_not_a_preset(rig):

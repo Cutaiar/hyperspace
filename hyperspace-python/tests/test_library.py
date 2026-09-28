@@ -93,9 +93,9 @@ def test_first_run_migrates_working_directory_files(tmp_path, monkeypatch, capsy
 
 def test_config_explicit_path_keeps_working(tmp_path):
     p = tmp_path / "config.toml"
-    p.write_text("[overlay]\nbg = 0.5\n")
+    p.write_text("[output]\nbg = 0.5\n")
     cfg = config.load(p)
-    assert cfg["overlay"]["bg"] == 0.5 and cfg["midi"]["enabled"] is True
+    assert cfg["output"]["bg"] == 0.5 and cfg["midi"]["enabled"] is True
     assert cfg["midi"]["map"] == str(tmp_path / "midi_map.json")
 
 
