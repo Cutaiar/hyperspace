@@ -131,7 +131,7 @@ in `config.toml` (not yet needed — nothing rig-specific exists until plan 04).
    CC pairs + pitch-bend lanes, MIDI clock from deck BPM, inbound control,
    FL-side fuser script. Nothing in the core may depend on it.
 5. **Plan 06 — divergence:** freeze/tag the HTML; **fix the trim
-   non-monotonicity** (three candidate fixes in plan 06 / ENGINEERING §9 —
+   non-monotonicity** (three candidate fixes in plan 06 / ENGINEERING.md's trim note in the audio-chain section —
    needs the user's choice; the auto/manual switch is the one to propose);
    tempo-locked shapers once DJ Link exists; saveable scenes as JSON;
    per-band LFO knobs; real harmonic detection; scrub bar.

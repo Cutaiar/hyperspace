@@ -7,7 +7,7 @@ parameter. This is the structure reference; behaviour is in
 [`AUDIT-2026-09.md`](AUDIT-2026-09.md).
 
 Written by plan 10 against `main` **ef299ef** (2026-09-27); the `file:line`
-references are as of plan 10's own commit **d5de879**, which changed only
+references are as of plan 10's own commit **488c445**, which changed only
 docstrings and comments. The symbol names will outlive the numbers.
 When a boundary, the frame order or the control model changes, change the
 line here in the same PR — this document exists so that a fix can be made
@@ -223,7 +223,7 @@ Three classes of writer, and the model is that they never fight:
 
 | Class | Writes | Who | Enforced by |
 |---|---|---|---|
-| **Scene-setter** | the **base** | panel widgets (`ui.py:683-807`); key / pad / hat rows via `routing.act` (`routing.py:454-479`); MIDI knobs, faders, buttons (`midi.py:433-484`); presets, themes, projects via `Registry.restore` (`library.py:523`, `routing.py:1005/1159/1176`); the relative writers — mouse orbit / pan / zoom, sticks, triggers, ↑/↓ — via `Param.nudge` / `scale` (`app.py:331-373, 560-568`); the loop keys `R`, F1–F8 via `app.act` (`app.py:96`) | every setter ends in `Param.set`, which writes `_base` while modulated (`params.py:182-187`); `nudge`/`scale` read `self.base` (`params.py:370, 385`); `tests/test_modulation.py:180`, `tests/test_app_relative.py`, `tests/test_midi.py:272` |
+| **Scene-setter** | the **base** | panel widgets (`ui.py:683-807`); key / pad / hat rows via `routing.act` (`routing.py:454-479`); MIDI knobs, faders, buttons (`midi.py:434-485`); presets, themes, projects via `Registry.restore` (`library.py:523`, `routing.py:1005/1159/1176`); the relative writers — mouse orbit / pan / zoom, sticks, triggers, ↑/↓ — via `Param.nudge` / `scale` (`app.py:331-373, 560-568`); the loop keys `R`, F1–F8 via `app.act` (`app.py:96`) | every setter ends in `Param.set`, which writes `_base` while modulated (`params.py:182-187`); `nudge`/`scale` read `self.base` (`params.py:370, 385`); `tests/test_modulation.py:180`, `tests/test_app_relative.py`, `tests/test_midi.py:272` |
 | **Performer** | an **offset** | `Router.modulate` → `Param.modulate` (`routing.py:1149`) — the only caller in the package | grep; adapters only `feed` (`hands/core.py:758`, `lfo.py:174`, `bridge.py:228`). No test |
 | **Object writer** | the live object, bypassing `Param` | the rotation integrator (`render.py:232`), `camera.reset` (`params.py:756-762`), `Control`'s scene / band resets (`control.py:57-134`), `mirror()` on the non-modulatable `hands.*` (`hands/core.py:449`) | `Param.apply` folds the delta into the base next frame (`params.py:460-466`, `tests/test_modulation.py:198`); non-modulatable params are never applied, so a direct write is simply the value |
 
@@ -237,9 +237,10 @@ Consequences to hold onto:
 - A relative writer reads the base, never the effective value. Reading the
   effective value folded the whole offset into the base on every drag
   frame — plan 09's audit simulation 1 (`tests/test_app_relative.py:53`).
-- MIDI ring feedback shows the base (`midi.py:504`) and never chases a
-  performer; LED feedback on a toggle or enum reads the effective value
-  (`midi.py:525-527`) and does. That asymmetry is real (audit).
+- MIDI ring feedback shows the base (`midi.py:505`) and never chases a
+  performer; LED feedback on a toggle, or on an enum `set` row, reads the
+  effective value
+  (`midi.py:526-528`) and does. That asymmetry is real (audit).
 - `Router.modulate` never checks ownership. The referee lives in the
   table's edit doors (§3.5); a table mutated directly could still stack two
   rows on one target.
@@ -255,7 +256,7 @@ A `Binding` (`routing.py:290`) is one row: `source` (`scheme:address`),
 |---|---|---|---|
 | `key:` | a GLFW key name, optional `SHIFT+` / `SUPER+` | `Router.keys` (`routing.py:1024`) | a **discrete op** on the base |
 | `pad:` / `hat:` | a `gamepad` button / hat name | `Router.pad` (`routing.py:1051`) | discrete op on the base |
-| `cc:` / `note:` / `pitch:` | `channel:number` (`pitch:` is `channel` only) | `MidiIO._apply` (`midi.py:433`) | `abs` (with soft pickup), `rel`, `rel64`, `step`, `toggle`, `set`, `momentary` — all base |
+| `cc:` / `note:` / `pitch:` | `channel:number` (`pitch:` is `channel` only) | `MidiIO._apply` (`midi.py:434`) | `abs` (with soft pickup), `rel`, `rel64`, `step`, `toggle`, `set`, `momentary` — all base |
 | `lane:` | analyzer band index | `analyzer.lanes / CEIL` inside `Router.modulate` (`routing.py:1118`) | **performer** |
 | `hand:` | axis index: 12 axes, 2 presence, 8 pinch switches | `HandsIO.poll` → `Router.feed("hand")` (`hands/core.py:758`) | performer; a switch may also be a gate |
 | `ext:` | DAW lane 0–15 | `Bridge.step` → `Router.feed("ext")` (`bridge.py:228`) | performer |
@@ -328,7 +329,7 @@ nothing; key, pad and MIDI rows never own. A target has at most one:
 - `Bindings.replace_owner(new, *, target=None)` is the **one door** onto a
   taken target: it removes whoever owns it *at commit* and adds or
   retargets the new row (`routing.py:907-933`). Every *Replace* in the app
-  is that call (`ui_routing.py:206, 237, 243`; `midi.py:382`).
+  is that call (`ui_routing.py:206, 237, 243`; `midi.py:383`).
 - Loading a file or a preset runs `referee()`: first performer per target
   wins in file order, the rest go to `table.dropped` with a reason, shown
   on the ROUTING page until the next edit (`routing.py:567-584, 779, 956`).
@@ -342,7 +343,7 @@ target).
 **The Replace / Keep prompt.** A conflicting learn or edit is *held*, not
 applied:
 
-- A hand learn goes through `MidiIO.learn_source` (`midi.py:325-357`): if
+- A hand learn goes through `MidiIO.learn_source` (`midi.py:326-358`): if
   another performer owns the target the pair is parked in `MidiIO.pending`
   and nothing is written. A learn onto a target the same axis already
   positions only refreshes the gate.
@@ -392,16 +393,16 @@ preset also writes four of them (`lfo.1.sync/shape/depth`, `lfo.2.sync`) as
 | mouse drag / shift-drag / wheel | `Mouse.poll` → `nudge` / `scale` on camera params | base, relative | `app.py:321-367` |
 | a pad button or hat | `routing.act` on the row | base | `app.py:555` → `routing.py:1051` |
 | a stick or trigger | `nudge` / `scale` / `_ride_depth` | base, relative | `app.py:558-568` |
-| an APC40 knob or fader (`abs`) | `Param.set_norm` after soft pickup; ring feedback shows the base | base | `midi.py:475-484, 493-520` |
-| an APC40 button (note) | `momentary` / `toggle` / `step` / `fire` | base | `midi.py:437-449` |
+| an APC40 knob or fader (`abs`) | `Param.set_norm` after soft pickup; ring feedback shows the base | base | `midi.py:476-485, 494-521` |
+| an APC40 button (note) | `momentary` / `toggle` / `step` / `fire` | base | `midi.py:438-450` |
 | an APC40 knob on a **hand-owned** param | the same — it moves the return value | base | decision 3; `tests/test_routing.py:1068` |
 | an analyzer band | `lane:<i>` → its performer row | offset | `routing.py:1118` |
 | a hand axis | `hand:<i>` → its performer row (push or position) | offset | `hands/core.py:758` → `routing.py:1113` |
 | a pinch | `hand:<14+…>` — a lane like any other, and a gate for rows whose `when` names it | offset, or opens / shuts a row | `hands/core.py:688-696`, `routing.py:1074` |
 | a DAW lane in | `ext:<i>` → its performer row | offset | `bridge.py:228` |
 | an LFO | `lfo:<i>` → its performer row | offset | `lfo.py:174` |
-| right-click → Learn, then move a hand | `MidiIO.learn_source` → a `position` row, or the prompt | the table | `hands/core.py:808-832` → `midi.py:325` |
-| right-click → Learn, then turn a knob | `MidiIO._learned` → an `abs` / `rel` / `toggle` MIDI row | the table | `midi.py:298-323` |
+| right-click → Learn, then move a hand | `MidiIO.learn_source` → a `position` row, or the prompt | the table | `hands/core.py:808-832` → `midi.py:326` |
+| right-click → Learn, then turn a knob | `MidiIO._learned` → an `abs` / `rel` / `toggle` MIDI row | the table | `midi.py:299-324` |
 | a preset, theme or project | `Registry.restore` | base | `library.py:523` |
 | a routing preset | `Bindings.set_routes` + `reg.restore(values)` | the performer rows and the macros | `routing.py:1161-1176` |
 
@@ -479,7 +480,7 @@ filed in [`AUDIT-2026-09.md`](AUDIT-2026-09.md):
   `position` row: the axis springs to its rest value and the row keeps
   positioning the param there. Only the tracker going dark feeds `None`
   (`hands/core.py:693` for the NaN rule, `:758` for the `None` feed,
-  `signal.py:124-131` for the spring; with `rest = hold` it holds instead).
+  `hands/signal.py:124-131` for the spring; with `rest = hold` it holds instead).
 - Hand Learn lives in the MIDI adapter object; with `[midi] enabled =
   false` there is no hand Learn.
 - Nothing in `Router.modulate` checks ownership.
@@ -549,10 +550,10 @@ with soft pickup; `feedback` rings and LEDs; `learn`, `learn_source`,
 styles, `DEFAULT_MAP` (113 rows), `N_TAP`/`N_NUDGE_*`/`N_METRO`/`N_QUANT`.
 **Must never.** Be imported by the core (`tests/test_params.py:286`).
 Write an offset (every path ends in `set_norm`/`step`/`toggle`/`fire`/
-`act`). Let a ring chase a performer (`midi.py:504`,
+`act`). Let a ring chase a performer (`midi.py:505`,
 `tests/test_midi.py:272`). Apply or lose a held learn silently
-(`midi.py:283-287, 353-356`). Fire a note release as a bind
-(`midi.py:425`).
+(`midi.py:284-288, 354-357`). Fire a note release as a bind
+(`midi.py:426`).
 **Tests.** `tests/test_midi.py`; `apc40` indirectly there and in
 `tests/test_routing.py:374` (the remap tables pinned to `DEFAULT_MAP`).
 
@@ -572,7 +573,7 @@ hand rows.
 **Must never.** `core.py` / `signal.py` import from `hyperspace`; only
 `panel.py` knows the host (`tests/test_hands_boundary.py`). Write a
 param (they declare and feed only). Touch the registry or Router from
-the SDK thread (`core.py:567-568`, unenforced). Change the lane order
+the SDK thread (`hands/core.py:567-568`, unenforced). Change the lane order
 under a saved `hand:<i>` (`tests/test_hands.py:391`). Let a gate open on
 a source that is not live (`tests/test_hands.py:752`). Learn while a
 question is up (`tests/test_hands.py:521`).
@@ -734,7 +735,7 @@ render window. Let a broken adapter or a raising reload stop the show.
 Read the effective value into a base from a relative writer
 (`tests/test_app_relative.py`). `bridge`: write a Param
 (`tests/test_bridge.py:272`); be on by default (`:392`). `hotreload`: reload
-anything when a changed file does not parse (`tests/test_hotreload.py:202`).
+anything when a changed file does not parse (`tests/test_hotreload.py:109`).
 **Tests.** `tests/test_app_relative.py`, `tests/test_overlay.py`,
 `tests/test_gamepad.py`, `tests/test_hotreload.py`, `tests/test_bridge.py`.
 The loop order, `Keys`, `Mouse` and the `_open_*` gates have no test.

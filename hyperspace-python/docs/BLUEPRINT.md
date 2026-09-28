@@ -1,5 +1,12 @@
 # Hyperspace — System Blueprint, rev. 2 (Python target)
 
+> **Reading note (plan 10, 2026-09-27).** The `ENGINEERING §N` references
+> below predate plan 10's rewrite of `ENGINEERING.md`, which removed the
+> HTML-era sections and renumbered the rest. Read them by topic against the
+> current section titles, and treat this document as the design of record
+> for the port, not as a description of the system as built — that is
+> [`ARCHITECTURE.md`](ARCHITECTURE.md).
+
 This supersedes `System Architecture Blueprint.md` (the Gemini spitball, kept for
 reference). That draft sketched the right *inputs* — Pro DJ Link metadata, IMU
 steering, a real audio feed, delay compensation — but proposed building them on

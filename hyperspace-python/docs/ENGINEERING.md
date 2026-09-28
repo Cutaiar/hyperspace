@@ -9,7 +9,7 @@ in [`DECISIONS.md`](DECISIONS.md); what is currently drifting is in
 [`AUDIT-2026-09.md`](AUDIT-2026-09.md).
 
 Refreshed by plan 10 against `main` ef299ef (2026-09-27; line numbers as of
-plan 10's docstring commit d5de879): every sentence
+plan 10's docstring commit 488c445): every sentence
 below was read against its module. Where plan 09 changed behaviour the
 paragraph says so. The HTML-era sections (browser sandbox, deploy) are
 gone; `hyperspace-web/hyperspace.html` is frozen and matters here only as
