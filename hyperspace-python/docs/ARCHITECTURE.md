@@ -31,52 +31,9 @@ registry's live objects, a **panel** that edits the registry, and a
 **library** that saves and loads it. `app.py` builds everything once and
 runs the one frame loop.
 
-```mermaid
-%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 28, "rankSpacing": 44, "wrappingWidth": 420}}}%%
-flowchart TB
-    subgraph inputs ["Input adapters"]
-        direction LR
-        KEYS["keys and mouse<br/>app.Keys / app.Mouse"]
-        PAD["gamepad.Pad"]
-        MIDI["midi.MidiIO<br/>+ apc40 profile"]
-        HANDS["hands/<br/>HandsIO"]
-        BRIDGE["bridge.Bridge"]
-    end
-    subgraph sources ["Sources that are not inputs"]
-        direction LR
-        AUDIO["audio.AudioEngine<br/>analyzer.Analyzer"]
-        LFO["lfo.LFOs<br/>tempo.Clock"]
-    end
-    ROUTER["routing.Router: the binding table<br/>Router.modulate is the one performer path"]
-    REG[("params.Registry<br/>base + offsets to the live objects, once a frame")]
-    subgraph render ["Render stack (reads only)"]
-        direction LR
-        VIEW["render.ViewState"]
-        RENDER["render.Renderer<br/>geometry, fx, lookback, dream"]
-        OUT["overlay.Output"]
-    end
-    subgraph panel ["Control window"]
-        direction LR
-        UI["ui.Panel + ui_* pages<br/>hands/panel"]
-        CTRL["control.Control"]
-        LIB["library.Library<br/>presets, projects, config"]
-    end
+![The component map: adapters and sources feed the routing table, the router writes offsets, the control window writes bases, the registry lands both on the live objects, the render stack reads](assets/10-architecture/component-map.svg)
 
-    KEYS -- "key rows to base<br/>nudge / scale to base" --> ROUTER
-    PAD -- "pad rows to base<br/>sticks to base" --> ROUTER
-    MIDI -- "cc / note rows to base<br/>Learn writes a route" --> ROUTER
-    HANDS -- "feed hand" --> ROUTER
-    BRIDGE -- "feed ext" --> ROUTER
-    AUDIO -- "lanes" --> ROUTER
-    LFO -- "feed lfo" --> ROUTER
-    ROUTER -- "modulate: an offset" --> REG
-    REG -- "apply() writes the objects" --> VIEW
-    REG --> OUT
-    VIEW --> RENDER
-    UI -- "set: the base; edits rows" --> REG
-    LIB -- "restore: the base" --> REG
-    REG -- "feedback reads the base" --> MIDI
-```
+*The table below is the picture's text twin.*
 
 | Component | Modules | Owns | Reads | Writes | Boundary rule (held by) |
 |---|---|---|---|---|---|
