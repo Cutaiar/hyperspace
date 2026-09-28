@@ -540,6 +540,31 @@ def test_the_combo_reads_the_librarys_own_factory_tree(tmp_path):
     assert audio.chain.params[0].atk == 0.123 and "strobe-cage.json" in lib.error
 
 
+def test_a_scene_lands_on_the_base_under_a_performer_and_reads_clean(tmp_path):
+    """WP11's review of PR #44: a scene select is a base write when a
+    registry is attached, so a band knob a performer holds keeps its
+    offset — the strip reads clean at once, not after the fold, and never
+    an offset off."""
+    reg, control, _, lib = wired(tmp_path)
+    p = reg["band.1.atk"]
+    p.modulate(0.1)                                   # a lane holds BASS attack
+    reg.apply()
+    control.select_scene(SCENES.index("Kick & Sizzle"))
+    scene = factory_doc("band", "Kick & Sizzle")["values"]["band.1.atk"]
+    assert p.base == scene, "the scene landed on the base"
+    assert not lib.is_dirty("band"), "clean straight after the select"
+    p.modulate(0.1)
+    reg.apply()
+    assert p.base == scene and p.value > scene, "the offset rides on the scene's value"
+    assert not lib.is_dirty("band")
+    control.reset_band(1)
+    assert p.base == scene and not lib.is_dirty("band")
+    # no library: the combo writes the analyzer's Params directly, as before
+    _, bare, bare_audio = rig()
+    bare.select_scene(SCENES.index("Kick & Sizzle"))
+    assert bare_audio.chain.params[1].atk == scene
+
+
 def test_a_strip_load_is_a_scene_change_for_the_undo(tmp_path):
     _, control, audio, lib = wired(tmp_path)
     control.add_band()

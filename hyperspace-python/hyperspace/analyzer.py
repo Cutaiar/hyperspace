@@ -193,6 +193,21 @@ def legacy_layout() -> dict:
 _SCENE_KEYS = ("fn", "trim", "pre", "post", "atk", "dec", "thr", "exp", "trn")
 
 
+def scene_strip(values: dict, n: int, bands=None) -> dict:
+    """The complete ``band.{i}.*`` strip a scene lands on `n` bands (or on
+    the bands in `bands`): the scene's row where it has one, the default
+    strip (default_band_params) for a key or a band it lacks. What the
+    scene combo hands the registry, and what apply_scene writes."""
+    rows, d = scene_rows(values), default_band_params()
+    out: dict = {}
+    for i in (range(n) if bands is None else bands):
+        row = rows.get(i) or {}
+        for k in _SCENE_KEYS:
+            v = row.get(k, getattr(d, k))
+            out[f"band.{i}.{k}"] = int(v) if k == "fn" else v
+    return out
+
+
 def scene_rows(values: dict) -> dict[int, dict]:
     """``{"band.3.atk": 0.05, …}`` → ``{3: {"atk": 0.05, …}}``, the strip
     keys only (a layout knob such as ``band.3.f`` is not a scene row)."""
