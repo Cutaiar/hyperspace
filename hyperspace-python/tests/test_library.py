@@ -244,6 +244,28 @@ def test_a_band_preset_saved_from_the_strip_carries_its_layout(rig, tmp_path):
     assert other.lib.current("band") == "Eight" and not other.lib.is_dirty("band")
 
 
+def test_a_projects_inline_band_copy_carries_the_layout(rig, tmp_path):
+    """Code review of PR #44 (A2): every band document the library writes
+    is built by Library.document, so a band preset that has no file when
+    the project is saved is copied inline with its layout. (Applying a
+    module's layout on project load is a separate, older gap: Project._apply
+    never ran the layout hook; filed for plan 11's library sweep.)"""
+    lib, control, chain = rig.lib, rig.control, rig.chain
+    lib.on_layout("band", control.apply_layout)
+    lib.extra("band", lambda: {"layout": chain.layout()})
+    control.add_band()
+    chain.set_band(6, name="HIGH")
+    lib.save_as("band", "Gone")
+    (tmp_path / "band" / "gone.json").unlink()        # current, but no file anywhere
+    lib._sync(tmp_path / "band" / "gone.json")
+    assert lib.current("band") == "Gone" and lib.path_of("band", "Gone") is None
+    lib.project.save("P")
+    inline = json.loads((tmp_path / "projects" / "p.hyp.json").read_text())["modules"]["band"]
+    assert inline["name"] == "Gone" and "schema" not in inline and "group" not in inline
+    assert [b.get("name") for b in inline["layout"]["bands"]][6] == "HIGH"
+    assert len(inline["layout"]["bands"]) == 7 and "band.6.atk" in inline["values"]
+
+
 def test_rename_and_delete_are_user_only(rig, tmp_path):
     lib = rig.lib
     lib.save_as("camera", "Wide")
@@ -255,6 +277,7 @@ def test_rename_and_delete_are_user_only(rig, tmp_path):
     assert not lib.delete("camera", "never was")
     assert lib.delete("camera", "Wider")
     assert lib.list("camera") == [] and lib.current("camera") is None
+
 
 
 def test_next_prev_cycle_by_name(rig):

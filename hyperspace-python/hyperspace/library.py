@@ -290,15 +290,14 @@ class Project:
         for group, ref in self.modules.items():
             if isinstance(ref, dict):                 # inline copy of a preset
                 name = str(ref.get("name") or "")
-                vals = lib._resolve(group, ref.get("values") or {})
+                vals = lib.resolved(group, ref.get("values") or {})
             else:                                     # by name in the library
                 name = str(ref)
                 try:
-                    vals = lib._resolve(group, lib.read(group, name).get("values") or {})
+                    vals = lib.resolved(group, lib.read(group, name).get("values") or {})
                 except LibraryError:
                     vals = lib.reg.snapshot(group)   # gone from the library: not dirty
-            lib._current[group] = name
-            lib._loaded[group] = vals
+            lib._landed(group, name, vals)
         lib.bank.active = -1
         return missing
 
@@ -352,7 +351,9 @@ class Project:
             if lib.path_of(group, cur) is not None:
                 self.modules[group] = cur
             else:                                     # not in any library: keep a copy
-                self.modules[group] = {"name": cur, "values": lib.reg.snapshot(group)}
+                doc = lib.document(group, cur)
+                self.modules[group] = {k: v for k, v in doc.items()
+                                       if k not in ("schema", "group")}
         self.write()
         lib.status = f"project: saved {self.name}"
         return self.path
@@ -400,6 +401,8 @@ class Library:
         self._layout_hooks: dict[str, Any] = {}
         self._extra_hooks: dict[str, Any] = {}    # group → what a save adds beside values
         self._load_hooks: dict[str, Any] = {}     # group → told the name after a load
+        self._adopted: dict[str, Any] = {}        # group → how to re-apply an adopted preset
+        self._defaults: dict[str, dict[str, Any]] = {}   # defaults(group), until a file moves
         self._docs: dict[Path, tuple[float, dict]] = {}   # parsed files, by mtime
         self._mtimes: dict[Path, float] = {}
         self._next = 0.0
@@ -412,6 +415,7 @@ class Library:
         """Bind the registry; its state right now is what "default" means."""
         self.reg = reg
         self._fresh = reg.snapshot()
+        self._defaults.clear()
         missing = self.project._apply()
         self.report(missing, self.project.name)
         return missing
@@ -528,7 +532,11 @@ class Library:
         return name if self.path_of(group, name) is not None else None
 
     def defaults(self, group: str) -> dict[str, Any]:
-        """What reset(group) produces: the default preset over the fresh values."""
+        """What reset(group) produces: the default preset over the fresh values.
+        Cached until a file in the tree moves (_sync, poll) or attach()."""
+        hit = self._defaults.get(group)
+        if hit is not None:
+            return dict(hit)
         out = {k: v for k, v in self._fresh.items() if self.reg and k in self.reg
                and self.reg[k].group == group}
         name = self.default_name(group)
@@ -537,13 +545,41 @@ class Library:
                 out.update(self.read(group, name).get("values") or {})
             except LibraryError as e:
                 self.error = f"library: {e}"
+                return out                             # not cached: the file may be fixed
+        self._defaults[group] = dict(out)
         return out
 
-    def _resolve(self, group: str, values: dict[str, Any]) -> dict[str, Any]:
-        """A preset's values over the group's defaults, ids this registry has."""
+    def resolved(self, group: str, values: dict[str, Any]) -> dict[str, Any]:
+        """A preset's values over the group's defaults, ids this registry
+        has — the one fill-in for a partial file, whichever road applies it
+        (a strip load, or the scene combo re-tuning from a scene)."""
         out = self.defaults(group)
         out.update(values)
         return {k: v for k, v in out.items() if k in self.reg}
+
+    def _landed(self, group: str, name: str | None, loaded: dict[str, Any] | None,
+                reapply=None) -> None:
+        """One place for what "the group's current preset" means: its name,
+        the values it produced (what is_dirty compares against) and, for a
+        preset someone else applied, how to apply it again when its file
+        changes on disk."""
+        self._current[group] = name
+        if loaded is None:
+            self._loaded.pop(group, None)
+        else:
+            self._loaded[group] = loaded
+        if reapply is None:
+            self._adopted.pop(group, None)
+        else:
+            self._adopted[group] = reapply
+
+    def landed(self, group: str) -> tuple:
+        """The group's landed state, opaque, for an undo to hand back."""
+        return (self._current.get(group), self._loaded.get(group), self._adopted.get(group))
+
+    def reland(self, group: str, mark: tuple) -> None:
+        """Put back what landed() returned — the analyzer's reset undo."""
+        self._landed(group, *mark)
 
     def restore(self, values: dict[str, Any]) -> list[str]:
         """restore() in registry order, whatever order the file had."""
@@ -577,10 +613,9 @@ class Library:
             hook(doc["layout"])                        # rebuild params first
         values = doc.get("values") or {}
         missing = [k for k in values if k not in self.reg]
-        resolved = self._resolve(group, values)
+        resolved = self.resolved(group, values)
         self.restore(resolved)
-        self._current[group] = doc.get("name") or name
-        self._loaded[group] = resolved
+        self._landed(group, doc.get("name") or name, resolved)
         self.report(missing, f"{group}/{name}")
         self.status = f"{group}: {self._current[group]}"
         hook = self._load_hooks.get(group)
@@ -588,15 +623,16 @@ class Library:
             hook(self._current[group])
         return missing
 
-    def adopt(self, group: str, doc: dict) -> None:
-        """A preset applied by someone else (the scene combo lands a scene's
-        values on the analyzer itself): make it the group's current preset
-        so the strip's name and dirty dot agree with what is loaded."""
-        values = doc.get("values") or {}
-        self._current[group] = doc.get("name") or self._current.get(group)
-        if self.reg is not None:
-            self._loaded[group] = self._resolve(group, values)
-        self.status = f"{group}: {self._current[group]}"
+    def adopt(self, group: str, name: str, reapply) -> None:
+        """A preset applied by someone else — the scene combo landing a
+        scene's values on the analyzer itself: make it the group's current
+        preset, with the group's state as it now stands as what "clean"
+        means (the combo applies no layout, so the file's layout ids are
+        not the reference), and `reapply` as what poll() calls when the
+        file changes on disk, in place of a whole load."""
+        loaded = self.reg.snapshot(group) if self.reg is not None else None
+        self._landed(group, name, loaded, reapply)
+        self.status = f"{group}: {name}"
 
     def _step(self, group: str, n: int) -> str | None:
         names = self.list(group)
@@ -615,20 +651,27 @@ class Library:
 
     def save_as(self, group: str, name: str, *, extra: dict | None = None) -> Path:
         """Write the group's bases as a user preset and make it current."""
+        doc = self.document(group, name, extra=extra)
+        path = self.home / group / f"{slug(name)}.json"
+        _write_json(path, doc)
+        self._sync(path)
+        self._landed(group, name, self.resolved(group, doc["values"]))
+        self.status = f"{group}: saved {name}"
+        return path
+
+    def document(self, group: str, name: str, *, extra: dict | None = None) -> dict:
+        """The group's bases as a preset document — with whatever the
+        group's `extra` hook adds beside the values (the analyzer's layout),
+        unless the caller brought its own. Every band document the library
+        writes is built here: a file, or a project's inline module copy."""
         reg = self._need_reg()
         doc = {"schema": PRESET_SCHEMA, "group": group, "name": name,
                "values": reg.snapshot(group)}
         if extra is None and group in self._extra_hooks:
-            extra = self._extra_hooks[group]()         # the analyzer's layout
+            extra = self._extra_hooks[group]()
         if extra:
             doc.update(extra)
-        path = self.home / group / f"{slug(name)}.json"
-        _write_json(path, doc)
-        self._sync(path)
-        self._current[group] = name
-        self._loaded[group] = self._resolve(group, doc["values"])
-        self.status = f"{group}: saved {name}"
-        return path
+        return doc
 
     def overwrite(self, group: str, *, extra: dict | None = None) -> Path | None:
         """Save over the current preset (a factory one gets a user shadow)."""
@@ -660,8 +703,7 @@ class Library:
         path.unlink()
         self._sync(path)
         if self._current.get(group) == name and self.path_of(group, name) is None:
-            self._current[group] = None
-            self._loaded.pop(group, None)
+            self._landed(group, None, None)
         return True
 
     def is_dirty(self, group: str) -> bool:
@@ -669,7 +711,7 @@ class Library:
         reg = self._need_reg()
         ref = self._loaded.get(group)
         if ref is None:
-            ref = self._resolve(group, {})
+            ref = self.resolved(group, {})
         # over the ids the preset governs: a param registered after attach()
         # (the overlay's) is outside every preset until something saves it
         snap = reg.snapshot(group)
@@ -682,9 +724,8 @@ class Library:
             self.load(group, name)
             return name
         self._need_reg()
-        self.restore(self._resolve(group, {}))
-        self._current[group] = None
-        self._loaded.pop(group, None)
+        self.restore(self.resolved(group, {}))
+        self._landed(group, None, None)
         return None
 
     # ---- watching: an editor save shows up in the running app ----
@@ -711,6 +752,7 @@ class Library:
             except OSError:
                 self._mtimes.pop(p, None)
             self._docs.pop(p, None)
+        self._defaults.clear()
 
     def poll(self, now: float | None = None) -> bool:
         """Re-apply whatever is loaded from a file that changed on disk."""
@@ -726,13 +768,18 @@ class Library:
             return False
         for p in changed:
             self._docs.pop(p, None)
+        self._defaults.clear()
         if self.reg is None:
             return True
         hit = []
         try:
             for group, name in list(self._current.items()):
                 if name is not None and self.path_of(group, name) in changed:
-                    self.load(group, name)
+                    reapply = self._adopted.get(group)
+                    if reapply is not None:            # by the road it came in
+                        reapply()
+                    else:
+                        self.load(group, name)
                     hit.append(f"{group}/{name}")
             if self.project.path in changed:
                 self.project.load(self.project.path)

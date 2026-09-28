@@ -106,17 +106,30 @@ class Control:
     def scene_names(self) -> list[str]:
         return list(SCENES)
 
-    def scene_doc(self, k: int | None = None) -> dict:
+    def scene_doc(self) -> dict:
         """The selected scene's band preset — the user's file if one shadows
         the factory's, else the factory's (a missing or broken file falls
         back to the factory copy and is reported on the library)."""
-        name = SCENES[self.scene if k is None else k]
-        if self.library is not None:
-            try:
-                return self.library.read(BAND_GROUP, name)
-            except LibraryError as e:
-                self.library.error = f"library: {e}"
-        return factory_doc(BAND_GROUP, name)
+        name = SCENES[self.scene]
+        lib = self.library
+        if lib is None:
+            return factory_doc(BAND_GROUP, name)
+        try:
+            return lib.read(BAND_GROUP, name)
+        except LibraryError as e:
+            lib.error = f"library: {e}"
+            return factory_doc(BAND_GROUP, name, lib.factory)
+
+    def scene_values(self) -> dict:
+        """The scene's values, filled in the way a strip load fills a
+        partial file (Library.resolved) when a library is attached, so the
+        two roads never land different strips."""
+        doc = self.scene_doc()
+        values = doc.get("values") or {}
+        lib = self.library
+        if lib is not None and lib.reg is not None:
+            values = lib.resolved(BAND_GROUP, values)
+        return values
 
     def select_scene(self, k: int) -> None:
         self.clear_undo()        # that snapshot belongs to the old scene
@@ -130,13 +143,12 @@ class Control:
             self.clear_undo()
             self.scene = SCENES.index(name)
 
-    def _apply_scene(self) -> dict:
-        """The scene's values onto the bands loaded; the library is told."""
-        doc = self.scene_doc()
-        self.chain.apply_scene(doc.get("values") or {})
+    def _apply_scene(self) -> None:
+        """The scene's values onto the bands loaded; the library is told,
+        and re-applies it this way if the scene's file changes on disk."""
+        self.chain.apply_scene(self.scene_values())
         if self.library is not None:
-            self.library.adopt(BAND_GROUP, doc)
-        return doc
+            self.library.adopt(BAND_GROUP, SCENES[self.scene], self._apply_scene)
 
     # ---- reset / undo ----
 
@@ -151,8 +163,7 @@ class Control:
 
     def reset_band(self, i: int | None = None) -> None:
         i = self.selb if i is None else i
-        rows = scene_rows(self.scene_doc().get("values") or {})
-        self.chain.apply_scene_band(i, rows.get(i))
+        self.chain.apply_scene_band(i, scene_rows(self.scene_values()).get(i))
 
     def reset_all_clicked(self) -> None:
         """The one button: resets, or undoes if the window is still open."""
@@ -162,9 +173,11 @@ class Control:
             self._reset_all()
 
     def _reset_all(self) -> None:
-        # the snapshot carries the layout too, so an undo is whole whatever
-        # a strip load did in between
-        snap = (self.chain.layout(), [replace(p) for p in self.chain.params])
+        # the snapshot carries the layout and the strip's current preset
+        # too, so an undo is whole
+        lib = self.library
+        snap = (self.chain.layout(), [replace(p) for p in self.chain.params],
+                None if lib is None else lib.landed(BAND_GROUP))
         self._apply_scene()
         self._undo_snap, self._undo_at = snap, self.clock()
 
@@ -173,10 +186,12 @@ class Control:
         self.clear_undo()
         if snap is None:
             return
-        layout, params = snap
+        layout, params, landed = snap
         self._keeping_layout(
             lambda: self.chain.apply_layout(layout, params=[replace(p) for p in params])
         )
+        if landed is not None and self.library is not None:
+            self.library.reland(BAND_GROUP, landed)
 
     # ---- band strip ----
 
