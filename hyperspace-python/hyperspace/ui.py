@@ -965,10 +965,10 @@ class Panel:
             p0 = imgui.get_cursor_screen_pos()
             if imgui.invisible_button(f"##page{k}", imgui.ImVec2(w, h)):
                 self.reg["ui.page"].set(k)
-            imgui.pop_font()            # the menu opens in the panel's own face
-            self._ctx(self.reg["ui.page"], f".{k}")
+            hov = imgui.is_item_hovered()   # the pill's hover, read before the
+            imgui.pop_font()                # menu becomes the last item; the menu
+            self._ctx(self.reg["ui.page"], f".{k}")   # opens in the panel's own face
             imgui.push_font(_FONTS["micro"], FONT_MICRO)
-            hov = imgui.is_item_hovered()
             p1 = imgui.ImVec2(p0.x + w, p0.y + h)
             if lit or hov:
                 dl.add_rect_filled(p0, p1, u32(RED) if lit else
