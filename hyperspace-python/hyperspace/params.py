@@ -64,7 +64,7 @@ from .analyzer import CURVES, F_HI, F_LO, Q_HI, Q_LO
 from .bands import CEIL, DRIVE, PRESETS, SHAPERS
 from .fx import FxState
 from .fx import declare as declare_fx
-from .geometry import SHAPES
+from .geometry import PLANE_NAMES, SHAPES
 from .lookback import LAYERS, MAX_ECHOES, OCTAVES, RES, TINT_FROM, DreamState
 from .tapers import Taper
 
@@ -74,7 +74,7 @@ PATTERNS = [
 ]
 INST_MOTION = ["STILL", "ORBIT", "WAVE", "RIPPLE"]
 BMP_PATHS = ["STILL", "ORBIT", "FIG-8", "SWAY"]
-PLANES = ["XY", "XZ", "YZ", "XW", "YW", "ZW"]
+PLANES = PLANE_NAMES   # the rotation planes' names, in geometry.PLANES's order
 
 RAW_STEPS = 100  # detents across an untapered continuous range
 N_MACROS = 8     # macro.1–8: knobs that exist to be a route's scale and to be owned

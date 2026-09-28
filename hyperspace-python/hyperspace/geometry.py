@@ -530,7 +530,11 @@ def geom(i: int) -> dict:
 
 # ------------------------------------------------------------- transforms
 
-PLANES = [[0, 1], [0, 2], [1, 2], [0, 3], [1, 3], [2, 3]]
+# the six rotation planes, in the reference's order: the name the panel,
+# the registry (params.PLANES) and the routing table use, and the two
+# axes it turns. One table, so the names can never drift from the maths.
+PLANES = [("XY", 0, 1), ("XZ", 0, 2), ("YZ", 1, 2), ("XW", 0, 3), ("YW", 1, 3), ("ZW", 2, 3)]
+PLANE_NAMES = [name for name, _, _ in PLANES]
 RATE = [0.62, 0.47, 0.31, 1.00, 0.79, 0.55]
 CAM3 = 3.4
 
@@ -539,7 +543,7 @@ def rotate4(V: np.ndarray, ang) -> np.ndarray:
     """Sequential per-plane rotation, exactly as draw() applies it in-place."""
     v = V.copy()
     for p in range(6):
-        a, b = PLANES[p]
+        _, a, b = PLANES[p]
         c, s = math.cos(ang[p]), math.sin(ang[p])
         va, vb = v[:, a].copy(), v[:, b].copy()
         v[:, a] = va * c - vb * s
@@ -554,22 +558,13 @@ def project(
     """The full draw() transform: 4D rotate → 4D→3D → view → 3D→2D.
 
     Returns (px, py, pd) matching the reference renderer at viewport (w, h),
-    DPR 1. pd is the post-rotation w-coordinate used for depth cueing.
+    DPR 1. pd is the post-rotation w-coordinate used for depth cueing. This
+    is the parity oracle the golden traces are checked against; it is
+    `project_h` — the renderer's path — without the homogeneous divisor, so
+    the two can never disagree (tests/test_core.py pins it on every shape).
     """
-    v = rotate4(V, ang)
-    k = d4 / (d4 - v[:, 3])
-    x, y, z = v[:, 0] * k, v[:, 1] * k, v[:, 2] * k
-    cy, sy = math.cos(yaw), math.sin(yaw)
-    cp, sp = math.cos(pitch), math.sin(pitch)
-    x1 = x * cy + z * sy
-    z1 = -x * sy + z * cy
-    y1 = y * cp - z1 * sp
-    z1 = y * sp + z1 * cp
-    k2 = CAM3 / (CAM3 - z1 * 0.9)
-    scale = min(w, h) * 0.30
-    px = w / 2 + x1 * k2 * scale
-    py = h / 2 - y1 * k2 * scale
-    return px, py, v[:, 3].copy()
+    px, py, pd, _ = project_h(V, ang, yaw, pitch, d4=d4, w=w, h=h)
+    return px, py, pd
 
 
 # ------------------------------------------------------------------ faces
@@ -786,20 +781,7 @@ def face_uvs(i: int) -> np.ndarray:
     V = g["V"]
     per_face: list[np.ndarray] = []
     for cyc in faces(i):
-        P = V[np.asarray(cyc)]
-        c = P.mean(axis=0)
-        e1 = P[0] - c
-        e1 = e1 / np.linalg.norm(e1)
-        w = P[1] - c
-        w = w - (w @ e1) * e1
-        e2 = w / np.linalg.norm(w)
-        xy = np.stack([(P - c) @ e1, (P - c) @ e2], axis=1)
-        # consistent winding: flip e2 if the polygon runs clockwise
-        area = float(
-            np.sum(xy[:, 0] * np.roll(xy[:, 1], -1) - np.roll(xy[:, 0], -1) * xy[:, 1])
-        )
-        if area < 0:
-            xy[:, 1] = -xy[:, 1]
+        xy = _face_xy(V[np.asarray(cyc)])   # the face in its own CCW 2-plane basis
         r = np.linalg.norm(xy, axis=1).max()
         per_face.append(xy / (2 * r) + 0.5)
     tris = face_triangles(i)
@@ -819,7 +801,8 @@ def project_h(
     V: np.ndarray, ang, yaw: float, pitch: float,
     d4: float = 2.6, w: int = 1200, h: int = 800,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """project() plus the combined homogeneous divisor per vertex.
+    """The one transform: project()'s (px, py, pd) plus the combined
+    homogeneous divisor per vertex.
 
     The 4D→3D and 3D→2D steps are each perspective divides; restricted to a
     planar face their composition is one projective map, so the product of
