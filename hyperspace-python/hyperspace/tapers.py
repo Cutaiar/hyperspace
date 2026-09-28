@@ -18,7 +18,9 @@ OCT = 20     # slider steps per doubling, gain-like controls
 OCT_T = 12   # slider steps per doubling, time constants
 
 
-def _clamp(x, a, b):
+def clamp(x, a, b):
+    """The package's one clamp (audit R10). tempo.py, lfo.py and the hands
+    package keep a private copy: they import nothing from the package."""
     return a if x < a else min(x, b)
 
 
@@ -36,7 +38,7 @@ def exp_zero(u: int, n: int) -> Taper:
     return Taper(
         steps=n, unity=u, log=True,
         map=lambda p: 0.0 if p <= 0 else 2.0 ** ((p - u) / OCT),
-        unmap=lambda v: 0 if v <= 0 else _clamp(round(u + OCT * math.log2(v)), 1, n),
+        unmap=lambda v: 0 if v <= 0 else clamp(round(u + OCT * math.log2(v)), 1, n),
     )
 
 
@@ -45,7 +47,7 @@ def exp_pure(u: int, n: int) -> Taper:
     return Taper(
         steps=n, unity=u, log=True,
         map=lambda p: 2.0 ** ((p - u) / OCT),
-        unmap=lambda v: _clamp(round(u + OCT * math.log2(max(v, 1e-9))), 0, n),
+        unmap=lambda v: clamp(round(u + OCT * math.log2(max(v, 1e-9))), 0, n),
     )
 
 
@@ -54,7 +56,7 @@ def exp_time(v0: float, n: int) -> Taper:
     return Taper(
         steps=n, log=True,
         map=lambda p: v0 * 2.0 ** (p / OCT_T) / 1000,
-        unmap=lambda s: _clamp(round(OCT_T * math.log2(max(s * 1000, 1e-6) / v0)), 0, n),
+        unmap=lambda s: clamp(round(OCT_T * math.log2(max(s * 1000, 1e-6) / v0)), 0, n),
     )
 
 
@@ -63,7 +65,7 @@ def lin_t(d: float, n: int) -> Taper:
     return Taper(
         steps=n, log=False,
         map=lambda p: p / d,
-        unmap=lambda v: _clamp(round(v * d), 0, n),
+        unmap=lambda v: clamp(round(v * d), 0, n),
     )
 
 
@@ -78,7 +80,7 @@ def lin_db(lo: float, hi: float, n: int) -> Taper:
         unity=round(1 - lo * (n - 1) / (hi - lo)),
         map=lambda p: -math.inf if p <= 0 else lo + (hi - lo) * (p - 1) / (n - 1),
         unmap=lambda v: (
-            _clamp(round((v - lo) * (n - 1) / (hi - lo)) + 1, 1, n)
+            clamp(round((v - lo) * (n - 1) / (hi - lo)) + 1, 1, n)
             if math.isfinite(v)
             else 0
         ),
@@ -94,7 +96,7 @@ T_TRIM = lin_db(T_TRIM_LO, T_TRIM_HI, T_TRIM_HI - T_TRIM_LO + 1)
 T_DEPTH = Taper(
     steps=160, log=True,
     map=lambda p: 1 + 0.05 * 2.0 ** (p / OCT),
-    unmap=lambda v: _clamp(round(OCT * math.log2(max(v - 1, 1e-6) / 0.05)), 0, 160),
+    unmap=lambda v: clamp(round(OCT * math.log2(max(v - 1, 1e-6) / 0.05)), 0, 160),
 )
 
 T_DRIVE = exp_zero(100, 160)   # master audio drive: off, 0.03×–8.00×

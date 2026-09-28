@@ -208,8 +208,7 @@ def _open_midi(reg: Registry, cfg: dict, table: Bindings, learn):
         print(f"midi: adapter unavailable ({e})", file=sys.stderr)
         return None
     try:
-        mapping = midi.MidiMap(table=table)
-        return midi.MidiIO(reg, mapping, port=mc.get("port"), profile=mc.get("profile", "apc40"),
+        return midi.MidiIO(reg, table, port=mc.get("port"), profile=mc.get("profile", "apc40"),
                            learner=learn)
     except Exception as e:  # noqa: BLE001 — a broken adapter must not stop the show
         print(f"midi: {e}", file=sys.stderr)
@@ -524,6 +523,7 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     try:
         audio = h.audio
         audio.step(dt)
+        audio.publish(router)       # the lanes' names, like every source (R8)
         if h.bridge_io is not None:   # lanes out, external lanes in (bridge.py)
             h.bridge_io.step(audio.chain if audio.on else None, router)
         # the LFOs are a source like any other: stepped on the frame's
@@ -693,7 +693,7 @@ def main() -> None:
         (clock, "tempo", "Clock"),
         (lfos, "lfo", "LFOs"),
         *[(lf, "lfo", "LFO") for lf in lfos.lfos],
-        *([(midi_io, "midi", "MidiIO"), (midi_io.map, "midi", "MidiMap")] if midi_io else []),
+        *([(midi_io, "midi", "MidiIO")] if midi_io else []),
         *([(bridge_io, "bridge", "Bridge")] if bridge_io else []),
         *([(hand_settings, "hands.core", "HandSettings")] if hand_settings else []),
         *([(hands_io, "hands.core", "HandsIO")] if hands_io else []),

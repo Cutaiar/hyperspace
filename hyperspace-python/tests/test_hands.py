@@ -16,7 +16,7 @@ from hyperspace.hands import HandSettings, HandsIO, features
 from hyperspace.hands import signal as hs
 from hyperspace.learn import Learn
 from hyperspace.library import Library
-from hyperspace.midi import MidiIO, MidiMap
+from hyperspace.midi import MidiIO
 from hyperspace.params import Registry, build_registry
 from hyperspace.routing import Binding, Bindings, Router
 from hyperspace.view import ViewState
@@ -435,7 +435,7 @@ def app(tmp_path):
             return iter(())
 
     learn = Learn(reg, table)
-    midi = MidiIO(reg, MidiMap(table=table), inp=Quiet(), out=FakeOut(), learner=learn)
+    midi = MidiIO(reg, table, inp=Quiet(), out=FakeOut(), learner=learn)
     return NS(reg=reg, view=view, learn=learn, midi=midi, router=Router(reg, table), table=table)
 
 

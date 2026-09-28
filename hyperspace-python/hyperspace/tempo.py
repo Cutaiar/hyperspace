@@ -59,6 +59,7 @@ GROUP = "tempo"
 
 
 def _clamp(x, a, b):
+    # tapers.clamp again — the price of importing nothing from the host
     return a if x < a else min(x, b)
 
 

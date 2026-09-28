@@ -146,7 +146,7 @@ def test_the_routing_page_shows_the_referees_refusals(rig, tmp_path):
     frame(panel)
 
 
-def test_the_replace_prompt_swaps_the_owner_or_leaves_the_table(rig, tmp_path):
+def test_the_replace_prompt_swaps_the_owner_or_leaves_the_table(rig, tmp_path, monkeypatch):
     """Plan 09 WP5, exit criterion 3 without the mouse: a second performer
     on a target is a question, not an error. *Replace* swaps the owner and
     writes the file; *Keep* leaves the table untouched. The same modal
@@ -202,7 +202,11 @@ def test_the_replace_prompt_swaps_the_owner_or_leaves_the_table(rig, tmp_path):
     assert lrn.pending is None and table.owner("view.bright") is cur and "kept" in lrn.last
     lrn.arm("view.bright")
     lrn.learn_source("hand:1")
+    writes, real_write = [], table.write
+    monkeypatch.setattr(table, "write", lambda: (writes.append(1), real_write()))
     ui_routing.answer(panel, True)                                     # Replace: the axis moves
+    assert writes == [1]                                               # once (audit R9): the learn's
+    assert ui_routing._state(panel)["saved"] == ui_routing._sig(router)  # …and the page knows
     got = table.owner("view.bright")
     assert got.source == "hand:1" and cur not in table.bindings
     assert not table.routes_to("view.speed")                           # one axis, one param
@@ -227,7 +231,7 @@ def test_the_replace_prompt_swaps_the_owner_or_leaves_the_table(rig, tmp_path):
     landed = table.add(Binding("lane:3", "view.bright", "push", 0.3))   # while the prompt was up
     ui_routing.answer(panel, True)
     assert asleep.enabled and table.owner("view.bright") is asleep and landed not in table.bindings
-    assert [b for b in table.performers() if b.target == "view.bright"] == [asleep]
+    assert [b for b in table.bindings if b.is_performer and b.target == "view.bright"] == [asleep]
     assert ui_routing._state(panel)["saved"] == ui_routing._sig(router)  # on disk already…
     before = routing.bindings_path(tmp_path).stat().st_mtime_ns
     frame(panel, "routing")
@@ -391,10 +395,11 @@ def test_routing_presets_step_load_save(rig, tmp_path):
     assert not lib.is_factory("bindings", "My Routes")
     frame(panel)
     # load a factory preset back: the user route goes, the inputs stay
-    n_inputs = len(router.table.of(*routing.INPUT_SCHEMES))
+    inputs = ("key", "pad", "hat", *routing.MIDI_SCHEMES)
+    n_inputs = len(router.table.of(*inputs))
     lib.load("bindings", "default")
     assert not router.table.routes_to("view.bright")
-    assert len(router.table.of(*routing.INPUT_SCHEMES)) == n_inputs
+    assert len(router.table.of(*inputs)) == n_inputs
     # and the user file round-trips
     lib.load("bindings", "My Routes")
     assert router.table.routes_to("view.bright")[0].value == 0.3

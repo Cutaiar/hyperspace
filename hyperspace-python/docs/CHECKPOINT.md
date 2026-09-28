@@ -13,7 +13,7 @@ is [`AUDIT-2026-09.md`](AUDIT-2026-09.md); the stages it was built in are
 ```bash
 git clone github.com/Cutaiar/hyperspace && cd hyperspace/hyperspace-python
 uv sync                 # whole environment, from the committed lockfile
-uv run pytest           # 772 tests, ~20 s (11 skipped without torch)
+uv run pytest           # 777 tests, ~20 s (11 skipped without torch)
 uv run hyperspace       # the app: ? shows the controls cheat sheet
 ```
 

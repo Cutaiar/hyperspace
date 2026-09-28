@@ -204,6 +204,7 @@ from __future__ import annotations
 import json
 import math
 import sys
+import time
 from collections.abc import Callable, Iterable
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
@@ -222,7 +223,6 @@ LEGACY_MIDI_FILE = Path("midi_map.json")
 FACTORY_DIR = Path(__file__).parent / "library" / "bindings"
 
 MIDI_SCHEMES = ("cc", "note", "pitch")
-INPUT_SCHEMES = ("key", "pad", "hat", *MIDI_SCHEMES)
 LANE_SCHEMES = ("lane", "ext", "lfo", "hand")          # continuous, read by the Router
 MOD_OPS = ("push", "position")                 # the performer ops: the Router's rows
 OPS = ("fire", "toggle", "step", "set", "abs", "rel", "rel64", "momentary", *MOD_OPS)
@@ -404,6 +404,10 @@ class Binding:
                   "on", "off", "ring"):
             if d[k] == self.__dataclass_fields__[k].default:
                 d.pop(k)
+        # a performer never picks up (plan 09 d.4: hands grab, they never
+        # yield) — the field rides on the dataclass but never on the file
+        if self.scheme in LANE_SCHEMES:
+            d.pop("pickup", None)
         return d
 
     @classmethod
@@ -604,11 +608,36 @@ def migrate_v1(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
                 why += " — a push on a base of 0 is the additive twin"
             notes.append(f"dropped {b.source} → {b.target} ({b.op}): {why}")
             continue
-        if b.op == "abs":            # a learned hand: the whole throw, no pickup
-            b.value, b.pickup = 1.0, True
+        if b.op == "abs":            # a learned hand: the whole throw (pickup is
+            b.value = 1.0            # not a performer's field — to_json drops it)
         b.op = op
         out.append(b)
     return out, notes
+
+
+def backup(path: Path, schema: str) -> Path | None:
+    """The file as it is, kept beside itself before the loader rewrites it
+    (a migration or a factory remap, audit R12): ``<file>.bak-v<schema>``
+    the first time, and ``<file>.bak-v<schema>-<stamp>`` when that name is
+    taken — so the oldest state and the one about to go are both kept, and
+    nothing already there, this loader's or a copy the owner made by hand
+    under any ``.bak-*`` name, is ever overwritten. A copy that cannot be
+    made never stops the load. Returns the path written."""
+    bak = path.with_name(f"{path.name}.bak-v{schema}")
+    if bak.exists():
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        bak = path.with_name(f"{path.name}.bak-v{schema}-{stamp}")
+        n = 1
+        while bak.exists():
+            n += 1
+            bak = path.with_name(f"{path.name}.bak-v{schema}-{stamp}-{n}")
+    try:
+        bak.write_bytes(path.read_bytes())
+    except OSError as e:
+        print(f"bindings: no backup of {path}: {e}", file=sys.stderr)
+        return None
+    print(f"bindings: {path.name} kept as {bak.name} before the rewrite", file=sys.stderr)
+    return bak
 
 
 def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
@@ -731,6 +760,7 @@ class Bindings:
             t.notes += remapped
             if t.migrated or remapped:
                 t.announce(path)
+                backup(path, "1" if t.migrated else "2")
                 t.write()
             return t
         t = cls.factory(profile, path)
@@ -821,11 +851,6 @@ class Bindings:
         """Every performer row, disabled ones too — what the matrix lists
         and a routing preset saves."""
         return [b for b in self.bindings if b.op in MOD_OPS]
-
-    def performers(self) -> list[Binding]:
-        """The rows that own a target: enabled, a continuous source, push
-        or position (`Binding.is_performer`)."""
-        return [b for b in self.bindings if b.is_performer]
 
     def owner(self, pid: str) -> Binding | None:
         """The one performer on `pid`, or None — the referee's question."""
@@ -1162,6 +1187,7 @@ class Router:
         t = Bindings.from_json(doc, path=path)
         if t.migrated and path is not None and FACTORY_DIR not in path.parents:
             t.announce(path)             # a user's v1 preset: rewritten once
+            backup(path, "1")
             t.write()
             if t.error:                  # a file that would not take the rewrite: say so
                 raise OSError(t.error)

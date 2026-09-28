@@ -3,12 +3,12 @@
 Everything only the owner can verify, in the order that costs the least
 time at the machine: laptop alone first, then the APC40, then the camera
 and the box (APC40 still plugged in for check 24), then the projector,
-then IAC + FL Studio. Each check: the commands, the config, the preset,
+then IAC + FL Studio, then one back on the laptop. Each check: the commands, the config, the preset,
 what to do, what a pass and a fail look like, and which audit item or
 code path a fail points at. Where a check can be simulated headless, the
 pytest node or `tools/` command that shows the expected behaviour is
 listed first — run it before touching hardware so you know what "right"
-looks like. Written against `plan-11-integration` (772 tests).
+looks like. Written against `plan-11-integration` (777 tests).
 
 **Before you start.** `git pull`, `uv sync`, `uv run pytest -q`. Your
 `~/Hyperspace/config.toml` today has `[midi] enabled = true`, `[output]`
@@ -327,13 +327,19 @@ shows on CC 109 channel 16 (`[hands] cc = 102`, six per hand). Unplug the
 IAC bus while running, plug it back: within 2 s the port is rejoined and
 the presence note re-sent (N4, PR #49). *Fail:* no rejoin → `HandsIO._open`.
 
-## F. After WP8 merges
+## F. Back on the laptop — 3 minutes
 
-**30. R12: `.bak` before a migration rewrite** — placeholder; WP8 writes
-`bindings.json.bak-<schema>` once before the first rewrite and never
-overwrites an existing `.bak-*` (your hand-made `.bak-plan09` and
-`.bak-2026-09-26` stay). The check: put a schema-1 file in a scratch home,
-launch with `HYPERSPACE_HOME=/tmp/h uv run hyperspace`, see the `.bak`.
+**30. R12: a `.bak` before every migration rewrite.**
+Headless: `uv run pytest -q "tests/test_routing.py::test_a_backup_is_kept_before_every_rewrite_and_never_over_a_hand_made_one"`.
+Then, in a scratch home: `mkdir -p /tmp/h && cp ~/Hyperspace/bindings.json.bak-plan09 /tmp/h/bindings.json`
+(a schema-1 file) and `HYPERSPACE_HOME=/tmp/h HYPERSPACE_FRAMES=3 uv run hyperspace`.
+*Pass:* stderr names the migration; `/tmp/h/` holds `bindings.json`
+(schema 2) beside `bindings.json.bak-v1` (the file as it was) — and, if
+the remap also fired, `.bak-v2`; run it again: no new backup, nothing
+rewritten. Your real home's hand-made `.bak-plan09` and
+`.bak-2026-09-26` are never touched. *Fail:* no `.bak-v1` → `routing.backup`
+(`Bindings.load`, PR #53); an existing `.bak-*` overwritten → the dated
+copy path in `backup`.
 
 ## What this list does not ground
 

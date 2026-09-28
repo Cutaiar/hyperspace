@@ -297,6 +297,25 @@ def test_json_rows_carry_only_what_differs():
     assert Binding("lfo:0", "x", "push", rest=0.0).to_json()["rest"] == 0.0   # an override
 
 
+def test_pickup_never_rides_on_a_performer_row():
+    """Audit R5: `pickup` is a knob's field (soft pickup on a MIDI abs
+    row). A performer grabs and never yields (plan 09 d.4), so the field
+    never reaches the file for a lane-scheme row, whatever it reads."""
+    for src in ("hand:3", "lane:0", "lfo:1", "ext:2"):
+        assert "pickup" not in Binding(src, "view.bright", "position", pickup=False).to_json()
+        assert "pickup" not in Binding(src, "view.bright", "push", 0.5, pickup=True).to_json()
+    assert Binding("cc:0:48", "view.bright", "abs", pickup=False).to_json()["pickup"] is False
+
+
+def test_the_apc40_band_planes_are_the_reference_tables():
+    """Audit R7: apc40.py hand-copies bands.BANDS[i].pl for the six
+    ACTIVATOR buttons rather than importing the audio stack; this pins
+    the copy to the table."""
+    from hyperspace import apc40
+
+    assert apc40._BAND_PLANES == tuple(b.pl for b in BANDS)
+
+
 def test_midi_map_v1_rows_migrate():
     old = {"param": "view.speed", "kind": "cc", "number": 0x31, "channel": 0, "mode": "abs",
            "value": 1.0, "pickup": True, "feedback": "ring", "on": 1, "off": 0, "ring": 2}
@@ -758,11 +777,12 @@ def test_apply_preset_replaces_routes_and_lands_bases(tmp_path):
     r = rig(tmp_path=tmp_path, full=True)
     router = Router(r.reg, Bindings.factory())
     router.table.add(Binding("lane:0", "view.bright", "push", 0.5))
-    n_inputs = len(router.table.of(*routing.INPUT_SCHEMES))
+    inputs = ("key", "pad", "hat", *routing.MIDI_SCHEMES)
+    n_inputs = len(router.table.of(*inputs))
     r.view.rate[0] = 2.0
     assert router.apply_preset("legacy6") == []
     assert len(router.table.mods()) == 12 and not router.table.routes_to("view.bright")
-    assert len(router.table.of(*routing.INPUT_SCHEMES)) == n_inputs
+    assert len(router.table.of(*inputs)) == n_inputs
     assert r.view.pattern_mod == [0.0] * 6 + [1.0] * (N_MOD - 6)
     assert r.view.rate == [0.0] * 6                      # a push lands the drive only on 0
     for name in PLANES:
@@ -774,15 +794,22 @@ def test_apply_preset_replaces_routes_and_lands_bases(tmp_path):
 
 
 def test_midi_view_shares_the_table(tmp_path):
-    """midi.MidiMap over the app's table: a learn lands in bindings.json
+    """midi.MidiIO over the app's table: a learn lands in bindings.json
     next to the keys, and the MIDI view sees only MIDI rows."""
-    from hyperspace.midi import MidiMap
+    from hyperspace.midi import MidiIO
+
+    class Quiet:                 # a port that never speaks
+        def iter_pending(self):
+            return iter(())
+
+        def send(self, msg):
+            pass
 
     t = Bindings.factory(path=bindings_path(tmp_path))
-    m = MidiMap(table=t)
+    m = MidiIO(rig(tmp_path=tmp_path, full=True).reg, t, inp=Quiet(), out=Quiet())
     assert len(m.bindings) == 113 and all(b.is_midi for b in m.bindings)
-    m.bind(Binding("cc:0:99", "view.zoom", "abs"))
-    assert m.for_param("view.zoom").number == 99
+    m.table.bind(Binding("cc:0:99", "view.zoom", "abs"))
+    assert m.table.for_param("view.zoom").number == 99
     again = Bindings.load(bindings_path(tmp_path))
     assert again.for_param("view.zoom").source == "cc:0:99"
     assert len(again.of("key")) == 25 and len(again.mods()) == 12
@@ -900,7 +927,7 @@ def test_a_target_has_one_performer():
     assert e.value.existing is first and e.value.new is second
     assert "view.bright is already performed by hand 0 positions" in str(e.value)
     assert t.routes() == [first] and t.owner("view.bright") is first
-    assert t.performers() == [first]
+    assert [b for b in t.bindings if b.is_performer] == [first]
     # a different target is free; the same row again is its own owner
     t.add(Binding("hand:0", "view.speed", "position"))       # one hand, two params
     assert t.replace_owner(first) is None
@@ -963,7 +990,7 @@ def test_replace_owner_is_the_one_door_onto_a_taken_target():
     t.remove(first)
     other = t.add(Binding("lane:2", "view.bright", "push", 0.1))
     assert t.replace_owner(asked) is other                             # whoever holds it now
-    assert t.owner("view.bright") is asked and t.performers() == [asked]
+    assert t.owner("view.bright") is asked and [b for b in t.bindings if b.is_performer] == [asked]
     # a retarget in place: `b` keeps its identity, gains the target
     mover = t.add(Binding("hand:3", "view.speed", "position"))
     assert t.replace_owner(mover, target="view.bright") is asked
@@ -1167,7 +1194,8 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     assert rows[("hand:3", "view.inst_amp")].value == 0.4
     assert rows[("hand:7", "view.depth4")].op == "position"
     z = rows[("hand:7", "camera.zoom")]
-    assert (z.op, z.value, z.pickup, z.when) == ("position", 1.0, True, "hand:18")
+    assert (z.op, z.value, z.when) == ("position", 1.0, "hand:18")
+    assert "pickup" not in z.to_json()                         # dropped with the abs op
     assert ("lane:1", "rot.rate.XY") not in rows and ("hand:2", "view.depth4") not in rows
     assert [b.source for b, _ in t.dropped] == ["hand:2"]
     assert len(t.notes) == 9
@@ -1178,9 +1206,12 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     assert rows[(f"note:0:{apc40.N_METRO}", "lfo.trigger")].feedback == "led"
     assert rows[(f"note:0:{apc40.N_QUANT}", "theme.next")].op == "toggle"
     assert t.values == {"pattern.mod.0": 0.0}
-    # written back once, at schema 2; the second load is quiet
+    # written back once, at schema 2, with the file as it was kept beside
+    # it (audit R12); the second load is quiet
     doc = json.loads(path.read_text())
     assert doc["schema"] == SCHEMA and doc == t.to_json()
+    bak = path.with_name("bindings.json.bak-v1")
+    assert json.loads(bak.read_text()) == V1_FILE and "kept as bindings.json.bak-v1" in err
     again = Bindings.load(path, legacy_midi=None)
     assert not again.migrated and again.to_json() == t.to_json() and capsys.readouterr().err == ""
     # a v1 preset file loads through the same door
@@ -1195,8 +1226,9 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     # the ops and the second owner only: a preset holds routes, so the
     # factory-row remap (a table's business, in Bindings.load) stays out
     assert len(router.table.notes) == 2 and "migrated" in capsys.readouterr().err
-    # a user's preset file is rewritten once at schema 2 …
+    # a user's preset file is rewritten once at schema 2, kept beside it first (R12) …
     assert json.loads((d / "old.json").read_text())["schema"] == SCHEMA
+    assert json.loads((d / "old.json.bak-v1").read_text()) == V1_FILE
     router.load_preset("old", tmp_path)
     assert capsys.readouterr().err == "" and router.table.notes == []
     router.table.add(Binding("lane:0", "view.bright", "push", 0.2))
@@ -1206,6 +1238,44 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     for q in sorted(routing.FACTORY_DIR.glob("*.json")):
         router.load_preset(q.name[:-5])
     assert {q.name: q.read_text() for q in routing.FACTORY_DIR.glob("*.json")} == before
+
+
+def test_a_backup_is_kept_before_every_rewrite_and_never_over_a_hand_made_one(tmp_path, capsys,
+                                                                              monkeypatch):
+    """Audit R12: a rewrite keeps the file as it was as `.bak-v<schema>`;
+    a later rewrite of the same schema keeps its own copy under a dated
+    name rather than touching the first (the oldest state is worth
+    having, and so is the one about to go), and a copy the owner made by
+    hand is a different name, untouched. A remap of a schema-2 file is a
+    `.bak-v2`; a copy that cannot be made never stops the load."""
+    path = bindings_path(tmp_path)
+    hand = path.with_name("bindings.json.bak-plan09")
+    hand.write_text("mine")
+    v2 = Bindings.factory().to_json()
+    v2["bindings"] = [b for b in v2["bindings"] if b["target"] != "tempo.tap"]  # an old table
+    path.write_text(json.dumps(v2))
+    t = Bindings.load(path, legacy_midi=None)
+    assert any(n.startswith("added key:B") for n in t.notes)
+    bak = path.with_name("bindings.json.bak-v2")
+    assert json.loads(bak.read_text()) == v2 and hand.read_text() == "mine"
+    # the same schema rewritten again: the first copy stands, the state
+    # about to go is kept under a dated name
+    v2b = dict(v2, bindings=[b for b in v2["bindings"] if b["target"] != "lfo.trigger"])
+    path.write_text(json.dumps(v2b))
+    Bindings.load(path, legacy_midi=None)
+    assert json.loads(bak.read_text()) == v2
+    dated = list(tmp_path.glob("bindings.json.bak-v2-*"))
+    assert len(dated) == 1 and json.loads(dated[0].read_text()) == v2b
+    # a backup that cannot be made never stops the load
+    path.write_text(json.dumps(v2))
+
+    def refuse(self, data):
+        raise OSError("read-only")
+
+    monkeypatch.setattr(Path, "write_bytes", refuse)
+    t2 = Bindings.load(path, legacy_midi=None)
+    assert t2.error == "" and "no backup of" in capsys.readouterr().err
+    assert any(n.startswith("added key:B") for n in t2.notes)
 
 
 def test_an_unknown_schema_is_reported_not_migrated(tmp_path):

@@ -284,7 +284,7 @@ ORDER = [
     "hands.poll",                                    # feeds hand
     "output.apply",                                  # reads last frame's objects
     "mouse.poll",                                    # relative writers, to the base
-    "audio.step",                                    # new lanes
+    "audio.step", "audio.publish",                   # new lanes, and their names (R8)
     "bridge.step",                                   # feeds ext
     "lfos.step", "lfos.publish",                     # feeds lfo
     "router.modulate", "reg.apply", "view.integrate",  # the pass, then one commit

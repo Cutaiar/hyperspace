@@ -118,7 +118,7 @@ depends on an unmerged PR branches from that PR's branch and says so.
 - [ ] 3. DECISIONS has a dated row for every decision in §2 that the owner
       made in this plan, and the 2026-09-26 tempo row's "two deviations"
       note is gone or reduced to what still holds.
-- [x] 4. (three of four; R11 lands with WP8) The four missing tests exist and pass: `routing.py`'s import
+- [x] 4. The four missing tests exist and pass: `routing.py`'s import
       boundary and the one caller of `Param.modulate` (R11), the audio
       stack's streams and FFT with a boundary test (A9), `app.py`'s import
       hygiene and loop order over stubs (P5), and hands releasing a
@@ -201,6 +201,14 @@ packages' reports (PR numbers in the audit rows).
   throttles were left as file-watch clocks. A raising adapter's note now
   survives until a clean frame (it was erased the same frame).
   No windowed smoke was run headless — hand check 1.
+- **WP8 (#53).** `Bindings.routes_to` stays public (the pages use it);
+  `performers()` / `INPUT_SCHEMES` went. `AudioEngine.publish(router)`
+  publishes the lanes' *names* only (rests are 0 by default, nothing to
+  say). `tapers.clamp` reaches the chain through a `bands` re-export so
+  the frozen oracle (`tests/legacy_chain.py`) is untouched. R12's backup
+  is per rewrite: `<file>.bak-v1` before a v1 migration, `.bak-v2` before
+  a remap, a dated copy when the name is taken, and a hand-made `.bak-*`
+  is never touched.
 - **Integration.** Merged one by one the branches conflict on the three
   shared documents' tables and on four seams (`Chain` gone under WP14's
   and WP5's tests, `lib.bank` → `lib.project`, `learn=` on the MIDI gate
