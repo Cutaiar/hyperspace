@@ -98,7 +98,7 @@ accurate beats exhaustive; the code remains the reference for the rest.
    `shaders/`), the library (`library.py`, `presets.py`, `config.py`), the
    panel (`control.py`, `ui*.py`, `hands/panel.py`), and the host
    (`app.py`, `hotreload.py`).
-2. **The frame.** A sequence diagram of one frame in `app.run`'s order —
+2. **The frame.** A top-to-bottom diagram of one frame in `app.main`'s loop order —
    poll events / keys / gamepad / MIDI → `hands.poll` → `output.apply` →
    `mouse.poll` → `audio.step` → `bridge.step` → `lfos.step` +
    `publish` → `router.modulate` → `reg.apply` → `integrate` → `draw` →

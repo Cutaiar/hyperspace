@@ -32,51 +32,50 @@ registry's live objects, a **panel** that edits the registry, and a
 runs the one frame loop.
 
 ```mermaid
-flowchart LR
-    subgraph inputs [Input adapters]
-        KEYS[keys · mouse<br/>app.Keys / app.Mouse]
-        PAD[gamepad.Pad]
-        MIDI[midi.MidiIO<br/>apc40 profile]
-        HANDS[hands/<br/>HandsIO]
-        BRIDGE[bridge.Bridge]
+%%{init: {"theme": "neutral", "themeVariables": {"fontSize": "18px", "fontFamily": "-apple-system, Helvetica, Arial, sans-serif"}, "flowchart": {"nodeSpacing": 28, "rankSpacing": 44, "htmlLabels": true, "curve": "basis", "wrappingWidth": 420}}}%%
+flowchart TB
+    subgraph inputs ["Input adapters"]
+        direction LR
+        KEYS["keys · mouse<br/>app.Keys / app.Mouse"]
+        PAD["gamepad.Pad"]
+        MIDI["midi.MidiIO<br/>+ apc40 profile"]
+        HANDS["hands/<br/>HandsIO"]
+        BRIDGE["bridge.Bridge"]
     end
-    subgraph sources [Sources that are not inputs]
-        AUDIO[audio.AudioEngine<br/>analyzer.Analyzer]
-        LFO[lfo.LFOs<br/>tempo.Clock]
+    subgraph sources ["Sources that are not inputs"]
+        direction LR
+        AUDIO["audio.AudioEngine<br/>analyzer.Analyzer"]
+        LFO["lfo.LFOs<br/>tempo.Clock"]
     end
-    ROUTER[routing.Router<br/>the binding table]
-    REG[(params.Registry<br/>base + offsets → objects)]
-    subgraph render [Render stack]
-        VIEW[render.ViewState]
-        RENDER[render.Renderer<br/>geometry · fx · lookback · dream]
-        OUT[overlay.Output]
+    ROUTER["routing.Router — the binding table<br/>Router.modulate: the one performer path"]
+    REG[("params.Registry<br/>base + Σ offsets → live objects, once a frame")]
+    subgraph render ["Render stack — reads only"]
+        direction LR
+        VIEW["render.ViewState"]
+        RENDER["render.Renderer<br/>geometry · fx · lookback · dream"]
+        OUT["overlay.Output"]
     end
-    subgraph panel [Control window]
-        UI[ui.Panel + ui_* pages<br/>hands/panel]
-        CTRL[control.Control]
+    subgraph panel ["Control window"]
+        direction LR
+        UI["ui.Panel + ui_* pages<br/>hands/panel"]
+        CTRL["control.Control"]
+        LIB["library.Library<br/>presets · projects · config"]
     end
-    LIB[library.Library<br/>presets · projects · config]
 
-    KEYS -- "key:/rows → base" --> ROUTER
-    PAD -- "pad:/hat: rows → base" --> ROUTER
-    KEYS -- "nudge/scale → base" --> REG
-    PAD -- "sticks → base" --> REG
-    MIDI -- "cc/note rows → base" --> REG
-    MIDI -- "learn → a route" --> ROUTER
+    KEYS -- "key: rows → base<br/>nudge / scale → base" --> ROUTER
+    PAD -- "pad: rows → base<br/>sticks → base" --> ROUTER
+    MIDI -- "cc / note rows → base<br/>Learn → a route" --> ROUTER
     HANDS -- "feed hand" --> ROUTER
     BRIDGE -- "feed ext" --> ROUTER
     AUDIO -- "lanes" --> ROUTER
     LFO -- "feed lfo" --> ROUTER
     ROUTER -- "modulate → offset" --> REG
-    REG -- "apply() writes objects" --> VIEW
+    REG -- "apply() writes the objects" --> VIEW
     REG --> OUT
-    REG --> CTRL
     VIEW --> RENDER
-    UI -- "set → base" --> REG
-    UI -- "edits rows" --> ROUTER
+    UI -- "set → base · edits rows" --> REG
     LIB -- "restore → base" --> REG
-    UI --> LIB
-    REG -- "feedback reads base" --> MIDI
+    REG -- "feedback reads the base" --> MIDI
 ```
 
 | Component | Modules | Owns | Reads | Writes | Boundary rule (held by) |
@@ -105,44 +104,47 @@ the render stack only reads.
 it; read the loop when it matters.
 
 ```mermaid
-sequenceDiagram
-    autonumber
-    participant W as glfw / imgui
-    participant K as keys · pad · mouse<br/>(app.py)
-    participant M as midi.MidiIO
-    participant H as hands.HandsIO
-    participant A as audio / analyzer
-    participant B as bridge.Bridge
-    participant L as lfo.LFOs
-    participant R as routing.Router
-    participant P as params.Registry
-    participant V as render.ViewState
-    participant D as Renderer / Panel
-
-    W->>W: poll_events · new_frame · clock.tick(now)  app.py:510-523
-    K->>R: router.keys(keys)  :533 — table rows → act() → base
-    K->>P: R, ↑/↓, F1–F8 — loop keys → base  :534-549
-    K->>R: router.pad(pad)  :555 — pad/hat rows → base
-    K->>P: sticks, triggers → nudge/scale → base  :558-568
-    M->>P: cc/note rows → set_norm/step/toggle → base  :573
-    H->>R: feed("hand", lanes | None), labels, gates, rests  :580
-    H->>M: a moved axis completes a learn → route or pending
-    W->>W: output.apply() (reads last frame's objects)  :585
-    K->>P: mouse orbit / pan / zoom → nudge/scale → base  :589
-    A->>A: audio.step(dt) — new lanes  :595
-    B->>R: feed("ext", …) · reads eff_norm out  :597
-    L->>R: lfos.step · publish → feed("lfo", …)  :600-601
-    R->>P: modulate(): every live performer row → p.modulate(offset)  :605
-    P->>V: reg.apply(): base + Σoffsets → every object  :606
-    V->>V: integrate(dt): ang += rate · dt  :607
-    D->>D: renderer.draw(view)  :618
-    D->>P: panel.draw(): widgets → base · modal → table  :627
+%%{init: {"theme": "neutral", "themeVariables": {"fontSize": "18px", "fontFamily": "-apple-system, Helvetica, Arial, sans-serif"}, "flowchart": {"nodeSpacing": 28, "rankSpacing": 44, "htmlLabels": true, "curve": "basis", "wrappingWidth": 420}}}%%
+flowchart TB
+    S0["poll_events · imgui new_frame · clock.tick(now)<br/><i>app.py:510-523</i>"]
+    subgraph setters ["Scene-setters — every write lands on the BASE"]
+        direction TB
+        S1["router.keys(keys) — key rows → act()<br/><i>:533</i>"]
+        S2["R · ↑/↓ · F1–F8 — loop keys → app.act / _ride_depth<br/><i>:534-549</i>"]
+        S3["pad.poll · router.pad(pad) — pad/hat rows<br/>sticks, triggers → nudge / scale<br/><i>:553-568</i>"]
+        S4["midi_io.poll() — cc/note rows → set_norm / step / toggle<br/><i>:573</i>"]
+        S1 --> S2 --> S3 --> S4
+    end
+    subgraph feeds ["Sources feed the table"]
+        direction TB
+        S5["hands_io.poll(dt, midi, router) — feed(&quot;hand&quot;), labels, gates, rests<br/>a moved axis may complete a Learn<br/><i>:580</i>"]
+        S6["output.apply() — reads last frame's objects<br/><i>:585</i>"]
+        S7["mouse.poll(shift) — orbit / pan / zoom → nudge / scale → base<br/><i>:589</i>"]
+        S8["audio.step(dt) — new lanes<br/><i>:595</i>"]
+        S9["bridge_io.step — feed(&quot;ext&quot;); sends eff_norm out<br/><i>:597</i>"]
+        S10["lfos.step · lfos.publish — feed(&quot;lfo&quot;), rests 0.5<br/><i>:600-601</i>"]
+        S5 --> S6 --> S7 --> S8 --> S9 --> S10
+    end
+    subgraph pass ["The pass — offsets, then one commit"]
+        direction TB
+        S11["router.modulate() — every live performer row → p.modulate(offset)<br/><i>:605</i>"]
+        S12["reg.apply() — base + Σ offsets → every live object<br/><i>:606</i>"]
+        S13["view.integrate(dt) — ang += rate · dt (an object write, folded next frame)<br/><i>:607</i>"]
+        S11 --> S12 --> S13
+    end
+    subgraph draw ["Draw"]
+        direction TB
+        S14["renderer.draw(view) — render window<br/><i>:618</i>"]
+        S15["panel.draw() — widgets → base · Replace/Keep modal → table<br/><i>:627</i>"]
+        S14 --> S15
+    end
+    S0 --> setters --> feeds --> pass --> draw
 ```
 
 Two rules follow from the order.
 
 **One-frame lag.** Everything that a performer moves is landed by
-`reg.apply()` once, at step 15. A source that reads a parameter — an LFO
+`reg.apply()` once, in the pass. A source that reads a parameter — an LFO
 reading its own `depth`, a route reading its `scale` macro, the bridge
 sending `eff_norm`, `output.apply` reading `output.alpha` — reads what
 `apply()` wrote **last** frame. So a hand that owns `lfo.1.depth` lands one
@@ -152,13 +154,15 @@ the modulation pass reads a value it is about to write
 (`tests/test_lfo.py:253-290`, `tests/test_routing.py:1310`).
 
 **Base before offset.** Every scene-setter runs before `router.modulate`
-(steps 2–11 and the panel at step 18, which is the previous frame's tail),
+(the scene-setter block, the feeds, and the panel — whose draw is the previous
+frame's tail),
 so a base write and the offsets on top of it are combined in one `apply()`.
-The one writer after `apply()` is the rotation integrator (step 16), which
+The one writer after `apply()` is the rotation integrator (`view.integrate`), which
 writes the object directly; `Param.apply` adopts that as a delta on the
 base the next frame (`params.py:460-466`, `tests/test_modulation.py:198`).
 
-Guarding: the step block (steps 11–16), `renderer.draw` and `panel.draw`
+Guarding: the step block (`audio.step` through `integrate`), `renderer.draw`
+and `panel.draw`
 are each wrapped so hot-reloaded code that raises records
 `reloader.runtime_error` and the loop continues (`app.py:593-629`).
 
@@ -294,7 +298,7 @@ Every continuous source reaches a parameter through exactly one pass,
      base returns (`tests/test_routing.py:641`).
 5. `p.modulate(offset)` (`routing.py:1149`). Range, wrap, hysteresis and
    the return to base are all `Param.apply`'s job, run by `Registry.apply`
-   at frame step 15 (§3.1). `modulate` records; `apply` lands.
+   in the frame's pass (§2, §3.1). `modulate` records; `apply` lands.
 
 A row whose source stops being fed (`Router.feed(scheme, None)`: the
 tracker off, the DAW port gone) or whose gate opens simply stops calling
