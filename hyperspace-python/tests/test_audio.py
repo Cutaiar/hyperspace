@@ -108,13 +108,23 @@ def test_rescan_reads_the_list_again_and_keeps_the_selection_by_name(fake_sd):
     assert a.device_sel == 0, "a vanished device falls back to the heuristic"
 
 
-def test_a_failed_scan_is_an_error_not_a_crash(monkeypatch):
+def test_a_failed_scan_is_an_error_not_a_crash_and_a_rescan_clears_it(monkeypatch):
     def boom():
         raise OSError("PortAudio not initialised")
 
     monkeypatch.setattr(A, "input_devices", boom)
     a = AudioEngine()
     assert a.devices == [] and "PortAudio" in a.error and a.device_sel == 0
+    monkeypatch.setattr(A, "input_devices", lambda: [{"index": 3, "name": "USB", "loopback": False}])
+    assert [d["name"] for d in a.rescan()] == ["USB"] and a.error == ""
+
+
+def test_rescan_on_a_never_read_list_scans_once(monkeypatch):
+    scans = []
+    monkeypatch.setattr(A, "input_devices", lambda: scans.append(1) or [])
+    a = AudioEngine()
+    a.rescan()                                # app.main's startup call
+    assert scans == [1]
 
 
 # ------------------------------------------------------------- capture (A9)

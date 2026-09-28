@@ -669,7 +669,8 @@ def is_factory_preset(name: str, home: Path | str | None = None) -> bool:
 
 def legacy_planedrive(lanes, gain: float = 1.0) -> np.ndarray:
     """The reference's PLANEDRIVE from six lanes — what the legacy6 routes
-    must land on rot.rate.*; offline.py's per-frame `drive` history."""
+    must land on rot.rate.* (tests/test_core.py computes it from the
+    offline driver's `out`; offline.py itself ends at the lanes)."""
     drive = np.ones(6)
     for i, b in enumerate(BANDS[: len(lanes)]):
         drive[b.plane] = b.dir * lanes[i] * DRIVE * gain

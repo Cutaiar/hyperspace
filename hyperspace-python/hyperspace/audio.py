@@ -46,8 +46,8 @@ def input_devices() -> list[dict]:
 def preselect(devices: list[dict]) -> int:
     """The reference's heuristic, as a position in `devices`: the first
     loopback driver wins, else the first device (0 on an empty list). The
-    one implementation — `AudioEngine.device_sel` and the panel's combo
-    both read it."""
+    one implementation: `AudioEngine.device_sel` reads it, and the panel's
+    combo reads `device_sel`."""
     return next((k for k, d in enumerate(devices) if d["loopback"]), 0)
 
 
@@ -121,15 +121,20 @@ class AudioEngine:
         return self._devices
 
     def rescan(self) -> list[dict]:
-        """Read the device list again (the SYSTEM page's rescan button). The
-        selection follows the device by name where it can, else the
-        heuristic picks afresh; a running capture is left alone."""
-        old = self.devices
-        name = old[self._device_sel]["name"] if self._device_sel is not None and 0 <= self._device_sel < len(old) else None
+        """Read the device list again (the audio page's rescan button, and
+        app.main once at startup). One scan: a list never read is not read
+        first. The selection follows the device by name where it can, else
+        the heuristic picks afresh; a running capture is left alone; a
+        failed earlier scan's error clears when this one succeeds."""
+        old = self._devices or []
+        sel = self._device_sel
+        name = old[sel]["name"] if sel is not None and 0 <= sel < len(old) else None
         self._devices = None
+        if self.error.startswith("audio devices:"):
+            self.error = ""
         new = self.devices
-        self._device_sel = next((k for k, d in enumerate(new) if d["name"] == name), None) \
-            if name is not None else None
+        self._device_sel = (next((k for k, d in enumerate(new) if d["name"] == name), None)
+                            if name is not None else None)
         return new
 
     @property
