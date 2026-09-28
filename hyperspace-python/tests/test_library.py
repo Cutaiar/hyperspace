@@ -86,7 +86,8 @@ def test_first_run_migrates_working_directory_files(tmp_path, monkeypatch, capsy
     }
     r.lib.project.load_slot(1)
     assert r.view.shape == 4 and r.chain.params[0].atk == 0.5 and r.chain.gain == 2.0
-    # second run: nothing to do, nothing said
+    # second run: nothing to do, nothing said (migrate itself; ensure_home is memoised)
+    assert library.migrate(home, cwd) == []
     library.ensure_home(home, cwd)
     assert capsys.readouterr().err == ""
 
@@ -313,7 +314,7 @@ def test_a_project_restores_a_modules_layout(rig, tmp_path):
     `Project._apply` takes the same road a strip load does, layout first."""
     lib, control, chain = rig.lib, rig.control, rig.chain
     lib.on_layout("band", control.apply_layout)
-    lib.extra("band", lambda: {"layout": chain.layout()})
+    lib.extra("band", lambda: {"layout": chain.layout()})      # six bands: the fresh layout
     control.add_band()
     control.add_band()
     chain.set_band(7, name="TOP")
@@ -324,7 +325,21 @@ def test_a_project_restores_a_modules_layout(rig, tmp_path):
     assert lib.project.load("Wide") == []
     assert chain.n == 8 and chain.band_names[7] == "TOP" and lib.current("band") == "Eight"
     assert not lib.is_dirty("band")
-    (tmp_path / "band" / "eight.json").unlink()           # …and as an inline copy
+    # an edit saved with the project comes back as an edit — dirty against
+    # "Eight" — and the band the layout made has its build value as fresh
+    rig.reg["band.7.atk"].set_value(0.9)
+    edited = chain.params[7].atk                         # as detented by the taper
+    lib.project.save("Wide")
+    lib.load("band", "Balanced")
+    lib.project.load("Wide")
+    assert chain.params[7].atk == edited and lib.is_dirty("band")
+    assert lib.defaults("band")["band.7.atk"] != edited
+    # a new project goes back to the layout the app started with
+    lib.project.new()
+    assert chain.n == 6 and lib.current("band") is None
+    # …and the module as an inline copy, when its file is gone
+    lib.project.load("Wide")
+    (tmp_path / "band" / "eight.json").unlink()
     lib._sync(tmp_path / "band" / "eight.json")
     lib.project.save("Wide")
     lib.load("band", "Balanced")
@@ -412,7 +427,54 @@ def test_a_bad_routing_preset_is_reported_not_fatal(rig, tmp_path):
         {"schema": "hyperspace.bindings/2", "bindings": [{"source": "lane:0"}]}))
     with pytest.raises(LibraryError):
         lib.load("bindings", "worse")
+    (tmp_path / "bindings" / "worst.json").write_text(json.dumps(
+        {"schema": "hyperspace.bindings/2", "bindings": ["lane:0"]}))     # a row that is no dict
+    with pytest.raises(LibraryError):
+        lib.load("bindings", "worst")
     assert lib.list("band")                               # the rest of the tree is fine
+    # a schema-1 user file is rewritten once; one that will not take the
+    # rewrite is reported rather than migrated and announced on every load
+    old = tmp_path / "bindings" / "old.json"
+    old.write_text(json.dumps({"bindings": [{"source": "lane:0", "target": "view.bright",
+                                              "op": "mod", "value": 0.2}]}))
+    old.chmod(0o444)
+    try:
+        with pytest.raises(LibraryError):
+            lib.load("bindings", "old")
+    finally:
+        old.chmod(0o644)
+    assert lib.load("bindings", "old") == []
+    assert json.loads(old.read_text())["schema"] == "hyperspace.bindings/2"
+    # a routing preset saved from the strip keeps one row per line, like the factory files
+    path = lib.save_as("bindings", "Rows")
+    lines = path.read_text().splitlines()
+    assert sum(line.startswith("  {") for line in lines) == len(json.loads(path.read_text())["bindings"])
+    assert json.loads(path.read_text())["name"] == "Rows"
+
+
+def test_the_routing_kind_reaches_the_router_at_call_time(rig, tmp_path):
+    """Hot reload re-classes the router in place; the kind's hooks must not
+    hold the pre-reload bound methods."""
+    lib = rig.lib
+    router = _routed(rig, tmp_path)
+    seen = []
+    router.signature = lambda: seen.append("sig") or []
+    lib.load("bindings", "default")
+    assert seen == ["sig"]
+
+
+def test_a_project_naming_the_routing_layer_is_ignored_before_and_after_the_kind(rig, tmp_path):
+    """app.py attaches the library before it registers the routing kind, so
+    a project file naming a `bindings` module (hand-edited) must be skipped
+    by name, not by registration."""
+    lib = rig.lib
+    p = tmp_path / "projects" / "odd.hyp.json"
+    p.write_text(json.dumps({"schema": "hyperspace.project/1", "name": "Odd",
+                             "values": {}, "modules": {"bindings": "lfo-breathe"}}))
+    assert lib.project.load("odd") == []
+    assert lib.current("bindings") is None
+    _routed(rig, tmp_path)
+    assert lib.current("bindings") is None and not lib.is_dirty("bindings")
 
 
 def test_a_project_never_carries_the_routing_layer(rig, tmp_path):

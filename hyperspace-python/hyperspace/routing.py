@@ -661,6 +661,19 @@ def legacy_planedrive(lanes, gain: float = 1.0) -> np.ndarray:
     return drive
 
 
+def dumps_doc(d: dict) -> str:
+    """A bindings document as file text: one row per line, so a diff reads
+    as a binding; a `name` (a user's routing preset) after the schema."""
+    rows = ",\n".join("  " + json.dumps(b) for b in d["bindings"])
+    text = f'{{\n "schema": {json.dumps(d["schema"])},\n'
+    if "name" in d:
+        text += f' "name": {json.dumps(d["name"])},\n'
+    text += f' "profile": {json.dumps(d["profile"])},\n "bindings": [\n{rows}\n ]'
+    if "values" in d:
+        text += f',\n "values": {json.dumps(d["values"], indent=2)}'
+    return text + "\n}\n"
+
+
 class Bindings:
     """The whole table: rows of every scheme, one file, indexed for the adapters."""
 
@@ -776,13 +789,7 @@ class Bindings:
 
     def dumps(self) -> str:
         """The file text: one row per line, so a diff reads as a binding."""
-        d = self.to_json()
-        rows = ",\n".join("  " + json.dumps(b) for b in d["bindings"])
-        text = (f'{{\n "schema": {json.dumps(d["schema"])},\n'
-                f' "profile": {json.dumps(d["profile"])},\n "bindings": [\n{rows}\n ]')
-        if "values" in d:
-            text += f',\n "values": {json.dumps(d["values"], indent=2)}'
-        return text + "\n}\n"
+        return dumps_doc(self.to_json())
 
     def write(self) -> None:
         """The table to its file — with the routing layer's bases as
@@ -1149,11 +1156,14 @@ class Router:
         in — a full table (default.json) works as a preset too — and its
         `values` land. A user's schema-1 file is migrated and rewritten
         once at `path`; a factory file never is. A bad document raises
-        ValueError (the library turns it into its own error)."""
+        ValueError, a rewrite that fails OSError (the library turns both
+        into its own error)."""
         t = Bindings.from_json(doc, path=path)
         if t.migrated and path is not None and FACTORY_DIR not in path.parents:
             t.announce(path)             # a user's v1 preset: rewritten once
             t.write()
+            if t.error:                  # a file that would not take the rewrite: say so
+                raise OSError(t.error)
         self.table.set_routes(replace(b) for b in t.bindings if b.op in MOD_OPS)
         self.table.dropped, self.table.notes = list(t.dropped), list(t.notes)
         return self.reg.restore(t.values) if t.values else []

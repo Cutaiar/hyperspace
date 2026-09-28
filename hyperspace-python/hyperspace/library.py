@@ -83,6 +83,7 @@ from typing import Any
 from .params import PLANES, ROUTING_GROUPS, Registry
 
 SLOTS = 8                 # the F1–F8 theme bank
+BINDINGS = "bindings"     # the routing presets' group: the one document kind (routing.PRESET_DIR)
 HOME_ENV = "HYPERSPACE_HOME"
 DEFAULT_HOME = Path("~/Hyperspace")
 FACTORY = Path(__file__).with_name("library")
@@ -178,9 +179,13 @@ def _read_json(path: Path) -> dict:
 
 
 def _write_json(path: Path, doc: dict) -> None:
+    _write_text(path, json.dumps(doc, indent=1) + "\n")
+
+
+def _write_text(path: Path, text: str) -> None:
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(doc, indent=1) + "\n")
+        path.write_text(text)
     except OSError as e:
         raise LibraryError(f"{path.name}: {e}") from e
 
@@ -228,6 +233,7 @@ class DocKind:
     load: Callable[[dict, Path | None], list[str]]
     document: Callable[[str], dict]
     signature: Callable[[], Any]
+    text: Callable[[dict], str] | None = None   # the file's text, when json.dumps is not it
 
 
 def factory_doc(group: str, name: str, factory: Path = FACTORY) -> dict:
@@ -350,7 +356,7 @@ class Project:
         lib._adopted.clear()
         docs: list[tuple[str, str, dict | None]] = []
         for group, ref in self.modules.items():
-            if group in lib._kinds:                   # never carried; an old file's is ignored
+            if group in lib._kinds or group == BINDINGS:   # never carried; an old file's is ignored
                 continue
             if isinstance(ref, dict):                 # inline copy of a preset
                 name, doc = str(ref.get("name") or ""), dict(ref)
@@ -364,6 +370,7 @@ class Project:
             hook = lib._layout_hooks.get(group)
             if doc is not None and hook is not None and doc.get("layout") is not None:
                 hook(doc["layout"])                   # its params exist before the values land
+                lib._fresh_of(group)                  # …and their build values are "fresh"
         missing = lib.restore(self.values) if self.values else []
         for group, name, doc in docs:
             vals = (lib.reg.snapshot(group) if doc is None
@@ -454,7 +461,8 @@ class Project:
         self._take(_read_json(lib.factory / PROJECTS / f"{DEFAULT_PROJECT}{PROJECT_SUFFIX}"),
                    None)
         self.name = name
-        lib.restore(lib._fresh_all())
+        lib._fresh_layouts()                          # the layout the app started with…
+        lib.restore(lib._fresh_all())                 # …and every group's fresh values
         self._apply()
         lib.status = f"project: new {name}"
 
@@ -469,8 +477,8 @@ class Project:
         self.values = lib.reg.snapshot()
         self.modules = {}
         for group, cur in lib._current.items():
-            if cur is None or group in lib._kinds:    # the routing layer is the rig's, not the project's
-                continue
+            if cur is None or group in lib._kinds or group == BINDINGS:
+                continue                              # the routing layer is the rig's, not the project's
             if lib.path_of(group, cur) is not None:
                 self.modules[group] = cur
             else:                                     # not in any library: keep a copy
@@ -528,6 +536,7 @@ class Library:
         self._load_hooks: dict[str, Any] = {}     # group → told the name after a load
         self._adopted: dict[str, Any] = {}        # group → how to re-apply an adopted preset
         self._kinds: dict[str, DocKind] = {}      # group → a document kind of its own
+        self._fresh_extra: dict[str, dict] = {}   # group → its extra (layout) at attach
         self._defaults: dict[str, dict[str, Any]] = {}   # defaults(group), until a file moves
         self._docs: dict[Path, tuple[float, dict]] = {}   # parsed files, by mtime
         self._mtimes: dict[Path, float] = {}
@@ -542,19 +551,34 @@ class Library:
         about (`_fresh_of`), so ``reset`` and ``is_dirty`` work for it too."""
         self.reg = reg
         self._fresh = reg.snapshot()
+        # what a group's `extra` hook says now — the analyzer's layout as the
+        # app started — is the fresh layout `Project.new` goes back to
+        self._fresh_extra = {g: hook() for g, hook in self._extra_hooks.items()}
         self._defaults.clear()
         missing = self.project._apply()
         self.report(missing, self.project.name)
         return missing
 
+    def _fresh_layouts(self) -> None:
+        """Every group with a layout hook back to the layout it started with."""
+        for group, extra in self._fresh_extra.items():
+            hook = self._layout_hooks.get(group)
+            if hook is not None and extra and extra.get("layout") is not None:
+                hook(extra["layout"])
+                self._fresh_of(group)
+
     def _fresh_of(self, group: str) -> dict[str, Any]:
         """The values a group's objects were built with — captured at
-        attach(), or, for a param registered after it (the overlay's
-        `output.*`, audit L6), the first time anyone asks about its group."""
+        attach(), or, for a param registered after it (a band a layout
+        made, audit L6), the first time anyone asks about its group; a
+        newly adopted id drops the group's cached defaults."""
         reg = self.reg
         if reg is not None:
-            for k, v in reg.snapshot(group).items():
-                self._fresh.setdefault(k, v)
+            new = [k for k in reg.snapshot(group) if k not in self._fresh]
+            if new:
+                snap = reg.snapshot(group)
+                self._fresh.update((k, snap[k]) for k in new)
+                self._defaults.pop(group, None)
         return {k: v for k, v in self._fresh.items() if reg is not None and k in reg
                 and reg[k].group == group}
 
@@ -564,21 +588,26 @@ class Library:
         return dict(self._fresh)
 
     def kind(self, group: str, schema: str, *, load, document, signature,
-             versions: tuple[int, ...] = (1,)) -> None:
+             versions: tuple[int, ...] = (1,), text=None) -> None:
         """Register a document kind for `group` (see DocKind): its files
         live under ``<root>/<group>/`` like any preset's, the strip drives
         them, and the hooks apply and produce them."""
-        self._kinds[group] = DocKind(schema, tuple(versions), load, document, signature)
+        self._kinds[group] = DocKind(schema, tuple(versions), load, document, signature, text)
 
     def routing(self, router) -> None:
         """The routing presets as a document kind: ``bindings/*.json``,
         ``hyperspace.bindings/2`` (a user's schema-1 file is migrated by
-        the router and rewritten once), applied and written by the router."""
-        from .routing import SCHEMA, SCHEMA_V1
+        the router and rewritten once), applied and written by the router.
+        The hooks look the router's methods up at call time, so a hot
+        reload that re-classes the router reaches them."""
+        from . import routing
 
-        versions = tuple(int(s.rpartition("/")[2]) for s in (SCHEMA_V1, SCHEMA))
-        self.kind("bindings", SCHEMA.rpartition("/")[0], load=router.apply_doc,
-                  document=router.preset_doc, signature=router.signature, versions=versions)
+        versions = tuple(int(s.rpartition("/")[2]) for s in (routing.SCHEMA_V1, routing.SCHEMA))
+        self.kind(BINDINGS, routing.SCHEMA.rpartition("/")[0],
+                  load=lambda doc, path: router.apply_doc(doc, path),
+                  document=lambda name: router.preset_doc(name),
+                  signature=lambda: router.signature(),
+                  versions=versions, text=lambda doc: routing.dumps_doc(doc))
 
     @property
     def kinds(self) -> tuple[str, ...]:
@@ -591,8 +620,11 @@ class Library:
     def extra(self, group: str, hook) -> None:
         """Register what a save of this group writes beside its values — the
         analyzer's ``{"layout": …}`` — so a preset saved from the strip
-        carries it without the caller knowing (plan 07 contract; audit A2)."""
+        carries it without the caller knowing (plan 07 contract; audit A2).
+        Registered after attach(), what it says now is the group's fresh extra."""
         self._extra_hooks[group] = hook
+        if self.reg is not None and group not in self._fresh_extra:
+            self._fresh_extra[group] = hook()
 
     def on_load(self, group: str, hook) -> None:
         """Register who is told the name a load of this group landed — the
@@ -708,12 +740,12 @@ class Library:
     def defaults(self, group: str) -> dict[str, Any]:
         """What reset(group) produces: the default preset over the fresh values.
         Cached until a file in the tree moves (_sync, poll) or attach()."""
-        hit = self._defaults.get(group)
-        if hit is not None:
-            return dict(hit)
         if group in self._kinds:                   # no values of its own to fall back on
             return {}
         out = self._fresh_of(group)
+        hit = self._defaults.get(group)
+        if hit is not None and hit.keys() == out.keys():   # a layout can change the ids
+            return dict(hit)
         name = self.default_name(group)
         if name is not None:
             try:
@@ -796,7 +828,7 @@ class Library:
         if kind is not None:
             try:
                 missing = list(kind.load(doc, path) or [])
-            except (ValueError, KeyError, TypeError) as e:
+            except (ValueError, KeyError, TypeError, AttributeError, OSError) as e:
                 raise LibraryError(f"{group}/{name}: {e}") from e
             if path is not None:
                 self._sync(path)                       # a migrated user file, rewritten once
@@ -805,6 +837,7 @@ class Library:
             hook = self._layout_hooks.get(group)
             if hook is not None and doc.get("layout") is not None:
                 hook(doc["layout"])                    # rebuild params first
+                self._fresh_of(group)                  # …and their build values are "fresh"
             values = doc.get("values") or {}
             missing = [k for k in values if k not in self.reg]
             resolved = self.resolved(group, values)
@@ -848,9 +881,12 @@ class Library:
         """Write the group's bases as a user preset and make it current."""
         doc = self.document(group, name, extra=extra)
         path = self.home / group / f"{slug(name)}.json"
-        _write_json(path, doc)
-        self._sync(path)
         kind = self._kinds.get(group)
+        if kind is not None and kind.text is not None:
+            _write_text(path, kind.text(doc))
+        else:
+            _write_json(path, doc)
+        self._sync(path)
         self._landed(group, name, kind.signature() if kind is not None
                      else self.resolved(group, doc["values"]))
         self.status = f"{group}: saved {name}"
