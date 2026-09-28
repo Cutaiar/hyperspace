@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="560" viewBox="0 0 980 560" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="14">
+  <title>Hyperspace control model — who may write a parameter</title>
+  <desc>Scene-setters write the base; exactly one performer row writes an offset through Router.modulate; Registry.apply lands base plus offset on the live object once per frame; the render stack only reads. Text twin in docs/ARCHITECTURE.md §3.</desc>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#333"/>
+    </marker>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#c1272d"/>
+    </marker>
+  </defs>
+  <rect width="980" height="560" fill="#fff"/>
+
+  <!-- scene-setters -->
+  <rect x="20" y="20" width="420" height="150" rx="10" fill="#f3f3f3" stroke="#bbb"/>
+  <text x="34" y="44" font-weight="700">Scene-setters — write the BASE, never prompt, never blocked</text>
+  <text x="34" y="68">panel widgets · key / pad rows (routing.act) · APC40 knobs, faders, buttons</text>
+  <text x="34" y="88">presets, themes, projects (Registry.restore) · mouse, sticks, ↑/↓ (Param.nudge / scale)</text>
+  <text x="34" y="108">R, F1–F8 (app.act)</text>
+  <text x="34" y="140" fill="#555">every path ends in Param.set → _base while a performer holds the param</text>
+  <text x="34" y="158" fill="#555">relative writers read .base, never .value (audit sim 1)</text>
+
+  <!-- performer -->
+  <rect x="540" y="20" width="420" height="150" rx="10" fill="#fbecec" stroke="#c1272d"/>
+  <text x="554" y="44" font-weight="700" fill="#c1272d">The one performer — writes an OFFSET, one row per target</text>
+  <text x="554" y="68">lane:i · hand:i · ext:i · lfo:i   (LANE_SCHEMES)</text>
+  <text x="554" y="88">op push:      offset = depth · scale · (u − rest)</text>
+  <text x="554" y="108">op position:  offset = clamp(depth · scale · u) − base_norm</text>
+  <text x="554" y="140" fill="#555">Router.modulate → Param.modulate — the only caller in the package</text>
+  <text x="554" y="158" fill="#555">a second row on the target → Owned → Replace / Keep (Bindings edit doors)</text>
+
+  <!-- param -->
+  <rect x="300" y="240" width="380" height="110" rx="10" fill="#fff" stroke="#333" stroke-width="2"/>
+  <text x="490" y="266" text-anchor="middle" font-weight="700" font-size="16">Param</text>
+  <text x="490" y="292" text-anchor="middle">base  +  Σ offsets  →  effective</text>
+  <text x="490" y="316" text-anchor="middle" fill="#555">Registry.apply(), once per frame, after every source has spoken</text>
+  <text x="490" y="336" text-anchor="middle" fill="#555">a direct object write since last frame is folded into the base first</text>
+
+  <!-- arrows in -->
+  <line x1="230" y1="170" x2="400" y2="240" stroke="#333" stroke-width="2" marker-end="url(#a)"/>
+  <text x="250" y="215" fill="#333">base</text>
+  <line x1="750" y1="170" x2="580" y2="240" stroke="#c1272d" stroke-width="2" marker-end="url(#ar)"/>
+  <text x="680" y="215" fill="#c1272d">offset</text>
+
+  <!-- object -->
+  <rect x="300" y="420" width="380" height="70" rx="10" fill="#f3f3f3" stroke="#bbb"/>
+  <text x="490" y="446" text-anchor="middle" font-weight="700">The live object</text>
+  <text x="490" y="468" text-anchor="middle">ViewState · FxState · DreamState · Analyzer · Output · a list slot</text>
+  <line x1="490" y1="350" x2="490" y2="420" stroke="#333" stroke-width="2" marker-end="url(#a)"/>
+  <text x="500" y="390" fill="#333">put(effective)</text>
+
+  <!-- object writers -->
+  <rect x="20" y="380" width="240" height="110" rx="10" fill="#fff" stroke="#bbb" stroke-dasharray="5 4"/>
+  <text x="34" y="404" font-weight="700">Object writers (bypass Param)</text>
+  <text x="34" y="426">ViewState.integrate → ang</text>
+  <text x="34" y="446">camera.reset · Control resets</text>
+  <text x="34" y="474" fill="#555">folded into the base next frame</text>
+  <line x1="260" y1="455" x2="300" y2="455" stroke="#333" stroke-width="2" marker-end="url(#a)"/>
+
+  <!-- readers -->
+  <rect x="720" y="380" width="240" height="110" rx="10" fill="#fff" stroke="#bbb" stroke-dasharray="5 4"/>
+  <text x="734" y="404" font-weight="700">Readers (never write)</text>
+  <text x="734" y="426">Renderer.draw · Lookback · FxChain</text>
+  <text x="734" y="446">LFO.step (its own fields) · bridge out</text>
+  <text x="734" y="474" fill="#555">see last frame's effective value — the one-frame lag</text>
+  <line x1="680" y1="455" x2="720" y2="455" stroke="#333" stroke-width="2" marker-end="url(#a)"/>
+
+  <!-- chaining note -->
+  <text x="490" y="530" text-anchor="middle" fill="#555">Chaining, not stacking: LFO knobs and macro.1–8 are Params too, so a performer may own them; a route's scale reads a macro's effective value.</text>
+</svg>

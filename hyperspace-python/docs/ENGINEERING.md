@@ -8,7 +8,8 @@ in [`ARCHITECTURE.md`](ARCHITECTURE.md); the reasons behind the calls are
 in [`DECISIONS.md`](DECISIONS.md); what is currently drifting is in
 [`AUDIT-2026-09.md`](AUDIT-2026-09.md).
 
-Refreshed by plan 10 against `main` ef299ef (2026-09-27): every sentence
+Refreshed by plan 10 against `main` ef299ef (2026-09-27; line numbers as of
+plan 10's docstring commit d5de879): every sentence
 below was read against its module. Where plan 09 changed behaviour the
 paragraph says so. The HTML-era sections (browser sandbox, deploy) are
 gone; `hyperspace-web/hyperspace.html` is frozen and matters here only as
@@ -102,22 +103,22 @@ perspective project 4D→3D (`D4 / (D4 − w)`) → apply drag orientation
 oracle for the tests). It runs on the CPU; the GPU rasterises. Geometry is
 exact to 1e-12 against the traces (`tests/test_core.py:33-53`).
 
-`Renderer.draw` (`render.py:445-480`) is five stages, and with look-back
+`Renderer.draw` (`render.py:446-481`) is five stages, and with look-back
 and FX off the output is bit-identical to the scene pass alone
 (`tests/test_render.py:306`):
 
-1. **Scene pass** into an MSAA RGBA target (`draw_scene`, `render.py:497`):
+1. **Scene pass** into an MSAA RGBA target (`draw_scene`, `render.py:498`):
    zoom and pan about the cursor; the instance grid with motion; face
    fills through `patterns.glsl` and the optional bitmap layer; edges;
    points. Painter order on w-depth.
 2. **Coverage mask** — the faces again, solid, when the look-back is on
    and occluding, so the wake fills the space between shapes rather than
-   glowing over them (`render.py:292-317, 466`).
+   glowing over them (`render.py:293-318, 467`).
 3. **Look-back** — `lookback.pull()` takes a finished dream result;
    capture and composite (§2.3).
 4. **FX chain** — the enabled effect passes, ping-pong, after the
    composite (§2.4). The history never sees effected pixels
-   (`render.py:474-477`).
+   (`render.py:475-478`).
 5. To the window. All post passes run with GL blending off and write
    premultiplied colour.
 
@@ -126,19 +127,19 @@ and FX off the output is bit-identical to the scene pass alone
 - Edges are screen-space quads, not GL lines: 1 px lines lost the
   near-edge hierarchy the reference has. Width `(0.5 + 1.5·t)`, or
   `(0.35 + 0.85·t)` for shapes over 500 edges, × a brightness scale × zoom;
-  sub-pixel width folds into alpha (`render.py:556-559, 636-661`).
+  sub-pixel width folds into alpha (`render.py:557-560, 637-662`).
 - Edge alpha is `(0.10 + 0.90·t²)·B`, clipped to `[0.015, 1]`, where `t` is
   normalised w-depth: the near half glows, the far half recedes
-  (`render.py:545-552`).
+  (`render.py:546-553`).
 - `B = brightness · density compensation`, `dens = clamp(340 / edges,
-  0.42, 1)` (`render.py:549-550`). Without that term the 120-cell's 1200
+  0.42, 1)` (`render.py:550-551`). Without that term the 120-cell's 1200
   edges clip to a solid blob at the slider position that leaves the 5-cell
   invisible.
 - Points are red; radius and alpha are depth-cued, radius also × dpr ×
-  zoom with a smaller base for heavy shapes (`render.py:664-668`).
+  zoom with a smaller base for heavy shapes (`render.py:665-669`).
 - `view.cut_through` (default on) keeps the old blend for face fills; off
   uses separate alpha (ONE, ONE_MINUS_SRC_ALPHA) so in overlay mode a
-  fill does not let the desktop through (`render.py:565-573`; PR #26).
+  fill does not let the desktop through (`render.py:566-574`; PR #26).
   On an opaque window it is invisible.
 
 ### 2.2 Faces, patterns, bitmap
@@ -149,7 +150,7 @@ polytopes (`tests/test_shapes3d.py`). UVs are face-local and
 perspective-correct (`geometry.face_uvs`).
 
 `shaders/patterns.glsl` is user-editable and hot-reloads on save by mtime
-(`render.py:433-443`); a bad edit keeps the last good program and shows
+(`render.py:434-444`); a bad edit keeps the last good program and shows
 the GLSL error on the panel. Contract: `vec4 pattern(int mode, vec2 uv,
 float fid)`, reading `u_time` and `u_mod[8]` — the eight `pattern.mod.k`
 params, which any source may drive. Eleven modes ship; their names live in
@@ -189,8 +190,7 @@ presettable, all modulatable.
 
 One GLSL file per effect under `shaders/fx/`. Every `// @param` uniform
 becomes a registry param `fx.<file>.<key>`, plus `on mix speed blend
-order` per file; `fx.on` and `fx.mix` govern the chain (`fx.py:114-164,
-284-327`). Effects hot-reload by polling the folder every 30 frames; a
+order` per file; `fx.on` and `fx.mix` govern the chain (`fx.py:114-164, 284-327`). Effects hot-reload by polling the folder every 30 frames; a
 parse error keeps the last spec, a compile error skips the pass, all
 broken is a copy. Off is bit-identical (`tests/test_fx.py:268`). The
 blend modes are arithmetic in the shader, not GL blend state, and a pass
@@ -203,8 +203,7 @@ Noita's `post_final.frag` maths among them; the factory presets are
 `app.py` opens the render window (vsync, 4× MSAA, transparent framebuffer)
 and the control window (opaque, no MSAA, vsync off so it paces off the
 render swap) in one GLFW share group, each with its own moderngl context;
-the only imgui context lives on the control window (`app.py:135-166,
-395-418`). The render window has no imgui at all. Mouse orbit / pan / zoom
+the only imgui context lives on the control window (`app.py:136-167, 396-419`). The render window has no imgui at all. Mouse orbit / pan / zoom
 are taken from the render window only; keys from both, with the control
 window deferring to imgui typing. `imgui.new_frame()` runs before input
 handling on purpose: with the 1.87+ event queue, `want_capture_keyboard`
@@ -216,14 +215,14 @@ binds.
 
 ## 3. Audio sources
 
-Two, both through `AudioEngine._attach` (`audio.py:129-137`):
+Two, both through `AudioEngine._attach` (`audio.py:132-140`):
 
 - **A capture device** (`start_mic(index)`): a `sounddevice.InputStream`,
   mono, at the engine's rate, callback → ring buffer. The device list is
   every input-capable device (`input_devices`); a loopback driver
   (BlackHole, Soundflower, anything named "loopback") is recognised by
   name, pre-selected in the panel's combo, and labelled `System · …`
-  (`audio.py:26-49, 154`). That is the one system-audio route: with the
+  (`audio.py:29-52, 157`). That is the one system-audio route: with the
   Mac's output on a Multi-Output Device, everything arrives through the
   plain input path. **Nothing captures at launch** — capture starts when
   `audio.mic` is toggled (`M`), and the device list is read once at panel
@@ -231,10 +230,10 @@ Two, both through `AudioEngine._attach` (`audio.py:129-137`):
 - **A file** (`start_file(path)`; wav / mp3 / flac / ogg through
   `soundfile`): mono mean, played through an `OutputStream` at the
   **track's** sample rate, and the analyser is rebuilt at that rate
-  (`audio.py:162-188`).
+  (`audio.py:165-191`).
 
 The callbacks only copy samples into the ring; the FFT and the chain run
-on the frame loop in `audio.step(dt)` (`audio.py:232-239`). `audio.chain`
+on the frame loop in `audio.step(dt)` (`audio.py:235-242`). `audio.chain`
 is a fresh `Analyzer` on every attach, sharing the old per-band `Params`
 objects and copying the layout and master faders, so a source switch
 keeps the user's settings and restarts only the trackers and the warm-up
@@ -361,8 +360,7 @@ feeds the 4 s log-frequency spectrum history the band editor draws.
 
 **Harmonic coupling** boosts a band by the geometric-mean coherence with
 the *next band in frequency order* (the top band reads itself), so
-overtone-rich sources drive harder than pure tones (`analyzer.py:364-371,
-561-568`). It is a proxy, not integer-multiple peak detection — stated
+overtone-rich sources drive harder than pure tones (`analyzer.py:364-371, 561-568`). It is a proxy, not integer-multiple peak detection — stated
 plainly to the owner. It sits on the input side because it characterises
 the signal rather than shaping it.
 
@@ -405,7 +403,7 @@ never to hard-coded defaults; on Balanced the two coincide. Reset-all is
 guarded by an 8 s **undo** (the button relabels itself) rather than a
 confirm; the undo snapshot carries the layout too and is discarded on a
 scene change or any structural change, because it belongs to the old
-scene (`control.py:88-126`, `tests/test_control.py:74-112`).
+scene (`control.py:89-127`, `tests/test_control.py:74-112`).
 
 ## 4b. Transport
 
@@ -415,7 +413,7 @@ running and emits silence, so the ring keeps filling and the bands decay
 on their own time constants — the shape coasts to rest rather than
 freezing. Position is `_offset + _played`, where `_played` counts the
 frames the callback has handed to PortAudio (so it leads the DAC by the
-buffer latency), folded by the track length for the loop (`audio.py:190-
+buffer latency), folded by the track length for the loop (`audio.py:193-
 228`, `tests/test_control.py:126-146`). Restart is return-to-zero preserving
 the play / pause state. Keys, as table rows: `K` play / pause (`audio.play`),
 `0` restart, `M` capture on / off. In capture mode `stop()` closes the

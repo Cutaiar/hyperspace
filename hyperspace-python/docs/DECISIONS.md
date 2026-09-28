@@ -73,7 +73,7 @@ why, and a link from the plan or PR that made it.
 
 | Date | Decision | Why | Source | Status |
 |---|---|---|---|---|
-| 2026-09-26 | One free-running clock, tapped into time. Hz is the base unit; BPM + division converts to Hz. Tap sets BPM and the downbeat. No DJ Link, no MIDI clock, no drift correction: re-tap. 4/4 assumed. | Sync sources do not exist on this rig yet; a tap is what a lighting operator already does. | plan 09 d.9 | standing (`tempo.py`) |
+| 2026-09-26 | One free-running clock, tapped into time. Tap sets BPM; the downbeat is the global trigger's. No DJ Link, no MIDI clock, no drift correction: re-tap. 4/4 assumed. | Sync sources do not exist on this rig yet; a tap is what a lighting operator already does. | plan 09 d.9 | standing with two deviations (`tempo.py`): a tap also re-pins the downbeat *until the clock is first triggered* (audit B2), and there is no BPM → Hz conversion — a synced LFO reads `clock.beat · ratio` directly while a Hz LFO integrates its rate |
 | 2026-09-26 | BPM is the mean of the burst's last 8 taps; a gap over 2 s starts a new burst. | A tempo change should register within a bar. | plan 09 as built | standing |
 | 2026-09-26 | The global LFO trigger sets the downbeat to now and restarts every synced LFO at phase 0 together; tapping alone never moves a running LFO. | A re-tap mid-set must not jolt the picture until the performer says so. | plan 09 WP4 | standing (`lfo.trigger`) |
 | 2026-09-26 | `Clock.trigger` folds the current nudge into `t0`; `Clock.tick(now)` once a frame so a key-fired trigger and the LFO step agree. | Without the tick a synced LFO read phase ≈ 0.999 on the trigger frame. | plan 09 as built | standing |
