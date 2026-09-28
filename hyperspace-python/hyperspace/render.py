@@ -369,21 +369,12 @@ class Renderer:
 
     def on_reload(self) -> None:
         """Hot-swap hook (hotreload.py): recompile every GL program so edits
-        to the shader strings in this module land; the buffers persist."""
-        # attributes newer than this live instance's __init__
-        if not hasattr(self, "_bmp_tex"):
-            self.bitmap_error, self._bmp_tex, self._bmp_file = "", None, ""
-        if not hasattr(self, "lookback"):
-            self.scene, self.lookback = SceneTarget(self.ctx), Lookback(self.ctx)
-            self._blank = self.ctx.texture((1, 1), 4)
-        if not hasattr(self, "fx"):
-            self.fx = FxChain(self.ctx)
-        olds = [self._lvao, self._pvao, self._lines, self._points]
-        if hasattr(self, "_cvao"):
-            olds += [self._cvao, self._cover_prog]
-        else:
-            self.cover, self._face_verts = CoverTarget(self.ctx), 0
-        for res in olds:
+        to the shader strings in this module land; the buffers persist. An
+        attribute a newer __init__ would have added is missing until a
+        restart, and the reloader reports the AttributeError rather than
+        this hook guessing at a value (audit H3)."""
+        for res in (self._lvao, self._pvao, self._cvao,
+                    self._lines, self._points, self._cover_prog):
             res.release()
         self._build_wire_programs()
         self._build_face_program()
