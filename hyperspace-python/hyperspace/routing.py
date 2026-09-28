@@ -614,6 +614,24 @@ def migrate_v1(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
     return out, notes
 
 
+def backup(path: Path, schema: str) -> Path | None:
+    """``<file>.bak-v<schema>`` beside a file the loader is about to rewrite
+    (a migration or a factory remap, audit R12), written once: a backup
+    already there — this one from an earlier run, or a copy the owner made
+    by hand under any ``.bak-*`` name — is never overwritten, and a copy
+    that cannot be made never stops the load. Returns the path written."""
+    bak = path.with_name(f"{path.name}.bak-v{schema}")
+    if bak.exists():
+        return None
+    try:
+        bak.write_bytes(path.read_bytes())
+    except OSError as e:
+        print(f"bindings: no backup of {path}: {e}", file=sys.stderr)
+        return None
+    print(f"bindings: {path.name} kept as {bak.name} before the rewrite", file=sys.stderr)
+    return bak
+
+
 def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
     """The factory rows plan 09 WP4 moved, on a table of any schema: the
     old APC40 factory rows swapped for the new (APC_REMAP), the METRONOME /
@@ -733,6 +751,7 @@ class Bindings:
             t.notes += remapped
             if t.migrated or remapped:
                 t.announce(path)
+                backup(path, "1" if t.migrated else "2")
                 t.write()
             return t
         t = cls.factory(profile, path)
@@ -1159,6 +1178,7 @@ class Router:
         t = Bindings.from_json(doc, path=path)
         if t.migrated and path is not None and FACTORY_DIR not in path.parents:
             t.announce(path)             # a user's v1 preset: rewritten once
+            backup(path, "1")
             t.write()
             if t.error:                  # a file that would not take the rewrite: say so
                 raise OSError(t.error)

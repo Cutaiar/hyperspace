@@ -1206,11 +1206,48 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     assert rows[(f"note:0:{apc40.N_METRO}", "lfo.trigger")].feedback == "led"
     assert rows[(f"note:0:{apc40.N_QUANT}", "theme.next")].op == "toggle"
     assert t.values == {"pattern.mod.0": 0.0}
-    # written back once, at schema 2; the second load is quiet
+    # written back once, at schema 2, with the file as it was kept beside
+    # it (audit R12); the second load is quiet
     doc = json.loads(path.read_text())
     assert doc["schema"] == SCHEMA and doc == t.to_json()
+    bak = path.with_name("bindings.json.bak-v1")
+    assert json.loads(bak.read_text()) == V1_FILE and "kept as bindings.json.bak-v1" in err
     again = Bindings.load(path, legacy_midi=None)
     assert not again.migrated and again.to_json() == t.to_json() and capsys.readouterr().err == ""
+
+
+def test_a_backup_is_written_once_and_never_over_a_hand_made_one(tmp_path, capsys):
+    """Audit R12: the first rewrite keeps the file as it was as
+    `.bak-v<schema>`; a later rewrite of the same schema leaves that copy
+    alone (the oldest state is the one worth having), and a copy the owner
+    made by hand is a different name, untouched. A remap of a schema-2
+    file is a `.bak-v2`."""
+    path = bindings_path(tmp_path)
+    hand = path.with_name("bindings.json.bak-plan09")
+    hand.write_text("mine")
+    v2 = Bindings.factory().to_json()
+    v2["bindings"] = [b for b in v2["bindings"] if b["target"] != "tempo.tap"]  # an old table
+    path.write_text(json.dumps(v2))
+    t = Bindings.load(path, legacy_midi=None)
+    assert any(n.startswith("added key:B") for n in t.notes)
+    bak = path.with_name("bindings.json.bak-v2")
+    assert json.loads(bak.read_text()) == v2 and hand.read_text() == "mine"
+    # the same schema rewritten again: the first copy stands
+    v2["bindings"] = [b for b in v2["bindings"] if b["target"] != "lfo.trigger"]
+    path.write_text(json.dumps(v2))
+    Bindings.load(path, legacy_midi=None)
+    assert json.loads(bak.read_text()) != v2 and "tempo.tap" not in bak.read_text()
+    # a backup that cannot be made never stops the load
+    bad = tmp_path / "ro"
+    bad.mkdir()
+    p2 = bad / "bindings.json"
+    p2.write_text(json.dumps(v2))
+    bad.chmod(0o555)
+    try:
+        t2 = Bindings.load(p2, legacy_midi=None)
+    finally:
+        bad.chmod(0o755)
+    assert t2.error == "" and "no backup of" in capsys.readouterr().err
     # a v1 preset file loads through the same door
     r = rig(tmp_path=tmp_path, full=True)
     router = Router(r.reg, Bindings.factory())

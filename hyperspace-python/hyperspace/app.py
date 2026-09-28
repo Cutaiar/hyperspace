@@ -621,6 +621,7 @@ def main() -> None:
         ok = True
         try:
             audio.step(dt)
+            audio.publish(router)       # the lanes' names and rests, like every source
             if bridge_io is not None:   # lanes out, external lanes in (bridge.py)
                 bridge_io.step(audio.chain if audio.on else None, router)
             # the LFOs are a source like any other: stepped on the frame's

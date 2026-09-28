@@ -331,7 +331,7 @@ def test_the_routing_page_shows_the_referees_refusals(rig, tmp_path):
     frame(panel)
 
 
-def test_the_replace_prompt_swaps_the_owner_or_leaves_the_table(rig, tmp_path):
+def test_the_replace_prompt_swaps_the_owner_or_leaves_the_table(rig, tmp_path, monkeypatch):
     """Plan 09 WP5, exit criterion 3 without the mouse: a second performer
     on a target is a question, not an error. *Replace* swaps the owner and
     writes the file; *Keep* leaves the table untouched. The same modal
@@ -387,7 +387,11 @@ def test_the_replace_prompt_swaps_the_owner_or_leaves_the_table(rig, tmp_path):
     assert lrn.pending is None and table.owner("view.bright") is cur and "kept" in lrn.last
     lrn.arm("view.bright")
     lrn.learn_source("hand:1")
+    writes, real_write = [], table.write
+    monkeypatch.setattr(table, "write", lambda: (writes.append(1), real_write()))
     ui_routing.answer(panel, True)                                     # Replace: the axis moves
+    assert writes == [1]                                               # once (audit R9): the learn's
+    assert ui_routing._state(panel)["saved"] == ui_routing._sig(router)  # …and the page knows
     got = table.owner("view.bright")
     assert got.source == "hand:1" and cur not in table.bindings
     assert not table.routes_to("view.speed")                           # one axis, one param
