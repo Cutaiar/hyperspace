@@ -296,3 +296,49 @@ def test_band_bins_round_like_the_reference():
     assert an.band_bins(60, 160) == (5, 14)   # floor(5.12), ceil(13.65)
     assert an.band_bins(0, 5) == (1, 2)       # never bin 0, never fewer than two
     assert an.band_bins(20_000, 30_000) == (1706, 2047)
+
+
+# ------------------------- transport, loopback, ring (moved from test_control.py, audit D5)
+
+def test_transport_position_math():
+    import numpy as np
+
+    from hyperspace.audio import AudioEngine
+
+    a = AudioEngine()
+    a.track = np.zeros(48_000 * 4)  # 4 s at 48 kHz
+    a._track_sr = 48_000.0
+    a.playing = True
+    a._offset, a._played = 0, 48_000
+    assert a.position() == pytest.approx(1.0)
+    a.toggle_play()  # pause freezes position
+    assert not a.playing
+    assert a.position() == pytest.approx(1.0)
+    a.toggle_play()  # resume from the same offset
+    assert a.position() == pytest.approx(1.0)
+    a._played = 48_000 * 5  # loop fold: 1s offset + 5s played on a 4s track
+    assert a.position() == pytest.approx(2.0)
+    a.restart()  # RTZ preserves transport state
+    assert a.playing
+    assert a.position() == pytest.approx(0.0)
+
+
+def test_loopback_detection():
+    from hyperspace.audio import is_loopback
+
+    assert is_loopback("BlackHole 2ch")
+    assert is_loopback("Loopback Audio")
+    assert not is_loopback("MacBook Pro Microphone")
+
+
+def test_ring_buffer():
+    import numpy as np
+
+    from hyperspace.audio import _Ring
+
+    r = _Ring(8)
+    r.push(np.array([1.0, 2.0, 3.0]))
+    assert list(r.drain()) == [1.0, 2.0, 3.0]
+    assert len(r.drain()) == 0
+    r.push(np.arange(10.0))  # overflow: only the last 8 survive
+    assert list(r.drain()) == list(np.arange(2.0, 10.0))

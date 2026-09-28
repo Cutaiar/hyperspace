@@ -1,4 +1,4 @@
-"""The six-band `Chain` exactly as it was before plan 07 WP4a (commit 628ae7e).
+"""The six-band `Chain` exactly as it was before plan 07 WP4a (frozen in commit 590243b, the WP4a merge).
 
 Frozen here as the parity reference: the analyzer with the "Legacy 6"
 layout must reproduce this frame for frame, bit for bit

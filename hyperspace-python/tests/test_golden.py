@@ -5,31 +5,13 @@ from pathlib import Path
 
 import pytest
 
+from hyperspace.geometry import SHAPES, geom
+
 GOLDEN = Path(__file__).parent / "golden"
 
-# The V/E table from docs/ENGINEERING.md §2, in slider order.
-VE_TABLE = [
-    ("5-cell", 5, 10),
-    ("3,3-duoprism", 9, 18),
-    ("Cubic pyramid", 9, 20),
-    ("Tesseract", 16, 32),
-    ("Rectified 5-cell", 10, 30),
-    ("4,8-duoprism", 32, 64),
-    ("6,6-duoprism", 36, 72),
-    ("16-cell", 8, 24),
-    ("10,10-duoprism", 100, 200),
-    ("Icosahedral prism", 24, 72),
-    ("24-cell", 24, 96),
-    ("Truncated tesseract", 64, 128),
-    ("12,12-duoprism", 144, 288),
-    ("Dodecahedral prism", 40, 80),
-    ("20,20-duoprism", 400, 800),
-    ("120-cell", 600, 1200),
-    ("600-cell", 120, 720),
-    ("Clifford torus", 512, 1024),
-]
-
-
+# The expected V/E counts come from the code, not a third copy of the
+# table (audit D6): the trace's index is the slider index, so the shape it
+# was recorded from is geometry.SHAPES[index] and its counts are geom()'s.
 def geometry_files() -> list[Path]:
     return sorted((GOLDEN / "geometry").glob("*.json"))
 
@@ -41,9 +23,11 @@ def test_geometry_traces_present():
 @pytest.mark.parametrize("path", geometry_files(), ids=lambda p: p.stem)
 def test_geometry_trace_consistent(path):
     data = json.loads(path.read_text())
-    name, n, m = VE_TABLE[data["index"]]
-    assert data["name"].startswith(name.split(" ")[0]), (data["name"], name)
-    assert data["n"] == n and data["m"] == m, f"{data['name']}: V/E mismatch vs ENGINEERING §2"
+    shape = SHAPES[data["index"]]
+    g = geom(data["index"])
+    n, m = g["n"], g["m"]
+    assert data["name"].startswith(shape.name.split(" ")[0]), (data["name"], shape.name)
+    assert data["n"] == n and data["m"] == m, f"{data['name']}: V/E mismatch vs geometry.geom"
     assert len(data["V"]) == n * 4
     assert len(data["E"]) == m * 2
     assert all(0 <= e < n for e in data["E"])
