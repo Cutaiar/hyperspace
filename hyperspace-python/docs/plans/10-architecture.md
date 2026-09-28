@@ -47,13 +47,12 @@ accurate beats exhaustive; the code remains the reference for the rest.
    is it built that way"; ARCHITECTURE answers "what are the parts, how do
    they connect, who may write what". Neither duplicates the other; each
    links.
-3. **HTML-era material moves next to the HTML.** ENGINEERING.md §5 (browser
-   sandbox constraints), §6 (puppeteer testing), §8 (Vercel deploy) and the
-   parts of §3b that describe `getUserMedia` / `getDisplayMedia` are true
-   of `hyperspace-web/hyperspace.html` and dead for the Python system. They
-   move verbatim to `hyperspace-web/ENGINEERING-html.md` with a one-line
-   pointer left behind. Nothing is deleted from the repository; it is
-   filed where it applies.
+3. **The Python app is the only subject.** `hyperspace-web/` is frozen and
+   out of scope; no document here describes it beyond the one sentence that
+   says it is the golden-trace oracle. ENGINEERING.md §5 (browser sandbox
+   constraints), §6 (puppeteer testing), §8 (Vercel deploy) and the
+   `getUserMedia` / `getDisplayMedia` parts of §3b are true only of the
+   HTML and are removed; the commit history keeps them.
 4. **Describe the system as built now.** Plan 09's hand checks at the
    machine are still owed and may yield small fixes; the documents describe
    `main` at ef299ef and say so in their header. A later fix updates the
@@ -83,7 +82,6 @@ accurate beats exhaustive; the code remains the reference for the rest.
 | `DECISIONS.md` | Why is it this way; what was rejected | plans 07–09, memory | whoever settles a new decision with the owner |
 | `ENGINEERING.md` | How does the existing chain behave; what has been tried and failed | today's file, verified against the code | whoever changes behaviour |
 | `AUDIT-2026-09.md` | What is wrong or drifting right now, and what it would cost to fix | this plan's audit | consumed by the follow-up plan; not maintained after |
-| `hyperspace-web/ENGINEERING-html.md` | The frozen reference's own constraints | ENGINEERING.md §5, §6, §8 (moved) | nobody — the HTML is frozen |
 
 ### ARCHITECTURE.md, section by section
 
@@ -136,10 +134,10 @@ host, the look-back and FX stages), §4 audio chain (verified against
 only if the code still has the behaviour), §4b transport (verified against
 `audio.py`), §7 visual conventions (already current), §10's worktree traps
 (moved to a process section). Marked as changed by plan 09: anything that
-says a source drives a param outside `Router.modulate`. Moved out: §5, §6,
-§8 (decision 3). Removed: §1 and the HTML-artifact preamble (history, now
-in `DECISIONS.md` and git), §9 threads that are closed or restated in
-`CHECKPOINT.md`. Every surviving sentence is checked against the code.
+says a source drives a param outside `Router.modulate`. Removed: §5, §6,
+§8 (HTML-only, decision 3), §1 and the HTML-artifact preamble (history, now
+in `DECISIONS.md` and the commit log), §9 threads that are closed or
+restated in `CHECKPOINT.md`. Every surviving sentence is checked against the code.
 
 ### AUDIT-2026-09.md
 
@@ -197,7 +195,7 @@ for status. Superseded decisions kept with their successor.
 ### WP4 — ENGINEERING.md · M · parallel with WP2
 
 Section by section against readers D and E and the code; §5 / §6 / §8
-moved to `hyperspace-web/ENGINEERING-html.md`. A sentence that cannot be
+removed as HTML-only. A sentence that cannot be
 verified against the code is removed, not kept on faith.
 
 ### WP5 — AUDIT-2026-09.md · S · after WP1–WP4
@@ -225,8 +223,8 @@ but docstrings moved.
       reads only that section and the code finds no claim it cannot
       locate.
 - [ ] 3. `ENGINEERING.md` contains nothing the code contradicts: every
-      surviving section has been read against its module, and the
-      HTML-only sections live in `hyperspace-web/ENGINEERING-html.md`.
+      surviving section has been read against its module, and no
+      HTML-only section remains.
 - [ ] 4. `AUDIT-2026-09.md` gives every finding a size and a one-line fix,
       and `git diff ef299ef -- hyperspace/` touches docstrings and comments
       only (no statement changes; `pytest` count and `ruff` unchanged).
