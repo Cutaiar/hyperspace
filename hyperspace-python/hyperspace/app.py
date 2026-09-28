@@ -70,10 +70,9 @@ from .audio import AudioEngine
 from .control import Control
 from .gamepad import Pad
 from .hotreload import HotReloader
-from .library import Library
+from .library import SLOTS, Library
 from .overlay import GlfwBackend, Output
 from .params import Registry, build_registry
-from .presets import SLOTS
 from .render import Renderer, ViewState
 from .routing import Bindings, Router, bindings_path
 from .ui import Panel, apply_style, load_fonts
@@ -425,12 +424,11 @@ def main() -> None:
     cfg = config.load()
     audio = AudioEngine()
     control = Control(audio.chain)
-    library = Library()                    # presets, projects, the theme bank
-    presets = library.bank
+    library = Library()                    # presets, projects, the theme bank (its project's)
     # dream.* drives the renderer's look-back (lookback.py); the post pass
     # runs inside renderer.draw
     want = {"restart": False}          # app.restart sets it; polled after the panel draws
-    reg = build_registry(s, control, audio, presets, dream=renderer.lookback.state,
+    reg = build_registry(s, control, audio, library.project, dream=renderer.lookback.state,
                          fx=renderer.fx.state,
                          restart=lambda: want.__setitem__("restart", True))
     # an analyzer preset carries its band layout; the library hands it to
@@ -448,10 +446,12 @@ def main() -> None:
     lfos = lfo.LFOs()
     tempo.register(reg, clock)
     lfo.register(reg, lfos, clock)
-    library.attach(reg)
-    panel = Panel(control, audio, s, renderer, presets, registry=reg, library=library)
-    panel.clock, panel.lfos = clock, lfos     # the LFO page's scopes and beat light
+    # the render window's placement registers before attach, so "default"
+    # includes output.* and reset / the dirty dot see them (audit L6)
     output = _make_output(render_win, reg, cfg)
+    library.attach(reg)
+    panel = Panel(control, audio, s, renderer, library.project, registry=reg, library=library)
+    panel.clock, panel.lfos = clock, lfos     # the LFO page's scopes and beat light
     panel.output = output
     # one binding table for keys, pad, MIDI and lanes (an old midi_map.json migrates)
     mc = cfg.get("midi", {})
@@ -464,6 +464,7 @@ def main() -> None:
     # registry hasn't goes where every other missing id goes
     if router.missing_values:
         library.report(router.missing_values, "bindings.json values")
+    library.routing(router)                # the routing presets: the library's files, the router's documents
     midi_io = _open_midi(reg, cfg, router.table)
     panel.midi = midi_io
     panel.router = router                  # the ROUTING page edits the live table
@@ -498,7 +499,7 @@ def main() -> None:
         (output, "overlay", "Output"),
         (output.backend, "overlay", "GlfwBackend"),
         (library, "library", "Library"),
-        (presets, "presets", "Presets"),
+        (library.project, "library", "Project"),
         (router, "routing", "Router"),
         (clock, "tempo", "Clock"),
         (lfos, "lfo", "LFOs"),

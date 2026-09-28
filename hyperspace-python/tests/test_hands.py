@@ -426,7 +426,7 @@ def app(tmp_path):
     control = Control(chain)
     view = ViewState()
     lib = Library(tmp_path)
-    reg = build_registry(view, control, NS(chain=chain), lib.bank)
+    reg = build_registry(view, control, NS(chain=chain), lib.project)
     table = Bindings.load(tmp_path / "bindings.json", legacy_midi=None)
 
     class Quiet:
@@ -578,11 +578,11 @@ def test_hands_page_draws_live_and_offline(tmp_path):
         audio = NS(chain=chain, on=False, mode="", error="", label="", sr=48000.0)
         view = ViewState()
         lib = Library(tmp_path, period=0.0)
-        reg = build_registry(view, control, audio, lib.bank)
+        reg = build_registry(view, control, audio, lib.project)
         r = rig()
         hands.register(reg, r.s)
         lib.attach(reg)
-        panel = Panel(control, audio, view, presets=lib.bank, registry=reg, library=lib)
+        panel = Panel(control, audio, view, themes=lib.project, registry=reg, library=lib)
         panel.hand_settings = r.s
         reg["ui.page"].set(PAGE_KEYS.index("hands"))
 

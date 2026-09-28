@@ -20,7 +20,7 @@ def make(tmp_path):
     audio = SimpleNamespace(chain=chain)
     view = ViewState()
     lib = Library(tmp_path)
-    presets = lib.bank
+    presets = lib.project
     reg = build_registry(view, control, audio, presets)
     lib.attach(reg)
     return reg, view, control, audio, presets
@@ -290,7 +290,7 @@ def test_core_does_not_import_the_midi_adapter():
     sys.modules.pop("hyperspace.midi", None)
     import importlib
 
-    for m in ("hyperspace.params", "hyperspace.control", "hyperspace.presets",
+    for m in ("hyperspace.params", "hyperspace.control", "hyperspace.library",
               "hyperspace.bands", "hyperspace.render"):
         importlib.import_module(m)
     assert "hyperspace.midi" not in sys.modules

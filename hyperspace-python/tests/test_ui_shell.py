@@ -53,7 +53,7 @@ def rig(tmp_path):
     audio = SimpleNamespace(chain=chain, on=False, mode="", error="", label="", sr=48000.0)
     view = ViewState()
     lib = Library(tmp_path, period=0.0)
-    reg = build_registry(view, control, audio, lib.bank)
+    reg = build_registry(view, control, audio, lib.project)
     lib.on_layout("band", control.apply_layout)
     # the rig has everything app.py gives the panel, so every page is
     # measured full: a hands setup over a tracker that sees no hands, an
@@ -67,7 +67,7 @@ def rig(tmp_path):
     output = Output(None, None)
     output.register(reg)
     lib.attach(reg)
-    panel = Panel(control, audio, view, presets=lib.bank, registry=reg, library=lib)
+    panel = Panel(control, audio, view, themes=lib.project, registry=reg, library=lib)
     panel.clock, panel.lfos = clock, lfos
     panel.hands, panel.hand_settings = hands_io, settings
     panel.output = output
@@ -376,7 +376,7 @@ def test_theme_bank_keeps_its_behaviour(rig):
     frame(panel, "presets")
     reg["view.shape"].set(5)
     reg["theme.save.2"].fire()
-    assert lib.bank.active == 2 and lib.bank.slots[2]["values"]["view.shape"] == 5
+    assert lib.project.active == 2 and lib.project.slots[2]["values"]["view.shape"] == 5
     reg["view.shape"].set(1)
     reg["theme.load.2"].fire()
     assert rig.view.shape == 5

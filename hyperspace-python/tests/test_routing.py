@@ -66,7 +66,7 @@ def rig(sr: float = 48_000.0, tmp_path: Path | None = None, full: bool = False):
     audio = SimpleNamespace(chain=chain, on=True)
     view = ViewState()
     lib = Library(tmp_path) if full else None
-    presets = lib.bank if full else None
+    presets = lib.project if full else None
     reg = build_registry(view, control, audio, presets)
     if full:
         lib.attach(reg)
@@ -1203,8 +1203,8 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     assert router.table.dropped == [] and router.table.notes == []      # an edit clears both
     # … a factory file never is (they are all at schema 2 already)
     before = {q.name: q.read_text() for q in routing.FACTORY_DIR.glob("*.json")}
-    for name in routing.preset_names():
-        router.load_preset(name)
+    for q in sorted(routing.FACTORY_DIR.glob("*.json")):
+        router.load_preset(q.name[:-5])
     assert {q.name: q.read_text() for q in routing.FACTORY_DIR.glob("*.json")} == before
 
 

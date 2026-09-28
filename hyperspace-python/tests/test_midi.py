@@ -49,7 +49,7 @@ def rig(tmp_path):
     audio = SimpleNamespace(chain=chain)
     view = ViewState()
     lib = Library(tmp_path)
-    presets = lib.bank
+    presets = lib.project
     reg = build_registry(view, control, audio, presets)
     lib.attach(reg)
     reg.toggle("ui.panel", "Panel", lambda: True, lambda v: None)

@@ -179,7 +179,7 @@ migrates the same way (`migrate_v1`, the op rename only: ``mod`` → push,
 ``span`` → position, a lane-scheme ``abs`` → position at depth 1,
 ``replace`` dropped; then `referee`, a second owner dropped — each
 dropped row named on stderr, the file written back once; a user's preset
-file likewise, through `Router.load_preset`). Whatever the schema, every
+file likewise, through `Router.apply_doc`). Whatever the schema, every
 load runs `remap_factory`: the three APC40 buttons plan 09 WP4 gave to
 the clock and the B / ⇧B keys are brought up to date where the factory
 rows still stand, each change noted and written back once. A schema this
@@ -191,11 +191,12 @@ Routing presets are the same file format with only modulation rows:
 the factory exports in ``hyperspace/library/bindings/`` (`write_factory`:
 ``default``, ``legacy6``, ``lfo-breathe`` from `PRESETS`, and the three
 hand-written ``hands-*`` files plan 08 ships) and the user's
-``<home>/bindings/*.json`` (`preset_files`). `Router.load_preset` replaces
+``<home>/bindings/*.json``, both kept by the library (`Library.routing`,
+audit L1). `Router.apply_doc` replaces
 the routes from one — a hand's learned rows among them, since a learn
-is an ordinary position route — and lands its bases; `Router.save_preset`
-writes the current routes to the user folder — the ROUTING page's strip
-(WP5b).
+is an ordinary position route — and lands its bases; `Router.preset_doc`
+is what a save writes to the user folder — the library's one preset strip
+serves the ROUTING page too.
 """
 
 from __future__ import annotations
@@ -642,29 +643,13 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
     return out, notes
 
 
-# routing preset *files*: the factory exports (write_factory) and the
-# user's <home>/bindings/*.json — what the ROUTING page's strip steps
-# through. A user file shadows a factory one of the same name.
+# routing preset *files* live in the library's tree — the factory exports
+# (write_factory) under hyperspace/library/bindings/ and the user's under
+# <home>/bindings/, a user file shadowing a factory one of the same name.
+# Since plan 11 (audit L1) the library keeps them like any preset
+# (`Library.routing` registers the document kind); the router only applies
+# a document (`Router.apply_doc`) and produces one (`Router.preset_doc`).
 PRESET_DIR = "bindings"
-
-
-def preset_files(home: Path | str | None = None) -> dict[str, Path]:
-    """name → path of every routing preset file, user over factory."""
-    out: dict[str, Path] = {}
-    dirs = [FACTORY_DIR] + ([Path(home) / PRESET_DIR] if home is not None else [])
-    for d in dirs:
-        if d.is_dir():
-            out.update((p.name[:-5], p) for p in sorted(d.glob("*.json")))
-    return out
-
-
-def preset_names(home: Path | str | None = None) -> list[str]:
-    return sorted(preset_files(home), key=str.lower)
-
-
-def is_factory_preset(name: str, home: Path | str | None = None) -> bool:
-    p = preset_files(home).get(name)
-    return p is not None and FACTORY_DIR in p.parents
 
 
 def legacy_planedrive(lanes, gain: float = 1.0) -> np.ndarray:
@@ -1158,36 +1143,47 @@ class Router:
         self.table.set_routes(replace(b) for b in routes)
         return self.reg.restore(values) if values else []
 
-    def load_preset(self, name: str, home: Path | str | None = None) -> list[str]:
-        """`apply_preset` over the files: a routing preset by name from the
-        factory folder or the user's <home>/bindings/ (preset_files). Only
-        its performer rows come in — a full table (default.json) works as
-        a preset too. A missing name raises FileNotFoundError, a bad file
-        ValueError, so the strip can show it."""
-        path = preset_files(home).get(name)
-        if path is None:
-            raise FileNotFoundError(f"no routing preset {name!r}")
-        t = Bindings.from_json(json.loads(path.read_text()), path=path)
-        if t.migrated and FACTORY_DIR not in path.parents:
+    def apply_doc(self, doc: dict, path: Path | None = None) -> list[str]:
+        """`apply_preset` over a document — the library's loader for the
+        ``bindings`` kind (`Library.routing`). Only its performer rows come
+        in — a full table (default.json) works as a preset too — and its
+        `values` land. A user's schema-1 file is migrated and rewritten
+        once at `path`; a factory file never is. A bad document raises
+        ValueError (the library turns it into its own error)."""
+        t = Bindings.from_json(doc, path=path)
+        if t.migrated and path is not None and FACTORY_DIR not in path.parents:
             t.announce(path)             # a user's v1 preset: rewritten once
             t.write()
         self.table.set_routes(replace(b) for b in t.bindings if b.op in MOD_OPS)
         self.table.dropped, self.table.notes = list(t.dropped), list(t.notes)
         return self.reg.restore(t.values) if t.values else []
 
-    def save_preset(self, name: str, home: Path | str) -> Path:
+    def preset_doc(self, name: str) -> dict:
         """The current routes — disabled ones too — with the macros' bases
         as `values` (routing-layer state: no theme or project carries them,
-        params.ROUTING_GROUPS) as a user preset file under <home>/bindings/;
-        returns the path written."""
-        from .library import slug  # the library's file naming; no other tie
+        params.ROUTING_GROUPS) as a routing preset document, named; what
+        the library writes for a save (`Library.routing`)."""
+        doc = Bindings((replace(b) for b in self.table.routes()),
+                       values=self.routing_values() or None).to_json()
+        doc["name"] = name
+        return doc
 
-        d = Path(home) / PRESET_DIR
-        d.mkdir(parents=True, exist_ok=True)
-        path = d / f"{slug(name)}.json"
-        path.write_text(Bindings((replace(b) for b in self.table.routes()),
-                                 values=self.routing_values() or None).dumps())
-        return path
+    def signature(self) -> list[dict]:
+        """The performer rows as they would be written — the routing
+        strip's dirty dot compares this with what the last load or save
+        produced."""
+        return [b.to_json() for b in self.table.routes()]
+
+    def load_preset(self, name: str, home: Path | str | None = None) -> list[str]:
+        """A routing preset by name through a `Library` over `home` (the
+        env / default home when None) — the road the strip takes, for
+        tests and tools. Raises `library.LibraryError` for a name the tree
+        lacks or a file that will not load."""
+        from .library import Library
+
+        lib = Library(None if home is None else Path(home))
+        lib.routing(self)
+        return lib.load(PRESET_DIR, name)
 
 
 def _resolve(scheme: str, name: str) -> int | None:
