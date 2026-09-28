@@ -6,8 +6,8 @@ import pytest
 
 from hyperspace import tapers
 from hyperspace.analysis import Analyser
-from hyperspace.bands import PRESETS, Chain
-from hyperspace.control import UNDO_S, Control
+from hyperspace.bands import Chain
+from hyperspace.control import SCENES, UNDO_S, Control
 from hyperspace.geometry import SHAPES, faces
 
 # ---------------------------------------------------------------- tapers
@@ -117,8 +117,9 @@ def test_shaper_change_resets_scratch(ctl):
     assert c.chain.params[2].fn == 9
 
 
-def test_scene_count_and_rows():
-    assert len(PRESETS) == 11
+def test_scene_count_and_order():
+    # the index is what the APC40's clip grid and saved projects hold
+    assert len(SCENES) == 11 and SCENES[0] == "Balanced" and SCENES[4] == "Bass Engine"
 
 
 # -------------------------------------------------------------- transport

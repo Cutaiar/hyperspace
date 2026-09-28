@@ -733,10 +733,10 @@ def test_lookback_page_draws_headless(tmp_path):
         view = ViewState()
         lib = Library(tmp_path, period=0.0)
         d = DreamState()
-        reg = build_registry(view, control, audio, lib.bank, dream=d)
+        reg = build_registry(view, control, audio, lib.project, dream=d)
         lib.attach(reg)
         # no renderer: the thumbnail row says so instead of drawing textures
-        panel = Panel(control, audio, view, presets=lib.bank, registry=reg, library=lib)
+        panel = Panel(control, audio, view, themes=lib.project, registry=reg, library=lib)
         reg["ui.page"].set(PAGE_KEYS.index("lookback"))
         for on in (False, True):
             d.on = on

@@ -15,7 +15,7 @@ paragraph says so. The HTML-era sections (browser sandbox, deploy) are
 gone; `hyperspace-web/hyperspace.html` is frozen and matters here only as
 the oracle the golden traces were recorded from.
 
-**Run it:** `uv sync`, `uv run pytest` (628 tests, ~15 s), `uv run
+**Run it:** `uv sync`, `uv run pytest` (664 tests, ~20 s), `uv run
 hyperspace`. `?` in the app shows the controls cheat sheet.
 
 ---
@@ -383,11 +383,17 @@ the tempo clock (plan 09's LFOs are the clock-aware oscillators; audit).
 **11 scenes** snapshot every band's function, drives, attack, decay,
 threshold, contrast, transient and trim: Balanced, Kick & Sizzle, Glacial
 Drift, Strobe Cage, Bass Engine, Air & Lace, Inverse World, Percussive,
-Tremolo Web, Harmonic Bloom, Slow Bass / Fast Air. They exist twice —
-`bands.PRESETS` (what `scene.select`, reset and undo use; keeps the band
-names) and `library/band/*.json` (the preset strip; carries a layout,
-drops the names). Numerically equal today (audit A1). Rows past the sixth
-band take defaults.
+Tremolo Web, Harmonic Bloom, Slow Bass / Fast Air. A scene **is** a band
+preset — the one store is `library/band/*.json`, whose layout carries the
+band names; `control.SCENES` only fixes the combo order, because the
+APC40's clip grid and saved projects address scenes by index (plan 11,
+audit A1). Two ways in: the scene combo, the grid and Reset *re-tune the
+bands you have* from the scene's values (`Analyzer.apply_scene`; rows past
+the scene's take the default strip) and tell the strip which preset is
+current; the preset strip loads the file *whole*, layout included, and
+moves the combo when the file is a scene. A user file of the same name
+shadows the factory scene for both. A band preset saved from the strip
+carries the current layout, names included (`Library.extra`, audit A2).
 
 **Per-band knobs** (`tapers.KNOBS`, registered as `band.{i}.*` and as the
 `band.sel.*` aliases that follow the selection): contrast 1:1–1:5,
@@ -407,11 +413,13 @@ tooltip. For modulation the same taper maps floats without snapping, and a
 sub-detent base survives under a performer (ARCHITECTURE §3.1).
 
 **Reset** resolves to the *currently selected scene* (`Control.scene`),
-never to hard-coded defaults; on Balanced the two coincide. Reset-all is
+never to hard-coded defaults; on Balanced the two coincide. It re-tunes
+the bands loaded and never changes the layout. Reset-all is
 guarded by an 8 s **undo** (the button relabels itself) rather than a
 confirm; the undo snapshot carries the layout too and is discarded on a
-scene change or any structural change, because it belongs to the old
-scene (`control.py:89-127`, `tests/test_control.py:74-112`).
+scene change — a strip load included — or any structural change, because
+it belongs to the old scene (`control.py`, `tests/test_control.py:74-112`,
+`tests/test_analyzer.py` "reset_all_re_tunes").
 
 ## 4b. Transport
 
@@ -474,7 +482,7 @@ unreadable at a party.
 
 ## 6. Testing
 
-`uv run pytest` — 634 tests, 11 skipped without torch, about 20 s. `ruff`
+`uv run pytest` — 664 tests, 11 skipped without torch, about 20 s. `ruff`
 is the linter. Every test runs with `HYPERSPACE_HOME` pointed at its own
 `tmp_path` (`tests/conftest.py`), so no test can touch `~/Hyperspace`.
 What holds what:

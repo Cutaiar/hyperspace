@@ -367,7 +367,7 @@ def test_factory_presets_name_only_real_params(tmp_path):
     chain = Chain(Analyser())
     st = FxState()
     lib = Library(tmp_path, period=0.0)
-    reg = build_registry(ViewState(), Control(chain), SimpleNamespace(chain=chain), lib.bank,
+    reg = build_registry(ViewState(), Control(chain), SimpleNamespace(chain=chain), lib.project,
                          fx=st)
     lib.attach(reg)
     names = lib.list("fx")
@@ -407,9 +407,9 @@ def test_the_page_draws_and_fits(tmp_path, monkeypatch):
         st = FxState()
         lib = Library(tmp_path, period=0.0)
         view = ViewState()
-        reg = build_registry(view, Control(chain), audio, lib.bank, fx=st)
+        reg = build_registry(view, Control(chain), audio, lib.project, fx=st)
         lib.attach(reg)
-        panel = Panel(Control(chain), audio, view, presets=lib.bank, registry=reg, library=lib)
+        panel = Panel(Control(chain), audio, view, themes=lib.project, registry=reg, library=lib)
         # just enough renderer for the page: the live state and its errors
         panel.renderer = SimpleNamespace(fx=SimpleNamespace(
             state=st, error=lambda n: "line 3: made up" if n == "warp" else ""))
@@ -461,9 +461,9 @@ def test_the_page_has_no_conflicting_ids(tmp_path, monkeypatch):
         st = FxState()
         lib = Library(tmp_path, period=0.0)
         view = ViewState()
-        reg = build_registry(view, Control(chain), audio, lib.bank, fx=st)
+        reg = build_registry(view, Control(chain), audio, lib.project, fx=st)
         lib.attach(reg)
-        panel = Panel(Control(chain), audio, view, presets=lib.bank, registry=reg, library=lib)
+        panel = Panel(Control(chain), audio, view, themes=lib.project, registry=reg, library=lib)
         panel.renderer = SimpleNamespace(fx=SimpleNamespace(state=st, error=lambda n: ""))
         ids: list[str] = []
         for fn in ("button", "checkbox", "slider_float", "slider_int", "combo",

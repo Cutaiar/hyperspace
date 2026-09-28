@@ -337,17 +337,18 @@ PAGE_KEYS = [k for k, _, _ in PAGES]
 
 class Panel:
     def __init__(self, control: Control, audio: AudioEngine, view: ViewState, renderer=None,
-                 presets=None, registry: Registry | None = None, library=None):
+                 themes=None, registry: Registry | None = None, library=None):
         self.control = control
         self.audio = audio
         self.view = view
         self.renderer = renderer
         self.library = library      # library.Library, or None: no strips, no project row
-        self.presets = presets if presets is not None else (
-            library.bank if library is not None else None
+        # the F1–F8 theme bank is the open project's (library.Project)
+        self.themes = themes if themes is not None else (
+            library.project if library is not None else None
         )
         self.reg = registry if registry is not None else build_registry(
-            view, control, audio, self.presets
+            view, control, audio, self.themes
         )
         self.pin_in = [0.0] * N_MAX
         self.pin_out = [0.0] * N_MAX
