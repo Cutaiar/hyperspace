@@ -202,8 +202,8 @@ checks every shipped row still names a real param and a real lane.
   - the preset strip, the tracker/port status and the last message out
   - the box from above: palms as dots (left white, right red), size = height
   - the eight pinch switches, each with its live gap
-  - a live row per axis: output bar, a red hairline where the hand is, a
-    tick at the rest value, and the MIDI out and value
+  - a live row per axis, one column per hand: output bar, a red hairline
+    where the hand is, a tick at the rest value, and the MIDI out and value
   - the selected axis's editor, with its transfer curve drawn and the
     hand's live point on it, plus **mirror** (copy the feel to the other
     hand) and **solo** (only this axis to the DAW, for a DAW's learn)
