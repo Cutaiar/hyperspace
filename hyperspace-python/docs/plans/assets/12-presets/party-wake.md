@@ -32,8 +32,6 @@ says whether it is.
 
 ## To load
 
-1. PRESETS page → project → load ▾ → **party** (once per night; if it is
-   not listed, copy `hyperspace/library/projects/party.hyp.json` into
-   `~/Hyperspace/projects/` first).
+1. PRESETS page → project → load ▾ → **party** (once per night).
 2. Press **F4** — the WAKE scene.
 3. ROUTING page → strip → **party-wake**.

@@ -297,7 +297,7 @@ def test_project_save_load_new(rig, tmp_path):
     lib.bank.save(2)
     p = lib.project.save("Gig")
     assert p == tmp_path / "projects" / "gig.hyp.json"
-    assert lib.project.list() == ["default", "gig"]  # default: the bank save's autosave
+    assert lib.project.list() == ["default", "gig", "party"]   # party: the factory one
     doc = json.loads(p.read_text())
     assert doc["schema"] == "hyperspace.project/1" and doc["name"] == "Gig"
     assert doc["modules"] == {"band": "Percussive", "view": "Mine"}
@@ -382,3 +382,13 @@ def test_editing_the_open_project_reloads_it(rig, tmp_path):
     assert lib.poll(now=2.0)
     assert rig.view.shape == 8 and lib.bank.slots[0]["name"] == "RENAMED"
 
+
+
+def test_factory_projects_are_listed_and_load_by_name(rig):
+    """The load combo lists the factory projects (plan 12's `party`) beside
+    the user's; opening one by name lands its bank without a user file."""
+    lib = rig.lib
+    assert "party" in lib.project.list()
+    assert lib.project.load("party") == []
+    assert lib.project.name == "party" and lib.project.path is None
+    assert [s["name"] for s in lib.project.bank[:5]] == ["TUMBLE", "FACES", "FIELD", "WAKE", "TRIP"]

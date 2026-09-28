@@ -281,10 +281,10 @@ knobs*).
 
 **Code changes I did not make, and want:**
 
-- `library.Project.list()` lists only `~/Hyperspace/projects/`, so the
-  factory `party.hyp.json` is not in the load ▾ combo. One line to include
-  factory projects (user files shadowing, as every other group does). Until
-  then the cards say: copy the file into `~/Hyperspace/projects/` once.
+- ~~`library.Project.list()` lists only the user's projects~~ — done in
+  this PR at the owner's word: the load ▾ combo lists factory projects
+  too, a user file of the same name shadowing (`library.py`,
+  `tests/test_library.py`).
 - The desk block of §6.
 - `tests/test_routing.py:1372` — the one line I did change: the set of
   preset names `write_factory` exports.

@@ -33,8 +33,6 @@ Nothing to pinch. A hand out of the box changes nothing.
 
 ## To load
 
-1. PRESETS page → project → load ▾ → **party** (once per night; if it is
-   not listed, copy `hyperspace/library/projects/party.hyp.json` into
-   `~/Hyperspace/projects/` first).
+1. PRESETS page → project → load ▾ → **party** (once per night).
 2. Press **F5** — the TRIP scene.
 3. ROUTING page → strip → **party-trip**.
