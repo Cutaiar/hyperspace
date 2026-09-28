@@ -961,3 +961,200 @@ def test_the_adapter_publishes_its_switches_as_gates(app):
     run(r, 1, hand(), router=app.router)
     assert app.router.rests["hand"][r.io.axis("left.y")] == 0.2
     assert app.router.rest_of(f"hand:{r.io.axis('right.roll')}") == 0.5
+
+
+# ------------------------------------------------- one rig table (audit N1)
+
+def test_one_defaults_table_for_the_rig(tmp_path):
+    """config.load fills the [hands] section from hands.DEFAULTS (config has
+    no table of its own), and a bare AxisSettings is the axis from_config
+    builds — no second table of defaults anywhere."""
+    from hyperspace import config
+    from hyperspace.hands import AxisSettings
+
+    assert "hands" not in config.DEFAULTS                 # no table of its own
+    (tmp_path / "config.toml").write_text("[hands]\nenabled = true\n")
+    cfg = config.load(tmp_path / "config.toml")["hands"]
+    assert set(cfg) == set(hands.DEFAULTS) and cfg["enabled"] is True
+    assert cfg["calibration"] == str(tmp_path / "hands.json")
+    cfg["dofs"].append("grab")                             # a copy: the table is untouched
+    assert hands.DEFAULTS["dofs"] == hands.core.DEFAULT_DOFS and "grab" not in hands.core.DEFAULT_DOFS
+    filled = hands.core.rig({"dofs": ["x"]})
+    filled["dofs"].append("y")
+    assert hands.DEFAULTS["dofs"][:2] == ["x", "y"] and len(hands.DEFAULTS["dofs"]) == 6
+    s = HandSettings.from_config()
+    for a in s.axes:
+        bare = AxisSettings(a.side, a.feature, number=a.number)
+        assert bare == a, a.name
+    roll, y = AxisSettings("right", "roll"), AxisSettings("left", "y")
+    assert (roll.bipolar, roll.deadzone, roll.rest_value) == (True, 0.04, 0.5)
+    assert (y.bipolar, y.deadzone, y.rest_value) == (False, 0.0, 0.0)
+    assert (y.channel, y.number) == (hands.DEFAULTS["channel"], hands.DEFAULTS["cc"])
+    # an explicit shape is kept
+    assert AxisSettings("left", "y", bipolar=True).rest_value == 0.5
+
+
+# --------------------------------------------- one layout, published once (N2)
+
+class FakeRouter:
+    def __init__(self):
+        self.fed = []
+        self.labels, self.gates, self.rests = {}, {}, {}
+
+    def feed(self, scheme, vec):
+        self.fed.append((scheme, vec))
+
+
+def test_the_layout_is_one_object_published_once_and_rests_on_change():
+    r = rig()
+    router = FakeRouter()
+    run(r, 1, hand(), router=router)
+    lay = r.io.layout
+    assert router.labels["hand"] is lay.names and router.gates["hand"] is lay.gates
+    assert r.io.lane_names is lay.names
+    rests = router.rests["hand"]
+    assert len(lay.names) == len(rests) == len(r.io.lanes()) == lay.n == 22
+    # the index maps agree with the vector lanes() fills
+    lanes = r.io.lanes()
+    assert lanes[lay.presence["right"]] == 1.0 and lanes[lay.presence["left"]] == 0.0
+    assert all(lay.gate[(s, f)] == r.io.gate_lane(s, f) for s in hands.SIDES
+               for f in hands.PINCHES)
+    assert lay.gates == [(lay.gate[(s, f)], lay.names[lay.gate[(s, f)]])
+                         for s in hands.SIDES for f in hands.PINCHES]
+    run(r, 3, hand(), router=router)
+    # nothing republished while nothing changed: the same objects
+    assert router.labels["hand"] is lay.names and router.rests["hand"] is rests
+    assert len(router.fed) == 4                       # feed is every frame
+    r.s.axes[ax(r, "left.y")].rest_value = 0.3        # the setup moved a rest
+    run(r, 1, hand(), router=router)
+    assert router.rests["hand"] is not rests
+    assert router.rests["hand"][ax(r, "left.y")] == 0.3
+    # a router that lost the layout (a fresh one) gets it again
+    fresh = FakeRouter()
+    run(r, 1, hand(), router=fresh)
+    assert fresh.labels["hand"] is lay.names and fresh.rests["hand"] == router.rests["hand"]
+
+
+# ----------------------------------------- the DAW port comes back (N4)
+
+class FlakyOut:
+    name = "Fake DAW"
+
+    def __init__(self):
+        self.sent, self.broken, self.closed = [], False, False
+
+    def send(self, m):
+        if self.broken:
+            raise OSError("port yanked")
+        self.sent.append(m)
+
+    def close(self):
+        self.closed = True
+
+
+class Backend:
+    """mido's output side as the tests see it: a port list and an opener."""
+
+    def __init__(self, names):
+        self.names, self.opened, self.fail = list(names), [], False
+
+    def get_output_names(self):
+        return list(self.names)
+
+    def open_output(self, name, virtual=False):
+        if self.fail:
+            raise RuntimeError("no backend")
+        self.opened.append((name, virtual))
+        return FlakyOut()
+
+
+def daw_rig(monkeypatch, names):
+    from hyperspace.hands import core
+
+    be = Backend(names)
+    monkeypatch.setattr(core.mido, "get_output_names", be.get_output_names)
+    monkeypatch.setattr(core.mido, "open_output", be.open_output)
+    settings = HandSettings.from_config({"out": "fake daw"})
+    settings.catch_s, settings.rate, settings.pinch_hold = 0.0, 0, 0.0
+    clock = Clock()
+    src = FakeSource(clock)
+    io = HandsIO(settings, {"out": "fake daw"}, source=src, clock=clock)
+    return NS(io=io, src=src, clock=clock, s=settings, be=be)
+
+
+def notes(msgs, kind="note_on"):
+    return [m.note for m in msgs if m.type == kind]
+
+
+def test_a_lost_daw_port_is_looked_for_again_and_the_daw_resynced(monkeypatch, capsys):
+    from hyperspace.hands import core
+
+    r = daw_rig(monkeypatch, ["Fake DAW 1"])
+    io, be, clock = r.io, r.be, r.clock
+    assert be.opened == [("Fake DAW 1", False)] and io.out_name == "Fake DAW" and io.error == ""
+    pinched = hand(tips=(10.0, 80.0, 80.0, 80.0), palm_w=100.0)   # R index closed
+    run(r, 1, pinched)
+    port = io.out
+    assert 120 + 1 in notes(port.sent) and 100 + 4 in notes(port.sent)   # presence, R ind
+    assert io.last                                                       # something went out
+    last = io.last
+    # the DAW goes away: the port fails, is closed, and nothing is said to have been sent
+    port.broken = True
+    be.names = []
+    run(r, 1, hand(pos=(50.0, 300.0, 0.0), tips=(10.0, 80.0, 80.0, 80.0), palm_w=100.0))
+    assert io.out is None and io.error.startswith("send: port yanked")
+    assert port.closed and io.last == last
+    # a retry while the DAW is still gone makes no virtual port in its place
+    clock.t += core.RECONNECT_S
+    run(r, 1, hand(pos=(60.0, 310.0, 0.0), tips=(10.0, 80.0, 80.0, 80.0), palm_w=100.0))
+    assert io.out is None and io.error == "out 'fake daw': no such port" and len(be.opened) == 1
+    # the DAW is back: the port reopens, the notes that are on go out again,
+    # and every axis resends its value rather than waiting for a change
+    be.names = ["Fake DAW 1"]
+    clock.t += core.RECONNECT_S
+    run(r, 1, hand(pos=(60.0, 310.0, 0.0), tips=(10.0, 80.0, 80.0, 80.0), palm_w=100.0))
+    assert io.out is not None and io.out is not port and be.opened[-1] == ("Fake DAW 1", False)
+    assert io.error == ""
+    assert notes(io.out.sent)[:2] == [121, 104]                          # presence, R index
+    ccs = [m for m in io.out.sent if m.type == "control_change"]
+    assert {m.control for m in ccs} >= {a.number for a in r.s.axes if a.side == "right"}
+    # the backend refusing: said once on stderr, retried every interval
+    be.fail = True
+    io.out.broken = True
+    run(r, 1, hand(pos=(80.0, 330.0, 0.0)))
+    for _ in range(3):
+        clock.t += core.RECONNECT_S
+        run(r, 1, hand(pos=(90.0, 330.0, 0.0)))
+    assert io.out is None and io.error == "out 'fake daw': no backend"
+    assert capsys.readouterr().err.count("no backend") == 1
+    be.fail = False
+    clock.t += core.RECONNECT_S
+    run(r, 1, hand(pos=(99.0, 330.0, 0.0)))
+    assert io.out is not None and io.error == ""
+
+
+def test_a_virtual_port_is_made_again_when_it_fails(monkeypatch):
+    from hyperspace.hands import core
+
+    r = daw_rig(monkeypatch, [])                       # nothing to join: a virtual port
+    io, be, clock = r.io, r.be, r.clock
+    assert be.opened == [("fake daw", True)] and io.error == ""
+    run(r, 1, hand())
+    io.out.broken = True
+    run(r, 1, hand(pos=(50.0, 300.0, 0.0)))
+    assert io.out is None
+    clock.t += core.RECONNECT_S
+    run(r, 1, hand(pos=(60.0, 300.0, 0.0)))
+    assert io.out is not None and be.opened[-1] == ("fake daw", True) and io.error == ""
+
+
+def test_an_injected_port_is_the_callers_and_never_reopened():
+    r = rig()
+    run(r, 1, hand())
+    out = r.io.out
+    out.send = lambda m: (_ for _ in ()).throw(OSError("gone"))
+    run(r, 1, hand(pos=(50.0, 300.0, 0.0)))
+    assert r.io.out is None and r.io.error.startswith("send: gone")
+    r.clock.t += 10.0
+    run(r, 1, hand(pos=(60.0, 300.0, 0.0)))
+    assert r.io.out is None and r.io.out_name == ""

@@ -68,6 +68,7 @@ registry.
 
 from __future__ import annotations
 
+import copy
 import json
 import math
 import sys
@@ -126,8 +127,15 @@ X_RANGE = {"left": (-220.0, 20.0), "right": (-20.0, 220.0)}
 BIPOLAR = {"x", "z", "roll", "pitch", "yaw"}
 
 DEFAULT_DOFS = ["x", "y", "z", "roll", "pitch", "yaw"]
+DEADZONE_CENTRED = 0.04  # a level hand reads exactly neutral; a height axis starts at 0
+# a lost DAW port is looked for again this often. The same number and the
+# same policy as midi.Ports (reopen only a port that is back; never a new
+# one), spelled twice because this module imports nothing from the package.
+RECONNECT_S = 2.0
 
-# [hands] in config.toml — the rig, not the performance
+# [hands] in config.toml — the rig, not the performance. The one table:
+# config.DEFAULTS["hands"] is this dict, HandSettings.from_config and
+# HandsIO fill from it, so a key exists exactly here.
 DEFAULTS: dict = {
     "enabled": False,
     "mode": "desktop",       # desktop | screentop | hmd — where the camera looks from
@@ -280,23 +288,38 @@ class Gate:
 
 @dataclass
 class AxisSettings:
-    """What a setup says about one axis — every field is a registry param."""
+    """What a setup says about one axis — every field is a registry param.
+
+    The three shape fields that depend on the feature (`bipolar`,
+    `deadzone`, `rest_value`) default to None and are filled from
+    `BIPOLAR` in `__post_init__`; the MIDI fields default from `DEFAULTS`.
+    So there is no second table of defaults here: a bare
+    ``AxisSettings("right", "roll")`` is the axis `from_config` builds.
+    """
 
     side: str
     feature: str
     invert: bool = False
-    bipolar: bool = True
-    deadzone: float = 0.0       # bipolar: half-width about the middle; else at the bottom
-    curve: float = 0.0          # −1 … 1, the exponent 4^c
-    attack: float = 0.0         # s, rising
-    decay: float = 0.0          # s, falling
-    rest: str = "return"        # "hold" | "return" when the hand leaves
-    rest_value: float = 0.5
-    return_s: float = 0.5       # spring settle time back to rest
-    bounce: float = 0.15        # 0 critically damped … 1 rings
-    out: str = "cc"             # OUTS
-    channel: int = 16           # 1-based
-    number: int = 102
+    bipolar: bool | None = None      # None: centred iff the feature is in BIPOLAR
+    deadzone: float | None = None    # centred: half-width about the middle; else at the bottom
+    curve: float = 0.0               # −1 … 1, the exponent 4^c
+    attack: float = 0.0              # s, rising
+    decay: float = 0.0               # s, falling
+    rest: str = "return"             # "hold" | "return" when the hand leaves
+    rest_value: float | None = None  # None: the middle when centred, else the bottom
+    return_s: float = 0.5            # spring settle time back to rest
+    bounce: float = 0.15             # 0 critically damped … 1 rings
+    out: str = "cc"                  # OUTS
+    channel: int = DEFAULTS["channel"]   # 1-based
+    number: int = DEFAULTS["cc"]
+
+    def __post_init__(self) -> None:
+        if self.bipolar is None:
+            self.bipolar = self.feature in BIPOLAR
+        if self.deadzone is None:
+            self.deadzone = DEADZONE_CENTRED if self.bipolar else 0.0
+        if self.rest_value is None:
+            self.rest_value = 0.5 if self.bipolar else 0.0
 
     @property
     def name(self) -> str:
@@ -323,7 +346,9 @@ class HandSettings:
 
     @classmethod
     def from_config(cls, cfg: dict | None = None) -> HandSettings:
-        cfg = {**DEFAULTS, **(cfg or {})}
+        """The axes a rig config asks for: `dofs` per hand, left then
+        right, on consecutive CCs from `cc` on `channel`."""
+        cfg = rig(cfg)
         dofs = list(cfg["dofs"])
         bad = [d for d in dofs if d not in FEATURES]
         if bad:
@@ -339,14 +364,18 @@ class HandSettings:
             if cfg["presence"] and n0 <= note + 1 and note <= n1:
                 raise ValueError(f"hands: pinch notes {n0}–{n1} collide with the "
                                  f"presence notes {note}–{note + 1}")
-        axes = []
-        for s, side in enumerate(SIDES):
-            for k, feat in enumerate(dofs):
-                bi = feat in BIPOLAR
-                axes.append(AxisSettings(side, feat, bipolar=bi, deadzone=0.04 if bi else 0.0,
-                                         rest_value=0.5 if bi else 0.0, channel=ch,
-                                         number=cc0 + s * len(dofs) + k))
+        axes = [AxisSettings(side, feat, channel=ch, number=cc0 + s * len(dofs) + k)
+                for s, side in enumerate(SIDES) for k, feat in enumerate(dofs)]
         return cls(axes)
+
+
+def rig(cfg: dict | None) -> dict:
+    """A ``[hands]`` section with every default filled in, as a copy that
+    shares nothing with the table. Idempotent: config.load fills the
+    section from the same DEFAULTS, and `from_config` and `HandsIO` each
+    accept a partial one (tests, the probe's overrides), so the fill runs
+    wherever a section arrives and there is still one table."""
+    return copy.deepcopy({**DEFAULTS, **(cfg or {})})
 
 
 def register(reg, settings: HandSettings) -> None:
@@ -554,7 +583,9 @@ class LeapSource:
             except Exception as e:  # noqa: BLE001 — service missing / refused
                 self.status = f"{type(e).__name__}: {e}"[:120]
 
-        threading.Thread(target=connect, name="leap-connect", daemon=True).start()
+        # kept so a test (or a probe) can wait for the attempt to finish
+        self.connecting = threading.Thread(target=connect, name="leap-connect", daemon=True)
+        self.connecting.start()
 
     def _frame(self, hands) -> None:
         """SDK thread: one tracking frame. Two hands of one side (rare,
@@ -611,17 +642,44 @@ class AxisState:
         return (v - self.lo) / span if span else 0.0
 
 
+class Layout:
+    """Where each lane sits in the ``hand`` vector — written here once.
+
+    Axes first (in setup order), then one presence lane per hand, then
+    the eight pinch switches. The switches come last so that a saved
+    binding to ``hand:<i>`` keeps meaning the axis it always did. Names
+    and the gate list are what the adapter publishes to the router
+    (`labels["hand"]`, `gates["hand"]`); `presence` and `gate` are the
+    index maps `lanes()` and `rests()` fill by.
+    """
+
+    __slots__ = ("gate", "gates", "n", "n_axes", "names", "presence")
+
+    def __init__(self, axes: list[AxisSettings]):
+        self.n_axes = len(axes)
+        self.presence = {s: self.n_axes + i for i, s in enumerate(SIDES)}
+        self.gate = {(s, f): self.n_axes + len(SIDES) + i * len(PINCHES) + k
+                     for i, s in enumerate(SIDES) for k, f in enumerate(PINCHES)}
+        self.n = self.n_axes + len(SIDES) + len(SIDES) * len(PINCHES)
+        self.names = ([a.label for a in axes]
+                      + [f"{s[0].upper()} in" for s in SIDES]
+                      + [f"{s[0].upper()} {f[:3]}" for s in SIDES for f in PINCHES])
+        self.gates = [(self.gate[(s, f)], self.names[self.gate[(s, f)]])
+                      for s in SIDES for f in PINCHES]
+
+
 class HandsIO:
     """Polled once per render frame: source → axes → hand lanes, DAW MIDI.
 
     `source` is anything with ``latest()`` (tests pass a fake); `out` an
-    object with ``send()``, else the port `cfg["out"]` names is opened.
+    object with ``send()``, else the port `cfg["out"]` names is opened —
+    and, like midi.Ports, reopened every RECONNECT_S after it fails.
     """
 
     def __init__(self, settings: HandSettings, cfg: dict | None = None, *, source=None,
                  out=None, cal_path: Path | None = None, clock=time.monotonic):
         self.settings = settings
-        self.cfg = {**DEFAULTS, **(cfg or {})}
+        self.cfg = rig(cfg)
         self.cal_path = cal_path
         self.clock = clock
         cal = load_calibration(cal_path)
@@ -632,21 +690,33 @@ class HandsIO:
             self.state.append(AxisState(float(c.get("lo", lo)), float(c.get("hi", hi))))
         self.min_conf = float(self.cfg["min_confidence"])
         self.source = source if source is not None else LeapSource(self.cfg["mode"], clock)
-        self.out = out if out is not None else _open_out(self.cfg.get("out") or "")
-        self.out_name = getattr(self.out, "name", "") if self.out is not None else ""
+        self.layout = Layout(settings.axes)
+        self._rests: list[float] | None = None      # the rests vector last published
+        self.error = ""
+        # the DAW port: an injected one is the caller's and never reopened.
+        # One opened by name is looked for again every RECONNECT_S after it
+        # fails — an existing port only, unless the first open had to make a
+        # virtual one (then a virtual one is made again); the DAW is resynced
+        # when it comes back
+        self._out_match = "" if out is not None else (self.cfg.get("out") or "")
+        self._out_virtual: bool | None = None      # what the first open made
+        self._out_next = 0.0
+        self._lost = False
+        self.out = out
         self.present = {s: False for s in SIDES}
         # the eight pinch switches, whether or not the ratios are axes
         self.gates = {s: {f: Gate() for f in PINCHES} for s in SIDES}
         self.frame: dict[str, dict | None] = {s: None for s in SIDES}  # native features
         self.solo: int | None = None      # axis index: only it goes to the DAW
         self.last = ""                    # the last MIDI sent, for the status line
-        self.error = ""
         self._seq = -1
         self._learn_base: list[float | None] | None = None
         # calibration sweep in progress: axis name → raw samples
         self._cal: dict[str, list[float]] | None = None
         self._cal_until = 0.0
         self.cal_note = ""
+        if out is None:
+            self._open()
 
     @property
     def axes(self) -> list[AxisSettings]:
@@ -654,13 +724,15 @@ class HandsIO:
 
     @property
     def lane_names(self) -> list[str]:
-        return ([a.label for a in self.axes]
-                + [f"{s[0].upper()} in" for s in SIDES]
-                + [f"{s[0].upper()} {f[:3]}" for s in SIDES for f in PINCHES])
+        return self.layout.names
 
     @property
     def status(self) -> str:
         return getattr(self.source, "status", "")
+
+    @property
+    def out_name(self) -> str:
+        return getattr(self.out, "name", "") if self.out is not None else ""
 
     def axis(self, name: str) -> int:
         """Index of "left.pitch" etc.; ValueError when there is none."""
@@ -668,8 +740,7 @@ class HandsIO:
 
     def gate_lane(self, side: str, finger: str) -> int:
         """Lane index of one pinch switch — what a `when` address names."""
-        return (len(self.axes) + len(SIDES)
-                + SIDES.index(side) * len(PINCHES) + PINCHES.index(finger))
+        return self.layout.gate[(side, finger)]
 
     def held_gate(self, side: str | None = None) -> str | None:
         """The pinch being held right now as a source address, or None.
@@ -686,17 +757,43 @@ class HandsIO:
         return None
 
     def lanes(self) -> list[float]:
-        """Each axis's output y — NaN while its hand is out of the box (or
-        never seen), so a routing row lets go and the base returns the
-        frame the hand leaves; the spring and `hold` shape only the DAW
-        output (`Follower.live`; the catch glide on a returning hand is live).
-        Then one presence lane per hand (1 in view, 0 not), then the eight
-        pinch switches. The switches come last so that a saved binding to
-        ``hand:<i>`` keeps meaning the axis it always did."""
-        ys = [st.y if st.follow.live else math.nan for st in self.state]
-        return (ys
-                + [1.0 if self.present[s] else 0.0 for s in SIDES]
-                + [1.0 if self.gates[s][f].on else 0.0 for s in SIDES for f in PINCHES])
+        """This frame's ``hand`` vector, in `Layout` order. Each axis's
+        output y — NaN while its hand is out of the box (or never seen),
+        so a routing row lets go and the base returns the frame the hand
+        leaves; the spring and `hold` shape only the DAW output
+        (`Follower.live`; the catch glide on a returning hand is live).
+        Then presence (1 in view, 0 not) and the pinch switches (1 closed)."""
+        lay = self.layout
+        out = [math.nan] * lay.n
+        out[:lay.n_axes] = [st.y if st.follow.live else math.nan for st in self.state]
+        for s in SIDES:
+            out[lay.presence[s]] = 1.0 if self.present[s] else 0.0
+            for f in PINCHES:
+                out[lay.gate[(s, f)]] = 1.0 if self.gates[s][f].on else 0.0
+        return out
+
+    def rests(self) -> list[float]:
+        """Where each lane idles — the axis's own configured rest, so a
+        push row centred on it pushes nothing from an absent hand whatever
+        the setup says `rest` is; presence and pinches 0."""
+        out = [0.0] * self.layout.n
+        out[:self.layout.n_axes] = [float(a.rest_value) for a in self.axes]
+        return out
+
+    def _publish(self, router) -> None:
+        """The layout to the router: names and switches once per router
+        (they only change with the setup, which builds a new adapter), the
+        rests only when a rest value moved. `feed` is every frame."""
+        lay = self.layout
+        if router.labels.get("hand") is not lay.names:
+            router.labels["hand"] = lay.names
+            # the switches, so the routing UI can offer them without
+            # knowing anything about hands
+            router.gates["hand"] = lay.gates
+        rests = self.rests()
+        if rests != self._rests or router.rests.get("hand") is not self._rests:
+            self._rests = rests
+            router.rests["hand"] = rests
 
     # ---- per frame ----
 
@@ -710,6 +807,9 @@ class HandsIO:
         now = self.clock()
         fresh = seq != self._seq
         self._seq = seq
+        if self.out is None and self._out_match and now >= self._out_next:
+            self._open()              # the port was lost: look for it again, before
+            #                           the axes quantise, so a resync resends them now
         msgs: list[mido.Message] = []
         for s, side in enumerate(SIDES):
             h = hands.get(side)
@@ -752,24 +852,18 @@ class HandsIO:
                 st.next_ok = now + (1.0 / g.rate if g.rate > 0 else 0.0)
                 msgs += encode(a.out, a.channel - 1, a.number, q)
         self._finish_calibration(now)
-        if self.out is not None:
-            for m in msgs:
-                self._send(m)
-        if msgs:
-            self.last = describe(msgs[-1])
+        sent = None
+        for m in msgs:
+            if self.out is None:      # no port: dropped; a reopen resyncs the DAW
+                break
+            if self._send(m):
+                sent = m
+        if sent is not None:
+            self.last = describe(sent)
         if router is not None:
             live = getattr(self.source, "on", True)
             router.feed("hand", self.lanes() if live else None)
-            router.labels["hand"] = self.lane_names
-            # the switches, so the routing UI can offer them without
-            # knowing anything about hands
-            router.gates["hand"] = [(self.gate_lane(s, f), f"{s[0].upper()} {f[:3]}")
-                                    for s in SIDES for f in PINCHES]
-            # where each lane idles — the axis's own configured rest, so a
-            # push row centred on it pushes nothing from an absent hand
-            # whatever the setup says rest is; presence and pinches 0
-            router.rests["hand"] = ([float(a.rest_value) for a in self.axes]
-                                    + [0.0] * (len(SIDES) + len(SIDES) * len(PINCHES)))
+            self._publish(router)
         if learn is not None:
             self._learn(learn)
         return msgs
@@ -831,12 +925,60 @@ class HandsIO:
             else:
                 learn.learn_source(f"hand:{best}", when=gate)
 
-    def _send(self, m: mido.Message) -> None:
+    def _open(self) -> None:
+        """Open the port the config names; on failure say why once and
+        look again in RECONNECT_S. After a loss, only a port that is back
+        (or, if the first open made a virtual port, a new virtual one),
+        and the DAW is brought up to date when it opens."""
+        self._out_next = self.clock() + RECONNECT_S
+        self.out, err, virtual = _open_out(self._out_match,
+                                           virtual=self._out_virtual is not False)
+        if err and err != self.error:
+            print(f"hands: {err}", file=sys.stderr)
+        self.error = err
+        if self.out is None:
+            return
+        if self._out_virtual is None:
+            self._out_virtual = virtual
+        if self._lost:
+            self._lost = False
+            self._resync()
+
+    def _resync(self) -> None:
+        """The port is back after a gap the DAW did not hear: every axis
+        resends its value on the next change-check, and the notes that are
+        on right now (presence, pinches) go out again."""
+        cfg = self.cfg
+        for st in self.state:
+            st.q, st.next_ok = None, 0.0
+        if self.solo is not None:
+            return
+        ch = int(cfg["channel"]) - 1
+        for s, side in enumerate(SIDES):
+            if cfg["presence"] and self.present[side]:
+                self._send(mido.Message("note_on", channel=ch, note=int(cfg["note"]) + s,
+                                        velocity=127))
+            if cfg["pinch_gates"] and cfg["pinch_notes"]:
+                for k, f in enumerate(PINCHES):
+                    if self.gates[side][f].on:
+                        self._send(mido.Message(
+                            "note_on", channel=ch,
+                            note=int(cfg["pinch_note"]) + s * len(PINCHES) + k, velocity=127))
+
+    def _send(self, m: mido.Message) -> bool:
+        """One message to the port; False when the port went away under it."""
+        if self.out is None:
+            return False
         try:
             self.out.send(m)
+            return True
         except Exception as e:  # noqa: BLE001 — port yanked mid-frame
             self.error = f"send: {e}"[:120]
+            _close_port(self.out)
             self.out = None
+            self._lost = True
+            self._out_next = self.clock() + RECONNECT_S
+            return False
 
     # ---- calibration ----
 
@@ -887,22 +1029,33 @@ class HandsIO:
             self.cal_note = f"save: {e}"[:120]
 
     def close(self) -> None:
-        if self.out is not None and hasattr(self.out, "close"):
-            try:
-                self.out.close()
-            except Exception:  # noqa: BLE001, S110
-                pass
+        _close_port(self.out)
         if hasattr(self.source, "close"):
             self.source.close()
 
 
-def _open_out(name: str):
-    """An existing port matching `name`, else a virtual one called `name`."""
+def _close_port(port) -> None:
+    """Best effort: a dropped or finished port is closed, so a virtual one
+    is unregistered rather than left for the next open to find."""
+    if port is not None and hasattr(port, "close"):
+        try:
+            port.close()
+        except Exception:  # noqa: BLE001, S110
+            pass
+
+
+def _open_out(name: str, *, virtual: bool = True) -> tuple:
+    """(port, error, made_virtual): an existing port matching `name`, else
+    — when `virtual` — a new virtual one called `name`. (None, why, False)
+    when there is no such port or the backend refuses."""
     if not name:
-        return None
+        return None, "", False
     try:
         hit = next((n for n in mido.get_output_names() if name.lower() in n.lower()), None)
-        return mido.open_output(hit) if hit else mido.open_output(name, virtual=True)
+        if hit:
+            return mido.open_output(hit), "", False
+        if not virtual:
+            return None, f"out {name!r}: no such port", False
+        return mido.open_output(name, virtual=True), "", True
     except Exception as e:  # noqa: BLE001 — no backend / virtual ports unsupported
-        print(f"hands: out {name!r}: {e}", file=sys.stderr)
-        return None
+        return None, f"out {name!r}: {e}"[:120], False

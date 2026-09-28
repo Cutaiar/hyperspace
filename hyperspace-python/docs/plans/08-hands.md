@@ -228,7 +228,9 @@ checks every shipped row still names a real param and a real lane.
   the same menu, and it leaves the axis's other routes alone. Loading a
   routing preset replaces learned rows along with every other route.
 - **Rig** settings (tracking mode, which features, the port, presence
-  notes) are `[hands]` in config.toml. **Box** ranges are `hands.json`.
+  notes) are `[hands]` in config.toml, defaulted from the one table in
+  `hands/core.py` (`DEFAULTS`); a DAW port that fails is reopened every
+  two seconds, as the APC40's is. **Box** ranges are `hands.json`.
   **Performance** settings are a setup. Each lives where it changes.
 
 ## Install

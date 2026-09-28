@@ -513,7 +513,9 @@ What holds what:
 - **Boundaries**: the core never imports `midi` / `bridge` / `dream`
   (`tests/test_params.py:286`, `tests/test_bridge.py:381`,
   `tests/test_dream.py:55`); `hands/core.py`, `hands/signal.py`, `lfo.py`,
-  `tempo.py` import nothing from the package (`tests/test_*_boundary.py`).
+  `tempo.py` import nothing from the package (`tests/test_*_boundary.py`);
+  `config.py` reads the hands rig defaults from `hands/core.py` (the one table),
+  never the reverse.
 - **Hot reload**: every module but `app.py`, `hotreload.py` and `offline.py`
   is on the watch list in dependency order (leaves first), an optional
   adapter that was never imported is skipped, every swap target `app.py`
@@ -532,6 +534,8 @@ What holds what:
 
 Untested today, and worth knowing before trusting a change there: the
 frame order in `app.py`, `Keys` and `Mouse`, the `_open_*` config gates,
+`audio.py`'s streams, `analysis.py` on its own (audit). `LeapSource`, the DAW
+port's open and retry run against a fake `leap` (`tests/test_hands_leap.py`).
 `LeapSource` (audit). `audio.py`'s streams and `analysis.py` are covered
 headless by `tests/test_audio.py` over a fake `sounddevice`, and the
 audio stack's import boundary by `tests/test_audio_boundary.py`.

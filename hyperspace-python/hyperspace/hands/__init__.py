@@ -32,43 +32,26 @@ What the host must still provide when embedded (see app.py):
 from __future__ import annotations
 
 from .core import (
-    BIPOLAR,
-    CAL_FILE,
-    CAL_MIN_SAMPLES,
-    CAL_SCHEMA,
-    DEFAULT_DOFS,
     DEFAULTS,
     FEATURES,
     GROUP,
-    LEARN_MOVE,
     PALM_W,
     PINCHES,
-    SHAPE_KEYS,
     SIDES,
-    STALE_S,
-    TRACKING_MODES,
-    X_RANGE,
     AxisSettings,
-    AxisState,
     Gate,
     HandSettings,
     HandsIO,
-    LeapSource,
-    OneEuro,
     conflicts,
-    default_range,
     features,
-    load_calibration,
     mirror,
     pinches,
     register,
-    save_calibration,
 )
 
+# what the host, the panel, the tools and the tests reach for; everything
+# else (calibration files, the tracking source, the constants) is core's
 __all__ = [
-    "BIPOLAR", "CAL_FILE", "CAL_MIN_SAMPLES", "CAL_SCHEMA", "DEFAULTS", "DEFAULT_DOFS",
-    "FEATURES", "GROUP", "LEARN_MOVE", "PALM_W", "PINCHES", "SHAPE_KEYS", "SIDES",
-    "STALE_S", "TRACKING_MODES", "X_RANGE", "AxisSettings", "AxisState", "Gate",
-    "HandSettings", "HandsIO", "LeapSource", "OneEuro", "conflicts", "default_range",
-    "features", "load_calibration", "mirror", "pinches", "register", "save_calibration",
+    "DEFAULTS", "FEATURES", "GROUP", "PALM_W", "PINCHES", "SIDES", "AxisSettings", "Gate",
+    "HandSettings", "HandsIO", "conflicts", "features", "mirror", "pinches", "register",
 ]
