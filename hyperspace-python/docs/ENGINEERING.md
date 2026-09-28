@@ -15,7 +15,7 @@ paragraph says so. The HTML-era sections (browser sandbox, deploy) are
 gone; `hyperspace-web/hyperspace.html` is frozen and matters here only as
 the oracle the golden traces were recorded from.
 
-**Run it:** `uv sync`, `uv run pytest` (628 tests, ~20 s), `uv run
+**Run it:** `uv sync`, `uv run pytest` (628 tests, ~15 s), `uv run
 hyperspace`. `?` in the app shows the controls cheat sheet.
 
 ---
@@ -115,7 +115,7 @@ and FX off the output is bit-identical to the scene pass alone
    and occluding, so the wake fills the space between shapes rather than
    glowing over them (`render.py:293-318, 467`).
 3. **Look-back** — `lookback.pull()` takes a finished dream result;
-   capture and composite (§2.3).
+   composite, then capture the scene into the history (§2.3).
 4. **FX chain** — the enabled effect passes, ping-pong, after the
    composite (§2.4). The history never sees effected pixels
    (`render.py:475-478`).
@@ -146,14 +146,15 @@ and FX off the output is bit-identical to the scene pass alone
 
 True 2-face extraction (cycle walk + support-plane filter) gives
 translucent painter-sorted fills; counts match the known values for all
-polytopes (`tests/test_shapes3d.py`). UVs are face-local and
+polytopes (`tests/test_control.py:184-196`; the 3D shapes' faces in
+`tests/test_shapes3d.py`). UVs are face-local and
 perspective-correct (`geometry.face_uvs`).
 
 `shaders/patterns.glsl` is user-editable and hot-reloads on save by mtime
 (`render.py:434-444`); a bad edit keeps the last good program and shows
 the GLSL error on the panel. Contract: `vec4 pattern(int mode, vec2 uv,
 float fid)`, reading `u_time` and `u_mod[8]` — the eight `pattern.mod.k`
-params, which any source may drive. Eleven modes ship; their names live in
+params, which any source may drive. Eleven patterned modes ship (plus flat, mode 0); their names live in
 `params.PATTERNS`, and a new mode needs both the GLSL case and the name.
 The bitmap layer (`view.bmp_*`) textures faces from a file; a bad file
 never raises and leaves the plain faces (`tests/test_render.py:147`).
@@ -282,8 +283,8 @@ uses and the meter tooltip.
 existing knobs (`analyzer.py:105-186`). Bands can be added, removed and
 reordered at runtime; strip order never changes the maths
 (`tests/test_analyzer.py:207`); retuning f / q / curve keeps the trackers.
-The `band.{i}.*` params are rebuilt on every layout change through
-`Control.on_layout`.
+The `band.{i}.*` params are rebuilt on every layout change through the
+`Control.on_layout` hook that `build_registry` installs (`control.py:36-45`).
 
 **Headroom.** Nothing hard-clamps the fader path. Four landmarks: `NOM =
 1.0` (a band working normally), `KNEE = 1.25` (where the soft ceiling
@@ -303,10 +304,11 @@ is followed by the ceiling (`analyzer.py:550-568`). The Python bar for this
 is `tests/test_core.py:127-151`: nothing at or above the asymptote, settled
 spread within 0.08 of the golden trace.
 
-`WARM_F` (60 frames) fades the expander in; it needs a settled mean to
-expand about and for those frames it has a seed instead — expanding
-against a stale mean threw every bar at the ceiling for the opening half
-second of every track (`analyzer.py:491-492, 553`). `warm` restarts on every
+`WARM_F` (60 frames) fades the expander in (`dev *= min(1, warm / WARM_F)`);
+the first three frames use a seed instead of a mean and frames before 60 a
+fast 0.25 s mean, because expanding against a stale mean threw every bar
+at the ceiling for the opening half second of every track
+(`analyzer.py:491-492, 553`). `warm` restarts on every
 source attach.
 
 **Meters** read 0..`CEIL` with the nominal line at 38.5 % and the knee at
@@ -351,8 +353,9 @@ alone is a placebo (`analyzer.py:504-508, 556`).
 > trim, apply trim as a post-normaliser multiplier, or a per-band manual
 > mode that bypasses adaptive normalisation.
 
-**Analyser** (`analysis.py`): `fftSize 4096`, Blackman window, 1/N
-normalisation, `smoothingTimeConstant 0.15` — deliberately low, the
+**Analyser** (`analysis.py`): `FFT_SIZE = 4096`, Blackman window, 1/N
+normalisation, `SMOOTHING = 0.15` (the Web Audio smoothing constant) —
+deliberately low, the
 per-band envelopes do the smoothing and the analyser's own would fight the
 attack / decay knobs. It smooths once per `Analyzer.step`, so the spread is
 cadence-sensitive (60 vs 120 fps, `tests/test_core.py:114`). The same call
@@ -456,7 +459,7 @@ unreadable at a party.
 
 ## 6. Testing
 
-`uv run pytest` — 628 tests, 11 skipped without torch, about 20 s. `ruff`
+`uv run pytest` — 628 tests, 11 skipped without torch, about 15 s. `ruff`
 is the linter. What holds what:
 
 - **Golden traces** (`tests/golden/`, recorded once from the HTML by
@@ -470,9 +473,10 @@ is the linter. What holds what:
   (`tests/test_routing.py:1029-1095`), the referee, migration, macros,
   relative writers under modulation (`tests/test_app_relative.py`), rings
   never chasing a performer (`tests/test_midi.py:272`).
-- **Boundaries**: the core never imports `midi` / `bridge` / `dream`;
-  `hands/core.py`, `hands/signal.py`, `lfo.py`, `tempo.py` import nothing
-  from the package (`tests/test_*_boundary.py`).
+- **Boundaries**: the core never imports `midi` / `bridge` / `dream`
+  (`tests/test_params.py:286`, `tests/test_bridge.py:381`,
+  `tests/test_dream.py:55`); `hands/core.py`, `hands/signal.py`, `lfo.py`,
+  `tempo.py` import nothing from the package (`tests/test_*_boundary.py`).
 - **Headless GL and imgui**: every shape renders offscreen; post passes off
   are bit-identical; every panel page draws headless and fits; every
   factory effect compiles and changes the frame.
