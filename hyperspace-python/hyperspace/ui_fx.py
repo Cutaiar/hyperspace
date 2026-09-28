@@ -6,10 +6,11 @@ right-clicking it binds it (MIDI learn) like any widget. The open strip
 is the effect's own five (on, mix, speed, blend, order) and a row per
 annotated uniform, with the file's parse or compile error under it.
 
-A function over the Panel, like ui_lookback: no state of its own. The
-effects are whatever files sit in shaders/fx/, so the page draws from
-the live FxState rather than a fixed id list — a new file shows up here
-on the next poll.
+A function over the Panel, like ui_lookback: no state of its own, and a
+save of this file lands live (hotreload.MODULES). The effects are
+whatever files sit in shaders/fx/, so the page draws from the live
+FxState rather than a fixed id list — a new file shows up here on the
+next poll.
 """
 
 from __future__ import annotations

@@ -105,6 +105,7 @@ class Kind(Enum):
     TEXT = "text"
 
 
+
 def _clamp(x, a, b):
     return a if x < a else min(x, b)
 
