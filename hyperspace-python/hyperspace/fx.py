@@ -54,6 +54,8 @@ from typing import Any
 
 import moderngl
 
+from .glsl import QUAD_VS, common, common_mtime
+
 FX_DIR = Path(__file__).parent / "shaders" / "fx"
 LIB_FILE = "_lib.glsl"          # helpers prepended to every effect; not an effect
 BLENDS = ["mix", "add", "screen", "multiply"]
@@ -183,6 +185,7 @@ class FxState:
         self.phase: dict[str, float] = {}
         self.errors: dict[str, str] = {}       # file → why it is not loaded
         self.lib = ""                          # _lib.glsl's text
+        self.common = ""                       # shaders/_common.glsl's text
         # the registry's re-declare hook (params.py sets it): called with
         # the effect names whose params changed shape on a reload
         self.on_specs: Callable[[set[str]], None] | None = None
@@ -192,7 +195,7 @@ class FxState:
     # ---- the folder ----
 
     def _scan(self) -> dict[str, float]:
-        out = {}
+        out = {"_common": common_mtime()}      # the shared helpers count as a change too
         if self.dir.is_dir():
             for p in self.dir.glob("*.glsl"):
                 try:
@@ -210,6 +213,7 @@ class FxState:
             self.lib = (self.dir / LIB_FILE).read_text()
         except OSError:
             self.lib = ""
+        self.common = common()
         changed: set[str] = set()
         found: dict[str, EffectSpec] = {}
         self.errors = {}
@@ -345,18 +349,9 @@ def _fmt(p: ParamSpec) -> Callable[[float], str]:
 
 # ---- GL ----
 
-QUAD_VS = """
-#version 330
-out vec2 v_uv;
-void main() {
-    vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
-    v_uv = p;
-    gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
-}
-"""
-
-# every effect is compiled inside this: the lib (string 1) and the effect
-# file (string 2) — #line makes a compile error name the file's own line
+# every effect is compiled inside this: the shared helpers (string 1,
+# shaders/_common.glsl), the lib (string 2) and the effect file (string 3)
+# — #line makes a compile error name the file's own line
 FS_HEAD = """#version 330
 uniform sampler2D u_src;   // the frame so far
 uniform vec2 u_res;        // its size, px
@@ -392,16 +387,19 @@ void main() { f_color = texture(u_src, v_uv); }
 """
 
 
-def fragment_source(lib: str, effect: str) -> str:
-    return f"{FS_HEAD}#line 1 1\n{lib}\n#line 1 2\n{effect}\n#line 1 3\n{FS_TAIL}"
+def fragment_source(lib: str, effect: str, shared: str | None = None) -> str:
+    shared = common() if shared is None else shared
+    return (f"{FS_HEAD}#line 1 1\n{shared}\n#line 1 2\n{lib}\n#line 1 3\n{effect}\n"
+            f"#line 1 4\n{FS_TAIL}")
 
 
 def _gl_error(e: Exception) -> str:
     """The first compiler message, with its file named."""
     lines = [ln.strip() for ln in str(e).splitlines() if ln.strip()]
     msg = next((ln for ln in lines if "ERROR" in ln.upper()), lines[-1] if lines else str(e))
-    msg = re.sub(r"ERROR:\s*1:(\d+):", r"_lib.glsl:\1:", msg)
-    msg = re.sub(r"ERROR:\s*2:(\d+):", r"line \1:", msg)
+    msg = re.sub(r"ERROR:\s*1:(\d+):", r"_common.glsl:\1:", msg)
+    msg = re.sub(r"ERROR:\s*2:(\d+):", r"_lib.glsl:\1:", msg)
+    msg = re.sub(r"ERROR:\s*3:(\d+):", r"line \1:", msg)
     return msg[:200]
 
 
@@ -522,7 +520,7 @@ class FxChain:
         spec = st.specs.get(name)
         if spec is None:
             return None
-        src = fragment_source(st.lib, spec.source)
+        src = fragment_source(st.lib, spec.source, st.common)
         have = self._progs.get(name)
         if (have is None or have[0] != src) and self._tried.get(name) != src:
             self._tried[name] = src

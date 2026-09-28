@@ -109,6 +109,8 @@ from typing import Any, Protocol, runtime_checkable
 import moderngl
 import numpy as np
 
+from .glsl import QUAD_VS, common
+
 MAX_ECHOES = 32
 RES = [128, 192, 256, 384]              # dream.res: the echo's short side, px
 LAYERS = ["conv2_2", "conv3_3", "conv4_3", "inception3b", "inception4c", "inception4e"]
@@ -182,18 +184,7 @@ class NullSource:
         return None
 
 
-# ---- GL: one fullscreen triangle, two fragment programs ----
-
-QUAD_VS = """
-#version 330
-out vec2 v_uv;
-void main() {
-    // one triangle over the viewport; uv 0..1 across it
-    vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
-    v_uv = p;
-    gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
-}
-"""
+# ---- GL: one fullscreen triangle (glsl.QUAD_VS), two fragment programs ----
 
 DOWN_FS = """
 #version 330
@@ -206,6 +197,7 @@ void main() { f_color = texture(u_scene, v_uv); }
 POST_FS = f"""
 #version 330
 #define MAX_ECHOES {MAX_ECHOES}
+{common()}
 uniform sampler2D u_scene;   // this frame, fetched exactly: off = a copy
 uniform sampler2D u_ring;    // the history atlas, MAX_ECHOES slots stacked in v
 uniform sampler2D u_dream;   // the dream buffer D
@@ -228,29 +220,17 @@ uniform vec3 u_tint_rgb;     // the tint colour: chosen, or the scene's hue (Loo
 in vec2 v_uv;
 out vec4 f_color;
 
-const vec3 LUMA = vec3(0.299, 0.587, 0.114);
 const float OCCLUDE_GAIN = {OCCLUDE_GAIN};
 
 vec3 grade(vec3 c) {{
     return pow(max(c, vec3(1e-6)), vec3(u_contrast)) * (1.0 - u_darken);
 }}
 
-// the chroma plane turned about the grey axis (YIQ): luma is kept
-vec3 rotate_hue(vec3 c, float a) {{
-    float y = dot(c, LUMA);
-    float i = dot(c, vec3(0.596, -0.274, -0.322));
-    float q = dot(c, vec3(0.211, -0.523, 0.312));
-    float ca = cos(a), sa = sin(a);
-    float i2 = i * ca - q * sa, q2 = i * sa + q * ca;
-    return vec3(y + 0.956 * i2 + 0.621 * q2, y - 0.272 * i2 - 0.647 * q2,
-                y - 1.106 * i2 + 1.703 * q2);
-}}
-
 // the dream's colours, re-hued and (de)saturated, crossed into a tint of
 // its luminance
 vec3 chroma(vec3 c) {{
     float l = dot(c, LUMA);
-    vec3 own = mix(vec3(l), rotate_hue(c, u_hue), u_sat);
+    vec3 own = mix(vec3(l), hue_rotate(c, u_hue), u_sat);  // _common.glsl
     return clamp(mix(own, l * u_tint_rgb, u_tint), 0.0, 1.0);
 }}
 

@@ -19,23 +19,13 @@
 // uv is face-local: (0.5, 0.5) is the face centre, circumradius 0.5,
 // identical framing on every congruent face.
 //
-// Helpers below; add a case, and list the name in params.py's PATTERNS.
+// TAU, hsv(h, s, v), pal(t, a, b, c, d), hue_rotate and LUMA come from
+// shaders/_common.glsl, prepended to this file (and to every effect).
+// Add a case below, and list the name in params.py's PATTERNS.
 
-const float TAU = 6.28318530718;
-
-// hue [0,1), saturation, value → rgb
-vec3 hsv(float h, float s, float v) {
-    vec3 k = mod(vec3(5.0, 3.0, 1.0) + h * 6.0, 6.0);
-    return v - v * s * clamp(min(k, 4.0 - k), 0.0, 1.0);
-}
-
-// cosine palette: smooth colour cycles without hue banding.
-// a = base, b = amplitude, c = frequency, d = per-channel phase.
-vec3 pal(float t, vec3 a, vec3 b, vec3 c, vec3 d) {
-    return a + b * cos(TAU * (c * t + d));
-}
-
-// 2D hashes and value noise, for the cellular / stochastic modes
+// 2D hashes and value noise, for the cellular / stochastic modes. These
+// are this file's own on purpose — fx/_lib.glsl has a different pair, and
+// the cellular modes were tuned on these; changing them moves every cell.
 float hash21(vec2 p) {
     p = fract(p * vec2(234.34, 435.345));
     p += dot(p, p + 34.23);

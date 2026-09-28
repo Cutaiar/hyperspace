@@ -40,6 +40,7 @@ import numpy as np
 
 from .fx import FxChain, FxState
 from .geometry import face_triangles, face_uvs, geom, project_h
+from .glsl import common, common_mtime
 from .lookback import DreamState, Lookback
 from .view import N_MOD, ViewState  # re-exported for callers that had them from here
 
@@ -365,10 +366,12 @@ class Renderer:
     def _build_face_program(self) -> None:
         try:
             src = PATTERNS_GLSL.read_text()
-            self._patterns_mtime = PATTERNS_GLSL.stat().st_mtime
+            self._patterns_mtime = self._shader_mtime()
+            # the shared helpers first; #line makes an error name the line
+            # in patterns.glsl itself
             prog = self.ctx.program(
                 vertex_shader=FACE_VS,
-                fragment_shader=FACE_FS_HEAD + src + FACE_FS_TAIL,
+                fragment_shader=FACE_FS_HEAD + common() + "\n#line 1\n" + src + FACE_FS_TAIL,
             )
         except Exception as e:  # noqa: BLE001 — a bad edit must not kill the app
             self.pattern_error = str(e).strip().splitlines()[-1][:160]
@@ -384,12 +387,17 @@ class Renderer:
         )
         self.pattern_error = ""
 
+    @staticmethod
+    def _shader_mtime() -> float:
+        """patterns.glsl's or _common.glsl's, whichever was saved last."""
+        return max(PATTERNS_GLSL.stat().st_mtime, common_mtime())
+
     def _maybe_reload_patterns(self) -> None:
         self._reload_check += 1
         if self._reload_check % 30:
             return
         try:
-            mtime = PATTERNS_GLSL.stat().st_mtime
+            mtime = self._shader_mtime()
         except OSError:
             return
         if mtime != self._patterns_mtime:
