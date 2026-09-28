@@ -364,6 +364,7 @@ class Panel:
         self.config_notes: list[str] = []  # set by app.py: config.toml wants a rename
         self.midi = None      # set by app.py when an adapter is up (midi.MidiIO)
         self.learn = None     # set by app.py: the armed param and the held question (learn.Learn)
+        self.bridge = None    # set by app.py when [bridge] is enabled (bridge.Bridge)
         self.router = None    # set by app.py (routing.Router); else found via midi's table
         self.output = None    # set by app.py (overlay.Output); its params draw below
         self.hands = None          # set by app.py when the tracker is on (hands.HandsIO)
@@ -1291,6 +1292,25 @@ class Panel:
         self._section("midi")
         self._midi_status()
         self._learn_status()
+        imgui.spacing()
+        self._section("bridge")
+        self._bridge_status()
+
+    def _bridge_status(self) -> None:
+        """The DAW bridge's one sign of life (audit P3): off, a port error,
+        no port yet, or the ports, the encoding and what has gone out."""
+        b = self.bridge
+        if b is None:
+            imgui.text_disabled("no bridge — [bridge] enabled = false")
+            return
+        if b.error:
+            imgui.text_colored(WARN, f"bridge: {b.error}")
+            return
+        if not b.on:
+            imgui.text_disabled("bridge: no port")
+            return
+        imgui.text_disabled(f"bridge: {b.name}  ·  {b.encoding}, {b.room} lanes"
+                            f"  ·  {b.sent} sent")
 
     def _midi_status(self) -> None:
         m = self.midi

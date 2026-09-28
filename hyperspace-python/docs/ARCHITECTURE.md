@@ -45,7 +45,7 @@ runs the one frame loop.
 | **Render stack** | `geometry.py`, `render.py`, `fx.py`, `lookback.py`, `dream.py`, `shaders/`, `overlay.py` | GL resources, `ViewState`, the frame history, the dream worker, the window's placement | `ViewState` and the `FxState` / `DreamState` objects the registry writes | the screen; `ViewState.integrate` writes `ang` directly (folded into the base next frame) | zero registry traffic; `dream` is imported lazily by `app.py:248` under `[dream] enabled` (`tests/test_dream.py:55-72`) |
 | **Panel** | `ui.py`, `ui_*.py`, `hands/panel.py`, `control.py` | imgui state, page selection, the Replace / Keep modal, the routing page's edits | everything, for display | param **bases** through `Param.set*`; table rows through `Bindings.add/enable/remove/replace_owner` | a leaf: no engine module imports `ui*` (only `app.py:79` and `hands/panel.py:41`). Unenforced by a test |
 | **Library** | `library.py`, `config.py`, `library/` | the home folder, preset and project files (the band presets *are* the scenes), the F1–F8 bank (the open project's), the routing preset *files* (a document kind the router fills, `Library.routing`), `config.toml` | `Registry.snapshot`, a group's `extra` hook (the analyzer's layout) on save, a document kind's `signature` for its dirty dot | `Registry.restore` (bases); tells a group's `on_load` hook the name it landed; hands a document kind's `load` hook the file | depends only on `params` (and, lazily, `routing` for the bindings schema strings); its importers are `app`, `config` (for `ensure_home`), `control` (`factory_doc`, the scenes), `dream` (for `home()`), `ui_presets` (`LibraryError`) and, lazily, `routing` (`slug`, `Library` for `load_preset`) |
-| **Host** | `app.py`, `hotreload.py` | the two windows, construction order, the frame loop, the reload watch list (`hotreload.MODULES`: every module in the package but `app`, `hotreload` and `offline`, in dependency order, leaves first — a module after everything it `from .x import`s; an optional adapter that was never imported is skipped; `tests/test_hotreload.py` holds the list, its order and every swap target against the source) | — | the relative writers' bases (`nudge`/`scale`), `act()` for its four loop keys | the one cold module; the only importer of every optional adapter, each behind its config gate (`app.py:185-253`) |
+| **Host** | `app.py`, `hotreload.py` | the two windows, construction order, the frame loop, the reload watch list (`hotreload.MODULES`: every module in the package but `app`, `hotreload` and `offline`, in dependency order, leaves first — a module after everything it `from .x import`s; an optional adapter that was never imported is skipped; `tests/test_hotreload.py` holds the list, its order and every swap target against the source) | — | the relative writers' bases (`nudge`/`scale`), `act()` for its four loop keys | the one cold module; the only importer of every optional adapter, each behind its config gate (`_open_*`; MIDI and the gamepad on by default, the bridge, dream and hands off), and the one that closes them all (`close_all`, on quit and on Cmd+R alike); `tests/test_app_boundary.py` holds the gates and that importing `app` imports no gated adapter, no `torch`, no `leap` |
 
 The direction to remember: **everything points at the registry; the
 registry points at nothing above it.** Adapters and sources feed the
@@ -56,9 +56,13 @@ the render stack only reads.
 
 ## 2. The frame
 
-`app.main()` (`app.py:393`) is the only entry point and the loop at
-`app.py:505-642` is the only place the frame order exists. No test pins
-it; read the loop when it matters.
+`app.main()` is the only entry point: it builds everything once into an
+`app.Host` and runs `app.frame(host, now, dt, fps)` in its loop — the one
+place the frame order exists. `main` keeps only what needs the window
+system (events, `imgui.new_frame()`, the frame clock, the toast and the
+swaps); `frame` is the order below, and
+`tests/test_app_boundary.py::test_the_frame_runs_in_the_documented_order`
+pins it over stubs.
 
 ```mermaid
 %%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 28, "rankSpacing": 44, "wrappingWidth": 420}}}%%
@@ -121,10 +125,11 @@ The one writer after `apply()` is the rotation integrator (`view.integrate`), wh
 writes the object directly; `Param.apply` adopts that as a delta on the
 base the next frame (`params.py:460-466`, `tests/test_modulation.py:198`).
 
-Guarding: the step block (`audio.step` through `integrate`), `renderer.draw`
-and `panel.draw`
-are each wrapped so hot-reloaded code that raises records
-`reloader.runtime_error` and the loop continues (`app.py:593-629`).
+Guarding: the MIDI and hands polls, the step block (`audio.step` through
+`integrate`), `renderer.draw` and `panel.draw` are each wrapped so
+hot-reloaded code that raises records `reloader.runtime_error` — kept
+until a clean frame — and the loop continues (`app.frame`;
+`tests/test_app_boundary.py`).
 
 ---
 
@@ -509,11 +514,16 @@ grep for; the module's docstring has the rest.
 | `ui.py` + `ui_*.py` + `hands/panel.py` | The control window: the rail of fourteen pages, the widgets (each a view onto one param), the right-click menu, the Replace / Keep modal, the cheat sheet. | `Panel.draw`, the widget helpers, `PAGES`; each page's `page(panel)`; `ui_routing.modal`; the `ui.*` params (the window, the sheet, the page) — every other param the factory table names is `build_registry`'s. | A widget writes only the base, through `Param.set*`; nothing here calls `modulate`; the modal is drawn before the panel decides whether it is open; no page scrolls at the control size (every page measured full: hands setup, `Output`, routed table); the cheat sheet names every key row and loop key and nothing else; every widget has its own imgui id. (`tests/test_ui_bands.py:436`, `tests/test_ui_shell.py` `test_every_page_fits_the_control_window` / `test_the_cheat_sheet_matches_the_tables_and_the_loop_keys`, `tests/test_ui_lfo.py:86`) | `test_ui_shell.py`, `test_ui_bands.py`, `test_ui_lfo.py` |
 | `control.py` | The headless half of the analyzer page: band selection, the scene, reset with its 8 s undo, adding and removing bands. | `Control`, whose methods the `scene.*` and `band.*` params call; `SCENES`, the combo order of the eleven band presets that are the scenes. | Reset goes to the selected scene, never to hard-coded defaults, and never changes the layout; an undo never survives a scene change; a scene is read from the library (a user file shadows the factory's) and re-tunes the bands loaded, while a strip load applies the layout too and moves the combo. (`tests/test_control.py:74-112`, `tests/test_analyzer.py` "one_file") | `test_control.py`, `test_analyzer.py` |
 | `library.py` + `presets.py` + `config.py` | The home folder (`~/Hyperspace`), one JSON per module preset, projects with the F1–F8 bank, and `config.toml`. Routing presets are `routing.py`'s, not the library's. | `Library` (`load`, `save_as`, `reset`, `is_dirty`, `poll`), `Presets` (the bank's view), `config.load`. | Never writes a factory file; a theme or project never carries a macro or a rotation phase; every restore is a base write; the analyzer's layout lands before its values and a band preset saved from the strip carries the layout back out. (`tests/test_library.py:123, 164, 240`, "carries_its_layout", `tests/test_presets.py:73`) | `test_library.py`, `test_presets.py` |
+| `app.py` + `hotreload.py` | The entry point: two windows, construction in a fixed order, the frame loop, and hot reload of every module but the cold core. | `main()`, `Host` and `frame()`, `Keys`, `Mouse`, `close_all()`; `HotReloader` and its `MODULES` list. | Optional adapters are imported lazily behind their config gate; the render window never runs imgui; a raising adapter or reload never stops the show; a relative writer reads the base, never the effective value; every module but `app` / `hotreload` / `offline` is watched, in dependency order (leaves first), and an Enum a reloaded module defines keeps its identity (`Kind`); the frame runs in §2's order and every adapter is closed on both exits. (`tests/test_app_relative.py`, `tests/test_hotreload.py`, `tests/test_app_boundary.py`) | `test_app_relative.py`, `test_hotreload.py`, `test_app_boundary.py` |
 | `library.py` + `config.py` | The home folder (`~/Hyperspace`), one JSON per module preset, projects with the F1–F8 bank, the routing presets' files (a document kind), and `config.toml`. | `Library` (`load`, `save_as`, `reset`, `is_dirty`, `poll`, `kind` / `routing`), `Project` (the open project and its theme bank: `load_slot`, `save_slot`, `cycle`), `config.load`. | Never writes a factory file; a theme or project never carries a macro, a rotation phase or the routing layer; every restore is a base write; the analyzer's layout lands before its values — from a strip load and from a project alike — and a band preset saved from the strip carries the layout back out; a group registered after `attach` still has a default. (`tests/test_library.py` "carries_its_layout", "restores_a_modules_layout", "document_kind", "after_attach"; `tests/test_themes.py`) | `test_library.py`, `test_themes.py` |
-| `app.py` + `hotreload.py` | The entry point: two windows, construction in a fixed order, the frame loop, and hot reload of every module but the cold core. | `main()`, `Keys`, `Mouse`; `HotReloader` and its `MODULES` list. | Optional adapters are imported lazily behind their config gate; the render window never runs imgui; a raising adapter or reload never stops the show; a relative writer reads the base, never the effective value; every module but `app` / `hotreload` / `offline` is watched, in dependency order (leaves first), and an Enum a reloaded module defines keeps its identity (`Kind`). (`tests/test_app_relative.py`, `tests/test_hotreload.py`) | `test_app_relative.py`, `test_hotreload.py` |
 | `gamepad.py` + `bridge.py` | The Xbox pad polled raw through GLFW with our own index map; the DAW bridge — analyzer lanes out as 14-bit MIDI, the same forms in as `ext` lanes. | `Pad`; `Bridge.step`. | The pad never raises when absent; the bridge never writes a `Param` (its lanes reach one only as a route) and is off by default. (`tests/test_gamepad.py:77`, `tests/test_bridge.py:272, 392`) | `test_gamepad.py`, `test_bridge.py` |
 | `audio.py` + `analysis.py` + `analyzer.py` + `bands.py` | The audio source (a capture device or a file, through a ring buffer), the FFT front end, and the one chain that runs: the N-band analyzer whose output is `lanes`. `bands.py` is its parts bin. | `AudioEngine` (`chain`, `step`, the transport, `devices` / `rescan`, `rate`), `Analyzer` (`lanes`, layout, `apply_scene`), `bands.default_params` and the reference constants. | The legacy six-band layout never diverges from the frozen oracle by a bit; a lane never reaches `CEIL`; the callbacks never do chain work; a source attaches once, at its own rate, and never loses the layout or the faders; the stack imports nothing above itself. (`tests/test_analyzer.py:63, 412`, `tests/test_core.py:58, 144`, `tests/test_audio.py`, `tests/test_audio_boundary.py`) | `test_analyzer.py`, `test_core.py`, `test_audio.py`, `test_audio_boundary.py` |
 
+Things no test holds today, in every row that says so above:
+`routing.py`'s import boundary, "only `Router.modulate`
+calls `Param.modulate`", the audio stack's imports, the panel being a
+leaf. They are filed as audit items R11 and A9 (P5, the frame order and
+the host's import boundary, is `tests/test_app_boundary.py`).
 Things no test holds today, in every row that says so above: the frame
 order in `app.py`, `routing.py`'s import boundary, "only `Router.modulate`
 calls `Param.modulate`", the panel being a leaf. They are filed as audit

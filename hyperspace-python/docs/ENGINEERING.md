@@ -212,7 +212,16 @@ only holds this frame's value after it. `overlay.Output` places the render
 window (window · fullscreen · overlay with passthrough and opacity) from
 the `output.*` params, applied once a frame through an injectable backend
 (`tests/test_overlay.py`); `overlay.*` are aliases the factory table
-binds. The rig's placement comes from `[output]` in `config.toml`
+binds. `output.monitor` offers *follow window* — the screen the window is
+on, config `monitor = -1` — and then each screen by name. Quitting, Cmd+R
+and the panel's restart button all run `app.close_all`: every open
+adapter (MIDI, the bridge, the hands tracker, the dream worker) then the
+audio stream, best-effort, so a broken port never blocks an exit. The
+SYSTEM page shows each adapter's state — MIDI, the bridge (port,
+encoding, messages sent, or why it is off) — beside the hot-reload and
+config notices. The optional adapters and the gamepad are config gates
+(`[midi]` and `[gamepad]` on by default, `[bridge]`, `[dream]`, `[hands]`
+off); `hyperspace/config.py` documents every key. The rig's placement comes from `[output]` in `config.toml`
 (`config.py`); a `[overlay]` section is the same thing under its pre-split
 name, still read and merged under `[output]`, with a note on stderr asking
 for the rename. A `config.toml` that will not parse keeps the defaults and
@@ -532,6 +541,11 @@ What holds what:
   Probes: `tools/midi_probe.py` (echoes a controller, lights an APC40),
   `tools/hands_probe.py` (every hand axis live; `--calibrate`).
 
+Untested today, and worth knowing before trusting a change there:
+`audio.py`'s streams, `analysis.py` on its own, `LeapSource` (audit). The
+frame order, `Keys`, `Mouse`, the `_open_*` gates and the host's import
+boundary are `tests/test_app_boundary.py` (the frame runs over stubs;
+the boundary in a subprocess).
 Untested today, and worth knowing before trusting a change there: the
 frame order in `app.py`, `Keys` and `Mouse`, the `_open_*` config gates,
 `audio.py`'s streams, `analysis.py` on its own (audit). `LeapSource`, the DAW

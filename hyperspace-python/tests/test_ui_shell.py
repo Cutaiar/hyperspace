@@ -123,6 +123,35 @@ def test_system_page_shows_a_config_error_and_notes(rig, monkeypatch):
     assert not any(s.startswith("config:") for s in drawn)
 
 
+def test_system_page_shows_the_bridge(rig, monkeypatch):
+    """The DAW bridge's state — off, a port error, no port, or the ports and
+    what went out — is on the SYSTEM page (audit P3), where before its only
+    sign of life was a stderr line."""
+    import hyperspace.ui as ui_mod
+
+    drawn: list[str] = []
+    real_colored, real_disabled = imgui.text_colored, imgui.text_disabled
+    monkeypatch.setattr(ui_mod.imgui, "text_colored",
+                        lambda col, s: (drawn.append(s), real_colored(col, s)))
+    monkeypatch.setattr(ui_mod.imgui, "text_disabled",
+                        lambda s: (drawn.append(s), real_disabled(s)))
+
+    def shown() -> list[str]:
+        drawn.clear()
+        frame(rig.panel, "system")
+        imgui.end_frame()
+        return [s for s in drawn if s.startswith(("bridge", "no bridge"))]
+
+    assert shown() == ["no bridge — [bridge] enabled = false"]
+    b = SimpleNamespace(on=False, name="", error="", encoding="pitch", room=16, sent=0)
+    rig.panel.bridge = b
+    assert shown() == ["bridge: no port"]
+    b.on, b.name, b.sent = True, "out IAC Bus 1", 42
+    assert shown() == ["bridge: out IAC Bus 1  ·  pitch, 16 lanes  ·  42 sent"]
+    b.error = "no such port"
+    assert shown() == ["bridge: no such port"]
+
+
 def test_page_param_is_ui_state_not_a_preset(rig):
     p = rig.reg["ui.page"]
     assert p.group == "ui" and not p.persist and not p.modulatable

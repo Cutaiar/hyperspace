@@ -4,10 +4,13 @@ The home is ``$HYPERSPACE_HOME`` (default ``~/Hyperspace``, library.py);
 a config.toml still sitting in the working directory is copied there on
 the first run. Everything has a default, so the file is only for what
 differs on this machine. Adapters are enabled here, not in code
-(BLUEPRINT §3.6).
+(BLUEPRINT §3.6). Two are on by default because they cost nothing when the
+device is absent — the MIDI adapter (it is the one that also holds Learn)
+and the gamepad; the bridge, the dream worker and the hands tracker are
+off until asked for, and their modules are never imported until then.
 
     [midi]
-    enabled = true          # false leaves the adapter out entirely
+    enabled = true          # false leaves the adapter out entirely (and hand Learn with it)
     port = "APC40"          # substring of the port name; default from the profile
     profile = "apc40"       # device profile (hyperspace/<profile>.py)
     map = "midi_map.json"   # a pre-plan-09 MIDI map, relative to this file's
@@ -31,6 +34,9 @@ differs on this machine. Adapters are enabled here, not in code
 A file that will not parse is not fatal: the defaults stand and
 ``cfg["error"]`` carries the message; ``cfg["notes"]`` carries requests
 like the rename above. The SYSTEM page shows both.
+
+    [gamepad]               # the Xbox pad polled through GLFW (gamepad.py)
+    enabled = true          # false never polls for one
 
     [bridge]                # lanes out / external lanes in over MIDI (bridge.py)
     enabled = false         # true opens the bridge; off, it is never imported
@@ -85,6 +91,8 @@ DEFAULTS: dict = {
     # overlay.py: the render window's placement and look; ground 0 = see-through
     "output": {"monitor": -1, "fullscreen": False, "on_start": False, "passthrough": True,
                "bg": 0.0, "alpha": 1.0},
+    # gamepad.py: the Xbox pad — on by default, inert when absent
+    "gamepad": {"enabled": True},
     # bridge.py: the analyzer's lanes out to a DAW, external lanes in — off by default
     "bridge": {"enabled": False, "out": "IAC", "in": "", "encoding": "pitch", "channel": 0,
                "cc": 16, "rate": 100, "send": ["lane:*"], "in_lanes": 16},
