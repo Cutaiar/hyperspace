@@ -883,3 +883,62 @@ def test_lookback_page_draws_headless(tmp_path):
         imgui.end_frame()
     finally:
         imgui.destroy_context(ictx)
+
+
+# ---------------------------------------------------------------- plan 14 WP1: the freeze
+
+def test_capture_off_the_cadence_with_no_source_puts_the_target_back(ctx):
+    """The early return (not a commit frame, no worker, no scene tint) left
+    the atlas `_ensure` had bound; every return now binds `target`."""
+    rig = Rig(ctx, 200, 128, dream=DreamState(on=True, echoes=4, every=2, res=0))
+    rig.lb.source = None
+    scene = ctx.texture((200, 128), 4)
+    rig.fbo.use()
+    rig.lb.capture(scene, rig.fbo)            # frame 1: off the cadence
+    assert rig.lb.frame == 1 and rig.lb._captures == []
+    assert ctx.fbo is rig.fbo
+    rig.lb.capture(scene, rig.fbo)            # frame 2: a commit
+    assert ctx.fbo is rig.fbo and len(rig.lb._captures) == 1
+    scene.release()
+    rig.release()
+
+
+def test_the_atlas_fits_the_drivers_largest_texture(ctx, monkeypatch):
+    """A portrait window at res 384 asked for a 36 864 px tall atlas, past
+    GL_MAX_TEXTURE_SIZE, and capture raised every frame. The slot shrinks,
+    aspect kept, so the atlas fits; when the textures cannot be made at
+    all, nothing is captured and the reason is on `ring_error`."""
+    from hyperspace.lookback import fit_atlas
+
+    assert fit_atlas((384, 1152), 16384) == (168, 512)
+    assert fit_atlas((400, 256), 16384) == (400, 256)
+    ew, eh = fit_atlas(echo_size(RES[-1], 820, 2460), 16384)
+    assert eh * MAX_ECHOES <= 16384 and ew <= 16384
+    lb = Lookback(ctx, DreamState(on=True, echoes=4, every=1, res=len(RES) - 1))
+    monkeypatch.setattr(lb, "max_texture", lambda: 4096)
+    tex = ctx.texture((120, 360), 4)
+    fbo = ctx.framebuffer(color_attachments=[tex])
+    fbo.use()
+    lb.capture(tex, fbo)
+    assert lb.atlas is not None and lb.atlas.size[1] <= 4096 and lb.ring_error == ""
+    assert len(lb._captures) == 1 and ctx.fbo is fbo
+    # the driver refuses outright: no history, no echo recorded, no raise
+    lb.release_ring()
+    lb._captures.clear()
+    real = ctx.texture
+
+    def refuse(size, *a, **k):
+        if size[1] > 1000:
+            raise moderngl.Error("GL_INVALID_VALUE")
+        return real(size, *a, **k)
+
+    monkeypatch.setattr(lb, "ctx", SimpleNamespace(texture=refuse, framebuffer=ctx.framebuffer,
+                                                   clear=ctx.clear, info=ctx.info))
+    monkeypatch.setattr(lb, "max_texture", lambda: 1 << 20)
+    frame = lb.frame
+    lb.capture(tex, fbo)
+    assert lb.atlas is None and lb._captures == [] and lb.frame == frame
+    assert lb.ring_error.startswith("look-back: no history at ")
+    assert ctx.fbo is fbo
+    fbo.release()
+    tex.release()

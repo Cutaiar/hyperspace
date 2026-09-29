@@ -109,7 +109,7 @@ def _status(lb, on: bool) -> str:
     if not on:
         return "off"
     if lb.atlas is None:
-        return "starting"
+        return getattr(lb, "ring_error", "") or "starting"
     n = len(lb.thumbnails())
     dream = "dream" if lb.dream_frame >= 0 else "no dream"
     return f"{n} echo(es) · {dream}"

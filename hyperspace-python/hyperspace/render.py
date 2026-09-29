@@ -431,13 +431,32 @@ class Renderer:
         then the post pass (lookback.py) puts it on the target. `t_now`
         pins the clock (offscreen renders and tests); otherwise the frame
         reads the renderer's own, and the patterns, the instance motion
-        and the effect chain all see the same second."""
+        and the effect chain all see the same second.
+
+        The target is captured once and bound again, with its viewport and
+        blending, on every exit — a raise included. The frame binds half a
+        dozen offscreen framebuffers; one left bound made every later
+        frame draw into it while the window swapped a stale picture (the
+        owner's freeze, plan 14 WP1: WAKE without a dream worker left the
+        look-back's atlas bound, with no error anywhere)."""
         ctx = self.ctx
         t = self.now(t_now)
         target = ctx.fbo
         if target is None:
             raise RuntimeError("Renderer.draw: no framebuffer bound (call fbo.use())")
         vx, vy, vw, vh = target.viewport
+        try:
+            self._draw_frame(s, w, h, dpr, t, target, (vx, vy, vw, vh))
+        finally:
+            target.use()
+            ctx.viewport = (vx, vy, vw, vh)
+            ctx.enable(moderngl.BLEND)
+
+    def _draw_frame(self, s: ViewState, w: int, h: int, dpr: float, t: float,
+                    target: moderngl.Framebuffer, vp: tuple[int, int, int, int]) -> None:
+        """draw()'s body: scene, cover, pull, composite, capture, effects."""
+        ctx = self.ctx
+        vx, vy, vw, vh = vp
         self.scene.ensure((max(vw, 1), max(vh, 1)), _samples_of(ctx, target))
         for unit in range(4):
             self._blank.use(location=unit)

@@ -288,6 +288,16 @@ def mean_colour(pixels: np.ndarray) -> tuple[float, float, float]:
     return (float(m[0]), float(m[1]), float(m[2]))
 
 
+def fit_atlas(size: tuple[int, int], max_tex: int) -> tuple[int, int]:
+    """The echo size shrunk, aspect kept and 8-px rounded down, so the atlas
+    (MAX_ECHOES slots stacked) is at most `max_tex` on each side."""
+    ew, eh = size
+    k = min(1.0, max_tex / (eh * MAX_ECHOES), max_tex / ew)
+    if k >= 1.0:
+        return size
+    return max(8, int(ew * k) // 8 * 8), max(8, int(eh * k) // 8 * 8)
+
+
 def echo_size(res: int, w: int, h: int) -> tuple[int, int]:
     """The echo's size: `res` on the short side, the render's aspect, 8-px rounded."""
     w, h = max(w, 1), max(h, 1)
@@ -317,6 +327,7 @@ class Lookback:
         self._w = np.zeros(MAX_ECHOES, dtype="f4")
         self._off = np.zeros(MAX_ECHOES, dtype="f4")
         self.error = ""                # _common.glsl did not compile: on the fallback
+        self.ring_error = ""           # the history textures could not be made (_ensure)
         self._build_programs()
 
     def _build_programs(self) -> None:
@@ -348,18 +359,38 @@ class Lookback:
 
     # ---- the ring ----
 
-    def _ensure(self, w: int, h: int) -> None:
-        """The atlas and the dream buffer at the echo size for this render size."""
-        size = echo_size(RES[max(0, min(self.state.res, len(RES) - 1))], w, h)
+    def max_texture(self) -> int:
+        """The driver's GL_MAX_TEXTURE_SIZE (16384 on Apple silicon)."""
+        try:
+            return int(self.ctx.info["GL_MAX_TEXTURE_SIZE"])
+        except Exception:  # noqa: BLE001 — a context without the query: the common floor
+            return 8192
+
+    def _ensure(self, w: int, h: int) -> bool:
+        """The atlas and the dream buffer at the echo size for this render
+        size, the slot shrunk (aspect kept) so the atlas fits the driver's
+        largest texture — a portrait window at res 384 would otherwise ask
+        for a 36 864 px tall atlas and raise every frame. False, with the
+        reason on `ring_error`, when the textures cannot be made: nothing
+        is captured then (plan 14 WP1)."""
+        size = fit_atlas(echo_size(RES[max(0, min(self.state.res, len(RES) - 1))], w, h),
+                         self.max_texture())
         if size == self.echo and self.atlas is not None:
-            return
+            return True
         self.release_ring()
-        ew, eh = self.echo = size
-        self.atlas = self.ctx.texture((ew, eh * MAX_ECHOES), 4)
-        self.atlas.repeat_x = self.atlas.repeat_y = False
-        self.dream = self.ctx.texture((ew, eh), 4)
-        self.dream.repeat_x = self.dream.repeat_y = False
-        self._fbo = self.ctx.framebuffer(color_attachments=[self.atlas])
+        ew, eh = size
+        try:
+            self.atlas = self.ctx.texture((ew, eh * MAX_ECHOES), 4)
+            self.atlas.repeat_x = self.atlas.repeat_y = False
+            self.dream = self.ctx.texture((ew, eh), 4)
+            self.dream.repeat_x = self.dream.repeat_y = False
+            self._fbo = self.ctx.framebuffer(color_attachments=[self.atlas])
+        except Exception as e:  # noqa: BLE001 — no history this frame, never a stuck ring
+            self.release_ring()
+            self.ring_error = f"look-back: no history at {ew}×{eh}: {e}"[:160]
+            return False
+        self.ring_error = ""
+        self.echo = size
         self._fbo.use()
         self.ctx.clear(0.0, 0.0, 0.0, 0.0)
         self._captures.clear()
@@ -367,6 +398,7 @@ class Lookback:
         self.dream_frame = -1
         self._host = None
         self._post["u_pad"].value = 0.5 / eh
+        return True
 
     def release_ring(self) -> None:
         for res in (self._fbo, self.atlas, self.dream):
@@ -444,13 +476,23 @@ class Lookback:
 
     def capture(self, scene: moderngl.Texture, target: moderngl.Framebuffer) -> None:
         """After the composite: this frame into the ring (on the cadence) and,
-        with a source attached, out to it. `target` is restored afterwards."""
+        with a source attached, out to it. `target` is bound again on every
+        return, a raise included: `_ensure` binds the atlas, and the early
+        return on a frame with nothing to capture (off the cadence, no
+        worker, no scene tint) once left it bound for good (plan 14 WP1)."""
+        try:
+            self._capture(scene, target)
+        finally:
+            target.use()
+
+    def _capture(self, scene: moderngl.Texture, target: moderngl.Framebuffer) -> None:
         s = self.state
         if not s.on:
             self.idle()
             return
         _, _, w, h = target.viewport
-        self._ensure(w, h)
+        if not self._ensure(w, h):
+            return
         self.frame += 1
         commit = self.frame % max(1, int(s.every)) == 0
         want_mean = self.scene_tinted()
@@ -474,7 +516,6 @@ class Lookback:
                 self.scene_mean = mean_colour(buf)
             if self.source is not None:
                 self.source.submit(buf, self.frame)
-        target.use()
 
     def scene_tinted(self) -> bool:
         """Whether the dream's tint takes its hue from the scene this frame."""
