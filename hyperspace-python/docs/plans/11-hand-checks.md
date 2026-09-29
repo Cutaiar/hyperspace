@@ -26,6 +26,11 @@ three frames, clean exit, nothing on stderr but the adapters' one-line
 notes. *Fail:* a traceback, or the process not exiting → `app.frame` /
 `app.Host` (WP14, PR #48); a stderr note from an adapter that should be
 silent → that adapter's `_open_*` gate.
+Then `uv run hyperspace` once more: R resets the camera, F1 loads theme 1,
+⇧F1 saves it, ⌘R restarts without resetting the camera first, and all
+seventeen rows are listed on the ROUTING page (WP7; headless:
+`tests/test_routing.py::test_r_and_the_f_keys_are_table_rows_that_fire_their_params`).
+A fail → `routing.LOOP_KEY_ROWS` / the ⌘R edge claim in `app.frame`.
 
 **2. The config rename note and a bad TOML (L4).**
 Headless: `uv run pytest -q tests/test_config.py::test_overlay_is_an_alias_merged_under_output_and_noted_once tests/test_ui_shell.py::test_system_page_shows_a_config_error_and_notes`.

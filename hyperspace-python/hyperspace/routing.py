@@ -17,10 +17,11 @@ Sources are one string, ``scheme:address``:
                    modifier fires only while it is held; a row on the bare
                    key then stays quiet while a modifier some other row on
                    that key names is held, so "B" and "SHIFT+B" are two
-                   controls. Still app.py's own, outside the table: R
-                   (camera.reset), F1–F8 / ⇧F1–F8 (themes), Cmd+R, Esc / Q,
-                   and the relative writers — ↑/↓, the mouse and the
-                   sticks, which nudge camera params directly
+                   controls. R, F1–F8 and ⇧F1–F8 are rows since plan 11
+                   (LOOP_KEY_ROWS). Still app.py's own, outside the
+                   table: Cmd+R, Esc / Q, and the relative writers — ↑/↓,
+                   the mouse and the sticks, which nudge camera params
+                   directly
   pad:<NAME>       a gamepad button by gamepad.py's name ("A", "LB", "LSTICK")
   hat:<DIR>        the d-pad: UP DOWN LEFT RIGHT
   cc:<ch>:<n>      MIDI control change n on 0-based channel ch, or * for any
@@ -264,9 +265,20 @@ APC_NEW_ROWS = (
     (f"note:0:{apc40.N_QUANT}", "theme.next", "toggle", 1.0, True),
 )
 # the keys WP4 added, likewise only where the key is free
+# the keys plan 11 moved out of app.py's loop into the table (audit R2;
+# decision register row 7): R resets the camera, F1–F8 load theme slots
+# 1–8 (param ids are 0-based), ⇧F1–F8 save them. Cmd+R (restart), Esc / Q
+# and ↑ / ↓ stay in the loop.
+THEME_SLOTS = 8
+LOOP_KEY_ROWS = (
+    ("R", "camera.reset", "fire"),
+    *[(f"F{k + 1}", f"theme.load.{k}", "fire") for k in range(THEME_SLOTS)],
+    *[(f"SHIFT+F{k + 1}", f"theme.save.{k}", "fire") for k in range(THEME_SLOTS)],
+)
 KEY_NEW_ROWS = (
     ("key:B", "tempo.tap", "fire", 1.0),
     ("key:SHIFT+B", "lfo.trigger", "fire", 1.0),
+    *[(f"key:{k}", pid, op, 1.0) for k, pid, op in LOOP_KEY_ROWS],
 )
 
 # the legacy rate route: a push on a base of 0 lands the reference's
@@ -470,10 +482,10 @@ def act(reg: Registry, b: Binding) -> None:
     elif op == "fire":
         p.fire()
     elif op == "set":
-        set_value(p, b.value)
+        land(p, b.value)
 
 
-def set_value(p: Param, value: float) -> None:
+def land(p: Param, value: float) -> None:
     """`set` by kind: a fader's norm, a toggle's state, an enum's choice."""
     if p.kind is Kind.CONTINUOUS:
         p.set_norm(float(value))
@@ -507,6 +519,7 @@ def keymap() -> list[Binding]:
         ("T", "overlay.on", "toggle"), ("G", "overlay.passthrough", "toggle"),
         ("B", "tempo.tap", "fire"), ("SHIFT+B", "lfo.trigger", "fire"),
         *[(str(p + 1), f"view.plane.{n}", "toggle") for p, n in enumerate(PLANES)],
+        *LOOP_KEY_ROWS,
     ]
     return [Binding(f"key:{k}", pid, op, *arg) for k, pid, op, *arg in rows]
 
@@ -829,7 +842,7 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
         if source in used:
             continue
         out.append(Binding(source, target, op, value))
-        notes.append(f"added {source} → {target} (the keys of plan 09)")
+        notes.append(f"added {source} → {target} (the keys of plan 09 / plan 11)")
     return out, notes
 
 
