@@ -99,6 +99,14 @@ POSES: dict[str, list[tuple[str, dict[str, float]]]] = {
         ("L up (pump)", {"L.y": 1}), ("L left + R up", {"L.x": 0, "R.y": 1}),
         ("L reach in + R up", {"L.z": 0, "R.y": 1}),
     ],
+    # plan 14 WP6: the legible echoes (in the list, on no F-key)
+    "party-tracer": [
+        ("no hands", {}), ("both level", {"L.y": 0, "R.y": 0}),
+        ("L roll thumb-up (turn)", {"L.roll": 1}), ("L up (spin)", {"L.y": 1}),
+        ("R up (bright trail)", {"R.y": 1}), ("R reach in (long)", {"R.z": 0}),
+        ("R pull back (short)", {"R.z": 1}), ("R roll thumb-up (covered)", {"R.roll": 1}),
+        ("R roll thumb-down (through)", {"R.roll": 0}), ("R pitch fingers-up (hard)", {"R.pitch": 1}),
+    ],
     # plan 14 WP5: the effect families on F6–F8
     "party-acid": [
         ("no hands", {}), ("both level", {"L.y": 0, "R.y": 0}),
