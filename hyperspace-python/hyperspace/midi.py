@@ -328,7 +328,7 @@ class MidiIO:
         for x in self.table.bind(b, write=False):     # the preset rows it replaced
             if x.feedback:
                 self._dark(x)                          # the new row redraws its own control
-        lrn.last = f"learned {pid} ← {self.control_name(b)} (into the preset)"
+        lrn.said(f"learned {pid} ← {self.control_name(b)} (into the preset)")
 
     # ---- per frame ----
 

@@ -599,7 +599,7 @@ def head(panel, router: Router) -> None:
         imgui.text_colored(ui.WARN, lib.error)          # a preset that would not load
     # the desk rows the last load dropped (an invariant control, D6), on
     # one line so a file full of them never pushes the page off the window
-    notes = pr.desk_notes if pr is not None else []
+    notes = getattr(pr, "desk_notes", None) or []    # (a Presets from before a hot reload)
     if notes:
         more = f"  (+{len(notes) - 1} more)" if len(notes) > 1 else ""
         imgui.text_colored(ui.WARN, f"desk: {notes[0]}{more}")
@@ -667,7 +667,8 @@ def _learn_line(panel) -> None:
     if lrn.learning:
         imgui.text_colored(ui.RED, f"learning {lrn.learning} — {panel._learn_hint()}")
     elif lrn.last:
-        imgui.push_style_color(imgui.Col_.text, ui.WARN if lrn.refused else ui.FAINT)
+        refused = getattr(lrn, "refused", False)
+        imgui.push_style_color(imgui.Col_.text, ui.WARN if refused else ui.FAINT)
         imgui.text_wrapped(f"learn: {lrn.last}")
         imgui.pop_style_color()
 

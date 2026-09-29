@@ -58,20 +58,16 @@ class Learn:
         self.table = table
         self.learning: str | None = None
         self.pending: tuple[Binding, Binding] | None = None
-        self._last = ""         # what the last learn did, for the status lines
+        self.last = ""          # what the last learn did, for the status lines
         self.refused = False    # …and whether it was a refusal (drawn as a warning)
 
-    @property
-    def last(self) -> str:
-        return self._last
-
-    @last.setter
-    def last(self, text: str) -> None:
-        self._last, self.refused = text, False
+    def said(self, text: str) -> None:
+        """What a learn that landed (or was kept) did, for the status lines."""
+        self.last, self.refused = text, False
 
     def refuse(self, why: str) -> None:
         """A learn that may not land: nothing changes, `last` says why."""
-        self._last, self.refused = why, True
+        self.last, self.refused = why, True
 
     # ---- arming ----
 
@@ -124,11 +120,11 @@ class Learn:
         cur = self.table.owner(p.id)
         if cur is not None and cur.source == source and cur.op == "position":
             cur.when = when                          # the same axis again: no move
-            self.last = f"learned {p.id} ← {cur.describe()} (into the preset)"
+            self.said(f"learned {p.id} ← {cur.describe()} (into the preset)")
             return
         if cur is not None:
             self.pending = (b, cur)
-            self.last = f"{Owned(cur, b)} — replace?"
+            self.said(f"{Owned(cur, b)} — replace?")
             return
         self._place(b)
 
@@ -142,7 +138,7 @@ class Learn:
         new, old = self.pending
         self.pending = None
         if not replace:
-            self.last = f"kept {old.describe()} on {old.target}"
+            self.said(f"kept {old.describe()} on {old.target}")
             return None
         self._place(new)
         return new
@@ -158,4 +154,4 @@ class Learn:
         for x in [x for x in table.of(b.scheme) if x.source == b.source and x.op == "position"]:
             table.remove(x)
         table.replace_owner(b)
-        self.last = f"learned {b.target} ← {b.describe()} (into the preset)"
+        self.said(f"learned {b.target} ← {b.describe()} (into the preset)")
