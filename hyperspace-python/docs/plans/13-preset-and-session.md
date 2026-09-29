@@ -26,7 +26,7 @@ presets are re-cut into the new shape as one of its work packages).
 | D7 | On a layer switch the **knobs jump** to the layer's values (they are endless encoders the host re-bases); the **faders soft-pick-up**. Faders are invariant, so pickup only ever happens after a preset load moves a base. |
 | D8 | A control a preset does not map **does nothing** and shows dark. No fall-through to the global layer. |
 | D9 | The **analyzer is session**: its bands, dynamics, scene and the drive fader are never in a preset. |
-| D10 | **One macro concept** (owner, 2026-09-28). A macro is a knob (`macro.1–8`, an ordinary param) with a list of **subscribers**. A subscriber either sets a target's **base** or scales a route's **depth** (attenuation), and each states its own **polarity** as a `from` → `to` range, so one knob can raise one thing while lowering another. The separate multi-target desk row is gone: a desk control that should move several things maps to one macro. §2.4 is the definition; what a performer riding a macro does to its base subscribers is still open (plan 11 §2 row 19). |
+| D10 | **One macro concept** (owner, 2026-09-28). A macro is a knob (`macro.1–8`, an ordinary param) with a list of **subscribers**. A subscriber either sets a target's **base** or scales a route's **depth** (attenuation), and each states its own **polarity** as a `from` → `to` range, so one knob can raise one thing while lowering another. The separate multi-target desk row is gone: a desk control that should move several things maps to one macro. §2.4 is the definition; a performer on a macro moves its depth subscribers only (plan 11 §2 row 19). |
 | D11 | A session **names its startup preset**, loaded on launch. |
 | D12 | A modifier is read **at the press**; SHIFT's release never re-evaluates a button already down. |
 
@@ -134,10 +134,12 @@ ROUTING page marks a param that two macros set. A depth subscriber reads
 the macro's effective value every frame, as `scale` does today, so a hand
 riding a macro deepens or flattens its routes one frame later.
 
-**Open (plan 11 §2 row 19).** When a performer owns a macro, do its base
-subscribers follow? Following would make a performer write bases, which
-the control model reserves for scene-setters; the alternatives are in
-that row.
+**A performer on a macro** (owner, 2026-09-28, plan 11 §2 row 19). Base
+subscribers follow the macro's **base** only: the desk, the panel or a
+preset moves them. Depth subscribers follow its effective value, so a
+hand riding a macro deepens or flattens its routes and leaves the bases
+alone. Letting a performer's macro move bases as offsets (the macro as a
+performer of each param) is a later extension, not this plan.
 
 **Migration.** A route with `scale: "macro.N"` becomes a depth subscriber
 of `macro.N` with `from 0, to 1`; the route loses the field. Every factory

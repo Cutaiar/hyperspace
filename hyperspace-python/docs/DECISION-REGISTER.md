@@ -441,8 +441,8 @@ or "overturn".
 | 10 | P13-b partial presets | (a) no exception | **(a)**, 2026-09-28 | |
 | 11 | P13-c bank slots | (a) a slot names a file | **(a)**, 2026-09-28 | |
 | 12 | P13-d what a macro is | (a) attenuator + multi-target rows | **one concept**, 2026-09-28 | subscribers set a base or a depth, each with its own polarity; see 12b |
-| 13 | P13-e ROUTING page | (a) one page | | |
-| 12b | P13-g a performer on a macro | (a) base subscribers follow the base only | | new, from your row 12 answer |
+| 13 | P13-e ROUTING page | (a) one page | **(a)**, 2026-09-28 | |
+| 12b | P13-g a performer on a macro | (a) base subscribers follow the base only | **(a)**, 2026-09-28 | |
 | 14 | B1 as built | keep | | |
 | 15 | A1 as built | keep | | |
 | 16 | L3 as built | keep | | |
