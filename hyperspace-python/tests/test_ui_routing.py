@@ -411,7 +411,7 @@ def test_the_routing_page_is_one_page_over_the_loaded_preset(rig, tmp_path, monk
     frame(panel, "routing")
     frame(panel)
     # the head
-    assert "SHOW" in texts and "LAYER PRESET" in texts and "●" not in texts
+    assert "SHOW" in texts and "DESK LAYER: PRESET" in texts and "●" not in texts
     assert "learn: track fader 3 is invariant (the session's) — not learned" in texts
     assert any(t.startswith("desk: dropped cc:0:7 → view.bright") and "invariant" in t
                for t in texts)
@@ -454,7 +454,7 @@ def test_the_routing_page_is_one_page_over_the_loaded_preset(rig, tmp_path, monk
     table.set_layer("global")
     texts.clear()
     frame(panel)
-    assert "LAYER GLOBAL" in texts
+    assert "DESK LAYER: GLOBAL" in texts
 
 
 def test_route_a_lane_here_jumps_to_the_page(rig, tmp_path):

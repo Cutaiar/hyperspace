@@ -491,7 +491,7 @@ def test_project_row_and_dirty_state(rig, tmp_path):
     panel, lib, reg = rig.panel, rig.lib, rig.reg
     proj = lib.project
     frame(panel, "presets")
-    assert proj.is_dirty()          # never saved
+    assert not proj.is_dirty() and proj.factory   # a factory show as it shipped: clean
     ui_presets._project_save_as(panel, "Show")
     assert proj.name == "Show" and proj.path == tmp_path / "projects" / "show.hyp.json"
     assert not proj.is_dirty()

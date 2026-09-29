@@ -101,7 +101,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .params import PLANES, SESSION_GROUPS, Registry
+from .params import PERFORMANCE_GROUPS, PLANES, SESSION_GROUPS, Registry
 
 SLOTS = 8                 # the F1–F8 preset bank
 PRESETS = "presets"       # the presets' group, a document kind (preset.py)
@@ -403,6 +403,9 @@ class Project:
         self.name = DEFAULT_PROJECT
         self.note = ""
         self.path: Path | None = None
+        # a factory show opened as it shipped (no user file): clean until
+        # it is changed, and a save writes your copy (plan 14 WP4)
+        self.factory = False
         self.session: dict[str, Any] = {}     # the session part
         self.modules: dict[str, Any] = {}     # session groups' module labels
         self.bank: list[str | None] = [None] * SLOTS
@@ -413,7 +416,8 @@ class Project:
 
     # ---- documents ----
 
-    def _take(self, doc: dict, path: Path | None, where: str = "project") -> None:
+    def _take(self, doc: dict, path: Path | None, where: str = "project", *,
+              factory: bool = False) -> None:
         if doc.get("schema") == PROJECT_V1:
             # its bank becomes presets through the live table (Project.load,
             # preset.migrate_home); with no preset loader there is none
@@ -424,6 +428,7 @@ class Project:
                                             else UNTITLED))
         self.note = str(doc.get("note") or "")
         self.path = path
+        self.factory = factory and path is None
         self.session = dict(doc.get("session") or {})
         self.modules = dict(doc.get("modules") or {})
         bank = [str(s) if isinstance(s, str) and s else None
@@ -452,13 +457,15 @@ class Project:
         preset's (preset.py)."""
         lib = self.lib
         # a document kind is never the project's (the loaded preset, the
-        # only kind since plan 13 WP5): what it has landed survives a project load
-        kinds = {g: lib.landed(g) for g in lib._kinds}
+        # only kind since plan 13 WP5): what it has landed survives a project
+        # load, and so do the performance groups' references — the loaded
+        # preset's, which their dirty dots compare against (plan 14 WP4)
+        kept = {g: lib.landed(g) for g in (*lib._kinds, *PERFORMANCE_GROUPS)}
         lib._current.clear()
         lib._loaded.clear()
         lib._adopted.clear()
-        for group, mark in kinds.items():
-            if mark[0] is not None:
+        for group, mark in kept.items():
+            if mark[0] is not None or mark[1] is not None:
                 lib.reland(group, mark)
         docs: list[tuple[str, str, dict | None]] = []
         for group, ref in self.modules.items():
@@ -489,6 +496,14 @@ class Project:
             hook = lib._load_hooks.get(group)
             if hook is not None:
                 hook(name)
+        # a session group the show names no module preset for: clean as the
+        # show left it — the rail's dot compares against the show, not fresh
+        # defaults (plan 14 WP4)
+        if lib.reg is not None:
+            named = {g for g, _n, _d in docs}
+            for group in SESSION_GROUPS:
+                if group not in named and group not in lib._kinds:
+                    lib._landed(group, None, lib.reg.snapshot(group))
         # the bank lights the slot naming the preset still loaded, if any
         cur = lib._current.get(PRESETS)
         self.active = self.bank.index(cur) if cur in self.bank else -1
@@ -598,7 +613,7 @@ class Project:
             path = Path(name)
         else:
             path = self.path_for(name)
-            if not path.is_file():                    # a factory project by name
+            if not path.is_file():                    # a factory show by name
                 path = lib.factory / PROJECTS / path.name
         doc = _read_json(path)
         presets = self._loader()
@@ -628,7 +643,9 @@ class Project:
                 raise LibraryError(f"{path.name}: not migrated ({notes[-1] if notes else '?'})")
             lib._sync(path)
             doc = _read_json(path)
-        self._take(doc, path if lib._is_user(path) else None, path.name)
+        user = lib._is_user(path)
+        self._take(doc, path if user else None, path.name,
+                   factory=path.parent == lib.factory / PROJECTS)
         missing = self._apply()
         lib.report(missing, path.name)
         lib.status = f"show: {self.name}"
@@ -642,7 +659,7 @@ class Project:
         (not remembered until it is saved)."""
         lib = self.lib
         self._take(_read_json(lib.factory / PROJECTS / f"{DEFAULT_PROJECT}{PROJECT_SUFFIX}"),
-                   None)
+                   None)                                 # not factory: a new show of yours
         self.name = name
         lib._fresh_layouts()                          # the layout the app started with…
         lib.restore(lib._fresh_all())                 # …and every group's fresh values
@@ -691,15 +708,18 @@ class Project:
         _write_json(self.path, self.to_doc())
         self.lib._sync(self.path)
         self._saved = (list(self.bank), self.startup)
+        self.factory = False                          # your copy now
         return self.path
 
     def is_dirty(self) -> bool:
         """Does the live state differ from the file — the session values,
-        the bank or the startup preset? Never saved counts as dirty."""
+        the bank or the startup preset? Never saved counts as dirty; a
+        factory show opened as it shipped does not (plan 14 WP4)."""
         reg = self.lib.reg
         if reg is None:
             return False
-        return (self.path is None or self.session != reg.snapshot(part="session")
+        return ((self.path is None and not self.factory)
+                or self.session != reg.snapshot(part="session")
                 or (self.bank, self.startup) != self._saved)
 
 
@@ -867,13 +887,13 @@ class Library:
                     self.error = f"library: {e}"
             elif factory.is_file() and name != DEFAULT_PROJECT:
                 try:
-                    self.project._take(_read_json(factory), None, factory.name)
+                    self.project._take(_read_json(factory), None, factory.name, factory=True)
                     return
                 except LibraryError as e:
                     self.error = f"library: {e}"
         factory = self.factory / PROJECTS / f"{DEFAULT_PROJECT}{PROJECT_SUFFIX}"
         try:
-            self.project._take(_read_json(factory), None, factory.name)
+            self.project._take(_read_json(factory), None, factory.name, factory=True)
         except LibraryError as e:
             self.error = f"library: {e}"
             self.project._take({"schema": PROJECT_SCHEMA}, None)
@@ -1012,8 +1032,11 @@ class Library:
         """Record `name` as the group's current module preset, the group's
         state as it now stands being what "clean" means — a preset's
         module label (plan 13 D3): the strip shows the name and a clean
-        dot, and nothing is loaded. None: no current preset."""
-        loaded = self.reg.snapshot(group) if name is not None and self.reg is not None else None
+        dot, and nothing is loaded. None: no module preset, but the state
+        as it stands is still what "clean" means — a preset that names no
+        module for the group landed it, and the rail's dot compares against
+        that, not fresh defaults (plan 14 WP4)."""
+        loaded = self.reg.snapshot(group) if self.reg is not None else None
         self._landed(group, name, loaded)
 
     def landed(self, group: str) -> tuple:

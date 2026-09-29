@@ -673,7 +673,7 @@ def _preset_line(panel, pr, table) -> None:
         if imgui.is_item_hovered():
             imgui.set_tooltip("edited since it loaded — save writes it")
     glob = table.layer == "global"
-    layer = f"layer {'global' if glob else 'preset'}"
+    layer = f"desk layer: {'global' if glob else 'preset'}"
     sp = imgui.get_style().item_spacing.x
     imgui.same_line(imgui.get_content_region_avail().x
                     - ui.chip_w("save", "as…") - ui._micro_width(layer) - sp)
