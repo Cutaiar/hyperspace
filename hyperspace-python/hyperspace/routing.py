@@ -940,6 +940,25 @@ def sort_layers(rows: Iterable[Binding], profile: str = "apc40"
     return rows, notes
 
 
+PICKUP_TOL = 1.5 / 127   # a knob "reaches" the value within this (midi.py)
+
+
+def led_lit(b: Binding, p: Param) -> bool:
+    """Is a note row's LED on for `p`'s state now — the device's light and
+    the on-screen desk's (ui_desk.py) from one rule."""
+    if p.kind is Kind.TOGGLE:
+        return bool(p.value) if b.op != "set" else bool(p.value) == bool(b.value)
+    if p.kind is Kind.ENUM:
+        return p.value == int(b.value) if b.op == "set" else b.lit
+    if p.kind is Kind.CONTINUOUS and b.op == "set":
+        return abs(p.norm - float(b.value)) <= PICKUP_TOL
+    if p.kind is Kind.TRIGGER:
+        # the press echo, or a light the param carries itself (a trigger
+        # declared with `lit=`: the METRONOME LED blinking on the beat)
+        return b.lit or bool(p.get())
+    return b.lit
+
+
 def register_desk(reg: Registry, table: Bindings) -> None:
     """`desk.shift`: the layer latch as a toggle over the table — on while
     the global layer is up — so SHIFT is a row like any other (a note row

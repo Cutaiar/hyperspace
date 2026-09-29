@@ -418,10 +418,12 @@ def test_the_routing_page_is_one_page_over_the_loaded_preset(rig, tmp_path, monk
     assert "bindings" not in lib.kinds                         # no routing-preset strip
     # the routes, with the macro's chip
     assert "view.bright" in previews and "× macro.1" in texts
-    # the desk: its rows in Akai's words, and the controls it leaves dark
-    assert {"DESK  ·  PRESET LAYER", "device knob 1", "scene launch 1"} <= set(texts)
+    # the desk: its rows by glyph (plan 14 WP7: D1 is device knob 1, G1·9
+    # scene launch 1), and the controls it leaves dark
+    assert {"DESK  ·  PRESET LAYER", "D1", "G1·9"} <= set(texts)
+    assert "device knob 1" not in texts                        # Akai's name: the tooltip
     assert {"view.speed", "view.points"} <= set(previews)
-    assert "track knob 1" in texts and "unmapped — dark" in texts
+    assert "K1" in texts and "unmapped — dark" in texts
     dark = [f.source for f in ui_routing.unmapped(table)]
     assert "cc:0:48" in dark and "cc:*:16" not in dark and "cc:0:7" not in dark
     # the macros: both subscribers, the shared param marked on both lines
@@ -430,7 +432,7 @@ def test_the_routing_page_is_one_page_over_the_loaded_preset(rig, tmp_path, monk
     assert ui_routing.shared_bases(table) == {"view.depth4": ["macro.1", "macro.2"]}
     # the session, read-only
     assert "the session's — edit bindings.json" in texts
-    assert {"track fader 1", "band.0.post", "SHIFT", "desk.shift", "band.sel.trim"} <= set(texts)
+    assert {"S1", "band.0.post", "⇧", "desk.shift", "band.sel.trim"} <= set(texts)
     assert not lib.is_dirty("presets")
     # an edit on the page: a subscriber's `to` dragged
     real = imgui.slider_float

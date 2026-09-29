@@ -622,6 +622,15 @@ the APC40 with the mapped controls lit.
 **What changes.** A layout table, the glyph on the page and in Learn, the
 diagram window, hand check 45. Plan 14 WP7.
 
+**Built (plan 14 WP7).** `apc40.LAYOUT` holds all 137 controls with the
+glyphs above (B1–B4 PAN, SEND A–C; B5–B12 the eight device buttons,
+CLIP/TRACK … METRONOME; B13–B15 PLAY, STOP, REC; B16–B19 ▲ ▼ ▶ ◀; B20
+TAP TEMPO, B21 NUDGE −, B22 NUDGE +). The ROUTING desk and session rows
+print the glyph first, Akai's name in the tooltip; Learn says "D3
+(device knob 3)". The diagram (`ui_desk.py`, `ui.desk`) sits above the
+cheat sheet in the control window and reads the table, not the port.
+Where each control sits is hand check 45's to confirm on the device.
+
 ---
 
 ## Part B — built on the recommendation without asking; confirm or overturn
@@ -704,4 +713,4 @@ or "overturn".
 | 22 | P14-b the party device | party opens; house moods a `house` show; last show remembered | **rec**, 2026-09-29 | plan 14 WP3 |
 | 23 | P14-c dream on by default | (b) optional torch, worker on, loud when missing | **(a)**, 2026-09-29 | torch is part of the app, not optional; plan 14 WP1 |
 | 24 | P14-d F6–F8 effects | (a) ACID, MANDALA, NOITA | **(a)**, 2026-09-29 | plan 14 WP5 |
-| 25 | P14-e desk glyphs and diagram | (a) K/D/S/G/B glyphs, up layer, above the cheat sheet | **(a)**, 2026-09-29 | plan 14 WP7 |
+| 25 | P14-e desk glyphs and diagram | (a) K/D/S/G/B glyphs, up layer, above the cheat sheet | **(a)**, 2026-09-29 | plan 14 WP7 — built (`apc40.LAYOUT`, `ui_desk.py`, hand check 45) |

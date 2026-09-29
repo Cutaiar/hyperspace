@@ -637,6 +637,19 @@ unreadable at a party.
   assumption). A macro is a knob with subscribers: each sets a param's
   base or scales a route's depth over its own `from → to`; a hand on a
   macro moves only the depths.
+- **The desk's glyphs and diagram** (plan 14 WP7, decision 25). Every
+  control has a short glyph (`apc40.LAYOUT`): K1–K8 the track knobs,
+  D1–D8 the device knobs, S1–S8 the faders, SM the master, X the
+  crossfader, C the cue knob, Gr·c the button field (rows 1–5 clip
+  launch, 6 clip stop, 7 track select, 8 activator, 9 solo, 10 rec-arm;
+  column 9 scene launch, STOP ALL, MASTER), B1–B22 the other buttons, ⇧
+  SHIFT. A ROUTING row, a Learn message and the cheat sheet use the
+  glyph; Akai's name stays in the tooltip. The control window draws the
+  desk above the cheat sheet (`ui_desk.py`, `ui.desk`): the layer that is
+  up lit exactly as the device is (`Bindings.active`, `routing.led_lit`),
+  the rest dark, ⇧ red on the global layer; it reads the table, so it
+  works with no device plugged in. A new control in the protocol gets a
+  `LAYOUT` entry, or `tests/test_ui_desk.py` fails.
 - **Learn and the ROUTING page write into the loaded preset** (plan 13
   §3.3). Right-click → Learn, then a knob: a preset-layer row; then a
   hand: a route naming the axis that moved, `hand:right.pitch` (decision

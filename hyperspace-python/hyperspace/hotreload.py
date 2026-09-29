@@ -58,7 +58,7 @@ MODULES = (
     "lookback", "dream", "fx", "view", "render", "params", "library", "control", "config",
     "overlay", "gamepad", "apc40", "routing", "preset", "learn", "midi", "bridge",
     "hands.signal", "hands.core", "hands", "ui_presets", "ui_lookback", "ui_bands", "ui_routing", "ui_fx",
-    "ui_lfo", "hands.panel", "ui",
+    "ui_lfo", "ui_desk", "hands.panel", "ui",
 )
 
 

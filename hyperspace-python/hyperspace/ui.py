@@ -32,7 +32,7 @@ from collections.abc import Callable
 
 from imgui_bundle import imgui
 
-from . import ui_bands, ui_fx, ui_lfo, ui_lookback, ui_presets, ui_routing
+from . import ui_bands, ui_desk, ui_fx, ui_lfo, ui_lookback, ui_presets, ui_routing
 from .analyzer import N_MAX
 from .audio import AudioEngine
 from .bands import CEIL, KNEE
@@ -306,6 +306,8 @@ CHEATSHEET = [
     ("view/menu", "panel / this sheet"),
     # any control ↔ any MIDI message, through the registry (midi.py)
     ("right-click", "a control: MIDI learn / unbind"),
+    # the APC40's glyphs, as the desk above and the ROUTING rows print them
+    ("APC40", "K D knobs · S faders · G row·col · B ⇧"),
 ]
 
 # ---- the pages: (key, rail label, the group — or groups — whose dirty dot the rail shows) ----
@@ -359,6 +361,7 @@ class Panel:
         self.pin_out = [0.0] * N_MAX
         self.open = True
         self.cheatsheet = True
+        self.desk = True            # the APC40 drawn above the sheet (ui_desk.py)
         self.page = 1               # index into PAGES; the view page opens first
         self.ghosts = 0             # ghost markers drawn this frame (tests read it)
         self._file_dialog = None
@@ -395,6 +398,12 @@ class Panel:
                  lambda: self.cheatsheet,
                  lambda on: setattr(self, "cheatsheet", bool(on)), group="ui",
                  persist=False, modulatable=False)
+        r.toggle("ui.desk", "Desk diagram",
+                 lambda: self.desk,
+                 lambda on: setattr(self, "desk", bool(on)), group="ui",
+                 persist=False, modulatable=False,
+                 tip="The APC40 drawn above the cheat sheet: the controls the layer "
+                     "that is up maps lit, each with the glyph the ROUTING rows print.")
         r.enum("ui.page", "Page", lambda: self.page,
                lambda i: setattr(self, "page", int(i)), [lb for _, lb, _ in PAGES],
                group="ui", persist=False, modulatable=False,
@@ -858,6 +867,7 @@ class Panel:
             _readout(key, RED)
             imgui.same_line(x0 + col + 14)
             imgui.text_colored(DIM, action)
+        self._sheet_h = imgui.get_window_height()    # the desk sits above it (ui_desk)
         imgui.end()
         imgui.pop_style_var()
 
@@ -956,6 +966,8 @@ class Panel:
         ui_routing.modal(self)
         if self.cheatsheet:
             self._draw_cheatsheet()
+        if getattr(self, "desk", True):     # (a Panel from before a hot reload)
+            ui_desk.diagram(self)
         if not self.open:
             return
         io = imgui.get_io()
@@ -1289,6 +1301,9 @@ class Panel:
         self._section("system")
         self._check("ui.cheatsheet")
         imgui.same_line()
+        if "ui.desk" in self.reg:   # (a registry from before a hot reload lacks it)
+            self._check("ui.desk")
+            imgui.same_line()
         self._button("app.restart", "Restart process", small=True)
         if self.reloader is not None:
             imgui.text_disabled(f"hot reload: {self.reloader.status or 'watching'}")
