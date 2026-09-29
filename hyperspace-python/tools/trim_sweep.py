@@ -59,7 +59,9 @@ def main() -> None:
     ap.add_argument("--manual", action="store_true")
     a = ap.parse_args()
     path = Path(a.clip)
-    if not path.exists():
+    if not path.exists() and path.resolve() != (FIXTURES / "brickwalled.wav").resolve():
+        sys.exit(f"no such clip: {path}")
+    if not path.exists():   # the default clip: generate the fixtures once
         subprocess.run([sys.executable, str(ROOT / "tools" / "gen_test_audio.py"),
                         "--out", str(FIXTURES)], check=True)
     mode = "MANUAL" if a.manual else "AUTO"

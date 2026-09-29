@@ -355,10 +355,12 @@ def _norm_chip(panel) -> None:
     a = panel.reg["band.sel.norm"]
     p = panel._real(a)
     manual = bool(p.base)
-    if ui.lit_chip(f"{'MANUAL' if manual else 'AUTO'}##norm", manual):
+    w = imgui.ImVec2(ui.chip_w("MANUAL"), 0)   # one width: the combos never jump
+    if ui.lit_chip(f"{'MANUAL' if manual else 'AUTO'}##norm", manual, size=w):
         p.set(0 if manual else 1)
     panel._tip(a)
     panel._ctx(a)
+    panel._learn_frame(a)
 
 
 def strip(panel) -> None:
