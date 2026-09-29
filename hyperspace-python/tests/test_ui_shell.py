@@ -211,8 +211,8 @@ def test_system_page_shows_the_dream_error_and_the_stall_log(rig, monkeypatch, t
     drawn = _drawn(monkeypatch)
     rig.panel.dream_error = app.dream_error(ModuleNotFoundError("no torch", name="torch"))
     assert rig.panel.dream_error == (
-        "dream worker off: torch is not installed — run `uv sync --extra dream`, "
-        "then launch with `uv run --extra dream hyperspace`")
+        "dream worker off: torch is not installed — run `uv sync`, "
+        "then launch with `uv run hyperspace`")
     wd = Watchdog(tmp_path / "stall.log", preset=lambda: "FACES")
     rig.panel.watchdog = wd
     frame(rig.panel, "system")
@@ -228,7 +228,7 @@ def test_system_page_shows_the_dream_error_and_the_stall_log(rig, monkeypatch, t
 def test_the_lookback_page_says_why_the_worker_is_off(rig, monkeypatch):
 
     drawn = _drawn(monkeypatch)
-    rig.panel.dream_error = "dream worker off: torch is not installed — run `uv sync --extra dream`"
+    rig.panel.dream_error = "dream worker off: torch is not installed — run `uv sync`"
     frame(rig.panel, "lookback")
     assert rig.panel.dream_error in drawn
 

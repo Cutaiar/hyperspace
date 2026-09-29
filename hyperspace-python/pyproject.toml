@@ -21,13 +21,10 @@ dependencies = [
     "python-rtmidi>=1.5.8",
     "sounddevice>=0.5.6",
     "soundfile>=0.14.0",
-]
-
-[project.optional-dependencies]
-# the look-back's dream worker (dream.py, torch on MPS) and the bench in
-# tools/dream_bench/. Optional: dream.py is imported only under
-# `[dream] enabled` in config.toml.  `uv sync --extra dream`
-dream = [
+    # the look-back's dream worker (dream.py, torch on MPS) and the bench in
+    # tools/dream_bench/ — part of the app since decision 23 (a), 2026-09-29:
+    # plain `uv sync` installs it. dream.py is still imported lazily, only
+    # under `[dream] enabled` (on by default), so importing app pulls no torch.
     "torch>=2.2",
     "torchvision>=0.17",
     "mlx>=0.20 ; sys_platform == 'darwin'",

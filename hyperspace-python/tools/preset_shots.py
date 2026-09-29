@@ -8,7 +8,7 @@ load, as its F-key does — and two fake hands are driven through the real ``Han
 (range → One Euro → dead zone → follower) at a handful of poses, each held
 for a second and a half before the frame is taken. No audio source: the
 lane rows are quiet, so what the shots show is the hands alone over the
-preset's bases. No dream worker either (torch is optional), so in the wake
+preset's bases. No dream worker either (the tool attaches none), so in the wake
 shots the echoes are real and the dream buffer is empty.
 
     uv run python tools/preset_shots.py [--only tumble,trip] [--frames 90] [--no-shots]

@@ -1,6 +1,6 @@
 """Question B.1 — zero-copy GL <-> Metal <-> torch/MLX on macOS from Python.
 
-    uv run --extra dream python tools/dream_bench/b_iosurface.py [--res 256]
+    uv run python tools/dream_bench/b_iosurface.py [--res 256]
 
 What it prototypes, in order, stopping at the first thing that fails:
 

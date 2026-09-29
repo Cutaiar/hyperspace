@@ -152,8 +152,8 @@ def _worker_status(lb, error: str = "") -> str:
     if w is None:
         if error:
             return error
-        return ("no worker — [dream] enabled = true in config.toml opens it; it needs "
-                "torch: `uv sync --extra dream`, then `uv run --extra dream hyperspace`")
+        return ("no worker — [dream] enabled in config.toml opens it (on by default); "
+                "torch comes with `uv sync`")
     try:
         return w.status()
     except Exception as e:  # noqa: BLE001 — a status line must not take the page down

@@ -99,8 +99,8 @@ def test_a_broken_adapter_is_a_note_not_a_crash(monkeypatch, capsys):
     monkeypatch.setitem(sys.modules, "torch", None)
     off, why = app._open_dream(reg, {"dream": {"enabled": True}})
     assert off is None
-    assert why == ("dream worker off: torch is not installed — run `uv sync --extra dream`, "
-                   "then launch with `uv run --extra dream hyperspace`")
+    assert why == ("dream worker off: torch is not installed — run `uv sync`, "
+                   "then launch with `uv run hyperspace`")
     err = capsys.readouterr().err
     for line in ("midi: boom", "bridge: boom", "hands: boom", "dream: boom"):
         assert line in err

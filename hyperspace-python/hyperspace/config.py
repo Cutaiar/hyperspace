@@ -4,10 +4,12 @@ The home is ``$HYPERSPACE_HOME`` (default ``~/Hyperspace``, library.py);
 a config.toml still sitting in the working directory is copied there on
 the first run. Everything has a default, so the file is only for what
 differs on this machine. Adapters are enabled here, not in code
-(BLUEPRINT §3.6). Two are on by default because they cost nothing when the
-device is absent — the MIDI adapter (it is the one that also holds Learn)
-and the gamepad; the bridge, the dream worker and the hands tracker are
-off until asked for, and their modules are never imported until then.
+(BLUEPRINT §3.6). Three are on by default: the MIDI adapter (it is the one
+that also holds Learn) and the gamepad cost nothing when the device is
+absent, and the dream worker is part of the show (decision 23 (a),
+2026-09-29: torch is a main dependency). The bridge and the hands tracker
+are off until asked for, and their modules are never imported until then;
+dream.py, too, is imported only when its gate is open.
 
     [midi]
     enabled = true          # false leaves the adapter out entirely (and hand Learn with it)
@@ -51,7 +53,7 @@ like the rename above. The SYSTEM page shows both.
     in_lanes = 16           # size of the `ext` vector the inbound lanes fill
 
     [dream]                 # the look-back's Deep Dream worker (dream.py, torch)
-    enabled = false         # true opens the worker; off, torch is never imported
+    enabled = true          # on by default; false keeps torch from ever being imported
     device = "auto"         # "auto" (MPS when there, else CPU), "mps", "cpu"
     precision = "fp32"      # or "fp16": ~10 % faster on VGG, more p99 outliers
     weights_dir = ""        # pretrained weights; "" = <library home>/weights
@@ -96,8 +98,9 @@ DEFAULTS: dict = {
     # bridge.py: the analyzer's lanes out to a DAW, external lanes in — off by default
     "bridge": {"enabled": False, "out": "IAC", "in": "", "encoding": "pitch", "channel": 0,
                "cc": 16, "rate": 100, "send": ["lane:*"], "in_lanes": 16},
-    # dream.py: the temporal Deep Dream behind the look-back — off by default
-    "dream": {"enabled": False, "device": "auto", "precision": "fp32", "weights_dir": ""},
+    # dream.py: the temporal Deep Dream behind the look-back — on by default
+    # (decision 23 (a)); a worker that will not start is said on the panel
+    "dream": {"enabled": True, "device": "auto", "precision": "fp32", "weights_dir": ""},
     # hands/: Ultraleap hands as MIDI CCs and hand lanes — off by default.
     # Its section is not here: load() fills it from hands/core.py's DEFAULTS,
     # the one table (every key documented there), read at call time so this

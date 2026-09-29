@@ -1,8 +1,8 @@
 """WP6b — the dream worker: the LookbackSource contract, the hand-off,
 the guards, the copy paths, the config gate, and the real pipeline.
 
-The worker itself needs torch (``uv sync --extra dream``); those tests
-skip without it. The fast ones inject a step function in place of the
+The worker itself needs torch — a main dependency since decision 23 (a),
+so a plain ``uv sync`` has it; those tests still skip without it. The fast ones inject a step function in place of the
 net, so they need no weights and no GPU; the end-to-end one loads VGG16
 conv3_3 for real and is marked slow.
 """
@@ -72,13 +72,15 @@ def test_core_does_not_import_the_worker():
         assert "import torch" not in f.read_text(), f.name
 
 
-def test_dream_is_off_by_default(tmp_path):
+def test_dream_is_on_by_default(tmp_path):
+    """Decision 23 (a), 2026-09-29: torch is part of the app and the worker
+    opens unless config.toml says `[dream] enabled = false`."""
     cfg = config.load(tmp_path / "config.toml")
-    assert cfg["dream"] == {"enabled": False, "device": "auto", "precision": "fp32",
+    assert cfg["dream"] == {"enabled": True, "device": "auto", "precision": "fp32",
                             "weights_dir": ""}
-    (tmp_path / "config.toml").write_text('[dream]\nenabled = true\nprecision = "fp16"\n')
+    (tmp_path / "config.toml").write_text('[dream]\nenabled = false\nprecision = "fp16"\n')
     cfg = config.load(tmp_path / "config.toml")
-    assert cfg["dream"]["enabled"] is True and cfg["dream"]["precision"] == "fp16"
+    assert cfg["dream"]["enabled"] is False and cfg["dream"]["precision"] == "fp16"
     assert cfg["dream"]["device"] == "auto"
 
 

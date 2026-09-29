@@ -248,14 +248,14 @@ def _open_hands(cfg: dict, settings):
         return None
 
 
-# torch is the optional `dream` extra (pyproject.toml). A plain `uv sync`
-# is exact and removes it again; `uv run` without the extra keeps it.
-DREAM_SETUP = "run `uv sync --extra dream`, then launch with `uv run --extra dream hyperspace`"
+# torch is an ordinary dependency (decision register row 23 (a)): `uv sync`
+# installs it. A missing torch means the environment was not synced.
+DREAM_SETUP = "run `uv sync`, then launch with `uv run hyperspace`"
 
 
 def dream_error(e: Exception) -> str:
     """What the panel says when the dream worker would not start: torch
-    missing gets the setup commands (README "Dream worker (optional)")."""
+    missing gets the setup commands (README "Dream worker")."""
     mod = (getattr(e, "name", "") or "").split(".")[0] if isinstance(e, ImportError) else ""
     if mod in ("torch", "torchvision"):
         return f"dream worker off: {mod} is not installed — {DREAM_SETUP}"

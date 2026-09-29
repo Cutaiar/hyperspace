@@ -17,28 +17,17 @@ uv run pytest          # ~930 tests, ~35 s
 uv run hyperspace      # opens the render window and the control window
 ```
 
-### Dream worker (optional)
+### Dream worker
 
-The look-back's Deep Dream worker needs **torch**, which is not part of a
-plain install: it is the `dream` extra (torch, torchvision, and on macOS
-mlx and the Metal / Quartz bindings — about 800 MB).
-
-```bash
-uv sync --extra dream                  # installs torch and the rest of the extra
-uv run --extra dream hyperspace        # launch with it
-```
-
-and `[dream] enabled = true` in `~/Hyperspace/config.toml` (off by
-default). Once installed, a plain `uv run hyperspace` keeps it (`uv run`
-only adds what is missing), but a plain **`uv sync` removes it again** —
-`uv sync` makes the environment exactly the lock without extras. Run
-`uv sync --extra dream` whenever you sync. The pretrained weights (VGG16,
-528 MB) are read from `~/Hyperspace/weights`, else torch's hub cache, and
-downloaded there on first use otherwise. With `[dream] enabled = true`
-and no torch the app runs the plain tracer and says why — the red banner
-at the bottom of the control window, the SYSTEM page and the LOOKBACK
-page all read "dream worker off: torch is not installed — run `uv sync
---extra dream`, then launch with `uv run --extra dream hyperspace`".
+The look-back's Deep Dream worker is part of the app: `uv sync` installs
+**torch** with everything else (torch, torchvision, and on macOS mlx and
+the Metal / Quartz bindings — about 800 MB), and `[dream] enabled`
+defaults to on. The pretrained weights (VGG16, 528 MB) are read from
+`~/Hyperspace/weights`, else torch's hub cache, and downloaded there on
+first use otherwise. If the worker cannot start (weights missing, a device
+error, an unsynced environment) the app runs the plain tracer and says why
+— the red banner at the bottom of the control window, the SYSTEM page and
+the LOOKBACK page. Turn it off with `[dream] enabled = false`.
 
 ### When the render freezes
 

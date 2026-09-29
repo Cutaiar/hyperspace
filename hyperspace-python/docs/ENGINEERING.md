@@ -230,12 +230,11 @@ presettable, all modulatable.
   (`tests/test_dream.py`). It reads the `dream.*` params on the frame thread
   inside `submit`, never from the worker thread. The performance spike
   behind these numbers is `docs/plans/assets/06-lookback-perf.md`.
-- **Setup.** torch is the `dream` extra, not a main dependency:
-  `uv sync --extra dream`, then `uv run --extra dream hyperspace` (or plain
-  `uv run hyperspace` afterwards — `uv run` without the extra leaves it
-  installed). A plain `uv sync` is exact and **removes** the extra again.
-  With `[dream] enabled = true` and no torch, `app._open_dream` keeps the
-  reason (`dream_error`, with those commands) and the panel shows it: the
+- **Setup.** torch and the dream stack are ordinary dependencies
+  (decision register row 23 (a), 2026-09-29): `uv sync` installs them and
+  `[dream] enabled` defaults to on. If the worker cannot start (an unsynced
+  environment without torch, missing weights), `app._open_dream` keeps the
+  reason (`dream_error`) and the panel shows it: the
   SYSTEM page, the LOOKBACK page's worker line, and the red banner. A
   preset that asks for the dream (`dream.on`, `dream.mix` > 0) with no worker is a banner warning (until dismissed) and a
   stall-log entry, once (the look-back then shows the echoes only).

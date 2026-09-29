@@ -3,7 +3,7 @@
 Nothing here is imported by the `hyperspace` package. Every script in this
 directory is standalone:
 
-    uv run --extra dream python tools/dream_bench/<name>.py
+    uv run python tools/dream_bench/<name>.py
 
 The helpers cover three things the benchmarks all need:
 

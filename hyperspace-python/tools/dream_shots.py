@@ -9,7 +9,7 @@ worker's ms per submit (p50 / p99) and the renderer's own frame time with
 the worker running against the same loop without one — the contention
 number of spike C on the real pipeline.
 
-    uv run --extra dream python tools/dream_shots.py [--frames 90] [--layer conv3_3]
+    uv run python tools/dream_shots.py [--frames 90] [--layer conv3_3]
 """
 
 from __future__ import annotations
