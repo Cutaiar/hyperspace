@@ -238,6 +238,30 @@ def test_switching_to_hz_carries_the_phase_and_a_division_lands_on_the_clock():
     assert rnd.hold == held
 
 
+def test_a_division_chosen_after_a_per_lfo_reset_still_lands_on_the_clock():
+    lfos, c = LFOs(), clock_at(120.0)
+    lf = lfos[0]
+    lf.sync, lf.shape = SYNCS.index("1/4"), SHAPES.index("saw")
+    run(lfos, c, 0.0, 1.65)                      # beat ≈ 3.3
+    lfos.reset(0, c, 1.65)                       # an offset for the quarter
+    lfos.step(0.0, 1.65, c)
+    lf.sync = SYNCS.index("1 bar")               # the offset must not follow
+    t = 1.65 + DT
+    lfos.step(DT, t, c)
+    assert lf.x == pytest.approx((c.beat(t) / 4) % 1.0, abs=1e-9)
+
+
+def test_a_reset_and_a_switch_to_hz_in_one_frame_still_reads_phase_zero():
+    lfos, c = LFOs(), clock_at(120.0)
+    lf = lfos[0]
+    lf.sync, lf.shape = SYNCS.index("1 bar"), SHAPES.index("saw")
+    run(lfos, c, 0.0, 1.3)
+    lfos.reset(0, c, 1.3 + DT)                   # a key, before the step…
+    lf.sync = 0                                  # …and the sync knob, same frame
+    lfos.step(DT, 1.3 + DT, c)
+    assert lf.x == 0.0
+
+
 def test_an_immediate_hz_reset_reads_phase_zero_on_its_first_step_too():
     """A key-bound lfo.N.reset (before the step) and the panel chip (after
     it) must agree: the landing step begins the cycle, it is not rate·dt in."""
