@@ -533,8 +533,10 @@ second launch finds nothing to do (`tests/test_migration.py`):
    preset layer and macros; the project's performance groups' module
    labels), an empty slot points at the factory house preset its F-key
    loaded, and the file becomes `hyperspace.project/2` (`startup` the
-   first filled slot, `session` its session part and the first slot's
-   session ids, `modules` its session groups' labels), kept first as
+   project's own look — the slot its performance `values` equal, else a
+   preset `<PROJECT> SAVED` put in its first empty slot — `session`
+   its session part and the first slot's session ids, `modules` its
+   session groups' labels), kept first as
    `<file>.bak-v1`. A schema-1 file opened later (`Project.load`) takes
    the same road;
 2. every user routing preset (`bindings/*.json`) → a **full** user preset

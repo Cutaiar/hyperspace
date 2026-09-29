@@ -823,28 +823,44 @@ def slot_presets(root: Path, slots: list, carried: routing.Carried, modules: dic
         if not isinstance(slot, dict):
             bank.append(None)
             continue
-        values: dict = {}
-        sess: dict = {}
-        for pid, v in dict(slot.get("values") or {}).items():
-            (sess if _part(pid) == "session" else values)[pid] = v
+        values, sess = _split_values(slot.get("values"), carried)
         if not session and sess:
             session = sess
-        for pid, v in carried.values.items():
-            if _part(pid) == "performance":
-                values.setdefault(pid, v)
-        doc: dict[str, Any] = {"schema": SCHEMA,
-                               "name": str(slot.get("name") or f"PRESET {k + 1}")}
-        if slot.get("note"):
-            doc["note"] = str(slot["note"])
-        doc.update(values=values, routes=copy.deepcopy(carried.routes))
-        if carried.desk:
-            doc["desk"] = _desk_rows(carried.desk)
-        doc.update(macros=copy.deepcopy(carried.macros), modules=dict(modules))
+        doc = _carried_doc(str(slot.get("name") or f"PRESET {k + 1}"), values, carried,
+                           modules, note=str(slot.get("note") or ""))
         name, path = put_preset(root, doc, factory)
         bank.append(name)
         notes.append(f"slot {k + 1} → preset {name!r}"
                      + (f" ({path.name})" if path is not None else " (already there)"))
     return bank, session, notes
+
+
+def _split_values(raw, carried: routing.Carried) -> tuple[dict, dict]:
+    """A schema-1 snapshot's values as (the performance part, the carried
+    table's `values` — the macros' bases — filling the ids it lacks; the
+    session part)."""
+    values: dict = {}
+    sess: dict = {}
+    for pid, v in dict(raw or {}).items():
+        (sess if _part(pid) == "session" else values)[pid] = v
+    for pid, v in carried.values.items():
+        if _part(pid) == "performance":
+            values.setdefault(pid, v)
+    return values, sess
+
+
+def _carried_doc(name: str, values: dict, carried: routing.Carried, modules: dict,
+                 note: str = "") -> dict:
+    """A migrated preset: `values`, and the carried table's performer rows,
+    preset layer (none: no `desk` key) and macros."""
+    doc: dict[str, Any] = {"schema": SCHEMA, "name": name}
+    if note:
+        doc["note"] = note
+    doc.update(values=values, routes=copy.deepcopy(carried.routes))
+    if carried.desk:
+        doc["desk"] = _desk_rows(carried.desk)
+    doc.update(macros=copy.deepcopy(carried.macros), modules=dict(modules))
+    return doc
 
 
 def _labels(modules: dict) -> tuple[dict, dict]:
@@ -867,7 +883,9 @@ def migrate_project(root: Path, path: Path, carried: routing.Carried, *,
     """One schema-1 project → its slots as presets and the file at
     ``hyperspace.project/2`` (kept first as ``<file>.bak-v1``). An empty
     slot points at the factory default bank's preset of that slot — what
-    its F-key loaded while empty slots were seeded. Returns (notes, whether
+    its F-key loaded while empty slots were seeded — unless it holds the
+    project's own look (`<PROJECT> SAVED`, below), which is the startup
+    whatever slot it is in. Returns (notes, whether
     a preset now holds `carried`, whether the file was rewritten); a file
     that is not schema 1 is left alone: ([], False, False)."""
     doc = json.loads(path.read_text())
@@ -883,6 +901,37 @@ def migrate_project(root: Path, path: Path, carried: routing.Carried, *,
     except (OSError, ValueError, AttributeError):
         seeds = []
     filled = [n for n in bank if n]
+    startup = filled[0] if filled else None
+    pname = str(doc.get("name") or path.name[: -len(PROJECT_SUFFIX)])
+    # the project's own look — the performance values it restored on open —
+    # is never left only in the backup: equal to a slot's preset (as it
+    # would land: the same performance values), that slot is the startup;
+    # otherwise it is a preset of its own, `<PROJECT> SAVED`, the startup,
+    # in the first empty slot (a full bank: in no slot, said)
+    look, _ = _split_values(doc.get("values"), carried)
+    own = {k: v for k, v in (doc.get("values") or {}).items() if _part(k) == "performance"}
+    if own:
+        match = next((bank[k] for k, s in enumerate(raw) if isinstance(s, dict)
+                      and _split_values(s.get("values"), carried)[0] == look), None)
+        if match is not None:
+            startup = match
+            notes.append(f"the project's own look is slot {bank.index(match) + 1}'s "
+                         f"preset {match!r}: the startup")
+        else:
+            saved = _carried_doc(f"{pname.upper()} SAVED", look, carried, labels,
+                                 note=f"the look project {pname!r} restored on open, "
+                                      "made a preset by plan 13's migration")
+            name, wrote = put_preset(root, saved, factory)
+            startup = name
+            empty = next((k for k, s in enumerate(raw) if not isinstance(s, dict)), None)
+            if empty is not None:
+                bank[empty] = name
+                where = f"slot {empty + 1}"
+            else:
+                where = "no slot (the bank is full)"
+            notes.append(f"the project's own look → preset {name!r}"
+                         + (f" ({wrote.name})" if wrote is not None else " (already there)")
+                         + f": the startup, in {where}")
     bank = [n if n or k >= len(seeds) else seeds[k] for k, n in enumerate(bank)]
     session = dict(doc.get("session") or {})
     for pid, v in dict(doc.get("values") or {}).items():
@@ -890,11 +939,10 @@ def migrate_project(root: Path, path: Path, carried: routing.Carried, *,
             session.setdefault(pid, v)
     for pid, v in first.items():
         session.setdefault(pid, v)
-    new: dict[str, Any] = {"schema": PROJECT_SCHEMA,
-                           "name": str(doc.get("name") or path.name[: -len(PROJECT_SUFFIX)])}
+    new: dict[str, Any] = {"schema": PROJECT_SCHEMA, "name": pname}
     if doc.get("note"):
         new["note"] = str(doc["note"])
-    new.update(startup=filled[0] if filled else next((n for n in bank if n), None),
+    new.update(startup=startup or next((n for n in bank if n), None),
                bank=bank, session=session, modules=keep)
     bak = routing.backup(path, "1")
     if bak is None:
@@ -902,7 +950,7 @@ def migrate_project(root: Path, path: Path, carried: routing.Carried, *,
     _write_text(path, json.dumps(new, indent=1) + "\n")
     notes.append(f"{path.name} → {PROJECT_SCHEMA} ({len(filled)} presets); "
                  f"the old file kept as {bak.name}")
-    return notes, bool(filled), True
+    return notes, bool(filled) or startup is not None, True
 
 
 def _into_default(root: Path, name: str, factory: Path = FACTORY) -> str:
