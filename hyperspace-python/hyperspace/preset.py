@@ -104,6 +104,7 @@ from .library import (
     _write_text,
     slug,
 )
+from .lookback import LEGACY, fade_of_decay, gap_of_every, migrate_row, migrate_values
 from .params import PERFORMANCE_GROUPS, PLANES, SESSION_GROUPS, part_of
 from .routing import LANE_SCHEMES, MOD_OPS, Binding, Macro, Sub
 
@@ -147,6 +148,49 @@ def dumps(doc: dict) -> str:
             text = json.dumps(v)
         parts.append(f" {json.dumps(key)}: {text}")
     return "{\n" + ",\n".join(parts) + "\n}\n"
+
+
+def echo_seconds(doc: dict) -> tuple[dict, list[str]]:
+    """A preset document with the look-back's per-frame ids read as 60 Hz
+    frames and written in seconds (plan 14 WP6, `lookback.LEGACY`): its
+    values, every route and desk row on one, a macro's base subscriber on
+    one (its from / to converted too) and a depth subscriber naming such a
+    route. Returns (a copy, a note per change); the document itself when
+    it names none."""
+    text = json.dumps(doc)
+    if not any(k in text for k in LEGACY):
+        return doc, []
+    out = copy.deepcopy(doc)
+    values, notes = migrate_values(dict(out.get("values") or {}))
+    if "values" in out:
+        out["values"] = values
+    for key in ("routes", "desk"):
+        rows = []
+        for row in out.get(key) or []:
+            new, note = migrate_row(row, doc.get("values") or {}) \
+                if isinstance(row, dict) else (row, None)
+            if note:
+                notes.append(f"{key}: {note}")
+            rows.append(new)
+        if key in out:
+            out[key] = rows
+    for mid, m in (out.get("macros") or {}).items():
+        for s in (m.get("subs") or []) if isinstance(m, dict) else []:
+            if not isinstance(s, dict):
+                continue
+            base = s.get("base")
+            if base in LEGACY:
+                new, conv = LEGACY[base]
+                s["base"] = new
+                for end in ("from", "to"):
+                    if end in s:
+                        s[end] = conv(s[end])
+                notes.append(f"{mid}: base {base} → {new}")
+            dep = s.get("depth")
+            if isinstance(dep, dict) and dep.get("target") in LEGACY:
+                notes.append(f"{mid}: depth on {dep['target']} → {LEGACY[dep['target']][0]}")
+                dep["target"] = LEGACY[dep["target"]][0]
+    return out, notes
 
 
 class Presets:
@@ -197,6 +241,13 @@ class Presets:
         Returns the unknown ids; the notes land in `notes`."""
         lib, reg, table = self.lib, self.reg, self.router.table
         notes: list[str] = []
+        # 0. the look-back's per-frame ids, read as 60 Hz frames (plan 14
+        #    WP6) — a file the launch's migration has not rewritten
+        doc, converted = echo_seconds(doc)
+        if converted:
+            notes.append(f"look-back read in seconds ({converted[0]}"
+                         + (f", +{len(converted) - 1}" if len(converted) > 1 else "")
+                         + "); save to keep it")
         # 1. what the file names that a preset may not carry — all parsed
         #    before anything lands, so a bad row leaves the state alone
         values: dict[str, Any] = {}
@@ -436,15 +487,47 @@ def party_field_routes() -> list[Binding]:
 def party_wake_routes() -> list[Binding]:
     """The look-back wake. Left hand grips the object — moving it is what
     paints the wake — and left height pushes the spin. Right height pushes
-    the echoes in, reaching in lengthens them (decay up), right roll
-    positions the dream's hue round the whole circle (level = as painted),
-    fingers up push the dream buffer's opacity."""
+    the echoes in, reaching in lengthens them (a longer fade; plan 14 WP6:
+    0.24 s … 1.5 s about the scene's 0.6 s), right roll positions the
+    dream's hue round the whole circle (level = as painted), fingers up
+    push the dream buffer's opacity."""
     return [*_lane_rows(), *_grip_rows(),
             _push("L", "y", "view.speed", 0.4),
-            _push("R", "y", "dream.echo_mix", 0.7),
-            _push("R", "z", "dream.decay", -0.12),
+            _push("R", "y", "dream.echo_mix", 0.45),
+            _push("R", "z", "dream.fade", -0.3),
             Binding(hand("R", "roll"), "dream.hue", "position"),
             _push("R", "pitch", "dream.mix", 0.5)]
+
+
+def party_tracer_routes() -> list[Binding]:
+    """TRACER — the legible echoes alone (plan 14 WP6). Left hand grips
+    the object — turning it is what draws the trail — and left height
+    pushes the spin. Right height brightens the trail, reaching in makes
+    it last longer, right roll lets the shape cover its own trail (occlude
+    up) or glow through it, fingers up harden the trail to its brightest
+    lines (contrast)."""
+    return [*_lane_rows(), *_grip_rows(),
+            _push("L", "y", "view.speed", 0.4),
+            _push("R", "y", "dream.echo_mix", 0.3),
+            _push("R", "z", "dream.fade", -0.3),
+            _push("R", "roll", "dream.occlude", 0.6),
+            _push("R", "pitch", "dream.contrast", 0.3)]
+
+
+def party_tracer_values() -> dict[str, Any]:
+    """The investigation's legible echo set (plan 14 §1 row 6), in
+    seconds: 24 echoes one every 4 frames at 60 Hz (1/15 s — the trail
+    reaches 1.6 s back), fading 0.985 a frame at 60 Hz (a half-life of
+    0.76 s), echo mix 0.7, no darken, occlude 0.3, contrast 1; the
+    16-cell's points and lines without faces, at speed 0.6 and brightness
+    2. The dream buffer stays out (mix 0): the echoes are the look."""
+    return {**party_scene(view_shape=7, view_speed=0.6, view_bright=2.0, view_depth4=2.2,
+                          view_faces=False, view_points=True, view_pattern=9,
+                          camera_zoom=0.9, fx_on=False,
+                          **{f"view_plane.{n}": True for n in ("XW", "YW", "ZW")}),
+            "dream.on": True, "dream.echoes": 24, "dream.gap": gap_of_every(4),
+            "dream.fade": fade_of_decay(0.985), "dream.echo_mix": 0.7, "dream.darken": 0.0,
+            "dream.occlude": 0.3, "dream.contrast": 1.0, "dream.mix": 0.0, "dream.res": 2}
 
 
 def party_trip_routes() -> list[Binding]:
@@ -724,7 +807,7 @@ def device_knob(k: int, target: str) -> Binding:
 
 # plan 12 §6: the eight device knobs WAKE and TRIP put their bases on, on
 # top of the factory preset layer (the band strip stays behind SHIFT)
-WAKE_KNOBS = ("dream.echo_mix", "dream.decay", "dream.darken", "dream.contrast",
+WAKE_KNOBS = ("dream.echo_mix", "dream.fade", "dream.darken", "dream.contrast",
               "dream.occlude", "dream.mix", "dream.sat", "dream.k")
 TRIP_KNOBS = ("fx.mix", "fx.plasma.level", "fx.kaleido.segments", "fx.kaleido.zoom",
               "fx.zoomblur.amount", "fx.zoomblur.glow", "fx.huecycle.paint",
@@ -737,6 +820,9 @@ ACID_KNOBS = ("fx.mix", "fx.acid.bend", "fx.acid.twist", "fx.acid.reach",
 MANDALA_KNOBS = ("fx.mix", "fx.plasma.level", "fx.kaleido.segments", "fx.kaleido.zoom",
                  "fx.fractals.amount", "fx.fractals.ground", "fx.glimmer.amount",
                  "fx.glimmer.ground")
+# plan 14 WP6: TRACER's — the trail's six, its reach (echoes, spacing)
+TRACER_KNOBS = ("dream.echo_mix", "dream.fade", "dream.echoes", "dream.gap",
+                "dream.darken", "dream.contrast", "dream.occlude", "view.depth4")
 NOITA_KNOBS = ("fx.mix", "fx.warp.amount", "fx.warp.scale", "fx.tripcolour.amount",
                "fx.fractals.amount", "fx.fractals.size", "fx.doublevision.amount",
                "fx.doublevision.ghost")
@@ -789,6 +875,13 @@ FACTORY_PRESETS: dict[str, Factory] = {
                            "fractals at \"heavily tripping\", the right hand's height the "
                            "next stage, and the drunk double vision on its roll",
                            desk=knob_desk(NOITA_KNOBS)),
+    # plan 14 WP6: the legible echoes, a ninth party preset (in the list,
+    # on no F-key: F1–F8 are the five and the effect families)
+    "party-tracer": Factory(party_tracer_routes, party_tracer_values, "TRACER",
+                            "party-tracer: the 16-cell's points and lines trailing 24 echoes "
+                            "over 1.6 s, each halving in 0.76 s — the look-back alone, "
+                            "legible at a glance, the same on any screen",
+                            desk=knob_desk(TRACER_KNOBS)),
     # the routing presets, full presets now (decision 10)
     "legacy6": Factory(_lanes, legacy6_values, "legacy6",
                        "The reference's band → plane table on bases of 0: the parity "
@@ -1058,6 +1151,7 @@ def put_preset(root: Path, doc: dict, factory: Path = FACTORY) -> tuple[str, Pat
     by slug, so a user file whose slug is a factory file's shadows that
     file whole — allowed only when the two share a display name (a user
     ``party-trip`` would otherwise take TRIP off the list and the F-key)."""
+    doc, _ = echo_seconds(doc)          # an old file's echo ids in seconds (plan 14 WP6)
     base = str(doc.get("name") or "PRESET")
     name, n = base, 1
     while True:
@@ -1342,6 +1436,49 @@ def migrate_routing_presets(root: Path, has: Callable[[str], bool] | None = None
     return notes
 
 
+ECHO_BACKUP = "2-frames"          # <file>.bak-v2-frames: the file before echo time went to seconds
+
+
+def migrate_echo_home(root: Path) -> tuple[list[str], list[Path]]:
+    """Plan 14 WP6, once per file: every user preset (``<root>/presets``)
+    and look-back module preset (``<root>/dream``) that still names the
+    per-frame ``dream.decay`` / ``dream.every`` rewritten in seconds
+    (`echo_seconds`: 60 Hz frames, so the look is the same at 60 Hz),
+    kept first as ``<file>.bak-v2-frames`` (a backup that cannot be made
+    leaves the file as it is; the loader converts it on every load then).
+    Returns (the notes, the files written); nothing to do: nothing."""
+    notes: list[str] = []
+    written: list[Path] = []
+    for group in (GROUP, "dream"):
+        folder = root / group
+        for path in sorted(folder.glob("*.json")) if folder.is_dir() else []:
+            try:
+                text = path.read_text()
+                if not any(k in text for k in LEGACY):
+                    continue
+                doc = json.loads(text)
+            except (OSError, ValueError):
+                continue
+            if not isinstance(doc, dict):
+                continue
+            new, changed = echo_seconds(doc)
+            if not changed:
+                continue
+            if routing.backup(path, ECHO_BACKUP) is None:
+                notes.append(f"{group}/{path.name}: NOT rewritten in seconds (no backup); "
+                             "read in seconds on every load")
+                continue
+            try:
+                _write_text(path, dumps(new) if group == GROUP
+                            else json.dumps(new, indent=1, ensure_ascii=False) + "\n")
+            except LibraryError as e:
+                notes.append(f"{group}/{path.name}: NOT rewritten ({e})")
+                continue
+            written.append(path)
+            notes.append(f"{group}/{path.name}: look-back in seconds ({'; '.join(changed)})")
+    return notes, written
+
+
 def migrate_home(lib, router, hands_cfg: dict | None = None) -> list[str]:
     """Plan 13 §6's one-time migration of the library home (see above):
     the schema-1 projects, the user routing presets, then `bindings.json`
@@ -1433,6 +1570,11 @@ def migrate_home(lib, router, hands_cfg: dict | None = None) -> list[str]:
                 table.carried = None
                 notes.append(f"bindings.json now holds only the session's controls{kept}")
                 written.append(table.path)
+    # plan 14 WP6: echo time in seconds — last, so a preset written above
+    # from an old file is converted too
+    echo_notes, echo_written = migrate_echo_home(root)
+    notes += echo_notes
+    written += echo_written
     if written:
         lib._sync(*written)
     if projects:
@@ -1441,7 +1583,8 @@ def migrate_home(lib, router, hands_cfg: dict | None = None) -> list[str]:
     for n in notes:
         print(f"migrate: {n}", file=sys.stderr)
     if notes:
-        lib.warning = (f"plan 13 migration: {len(written)} file(s) rewritten, backups beside "
+        what = "plan 13 migration" if len(notes) > len(echo_notes) else "echo time in seconds"
+        lib.warning = (f"{what}: {len(written)} file(s) rewritten, backups beside "
                        "them — the details are on stderr")
     return notes
 

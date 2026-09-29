@@ -467,6 +467,7 @@ class Renderer:
         lb = self.lookback
         cover = self._draw_cover(w, h) if lb.wants_cover() else None
         target.viewport = (vx, vy, vw, vh)
+        lb.tick(t)                       # echo time is seconds (plan 14 WP6)
         lb.pull()
         fx = self.fx
         fx.tick()

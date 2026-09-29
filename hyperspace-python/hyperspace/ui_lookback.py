@@ -29,7 +29,8 @@ RES_W = 84          # the res and octaves combos
 # the half-width cells' labels: the registry's are too long for them
 SHORT = {"dream.mix": "dream", "dream.echo_mix": "echo", "dream.hue": "hue",
          "dream.sat": "sat", "dream.tint_hue": "tint hue", "dream.tint_sat": "tint sat",
-         "dream.k": "blend k", "dream.mask_decay": "mask", "dream.step": "step"}
+         "dream.k": "blend k", "dream.mask_decay": "mask", "dream.step": "step",
+         "dream.fade": "fade"}
 THUMB_H = 48        # thumbnail height, px; width follows the echo's aspect
 
 
@@ -55,7 +56,7 @@ def page(panel, dt: float) -> None:
         imgui.table_next_column()
         panel._section("chroma")
         imgui.table_next_column()
-        for pid in ("dream.mix", "dream.echo_mix", "dream.decay", "dream.darken",
+        for pid in ("dream.mix", "dream.echo_mix", "dream.fade", "dream.darken",
                     "dream.contrast", "dream.occlude"):
             panel.half(pid, SHORT.get(pid))
         imgui.table_next_column()
@@ -71,11 +72,14 @@ def page(panel, dt: float) -> None:
         imgui.end_table()
     imgui.spacing()
 
-    panel._section("history", note="rebuilds the ring")
+    panel._section("history", note="size rebuilds the ring")
+    imgui.push_style_color(imgui.Col_.text, ui.FAINT)
+    imgui.text_wrapped(_trail_text(r))
+    imgui.pop_style_color()
     panel._row("dream.echoes")
-    panel._label_cell("every")
-    panel._tip(r["dream.every"])
-    panel._slider("dream.every", -(RES_W + imgui.get_style().item_spacing.x))
+    panel._label_cell("spacing")
+    panel._tip(r["dream.gap"])
+    panel._slider("dream.gap", -(RES_W + imgui.get_style().item_spacing.x))
     imgui.same_line()
     panel._combo("dream.res", RES_W)
     imgui.text_disabled(f"echo size  {_echo_text(lb)}")
@@ -101,6 +105,17 @@ def page(panel, dt: float) -> None:
             imgui.table_next_column()
             panel.half(pid, SHORT.get(pid))
         imgui.end_table()
+
+
+def _trail_text(r) -> str:
+    """What an echo is, and how far back this trail reaches — in seconds,
+    the same on any screen (plan 14 WP6)."""
+    n, gap = int(r["dream.echoes"].value), float(r["dream.gap"].value)
+    fade = float(r["dream.fade"].value)
+    reach = f"{n} echo(es), one every {gap * 1000:.0f} ms: the trail reaches " \
+            f"{n * gap:.2f} s back" if gap > 0 else f"{n} echo(es), one a frame"
+    return (f"an echo is an earlier frame, drawn faintly under this one. {reach}; "
+            f"each halves in brightness every {fade:.2f} s")
 
 
 def _status(lb, on: bool) -> str:
@@ -190,7 +205,8 @@ def _thumbnails(panel, lb) -> None:
             imgui.same_line(0, 3)
         imgui.image(tex, size, imgui.ImVec2(*t["uv0"]), imgui.ImVec2(*t["uv1"]))
         if imgui.is_item_hovered():
-            imgui.set_tooltip(f"echo {k + 1} · age {t['age']} · weight {t['weight']:.3f}")
+            imgui.set_tooltip(f"echo {k + 1} · {t['age'] * 1000:.0f} ms old · weight "
+                              f"{t['weight']:.3f}")
     if len(thumbs) > fit:
         imgui.same_line(0, 3)
         imgui.text_disabled(f"+{len(thumbs) - fit}")

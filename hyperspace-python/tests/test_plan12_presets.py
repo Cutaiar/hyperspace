@@ -161,7 +161,8 @@ def test_the_party_presets_load_by_f_key_as_presets(tmp_path):
                                           ("party-trip", "TRIP_KNOBS"),
                                           ("party-acid", "ACID_KNOBS"),
                                           ("party-mandala", "MANDALA_KNOBS"),
-                                          ("party-noita", "NOITA_KNOBS")])
+                                          ("party-noita", "NOITA_KNOBS"),
+                                          ("party-tracer", "TRACER_KNOBS")])
 def test_wake_and_trip_device_knobs_move_their_bases(slug, targets, tmp_path):
     """Plan 12 §6 on WAKE's and TRIP's preset layer: device knob k sets the
     k-th base of the preset's eight — the base, not an offset, whether or

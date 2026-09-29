@@ -24,7 +24,7 @@ from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
 from hyperspace.fx import FxState
 from hyperspace.library import FACTORY, SESSION_GROUPS, Library
-from hyperspace.lookback import DreamState
+from hyperspace.lookback import DreamState, migrate_values
 from hyperspace.params import build_registry
 from hyperspace.preset import Presets
 from hyperspace.routing import MOD_OPS, Binding, Bindings, Router, bindings_path
@@ -164,7 +164,8 @@ def test_a_schema_1_project_becomes_presets_and_a_schema_2_project(home):
         assert p["note"] == f"slot {k + 1}"
         perf = {pid: v for pid, v in slot(k)["values"].items()
                 if pid.partition(".")[0] not in SESSION_GROUPS}
-        assert p["values"] == {**MACRO_VALUES, **perf}            # the table's macros fill in
+        # the table's macros fill in; the look-back's per-frame ids in seconds (plan 14 WP6)
+        assert p["values"] == migrate_values({**MACRO_VALUES, **perf})[0]
         assert p["modules"] == {"fx": "trip"}                     # the performance labels
         assert len(p["routes"]) == 12 + len(LEARNED)
         assert p["macros"] == {"macro.2": {"subs": [{"depth": {"source": "lane:3",
@@ -551,9 +552,10 @@ def test_nothing_is_lost(home):
     # the performance values: every slot's, and the macros' bases, in its preset
     for k, name in enumerate(SLOT_NAMES):
         held = preset_file(home, name)["values"]
-        for pid, v in {**slot(k)["values"], **raw["values"]}.items():
+        want = migrate_values({**raw["values"], **slot(k)["values"]})[0]   # plan 14 WP6
+        for pid, v in want.items():
             if pid.partition(".")[0] not in SESSION_GROUPS:
-                assert held[pid] == (slot(k)["values"].get(pid, v)), (name, pid)
+                assert held[pid] == v, (name, pid)
     # the project's own look (what it restored on open) is a preset too
     saved = preset_file(home, "DEFAULT SAVED")["values"]
     for pid, v in {**raw["values"], **project_v1()["values"]}.items():

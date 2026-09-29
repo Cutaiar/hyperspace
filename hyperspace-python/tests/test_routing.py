@@ -1637,7 +1637,7 @@ def test_every_factory_preset_names_real_params_with_one_owner(tmp_path):
     assert set(preset.FACTORY_PRESETS) == {
         "legacy6", "lfo-breathe", "hands-fx", "hands-pinch", "hands-play",
         "party-tumble", "party-faces", "party-field", "party-wake", "party-trip",
-        "party-acid", "party-mandala", "party-noita"}
+        "party-acid", "party-mandala", "party-noita", "party-tracer"}
     assert (preset.FACTORY_DIR / "lfo-breathe.json").exists()
 
 

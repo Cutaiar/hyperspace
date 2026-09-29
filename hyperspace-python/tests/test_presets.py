@@ -84,7 +84,7 @@ def test_a_preset_load_lands_every_base_and_replaces_every_route(rig):
     lib, reg, table = rig.lib, rig.reg, rig.router.table
     reg["view.bright"].set(3.3)                         # a view base off default
     reg["fx.kaleido.on"].set(not reg["fx.kaleido.on"].value)   # an fx toggle
-    reg["dream.decay"].set(0.5)                         # a dream value
+    reg["dream.fade"].set(2.0)                          # a dream value
     table.add(Binding("hand:7", "view.speed", "push", 0.3))    # a hand route
     keys = [b.to_json() for b in table.bindings
             if b.op not in routing.MOD_OPS and b.layer != "preset"]
@@ -97,12 +97,63 @@ def test_a_preset_load_lands_every_base_and_replaces_every_route(rig):
     assert reg.snapshot(part="performance") == expected(lib, values)
     assert rig.view.shape == 4 and reg["lfo.1.depth"].value == 0.25
     assert reg["view.bright"].value == lib.defaults("view")["view.bright"]
-    assert reg["dream.decay"].value == lib.defaults("dream")["dream.decay"]
+    assert reg["dream.fade"].value == lib.defaults("dream")["dream.fade"]
     assert [b.to_json() for b in table.routes()] == routes   # exactly the file's, disabled too
     assert [b.to_json() for b in table.bindings
             if b.op not in routing.MOD_OPS and b.layer != "preset"] == keys
     assert table.desk() == []                               # the file's `desk: []`
     assert rig.presets.current == "PARTIAL" and not lib.is_dirty("presets")
+
+
+def test_a_preset_with_per_frame_echo_ids_is_read_in_seconds(rig):
+    """Plan 14 WP6: a preset file that still names the per-frame
+    `dream.decay` / `dream.every` loads as 60 Hz frames in seconds — its
+    values, a hand push on the decay (the same throw of decays), a desk
+    knob on it — and the load says so, once."""
+    from hyperspace.lookback import decay_per_frame, fade_of_decay
+
+    put(rig.home, "OLDWAKE", values={"dream.on": True, "dream.decay": 0.93, "dream.every": 2},
+        routes=[{"source": "hand:right.z", "target": "dream.decay", "op": "push",
+                 "value": -0.12}],
+        desk=[{"source": "cc:*:17", "target": "dream.decay", "op": "abs", "feedback": "ring"}])
+    assert rig.presets.load("OLDWAKE") == []
+    reg, table = rig.reg, rig.router.table
+    assert reg["dream.fade"].value == pytest.approx(fade_of_decay(0.93))
+    assert reg["dream.gap"].value == pytest.approx(2 / 60, abs=1e-6)
+    assert len(rig.presets.notes) == 1 and "look-back read in seconds" in rig.presets.notes[0]
+    (row,) = table.routes()
+    assert row.target == "dream.fade" and row.value < 0          # reach in: longer, as before
+    # the throw spans as far as the old one (0.87 … 0.99 a frame), in
+    # fade's own (log) norm about the base: reach in lasts, pull back snaps
+    p = reg["dream.fade"]
+    ends = [decay_per_frame(p._raw_value(p.norm + row.value * (u - 0.5))) for u in (0.0, 1.0)]
+    assert ends[0] > 0.975 and ends[1] < 0.9, ends
+    span = abs(p._raw_norm(fade_of_decay(0.99)) - p._raw_norm(fade_of_decay(0.87)))
+    assert abs(row.value) == pytest.approx(span, abs=1e-3)
+    assert any(b.target == "dream.fade" and b.source == "cc:*:17" for b in table.desk())
+
+
+def test_the_home_is_rewritten_in_seconds_once_with_backups(tmp_path):
+    """Plan 14 WP6: a user preset and a look-back module preset naming the
+    per-frame ids are rewritten once, each kept first as
+    `<file>.bak-v2-frames`; a second run finds nothing."""
+    from hyperspace.lookback import fade_of_decay
+
+    home = tmp_path
+    p = put(home, "MINE", values={"dream.decay": 0.9, "view.shape": 3})
+    d = home / "dream" / "old.json"
+    d.parent.mkdir()
+    d.write_text(json.dumps({"schema": "hyperspace.preset/1", "group": "dream", "name": "old",
+                             "values": {"dream.every": 3, "dream.mix": 0.2}}))
+    before = p.read_text(), d.read_text()
+    notes, written = preset.migrate_echo_home(home)
+    assert sorted(written) == sorted([p, d]) and len(notes) == 2
+    assert json.loads(p.read_text())["values"] == {"dream.fade": fade_of_decay(0.9),
+                                                   "view.shape": 3}
+    assert json.loads(d.read_text())["values"] == {"dream.gap": 0.05, "dream.mix": 0.2}
+    assert (p.with_name(p.name + ".bak-v2-frames").read_text(),
+            d.with_name(d.name + ".bak-v2-frames").read_text()) == before
+    assert preset.migrate_echo_home(home) == ([], [])
 
 
 def test_a_preset_load_never_touches_a_session_param(rig):
@@ -542,7 +593,7 @@ def test_every_factory_presets_desk_is_the_generators():
             from_map.append(row)
     assert desk == from_map
     paths = sorted(preset.FACTORY_DIR.glob("*.json"))
-    assert len(paths) == 21                  # 8 house, 8 party, 5 made from routing presets
+    assert len(paths) == 22                  # 8 house, 9 party, 5 made from routing presets
     for path in paths:
         doc = json.loads(path.read_text())
         want = expected_desk(path.stem)
@@ -554,7 +605,8 @@ def test_every_factory_presets_desk_is_the_generators():
     for slug, targets in (("party-wake", preset.WAKE_KNOBS), ("party-trip", preset.TRIP_KNOBS),
                           ("party-acid", preset.ACID_KNOBS),
                           ("party-mandala", preset.MANDALA_KNOBS),
-                          ("party-noita", preset.NOITA_KNOBS)):
+                          ("party-noita", preset.NOITA_KNOBS),
+                          ("party-tracer", preset.TRACER_KNOBS)):
         rows = json.loads((preset.FACTORY_DIR / f"{slug}.json").read_text())["desk"]
         assert rows[:len(desk)] == desk
         assert [(d["source"], d["target"], d["op"], d["feedback"]) for d in rows[len(desk):]] \
