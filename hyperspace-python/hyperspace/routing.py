@@ -1159,6 +1159,9 @@ class Bindings:
         self.layer = "preset"
         self.layer_serial = 0
         self.desk_serial = 0
+        # an edit of a desk row in place (the ROUTING page): a redraw only,
+        # never the faders' catch cleared — no base moved
+        self.redraw_serial = 0
 
     # ---- construction ----
 

@@ -161,6 +161,29 @@ def test_a_preset_load_clears_the_faders_catch(rig):
     assert post.norm == pytest.approx(1.0)
 
 
+def test_a_desk_edit_on_the_page_redraws_and_keeps_the_faders_catch(rig):
+    """Review of PR #65: a desk row retargeted or removed on the ROUTING
+    page redraws the desk, but it is not a load — no base moved, so every
+    fader keeps its catch."""
+    from hyperspace import ui_routing
+
+    t, reg = rig.midi.table, rig.reg
+    reg["band.2.post"].set_norm(0.5)
+    rig.midi.poll()
+    push(rig, cc(apc40.CC_FADER, 64, channel=2))
+    fader = row(rig, "band.2.post")
+    assert fader.caught
+    knob = next(b for b in t.desk() if b.number == 0x30)
+    rig.out.sent.clear()
+    knob.target = "view.speed"
+    ui_routing._desk_edited(t, knob)
+    rig.midi.poll()
+    assert fader.caught                                          # still caught
+    assert sent_cc(rig, 0x30) == [round(reg["view.speed"].norm * 127)]   # redrawn
+    push(rig, cc(apc40.CC_FADER, 30, channel=2))
+    assert reg["band.2.post"].norm == pytest.approx(30 / 127, abs=PICKUP_TOL)
+
+
 # --------------------------------------------------------- unmapped, invariant
 
 def test_an_unmapped_control_is_dark_and_does_nothing(rig):

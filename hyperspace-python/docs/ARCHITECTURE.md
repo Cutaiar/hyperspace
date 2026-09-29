@@ -451,7 +451,7 @@ decided 2026-09-28).
 | a module preset or project | `Registry.restore` (a project: its session part) | base | `Library.restore` |
 | a routing preset | `Bindings.set_routes` + `set_macros` + `reg.restore(values)` | the performer rows, the macros' subscribers and values | `Router.apply_doc` |
 | a preset load's desk (step 4 of `Presets.load_doc`) | `Bindings.set_desk(rows)`: every preset-layer row replaced, a row on an invariant control dropped with a note (the load's notes, the ROUTING head), the layer dropped to preset, the faders' catch cleared at the next redraw | the table's preset layer | `routing.py` `set_desk` |
-| a ROUTING-page edit (a route, a desk row's target or ×, a macro's label or subscriber) | the table in place — the loaded preset, its dirty dot; a subscriber edit re-lands the base subscribers (`macros_serial`), a desk edit redraws the desk (`desk_serial`) | the table | `ui_routing.py` |
+| a ROUTING-page edit (a route, a desk row's target or ×, a macro's label or subscriber) | the table in place — the loaded preset, its dirty dot; a subscriber edit re-lands the base subscribers (`macros_serial`), a desk edit redraws the desk (`redraw_serial`: a redraw, not a load — the faders keep their catch) | the table | `ui_routing.py` |
 
 ### 3.8 The binding file
 

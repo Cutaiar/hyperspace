@@ -207,7 +207,7 @@ class MidiIO:
         # the same rows whatever layer is up by then
         self._held: dict[tuple[int, int], list[Binding]] = {}
         # the table's layer / desk counters as last drawn (`_follow_table`)
-        self._seen = (self.table.layer_serial, self.table.desk_serial)
+        self._seen = self._serials()
         register_desk(registry, self.table)     # SHIFT's param, for a bare adapter too
         if self.ports.injected:
             self._enter()
@@ -348,12 +348,17 @@ class MidiIO:
     def _follow_table(self) -> None:
         """A layer switch or a desk replacement since the last look: redraw
         every ring and LED; a replacement (a preset load) also clears the
-        faders' catch."""
-        seen = (self.table.layer_serial, self.table.desk_serial)
+        faders' catch; a desk row edited in place (`redraw_serial`, the
+        ROUTING page) only redraws."""
+        seen = self._serials()
         if seen != self._seen:
             load = seen[1] != self._seen[1]
             self._seen = seen
             self.redraw(load=load)
+
+    def _serials(self) -> tuple[int, int, int]:
+        t = self.table
+        return t.layer_serial, t.desk_serial, getattr(t, "redraw_serial", 0)
 
     def _uncatch_moved(self) -> None:
         """A param that moved without us re-arms pickup on its knob."""

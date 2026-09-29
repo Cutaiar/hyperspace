@@ -722,10 +722,12 @@ def _desk_targets(panel) -> list[Param]:
 
 
 def _desk_edited(table, b: Binding | None = None) -> None:
-    """A desk row changed on the page: the MIDI adapter redraws the desk."""
+    """A desk row changed on the page: the MIDI adapter redraws the desk —
+    only redraws: no base moved, so the faders keep their catch (a
+    `desk_serial` bump would read as a preset load)."""
     if b is not None:
         b.last_out = None
-    table.desk_serial += 1
+    table.redraw_serial = getattr(table, "redraw_serial", 0) + 1
 
 
 def desk(panel, router: Router) -> None:

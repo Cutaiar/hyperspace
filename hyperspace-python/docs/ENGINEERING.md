@@ -15,7 +15,7 @@ paragraph says so. The HTML-era sections (browser sandbox, deploy) are
 gone; `hyperspace-web/hyperspace.html` is frozen and matters here only as
 the oracle the golden traces were recorded from.
 
-**Run it:** `uv sync`, `uv run pytest` (851 tests, ~25 s), `uv run
+**Run it:** `uv sync`, `uv run pytest` (852 tests, ~25 s), `uv run
 hyperspace`. `?` in the app shows the controls cheat sheet.
 
 ---
@@ -550,7 +550,7 @@ unreadable at a party.
 
 ## 6. Testing
 
-`uv run pytest` — 851 tests, 11 skipped without torch, about 25 s. `ruff`
+`uv run pytest` — 852 tests, 11 skipped without torch, about 25 s. `ruff`
 is the linter. Every test runs with `HYPERSPACE_HOME` pointed at its own
 `tmp_path` (`tests/conftest.py`), so no test can touch `~/Hyperspace`.
 What holds what:
