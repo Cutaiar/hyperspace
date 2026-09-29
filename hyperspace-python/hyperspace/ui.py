@@ -942,9 +942,15 @@ class Panel:
     # ---- main draw: rail · page · footer ----
 
     def draw(self, dt: float, fps: float) -> None:
-        # the red banner first, its own window: a render window that stopped
-        # or a dream worker that is off shows even with the panel hidden
-        self._alert_banner()
+        try:
+            self._draw(dt, fps)
+        finally:
+            # the red banner, its own window, last and in front: a render
+            # window that stopped or a dream worker that is off shows even
+            # with the panel hidden or a page that raised
+            self._alert_banner()
+
+    def _draw(self, dt: float, fps: float) -> None:
         # Replace / Keep, its own window, before anything can return: a
         # held hand learn is never parked behind a hidden or collapsed panel
         ui_routing.modal(self)
@@ -1326,10 +1332,13 @@ class Panel:
 
     def _alert_banner(self) -> None:
         """A red strip across the bottom of the control window, one line per
-        alert — impossible to miss from across the room. Not interactive."""
+        alert — impossible to miss from across the room — in front of every
+        other window without taking focus. A render error that recovered
+        and the warnings stay until "dismiss"."""
         lines = self.alerts()
         if not lines:
             return
+        rw = self.render_watch
         io = imgui.get_io()
         imgui.set_next_window_pos(imgui.ImVec2(0, io.display_size.y), imgui.Cond_.always,
                                   imgui.ImVec2(0, 1))
@@ -1338,10 +1347,17 @@ class Panel:
         imgui.push_style_color(imgui.Col_.text, imgui.ImVec4(1, 1, 1, 1))
         imgui.begin("##alerts", None,
                     imgui.WindowFlags_.no_decoration | imgui.WindowFlags_.no_move
-                    | imgui.WindowFlags_.no_inputs | imgui.WindowFlags_.no_focus_on_appearing
-                    | imgui.WindowFlags_.no_nav | imgui.WindowFlags_.no_saved_settings)
+                    | imgui.WindowFlags_.no_focus_on_appearing | imgui.WindowFlags_.no_nav
+                    | imgui.WindowFlags_.no_saved_settings)
+        try:
+            imgui.internal.bring_window_to_display_front(imgui.internal.get_current_window())
+        except Exception:  # noqa: BLE001, S110 — an imgui without the internal call: drawn last
+            pass
         for line in lines:
             imgui.text_wrapped(line)
+        if (rw is not None and getattr(rw, "dismissible", False)
+                and imgui.small_button("dismiss##alerts")):
+            rw.dismiss()
         imgui.end()
         imgui.pop_style_color(2)
 

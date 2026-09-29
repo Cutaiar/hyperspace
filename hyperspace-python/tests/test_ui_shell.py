@@ -183,13 +183,20 @@ def test_a_render_error_and_the_dream_error_show_in_the_red_banner(rig, monkeypa
     rig.panel.open = False                     # the banner shows with the panel hidden
     drawn.clear()
     frame(rig.panel)
-    assert drawn[:2] == ["render window stopped — ValueError: boom",
-                         "dream worker off: FileNotFoundError: vgg16 weights"]
+    # the banner is drawn last, in front of everything else
+    assert drawn[-2:] == ["render window stopped — ValueError: boom",
+                          "dream worker off: FileNotFoundError: vgg16 weights"]
+    # the render recovers: the error stays, as what happened, until dismissed
     rw.drew(1.0)
     drawn.clear()
     frame(rig.panel)
-    assert drawn[0] == "dream worker off: FileNotFoundError: vgg16 weights"
-    assert not any(s.startswith("render window") for s in drawn)
+    assert drawn[-2].startswith("the render window stopped once, last at ")
+    assert "ValueError: boom" in drawn[-2] and rw.dismissible
+    rw.dismiss()
+    drawn.clear()
+    frame(rig.panel)
+    assert drawn[-1] == "dream worker off: FileNotFoundError: vgg16 weights"
+    assert not any("render window" in s for s in drawn)
 
 
 def test_system_page_shows_the_dream_error_and_the_stall_log(rig, monkeypatch, tmp_path):

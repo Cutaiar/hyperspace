@@ -193,9 +193,39 @@ def test_a_raising_draw_is_logged_once_with_its_traceback_and_bannered(fake):
     assert wd.path.read_text().count("=== render error ") == 2
     h.draw_render = lambda dt: log.append("render.draw")
     assert app.frame(h, now=2.1, dt=1 / 60, fps=60.0) is True
-    assert h.render_watch.alerts() == []
-    assert h.render_watch.errors_logged == 2
+    assert h.reloader.runtime_error == ""            # the toast clears on a clean frame…
+    rw = h.render_watch
+    assert rw.error == "" and rw.error_count == 6    # …the render error does not: sticky
+    [line] = rw.alerts()
+    assert line.startswith("the render window stopped 6 times, last at ")
+    assert "KeyError: 'u_mix'" in line and rw.dismissible
+    rw.dismiss()
+    assert rw.alerts() == [] and not rw.dismissible
+    assert rw.errors_logged == 2
     assert wd.status() == f"stall log: {wd.path} (2 render errors)"
+
+
+def test_a_stranded_target_nonfinite_params_and_warnings_are_logged_once(fake):
+    wd, _ = fake
+    rw = RenderWatch(wd)
+    rw.failed(RuntimeError("once"), 0.0)
+    rw.drew(0.1)
+    for _ in range(3):
+        rw.stranded(5)
+    rw.nonfinite(["view.speed", "view.shape"])
+    rw.nonfinite(["view.speed"])
+    rw.nonfinite(lambda: None)                        # a stub registry: ignored
+    for _ in range(2):
+        rw.warn("preset WAKE: dream.on, but there is no dream worker")
+    text = wd.path.read_text()
+    assert text.count("=== stranded target ") == 1
+    assert "framebuffer 5 was still bound" in text and "RuntimeError: once" in text
+    assert text.count("=== non-finite ") == 2 and "view.shape" in text
+    assert text.count("=== warning ") == 1
+    alerts = rw.alerts()
+    assert any("stranded" in a for a in alerts) and any("dream.on" in a for a in alerts)
+    assert wd.counts() == {"render error": 1, "stranded target": 1, "non-finite": 2,
+                           "warning": 1}
 
 
 def test_a_render_window_that_stops_presenting_is_logged(fake):

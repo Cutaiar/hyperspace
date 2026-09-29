@@ -676,3 +676,17 @@ def test_lfo_breathes_macro_moves_brightness_up_and_speed_down(rig):
         reg.apply()
         pushes.append(mix.eff_norm - mix.norm)
     assert pushes[0] == pytest.approx(0.0, abs=1e-9) and pushes[1] > 0.1
+
+
+def test_a_load_tells_the_listeners_its_name(rig):
+    """Plan 14 WP1: app.py listens to every preset load (a preset that turns
+    the dream on with no worker is a banner); a listener that raises is a
+    note, never a failed load."""
+    heard: list = []
+    rig.presets.listeners.append(heard.append)
+    rig.presets.listeners.append(lambda name: 1 / 0)
+    name = rig.lib.list("presets")[0]
+    assert rig.presets.load(name) == []
+    assert heard == [rig.lib.current("presets")]
+    assert rig.presets.note.startswith("preset listener: ZeroDivisionError")
+

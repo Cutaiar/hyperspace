@@ -171,6 +171,7 @@ class Presets:
                  text=lambda doc: dumps(doc))
         lib.on_load(GROUP, lambda name: self._landed(name))
         lib.presets = self
+        self.listeners: list = []        # called with the name after every load (app.py)
 
     # ---- the API ----
 
@@ -316,6 +317,11 @@ class Presets:
         a file edited on disk); a preset the bank does not name lights none."""
         pr = self.lib.project
         pr.active = pr.bank.index(name) if name in pr.bank else -1
+        for fn in getattr(self, "listeners", ()):
+            try:
+                fn(name)
+            except Exception as e:  # noqa: BLE001 — a listener must not fail a load
+                self.note = f"preset listener: {type(e).__name__}: {e}"[:160]
 
 
 # ---------------------------------------------------------------- factory inputs

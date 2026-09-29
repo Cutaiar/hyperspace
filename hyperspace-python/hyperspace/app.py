@@ -552,12 +552,14 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
         h.view.integrate(dt)
     except Exception as e:  # noqa: BLE001
         ok, reloader.runtime_error = False, _err("step", e)
+    watch = h.render_watch
+    if watch is not None:     # a NaN / inf a param dropped: named once in the stall log
+        watch.nonfinite(getattr(reg, "nonfinite", ()))
 
     # ---- render window, then the control window. A raising draw leaves
     # the render window on its last frame while the panel goes on — the
     # render watch logs it (traceback, once per error) and the control
-    # window's red banner names it until a draw succeeds ----
-    watch = h.render_watch
+    # window's red banner names it, until dismissed ----
     try:
         h.draw_render(dt)
     except Exception as e:  # noqa: BLE001
@@ -741,6 +743,14 @@ def main() -> None:
         # the render window: its own size and DPI (a 1080p projector next
         # to a retina laptop)
         glfw.make_context_current(render_win)
+        # the window, bound explicitly every frame: Renderer.draw draws into
+        # whatever is bound, and a frame that once left an offscreen
+        # framebuffer bound froze the picture with no error (plan 14 WP1).
+        # Renderer.draw now puts its target back; the check is the alarm.
+        stranded = ctx.fbo
+        if stranded is not None and stranded.glo != 0:
+            render_watch.stranded(stranded.glo)
+        ctx.screen.use()
         w, h = glfw.get_window_size(render_win)
         fbw, fbh = glfw.get_framebuffer_size(render_win)
         ctx.viewport = (0, 0, fbw, fbh)
@@ -764,6 +774,16 @@ def main() -> None:
     render_watch = RenderWatch(watchdog,
                                info=lambda: output.backend.window_state(render_win))
     panel.watchdog, panel.render_watch = watchdog, render_watch
+
+    def dream_check(name: str | None) -> None:
+        # a preset that turns the dream on with no worker to dream: the
+        # look-back shows the echoes only — said on the banner, logged once
+        if reg["dream.on"].base and dream_io is None:
+            why = panel.dream_error or "[dream] enabled = false in config.toml"
+            render_watch.warn(f"{name} turns the dream on, but there is no dream worker ({why}); "
+                              "the look-back shows the echoes only")
+    presets.listeners.append(dream_check)
+    dream_check(library.current("presets"))     # the startup preset has already landed
 
     host = Host(reg=reg, view=s, control=control, audio=audio, router=router,
                 clock=clock, lfos=lfos, keys=keys, mouse=mouse, output=output,

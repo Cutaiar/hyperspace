@@ -1,6 +1,6 @@
 """The stall log — a frozen show leaves a stack dump behind (plan 14 WP1).
 
-Three things write ``<home>/stall.log``, each entry a ``=== <kind>``
+Everything below writes ``<home>/stall.log``, each entry a ``=== <kind>``
 header (the wall time, the loaded preset) and every thread's stack
 (``faulthandler.dump_traceback(all_threads=True)``):
 
@@ -27,6 +27,21 @@ main thread:
   second display, a fullscreen Space). The entry has the window's
   attributes (visible, iconified, focused, monitor, framebuffer size,
   macOS occlusion) as `info()` reads them.
+- ``stranded target`` — a render frame started with an offscreen
+  framebuffer still bound (`app.draw_render` checks before it binds the
+  window). That was the freeze itself: `Renderer.draw` draws into
+  whatever is bound, and a frame that left the look-back's atlas bound
+  made every later frame draw there while the window swapped a stale
+  picture, with no error anywhere. `Renderer.draw` and `Lookback.capture`
+  now put their target back on every exit; the check stays as the alarm.
+- ``non-finite`` — a param dropped a NaN / inf offset or value
+  (`Registry.nonfinite`), once per param.
+- ``warning`` — a show problem worth a banner, once per message (a
+  preset that turns the dream on with no worker to dream).
+
+The banner keeps a render error after the render recovers — its last
+message, time and count — and the warnings, until the performer
+dismisses them: a freeze that fixed itself is still worth knowing about.
 
 **On demand**: ``kill -USR1 <pid>`` dumps every thread into the same file
 (``faulthandler.register``) — no header; the SYSTEM page counts it.
@@ -51,7 +66,8 @@ LIMIT = 2.0          # seconds without a completed frame before it counts as a s
 PERIOD = 0.25        # how often the thread looks
 POLL = 0.5           # how often RenderWatch reads the render window's attributes
 LOG_NAME = "stall.log"
-KINDS = ("stall", "render error", "render stall")    # the headers' kinds, in status order
+KINDS = ("stall", "render error", "render stall", "stranded target", "non-finite",
+         "warning")                                   # the headers' kinds, in status order
 
 
 def _stamp(t: float) -> str:
@@ -225,28 +241,43 @@ class Watchdog:
 class RenderWatch:
     """The render window's health, from the main thread: `drew` after a
     render frame completed, `failed` when the draw raised, `tick` once per
-    loop frame after both windows drew. `info` reads the render window's
-    attributes (app.py: GLFW, and the NSWindow's occlusion on macOS);
-    its "presentable" key says whether a completed frame reaches the
-    screen. Everything here is guarded: a watch that raises would be the
-    thing that stopped the show."""
+    loop frame after both windows drew, `stranded` when a frame starts on
+    an offscreen framebuffer. `info` reads the render window's attributes
+    (app.py: GLFW, and the NSWindow's occlusion on macOS); its
+    "presentable" key says whether a completed frame reaches the screen.
+    Everything here is guarded: a watch that raises would be the thing
+    that stopped the show."""
 
     def __init__(self, log: Watchdog | None, *, limit: float = LIMIT, poll: float = POLL,
-                 info: Callable[[], dict] | None = None):
+                 info: Callable[[], dict] | None = None,
+                 wall: Callable[[], float] = time.time):
         self.watchdog = log
         self.limit, self.poll = float(limit), float(poll)
-        self.info = info
+        self.info, self.wall = info, wall
         self.error = ""               # the live render error: the last draw raised
         self.stalled = ""             # the live render stall
         self.frames = 0               # render frames completed
+        # sticky: the last render error, kept after the render recovers
+        # until dismissed (the banner's "dismiss")
+        self.last_error = ""
+        self.last_error_at = 0.0      # wall time
+        self.error_count = 0          # draws that raised, this process
+        self.warnings: list[str] = []
+        self.dismissed = True         # nothing sticky to show yet
         self.errors_logged = 0
         self.stalls_logged = 0
-        self._logged: set[str] = set()   # distinct errors already written
+        self._logged: set[str] = set()   # distinct errors / warnings / ids already written
         self._drew = False               # a frame completed since the last tick
         self._last_ok: float | None = None   # the last tick a completed frame was presentable
         self._polled: float | None = None
         self._state: dict = {}
         self._stall_open = False
+
+    def _once(self, key: str, kind: str, headline: str, body: str = "") -> bool:
+        if key in self._logged or self.watchdog is None:
+            return False
+        self._logged.add(key)
+        return self.watchdog.log(kind, headline, body)
 
     def drew(self, now: float) -> None:
         self.frames += 1
@@ -256,18 +287,57 @@ class RenderWatch:
     def failed(self, exc: BaseException, now: float) -> None:
         """`renderer.draw` raised: the render window holds its last frame."""
         try:
-            self.error = f"render window stopped — {type(exc).__name__}: {exc}"[:200]
+            msg = f"{type(exc).__name__}: {exc}"
+            self.error = f"render window stopped — {msg}"[:200]
+            self.last_error, self.last_error_at = msg[:200], self.wall()
+            self.error_count += 1
+            self.dismissed = False
             tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
             key = "".join(traceback.format_exception_only(type(exc), exc))
             last = traceback.extract_tb(exc.__traceback__)[-1:] if exc.__traceback__ else []
             key += "".join(f"{fr.filename}:{fr.lineno}" for fr in last)
-            if key not in self._logged and self.watchdog is not None:
-                self._logged.add(key)
-                if self.watchdog.log("render error", f"renderer.draw raised "
-                                     f"{type(exc).__name__}: {exc}"[:300], tb):
-                    self.errors_logged += 1
+            if self._once("error:" + key, "render error",
+                          f"renderer.draw raised {msg}"[:300], tb):
+                self.errors_logged += 1
         except Exception:  # noqa: BLE001, S110 — never stop the show
             pass
+
+    def stranded(self, glo: int) -> None:
+        """A render frame started with framebuffer `glo` bound, not the window."""
+        try:
+            last = self.last_error or "none"
+            self.warn(f"render target stranded: framebuffer {glo} was still bound at the "
+                      f"start of a render frame (last render error: {last})",
+                      kind="stranded target", key=f"glo:{glo}")
+        except Exception:  # noqa: BLE001, S110
+            pass
+
+    def nonfinite(self, ids) -> None:
+        """Params that dropped a NaN / inf this frame (`Registry.nonfinite`)."""
+        try:
+            if not isinstance(ids, (list, tuple)):
+                return
+            for pid in ids:
+                self._once(f"nonfinite:{pid}", "non-finite",
+                           f"{pid}: a NaN / inf offset or value was dropped; the base holds")
+        except Exception:  # noqa: BLE001, S110
+            pass
+
+    def warn(self, msg: str, *, kind: str = "warning", key: str | None = None) -> None:
+        """A show problem: on the banner until dismissed, in the log once."""
+        try:
+            if msg not in self.warnings:
+                self.warnings.append(msg)
+            self.dismissed = False
+            self._once(f"{kind}:{key or msg}", kind, msg[:300])
+        except Exception:  # noqa: BLE001, S110
+            pass
+
+    def dismiss(self) -> None:
+        """The banner's button: forget the sticky error and the warnings
+        (the live ones stay until the render recovers)."""
+        self.dismissed = True
+        self.warnings = []
 
     def tick(self, now: float) -> None:
         try:
@@ -297,9 +367,25 @@ class RenderWatch:
         except Exception:  # noqa: BLE001, S110 — never stop the show
             pass
 
+    @property
+    def dismissible(self) -> bool:
+        return not self.dismissed and (bool(self.warnings) or self._sticky() != "")
+
+    def _sticky(self) -> str:
+        if self.dismissed or not self.error_count or self.error:
+            return ""
+        at = time.strftime("%H:%M:%S", time.localtime(self.last_error_at))
+        times = f"{self.error_count} times" if self.error_count != 1 else "once"
+        return (f"the render window stopped {times}, last at {at}: {self.last_error} "
+                f"(it recovered; the traceback is in the stall log)")[:240]
+
     def alerts(self) -> list[str]:
-        """What the control window's red banner says right now."""
-        return [a for a in (self.error, self.stalled) if a]
+        """What the control window's red banner says right now: the live
+        render error and stall, then what stays until dismissed."""
+        out = [a for a in (self.error, self.stalled, self._sticky()) if a]
+        if not self.dismissed:
+            out += self.warnings
+        return out
 
 
 def _why(state: dict) -> str:
