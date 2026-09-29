@@ -173,8 +173,15 @@ def test_a_project_keeps_the_session_apart(rig, tmp_path):
     (tmp_path / "projects" / "old.hyp.json").write_text(json.dumps(old))
     lib.project.load("Old")
     assert rig.view.shape == 7 and rig.chain.gain == 3.0 and rig.chain.params[0].atk == 0.5
-    assert lib.project.values == {"view.shape": 7}
-    assert lib.project.session == {"master.gain": 3.0, "band.0.atk": 0.5}
+    pr = lib.project
+    assert pr.values["view.shape"] == 7 and pr.session["master.gain"] == 3.0
+    assert pr.session["band.0.atk"] == 0.5
+    assert not {"master.gain", "band.0.atk"} & set(pr.values)
+    # the ids the old file lacks (its macros) are filled from the loaded state,
+    # so an untouched project is clean the moment it opens (review of PR #62)
+    assert "macro.1" in pr.values and not pr.is_dirty()
+    reg["macro.1"].set_value(0.2)
+    assert pr.is_dirty()
 
 
 def test_list_user_shadows_factory(rig, tmp_path):

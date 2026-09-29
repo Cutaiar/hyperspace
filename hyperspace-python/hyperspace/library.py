@@ -408,6 +408,12 @@ class Project:
         missing = lib.restore(self.session) if self.session else []
         if self.values:
             missing += lib.restore(self.values)
+        # ids the file lacks (the macros, in a file from before plan 13 WP1;
+        # a param added since) take the state this load left, so an
+        # untouched project is not dirty the moment it opens
+        for part, held in (("performance", self.values), ("session", self.session)):
+            for pid, v in (lib.reg.snapshot(part=part) if lib.reg is not None else {}).items():
+                held.setdefault(pid, v)
         for group, name, doc in docs:
             vals = (lib.reg.snapshot(group) if doc is None
                     else lib.resolved(group, doc.get("values") or {}))
