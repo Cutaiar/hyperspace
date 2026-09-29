@@ -466,6 +466,140 @@ def party_trip_routes() -> list[Binding]:
             _push("L", "z", "fx.zoomblur.cy", -0.8)]
 
 
+# ---- plan 14 WP5 (decision 24): the effect families on F6–F8 ----
+#
+# One effect family each, the effect values from the matching `library/fx`
+# module preset (`fx_module`), and between them every effect in
+# shaders/fx on in a party preset: ACID acid · wobble · deconverge · hue
+# cycle; MANDALA plasma · kaleidoscope · fractals · glimmer; NOITA trip
+# warp · trip colour · fractals · double vision. Plan 12's rules hold
+# (tests/test_plan12_presets.py sweeps them): six DOF, no pinch, every row
+# a push from the axis's rest (the one `position` row, MANDALA's swirl,
+# on a base of 0 as TRIP's), a still or absent hand is the scene. The
+# right hand plays the family's main effect, the left grips the object
+# (as in tumble, faces and wake) and its height adds the second effect.
+
+def fx_module(name: str) -> dict[str, Any]:
+    """A `library/fx` module preset's values — what an effect preset
+    takes its effect settings from (read at generation, so the module
+    file stays the one place they are tuned)."""
+    doc = json.loads((FACTORY / "fx" / f"{name}.json").read_text())
+    return dict(doc.get("values") or {})
+
+
+def party_scene(**view) -> dict[str, Any]:
+    """The bases every party preset carries (plan 12 §3): the lane rows'
+    bases of 1, no look-back, the effect chain on at full mix, LFO 1 at
+    depth 0, then `view` — the scene's shape, planes and light, written
+    with dots as underscores (``view_shape=10``, ``camera_zoom=0.8``)."""
+    out: dict[str, Any] = {
+        "view.speed": 0.35, "view.depth4": 2.6, "view.bright": 2.0, "view.points": False,
+        "view.lines": True, "view.faces": True, "view.rotate": True,
+        **{f"view.plane.{n}": False for n in PLANES},
+        "view.pattern_mix": 1.0, "view.instances": 1, "view.inst_motion": 0,
+        "camera.zoom": 1.0, "camera.yaw": 0.0, "camera.pitch": 0.0, "camera.pan.x": 0.0,
+        "camera.pan.y": 0.0,
+        "dream.on": False, "fx.on": True, "fx.mix": 1.0, "lfo.1.depth": 0.0,
+        **{f"rot.rate.{n}": 1.0 for n in PLANES},
+        **{f"pattern.mod.{i}": 1.0 for i in range(len(BANDS))},
+    }
+    for k, v in view.items():
+        group, _, rest = k.partition("_")
+        out[f"{group}.{rest}"] = v
+    return out
+
+
+def party_acid_routes() -> list[Binding]:
+    """ACID — Minecraft's acid over the polytope. Right height heaves the
+    frame (acid bend), reaching in tightens the rings (acid reach), right
+    roll rolls it about the centre (acid twist), fingers up split the
+    colours (deconverge), fingers out tighten the rainbow (hue spread).
+    Left hand grips the object; its height shivers the frame (wobble)."""
+    return [*_lane_rows(), *_grip_rows(),
+            _push("R", "y", "fx.acid.bend", 0.6),
+            _push("R", "z", "fx.acid.reach", -0.4),
+            _push("R", "roll", "fx.acid.twist", 0.5),
+            _push("R", "pitch", "fx.deconverge.amount", 0.6),
+            _push("R", "yaw", "fx.huecycle.spread", 0.4),
+            _push("L", "y", "fx.wobble.amount", 0.5)]
+
+
+def party_acid_values() -> dict[str, Any]:
+    """The truncated tesseract's white lines over faint rings — edges for
+    the deconverge to split and the hue cycle to paint — with the `acid`
+    module preset's effects, their bases where the rows push from."""
+    return {**party_scene(view_shape=11, view_speed=0.3, view_bright=2.0, view_depth4=2.6,
+                          view_pattern=1, view_pattern_mix=0.6, camera_zoom=1.1,
+                          **{f"view_plane.{n}": True for n in ("XW", "YW", "ZW")}),
+            **fx_module("acid"),
+            "fx.acid.bend": 0.04, "fx.acid.twist": 0.9, "fx.acid.reach": 10.0,
+            "fx.acid.breathe": 0.35, "fx.deconverge.amount": 5.0,
+            "fx.wobble.amount": 0.004, "fx.huecycle.paint": 0.7, "fx.huecycle.spread": 1.2}
+
+
+def party_mandala_routes() -> list[Binding]:
+    """MANDALA — the plasma folded through the kaleidoscope, fractals and
+    glints over it. Right height swells the fractals, reaching in folds
+    the kaleidoscope tighter, right roll swirls it (position: level = no
+    swirl, as TRIP), fingers up flood the plasma, fingers out grow the
+    fractal lattice's cells. Left hand grips the object inside the fold;
+    its height brightens the glints."""
+    return [*_lane_rows(), *_grip_rows(),
+            _push("R", "y", "fx.fractals.amount", 0.4),
+            _push("R", "z", "fx.kaleido.zoom", -0.5),
+            Binding(hand("R", "roll"), "fx.kaleido.swirl", "position"),
+            _push("R", "pitch", "fx.plasma.level", 0.4),
+            _push("R", "yaw", "fx.fractals.cells", -0.4),
+            _push("L", "y", "fx.glimmer.amount", 0.5)]
+
+
+def party_mandala_values() -> dict[str, Any]:
+    """The 24-cell on plasma faces, panned off the centre so the
+    eight-wedge fold rings it into a mandala, with the `mandala` module
+    preset's effects. The module is a full-frame generator (it reads with
+    every shape off); on the glass the black must stay black, so here the
+    plasma field starts at level 0 (fingers up flood it in) and the
+    fractals and glints grow only out of the shape (grounds 0)."""
+    return {**party_scene(view_shape=10, view_speed=0.25, view_bright=1.6, view_depth4=2.6,
+                          view_faces=True, view_pattern=9, camera_zoom=0.7,
+                          **{"camera_pan.x": 190.0},
+                          **{f"view_plane.{n}": True for n in ("XW", "ZW")}),
+            **fx_module("mandala"),
+            "fx.kaleido.zoom": 1.0, "fx.kaleido.swirl": 0.0, "fx.glimmer.amount": 1.0,
+            # tuned for the glass (plan 14 WP5): a black ground
+            "fx.plasma.level": 0.0, "fx.fractals.ground": 0.0, "fx.glimmer.ground": 0.0}
+
+
+def party_noita_routes() -> list[Binding]:
+    """NOITA — the trip stages. The scene is "heavily tripping"; right
+    height is the next stage, one gesture over three params (Noita's
+    stages add: the warp, the colour and the fractals toward "tripping
+    balls"), reaching in makes the warp ripple finer, right roll opens the
+    double vision, fingers up quicken the colour's pulse. Left hand grips
+    the object; its height makes the warp's noise drift faster."""
+    return [*_lane_rows(), *_grip_rows(),
+            _push("R", "y", "fx.warp.amount", 0.3),
+            _push("R", "y", "fx.tripcolour.amount", 0.25),
+            _push("R", "y", "fx.fractals.amount", 0.2),
+            _push("R", "z", "fx.warp.scale", -0.4),
+            _push("R", "roll", "fx.doublevision.amount", 0.6),
+            _push("R", "pitch", "fx.tripcolour.pulse", 0.4),
+            _push("L", "y", "fx.warp.drift", 0.4)]
+
+
+def party_noita_values() -> dict[str, Any]:
+    """The 16-cell on ember faces — a warm, bright scene for the trip
+    colour to swing and the fractals to glow out of — under the
+    `noita-heavily-tripping` stage and Noita's drunk double vision
+    (two ghosts)."""
+    return {**party_scene(view_shape=7, view_speed=0.3, view_bright=1.4, view_depth4=2.4,
+                          view_pattern=11, view_pattern_mix=0.8, camera_zoom=1.0,
+                          **{f"view_plane.{n}": True for n in ("XW", "YW", "ZW")}),
+            **fx_module("noita-heavily-tripping"),
+            "fx.doublevision.on": True, "fx.doublevision.amount": 4.0,
+            "fx.doublevision.ghost": 0.5, "fx.doublevision.copies": 2}
+
+
 # ---- the routes-only files, full presets now (plan 13 decision 10) ----
 
 def legacy6_values() -> dict[str, float]:
@@ -510,7 +644,11 @@ def lfo_breathe_values() -> dict[str, Any]:
     is turned up (brightness and speed at the subscribers' `from`)."""
     return {"view.bright": 1.0, "view.speed": 0.25,
             "lfo.1.sync": SYNCS.index("1 bar"), "lfo.2.sync": SYNCS.index("1/4"),
-            "lfo.1.shape": SHAPES.index("sine"), "lfo.1.depth": 0.6, "macro.1": 0.0}
+            "lfo.1.shape": SHAPES.index("sine"), "lfo.1.depth": 0.6, "macro.1": 0.0,
+            # what LFO 2's swell of the fx mix swells (plan 14 WP5: the row
+            # was dead with no effect on): the plasma screened under the
+            # scene, from a half mix the quarter-note push breathes about
+            "fx.mix": 0.5, "fx.plasma.on": True}
 
 
 def lfo_breathe_desk() -> list[Binding]:
@@ -535,6 +673,13 @@ def hands_pinch_routes() -> list[Binding]:
             Binding(hand("R", "y"), "view.speed", "position", when=pinch("R", "middle")),
             Binding(hand("L", "y"), "fx.mix", "position", when=pinch("L", "index")),
             Binding(hand("L", "y"), "camera.zoom", "position", when=pinch("L", "middle"))]
+
+
+def hands_pinch_values() -> dict[str, Any]:
+    """The left index pinch's fx mix plays into the hue cycle (plan 14
+    WP5: the row was dead with no effect on), from a mix of 0 — nothing
+    until that pinch lifts it."""
+    return {"fx.mix": 0.0, "fx.huecycle.on": True}
 
 
 def hands_play_routes() -> list[Binding]:
@@ -584,6 +729,17 @@ WAKE_KNOBS = ("dream.echo_mix", "dream.decay", "dream.darken", "dream.contrast",
 TRIP_KNOBS = ("fx.mix", "fx.plasma.level", "fx.kaleido.segments", "fx.kaleido.zoom",
               "fx.zoomblur.amount", "fx.zoomblur.glow", "fx.huecycle.paint",
               "fx.huecycle.spread")
+# plan 14 WP5: the effect presets' eight, the same shape — the chain's mix
+# first, then the family's bases, the hand-played ones among them
+ACID_KNOBS = ("fx.mix", "fx.acid.bend", "fx.acid.twist", "fx.acid.reach",
+              "fx.acid.breathe", "fx.wobble.amount", "fx.deconverge.amount",
+              "fx.huecycle.spread")
+MANDALA_KNOBS = ("fx.mix", "fx.plasma.level", "fx.kaleido.segments", "fx.kaleido.zoom",
+                 "fx.fractals.amount", "fx.fractals.ground", "fx.glimmer.amount",
+                 "fx.glimmer.ground")
+NOITA_KNOBS = ("fx.mix", "fx.warp.amount", "fx.warp.scale", "fx.tripcolour.amount",
+               "fx.fractals.amount", "fx.fractals.size", "fx.doublevision.amount",
+               "fx.doublevision.ghost")
 
 
 def knob_desk(targets: tuple[str, ...]) -> Callable[[], list[Binding]]:
@@ -617,6 +773,22 @@ FACTORY_PRESETS: dict[str, Factory] = {
     "party-field": Factory(party_field_routes),
     "party-wake": Factory(party_wake_routes, desk=knob_desk(WAKE_KNOBS)),
     "party-trip": Factory(party_trip_routes, desk=knob_desk(TRIP_KNOBS)),
+    # plan 14 WP5: the three effect families on F6–F8, generated whole
+    "party-acid": Factory(party_acid_routes, party_acid_values, "ACID",
+                          "party-acid: Minecraft's acid over the truncated tesseract — the "
+                          "frame heaves, rolls, shivers, splits its colours and cycles the "
+                          "rainbow (the `acid` fx module preset)",
+                          desk=knob_desk(ACID_KNOBS)),
+    "party-mandala": Factory(party_mandala_routes, party_mandala_values, "MANDALA",
+                             "party-mandala: plasma folded through an eight-wedge "
+                             "kaleidoscope, Noita's fractals and glints over it, the 24-cell "
+                             "a dim seed (the `mandala` fx module preset)",
+                             desk=knob_desk(MANDALA_KNOBS)),
+    "party-noita": Factory(party_noita_routes, party_noita_values, "NOITA",
+                           "party-noita: Noita's trip on the 16-cell — warp, trip colour and "
+                           "fractals at \"heavily tripping\", the right hand's height the "
+                           "next stage, and the drunk double vision on its roll",
+                           desk=knob_desk(NOITA_KNOBS)),
     # the routing presets, full presets now (decision 10)
     "legacy6": Factory(_lanes, legacy6_values, "legacy6",
                        "The reference's band → plane table on bases of 0: the parity "
@@ -630,13 +802,19 @@ FACTORY_PRESETS: dict[str, Factory] = {
     "hands-fx": Factory(hands_fx_routes, lambda: {"fx.acid.speed": 4.0}, "hands-fx",
                         "Plan 08: both hands play the Acid shader and the fx mix.",
                         desk=None),
-    "hands-pinch": Factory(hands_pinch_routes, dict, "hands-pinch",
-                           "Plan 08: a pinch picks what a hand's height moves.", desk=None),
+    "hands-pinch": Factory(hands_pinch_routes, hands_pinch_values, "hands-pinch",
+                           "Plan 08: a pinch picks what a hand's height moves — the left "
+                           "index pinch fades the hue cycle in.", desk=None),
     "hands-play": Factory(hands_play_routes, dict, "hands-play",
                           "Plan 08: brightness, speed and 4D depth on the hands.", desk=None),
 }
-# the five party presets (plan 12), by file slug
+# the party presets, by file slug: plan 12's five and plan 14's, in the
+# party show's bank order (F1–F8) and then those in no slot
 PARTY = tuple(s for s in FACTORY_PRESETS if s.startswith("party-"))
+# the party presets the show's F-keys load: F1–F5 plan 12's, F6–F8 the
+# effect families (decision 24)
+PARTY_BANK = ("party-tumble", "party-faces", "party-field", "party-wake", "party-trip",
+              "party-acid", "party-mandala", "party-noita")
 
 
 def generated(key: str) -> dict:

@@ -688,6 +688,7 @@ def test_factory_projects_are_listed_and_load_by_name(rig):
     assert "party" in lib.project.list()
     assert lib.project.load("party") == []
     assert lib.project.name == "party" and lib.project.path is None
-    assert lib.project.bank == ["TUMBLE", "FACES", "FIELD", "WAKE", "TRIP", None, None, None]
+    assert lib.project.bank == ["TUMBLE", "FACES", "FIELD", "WAKE", "TRIP", "ACID", "MANDALA",
+                               "NOITA"]
     assert lib.current("presets") == "TUMBLE" and lib.project.active == 0
     assert rig.view.shape == 10 and lib.current("band") == "Balanced"

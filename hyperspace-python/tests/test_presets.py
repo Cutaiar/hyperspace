@@ -511,8 +511,9 @@ def test_the_party_presets_routes_are_the_codes():
     """`python -m hyperspace.preset` regenerates the five party presets'
     routes from `preset.FACTORY_PRESETS`; the files may not drift from the
     code. The house presets carry the lane rows the factory table shipped."""
-    assert preset.PARTY == ("party-tumble", "party-faces", "party-field", "party-wake",
-                            "party-trip")
+    assert preset.PARTY[:8] == preset.PARTY_BANK == (
+        "party-tumble", "party-faces", "party-field", "party-wake", "party-trip",
+        "party-acid", "party-mandala", "party-noita")
     for slug in preset.PARTY:
         doc = json.loads((preset.FACTORY_DIR / f"{slug}.json").read_text())
         routes = [b.to_json() for b in preset.FACTORY_PRESETS[slug].routes()]
@@ -541,7 +542,7 @@ def test_every_factory_presets_desk_is_the_generators():
             from_map.append(row)
     assert desk == from_map
     paths = sorted(preset.FACTORY_DIR.glob("*.json"))
-    assert len(paths) == 18                  # 8 house, 5 party, 5 made from routing presets
+    assert len(paths) == 21                  # 8 house, 8 party, 5 made from routing presets
     for path in paths:
         doc = json.loads(path.read_text())
         want = expected_desk(path.stem)
@@ -550,7 +551,10 @@ def test_every_factory_presets_desk_is_the_generators():
         else:
             assert doc["desk"] == want, path.name
     knobs = [f"cc:*:{0x10 + k}" for k in range(8)]
-    for slug, targets in (("party-wake", preset.WAKE_KNOBS), ("party-trip", preset.TRIP_KNOBS)):
+    for slug, targets in (("party-wake", preset.WAKE_KNOBS), ("party-trip", preset.TRIP_KNOBS),
+                          ("party-acid", preset.ACID_KNOBS),
+                          ("party-mandala", preset.MANDALA_KNOBS),
+                          ("party-noita", preset.NOITA_KNOBS)):
         rows = json.loads((preset.FACTORY_DIR / f"{slug}.json").read_text())["desk"]
         assert rows[:len(desk)] == desk
         assert [(d["source"], d["target"], d["op"], d["feedback"]) for d in rows[len(desk):]] \
@@ -631,7 +635,9 @@ def test_a_converted_preset_switches_on_the_effects_its_routes_drive(rig):
     assert fx["fx.on"] is True and fx["fx.acid.on"] is True and fx["fx.acid.speed"] == 4.0
     rig.presets.load("hands-fx")
     assert rig.reg["fx.on"].value is True and rig.reg["fx.acid.on"].value is True
-    assert preset.generated("hands-pinch")["values"] == {"fx.on": True}      # fx.mix alone
+    # plan 14 WP5: hands-pinch's fx.mix row plays into the hue cycle, from 0
+    assert preset.generated("hands-pinch")["values"] == {"fx.mix": 0.0, "fx.huecycle.on": True,
+                                                         "fx.on": True}
     assert preset.generated("lfo-breathe")["values"]["fx.on"] is True
     assert "fx.on" not in preset.generated("hands-play")["values"]
     assert "fx.on" not in preset.generated("legacy6")["values"]
