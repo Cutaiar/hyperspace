@@ -1,6 +1,6 @@
 # Decision register — everything that is yours to decide
 
-As of 2026-09-28. **Two rows are open: 18 and 19** (plan 13, Part A2); every other row is answered (the answer sheet at the end). This is the one list. Every decision that blocks
+As of 2026-09-28. **Every row is answered**; 18 and 19 (plan 13, Part A2) on 2026-09-28 (the answer sheet at the end). This is the one list. Every decision that blocks
 implementing and settling the open work is here, whichever plan or session
 raised it. Each entry stands on its own: what the thing is, what the software
 does today, the options, a recommendation with its reasons, the trade-off you
@@ -396,7 +396,7 @@ hard the music pushes everything the bands drive (`master.gain`, 1× to 8×).
 
 ### 18. P13-h — how the drive fader reaches the rotation, once routes lose `scale`
 
-**Recommendation: (a), keep `scale` on a route, only for a session param.**
+**Answered (a), 2026-09-28.** (Recommendation was (a), keep `scale` on a route, only for a session param.)
 
 **What it is.** A route's depth can be multiplied by another parameter's
 live value, its `scale`. You decided (row 12) that a macro's attenuation
@@ -428,7 +428,7 @@ those six rows exactly as they are.
 
 ### 19. P13-i — may a preset's route *perform* a session param?
 
-**Recommendation: (a), yes.**
+**Answered (a), 2026-09-28.** (Recommendation was (a), yes.)
 
 **What it is.** You decided (plan 13 D9) that the analyzer is session: its
 bands, dynamics, scene and the drive fader are never in a preset, so a
@@ -522,5 +522,5 @@ or "overturn".
 | 15 | A1 as built | keep | **keep**, 2026-09-28 | |
 | 16 | L3 as built | keep | **keep**, 2026-09-28 | |
 | 17 | B6 as built | keep | **keep**, 2026-09-28 | |
-| 18 | P13-h the drive fader and `scale` | (a) keep `scale`, session params only | | open |
-| 19 | P13-i a route onto a session param | (a) yes; D9 is about values | | open |
+| 18 | P13-h the drive fader and `scale` | (a) keep `scale`, session params only | **(a)**, 2026-09-28 | built in plan 13 WP5 |
+| 19 | P13-i a route onto a session param | (a) yes; D9 is about values | **(a)**, 2026-09-28 | built in plan 13 WP5 (the page's "session" chip) |
