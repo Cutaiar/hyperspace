@@ -169,7 +169,7 @@ File format (``bindings.json``, schema ``hyperspace.bindings/2``):
 Rows carry only what differs from the defaults. `values` in a routing
 preset are the bases its routes assume; in the live table they are the
 macros' bases (the `macro` group, performance state since plan 13 WP1,
-so a theme and a project carry them too; the table keeps them until
+so a preset carries them too; the table keeps them until
 plan 13 WP5 moves them into presets) — refreshed on every write through the thunk
 the Router gives the table (`Bindings.values_of`) and landed in the
 registry when the Router is built (`Router.restore_values`, the ids the
@@ -263,19 +263,28 @@ APC_REMAP: dict[tuple[str, str, str, float], tuple[str, str, float]] = {
 # when the theme cycle was remapped away)
 APC_NEW_ROWS = (
     (f"note:0:{apc40.N_METRO}", "lfo.trigger", "toggle", 1.0, False),
-    (f"note:0:{apc40.N_QUANT}", "theme.next", "toggle", 1.0, True),
+    (f"note:0:{apc40.N_QUANT}", "preset.next", "toggle", 1.0, True),
 )
 # the keys WP4 added, likewise only where the key is free
 # the keys plan 11 moved out of app.py's loop into the table (audit R2;
-# decision register row 7): R resets the camera, F1–F8 load theme slots
-# 1–8 (param ids are 0-based), ⇧F1–F8 save them. Cmd+R (restart), Esc / Q
-# and ↑ / ↓ stay in the loop.
-THEME_SLOTS = 8
+# decision register row 7): R resets the camera, F1–F8 load the preset
+# bank's slots 1–8 (param ids are 0-based), ⇧F1–F8 save the live state
+# as them. Cmd+R (restart), Esc / Q and ↑ / ↓ stay in the loop.
+BANK_SLOTS = 8
 LOOP_KEY_ROWS = (
     ("R", "camera.reset", "fire"),
-    *[(f"F{k + 1}", f"theme.load.{k}", "fire") for k in range(THEME_SLOTS)],
-    *[(f"SHIFT+F{k + 1}", f"theme.save.{k}", "fire") for k in range(THEME_SLOTS)],
+    *[(f"F{k + 1}", f"preset.load.{k}", "fire") for k in range(BANK_SLOTS)],
+    *[(f"SHIFT+F{k + 1}", f"preset.save.{k}", "fire") for k in range(BANK_SLOTS)],
 )
+# plan 13 WP2: the theme bank became the preset bank. A row a file wrote
+# before it that targets a theme param — a factory key or APC40 row, or
+# one the user learned — is rewritten to the preset param of the same
+# slot (`remap_factory`, noted, the file written back once)
+THEME_TO_PRESET = {
+    "theme.select": "preset.select", "theme.next": "preset.next",
+    "theme.prev": "preset.prev",
+    **{f"theme.{w}.{k}": f"preset.{w}.{k}" for w in ("load", "save") for k in range(BANK_SLOTS)},
+}
 KEY_NEW_ROWS = (
     ("key:B", "tempo.tap", "fire", 1.0),
     ("key:SHIFT+B", "lfo.trigger", "fire", 1.0),
@@ -528,7 +537,7 @@ def keymap() -> list[Binding]:
 def padmap() -> list[Binding]:
     """Xbox-layout gamepad buttons and the d-pad."""
     rows = [
-        ("pad:A", "view.rotate", "toggle"), ("pad:B", "theme.next", "fire"),
+        ("pad:A", "view.rotate", "toggle"), ("pad:B", "preset.next", "fire"),
         ("pad:X", "view.points", "toggle"), ("pad:Y", "view.faces", "toggle"),
         ("pad:LB", "view.shape", "step", -1), ("pad:RB", "view.shape", "step", 1),
         ("pad:VIEW", "ui.panel", "toggle"), ("pad:MENU", "ui.cheatsheet", "toggle"),
@@ -819,8 +828,10 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
     """The factory rows plan 09 WP4 moved, on a table of any schema: the
     old APC40 factory rows swapped for the new (APC_REMAP), the METRONOME /
     QUANT notes and the B / ⇧B keys added where nothing uses the source
-    (APC_NEW_ROWS, KEY_NEW_ROWS). Idempotent: a second pass finds every old
-    row gone and every source taken. Returns (rows, a note per change)."""
+    (APC_NEW_ROWS, KEY_NEW_ROWS); and, since plan 13 WP2, any row on a
+    ``theme.*`` param moved to the ``preset.*`` param of the same slot
+    (THEME_TO_PRESET). Idempotent: a second pass finds every old row gone
+    and every source taken. Returns (rows, a note per change)."""
     out: list[Binding] = []
     notes: list[str] = []
     moved_theme = False
@@ -832,6 +843,11 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
                          "of plan 09)")
             moved_theme = moved_theme or b.target == "theme.next"
             b = replace(b, target=target, op=op, value=value)
+        elif b.target in THEME_TO_PRESET:
+            target = THEME_TO_PRESET[b.target]
+            notes.append(f"remapped {b.source}: {b.target} → {target} (the preset bank "
+                         "of plan 13)")
+            b = replace(b, target=target)
         out.append(b)
     used = {b.source for b in out}
     for source, target, op, value, only_if_moved in APC_NEW_ROWS:
@@ -889,7 +905,7 @@ class Bindings:
         self.profile = profile
         self.values = values
         # the live table carries the macros' bases (the `macro` group; a
-        # theme and a project carry them too since plan 13 WP1, the table
+        # preset carries them too since plan 13 WP2, the table
         # until WP5) so a macro turned on the page is there at the next start. The table
         # has no registry: the Router hands it this thunk, and every
         # write() refreshes `values` through it before the file goes out

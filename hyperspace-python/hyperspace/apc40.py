@@ -31,8 +31,8 @@ own CC carries the value; CC number + 8 sets the ring style
 
 The default map's transport corner is the clock (plan 09): TAP TEMPO taps
 ``tempo.tap``, NUDGE +/− step ``tempo.nudge`` by a hundredth of a beat,
-METRONOME fires ``lfo.trigger`` — the global LFO trigger — and QUANT cycles
-the theme. METRONOME's LED blinks on the beat through the ordinary ``led``
+METRONOME fires ``lfo.trigger`` — the global LFO trigger — and QUANT steps
+the preset bank. METRONOME's LED blinks on the beat through the ordinary ``led``
 feedback: one row, no second binding on the note. A trigger's LED is its
 press echo unless the param carries a light of its own
 (``Registry.trigger(lit=)``), and ``lfo.trigger`` is declared with the
@@ -156,8 +156,8 @@ DEFAULT_MAP: list[dict] = [
     *[_note(f"view.plane.{pl}", N_ACTIVATOR, i) for i, pl in enumerate(_BAND_PLANES)],
     *[_note(f"band.{i}.fn", N_SOLO, i) for i in range(6)],
     *[_note(f"band.{i}.reset", N_ARM, i) for i in range(6)],
-    # clip grid: themes · scenes · grid motion · shapes
-    *[_note("theme.select", N_CLIP[0], k, op="set", value=k, on=GREEN) for k in range(8)],
+    # clip grid: the preset bank · scenes · grid motion · shapes
+    *[_note("preset.select", N_CLIP[0], k, op="set", value=k, on=GREEN) for k in range(8)],
     *[_note("scene.select", N_CLIP[1], k, op="set", value=k, on=YELLOW) for k in range(8)],
     *[_note("scene.select", N_CLIP[2], k, op="set", value=8 + k, on=YELLOW) for k in range(3)],
     *[_note("view.inst_motion", N_CLIP[2], 4 + k, op="set", value=k, on=RED) for k in range(4)],
@@ -175,7 +175,7 @@ DEFAULT_MAP: list[dict] = [
     # blinks on the beat (the trigger param carries the light; see the docstring)
     _note("tempo.tap", N_TAP), _note("tempo.nudge", N_NUDGE_P, op="step", value=1),
     _note("tempo.nudge", N_NUDGE_M, op="step", value=-1),
-    _note("lfo.trigger", N_METRO), _note("theme.next", N_QUANT),
+    _note("lfo.trigger", N_METRO), _note("preset.next", N_QUANT),
     _note("view.bright", N_UP, op="step", value=3),
     _note("view.bright", N_DOWN, op="step", value=-3),
     _note("band.select", N_RIGHT, op="step", value=1),
