@@ -13,9 +13,10 @@ plan 10's docstring commit 488c445): every sentence
 below was read against its module. Where plan 09 changed behaviour the
 paragraph says so. The HTML-era sections (browser sandbox, deploy) are
 gone; `hyperspace-web/hyperspace.html` is frozen and matters here only as
-the oracle the golden traces were recorded from.
+the oracle the golden traces were recorded from. Revised for plan 13
+(presets, the session, the two-layer desk) on `plan-13-integration`.
 
-**Run it:** `uv sync`, `uv run pytest` (852 tests, ~25 s), `uv run
+**Run it:** `uv sync`, `uv run pytest` (872 tests, ~35 s), `uv run
 hyperspace`. `?` in the app shows the controls cheat sheet.
 
 ---
@@ -519,6 +520,28 @@ unreadable at a party.
   has its own imgui id (`tests/test_ui_lfo.py:86`). One grey (`ui.LINE`)
   for every rule and frame, one `ui.u32`, one `Panel.half` for a slider
   in a half-width cell.
+- **Presets and the bank** (plan 13 §2, §5). A **preset**
+  (`<home>/presets/<slug>.json`, `hyperspace.preset/2`, factory ones in
+  `hyperspace/library/presets/` shadowed by name) is the whole
+  performance: the performance groups' values (`view rot camera pattern
+  dream fx lfo macro`), the performer routes, the desk's preset layer,
+  the macros and the module labels. A load **replaces everything** (D2):
+  every performance param lands from the file or its group default,
+  every performer row, the preset layer and the macros are replaced, and
+  a session param (`tempo`, `hands`, the analyzer's `band` / `master` /
+  `scene` / `audio`, `output`, `overlay`, `ui`) is never touched — a
+  tapped BPM survives any preset. What a file names that it may not
+  (a session id, an unknown id, a non-performer route, a second
+  performer, a desk row on an invariant control) is noted on the panel
+  and ignored. A module label is recorded, never chain-loaded (D3). The
+  **project** (`hyperspace.project/2`) is the session's values, a
+  `startup` preset loaded on launch (D11), and a **bank** of eight preset
+  names: F1–F8 and the APC40's clip row 1 load slot k (an empty slot or
+  a dangling name loads nothing and says so), ⇧F1–F8 save the live state
+  as that slot's preset into the user folder (`PRESET <n>` for an empty
+  one), QUANT and pad B step to the next filled slot (`preset.next`). The
+  PRESETS page's preset strip lists, loads, saves and deletes them;
+  module presets keep their own strips and replace only their group.
 - **The desk** (plan 13 §3). The APC40 has two layers under a latched
   SHIFT, whose LED is lit while the global layer is up. The faders, the
   preset row, SHIFT, the clock corner, the transport and the track buttons
@@ -567,7 +590,7 @@ unreadable at a party.
 
 ## 6. Testing
 
-`uv run pytest` — 872 tests, 11 skipped without torch, about 28 s. `ruff`
+`uv run pytest` — 872 tests, 11 skipped without torch, about 35 s. `ruff`
 is the linter. Every test runs with `HYPERSPACE_HOME` pointed at its own
 `tmp_path` (`tests/conftest.py`), so no test can touch `~/Hyperspace`.
 What holds what:
@@ -590,6 +613,16 @@ What holds what:
   migration and refusal (`tests/test_macros.py`); the one-time migration
   of an owner-like home — presets, backups, nothing lost, a second
   launch that changes nothing (`tests/test_migration.py`).
+- **Presets and the session** (plan 13): every persisted param in exactly
+  one part (`tests/test_params.py`,
+  `test_every_persisted_group_is_performance_or_session`); a preset load
+  landing every performance base and replacing every route, never
+  touching a session param, the bank's slots, ⇧F, the startup preset and
+  module labels (`tests/test_presets.py`); Learn into the loaded preset
+  and its refusals (`tests/test_learn.py`); the ROUTING page as one page
+  over the loaded preset (`tests/test_ui_routing.py`); plan 12's five
+  party presets loading by F-key and keeping their rules, WAKE's and
+  TRIP's device knobs (`tests/test_plan12_presets.py`).
 - **Boundaries**: the core never imports `midi` / `bridge` / `dream`
   (`tests/test_params.py:286`, `tests/test_bridge.py:381`,
   `tests/test_dream.py:55`); `hands/core.py`, `hands/signal.py`, `lfo.py`,
