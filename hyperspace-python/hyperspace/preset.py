@@ -321,7 +321,9 @@ class Presets:
             try:
                 fn(name)
             except Exception as e:  # noqa: BLE001 — a listener must not fail a load
-                self.note = f"preset listener: {type(e).__name__}: {e}"[:160]
+                # the library's warning line, never `note` (the preset's own,
+                # saved back into the file)
+                self.lib.warning = f"preset listener: {type(e).__name__}: {e}"[:160]
 
 
 # ---------------------------------------------------------------- factory inputs

@@ -688,5 +688,6 @@ def test_a_load_tells_the_listeners_its_name(rig):
     name = rig.lib.list("presets")[0]
     assert rig.presets.load(name) == []
     assert heard == [rig.lib.current("presets")]
-    assert rig.presets.note.startswith("preset listener: ZeroDivisionError")
+    assert rig.lib.warning.startswith("preset listener: ZeroDivisionError")
+    assert not rig.presets.note.startswith("preset listener")   # the preset's own note
 
