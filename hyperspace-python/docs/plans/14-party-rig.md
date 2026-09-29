@@ -131,7 +131,7 @@ rows through the same table) — WP9 adds one.
 
 Filled as the work packages land.
 
-- **WP2, overlay behind config** (decision 21 (a); PR #PRNUM, stacked on
+- **WP2, overlay behind config** (decision 21 (a); PR #75, stacked on
   #73 and #72). `[output] overlay = false` in `config.DEFAULTS`; `app.main`
   reads the config before the windows, and `app._windows(overlay)` sets
   `TRANSPARENT_FRAMEBUFFER` only when it is true. `overlay.Output.allowed`
