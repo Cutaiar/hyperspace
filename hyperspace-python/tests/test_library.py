@@ -370,7 +370,7 @@ def test_routing_presets_are_a_document_kind_of_the_library(rig, tmp_path):
     router = _routed(rig, tmp_path)
     assert "bindings" in lib.kinds and "bindings" in lib.groups()
     assert lib.list("bindings") == ["default", "hands-fx", "hands-pinch", "hands-play",
-                                    "legacy6", "lfo-breathe"]
+                                    "legacy6", "lfo-breathe", "party-faces", "party-field", "party-trip", "party-tumble", "party-wake"]
     assert lib.is_factory("bindings", "legacy6") and lib.current("bindings") is None
     assert not lib.is_dirty("bindings")                  # nothing loaded: never dirty
     rig.view.pattern_mod[0] = 0.4
@@ -385,10 +385,11 @@ def test_routing_presets_are_a_document_kind_of_the_library(rig, tmp_path):
     doc = json.loads(path.read_text())
     assert doc["schema"] == SCHEMA and doc["name"] == "My Routes" and len(doc["bindings"]) == 13
     assert lib.current("bindings") == "My Routes" and not lib.is_dirty("bindings")
-    assert lib.list("bindings")[-1] == "My Routes" and not lib.is_factory("bindings", "My Routes")
-    assert lib.next("bindings") == "default"              # wraps by name order
-    assert not router.table.routes_to("view.bright")
-    assert lib.load("bindings", "My Routes") == [] and router.table.routes_to("view.bright")
+    assert "My Routes" in lib.list("bindings") and not lib.is_factory("bindings", "My Routes")
+    assert lib.next("bindings") == "party-faces"          # the next by name order
+    mine = lambda: [b for b in router.table.routes_to("view.bright") if b.source == "lane:2"]
+    assert not mine()                                     # the user's row went with the load
+    assert lib.load("bindings", "My Routes") == [] and mine()
     assert lib.reset("bindings") == "default" and lib.current("bindings") == "default"
     assert lib.delete("bindings", "My Routes") and "My Routes" not in lib.list("bindings")
     with pytest.raises(LibraryError):

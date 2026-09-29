@@ -367,12 +367,15 @@ def test_routing_presets_step_load_save(rig, tmp_path):
     assert "bindings" in lib.kinds
     listing = lib.list("bindings")
     assert listing == ["default", "hands-fx", "hands-pinch", "hands-play", "legacy6",
-                       "lfo-breathe"]                       # the factory exports
+                       "lfo-breathe", "party-faces", "party-field", "party-trip", "party-tumble", "party-wake"]  # the factory exports
     # next from nothing: the first; prev wraps to the last
     assert lib.next("bindings") == "default"
     assert lib.current("bindings") == "default"
     assert not lib.is_dirty("bindings")
     frame(panel)
+    assert lib.prev("bindings") == "party-wake"
+    for _ in range(4):                          # back past the plan-12 presets
+        lib.prev("bindings")
     assert lib.prev("bindings") == "lfo-breathe"
     assert rig.reg["lfo.1.sync"].value == 3     # lfo-breathe lands its bases: 1 bar
     assert lib.prev("bindings") == "legacy6"
@@ -391,7 +394,8 @@ def test_routing_presets_step_load_save(rig, tmp_path):
     assert lib.current("bindings") == "My Routes"
     assert not lib.is_dirty("bindings")
     assert lib.list("bindings") == [
-        "default", "hands-fx", "hands-pinch", "hands-play", "legacy6", "lfo-breathe", "My Routes"]
+        "default", "hands-fx", "hands-pinch", "hands-play", "legacy6", "lfo-breathe", "My Routes",
+        "party-faces", "party-field", "party-trip", "party-tumble", "party-wake"]
     assert not lib.is_factory("bindings", "My Routes")
     frame(panel)
     # load a factory preset back: the user route goes, the inputs stay
@@ -437,7 +441,8 @@ def test_router_preset_documents_and_a_library_over_them(tmp_path):
     lib = Library(tmp_path)
     lib.routing(router)
     assert lib.list("bindings") == [
-        "default", "hands-fx", "hands-pinch", "hands-play", "legacy6", "lfo-breathe"]
+        "default", "hands-fx", "hands-pinch", "hands-play", "legacy6", "lfo-breathe",
+        "party-faces", "party-field", "party-trip", "party-tumble", "party-wake"]
     assert lib.is_factory("bindings", "legacy6")
     router.table.add(Binding("lane:0", "view.bright", "push", 0.5, enabled=False))
     r.reg["macro.2"].set_value(0.3)                  # routing-layer state: saved with the routes
