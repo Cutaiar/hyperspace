@@ -1,6 +1,6 @@
 # Decision register — everything that is yours to decide
 
-As of 2026-09-28. **Every row is answered** (the answer sheet at the end). This is the one list. Every decision that blocks
+As of 2026-09-28. **Two rows are open: 18 and 19** (plan 13, Part A2); every other row is answered (the answer sheet at the end). This is the one list. Every decision that blocks
 implementing and settling the open work is here, whichever plan or session
 raised it. Each entry stands on its own: what the thing is, what the software
 does today, the options, a recommendation with its reasons, the trade-off you
@@ -381,6 +381,79 @@ bases, which the model forbids.
 
 ---
 
+## Part A2 — raised while building plan 13 (2026-09-28)
+
+Both came out of checking plan 13 against the code (plan 13 §9). Both are
+about the **MASTER fader**, which in this app is the audio *drive*: how
+hard the music pushes everything the bands drive (`master.gain`, 1× to 8×).
+
+```
+ APC40 MASTER fader ──▶ master.gain (session: the room's drive)
+                              │ today: every band → rotation route is "× master.gain"
+ band lanes ──push──▶ rot.rate.XY … ZW        (the six planes spin with the music)
+ left hand (party-tumble) ──push──▶ master.gain   (a hand leans on the drive)
+```
+
+### 18. P13-h — how the drive fader reaches the rotation, once routes lose `scale`
+
+**Recommendation: (a), keep `scale` on a route, only for a session param.**
+
+**What it is.** A route's depth can be multiplied by another parameter's
+live value, its `scale`. You decided (row 12) that a macro's attenuation
+becomes a *depth subscriber* of the macro, and that routes lose the
+`scale` field. But the field has a second user that is not a macro: the
+six band → rotation routes are each "× `master.gain`". That multiplication
+is the only way the MASTER fader changes how hard the music spins the
+shape, and it is how the reference design worked (the parity test checks
+it).
+
+**Today.** Every factory and party preset carries those six rows with
+`scale: master.gain`. Move the MASTER fader and the music spins the shape
+harder or softer; the band pattern inputs are not scaled.
+
+| Option | What the MASTER fader does to the rotation | Trade-off |
+|---|---|---|
+| (a) Keep `scale` on a route, allowed only on a session param (the drive fader today); macros go to subscribers as decided | Exactly what it does now. | Two ways to scale a depth remain — a macro's subscriber (per preset) and a route's `scale` (the rig's) — each with one job; the ROUTING page shows both. |
+| (b) Let the drive fader have depth subscribers, like a macro, listed in the preset | The same, described as a subscriber. | A session control's wiring lives in every preset; a subscriber's `from → to` runs over the fader's 0–1 position, not its 1×–8× value, so the six rows' numbers change and the parity test is re-derived. |
+| (c) Drop it: routes lose `scale` everywhere | The MASTER fader no longer changes the rotation; only the pattern and whatever the analyzer's gain feeds. | The drive fader stops meaning "how hard the music drives the shape"; the legacy6 parity anchor is re-frozen without gain. |
+
+**Why (a).** It keeps the one job the drive fader has in the room, costs
+no numbers, and keeps your macro decision whole: every `scale` that named
+a macro still becomes a subscriber.
+
+**What changes.** (a): the migration converts only `scale: macro.N`; the
+loader refuses a `scale` on a performance param with a note; one sentence
+in ARCHITECTURE §3.4. Plan 13 WP3 builds it; until you answer, WP3 leaves
+those six rows exactly as they are.
+
+### 19. P13-i — may a preset's route *perform* a session param?
+
+**Recommendation: (a), yes.**
+
+**What it is.** You decided (plan 13 D9) that the analyzer is session: its
+bands, dynamics, scene and the drive fader are never in a preset, so a
+preset load never moves them. `party-tumble`'s left hand, though, *pushes*
+the drive (`master.gain`) — lifting the hand makes the music grip the
+shape harder; lowering it or leaving the box gives the fader's own value
+back.
+
+**Today.** The route works; nothing distinguishes a session target.
+
+| Option | What `party-tumble`'s left hand does | Trade-off |
+|---|---|---|
+| (a) A route may target any param a performer may drive, session ones included; D9 governs the *values* a preset lands | Leans on the drive while the hand is up; the fader's setting is never changed and shows again when the hand leaves. | A preset can change how the room *feels* while a hand is in, never what it is *set* to. The ROUTING page marks such a route "session". |
+| (b) A route onto a session param is dropped at load with a note | Nothing; `party-tumble`'s left height is re-cut onto a performance param (the spin speed, say). | The strict reading of D9; one party gesture changes. |
+
+**Why (a).** D9's reason was that the analyzer is the room and every
+preset assumes one lane layout; an offset that springs back touches
+neither. It keeps plan 12's gesture as you approved it.
+
+**What changes.** (a): nothing in the loader; the page's "session" mark;
+one sentence in ARCHITECTURE §3.2. (b): a check in the preset loader and a
+new left-height row in `party-tumble` (WP5).
+
+---
+
 ## Part B — built on the recommendation without asking; confirm or overturn
 
 Four calls had a sensible default and waiting would have blocked the work.
@@ -418,7 +491,9 @@ Each is built, reviewed and on PR #55. Overturning any is a small follow-up.
 - Two review notes from plan 12 that belong in the audit, not here: named
   hand addresses (`hand:left.roll`) so a custom `[hands] dofs` list cannot
   scramble shipped presets; an explicit groups-to-reset list on a theme or
-  preset.
+  preset. Filed 2026-09-28 as `AUDIT-2026-09.md` rows N7 and L9.
+- Plan 13's machine checks: `docs/plans/11-hand-checks.md` group H
+  (checks 33–41).
 
 ---
 
@@ -447,3 +522,5 @@ or "overturn".
 | 15 | A1 as built | keep | **keep**, 2026-09-28 | |
 | 16 | L3 as built | keep | **keep**, 2026-09-28 | |
 | 17 | B6 as built | keep | **keep**, 2026-09-28 | |
+| 18 | P13-h the drive fader and `scale` | (a) keep `scale`, session params only | | open |
+| 19 | P13-i a route onto a session param | (a) yes; D9 is about values | | open |

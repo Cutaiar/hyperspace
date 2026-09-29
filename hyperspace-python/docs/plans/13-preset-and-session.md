@@ -9,9 +9,11 @@ SHIFT so every preset can lay the desk out for itself without losing the
 global controls. It is the design; the decisions were taken with the owner
 on 2026-09-28 and are listed first so the rest can be checked against them.
 
-Nothing here is built. Plan 11's routing and library work packages land
-first; this plan then supersedes plan 12's file shape (the five `party-*`
-presets are re-cut into the new shape as one of its work packages).
+Plans 11 and 12 are merged (main 4bffa9d); plan 13 runs from its WP1 and
+supersedes plan 12's file shape (the five `party-*` presets are re-cut into
+the new shape in WP5). §9 maps this design onto the code as it now is, §10
+is the exit criteria, §11 the work packages as run, §12 the forks still
+open.
 
 ## 1. Decisions
 
@@ -59,7 +61,9 @@ user ones in the home folder shadowing by name (as every group does today).
   params are performance and which are session). A partial file is legal;
   unnamed ids land on the app default at load (D2).
 - `routes`: the performer rows — `hand:`, `lane:`, `lfo:`, `ext:` sources,
-  `push` / `position`, scale, gate, rest — exactly today's routing rows.
+  `push` / `position`, gate, rest — today's routing rows less a `scale`
+  that names a macro (a depth subscriber replaces it, §2.4; a `scale` on
+  a non-macro param is decision 18, §12).
   One performer per target; the referee settles a file with two.
 - `desk`: the preset layer of the APC40, MIDI rows in today's form. A
   control that should move several things maps to a macro (D10). A row on
@@ -170,7 +174,10 @@ the faders' catch state is cleared on a preset load (D7).
 
 ### 3.2 The sorted default map
 
-Today's `apc40.DEFAULT_MAP` (113 rows), sorted by the decisions. Names are
+Today's `apc40.DEFAULT_MAP` (113 rows), sorted by the decisions. QUANT
+(`theme.next` today) is not in the tables below; it becomes `preset.next`
+and is **invariant**, for D6's reason (switching presets is never behind
+a layer). Names are
 Akai's; "row n" is a clip-launch row across the eight tracks.
 
 **Invariant** (D6, D9):
@@ -282,15 +289,17 @@ targets return to their new bases the frame the old rows are gone).
   filled slot); MIDI rows are sorted by §3.2; rows the sorting does not
   know keep the layer they are on (preset layer, into the startup preset).
 - `library/bindings/*.json`: `legacy6`, `lfo-breathe` and the `hands-*`
-  files become presets with only `routes` (partial presets are legal); the
-  five `party-*` files merge with their `party.hyp.json` slots into five
-  full presets — plan 12's real deliverable in the new shape.
+  files become **full** presets (decision 10: no exception to D2 — each
+  takes the factory default's values under its own); the five `party-*`
+  files merge with their `party.hyp.json` slots into five full presets —
+  plan 12's real deliverable in the new shape.
 - The factory `library/projects/default.hyp.json` becomes eight factory
   presets (the house themes) and a schema-2 project naming them.
-- `ROUTING_GROUPS`, `Presets`, `theme.*` params, the routing preset file
-  system and `ui_routing`'s strip go; the F-keys and the preset row call
-  the one loader. Audit items L1, L2, R1 and A1's scene-naming half close
-  as a consequence.
+- `ROUTING_GROUPS`, `theme.*` params, the routing preset document kind
+  (`Library.routing`, `Router.apply_doc` / `preset_doc`, `routing.PRESETS`)
+  and `ui_routing`'s strip go; the F-keys and the preset row call the one
+  loader. (`Presets` already went in plan 11, PR #52; audit L1 and L2
+  closed there and in PR #58; R1 was decided (c) and dissolves here.)
 
 ## 7. Work packages and order
 
@@ -319,3 +328,158 @@ rows 9–13 and 12b):
 - Macros: one concept (§2.4); a performer on a macro moves its depth
   subscribers only.
 - The ROUTING page: one page over the loaded preset.
+
+## 9. Against main
+
+Checked against main **75f8ef7** (2026-09-28: plan 11 as PR #55, plan 12
+as #47, the keys as #58, decisions 10–13 and 12b). What each section
+above assumes, and what the code already gives it.
+
+| Claim | Where it is today | What plan 13 changes |
+|---|---|---|
+| §4 the performance / session split "is `ROUTING_GROUPS`" | `params.ROUTING_GROUPS = ("macro",)`; `Registry.snapshot()` leaves it out of the whole surface; `Library.groups()` hides it; `Router.routing_values` saves the macros into `bindings.json`'s `values` | WP1: two tuples, `PERFORMANCE_GROUPS` (`view rot camera pattern dream fx lfo macro`) and `SESSION_GROUPS` (`tempo hands band master scene audio output overlay ui`), every persisted group in exactly one (a test walks the full registry); `snapshot(part=…)`; `ROUTING_GROUPS` goes. Those are all the groups the registry has; `rot.phase.*` is already `persist=False` |
+| §2.2 the session's values in the project | `Project.values` is a whole-surface snapshot (session ids included), `Project.bank` holds eight inline `{name, values}` slots, `Project.modules` the module labels (`hyperspace.project/1`) | WP1 adds a `session` section and splits `values`; WP2 bumps to `hyperspace.project/2` (`startup`, `bank` of names, `session`) |
+| §2.1 the preset file, "user ones shadowing by name (as every group does)" | `Library` already does list / shadow / load / save as / delete / dirty dot / watch for any folder, and for a foreign format through a **document kind** (`Library.kind(group, schema, load=, document=, signature=)`, plan 11 WP6); the routing presets are the one kind so far (`Library.routing` → `Router.apply_doc` / `preset_doc` / `signature`) | WP2 registers `presets/` as a document kind whose hooks are a new `preset.py` (`Presets`): the strip, shadowing, watch and dirty dot come for free. The routing kind goes in WP5 |
+| §5 steps 2–3, "land values, replace routes, referee first-wins" | `Router.apply_doc` already replaces every performer row (`Bindings.set_routes`, referee first-wins into `table.dropped`) and restores `values`; `Library.defaults(group)` is the "app default" fill-in (the group's default module preset over the build values) | WP2 calls those two, over every performance group, not only the ids the file names |
+| §3.2 the F-keys and the preset row | F1–F8 / ⇧F1–F8 and `R` are table rows (`routing.LOOP_KEY_ROWS` → `theme.load.k` / `theme.save.k`, PR #58); clip row 1 is `theme.select`; QUANT and `pad:B` are `theme.next`; `remap_factory` adds rows to older files where the key is free | WP2 renames the targets (`preset.load.k`, `preset.save.k`, `preset.select`, `preset.next` / `prev`) and remaps a user file's `theme.*` rows to them |
+| §3 the desk | `MidiIO` routes every MIDI row with no notion of a layer; soft pickup on every `abs` row (`_apply`, `_uncatch_moved`); rings show the base, LEDs the state (R6, decided); `apc40.N_SHIFT` (0x62) is defined and unmapped | WP3: `layer` on MIDI rows, the latch, feedback per layer, the knobs re-based on a switch (check 31 is the hardware assumption) |
+| §2.4 macros and `scale` | `Binding.scale` names **any** param whose effective value multiplies the depth. Factory files use it twice: `lfo-breathe`'s `lfo:1 → fx.mix × macro.1`, and **every legacy6 lane → `rot.rate` row, × `master.gain`** — that is how the MASTER (drive) fader drives the rotation, and the legacy6 parity anchor (`tests/test_core.py`) depends on it | WP3 turns `scale: macro.N` into a depth subscriber. `scale: master.gain` is not a macro, and D10's "routes lose `scale`" would take the drive fader off the rotation: **decision 18** (§12). Until it is answered WP3 leaves non-macro `scale` rows exactly as they are |
+| §3.3 Learn | `learn.Learn` is the one armed id (plan 11 WP5): `MidiIO._learned` binds a MIDI row into the live table and writes `bindings.json`; `Learn.learn_source` places a hand `position` route through `replace_owner`, parking a conflict in `pending` for the Replace / Keep modal | WP4 points both at the loaded preset (dirty, not written) and adds the refusals |
+| §3.3 the ROUTING page | `ui_routing.page`: the library strip over `bindings`, the macro strip, the performer rows (with a `scale` combo); MIDI rows are not shown | WP4: one page (decision 13) |
+| §6 backups before a rewrite | `routing.backup(path, schema)` writes `<file>.bak-v<schema>` once, a dated copy when taken, never over any `.bak-*` (plan 11 WP8, audit R12) | WP5 reuses it for every file it rewrites (project, `bindings.json`, a user's `bindings/*.json`) |
+| D9 "the analyzer is session" | Every house theme and every party slot sets `scene.select` (the eight house themes each pick a different band scene); `party-tumble` pushes `master.gain` with the left hand | The `scene.select` values drop at the migration — decided by D9, and felt: a house preset no longer changes the band scene. A route *onto* a session param is **decision 19** (§12) |
+| Plan 12's cards, "F-key then the ROUTING strip" | A party scene loads in two steps (a theme, then a routing preset) | One step after WP5: the F-key |
+
+Two sentences plan 11 made stale are fixed above (§2.1's `routes`, §6's
+list of what closes). Two choices the design left open are taken here as
+defaults, overturnable in review: QUANT and `pad:B` become `preset.next`,
+invariant (§3.2's note); the macro group gets no module-preset strip (a
+macro's meaning is its subscribers, which live in the preset).
+
+## 10. Exit criteria (checked on merged main)
+
+Headless, each held by a named test (the work package that adds it in
+brackets):
+
+- [ ] 1. Every persisted param is in exactly one of `PERFORMANCE_GROUPS` /
+      `SESSION_GROUPS` — `test_params.py::test_every_persisted_group_is_performance_or_session` [WP1].
+- [ ] 2. A preset load never touches a session param (a tapped BPM
+      survives TRIP) — `test_presets.py::test_a_preset_load_never_touches_a_session_param` [WP2].
+- [ ] 3. A preset load lands every performance base (the file's, else the
+      group default) and replaces every performer row —
+      `test_presets.py::test_a_preset_load_lands_every_base_and_replaces_every_route` [WP2].
+- [ ] 4. Session ids and invariant desk rows in a preset are noted and
+      ignored — `test_presets.py::test_session_ids_in_a_preset_are_noted_and_ignored`,
+      `test_desk.py::test_a_desk_row_on_an_invariant_control_is_dropped_with_a_note` [WP2, WP3].
+- [ ] 5. A slot names a file; an empty or dangling slot loads nothing and
+      says so; ⇧F saves the live state as that preset in the user folder —
+      `test_presets.py::test_a_slot_names_a_preset_file`,
+      `::test_shift_f_saves_the_live_state_as_the_slots_preset` [WP2].
+- [ ] 6. The startup preset loads on launch —
+      `test_presets.py::test_the_startup_preset_loads_on_launch` [WP2].
+- [ ] 7. Module labels are recorded and never chain-load —
+      `test_presets.py::test_module_labels_are_recorded_and_never_chain_load` [WP2].
+- [ ] 8. SHIFT latches and lights; a load drops to the preset layer; a
+      modifier is read at the press —
+      `test_desk.py::test_shift_latches_the_layer_and_lights_its_led`,
+      `::test_a_preset_load_drops_to_the_preset_layer`,
+      `::test_shift_release_never_reevaluates_a_held_button` [WP3].
+- [ ] 9. On a layer switch the knobs are re-based and the faders pick up;
+      a load clears the faders' catch —
+      `test_desk.py::test_a_layer_switch_rebases_the_knobs_and_leaves_the_faders_to_pick_up`,
+      `::test_a_preset_load_clears_the_faders_catch` [WP3].
+- [ ] 10. An unmapped control is dark and does nothing; invariant controls
+      mean one thing on both layers —
+      `test_desk.py::test_an_unmapped_control_is_dark_and_does_nothing`,
+      `::test_invariant_controls_mean_one_thing_on_both_layers` [WP3].
+- [ ] 11. Two base subscribers of opposite polarity move opposite ways; a
+      performer on a macro moves only its depth subscribers; `scale:
+      macro.N` migrates to a depth subscriber —
+      `test_macros.py::test_base_subscribers_of_opposite_polarity_move_opposite_ways`,
+      `::test_a_performer_on_a_macro_moves_only_its_depth_subscribers`,
+      `::test_scale_on_a_macro_migrates_to_a_depth_subscriber` [WP3].
+- [ ] 12. Learn writes into the loaded preset and refuses the global layer
+      and invariant controls —
+      `test_learn.py::test_a_knob_learn_writes_a_desk_row_into_the_loaded_preset`,
+      `::test_a_hand_learn_writes_a_route_into_the_loaded_preset`,
+      `::test_learn_refuses_the_global_layer_and_invariant_controls` [WP4].
+- [ ] 13. The ROUTING page is one page and fits —
+      `test_ui_routing.py::test_the_routing_page_is_one_page_over_the_loaded_preset`,
+      `test_ui_shell.py::test_every_page_fits_the_control_window` [WP4].
+- [ ] 14. The migration: a schema-1 project, `bindings.json` and every
+      routes-only file become presets and a schema-2 project, a backup kept
+      before each rewrite and never over a hand-made `.bak-*` —
+      `test_migration.py` [WP5].
+- [ ] 15. The five party presets load by F-key as presets and still hold
+      plan 12's rules — `test_plan12_presets.py` [WP5].
+- [ ] 16. The control model holds: `tests/test_routing_boundary.py` (one
+      caller of `Param.modulate`) and `tests/test_app_boundary.py` (the
+      frame order, with the macro step in the scene-setter block) green;
+      pytest green, ruff clean, ENGINEERING §6's count updated.
+- [ ] 17. DECISIONS' plan 13 rows read "standing"; the register's notes say
+      where each answer was built; ARCHITECTURE §3 and §3.8 describe the
+      code [WP6].
+
+At the machine: `11-hand-checks.md` group H (checks 33–41, with check 31
+as its first step). Plan 13 is settled when the owner has run them.
+
+## 11. Work packages as run
+
+The suggested waves held, with one move: **WP2 converts the factory files
+it needs** (the house themes and the party slots into factory presets,
+generated from code the way the routing presets are today), because
+without a factory bank the F-keys have nothing to load and WP2 nothing to
+test. WP5 keeps every *user*-file migration and the real re-cut (desk
+blocks, macros, the regenerated factory set).
+
+| Wave | WP | Branch | Owns | Must not touch |
+|---|---|---|---|---|
+| 1 | WP1 split | `plan-13-wp1-split` | `params.py` (the two tuples, `snapshot(part=)`), `library.py` (`Project.session`, slot capture / restore over performance only, `groups()`), `routing.py` (`routing_values` names the macro group) | presets, desk, UI |
+| 2 | WP2 preset/2 | `plan-13-wp2-preset` | new `preset.py`; `library.py` (`presets/` kind, `hyperspace.project/2`); `params.py` (`theme.*` → `preset.*`); `routing.py` (`LOOP_KEY_ROWS`, `keymap` / `padmap` targets, the `theme.*` remap); `apc40.py` (**target ids only**: clip row 1, QUANT); `ui_presets.py`; `app.py` (construction, startup load); `library/presets/`, `library/projects/` | `midi.py`, `learn.py`, `ui_routing.py`, row layers |
+| 2 | WP3 desk + macros | `plan-13-wp3-desk` | `routing.py` (`Binding.layer`, `Macro` and its subscribers on `Bindings`, the `scale` migration, depth in `Router.modulate`, the macro base-follow step); `midi.py` (layers, latch, feedback, re-base, catch); `apc40.py` (**layers only**: the sorted map, the SHIFT row, the global track knobs); `hands/` (`hands.select`, the `hands.sel.return` alias); `app.py` (the macro step in the frame); `ui_routing.py` (only what removing `scale` forces) | target ids, `library.py`, `ui_presets.py` |
+| 3 | WP4 learn + page | `plan-13-wp4-learn` | `preset.py` wiring (desk and macros into load and save); `learn.py`; `midi.py` `_learned`; `hands/core.py` `_learn`; `ui_routing.py` (the one page); `ui.py` (the refusal line) | file formats |
+| 4 | WP5 migration + re-cut | `plan-13-wp5-migrate` | the migrations (`library.MIGRATIONS`, `Bindings.load`), removing the routing kind and `routing.PRESETS`, the factory generator's inputs, `library/bindings/` → `library/presets/`, `tests/test_plan12_presets.py`, `tools/preset_shots.py` | docs beyond its own lines |
+| 4 | WP6 docs | `plan-13-wp6-docs` | ARCHITECTURE §3 / §3.8 / the file table, ENGINEERING, DECISIONS statuses, the register's notes, plan 12's cards, CHECKPOINT, plans README row 13, this plan's §13 | code |
+
+**Contracts between them.**
+
+- *WP1 → all.* `params.PERFORMANCE_GROUPS`, `params.SESSION_GROUPS`,
+  `params.part_of(p) -> "performance" | "session" | None`,
+  `Registry.snapshot(group=None, *, ids=None, part=None)`; from WP1 on the
+  whole snapshot includes the macros.
+- *WP2 → WP4, WP5.* `preset.Presets(lib, reg, router)` with `load(name)`,
+  `load_doc(doc, path=None) -> notes`, `document(name) -> dict`,
+  `save_as(name)`, `current`, `notes`; the file is §2.1's shape. WP2
+  carries `desk` and `macros` **verbatim** (kept from the loaded file,
+  written back on save) and applies neither; WP4 wires them. Bank params:
+  `preset.load.0–7`, `preset.save.0–7`, `preset.select`, `preset.next` /
+  `prev`, group `preset`, never persisted. WP2 does not migrate a *user*
+  schema-1 project; it refuses one with a clear `Library.error` until WP5
+  registers the migration.
+- *WP3 → WP4, WP5.* MIDI rows carry `layer`: absent = invariant (the
+  session defines the control), `"global"`, or `"preset"`.
+  `Bindings.set_desk(rows) -> notes` replaces every preset-layer row,
+  dropping with a note a row on an invariant source;
+  `Bindings.desk() -> list[Binding]`; `Bindings.macros` with
+  `set_macros(doc)` / `macros_doc()`; the adapter's `layer` and
+  `drop_layer()`; `MidiIO.redraw()` (every ring and LED for the up layer,
+  the knobs caught at the value just sent, the faders' catch cleared).
+  Until WP4 and WP5 the preset layer and the macros persist in
+  `bindings.json` (`layer: "preset"` rows, a `macros` key) so the desk
+  works on its own branch; WP5 moves them into presets.
+- *WP4 → WP5.* A learn marks the loaded preset dirty and never writes
+  `bindings.json`; only ⇧F or the strip's save writes a preset.
+
+## 12. Open forks
+
+Filed in `docs/DECISION-REGISTER.md` (rows 18 and 19) with a pending line
+in DECISIONS.md. Work that does not depend on them runs meanwhile.
+
+| # | Fork | Recommendation | Blocks |
+|---|---|---|---|
+| 18 | **P13-h** The drive fader reaches the rotation as `scale: master.gain` on every lane → rotation route; D10 says routes lose `scale`. | (a) keep a route's `scale`, allowed only on a session param; macros move to subscribers | WP3's last step (it leaves those rows alone meanwhile) and WP5's factory regeneration |
+| 19 | **P13-i** May a preset's route *perform* a session param (`party-tumble`'s left height pushes `master.gain`)? | (a) yes: D9 keeps the analyzer's settings out of a preset, and an offset is not a setting | WP5's re-cut of `party-tumble` |
+
+## 13. As built
+
+Filled as the work packages land: one line per deviation, with its PR.
