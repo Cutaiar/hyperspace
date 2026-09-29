@@ -274,6 +274,7 @@ def test_every_page_fits_the_control_window(rig, monkeypatch):
     a hands setup with a tracker, an Output and a Router with the factory
     rows, so HANDS, OUTPUT and ROUTING are measured full (audit U1)."""
     assert rig.panel.hands is not None and rig.panel.output is not None
+    assert rig.panel.desk                   # the desk diagram on (plan 14 WP7)
     assert rig.router.table.routes()
     over = _page_scroll(rig, monkeypatch)
     assert set(over) == set(PAGE_KEYS)
@@ -369,7 +370,8 @@ _SYMBOLS = {"←": "LEFT", "→": "RIGHT", "↑": "UP", "↓": "DOWN", "space": 
             "?": "SLASH", "Esc": "ESCAPE", "Cmd+R": "SUPER+R"}
 _PADS = {"pad A B": ["A", "B"], "pad X Y": ["X", "Y"], "LB / RB": ["LB", "RB"],
          "view/menu": ["VIEW", "MENU"], "sticks": ["LSTICK", "RSTICK"]}
-_MOUSE = {"drag", "⇧drag", "scroll", "right-click", "d-pad", "LT / RT"}
+_MOUSE = {"drag", "⇧drag", "scroll", "right-click", "d-pad", "LT / RT",
+          "APC40"}                                   # the desk's glyph legend, not a key
 
 
 def _sheet_keys() -> tuple[set[str], set[str]]:
