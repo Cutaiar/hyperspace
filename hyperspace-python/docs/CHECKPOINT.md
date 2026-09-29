@@ -55,9 +55,10 @@ file what fails as new audit rows dated with plan 11.
    under test over a fake device, but no human has pressed `M` on real
    hardware with the macOS microphone prompt. One click plus a clap
    (hand check 3).
-3. **The owner's seven decisions** (plan 11 §2) and the two work packages
-   behind them: the trim non-monotonicity fix (A10, plan 06's open
-   choice) and `R` / F1–F8 as table rows (R2, L2).
+3. **The owner's remaining decisions** (`docs/DECISION-REGISTER.md`).
+   Rows 1–6 are answered and built (the trim is the per-band AUTO /
+   MANUAL switch, plan 11 WP15); `R` / F1–F8 as table rows (row 7) and
+   plan 13's forks (rows 9–13) are open.
 4. **Plan 04 — booth hardware.** Blocked on access: the pure-Python
    Pro DJ Link spike against the CDJ-3000/XDJ-AZ (BLT+OSC is the standing
    fallback), ESP32+BNO055 IMU ingest (packet format specced in BLUEPRINT

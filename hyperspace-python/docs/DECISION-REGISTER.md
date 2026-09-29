@@ -407,9 +407,9 @@ or "overturn".
 | 1 | B2 tap and the downbeat | (a) never moves it | **(a)**, 2026-09-28 | |
 | 2 | B5 performer-fired triggers | (a) keep all three | **(c)**, 2026-09-28 | LFO triggers ownable, tap tempo not |
 | 3 | R1 LFO knobs | (c) theme state; presets may set assumed bases | **(c)**, 2026-09-28 | |
-| 4 | R6 APC40 LEDs | (a) rings base, LEDs state | | |
-| 5 | A7 Dynamics past 1× | (b) keep 4×, document | | |
-| 6 | A10 input trim | (3) auto/manual switch | | |
+| 4 | R6 APC40 LEDs | (a) rings base, LEDs state | **(a)**, 2026-09-28 | |
+| 5 | A7 Dynamics past 1× | (b) keep 4×, document | **(b)**, 2026-09-28 | |
+| 6 | A10 input trim | (3) auto/manual switch | **(3)**, 2026-09-28 | built, WP15 |
 | 7 | R2 + L2 loop keys | (a) table rows | | |
 | 8 | Merge path | PR #55, then #47 | | |
 | 9 | P13-a global track knobs | (a) hand feel + BPM | | |

@@ -363,9 +363,11 @@ a limiter flattens level but cannot flatten change). Global `master.dyn`
 scales the lot; per-band `Contrast` (`exp`) and `Transient` (`trn`) sit at
 the top of the strip. A band with genuinely no dynamics stays flat — this
 recovers what a limiter took, it does not invent motion
-(`tests/test_core.py:111-124`). Note `master.dyn`'s fader runs to 4× while
-the chain clamps it to 1 for the window blend and uses it raw in the
-expansion ratio (audit A7).
+(`tests/test_core.py:111-124`). `master.dyn`'s fader runs to 4× on
+purpose: up to 1× it blends from the absolute to the windowed normaliser
+and grows the expansion ratio; past 1× the blend is full and only the
+expansion keeps growing (owner, 2026-09-28, audit A7; the parity oracle
+is frozen at 0 and 1, where the two agree).
 
 **Input trim** (`band.{i}.trim` and `master.trim`, dB) is the mixer-style
 input stage: off, then −60 dB to +12 dB at 1 dB/step with a detent at 0,
@@ -377,17 +379,25 @@ exists because the window normaliser is a two-point auto-calibration and
 by construction removes any static gain in front of it: pre-envelope trim
 alone is a placebo (`analyzer.py:504-508, 556`).
 
-> ⚠️ **Known limitation, kept on purpose.** On real material from a
-> settled state, BASS trim is non-monotonic through the range you would
-> reach for: cutting 6–12 dB makes the band drive *harder*, and it only
-> attenuates from around −20 dB (measured on the reference: 0 dB → out
-> 0.87; −6 → **1.03**; −12 → **1.01**; −20 → 0.75). A hard off (−60 dB)
-> correctly produces exactly 0. The cause is the trim's calibration
-> depending on harmonic coupling, which the ceiling work moved. It is
-> ported as-is and frozen by the parity test; the structural fix is plan
-> 06's one open decision (§8) — bias the adaptive window in proportion to
-> trim, apply trim as a post-normaliser multiplier, or a per-band manual
-> mode that bypasses adaptive normalisation.
+**AUTO and MANUAL normalisation** (`band.{i}.norm`, the chip on the band
+strip; plan 11 WP15, audit A10). AUTO — every band's default, and every
+scene or preset that does not name the key — is the reference chain above,
+bit for bit, trim applied twice. It keeps the reference's known behaviour:
+on the real track from a settled state, BASS trim is non-monotonic through
+the range you would reach for (0 dB → out 0.87; −6 → **1.03**; −12 →
+**1.01**; −20 → 0.75; −60 → exactly 0), because the trim's calibration
+depends on harmonic coupling. MANUAL is the fix the owner chose
+(2026-09-28): for that band the window, the confidence gating of `dyn`, the
+expansion and the warm-up are bypassed; the level is the envelope itself in
+`u` (1.0 = nominal), which carries the trim once, as a plain gain; the
+transient knob blends toward the peak-normalised flux scaled by that level;
+the gate, coupling, drives, shaper and ceilings are unchanged. The trackers
+keep running, so switching back resumes where the window would have been.
+Measured on the brickwalled fixture, BASS settled, MANUAL: 0 dB → 1.63; −6
+→ 1.51; −12 → 1.34; −20 → 1.05, non-increasing on every band
+(`test_manual_normalisation_makes_trim_monotonic`; `uv run python
+tools/trim_sweep.py --manual` prints a sweep). A MANUAL band gives up the
+limiter-undoing dynamics recovery; that is the trade.
 
 **Analyser** (`analysis.py`): `FFT_SIZE = 4096`, Blackman window, 1/N
 normalisation, `SMOOTHING = 0.15` (the Web Audio smoothing constant) —
@@ -412,7 +422,8 @@ band's scratch state. `CHOP`, `TREM` and `S&H` are fixed-rate and unaware of
 the tempo clock (plan 09's LFOs are the clock-aware oscillators; audit).
 
 **11 scenes** snapshot every band's function, drives, attack, decay,
-threshold, contrast, transient and trim: Balanced, Kick & Sizzle, Glacial
+threshold, contrast, transient and trim (and, since plan 11, the AUTO /
+MANUAL switch, AUTO when a file does not name it): Balanced, Kick & Sizzle, Glacial
 Drift, Strobe Cage, Bass Engine, Air & Lace, Inverse World, Percussive,
 Tremolo Web, Harmonic Bloom, Slow Bass / Fast Air. A scene **is** a band
 preset — the one store is `library/band/*.json`, whose layout carries the
@@ -430,7 +441,8 @@ carries the current layout, names included (`Library.extra`, audit A2).
 `band.sel.*` aliases that follow the selection): contrast 1:1–1:5,
 transient 0–100 %, pre-drive and post-drive off / 0.06–8×, attack 0.5 ms–
 2.05 s, decay 5 ms–20.5 s, threshold 0–0.6, trim; plus centre `f` (20 Hz–20
-kHz, log), `q` (0.1–20) and `curve`.
+kHz, log), `q` (0.1–20), `curve`, and `norm` (AUTO / MANUAL, a scene
+setting, never a performer's).
 
 **Fader tapers.** Every fader is an integer position; a `Taper` owns both
 directions and `unmap(map(p)) == p` exactly over the whole throw
@@ -594,8 +606,8 @@ same PR; when it changes behaviour, the line here does.
   [`plans/11-hand-checks.md`](plans/11-hand-checks.md). Audit B1 (a hand
   leaving the box did not release its rows) was fixed by plan 11 WP1
   before these are run.
-- **The trim decision** (plan 06): the owner picks one of the three fixes
-  above; the oracle is re-frozen after.
+- **The trim** (plan 06): decided 2026-09-28 — the per-band AUTO / MANUAL
+  switch, built in plan 11 WP15; the oracle was not re-frozen.
 - **First real capture on this machine.** Every live path is code-complete;
   no session has recorded a human pressing `M` on real hardware with the
   macOS microphone prompt. One click plus a clap.

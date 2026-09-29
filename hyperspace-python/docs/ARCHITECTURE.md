@@ -220,7 +220,10 @@ Consequences to hold onto:
 - MIDI ring feedback shows the base (`midi.py:505`) and never chases a
   performer; LED feedback on a toggle, or on an enum `set` row, reads the
   effective value
-  (`midi.py:526-528`) and does. That asymmetry is real (audit).
+  (`midi.py:526-528`) and does. That is intended (owner, 2026-09-28,
+  audit R6): a ring is a pickup readback and must show the base or the
+  knob could never catch; an LED is a state light and shows what the
+  show is doing.
 - `Router.modulate` never checks ownership. The referee lives in the
   table's edit doors (§3.5); a table mutated directly could still stack two
   rows on one target.

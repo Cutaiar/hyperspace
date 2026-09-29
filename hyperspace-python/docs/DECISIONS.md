@@ -64,6 +64,7 @@ why, and a link from the plan or PR that made it.
 |---|---|---|---|---|
 | 2026-08-30 | The Xbox pad is polled raw through GLFW with our own index map, not the gamepad-mapping database. | The bundled SDL database misses the BLE controller's GUID and `update_gamepad_mappings` did not take on macOS. | memory | standing (`gamepad.py`) |
 | 2026-09-08 | The APC40 is a device *profile* (`apc40.py`: port name, mode SysEx, LED rules, default map) over a generic MIDI adapter (`midi.py`). | The adapter must outlive the controller. | plan 05 | standing |
+| 2026-09-28 | APC40 feedback: **rings show the base**, **LEDs on toggles and enum `set` rows show the effective value**. | A ring is a pickup readback — showing a performer's value would mean the knob could never catch its own; an LED is a state light and should show what the show is doing. | owner, decision register row 4 (audit R6) | standing (`midi.py` feedback) |
 | 2026-09-25 | Hands are the primary performing surface; the APC40 keeps presets, scenes and master controls. | Two hands in a box is the show; the desk is the setup. | plan 08, memory | standing |
 | 2026-09-25 | Twelve axes (palm pose, six per hand) shaped as analog signals — range, One Euro, dead zone, curve, attack/decay, rest spring — and eight pinch switches. **No gesture vocabularies, no more DOFs.** | Performers have to be taught the system; predictability beats expressiveness. | plan 08 | standing |
 | 2026-09-25 | The hands package is liftable: `core.py` and `signal.py` import nothing from the host, everything arrives duck-typed; `panel.py` is the one adapter. A test fails the build otherwise. | Boundaries erode one convenient import at a time. | plan 08 | standing (`test_hands_boundary.py`) |
@@ -90,10 +91,12 @@ why, and a link from the plan or PR that made it.
 
 | Date | Decision | Why | Source | Status |
 |---|---|---|---|---|
-| 2026-08-21 | The six-band chain ports faithfully, including its known bugs (the trim non-monotonicity), until plan 06. | A "fix" during a port makes parity failures undiagnosable. | plans README | standing for `bands.py` |
+| 2026-08-21 | The six-band chain ports faithfully, including its known bugs (the trim non-monotonicity), until plan 06. | A "fix" during a port makes parity failures undiagnosable. | plans README | standing on the AUTO path; MANUAL is the fix (2026-09-28) |
 | 2026-09-18 | The chain becomes an N-band (1–16) graphic-EQ analyzer: per band centre / width / weighting curve, then the existing envelope, transient and shaper chain. Band → plane mapping and `dir` leave the chain and become routes. | Audio as a source, not a special case. | plan 07 WP4a | standing (`analyzer.py`) |
 | 2026-09-18 | A factory `legacy6` preset reproduces the reference chain on the golden traces. | The regression net for the refactor. | plan 07 WP4a | standing |
 | 2026-09-18 | The band editor shows a live spectrogram heat map with the band curves drawn over it. | Bands are shaped against real signal, not numbers. | plan 07 | standing (`ui_bands.py`) |
+| 2026-09-28 | `master.dyn` keeps its 0.06×–4× range: up to 1× it blends toward the windowed normaliser and grows the expansion; past 1× only the expansion grows. | Capping at 1× would move every saved preset's detent; two knobs would re-freeze the oracle. Documented instead. | owner, decision register row 5 (audit A7) | standing (tooltip, ENGINEERING §4) |
+| 2026-09-28 | The trim fix is a per-band **AUTO / MANUAL** normalisation switch (`band.{i}.norm`, default AUTO): AUTO is the reference chain bit for bit; MANUAL bypasses the adaptive window and applies trim once, as a plain gain. | What a mix engineer expects; the reference path and its frozen oracle stay untouched; options 1 and 2 changed the reference for everyone. | owner, decision register row 6 (audit A10, plan 06 item 2) | standing (plan 11 WP15, `test_manual_normalisation_makes_trim_monotonic`) |
 
 ## Render
 

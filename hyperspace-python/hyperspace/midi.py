@@ -398,7 +398,13 @@ class MidiIO:
     # ---- feedback ----
 
     def feedback(self) -> None:
-        """Push every bound param's state to its ring or LED, change-gated."""
+        """Push every bound param's state to its ring or LED, change-gated.
+
+        Rings show the base — a pickup readback, so a knob can always
+        catch its own value under a performer. LEDs on a toggle or an
+        enum `set` row show the effective value — a state light shows
+        what the show is doing. Intended (owner, 2026-09-28, audit R6).
+        """
         if self.out is None:
             return
         for b in self.bindings:

@@ -887,7 +887,8 @@ def build_registry(view, control, audio, themes=None, dream=None, fx=None,
                  lambda: chain().dyn, lambda v: setattr(chain(), "dyn", v),
                  taper=tapers.T_DYN, fmt=tapers.fmt_gain, group=g,
                  tip="How much of the range a limiter took is put back. At 0 the chain is "
-                     "a plain level follower.")
+                     "a plain level follower; up to 1× it blends toward the moving window "
+                     "and grows the expansion; past 1× only the expansion keeps growing.")
     r.continuous("master.trim", "Input trim",
                  lambda: chain().trim, lambda v: setattr(chain(), "trim", v),
                  taper=tapers.T_TRIM, fmt=tapers.fmt_db, group=g,
