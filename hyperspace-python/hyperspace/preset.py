@@ -104,7 +104,14 @@ from .library import (
     _write_text,
     slug,
 )
-from .lookback import LEGACY, fade_of_decay, gap_of_every, migrate_row, migrate_values
+from .lookback import (
+    LEGACY,
+    fade_depth,
+    fade_of_decay,
+    gap_of_every,
+    migrate_row,
+    migrate_values,
+)
 from .params import PERFORMANCE_GROUPS, PLANES, SESSION_GROUPS, part_of
 from .routing import LANE_SCHEMES, MOD_OPS, Binding, Macro, Sub
 
@@ -178,18 +185,33 @@ def echo_seconds(doc: dict) -> tuple[dict, list[str]]:
         for s in (m.get("subs") or []) if isinstance(m, dict) else []:
             if not isinstance(s, dict):
                 continue
+            # a subscriber's from / to default to 0 and 1 (routing.Sub):
+            # written out, so the converted ends are the file's own
             base = s.get("base")
             if base in LEGACY:
                 new, conv = LEGACY[base]
                 s["base"] = new
-                for end in ("from", "to"):
-                    if end in s:
-                        s[end] = conv(s[end])
+                for end, default in (("from", 0.0), ("to", 1.0)):
+                    try:
+                        s[end] = conv(s.get(end, default))
+                    except (TypeError, ValueError):
+                        notes.append(f"{mid}: base {base} {end} {s.get(end)!r} not a number")
                 notes.append(f"{mid}: base {base} → {new}")
             dep = s.get("depth")
             if isinstance(dep, dict) and dep.get("target") in LEGACY:
-                notes.append(f"{mid}: depth on {dep['target']} → {LEGACY[dep['target']][0]}")
-                dep["target"] = LEGACY[dep["target"]][0]
+                old = dep["target"]
+                dep["target"] = LEGACY[old][0]
+                notes.append(f"{mid}: depth on {old} → {dep['target']}")
+                # the subscriber sets the route's depth: its ends move to
+                # fade's units the way the route's own depth did
+                if old == "dream.decay":
+                    for end, default in (("from", 0.0), ("to", 1.0)):
+                        d = fade_depth(s.get(end, default), dep.get("source"),
+                                       doc.get("values") or {})
+                        if d is None:
+                            notes.append(f"{mid}: depth {end} {s.get(end)!r} not a number")
+                        else:
+                            s[end] = d
     return out, notes
 
 
@@ -1445,7 +1467,10 @@ def migrate_echo_home(root: Path) -> tuple[list[str], list[Path]]:
     per-frame ``dream.decay`` / ``dream.every`` rewritten in seconds
     (`echo_seconds`: 60 Hz frames, so the look is the same at 60 Hz),
     kept first as ``<file>.bak-v2-frames`` (a backup that cannot be made
-    leaves the file as it is; the loader converts it on every load then).
+    leaves the file as it is: a preset is then converted on every load by
+    `Presets.load_doc`; a module preset is not — the library's module
+    road reports its old ids as unknown — so the note says so). A module
+    preset copied into the home after launch is converted on the next.
     Returns (the notes, the files written); nothing to do: nothing."""
     notes: list[str] = []
     written: list[Path] = []
@@ -1461,12 +1486,21 @@ def migrate_echo_home(root: Path) -> tuple[list[str], list[Path]]:
                 continue
             if not isinstance(doc, dict):
                 continue
-            new, changed = echo_seconds(doc)
+            try:
+                new, changed = echo_seconds(doc)
+            except Exception as e:  # noqa: BLE001 — one odd hand-edited file must not stop a launch
+                notes.append(f"{group}/{path.name}: NOT rewritten in seconds "
+                             f"({type(e).__name__}: {e}); the file is left as it is")
+                continue
             if not changed:
                 continue
             if routing.backup(path, ECHO_BACKUP) is None:
+                # only the presets loader converts on load; a module preset
+                # lands through the library's values road, which does not
+                later = ("read in seconds on every load" if group == GROUP else
+                         "its fade and spacing are unknown ids until it is rewritten")
                 notes.append(f"{group}/{path.name}: NOT rewritten in seconds (no backup); "
-                             "read in seconds on every load")
+                             + later)
                 continue
             try:
                 _write_text(path, dumps(new) if group == GROUP

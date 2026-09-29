@@ -143,6 +143,8 @@ def fade_of_decay(decay: float, hz: float = REF_HZ) -> float:
     seconds after which decay^(age·hz) is one half. Rounded to 4 places,
     clamped to the fader (a decay of 1 never fades: the longest fade)."""
     d = float(decay)
+    if not math.isfinite(d):
+        raise ValueError(f"decay {decay!r} is not a number")
     if d >= 1.0:
         return FADE_HI
     if d <= 0.0:
@@ -157,7 +159,10 @@ def decay_per_frame(fade: float, hz: float = REF_HZ) -> float:
 
 def gap_of_every(every: float, hz: float = REF_HZ) -> float:
     """Every `every` frames at `hz`, in seconds between captures."""
-    return round(min(max(float(every) / hz, GAP_LO), GAP_HI), 6)
+    e = float(every)
+    if not math.isfinite(e):
+        raise ValueError(f"every {every!r} is not a number")
+    return round(min(max(e / hz, GAP_LO), GAP_HI), 6)
 
 
 # old id → (new id, the value's conversion)
@@ -209,22 +214,50 @@ def migrate_row(row: dict, values: dict[str, Any] | None = None) -> tuple[dict, 
     new = LEGACY[target][0]
     out = dict(row, target=new)
     note = f"{target} → {new}"
-    if target == "dream.decay" and out.get("op") == "push" and out.get("value") is not None:
-        vals = values or {}
+    if target == "dream.decay" and out.get("op") == "push":
+        # a push at the default depth (1) has no "value" key in its file
+        depth = out.get("value", 1.0)
+        new_depth = fade_depth(depth, out.get("source"), values)
+        if new_depth is None:
+            note += f" (push {depth!r} left as it was: not a number)"
+        else:
+            out["value"] = new_depth
+            note += f" (push {float(depth):+g} → {new_depth:+g})"
+    return out, note
+
+
+def old_decay_base(values: dict[str, Any] | None) -> float:
+    """The per-frame decay a file's pushes on ``dream.decay`` were drawn
+    about: its ``dream.fade`` or ``dream.decay``, else the old default —
+    a value that is not a number counts as the default."""
+    vals = values or {}
+    try:
         if "dream.fade" in vals:
-            base = decay_per_frame(vals["dream.fade"])
+            base = decay_per_frame(float(vals["dream.fade"]))
         else:
             base = float(vals.get("dream.decay", OLD_DECAY))
-        depth = float(out["value"])
-        # a push adds depth · (u − rest): on a height (rest 0) the throw
-        # spans base … base + depth, on a centred axis base ± depth / 2;
-        # the new depth spans the same decays in fade's norm
-        height = str(out.get("source", "")).endswith(".y")
-        a, b = (base, base + depth) if height else (base - depth / 2, base + depth / 2)
-        a, b = (min(max(x, 1e-6), 1.0) for x in (a, b))
-        out["value"] = round(fade_norm(fade_of_decay(b)) - fade_norm(fade_of_decay(a)), 4)
-        note += f" (push {depth:+g} → {out['value']:+g})"
-    return out, note
+    except (TypeError, ValueError, ZeroDivisionError, OverflowError):
+        return OLD_DECAY
+    return base if math.isfinite(base) else OLD_DECAY
+
+
+def fade_depth(depth, source, values: dict[str, Any] | None = None) -> float | None:
+    """A push depth on ``dream.decay`` (its linear 0–1 norm) as one on
+    ``dream.fade`` spanning the same decays, about the file's base
+    (`old_decay_base`); None when `depth` is not a number. A push adds
+    depth · (u − rest): on a height (rest 0) the throw spans base … base +
+    depth, on a centred axis base ± depth / 2."""
+    try:
+        depth = float(depth)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(depth):
+        return None
+    base = old_decay_base(values)
+    height = str(source or "").endswith(".y")
+    a, b = (base, base + depth) if height else (base - depth / 2, base + depth / 2)
+    a, b = (min(max(x, 1e-6), 1.0) for x in (a, b))
+    return round(fade_norm(fade_of_decay(b)) - fade_norm(fade_of_decay(a)), 4)
 
 
 @dataclass

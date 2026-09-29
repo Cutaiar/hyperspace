@@ -133,6 +133,39 @@ def test_a_preset_with_per_frame_echo_ids_is_read_in_seconds(rig):
     assert any(b.target == "dream.fade" and b.source == "cc:*:17" for b in table.desk())
 
 
+def test_the_echo_migration_keeps_every_depth_and_survives_bad_values(tmp_path):
+    """Review of PR #76: a full-depth push has no `value` key and is still
+    re-drawn; a macro's depth subscriber on such a route moves its ends to
+    fade's units too; a value that is not a number is noted, never raised
+    (one odd hand-edited file must not stop a launch)."""
+    from hyperspace.lookback import fade_depth, migrate_row
+
+    row, note = migrate_row({"source": "hand:right.z", "target": "dream.decay", "op": "push"})
+    assert row["target"] == "dream.fade" and row["value"] == fade_depth(1.0, "hand:right.z")
+    assert 0 < row["value"] <= 1 and "push" in note
+    doc = {"schema": preset.SCHEMA, "name": "X", "values": {"dream.decay": 0.93},
+           "routes": [{"source": "hand:right.y", "target": "dream.decay", "op": "push",
+                       "value": 0.05}],
+           "macros": {"macro.1": {"subs": [{"depth": {"source": "hand:right.y",
+                                                      "target": "dream.decay"},
+                                            "from": 0.0, "to": 0.05}]}}}
+    new, _ = preset.echo_seconds(doc)
+    sub = new["macros"]["macro.1"]["subs"][0]
+    assert sub["depth"]["target"] == "dream.fade"
+    assert sub["from"] == 0.0 and sub["to"] == new["routes"][0]["value"]
+    # bad values: noted, not raised
+    bad = {"schema": preset.SCHEMA, "name": "BAD", "values": {"dream.decay": "long"},
+           "routes": [{"source": "hand:right.z", "target": "dream.decay", "op": "push",
+                       "value": None}],
+           "macros": {"macro.1": {"subs": [{"base": "dream.decay", "from": None, "to": 1}]}}}
+    new, notes = preset.echo_seconds(bad)
+    assert "dream.decay" not in new["values"] and new["routes"][0]["target"] == "dream.fade"
+    assert any("not a number" in n for n in notes)
+    put(tmp_path, "BAD", **{k: v for k, v in bad.items() if k not in ("schema", "name")})
+    notes, written = preset.migrate_echo_home(tmp_path)
+    assert len(written) == 1 and notes
+
+
 def test_the_home_is_rewritten_in_seconds_once_with_backups(tmp_path):
     """Plan 14 WP6: a user preset and a look-back module preset naming the
     per-frame ids are rewritten once, each kept first as
