@@ -57,6 +57,8 @@ pickup; the faders are real pots and keep soft pickup.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import mido
 
 PORT_MATCH = "APC40"
@@ -178,6 +180,164 @@ def control_name(source: str) -> str | None:
             return f"scene launch {N_SCENE.index(num) + 1}"
         return _NOTE_NAMES.get(num)
     return None
+
+
+# ---------------------------------------------------------------- the layout
+# Plan 14 WP7, decision 25 (a): every control the protocol names, where it
+# sits on the device, and a short glyph the panel prints wherever a
+# control is named (the ROUTING rows, Learn, the on-screen desk,
+# ui_desk.py). Akai's names ("track knob 3") stay for the tooltips.
+#
+#   K1–K8   track knobs (top right, two rows of four)
+#   D1–D8   device knobs (right, below the bank select)
+#   S1–S8   track faders   SM master fader   X crossfader   C cue level
+#   Gr·c    the button field, row r · column c: rows 1–5 clip launch,
+#           6 clip stop, 7 track select, 8 activator, 9 solo, 10 rec-arm;
+#           column 9 is scene launch 1–5 · STOP ALL · MASTER select
+#   B1–B22  the other buttons: PAN, SEND A–C; the eight device buttons;
+#           PLAY, STOP, REC; ▲ ▼ ▶ ◀; TAP TEMPO, NUDGE −, NUDGE +
+#   ⇧       SHIFT
+#
+# Positions are in a unit grid (x right, y down) that draws like the
+# mk1's face: the button field and the faders on the left, one unit a
+# column; the knobs, the bank select, the transport corner and the
+# crossfader on the right. The picture is hand check 45's to confirm.
+
+
+@dataclass(frozen=True)
+class Control:
+    """One physical control: its MIDI source (``cc:*:16`` for a knob that
+    sends on any channel, ``note:3:53`` for a per-track button on channel
+    3), its kind (knob, fader, button, grid), its glyph, and where it sits
+    (x, y, w, h in layout units)."""
+
+    source: str
+    kind: str
+    glyph: str
+    x: float
+    y: float
+    w: float
+    h: float
+
+    @property
+    def name(self) -> str:
+        """Akai's name for it ("device knob 3")."""
+        return control_name(self.source) or self.source
+
+
+FIELD_ROWS = [*N_CLIP, N_CLIPSTOP, N_SELECT, N_ACTIVATOR, N_SOLO, N_ARM]   # G1… G10
+FIELD_Y = [0.0, 1.0, 2.0, 3.0, 4.0, 5.3, 6.4, 7.6, 8.6, 9.6]               # a gap under the clips
+OTHER_BUTTONS = [N_PAN, N_SEND_A, N_SEND_B, N_SEND_C,                      # B1–B4
+                 N_CLIPTRACK, N_DEVICE_ON, N_DEV_L, N_DEV_R,               # B5–B8
+                 N_DETAIL, N_QUANT, N_OVERDUB, N_METRO,                    # B9–B12
+                 N_PLAY, N_STOP, N_REC,                                    # B13–B15
+                 N_UP, N_DOWN, N_RIGHT, N_LEFT,                            # B16–B19
+                 N_TAP, N_NUDGE_M, N_NUDGE_P]                              # B20–B22
+RIGHT = 9.7        # the right-hand section's left edge
+
+
+def _layout() -> list[Control]:
+    out: list[Control] = []
+    # the button field: eight track columns and the master column
+    for r, (note, y) in enumerate(zip(FIELD_ROWS, FIELD_Y), 1):
+        for c in range(1, 9):
+            out.append(Control(f"note:{c - 1}:{note}", "grid", f"G{r}·{c}", c - 1, y, 1, 1))
+    for r, note in enumerate(N_SCENE, 1):
+        out.append(Control(f"note:0:{note}", "grid", f"G{r}·9", 8.2, FIELD_Y[r - 1], 1, 1))
+    out.append(Control(f"note:0:{N_STOP_ALL}", "grid", "G6·9", 8.2, FIELD_Y[5], 1, 1))
+    out.append(Control(f"note:0:{N_MASTER_SEL}", "grid", "G7·9", 8.2, FIELD_Y[6], 1, 1))
+    out.append(Control(f"cc:0:{CC_CUE}", "knob", "C", 8.2, 7.9, 1, 1.4))
+    # the faders, under their strips; the master under the master column
+    for c in range(1, 9):
+        out.append(Control(f"cc:{c - 1}:{CC_FADER}", "fader", f"S{c}", c - 1, 10.9, 1, 3.6))
+    out.append(Control(f"cc:0:{CC_MASTER}", "fader", "SM", 8.2, 10.9, 1, 3.6))
+    # the right-hand section, top down
+    b = {n: f"B{i}" for i, n in enumerate(OTHER_BUTTONS, 1)}
+    for k, cc in enumerate(TRACK_KNOBS):
+        out.append(Control(f"cc:0:{cc}", "knob", f"K{k + 1}",
+                           RIGHT + k % 4, 1.1 * (k // 4), 1, 1.1))
+    for k, n in enumerate((N_PAN, N_SEND_A, N_SEND_B, N_SEND_C)):
+        out.append(Control(f"note:0:{n}", "button", b[n], RIGHT + k, 2.35, 1, 0.75))
+    # the bank select as a cross; TAP and NUDGE beside it; SHIFT under them
+    for n, dx, dy in ((N_UP, 0.6, 3.35), (N_LEFT, 0.0, 4.05), (N_RIGHT, 1.2, 4.05),
+                      (N_DOWN, 0.6, 4.75)):
+        out.append(Control(f"note:0:{n}", "button", b[n], RIGHT + dx, dy, 0.8, 0.7))
+    out.append(Control(f"note:0:{N_TAP}", "button", b[N_TAP], RIGHT + 2.2, 3.35, 1.8, 0.7))
+    out.append(Control(f"note:0:{N_NUDGE_M}", "button", b[N_NUDGE_M], RIGHT + 2.2, 4.05, 0.9, 0.7))
+    out.append(Control(f"note:0:{N_NUDGE_P}", "button", b[N_NUDGE_P], RIGHT + 3.1, 4.05, 0.9, 0.7))
+    out.append(Control(f"note:0:{N_SHIFT}", "button", "⇧", RIGHT + 2.2, 4.75, 1.8, 0.7))
+    for k, cc in enumerate(DEVICE_KNOBS):
+        out.append(Control(f"cc:*:{cc}", "knob", f"D{k + 1}",
+                           RIGHT + k % 4, 5.65 + 1.1 * (k // 4), 1, 1.1))
+    for k, n in enumerate(OTHER_BUTTONS[4:12]):
+        out.append(Control(f"note:0:{n}", "button", b[n],
+                           RIGHT + k % 4, 7.95 + 0.75 * (k // 4), 1, 0.75))
+    for k, n in enumerate((N_PLAY, N_STOP, N_REC)):
+        out.append(Control(f"note:0:{n}", "button", b[n], round(RIGHT + k * 4 / 3, 3), 9.6,
+                           1.333, 0.75))
+    out.append(Control(f"cc:0:{CC_XFADE}", "fader", "X", RIGHT, 13.5, 4, 1.0))
+    return out
+
+
+LAYOUT: list[Control] = _layout()
+LAYOUT_W = max(c.x + c.w for c in LAYOUT)
+LAYOUT_H = max(c.y + c.h for c in LAYOUT)
+_BY_SOURCE = {c.source: c for c in LAYOUT}
+
+
+def _parse(source: str) -> tuple[str, str, int] | None:
+    kind, _, rest = source.partition(":")
+    ch, _, num = rest.partition(":")
+    try:
+        return kind, ch, int(num)
+    except ValueError:
+        return None
+
+
+def controls(source: str) -> list[Control]:
+    """The layout's controls a MIDI source names: one for a one-channel
+    row, one for an any-channel row on a knob that has one (``cc:*:48`` is
+    K1), every track's for an any-channel row on a per-track control
+    (``note:*:53`` is the whole first clip row); none for a source the
+    APC40 does not send."""
+    c = _BY_SOURCE.get(source)
+    if c is not None:
+        return [c]
+    parsed = _parse(source)
+    if parsed is None:
+        return []
+    kind, ch, num = parsed
+    out = []
+    for c in LAYOUT:
+        k2, c2, n2 = _parse(c.source)
+        if k2 == kind and n2 == num and (ch == "*" or c2 == "*" or c2 == ch):
+            out.append(c)
+    return out
+
+
+def glyph(source: str) -> str | None:
+    """The glyph of the control a MIDI source names ("cc:*:16" → "D1",
+    "cc:0:16" → "D1", "note:3:53" → "G1·4"), None for a source the APC40
+    does not send; an any-channel row on a per-track control names the
+    row ("note:*:53" → "G1·*")."""
+    cs = controls(source)
+    if len(cs) == 1:
+        return cs[0].glyph
+    if not cs:
+        return None
+    g = cs[0].glyph
+    return g.split("·")[0] + "·*" if "·" in g else g.rstrip("0123456789") + "*"
+
+
+def named(source: str) -> str | None:
+    """A control in the words a message uses: the glyph, then Akai's name
+    ("D3 (device knob 3)"), or None when the APC40 has no such control."""
+    cs = controls(source)
+    if not cs:
+        return None
+    if len(cs) > 1:
+        return f"{glyph(source)} (every track)"
+    return f"{cs[0].glyph} ({cs[0].name})"
 
 
 # ---------------------------------------------------------------- default map
