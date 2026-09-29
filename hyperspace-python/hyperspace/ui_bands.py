@@ -349,6 +349,18 @@ def band_row(panel) -> None:
     panel._button("band.reset", "Reset", small=True)
 
 
+def _norm_chip(panel) -> None:
+    """AUTO / MANUAL normalisation for the open band (audit A10): lit red on
+    MANUAL, where the trim is a plain gain."""
+    a = panel.reg["band.sel.norm"]
+    p = panel._real(a)
+    manual = bool(p.base)
+    if ui.lit_chip(f"{'MANUAL' if manual else 'AUTO'}##norm", manual):
+        p.set(0 if manual else 1)
+    panel._tip(a)
+    panel._ctx(a)
+
+
 def strip(panel) -> None:
     """The selected band's strip — the band.sel.* aliases follow the selection."""
     c, a, r = panel.control, panel.audio, panel.reg
@@ -358,7 +370,10 @@ def strip(panel) -> None:
     imgui.same_line()
     imgui.text_disabled(f"{lo:.0f}–{hi:.0f} Hz")
     sp = imgui.get_style().item_spacing.x
-    imgui.same_line(imgui.get_content_region_avail().x - 2 * FN_W - sp)
+    imgui.same_line(imgui.get_content_region_avail().x - 2 * FN_W - 2 * sp
+                    - ui.chip_w("MANUAL"))
+    _norm_chip(panel)
+    imgui.same_line()
     panel._combo("band.sel.fn", FN_W, SHAPERS[P.fn].name)
     imgui.same_line()
     panel._combo("band.sel.curve", FN_W)

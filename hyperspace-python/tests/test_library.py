@@ -645,3 +645,18 @@ def test_editing_the_open_project_reloads_it(rig, tmp_path):
     assert lib.poll(now=2.0)
     assert rig.view.shape == 8 and lib.project.slots[0]["name"] == "RENAMED"
 
+
+def test_a_band_presets_normalisation_switch_round_trips(rig):
+    """Audit A10: `band.{i}.norm` is a persisted scene setting, never a
+    performer's — saved with a band preset, restored by it, not ownable."""
+    lib, reg, chain = rig.lib, rig.reg, rig.chain
+    assert not reg["band.3.norm"].modulatable and reg["band.3.norm"].persist
+    assert reg["band.sel.norm"].alias
+    reg["band.3.norm"].set(1)
+    assert chain.params[3].norm == 1
+    path = lib.save_as("band", "Manual mid")
+    assert json.loads(path.read_text())["values"]["band.3.norm"] == 1
+    reg["band.3.norm"].set(0)
+    assert lib.load("band", "Manual mid") == []
+    assert chain.params[3].norm == 1
+

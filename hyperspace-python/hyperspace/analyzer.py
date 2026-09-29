@@ -190,7 +190,8 @@ def legacy_layout() -> dict:
     return {"bands": rows}
 
 
-_SCENE_KEYS = ("fn", "trim", "pre", "post", "atk", "dec", "thr", "exp", "trn")
+_SCENE_KEYS = ("fn", "trim", "pre", "post", "atk", "dec", "thr", "exp", "trn", "norm")
+_INT_KEYS = ("fn", "norm")
 
 
 def scene_strip(values: dict, n: int, bands=None) -> dict:
@@ -204,7 +205,7 @@ def scene_strip(values: dict, n: int, bands=None) -> dict:
         row = rows.get(i) or {}
         for k in _SCENE_KEYS:
             v = row.get(k, getattr(d, k))
-            out[f"band.{i}.{k}"] = int(v) if k == "fn" else v
+            out[f"band.{i}.{k}"] = int(v) if k in _INT_KEYS else v
     return out
 
 
@@ -481,7 +482,7 @@ class Analyzer:
         row = row or {}
         for k in _SCENE_KEYS:
             v = row.get(k, getattr(d, k))
-            setattr(P, k, int(v) if k == "fn" else v)
+            setattr(P, k, int(v) if k in _INT_KEYS else v)
         self.st[i] = {}
 
     def apply_scene(self, values: dict) -> None:
@@ -522,8 +523,9 @@ class Analyzer:
             rms = math.sqrt(float(np.mean(self._w[i] * (mags * mags))))
             db = 20 * math.log10(rms + 1e-9)
 
-            # input trim, applied pre-envelope AND as tU offset below —
-            # the double application is the reference's design (and its bug)
+            # input trim, applied pre-envelope AND (AUTO only) as tU offset
+            # below — the double application is the reference's design, and
+            # why a cut can drive harder there; MANUAL applies it once
             t_db = P.trim + self.trim
             t_u = t_db / U_SPAN
             u = clamp((db + t_db - U_LO) / U_SPAN, 0, 2.5)
@@ -574,7 +576,18 @@ class Analyzer:
             dev *= min(1, self.warm / WARM_F)
             lvl = TARGET * conf + dev
 
-            x = lvl + (trn * conf - lvl) * P.trn + t_u
+            if P.norm:
+                # MANUAL (audit A10): no adaptive window, no confidence, no
+                # expansion, no warm-up. The level is the envelope itself in
+                # u (1.0 = nominal), which already carries the trim once, as
+                # a plain gain; the transient knob blends toward the
+                # peak-normalised flux scaled by that level, so it too falls
+                # with the trim. The trackers above still run, so switching
+                # back to AUTO resumes where the window would have been.
+                lvl = self.env[i]
+                x = lvl + (trn * lvl - lvl) * P.trn
+            else:
+                x = lvl + (trn * conf - lvl) * P.trn + t_u
             if self.env[i] < P.thr:
                 x = 0.0  # gate: band goes quiet, plane stops
             self.inp[i] = x if x > 0 else 0.0

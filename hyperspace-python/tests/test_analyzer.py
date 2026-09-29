@@ -6,6 +6,7 @@ add/remove/move, coupling order, spectrum history, layout round-trips and
 the registry rebuild that follows a layout change.
 """
 
+import itertools
 import json
 import subprocess
 import sys
@@ -604,3 +605,36 @@ def test_balanced_is_the_default_table_and_the_reference_edges():
     for r, b in zip(lay, BANDS):
         f, q = centre_q(b.lo, b.hi)
         assert r["f"] == pytest.approx(f) and r["q"] == pytest.approx(q)
+
+
+# ---- per-band normalisation: AUTO / MANUAL (plan 11 WP15, audit A10) ----
+
+def test_manual_normalisation_makes_trim_monotonic(fixture_wavs):
+    """Audit A10, decided (3): on MANUAL the trim is a plain gain. Every
+    band of the brickwalled master, settled (the clip's second half), trim
+    swept 0 → −20 dB in 2 dB steps: `out` never rises, and a 20 dB cut is
+    felt. The AUTO path keeps the reference's behaviour, frozen above."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("trim_sweep", ROOT / "tools" / "trim_sweep.py")
+    ts = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ts)
+    samples, sr = load_wav(fixture_wavs / "brickwalled.wav")
+    for band in range(6):
+        outs = [ts.settled_out(samples, sr, band, float(t), manual=True)
+                for t in range(0, -22, -2)]
+        assert all(b <= a + 1e-9 for a, b in itertools.pairwise(outs)), (band, outs)
+        assert outs[-1] < outs[0] - 0.2, (band, outs)
+
+
+def test_auto_is_the_default_and_a_scene_without_the_key_lands_auto():
+    """Every existing scene and band preset predates the switch: a row
+    without `norm` lands AUTO, so a band set MANUAL goes back to AUTO when
+    a scene that never names it is applied."""
+    a = Analyzer(Analyser())
+    assert all(P.norm == 0 for P in a.params)
+    a.params[2].norm = 1
+    a.apply_scene(factory_doc("band", "Balanced")["values"])
+    assert all(P.norm == 0 for P in a.params)
+    assert A.scene_strip({}, 2)["band.1.norm"] == 0
+    a.apply_scene_band(3, {"norm": 1.0})
+    assert a.params[3].norm == 1 and isinstance(a.params[3].norm, int)

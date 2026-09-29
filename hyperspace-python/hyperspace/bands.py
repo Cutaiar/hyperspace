@@ -1,7 +1,9 @@
 """The analysis chain's parts — port of the audio module of hyperspace.html.
 
 Every constant keeps its reference name (ENGINEERING §4). The known input-trim
-non-monotonicity is ported as-is; the fix belongs to plan 06, not the port.
+non-monotonicity is ported as-is on the AUTO path; a band switched to MANUAL
+normalisation (``Params.norm``, plan 11 / audit A10) takes a plain monotonic
+trim instead.
 
 The chain itself lives in analyzer.py since plan 07 (N bands, not six);
 this module keeps what it is made of — the reference band table (the six
@@ -184,6 +186,12 @@ class Params:
     thr: float
     exp: float
     trn: float
+    norm: int = 0    # NORMS index: 0 auto (the reference's adaptive window), 1 manual
+
+
+# per-band normalisation (plan 11, audit A10): AUTO is the reference chain
+# bit for bit; MANUAL bypasses the adaptive window and trim is a plain gain
+NORMS = ["AUTO", "MANUAL"]
 
 
 def default_params() -> list[Params]:

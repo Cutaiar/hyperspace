@@ -61,7 +61,7 @@ from typing import Any
 
 from . import tapers
 from .analyzer import CURVES, F_HI, F_LO, Q_HI, Q_LO
-from .bands import CEIL, SHAPERS
+from .bands import CEIL, NORMS, SHAPERS
 from .fx import FxState
 from .fx import declare as declare_fx
 from .geometry import PLANE_NAMES, SHAPES
@@ -955,6 +955,14 @@ def build_registry(view, control, audio, themes=None, dream=None, fx=None,
         r.enum(f"{prefix}.fn", label_of("Transfer"),
                lambda: chain().params[idx()].fn,
                lambda fn: control.set_shaper(idx(), fn), shaper_tags, group=g, alias=alias)
+        r.enum(f"{prefix}.norm", label_of("Normalise"),
+               lambda: chain().params[idx()].norm,
+               lambda v: setattr(chain().params[idx()], "norm", int(v)), NORMS,
+               group=g, alias=alias, modulatable=False,
+               tip="AUTO: the reference's adaptive window — it undoes a limiter, and "
+                   "cancels most of a trim (a 6–12 dB cut can even drive harder). "
+                   "MANUAL: no window; the trim is a plain gain and the band follows "
+                   "its level, 1.0 at nominal.")
         for knob in tapers.KNOBS:
             r.continuous(
                 f"{prefix}.{knob.key}", label_of(knob.label),
