@@ -73,7 +73,7 @@ from .control import Control
 from .gamepad import Pad
 from .hotreload import HotReloader
 from .learn import Learn
-from .library import SLOTS, Library
+from .library import Library
 from .overlay import GlfwBackend, Output
 from .params import Registry, build_registry
 from .render import Renderer
@@ -94,21 +94,9 @@ D4_RATE1 = 3.6    # octaves/s once the ramp completes
 D4_RAMP = 1.8     # seconds of hold to reach full rate
 
 # the key / pad / MIDI / lane binding tables live in routing.py (bindings.json);
-# these are the keys the loop still handles itself (the cheat-sheet test reads it)
-LOOP_KEYS = ("R", "SUPER+R", "UP", "DOWN", "ESCAPE", "Q",
-             *[f"F{k + 1}" for k in range(SLOTS)], *[f"SHIFT+F{k + 1}" for k in range(SLOTS)])
-
-
-def act(reg: Registry, pid: str, op: str, arg: int = 0) -> None:
-    p = reg.get(pid)
-    if p is None:
-        return
-    if op == "step":
-        p.step(arg)
-    elif op == "toggle":
-        p.toggle()
-    elif op == "fire":
-        p.fire()
+# these are the keys the loop still handles itself (the cheat-sheet test reads
+# it). R and F1–F8 / ⇧F1–F8 are table rows since plan 11 (routing.LOOP_KEY_ROWS).
+LOOP_KEYS = ("SUPER+R", "UP", "DOWN", "ESCAPE", "Q")
 
 
 def _err(where: str, e: Exception) -> str:
@@ -455,12 +443,11 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     if keys.pressed(glfw.KEY_ESCAPE) or keys.pressed(glfw.KEY_Q):
         h.quit()
     shift = keys.shift()
-    router.keys(keys)         # B taps, ⇧B triggers: both are table rows
-    if keys.pressed(glfw.KEY_R):
-        if keys.super():
-            h.restart()
-        else:
-            act(reg, "camera.reset", "fire")
+    # Cmd+R restarts; it claims R's edge first, so the table's `key:R`
+    # (camera.reset) never hears it — a press with ⌘ held is the loop's
+    if keys.super() and keys.pressed(glfw.KEY_R):
+        h.restart()
+    router.keys(keys)         # key rows: B / ⇧B, R, F1–F8 / ⇧F1–F8, and the rest
     # ↑/↓ ride depth4 toward its range limit, accelerating with hold
     for key, sgn in ((glfw.KEY_UP, 1.0), (glfw.KEY_DOWN, -1.0)):
         hold = keys.held(key, now)
@@ -468,10 +455,6 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
             ramp = min(hold / D4_RAMP, 1.0)
             rate = D4_RATE0 + (D4_RATE1 - D4_RATE0) * ramp * ramp
             _ride_depth(reg["view.depth4"], sgn * rate * dt)
-    # F1–F8 flip whole-surface themes; with ⇧ held they save instead
-    for k in range(SLOTS):
-        if keys.pressed(glfw.KEY_F1 + k):
-            act(reg, f"theme.{'save' if shift else 'load'}.{k}", "fire")
 
     # ---- gamepad: a second hand on the same controls (imgui never
     # claims it, so it works even while the panel has keyboard focus) ----
