@@ -660,6 +660,24 @@ guard, each filed where it says:
   subscriber's value, not the saved one — the macro is the scene-setter
   of record (plan 13 §13, WP4's list).
 
+Found by the review of the documents PR (#67) and left for a code fix —
+each is a place where the code falls short of plan 13's rule:
+
+- **A removed desk row's light stays on.** `MidiIO.redraw` darkens only
+  controls some row in the table still names; a preset load that leaves
+  a control unmapped (`set_desk`) or a ROUTING-page × does not switch its
+  LED or ring off first, so it keeps showing the old state while it does
+  nothing (D8 says dark).
+- **A knob learn beside an any-channel row keeps both.** `Bindings.bind`
+  matches the row it replaces by source string (`Binding.key`), not by
+  physical control (`Binding.overlaps`): learning device knob 1
+  (`cc:0:16`) in a preset whose desk has `cc:*:16` (WAKE, TRIP,
+  `lfo-breathe`) leaves the old row, and the knob moves both params.
+- **A macro's base subscriber can name a session param.** `load_doc`
+  refuses session ids in `values` but not in `macros`, and the ROUTING
+  page's "+ base" picker offers them; `follow_macros(force=True)` then
+  writes that session base on load (D9 says never).
+
 ---
 
 ## 4. Module shapes
