@@ -84,11 +84,11 @@ One performer per parameter — the model (plan 09)::
                                    │  ONE route row, ONE per-frame path: Router.modulate
               performer ───────────┘
     lane:<i> · hand:<i> · ext:<i> · lfo:<i>      op = push | position
-                                                  depth · scale (a param, e.g. macro.3)
+                                                  depth · scale (a session param: master.gain)
                                                   rest (push; the source's, or a number) · when (a gate)
 
    chaining:  hand:7 ──position──▶ lfo.1.depth      lfo:0 ──push──▶ view.bright
-              lane:0 ──push──▶ macro.2              hand:1 ──position──▶ fx.mix  ×scale macro.2
+              lane:0 ──push──▶ macro.2              hand:1 ──position──▶ fx.mix  × macro.2 (depth sub)
 
 A *performer* is an enabled row whose source is a continuous scheme
 (LANE_SCHEMES) and whose op is in MOD_OPS. A target has at most one:
@@ -174,9 +174,10 @@ the session's control; "global": the SHIFT layer; "preset": the loaded
 preset's desk (`Bindings.dispatch` / `active`, `set_desk`, the latch
 `desk.shift`) — and the macros' subscribers (`Macro`, `Sub`; the base
 ones followed by `Router.follow_macros`, the depth ones multiplied in by
-`Router.modulate`). A `scale` is kept only on a non-macro param
-(`master.gain`, decision register row 18 open); `scale: "macro.N"`
-becomes a depth subscriber on load (`migrate_scales`). An older file's
+`Router.modulate`). A `scale` is kept only on a session param
+(`master.gain`, the drive fader; decision register row 18 (a)); `scale:
+"macro.N"` becomes a depth subscriber on load, and one on any other
+param is dropped with a note (`migrate_scales`). An older file's
 MIDI rows are sorted into the layers once (`sort_layers`).
 
 Rows carry only what differs from the defaults. `Bindings.load` reads
@@ -222,7 +223,7 @@ import numpy as np
 
 from . import apc40
 from .bands import BANDS, CEIL
-from .params import DRIVE, PLANES, ROT_RATE_MAX, Kind, Param, Registry
+from .params import DRIVE, PLANES, ROT_RATE_MAX, SESSION_GROUPS, Kind, Param, Registry
 
 SCHEMA = "hyperspace.bindings/3"
 SCHEMA_V1 = "hyperspace.bindings/1"
@@ -787,15 +788,31 @@ def macros_of(doc: dict | None) -> dict[str, Macro]:
     return {mid: Macro.from_json(m) for mid, m in (doc or {}).items()}
 
 
+def is_session_id(pid: str | None) -> bool:
+    """Does `pid` name a session param (params.SESSION_GROUPS, plan 13 §4)?
+    By its group prefix, so a param this registry lacks (a band a layout
+    has not built yet) is still classed."""
+    return bool(pid) and pid.partition(".")[0] in SESSION_GROUPS
+
+
 def migrate_scales(rows: Iterable[Binding], macros: dict[str, Macro]) -> list[str]:
-    """`scale: "macro.N"` → a depth subscriber of macro.N `from 0, to 1`
+    """A route's `scale` settled (decision register row 18 (a)): it is the
+    rig's attenuator, so it names a **session** param — the legacy6 rate
+    rows' `master.gain`, the drive fader — and is kept only then.
+    `scale: "macro.N"` becomes a depth subscriber of macro.N `from 0, to 1`
     (unless an identical one is there) and the row loses the field (plan 13
-    §2.4). A `scale` naming anything else — the legacy6 rate rows'
-    `master.gain` — is left exactly as it is (decision register row 18,
-    open). Edits `rows` and `macros` in place; returns a note per row."""
+    §2.4); a `scale` naming any other param — a performance one, which a
+    preset load could move under the route — is dropped, the depth left as
+    it is. Edits `rows` and `macros` in place; returns a note per row."""
     notes: list[str] = []
     for b in rows:
+        if b.scale is None or is_session_id(b.scale):
+            continue
         if not is_macro(b.scale):
+            notes.append(f"dropped the scale {b.scale} of {b.source} → {b.target}: a route's "
+                         "scale is a session param (decision register row 18 (a)); a macro "
+                         "attenuates a route as its depth subscriber")
+            b.scale = None
             continue
         m = macros.setdefault(b.scale, Macro())
         sub = Sub(depth=(b.source, b.target), lo=0.0, hi=1.0)

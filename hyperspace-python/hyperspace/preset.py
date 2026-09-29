@@ -224,8 +224,12 @@ class Presets:
             desk = [Binding.from_json(row) for row in doc.get("desk") or []]
         else:
             desk = fresh_desk(table.profile)
-        macros = dict(doc.get("macros") or {})
-        routing.macros_of(macros)                  # a bad subscriber raises before anything lands
+        # a bad subscriber raises before anything lands; a route's scale is
+        # settled as the table's are (decision register row 18 (a)): on a
+        # macro a depth subscriber, on a performance param dropped, noted
+        held = routing.macros_of(doc.get("macros"))
+        notes += routing.migrate_scales(routes, held)
+        macros = {mid: m.to_json() for mid, m in held.items()}
         modules = dict(doc.get("modules") or {})
         for group in list(modules):
             if group not in PERFORMANCE_GROUPS or group == "macro":

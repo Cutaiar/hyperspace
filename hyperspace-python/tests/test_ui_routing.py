@@ -514,6 +514,25 @@ def test_the_old_routing_presets_step_load_save_as_presets(rig, tmp_path):
     assert lib.delete("presets", "My Routes")
 
 
+def test_a_route_on_a_session_param_is_marked_session(rig, monkeypatch):
+    """Decision register row 19 (a): a preset's route may perform a session
+    param — TUMBLE's left height pushes the drive (`master.gain`) — and the
+    load keeps it; the page marks that row with a dim "session" and no other."""
+    panel, lib, router = rig.panel, rig.panel.library, rig.router
+    lib.load("presets", "TUMBLE")
+    drive = [b for b in router.table.routes() if b.target == "master.gain"]
+    assert [(b.source, b.op) for b in drive] == [("hand:1", "push")]
+    assert ui_routing.is_session_target(panel, drive[0])
+    assert not any(ui_routing.is_session_target(panel, b) for b in router.table.routes()
+                   if b is not drive[0])
+    texts, _ = _drawn(monkeypatch)
+    frame(panel, "routing")
+    texts.clear()
+    frame(panel)                                    # one frame: one mark, on one row
+    assert texts.count(ui_routing.SESSION_MARK) == 1
+    assert "never changed" in ui_routing.SESSION_TIP
+
+
 def test_the_routing_heads_name_field_draws(rig):
     """The head's save as… is the preset strip's name field, over the
     loaded preset (ui_presets._name_field under its own key)."""
