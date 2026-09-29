@@ -482,6 +482,7 @@ conversion of routes-only files switches on the effects their routes drive.
 |---|---|---|---|
 | 18 | **P13-h** The drive fader reaches the rotation as `scale: master.gain` on every lane → rotation route; D10 says routes lose `scale`. | (a) keep a route's `scale`, allowed only on a session param; macros move to subscribers | WP3's last step (it leaves those rows alone meanwhile) and WP5's factory regeneration |
 | 19 | **P13-i** May a preset's route *perform* a session param (`party-tumble`'s left height pushes `master.gain`)? | (a) yes: D9 keeps the analyzer's settings out of a preset, and an offset is not a setting | WP5's re-cut of `party-tumble` |
+| 20 | **P13-j** Hand routes by name (`hand:right.roll`) or by lane number (audit N7), now that WP5 makes it an S-sized change | (a) names now, as WP5b before the integration merge | nothing else; WP6 and the integration PR wait only if (a) |
 
 ## 13. As built
 

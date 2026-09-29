@@ -1,6 +1,6 @@
 # Decision register — everything that is yours to decide
 
-As of 2026-09-28. **Every row is answered**; 18 and 19 (plan 13, Part A2) on 2026-09-28 (the answer sheet at the end). This is the one list. Every decision that blocks
+As of 2026-09-28. **Row 20 is open** (plan 13, Part A2); every other row is answered — 18 and 19 on 2026-09-28 (the answer sheet at the end). This is the one list. Every decision that blocks
 implementing and settling the open work is here, whichever plan or session
 raised it. Each entry stands on its own: what the thing is, what the software
 does today, the options, a recommendation with its reasons, the trade-off you
@@ -452,6 +452,44 @@ neither. It keeps plan 12's gesture as you approved it.
 one sentence in ARCHITECTURE §3.2. (b): a check in the preset loader and a
 new left-height row in `party-tumble` (WP5).
 
+### 20. P13-j — hand routes by name or by lane number
+
+**Recommendation: (a), by name, built now in plan 13.**
+
+**What it is.** A preset's hand route says which hand axis drives it. Today
+it says so by a lane *number*: `hand:9` means "the 10th hand lane", which on
+the shipped setup is the right hand's roll. The numbers follow the order of
+the `[hands] dofs` list in your `config.toml`. If that list is ever
+reordered or trimmed (say, dropping yaw because it is noisy in your box),
+every hand row in every shipped and saved preset silently points at a
+different axis: a tilt would start zooming. Nothing warns.
+
+```
+ [hands] dofs = x y z roll pitch yaw     hand:9  →  right roll     (as designed)
+ [hands] dofs = x y z roll pitch         hand:9  →  right pitch?   (silently wrong)
+ by name:                                hand:right.roll → right roll, whatever the list
+```
+
+**Today.** Every preset uses numbers; plan 12 noted the risk and the audit
+filed it (N7). Plan 13 has just regenerated every factory preset and is
+migrating your files once, so this is the cheapest moment the format will
+ever have.
+
+| Option | What a preset says | Trade-off |
+|---|---|---|
+| (a) Names now: `hand:right.roll`, `hand:left.y`, `hand:left.pinch.index`; the hands adapter publishes the name → lane map; a name the rig lacks makes the row dormant, never another axis. Factory presets regenerated with names; your migrated presets written with names; `hand:<i>` still read. | The axis it means, whatever `dofs` says. | About half a day more in plan 13 (a small follow-up PR before the integration merge). Learn writes names too. |
+| (b) Later, as its own small plan | Numbers for now. | Every preset written until then (factory, migrated, yours) carries numbers and needs a second conversion; the silent scramble stays possible meanwhile. |
+| (c) Never; a warning instead | Numbers; the app warns at start when your `dofs` differs from the shipped order. | Cheapest; you are told, but the presets are still wrong until re-authored. |
+
+**Why (a).** The format is being set now and your files are being migrated
+once; doing it now means no second migration, and a changed `dofs` can
+never quietly break a party preset mid-set.
+
+**What changes.** (a): a name map the hands adapter publishes, a resolver in
+the router (routes, gates, rests, the page's labels), Learn writing names,
+the generator and the migration writing names, tests; plan 13 builds it as
+WP5b before the integration merge. (b)/(c): audit N7 stays open.
+
 ---
 
 ## Part B — built on the recommendation without asking; confirm or overturn
@@ -524,3 +562,4 @@ or "overturn".
 | 17 | B6 as built | keep | **keep**, 2026-09-28 | |
 | 18 | P13-h the drive fader and `scale` | (a) keep `scale`, session params only | **(a)**, 2026-09-28 | built in plan 13 WP5 |
 | 19 | P13-i a route onto a session param | (a) yes; D9 is about values | **(a)**, 2026-09-28 | built in plan 13 WP5 (the page's "session" chip) |
+| 20 | P13-j hand routes by name | (a) names now, in plan 13 | | open |
