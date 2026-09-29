@@ -237,8 +237,8 @@ presettable, all modulatable.
   With `[dream] enabled = true` and no torch, `app._open_dream` keeps the
   reason (`dream_error`, with those commands) and the panel shows it: the
   SYSTEM page, the LOOKBACK page's worker line, and the red banner. A
-  preset that turns `dream.on` with no worker is a banner warning and a
-  stall-log entry on every load (the look-back then shows the echoes only).
+  preset that asks for the dream (`dream.on`, `dream.mix` > 0) with no worker is a banner warning (until dismissed) and a
+  stall-log entry, once (the look-back then shows the echoes only).
 - **The ring fits the driver.** 32 slots stacked can pass
   `GL_MAX_TEXTURE_SIZE` on a portrait window at `res` 384; the slot shrinks
   to fit (`lookback.fit_atlas`), and if the textures cannot be made
@@ -306,7 +306,7 @@ the loaded preset, what happened — then every thread's stack
   (the freeze's signature, §2), with its `glo` and the last render error.
 - `non-finite` — a param dropped a NaN / inf (`Registry.nonfinite`; §5's
   modulation rule drops them, and `tapers.clamp` lands NaN on its low end).
-- `warning` — a preset that turns the dream on with no worker.
+- `warning` — a preset that asks for the dream (`dream.on`, `dream.mix` > 0) with no worker.
 
 `kill -USR1 <pid>` dumps every thread into the same file on demand, and
 a stall that holds the GIL — the thread cannot run to see it — is caught

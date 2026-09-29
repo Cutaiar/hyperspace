@@ -225,6 +225,9 @@ def test_a_stranded_target_nonfinite_params_and_warnings_are_logged_once(fake):
     assert text.count("=== warning ") == 1
     alerts = rw.alerts()
     assert any("stranded" in a for a in alerts) and any("dream.on" in a for a in alerts)
+    rw.dismiss()
+    rw.warn("preset WAKE: dream.on, but there is no dream worker")   # the next WAKE load
+    assert rw.alerts() == [], "a dismissed warning does not come back"
     assert wd.counts() == {"render error": 1, "stranded target": 1, "non-finite": 2,
                            "warning": 1}
 

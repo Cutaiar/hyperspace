@@ -37,7 +37,8 @@ main thread:
 - ``non-finite`` — a param dropped a NaN / inf offset or value
   (`Registry.nonfinite`), once per param.
 - ``warning`` — a show problem worth a banner, once per message (a
-  preset that turns the dream on with no worker to dream).
+  preset that asks for the dream — `dream.on` with `dream.mix` above 0 —
+  with no worker to dream; dismissed, it does not come back).
 
 The banner keeps a render error after the render recovers — its last
 message, time and count — and the warnings, until the performer
@@ -283,6 +284,7 @@ class RenderWatch:
         self.last_error_at = 0.0      # wall time
         self.error_count = 0          # draws that raised, this process
         self.warnings: list[str] = []
+        self._waved: set[str] = set()   # warnings the performer dismissed: not shown again
         self.dismissed = True         # nothing sticky to show yet
         self.errors_logged = 0
         self.stalls_logged = 0
@@ -346,9 +348,9 @@ class RenderWatch:
     def warn(self, msg: str, *, kind: str = "warning", key: str | None = None) -> None:
         """A show problem: on the banner until dismissed, in the log once."""
         try:
-            if msg not in self.warnings:
+            if msg not in self.warnings and msg not in self._waved:
                 self.warnings.append(msg)
-            self.dismissed = False
+                self.dismissed = False
             self._once(f"{kind}:{key or msg}", kind, msg[:300])
         except Exception:  # noqa: BLE001, S110
             pass
@@ -357,6 +359,7 @@ class RenderWatch:
         """The banner's button: forget the sticky error and the warnings
         (the live ones stay until the render recovers)."""
         self.dismissed = True
+        self._waved.update(self.warnings)
         self.warnings = []
 
     def tick(self, now: float) -> None:

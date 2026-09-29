@@ -776,9 +776,11 @@ def main() -> None:
     panel.watchdog, panel.render_watch = watchdog, render_watch
 
     def dream_check(name: str | None) -> None:
-        # a preset that turns the dream on with no worker to dream: the
-        # look-back shows the echoes only — said on the banner, logged once
-        if reg["dream.on"].base and dream_io is None:
+        # a preset that asks for the dream — the look-back on with a dream
+        # mix above 0 — with no worker to dream: the look-back shows the
+        # echoes only. Said on the banner (until dismissed), logged once.
+        # Echoes alone (dream.mix 0) are a normal mode and say nothing.
+        if reg["dream.on"].base and reg["dream.mix"].base > 0 and dream_io is None:
             why = panel.dream_error or "[dream] enabled = false in config.toml"
             render_watch.warn(f"{name} turns the dream on, but there is no dream worker ({why}); "
                               "the look-back shows the echoes only")
