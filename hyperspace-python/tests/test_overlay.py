@@ -63,7 +63,7 @@ def _registry():
 def rig():
     reg = _registry()
     b = FakeBackend()
-    out = Output("win", b)
+    out = Output("win", b, allowed=True)   # [output] overlay = true: the tests of overlay itself
     out.register(reg)
     return SimpleNamespace(reg=reg, out=out, b=b)
 
@@ -278,9 +278,66 @@ def test_backend_error_is_reported_not_raised(rig):
 
 def test_headless_output_has_no_window_to_push_to():
     reg = _registry()
-    out = Output(None, None)
+    out = Output(None, None, allowed=True)
     out.register(reg)
     reg["output.overlay"].toggle()
     out.apply()
     assert out.overlay is True and out.bg_alpha == 0.0
     assert reg["output.monitor"].names == ["follow window", "screen"]
+
+
+# ---- decision 21 (a): overlay only when the config asks ----
+
+@pytest.fixture()
+def gated():
+    """`[output] overlay = false`, the default: Output's own default too."""
+    reg = _registry()
+    b = FakeBackend()
+    out = Output("win", b)
+    out.register(reg)
+    return SimpleNamespace(reg=reg, out=out, b=b)
+
+
+def test_overlay_is_shut_by_default():
+    assert Output(None, None).allowed is False
+
+
+def test_overlay_refuses_every_road_while_the_config_shuts_it(gated):
+    """The T key and the APC40's MASTER select are rows on `overlay.on`
+    (the factory table, apc40.DEFAULT_MAP); the panel sets `output.overlay`;
+    a preset restores values. Every one lands on the one param, and it
+    stays off — the window never leaves window mode."""
+    from hyperspace import apc40, routing
+
+    r, out = gated.reg, gated.out
+    t = next(b for b in routing.Bindings.factory().bindings
+             if b.source == "key:T" and b.target == "overlay.on")
+    master = next(d for d in apc40.DEFAULT_MAP if d["source"] == "note:0:80")
+    assert master["target"] == "overlay.on"
+    routing.act(r, t)                                         # T
+    routing.act(r, routing.Binding.from_json(master))         # MASTER select
+    r["output.overlay"].set(True)                             # the panel's toggle
+    r["overlay.on"].toggle()
+    r.restore({"output.overlay": True, "overlay.on": True})   # a preset naming it
+    out.apply()
+    assert out.overlay is False and out.mode == "window"
+    assert r["output.overlay"].get() is False
+    # the first apply settles the plain window: click-through off, opacity 1
+    assert gated.b.calls == [("MOUSE_PASSTHROUGH", False), ("opacity", 1.0)]
+
+
+def test_the_ground_and_opacity_do_nothing_while_shut(gated):
+    """The crossfader's `overlay.bg` still lands a value, but the window
+    clears opaque and its opacity is never touched."""
+    gated.reg["overlay.bg"].set_norm(0.0)
+    gated.reg["output.alpha"].set_norm(0.2)
+    gated.out.overlay = True        # even a forced flag: mode reads the gate
+    gated.out.apply()
+    assert gated.out.bg_alpha == 1.0 and gated.out.mode == "window"
+    assert [a for k, a in gated.b.calls if k == "opacity"] == [1.0]
+
+
+def test_fullscreen_still_works_while_overlay_is_shut(gated):
+    gated.reg["output.fullscreen"].set(True)
+    gated.out.apply()
+    assert gated.out.mode == "fullscreen" and ("fullscreen", "Built-in") in gated.b.calls

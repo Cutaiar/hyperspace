@@ -531,7 +531,7 @@ def test_cut_through_still_cuts_in_overlay_mode(ctx):
     """Overlay mode's see-through ground: cut-through on lets the fills
     lower the window's alpha below the ground's; off, alpha composites over
     the ground and never drops below it."""
-    out_ = Output(None, None)
+    out_ = Output(None, None, allowed=True)   # [output] overlay = true
     out_.overlay, out_.bg = True, 0.6
     rig = Rig(ctx, 256, 256, bg_alpha=out_.bg_alpha)
     ground = round(0.6 * 255)

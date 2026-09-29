@@ -293,7 +293,7 @@ CHEATSHEET = [
     ("B", "tap tempo · ⇧B LFO trigger"),
     ("Cmd+R", "restart process"),
     ("H / ?", "panel / this sheet"),
-    ("T", "overlay: float over the screen"),
+    ("T", "overlay (if config.toml allows)"),
     ("G", "overlay: clicks through / back"),
     ("Esc / Q", "quit"),
     # Xbox-layout gamepad, Bluetooth or USB (gamepad.py holds the map)
@@ -1047,10 +1047,19 @@ class Panel:
             self._combo("output.monitor")
         self._check("output.fullscreen")
         imgui.same_line()
+        # decision 21 (a): overlay only when the config asks — shut, the
+        # toggle is drawn disabled with the reason, and its three overlay-only
+        # settings (click-through, ground, opacity) would do nothing
+        allowed = getattr(self.output, "allowed", True)
+        imgui.begin_disabled(not allowed)
         self._check("output.overlay")
-        self._check("output.passthrough")
-        self._row("output.bg")
-        self._row("output.alpha")
+        if allowed:
+            self._check("output.passthrough")
+            self._row("output.bg")
+            self._row("output.alpha")
+        imgui.end_disabled()
+        if not allowed:
+            imgui.text_disabled(f"overlay {self.output.GATED}")
         if self.output.error:
             imgui.text_colored(WARN, self.output.error)
 
