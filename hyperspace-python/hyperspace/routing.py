@@ -1077,11 +1077,12 @@ class Bindings:
 
         Schema 3 adds `layer` on MIDI rows and the `macros` key. An older
         file's MIDI rows get their layers once (`sort_layers`; a file with
-        no MIDI rows gets none added, and `desk=False` — a routing preset,
-        whose MIDI rows are never read — skips the sort), and on any
-        schema a row's `scale: "macro.N"` becomes a depth subscriber
-        (`migrate_scales`); either sets `changed`, noted, so `load` writes
-        the file back once."""
+        no MIDI rows gets none added, and `desk=False` — an old routing
+        preset read by the migration, whose MIDI rows are never read —
+        skips the sort), and on any schema a row's `scale` is settled
+        (`migrate_scales`: a macro's a depth subscriber, a performance
+        param's dropped); either sets `changed`, noted, so `load` writes
+        the file back once (or leaves it to the migration, `load`)."""
         schema = data.get("schema")
         if schema not in (SCHEMA, SCHEMA_V2, SCHEMA_V1, None):
             raise ValueError(f"unknown schema {schema!r}")
@@ -1144,7 +1145,7 @@ class Bindings:
 
     def routes(self) -> list[Binding]:
         """Every performer row, disabled ones too — what the matrix lists
-        and a routing preset saves."""
+        and a preset saves."""
         return [b for b in self.bindings if b.op in MOD_OPS]
 
     def owner(self, pid: str) -> Binding | None:

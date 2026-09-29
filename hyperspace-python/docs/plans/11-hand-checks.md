@@ -387,8 +387,8 @@ brings the dream in, over sixteen echoes; **(f)** TRIP after TAP TEMPO ×8
 and METRONOME once: the left hand's height opens a pump on the beat and
 the burst at the right hand's top is light, not glare. *Fail* points:
 (a) the preset's `view.bright` in `library/presets/party-*.json`; (b)
-`routing.TURN` (0.25 → try 0.35) and the axes' `return` on the HANDS
-page; (c) the row's depth sign in `routing.party_*_routes` — a flipped
+`preset.TURN` (0.25 → try 0.35) and the axes' `return` on the HANDS
+page; (c) the row's depth sign in `preset.party_*_routes` — a flipped
 axis is one sign; (d) `view.instances`' push depth (0.6) and
 `view.inst_amp`'s (0.5) in `party_field_routes`; (e) `[dream] enabled`
 and the worker line on the LOOKBACK page — without the worker those two
@@ -409,18 +409,30 @@ and the box). About 35 minutes. The headless tests named are the ones plan
 **33. The first launch migrates your home folder, and loses nothing (plan 13 §6, WP5).**
 Headless: `uv run pytest -q tests/test_migration.py`. Before launching,
 `cp -R ~/Hyperspace ~/Hyperspace-before-13`. Then `uv run hyperspace` and
-read stderr. *Pass:* one line per rewritten file naming its backup
-(`<file>.bak-v1` / `.bak-v2`, a dated copy if that name was taken);
+read stderr. *Pass:* one `migrate:` line per rewritten file naming its
+backup — `projects/<name>.hyp.json.bak-v1` for each schema-1 project,
+`bindings.json.bak-v2` (or `bindings.json.bak-v2-<date>` when that name
+was already taken) — and one per preset written;
 `~/Hyperspace/presets/` holds one preset per filled slot of each project
-and one per user routing preset; each project is `hyperspace.project/2`
-naming them; `bindings.json` keeps your keys, pad and MIDI rows, the band
-strip's eight device knobs now `"layer": "global"`; your learned hand rows
-are in the startup preset (ROUTING page); every `.bak-*` you made by hand
-is untouched (`ls -la ~/Hyperspace` against the copy). *Fail:* a slot
-missing → the project/1 migration (`library.MIGRATIONS`); a learned row
-gone → the `bindings.json` split (`routing.Bindings.load`); a backup
-overwritten → `routing.backup`. Keep `~/Hyperspace-before-13` until H is
-done.
+(named by the slot; a slot equal to a factory preset is pointed at, not
+copied, and a name a preset of yours already has gets `<name> 2`) and
+one per user routing preset (named by its `name`, its effects switched
+on); each project is `hyperspace.project/2` naming them, an empty slot
+pointing at the house preset its F-key used to load, `startup` the first
+filled slot; `bindings.json` keeps your keys, pad and MIDI rows and
+nothing else — no route, no preset-layer knob, no `macros`, no `values`
+— the band strip's eight device knobs now `"layer": "global"`; your
+learned hand rows and knobs are in the startup preset (ROUTING page:
+the routes, the DESK section); `~/Hyperspace/bindings/` is as it was,
+with a `NOT-READ.txt` beside it; every `.bak-*` you made by hand is
+untouched (`ls -la ~/Hyperspace` against the copy). A home with no
+project of its own gets a `MIGRATED` preset holding bindings.json's
+routes, desk and macros, the startup of a new `default` project. Launch
+again: stderr says nothing and no file's time moves. *Fail:* a slot
+missing → the project migration (`preset.migrate_project`); a learned
+row gone → `routing.Bindings.carried` and `preset.migrate_home`; a
+backup overwritten → `routing.backup`. Keep `~/Hyperspace-before-13`
+until H is done.
 
 **34. SHIFT latches and lights (plan 13 D4, D12; WP3).**
 Headless: `uv run pytest -q tests/test_desk.py::test_shift_latches_the_layer_and_lights_its_led tests/test_desk.py::test_shift_release_never_reevaluates_a_held_button`.
@@ -492,16 +504,21 @@ land; the BPM reset → `tempo` classed as performance
 
 **39. One macro, two directions (plan 13 D10, §2.4; WP3, WP5).**
 Headless: `uv run pytest -q tests/test_macros.py::test_base_subscribers_of_opposite_polarity_move_opposite_ways`.
-PRESETS page → the preset strip → `lfo-breathe`. Turn device knob 1
-(macro 1, "Breathe") from bottom to top. *Pass:* the picture brightens
-while the spin slows, together, and the LFO's breathing of the effect mix
-deepens; bottom to top and back is smooth, no step; the ROUTING page's
+Headless too: `uv run pytest -q tests/test_presets.py::test_lfo_breathes_macro_moves_brightness_up_and_speed_down`.
+PRESETS page → the preset strip → `lfo-breathe`; it loads with the knob
+at the bottom (brightness 1×, speed 0.25×). Turn device knob 1 (macro 1,
+"Breathe", its ring from the preset's desk) from bottom to top. *Pass:*
+the picture brightens from 1× to 2× while the spin slows from 0.25× to a
+crawl (about 0.06×), together, and the LFO's breathing of the effect mix
+deepens from nothing; bottom to top and back is smooth, no step; the ROUTING page's
 MACROS section shows knob 1 labelled "Breathe" with three subscriber
 lines — two `base` lines (a param, `from`, `to`; the one whose `from` is
 above its `to` runs the other way) and one `depth` line naming the LFO's
 route. *Fail:* both moving the same way → a
-subscriber's `from → to` in `library/presets/lfo-breathe.json`; nothing
-moving → the macro's base-follow step (`routing.py`) or the desk row.
+subscriber's `from → to` (`preset.BREATHE_BRIGHT` / `BREATHE_SPEED`;
+the file is generated: `python -m hyperspace.preset`); nothing moving →
+the macro's base-follow step (`routing.py`) or the desk row
+(`preset.lfo_breathe_desk`, `cc:*:16 → macro.1`).
 
 **40. The startup preset (plan 13 D11; WP2).**
 Headless: `uv run pytest -q tests/test_presets.py::test_the_startup_preset_loads_on_launch`.
@@ -512,17 +529,23 @@ own project's startup back afterwards. *Fail:* a dark desk or the factory
 look → `Project.startup` and the startup load in `app.main`.
 
 **41. The five party presets, re-cut (plan 12 §7, plan 13 WP5).**
-Headless: `uv run pytest -q tests/test_plan12_presets.py` and
+Headless: `uv run pytest -q tests/test_plan12_presets.py` (the F-keys,
+`test_the_five_party_presets_load_by_f_key_as_presets`; the knobs,
+`test_wake_and_trip_device_knobs_move_their_bases`) and
 `uv run python tools/preset_shots.py`. Projector and box on. As check 32,
 but each preset is one F-key — F1 TUMBLE, F2 FACES, F3 FIELD, F4 WAKE,
 F5 TRIP — with no ROUTING strip step. *Pass:* check 32's (a)–(f) hold as
 before; WAKE's device knobs 1–8 set echo mix · decay · darken · contrast ·
 occlude · dream mix · dream sat · dream k, and TRIP's set fx mix · plasma
 level · kaleido segments · kaleido zoom · burst amount · burst glow · hue
-paint · hue spread (plan 12 §6), each ring showing its value. *Fail:* a
-look → the numbers in `library/presets/party-*.json` (generated: change the
-generator, `python -m hyperspace.preset`, not the file); a knob on the
-wrong base → the preset's `desk`; anything check 32 lists → the same
+paint · hue spread (plan 12 §6) — device knob k is `cc:*:<0x10+k>`, absolute —
+each ring showing its value; on TUMBLE, FACES and FIELD the device
+knobs are dark (SHIFT brings the band strip). TUMBLE's left height
+still pushes the drive (row 19 (a)), its ROUTING row marked "session".
+*Fail:* a look → the values in `library/presets/party-*.json` (data)
+or a route in `preset.party_*_routes` (generated: change the generator,
+`python -m hyperspace.preset`, not the file); a knob on the wrong base
+→ `preset.WAKE_KNOBS` / `TRIP_KNOBS`; anything check 32 lists → the same
 place it lists.
 
 ## What this list does not ground

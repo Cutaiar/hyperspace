@@ -150,7 +150,7 @@ def dumps(doc: dict) -> str:
 class Presets:
     """The loaded preset over one library, registry and router.
 
-    Built as ``Presets(lib, reg, router)`` after ``lib.routing(router)``;
+    Built as ``Presets(lib, reg, router)`` once the router exists (app.main);
     it registers the ``presets`` document kind and makes itself
     ``lib.presets``, which the project's bank (F-keys, the preset row)
     loads and saves through. The kind's hooks look this object's methods

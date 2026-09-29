@@ -75,9 +75,8 @@ and exactly one owner remains. The owner is named the way its adapter
 names it (`Router.describe`). Rows a preset had to drop for the same
 reason (`table.dropped`) are listed under the header until the next edit.
 
-The routing presets (``library/bindings/``, `Library.routing`) are no
-longer on this page: the preset holds the routes. The document kind stays
-registered by app.py until plan 13 WP5 removes it.
+The routing presets are gone (plan 13 WP5): the preset holds the routes,
+and the ones that shipped are presets on the PRESETS strip.
 
 The panel reaches the router through `panel.router`, which app.py is
 meant to set; until it does, the table is found through the MIDI

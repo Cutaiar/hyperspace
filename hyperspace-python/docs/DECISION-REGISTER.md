@@ -513,7 +513,7 @@ or "overturn".
 | 7 | R2 + L2 loop keys | (a) table rows | **(a)**, 2026-09-28 | built, PR #58 |
 | 8 | Merge path | PR #55, then #47 | **rec**, 2026-09-28 | #56 folded into #55 first |
 | 9 | P13-a global track knobs | (a) hand feel + BPM | **(a)**, 2026-09-28 | a first cut; expect better globals with use. Built in plan 13 WP3 (PR #63): five global rows in `apc40.DEFAULT_MAP`, knobs 6–8 dark |
-| 10 | P13-b partial presets | (a) no exception | **(a)**, 2026-09-28 | built, plan 13 WP2, PR #64 (the F-key bank); the routes-only files in WP5 |
+| 10 | P13-b partial presets | (a) no exception | **(a)**, 2026-09-28 | built, plan 13 WP2, PR #64 (the F-key bank), and WP5, PR #WP5PR: the routes-only files are full presets — `legacy6`, `lfo-breathe`, `hands-*` in `library/presets/`, a user's `bindings/*.json` by the first-launch migration (`preset.migrate_routing_presets`), each with the effects its routes drive switched on |
 | 11 | P13-c bank slots | (a) a slot names a file | **(a)**, 2026-09-28 | built, plan 13 WP2, PR #64 |
 | 12 | P13-d what a macro is | (a) attenuator + multi-target rows | **one concept**, 2026-09-28 | subscribers set a base or a depth, each with its own polarity; see 12b. Built in plan 13 WP3 (PR #63): `routing.Macro` / `Sub`, `Router.follow_macros`, the depth term in `Router.modulate` |
 | 13 | P13-e ROUTING page | (a) one page | **(a)**, 2026-09-28 | built in plan 13 WP4 (PR #65): `ui_routing.page` over the loaded preset — the head (name, dirty dot, save / as…, the layer, the last learn or refusal), routes, the desk with its dark controls, the macros and their subscribers, the session's MIDI rows read-only |
