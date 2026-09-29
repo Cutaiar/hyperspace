@@ -140,8 +140,10 @@ def test_a_schema_1_project_becomes_presets_and_a_schema_2_project(home):
     # the bank names the five slots' presets; the empty slots point at the
     # factory house presets their F-keys used to load (the seeds)
     seeds = read(FACTORY / "projects" / "default.hyp.json")["bank"]
-    assert doc["bank"] == SLOT_NAMES + seeds[5:]
-    assert doc["startup"] == "MY WAVE"
+    # slot 6, the first empty one, holds the project's own look (it differs from
+    # every slot: view.shape 9); the rest point at the house presets
+    assert doc["bank"] == [*SLOT_NAMES, "DEFAULT SAVED", *seeds[6:]]
+    assert doc["startup"] == "DEFAULT SAVED"
     # the session: the project's own session ids, then the first slot's
     assert doc["session"]["tempo.bpm"] == 128.0 and doc["session"]["band.1.post"] == 0.7
     assert doc["session"]["hands.smooth"] == 0.3
@@ -164,8 +166,8 @@ def test_a_schema_1_project_becomes_presets_and_a_schema_2_project(home):
         assert any(d["source"] == KNOB["source"] for d in p["desk"])
     # the live state: the migrated project is the one open, its startup loaded
     assert r.lib.project.path == home / "projects" / "default.hyp.json"
-    assert r.lib.project.bank[:5] == SLOT_NAMES and r.lib.current("presets") == "MY WAVE"
-    assert r.view.shape == 2 and r.lib.project.active == 0
+    assert r.lib.project.bank[:5] == SLOT_NAMES and r.lib.current("presets") == "DEFAULT SAVED"
+    assert r.view.shape == 9 and r.lib.project.active == 5     # the look it opened on (D11)
     assert not r.lib.error
     # F2 loads the second slot's preset through the one loader
     r.reg["preset.load.1"].fire()
@@ -175,6 +177,57 @@ def test_a_schema_1_project_becomes_presets_and_a_schema_2_project(home):
     assert table["values"] == MACRO_VALUES
 
 
+def test_a_schema_1_projects_saved_look_becomes_its_startup_preset(tmp_path):
+    """The look a schema-1 project restored on open (its own performance
+    `values`) never survives only in the backup: differing from every
+    slot, it is `<PROJECT> SAVED` — the table's routes, desk and macros
+    with it — the startup, in the first empty slot (a full bank: in no
+    slot, said), through `put_preset` (a differing user preset of that
+    name is kept: `<name> 2`); equal to a slot's, that slot is the startup
+    and nothing more is written."""
+    # differs, first empty slot 6; a user DEFAULT SAVED already there is kept
+    home = owners_home(tmp_path / "a", routing_preset=False)
+    (home / "presets").mkdir()
+    mine = {"schema": "hyperspace.preset/2", "name": "DEFAULT SAVED", "values": {}}
+    (home / "presets" / "default-saved.json").write_text(json.dumps(mine))
+    r = boot(home)
+    doc = read(home / "projects" / "default.hyp.json")
+    assert doc["startup"] == "DEFAULT SAVED 2" and doc["bank"][5] == "DEFAULT SAVED 2"
+    assert read(home / "presets" / "default-saved.json") == mine
+    saved = preset_file(home, "DEFAULT SAVED 2")
+    assert saved["values"]["view.shape"] == 9 and saved["values"]["macro.2"] == 0.4
+    assert not any(k.partition(".")[0] in SESSION_GROUPS for k in saved["values"])
+    assert saved["routes"] == preset_file(home, "MY WAVE")["routes"]
+    assert KNOB in saved["desk"] and saved["macros"] == preset_file(home, "MY WAVE")["macros"]
+    assert saved["modules"] == {"fx": "trip"}
+    assert r.lib.current("presets") == "DEFAULT SAVED 2" and r.view.shape == 9
+    assert any("own look → preset 'DEFAULT SAVED 2'" in n and "slot 6" in n for n in r.notes)
+    # equal to slot 3's: that slot is the startup, no SAVED preset
+    home = tmp_path / "b"
+    owners_home(home, routing_preset=False)
+    v1 = project_v1()
+    v1["values"] = {**slot(2)["values"], "tempo.bpm": 128.0}
+    (home / "projects" / "default.hyp.json").write_text(json.dumps(v1))
+    r = boot(home)
+    doc = read(home / "projects" / "default.hyp.json")
+    assert doc["startup"] == "LATE SET" and "DEFAULT SAVED" not in doc["bank"]
+    assert not (home / "presets" / "default-saved.json").exists()
+    assert r.lib.current("presets") == "LATE SET" and doc["session"]["tempo.bpm"] == 128.0
+    # a full bank: the startup, in no slot, and the note says so
+    home = tmp_path / "c"
+    owners_home(home, routing_preset=False)
+    v1 = project_v1()
+    v1["name"] = "gig"
+    v1["bank"] = [dict(slot(k % 5), name=f"S{k}") for k in range(8)]
+    (home / "projects" / "default.hyp.json").write_text(json.dumps(v1))
+    r = boot(home)
+    doc = read(home / "projects" / "default.hyp.json")
+    assert doc["startup"] == "GIG SAVED" and "GIG SAVED" not in doc["bank"]
+    assert preset_file(home, "GIG SAVED")["values"]["view.shape"] == 9
+    assert any("GIG SAVED" in n and "no slot (the bank is full)" in n for n in r.notes)
+    assert r.lib.current("presets") == "GIG SAVED"
+
+
 def test_a_schema_1_project_opened_later_is_migrated_on_the_same_road(home, capsys):
     """A schema-1 project the launch did not see (put in the folder since)
     is migrated when it is opened: presets, schema 2, a backup."""
@@ -182,6 +235,7 @@ def test_a_schema_1_project_opened_later_is_migrated_on_the_same_road(home, caps
     later = project_v1()
     later["name"] = "gig"
     later["bank"] = [dict(slot(0), name="GIG ONE"), None]
+    later["values"] = dict(slot(0)["values"])          # its look is slot 1's: no SAVED
     path = home / "projects" / "gig.hyp.json"
     path.write_text(json.dumps(later))
     assert set(r.lib.project.load("gig")) <= {"hands.smooth"}     # no hands in this rig
@@ -303,7 +357,7 @@ def test_the_migration_runs_once(home):
     after = tree(home)
     second = boot(home)
     assert second.notes == [] and tree(home) == after
-    assert second.lib.current("presets") == "MY WAVE" and not second.lib.error
+    assert second.lib.current("presets") == "DEFAULT SAVED" and not second.lib.error
     assert [b.source for b in second.router.table.routes() if b.source.startswith("hand")] \
         == ["hand:7", "hand:1"]
 
@@ -408,7 +462,7 @@ def test_a_launch_that_could_not_rewrite_bindings_json_does_not_take_the_default
     r = boot(home)
     assert not (home / "presets" / "migrated.json").exists()
     assert (home / "projects" / "default.hyp.json").read_text() == project
-    assert r.lib.current("presets") == "MY WAVE"
+    assert r.lib.current("presets") == "DEFAULT SAVED"
     assert not any(b.op in MOD_OPS for b in Bindings.load(bindings_path(home)).bindings)
     assert any("already in a preset" in n for n in r.notes)
 
@@ -448,6 +502,11 @@ def test_nothing_is_lost(home):
         for pid, v in {**slot(k)["values"], **raw["values"]}.items():
             if pid.partition(".")[0] not in SESSION_GROUPS:
                 assert held[pid] == (slot(k)["values"].get(pid, v)), (name, pid)
+    # the project's own look (what it restored on open) is a preset too
+    saved = preset_file(home, "DEFAULT SAVED")["values"]
+    for pid, v in {**raw["values"], **project_v1()["values"]}.items():
+        if pid.partition(".")[0] not in SESSION_GROUPS:
+            assert saved[pid] == project_v1()["values"].get(pid, v), pid
     # the session values went to the project, not lost
     session = read(home / "projects" / "default.hyp.json")["session"]
     for pid in ("scene.select", "master.gain", "band.0.atk", "tempo.bpm", "hands.smooth"):

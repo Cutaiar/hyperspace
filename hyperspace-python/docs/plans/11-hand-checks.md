@@ -418,8 +418,11 @@ was already taken) — and one per preset written;
 copied, and a name a preset of yours already has gets `<name> 2`) and
 one per user routing preset (named by its `name`, its effects switched
 on); each project is `hyperspace.project/2` naming them, an empty slot
-pointing at the house preset its F-key used to load, `startup` the first
-filled slot; `bindings.json` keeps your keys, pad and MIDI rows and
+pointing at the house preset its F-key used to load; the look a project
+restored on open is its `startup` — the slot whose values it equals, or
+else a preset `<PROJECT> SAVED` (`DEFAULT SAVED` for your default
+project) in its first empty slot — so the first launch opens on the
+same picture as the last one; `bindings.json` keeps your keys, pad and MIDI rows and
 nothing else — no route, no preset-layer knob, no `macros`, no `values`
 — the band strip's eight device knobs now `"layer": "global"`; your
 learned hand rows and knobs are in the startup preset (ROUTING page:
