@@ -113,6 +113,34 @@ class GlfwBackend:
             self._ns = None
         return self._ns
 
+    def window_state(self, win) -> dict:
+        """What the stall log records about the render window (watchdog.
+        RenderWatch): visible, iconified, focused, its monitor, its
+        framebuffer and rect — and on macOS whether the NSWindow is occluded
+        (covered, or on a Space that is not showing). `presentable` is
+        whether a completed frame reaches the screen. Read-only."""
+        g = self.glfw
+        fb = tuple(g.get_framebuffer_size(win))
+        mon = g.get_window_monitor(win)
+        st = {
+            "visible": bool(g.get_window_attrib(win, g.VISIBLE)),
+            "iconified": bool(g.get_window_attrib(win, g.ICONIFIED)),
+            "focused": bool(g.get_window_attrib(win, g.FOCUSED)),
+            "monitor": self.monitor_name(mon) if mon else "none (windowed)",
+            "framebuffer": fb,
+            "rect": self.window_rect(win),
+        }
+        ns = self._nswindow(win)
+        if ns is not None:
+            try:
+                st["occluded"] = not (int(ns.occlusionState()) & 2)   # NSWindowOcclusionStateVisible
+                st["on_active_space"] = bool(ns.isOnActiveSpace())
+            except Exception:  # noqa: BLE001, S110 — an older pyobjc: GLFW's view only
+                pass
+        st["presentable"] = (st["visible"] and not st["iconified"]
+                             and not st.get("occluded", False) and fb[0] > 0 and fb[1] > 0)
+        return st
+
     def raise_over_spaces(self, win, on: bool) -> None:
         ns = self._nswindow(win)
         if ns is None:

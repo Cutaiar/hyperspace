@@ -81,6 +81,7 @@ from .render import Renderer
 from .routing import Bindings, Router, bindings_path
 from .ui import Panel, apply_style, load_fonts
 from .view import ViewState
+from .watchdog import LOG_NAME, RenderWatch, Watchdog
 
 TITLE = "Hyperspace"
 RENDER_SIZE = (1280, 820)
@@ -247,16 +248,31 @@ def _open_hands(cfg: dict, settings):
         return None
 
 
-def _open_dream(reg: Registry, cfg: dict):
-    """The look-back's dream worker (dream.py, torch), only when [dream] enabled."""
+DREAM_SETUP = "run `uv sync` in hyperspace-python/, then `uv run hyperspace`"
+
+
+def dream_error(e: Exception) -> str:
+    """What the panel says when the dream worker would not start. torch is
+    a main dependency (decision 23 (a)), so a missing one means the venv
+    is stale: the fix is a plain `uv sync` (README "Dream worker")."""
+    mod = (getattr(e, "name", "") or "").split(".")[0] if isinstance(e, ImportError) else ""
+    if mod in ("torch", "torchvision"):
+        return f"dream worker off: {mod} is not installed — {DREAM_SETUP}"
+    return f"dream worker off: {type(e).__name__}: {e}"[:200]
+
+
+def _open_dream(reg: Registry, cfg: dict) -> tuple[object | None, str]:
+    """The look-back's dream worker (dream.py, torch), only when [dream]
+    enabled; with the reason it is off when it would not start (the SYSTEM
+    and LOOKBACK pages show it), "" otherwise."""
     if not cfg.get("dream", {}).get("enabled", False):
-        return None
+        return None, ""
     try:
         from . import dream
-        return dream.DreamWorker(reg, cfg["dream"])
+        return dream.DreamWorker(reg, cfg["dream"]), ""
     except Exception as e:  # noqa: BLE001 — no torch, no GPU: the plain tracer runs
         print(f"dream: {e}", file=sys.stderr)
-        return None
+        return None, dream_error(e)
 
 
 def _open_pad(cfg: dict):
@@ -420,6 +436,7 @@ class Host:
     bridge_io: object | None = None
     dream_io: object | None = None
     learn: object | None = None       # learn.Learn: what MIDI and the hands complete
+    render_watch: RenderWatch | None = None   # the render window's health (watchdog.py)
 
     @property
     def adapters(self) -> tuple:
@@ -535,17 +552,28 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     except Exception as e:  # noqa: BLE001
         ok, reloader.runtime_error = False, _err("step", e)
 
-    # ---- render window, then the control window ----
+    # ---- render window, then the control window. A raising draw leaves
+    # the render window on its last frame while the panel goes on — the
+    # render watch logs it (traceback, once per error) and the control
+    # window's red banner names it until a draw succeeds ----
+    watch = h.render_watch
     try:
         h.draw_render(dt)
     except Exception as e:  # noqa: BLE001
         ok, reloader.runtime_error = False, _err("render.draw", e)
+        if watch is not None:
+            watch.failed(e, now)
+    else:
+        if watch is not None:
+            watch.drew(now)
     try:
         h.draw_panel(dt, fps)
     except Exception as e:  # noqa: BLE001
         ok, reloader.runtime_error = False, _err("panel.draw", e)
     if ok:
         reloader.runtime_error = ""
+    if watch is not None:     # no presented render frame for 2 s: logged, bannered
+        watch.tick(now)
 
     if h.panel.restart_requested:
         h.panel.restart_requested = False
@@ -657,7 +685,7 @@ def main() -> None:
     hands_io = _open_hands(cfg, hand_settings)
     panel.hands = hands_io
     panel.hand_settings = hand_settings
-    dream_io = _open_dream(reg, cfg)
+    dream_io, panel.dream_error = _open_dream(reg, cfg)
     if dream_io is not None:            # fills the look-back's dream slot
         renderer.lookback.source = dream_io
     panel.bridge = bridge_io               # the SYSTEM page's bridge line
@@ -727,17 +755,28 @@ def main() -> None:
         ui_gl.clear(0.0, 0.0, 0.0, 1.0)
         panel.draw(dt, fps)
 
+    # the stall log (watchdog.py), <home>/stall.log: a 2 s whole-loop stall,
+    # a raising render draw, or 2 s with no render frame presented while the
+    # panel runs, each with every thread's stack; kill -USR1 dumps on demand
+    watchdog = Watchdog(library.home / LOG_NAME,
+                        preset=lambda: library.current("presets"))
+    render_watch = RenderWatch(watchdog,
+                               info=lambda: output.backend.window_state(render_win))
+    panel.watchdog, panel.render_watch = watchdog, render_watch
+
     host = Host(reg=reg, view=s, control=control, audio=audio, router=router,
                 clock=clock, lfos=lfos, keys=keys, mouse=mouse, output=output,
                 renderer=renderer, panel=panel, reloader=reloader,
                 draw_render=draw_render, draw_panel=draw_panel,
-                restart=lambda: _restart(audio, host.adapters, impl, ctrl_win),
+                restart=lambda: _restart(audio, (watchdog, *host.adapters), impl, ctrl_win),
                 quit=lambda: glfw.set_window_should_close(render_win, True),
                 pad=pad, midi_io=midi_io, hands_io=hands_io, bridge_io=bridge_io,
-                dream_io=dream_io, learn=learn)
+                dream_io=dream_io, learn=learn, render_watch=render_watch)
 
     # smoke-test escape hatch: HYPERSPACE_FRAMES=n closes after n frames
     frames_left = int(os.environ.get("HYPERSPACE_FRAMES", "0")) or None
+
+    watchdog.start()          # last, so startup is not a stall
 
     last = time.perf_counter()
     fps = 0.0
@@ -770,8 +809,9 @@ def main() -> None:
         imgui.render()
         impl.render(imgui.get_draw_data())
         glfw.swap_buffers(ctrl_win)
+        watchdog.pet(now)          # a frame completed: one float write
 
-    close_all(audio, *host.adapters)
+    close_all(audio, watchdog, *host.adapters)   # the watchdog first: teardown is no stall
     impl.shutdown()
     glfw.terminate()
 

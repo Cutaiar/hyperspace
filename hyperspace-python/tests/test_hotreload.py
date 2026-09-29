@@ -228,7 +228,9 @@ def test_every_package_module_but_the_cold_core_is_watched():
             parts = parts[:-1]
         if parts:
             names.add(".".join(parts))
-    cold = {"app", "hotreload", "offline"}      # offline is the tests' oracle harness
+    # offline is the tests' oracle harness; watchdog is cold like app — it
+    # must outlive whatever a reload does, being what diagnoses a freeze
+    cold = {"app", "hotreload", "offline", "watchdog"}
     assert names - cold == set(_watched()), sorted((names - cold) ^ set(_watched()))
 
 

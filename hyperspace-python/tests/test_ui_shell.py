@@ -155,6 +155,74 @@ def test_system_page_shows_the_bridge(rig, monkeypatch):
     assert shown() == ["bridge: no such port"]
 
 
+def _drawn(monkeypatch) -> list[str]:
+    """Every string the page code hands imgui's text calls, in order (every
+    ui module shares the one imgui module, so patching it once is enough)."""
+    drawn: list[str] = []
+    colored, disabled, wrapped = imgui.text_colored, imgui.text_disabled, imgui.text_wrapped
+    monkeypatch.setattr(imgui, "text_colored", lambda col, s: (drawn.append(s), colored(col, s)))
+    monkeypatch.setattr(imgui, "text_disabled", lambda s: (drawn.append(s), disabled(s)))
+    monkeypatch.setattr(imgui, "text_wrapped", lambda s: (drawn.append(s), wrapped(s)))
+    return drawn
+
+
+def test_a_render_error_and_the_dream_error_show_in_the_red_banner(rig, monkeypatch, tmp_path):
+    """Plan 14 WP1: a live render error (the render window holding its last
+    frame) and a dream worker that would not start are a red banner across
+    the control window — drawn even with the panel hidden — not only a
+    line on the SYSTEM page."""
+    from hyperspace.watchdog import RenderWatch, Watchdog
+
+    drawn = _drawn(monkeypatch)
+    rw = RenderWatch(Watchdog(tmp_path / "stall.log"))
+    rig.panel.render_watch = rw
+    frame(rig.panel)
+    assert rig.panel.alerts() == [] and not any("render window" in s for s in drawn)
+    rw.failed(ValueError("boom"), 0.0)
+    rig.panel.dream_error = "dream worker off: FileNotFoundError: vgg16 weights"
+    rig.panel.open = False                     # the banner shows with the panel hidden
+    drawn.clear()
+    frame(rig.panel)
+    assert drawn[:2] == ["render window stopped — ValueError: boom",
+                         "dream worker off: FileNotFoundError: vgg16 weights"]
+    rw.drew(1.0)
+    drawn.clear()
+    frame(rig.panel)
+    assert drawn[0] == "dream worker off: FileNotFoundError: vgg16 weights"
+    assert not any(s.startswith("render window") for s in drawn)
+
+
+def test_system_page_shows_the_dream_error_and_the_stall_log(rig, monkeypatch, tmp_path):
+    """The dream gate's reason sits beside config_error / config_notes; the
+    stall log's line appears once the file has entries."""
+    from hyperspace import app
+    from hyperspace.watchdog import Watchdog
+
+    drawn = _drawn(monkeypatch)
+    rig.panel.dream_error = app.dream_error(ModuleNotFoundError("no torch", name="torch"))
+    assert rig.panel.dream_error == (
+        "dream worker off: torch is not installed — run `uv sync` in hyperspace-python/, "
+        "then `uv run hyperspace`")
+    wd = Watchdog(tmp_path / "stall.log", preset=lambda: "FACES")
+    rig.panel.watchdog = wd
+    frame(rig.panel, "system")
+    assert rig.panel.dream_error in drawn
+    assert not any(s.startswith("stall log:") for s in drawn)
+    assert wd.open() and wd.log("stall", "no frame for 2.4 s")
+    drawn.clear()
+    frame(rig.panel, "system")
+    assert f"stall log: {wd.path} (1 stall)" in drawn
+    wd.close()
+
+
+def test_the_lookback_page_says_why_the_worker_is_off(rig, monkeypatch):
+
+    drawn = _drawn(monkeypatch)
+    rig.panel.dream_error = "dream worker off: torch is not installed — run `uv sync`"
+    frame(rig.panel, "lookback")
+    assert rig.panel.dream_error in drawn
+
+
 def test_page_param_is_ui_state_not_a_preset(rig):
     p = rig.reg["ui.page"]
     assert p.group == "ui" and not p.persist and not p.modulatable

@@ -84,7 +84,11 @@ def page(panel, dt: float) -> None:
 
     panel._section("dream worker", note="[dream] in config.toml")
     imgui.push_style_color(imgui.Col_.text, ui.FAINT)
-    imgui.text_wrapped(_worker_status(lb))
+    err = getattr(panel, "dream_error", "")
+    if err:                               # torch missing: said plainly, in the warning colour
+        imgui.pop_style_color()
+        imgui.push_style_color(imgui.Col_.text, ui.WARN)
+    imgui.text_wrapped(_worker_status(lb, err))
     imgui.pop_style_color()
     panel._label_cell("net")
     panel._tip(r["dream.layer"])
@@ -141,10 +145,14 @@ def _worker_note(lb) -> str:
     return "dream worker on" if _worker(lb) is not None else "echoes only: no worker"
 
 
-def _worker_status(lb) -> str:
+def _worker_status(lb, error: str = "") -> str:
+    """The worker's line: its own status, else why it is off — `error` is
+    app._open_dream's reason (torch missing, with the setup commands)."""
     w = _worker(lb)
     if w is None:
-        return "no worker — [dream] enabled = true needs torch (uv sync --extra dream)"
+        if error:
+            return error
+        return "no worker — [dream] enabled = false in config.toml"
     try:
         return w.status()
     except Exception as e:  # noqa: BLE001 — a status line must not take the page down

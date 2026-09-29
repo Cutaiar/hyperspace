@@ -366,6 +366,9 @@ class Panel:
         self.reloader = None  # set by app.py; panel only reads status off it
         self.config_error = ""  # set by app.py: config.toml failed to parse (SYSTEM page)
         self.config_notes: list[str] = []  # set by app.py: config.toml wants a rename
+        self.dream_error = ""  # set by app.py: why the dream worker is off (SYSTEM, LOOKBACK)
+        self.watchdog = None   # set by app.py (watchdog.Watchdog): the stall log line
+        self.render_watch = None   # set by app.py (watchdog.RenderWatch): the red banner
         self.midi = None      # set by app.py when an adapter is up (midi.MidiIO)
         self.learn = None     # set by app.py: the armed param and the held question (learn.Learn)
         self.bridge = None    # set by app.py when [bridge] is enabled (bridge.Bridge)
@@ -939,6 +942,9 @@ class Panel:
     # ---- main draw: rail · page · footer ----
 
     def draw(self, dt: float, fps: float) -> None:
+        # the red banner first, its own window: a render window that stopped
+        # or a dream worker that is off shows even with the panel hidden
+        self._alert_banner()
         # Replace / Keep, its own window, before anything can return: a
         # held hand learn is never parked behind a hidden or collapsed panel
         ui_routing.modal(self)
@@ -1293,6 +1299,9 @@ class Panel:
             imgui.text_colored(WARN, self.config_error)
         for note in self.config_notes:
             imgui.text_disabled(note)
+        if self.dream_error:
+            imgui.text_colored(WARN, self.dream_error)
+        self._stall_status()
         imgui.spacing()
         self._section("midi")
         self._midi_status()
@@ -1300,6 +1309,55 @@ class Panel:
         imgui.spacing()
         self._section("bridge")
         self._bridge_status()
+
+    def alerts(self) -> list[str]:
+        """What the red banner says: a live render error or render stall
+        (watchdog.RenderWatch), and why the dream worker is off."""
+        out: list[str] = []
+        rw = self.render_watch
+        if rw is not None:
+            try:
+                out += rw.alerts()
+            except Exception as e:  # noqa: BLE001 — the banner must not take the panel down
+                out.append(f"render watch: {type(e).__name__}: {e}"[:160])
+        if self.dream_error:
+            out.append(self.dream_error)
+        return out
+
+    def _alert_banner(self) -> None:
+        """A red strip across the bottom of the control window, one line per
+        alert — impossible to miss from across the room. Not interactive."""
+        lines = self.alerts()
+        if not lines:
+            return
+        io = imgui.get_io()
+        imgui.set_next_window_pos(imgui.ImVec2(0, io.display_size.y), imgui.Cond_.always,
+                                  imgui.ImVec2(0, 1))
+        imgui.set_next_window_size(imgui.ImVec2(io.display_size.x, 0), imgui.Cond_.always)
+        imgui.push_style_color(imgui.Col_.window_bg, imgui.ImVec4(0.62, 0.05, 0.05, 0.96))
+        imgui.push_style_color(imgui.Col_.text, imgui.ImVec4(1, 1, 1, 1))
+        imgui.begin("##alerts", None,
+                    imgui.WindowFlags_.no_decoration | imgui.WindowFlags_.no_move
+                    | imgui.WindowFlags_.no_inputs | imgui.WindowFlags_.no_focus_on_appearing
+                    | imgui.WindowFlags_.no_nav | imgui.WindowFlags_.no_saved_settings)
+        for line in lines:
+            imgui.text_wrapped(line)
+        imgui.end()
+        imgui.pop_style_color(2)
+
+    def _stall_status(self) -> None:
+        """The stall log's line (watchdog.py), once it has entries."""
+        wd = self.watchdog
+        if wd is None:
+            return
+        if wd.error:
+            imgui.text_colored(WARN, wd.error)
+        line = wd.status()
+        if line:
+            imgui.text_colored(WARN, line)
+            if imgui.is_item_hovered():
+                imgui.set_tooltip("a frame took over 2 s, or kill -USR1 asked for a dump: "
+                                  "every thread's stack, newest at the end")
 
     def _bridge_status(self) -> None:
         """The DAW bridge's one sign of life (audit P3): off, a port error,
