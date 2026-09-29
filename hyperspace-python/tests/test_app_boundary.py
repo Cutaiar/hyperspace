@@ -243,7 +243,7 @@ def _host(log: list[str], *, pad_on=True, pressed=(), held=(), super_=False, sti
     g = app.glfw
     down = set(pressed)
     keys = Stub("keys", log, typing=False)
-    keys.pressed = lambda k: k in down
+    keys.pressed = lambda k: k in down and down.discard(k) is None   # an edge, once
     keys.held = lambda k, now: 0.5 if k in held else 0.0
     keys.shift = lambda: False
     keys.super = lambda: super_
@@ -360,9 +360,11 @@ def test_the_relative_writers_run_with_the_setters_and_move_the_base():
 
 
 def test_the_loop_keys_outside_the_table():
-    """Esc / Q close, R resets the camera, Cmd+R restarts the process, and
-    the panel's restart button restarts too — the keys ARCHITECTURE §3.7
-    lists as loop code."""
+    """Esc / Q close, Cmd+R restarts the process, and the panel's restart
+    button restarts too — the keys ARCHITECTURE §3.7 lists as loop code.
+    R alone is a table row since plan 11: the loop leaves its edge for
+    `router.keys`; with ⌘ held the loop claims the edge first, so the
+    `key:R` row (camera.reset) never hears a restart."""
     g = app.glfw
     log: list[str] = []
     h = _host(log, pressed={g.KEY_ESCAPE})
@@ -371,11 +373,14 @@ def test_the_loop_keys_outside_the_table():
     log.clear()
     h = _host(log, pressed={g.KEY_R})
     app.frame(h, now=1.0, dt=1 / 60, fps=60.0)
-    assert h.reg.fired == ["camera.reset"] and "restart" not in log
+    assert "restart" not in log and h.reg.fired == []           # the loop leaves R alone…
+    assert h.keys.pressed(g.KEY_R)                               # …its edge is the table's
     log.clear()
     h = _host(log, pressed={g.KEY_R}, super_=True)
     app.frame(h, now=1.0, dt=1 / 60, fps=60.0)
     assert log.count("restart") == 1 and h.reg.fired == []
+    assert log.index("restart") < log.index("router.keys")
+    assert not h.keys.pressed(g.KEY_R)                           # claimed before the table
     log.clear()
     h = _host(log)
     h.panel.restart_requested = True

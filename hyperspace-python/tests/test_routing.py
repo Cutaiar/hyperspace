@@ -383,7 +383,7 @@ def test_factory_table_binds_only_real_params(tmp_path):
             assert r.reg[b.target].modulatable, b
     keys = [b.key for b in t.bindings if b.scheme != "lane"]
     assert len(keys) == len(set(keys))
-    assert len(t.of("key")) == 25 and len(t.of("pad")) == 10 and len(t.of("hat")) == 4
+    assert len(t.of("key")) == 25 + 17 and len(t.of("pad")) == 10 and len(t.of("hat")) == 4  # + R, F1–F8, ⇧F1–F8
     assert len(t.midi()) == 113 and len(t.mods()) == 12
     assert routing.referee(t.bindings)[1] == []           # one owner per target
     assert routing.remap_factory(t.bindings)[1] == []     # the factory table is current
@@ -812,7 +812,7 @@ def test_midi_view_shares_the_table(tmp_path):
     assert m.table.for_param("view.zoom").number == 99
     again = Bindings.load(bindings_path(tmp_path))
     assert again.for_param("view.zoom").source == "cc:0:99"
-    assert len(again.of("key")) == 25 and len(again.mods()) == 12
+    assert len(again.of("key")) == 25 + 17 and len(again.mods()) == 12
     m.unbind("view.zoom")
     assert Bindings.load(bindings_path(tmp_path)).for_param("view.zoom") is None
 
@@ -1184,7 +1184,8 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     assert f"added note:0:{apc40.N_METRO} → lfo.trigger" in err
     assert f"added note:0:{apc40.N_QUANT} → theme.next" in err
     assert "added key:B → tempo.tap" in err and "added key:SHIFT+B → lfo.trigger" in err
-    assert f"migrated {path} to {SCHEMA} (2 rows dropped, 7 rows changed)" in err
+    assert "added key:F1 → theme.load.0" in err and "added key:SHIFT+F8 → theme.save.7" in err
+    assert f"migrated {path} to {SCHEMA} (2 rows dropped, 24 rows changed)" in err  # 7 + the 17 keys of plan 11
     rows = {(b.source, b.target): b for b in t.bindings}
     assert rows[("key:RIGHT", "view.shape")].op == "step"
     assert rows[("cc:0:48", "view.bright")].op == "abs"                       # MIDI keeps abs
@@ -1198,7 +1199,7 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     assert "pickup" not in z.to_json()                         # dropped with the abs op
     assert ("lane:1", "rot.rate.XY") not in rows and ("hand:2", "view.depth4") not in rows
     assert [b.source for b, _ in t.dropped] == ["hand:2"]
-    assert len(t.notes) == 9
+    assert len(t.notes) == 9 + 17                              # + the moved keys of plan 11
     # the APC40 rows: the old factory rows swapped for the new, the LED kept
     tap = rows[("note:0:99", "tempo.tap")]
     assert (tap.op, tap.feedback) == ("toggle", "led") and ("note:0:99", "theme.next") not in rows
@@ -1297,6 +1298,71 @@ def test_an_unknown_schema_is_reported_not_migrated(tmp_path):
     assert t.migrated and t.bindings[0].op == "push"
 
 
+class _EdgeKeys:
+    """app.Keys as Router.keys sees it: an edge per key, asked once, and the
+    modifier state."""
+
+    def __init__(self, pressed=(), shift=False, super_=False):
+        self._down, self._shift, self._super = set(pressed), shift, super_
+
+    def pressed(self, code):
+        hit = code in self._down
+        self._down.discard(code)
+        return hit
+
+    def shift(self):
+        return self._shift
+
+    def super(self):
+        return self._super
+
+
+def test_r_and_the_f_keys_are_table_rows_that_fire_their_params(tmp_path):
+    """Plan 11 WP7 (audit R2, decision register row 7): R resets the camera,
+    F1–F8 load theme slots 1–8, ⇧F1–F8 save them — through `Router.keys`,
+    like every other key row."""
+    import glfw
+
+    from hyperspace.library import SLOTS
+    assert routing.THEME_SLOTS == SLOTS              # routing may not import library
+    r = rig(tmp_path=tmp_path, full=True)
+    fired: list[str] = []
+    for pid in ["camera.reset", *[f"theme.{w}.{k}" for w in ("load", "save") for k in range(SLOTS)]]:
+        r.reg[pid].fire = lambda pid=pid: fired.append(pid)
+    router = Router(r.reg, Bindings.factory())
+    router.keys(_EdgeKeys({glfw.KEY_R}))
+    assert fired == ["camera.reset"]
+    fired.clear()
+    router.keys(_EdgeKeys({glfw.KEY_F3}))
+    assert fired == ["theme.load.2"]
+    fired.clear()
+    router.keys(_EdgeKeys({glfw.KEY_F8}, shift=True))
+    assert fired == ["theme.save.7"]                 # ⇧F8 saves; the bare row stays quiet
+    fired.clear()
+    router.keys(_EdgeKeys({glfw.KEY_F1, glfw.KEY_F2}))
+    assert sorted(fired) == ["theme.load.0", "theme.load.1"]
+
+
+def test_an_older_file_gets_the_moved_keys_only_where_they_are_free(tmp_path):
+    """remap_factory adds the seventeen rows to a user table that predates
+    them; a key the user already bound keeps its row; a second pass adds
+    nothing; the file is backed up before the one rewrite."""
+    moved = {f"key:{k}" for k, _, _ in routing.LOOP_KEY_ROWS}
+    old = [b for b in Bindings.factory().bindings if b.source not in moved]
+    old.append(Binding("key:F3", "view.faces", "toggle"))              # the user's F3
+    path = bindings_path(tmp_path)
+    Bindings(old, path=path).write()
+    t = Bindings.load(path, legacy_midi=None)
+    rows = {b.source: b for b in t.of("key")}
+    assert rows["key:F3"].target == "view.faces"                        # kept
+    assert rows["key:F4"].target == "theme.load.3" and rows["key:R"].target == "camera.reset"
+    assert rows["key:SHIFT+F3"].target == "theme.save.2"                # a different source
+    assert moved <= set(rows) and len(moved) == 17
+    assert list(tmp_path.glob("bindings.json.bak-*"))                   # kept before the rewrite
+    _, notes = routing.remap_factory(t.bindings)
+    assert notes == []
+
+
 def test_a_user_row_on_a_moved_apc_note_is_kept():
     """The remap swaps only the old factory rows; a note or key the user
     put something else on, or one already in use, is left as it is."""
@@ -1312,7 +1378,7 @@ def test_a_user_row_on_a_moved_apc_note_is_kept():
     assert ("key:B", "view.points") in by and ("key:SHIFT+B", "lfo.trigger") in by
     assert not any(b.target == "tempo.tap" for b in out)
     assert not any(b.source == f"note:0:{apc40.N_QUANT}" for b in out)   # theme.next stayed
-    assert [n.split(" ")[0] for n in notes] == ["remapped", "added"]
+    assert [n.split(" ")[0] for n in notes] == ["remapped", "added"] + ["added"] * 17  # + R, F-keys
     # and a second pass has nothing to do
     again, notes2 = routing.remap_factory(out)
     assert notes2 == [] and [b.source for b in again] == [b.source for b in out]
