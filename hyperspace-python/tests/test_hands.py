@@ -918,6 +918,22 @@ def test_learning_while_pinched_gates_the_row_on_that_pinch(app):
     assert rows[0].when == "hand:right.pinch.index"
 
 
+def test_a_hand_learn_writes_the_axis_by_name_on_any_dofs(app):
+    """Decision register row 20: a learn writes `hand:<name>` — the same
+    row whatever lane the axis sits on — so a preset saved on this rig
+    plays on one whose `[hands] dofs` list is ordered differently."""
+    r = rig(dofs=["yaw", "pitch"])                  # right pitch is lane 3 here, not 10
+    shut = {"tips": (10.0, 60.0, 60.0, 60.0), "palm_w": 100.0}
+    run(r, 1, hand(**shut), learn=app.learn, router=app.router)
+    app.learn.arm("view.inst_amp")
+    for k in range(1, 8):
+        run(r, 1, hand(direction=tilt(0.12 * k), **shut), learn=app.learn, router=app.router)
+    b = app.table.owner("view.inst_amp")
+    assert (b.source, b.when) == ("hand:right.pitch", "hand:right.pinch.index")
+    assert app.router.lane(b.source) == ("hand", r.io.axis("right.pitch")) == ("hand", 3)
+    assert app.router.describe(b) == "R pitch positions while R ind"
+
+
 def test_learning_with_an_open_hand_leaves_the_row_ungated(app):
     r = rig()
     wide = {"tips": (60.0, 60.0, 60.0, 60.0), "palm_w": 100.0}
