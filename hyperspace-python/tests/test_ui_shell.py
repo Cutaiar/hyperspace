@@ -524,3 +524,24 @@ def test_ghost_on_a_compact_slider_and_a_fader_in_a_table(rig):
     _hold(reg, {"band.0.atk": 0.1, "master.gain": -0.1})
     frame(panel, "audio")
     assert panel.ghosts == 1
+
+
+def test_every_panel_attribute_the_frame_reads_is_a_real_panels(rig):
+    """`app.frame` reads the panel through `h.panel.<name>`, and the frame-order
+    test drives it over a stub, so a name only the stub has (it was
+    `restart_requested`: every launch crashed on its first frame) must fail
+    here, against the real Panel the app builds."""
+    import ast
+    import inspect
+
+    from hyperspace import app
+
+    tree = ast.parse(inspect.getsource(app.frame))
+    names = {n.attr for n in ast.walk(tree)
+             if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Attribute)
+             and n.value.attr == "panel" and isinstance(n.value.value, ast.Name)
+             and n.value.value.id == "h"}
+    assert "restart_requested" in names
+    missing = sorted(n for n in names if not hasattr(rig.panel, n))
+    assert not missing, f"app.frame reads h.panel.{missing} that Panel never sets"
+    assert rig.panel.restart_requested is False

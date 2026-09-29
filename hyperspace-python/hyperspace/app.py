@@ -602,10 +602,10 @@ def main() -> None:
     library = Library()                    # presets, projects, the preset bank (its project's)
     # dream.* drives the renderer's look-back (lookback.py); the post pass
     # runs inside renderer.draw
-    want = {"restart": False}          # app.restart sets it; polled after the panel draws
+    panels: list = []                  # app.restart raises the panel's flag; frame() polls it
     reg = build_registry(s, control, audio, library.project, dream=renderer.lookback.state,
                          fx=renderer.fx.state,
-                         restart=lambda: want.__setitem__("restart", True))
+                         restart=lambda: [setattr(p, "restart_requested", True) for p in panels])
     # an analyzer preset carries its band layout; the library hands it to
     # control before restoring values (07-overhaul contracts)
     library.on_layout("band", control.apply_layout)
@@ -626,6 +626,7 @@ def main() -> None:
     output = _make_output(render_win, reg, cfg)
     library.attach(reg)
     panel = Panel(control, audio, s, renderer, library.project, registry=reg, library=library)
+    panels.append(panel)
     panel.clock, panel.lfos = clock, lfos     # the LFO page's scopes and beat light
     panel.output = output
     # one binding table for keys, pad, MIDI and lanes (an old midi_map.json migrates)

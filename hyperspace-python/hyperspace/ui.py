@@ -344,6 +344,9 @@ class Panel:
         self.audio = audio
         self.view = view
         self.renderer = renderer
+        # app.restart (the SYSTEM page's button, Cmd+R's param) sets it; app.frame
+        # polls it after the panel draws and restarts the process
+        self.restart_requested = False
         self.library = library      # library.Library, or None: no strips, no project row
         # the F1–F8 preset bank is the open project's (library.Project)
         self.bank = bank if bank is not None else (
