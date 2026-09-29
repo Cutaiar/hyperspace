@@ -24,7 +24,7 @@ from hyperspace.hands import HandSettings, HandsIO
 from hyperspace.hands.core import DEFAULT_DOFS, PINCHES, default_range
 from hyperspace.library import FACTORY
 from hyperspace.params import Kind
-from hyperspace.preset import FACTORY_PRESETS, HAND_AXES, PARTY, Presets, hand
+from hyperspace.preset import FACTORY_PRESETS, FINGERS, HAND_AXES, PARTY, Presets, hand, pinch
 from hyperspace.routing import Bindings, Router
 
 DT = 1 / 60
@@ -176,14 +176,29 @@ def test_wake_and_trip_device_knobs_move_their_bases(slug, targets, tmp_path):
     assert {pid: r.reg[pid].norm for pid in ids} == before
 
 
-def test_hand_lane_numbers_are_the_hands_packages():
-    """routing.hand() names the lanes HandsIO publishes on the default dofs."""
+def test_hand_lane_names_are_the_hands_packages():
+    """preset.hand() and preset.pinch() write the addresses HandsIO
+    publishes (decision register row 20): every axis of the default dofs
+    and every pinch switch, by name."""
     io = HandsIO(HandSettings.from_config(), {"enabled": True}, source=DictSource(),
                  out=NullOut())
-    assert list(HAND_AXES) == DEFAULT_DOFS
+    assert list(HAND_AXES) == DEFAULT_DOFS and FINGERS == PINCHES
     for s, side in SIDE.items():
         for axis in HAND_AXES:
-            assert hand(s, axis) == f"hand:{io.axis(f'{side}.{axis}')}"
+            assert hand(s, axis) == io.address(io.axis(f"{side}.{axis}")) == \
+                f"hand:{side}.{axis}"
+        for f in FINGERS:
+            assert pinch(s, f) == io.address(io.gate_lane(side, f))
+    with pytest.raises(ValueError):
+        hand("R", "grab")                 # not a default axis
+    with pytest.raises(ValueError):
+        pinch("L", "thumb")
+
+
+def _axis(b) -> tuple[str, str]:
+    """A named hand row's ("L"/"R", axis): ``hand:right.roll`` → ("R", "roll")."""
+    side, axis = b.parts[0].split(".")
+    return {v: k for k, v in SIDE.items()}[side], axis
 
 
 def test_every_party_preset_has_a_preset_a_card_and_only_real_ids(tmp_path):
@@ -215,7 +230,7 @@ def test_position_rows_rest_where_their_base_is(name, tmp_path):
         if b.scheme != "hand" or b.op != "position":
             continue
         p = r.reg[b.target]
-        axis = HAND_AXES[b.index % len(HAND_AXES)]
+        _, axis = _axis(b)
         rest = 0.0 if axis == "y" else 0.5
         assert p.norm == pytest.approx(rest, abs=1e-9), (name, b.target, p.norm)
 
@@ -242,8 +257,7 @@ def test_each_hand_axis_moves_its_target_as_the_table_says(name, tmp_path):
     whole throw from 0 (a position); the move is monotonic; a hand that
     leaves the box brings the base back."""
     for b in _hand_rows(name):
-        i = b.index
-        s, axis = ("L", "R")[i // len(HAND_AXES)], HAND_AXES[i % len(HAND_AXES)]
+        s, axis = _axis(b)
         side = SIDE[s]
         readings = []
         for u in (0.0, 0.25, 0.5, 0.75, 1.0):

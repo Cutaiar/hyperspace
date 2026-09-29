@@ -521,7 +521,7 @@ def test_a_route_on_a_session_param_is_marked_session(rig, monkeypatch):
     panel, lib, router = rig.panel, rig.panel.library, rig.router
     lib.load("presets", "TUMBLE")
     drive = [b for b in router.table.routes() if b.target == "master.gain"]
-    assert [(b.source, b.op) for b in drive] == [("hand:1", "push")]
+    assert [(b.source, b.op) for b in drive] == [("hand:left.y", "push")]
     assert ui_routing.is_session_target(panel, drive[0])
     assert not any(ui_routing.is_session_target(panel, b) for b in router.table.routes()
                    if b is not drive[0])

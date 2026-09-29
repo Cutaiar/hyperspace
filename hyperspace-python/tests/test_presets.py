@@ -10,6 +10,7 @@ as the bank of names.
 
 import itertools
 import json
+import re
 from types import SimpleNamespace
 
 import pytest
@@ -580,6 +581,29 @@ def test_write_factory_regenerates_every_factory_file(tmp_path):
         assert (tmp_path / path.name).read_text() == path.read_text(), path.name
     assert sorted(p.name for p in tmp_path.glob("*.json")) == \
         sorted(p.name for p in preset.FACTORY_DIR.glob("*.json"))
+
+
+def test_every_factory_presets_hand_rows_are_named():
+    """Decision register row 20 (plan 13 WP5b): no factory preset names a
+    hand lane by number — every hand source, every gate and every macro
+    subscriber's route is `hand:<name>` on the default layout's names, so
+    a rig that reorders `[hands] dofs` keeps every preset on its axes."""
+    from hyperspace.hands import default_addresses
+
+    names = {f"hand:{n}" for n in default_addresses()}
+    seen = 0
+    for path in sorted(preset.FACTORY_DIR.glob("*.json")):
+        text = path.read_text()
+        assert not re.search(r'"hand:\d', text), path.name
+        doc = json.loads(text)
+        addrs = [a for d in doc.get("routes") or [] for a in (d["source"], d.get("when"))]
+        addrs += [s["depth"]["source"] for m in (doc.get("macros") or {}).values()
+                  for s in m.get("subs") or [] if "depth" in s]
+        for a in addrs:
+            if a is not None and a.startswith("hand:"):
+                assert a in names, (path.name, a)
+                seen += 1
+    assert seen > 40                                 # the party presets and the hands-* ones
 
 
 def test_the_routing_presets_are_full_factory_presets(rig):

@@ -14,7 +14,7 @@
  },
  "routes": [
   {"source": "lfo:0", "target": "view.bright", "op": "push", "value": 0.5},
-  {"source": "hand:7", "target": "lfo.1.depth", "op": "position"},
+  {"source": "hand:right.y", "target": "lfo.1.depth", "op": "position"},
   {"source": "lfo:1", "target": "fx.mix", "op": "push", "value": 0.3}
  ],
  "desk": [

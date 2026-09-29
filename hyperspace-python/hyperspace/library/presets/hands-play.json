@@ -4,9 +4,9 @@
  "note": "Plan 08: brightness, speed and 4D depth on the hands.",
  "values": {},
  "routes": [
-  {"source": "hand:7", "target": "view.bright", "op": "position"},
-  {"source": "hand:1", "target": "view.speed", "op": "position"},
-  {"source": "hand:10", "target": "view.depth4", "op": "position"}
+  {"source": "hand:right.y", "target": "view.bright", "op": "position"},
+  {"source": "hand:left.y", "target": "view.speed", "op": "position"},
+  {"source": "hand:right.pitch", "target": "view.depth4", "op": "position"}
  ],
  "macros": {},
  "modules": {}

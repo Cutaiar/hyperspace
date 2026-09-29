@@ -946,22 +946,27 @@ def test_only_fed_sources_can_gate_a_row():
 @pytest.mark.parametrize("name", ["hands-play", "hands-pinch", "hands-fx"])
 def test_the_hand_presets_name_params_and_lanes_that_exist(name):
     """A preset whose target was renamed loads silently and does nothing.
-    These are shipped, so check every row lands somewhere real."""
-    from hyperspace.hands import PINCHES, SIDES, HandSettings
+    These are shipped, so check every row lands somewhere real — by name
+    (decision register row 20): an axis of the default layout, a gate one
+    of its switches."""
+    from hyperspace.hands import PINCHES, SIDES, HandSettings, Layout
 
     r = rig(full=True)
     router = Router(r.reg, Bindings())
     assert load_preset(r, router, name) == []      # no unknown target ids
     rows = router.table.routes()
     assert rows and router.table.dropped == []     # one owner per target
-    axes = len(HandSettings.from_config({}).axes)
+    lay = Layout(HandSettings.from_config({}).axes)
+    router.names["hand"] = lay.index
+    axes = lay.n_axes
     lanes = axes + len(SIDES) + len(SIDES) * len(PINCHES)
     for b in rows:
         p = r.reg.get(b.target)
         assert p is not None and p.modulatable, f"{name}: {b.target} is dormant"
-        assert b.scheme == "hand" and 0 <= b.index < axes, f"{name}: {b.source}"
+        assert b.scheme == "hand" and b.index == -1, f"{name}: {b.source} is not a name"
+        assert 0 <= router.lane(b.source)[1] < axes, f"{name}: {b.source}"
         if b.when is not None:
-            i = int(b.when.split(":")[1])
+            i = router.lane(b.when)[1]
             assert axes + len(SIDES) <= i < lanes, f"{name}: {b.when} is not a switch"
 
 
@@ -972,6 +977,7 @@ def test_the_hand_presets_reach_both_ends_of_their_targets(name):
     were `replace` rows once, which cap a 0–1 hand at the *value* 1.)"""
     r = rig(full=True)
     router = Router(r.reg, Bindings())
+    router.names["hand"] = hands.Layout(hands.HandSettings.from_config({}).axes).index
     load_preset(r, router, name)
     for b in router.table.routes():
         if b.op == "push" or b.value != 1.0:
@@ -1669,7 +1675,7 @@ def test_lfo_breathe_is_the_chain_the_plan_draws(tmp_path):
     assert router.table.macros["macro.1"].label == "Breathe"
     reg["macro.1"].set_value(1.0)
     assert [(b.source, b.target, b.op) for b in router.table.routes()] == [
-        ("lfo:0", "view.bright", "push"), ("hand:7", "lfo.1.depth", "position"),
+        ("lfo:0", "view.bright", "push"), ("hand:right.y", "lfo.1.depth", "position"),
         ("lfo:1", "fx.mix", "push")]
     assert router.table.dropped == []
     clock, lfos = tempo.Clock(now=lambda: 0.0), lfo.LFOs()
@@ -1695,6 +1701,7 @@ def test_lfo_breathe_is_the_chain_the_plan_draws(tmp_path):
     assert mix.value == at(mix, 0.0) and not depth.modulated   # live, pushing nothing
     # the right hand rises: LFO 1's depth is positioned by it; the swell
     # follows a frame later, and brightness's base never moved
+    router.names["hand"] = {"right.y": 7}               # the hands adapter's map (row 20)
     router.feed("hand", [float("nan")] * 7 + [1.0] + [float("nan")] * 12)
     router.modulate()
     reg.apply()

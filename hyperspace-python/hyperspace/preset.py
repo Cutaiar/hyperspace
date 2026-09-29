@@ -322,10 +322,12 @@ class Presets:
 
 # ---- plan 12: the party presets — one per render attraction, two hands ----
 #
-# Lane numbers assume the default six dofs per hand (hands/core.py
-# DEFAULT_DOFS: x, y, z, roll, pitch, yaw; left 0–5, right 6–11), which
-# tests/test_plan12_presets.py pins to the hands package. Every hand row
-# is a `push` from the axis's own rest — a level or absent hand adds
+# Hand rows name their axis (`hand`: ``hand:right.roll``, decision
+# register row 20), so they keep it on a rig that reorders or trims
+# `[hands] dofs`; an axis the rig lacks leaves its row dormant. The axes
+# used are the default six (hands/core.py DEFAULT_DOFS: x, y, z, roll,
+# pitch, yaw), which tests/test_plan12_presets.py pins to the hands
+# package. Every hand row is a `push` from the axis's own rest — a level or absent hand adds
 # nothing, so the scene's bases come back when the hand leaves the box
 # with or without the audit's B1 fix — except the three `position` rows
 # on wrap / centred params whose base *is* the axis's rest value
@@ -336,9 +338,23 @@ HAND_AXES = ("x", "y", "z", "roll", "pitch", "yaw")
 TURN = 0.25      # a phase push's depth: ±45° across a tilt's throw
 
 
+HAND_SIDES = {"L": "left", "R": "right"}
+FINGERS = ("index", "middle", "ring", "pinky")    # hands/core.py PINCHES, pinned by the tests
+
+
 def hand(side: str, axis: str) -> str:
-    """`hand:<i>` for "L"/"R" and an axis name, on the default dofs."""
-    return f"hand:{('L', 'R').index(side) * len(HAND_AXES) + HAND_AXES.index(axis)}"
+    """The source address of "L"/"R"'s `axis`: ``hand:right.roll``."""
+    if axis not in HAND_AXES:
+        raise ValueError(f"hand axis {axis!r}: one of {', '.join(HAND_AXES)}")
+    return f"hand:{HAND_SIDES[side]}.{axis}"
+
+
+def pinch(side: str, finger: str) -> str:
+    """The address of "L"/"R"'s thumb-to-`finger` pinch switch — a gate:
+    ``hand:right.pinch.index``."""
+    if finger not in FINGERS:
+        raise ValueError(f"pinch finger {finger!r}: one of {', '.join(FINGERS)}")
+    return f"hand:{HAND_SIDES[side]}.pinch.{finger}"
 
 
 def _push(side: str, axis: str, target: str, depth: float, **kw) -> Binding:
@@ -458,7 +474,7 @@ def lfo_breathe_routes() -> list[Binding]:
     pushes the fx mix on the quarter, through macro 1 as its attenuator
     (a depth subscriber of macro.1, `lfo_breathe_macros`)."""
     return [Binding("lfo:0", "view.bright", "push", 0.5),
-            Binding("hand:7", "lfo.1.depth", "position"),
+            Binding(hand("R", "y"), "lfo.1.depth", "position"),
             Binding("lfo:1", "fx.mix", "push", 0.3)]
 
 
@@ -496,28 +512,28 @@ def lfo_breathe_desk() -> list[Binding]:
 
 def hands_fx_routes() -> list[Binding]:
     """Plan 08's hand-driven effect: the right hand's height positions the
-    fx mix, its roll and yaw bend and twist the Acid shader, the left
+    fx mix, its tilt (pitch) twists and its yaw bends the Acid shader, the left
     hand's roll pushes Acid's speed and its height the brightness."""
-    return [Binding("hand:7", "fx.mix", "position"),
-            Binding("hand:10", "fx.acid.twist", "position"),
-            Binding("hand:3", "fx.acid.speed", "push", 0.5),
-            Binding("hand:1", "view.bright", "push", 0.4),
-            Binding("hand:11", "fx.acid.bend", "position")]
+    return [Binding(hand("R", "y"), "fx.mix", "position"),
+            Binding(hand("R", "pitch"), "fx.acid.twist", "position"),
+            Binding(hand("L", "roll"), "fx.acid.speed", "push", 0.5),
+            Binding(hand("L", "y"), "view.bright", "push", 0.4),
+            Binding(hand("R", "yaw"), "fx.acid.bend", "position")]
 
 
 def hands_pinch_routes() -> list[Binding]:
     """Plan 08's pinch gates: one hand height, two meanings by finger."""
-    return [Binding("hand:7", "view.bright", "position", when="hand:18"),
-            Binding("hand:7", "view.speed", "position", when="hand:19"),
-            Binding("hand:1", "fx.mix", "position", when="hand:14"),
-            Binding("hand:1", "camera.zoom", "position", when="hand:15")]
+    return [Binding(hand("R", "y"), "view.bright", "position", when=pinch("R", "index")),
+            Binding(hand("R", "y"), "view.speed", "position", when=pinch("R", "middle")),
+            Binding(hand("L", "y"), "fx.mix", "position", when=pinch("L", "index")),
+            Binding(hand("L", "y"), "camera.zoom", "position", when=pinch("L", "middle"))]
 
 
 def hands_play_routes() -> list[Binding]:
-    """Plan 08's first hand preset: the two heights and the right roll."""
-    return [Binding("hand:7", "view.bright", "position"),
-            Binding("hand:1", "view.speed", "position"),
-            Binding("hand:10", "view.depth4", "position")]
+    """Plan 08's first hand preset: the two heights and the right tilt (pitch)."""
+    return [Binding(hand("R", "y"), "view.bright", "position"),
+            Binding(hand("L", "y"), "view.speed", "position"),
+            Binding(hand("R", "pitch"), "view.depth4", "position")]
 
 
 def effects_on(routes, values: dict[str, Any],
