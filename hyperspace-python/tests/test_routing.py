@@ -412,8 +412,12 @@ def test_old_midi_map_migrates_into_bindings_json(tmp_path, capsys):
     ]}))
     path = bindings_path(tmp_path)
     t = Bindings.load(path, legacy_midi=legacy)
-    assert "migrated 2 rows" in capsys.readouterr().err
-    assert path.exists()                                # written once, then the file rules
+    # a knob off the factory's is a preset's row: the table carries it, with
+    # the lane rows the factory table shipped, and leaves the file to the
+    # migration (review of PR #66: written now, a stopped migration would
+    # lose the knob)
+    assert not path.exists() and t.carried is not None
+    assert t.carried.routes == [b.to_json() for b in routing.legacy6_routes()]
     # the map's two rows sorted (plan 13 §3.2: an unknown knob to the preset
     # layer, a factory button's control kept invariant), then the factory's
     # global rows and SHIFT added
@@ -424,9 +428,13 @@ def test_old_midi_map_migrates_into_bindings_json(tmp_path, capsys):
     assert len(t.of("key")) == len(routing.keymap()) and t.mods() == []
     # the knob on the preset layer is a preset's row: the file keeps the
     # session's, and the table carries it for the migration (preset.migrate_home)
-    assert "cc:0:87" not in path.read_text()
-    assert t.carried is not None and {"source": "cc:0:87", "target": "view.inst_amp",
-                                      "op": "abs", "layer": "preset"} in t.carried.desk
+    assert {"source": "cc:0:87", "target": "view.inst_amp", "op": "abs",
+            "layer": "preset"} in t.carried.desk
+    migrate_home(tmp_path, t)                           # the first launch writes it
+    assert path.exists() and "cc:0:87" not in path.read_text() and t.carried is None
+    kept = json.loads((tmp_path / "presets" / "migrated.json").read_text())
+    assert {"source": "cc:0:87", "target": "view.inst_amp", "op": "abs"} in kept["desk"]
+    assert len(kept["routes"]) == 12                     # the lane rows it played
     legacy.unlink()
     assert Bindings.load(path, legacy_midi=legacy).to_json() == t.to_json()
     # without either file: the factory table, nothing written

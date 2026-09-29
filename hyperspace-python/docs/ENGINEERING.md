@@ -567,7 +567,7 @@ unreadable at a party.
 
 ## 6. Testing
 
-`uv run pytest` — 868 tests, 11 skipped without torch, about 28 s. `ruff`
+`uv run pytest` — 871 tests, 11 skipped without torch, about 28 s. `ruff`
 is the linter. Every test runs with `HYPERSPACE_HOME` pointed at its own
 `tmp_path` (`tests/conftest.py`), so no test can touch `~/Hyperspace`.
 What holds what:

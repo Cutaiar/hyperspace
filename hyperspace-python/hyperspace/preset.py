@@ -746,13 +746,34 @@ def _named(folder: Path, name: str) -> Path | None:
     return hit if hit.is_file() else None
 
 
+def _held(root: Path, carried: routing.Carried) -> bool:
+    """Does a user preset already hold `carried` — its routes, desk and
+    macros (`same`, values aside)?"""
+    want = {"routes": carried.routes, "macros": carried.macros}
+    if carried.desk:
+        want["desk"] = _desk_rows(carried.desk)
+    folder = root / GROUP
+    for p in sorted(folder.glob("*.json")) if folder.is_dir() else []:
+        try:
+            doc = json.loads(p.read_text())
+        except (OSError, ValueError):
+            continue
+        if isinstance(doc, dict) and same({**doc, "values": {}}, {**want, "values": {}}):
+            return True
+    return False
+
+
 def put_preset(root: Path, doc: dict, factory: Path = FACTORY) -> tuple[str, Path | None]:
     """Place a migrated preset in the user folder. Returns (the name the
     bank should say, the file written or None). An equal preset already
     reached by that name — the user's, else the factory's — is pointed at
     and nothing is written; a factory one that differs is shadowed by a
     new user file (what the old F-key loaded); a user file that differs is
-    never touched: the preset takes the next free ``<name> 2``, ``3``, …"""
+    never touched: the preset takes the next free ``<name> 2``, ``3``, ….
+    Nor is a factory preset of *another* name hidden: the library keys files
+    by slug, so a user file whose slug is a factory file's shadows that
+    file whole — allowed only when the two share a display name (a user
+    ``party-trip`` would otherwise take TRIP off the list and the F-key)."""
     base = str(doc.get("name") or "PRESET")
     name, n = base, 1
     while True:
@@ -767,10 +788,19 @@ def put_preset(root: Path, doc: dict, factory: Path = FACTORY) -> tuple[str, Pat
             name = f"{base} {n}"
             continue
         fac = _named(factory / GROUP, name)
-        if fac is not None and same(json.loads(fac.read_text()), doc):
+        try:
+            fac_doc = json.loads(fac.read_text()) if fac is not None else None
+        except (OSError, ValueError):
+            fac_doc = None
+        if fac_doc is not None and same(fac_doc, doc):
             return name, None
         path = root / GROUP / f"{slug(name)}.json"
-        if path.exists():                       # a slug taken under another name
+        under = factory / GROUP / path.name       # the factory file this slug would shadow
+        try:
+            other = under.is_file() and json.loads(under.read_text()).get("name") != name
+        except (OSError, ValueError, AttributeError):
+            other = True
+        if path.exists() or other:              # a slug taken under another name
             n += 1
             name = f"{base} {n}"
             continue
@@ -922,7 +952,8 @@ def migrate_routing_presets(root: Path, has: Callable[[str], bool] | None = None
     files = sorted(folder.glob("*.json")) if folder.is_dir() else []
     if not files or (folder / NOT_READ).exists():
         return []
-    notes = []
+    notes: list[str] = []
+    stuck = False
     for f in files:
         try:
             raw = json.loads(f.read_text())
@@ -937,15 +968,25 @@ def migrate_routing_presets(root: Path, has: Callable[[str], bool] | None = None
                "note": f"the routing preset bindings/{f.name}, made a preset (plan 13 WP5)",
                "values": effects_on(routes, values, has), "routes": routes,
                "macros": t.macros_doc(), "modules": {}}
-        name, path = put_preset(root, doc, factory)
+        try:
+            name, path = put_preset(root, doc, factory)
+        except (OSError, ValueError, LibraryError) as e:   # a full disk: said, retried next launch
+            notes.append(f"bindings/{f.name}: NOT converted ({e}); tried again next launch")
+            stuck = True
+            continue
         notes.append(f"bindings/{f.name} → preset {name!r}"
                      + (f" ({path.name})" if path is not None else " (already there)"))
-    _write_text(folder / NOT_READ,
-                "Plan 13 (WP5) made every routing preset in this folder a preset in "
-                "../presets/ on " + time.strftime("%Y-%m-%d") + ".\nThe app no longer "
-                "reads this folder; the files are kept as they were.\n")
+    if stuck:
+        return notes
+    try:
+        _write_text(folder / NOT_READ,
+                    "Plan 13 (WP5) made every routing preset in this folder a preset in "
+                    "../presets/ on " + time.strftime("%Y-%m-%d") + ".\nThe app no longer "
+                    "reads this folder; the files are kept as they were.\n")
+    except LibraryError as e:        # a read-only folder: the next launch points at the presets again
+        notes.append(f"bindings/{NOT_READ} not written ({e})")
     notes.append(f"bindings/: {len(files)} routing preset(s) are presets now; the folder "
-                 f"is no longer read ({NOT_READ})")
+                 f"is no longer read")
     return notes
 
 
@@ -982,6 +1023,13 @@ def migrate_home(lib, router) -> list[str]:
             written.append(path)
     notes += migrate_routing_presets(root, (lambda pid: pid in reg) if reg is not None
                                      else None, factory)
+    # a user preset already holding the table's part (a launch that
+    # converted the projects but could not rewrite bindings.json, or a
+    # MIGRATED preset made before) takes it: no second MIGRATED, and the
+    # default project is not touched again
+    if carried is not None and not carried.empty and not held and _held(root, carried):
+        held = True
+        notes.append("bindings.json's routes, desk and macros are already in a preset")
     # no project took the table's part: a MIGRATED preset keeps it — unless
     # a schema-1 project could not be converted, whose next try will
     if carried is not None and not carried.empty and not held and not stuck:
@@ -1007,18 +1055,19 @@ def migrate_home(lib, router) -> list[str]:
     if carried is not None and table.path is not None and (held or carried.empty):
         if table.notes:
             table.announce(table.path)
-        bak = routing.backup(table.path, table.read_at)
-        if bak is None:
+        # no file yet (an old midi_map.json's rows, carried): nothing to keep
+        fresh = not table.path.exists()
+        bak = None if fresh else routing.backup(table.path, table.read_at)
+        kept = "" if fresh else f"; the old file kept as {bak.name}" if bak else ""
+        if bak is None and not fresh:
             notes.append("bindings.json NOT rewritten: no backup could be made")
         else:
             table.write()
             if table.error:
-                notes.append(f"bindings.json NOT rewritten ({table.error}); the old file is "
-                             f"also kept as {bak.name}")
+                notes.append(f"bindings.json NOT written ({table.error}){kept}")
             else:
                 table.carried = None
-                notes.append(f"bindings.json now holds only the session's controls; the old "
-                             f"file kept as {bak.name}")
+                notes.append(f"bindings.json now holds only the session's controls{kept}")
                 written.append(table.path)
     if written:
         lib._sync(*written)

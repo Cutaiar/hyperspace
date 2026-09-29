@@ -1042,12 +1042,18 @@ class Bindings:
                 rows, _ = sort_layers(rows, t.profile)     # the desk's layers, plan 13 §3.2
                 t.bindings = [b for b in t.bindings if not b.is_midi] + rows
                 # a knob the old map had off the factory's is a preset's row
-                # now: kept for the migration, like a newer file's
+                # now: kept for the migration, like a newer file's — with the
+                # lane rows the factory table shipped then, the routes this
+                # rig played — and the file is left for the migration to write
+                # (written now, it would hold the session's rows only, and a
+                # launch whose migration stopped would lose the knobs)
                 fresh = sorted(json.dumps(b.to_json(), sort_keys=True)
                                for b in factory_desk(t.profile) if b.layer == "preset")
                 desk = [b.to_json() for b in t.desk()]
                 if sorted(json.dumps(d, sort_keys=True) for d in desk) != fresh:
-                    t.carried = Carried(routes=[], desk=desk or None, macros={}, values={})
+                    t.carried = Carried(routes=[b.to_json() for b in legacy6_routes()],
+                                        desk=desk or None, macros={}, values={})
+                    return t
                 print(f"bindings: migrated {n} rows from {legacy_midi}"
                       + (f" into {path}" if path is not None else ""), file=sys.stderr)
                 t.write()

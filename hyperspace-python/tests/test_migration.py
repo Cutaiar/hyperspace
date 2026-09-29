@@ -359,6 +359,60 @@ def test_an_equal_preset_is_pointed_at_and_a_users_is_never_overwritten(tmp_path
     assert read(path2)["name"] == "EMBER ORBIT 2"
 
 
+def test_a_migrated_preset_never_hides_a_factory_preset_of_another_name(tmp_path):
+    """Review of PR #66: the library keys files by slug, so a user file
+    `party-trip.json` would take the factory TRIP (same slug, another
+    display name) off the list and off F5. A routing preset the owner saved
+    as `party-trip` becomes `party-trip 2`; TRIP still loads by F-key."""
+    home = owners_home(tmp_path, routing_preset=False)
+    (home / "bindings").mkdir()
+    (home / "bindings" / "party-trip.json").write_text(json.dumps(
+        {"schema": routing.SCHEMA_V2, "name": "party-trip", "bindings": [
+            {"source": "hand:7", "target": "fx.mix", "op": "position"}]}))
+    r = boot(home)
+    assert not (home / "presets" / "party-trip.json").exists()
+    assert preset_file(home, "party-trip 2")["routes"][0]["target"] == "fx.mix"
+    assert "TRIP" in r.lib.list("presets") and r.lib.is_factory("presets", "TRIP")
+    r.lib.project.load("party")
+    r.reg["preset.load.4"].fire()
+    assert r.lib.current("presets") == "TRIP"
+
+
+def test_a_preset_that_cannot_be_written_never_stops_the_launch(home):
+    """Review of PR #66: a read-only presets folder (a full disk) is said,
+    not fatal; nothing is marked done, so the next launch tries again."""
+    (home / "presets").mkdir()
+    (home / "presets").chmod(0o555)
+    try:
+        r = boot(home)                                   # no exception
+        assert any("NOT converted" in n for n in r.notes)
+        assert not (home / "bindings" / preset.NOT_READ).exists()
+        assert read(home / "bindings" / "show-a.json") == ROUTING_PRESET
+    finally:
+        (home / "presets").chmod(0o755)
+    again = boot(home)
+    assert (home / "bindings" / preset.NOT_READ).exists()
+    assert preset_file(home, "Show A")["routes"] == ROUTING_PRESET["bindings"]
+    assert read(home / "projects" / "default.hyp.json")["schema"] == "hyperspace.project/2"
+    assert again.router.table.carried is None
+
+
+def test_a_launch_that_could_not_rewrite_bindings_json_does_not_take_the_default(home):
+    """Review of PR #66: when the projects were converted but bindings.json
+    was not rewritten, the next launch finds its routes already in a preset
+    — no MIGRATED, the default project left as the first launch made it —
+    and only rewrites bindings.json."""
+    boot(home)
+    project = (home / "projects" / "default.hyp.json").read_text()
+    bindings_path(home).write_text(json.dumps(bindings_v2()))    # as if the rewrite never landed
+    r = boot(home)
+    assert not (home / "presets" / "migrated.json").exists()
+    assert (home / "projects" / "default.hyp.json").read_text() == project
+    assert r.lib.current("presets") == "MY WAVE"
+    assert not any(b.op in MOD_OPS for b in Bindings.load(bindings_path(home)).bindings)
+    assert any("already in a preset" in n for n in r.notes)
+
+
 # ---------------------------------------------------------------- nothing lost
 
 def _union(docs):
