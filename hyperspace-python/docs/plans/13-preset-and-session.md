@@ -472,8 +472,11 @@ blocks, macros, the regenerated factory set).
 
 ## 12. Open forks
 
-Filed in `docs/DECISION-REGISTER.md` (rows 18 and 19) with a pending line
-in DECISIONS.md. Work that does not depend on them runs meanwhile.
+Filed in `docs/DECISION-REGISTER.md` (rows 18 and 19); **both answered (a)
+by the owner on 2026-09-28** (DECISIONS.md, two rows) and built in WP5.
+The owner also closed PR #29 (routing presets switching on their effects)
+as superseded: a preset carries every effect's settings (D2), and WP5's
+conversion of routes-only files switches on the effects their routes drive.
 
 | # | Fork | Recommendation | Blocks |
 |---|---|---|---|
