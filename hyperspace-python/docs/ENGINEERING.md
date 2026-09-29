@@ -141,10 +141,20 @@ exception inside the draw stranded a framebuffer the same way
 starts on an offscreen framebuffer is logged (§2.6).
 
 **The window is opaque unless it is the overlay** (plan 14 WP1, the
-Pepper's Ghost rig). The render window's framebuffer keeps alpha — it is
-created with `TRANSPARENT_FRAMEBUFFER` for overlay mode, in every mode,
-pending decision register row 21 — so the compositor shows the desktop
-wherever the final alpha is below 1. In window and fullscreen mode the
+Pepper's Ghost rig), **and there is no overlay unless the config asks**
+(decision 21 (a), plan 14 WP2). With `[output] overlay = false`, the
+default, the render window is created without `TRANSPARENT_FRAMEBUFFER`
+(`app._windows(overlay)`), `output.overlay` refuses to switch on
+(`Output._set_overlay`: the `T` key and MASTER select `note:0:80` bind the
+`overlay.on` alias, the panel draws the toggle disabled with the reason,
+a preset cannot carry it), and `Output.mode` never reads overlay, so the
+crossfader's `overlay.bg` and `output.alpha` do nothing; `on_start` is
+ignored with a note on stderr (`tests/test_overlay.py::test_overlay_refuses_every_road_while_the_config_shuts_it`,
+`::test_the_ground_and_opacity_do_nothing_while_shut`,
+`tests/test_app_boundary.py::test_the_render_window_is_transparent_only_when_the_config_asks`).
+With `overlay = true` the framebuffer keeps alpha for overlay mode, so the
+compositor shows the desktop wherever the final alpha is below 1. In
+window and fullscreen mode the
 ground clears to alpha 1, cut-through is off whatever `view.cut_through`
 says, and every FX pass writes alpha 1 (`FxChain.opaque`, set by the
 renderer each frame; a multiply-blend effect dropped it to 0); the
@@ -259,7 +269,9 @@ Noita's `post_final.frag` maths among them; the factory presets are
 ### 2.5 Two windows
 
 `app.py` opens the render window (vsync, 4× MSAA, a framebuffer with alpha
-for overlay mode — opaque in every other mode, §2)
+only when `[output] overlay = true` — decision 21; opaque in every mode
+but overlay, §2) — reading the config first, since the hint is a
+creation-time one —
 and the control window (opaque, no MSAA, vsync off so it paces off the
 render swap) in one GLFW share group, each with its own moderngl context;
 the only imgui context lives on the control window (`app.py:136-167, 396-419`). The render window has no imgui at all. Mouse orbit / pan / zoom
@@ -270,7 +282,8 @@ only holds this frame's value after it. `overlay.Output` places the render
 window (window · fullscreen · overlay with passthrough and opacity) from
 the `output.*` params, applied once a frame through an injectable backend
 (`tests/test_overlay.py`); `overlay.*` are aliases the factory table
-binds. `output.monitor` offers *follow window* — the screen the window is
+binds, and `Output.allowed` (the config's `overlay`) is the gate every one
+of them passes. `output.monitor` offers *follow window* — the screen the window is
 on, config `monitor = -1` — and then each screen by name. Quitting, Cmd+R
 and the panel's restart button all run `app.close_all`: every open
 adapter (MIDI, the bridge, the hands tracker, the dream worker) then the
@@ -624,6 +637,42 @@ unreadable at a party.
   one), QUANT and pad B step to the next filled slot (`preset.next`). The
   PRESETS page's preset strip lists, loads, saves and deletes them;
   module presets keep their own strips and replace only their group.
+- **The party show opens** (decision 22, plan 14 WP3). The panel calls a
+  project a **show** (plan 14 §3; the code keeps `Project`). The factory
+  shows are `party` (`library.DEFAULT_PROJECT`: TUMBLE, FACES, FIELD,
+  WAKE, TRIP on F1–F5) and `house` (the eight house moods, the factory
+  default until plan 14); there is no factory `default`. A launch opens
+  the show opened last — its name in `<home>/last_show`, written by every
+  show load, save as and "starts on" pick (`Library.remember`) — else the
+  party, the user's copy of either if there is one (`Library._open_default`).
+  Once, for a home plan 13 migrated: a user `projects/default.hyp.json`
+  (MIGRATED and the house moods) is renamed `projects/mine.hyp.json`,
+  named `mine`, bank and startup as they were, backed up first as
+  `default.hyp.json.bak-v2` (a dated copy if that name is taken), said on
+  stderr and on the PRESETS page's warning line; a `mine` already there
+  leaves both files alone (`library.unshadow_default`, run by `Library()`
+  and after plan 13's migration converts a schema-1 `default`; plan 13's
+  MIGRATED now lands in `mine`, made from `house`)
+  (`tests/test_party_show.py`).
+- **The PRESETS page** (plan 14 WP4), top to bottom: **SHOW** — the
+  show's name on its own line, never covered, a dim "factory" beside a
+  factory show, then show ▾ (factory shows dim) · save · save as · new;
+  **starts on ▾** — labelled, and written into the show the moment it is
+  picked (`ui_presets.set_starts_on` → `Project.write`; a factory show's
+  write makes your copy); the eight **preset buttons**, two a row, each
+  its F-key and its preset's name (elided to the button), the live one
+  lit, click loads, ⇧click saves; the **preset strip** (the loaded
+  preset, its dot, save / as… / reset — save on a factory preset writes
+  your copy); and **more**, folded, a module-preset strip per group; the
+  library's warning, error and status lines under all of it. One word per
+  thing: show, preset, starts on, module preset, factory. The rail's
+  dirty dots and the footer's mark compare against the loaded preset or
+  show: a preset that names no module preset for a group leaves the group
+  clean as it landed (`Library.label(g, None)`), a show load keeps the
+  performance groups' references and marks the session groups it names
+  no module for clean as it left them (`Project._apply`), and a factory
+  show opened as shipped is not unsaved (`Project.factory`), so loading a
+  factory preset or show shows everything clean (`tests/test_ui_presets.py`).
 - **The desk** (plan 13 §3). The APC40 has two layers under a latched
   SHIFT, whose LED is lit while the global layer is up. The faders, the
   preset row, SHIFT, the clock corner, the transport and the track buttons
@@ -646,7 +695,7 @@ unreadable at a party.
   or on an invariant control, a knob learn is refused and the reason shows
   on the SYSTEM page's learn line and the ROUTING head. The ROUTING page is
   one page over the loaded preset — head (the preset, its dot, save /
-  as…, the layer), routes, the desk with its dark controls, the macros
+  as…, the layer, said "desk layer: preset" or "desk layer: global"), routes, the desk with its dark controls, the macros
   and their subscribers, the session's MIDI rows read-only. Nothing there
   writes `bindings.json`; the preset's dirty dot shows the edit until a
   save (the head, the PRESETS strip, ⇧F). Right-click → Unbind removes

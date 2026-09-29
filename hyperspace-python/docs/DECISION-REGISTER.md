@@ -525,6 +525,13 @@ thrown away.
 **What changes.** (a): the window hint and the two controls gated on the
 config key, the overlay tests, check 26. Plan 14 WP2.
 
+**Built** (plan 14 WP2): `[output] overlay` (default false) in
+`config.DEFAULTS`; `app._windows(overlay)` sets `TRANSPARENT_FRAMEBUFFER`
+only when it is true; `overlay.Output.allowed` gates `output.overlay`, the
+one param the `T` row, the MASTER select row, the panel and a preset land
+on, so each road is shut together; the OUTPUT page greys the toggle and
+says why.
+
 ### 22. P14-b — how the rig becomes "the party device"
 
 **Answered the recommendation, 2026-09-29.** **Recommendation: the party show opens by default; the house moods become a
@@ -549,6 +556,18 @@ the party.
 **What changes.** The factory `default.hyp.json`, a `house` show, a
 remembered last show, a one-off rename of your `default` (with backup).
 Plan 14 WP3.
+
+**Built** (plan 14 WP3): the factory `default.hyp.json` is removed rather
+than re-filled — `party.hyp.json` already was the party show, and a user
+file named `default` (yours, plan 13's) would have gone on shadowing a
+factory `default`; `library.DEFAULT_PROJECT` is `party`. The house moods
+are `house.hyp.json`. `<home>/last_show` holds the name of the show opened
+last (a plain one-line file beside `config.toml`, written by a show load,
+save as, or a "starts on" pick); a name that is gone falls back to the
+party. On the first launch your `projects/default.hyp.json` becomes
+`projects/mine.hyp.json` (named `mine`, bank and startup as they were),
+kept first as `default.hyp.json.bak-v2`, noted on stderr and on the
+PRESETS page; the second launch changes nothing.
 
 ### 23. P14-c — "the dream on by default"
 
@@ -700,8 +719,8 @@ or "overturn".
 | 18 | P13-h the drive fader and `scale` | (a) keep `scale`, session params only | **(a)**, 2026-09-28 | built in plan 13 WP5 (PR #66): `routing.migrate_scales` — a `scale` kept only on a session param, one on a macro a depth subscriber, one on a performance param dropped with a note |
 | 19 | P13-i a route onto a session param | (a) yes; D9 is about values | **(a)**, 2026-09-28 | built in plan 13 WP5 (PR #66): the ROUTING page marks such a route "session" (`ui_routing.is_session_target`); the scale combo offers session params only |
 | 20 | P13-j hand routes by name | (a) names now, in plan 13 | **(a)**, 2026-09-29 | built, plan 13 WP5b, PR #70: `hand:right.roll`, `hand:left.present`, `hand:left.pinch.index`, resolved through the hands adapter's published map (`router.names`); a name the rig lacks is dormant; `hand:<i>` still reads; the factory presets regenerated, the migration names what it carries by the rig's layout |
-| 21 | P14-a overlay mode | (a) behind a config key, off | **(a)**, 2026-09-29 | plan 14 WP2 |
-| 22 | P14-b the party device | party opens; house moods a `house` show; last show remembered | **rec**, 2026-09-29 | plan 14 WP3 |
+| 21 | P14-a overlay mode | (a) behind a config key, off | **(a)**, 2026-09-29 | built, plan 14 WP2 (PR #PRNUM): `[output] overlay = false` by default — the render window is created without a transparent framebuffer, `output.overlay` refuses to switch on (`T`, MASTER select, the panel's greyed toggle with the reason, a preset), the crossfader's ground does nothing; `true` is today's overlay |
+| 22 | P14-b the party device | party opens; house moods a `house` show; last show remembered | **rec**, 2026-09-29 | built, plan 14 WP3 + WP4 (PR #PRNUM): the factory `default` show is gone — `party` opens, `house` holds the eight house moods; `<home>/last_show` remembers the show opened last; your `default` (MIGRATED + seven house moods) is renamed `mine` once, backed up as `default.hyp.json.bak-v2`, MIGRATED still its first preset; the PRESETS page speaks "show" |
 | 23 | P14-c dream on by default | (b) optional torch, worker on, loud when missing | **(a)**, 2026-09-29 | torch is part of the app, not optional; plan 14 WP1 |
 | 24 | P14-d F6–F8 effects | (a) ACID, MANDALA, NOITA | **(a)**, 2026-09-29 | plan 14 WP5 |
 | 25 | P14-e desk glyphs and diagram | (a) K/D/S/G/B glyphs, up layer, above the cheat sheet | **(a)**, 2026-09-29 | plan 14 WP7 |
