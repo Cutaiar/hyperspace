@@ -173,7 +173,15 @@ class Presets:
         landed: dict[str, Any] = {}
         for group in PERFORMANCE_GROUPS:
             landed.update(lib.resolved(group, by_group[group]))
-        lib.restore(landed)
+        # a value that will not take (a hand-edited "fast" on a number) must
+        # not leave half the look on this preset and half on the last: the
+        # state as it was goes back and the load is refused whole
+        before = reg.snapshot(part="performance")
+        try:
+            lib.restore(landed)
+        except (ValueError, TypeError) as e:
+            lib.restore(before)
+            raise ValueError(f"a value would not land ({e}); nothing loaded") from e
         # 3. every performer row replaced; the referee keeps the first
         table.set_routes(routes)
         notes += [f"dropped {b.source} → {b.target}: {why}" for b, why in table.dropped]
