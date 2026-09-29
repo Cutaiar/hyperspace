@@ -1344,11 +1344,13 @@ class Bindings:
     def bind(self, b: Binding, *, write: bool = True) -> list[Binding]:
         """A control drives one param; a param keeps one control per role.
 
-        Drops whatever the key drove before, and the param's previous
-        binding in the same role: a knob (any cc or pitch binding) when
-        learning a knob, or a button of the same op and value when
-        learning a button — so a param's step buttons survive a knob learn.
-        Only rows of `b`'s own layer go: a preset-layer learn never takes
+        Drops every row on the same physical control (`Binding.overlaps`:
+        an any-channel row on that knob included, so learning ``cc:0:16``
+        where the preset has ``cc:*:16`` leaves one row, not two), and the
+        param's previous binding in the same role: a knob (any cc or pitch
+        binding) when learning a knob, or a button of the same op and value
+        when learning a button — so a param's step buttons survive a knob
+        learn. Only rows of `b`'s own layer go: a preset-layer learn never takes
         an invariant or a global row with it, nor the reverse (plan 13
         D5, D6). A continuous source's row (a hand learn) is a performer
         like any route: `add` — `Owned` if the target is taken. The file
@@ -1374,7 +1376,7 @@ class Bindings:
             return x.layer != b.layer
 
         gone = [x for x in self.bindings
-                if not (apart(x) or (x.key != b.key and not same_role(x)))]
+                if not apart(x) and (x.overlaps(b) or same_role(x))]
         self.bindings = [x for x in self.bindings if not any(x is g for g in gone)]
         self.bindings.append(b)
         self.dropped, self.notes = [], []

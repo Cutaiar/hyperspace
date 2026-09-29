@@ -317,7 +317,8 @@ class MidiIO:
         Refused, with the reason in `learner.last` and nothing changed, on
         an invariant control — SHIFT among them (D6) — and while the global
         layer is up (D5): both are the session's, edited in bindings.json.
-        Otherwise the row replaces the control's preset-layer row and the
+        Otherwise the row replaces every preset-layer row on the control
+        (an any-channel row on it included, `Binding.overlaps`) and the
         param's previous preset-layer row in the same role (`Bindings.bind`)
         and the file is **not** written: the row is the preset's, and the
         preset's dirty dot shows it until a save (⇧F, the strip)."""

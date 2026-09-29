@@ -378,9 +378,12 @@ applied:
   axis already positions only refreshes the gate. A knob completes it
   through `MidiIO._learned`, which binds the param as armed — alias
   included, on purpose — as a **preset-layer** row (`Bindings.bind(b,
-  write=False)`: it replaces that control's preset-layer row and the
-  param's previous preset-layer row in the same role, never an invariant
-  or global row); a knob learn with the global layer up, or on an
+  write=False)`: it replaces every preset-layer row on that physical
+  control — an any-channel row on it included (`Binding.overlaps`:
+  learning `cc:0:16` where the preset has `cc:*:16` leaves one row;
+  `tests/test_learn.py::test_a_knob_learn_replaces_an_any_channel_row_on_the_same_knob`)
+  — and the param's previous preset-layer row in the same role, never an
+  invariant or global row); a knob learn with the global layer up, or on an
   invariant control (SHIFT among them), is **refused** — nothing changes,
   `Learn.last` says why, `Learn.refused` is set (plan 13 D5, D6).
   Every learn goes into the **loaded preset**: the table changes, the
@@ -663,11 +666,6 @@ guard, each filed where it says:
 Found by the review of the documents PR (#67) and left for a code fix —
 each is a place where the code falls short of plan 13's rule:
 
-- **A knob learn beside an any-channel row keeps both.** `Bindings.bind`
-  matches the row it replaces by source string (`Binding.key`), not by
-  physical control (`Binding.overlaps`): learning device knob 1
-  (`cc:0:16`) in a preset whose desk has `cc:*:16` (WAKE, TRIP,
-  `lfo-breathe`) leaves the old row, and the knob moves both params.
 - **A macro's base subscriber can name a session param.** `load_doc`
   refuses session ids in `values` but not in `macros`, and the ROUTING
   page's "+ base" picker offers them; `follow_macros(force=True)` then

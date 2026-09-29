@@ -178,6 +178,32 @@ def test_a_knob_learn_writes_a_desk_row_into_the_loaded_preset(tmp_path):
     assert untouched(r)
 
 
+def test_a_knob_learn_replaces_an_any_channel_row_on_the_same_knob(tmp_path):
+    """Review of PR #67: a learn replaces every row of its own layer on the
+    same physical control (`Binding.overlaps`), an any-channel row
+    included. `lfo-breathe`'s desk has ``cc:*:16`` on its Breathe macro;
+    learning device knob 1 (``cc:0:16``) leaves one row there, and the knob
+    moves the learned param only. The global row on that knob stays."""
+    from test_midi import cc, push
+
+    r = desk_rig(tmp_path)
+    lib, table, lrn, reg = r.lib, r.router.table, r.learn, r.reg
+    lib.load("presets", "lfo-breathe")
+    assert [b.target for b in table.desk() if b.source == "cc:*:16"] == ["macro.1"]
+    lrn.arm("view.depth4")
+    push(r, cc(0x10, 64))
+    on_knob = [b for b in table.desk() if b.kind == "cc" and b.number == 0x10]
+    assert [(b.source, b.target) for b in on_knob] == [("cc:0:16", "view.depth4")]
+    assert any(b.layer == "global" and b.source == "cc:*:16" for b in table.midi())
+    macro = reg["macro.1"].norm
+    for x in on_knob:
+        x.pickup = False
+    push(r, cc(0x10, 20), cc(0x10, 110))
+    assert reg["view.depth4"].norm == pytest.approx(110 / 127, abs=0.02)
+    assert reg["macro.1"].norm == pytest.approx(macro)             # one param, not two
+    assert untouched(r)
+
+
 def test_a_hand_learn_writes_a_route_into_the_loaded_preset(tmp_path):
     """The same for a hand: the route goes into the table through the
     referee — a taken target still asks, Replace / Keep — and neither the
