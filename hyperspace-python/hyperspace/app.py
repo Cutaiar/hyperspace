@@ -17,7 +17,7 @@ fullscreen, overlay) through the output.* params.
   drag  orbit       ⇧drag / right-drag  pan   scroll  zoom about cursor
   L  lines          F  faces          ?  cheat sheet
   T  overlay: float the render over the screen    G  clicks through it
-  F1–F8  load theme (whole-surface save state)    ⇧F1–F8  save theme
+  F1–F8  load a preset of the bank               ⇧F1–F8  save the live state as it
   B  tap tempo      ⇧B  LFO trigger: the downbeat is now, synced LFOs restart
 
 Every input path — keys, the Xbox-layout gamepad, a MIDI controller, the
@@ -76,6 +76,7 @@ from .learn import Learn
 from .library import Library
 from .overlay import GlfwBackend, Output
 from .params import Registry, build_registry
+from .preset import Presets
 from .render import Renderer
 from .routing import Bindings, Router, bindings_path
 from .ui import Panel, apply_style, load_fonts
@@ -589,7 +590,7 @@ def main() -> None:
     audio = AudioEngine()
     audio.rescan()                         # the one PortAudio scan, here at startup — never mid-set on a first read
     control = Control(audio.chain)
-    library = Library()                    # presets, projects, the theme bank (its project's)
+    library = Library()                    # presets, projects, the preset bank (its project's)
     # dream.* drives the renderer's look-back (lookback.py); the post pass
     # runs inside renderer.draw
     want = {"restart": False}          # app.restart sets it; polled after the panel draws
@@ -624,12 +625,15 @@ def main() -> None:
         bindings_path(library.home), mc.get("profile", "apc40"),
         Path(mc.get("map", "midi_map.json")),
     ))
-    # the macros are the routing layer's, saved with the table and not in
-    # any theme; the Router landed them — what the file named and the
-    # registry hasn't goes where every other missing id goes
+    # the macros ride in the table too until plan 13 WP5; the Router landed
+    # them — what the file named and the registry hasn't goes where every
+    # other missing id goes (the startup preset below lands its own)
     if router.missing_values:
         library.report(router.missing_values, "bindings.json values")
     library.routing(router)                # the routing presets: the library's files, the router's documents
+    # the presets (preset.py): the library's `presets/` files, landed on the
+    # registry and the table; the project's bank loads through it
+    presets = Presets(library, reg, router)
     # one Learn over the live table, whatever the MIDI gate says: a knob
     # or a hand completes it, the panel's prompt settles what the referee
     # refused (learn.py; the band.sel.* rule is the registry's `real`)
@@ -647,6 +651,9 @@ def main() -> None:
         renderer.lookback.source = dream_io
     panel.bridge = bridge_io               # the SYSTEM page's bridge line
     pad = _open_pad(cfg)
+    # the project's startup preset (D11), once, now that everything it lands
+    # on exists; a missing one is said on the panel and the app runs on
+    library.project.load_startup()
     # panel state and chain must stay one object even after source changes
     # the live objects that get re-classed on a hot reload; re-evaluated
     # each swap so recreated ones (the chain after a source attach) count
@@ -672,6 +679,7 @@ def main() -> None:
         (library, "library", "Library"),
         (library.project, "library", "Project"),
         (router, "routing", "Router"),
+        (presets, "preset", "Presets"),
         (learn, "learn", "Learn"),
         (clock, "tempo", "Clock"),
         (lfos, "lfo", "LFOs"),

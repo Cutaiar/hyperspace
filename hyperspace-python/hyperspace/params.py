@@ -2,7 +2,7 @@
 
 Every control the panel draws, every hotkey, every gamepad button and every
 MIDI binding resolves to a Param here, by a stable string id
-(``view.bright``, ``band.2.atk``, ``theme.load.0``). The registry is the
+(``view.bright``, ``band.2.atk``, ``preset.load.0``). The registry is the
 core's own contract (BLUEPRINT §3.6 inbound: "addressed by the same
 parameter registry the UI uses"), so nothing in it may import from an
 adapter — midi.py depends on this module, never the other way round.
@@ -80,13 +80,13 @@ PLANES = PLANE_NAMES   # the rotation planes' names, in geometry.PLANES's order
 RAW_STEPS = 100  # detents across an untapered continuous range
 N_MACROS = 8     # macro.1–8: knobs that exist to be a route's scale and to be owned
 # the performance / session split (plan 13 §4, D9), by group, declared
-# once. Performance is what a theme slot (later a preset) captures and
+# once. Performance is what a preset (preset.py) holds and
 # replaces: the look, its LFOs and its macros. Session is the rig and the
 # room (the clock, the hands' feel, the analyzer and its source, the
-# output, the UI), which a theme never moves, so a tapped BPM or the band
-# scene survives a theme change. Every persisted param is in exactly one
+# output, the UI), which a preset never moves, so a tapped BPM or the band
+# scene survives a preset load. Every persisted param is in exactly one
 # (tests/test_params.py walks the full registry); a group in neither
-# (`theme`) has no persisted params, and `rot.phase.*` is `persist=False`.
+# (`preset`, the bank) has no persisted params, and `rot.phase.*` is `persist=False`.
 PERFORMANCE_GROUPS = ("view", "rot", "camera", "pattern", "dream", "fx", "lfo", "macro")
 SESSION_GROUPS = ("tempo", "hands", "band", "master", "scene", "audio", "output",
                   "overlay", "ui")
@@ -137,7 +137,7 @@ class Param:
     integer: bool = False       # untapered range that only takes ints
     wrap: bool = False          # a circular range (yaw): stepping wraps
     fmt: Callable[[float], str] = field(repr=False, default=lambda v: f"{v:.2f}")
-    # ENUM: a list, or a callable returning one (theme names change on save)
+    # ENUM: a list, or a callable returning one (preset names change on save)
     choices: list[str] | Callable[[], list[str]] = field(default_factory=list)
     # what the param is for
     persist: bool = True         # belongs in a preset
@@ -508,7 +508,7 @@ class Param:
 
 def part_of(p: Param) -> str | None:
     """"performance" or "session", by the param's group; None for a group
-    in neither (no group, or `theme`, whose params never persist)."""
+    in neither (no group, or `preset`, whose params never persist)."""
     for name, groups in PARTS.items():
         if p.group in groups:
             return name
@@ -675,7 +675,7 @@ def _item(get_list, i):
     return (lambda: get_list()[i]), (lambda v: get_list().__setitem__(i, v))
 
 
-def build_registry(view, control, audio, themes=None, dream=None, fx=None,
+def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                    restart=None) -> Registry:
     """Declare every parameter the surface owns.
 
@@ -687,7 +687,9 @@ def build_registry(view, control, audio, themes=None, dream=None, fx=None,
     resolves with or without a panel. `dream` is the renderer's lookback
     state (lookback.DreamState); a fresh one stands in when there is no
     renderer, so the group is always declared; `fx` (fx.FxState, the
-    renderer's effect stack) likewise. `restart` is the host's request to
+    renderer's effect stack) likewise. `bank` is the open project
+    (library.Project), whose eight preset slots the ``preset.*`` params
+    load, save and cycle. `restart` is the host's request to
     restart the process (``app.restart``; app.py polls a flag) — a no-op
     without a host. Only the panel's own state (``ui.*``) is added by the
     panel once it exists.
@@ -762,7 +764,7 @@ def build_registry(view, control, audio, themes=None, dream=None, fx=None,
     # rate multiplies dt·speed·RATE[p]; signed so a lane can spin a plane
     # backwards, and as wide as the reference's plane drive (ROT_RATE_MAX).
     # phase is the integrated angle, folded to one turn: not a preset value
-    # (a theme changes the look, not where the spin is) but a modulation
+    # (a preset changes the look, not where the spin is) but a modulation
     # target — a lane adds a phase offset on top of the integrator.
     g = "rot"
     fold = lambda a: math.remainder(a, 2 * math.pi)   # ±π stay put, the rest folds
@@ -1021,25 +1023,24 @@ def build_registry(view, control, audio, themes=None, dream=None, fx=None,
     build_bands()
     control.on_layout = build_bands
 
-    # ---- themes ----
-    if themes is not None:                 # library.Project: the F1–F8 bank
-        g = "theme"
-        names = lambda: [
-            s["name"] if s else f"THEME {k + 1}" for k, s in enumerate(themes.slots)
-        ]
-        # active is −1 until a theme loads: no choice selected, no LED lit
-        # meta-controls: they *apply* themes, so no preset stores them
-        r.enum("theme.select", "Theme", lambda: themes.active, themes.load_slot, names,
+    # ---- the preset bank ----
+    if bank is not None:                   # library.Project: the F1–F8 bank of preset names
+        g = "preset"
+        names = lambda: [n or f"SLOT {k + 1}" for k, n in enumerate(bank.bank)]
+        # active is −1 until a preset loads: no choice selected, no LED lit
+        # meta-controls: they *apply* presets, so no preset stores them
+        r.enum("preset.select", "Preset", lambda: bank.active, bank.load_slot, names,
                group=g, persist=False, modulatable=False,
-               tip="Save states of the performance: the look, its LFOs and its "
-                   "macros. Never the tempo, the hands or the analyzer.")
-        for k in range(len(themes.slots)):
-            r.trigger(f"theme.load.{k}", f"Load theme {k + 1}",
-                      lambda k=k: themes.load_slot(k), group=g)
-            r.trigger(f"theme.save.{k}", f"Save theme {k + 1}",
-                      lambda k=k: themes.save_slot(k), group=g, modulatable=False)
-        r.trigger("theme.next", "Next theme", lambda: themes.cycle(1), group=g)
-        r.trigger("theme.prev", "Previous theme", lambda: themes.cycle(-1), group=g)
+               tip="The project's eight presets: each one the whole performance — "
+                   "the look, its routes, its LFOs and macros. Never the tempo, the "
+                   "hands or the analyzer.")
+        for k in range(len(bank.bank)):
+            r.trigger(f"preset.load.{k}", f"Load preset {k + 1}",
+                      lambda k=k: bank.load_slot(k), group=g)
+            r.trigger(f"preset.save.{k}", f"Save preset {k + 1}",
+                      lambda k=k: bank.save_slot(k), group=g, modulatable=False)
+        r.trigger("preset.next", "Next preset", lambda: bank.cycle(1), group=g)
+        r.trigger("preset.prev", "Previous preset", lambda: bank.cycle(-1), group=g)
 
     # ---- audio transport (only what the engine exposes headlessly) ----
     g = "audio"

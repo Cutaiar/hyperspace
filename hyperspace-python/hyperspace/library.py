@@ -15,27 +15,32 @@ Two kinds of file, both plain JSON you can open in a text editor:
                   combo reads them (``read``, or ``factory_doc`` with no
                   library) and ``adopt``s the one it landed; a strip load
                   tells the combo through ``on_load`` (control.py).
-  project         everything — ``{"schema": "hyperspace.project/1",
-                  "name", "values": <performance snapshot>, "session":
-                  <session snapshot>, "modules": {group: name | {"name",
-                  "values", …}}, "bank": [8 × {"name", "values"} |
-                  null]}``, in a ``*.hyp.json`` file (params.PARTS is the
-                  split; an older file with no ``session`` loads, its
-                  session ids read out of ``values``). The F1–F8 theme
-                  bank is the project's (``Project.load_slot`` /
-                  ``save_slot``): emulator-style save states of the
-                  performance, macros included, which never move a
-                  session param. A module the project names by a preset
+  project         the session — ``{"schema": "hyperspace.project/2",
+                  "name", "note", "startup": <preset name>, "bank": [8 ×
+                  <preset name> | null], "session": <session snapshot>,
+                  "modules": {group: name | {"name", "values", …}}}``, in
+                  a ``*.hyp.json`` file (params.PARTS is the split; plan
+                  13 §2.2). ``session`` lands on a project load and a
+                  preset never touches it; ``modules`` names the session
+                  groups' module presets (the band strip's scene and
+                  layout). The **bank** is eight pointers to preset files
+                  (preset.py, ``hyperspace.preset/2``): F1–F8 and the
+                  APC40's clip row 1 load one (``Project.load_slot``),
+                  ⇧F1–F8 save the live state *as* it (``save_slot``), and
+                  ``startup`` is the preset loaded on launch and with the
+                  project (D11). A module the project names by a preset
                   that carries a ``layout`` gets that layout back on
-                  load, the same road a strip load takes. A project never
-                  carries a routing preset: the live table is
-                  ``<home>/bindings.json``, one file for the rig.
+                  load, the same road a strip load takes. A schema-1
+                  project (an inline theme bank) is refused until plan
+                  13's migration (WP5) converts it.
 
 A third kind of document is *not* the library's own format but goes
 through the same doors: a **document kind** registered with ``kind()``
-— the routing presets, ``hyperspace.bindings/2`` under ``bindings/``,
-which the router loads and writes (``Router.apply_doc`` /
-``preset_doc``; ``Library.routing`` wires it). For such a group the
+— the presets, ``hyperspace.preset/2`` under ``presets/``, which
+preset.py's ``Presets`` loads and writes, and the routing presets,
+``hyperspace.bindings/2`` under ``bindings/``, which the router loads
+and writes (``Router.apply_doc`` / ``preset_doc``; ``Library.routing``
+wires it; plan 13 WP5 folds them into presets). For such a group the
 library does the file half — list, user-shadows-factory, load / save as
 / delete, the dirty dot, the watch — and the kind's hooks do the
 document half: ``load(doc, path)`` applies it, ``document(name)`` is
@@ -54,7 +59,8 @@ factory's file of the same name:
 ``home()`` is the one resolver for that folder (config.py and the binding
 table path go through it). On the first run the working-directory ``config.toml``
 and ``midi_map.json`` are copied in and a legacy ``presets.json`` theme
-bank becomes the user's default project — originals are left alone.
+bank becomes user presets and a default project naming them — originals
+are left alone.
 
 Loading a preset fills ids it doesn't name from the group's *default*
 preset (DEFAULT_NAMES, else one called "default", else the values the
@@ -83,16 +89,19 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .params import PLANES, SESSION_GROUPS, Registry, part_of
+from .params import PLANES, SESSION_GROUPS, Registry
 
-SLOTS = 8                 # the F1–F8 theme bank
-BINDINGS = "bindings"     # the routing presets' group: the one document kind (routing.PRESET_DIR)
+SLOTS = 8                 # the F1–F8 preset bank
+BINDINGS = "bindings"     # the routing presets' group, a document kind (routing.PRESET_DIR)
+PRESETS = "presets"       # the presets' group, a document kind (preset.py)
 HOME_ENV = "HYPERSPACE_HOME"
 DEFAULT_HOME = Path("~/Hyperspace")
 FACTORY = Path(__file__).with_name("library")
 
-PRESET_SCHEMA = "hyperspace.preset/1"
-PROJECT_SCHEMA = "hyperspace.project/1"
+PRESET_SCHEMA = "hyperspace.preset/1"      # a module preset (one group)
+PERFORMANCE_SCHEMA = "hyperspace.preset/2" # a preset: the performance (preset.py)
+PROJECT_SCHEMA = "hyperspace.project/2"
+PROJECT_V1 = "hyperspace.project/1"        # refused until plan 13 WP5 migrates it
 PROJECT_SUFFIX = ".hyp.json"
 PROJECTS = "projects"
 DEFAULT_PROJECT = "default"
@@ -153,15 +162,51 @@ def migrate(root: Path, cwd: Path | None = None) -> list[str]:
     if src.is_file() and not dst.exists():
         try:
             doc = _read_json(src)
-            bank = [legacy_slot(s) if s else None for s in doc.get("slots", [])[:SLOTS]]
+            slots = [legacy_slot(s) if s else None for s in doc.get("slots", [])[:SLOTS]]
+            bank = _legacy_presets(root, slots)
         except LibraryError as e:
             done.append(f"library: {src} not migrated ({e})")
         else:
-            dst.parent.mkdir(parents=True, exist_ok=True)
+            bank += [None] * (SLOTS - len(bank))
             _write_json(dst, {"schema": PROJECT_SCHEMA, "name": DEFAULT_PROJECT,
-                              "values": {}, "modules": {}, "bank": bank})
-            done.append(f"library: theme bank {src} → project {dst}")
+                              "startup": next((n for n in bank if n), None),
+                              "bank": bank, "session": {}, "modules": {}})
+            done.append(f"library: theme bank {src} → {sum(1 for n in bank if n)} "
+                        f"presets in {root / PRESETS} and project {dst}")
     return done
+
+
+def _legacy_presets(root: Path, slots: list[dict | None]) -> list[str | None]:
+    """The legacy slots as user presets (``hyperspace.preset/2``), named by
+    the slot (made unique), each with the factory table's performer rows
+    so the music still drives the picture; the slots' session ids (the
+    band scene, the analyzer's strips) are dropped, as a preset never
+    carries them (D9). Returns the bank: a name per slot, or None."""
+    from . import routing
+
+    routes = [b.to_json() for b in routing.legacy6_routes()]
+    bank: list[str | None] = []
+    taken: set[str] = set()
+    for slot in slots:
+        if slot is None:
+            bank.append(None)
+            continue
+        base = str(slot.get("name") or f"PRESET {len(bank) + 1}")
+        name, n = base, 1
+        while slug(name) in taken:
+            n += 1
+            name = f"{base} {n}"
+        taken.add(slug(name))
+        values = {k: v for k, v in slot["values"].items()
+                  if k.partition(".")[0] not in SESSION_GROUPS}
+        doc = {"schema": PERFORMANCE_SCHEMA, "name": name,
+               "note": str(slot.get("note") or ""), "values": values, "routes": routes,
+               "desk": [], "macros": {}, "modules": {}}
+        path = root / PRESETS / f"{slug(name)}.json"
+        if not path.exists():
+            _write_json(path, doc)
+        bank.append(name)
+    return bank
 
 
 # ---------------------------------------------------------------- files
@@ -198,7 +243,9 @@ def _write_text(path: Path, text: str) -> None:
 MIGRATIONS: dict[tuple[str, int], Any] = {
     # ("hyperspace.preset", 1): lambda doc: {...},   # 1 → 2, when there is one
 }
-CURRENT = {"hyperspace.preset": 1, "hyperspace.project": 1}
+# no project 1 → 2 step yet: an inline theme bank becomes preset files
+# and a bank of names in plan 13 WP5; until then Project refuses one
+CURRENT = {"hyperspace.preset": 1, "hyperspace.project": 2}
 
 
 def migrate_doc(doc: dict, kind: str) -> dict:
@@ -295,103 +342,83 @@ def legacy_slot(slot: dict) -> dict:
 # ---------------------------------------------------------------- project
 
 class Project:
-    """The open project: its file (None until saved), its sections, and
-    the F1–F8 theme bank.
+    """The open project — the session (plan 13 §2.2): its file (None
+    until saved), the session values, the session groups' module labels,
+    and the F1–F8 preset bank.
 
-    ``values`` / ``session`` / ``modules`` / ``bank`` are what the *file*
-    holds; only ``save()`` refreshes ``values``, ``session`` and
-    ``modules`` from the live state. ``write()`` puts the in-memory
-    document back on disk as it is — that is what a theme-slot save uses,
-    so F-key saves persist without turning the whole project into a
-    snapshot of the moment.
+    ``session`` / ``modules`` / ``bank`` / ``startup`` are what the *file*
+    holds; ``save()`` refreshes ``session`` and ``modules`` from the live
+    state, ``write()`` puts the document back on disk as it is — what an
+    F-key save uses, so ⇧F1–F8 persist the bank without turning the
+    whole project into a snapshot of the moment.
 
-    The file's state is split by params.PARTS (plan 13 §4, D9): ``values``
-    is the performance part (the look, the LFOs, the macros) and
-    ``session`` the session part (tempo, hands, the analyzer, output). An
-    older file with no ``session`` key, whose ``values`` held both, is
-    split in memory when it is read, and both parts restore on load.
-
-    A theme (one of the eight slots) is a save state of the performance:
-    ``snapshot(part="performance")``, macros included. Loading one cuts the
-    whole look over in a single frame. A slot restores the performance
-    modules it names, whole: every id in a group the slot mentions is set,
-    from the slot or else from the group's defaults, so a theme is the same
-    state whatever it lands on, while a group it never mentions is left
-    alone. A slot never moves a session param: an id it names there (the
-    house themes and party slots set ``scene.select``) stays in the file
-    but a load ignores it, so a theme no longer resets a tapped BPM or the
-    band scene. Rotation phases are never in a slot: a theme changes the
-    look, not where the spin is. Empty slots come back seeded with the
-    eight house moods (hyperspace/library/projects/default.hyp.json).
+    ``session`` is the session part of the registry (params.PARTS: tempo,
+    hands, the analyzer, output), landed on a project load and never
+    touched by a preset. The **bank** is eight preset names (or None):
+    a slot is a pointer to a preset file (preset.py), loaded through
+    ``Library.presets`` — F<k+1> and the APC40's clip row 1 load it,
+    ⇧F<k+1> saves the live state as that preset into the user folder.
+    ``startup`` is the preset a launch and a project load bring up (D11).
     """
 
     def __init__(self, lib: Library):
         self.lib = lib
         self.name = DEFAULT_PROJECT
+        self.note = ""
         self.path: Path | None = None
-        self.values: dict[str, Any] = {}      # the performance part
         self.session: dict[str, Any] = {}     # the session part
-        self.modules: dict[str, Any] = {}
-        self.bank: list[dict | None] = [None] * SLOTS
-        self.active = -1          # last theme slot loaded, -1 until one is
+        self.modules: dict[str, Any] = {}     # session groups' module labels
+        self.bank: list[str | None] = [None] * SLOTS
+        self.startup: str | None = None
+        self.active = -1          # the slot last loaded, -1 until one is
         self.bank_error = ""
+        self._saved: tuple = ([None] * SLOTS, None)   # bank and startup as on disk
 
     # ---- documents ----
 
-    def _take(self, doc: dict, path: Path | None) -> None:
+    def _take(self, doc: dict, path: Path | None, where: str = "project") -> None:
+        if doc.get("schema") == PROJECT_V1:
+            raise LibraryError(f"{where} is a schema-1 project; plan 13's migration (WP5) "
+                               "converts it")
         doc = migrate_doc(doc, "hyperspace.project")
         self.name = str(doc.get("name") or (path.name[: -len(PROJECT_SUFFIX)] if path
                                             else UNTITLED))
+        self.note = str(doc.get("note") or "")
         self.path = path
-        # an older file's `values` held the session ids too: they move to
-        # `session` here, so both parts restore and the next save splits them
-        self.values, self.session = {}, dict(doc.get("session") or {})
-        for pid, v in (doc.get("values") or {}).items():
-            if self._is_session(pid):
-                self.session.setdefault(pid, v)
-            else:
-                self.values[pid] = v
+        self.session = dict(doc.get("session") or {})
         self.modules = dict(doc.get("modules") or {})
-        bank = list(doc.get("bank") or [])[:SLOTS]
-        bank += [None] * (SLOTS - len(bank))
-        # an empty slot is seeded from the factory bank, as it always was
-        seeds = self.lib.factory_bank()
-        self.bank = [s if s else seeds[k] for k, s in enumerate(bank)]
-
-    def _is_session(self, pid: str) -> bool:
-        """Is this id in the session part? By its param's group once the
-        registry is attached; before that (the default project is read in
-        Library.__init__) by its id's first segment, which is the group for
-        every persisted param (tests/test_params.py)."""
-        reg = self.lib.reg
-        if reg is not None and pid in reg:
-            return part_of(reg[pid]) == "session"
-        return pid.partition(".")[0] in SESSION_GROUPS
-
-    def _performance(self, values: dict[str, Any]) -> dict[str, Any]:
-        """`values` less its session ids (ids nobody knows stay, to be reported)."""
-        return {pid: v for pid, v in values.items() if not self._is_session(pid)}
+        bank = [str(s) if isinstance(s, str) and s else None
+                for s in list(doc.get("bank") or [])[:SLOTS]]
+        self.bank = bank + [None] * (SLOTS - len(bank))
+        self.startup = str(doc["startup"]) if doc.get("startup") else None
+        self.active = -1
+        self._saved = (list(self.bank), self.startup)
 
     def to_doc(self) -> dict:
-        return {"schema": PROJECT_SCHEMA, "name": self.name, "values": self.values,
-                "session": self.session, "modules": self.modules, "bank": self.bank}
+        doc: dict[str, Any] = {"schema": PROJECT_SCHEMA, "name": self.name}
+        if self.note:
+            doc["note"] = self.note
+        doc.update(startup=self.startup, bank=list(self.bank), session=self.session,
+                   modules=self.modules)
+        return doc
 
     def _apply(self) -> list[str]:
-        """Push the document's state into the registry; returns unknown ids.
-        A module's `layout` lands first (a project saved on eight bands
-        comes back with eight, audit L8), then the project's own values —
-        the live state as saved, edits included: the session part, then
-        the performance part — and each module is
+        """Push the document's session into the registry; returns unknown
+        ids. A module's `layout` lands first (a project saved on eight
+        bands comes back with eight, audit L8), then the session values
+        — the live state as saved, edits included — and each module is
         recorded as the group's current preset, the reference its dirty
-        dot compares against, the way a strip load records it."""
+        dot compares against, the way a strip load records it. Only a
+        session group's module counts: a performance group's label is the
+        preset's (preset.py)."""
         lib = self.lib
         lib._current.clear()
         lib._loaded.clear()
         lib._adopted.clear()
         docs: list[tuple[str, str, dict | None]] = []
         for group, ref in self.modules.items():
-            if group in lib._kinds or group == BINDINGS:   # never carried; an old file's is ignored
-                continue
+            if group in lib._kinds or group not in SESSION_GROUPS:
+                continue                              # a preset's, or a document kind's
             if isinstance(ref, dict):                 # inline copy of a preset
                 name, doc = str(ref.get("name") or ""), dict(ref)
             else:                                     # by name in the library
@@ -406,14 +433,10 @@ class Project:
                 hook(doc["layout"])                   # its params exist before the values land
                 lib._fresh_of(group)                  # …and their build values are "fresh"
         missing = lib.restore(self.session) if self.session else []
-        if self.values:
-            missing += lib.restore(self.values)
-        # ids the file lacks (the macros, in a file from before plan 13 WP1;
-        # a param added since) take the state this load left, so an
-        # untouched project is not dirty the moment it opens
-        for part, held in (("performance", self.values), ("session", self.session)):
-            for pid, v in (lib.reg.snapshot(part=part) if lib.reg is not None else {}).items():
-                held.setdefault(pid, v)
+        # ids the file lacks (a param added since) take the state this load
+        # left, so an untouched project is not dirty the moment it opens
+        for pid, v in (lib.reg.snapshot(part="session") if lib.reg is not None else {}).items():
+            self.session.setdefault(pid, v)
         for group, name, doc in docs:
             vals = (lib.reg.snapshot(group) if doc is None
                     else lib.resolved(group, doc.get("values") or {}))
@@ -424,55 +447,87 @@ class Project:
         self.active = -1
         return missing
 
-    # ---- the theme bank: performance save states inside the project ----
+    # ---- the bank: eight pointers to preset files ----
 
-    @property
-    def slots(self) -> list[dict | None]:
-        return self.bank
+    def _loader(self):
+        return getattr(self.lib, "presets", None)
 
-    def capture(self, name: str) -> dict[str, Any]:
-        return {"name": name, "values": self.lib.reg.snapshot(part="performance")}
+    def load_slot(self, k: int) -> None:
+        """F<k+1>: the preset slot k names, through the one loader. An
+        empty slot, or a name with no file, loads nothing and says so."""
+        if not 0 <= k < SLOTS:
+            return
+        lib, name, key = self.lib, self.bank[k], f"F{k + 1}"
+        presets = self._loader()
+        if name is None:
+            lib.warning = f"{key}: an empty slot — ⇧{key} saves the live state into it"
+            return
+        if presets is None or lib.path_of(PRESETS, name) is None:
+            lib.warning = f"{key}: no preset {name!r}"
+            return
+        try:
+            presets.load(name)
+        except LibraryError as e:                     # a bad file: said, never fatal
+            lib.error = f"library: {e}"
+            return
+        self.active = k
 
     def save_slot(self, k: int) -> None:
-        """⇧F<k+1>: the surface into slot k, and the project file with it."""
+        """⇧F<k+1>: the live state as the preset slot k names — a new one,
+        ``PRESET <k+1>``, for an empty slot — into the user folder (a
+        factory preset of that name is shadowed, never overwritten); the
+        bank and the project file with it."""
+        presets = self._loader()
         if not 0 <= k < SLOTS or self.lib.reg is None:
             return
-        old = self.bank[k]
-        name = old["name"] if old else f"THEME {k + 1}"
-        self.bank[k] = self.capture(name)
-        self.active = k
+        if presets is None:
+            self.bank_error = "presets: no preset loader"
+            return
+        name = self.bank[k] or self._fresh_name(k)
         try:
+            presets.save_as(name)
+            self.bank[k] = name
+            self.active = k
             self.write()
             self.bank_error = ""
         except LibraryError as e:                     # a full disk must not stop the show
-            self.bank_error = f"themes: {e}"
+            self.bank_error = f"presets: {e}"
 
-    def load_slot(self, k: int) -> None:
-        """F<k+1>: slot k onto the surface, whole per performance group it
-        names. Its session ids (a house theme's ``scene.select``) are ignored."""
-        if not 0 <= k < SLOTS or self.bank[k] is None or self.lib.reg is None:
-            return
-        values = self._performance(self.bank[k].get("values") or {})
-        lib, reg = self.lib, self.lib.reg
-        groups = {reg[pid].group for pid in values if pid in reg}
-        merged: dict[str, Any] = {}
-        for g in groups:
-            merged.update(lib.defaults(g))
-        merged.update(values)
-        missing = lib.restore(merged)
-        lib.report(missing, self.bank[k]["name"])
-        self.active = k
+    def _fresh_name(self, k: int) -> str:
+        """``PRESET <k+1>``, made unique against every preset there is."""
+        taken = {slug(n) for n in self.lib.list(PRESETS)} | {slug(n) for n in self.bank if n}
+        base = name = f"PRESET {k + 1}"
+        n = 1
+        while slug(name) in taken:
+            n += 1
+            name = f"{base} ({n})"
+        return name
 
     def cycle(self, step: int = 1) -> None:
-        """Flip to the next saved slot — the pad's and the APC's theme button."""
+        """Flip to the next filled slot — the pad's B and the APC's QUANT."""
         filled = [k for k, s in enumerate(self.bank) if s is not None]
         if not filled:
             return
         if self.active in filled:
             k = filled[(filled.index(self.active) + step) % len(filled)]
         else:
-            k = filled[0]
+            k = filled[0] if step > 0 else filled[-1]
         self.load_slot(k)
+
+    def load_startup(self) -> None:
+        """The project's startup preset (D11), if it names one: a launch
+        and a project load bring it up. A name with no file says so and
+        the app keeps running on what it has."""
+        lib, presets, name = self.lib, self._loader(), self.startup
+        if presets is None or not name:
+            return
+        if lib.path_of(PRESETS, name) is None:
+            lib.warning = f"startup: no preset {name!r}"
+            return
+        try:
+            presets.load(name)
+        except LibraryError as e:
+            lib.error = f"library: {e}"
 
     # ---- API ----
 
@@ -487,8 +542,10 @@ class Project:
     def path_for(self, name: str) -> Path:
         return self.lib.home / PROJECTS / f"{slug(name)}{PROJECT_SUFFIX}"
 
-    def load(self, name: str | Path) -> list[str]:
-        """Open a project by name (user library) or path; returns unknown ids."""
+    def load(self, name: str | Path, *, startup: bool = True) -> list[str]:
+        """Open a project by name (user library) or path; returns unknown
+        ids. Its startup preset comes up with it unless `startup` is off
+        (the file watch re-reading an edited project)."""
         lib = self.lib
         if isinstance(name, Path) or str(name).endswith(PROJECT_SUFFIX):
             path = Path(name)
@@ -496,10 +553,12 @@ class Project:
             path = self.path_for(name)
             if not path.is_file():                    # a factory project by name
                 path = lib.factory / PROJECTS / path.name
-        self._take(_read_json(path), path if lib._is_user(path) else None)
+        self._take(_read_json(path), path if lib._is_user(path) else None, path.name)
         missing = self._apply()
         lib.report(missing, path.name)
         lib.status = f"project: {self.name}"
+        if startup:
+            self.load_startup()
         return missing
 
     def new(self, name: str = UNTITLED) -> None:
@@ -512,21 +571,22 @@ class Project:
         lib.restore(lib._fresh_all())                 # …and every group's fresh values
         self._apply()
         lib.status = f"project: new {name}"
+        self.load_startup()
 
     def save(self, name: str | None = None) -> Path:
-        """Snapshot everything into the project file (as `name` if given)."""
+        """The session into the project file (as `name` if given), with the
+        bank and startup as held."""
         lib = self.lib
         if name:
             self.name = name
             self.path = self.path_for(name)
         elif self.path is None:
             self.path = self.path_for(self.name)
-        self.values = lib.reg.snapshot(part="performance")
         self.session = lib.reg.snapshot(part="session")
         self.modules = {}
         for group, cur in lib._current.items():
-            if cur is None or group in lib._kinds or group == BINDINGS:
-                continue                              # the routing layer is the rig's, not the project's
+            if cur is None or group in lib._kinds or group not in SESSION_GROUPS:
+                continue                              # a preset's label, or a kind's
             if lib.path_of(group, cur) is not None:
                 self.modules[group] = cur
             else:                                     # not in any library: keep a copy
@@ -538,33 +598,46 @@ class Project:
         return self.path
 
     def write(self) -> Path:
-        """Write the document as held — the theme bank's autosave."""
+        """Write the document as held — the bank's autosave. A schema-1
+        file in the way (refused on open, until WP5 migrates it) is kept
+        beside itself first (routing.backup), never lost."""
         if self.path is None:
             self.path = self.path_for(self.name)
+        try:
+            old = json.loads(self.path.read_text()) if self.path.is_file() else {}
+        except (OSError, ValueError):
+            old = {}
+        if isinstance(old, dict) and old.get("schema") == PROJECT_V1:
+            from .routing import backup
+            backup(self.path, "1")
         _write_json(self.path, self.to_doc())
         self.lib._sync(self.path)
+        self._saved = (list(self.bank), self.startup)
         return self.path
 
     def is_dirty(self) -> bool:
-        """Does the live state differ from the file? Never saved counts as dirty."""
+        """Does the live state differ from the file — the session values,
+        the bank or the startup preset? Never saved counts as dirty."""
         reg = self.lib.reg
         if reg is None:
             return False
-        return (self.path is None or self.values != reg.snapshot(part="performance")
-                or self.session != reg.snapshot(part="session"))
+        return (self.path is None or self.session != reg.snapshot(part="session")
+                or (self.bank, self.startup) != self._saved)
 
 
 # ---------------------------------------------------------------- library
 
 class Library:
-    """Presets, projects and the theme bank over one registry.
+    """Module presets, presets and projects over one registry.
 
-    Built before the registry (the theme params need the project's bank),
-    bound to it with ``attach(reg)``, which also captures the fresh-object
-    values and opens the user's default project (or the factory one).
-    `home` is the user tree; tests pass a tmp_path and never touch
-    ~/Hyperspace. A document kind (`kind`, `routing`) adds a group whose
-    files the library keeps and someone else applies.
+    Built before the registry (the preset bank's params need the
+    project's bank), bound to it with ``attach(reg)``, which also captures
+    the fresh-object values and opens the user's default project (or the
+    factory one). `home` is the user tree; tests pass a tmp_path and never
+    touch ~/Hyperspace. A document kind (`kind`, `routing`, preset.py's
+    `Presets`) adds a group whose files the library keeps and someone
+    else applies; ``presets`` is the `Presets` the bank loads through
+    (None until app.py builds it after the router).
     """
 
     def __init__(self, home_dir: Path | None = None, *, factory: Path = FACTORY,
@@ -590,6 +663,7 @@ class Library:
         self._docs: dict[Path, tuple[float, dict]] = {}   # parsed files, by mtime
         self._mtimes: dict[Path, float] = {}
         self._next = 0.0
+        self.presets = None        # preset.Presets, set by its constructor
         self.project = Project(self)
         self._open_default()
         self._mtimes = self._scan()
@@ -681,22 +755,23 @@ class Library:
         self._load_hooks[group] = hook
 
     def _open_default(self) -> None:
-        """The user's default project if there is one, else the factory's."""
+        """The user's default project if there is one, else the factory's —
+        which also stands in for a user file that will not open (a
+        schema-1 project until plan 13 WP5 migrates it), the reason in
+        `error`. A save then keeps the refused file as a backup (write)."""
         user = self.project.path_for(DEFAULT_PROJECT)
-        path = user if user.is_file() else self.factory / PROJECTS / user.name
+        factory = self.factory / PROJECTS / user.name
+        if user.is_file():
+            try:
+                self.project._take(_read_json(user), user, user.name)
+                return
+            except LibraryError as e:
+                self.error = f"library: {e}"
         try:
-            self.project._take(_read_json(path), user if path == user else None)
+            self.project._take(_read_json(factory), None, factory.name)
         except LibraryError as e:
             self.error = f"library: {e}"
             self.project._take({"schema": PROJECT_SCHEMA}, None)
-
-    def factory_bank(self) -> list[dict | None]:
-        path = self.factory / PROJECTS / f"{DEFAULT_PROJECT}{PROJECT_SUFFIX}"
-        try:
-            bank = list(_read_json(path).get("bank") or [])[:SLOTS]
-        except LibraryError:
-            bank = []
-        return bank + [None] * (SLOTS - len(bank))
 
     # ---- the tree ----
 
@@ -828,6 +903,14 @@ class Library:
             self._adopted.pop(group, None)
         else:
             self._adopted[group] = reapply
+
+    def label(self, group: str, name: str | None) -> None:
+        """Record `name` as the group's current module preset, the group's
+        state as it now stands being what "clean" means — a preset's
+        module label (plan 13 D3): the strip shows the name and a clean
+        dot, and nothing is loaded. None: no current preset."""
+        loaded = self.reg.snapshot(group) if name is not None and self.reg is not None else None
+        self._landed(group, name, loaded)
 
     def landed(self, group: str) -> tuple:
         """The group's landed state, opaque, for an undo to hand back."""
@@ -1057,7 +1140,7 @@ class Library:
                         self.load(group, name)
                     hit.append(f"{group}/{name}")
             if self.project.path in changed:
-                self.project.load(self.project.path)
+                self.project.load(self.project.path, startup=False)
                 hit.append(f"project {self.project.name}")
             self.error = ""
         except LibraryError as e:                     # a half-saved file: keep running
