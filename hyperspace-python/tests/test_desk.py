@@ -337,6 +337,7 @@ def test_an_old_bindings_file_gets_its_layers_once_with_a_backup(tmp_path, capsy
     v2["bindings"] += [
         {"source": "cc:0:7", "target": "view.speed", "op": "abs"},          # on fader 1
         {"source": "cc:0:87", "target": "view.inst_amp", "op": "abs"},      # a knob of mine
+        {"source": f"note:0:{SHIFT}", "target": "view.points", "op": "toggle"},  # on SHIFT
     ]
     v2["bindings"] = [b for b in v2["bindings"]
                       if not (b["source"] == "cc:0:7" and b["target"] == "band.0.post")]
@@ -351,6 +352,10 @@ def test_an_old_bindings_file_gets_its_layers_once_with_a_backup(tmp_path, capsy
     assert layer[("cc:0:87", "view.inst_amp")] == "preset"        # mine, anywhere else
     for pid in new:                                               # the global rows and SHIFT added
         assert any(b.target == pid for b in t.midi()), pid
+    # a row of mine on SHIFT's note would keep the latch off: dropped, noted
+    # (review of PR #63), and SHIFT is the latch
+    assert [b.target for b in t.dispatch("note", 0, SHIFT)] == [routing.SHIFT_PARAM]
+    assert any("SHIFT is the desk's layer latch" in n for n in t.notes)
     assert "sorted" in err and "kept as bindings.json.bak-v2" in err
     assert json.loads(path.with_name("bindings.json.bak-v2").read_text()) == v2
     assert hand.read_text() == "mine"

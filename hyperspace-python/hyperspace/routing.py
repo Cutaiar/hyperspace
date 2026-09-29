@@ -1021,6 +1021,14 @@ def sort_layers(rows: Iterable[Binding], profile: str = "apc40"
     layer_of = {(f.source, f.target, f.op, float(f.value)): f.layer for f in factory}
     invariant = [f for f in factory if f.layer is None]
     n = 0
+    notes: list[str] = []
+    # SHIFT is the layer latch now (it was unused before plan 13): a row a
+    # user put on its note would keep the latch off the desk for good
+    shift = [b for b in rows if b.is_midi and b.overlaps(_SHIFT) and b.target != SHIFT_PARAM]
+    for b in shift:
+        notes.append(f"dropped {b.source} → {b.target}: SHIFT is the desk's layer latch "
+                     "(plan 13 D4)")
+    rows = [b for b in rows if not any(b is x for x in shift)]
     for b in rows:
         if not b.is_midi:
             continue
@@ -1032,7 +1040,8 @@ def sort_layers(rows: Iterable[Binding], profile: str = "apc40"
         else:
             b.layer = "preset"
         n += 1
-    notes = [f"sorted {n} MIDI rows into the desk's layers (plan 13 §3.2)"] if n else []
+    if n:
+        notes.insert(0, f"sorted {n} MIDI rows into the desk's layers (plan 13 §3.2)")
     for f in factory:
         if f.layer != "global" and f.source != SHIFT_SOURCE:
             continue
