@@ -1,5 +1,5 @@
 {
- "schema": "hyperspace.bindings/2",
+ "schema": "hyperspace.bindings/3",
  "profile": "apc40",
  "bindings": [
   {"source": "hand:7", "target": "fx.mix", "op": "position"},

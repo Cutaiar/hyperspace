@@ -283,7 +283,8 @@ def test_setup_is_registry_params_that_round_trip():
     hands.register(reg, s)
     hands.register(reg, s)                                   # idempotent
     ps = reg.group("hands")
-    assert len(ps) == 8 + 12 * 13 and not any(p.modulatable for p in ps)
+    # 8 settings, 13 per axis, and the selection with its alias (plan 13 WP3)
+    assert len(ps) == 8 + 12 * 13 + 2 and not any(p.modulatable for p in ps)
     snap = reg.snapshot("hands")
     reg["hands.right.pitch.curve"].set_value(-0.5)
     reg["hands.right.pitch.rest"].set(0)
@@ -733,12 +734,12 @@ def test_hands_page_draws_live_and_offline(tmp_path):
         run(r, 2, hand("left"), hand("right", direction=tilt(0.3)))
         r.io.start_calibration(5.0)
         for k in range(len(r.s.axes)):
-            panel._hands_sel = k
+            reg["hands.select"].set(k)
             r.s.axes[k].out = hs.OUTS[k % len(hs.OUTS)]
             r.s.axes[k].rest = hs.RESTS[k % 2]
             frame()
         r.s.axes[0].out, r.s.axes[0].number = "cc14", 99   # a conflict draws its warning
-        panel._hands_sel = 0
+        reg["hands.select"].set(0)
         frame()
     finally:
         imgui.destroy_context(ctx)

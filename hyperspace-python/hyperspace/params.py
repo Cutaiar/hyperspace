@@ -524,12 +524,23 @@ class Registry:
         # → the selected band), installed by build_registry; the panel's
         # widgets, the Learn object and the routing menu all ask here
         self.real_of: Callable[[Param], Param] | None = None
+        # the other alias families, by id prefix → who they stand for right
+        # now (hands.sel.* → the selected hand axis, hands/core.py), asked
+        # after `real_of`; a module that declares an alias adds its rule
+        self.aliases: dict[str, Callable[[Param], Param | None]] = {}
 
     def real(self, p: Param) -> Param:
         """The param behind an alias — where the base and the modulation
         state live — or `p` itself when it is not one."""
-        if p.alias and self.real_of is not None:
-            return self.real_of(p) or p
+        if not p.alias:
+            return p
+        if self.real_of is not None:
+            q = self.real_of(p)
+            if q is not None and q is not p:
+                return q
+        for prefix, rule in self.aliases.items():
+            if p.id.startswith(prefix):
+                return rule(p) or p
         return p
 
     def add(self, p: Param) -> Param:
@@ -916,10 +927,11 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                      "chain — moves a whole song down into the 56 dB working window.")
 
     # ---- macros: the chaining knobs (plan 09, decision 7) ----
-    # Nothing reads a macro but the router: a route names one as its
-    # `scale`, and a performer may own it — so a hand that positions
-    # macro.2 deepens the lane pushing brightness × macro.2, one frame
-    # later, rather than two performers pulling on brightness. No object,
+    # Nothing reads a macro but the router, through the macro's subscribers
+    # (routing.Macro, plan 13 §2.4): a base subscriber follows the macro's
+    # base, a depth subscriber its effective value — so a hand that
+    # positions macro.2 deepens the routes macro.2 subscribes, one frame
+    # later, rather than two performers pulling on one param. No object,
     # so the values live in this list, and the slot clamps itself (a
     # restore writes raw). Base 1: a route that names an untouched macro
     # runs at its full depth, the same as "× 1".
@@ -929,8 +941,9 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
         r.continuous(f"macro.{k + 1}", f"Macro {k + 1}", (lambda k=k: macros[k]),
                      (lambda v, k=k: macros.__setitem__(k, _clamp(float(v), 0.0, 1.0))),
                      lo=0.0, hi=1.0, fmt=lambda v: f"{v * 100:.0f} %", group=g,
-                     tip="Does nothing on its own. Put it on a route as its scale, or own "
-                         "it with a hand or LFO, to chain.")
+                     tip="Does nothing on its own: it acts through its subscribers — "
+                         "each sets a param's base or scales a route's depth, over its "
+                         "own from → to. Own it with a hand or LFO to ride the depths.")
 
     # ---- scene ----
     g = "scene"

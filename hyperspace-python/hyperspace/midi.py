@@ -41,6 +41,18 @@ Triggers echo their press so the button lights while held, or show a
 light of their own when the param carries one (``Registry.trigger(lit=)``:
 the METRONOME LED blinks on the beat through ``lfo.trigger``).
 
+Two layers under a latched SHIFT (plan 13 §3). A message goes to the
+invariant rows on its control, else to the rows of the layer that is up
+(`Bindings.dispatch`) — nothing falls through, so a control the up layer
+does not map does nothing; a note-off goes to the rows its note-on went
+to, whatever the layer is by then (D12). Only the up layer's rows and the
+invariant ones draw (`Bindings.active`); a layer switch or a desk
+replacement re-sends every ring and LED (`redraw`), a control no active
+row draws going dark. A knob's ring also re-bases the endless encoder
+(`apc40.RING_REBASES_KNOB`, hand check 31), so the row is caught at the
+value just sent; the faders keep soft pickup, and a desk replacement (a
+preset load) clears their catch.
+
 Bindings persist with every other source's in bindings.json (routing.py;
 an old midi_map.json is migrated on first run). With no file the device
 profile's default map is used; right-click → Learn on any panel control
@@ -61,7 +73,7 @@ import mido
 from . import apc40
 from .learn import Learn
 from .params import Kind, Param, Registry
-from .routing import Binding, Bindings, act, bindings_path
+from .routing import Binding, Bindings, act, bindings_path, register_desk
 
 PROFILES = {"apc40": apc40}          # config's `[midi] profile` names one of these
 RECONNECT_S = 2.0
@@ -188,6 +200,12 @@ class MidiIO:
         # sees; a bare adapter (tests, the probe) makes its own
         self.learner = learner if learner is not None else Learn(registry, self.table)
         self._writes: dict[str, float] = {}  # param → norm we last wrote / saw
+        # D12: a note-on's rows, by (channel, note), so its note-off goes to
+        # the same rows whatever layer is up by then
+        self._held: dict[tuple[int, int], list[Binding]] = {}
+        # the table's layer / desk counters as last drawn (`_follow_table`)
+        self._seen = (self.table.layer_serial, self.table.desk_serial)
+        register_desk(registry, self.table)     # SHIFT's param, for a bare adapter too
         if self.ports.injected:
             self._enter()
         elif self.ports.connect():
@@ -228,7 +246,7 @@ class MidiIO:
         if self.out is not None:
             for msg in self.profile.enter():
                 self._send(msg)
-            self.feedback()
+            self.redraw()
 
     def close(self) -> None:
         if self.out is not None:
@@ -270,6 +288,9 @@ class MidiIO:
         if p is None:
             return
         b = Binding(Binding.midi_source(kind, channel, number), pid, "abs")
+        # into the preset layer — unless the control is invariant, which it
+        # keeps (WP4 refuses that learn, and one with SHIFT up, D5 / D6)
+        b.layer = None if self.table.is_invariant(b) else "preset"
         if kind == "cc":
             if self.profile.is_relative(number):
                 b.op = "rel"
@@ -278,10 +299,10 @@ class MidiIO:
         elif kind == "note":
             b.op = "toggle"
         old = self.table.for_param(pid)
-        if old is not None and old.feedback:
+        if old is not None and old.feedback and (old.layer == "global") == (b.layer == "global"):
             self._dark(old)
         for x in self.table.route(kind, channel, number):
-            if x.feedback:
+            if x.feedback and (x.layer == "global") == (b.layer == "global"):
                 self._dark(x)
         fb = self.profile.feedback_for(kind, channel, number)
         if fb:
@@ -298,10 +319,22 @@ class MidiIO:
                 self._connected()
             if not self.on:
                 return
+        self._follow_table()
         self._uncatch_moved()
         for msg in self.ports.recv():
             self._handle(msg)
+        self._follow_table()        # SHIFT pressed just now: this frame's redraw
         self.feedback()
+
+    def _follow_table(self) -> None:
+        """A layer switch or a desk replacement since the last look: redraw
+        every ring and LED; a replacement (a preset load) also clears the
+        faders' catch."""
+        seen = (self.table.layer_serial, self.table.desk_serial)
+        if seen != self._seen:
+            load = seen[1] != self._seen[1]
+            self._seen = seen
+            self.redraw(load=load)
 
     def _uncatch_moved(self) -> None:
         """A param that moved without us re-arms pickup on its knob."""
@@ -332,7 +365,17 @@ class MidiIO:
             if kind != "note" or value > 0:
                 self._learned(kind, ch, number, value)
             return
-        for b in self.table.route(kind, ch, number):
+        # the layer is read at the press (D12): a note-off goes to the rows
+        # its note-on went to, whatever is up by now
+        if kind == "note" and value > 0:
+            rows = self._held[(ch, number)] = self.table.dispatch(kind, ch, number)
+        elif kind == "note":
+            rows = self._held.pop((ch, number), None)
+            if rows is None:
+                rows = self.table.dispatch(kind, ch, number)
+        else:
+            rows = self.table.dispatch(kind, ch, number)
+        for b in rows:
             p = self.reg.get(b.target)
             if p is not None and b.enabled:
                 self._apply(b, p, value)
@@ -407,7 +450,7 @@ class MidiIO:
         """
         if self.out is None:
             return
-        for b in self.bindings:
+        for b in self.table.active():        # the up layer's rows and the invariant ones
             if not b.feedback:
                 continue
             p = self.reg.get(b.target)
@@ -423,6 +466,7 @@ class MidiIO:
                     self._send(mido.Message(
                         "control_change", channel=b.channel or 0, control=b.number, value=v
                     ))
+                    self._rebase(b, p, v)
             elif b.feedback == "led":
                 lit = self._lit(b, p)
                 v = b.on if lit else b.off
@@ -431,6 +475,39 @@ class MidiIO:
                     self._send(mido.Message(
                         "note_on", channel=b.channel or 0, note=b.number, velocity=v
                     ))
+
+    def _rebase(self, b: Binding, p: Param, v: int) -> None:
+        """Plan 13 D7, hand check 31 (`profile.RING_REBASES_KNOB`): the ring
+        CC just sent also set the endless knob's own value, so the knob is
+        caught there — its next turn continues from the ring, no pickup.
+        A fader never gets here (it has no ring) and keeps soft pickup."""
+        if b.op != "abs" or not getattr(self.profile, "RING_REBASES_KNOB", False):
+            return
+        b.caught, b.last_hw = True, v / 127.0
+        if p.kind is not Kind.TRIGGER:
+            self._writes[p.id] = p.norm
+
+    def redraw(self, *, load: bool = False) -> None:
+        """Every ring and LED for the layer that is up (plan 13 §3.1): each
+        control some row names goes dark unless an active row draws it, then
+        every active row is re-sent — a knob's ring re-bases it (`_rebase`).
+        `load` (a desk replacement: a preset load) also clears every
+        fader's catch, so a fader whose base the load moved picks up."""
+        active = self.table.active()
+        drawn = {b.control for b in active if b.feedback}
+        for b in self.bindings:
+            b.last_out = None
+            if load and b.kind in ("cc", "pitch") and b.op == "abs" and b.feedback != "ring":
+                b.caught = False
+        if self.out is None:
+            return
+        dark: set = set()
+        for b in self.bindings:
+            c = b.control
+            if b.feedback and c not in drawn and c not in dark:
+                dark.add(c)
+                self._dark(b, velocity=0)
+        self.feedback()
 
     @staticmethod
     def _lit(b: Binding, p: Param) -> bool:
@@ -446,10 +523,11 @@ class MidiIO:
             return b.lit or bool(p.get())
         return b.lit
 
-    def _dark(self, b: Binding) -> None:
+    def _dark(self, b: Binding, velocity: int | None = None) -> None:
         if b.kind == "note":
             self._send(mido.Message(
-                "note_on", channel=b.channel or 0, note=b.number, velocity=b.off
+                "note_on", channel=b.channel or 0, note=b.number,
+                velocity=b.off if velocity is None else velocity,
             ))
         elif b.kind == "cc" and b.feedback == "ring":
             for msg in self.profile.ring_setup(b.channel or 0, b.number, 0):

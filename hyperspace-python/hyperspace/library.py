@@ -733,7 +733,7 @@ class Library:
         reload that re-classes the router reaches them."""
         from . import routing
 
-        versions = tuple(int(s.rpartition("/")[2]) for s in (routing.SCHEMA_V1, routing.SCHEMA))
+        versions = routing.SCHEMA_VERSIONS
         self.kind(BINDINGS, routing.SCHEMA.rpartition("/")[0],
                   load=lambda doc, path: router.apply_doc(doc, path),
                   document=lambda name: router.preset_doc(name),

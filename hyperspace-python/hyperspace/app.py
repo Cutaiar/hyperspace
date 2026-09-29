@@ -426,7 +426,8 @@ class Host:
 
 def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     """One frame, in the order ARCHITECTURE §2 states: the scene-setters
-    (keys, loop keys, pad, MIDI) write bases; the sources feed the table
+    (keys, loop keys, pad, MIDI, the macros' base subscribers) write
+    bases; the sources feed the table
     (hands, output, mouse, audio, bridge, LFOs); the pass lands offsets
     (`router.modulate`, `reg.apply`, `integrate`); then the two windows
     draw. Returns False when a guarded block raised — the error is on
@@ -487,6 +488,14 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
             h.midi_io.poll()
         except Exception as e:  # noqa: BLE001 — hot-reloaded code may raise
             ok, reloader.runtime_error = False, _err("midi", e)
+
+    # ---- the macros' base subscribers: the last scene-setter — a macro
+    # whose base moved (a knob just now, the panel last frame, a restore)
+    # sets its subscribers' bases before any source feeds (plan 13 §2.4) ----
+    try:
+        router.follow_macros()
+    except Exception as e:  # noqa: BLE001
+        ok, reloader.runtime_error = False, _err("macros", e)
 
     # ---- Ultraleap hands: hand lanes into the table, MIDI out to a DAW ----
     if h.hands_io is not None:

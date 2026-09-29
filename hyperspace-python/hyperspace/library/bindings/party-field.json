@@ -1,5 +1,5 @@
 {
- "schema": "hyperspace.bindings/2",
+ "schema": "hyperspace.bindings/3",
  "profile": "apc40",
  "bindings": [
   {"source": "lane:0", "target": "rot.rate.ZW", "op": "push", "value": 0.0625, "scale": "master.gain"},

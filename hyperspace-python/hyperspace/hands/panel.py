@@ -51,9 +51,24 @@ CAL_SECONDS = 20.0
 LEFT = imgui.ImVec4(0.92, 0.92, 0.92, 1.0)
 
 
+def _sel_param(panel):
+    """`hands.select`, the selected axis the page and the desk's
+    `hands.sel.*` knob share (core.register); None on a bare registry."""
+    reg = getattr(panel, "reg", None)
+    return reg.get(f"{GROUP}.select") if reg is not None else None
+
+
 def _sel(panel, n: int) -> int:
-    k = getattr(panel, "_hands_sel", 0)
+    p = _sel_param(panel)
+    k = int(p.value) if p is not None else getattr(panel, "_hands_sel", 0)
     return min(max(k, 0), n - 1)
+
+
+def _select(panel, k: int) -> None:
+    p = _sel_param(panel)
+    if p is not None:
+        p.set(k)
+    panel._hands_sel = k
 
 
 # ---- right-click menu: a param's hand bindings ----
@@ -201,7 +216,8 @@ def _axes(panel, io, settings) -> int:
                          imgui.ImVec2(imgui.get_style().item_spacing.x, 2.0))
     for i, a in enumerate(settings.axes):
         if _axis_row(panel, io, i, a, i == k, h, a.name in bad):
-            panel._hands_sel = k = i
+            _select(panel, i)
+            k = i
     imgui.pop_style_var()
     return k
 
