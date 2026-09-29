@@ -26,7 +26,7 @@ presets are re-cut into the new shape as one of its work packages).
 | D7 | On a layer switch the **knobs jump** to the layer's values (they are endless encoders the host re-bases); the **faders soft-pick-up**. Faders are invariant, so pickup only ever happens after a preset load moves a base. |
 | D8 | A control a preset does not map **does nothing** and shows dark. No fall-through to the global layer. |
 | D9 | The **analyzer is session**: its bands, dynamics, scene and the drive fader are never in a preset. |
-| D10 | **Macros stay what they are** — a knob that scales the depth of every route naming it — and belong in the preset with those routes. Separately, a desk row may name **several targets**, each with a range, which is "one knob moves several bases". |
+| D10 | **One macro concept** (owner, 2026-09-28). A macro is a knob (`macro.1–8`, an ordinary param) with a list of **subscribers**. A subscriber either sets a target's **base** or scales a route's **depth** (attenuation), and each states its own **polarity** as a `from` → `to` range, so one knob can raise one thing while lowering another. The separate multi-target desk row is gone: a desk control that should move several things maps to one macro. §2.4 is the definition; a performer on a macro moves its depth subscribers only (plan 11 §2 row 19). |
 | D11 | A session **names its startup preset**, loaded on launch. |
 | D12 | A modifier is read **at the press**; SHIFT's release never re-evaluates a button already down. |
 
@@ -46,8 +46,11 @@ user ones in the home folder shadowing by name (as every group does today).
  "routes":  [{"source": "hand:7", "target": "fx.zoomblur.amount", "op": "push", "value": 0.8}, …],
  "desk":    [{"source": "cc:0:48", "target": "view.bright", "op": "abs"},
              {"source": "note:0:82", "target": "view.points", "op": "toggle"},
-             {"source": "cc:0:51", "targets": [{"id": "fx.plasma.level", "lo": 0, "hi": 0.6},
-                                                {"id": "fx.zoomblur.glow", "lo": 0.2, "hi": 1.2}]}, …],
+             {"source": "cc:0:51", "target": "macro.1", "op": "abs"}, …],
+ "macros":  {"macro.1": {"label": "Heat", "subs": [
+               {"base": "fx.plasma.level", "from": 0.0, "to": 0.6},
+               {"base": "view.speed", "from": 0.8, "to": 0.3},
+               {"depth": {"source": "hand:7", "target": "fx.zoomblur.amount"}, "from": 0.0, "to": 1.0}]}},
  "modules": {"fx": "trip", "dream": "wake"}
 }
 ```
@@ -58,9 +61,11 @@ user ones in the home folder shadowing by name (as every group does today).
 - `routes`: the performer rows — `hand:`, `lane:`, `lfo:`, `ext:` sources,
   `push` / `position`, scale, gate, rest — exactly today's routing rows.
   One performer per target; the referee settles a file with two.
-- `desk`: the preset layer of the APC40, MIDI rows in today's form plus the
-  multi-target form (D10). A row on an invariant control is dropped at load
-  with a note (D6).
+- `desk`: the preset layer of the APC40, MIDI rows in today's form. A
+  control that should move several things maps to a macro (D10). A row on
+  an invariant control is dropped at load with a note (D6).
+- `macros`: each macro's label and subscribers (§2.4). Routes no longer
+  carry a `scale` field; a depth subscriber replaces it.
 - `modules`: labels (D3).
 
 Rotation phases stay out (a load changes the look, not where the spin is).
@@ -100,6 +105,45 @@ The project file keeps its name (`<slug>.hyp.json`) and becomes:
 
 The `values`, `modules`, `io` and inline `bank` of schema 1 are migrated
 (§6).
+
+### 2.4 Macros — one concept (D10)
+
+A **macro** is one knob, `macro.1` to `macro.8`, whose value `m` runs 0 to
+1. It is an ordinary parameter: a desk control, the panel, or a preset
+sets it, and a performer may own it. It does nothing on its own; it acts
+through its **subscribers**, which live in the preset beside the routes.
+
+A subscriber is one of two kinds:
+
+| Kind | Written | What `m` does |
+|---|---|---|
+| base | `{"base": "<param id>", "from": a, "to": b}` | sets that param's base to `a + m · (b − a)`, measured along the param's own fader (norm units), so `from` and `to` are fader positions |
+| depth | `{"depth": {"source": …, "target": …}, "from": a, "to": b}` | multiplies that route's depth by `a + m · (b − a)`; `from 0, to 1` is today's `scale` |
+
+**Polarity is per subscriber.** `from > to` runs the other way, so one
+knob can brighten the picture while slowing the spin, or deepen one route
+while flattening another. A depth range may cross zero, which flips the
+route's direction partway through the throw.
+
+**Where it sits in the control model.** A base subscriber is a
+scene-setter: it writes the base, never an offset, exactly as a knob on
+the desk does. A performer on the same param still adds its offset on
+top, and the macro moves the value the performer returns to. Two
+scene-setters on one param do not compete: the last write wins, and the
+ROUTING page marks a param that two macros set. A depth subscriber reads
+the macro's effective value every frame, as `scale` does today, so a hand
+riding a macro deepens or flattens its routes one frame later.
+
+**A performer on a macro** (owner, 2026-09-28, plan 11 §2 row 19). Base
+subscribers follow the macro's **base** only: the desk, the panel or a
+preset moves them. Depth subscribers follow its effective value, so a
+hand riding a macro deepens or flattens its routes and leaves the bases
+alone. Letting a performer's macro move bases as offsets (the macro as a
+performer of each param) is a later extension, not this plan.
+
+**Migration.** A route with `scale: "macro.N"` becomes a depth subscriber
+of `macro.N` with `from 0, to 1`; the route loses the field. Every factory
+file is regenerated; a user file migrates on load with a note.
 
 ### 2.3 Module preset — `hyperspace.preset/1`, unchanged
 

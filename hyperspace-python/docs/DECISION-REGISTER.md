@@ -354,6 +354,31 @@ knob do nothing", and one page answers it.
 **What changes.** The ROUTING page layout and its no-scroll test. Part of
 plan 13 WP3.
 
+### 12b. P13-g — when a hand owns a macro, do its base settings follow?
+
+**Recommendation: (a) for the first build.**
+
+**What it is.** Your answer to 12 made a macro one knob with subscribers:
+each either sets a parameter's base or scales a route's depth, with its own
+direction. A macro is an ordinary parameter, so a performer (a hand, an
+LFO) can own it. The question is what happens to the macro's *base*
+subscribers while a performer is moving it.
+
+**Why it is a question.** The control model has one hard rule: knobs,
+keys, the panel and presets set bases; performers only ever add offsets,
+through one path. A knob turned on the desk setting several bases is
+fine. A hand setting several bases every frame is a performer writing
+bases, which the model forbids.
+
+| Option | What a hand riding a macro does | Trade-off |
+|---|---|---|
+| (a) Base subscribers follow the macro's base only | Moves the macro's depth subscribers (route attenuation), as `scale` does today. The base subscribers move only when the knob, panel or a preset moves the macro. | A hand cannot sweep several bases at once through a macro; it can still own each of those params directly. |
+| (b) Yes, as offsets | The macro becomes the performer of every param it base-subscribes, counted by the referee as that param's one owner; the hand's movement lands as offsets. | A real extension of the model: a macro that is a performer, with referee rules for when a route and a macro both want one param. |
+| (c) Yes, as base writes | The hand rewrites the bases every frame. | Breaks the rule that stops a hand and a knob fighting over one value; the knob could never catch. |
+
+**Why (a).** It needs nothing new in the model and ships the concept.
+(b) can follow if a hand on a macro turns out to be what you reach for.
+
 ---
 
 ## Part B — built on the recommendation without asking; confirm or overturn
@@ -413,10 +438,11 @@ or "overturn".
 | 7 | R2 + L2 loop keys | (a) table rows | **(a)**, 2026-09-28 | built, PR #58 |
 | 8 | Merge path | PR #55, then #47 | **rec**, 2026-09-28 | #56 folded into #55 first |
 | 9 | P13-a global track knobs | (a) hand feel + BPM | **(a)**, 2026-09-28 | a first cut; expect better globals with use |
-| 10 | P13-b partial presets | (a) no exception | | |
-| 11 | P13-c bank slots | (a) a slot names a file | | |
-| 12 | P13-d what a macro is | (a) attenuator + multi-target rows | | |
-| 13 | P13-e ROUTING page | (a) one page | | |
+| 10 | P13-b partial presets | (a) no exception | **(a)**, 2026-09-28 | |
+| 11 | P13-c bank slots | (a) a slot names a file | **(a)**, 2026-09-28 | |
+| 12 | P13-d what a macro is | (a) attenuator + multi-target rows | **one concept**, 2026-09-28 | subscribers set a base or a depth, each with its own polarity; see 12b |
+| 13 | P13-e ROUTING page | (a) one page | **(a)**, 2026-09-28 | |
+| 12b | P13-g a performer on a macro | (a) base subscribers follow the base only | **(a)**, 2026-09-28 | |
 | 14 | B1 as built | keep | | |
 | 15 | A1 as built | keep | | |
 | 16 | L3 as built | keep | | |
