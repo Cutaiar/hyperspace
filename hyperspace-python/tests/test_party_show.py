@@ -67,6 +67,24 @@ def test_the_last_show_opened_is_the_one_that_opens(tmp_path):
     assert boot(tmp_path, show=None).lib.project.name == "Friday"
 
 
+def test_the_last_show_is_remembered_by_its_file_not_the_name_inside(tmp_path):
+    """Review of PR #75: a copied file keeps the name it was saved with;
+    the launch finds a show by its file name, so that is what is kept."""
+    party = json.loads((FACTORY / "projects" / "party.hyp.json").read_text())
+    (tmp_path / "projects").mkdir(parents=True)
+    (tmp_path / "projects" / "gig.hyp.json").write_text(
+        json.dumps(dict(party, startup="FACES")))                # still "name": "party"
+    r = boot(tmp_path, show=None)
+    r.lib.project.load("gig")
+    assert (tmp_path / "last_show").read_text() == "gig\n"
+    again = boot(tmp_path, show=None)
+    assert again.lib.project.path == tmp_path / "projects" / "gig.hyp.json"
+    assert again.lib.current("presets") == "FACES"
+    again.lib.project.save("Friday Night")
+    assert (tmp_path / "last_show").read_text() == "friday-night\n"
+    assert boot(tmp_path, show=None).lib.project.name == "Friday Night"
+
+
 def test_a_remembered_show_that_is_gone_falls_back_to_the_party(tmp_path):
     (tmp_path / "last_show").write_text("vanished\n")
     r = boot(tmp_path, show=None)

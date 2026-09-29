@@ -159,7 +159,11 @@ Filled as the work packages land.
   `projects/mine.hyp.json`, named `mine`, bank and startup as they were
   (MIGRATED first), backed up by `routing.backup` as `.bak-v2` (a dated
   copy when taken), noted on stderr and in `lib.warning`; a `mine` already
-  there leaves both alone; idempotent. Plan 13's migration now puts
+  there leaves both alone; `projects/RENAMED.txt` records that it is
+  settled, so it runs once per home (review of PR #75: without it a show
+  later saved as "default" was renamed on the next launch), and
+  `last_show` holds the file name (`Project.stem`), not the name inside
+  the file. Plan 13's migration now puts
   MIGRATED into `mine` (made from `house`), and its empty-slot seeds come
   from `house`. `Project.new` takes the party show's bank. Tests:
   `tests/test_party_show.py`; the tests written on the house moods open

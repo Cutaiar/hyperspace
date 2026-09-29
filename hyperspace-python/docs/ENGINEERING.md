@@ -650,7 +650,10 @@ unreadable at a party.
   named `mine`, bank and startup as they were, backed up first as
   `default.hyp.json.bak-v2` (a dated copy if that name is taken), said on
   stderr and on the PRESETS page's warning line; a `mine` already there
-  leaves both files alone (`library.unshadow_default`, run by `Library()`
+  leaves both files alone; once settled, `projects/RENAMED.txt` says so and it
+  never runs again, so a show you later save as "default" stays yours;
+  `last_show` holds the show's file name, not the name inside it
+  (`library.unshadow_default`, run by `Library()`
   and after plan 13's migration converts a schema-1 `default`; plan 13's
   MIGRATED now lands in `mine`, made from `house`)
   (`tests/test_party_show.py`).

@@ -452,6 +452,8 @@ class Project:
         self.note = str(doc.get("note") or "")
         self.path = path
         self.factory = factory and path is None
+        # the file's own name, which a launch finds the show by (`stem`)
+        self._stem = where[: -len(PROJECT_SUFFIX)] if where.endswith(PROJECT_SUFFIX) else None
         self.session = dict(doc.get("session") or {})
         self.modules = dict(doc.get("modules") or {})
         bank = [str(s) if isinstance(s, str) and s else None
@@ -460,6 +462,15 @@ class Project:
         self.startup = str(doc["startup"]) if doc.get("startup") else None
         self.active = -1
         self._saved = (list(self.bank), self.startup)
+
+    @property
+    def stem(self) -> str:
+        """The show's file name less ``.hyp.json`` — what `last_show` holds
+        and `path_for` finds again, whatever `name` the file carries inside
+        (review of PR #75: a copied or hand-edited file's name can differ)."""
+        if self.path is not None:
+            return self.path.name[: -len(PROJECT_SUFFIX)]
+        return getattr(self, "_stem", None) or slug(self.name)
 
     def to_doc(self) -> dict:
         doc: dict[str, Any] = {"schema": PROJECT_SCHEMA, "name": self.name}
@@ -672,7 +683,7 @@ class Project:
         missing = self._apply()
         lib.report(missing, path.name)
         lib.status = f"show: {self.name}"
-        lib.remember(self.name)
+        lib.remember(self.stem)
         if startup:
             self.load_startup()
         return missing
@@ -712,7 +723,7 @@ class Project:
                                        if k not in ("schema", "group")}
         self.write()
         lib.status = f"show: saved {self.name}"
-        lib.remember(self.name)
+        lib.remember(self.stem)
         return self.path
 
     def write(self) -> Path:
@@ -880,8 +891,9 @@ class Library:
         return name or None
 
     def remember(self, name: str) -> None:
-        """Note `name` as the show a launch opens (decision 22); a write
-        that fails costs only the memory."""
+        """Note `name` — a show's file name less ``.hyp.json``
+        (`Project.stem`) — as the show a launch opens (decision 22); a
+        write that fails costs only the memory."""
         if name == self.last_show():
             return
         try:
