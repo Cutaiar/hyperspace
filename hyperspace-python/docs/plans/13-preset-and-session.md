@@ -1,5 +1,11 @@
 # Plan 13 — Preset and session: two nouns, a latched desk, one load
 
+**Status: built on `plan-13-integration`** (WP1–WP5, PRs #62, #64, #63,
+#65, #66; WP6's documents; the integration PR to come). What remains:
+the hand checks at the machine (`11-hand-checks.md` group H, checks
+33–41 with check 31 first) and decision 20 (register row 20, hand routes
+by name), the owner's.
+
 **After plans 11 and 12.** Plan 12 composed five hand presets and, in doing
 so, showed that the app has five nouns for saved state — module preset,
 theme, project, routing preset, scene — split by which file system they
@@ -363,65 +369,73 @@ macro's meaning is its subscribers, which live in the preset).
 
 ## 10. Exit criteria (checked on merged main)
 
+Checked by WP6 on `plan-13-integration` (caacf14 plus the documents):
+every named test below exists under that name and passes, and the whole
+suite is 872 passed, 11 skipped; ruff clean. The owner re-checks on
+main after the merge.
+
 Headless, each held by a named test (the work package that adds it in
 brackets):
 
-- [ ] 1. Every persisted param is in exactly one of `PERFORMANCE_GROUPS` /
+- [x] 1. Every persisted param is in exactly one of `PERFORMANCE_GROUPS` /
       `SESSION_GROUPS` — `test_params.py::test_every_persisted_group_is_performance_or_session` [WP1].
-- [ ] 2. A preset load never touches a session param (a tapped BPM
+- [x] 2. A preset load never touches a session param (a tapped BPM
       survives TRIP) — `test_presets.py::test_a_preset_load_never_touches_a_session_param` [WP2].
-- [ ] 3. A preset load lands every performance base (the file's, else the
+- [x] 3. A preset load lands every performance base (the file's, else the
       group default) and replaces every performer row —
       `test_presets.py::test_a_preset_load_lands_every_base_and_replaces_every_route` [WP2].
-- [ ] 4. Session ids and invariant desk rows in a preset are noted and
+- [x] 4. Session ids and invariant desk rows in a preset are noted and
       ignored — `test_presets.py::test_session_ids_in_a_preset_are_noted_and_ignored`,
       `test_desk.py::test_a_desk_row_on_an_invariant_control_is_dropped_with_a_note` [WP2, WP3].
-- [ ] 5. A slot names a file; an empty or dangling slot loads nothing and
+- [x] 5. A slot names a file; an empty or dangling slot loads nothing and
       says so; ⇧F saves the live state as that preset in the user folder —
       `test_presets.py::test_a_slot_names_a_preset_file`,
       `::test_shift_f_saves_the_live_state_as_the_slots_preset` [WP2].
-- [ ] 6. The startup preset loads on launch —
+- [x] 6. The startup preset loads on launch —
       `test_presets.py::test_the_startup_preset_loads_on_launch` [WP2].
-- [ ] 7. Module labels are recorded and never chain-load —
+- [x] 7. Module labels are recorded and never chain-load —
       `test_presets.py::test_module_labels_are_recorded_and_never_chain_load` [WP2].
-- [ ] 8. SHIFT latches and lights; a load drops to the preset layer; a
+- [x] 8. SHIFT latches and lights; a load drops to the preset layer; a
       modifier is read at the press —
       `test_desk.py::test_shift_latches_the_layer_and_lights_its_led`,
       `::test_a_preset_load_drops_to_the_preset_layer`,
       `::test_shift_release_never_reevaluates_a_held_button` [WP3].
-- [ ] 9. On a layer switch the knobs are re-based and the faders pick up;
+- [x] 9. On a layer switch the knobs are re-based and the faders pick up;
       a load clears the faders' catch —
       `test_desk.py::test_a_layer_switch_rebases_the_knobs_and_leaves_the_faders_to_pick_up`,
       `::test_a_preset_load_clears_the_faders_catch` [WP3].
-- [ ] 10. An unmapped control is dark and does nothing; invariant controls
+- [x] 10. An unmapped control is dark and does nothing; invariant controls
       mean one thing on both layers —
       `test_desk.py::test_an_unmapped_control_is_dark_and_does_nothing`,
       `::test_invariant_controls_mean_one_thing_on_both_layers` [WP3].
-- [ ] 11. Two base subscribers of opposite polarity move opposite ways; a
+- [x] 11. Two base subscribers of opposite polarity move opposite ways; a
       performer on a macro moves only its depth subscribers; `scale:
       macro.N` migrates to a depth subscriber —
       `test_macros.py::test_base_subscribers_of_opposite_polarity_move_opposite_ways`,
       `::test_a_performer_on_a_macro_moves_only_its_depth_subscribers`,
       `::test_scale_on_a_macro_migrates_to_a_depth_subscriber` [WP3].
-- [ ] 12. Learn writes into the loaded preset and refuses the global layer
+- [x] 12. Learn writes into the loaded preset and refuses the global layer
       and invariant controls —
       `test_learn.py::test_a_knob_learn_writes_a_desk_row_into_the_loaded_preset`,
       `::test_a_hand_learn_writes_a_route_into_the_loaded_preset`,
       `::test_learn_refuses_the_global_layer_and_invariant_controls` [WP4].
-- [ ] 13. The ROUTING page is one page and fits —
+- [x] 13. The ROUTING page is one page and fits —
       `test_ui_routing.py::test_the_routing_page_is_one_page_over_the_loaded_preset`,
       `test_ui_shell.py::test_every_page_fits_the_control_window` [WP4].
-- [ ] 14. The migration: a schema-1 project, `bindings.json` and every
+- [x] 14. The migration: a schema-1 project, `bindings.json` and every
       routes-only file become presets and a schema-2 project, a backup kept
       before each rewrite and never over a hand-made `.bak-*` —
-      `test_migration.py` [WP5].
-- [ ] 15. The five party presets load by F-key as presets and still hold
-      plan 12's rules — `test_plan12_presets.py` [WP5].
-- [ ] 16. The control model holds: `tests/test_routing_boundary.py` (one
+      `test_migration.py` (fourteen tests) [WP5].
+- [x] 15. The five party presets load by F-key as presets and still hold
+      plan 12's rules — `test_plan12_presets.py`
+      (`::test_the_five_party_presets_load_by_f_key_as_presets`,
+      `::test_wake_and_trip_device_knobs_move_their_bases` and the plan 12
+      rules) [WP5].
+- [x] 16. The control model holds: `tests/test_routing_boundary.py` (one
       caller of `Param.modulate`) and `tests/test_app_boundary.py` (the
       frame order, with the macro step in the scene-setter block) green;
       pytest green, ruff clean, ENGINEERING §6's count updated.
-- [ ] 17. DECISIONS' plan 13 rows read "standing"; the register's notes say
+- [x] 17. DECISIONS' plan 13 rows read "standing"; the register's notes say
       where each answer was built; ARCHITECTURE §3 and §3.8 describe the
       code [WP6].
 
@@ -439,11 +453,11 @@ blocks, macros, the regenerated factory set).
 
 | Wave | WP | Branch | Owns | Must not touch |
 |---|---|---|---|---|
-| 1 | WP1 split | `plan-13-wp1-split` | `params.py` (the two tuples, `snapshot(part=)`), `library.py` (`Project.session`, slot capture / restore over performance only, `groups()`), `routing.py` (`routing_values` names the macro group) | presets, desk, UI |
+| 1 | WP1 split | `plan-13-wp1-split` | `params.py` (the two tuples, `snapshot(part=)`), `library.py` (`Project.session`, slot capture / restore over performance only, `groups()`), `routing.py` (`routing_values` names the macro group; as built, gone in WP5) | presets, desk, UI |
 | 2 | WP2 preset/2 | `plan-13-wp2-preset` | new `preset.py`; `library.py` (`presets/` kind, `hyperspace.project/2`); `params.py` (`theme.*` → `preset.*`); `routing.py` (`LOOP_KEY_ROWS`, `keymap` / `padmap` targets, the `theme.*` remap); `apc40.py` (**target ids only**: clip row 1, QUANT); `ui_presets.py`; `app.py` (construction, startup load); `library/presets/`, `library/projects/` | `midi.py`, `learn.py`, `ui_routing.py`, row layers |
-| 2 | WP3 desk + macros | `plan-13-wp3-desk` | `routing.py` (`Binding.layer`, `Macro` and its subscribers on `Bindings`, the `scale` migration, depth in `Router.modulate`, the macro base-follow step); `midi.py` (layers, latch, feedback, re-base, catch); `apc40.py` (**layers only**: the sorted map, the SHIFT row, the global track knobs); `hands/` (`hands.select`, the `hands.sel.return` alias); `app.py` (the macro step in the frame); `ui_routing.py` (only what removing `scale` forces) | target ids, `library.py`, `ui_presets.py` |
-| 3 | WP4 learn + page | `plan-13-wp4-learn` | `preset.py` wiring (desk and macros into load and save); `learn.py`; `midi.py` `_learned`; `hands/core.py` `_learn`; `ui_routing.py` (the one page); `ui.py` (the refusal line) | file formats |
-| 4 | WP5 migration + re-cut | `plan-13-wp5-migrate` | the migrations (`library.MIGRATIONS`, `Bindings.load`), removing the routing kind and `routing.PRESETS`, the factory generator's inputs, `library/bindings/` → `library/presets/`, `tests/test_plan12_presets.py`, `tools/preset_shots.py` | docs beyond its own lines |
+| 2 | WP3 desk + macros | `plan-13-wp3-desk` | `routing.py` (`Binding.layer`, `Macro` and its subscribers on `Bindings`, the `scale` migration, depth in `Router.modulate`, the macro base-follow step, `register_desk` / `desk.shift`); `midi.py` (layers, latch, feedback, re-base, catch); `apc40.py` (**layers only**: the sorted map, the SHIFT row, the global track knobs); `hands/` (`hands.select`, the `hands.sel.return` alias — as built through `params.Registry.aliases`); `app.py` (the macro step in the frame); `ui_routing.py` (only what removing `scale` forces) | target ids, `library.py` (as built: one line, the routing kind's schema versions, approved), `ui_presets.py` |
+| 3 | WP4 learn + page | `plan-13-wp4-learn` | `preset.py` wiring (desk and macros into load and save, `fresh_desk`, the factory desks); `learn.py`; `midi.py` `_learned`; `hands/core.py` `_learn`; `ui_routing.py` (the one page); `ui.py` (the refusal line); as built also `routing.Bindings.bind(write=)` and `hands/panel.py`'s context menu (no file written) | file formats |
+| 4 | WP5 migration + re-cut | `plan-13-wp5-migrate` | the migrations — as built in `preset.py` (`migrate_home`, `migrate_project`, `migrate_routing_presets`, `put_preset`), `Project.load` and `Bindings.load` / `Carried`, not `library.MIGRATIONS` — removing the routing kind and `routing.PRESETS`, the factory generator's inputs (now `preset.FACTORY_PRESETS`), `library/bindings/` → `library/presets/` and `hyperspace/bindings.default.json`, `routing.migrate_scales` (decision 18), `midi.MidiIO.unbind`, `ui_routing.py` (the "session" mark, the scale combo: decision 19), `tests/test_plan12_presets.py`, `tools/preset_shots.py` | docs beyond its own lines |
 | 4 | WP6 docs | `plan-13-wp6-docs` | ARCHITECTURE §3 / §3.8 / the file table, ENGINEERING, DECISIONS statuses, the register's notes, plan 12's cards, CHECKPOINT, plans README row 13, this plan's §13 | code |
 
 **Contracts between them.**
@@ -487,14 +501,376 @@ conversion of routes-only files switches on the effects their routes drive.
 |---|---|---|---|
 | 18 | **P13-h** The drive fader reaches the rotation as `scale: master.gain` on every lane → rotation route; D10 says routes lose `scale`. | (a) keep a route's `scale`, allowed only on a session param; macros move to subscribers | WP3's last step (it leaves those rows alone meanwhile) and WP5's factory regeneration |
 | 19 | **P13-i** May a preset's route *perform* a session param (`party-tumble`'s left height pushes `master.gain`)? | (a) yes: D9 keeps the analyzer's settings out of a preset, and an offset is not a setting | WP5's re-cut of `party-tumble` |
-| 20 | **P13-j** Hand routes by name (`hand:right.roll`) or by lane number (audit N7), now that WP5 makes it an S-sized change | (a) names now, as WP5b before the integration merge | nothing else; WP6 and the integration PR wait only if (a) |
+| 20 | **P13-j** Hand routes by name (`hand:right.roll`) or by lane number (audit N7), now that WP5 makes it an S-sized change | (a) names now, as WP5b before the integration merge | nothing else; WP6 and the integration PR wait only if (a). **Still open** when WP6 was written |
 
 ## 13. As built
 
-Filled as the work packages land: one line per deviation, with its PR.
+What WP1–WP5 built on `plan-13-integration`, one list per work package,
+every deviation from §1–§11 kept (with the review that made it, where a
+review did). An *interim* line was true only until a later package; it
+says which.
 
-- **WP1** (PR #62): `PERFORMANCE_GROUPS` / `SESSION_GROUPS` / `PARTS`, `part_of`, `snapshot(part=)` in `params.py`; `ROUTING_GROUPS` is gone and the whole snapshot carries the macros. A theme slot captures and restores the performance part only (a slot's `scene.select` stays in the file, ignored). `Project.session` is an additive `"session"` key under `hyperspace.project/1` (an old file's session ids are split out of `values` on read). The `app` group of §4 has no params (`app.restart` is `ui`, not persisted), so `SESSION_GROUPS` does not name it. Interim until WP5: the macros are in the project *and* `bindings.json`'s `values`; at startup the table's copy lands last and wins, so a project opened at launch shows dirty when its macros differ from the table's, and loading it again by hand does land its own. An open project fills the ids its file lacks (an old file's macros) from the state the load left, so it opens clean (review of PR #62).
-- **WP2** (PR #64): `preset.Presets(lib, reg, router)` registers `presets/` as a document kind (`load`, `load_doc`, `document`, `save_as`, `signature`, `current`, `notes`, `desk`, `macros`, plus a carried `note`) and sets `Library.presets`; the project is `hyperspace.project/2` (`startup`, `bank` of names, `session`, session-only `modules`, `note`); the bank params are `preset.select / load.0–7 / save.0–7 / next / prev` (group `preset`). Deviations from the brief: **(1)** step 1 drops a `routes` row by scheme and op (not a lane scheme, or not push / position), not by `is_performer`, so a *disabled* performer row is kept — a save writes disabled rows, and the round trip must hold; a performance id that is not persisted (`rot.phase.*`) and a `modules` entry for a non-performance group are noted and ignored too. **(2)** The library method is `Library.label(group, name)` (name + the group's snapshot as the clean reference; None clears). **(3)** The kind's load hook lights the bank slot that names what loaded, whichever road it came by (strip, F-key, file edit); a preset the bank does not name lights none. **(4)** Empty slots are no longer seeded from the factory bank: `party.hyp.json`'s slots 6–8 are null and stay empty. **(5)** `migrate()` (a first run from a legacy `presets.json`) is kept working: each slot becomes a user preset (its performance ids only, the factory lane rows as routes) and the default project a schema-2 one naming them, `startup` the first filled slot. **(6)** The schema-1 refusal is in `Project._take` (`"<file> is a schema-1 project; plan 13's migration (WP5) converts it"`, no `MIGRATIONS` entry); a refused user default gives way to the factory default, and a later save over the refused file keeps it first as `<file>.bak-v1` (`routing.backup`). **(7)** `Project.load(…, startup=False)` is the file watch's road (an edited project re-reads its session and bank but does not reload the startup preset); `Project.new()` loads the factory startup preset. **(8)** `master.gain` (session) drops out of TUMBLE's values along with `scene.select`; every party preset's `modules` is empty (the party project named only `band`, a session group). **(9)** `python -m hyperspace.preset` regenerates only the party presets' routes; the house presets' routes (the legacy6 lane rows) are pinned by `test_the_party_presets_routes_are_the_codes`. **(10)** Renames: `build_registry(bank=)` and `Panel(bank=)` / `Panel.bank` (were `themes`), `routing.BANK_SLOTS` (was `THEME_SLOTS`), `routing.THEME_TO_PRESET` (the remap table); `Project.values`, `slots`, `capture` and `Library.factory_bank` are gone. **(11)** The PRESETS rail entry carries the `presets` dirty dot; the overview lists the performance groups less `macro`, and `band`. **(12)** `tests/test_themes.py` is folded into `tests/test_presets.py` and removed. **(13)** In `app.main` the startup preset loads after every adapter is open, just before the reloader is built. **(14)** Review of PR #64: a value that will not land refuses the load whole (the performance part is put back); a project load keeps what a document kind has landed (the loaded preset, a routing preset) and relights the bank slot naming it; `Library.save_as` tells a kind's load hook the new name, so a strip save as moves the bank light.
-- **WP3** (PR #63): `Binding.layer`; `Bindings.layer` / `set_layer` / `toggle_layer` / `drop_layer` / `dispatch` / `active` / `set_desk` / `desk` / `macros` / `set_macros` / `macros_doc`; `Macro` / `Sub`; `Router.follow_macros` (in `app.frame` after the MIDI poll); `MidiIO.redraw(load=)`; `hyperspace.bindings/3`. Deviations: SHIFT is an ordinary invariant row on a new param **`desk.shift`** (group `desk`, a toggle over the table's layer, registered by `routing.register_desk` from both `Router` and `MidiIO`); the D7 hardware assumption is one switch, `apc40.RING_REBASES_KNOB`, and the knobs are re-based on **every** ring send (not only on a redraw); `redraw(load=True)` is what clears the faders' catch, and a plain layer switch leaves it; the layer counters are `layer_serial` / `desk_serial` on the table, and `set_desk` never writes `bindings.json`. `library.py` gets one line (the routing kind reads `routing.SCHEMA_VERSIONS`, 1–3; approved). A routing preset's `macros` replace the table's wholesale (a file with none clears them) and `preset_doc` saves them; a routing preset's MIDI rows are never sorted (`from_json(desk=False)`), and the one-time sort runs only on a file that has MIDI rows. Interim until WP4: a knob Learn writes into the preset layer (an invariant control's learn stays invariant), and `bind` never removes a global-layer row for a non-global one or the reverse. `Registry.aliases` (id prefix → rule) is how `hands.sel.*` resolves beside `band.sel.*`. A backup is named for the schema the file was read at (`.bak-v2` for the sort of a v2 file, `.bak-v3` for a remap of a v3 one). Base subscribers act from the first macro-base change after start (a launch does not re-land them) and on every `set_macros`; two macros on one param: the later in id order wins. Review of PR #63: a depth subscriber follows its route when the row is re-pointed (`Bindings.move_route`, the ROUTING page and a Replace retarget) and goes when the route is removed; an older file's row on SHIFT's note is dropped with a note so the latch can be added. `Bindings.active` reads an index of the invariant controls (a pairwise scan cost about 4 ms a frame).
-- **WP4** (PR #65): `Presets.load_doc` replaces the preset layer (`set_desk`; its notes join the load's and are kept as `Presets.desk_notes` for the ROUTING head) and the macros (`set_macros`), then lands the base subscribers with `Router.follow_macros(force=True)` before the clean reference is taken; `document` / `signature` read the table (`preset.desk_json(table.desk())` — rows without `layer` — and `table.macros_doc()`), the carried `desk` / `macros` attributes are gone. `preset.fresh_desk()` is the factory preset layer: a file with no `desk` key gets it, and `python -m hyperspace.preset` now writes it as the `desk` of **every** factory preset (the five party presets included; their plan-12 desk blocks stay WP5's), pinned by `test_every_factory_presets_desk_is_the_generators`. `MidiIO._learned` writes a preset-layer row and no file, and refuses (the arm is spent) on an invariant control — checked first, so SHIFT's own note is refused and does not latch — or with the global layer up; the reason is `Learn.last` with `Learn.refused` set (`Learn.said` / `refuse`, plain attributes so a hot reload keeps them), the control named in Akai's words (`apc40.control_name`, `MidiIO.control_name`). Deviations: **(1)** `routing.Bindings.bind(b, *, write=True)` (routing.py, outside WP4's list) gained `write` and returns the rows it dropped, and a row now replaces only rows of **its own layer** (was: global vs the rest), so a knob learn never takes an invariant row with it. **(2)** `hands/panel.py`'s context menu (the gate, Unbind hand) no longer writes `bindings.json` either — a route edit is the preset's. **(3)** `MidiIO.unbind` (right-click → Unbind) is unchanged: it removes every MIDI row of the param, any layer, and writes `bindings.json` — left for WP5 / a follow-up. **(4)** The head has **save** and **as…** (the brief named save only); the layer is a label (LAYER PRESET / LAYER GLOBAL), not a switch; the load's desk notes show as one line (the first, "+n more", the rest in a tooltip) so the head cannot push the page off the window. **(5)** A desk row's op is shown, not edited; new rows come only from Learn; a desk edit (target, ×) bumps a new `Bindings.redraw_serial`, so the adapter redraws without clearing the faders' catch (review of PR #65: `desk_serial` would read as a load). Review of PR #65 also: the first-run migration from `presets.json` writes no `desk` key (it wrote `[]`, which WP4 reads as a dark preset layer), so a migrated preset gets the factory one. **(6)** "Preset controls" for the dark lines are every factory-map control on either layer that the live table does not make invariant — so the device knobs and clip row 3's first three buttons are listed when a preset leaves them. **(7)** A subscriber edit bumps `macros_serial` (every base subscriber re-lands); "+ base" adds `view.bright` with `from = to =` its current position (moves nothing), "+ depth" the first route at 0 → 1 (disabled with no routes); a param two macros base-subscribe is marked "shared" on each line. **(8)** The routing-preset strip left the page, and with it `_strip` (the page no longer registers the `bindings` kind — app.py still does), `_write`, `_save_edits`, `_sig` and the page's "saved" record. **(9)** A preset saved after a module load moved a base-subscribed param does not round-trip that param: the reload lands the subscriber's value (`test_a_preset_round_trips` now subscribes a param nothing else moves). **(10)** The SYSTEM page's learn line shows a refusal wrapped, in the warning colour. Tests changed: `test_presets.py::test_a_preset_load_lands_every_base_and_replaces_every_route`, `::test_a_preset_round_trips`, `::test_the_factory_presets_are_preset_2_performance_files`, `::test_write_factory_rewrites_only_the_routes` → `::test_write_factory_rewrites_only_the_routes_and_the_desk`; `test_learn.py::test_learn_source_writes_a_position_route_without_any_midi`; `test_midi.py::test_learn_binds_next_message_and_persists` → `::test_learn_binds_next_message_into_the_preset_layer`, `::test_learn_a_button_on_a_toggle` (a free clip button: METRONOME is invariant); `test_hands.py::test_learn_takes_the_axis_that_moved_as_a_position_route`, `::test_a_learn_on_a_performed_param_is_held_for_the_prompt`, `::test_a_hand_learn_needs_no_midi_adapter`; `test_ui_routing.py::test_routing_page_draws_routes`, `::test_routing_page_edits_land_in_bindings_json` → `::test_routing_page_edits_change_the_preset_not_bindings_json`, `::test_the_routing_page_shows_the_referees_refusals`, `::test_the_replace_prompt_swaps_the_owner_or_leaves_the_table`, `::test_the_routing_page_has_no_conflicting_ids` (subscriber lines too), `::test_routing_presets_step_load_save` (registers the kind itself), `::test_routing_strip_name_field_draws` → `::test_the_routing_heads_name_field_draws`.
-- **WP5** (PR #66): `preset.migrate_home(lib, router)` in `app.main` after `Presets` is built and before the startup preset (§6; `tests/test_migration.py`); `bindings.json` holds only the session's controls (`routing.is_session_row`; `Bindings.to_json` / `write` never write a performer row, a preset-layer row, `macros` or `values`); `Router.restore_values` / `routing_values` / `missing_values`, `Bindings.values_of`, `Library.routing` / `BINDINGS`, `Router.apply_doc` / `preset_doc` / `signature` / `load_preset` / `apply_preset`, `routing.PRESETS` / `PRESET_MACROS` / `PRESET_DIR` / `FACTORY_DIR` / `preset_table` and `ui_routing.KEY` are gone; `library/bindings/` is gone — `legacy6`, `lfo-breathe`, `hands-fx`, `hands-pinch`, `hands-play` are full factory presets and the factory session table is `hyperspace/bindings.default.json` (`routing.FACTORY_FILE`, `python -m hyperspace.routing`); the generator's inputs live in `preset.py` (`FACTORY_PRESETS`, `generated`, `write_factory`); `MidiIO.unbind` removes only preset-layer rows, writes no file, and refuses a session row through `Learn.refuse`. Decisions 18 (a) and 19 (a), answered 2026-09-28, built here: `routing.migrate_scales` keeps a `scale` only on a session param (`is_session_id`) and drops one on a performance param with a note — in the table, in `Presets.load_doc` and in the migration; the ROUTING page's scale combo offers session params only and marks a route onto a session param "session" (`ui_routing.is_session_target`). Deviations: **(1)** `Bindings.load` never rewrites a file that still holds a preset's part (it keeps it in `Bindings.carried`, a `routing.Carried`); `migrate_home` moves it into presets first and only then backs the file up and rewrites it, so a crash in between loses nothing. **(2)** `Bindings.factory()` ships no performer rows but keeps the factory preset layer in memory (a fresh preset's desk); only the file drops it. **(3)** An empty slot of a schema-1 bank points at the factory default bank's preset of that slot — what its F-key loaded while empty slots were seeded — rather than staying empty. **(4)** A slot preset's `values` are the slot's performance ids with `bindings.json`'s `values` (the macros' bases) filling the ids it lacks; its session part and the first slot's session ids go to `session`. The schema-1 project's own top-level performance `values` — the look it restored on open — never survive only in the backup (follow-up on PR #66): equal to a filled slot's preset as it would land (the same performance values, the macros' bases filled alike), that slot is the `startup`; otherwise they are a user preset `<PROJECT NAME> SAVED` (`DEFAULT SAVED` for `default`; through `put_preset`, so `<name> 2` and nothing overwritten), with the table's routes, desk and macros like the slots, made the `startup` (D11: opening the project shows what it used to) and put in the first empty bank slot — a full bank: in no slot, and the note says so. **(5)** A migrated preset is only ever written as a new file (`preset.put_preset`): an equal preset reached by that name (the user's, else the factory's) is pointed at; a factory one that differs is shadowed; a *user* file that differs is never overwritten — the new one takes `<name> 2` (the brief said write under that name). **(6)** The user routing presets are converted once, marked by a `NOT-READ.txt` left in `<home>/bindings/` (the files untouched); their session ids are dropped from `values`, the referee's refused rows kept after the first (so the file loses nothing and the first still wins), and — the rule PR #29 proposed, which the owner asked for — `preset.effects_on` switches on `fx.on` / `fx.<name>.on` / `dream.on` for the effects a converted file's routes drive, unless it names them (the factory five too: `hands-fx` turns Acid on, `hands-pinch` and `lfo-breathe` set `fx.on`). **(7)** `MIGRATED` becomes the user default project's startup and slot 1, the rest of the bank one slot along (a full bank's last name leaves it, noted; its file stays); an existing schema-2 default is kept as `.bak-v2` first; no `MIGRATED` is made while a schema-1 project failed to convert (its next try takes the table's part). **(8)** A backup that cannot be made leaves its file as it was (the migration rewrites nothing without its copy; the next launch tries again); `routing.backup` now creates the copy exclusively (`_write_new`) and says `backup: …`. **(9)** A schema-1 project opened later (`Project.load`) is migrated on the same road with the live table's routes, desk and macros; `Project._take` still refuses one when there is no preset loader, and `_open_default` quietly opens the factory default while the user's is schema 1 (the migration re-opens it). **(10)** `library.migrate()` (a legacy `presets.json`) goes through `preset.slot_presets` too; the first slot's session ids now land in the project's `session` (they were dropped). **(11)** The five presets made from routing presets are named by their slugs (`legacy6`, `lfo-breathe`, `hands-fx` …), so hand check 39's "strip → `lfo-breathe`" stands; `legacy6` and the `hands-*` carry no `desk` key, while the house and party presets keep the explicit factory layer WP4 wrote; the `hands-*` are generated from code now (they were hand-written). **(12)** `lfo-breathe` is re-tuned as the macro demo: `macro.1` "Breathe" on device knob 1 (`cc:*:16`, abs, ring) loads at 0 (was 1.0), brightness 1× → 2× (fader 0.6 → 0.8), speed 0.25× → about 0.06× (0.5 → 0.25), its depth subscriber on `lfo:1 → fx.mix` 0 → 1. **(13)** WAKE's and TRIP's eight device knobs are the ids plan 12 §6 names; all exist. **(14)** `Library.groups()` skips a home's `bindings/` (`LEGACY_DIRS`), and a document-kind file with no `schema` is refused (the routing kind's v1 files were the exception). **(15)** The party presets' `*_values` helpers and `_driven_values` are gone (their values are data in the files). **(16)** Review of PR #66: `put_preset` never writes a user file whose slug is a factory file's of another display name (a user `party-trip` would have hidden TRIP and its F-key: it becomes `party-trip 2`); a routing preset that cannot be written is said and retried next launch, never fatal (no `NOT-READ.txt` until all are in); an old `midi_map.json` with its own knobs carries the factory lane rows and is left for the migration to write (it was written stripped at load); a user preset already holding `bindings.json`'s routes, desk and macros counts as holding them, so a launch after one that could not rewrite `bindings.json` makes no `MIGRATED` and leaves the default project alone. Tests: `test_migration.py::test_a_migrated_preset_never_hides_a_factory_preset_of_another_name`, `::test_a_preset_that_cannot_be_written_never_stops_the_launch`, `::test_a_launch_that_could_not_rewrite_bindings_json_does_not_take_the_default`; `test_routing.py::test_old_midi_map_migrates_into_bindings_json` changed. Tests added: `test_migration.py` (fourteen, `test_a_schema_1_projects_saved_look_becomes_its_startup_preset` among them), `test_presets.py::test_the_routing_presets_are_full_factory_presets`, `::test_a_converted_preset_switches_on_the_effects_its_routes_drive`, `::test_lfo_breathes_macro_moves_brightness_up_and_speed_down`, `test_plan12_presets.py::test_the_five_party_presets_load_by_f_key_as_presets`, `::test_wake_and_trip_device_knobs_move_their_bases`, `test_midi.py::test_unbind_removes_only_preset_layer_rows_and_writes_no_file`, `test_macros.py::test_a_scale_on_a_performance_param_is_refused_with_a_note`, `test_ui_routing.py::test_a_route_on_a_session_param_is_marked_session`. Renamed over the new road: `test_write_factory_rewrites_only_the_routes_and_the_desk` → `test_write_factory_regenerates_every_factory_file`; `test_routing.py::test_apply_preset_replaces_routes_and_lands_bases` → `::test_the_legacy6_preset_replaces_routes_and_lands_bases`, `::test_load_preset_lists_what_it_dropped` → `::test_a_preset_load_lists_what_it_dropped`, `::test_a_routing_presets_values_are_bases_a_theme_would_save` → `::test_a_converted_presets_values_are_bases_a_preset_would_save`, `::test_the_live_table_carries_the_macros` → `::test_the_live_table_writes_only_the_sessions_controls`; `test_library.py::test_routing_presets_are_a_document_kind_of_the_library` → `::test_presets_are_the_librarys_one_document_kind`, `::test_a_bad_routing_preset_is_reported_not_fatal` → `::test_a_bad_preset_is_reported_not_fatal`, `::test_the_routing_kind_reaches_the_router_at_call_time` → `::test_the_preset_kind_reaches_presets_at_call_time`, `::test_a_project_naming_the_routing_layer_is_ignored_before_and_after_the_kind` → `::test_a_project_naming_the_old_routing_layer_is_ignored`, `::test_a_project_never_carries_the_routing_layer` → `::test_a_project_never_carries_the_loaded_preset`; `test_ui_routing.py::test_routing_presets_step_load_save` → `::test_the_old_routing_presets_step_load_save_as_presets`. Removed: `test_presets.py::test_a_schema_1_user_project_is_refused_until_the_migration` (the migration's tests replace it), `test_library.py::test_a_routing_preset_edited_on_disk_is_re_applied` (`test_presets.py::test_a_preset_edited_on_disk_is_re_applied` holds it), `test_ui_routing.py::test_router_preset_documents_and_a_library_over_them` (the router's documents are gone; `test_presets.py`'s round trips hold the save). Changed in body, same names: the legacy6 parity tests in `test_routing.py` (the preset's routes and bases from `preset.generated("legacy6")`; the "factory" leg is the factory table plus the house presets' lane rows) and every `test_routing.py` test that relied on `Bindings.factory()`'s lane rows, the file / remap / backup tests there (a session-only file, or `migrate_home` doing the write), `test_presets.py`'s factory-file tests and `boot` (it runs the migration), `test_macros.py::test_scale_on_a_macro_migrates_to_a_depth_subscriber` and `::test_a_scale_on_a_session_param_is_left_alone`, `test_desk.py::test_the_default_map_is_sorted_as_plan_13_says` and `::test_an_old_bindings_file_gets_its_layers_once_with_a_backup`, `test_midi.py::test_map_round_trips_json`, `test_routing_boundary.py` (`LAZY` loses `library`), `test_ui_routing.py::test_routing_page_edits_change_the_preset_not_bindings_json`, the `test_ui_shell.py` / `test_ui_routing.py` rigs (the house lane rows set on the table).
+### WP1 — the split (PR #62)
+
+- `params.py`: `PERFORMANCE_GROUPS` / `SESSION_GROUPS` / `PARTS`,
+  `part_of`, `Registry.snapshot(part=)`; `ROUTING_GROUPS` is gone and the
+  whole snapshot carries the macros.
+- The `app` group of §4 has no params (`app.restart` is `ui`, not
+  persisted), so `SESSION_GROUPS` does not name it.
+- A theme slot captured and restored the performance part only (a slot's
+  `scene.select` stayed in the file, ignored); the theme bank itself went
+  in WP2.
+- `Project.session` began as an additive `"session"` key under
+  `hyperspace.project/1` (an old file's session ids split out of `values`
+  on read); WP2 made it part of `hyperspace.project/2`.
+- *Interim, ended in WP5:* the macros were in the project *and*
+  `bindings.json`'s `values`; at startup the table's copy landed last and
+  won, so a project opened at launch showed dirty when its macros
+  differed from the table's.
+- Review of PR #62: an open project fills the ids its file lacks (an old
+  file's macros) from the state the load left, so it opens clean.
+
+### WP2 — preset/2, project/2, the bank (PR #64)
+
+- `preset.Presets(lib, reg, router)` registers `presets/` as a document
+  kind (`load`, `load_doc`, `document`, `save_as`, `signature`,
+  `current`, `notes`, a carried `note`) and sets `Library.presets`; the
+  carried `desk` / `macros` attributes of the WP2 contract went in WP4.
+- The project is `hyperspace.project/2` (`startup`, `bank` of names,
+  `session`, session-only `modules`, `note`); the bank params are
+  `preset.select / load.0–7 / save.0–7 / next / prev` (group `preset`).
+- Step 1 drops a `routes` row by scheme and op (not a lane scheme, or not
+  push / position), not by `is_performer`, so a *disabled* performer row
+  is kept — a save writes disabled rows and the round trip must hold; a
+  performance id that is not persisted (`rot.phase.*`) and a `modules`
+  entry for a non-performance group are noted and ignored too.
+- The library method is `Library.label(group, name)` (name + the group's
+  snapshot as the clean reference; None clears).
+- The kind's load hook lights the bank slot that names what loaded,
+  whichever road it came by (strip, F-key, file edit); a preset the bank
+  does not name lights none.
+- Empty slots are no longer seeded from the factory bank: `party.hyp.json`'s
+  slots 6–8 are null and stay empty.
+- `library.migrate()` (a first run from a legacy `presets.json`) keeps
+  working: each slot becomes a user preset (its performance ids, the
+  factory lane rows as routes) and the default project a schema-2 one
+  naming them, `startup` the first filled slot. WP4's review: it writes
+  no `desk` key (it wrote `[]`, a dark preset layer), so a migrated preset
+  gets the factory one. WP5: it goes through `preset.slot_presets`, and
+  the first slot's session ids land in the project's `session`.
+- *Interim, ended in WP5:* a user schema-1 project was refused in
+  `Project._take` with a clear `Library.error` (no `MIGRATIONS` entry); a
+  refused user default gave way to the factory default, and a later save
+  over the refused file kept it first as `<file>.bak-v1`.
+- `Project.load(…, startup=False)` is the file watch's road (an edited
+  project re-reads its session and bank but does not reload the startup
+  preset); `Project.new()` loads the factory startup preset.
+- `master.gain` (session) dropped out of TUMBLE's values with
+  `scene.select`; every party preset's `modules` is empty (the party
+  project named only `band`, a session group).
+- The factory presets are generated from code (§11's one move); WP2's
+  generator regenerated only the party presets' routes, the house
+  presets' lane rows pinned by `test_the_party_presets_routes_are_the_codes`
+  (WP4 and WP5 widened it: below).
+- Renames: `build_registry(bank=)` and `Panel(bank=)` / `Panel.bank`
+  (were `themes`), `routing.BANK_SLOTS` (was `THEME_SLOTS`),
+  `routing.THEME_TO_PRESET` (the remap of a user file's `theme.*` rows);
+  `Project.values`, `slots`, `capture` and `Library.factory_bank` are
+  gone.
+- The PRESETS rail entry carries the `presets` dirty dot; the overview
+  lists the performance groups less `macro`, and `band`.
+- `tests/test_themes.py` is folded into `tests/test_presets.py` and
+  removed.
+- In `app.main` the startup preset loads after every adapter is open,
+  just before the reloader is built.
+- Review of PR #64: a value that will not land refuses the load whole
+  (the performance part is put back); a project load keeps what a
+  document kind has landed (the loaded preset) and relights the bank
+  slot naming it; `Library.save_as` tells a kind's load hook the new
+  name, so a strip save as moves the bank light.
+
+### WP3 — the desk and the macros (PR #63)
+
+- `Binding.layer`; `Bindings.layer` / `set_layer` / `toggle_layer` /
+  `drop_layer` / `dispatch` / `active` / `set_desk` / `desk` / `macros` /
+  `set_macros` / `macros_doc`; `Macro` / `Sub`; `Router.follow_macros` (in
+  `app.frame` after the MIDI poll); `MidiIO.redraw(load=)`;
+  `hyperspace.bindings/3`.
+- SHIFT is an ordinary invariant row on a new param **`desk.shift`**
+  (group `desk`, a toggle over the table's layer, registered by
+  `routing.register_desk` from both `Router` and `MidiIO`).
+- The D7 hardware assumption is one switch, `apc40.RING_REBASES_KNOB`,
+  and the knobs are re-based on **every** ring send (not only on a
+  redraw); `redraw(load=True)` is what clears the faders' catch, and a
+  plain layer switch leaves it.
+- The layer counters are `layer_serial` / `desk_serial` on the table;
+  `set_desk` never writes `bindings.json`.
+- `library.py` got one line outside WP3's list (the routing kind read
+  `routing.SCHEMA_VERSIONS`, 1–3; approved; the kind went in WP5).
+- A routing preset's `macros` replaced the table's wholesale and
+  `preset_doc` saved them; a routing preset's MIDI rows were never sorted
+  (`from_json(desk=False)`) — both gone with the routing presets in WP5.
+  The one-time sort runs only on a file that has MIDI rows.
+- *Interim, ended in WP4:* a knob Learn wrote into the preset layer (an
+  invariant control's learn stayed invariant), and `bind` never removed a
+  global-layer row for a non-global one or the reverse.
+- `Registry.aliases` (id prefix → rule) is how `hands.sel.*` resolves
+  beside `band.sel.*`.
+- A backup is named for the schema the file was read at (`.bak-v2` for
+  the sort of a v2 file, `.bak-v3` for a remap of a v3 one).
+- Base subscribers act from the first macro-base change after start (a
+  launch does not re-land them; a preset load does, WP4) and on every
+  `set_macros`; two macros on one param: the later in id order wins.
+- Review of PR #63: a depth subscriber follows its route when the row is
+  re-pointed (`Bindings.move_route`, the ROUTING page and a Replace
+  retarget) and goes when the route is removed; an older file's row on
+  SHIFT's note is dropped with a note so the latch can be added.
+  `Bindings.active` reads an index of the invariant controls (a pairwise
+  scan cost about 4 ms a frame).
+
+### WP4 — Learn into the preset, the one ROUTING page (PR #65)
+
+- `Presets.load_doc` replaces the preset layer (`set_desk`; its notes
+  join the load's and are kept as `Presets.desk_notes` for the ROUTING
+  head) and the macros (`set_macros`), then lands the base subscribers
+  with `Router.follow_macros(force=True)` before the clean reference is
+  taken; `document` / `signature` read the table (`preset.desk_json`
+  over `table.desk()` — rows without `layer` — and `table.macros_doc()`).
+- `preset.fresh_desk()` is the factory preset layer: a file with no
+  `desk` key gets it, and `python -m hyperspace.preset` writes it as the
+  `desk` of every house and party preset, pinned by
+  `test_every_factory_presets_desk_is_the_generators` (the party presets'
+  plan-12 desk blocks came in WP5).
+- `MidiIO._learned` writes a preset-layer row and no file, and refuses
+  (the arm is spent) on an invariant control — checked first, so SHIFT's
+  own note is refused and does not latch — or with the global layer up;
+  the reason is `Learn.last` with `Learn.refused` set (`Learn.said` /
+  `refuse`, plain attributes so a hot reload keeps them), the control
+  named in Akai's words (`apc40.control_name`, `MidiIO.control_name`).
+- `routing.Bindings.bind(b, *, write=True)` (outside WP4's list) gained
+  `write` and returns the rows it dropped, and a row now replaces only
+  rows of **its own layer** (was: global vs the rest), so a knob learn
+  never takes an invariant row with it.
+- `hands/panel.py`'s context menu (the gate, Unbind hand) no longer
+  writes `bindings.json` either — a route edit is the preset's.
+- *Interim, ended in WP5:* `MidiIO.unbind` (right-click → Unbind) still
+  removed every MIDI row of the param, any layer, and wrote
+  `bindings.json`.
+- The head has **save** and **as…** (the brief named save only); the
+  layer is a label (LAYER PRESET / LAYER GLOBAL), not a switch; the
+  load's desk notes show as one line (the first, "+n more", the rest in a
+  tooltip) so the head cannot push the page off the window.
+- A desk row's op is shown, not edited; new rows come only from Learn.
+- "Preset controls" for the dark lines are every factory-map control on
+  either layer that the live table does not make invariant — so the
+  device knobs and clip row 3's first three buttons are listed when a
+  preset leaves them.
+- A subscriber edit bumps `macros_serial` (every base subscriber
+  re-lands); "+ base" adds `view.bright` with `from = to =` its current
+  position (moves nothing), "+ depth" the first route at 0 → 1 (disabled
+  with no routes); a param two macros base-subscribe is marked "shared"
+  on each line.
+- The routing-preset strip left the page, and with it `_strip`, `_write`,
+  `_save_edits`, `_sig` and the page's "saved" record.
+- A preset saved after a module load moved a base-subscribed param does
+  not round-trip that param: the reload lands the subscriber's value
+  (`test_a_preset_round_trips` subscribes a param nothing else moves).
+- The SYSTEM page's learn line shows a refusal wrapped, in the warning
+  colour.
+- Review of PR #65: a desk edit (target, ×) bumps a new
+  `Bindings.redraw_serial`, so the adapter redraws without clearing the
+  faders' catch (`desk_serial` would read as a load;
+  `test_desk.py::test_a_desk_edit_on_the_page_redraws_and_keeps_the_faders_catch`);
+  the first-run migration's `desk` fix (WP2's list).
+- Tests changed: `test_presets.py::test_a_preset_load_lands_every_base_and_replaces_every_route`,
+  `::test_a_preset_round_trips`, `::test_the_factory_presets_are_preset_2_performance_files`;
+  `test_learn.py::test_learn_source_writes_a_position_route_without_any_midi`;
+  `test_midi.py::test_learn_binds_next_message_and_persists` →
+  `::test_learn_binds_next_message_into_the_preset_layer`,
+  `::test_learn_a_button_on_a_toggle` (a free clip button: METRONOME is
+  invariant); `test_hands.py::test_learn_takes_the_axis_that_moved_as_a_position_route`,
+  `::test_a_learn_on_a_performed_param_is_held_for_the_prompt`,
+  `::test_a_hand_learn_needs_no_midi_adapter`;
+  `test_ui_routing.py::test_routing_page_draws_routes`,
+  `::test_routing_page_edits_land_in_bindings_json` →
+  `::test_routing_page_edits_change_the_preset_not_bindings_json`,
+  `::test_the_routing_page_shows_the_referees_refusals`,
+  `::test_the_replace_prompt_swaps_the_owner_or_leaves_the_table`,
+  `::test_the_routing_page_has_no_conflicting_ids` (subscriber lines
+  too), `::test_routing_presets_step_load_save` (registers the kind itself), `::test_routing_strip_name_field_draws` →
+  `::test_the_routing_heads_name_field_draws`. Renamed here and again
+  in WP5 (below): `test_presets.py::test_write_factory_rewrites_only_the_routes`
+  → `…_the_routes_and_the_desk` → `test_write_factory_regenerates_every_factory_file`,
+  and (changed here, renamed there) `test_routing_presets_step_load_save` →
+  `test_the_old_routing_presets_step_load_save_as_presets`.
+
+### WP5 — the migration, the routing presets gone, the re-cut (PR #66)
+
+- `preset.migrate_home(lib, router)` runs in `app.main` after `Presets`
+  is built and before the startup preset (§6; `tests/test_migration.py`).
+  The migrations live in `preset.py` (`migrate_home`, `migrate_project`,
+  `migrate_routing_presets`, `slot_presets`, `put_preset`), not in
+  `library.MIGRATIONS` (§11 named it): a schema-1 bank becomes files, which
+  a document step cannot do.
+- `bindings.json` holds only the session's controls
+  (`routing.is_session_row`; `Bindings.to_json` / `write` never write a
+  performer row, a preset-layer row, `macros` or `values`).
+- Gone: `Router.restore_values` / `routing_values` / `missing_values`,
+  `Bindings.values_of`, `Library.routing` / `BINDINGS`, `Router.apply_doc`
+  / `preset_doc` / `signature` / `load_preset` / `apply_preset`,
+  `routing.PRESETS` / `PRESET_MACROS` / `PRESET_DIR` / `FACTORY_DIR` /
+  `preset_table`, `ui_routing.KEY`, and `library/bindings/`.
+- `legacy6`, `lfo-breathe`, `hands-fx`, `hands-pinch`, `hands-play` are
+  full factory presets; the factory session table is
+  `hyperspace/bindings.default.json` (`routing.FACTORY_FILE`,
+  `python -m hyperspace.routing`); the generator's inputs live in
+  `preset.py` (`FACTORY_PRESETS`, `generated`, `write_factory`).
+- `MidiIO.unbind` removes only preset-layer rows, writes no file, and
+  refuses a session row through `Learn.refuse`.
+- Decisions 18 (a) and 19 (a), answered 2026-09-28, built here:
+  `routing.migrate_scales` keeps a `scale` only on a session param
+  (`is_session_id`) and drops one on a performance param with a note — in
+  the table, in `Presets.load_doc` and in the migration; the ROUTING
+  page's scale combo offers session params only and marks a route onto a
+  session param "session" (`ui_routing.is_session_target`).
+- `Bindings.load` never rewrites a file that still holds a preset's part
+  (it keeps it in `Bindings.carried`, a `routing.Carried`);
+  `migrate_home` moves it into presets first and only then backs the file
+  up and rewrites it, so a crash in between loses nothing.
+- `Bindings.factory()` ships no performer rows but keeps the factory
+  preset layer in memory (a fresh preset's desk); only the file drops it.
+- An empty slot of a schema-1 bank points at the factory default bank's
+  preset of that slot — what its F-key loaded while empty slots were
+  seeded — rather than staying empty.
+- A slot preset's `values` are the slot's performance ids with
+  `bindings.json`'s `values` (the macros' bases) filling the ids it
+  lacks; its session part and the first slot's session ids go to
+  `session`.
+- The schema-1 project's own top-level performance `values` — the look it
+  restored on open — never survive only in the backup (follow-up on PR
+  #66): equal to a filled slot's preset as it would land, that slot is
+  the `startup`; otherwise they are a user preset `<PROJECT NAME> SAVED`
+  (`DEFAULT SAVED` for `default`; through `put_preset`, so `<name> 2` and
+  nothing overwritten), with the table's routes, desk and macros like the
+  slots, made the `startup` (D11) and put in the first empty bank slot —
+  a full bank: in no slot, and the note says so.
+- A migrated preset is only ever written as a new file
+  (`preset.put_preset`): an equal preset reached by that name (the
+  user's, else the factory's) is pointed at; a factory one that differs
+  is shadowed; a *user* file that differs is never overwritten — the new
+  one takes `<name> 2` (the brief said write under that name).
+- The user routing presets are converted once, marked by a
+  `NOT-READ.txt` left in `<home>/bindings/` (the files untouched); their
+  session ids are dropped from `values`, the referee's refused rows kept
+  after the first (so the file loses nothing and the first still wins),
+  and — the rule PR #29 proposed, which the owner asked for —
+  `preset.effects_on` switches on `fx.on` / `fx.<name>.on` / `dream.on`
+  for the effects a converted file's routes drive, unless it names them
+  (the factory five too: `hands-fx` turns Acid on, `hands-pinch` and
+  `lfo-breathe` set `fx.on`).
+- `MIGRATED` becomes the user default project's startup and slot 1, the
+  rest of the bank one slot along (a full bank's last name leaves it,
+  noted; its file stays); an existing schema-2 default is kept as
+  `.bak-v2` first; no `MIGRATED` is made while a schema-1 project failed
+  to convert (its next try takes the table's part).
+- A backup that cannot be made leaves its file as it was (the migration
+  rewrites nothing without its copy; the next launch tries again);
+  `routing.backup` creates the copy exclusively (`_write_new`) and says
+  `backup: …`.
+- A schema-1 project opened later (`Project.load`) is migrated on the
+  same road with the live table's routes, desk and macros;
+  `Project._take` still refuses one when there is no preset loader, and
+  `_open_default` quietly opens the factory default while the user's is
+  schema 1 (the migration re-opens it).
+- The five presets made from routing presets are named by their slugs
+  (`legacy6`, `lfo-breathe`, `hands-fx` …), so hand check 39's "strip →
+  `lfo-breathe`" stands; `legacy6` and the `hands-*` carry no `desk` key,
+  while the house and party presets keep the explicit factory layer WP4
+  wrote; the `hands-*` are generated from code now (they were
+  hand-written).
+- `lfo-breathe` is re-tuned as the macro demo: `macro.1` "Breathe" on
+  device knob 1 (`cc:*:16`, abs, ring) loads at 0 (was 1.0), brightness
+  1× → 2× (fader 0.6 → 0.8), speed 0.25× → about 0.06× (0.5 → 0.25), its
+  depth subscriber on `lfo:1 → fx.mix` 0 → 1.
+- WAKE's and TRIP's eight device knobs are the ids plan 12 §6 names; all
+  exist.
+- `Library.groups()` skips a home's `bindings/` (`LEGACY_DIRS`), and a
+  document-kind file with no `schema` is refused (the routing kind's v1
+  files were the exception).
+- The party presets' `*_values` helpers and `_driven_values` are gone
+  (their values are data in the files).
+- Review of PR #66: `put_preset` never writes a user file whose slug is a
+  factory file's of another display name (a user `party-trip` would have
+  hidden TRIP and its F-key: it becomes `party-trip 2`); a routing preset
+  that cannot be written is said and retried next launch, never fatal (no
+  `NOT-READ.txt` until all are in); an old `midi_map.json` with its own
+  knobs carries the factory lane rows and is left for the migration to
+  write (it was written stripped at load); a user preset already holding
+  `bindings.json`'s routes, desk and macros counts as holding them, so a
+  launch after one that could not rewrite `bindings.json` makes no
+  `MIGRATED` and leaves the default project alone. Tests:
+  `test_migration.py::test_a_migrated_preset_never_hides_a_factory_preset_of_another_name`,
+  `::test_a_preset_that_cannot_be_written_never_stops_the_launch`,
+  `::test_a_launch_that_could_not_rewrite_bindings_json_does_not_take_the_default`;
+  `test_routing.py::test_old_midi_map_migrates_into_bindings_json` changed.
+- Tests added: `test_migration.py` (fourteen,
+  `test_a_schema_1_projects_saved_look_becomes_its_startup_preset` among
+  them), `test_presets.py::test_the_routing_presets_are_full_factory_presets`,
+  `::test_a_converted_preset_switches_on_the_effects_its_routes_drive`,
+  `::test_lfo_breathes_macro_moves_brightness_up_and_speed_down`,
+  `test_plan12_presets.py::test_the_five_party_presets_load_by_f_key_as_presets`,
+  `::test_wake_and_trip_device_knobs_move_their_bases`,
+  `test_midi.py::test_unbind_removes_only_preset_layer_rows_and_writes_no_file`,
+  `test_macros.py::test_a_scale_on_a_performance_param_is_refused_with_a_note`,
+  `test_ui_routing.py::test_a_route_on_a_session_param_is_marked_session`.
+- Renamed over the new road: `test_write_factory_rewrites_only_the_routes_and_the_desk`
+  → `test_write_factory_regenerates_every_factory_file`;
+  `test_routing.py::test_apply_preset_replaces_routes_and_lands_bases` →
+  `::test_the_legacy6_preset_replaces_routes_and_lands_bases`,
+  `::test_load_preset_lists_what_it_dropped` →
+  `::test_a_preset_load_lists_what_it_dropped`,
+  `::test_a_routing_presets_values_are_bases_a_theme_would_save` →
+  `::test_a_converted_presets_values_are_bases_a_preset_would_save`,
+  `::test_the_live_table_carries_the_macros` →
+  `::test_the_live_table_writes_only_the_sessions_controls`;
+  `test_library.py::test_routing_presets_are_a_document_kind_of_the_library`
+  → `::test_presets_are_the_librarys_one_document_kind`,
+  `::test_a_bad_routing_preset_is_reported_not_fatal` →
+  `::test_a_bad_preset_is_reported_not_fatal`,
+  `::test_the_routing_kind_reaches_the_router_at_call_time` →
+  `::test_the_preset_kind_reaches_presets_at_call_time`,
+  `::test_a_project_naming_the_routing_layer_is_ignored_before_and_after_the_kind`
+  → `::test_a_project_naming_the_old_routing_layer_is_ignored`,
+  `::test_a_project_never_carries_the_routing_layer` →
+  `::test_a_project_never_carries_the_loaded_preset`;
+  `test_ui_routing.py::test_routing_presets_step_load_save` →
+  `::test_the_old_routing_presets_step_load_save_as_presets`.
+- Removed: `test_presets.py::test_a_schema_1_user_project_is_refused_until_the_migration`
+  (the migration's tests replace it),
+  `test_library.py::test_a_routing_preset_edited_on_disk_is_re_applied`
+  (`test_presets.py::test_a_preset_edited_on_disk_is_re_applied` holds
+  it), `test_ui_routing.py::test_router_preset_documents_and_a_library_over_them`
+  (the router's documents are gone; `test_presets.py`'s round trips hold
+  the save).
+- Changed in body, same names: the legacy6 parity tests in
+  `test_routing.py` (the preset's routes and bases from
+  `preset.generated("legacy6")`; the "factory" leg is the factory table
+  plus the house presets' lane rows) and every `test_routing.py` test
+  that relied on `Bindings.factory()`'s lane rows, the file / remap /
+  backup tests there (a session-only file, or `migrate_home` doing the
+  write), `test_presets.py`'s factory-file tests and `boot` (it runs the
+  migration), `test_macros.py::test_scale_on_a_macro_migrates_to_a_depth_subscriber`
+  and `::test_a_scale_on_a_session_param_is_left_alone`,
+  `test_desk.py::test_the_default_map_is_sorted_as_plan_13_says` and
+  `::test_an_old_bindings_file_gets_its_layers_once_with_a_backup`,
+  `test_midi.py::test_map_round_trips_json`, `test_routing_boundary.py`
+  (`LAZY` loses `library`), `test_ui_routing.py::test_routing_page_edits_change_the_preset_not_bindings_json`,
+  the `test_ui_shell.py` / `test_ui_routing.py` rigs (the house lane rows
+  set on the table).
+
+### WP6 — the documents (this PR)
+
+ARCHITECTURE, ENGINEERING, DECISIONS, the register, the audit, the hand
+checks, plan 12's cards, the plans README and CHECKPOINT describe the
+code on `plan-13-integration`; §10's headless criteria were run there
+(872 passed, 11 skipped).
