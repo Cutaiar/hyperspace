@@ -412,9 +412,15 @@ class Project:
         session group's module counts: a performance group's label is the
         preset's (preset.py)."""
         lib = self.lib
+        # a document kind is never the project's (the loaded preset, the
+        # routing preset): what it has landed survives a project load
+        kinds = {g: lib.landed(g) for g in lib._kinds}
         lib._current.clear()
         lib._loaded.clear()
         lib._adopted.clear()
+        for group, mark in kinds.items():
+            if mark[0] is not None:
+                lib.reland(group, mark)
         docs: list[tuple[str, str, dict | None]] = []
         for group, ref in self.modules.items():
             if group in lib._kinds or group not in SESSION_GROUPS:
@@ -444,7 +450,9 @@ class Project:
             hook = lib._load_hooks.get(group)
             if hook is not None:
                 hook(name)
-        self.active = -1
+        # the bank lights the slot naming the preset still loaded, if any
+        cur = lib._current.get(PRESETS)
+        self.active = self.bank.index(cur) if cur in self.bank else -1
         return missing
 
     # ---- the bank: eight pointers to preset files ----
@@ -1022,6 +1030,9 @@ class Library:
         self._landed(group, name, kind.signature() if kind is not None
                      else self.resolved(group, doc["values"]))
         self.status = f"{group}: saved {name}"
+        hook = self._load_hooks.get(group)
+        if kind is not None and hook is not None:   # a kind's current moved: say so
+            hook(name)                               # (the bank's light, preset.py)
         return path
 
     def document(self, group: str, name: str, *, extra: dict | None = None) -> dict:
