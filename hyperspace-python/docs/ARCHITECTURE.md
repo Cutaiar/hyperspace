@@ -357,9 +357,12 @@ snapshot a theme or project takes, inside a routing preset's `values` and
 the live `bindings.json`'s `values`, landed at startup by the first
 `Router` built over the table (`routing.py:988-1005`,
 `tests/test_routing.py:1449`). LFO and tempo params are **not** in
-`ROUTING_GROUPS`: they are theme state, though the `lfo-breathe` routing
-preset also writes four of them (`lfo.1.sync/shape/depth`, `lfo.2.sync`) as
-`values` (audit R1).
+`ROUTING_GROUPS`: they are theme state. A routing preset's `values` may
+still set any base its rows assume — `lfo-breathe` sets four LFO knobs,
+`hands-fx` the acid speed — as long as each id is a persisted, non-alias
+param a theme would save too
+(`test_a_routing_presets_values_are_bases_a_theme_would_save`; audit R1,
+decided 2026-09-28).
 
 ### 3.7 Where a controller's value goes
 

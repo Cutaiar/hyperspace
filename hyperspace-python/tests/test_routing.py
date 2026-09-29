@@ -1442,6 +1442,23 @@ def test_every_factory_preset_names_real_params_with_one_owner(tmp_path):
     assert (routing.FACTORY_DIR / "lfo-breathe.json").exists()
 
 
+def test_a_routing_presets_values_are_bases_a_theme_would_save(tmp_path):
+    """Audit R1, decided (c) on 2026-09-28: LFO knobs stay theme state, and a
+    routing preset may set any base its rows assume. The rule that keeps
+    that honest: every id in a shipped routing file's `values` is a real,
+    persisted, non-alias param — a base a theme would save too."""
+    import json
+    r = rig(tmp_path=tmp_path, full=True)
+    ids = set(r.reg.ids())
+    files = sorted(routing.FACTORY_DIR.glob("*.json"))
+    assert files
+    for f in files:
+        for pid in json.loads(f.read_text()).get("values") or {}:
+            assert pid in ids, (f.name, pid)
+            p = r.reg[pid]
+            assert p.persist and not p.alias, (f.name, pid)
+
+
 def test_lfo_breathe_is_the_chain_the_plan_draws(tmp_path):
     """The `lfo-breathe` preset (plan 09 WP5): LFO 1, a sine at one bar,
     pushes brightness; the right hand's height *positions* LFO 1's depth,
