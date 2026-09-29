@@ -319,3 +319,9 @@ rows 9–13 and 12b):
 - Macros: one concept (§2.4); a performer on a macro moves its depth
   subscribers only.
 - The ROUTING page: one page over the loaded preset.
+
+## 13. As built
+
+Filled as the work packages land: one line per deviation, with its PR.
+
+- **WP1** (PR #62): `PERFORMANCE_GROUPS` / `SESSION_GROUPS` / `PARTS`, `part_of`, `snapshot(part=)` in `params.py`; `ROUTING_GROUPS` is gone and the whole snapshot carries the macros. A theme slot captures and restores the performance part only (a slot's `scene.select` stays in the file, ignored). `Project.session` is an additive `"session"` key under `hyperspace.project/1` (an old file's session ids are split out of `values` on read). The `app` group of §4 has no params (`app.restart` is `ui`, not persisted), so `SESSION_GROUPS` does not name it. Interim until WP5: the macros are in the project *and* `bindings.json`'s `values`; at startup the table's copy lands last and wins.
