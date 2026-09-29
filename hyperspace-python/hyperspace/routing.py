@@ -1609,10 +1609,15 @@ class Router:
     def address(self, scheme: str, i: int) -> str:
         """Lane `i` of `scheme` as a row should name it: by its published
         name when the scheme has one (``hand:right.roll``), else by index."""
-        for name, k in (self.names.get(scheme) or {}).items():
-            if k == i:
-                return f"{scheme}:{name}"
-        return f"{scheme}:{i}"
+        m = self.names.get(scheme)
+        if not m:
+            return f"{scheme}:{i}"
+        inv = self.__dict__.setdefault("_inverse", {})    # scheme → (map, {lane: name})
+        hit = inv.get(scheme)
+        if hit is None or hit[0] is not m:                 # the page asks per row per frame
+            hit = inv[scheme] = (m, {k: n for n, k in m.items()})
+        name = hit[1].get(i)
+        return f"{scheme}:{name}" if name is not None else f"{scheme}:{i}"
 
     def _note_macro_bases(self) -> None:
         for p in self.reg.group("macro"):
