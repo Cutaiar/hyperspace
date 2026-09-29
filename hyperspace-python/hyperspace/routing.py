@@ -30,13 +30,21 @@ Sources are one string, ``scheme:address``:
   lane:<i>         analyzer lane i — continuous, held every frame it is live
   ext:<i>          an external MIDI lane (WP4c)
   lfo:<i>          LFO i's output in [0, 1], resting at 0.5 (lfo.py)
-  hand:<i>         Ultraleap hand axis i's output in [0, 1] (hands/core.py),
-                   then one presence lane per hand, then the eight pinch
-                   switches (left then right, four fingers each; the
-                   `when` gates); NaN while that hand is out of the box
-                   or was never seen, and a NaN reading is not live
+  hand:<name>      an Ultraleap hand lane by name (hands/core.py `Layout`,
+                   decision register row 20): an axis's output in [0, 1]
+                   as `[hands] dofs` spells it (``hand:left.x`` …
+                   ``hand:right.yaw``), a hand's presence
+                   (``hand:left.present``), a pinch switch
+                   (``hand:right.pinch.index`` … ``.pinky``; the `when`
+                   gates). Resolved through the map the adapter publishes
+                   (`Router.names`): a name the rig lacks is dormant.
+                   NaN while that hand is out of the box or was never
+                   seen, and a NaN reading is not live
+  hand:<i>         the hand lane at index i on the rig's layout (axes,
+                   then presence, then switches) — still read, so an
+                   older saved preset plays; nothing writes it any more
 
-Source addresses are 0-based (``lfo:0`` is "LFO 1", ``hand:0`` the first
+Numeric addresses are 0-based (``lfo:0`` is "LFO 1", ``hand:0`` the first
 axis); param ids are 1-based (``lfo.1.depth``, ``macro.1``).
 
 Ops — what a row does to its target. The first group is the *scene-
@@ -83,12 +91,12 @@ One performer per parameter — the model (plan 09)::
                                    ▲
                                    │  ONE route row, ONE per-frame path: Router.modulate
               performer ───────────┘
-    lane:<i> · hand:<i> · ext:<i> · lfo:<i>      op = push | position
+    lane:<i> · hand:<name> · ext:<i> · lfo:<i>   op = push | position
                                                   depth · scale (a session param: master.gain)
                                                   rest (push; the source's, or a number) · when (a gate)
 
-   chaining:  hand:7 ──position──▶ lfo.1.depth      lfo:0 ──push──▶ view.bright
-              lane:0 ──push──▶ macro.2              hand:1 ──position──▶ fx.mix  × macro.2 (depth sub)
+   chaining:  hand:right.y ──position──▶ lfo.1.depth   lfo:0 ──push──▶ view.bright
+              lane:0 ──push──▶ macro.2   hand:left.y ──position──▶ fx.mix  × macro.2 (depth sub)
 
 A *performer* is an enabled row whose source is a continuous scheme
 (LANE_SCHEMES) and whose op is in MOD_OPS. A target has at most one:
@@ -345,7 +353,7 @@ class Binding:
     value: float = 1.0           # set: the value · step: the detents · push/position: the depth
     enabled: bool = True
     scale: str | None = None     # push/position: a param whose value multiplies the depth
-    # a source address ("hand:14") that must read on for this row to apply:
+    # a source address ("hand:left.pinch.index") that must read on for this row to apply:
     # a pinch switch gating an axis, so the same hand move means two things
     when: str | None = None
     # push: where the source sits idle — the reading that pushes nothing.
@@ -1524,6 +1532,9 @@ class Bindings:
 
 # ---------------------------------------------------------------- router
 
+_NO_LANES: dict = {}      # `Router.lane`'s cache before its first miss; never written
+
+
 class Router:
     """The adapters' lookup and the per-frame modulation pass over one table."""
 
@@ -1541,6 +1552,9 @@ class Router:
         # its configured rest value, a presence lane 0, an LFO 0.5); the
         # analyzer's lanes, and any scheme that publishes nothing, rest at 0
         self.rests: dict[str, list[float]] = {}
+        # `names` (scheme → {address name: lane}) and the resolved-address
+        # cache are made on first use, so a Router from before a hot reload
+        # has them too
         self._codes: dict[str, int | None] = {}
         register_desk(reg, table)
         # follow_macros: each macro's base as last acted on, and the table's
@@ -1549,6 +1563,56 @@ class Router:
         self._macro_bases: dict[str, float] = {}
         self._macros_seen = table.macros_serial
         self._note_macro_bases()
+
+    @property
+    def names(self) -> dict[str, dict[str, int]]:
+        """scheme → {address name: lane index}, published like `labels`
+        by an adapter whose lanes have names (the hands: ``"right.roll"``
+        → its lane, decision register row 20), by plain assignment of a
+        **new** dict whenever its layout changes — the resolved addresses
+        are cached against that dict's identity. A row naming
+        ``hand:right.roll`` reads the lane this map gives; a name the map
+        lacks, or any name while no map is published, is dormant — never
+        another lane. A numeric address (``hand:7``) is the lane at that
+        index whatever the map says."""
+        d = self.__dict__.get("_names")
+        if d is None:
+            d = self.__dict__["_names"] = {}
+        return d
+
+    def lane(self, source: str) -> tuple[str, int]:
+        """(scheme, lane index) that a source address names — its number,
+        or its name through `names` — with −1 for an address that names no
+        lane (a name the adapter's map lacks, no map yet, garbage), which
+        every reader treats as dormant. Cached per address until the
+        scheme's map is republished, so the per-frame pass parses nothing."""
+        d = self.__dict__
+        hit = d.get("_lanes", _NO_LANES).get(source)
+        if hit is None or self.names.get(hit[0]) is not hit[1]:
+            hit = self._resolve_lane(source)
+        return hit[0], hit[2]
+
+    def _resolve_lane(self, source: str) -> tuple[str, dict | None, int]:
+        """`lane`'s cache miss: (scheme, the map it was resolved against, index)."""
+        cache = self.__dict__.get("_lanes")
+        if cache is None or len(cache) > 4096:       # addresses typed at the page, say
+            cache = self.__dict__["_lanes"] = {}
+        scheme, _, addr = source.partition(":")
+        m = self.names.get(scheme)
+        try:
+            i = int(addr)
+        except ValueError:
+            i = -1 if m is None else m.get(addr, -1)
+        hit = cache[source] = (scheme, m, i)
+        return hit
+
+    def address(self, scheme: str, i: int) -> str:
+        """Lane `i` of `scheme` as a row should name it: by its published
+        name when the scheme has one (``hand:right.roll``), else by index."""
+        for name, k in (self.names.get(scheme) or {}).items():
+            if k == i:
+                return f"{scheme}:{name}"
+        return f"{scheme}:{i}"
 
     def _note_macro_bases(self) -> None:
         for p in self.reg.group("macro"):
@@ -1593,15 +1657,16 @@ class Router:
         """`Binding.describe` with the adapter's names in place of the
         addresses — "R height positions while R ind", "LFO 1 pushes +0.5 ×
         macro.1" — from `labels` / `gates` where a scheme has published
-        them; otherwise the row's own "hand 7 positions while hand:18"."""
-        names = self.labels.get(b.scheme) or []
-        i = b.index
+        them — a named address (``hand:right.roll``) through `lane`;
+        otherwise the row's own "hand right.y positions while
+        hand:right.pinch.index"."""
+        scheme, i = self.lane(b.source)
+        names = self.labels.get(scheme) or []
         name = names[i] if 0 <= i < len(names) else None
         gate = None
         if b.when is not None:
-            scheme, _, addr = b.when.partition(":")
-            gate = next((lb for k, lb in self.gates.get(scheme) or []
-                         if str(k) == addr), None)
+            scheme, k = self.lane(b.when)
+            gate = next((lb for j, lb in self.gates.get(scheme) or [] if j == k), None)
         return b.describe(name, gate)
 
     # ---- discrete adapters ----
@@ -1666,19 +1731,15 @@ class Router:
         should start moving because a camera was unplugged. Only fed
         sources gate — the analyzer's lanes are not switches and are not
         in `feeds`, so a row gated on one stays shut in both passes
-        rather than working in one and not the other.
+        rather than working in one and not the other. A named gate
+        (``hand:right.pinch.index``) is found through `lane`; one the
+        adapter's map lacks holds the row shut.
         """
         if b.when is None:
             return True
-        scheme, _, addr = b.when.partition(":")
+        scheme, i = self.lane(b.when)
         vec = self.feeds.get(scheme)
-        if vec is None:
-            return False
-        try:
-            i = int(addr)
-        except ValueError:
-            return False
-        if not 0 <= i < len(vec):
+        if vec is None or not 0 <= i < len(vec):
             return False
         u = float(vec[i])
         return not math.isnan(u) and u >= 0.5
@@ -1687,12 +1748,8 @@ class Router:
         """Where `source` rests right now, from its adapter's `rests` — 0
         when the adapter published none (the analyzer's lanes, an unknown
         address). What a push row without a rest of its own is centred on."""
-        scheme, _, addr = source.partition(":")
+        scheme, i = self.lane(source)
         rests = self.rests.get(scheme) or []
-        try:
-            i = int(addr)
-        except ValueError:
-            return 0.0
         return float(rests[i]) if 0 <= i < len(rests) else 0.0
 
     def modulate(self, analyzer=None) -> None:
@@ -1701,9 +1758,17 @@ class Router:
         calls modulate on its target. `analyzer` is the live one, or None
         while no audio source runs (its lanes are then not a source)."""
         lanes = None if analyzer is None else analyzer.lanes / CEIL
+        # each row's lane — a number, or a name through `names` — from the
+        # cache `lane` keeps; a miss or a republished map resolves again
+        names = self.names
+        cache = self.__dict__.get("_lanes", _NO_LANES)
         for b in self.table.mods():
-            vec = lanes if b.scheme == "lane" else self.feeds.get(b.scheme)
-            i = b.index
+            hit = cache.get(b.source)
+            if hit is None or names.get(hit[0]) is not hit[1]:
+                hit = self._resolve_lane(b.source)
+                cache = self.__dict__["_lanes"]
+            scheme, _, i = hit
+            vec = lanes if scheme == "lane" else self.feeds.get(scheme)
             if vec is None or not 0 <= i < len(vec):
                 continue
             u = float(vec[i])

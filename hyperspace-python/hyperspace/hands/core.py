@@ -7,8 +7,9 @@ smoothed, shaped (dead zone, curve), enveloped (attack, decay), sprung
 back to a rest value when the hand leaves, and glided back onto the hand
 when it returns. The output y ∈ [0, 1] goes two ways:
 
-  * inside Hyperspace, as ``hand:<i>`` sources in the routing table
-    (routing.py) at float precision: right-click → Learn writes a
+  * inside Hyperspace, as ``hand:<name>`` sources in the routing table
+    (routing.py) at float precision — ``hand:right.roll``,
+    ``hand:left.present``, ``hand:left.pinch.index`` (`Layout`): right-click → Learn writes a
     `position` route (the hand is the fader), and the ROUTING page can
     `push` or `position` anything with it — one performer per param, the
     table's referee asks before a hand takes over. No MIDI in between,
@@ -664,18 +665,42 @@ class AxisState:
         return (v - self.lo) / span if span else 0.0
 
 
+def pinch_name(side: str, finger: str) -> str:
+    """A pinch switch's address name: "right.pinch.index"."""
+    return f"{side}.pinch.{finger}"
+
+
+def addresses(axes: list[AxisSettings]) -> list[str]:
+    """Every hand lane's address name, in lane order: the axes as
+    `[hands] dofs` spells them (`AxisSettings.name`, "left.roll"), then
+    "left.present" / "right.present", then the pinch switches
+    ("left.pinch.index" … "right.pinch.pinky")."""
+    return ([a.name for a in axes] + [f"{s}.present" for s in SIDES]
+            + [pinch_name(s, f) for s in SIDES for f in PINCHES])
+
+
+def default_addresses() -> list[str]:
+    """`addresses` on the default layout — `DEFAULTS`' dofs."""
+    return addresses(HandSettings.from_config({}).axes)
+
+
 class Layout:
     """Where each lane sits in the ``hand`` vector — written here once.
 
     Axes first (in setup order), then one presence lane per hand, then
-    the eight pinch switches. The switches come last so that a saved
-    binding to ``hand:<i>`` keeps meaning the axis it always did. Names
-    and the gate list are what the adapter publishes to the router
-    (`labels["hand"]`, `gates["hand"]`); `presence` and `gate` are the
-    index maps `lanes()` and `rests()` fill by.
+    the eight pinch switches. A lane is addressed by **name** (decision
+    register row 20, audit N7): ``hand:left.roll``, ``hand:right.present``,
+    ``hand:left.pinch.index`` (`addresses`); `index` maps each name to
+    its lane and is what the adapter publishes as ``router.names["hand"]``,
+    so a row keeps its axis whatever order or subset `dofs` lists, and a
+    name this rig lacks is dormant. ``hand:<i>`` — the lane at index i —
+    still reads, which is why the switches stay last. The labels and the
+    gate list are published beside it (`labels["hand"]`, `gates["hand"]`);
+    `presence` and `gate` are the index maps `lanes()` and `rests()` fill
+    by.
     """
 
-    __slots__ = ("gate", "gates", "n", "n_axes", "names", "presence")
+    __slots__ = ("addresses", "gate", "gates", "index", "n", "n_axes", "names", "presence")
 
     def __init__(self, axes: list[AxisSettings]):
         self.n_axes = len(axes)
@@ -686,7 +711,9 @@ class Layout:
         self.names = ([a.label for a in axes]
                       + [f"{s[0].upper()} in" for s in SIDES]
                       + [f"{s[0].upper()} {f[:3]}" for s in SIDES for f in PINCHES])
-        self.gates = [(self.gate[(s, f)], self.names[self.gate[(s, f)]])
+        self.addresses = addresses(axes)
+        self.index = {name: i for i, name in enumerate(self.addresses)}
+        self.gates =[(self.gate[(s, f)], self.names[self.gate[(s, f)]])
                       for s in SIDES for f in PINCHES]
 
 
@@ -761,8 +788,12 @@ class HandsIO:
         return [a.name for a in self.axes].index(name)
 
     def gate_lane(self, side: str, finger: str) -> int:
-        """Lane index of one pinch switch — what a `when` address names."""
+        """Lane index of one pinch switch."""
         return self.layout.gate[(side, finger)]
+
+    def address(self, i: int) -> str:
+        """Lane i as the source address a row names: ``hand:right.roll``."""
+        return f"hand:{self.layout.addresses[i]}"
 
     def held_gate(self, side: str | None = None) -> str | None:
         """The pinch being held right now as a source address, or None.
@@ -775,7 +806,7 @@ class HandsIO:
         for s in order:
             for f in PINCHES:
                 if self.gates[s][f].on:
-                    return f"hand:{self.gate_lane(s, f)}"
+                    return f"hand:{pinch_name(s, f)}"
         return None
 
     def lanes(self) -> list[float]:
@@ -803,15 +834,23 @@ class HandsIO:
         return out
 
     def _publish(self, router) -> None:
-        """The layout to the router: names and switches once per router
-        (they only change with the setup, which builds a new adapter), the
-        rests only when a rest value moved. `feed` is every frame."""
+        """The layout to the router: the address map, names and switches
+        once per router (they only change with the setup, which builds a
+        new adapter), the rests only when a rest value moved. `feed` is
+        every frame."""
         lay = self.layout
-        if router.labels.get("hand") is not lay.names:
+        if getattr(lay, "index", None) is None:      # a Layout from before a hot reload
+            self.layout = lay = Layout(self.axes)
+        names = getattr(router, "names", None)       # None: a router that knows no names
+        if router.labels.get("hand") is not lay.names or (
+                names is not None and names.get("hand") is not lay.index):
             router.labels["hand"] = lay.names
             # the switches, so the routing UI can offer them without
             # knowing anything about hands
             router.gates["hand"] = lay.gates
+            # name → lane: how the router finds `hand:right.roll` (row 20)
+            if names is not None:
+                names["hand"] = lay.index
         rests = self.rests()
         if rests != self._rests or router.rests.get("hand") is not self._rests:
             self._rests = rests
@@ -946,9 +985,9 @@ class HandsIO:
             # the same movement means this only while the thumb agrees
             gate = self.held_gate(self.axes[best].side)
             if gate is None:
-                learn.learn_source(f"hand:{best}")
+                learn.learn_source(self.address(best))
             else:
-                learn.learn_source(f"hand:{best}", when=gate)
+                learn.learn_source(self.address(best), when=gate)
 
     def _open(self) -> None:
         """Open the port the config names; on failure say why once and

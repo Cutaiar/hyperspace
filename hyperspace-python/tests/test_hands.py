@@ -424,6 +424,11 @@ def test_calibration_sweep_sets_and_saves_ranges(tmp_path):
 
 @pytest.fixture()
 def app(tmp_path):
+    return make_app(tmp_path)
+
+
+def make_app(tmp_path):
+    """The host's half the hands meet: registry, table, Learn, MIDI, router."""
     chain = Analyzer(Analyser())
     control = Control(chain)
     view = ViewState()
@@ -456,7 +461,7 @@ def test_learn_takes_the_axis_that_moved_as_a_position_route(app):
     assert app.learn.learning is None and app.learn.pending is None
     rows = [b for b in app.table.of("hand") if b.target == "view.inst_amp"]
     assert [(b.source, b.op, b.value, b.when) for b in rows] == [
-        (f"hand:{ax(r, 'right.pitch')}", "position", 1.0, None)]
+        ("hand:right.pitch", "position", 1.0, None)]
     assert app.table.owner("view.inst_amp") is rows[0]
     assert "learned view.inst_amp" in app.learn.last
     # the hand is the fader — in floats, off its 100 detents — through the
@@ -648,7 +653,7 @@ def test_a_hand_learn_needs_no_midi_adapter(tmp_path):
         run(r, 1, hand(pos=(2.0 * k, 200.0, 0.0), direction=tilt(0.12 * k)),
             learn=learn, router=router)
     b = table.owner("view.inst_amp")
-    assert (b.source, b.op) == (f"hand:{ax(r, 'right.pitch')}", "position")
+    assert (b.source, b.op) == ("hand:right.pitch", "position")
     assert learn.learning is None and "learned view.inst_amp" in learn.last
     assert Bindings.load(table.path, legacy_midi=None).owner("view.inst_amp") is None  # the preset's
     run(r, 1, hand(direction=tilt(math.radians(13.0))), learn=learn, router=router)
@@ -910,7 +915,7 @@ def test_learning_while_pinched_gates_the_row_on_that_pinch(app):
             learn=app.learn, router=app.router)
     rows = [b for b in app.table.of("hand") if b.target == "view.inst_amp"]
     assert len(rows) == 1
-    assert rows[0].when == f"hand:{r.io.gate_lane('right', 'index')}"
+    assert rows[0].when == "hand:right.pinch.index"
 
 
 def test_learning_with_an_open_hand_leaves_the_row_ungated(app):
@@ -937,7 +942,7 @@ def test_the_learning_hand_chooses_its_own_thumb(app):
     for k in range(1, 8):
         run(r, 1, *both(k), learn=app.learn, router=app.router)
     rows = [b for b in app.table.of("hand") if b.target == "view.inst_amp"]
-    assert rows[0].when == f"hand:{r.io.gate_lane('right', 'index')}"
+    assert rows[0].when == "hand:right.pinch.index"
 
 
 def test_the_adapter_publishes_its_switches_as_gates(app):
@@ -1001,7 +1006,7 @@ def test_one_defaults_table_for_the_rig(tmp_path):
 class FakeRouter:
     def __init__(self):
         self.fed = []
-        self.labels, self.gates, self.rests = {}, {}, {}
+        self.labels, self.gates, self.rests, self.names = {}, {}, {}, {}
 
     def feed(self, scheme, vec):
         self.fed.append((scheme, vec))
@@ -1013,7 +1018,17 @@ def test_the_layout_is_one_object_published_once_and_rests_on_change():
     run(r, 1, hand(), router=router)
     lay = r.io.layout
     assert router.labels["hand"] is lay.names and router.gates["hand"] is lay.gates
+    assert router.names["hand"] is lay.index                 # name → lane (row 20)
     assert r.io.lane_names is lay.names
+    # every lane has one address name: the axes as dofs spells them, the
+    # presence lanes, the switches
+    assert lay.addresses == hands.addresses(r.s.axes) == hands.default_addresses()
+    assert lay.index == {n: i for i, n in enumerate(lay.addresses)} and len(lay.index) == 22
+    assert lay.index["right.roll"] == ax(r, "right.roll")
+    assert lay.index["left.present"] == lay.presence["left"]
+    assert lay.index["right.pinch.index"] == r.io.gate_lane("right", "index")
+    assert [r.io.address(i) for i in (0, 11, 13, 21)] == [
+        "hand:left.x", "hand:right.yaw", "hand:right.present", "hand:right.pinch.pinky"]
     rests = router.rests["hand"]
     assert len(lay.names) == len(rests) == len(r.io.lanes()) == lay.n == 22
     # the index maps agree with the vector lanes() fills
@@ -1026,6 +1041,7 @@ def test_the_layout_is_one_object_published_once_and_rests_on_change():
     run(r, 3, hand(), router=router)
     # nothing republished while nothing changed: the same objects
     assert router.labels["hand"] is lay.names and router.rests["hand"] is rests
+    assert router.names["hand"] is lay.index
     assert len(router.fed) == 4                       # feed is every frame
     r.s.axes[ax(r, "left.y")].rest_value = 0.3        # the setup moved a rest
     run(r, 1, hand(), router=router)
@@ -1035,6 +1051,20 @@ def test_the_layout_is_one_object_published_once_and_rests_on_change():
     fresh = FakeRouter()
     run(r, 1, hand(), router=fresh)
     assert fresh.labels["hand"] is lay.names and fresh.rests["hand"] == router.rests["hand"]
+    assert fresh.names["hand"] is lay.index
+    # a router with no `names` (one that resolves none) still gets the rest
+    bare = FakeRouter()
+    del bare.names
+    run(r, 1, hand(), router=bare)
+    assert bare.labels["hand"] is lay.names and not hasattr(bare, "names")
+    # a Layout from before a hot reload (no address map) is rebuilt at publish
+    old = r.io.layout
+    object.__setattr__(r.io, "layout", NS(names=old.names, gates=old.gates, n=old.n,
+                                          n_axes=old.n_axes, presence=old.presence,
+                                          gate=old.gate))
+    again = FakeRouter()
+    run(r, 1, hand(), router=again)
+    assert again.names["hand"] == old.index and r.io.layout.addresses == old.addresses
 
 
 # ----------------------------------------- the DAW port comes back (N4)
