@@ -516,7 +516,7 @@ or "overturn".
 | 10 | P13-b partial presets | (a) no exception | **(a)**, 2026-09-28 | built, plan 13 WP2, PR #64 (the F-key bank); the routes-only files in WP5 |
 | 11 | P13-c bank slots | (a) a slot names a file | **(a)**, 2026-09-28 | built, plan 13 WP2, PR #64 |
 | 12 | P13-d what a macro is | (a) attenuator + multi-target rows | **one concept**, 2026-09-28 | subscribers set a base or a depth, each with its own polarity; see 12b. Built in plan 13 WP3 (PR #63): `routing.Macro` / `Sub`, `Router.follow_macros`, the depth term in `Router.modulate` |
-| 13 | P13-e ROUTING page | (a) one page | **(a)**, 2026-09-28 | |
+| 13 | P13-e ROUTING page | (a) one page | **(a)**, 2026-09-28 | built in plan 13 WP4 (PR #WP4PR): `ui_routing.page` over the loaded preset — the head (name, dirty dot, save / as…, the layer, the last learn or refusal), routes, the desk with its dark controls, the macros and their subscribers, the session's MIDI rows read-only |
 | 12b | P13-g a performer on a macro | (a) base subscribers follow the base only | **(a)**, 2026-09-28 | built in plan 13 WP3 (PR #63): base subscribers follow `p.base`, depth ones `p.value` |
 | 14 | B1 as built | keep | **keep**, 2026-09-28 | |
 | 15 | A1 as built | keep | **keep**, 2026-09-28 | |

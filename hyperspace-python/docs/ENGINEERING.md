@@ -15,7 +15,7 @@ paragraph says so. The HTML-era sections (browser sandbox, deploy) are
 gone; `hyperspace-web/hyperspace.html` is frozen and matters here only as
 the oracle the golden traces were recorded from.
 
-**Run it:** `uv sync`, `uv run pytest` (826 tests, ~25 s), `uv run
+**Run it:** `uv sync`, `uv run pytest` (851 tests, ~25 s), `uv run
 hyperspace`. `?` in the app shows the controls cheat sheet.
 
 ---
@@ -508,8 +508,10 @@ unreadable at a party.
 - **Layout.** No page scrolls at `app.CONTROL_SIZE`
   (`test_every_page_fits_the_control_window` in `tests/test_ui_shell.py`
   measures every page with a hands setup, an `Output` and a routed table;
-  ROUTING's rows scroll in a child by design, and
-  `test_the_routing_rows_scroll_in_their_own_child` holds that). The
+  ROUTING's routes, desk, macros and session rows scroll in a child by
+  design, and `test_the_routing_rows_scroll_in_their_own_child` and
+  `test_the_routing_page_fits_over_a_loaded_preset_and_a_full_desk` hold
+  that). The
   HANDS page puts its switches beside the box and its feel knobs two to a
   row beside the transfer plot for that reason. Right-aligned groups are measured
   with `ui.chip_w` / `ui.button_w`, never hard-coded offsets. Every widget
@@ -529,6 +531,16 @@ unreadable at a party.
   assumption). A macro is a knob with subscribers: each sets a param's
   base or scales a route's depth over its own `from → to`; a hand on a
   macro moves only the depths.
+- **Learn and the ROUTING page write into the loaded preset** (plan 13
+  §3.3). Right-click → Learn, then a knob: a preset-layer row; then a
+  hand: a route (the Replace / Keep prompt as ever). With SHIFT latched,
+  or on an invariant control, a knob learn is refused and the reason shows
+  on the SYSTEM page's learn line and the ROUTING head. The ROUTING page is
+  one page over the loaded preset — head (the preset, its dot, save /
+  as…, the layer), routes, the desk with its dark controls, the macros
+  and their subscribers, the session's MIDI rows read-only. Nothing there
+  writes `bindings.json`; the preset's dirty dot shows the edit until a
+  save (the head, the PRESETS strip, ⇧F).
 - **The cheat sheet** (`ui.CHEATSHEET`) is the canonical human list of the
   keys; `test_the_cheat_sheet_matches_the_tables_and_the_loop_keys` parses
   its key column against `routing.keymap()`, `padmap()` and the keys the
@@ -538,7 +550,7 @@ unreadable at a party.
 
 ## 6. Testing
 
-`uv run pytest` — 842 tests, 11 skipped without torch, about 25 s. `ruff`
+`uv run pytest` — 851 tests, 11 skipped without torch, about 25 s. `ruff`
 is the linter. Every test runs with `HYPERSPACE_HOME` pointed at its own
 `tmp_path` (`tests/conftest.py`), so no test can touch `~/Hyperspace`.
 What holds what:

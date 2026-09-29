@@ -452,23 +452,33 @@ host's CC (check 31's fail); a fader jumping → pickup in `MidiIO._apply`.
 Headless: `uv run pytest -q tests/test_desk.py::test_an_unmapped_control_is_dark_and_does_nothing`.
 F1 (TUMBLE, whose desk leaves the device knobs free). *Pass:* the eight
 device-knob rings are off; turning one changes nothing on the panel; the
-ROUTING page lists them under the desk rows as unmapped; with SHIFT
-latched they light and move the band strip. *Fail:* a lit ring on an
-unmapped knob → the dark rule in `MidiIO.redraw`; a device knob moving the
-band strip without SHIFT → a fall-through to the global layer, which D8
-forbids (`MidiIO._handle`).
+ROUTING page's DESK · PRESET LAYER section lists them, dimmed, under the
+desk rows as "device knob 1 … unmapped — dark" (through "device knob 8");
+with SHIFT latched they light and move the band strip, and the ROUTING
+head reads LAYER GLOBAL. *Fail:* a lit ring on an unmapped knob → the dark
+rule in `MidiIO.redraw`; a device knob moving the band strip without SHIFT
+→ a fall-through to the global layer, which D8 forbids (`MidiIO._handle`);
+a knob that does nothing but is not listed → `ui_routing.unmapped`.
 
 **37. Learn refuses the global layer and the invariant controls (plan 13 D5, D6; WP4).**
-Headless: `uv run pytest -q tests/test_learn.py::test_learn_refuses_the_global_layer_and_invariant_controls tests/test_learn.py::test_a_knob_learn_writes_a_desk_row_into_the_loaded_preset`.
-Note `bindings.json`'s time (`ls -l ~/Hyperspace/bindings.json`).
-Right-click Brightness → Learn, move track fader 1. *Pass:* refused, the
-panel says why (an invariant control); nothing changes. Learn again with
-SHIFT latched, turn track knob 6: refused (the global layer). Learn again,
-SHIFT off, turn device knob 3: learned — the knob now moves brightness,
-the preset strip's dirty dot is lit, and `bindings.json`'s time has not
-moved. Load the preset again (F1) to throw the learn away. *Fail:* a
-learn on a fader or under SHIFT → the refusals in `MidiIO._learned`;
-`bindings.json` rewritten → a learn still writing the session file.
+Headless: `uv run pytest -q tests/test_learn.py::test_learn_refuses_the_global_layer_and_invariant_controls tests/test_learn.py::test_a_knob_learn_writes_a_desk_row_into_the_loaded_preset tests/test_learn.py::test_a_hand_learn_writes_a_route_into_the_loaded_preset`.
+Note `bindings.json`'s time (`ls -l ~/Hyperspace/bindings.json`). Open
+the ROUTING page. Right-click Brightness → Learn, move track fader 1.
+*Pass:* refused — the ROUTING head (and the SYSTEM page's learn line)
+reads, in the warning colour, "learn: track fader 1 is invariant (the
+session's) — not learned"; nothing changes, the fader still drives SUB's
+drive. Latch SHIFT, Learn again, turn track knob 6: "learn: track knob 6
+is on the global layer (the session's) — latch SHIFT off to learn into
+the preset". Unlatch SHIFT, Learn again, turn device knob 3: "learn:
+learned view.bright ← device knob 3 (into the preset)" — the knob now
+moves brightness, the DESK section shows "device knob 3 → view.bright
+abs" and track knob 1 (brightness's old knob) as "unmapped — dark", the
+head's dot (and the PRESETS strip's) is lit, and `bindings.json`'s time
+has not moved. Load the preset again (F1) to throw the learn away: the
+dot goes out, track knob 1 is brightness again. *Fail:* a learn on a
+fader or under SHIFT → the refusals in `MidiIO._learned`; `bindings.json`
+rewritten → a learn still writing the session file; no dot → the desk in
+`Presets.signature`.
 
 **38. A preset load lands every base and replaces every route (plan 13 D2, D9; WP2).**
 Headless: `uv run pytest -q tests/test_presets.py::test_a_preset_load_lands_every_base_and_replaces_every_route tests/test_presets.py::test_a_preset_load_never_touches_a_session_param`.
@@ -485,8 +495,11 @@ Headless: `uv run pytest -q tests/test_macros.py::test_base_subscribers_of_oppos
 PRESETS page → the preset strip → `lfo-breathe`. Turn device knob 1
 (macro 1, "Breathe") from bottom to top. *Pass:* the picture brightens
 while the spin slows, together, and the LFO's breathing of the effect mix
-deepens; bottom to top and back is smooth, no step; the ROUTING page shows
-macro 1 with its three subscribers. *Fail:* both moving the same way → a
+deepens; bottom to top and back is smooth, no step; the ROUTING page's
+MACROS section shows knob 1 labelled "Breathe" with three subscriber
+lines — two `base` lines (a param, `from`, `to`; the one whose `from` is
+above its `to` runs the other way) and one `depth` line naming the LFO's
+route. *Fail:* both moving the same way → a
 subscriber's `from → to` in `library/presets/lfo-breathe.json`; nothing
 moving → the macro's base-follow step (`routing.py`) or the desk row.
 
