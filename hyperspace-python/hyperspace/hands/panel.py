@@ -81,12 +81,13 @@ def ctx_rows(panel, p) -> None:
     rows = [b for b in router.table.of("hand") if b.target == p.id]
     for b in rows:                      # in the adapter's words: "R height positions …"
         imgui.text(router.describe(b) + ("" if b.enabled else " (off)"))
-    if rows and _gate_menu(router, rows):
-        router.table.write()
+    # routes are the loaded preset's (plan 13 §3.3): an edit here changes
+    # the table and the preset's dirty dot, and writes no file
+    if rows:
+        _gate_menu(router, rows)
     if rows and imgui.menu_item_simple("Unbind hand"):
         for b in rows:                  # the hand's rows only: a lane's stay
             router.table.remove(b)
-        router.table.write()
 
 
 def _gate_menu(router, rows) -> bool:

@@ -1494,20 +1494,25 @@ class Bindings:
         if cur is not None:
             raise Owned(cur, b)
 
-    def bind(self, b: Binding) -> None:
+    def bind(self, b: Binding, *, write: bool = True) -> list[Binding]:
         """A control drives one param; a param keeps one control per role.
 
         Drops whatever the key drove before, and the param's previous
         binding in the same role: a knob (any cc or pitch binding) when
         learning a knob, or a button of the same op and value when
         learning a button — so a param's step buttons survive a knob learn.
-        A continuous source's row (a hand learn) is a performer like any
-        route: `add`, then written — `Owned` if the target is taken.
+        Only rows of `b`'s own layer go: a preset-layer learn never takes
+        an invariant or a global row with it, nor the reverse (plan 13
+        D5, D6). A continuous source's row (a hand learn) is a performer
+        like any route: `add` — `Owned` if the target is taken. The file
+        is written unless `write` is False (a knob Learn: the row is the
+        loaded preset's, plan 13 §3.3). Returns the rows dropped.
         """
         if not b.is_midi:
             self.add(b)
-            self.write()
-            return
+            if write:
+                self.write()
+            return []
 
         def same_role(x: Binding) -> bool:
             if x.target != b.target or not x.is_midi:
@@ -1516,16 +1521,19 @@ class Bindings:
                 return x.scheme == "note" and x.op == b.op and x.value == b.value
             return x.scheme in ("cc", "pitch")
 
-        # the global layer is the session's (plan 13 D5): a learn off it
-        # never takes a global row with it, nor a global row a preset one
+        # the layers are apart (plan 13 D5, D6): a row only ever replaces
+        # rows of its own layer
         def apart(x: Binding) -> bool:
-            return (x.layer == "global") != (b.layer == "global")
+            return x.layer != b.layer
 
-        self.bindings = [x for x in self.bindings
-                         if apart(x) or (x.key != b.key and not same_role(x))]
+        gone = [x for x in self.bindings
+                if not (apart(x) or (x.key != b.key and not same_role(x)))]
+        self.bindings = [x for x in self.bindings if not any(x is g for g in gone)]
         self.bindings.append(b)
         self.dropped, self.notes = [], []
-        self.write()
+        if write:
+            self.write()
+        return gone
 
     def unbind(self, pid: str, schemes: tuple[str, ...] = MIDI_SCHEMES) -> None:
         self.bindings = [b for b in self.bindings
@@ -1622,8 +1630,9 @@ class Router:
         self.rests: dict[str, list[float]] = {}
         self._codes: dict[str, int | None] = {}
         # the live table saves the routing layer's bases (the macros) with
-        # its rows: every table.write() — a learn, the page, a hand unbind
-        # — reads them through here (Bindings.values_of), and the file's
+        # its rows: every table.write() — a migration, an edit of the
+        # session's rows; a Learn and the ROUTING page write none since
+        # plan 13 WP4 — reads them through here (Bindings.values_of), and the file's
         # values land in the registry here, once. The first Router over a
         # table is its registry's; a second one (the panel's fallback over
         # the MIDI adapter's table) neither hijacks the thunk nor re-lands

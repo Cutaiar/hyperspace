@@ -55,8 +55,11 @@ preset load) clears their catch.
 
 Bindings persist with every other source's in bindings.json (routing.py;
 an old midi_map.json is migrated on first run). With no file the device
-profile's default map is used; right-click → Learn on any panel control
-writes the file. `MidiIO.bindings` is the MIDI-side view of that table —
+profile's default map is used. Right-click → Learn on any panel control,
+then a knob or button, writes a preset-layer row into the loaded preset
+(`_learned`, plan 13 §3.3): the preset is dirty and bindings.json is not
+written; a learn on an invariant control or with the global layer up is
+refused with the reason. `MidiIO.bindings` is the MIDI-side view of that table —
 what this adapter routes through and the panel edits. The profile (apc40.py is the
 first) knows the device's port name, its power-up SysEx, which controls
 have rings, and what velocities its LEDs take.
@@ -279,18 +282,38 @@ class MidiIO:
             self._dark(b)
         self.table.unbind(pid)
 
+    def control_name(self, b: Binding) -> str:
+        """The control a row names, in the device's words where the
+        profile has them ("track knob 3"), else the row's own."""
+        name = getattr(self.profile, "control_name", None)
+        return (name(b.source) if name is not None else None) or b.describe()
+
     def _learned(self, kind: str, channel: int, number: int, value: int) -> None:
-        """A message while armed: the MIDI row. It binds the param as
-        armed — a ``band.sel.*`` alias included, on purpose: a knob on
-        "the selected band's threshold" should follow the selection."""
-        pid = self.learner.take()
+        """A message while armed: a preset-layer row into the loaded preset
+        (plan 13 §3.3). It binds the param as armed — a ``band.sel.*``
+        alias included, on purpose: a knob on "the selected band's
+        threshold" should follow the selection.
+
+        Refused, with the reason in `learner.last` and nothing changed, on
+        an invariant control — SHIFT among them (D6) — and while the global
+        layer is up (D5): both are the session's, edited in bindings.json.
+        Otherwise the row replaces the control's preset-layer row and the
+        param's previous preset-layer row in the same role (`Bindings.bind`)
+        and the file is **not** written: the row is the preset's, and the
+        preset's dirty dot shows it until a save (⇧F, the strip)."""
+        lrn = self.learner
+        pid = lrn.take()
         p = self.reg.get(pid) if pid is not None else None
         if p is None:
             return
-        b = Binding(Binding.midi_source(kind, channel, number), pid, "abs")
-        # into the preset layer — unless the control is invariant, which it
-        # keeps (WP4 refuses that learn, and one with SHIFT up, D5 / D6)
-        b.layer = None if self.table.is_invariant(b) else "preset"
+        b = Binding(Binding.midi_source(kind, channel, number), pid, "abs", layer="preset")
+        if self.table.is_invariant(b):
+            lrn.refuse(f"{self.control_name(b)} is invariant (the session's) — not learned")
+            return
+        if self.table.layer == "global":
+            lrn.refuse(f"{self.control_name(b)} is on the global layer (the session's) "
+                       "— latch SHIFT off to learn into the preset")
+            return
         if kind == "cc":
             if self.profile.is_relative(number):
                 b.op = "rel"
@@ -298,18 +321,14 @@ class MidiIO:
                 b.op = "toggle"
         elif kind == "note":
             b.op = "toggle"
-        old = self.table.for_param(pid)
-        if old is not None and old.feedback and (old.layer == "global") == (b.layer == "global"):
-            self._dark(old)
-        for x in self.table.route(kind, channel, number):
-            if x.feedback and (x.layer == "global") == (b.layer == "global"):
-                self._dark(x)
         fb = self.profile.feedback_for(kind, channel, number)
         if fb:
             b.feedback, b.ring = fb["feedback"], fb.get("ring", b.ring)
             b.on, b.off = fb.get("on", b.on), fb.get("off", b.off)
-        self.table.bind(b)
-        self.learner.last = f"learned {pid} ← {b.describe()}"
+        for x in self.table.bind(b, write=False):     # the preset rows it replaced
+            if x.feedback:
+                self._dark(x)                          # the new row redraws its own control
+        lrn.last = f"learned {pid} ← {self.control_name(b)} (into the preset)"
 
     # ---- per frame ----
 

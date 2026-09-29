@@ -468,9 +468,10 @@ def test_learn_takes_the_axis_that_moved_as_a_position_route(app):
     assert p.eff_norm == pytest.approx(u, abs=1e-4)   # the filter at 1 MHz: all but exact
     assert abs(p.eff_norm * p.steps - round(p.eff_norm * p.steps)) > 1e-3
     assert p.norm == pytest.approx(0.25) and p.modulated
-    # and it is in the file
+    # into the loaded preset: the table has it, bindings.json does not
+    # (plan 13 §3.3 — a save of the preset writes it)
     on_disk = Bindings.load(app.table.path, legacy_midi=None)
-    assert on_disk.owner("view.inst_amp").source == rows[0].source
+    assert on_disk.owner("view.inst_amp") is None
 
 
 def test_a_panel_edit_moves_the_return_value_under_a_hand(app):
@@ -628,7 +629,7 @@ def test_a_learn_on_a_performed_param_is_held_for_the_prompt(app):
     assert old not in t.bindings and "learned view.inst_amp" in m.last
     assert not t.routes_to("view.speed")                             # hand:7 moved here
     assert t.routes_to("view.bright")                                # the other row stays
-    assert Bindings.load(t.path, legacy_midi=None).owner("view.inst_amp").source == "hand:7"
+    assert Bindings.load(t.path, legacy_midi=None).owner("view.inst_amp") is None  # no file
     assert m.resolve_pending(True) is None                           # nothing pending
 
 
@@ -649,7 +650,7 @@ def test_a_hand_learn_needs_no_midi_adapter(tmp_path):
     b = table.owner("view.inst_amp")
     assert (b.source, b.op) == (f"hand:{ax(r, 'right.pitch')}", "position")
     assert learn.learning is None and "learned view.inst_amp" in learn.last
-    assert Bindings.load(table.path, legacy_midi=None).owner("view.inst_amp") == b
+    assert Bindings.load(table.path, legacy_midi=None).owner("view.inst_amp") is None  # the preset's
     run(r, 1, hand(direction=tilt(math.radians(13.0))), learn=learn, router=router)
     router.modulate()
     reg.apply()

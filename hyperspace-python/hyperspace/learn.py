@@ -11,6 +11,15 @@ Learn at all (audit B3). Now ``app.main`` builds one ``Learn`` over the
 live table whatever the MIDI gate says and hands it to both adapters and
 to the panel.
 
+A learn writes into the **loaded preset** (plan 13 §3.3, D5): the row
+goes into the live table — a knob's as a preset-layer desk row, a hand's
+as a route — and no file is written. The preset's dirty dot (preset.py,
+`Presets.signature` over the table) shows it until a save (⇧F, the preset
+strip's save / as…); loading the preset again throws it away. A knob learn
+on an invariant control or with the global layer up is refused (midi.py's
+`_learned` calls `refuse`): the reason is `last`, `refused` is set, and
+nothing changes.
+
 Two things the object owns:
 
   * **`learning`** — the armed param id, or None. Arming forgets a held
@@ -49,7 +58,20 @@ class Learn:
         self.table = table
         self.learning: str | None = None
         self.pending: tuple[Binding, Binding] | None = None
-        self.last = ""          # what the last learn did, for the status lines
+        self._last = ""         # what the last learn did, for the status lines
+        self.refused = False    # …and whether it was a refusal (drawn as a warning)
+
+    @property
+    def last(self) -> str:
+        return self._last
+
+    @last.setter
+    def last(self, text: str) -> None:
+        self._last, self.refused = text, False
+
+    def refuse(self, why: str) -> None:
+        """A learn that may not land: nothing changes, `last` says why."""
+        self._last, self.refused = why, True
 
     # ---- arming ----
 
@@ -102,8 +124,7 @@ class Learn:
         cur = self.table.owner(p.id)
         if cur is not None and cur.source == source and cur.op == "position":
             cur.when = when                          # the same axis again: no move
-            self.table.write()
-            self.last = f"learned {p.id} ← {cur.describe()}"
+            self.last = f"learned {p.id} ← {cur.describe()} (into the preset)"
             return
         if cur is not None:
             self.pending = (b, cur)
@@ -113,8 +134,9 @@ class Learn:
 
     def resolve_pending(self, replace: bool) -> Binding | None:
         """The prompt's answer to a held learn: *Replace* swaps the target's
-        performer for the learned row and writes the file; *Keep* leaves
-        the table as it was. Returns the row now in the table, or None."""
+        performer for the learned row (into the loaded preset, no file
+        written); *Keep* leaves the table as it was. Returns the row now in
+        the table, or None."""
         if self.pending is None:
             return None
         new, old = self.pending
@@ -130,10 +152,10 @@ class Learn:
         go first (one axis, one param), then `replace_owner` — the one door
         onto a target, which reads the owner *now* (a free target takes the
         row; the prompt's Replace removes whoever holds it at this moment,
-        not whoever did when the question was asked) — then the file."""
+        not whoever did when the question was asked). A route of the
+        loaded preset's: no file is written (plan 13 §3.3)."""
         table = self.table
         for x in [x for x in table.of(b.scheme) if x.source == b.source and x.op == "position"]:
             table.remove(x)
         table.replace_owner(b)
-        table.write()
-        self.last = f"learned {b.target} ← {b.describe()}"
+        self.last = f"learned {b.target} ← {b.describe()} (into the preset)"

@@ -136,6 +136,50 @@ def feedback_for(kind: str, channel: int, number: int) -> dict | None:
     return None
 
 
+# Akai's names for the controls, for the panel ("track knob 3", "clip 4·2")
+_NOTE_NAMES = {
+    N_CLIPTRACK: "CLIP/TRACK", N_DEVICE_ON: "DEVICE ON/OFF", N_DEV_L: "device ◀",
+    N_DEV_R: "device ▶", N_DETAIL: "DETAIL", N_QUANT: "QUANT", N_OVERDUB: "OVERDUB",
+    N_METRO: "METRONOME", N_MASTER_SEL: "MASTER select", N_STOP_ALL: "STOP ALL CLIPS",
+    N_PAN: "PAN", N_SEND_A: "SEND A", N_SEND_B: "SEND B", N_SEND_C: "SEND C",
+    N_PLAY: "PLAY", N_STOP: "STOP", N_REC: "REC", N_UP: "▲", N_DOWN: "▼", N_RIGHT: "▶",
+    N_LEFT: "◀", N_SHIFT: "SHIFT", N_TAP: "TAP TEMPO", N_NUDGE_P: "NUDGE +",
+    N_NUDGE_M: "NUDGE −",
+}
+_TRACK_NOTES = {N_ARM: "rec-arm", N_SOLO: "solo", N_ACTIVATOR: "activator",
+                N_SELECT: "track select", N_CLIPSTOP: "clip stop"}
+
+
+def control_name(source: str) -> str | None:
+    """Akai's name for the control a MIDI source names, or None when the
+    source is not one of the APC40's ("cc:0:50" → "track knob 3",
+    "note:1:56" → "clip 4·2", "note:0:98" → "SHIFT")."""
+    kind, _, rest = source.partition(":")
+    ch_s, _, num_s = rest.partition(":")
+    try:
+        num = int(num_s)
+        ch = None if ch_s == "*" else int(ch_s)
+    except ValueError:
+        return None
+    track = (ch or 0) + 1
+    if kind == "cc":
+        if num in DEVICE_KNOBS:
+            return f"device knob {num - DEVICE_KNOBS[0] + 1}"
+        if num in TRACK_KNOBS:
+            return f"track knob {num - TRACK_KNOBS[0] + 1}"
+        return {CC_FADER: f"track fader {track}", CC_MASTER: "MASTER fader",
+                CC_XFADE: "crossfader", CC_CUE: "cue level"}.get(num)
+    if kind == "note":
+        if num in _TRACK_NOTES:
+            return f"{_TRACK_NOTES[num]} {track}"
+        if num in N_CLIP:
+            return f"clip {N_CLIP.index(num) + 1}·{track}"
+        if num in N_SCENE:
+            return f"scene launch {N_SCENE.index(num) + 1}"
+        return _NOTE_NAMES.get(num)
+    return None
+
+
 # ---------------------------------------------------------------- default map
 # rows in routing.Binding's JSON form: {"source": "cc:<ch|*>:<n>" /
 # "note:<ch>:<n>", "target": param id, "op", …}; channel None = any

@@ -3,6 +3,7 @@ adapter (plan 11 WP5, audit B3 and B4). A hand completes a learn with no
 MIDI adapter anywhere; a `band.sel.*` alias learns onto the band it
 stands for; the referee's refusal is held for the prompt."""
 
+import json
 from types import SimpleNamespace as NS
 
 import pytest
@@ -29,8 +30,9 @@ def rig(tmp_path):
 
 def test_learn_source_writes_a_position_route_without_any_midi(rig, tmp_path):
     """A hand completing a learn: a `position` row at depth 1 through the
-    table's referee, written to the file — no MidiIO exists here (B3). On
-    an owned target it is held in `pending`; a new learn forgets it."""
+    table's referee, into the table and no file (plan 13 §3.3: the loaded
+    preset's) — no MidiIO exists here (B3). On an owned target it is held
+    in `pending`; a new learn forgets it."""
     lrn, t = rig.learn, rig.table
     lrn.arm("view.inst_amp")
     assert lrn.learning == "view.inst_amp"
@@ -38,8 +40,8 @@ def test_learn_source_writes_a_position_route_without_any_midi(rig, tmp_path):
     assert lrn.learning is None and lrn.pending is None
     b = t.owner("view.inst_amp")
     assert (b.source, b.op, b.value, b.when) == ("hand:3", "position", 1.0, "hand:14")
-    assert "learned view.inst_amp" in lrn.last
-    assert Bindings.load(tmp_path / "bindings.json", legacy_midi=None).owner("view.inst_amp") == b
+    assert "learned view.inst_amp" in lrn.last and not lrn.refused
+    assert not (tmp_path / "bindings.json").exists()
     lrn.arm("view.inst_amp")
     lrn.learn_source("hand:7")
     assert lrn.pending is not None and lrn.pending[1] is b and "replace?" in lrn.last
@@ -108,3 +110,140 @@ def test_a_learn_on_a_band_sel_alias_lands_on_the_selected_band(rig):
     assert reg.real(reg["band.sel.thr"]) is reg["band.2.thr"]
     reg.real_of = None
     assert Learn(reg, t).target_for("band.sel.thr").id == "band.sel.thr"
+
+
+# ------------------------------------------ plan 13 WP4: into the loaded preset
+
+def desk_rig(home):
+    """The app's construction (tests/test_presets.boot: the startup preset
+    loaded) with a MIDI adapter over fake ports on the same table and one
+    shared Learn; bindings.json written once so a later write would show."""
+    from test_midi import FakeIn, FakeOut
+    from test_presets import boot
+
+    from hyperspace.midi import MidiIO
+
+    r = boot(home)
+    table = r.router.table
+    table.write()
+    r.learn = Learn(r.reg, table)
+    r.inp, r.out = FakeIn(), FakeOut()
+    r.midi = MidiIO(r.reg, table, inp=r.inp, out=r.out, learner=r.learn)
+    r.path = table.path
+    r.on_disk = (table.path.read_text(), table.path.stat().st_mtime_ns)
+    return r
+
+
+def untouched(r) -> bool:
+    return (r.path.read_text(), r.path.stat().st_mtime_ns) == r.on_disk
+
+
+def test_a_knob_learn_writes_a_desk_row_into_the_loaded_preset(tmp_path):
+    """Plan 13 §3.3, D5: a knob learn is a preset-layer row in the live
+    table — the control's old preset row and the param's previous knob
+    go, the global row on the same knob stays — the loaded preset is dirty
+    and bindings.json is untouched; saving the preset writes the row, and
+    loading the preset again throws away what was learned since."""
+    from test_midi import cc, push
+
+    from hyperspace import preset
+
+    r = desk_rig(tmp_path)
+    lib, table, lrn = r.lib, r.router.table, r.learn
+    assert lib.current("presets") == "BIG BLUE WAVE" and not lib.is_dirty("presets")
+    lrn.arm("view.depth4")
+    push(r, cc(0x10, 64))                                   # device knob 1: free on the preset layer
+    assert lrn.learning is None and not lrn.refused
+    assert "learned view.depth4" in lrn.last and "device knob 1" in lrn.last
+    row = next(b for b in table.desk() if b.target == "view.depth4")
+    assert (row.source, row.op, row.layer, row.feedback) == ("cc:0:16", "abs", "preset", "ring")
+    assert any(b.layer == "global" and b.target == "band.sel.trim" for b in table.midi())
+    lrn.arm("view.bright")
+    push(r, cc(0x33, 10))                                   # track knob 4, view.pattern_mix's
+    assert not any(b.target == "view.pattern_mix" and b.kind == "cc" for b in table.desk())
+    assert not any(b.target == "view.bright" and b.number == 0x30 for b in table.desk())
+    assert lib.is_dirty("presets") and untouched(r)
+    path = lib.overwrite("presets")                         # the head's / the strip's save
+    assert path == tmp_path / "presets" / "big-blue-wave.json" and untouched(r)
+    saved = json.loads(path.read_text())["desk"]
+    assert {"source": "cc:0:16", "target": "view.depth4", "op": "abs",
+            "feedback": "ring"} in saved
+    assert not lib.is_dirty("presets")
+    lrn.arm("view.speed")
+    push(r, cc(0x11, 64))                                   # learned after the save…
+    assert lib.is_dirty("presets")
+    lib.load("presets", "BIG BLUE WAVE")                    # …and thrown away by a load
+    assert not any(b.target == "view.speed" and b.number == 0x11 for b in table.desk())
+    assert preset.desk_json(table.desk()) == saved and not lib.is_dirty("presets")
+    assert untouched(r)
+
+
+def test_a_hand_learn_writes_a_route_into_the_loaded_preset(tmp_path):
+    """The same for a hand: the route goes into the table through the
+    referee — a taken target still asks, Replace / Keep — and neither the
+    learn nor the answer writes bindings.json; the preset is dirty until
+    saved, and a load throws the learn away."""
+    r = desk_rig(tmp_path)
+    lib, table, lrn = r.lib, r.router.table, r.learn
+    lrn.arm("view.inst_amp")
+    lrn.learn_source("hand:3")
+    b = table.owner("view.inst_amp")
+    assert (b.source, b.op) == ("hand:3", "position") and "into the preset" in lrn.last
+    assert lib.is_dirty("presets") and untouched(r)
+    lrn.arm("view.inst_amp")
+    lrn.learn_source("hand:7")                               # taken: the prompt's question
+    assert lrn.pending is not None and table.owner("view.inst_amp") is b
+    assert lrn.resolve_pending(False) is None and table.owner("view.inst_amp") is b   # Keep
+    lrn.arm("view.inst_amp")
+    lrn.learn_source("hand:7")
+    new = lrn.resolve_pending(True)                          # Replace
+    assert table.owner("view.inst_amp") is new and b not in table.bindings and untouched(r)
+    path = r.presets.save_as("HANDS")
+    routes = json.loads(path.read_text())["routes"]
+    assert {"source": "hand:7", "target": "view.inst_amp", "op": "position"} in routes
+    assert not lib.is_dirty("presets") and untouched(r)
+    lrn.arm("view.speed")
+    lrn.learn_source("hand:9")
+    lib.load("presets", "HANDS")
+    assert table.owner("view.speed") is None and table.owner("view.inst_amp").source == "hand:7"
+    assert untouched(r)
+
+
+def test_learn_refuses_the_global_layer_and_invariant_controls(tmp_path):
+    """D5, D6: with the global layer up, and on an invariant control — a
+    fader, SHIFT's own note — a learn is refused: nothing changes (the
+    table, the layer, the param, the file, the preset's dot) and the
+    reason is in `learner.last`."""
+    from test_midi import cc, note, push, shift
+
+    from hyperspace import apc40
+
+    r = desk_rig(tmp_path)
+    lib, table, lrn, reg = r.lib, r.router.table, r.learn, r.reg
+
+    def rows():
+        return [(b.to_json(), b.layer) for b in table.bindings]
+    shift(r)
+    assert table.layer == "global"
+    before, depth4 = rows(), reg["view.depth4"].value
+    lrn.arm("view.depth4")
+    push(r, cc(0x30, 90))                                    # track knob 1, SHIFT on
+    assert lrn.learning is None and lrn.refused
+    assert lrn.last == ("track knob 1 is on the global layer (the session's) — "
+                        "latch SHIFT off to learn into the preset")
+    assert rows() == before and table.layer == "global" and reg["view.depth4"].value == depth4
+    shift(r)
+    assert table.layer == "preset"
+    lrn.arm("view.depth4")
+    push(r, cc(apc40.CC_FADER, 64, channel=2))               # track fader 3
+    assert lrn.refused and lrn.last == "track fader 3 is invariant (the session's) — not learned"
+    lrn.arm("view.depth4")
+    push(r, note(apc40.N_SHIFT))                             # SHIFT itself
+    assert lrn.refused and lrn.last == "SHIFT is invariant (the session's) — not learned"
+    assert table.layer == "preset"                           # the press did not latch
+    push(r, note(apc40.N_SHIFT, 0))
+    assert rows() == before and reg["view.depth4"].value == depth4
+    assert not lib.is_dirty("presets") and untouched(r)
+    lrn.arm("view.depth4")                                   # and a good learn clears the flag
+    push(r, cc(0x10, 64))
+    assert not lrn.refused and "learned view.depth4" in lrn.last

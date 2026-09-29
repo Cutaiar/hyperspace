@@ -922,7 +922,10 @@ class HandsIO:
     def _learn(self, learn) -> None:
         """While a param is armed to learn, the axis that has moved
         furthest (≥ LEARN_MOVE) since the learn began takes it — a hand
-        moves all its axes at once, so first-to-move won't do."""
+        moves all its axes at once, so first-to-move won't do. The route
+        goes into the loaded preset through `learn.learn_source` (the
+        referee and the Replace / Keep prompt as ever); no file is written,
+        the preset shows dirty until a save (plan 13 §3.3)."""
         if getattr(learn, "learning", None) is None:
             self._learn_base = None
             return

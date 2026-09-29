@@ -351,33 +351,37 @@ def test_selected_band_rings_follow_the_selection(rig):
 
 # ---------------------------------------------------------------- learn
 
-def test_learn_binds_next_message_and_persists(rig, tmp_path):
+def test_learn_binds_next_message_into_the_preset_layer(rig, tmp_path):
+    """Plan 13 §3.3: the learned row is a preset-layer row in the live
+    table — the file is not written (tests/test_learn.py has the rest)."""
     m = rig.midi
+    path = tmp_path / "midi_map.json"
+    before = path.read_text() if path.exists() else None
     m.learner.arm("view.inst_amp")
     assert m.learner.learning == "view.inst_amp"
     push(rig, cc(0x57, 40))                   # send-A knob-ish: an unused CC
     assert m.learner.learning is None
     b = m.binding_for("view.inst_amp")
     assert b is not None and b.kind == "cc" and b.number == 0x57 and b.op == "abs"
-    assert "CC 87" in b.describe()
+    assert b.layer == "preset" and "CC 87" in b.describe()
     # the learning message itself did not move the param
     assert rig.view.inst_amp == 0.25
-    # persisted, and read back by a fresh table
-    m2 = Bindings.load(tmp_path / "midi_map.json")
-    assert any(x.target == "view.inst_amp" and x.number == 0x57 for x in m2.midi())
     # the old track-knob binding for the same param is gone
-    assert not any(x.target == "view.inst_amp" and x.number == 0x34 for x in m2.midi())
+    assert not any(x.target == "view.inst_amp" and x.number == 0x34 for x in m.bindings)
+    # and nothing went to disk
+    assert (path.read_text() if path.exists() else None) == before
 
 
 def test_learn_a_button_on_a_toggle(rig):
     m = rig.midi
+    free = apc40.N_CLIP[2]                    # clip row 3, track 4: free on both layers
     m.learner.arm("view.lines")
-    push(rig, note(apc40.N_METRO, 0))         # a release is not a binding
+    push(rig, note(free, 0, channel=3))       # a release is not a binding
     assert m.learner.learning == "view.lines"
-    push(rig, note(apc40.N_METRO))
-    b = m.binding_for("view.lines")
-    assert b.kind == "note" and b.number == apc40.N_METRO and b.feedback == "led"
-    push(rig, note(apc40.N_METRO, 0), note(apc40.N_METRO))
+    push(rig, note(free, channel=3))
+    b = next(x for x in m.bindings if x.target == "view.lines" and x.number == free)
+    assert b.kind == "note" and b.channel == 3 and b.feedback == "led" and b.on == apc40.GREEN
+    push(rig, note(free, 0, channel=3), note(free, channel=3))
     assert not rig.view.lines                  # was True by default, flipped once
 
 
