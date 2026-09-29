@@ -26,8 +26,8 @@ three frames, clean exit, nothing on stderr but the adapters' one-line
 notes. *Fail:* a traceback, or the process not exiting → `app.frame` /
 `app.Host` (WP14, PR #48); a stderr note from an adapter that should be
 silent → that adapter's `_open_*` gate.
-Then `uv run hyperspace` once more: R resets the camera, F1 loads theme 1,
-⇧F1 saves it, ⌘R restarts without resetting the camera first, and all
+Then `uv run hyperspace` once more: R resets the camera, F1 loads preset 1 (BIG BLUE WAVE),
+⇧F1 saves the live state as it (a user file shadowing the factory one), ⌘R restarts without resetting the camera first, and all
 seventeen rows are listed on the ROUTING page (WP7; headless:
 `tests/test_routing.py::test_r_and_the_f_keys_are_table_rows_that_fire_their_params`).
 A fail → `routing.LOOP_KEY_ROWS` / the ⌘R edge claim in `app.frame`.
@@ -165,7 +165,7 @@ a ring chasing the audio → `MidiIO.feedback` reading the effective value.
 As check 7 but on the desk: TAP TEMPO ×4 on the beat, METRONOME on the
 one. *Pass:* as check 7; the METRONOME LED blinks on the beat; NUDGE +
 and − move `tempo.nudge` by 0.01 and the swell with it; QUANT cycles the
-theme (`theme.next`), the clip grid's top row picks a theme, row 2–3 a
+preset bank (`preset.next`), the clip grid's top row picks a preset, row 2–3 a
 scene, row 4–5 a shape, STOP ALL resets the scene with the 8 s undo.
 *Fail:* METRONOME LED steady → `lfo.trigger`'s `lit` (tempo.py
 `on_beat`); a button doing what it did before plan 09 → your
@@ -353,8 +353,8 @@ copy path in `backup`.
 **31. The APC40's knobs re-base from the host (plan 13 D7; the one hardware assumption the two-layer desk rests on).**
 No headless twin: it is the device's behaviour. Desk plugged in, the app
 on the `default` routing. Turn track knob 1 (brightness) to about a
-quarter; press F2 (a house theme with a different brightness). *Pass:*
-the knob's ring jumps to the theme's brightness at once, and the next
+quarter; press F2 (a house preset with a different brightness). *Pass:*
+the knob's ring jumps to the preset's brightness at once, and the next
 turn of the knob continues from *there* — no jump back toward the
 quarter, no pickup. *Fail:* the first turn after F2 snaps brightness to
 where the knob physically was → the encoder keeps its own value and
@@ -367,7 +367,7 @@ Headless first: `uv run pytest -q tests/test_plan12_presets.py` and
 `uv run python tools/preset_shots.py`, then look at
 `docs/plans/assets/12-presets/party-*-sheet.png` so you know the pose
 each tile expects. Projector and box on; PRESETS page → project → load ▾
-→ `party`; then per preset the F-key and the ROUTING strip's `party-*`
+→ `party`; then per preset its F-key alone — F1 TUMBLE … F5 TRIP (plan 13 WP2)
 (the cards under `docs/plans/assets/12-presets/` say which). *Pass*, one
 line each — **(a)** faces at 2.5× (FACES) and 2.0× (TUMBLE, WAKE) read
 on the projector in the room, and the left hand's headroom to 4× is
@@ -381,7 +381,7 @@ the right roll turns the dream's hue round the wheel and fingers up
 brings the dream in, over sixteen echoes; **(f)** TRIP after TAP TEMPO ×8
 and METRONOME once: the left hand's height opens a pump on the beat and
 the burst at the right hand's top is light, not glare. *Fail* points:
-(a) the theme's `view.bright` in `library/projects/party.hyp.json`; (b)
+(a) the preset's `view.bright` in `library/presets/party-*.json`; (b)
 `routing.TURN` (0.25 → try 0.35) and the axes' `return` on the HANDS
 page; (c) the row's depth sign in `routing.party_*_routes` — a flipped
 axis is one sign; (d) `view.instances`' push depth (0.6) and

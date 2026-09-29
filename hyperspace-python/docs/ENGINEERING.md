@@ -15,7 +15,7 @@ paragraph says so. The HTML-era sections (browser sandbox, deploy) are
 gone; `hyperspace-web/hyperspace.html` is frozen and matters here only as
 the oracle the golden traces were recorded from.
 
-**Run it:** `uv sync`, `uv run pytest` (778 tests, ~20 s), `uv run
+**Run it:** `uv sync`, `uv run pytest` (823 tests, ~25 s), `uv run
 hyperspace`. `?` in the app shows the controls cheat sheet.
 
 ---
@@ -498,7 +498,7 @@ unreadable at a party.
   weight through FreeType's face index and falls back off macOS.
 - **Shape.** Rounded frames (8 px), pill chips (`ui.chip`) in place of small
   buttons, a solid red pill for anything lit: the open page on the rail, a
-  spinning plane, the active theme slot. A checked box is a red square with
+  spinning plane, the active preset slot. A checked box is a red square with
   a white tick.
 - **Faders.** Every slider fills red from its origin (zero on a signed
   range) to its value, so position reads at a glance. A slider with its
@@ -525,7 +525,7 @@ unreadable at a party.
 
 ## 6. Testing
 
-`uv run pytest` — 778 tests, 11 skipped without torch, about 20 s. `ruff`
+`uv run pytest` — 823 tests, 11 skipped without torch, about 25 s. `ruff`
 is the linter. Every test runs with `HYPERSPACE_HOME` pointed at its own
 `tmp_path` (`tests/conftest.py`), so no test can touch `~/Hyperspace`.
 What holds what:
