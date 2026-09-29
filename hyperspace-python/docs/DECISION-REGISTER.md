@@ -1,6 +1,6 @@
 # Decision register — everything that is yours to decide
 
-As of 2026-09-28. This is the one list. Every decision that blocks
+As of 2026-09-28. **Every row is answered** (the answer sheet at the end). This is the one list. Every decision that blocks
 implementing and settling the open work is here, whichever plan or session
 raised it. Each entry stands on its own: what the thing is, what the software
 does today, the options, a recommendation with its reasons, the trade-off you
@@ -443,7 +443,7 @@ or "overturn".
 | 12 | P13-d what a macro is | (a) attenuator + multi-target rows | **one concept**, 2026-09-28 | subscribers set a base or a depth, each with its own polarity; see 12b |
 | 13 | P13-e ROUTING page | (a) one page | **(a)**, 2026-09-28 | |
 | 12b | P13-g a performer on a macro | (a) base subscribers follow the base only | **(a)**, 2026-09-28 | |
-| 14 | B1 as built | keep | | |
-| 15 | A1 as built | keep | | |
-| 16 | L3 as built | keep | | |
-| 17 | B6 as built | keep | | |
+| 14 | B1 as built | keep | **keep**, 2026-09-28 | |
+| 15 | A1 as built | keep | **keep**, 2026-09-28 | |
+| 16 | L3 as built | keep | **keep**, 2026-09-28 | |
+| 17 | B6 as built | keep | **keep**, 2026-09-28 | |

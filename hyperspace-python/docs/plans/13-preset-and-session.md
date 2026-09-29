@@ -106,6 +106,13 @@ The project file keeps its name (`<slug>.hyp.json`) and becomes:
 The `values`, `modules`, `io` and inline `bank` of schema 1 are migrated
 (§6).
 
+### 2.3 Module preset — `hyperspace.preset/1`, unchanged
+
+A file of values for one group, in `<library>/<group>/`. Loading one
+replaces that group's values (every id in the group: from the file or the
+group's default). Its strip stays on the PRESETS page. The `bindings/`
+folder and the ROUTING page's strip go away: routes live in the preset.
+
 ### 2.4 Macros — one concept (D10)
 
 A **macro** is one knob, `macro.1` to `macro.8`, whose value `m` runs 0 to
@@ -144,13 +151,6 @@ performer of each param) is a later extension, not this plan.
 **Migration.** A route with `scale: "macro.N"` becomes a depth subscriber
 of `macro.N` with `from 0, to 1`; the route loses the field. Every factory
 file is regenerated; a user file migrates on load with a note.
-
-### 2.3 Module preset — `hyperspace.preset/1`, unchanged
-
-A file of values for one group, in `<library>/<group>/`. Loading one
-replaces that group's values (every id in the group: from the file or the
-group's default). Its strip stays on the PRESETS page. The `bindings/`
-folder and the ROUTING page's strip go away: routes live in the preset.
 
 ## 3. The desk
 
@@ -300,19 +300,22 @@ After plan 11's routing and library packages (they touch the same files):
 |---|---|---|
 | 1 | The performance / session split in `params.py`; snapshot and restore over it; the session values in the project | S |
 | 2 | Preset schema 2: loader, saver, referee; the library's one preset strip; F-keys and the preset row on it; module presets unchanged | M |
-| 3 | The desk: `layer` on MIDI rows, the SHIFT latch, invariant set, redraw on switch and load, fader catch reset, multi-target rows | M |
+| 3 | The desk: `layer` on MIDI rows, the SHIFT latch, invariant set, redraw on switch and load, fader catch reset; the unified macro (§2.4: base and depth subscribers, per-subscriber polarity, `scale` migrated to depth subscribers) | M |
 | 4 | Learn into the preset; refusals on the global layer and invariant controls; ROUTING page over the loaded preset | S |
 | 5 | Migration of project, bindings and factory files; the five `party-*` presets re-cut; hand-check the rings and knob re-basing on the real desk | M |
 | 6 | Docs: ARCHITECTURE §3.8 and the file table; DECISIONS; the plan 12 cards say "press F-key" only | S |
 
-## 8. Still open
+## 8. Settled since
 
-- Which four hand-feel params deserve the global layer's track knobs, and
-  whether `hands.*` wants a knob at all once the box is calibrated.
-- Whether a partial preset (routes only, no `values`) should land defaults
-  for the values it does not name (D2 says yes; `legacy6` loaded as a
-  preset would then reset the whole picture) or whether "partial" is only
-  ever a module preset. The clean answer is the second: routes-only files
-  become full presets in the migration, and D2 stands without exception.
-- The ROUTING page's shape once it edits a preset: whether its per-row
-  table stays, or the desk rows get their own page.
+Every question this section listed was answered by the owner on
+2026-09-28 (DECISIONS.md, "Presets and the desk"; docs/DECISION-REGISTER.md
+rows 9–13 and 12b):
+
+- The global layer's track knobs: four hand-feel settings plus BPM, as a
+  first cut; better global controls are expected to turn up with use.
+- A routes-only file under D2: no exception; the migration turns it into a
+  full preset.
+- Bank slots name preset files.
+- Macros: one concept (§2.4); a performer on a macro moves its depth
+  subscribers only.
+- The ROUTING page: one page over the loaded preset.

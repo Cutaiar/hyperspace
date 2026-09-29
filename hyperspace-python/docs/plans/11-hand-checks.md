@@ -150,7 +150,7 @@ no LEDs → `apc40.mode_on` / the port name (`[midi] port`); a knob that
 moves the wrong param → `apc40.DEFAULT_MAP`; a knob jumping instead of
 catching → `MidiIO._apply` pickup (midi.py).
 
-**11. Rings show the base, LEDs show the state (R6, pending decision).**
+**11. Rings show the base, LEDs show the state (R6, decided (a)).**
 Headless: `uv run pytest -q tests/test_midi.py::test_ring_shows_the_base_and_never_chases_a_performer tests/test_midi.py::test_select_buttons_and_led_state`.
 ROUTING page: `default` (a lane pushes each rotation rate). Play a track.
 *Pass:* the track-knob rings for view faders sit at the *setting* and do
