@@ -1332,12 +1332,19 @@ class Panel:
 
     def _learn_status(self) -> None:
         """The armed param and what the last learn did — a knob's or a
-        hand's, so the line is there with no MIDI adapter at all."""
+        hand's, so the line is there with no MIDI adapter at all; a refusal
+        (the global layer, an invariant control — plan 13 D5, D6) in the
+        warning colour. The ROUTING page's head shows the same line."""
         lrn = self.learn
         if lrn is None:
             return
         if lrn.learning:
             imgui.text_colored(RED, f"learning {lrn.learning} — {self._learn_hint()}")
         elif lrn.last:
-            imgui.text_disabled(f"learn: {lrn.last}")
+            if getattr(lrn, "refused", False):
+                imgui.push_style_color(imgui.Col_.text, WARN)
+                imgui.text_wrapped(f"learn: {lrn.last}")
+                imgui.pop_style_color()
+            else:
+                imgui.text_disabled(f"learn: {lrn.last}")
         imgui.text_disabled("right-click any control to learn or unbind")

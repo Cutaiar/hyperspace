@@ -228,6 +228,38 @@ def test_the_routing_rows_scroll_in_their_own_child(rig, monkeypatch):
     assert inner and inner[-1] > 0, "the rows' child did not scroll with 40 rows"
 
 
+def test_the_routing_page_fits_over_a_loaded_preset_and_a_full_desk(rig, monkeypatch):
+    """Plan 13 decision 13: the one ROUTING page — head, routes, desk,
+    macros, session — never scrolls itself, with the factory preset
+    loaded and with a full desk (every preset control mapped, each macro
+    subscribed), a refused learn and a dropped desk row in the head."""
+    from hyperspace.learn import Learn
+
+    lib, table = rig.lib, rig.router.table
+    lib.load("presets", "BIG BLUE WAVE")
+    assert table.desk()
+    over = _page_scroll(rig, monkeypatch)
+    assert over["routing"] == 0, "the ROUTING page scrolled with the factory preset"
+    full = [*table.desk(), *[Binding(f"cc:*:{0x10 + k}", "view.speed", "abs",
+                                     feedback="ring", layer="preset") for k in range(8)],
+            *[Binding(f"note:{k}:{0x36}", "view.shape", "set", float(k), feedback="led",
+                      layer="preset") for k in range(8)],
+            Binding("cc:0:7", "view.bright", "abs")]          # a fader: dropped, noted
+    rig.lib.presets.desk_notes = table.set_desk(full)
+    table.set_macros({f"macro.{k}": {"label": f"M{k}", "subs": [
+        {"base": "view.depth4", "from": 0.0, "to": 1.0},
+        {"depth": {"source": "lane:0", "target": "rot.rate.ZW"}, "from": 0.0, "to": 1.0}]}
+        for k in range(1, 9)})
+    rig.panel.learn = Learn(rig.reg, table)
+    rig.panel.learn.refuse("track knob 1 is on the global layer (the session's) — "
+                           "latch SHIFT off to learn into the preset")
+    # dark now: only clip row 3's first three buttons (the global band scenes' own)
+    assert [f.source for f in ui_routing.unmapped(table)] == [
+        f"note:{k}:{0x37}" for k in range(3)]
+    over = _page_scroll(rig, monkeypatch)
+    assert over["routing"] == 0, "the ROUTING page scrolled with a full desk"
+
+
 def test_the_hands_page_fits_with_the_tracker_off(rig, monkeypatch):
     """The setup still edits and saves with no tracker: the page draws
     without the switches beside the box and still fits."""
