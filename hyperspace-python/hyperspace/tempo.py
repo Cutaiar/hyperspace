@@ -7,11 +7,13 @@ BPM and a division into a phase.
 
 Two things a tap must never do decide the shape of `Clock`:
 
-  * **Once triggered, a tap never moves a running synced LFO.** Tapping
-    sets the BPM; after the first `trigger` — the global LFO trigger,
-    ``lfo.trigger``, the one button pressed after tapping — the downbeat
-    the LFOs read (`t0`) is the performer's and a tap does not touch it.
-    So a re-tap mid-set changes the tempo, not the downbeat: a BPM change
+  * **A tap never moves the downbeat.** Tapping sets the BPM; only
+    `trigger` — the global LFO trigger, ``lfo.trigger``, the one button
+    pressed after tapping — places the downbeat the LFOs read (`t0`).
+    A fresh clock's `t0` is its construction time until the first trigger,
+    so on a new launch the synced LFOs run unaligned until that press
+    (plan 11, decision register row 1). A re-tap mid-set changes the
+    tempo, not the downbeat: a BPM change
     re-anchors `t0` so that ``beat(t)`` is continuous at the instant of
     the change, and every synced LFO keeps its place in the bar and runs
     faster or slower from there.
@@ -20,10 +22,8 @@ Two things a tap must never do decide the shape of `Clock`:
     `TAPS` (8) taps, measured from the oldest of those — the burst's
     first tap until the burst runs past eight, then the eighth-last — so
     a tempo change registers within a bar of tapping rather than being
-    averaged against a minute of the old one. The one time a tap does set
-    the downbeat is a clock that has never been triggered: there every
-    tap places `t0` on the burst's first tap (with the nudge folded in,
-    as `trigger` does), so a new app lines up without a second press.
+    averaged against a minute of the old one. Before and after the first
+    trigger alike, a tap never places `t0`.
 
 ``beat(t) = (t − t0) · bpm / 60 + nudge``, ``bar(t) = beat mod 4`` (4/4
 assumed), ``phase(t, ratio) = (beat · ratio) mod 1`` — `ratio` in cycles
@@ -72,7 +72,6 @@ class Clock:
         self.t = now()          # the frame's time; tick() keeps it current
         self.t0 = self.t        # the downbeat the LFOs read (trigger)
         self.taps: list[float] = []   # the current burst
-        self._triggered = False
 
     # ---- time ----
 
@@ -96,13 +95,8 @@ class Clock:
             mean = (recent[-1] - recent[0]) / (len(recent) - 1)
             if mean > 0.0:                       # two in one frame is not a tempo
                 self.set_bpm(60.0 / mean, t)
-        if not self._triggered:
-            # never triggered: every tap puts the downbeat on the burst's
-            # first tap — the nudge folded in exactly as trigger() does — so
-            # a new app lines up without a second press. Once triggered, a
-            # tap changes only the BPM; set_bpm above moved t0 just enough
-            # to keep beat(t) continuous.
-            self.t0 = self.taps[0] + self.nudge * 60.0 / self.bpm
+        # never t0: set_bpm moved it only enough to keep beat(t) continuous,
+        # and the downbeat is the trigger's alone
 
     def set_bpm(self, bpm: float, t: float | None = None) -> None:
         """A new tempo that keeps ``beat(t)`` where it is: the downbeat is
@@ -122,7 +116,6 @@ class Clock:
         The burst keeps counting."""
         t = self._t(t)
         self.t0 = t + self.nudge * 60.0 / self.bpm
-        self._triggered = True
 
     # ---- phase ----
 
@@ -153,7 +146,10 @@ def register(reg, clock: Clock) -> None:
                    tip="The clock's tempo. Tap it (B, the APC's TAP TEMPO) or set it "
                        "here; a change keeps every synced LFO where it is and only "
                        "alters its rate.")
-    reg.trigger(f"{GROUP}.tap", "Tap tempo", clock.tap, group=GROUP,
+    # not modulatable (decision register row 2, option c): a performer on
+    # tap tempo — an audio band, say — would tap on every transient. The
+    # LFO triggers stay ownable (lfo.py).
+    reg.trigger(f"{GROUP}.tap", "Tap tempo", clock.tap, group=GROUP, modulatable=False,
                 tip="Tap on the beat: two or more taps within 2 s of each other set "
                     "the BPM. Tapping never restarts the LFOs — the trigger does.")
     reg.continuous(f"{GROUP}.nudge", "Nudge", lambda: clock.nudge,

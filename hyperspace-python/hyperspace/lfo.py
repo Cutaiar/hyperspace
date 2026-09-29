@@ -132,13 +132,21 @@ class LFO:
         if self.pending:                  # a reset held since the last step: now
             self.pending = False
             self.restart(clock, t)
-        elif (self.last_sync is not None and self.sync != self.last_sync
-              and not self.synced):
-            # a division → Hz: the accumulator takes the wave's position so
-            # nothing jumps. Hz → a division is not carried: a division lands
-            # on the clock's beat, whether a knob or a preset set it.
-            self.acc = self.x - self.phase
-            carried = True
+        elif self.last_sync is not None and self.sync != self.last_sync:
+            if self.fresh:
+                # a reset this frame wins over the carry: restart again in
+                # the new mode, so it still reads phase 0
+                self.restart(clock, t)
+            elif not self.synced:
+                # a division → Hz: the accumulator takes the wave's position
+                # so nothing jumps
+                self.acc = self.x - self.phase
+                carried = True
+            else:
+                # into a division: on the clock's beat, whether a knob or a
+                # preset set it — an earlier per-LFO reset's offset belonged
+                # to the old ratio and goes
+                self.shift = 0.0
         self.last_sync = self.sync
         if self.fresh:                    # the cycle begins at this step, not dt into it
             self.fresh, dt = False, 0.0
