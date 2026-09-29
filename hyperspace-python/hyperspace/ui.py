@@ -293,7 +293,7 @@ CHEATSHEET = [
     ("B", "tap tempo · ⇧B LFO trigger"),
     ("Cmd+R", "restart process"),
     ("H / ?", "panel / this sheet"),
-    ("T", "overlay: float over the screen"),
+    ("T", "overlay (if config.toml allows)"),
     ("G", "overlay: clicks through / back"),
     ("Esc / Q", "quit"),
     # Xbox-layout gamepad, Bluetooth or USB (gamepad.py holds the map)
@@ -1045,7 +1045,7 @@ class Panel:
             imgui.same_line(imgui.get_content_region_avail().x - imgui.calc_text_size(text).x)
             imgui.text_colored(RED if proj.is_dirty() else DIM, text)
             if imgui.is_item_hovered():
-                imgui.set_tooltip("the open project — PRESETS page")
+                imgui.set_tooltip("the open show — PRESETS page")
 
     # ---- pages ----
 
@@ -1059,10 +1059,19 @@ class Panel:
             self._combo("output.monitor")
         self._check("output.fullscreen")
         imgui.same_line()
+        # decision 21 (a): overlay only when the config asks — shut, the
+        # toggle is drawn disabled with the reason, and its three overlay-only
+        # settings (click-through, ground, opacity) would do nothing
+        allowed = getattr(self.output, "allowed", True)
+        imgui.begin_disabled(not allowed)
         self._check("output.overlay")
-        self._check("output.passthrough")
-        self._row("output.bg")
-        self._row("output.alpha")
+        if allowed:
+            self._check("output.passthrough")
+            self._row("output.bg")
+            self._row("output.alpha")
+        imgui.end_disabled()
+        if not allowed:
+            imgui.text_disabled(f"overlay {self.output.GATED}")
         if self.output.error:
             imgui.text_colored(WARN, self.output.error)
 
@@ -1284,12 +1293,15 @@ class Panel:
         ui_hands.page(self, dt)
 
     def _page_presets(self, dt: float) -> None:
-        """The project and its preset bank, the loaded preset, the modules."""
-        self._section("project")
+        """Plan 14 WP4, top to bottom: the show (its name, show ▾ · save ·
+        save as · new), starts on ▾, the eight preset buttons, the preset
+        strip, and "more" folded over the module presets (ui_presets)."""
+        self._section("show")
         if self.library is None:
             imgui.text_disabled("no library attached")
         else:
-            ui_presets.project_row(self)
+            ui_presets.show_block(self)
+            ui_presets.starts_on(self)
             imgui.spacing()
         ui_presets.preset_bank(self)
         imgui.spacing()
@@ -1314,7 +1326,7 @@ class Panel:
         if self.library is not None:
             imgui.text_disabled(f"library: {self.library.home}")
             if imgui.is_item_hovered():
-                imgui.set_tooltip("$HYPERSPACE_HOME — presets and projects as JSON; "
+                imgui.set_tooltip("$HYPERSPACE_HOME — presets and shows as JSON; "
                                   "edit a file and the app follows")
         if self.config_error:
             imgui.text_colored(WARN, self.config_error)

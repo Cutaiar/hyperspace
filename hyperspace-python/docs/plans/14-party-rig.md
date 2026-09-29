@@ -148,3 +148,67 @@ Filled as the work packages land.
   glyph · param · layer. The cheat sheet gains the glyph legend.
   Screenshot: `assets/14-party-rig/desk-preset.png` (TRIP),
   `desk-global.png` (SHIFT latched). Hand check 45.
+- **WP2, overlay behind config** (decision 21 (a); PR #75, stacked on
+  #73 and #72). `[output] overlay = false` in `config.DEFAULTS`; `app.main`
+  reads the config before the windows, and `app._windows(overlay)` sets
+  `TRANSPARENT_FRAMEBUFFER` only when it is true. `overlay.Output.allowed`
+  shuts `output.overlay` (`_set_overlay`), which the `T` row, the APC40's
+  MASTER select (`note:0:80`, its `apc40.DEFAULT_MAP` row unchanged), the
+  panel and a preset all land on; `Output.mode` never reads overlay while
+  shut, so the crossfader's `overlay.bg` and `output.alpha` do nothing and
+  `on_start` is ignored with a stderr note. The OUTPUT page greys the
+  toggle, hides click-through / ground / opacity, and says why. Tests:
+  `tests/test_overlay.py` (every road refused, ground and opacity inert,
+  fullscreen still works), `tests/test_app_boundary.py` (the hint, stubbed
+  glfw). Hand check 26 rewritten.
+- **WP3, the party show opens** (decision 22). Chose to **remove** the
+  factory `default.hyp.json` and make `party` the one that opens
+  (`library.DEFAULT_PROJECT = "party"`) rather than refill `default`:
+  `party.hyp.json` already was the party show (two copies would drift),
+  the panel then reads "party", and a user file named `default` shadows
+  nothing. The house moods are the factory `house` show. The last show is
+  `<home>/last_show`, one line beside `config.toml` — plain, visible, and
+  outside the watched `projects/` folder — written by a show load, save
+  as and a "starts on" pick (`Library.remember`); `Library._open_default`
+  opens it, else the party. The one-off (`library.unshadow_default`, run
+  by `Library()` and after plan 13's migration converts a schema-1
+  `default`): the user's `projects/default.hyp.json` becomes
+  `projects/mine.hyp.json`, named `mine`, bank and startup as they were
+  (MIGRATED first), backed up by `routing.backup` as `.bak-v2` (a dated
+  copy when taken), noted on stderr and in `lib.warning`; a `mine` already
+  there leaves both alone; `projects/RENAMED.txt` records that it is
+  settled, so it runs once per home (review of PR #75: without it a show
+  later saved as "default" was renamed on the next launch), and
+  `last_show` holds the file name (`Project.stem`), not the name inside
+  the file. Plan 13's migration now puts
+  MIGRATED into `mine` (made from `house`), and its empty-slot seeds come
+  from `house`. `Project.new` takes the party show's bank. Tests:
+  `tests/test_party_show.py`; the tests written on the house moods open
+  `house` (`conftest.opened_last`), `tests/test_migration.py` checks the
+  migrated show as `mine`.
+- **WP4, the PRESETS page** (plan 14 §3's words). `ui_presets.show_block`
+  (the name on its own line — the old bug was the startup combo placed
+  over it — "factory" beside a factory show, then show ▾ · save · save as
+  · new), `starts_on` (labelled; `set_starts_on` writes the show at once),
+  `preset_bank` (eight buttons **two a row**, not four: at four a row a
+  name got five characters; each draws its F-key quiet and its name
+  bright, elided to the button), `preset_strip`, and `more` (a folded
+  header over a module-preset strip per group) with the warning / error /
+  status lines outside the fold. Save on a factory preset now writes your
+  copy in every strip, as the ROUTING head already did. The dirty dots
+  compare against the loaded preset or show: `Library.label(g, None)`
+  keeps the state as landed as the reference, `Project._apply` keeps the
+  performance groups' references across a show load and marks the
+  session groups it names no module for clean, and `Project.factory`
+  makes a factory show as shipped clean. ROUTING's head says "desk layer:
+  preset / global". Tests: `tests/test_ui_presets.py` (the name's rect
+  overlaps nothing, a long name too; the buttons carry names; the dots
+  clean after a factory load; starts on saved when set; one word per
+  thing; "more" opened still fits). Hand checks 1, 3, 11, 30, 31, 32, 33,
+  40, 41 updated.
+- **The owner's home on first launch** (measured on a copy of
+  `~/Hyperspace`, headless): `projects/default.hyp.json` →
+  `projects/mine.hyp.json` + `default.hyp.json.bak-v2`; the party show
+  opens on TUMBLE (F6–F8 empty until WP5); show ▾ lists house, mine,
+  party; `mine` opens on MIGRATED with its seven house moods; MIGRATED is
+  in the preset list; the second launch writes nothing and says nothing.

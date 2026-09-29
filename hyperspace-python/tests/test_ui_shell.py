@@ -493,11 +493,11 @@ def test_project_row_and_dirty_state(rig, tmp_path):
     panel, lib, reg = rig.panel, rig.lib, rig.reg
     proj = lib.project
     frame(panel, "presets")
-    assert proj.is_dirty()          # never saved
+    assert not proj.is_dirty() and proj.factory   # a factory show as it shipped: clean
     ui_presets._project_save_as(panel, "Show")
     assert proj.name == "Show" and proj.path == tmp_path / "projects" / "show.hyp.json"
     assert not proj.is_dirty()
-    assert ui_presets.names(panel, ui_presets.PROJECT) == ["default", "party", "show"]
+    assert ui_presets.names(panel, ui_presets.PROJECT) == ["house", "party", "show"]
     frame(panel)
     gain = rig.chain.gain
     reg["master.gain"].set(gain + 1.0)             # a session move
@@ -521,9 +521,9 @@ def test_preset_bank_and_strip_on_the_presets_page(rig):
     frame(panel, "presets")
     reg["view.shape"].set(5)
     reg["preset.save.2"].fire()
-    assert lib.project.active == 2 and lib.project.bank[2] == "STROBE CAGE"
-    assert lib.read("presets", "STROBE CAGE")["values"]["view.shape"] == 5
-    assert lib.current("presets") == "STROBE CAGE" and not lib.is_dirty("presets")
+    assert lib.project.active == 2 and lib.project.bank[2] == "FIELD"
+    assert lib.read("presets", "FIELD")["values"]["view.shape"] == 5
+    assert lib.current("presets") == "FIELD" and not lib.is_dirty("presets")
     reg["view.shape"].set(1)
     assert ui_presets.dirty(panel, "presets")
     frame(panel)

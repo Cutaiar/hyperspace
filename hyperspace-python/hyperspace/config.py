@@ -23,9 +23,13 @@ dream.py, too, is imported only when its gate is open.
 
     [output]                # where the render window goes and how it looks
                             # (overlay.py; app.py seeds the output.* params)
+    overlay = false         # overlay mode exists at all (decision 21 (a)): false,
+                            # the render window is always opaque — no transparent
+                            # framebuffer, and T / MASTER select / the panel cannot
+                            # float it see-through; true for a laptop demo
     monitor = -1            # screen index for fullscreen; -1 = the window's own
     fullscreen = false      # launch fullscreen on that screen
-    on_start = false        # launch straight into overlay mode
+    on_start = false        # launch straight into overlay mode (needs overlay = true)
     passthrough = true      # clicks go to the window underneath (G / pan toggles)
     bg = 0.0                # ground darkness in overlay: 0 see-through, 1 black
     alpha = 1.0             # whole-window opacity
@@ -90,9 +94,11 @@ LEGACY_OUTPUT = "overlay"   # the section [output] was called before the split
 DEFAULTS: dict = {
     # midi.map: the legacy midi_map.json, merged once when bindings.json is missing
     "midi": {"enabled": True, "port": None, "profile": "apc40", "map": "midi_map.json"},
-    # overlay.py: the render window's placement and look; ground 0 = see-through
-    "output": {"monitor": -1, "fullscreen": False, "on_start": False, "passthrough": True,
-               "bg": 0.0, "alpha": 1.0},
+    # overlay.py: the render window's placement and look; ground 0 = see-through.
+    # overlay: off, the window is opaque and overlay cannot switch on
+    # (decision 21 (a), plan 14 WP2)
+    "output": {"overlay": False, "monitor": -1, "fullscreen": False, "on_start": False,
+               "passthrough": True, "bg": 0.0, "alpha": 1.0},
     # gamepad.py: the Xbox pad — on by default, inert when absent
     "gamepad": {"enabled": True},
     # bridge.py: the analyzer's lanes out to a DAW, external lanes in — off by default

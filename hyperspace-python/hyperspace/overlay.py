@@ -30,9 +30,18 @@ aliases of the ``output.*`` params; the factory table (routing.py) and
 the APC40 profile bind the alias ids, so they are the live names for
 those rows, not a shim.
 
-The window is created with a transparent framebuffer from the start (a
-creation-time GLFW hint), so toggling is only attributes, position and
-the clear alpha. Every GLFW/Cocoa call goes through `apply()`, once per
+Overlay is there only when the config asks (decision 21 (a), plan 14
+WP2): ``[output] overlay = true``. Otherwise the render window is created
+without a transparent framebuffer (app._windows) and ``output.overlay``
+refuses to switch on — the ``T`` key, the APC40's MASTER select, the
+panel and a preset all land on the one param, so one gate covers every
+road — and the ground (``output.bg``, the crossfader) and opacity do
+nothing, since they only ever act in overlay. The show behind a Pepper's
+Ghost glass can never go see-through by accident.
+
+When it is allowed, the window is created with a transparent framebuffer
+from the start (a creation-time GLFW hint), so toggling is only
+attributes, position and the clear alpha. Every GLFW/Cocoa call goes through `apply()`, once per
 frame, and only when something changed. The window-system backend is
 injectable so the state machine tests headlessly.
 """
@@ -162,9 +171,14 @@ class GlfwBackend:
 class Output:
     """The render window's output state, its params, and the once-per-frame apply."""
 
-    def __init__(self, win, backend=None):
+    GATED = "off in the config: set [output] overlay = true in config.toml"
+
+    def __init__(self, win, backend=None, *, allowed: bool = False):
         self.win = win
         self.backend = backend
+        # decision 21 (a): the config's [output] overlay; False (the
+        # default) means overlay can never switch on (_set_overlay)
+        self.allowed = bool(allowed)
         self.fullscreen = False
         self.overlay = False
         self.passthrough = True  # an overlay should not block what is under it
@@ -192,7 +206,7 @@ class Output:
                    tip="Borderless, covering the chosen screen — for the projector. "
                        "No video-mode switch.", **rig)
         reg.toggle("output.overlay", "Overlay", lambda: self.overlay,
-                   lambda v: setattr(self, "overlay", bool(v)), group=g,
+                   self._set_overlay, group=g,
                    tip="Float the render, frameless and see-through, over the whole "
                        "screen — above a fullscreen video. T toggles.", **rig)
         reg.toggle("output.passthrough", "Click-through", lambda: self.passthrough,
@@ -220,6 +234,10 @@ class Output:
                           tip=p.tip, lo=p.lo, hi=p.hi, fmt=p.fmt, choices=p.choices,
                           alias=True))
 
+    def _set_overlay(self, v) -> None:
+        """The one door into overlay mode: shut unless the config asks."""
+        self.overlay = bool(v) and self.allowed
+
     def monitor_names(self) -> list[str]:
         if self.backend is None:
             return ["screen"]
@@ -240,12 +258,13 @@ class Output:
     @property
     def mode(self) -> str:
         """window · fullscreen · overlay — the overlay wins when both are on."""
-        return "overlay" if self.overlay else "fullscreen" if self.fullscreen else "window"
+        on = self.overlay and self.allowed
+        return "overlay" if on else "fullscreen" if self.fullscreen else "window"
 
     @property
     def bg_alpha(self) -> float:
         """What the renderer clears to this frame."""
-        return self.bg if self.overlay else 1.0
+        return self.bg if self.mode == "overlay" else 1.0
 
     def apply(self) -> None:
         """Push state to the window; each attribute only when it changed."""
@@ -264,10 +283,11 @@ class Output:
                 self._enter(mode)
             elif mode != "window" and self._changed("monitor", self.monitor):
                 self._enter(mode)  # same mode, another screen
-            want_pt = self.overlay and self.passthrough
+            on = mode == "overlay"
+            want_pt = on and self.passthrough
             if self._changed("passthrough", want_pt):
                 b.set_attrib(win, "MOUSE_PASSTHROUGH", want_pt)
-            want_a = self.alpha if self.overlay else 1.0
+            want_a = self.alpha if on else 1.0
             if self._changed("alpha", round(want_a, 3)):
                 b.set_opacity(win, want_a)
             self.error = ""

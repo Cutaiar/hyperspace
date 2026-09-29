@@ -29,8 +29,11 @@ three frames, clean exit, nothing on stderr but the adapters' one-line
 notes. *Fail:* a traceback, or the process not exiting → `app.frame` /
 `app.Host` (WP14, PR #48); a stderr note from an adapter that should be
 silent → that adapter's `_open_*` gate.
-Then `uv run hyperspace` once more: R resets the camera, F1 loads preset 1 (BIG BLUE WAVE),
-⇧F1 saves the live state as it (a user file shadowing the factory one), ⌘R restarts without resetting the camera first, and the
+Then `uv run hyperspace` once more: the rig opens the party show (PRESETS
+page: SHOW `party`, starts on TUMBLE — plan 14 WP3), R resets the camera,
+F1 loads preset 1 (TUMBLE), ⇧F1 saves the live state as it (a user file
+shadowing the factory one), `T` does nothing (overlay is off unless
+`[output] overlay = true`, decision 21), ⌘R restarts without resetting the camera first, and the
 cheat sheet (`/`) names all seventeen rows — R, F1–F8, ⇧F1–F8 (WP7; the
 rows are the session's, in `bindings.json`; headless:
 `tests/test_routing.py::test_r_and_the_f_keys_are_table_rows_that_fire_their_params`).
@@ -52,8 +55,9 @@ page: the input combo lists the MacBook microphone (and BlackHole if
 installed, pre-selected and labelled `System ·`). Press `M`. *Pass:*
 macOS asks for microphone access once; the INPUT meters (white) move on a
 clap and settle; the six OUTPUT meters (red) follow; the shape's rotation
-changes with the clap on the default project's startup preset (BIG
-BLUE WAVE: a lane pushes each rotation rate). Plug in or enable a
+changes with the clap on the house show's first preset (PRESETS → show ▾
+→ `house`, F1 BIG BLUE WAVE: a lane pushes each rotation rate; the party
+show that opens is played by hand). Plug in or enable a
 device and press **rescan** beside the combo: it appears, the selection
 by name survives. *Fail:* no prompt and flat meters → `AudioEngine.start_mic`
 / the callback (`audio.py`); meters at the ceiling with the blinking
@@ -172,8 +176,8 @@ a fader jumping instead of catching → `MidiIO._apply` pickup (midi.py).
 
 **11. Rings show the base, LEDs show the state (R6, decided (a)).**
 Headless: `uv run pytest -q tests/test_midi.py::test_ring_shows_the_base_and_never_chases_a_performer tests/test_midi.py::test_select_buttons_and_led_state`.
-F1 on the default project (BIG BLUE WAVE: a lane pushes each rotation
-rate). Play a track.
+F1 on the house show (PRESETS → show ▾ → `house`; BIG BLUE WAVE: a lane
+pushes each rotation rate). Play a track.
 *Pass:* the track-knob rings for view faders sit at the *setting* and do
 not flicker with the audio; the scene-launch LEDs for points / lines /
 faces / rotate reflect the toggles; pressing one flips the LED at once.
@@ -322,17 +326,25 @@ follower's attack). *Fail:* more → `hands.<axis>.attack` or the One Euro
 
 ## D. Projector (second monitor) — about 5 minutes
 
-**26. `[output] monitor`, fullscreen, "follow window" (P3, plan 07 WP1).**
-Headless: `uv run pytest -q tests/test_overlay.py::test_follow_window_is_the_first_choice_and_reads_back_as_itself`.
+**26. `[output] monitor`, fullscreen, "follow window"; overlay behind the config (P3, plan 07 WP1; rewritten by plan 14 WP2).**
+Headless: `uv run pytest -q tests/test_overlay.py::test_follow_window_is_the_first_choice_and_reads_back_as_itself tests/test_overlay.py::test_overlay_refuses_every_road_while_the_config_shuts_it tests/test_app_boundary.py::test_the_render_window_is_transparent_only_when_the_config_asks`.
 Plug the projector in. OUTPUT page: `output.monitor` combo lists "follow
 window" first, then each screen by name; pick the projector,
 `output.fullscreen` on. *Pass:* the render window covers the projector at
 its own DPI (edges the same weight as on the laptop), the control window
-stays on the laptop; `T` overlay on the projector, `G` passthrough; back
-to "follow window" and fullscreen off returns a window. Set
+stays on the laptop; with no `overlay` key in `config.toml` (the default,
+decision 21 (a)) the Overlay toggle is greyed with "overlay off in the
+config: set [output] overlay = true in config.toml", and `T`, the APC40's
+MASTER select and the crossfader change nothing — the window stays opaque;
+back to "follow window" and fullscreen off returns a window. Set
 `[output] monitor = 1, fullscreen = true`, relaunch: straight to the
-projector. *Fail:* the wrong screen → `overlay.Output.apply` (the GLFW
-monitor list order); blurry edges → `dpr` in `app.frame`'s draw.
+projector. Then, for a laptop demo only, add `overlay = true` under
+`[output]` and relaunch: `T` floats the render over the screen, `G` is
+passthrough, the crossfader darkens the ground; remove the line after.
+*Fail:* the wrong screen → `overlay.Output.apply` (the GLFW monitor list
+order); blurry edges → `dpr` in `app.frame`'s draw; the desktop through
+the window, or `T` floating it, with no `overlay = true` →
+`app._overlay_allowed` / `Output._set_overlay`.
 
 ## E. IAC + FL Studio — about 15 minutes
 
@@ -372,7 +384,8 @@ bindings.json.bak-v1` and three `migrate:` lines; `/tmp/h/` holds
 `bindings.json` (`hyperspace.bindings/3`, the session's controls only)
 beside `bindings.json.bak-v1` (the file as it was), `presets/migrated.json`
 (its routes, knobs and macros as the preset `MIGRATED`) and
-`projects/default.hyp.json` starting on it; run it again: no new backup,
+`projects/mine.hyp.json` (the house show's bank one slot along, since
+plan 14 WP3) starting on it; run it again: no new backup,
 nothing rewritten. Your real home's hand-made `.bak-plan09` and
 `.bak-2026-09-26` are never touched. *Fail:* no `.bak-v1` → `routing.backup`
 (`preset.migrate_home`, PR #66); an existing `.bak-*` overwritten → the dated
@@ -382,7 +395,7 @@ copy path in `backup`.
 
 **31. The APC40's knobs re-base from the host (plan 13 D7; the one hardware assumption the two-layer desk rests on).**
 No headless twin: it is the device's behaviour. Desk plugged in, the app
-on the default project (F1, BIG BLUE WAVE, brightness 1.25×). Turn track knob 1 (brightness) to about a
+on the house show (PRESETS → show ▾ → `house`; F1, BIG BLUE WAVE, brightness 1.25×). Turn track knob 1 (brightness) to about a
 quarter; press F2 (EMBER ORBIT, brightness 1.5×). *Pass:*
 the knob's ring jumps to the preset's brightness at once, and the next
 turn of the knob continues from *there* — no jump back toward the
@@ -396,8 +409,9 @@ is wrong. Either way, note it on plan 11 §2 row 12.
 Headless first: `uv run pytest -q tests/test_plan12_presets.py` and
 `uv run python tools/preset_shots.py`, then look at
 `docs/plans/assets/12-presets/party-*-sheet.png` so you know the pose
-each tile expects. Projector and box on; PRESETS page → project → load ▾
-→ `party`; then per preset its F-key alone — F1 TUMBLE … F5 TRIP (plan 13 WP2)
+each tile expects. Projector and box on; the party show is what the rig
+opens (PRESETS page: SHOW `party`; if another show is up, show ▾ →
+`party`); then per preset its F-key alone — F1 TUMBLE … F5 TRIP (plan 13 WP2)
 (the cards under `docs/plans/assets/12-presets/` say which). *Pass*, one
 line each — **(a)** faces at 2.5× (FACES) and 2.0× (TUMBLE, WAKE) read
 on the projector in the room, and the left hand's headroom to 4× is
@@ -447,8 +461,10 @@ on); each project is `hyperspace.project/2` naming them, an empty slot
 pointing at the house preset its F-key used to load; the look a project
 restored on open is its `startup` — the slot whose values it equals, or
 else a preset `<PROJECT> SAVED` (`DEFAULT SAVED` for your default
-project) in its first empty slot — so the first launch opens on the
-same picture as the last one; `bindings.json` keeps your keys, pad and MIDI rows and
+project) in its first empty slot — so opening that show brings back the
+picture it had (since plan 14 WP3 a converted `default` is renamed
+`mine`, `default.hyp.json.bak-v2` first, and the launch opens the party
+show; show ▾ → `mine` for yours); `bindings.json` keeps your keys, pad and MIDI rows and
 nothing else — no route, no preset-layer knob, no `macros`, no `values`
 — the band strip's eight device knobs now `"layer": "global"`; your
 learned hand rows and knobs are in the startup preset (ROUTING page:
@@ -456,7 +472,7 @@ the routes, the DESK section); `~/Hyperspace/bindings/` is as it was,
 with a `NOT-READ.txt` in it; every `.bak-*` you made by hand is
 untouched (`ls -la ~/Hyperspace` against the copy). A home with no
 project of its own gets a `MIGRATED` preset holding bindings.json's
-routes, desk and macros, the startup of a new `default` project. Launch
+routes, desk and macros, the startup of a new `mine` show. Launch
 again: stderr says nothing and no file's time moves. *Fail:* a slot
 missing → the project migration (`preset.migrate_project`); a learned
 row gone → `routing.Bindings.carried` and `preset.migrate_home`; a
@@ -551,13 +567,20 @@ the file is generated: `python -m hyperspace.preset`); nothing moving →
 the macro's base-follow step (`routing.py`) or the desk row
 (`preset.lfo_breathe_desk`, `cc:*:16 → macro.1`).
 
-**40. The startup preset (plan 13 D11; WP2).**
-Headless: `uv run pytest -q tests/test_presets.py::test_the_startup_preset_loads_on_launch`.
-PRESETS page, project `party`, startup ▾ → TUMBLE; save the project. Quit
-(Esc) and relaunch. *Pass:* the show comes up as TUMBLE, its desk lit (the
-track-knob rings at TUMBLE's values), the status line says so. Put your
-own project's startup back afterwards. *Fail:* a dark desk or the factory
-look → `Project.startup` and the startup load in `app.main`.
+**40. What the show starts on (plan 13 D11; WP2; rewritten by plan 14 WP3, WP4).**
+Headless: `uv run pytest -q tests/test_presets.py::test_the_startup_preset_loads_on_launch tests/test_ui_presets.py::test_starts_on_is_labelled_and_saved_when_set tests/test_party_show.py`.
+Launch: the party show opens (SHOW `party`, its name in full, "factory"
+beside it, no unsaved dot) on TUMBLE. PRESETS page, "starts on ▾" → WAKE
+— no save: it is written the moment it is picked (a factory show's first
+write makes your copy, `~/Hyperspace/projects/party.hyp.json`). Quit
+(Esc) and relaunch. *Pass:* the party show comes up on WAKE, its desk lit
+(the device-knob rings at WAKE's values), the status line says so. Then
+show ▾ → `house`, quit, relaunch: the house show opens (the last show
+opened is remembered, `~/Hyperspace/last_show`). Put party's "starts on"
+back to TUMBLE and open party again afterwards. *Fail:* a dark desk or
+the wrong look → `Project.startup` and the startup load in `app.main`;
+a pick that does not survive the relaunch → `ui_presets.set_starts_on`;
+the wrong show → `Library._open_default` / `last_show`.
 
 **41. The five party presets, re-cut (plan 12 §7, plan 13 WP5).**
 Headless: `uv run pytest -q tests/test_plan12_presets.py` (the F-keys,
@@ -565,7 +588,7 @@ Headless: `uv run pytest -q tests/test_plan12_presets.py` (the F-keys,
 `test_wake_and_trip_device_knobs_move_their_bases`) and
 `uv run python tools/preset_shots.py`. Projector and box on. As check 32,
 but each preset is one F-key — F1 TUMBLE, F2 FACES, F3 FIELD, F4 WAKE,
-F5 TRIP on the `party` project — one step, nothing else to load. *Pass:* check 32's (a)–(f) hold as
+F5 TRIP on the `party` show, which the rig opens — one step, nothing else to load. *Pass:* check 32's (a)–(f) hold as
 before; WAKE's device knobs 1–8 set echo mix · decay · darken · contrast ·
 occlude · dream mix · dream sat · dream k, and TRIP's set fx mix · plasma
 level · kaleido segments · kaleido zoom · burst amount · burst glow · hue

@@ -62,8 +62,17 @@ factory's file of the same name:
 ``home()`` is the one resolver for that folder (config.py and the binding
 table path go through it). On the first run the working-directory ``config.toml``
 and ``midi_map.json`` are copied in and a legacy ``presets.json`` theme
-bank becomes user presets and a default project naming them — originals
+bank becomes user presets and a project naming them (``mine``) — originals
 are left alone.
+
+Which show opens (decision 22, plan 14 WP3): the one opened last, its
+name in ``<home>/last_show`` (one line, written by every load and save
+as), else the **party** show (DEFAULT_PROJECT) — the factory ``party``
+unless the user has a copy. The eight house moods are the factory
+``house`` show. There is no factory ``default`` any more: a user
+``projects/default.hyp.json`` — what plan 13's migration made, ``MIGRATED``
+and the house moods — is renamed ``mine`` once, with a backup
+(``unshadow_default``).
 
 Loading a preset fills ids it doesn't name from the group's *default*
 preset (DEFAULT_NAMES, else one called "default", else the values the
@@ -92,7 +101,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .params import PLANES, SESSION_GROUPS, Registry
+from .params import PERFORMANCE_GROUPS, PLANES, SESSION_GROUPS, Registry
 
 SLOTS = 8                 # the F1–F8 preset bank
 PRESETS = "presets"       # the presets' group, a document kind (preset.py)
@@ -109,7 +118,17 @@ PROJECT_SCHEMA = "hyperspace.project/2"
 PROJECT_V1 = "hyperspace.project/1"        # migrated by preset.migrate_project
 PROJECT_SUFFIX = ".hyp.json"
 PROJECTS = "projects"
-DEFAULT_PROJECT = "default"
+# the show a launch opens when none was opened before (decision 22): the
+# party. `house` holds the eight house moods; `mine` is where a user's old
+# `default` show (plan 13's migration: MIGRATED + the house moods) lives
+DEFAULT_PROJECT = "party"
+HOUSE_PROJECT = "house"
+MINE_PROJECT = "mine"
+OLD_DEFAULT = "default"             # the factory show's name until plan 14 WP3
+LAST_SHOW = "last_show"             # <home>/last_show: the show opened last
+# projects/RENAMED.txt: decision 22's one-off rename has been settled for
+# this home, so a show you later save as "default" stays "default"
+RENAMED_NOTE = "RENAMED.txt"
 UNTITLED = "untitled"
 
 # the preset a group resets to; any other group uses one named "default"
@@ -163,7 +182,7 @@ def migrate(root: Path, cwd: Path | None = None) -> list[str]:
         if src.is_file() and not dst.exists():
             shutil.copyfile(src, dst)
             done.append(f"library: copied {src} → {dst}")
-    src, dst = cwd / LEGACY_BANK, root / PROJECTS / f"{DEFAULT_PROJECT}{PROJECT_SUFFIX}"
+    src, dst = cwd / LEGACY_BANK, root / PROJECTS / f"{MINE_PROJECT}{PROJECT_SUFFIX}"
     if src.is_file() and not dst.exists():
         # the slots become presets through plan 13's migration code (the
         # one road for an inline bank, preset.slot_presets): each with the
@@ -181,12 +200,71 @@ def migrate(root: Path, cwd: Path | None = None) -> list[str]:
             done.append(f"library: {src} not migrated ({e})")
         else:
             bank += [None] * (SLOTS - len(bank))
-            _write_json(dst, {"schema": PROJECT_SCHEMA, "name": DEFAULT_PROJECT,
+            _write_json(dst, {"schema": PROJECT_SCHEMA, "name": MINE_PROJECT,
                               "startup": next((n for n in bank if n), None),
                               "bank": bank, "session": session, "modules": {}})
             done.append(f"library: theme bank {src} → {sum(1 for n in bank if n)} "
                         f"presets in {root / PRESETS} and project {dst}")
     return done
+
+
+def unshadow_default(root: Path) -> list[str]:
+    """Once, for a home plan 13 migrated (decision 22, plan 14 WP3): the
+    user's ``projects/default.hyp.json`` — ``MIGRATED`` on slot 1 and the
+    house moods, its startup ``MIGRATED`` — becomes ``projects/mine.hyp.json``
+    (named ``mine``, the bank and startup as they were), kept first beside
+    itself by ``routing.backup`` (never over an existing ``.bak-*``), so
+    the party show is what opens. A schema-1 file waits for plan 13's
+    migration; a ``mine`` already there leaves both files as they are (a
+    ``default`` then is just a show of yours), and so does a backup that
+    cannot be made, said. Once it is settled — renamed, nothing to rename,
+    or a ``mine`` in the way — ``projects/RENAMED.txt`` says so and it never
+    runs again: a show you save as "default" later stays yours (review of
+    PR #75). Returns the notes."""
+    src = root / PROJECTS / f"{OLD_DEFAULT}{PROJECT_SUFFIX}"
+    dst = root / PROJECTS / f"{MINE_PROJECT}{PROJECT_SUFFIX}"
+    note = root / PROJECTS / RENAMED_NOTE
+    if note.exists():
+        return []
+    if not src.is_file():
+        _settled(note, "no user default show to rename")
+        return []
+    try:
+        doc = _read_json(src)
+    except LibraryError as e:
+        return [f"{src.name}: not renamed ({e})"]
+    if doc.get("schema") != PROJECT_SCHEMA:
+        return []                               # schema 1: plan 13's migration first
+    if dst.exists():
+        # both are yours now: a show called default is just a show
+        _settled(note, f"{src.name} left as it is: {dst.name} was already there")
+        return []
+    from .routing import backup
+
+    bak = backup(src, "2")
+    if bak is None:
+        return [f"{src.name}: not renamed — no backup could be made"]
+    doc["name"] = MINE_PROJECT
+    try:
+        _write_json(dst, doc)
+        src.unlink()
+    except (LibraryError, OSError) as e:
+        return [f"{src.name}: not renamed ({e}); the backup {bak.name} stays"]
+    _settled(note, f"{src.name} renamed {dst.name}; the old file kept as {bak.name}")
+    return [(f"your show 'default' is now 'mine' ({dst.name}; the old file kept as "
+             f"{bak.name}) — the party show opens; 'mine' is in the show list, "
+             f"{doc.get('startup')!r} its first preset")]
+
+
+def _settled(note: Path, what: str) -> None:
+    """Write the rename's note: done for this home, and what it did. A note
+    that cannot be written only means the check runs again next launch."""
+    try:
+        note.write_text("Plan 14 (decision 22) checked this folder on "
+                        f"{time.strftime('%Y-%m-%d')}: {what}.\nThe party show opens; "
+                        "a show you save as 'default' from now on stays yours.\n")
+    except OSError as e:
+        print(f"library: {note.name} not written ({e})", file=sys.stderr)
 
 
 # ---------------------------------------------------------------- files
@@ -348,6 +426,9 @@ class Project:
         self.name = DEFAULT_PROJECT
         self.note = ""
         self.path: Path | None = None
+        # a factory show opened as it shipped (no user file): clean until
+        # it is changed, and a save writes your copy (plan 14 WP4)
+        self.factory = False
         self.session: dict[str, Any] = {}     # the session part
         self.modules: dict[str, Any] = {}     # session groups' module labels
         self.bank: list[str | None] = [None] * SLOTS
@@ -358,7 +439,8 @@ class Project:
 
     # ---- documents ----
 
-    def _take(self, doc: dict, path: Path | None, where: str = "project") -> None:
+    def _take(self, doc: dict, path: Path | None, where: str = "project", *,
+              factory: bool = False) -> None:
         if doc.get("schema") == PROJECT_V1:
             # its bank becomes presets through the live table (Project.load,
             # preset.migrate_home); with no preset loader there is none
@@ -369,6 +451,9 @@ class Project:
                                             else UNTITLED))
         self.note = str(doc.get("note") or "")
         self.path = path
+        self.factory = factory and path is None
+        # the file's own name, which a launch finds the show by (`stem`)
+        self._stem = where[: -len(PROJECT_SUFFIX)] if where.endswith(PROJECT_SUFFIX) else None
         self.session = dict(doc.get("session") or {})
         self.modules = dict(doc.get("modules") or {})
         bank = [str(s) if isinstance(s, str) and s else None
@@ -377,6 +462,15 @@ class Project:
         self.startup = str(doc["startup"]) if doc.get("startup") else None
         self.active = -1
         self._saved = (list(self.bank), self.startup)
+
+    @property
+    def stem(self) -> str:
+        """The show's file name less ``.hyp.json`` — what `last_show` holds
+        and `path_for` finds again, whatever `name` the file carries inside
+        (review of PR #75: a copied or hand-edited file's name can differ)."""
+        if self.path is not None:
+            return self.path.name[: -len(PROJECT_SUFFIX)]
+        return getattr(self, "_stem", None) or slug(self.name)
 
     def to_doc(self) -> dict:
         doc: dict[str, Any] = {"schema": PROJECT_SCHEMA, "name": self.name}
@@ -397,13 +491,15 @@ class Project:
         preset's (preset.py)."""
         lib = self.lib
         # a document kind is never the project's (the loaded preset, the
-        # only kind since plan 13 WP5): what it has landed survives a project load
-        kinds = {g: lib.landed(g) for g in lib._kinds}
+        # only kind since plan 13 WP5): what it has landed survives a project
+        # load, and so do the performance groups' references — the loaded
+        # preset's, which their dirty dots compare against (plan 14 WP4)
+        kept = {g: lib.landed(g) for g in (*lib._kinds, *PERFORMANCE_GROUPS)}
         lib._current.clear()
         lib._loaded.clear()
         lib._adopted.clear()
-        for group, mark in kinds.items():
-            if mark[0] is not None:
+        for group, mark in kept.items():
+            if mark[0] is not None or mark[1] is not None:
                 lib.reland(group, mark)
         docs: list[tuple[str, str, dict | None]] = []
         for group, ref in self.modules.items():
@@ -434,6 +530,14 @@ class Project:
             hook = lib._load_hooks.get(group)
             if hook is not None:
                 hook(name)
+        # a session group the show names no module preset for: clean as the
+        # show left it — the rail's dot compares against the show, not fresh
+        # defaults (plan 14 WP4)
+        if lib.reg is not None:
+            named = {g for g, _n, _d in docs}
+            for group in SESSION_GROUPS:
+                if group not in named and group not in lib._kinds:
+                    lib._landed(group, None, lib.reg.snapshot(group))
         # the bank lights the slot naming the preset still loaded, if any
         cur = lib._current.get(PRESETS)
         self.active = self.bank.index(cur) if cur in self.bank else -1
@@ -543,7 +647,7 @@ class Project:
             path = Path(name)
         else:
             path = self.path_for(name)
-            if not path.is_file():                    # a factory project by name
+            if not path.is_file():                    # a factory show by name
                 path = lib.factory / PROJECTS / path.name
         doc = _read_json(path)
         presets = self._loader()
@@ -573,24 +677,28 @@ class Project:
                 raise LibraryError(f"{path.name}: not migrated ({notes[-1] if notes else '?'})")
             lib._sync(path)
             doc = _read_json(path)
-        self._take(doc, path if lib._is_user(path) else None, path.name)
+        user = lib._is_user(path)
+        self._take(doc, path if user else None, path.name,
+                   factory=path.parent == lib.factory / PROJECTS)
         missing = self._apply()
         lib.report(missing, path.name)
-        lib.status = f"project: {self.name}"
+        lib.status = f"show: {self.name}"
+        lib.remember(self.stem)
         if startup:
             self.load_startup()
         return missing
 
     def new(self, name: str = UNTITLED) -> None:
-        """A fresh project: default state, the factory bank, no file yet."""
+        """A fresh show: default state, the party show's bank, no file yet
+        (not remembered until it is saved)."""
         lib = self.lib
         self._take(_read_json(lib.factory / PROJECTS / f"{DEFAULT_PROJECT}{PROJECT_SUFFIX}"),
-                   None)
+                   None)                                 # not factory: a new show of yours
         self.name = name
         lib._fresh_layouts()                          # the layout the app started with…
         lib.restore(lib._fresh_all())                 # …and every group's fresh values
         self._apply()
-        lib.status = f"project: new {name}"
+        lib.status = f"show: new {name}"
         self.load_startup()
 
     def save(self, name: str | None = None) -> Path:
@@ -614,7 +722,8 @@ class Project:
                 self.modules[group] = {k: v for k, v in doc.items()
                                        if k not in ("schema", "group")}
         self.write()
-        lib.status = f"project: saved {self.name}"
+        lib.status = f"show: saved {self.name}"
+        lib.remember(self.stem)
         return self.path
 
     def write(self) -> Path:
@@ -633,15 +742,18 @@ class Project:
         _write_json(self.path, self.to_doc())
         self.lib._sync(self.path)
         self._saved = (list(self.bank), self.startup)
+        self.factory = False                          # your copy now
         return self.path
 
     def is_dirty(self) -> bool:
         """Does the live state differ from the file — the session values,
-        the bank or the startup preset? Never saved counts as dirty."""
+        the bank or the startup preset? Never saved counts as dirty; a
+        factory show opened as it shipped does not (plan 14 WP4)."""
         reg = self.lib.reg
         if reg is None:
             return False
-        return (self.path is None or self.session != reg.snapshot(part="session")
+        return ((self.path is None and not self.factory)
+                or self.session != reg.snapshot(part="session")
                 or (self.bank, self.startup) != self._saved)
 
 
@@ -685,8 +797,19 @@ class Library:
         self._next = 0.0
         self.presets = None        # preset.Presets, set by its constructor
         self.project = Project(self)
+        self.unshadow()
         self._open_default()
         self._mtimes = self._scan()
+
+    def unshadow(self) -> list[str]:
+        """`unshadow_default` over this home: each note on stderr and in
+        `warning` (decision 22's one-off rename)."""
+        notes = unshadow_default(self.home)
+        for n in notes:
+            print(f"library: {n}", file=sys.stderr)
+        if notes:
+            self.warning = notes[-1]
+        return notes
 
     def attach(self, reg: Registry) -> list[str]:
         """Bind the registry; its state right now is what "default" means.
@@ -759,25 +882,53 @@ class Library:
         scene combo, so a strip load moves the selected scene."""
         self._load_hooks[group] = hook
 
-    def _open_default(self) -> None:
-        """The user's default project if there is one, else the factory's —
-        which also stands in for a user file that will not open, the
-        reason in `error`, and, quietly, for a schema-1 file until the
-        launch's migration converts it (preset.migrate_home re-opens the
-        default then). A save keeps a file it could not read as a backup
-        (write)."""
-        user = self.project.path_for(DEFAULT_PROJECT)
-        factory = self.factory / PROJECTS / user.name
-        if user.is_file():
-            try:
-                doc = _read_json(user)
-                if doc.get("schema") != PROJECT_V1:
-                    self.project._take(doc, user, user.name)
-                    return
-            except LibraryError as e:
-                self.error = f"library: {e}"
+    def last_show(self) -> str | None:
+        """The show opened last (`<home>/last_show`), or None."""
         try:
-            self.project._take(_read_json(factory), None, factory.name)
+            name = (self.home / LAST_SHOW).read_text().strip()
+        except OSError:
+            return None
+        return name or None
+
+    def remember(self, name: str) -> None:
+        """Note `name` — a show's file name less ``.hyp.json``
+        (`Project.stem`) — as the show a launch opens (decision 22); a
+        write that fails costs only the memory."""
+        if name == self.last_show():
+            return
+        try:
+            (self.home / LAST_SHOW).write_text(f"{name}\n")
+        except OSError as e:
+            print(f"library: {LAST_SHOW} not written ({e})", file=sys.stderr)
+
+    def _open_default(self) -> None:
+        """The show a launch opens (decision 22): the one opened last
+        (`last_show`), else the party show — the user's copy of either
+        if there is one, else the factory's. The party show also stands
+        in for a remembered show that is gone or will not open, the reason
+        in `error`, and, quietly, for a schema-1 file until the launch's
+        migration converts it (preset.migrate_home re-opens the show
+        then). A save keeps a file it could not read as a backup (write)."""
+        for name in dict.fromkeys(n for n in (self.last_show(), DEFAULT_PROJECT) if n):
+            user = self.project.path_for(name)
+            factory = self.factory / PROJECTS / user.name
+            if user.is_file():
+                try:
+                    doc = _read_json(user)
+                    if doc.get("schema") != PROJECT_V1:
+                        self.project._take(doc, user, user.name)
+                        return
+                except LibraryError as e:
+                    self.error = f"library: {e}"
+            elif factory.is_file() and name != DEFAULT_PROJECT:
+                try:
+                    self.project._take(_read_json(factory), None, factory.name, factory=True)
+                    return
+                except LibraryError as e:
+                    self.error = f"library: {e}"
+        factory = self.factory / PROJECTS / f"{DEFAULT_PROJECT}{PROJECT_SUFFIX}"
+        try:
+            self.project._take(_read_json(factory), None, factory.name, factory=True)
         except LibraryError as e:
             self.error = f"library: {e}"
             self.project._take({"schema": PROJECT_SCHEMA}, None)
@@ -916,8 +1067,11 @@ class Library:
         """Record `name` as the group's current module preset, the group's
         state as it now stands being what "clean" means — a preset's
         module label (plan 13 D3): the strip shows the name and a clean
-        dot, and nothing is loaded. None: no current preset."""
-        loaded = self.reg.snapshot(group) if name is not None and self.reg is not None else None
+        dot, and nothing is loaded. None: no module preset, but the state
+        as it stands is still what "clean" means — a preset that names no
+        module for the group landed it, and the rail's dot compares against
+        that, not fresh defaults (plan 14 WP4)."""
+        loaded = self.reg.snapshot(group) if self.reg is not None else None
         self._landed(group, name, loaded)
 
     def landed(self, group: str) -> tuple:

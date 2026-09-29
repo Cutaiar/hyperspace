@@ -128,10 +128,13 @@ A **preset** (`presets/*.json`) is one whole performance moment: every
 performance parameter (view, rotation, camera, patterns, dream, FX, LFOs,
 macros), the hand / audio / LFO routes, the APC40's preset layer and the
 macros' subscribers; loading one replaces all of it and never touches
-the session (tempo, hands, the analyzer, output). A *project*
-(`*.hyp.json`) is the session: its values, a startup preset, and the
-F1–F8 bank of eight preset names (F-key loads, ⇧F-key saves the live
-state as that preset). Every registry group (view, camera, band…) also
+the session (tempo, hands, the analyzer, output). A **show** (a
+*project* in the code, `projects/*.hyp.json`) is the session: its values,
+the preset it starts on, and the F1–F8 bank of eight preset names (F-key
+loads, ⇧F-key saves the live state as that preset). The rig opens the
+factory **party** show, or whichever show you opened last
+(`~/Hyperspace/last_show`); the eight house moods are the factory
+**house** show (PRESETS page → show ▾). Every registry group (view, camera, band…) also
 keeps its own module presets, which replace only that group. Factory presets live in `hyperspace/library/`; yours go in
 `$HYPERSPACE_HOME` (default `~/Hyperspace`) in the same tree, with
 `projects/`, `bindings.json` and `config.toml` next to them — a user file
@@ -168,7 +171,12 @@ in the render window. The panel's Output section (`output.monitor`,
 `output.alpha`, all learnable) says where the render window goes:
 fullscreen on a chosen screen, or overlay mode.
 
-**Overlay mode.** Press `T` (or the APC40's master-select button) and the
+**Overlay mode** — only when `config.toml` asks for it: add
+`overlay = true` under `[output]` (decision 21). Without it, the default,
+the render window is always opaque — the rig is a Pepper's Ghost glass
+on a black window — and `T`, the master-select button and the crossfader
+do nothing; the OUTPUT page greys the toggle and says why. With it, press
+`T` (or the APC40's master-select button) and the
 render window drops its frame, covers the screen, sits above everything —
 including another app's fullscreen video on macOS — and clears to
 see-through, so only the shape is drawn over what is behind it. Clicks pass

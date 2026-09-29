@@ -17,6 +17,7 @@ fullscreen, overlay) through the output.* params.
   drag  orbit       ⇧drag / right-drag  pan   scroll  zoom about cursor
   L  lines          F  faces          ?  cheat sheet
   T  overlay: float the render over the screen    G  clicks through it
+     (only with [output] overlay = true in config.toml — decision 21)
   F1–F8  load a preset of the bank               ⇧F1–F8  save the live state as it
   B  tap tempo      ⇧B  LFO trigger: the downbeat is now, synced LFOs restart
 
@@ -137,20 +138,24 @@ def _restart(audio, adapters, impl, ctrl_win) -> None:
     os.execv(sys.executable, [sys.executable, *sys.argv])
 
 
-def _windows():
-    """The two GLFW windows on one shared GL context: render first, then controls."""
+def _windows(overlay: bool = False):
+    """The two GLFW windows on one shared GL context: render first, then controls.
+
+    `overlay` is the config's ``[output] overlay`` (decision 21 (a)): only
+    then is the render window's framebuffer transparent."""
     glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
     glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
     glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
     glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, True)
     glfw.window_hint(glfw.SAMPLES, 4)
-    # creation-time hints: the framebuffer keeps alpha so overlay mode can
-    # clear to see-through (the other modes clear opaque, and the renderer
-    # keeps every pixel at alpha 1 there — plan 14 WP1), and fullscreen
-    # must not minimise when the control window takes focus (overlay.py).
-    # Pending owner decision (plan 14, decision register row 21): whether
-    # overlay mode survives, and whether this hint moves behind a config key.
-    glfw.window_hint(glfw.TRANSPARENT_FRAMEBUFFER, True)
+    # creation-time hints: only when the config asks for overlay does the
+    # framebuffer keep alpha so overlay mode can clear to see-through (the
+    # other modes clear opaque, and the renderer keeps every pixel at alpha
+    # 1 there — plan 14 WP1); otherwise the window is opaque whatever is
+    # drawn, for the Pepper's Ghost glass (decision 21 (a), plan 14 WP2).
+    # Fullscreen must not minimise when the control window takes focus
+    # (overlay.py).
+    glfw.window_hint(glfw.TRANSPARENT_FRAMEBUFFER, bool(overlay))
     glfw.window_hint(glfw.AUTO_ICONIFY, False)
     render_win = glfw.create_window(*RENDER_SIZE, TITLE, None, None)
     if not render_win:
@@ -174,16 +179,25 @@ def _windows():
     return render_win, ctrl_win
 
 
+def _overlay_allowed(cfg: dict) -> bool:
+    """Decision 21 (a): overlay mode exists only when ``[output] overlay``
+    is true (config.DEFAULTS: false)."""
+    return bool(cfg.get("output", {}).get("overlay", False))
+
+
 def _make_output(win, reg: Registry, cfg: dict) -> Output:
     """The render window's output settings, seeded from config."""
-    out = Output(win, GlfwBackend(glfw))
-    out.register(reg)
     # [output] in config.toml — config.load has already folded a pre-split
     # [overlay] section under it, so this is the one place that reads it
     oc = cfg.get("output", {})
+    out = Output(win, GlfwBackend(glfw), allowed=_overlay_allowed(cfg))
+    out.register(reg)
     out.monitor = int(oc.get("monitor", -1))
     out.fullscreen = bool(oc.get("fullscreen", False))
-    out.overlay = bool(oc.get("on_start", False))
+    if oc.get("on_start", False) and not out.allowed:
+        print("output: on_start asks for overlay, but [output] overlay is false — "
+              "the window stays opaque", file=sys.stderr)
+    out.overlay = bool(oc.get("on_start", False)) and out.allowed
     out.passthrough = bool(oc.get("passthrough", True))
     out.bg = float(oc.get("bg", 0.0))
     out.alpha = float(oc.get("alpha", 1.0))
@@ -604,7 +618,8 @@ def _hot_error_toast(msg: str) -> None:
 def main() -> None:
     if not glfw.init():
         raise SystemExit("GLFW failed to initialise")
-    render_win, ctrl_win = _windows()
+    cfg = config.load()                   # before the windows: [output] overlay is a creation hint
+    render_win, ctrl_win = _windows(_overlay_allowed(cfg))
 
     # the render side: moderngl on the render window's context, vsynced
     glfw.make_context_current(render_win)
@@ -629,7 +644,6 @@ def main() -> None:
     io.config_error_recovery = True
     io.config_error_recovery_enable_assert = False
 
-    cfg = config.load()
     audio = AudioEngine()
     audio.rescan()                         # the one PortAudio scan, here at startup — never mid-set on a first read
     control = Control(audio.chain)
