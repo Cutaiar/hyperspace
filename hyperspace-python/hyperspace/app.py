@@ -271,9 +271,9 @@ class Keys:
     control window while imgui is not typing (`typing` is io.want_capture_
     keyboard, set each frame after new_frame()). This is the `keys` the
     router's key rows read: pressed() is an edge, shift() / super() the
-    modifier state a "key:SHIFT+B" row needs. F1–F8 (⇧ saves) and Cmd+R
-    stay in the loop below — they predate the table and are out of plan
-    09's scope.
+    modifier state a "key:SHIFT+B" row needs. R and F1–F8 / ⇧F1–F8 are
+    table rows since plan 11 WP7; Cmd+R, Esc / Q and ↑ / ↓ stay in the
+    loop (`frame`), Cmd+R claiming R's edge before the table reads it.
     """
 
     def __init__(self, render_win, ctrl_win):
