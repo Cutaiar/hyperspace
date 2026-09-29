@@ -31,16 +31,16 @@ Two kinds of file, both plain JSON you can open in a text editor:
                   project (D11). A module the project names by a preset
                   that carries a ``layout`` gets that layout back on
                   load, the same road a strip load takes. A schema-1
-                  project (an inline theme bank) is refused until plan
-                  13's migration (WP5) converts it.
+                  project (an inline theme bank) is migrated by plan 13's
+                  first-launch migration (preset.migrate_home: its slots
+                  become presets), and one opened by hand later on the
+                  same road (``Project.load``).
 
 A third kind of document is *not* the library's own format but goes
 through the same doors: a **document kind** registered with ``kind()``
 — the presets, ``hyperspace.preset/2`` under ``presets/``, which
-preset.py's ``Presets`` loads and writes, and the routing presets,
-``hyperspace.bindings/2`` under ``bindings/``, which the router loads
-and writes (``Router.apply_doc`` / ``preset_doc``; ``Library.routing``
-wires it; plan 13 WP5 folds them into presets). For such a group the
+preset.py's ``Presets`` loads and writes (the one kind since plan 13
+WP5 made the routing presets presets). For such a group the
 library does the file half — list, user-shadows-factory, load / save as
 / delete, the dirty dot, the watch — and the kind's hooks do the
 document half: ``load(doc, path)`` applies it, ``document(name)`` is
@@ -55,6 +55,9 @@ factory's file of the same name:
   $HYPERSPACE_HOME/projects/<slug>.hyp.json  user projects
   $HYPERSPACE_HOME/config.toml, bindings.json (a midi_map.json is only
                                  migrated in and read once, routing.py)
+  $HYPERSPACE_HOME/bindings/      the old routing presets: made presets
+                                 once (plan 13 WP5) and never read again,
+                                 so no group (LEGACY_DIRS)
 
 ``home()`` is the one resolver for that folder (config.py and the binding
 table path go through it). On the first run the working-directory ``config.toml``
@@ -92,8 +95,10 @@ from typing import Any
 from .params import PLANES, SESSION_GROUPS, Registry
 
 SLOTS = 8                 # the F1–F8 preset bank
-BINDINGS = "bindings"     # the routing presets' group, a document kind (routing.PRESET_DIR)
 PRESETS = "presets"       # the presets' group, a document kind (preset.py)
+# folders in a library root that are no group: the routing presets' old
+# folder, kept as it was by plan 13's migration and never read again
+LEGACY_DIRS = ("bindings",)
 HOME_ENV = "HYPERSPACE_HOME"
 DEFAULT_HOME = Path("~/Hyperspace")
 FACTORY = Path(__file__).with_name("library")
@@ -101,7 +106,7 @@ FACTORY = Path(__file__).with_name("library")
 PRESET_SCHEMA = "hyperspace.preset/1"      # a module preset (one group)
 PERFORMANCE_SCHEMA = "hyperspace.preset/2" # a preset: the performance (preset.py)
 PROJECT_SCHEMA = "hyperspace.project/2"
-PROJECT_V1 = "hyperspace.project/1"        # refused until plan 13 WP5 migrates it
+PROJECT_V1 = "hyperspace.project/1"        # migrated by preset.migrate_project
 PROJECT_SUFFIX = ".hyp.json"
 PROJECTS = "projects"
 DEFAULT_PROJECT = "default"
@@ -160,53 +165,28 @@ def migrate(root: Path, cwd: Path | None = None) -> list[str]:
             done.append(f"library: copied {src} → {dst}")
     src, dst = cwd / LEGACY_BANK, root / PROJECTS / f"{DEFAULT_PROJECT}{PROJECT_SUFFIX}"
     if src.is_file() and not dst.exists():
+        # the slots become presets through plan 13's migration code (the
+        # one road for an inline bank, preset.slot_presets): each with the
+        # factory table's lane rows so the music still drives the picture,
+        # no `desk` (a fresh preset's); the first slot's session ids (the
+        # band scene, the analyzer's strips) go to the project (D9)
+        from . import preset
+
         try:
             doc = _read_json(src)
             slots = [legacy_slot(s) if s else None for s in doc.get("slots", [])[:SLOTS]]
-            bank = _legacy_presets(root, slots)
-        except LibraryError as e:
+            bank, session, _notes = preset.slot_presets(root, slots, preset.factory_carried(),
+                                                        {})
+        except (LibraryError, OSError, ValueError) as e:
             done.append(f"library: {src} not migrated ({e})")
         else:
             bank += [None] * (SLOTS - len(bank))
             _write_json(dst, {"schema": PROJECT_SCHEMA, "name": DEFAULT_PROJECT,
                               "startup": next((n for n in bank if n), None),
-                              "bank": bank, "session": {}, "modules": {}})
+                              "bank": bank, "session": session, "modules": {}})
             done.append(f"library: theme bank {src} → {sum(1 for n in bank if n)} "
                         f"presets in {root / PRESETS} and project {dst}")
     return done
-
-
-def _legacy_presets(root: Path, slots: list[dict | None]) -> list[str | None]:
-    """The legacy slots as user presets (``hyperspace.preset/2``), named by
-    the slot (made unique), each with the factory table's performer rows
-    so the music still drives the picture; the slots' session ids (the
-    band scene, the analyzer's strips) are dropped, as a preset never
-    carries them (D9). Returns the bank: a name per slot, or None."""
-    from . import routing
-
-    routes = [b.to_json() for b in routing.legacy6_routes()]
-    bank: list[str | None] = []
-    taken: set[str] = set()
-    for slot in slots:
-        if slot is None:
-            bank.append(None)
-            continue
-        base = str(slot.get("name") or f"PRESET {len(bank) + 1}")
-        name, n = base, 1
-        while slug(name) in taken:
-            n += 1
-            name = f"{base} {n}"
-        taken.add(slug(name))
-        values = {k: v for k, v in slot["values"].items()
-                  if k.partition(".")[0] not in SESSION_GROUPS}
-        doc = {"schema": PERFORMANCE_SCHEMA, "name": name,
-               "note": str(slot.get("note") or ""), "values": values, "routes": routes,
-               "macros": {}, "modules": {}}       # no `desk`: a fresh preset's (plan 13 WP4)
-        path = root / PRESETS / f"{slug(name)}.json"
-        if not path.exists():
-            _write_json(path, doc)
-        bank.append(name)
-    return bank
 
 
 # ---------------------------------------------------------------- files
@@ -243,8 +223,10 @@ def _write_text(path: Path, text: str) -> None:
 MIGRATIONS: dict[tuple[str, int], Any] = {
     # ("hyperspace.preset", 1): lambda doc: {...},   # 1 → 2, when there is one
 }
-# no project 1 → 2 step yet: an inline theme bank becomes preset files
-# and a bank of names in plan 13 WP5; until then Project refuses one
+# no project 1 → 2 step here: an inline theme bank becomes preset files
+# and a bank of names, which a document step cannot do — it needs the
+# live table's routes and writes files (preset.migrate_project, run by
+# preset.migrate_home at launch and by Project.load for a file opened later)
 CURRENT = {"hyperspace.preset": 1, "hyperspace.project": 2}
 
 
@@ -272,7 +254,7 @@ def migrate_doc(doc: dict, kind: str) -> dict:
 @dataclass(frozen=True)
 class DocKind:
     """A document format that is not the library's own but lives in its
-    tree and goes through its doors (the routing presets). `schema` is
+    tree and goes through its doors (the presets, preset.py). `schema` is
     the kind half of the file's ``schema`` string, `versions` the ones
     `load` can take; `load(doc, path)` applies a file (returning the ids
     it named that nothing has), `document(name)` is what a save writes,
@@ -378,8 +360,10 @@ class Project:
 
     def _take(self, doc: dict, path: Path | None, where: str = "project") -> None:
         if doc.get("schema") == PROJECT_V1:
-            raise LibraryError(f"{where} is a schema-1 project; plan 13's migration (WP5) "
-                               "converts it")
+            # its bank becomes presets through the live table (Project.load,
+            # preset.migrate_home); with no preset loader there is none
+            raise LibraryError(f"{where} is a schema-1 project, which only the app's "
+                               "migration reads (plan 13 §6)")
         doc = migrate_doc(doc, "hyperspace.project")
         self.name = str(doc.get("name") or (path.name[: -len(PROJECT_SUFFIX)] if path
                                             else UNTITLED))
@@ -413,7 +397,7 @@ class Project:
         preset's (preset.py)."""
         lib = self.lib
         # a document kind is never the project's (the loaded preset, the
-        # routing preset): what it has landed survives a project load
+        # only kind since plan 13 WP5): what it has landed survives a project load
         kinds = {g: lib.landed(g) for g in lib._kinds}
         lib._current.clear()
         lib._loaded.clear()
@@ -561,7 +545,30 @@ class Project:
             path = self.path_for(name)
             if not path.is_file():                    # a factory project by name
                 path = lib.factory / PROJECTS / path.name
-        self._take(_read_json(path), path if lib._is_user(path) else None, path.name)
+        doc = _read_json(path)
+        presets = self._loader()
+        if doc.get("schema") == PROJECT_V1 and presets is not None:
+            # a schema-1 file the launch did not see (opened by path, or
+            # put in the folder since): migrated now, the same road
+            from .preset import migrate_project
+            from .routing import Carried
+
+            table = presets.router.table
+            live = Carried(routes=[b.to_json() for b in table.routes()],
+                           desk=[b.to_json() for b in table.desk()] or None,
+                           macros=table.macros_doc(), values={})
+            try:
+                notes, _held, rewrote = migrate_project(lib.home, path, live,
+                                                        factory=lib.factory)
+            except (OSError, ValueError) as e:
+                raise LibraryError(f"{path.name}: not migrated ({e})") from e
+            for n in notes:
+                print(f"migrate: {n}", file=sys.stderr)
+            if not rewrote:
+                raise LibraryError(f"{path.name}: not migrated ({notes[-1] if notes else '?'})")
+            lib._sync(path)
+            doc = _read_json(path)
+        self._take(doc, path if lib._is_user(path) else None, path.name)
         missing = self._apply()
         lib.report(missing, path.name)
         lib.status = f"project: {self.name}"
@@ -607,7 +614,7 @@ class Project:
 
     def write(self) -> Path:
         """Write the document as held — the bank's autosave. A schema-1
-        file in the way (refused on open, until WP5 migrates it) is kept
+        file in the way (one the migration could not convert) is kept
         beside itself first (routing.backup), never lost."""
         if self.path is None:
             self.path = self.path_for(self.name)
@@ -642,7 +649,7 @@ class Library:
     project's bank), bound to it with ``attach(reg)``, which also captures
     the fresh-object values and opens the user's default project (or the
     factory one). `home` is the user tree; tests pass a tmp_path and never
-    touch ~/Hyperspace. A document kind (`kind`, `routing`, preset.py's
+    touch ~/Hyperspace. A document kind (`kind`; preset.py's
     `Presets`) adds a group whose files the library keeps and someone
     else applies; ``presets`` is the `Presets` the bank loads through
     (None until app.py builds it after the router).
@@ -725,21 +732,6 @@ class Library:
         them, and the hooks apply and produce them."""
         self._kinds[group] = DocKind(schema, tuple(versions), load, document, signature, text)
 
-    def routing(self, router) -> None:
-        """The routing presets as a document kind: ``bindings/*.json``,
-        ``hyperspace.bindings/2`` (a user's schema-1 file is migrated by
-        the router and rewritten once), applied and written by the router.
-        The hooks look the router's methods up at call time, so a hot
-        reload that re-classes the router reaches them."""
-        from . import routing
-
-        versions = routing.SCHEMA_VERSIONS
-        self.kind(BINDINGS, routing.SCHEMA.rpartition("/")[0],
-                  load=lambda doc, path: router.apply_doc(doc, path),
-                  document=lambda name: router.preset_doc(name),
-                  signature=lambda: router.signature(),
-                  versions=versions, text=lambda doc: routing.dumps_doc(doc))
-
     @property
     def kinds(self) -> tuple[str, ...]:
         return tuple(self._kinds)
@@ -764,15 +756,19 @@ class Library:
 
     def _open_default(self) -> None:
         """The user's default project if there is one, else the factory's —
-        which also stands in for a user file that will not open (a
-        schema-1 project until plan 13 WP5 migrates it), the reason in
-        `error`. A save then keeps the refused file as a backup (write)."""
+        which also stands in for a user file that will not open, the
+        reason in `error`, and, quietly, for a schema-1 file until the
+        launch's migration converts it (preset.migrate_home re-opens the
+        default then). A save keeps a file it could not read as a backup
+        (write)."""
         user = self.project.path_for(DEFAULT_PROJECT)
         factory = self.factory / PROJECTS / user.name
         if user.is_file():
             try:
-                self.project._take(_read_json(user), user, user.name)
-                return
+                doc = _read_json(user)
+                if doc.get("schema") != PROJECT_V1:
+                    self.project._take(doc, user, user.name)
+                    return
             except LibraryError as e:
                 self.error = f"library: {e}"
         try:
@@ -800,7 +796,8 @@ class Library:
         for root in self._roots():
             if root.is_dir():
                 out.update(d.name for d in root.iterdir()
-                           if d.is_dir() and d.name != PROJECTS and not d.name.startswith("."))
+                           if d.is_dir() and d.name != PROJECTS and d.name not in LEGACY_DIRS
+                           and not d.name.startswith("."))
         return sorted(out)
 
     def _files(self, group: str) -> dict[str, Path]:
@@ -853,8 +850,6 @@ class Library:
         if kind is not None:                       # its own format: checked, not lifted
             schema = str(doc.get("schema") or "")
             k, _, v = schema.rpartition("/")
-            if not schema:                          # routing's v1 files carried none
-                return doc
             if k != kind.schema or not v.isdigit() or int(v) not in kind.versions:
                 raise LibraryError(f"{path.name}: schema {schema!r} is not a {kind.schema}")
             return doc
@@ -946,7 +941,7 @@ class Library:
             self.warning = f"{where}: {len(missing)} unknown id(s): {shown}"
             print(f"library: {self.warning}", file=sys.stderr)
 
-    # ---- presets: the surface WP5a draws ----
+    # ---- presets: the surface the strip draws ----
 
     def current(self, group: str) -> str | None:
         return self._current.get(group)

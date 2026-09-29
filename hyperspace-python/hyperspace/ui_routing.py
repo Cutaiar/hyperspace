@@ -32,9 +32,13 @@ a lane at the asymptote on the param's end stop), a fraction of the
 throw for `position`; `rest` (push rows only) is the source reading that
 pushes nothing — normally the source's own, what its adapter publishes
 in `Router.rests`, shown dimmed; dragging it makes the row's own number,
-"auto" gives it back; scale names an attenuator param or none — never a
-macro (a macro scales a route as its depth subscriber, shown read-only as
-a "× macro.N" chip; plan 13 §2.4). The live bar is the
+"auto" gives it back; scale names the rig's attenuator — a **session**
+param (the drive fader, `master.gain`) — or none, never a performance
+param (decision register row 18 (a)): a macro scales a route as its depth
+subscriber, shown read-only as a "× macro.N" chip (plan 13 §2.4). A
+route whose target is a session param (TUMBLE's left height on the
+drive) carries a dim "session" mark: it leans on that control while its
+source is live and never changes its setting (row 19 (a)). The live bar is the
 source's normalized reading (white) with a red hairline at the target's
 effective norm, so a route can be read working. Edits land on the table
 at once (the router reads it every frame) — nothing here is copied.
@@ -71,9 +75,8 @@ and exactly one owner remains. The owner is named the way its adapter
 names it (`Router.describe`). Rows a preset had to drop for the same
 reason (`table.dropped`) are listed under the header until the next edit.
 
-The routing presets (``library/bindings/``, `Library.routing`) are no
-longer on this page: the preset holds the routes. The document kind stays
-registered by app.py until plan 13 WP5 removes it.
+The routing presets are gone (plan 13 WP5): the preset holds the routes,
+and the ones that shipped are presets on the PRESETS strip.
 
 The panel reaches the router through `panel.router`, which app.py is
 meant to set; until it does, the table is found through the MIDI
@@ -95,10 +98,9 @@ from imgui_bundle import imgui
 from . import apc40, ui, ui_presets
 from .bands import CEIL
 from .library import PRESETS
-from .params import Kind, Param
-from .routing import PRESET_DIR, SHIFT_PARAM, Binding, Macro, Owned, Router, Sub, factory_desk
+from .params import Kind, Param, part_of
+from .routing import SHIFT_PARAM, Binding, Macro, Owned, Router, Sub, factory_desk
 
-KEY = PRESET_DIR          # the routing presets' group in the library ("bindings")
 NAMING = "routing.preset"  # the head's save as… name field (ui_presets._name_field)
 DEPTH_MOD = 1.0           # ±, the depth slider's throw
 # the op chip cycles push ↔ position; what each one's depth means
@@ -355,14 +357,27 @@ def _targets(panel) -> list[Param]:
 
 
 def _scales(panel, target: str | None = None) -> list[Param]:
-    """What a row's scale may be: any continuous param but a macro
-    (master.gain on the rate routes) — a macro scales a route as a depth
-    subscriber now (plan 13 §2.4), shown on the row as a chip — less the
-    row's own target: a row scaled by what it pushes strobes (the push
-    grows the scale grows the push, then clamps and lets go, every frame)."""
+    """What a row's scale may be: a continuous **session** param
+    (master.gain on the rate routes; decision register row 18 (a)) — a
+    macro scales a route as a depth subscriber (plan 13 §2.4), shown on the
+    row as a chip, and a performance param is no attenuator a preset could
+    carry — less the row's own target: a row scaled by what it pushes
+    strobes (the push grows the scale grows the push, then clamps and lets
+    go, every frame)."""
     reg = panel.reg
     return [q for q in reg if q.kind is Kind.CONTINUOUS and not q.alias
-            and q.group != "macro" and q.id != target]
+            and part_of(q) == "session" and q.id != target]
+
+
+SESSION_MARK = "session"
+SESSION_TIP = ("a session control: this route leans on it while its source is live; "
+               "the setting itself is never changed")
+
+
+def is_session_target(panel, b: Binding) -> bool:
+    """Does the route perform a session param (decision register row 19 (a))?"""
+    p = panel.reg.get(b.target)
+    return p is not None and part_of(p) == "session"
 
 
 def _depth_chips(router: Router, b: Binding) -> list[str]:
@@ -442,7 +457,10 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
     imgui.same_line()
     sp = imgui.get_style().item_spacing.x
     op_w = ui.chip_w("push")
-    picked = _param_combo(panel, "##target", b.target, -(op_w + ui.chip_w("×") + 2 * sp),
+    session = is_session_target(panel, b)
+    mark_w = imgui.calc_text_size(SESSION_MARK).x + sp if session else 0.0
+    picked = _param_combo(panel, "##target", b.target,
+                          -(op_w + ui.chip_w("×") + 2 * sp + mark_w),
                           lambda: _targets(panel))
     if picked:
         cur = router.table.owner(picked)
@@ -456,6 +474,11 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
             imgui.set_tooltip(f"{b.target}: no such param — the row is dormant")
     elif not p.modulatable and imgui.is_item_hovered():
         imgui.set_tooltip(f"{b.target} is not modulatable — the row is dormant")
+    if session:                             # row 19 (a): a route may lean on a session control
+        imgui.same_line()
+        imgui.text_colored(ui.DIM, SESSION_MARK)
+        if imgui.is_item_hovered():
+            imgui.set_tooltip(SESSION_TIP)
     imgui.same_line()
     label = OP_CHIP.get(b.op, "push")
     if ui.lit_chip(f"{label}##op", b.op != "push", ui.DIM, imgui.ImVec2(op_w, 0)):
@@ -529,9 +552,10 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
     if scale is not False:
         b.scale = scale
     if imgui.is_item_hovered():
-        imgui.set_tooltip("A param whose live value multiplies the depth — master.gain "
-                          "on the rate routes. Never the row's own target, never a "
-                          "macro: a macro scales a route through its depth subscriber.")
+        imgui.set_tooltip("A session param whose live value multiplies the depth — "
+                          "master.gain, the drive fader, on the rate routes. Never the "
+                          "row's own target, never a performance param: a macro scales "
+                          "a route through its depth subscriber.")
     if gates:
         imgui.same_line()
         _gate_combo(b, gates, gate_w)
@@ -595,7 +619,7 @@ def head(panel, router: Router) -> None:
     _learn_line(panel)
     if st["error"]:
         imgui.text_colored(ui.WARN, st["error"])
-    if lib is not None and lib.error and (PRESETS in lib.error or KEY in lib.error):
+    if lib is not None and lib.error and PRESETS in lib.error:
         imgui.text_colored(ui.WARN, lib.error)          # a preset that would not load
     # the desk rows the last load dropped (an invariant control, D6), on
     # one line so a file full of them never pushes the page off the window

@@ -1,0 +1,91 @@
+{
+ "schema": "hyperspace.preset/2",
+ "name": "lfo-breathe",
+ "note": "The macro demo: device knob 1 is Breathe \u2014 the picture brightens and the spin slows as the LFO's swell of the fx mix deepens; the right hand's height deepens LFO 1's pulse.",
+ "values": {
+  "view.bright": 1.0,
+  "view.speed": 0.25,
+  "lfo.1.sync": 3,
+  "lfo.2.sync": 5,
+  "lfo.1.shape": 0,
+  "lfo.1.depth": 0.6,
+  "macro.1": 0.0,
+  "fx.on": true
+ },
+ "routes": [
+  {"source": "lfo:0", "target": "view.bright", "op": "push", "value": 0.5},
+  {"source": "hand:7", "target": "lfo.1.depth", "op": "position"},
+  {"source": "lfo:1", "target": "fx.mix", "op": "push", "value": 0.3}
+ ],
+ "desk": [
+  {"source": "cc:0:48", "target": "view.bright", "op": "abs", "feedback": "ring"},
+  {"source": "cc:0:49", "target": "view.speed", "op": "abs", "feedback": "ring"},
+  {"source": "cc:0:50", "target": "view.instances", "op": "abs", "feedback": "ring"},
+  {"source": "cc:0:51", "target": "view.pattern_mix", "op": "abs", "feedback": "ring"},
+  {"source": "cc:0:52", "target": "view.inst_amp", "op": "abs", "feedback": "ring"},
+  {"source": "cc:0:53", "target": "view.inst_rate", "op": "abs", "feedback": "ring"},
+  {"source": "cc:0:54", "target": "view.bmp_alpha", "op": "abs", "feedback": "ring"},
+  {"source": "cc:0:55", "target": "camera.zoom", "op": "abs", "feedback": "ring"},
+  {"source": "cc:0:47", "target": "view.shape", "op": "rel", "ring": 0},
+  {"source": "note:0:50", "target": "view.plane.ZW", "op": "toggle", "feedback": "led"},
+  {"source": "note:1:50", "target": "view.plane.XW", "op": "toggle", "feedback": "led"},
+  {"source": "note:2:50", "target": "view.plane.YW", "op": "toggle", "feedback": "led"},
+  {"source": "note:3:50", "target": "view.plane.XY", "op": "toggle", "feedback": "led"},
+  {"source": "note:4:50", "target": "view.plane.XZ", "op": "toggle", "feedback": "led"},
+  {"source": "note:5:50", "target": "view.plane.YZ", "op": "toggle", "feedback": "led"},
+  {"source": "note:4:55", "target": "view.inst_motion", "op": "set", "value": 0, "feedback": "led", "on": 3},
+  {"source": "note:5:55", "target": "view.inst_motion", "op": "set", "feedback": "led", "on": 3},
+  {"source": "note:6:55", "target": "view.inst_motion", "op": "set", "value": 2, "feedback": "led", "on": 3},
+  {"source": "note:7:55", "target": "view.inst_motion", "op": "set", "value": 3, "feedback": "led", "on": 3},
+  {"source": "note:0:56", "target": "view.shape", "op": "set", "value": 0, "feedback": "led"},
+  {"source": "note:1:56", "target": "view.shape", "op": "set", "feedback": "led"},
+  {"source": "note:2:56", "target": "view.shape", "op": "set", "value": 2, "feedback": "led"},
+  {"source": "note:3:56", "target": "view.shape", "op": "set", "value": 3, "feedback": "led"},
+  {"source": "note:4:56", "target": "view.shape", "op": "set", "value": 4, "feedback": "led"},
+  {"source": "note:5:56", "target": "view.shape", "op": "set", "value": 5, "feedback": "led"},
+  {"source": "note:6:56", "target": "view.shape", "op": "set", "value": 6, "feedback": "led"},
+  {"source": "note:7:56", "target": "view.shape", "op": "set", "value": 7, "feedback": "led"},
+  {"source": "note:0:57", "target": "view.shape", "op": "set", "value": 8, "feedback": "led"},
+  {"source": "note:1:57", "target": "view.shape", "op": "set", "value": 9, "feedback": "led"},
+  {"source": "note:2:57", "target": "view.shape", "op": "set", "value": 10, "feedback": "led"},
+  {"source": "note:3:57", "target": "view.shape", "op": "set", "value": 11, "feedback": "led"},
+  {"source": "note:4:57", "target": "view.shape", "op": "set", "value": 12, "feedback": "led"},
+  {"source": "note:5:57", "target": "view.shape", "op": "set", "value": 13, "feedback": "led"},
+  {"source": "note:6:57", "target": "view.shape", "op": "set", "value": 14, "feedback": "led"},
+  {"source": "note:7:57", "target": "view.shape", "op": "set", "value": 15, "feedback": "led"},
+  {"source": "note:0:82", "target": "view.points", "op": "toggle", "feedback": "led"},
+  {"source": "note:0:83", "target": "view.lines", "op": "toggle", "feedback": "led"},
+  {"source": "note:0:84", "target": "view.faces", "op": "toggle", "feedback": "led"},
+  {"source": "note:0:85", "target": "view.rotate", "op": "toggle", "feedback": "led"},
+  {"source": "note:0:86", "target": "camera.reset", "op": "toggle", "feedback": "led"},
+  {"source": "note:0:94", "target": "view.bright", "op": "step", "value": 3, "feedback": "led"},
+  {"source": "note:0:95", "target": "view.bright", "op": "step", "value": -3, "feedback": "led"},
+  {"source": "cc:*:16", "target": "macro.1", "op": "abs", "feedback": "ring"}
+ ],
+ "macros": {
+  "macro.1": {
+   "label": "Breathe",
+   "subs": [
+    {
+     "depth": {
+      "source": "lfo:1",
+      "target": "fx.mix"
+     },
+     "from": 0.0,
+     "to": 1.0
+    },
+    {
+     "base": "view.bright",
+     "from": 0.6,
+     "to": 0.8
+    },
+    {
+     "base": "view.speed",
+     "from": 0.5,
+     "to": 0.25
+    }
+   ]
+  }
+ },
+ "modules": {}
+}

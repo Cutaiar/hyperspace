@@ -14,7 +14,7 @@ import json
 import pytest
 from test_routing import rig
 
-from hyperspace import routing
+from hyperspace import preset, routing
 from hyperspace.routing import Binding, Bindings, Router, bindings_path
 
 
@@ -99,15 +99,30 @@ def test_scale_on_a_macro_migrates_to_a_depth_subscriber(tmp_path, capsys):
     assert t.bindings[0].scale is None
     assert t.macros_doc() == {"macro.1": {"subs": [depth_sub("lfo:1", "fx.mix")]}}
     assert any("depth subscriber of macro.1" in n for n in t.notes)
+    # the route and its macro are a preset's (plan 13 WP5): the migration
+    # keeps them in one, then rewrites the file with the session's rows
+    assert t.carried.macros == t.macros_doc() and "scale" not in json.dumps(t.carried.routes)
+    from test_routing import migrate_home
+    migrate_home(tmp_path, t)
     assert "kept as bindings.json.bak-v2" in capsys.readouterr().err
     doc = json.loads(path.read_text())
-    assert doc["macros"] == t.macros_doc() and "scale" not in json.dumps(doc["bindings"])
+    assert "macros" not in doc and not any(d.get("op") in routing.MOD_OPS for d in doc["bindings"])
+    kept = json.loads((tmp_path / "presets" / "migrated.json").read_text())
+    assert kept["macros"] == t.macros_doc() and "scale" not in json.dumps(kept["routes"])
     again = Bindings.load(path, legacy_midi=None)
     assert again.to_json() == t.to_json() and not again.changed
-    # a routing preset: through apply_doc, the same subscriber, the same depth
+    # a user routing preset: made a preset through the same reading, the
+    # same subscriber, the same depth
+    (tmp_path / "bindings").mkdir()
+    (tmp_path / "bindings" / "old.json").write_text(
+        json.dumps({"schema": routing.SCHEMA_V2, "bindings": [row]}))
+    from hyperspace.preset import migrate_routing_presets
+    migrate_routing_presets(tmp_path)
+    made = json.loads((tmp_path / "presets" / "old.json").read_text())
     r = rig()
     router = Router(r.reg, Bindings())
-    router.apply_doc({"schema": routing.SCHEMA_V2, "bindings": [row]})
+    router.table.set_routes(Binding.from_json(d) for d in made["routes"])
+    router.table.set_macros(made["macros"])
     assert router.table.routes()[0].scale is None
     assert router.table.macros_doc()["macro.1"]["subs"] == [depth_sub("lfo:1", "fx.mix")]
     reg, mix = r.reg, r.reg["fx.mix"]
@@ -123,23 +138,69 @@ def test_scale_on_a_macro_migrates_to_a_depth_subscriber(tmp_path, capsys):
                              "macros": {"macro.1": {"subs": [depth_sub("lfo:1", "fx.mix")]}}})
     assert len(t2.macros["macro.1"].subs) == 1
     # the factory file is regenerated: lfo-breathe's macro.1 is a subscriber
-    lfo_breathe = json.loads((routing.FACTORY_DIR / "lfo-breathe.json").read_text())
-    assert lfo_breathe["macros"]["macro.1"]["subs"] == [depth_sub("lfo:1", "fx.mix")]
-    assert "scale" not in json.dumps(lfo_breathe["bindings"])
+    lfo_breathe = json.loads((preset.FACTORY_DIR / "lfo-breathe.json").read_text())
+    assert lfo_breathe["macros"]["macro.1"]["subs"][0] == depth_sub("lfo:1", "fx.mix")
+    assert "scale" not in json.dumps(lfo_breathe["routes"])
 
 
 def test_a_scale_on_a_session_param_is_left_alone():
-    """Decision register row 18 is open: the drive fader reaches the
-    rotation as `scale: master.gain`, and nothing migrates it."""
+    """Decision register row 18 (a): a route keeps a `scale` that names a
+    session param — the drive fader reaches the rotation as `scale:
+    master.gain` on the six legacy6 rate rows — and nothing migrates it."""
     row = {"source": "lane:0", "target": "rot.rate.ZW", "op": "push", "value": 0.0625,
            "scale": "master.gain"}
     t = Bindings.from_json({"schema": routing.SCHEMA_V2, "bindings": [row]})
     assert t.bindings[0].scale == "master.gain" and t.macros == {} and not t.changed
-    legacy6 = json.loads((routing.FACTORY_DIR / "legacy6.json").read_text())
-    assert sum(b.get("scale") == "master.gain" for b in legacy6["bindings"]) == 6
-    assert "macros" not in legacy6
+    legacy6 = json.loads((preset.FACTORY_DIR / "legacy6.json").read_text())
+    assert sum(b.get("scale") == "master.gain" for b in legacy6["routes"]) == 6
+    assert legacy6["macros"] == {}
     assert all(b.scale == "master.gain" for b in routing.legacy6_routes()
                if b.target.startswith("rot.rate."))
+
+
+def test_a_scale_on_a_performance_param_is_refused_with_a_note(tmp_path):
+    """Decision register row 18 (a): a `scale` naming a performance param
+    (one a preset load could move under the route) is dropped with a note
+    — in the live table, in a preset's load and in the migration of a
+    routing preset — the depth kept; a macro's becomes a depth subscriber
+    and a session param's stays, as before."""
+    rows = [{"source": "hand:1", "target": "view.bright", "op": "push", "value": 0.3,
+             "scale": "view.speed"},                                  # performance: dropped
+            {"source": "lfo:1", "target": "fx.mix", "op": "push", "value": 0.3,
+             "scale": "macro.4"},                                     # a macro: a subscriber
+            {"source": "lane:0", "target": "rot.rate.ZW", "op": "push", "value": 0.0625,
+             "scale": "master.gain"}]                                 # session: kept
+    # the live table
+    t = Bindings.from_json({"schema": routing.SCHEMA, "bindings": rows})
+    assert [b.scale for b in t.bindings] == [None, None, "master.gain"]
+    assert t.bindings[0].value == 0.3 and t.changed
+    assert any("dropped the scale view.speed of hand:1 → view.bright" in n and "18 (a)" in n
+               for n in t.notes)
+    assert t.macros_doc() == {"macro.4": {"subs": [depth_sub("lfo:1", "fx.mix")]}}
+    # a preset's load
+    from test_presets import boot, put
+    r = boot(tmp_path)
+    put(tmp_path, "SCALED", routes=rows, macros={})
+    r.presets.load("SCALED")
+    assert [b.scale for b in r.router.table.routes()] == [None, None, "master.gain"]
+    assert any("dropped the scale view.speed" in n for n in r.presets.notes)
+    assert r.router.table.macros_doc()["macro.4"]["subs"] == [depth_sub("lfo:1", "fx.mix")]
+    # a user routing preset made a preset by the migration
+    (tmp_path / "bindings").mkdir()
+    (tmp_path / "bindings" / "old.json").write_text(
+        json.dumps({"schema": routing.SCHEMA_V2, "bindings": rows}))
+    from hyperspace.preset import migrate_routing_presets
+    migrate_routing_presets(tmp_path)
+    made = json.loads((tmp_path / "presets" / "old.json").read_text())
+    assert [d.get("scale") for d in made["routes"]] == [None, None, "master.gain"]
+    # the ROUTING page's combo offers session params only
+    from types import SimpleNamespace
+
+    from hyperspace import ui_routing
+    offered = {q.id for q in ui_routing._scales(SimpleNamespace(reg=r.reg), "rot.rate.ZW")}
+    assert "master.gain" in offered and "view.speed" not in offered
+    assert not any(pid.startswith("macro.") for pid in offered)
+    assert all(routing.is_session_id(pid) for pid in offered)
 
 
 def test_a_depth_range_crossing_zero_flips_the_route():

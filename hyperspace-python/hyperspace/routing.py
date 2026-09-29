@@ -84,11 +84,11 @@ One performer per parameter — the model (plan 09)::
                                    │  ONE route row, ONE per-frame path: Router.modulate
               performer ───────────┘
     lane:<i> · hand:<i> · ext:<i> · lfo:<i>      op = push | position
-                                                  depth · scale (a param, e.g. macro.3)
+                                                  depth · scale (a session param: master.gain)
                                                   rest (push; the source's, or a number) · when (a gate)
 
    chaining:  hand:7 ──position──▶ lfo.1.depth      lfo:0 ──push──▶ view.bright
-              lane:0 ──push──▶ macro.2              hand:1 ──position──▶ fx.mix  ×scale macro.2
+              lane:0 ──push──▶ macro.2              hand:1 ──position──▶ fx.mix  × macro.2 (depth sub)
 
 A *performer* is an enabled row whose source is a continuous scheme
 (LANE_SCHEMES) and whose op is in MOD_OPS. A target has at most one:
@@ -147,76 +147,66 @@ clamps at any gain, and the effective rate is the reference's number to
 round-off *while the source is live* (a value passes through the
 registry's normalized space and back: within an ulp of the range, the
 same float32 the GPU sees; params.py says why the range is that wide).
-`PRESETS["legacy6"]` carries the routes and the bases (`values`: zeros
+`preset.legacy6_values` gives the preset ``legacy6`` its bases (zeros
 for the rates and the pattern inputs — a push reproduces "audio replaces
 the constant" only on 0). Where the reference spun at 1× the moment the
 source stopped, the planes now stop: the base is 0 and the parity anchor
 is the driven value, not the idle one (plan 09, inside the relaxed bar).
-The factory table ships the same routes on WP0's bases of 1, so a plane
+The house presets carry the same routes on WP0's bases of 1, so a plane
 keeps its un-driven spin and a lane rides on top.
 
-File format (``bindings.json``, schema ``hyperspace.bindings/3``):
+The file (``bindings.json``, schema ``hyperspace.bindings/3``) holds the
+**session's controls** (plan 13 §2.2): the keys, the pad, and the
+invariant and global-layer MIDI rows — never a performer row, a
+preset-layer row, the macros or any values; those are the loaded
+preset's (preset.py), and the table holds them in memory only
+(`is_session_row`, `to_json`):
 
   {"schema": "hyperspace.bindings/3", "profile": "apc40",
    "bindings": [{"source": "key:RIGHT", "target": "view.shape",
                  "op": "step", "value": 1},
                 {"source": "cc:*:16", "target": "band.sel.trim", "op": "abs",
                  "feedback": "ring", "layer": "global"},
-                {"source": "lane:0", "target": "rot.rate.ZW", "op": "push",
-                 "value": 0.0625, "scale": "master.gain"},
-                {"source": "hand:7", "target": "view.bright", "op": "position",
-                 "when": "hand:18"}, …],
-   "values": {…},            # bases: a routing preset's, or the live table's macros
-   "macros": {"macro.1": {"label": "Heat", "subs": [
-       {"base": "view.speed", "from": 0.8, "to": 0.3},
-       {"depth": {"source": "lfo:1", "target": "fx.mix"}, "from": 0, "to": 1}]}}}
+                {"source": "note:0:98", "target": "desk.shift", "op": "toggle"}, …]}
 
 Schema 3 (plan 13 WP3) adds a MIDI row's `layer` — absent: invariant,
 the session's control; "global": the SHIFT layer; "preset": the loaded
 preset's desk (`Bindings.dispatch` / `active`, `set_desk`, the latch
 `desk.shift`) — and the macros' subscribers (`Macro`, `Sub`; the base
 ones followed by `Router.follow_macros`, the depth ones multiplied in by
-`Router.modulate`). A `scale` is kept only on a non-macro param
-(`master.gain`, decision register row 18 open); `scale: "macro.N"`
-becomes a depth subscriber on load (`migrate_scales`). An older file's
-MIDI rows are sorted into the layers once (`sort_layers`), backed up and
-written back. Until plan 13 WP4 / WP5 move them into presets, the preset
-layer and the macros live here too.
+`Router.modulate`). A `scale` is kept only on a session param
+(`master.gain`, the drive fader; decision register row 18 (a)); `scale:
+"macro.N"` becomes a depth subscriber on load, and one on any other
+param is dropped with a note (`migrate_scales`). An older file's
+MIDI rows are sorted into the layers once (`sort_layers`).
 
-Rows carry only what differs from the defaults. `values` in a routing
-preset are the bases its routes assume; in the live table they are the
-macros' bases (the `macro` group, performance state since plan 13 WP1,
-so a preset carries them too; the table keeps them until
-plan 13 WP5 moves them into presets) — refreshed on every write through the thunk
-the Router gives the table (`Bindings.values_of`) and landed in the
-registry when the Router is built (`Router.restore_values`, the ids the
-registry lacks in `Router.missing_values`). `Bindings.load` reads the file, or builds the
-factory table when there is none — and if an old ``midi_map.json``
-(midi.py's version-1 file) is present, its rows replace the factory MIDI
-part and the merged table is written once, with a note. A schema-1 file
-migrates the same way (`migrate_v1`, the op rename only: ``mod`` → push,
-``span`` → position, a lane-scheme ``abs`` → position at depth 1,
-``replace`` dropped; then `referee`, a second owner dropped — each
-dropped row named on stderr, the file written back once; a user's preset
-file likewise, through `Router.apply_doc`). Whatever the schema, every
-load runs `remap_factory`: the three APC40 buttons plan 09 WP4 gave to
-the clock and the B / ⇧B keys are brought up to date where the factory
-rows still stand, each change noted and written back once. A schema this
-code doesn't know is left alone and reported, like a file that won't
-parse. `bindings_path(home)` says where the file lives; the app always
-passes the library home, and the working-directory default is for tests.
+Rows carry only what differs from the defaults. `Bindings.load` reads
+the file, or builds the factory table when there is none — and if an old
+``midi_map.json`` (midi.py's version-1 file) is present, its rows replace
+the factory MIDI part and the merged table is written once, with a note.
+A schema-1 file migrates the same way (`migrate_v1`, the op rename only:
+``mod`` → push, ``span`` → position, a lane-scheme ``abs`` → position at
+depth 1, ``replace`` dropped; then `referee`, a second owner dropped —
+each dropped row named on stderr). Whatever the schema, every load runs
+`remap_factory`: the three APC40 buttons plan 09 WP4 gave to the clock
+and the B / ⇧B keys are brought up to date where the factory rows still
+stand, each change noted. A changed file is backed up (`backup`) and
+written back once — except a file that still holds a preset's part
+(every file before plan 13 WP5: performer rows, preset-layer rows,
+`macros`, `values`), which keeps that part in `Bindings.carried` and is
+left for the first-launch migration (`preset.migrate_home`) to move into
+presets and only then rewrite. A schema this code doesn't know is left
+alone and reported, like a file that won't parse. `bindings_path(home)`
+says where the file lives; the app always passes the library home, and
+the working-directory default is for tests.
 
-Routing presets are the same file format with only modulation rows:
-the factory exports in ``hyperspace/library/bindings/`` (`write_factory`:
-``default``, then ``legacy6``, ``lfo-breathe`` and plan 12's five
-``party-*`` from `PRESETS`, and the three hand-written ``hands-*`` files
-plan 08 ships) and the user's
-``<home>/bindings/*.json``, both kept by the library (`Library.routing`,
-audit L1). `Router.apply_doc` replaces
-the routes from one — a hand's learned rows among them, since a learn
-is an ordinary position route — and lands its bases; `Router.preset_doc`
-is what a save writes to the user folder — the library's one preset strip
-serves the ROUTING page too.
+The routing presets — this file format with only modulation rows, once a
+library document kind of their own — are gone since plan 13 WP5
+(decision 10): the factory ones are full presets
+(``library/presets/legacy6.json`` …, generated by preset.py) and a
+user's ``<home>/bindings/*.json`` were made presets once, the files left
+as they were and no longer read. The factory session table is exported
+to ``hyperspace/bindings.default.json`` (`write_factory`).
 """
 
 from __future__ import annotations
@@ -225,7 +215,7 @@ import json
 import math
 import sys
 import time
-from collections.abc import Callable, Iterable
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 
@@ -233,8 +223,7 @@ import numpy as np
 
 from . import apc40
 from .bands import BANDS, CEIL
-from .lfo import SHAPES, SYNCS
-from .params import DRIVE, PLANES, ROT_RATE_MAX, Kind, Param, Registry
+from .params import DRIVE, PLANES, ROT_RATE_MAX, SESSION_GROUPS, Kind, Param, Registry
 
 SCHEMA = "hyperspace.bindings/3"
 SCHEMA_V1 = "hyperspace.bindings/1"
@@ -242,7 +231,9 @@ SCHEMA_V2 = "hyperspace.bindings/2"
 SCHEMA_VERSIONS = (1, 2, 3)        # what a load reads (the library's routing kind too)
 FILE = "bindings.json"
 LEGACY_MIDI_FILE = Path("midi_map.json")
-FACTORY_DIR = Path(__file__).parent / "library" / "bindings"
+# the factory session table as a file (`write_factory`): what a fresh
+# bindings.json holds — outside library/, since it is no group's preset
+FACTORY_FILE = Path(__file__).with_name("bindings.default.json")
 
 MIDI_SCHEMES = ("cc", "note", "pitch")
 LANE_SCHEMES = ("lane", "ext", "lfo", "hand")          # continuous, read by the Router
@@ -614,210 +605,6 @@ def legacy6_routes() -> list[Binding]:
     return rows
 
 
-def legacy6_values() -> dict[str, float]:
-    """The bases the legacy6 routes assume: a push lands the reference's
-    number only from 0."""
-    return {**{f"rot.rate.{n}": 0.0 for n in PLANES},
-            **{f"pattern.mod.{i}": 0.0 for i in range(len(BANDS))}}
-
-
-def lfo_breathe_routes() -> list[Binding]:
-    """The chaining demonstration (plan 09 decision 7): LFO 1 pushes
-    brightness on the bar; the right hand's height positions LFO 1's depth
-    — so raising the hand deepens the swell and nothing else moves; LFO 2
-    pushes the fx mix on the quarter, through macro 1 as its attenuator
-    (a depth subscriber of macro.1, `lfo_breathe_macros`)."""
-    return [Binding("lfo:0", "view.bright", "push", 0.5),
-            Binding("hand:7", "lfo.1.depth", "position"),
-            Binding("lfo:1", "fx.mix", "push", 0.3)]
-
-
-def lfo_breathe_macros() -> dict[str, Macro]:
-    """Macro 1 attenuates LFO 2's push on the fx mix — was that row's
-    `scale: macro.1` (plan 13 §2.4)."""
-    return {"macro.1": Macro("", [Sub(depth=("lfo:1", "fx.mix"), lo=0.0, hi=1.0)])}
-
-
-def lfo_breathe_values() -> dict[str, float]:
-    """The bases lfo-breathe assumes: LFO 1 a sine at one bar, LFO 2 at a
-    quarter, a depth the hand can deepen from, macro 1 wide open."""
-    return {"lfo.1.sync": SYNCS.index("1 bar"), "lfo.2.sync": SYNCS.index("1/4"),
-            "lfo.1.shape": SHAPES.index("sine"), "lfo.1.depth": 0.6, "macro.1": 1.0}
-
-
-# ---- plan 12: the party presets — one per render attraction, two hands ----
-#
-# Lane numbers assume the default six dofs per hand (hands/core.py
-# DEFAULT_DOFS: x, y, z, roll, pitch, yaw; left 0–5, right 6–11), which
-# tests/test_plan12_presets.py pins to the hands package. Every hand row
-# is a `push` from the axis's own rest — a level or absent hand adds
-# nothing, so the scene's bases come back when the hand leaves the box
-# with or without the audit's B1 fix — except the three `position` rows
-# on wrap / centred params whose base *is* the axis's rest value
-# (dream.hue 0, fx.kaleido.swirl 0, lfo.1.depth 0): same rule, same
-# result. docs/plans/12-presets.md is the design; the performer cards
-# are docs/plans/assets/12-presets/<name>.md.
-HAND_AXES = ("x", "y", "z", "roll", "pitch", "yaw")
-TURN = 0.25      # a phase push's depth: ±45° across a tilt's throw
-
-
-def hand(side: str, axis: str) -> str:
-    """`hand:<i>` for "L"/"R" and an axis name, on the default dofs."""
-    return f"hand:{('L', 'R').index(side) * len(HAND_AXES) + HAND_AXES.index(axis)}"
-
-
-def _push(side: str, axis: str, target: str, depth: float, **kw) -> Binding:
-    return Binding(hand(side, axis), target, "push", depth, **kw)
-
-
-def _grip_rows() -> list[Binding]:
-    """The left hand holds the object: roll, pitch and yaw of the palm add
-    a rigid turn (±45° at the ends of the throw — a quarter turn maps the
-    cubic shapes onto themselves, so the eighth is the whole visible
-    range) in the three 3D planes on top of whatever the integrator is
-    doing; a level hand adds nothing and a hand that leaves springs the
-    turn back over the axis's return."""
-    return [_push("L", "roll", "rot.phase.XY", TURN),
-            _push("L", "pitch", "rot.phase.YZ", TURN),
-            _push("L", "yaw", "rot.phase.XZ", TURN)]
-
-
-def _lane_rows(skip_mods: tuple[int, ...] = ()) -> list[Binding]:
-    """The legacy6 band → plane and band → pattern rows, less the pattern
-    inputs a hand owns in this preset (one performer per parameter)."""
-    skip = {f"pattern.mod.{i}" for i in skip_mods}
-    return [b for b in legacy6_routes() if b.target not in skip]
-
-
-def _driven_values() -> dict[str, float]:
-    """The factory bases under the lane rows: every plane spins at 1× and
-    every pattern input sits at its undriven 1, the music riding on top."""
-    return {**{f"rot.rate.{n}": 1.0 for n in PLANES},
-            **{f"pattern.mod.{i}": 1.0 for i in range(len(BANDS))}}
-
-
-def party_tumble_routes() -> list[Binding]:
-    """The polytope. Left hand grips the object (3D planes); left height
-    pushes the audio drive (1× → 8×: the music grips it harder). Right
-    height whips the spin, reaching in deepens the 4D perspective, right
-    roll and yaw add a turn in the XW and ZW planes."""
-    return [*_lane_rows(), *_grip_rows(),
-            _push("L", "y", "master.gain", 0.375),
-            _push("R", "y", "view.speed", 0.45),
-            _push("R", "z", "view.depth4", 0.35),
-            _push("R", "roll", "rot.phase.XW", TURN),
-            _push("R", "yaw", "rot.phase.ZW", TURN)]
-
-
-def party_tumble_values() -> dict[str, float]:
-    return {**_driven_values(), "master.gain": 1.0}
-
-
-def party_faces_routes() -> list[Binding]:
-    """The faces. Left hand grips; left height pushes brightness (the
-    faces glow, up to the 4× stop). Right height pushes the pattern mix
-    in, reaching in zooms the camera onto the faces, right roll pushes
-    pattern input 2 — the hex cells' scale, the one spatial input the
-    scene's pattern reads, which lane 2 then leaves alone — and fingers
-    up tip the camera to look down onto the faces."""
-    return [*_lane_rows(skip_mods=(2,)), *_grip_rows(),
-            _push("L", "y", "view.bright", 0.14),
-            _push("R", "y", "view.pattern_mix", 0.6),
-            _push("R", "z", "camera.zoom", -0.3),
-            _push("R", "roll", "pattern.mod.2", 0.7),
-            _push("R", "pitch", "camera.pitch", 0.5)]
-
-
-def party_faces_values() -> dict[str, float]:
-    return _driven_values()
-
-
-def party_field_routes() -> list[Binding]:
-    """The instance field. Right height is the crowd: more copies, the
-    camera pulling back to keep them in frame and a touch more light so
-    the small copies read; right roll and yaw turn every copy at once in
-    XW and ZW. Left hand flies the field — sideways and reaching in pan
-    it — and left height pushes how far the copies swing."""
-    return [*_lane_rows(),
-            _push("R", "y", "view.instances", 0.6),
-            _push("R", "y", "camera.zoom", -0.15),
-            _push("R", "y", "view.bright", 0.1),
-            _push("R", "roll", "rot.phase.XW", TURN),
-            _push("R", "yaw", "rot.phase.ZW", TURN),
-            _push("L", "x", "camera.pan.x", 0.1),
-            _push("L", "z", "camera.pan.y", 0.1),
-            _push("L", "y", "view.inst_amp", 0.5)]
-
-
-def party_field_values() -> dict[str, float]:
-    return _driven_values()
-
-
-def party_wake_routes() -> list[Binding]:
-    """The look-back wake. Left hand grips the object — moving it is what
-    paints the wake — and left height pushes the spin. Right height pushes
-    the echoes in, reaching in lengthens them (decay up), right roll
-    positions the dream's hue round the whole circle (level = as painted),
-    fingers up push the dream buffer's opacity."""
-    return [*_lane_rows(), *_grip_rows(),
-            _push("L", "y", "view.speed", 0.4),
-            _push("R", "y", "dream.echo_mix", 0.7),
-            _push("R", "z", "dream.decay", -0.12),
-            Binding(hand("R", "roll"), "dream.hue", "position"),
-            _push("R", "pitch", "dream.mix", 0.5)]
-
-
-def party_wake_values() -> dict[str, float]:
-    return {**_driven_values(), "dream.echo_mix": 0.3, "dream.decay": 0.93,
-            "dream.hue": 0.0, "dream.mix": 0.5}
-
-
-def party_trip_routes() -> list[Binding]:
-    """The effect stack. Right height fires the zoom burst, reaching in
-    zooms the kaleidoscope, right roll positions its swirl (level = none),
-    fingers out spread the hue cycle, fingers up flood the plasma. Left
-    height positions LFO 1's depth — a quarter-note sine that pumps the
-    camera zoom, so the picture beats only while the left hand is up — and
-    left x / z carry the burst's centre across the frame."""
-    return [*_lane_rows(),
-            _push("R", "y", "fx.zoomblur.amount", 0.8),
-            _push("R", "z", "fx.kaleido.zoom", -0.5),
-            Binding(hand("R", "roll"), "fx.kaleido.swirl", "position"),
-            _push("R", "yaw", "fx.huecycle.spread", 0.4),
-            _push("R", "pitch", "fx.plasma.level", 0.4),
-            Binding(hand("L", "y"), "lfo.1.depth", "position"),
-            Binding("lfo:0", "camera.zoom", "push", 0.08),
-            _push("L", "x", "fx.zoomblur.cx", 0.8),
-            _push("L", "z", "fx.zoomblur.cy", -0.8)]
-
-
-def party_trip_values() -> dict[str, float]:
-    return {**_driven_values(),
-            "fx.zoomblur.amount": 0.1, "fx.zoomblur.cx": 0.0, "fx.zoomblur.cy": 0.0,
-            "fx.kaleido.zoom": 1.0, "fx.kaleido.swirl": 0.0,
-            "fx.huecycle.spread": 0.8, "fx.plasma.level": 0.2,
-            "lfo.1.sync": SYNCS.index("1/4"), "lfo.1.shape": SHAPES.index("sine"),
-            "lfo.1.depth": 0.0}
-
-
-# routing presets: {name: (routes, values)} — `values` are the bases the
-# routes assume; None leaves the user's settings alone
-PRESETS: dict[str, tuple[list[Binding], dict | None]] = {
-    "legacy6": (legacy6_routes(), legacy6_values()),
-    "lfo-breathe": (lfo_breathe_routes(), lfo_breathe_values()),
-    "party-tumble": (party_tumble_routes(), party_tumble_values()),
-    "party-faces": (party_faces_routes(), party_faces_values()),
-    "party-field": (party_field_routes(), party_field_values()),
-    "party-wake": (party_wake_routes(), party_wake_values()),
-    "party-trip": (party_trip_routes(), party_trip_values()),
-}
-# a routing preset's macros (plan 13 §2.4): the subscribers its routes
-# assume; a preset not named here carries none
-PRESET_MACROS: dict[str, Callable[[], dict[str, Macro]]] = {
-    "lfo-breathe": lfo_breathe_macros,
-}
-
-
 def referee(rows: Iterable[Binding]) -> tuple[list[Binding], list[tuple[Binding, str]]]:
     """First performer per target wins: (kept, [(dropped row, why)]).
 
@@ -864,6 +651,13 @@ def migrate_v1(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
     return out, notes
 
 
+def _write_new(path: Path, data: bytes) -> None:
+    """Write a file that must not exist yet — exclusive, so a backup never
+    lands on a file that appeared since its name was chosen."""
+    with open(path, "xb") as f:
+        f.write(data)
+
+
 def backup(path: Path, schema: str) -> Path | None:
     """The file as it is, kept beside itself before the loader rewrites it
     (a migration or a factory remap, audit R12): ``<file>.bak-v<schema>``
@@ -881,11 +675,11 @@ def backup(path: Path, schema: str) -> Path | None:
             n += 1
             bak = path.with_name(f"{path.name}.bak-v{schema}-{stamp}-{n}")
     try:
-        bak.write_bytes(path.read_bytes())
+        _write_new(bak, path.read_bytes())
     except OSError as e:
-        print(f"bindings: no backup of {path}: {e}", file=sys.stderr)
+        print(f"backup: no backup of {path}: {e}", file=sys.stderr)
         return None
-    print(f"bindings: {path.name} kept as {bak.name} before the rewrite", file=sys.stderr)
+    print(f"backup: {path.name} kept as {bak.name} before the rewrite", file=sys.stderr)
     return bak
 
 
@@ -994,15 +788,31 @@ def macros_of(doc: dict | None) -> dict[str, Macro]:
     return {mid: Macro.from_json(m) for mid, m in (doc or {}).items()}
 
 
+def is_session_id(pid: str | None) -> bool:
+    """Does `pid` name a session param (params.SESSION_GROUPS, plan 13 §4)?
+    By its group prefix, so a param this registry lacks (a band a layout
+    has not built yet) is still classed."""
+    return bool(pid) and pid.partition(".")[0] in SESSION_GROUPS
+
+
 def migrate_scales(rows: Iterable[Binding], macros: dict[str, Macro]) -> list[str]:
-    """`scale: "macro.N"` → a depth subscriber of macro.N `from 0, to 1`
+    """A route's `scale` settled (decision register row 18 (a)): it is the
+    rig's attenuator, so it names a **session** param — the legacy6 rate
+    rows' `master.gain`, the drive fader — and is kept only then.
+    `scale: "macro.N"` becomes a depth subscriber of macro.N `from 0, to 1`
     (unless an identical one is there) and the row loses the field (plan 13
-    §2.4). A `scale` naming anything else — the legacy6 rate rows'
-    `master.gain` — is left exactly as it is (decision register row 18,
-    open). Edits `rows` and `macros` in place; returns a note per row."""
+    §2.4); a `scale` naming any other param — a performance one, which a
+    preset load could move under the route — is dropped, the depth left as
+    it is. Edits `rows` and `macros` in place; returns a note per row."""
     notes: list[str] = []
     for b in rows:
+        if b.scale is None or is_session_id(b.scale):
+            continue
         if not is_macro(b.scale):
+            notes.append(f"dropped the scale {b.scale} of {b.source} → {b.target}: a route's "
+                         "scale is a session param (decision register row 18 (a)); a macro "
+                         "attenuates a route as its depth subscriber")
+            b.scale = None
             continue
         m = macros.setdefault(b.scale, Macro())
         sub = Sub(depth=(b.source, b.target), lo=0.0, hi=1.0)
@@ -1084,15 +894,6 @@ def register_desk(reg: Registry, table: Bindings) -> None:
                    "loaded preset's. Loading a preset turns it off.")
 
 
-# routing preset *files* live in the library's tree — the factory exports
-# (write_factory) under hyperspace/library/bindings/ and the user's under
-# <home>/bindings/, a user file shadowing a factory one of the same name.
-# Since plan 11 (audit L1) the library keeps them like any preset
-# (`Library.routing` registers the document kind); the router only applies
-# a document (`Router.apply_doc`) and produces one (`Router.preset_doc`).
-PRESET_DIR = "bindings"
-
-
 def legacy_planedrive(lanes, gain: float = 1.0) -> np.ndarray:
     """The reference's PLANEDRIVE from six lanes — what the legacy6 routes
     must land on rot.rate.* (tests/test_core.py computes it from the
@@ -1105,35 +906,54 @@ def legacy_planedrive(lanes, gain: float = 1.0) -> np.ndarray:
 
 def dumps_doc(d: dict) -> str:
     """A bindings document as file text: one row per line, so a diff reads
-    as a binding; a `name` (a user's routing preset) after the schema."""
+    as a binding."""
     rows = ",\n".join("  " + json.dumps(b) for b in d["bindings"])
     text = f'{{\n "schema": {json.dumps(d["schema"])},\n'
-    if "name" in d:
-        text += f' "name": {json.dumps(d["name"])},\n'
     text += f' "profile": {json.dumps(d["profile"])},\n "bindings": [\n{rows}\n ]'
-    if "values" in d:
-        text += f',\n "values": {json.dumps(d["values"], indent=2)}'
-    if "macros" in d:
-        ms = ",\n".join(f"  {json.dumps(k)}: {json.dumps(v)}" for k, v in d["macros"].items())
-        text += f',\n "macros": {{\n{ms}\n }}'
     return text + "\n}\n"
 
 
+def is_session_row(b: Binding) -> bool:
+    """A row `bindings.json` keeps (plan 13 §2.2): anything but a performer
+    row (push / position, disabled ones too) and a preset-layer MIDI row —
+    those are the loaded preset's."""
+    return b.op not in MOD_OPS and not (b.is_midi and b.layer == "preset")
+
+
+@dataclass
+class Carried:
+    """What an older `bindings.json` held that is a preset's now (plan 13
+    §6): its performer rows (the referee's refusals after them, so nothing
+    is lost and the first still wins), its preset-layer MIDI rows (None:
+    the file had none), its macros and its `values`. `Bindings.load` keeps
+    it; `preset.migrate_home` moves it into presets and then rewrites the
+    file without it."""
+    routes: list[dict]
+    desk: list[dict] | None
+    macros: dict
+    values: dict
+
+    @property
+    def empty(self) -> bool:
+        return not (self.routes or self.desk or self.macros or self.values)
+
+
 class Bindings:
-    """The whole table: rows of every scheme, one file, indexed for the adapters."""
+    """The whole table: rows of every scheme, one file, indexed for the adapters.
+
+    In memory the table holds the session's controls and the loaded
+    preset's performer rows, preset layer and macros; the file
+    (`to_json`, `write`) holds only the session's (`is_session_row`)."""
 
     def __init__(self, bindings: Iterable[Binding] = (), *, path: Path | None = None,
-                 profile: str = "apc40", values: dict | None = None):
+                 profile: str = "apc40"):
         self.bindings: list[Binding] = list(bindings)
         self.path = path
         self.profile = profile
-        self.values = values
-        # the live table carries the macros' bases (the `macro` group; a
-        # preset carries them too since plan 13 WP2, the table
-        # until WP5) so a macro turned on the page is there at the next start. The table
-        # has no registry: the Router hands it this thunk, and every
-        # write() refreshes `values` through it before the file goes out
-        self.values_of: Callable[[], dict] | None = None
+        # the preset content an older file carried (`Carried`), until the
+        # first-launch migration moves it into presets; None once it has
+        # (or for a file that never had any)
+        self.carried: Carried | None = None
         self.error = ""
         # what the referee refused from the last preset or file, (row, why),
         # for the ROUTING page to show until the next edit
@@ -1167,9 +987,11 @@ class Bindings:
 
     @classmethod
     def factory(cls, profile: str = "apc40", path: Path | None = None) -> Bindings:
-        """Keys, pad, the device profile's default MIDI map, the legacy6 routes."""
-        return cls([*keymap(), *padmap(), *factory_desk(profile), *legacy6_routes()],
-                   path=path, profile=profile)
+        """Keys, pad and the device profile's default MIDI map — its preset
+        layer too, the fresh preset's desk, which the file never keeps. No
+        performer rows: those are the loaded preset's (plan 13 §2.2; the
+        house presets carry the legacy6 lane rows)."""
+        return cls([*keymap(), *padmap(), *factory_desk(profile)], path=path, profile=profile)
 
     @classmethod
     def load(cls, path: Path | None, profile: str = "apc40",
@@ -1180,18 +1002,32 @@ class Bindings:
         back once, and from then on the file rules. Whatever the schema,
         the factory rows plan 09 moved are brought up to date on every load
         (`remap_factory`) — a change is noted and written back once, and a
-        table already current is left alone."""
+        table already current is left alone.
+
+        A file that still holds a preset's part — performer rows,
+        preset-layer MIDI rows, `macros`, `values` (every file before plan
+        13 WP5) — keeps it in memory and in `carried`, and is **not**
+        rewritten here, whatever else changed: `preset.migrate_home` moves
+        that part into presets first and only then backs the file up and
+        rewrites it, so a crash in between loses nothing."""
         if path is not None and path.exists():
             try:
-                t = cls.from_json(json.loads(path.read_text()), path=path)
+                data = json.loads(path.read_text())
+                t = cls.from_json(data, path=path)
                 t.profile = t.profile or profile
-            except (OSError, ValueError, TypeError, KeyError) as e:
+            except (OSError, ValueError, TypeError, KeyError, AttributeError) as e:
                 t = cls.factory(profile, path)
                 t.error = f"bindings: {e}"
                 return t
             t.bindings, remapped = remap_factory(t.bindings)
             t.notes += remapped
-            if t.migrated or t.changed or remapped:
+            carried = Carried(
+                routes=[b.to_json() for b in [*t.routes(), *(b for b, _ in t.dropped)]],
+                desk=[b.to_json() for b in t.desk()] or None,
+                macros=t.macros_doc(), values=dict(data.get("values") or {}))
+            if not carried.empty or "values" in data or "macros" in data:
+                t.carried = carried              # preset.migrate_home writes the file
+            elif t.migrated or t.changed or remapped:
                 t.announce(path)
                 backup(path, t.read_at)
                 t.write()
@@ -1205,6 +1041,19 @@ class Bindings:
                 n = len(rows)
                 rows, _ = sort_layers(rows, t.profile)     # the desk's layers, plan 13 §3.2
                 t.bindings = [b for b in t.bindings if not b.is_midi] + rows
+                # a knob the old map had off the factory's is a preset's row
+                # now: kept for the migration, like a newer file's — with the
+                # lane rows the factory table shipped then, the routes this
+                # rig played — and the file is left for the migration to write
+                # (written now, it would hold the session's rows only, and a
+                # launch whose migration stopped would lose the knobs)
+                fresh = sorted(json.dumps(b.to_json(), sort_keys=True)
+                               for b in factory_desk(t.profile) if b.layer == "preset")
+                desk = [b.to_json() for b in t.desk()]
+                if sorted(json.dumps(d, sort_keys=True) for d in desk) != fresh:
+                    t.carried = Carried(routes=[b.to_json() for b in legacy6_routes()],
+                                        desk=desk or None, macros={}, values={})
+                    return t
                 print(f"bindings: migrated {n} rows from {legacy_midi}"
                       + (f" into {path}" if path is not None else ""), file=sys.stderr)
                 t.write()
@@ -1234,11 +1083,12 @@ class Bindings:
 
         Schema 3 adds `layer` on MIDI rows and the `macros` key. An older
         file's MIDI rows get their layers once (`sort_layers`; a file with
-        no MIDI rows gets none added, and `desk=False` — a routing preset,
-        whose MIDI rows are never read — skips the sort), and on any
-        schema a row's `scale: "macro.N"` becomes a depth subscriber
-        (`migrate_scales`); either sets `changed`, noted, so `load` writes
-        the file back once."""
+        no MIDI rows gets none added, and `desk=False` — an old routing
+        preset read by the migration, whose MIDI rows are never read —
+        skips the sort), and on any schema a row's `scale` is settled
+        (`migrate_scales`: a macro's a depth subscriber, a performance
+        param's dropped); either sets `changed`, noted, so `load` writes
+        the file back once (or leaves it to the migration, `load`)."""
         schema = data.get("schema")
         if schema not in (SCHEMA, SCHEMA_V2, SCHEMA_V1, None):
             raise ValueError(f"unknown schema {schema!r}")
@@ -1257,7 +1107,7 @@ class Bindings:
         moved = migrate_scales(rows, macros)
         notes += moved
         changed = changed or bool(moved)
-        t = cls(rows, path=path, profile=profile, values=data.get("values"))
+        t = cls(rows, path=path, profile=profile)
         t.macros = macros
         t.bindings, t.dropped = referee(t.bindings)
         if migrated:
@@ -1267,26 +1117,20 @@ class Bindings:
         return t
 
     def to_json(self) -> dict:
-        d = {"schema": SCHEMA, "profile": self.profile,
-             "bindings": [b.to_json() for b in self.bindings]}
-        if self.values is not None:
-            d["values"] = dict(self.values)
-        macros = self.macros_doc()
-        if macros:
-            d["macros"] = macros
-        return d
+        """The file's dict: the session's controls only (`is_session_row`)
+        — never a performer row, a preset-layer row, the macros or any
+        values; those are the loaded preset's (plan 13 §2.2)."""
+        return {"schema": SCHEMA, "profile": self.profile,
+                "bindings": [b.to_json() for b in self.bindings if is_session_row(b)]}
 
     def dumps(self) -> str:
         """The file text: one row per line, so a diff reads as a binding."""
         return dumps_doc(self.to_json())
 
     def write(self) -> None:
-        """The table to its file — with the routing layer's bases as
-        `values` when a Router has attached a registry (`values_of`)."""
+        """The session's controls to the file (`to_json`)."""
         if self.path is None:
             return
-        if self.values_of is not None:
-            self.values = self.values_of() or None
         try:
             self.path.write_text(self.dumps())
             self.error = ""
@@ -1307,7 +1151,7 @@ class Bindings:
 
     def routes(self) -> list[Binding]:
         """Every performer row, disabled ones too — what the matrix lists
-        and a routing preset saves."""
+        and a preset saves."""
         return [b for b in self.bindings if b.op in MOD_OPS]
 
     def owner(self, pid: str) -> Binding | None:
@@ -1538,11 +1382,18 @@ class Bindings:
             self.write()
         return gone
 
-    def unbind(self, pid: str, schemes: tuple[str, ...] = MIDI_SCHEMES) -> None:
-        self.bindings = [b for b in self.bindings
-                         if not (b.target == pid and b.scheme in schemes)]
-        self.dropped, self.notes = [], []
-        self.write()
+    def unbind(self, pid: str) -> list[Binding]:
+        """Right-click → Unbind: the loaded preset's desk rows on `pid` go
+        (plan 13 §3.3) — the preset is edited, not saved, so no file is
+        written; a session row (invariant or global) stays, it is edited in
+        `bindings.json`. Returns the rows removed."""
+        gone = [b for b in self.bindings
+                if b.target == pid and b.is_midi and b.layer == "preset"]
+        self.bindings = [b for b in self.bindings if not any(b is g for g in gone)]
+        if gone:
+            self.dropped, self.notes = [], []
+            self.redraw_serial += 1
+        return gone
 
     def add(self, b: Binding) -> Binding:
         """A route (or any row) added at runtime — the routing matrix's
@@ -1632,17 +1483,6 @@ class Router:
         # analyzer's lanes, and any scheme that publishes nothing, rest at 0
         self.rests: dict[str, list[float]] = {}
         self._codes: dict[str, int | None] = {}
-        # the live table saves the routing layer's bases (the macros) with
-        # its rows: every table.write() — a migration, an edit of the
-        # session's rows; a Learn and the ROUTING page write none since
-        # plan 13 WP4 — reads them through here (Bindings.values_of), and the file's
-        # values land in the registry here, once. The first Router over a
-        # table is its registry's; a second one (the panel's fallback over
-        # the MIDI adapter's table) neither hijacks the thunk nor re-lands
-        self.missing_values: list[str] = []      # ids the file named that the registry hasn't
-        if table.values_of is None:
-            table.values_of = self.routing_values
-            self.missing_values = self.restore_values()
         register_desk(reg, table)
         # follow_macros: each macro's base as last acted on, and the table's
         # macros_serial as last seen — a start acts on nothing (the bases
@@ -1689,18 +1529,6 @@ class Router:
                 q.set(q._value_of_norm(min(1.0, max(0.0, s.at(m)))))
                 written.append(q.id)
         return written
-
-    def routing_values(self) -> dict:
-        """{id: base} over the `macro` group — what the live table and a
-        routing preset carry as `values`; empty when none are registered."""
-        return self.reg.snapshot("macro")
-
-    def restore_values(self) -> list[str]:
-        """The table's `values` — the macros as last written — into the
-        registry (done once, on construction; `missing_values` keeps the
-        answer). Returns the ids the registry doesn't have (a hand-edited
-        file), for the library to report."""
-        return self.reg.restore(self.table.values) if self.table.values else []
 
     def describe(self, b: Binding) -> str:
         """`Binding.describe` with the adapter's names in place of the
@@ -1857,72 +1685,6 @@ class Router:
                 x = min(1.0, max(0.0, depth * u)) - p.norm
             p.modulate(x)
 
-    # ---- presets ----
-
-    def apply_preset(self, name: str) -> list[str]:
-        """Replace the routes with a preset's; land its bases. Returns the
-        ids the registry doesn't have. Two rows on one target: the first
-        stays, the rest wait in `table.dropped` for the page to show."""
-        routes, values = PRESETS[name]
-        self.table.set_routes(replace(b) for b in routes)
-        macros = PRESET_MACROS.get(name)
-        self.table.set_macros({k: m.to_json() for k, m in macros().items()} if macros else None)
-        return self.reg.restore(values) if values else []
-
-    def apply_doc(self, doc: dict, path: Path | None = None) -> list[str]:
-        """`apply_preset` over a document — the library's loader for the
-        ``bindings`` kind (`Library.routing`). Only its performer rows come
-        in — a full table (default.json) works as a preset too — and its
-        `values` land. A user's schema-1 file is migrated and rewritten
-        once at `path`; a factory file never is. A bad document raises
-        ValueError, a rewrite that fails OSError (the library turns both
-        into its own error).
-
-        Schemas 1–3. A `scale: "macro.N"` becomes a depth subscriber
-        (`migrate_scales`); the document's macros replace the table's
-        (one load replaces, plan 13 D2 — a file with none clears them)."""
-        t = Bindings.from_json(doc, path=path, desk=False)    # a preset: routes, no desk
-        if ((t.migrated or t.changed) and path is not None
-                and FACTORY_DIR not in path.parents):
-            t.announce(path)             # a user's older preset: rewritten once
-            backup(path, t.read_at)
-            t.write()
-            if t.error:                  # a file that would not take the rewrite: say so
-                raise OSError(t.error)
-        self.table.set_routes(replace(b) for b in t.bindings if b.op in MOD_OPS)
-        self.table.set_macros(t.macros_doc())
-        self.table.dropped, self.table.notes = list(t.dropped), list(t.notes)
-        return self.reg.restore(t.values) if t.values else []
-
-    def preset_doc(self, name: str) -> dict:
-        """The current routes — disabled ones too — with the macros' bases
-        as `values` (`routing_values`) and their subscribers as `macros`, as
-        a routing preset document, named; what the library writes for a
-        save (`Library.routing`)."""
-        t = Bindings((replace(b) for b in self.table.routes()),
-                     values=self.routing_values() or None)
-        t.set_macros(self.table.macros_doc())
-        doc = t.to_json()
-        doc["name"] = name
-        return doc
-
-    def signature(self) -> list[dict]:
-        """The performer rows as they would be written — the routing
-        strip's dirty dot compares this with what the last load or save
-        produced."""
-        return [b.to_json() for b in self.table.routes()]
-
-    def load_preset(self, name: str, home: Path | str | None = None) -> list[str]:
-        """A routing preset by name through a `Library` over `home` (the
-        env / default home when None) — the road the strip takes, for
-        tests and tools. Raises `library.LibraryError` for a name the tree
-        lacks or a file that will not load."""
-        from .library import Library
-
-        lib = Library(None if home is None else Path(home))
-        lib.routing(self)
-        return lib.load(PRESET_DIR, name)
-
 
 def _resolve(scheme: str, name: str) -> int | None:
     """key:NAME → glfw.KEY_NAME; pad:NAME → gamepad.NAME; hat:DIR → gamepad.HAT_DIR.
@@ -1937,31 +1699,17 @@ def _resolve(scheme: str, name: str) -> int | None:
         return None
 
 
-# --------------------------------------------------------------- factory files
+# --------------------------------------------------------------- factory file
 
-def write_factory(directory: Path = FACTORY_DIR) -> list[Path]:
-    """Export the factory table and every routing preset as library files
-    (`python -m hyperspace.routing`); test_routing guards them against drift."""
-    directory.mkdir(parents=True, exist_ok=True)
-    out = [directory / "default.json"]
-    out[0].write_text(Bindings.factory().dumps())
-    for name in PRESETS:
-        p = directory / f"{name}.json"
-        p.write_text(preset_table(name).dumps())
-        out.append(p)
-    return out
-
-
-def preset_table(name: str) -> Bindings:
-    """A factory routing preset as a table: its routes, values and macros."""
-    routes, values = PRESETS[name]
-    t = Bindings(routes, values=values)
-    macros = PRESET_MACROS.get(name)
-    if macros:
-        t.macros = macros()
-    return t
+def write_factory(path: Path = FACTORY_FILE) -> Path:
+    """Export the factory session table — the file a fresh `bindings.json`
+    would be (`python -m hyperspace.routing`); test_routing guards it
+    against drift. Outside the library tree: it is no group's preset."""
+    path.write_text(Bindings.factory().dumps())
+    return path
 
 
 if __name__ == "__main__":
-    for path in write_factory():
-        print(path)
+    print(write_factory())
+
+

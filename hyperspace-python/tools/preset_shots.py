@@ -48,9 +48,9 @@ from hyperspace.hands.core import PINCHES, default_range
 from hyperspace.library import Library
 from hyperspace.lookback import DreamState
 from hyperspace.params import Kind, build_registry
-from hyperspace.preset import Presets
+from hyperspace.preset import FACTORY_PRESETS, HAND_AXES, Presets
 from hyperspace.render import Renderer, ViewState
-from hyperspace.routing import HAND_AXES, PRESETS, Bindings, Router
+from hyperspace.routing import Bindings, Router
 
 OUT = ROOT / "docs" / "plans" / "assets" / "12-presets"
 W, H = 960, 600
@@ -221,7 +221,7 @@ def fmt(p, v) -> str:
 def sweep(name: str, frames: int) -> str:
     """Every hand row of the preset across its axis's throw — the markdown
     table the plan cites. A fresh stage per reading, so nothing carries."""
-    rows = [b for b in PRESETS[name][0] if b.scheme == "hand"]
+    rows = [b for b in FACTORY_PRESETS[name].routes() if b.scheme == "hand"]
     us = (0.0, 0.25, 0.5, 0.75, 1.0)
     intro = ("Each cell is the target's value after the hand has held that position "
              f"for {frames} frames ({frames / 60:.1f} s) through the real hand chain "

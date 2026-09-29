@@ -305,11 +305,12 @@ FFT bins → weighted power mean under the band's curve → dB → u (0..2.5; 1.
 `PLANEDRIVE` and no band → plane table in the chain: a lane reaches a
 rotation plane, a pattern input or anything else as a **route**
 (ARCHITECTURE §3). The reference's `dir · out · 3.2 · gain` is the `legacy6`
-routing preset — `lane:i → rot.rate.<plane>` pushes with depth
-`dir · ROT_DEPTH` scaled by `master.gain` on rate bases of 0 — which the
-parity test drives (`tests/test_routing.py:103`). The factory `default`
-table has the same rows on bases of **1**, so the idle spin stays and audio
-rides on top. `bands.BANDS` still holds the reference table for those two
+preset (a routing preset until plan 13 WP5 made it a full one) —
+`lane:i → rot.rate.<plane>` pushes with depth `dir · ROT_DEPTH` scaled by
+`master.gain` on rate bases of 0 — which the parity test drives through
+the code that generates it (`preset.generated`, `tests/test_routing.py`).
+The house presets carry the same rows on bases of **1**, so the idle spin
+stays and audio rides on top. `bands.BANDS` still holds the reference table for those two
 uses and the meter tooltip.
 
 **Bands.** Each band is a centre frequency, a Q and a weighting curve
@@ -540,7 +541,23 @@ unreadable at a party.
   as…, the layer), routes, the desk with its dark controls, the macros
   and their subscribers, the session's MIDI rows read-only. Nothing there
   writes `bindings.json`; the preset's dirty dot shows the edit until a
-  save (the head, the PRESETS strip, ⇧F).
+  save (the head, the PRESETS strip, ⇧F). Right-click → Unbind removes
+  the loaded preset's desk rows on the param, and refuses a session row
+  the way Learn does. A route's `scale` is a session param only (the
+  drive fader; decision register row 18 (a)); a route may perform a
+  session param, marked "session" on its row (row 19 (a)).
+- **The home folder** (`~/Hyperspace`). `bindings.json` holds only the
+  session's controls — keys, pad, the invariant and global-layer MIDI
+  rows; the routes, the preset layer and the macros are the presets'
+  (plan 13 §2.2). The routing presets are gone (decision 10): the
+  factory ones are presets, and a user's `bindings/*.json` were made
+  presets once and are no longer read. The first launch of this build
+  migrates an older home once (`preset.migrate_home`, ARCHITECTURE
+  §3.8): schema-1 projects become presets and schema-2 projects,
+  `bindings.json` gives its preset part to them (a `MIGRATED` preset
+  when no project takes it), every rewritten file is kept first as
+  `<file>.bak-v<n>` (a dated copy when the name is taken, never over a
+  `.bak-*` already there), and stderr names each backup.
 - **The cheat sheet** (`ui.CHEATSHEET`) is the canonical human list of the
   keys; `test_the_cheat_sheet_matches_the_tables_and_the_loop_keys` parses
   its key column against `routing.keymap()`, `padmap()` and the keys the
@@ -550,7 +567,7 @@ unreadable at a party.
 
 ## 6. Testing
 
-`uv run pytest` — 852 tests, 11 skipped without torch, about 25 s. `ruff`
+`uv run pytest` — 871 tests, 11 skipped without torch, about 28 s. `ruff`
 is the linter. Every test runs with `HYPERSPACE_HOME` pointed at its own
 `tmp_path` (`tests/conftest.py`), so no test can touch `~/Hyperspace`.
 What holds what:
@@ -570,7 +587,9 @@ What holds what:
   knobs re-based and the faders picking up, the sorted map and an older
   file's one-time sort (`tests/test_desk.py`); the macros' base and depth
   subscribers, a performer on a macro moving only its depths, the `scale`
-  migration (`tests/test_macros.py`).
+  migration and refusal (`tests/test_macros.py`); the one-time migration
+  of an owner-like home — presets, backups, nothing lost, a second
+  launch that changes nothing (`tests/test_migration.py`).
 - **Boundaries**: the core never imports `midi` / `bridge` / `dream`
   (`tests/test_params.py:286`, `tests/test_bridge.py:381`,
   `tests/test_dream.py:55`); `hands/core.py`, `hands/signal.py`, `lfo.py`,

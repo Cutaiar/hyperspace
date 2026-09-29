@@ -24,19 +24,18 @@ import pytest
 from legacy_chain import LegacyChain  # tests/legacy_chain.py — the frozen reference
 from test_analyzer import fixture_wavs, frames  # noqa: F401 — the fixture, re-exported
 
-from hyperspace import apc40, hands, lfo, routing, tempo
+from hyperspace import apc40, hands, lfo, preset, routing, tempo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer, legacy_layout
 from hyperspace.bands import BANDS, CEIL, default_params
 from hyperspace.control import Control
 from hyperspace.geometry import RATE
-from hyperspace.library import Library
+from hyperspace.library import FACTORY, Library
 from hyperspace.offline import load_wav
 from hyperspace.overlay import Output
-from hyperspace.params import DRIVE, PLANES, ROT_RATE_MAX, Registry, build_registry
+from hyperspace.params import DRIVE, PLANES, ROT_RATE_MAX, build_registry, part_of
 from hyperspace.routing import (
     MOD_OPS,
-    PRESETS,
     ROT_DEPTH,
     SCHEMA,
     Binding,
@@ -85,6 +84,52 @@ def rig(sr: float = 48_000.0, tmp_path: Path | None = None, full: bool = False):
                            lib=lib)
 
 
+def legacy6(router: Router) -> list[str]:
+    """The legacy6 preset onto the table and the registry: its routes and
+    its bases, as the code that generates library/presets/legacy6.json
+    writes them (`preset.generated`; the file is pinned to it by
+    test_presets.py). Returns the ids the registry lacks."""
+    doc = preset.generated("legacy6")
+    router.table.set_routes(Binding.from_json(d) for d in doc["routes"])
+    return router.reg.restore(doc["values"])
+
+
+def load_preset(r, router: Router, name: str) -> list[str]:
+    """A preset by name through the one loader (`preset.Presets` over the
+    rig's library) — the road the routing presets took before plan 13 WP5
+    made them presets. Returns the ids the registry lacks."""
+    from hyperspace.preset import Presets
+
+    return Presets(r.lib, r.reg, router).load(name)
+
+
+def migrate_home(home: Path, table: Bindings) -> list[str]:
+    """The first launch over `table` (read from `home`'s bindings.json):
+    the library, the registry, a Router and `Presets` as app.main builds
+    them, then plan 13's migration (`preset.migrate_home`)."""
+    from hyperspace.preset import Presets
+    from hyperspace.preset import migrate_home as run
+
+    r = rig(tmp_path=home, full=True)
+    router = Router(r.reg, table)
+    Presets(r.lib, r.reg, router)
+    return run(r.lib, router)
+
+
+def session_rows() -> list[Binding]:
+    """The factory table's rows a bindings.json keeps (plan 13 §2.2)."""
+    return [b for b in Bindings.factory().bindings if routing.is_session_row(b)]
+
+
+def house(**kw) -> Bindings:
+    """The factory table with the house presets' performer rows — the
+    legacy6 lane rows on the bases of 1 — which `Bindings.factory` shipped
+    until plan 13 WP5 moved every performer row into the presets."""
+    t = Bindings.factory(**kw)
+    t.set_routes(routing.legacy6_routes())
+    return t
+
+
 def legacy_integrate(view: ViewState, dt: float, planedrive) -> None:
     """view.ViewState.integrate as it was before WP4b, rate[p] = 1."""
     if not view.playing:
@@ -126,10 +171,10 @@ def test_legacy6_reproduces_planedrive_and_u_bands(
     old.gain = r.chain.gain = gain
     old_view, view = ViewState(), r.view
     old_view.planes = view.planes = [True] * 6
-    router = Router(r.reg, Bindings.factory())
+    router = Router(r.reg, house())
     assert view.rate == [1.0] * 6                          # WP0's un-driven base
     if table == "legacy6":
-        assert router.apply_preset("legacy6") == []
+        assert legacy6(router) == []
         assert view.pattern_mod[:6] == [0.0] * 6 and view.rate == [0.0] * 6
     base = [0.0] * 6 if table == "legacy6" else [1.0] * 6
     ticks = list(frames(samples, sr, fps))
@@ -200,8 +245,8 @@ def test_legacy6_matches_the_golden_traces():
     """The reference's own recording: out[6] fed as lanes lands on its
     planedrive[6] columns (six-decimal data, so to that precision)."""
     r = rig()
-    router = Router(r.reg, Bindings.factory())
-    router.apply_preset("legacy6")
+    router = Router(r.reg, house())
+    legacy6(router)
     for trace in ("gate-prover-default", "brickwalled-default", "sweep-default"):
         lines = (GOLDEN / f"{trace}.jsonl").read_text().splitlines()
         rows = np.asarray([json.loads(ln) for ln in lines])
@@ -233,7 +278,7 @@ def test_rot_rate_range_holds_the_reference_drive():
     p = r.reg["rot.rate.ZW"]
     assert (p.lo, p.hi) == (-ROT_RATE_MAX, ROT_RATE_MAX)
     router = Router(r.reg, Bindings(routing.legacy6_routes()))
-    assert r.reg.restore(routing.legacy6_values()) == []
+    assert r.reg.restore(preset.legacy6_values()) == []
     r.chain.out[:] = CEIL
     r.chain.gain = 8.0
     router.modulate(r.chain)
@@ -338,13 +383,18 @@ def test_table_file_round_trip_and_path(tmp_path):
     assert bindings_path() == Path("bindings.json")
     t = Bindings.factory(path=path)
     n = len(t.bindings)
+    session = [b for b in t.bindings if routing.is_session_row(b)]
     t.add(Binding("lane:2", "view.bright", "push", 0.4))
     t.write()
     text = path.read_text()
-    assert text.count("\n  {") == n + 1                 # one row per line
+    # one row per line — the session's controls only: a performer row and
+    # the preset layer are the loaded preset's (plan 13 §2.2, WP5)
+    assert text.count("\n  {") == len(session) < n
+    doc = json.loads(text)
+    assert set(doc) == {"schema", "profile", "bindings"}
     t2 = Bindings.load(path)
     assert t2.to_json() == t.to_json() and t2.profile == "apc40" and not t2.error
-    assert t2.routes_to("view.bright")[0].value == 0.4
+    assert t2.routes() == [] and t2.desk() == [] and t2.carried is None
     # a file that won't parse falls back to the factory table, reported
     path.write_text("{not json")
     t3 = Bindings.load(path)
@@ -362,8 +412,12 @@ def test_old_midi_map_migrates_into_bindings_json(tmp_path, capsys):
     ]}))
     path = bindings_path(tmp_path)
     t = Bindings.load(path, legacy_midi=legacy)
-    assert "migrated 2 rows" in capsys.readouterr().err
-    assert path.exists()                                # written once, then the file rules
+    # a knob off the factory's is a preset's row: the table carries it, with
+    # the lane rows the factory table shipped, and leaves the file to the
+    # migration (review of PR #66: written now, a stopped migration would
+    # lose the knob)
+    assert not path.exists() and t.carried is not None
+    assert t.carried.routes == [b.to_json() for b in routing.legacy6_routes()]
     # the map's two rows sorted (plan 13 §3.2: an unknown knob to the preset
     # layer, a factory button's control kept invariant), then the factory's
     # global rows and SHIFT added
@@ -371,7 +425,16 @@ def test_old_midi_map_migrates_into_bindings_json(tmp_path, capsys):
                                                          ("note:0:65", None)]
     assert {b.layer for b in t.midi()[2:]} == {"global", None}
     assert t.for_param("view.lines").op == "toggle"
-    assert len(t.of("key")) == len(routing.keymap()) and len(t.mods()) == 12
+    assert len(t.of("key")) == len(routing.keymap()) and t.mods() == []
+    # the knob on the preset layer is a preset's row: the file keeps the
+    # session's, and the table carries it for the migration (preset.migrate_home)
+    assert {"source": "cc:0:87", "target": "view.inst_amp", "op": "abs",
+            "layer": "preset"} in t.carried.desk
+    migrate_home(tmp_path, t)                           # the first launch writes it
+    assert path.exists() and "cc:0:87" not in path.read_text() and t.carried is None
+    kept = json.loads((tmp_path / "presets" / "migrated.json").read_text())
+    assert {"source": "cc:0:87", "target": "view.inst_amp", "op": "abs"} in kept["desk"]
+    assert len(kept["routes"]) == 12                     # the lane rows it played
     legacy.unlink()
     assert Bindings.load(path, legacy_midi=legacy).to_json() == t.to_json()
     # without either file: the factory table, nothing written
@@ -392,7 +455,8 @@ def test_factory_table_binds_only_real_params(tmp_path):
     keys = [(b.key, b.layer) for b in t.bindings if b.scheme != "lane"]
     assert len(keys) == len(set(keys))                  # one row per control per layer
     assert len(t.of("key")) == 25 + 17 and len(t.of("pad")) == 10 and len(t.of("hat")) == 4  # + R, F1–F8, ⇧F1–F8
-    assert len(t.midi()) == 113 + 6 and len(t.mods()) == 12   # + SHIFT, the global track knobs
+    assert len(t.midi()) == 113 + 6 and t.mods() == []   # + SHIFT, the global track knobs;
+    # no performer rows: the house presets carry the lane rows (plan 13 WP5)
     assert routing.referee(t.bindings)[1] == []           # one owner per target
     assert routing.remap_factory(t.bindings)[1] == []     # the factory table is current
 
@@ -417,22 +481,20 @@ def test_the_apc_migration_tables_agree_with_the_default_map():
 
 
 def test_factory_files_match_the_code():
-    """hyperspace/library/bindings/*.json are exports of the factory table
-    and the routing presets — `python -m hyperspace.routing` regenerates —
-    and every file there, the hand-written hand presets included, is at
-    the current schema with one owner per target."""
-    d = routing.FACTORY_DIR
-    assert json.loads((d / "default.json").read_text()) == Bindings.factory().to_json()
-    for name in PRESETS:
-        preset = routing.preset_table(name).to_json()
-        assert json.loads((d / f"{name}.json").read_text()) == preset
-    assert re.search(r'^  \{"source": "key:RIGHT"', (d / "default.json").read_text(), re.MULTILINE)
-    for path in sorted(d.glob("*.json")):
-        doc = json.loads(path.read_text())
-        assert doc["schema"] == SCHEMA, path.name
-        t = Bindings.from_json(doc)
-        assert not t.migrated and not t.changed and t.dropped == [], path.name
-        assert all(b.op in MOD_OPS for b in t.bindings if b.scheme in routing.LANE_SCHEMES)
+    """hyperspace/bindings.default.json is the export of the factory session
+    table — `python -m hyperspace.routing` regenerates it — at the current
+    schema, the session's controls only. It lives outside library/ (plan 13
+    WP5: no group's preset), and the routing presets that were beside it are
+    presets now (library/presets/, tests/test_presets.py)."""
+    f = routing.FACTORY_FILE
+    assert f.parent.name == "hyperspace" and "library" not in f.parts
+    doc = json.loads(f.read_text())
+    assert doc == Bindings.factory().to_json() and doc["schema"] == SCHEMA
+    assert re.search(r'^  \{"source": "key:RIGHT"', f.read_text(), re.MULTILINE)
+    t = Bindings.from_json(doc)
+    assert not t.migrated and not t.changed and t.dropped == []
+    assert all(routing.is_session_row(b) for b in t.bindings) and t.macros == {}
+    assert not (FACTORY / "bindings").exists()
 
 
 # -------------------------------------------------------------- adapters
@@ -473,7 +535,7 @@ def test_key_adapter_routes_the_old_keymap(tmp_path):
     import glfw
 
     r = rig(tmp_path=tmp_path, full=True)
-    router = Router(r.reg, Bindings.factory())
+    router = Router(r.reg, house())
     keys = FakeKeys()
     r.view.shape = 3
     keys.hits = {glfw.KEY_RIGHT}
@@ -507,7 +569,7 @@ def test_key_rows_with_modifiers_are_distinct_controls(tmp_path):
 
     r = rig(tmp_path=tmp_path, full=True)
     clock = r.reg["tempo.bpm"]      # registered by the rig; the trigger lands the downbeat
-    router = Router(r.reg, Bindings.factory())
+    router = Router(r.reg, house())
     rows = [b for b in router.table.of("key") if b.key_name == "B"]
     assert {(b.source, b.target) for b in rows} == {("key:B", "tempo.tap"),
                                                     ("key:SHIFT+B", "lfo.trigger")}
@@ -542,7 +604,7 @@ def test_pad_adapter_routes_buttons_and_hat(tmp_path):
     from hyperspace import gamepad
 
     r = rig(tmp_path=tmp_path, full=True)
-    router = Router(r.reg, Bindings.factory())
+    router = Router(r.reg, house())
     pad = FakePad()
     r.view.shape = 5
     pad.hits = {gamepad.RB, gamepad.X}
@@ -740,7 +802,7 @@ def test_dormant_rows_are_no_ops():
 
 def test_routes_are_editable_at_runtime():
     r = rig()
-    router = Router(r.reg, Bindings.factory())
+    router = Router(r.reg, house())
     r.chain.out[:] = 1.0
     router.modulate(r.chain)
     r.reg.apply()
@@ -781,14 +843,20 @@ def test_a_lane_may_modulate_the_analyzer():
     assert thr.norm == base                            # the user's setting is untouched
 
 
-def test_apply_preset_replaces_routes_and_lands_bases(tmp_path):
+def test_the_legacy6_preset_replaces_routes_and_lands_bases(tmp_path):
+    """The routing preset `legacy6` is a preset since plan 13 WP5: loaded by
+    name through `Presets` it replaces every route and lands its bases —
+    the zeros the parity anchor needs — and leaves the input rows alone."""
+    from hyperspace.preset import Presets
+
     r = rig(tmp_path=tmp_path, full=True)
-    router = Router(r.reg, Bindings.factory())
+    router = Router(r.reg, house())
+    presets = Presets(r.lib, r.reg, router)
     router.table.add(Binding("lane:0", "view.bright", "push", 0.5))
     inputs = ("key", "pad", "hat", *routing.MIDI_SCHEMES)
     n_inputs = len(router.table.of(*inputs))
     r.view.rate[0] = 2.0
-    assert router.apply_preset("legacy6") == []
+    assert presets.load("legacy6") == [] and presets.notes == []
     assert len(router.table.mods()) == 12 and not router.table.routes_to("view.bright")
     assert len(router.table.of(*inputs)) == n_inputs
     assert r.view.pattern_mod == [0.0] * 6 + [1.0] * (N_MOD - 6)
@@ -796,9 +864,10 @@ def test_apply_preset_replaces_routes_and_lands_bases(tmp_path):
     for name in PLANES:
         assert router.table.routes_to(f"rot.rate.{name}")[0].op == "push"
     assert router.table.dropped == []
-    # the preset's rows are copies: editing one never edits the preset
+    # the table's rows are the file's copies: editing one edits no preset
     router.table.mods()[0].value = 99
-    assert PRESETS["legacy6"][0][0].value == BANDS[0].dir * ROT_DEPTH
+    assert preset.generated("legacy6")["routes"][0]["value"] == BANDS[0].dir * ROT_DEPTH
+    assert not r.lib.is_factory("presets", "nope") and r.lib.is_factory("presets", "legacy6")
 
 
 def test_midi_view_shares_the_table(tmp_path):
@@ -820,9 +889,12 @@ def test_midi_view_shares_the_table(tmp_path):
     assert m.table.for_param("view.zoom").number == 99
     again = Bindings.load(bindings_path(tmp_path))
     assert again.for_param("view.zoom").source == "cc:0:99"
-    assert len(again.of("key")) == 25 + 17 and len(again.mods()) == 12
+    assert len(again.of("key")) == 25 + 17 and again.mods() == []
+    # a session row (no layer: invariant) is edited in bindings.json, not
+    # unbound from the panel (plan 13 WP5; tests/test_midi.py has the rest)
     m.unbind("view.zoom")
-    assert Bindings.load(bindings_path(tmp_path)).for_param("view.zoom") is None
+    assert m.learner.refused and m.table.for_param("view.zoom").source == "cc:0:99"
+    assert Bindings.load(bindings_path(tmp_path)).for_param("view.zoom").source == "cc:0:99"
 
 
 def test_a_gated_row_round_trips_and_stays_out_of_ungated_files():
@@ -879,7 +951,7 @@ def test_the_hand_presets_name_params_and_lanes_that_exist(name):
 
     r = rig(full=True)
     router = Router(r.reg, Bindings())
-    assert router.load_preset(name) == []          # no unknown target ids
+    assert load_preset(r, router, name) == []      # no unknown target ids
     rows = router.table.routes()
     assert rows and router.table.dropped == []     # one owner per target
     axes = len(HandSettings.from_config({}).axes)
@@ -900,7 +972,7 @@ def test_the_hand_presets_reach_both_ends_of_their_targets(name):
     were `replace` rows once, which cap a 0–1 hand at the *value* 1.)"""
     r = rig(full=True)
     router = Router(r.reg, Bindings())
-    router.load_preset(name)
+    load_preset(r, router, name)
     for b in router.table.routes():
         if b.op == "push" or b.value != 1.0:
             continue                                 # a deliberate depth or slice
@@ -1032,24 +1104,27 @@ def test_a_preset_with_two_owners_keeps_the_first_and_says_so():
     t.add(Binding("lane:0", "view.depth4", "push", 0.2))                 # an edit clears it
     assert t.dropped == []
     # a file with two owners says so too
-    doc = Bindings([Binding("hand:7", "view.bright", "position"),
-                    Binding("hand:1", "view.bright", "position")]).to_json()
+    doc = {"schema": SCHEMA, "bindings": [Binding("hand:7", "view.bright", "position").to_json(),
+                                          Binding("hand:1", "view.bright", "position").to_json()]}
     assert Bindings.from_json(doc).dropped[0][0].source == "hand:1"
-    # apply_preset: the factory presets have one owner per target
-    router.apply_preset("legacy6")
+    # the legacy6 preset: one owner per target
+    legacy6(router)
     assert t.dropped == []
 
 
-def test_load_preset_lists_what_it_dropped(tmp_path):
+def test_a_preset_load_lists_what_it_dropped(tmp_path):
+    """Was test_load_preset_lists_what_it_dropped (a routing preset): a
+    preset with two performers on one target keeps the first and lists the
+    second until the next edit."""
     r = rig(tmp_path=tmp_path, full=True)
-    router = Router(r.reg, Bindings.factory())
-    d = tmp_path / "bindings"
+    router = Router(r.reg, house())
+    d = tmp_path / "presets"
     d.mkdir()
-    (d / "twice.json").write_text(Bindings([
-        Binding("hand:7", "view.bright", "position"),
-        Binding("hand:1", "view.bright", "position", when="hand:14"),   # a gate is no exemption
-    ]).dumps())
-    assert router.load_preset("twice", tmp_path) == []
+    (d / "twice.json").write_text(json.dumps({
+        "schema": preset.SCHEMA, "name": "twice", "values": {}, "routes": [
+            Binding("hand:7", "view.bright", "position").to_json(),
+            Binding("hand:1", "view.bright", "position", when="hand:14").to_json()]}))
+    assert load_preset(r, router, "twice") == []            # a gate is no exemption
     assert [b.source for b in router.table.routes()] == ["hand:7"]
     assert [b.source for b, _ in router.table.dropped] == ["hand:1"]
     router.table.remove(router.table.routes()[0])
@@ -1183,6 +1258,11 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     path = bindings_path(tmp_path)
     path.write_text(json.dumps(V1_FILE))
     t = Bindings.load(path, legacy_midi=None)
+    # the file holds performer rows, a preset's: the load leaves it for the
+    # first-launch migration, which moves them and only then rewrites it
+    assert capsys.readouterr().err == "" and json.loads(path.read_text()) == V1_FILE
+    assert t.carried is not None and t.carried.values == {"pattern.mod.0": 0.0}
+    migrate_home(tmp_path, t)
     err = capsys.readouterr().err
     assert t.migrated and not t.error
     assert "dropped lane:1 → rot.rate.XY (replace)" in err
@@ -1215,39 +1295,33 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     assert (rows[("note:0:100", "tempo.nudge")].value, rows[("note:0:101", "tempo.nudge")].value) == (1, -1)
     assert rows[(f"note:0:{apc40.N_METRO}", "lfo.trigger")].feedback == "led"
     assert rows[(f"note:0:{apc40.N_QUANT}", "preset.next")].op == "toggle"
-    assert t.values == {"pattern.mod.0": 0.0}
-    # written back once, at schema 2, with the file as it was kept beside
-    # it (audit R12); the second load is quiet
+    # written back once, the session's rows only, with the file as it was
+    # kept beside it (audit R12); its routes and values are a preset's now
+    # (MIGRATED: this home has no project); the second load is quiet
     doc = json.loads(path.read_text())
-    assert doc["schema"] == SCHEMA and doc == t.to_json()
+    assert doc["schema"] == SCHEMA and doc == t.to_json() and t.carried is None
     bak = path.with_name("bindings.json.bak-v1")
     assert json.loads(bak.read_text()) == V1_FILE and "kept as bindings.json.bak-v1" in err
+    kept = json.loads((tmp_path / "presets" / "migrated.json").read_text())
+    assert {(d["source"], d["target"]) for d in kept["routes"]} >= {
+        ("lane:0", "pattern.mod.0"), ("hand:7", "camera.zoom"), ("lfo:0", "fx.mix")}
+    assert kept["values"]["pattern.mod.0"] == 0.0
     again = Bindings.load(path, legacy_midi=None)
-    assert not again.migrated and again.to_json() == t.to_json() and capsys.readouterr().err == ""
-    # a v1 preset file loads through the same door
-    r = rig(tmp_path=tmp_path, full=True)
-    router = Router(r.reg, Bindings.factory())
+    assert not again.migrated and again.to_json() == t.to_json() and again.carried is None
+    assert capsys.readouterr().err == ""
+    # a v1 routing preset in the home is a preset now, through the same
+    # reading (the ops renamed, the second owner kept after the first so
+    # nothing is lost and the first still wins at load); the file stays
     d = tmp_path / "bindings"
     d.mkdir()
     (d / "old.json").write_text(json.dumps(V1_FILE))
-    router.load_preset("old", tmp_path)
-    assert {b.op for b in router.table.routes()} == {"push", "position"}
-    assert [b.source for b, _ in router.table.dropped] == ["hand:2"]
-    # the ops and the second owner only: a preset holds routes, so the
-    # factory-row remap (a table's business, in Bindings.load) stays out
-    assert len(router.table.notes) == 2 and "migrated" in capsys.readouterr().err
-    # a user's preset file is rewritten once at schema 2, kept beside it first (R12) …
-    assert json.loads((d / "old.json").read_text())["schema"] == SCHEMA
-    assert json.loads((d / "old.json.bak-v1").read_text()) == V1_FILE
-    router.load_preset("old", tmp_path)
-    assert capsys.readouterr().err == "" and router.table.notes == []
-    router.table.add(Binding("lane:0", "view.bright", "push", 0.2))
-    assert router.table.dropped == [] and router.table.notes == []      # an edit clears both
-    # … a factory file never is (they are all at schema 2 already)
-    before = {q.name: q.read_text() for q in routing.FACTORY_DIR.glob("*.json")}
-    for q in sorted(routing.FACTORY_DIR.glob("*.json")):
-        router.load_preset(q.name[:-5])
-    assert {q.name: q.read_text() for q in routing.FACTORY_DIR.glob("*.json")} == before
+    from hyperspace.preset import migrate_routing_presets
+    notes = migrate_routing_presets(tmp_path)
+    assert any("bindings/old.json → preset 'old'" in n for n in notes)
+    old = json.loads((tmp_path / "presets" / "old.json").read_text())
+    assert {r_["op"] for r_ in old["routes"]} == {"push", "position"}
+    assert old["routes"][-1]["source"] == "hand:2" and "desk" not in old
+    assert json.loads((d / "old.json").read_text()) == V1_FILE          # untouched
 
 
 def test_a_backup_is_kept_before_every_rewrite_and_never_over_a_hand_made_one(tmp_path, capsys,
@@ -1281,10 +1355,10 @@ def test_a_backup_is_kept_before_every_rewrite_and_never_over_a_hand_made_one(tm
     # a backup that cannot be made never stops the load
     path.write_text(json.dumps(v2))
 
-    def refuse(self, data):
+    def refuse(p, data):
         raise OSError("read-only")
 
-    monkeypatch.setattr(Path, "write_bytes", refuse)
+    monkeypatch.setattr(routing, "_write_new", refuse)
     t2 = Bindings.load(path, legacy_midi=None)
     assert t2.error == "" and "no backup of" in capsys.readouterr().err
     assert any(n.startswith("added key:B") for n in t2.notes)
@@ -1340,7 +1414,7 @@ def test_r_and_the_f_keys_are_table_rows_that_fire_their_params(tmp_path):
     fired: list[str] = []
     for pid in ["camera.reset", *[f"preset.{w}.{k}" for w in ("load", "save") for k in range(SLOTS)]]:
         r.reg[pid].fire = lambda pid=pid: fired.append(pid)
-    router = Router(r.reg, Bindings.factory())
+    router = Router(r.reg, house())
     router.keys(_EdgeKeys({glfw.KEY_R}))
     assert fired == ["camera.reset"]
     fired.clear()
@@ -1385,7 +1459,7 @@ def test_a_theme_row_in_an_old_bindings_file_is_remapped_to_the_preset_bank(tmp_
            **{f"preset.{w}.{k}": f"theme.{w}.{k}" for w in ("load", "save")
               for k in range(routing.BANK_SLOTS)}}
     rows = []
-    for b in Bindings.factory().bindings:
+    for b in session_rows():
         d = b.to_json()
         d["target"] = old.get(d["target"], d["target"])
         rows.append(d)
@@ -1437,7 +1511,7 @@ def test_a_schema_2_file_gets_the_moved_factory_rows_once(tmp_path, capsys):
     exactly those, says so, writes back once; the user's own rows on other
     notes stay; the next load is quiet."""
     path = bindings_path(tmp_path)
-    rows = [b.to_json() for b in Bindings.factory().bindings
+    rows = [b.to_json() for b in session_rows()
             if b.source not in (f"note:0:{apc40.N_METRO}", f"note:0:{apc40.N_QUANT}",
                                 "key:B", "key:SHIFT+B")
             and b.target not in ("tempo.tap", "tempo.nudge")]
@@ -1469,7 +1543,7 @@ def test_a_schema_2_file_gets_the_moved_factory_rows_once(tmp_path, capsys):
         {"source": f"note:0:{apc40.N_SEND_B}", "target": "view.lines", "op": "toggle",
          "feedback": "led"}] or True     # order differs: the added rows go last
     assert {(b["source"], b["target"]) for b in t.to_json()["bindings"]} == (
-        {(b.source, b.target) for b in Bindings.factory().bindings}
+        {(b.source, b.target) for b in session_rows()}
         | {(f"note:0:{apc40.N_SEND_B}", "view.lines")})
     # written back once, at schema 2; the second load finds nothing to do
     assert json.loads(path.read_text()) == t.to_json()
@@ -1539,38 +1613,40 @@ def test_a_macro_owned_by_a_hand_scales_a_lanes_push_one_frame_later():
 # ------------------------------------------------------------- plan 09 WP5
 
 def test_every_factory_preset_names_real_params_with_one_owner(tmp_path):
-    """The routes `write_factory` exports (PRESETS) land on params the full
-    registry has, modulatable, with a scale it has too, and one owner per
-    target — the check the shipped files are held to."""
+    """The routes the preset generator writes (`preset.FACTORY_PRESETS`)
+    land on params the full registry has, modulatable, with a scale it has
+    too, and one owner per target — the check the shipped files are held to."""
     r = rig(tmp_path=tmp_path, full=True)
     ids = set(r.reg.ids())
-    for name, (routes, values) in PRESETS.items():
+    for name, spec in preset.FACTORY_PRESETS.items():
+        routes = spec.routes()
         for b in routes:
             assert b.target in ids and r.reg[b.target].modulatable, (name, b)
             assert b.scale is None or b.scale in ids, (name, b)
             assert b.is_performer, (name, b)
         assert routing.referee(routes)[1] == [], name
-        assert set(values or {}) <= ids, name
-    assert set(PRESETS) == {"legacy6", "lfo-breathe", "party-tumble", "party-faces",
-                            "party-field", "party-wake", "party-trip"}
-    assert (routing.FACTORY_DIR / "lfo-breathe.json").exists()
+        if spec.values is not None:
+            assert set(preset.generated(name)["values"]) <= ids, name
+    assert set(preset.FACTORY_PRESETS) == {
+        "legacy6", "lfo-breathe", "hands-fx", "hands-pinch", "hands-play",
+        "party-tumble", "party-faces", "party-field", "party-wake", "party-trip"}
+    assert (preset.FACTORY_DIR / "lfo-breathe.json").exists()
 
 
-def test_a_routing_presets_values_are_bases_a_theme_would_save(tmp_path):
-    """Audit R1, decided (c) on 2026-09-28: LFO knobs stay theme state, and a
-    routing preset may set any base its rows assume. The rule that keeps
-    that honest: every id in a shipped routing file's `values` is a real,
-    persisted, non-alias param — a base a theme would save too."""
-    import json
+def test_a_converted_presets_values_are_bases_a_preset_would_save(tmp_path):
+    """Was test_a_routing_presets_values_are_bases_a_theme_would_save (audit
+    R1, decided (c)): a routing preset could set any base its rows assume;
+    made presets (plan 13 WP5), every id in their `values` is a real,
+    persisted, non-alias performance param — a base a preset save writes."""
     r = rig(tmp_path=tmp_path, full=True)
     ids = set(r.reg.ids())
-    files = sorted(routing.FACTORY_DIR.glob("*.json"))
-    assert files
-    for f in files:
-        for pid in json.loads(f.read_text()).get("values") or {}:
-            assert pid in ids, (f.name, pid)
+    made = [k for k, s in preset.FACTORY_PRESETS.items() if s.values is not None]
+    assert made
+    for key in made:
+        for pid in json.loads((preset.FACTORY_DIR / f"{key}.json").read_text())["values"]:
+            assert pid in ids, (key, pid)
             p = r.reg[pid]
-            assert p.persist and not p.alias, (f.name, pid)
+            assert p.persist and not p.alias and part_of(p) == "performance", (key, pid)
 
 
 def test_lfo_breathe_is_the_chain_the_plan_draws(tmp_path):
@@ -1583,11 +1659,15 @@ def test_lfo_breathe_is_the_chain_the_plan_draws(tmp_path):
     r = rig(tmp_path=tmp_path, full=True)
     reg = r.reg
     router = Router(reg, Bindings())
-    assert router.load_preset("lfo-breathe") == []
+    assert load_preset(r, router, "lfo-breathe") == []
     assert reg["lfo.1.sync"].value == lfo.SYNCS.index("1 bar")
     assert reg["lfo.2.sync"].value == lfo.SYNCS.index("1/4")
     assert reg["lfo.1.shape"].value == lfo.SHAPES.index("sine")
-    assert reg["lfo.1.depth"].value == pytest.approx(0.6) and reg["macro.1"].value == 1.0
+    # the Breathe knob loads at the bottom (hand check 39 turns it up);
+    # open it for the chain below
+    assert reg["lfo.1.depth"].value == pytest.approx(0.6) and reg["macro.1"].value == 0.0
+    assert router.table.macros["macro.1"].label == "Breathe"
+    reg["macro.1"].set_value(1.0)
     assert [(b.source, b.target, b.op) for b in router.table.routes()] == [
         ("lfo:0", "view.bright", "push"), ("hand:7", "lfo.1.depth", "position"),
         ("lfo:1", "fx.mix", "push")]
@@ -1646,62 +1726,33 @@ def test_lfo_breathe_is_the_chain_the_plan_draws(tmp_path):
     assert not depth.modulated and depth.value == pytest.approx(0.6)
 
 
-def test_the_live_table_carries_the_macros(tmp_path):
-    """The macros (the `macro` group) are performance state a theme and a
-    project carry since plan 13 WP1, and until WP5 the live table saves
-    them as `values` on every write — through the thunk the Router gives
-    it — and `Router.restore_values` lands them at
-    the next start. A table nobody has attached a registry to writes no
-    values; a registry without macros writes none either."""
+def test_the_live_table_writes_only_the_sessions_controls(tmp_path):
+    """Was test_the_live_table_carries_the_macros. Since plan 13 WP5 the
+    macros' bases, subscribers, the performer rows and the preset layer
+    are the loaded preset's: `bindings.json` never gets `values`, `macros`,
+    a performer row or a preset-layer row, whatever the table holds, and a
+    Router lands nothing from the file (the startup preset does)."""
     path = bindings_path(tmp_path)
     r = rig(tmp_path=tmp_path, full=True)
     t = Bindings.factory(path=path)
-    assert t.values_of is None
-    t.write()
-    assert "values" not in json.loads(path.read_text())          # no registry yet
     router = Router(r.reg, t)
-    assert t.values_of is not None and router.routing_values() == {
-        f"macro.{k}": 1.0 for k in range(1, 9)}
+    assert not hasattr(t, "values_of") and not hasattr(router, "restore_values")
+    t.set_routes([Binding("hand:7", "view.bright", "position")])
+    t.set_macros({"macro.3": {"label": "Heat",
+                              "subs": [{"base": "view.speed", "from": 0.2, "to": 0.8}]}})
     r.reg["macro.3"].set_value(0.25)
-    t.bind(Binding("cc:0:99", "view.zoom", "abs"))               # a learn: the table writes
+    t.bind(Binding("cc:0:99", "view.zoom", "abs"))               # a session row: the file
     doc = json.loads(path.read_text())
-    assert doc["values"]["macro.3"] == pytest.approx(0.25) and doc["values"]["macro.1"] == 1.0
-    assert set(doc["values"]) == {f"macro.{k}" for k in range(1, 9)}
-    # the next start: the file's values into a fresh registry
+    assert set(doc) == {"schema", "profile", "bindings"}
+    assert all(routing.is_session_row(Binding.from_json(d)) for d in doc["bindings"])
+    assert {"source": "cc:0:99", "target": "view.zoom", "op": "abs"} in doc["bindings"]
+    assert not any(d.get("layer") == "preset" for d in doc["bindings"])
+    # the next start reads the session's rows and nothing it would land
     r2 = rig(tmp_path=tmp_path, full=True)
     again = Bindings.load(path, legacy_midi=None)
-    assert again.values == doc["values"]
+    Router(r2.reg, again)
+    assert again.carried is None and again.routes() == [] and again.macros == {}
     assert r2.reg["macro.3"].value == 1.0
-    router2 = Router(r2.reg, again)                              # landed on construction
-    assert router2.missing_values == [] and r2.reg["macro.3"].value == pytest.approx(0.25)
-    # a second Router over the same table (the panel's fallback) neither
-    # takes the thunk nor lands the values again
-    r2.reg["macro.3"].set_value(0.9)
-    twin = Router(r2.reg, again)
-    assert again.values_of == router2.routing_values and twin.missing_values == []
-    assert r2.reg["macro.3"].value == pytest.approx(0.9)
-    # a modulated macro saves its base, not the hand's position
-    r2.reg["macro.3"].modulate(-0.5)
-    r2.reg.apply()
-    assert r2.reg["macro.3"].value == pytest.approx(0.4)
-    again.write()
-    assert json.loads(path.read_text())["values"]["macro.3"] == pytest.approx(0.9)
-    # an id the registry doesn't have is reported (Router.missing_values,
-    # which app.py hands to the library), not fatal
-    again.values = {"macro.3": 0.7, "no.such": 1}
-    assert router2.restore_values() == ["no.such"]
-    assert r2.reg["macro.3"].base == pytest.approx(0.7)          # the base; the offset rides on
-    r3 = rig(tmp_path=tmp_path, full=True)
-    fresh = Bindings(values={"macro.1": 0.4, "no.such": 1}, path=tmp_path / "x.json")
-    assert Router(r3.reg, fresh).missing_values == ["no.such"]
-    assert r3.reg["macro.1"].value == pytest.approx(0.4)
-    # a registry with no routing groups: nothing to save
-    bare = Router(Registry(), Bindings(path=tmp_path / "bare.json"))
-    bare.table.write()
-    assert "values" not in json.loads((tmp_path / "bare.json").read_text())
-    assert bare.restore_values() == []
-    # the factory files are unchanged by any of this
-    assert "values" not in Bindings.factory().to_json()
 
 
 def test_router_describe_uses_the_adapters_names():
