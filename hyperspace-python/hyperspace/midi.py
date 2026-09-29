@@ -495,13 +495,16 @@ class MidiIO:
         """
         if self.out is None:
             return
+        # an adapter made before `_shown` existed (a hot reload keeps the
+        # object and never re-runs __init__) gets it here
+        shown = self.__dict__.setdefault("_shown", {})
         for b in self.table.active():        # the up layer's rows and the invariant ones
             if not b.feedback:
                 continue
             p = self.reg.get(b.target)
             if p is None:
                 continue
-            self._shown.setdefault(b.control, b)
+            shown.setdefault(b.control, b)
             if b.feedback == "ring":
                 v = round(p.norm * 127)
                 if b.last_out is None:
@@ -550,7 +553,7 @@ class MidiIO:
                 b.caught = False
         if self.out is None:
             return
-        shown, self._shown = self._shown, {}
+        shown, self._shown = getattr(self, "_shown", {}), {}   # hot-reload safe
         dark: set = set()
         for b in (*self.bindings, *shown.values()):
             c = b.control

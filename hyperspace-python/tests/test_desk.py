@@ -216,6 +216,12 @@ def test_a_control_that_loses_its_row_goes_dark(rig):
     rig.out.sent.clear()
     rig.midi.poll()
     assert sent_notes(rig, faces) == []                              # and stays dark
+    # an adapter from before `_shown` (a hot reload skips __init__) still draws
+    del rig.midi._shown
+    rig.midi.feedback()
+    del rig.midi._shown
+    rig.midi.redraw()                                                # re-sends: fills it
+    assert rig.midi._shown
 
 
 # --------------------------------------------------------- unmapped, invariant
