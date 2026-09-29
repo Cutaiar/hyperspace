@@ -2,7 +2,7 @@
  "schema": "hyperspace.preset/1",
  "group": "fx",
  "name": "trip",
- "note": "Plan 12's party-trip stack: a plasma wash screened under the scene, folded into a six-wedge kaleidoscope, a zoom burst on top and the hues cycling. Bases sit where the party-trip routing preset expects them: the burst nearly off and the swirl at zero so a level hand changes nothing.",
+ "note": "Plan 12's party-trip stack: a plasma wash screened under the scene, folded into a six-wedge kaleidoscope, a zoom burst on top and the hues cycling. Bases sit where the party-trip preset's routes expect them: the burst nearly off and the swirl at zero so a level hand changes nothing.",
  "values": {
   "fx.on": true,
   "fx.mix": 1.0,

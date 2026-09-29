@@ -32,5 +32,5 @@ Nothing to pinch. A hand out of the box changes nothing.
 ## To load
 
 1. PRESETS page → project → load ▾ → **party** (once per night).
-2. Press **F2** — the FACES scene.
-3. ROUTING page → strip → **party-faces**.
+2. Press **F2** — FACES: the look, the hands and the desk
+   in one step.

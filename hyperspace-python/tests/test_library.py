@@ -10,13 +10,16 @@ from types import SimpleNamespace
 
 import pytest
 
-from hyperspace import config, library
+from hyperspace import config, library, routing
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.bands import BANDS
 from hyperspace.control import SCENES, Control
 from hyperspace.library import FACTORY, Library, LibraryError, legacy_slot, migrate_doc, slug
 from hyperspace.params import build_registry
+from hyperspace.preset import Presets
+from hyperspace.routing import Bindings as _Bindings
+from hyperspace.routing import Router as _Router
 from hyperspace.view import ViewState
 
 _clock = [1_000_000_000.0]
@@ -43,7 +46,9 @@ def make(home):
     lib = Library(home, period=0.0)
     reg = build_registry(view, control, audio, lib.project)
     lib.attach(reg)
-    return SimpleNamespace(lib=lib, reg=reg, view=view, control=control, chain=chain)
+    presets = Presets(lib, reg, _Router(reg, _Bindings()))    # the bank's loader, as app.py builds it
+    return SimpleNamespace(lib=lib, reg=reg, view=view, control=control, chain=chain,
+                           presets=presets)
 
 
 @pytest.fixture()
@@ -78,15 +83,23 @@ def test_first_run_migrates_working_directory_files(tmp_path, monkeypatch, capsy
     assert (cwd / "config.toml").exists()                       # originals stay
     err = capsys.readouterr().err
     assert "config.toml" in err and "presets.json" in err
-    # the legacy theme bank became the user's default project, seeds filling the gaps
+    # the legacy theme bank became user presets and a schema-2 default
+    # project naming them (plan 13 WP2); an empty legacy slot stays empty
     r = make(home)
-    assert r.lib.project.slots[0]["name"] == "BIG BLUE WAVE"
-    assert r.lib.project.slots[1]["values"] == {
-        "view.shape": 4, **{f"view.plane.{n}": True for n in library.PLANES},
-        "scene.select": 3, "band.0.fn": 2, "band.0.atk": 0.5, "master.gain": 2.0,
-    }
+    assert r.lib.project.bank[:2] == [None, "MINE"] and r.lib.project.startup == "MINE"
+    doc = json.loads((home / "presets" / "mine.json").read_text())
+    assert doc["schema"] == "hyperspace.preset/2" and doc["routes"]   # the factory lanes
+    # the slot's session ids (scene, band, master) are dropped: a preset never has them (D9)
+    assert doc["values"] == {"view.shape": 4, **{f"view.plane.{n}": True for n in library.PLANES}}
+    atk, gain = r.chain.params[0].atk, r.chain.gain
     r.lib.project.load_slot(1)
-    assert r.view.shape == 4 and r.chain.params[0].atk == 0.5 and r.chain.gain == 2.0
+    assert r.view.shape == 4 and r.chain.params[0].atk == atk and r.chain.gain == gain
+    # no `desk` key: loading it gives the factory preset layer, not a dark desk
+    # (review of PR #65 — an explicit [] would blank every preset control)
+    assert "desk" not in doc
+    table = r.lib.presets.router.table
+    assert [b.source for b in table.desk()] == [
+        b.source for b in routing.factory_desk() if b.layer == "preset"]
     # second run: nothing to do, nothing said (migrate itself; ensure_home is memoised)
     assert library.migrate(home, cwd) == []
     library.ensure_home(home, cwd)
@@ -124,26 +137,59 @@ def test_slug():
     assert slug("***") == "untitled"
 
 
-def test_macros_are_routing_state_not_the_scenes(rig, tmp_path):
-    """params.ROUTING_GROUPS: the macros persist, but no theme, project or
-    module strip carries them — a theme change never moves a macro under a
-    route. A routing preset does (Router.preset_doc, test_ui_bands)."""
+def test_macros_are_performance_state(rig, tmp_path):
+    """Plan 13 WP1 / WP2: the macros are performance state. A preset
+    carries them and a project (the session) does not; the module strips
+    still list no `macro` group (a macro's meaning is its subscribers,
+    which live in the preset). The live table keeps them too until plan
+    13 WP5 (test_routing)."""
     lib, reg = rig.lib, rig.reg
     assert "macro" not in lib.groups() and "view" in lib.groups()
     m = reg["macro.2"]
     m.set_value(0.3)
     lib.project.save_slot(0)
-    assert not any(k.startswith("macro.") for k in lib.project.slots[0]["values"])
+    assert lib.read("presets", lib.project.bank[0])["values"]["macro.2"] == pytest.approx(0.3)
     m.set_value(0.7)
+    assert lib.is_dirty("presets")                   # the loaded preset tracks it
     lib.project.load_slot(0)
-    assert m.value == pytest.approx(0.7)             # the theme left it alone
+    assert m.value == pytest.approx(0.3)             # the preset brought it back
     path = lib.project.save("Show")
     doc = json.loads(path.read_text())
-    assert not any(k.startswith("macro.") for k in doc["values"]) and "macro" not in doc["modules"]
+    assert "macro.2" not in doc["session"] and "values" not in doc
+    assert "macro" not in doc["modules"]
     m.set_value(0.1)
-    assert not lib.project.is_dirty()                # a macro is not the project's to track
-    lib.project.load("Show")
-    assert m.value == pytest.approx(0.1)
+    assert not lib.project.is_dirty()                # not the session's
+
+
+def test_a_project_keeps_the_session_apart(rig, tmp_path):
+    """Plan 13 §2.2 / §4: a project file (schema 2) holds the session part
+    as `session` and the bank as names; the performance is the preset's.
+    is_dirty sees the session, the bank and the startup preset; a file
+    that lacks a session id takes the loaded state, so it opens clean."""
+    lib, reg = rig.lib, rig.reg
+    reg["view.shape"].set(5)
+    reg["master.gain"].set(2.0)
+    path = lib.project.save("Split")
+    doc = json.loads(path.read_text())
+    assert doc["schema"] == "hyperspace.project/2" and "values" not in doc
+    assert doc["session"] == reg.snapshot(part="session")
+    assert "master.gain" in doc["session"] and "view.shape" not in doc["session"]
+    assert doc["bank"] == lib.project.bank and doc["startup"] == "BIG BLUE WAVE"
+    assert not lib.project.is_dirty()
+    reg["view.shape"].set(6)                         # a performance move: the preset's
+    assert not lib.project.is_dirty()
+    reg["master.gain"].set(1.0)                      # a session move dirties the project
+    assert lib.project.is_dirty()
+    lib.project.save()
+    lib.project.startup = "EMBER ORBIT"              # …as does the startup combo
+    assert lib.project.is_dirty()
+    lib.project.save()
+    short = {k: v for k, v in doc.items() if k != "session"}
+    short["session"] = {"master.gain": 3.0}
+    (tmp_path / "projects" / "short.hyp.json").write_text(json.dumps(short))
+    lib.project.load("short")
+    assert rig.chain.gain == 3.0 and "band.0.atk" in lib.project.session
+    assert not lib.project.is_dirty()
 
 
 def test_list_user_shadows_factory(rig, tmp_path):
@@ -351,144 +397,108 @@ def test_a_project_restores_a_modules_layout(rig, tmp_path):
 
 # --------------------------------------------------------- document kinds
 
-def _routed(rig, tmp_path):
-    from hyperspace import routing
-    from hyperspace.routing import Bindings, Router
+def test_presets_are_the_librarys_one_document_kind(rig, tmp_path):
+    """Audit L1, closed by plan 13 WP5: one preset system. The routing
+    presets' kind is gone (was test_routing_presets_are_a_document_kind_of_
+    the_library); what they were — legacy6, lfo-breathe, the hands-* — are
+    presets, which list, shadow, load, save, dirty and delete through the
+    library like any module's. A user's old bindings/ folder is no group."""
+    from hyperspace.routing import Binding
 
-    router = Router(rig.reg, Bindings.factory(path=routing.bindings_path(tmp_path)))
-    rig.lib.routing(router)
-    return router
-
-
-def test_routing_presets_are_a_document_kind_of_the_library(rig, tmp_path):
-    """Audit L1: one preset system. The routing presets list, shadow, load,
-    save, dirty and delete through the library like any module's, while
-    the router applies and produces the documents."""
-    from hyperspace.routing import SCHEMA, Binding
-
-    lib = rig.lib
-    router = _routed(rig, tmp_path)
-    assert "bindings" in lib.kinds and "bindings" in lib.groups()
-    assert lib.list("bindings") == ["default", "hands-fx", "hands-pinch", "hands-play",
-                                    "legacy6", "lfo-breathe", "party-faces", "party-field", "party-trip", "party-tumble", "party-wake"]
-    assert lib.is_factory("bindings", "legacy6") and lib.current("bindings") is None
-    assert not lib.is_dirty("bindings")                  # nothing loaded: never dirty
+    lib, router = rig.lib, rig.presets.router
+    assert lib.kinds == ("presets",) and not hasattr(lib, "routing")
+    (tmp_path / "bindings").mkdir()
+    (tmp_path / "bindings" / "mine.json").write_text("{}")
+    assert "bindings" not in lib.groups() and "presets" in lib.groups()
+    names = lib.list("presets")
+    assert {"legacy6", "lfo-breathe", "hands-fx", "hands-pinch", "hands-play"} <= set(names)
+    assert lib.is_factory("presets", "legacy6") and lib.current("presets") is None
+    assert not lib.is_dirty("presets")                    # nothing loaded: never dirty
     rig.view.pattern_mod[0] = 0.4
-    assert lib.load("bindings", "legacy6") == []
+    lib.load("presets", "legacy6")
     assert rig.view.pattern_mod[0] == 0.0                 # its bases land
-    assert lib.current("bindings") == "legacy6" and not lib.is_dirty("bindings")
+    assert lib.current("presets") == "legacy6" and not lib.is_dirty("presets")
     assert len(router.table.routes()) == 12
     router.table.add(Binding("lane:2", "view.bright", "push", 0.3))
-    assert lib.is_dirty("bindings")
-    path = lib.save_as("bindings", "My Routes")
-    assert path == tmp_path / "bindings" / "my-routes.json"
+    assert lib.is_dirty("presets")
+    path = lib.save_as("presets", "My Routes")
+    assert path == tmp_path / "presets" / "my-routes.json"
     doc = json.loads(path.read_text())
-    assert doc["schema"] == SCHEMA and doc["name"] == "My Routes" and len(doc["bindings"]) == 13
-    assert lib.current("bindings") == "My Routes" and not lib.is_dirty("bindings")
-    assert "My Routes" in lib.list("bindings") and not lib.is_factory("bindings", "My Routes")
-    assert lib.next("bindings") == "party-faces"          # the next by name order
-    mine = lambda: [b for b in router.table.routes_to("view.bright") if b.source == "lane:2"]
-    assert not mine()                                     # the user's row went with the load
-    assert lib.load("bindings", "My Routes") == [] and mine()
-    assert lib.reset("bindings") == "default" and lib.current("bindings") == "default"
-    assert lib.delete("bindings", "My Routes") and "My Routes" not in lib.list("bindings")
+    assert doc["schema"] == "hyperspace.preset/2" and len(doc["routes"]) == 13
+    assert lib.current("presets") == "My Routes" and not lib.is_dirty("presets")
+    assert not lib.is_factory("presets", "My Routes")
+    lib.load("presets", "hands-play")
+    assert not router.table.routes_to("view.bright")[0].source.startswith("lane")
+    lib.load("presets", "My Routes")
+    assert [b.source for b in router.table.routes_to("view.bright")] == ["lane:2"]
+    assert lib.delete("presets", "My Routes") and "My Routes" not in lib.list("presets")
     with pytest.raises(LibraryError):
-        lib.load("bindings", "no-such")
+        lib.load("presets", "no-such")
     # a shadow: a user file named like a factory one wins, and lifts on delete
-    (tmp_path / "bindings").mkdir(exist_ok=True)
-    (tmp_path / "bindings" / "legacy6.json").write_text(json.dumps(
-        {"schema": SCHEMA, "bindings": [{"source": "lane:0", "target": "view.bright",
-                                          "op": "push", "value": 0.1}]}))
-    assert not lib.is_factory("bindings", "legacy6")
-    lib.load("bindings", "legacy6")
+    (tmp_path / "presets" / "legacy6.json").write_text(json.dumps(
+        {"schema": "hyperspace.preset/2", "name": "legacy6", "values": {}, "routes": [
+            {"source": "lane:0", "target": "view.bright", "op": "push", "value": 0.1}]}))
+    assert not lib.is_factory("presets", "legacy6")
+    lib.load("presets", "legacy6")
     assert [b.target for b in router.table.routes()] == ["view.bright"]
-    assert lib.delete("bindings", "legacy6") and lib.is_factory("bindings", "legacy6")
+    assert lib.delete("presets", "legacy6") and lib.is_factory("presets", "legacy6")
 
 
-def test_a_routing_preset_edited_on_disk_is_re_applied(rig, tmp_path):
+def test_a_bad_preset_is_reported_not_fatal(rig, tmp_path):
+    """Was test_a_bad_routing_preset_is_reported_not_fatal: a preset of an
+    unknown schema, or with a row that is no row, is refused with a
+    LibraryError and the rest of the tree is fine."""
     lib = rig.lib
-    router = _routed(rig, tmp_path)
-    lib.load("bindings", "legacy6")
-    path = lib.save_as("bindings", "Live")
-    assert not lib.poll(now=1.0)
-    edit(path, lambda d: d["bindings"].__setitem__(0, {"source": "lane:5", "target": "view.bright",
-                                                        "op": "push", "value": 0.7}))
-    assert lib.poll(now=2.0)
-    assert router.table.routes_to("view.bright")[0].value == 0.7 and "bindings/Live" in lib.status
-    assert not lib.is_dirty("bindings")
-
-
-def test_a_bad_routing_preset_is_reported_not_fatal(rig, tmp_path):
-    lib = rig.lib
-    _routed(rig, tmp_path)
-    (tmp_path / "bindings").mkdir()
-    (tmp_path / "bindings" / "odd.json").write_text(json.dumps({"schema": "hyperspace.bindings/9"}))
+    d = tmp_path / "presets"
+    d.mkdir()
+    (d / "odd.json").write_text(json.dumps({"schema": "hyperspace.bindings/3", "name": "odd"}))
     with pytest.raises(LibraryError):
-        lib.load("bindings", "odd")
-    (tmp_path / "bindings" / "worse.json").write_text(json.dumps(
-        {"schema": "hyperspace.bindings/2", "bindings": [{"source": "lane:0"}]}))
+        lib.load("presets", "odd")
+    (d / "worse.json").write_text(json.dumps(
+        {"schema": "hyperspace.preset/2", "name": "worse", "routes": [{"source": "lane:0"}]}))
     with pytest.raises(LibraryError):
-        lib.load("bindings", "worse")
-    (tmp_path / "bindings" / "worst.json").write_text(json.dumps(
-        {"schema": "hyperspace.bindings/2", "bindings": ["lane:0"]}))     # a row that is no dict
+        lib.load("presets", "worse")
+    (d / "worst.json").write_text(json.dumps(
+        {"schema": "hyperspace.preset/2", "name": "worst", "routes": ["lane:0"]}))
     with pytest.raises(LibraryError):
-        lib.load("bindings", "worst")
+        lib.load("presets", "worst")
+    (d / "bare.json").write_text(json.dumps({"name": "bare", "values": {}}))    # no schema
+    with pytest.raises(LibraryError):
+        lib.load("presets", "bare")
     assert lib.list("band")                               # the rest of the tree is fine
-    # a schema-1 user file is rewritten once; one that will not take the
-    # rewrite is reported rather than migrated and announced on every load
-    old = tmp_path / "bindings" / "old.json"
-    old.write_text(json.dumps({"bindings": [{"source": "lane:0", "target": "view.bright",
-                                              "op": "mod", "value": 0.2}]}))
-    old.chmod(0o444)
-    try:
-        with pytest.raises(LibraryError):
-            lib.load("bindings", "old")
-    finally:
-        old.chmod(0o644)
-    assert lib.load("bindings", "old") == []
-    assert json.loads(old.read_text())["schema"] == "hyperspace.bindings/2"
-    # a routing preset saved from the strip keeps one row per line, like the factory files
-    path = lib.save_as("bindings", "Rows")
-    lines = path.read_text().splitlines()
-    assert sum(line.startswith("  {") for line in lines) == len(json.loads(path.read_text())["bindings"])
-    assert json.loads(path.read_text())["name"] == "Rows"
 
 
-def test_the_routing_kind_reaches_the_router_at_call_time(rig, tmp_path):
-    """Hot reload re-classes the router in place; the kind's hooks must not
-    hold the pre-reload bound methods."""
+def test_the_preset_kind_reaches_presets_at_call_time(rig):
+    """Hot reload re-classes `Presets` in place; the kind's hooks must not
+    hold the pre-reload bound methods (was the routing kind's test)."""
     lib = rig.lib
-    router = _routed(rig, tmp_path)
     seen = []
-    router.signature = lambda: seen.append("sig") or []
-    lib.load("bindings", "default")
+    rig.presets.signature = lambda: seen.append("sig") or ()
+    lib.load("presets", "hands-play")
     assert seen == ["sig"]
 
 
-def test_a_project_naming_the_routing_layer_is_ignored_before_and_after_the_kind(rig, tmp_path):
-    """app.py attaches the library before it registers the routing kind, so
-    a project file naming a `bindings` module (hand-edited) must be skipped
-    by name, not by registration."""
+def test_a_project_naming_the_old_routing_layer_is_ignored(rig, tmp_path):
+    """A hand-edited project naming a `bindings` module (the routing
+    presets' old group) loads, and names nothing current."""
     lib = rig.lib
     p = tmp_path / "projects" / "odd.hyp.json"
-    p.write_text(json.dumps({"schema": "hyperspace.project/1", "name": "Odd",
-                             "values": {}, "modules": {"bindings": "lfo-breathe"}}))
+    p.write_text(json.dumps({"schema": "hyperspace.project/2", "name": "Odd",
+                             "session": {}, "modules": {"bindings": "lfo-breathe"}}))
     assert lib.project.load("odd") == []
     assert lib.current("bindings") is None
-    _routed(rig, tmp_path)
-    assert lib.current("bindings") is None and not lib.is_dirty("bindings")
 
 
-def test_a_project_never_carries_the_routing_layer(rig, tmp_path):
-    """Audit L3: `Project.io` is gone and the routing presets stay out of a
-    project's modules — the live table is one file for the rig."""
+def test_a_project_never_carries_the_loaded_preset(rig, tmp_path):
+    """Audit L3, and plan 13 §2.2: `Project.io` is gone, and the loaded
+    preset (routes and all) stays out of a project's modules — the bank
+    names presets, the project holds the session."""
     lib = rig.lib
-    _routed(rig, tmp_path)
-    lib.load("bindings", "hands-play")
+    lib.load("presets", "hands-play")
     doc = json.loads(lib.project.save("Set").read_text())
     assert "io" not in doc and "bindings" not in doc["modules"]
+    assert "presets" not in doc["modules"]
     assert not hasattr(lib.project, "io")
-
 
 
 def test_next_prev_cycle_by_name(rig):
@@ -563,51 +573,56 @@ def test_project_save_load_new(rig, tmp_path):
     assert p == tmp_path / "projects" / "gig.hyp.json"
     assert lib.project.list() == ["default", "gig", "party"]   # party: the factory one
     doc = json.loads(p.read_text())
-    assert doc["schema"] == "hyperspace.project/1" and doc["name"] == "Gig"
-    assert doc["modules"] == {"band": "Percussive", "view": "Mine"}
-    assert doc["values"]["camera.zoom"] == 3.0 and doc["bank"][2]["name"] == "STROBE CAGE"
+    assert doc["schema"] == "hyperspace.project/2" and doc["name"] == "Gig"
+    # a performance group's label is the preset's, never the project's
+    assert doc["modules"] == {"band": "Percussive"}
+    assert doc["session"]["master.gain"] == 2.5 and "camera.zoom" not in doc["session"]
+    assert doc["bank"][2] == "STROBE CAGE"
+    assert lib.read("presets", "STROBE CAGE")["values"]["camera.zoom"] == 3.0   # the user's shadow
     assert "io" not in doc                                  # audit L3: never written, gone
 
     lib.project.new()
     assert lib.project.name == "untitled" and lib.project.path is None
-    assert rig.view.zoom == 1.0 and rig.chain.gain == 1.0     # fresh state
-    assert lib.current("band") is None and lib.project.slots[2]["values"] == \
-        json.loads((FACTORY / "projects" / "default.hyp.json").read_text())["bank"][2]["values"]
+    assert rig.chain.gain == 1.0 and lib.current("band") is None    # a fresh session…
+    assert lib.project.bank[2] == "STROBE CAGE"                      # …the factory bank
+    assert lib.current("presets") == "BIG BLUE WAVE"                 # …and its startup preset
 
     missing = lib.project.load("Gig")
     assert missing == [] and lib.project.path == p
-    assert rig.view.zoom == 3.0 and rig.chain.gain == 2.5
+    assert rig.chain.gain == 2.5
     assert lib.current("band") == "Percussive" and not lib.is_dirty("band")
-    assert lib.project.slots[2]["values"]["camera.zoom"] == 3.0 and lib.project.active == -1
+    assert lib.project.active == 0                                   # the startup preset's slot
     # a module whose preset is gone is still "loaded", the values speak for it
-    lib.delete("view", "Mine")
+    lib.save_as("band", "Mine")
+    lib.project.save()
+    lib.delete("band", "Mine")
     lib.project.load(p)
-    assert lib.current("view") == "Mine" and not lib.is_dirty("view")
+    assert lib.current("band") == "Mine" and not lib.is_dirty("band")
     # saving now keeps an inline copy so the project stays whole elsewhere
     doc = json.loads(lib.project.save().read_text())
-    assert doc["modules"]["view"]["name"] == "Mine" and "view.bright" in doc["modules"]["view"]["values"]
+    assert doc["modules"]["band"]["name"] == "Mine" and "band.0.atk" in doc["modules"]["band"]["values"]
 
 
-def test_project_unknown_ids_and_bank_seeding(rig, tmp_path):
+def test_project_unknown_ids_and_a_short_bank(rig, tmp_path):
     p = tmp_path / "projects" / "odd.hyp.json"
-    p.write_text(json.dumps({"schema": "hyperspace.project/1", "name": "Odd",
-                             "values": {"view.shape": 6, "warp.core": 1},
-                             "bank": [{"name": "ONE", "values": {}}]}))
+    p.write_text(json.dumps({"schema": "hyperspace.project/2", "name": "Odd",
+                             "session": {"master.gain": 2.0, "warp.core": 1},
+                             "bank": ["ONE"]}))
     assert rig.lib.project.load("odd") == ["warp.core"]
-    assert rig.view.shape == 6
-    slots = rig.lib.project.slots
-    assert slots[0]["name"] == "ONE" and slots[1]["name"] == "EMBER ORBIT"
+    assert rig.chain.gain == 2.0
+    # a short bank is padded with empty slots; nothing is seeded any more
+    assert rig.lib.project.bank == ["ONE"] + [None] * (library.SLOTS - 1)
     assert rig.lib.project.name == "Odd" and rig.lib.project.path == p
 
 
 def test_user_default_project_opens_on_attach(tmp_path):
     r = make(tmp_path)
-    r.reg["view.bright"].set_value(2.0)
+    r.reg["master.gain"].set(2.0)
     r.lib.load("band", "Tremolo Web")
     r.lib.project.save()
     r2 = make(tmp_path)
     assert r2.lib.project.path == tmp_path / "projects" / "default.hyp.json"
-    assert r2.view.bright == 2.0 and r2.lib.current("band") == "Tremolo Web"
+    assert r2.chain.gain == 2.0 and r2.lib.current("band") == "Tremolo Web"
 
 
 # ---------------------------------------------------------------- live editing
@@ -641,10 +656,12 @@ def test_editing_the_open_project_reloads_it(rig, tmp_path):
     lib = rig.lib
     p = lib.project.save("Set")
     lib.poll(now=1.0)
-    edit(p, lambda d: (d["values"].__setitem__("view.shape", 8),
-                       d["bank"][0].__setitem__("name", "RENAMED")))
+    rig.view.shape = 3                                 # the performance, the preset's
+    edit(p, lambda d: (d["session"].__setitem__("master.gain", 4.0),
+                       d["bank"].__setitem__(0, "RENAMED")))
     assert lib.poll(now=2.0)
-    assert rig.view.shape == 8 and lib.project.slots[0]["name"] == "RENAMED"
+    assert rig.chain.gain == 4.0 and lib.project.bank[0] == "RENAMED"
+    assert rig.view.shape == 3                         # an edit re-reads; no startup load
 
 
 def test_a_band_presets_normalisation_switch_round_trips(rig):
@@ -665,9 +682,12 @@ def test_a_band_presets_normalisation_switch_round_trips(rig):
 
 def test_factory_projects_are_listed_and_load_by_name(rig):
     """The load combo lists the factory projects (plan 12's `party`) beside
-    the user's; opening one by name lands its bank without a user file."""
+    the user's; opening one by name lands its bank without a user file,
+    and its startup preset with it."""
     lib = rig.lib
     assert "party" in lib.project.list()
     assert lib.project.load("party") == []
     assert lib.project.name == "party" and lib.project.path is None
-    assert [s["name"] for s in lib.project.bank[:5]] == ["TUMBLE", "FACES", "FIELD", "WAKE", "TRIP"]
+    assert lib.project.bank == ["TUMBLE", "FACES", "FIELD", "WAKE", "TRIP", None, None, None]
+    assert lib.current("presets") == "TUMBLE" and lib.project.active == 0
+    assert rig.view.shape == 10 and lib.current("band") == "Balanced"

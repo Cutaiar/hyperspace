@@ -1,6 +1,6 @@
 # Decision register — everything that is yours to decide
 
-As of 2026-09-28. **Every row is answered** (the answer sheet at the end). This is the one list. Every decision that blocks
+As of 2026-09-29. **Every row is answered** — 18 and 19 on 2026-09-28, 20 on 2026-09-29 (the answer sheet at the end). This is the one list. Every decision that blocks
 implementing and settling the open work is here, whichever plan or session
 raised it. Each entry stands on its own: what the thing is, what the software
 does today, the options, a recommendation with its reasons, the trade-off you
@@ -19,7 +19,9 @@ DECISIONS.md gets a dated row per decision and this file records the answer.
   offset on top through one routing row per parameter.
 - **Trigger**: a parameter that fires once (tap tempo, LFO reset).
 - **Routing preset**: a saved set of performer rows, optionally with the
-  bases they assume. **Theme**: a saved snapshot of every base.
+  bases they assume. **Theme**: a saved snapshot of every base. (Both are
+  gone since plan 13, built on `plan-13-integration`: a preset holds both,
+  and the questions below that use the words are kept as they were asked.)
 - **Clock**: the tap-tempo clock the synced LFOs read. The **trigger
   button** (⇧B, the APC40's METRONOME) says "the one is now".
 - Plan 13's two nouns, already decided by you on 2026-09-28: a **preset** is
@@ -381,6 +383,117 @@ bases, which the model forbids.
 
 ---
 
+## Part A2 — raised while building plan 13 (2026-09-28)
+
+Both came out of checking plan 13 against the code (plan 13 §9). Both are
+about the **MASTER fader**, which in this app is the audio *drive*: how
+hard the music pushes everything the bands drive (`master.gain`, 1× to 8×).
+
+```
+ APC40 MASTER fader ──▶ master.gain (session: the room's drive)
+                              │ today: every band → rotation route is "× master.gain"
+ band lanes ──push──▶ rot.rate.XY … ZW        (the six planes spin with the music)
+ left hand (party-tumble) ──push──▶ master.gain   (a hand leans on the drive)
+```
+
+### 18. P13-h — how the drive fader reaches the rotation, once routes lose `scale`
+
+**Answered (a), 2026-09-28.** (Recommendation was (a), keep `scale` on a route, only for a session param.)
+
+**What it is.** A route's depth can be multiplied by another parameter's
+live value, its `scale`. You decided (row 12) that a macro's attenuation
+becomes a *depth subscriber* of the macro, and that routes lose the
+`scale` field. But the field has a second user that is not a macro: the
+six band → rotation routes are each "× `master.gain`". That multiplication
+is the only way the MASTER fader changes how hard the music spins the
+shape, and it is how the reference design worked (the parity test checks
+it).
+
+**Today.** Every factory and party preset carries those six rows with
+`scale: master.gain`. Move the MASTER fader and the music spins the shape
+harder or softer; the band pattern inputs are not scaled.
+
+| Option | What the MASTER fader does to the rotation | Trade-off |
+|---|---|---|
+| (a) Keep `scale` on a route, allowed only on a session param (the drive fader today); macros go to subscribers as decided | Exactly what it does now. | Two ways to scale a depth remain — a macro's subscriber (per preset) and a route's `scale` (the rig's) — each with one job; the ROUTING page shows both. |
+| (b) Let the drive fader have depth subscribers, like a macro, listed in the preset | The same, described as a subscriber. | A session control's wiring lives in every preset; a subscriber's `from → to` runs over the fader's 0–1 position, not its 1×–8× value, so the six rows' numbers change and the parity test is re-derived. |
+| (c) Drop it: routes lose `scale` everywhere | The MASTER fader no longer changes the rotation; only the pattern and whatever the analyzer's gain feeds. | The drive fader stops meaning "how hard the music drives the shape"; the legacy6 parity anchor is re-frozen without gain. |
+
+**Why (a).** It keeps the one job the drive fader has in the room, costs
+no numbers, and keeps your macro decision whole: every `scale` that named
+a macro still becomes a subscriber.
+
+**What changes.** (a): the migration converts only `scale: macro.N`; the
+loader refuses a `scale` on a performance param with a note; one sentence
+in ARCHITECTURE §3.4. Plan 13 WP3 builds it; until you answer, WP3 leaves
+those six rows exactly as they are.
+
+### 19. P13-i — may a preset's route *perform* a session param?
+
+**Answered (a), 2026-09-28.** (Recommendation was (a), yes.)
+
+**What it is.** You decided (plan 13 D9) that the analyzer is session: its
+bands, dynamics, scene and the drive fader are never in a preset, so a
+preset load never moves them. `party-tumble`'s left hand, though, *pushes*
+the drive (`master.gain`) — lifting the hand makes the music grip the
+shape harder; lowering it or leaving the box gives the fader's own value
+back.
+
+**Today.** The route works; nothing distinguishes a session target.
+
+| Option | What `party-tumble`'s left hand does | Trade-off |
+|---|---|---|
+| (a) A route may target any param a performer may drive, session ones included; D9 governs the *values* a preset lands | Leans on the drive while the hand is up; the fader's setting is never changed and shows again when the hand leaves. | A preset can change how the room *feels* while a hand is in, never what it is *set* to. The ROUTING page marks such a route "session". |
+| (b) A route onto a session param is dropped at load with a note | Nothing; `party-tumble`'s left height is re-cut onto a performance param (the spin speed, say). | The strict reading of D9; one party gesture changes. |
+
+**Why (a).** D9's reason was that the analyzer is the room and every
+preset assumes one lane layout; an offset that springs back touches
+neither. It keeps plan 12's gesture as you approved it.
+
+**What changes.** (a): nothing in the loader; the page's "session" mark;
+one sentence in ARCHITECTURE §3.2. (b): a check in the preset loader and a
+new left-height row in `party-tumble` (WP5).
+
+### 20. P13-j — hand routes by name or by lane number
+
+**Answered (a), 2026-09-29: by name, built in plan 13 WP5b (PR #70).** (Recommendation was (a).) Every factory preset now names its hand rows (`hand:right.roll`); the migration names yours by your rig's `[hands] dofs` (or the default list when `[hands]` is off) and says so in a note; a number still reads. Hand check 42 tries a reordered `dofs` at the machine.
+
+**What it is.** A preset's hand route says which hand axis drives it. Today
+it says so by a lane *number*: `hand:9` means "the 10th hand lane", which on
+the shipped setup is the right hand's roll. The numbers follow the order of
+the `[hands] dofs` list in your `config.toml`. If that list is ever
+reordered or trimmed (say, dropping yaw because it is noisy in your box),
+every hand row in every shipped and saved preset silently points at a
+different axis: a tilt would start zooming. Nothing warns.
+
+```
+ [hands] dofs = x y z roll pitch yaw     hand:9  →  right roll     (as designed)
+ [hands] dofs = x y z roll pitch         hand:9  →  right pitch?   (silently wrong)
+ by name:                                hand:right.roll → right roll, whatever the list
+```
+
+**Today.** Every preset uses numbers; plan 12 noted the risk and the audit
+filed it (N7). Plan 13 has just regenerated every factory preset and is
+migrating your files once, so this is the cheapest moment the format will
+ever have.
+
+| Option | What a preset says | Trade-off |
+|---|---|---|
+| (a) Names now: `hand:right.roll`, `hand:left.y`, `hand:left.pinch.index`; the hands adapter publishes the name → lane map; a name the rig lacks makes the row dormant, never another axis. Factory presets regenerated with names; your migrated presets written with names; `hand:<i>` still read. | The axis it means, whatever `dofs` says. | About half a day more in plan 13 (a small follow-up PR before the integration merge). Learn writes names too. |
+| (b) Later, as its own small plan | Numbers for now. | Every preset written until then (factory, migrated, yours) carries numbers and needs a second conversion; the silent scramble stays possible meanwhile. |
+| (c) Never; a warning instead | Numbers; the app warns at start when your `dofs` differs from the shipped order. | Cheapest; you are told, but the presets are still wrong until re-authored. |
+
+**Why (a).** The format is being set now and your files are being migrated
+once; doing it now means no second migration, and a changed `dofs` can
+never quietly break a party preset mid-set.
+
+**What changes.** (a): a name map the hands adapter publishes, a resolver in
+the router (routes, gates, rests, the page's labels), Learn writing names,
+the generator and the migration writing names, tests; plan 13 builds it as
+WP5b before the integration merge. (b)/(c): audit N7 stays open.
+
+---
+
 ## Part B — built on the recommendation without asking; confirm or overturn
 
 Four calls had a sensible default and waiting would have blocked the work.
@@ -402,7 +515,9 @@ Each is built, reviewed and on PR #55. Overturning any is a small follow-up.
   SHIFT with an LED; fixed global layer; invariant controls; knobs jump and
   faders pick up on a layer switch; an unmapped control does nothing and
   shows dark; the analyzer is session; a session names its startup preset; a
-  modifier is read at the press. Decided, not built.
+  modifier is read at the press. Built in plan 13 (WP1 #62, WP2 #64, WP3
+  #63, WP4 #65, WP5 #66) on `plan-13-integration`; DECISIONS.md's rows say
+  where and which test holds each.
 - **Sequencing** (2026-09-28): merge #55, then #47 as is, then plan 13 from
   its WP1, re-cutting the five `party-*` presets in its WP5.
 - **Plan 12's per-preset desk block**: superseded by plan 13's preset desk
@@ -410,7 +525,8 @@ Each is built, reviewed and on PR #55. Overturning any is a small follow-up.
 
 ## Part D — not decisions, but gating "settled"
 
-- `docs/plans/11-hand-checks.md`: 32 checks at the machine. Checks 7 and 11
+- `docs/plans/11-hand-checks.md`: 32 checks at the machine (41 since
+  plan 13's group H). Checks 7 and 11
   read differently under each answer to decisions 1 and 4. Check 31 is the
   one hardware assumption plan 13 rests on (the APC40's endless knobs
   re-base from a host CC). Check 32 is plan 12's seven projector-and-box
@@ -418,7 +534,11 @@ Each is built, reviewed and on PR #55. Overturning any is a small follow-up.
 - Two review notes from plan 12 that belong in the audit, not here: named
   hand addresses (`hand:left.roll`) so a custom `[hands] dofs` list cannot
   scramble shipped presets; an explicit groups-to-reset list on a theme or
-  preset.
+  preset. Filed 2026-09-28 as `AUDIT-2026-09.md` rows N7 and L9. L9 is moot
+  for presets since plan 13 (a load replaces every performance group, D2);
+  N7 is row 20 here, answered (a) 2026-09-29, built in plan 13 WP5b (PR #70).
+- Plan 13's machine checks: `docs/plans/11-hand-checks.md` group H
+  (checks 33–42).
 
 ---
 
@@ -431,19 +551,22 @@ or "overturn".
 |---|---|---|---|---|
 | 1 | B2 tap and the downbeat | (a) never moves it | **(a)**, 2026-09-28 | |
 | 2 | B5 performer-fired triggers | (a) keep all three | **(c)**, 2026-09-28 | LFO triggers ownable, tap tempo not |
-| 3 | R1 LFO knobs | (c) theme state; presets may set assumed bases | **(c)**, 2026-09-28 | |
+| 3 | R1 LFO knobs | (c) theme state; presets may set assumed bases | **(c)**, 2026-09-28 | dissolved by plan 13 WP5 (PR #66): a preset carries every performance base, LFO knobs included, and the routing presets are full presets |
 | 4 | R6 APC40 LEDs | (a) rings base, LEDs state | **(a)**, 2026-09-28 | |
 | 5 | A7 Dynamics past 1× | (b) keep 4×, document | **(b)**, 2026-09-28 | |
 | 6 | A10 input trim | (3) auto/manual switch | **(3)**, 2026-09-28 | built, WP15 |
 | 7 | R2 + L2 loop keys | (a) table rows | **(a)**, 2026-09-28 | built, PR #58 |
 | 8 | Merge path | PR #55, then #47 | **rec**, 2026-09-28 | #56 folded into #55 first |
-| 9 | P13-a global track knobs | (a) hand feel + BPM | **(a)**, 2026-09-28 | a first cut; expect better globals with use |
-| 10 | P13-b partial presets | (a) no exception | **(a)**, 2026-09-28 | |
-| 11 | P13-c bank slots | (a) a slot names a file | **(a)**, 2026-09-28 | |
-| 12 | P13-d what a macro is | (a) attenuator + multi-target rows | **one concept**, 2026-09-28 | subscribers set a base or a depth, each with its own polarity; see 12b |
-| 13 | P13-e ROUTING page | (a) one page | **(a)**, 2026-09-28 | |
-| 12b | P13-g a performer on a macro | (a) base subscribers follow the base only | **(a)**, 2026-09-28 | |
+| 9 | P13-a global track knobs | (a) hand feel + BPM | **(a)**, 2026-09-28 | a first cut; expect better globals with use. Built in plan 13 WP3 (PR #63): five global rows in `apc40.DEFAULT_MAP` (hand feel and `tempo.bpm` on track knobs 1–5, `hands.sel.return` the selected axis's alias), knobs 6–8 dark; learns kept off the global layer in WP4 (PR #65) |
+| 10 | P13-b partial presets | (a) no exception | **(a)**, 2026-09-28 | built in plan 13 WP2 (PR #64): a load lands every performance base and replaces every route; and WP5 (PR #66): the routes-only files are full presets — `legacy6`, `lfo-breathe`, `hands-*` in `library/presets/`, a user's `bindings/*.json` by the first-launch migration (`preset.migrate_routing_presets`), each with the effects its routes drive switched on |
+| 11 | P13-c bank slots | (a) a slot names a file | **(a)**, 2026-09-28 | built in plan 13 WP2 (PR #64): `Project.bank` is eight preset names, `load_slot` / `save_slot` / `cycle`; schema-1 inline slots become preset files in WP5 (PR #66) |
+| 12 | P13-d what a macro is | (a) attenuator + multi-target rows | **one concept**, 2026-09-28 | subscribers set a base or a depth, each with its own polarity; see 12b. Built in plan 13 WP3 (PR #63): `routing.Macro` / `Sub`, `Router.follow_macros`, the depth term in `Router.modulate`, `scale: macro.N` migrated; the macros became the loaded preset's in WP4 (PR #65) and left `bindings.json` in WP5 (PR #66) |
+| 13 | P13-e ROUTING page | (a) one page | **(a)**, 2026-09-28 | built in plan 13 WP4 (PR #65): `ui_routing.page` over the loaded preset — the head (name, dirty dot, save / as…, the layer, the last learn or refusal), routes, the desk with its dark controls, the macros and their subscribers, the session's MIDI rows read-only; the routing-preset strip left it there |
+| 12b | P13-g a performer on a macro | (a) base subscribers follow the base only | **(a)**, 2026-09-28 | built in plan 13 WP3 (PR #63): base subscribers follow `p.base`, depth ones `p.value` (`test_a_performer_on_a_macro_moves_only_its_depth_subscribers`) |
 | 14 | B1 as built | keep | **keep**, 2026-09-28 | |
 | 15 | A1 as built | keep | **keep**, 2026-09-28 | |
 | 16 | L3 as built | keep | **keep**, 2026-09-28 | |
 | 17 | B6 as built | keep | **keep**, 2026-09-28 | |
+| 18 | P13-h the drive fader and `scale` | (a) keep `scale`, session params only | **(a)**, 2026-09-28 | built in plan 13 WP5 (PR #66): `routing.migrate_scales` — a `scale` kept only on a session param, one on a macro a depth subscriber, one on a performance param dropped with a note |
+| 19 | P13-i a route onto a session param | (a) yes; D9 is about values | **(a)**, 2026-09-28 | built in plan 13 WP5 (PR #66): the ROUTING page marks such a route "session" (`ui_routing.is_session_target`); the scale combo offers session params only |
+| 20 | P13-j hand routes by name | (a) names now, in plan 13 | **(a)**, 2026-09-29 | built, plan 13 WP5b, PR #70: `hand:right.roll`, `hand:left.present`, `hand:left.pinch.index`, resolved through the hands adapter's published map (`router.names`); a name the rig lacks is dormant; `hand:<i>` still reads; the factory presets regenerated, the migration names what it carries by the rig's layout |

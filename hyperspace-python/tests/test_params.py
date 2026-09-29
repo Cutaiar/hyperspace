@@ -11,7 +11,14 @@ from hyperspace.bands import BANDS
 from hyperspace.control import SCENES, Control
 from hyperspace.geometry import SHAPES
 from hyperspace.library import Library
-from hyperspace.params import Kind, Registry, build_registry
+from hyperspace.params import (
+    PERFORMANCE_GROUPS,
+    SESSION_GROUPS,
+    Kind,
+    Registry,
+    build_registry,
+    part_of,
+)
 from hyperspace.view import ViewState
 
 
@@ -38,7 +45,7 @@ def test_ids_are_unique_and_stable(rig):
     assert len(ids) == len(set(ids))
     for must in ("view.bright", "view.shape", "master.gain", "scene.select",
                  "band.0.atk", "band.5.thr", "band.sel.pre", "band.select",
-                 "theme.load.0", "theme.save.7", "camera.zoom", "view.plane.ZW"):
+                 "preset.load.0", "preset.save.7", "camera.zoom", "view.plane.ZW"):
         assert must in reg, must
     r = Registry()
     r.toggle("x", "x", lambda: True, lambda v: None)
@@ -236,18 +243,29 @@ def test_params_survive_a_chain_swap(rig):
     assert new.params[0].post == 0.0
 
 
-def test_theme_params(rig):
-    reg, view, _control, _audio, presets = rig
-    assert len(reg["theme.select"].names) == 8
-    reg["theme.load.1"].fire()
-    assert presets.active == 1 and view.shape == 10
-    reg["theme.select"].set_norm(0.0)
-    assert presets.active == 0
-    reg["theme.next"].fire()
-    assert presets.active == 1
+def test_preset_bank_params(rig):
+    """The bank's params (plan 13 WP2): select, load, save, next / prev
+    over the project's eight preset names, loading through `Presets`."""
+    from hyperspace.preset import Presets
+    from hyperspace.routing import Bindings, Router
+
+    reg, view, _control, _audio, bank = rig
+    Presets(bank.lib, reg, Router(reg, Bindings()))
+    assert reg["preset.select"].names[:2] == ["BIG BLUE WAVE", "EMBER ORBIT"]
+    assert len(reg["preset.select"].names) == 8
+    reg["preset.load.1"].fire()
+    assert bank.active == 1 and view.shape == 10
+    reg["preset.select"].set_norm(0.0)
+    assert bank.active == 0
+    reg["preset.next"].fire()
+    assert bank.active == 1
+    reg["preset.prev"].fire()
+    assert bank.active == 0
     view.shape = 12
-    reg["theme.save.5"].fire()
-    assert presets.slots[5]["values"]["view.shape"] == 12
+    reg["preset.save.5"].fire()
+    assert bank.bank[5] == "SPIRAL SILK"
+    assert bank.lib.read("presets", "SPIRAL SILK")["values"]["view.shape"] == 12
+    assert not reg["preset.save.5"].modulatable and not reg["preset.select"].persist
 
 
 def test_scene_names_match_presets(rig):
@@ -279,9 +297,59 @@ def test_macro_knobs_are_persisted_attenuators_with_no_object(rig):
     # the slot bounds itself: a restore writes raw, and nothing else would clamp
     assert reg.restore({"macro.3": 5.0, "macro.4": -2.0}) == []
     assert reg["macro.3"].value == 1.0 and reg["macro.4"].value == 0.0
-    # routing-layer state (ROUTING_GROUPS): in a snapshot by group, out of the whole one
-    assert not any(k.startswith("macro.") for k in reg.snapshot())
+    # performance state (plan 13 WP1): in the whole snapshot and its performance part
     assert set(reg.snapshot("macro")) == {p.id for p in ms}
+    assert set(reg.snapshot("macro")) <= set(reg.snapshot(part="performance"))
+
+
+def _full_registry(tmp_path):
+    """Every param the app registers: build_registry, the hands setup, the
+    clock, the LFOs and the render window's output (headless)."""
+    from hyperspace import hands, lfo, tempo
+    from hyperspace.overlay import Output
+
+    reg = make(tmp_path)[0]
+    hands.register(reg, hands.HandSettings())
+    clock = tempo.Clock()
+    tempo.register(reg, clock)
+    lfo.register(reg, lfo.LFOs(), clock)
+    Output(None, None).register(reg)
+    return reg
+
+
+def test_every_persisted_group_is_performance_or_session(tmp_path):
+    """Plan 13 §4 / exit criterion 1: every persisted param is in exactly
+    one part, the two tuples are disjoint, and each persisted id's first
+    segment is its group (Project._is_session splits an unattached file by it)."""
+    reg = _full_registry(tmp_path)
+    assert not set(PERFORMANCE_GROUPS) & set(SESSION_GROUPS)
+    persisted = [p for p in reg if p.persist]
+    for must in ("hands", "tempo", "lfo", "output", "macro", "band"):
+        assert any(p.group == must for p in persisted), must
+    for p in persisted:
+        assert (p.group in PERFORMANCE_GROUPS) + (p.group in SESSION_GROUPS) == 1, p.id
+        assert part_of(p) in ("performance", "session"), p.id
+        assert p.id.partition(".")[0] == p.group, p.id
+    assert all(not p.persist for p in reg if p.id.startswith("rot.phase."))
+    assert all(part_of(p) is None for p in reg.group("preset"))
+
+
+def test_snapshot_by_part(tmp_path):
+    """The performance and session parts partition the whole snapshot;
+    the macros are in the whole one and in the performance part."""
+    reg = _full_registry(tmp_path)
+    whole = reg.snapshot()
+    perf, sess = reg.snapshot(part="performance"), reg.snapshot(part="session")
+    assert perf and sess and not set(perf) & set(sess)
+    assert {**perf, **sess} == whole
+    assert all(part_of(reg[k]) == "performance" for k in perf)
+    assert all(part_of(reg[k]) == "session" for k in sess)
+    macros = {f"macro.{k}" for k in range(1, 9)}
+    assert macros <= set(whole) and macros <= set(perf)
+    assert "tempo.bpm" in sess and "scene.select" in sess and "lfo.1.depth" in perf
+    # the filters combine
+    assert reg.snapshot("macro", part="session") == {}
+    assert reg.snapshot("view", part="performance") == reg.snapshot("view")
 
 
 def test_core_does_not_import_the_midi_adapter():

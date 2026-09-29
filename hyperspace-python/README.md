@@ -13,7 +13,7 @@ DJ-link, and DAW-bridge tiers — is in [`docs/SETUP.md`](docs/SETUP.md).
 
 ```bash
 uv sync
-uv run pytest          # 778 tests, ~20 s
+uv run pytest          # 876 tests, ~35 s
 uv run hyperspace      # opens the render window and the control window
 ```
 
@@ -28,8 +28,8 @@ uv run hyperspace      # opens the render window and the control window
   the render stack (`geometry`, `view`, `render`, `glsl`, `fx`, `lookback`,
   `dream`, `overlay`, `shaders/`), the panel (`ui`, `ui_bands`,
   `ui_routing`, `ui_lfo`, `ui_fx`, `ui_lookback`, `ui_presets`,
-  `hands/panel`, `control`), the library (`library`, `config`, `library/`
-  with the factory presets) and the host (`app`, `hotreload`). Who owns
+  `hands/panel`, `control`), the library (`library`, `preset`, `config`,
+  `library/` with the factory presets) and the host (`app`, `hotreload`). Who owns
   what and who may write a parameter: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 - `tests/` — pytest suite plus committed `golden/` traces recorded from
   `hyperspace-web/hyperspace.html` (the oracle for geometry and audio
@@ -64,50 +64,72 @@ Chromium.
 ## Controls and MIDI
 
 Everything the panel can set is a named parameter in `hyperspace/params.py`
-(`view.bright`, `band.2.atk`, `theme.load.0`, …). Keys, the gamepad, MIDI
+(`view.bright`, `band.2.atk`, `preset.load.0`, …). Keys, the gamepad, MIDI
 and the analyzer's lanes are one binding table over that registry
-(`hyperspace/routing.py`, persisted as `bindings.json`; factory default in
-`hyperspace/library/bindings/`) — so a value moved from any of them shows
+(`hyperspace/routing.py`) — so a value moved from any of them shows
 on the panel the next frame, and any audio band can modulate any param.
+The session's controls (keys, pad, the APC40's fixed rows) persist in
+`bindings.json` (factory default `hyperspace/bindings.default.json`); the
+routes, the APC40's preset layer and the macros belong to the loaded
+preset.
 Press `?` in the app for the cheat sheet.
 
 Plug in an Akai APC40 and it is picked up on launch (and on reconnect):
-the eight device knobs are the open band strip, the track knobs are the
-view faders, channel faders are per-band output drive, the clip grid holds
-themes, scenes and shapes, and every LED and knob ring tracks the engine.
-The full default layout is at the bottom of `hyperspace/apc40.py`.
+it has two layers under a latched SHIFT (its LED lit while the global
+layer is up). The faders (per-band output drive, dynamics, trim, the
+MASTER drive), the first clip row (the preset bank), SHIFT, the clock
+buttons and the transport mean the same on both. The **preset** layer is
+the loaded preset's — by default the track knobs are the view faders and
+the grid holds the shapes; the **global** layer (SHIFT) puts the open
+band strip on the device knobs, hand feel and BPM on the track knobs and
+the band scenes on the grid. A control the up layer does not map is dark
+and does nothing; every LED and knob ring tracks the engine. The full
+default layout is at the bottom of `hyperspace/apc40.py`.
 
 To rebind anything: right-click the control in the panel → **Learn**,
 then move a knob, press a button — or move a hand, with the tracker on.
-Bindings persist in `bindings.json` in the library home (delete it to get
-the defaults back; a pre-2026-09 `midi_map.json` there is merged into it
-once and then ignored). Knobs use soft
-pickup — after a band switch or a theme load a knob does nothing until it
-sweeps through the current value. An optional `config.toml` names the port
+A learn goes into the loaded preset (its dirty dot lights; ⇧F or the
+preset strip's save writes it); with SHIFT latched, or on a fixed
+control, it is refused and the panel says why. `bindings.json` in the
+library home holds the session's controls (delete it to get the defaults
+back; a pre-2026-09 `midi_map.json` there is merged into it once and then
+ignored). Faders use soft pickup — after a preset load a fader does
+nothing until it sweeps through the current value; the knobs are endless
+and continue from their ring. An optional `config.toml` names the port
 and profile, or disables the adapter (see `hyperspace/config.py`); MIDI
 and the gamepad are the two adapters on by default (`[gamepad] enabled =
 false` stops polling for a pad), the bridge, dream and hands are off.
 
 ## Presets, projects and the library
 
-Every registry group (view, camera, band…) has a preset library, and a
-*project* (`*.hyp.json`) saves everything at once, including the F1–F8
-theme bank. Factory presets live in `hyperspace/library/`; yours go in
+A **preset** (`presets/*.json`) is one whole performance moment: every
+performance parameter (view, rotation, camera, patterns, dream, FX, LFOs,
+macros), the hand / audio / LFO routes, the APC40's preset layer and the
+macros' subscribers; loading one replaces all of it and never touches
+the session (tempo, hands, the analyzer, output). A *project*
+(`*.hyp.json`) is the session: its values, a startup preset, and the
+F1–F8 bank of eight preset names (F-key loads, ⇧F-key saves the live
+state as that preset). Every registry group (view, camera, band…) also
+keeps its own module presets, which replace only that group. Factory presets live in `hyperspace/library/`; yours go in
 `$HYPERSPACE_HOME` (default `~/Hyperspace`) in the same tree, with
 `projects/`, `bindings.json` and `config.toml` next to them — a user file
-shadows a factory file of the same name. Routing presets (`bindings/`) are
-a document kind of the same library, so they list, shadow and reload the
-same way. The files are plain JSON: edit one
+shadows a factory file of the same name. The first launch of a build
+from plan 13 on converts an older home once (old projects, routing
+presets and `bindings.json`'s routes become presets), keeping a
+`.bak-v<n>` of every file it rewrites. The files are plain JSON: edit one
 in a text editor while the app runs and the loaded preset updates in place.
-See `hyperspace/library.py` for the formats and the API the panel uses.
+See `hyperspace/library.py` and `hyperspace/preset.py` for the formats
+and the API the panel uses.
 
 The panel is a rail of fourteen pages — Output · View · Faces · Bitmap ·
 Camera · Lookback · FX · Audio · Analyzer · Routing · LFO · Hands ·
 Presets · System — and every page that is a registry group carries its
 preset strip: `◀ name ▶`, save, save-as, reset, and a red dot once the
 group has moved off its preset. The Presets page holds the project row
-(save / save-as / load / new) and the F1–F8 theme bank; the Routing page
-is the binding table with its own strip of routing presets; the LFO page
+(save / save-as / load / new, the startup preset), the F1–F8 preset bank
+and the preset strip; the Routing page is one page over the loaded
+preset — its routes, desk rows and macros, the session's MIDI rows
+read-only; the LFO page
 the clock and the four LFOs; the Hands page the tracker, the box and the
 axis setups. A param a performer is driving shows its *setting* as the
 handle and the *effective* value as a white ghost bar, and names the

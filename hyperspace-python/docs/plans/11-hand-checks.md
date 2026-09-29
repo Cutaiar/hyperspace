@@ -3,12 +3,15 @@
 Everything only the owner can verify, in the order that costs the least
 time at the machine: laptop alone first, then the APC40, then the camera
 and the box (APC40 still plugged in for check 24), then the projector,
-then IAC + FL Studio, then one back on the laptop, then plans 12 and 13's two. Each check: the commands, the config, the preset,
+then IAC + FL Studio, then one back on the laptop, then plans 12 and 13's two, then plan 13's group H (plan 13 is built on `plan-13-integration`). Each check: the commands, the config, the preset,
 what to do, what a pass and a fail look like, and which audit item or
 code path a fail points at. Where a check can be simulated headless, the
 pytest node or `tools/` command that shows the expected behaviour is
 listed first — run it before touching hardware so you know what "right"
-looks like. Written against `plan-11-integration` (778 tests).
+looks like. Written against `plan-11-integration` (778 tests); revised
+for plan 13 on `plan-13-integration` (872 tests): F1–F8 load the open
+project's bank of **presets**, the ROUTING page is one page over the
+loaded preset, and `bindings.json` holds only the session's controls.
 
 **Before you start.** `git pull`, `uv sync`, `uv run pytest -q`. Your
 `~/Hyperspace/config.toml` today has `[midi] enabled = true`, `[output]`
@@ -26,9 +29,10 @@ three frames, clean exit, nothing on stderr but the adapters' one-line
 notes. *Fail:* a traceback, or the process not exiting → `app.frame` /
 `app.Host` (WP14, PR #48); a stderr note from an adapter that should be
 silent → that adapter's `_open_*` gate.
-Then `uv run hyperspace` once more: R resets the camera, F1 loads theme 1,
-⇧F1 saves it, ⌘R restarts without resetting the camera first, and all
-seventeen rows are listed on the ROUTING page (WP7; headless:
+Then `uv run hyperspace` once more: R resets the camera, F1 loads preset 1 (BIG BLUE WAVE),
+⇧F1 saves the live state as it (a user file shadowing the factory one), ⌘R restarts without resetting the camera first, and the
+cheat sheet (`/`) names all seventeen rows — R, F1–F8, ⇧F1–F8 (WP7; the
+rows are the session's, in `bindings.json`; headless:
 `tests/test_routing.py::test_r_and_the_f_keys_are_table_rows_that_fire_their_params`).
 A fail → `routing.LOOP_KEY_ROWS` / the ⌘R edge claim in `app.frame`.
 
@@ -48,7 +52,8 @@ page: the input combo lists the MacBook microphone (and BlackHole if
 installed, pre-selected and labelled `System ·`). Press `M`. *Pass:*
 macOS asks for microphone access once; the INPUT meters (white) move on a
 clap and settle; the six OUTPUT meters (red) follow; the shape's rotation
-changes with the clap on the `default` routing. Plug in or enable a
+changes with the clap on the default project's startup preset (BIG
+BLUE WAVE: a lane pushes each rotation rate). Plug in or enable a
 device and press **rescan** beside the combo: it appears, the selection
 by name survives. *Fail:* no prompt and flat meters → `AudioEngine.start_mic`
 / the callback (`audio.py`); meters at the ceiling with the blinking
@@ -93,7 +98,7 @@ path.
 
 **7. The LFO page, B and ⇧B (plan 09 check 5, keys only).**
 Headless: `uv run pytest -q tests/test_tempo.py::test_three_taps_at_140_read_140 tests/test_lfo.py::test_a_tap_does_not_move_a_running_synced_lfo_but_the_trigger_does tests/test_lfo.py::test_a_trigger_after_this_frames_step_lands_phase_zero_on_the_next_step`.
-ROUTING page: load `lfo-breathe`. LFO page. Play a track (`K`, a file
+PRESETS page: load the preset `lfo-breathe` from the preset strip. LFO page. Play a track (`K`, a file
 from the AUDIO page) or use a metronome app at 140. Tap `B` four times on
 the beat, press `⇧B` on the "one". *Pass:* `tempo.bpm` reads 140 ± 1;
 the beat light blinks on the beat; LFO 1's scope shows a one-bar sine
@@ -142,17 +147,22 @@ the note on SYSTEM (`_open_dream`).
 First `uv run python tools/midi_probe.py` (echoes every message; lights
 the desk), Ctrl-C. Then the app, ANALYZER page. *Pass:* on launch the
 desk enters mode 0x42 (the LEDs light in the layout, rings show); the
-eight device knobs move the open band strip; the track knobs move the
-view faders; a channel fader moves that band's post drive; after
-switching band with the track-select buttons a device knob does nothing
-until it sweeps through the current value (pickup), then catches. *Fail:*
+track knobs move the view faders; the device knobs are dark and do
+nothing until SHIFT is latched (plan 13 WP3: the band strip is the global
+layer's), then move the open band strip; a channel fader moves that
+band's post drive on either layer; after switching band with the
+track-select buttons a device knob's ring redraws and the knob continues
+from it (the ring re-bases the encoder — group H, check 31, is that
+check). A fader moved behind your back still waits for a pickup. *Fail:*
 no LEDs → `apc40.mode_on` / the port name (`[midi] port`); a knob that
-moves the wrong param → `apc40.DEFAULT_MAP`; a knob jumping instead of
-catching → `MidiIO._apply` pickup (midi.py).
+moves the wrong param → `apc40.DEFAULT_MAP` (and its `layer`); a knob
+jumping back to its old place after a switch → check 31;
+a fader jumping instead of catching → `MidiIO._apply` pickup (midi.py).
 
 **11. Rings show the base, LEDs show the state (R6, decided (a)).**
 Headless: `uv run pytest -q tests/test_midi.py::test_ring_shows_the_base_and_never_chases_a_performer tests/test_midi.py::test_select_buttons_and_led_state`.
-ROUTING page: `default` (a lane pushes each rotation rate). Play a track.
+F1 on the default project (BIG BLUE WAVE: a lane pushes each rotation
+rate). Play a track.
 *Pass:* the track-knob rings for view faders sit at the *setting* and do
 not flicker with the audio; the scene-launch LEDs for points / lines /
 faces / rotate reflect the toggles; pressing one flips the LED at once.
@@ -165,13 +175,14 @@ a ring chasing the audio → `MidiIO.feedback` reading the effective value.
 As check 7 but on the desk: TAP TEMPO ×4 on the beat, METRONOME on the
 one. *Pass:* as check 7; the METRONOME LED blinks on the beat; NUDGE +
 and − move `tempo.nudge` by 0.01 and the swell with it; QUANT cycles the
-theme (`theme.next`), the clip grid's top row picks a theme, row 2–3 a
-scene, row 4–5 a shape, STOP ALL resets the scene with the 8 s undo.
+preset bank (`preset.next`), the clip grid's top row picks a preset, row 2–3 a
+scene (with SHIFT latched — the band scenes are the global layer's, group
+H), row 4–5 a shape, STOP ALL resets the scene with the 8 s undo.
 *Fail:* METRONOME LED steady → `lfo.trigger`'s `lit` (tempo.py
 `on_beat`); a button doing what it did before plan 09 → your
 `bindings.json` kept an old row (`remap_factory` only moves rows where
-nothing uses the source): check the ROUTING page and delete the stale
-row.
+nothing uses the source): the ROUTING page's session section lists it
+(read-only); delete the stale row from `bindings.json` by hand.
 
 ## C. Camera and box (APC40 still plugged in) — about 45 minutes
 
@@ -202,7 +213,7 @@ those again; ranges that make a resting hand read off-centre → the 2nd /
 
 **16. The default feel, saved as the factory setup (plan 08).**
 Headless reference: `uv run pytest -q tests/test_hands.py::test_follower_catches_a_returning_hand_instead_of_jumping`.
-ROUTING: load `hands-play`. Raise and lower the right hand; watch
+PRESETS: load the preset `hands-play`. Raise and lower the right hand; watch
 brightness. Tune on the HANDS page: Steadiness 1 Hz, Response 4, Catch
 150 ms, return 500 ms, bounce 0.15, dead zone 0.04 on the centred axes
 are the defaults. *Pass:* a still hand does not shimmer, a fast one does
@@ -212,7 +223,7 @@ and say so in the plan's As built so it can be copied into the repo.
 *Fail:* shimmer at rest → `smooth` too high; lag → `response` too low.
 
 **17. Yaw and pitch held independently of x and y (plan 08).**
-ROUTING: `hands-fx`. Hold the right hand still and tilt (pitch), then
+PRESETS: the preset `hands-fx`. Hold the right hand still and tilt (pitch), then
 turn it (yaw). *Pass:* `fx.acid.twist` (tilt) and `fx.acid.bend` (yaw)
 move while `fx.mix` (height) stays within a few percent. *Fail:* height
 moving with a tilt → widen `hands.right.y.deadzone` or file it as a
@@ -228,12 +239,14 @@ question) with the gap you read.
 
 **19. Plan 09 check 3 — Learn on a performed param prompts.**
 Headless: `uv run pytest -q tests/test_ui_routing.py::test_the_replace_prompt_swaps_the_owner_or_leaves_the_table tests/test_hands.py::test_a_learn_on_a_performed_param_is_held_for_the_prompt tests/test_hands.py::test_a_hand_learn_needs_no_midi_adapter`.
-ROUTING: `hands-play` (R height positions `view.bright`). VIEW page:
+PRESETS: the preset `hands-play` (R height positions `view.bright`). VIEW page:
 right-click the brightness fader → **Learn**; move the *left* hand up
 and down. *Pass:* the prompt "Brightness is already performed by R
 height positions — Replace / Keep" appears on whatever page you are on;
 *Keep* leaves the table (ROUTING page unchanged); repeat and *Replace*:
-the row now reads L height and `~/Hyperspace/bindings.json` changed.
+the row now reads L height and the preset's dirty dot lights —
+`~/Hyperspace/bindings.json` is not written (plan 13 WP4: a learn goes
+into the loaded preset; ⇧F or the strip's save keeps it).
 While the prompt is up, moving hands learns nothing more. Optional: set
 `[midi] enabled = false`, relaunch, repeat — Learn still works (B3, PR
 #50); put it back. *Fail:* the learn lands with no prompt → `Learn.learn_source`
@@ -242,7 +255,7 @@ axis that moved furthest among *live* axes (WP1).
 
 **20. Plan 09 check 4 — `hands-pinch` zoom under pinch + scroll.**
 Headless: `uv run pytest -q tests/test_routing.py::test_audit_1_a_relative_writer_on_the_base_holds_under_modulation`.
-ROUTING: `hands-pinch`. Pinch L middle, move the left hand: zoom follows.
+PRESETS: the preset `hands-pinch`. Pinch L middle, move the left hand: zoom follows.
 Keep pinching and scroll the mouse wheel in the render window a few
 notches. *Pass:* zoom does not run away while scrolling under the hand;
 open the pinch: zoom lands on the scroll-set value (the base), not where
@@ -251,18 +264,18 @@ the effective value (`Param.scale` must read the base); a jump to the
 hand's last value on release → the gate / `Registry.apply` return.
 
 **21. Plan 09 check 6 — the right hand deepens `lfo-breathe`'s swell.**
-ROUTING: `lfo-breathe`; LFO page in view. Raise the right hand. *Pass:*
+PRESETS: the preset `lfo-breathe`; LFO page in view. Raise the right hand. *Pass:*
 LFO 1's depth fader's ghost bar rises with the hand, the brightness swell
 deepens one frame later, nothing else moves (speed, zoom, fx untouched);
-lower the hand: depth returns to its base (0.6 from the preset's values)
-— note R1 pending: the preset also sets `lfo.1.sync` to 1 bar, which
-dirties the LFO group's dot on purpose (recommendation: keep). *Fail:*
-something else moving → a stale row in your `bindings.json`; depth not
+lower the hand: depth returns to its base (0.6 from the preset's values;
+the preset sets `lfo.1.sync` to 1 bar too — R1, dissolved by plan 13: a
+preset carries every performance value). *Fail:* something else moving
+→ a route in the loaded preset (ROUTING page); depth not
 returning when the hand leaves → B1 (`Follower.live`, PR #40).
 
 **22. Plan 09 check 7 — a knob on a hand-owned param (B1 fixed).**
 Headless: `uv run pytest -q tests/test_routing.py::test_audit_3_a_knob_moves_the_return_value_under_a_hand tests/test_hands.py::test_a_hand_leaving_the_box_releases_its_position_row`.
-ROUTING: `hands-play`. Right hand in the box: it owns brightness. Turn
+PRESETS: the preset `hands-play`. Right hand in the box: it owns brightness. Turn
 the APC40's brightness knob (track knob, VIEW fader `view.bright`).
 *Pass:* the fader's *setting* moves (the readout's base; the ring
 follows the knob), the picture does not; take the hand out of the box
@@ -274,7 +287,7 @@ not exist since plan 09).
 
 **23. A gated row on a second pinch at a different height (plan 08).**
 Headless: `uv run pytest -q tests/test_hands.py::test_pinch_gate_needs_the_wider_gap_to_let_go`.
-`hands-pinch`: pinch R index low (brightness dark), open, raise the hand,
+Preset `hands-pinch`: pinch R index low (brightness dark), open, raise the hand,
 pinch again. *Pass:* brightness takes the hand's new height at once —
 hands grab, they never yield (decision 4) — and the base returns on open.
 This is a feel check, not a design question; note whether the jump wants
@@ -282,7 +295,7 @@ the catch glide (150 ms) applied on gate open too.
 
 **24. A hand leaving the box, and `hold` (B1, N6).**
 Headless: `uv run pytest -q tests/test_hands.py::test_hold_shapes_the_daw_output_but_never_latches_a_row tests/test_hands.py::test_a_returning_hand_glides_its_row_back_on_through_the_catch`.
-`hands-play`, HANDS page open. Take the right hand out. *Pass:* its axis
+Preset `hands-play`, HANDS page open. Take the right hand out. *Pass:* its axis
 rows dim and say "DAW only; lane —"; brightness is back at its base the
 same frame. Set `hands.right.y.rest` to *hold*: the DAW value holds, the
 picture still returns. Re-enter: the row glides onto the hand (the
@@ -337,24 +350,29 @@ the presence note re-sent (N4, PR #49). *Fail:* no rejoin → `HandsIO._open`.
 ## F. Back on the laptop — 3 minutes
 
 **30. R12: a `.bak` before every migration rewrite.**
-Headless: `uv run pytest -q "tests/test_routing.py::test_a_backup_is_kept_before_every_rewrite_and_never_over_a_hand_made_one"`.
+Headless: `uv run pytest -q "tests/test_routing.py::test_a_backup_is_kept_before_every_rewrite_and_never_over_a_hand_made_one" tests/test_migration.py::test_a_home_with_no_project_keeps_its_routes_in_a_migrated_preset`.
 Then, in a scratch home: `mkdir -p /tmp/h && cp ~/Hyperspace/bindings.json.bak-plan09 /tmp/h/bindings.json`
 (a schema-1 file) and `HYPERSPACE_HOME=/tmp/h HYPERSPACE_FRAMES=3 uv run hyperspace`.
-*Pass:* stderr names the migration; `/tmp/h/` holds `bindings.json`
-(schema 2) beside `bindings.json.bak-v1` (the file as it was) — and, if
-the remap also fired, `.bak-v2`; run it again: no new backup, nothing
-rewritten. Your real home's hand-made `.bak-plan09` and
+*Pass* (since plan 13 WP5 the file holds a preset's part — its hand and
+lane rows — so the first launch's migration does the rewrite): stderr
+names the sort, the remaps, `backup: bindings.json kept as
+bindings.json.bak-v1` and three `migrate:` lines; `/tmp/h/` holds
+`bindings.json` (`hyperspace.bindings/3`, the session's controls only)
+beside `bindings.json.bak-v1` (the file as it was), `presets/migrated.json`
+(its routes, knobs and macros as the preset `MIGRATED`) and
+`projects/default.hyp.json` starting on it; run it again: no new backup,
+nothing rewritten. Your real home's hand-made `.bak-plan09` and
 `.bak-2026-09-26` are never touched. *Fail:* no `.bak-v1` → `routing.backup`
-(`Bindings.load`, PR #53); an existing `.bak-*` overwritten → the dated
+(`preset.migrate_home`, PR #66); an existing `.bak-*` overwritten → the dated
 copy path in `backup`.
 
 ## G. Plans 12 and 13 — added 2026-09-28, after the rest
 
 **31. The APC40's knobs re-base from the host (plan 13 D7; the one hardware assumption the two-layer desk rests on).**
 No headless twin: it is the device's behaviour. Desk plugged in, the app
-on the `default` routing. Turn track knob 1 (brightness) to about a
-quarter; press F2 (a house theme with a different brightness). *Pass:*
-the knob's ring jumps to the theme's brightness at once, and the next
+on the default project (F1, BIG BLUE WAVE, brightness 1.25×). Turn track knob 1 (brightness) to about a
+quarter; press F2 (EMBER ORBIT, brightness 1.5×). *Pass:*
+the knob's ring jumps to the preset's brightness at once, and the next
 turn of the knob continues from *there* — no jump back toward the
 quarter, no pickup. *Fail:* the first turn after F2 snaps brightness to
 where the knob physically was → the encoder keeps its own value and
@@ -367,7 +385,7 @@ Headless first: `uv run pytest -q tests/test_plan12_presets.py` and
 `uv run python tools/preset_shots.py`, then look at
 `docs/plans/assets/12-presets/party-*-sheet.png` so you know the pose
 each tile expects. Projector and box on; PRESETS page → project → load ▾
-→ `party`; then per preset the F-key and the ROUTING strip's `party-*`
+→ `party`; then per preset its F-key alone — F1 TUMBLE … F5 TRIP (plan 13 WP2)
 (the cards under `docs/plans/assets/12-presets/` say which). *Pass*, one
 line each — **(a)** faces at 2.5× (FACES) and 2.0× (TUMBLE, WAKE) read
 on the projector in the room, and the left hand's headroom to 4× is
@@ -381,9 +399,9 @@ the right roll turns the dream's hue round the wheel and fingers up
 brings the dream in, over sixteen echoes; **(f)** TRIP after TAP TEMPO ×8
 and METRONOME once: the left hand's height opens a pump on the beat and
 the burst at the right hand's top is light, not glare. *Fail* points:
-(a) the theme's `view.bright` in `library/projects/party.hyp.json`; (b)
-`routing.TURN` (0.25 → try 0.35) and the axes' `return` on the HANDS
-page; (c) the row's depth sign in `routing.party_*_routes` — a flipped
+(a) the preset's `view.bright` in `library/presets/party-*.json`; (b)
+`preset.TURN` (0.25 → try 0.35) and the axes' `return` on the HANDS
+page; (c) the row's depth sign in `preset.party_*_routes` — a flipped
 axis is one sign; (d) `view.instances`' push depth (0.6) and
 `view.inst_amp`'s (0.5) in `party_field_routes`; (e) `[dream] enabled`
 and the worker line on the LOOKBACK page — without the worker those two
@@ -393,6 +411,176 @@ Anything that fails here is a number in a preset file, not code, unless
 (c) reveals the box's mounting flips an axis for every preset — then
 `hands.<axis>.invert` on the HANDS page, saved as the hands setup, is the
 fix and the cards stand.
+
+## H. Plan 13 — one preset, a two-layer desk — added 2026-09-28
+
+Run after plan 13 is merged, APC40 plugged in, in this order (33 is the
+first launch on the new code, so it goes first; 41 needs the projector
+and the box, 42 the box and a `config.toml` edit). About 40 minutes. The
+headless tests named are the ones plan
+13's work packages add (plan 13 §10); run them first.
+
+**33. The first launch migrates your home folder, and loses nothing (plan 13 §6, WP5).**
+Headless: `uv run pytest -q tests/test_migration.py`. Before launching,
+`cp -R ~/Hyperspace ~/Hyperspace-before-13`. Then `uv run hyperspace` and
+read stderr. *Pass:* one `migrate:` line per rewritten file naming its
+backup — `projects/<name>.hyp.json.bak-v1` for each schema-1 project,
+`bindings.json.bak-v2` (or `bindings.json.bak-v2-<date>` when that name
+was already taken) — and one per preset written;
+`~/Hyperspace/presets/` holds one preset per filled slot of each project
+(named by the slot; a slot equal to a factory preset is pointed at, not
+copied, and a name a preset of yours already has gets `<name> 2`) and
+one per user routing preset (named by its `name`, its effects switched
+on); each project is `hyperspace.project/2` naming them, an empty slot
+pointing at the house preset its F-key used to load; the look a project
+restored on open is its `startup` — the slot whose values it equals, or
+else a preset `<PROJECT> SAVED` (`DEFAULT SAVED` for your default
+project) in its first empty slot — so the first launch opens on the
+same picture as the last one; `bindings.json` keeps your keys, pad and MIDI rows and
+nothing else — no route, no preset-layer knob, no `macros`, no `values`
+— the band strip's eight device knobs now `"layer": "global"`; your
+learned hand rows and knobs are in the startup preset (ROUTING page:
+the routes, the DESK section); `~/Hyperspace/bindings/` is as it was,
+with a `NOT-READ.txt` in it; every `.bak-*` you made by hand is
+untouched (`ls -la ~/Hyperspace` against the copy). A home with no
+project of its own gets a `MIGRATED` preset holding bindings.json's
+routes, desk and macros, the startup of a new `default` project. Launch
+again: stderr says nothing and no file's time moves. *Fail:* a slot
+missing → the project migration (`preset.migrate_project`); a learned
+row gone → `routing.Bindings.carried` and `preset.migrate_home`; a
+backup overwritten → `routing.backup`. Keep `~/Hyperspace-before-13`
+until H is done.
+
+**34. SHIFT latches and lights (plan 13 D4, D12; WP3).**
+Headless: `uv run pytest -q tests/test_desk.py::test_shift_latches_the_layer_and_lights_its_led tests/test_desk.py::test_shift_release_never_reevaluates_a_held_button`.
+Press SHIFT once and let go. *Pass:* the SHIFT LED lights and stays lit;
+the device knobs now move the open band strip (ANALYZER page); track knobs
+1–5 move the hands' steadiness, response, catch, the selected axis's
+return (HANDS page) and the BPM; track knobs 6–8 are dark and do nothing.
+Press SHIFT again: LED off, the preset's meanings back. Then hold a shape
+button (clip row 4), press and release SHIFT while holding it, let go of
+the button: one shape change, nothing else. *Fail:* the LED dark while
+latched, or lit only while held → the latch in `MidiIO._handle`; a knob
+keeping its preset meaning under SHIFT → the row's `layer`
+(`apc40.DEFAULT_MAP`, your `bindings.json`); a second action on release →
+D12, the modifier read at the press.
+
+**35. On a layer switch the knobs jump and the faders pick up (plan 13 D7; WP3).**
+Headless: `uv run pytest -q tests/test_desk.py::test_a_layer_switch_rebases_the_knobs_and_leaves_the_faders_to_pick_up tests/test_desk.py::test_a_preset_load_clears_the_faders_catch`.
+Run check 31 first; if it failed, stop and note it on plan 13 §12 — D7
+then needs pickup on the knobs too. Turn track knob 1 (brightness) to a
+quarter; SHIFT (knob 1 is now steadiness); turn it a little; SHIFT back.
+*Pass:* each switch moves the ring at once to that layer's value, and the
+next turn continues from the ring, no jump. Then on the ANALYZER page drag
+SUB's drive to the top with the mouse and move track fader 1 from the
+bottom: nothing until it passes the new value, then it follows. *Fail:* a
+knob snapping back to where it physically was → the encoder ignores the
+host's CC (check 31's fail); a fader jumping → pickup in `MidiIO._apply`.
+
+**36. An unmapped control is dark and does nothing (plan 13 D8; WP3).**
+Headless: `uv run pytest -q tests/test_desk.py::test_an_unmapped_control_is_dark_and_does_nothing`.
+F1 (TUMBLE, whose desk leaves the device knobs free). *Pass:* the eight
+device-knob rings are off; turning one changes nothing on the panel; the
+ROUTING page's DESK · PRESET LAYER section lists them, dimmed, under the
+desk rows as "device knob 1 … unmapped — dark" (through "device knob 8");
+with SHIFT latched they light and move the band strip, and the ROUTING
+head reads LAYER GLOBAL. *Fail:* a lit ring on an unmapped knob → the dark
+rule in `MidiIO.redraw`; a device knob moving the band strip without SHIFT
+→ a fall-through to the global layer, which D8 forbids (`MidiIO._handle`);
+a knob that does nothing but is not listed → `ui_routing.unmapped`.
+
+**37. Learn refuses the global layer and the invariant controls (plan 13 D5, D6; WP4).**
+Headless: `uv run pytest -q tests/test_learn.py::test_learn_refuses_the_global_layer_and_invariant_controls tests/test_learn.py::test_a_knob_learn_writes_a_desk_row_into_the_loaded_preset tests/test_learn.py::test_a_hand_learn_writes_a_route_into_the_loaded_preset`.
+Note `bindings.json`'s time (`ls -l ~/Hyperspace/bindings.json`). Open
+the ROUTING page. Right-click Brightness → Learn, move track fader 1.
+*Pass:* refused — the ROUTING head (and the SYSTEM page's learn line)
+reads, in the warning colour, "learn: track fader 1 is invariant (the
+session's) — not learned"; nothing changes, the fader still drives SUB's
+drive. Latch SHIFT, Learn again, turn track knob 6: "learn: track knob 6
+is on the global layer (the session's) — latch SHIFT off to learn into
+the preset". Unlatch SHIFT, Learn again, turn device knob 3: "learn:
+learned view.bright ← device knob 3 (into the preset)" — the knob now
+moves brightness, the DESK section shows "device knob 3 → view.bright
+abs" and track knob 1 (brightness's old knob) as "unmapped — dark", the
+head's dot (and the PRESETS strip's) is lit, and `bindings.json`'s time
+has not moved. Load the preset again (F1) to throw the learn away: the
+dot goes out, track knob 1 is brightness again. *Fail:* a learn on a
+fader or under SHIFT → the refusals in `MidiIO._learned`; `bindings.json`
+rewritten → a learn still writing the session file; no dot → the desk in
+`Presets.signature`.
+
+**38. A preset load lands every base and replaces every route (plan 13 D2, D9; WP2).**
+Headless: `uv run pytest -q tests/test_presets.py::test_a_preset_load_lands_every_base_and_replaces_every_route tests/test_presets.py::test_a_preset_load_never_touches_a_session_param`.
+Project `party`. F5 (TRIP): the effect stack is on. Tap B (or TAP TEMPO)
+×8 at about 100 BPM. F1 (TUMBLE). *Pass:* every effect is off (FX page),
+the look-back is back to its default, the ROUTING page shows TUMBLE's rows
+and no `fx.*` row, the BPM still reads about 100, the band scene has not
+changed. *Fail:* an effect still on → a group `Presets.load_doc` did not
+land; the BPM reset → `tempo` classed as performance
+(`params.SESSION_GROUPS`); an `fx.*` row left → the route replacement.
+
+**39. One macro, two directions (plan 13 D10, §2.4; WP3, WP5).**
+Headless: `uv run pytest -q tests/test_macros.py::test_base_subscribers_of_opposite_polarity_move_opposite_ways`.
+Headless too: `uv run pytest -q tests/test_presets.py::test_lfo_breathes_macro_moves_brightness_up_and_speed_down`.
+PRESETS page → the preset strip → `lfo-breathe`; it loads with the knob
+at the bottom (brightness 1×, speed 0.25×). Turn device knob 1 (macro 1,
+"Breathe", its ring from the preset's desk) from bottom to top. *Pass:*
+the picture brightens from 1× to 2× while the spin slows from 0.25× to a
+crawl (about 0.06×), together, and the LFO's breathing of the effect mix
+deepens from nothing; bottom to top and back is smooth, no step; the ROUTING page's
+MACROS section shows knob 1 labelled "Breathe" with three subscriber
+lines — two `base` lines (a param, `from`, `to`; the one whose `from` is
+above its `to` runs the other way) and one `depth` line naming the LFO's
+route. *Fail:* both moving the same way → a
+subscriber's `from → to` (`preset.BREATHE_BRIGHT` / `BREATHE_SPEED`;
+the file is generated: `python -m hyperspace.preset`); nothing moving →
+the macro's base-follow step (`routing.py`) or the desk row
+(`preset.lfo_breathe_desk`, `cc:*:16 → macro.1`).
+
+**40. The startup preset (plan 13 D11; WP2).**
+Headless: `uv run pytest -q tests/test_presets.py::test_the_startup_preset_loads_on_launch`.
+PRESETS page, project `party`, startup ▾ → TUMBLE; save the project. Quit
+(Esc) and relaunch. *Pass:* the show comes up as TUMBLE, its desk lit (the
+track-knob rings at TUMBLE's values), the status line says so. Put your
+own project's startup back afterwards. *Fail:* a dark desk or the factory
+look → `Project.startup` and the startup load in `app.main`.
+
+**41. The five party presets, re-cut (plan 12 §7, plan 13 WP5).**
+Headless: `uv run pytest -q tests/test_plan12_presets.py` (the F-keys,
+`test_the_five_party_presets_load_by_f_key_as_presets`; the knobs,
+`test_wake_and_trip_device_knobs_move_their_bases`) and
+`uv run python tools/preset_shots.py`. Projector and box on. As check 32,
+but each preset is one F-key — F1 TUMBLE, F2 FACES, F3 FIELD, F4 WAKE,
+F5 TRIP on the `party` project — one step, nothing else to load. *Pass:* check 32's (a)–(f) hold as
+before; WAKE's device knobs 1–8 set echo mix · decay · darken · contrast ·
+occlude · dream mix · dream sat · dream k, and TRIP's set fx mix · plasma
+level · kaleido segments · kaleido zoom · burst amount · burst glow · hue
+paint · hue spread (plan 12 §6) — device knobs 1–8 are `cc:*:16`–`23`, absolute —
+each ring showing its value; on TUMBLE, FACES and FIELD the device
+knobs are dark (SHIFT brings the band strip). TUMBLE's left height
+still pushes the drive (row 19 (a)), its ROUTING row marked "session".
+*Fail:* a look → the values in `library/presets/party-*.json` (data)
+or a route in `preset.party_*_routes` (generated: change the generator,
+`python -m hyperspace.preset`, not the file); a knob on the wrong base
+→ `preset.WAKE_KNOBS` / `TRIP_KNOBS`; anything check 32 lists → the same
+place it lists.
+
+**42. Hand routes by name survive a reordered `dofs` (plan 13 WP5b,
+decision register row 20).** Headless: `uv run pytest -q
+tests/test_hand_names.py`. Camera and box on. In `config.toml` set
+`[hands] dofs = ["yaw", "pitch", "roll", "y", "x", "z"]` (the default
+list reversed) and relaunch. Load `hands-play`: the right height still
+positions brightness, the left height speed, the right tilt 4D depth; the
+ROUTING page's rows read "R y positions", "L y positions", "R pitch
+positions" and their source combos show `hand R y` / `hand L y` /
+`hand R pitch`. Load `hands-pinch`: a right index pinch still picks
+brightness. Now set `dofs = ["x", "y", "z"]` and relaunch: `hands-play`'s
+right tilt row does nothing (no `right.pitch` on this rig) while both
+heights still work. Put `dofs` back afterwards. *Pass:* every row stays on
+the axis its words name; the missing axis's row is dormant, never on
+another axis. *Fail:* a row moving with the wrong axis → `Router.lane` /
+`HandsIO._publish` (`router.names["hand"]`); the combos showing raw
+`hand:<i>` → `ui_routing._sources` / `Router.address`.
 
 ## What this list does not ground
 

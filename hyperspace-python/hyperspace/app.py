@@ -17,7 +17,7 @@ fullscreen, overlay) through the output.* params.
   drag  orbit       ⇧drag / right-drag  pan   scroll  zoom about cursor
   L  lines          F  faces          ?  cheat sheet
   T  overlay: float the render over the screen    G  clicks through it
-  F1–F8  load theme (whole-surface save state)    ⇧F1–F8  save theme
+  F1–F8  load a preset of the bank               ⇧F1–F8  save the live state as it
   B  tap tempo      ⇧B  LFO trigger: the downbeat is now, synced LFOs restart
 
 Every input path — keys, the Xbox-layout gamepad, a MIDI controller, the
@@ -76,6 +76,7 @@ from .learn import Learn
 from .library import Library
 from .overlay import GlfwBackend, Output
 from .params import Registry, build_registry
+from .preset import Presets, migrate_home
 from .render import Renderer
 from .routing import Bindings, Router, bindings_path
 from .ui import Panel, apply_style, load_fonts
@@ -425,7 +426,8 @@ class Host:
 
 def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     """One frame, in the order ARCHITECTURE §2 states: the scene-setters
-    (keys, loop keys, pad, MIDI) write bases; the sources feed the table
+    (keys, loop keys, pad, MIDI, the macros' base subscribers) write
+    bases; the sources feed the table
     (hands, output, mouse, audio, bridge, LFOs); the pass lands offsets
     (`router.modulate`, `reg.apply`, `integrate`); then the two windows
     draw. Returns False when a guarded block raised — the error is on
@@ -486,6 +488,14 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
             h.midi_io.poll()
         except Exception as e:  # noqa: BLE001 — hot-reloaded code may raise
             ok, reloader.runtime_error = False, _err("midi", e)
+
+    # ---- the macros' base subscribers: the last scene-setter — a macro
+    # whose base moved (a knob just now, the panel last frame, a restore)
+    # sets its subscribers' bases before any source feeds (plan 13 §2.4) ----
+    try:
+        router.follow_macros()
+    except Exception as e:  # noqa: BLE001
+        ok, reloader.runtime_error = False, _err("macros", e)
 
     # ---- Ultraleap hands: hand lanes into the table, MIDI out to a DAW ----
     if h.hands_io is not None:
@@ -589,7 +599,7 @@ def main() -> None:
     audio = AudioEngine()
     audio.rescan()                         # the one PortAudio scan, here at startup — never mid-set on a first read
     control = Control(audio.chain)
-    library = Library()                    # presets, projects, the theme bank (its project's)
+    library = Library()                    # presets, projects, the preset bank (its project's)
     # dream.* drives the renderer's look-back (lookback.py); the post pass
     # runs inside renderer.draw
     want = {"restart": False}          # app.restart sets it; polled after the panel draws
@@ -624,16 +634,17 @@ def main() -> None:
         bindings_path(library.home), mc.get("profile", "apc40"),
         Path(mc.get("map", "midi_map.json")),
     ))
-    # the macros are the routing layer's, saved with the table and not in
-    # any theme; the Router landed them — what the file named and the
-    # registry hasn't goes where every other missing id goes
-    if router.missing_values:
-        library.report(router.missing_values, "bindings.json values")
-    library.routing(router)                # the routing presets: the library's files, the router's documents
+    # the presets (preset.py): the library's `presets/` files, landed on the
+    # registry and the table; the project's bank loads through it
+    presets = Presets(library, reg, router)
+    # plan 13 §6, once: an older home's projects, routing presets and the
+    # preset part of bindings.json become presets (backups beside every
+    # rewritten file); a home already migrated finds nothing to do
+    migrate_home(library, router, cfg.get("hands"))   # hand lanes named by the rig's layout
     # one Learn over the live table, whatever the MIDI gate says: a knob
     # or a hand completes it, the panel's prompt settles what the referee
     # refused (learn.py; the band.sel.* rule is the registry's `real`)
-    learn = Learn(reg, router.table)
+    learn = Learn(reg, router.table, lane=router.lane)   # hand:7 and hand:right.y: one axis
     panel.learn = learn
     midi_io = _open_midi(reg, cfg, router.table, learn)
     panel.midi = midi_io
@@ -647,6 +658,9 @@ def main() -> None:
         renderer.lookback.source = dream_io
     panel.bridge = bridge_io               # the SYSTEM page's bridge line
     pad = _open_pad(cfg)
+    # the project's startup preset (D11), once, now that everything it lands
+    # on exists; a missing one is said on the panel and the app runs on
+    library.project.load_startup()
     # panel state and chain must stay one object even after source changes
     # the live objects that get re-classed on a hot reload; re-evaluated
     # each swap so recreated ones (the chain after a source attach) count
@@ -672,6 +686,7 @@ def main() -> None:
         (library, "library", "Library"),
         (library.project, "library", "Project"),
         (router, "routing", "Router"),
+        (presets, "preset", "Presets"),
         (learn, "learn", "Learn"),
         (clock, "tempo", "Clock"),
         (lfos, "lfo", "LFOs"),

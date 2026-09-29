@@ -136,8 +136,10 @@ class Clock:
 
 
 def register(reg, clock: Clock) -> None:
-    """The clock's params in the ``tempo`` group: bpm and nudge persist (a
-    preset carries a tempo), tap is the key's and the APC's button."""
+    """The clock's params in the ``tempo`` group: bpm and nudge persist as
+    **session** state (a project's session part — a preset never carries
+    or moves a tempo, plan 13 §4), tap is the key's and the APC's
+    button."""
     if f"{GROUP}.bpm" in reg:
         return
     reg.continuous(f"{GROUP}.bpm", "BPM", lambda: clock.bpm,

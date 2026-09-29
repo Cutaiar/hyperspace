@@ -13,9 +13,10 @@ plan 10's docstring commit 488c445): every sentence
 below was read against its module. Where plan 09 changed behaviour the
 paragraph says so. The HTML-era sections (browser sandbox, deploy) are
 gone; `hyperspace-web/hyperspace.html` is frozen and matters here only as
-the oracle the golden traces were recorded from.
+the oracle the golden traces were recorded from. Revised for plan 13
+(presets, the session, the two-layer desk) on `plan-13-integration`.
 
-**Run it:** `uv sync`, `uv run pytest` (778 tests, ~20 s), `uv run
+**Run it:** `uv sync`, `uv run pytest` (886 tests, ~35 s), `uv run
 hyperspace`. `?` in the app shows the controls cheat sheet.
 
 ---
@@ -305,11 +306,12 @@ FFT bins → weighted power mean under the band's curve → dB → u (0..2.5; 1.
 `PLANEDRIVE` and no band → plane table in the chain: a lane reaches a
 rotation plane, a pattern input or anything else as a **route**
 (ARCHITECTURE §3). The reference's `dir · out · 3.2 · gain` is the `legacy6`
-routing preset — `lane:i → rot.rate.<plane>` pushes with depth
-`dir · ROT_DEPTH` scaled by `master.gain` on rate bases of 0 — which the
-parity test drives (`tests/test_routing.py:103`). The factory `default`
-table has the same rows on bases of **1**, so the idle spin stays and audio
-rides on top. `bands.BANDS` still holds the reference table for those two
+preset (a routing preset until plan 13 WP5 made it a full one) —
+`lane:i → rot.rate.<plane>` pushes with depth `dir · ROT_DEPTH` scaled by
+`master.gain` on rate bases of 0 — which the parity test drives through
+the code that generates it (`preset.generated`, `tests/test_routing.py`).
+The house presets carry the same rows on bases of **1**, so the idle spin
+stays and audio rides on top. `bands.BANDS` still holds the reference table for those two
 uses and the meter tooltip.
 
 **Bands.** Each band is a centre frequency, a Q and a weighting curve
@@ -498,7 +500,7 @@ unreadable at a party.
   weight through FreeType's face index and falls back off macOS.
 - **Shape.** Rounded frames (8 px), pill chips (`ui.chip`) in place of small
   buttons, a solid red pill for anything lit: the open page on the rail, a
-  spinning plane, the active theme slot. A checked box is a red square with
+  spinning plane, the active preset slot. A checked box is a red square with
   a white tick.
 - **Faders.** Every slider fills red from its origin (zero on a signed
   range) to its value, so position reads at a glance. A slider with its
@@ -508,14 +510,80 @@ unreadable at a party.
 - **Layout.** No page scrolls at `app.CONTROL_SIZE`
   (`test_every_page_fits_the_control_window` in `tests/test_ui_shell.py`
   measures every page with a hands setup, an `Output` and a routed table;
-  ROUTING's rows scroll in a child by design, and
-  `test_the_routing_rows_scroll_in_their_own_child` holds that). The
+  ROUTING's routes, desk, macros and session rows scroll in a child by
+  design, and `test_the_routing_rows_scroll_in_their_own_child` and
+  `test_the_routing_page_fits_over_a_loaded_preset_and_a_full_desk` hold
+  that). The
   HANDS page puts its switches beside the box and its feel knobs two to a
   row beside the transfer plot for that reason. Right-aligned groups are measured
   with `ui.chip_w` / `ui.button_w`, never hard-coded offsets. Every widget
   has its own imgui id (`tests/test_ui_lfo.py:86`). One grey (`ui.LINE`)
   for every rule and frame, one `ui.u32`, one `Panel.half` for a slider
   in a half-width cell.
+- **Presets and the bank** (plan 13 §2, §5). A **preset**
+  (`<home>/presets/<slug>.json`, `hyperspace.preset/2`, factory ones in
+  `hyperspace/library/presets/` shadowed by name) is the whole
+  performance: the performance groups' values (`view rot camera pattern
+  dream fx lfo macro`), the performer routes, the desk's preset layer,
+  the macros and the module labels. A load **replaces everything** (D2):
+  every performance param lands from the file or its group default,
+  every performer row, the preset layer and the macros are replaced, and
+  a session param (`tempo`, `hands`, the analyzer's `band` / `master` /
+  `scene` / `audio`, `output`, `overlay`, `ui`) is never touched — a
+  tapped BPM survives any preset. What a file names that it may not
+  (a session id, an unknown id, a non-performer route, a second
+  performer, a desk row on an invariant control) is noted on the panel
+  and ignored. A module label is recorded, never chain-loaded (D3). The
+  **project** (`hyperspace.project/2`) is the session's values, a
+  `startup` preset loaded on launch (D11), and a **bank** of eight preset
+  names: F1–F8 and the APC40's clip row 1 load slot k (an empty slot or
+  a dangling name loads nothing and says so), ⇧F1–F8 save the live state
+  as that slot's preset into the user folder (`PRESET <n>` for an empty
+  one), QUANT and pad B step to the next filled slot (`preset.next`). The
+  PRESETS page's preset strip lists, loads, saves and deletes them;
+  module presets keep their own strips and replace only their group.
+- **The desk** (plan 13 §3). The APC40 has two layers under a latched
+  SHIFT, whose LED is lit while the global layer is up. The faders, the
+  preset row, SHIFT, the clock corner, the transport and the track buttons
+  are **invariant**: one meaning on both layers. The **global** layer is
+  the session's (the band strip on the device knobs, hand feel and BPM on
+  track knobs 1–5, the band scenes on clip rows 2–3); the **preset** layer
+  is the loaded preset's (the factory default: the view faders on the
+  track knobs, the shape grid, the render toggles). A control the up layer
+  does not map is dark and does nothing. Knobs continue from their ring
+  after a switch; faders soft-pick-up (hand check 31 is the hardware
+  assumption). A macro is a knob with subscribers: each sets a param's
+  base or scales a route's depth over its own `from → to`; a hand on a
+  macro moves only the depths.
+- **Learn and the ROUTING page write into the loaded preset** (plan 13
+  §3.3). Right-click → Learn, then a knob: a preset-layer row; then a
+  hand: a route naming the axis that moved, `hand:right.pitch` (decision
+  register row 20: hand routes are addressed by name, so a rig that
+  reorders `[hands] dofs` keeps every preset on its axes; a name the rig
+  lacks is dormant; the Replace / Keep prompt as ever). With SHIFT latched,
+  or on an invariant control, a knob learn is refused and the reason shows
+  on the SYSTEM page's learn line and the ROUTING head. The ROUTING page is
+  one page over the loaded preset — head (the preset, its dot, save /
+  as…, the layer), routes, the desk with its dark controls, the macros
+  and their subscribers, the session's MIDI rows read-only. Nothing there
+  writes `bindings.json`; the preset's dirty dot shows the edit until a
+  save (the head, the PRESETS strip, ⇧F). Right-click → Unbind removes
+  the loaded preset's desk rows on the param, and refuses a session row
+  the way Learn does. A route's `scale` is a session param only (the
+  drive fader; decision register row 18 (a)); a route may perform a
+  session param, marked "session" on its row (row 19 (a)).
+- **The home folder** (`~/Hyperspace`). `bindings.json` holds only the
+  session's controls — keys, pad, the invariant and global-layer MIDI
+  rows; the routes, the preset layer and the macros are the presets'
+  (plan 13 §2.2). The routing presets are gone (decision 10): the
+  factory ones are presets, and a user's `bindings/*.json` were made
+  presets once and are no longer read. The first launch of this build
+  migrates an older home once (`preset.migrate_home`, ARCHITECTURE
+  §3.8): schema-1 projects become presets and schema-2 projects,
+  `bindings.json` gives its preset part to them (a `MIGRATED` preset
+  when no project takes it), every rewritten file is kept first as
+  `<file>.bak-v<n>` (a dated copy when the name is taken, never over a
+  `.bak-*` already there), and stderr names each backup.
 - **The cheat sheet** (`ui.CHEATSHEET`) is the canonical human list of the
   keys; `test_the_cheat_sheet_matches_the_tables_and_the_loop_keys` parses
   its key column against `routing.keymap()`, `padmap()` and the keys the
@@ -525,7 +593,7 @@ unreadable at a party.
 
 ## 6. Testing
 
-`uv run pytest` — 778 tests, 11 skipped without torch, about 20 s. `ruff`
+`uv run pytest` — 886 tests, 11 skipped without torch, about 35 s. `ruff`
 is the linter. Every test runs with `HYPERSPACE_HOME` pointed at its own
 `tmp_path` (`tests/conftest.py`), so no test can touch `~/Hyperspace`.
 What holds what:
@@ -538,9 +606,30 @@ What holds what:
 - **The frozen chain** (`tests/legacy_chain.py`) against the analyzer's
   legacy layout, bit-exact (`tests/test_analyzer.py:63`).
 - **The control model**: the four plan-09 audit simulations
-  (`tests/test_routing.py:1029-1095`), the referee, migration, macros,
+  (`tests/test_routing.py:1029-1095`), the referee, migration,
   relative writers under modulation (`tests/test_app_relative.py`), rings
-  never chasing a performer (`tests/test_midi.py:272`).
+  never chasing a performer (`tests/test_midi.py:272`); the APC40's two
+  layers — the latch, no fall-through, the release read at the press, the
+  knobs re-based and the faders picking up, the sorted map and an older
+  file's one-time sort (`tests/test_desk.py`); the macros' base and depth
+  subscribers, a performer on a macro moving only its depths, the `scale`
+  migration and refusal (`tests/test_macros.py`); the one-time migration
+  of an owner-like home — presets, backups, nothing lost, a second
+  launch that changes nothing, every hand lane it carries named by the
+  rig's layout (`tests/test_migration.py`); hand routes by name — a
+  named row follows its axis whatever the dofs order, a name the rig
+  lacks is dormant, a number still reads, the gates and the ROUTING combos
+  by name (`tests/test_hand_names.py`).
+- **Presets and the session** (plan 13): every persisted param in exactly
+  one part (`tests/test_params.py`,
+  `test_every_persisted_group_is_performance_or_session`); a preset load
+  landing every performance base and replacing every route, never
+  touching a session param, the bank's slots, ⇧F, the startup preset and
+  module labels (`tests/test_presets.py`); Learn into the loaded preset
+  and its refusals (`tests/test_learn.py`); the ROUTING page as one page
+  over the loaded preset (`tests/test_ui_routing.py`); plan 12's five
+  party presets loading by F-key and keeping their rules, WAKE's and
+  TRIP's device knobs (`tests/test_plan12_presets.py`).
 - **Boundaries**: the core never imports `midi` / `bridge` / `dream`
   (`tests/test_params.py:286`, `tests/test_bridge.py:381`,
   `tests/test_dream.py:55`); `hands/core.py`, `hands/signal.py`, `lfo.py`,

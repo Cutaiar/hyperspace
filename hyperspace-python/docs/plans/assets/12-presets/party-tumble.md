@@ -33,5 +33,5 @@ Nothing to pinch. A hand out of the box changes nothing.
 ## To load
 
 1. PRESETS page → project → load ▾ → **party** (once per night).
-2. Press **F1** (or the first green button of clip row 1) — the TUMBLE scene.
-3. ROUTING page → strip → **party-tumble**.
+2. Press **F1** (or the first green button of clip row 1) — TUMBLE: the look, the hands and the desk
+   in one step.

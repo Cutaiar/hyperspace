@@ -59,9 +59,9 @@ def test_only_router_modulate_calls_param_modulate():
 # table points at the registry (ARCHITECTURE §1)
 ABOVE = ("ui", "app", "hands", "midi", "bridge", "learn", "dream", "hotreload", "library")
 # the lazy imports routing.py is allowed: name resolution for key and pad
-# rows (§1's "only lazily to resolve names"), and a Library for the tests'
-# and tools' `Router.load_preset` road — pinned so a new one is a decision
-LAZY = {"glfw", "gamepad", "library"}
+# rows (§1's "only lazily to resolve names") — pinned so a new one is a
+# decision (the Library `Router.load_preset` took went with it, plan 13 WP5)
+LAZY = {"glfw", "gamepad"}
 
 
 def _imports(tree):

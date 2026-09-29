@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import mido
 import pytest
 
-from hyperspace import apc40, lfo, tempo
+from hyperspace import apc40, hands, lfo, tempo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
@@ -13,7 +13,8 @@ from hyperspace.library import Library
 from hyperspace.midi import PICKUP_TOL, Binding, MidiIO
 from hyperspace.overlay import Output
 from hyperspace.params import Kind, build_registry
-from hyperspace.routing import Bindings
+from hyperspace.preset import Presets
+from hyperspace.routing import Bindings, Router, is_session_row
 from hyperspace.view import ViewState
 
 
@@ -62,8 +63,10 @@ def rig(tmp_path):
     clock = tempo.Clock(now=lambda: 0.0)       # the transport corner: tap, nudge, trigger
     tempo.register(reg, clock)
     lfo.register(reg, lfo.LFOs(), clock)
+    hands.register(reg, hands.HandSettings.from_config({}))   # the global track knobs
     inp, out = FakeIn(), FakeOut()
     m = MidiIO(reg, path=tmp_path / "midi_map.json", inp=inp, out=out)
+    Presets(lib, reg, Router(reg, m.table))     # the bank the clip row and QUANT load
     return SimpleNamespace(reg=reg, view=view, control=control, audio=audio,
                            presets=presets, midi=m, inp=inp, out=out, clock=clock)
 
@@ -71,6 +74,11 @@ def rig(tmp_path):
 def push(r, *msgs):
     r.inp.queue.extend(msgs)
     r.midi.poll()
+
+
+def shift(r):
+    """Latch SHIFT (plan 13 D4): the global layer comes up."""
+    push(r, note(apc40.N_SHIFT), note(apc40.N_SHIFT, 0))
 
 
 # ---------------------------------------------------------------- default map
@@ -84,7 +92,7 @@ def test_default_map_binds_only_real_params(rig):
 
 
 def test_default_map_has_no_two_controls_on_one_key(rig):
-    keys = [b.key for b in rig.midi.bindings]
+    keys = [(b.key, b.layer) for b in rig.midi.bindings]      # one row per layer
     assert len(keys) == len(set(keys))
 
 
@@ -96,23 +104,29 @@ def test_power_up_sends_mode_sysex(rig):
 
 # ---------------------------------------------------------------- knobs
 
-def test_device_knob_drives_selected_band_with_pickup(rig):
+def test_device_knob_drives_selected_band_under_shift(rig):
+    """The band strip is the global layer's (plan 13 §3.2): dead until
+    SHIFT is up. A device knob is an endless encoder the ring re-bases
+    (D7), so it continues from the ring it was just sent — no pickup —
+    and a band switch re-draws the ring, which re-bases it again."""
     reg, control = rig.reg, rig.control
     atk = reg["band.sel.atk"]
-    assert atk.norm != pytest.approx(0.0)
-    push(rig, cc(0x15, 0))            # far from the value: not caught yet
-    assert atk.norm != pytest.approx(0.0)
-    cur = atk.norm
-    push(rig, cc(0x15, 127))          # swept past it: caught, and applied
+    before = atk.norm
+    push(rig, cc(0x15, 0))            # the preset layer: nothing there
+    assert atk.norm == pytest.approx(before)
+    shift(rig)
+    push(rig, cc(0x15, 127))          # re-based at the ring: applied at once
     assert atk.norm == pytest.approx(1.0)
     push(rig, cc(0x15, 64))
     assert atk.position() == round(64 / 127 * atk.steps)
-    # switching band moves the alias under the knob: pickup re-arms
+    # switching band moves the alias under the knob: the ring is redrawn,
+    # and the knob continues from there
     control.selb = 3
-    before = reg["band.3.atk"].norm
+    rig.midi.poll()
+    b = next(x for x in rig.midi.bindings if x.target == "band.sel.atk")
+    assert b.caught and b.last_hw == pytest.approx(round(reg["band.3.atk"].norm * 127) / 127)
     push(rig, cc(0x15, 10))
-    assert reg["band.3.atk"].norm == pytest.approx(before)
-    assert cur != 0  # silence the unused warning
+    assert reg["band.3.atk"].norm == pytest.approx(10 / 127, abs=PICKUP_TOL)
 
 
 def test_pickup_catches_when_knob_reaches_value(rig):
@@ -163,6 +177,7 @@ def test_select_buttons_and_led_state(rig):
     leds = {(m.channel, m.note): m.velocity for m in rig.out.sent if m.type == "note_on"}
     assert leds[(4, apc40.N_SELECT)] == 1
     assert leds[(0, apc40.N_SELECT)] == 0
+    shift(rig)                                    # the band scenes are global (§3.2)
     push(rig, note(apc40.N_CLIP[1], channel=3))   # scene 3
     assert rig.control.scene == 3
     leds = {(m.channel, m.note): m.velocity for m in rig.out.sent if m.type == "note_on"}
@@ -206,7 +221,7 @@ def test_step_buttons(rig):
 
 
 def test_transport_corner_is_the_clock(rig):
-    """TAP TEMPO taps, NUDGE ± steps a hundredth, QUANT cycles the theme."""
+    """TAP TEMPO taps, NUDGE ± steps a hundredth, QUANT steps the preset bank."""
     c = rig.clock
     c.tick(1.0)
     push(rig, note(apc40.N_TAP), note(apc40.N_TAP, 0))
@@ -245,7 +260,7 @@ def test_metronome_fires_the_trigger_and_blinks_on_the_beat(rig):
     assert len(rig.midi.table.route("note", 0, apc40.N_METRO)) == 1
 
 
-def test_theme_grid_lights_the_active_theme(rig):
+def test_preset_row_lights_the_active_preset(rig):
     push(rig, note(apc40.N_CLIP[0], channel=2))
     assert rig.presets.active == 2
     leds = {(m.channel, m.note): m.velocity for m in rig.out.sent if m.type == "note_on"}
@@ -326,6 +341,7 @@ def test_selected_band_rings_follow_the_selection(rig):
     rig.reg["band.0.thr"].set_norm(0.1)
     rig.reg["band.2.thr"].set_norm(0.9)
     rig.control.selb = 0
+    shift(rig)                                    # the strip's rings are the global layer's
     rig.midi.poll()
     assert ring(0x17) == round(0.1 * 127)
     rig.control.selb = 2
@@ -335,33 +351,37 @@ def test_selected_band_rings_follow_the_selection(rig):
 
 # ---------------------------------------------------------------- learn
 
-def test_learn_binds_next_message_and_persists(rig, tmp_path):
+def test_learn_binds_next_message_into_the_preset_layer(rig, tmp_path):
+    """Plan 13 §3.3: the learned row is a preset-layer row in the live
+    table — the file is not written (tests/test_learn.py has the rest)."""
     m = rig.midi
+    path = tmp_path / "midi_map.json"
+    before = path.read_text() if path.exists() else None
     m.learner.arm("view.inst_amp")
     assert m.learner.learning == "view.inst_amp"
     push(rig, cc(0x57, 40))                   # send-A knob-ish: an unused CC
     assert m.learner.learning is None
     b = m.binding_for("view.inst_amp")
     assert b is not None and b.kind == "cc" and b.number == 0x57 and b.op == "abs"
-    assert "CC 87" in b.describe()
+    assert b.layer == "preset" and "CC 87" in b.describe()
     # the learning message itself did not move the param
     assert rig.view.inst_amp == 0.25
-    # persisted, and read back by a fresh table
-    m2 = Bindings.load(tmp_path / "midi_map.json")
-    assert any(x.target == "view.inst_amp" and x.number == 0x57 for x in m2.midi())
     # the old track-knob binding for the same param is gone
-    assert not any(x.target == "view.inst_amp" and x.number == 0x34 for x in m2.midi())
+    assert not any(x.target == "view.inst_amp" and x.number == 0x34 for x in m.bindings)
+    # and nothing went to disk
+    assert (path.read_text() if path.exists() else None) == before
 
 
 def test_learn_a_button_on_a_toggle(rig):
     m = rig.midi
+    free = apc40.N_CLIP[2]                    # clip row 3, track 4: free on both layers
     m.learner.arm("view.lines")
-    push(rig, note(apc40.N_METRO, 0))         # a release is not a binding
+    push(rig, note(free, 0, channel=3))       # a release is not a binding
     assert m.learner.learning == "view.lines"
-    push(rig, note(apc40.N_METRO))
-    b = m.binding_for("view.lines")
-    assert b.kind == "note" and b.number == apc40.N_METRO and b.feedback == "led"
-    push(rig, note(apc40.N_METRO, 0), note(apc40.N_METRO))
+    push(rig, note(free, channel=3))
+    b = next(x for x in m.bindings if x.target == "view.lines" and x.number == free)
+    assert b.kind == "note" and b.channel == 3 and b.feedback == "led" and b.on == apc40.GREEN
+    push(rig, note(free, 0, channel=3), note(free, channel=3))
     assert not rig.view.lines                  # was True by default, flipped once
 
 
@@ -376,6 +396,37 @@ def test_learn_takes_over_a_key_from_its_old_param(rig):
     assert m.binding_for("view.pattern_mix") is None
     push(rig, cc(0x30, 10))                   # now nothing listens
     assert rig.view.pattern_mix == 1.0
+
+
+def test_unbind_removes_only_preset_layer_rows_and_writes_no_file(rig):
+    """Plan 13 WP5: right-click → Unbind is an edit of the loaded preset —
+    its desk rows on the param go (the knob and the step buttons), no file
+    is written, the preset's dot lights; a param only the session maps (an
+    invariant fader, a global-layer knob) is refused with the reason in
+    the learn line, as Learn refuses, and its row stays."""
+    m, lib = rig.midi, rig.presets.lib
+    lib.load("presets", "BIG BLUE WAVE")
+    assert not lib.is_dirty("presets")
+    path = m.table.path
+    before = path.read_bytes() if path.exists() else None
+    session = [b.to_json() for b in m.table.bindings if b.layer != "preset"]
+    rows = [b for b in m.table.desk() if b.target == "view.bright"]
+    assert {b.kind for b in rows} == {"cc", "note"}               # the knob and ▲ ▼
+    m.unbind("view.bright")
+    assert not [b for b in m.table.bindings if b.target == "view.bright" and b.is_midi]
+    assert not m.learner.refused and "unbound view.bright" in m.learner.last
+    assert (path.read_bytes() if path.exists() else None) == before
+    assert lib.is_dirty("presets")
+    assert [b.to_json() for b in m.table.bindings if b.layer != "preset"] == session
+    push(rig, cc(0x30, 10))                                       # nothing listens now
+    assert rig.view.bright == pytest.approx(lib.read("presets", "BIG BLUE WAVE")["values"]
+                                            .get("view.bright", 1.0))
+    # the session's rows: refused, kept
+    for pid, why in (("band.0.post", "invariant"), ("band.sel.trim", "global layer")):
+        m.unbind(pid)
+        assert m.learner.refused and why in m.learner.last, pid
+        assert m.table.for_param(pid) is not None, pid
+    assert (path.read_bytes() if path.exists() else None) == before
 
 
 def test_relative_cc_learn_keeps_encoder_mode(rig):
@@ -405,7 +456,7 @@ def test_a_hand_learn_reaches_the_shared_learn_object(rig):
 def test_map_round_trips_json(tmp_path):
     path = tmp_path / "m.json"
     mm = Bindings.load(path)
-    n = len(mm.midi())
+    n = len([b for b in mm.midi() if is_session_row(b)])   # the file keeps the session's
     mm.bind(Binding("pitch:3", "view.zoom", "abs"))
     mm2 = Bindings.load(path)
     assert len(mm2.midi()) == n + 1

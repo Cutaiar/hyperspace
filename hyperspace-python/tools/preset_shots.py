@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Plan 12 — the party presets, offscreen: each preset's scene under a set
+"""Plan 12 — the party presets, offscreen: each preset's look under a set
 of hand poses, and the sweep tables the plan cites.
 
-For every ``party-*`` routing preset the scene is its theme from
-``library/projects/party.hyp.json``, the routes are loaded through the real
-``Router``, and two fake hands are driven through the real ``HandsIO`` chain
+Every ``party-*`` preset (``library/presets/``) is loaded through the real
+``Presets`` over a ``Router`` — its values and its routes in one
+load, as its F-key does — and two fake hands are driven through the real ``HandsIO`` chain
 (range → One Euro → dead zone → follower) at a handful of poses, each held
 for a second and a half before the frame is taken. No audio source: the
 lane rows are quiet, so what the shots show is the hands alone over the
-scene's bases. No dream worker either (torch is optional), so in the wake
+preset's bases. No dream worker either (torch is optional), so in the wake
 shots the echoes are real and the dream buffer is empty.
 
     uv run python tools/preset_shots.py [--only tumble,trip] [--frames 90] [--no-shots]
@@ -23,9 +23,9 @@ Writes, under docs/plans/assets/12-presets/:
 from __future__ import annotations
 
 import argparse
-import json
 import math
 import sys
+import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -45,11 +45,12 @@ from hyperspace.control import Control
 from hyperspace.fx import FxState
 from hyperspace.hands import HandSettings, HandsIO
 from hyperspace.hands.core import PINCHES, default_range
-from hyperspace.library import FACTORY
+from hyperspace.library import Library
 from hyperspace.lookback import DreamState
 from hyperspace.params import Kind, build_registry
+from hyperspace.preset import FACTORY_PRESETS, HAND_AXES, Presets
 from hyperspace.render import Renderer, ViewState
-from hyperspace.routing import HAND_AXES, PRESETS, Bindings, Router
+from hyperspace.routing import Bindings, Router
 
 OUT = ROOT / "docs" / "plans" / "assets" / "12-presets"
 W, H = 960, 600
@@ -141,12 +142,6 @@ def pose_hands(pose: dict[str, float]) -> dict[str, dict[str, float]]:
     return out
 
 
-def theme_values(name: str) -> dict:
-    doc = json.loads((FACTORY / "projects" / "party.hyp.json").read_text())
-    slot = name.split("-", 1)[1].upper()
-    return next(s["values"] for s in doc["bank"] if s and s["name"] == slot)
-
-
 class Stage:
     """Everything one preset needs: registry, router, hands, clock, LFOs."""
 
@@ -161,10 +156,16 @@ class Stage:
         self.lfos = lfo.LFOs()
         tempo.register(self.reg, self.clock)
         lfo.register(self.reg, self.lfos, self.clock)
-        self.reg.restore(theme_values(name))
+        # the preset through the one loader (plan 13 WP2), over a throwaway
+        # library home so nothing touches ~/Hyperspace
+        self._home = tempfile.TemporaryDirectory()
+        lib = Library(Path(self._home.name))
+        lib.attach(self.reg)
         self.router = Router(self.reg, Bindings())
-        missing = self.router.load_preset(name)
-        assert not missing and not self.router.table.dropped, (name, missing)
+        presets = Presets(lib, self.reg, self.router)
+        missing = presets.load(name.split("-", 1)[1].upper())
+        assert not missing and not presets.notes and not self.router.table.dropped, (
+            name, missing, presets.notes)
         self.src = DictSource(lambda: self.t)
         self.io = HandsIO(HandSettings.from_config(), {"enabled": True}, source=self.src,
                           out=NullOut(), clock=lambda: self.t)
@@ -220,13 +221,13 @@ def fmt(p, v) -> str:
 def sweep(name: str, frames: int) -> str:
     """Every hand row of the preset across its axis's throw — the markdown
     table the plan cites. A fresh stage per reading, so nothing carries."""
-    rows = [b for b in PRESETS[name][0] if b.scheme == "hand"]
+    rows = [b for b in FACTORY_PRESETS[name].routes() if b.scheme == "hand"]
     us = (0.0, 0.25, 0.5, 0.75, 1.0)
     intro = ("Each cell is the target's value after the hand has held that position "
              f"for {frames} frames ({frames / 60:.1f} s) through the real hand chain "
              "(default feel: dead zone 0.04 on the centred axes, return 0.5 s), then "
              f"*out* is the value {frames} frames after the hand left at u = 1, and "
-             "*never* the value when that hand was never seen. The scene's base is "
+             "*never* the value when that hand was never seen. The preset's base is "
              "the first column; a rotation phase is shown as the hand's offset from "
              "the base, since a live plane keeps turning underneath.\n")
     lines = [f"# {name} — hand sweeps\n", intro,

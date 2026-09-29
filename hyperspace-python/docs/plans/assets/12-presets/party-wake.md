@@ -27,11 +27,13 @@ says whether it is.
 ## The desk
 
 - Track knob 1: base brightness. Knob 2: base speed.
-- The echo and dream bases are on the LOOKBACK page (the `wake` preset in
-  its strip puts them back).
+- Device knobs 1–8: echo mix · decay · darken · contrast · occlude ·
+  dream mix · dream sat · dream k — each ring shows its base. (With
+  SHIFT latched they are the band strip; press SHIFT again to get
+  them back. F4 puts every one back where it was.)
 
 ## To load
 
 1. PRESETS page → project → load ▾ → **party** (once per night).
-2. Press **F4** — the WAKE scene.
-3. ROUTING page → strip → **party-wake**.
+2. Press **F4** — WAKE: the look, the hands and the desk
+   in one step.

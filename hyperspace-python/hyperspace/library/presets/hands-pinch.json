@@ -1,0 +1,16 @@
+{
+ "schema": "hyperspace.preset/2",
+ "name": "hands-pinch",
+ "note": "Plan 08: a pinch picks what a hand's height moves.",
+ "values": {
+  "fx.on": true
+ },
+ "routes": [
+  {"source": "hand:right.y", "target": "view.bright", "op": "position", "when": "hand:right.pinch.index"},
+  {"source": "hand:right.y", "target": "view.speed", "op": "position", "when": "hand:right.pinch.middle"},
+  {"source": "hand:left.y", "target": "fx.mix", "op": "position", "when": "hand:left.pinch.index"},
+  {"source": "hand:left.y", "target": "camera.zoom", "op": "position", "when": "hand:left.pinch.middle"}
+ ],
+ "macros": {},
+ "modules": {}
+}

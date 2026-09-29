@@ -12,7 +12,7 @@ from types import SimpleNamespace
 import pytest
 from imgui_bundle import imgui, implot
 
-from hyperspace import hands, lfo, tempo, ui_presets, ui_routing
+from hyperspace import hands, lfo, routing, tempo, ui_presets, ui_routing
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.app import CONTROL_SIZE, LOOP_KEYS
@@ -20,6 +20,7 @@ from hyperspace.control import Control
 from hyperspace.library import Library
 from hyperspace.overlay import Output
 from hyperspace.params import Kind, build_registry
+from hyperspace.preset import Presets
 from hyperspace.routing import Binding, Bindings, Owned, Router, keymap, padmap
 from hyperspace.ui import CHEATSHEET, PAGE_KEYS, PAGES, Panel, apply_style, load_fonts
 from hyperspace.view import ViewState
@@ -67,11 +68,13 @@ def rig(tmp_path):
     output = Output(None, None)
     output.register(reg)
     lib.attach(reg)
-    panel = Panel(control, audio, view, themes=lib.project, registry=reg, library=lib)
+    panel = Panel(control, audio, view, bank=lib.project, registry=reg, library=lib)
     panel.clock, panel.lfos = clock, lfos
     panel.hands, panel.hand_settings = hands_io, settings
     panel.output = output
     router = Router(reg, Bindings.factory(path=tmp_path / "bindings.json"))
+    router.table.set_routes(routing.legacy6_routes())   # a house preset's performer rows
+    Presets(lib, reg, router)           # the bank and the preset strip, as app.py builds them
     panel.router = router
     r = SimpleNamespace(panel=panel, lib=lib, reg=reg, view=view, chain=chain, router=router)
     try:
@@ -224,6 +227,38 @@ def test_the_routing_rows_scroll_in_their_own_child(rig, monkeypatch):
     over = _page_scroll(rig, monkeypatch)
     assert over["routing"] == 0, "the ROUTING page itself scrolled"
     assert inner and inner[-1] > 0, "the rows' child did not scroll with 40 rows"
+
+
+def test_the_routing_page_fits_over_a_loaded_preset_and_a_full_desk(rig, monkeypatch):
+    """Plan 13 decision 13: the one ROUTING page — head, routes, desk,
+    macros, session — never scrolls itself, with the factory preset
+    loaded and with a full desk (every preset control mapped, each macro
+    subscribed), a refused learn and a dropped desk row in the head."""
+    from hyperspace.learn import Learn
+
+    lib, table = rig.lib, rig.router.table
+    lib.load("presets", "BIG BLUE WAVE")
+    assert table.desk()
+    over = _page_scroll(rig, monkeypatch)
+    assert over["routing"] == 0, "the ROUTING page scrolled with the factory preset"
+    full = [*table.desk(), *[Binding(f"cc:*:{0x10 + k}", "view.speed", "abs",
+                                     feedback="ring", layer="preset") for k in range(8)],
+            *[Binding(f"note:{k}:{0x36}", "view.shape", "set", float(k), feedback="led",
+                      layer="preset") for k in range(8)],
+            Binding("cc:0:7", "view.bright", "abs")]          # a fader: dropped, noted
+    rig.lib.presets.desk_notes = table.set_desk(full)
+    table.set_macros({f"macro.{k}": {"label": f"M{k}", "subs": [
+        {"base": "view.depth4", "from": 0.0, "to": 1.0},
+        {"depth": {"source": "lane:0", "target": "rot.rate.ZW"}, "from": 0.0, "to": 1.0}]}
+        for k in range(1, 9)})
+    rig.panel.learn = Learn(rig.reg, table)
+    rig.panel.learn.refuse("track knob 1 is on the global layer (the session's) — "
+                           "latch SHIFT off to learn into the preset")
+    # dark now: only clip row 3's first three buttons (the global band scenes' own)
+    assert [f.source for f in ui_routing.unmapped(table)] == [
+        f"note:{k}:{0x37}" for k in range(3)]
+    over = _page_scroll(rig, monkeypatch)
+    assert over["routing"] == 0, "the ROUTING page scrolled with a full desk"
 
 
 def test_the_hands_page_fits_with_the_tracker_off(rig, monkeypatch):
@@ -384,31 +419,36 @@ def test_project_row_and_dirty_state(rig, tmp_path):
     assert not proj.is_dirty()
     assert ui_presets.names(panel, ui_presets.PROJECT) == ["default", "party", "show"]
     frame(panel)
-    shape = rig.view.shape
-    reg["view.shape"].step(1)
+    gain = rig.chain.gain
+    reg["master.gain"].set(gain + 1.0)             # a session move
     assert proj.is_dirty()
     frame(panel)
     ui_presets._guard(panel, proj.save)
     assert not proj.is_dirty()
     # load / new go through the same row
     proj.new("scratch")
-    assert proj.is_dirty() and proj.path is None and rig.view.shape == shape
+    assert proj.is_dirty() and proj.path is None and rig.chain.gain == gain
     frame(panel)
     proj.load("show")
-    assert rig.view.shape == shape + 1 and not proj.is_dirty()
+    assert rig.chain.gain == gain + 1.0 and not proj.is_dirty()
     frame(panel)
 
 
-def test_theme_bank_keeps_its_behaviour(rig):
-    """F1–F8 moved to the presets page; the params and slots are unchanged."""
+def test_preset_bank_and_strip_on_the_presets_page(rig):
+    """Plan 13 WP2: the bank row loads and saves presets by F-key param,
+    the one preset strip shows what is loaded and its dirty dot."""
     panel, lib, reg = rig.panel, rig.lib, rig.reg
     frame(panel, "presets")
     reg["view.shape"].set(5)
-    reg["theme.save.2"].fire()
-    assert lib.project.active == 2 and lib.project.slots[2]["values"]["view.shape"] == 5
+    reg["preset.save.2"].fire()
+    assert lib.project.active == 2 and lib.project.bank[2] == "STROBE CAGE"
+    assert lib.read("presets", "STROBE CAGE")["values"]["view.shape"] == 5
+    assert lib.current("presets") == "STROBE CAGE" and not lib.is_dirty("presets")
     reg["view.shape"].set(1)
-    reg["theme.load.2"].fire()
-    assert rig.view.shape == 5
+    assert ui_presets.dirty(panel, "presets")
+    frame(panel)
+    reg["preset.load.2"].fire()
+    assert rig.view.shape == 5 and not lib.is_dirty("presets")
     frame(panel)
 
 

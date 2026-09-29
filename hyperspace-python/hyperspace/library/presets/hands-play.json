@@ -1,0 +1,13 @@
+{
+ "schema": "hyperspace.preset/2",
+ "name": "hands-play",
+ "note": "Plan 08: brightness, speed and 4D depth on the hands.",
+ "values": {},
+ "routes": [
+  {"source": "hand:right.y", "target": "view.bright", "op": "position"},
+  {"source": "hand:left.y", "target": "view.speed", "op": "position"},
+  {"source": "hand:right.pitch", "target": "view.depth4", "op": "position"}
+ ],
+ "macros": {},
+ "modules": {}
+}

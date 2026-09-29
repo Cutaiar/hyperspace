@@ -1,7 +1,8 @@
-"""Plan 12 — the five party routing presets, headless.
+"""Plan 12 — the five party presets, headless.
 
-Each preset is loaded through the real `Router` over the full registry with
-its scene (the theme in library/projects/party.hyp.json) landed, and two
+Each preset is loaded through the real `Presets` (plan 13 WP2: one file,
+library/presets/party-*.json, its scene's values and the routes of its
+party-* routing preset) over the full registry and a `Router`, and two
 fake hands are driven through the real hand chain (`HandsIO`: range → One
 Euro → dead zone → follower, the default feel). For every hand row the
 axis is swept across its throw and the target has to move the way the plan's
@@ -23,11 +24,11 @@ from hyperspace.hands import HandSettings, HandsIO
 from hyperspace.hands.core import DEFAULT_DOFS, PINCHES, default_range
 from hyperspace.library import FACTORY
 from hyperspace.params import Kind
-from hyperspace.routing import HAND_AXES, PRESETS, Bindings, Router, hand
+from hyperspace.preset import FACTORY_PRESETS, FINGERS, HAND_AXES, PARTY, Presets, hand, pinch
+from hyperspace.routing import Bindings, Router
 
 DT = 1 / 60
 HOLD = 90                # frames: the One Euro and the return spring both settle
-PARTY = [n for n in PRESETS if n.startswith("party-")]
 SIDE = {"L": "left", "R": "right"}
 
 
@@ -64,16 +65,23 @@ def feats(side: str, **u) -> dict:
 
 
 def theme(name: str) -> dict:
-    doc = json.loads((FACTORY / "projects" / "party.hyp.json").read_text())
+    """The preset's values: the party slot's scene over its routing preset's bases."""
+    return json.loads((FACTORY / "presets" / f"{name}.json").read_text())["values"]
+
+
+def load(name: str, tmp_path):
+    """The party preset through the one loader, as its F-key loads it."""
+    r = rig(tmp_path=tmp_path, full=True)
+    router = Router(r.reg, Bindings())
+    presets = Presets(r.lib, r.reg, router)
     slot = name.split("-", 1)[1].upper()
-    return next(s["values"] for s in doc["bank"] if s and s["name"] == slot)
+    assert presets.load(slot) == [] and presets.notes == [], (name, presets.notes)
+    assert router.table.dropped == []
+    return r, router
 
 
 def stage(name: str, tmp_path):
-    r = rig(tmp_path=tmp_path, full=True)
-    assert r.reg.restore(theme(name)) == [], name
-    router = Router(r.reg, Bindings())
-    assert router.load_preset(name) == [] and router.table.dropped == []
+    r, router = load(name, tmp_path)
     src = DictSource()
     io = HandsIO(HandSettings.from_config(), {"enabled": True}, source=src, out=NullOut(),
                  clock=lambda: src.t)
@@ -100,19 +108,103 @@ def offset(p) -> float:
 
 # ---------------------------------------------------------------- the files
 
-def test_hand_lane_numbers_are_the_hands_packages():
-    """routing.hand() names the lanes HandsIO publishes on the default dofs."""
+def desk_rig(tmp_path):
+    """The full registry, a MIDI adapter on fake ports over the live table,
+    `Presets`, and the party project open — the F-keys' road."""
+    from test_midi import FakeIn, FakeOut
+
+    from hyperspace.midi import MidiIO
+
+    r = rig(tmp_path=tmp_path, full=True)
+    inp, out = FakeIn(), FakeOut()
+    midi = MidiIO(r.reg, Bindings.factory(), inp=inp, out=out)
+    router = Router(r.reg, midi.table)
+    presets = Presets(r.lib, r.reg, router)
+    r.lib.project.load("party")
+    return r, router, presets, midi, inp
+
+
+def test_the_five_party_presets_load_by_f_key_as_presets(tmp_path):
+    """Plan 13 WP5 (§10 exit 15): on the party project F1–F5 load TUMBLE,
+    FACES, FIELD, WAKE, TRIP — one step each, the preset's routes and desk
+    replacing the last's, nothing noted; TUMBLE's left height keeps its
+    push on the drive (decision register row 19 (a): a route may perform a
+    session param)."""
+    r, router, presets, _midi, _inp = desk_rig(tmp_path)
+    for k, slug in enumerate(PARTY):
+        r.reg[f"preset.load.{k}"].fire()
+        name = slug.split("-", 1)[1].upper()
+        assert r.lib.current("presets") == name and r.lib.project.active == k, slug
+        assert presets.notes == [] and router.table.dropped == [], (slug, presets.notes)
+        assert [b.to_json() for b in router.table.routes()] == \
+            [b.to_json() for b in FACTORY_PRESETS[slug].routes()], slug
+        want = json.loads((FACTORY / "presets" / f"{slug}.json").read_text())["desk"]
+        got = [{k2: v for k2, v in b.to_json().items() if k2 != "layer"}
+               for b in router.table.desk()]
+        assert got == want, slug
+        assert not r.lib.is_dirty("presets"), slug
+    r.reg["preset.load.0"].fire()
+    assert [b.target for b in router.table.routes() if b.source == hand("L", "y")] \
+        == ["master.gain"]
+
+
+@pytest.mark.parametrize("slug,targets", [("party-wake", "WAKE_KNOBS"),
+                                          ("party-trip", "TRIP_KNOBS")])
+def test_wake_and_trip_device_knobs_move_their_bases(slug, targets, tmp_path):
+    """Plan 12 §6 on WAKE's and TRIP's preset layer: device knob k sets the
+    k-th base of the preset's eight — the base, not an offset, whether or
+    not a hand also performs it (ARCHITECTURE §3.2) — and the knob is dark
+    on the other three party presets (the band strip stays behind SHIFT)."""
+    from test_midi import cc
+
+    from hyperspace import preset
+
+    r, _router, presets, midi, inp = desk_rig(tmp_path)
+    presets.load(slug.split("-", 1)[1].upper())
+    ids = getattr(preset, targets)
+    for k, pid in enumerate(ids):
+        p = r.reg[pid]
+        for value in (0, 127, 64):
+            inp.queue.append(cc(0x10 + k, value))
+            midi.poll()
+            assert p.norm == pytest.approx(value / 127, abs=0.02), (slug, pid, value)
+            assert not p.modulated, pid
+    presets.load("TUMBLE")
+    before = {pid: r.reg[pid].norm for pid in ids}
+    inp.queue.append(cc(0x10, 0))
+    midi.poll()
+    assert {pid: r.reg[pid].norm for pid in ids} == before
+
+
+def test_hand_lane_names_are_the_hands_packages():
+    """preset.hand() and preset.pinch() write the addresses HandsIO
+    publishes (decision register row 20): every axis of the default dofs
+    and every pinch switch, by name."""
     io = HandsIO(HandSettings.from_config(), {"enabled": True}, source=DictSource(),
                  out=NullOut())
-    assert list(HAND_AXES) == DEFAULT_DOFS
+    assert list(HAND_AXES) == DEFAULT_DOFS and FINGERS == PINCHES
     for s, side in SIDE.items():
         for axis in HAND_AXES:
-            assert hand(s, axis) == f"hand:{io.axis(f'{side}.{axis}')}"
+            assert hand(s, axis) == io.address(io.axis(f"{side}.{axis}")) == \
+                f"hand:{side}.{axis}"
+        for f in FINGERS:
+            assert pinch(s, f) == io.address(io.gate_lane(side, f))
+    with pytest.raises(ValueError):
+        hand("R", "grab")                 # not a default axis
+    with pytest.raises(ValueError):
+        pinch("L", "thumb")
 
 
-def test_every_party_preset_has_a_theme_a_card_and_only_real_ids(tmp_path):
-    """Each preset's scene is a slot in party.hyp.json naming only real
-    params, and its performer card exists beside the plan."""
+def _axis(b) -> tuple[str, str]:
+    """A named hand row's ("L"/"R", axis): ``hand:right.roll`` → ("R", "roll")."""
+    side, axis = b.parts[0].split(".")
+    return {v: k for k, v in SIDE.items()}[side], axis
+
+
+def test_every_party_preset_has_a_preset_a_card_and_only_real_ids(tmp_path):
+    """Each preset (library/presets/party-*.json, named by the
+    party.hyp.json bank) names only real params, and its performer card
+    exists beside the plan."""
     r = rig(tmp_path=tmp_path, full=True)
     ids = set(r.reg.ids())
     doc = json.loads((FACTORY / "projects" / "party.hyp.json").read_text())
@@ -132,15 +224,13 @@ def test_position_rows_rest_where_their_base_is(name, tmp_path):
     """The B1 rule: a position row's base must equal the value at the axis's
     rest (0.5 on a centred axis, 0 on height), so a hand leaving the box
     lands the same place with or without the fix."""
-    r = rig(tmp_path=tmp_path, full=True)
-    r.reg.restore(theme(name))
-    routes, values = PRESETS[name]
-    r.reg.restore(values)
+    r, _ = load(name, tmp_path)
+    routes = FACTORY_PRESETS[name].routes()
     for b in routes:
         if b.scheme != "hand" or b.op != "position":
             continue
         p = r.reg[b.target]
-        axis = HAND_AXES[b.index % len(HAND_AXES)]
+        _, axis = _axis(b)
         rest = 0.0 if axis == "y" else 0.5
         assert p.norm == pytest.approx(rest, abs=1e-9), (name, b.target, p.norm)
 
@@ -148,7 +238,7 @@ def test_position_rows_rest_where_their_base_is(name, tmp_path):
 # ---------------------------------------------------------------- the sweeps
 
 def _hand_rows(name):
-    return [b for b in PRESETS[name][0] if b.scheme == "hand"]
+    return [b for b in FACTORY_PRESETS[name].routes() if b.scheme == "hand"]
 
 
 @pytest.mark.parametrize("name", PARTY)
@@ -167,8 +257,7 @@ def test_each_hand_axis_moves_its_target_as_the_table_says(name, tmp_path):
     whole throw from 0 (a position); the move is monotonic; a hand that
     leaves the box brings the base back."""
     for b in _hand_rows(name):
-        i = b.index
-        s, axis = ("L", "R")[i // len(HAND_AXES)], HAND_AXES[i % len(HAND_AXES)]
+        s, axis = _axis(b)
         side = SIDE[s]
         readings = []
         for u in (0.0, 0.25, 0.5, 0.75, 1.0):

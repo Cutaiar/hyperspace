@@ -289,7 +289,7 @@ CHEATSHEET = [
     ("M", "mic on/off"),
     ("K / 0", "play-pause / restart track"),
     ("R", "reset view + camera"),
-    ("F1–F8", "load theme · ⇧ saves"),
+    ("F1–F8", "load preset · ⇧ saves"),
     ("B", "tap tempo · ⇧B LFO trigger"),
     ("Cmd+R", "restart process"),
     ("H / ?", "panel / this sheet"),
@@ -297,7 +297,7 @@ CHEATSHEET = [
     ("G", "overlay: clicks through / back"),
     ("Esc / Q", "quit"),
     # Xbox-layout gamepad, Bluetooth or USB (gamepad.py holds the map)
-    ("pad A B", "pause · next theme"),
+    ("pad A B", "pause · next preset"),
     ("pad X Y", "points · faces"),
     ("LB / RB", "previous / next shape"),
     ("d-pad", "brightness ↑↓ · speed ←→"),
@@ -331,7 +331,7 @@ PAGES = [
     ("routing", "routing", None),
     ("lfo", "lfo", ("lfo", "tempo")),
     ("hands", "hands", "hands"),
-    ("presets", "presets", None),
+    ("presets", "presets", "presets"),     # the loaded preset's dirty dot
     ("system", "system", None),
 ]
 PAGE_KEYS = [k for k, _, _ in PAGES]
@@ -339,18 +339,18 @@ PAGE_KEYS = [k for k, _, _ in PAGES]
 
 class Panel:
     def __init__(self, control: Control, audio: AudioEngine, view: ViewState, renderer=None,
-                 themes=None, registry: Registry | None = None, library=None):
+                 bank=None, registry: Registry | None = None, library=None):
         self.control = control
         self.audio = audio
         self.view = view
         self.renderer = renderer
         self.library = library      # library.Library, or None: no strips, no project row
-        # the F1–F8 theme bank is the open project's (library.Project)
-        self.themes = themes if themes is not None else (
+        # the F1–F8 preset bank is the open project's (library.Project)
+        self.bank = bank if bank is not None else (
             library.project if library is not None else None
         )
         self.reg = registry if registry is not None else build_registry(
-            view, control, audio, self.themes
+            view, control, audio, self.bank
         )
         self.pin_in = [0.0] * N_MAX
         self.pin_out = [0.0] * N_MAX
@@ -785,7 +785,7 @@ class Panel:
 
     def _lit_button(self, pid: str, label: str, lit: bool, color: imgui.ImVec4 | None = None,
                     width: float = 0.0) -> bool:
-        """A toggle drawn as a chip that goes solid red while on (plane keys, themes)."""
+        """A toggle drawn as a chip that goes solid red while on (plane keys, the preset bank)."""
         p = self.reg[pid]
         # its own id space: the same param often has a check or slider on the
         # same page (the FX strip under its chip), and two visible items with
@@ -1257,15 +1257,16 @@ class Panel:
         ui_hands.page(self, dt)
 
     def _page_presets(self, dt: float) -> None:
-        """The project and everything it carries: the theme bank, the modules."""
+        """The project and its preset bank, the loaded preset, the modules."""
         self._section("project")
         if self.library is None:
             imgui.text_disabled("no library attached")
         else:
             ui_presets.project_row(self)
             imgui.spacing()
-        ui_presets.theme_bank(self)
+        ui_presets.preset_bank(self)
         imgui.spacing()
+        ui_presets.preset_strip(self)
         imgui.separator()
         ui_presets.overview(self)
 
@@ -1331,12 +1332,19 @@ class Panel:
 
     def _learn_status(self) -> None:
         """The armed param and what the last learn did — a knob's or a
-        hand's, so the line is there with no MIDI adapter at all."""
+        hand's, so the line is there with no MIDI adapter at all; a refusal
+        (the global layer, an invariant control — plan 13 D5, D6) in the
+        warning colour. The ROUTING page's head shows the same line."""
         lrn = self.learn
         if lrn is None:
             return
         if lrn.learning:
             imgui.text_colored(RED, f"learning {lrn.learning} — {self._learn_hint()}")
         elif lrn.last:
-            imgui.text_disabled(f"learn: {lrn.last}")
+            if getattr(lrn, "refused", False):
+                imgui.push_style_color(imgui.Col_.text, WARN)
+                imgui.text_wrapped(f"learn: {lrn.last}")
+                imgui.pop_style_color()
+            else:
+                imgui.text_disabled(f"learn: {lrn.last}")
         imgui.text_disabled("right-click any control to learn or unbind")

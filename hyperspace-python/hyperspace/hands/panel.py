@@ -51,9 +51,24 @@ CAL_SECONDS = 20.0
 LEFT = imgui.ImVec4(0.92, 0.92, 0.92, 1.0)
 
 
+def _sel_param(panel):
+    """`hands.select`, the selected axis the page and the desk's
+    `hands.sel.*` knob share (core.register); None on a bare registry."""
+    reg = getattr(panel, "reg", None)
+    return reg.get(f"{GROUP}.select") if reg is not None else None
+
+
 def _sel(panel, n: int) -> int:
-    k = getattr(panel, "_hands_sel", 0)
+    p = _sel_param(panel)
+    k = int(p.value) if p is not None else getattr(panel, "_hands_sel", 0)
     return min(max(k, 0), n - 1)
+
+
+def _select(panel, k: int) -> None:
+    p = _sel_param(panel)
+    if p is not None:
+        p.set(k)
+    panel._hands_sel = k
 
 
 # ---- right-click menu: a param's hand bindings ----
@@ -66,21 +81,25 @@ def ctx_rows(panel, p) -> None:
     rows = [b for b in router.table.of("hand") if b.target == p.id]
     for b in rows:                      # in the adapter's words: "R height positions …"
         imgui.text(router.describe(b) + ("" if b.enabled else " (off)"))
-    if rows and _gate_menu(router, rows):
-        router.table.write()
+    # routes are the loaded preset's (plan 13 §3.3): an edit here changes
+    # the table and the preset's dirty dot, and writes no file
+    if rows:
+        _gate_menu(router, rows)
     if rows and imgui.menu_item_simple("Unbind hand"):
         for b in rows:                  # the hand's rows only: a lane's stay
             router.table.remove(b)
-        router.table.write()
 
 
 def _gate_menu(router, rows) -> bool:
-    """Pick the pinch that has to be held for these rows to act."""
+    """Pick the pinch that has to be held for these rows to act; the pick
+    is written by name (``hand:right.pinch.index``, decision register row
+    20), and a gate an older preset names by number shows as its switch."""
     gates = getattr(router, "gates", {}).get("hand") or []
     if not gates:
         return False
     cur = next((b.when for b in rows if b.when), None)
-    shown = next((lb for src, lb in gates if f"hand:{src}" == cur), None)
+    lane = router.lane(cur)[1] if cur is not None else None
+    shown = next((lb for src, lb in gates if src == lane), None)
     if not imgui.begin_menu(f"Gate: {shown or 'none'}"):
         return False
     hit = False
@@ -89,8 +108,8 @@ def _gate_menu(router, rows) -> bool:
             b.when = None
         hit = True
     for src, lb in gates:
-        addr = f"hand:{src}"
-        if imgui.menu_item_simple(lb, selected=cur == addr) and cur != addr:
+        addr = router.address("hand", src)
+        if imgui.menu_item_simple(lb, selected=src == lane) and cur != addr:
             for b in rows:
                 b.when = addr
             hit = True
@@ -201,7 +220,8 @@ def _axes(panel, io, settings) -> int:
                          imgui.ImVec2(imgui.get_style().item_spacing.x, 2.0))
     for i, a in enumerate(settings.axes):
         if _axis_row(panel, io, i, a, i == k, h, a.name in bad):
-            panel._hands_sel = k = i
+            _select(panel, i)
+            k = i
     imgui.pop_style_var()
     return k
 

@@ -434,7 +434,7 @@ def test_the_page_draws_and_fits(tmp_path, monkeypatch):
         view = ViewState()
         reg = build_registry(view, Control(chain), audio, lib.project, fx=st)
         lib.attach(reg)
-        panel = Panel(Control(chain), audio, view, themes=lib.project, registry=reg, library=lib)
+        panel = Panel(Control(chain), audio, view, bank=lib.project, registry=reg, library=lib)
         # just enough renderer for the page: the live state and its errors
         panel.renderer = SimpleNamespace(fx=SimpleNamespace(
             state=st, error=lambda n: "line 3: made up" if n == "warp" else ""))
@@ -488,7 +488,7 @@ def test_the_page_has_no_conflicting_ids(tmp_path, monkeypatch):
         view = ViewState()
         reg = build_registry(view, Control(chain), audio, lib.project, fx=st)
         lib.attach(reg)
-        panel = Panel(Control(chain), audio, view, themes=lib.project, registry=reg, library=lib)
+        panel = Panel(Control(chain), audio, view, bank=lib.project, registry=reg, library=lib)
         panel.renderer = SimpleNamespace(fx=SimpleNamespace(state=st, error=lambda n: ""))
         ids: list[str] = []
         for fn in ("button", "checkbox", "slider_float", "slider_int", "combo",

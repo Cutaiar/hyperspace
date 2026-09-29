@@ -2,7 +2,7 @@
  "schema": "hyperspace.preset/1",
  "group": "dream",
  "name": "wake",
- "note": "Plan 12's party-wake scene: sixteen echoes every other frame with a long decay, occluded by the shape so the wake fills the space the object leaves, and the dream buffer at half opacity on the classic conv3_3 swirl. Echo mix, decay, hue and dream mix sit at the bases the party-wake routing preset pushes from.",
+ "note": "Plan 12's party-wake scene: sixteen echoes every other frame with a long decay, occluded by the shape so the wake fills the space the object leaves, and the dream buffer at half opacity on the classic conv3_3 swirl. Echo mix, decay, hue and dream mix sit at the bases the party-wake preset's routes push from.",
  "values": {
   "dream.on": true,
   "dream.mix": 0.5,
