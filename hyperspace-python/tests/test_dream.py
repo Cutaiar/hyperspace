@@ -86,8 +86,8 @@ def test_open_dream_off_imports_nothing():
     from hyperspace import app
 
     sys.modules.pop("hyperspace.dream", None)
-    assert app._open_dream(registry(), {"dream": {"enabled": False}}) is None
-    assert app._open_dream(registry(), {}) is None
+    assert app._open_dream(registry(), {"dream": {"enabled": False}}) == (None, "")
+    assert app._open_dream(registry(), {}) == (None, "")
     assert "hyperspace.dream" not in sys.modules
 
 

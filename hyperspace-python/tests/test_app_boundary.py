@@ -91,16 +91,16 @@ def test_a_broken_adapter_is_a_note_not_a_crash(monkeypatch, capsys):
     assert app._open_hands({"hands": {"enabled": True}}, settings=SimpleNamespace()) is None
     assert app._open_dream(reg, {"dream": {"enabled": True}}) == (
         None, "dream worker off: RuntimeError: boom")
-    # torch missing (a venv from before decision 23 (a)): dream.py's own
-    # `import torch` fails, and the reason names the fix
+    # torch missing (no `dream` extra): dream.py's own `import torch`
+    # fails, and the reason names the fix
     import hyperspace
     monkeypatch.delitem(sys.modules, "hyperspace.dream")
     monkeypatch.delattr(hyperspace, "dream", raising=False)
     monkeypatch.setitem(sys.modules, "torch", None)
     off, why = app._open_dream(reg, {"dream": {"enabled": True}})
     assert off is None
-    assert why == ("dream worker off: torch is not installed — run `uv sync` in "
-                   "hyperspace-python/, then `uv run hyperspace`")
+    assert why == ("dream worker off: torch is not installed — run `uv sync --extra dream`, "
+                   "then launch with `uv run --extra dream hyperspace`")
     err = capsys.readouterr().err
     for line in ("midi: boom", "bridge: boom", "hands: boom", "dream: boom"):
         assert line in err
