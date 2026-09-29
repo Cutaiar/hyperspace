@@ -363,3 +363,31 @@ def test_core_does_not_import_the_midi_adapter():
               "hyperspace.bands", "hyperspace.render"):
         importlib.import_module(m)
     assert "hyperspace.midi" not in sys.modules
+
+
+def test_a_non_finite_offset_never_poisons_a_base(rig):
+    """Plan 14 WP1: `clamp` passed NaN through, a NaN offset became the base,
+    and integer and enum params then raised in `reg.apply` every frame. A
+    non-finite offset is dropped (and named on `reg.nonfinite`); the value
+    stays the base, and the next clean frame is clean."""
+    from hyperspace.tapers import clamp
+
+    assert clamp(math.nan, 0.0, 1.0) == 0.0
+    assert clamp(math.inf, 0.0, 1.0) == 1.0 and clamp(-math.inf, 0.0, 1.0) == 0.0
+    reg, *_ = rig
+    speed, shape, inst = reg["view.speed"], reg["view.shape"], reg["view.instances"]
+    base_speed, base_shape, base_inst = speed.base, shape.base, inst.base
+    for p in (speed, shape, inst):
+        p.modulate(math.nan)
+    inst.modulate(math.inf)
+    reg.apply()                                   # no ValueError: NaN to integer
+    assert sorted(reg.nonfinite) == ["view.instances", "view.shape", "view.speed"]
+    assert speed.value == pytest.approx(base_speed)
+    assert shape.value == base_shape and inst.value == base_inst
+    for p in (speed, shape, inst):
+        p.modulate(0.0)
+    reg.apply()                                   # a clean frame
+    assert reg.nonfinite == []
+    assert math.isfinite(speed._base) and shape.value == base_shape
+    reg.apply()                                   # the sources left: the base comes back
+    assert speed.value == pytest.approx(base_speed) and not speed.modulated

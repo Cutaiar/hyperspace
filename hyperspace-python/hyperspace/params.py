@@ -152,6 +152,7 @@ class Param:
     _last: float | None = field(default=None, repr=False)   # norm we last wrote
     _disc: float | None = field(default=None, repr=False)   # last discrete effective
     _armed: bool = field(default=True, repr=False)          # trigger edge detector
+    _bad: bool = field(default=False, repr=False)           # a non-finite value was dropped
 
     def __post_init__(self):
         if self.alias:
@@ -451,10 +452,15 @@ class Param:
         if not self.modulatable:
             return
         if self._base is None:
-            self._base = self._norm_of(self.get())   # adopt the user's setting
+            base = self._norm_of(self.get())         # adopt the user's setting
+            self._base = base if math.isfinite(base) else 0.0
             self._last = self._base
             self._disc = None
-        self._mod += float(u)
+        u = float(u)
+        if math.isfinite(u):
+            self._mod += u
+        else:                   # a NaN or an inf never reaches the base (plan 14 WP1)
+            self._bad = True
         self._held = True
 
     def apply(self) -> None:
@@ -473,7 +479,9 @@ class Param:
             # something wrote the object since we did (the rotation
             # integrator, presets.load…): that delta belongs to the base
             cur = self._norm_of(self.get())
-            if self._last is not None and cur != self._last:
+            if not math.isfinite(cur):          # the object went non-finite: the base holds
+                self._bad = True
+            elif self._last is not None and cur != self._last:
                 self._base += cur - self._last
                 self._base = self._base % 1.0 if self.wrap else _clamp(self._base, 0.0, 1.0)
         target = self._base + mod
@@ -522,6 +530,7 @@ class Registry:
 
     def __init__(self):
         self._p: dict[str, Param] = {}
+        self.nonfinite: list[str] = []   # params that dropped a NaN / inf last apply()
         # the one rule for what an alias stands for right now (band.sel.*
         # → the selected band), installed by build_registry; the panel's
         # widgets, the Learn object and the routing menu all ask here
@@ -589,10 +598,17 @@ class Registry:
     def apply(self) -> None:
         """Once per frame, after every source has called modulate()."""
         # over a copy: a modulated trigger may add or remove params
-        # (a band layout change) while we are still walking the table
+        # (a band layout change) while we are still walking the table.
+        # `nonfinite`: the params that dropped a NaN / inf this frame (the
+        # stall log names each once, app.py)
+        bad: list[str] = []
         for p in list(self._p.values()):
             if p._base is not None:
                 p.apply()
+                if getattr(p, "_bad", False):
+                    p._bad = False
+                    bad.append(p.id)
+        self.nonfinite = bad
 
     # ---- persistence: the one serialization every preset is made of ----
 
