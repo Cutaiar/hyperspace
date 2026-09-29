@@ -201,7 +201,7 @@ def _legacy_presets(root: Path, slots: list[dict | None]) -> list[str | None]:
                   if k.partition(".")[0] not in SESSION_GROUPS}
         doc = {"schema": PERFORMANCE_SCHEMA, "name": name,
                "note": str(slot.get("note") or ""), "values": values, "routes": routes,
-               "desk": [], "macros": {}, "modules": {}}
+               "macros": {}, "modules": {}}       # no `desk`: a fresh preset's (plan 13 WP4)
         path = root / PRESETS / f"{slug(name)}.json"
         if not path.exists():
             _write_json(path, doc)

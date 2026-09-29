@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from hyperspace import config, library
+from hyperspace import config, library, routing
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.bands import BANDS
@@ -94,6 +94,12 @@ def test_first_run_migrates_working_directory_files(tmp_path, monkeypatch, capsy
     atk, gain = r.chain.params[0].atk, r.chain.gain
     r.lib.project.load_slot(1)
     assert r.view.shape == 4 and r.chain.params[0].atk == atk and r.chain.gain == gain
+    # no `desk` key: loading it gives the factory preset layer, not a dark desk
+    # (review of PR #65 — an explicit [] would blank every preset control)
+    assert "desk" not in doc
+    table = r.lib.presets.router.table
+    assert [b.source for b in table.desk()] == [
+        b.source for b in routing.factory_desk() if b.layer == "preset"]
     # second run: nothing to do, nothing said (migrate itself; ensure_home is memoised)
     assert library.migrate(home, cwd) == []
     library.ensure_home(home, cwd)
