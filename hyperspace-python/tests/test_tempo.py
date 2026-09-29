@@ -49,15 +49,21 @@ def test_bpm_follows_the_last_eight_taps():
     assert c.bpm == pytest.approx(128.0)
 
 
-def test_a_fresh_clocks_first_tap_folds_the_nudge_like_the_trigger():
+def test_a_tap_on_a_never_triggered_clock_leaves_the_downbeat_alone():
+    """Decision register row 1 (a): a tap never moves the downbeat, before
+    the first trigger as after it. Only the tempo changes, and beat(t) stays
+    continuous through the change."""
     c = Clock(now=lambda: 0.0)
     c.nudge = 0.25
-    taps(c, 120, 4, start=10.0)
-    assert c.beat(10.0) == pytest.approx(0.0, abs=1e-12)        # the tap is the "one"
-    assert c.phase(10.0, 0.25) == pytest.approx(0.0, abs=1e-12)
-    assert c.t0 == pytest.approx(10.0 + 0.25 * 0.5)
-    c.nudge = 0.0                                                # turned later: it moves
-    assert c.beat(10.0) == pytest.approx(-0.25)
+    assert c.t0 == 0.0                                  # construction time
+    before = c.beat(10.0)
+    taps(c, 120, 4, start=10.0)                         # 120 is the default: no change
+    assert c.t0 == 0.0 and c.beat(10.0) == pytest.approx(before)
+    t = taps(c, 140, 4, start=20.0)                     # a new tempo: t0 slides only
+    assert c.bpm == pytest.approx(140.0)                # to keep beat(t) continuous
+    assert c.beat(20.0 + 3 * 60 / 140) == pytest.approx(
+        (20.0 + 60 / 140) * 2.0 + 0.25 + 2 * 60 / 140 * 140 / 60)
+    assert c.beat(t) != pytest.approx(0.0, abs=0.05)    # the tap is not the "one"
 
 
 def test_bpm_is_clamped():
@@ -73,17 +79,27 @@ def test_bpm_is_clamped():
 
 # ---------------------------------------------------------------- the beat
 
-def test_a_fresh_clock_lines_up_on_its_first_tap():
-    """Never triggered: the burst's first tap is the downbeat, so a bar-long
-    division reads phase 0 there and on every bar after."""
-    c = Clock(now=lambda: 0.0)
-    taps(c, 120, 4, start=10.0)
-    assert c.t0 == 10.0 and not hasattr(c, "now")
-    assert c.phase(10.0, 0.25) == pytest.approx(0.0)
-    assert c.phase(12.0, 0.25) == pytest.approx(0.0)          # one bar later
-    assert c.phase(11.0, 0.25) == pytest.approx(0.5)          # half a bar
-    assert c.bar(10.5) == pytest.approx(1.0)
-    assert c.beat(10.5) == pytest.approx(1.0)
+def test_a_tap_on_a_never_triggered_clock_does_not_jump_a_running_synced_lfo():
+    """Before any trigger, a bar-long LFO runs from the clock's construction
+    time; a tap burst at a new tempo changes its rate, never its position."""
+    from hyperspace.lfo import SHAPES, SYNCS, LFOs
+
+    c, lfos = Clock(now=lambda: 0.0), LFOs()
+    bar = lfos[0]
+    bar.sync, bar.shape = SYNCS.index("1 bar"), SHAPES.index("saw")
+    dt, t = 1 / 60, 0.0
+    while t < 3.3 - 1e-9:
+        t += dt
+        lfos.step(dt, t, c)
+    for k in range(4):                                  # taps at 140 between frames
+        c.tap(3.3 + k * 60 / 140)
+        x = bar.x
+        t = 3.3 + k * 60 / 140
+        lfos.step(0.0, t, c)
+        # continuous: at most the distance the wave ran since the last frame
+        assert (bar.x - x) % 1.0 < 60 / 140 * 140 / 60 / 4 + 1e-9
+    assert c.t0 != pytest.approx(3.3, abs=0.05)         # no tap became the downbeat
+    assert bar.x != pytest.approx(0.0, abs=0.05)
 
 
 def test_trigger_lands_beat_zero_whatever_the_nudge():
@@ -160,6 +176,31 @@ def test_tick_is_the_default_time():
 
 # ---------------------------------------------------------------- params
 
+def test_a_performer_on_tap_tempo_is_dormant_but_one_on_the_lfo_trigger_fires():
+    """Decision register row 2 (c): tempo.tap is not modulatable — a band on
+    it would tap on every transient — while lfo.trigger stays ownable and
+    fires on the rising edge."""
+    from hyperspace.lfo import LFOs
+    from hyperspace.lfo import register as register_lfo
+    from hyperspace.routing import Binding, Bindings, Router
+
+    reg, c, lfos = Registry(), Clock(now=lambda: 0.0), LFOs()
+    register(reg, c)
+    register_lfo(reg, lfos, c)
+    assert not reg["tempo.tap"].modulatable and reg["lfo.trigger"].modulatable
+    table = Bindings([Binding("ext:0", "tempo.tap", "push", 1.0),
+                      Binding("ext:1", "lfo.trigger", "push", 1.0)])
+    router = Router(reg, table)
+    for k, u in enumerate((0.0, 1.0, 0.0, 1.0)):       # two rising edges each
+        c.tick(1.0 + k * 0.5)
+        router.feed("ext", [u, u])
+        router.modulate(None)
+        reg.apply()
+        if u:
+            assert c.t0 == pytest.approx(1.0 + k * 0.5)   # the trigger fired
+    assert c.taps == []                                  # tap tempo never did
+
+
 def test_register_declares_the_tempo_group():
     reg = Registry()
     c = Clock(now=lambda: 0.0)
@@ -167,7 +208,7 @@ def test_register_declares_the_tempo_group():
     register(reg, c)                            # idempotent, like hands.register
     bpm, tap, nudge = reg["tempo.bpm"], reg["tempo.tap"], reg["tempo.nudge"]
     assert bpm.kind is Kind.CONTINUOUS and bpm.persist and bpm.lo == 20 and bpm.hi == 300
-    assert tap.kind is Kind.TRIGGER and tap.modulatable
+    assert tap.kind is Kind.TRIGGER and not tap.modulatable   # decision register row 2 (c)
     assert nudge.kind is Kind.CONTINUOUS and nudge.persist and (nudge.lo, nudge.hi) == (-0.5, 0.5)
     assert {p.group for p in reg.group("tempo")} == {"tempo"}
     bpm.set_value(100.0)

@@ -198,6 +198,13 @@ Consequences to hold onto:
   (plan 09 decision 3, "scene-setters don't compete";
   `tests/test_routing.py:1068`). Caveat, §3.10: today a hand leaving the
   box does not make its `position` row let go; the tracker going dark does.
+- Of the clock's and the LFOs' triggers, `lfo.trigger` and every
+  `lfo.N.reset` are ownable: a performer fires them on its rising edge
+  (a pinch drops the LFOs on the one, a kick band re-triggers them).
+  `tempo.tap` is not (`modulatable=False`): a row on it is dormant,
+  because a band on tap tempo would tap on every transient (decision
+  register row 2, 2026-09-28;
+  `test_a_performer_on_tap_tempo_is_dormant_but_one_on_the_lfo_trigger_fires`).
 - A relative writer reads the base, never the effective value. Reading the
   effective value folded the whole offset into the base on every drag
   frame — plan 09's audit simulation 1 (`tests/test_app_relative.py:53`).
@@ -419,11 +426,13 @@ are the APC40's TAP TEMPO, NUDGE ± and METRONOME (`apc40.DEFAULT_MAP`).
 **The global LFO trigger** (`lfo.trigger`, `lfo.py:250`; `⇧B`, the APC40's
 METRONOME) sets the downbeat to now — folding the current nudge in so beat
 0 lands on the press (`tempo.py:113-121`) — and restarts every LFO in a
-division mode at phase 0 together; Hz LFOs are untouched. Once the clock
-has been triggered, a tap changes the BPM and not the downbeat, so a
-re-tap mid-set moves the readout, not the picture (`tempo.py:95-101`,
-`tests/test_lfo.py:98-140`). Before the first trigger a tap does re-pin the
-downbeat (audit B2; the module docstring now says so).
+division mode at phase 0 together; Hz LFOs are untouched. **A tap never
+moves the downbeat**, before the first trigger or after it: a tap changes
+the BPM, sliding `t0` only as far as keeps `beat(t)` continuous, so a
+re-tap mid-set moves the readout, not the picture. A fresh clock's
+downbeat is its construction time until the first trigger (decision
+register row 1, 2026-09-28; `tempo.py:86-98`, `tests/test_lfo.py:98-140`,
+`test_a_tap_on_a_never_triggered_clock_leaves_the_downbeat_alone`).
 
 `lfo.LFOs` (`lfo.py:172`): four. Per LFO `shape` (sine, tri, saw, square,
 random = sample-and-hold per cycle), `rate` (Hz, log 0.01–20), `sync` (Hz
@@ -465,7 +474,6 @@ filed in [`AUDIT-2026-09.md`](AUDIT-2026-09.md):
 - Nothing in `Router.modulate` checks ownership; the referee is the
   table's edit doors, and `tests/test_routing_boundary.py` holds that
   `Router.modulate` is the only caller of `Param.modulate` (audit B8).
-- `tempo.tap`, `lfo.trigger` and `lfo.N.reset` are modulatable by default.
 
 ---
 
@@ -484,7 +492,7 @@ grep for; the module's docstring has the rest.
 | `routing.py` | The binding table: one row type for keys, pads, MIDI and performers; the file on disk; the referee; the per-frame modulation pass. | `Binding`, `Bindings` (the table and its edit doors), `Router` (the pass, `feed`, presets), `Owned`. | A lane-scheme row carries only `push` or `position`; a target never has two enabled performers through the edit doors; `modulate` never writes a base; an unknown-schema file is never rewritten. (`tests/test_routing.py:892-1009, 1212`) | `test_routing.py` |
 | `midi.py` + `apc40.py` | The MIDI adapter (ports, soft pickup, ring and LED feedback, Learn) and the APC40's device profile (port name, mode SysEx, LED colours, the 113-row default map). | `MidiIO`, `Ports`; `apc40.DEFAULT_MAP` and the button constants the clock uses. | The core never imports it; every write it makes is a base write; a ring shows the base and never chases a performer; a held Learn is never applied or dropped silently. (`tests/test_params.py:286`, `tests/test_midi.py:272, 387`) | `test_midi.py` |
 | `hands/` | The Ultraleap instrument: two hands as twelve shaped axes, two presence lanes and eight pinch switches, fed to the table; MIDI out to a DAW; box calibration; the HANDS page. | `HandsIO.poll(dt, midi, router)`, `HandSettings`, `register`; `panel.page`. | `core.py` and `signal.py` import nothing from the package — only `panel.py` knows the host; the lane order never changes under a saved `hand:<i>`; a gate never opens on a source that is not live; nothing learns while a question is up. (`tests/test_hands_boundary.py`, `tests/test_hands.py:391, 752, 521`) | `test_hands.py`, `test_hands_boundary.py` |
-| `lfo.py` + `tempo.py` | Four tempo-aware LFOs and the tap-tempo clock, as a source fed to the table like any other, with every knob an ordinary param. | `LFOs.step` / `publish`, `Clock` (`tap`, `trigger`, `beat`), the two `register` functions. | Import nothing from the package; read their own fields, never a `Param` (that is the one-frame lag); once triggered, a tap never moves a running synced LFO; the global trigger never touches a Hz LFO; a trigger or reset lands at exactly phase 0 on the first step that sees it, whichever side of the step it fired; leaving a division for Hz carries the phase. (`tests/test_lfo_boundary.py`, `tests/test_lfo.py:98-156`, the plan 11 WP4 tests in `test_lfo.py`) | `test_lfo.py`, `test_tempo.py`, `test_lfo_boundary.py` |
+| `lfo.py` + `tempo.py` | Four tempo-aware LFOs and the tap-tempo clock, as a source fed to the table like any other, with every knob an ordinary param. | `LFOs.step` / `publish`, `Clock` (`tap`, `trigger`, `beat`), the two `register` functions. | Import nothing from the package; read their own fields, never a `Param` (that is the one-frame lag); a tap never moves the downbeat, so never a running synced LFO; `tempo.tap` is not ownable, the LFO triggers are; the global trigger never touches a Hz LFO; a trigger or reset lands at exactly phase 0 on the first step that sees it, whichever side of the step it fired; leaving a division for Hz carries the phase. (`tests/test_lfo_boundary.py`, `tests/test_lfo.py:98-156`, the plan 11 WP4 tests in `test_lfo.py`) | `test_lfo.py`, `test_tempo.py`, `test_lfo_boundary.py` |
 | `geometry.py` | Builds the 25 shapes as unit-circumradius vertex, edge and face arrays, and holds the exact 4D → 2D transform. | `SHAPES`, `geom(i)`, `project_h` (the renderer's), `project` (the tests' oracle), faces and UVs. | The first 18 shapes' vertex and edge order never changes — the golden traces key on it. (`tests/test_core.py:33`, `tests/test_shapes3d.py:16`) | `test_core.py`, `test_shapes3d.py`, `test_golden.py` |
 | `render.py` | `ViewState`, the live object the view, rotation and camera params write, and `Renderer.draw`: scene pass, coverage mask, look-back, FX, to the window. | `ViewState` (and `integrate`, the one direct writer of `ang`), `Renderer`, `render_offscreen`. | Imports no audio, input or registry code; with look-back and FX off the output is bit-identical to the scene pass; the history never captures the effected frame. (`tests/test_render.py:306`) | `test_render.py` |
 | `fx.py` + `shaders/fx/` | Post effects as GLSL files whose `// @param` uniforms become registry params, run as a pass chain after the composite. | `FxState` (the params' object), `FxChain`, `declare`. | An effect is never defined in Python; a broken edit never takes the frame down; off is bit-identical. (`tests/test_fx.py:194, 268, 293`) | `test_fx.py` |
