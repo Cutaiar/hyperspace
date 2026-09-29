@@ -115,7 +115,35 @@ def test_a_mine_already_there_leaves_both_shows_alone(tmp_path):
         {"schema": "hyperspace.project/2", "name": "mine", "bank": [], "startup": None}))
     after = tree(tmp_path)
     r = boot(tmp_path, show=None)
-    assert {k: v for k, v in tree(tmp_path).items() if k.startswith("projects/")} == \
-        {k: v for k, v in after.items() if k.startswith("projects/")}
+    shows = {k: v for k, v in tree(tmp_path).items()
+             if k.startswith("projects/") and k != "projects/RENAMED.txt"}
+    assert shows == {k: v for k, v in after.items() if k.startswith("projects/")}
     assert r.lib.project.name == "party"
     assert r.lib.project.list() == ["default", "house", "mine", "party"]
+
+
+def test_a_show_saved_as_default_later_stays_yours(tmp_path):
+    """Review of PR #75: the rename is once per home, not once per launch.
+    A fresh home settles it at the first launch (projects/RENAMED.txt); a
+    show saved as "default" afterwards is never renamed, and it is the one
+    the next launch opens."""
+    r = boot(tmp_path, show=None)
+    assert (tmp_path / "projects" / "RENAMED.txt").is_file()
+    r.lib.project.save("default")
+    again = boot(tmp_path, show=None)
+    assert (tmp_path / "projects" / "default.hyp.json").is_file()
+    assert not (tmp_path / "projects" / "mine.hyp.json").exists()
+    assert not list((tmp_path / "projects").glob("*.bak-*"))
+    assert again.lib.project.name == "default" and not again.lib.warning
+
+
+def test_the_owners_rename_is_noted_as_done(tmp_path):
+    owners_home(tmp_path)
+    boot(tmp_path, show=None)
+    note = (tmp_path / "projects" / "RENAMED.txt").read_text()
+    assert "default.hyp.json renamed mine.hyp.json" in note
+    # a new "default" made after the rename is left alone
+    (tmp_path / "projects" / "mine.hyp.json").unlink()
+    boot(tmp_path, show=None).lib.project.save("default")
+    boot(tmp_path, show=None)
+    assert (tmp_path / "projects" / "default.hyp.json").is_file()

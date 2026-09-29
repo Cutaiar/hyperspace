@@ -126,6 +126,9 @@ HOUSE_PROJECT = "house"
 MINE_PROJECT = "mine"
 OLD_DEFAULT = "default"             # the factory show's name until plan 14 WP3
 LAST_SHOW = "last_show"             # <home>/last_show: the show opened last
+# projects/RENAMED.txt: decision 22's one-off rename has been settled for
+# this home, so a show you later save as "default" stays "default"
+RENAMED_NOTE = "RENAMED.txt"
 UNTITLED = "untitled"
 
 # the preset a group resets to; any other group uses one named "default"
@@ -214,11 +217,17 @@ def unshadow_default(root: Path) -> list[str]:
     the party show is what opens. A schema-1 file waits for plan 13's
     migration; a ``mine`` already there leaves both files as they are (a
     ``default`` then is just a show of yours), and so does a backup that
-    cannot be made, said. Nothing to do (the second run on): nothing written.
-    Returns the notes."""
+    cannot be made, said. Once it is settled — renamed, nothing to rename,
+    or a ``mine`` in the way — ``projects/RENAMED.txt`` says so and it never
+    runs again: a show you save as "default" later stays yours (review of
+    PR #75). Returns the notes."""
     src = root / PROJECTS / f"{OLD_DEFAULT}{PROJECT_SUFFIX}"
     dst = root / PROJECTS / f"{MINE_PROJECT}{PROJECT_SUFFIX}"
+    note = root / PROJECTS / RENAMED_NOTE
+    if note.exists():
+        return []
     if not src.is_file():
+        _settled(note, "no user default show to rename")
         return []
     try:
         doc = _read_json(src)
@@ -227,7 +236,9 @@ def unshadow_default(root: Path) -> list[str]:
     if doc.get("schema") != PROJECT_SCHEMA:
         return []                               # schema 1: plan 13's migration first
     if dst.exists():
-        return []           # both are yours now: a show called default is just a show
+        # both are yours now: a show called default is just a show
+        _settled(note, f"{src.name} left as it is: {dst.name} was already there")
+        return []
     from .routing import backup
 
     bak = backup(src, "2")
@@ -239,9 +250,21 @@ def unshadow_default(root: Path) -> list[str]:
         src.unlink()
     except (LibraryError, OSError) as e:
         return [f"{src.name}: not renamed ({e}); the backup {bak.name} stays"]
+    _settled(note, f"{src.name} renamed {dst.name}; the old file kept as {bak.name}")
     return [(f"your show 'default' is now 'mine' ({dst.name}; the old file kept as "
              f"{bak.name}) — the party show opens; 'mine' is in the show list, "
              f"{doc.get('startup')!r} its first preset")]
+
+
+def _settled(note: Path, what: str) -> None:
+    """Write the rename's note: done for this home, and what it did. A note
+    that cannot be written only means the check runs again next launch."""
+    try:
+        note.write_text("Plan 14 (decision 22) checked this folder on "
+                        f"{time.strftime('%Y-%m-%d')}: {what}.\nThe party show opens; "
+                        "a show you save as 'default' from now on stays yours.\n")
+    except OSError as e:
+        print(f"library: {note.name} not written ({e})", file=sys.stderr)
 
 
 # ---------------------------------------------------------------- files
