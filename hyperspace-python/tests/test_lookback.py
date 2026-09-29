@@ -706,7 +706,7 @@ def test_factory_presets_load(tmp_path):
     lib = Library(tmp_path, period=0.0)
     lib.attach(reg)
     assert "dream" in lib.groups()
-    assert lib.list("dream") == ["default", "tracer-only"]
+    assert lib.list("dream") == ["default", "tracer-only", "wake"]
     assert lib.default_name("dream") == "default"
     assert lib.load("dream", "tracer-only") == []
     assert d.on and d.echoes == 8 and d.mix == 0.0 and d.echo_mix > 0

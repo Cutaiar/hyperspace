@@ -382,7 +382,7 @@ def test_project_row_and_dirty_state(rig, tmp_path):
     ui_presets._project_save_as(panel, "Show")
     assert proj.name == "Show" and proj.path == tmp_path / "projects" / "show.hyp.json"
     assert not proj.is_dirty()
-    assert ui_presets.names(panel, ui_presets.PROJECT) == ["show"]
+    assert ui_presets.names(panel, ui_presets.PROJECT) == ["default", "party", "show"]
     frame(panel)
     shape = rig.view.shape
     reg["view.shape"].step(1)
