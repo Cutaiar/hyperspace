@@ -1,6 +1,6 @@
 # Decision register — everything that is yours to decide
 
-As of 2026-09-29. **Rows 21–25 are open** (plan 14, Part A3); every other row is answered (the answer sheet at the end). This is the one list. Every decision that blocks
+As of 2026-09-29. **Every row is answered** (21–25, plan 14, on 2026-09-29) (the answer sheet at the end). This is the one list. Every decision that blocks
 implementing and settling the open work is here, whichever plan or session
 raised it. Each entry stands on its own: what the thing is, what the software
 does today, the options, a recommendation with its reasons, the trade-off you
@@ -502,7 +502,7 @@ has the findings; these five are yours.
 
 ### 21. P14-a — does overlay mode survive?
 
-**Recommendation: (a), keep it behind a config key, off by default.**
+**Answered (a), 2026-09-29.** **Recommendation: (a), keep it behind a config key, off by default.**
 
 **What it is.** Overlay mode floats the render window over the whole
 desktop, see-through and click-through (a feature from an early commit).
@@ -527,7 +527,7 @@ config key, the overlay tests, check 26. Plan 14 WP2.
 
 ### 22. P14-b — how the rig becomes "the party device"
 
-**Recommendation: the party show opens by default; the house moods become a
+**Answered the recommendation, 2026-09-29.** **Recommendation: the party show opens by default; the house moods become a
 `house` show; the last show opened is remembered.**
 
 **What it is.** A "show" (today's "project") is a bank of eight presets and
@@ -552,7 +552,7 @@ Plan 14 WP3.
 
 ### 23. P14-c — "the dream on by default"
 
-**Recommendation: (b), keep torch optional, turn the worker on by default,
+**Answered (a): torch is part of the app, 2026-09-29.** **Recommendation: (b), keep torch optional, turn the worker on by default,
 and say loudly when torch is missing.**
 
 **What it is.** The dream worker (the neural "dream" over the look-back
@@ -574,7 +574,7 @@ still starts fast and tells you why.
 
 ### 24. P14-d — which effects go on the party show's F6–F8
 
-**Recommendation: ACID, MANDALA and NOITA.**
+**Answered (a), 2026-09-29.** **Recommendation: ACID, MANDALA and NOITA.**
 
 **What it is.** The FX page has twelve effects; the party show uses four,
 all in TRIP. Seven (warp, wobble, doublevision, deconverge, fractals,
@@ -595,7 +595,7 @@ test. Plan 14 WP5.
 
 ### 25. P14-e — the desk's glyphs and diagram
 
-**Recommendation: the scheme below, the diagram above the cheat sheet,
+**Answered (a), 2026-09-29.** **Recommendation: the scheme below, the diagram above the cheat sheet,
 showing the layer that is up.**
 
 **What it is.** Akai's names ("track knob", "device knob", "clip 4·2")
@@ -700,8 +700,8 @@ or "overturn".
 | 18 | P13-h the drive fader and `scale` | (a) keep `scale`, session params only | **(a)**, 2026-09-28 | built in plan 13 WP5 (PR #66): `routing.migrate_scales` — a `scale` kept only on a session param, one on a macro a depth subscriber, one on a performance param dropped with a note |
 | 19 | P13-i a route onto a session param | (a) yes; D9 is about values | **(a)**, 2026-09-28 | built in plan 13 WP5 (PR #66): the ROUTING page marks such a route "session" (`ui_routing.is_session_target`); the scale combo offers session params only |
 | 20 | P13-j hand routes by name | (a) names now, in plan 13 | **(a)**, 2026-09-29 | built, plan 13 WP5b, PR #70: `hand:right.roll`, `hand:left.present`, `hand:left.pinch.index`, resolved through the hands adapter's published map (`router.names`); a name the rig lacks is dormant; `hand:<i>` still reads; the factory presets regenerated, the migration names what it carries by the rig's layout |
-| 21 | P14-a overlay mode | (a) behind a config key, off | | open |
-| 22 | P14-b the party device | party opens; house moods a `house` show; last show remembered | | open |
-| 23 | P14-c dream on by default | (b) optional torch, worker on, loud when missing | | open |
-| 24 | P14-d F6–F8 effects | (a) ACID, MANDALA, NOITA | | open |
-| 25 | P14-e desk glyphs and diagram | (a) K/D/S/G/B glyphs, up layer, above the cheat sheet | | open |
+| 21 | P14-a overlay mode | (a) behind a config key, off | **(a)**, 2026-09-29 | plan 14 WP2 |
+| 22 | P14-b the party device | party opens; house moods a `house` show; last show remembered | **rec**, 2026-09-29 | plan 14 WP3 |
+| 23 | P14-c dream on by default | (b) optional torch, worker on, loud when missing | **(a)**, 2026-09-29 | torch is part of the app, not optional; plan 14 WP1 |
+| 24 | P14-d F6–F8 effects | (a) ACID, MANDALA, NOITA | **(a)**, 2026-09-29 | plan 14 WP5 |
+| 25 | P14-e desk glyphs and diagram | (a) K/D/S/G/B glyphs, up layer, above the cheat sheet | **(a)**, 2026-09-29 | plan 14 WP7 |

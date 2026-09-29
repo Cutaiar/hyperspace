@@ -9,15 +9,15 @@ desk readable at a glance. Investigated first, without code changes, on
 main 69ae578 (scripts and screenshots in the job's `tmp/inv/`); every
 finding below cites what was measured.
 
-The owner's to-do list at the machine is §6. The decisions that are
-theirs are §4, filed in `docs/DECISION-REGISTER.md` rows 21–25.
+The owner's to-do list at the machine is §6. The owner's decisions are §4
+(`docs/DECISION-REGISTER.md` rows 21–25), **all answered on 2026-09-29**.
 
 ## 1. What the owner hit, and what it is
 
 | # | The owner saw | What it is | Evidence |
 |---|---|---|---|
 | 1 | The desktop shows through the shape. The render is for a **Pepper's Ghost** illusion: it must be opaque black. | The render window is created with a transparent framebuffer in every mode (`app._windows`, since the overlay commit 4317cc6), and `view.cut_through` (default on, PR #26) blends alpha down wherever faces or faint lines draw — even in plain window mode on an opaque ground. The APC40's MASTER select and the `T` key float the window into overlay (see-through, click-through) with one press. | Offscreen, window mode: TUMBLE 23 % of pixels below alpha 255 (lowest 93), FACES 70 %, TRIP 65 %. `tests/test_lookback.py::test_cut_through_toggle_on_an_opaque_ground` pins the bug. |
-| 2 | Loading a party preset freezes. | **Not reproduced** in ~20 runs of the real app: the owner's home copied (and a pre-migration copy), the real APC40 and Leap connected, fake moving hands, the live mic, `[dream] enabled` without torch; loads by bank click, F-key, APC40 clip row 1, strip, and project load ▾ cold. Every load 7–9 ms, worst frame ~90 ms; GPU cost at 4K with MSAA and every heavy preset 1–4 ms. Not yet tried: the Leap service stopped with `[hands] enabled`, real hands entering and leaving, a real fullscreen / projector switch. | `run_*.txt`; faulthandler dumps showed the main thread in normal code |
+| 2 | Loading a party preset freezes — the owner, 2026-09-29: **the render stopped drawing while the panel kept working**. | **Not reproduced** in ~20 runs of the real app: the owner's home copied (and a pre-migration copy), the real APC40 and Leap connected, fake moving hands, the live mic, `[dream] enabled` without torch; loads by bank click, F-key, APC40 clip row 1, strip, and project load ▾ cold. Every load 7–9 ms, worst frame ~90 ms; GPU cost at 4K with MSAA and every heavy preset 1–4 ms. Not yet tried: the Leap service stopped with `[hands] enabled`, real hands entering and leaving, a real fullscreen / projector switch. | `run_*.txt`; faulthandler dumps showed the main thread in normal code |
 | 3 | The PRESETS page is confusing: "Default", "Startup", Party hidden in the project list. "I don't care about the default project — this is a party device." | The project name is covered by an unlabelled startup combo (a layout bug: only "de" shows); the bank chips show 1–8 with names only in a tooltip; "startup" takes effect only on save; the rig always opens the project named `default` and forgets `party`; your migrated `default` starts on `MIGRATED` with the house moods behind it. | `panel_presets_*.png` |
 | 4 | Are the FX tab's effects in the presets? | Mostly no. Of 12 effects only 4 (plasma, kaleido, zoomblur, huecycle) are in a party preset (TRIP); acid is in `hands-fx`, which is in no bank; warp, wobble, doublevision, deconverge, fractals, glimmer, tripcolour are in no preset. `hands-pinch`, `lfo-breathe` and your `MIGRATED` route into `fx.mix` / acid / kaleido with the effects off (dead rows). The `library/fx` module presets (acid, mandala, noita-*) are referenced by nothing. A preset load resets every effect not in the preset (D2), so FX-page experiments vanish on an F-key. | `fx_cov.py` |
 | 5 | The dream says "no worker"; it should be on by default. | The dream worker needs **torch**, an optional extra (`uv sync --extra dream`), which is not installed; plain `uv sync` removes it. The failure goes only to stderr; README and SETUP never mention the extra. With no worker, the look-back shows raw echoes only, and WAKE's two dream rows do nothing. | `app._open_dream`, `ui_lookback._worker_status`, `pyproject.toml` |
@@ -36,14 +36,14 @@ Order is the order of what blocks the show.
 
 | WP | What | Size | Needs |
 |---|---|---|---|
-| 1 | **Opaque window** (cut-through only in overlay; every factory preset renders at alpha 255 in window mode, pinned by a GL test), **stall watchdog** (a 2 s frame stall dumps every thread to `<home>/stall.log`; `kill -USR1` dumps on demand; SYSTEM shows it), **the dream error on the panel** and the `--extra dream` setup in README / SETUP. | S | — (in progress, PR to come) |
+| 1 | **Opaque window** (cut-through only in overlay; every factory preset renders at alpha 255 in window mode, pinned by a GL test); **the render watchdog** — a `renderer.draw` error (which the frame loop swallows, so the render keeps its last image while the panel lives: the owner's freeze exactly) or a render window that stops presenting is logged with its traceback to `<home>/stall.log` and shown as a banner; plus a whole-loop stall dump and `kill -USR1`; **the dream in the app** (decision 23 (a): torch an ordinary dependency, the worker on by default). | S | — (in progress, PR to come) |
 | 2 | **Overlay behind config** (decision 21): the transparent framebuffer only when `[output] overlay = true`; MASTER select and `T` do nothing otherwise. | S | decision 21 |
 | 3 | **Party is the show** (decision 22): the rig opens on the party project; the house moods become a project named `house`; the last project opened is remembered; your `MIGRATED` stays a preset in the list. | S | decision 22 |
 | 4 | **The PRESETS page for a party**: the show's name visible; eight named buttons, the live one lit; "starts on" labelled and saved when set; save / save as; modules and projects folded under "more"; one word per thing (§3); the dirty dots compare against the loaded preset, not fresh defaults; the ROUTING head's words. | M | WP3 |
 | 5 | **The effects in the show** (decision 24): three new party presets on F6–F8, each an effect family with hand routes and a device-knob desk like TRIP; the dead `fx.mix` / acid rows fixed or removed; a test that every effect is on in at least one factory preset (or on an allow-list) and no factory route drives an effect that is off; a note on the FX page that a preset load resets the stack. | S | decision 24 |
 | 6 | **Dream and echoes** (decision 23): the dream on by default as decided; a TRACER preset with the legible echo set; WAKE re-tuned; echo decay and cadence per second, not per frame, so a 120 Hz screen looks like a 60 Hz one. | S + M | decision 23 |
 | 7 | **The desk, drawn** (decision 25): `apc40.LAYOUT` (every control's position, kind and glyph), the glyph on every ROUTING desk and session row and in every Learn message, and an APC40 diagram above the cheat sheet — the up layer's mapped controls lit, the rest dark, ⇧ lit on the global layer, a hover naming the param. | S + M | decision 25 |
-| 8 | **The freeze, found**: once the watchdog has a dump (or the owner's answers say which road), reproduce, fix, and add the test on that road; plus the untried cases above. | S–M | a stall.log |
+| 8 | **The freeze, found**: a fuzz of every value the party presets reach, through `renderer.draw`, looking for the exception the frame loop hides (in progress); fix it with a test on that road; else the render watchdog's log from the machine. | S–M | the fuzz or a stall.log |
 | 9 | **Docs and hand checks**: every hand check this plan changes (§6's list), the plan's "As built". | S | last |
 
 ## 3. One word per thing
@@ -62,11 +62,11 @@ The page and the docs use these and nothing else:
 
 | # | Decision | Recommendation |
 |---|---|---|
-| 21 | Does overlay mode (the render floating see-through over the desktop) survive? | (a) keep it behind a config key, off by default; the rig can never show through unless asked |
-| 22 | How does the rig become "the party device"? | the party show is the factory default and what the rig opens on; the house moods become a `house` show; the last show opened is remembered |
-| 23 | "Dream on by default": install torch always, or keep it optional and on? | (b) keep the extra, turn the worker on by default, say loudly on the panel when torch is missing |
-| 24 | Which effects go in the party show's F6–F8? | ACID, MANDALA and NOITA (the three module presets already tuned), each with hands and eight device knobs |
-| 25 | The desk's glyphs and diagram | K1–K8 track knobs, D1–D8 device knobs, S1–S8 faders, SM master, X crossfader, C cue, G row·column for the button field, B1–B22 other buttons, ⇧ SHIFT; the diagram shows the layer that is up, above the cheat sheet |
+| 21 | Does overlay mode (the render floating see-through over the desktop) survive? | **answered as recommended**: (a) keep it behind a config key, off by default; the rig can never show through unless asked |
+| 22 | How does the rig become "the party device"? | **answered as recommended**: the party show is the factory default and what the rig opens on; the house moods become a `house` show; the last show opened is remembered |
+| 23 | "Dream on by default": install torch always, or keep it optional and on? | **answered (a)**: torch is part of the app — ordinary dependencies, `uv sync` installs them, the worker on by default |
+| 24 | Which effects go in the party show's F6–F8? | **answered as recommended**: ACID, MANDALA and NOITA (the three module presets already tuned), each with hands and eight device knobs |
+| 25 | The desk's glyphs and diagram | **answered as recommended**: K1–K8 track knobs, D1–D8 device knobs, S1–S8 faders, SM master, X crossfader, C cue, G row·column for the button field, B1–B22 other buttons, ⇧ SHIFT; the diagram shows the layer that is up, above the cheat sheet |
 
 ## 5. What this plan does not change
 
