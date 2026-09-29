@@ -142,13 +142,17 @@ the note on SYSTEM (`_open_dream`).
 First `uv run python tools/midi_probe.py` (echoes every message; lights
 the desk), Ctrl-C. Then the app, ANALYZER page. *Pass:* on launch the
 desk enters mode 0x42 (the LEDs light in the layout, rings show); the
-eight device knobs move the open band strip; the track knobs move the
-view faders; a channel fader moves that band's post drive; after
-switching band with the track-select buttons a device knob does nothing
-until it sweeps through the current value (pickup), then catches. *Fail:*
+track knobs move the view faders; the device knobs are dark and do
+nothing until SHIFT is latched (plan 13 WP3: the band strip is the global
+layer's), then move the open band strip; a channel fader moves that
+band's post drive on either layer; after switching band with the
+track-select buttons a device knob's ring redraws and the knob continues
+from it (the ring re-bases the encoder — group H, check 31, is that
+check). A fader moved behind your back still waits for a pickup. *Fail:*
 no LEDs → `apc40.mode_on` / the port name (`[midi] port`); a knob that
-moves the wrong param → `apc40.DEFAULT_MAP`; a knob jumping instead of
-catching → `MidiIO._apply` pickup (midi.py).
+moves the wrong param → `apc40.DEFAULT_MAP` (and its `layer`); a knob
+jumping back to its old place after a switch → check 31;
+a fader jumping instead of catching → `MidiIO._apply` pickup (midi.py).
 
 **11. Rings show the base, LEDs show the state (R6, decided (a)).**
 Headless: `uv run pytest -q tests/test_midi.py::test_ring_shows_the_base_and_never_chases_a_performer tests/test_midi.py::test_select_buttons_and_led_state`.
@@ -166,7 +170,8 @@ As check 7 but on the desk: TAP TEMPO ×4 on the beat, METRONOME on the
 one. *Pass:* as check 7; the METRONOME LED blinks on the beat; NUDGE +
 and − move `tempo.nudge` by 0.01 and the swell with it; QUANT cycles the
 theme (`theme.next`), the clip grid's top row picks a theme, row 2–3 a
-scene, row 4–5 a shape, STOP ALL resets the scene with the 8 s undo.
+scene (with SHIFT latched — the band scenes are the global layer's, group
+H), row 4–5 a shape, STOP ALL resets the scene with the 8 s undo.
 *Fail:* METRONOME LED steady → `lfo.trigger`'s `lit` (tempo.py
 `on_beat`); a button doing what it did before plan 09 → your
 `bindings.json` kept an old row (`remap_factory` only moves rows where

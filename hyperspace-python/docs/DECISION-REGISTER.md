@@ -512,12 +512,12 @@ or "overturn".
 | 6 | A10 input trim | (3) auto/manual switch | **(3)**, 2026-09-28 | built, WP15 |
 | 7 | R2 + L2 loop keys | (a) table rows | **(a)**, 2026-09-28 | built, PR #58 |
 | 8 | Merge path | PR #55, then #47 | **rec**, 2026-09-28 | #56 folded into #55 first |
-| 9 | P13-a global track knobs | (a) hand feel + BPM | **(a)**, 2026-09-28 | a first cut; expect better globals with use |
+| 9 | P13-a global track knobs | (a) hand feel + BPM | **(a)**, 2026-09-28 | a first cut; expect better globals with use. Built in plan 13 WP3 (PR #63): five global rows in `apc40.DEFAULT_MAP`, knobs 6–8 dark |
 | 10 | P13-b partial presets | (a) no exception | **(a)**, 2026-09-28 | |
 | 11 | P13-c bank slots | (a) a slot names a file | **(a)**, 2026-09-28 | |
-| 12 | P13-d what a macro is | (a) attenuator + multi-target rows | **one concept**, 2026-09-28 | subscribers set a base or a depth, each with its own polarity; see 12b |
+| 12 | P13-d what a macro is | (a) attenuator + multi-target rows | **one concept**, 2026-09-28 | subscribers set a base or a depth, each with its own polarity; see 12b. Built in plan 13 WP3 (PR #63): `routing.Macro` / `Sub`, `Router.follow_macros`, the depth term in `Router.modulate` |
 | 13 | P13-e ROUTING page | (a) one page | **(a)**, 2026-09-28 | |
-| 12b | P13-g a performer on a macro | (a) base subscribers follow the base only | **(a)**, 2026-09-28 | |
+| 12b | P13-g a performer on a macro | (a) base subscribers follow the base only | **(a)**, 2026-09-28 | built in plan 13 WP3 (PR #63): base subscribers follow `p.base`, depth ones `p.value` |
 | 14 | B1 as built | keep | **keep**, 2026-09-28 | |
 | 15 | A1 as built | keep | **keep**, 2026-09-28 | |
 | 16 | L3 as built | keep | **keep**, 2026-09-28 | |
