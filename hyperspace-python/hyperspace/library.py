@@ -16,17 +16,20 @@ Two kinds of file, both plain JSON you can open in a text editor:
                   library) and ``adopt``s the one it landed; a strip load
                   tells the combo through ``on_load`` (control.py).
   project         everything — ``{"schema": "hyperspace.project/1",
-                  "name", "values": <full snapshot>, "modules": {group:
-                  name | {"name", "values", …}}, "bank": [8 × {"name",
-                  "values"} | null]}``, in a ``*.hyp.json`` file. The
-                  F1–F8 theme bank is the project's (``Project.load_slot``
-                  / ``save_slot``): emulator-style save states of the
-                  whole surface, less the routing layer's macros. A
-                  module the project names by a preset that carries a
-                  ``layout`` gets that layout back on load, the same road
-                  a strip load takes. A project never carries the routing
-                  layer (its macros, or a routing preset): the live table
-                  is ``<home>/bindings.json``, one file for the rig.
+                  "name", "values": <performance snapshot>, "session":
+                  <session snapshot>, "modules": {group: name | {"name",
+                  "values", …}}, "bank": [8 × {"name", "values"} |
+                  null]}``, in a ``*.hyp.json`` file (params.PARTS is the
+                  split; an older file with no ``session`` loads, its
+                  session ids read out of ``values``). The F1–F8 theme
+                  bank is the project's (``Project.load_slot`` /
+                  ``save_slot``): emulator-style save states of the
+                  performance, macros included, which never move a
+                  session param. A module the project names by a preset
+                  that carries a ``layout`` gets that layout back on
+                  load, the same road a strip load takes. A project never
+                  carries a routing preset: the live table is
+                  ``<home>/bindings.json``, one file for the rig.
 
 A third kind of document is *not* the library's own format but goes
 through the same doors: a **document kind** registered with ``kind()``
@@ -80,7 +83,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .params import PLANES, ROUTING_GROUPS, Registry
+from .params import PLANES, SESSION_GROUPS, Registry, part_of
 
 SLOTS = 8                 # the F1–F8 theme bank
 BINDINGS = "bindings"     # the routing presets' group: the one document kind (routing.PRESET_DIR)
@@ -295,30 +298,39 @@ class Project:
     """The open project: its file (None until saved), its sections, and
     the F1–F8 theme bank.
 
-    ``values`` / ``modules`` / ``bank`` are what the *file* holds; only
-    ``save()`` refreshes ``values`` and ``modules`` from the live state.
-    ``write()`` puts the in-memory document back on disk as it is — that
-    is what a theme-slot save uses, so F-key saves persist without turning
-    the whole project into a snapshot of the moment.
+    ``values`` / ``session`` / ``modules`` / ``bank`` are what the *file*
+    holds; only ``save()`` refreshes ``values``, ``session`` and
+    ``modules`` from the live state. ``write()`` puts the in-memory
+    document back on disk as it is — that is what a theme-slot save uses,
+    so F-key saves persist without turning the whole project into a
+    snapshot of the moment.
 
-    A theme (one of the eight slots) is a whole-surface save state: the
-    registry's ``snapshot()``, every persisted parameter except the routing
-    layer's macros (params.ROUTING_GROUPS), which the binding table carries.
-    Loading one cuts the whole look over in a single frame. A slot restores
-    the modules it names, whole: every id in a group the slot mentions is
-    set, from the slot or else from the group's defaults, so a theme is the
-    same state whatever it lands on — while a group it never mentions (the
-    seeds carry a scene, not band values; no master fader) is left alone.
-    Rotation phases are never in a slot: a theme changes the look, not where
-    the spin is. Empty slots come back seeded with the eight house moods
-    (hyperspace/library/projects/default.hyp.json).
+    The file's state is split by params.PARTS (plan 13 §4, D9): ``values``
+    is the performance part (the look, the LFOs, the macros) and
+    ``session`` the session part (tempo, hands, the analyzer, output). An
+    older file with no ``session`` key, whose ``values`` held both, is
+    split in memory when it is read, and both parts restore on load.
+
+    A theme (one of the eight slots) is a save state of the performance:
+    ``snapshot(part="performance")``, macros included. Loading one cuts the
+    whole look over in a single frame. A slot restores the performance
+    modules it names, whole: every id in a group the slot mentions is set,
+    from the slot or else from the group's defaults, so a theme is the same
+    state whatever it lands on, while a group it never mentions is left
+    alone. A slot never moves a session param: an id it names there (the
+    house themes and party slots set ``scene.select``) stays in the file
+    but a load ignores it, so a theme no longer resets a tapped BPM or the
+    band scene. Rotation phases are never in a slot: a theme changes the
+    look, not where the spin is. Empty slots come back seeded with the
+    eight house moods (hyperspace/library/projects/default.hyp.json).
     """
 
     def __init__(self, lib: Library):
         self.lib = lib
         self.name = DEFAULT_PROJECT
         self.path: Path | None = None
-        self.values: dict[str, Any] = {}
+        self.values: dict[str, Any] = {}      # the performance part
+        self.session: dict[str, Any] = {}     # the session part
         self.modules: dict[str, Any] = {}
         self.bank: list[dict | None] = [None] * SLOTS
         self.active = -1          # last theme slot loaded, -1 until one is
@@ -331,7 +343,14 @@ class Project:
         self.name = str(doc.get("name") or (path.name[: -len(PROJECT_SUFFIX)] if path
                                             else UNTITLED))
         self.path = path
-        self.values = dict(doc.get("values") or {})
+        # an older file's `values` held the session ids too: they move to
+        # `session` here, so both parts restore and the next save splits them
+        self.values, self.session = {}, dict(doc.get("session") or {})
+        for pid, v in (doc.get("values") or {}).items():
+            if self._is_session(pid):
+                self.session.setdefault(pid, v)
+            else:
+                self.values[pid] = v
         self.modules = dict(doc.get("modules") or {})
         bank = list(doc.get("bank") or [])[:SLOTS]
         bank += [None] * (SLOTS - len(bank))
@@ -339,15 +358,30 @@ class Project:
         seeds = self.lib.factory_bank()
         self.bank = [s if s else seeds[k] for k, s in enumerate(bank)]
 
+    def _is_session(self, pid: str) -> bool:
+        """Is this id in the session part? By its param's group once the
+        registry is attached; before that (the default project is read in
+        Library.__init__) by its id's first segment, which is the group for
+        every persisted param (tests/test_params.py)."""
+        reg = self.lib.reg
+        if reg is not None and pid in reg:
+            return part_of(reg[pid]) == "session"
+        return pid.partition(".")[0] in SESSION_GROUPS
+
+    def _performance(self, values: dict[str, Any]) -> dict[str, Any]:
+        """`values` less its session ids (ids nobody knows stay, to be reported)."""
+        return {pid: v for pid, v in values.items() if not self._is_session(pid)}
+
     def to_doc(self) -> dict:
         return {"schema": PROJECT_SCHEMA, "name": self.name, "values": self.values,
-                "modules": self.modules, "bank": self.bank}
+                "session": self.session, "modules": self.modules, "bank": self.bank}
 
     def _apply(self) -> list[str]:
         """Push the document's state into the registry; returns unknown ids.
         A module's `layout` lands first (a project saved on eight bands
         comes back with eight, audit L8), then the project's own values —
-        the live state as saved, edits included — and each module is
+        the live state as saved, edits included: the session part, then
+        the performance part — and each module is
         recorded as the group's current preset, the reference its dirty
         dot compares against, the way a strip load records it."""
         lib = self.lib
@@ -371,7 +405,15 @@ class Project:
             if doc is not None and hook is not None and doc.get("layout") is not None:
                 hook(doc["layout"])                   # its params exist before the values land
                 lib._fresh_of(group)                  # …and their build values are "fresh"
-        missing = lib.restore(self.values) if self.values else []
+        missing = lib.restore(self.session) if self.session else []
+        if self.values:
+            missing += lib.restore(self.values)
+        # ids the file lacks (the macros, in a file from before plan 13 WP1;
+        # a param added since) take the state this load left, so an
+        # untouched project is not dirty the moment it opens
+        for part, held in (("performance", self.values), ("session", self.session)):
+            for pid, v in (lib.reg.snapshot(part=part) if lib.reg is not None else {}).items():
+                held.setdefault(pid, v)
         for group, name, doc in docs:
             vals = (lib.reg.snapshot(group) if doc is None
                     else lib.resolved(group, doc.get("values") or {}))
@@ -382,14 +424,14 @@ class Project:
         self.active = -1
         return missing
 
-    # ---- the theme bank: whole-surface save states inside the project ----
+    # ---- the theme bank: performance save states inside the project ----
 
     @property
     def slots(self) -> list[dict | None]:
         return self.bank
 
     def capture(self, name: str) -> dict[str, Any]:
-        return {"name": name, "values": self.lib.reg.snapshot()}
+        return {"name": name, "values": self.lib.reg.snapshot(part="performance")}
 
     def save_slot(self, k: int) -> None:
         """⇧F<k+1>: the surface into slot k, and the project file with it."""
@@ -406,10 +448,11 @@ class Project:
             self.bank_error = f"themes: {e}"
 
     def load_slot(self, k: int) -> None:
-        """F<k+1>: slot k onto the surface, whole per group it names."""
+        """F<k+1>: slot k onto the surface, whole per performance group it
+        names. Its session ids (a house theme's ``scene.select``) are ignored."""
         if not 0 <= k < SLOTS or self.bank[k] is None or self.lib.reg is None:
             return
-        values = self.bank[k].get("values") or {}
+        values = self._performance(self.bank[k].get("values") or {})
         lib, reg = self.lib, self.lib.reg
         groups = {reg[pid].group for pid in values if pid in reg}
         merged: dict[str, Any] = {}
@@ -478,7 +521,8 @@ class Project:
             self.path = self.path_for(name)
         elif self.path is None:
             self.path = self.path_for(self.name)
-        self.values = lib.reg.snapshot()
+        self.values = lib.reg.snapshot(part="performance")
+        self.session = lib.reg.snapshot(part="session")
         self.modules = {}
         for group, cur in lib._current.items():
             if cur is None or group in lib._kinds or group == BINDINGS:
@@ -506,7 +550,8 @@ class Project:
         reg = self.lib.reg
         if reg is None:
             return False
-        return self.path is None or self.values != reg.snapshot()
+        return (self.path is None or self.values != reg.snapshot(part="performance")
+                or self.session != reg.snapshot(part="session"))
 
 
 # ---------------------------------------------------------------- library
@@ -664,10 +709,10 @@ class Library:
 
     def groups(self) -> list[str]:
         """Every group with a preset folder, a persisted param or a document
-        kind — less the routing layer's params (params.ROUTING_GROUPS),
-        which the routing presets carry as their `values`."""
+        kind — less ``macro``: a macro's meaning is its subscribers, which
+        live in the preset, so it gets no module-preset strip (plan 13 §9)."""
         out = {p.group for p in (self.reg or [])
-               if p.persist and p.group and p.group not in ROUTING_GROUPS}
+               if p.persist and p.group and p.group != "macro"}
         out.update(self._kinds)
         for root in self._roots():
             if root.is_dir():

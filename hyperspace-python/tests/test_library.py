@@ -85,8 +85,10 @@ def test_first_run_migrates_working_directory_files(tmp_path, monkeypatch, capsy
         "view.shape": 4, **{f"view.plane.{n}": True for n in library.PLANES},
         "scene.select": 3, "band.0.fn": 2, "band.0.atk": 0.5, "master.gain": 2.0,
     }
+    atk, gain = r.chain.params[0].atk, r.chain.gain
     r.lib.project.load_slot(1)
-    assert r.view.shape == 4 and r.chain.params[0].atk == 0.5 and r.chain.gain == 2.0
+    # the slot keeps its session ids, but a load moves the performance only (D9)
+    assert r.view.shape == 4 and r.chain.params[0].atk == atk and r.chain.gain == gain
     # second run: nothing to do, nothing said (migrate itself; ensure_home is memoised)
     assert library.migrate(home, cwd) == []
     library.ensure_home(home, cwd)
@@ -124,26 +126,62 @@ def test_slug():
     assert slug("***") == "untitled"
 
 
-def test_macros_are_routing_state_not_the_scenes(rig, tmp_path):
-    """params.ROUTING_GROUPS: the macros persist, but no theme, project or
-    module strip carries them — a theme change never moves a macro under a
-    route. A routing preset does (Router.preset_doc, test_ui_bands)."""
+def test_macros_are_performance_state(rig, tmp_path):
+    """Plan 13 WP1: the macros are performance state. A theme slot and a
+    project carry them; the module strips still list no `macro` group (a
+    macro's meaning is its subscribers, which a preset will carry). The
+    live table keeps them too until plan 13 WP5 (test_routing)."""
     lib, reg = rig.lib, rig.reg
     assert "macro" not in lib.groups() and "view" in lib.groups()
     m = reg["macro.2"]
     m.set_value(0.3)
     lib.project.save_slot(0)
-    assert not any(k.startswith("macro.") for k in lib.project.slots[0]["values"])
+    assert lib.project.slots[0]["values"]["macro.2"] == pytest.approx(0.3)
     m.set_value(0.7)
     lib.project.load_slot(0)
-    assert m.value == pytest.approx(0.7)             # the theme left it alone
+    assert m.value == pytest.approx(0.3)             # the theme brought it back
     path = lib.project.save("Show")
     doc = json.loads(path.read_text())
-    assert not any(k.startswith("macro.") for k in doc["values"]) and "macro" not in doc["modules"]
+    assert doc["values"]["macro.2"] == pytest.approx(0.3) and "macro" not in doc["modules"]
     m.set_value(0.1)
-    assert not lib.project.is_dirty()                # a macro is not the project's to track
+    assert lib.project.is_dirty()                    # the project tracks it now
     lib.project.load("Show")
-    assert m.value == pytest.approx(0.1)
+    assert m.value == pytest.approx(0.3)
+
+
+def test_a_project_keeps_the_session_apart(rig, tmp_path):
+    """Plan 13 §2.2 / §4: a project file holds the performance part as
+    `values` and the session part as `session`; an older file whose
+    `values` held both still restores both, and is_dirty sees either."""
+    lib, reg = rig.lib, rig.reg
+    reg["view.shape"].set(5)
+    reg["master.gain"].set(2.0)
+    path = lib.project.save("Split")
+    doc = json.loads(path.read_text())
+    assert doc["schema"] == "hyperspace.project/1"
+    assert doc["values"] == reg.snapshot(part="performance")
+    assert doc["session"] == reg.snapshot(part="session")
+    assert "master.gain" in doc["session"] and "master.gain" not in doc["values"]
+    assert "view.shape" in doc["values"] and "view.shape" not in doc["session"]
+    assert not lib.project.is_dirty()
+    reg["master.gain"].set(1.0)                      # a session move dirties the project
+    assert lib.project.is_dirty()
+    # an old file: no `session` key, session ids in `values`
+    old = {"schema": "hyperspace.project/1", "name": "Old",
+           "values": {"view.shape": 7, "master.gain": 3.0, "band.0.atk": 0.5},
+           "modules": {}, "bank": [None] * library.SLOTS}
+    (tmp_path / "projects" / "old.hyp.json").write_text(json.dumps(old))
+    lib.project.load("Old")
+    assert rig.view.shape == 7 and rig.chain.gain == 3.0 and rig.chain.params[0].atk == 0.5
+    pr = lib.project
+    assert pr.values["view.shape"] == 7 and pr.session["master.gain"] == 3.0
+    assert pr.session["band.0.atk"] == 0.5
+    assert not {"master.gain", "band.0.atk"} & set(pr.values)
+    # the ids the old file lacks (its macros) are filled from the loaded state,
+    # so an untouched project is clean the moment it opens (review of PR #62)
+    assert "macro.1" in pr.values and not pr.is_dirty()
+    reg["macro.1"].set_value(0.2)
+    assert pr.is_dirty()
 
 
 def test_list_user_shadows_factory(rig, tmp_path):
