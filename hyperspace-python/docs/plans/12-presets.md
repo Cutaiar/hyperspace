@@ -123,8 +123,11 @@ re-pins the downbeat on every tap (audit B2).
 
 ## 4. The presets
 
-Lane numbers: `hand:0–5` left x, y, z, roll, pitch, yaw; `hand:6–11` right;
-12–13 presence; 14–21 the pinch switches (pinned to `hands/core.py` by the
+Hand rows name their axis (plan 13 WP5b, decision register row 20):
+`hand:left.x` … `hand:left.yaw`, `hand:right.x` … `hand:right.yaw`; on the
+default layout they are lanes 0–5 (left x, y, z, roll, pitch, yaw) and 6–11 (right);
+12–13 presence (`hand:left.present`), 14–21 the pinch switches
+(`hand:left.pinch.index` …; the names pinned to `hands/core.py` by the
 tests). *u* is the axis's shaped 0–1: height 0 at the bottom of the box,
 the centred axes 0.5 level, thumb-up / fingers-up / fingers-out toward 1.
 Every preset also carries the six `lane:` → `rot.rate.*` rows (× the drive
@@ -326,11 +329,11 @@ performance value). What waits on eyes is hand check 32, re-run as 41.
 **From the code review, noted rather than built** (each is a change
 outside the preset files):
 
-- The `hand:<i>` lane numbers bake in the default dofs order, as the
-  `hands-*` files always have; a user `[hands] dofs` list scrambles every
-  shipped preset silently. The right fix is a named address
-  (`hand:left.roll`) resolved by the adapter, or a warning from `HandsIO`
-  when its lane names differ from the default — plan 11 material.
+- *Done in plan 13 WP5b (PR #70), decision register row 20:* the `hand:<i>` lane numbers baked in the default dofs order, as the
+  `hands-*` files always had, so a user `[hands] dofs` list scrambled every
+  shipped preset silently. Built as the named address (`hand:left.roll`)
+  resolved through the map the hands adapter publishes; a name the rig
+  lacks is dormant.
 - A theme resets a whole group by naming one id in it (`rot.rate.XY: 1.0`,
   `fx.on: false`, …), which the project note explains and nothing else
   guards; a slot-level "groups to reset" list in `Presets.load` would say

@@ -3,8 +3,8 @@
 **Status: built on `plan-13-integration`** (WP1–WP5, PRs #62, #64, #63,
 #65, #66; WP6's documents; the integration PR to come). What remains:
 the hand checks at the machine (`11-hand-checks.md` group H, checks
-33–41 with check 31 first). Decision 20 (hand routes by name) was answered
-(a) on 2026-09-29 and is built as WP5b.
+33–42 with check 31 first). Decision 20 (hand routes by name) was answered
+(a) on 2026-09-29 and is built as WP5b (PR #70, §13).
 
 **After plans 11 and 12.** Plan 12 composed five hand presets and, in doing
 so, showed that the app has five nouns for saved state — module preset,
@@ -51,14 +51,14 @@ user ones in the home folder shadowing by name (as every group does today).
  "name": "TRIP",
  "note": "…",
  "values":  {"view.shape": 10, "fx.kaleido.on": true, "macro.1": 1.0, …},
- "routes":  [{"source": "hand:7", "target": "fx.zoomblur.amount", "op": "push", "value": 0.8}, …],
+ "routes":  [{"source": "hand:right.y", "target": "fx.zoomblur.amount", "op": "push", "value": 0.8}, …],
  "desk":    [{"source": "cc:0:48", "target": "view.bright", "op": "abs"},
              {"source": "note:0:82", "target": "view.points", "op": "toggle"},
              {"source": "cc:0:51", "target": "macro.1", "op": "abs"}, …],
  "macros":  {"macro.1": {"label": "Heat", "subs": [
                {"base": "fx.plasma.level", "from": 0.0, "to": 0.6},
                {"base": "view.speed", "from": 0.8, "to": 0.3},
-               {"depth": {"source": "hand:7", "target": "fx.zoomblur.amount"}, "from": 0.0, "to": 1.0}]}},
+               {"depth": {"source": "hand:right.y", "target": "fx.zoomblur.amount"}, "from": 0.0, "to": 1.0}]}},
  "modules": {"fx": "trip", "dream": "wake"}
 }
 ```
@@ -501,7 +501,7 @@ conversion of routes-only files switches on the effects their routes drive.
 |---|---|---|---|
 | 18 | **P13-h** The drive fader reaches the rotation as `scale: master.gain` on every lane → rotation route; D10 says routes lose `scale`. | (a) keep a route's `scale`, allowed only on a session param; macros move to subscribers | WP3's last step (it leaves those rows alone meanwhile) and WP5's factory regeneration |
 | 19 | **P13-i** May a preset's route *perform* a session param (`party-tumble`'s left height pushes `master.gain`)? | (a) yes: D9 keeps the analyzer's settings out of a preset, and an offset is not a setting | WP5's re-cut of `party-tumble` |
-| 20 | **P13-j** Hand routes by name (`hand:right.roll`) or by lane number (audit N7), now that WP5 makes it an S-sized change | **answered (a) 2026-09-29**: names now, built as WP5b | nothing else; WP6 and the integration PR wait only if (a). **Still open** when WP6 was written |
+| 20 | **P13-j** Hand routes by name (`hand:right.roll`) or by lane number (audit N7), now that WP5 makes it an S-sized change | **answered (a) 2026-09-29**: names now, built as WP5b (PR #70) | nothing else; WP6 and the integration PR wait only if (a). **Still open** when WP6 was written |
 
 ## 13. As built
 
@@ -908,3 +908,53 @@ its test, and the §3.10 items are gone:
   not regenerated: a rerun also flips `-0°` to `+0°` in a few cells, so
   their header keeps the old words until the next real regeneration).
   876 passed, 11 skipped; ruff clean.
+
+### WP5b — hand routes by name (PR #70)
+
+Decision register row 20 (a), audit N7. Stacked on the integration branch.
+
+- **The address.** `hand:<name>`: the axes as `[hands] dofs` spells them
+  (`left.x` … `right.yaw`), `left.present` / `right.present`, the pinch
+  switches `left.pinch.index` … `right.pinch.pinky` (the layout's own
+  finger words, `hands.core.PINCHES`). `hand:<i>` still reads as the lane
+  at index i.
+- **The map is the adapter's.** `hands.core.Layout` gives every lane its
+  name (`addresses`, `index`); `HandsIO._publish` puts
+  `router.names["hand"] = {name: lane}` beside the labels, once and on a
+  change. `Router.lane` resolves a source or a gate through it — a name
+  the map lacks, or any name before a map is published, is dormant —
+  cached per address against the map's identity; `Router.modulate`
+  inlines the cache hit, so the pass parses nothing (28 rows: ~31–32 µs
+  before, ~30 µs after, numeric and named alike). `Router.describe`,
+  `rest_of` and `gated` go through it. Hot-reload safe: `names` and the
+  cache are made on first use, and an adapter holding a pre-reload
+  `Layout` rebuilds it at publish.
+- **Writers.** A hand learn and its held-pinch gate write names
+  (`HandsIO.address`); the ROUTING page's source and gate combos and the
+  HANDS context menu offer and write names and show a numeric row as the
+  lane it reads (`ui_routing._at`, `Router.address`); the factory
+  generator writes names (`preset.hand`, `preset.pinch`) and every
+  factory preset with hand rows was regenerated — a pure rename on the
+  default layout. The hands-fx / hands-play docstrings said "roll" for the
+  right tilt (pitch) rows; corrected to plan 08's words.
+- **The migration** (`preset.hand_layout`, `name_hand_rows`): every
+  preset it writes names its hand sources, gates and depth-subscriber
+  routes by the rig's `[hands] dofs` when `[hands]` is enabled, else the
+  default layout, with a note naming which; `app.main` passes `[hands]`;
+  `Project.load`'s late schema-1 path uses the layout the adapter
+  published (`live_hand_layout`). A user preset saved with numbers is
+  loaded as it is.
+- **Not changed:** the referee, one performer per target, gates, rests,
+  the Replace / Keep prompt. Sources compare as strings, so `hand:7` and
+  `hand:right.y` are different sources to Learn's same-axis refresh and to
+  a depth subscriber's key (ARCHITECTURE §3.10).
+- **Tests.** New: `test_hand_names.py` (six),
+  `test_hands.py::test_a_hand_learn_writes_the_axis_by_name_on_any_dofs`,
+  `test_presets.py::test_every_factory_presets_hand_rows_are_named`,
+  `test_migration.py::test_the_migration_names_the_hand_rows`. Changed:
+  `test_hands.py`'s learn and layout tests,
+  `test_plan12_presets.py::test_hand_lane_names_are_the_hands_packages`
+  (was `…_numbers_…`) and its two sweeps, four `test_routing.py` tests,
+  `test_ui_routing.py::test_a_route_on_a_session_param_is_marked_session`,
+  six `test_migration.py` tests. Hand check 42 at the machine. 885 passed,
+  11 skipped; ruff clean.

@@ -16,7 +16,7 @@ gone; `hyperspace-web/hyperspace.html` is frozen and matters here only as
 the oracle the golden traces were recorded from. Revised for plan 13
 (presets, the session, the two-layer desk) on `plan-13-integration`.
 
-**Run it:** `uv sync`, `uv run pytest` (876 tests, ~35 s), `uv run
+**Run it:** `uv sync`, `uv run pytest` (885 tests, ~35 s), `uv run
 hyperspace`. `?` in the app shows the controls cheat sheet.
 
 ---
@@ -557,7 +557,10 @@ unreadable at a party.
   macro moves only the depths.
 - **Learn and the ROUTING page write into the loaded preset** (plan 13
   §3.3). Right-click → Learn, then a knob: a preset-layer row; then a
-  hand: a route (the Replace / Keep prompt as ever). With SHIFT latched,
+  hand: a route naming the axis that moved, `hand:right.pitch` (decision
+  register row 20: hand routes are addressed by name, so a rig that
+  reorders `[hands] dofs` keeps every preset on its axes; a name the rig
+  lacks is dormant; the Replace / Keep prompt as ever). With SHIFT latched,
   or on an invariant control, a knob learn is refused and the reason shows
   on the SYSTEM page's learn line and the ROUTING head. The ROUTING page is
   one page over the loaded preset — head (the preset, its dot, save /
@@ -590,7 +593,7 @@ unreadable at a party.
 
 ## 6. Testing
 
-`uv run pytest` — 876 tests, 11 skipped without torch, about 35 s. `ruff`
+`uv run pytest` — 885 tests, 11 skipped without torch, about 35 s. `ruff`
 is the linter. Every test runs with `HYPERSPACE_HOME` pointed at its own
 `tmp_path` (`tests/conftest.py`), so no test can touch `~/Hyperspace`.
 What holds what:
@@ -612,7 +615,11 @@ What holds what:
   subscribers, a performer on a macro moving only its depths, the `scale`
   migration and refusal (`tests/test_macros.py`); the one-time migration
   of an owner-like home — presets, backups, nothing lost, a second
-  launch that changes nothing (`tests/test_migration.py`).
+  launch that changes nothing, every hand lane it carries named by the
+  rig's layout (`tests/test_migration.py`); hand routes by name — a
+  named row follows its axis whatever the dofs order, a name the rig
+  lacks is dormant, a number still reads, the gates and the ROUTING combos
+  by name (`tests/test_hand_names.py`).
 - **Presets and the session** (plan 13): every persisted param in exactly
   one part (`tests/test_params.py`,
   `test_every_persisted_group_is_performance_or_session`); a preset load

@@ -96,7 +96,7 @@ class Learn:
 
     def learn_source(self, source: str, when: str | None = None) -> None:
         """An adapter completes the learn with one of its own sources
-        (hands/core.py: ``hand:<i>``): a `position` route at depth 1 — the
+        (hands/core.py: ``hand:right.pitch``, by name): a `position` route at depth 1 — the
         source is the whole fader, through the Router like every route,
         with no pickup and no device feedback. `when` gates the row on a
         second source (a pinch held while learning), so the row only acts

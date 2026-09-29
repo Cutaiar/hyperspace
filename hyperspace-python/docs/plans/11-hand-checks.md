@@ -416,7 +416,8 @@ fix and the cards stand.
 
 Run after plan 13 is merged, APC40 plugged in, in this order (33 is the
 first launch on the new code, so it goes first; 41 needs the projector
-and the box). About 35 minutes. The headless tests named are the ones plan
+and the box, 42 the box and a `config.toml` edit). About 40 minutes. The
+headless tests named are the ones plan
 13's work packages add (plan 13 §10); run them first.
 
 **33. The first launch migrates your home folder, and loses nothing (plan 13 §6, WP5).**
@@ -563,6 +564,23 @@ or a route in `preset.party_*_routes` (generated: change the generator,
 `python -m hyperspace.preset`, not the file); a knob on the wrong base
 → `preset.WAKE_KNOBS` / `TRIP_KNOBS`; anything check 32 lists → the same
 place it lists.
+
+**42. Hand routes by name survive a reordered `dofs` (plan 13 WP5b,
+decision register row 20).** Headless: `uv run pytest -q
+tests/test_hand_names.py`. Camera and box on. In `config.toml` set
+`[hands] dofs = ["yaw", "pitch", "roll", "y", "x", "z"]` (the default
+list reversed) and relaunch. Load `hands-play`: the right height still
+positions brightness, the left height speed, the right tilt 4D depth; the
+ROUTING page's rows read "R y positions", "L y positions", "R pitch
+positions" and their source combos show `hand R y` / `hand L y` /
+`hand R pitch`. Load `hands-pinch`: a right index pinch still picks
+brightness. Now set `dofs = ["x", "y", "z"]` and relaunch: `hands-play`'s
+right tilt row does nothing (no `right.pitch` on this rig) while both
+heights still work. Put `dofs` back afterwards. *Pass:* every row stays on
+the axis its words name; the missing axis's row is dormant, never on
+another axis. *Fail:* a row moving with the wrong axis → `Router.lane` /
+`HandsIO._publish` (`router.names["hand"]`); the combos showing raw
+`hand:<i>` → `ui_routing._sources` / `Router.address`.
 
 ## What this list does not ground
 

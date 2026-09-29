@@ -456,7 +456,7 @@ new left-height row in `party-tumble` (WP5).
 
 ### 20. P13-j — hand routes by name or by lane number
 
-**Answered (a), 2026-09-29: by name, built now in plan 13 (WP5b).** (Recommendation was (a).)
+**Answered (a), 2026-09-29: by name, built in plan 13 WP5b (PR #70).** (Recommendation was (a).) Every factory preset now names its hand rows (`hand:right.roll`); the migration names yours by your rig's `[hands] dofs` (or the default list when `[hands]` is off) and says so in a note; a number still reads. Hand check 42 tries a reordered `dofs` at the machine.
 
 **What it is.** A preset's hand route says which hand axis drives it. Today
 it says so by a lane *number*: `hand:9` means "the 10th hand lane", which on
@@ -536,9 +536,9 @@ Each is built, reviewed and on PR #55. Overturning any is a small follow-up.
   scramble shipped presets; an explicit groups-to-reset list on a theme or
   preset. Filed 2026-09-28 as `AUDIT-2026-09.md` rows N7 and L9. L9 is moot
   for presets since plan 13 (a load replaces every performance group, D2);
-  N7 is row 20 here, answered (a) 2026-09-29, built in plan 13 WP5b.
+  N7 is row 20 here, answered (a) 2026-09-29, built in plan 13 WP5b (PR #70).
 - Plan 13's machine checks: `docs/plans/11-hand-checks.md` group H
-  (checks 33–41).
+  (checks 33–42).
 
 ---
 
@@ -569,4 +569,4 @@ or "overturn".
 | 17 | B6 as built | keep | **keep**, 2026-09-28 | |
 | 18 | P13-h the drive fader and `scale` | (a) keep `scale`, session params only | **(a)**, 2026-09-28 | built in plan 13 WP5 (PR #66): `routing.migrate_scales` — a `scale` kept only on a session param, one on a macro a depth subscriber, one on a performance param dropped with a note |
 | 19 | P13-i a route onto a session param | (a) yes; D9 is about values | **(a)**, 2026-09-28 | built in plan 13 WP5 (PR #66): the ROUTING page marks such a route "session" (`ui_routing.is_session_target`); the scale combo offers session params only |
-| 20 | P13-j hand routes by name | (a) names now, in plan 13 | **(a)**, 2026-09-29 | built in plan 13 WP5b |
+| 20 | P13-j hand routes by name | (a) names now, in plan 13 | **(a)**, 2026-09-29 | built, plan 13 WP5b, PR #70: `hand:right.roll`, `hand:left.present`, `hand:left.pinch.index`, resolved through the hands adapter's published map (`router.names`); a name the rig lacks is dormant; `hand:<i>` still reads; the factory presets regenerated, the migration names what it carries by the rig's layout |

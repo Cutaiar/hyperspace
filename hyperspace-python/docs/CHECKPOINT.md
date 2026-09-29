@@ -68,7 +68,7 @@ file what fails as new audit rows dated with plan 11.
    since plan 09 landed; B1's fix and the HANDS page re-layout (plan 11
    WP13 found it overflowing the panel by 216 px on any rig with hands
    enabled) are the two things most likely to look different. Plan 13's
-   group H (checks 33–41, check 31 first) starts with the first launch
+   group H (checks 33–42, check 31 first) starts with the first launch
    on the new code, which migrates `~/Hyperspace` — copy it first.
 2. **First real audio capture.** Every live path is code-complete and now
    under test over a fake device, but no human has pressed `M` on real
