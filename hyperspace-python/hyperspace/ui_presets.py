@@ -18,9 +18,10 @@ file it points at (click or F-key loads, ⇧click or ⇧F-key saves the live
 state as it, the loaded one lit). Under the bank sits the one **preset
 strip** — this same strip over the ``presets`` group, a document kind
 preset.py keeps — and then the module overview (the performance groups
-and the band strip's scene). The ROUTING page's strip is this same strip
-over the ``bindings`` group — a document kind the library keeps for the
-router (library.py, ``Library.routing``).
+and the band strip's scene). The ROUTING page's head is this strip's
+save / as… over the same ``presets`` group — the loaded preset, whose
+routes, desk and macros that page edits (ui_routing.head); there is no
+strip of routing presets since plan 13 WP5.
 
 These are functions over the Panel rather than widget classes: the
 state they need (the name field, the cached listings) lives on the

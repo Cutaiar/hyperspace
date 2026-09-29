@@ -27,8 +27,10 @@ Values are read live through getters, never cached, so a param stays true
 after a hot reload or after the chain object is recreated on a source
 attach (getters go through ``audio.chain``, not a captured chain).
 
-Two flags say what a param is *for*: ``persist`` (it belongs in a preset —
-off for UI state, transport and rig-specific choices) and ``modulatable``
+Two flags say what a param is *for*: ``persist`` (it belongs in a
+snapshot — a preset's values when its group is performance, a project's
+session part when it is session, `part_of`; off for transient UI state,
+transport and triggers) and ``modulatable``
 (a continuous source such as an audio lane may drive it — off for things
 like which screen the output is on). An ``alias`` (band.sel.*) is neither.
 
@@ -78,7 +80,7 @@ BMP_PATHS = ["STILL", "ORBIT", "FIG-8", "SWAY"]
 PLANES = PLANE_NAMES   # the rotation planes' names, in geometry.PLANES's order
 
 RAW_STEPS = 100  # detents across an untapered continuous range
-N_MACROS = 8     # macro.1–8: knobs that exist to be a route's scale and to be owned
+N_MACROS = 8     # macro.1–8: knobs that act through their subscribers and may be owned
 # the performance / session split (plan 13 §4, D9), by group, declared
 # once. Performance is what a preset (preset.py) holds and
 # replaces: the look, its LFOs and its macros. Session is the rig and the
@@ -140,7 +142,7 @@ class Param:
     # ENUM: a list, or a callable returning one (preset names change on save)
     choices: list[str] | Callable[[], list[str]] = field(default_factory=list)
     # what the param is for
-    persist: bool = True         # belongs in a preset
+    persist: bool = True         # belongs in a snapshot: a preset or a project's session (part_of)
     modulatable: bool = True     # a lane may drive it
     alias: bool = False          # a view onto another param (band.sel.*)
     # modulation state — runtime only

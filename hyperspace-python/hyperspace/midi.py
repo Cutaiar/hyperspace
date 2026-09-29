@@ -13,7 +13,7 @@ that class — with a MIDI source (``cc:<ch>:<n>``, ``note:<ch>:<n>``,
   cc   abs      absolute 7-bit knob or fader → set_norm, with soft pickup:
                 after the param moved by other means the knob does nothing
                 until it sweeps through the current value, so a band switch
-                or a theme load never jumps a knob's value.
+                or a preset load never jumps a knob's value.
        rel      two's-complement relative encoder → step(±n)
        rel64    64-centred relative encoder → step(±n)
        toggle   rising edge → toggle()/fire()

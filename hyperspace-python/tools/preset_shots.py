@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Plan 12 — the party presets, offscreen: each preset's scene under a set
+"""Plan 12 — the party presets, offscreen: each preset's look under a set
 of hand poses, and the sweep tables the plan cites.
 
 Every ``party-*`` preset (``library/presets/``) is loaded through the real
-``Presets`` over a ``Router`` — its scene's values and its routes in one
+``Presets`` over a ``Router`` — its values and its routes in one
 load, as its F-key does — and two fake hands are driven through the real ``HandsIO`` chain
 (range → One Euro → dead zone → follower) at a handful of poses, each held
 for a second and a half before the frame is taken. No audio source: the
 lane rows are quiet, so what the shots show is the hands alone over the
-scene's bases. No dream worker either (torch is optional), so in the wake
+preset's bases. No dream worker either (torch is optional), so in the wake
 shots the echoes are real and the dream buffer is empty.
 
     uv run python tools/preset_shots.py [--only tumble,trip] [--frames 90] [--no-shots]
@@ -227,7 +227,7 @@ def sweep(name: str, frames: int) -> str:
              f"for {frames} frames ({frames / 60:.1f} s) through the real hand chain "
              "(default feel: dead zone 0.04 on the centred axes, return 0.5 s), then "
              f"*out* is the value {frames} frames after the hand left at u = 1, and "
-             "*never* the value when that hand was never seen. The scene's base is "
+             "*never* the value when that hand was never seen. The preset's base is "
              "the first column; a rotation phase is shown as the hand's offset from "
              "the base, since a live plane keeps turning underneath.\n")
     lines = [f"# {name} — hand sweeps\n", intro,

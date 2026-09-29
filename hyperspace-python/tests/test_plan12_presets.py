@@ -186,8 +186,8 @@ def test_hand_lane_numbers_are_the_hands_packages():
             assert hand(s, axis) == f"hand:{io.axis(f'{side}.{axis}')}"
 
 
-def test_every_party_preset_has_a_theme_a_card_and_only_real_ids(tmp_path):
-    """Each preset's scene (library/presets/party-*.json, named by the
+def test_every_party_preset_has_a_preset_a_card_and_only_real_ids(tmp_path):
+    """Each preset (library/presets/party-*.json, named by the
     party.hyp.json bank) names only real params, and its performer card
     exists beside the plan."""
     r = rig(tmp_path=tmp_path, full=True)
