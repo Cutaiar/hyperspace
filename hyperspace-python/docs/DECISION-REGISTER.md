@@ -572,6 +572,18 @@ still starts fast and tells you why.
 **What changes.** `[dream] enabled` default, the SYSTEM / LOOKBACK message
 (WP1), the setup docs, the launch command in the hand checks. Plan 14 WP6.
 
+**As built (plan 14 WP1 + WP6).** WP1 made torch an ordinary dependency
+and the worker on by default. WP6 made the echoes it dreams over
+readable: echo time is seconds (`dream.fade`, a half-life; `dream.gap`,
+seconds between echoes — the old per-frame `dream.decay` / `dream.every`
+read as 60 Hz frames, so every saved look is the same at 60 Hz and a
+120 Hz screen no longer halves the trail); a TRACER preset with the
+investigation's legible set (a ninth party preset, in the list, on no
+F-key); WAKE re-tuned (24 echoes over 1.2 s, a 0.6 s half-life, occlude
+0.3) and shot with the worker running
+(`docs/plans/assets/12-presets/party-wake-dream-sheet.png`). No extra
+step: `uv sync` and launch; hand checks 9 and 41 look at it.
+
 ### 24. P14-d — which effects go on the party show's F6–F8
 
 **Answered (a), 2026-09-29.** **Recommendation: ACID, MANDALA and NOITA.**
@@ -592,6 +604,20 @@ key.
 
 **What changes.** Three generated presets, the party bank, the FX-coverage
 test. Plan 14 WP5.
+
+**As built (plan 14 WP5).** `party-acid` (acid, wobble, deconverge, hue
+cycle), `party-mandala` (plasma, kaleidoscope, fractals, glimmer) and
+`party-noita` (trip warp, trip colour, fractals, double vision) on F6–F8,
+each taking its effect values from its `library/fx` module preset, with
+plan 12's hand rows and eight device knobs. The seven effects no preset
+used are all on in one of the three. Two deviations from the module
+presets, both for the glass: MANDALA's plasma level and its fractals and
+glimmer grounds start at 0 (the module is a full-frame generator; on a
+Pepper's Ghost the black must stay black — the right hand's pitch floods
+the plasma in), and NOITA adds double vision, which no module preset has.
+The dead `fx.mix` rows: `hands-pinch` fades the hue cycle in, `lfo-breathe`
+breathes the plasma. Cards: `docs/plans/assets/12-presets/party-{acid,
+mandala,noita}.md`; hand checks 5 and 41.
 
 ### 25. P14-e — the desk's glyphs and diagram
 
@@ -702,6 +728,6 @@ or "overturn".
 | 20 | P13-j hand routes by name | (a) names now, in plan 13 | **(a)**, 2026-09-29 | built, plan 13 WP5b, PR #70: `hand:right.roll`, `hand:left.present`, `hand:left.pinch.index`, resolved through the hands adapter's published map (`router.names`); a name the rig lacks is dormant; `hand:<i>` still reads; the factory presets regenerated, the migration names what it carries by the rig's layout |
 | 21 | P14-a overlay mode | (a) behind a config key, off | **(a)**, 2026-09-29 | plan 14 WP2 |
 | 22 | P14-b the party device | party opens; house moods a `house` show; last show remembered | **rec**, 2026-09-29 | plan 14 WP3 |
-| 23 | P14-c dream on by default | (b) optional torch, worker on, loud when missing | **(a)**, 2026-09-29 | torch is part of the app, not optional; plan 14 WP1 |
-| 24 | P14-d F6–F8 effects | (a) ACID, MANDALA, NOITA | **(a)**, 2026-09-29 | plan 14 WP5 |
+| 23 | P14-c dream on by default | (b) optional torch, worker on, loud when missing | **(a)**, 2026-09-29 | torch is part of the app, not optional; built: plan 14 WP1 (the dependency, the worker on) and WP6 (echoes in seconds, TRACER, WAKE re-tuned and shot with the worker on) |
+| 24 | P14-d F6–F8 effects | (a) ACID, MANDALA, NOITA | **(a)**, 2026-09-29 | built: plan 14 WP5 — `party-acid` / `party-mandala` / `party-noita` on F6–F8, every effect on in a factory preset, no factory route on an effect that is off |
 | 25 | P14-e desk glyphs and diagram | (a) K/D/S/G/B glyphs, up layer, above the cheat sheet | **(a)**, 2026-09-29 | plan 14 WP7 |

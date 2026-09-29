@@ -92,7 +92,7 @@ terminal (after WP1), and keep `~/Hyperspace/stall.log`.
 - [ ] 3 — first real audio capture from the mic or the interface.
 - [ ] 2, 4, 5, 7, 8 — config notes, pages fit (†WP4, WP7), effects by eye (†WP5), the LFO page and B / ⇧B, hot reload.
 - [ ] 6 † — cut-through, rewritten by WP1: window and fullscreen opaque whatever the toggle.
-- [ ] 9 † — the dream by eye: needs `uv sync --extra dream` first (WP1's setup note) and WP6's echoes.
+- [ ] 9 † — the dream by eye: no extra step (decision 23: `uv sync` installs torch), with WP6's echoes — TRACER and WAKE.
 - [ ] 33 — the migration: `MIGRATED` holds your routes and learned knob; the backups exist.
 - [ ] 38, 40 † — a load replaces everything (a tapped BPM survives); the show opens on its "starts on" preset (†WP3, WP4).
 - [ ] 44 † — the stall log: `kill -USR1` writes a dump (WP1).
@@ -130,3 +130,61 @@ rows through the same table) — WP9 adds one.
 ## 7. As built
 
 Filled as the work packages land.
+
+**WP5 — the effects in the show (decision 24).**
+- Three generated party presets on the party show's F6–F8
+  (`preset.FACTORY_PRESETS`, written whole by `python -m hyperspace.preset`),
+  each taking its effect values from its `library/fx` module preset
+  (`preset.fx_module`) over a plan 12 scene (`preset.party_scene`), with
+  plan 12's hand rows (six DOF, pushes from rest, no pinch, the left hand's
+  grip) and eight device knobs like TRIP's:
+  - **ACID** (`party-acid`): acid, wobble, deconverge, hue cycle — the
+    `acid` module; the truncated tesseract in lines over faint rings.
+  - **MANDALA** (`party-mandala`): plasma, kaleidoscope, fractals,
+    glimmer — the `mandala` module; the 24-cell panned off centre so the
+    eight-wedge fold rings it. The module's plasma level and grounds start
+    at 0 here (it is a full-frame generator; the glass needs black) — the
+    right hand's fingers-up floods the plasma in.
+  - **NOITA** (`party-noita`): trip warp, trip colour, fractals — the
+    `noita heavily tripping` stage — and double vision; the right hand's
+    height is the next stage (warp, colour and fractals together).
+- The seven effects no preset used — warp (NOITA), wobble (ACID),
+  doublevision (NOITA), deconverge (ACID), fractals (MANDALA, NOITA),
+  glimmer (MANDALA), tripcolour (NOITA) — are all on in one; the tests
+  hold every effect to "on in a factory preset" (an allow-list, empty) and
+  no factory route or desk row to an effect, the chain's mix or the
+  look-back while it is off.
+- The dead rows: `hands-pinch`'s left index pinch fades the hue cycle in
+  from `fx.mix` 0; `lfo-breathe`'s LFO 2 breathes the plasma about
+  `fx.mix` 0.5 (check 39's look gains a plasma wash).
+- The FX page's faint line: "a preset load resets the effect stack; save
+  it as a preset to keep it".
+- Shots, sweeps and one card each under `docs/plans/assets/12-presets/`;
+  `tools/preset_shots.py`'s sweep read every named hand row as "R yaw"
+  (since plan 13 WP5b) and reads the address now.
+
+**WP6 — echoes you can read; the dream on (decision 23).**
+- Echo time is seconds: the look-back's own clock, ticked by the
+  renderer's time; `dream.fade` (an echo's half-life, "halves in 0.76 s")
+  replaces the per-frame `dream.decay`, `dream.gap` (seconds between
+  echoes, "every 67 ms") replaces `dream.every`. The same preset keeps the
+  same trail at 60 and 120 Hz.
+- The migration reads the old ids as 60 Hz frames, so every look is the
+  same at 60 Hz: the factory files converted; the launch rewrites a user
+  preset or look-back module preset once (`<file>.bak-v2-frames` kept);
+  a file still naming them loads in seconds with a note; a push on the old
+  decay keeps its reach.
+- **TRACER** (`party-tracer`): the investigation's legible set — 24
+  echoes every 1/15 s (1.6 s back), a 0.76 s half-life, echo mix 0.7,
+  darken 0, occlude 0.3, contrast 1, faces off, points on, speed 0.6,
+  bright 2 — with the grip, hand routes on echo mix / fade / occlude /
+  contrast, and eight device knobs. **A ninth party preset, in the list
+  on no F-key**: F1–F8 are plan 12's five and decision 24's three.
+- **WAKE** re-tuned the same way: 24 echoes every 50 ms, a 0.6 s
+  half-life, echo mix 0.6, darken 0, occlude 0.3, points on, speed 0.6;
+  its dream rows kept; shot with the worker on
+  (`tools/dream_shots.py --preset party-wake`).
+- The LOOKBACK page says what an echo is and how far back the trail
+  reaches; every echo knob's tooltip gives its unit.
+- Not changed: the dream worker's own `k` and `mask_decay` are per
+  submitted frame still.
