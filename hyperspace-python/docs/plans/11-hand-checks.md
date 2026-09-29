@@ -161,7 +161,10 @@ layer's), then move the open band strip; a channel fader moves that
 band's post drive on either layer; after switching band with the
 track-select buttons a device knob's ring redraws and the knob continues
 from it (the ring re-bases the encoder — group H, check 31, is that
-check). A fader moved behind your back still waits for a pickup. *Fail:*
+check). A fader moved behind your back still waits for a pickup. (The
+glyphs, plan 14 WP7: the track knobs are K1–K8, the device knobs D1–D8,
+the channel faders S1–S8, the track-select buttons G7·1–G7·8 — the
+on-screen desk above the cheat sheet lights each as you use it.) *Fail:*
 no LEDs → `apc40.mode_on` / the port name (`[midi] port`); a knob that
 moves the wrong param → `apc40.DEFAULT_MAP` (and its `layer`); a knob
 jumping back to its old place after a switch → check 31;
@@ -180,12 +183,13 @@ shows the base — that is today's rule (R6 recommendation: keep). *Fail:*
 a ring chasing the audio → `MidiIO.feedback` reading the effective value.
 
 **12. TAP TEMPO, NUDGE ±, METRONOME, QUANT (plan 09 check 5 on the desk).**
-As check 7 but on the desk: TAP TEMPO ×4 on the beat, METRONOME on the
-one. *Pass:* as check 7; the METRONOME LED blinks on the beat; NUDGE +
-and − move `tempo.nudge` by 0.01 and the swell with it; QUANT cycles the
-preset bank (`preset.next`), the clip grid's top row picks a preset, row 2–3 a
-scene (with SHIFT latched — the band scenes are the global layer's, group
-H), row 4–5 a shape, STOP ALL resets the scene with the 8 s undo.
+As check 7 but on the desk: TAP TEMPO (B20) ×4 on the beat, METRONOME
+(B12) on the one. *Pass:* as check 7; the METRONOME LED blinks on the
+beat; NUDGE + (B22) and − (B21) move `tempo.nudge` by 0.01 and the swell
+with it; QUANT (B10) cycles the preset bank (`preset.next`), the clip
+grid's top row (G1·1–G1·8) picks a preset, rows 2–3 a scene (with SHIFT
+latched — the band scenes are the global layer's, group H), rows 4–5 a
+shape, STOP ALL (G6·9) resets the scene with the 8 s undo.
 *Fail:* METRONOME LED steady → `lfo.trigger`'s `lit` (tempo.py
 `on_beat`); a button doing what it did before plan 09 → your
 `bindings.json` kept an old row (`remap_factory` only moves rows where
@@ -490,9 +494,10 @@ Headless: `uv run pytest -q tests/test_desk.py::test_an_unmapped_control_is_dark
 F1 (TUMBLE, whose desk leaves the device knobs free). *Pass:* the eight
 device-knob rings are off; turning one changes nothing on the panel; the
 ROUTING page's DESK · PRESET LAYER section lists them, dimmed, under the
-desk rows as "device knob 1 … unmapped — dark" (through "device knob 8");
-with SHIFT latched they light and move the band strip, and the ROUTING
-head reads LAYER GLOBAL. *Fail:* a lit ring on an unmapped knob → the dark
+desk rows as "D1  unmapped — dark" (through "D8"; hover one for "device
+knob 1"), and the on-screen desk above the cheat sheet draws D1–D8 dark;
+with SHIFT latched they light (on the device and on screen, where ⇧ turns
+red) and move the band strip, and the ROUTING head reads LAYER GLOBAL. *Fail:* a lit ring on an unmapped knob → the dark
 rule in `MidiIO.redraw`; a device knob moving the band strip without SHIFT
 → a fall-through to the global layer, which D8 forbids (`MidiIO._handle`);
 a knob that does nothing but is not listed → `ui_routing.unmapped`.
@@ -502,14 +507,15 @@ Headless: `uv run pytest -q tests/test_learn.py::test_learn_refuses_the_global_l
 Note `bindings.json`'s time (`ls -l ~/Hyperspace/bindings.json`). Open
 the ROUTING page. Right-click Brightness → Learn, move track fader 1.
 *Pass:* refused — the ROUTING head (and the SYSTEM page's learn line)
-reads, in the warning colour, "learn: track fader 1 is invariant (the
-session's) — not learned"; nothing changes, the fader still drives SUB's
-drive. Latch SHIFT, Learn again, turn track knob 6: "learn: track knob 6
-is on the global layer (the session's) — latch SHIFT off to learn into
-the preset". Unlatch SHIFT, Learn again, turn device knob 3: "learn:
-learned view.bright ← device knob 3 (into the preset)" — the knob now
-moves brightness, the DESK section shows "device knob 3 → view.bright
-abs" and track knob 1 (brightness's old knob) as "unmapped — dark", the
+reads, in the warning colour, "learn: S1 (track fader 1) is invariant
+(the session's) — not learned"; nothing changes, the fader still drives
+SUB's drive. Latch SHIFT, Learn again, turn track knob 6: "learn: K6
+(track knob 6) is on the global layer (the session's) — latch SHIFT off
+to learn into the preset". Unlatch SHIFT, Learn again, turn device knob
+3: "learn: learned view.bright ← D3 (device knob 3) (into the preset)" —
+the knob now moves brightness, the DESK section shows "D3 view.bright
+abs" and K1 (brightness's old knob) as "unmapped — dark", the on-screen
+desk lights D3 and darkens K1, the
 head's dot (and the PRESETS strip's) is lit, and `bindings.json`'s time
 has not moved. Load the preset again (F1) to throw the learn away: the
 dot goes out, track knob 1 is brightness again. *Fail:* a learn on a
@@ -593,9 +599,9 @@ another axis. *Fail:* a row moving with the wrong axis → `Router.lane` /
 ## I. Plan 14 WP1 — an opaque window, the stall log — added 2026-09-29
 
 Run on the plan 14 WP1 branch (PR, not merged). 43 needs the projector;
-44 and 46 run on the laptop alone. About 15 minutes. The headless tests
-named are the ones WP1 adds; run them first. (45 is kept for plan 14
-WP7's desk diagram.)
+44 and 46 run on the laptop alone; 45 (plan 14 WP7) needs the APC40.
+About 25 minutes. The headless tests named are the ones each WP adds;
+run them first.
 
 **43. Pepper's Ghost: an opaque black window (plan 14 WP1).**
 Headless: `uv run pytest -q tests/test_lookback.py -k opaque`.
@@ -627,6 +633,33 @@ time and the loaded preset, then every thread's stack. *Fail:* no file or
 an empty one → `watchdog.Watchdog.start` (its `error` is on the SYSTEM
 page); the app quitting on the signal → the `faulthandler.register` call
 did not run (the default action of SIGUSR1 is to terminate).
+
+**45. The on-screen desk matches the device, control by control (plan 14 WP7, decision 25).**
+Headless: `uv run pytest -q tests/test_ui_desk.py`. APC40 plugged in;
+launch, open the `party` project, F5 (TRIP), ROUTING page. The desk is
+drawn at the top left of the control window, above the cheat sheet
+(SYSTEM page: `Desk diagram` hides and shows it). *Pass:* the picture is
+the device's face — the 8 × 5 clip grid with the scene-launch column on
+its right, then the clip-stop row with STOP ALL, track select with MASTER,
+activator, solo and rec-arm rows, the cue knob in the master column, the
+nine faders along the bottom; on the right the eight track knobs (two
+rows of four) with PAN · SEND A · B · C under them, the bank-select arrows
+with TAP TEMPO, NUDGE − / + and SHIFT beside them, the eight device knobs
+with their eight buttons, PLAY · STOP · REC and the crossfader. Walk the
+desk with the mouse: every hover names the control Akai's way on its
+second line and it is the one at that place on the device (anything out
+of place: note it with its glyph). Every control lit on screen is lit on
+the device and every dark one dark (the clip grid in the same colours);
+turn D1: its arc moves with its ring. Latch SHIFT: ⇧ turns red, the
+header says GLOBAL LAYER · SHIFT, D1–D8 and K1–K5 stay lit with the band
+strip and the hand feel, K6–K8 go dark — on the device the same. Pick
+any row of the ROUTING page's DESK section, read its glyph (say "D4"),
+find D4 on the diagram, then the same place on the device, and turn it:
+that row's param moves. *Fail:* a control drawn in the wrong place →
+`apc40._layout` (its x, y); lit on screen but dark on the device, or the
+reverse → the screen reads `Bindings.active` and the device
+`MidiIO.redraw` — they must agree (`ui_desk.lit`); a glyph that names
+another control than the one you turned → `apc40.glyph`.
 
 **46. WAKE without the dream worker still draws (plan 14 WP1, the freeze).**
 Headless: `uv run pytest -q tests/test_render.py::test_a_look_back_frame_with_no_worker_leaves_the_window_bound tests/test_lookback.py::test_capture_off_the_cadence_with_no_source_puts_the_target_back`.

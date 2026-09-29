@@ -130,3 +130,21 @@ rows through the same table) — WP9 adds one.
 ## 7. As built
 
 Filled as the work packages land.
+
+- **WP7, the desk drawn** (decision 25 (a); branch `plan-14-wp7-desk`,
+  stacked on WP1 #73 and the plan #72). `apc40.LAYOUT`: the 137 controls
+  of the mk1 protocol, each with its source, kind, place on a unit grid
+  laid out like the device (the button field and faders left, the knobs,
+  bank select, transport corner and crossfader right) and glyph —
+  K1–K8, D1–D8, S1–S8, SM, X, C, G row·column (G1·1 … G10·8, G1·9 …
+  G7·9), B1–B22, ⇧; `apc40.glyph` / `named` resolve any MIDI row. The
+  glyph is first on every ROUTING desk and session row (Akai's name on
+  hover) and in every Learn message and refusal ("D3 (device knob 3)").
+  `ui_desk.py` draws the desk above the cheat sheet (`ui.desk`, the
+  SYSTEM page beside the sheet's switch): the up layer's controls and
+  the invariant ones lit, the rest dark, ⇧ red on the global layer, a
+  knob's ring arc at its base, a fader's cap, the LED colour the device
+  shows (`routing.led_lit`, the rule midi.py lights by); the hover names
+  glyph · param · layer. The cheat sheet gains the glyph legend.
+  Screenshot: `assets/14-party-rig/desk-preset.png` (TRIP),
+  `desk-global.png` (SHIFT latched). Hand check 45.
