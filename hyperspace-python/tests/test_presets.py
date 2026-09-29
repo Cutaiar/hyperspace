@@ -139,6 +139,54 @@ def test_session_ids_in_a_preset_are_noted_and_ignored(rig):
     assert rig.view.shape == 6 and [b.source for b in rig.router.table.routes()] == ["hand:7"]
 
 
+def test_a_value_that_will_not_land_leaves_the_state_whole(rig):
+    """Review of PR #64: a hand-edited value that will not take refuses the
+    load whole — the bases, the routes and the strip stay on the last preset."""
+    lib, reg = rig.lib, rig.reg
+    snap, routes = reg.snapshot(), [b.to_json() for b in rig.router.table.routes()]
+    put(rig.home, "BROKEN", values={"view.shape": 3, "view.speed": "fast"},
+        routes=[{"source": "hand:7", "target": "view.bright", "op": "push"}])
+    with pytest.raises(LibraryError, match="nothing loaded"):
+        rig.presets.load("BROKEN")
+    assert reg.snapshot() == snap
+    assert [b.to_json() for b in rig.router.table.routes()] == routes
+    assert lib.current("presets") == "BIG BLUE WAVE" and not lib.is_dirty("presets")
+
+
+def test_a_project_reload_keeps_the_loaded_preset(rig):
+    """Review of PR #64: a project re-read from disk (or opened with no
+    startup preset) keeps the preset that is loaded — its name, its clean
+    reference and its slot's light."""
+    lib, pr = rig.lib, rig.lib.project
+    pr.load_slot(1)
+    path = pr.save("Set")
+    lib.poll(now=1.0)
+    doc = json.loads(path.read_text())
+    doc["session"]["master.gain"] = 3.0
+    path.write_text(json.dumps(doc))
+    import os
+    os.utime(path, (2e9, 2e9))
+    assert lib.poll(now=2.0) and rig.chain.gain == 3.0
+    assert lib.current("presets") == "EMBER ORBIT" and not lib.is_dirty("presets")
+    assert pr.active == 1
+    doc["startup"] = None
+    (rig.home / "projects" / "bare.hyp.json").write_text(json.dumps(doc))
+    pr.load("bare")
+    assert lib.current("presets") == "EMBER ORBIT" and pr.active == 1
+
+
+def test_a_strip_save_as_moves_the_banks_light(rig):
+    """Review of PR #64: saving the live state from the strip under a name
+    the bank does not hold puts the slot light out; one the bank names
+    lights that slot."""
+    lib, pr = rig.lib, rig.lib.project
+    pr.load_slot(1)
+    lib.save_as("presets", "Elsewhere")
+    assert lib.current("presets") == "Elsewhere" and pr.active == -1
+    lib.save_as("presets", "STROBE CAGE")
+    assert pr.active == 2
+
+
 def test_rotation_phases_survive_a_preset_load(rig):
     rig.view.ang = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
     rig.lib.project.load_slot(1)
