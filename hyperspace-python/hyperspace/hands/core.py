@@ -460,6 +460,28 @@ def register(reg, settings: HandSettings) -> None:
         cont(f"{p}.number", "CC", a, "number", 0, 127, integer=True,
              tip="CC number (0–31 for 14-bit).")
 
+    # the selected axis — the HANDS page's list and a desk knob share it —
+    # and `hands.sel.return`, a view onto that axis's return time (the
+    # APC40's global layer has it on a track knob). Neither is saved or
+    # performed; the host resolves the alias through `reg.aliases`, when
+    # it has one (duck-typed: this module imports nothing from the host)
+    if not g.axes:
+        return
+    sel = [0]
+    axis = lambda: g.axes[min(max(sel[0], 0), len(g.axes) - 1)]
+    reg.enum(f"{GROUP}.select", "Axis", lambda: min(max(sel[0], 0), len(g.axes) - 1),
+             lambda i: sel.__setitem__(0, int(i)), [a.label for a in g.axes], group=GROUP,
+             persist=False, modulatable=False,
+             tip="Which axis the page edits — hands.sel.* follow it.")
+    reg.continuous(f"{GROUP}.sel.return", "Return", lambda: axis().return_s,
+                   lambda v: setattr(axis(), "return_s", float(v)), lo=0.05, hi=3.0,
+                   fmt=secs, group=GROUP, alias=True,
+                   tip="The selected axis's return: how long its spring takes to "
+                       "settle at rest.")
+    aliases = getattr(reg, "aliases", None)
+    if aliases is not None:
+        aliases[f"{GROUP}.sel."] = lambda p: reg.get(f"{GROUP}.{axis().name}.{p.id[10:]}")
+
 
 SHAPE_KEYS = ("invert", "bipolar", "deadzone", "curve", "attack", "decay", "rest",
               "rest_value", "return_s", "bounce")
