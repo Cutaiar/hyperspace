@@ -208,6 +208,12 @@ class MidiIO:
         self._held: dict[tuple[int, int], list[Binding]] = {}
         # the table's layer / desk counters as last drawn (`_follow_table`)
         self._seen = self._serials()
+        # every control feedback has drawn since the last redraw, by
+        # (kind, channel, number), with the row that drew it: a redraw
+        # darkens each one no active row draws now, even when the row that
+        # lit it has left the table (a preset load's smaller desk, the
+        # ROUTING page's ×) — D8, review of PR #67
+        self._shown: dict[tuple, Binding] = {}
         register_desk(registry, self.table)     # SHIFT's param, for a bare adapter too
         if self.ports.injected:
             self._enter()
@@ -494,6 +500,7 @@ class MidiIO:
             p = self.reg.get(b.target)
             if p is None:
                 continue
+            self._shown.setdefault(b.control, b)
             if b.feedback == "ring":
                 v = round(p.norm * 127)
                 if b.last_out is None:
@@ -527,10 +534,13 @@ class MidiIO:
 
     def redraw(self, *, load: bool = False) -> None:
         """Every ring and LED for the layer that is up (plan 13 §3.1): each
-        control some row names goes dark unless an active row draws it, then
-        every active row is re-sent — a knob's ring re-bases it (`_rebase`).
-        `load` (a desk replacement: a preset load) also clears every
-        fader's catch, so a fader whose base the load moved picks up."""
+        control some row names, or feedback drew since the last redraw
+        (`_shown` — a row since removed lit it: a preset load's smaller
+        desk, the ROUTING page's ×), goes dark unless an active row draws
+        it (D8); then every active row is re-sent — a knob's ring re-bases
+        it (`_rebase`). `load` (a desk replacement: a preset load) also
+        clears every fader's catch, so a fader whose base the load moved
+        picks up."""
         active = self.table.active()
         drawn = {b.control for b in active if b.feedback}
         for b in self.bindings:
@@ -539,8 +549,9 @@ class MidiIO:
                 b.caught = False
         if self.out is None:
             return
+        shown, self._shown = self._shown, {}
         dark: set = set()
-        for b in self.bindings:
+        for b in (*self.bindings, *shown.values()):
             c = b.control
             if b.feedback and c not in drawn and c not in dark:
                 dark.add(c)

@@ -470,8 +470,8 @@ R1, decided 2026-09-28).
 | a preset | `Presets.load`: every performance param's base (the file's or its group default) in one `Library.restore`, then `Bindings.set_routes`, `set_desk` (the file's `desk`, or the factory preset layer when it has no `desk` key) and `set_macros`, the base subscribers landed at once (`Router.follow_macros(force=True)`, over `values`); session params never; a value that will not land puts the performance part back and refuses the load whole | base, the performer rows, the preset layer, the macros | `Presets.load_doc`; `tests/test_presets.py` |
 | a module preset or project | `Registry.restore` (a project: its session part) | base | `Library.restore` |
 | right-click → Unbind | `MidiIO.unbind`: the loaded preset's desk rows on the param go (the preset dirty, no file written); a param only the session maps is refused with the reason in `Learn.last` | the table's preset layer | `midi.py`, `Bindings.unbind` |
-| a preset load's desk (step 4 of `Presets.load_doc`) | `Bindings.set_desk(rows)`: every preset-layer row replaced, a row on an invariant control dropped with a note (the load's notes, the ROUTING head), the layer dropped to preset, the faders' catch cleared at the next redraw | the table's preset layer | `routing.py` `set_desk` |
-| a ROUTING-page edit (a route, a desk row's target or ×, a macro's label or subscriber) | the table in place — the loaded preset, its dirty dot; a subscriber edit re-lands the base subscribers (`macros_serial`), a desk edit redraws the desk (`redraw_serial`: a redraw, not a load — the faders keep their catch) | the table | `ui_routing.py` |
+| a preset load's desk (step 4 of `Presets.load_doc`) | `Bindings.set_desk(rows)`: every preset-layer row replaced, a row on an invariant control dropped with a note (the load's notes, the ROUTING head), the layer dropped to preset, the faders' catch cleared at the next redraw, and every control that lost its last row sent dark there (D8: `MidiIO.redraw` darkens what it drew before, `_shown`; `tests/test_desk.py::test_a_control_that_loses_its_row_goes_dark`) | the table's preset layer | `routing.py` `set_desk`, `midi.py` `redraw` |
+| a ROUTING-page edit (a route, a desk row's target or ×, a macro's label or subscriber) | the table in place — the loaded preset, its dirty dot; a subscriber edit re-lands the base subscribers (`macros_serial`), a desk edit redraws the desk (`redraw_serial`: a redraw, not a load — the faders keep their catch; a control whose row the × took goes dark, D8) | the table | `ui_routing.py` |
 
 ### 3.8 The binding file
 
@@ -663,11 +663,6 @@ guard, each filed where it says:
 Found by the review of the documents PR (#67) and left for a code fix —
 each is a place where the code falls short of plan 13's rule:
 
-- **A removed desk row's light stays on.** `MidiIO.redraw` darkens only
-  controls some row in the table still names; a preset load that leaves
-  a control unmapped (`set_desk`) or a ROUTING-page × does not switch its
-  LED or ring off first, so it keeps showing the old state while it does
-  nothing (D8 says dark).
 - **A knob learn beside an any-channel row keeps both.** `Bindings.bind`
   matches the row it replaces by source string (`Binding.key`), not by
   physical control (`Binding.overlaps`): learning device knob 1

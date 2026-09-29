@@ -184,6 +184,40 @@ def test_a_desk_edit_on_the_page_redraws_and_keeps_the_faders_catch(rig):
     assert reg["band.2.post"].norm == pytest.approx(30 / 127, abs=PICKUP_TOL)
 
 
+def test_a_control_that_loses_its_row_goes_dark(rig):
+    """D8, review of PR #67: a control whose last row on the up layer goes
+    is sent dark — by a preset load with a smaller desk, and by the ROUTING
+    page's × — not left showing the old state while it does nothing."""
+    from hyperspace import ui_routing
+
+    t, view = rig.midi.table, rig.view
+    points, knob6 = apc40.N_SCENE[0], 0x35         # view.points, view.inst_rate: preset-only
+    view.points = True
+    rig.midi.poll()
+    assert sent_notes(rig, points)[-1] > 0                           # lit
+    assert sent_cc(rig, knob6 + 8)[-1] != apc40.RING_OFF             # a ring style
+    # a preset load whose desk leaves both unmapped
+    rig.out.sent.clear()
+    t.set_desk([{"source": f"note:0:{apc40.N_SCENE[2]}", "target": "view.faces",
+                 "op": "toggle", "feedback": "led", "on": 1}])
+    rig.midi.poll()
+    assert sent_notes(rig, points) == [0]
+    assert sent_cc(rig, knob6 + 8) == [apc40.RING_OFF]
+    view.faces = True
+    rig.midi.poll()
+    faces = apc40.N_SCENE[2]
+    assert sent_notes(rig, faces)[-1] == 1
+    # the page's × on the one row left
+    rig.out.sent.clear()
+    t.remove(next(b for b in t.desk() if b.number == faces))
+    ui_routing._desk_edited(t)
+    rig.midi.poll()
+    assert sent_notes(rig, faces) == [0]
+    rig.out.sent.clear()
+    rig.midi.poll()
+    assert sent_notes(rig, faces) == []                              # and stays dark
+
+
 # --------------------------------------------------------- unmapped, invariant
 
 def test_an_unmapped_control_is_dark_and_does_nothing(rig):
