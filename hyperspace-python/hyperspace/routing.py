@@ -1426,6 +1426,33 @@ class Bindings:
         return [(mid, s) for mid, m in self.macros.items() for s in m.subs
                 if s.depth == key]
 
+    def move_route(self, b: Binding, *, source: str | None = None,
+                   target: str | None = None) -> None:
+        """Re-point a route's source or target, its depth subscribers with
+        it — a subscriber names its route by (source, target), so an edit
+        that moved only the row would leave the macro behind."""
+        old = (b.source, b.target)
+        if source is not None:
+            b.source = source
+        if target is not None:
+            b.target = target
+        self._follow_route(old, (b.source, b.target))
+
+    def _follow_route(self, old: tuple[str, str], new: tuple[str, str] | None) -> None:
+        """The route `old` moved to `new` (None: it is gone). While another
+        route still has `old`'s pair its subscribers stay; otherwise they
+        follow it, or go with it."""
+        if old == new or any(x.op in MOD_OPS and (x.source, x.target) == old
+                             for x in self.bindings):
+            return
+        for m in self.macros.values():
+            if new is None:
+                m.subs = [s for s in m.subs if s.depth != old]
+            else:
+                for s in m.subs:
+                    if s.depth == old:
+                        s.depth = new
+
     # ---- edits ----
 
     def _check(self, b: Binding) -> None:
@@ -1509,8 +1536,10 @@ class Bindings:
         if cur is not None:
             self.remove(cur)
         if any(x is new for x in self.bindings):
+            old = (new.source, new.target)
             new.target, new.enabled = pid, True
             self._check(new)
+            self._follow_route(old, (new.source, new.target))
         else:
             new.target = pid
             self.add(new)
@@ -1532,7 +1561,11 @@ class Bindings:
         self.dropped, self.notes = [], []
 
     def remove(self, b: Binding) -> None:
+        """Take a row out; a route's depth subscribers go with it unless
+        another route has the same (source, target)."""
         self.bindings = [x for x in self.bindings if x is not b]
+        if b.op in MOD_OPS:
+            self._follow_route((b.source, b.target), None)
         self.dropped, self.notes = [], []
 
     def set_routes(self, routes: Iterable[Binding]) -> None:

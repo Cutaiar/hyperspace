@@ -449,7 +449,7 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
         for i, lb in enumerate(labels):
             sel, _ = imgui.selectable(lb, i == cur)
             if sel and i < len(sources):
-                b.source = sources[i][0]
+                router.table.move_route(b, source=sources[i][0])   # its subscribers too
         imgui.end_combo()
     imgui.same_line()
     sp = imgui.get_style().item_spacing.x
@@ -459,7 +459,7 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
     if picked:
         cur = router.table.owner(picked)
         if cur is None or cur is b or not b.is_performer:
-            b.target = picked
+            router.table.move_route(b, target=picked)
         else:                               # the referee, on a retarget
             ask(panel, cur, replace(b, target=picked),
                 lambda picked=picked: _retarget(router, b, picked))

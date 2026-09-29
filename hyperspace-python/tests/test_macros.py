@@ -160,3 +160,17 @@ def test_a_depth_range_crossing_zero_flips_the_route():
     assert offsets[0] == pytest.approx(-0.4 * 0.5, abs=1e-6)     # full throw down
     assert offsets[1] == pytest.approx(0.0, abs=1e-6)            # the zero crossing
     assert offsets[2] == pytest.approx(0.4 * 0.5, abs=1e-6)      # full throw up
+
+
+def test_a_depth_subscriber_follows_its_route_when_the_row_moves():
+    """Review of PR #63: a subscriber names its route by (source, target),
+    so re-pointing the row carries it along and removing the row drops it."""
+    table = Bindings([Binding("lfo:1", "fx.mix", "push", 0.3)])
+    table.set_macros({"macro.1": {"subs": [depth_sub("lfo:1", "fx.mix")]}})
+    b = table.bindings[0]
+    table.move_route(b, source="lfo:0")
+    assert [s.depth for _, s in table.depth_subs(b)] == [("lfo:0", "fx.mix")]
+    table.move_route(b, target="view.bright")
+    assert table.macros["macro.1"].subs[0].depth == ("lfo:0", "view.bright")
+    table.remove(b)
+    assert table.macros_doc() == {}
