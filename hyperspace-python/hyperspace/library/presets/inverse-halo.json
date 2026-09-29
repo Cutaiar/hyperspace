@@ -1,0 +1,40 @@
+{
+ "schema": "hyperspace.preset/2",
+ "name": "INVERSE HALO",
+ "note": "a slow starfruit turning inside out under haloed rings",
+ "values": {
+  "view.shape": 23,
+  "view.speed": 0.15,
+  "view.depth4": 2.0,
+  "view.bright": 1.4,
+  "view.points": false,
+  "view.lines": true,
+  "view.faces": true,
+  "view.plane.XY": false,
+  "view.plane.XZ": true,
+  "view.plane.YZ": false,
+  "view.plane.XW": true,
+  "view.plane.YW": true,
+  "view.plane.ZW": false,
+  "view.pattern": 1,
+  "view.pattern_mix": 0.95,
+  "camera.zoom": 0.9
+ },
+ "routes": [
+  {"source": "lane:0", "target": "rot.rate.ZW", "op": "push", "value": 0.0625, "scale": "master.gain"},
+  {"source": "lane:1", "target": "rot.rate.XW", "op": "push", "value": 0.0625, "scale": "master.gain"},
+  {"source": "lane:2", "target": "rot.rate.YW", "op": "push", "value": -0.0625, "scale": "master.gain"},
+  {"source": "lane:3", "target": "rot.rate.XY", "op": "push", "value": -0.0625, "scale": "master.gain"},
+  {"source": "lane:4", "target": "rot.rate.XZ", "op": "push", "value": 0.0625, "scale": "master.gain"},
+  {"source": "lane:5", "target": "rot.rate.YZ", "op": "push", "value": -0.0625, "scale": "master.gain"},
+  {"source": "lane:0", "target": "pattern.mod.0", "op": "push"},
+  {"source": "lane:1", "target": "pattern.mod.1", "op": "push"},
+  {"source": "lane:2", "target": "pattern.mod.2", "op": "push"},
+  {"source": "lane:3", "target": "pattern.mod.3", "op": "push"},
+  {"source": "lane:4", "target": "pattern.mod.4", "op": "push"},
+  {"source": "lane:5", "target": "pattern.mod.5", "op": "push"}
+ ],
+ "desk": [],
+ "macros": {},
+ "modules": {}
+}

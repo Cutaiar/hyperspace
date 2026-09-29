@@ -1,0 +1,40 @@
+{
+ "schema": "hyperspace.preset/2",
+ "name": "WOVEN LATTICE",
+ "note": "a woven duoprism trembling like a plucked string",
+ "values": {
+  "view.shape": 6,
+  "view.speed": 0.4,
+  "view.depth4": 2.8,
+  "view.bright": 1.1,
+  "view.points": true,
+  "view.lines": true,
+  "view.faces": false,
+  "view.plane.XY": true,
+  "view.plane.XZ": true,
+  "view.plane.YZ": false,
+  "view.plane.XW": false,
+  "view.plane.YW": true,
+  "view.plane.ZW": true,
+  "view.pattern": 10,
+  "view.pattern_mix": 0.85,
+  "camera.zoom": 0.8
+ },
+ "routes": [
+  {"source": "lane:0", "target": "rot.rate.ZW", "op": "push", "value": 0.0625, "scale": "master.gain"},
+  {"source": "lane:1", "target": "rot.rate.XW", "op": "push", "value": 0.0625, "scale": "master.gain"},
+  {"source": "lane:2", "target": "rot.rate.YW", "op": "push", "value": -0.0625, "scale": "master.gain"},
+  {"source": "lane:3", "target": "rot.rate.XY", "op": "push", "value": -0.0625, "scale": "master.gain"},
+  {"source": "lane:4", "target": "rot.rate.XZ", "op": "push", "value": 0.0625, "scale": "master.gain"},
+  {"source": "lane:5", "target": "rot.rate.YZ", "op": "push", "value": -0.0625, "scale": "master.gain"},
+  {"source": "lane:0", "target": "pattern.mod.0", "op": "push"},
+  {"source": "lane:1", "target": "pattern.mod.1", "op": "push"},
+  {"source": "lane:2", "target": "pattern.mod.2", "op": "push"},
+  {"source": "lane:3", "target": "pattern.mod.3", "op": "push"},
+  {"source": "lane:4", "target": "pattern.mod.4", "op": "push"},
+  {"source": "lane:5", "target": "pattern.mod.5", "op": "push"}
+ ],
+ "desk": [],
+ "macros": {},
+ "modules": {}
+}

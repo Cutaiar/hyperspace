@@ -1,0 +1,40 @@
+{
+ "schema": "hyperspace.preset/2",
+ "name": "SPIRAL SILK",
+ "note": "a trefoil drifting through slow spiral light",
+ "values": {
+  "view.shape": 22,
+  "view.speed": 0.18,
+  "view.depth4": 2.2,
+  "view.bright": 1.15,
+  "view.points": false,
+  "view.lines": true,
+  "view.faces": true,
+  "view.plane.XY": false,
+  "view.plane.XZ": false,
+  "view.plane.YZ": true,
+  "view.plane.XW": true,
+  "view.plane.YW": false,
+  "view.plane.ZW": false,
+  "view.pattern": 7,
+  "view.pattern_mix": 1.0,
+  "camera.zoom": 0.75
+ },
+ "routes": [
+  {"source": "lane:0", "target": "rot.rate.ZW", "op": "push", "value": 0.0625, "scale": "master.gain"},
+  {"source": "lane:1", "target": "rot.rate.XW", "op": "push", "value": 0.0625, "scale": "master.gain"},
+  {"source": "lane:2", "target": "rot.rate.YW", "op": "push", "value": -0.0625, "scale": "master.gain"},
+  {"source": "lane:3", "target": "rot.rate.XY", "op": "push", "value": -0.0625, "scale": "master.gain"},
+  {"source": "lane:4", "target": "rot.rate.XZ", "op": "push", "value": 0.0625, "scale": "master.gain"},
+  {"source": "lane:5", "target": "rot.rate.YZ", "op": "push", "value": -0.0625, "scale": "master.gain"},
+  {"source": "lane:0", "target": "pattern.mod.0", "op": "push"},
+  {"source": "lane:1", "target": "pattern.mod.1", "op": "push"},
+  {"source": "lane:2", "target": "pattern.mod.2", "op": "push"},
+  {"source": "lane:3", "target": "pattern.mod.3", "op": "push"},
+  {"source": "lane:4", "target": "pattern.mod.4", "op": "push"},
+  {"source": "lane:5", "target": "pattern.mod.5", "op": "push"}
+ ],
+ "desk": [],
+ "macros": {},
+ "modules": {}
+}

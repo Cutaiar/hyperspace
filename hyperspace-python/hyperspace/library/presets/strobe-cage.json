@@ -1,0 +1,40 @@
+{
+ "schema": "hyperspace.preset/2",
+ "name": "STROBE CAGE",
+ "note": "hard-edge tesseract flashing on the beat",
+ "values": {
+  "view.shape": 3,
+  "view.speed": 0.55,
+  "view.depth4": 3.2,
+  "view.bright": 1.35,
+  "view.points": false,
+  "view.lines": true,
+  "view.faces": true,
+  "view.plane.XY": true,
+  "view.plane.XZ": false,
+  "view.plane.YZ": true,
+  "view.plane.XW": true,
+  "view.plane.YW": false,
+  "view.plane.ZW": true,
+  "view.pattern": 3,
+  "view.pattern_mix": 0.9,
+  "camera.zoom": 0.85
+ },
+ "routes": [
+  {"source": "lane:0", "target": "rot.rate.ZW", "op": "push", "value": 0.0625, "scale": "master.gain"},
+  {"source": "lane:1", "target": "rot.rate.XW", "op": "push", "value": 0.0625, "scale": "master.gain"},
+  {"source": "lane:2", "target": "rot.rate.YW", "op": "push", "value": -0.0625, "scale": "master.gain"},
+  {"source": "lane:3", "target": "rot.rate.XY", "op": "push", "value": -0.0625, "scale": "master.gain"},
+  {"source": "lane:4", "target": "rot.rate.XZ", "op": "push", "value": 0.0625, "scale": "master.gain"},
+  {"source": "lane:5", "target": "rot.rate.YZ", "op": "push", "value": -0.0625, "scale": "master.gain"},
+  {"source": "lane:0", "target": "pattern.mod.0", "op": "push"},
+  {"source": "lane:1", "target": "pattern.mod.1", "op": "push"},
+  {"source": "lane:2", "target": "pattern.mod.2", "op": "push"},
+  {"source": "lane:3", "target": "pattern.mod.3", "op": "push"},
+  {"source": "lane:4", "target": "pattern.mod.4", "op": "push"},
+  {"source": "lane:5", "target": "pattern.mod.5", "op": "push"}
+ ],
+ "desk": [],
+ "macros": {},
+ "modules": {}
+}
