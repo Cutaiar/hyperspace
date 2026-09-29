@@ -874,3 +874,37 @@ ARCHITECTURE, ENGINEERING, DECISIONS, the register, the audit, the hand
 checks, plan 12's cards, the plans README and CHECKPOINT describe the
 code on `plan-13-integration`; §10's headless criteria were run there
 (872 passed, 11 skipped).
+
+### Review fixes (PR #68)
+
+The review of the documents PR (#67) filed three places where the code
+fell short of this plan's rules (ARCHITECTURE §3.10); each is fixed, with
+its test, and the §3.10 items are gone:
+
+- **D8, a removed desk row's light.** `MidiIO` remembers every control
+  its feedback drew (`_shown`) and `redraw` darkens each one no active
+  row draws now — so a preset load with a smaller desk (`set_desk`) and
+  the ROUTING page's × send the control dark, not just a layer switch
+  (`test_desk.py::test_a_control_that_loses_its_row_goes_dark`).
+- **A knob learn beside an any-channel row.** `Bindings.bind` replaces
+  every row of its own layer whose control overlaps the learned one
+  (`Binding.overlaps`, not the source string), so learning `cc:0:16`
+  where the preset has `cc:*:16` (WAKE, TRIP, `lfo-breathe`) leaves one
+  row (`test_learn.py::test_a_knob_learn_replaces_an_any_channel_row_on_the_same_knob`).
+- **D9, a macro's base subscriber on a session param.** A base
+  subscriber names a persisted, non-alias performance param
+  (`routing.base_refusal`); `set_macros` drops any other with a note
+  (`settle_bases`) — the preset loader's notes carry it, and the
+  migration drops it from `bindings.json`'s macros and each user routing
+  preset's with its note — and the "+ base" picker offers performance
+  params only (`ui_routing.base_targets`). Depth subscribers are
+  untouched (decision 19 (a))
+  (`test_macros.py::test_a_base_subscriber_on_a_session_param_is_dropped_with_a_note`,
+  `test_ui_routing.py::test_the_base_picker_offers_performance_params_only`).
+- Stale docstrings from before plan 13 (a theme load, the ROUTING strip
+  over `Library.routing`, a preset carrying a tempo, a macro as a route's
+  scale, `persist` as "in a preset") say what the code does now;
+  `tools/preset_shots.py` says "the preset's base" (the sweep cards were
+  not regenerated: a rerun also flips `-0°` to `+0°` in a few cells, so
+  their header keeps the old words until the next real regeneration).
+  876 passed, 11 skipped; ruff clean.

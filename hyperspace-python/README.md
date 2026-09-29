@@ -13,7 +13,7 @@ DJ-link, and DAW-bridge tiers — is in [`docs/SETUP.md`](docs/SETUP.md).
 
 ```bash
 uv sync
-uv run pytest          # 872 tests, ~35 s
+uv run pytest          # 876 tests, ~35 s
 uv run hyperspace      # opens the render window and the control window
 ```
 
