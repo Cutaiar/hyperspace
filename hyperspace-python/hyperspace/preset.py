@@ -91,8 +91,9 @@ from . import apc40, routing
 from .bands import BANDS
 from .lfo import SHAPES, SYNCS
 from .library import (
-    DEFAULT_PROJECT,
     FACTORY,
+    HOUSE_PROJECT,
+    MINE_PROJECT,
     PERFORMANCE_SCHEMA,
     PRESETS,
     PROJECT_SCHEMA,
@@ -991,7 +992,8 @@ def migrate_project(root: Path, path: Path, carried: routing.Carried, *,
     slot points at the factory default bank's preset of that slot — what
     its F-key loaded while empty slots were seeded — unless it holds the
     project's own look (`<PROJECT> SAVED`, below), which is the startup
-    whatever slot it is in. Returns (notes, whether
+    whatever slot it is in. The seeds are the factory ``house`` show's (the
+    factory default until plan 14 WP3). Returns (notes, whether
     a preset now holds `carried`, whether the file was rewritten); a file
     that is not schema 1 is left alone: ([], False, False)."""
     doc = json.loads(path.read_text())
@@ -1002,7 +1004,7 @@ def migrate_project(root: Path, path: Path, carried: routing.Carried, *,
     raw += [None] * (SLOTS - len(raw))
     bank, first, notes = slot_presets(root, raw, carried, labels, factory)
     try:
-        seeds = list(json.loads((factory / PROJECTS / f"{DEFAULT_PROJECT}{PROJECT_SUFFIX}")
+        seeds = list(json.loads((factory / PROJECTS / f"{HOUSE_PROJECT}{PROJECT_SUFFIX}")
                                 .read_text()).get("bank") or [])
     except (OSError, ValueError, AttributeError):
         seeds = []
@@ -1060,13 +1062,15 @@ def migrate_project(root: Path, path: Path, carried: routing.Carried, *,
 
 
 def _into_default(root: Path, name: str, factory: Path = FACTORY) -> str:
-    """`name` as the user default project's startup and first slot — the
-    project made from the factory default if the user has none; an
-    existing file is kept first (``.bak-v2``). The rest of the bank moves
-    one slot along; a name pushed off the end keeps its file."""
-    path = root / PROJECTS / f"{DEFAULT_PROJECT}{PROJECT_SUFFIX}"
+    """`name` as the user show ``mine``'s startup and first slot — the show
+    made from the factory ``house`` show if the user has none (until plan
+    14 WP3 this was the user's ``default``, which ``library.unshadow_default``
+    now renames ``mine``); an existing file is kept first (``.bak-v2``).
+    The rest of the bank moves one slot along; a name pushed off the end
+    keeps its file."""
+    path = root / PROJECTS / f"{MINE_PROJECT}{PROJECT_SUFFIX}"
     fresh = not path.is_file()
-    src = factory / PROJECTS / path.name if fresh else path
+    src = factory / PROJECTS / f"{HOUSE_PROJECT}{PROJECT_SUFFIX}" if fresh else path
     doc = json.loads(src.read_text())
     if not isinstance(doc, dict) or doc.get("schema") != PROJECT_SCHEMA:
         raise ValueError(f"{path.name} is not a {PROJECT_SCHEMA} project")
@@ -1082,10 +1086,10 @@ def _into_default(root: Path, name: str, factory: Path = FACTORY) -> str:
             gone = f"; {bank.pop()!r} left the bank (its file stays)"
     doc.update(bank=bank, startup=name)
     if fresh:
-        doc["name"] = DEFAULT_PROJECT
+        doc["name"] = MINE_PROJECT
         doc.pop("note", None)
         _write_text(path, json.dumps(doc, indent=1) + "\n")
-        return f"{path.name}: made from the factory default, {name!r} its startup{gone}"
+        return f"{path.name}: made from the factory house show, {name!r} its startup{gone}"
     bak = routing.backup(path, "2")
     if bak is None:
         raise OSError(f"{path.name}: no backup could be made")
@@ -1172,8 +1176,10 @@ def migrate_home(lib, router, hands_cfg: dict | None = None) -> list[str]:
     rewritten with the session's controls. Every hand lane a preset it
     writes names by number is named by `hands_cfg` — the config's
     ``[hands]`` section: the rig's layout when enabled, else the default
-    (`hand_layout`, decision register row 20). Re-opens the default project
-    when one changed. Every note goes to stderr and the sum to
+    (`hand_layout`, decision register row 20). A converted ``default``
+    show becomes ``mine`` (library.unshadow_default), and ``MIGRATED``
+    goes on its slot 1. Re-opens the launch's show (the last opened, else
+    the party) when a show changed. Every note goes to stderr and the sum to
     `lib.warning`; returns the notes. Nothing to do: nothing written."""
     root, table = lib.home, router.table
     reg = lib.reg
@@ -1207,6 +1213,13 @@ def migrate_home(lib, router, hands_cfg: dict | None = None) -> list[str]:
         if rewrote:
             projects = True
             written.append(path)
+    # a `default` show just converted from schema 1 becomes `mine` now,
+    # as the launch's Library did for one plan 13 converted before
+    # (decision 22) — before MIGRATED goes into `mine`
+    if projects:
+        renamed = lib.unshadow()
+        notes += renamed
+        written += [root / PROJECTS / f"{MINE_PROJECT}{PROJECT_SUFFIX}"] if renamed else []
     notes += migrate_routing_presets(root, (lambda pid: pid in reg) if reg is not None
                                      else None, factory, reg, hands)
     # a user preset already holding the table's part (a launch that
@@ -1234,7 +1247,7 @@ def migrate_home(lib, router, hands_cfg: dict | None = None) -> list[str]:
                          + (f" ({path.name})" if path is not None else " (already there)"))
             notes.append(_into_default(root, name, factory))
             projects = True
-            written.append(root / PROJECTS / f"{DEFAULT_PROJECT}{PROJECT_SUFFIX}")
+            written.append(root / PROJECTS / f"{MINE_PROJECT}{PROJECT_SUFFIX}")
             held = True
         except (OSError, ValueError, LibraryError) as e:
             notes.append(f"bindings.json's routes NOT moved ({e}); the file is left as it is")

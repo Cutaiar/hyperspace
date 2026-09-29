@@ -62,8 +62,17 @@ factory's file of the same name:
 ``home()`` is the one resolver for that folder (config.py and the binding
 table path go through it). On the first run the working-directory ``config.toml``
 and ``midi_map.json`` are copied in and a legacy ``presets.json`` theme
-bank becomes user presets and a default project naming them — originals
+bank becomes user presets and a project naming them (``mine``) — originals
 are left alone.
+
+Which show opens (decision 22, plan 14 WP3): the one opened last, its
+name in ``<home>/last_show`` (one line, written by every load and save
+as), else the **party** show (DEFAULT_PROJECT) — the factory ``party``
+unless the user has a copy. The eight house moods are the factory
+``house`` show. There is no factory ``default`` any more: a user
+``projects/default.hyp.json`` — what plan 13's migration made, ``MIGRATED``
+and the house moods — is renamed ``mine`` once, with a backup
+(``unshadow_default``).
 
 Loading a preset fills ids it doesn't name from the group's *default*
 preset (DEFAULT_NAMES, else one called "default", else the values the
@@ -109,7 +118,14 @@ PROJECT_SCHEMA = "hyperspace.project/2"
 PROJECT_V1 = "hyperspace.project/1"        # migrated by preset.migrate_project
 PROJECT_SUFFIX = ".hyp.json"
 PROJECTS = "projects"
-DEFAULT_PROJECT = "default"
+# the show a launch opens when none was opened before (decision 22): the
+# party. `house` holds the eight house moods; `mine` is where a user's old
+# `default` show (plan 13's migration: MIGRATED + the house moods) lives
+DEFAULT_PROJECT = "party"
+HOUSE_PROJECT = "house"
+MINE_PROJECT = "mine"
+OLD_DEFAULT = "default"             # the factory show's name until plan 14 WP3
+LAST_SHOW = "last_show"             # <home>/last_show: the show opened last
 UNTITLED = "untitled"
 
 # the preset a group resets to; any other group uses one named "default"
@@ -163,7 +179,7 @@ def migrate(root: Path, cwd: Path | None = None) -> list[str]:
         if src.is_file() and not dst.exists():
             shutil.copyfile(src, dst)
             done.append(f"library: copied {src} → {dst}")
-    src, dst = cwd / LEGACY_BANK, root / PROJECTS / f"{DEFAULT_PROJECT}{PROJECT_SUFFIX}"
+    src, dst = cwd / LEGACY_BANK, root / PROJECTS / f"{MINE_PROJECT}{PROJECT_SUFFIX}"
     if src.is_file() and not dst.exists():
         # the slots become presets through plan 13's migration code (the
         # one road for an inline bank, preset.slot_presets): each with the
@@ -181,12 +197,51 @@ def migrate(root: Path, cwd: Path | None = None) -> list[str]:
             done.append(f"library: {src} not migrated ({e})")
         else:
             bank += [None] * (SLOTS - len(bank))
-            _write_json(dst, {"schema": PROJECT_SCHEMA, "name": DEFAULT_PROJECT,
+            _write_json(dst, {"schema": PROJECT_SCHEMA, "name": MINE_PROJECT,
                               "startup": next((n for n in bank if n), None),
                               "bank": bank, "session": session, "modules": {}})
             done.append(f"library: theme bank {src} → {sum(1 for n in bank if n)} "
                         f"presets in {root / PRESETS} and project {dst}")
     return done
+
+
+def unshadow_default(root: Path) -> list[str]:
+    """Once, for a home plan 13 migrated (decision 22, plan 14 WP3): the
+    user's ``projects/default.hyp.json`` — ``MIGRATED`` on slot 1 and the
+    house moods, its startup ``MIGRATED`` — becomes ``projects/mine.hyp.json``
+    (named ``mine``, the bank and startup as they were), kept first beside
+    itself by ``routing.backup`` (never over an existing ``.bak-*``), so
+    the party show is what opens. A schema-1 file waits for plan 13's
+    migration; a ``mine`` already there leaves both files as they are (a
+    ``default`` then is just a show of yours), and so does a backup that
+    cannot be made, said. Nothing to do (the second run on): nothing written.
+    Returns the notes."""
+    src = root / PROJECTS / f"{OLD_DEFAULT}{PROJECT_SUFFIX}"
+    dst = root / PROJECTS / f"{MINE_PROJECT}{PROJECT_SUFFIX}"
+    if not src.is_file():
+        return []
+    try:
+        doc = _read_json(src)
+    except LibraryError as e:
+        return [f"{src.name}: not renamed ({e})"]
+    if doc.get("schema") != PROJECT_SCHEMA:
+        return []                               # schema 1: plan 13's migration first
+    if dst.exists():
+        return []           # both are yours now: a show called default is just a show
+    from .routing import backup
+
+    bak = backup(src, "2")
+    if bak is None:
+        return [f"{src.name}: not renamed — no backup could be made"]
+    doc["name"] = MINE_PROJECT
+    try:
+        _write_json(dst, doc)
+        src.unlink()
+    except (LibraryError, OSError) as e:
+        return [f"{src.name}: not renamed ({e}); the backup {bak.name} stays"]
+    return [(f"your show 'default' is now 'mine' ({dst.name}; the old file kept as "
+             f"{bak.name}) — the party show opens; 'mine' is in the show list, "
+             f"{doc.get('startup')!r} its first preset")]
 
 
 # ---------------------------------------------------------------- files
@@ -576,13 +631,15 @@ class Project:
         self._take(doc, path if lib._is_user(path) else None, path.name)
         missing = self._apply()
         lib.report(missing, path.name)
-        lib.status = f"project: {self.name}"
+        lib.status = f"show: {self.name}"
+        lib.remember(self.name)
         if startup:
             self.load_startup()
         return missing
 
     def new(self, name: str = UNTITLED) -> None:
-        """A fresh project: default state, the factory bank, no file yet."""
+        """A fresh show: default state, the party show's bank, no file yet
+        (not remembered until it is saved)."""
         lib = self.lib
         self._take(_read_json(lib.factory / PROJECTS / f"{DEFAULT_PROJECT}{PROJECT_SUFFIX}"),
                    None)
@@ -590,7 +647,7 @@ class Project:
         lib._fresh_layouts()                          # the layout the app started with…
         lib.restore(lib._fresh_all())                 # …and every group's fresh values
         self._apply()
-        lib.status = f"project: new {name}"
+        lib.status = f"show: new {name}"
         self.load_startup()
 
     def save(self, name: str | None = None) -> Path:
@@ -614,7 +671,8 @@ class Project:
                 self.modules[group] = {k: v for k, v in doc.items()
                                        if k not in ("schema", "group")}
         self.write()
-        lib.status = f"project: saved {self.name}"
+        lib.status = f"show: saved {self.name}"
+        lib.remember(self.name)
         return self.path
 
     def write(self) -> Path:
@@ -685,8 +743,19 @@ class Library:
         self._next = 0.0
         self.presets = None        # preset.Presets, set by its constructor
         self.project = Project(self)
+        self.unshadow()
         self._open_default()
         self._mtimes = self._scan()
+
+    def unshadow(self) -> list[str]:
+        """`unshadow_default` over this home: each note on stderr and in
+        `warning` (decision 22's one-off rename)."""
+        notes = unshadow_default(self.home)
+        for n in notes:
+            print(f"library: {n}", file=sys.stderr)
+        if notes:
+            self.warning = notes[-1]
+        return notes
 
     def attach(self, reg: Registry) -> list[str]:
         """Bind the registry; its state right now is what "default" means.
@@ -759,23 +828,50 @@ class Library:
         scene combo, so a strip load moves the selected scene."""
         self._load_hooks[group] = hook
 
+    def last_show(self) -> str | None:
+        """The show opened last (`<home>/last_show`), or None."""
+        try:
+            name = (self.home / LAST_SHOW).read_text().strip()
+        except OSError:
+            return None
+        return name or None
+
+    def remember(self, name: str) -> None:
+        """Note `name` as the show a launch opens (decision 22); a write
+        that fails costs only the memory."""
+        if name == self.last_show():
+            return
+        try:
+            (self.home / LAST_SHOW).write_text(f"{name}\n")
+        except OSError as e:
+            print(f"library: {LAST_SHOW} not written ({e})", file=sys.stderr)
+
     def _open_default(self) -> None:
-        """The user's default project if there is one, else the factory's —
-        which also stands in for a user file that will not open, the
-        reason in `error`, and, quietly, for a schema-1 file until the
-        launch's migration converts it (preset.migrate_home re-opens the
-        default then). A save keeps a file it could not read as a backup
-        (write)."""
-        user = self.project.path_for(DEFAULT_PROJECT)
-        factory = self.factory / PROJECTS / user.name
-        if user.is_file():
-            try:
-                doc = _read_json(user)
-                if doc.get("schema") != PROJECT_V1:
-                    self.project._take(doc, user, user.name)
+        """The show a launch opens (decision 22): the one opened last
+        (`last_show`), else the party show — the user's copy of either
+        if there is one, else the factory's. The party show also stands
+        in for a remembered show that is gone or will not open, the reason
+        in `error`, and, quietly, for a schema-1 file until the launch's
+        migration converts it (preset.migrate_home re-opens the show
+        then). A save keeps a file it could not read as a backup (write)."""
+        for name in dict.fromkeys(n for n in (self.last_show(), DEFAULT_PROJECT) if n):
+            user = self.project.path_for(name)
+            factory = self.factory / PROJECTS / user.name
+            if user.is_file():
+                try:
+                    doc = _read_json(user)
+                    if doc.get("schema") != PROJECT_V1:
+                        self.project._take(doc, user, user.name)
+                        return
+                except LibraryError as e:
+                    self.error = f"library: {e}"
+            elif factory.is_file() and name != DEFAULT_PROJECT:
+                try:
+                    self.project._take(_read_json(factory), None, factory.name)
                     return
-            except LibraryError as e:
-                self.error = f"library: {e}"
+                except LibraryError as e:
+                    self.error = f"library: {e}"
+        factory = self.factory / PROJECTS / f"{DEFAULT_PROJECT}{PROJECT_SUFFIX}"
         try:
             self.project._take(_read_json(factory), None, factory.name)
         except LibraryError as e:

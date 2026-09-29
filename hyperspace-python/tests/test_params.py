@@ -251,6 +251,7 @@ def test_preset_bank_params(rig):
 
     reg, view, _control, _audio, bank = rig
     Presets(bank.lib, reg, Router(reg, Bindings()))
+    bank.load("house", startup=False)          # the house moods (a fresh home opens party)
     assert reg["preset.select"].names[:2] == ["BIG BLUE WAVE", "EMBER ORBIT"]
     assert len(reg["preset.select"].names) == 8
     reg["preset.load.1"].fire()

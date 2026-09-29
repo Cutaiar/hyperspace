@@ -14,6 +14,7 @@ import re
 from types import SimpleNamespace
 
 import pytest
+from conftest import opened_last
 
 from hyperspace import apc40, lfo, preset, routing, tempo
 from hyperspace.analysis import Analyser
@@ -28,8 +29,12 @@ from hyperspace.routing import Binding, Bindings, Router, bindings_path
 from hyperspace.view import ViewState
 
 
-def boot(home):
-    """The app's construction order (app.main), headless."""
+def boot(home, show: str | None = "house"):
+    """The app's construction order (app.main), headless — over a home
+    that opened `show` last (the house moods, which these tests were
+    written on; None: a fresh home, which opens the party show)."""
+    if show:
+        opened_last(home, show)
     chain = Analyzer(Analyser())
     control = Control(chain)
     audio = SimpleNamespace(chain=chain)
@@ -268,7 +273,7 @@ def test_shift_f_saves_the_live_state_as_the_slots_preset(rig):
     assert {"source": "hand:7", "target": "view.speed", "op": "push", "value": 0.3} in user["routes"]
     assert "tempo.bpm" not in user["values"] and "master.gain" not in user["values"]
     assert pr.bank[2] == "STROBE CAGE" and pr.active == 2
-    doc = json.loads((home / "projects" / "default.hyp.json").read_text())
+    doc = json.loads((home / "projects" / "house.hyp.json").read_text())
     assert doc["schema"] == "hyperspace.project/2" and doc["bank"] == pr.bank
     # an empty slot: a new name, made unique against what is there
     put(home, "PRESET 8")
@@ -277,7 +282,7 @@ def test_shift_f_saves_the_live_state_as_the_slots_preset(rig):
     reg["preset.save.7"].fire()
     assert pr.bank[6] == "PRESET 7" and pr.bank[7] == "PRESET 8 (2)"
     assert (home / "presets" / "preset-7.json").is_file()
-    assert json.loads((home / "projects" / "default.hyp.json").read_text())["bank"] == pr.bank
+    assert json.loads((home / "projects" / "house.hyp.json").read_text())["bank"] == pr.bank
     assert not pr.is_dirty() and pr.bank_error == ""
 
 
@@ -298,9 +303,9 @@ def test_the_startup_preset_loads_on_launch(tmp_path):
     assert r.lib.project.startup == "BIG BLUE WAVE"
     assert r.lib.current("presets") == "BIG BLUE WAVE" and r.lib.project.active == 0
     assert r.view.shape == 17 and len(r.router.table.routes()) == 12
-    doc = json.loads((FACTORY / "projects" / "default.hyp.json").read_text())
+    doc = json.loads((FACTORY / "projects" / "house.hyp.json").read_text())
     doc["startup"] = "GONE"
-    (tmp_path / "projects" / "default.hyp.json").write_text(json.dumps(doc))
+    (tmp_path / "projects" / "house.hyp.json").write_text(json.dumps(doc))
     r2 = boot(tmp_path)
     assert r2.lib.warning == "startup: no preset 'GONE'"
     assert r2.lib.current("presets") is None and r2.lib.project.active == -1
@@ -500,7 +505,7 @@ def test_the_factory_presets_are_preset_2_performance_files():
             b = Binding.from_json(row)
             assert b.scheme in routing.LANE_SCHEMES and b.op in routing.MOD_OPS, (path.name, row)
     assert json.loads((preset.FACTORY_DIR / "lfo-breathe.json").read_text())["macros"]
-    for name in ("default", "party"):
+    for name in ("house", "party"):
         proj = json.loads((FACTORY / "projects" / f"{name}.hyp.json").read_text())
         assert proj["schema"] == "hyperspace.project/2" and proj["startup"] == proj["bank"][0]
         names = {json.loads(p.read_text())["name"] for p in (FACTORY / "presets").glob("*.json")}
@@ -519,7 +524,7 @@ def test_the_party_presets_routes_are_the_codes():
         assert doc["routes"] == routes, slug
         assert doc["name"] == slug.split("-", 1)[1].upper()
     lanes = [b.to_json() for b in routing.legacy6_routes()]
-    for name in json.loads((FACTORY / "projects" / "default.hyp.json").read_text())["bank"]:
+    for name in json.loads((FACTORY / "projects" / "house.hyp.json").read_text())["bank"]:
         path = preset.FACTORY_DIR / f"{name.lower().replace(' ', '-')}.json"
         assert json.loads(path.read_text())["routes"] == lanes, name
 
