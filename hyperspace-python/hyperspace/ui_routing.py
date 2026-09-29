@@ -119,7 +119,7 @@ GATE_W = 62.0            # the pinch-gate combo on line 2
 MACRO_LABEL_W = 22.0     # a knob's number beside it; the section says "macros"
 MACRO_NAME_W = 96.0      # a macro's editable label
 SUB_W = 58.0             # a subscriber's from / to fields
-CONTROL_W = 112.0        # the desk and session lines' control column
+CONTROL_W = 56.0         # the desk and session lines' control column: a glyph (plan 14 WP7)
 INDENT = 18.0            # a subscriber line under its macro
 PROMPT = "replace##routing"   # the Replace / Keep modal's popup id
 PROMPT_W = 360.0
@@ -726,6 +726,23 @@ def control_name(table, b: Binding) -> str:
     return name or b.describe()
 
 
+def control_glyph(table, b: Binding) -> str:
+    """What a desk or session row prints first: the control's glyph on the
+    on-screen desk ("D3", plan 14 WP7), else the row's own name."""
+    g = apc40.glyph(b.source) if table.profile == "apc40" else None
+    return g or b.describe()
+
+
+def _control_cell(table, b: Binding, color=None) -> None:
+    """The glyph, and Akai's name and the row's source on hover."""
+    if color is None:
+        imgui.text(control_glyph(table, b))
+    else:
+        imgui.text_colored(color, control_glyph(table, b))
+    if imgui.is_item_hovered():
+        imgui.set_tooltip(f"{control_name(table, b)}  ·  {b.describe()}")
+
+
 def _op_text(b: Binding) -> str:
     if b.op == "set":
         return f"set {b.value:g}"
@@ -788,14 +805,11 @@ def desk(panel, router: Router) -> None:
     sp = imgui.get_style().item_spacing.x
     op_w = imgui.calc_text_size("step +10").x
     dark = unmapped(table)
-    names = [control_name(table, b) for b in rows]
-    col = _column(names + [control_name(table, f) for f in dark])
+    col = _column([control_glyph(table, b) for b in (*rows, *dark)])
     dead = None
     for k, b in enumerate(rows):
         imgui.push_id(f"desk{k}")
-        imgui.text(names[k])
-        if imgui.is_item_hovered():
-            imgui.set_tooltip(b.describe())
+        _control_cell(table, b)
         imgui.same_line(col)
         picked = _param_combo(panel, "##target", b.target, -(op_w + ui.chip_w("×") + 2 * sp),
                               lambda: _desk_targets(panel))
@@ -818,7 +832,7 @@ def desk(panel, router: Router) -> None:
         table.remove(dead)
         _desk_edited(table)
     for f in dark:
-        imgui.text_colored(ui.FAINT, control_name(table, f))
+        _control_cell(table, f, ui.FAINT)
         imgui.same_line(col)
         imgui.text_colored(ui.FAINT, "unmapped — dark")
     if not rows:
@@ -996,13 +1010,13 @@ def session(panel, router: Router) -> None:
     ui._micro("session")
     imgui.same_line()
     imgui.text_disabled("the session's — edit bindings.json")
-    col = _column([control_name(table, b) for b in (*inv, *glob)])
+    col = _column([control_glyph(table, b) for b in (*inv, *glob)])
     for title, rows in (("invariant · both layers", inv), ("global layer · SHIFT on", glob)):
         if not rows:
             continue
         imgui.text_colored(ui.DIM, title)
         for b in rows:
-            imgui.text_colored(ui.FAINT, control_name(table, b))
+            _control_cell(table, b, ui.FAINT)
             imgui.same_line(col)
             op = _op_text(b)
             imgui.text_colored(ui.FAINT, b.target + ("" if op in ("abs", "toggle") else f"  {op}"))

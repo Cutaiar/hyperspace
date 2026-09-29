@@ -76,11 +76,10 @@ import mido
 from . import apc40
 from .learn import Learn
 from .params import Kind, Param, Registry
-from .routing import Binding, Bindings, act, bindings_path, register_desk
+from .routing import PICKUP_TOL, Binding, Bindings, act, bindings_path, led_lit, register_desk
 
 PROFILES = {"apc40": apc40}          # config's `[midi] profile` names one of these
 RECONNECT_S = 2.0
-PICKUP_TOL = 1.5 / 127   # a knob "reaches" the value within this
 
 __all__ = ["PICKUP_TOL", "Binding", "MidiIO", "Ports", "find_port"]
 
@@ -304,8 +303,9 @@ class MidiIO:
 
     def control_name(self, b: Binding) -> str:
         """The control a row names, in the device's words where the
-        profile has them ("track knob 3"), else the row's own."""
-        name = getattr(self.profile, "control_name", None)
+        profile has them — its glyph, then Akai's name ("D3 (device knob 3)",
+        plan 14 WP7) — else the row's own."""
+        name = getattr(self.profile, "named", None) or getattr(self.profile, "control_name", None)
         return (name(b.source) if name is not None else None) or b.describe()
 
     def _learned(self, kind: str, channel: int, number: int, value: int) -> None:
@@ -564,17 +564,7 @@ class MidiIO:
 
     @staticmethod
     def _lit(b: Binding, p: Param) -> bool:
-        if p.kind is Kind.TOGGLE:
-            return bool(p.value) if b.op != "set" else bool(p.value) == bool(b.value)
-        if p.kind is Kind.ENUM:
-            return p.value == int(b.value) if b.op == "set" else b.lit
-        if p.kind is Kind.CONTINUOUS and b.op == "set":
-            return abs(p.norm - float(b.value)) <= PICKUP_TOL
-        if p.kind is Kind.TRIGGER:
-            # the press echo, or a light the param carries itself (a trigger
-            # declared with `lit=`: the METRONOME LED blinking on the beat)
-            return b.lit or bool(p.get())
-        return b.lit
+        return led_lit(b, p)       # the rule is the table's: the desk diagram draws it too
 
     def _dark(self, b: Binding, velocity: int | None = None) -> None:
         if b.kind == "note":
