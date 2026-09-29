@@ -1301,8 +1301,9 @@ class Panel:
         self._section("system")
         self._check("ui.cheatsheet")
         imgui.same_line()
-        self._check("ui.desk")
-        imgui.same_line()
+        if "ui.desk" in self.reg:   # (a registry from before a hot reload lacks it)
+            self._check("ui.desk")
+            imgui.same_line()
         self._button("app.restart", "Restart process", small=True)
         if self.reloader is not None:
             imgui.text_disabled(f"hot reload: {self.reloader.status or 'watching'}")
