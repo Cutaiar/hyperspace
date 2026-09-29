@@ -1326,9 +1326,16 @@ class Panel:
                 out += rw.alerts()
             except Exception as e:  # noqa: BLE001 — the banner must not take the panel down
                 out.append(f"render watch: {type(e).__name__}: {e}"[:160])
-        if self.dream_error:
-            out.append(self.dream_error)
+        if self.dream_error and not getattr(self, "_dream_waved", False):
+            out.append(self.dream_error)        # dismissible: SYSTEM and LOOKBACK keep it
         return out
+
+    def dismiss_alerts(self) -> None:
+        """The banner's dismiss: the render watch's sticky lines and the
+        dream's reason; a live render error or stall stays."""
+        if self.render_watch is not None:
+            self.render_watch.dismiss()
+        self._dream_waved = True
 
     def _alert_banner(self) -> None:
         """A red strip across the bottom of the control window, one line per
@@ -1355,9 +1362,10 @@ class Panel:
             pass
         for line in lines:
             imgui.text_wrapped(line)
-        if (rw is not None and getattr(rw, "dismissible", False)
-                and imgui.small_button("dismiss##alerts")):
-            rw.dismiss()
+        dismissible = (rw is not None and getattr(rw, "dismissible", False)) or (
+            self.dream_error and not getattr(self, "_dream_waved", False))
+        if dismissible and imgui.small_button("dismiss##alerts"):
+            self.dismiss_alerts()
         imgui.end()
         imgui.pop_style_color(2)
 

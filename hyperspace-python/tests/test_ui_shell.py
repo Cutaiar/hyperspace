@@ -197,6 +197,9 @@ def test_a_render_error_and_the_dream_error_show_in_the_red_banner(rig, monkeypa
     frame(rig.panel)
     assert drawn[-1] == "dream worker off: FileNotFoundError: vgg16 weights"
     assert not any("render window" in s for s in drawn)
+    # the dream's reason dismisses too (SYSTEM and LOOKBACK keep it)
+    rig.panel.dismiss_alerts()
+    assert rig.panel.alerts() == []
 
 
 def test_system_page_shows_the_dream_error_and_the_stall_log(rig, monkeypatch, tmp_path):
