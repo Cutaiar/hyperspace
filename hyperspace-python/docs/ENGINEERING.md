@@ -516,6 +516,19 @@ unreadable at a party.
   has its own imgui id (`tests/test_ui_lfo.py:86`). One grey (`ui.LINE`)
   for every rule and frame, one `ui.u32`, one `Panel.half` for a slider
   in a half-width cell.
+- **The desk** (plan 13 §3). The APC40 has two layers under a latched
+  SHIFT, whose LED is lit while the global layer is up. The faders, the
+  preset row, SHIFT, the clock corner, the transport and the track buttons
+  are **invariant**: one meaning on both layers. The **global** layer is
+  the session's (the band strip on the device knobs, hand feel and BPM on
+  track knobs 1–5, the band scenes on clip rows 2–3); the **preset** layer
+  is the loaded preset's (the factory default: the view faders on the
+  track knobs, the shape grid, the render toggles). A control the up layer
+  does not map is dark and does nothing. Knobs continue from their ring
+  after a switch; faders soft-pick-up (hand check 31 is the hardware
+  assumption). A macro is a knob with subscribers: each sets a param's
+  base or scales a route's depth over its own `from → to`; a hand on a
+  macro moves only the depths.
 - **The cheat sheet** (`ui.CHEATSHEET`) is the canonical human list of the
   keys; `test_the_cheat_sheet_matches_the_tables_and_the_loop_keys` parses
   its key column against `routing.keymap()`, `padmap()` and the keys the
@@ -525,7 +538,7 @@ unreadable at a party.
 
 ## 6. Testing
 
-`uv run pytest` — 778 tests, 11 skipped without torch, about 20 s. `ruff`
+`uv run pytest` — 828 tests, 11 skipped without torch, about 25 s. `ruff`
 is the linter. Every test runs with `HYPERSPACE_HOME` pointed at its own
 `tmp_path` (`tests/conftest.py`), so no test can touch `~/Hyperspace`.
 What holds what:
@@ -538,9 +551,14 @@ What holds what:
 - **The frozen chain** (`tests/legacy_chain.py`) against the analyzer's
   legacy layout, bit-exact (`tests/test_analyzer.py:63`).
 - **The control model**: the four plan-09 audit simulations
-  (`tests/test_routing.py:1029-1095`), the referee, migration, macros,
+  (`tests/test_routing.py:1029-1095`), the referee, migration,
   relative writers under modulation (`tests/test_app_relative.py`), rings
-  never chasing a performer (`tests/test_midi.py:272`).
+  never chasing a performer (`tests/test_midi.py:272`); the APC40's two
+  layers — the latch, no fall-through, the release read at the press, the
+  knobs re-based and the faders picking up, the sorted map and an older
+  file's one-time sort (`tests/test_desk.py`); the macros' base and depth
+  subscribers, a performer on a macro moving only its depths, the `scale`
+  migration (`tests/test_macros.py`).
 - **Boundaries**: the core never imports `midi` / `bridge` / `dream`
   (`tests/test_params.py:286`, `tests/test_bridge.py:381`,
   `tests/test_dream.py:55`); `hands/core.py`, `hands/signal.py`, `lfo.py`,
