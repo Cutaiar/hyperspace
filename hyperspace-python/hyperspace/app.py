@@ -144,8 +144,11 @@ def _windows():
     glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, True)
     glfw.window_hint(glfw.SAMPLES, 4)
     # creation-time hints: the framebuffer keeps alpha so overlay mode can
-    # clear to see-through (the other modes clear opaque), and fullscreen
-    # must not minimise when the control window takes focus (overlay.py)
+    # clear to see-through (the other modes clear opaque, and the renderer
+    # keeps every pixel at alpha 1 there — plan 14 WP1), and fullscreen
+    # must not minimise when the control window takes focus (overlay.py).
+    # Pending owner decision (plan 14, decision register row 21): whether
+    # overlay mode survives, and whether this hint moves behind a config key.
     glfw.window_hint(glfw.TRANSPARENT_FRAMEBUFFER, True)
     glfw.window_hint(glfw.AUTO_ICONIFY, False)
     render_win = glfw.create_window(*RENDER_SIZE, TITLE, None, None)

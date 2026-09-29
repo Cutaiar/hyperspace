@@ -40,7 +40,10 @@ the effected frame, so echoes are never warped twice.
 
 Colour stays premultiplied (overlay.py clears to see-through): after its
 blend a pass lifts alpha to cover its own colour, so a generator painting
-over a transparent ground shows on the desktop.
+over a transparent ground shows on the desktop. On an opaque ground
+(window and fullscreen, ``FxChain.opaque``, set by the renderer each
+frame) every pass writes alpha 1, whatever its blend — a multiply or an
+effect returning a low alpha never lets the desktop through (plan 14 WP1).
 """
 
 from __future__ import annotations
@@ -358,6 +361,7 @@ uniform float u_phase;     // the effect's clock: seconds × its speed
 uniform float u_time;      // seconds, wall clock
 uniform float u_mix;       // its mix × fx.mix
 uniform int u_blend;       // index into BLENDS
+uniform int u_opaque;      // 1 on an opaque ground (window, fullscreen): alpha stays 1
 in vec2 v_uv;
 out vec4 f_color;
 """
@@ -373,6 +377,8 @@ void main() {
     c = clamp(mix(a, c, u_mix), 0.0, 1.0);
     // premultiplied: a pass that lights a pixel also covers it
     c.a = max(c.a, max(c.r, max(c.g, c.b)));
+    // on an opaque ground nothing may let the desktop through (plan 14 WP1)
+    if (u_opaque != 0) c.a = 1.0;
     f_color = c;
 }
 """
@@ -408,6 +414,7 @@ class FxChain:
         self.errors: dict[str, str] = {}
         self._t_last: float | None = None      # the t of the previous run
         self._frame = 0
+        self.opaque = False     # the ground is opaque: every pass writes alpha 1 (Renderer.draw)
         self._build_copy()
 
     def _build_copy(self) -> None:
@@ -487,6 +494,7 @@ class FxChain:
             self._set(prog, "u_time", float(t))
             self._set(prog, "u_mix", float(v["mix"]) * float(st.mix))
             self._set(prog, "u_blend", int(v["blend"]))
+            self._set(prog, "u_opaque", int(getattr(self, "opaque", False)))
             for p in st.specs[name].params:
                 x = v[p.key]
                 self._set(prog, p.uniform, round(x) if p.integer else float(x))

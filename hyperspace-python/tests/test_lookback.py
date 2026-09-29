@@ -9,6 +9,7 @@ only tolerance is 8-bit rounding.
 
 from __future__ import annotations
 
+import json
 import time
 from types import SimpleNamespace
 
@@ -25,6 +26,7 @@ from hyperspace.lookback import (
     LookbackSource,
     echo_size,
 )
+from hyperspace.overlay import Output
 from hyperspace.render import Renderer
 from hyperspace.view import ViewState
 
@@ -509,20 +511,126 @@ def test_alpha_preserved_on_a_transparent_ground(ctx):
     rig.release()
 
 
-def test_cut_through_toggle_on_an_opaque_ground(ctx):
-    """Faces on an opaque ground: cut-through on (the default) lowers the
-    window's alpha under the fills; off, every pixel stays opaque."""
-    rig = Rig(ctx, 256, 256, bg_alpha=1.0)
-    rig.s.faces, rig.s.lines, rig.s.points = True, False, False
+def test_cut_through_never_cuts_an_opaque_ground(ctx):
+    """Plan 14 WP1 (the Pepper's Ghost rig): on an opaque ground — window
+    and fullscreen — faces leave every pixel at alpha 255 whether
+    cut-through is on (the default) or off; the fills still draw."""
+    rig = Rig(ctx, 256, 256, bg_alpha=Output(None, None).bg_alpha)   # window mode: 1
+    rig.s.faces, rig.s.lines, rig.s.points = True, True, False
     assert rig.s.cut_through
+    for cut in (True, False):
+        rig.s.cut_through = cut
+        rig.frame()
+        out = rig.read()
+        assert (out[..., 3] == 255).all(), f"cut_through={cut} let the desktop through"
+        assert out[..., :3].max() > 0, "the fills must still draw"
+    rig.release()
+
+
+def test_cut_through_still_cuts_in_overlay_mode(ctx):
+    """Overlay mode's see-through ground: cut-through on lets the fills
+    lower the window's alpha below the ground's; off, alpha composites over
+    the ground and never drops below it."""
+    out_ = Output(None, None)
+    out_.overlay, out_.bg = True, 0.6
+    rig = Rig(ctx, 256, 256, bg_alpha=out_.bg_alpha)
+    ground = round(0.6 * 255)
+    rig.s.faces, rig.s.lines, rig.s.points = True, False, False
+    rig.s.cut_through = True
     rig.frame()
-    assert rig.read()[..., 3].min() < 255, "the fills must cut the alpha"
+    assert rig.read()[..., 3].min() < ground - 2, "in overlay the fills must cut the alpha"
     rig.s.cut_through = False
     rig.frame()
     out = rig.read()
-    assert (out[..., 3] == 255).all()
-    assert out[..., :3].max() > 0, "the fills must still draw"
+    assert out[..., 3].min() >= ground - 1
+    assert out[..., :3].max() > 0
     rig.release()
+
+
+def _preset_rig(ctx, tmp_path):
+    """The app's construction order (tests/test_presets.py `boot`), the
+    renderer's own dream and fx states on the registry."""
+    from hyperspace import lfo, preset, tempo
+    from hyperspace.analysis import Analyser
+    from hyperspace.analyzer import Analyzer
+    from hyperspace.control import Control
+    from hyperspace.library import Library
+    from hyperspace.params import build_registry
+    from hyperspace.preset import Presets
+    from hyperspace.routing import Bindings, Router
+
+    chain = Analyzer(Analyser())
+    control = Control(chain)
+    view = ViewState()
+    r = Renderer(ctx)
+    lib = Library(tmp_path, period=0.0)
+    reg = build_registry(view, control, SimpleNamespace(chain=chain), lib.project,
+                         dream=r.lookback.state, fx=r.fx.state)
+    control.library = lib
+    clock = tempo.Clock(now=lambda: 0.0)
+    tempo.register(reg, clock)
+    lfo.register(reg, lfo.LFOs(), clock)
+    lib.attach(reg)
+    router = Router(reg, Bindings())
+    presets = Presets(lib, reg, router)
+    preset.migrate_home(lib, router)
+    return SimpleNamespace(lib=lib, reg=reg, view=view, r=r, presets=presets)
+
+
+def _final_alpha(ctx, b, bg_alpha, w=240, h=160, frames=4):
+    tex = ctx.texture((w, h), 4)
+    fbo = ctx.framebuffer(color_attachments=[tex])
+    b.r.bg_alpha = bg_alpha
+    for k in range(frames):
+        b.reg.apply()
+        b.view.integrate(1 / 60)
+        fbo.use()
+        ctx.viewport = (0, 0, w, h)
+        b.r.draw(b.view, w, h, t_now=k / 60)
+    a = np.frombuffer(fbo.read(components=4), dtype=np.uint8).reshape(h, w, 4)[..., 3].copy()
+    fbo.release()
+    tex.release()
+    return a
+
+
+def _factory_presets():
+    from hyperspace.library import FACTORY
+    return sorted(p.stem for p in (FACTORY / "presets").glob("*.json"))
+
+
+# every effect on at its own blend, then every one forced to multiply
+# (a × b drops alpha wherever an effect returns less than 1)
+STRESS = ["effects", "multiply"]
+
+
+@pytest.mark.parametrize("name", _factory_presets() + STRESS)
+def test_every_factory_preset_renders_opaque_in_window_mode(ctx, tmp_path, name):
+    """Plan 14 WP1: the render window is a Pepper's Ghost screen — in window
+    mode (and fullscreen, the same opaque ground) every pixel of the final
+    frame is alpha 255 for every factory preset, and for a preset with
+    cut-through, faces, points, the look-back and every effect on, through
+    the FX chain and the look-back composite."""
+    b = _preset_rig(ctx, tmp_path)
+    first = _factory_presets()[0] if name in STRESS else name
+    path = b.lib.path_of("presets", first)
+    assert path is not None, first
+    b.presets.load(json.loads(path.read_text())["name"])
+    assert b.lib.current("presets") is not None
+    if name in STRESS:
+        values = {"view.faces": True, "view.cut_through": True, "view.lines": True,
+                  "view.points": True, "fx.on": True, "fx.mix": 1.0, "dream.on": True,
+                  "dream.echoes": 6, "dream.every": 1}
+        for fx_name in b.r.fx.state.specs:
+            values[f"fx.{fx_name}.on"] = True
+            values[f"fx.{fx_name}.mix"] = 1.0
+        assert b.reg.restore(values) == []
+        if name == "multiply":
+            for fx_name in b.r.fx.state.specs:
+                b.reg[f"fx.{fx_name}.blend"].set(3)
+    a = _final_alpha(ctx, b, Output(None, None).bg_alpha)
+    assert (a == 255).all(), f"{name}: {(a < 255).mean():.1%} below 255, lowest {a.min()}"
+    if name in STRESS:
+        assert b.r.fx.active() and b.view.cut_through and b.view.faces
 
 
 # ---------------------------------------------------------------- the dream slot

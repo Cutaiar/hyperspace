@@ -730,10 +730,10 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
              tip="Translucent fills on the true 2-faces, under the wireframe. "
                  "First build per shape takes a moment (extraction is cached).")
     r.toggle("view.cut_through", "Cut-through", *_attr(view, "cut_through"), group=g,
-             tip="On: the translucent faces (and faint lines) cut the window's alpha, so "
-                 "the screen behind the render window shows through them. Off: they "
-                 "draw over the ground and whatever layer is under them — nothing behind "
-                 "the window shows except where the ground itself is clear.")
+             tip="Overlay mode only: on, the translucent faces (and faint lines) cut the "
+                 "window's alpha, so the screen behind the render window shows through "
+                 "them; off, they draw over the ground and whatever layer is under them. "
+                 "In window and fullscreen the picture is always opaque, on or off.")
     r.toggle("view.rotate", "Rotate", *_attr(view, "playing"), group=g)
     r.continuous("view.instances", "Instances", *_attr(view, "instances"),
                  lo=1, hi=100, integer=True, fmt=lambda v: f"{int(v)} instance(s)", group=g,

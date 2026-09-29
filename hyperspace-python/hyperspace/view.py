@@ -34,7 +34,7 @@ class ViewState:
     yaw: float = 0.0
     pitch: float = 0.0
     faces: bool = False          # translucent face fills under the wireframe
-    cut_through: bool = True     # fills lower the window's alpha: the desktop shows through
+    cut_through: bool = True     # overlay only: fills lower the window's alpha (render.py)
     zoom: float = 1.0            # camera magnification about the view centre
     pan: list[float] = field(default_factory=lambda: [0.0, 0.0])  # logical px
     instances: int = 1           # synchronized copies in a centred grid

@@ -451,6 +451,8 @@ class Renderer:
         lb.pull()
         fx = self.fx
         fx.tick()
+        # an opaque ground keeps the whole chain at alpha 1 (plan 14 WP1)
+        fx.opaque = getattr(self, "bg_alpha", 1.0) >= 1.0
         if fx.active():
             # the post pass into the chain's first texture; the chain ends
             # on the window. The history captures the scene, not the effects.
@@ -544,12 +546,16 @@ class Renderer:
         # premultiplied ground: black at bg_alpha, so SRC_ALPHA/ONE_MINUS
         # blending leaves the framebuffer correctly composited for a
         # transparent window (colour = Σ c·a, alpha = 1 − Π(1 − a))
-        self.ctx.clear(*BG, getattr(self, "bg_alpha", 1.0))
+        bg_alpha = getattr(self, "bg_alpha", 1.0)
+        self.ctx.clear(*BG, bg_alpha)
         # cut-through: the plain blend also blends alpha (a² + (1 − a)·dst),
         # so a faint fill lowers the ground's alpha and a transparent window
         # shows the desktop through it. Off: alpha composites over the ground
-        # (a + (1 − a)·dst), never below it — the lowest layer shows instead
-        if s.cut_through:
+        # (a + (1 − a)·dst), never below it — the lowest layer shows instead.
+        # Only on a see-through ground (overlay mode): on an opaque one the
+        # frame stays alpha 1 everywhere, so the desktop never shows through
+        # the window (plan 14 WP1 — the Pepper's Ghost rig)
+        if s.cut_through and bg_alpha < 1.0:
             self.ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
         else:
             self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA,
