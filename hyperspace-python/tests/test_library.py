@@ -17,6 +17,9 @@ from hyperspace.bands import BANDS
 from hyperspace.control import SCENES, Control
 from hyperspace.library import FACTORY, Library, LibraryError, legacy_slot, migrate_doc, slug
 from hyperspace.params import build_registry
+from hyperspace.preset import Presets
+from hyperspace.routing import Bindings as _Bindings
+from hyperspace.routing import Router as _Router
 from hyperspace.view import ViewState
 
 _clock = [1_000_000_000.0]
@@ -43,7 +46,9 @@ def make(home):
     lib = Library(home, period=0.0)
     reg = build_registry(view, control, audio, lib.project)
     lib.attach(reg)
-    return SimpleNamespace(lib=lib, reg=reg, view=view, control=control, chain=chain)
+    presets = Presets(lib, reg, _Router(reg, _Bindings()))    # the bank's loader, as app.py builds it
+    return SimpleNamespace(lib=lib, reg=reg, view=view, control=control, chain=chain,
+                           presets=presets)
 
 
 @pytest.fixture()
@@ -78,16 +83,16 @@ def test_first_run_migrates_working_directory_files(tmp_path, monkeypatch, capsy
     assert (cwd / "config.toml").exists()                       # originals stay
     err = capsys.readouterr().err
     assert "config.toml" in err and "presets.json" in err
-    # the legacy theme bank became the user's default project, seeds filling the gaps
+    # the legacy theme bank became user presets and a schema-2 default
+    # project naming them (plan 13 WP2); an empty legacy slot stays empty
     r = make(home)
-    assert r.lib.project.slots[0]["name"] == "BIG BLUE WAVE"
-    assert r.lib.project.slots[1]["values"] == {
-        "view.shape": 4, **{f"view.plane.{n}": True for n in library.PLANES},
-        "scene.select": 3, "band.0.fn": 2, "band.0.atk": 0.5, "master.gain": 2.0,
-    }
+    assert r.lib.project.bank[:2] == [None, "MINE"] and r.lib.project.startup == "MINE"
+    doc = json.loads((home / "presets" / "mine.json").read_text())
+    assert doc["schema"] == "hyperspace.preset/2" and doc["routes"]   # the factory lanes
+    # the slot's session ids (scene, band, master) are dropped: a preset never has them (D9)
+    assert doc["values"] == {"view.shape": 4, **{f"view.plane.{n}": True for n in library.PLANES}}
     atk, gain = r.chain.params[0].atk, r.chain.gain
     r.lib.project.load_slot(1)
-    # the slot keeps its session ids, but a load moves the performance only (D9)
     assert r.view.shape == 4 and r.chain.params[0].atk == atk and r.chain.gain == gain
     # second run: nothing to do, nothing said (migrate itself; ensure_home is memoised)
     assert library.migrate(home, cwd) == []
@@ -127,61 +132,58 @@ def test_slug():
 
 
 def test_macros_are_performance_state(rig, tmp_path):
-    """Plan 13 WP1: the macros are performance state. A theme slot and a
-    project carry them; the module strips still list no `macro` group (a
-    macro's meaning is its subscribers, which a preset will carry). The
-    live table keeps them too until plan 13 WP5 (test_routing)."""
+    """Plan 13 WP1 / WP2: the macros are performance state. A preset
+    carries them and a project (the session) does not; the module strips
+    still list no `macro` group (a macro's meaning is its subscribers,
+    which live in the preset). The live table keeps them too until plan
+    13 WP5 (test_routing)."""
     lib, reg = rig.lib, rig.reg
     assert "macro" not in lib.groups() and "view" in lib.groups()
     m = reg["macro.2"]
     m.set_value(0.3)
     lib.project.save_slot(0)
-    assert lib.project.slots[0]["values"]["macro.2"] == pytest.approx(0.3)
+    assert lib.read("presets", lib.project.bank[0])["values"]["macro.2"] == pytest.approx(0.3)
     m.set_value(0.7)
+    assert lib.is_dirty("presets")                   # the loaded preset tracks it
     lib.project.load_slot(0)
-    assert m.value == pytest.approx(0.3)             # the theme brought it back
+    assert m.value == pytest.approx(0.3)             # the preset brought it back
     path = lib.project.save("Show")
     doc = json.loads(path.read_text())
-    assert doc["values"]["macro.2"] == pytest.approx(0.3) and "macro" not in doc["modules"]
+    assert "macro.2" not in doc["session"] and "values" not in doc
+    assert "macro" not in doc["modules"]
     m.set_value(0.1)
-    assert lib.project.is_dirty()                    # the project tracks it now
-    lib.project.load("Show")
-    assert m.value == pytest.approx(0.3)
+    assert not lib.project.is_dirty()                # not the session's
 
 
 def test_a_project_keeps_the_session_apart(rig, tmp_path):
-    """Plan 13 §2.2 / §4: a project file holds the performance part as
-    `values` and the session part as `session`; an older file whose
-    `values` held both still restores both, and is_dirty sees either."""
+    """Plan 13 §2.2 / §4: a project file (schema 2) holds the session part
+    as `session` and the bank as names; the performance is the preset's.
+    is_dirty sees the session, the bank and the startup preset; a file
+    that lacks a session id takes the loaded state, so it opens clean."""
     lib, reg = rig.lib, rig.reg
     reg["view.shape"].set(5)
     reg["master.gain"].set(2.0)
     path = lib.project.save("Split")
     doc = json.loads(path.read_text())
-    assert doc["schema"] == "hyperspace.project/1"
-    assert doc["values"] == reg.snapshot(part="performance")
+    assert doc["schema"] == "hyperspace.project/2" and "values" not in doc
     assert doc["session"] == reg.snapshot(part="session")
-    assert "master.gain" in doc["session"] and "master.gain" not in doc["values"]
-    assert "view.shape" in doc["values"] and "view.shape" not in doc["session"]
+    assert "master.gain" in doc["session"] and "view.shape" not in doc["session"]
+    assert doc["bank"] == lib.project.bank and doc["startup"] == "BIG BLUE WAVE"
+    assert not lib.project.is_dirty()
+    reg["view.shape"].set(6)                         # a performance move: the preset's
     assert not lib.project.is_dirty()
     reg["master.gain"].set(1.0)                      # a session move dirties the project
     assert lib.project.is_dirty()
-    # an old file: no `session` key, session ids in `values`
-    old = {"schema": "hyperspace.project/1", "name": "Old",
-           "values": {"view.shape": 7, "master.gain": 3.0, "band.0.atk": 0.5},
-           "modules": {}, "bank": [None] * library.SLOTS}
-    (tmp_path / "projects" / "old.hyp.json").write_text(json.dumps(old))
-    lib.project.load("Old")
-    assert rig.view.shape == 7 and rig.chain.gain == 3.0 and rig.chain.params[0].atk == 0.5
-    pr = lib.project
-    assert pr.values["view.shape"] == 7 and pr.session["master.gain"] == 3.0
-    assert pr.session["band.0.atk"] == 0.5
-    assert not {"master.gain", "band.0.atk"} & set(pr.values)
-    # the ids the old file lacks (its macros) are filled from the loaded state,
-    # so an untouched project is clean the moment it opens (review of PR #62)
-    assert "macro.1" in pr.values and not pr.is_dirty()
-    reg["macro.1"].set_value(0.2)
-    assert pr.is_dirty()
+    lib.project.save()
+    lib.project.startup = "EMBER ORBIT"              # …as does the startup combo
+    assert lib.project.is_dirty()
+    lib.project.save()
+    short = {k: v for k, v in doc.items() if k != "session"}
+    short["session"] = {"master.gain": 3.0}
+    (tmp_path / "projects" / "short.hyp.json").write_text(json.dumps(short))
+    lib.project.load("short")
+    assert rig.chain.gain == 3.0 and "band.0.atk" in lib.project.session
+    assert not lib.project.is_dirty()
 
 
 def test_list_user_shadows_factory(rig, tmp_path):
@@ -509,8 +511,8 @@ def test_a_project_naming_the_routing_layer_is_ignored_before_and_after_the_kind
     by name, not by registration."""
     lib = rig.lib
     p = tmp_path / "projects" / "odd.hyp.json"
-    p.write_text(json.dumps({"schema": "hyperspace.project/1", "name": "Odd",
-                             "values": {}, "modules": {"bindings": "lfo-breathe"}}))
+    p.write_text(json.dumps({"schema": "hyperspace.project/2", "name": "Odd",
+                             "session": {}, "modules": {"bindings": "lfo-breathe"}}))
     assert lib.project.load("odd") == []
     assert lib.current("bindings") is None
     _routed(rig, tmp_path)
@@ -601,51 +603,56 @@ def test_project_save_load_new(rig, tmp_path):
     assert p == tmp_path / "projects" / "gig.hyp.json"
     assert lib.project.list() == ["default", "gig", "party"]   # party: the factory one
     doc = json.loads(p.read_text())
-    assert doc["schema"] == "hyperspace.project/1" and doc["name"] == "Gig"
-    assert doc["modules"] == {"band": "Percussive", "view": "Mine"}
-    assert doc["values"]["camera.zoom"] == 3.0 and doc["bank"][2]["name"] == "STROBE CAGE"
+    assert doc["schema"] == "hyperspace.project/2" and doc["name"] == "Gig"
+    # a performance group's label is the preset's, never the project's
+    assert doc["modules"] == {"band": "Percussive"}
+    assert doc["session"]["master.gain"] == 2.5 and "camera.zoom" not in doc["session"]
+    assert doc["bank"][2] == "STROBE CAGE"
+    assert lib.read("presets", "STROBE CAGE")["values"]["camera.zoom"] == 3.0   # the user's shadow
     assert "io" not in doc                                  # audit L3: never written, gone
 
     lib.project.new()
     assert lib.project.name == "untitled" and lib.project.path is None
-    assert rig.view.zoom == 1.0 and rig.chain.gain == 1.0     # fresh state
-    assert lib.current("band") is None and lib.project.slots[2]["values"] == \
-        json.loads((FACTORY / "projects" / "default.hyp.json").read_text())["bank"][2]["values"]
+    assert rig.chain.gain == 1.0 and lib.current("band") is None    # a fresh session…
+    assert lib.project.bank[2] == "STROBE CAGE"                      # …the factory bank
+    assert lib.current("presets") == "BIG BLUE WAVE"                 # …and its startup preset
 
     missing = lib.project.load("Gig")
     assert missing == [] and lib.project.path == p
-    assert rig.view.zoom == 3.0 and rig.chain.gain == 2.5
+    assert rig.chain.gain == 2.5
     assert lib.current("band") == "Percussive" and not lib.is_dirty("band")
-    assert lib.project.slots[2]["values"]["camera.zoom"] == 3.0 and lib.project.active == -1
+    assert lib.project.active == 0                                   # the startup preset's slot
     # a module whose preset is gone is still "loaded", the values speak for it
-    lib.delete("view", "Mine")
+    lib.save_as("band", "Mine")
+    lib.project.save()
+    lib.delete("band", "Mine")
     lib.project.load(p)
-    assert lib.current("view") == "Mine" and not lib.is_dirty("view")
+    assert lib.current("band") == "Mine" and not lib.is_dirty("band")
     # saving now keeps an inline copy so the project stays whole elsewhere
     doc = json.loads(lib.project.save().read_text())
-    assert doc["modules"]["view"]["name"] == "Mine" and "view.bright" in doc["modules"]["view"]["values"]
+    assert doc["modules"]["band"]["name"] == "Mine" and "band.0.atk" in doc["modules"]["band"]["values"]
 
 
-def test_project_unknown_ids_and_bank_seeding(rig, tmp_path):
+def test_project_unknown_ids_and_a_short_bank(rig, tmp_path):
     p = tmp_path / "projects" / "odd.hyp.json"
-    p.write_text(json.dumps({"schema": "hyperspace.project/1", "name": "Odd",
-                             "values": {"view.shape": 6, "warp.core": 1},
-                             "bank": [{"name": "ONE", "values": {}}]}))
+    p.write_text(json.dumps({"schema": "hyperspace.project/2", "name": "Odd",
+                             "session": {"master.gain": 2.0, "warp.core": 1},
+                             "bank": ["ONE"]}))
     assert rig.lib.project.load("odd") == ["warp.core"]
-    assert rig.view.shape == 6
-    slots = rig.lib.project.slots
-    assert slots[0]["name"] == "ONE" and slots[1]["name"] == "EMBER ORBIT"
+    assert rig.chain.gain == 2.0
+    # a short bank is padded with empty slots; nothing is seeded any more
+    assert rig.lib.project.bank == ["ONE"] + [None] * (library.SLOTS - 1)
     assert rig.lib.project.name == "Odd" and rig.lib.project.path == p
 
 
 def test_user_default_project_opens_on_attach(tmp_path):
     r = make(tmp_path)
-    r.reg["view.bright"].set_value(2.0)
+    r.reg["master.gain"].set(2.0)
     r.lib.load("band", "Tremolo Web")
     r.lib.project.save()
     r2 = make(tmp_path)
     assert r2.lib.project.path == tmp_path / "projects" / "default.hyp.json"
-    assert r2.view.bright == 2.0 and r2.lib.current("band") == "Tremolo Web"
+    assert r2.chain.gain == 2.0 and r2.lib.current("band") == "Tremolo Web"
 
 
 # ---------------------------------------------------------------- live editing
@@ -679,10 +686,12 @@ def test_editing_the_open_project_reloads_it(rig, tmp_path):
     lib = rig.lib
     p = lib.project.save("Set")
     lib.poll(now=1.0)
-    edit(p, lambda d: (d["values"].__setitem__("view.shape", 8),
-                       d["bank"][0].__setitem__("name", "RENAMED")))
+    rig.view.shape = 3                                 # the performance, the preset's
+    edit(p, lambda d: (d["session"].__setitem__("master.gain", 4.0),
+                       d["bank"].__setitem__(0, "RENAMED")))
     assert lib.poll(now=2.0)
-    assert rig.view.shape == 8 and lib.project.slots[0]["name"] == "RENAMED"
+    assert rig.chain.gain == 4.0 and lib.project.bank[0] == "RENAMED"
+    assert rig.view.shape == 3                         # an edit re-reads; no startup load
 
 
 def test_a_band_presets_normalisation_switch_round_trips(rig):
@@ -703,9 +712,12 @@ def test_a_band_presets_normalisation_switch_round_trips(rig):
 
 def test_factory_projects_are_listed_and_load_by_name(rig):
     """The load combo lists the factory projects (plan 12's `party`) beside
-    the user's; opening one by name lands its bank without a user file."""
+    the user's; opening one by name lands its bank without a user file,
+    and its startup preset with it."""
     lib = rig.lib
     assert "party" in lib.project.list()
     assert lib.project.load("party") == []
     assert lib.project.name == "party" and lib.project.path is None
-    assert [s["name"] for s in lib.project.bank[:5]] == ["TUMBLE", "FACES", "FIELD", "WAKE", "TRIP"]
+    assert lib.project.bank == ["TUMBLE", "FACES", "FIELD", "WAKE", "TRIP", None, None, None]
+    assert lib.current("presets") == "TUMBLE" and lib.project.active == 0
+    assert rig.view.shape == 10 and lib.current("band") == "Balanced"

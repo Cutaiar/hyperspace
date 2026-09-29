@@ -45,7 +45,7 @@ def test_ids_are_unique_and_stable(rig):
     assert len(ids) == len(set(ids))
     for must in ("view.bright", "view.shape", "master.gain", "scene.select",
                  "band.0.atk", "band.5.thr", "band.sel.pre", "band.select",
-                 "theme.load.0", "theme.save.7", "camera.zoom", "view.plane.ZW"):
+                 "preset.load.0", "preset.save.7", "camera.zoom", "view.plane.ZW"):
         assert must in reg, must
     r = Registry()
     r.toggle("x", "x", lambda: True, lambda v: None)
@@ -243,18 +243,29 @@ def test_params_survive_a_chain_swap(rig):
     assert new.params[0].post == 0.0
 
 
-def test_theme_params(rig):
-    reg, view, _control, _audio, presets = rig
-    assert len(reg["theme.select"].names) == 8
-    reg["theme.load.1"].fire()
-    assert presets.active == 1 and view.shape == 10
-    reg["theme.select"].set_norm(0.0)
-    assert presets.active == 0
-    reg["theme.next"].fire()
-    assert presets.active == 1
+def test_preset_bank_params(rig):
+    """The bank's params (plan 13 WP2): select, load, save, next / prev
+    over the project's eight preset names, loading through `Presets`."""
+    from hyperspace.preset import Presets
+    from hyperspace.routing import Bindings, Router
+
+    reg, view, _control, _audio, bank = rig
+    Presets(bank.lib, reg, Router(reg, Bindings()))
+    assert reg["preset.select"].names[:2] == ["BIG BLUE WAVE", "EMBER ORBIT"]
+    assert len(reg["preset.select"].names) == 8
+    reg["preset.load.1"].fire()
+    assert bank.active == 1 and view.shape == 10
+    reg["preset.select"].set_norm(0.0)
+    assert bank.active == 0
+    reg["preset.next"].fire()
+    assert bank.active == 1
+    reg["preset.prev"].fire()
+    assert bank.active == 0
     view.shape = 12
-    reg["theme.save.5"].fire()
-    assert presets.slots[5]["values"]["view.shape"] == 12
+    reg["preset.save.5"].fire()
+    assert bank.bank[5] == "SPIRAL SILK"
+    assert bank.lib.read("presets", "SPIRAL SILK")["values"]["view.shape"] == 12
+    assert not reg["preset.save.5"].modulatable and not reg["preset.select"].persist
 
 
 def test_scene_names_match_presets(rig):
@@ -320,7 +331,7 @@ def test_every_persisted_group_is_performance_or_session(tmp_path):
         assert part_of(p) in ("performance", "session"), p.id
         assert p.id.partition(".")[0] == p.group, p.id
     assert all(not p.persist for p in reg if p.id.startswith("rot.phase."))
-    assert all(part_of(p) is None for p in reg.group("theme"))
+    assert all(part_of(p) is None for p in reg.group("preset"))
 
 
 def test_snapshot_by_part(tmp_path):

@@ -37,7 +37,7 @@ def rig(tmp_path):
     tempo.register(reg, clock)
     lfo.register(reg, lfos, clock)
     lib.attach(reg)
-    panel = Panel(control, audio, view, themes=lib.project, registry=reg, library=lib)
+    panel = Panel(control, audio, view, bank=lib.project, registry=reg, library=lib)
     panel.clock, panel.lfos = clock, lfos
     try:
         yield SimpleNamespace(panel=panel, reg=reg, clock=clock, lfos=lfos)

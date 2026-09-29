@@ -13,7 +13,8 @@ from hyperspace.library import Library
 from hyperspace.midi import PICKUP_TOL, Binding, MidiIO
 from hyperspace.overlay import Output
 from hyperspace.params import Kind, build_registry
-from hyperspace.routing import Bindings
+from hyperspace.preset import Presets
+from hyperspace.routing import Bindings, Router
 from hyperspace.view import ViewState
 
 
@@ -64,6 +65,7 @@ def rig(tmp_path):
     lfo.register(reg, lfo.LFOs(), clock)
     inp, out = FakeIn(), FakeOut()
     m = MidiIO(reg, path=tmp_path / "midi_map.json", inp=inp, out=out)
+    Presets(lib, reg, Router(reg, m.table))     # the bank the clip row and QUANT load
     return SimpleNamespace(reg=reg, view=view, control=control, audio=audio,
                            presets=presets, midi=m, inp=inp, out=out, clock=clock)
 
@@ -206,7 +208,7 @@ def test_step_buttons(rig):
 
 
 def test_transport_corner_is_the_clock(rig):
-    """TAP TEMPO taps, NUDGE ± steps a hundredth, QUANT cycles the theme."""
+    """TAP TEMPO taps, NUDGE ± steps a hundredth, QUANT steps the preset bank."""
     c = rig.clock
     c.tick(1.0)
     push(rig, note(apc40.N_TAP), note(apc40.N_TAP, 0))
@@ -245,7 +247,7 @@ def test_metronome_fires_the_trigger_and_blinks_on_the_beat(rig):
     assert len(rig.midi.table.route("note", 0, apc40.N_METRO)) == 1
 
 
-def test_theme_grid_lights_the_active_theme(rig):
+def test_preset_row_lights_the_active_preset(rig):
     push(rig, note(apc40.N_CLIP[0], channel=2))
     assert rig.presets.active == 2
     leds = {(m.channel, m.note): m.velocity for m in rig.out.sent if m.type == "note_on"}

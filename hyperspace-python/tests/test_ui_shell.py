@@ -20,6 +20,7 @@ from hyperspace.control import Control
 from hyperspace.library import Library
 from hyperspace.overlay import Output
 from hyperspace.params import Kind, build_registry
+from hyperspace.preset import Presets
 from hyperspace.routing import Binding, Bindings, Owned, Router, keymap, padmap
 from hyperspace.ui import CHEATSHEET, PAGE_KEYS, PAGES, Panel, apply_style, load_fonts
 from hyperspace.view import ViewState
@@ -67,11 +68,12 @@ def rig(tmp_path):
     output = Output(None, None)
     output.register(reg)
     lib.attach(reg)
-    panel = Panel(control, audio, view, themes=lib.project, registry=reg, library=lib)
+    panel = Panel(control, audio, view, bank=lib.project, registry=reg, library=lib)
     panel.clock, panel.lfos = clock, lfos
     panel.hands, panel.hand_settings = hands_io, settings
     panel.output = output
     router = Router(reg, Bindings.factory(path=tmp_path / "bindings.json"))
+    Presets(lib, reg, router)           # the bank and the preset strip, as app.py builds them
     panel.router = router
     r = SimpleNamespace(panel=panel, lib=lib, reg=reg, view=view, chain=chain, router=router)
     try:
@@ -384,31 +386,36 @@ def test_project_row_and_dirty_state(rig, tmp_path):
     assert not proj.is_dirty()
     assert ui_presets.names(panel, ui_presets.PROJECT) == ["default", "party", "show"]
     frame(panel)
-    shape = rig.view.shape
-    reg["view.shape"].step(1)
+    gain = rig.chain.gain
+    reg["master.gain"].set(gain + 1.0)             # a session move
     assert proj.is_dirty()
     frame(panel)
     ui_presets._guard(panel, proj.save)
     assert not proj.is_dirty()
     # load / new go through the same row
     proj.new("scratch")
-    assert proj.is_dirty() and proj.path is None and rig.view.shape == shape
+    assert proj.is_dirty() and proj.path is None and rig.chain.gain == gain
     frame(panel)
     proj.load("show")
-    assert rig.view.shape == shape + 1 and not proj.is_dirty()
+    assert rig.chain.gain == gain + 1.0 and not proj.is_dirty()
     frame(panel)
 
 
-def test_theme_bank_keeps_its_behaviour(rig):
-    """F1–F8 moved to the presets page; the params and slots are unchanged."""
+def test_preset_bank_and_strip_on_the_presets_page(rig):
+    """Plan 13 WP2: the bank row loads and saves presets by F-key param,
+    the one preset strip shows what is loaded and its dirty dot."""
     panel, lib, reg = rig.panel, rig.lib, rig.reg
     frame(panel, "presets")
     reg["view.shape"].set(5)
-    reg["theme.save.2"].fire()
-    assert lib.project.active == 2 and lib.project.slots[2]["values"]["view.shape"] == 5
+    reg["preset.save.2"].fire()
+    assert lib.project.active == 2 and lib.project.bank[2] == "STROBE CAGE"
+    assert lib.read("presets", "STROBE CAGE")["values"]["view.shape"] == 5
+    assert lib.current("presets") == "STROBE CAGE" and not lib.is_dirty("presets")
     reg["view.shape"].set(1)
-    reg["theme.load.2"].fire()
-    assert rig.view.shape == 5
+    assert ui_presets.dirty(panel, "presets")
+    frame(panel)
+    reg["preset.load.2"].fire()
+    assert rig.view.shape == 5 and not lib.is_dirty("presets")
     frame(panel)
 
 

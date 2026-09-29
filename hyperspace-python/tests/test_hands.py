@@ -719,7 +719,7 @@ def test_hands_page_draws_live_and_offline(tmp_path):
         r = rig()
         hands.register(reg, r.s)
         lib.attach(reg)
-        panel = Panel(control, audio, view, themes=lib.project, registry=reg, library=lib)
+        panel = Panel(control, audio, view, bank=lib.project, registry=reg, library=lib)
         panel.hand_settings = r.s
         reg["ui.page"].set(PAGE_KEYS.index("hands"))
 

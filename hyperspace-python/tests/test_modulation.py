@@ -66,11 +66,11 @@ def test_flags_say_what_a_param_is_for(rig):
     reg = rig[0]
     a = reg["band.sel.atk"]
     assert a.alias and not a.persist and not a.modulatable
-    for pid in ("band.select", "theme.select", "rot.phase.XY"):
+    for pid in ("band.select", "preset.select", "rot.phase.XY"):
         assert not reg[pid].persist, pid
-    assert not reg["theme.select"].modulatable
-    assert not reg["theme.save.0"].modulatable
-    assert reg["theme.load.0"].modulatable      # a kick may load a theme
+    assert not reg["preset.select"].modulatable
+    assert not reg["preset.save.0"].modulatable
+    assert reg["preset.load.0"].modulatable     # a kick may load a preset
     assert not reg["camera.reset"].persist       # triggers never persist
     assert reg["view.bright"].persist and reg["view.bright"].modulatable
     assert not reg["view.bmp_file"].modulatable
@@ -99,7 +99,7 @@ def test_snapshot_and_restore_round_trip_through_the_registry(rig):
     reg["band.2.atk"].set_norm(0.3)
     reg["view.bmp_file"].set("a.png")
     snap = reg.snapshot()
-    for absent in ("band.sel.atk", "theme.select", "camera.reset", "rot.phase.XY"):
+    for absent in ("band.sel.atk", "preset.select", "camera.reset", "rot.phase.XY"):
         assert absent not in snap, absent
     assert snap["view.bright"] == 1.5 and snap["view.shape"] == 7
     assert snap["view.faces"] is True and snap["view.bmp_file"] == "a.png"

@@ -1,7 +1,8 @@
-"""Plan 12 — the five party routing presets, headless.
+"""Plan 12 — the five party presets, headless.
 
-Each preset is loaded through the real `Router` over the full registry with
-its scene (the theme in library/projects/party.hyp.json) landed, and two
+Each preset is loaded through the real `Presets` (plan 13 WP2: one file,
+library/presets/party-*.json, its scene's values and the routes of its
+party-* routing preset) over the full registry and a `Router`, and two
 fake hands are driven through the real hand chain (`HandsIO`: range → One
 Euro → dead zone → follower, the default feel). For every hand row the
 axis is swept across its throw and the target has to move the way the plan's
@@ -23,6 +24,7 @@ from hyperspace.hands import HandSettings, HandsIO
 from hyperspace.hands.core import DEFAULT_DOFS, PINCHES, default_range
 from hyperspace.library import FACTORY
 from hyperspace.params import Kind
+from hyperspace.preset import Presets
 from hyperspace.routing import HAND_AXES, PRESETS, Bindings, Router, hand
 
 DT = 1 / 60
@@ -64,16 +66,23 @@ def feats(side: str, **u) -> dict:
 
 
 def theme(name: str) -> dict:
-    doc = json.loads((FACTORY / "projects" / "party.hyp.json").read_text())
+    """The preset's values: the party slot's scene over its routing preset's bases."""
+    return json.loads((FACTORY / "presets" / f"{name}.json").read_text())["values"]
+
+
+def load(name: str, tmp_path):
+    """The party preset through the one loader, as its F-key loads it."""
+    r = rig(tmp_path=tmp_path, full=True)
+    router = Router(r.reg, Bindings())
+    presets = Presets(r.lib, r.reg, router)
     slot = name.split("-", 1)[1].upper()
-    return next(s["values"] for s in doc["bank"] if s and s["name"] == slot)
+    assert presets.load(slot) == [] and presets.notes == [], (name, presets.notes)
+    assert router.table.dropped == []
+    return r, router
 
 
 def stage(name: str, tmp_path):
-    r = rig(tmp_path=tmp_path, full=True)
-    assert r.reg.restore(theme(name)) == [], name
-    router = Router(r.reg, Bindings())
-    assert router.load_preset(name) == [] and router.table.dropped == []
+    r, router = load(name, tmp_path)
     src = DictSource()
     io = HandsIO(HandSettings.from_config(), {"enabled": True}, source=src, out=NullOut(),
                  clock=lambda: src.t)
@@ -111,8 +120,9 @@ def test_hand_lane_numbers_are_the_hands_packages():
 
 
 def test_every_party_preset_has_a_theme_a_card_and_only_real_ids(tmp_path):
-    """Each preset's scene is a slot in party.hyp.json naming only real
-    params, and its performer card exists beside the plan."""
+    """Each preset's scene (library/presets/party-*.json, named by the
+    party.hyp.json bank) names only real params, and its performer card
+    exists beside the plan."""
     r = rig(tmp_path=tmp_path, full=True)
     ids = set(r.reg.ids())
     doc = json.loads((FACTORY / "projects" / "party.hyp.json").read_text())
@@ -132,10 +142,8 @@ def test_position_rows_rest_where_their_base_is(name, tmp_path):
     """The B1 rule: a position row's base must equal the value at the axis's
     rest (0.5 on a centred axis, 0 on height), so a hand leaving the box
     lands the same place with or without the fix."""
-    r = rig(tmp_path=tmp_path, full=True)
-    r.reg.restore(theme(name))
-    routes, values = PRESETS[name]
-    r.reg.restore(values)
+    r, _ = load(name, tmp_path)
+    routes, _values = PRESETS[name]
     for b in routes:
         if b.scheme != "hand" or b.op != "position":
             continue

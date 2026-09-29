@@ -80,7 +80,8 @@ def rig(sr: float = 48_000.0, tmp_path: Path | None = None, full: bool = False):
         clock = tempo.Clock(now=lambda: 0.0)
         tempo.register(reg, clock)
         lfo.register(reg, lfo.LFOs(), clock)
-    return SimpleNamespace(reg=reg, view=view, control=control, audio=audio, chain=chain)
+    return SimpleNamespace(reg=reg, view=view, control=control, audio=audio, chain=chain,
+                           lib=lib)
 
 
 def legacy_integrate(view: ViewState, dt: float, planedrive) -> None:
@@ -1182,9 +1183,9 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     assert "remapped note:0:99: theme.next → tempo.tap" in err
     assert "remapped note:0:100: view.shape → tempo.nudge" in err
     assert f"added note:0:{apc40.N_METRO} → lfo.trigger" in err
-    assert f"added note:0:{apc40.N_QUANT} → theme.next" in err
+    assert f"added note:0:{apc40.N_QUANT} → preset.next" in err
     assert "added key:B → tempo.tap" in err and "added key:SHIFT+B → lfo.trigger" in err
-    assert "added key:F1 → theme.load.0" in err and "added key:SHIFT+F8 → theme.save.7" in err
+    assert "added key:F1 → preset.load.0" in err and "added key:SHIFT+F8 → preset.save.7" in err
     assert f"migrated {path} to {SCHEMA} (2 rows dropped, 24 rows changed)" in err  # 7 + the 17 keys of plan 11
     rows = {(b.source, b.target): b for b in t.bindings}
     assert rows[("key:RIGHT", "view.shape")].op == "step"
@@ -1205,7 +1206,7 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     assert (tap.op, tap.feedback) == ("toggle", "led") and ("note:0:99", "theme.next") not in rows
     assert (rows[("note:0:100", "tempo.nudge")].value, rows[("note:0:101", "tempo.nudge")].value) == (1, -1)
     assert rows[(f"note:0:{apc40.N_METRO}", "lfo.trigger")].feedback == "led"
-    assert rows[(f"note:0:{apc40.N_QUANT}", "theme.next")].op == "toggle"
+    assert rows[(f"note:0:{apc40.N_QUANT}", "preset.next")].op == "toggle"
     assert t.values == {"pattern.mod.0": 0.0}
     # written back once, at schema 2, with the file as it was kept beside
     # it (audit R12); the second load is quiet
@@ -1319,28 +1320,28 @@ class _EdgeKeys:
 
 def test_r_and_the_f_keys_are_table_rows_that_fire_their_params(tmp_path):
     """Plan 11 WP7 (audit R2, decision register row 7): R resets the camera,
-    F1–F8 load theme slots 1–8, ⇧F1–F8 save them — through `Router.keys`,
+    F1–F8 load the preset bank's slots 1–8, ⇧F1–F8 save them — through `Router.keys`,
     like every other key row."""
     import glfw
 
     from hyperspace.library import SLOTS
-    assert routing.THEME_SLOTS == SLOTS              # routing may not import library
+    assert routing.BANK_SLOTS == SLOTS              # routing may not import library
     r = rig(tmp_path=tmp_path, full=True)
     fired: list[str] = []
-    for pid in ["camera.reset", *[f"theme.{w}.{k}" for w in ("load", "save") for k in range(SLOTS)]]:
+    for pid in ["camera.reset", *[f"preset.{w}.{k}" for w in ("load", "save") for k in range(SLOTS)]]:
         r.reg[pid].fire = lambda pid=pid: fired.append(pid)
     router = Router(r.reg, Bindings.factory())
     router.keys(_EdgeKeys({glfw.KEY_R}))
     assert fired == ["camera.reset"]
     fired.clear()
     router.keys(_EdgeKeys({glfw.KEY_F3}))
-    assert fired == ["theme.load.2"]
+    assert fired == ["preset.load.2"]
     fired.clear()
     router.keys(_EdgeKeys({glfw.KEY_F8}, shift=True))
-    assert fired == ["theme.save.7"]                 # ⇧F8 saves; the bare row stays quiet
+    assert fired == ["preset.save.7"]                 # ⇧F8 saves; the bare row stays quiet
     fired.clear()
     router.keys(_EdgeKeys({glfw.KEY_F1, glfw.KEY_F2}))
-    assert sorted(fired) == ["theme.load.0", "theme.load.1"]
+    assert sorted(fired) == ["preset.load.0", "preset.load.1"]
 
 
 def test_an_older_file_gets_the_moved_keys_only_where_they_are_free(tmp_path):
@@ -1355,12 +1356,48 @@ def test_an_older_file_gets_the_moved_keys_only_where_they_are_free(tmp_path):
     t = Bindings.load(path, legacy_midi=None)
     rows = {b.source: b for b in t.of("key")}
     assert rows["key:F3"].target == "view.faces"                        # kept
-    assert rows["key:F4"].target == "theme.load.3" and rows["key:R"].target == "camera.reset"
-    assert rows["key:SHIFT+F3"].target == "theme.save.2"                # a different source
+    assert rows["key:F4"].target == "preset.load.3" and rows["key:R"].target == "camera.reset"
+    assert rows["key:SHIFT+F3"].target == "preset.save.2"                # a different source
     assert moved <= set(rows) and len(moved) == 17
     assert list(tmp_path.glob("bindings.json.bak-*"))                   # kept before the rewrite
     _, notes = routing.remap_factory(t.bindings)
     assert notes == []
+
+
+def test_a_theme_row_in_an_old_bindings_file_is_remapped_to_the_preset_bank(tmp_path, capsys):
+    """Plan 13 WP2: a table written before the preset bank names theme.*
+    params — the factory F-keys, clip row 1, QUANT, pad B, and a row the
+    user learned onto a theme slot. Every one moves to the preset param of
+    the same slot, noted; the file is backed up and written once, and the
+    next load is quiet."""
+    path = bindings_path(tmp_path)
+    old = {"preset.select": "theme.select", "preset.next": "theme.next",
+           **{f"preset.{w}.{k}": f"theme.{w}.{k}" for w in ("load", "save")
+              for k in range(routing.BANK_SLOTS)}}
+    rows = []
+    for b in Bindings.factory().bindings:
+        d = b.to_json()
+        d["target"] = old.get(d["target"], d["target"])
+        rows.append(d)
+    rows.append({"source": "note:0:87", "target": "theme.prev", "op": "toggle"})   # the user's
+    path.write_text(json.dumps({"schema": SCHEMA, "profile": "apc40", "bindings": rows}))
+    t = Bindings.load(path, legacy_midi=None)
+    err = capsys.readouterr().err
+    by = {b.source: b.target for b in t.bindings}
+    assert by["key:F1"] == "preset.load.0" and by["key:SHIFT+F8"] == "preset.save.7"
+    assert by[f"note:0:{apc40.N_QUANT}"] == "preset.next" and by["pad:B"] == "preset.next"
+    assert by["note:0:87"] == "preset.prev"
+    assert [b.target for b in t.bindings if b.source == f"note:2:{apc40.N_CLIP[0]}"] \
+        == ["preset.select"]
+    assert not any(b.target.startswith("theme.") for b in t.bindings)
+    assert "remapped key:F3: theme.load.2 → preset.load.2 (the preset bank of plan 13)" in err
+    n = len(t.notes)
+    assert n == 16 + 8 + 1 + 1 + 1                 # F-keys, clip row, QUANT, pad B, the user's
+    assert all(note.startswith("remapped") for note in t.notes)
+    assert list(tmp_path.glob("bindings.json.bak-*"))
+    assert [b.to_json() for b in Bindings.load(path, legacy_midi=None).bindings] == \
+        [b.to_json() for b in t.bindings]           # written once: the next load is quiet
+    assert "remapped" not in capsys.readouterr().err
 
 
 def test_a_user_row_on_a_moved_apc_note_is_kept():
@@ -1377,7 +1414,7 @@ def test_a_user_row_on_a_moved_apc_note_is_kept():
     assert (f"note:0:{apc40.N_METRO}", "view.lines") in by
     assert ("key:B", "view.points") in by and ("key:SHIFT+B", "lfo.trigger") in by
     assert not any(b.target == "tempo.tap" for b in out)
-    assert not any(b.source == f"note:0:{apc40.N_QUANT}" for b in out)   # theme.next stayed
+    assert not any(b.source == f"note:0:{apc40.N_QUANT}" for b in out)   # no QUANT row added
     assert [n.split(" ")[0] for n in notes] == ["remapped", "added"] + ["added"] * 17  # + R, F-keys
     # and a second pass has nothing to do
     again, notes2 = routing.remap_factory(out)
@@ -1408,7 +1445,7 @@ def test_a_schema_2_file_gets_the_moved_factory_rows_once(tmp_path, capsys):
     assert not t.migrated and not t.error and len(t.notes) == 7
     assert f"remapped note:0:{apc40.N_TAP}: theme.next → tempo.tap" in err
     assert f"added note:0:{apc40.N_METRO} → lfo.trigger" in err
-    assert f"added note:0:{apc40.N_QUANT} → theme.next" in err
+    assert f"added note:0:{apc40.N_QUANT} → preset.next" in err
     assert "added key:B → tempo.tap" in err and "added key:SHIFT+B → lfo.trigger" in err
     assert f"bindings: updated {path} (7 rows changed)" in err
     by = {(b.source, b.target): b for b in t.bindings}
