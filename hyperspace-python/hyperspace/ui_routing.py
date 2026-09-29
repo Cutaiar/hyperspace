@@ -49,7 +49,8 @@ Route a lane here…) and its readout shows `base → effective` while it
 does, beside its label (editable) and its subscribers. A macro does
 nothing of its own; it acts through them: a **base** subscriber sets a
 param's base to from + m · (to − from) along its fader whenever the
-macro's base moves; a **depth** subscriber runs a route at depth ×
+macro's base moves — a performance param's only, which is all its picker
+offers (`base_targets`, D9: a preset never moves a session base); a **depth** subscriber runs a route at depth ×
 (from + m · (to − from)), one frame behind whatever moves the macro. A
 param two macros base-subscribe is marked on both lines — the last write
 wins (§2.4). An edit of a subscriber re-lands the base subscribers
@@ -99,7 +100,7 @@ from . import apc40, ui, ui_presets
 from .bands import CEIL
 from .library import PRESETS
 from .params import Kind, Param, part_of
-from .routing import SHIFT_PARAM, Binding, Macro, Owned, Router, Sub, factory_desk
+from .routing import SHIFT_PARAM, Binding, Macro, Owned, Router, Sub, base_refusal, factory_desk
 
 NAMING = "routing.preset"  # the head's save as… name field (ui_presets._name_field)
 DEPTH_MOD = 1.0           # ±, the depth slider's throw
@@ -827,9 +828,12 @@ def shared_bases(table) -> dict[str, list[str]]:
     return {pid: sorted(mids) for pid, mids in by.items() if len(mids) > 1}
 
 
-def _base_targets(panel) -> list[Param]:
+def base_targets(panel) -> list[Param]:
+    """What a base subscriber may set: a persisted, non-alias
+    **performance** param — never a session one, which a preset never
+    moves (plan 13 D9; `routing.base_refusal`) — and not a macro."""
     return [q for q in panel.reg if q.kind not in (Kind.TRIGGER, Kind.TEXT)
-            and not q.alias and q.group != "macro" and q.id != SHIFT_PARAM]
+            and q.group != "macro" and base_refusal(q.id, panel.reg) is None]
 
 
 def _route_combo(router: Router, s: Sub, width: float) -> bool:
@@ -869,7 +873,7 @@ def _sub(panel, router: Router, mid: str, s: Sub, shared: dict[str, list[str]]) 
         lo, hi, fmt = -DEPTH_MOD, DEPTH_MOD, "%+.2f"
         tip = "× the route's depth at the macro's 0 / 1 — a range may cross zero"
     else:
-        picked = _param_combo(panel, "##base", s.base, -right, lambda: _base_targets(panel))
+        picked = _param_combo(panel, "##base", s.base, -right, lambda: base_targets(panel))
         if picked:
             s.base, edited = picked, True
         lo, hi, fmt = 0.0, 1.0, "%.2f"
@@ -932,7 +936,7 @@ def macros(panel, router: Router) -> None:
         panel._slider(p.id, -(ui.chip_w("+ base", "+ depth") + sp))
         imgui.same_line()
         if ui.chip("+ base"):
-            q = panel.reg.get("view.bright") or _base_targets(panel)[0]
+            q = panel.reg.get("view.bright") or base_targets(panel)[0]
             # from = to = where the param sits: adding it moves nothing
             _macro(table, p.id).subs.append(Sub(base=q.id, lo=q.norm, hi=q.norm))
             _macros_edited(table)

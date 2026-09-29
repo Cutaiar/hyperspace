@@ -533,6 +533,22 @@ def test_a_route_on_a_session_param_is_marked_session(rig, monkeypatch):
     assert "never changed" in ui_routing.SESSION_TIP
 
 
+def test_the_base_picker_offers_performance_params_only(rig):
+    """D9, review of PR #67: a macro's "+ base" picker offers persisted,
+    non-alias performance params — never a session one (the BPM, the
+    drive, a band), an alias or a macro — and "+ base" adds one of those."""
+    from hyperspace.params import part_of
+
+    panel, reg = rig.panel, rig.reg
+    offered = ui_routing.base_targets(panel)
+    ids = {q.id for q in offered}
+    assert "view.bright" in ids and "fx.mix" in ids
+    assert not ids & {"tempo.bpm", "master.gain", "band.sel.trim", "band.0.trim"}
+    assert all(part_of(q) == "performance" and q.persist and not q.alias for q in offered)
+    assert not any(q.group == "macro" for q in offered)
+    assert all(routing.base_refusal(q.id, reg) is None for q in offered)
+
+
 def test_the_routing_heads_name_field_draws(rig):
     """The head's save as… is the preset strip's name field, over the
     loaded preset (ui_presets._name_field under its own key)."""

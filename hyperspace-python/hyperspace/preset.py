@@ -41,10 +41,12 @@ replaces rows, never an offset. In order (plan 13 §5):
    preset rows — a fresh preset, plan 13 §3.2); ``"desk": []`` is an
    empty preset layer, every preset control dark (D8);
 5. replace the macros' labels and subscribers with ``macros``
-   (`Bindings.set_macros`) and land the base subscribers at once from the
-   macros' bases just landed (`Router.follow_macros(force=True)`). The
-   macro is the scene-setter of record: a param a base subscriber names
-   ends at the subscriber's value even when ``values`` names it too;
+   (`Bindings.set_macros`: a base subscriber on anything but a
+   performance param — a session one, D9 — is dropped and its note joins
+   step 1's) and land the base subscribers at once from the macros' bases
+   just landed (`Router.follow_macros(force=True)`). The macro is the
+   scene-setter of record: a param a base subscriber names ends at the
+   subscriber's value even when ``values`` names it too;
 6. record each performance group's ``modules`` label as its current
    module preset, clean against the values just landed — a label only,
    never a chain-load of the module preset (D3); a group the file does
@@ -260,8 +262,9 @@ class Presets:
         notes += self.desk_notes
         # 5. the macros replaced, their base subscribers landed now from the
         #    macro bases step 2 put down — the macro is the scene-setter of
-        #    record, so its subscriber's value stands over `values`
-        table.set_macros(macros)
+        #    record, so its subscriber's value stands over `values`; a base
+        #    subscriber on a session param is dropped with a note (D9)
+        notes += table.set_macros(macros, reg)
         self.router.follow_macros(force=True)
         self.note = str(doc.get("note") or "")
         # 6. the module labels: a label and a clean dot, never a load (D3)
@@ -987,12 +990,24 @@ def _into_default(root: Path, name: str, factory: Path = FACTORY) -> str:
     return f"{path.name}: {name!r} its startup and slot 1{gone}; the old file kept as {bak.name}"
 
 
+def _settled_macros(macros: dict, reg, where: str) -> tuple[dict, list[str]]:
+    """A migrated file's `macros` with every base subscriber a preset may
+    not carry dropped (`routing.settle_bases`: a session param, D9), each
+    noted with `where` in front; the dict as it was when nothing went."""
+    settled, dropped = routing.settle_bases(macros, reg)
+    if not dropped:
+        return macros, []
+    return ({k: m.to_json() for k, m in settled.items() if not m.empty},
+            [f"{where}: {n}" for n in dropped])
+
+
 def migrate_routing_presets(root: Path, has: Callable[[str], bool] | None = None,
-                            factory: Path = FACTORY) -> list[str]:
+                            factory: Path = FACTORY, reg=None) -> list[str]:
     """Every user routing preset (``<home>/bindings/*.json``) as a full
     preset (decision 10): its values (less session ids, with the effects
     its routes drive switched on, `effects_on`), its performer rows (a
-    ``scale: macro.N`` a depth subscriber), its macros, no ``desk`` key.
+    ``scale: macro.N`` a depth subscriber), its macros (a base subscriber
+    on a session param dropped with a note, D9), no ``desk`` key.
     The files stay where they are, untouched; a note beside them
     (NOT_READ) says they are no longer read, and is what makes this run
     once."""
@@ -1012,10 +1027,12 @@ def migrate_routing_presets(root: Path, has: Callable[[str], bool] | None = None
         routes = [b.to_json() for b in [*t.routes(), *(b for b, _ in t.dropped)]]
         values = {k: v for k, v in dict(raw.get("values") or {}).items()
                   if _part(k) == "performance"}
+        macros, dropped = _settled_macros(t.macros_doc(), reg, f"bindings/{f.name}")
+        notes += dropped
         doc = {"schema": SCHEMA, "name": str(raw.get("name") or f.stem),
                "note": f"the routing preset bindings/{f.name}, made a preset (plan 13 WP5)",
                "values": effects_on(routes, values, has), "routes": routes,
-               "macros": t.macros_doc(), "modules": {}}
+               "macros": macros, "modules": {}}
         try:
             name, path = put_preset(root, doc, factory)
         except (OSError, ValueError, LibraryError) as e:   # a full disk: said, retried next launch
@@ -1052,6 +1069,10 @@ def migrate_home(lib, router) -> list[str]:
     carried = table.carried
     use = carried if carried is not None else factory_carried()
     notes: list[str] = []
+    # a base subscriber on a session param goes before any preset is made
+    # from the table's macros (D9)
+    use.macros, dropped = _settled_macros(use.macros, reg, "bindings.json")
+    notes += dropped
     written: list[Path] = []
     held = False                          # a preset now holds `carried`
     stuck = False                         # a schema-1 project left as it was
@@ -1070,7 +1091,7 @@ def migrate_home(lib, router) -> list[str]:
             projects = True
             written.append(path)
     notes += migrate_routing_presets(root, (lambda pid: pid in reg) if reg is not None
-                                     else None, factory)
+                                     else None, factory, reg)
     # a user preset already holding the table's part (a launch that
     # converted the projects but could not rewrite bindings.json, or a
     # MIGRATED preset made before) takes it: no second MIGRATED, and the

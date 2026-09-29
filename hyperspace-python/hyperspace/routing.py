@@ -223,7 +223,17 @@ import numpy as np
 
 from . import apc40
 from .bands import BANDS, CEIL
-from .params import DRIVE, PLANES, ROT_RATE_MAX, SESSION_GROUPS, Kind, Param, Registry
+from .params import (
+    DRIVE,
+    PERFORMANCE_GROUPS,
+    PLANES,
+    ROT_RATE_MAX,
+    SESSION_GROUPS,
+    Kind,
+    Param,
+    Registry,
+    part_of,
+)
 
 SCHEMA = "hyperspace.bindings/3"
 SCHEMA_V1 = "hyperspace.bindings/1"
@@ -795,6 +805,49 @@ def is_session_id(pid: str | None) -> bool:
     return bool(pid) and pid.partition(".")[0] in SESSION_GROUPS
 
 
+def base_refusal(pid: str, reg: Registry | None = None) -> str | None:
+    """Why a macro's base subscriber may not name `pid`, or None when it
+    may (plan 13 D9, review of PR #67). A base subscriber is a scene-setter
+    a preset carries, so it names a **performance** param — persisted, not
+    an alias — never a session one (a preset never moves a session base).
+    With a registry the param's own group and flags decide; an id it lacks,
+    or no registry, is judged by its group prefix, so a param this build
+    has not made yet is kept when its group is a performance one."""
+    p = reg.get(pid) if reg is not None else None
+    if p is None:
+        group = pid.partition(".")[0]
+        if group in SESSION_GROUPS:
+            return "a session param, never a preset's (plan 13 D9)"
+        return None if group in PERFORMANCE_GROUPS else "not part of a preset"
+    if part_of(p) == "session":
+        return "a session param, never a preset's (plan 13 D9)"
+    if p.alias:
+        return "an alias, not part of a preset"
+    if part_of(p) != "performance" or not p.persist:
+        return "not part of a preset"
+    return None
+
+
+def settle_bases(doc: dict | None, reg: Registry | None = None
+                 ) -> tuple[dict[str, Macro], list[str]]:
+    """A file's `macros` key as {id: Macro}, each base subscriber that may
+    not be one (`base_refusal`) dropped with a note. Depth subscribers are
+    untouched: a route may perform a session param (decision register row
+    19 (a)), and its depth subscriber with it."""
+    macros = macros_of(doc)
+    notes: list[str] = []
+    for mid, m in macros.items():
+        keep = []
+        for s in m.subs:
+            why = base_refusal(s.base, reg) if s.base is not None else None
+            if why is None:
+                keep.append(s)
+            else:
+                notes.append(f"dropped {mid}'s base subscriber {s.base}: {why}")
+        m.subs = keep
+    return macros, notes
+
+
 def migrate_scales(rows: Iterable[Binding], macros: dict[str, Macro]) -> list[str]:
     """A route's `scale` settled (decision register row 18 (a)): it is the
     rig's attenuator, so it names a **session** param — the legacy6 rate
@@ -1285,12 +1338,16 @@ class Bindings:
                                                      key=lambda kv: _macro_n(kv[0]))
                 if not m.empty}
 
-    def set_macros(self, doc: dict | None) -> None:
+    def set_macros(self, doc: dict | None, reg: Registry | None = None) -> list[str]:
         """Replace every macro's label and subscribers with `doc`'s (the
         `macros` key's shape); the router re-lands the base subscribers on
-        its next `follow_macros`."""
-        self.macros = macros_of(doc)
+        its next `follow_macros`. A base subscriber on anything but a
+        performance param — a session one above all (D9) — is dropped
+        (`settle_bases`, judged against `reg` when given). Returns a note
+        per subscriber dropped."""
+        self.macros, notes = settle_bases(doc, reg)
         self.macros_serial += 1
+        return notes
 
     def depth_subs(self, b: Binding) -> list[tuple[str, Sub]]:
         """(macro id, subscriber) for every depth subscriber naming `b`'s route."""

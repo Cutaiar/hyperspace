@@ -422,7 +422,15 @@ sets that param's base to `a + m · (b − a)` along its fader, without a
 detent, whenever the macro's base moves (`Router.follow_macros`, the
 frame's last scene-setter step, §2); a *depth* subscriber
 `{"depth": {"source", "target"}, "from", "to"}` multiplies that route's
-depth (§3.4 step 3). Polarity is per subscriber, so one knob can raise
+depth (§3.4 step 3). A base subscriber names a **performance** param —
+persisted, not an alias — never a session one (D9: a preset never moves
+a session base): `set_macros` drops any other with a note (the preset
+load's notes, the migration's; `routing.settle_bases`, `base_refusal`)
+and the ROUTING page's "+ base" picker offers performance params only
+(`ui_routing.base_targets`;
+`tests/test_macros.py::test_a_base_subscriber_on_a_session_param_is_dropped_with_a_note`).
+A depth subscriber may scale a route on a session param (row 19 (a)).
+Polarity is per subscriber, so one knob can raise
 one thing while lowering another. A performer may own a macro; it moves
 the depth subscribers only (§3.2). The subscribers live in the table
 (`Bindings.macros`) and are the loaded preset's since plan 13 WP4: a
@@ -470,7 +478,7 @@ R1, decided 2026-09-28).
 | an LFO | `lfo:<i>` → its performer row | offset | `LFOs.publish` |
 | right-click → Learn, then move a hand | `Learn.learn_source` → a `position` row on the real param, or the prompt — into the loaded preset (dirty), no file written | the table | `HandsIO._learn` → `Learn.learn_source` |
 | right-click → Learn, then turn a knob | `MidiIO._learned` (the armed id from the same `Learn`) → an `abs` / `rel` / `toggle` **preset-layer** row into the loaded preset (dirty), no file written; refused with the reason in `Learn.last` while the global layer is up or on an invariant control (D5, D6) | the table's preset layer | `MidiIO._learned` → `Bindings.bind(b, write=False)` |
-| a preset | `Presets.load`: every performance param's base (the file's or its group default) in one `Library.restore`, then `Bindings.set_routes`, `set_desk` (the file's `desk`, or the factory preset layer when it has no `desk` key) and `set_macros`, the base subscribers landed at once (`Router.follow_macros(force=True)`, over `values`); session params never; a value that will not land puts the performance part back and refuses the load whole | base, the performer rows, the preset layer, the macros | `Presets.load_doc`; `tests/test_presets.py` |
+| a preset | `Presets.load`: every performance param's base (the file's or its group default) in one `Library.restore`, then `Bindings.set_routes`, `set_desk` (the file's `desk`, or the factory preset layer when it has no `desk` key) and `set_macros` (a base subscriber on a session param dropped with a note, D9), the base subscribers landed at once (`Router.follow_macros(force=True)`, over `values`); session params never; a value that will not land puts the performance part back and refuses the load whole | base, the performer rows, the preset layer, the macros | `Presets.load_doc`; `tests/test_presets.py` |
 | a module preset or project | `Registry.restore` (a project: its session part) | base | `Library.restore` |
 | right-click → Unbind | `MidiIO.unbind`: the loaded preset's desk rows on the param go (the preset dirty, no file written); a param only the session maps is refused with the reason in `Learn.last` | the table's preset layer | `midi.py`, `Bindings.unbind` |
 | a preset load's desk (step 4 of `Presets.load_doc`) | `Bindings.set_desk(rows)`: every preset-layer row replaced, a row on an invariant control dropped with a note (the load's notes, the ROUTING head), the layer dropped to preset, the faders' catch cleared at the next redraw, and every control that lost its last row sent dark there (D8: `MidiIO.redraw` darkens what it drew before, `_shown`; `tests/test_desk.py::test_a_control_that_loses_its_row_goes_dark`) | the table's preset layer | `routing.py` `set_desk`, `midi.py` `redraw` |
@@ -662,14 +670,6 @@ guard, each filed where it says:
   subscriber sets does not round-trip that param: the reload lands the
   subscriber's value, not the saved one — the macro is the scene-setter
   of record (plan 13 §13, WP4's list).
-
-Found by the review of the documents PR (#67) and left for a code fix —
-each is a place where the code falls short of plan 13's rule:
-
-- **A macro's base subscriber can name a session param.** `load_doc`
-  refuses session ids in `values` but not in `macros`, and the ROUTING
-  page's "+ base" picker offers them; `follow_macros(force=True)` then
-  writes that session base on load (D9 says never).
 
 ---
 
