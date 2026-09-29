@@ -1,6 +1,6 @@
 # Decision register — everything that is yours to decide
 
-As of 2026-09-28. **Row 20 is open** (plan 13, Part A2); every other row is answered — 18 and 19 on 2026-09-28 (the answer sheet at the end). This is the one list. Every decision that blocks
+As of 2026-09-29. **Every row is answered** — 18 and 19 on 2026-09-28, 20 on 2026-09-29 (the answer sheet at the end). This is the one list. Every decision that blocks
 implementing and settling the open work is here, whichever plan or session
 raised it. Each entry stands on its own: what the thing is, what the software
 does today, the options, a recommendation with its reasons, the trade-off you
@@ -456,7 +456,7 @@ new left-height row in `party-tumble` (WP5).
 
 ### 20. P13-j — hand routes by name or by lane number
 
-**Recommendation: (a), by name, built now in plan 13.**
+**Answered (a), 2026-09-29: by name, built now in plan 13 (WP5b).** (Recommendation was (a).)
 
 **What it is.** A preset's hand route says which hand axis drives it. Today
 it says so by a lane *number*: `hand:9` means "the 10th hand lane", which on
@@ -536,7 +536,7 @@ Each is built, reviewed and on PR #55. Overturning any is a small follow-up.
   scramble shipped presets; an explicit groups-to-reset list on a theme or
   preset. Filed 2026-09-28 as `AUDIT-2026-09.md` rows N7 and L9. L9 is moot
   for presets since plan 13 (a load replaces every performance group, D2);
-  N7 is row 20 here, still open.
+  N7 is row 20 here, answered (a) 2026-09-29, built in plan 13 WP5b.
 - Plan 13's machine checks: `docs/plans/11-hand-checks.md` group H
   (checks 33–41).
 
@@ -569,4 +569,4 @@ or "overturn".
 | 17 | B6 as built | keep | **keep**, 2026-09-28 | |
 | 18 | P13-h the drive fader and `scale` | (a) keep `scale`, session params only | **(a)**, 2026-09-28 | built in plan 13 WP5 (PR #66): `routing.migrate_scales` — a `scale` kept only on a session param, one on a macro a depth subscriber, one on a performance param dropped with a note |
 | 19 | P13-i a route onto a session param | (a) yes; D9 is about values | **(a)**, 2026-09-28 | built in plan 13 WP5 (PR #66): the ROUTING page marks such a route "session" (`ui_routing.is_session_target`); the scale combo offers session params only |
-| 20 | P13-j hand routes by name | (a) names now, in plan 13 | | open |
+| 20 | P13-j hand routes by name | (a) names now, in plan 13 | **(a)**, 2026-09-29 | built in plan 13 WP5b |
