@@ -434,8 +434,12 @@ class Project:
     # ---- API ----
 
     def list(self) -> list[str]:
-        return sorted(p.name[: -len(PROJECT_SUFFIX)]
-                      for p in (self.lib.home / PROJECTS).glob(f"*{PROJECT_SUFFIX}"))
+        """Every project by name: the factory ones and the user's, a user
+        file of the same name shadowing the factory's (as every group does)."""
+        names = {p.name[: -len(PROJECT_SUFFIX)]
+                 for root in self.lib._roots()
+                 for p in (root / PROJECTS).glob(f"*{PROJECT_SUFFIX}")}
+        return sorted(names)
 
     def path_for(self, name: str) -> Path:
         return self.lib.home / PROJECTS / f"{slug(name)}{PROJECT_SUFFIX}"

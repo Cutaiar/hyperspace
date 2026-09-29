@@ -1438,7 +1438,8 @@ def test_every_factory_preset_names_real_params_with_one_owner(tmp_path):
             assert b.is_performer, (name, b)
         assert routing.referee(routes)[1] == [], name
         assert set(values or {}) <= ids, name
-    assert set(PRESETS) == {"legacy6", "lfo-breathe"}
+    assert set(PRESETS) == {"legacy6", "lfo-breathe", "party-tumble", "party-faces",
+                            "party-field", "party-wake", "party-trip"}
     assert (routing.FACTORY_DIR / "lfo-breathe.json").exists()
 
 

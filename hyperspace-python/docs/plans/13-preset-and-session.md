@@ -1,0 +1,274 @@
+# Plan 13 — Preset and session: two nouns, a latched desk, one load
+
+**After plans 11 and 12.** Plan 12 composed five hand presets and, in doing
+so, showed that the app has five nouns for saved state — module preset,
+theme, project, routing preset, scene — split by which file system they
+came from rather than by what they are. This plan replaces them with two,
+settles what a load does, and gives the APC40 two layers under a latched
+SHIFT so every preset can lay the desk out for itself without losing the
+global controls. It is the design; the decisions were taken with the owner
+on 2026-09-28 and are listed first so the rest can be checked against them.
+
+Nothing here is built. Plan 11's routing and library work packages land
+first; this plan then supersedes plan 12's file shape (the five `party-*`
+presets are re-cut into the new shape as one of its work packages).
+
+## 1. Decisions
+
+| # | decision |
+|---|---|
+| D1 | Two nouns. A **preset** is one file that holds everything a performance moment is. A **session** is the boilerplate that makes the rig ready to play and that a preset never touches. "Theme", "routing preset" and the UI word "scene" go away. |
+| D2 | **A preset load replaces everything.** Every performance parameter lands, from the file or from the app's default when the file does not name it; every performer row is replaced; the desk's preset layer is replaced. No merging. |
+| D3 | **Module presets stay** as a separate tool: a file of values for one group, cycled from that group's strip, replacing that group. A preset records the module preset each group was showing when it was saved, as a **label only**; loading the preset never chain-loads a module preset. |
+| D4 | The APC40 has **two layers under a latched SHIFT**; the SHIFT LED shows which layer is up. Loading a preset drops to the preset layer. |
+| D5 | The **global layer is fixed**: it lives in the session's files, is edited there, and is never the target of a Learn. A Learn writes only into the loaded preset. |
+| D6 | A set of controls is **invariant**: one meaning on both layers, and no preset may map them. The faders, the preset-select row, SHIFT, TAP TEMPO, METRONOME, NUDGE ± and the transport are invariant. |
+| D7 | On a layer switch the **knobs jump** to the layer's values (they are endless encoders the host re-bases); the **faders soft-pick-up**. Faders are invariant, so pickup only ever happens after a preset load moves a base. |
+| D8 | A control a preset does not map **does nothing** and shows dark. No fall-through to the global layer. |
+| D9 | The **analyzer is session**: its bands, dynamics, scene and the drive fader are never in a preset. |
+| D10 | **Macros stay what they are** — a knob that scales the depth of every route naming it — and belong in the preset with those routes. Separately, a desk row may name **several targets**, each with a range, which is "one knob moves several bases". |
+| D11 | A session **names its startup preset**, loaded on launch. |
+| D12 | A modifier is read **at the press**; SHIFT's release never re-evaluates a button already down. |
+
+## 2. The nouns
+
+### 2.1 Preset — `hyperspace.preset/2`
+
+One file, `<library>/presets/<slug>.json`, factory ones in the package,
+user ones in the home folder shadowing by name (as every group does today).
+
+```json
+{
+ "schema": "hyperspace.preset/2",
+ "name": "TRIP",
+ "note": "…",
+ "values":  {"view.shape": 10, "fx.kaleido.on": true, "macro.1": 1.0, …},
+ "routes":  [{"source": "hand:7", "target": "fx.zoomblur.amount", "op": "push", "value": 0.8}, …],
+ "desk":    [{"source": "cc:0:48", "target": "view.bright", "op": "abs"},
+             {"source": "note:0:82", "target": "view.points", "op": "toggle"},
+             {"source": "cc:0:51", "targets": [{"id": "fx.plasma.level", "lo": 0, "hi": 0.6},
+                                                {"id": "fx.zoomblur.glow", "lo": 0.2, "hi": 1.2}]}, …],
+ "modules": {"fx": "trip", "dream": "wake"}
+}
+```
+
+- `values`: every persisted performance parameter's base (§4 says which
+  params are performance and which are session). A partial file is legal;
+  unnamed ids land on the app default at load (D2).
+- `routes`: the performer rows — `hand:`, `lane:`, `lfo:`, `ext:` sources,
+  `push` / `position`, scale, gate, rest — exactly today's routing rows.
+  One performer per target; the referee settles a file with two.
+- `desk`: the preset layer of the APC40, MIDI rows in today's form plus the
+  multi-target form (D10). A row on an invariant control is dropped at load
+  with a note (D6).
+- `modules`: labels (D3).
+
+Rotation phases stay out (a load changes the look, not where the spin is).
+Macros are in (D10). Nothing session-level is in; a file that names a
+session id gets a note and the id is ignored.
+
+### 2.2 Session
+
+The session is the home folder: `config.toml` (the rig), `hands.json`
+(the box calibration), `bindings.json` (the session's controls), and the
+project file. Plan 13 changes two of them.
+
+`bindings.json` becomes the **session controls**: the keyboard and gamepad
+rows as today, the **invariant** MIDI rows, and the **global-layer** MIDI
+rows (`"layer": "global"` on the row). It no longer holds performer rows or
+the preset layer; those moved into presets. It is still written by the app
+(a keyboard learn, say) but the global-layer rows are never learned (D5).
+
+The project file keeps its name (`<slug>.hyp.json`) and becomes:
+
+```json
+{
+ "schema": "hyperspace.project/2",
+ "name": "party",
+ "startup": "TUMBLE",
+ "bank": ["TUMBLE", "FACES", "FIELD", "WAKE", "TRIP", null, null, null],
+ "session": {"tempo.bpm": 124, "band.0.post": 1.0, "hands.smooth": 1.0, …}
+}
+```
+
+- `startup`: the preset loaded on launch (D11).
+- `bank`: eight preset names (by name, not inline — a slot is a pointer to a
+  preset file; F1–F8 and the preset-select row load it; ⇧F1–F8 save the live
+  state *as* that preset, into the user folder).
+- `session`: the session parameters' values (§4), landed on project load
+  and never touched by a preset.
+
+The `values`, `modules`, `io` and inline `bank` of schema 1 are migrated
+(§6).
+
+### 2.3 Module preset — `hyperspace.preset/1`, unchanged
+
+A file of values for one group, in `<library>/<group>/`. Loading one
+replaces that group's values (every id in the group: from the file or the
+group's default). Its strip stays on the PRESETS page. The `bindings/`
+folder and the ROUTING page's strip go away: routes live in the preset.
+
+## 3. The desk
+
+### 3.1 Three classes of control
+
+| class | who defines it | on SHIFT up | on SHIFT down | Learn | in a preset file |
+|---|---|---|---|---|---|
+| **invariant** | the session (`bindings.json`) | same meaning | same meaning | no | dropped with a note |
+| **global layer** | the session (`bindings.json`, `layer: global`) | dark, inert | its meaning | no | — |
+| **preset layer** | the loaded preset's `desk` | its meaning, or dark if unmapped (D8) | dark, inert | yes, into the preset | yes |
+
+SHIFT (note 0x62) latches the layer; its LED is lit while the global layer
+is up. Loading a preset drops the layer (D4). Every ring and LED is redrawn
+on a layer change and on a preset load, and only the up layer's values
+show. The knobs are re-based by the same message that draws their rings;
+the faders' catch state is cleared on a preset load (D7).
+
+### 3.2 The sorted default map
+
+Today's `apc40.DEFAULT_MAP` (113 rows), sorted by the decisions. Names are
+Akai's; "row n" is a clip-launch row across the eight tracks.
+
+**Invariant** (D6, D9):
+
+| control | parameter |
+|---|---|
+| track faders 1–6 | `band.0–5.post` |
+| track faders 7, 8 | `master.dyn`, `master.trim` |
+| MASTER fader | `master.gain` |
+| crossfader | `overlay.bg` |
+| clip row 1, 8 buttons | **preset select**, slots 1–8 (was `theme.select`) |
+| SHIFT | the layer latch (new) |
+| TAP TEMPO, NUDGE +, NUDGE − | `tempo.tap`, `tempo.nudge` ±1 |
+| METRONOME | `lfo.trigger` (the global LFO trigger; its LED blinks on the beat) |
+| PLAY, STOP, REC | `audio.play`, `audio.stop`, `audio.mic` |
+| STOP ALL CLIPS | `scene.reset_all` (the analyzer's) |
+| track select ×6, ◀ ▶ | `band.select` (set / step) |
+| solo ×6, rec-arm ×6 | `band.N.fn`, `band.N.reset` |
+| DEVICE ON/OFF, DETAIL | `ui.panel`, `ui.cheatsheet` |
+| CLIP/TRACK | `audio.restart` |
+| MASTER select, PAN | `overlay.on`, `overlay.passthrough` |
+
+**Global layer** (SHIFT down; session-level things that want a knob):
+
+| control | parameter |
+|---|---|
+| device knobs 1–8 | the open band's strip, `band.sel.trim / exp / trn / pre / post / atk / dec / thr` (as today, moved behind SHIFT) |
+| track knobs 1–4 | hand feel: `hands.smooth`, `hands.response`, `hands.catch`, the selected axis's return |
+| track knob 5 | `tempo.bpm` |
+| track knobs 6–8 | free |
+| clip row 2, 8 buttons + row 3, 3 buttons | `scene.select` 0–10, the analyzer's band scenes |
+| everything else | dark |
+
+**Preset layer, factory default** (what a fresh preset starts with):
+
+| control | parameter |
+|---|---|
+| track knobs 1–8 | `view.bright`, `view.speed`, `view.instances`, `view.pattern_mix`, `view.inst_amp`, `view.inst_rate`, `view.bmp_alpha`, `camera.zoom` |
+| device knobs 1–8 | free (a preset's own eight — plan 12's `wake` and `trip` put their bases here) |
+| cue level | `view.shape` step |
+| activator ×6 | `view.plane.ZW / XW / YW / XY / XZ / YZ` |
+| clip row 3, buttons 5–8 | `view.inst_motion` STILL / ORBIT / WAVE / RIPPLE |
+| clip rows 4–5 | `view.shape` 0–15 |
+| scene launch 1–5 | `view.points`, `view.lines`, `view.faces`, `view.rotate`, `camera.reset` |
+| ▲ ▼ | `view.bright` ±3 |
+
+Two things this sorting changes on the desk: the band strip moves behind
+SHIFT (its eight knobs are the ones a preset most wants), and the theme row
+becomes the preset row. Everything else keeps its place on one layer or the
+other.
+
+### 3.3 Learn and edit
+
+- Right-click → Learn, then turn a knob: a `desk` row into the loaded
+  preset, which is now dirty. With SHIFT down, or on an invariant control,
+  the learn is refused with the reason on the panel (D5, D6).
+- A hand learn: a `routes` row into the loaded preset, as today's
+  `position` route, through the same Replace / Keep prompt.
+- The ROUTING page edits the loaded preset's `routes` and `desk`; the
+  session's controls are edited in `bindings.json` by hand, and the page
+  shows them read-only so a collision (a preset mapping an invariant
+  control) is visible.
+- Save (⇧F-key, the strip's save / as…) writes the live state as a preset
+  file: `values` from the registry's performance params, `routes` and
+  `desk` from the table, `modules` from the strips' current names.
+
+## 4. What is performance, what is session
+
+The split is by parameter group, declared once in `params.py` (today's
+`ROUTING_GROUPS` becomes this), and the snapshot / restore helpers take it
+from there.
+
+| session (a preset never touches) | performance (a preset replaces) |
+|---|---|
+| `tempo.*` (the clock) | `view.*`, `rot.rate.*`, `camera.*`, `pattern.mod.*` |
+| `hands.*` (setup and feel; calibration is `hands.json`) | `dream.*` |
+| `band.*`, `master.*`, `scene.*`, `audio.*` (the analyzer and its source) | `fx.*` |
+| `output.*`, `overlay.*`, `ui.*`, `app.*` | `lfo.*` |
+| | `macro.*` |
+
+`rot.phase.*` is neither: never saved. Plan 12's review found the TRIP
+theme resetting a tapped BPM; under this table it cannot.
+
+## 5. What a load does, in order
+
+1. Read the file; note ids that are session-level, invariant desk rows,
+   unknown ids, and second performers on a target.
+2. Land `values`: every performance param, from the file or its default.
+3. Replace every performer row with `routes` (referee first-wins).
+4. Replace the preset layer with `desk`; drop the layer to preset (D4).
+5. Redraw every ring and LED for the layer that is up; clear the faders'
+   catch state.
+6. Set the strips' labels from `modules`; mark the preset clean.
+7. Report the notes from step 1 on the panel.
+
+Rotation continues through a load (the integrator is untouched); a hand in
+the box keeps performing (its rows may now point elsewhere, and its old
+targets return to their new bases the frame the old rows are gone).
+
+## 6. Migration, one-time, on first launch
+
+- Each slot of a schema-1 project's `bank` becomes a preset file named by
+  the slot (`values` from the slot; `routes` from the live `bindings.json`'s
+  performer rows; `desk` from the sorted default map's preset layer;
+  `modules` from the project's `modules`). The project becomes schema 2 with
+  `bank` naming them and `session` holding the session-group values from
+  the old `values`.
+- `bindings.json`: performer rows move into the startup preset (the first
+  filled slot); MIDI rows are sorted by §3.2; rows the sorting does not
+  know keep the layer they are on (preset layer, into the startup preset).
+- `library/bindings/*.json`: `legacy6`, `lfo-breathe` and the `hands-*`
+  files become presets with only `routes` (partial presets are legal); the
+  five `party-*` files merge with their `party.hyp.json` slots into five
+  full presets — plan 12's real deliverable in the new shape.
+- The factory `library/projects/default.hyp.json` becomes eight factory
+  presets (the house themes) and a schema-2 project naming them.
+- `ROUTING_GROUPS`, `Presets`, `theme.*` params, the routing preset file
+  system and `ui_routing`'s strip go; the F-keys and the preset row call
+  the one loader. Audit items L1, L2, R1 and A1's scene-naming half close
+  as a consequence.
+
+## 7. Work packages and order
+
+After plan 11's routing and library packages (they touch the same files):
+
+| WP | what | size |
+|---|---|---|
+| 1 | The performance / session split in `params.py`; snapshot and restore over it; the session values in the project | S |
+| 2 | Preset schema 2: loader, saver, referee; the library's one preset strip; F-keys and the preset row on it; module presets unchanged | M |
+| 3 | The desk: `layer` on MIDI rows, the SHIFT latch, invariant set, redraw on switch and load, fader catch reset, multi-target rows | M |
+| 4 | Learn into the preset; refusals on the global layer and invariant controls; ROUTING page over the loaded preset | S |
+| 5 | Migration of project, bindings and factory files; the five `party-*` presets re-cut; hand-check the rings and knob re-basing on the real desk | M |
+| 6 | Docs: ARCHITECTURE §3.8 and the file table; DECISIONS; the plan 12 cards say "press F-key" only | S |
+
+## 8. Still open
+
+- Which four hand-feel params deserve the global layer's track knobs, and
+  whether `hands.*` wants a knob at all once the box is calibrated.
+- Whether a partial preset (routes only, no `values`) should land defaults
+  for the values it does not name (D2 says yes; `legacy6` loaded as a
+  preset would then reset the whole picture) or whether "partial" is only
+  ever a module preset. The clean answer is the second: routes-only files
+  become full presets in the migration, and D2 stands without exception.
+- The ROUTING page's shape once it edits a preset: whether its per-row
+  table stays, or the desk rows get their own page.

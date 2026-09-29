@@ -370,7 +370,7 @@ def test_routing_presets_are_a_document_kind_of_the_library(rig, tmp_path):
     router = _routed(rig, tmp_path)
     assert "bindings" in lib.kinds and "bindings" in lib.groups()
     assert lib.list("bindings") == ["default", "hands-fx", "hands-pinch", "hands-play",
-                                    "legacy6", "lfo-breathe"]
+                                    "legacy6", "lfo-breathe", "party-faces", "party-field", "party-trip", "party-tumble", "party-wake"]
     assert lib.is_factory("bindings", "legacy6") and lib.current("bindings") is None
     assert not lib.is_dirty("bindings")                  # nothing loaded: never dirty
     rig.view.pattern_mod[0] = 0.4
@@ -385,10 +385,11 @@ def test_routing_presets_are_a_document_kind_of_the_library(rig, tmp_path):
     doc = json.loads(path.read_text())
     assert doc["schema"] == SCHEMA and doc["name"] == "My Routes" and len(doc["bindings"]) == 13
     assert lib.current("bindings") == "My Routes" and not lib.is_dirty("bindings")
-    assert lib.list("bindings")[-1] == "My Routes" and not lib.is_factory("bindings", "My Routes")
-    assert lib.next("bindings") == "default"              # wraps by name order
-    assert not router.table.routes_to("view.bright")
-    assert lib.load("bindings", "My Routes") == [] and router.table.routes_to("view.bright")
+    assert "My Routes" in lib.list("bindings") and not lib.is_factory("bindings", "My Routes")
+    assert lib.next("bindings") == "party-faces"          # the next by name order
+    mine = lambda: [b for b in router.table.routes_to("view.bright") if b.source == "lane:2"]
+    assert not mine()                                     # the user's row went with the load
+    assert lib.load("bindings", "My Routes") == [] and mine()
     assert lib.reset("bindings") == "default" and lib.current("bindings") == "default"
     assert lib.delete("bindings", "My Routes") and "My Routes" not in lib.list("bindings")
     with pytest.raises(LibraryError):
@@ -560,7 +561,7 @@ def test_project_save_load_new(rig, tmp_path):
     lib.project.save_slot(2)
     p = lib.project.save("Gig")
     assert p == tmp_path / "projects" / "gig.hyp.json"
-    assert lib.project.list() == ["default", "gig"]  # default: the bank save's autosave
+    assert lib.project.list() == ["default", "gig", "party"]   # party: the factory one
     doc = json.loads(p.read_text())
     assert doc["schema"] == "hyperspace.project/1" and doc["name"] == "Gig"
     assert doc["modules"] == {"band": "Percussive", "view": "Mine"}
@@ -660,3 +661,13 @@ def test_a_band_presets_normalisation_switch_round_trips(rig):
     assert lib.load("band", "Manual mid") == []
     assert chain.params[3].norm == 1
 
+
+
+def test_factory_projects_are_listed_and_load_by_name(rig):
+    """The load combo lists the factory projects (plan 12's `party`) beside
+    the user's; opening one by name lands its bank without a user file."""
+    lib = rig.lib
+    assert "party" in lib.project.list()
+    assert lib.project.load("party") == []
+    assert lib.project.name == "party" and lib.project.path is None
+    assert [s["name"] for s in lib.project.bank[:5]] == ["TUMBLE", "FACES", "FIELD", "WAKE", "TRIP"]

@@ -1,0 +1,31 @@
+{
+ "schema": "hyperspace.preset/1",
+ "group": "dream",
+ "name": "wake",
+ "note": "Plan 12's party-wake scene: sixteen echoes every other frame with a long decay, occluded by the shape so the wake fills the space the object leaves, and the dream buffer at half opacity on the classic conv3_3 swirl. Echo mix, decay, hue and dream mix sit at the bases the party-wake routing preset pushes from.",
+ "values": {
+  "dream.on": true,
+  "dream.mix": 0.5,
+  "dream.echo_mix": 0.3,
+  "dream.decay": 0.93,
+  "dream.darken": 0.25,
+  "dream.contrast": 1.1,
+  "dream.occlude": 1.0,
+  "dream.hue": 0.0,
+  "dream.sat": 1.2,
+  "dream.tint": 0.0,
+  "dream.tint_from": 0,
+  "dream.tint_hue": 200.0,
+  "dream.tint_sat": 1.0,
+  "dream.echoes": 16,
+  "dream.every": 2,
+  "dream.res": 2,
+  "dream.steps": 2,
+  "dream.step": 0.03,
+  "dream.k": 0.08,
+  "dream.layer": 1,
+  "dream.octaves": 1,
+  "dream.mask_decay": 0.98,
+  "dream.jitter": 8
+ }
+}

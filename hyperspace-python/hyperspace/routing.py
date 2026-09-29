@@ -189,8 +189,9 @@ passes the library home, and the working-directory default is for tests.
 
 Routing presets are the same file format with only modulation rows:
 the factory exports in ``hyperspace/library/bindings/`` (`write_factory`:
-``default``, ``legacy6``, ``lfo-breathe`` from `PRESETS`, and the three
-hand-written ``hands-*`` files plan 08 ships) and the user's
+``default``, then ``legacy6``, ``lfo-breathe`` and plan 12's five
+``party-*`` from `PRESETS`, and the three hand-written ``hands-*`` files
+plan 08 ships) and the user's
 ``<home>/bindings/*.json``, both kept by the library (`Library.routing`,
 audit L1). `Router.apply_doc` replaces
 the routes from one — a hand's learned rows among them, since a learn
@@ -561,11 +562,171 @@ def lfo_breathe_values() -> dict[str, float]:
             "lfo.1.shape": SHAPES.index("sine"), "lfo.1.depth": 0.6, "macro.1": 1.0}
 
 
+# ---- plan 12: the party presets — one per render attraction, two hands ----
+#
+# Lane numbers assume the default six dofs per hand (hands/core.py
+# DEFAULT_DOFS: x, y, z, roll, pitch, yaw; left 0–5, right 6–11), which
+# tests/test_plan12_presets.py pins to the hands package. Every hand row
+# is a `push` from the axis's own rest — a level or absent hand adds
+# nothing, so the scene's bases come back when the hand leaves the box
+# with or without the audit's B1 fix — except the three `position` rows
+# on wrap / centred params whose base *is* the axis's rest value
+# (dream.hue 0, fx.kaleido.swirl 0, lfo.1.depth 0): same rule, same
+# result. docs/plans/12-presets.md is the design; the performer cards
+# are docs/plans/assets/12-presets/<name>.md.
+HAND_AXES = ("x", "y", "z", "roll", "pitch", "yaw")
+TURN = 0.25      # a phase push's depth: ±45° across a tilt's throw
+
+
+def hand(side: str, axis: str) -> str:
+    """`hand:<i>` for "L"/"R" and an axis name, on the default dofs."""
+    return f"hand:{('L', 'R').index(side) * len(HAND_AXES) + HAND_AXES.index(axis)}"
+
+
+def _push(side: str, axis: str, target: str, depth: float, **kw) -> Binding:
+    return Binding(hand(side, axis), target, "push", depth, **kw)
+
+
+def _grip_rows() -> list[Binding]:
+    """The left hand holds the object: roll, pitch and yaw of the palm add
+    a rigid turn (±45° at the ends of the throw — a quarter turn maps the
+    cubic shapes onto themselves, so the eighth is the whole visible
+    range) in the three 3D planes on top of whatever the integrator is
+    doing; a level hand adds nothing and a hand that leaves springs the
+    turn back over the axis's return."""
+    return [_push("L", "roll", "rot.phase.XY", TURN),
+            _push("L", "pitch", "rot.phase.YZ", TURN),
+            _push("L", "yaw", "rot.phase.XZ", TURN)]
+
+
+def _lane_rows(skip_mods: tuple[int, ...] = ()) -> list[Binding]:
+    """The legacy6 band → plane and band → pattern rows, less the pattern
+    inputs a hand owns in this preset (one performer per parameter)."""
+    skip = {f"pattern.mod.{i}" for i in skip_mods}
+    return [b for b in legacy6_routes() if b.target not in skip]
+
+
+def _driven_values() -> dict[str, float]:
+    """The factory bases under the lane rows: every plane spins at 1× and
+    every pattern input sits at its undriven 1, the music riding on top."""
+    return {**{f"rot.rate.{n}": 1.0 for n in PLANES},
+            **{f"pattern.mod.{i}": 1.0 for i in range(len(BANDS))}}
+
+
+def party_tumble_routes() -> list[Binding]:
+    """The polytope. Left hand grips the object (3D planes); left height
+    pushes the audio drive (1× → 8×: the music grips it harder). Right
+    height whips the spin, reaching in deepens the 4D perspective, right
+    roll and yaw add a turn in the XW and ZW planes."""
+    return [*_lane_rows(), *_grip_rows(),
+            _push("L", "y", "master.gain", 0.375),
+            _push("R", "y", "view.speed", 0.45),
+            _push("R", "z", "view.depth4", 0.35),
+            _push("R", "roll", "rot.phase.XW", TURN),
+            _push("R", "yaw", "rot.phase.ZW", TURN)]
+
+
+def party_tumble_values() -> dict[str, float]:
+    return {**_driven_values(), "master.gain": 1.0}
+
+
+def party_faces_routes() -> list[Binding]:
+    """The faces. Left hand grips; left height pushes brightness (the
+    faces glow, up to the 4× stop). Right height pushes the pattern mix
+    in, reaching in zooms the camera onto the faces, right roll pushes
+    pattern input 2 — the hex cells' scale, the one spatial input the
+    scene's pattern reads, which lane 2 then leaves alone — and fingers
+    up tip the camera to look down onto the faces."""
+    return [*_lane_rows(skip_mods=(2,)), *_grip_rows(),
+            _push("L", "y", "view.bright", 0.14),
+            _push("R", "y", "view.pattern_mix", 0.6),
+            _push("R", "z", "camera.zoom", -0.3),
+            _push("R", "roll", "pattern.mod.2", 0.7),
+            _push("R", "pitch", "camera.pitch", 0.5)]
+
+
+def party_faces_values() -> dict[str, float]:
+    return _driven_values()
+
+
+def party_field_routes() -> list[Binding]:
+    """The instance field. Right height is the crowd: more copies, the
+    camera pulling back to keep them in frame and a touch more light so
+    the small copies read; right roll and yaw turn every copy at once in
+    XW and ZW. Left hand flies the field — sideways and reaching in pan
+    it — and left height pushes how far the copies swing."""
+    return [*_lane_rows(),
+            _push("R", "y", "view.instances", 0.6),
+            _push("R", "y", "camera.zoom", -0.15),
+            _push("R", "y", "view.bright", 0.1),
+            _push("R", "roll", "rot.phase.XW", TURN),
+            _push("R", "yaw", "rot.phase.ZW", TURN),
+            _push("L", "x", "camera.pan.x", 0.1),
+            _push("L", "z", "camera.pan.y", 0.1),
+            _push("L", "y", "view.inst_amp", 0.5)]
+
+
+def party_field_values() -> dict[str, float]:
+    return _driven_values()
+
+
+def party_wake_routes() -> list[Binding]:
+    """The look-back wake. Left hand grips the object — moving it is what
+    paints the wake — and left height pushes the spin. Right height pushes
+    the echoes in, reaching in lengthens them (decay up), right roll
+    positions the dream's hue round the whole circle (level = as painted),
+    fingers up push the dream buffer's opacity."""
+    return [*_lane_rows(), *_grip_rows(),
+            _push("L", "y", "view.speed", 0.4),
+            _push("R", "y", "dream.echo_mix", 0.7),
+            _push("R", "z", "dream.decay", -0.12),
+            Binding(hand("R", "roll"), "dream.hue", "position"),
+            _push("R", "pitch", "dream.mix", 0.5)]
+
+
+def party_wake_values() -> dict[str, float]:
+    return {**_driven_values(), "dream.echo_mix": 0.3, "dream.decay": 0.93,
+            "dream.hue": 0.0, "dream.mix": 0.5}
+
+
+def party_trip_routes() -> list[Binding]:
+    """The effect stack. Right height fires the zoom burst, reaching in
+    zooms the kaleidoscope, right roll positions its swirl (level = none),
+    fingers out spread the hue cycle, fingers up flood the plasma. Left
+    height positions LFO 1's depth — a quarter-note sine that pumps the
+    camera zoom, so the picture beats only while the left hand is up — and
+    left x / z carry the burst's centre across the frame."""
+    return [*_lane_rows(),
+            _push("R", "y", "fx.zoomblur.amount", 0.8),
+            _push("R", "z", "fx.kaleido.zoom", -0.5),
+            Binding(hand("R", "roll"), "fx.kaleido.swirl", "position"),
+            _push("R", "yaw", "fx.huecycle.spread", 0.4),
+            _push("R", "pitch", "fx.plasma.level", 0.4),
+            Binding(hand("L", "y"), "lfo.1.depth", "position"),
+            Binding("lfo:0", "camera.zoom", "push", 0.08),
+            _push("L", "x", "fx.zoomblur.cx", 0.8),
+            _push("L", "z", "fx.zoomblur.cy", -0.8)]
+
+
+def party_trip_values() -> dict[str, float]:
+    return {**_driven_values(),
+            "fx.zoomblur.amount": 0.1, "fx.zoomblur.cx": 0.0, "fx.zoomblur.cy": 0.0,
+            "fx.kaleido.zoom": 1.0, "fx.kaleido.swirl": 0.0,
+            "fx.huecycle.spread": 0.8, "fx.plasma.level": 0.2,
+            "lfo.1.sync": SYNCS.index("1/4"), "lfo.1.shape": SHAPES.index("sine"),
+            "lfo.1.depth": 0.0}
+
+
 # routing presets: {name: (routes, values)} — `values` are the bases the
 # routes assume; None leaves the user's settings alone
 PRESETS: dict[str, tuple[list[Binding], dict | None]] = {
     "legacy6": (legacy6_routes(), legacy6_values()),
     "lfo-breathe": (lfo_breathe_routes(), lfo_breathe_values()),
+    "party-tumble": (party_tumble_routes(), party_tumble_values()),
+    "party-faces": (party_faces_routes(), party_faces_values()),
+    "party-field": (party_field_routes(), party_field_values()),
+    "party-wake": (party_wake_routes(), party_wake_values()),
+    "party-trip": (party_trip_routes(), party_trip_values()),
 }
 
 
