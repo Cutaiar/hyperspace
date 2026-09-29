@@ -1618,7 +1618,6 @@ class Router:
                     continue
                 q.set(q._value_of_norm(min(1.0, max(0.0, s.at(m)))))
                 written.append(q.id)
-        self._note_macro_bases()
         return written
 
     def routing_values(self) -> dict:
