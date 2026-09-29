@@ -12,8 +12,9 @@ a lane at the asymptote on the param's end stop), a fraction of the
 throw for `position`; `rest` (push rows only) is the source reading that
 pushes nothing — normally the source's own, what its adapter publishes
 in `Router.rests`, shown dimmed; dragging it makes the row's own number,
-"auto" gives it back; scale names an attenuator param or none — the eight
-macro knobs first, since that is what they are for. The live bar is the
+"auto" gives it back; scale names an attenuator param or none — never a
+macro (a macro scales a route as its depth subscriber, shown read-only as
+a "× macro.N" chip; plan 13 §2.4). The live bar is the
 source's normalized reading (white) with a red hairline at the target's
 effective norm, so a route can be read working. Edits land on the table
 at once (the router reads it every frame) — nothing here is copied.
@@ -22,10 +23,11 @@ The macros (`macro.1–8`, plan 09 decision 7) sit in a strip at the head
 of the rows' scroll, two lines of four compact sliders: ordinary registry
 widgets, so a performer can own one (right-click: Learn, Route a lane
 here…) and its readout shows `base → effective` while it does. A macro
-does nothing of its own; a route that names it as its scale runs at
-depth × the macro, one frame behind whatever moves the macro — chaining,
-not stacking. They are routing-layer state (params.ROUTING_GROUPS): a
-theme or project never carries them, a routing preset saved here does.
+does nothing of its own; it acts through its subscribers — a route its
+depth subscriber names runs at depth × (from + m · (to − from)), one frame
+behind whatever moves the macro — chaining, not stacking. They are
+performance state (params.PERFORMANCE_GROUPS): a theme, a project and a
+routing preset saved here carry them.
 
 One performer per target: the table's referee (`routing.Owned`) refuses
 a row on a target another enabled row performs, and the refusal is a
@@ -365,15 +367,19 @@ def _targets(panel) -> list[Param]:
 
 
 def _scales(panel, target: str | None = None) -> list[Param]:
-    """What a row's scale may be: the macros first — they exist for this —
-    then every other continuous param (master.gain on the rate routes), less
-    the row's own target: a row scaled by what it pushes strobes (the push
-    grows the scale grows the push, then clamps and lets go, every frame).
-    Two macros scaling each other's rows are allowed — the performer's rope."""
+    """What a row's scale may be: any continuous param but a macro
+    (master.gain on the rate routes) — a macro scales a route as a depth
+    subscriber now (plan 13 §2.4), shown on the row as a chip — less the
+    row's own target: a row scaled by what it pushes strobes (the push
+    grows the scale grows the push, then clamps and lets go, every frame)."""
     reg = panel.reg
-    return [q for q in reg.group("macro") if q.id != target] + [
-        q for q in reg if q.kind is Kind.CONTINUOUS and not q.alias
-        and q.group != "macro" and q.id != target]
+    return [q for q in reg if q.kind is Kind.CONTINUOUS and not q.alias
+            and q.group != "macro" and q.id != target]
+
+
+def _depth_chips(router: Router, b: Binding) -> list[str]:
+    """"× macro.N" for each macro whose depth subscriber names this route."""
+    return [f"× {mid}" for mid, _ in router.table.depth_subs(b)]
 
 
 def _param_combo(panel, label: str, current: str | None, width: float,
@@ -523,16 +529,21 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
             imgui.same_line()
     gates = _gates(router)
     gate_w = GATE_W if gates else 0.0
+    for chip in _depth_chips(router, b):          # read-only: the macro's subscriber
+        imgui.text_colored(ui.DIM, chip)
+        if imgui.is_item_hovered():
+            imgui.set_tooltip("A macro's depth subscriber scales this route "
+                              "(plan 13 §2.4); edited with the macro, not here")
+        imgui.same_line()
     scale = _param_combo(panel, "##scale", b.scale,
                          -(BAR_W + gate_w + sp * (2 if gate_w else 1)),
                          lambda: _scales(panel, b.target), none="× 1")
     if scale is not False:
         b.scale = scale
     if imgui.is_item_hovered():
-        imgui.set_tooltip("A param whose live value multiplies the depth — a macro, "
-                          "to chain (own the macro with a hand or LFO), or master.gain "
-                          "on the rate routes. Never the row's own target; two macros "
-                          "scaling each other's routes is allowed, and is your rope.")
+        imgui.set_tooltip("A param whose live value multiplies the depth — master.gain "
+                          "on the rate routes. Never the row's own target, never a "
+                          "macro: a macro scales a route through its depth subscriber.")
     if gates:
         imgui.same_line()
         _gate_combo(b, gates, gate_w)

@@ -155,16 +155,33 @@ is the driven value, not the idle one (plan 09, inside the relaxed bar).
 The factory table ships the same routes on WP0's bases of 1, so a plane
 keeps its un-driven spin and a lane rides on top.
 
-File format (``bindings.json``, schema ``hyperspace.bindings/2``):
+File format (``bindings.json``, schema ``hyperspace.bindings/3``):
 
-  {"schema": "hyperspace.bindings/2", "profile": "apc40",
+  {"schema": "hyperspace.bindings/3", "profile": "apc40",
    "bindings": [{"source": "key:RIGHT", "target": "view.shape",
                  "op": "step", "value": 1},
+                {"source": "cc:*:16", "target": "band.sel.trim", "op": "abs",
+                 "feedback": "ring", "layer": "global"},
                 {"source": "lane:0", "target": "rot.rate.ZW", "op": "push",
                  "value": 0.0625, "scale": "master.gain"},
                 {"source": "hand:7", "target": "view.bright", "op": "position",
                  "when": "hand:18"}, …],
-   "values": {…}}            # bases: a routing preset's, or the live table's macros
+   "values": {…},            # bases: a routing preset's, or the live table's macros
+   "macros": {"macro.1": {"label": "Heat", "subs": [
+       {"base": "view.speed", "from": 0.8, "to": 0.3},
+       {"depth": {"source": "lfo:1", "target": "fx.mix"}, "from": 0, "to": 1}]}}}
+
+Schema 3 (plan 13 WP3) adds a MIDI row's `layer` — absent: invariant,
+the session's control; "global": the SHIFT layer; "preset": the loaded
+preset's desk (`Bindings.dispatch` / `active`, `set_desk`, the latch
+`desk.shift`) — and the macros' subscribers (`Macro`, `Sub`; the base
+ones followed by `Router.follow_macros`, the depth ones multiplied in by
+`Router.modulate`). A `scale` is kept only on a non-macro param
+(`master.gain`, decision register row 18 open); `scale: "macro.N"`
+becomes a depth subscriber on load (`migrate_scales`). An older file's
+MIDI rows are sorted into the layers once (`sort_layers`), backed up and
+written back. Until plan 13 WP4 / WP5 move them into presets, the preset
+layer and the macros live here too.
 
 Rows carry only what differs from the defaults. `values` in a routing
 preset are the bases its routes assume; in the live table they are the
@@ -219,8 +236,10 @@ from .bands import BANDS, CEIL
 from .lfo import SHAPES, SYNCS
 from .params import DRIVE, PLANES, ROT_RATE_MAX, Kind, Param, Registry
 
-SCHEMA = "hyperspace.bindings/2"
+SCHEMA = "hyperspace.bindings/3"
 SCHEMA_V1 = "hyperspace.bindings/1"
+SCHEMA_V2 = "hyperspace.bindings/2"
+SCHEMA_VERSIONS = (1, 2, 3)        # what a load reads (the library's routing kind too)
 FILE = "bindings.json"
 LEGACY_MIDI_FILE = Path("midi_map.json")
 FACTORY_DIR = Path(__file__).parent / "library" / "bindings"
@@ -229,6 +248,13 @@ MIDI_SCHEMES = ("cc", "note", "pitch")
 LANE_SCHEMES = ("lane", "ext", "lfo", "hand")          # continuous, read by the Router
 MOD_OPS = ("push", "position")                 # the performer ops: the Router's rows
 OPS = ("fire", "toggle", "step", "set", "abs", "rel", "rel64", "momentary", *MOD_OPS)
+# the APC40's two layers (plan 13 §3): a MIDI row's `layer` is None — the
+# control is invariant, the session's, one meaning on both layers — or one
+# of these. The table's `layer` says which is up; SHIFT latches it.
+LAYERS = ("preset", "global")
+SHIFT_SOURCE = f"note:0:{apc40.N_SHIFT}"     # always invariant: it is the latch
+SHIFT_PARAM = "desk.shift"
+MACRO_PREFIX = "macro."
 
 # midi_map.json's `mode` → op
 MODE_TO_OP = {"abs": "abs", "rel": "rel", "rel64": "rel64", "trigger": "toggle",
@@ -322,6 +348,10 @@ class Binding:
     on: int = 1                  # led velocity when lit
     off: int = 0                 # led velocity when dark
     ring: int = 2                # ring style for "ring" feedback (profile-defined)
+    # the desk layer (plan 13 §3.1): None = invariant, the session's control
+    # with one meaning on both layers; "global" = SHIFT up; "preset" = the
+    # loaded preset's own. MIDI rows only
+    layer: str | None = None
     # runtime, never persisted
     caught: bool = field(default=False, repr=False, compare=False)
     last_hw: float | None = field(default=None, repr=False, compare=False)
@@ -407,6 +437,21 @@ class Binding:
             return False
         return kind == "pitch" or self.number == number
 
+    def overlaps(self, other: Binding) -> bool:
+        """Two MIDI rows on one physical control: the same kind and number
+        on the same channel, or either one on any channel."""
+        if not (self.is_midi and other.kind == self.kind):
+            return False
+        if None not in (self.channel, other.channel) and self.channel != other.channel:
+            return False
+        return self.kind == "pitch" or self.number == other.number
+
+    @property
+    def control(self) -> tuple[str, int, int] | None:
+        """The physical control a MIDI row names, for feedback: (kind,
+        channel, number), an any-channel row drawn on channel 0."""
+        return (self.kind, self.channel or 0, self.number) if self.is_midi else None
+
     # ---- files ----
 
     def to_json(self) -> dict:
@@ -415,7 +460,7 @@ class Binding:
             d.pop(k)
         # only what differs from the defaults keeps the file readable
         for k in ("value", "enabled", "scale", "when", "rest", "pickup", "feedback",
-                  "on", "off", "ring"):
+                  "on", "off", "ring", "layer"):
             if d[k] == self.__dataclass_fields__[k].default:
                 d.pop(k)
         # a performer never picks up (plan 09 d.4: hands grab, they never
@@ -466,6 +511,14 @@ class Binding:
             depth = "" if self.value == 1.0 else f" {self.value:.3g}"
             return f"{who} positions{depth}{by}{when}"
         return who
+
+
+_SHIFT = Binding(SHIFT_SOURCE, SHIFT_PARAM, "toggle")    # the latch's control
+
+
+def _macro_n(mid: str) -> int:
+    tail = mid[len(MACRO_PREFIX):]
+    return int(tail) if tail.isdigit() else 0
 
 
 # ------------------------------------------------------------------- ops
@@ -563,10 +616,17 @@ def lfo_breathe_routes() -> list[Binding]:
     """The chaining demonstration (plan 09 decision 7): LFO 1 pushes
     brightness on the bar; the right hand's height positions LFO 1's depth
     — so raising the hand deepens the swell and nothing else moves; LFO 2
-    pushes the fx mix on the quarter, through macro 1 as its attenuator."""
+    pushes the fx mix on the quarter, through macro 1 as its attenuator
+    (a depth subscriber of macro.1, `lfo_breathe_macros`)."""
     return [Binding("lfo:0", "view.bright", "push", 0.5),
             Binding("hand:7", "lfo.1.depth", "position"),
-            Binding("lfo:1", "fx.mix", "push", 0.3, scale="macro.1")]
+            Binding("lfo:1", "fx.mix", "push", 0.3)]
+
+
+def lfo_breathe_macros() -> dict[str, Macro]:
+    """Macro 1 attenuates LFO 2's push on the fx mix — was that row's
+    `scale: macro.1` (plan 13 §2.4)."""
+    return {"macro.1": Macro("", [Sub(depth=("lfo:1", "fx.mix"), lo=0.0, hi=1.0)])}
 
 
 def lfo_breathe_values() -> dict[str, float]:
@@ -742,6 +802,11 @@ PRESETS: dict[str, tuple[list[Binding], dict | None]] = {
     "party-wake": (party_wake_routes(), party_wake_values()),
     "party-trip": (party_trip_routes(), party_trip_values()),
 }
+# a routing preset's macros (plan 13 §2.4): the subscribers its routes
+# assume; a preset not named here carries none
+PRESET_MACROS: dict[str, Callable[[], dict[str, Macro]]] = {
+    "lfo-breathe": lfo_breathe_macros,
+}
 
 
 def referee(rows: Iterable[Binding]) -> tuple[list[Binding], list[tuple[Binding, str]]]:
@@ -847,6 +912,153 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
     return out, notes
 
 
+# ---------------------------------------------------------------- macros
+#
+# One macro concept (plan 13 D10, §2.4; decision register rows 12, 12b): a
+# macro is a knob, `macro.1–8`, an ordinary param, with a list of
+# subscribers. A *base* subscriber is a scene-setter: whenever the macro's
+# base moves (a knob, the panel, a restore — never an offset) it sets its
+# param's base to `from + m · (to − from)` along the param's own fader
+# (`Router.follow_macros`). A *depth* subscriber scales one route: its row's
+# depth is multiplied by `from + m · (to − from)` with m the macro's
+# effective value, last frame's (`Router.modulate`) — so a performer riding
+# a macro moves its depth subscribers only. Polarity is per subscriber; a
+# depth range may cross zero, flipping the route partway through the throw.
+
+@dataclass
+class Sub:
+    """One subscriber: `base` names a param, or `depth` names a route by
+    (source, target); `lo` / `hi` are the file's `from` / `to`."""
+    base: str | None = None
+    depth: tuple[str, str] | None = None
+    lo: float = 0.0
+    hi: float = 1.0
+
+    def at(self, m: float) -> float:
+        return self.lo + m * (self.hi - self.lo)
+
+    def to_json(self) -> dict:
+        d: dict = ({"base": self.base} if self.depth is None else
+                   {"depth": {"source": self.depth[0], "target": self.depth[1]}})
+        return {**d, "from": self.lo, "to": self.hi}
+
+    @classmethod
+    def from_json(cls, d: dict) -> Sub:
+        lo, hi = float(d.get("from", 0.0)), float(d.get("to", 1.0))
+        if "depth" in d:
+            dep = d["depth"]
+            return cls(depth=(str(dep["source"]), str(dep["target"])), lo=lo, hi=hi)
+        return cls(base=str(d["base"]), lo=lo, hi=hi)
+
+
+@dataclass
+class Macro:
+    label: str = ""
+    subs: list[Sub] = field(default_factory=list)
+
+    def to_json(self) -> dict:
+        d: dict = {"label": self.label} if self.label else {}
+        return {**d, "subs": [s.to_json() for s in self.subs]}
+
+    @classmethod
+    def from_json(cls, d: dict) -> Macro:
+        return cls(str(d.get("label", "")), [Sub.from_json(s) for s in d.get("subs", [])])
+
+    @property
+    def empty(self) -> bool:
+        return not self.label and not self.subs
+
+
+def is_macro(pid: str | None) -> bool:
+    return bool(pid) and pid.startswith(MACRO_PREFIX) and pid[len(MACRO_PREFIX):].isdigit()
+
+
+def macros_of(doc: dict | None) -> dict[str, Macro]:
+    """A file's `macros` key as {id: Macro}."""
+    return {mid: Macro.from_json(m) for mid, m in (doc or {}).items()}
+
+
+def migrate_scales(rows: Iterable[Binding], macros: dict[str, Macro]) -> list[str]:
+    """`scale: "macro.N"` → a depth subscriber of macro.N `from 0, to 1`
+    (unless an identical one is there) and the row loses the field (plan 13
+    §2.4). A `scale` naming anything else — the legacy6 rate rows'
+    `master.gain` — is left exactly as it is (decision register row 18,
+    open). Edits `rows` and `macros` in place; returns a note per row."""
+    notes: list[str] = []
+    for b in rows:
+        if not is_macro(b.scale):
+            continue
+        m = macros.setdefault(b.scale, Macro())
+        sub = Sub(depth=(b.source, b.target), lo=0.0, hi=1.0)
+        if sub not in m.subs:
+            m.subs.append(sub)
+        notes.append(f"moved {b.source} → {b.target} × {b.scale} to a depth subscriber "
+                     f"of {b.scale} (plan 13 §2.4)")
+        b.scale = None
+    return notes
+
+
+# ---------------------------------------------------------------- the desk
+
+def factory_desk(profile: str = "apc40") -> list[Binding]:
+    """The profile's default MIDI map with its layers (plan 13 §3.2)."""
+    return [Binding.from_json(d) for d in apc40.DEFAULT_MAP] if profile == "apc40" else []
+
+
+def sort_layers(rows: Iterable[Binding], profile: str = "apc40"
+                ) -> tuple[list[Binding], list[str]]:
+    """Give an older file's MIDI rows their layers, once (plan 13 §3.2, §6):
+    a row identical to a factory row in (source, target, op, value) takes
+    that row's layer; any other row on an invariant factory control stays
+    invariant; any other row goes to the preset layer. Then the factory's
+    global rows and SHIFT are added where the file has no row on that
+    control for that layer. A profile with no factory map keeps every row
+    invariant. Returns (rows, notes)."""
+    rows = list(rows)
+    factory = factory_desk(profile)
+    if not factory:
+        return rows, []
+    layer_of = {(f.source, f.target, f.op, float(f.value)): f.layer for f in factory}
+    invariant = [f for f in factory if f.layer is None]
+    n = 0
+    for b in rows:
+        if not b.is_midi:
+            continue
+        key = (b.source, b.target, b.op, float(b.value))
+        if key in layer_of:
+            b.layer = layer_of[key]
+        elif any(b.overlaps(f) for f in invariant):
+            b.layer = None
+        else:
+            b.layer = "preset"
+        n += 1
+    notes = [f"sorted {n} MIDI rows into the desk's layers (plan 13 §3.2)"] if n else []
+    for f in factory:
+        if f.layer != "global" and f.source != SHIFT_SOURCE:
+            continue
+        if any(b.is_midi and b.layer == f.layer and b.overlaps(f) for b in rows):
+            continue
+        rows.append(f)
+        where = "the global layer" if f.layer else "invariant"
+        notes.append(f"added {f.source} → {f.target} ({where}, plan 13 §3.2)")
+    return rows, notes
+
+
+def register_desk(reg: Registry, table: Bindings) -> None:
+    """`desk.shift`: the layer latch as a toggle over the table — on while
+    the global layer is up — so SHIFT is a row like any other (a note row
+    toggles it, its LED reads it) and a page or key row can reach it too.
+    Never saved, never performed. The first table a registry meets keeps it."""
+    if SHIFT_PARAM in reg:
+        return
+    reg.toggle(SHIFT_PARAM, "Shift", lambda: table.layer == "global",
+               lambda v: table.set_layer("global" if v else "preset"), group="desk",
+               persist=False, modulatable=False,
+               tip="The APC40's SHIFT, latched: on, the desk shows the global layer "
+                   "(the band strip, the hand feel, BPM, the band scenes); off, the "
+                   "loaded preset's. Loading a preset turns it off.")
+
+
 # routing preset *files* live in the library's tree — the factory exports
 # (write_factory) under hyperspace/library/bindings/ and the user's under
 # <home>/bindings/, a user file shadowing a factory one of the same name.
@@ -876,6 +1088,9 @@ def dumps_doc(d: dict) -> str:
     text += f' "profile": {json.dumps(d["profile"])},\n "bindings": [\n{rows}\n ]'
     if "values" in d:
         text += f',\n "values": {json.dumps(d["values"], indent=2)}'
+    if "macros" in d:
+        ms = ",\n".join(f"  {json.dumps(k)}: {json.dumps(v)}" for k, v in d["macros"].items())
+        text += f',\n "macros": {{\n{ms}\n }}'
     return text + "\n}\n"
 
 
@@ -903,15 +1118,30 @@ class Bindings:
         # next to `dropped` until the next edit), so the file can be checked
         self.migrated = False
         self.notes: list[str] = []
+        # the schema number the file was read at ("1", "2", "3"), for the
+        # backup's name; `changed` — the loader moved something (the desk's
+        # layers sorted, a macro `scale` moved to a subscriber) and the
+        # file is written back once
+        self.read_at = "3"
+        self.changed = False
+        # the macros' subscribers (plan 13 §2.4), {"macro.N": Macro}
+        self.macros: dict[str, Macro] = {}
+        self.macros_serial = 0        # bumped by set_macros: Router.follow_macros re-lands
+        # the desk (plan 13 §3): which layer is up — runtime, never saved,
+        # a fresh start is on the preset layer — and two counters the MIDI
+        # adapter watches: a layer change or a desk replacement redraws
+        # every ring and LED, and a replacement clears the faders' catch
+        self.layer = "preset"
+        self.layer_serial = 0
+        self.desk_serial = 0
 
     # ---- construction ----
 
     @classmethod
     def factory(cls, profile: str = "apc40", path: Path | None = None) -> Bindings:
         """Keys, pad, the device profile's default MIDI map, the legacy6 routes."""
-        midi = [Binding.from_json(b) for b in apc40.DEFAULT_MAP] if profile == "apc40" else []
-        return cls([*keymap(), *padmap(), *midi, *legacy6_routes()], path=path,
-                   profile=profile)
+        return cls([*keymap(), *padmap(), *factory_desk(profile), *legacy6_routes()],
+                   path=path, profile=profile)
 
     @classmethod
     def load(cls, path: Path | None, profile: str = "apc40",
@@ -933,9 +1163,9 @@ class Bindings:
                 return t
             t.bindings, remapped = remap_factory(t.bindings)
             t.notes += remapped
-            if t.migrated or remapped:
+            if t.migrated or t.changed or remapped:
                 t.announce(path)
-                backup(path, "1" if t.migrated else "2")
+                backup(path, t.read_at)
                 t.write()
             return t
         t = cls.factory(profile, path)
@@ -944,8 +1174,10 @@ class Bindings:
                 data = json.loads(legacy_midi.read_text())
                 rows = [Binding.from_json(b) for b in data.get("bindings", [])]
                 t.profile = data.get("profile", profile)
+                n = len(rows)
+                rows, _ = sort_layers(rows, t.profile)     # the desk's layers, plan 13 §3.2
                 t.bindings = [b for b in t.bindings if not b.is_midi] + rows
-                print(f"bindings: migrated {len(rows)} rows from {legacy_midi}"
+                print(f"bindings: migrated {n} rows from {legacy_midi}"
                       + (f" into {path}" if path is not None else ""), file=sys.stderr)
                 t.write()
             except (OSError, ValueError, TypeError, KeyError) as e:
@@ -960,30 +1192,50 @@ class Bindings:
         changed = len(self.notes) - dropped
         tail = ", ".join(f"{n} rows {what}" for n, what in ((dropped, "dropped"),
                                                               (changed, "changed")) if n)
-        what = f"migrated {path} to {SCHEMA}" if self.migrated else f"updated {path}"
+        what = (f"migrated {path} to {SCHEMA}" if self.migrated or self.read_at != "3"
+                else f"updated {path}")
         print(f"bindings: {what}" + (f" ({tail})" if tail else ""), file=sys.stderr)
 
     @classmethod
-    def from_json(cls, data: dict, path: Path | None = None) -> Bindings:
+    def from_json(cls, data: dict, path: Path | None = None, *, desk: bool = True) -> Bindings:
         """A file's dict. Schema 1 (or none) goes through `migrate_v1`; a
         schema this code doesn't know raises ValueError, like a file that
         won't parse — never rewritten. A schema-2 file with two owners on a
         target keeps the first, the rest in `dropped` — the referee, not a
-        prompt, since nobody is asking."""
+        prompt, since nobody is asking.
+
+        Schema 3 adds `layer` on MIDI rows and the `macros` key. An older
+        file's MIDI rows get their layers once (`sort_layers`; a file with
+        no MIDI rows gets none added, and `desk=False` — a routing preset,
+        whose MIDI rows are never read — skips the sort), and on any
+        schema a row's `scale: "macro.N"` becomes a depth subscriber
+        (`migrate_scales`); either sets `changed`, noted, so `load` writes
+        the file back once."""
         schema = data.get("schema")
-        if schema not in (SCHEMA, SCHEMA_V1, None):
+        if schema not in (SCHEMA, SCHEMA_V2, SCHEMA_V1, None):
             raise ValueError(f"unknown schema {schema!r}")
         rows = [Binding.from_json(b) for b in data.get("bindings", [])]
         notes: list[str] = []
-        migrated = schema != SCHEMA
+        migrated = schema in (SCHEMA_V1, None)
         if migrated:
             rows, notes = migrate_v1(rows)
-        t = cls(rows, path=path, profile=data.get("profile", "apc40"),
-                values=data.get("values"))
+        profile = data.get("profile", "apc40")
+        changed = False
+        if desk and schema != SCHEMA and any(b.is_midi for b in rows):
+            rows, sorted_notes = sort_layers(rows, profile)
+            notes += sorted_notes
+            changed = bool(sorted_notes)
+        macros = macros_of(data.get("macros"))
+        moved = migrate_scales(rows, macros)
+        notes += moved
+        changed = changed or bool(moved)
+        t = cls(rows, path=path, profile=profile, values=data.get("values"))
+        t.macros = macros
         t.bindings, t.dropped = referee(t.bindings)
         if migrated:
             notes += [f"dropped {b.source} → {b.target}: {why}" for b, why in t.dropped]
-        t.migrated, t.notes = migrated, notes
+        t.migrated, t.notes, t.changed = migrated, notes, changed
+        t.read_at = "1" if schema is None else schema.rpartition("/")[2]
         return t
 
     def to_json(self) -> dict:
@@ -991,6 +1243,9 @@ class Bindings:
              "bindings": [b.to_json() for b in self.bindings]}
         if self.values is not None:
             d["values"] = dict(self.values)
+        macros = self.macros_doc()
+        if macros:
+            d["macros"] = macros
         return d
 
     def dumps(self) -> str:
@@ -1040,6 +1295,111 @@ class Bindings:
     def routes_to(self, pid: str) -> list[Binding]:
         return [b for b in self.bindings if b.op in MOD_OPS and b.target == pid]
 
+    # ---- the desk: two layers under a latched SHIFT (plan 13 §3) ----
+
+    def invariant_rows(self) -> list[Binding]:
+        """The enabled MIDI rows with no layer: the session's controls."""
+        return [b for b in self.bindings if b.is_midi and b.layer is None and b.enabled]
+
+    def is_invariant(self, b: Binding, rows: list[Binding] | None = None) -> bool:
+        """Is `b`'s control invariant — SHIFT, or the control of an enabled
+        layer-None row (`rows`, when the caller has them)? A layered row
+        on such a control never acts and never lights (D6)."""
+        if not b.is_midi:
+            return False
+        if b.overlaps(_SHIFT):
+            return True
+        inv = self.invariant_rows() if rows is None else rows
+        return any(x is not b and b.overlaps(x) for x in inv)
+
+    def dispatch(self, kind: str, channel: int, number: int) -> list[Binding]:
+        """The rows a MIDI message goes to now: the invariant rows on its
+        control, else the enabled rows of the layer that is up on it —
+        nothing else (D8: no fall-through; a control the up layer does not
+        map does nothing)."""
+        rows = [b for b in self.route(kind, channel, number) if b.enabled]
+        inv = [b for b in rows if b.layer is None]
+        if inv:
+            return inv
+        if kind == "note" and channel == 0 and number == _SHIFT.number:
+            return []
+        return [b for b in rows if b.layer == self.layer]
+
+    def active(self) -> list[Binding]:
+        """The MIDI rows that show on the desk now: every invariant row, and
+        the up layer's rows on controls that are not invariant."""
+        inv = self.invariant_rows()
+        return [b for b in self.midi()
+                if b.layer is None or (b.layer == self.layer and not self.is_invariant(b, inv))]
+
+    def set_layer(self, layer: str) -> None:
+        if layer not in LAYERS:
+            raise ValueError(f"no layer {layer!r}; one of {', '.join(LAYERS)}")
+        if layer != self.layer:
+            self.layer = layer
+            self.layer_serial += 1
+
+    def toggle_layer(self) -> str:
+        """SHIFT's press: the other layer. Returns the one now up."""
+        self.set_layer("global" if self.layer == "preset" else "preset")
+        return self.layer
+
+    def drop_layer(self) -> None:
+        """Back to the preset layer (D4) — what a preset load does."""
+        self.set_layer("preset")
+
+    def desk(self) -> list[Binding]:
+        """The preset layer's rows — what a preset's `desk` holds."""
+        return [b for b in self.bindings if b.is_midi and b.layer == "preset"]
+
+    def set_desk(self, rows: Iterable[Binding | dict]) -> list[str]:
+        """Replace every preset-layer row with `rows` (layer forced to
+        "preset"), dropping with a note each row that is not a MIDI control
+        and each on an invariant control (D6); drop to the preset layer
+        (D4) and ask the adapter to redraw the desk and clear the faders'
+        catch (`desk_serial`). Returns the notes; the file is not written —
+        the desk is the loaded preset's."""
+        keep = [b for b in self.bindings if not (b.is_midi and b.layer == "preset")]
+        inv = [b for b in keep if b.is_midi and b.layer is None and b.enabled]
+        notes: list[str] = []
+        new: list[Binding] = []
+        for r in rows:
+            b = replace(r) if isinstance(r, Binding) else Binding.from_json(r)
+            b.layer = "preset"
+            if not b.is_midi:
+                notes.append(f"dropped {b.source} → {b.target}: not a desk control")
+            elif self.is_invariant(b, inv):
+                notes.append(f"dropped {b.source} → {b.target}: that control is "
+                             "invariant, the session's (plan 13 D6)")
+            else:
+                new.append(b)
+        self.bindings = keep + new
+        self.desk_serial += 1
+        self.drop_layer()
+        return notes
+
+    # ---- the macros' subscribers (plan 13 §2.4) ----
+
+    def macros_doc(self) -> dict:
+        """{id: {"label", "subs"}} for every macro that has either — the
+        file's `macros` key."""
+        return {mid: m.to_json() for mid, m in sorted(self.macros.items(),
+                                                     key=lambda kv: _macro_n(kv[0]))
+                if not m.empty}
+
+    def set_macros(self, doc: dict | None) -> None:
+        """Replace every macro's label and subscribers with `doc`'s (the
+        `macros` key's shape); the router re-lands the base subscribers on
+        its next `follow_macros`."""
+        self.macros = macros_of(doc)
+        self.macros_serial += 1
+
+    def depth_subs(self, b: Binding) -> list[tuple[str, Sub]]:
+        """(macro id, subscriber) for every depth subscriber naming `b`'s route."""
+        key = (b.source, b.target)
+        return [(mid, s) for mid, m in self.macros.items() for s in m.subs
+                if s.depth == key]
+
     # ---- edits ----
 
     def _check(self, b: Binding) -> None:
@@ -1078,7 +1438,13 @@ class Bindings:
                 return x.scheme == "note" and x.op == b.op and x.value == b.value
             return x.scheme in ("cc", "pitch")
 
-        self.bindings = [x for x in self.bindings if x.key != b.key and not same_role(x)]
+        # the global layer is the session's (plan 13 D5): a learn off it
+        # never takes a global row with it, nor a global row a preset one
+        def apart(x: Binding) -> bool:
+            return (x.layer == "global") != (b.layer == "global")
+
+        self.bindings = [x for x in self.bindings
+                         if apart(x) or (x.key != b.key and not same_role(x))]
         self.bindings.append(b)
         self.dropped, self.notes = [], []
         self.write()
@@ -1181,6 +1547,53 @@ class Router:
         if table.values_of is None:
             table.values_of = self.routing_values
             self.missing_values = self.restore_values()
+        register_desk(reg, table)
+        # follow_macros: each macro's base as last acted on, and the table's
+        # macros_serial as last seen — a start acts on nothing (the bases
+        # the project landed stand) until a macro's base moves
+        self._macro_bases: dict[str, float] = {}
+        self._macros_seen = table.macros_serial
+        self._note_macro_bases()
+
+    def _note_macro_bases(self) -> None:
+        for p in self.reg.group("macro"):
+            self._macro_bases[p.id] = float(p.base)
+
+    def follow_macros(self, force: bool = False) -> list[str]:
+        """The macros' base subscribers, a scene-setter step (plan 13 §2.4,
+        decision register row 12b): once a frame, before the hands and the
+        modulation pass, every macro whose **base** moved since the last
+        call — a knob, the panel, a restore; never a performer's offset —
+        sets each base subscriber's param base to `from + m · (to − from)`
+        along that param's fader, without snapping to a detent. Through the
+        ordinary base setter, so a performer on the target keeps its offset
+        on top. Two macros on one param: the later in id order wins. A
+        `set_macros` (or `force`) re-lands every macro. Returns the ids
+        written."""
+        if self.table.macros_serial != self._macros_seen:
+            self._macros_seen, force = self.table.macros_serial, True
+        written: list[str] = []
+        for mid in sorted(self.table.macros, key=_macro_n):
+            p = self.reg.get(mid)
+            if p is None:
+                continue
+            m = float(p.base)
+            if not force and self._macro_bases.get(mid) == m:
+                continue
+            self._macro_bases[mid] = m
+            for s in self.table.macros[mid].subs:
+                if s.base is None:
+                    continue
+                q = self.reg.get(s.base)
+                if q is None:
+                    continue
+                q = self.reg.real(q)
+                if q.kind in (Kind.TRIGGER, Kind.TEXT):
+                    continue
+                q.set(q._value_of_norm(min(1.0, max(0.0, s.at(m)))))
+                written.append(q.id)
+        self._note_macro_bases()
+        return written
 
     def routing_values(self) -> dict:
         """{id: base} over the `macro` group — what the live table and a
@@ -1325,6 +1738,17 @@ class Router:
                 if sp is None:
                     continue
                 depth *= float(sp.value)
+            # the macros' depth subscribers on this route: × from + m·(to − from),
+            # m the macro's effective value — last frame's, as `scale` reads
+            dormant = False
+            for mid, s in self.table.depth_subs(b):
+                mp = self.reg.get(mid)
+                if mp is None:
+                    dormant = True
+                    break
+                depth *= s.at(float(mp.value))
+            if dormant:
+                continue
             if b.op == "push":
                 # centred where the source rests — the row's own number, or
                 # the source's as published this frame: idle adds nothing
@@ -1346,6 +1770,8 @@ class Router:
         stays, the rest wait in `table.dropped` for the page to show."""
         routes, values = PRESETS[name]
         self.table.set_routes(replace(b) for b in routes)
+        macros = PRESET_MACROS.get(name)
+        self.table.set_macros({k: m.to_json() for k, m in macros().items()} if macros else None)
         return self.reg.restore(values) if values else []
 
     def apply_doc(self, doc: dict, path: Path | None = None) -> list[str]:
@@ -1355,24 +1781,33 @@ class Router:
         `values` land. A user's schema-1 file is migrated and rewritten
         once at `path`; a factory file never is. A bad document raises
         ValueError, a rewrite that fails OSError (the library turns both
-        into its own error)."""
-        t = Bindings.from_json(doc, path=path)
-        if t.migrated and path is not None and FACTORY_DIR not in path.parents:
-            t.announce(path)             # a user's v1 preset: rewritten once
-            backup(path, "1")
+        into its own error).
+
+        Schemas 1–3. A `scale: "macro.N"` becomes a depth subscriber
+        (`migrate_scales`); the document's macros replace the table's
+        (one load replaces, plan 13 D2 — a file with none clears them)."""
+        t = Bindings.from_json(doc, path=path, desk=False)    # a preset: routes, no desk
+        if ((t.migrated or t.changed) and path is not None
+                and FACTORY_DIR not in path.parents):
+            t.announce(path)             # a user's older preset: rewritten once
+            backup(path, t.read_at)
             t.write()
             if t.error:                  # a file that would not take the rewrite: say so
                 raise OSError(t.error)
         self.table.set_routes(replace(b) for b in t.bindings if b.op in MOD_OPS)
+        self.table.set_macros(t.macros_doc())
         self.table.dropped, self.table.notes = list(t.dropped), list(t.notes)
         return self.reg.restore(t.values) if t.values else []
 
     def preset_doc(self, name: str) -> dict:
         """The current routes — disabled ones too — with the macros' bases
-        as `values` (`routing_values`) as a routing preset document, named; what
-        the library writes for a save (`Library.routing`)."""
-        doc = Bindings((replace(b) for b in self.table.routes()),
-                       values=self.routing_values() or None).to_json()
+        as `values` (`routing_values`) and their subscribers as `macros`, as
+        a routing preset document, named; what the library writes for a
+        save (`Library.routing`)."""
+        t = Bindings((replace(b) for b in self.table.routes()),
+                     values=self.routing_values() or None)
+        t.set_macros(self.table.macros_doc())
+        doc = t.to_json()
         doc["name"] = name
         return doc
 
@@ -1415,11 +1850,21 @@ def write_factory(directory: Path = FACTORY_DIR) -> list[Path]:
     directory.mkdir(parents=True, exist_ok=True)
     out = [directory / "default.json"]
     out[0].write_text(Bindings.factory().dumps())
-    for name, (routes, values) in PRESETS.items():
+    for name in PRESETS:
         p = directory / f"{name}.json"
-        p.write_text(Bindings(routes, values=values).dumps())
+        p.write_text(preset_table(name).dumps())
         out.append(p)
     return out
+
+
+def preset_table(name: str) -> Bindings:
+    """A factory routing preset as a table: its routes, values and macros."""
+    routes, values = PRESETS[name]
+    t = Bindings(routes, values=values)
+    macros = PRESET_MACROS.get(name)
+    if macros:
+        t.macros = macros()
+    return t
 
 
 if __name__ == "__main__":

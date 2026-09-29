@@ -484,7 +484,19 @@ def test_a_bad_routing_preset_is_reported_not_fatal(rig, tmp_path):
     finally:
         old.chmod(0o644)
     assert lib.load("bindings", "old") == []
-    assert json.loads(old.read_text())["schema"] == "hyperspace.bindings/2"
+    assert json.loads(old.read_text())["schema"] == "hyperspace.bindings/3"
+    # a user's schema-2 routing preset still loads (plan 13 WP3: the kind
+    # reads schemas 1–3), its macro scale moved to a depth subscriber
+    v2 = tmp_path / "bindings" / "v2.json"
+    v2.write_text(json.dumps({"schema": "hyperspace.bindings/2", "bindings": [
+        {"source": "lfo:1", "target": "fx.mix", "op": "push", "value": 0.3,
+         "scale": "macro.1"}]}))
+    assert lib.load("bindings", "v2") == []
+    doc = json.loads(v2.read_text())
+    assert doc["schema"] == "hyperspace.bindings/3" and "scale" not in doc["bindings"][0]
+    assert doc["macros"]["macro.1"]["subs"][0]["depth"] == {"source": "lfo:1",
+                                                            "target": "fx.mix"}
+    assert (tmp_path / "bindings" / "v2.json.bak-v2").exists()
     # a routing preset saved from the strip keeps one row per line, like the factory files
     path = lib.save_as("bindings", "Rows")
     lines = path.read_text().splitlines()

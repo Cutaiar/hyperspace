@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import mido
 import pytest
 
-from hyperspace import apc40, lfo, tempo
+from hyperspace import apc40, hands, lfo, tempo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
@@ -62,6 +62,7 @@ def rig(tmp_path):
     clock = tempo.Clock(now=lambda: 0.0)       # the transport corner: tap, nudge, trigger
     tempo.register(reg, clock)
     lfo.register(reg, lfo.LFOs(), clock)
+    hands.register(reg, hands.HandSettings.from_config({}))   # the global track knobs
     inp, out = FakeIn(), FakeOut()
     m = MidiIO(reg, path=tmp_path / "midi_map.json", inp=inp, out=out)
     return SimpleNamespace(reg=reg, view=view, control=control, audio=audio,
@@ -71,6 +72,11 @@ def rig(tmp_path):
 def push(r, *msgs):
     r.inp.queue.extend(msgs)
     r.midi.poll()
+
+
+def shift(r):
+    """Latch SHIFT (plan 13 D4): the global layer comes up."""
+    push(r, note(apc40.N_SHIFT), note(apc40.N_SHIFT, 0))
 
 
 # ---------------------------------------------------------------- default map
@@ -84,7 +90,7 @@ def test_default_map_binds_only_real_params(rig):
 
 
 def test_default_map_has_no_two_controls_on_one_key(rig):
-    keys = [b.key for b in rig.midi.bindings]
+    keys = [(b.key, b.layer) for b in rig.midi.bindings]      # one row per layer
     assert len(keys) == len(set(keys))
 
 
@@ -96,23 +102,29 @@ def test_power_up_sends_mode_sysex(rig):
 
 # ---------------------------------------------------------------- knobs
 
-def test_device_knob_drives_selected_band_with_pickup(rig):
+def test_device_knob_drives_selected_band_under_shift(rig):
+    """The band strip is the global layer's (plan 13 §3.2): dead until
+    SHIFT is up. A device knob is an endless encoder the ring re-bases
+    (D7), so it continues from the ring it was just sent — no pickup —
+    and a band switch re-draws the ring, which re-bases it again."""
     reg, control = rig.reg, rig.control
     atk = reg["band.sel.atk"]
-    assert atk.norm != pytest.approx(0.0)
-    push(rig, cc(0x15, 0))            # far from the value: not caught yet
-    assert atk.norm != pytest.approx(0.0)
-    cur = atk.norm
-    push(rig, cc(0x15, 127))          # swept past it: caught, and applied
+    before = atk.norm
+    push(rig, cc(0x15, 0))            # the preset layer: nothing there
+    assert atk.norm == pytest.approx(before)
+    shift(rig)
+    push(rig, cc(0x15, 127))          # re-based at the ring: applied at once
     assert atk.norm == pytest.approx(1.0)
     push(rig, cc(0x15, 64))
     assert atk.position() == round(64 / 127 * atk.steps)
-    # switching band moves the alias under the knob: pickup re-arms
+    # switching band moves the alias under the knob: the ring is redrawn,
+    # and the knob continues from there
     control.selb = 3
-    before = reg["band.3.atk"].norm
+    rig.midi.poll()
+    b = next(x for x in rig.midi.bindings if x.target == "band.sel.atk")
+    assert b.caught and b.last_hw == pytest.approx(round(reg["band.3.atk"].norm * 127) / 127)
     push(rig, cc(0x15, 10))
-    assert reg["band.3.atk"].norm == pytest.approx(before)
-    assert cur != 0  # silence the unused warning
+    assert reg["band.3.atk"].norm == pytest.approx(10 / 127, abs=PICKUP_TOL)
 
 
 def test_pickup_catches_when_knob_reaches_value(rig):
@@ -163,6 +175,7 @@ def test_select_buttons_and_led_state(rig):
     leds = {(m.channel, m.note): m.velocity for m in rig.out.sent if m.type == "note_on"}
     assert leds[(4, apc40.N_SELECT)] == 1
     assert leds[(0, apc40.N_SELECT)] == 0
+    shift(rig)                                    # the band scenes are global (§3.2)
     push(rig, note(apc40.N_CLIP[1], channel=3))   # scene 3
     assert rig.control.scene == 3
     leds = {(m.channel, m.note): m.velocity for m in rig.out.sent if m.type == "note_on"}
@@ -326,6 +339,7 @@ def test_selected_band_rings_follow_the_selection(rig):
     rig.reg["band.0.thr"].set_norm(0.1)
     rig.reg["band.2.thr"].set_norm(0.9)
     rig.control.selb = 0
+    shift(rig)                                    # the strip's rings are the global layer's
     rig.midi.poll()
     assert ring(0x17) == round(0.1 * 127)
     rig.control.selb = 2

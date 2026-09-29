@@ -24,7 +24,7 @@ import pytest
 from legacy_chain import LegacyChain  # tests/legacy_chain.py — the frozen reference
 from test_analyzer import fixture_wavs, frames  # noqa: F401 — the fixture, re-exported
 
-from hyperspace import apc40, lfo, routing, tempo
+from hyperspace import apc40, hands, lfo, routing, tempo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer, legacy_layout
 from hyperspace.bands import BANDS, CEIL, default_params
@@ -80,6 +80,7 @@ def rig(sr: float = 48_000.0, tmp_path: Path | None = None, full: bool = False):
         clock = tempo.Clock(now=lambda: 0.0)
         tempo.register(reg, clock)
         lfo.register(reg, lfo.LFOs(), clock)
+        hands.register(reg, hands.HandSettings.from_config({}))  # the global track knobs
     return SimpleNamespace(reg=reg, view=view, control=control, audio=audio, chain=chain)
 
 
@@ -362,7 +363,12 @@ def test_old_midi_map_migrates_into_bindings_json(tmp_path, capsys):
     t = Bindings.load(path, legacy_midi=legacy)
     assert "migrated 2 rows" in capsys.readouterr().err
     assert path.exists()                                # written once, then the file rules
-    assert [b.source for b in t.midi()] == ["cc:0:87", "note:0:65"]
+    # the map's two rows sorted (plan 13 §3.2: an unknown knob to the preset
+    # layer, a factory button's control kept invariant), then the factory's
+    # global rows and SHIFT added
+    assert [(b.source, b.layer) for b in t.midi()][:2] == [("cc:0:87", "preset"),
+                                                         ("note:0:65", None)]
+    assert {b.layer for b in t.midi()[2:]} == {"global", None}
     assert t.for_param("view.lines").op == "toggle"
     assert len(t.of("key")) == len(routing.keymap()) and len(t.mods()) == 12
     legacy.unlink()
@@ -375,16 +381,17 @@ def test_old_midi_map_migrates_into_bindings_json(tmp_path, capsys):
 def test_factory_table_binds_only_real_params(tmp_path):
     r = rig(tmp_path=tmp_path, full=True)
     t = Bindings.factory()
+    routing.register_desk(r.reg, t)                     # SHIFT's param, as a Router does
     ids = set(r.reg.ids())
     for b in t.bindings:
         assert b.target in ids, b
         assert b.op in routing.OPS, b
         if b.op in MOD_OPS:
             assert r.reg[b.target].modulatable, b
-    keys = [b.key for b in t.bindings if b.scheme != "lane"]
-    assert len(keys) == len(set(keys))
+    keys = [(b.key, b.layer) for b in t.bindings if b.scheme != "lane"]
+    assert len(keys) == len(set(keys))                  # one row per control per layer
     assert len(t.of("key")) == 25 + 17 and len(t.of("pad")) == 10 and len(t.of("hat")) == 4  # + R, F1–F8, ⇧F1–F8
-    assert len(t.midi()) == 113 and len(t.mods()) == 12
+    assert len(t.midi()) == 113 + 6 and len(t.mods()) == 12   # + SHIFT, the global track knobs
     assert routing.referee(t.bindings)[1] == []           # one owner per target
     assert routing.remap_factory(t.bindings)[1] == []     # the factory table is current
 
@@ -415,15 +422,15 @@ def test_factory_files_match_the_code():
     the current schema with one owner per target."""
     d = routing.FACTORY_DIR
     assert json.loads((d / "default.json").read_text()) == Bindings.factory().to_json()
-    for name, (routes, values) in PRESETS.items():
-        preset = Bindings(routes, values=values).to_json()
+    for name in PRESETS:
+        preset = routing.preset_table(name).to_json()
         assert json.loads((d / f"{name}.json").read_text()) == preset
     assert re.search(r'^  \{"source": "key:RIGHT"', (d / "default.json").read_text(), re.MULTILINE)
     for path in sorted(d.glob("*.json")):
         doc = json.loads(path.read_text())
         assert doc["schema"] == SCHEMA, path.name
         t = Bindings.from_json(doc)
-        assert not t.migrated and t.dropped == [], path.name
+        assert not t.migrated and not t.changed and t.dropped == [], path.name
         assert all(b.op in MOD_OPS for b in t.bindings if b.scheme in routing.LANE_SCHEMES)
 
 
@@ -807,7 +814,7 @@ def test_midi_view_shares_the_table(tmp_path):
 
     t = Bindings.factory(path=bindings_path(tmp_path))
     m = MidiIO(rig(tmp_path=tmp_path, full=True).reg, t, inp=Quiet(), out=Quiet())
-    assert len(m.bindings) == 113 and all(b.is_midi for b in m.bindings)
+    assert len(m.bindings) == 113 + 6 and all(b.is_midi for b in m.bindings)
     m.table.bind(Binding("cc:0:99", "view.zoom", "abs"))
     assert m.table.for_param("view.zoom").number == 99
     again = Bindings.load(bindings_path(tmp_path))
@@ -1185,7 +1192,8 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     assert f"added note:0:{apc40.N_QUANT} → theme.next" in err
     assert "added key:B → tempo.tap" in err and "added key:SHIFT+B → lfo.trigger" in err
     assert "added key:F1 → theme.load.0" in err and "added key:SHIFT+F8 → theme.save.7" in err
-    assert f"migrated {path} to {SCHEMA} (2 rows dropped, 24 rows changed)" in err  # 7 + the 17 keys of plan 11
+    # 7 + the 17 keys of plan 11 + the desk's sort and its 25 global rows and SHIFT (plan 13)
+    assert f"migrated {path} to {SCHEMA} (2 rows dropped, 50 rows changed)" in err
     rows = {(b.source, b.target): b for b in t.bindings}
     assert rows[("key:RIGHT", "view.shape")].op == "step"
     assert rows[("cc:0:48", "view.bright")].op == "abs"                       # MIDI keeps abs
@@ -1199,7 +1207,7 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     assert "pickup" not in z.to_json()                         # dropped with the abs op
     assert ("lane:1", "rot.rate.XY") not in rows and ("hand:2", "view.depth4") not in rows
     assert [b.source for b, _ in t.dropped] == ["hand:2"]
-    assert len(t.notes) == 9 + 17                              # + the moved keys of plan 11
+    assert len(t.notes) == 9 + 17 + 26          # + the moved keys of plan 11, the desk's sort
     # the APC40 rows: the old factory rows swapped for the new, the LED kept
     tap = rows[("note:0:99", "tempo.tap")]
     assert (tap.op, tap.feedback) == ("toggle", "led") and ("note:0:99", "theme.next") not in rows
@@ -1253,7 +1261,9 @@ def test_a_backup_is_kept_before_every_rewrite_and_never_over_a_hand_made_one(tm
     hand = path.with_name("bindings.json.bak-plan09")
     hand.write_text("mine")
     v2 = Bindings.factory().to_json()
-    v2["bindings"] = [b for b in v2["bindings"] if b["target"] != "tempo.tap"]  # an old table
+    v2["schema"] = routing.SCHEMA_V2                  # an old table: no layers, no tap
+    v2["bindings"] = [{k: v for k, v in b.items() if k != "layer"} for b in v2["bindings"]
+                      if b["target"] not in ("tempo.tap", routing.SHIFT_PARAM)]
     path.write_text(json.dumps(v2))
     t = Bindings.load(path, legacy_midi=None)
     assert any(n.startswith("added key:B") for n in t.notes)
@@ -1284,15 +1294,15 @@ def test_an_unknown_schema_is_reported_not_migrated(tmp_path):
     the factory table stands in and the error says why, like a file that
     won't parse. Only schema 1 — or none — goes through the migration."""
     path = bindings_path(tmp_path)
-    text = json.dumps({"schema": "hyperspace.bindings/3", "bindings": [
+    text = json.dumps({"schema": "hyperspace.bindings/9", "bindings": [
         {"source": "lane:0", "target": "view.bright", "op": "mod"}]})
     path.write_text(text)
     t = Bindings.load(path, legacy_midi=None)
-    assert t.error == "bindings: unknown schema 'hyperspace.bindings/3'"
+    assert t.error == "bindings: unknown schema 'hyperspace.bindings/9'"
     assert not t.migrated and path.read_text() == text                  # left alone
     assert t.to_json()["bindings"] == Bindings.factory().to_json()["bindings"]
     with pytest.raises(ValueError, match="unknown schema"):
-        Bindings.from_json({"schema": "hyperspace.bindings/3", "bindings": []})
+        Bindings.from_json({"schema": "hyperspace.bindings/9", "bindings": []})
     # no schema at all is schema 1
     t = Bindings.from_json({"bindings": [{"source": "lane:0", "target": "x", "op": "mod"}]})
     assert t.migrated and t.bindings[0].op == "push"

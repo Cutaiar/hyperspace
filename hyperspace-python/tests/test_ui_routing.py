@@ -273,26 +273,29 @@ def test_the_replace_prompt_swaps_the_owner_or_leaves_the_table(rig, tmp_path, m
     panel.open = True
 
 
-def test_the_macros_lead_the_scale_choices_and_show_their_owner(rig, tmp_path, monkeypatch):
-    """Plan 09 decision 7: the eight macro knobs come first in every row's
-    scale combo (then the other continuous params, master.gain among them),
-    are targets like any other, and draw in a strip over the rows as the
-    panel's own sliders — a hand that positions one shows as the usual
-    `base → effective` readout and a ghost."""
+def test_the_scale_choices_leave_out_the_macros_and_a_macro_shows_its_owner(
+        rig, tmp_path, monkeypatch):
+    """Plan 13 §2.4: a macro scales a route as its depth subscriber, so the
+    row's scale combo offers every other continuous param (master.gain
+    among them) and no macro, and the row shows the macro as a read-only
+    "× macro.N" chip. The macros are still targets like any other, and draw
+    in a strip over the rows as the panel's own sliders — a hand that
+    positions one shows as the usual `base → effective` readout and a ghost."""
     panel, reg = rig.panel, rig.reg
     ids = [p.id for p in ui_routing._scales(panel)]
-    assert ids[:8] == [f"macro.{k}" for k in range(1, 9)]
-    assert "master.gain" in ids[8:] and not any(i.startswith("macro.") for i in ids[8:])
+    assert "master.gain" in ids and not any(i.startswith("macro.") for i in ids)
     assert all(p.kind is Kind.CONTINUOUS and not p.alias for p in ui_routing._scales(panel))
-    assert {p.id for p in ui_routing._targets(panel)} >= set(ids[:8])
-    # never the row's own target (a self-scaled push strobes); any other macro, yes
-    own = [p.id for p in ui_routing._scales(panel, "macro.2")]
-    assert "macro.2" not in own and own[:7] == [f"macro.{k}" for k in (1, 3, 4, 5, 6, 7, 8)]
+    assert {p.id for p in ui_routing._targets(panel)} >= {f"macro.{k}" for k in range(1, 9)}
+    # never the row's own target (a self-scaled push strobes)
     assert "view.bright" not in {p.id for p in ui_routing._scales(panel, "view.bright")}
-    router = panel.router = Router(reg, Bindings([
-        Binding("lane:0", "view.bright", "push", 0.5, scale="macro.2"),
+    table = Bindings([
+        Binding("lane:0", "view.bright", "push", 0.5),
         Binding("hand:0", "macro.2", "position"),
-    ]))
+    ])
+    table.set_macros({"macro.2": {"subs": [
+        {"depth": {"source": "lane:0", "target": "view.bright"}, "from": 0.0, "to": 1.0}]}})
+    router = panel.router = Router(reg, table)
+    assert ui_routing._depth_chips(router, table.bindings[0]) == ["× macro.2"]
     router.feed("hand", [0.6])
     router.labels["hand"] = ["R height"]
     fmts: list[str] = []

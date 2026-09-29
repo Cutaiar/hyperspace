@@ -281,6 +281,7 @@ ORDER = [
     "router.keys",                                   # key rows (and the loop keys)
     "pad.poll", "router.pad",                        # pad and hat rows, sticks
     "midi.poll",                                     # cc and note rows
+    "router.follow_macros",                          # the macros' base subscribers
     "hands.poll",                                    # feeds hand
     "output.apply",                                  # reads last frame's objects
     "mouse.poll",                                    # relative writers, to the base
