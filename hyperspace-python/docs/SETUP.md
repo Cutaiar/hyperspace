@@ -95,6 +95,29 @@ here, not to install it silently.
       in `docs/plans/assets/05-fl.md`; the `fl/HyperspaceBridge` MIDI
       script copied into FL's user data folder per that walkthrough.
 
+## D2. Dream worker (optional) — plan 07 WP6b
+
+The look-back's Deep Dream worker needs **torch**, which is not part of a
+plain install: it is the `dream` extra (torch, torchvision, and on macOS
+mlx and the Metal / Quartz bindings — about 800 MB).
+
+```bash
+uv sync --extra dream                  # installs torch and the rest of the extra
+uv run --extra dream hyperspace        # launch with it
+```
+
+and `[dream] enabled = true` in `~/Hyperspace/config.toml` (off by
+default). Once installed, a plain `uv run hyperspace` keeps it (`uv run`
+only adds what is missing), but a plain **`uv sync` removes it again** —
+`uv sync` makes the environment exactly the lock without extras. Run
+`uv sync --extra dream` whenever you sync. The pretrained weights (VGG16,
+528 MB) are read from `~/Hyperspace/weights`, else torch's hub cache, and
+downloaded there on first use otherwise. With `[dream] enabled = true`
+and no torch the app runs the plain tracer and says why — the red banner
+at the bottom of the control window, the SYSTEM page and the LOOKBACK
+page all read "dream worker off: torch is not installed — run `uv sync
+--extra dream`, then launch with `uv run --extra dream hyperspace`".
+
 ## E. Ultraleap hands — plan 08, optional
 
 - [ ] **Ultraleap Hand Tracking** (Gemini ≥ 5.17, macOS) installed and the

@@ -48,7 +48,7 @@ runs the one frame loop.
 | **Render stack** | `geometry.py`, `view.py`, `render.py`, `glsl.py`, `fx.py`, `lookback.py`, `dream.py`, `shaders/`, `overlay.py` | GL resources, `ViewState` (`view.py`), the frame history, the dream worker, the window's placement, the one wall clock (`Renderer.now`) | `ViewState` and the `FxState` / `DreamState` objects the registry writes | the screen; `ViewState.integrate` writes `ang` directly (folded into the base next frame) | zero registry traffic; `dream` is imported lazily by `app._open_dream` under `[dream] enabled` (`tests/test_dream.py::test_core_does_not_import_the_worker`) |
 | **Panel** | `ui.py`, `ui_*.py`, `hands/panel.py`, `control.py` | imgui state, page selection, the Replace / Keep modal, the routing page's edits | everything, for display | param **bases** through `Param.set*`; table rows through `Bindings.add/enable/remove/replace_owner/move_route`, and the loaded preset's desk rows and macro subscribers in place (bumping `redraw_serial` / `macros_serial`); no file | a leaf: no engine module imports `ui*` (only `app` and `hands/panel.py`, besides the `ui*` modules themselves). Unenforced by a test |
 | **Library** | `library.py`, `preset.py`, `config.py`, `library/` | the home folder, module preset and project files (the band presets *are* the analyzer's band scenes); the **presets** (`presets/*.json`, `hyperspace.preset/2`: the whole performance — values, routes, desk, macros, module labels — a document kind `preset.Presets` loads and writes); the project (`hyperspace.project/2`: the session values, the session groups' module labels, and the F1–F8 **bank of eight preset names** with a `startup` preset); the one-time migration of an older home (`preset.migrate_home`, plan 13 §6: schema-1 projects, `bindings.json`'s preset part and the old routing presets become presets, every rewritten file backed up first); `config.toml` | `Registry.snapshot` (a preset's performance part, a project's session part), a group's `extra` hook (the analyzer's layout) on save, a document kind's `signature` for its dirty dot | `Registry.restore` (bases); a preset load replaces every performer row (`Bindings.set_routes`); tells a group's `on_load` hook the name it landed; hands a document kind's `load` hook the file | `library` depends only on `params` (and, lazily, `routing` for `backup` and `Carried`, and `preset` for `migrate`'s and `Project.load`'s migrations); `preset` on `library`, `params`, `routing`, `apc40`, `bands` and `lfo`; `library`'s importers are `app`, `preset`, `config` (for `ensure_home`), `control` (`factory_doc`, the band scenes), `dream` (for `home()`), `ui_presets` (`LibraryError`, `PRESETS`) and `ui_routing` (`PRESETS`); `preset`'s only `app` (and `library`, lazily) — `routing` imports neither |
-| **Host** | `app.py`, `hotreload.py` | the two windows, construction order, the frame loop, the reload watch list (`hotreload.MODULES`: every module in the package but `app`, `hotreload` and `offline`, in dependency order, leaves first — a module after everything it `from .x import`s; an optional adapter that was never imported is skipped; `tests/test_hotreload.py` holds the list, its order and every swap target against the source) | — | the relative writers' bases (`nudge`/`scale`); no key of its own but Cmd+R (restart), Esc / Q and ↑ / ↓ (R and F1–F8 / ⇧F1–F8 are table rows since plan 11 WP7, `app.LOOP_KEYS`) | the one cold module; the only importer of every optional adapter, each behind its config gate (`_open_*`; MIDI and the gamepad on by default, the bridge, dream and hands off), and the one that closes them all (`close_all`, on quit and on Cmd+R alike); `tests/test_app_boundary.py` holds the gates and that importing `app` imports no gated adapter, no `torch`, no `leap` |
+| **Host** | `app.py`, `hotreload.py` | the two windows, construction order, the frame loop, the reload watch list (`hotreload.MODULES`: every module in the package but `app`, `hotreload`, `offline` and `watchdog`, in dependency order, leaves first — a module after everything it `from .x import`s; an optional adapter that was never imported is skipped; `tests/test_hotreload.py` holds the list, its order and every swap target against the source) | — | the relative writers' bases (`nudge`/`scale`); no key of its own but Cmd+R (restart), Esc / Q and ↑ / ↓ (R and F1–F8 / ⇧F1–F8 are table rows since plan 11 WP7, `app.LOOP_KEYS`) | the one cold module; the only importer of every optional adapter, each behind its config gate (`_open_*`; MIDI and the gamepad on by default, the bridge, dream and hands off; dream's torch is the `dream` extra, and why it did not open is `panel.dream_error`), and the one that closes them all (`close_all`, on quit and on Cmd+R alike); `tests/test_app_boundary.py` holds the gates and that importing `app` imports no gated adapter, no `torch`, no `leap` |
 
 The direction to remember: **everything points at the registry; the
 registry points at nothing above it.** Adapters and sources feed the
@@ -99,7 +99,7 @@ flowchart TB
     end
     subgraph draw ["Draw"]
         direction TB
-        S14["renderer.draw(view): the render window"]
+        S14["draw_render: bind the window (ctx.screen), then renderer.draw(view),<br/>which binds its target again on every exit"]
         S15["panel.draw(): widgets to the base; the Replace / Keep modal to the table"]
         S14 --> S15
     end
@@ -139,6 +139,30 @@ Guarding: the MIDI poll, the macro step, the hands poll, the step block (`audio.
 hot-reloaded code that raises records `reloader.runtime_error` — kept
 until a clean frame — and the loop continues (`app.frame`;
 `tests/test_app_boundary.py`).
+
+**The render frame binds its target explicitly** (plan 14 WP1).
+`app.draw_render` binds the window (`ctx.screen.use()`) before anything
+else, and `Renderer.draw` captures the framebuffer it was called with and
+binds it again — viewport and blending too — on every exit, a raise
+included; `Lookback.capture` does the same for its own target. The frame
+binds half a dozen offscreen framebuffers (the scene, the cover mask, the
+history atlas, the FX ping-pong); before this, one left bound made every
+later frame draw into it while the window swapped a stale picture — the
+owner's freeze, with no error anywhere (WAKE without a dream worker; any
+one exception inside the draw). A raising draw is also the render watch's
+(`watchdog.RenderWatch`): its traceback goes to `<home>/stall.log`, and
+the control window's red banner names it — and keeps it, after the render
+recovers, until dismissed — where `runtime_error` is cleared by the next
+clean frame. A frame that still starts on an offscreen framebuffer, a
+render window that presents nothing for 2 s, a 2 s stall of the whole
+loop and a non-finite param are logged the same way (ENGINEERING §2.6).
+
+**The render window is opaque unless it is the overlay.** In window and
+fullscreen the final frame's alpha is 1 everywhere — `view.cut_through`
+applies only on overlay's see-through ground, and every FX pass writes
+alpha 1 on an opaque one — because the framebuffer keeps alpha for
+overlay mode (pending decision register row 21) and the compositor would
+show the desktop through anything less: the Pepper's Ghost rig.
 
 ---
 

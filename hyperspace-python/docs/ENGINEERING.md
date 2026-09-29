@@ -125,6 +125,36 @@ and FX off the output is bit-identical to the scene pass alone
 5. To the window. All post passes run with GL blending off and write
    premultiplied colour.
 
+**The target is bound explicitly** (plan 14 WP1). `Renderer.draw` draws
+into whatever framebuffer is bound when it is called; it captures that
+target once and binds it again — with its viewport and blending — on
+every exit, a raise included, and `Lookback.capture` binds its own target
+on every return. `app.draw_render` binds the window (`ctx.screen.use()`)
+at the start of every render frame. Before this, a frame that ended on an
+offscreen framebuffer made every later frame draw into it while the
+window swapped a stale picture, with no error anywhere — the owner's
+freeze: WAKE (`dream.on`, `every = 2`) with no dream worker left the
+look-back's atlas bound on each frame off the cadence, and any one
+exception inside the draw stranded a framebuffer the same way
+(`tests/test_render.py::test_a_look_back_frame_with_no_worker_leaves_the_window_bound`,
+`::test_one_raising_frame_does_not_strand_the_next`). A frame that still
+starts on an offscreen framebuffer is logged (§2.6).
+
+**The window is opaque unless it is the overlay** (plan 14 WP1, the
+Pepper's Ghost rig). The render window's framebuffer keeps alpha — it is
+created with `TRANSPARENT_FRAMEBUFFER` for overlay mode, in every mode,
+pending decision register row 21 — so the compositor shows the desktop
+wherever the final alpha is below 1. In window and fullscreen mode the
+ground clears to alpha 1, cut-through is off whatever `view.cut_through`
+says, and every FX pass writes alpha 1 (`FxChain.opaque`, set by the
+renderer each frame; a multiply-blend effect dropped it to 0); the
+look-back's composite keeps `scene.a ∪ wake.a`, which is 1 on an opaque
+ground. Every factory preset, and one with faces, cut-through, points,
+the look-back and every effect on, renders with every pixel at alpha 255
+(`tests/test_lookback.py::test_every_factory_preset_renders_opaque_in_window_mode`).
+Measured before the fix, offscreen, window mode: TUMBLE 23 % of pixels
+below 255 (lowest 94), HEX ENGINE 40 %, and every factory preset some.
+
 ### 2.1 Edges, points, brightness
 
 - Edges are screen-space quads, not GL lines: 1 px lines lost the
@@ -140,10 +170,14 @@ and FX off the output is bit-identical to the scene pass alone
   invisible.
 - Points are red; radius and alpha are depth-cued, radius also × dpr ×
   zoom with a smaller base for heavy shapes (`render.py:665-669`).
-- `view.cut_through` (default on) keeps the old blend for face fills; off
-  uses separate alpha (ONE, ONE_MINUS_SRC_ALPHA) so in overlay mode a
-  fill does not let the desktop through (`render.py:566-574`; PR #26).
-  On an opaque window it is invisible.
+- `view.cut_through` (default on) matters **only in overlay mode**: on a
+  see-through ground it keeps the old blend, so a faint fill lowers the
+  window's alpha and the desktop shows through it; off uses separate alpha
+  (ONE, ONE_MINUS_SRC_ALPHA), so a fill never drops alpha below the
+  ground's (PR #26). On an opaque ground — window and fullscreen — the
+  renderer never cuts, whatever the toggle (plan 14 WP1;
+  `tests/test_lookback.py::test_cut_through_never_cuts_an_opaque_ground`,
+  `::test_cut_through_still_cuts_in_overlay_mode`).
 
 ### 2.2 Faces, patterns, bitmap
 
@@ -188,14 +222,27 @@ presettable, all modulatable.
   `max(brightness × 4, the faces' mask)`. Face fills draw at 1–6 % alpha,
   so brightness alone barely covered — hence the mask pass
   (`tests/test_lookback.py:353`).
-- **The worker** (`dream.DreamWorker`, optional `[dream]` extra, torch on
-  MPS) is temporal: one running buffer blended with each new echo, a few
+- **The worker** (`dream.DreamWorker`, the optional `dream` extra, torch
+  on MPS) is temporal: one running buffer blended with each new echo, a few
   gradient-ascent steps per submit, back to the compositor a frame or two
   later. `submit` never blocks; the latest finished result wins; `step ×
   steps / k` is clamped to `STABLE_RATIO` so a preset cannot run away
   (`tests/test_dream.py`). It reads the `dream.*` params on the frame thread
   inside `submit`, never from the worker thread. The performance spike
   behind these numbers is `docs/plans/assets/06-lookback-perf.md`.
+- **Setup.** torch is the `dream` extra, not a main dependency:
+  `uv sync --extra dream`, then `uv run --extra dream hyperspace` (or plain
+  `uv run hyperspace` afterwards — `uv run` without the extra leaves it
+  installed). A plain `uv sync` is exact and **removes** the extra again.
+  With `[dream] enabled = true` and no torch, `app._open_dream` keeps the
+  reason (`dream_error`, with those commands) and the panel shows it: the
+  SYSTEM page, the LOOKBACK page's worker line, and the red banner. A
+  preset that turns `dream.on` with no worker is a banner warning and a
+  stall-log entry on every load (the look-back then shows the echoes only).
+- **The ring fits the driver.** 32 slots stacked can pass
+  `GL_MAX_TEXTURE_SIZE` on a portrait window at `res` 384; the slot shrinks
+  to fit (`lookback.fit_atlas`), and if the textures cannot be made
+  nothing is captured and `ring_error` says why on the LOOKBACK page.
 
 ### 2.4 FX
 
@@ -212,7 +259,8 @@ Noita's `post_final.frag` maths among them; the factory presets are
 
 ### 2.5 Two windows
 
-`app.py` opens the render window (vsync, 4× MSAA, transparent framebuffer)
+`app.py` opens the render window (vsync, 4× MSAA, a framebuffer with alpha
+for overlay mode — opaque in every other mode, §2)
 and the control window (opaque, no MSAA, vsync off so it paces off the
 render swap) in one GLFW share group, each with its own moderngl context;
 the only imgui context lives on the control window (`app.py:136-167, 396-419`). The render window has no imgui at all. Mouse orbit / pan / zoom
@@ -232,11 +280,43 @@ SYSTEM page shows each adapter's state — MIDI, the bridge (port,
 encoding, messages sent, or why it is off) — beside the hot-reload and
 config notices. The optional adapters and the gamepad are config gates
 (`[midi]` and `[gamepad]` on by default, `[bridge]`, `[dream]`, `[hands]`
-off); `hyperspace/config.py` documents every key. The rig's placement comes from `[output]` in `config.toml`
+off; `[dream]` also needs the `dream` extra, §2.3); `hyperspace/config.py` documents every key. The rig's placement comes from `[output]` in `config.toml`
 (`config.py`); a `[overlay]` section is the same thing under its pre-split
 name, still read and merged under `[output]`, with a note on stderr asking
 for the rename. A `config.toml` that will not parse keeps the defaults and
 shows its error on the SYSTEM page.
+
+### 2.6 The stall log and the red banner
+
+`watchdog.py` (cold, like `app.py`: a reload never touches it) writes
+`<home>/stall.log`. Each entry is a `=== <kind>` header — the wall time,
+the loaded preset, what happened — then every thread's stack
+(`faulthandler.dump_traceback(all_threads=True)`):
+
+- `stall` — no frame completed for 2 s. A daemon thread watches; the loop
+  pets it once a frame with a float write. Once per stall.
+- `render error` — `renderer.draw` raised (`app.frame` guards it, so the
+  panel lives on while the render window holds its last frame): the full
+  traceback, once per distinct error.
+- `render stall` — no render frame *presented* for 2 s while the loop
+  runs: the draw did not complete, or the window was hidden, minimised,
+  occluded (macOS occlusion, another Space) or had no framebuffer. The
+  entry lists the window's attributes (`GlfwBackend.window_state`).
+- `stranded target` — a render frame started on an offscreen framebuffer
+  (the freeze's signature, §2), with its `glo` and the last render error.
+- `non-finite` — a param dropped a NaN / inf (`Registry.nonfinite`; §5's
+  modulation rule drops them, and `tapers.clamp` lands NaN on its low end).
+- `warning` — a preset that turns the dream on with no worker.
+
+`kill -USR1 <pid>` dumps every thread into the same file on demand. The
+SYSTEM page shows `stall log: <path> (N stalls, …)` once the file has
+entries. The control window's red banner, across its bottom and in front
+of every other window, names a live render error or render stall, a
+render error that recovered (its last message, time and count), the
+warnings and why the dream worker is off; what is not live stays until
+**dismiss**. Nothing in the watchdog may stop the show: a log that will
+not open, a platform without SIGUSR1, a write that fails — each is kept
+on `error` and the loop goes on (`tests/test_watchdog.py`).
 
 ## 3. Audio sources
 

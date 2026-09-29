@@ -86,15 +86,23 @@ a compile error that takes the frame down → `FxChain` (fx.py) or, since
 WP10, `_common.glsl` — a broken common file falls back to the shipped
 copy and says so on the LOOKBACK page.
 
-**6. Cut-through by eye (PR #26).**
-Press `T` (overlay mode over the desktop), `F` for faces, FACES page:
-pick a pattern. VIEW page: toggle `view.cut_through`. *Pass:* on, face
-fills let the desktop show through where they overlap; off, the lowest
-face layer hides it and only the window's ground (`overlay.bg`, the
-crossfader) is see-through. `T` again returns the window. *Fail:* no
-visible difference in overlay mode → the blend in `render.py` (§2.1);
-the desktop showing through with cut-through off → the separate-alpha
-path.
+**6. Cut-through by eye (PR #26; rewritten by plan 14 WP1).**
+Headless: `uv run pytest -q tests/test_lookback.py::test_cut_through_never_cuts_an_opaque_ground tests/test_lookback.py::test_cut_through_still_cuts_in_overlay_mode`.
+First in window mode, then fullscreen: `F` for faces, FACES page: pick a
+pattern, with a bright window (a white page) behind the render window.
+VIEW page: toggle `view.cut_through` on and off. *Pass (window and
+fullscreen):* the picture is opaque with cut-through on **and** off —
+the black ground and every face stay black-and-lit, nothing of the
+desktop shows anywhere. Then press `T` (overlay mode over the desktop)
+and toggle again. *Pass (overlay):* on, face fills let the desktop show
+through where they overlap; off, the lowest face layer hides it and only
+the window's ground (`overlay.bg`, the crossfader) is see-through. `T`
+again returns the window. Cut-through is visible **only** in overlay
+mode. *Fail:* the desktop through the faces in window or fullscreen →
+the `bg_alpha < 1` rule in `render.py` `draw_scene`, or an FX pass
+(`FxChain.opaque`); no visible difference in overlay mode → the blend in
+`render.py` (ENGINEERING §2.1); the desktop showing through with
+cut-through off in overlay → the separate-alpha path.
 
 **7. The LFO page, B and ⇧B (plan 09 check 5, keys only).**
 Headless: `uv run pytest -q tests/test_tempo.py::test_three_taps_at_140_read_140 tests/test_lfo.py::test_a_tap_does_not_move_a_running_synced_lfo_but_the_trigger_does tests/test_lfo.py::test_a_trigger_after_this_frames_step_lands_phase_zero_on_the_next_step`.
@@ -581,6 +589,58 @@ the axis its words name; the missing axis's row is dormant, never on
 another axis. *Fail:* a row moving with the wrong axis → `Router.lane` /
 `HandsIO._publish` (`router.names["hand"]`); the combos showing raw
 `hand:<i>` → `ui_routing._sources` / `Router.address`.
+
+## I. Plan 14 WP1 — an opaque window, the stall log — added 2026-09-29
+
+Run on the plan 14 WP1 branch (PR, not merged). 43 needs the projector;
+44 and 46 run on the laptop alone. About 15 minutes. The headless tests
+named are the ones WP1 adds; run them first. (45 is kept for plan 14
+WP7's desk diagram.)
+
+**43. Pepper's Ghost: an opaque black window (plan 14 WP1).**
+Headless: `uv run pytest -q tests/test_lookback.py -k opaque`.
+Projector connected. Put a bright desktop behind the render window on the
+projector — a white browser page full screen on that display. Fullscreen
+the render window on the projector (OUTPUT page: the projector's screen,
+`output.fullscreen` on), `F` for faces, then load each party preset
+F1–F5 and turn `view.cut_through` on and off on each. *Pass:* no desktop
+shows anywhere, ever: the ground is black, the faces and lines are lit on
+black, at every preset, cut-through on or off, with FX on (TRIP) and the
+look-back on (WAKE). *Fail:* the desktop through the faces or the faint
+lines → `render.py` cut-through (`draw_scene`: the `bg_alpha < 1` rule)
+or an FX pass (`FxChain.opaque`); through the whole ground → the window
+is in overlay (`T` or the APC40's MASTER select — check the OUTPUT page)
+or `app._windows`' transparent-framebuffer hint (decision register row
+21, pending).
+
+**44. The stall log: `kill -USR1` writes a dump (plan 14 WP1).**
+Headless: `uv run pytest -q tests/test_watchdog.py`. Launch
+`uv run hyperspace`. From another terminal: `kill -USR1 $(pgrep -f
+"bin/hyperspace")`. *Pass:* `~/Hyperspace/stall.log` gains a block of
+thread stacks (the main thread's ends in `app.py` `main`), the app keeps
+running, and the SYSTEM page shows `stall log: …/stall.log (1 on
+demand)`. If the render ever freezes, or the red banner at the bottom of
+the control window names a render error or a render stall, keep
+`stall.log`: each entry's header names the kind (`stall`, `render
+error`, `render stall`, `stranded target`, `non-finite`, `warning`), the
+time and the loaded preset, then every thread's stack. *Fail:* no file or
+an empty one → `watchdog.Watchdog.start` (its `error` is on the SYSTEM
+page); the app quitting on the signal → the `faulthandler.register` call
+did not run (the default action of SIGUSR1 is to terminate).
+
+**46. WAKE without the dream worker still draws (plan 14 WP1, the freeze).**
+Headless: `uv run pytest -q tests/test_render.py::test_a_look_back_frame_with_no_worker_leaves_the_window_bound tests/test_lookback.py::test_capture_off_the_cadence_with_no_source_puts_the_target_back`.
+In `config.toml` set `[dream] enabled = false` and relaunch. Open the
+`party` project and press F4 (WAKE): `dream.on`, an echo every 2 frames,
+and no worker. *Pass:* the render window keeps moving — the shape turns,
+the echoes trail it — for a minute and through F1–F5 and back to F4; the
+red banner says "WAKE turns the dream on, but there is no dream worker
+(…)" until **dismiss**; `stall.log` has that `warning` and no `stranded
+target`. Put `[dream]` back afterwards. *Fail:* the render window
+freezing on one picture while the panel goes on → a framebuffer left
+bound (`Renderer.draw`'s `finally`, `Lookback.capture`'s, and the
+`ctx.screen.use()` at the top of `app.draw_render`) — `stall.log` then
+has a `stranded target` entry naming it.
 
 ## What this list does not ground
 
