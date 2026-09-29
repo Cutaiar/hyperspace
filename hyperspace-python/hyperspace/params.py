@@ -61,12 +61,13 @@ from typing import Any
 
 from . import tapers
 from .analyzer import CURVES, F_HI, F_LO, Q_HI, Q_LO
-from .bands import CEIL, DRIVE, PRESETS, SHAPERS
+from .bands import CEIL, NORMS, SHAPERS
 from .fx import FxState
 from .fx import declare as declare_fx
-from .geometry import SHAPES
+from .geometry import PLANE_NAMES, SHAPES
 from .lookback import LAYERS, MAX_ECHOES, OCTAVES, RES, TINT_FROM, DreamState
 from .tapers import Taper
+from .tapers import clamp as _clamp
 
 PATTERNS = [
     "FLAT", "RINGS", "PLAID", "MOIRE", "BLOOM", "CAUSTIC",
@@ -74,7 +75,7 @@ PATTERNS = [
 ]
 INST_MOTION = ["STILL", "ORBIT", "WAVE", "RIPPLE"]
 BMP_PATHS = ["STILL", "ORBIT", "FIG-8", "SWAY"]
-PLANES = ["XY", "XZ", "YZ", "XW", "YW", "ZW"]
+PLANES = PLANE_NAMES   # the rotation planes' names, in geometry.PLANES's order
 
 RAW_STEPS = 100  # detents across an untapered continuous range
 N_MACROS = 8     # macro.1–8: knobs that exist to be a route's scale and to be owned
@@ -84,6 +85,11 @@ N_MACROS = 8     # macro.1–8: knobs that exist to be a route's scale and to be
 # list — so a theme change never moves a macro under a route
 ROUTING_GROUPS = ("macro",)
 
+# the reference's fader → rotation-rate factor (its PLANEDRIVE was
+# dir · out · DRIVE · gain). It lives here, not in the chain, because it is
+# a routing constant: the rate range below and the legacy6 routes
+# (routing.ROT_DEPTH) both derive from it, and routing.py imports params.
+DRIVE = 3.2
 # rot.rate.* spans the largest drive the reference ever put on a plane — a
 # lane at the CEIL asymptote through DRIVE at the drive fader's 8× — so the
 # legacy6 routes (routing.py) land today's rate without clamping. Wide for
@@ -104,9 +110,6 @@ class Kind(Enum):
     TRIGGER = "trigger"
     TEXT = "text"
 
-
-def _clamp(x, a, b):
-    return a if x < a else min(x, b)
 
 
 @dataclass(eq=False)
@@ -501,6 +504,17 @@ class Registry:
 
     def __init__(self):
         self._p: dict[str, Param] = {}
+        # the one rule for what an alias stands for right now (band.sel.*
+        # → the selected band), installed by build_registry; the panel's
+        # widgets, the Learn object and the routing menu all ask here
+        self.real_of: Callable[[Param], Param] | None = None
+
+    def real(self, p: Param) -> Param:
+        """The param behind an alias — where the base and the modulation
+        state live — or `p` itself when it is not one."""
+        if p.alias and self.real_of is not None:
+            return self.real_of(p) or p
+        return p
 
     def add(self, p: Param) -> Param:
         if p.id in self._p:
@@ -643,16 +657,22 @@ def _item(get_list, i):
     return (lambda: get_list()[i]), (lambda v: get_list().__setitem__(i, v))
 
 
-def build_registry(view, control, audio, presets=None, dream=None, fx=None) -> Registry:
+def build_registry(view, control, audio, themes=None, dream=None, fx=None,
+                   restart=None) -> Registry:
     """Declare every parameter the surface owns.
 
     `audio` only needs a `.chain` attribute (tests pass a namespace); the
     chain is looked up on every access because a source attach replaces it.
-    `dream` is the renderer's lookback state (lookback.DreamState); a fresh
-    one stands in when there is no renderer, so the group is always
-    declared; `fx` (fx.FxState, the renderer's effect stack) likewise. Panel- and app-level actions (panel toggle, restart…) are
-    added by the caller with `trigger()` / `toggle()` once those objects
-    exist.
+    Its capture side is optional too: with `start_mic` / `stop` and a
+    `devices` list (audio.AudioEngine) ``audio.mic`` and ``audio.device`` do
+    something; without them they are declared anyway, so a key row (`M`)
+    resolves with or without a panel. `dream` is the renderer's lookback
+    state (lookback.DreamState); a fresh one stands in when there is no
+    renderer, so the group is always declared; `fx` (fx.FxState, the
+    renderer's effect stack) likewise. `restart` is the host's request to
+    restart the process (``app.restart``; app.py polls a flag) — a no-op
+    without a host. Only the panel's own state (``ui.*``) is added by the
+    panel once it exists.
     """
     r = Registry()
     dream = dream if dream is not None else DreamState()
@@ -867,7 +887,8 @@ def build_registry(view, control, audio, presets=None, dream=None, fx=None) -> R
                  lambda: chain().dyn, lambda v: setattr(chain(), "dyn", v),
                  taper=tapers.T_DYN, fmt=tapers.fmt_gain, group=g,
                  tip="How much of the range a limiter took is put back. At 0 the chain is "
-                     "a plain level follower.")
+                     "a plain level follower; up to 1× it blends toward the moving window "
+                     "and grows the expansion; past 1× only the expansion keeps growing.")
     r.continuous("master.trim", "Input trim",
                  lambda: chain().trim, lambda v: setattr(chain(), "trim", v),
                  taper=tapers.T_TRIM, fmt=tapers.fmt_db, group=g,
@@ -894,7 +915,9 @@ def build_registry(view, control, audio, presets=None, dream=None, fx=None) -> R
     # ---- scene ----
     g = "scene"
     r.enum("scene.select", "Scene", lambda: control.scene, control.select_scene,
-           [p["name"] for p in PRESETS], group=g)
+           control.scene_names, group=g,
+           tip="The eleven factory scenes, re-tuned onto the bands you have; the "
+               "preset strip loads a band file whole, layout included.")
     r.trigger("scene.reset_all", "Reset all", control.reset_all_clicked, group=g,
               tip="Reloads the selected scene across every band. Undoable for 8 s.")
 
@@ -933,6 +956,14 @@ def build_registry(view, control, audio, presets=None, dream=None, fx=None) -> R
         r.enum(f"{prefix}.fn", label_of("Transfer"),
                lambda: chain().params[idx()].fn,
                lambda fn: control.set_shaper(idx(), fn), shaper_tags, group=g, alias=alias)
+        r.enum(f"{prefix}.norm", label_of("Normalise"),
+               lambda: chain().params[idx()].norm,
+               lambda v: setattr(chain().params[idx()], "norm", int(v)), NORMS,
+               group=g, alias=alias, modulatable=False,
+               tip="AUTO: the reference's adaptive window — it undoes a limiter, and "
+                   "cancels most of a trim (a 6–12 dB cut can even drive harder). "
+                   "MANUAL: no window; the trim is a plain gain and the band follows "
+                   "its level, 1.0 at nominal.")
         for knob in tapers.KNOBS:
             r.continuous(
                 f"{prefix}.{knob.key}", label_of(knob.label),
@@ -963,32 +994,66 @@ def build_registry(view, control, audio, presets=None, dream=None, fx=None) -> R
         # the selected band's strip: views onto band.{selb}.*, never saved or driven
         band_params("band.sel", lambda: control.selb, lambda lb: lb, alias=True)
 
+    def real_of(p: Param) -> Param:
+        if p.id.startswith("band.sel."):
+            return r.get(f"band.{control.selb}.{p.id[9:]}") or p
+        return p
+
+    r.real_of = real_of
     build_bands()
     control.on_layout = build_bands
 
     # ---- themes ----
-    if presets is not None:
+    if themes is not None:                 # library.Project: the F1–F8 bank
         g = "theme"
         names = lambda: [
-            s["name"] if s else f"THEME {k + 1}" for k, s in enumerate(presets.slots)
+            s["name"] if s else f"THEME {k + 1}" for k, s in enumerate(themes.slots)
         ]
         # active is −1 until a theme loads: no choice selected, no LED lit
-        # meta-controls: they *apply* presets, so no preset stores them
-        r.enum("theme.select", "Theme", lambda: presets.active, presets.load, names,
+        # meta-controls: they *apply* themes, so no preset stores them
+        r.enum("theme.select", "Theme", lambda: themes.active, themes.load_slot, names,
                group=g, persist=False, modulatable=False,
                tip="Whole-surface save states — every persisted parameter except "
                    "the routing layer's macros.")
-        for k in range(len(presets.slots)):
+        for k in range(len(themes.slots)):
             r.trigger(f"theme.load.{k}", f"Load theme {k + 1}",
-                      lambda k=k: presets.load(k), group=g)
+                      lambda k=k: themes.load_slot(k), group=g)
             r.trigger(f"theme.save.{k}", f"Save theme {k + 1}",
-                      lambda k=k: presets.save(k), group=g, modulatable=False)
-        r.trigger("theme.next", "Next theme", lambda: presets.cycle(1), group=g)
-        r.trigger("theme.prev", "Previous theme", lambda: presets.cycle(-1), group=g)
+                      lambda k=k: themes.save_slot(k), group=g, modulatable=False)
+        r.trigger("theme.next", "Next theme", lambda: themes.cycle(1), group=g)
+        r.trigger("theme.prev", "Previous theme", lambda: themes.cycle(-1), group=g)
 
     # ---- audio transport (only what the engine exposes headlessly) ----
+    g = "audio"
+
+    def mic_on() -> bool:
+        return bool(getattr(audio, "on", False) and getattr(audio, "mode", None) == "mic")
+
+    def set_mic(on: bool) -> None:
+        devices = getattr(audio, "devices", None) or []
+        if on and devices and not mic_on():
+            sel = min(max(int(getattr(audio, "device_sel", 0)), 0), len(devices) - 1)
+            audio.start_mic(devices[sel]["index"])
+        elif not on and mic_on():
+            audio.stop()
+
+    r.toggle("audio.mic", "Mic", mic_on, set_mic, group=g, persist=False,
+             tip="Listen to the selected input device.")
+    r.enum("audio.device", "Input device",
+           lambda: int(getattr(audio, "device_sel", 0)),
+           lambda i: setattr(audio, "device_sel", int(i)),
+           lambda: [("● " if d["loopback"] else "") + d["name"]
+                    for d in (getattr(audio, "devices", None) or [])],
+           group=g, persist=False, modulatable=False)
+    if hasattr(audio, "rescan"):
+        r.trigger("audio.rescan", "Rescan devices", audio.rescan, group=g, modulatable=False,
+                  tip="Read the input device list again — for a driver or an interface "
+                      "plugged in after launch.")
+    r.trigger("app.restart", "Restart process",
+              restart if restart is not None else (lambda: None), group="ui",
+              modulatable=False,
+              tip="Restart the process (Cmd+R). Full cold reload; view state is lost.")
     if hasattr(audio, "toggle_play"):
-        g = "audio"
         r.toggle("audio.play", "Play",
                  lambda: bool(getattr(audio, "playing", False)),
                  lambda on: audio.toggle_play() if on != bool(audio.playing) else None,

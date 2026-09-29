@@ -4,7 +4,8 @@ The render window is pure GL output — the thing on the projector or TV,
 with no panel in it (the controls live in their own window; app.py). Its
 window-system state is three settings and the params that drive them:
 
-  output.monitor      enum     which screen fullscreen / overlay covers
+  output.monitor      enum     which screen fullscreen / overlay covers —
+                               "follow window" (the one it is on) or a screen
   output.fullscreen   toggle   GLFW fullscreen on that screen, opaque
   output.overlay      toggle   a borderless cover of that screen, see-through
                                and floating above everything — on macOS
@@ -142,6 +143,7 @@ class Output:
         self.bg = 0.0
         self.alpha = 1.0
         self.monitor = -1        # index into backend.monitors(); −1 = the window's own
+                                 # ("follow window", the enum's first choice)
         self._applied: dict = {"mode": "window"}  # the window starts as a plain window
         self._saved_rect = None
         self.error = ""
@@ -151,9 +153,12 @@ class Output:
     def register(self, reg: Registry) -> None:
         g = "output"
         rig = {"persist": False, "modulatable": False}
-        reg.enum("output.monitor", "Screen", lambda: max(self.monitor, 0),
-                 lambda i: setattr(self, "monitor", int(i)), self.monitor_names, group=g,
-                 tip="Which screen fullscreen and overlay cover.", **rig)
+        # index 0 is "follow window" (monitor −1: the screen holding the
+        # window, resolved by _target_monitor); the screens follow (audit P3)
+        reg.enum("output.monitor", "Screen", lambda: self.monitor + 1,
+                 lambda i: setattr(self, "monitor", int(i) - 1), self.screen_names, group=g,
+                 tip="Which screen fullscreen and overlay cover: the one the window is "
+                     "on, or a screen by name.", **rig)
         reg.toggle("output.fullscreen", "Fullscreen", lambda: self.fullscreen,
                    lambda v: setattr(self, "fullscreen", bool(v)), group=g,
                    tip="Borderless, covering the chosen screen — for the projector. "
@@ -195,6 +200,12 @@ class Output:
                     for i, m in enumerate(self.backend.monitors())]
         except Exception:  # noqa: BLE001
             return ["screen"]
+
+    FOLLOW = "follow window"
+
+    def screen_names(self) -> list[str]:
+        """The enum's choices: "follow window" (monitor −1), then every screen."""
+        return [self.FOLLOW, *self.monitor_names()]
 
     # ---- per frame ----
 

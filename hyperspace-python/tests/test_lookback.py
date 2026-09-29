@@ -21,11 +21,12 @@ from hyperspace.lookback import (
     MAX_ECHOES,
     RES,
     DreamState,
+    Lookback,
     LookbackSource,
-    NullSource,
     echo_size,
 )
-from hyperspace.render import Renderer, ViewState
+from hyperspace.render import Renderer
+from hyperspace.view import ViewState
 
 VIEW = {"ang": [0.3, 0.7, 1.1, 0.5, 0.9, 1.3], "yaw": 0.4, "pitch": 0.25}
 
@@ -549,12 +550,25 @@ class Echo:
         return self.done
 
 
+def test_a_broken_common_glsl_leaves_the_post_pass_on_the_shipped_helpers(ctx, tmp_path, monkeypatch):
+    """audit V2 follow-up: the post pass runs every frame, so a bad edit to
+    _common.glsl falls back to the copy as shipped and says so; a fixed
+    file lands on the next rebuild."""
+    from hyperspace import glsl
+
+    bad = tmp_path / "_common.glsl"
+    bad.write_text("this is not glsl\n")
+    monkeypatch.setattr(glsl, "COMMON_GLSL", bad)
+    lb = Lookback(ctx)
+    assert lb.error.startswith("_common.glsl:1:")
+    bad.write_text(glsl.FALLBACK)
+    lb.on_reload()
+    assert lb.error == ""
+
+
 def test_source_protocol():
-    assert isinstance(NullSource(), LookbackSource)
     assert isinstance(Echo(), LookbackSource)
-    n = NullSource()
-    n.submit(np.zeros((2, 2, 4), np.uint8), 7)
-    assert n.frame_index == 7 and n.latest() is None
+    assert not isinstance(object(), LookbackSource)
 
 
 def test_dream_slot_round_trip(ctx):
@@ -634,11 +648,11 @@ def test_copy_path_round_trip_under_budget(ctx):
 
 def registry(dream=None):
     from hyperspace.analysis import Analyser
-    from hyperspace.bands import Chain
+    from hyperspace.analyzer import Analyzer
     from hyperspace.control import Control
     from hyperspace.params import build_registry
 
-    chain = Chain(Analyser())
+    chain = Analyzer(Analyser())
     audio = SimpleNamespace(chain=chain)
     return build_registry(ViewState(), Control(chain), audio, None, dream=dream)
 
@@ -713,7 +727,7 @@ def test_lookback_page_draws_headless(tmp_path):
 
     from hyperspace import ui_lookback
     from hyperspace.analysis import Analyser
-    from hyperspace.bands import Chain
+    from hyperspace.analyzer import Analyzer
     from hyperspace.control import Control
     from hyperspace.library import Library
     from hyperspace.params import build_registry
@@ -727,16 +741,16 @@ def test_lookback_page_draws_headless(tmp_path):
         io.backend_flags |= imgui.BackendFlags_.renderer_has_textures
         apply_style()
         load_fonts()
-        chain = Chain(Analyser())
+        chain = Analyzer(Analyser())
         control = Control(chain)
         audio = SimpleNamespace(chain=chain, on=False, mode="", error="", label="", sr=48000.0)
         view = ViewState()
         lib = Library(tmp_path, period=0.0)
         d = DreamState()
-        reg = build_registry(view, control, audio, lib.bank, dream=d)
+        reg = build_registry(view, control, audio, lib.project, dream=d)
         lib.attach(reg)
         # no renderer: the thumbnail row says so instead of drawing textures
-        panel = Panel(control, audio, view, presets=lib.bank, registry=reg, library=lib)
+        panel = Panel(control, audio, view, themes=lib.project, registry=reg, library=lib)
         reg["ui.page"].set(PAGE_KEYS.index("lookback"))
         for on in (False, True):
             d.on = on

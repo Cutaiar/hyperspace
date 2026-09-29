@@ -8,13 +8,13 @@ from imgui_bundle import imgui, implot
 
 from hyperspace import lfo, tempo, ui_lfo
 from hyperspace.analysis import Analyser
+from hyperspace.analyzer import Analyzer
 from hyperspace.app import CONTROL_SIZE
-from hyperspace.bands import Chain
 from hyperspace.control import Control
 from hyperspace.library import Library
 from hyperspace.params import build_registry
-from hyperspace.render import ViewState
 from hyperspace.ui import PAGE_KEYS, Panel, apply_style, load_fonts
+from hyperspace.view import ViewState
 
 
 @pytest.fixture()
@@ -26,18 +26,18 @@ def rig(tmp_path):
     io.backend_flags |= imgui.BackendFlags_.renderer_has_textures
     apply_style()
     load_fonts()
-    chain = Chain(Analyser())
+    chain = Analyzer(Analyser())
     control = Control(chain)
     audio = SimpleNamespace(chain=chain, on=False, mode="", error="", label="", sr=48000.0)
     view = ViewState()
     lib = Library(tmp_path, period=0.0)
-    reg = build_registry(view, control, audio, lib.bank)
+    reg = build_registry(view, control, audio, lib.project)
     clock = tempo.Clock(now=lambda: 0.0)
     lfos = lfo.LFOs(seed=2)
     tempo.register(reg, clock)
     lfo.register(reg, lfos, clock)
     lib.attach(reg)
-    panel = Panel(control, audio, view, presets=lib.bank, registry=reg, library=lib)
+    panel = Panel(control, audio, view, themes=lib.project, registry=reg, library=lib)
     panel.clock, panel.lfos = clock, lfos
     try:
         yield SimpleNamespace(panel=panel, reg=reg, clock=clock, lfos=lfos)

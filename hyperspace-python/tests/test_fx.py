@@ -140,10 +140,10 @@ def test_build_registry_declares_the_group():
     from hyperspace.params import build_registry
     audio = SimpleNamespace(chain=SimpleNamespace())
     from hyperspace.analysis import Analyser
-    from hyperspace.bands import Chain
+    from hyperspace.analyzer import Analyzer
     from hyperspace.control import Control
-    from hyperspace.render import ViewState
-    chain = Chain(Analyser())
+    from hyperspace.view import ViewState
+    chain = Analyzer(Analyser())
     audio.chain = chain
     st = FxState()
     r = build_registry(ViewState(), Control(chain), audio, fx=st)
@@ -247,7 +247,8 @@ W, H = 320, 200
 
 
 def render(ctx, fx: FxState, frames: int = 3) -> np.ndarray:
-    from hyperspace.render import Renderer, ViewState
+    from hyperspace.render import Renderer
+    from hyperspace.view import ViewState
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((W, H))])
     r = Renderer(ctx, fx=fx)
     s = ViewState(shape=10, faces=True, pattern=2, bright=1.3)
@@ -263,6 +264,30 @@ def render(ctx, fx: FxState, frames: int = 3) -> np.ndarray:
 
 def test_every_factory_effect_compiles(ctx):
     assert FxChain(ctx).compile_all() == {}
+
+
+def test_the_shared_helpers_are_written_once(ctx):
+    """audit V2: TAU, LUMA, hsv, pal and the hue rotation live in
+    shaders/_common.glsl and nowhere else; it compiles on its own (it reads
+    no uniform); an edit to it counts as a change to every effect."""
+    import re
+
+    from hyperspace import glsl, lookback
+    from hyperspace.render import PATTERNS_GLSL
+
+    shared = glsl.common()
+    ctx.program(vertex_shader=glsl.QUAD_VS,
+                fragment_shader="#version 330\n" + shared
+                + "\nout vec4 f; void main() { f = vec4(hsv(0.1, 1.0, 1.0), luma(pal(0.0, "
+                  "vec3(0.5), vec3(0.5), vec3(1.0), vec3(0.0)))); }")
+    defs = re.compile(r"(?m)^(?:const\s+\w+\s+(TAU|LUMA)\b|vec3\s+(hsv|hsv2rgb|pal|hue_rotate|rotate_hue)\s*\()")
+    for text in (PATTERNS_GLSL.read_text(), (FX_DIR / "_lib.glsl").read_text(), lookback.post_fs("")):
+        assert not defs.search(text), defs.search(text).group(0)
+    assert lookback.QUAD_VS is glsl.QUAD_VS
+    assert "_common" in FxState()._scan()
+    assert glsl.FALLBACK == shared, "glsl.FALLBACK must be the shipped _common.glsl"
+
+
 
 
 def test_off_is_the_old_frame_exactly(ctx):
@@ -359,15 +384,15 @@ def test_a_generator_lights_a_transparent_ground(ctx):
 
 def test_factory_presets_name_only_real_params(tmp_path):
     from hyperspace.analysis import Analyser
-    from hyperspace.bands import Chain
+    from hyperspace.analyzer import Analyzer
     from hyperspace.control import Control
     from hyperspace.library import Library
     from hyperspace.params import build_registry
-    from hyperspace.render import ViewState
-    chain = Chain(Analyser())
+    from hyperspace.view import ViewState
+    chain = Analyzer(Analyser())
     st = FxState()
     lib = Library(tmp_path, period=0.0)
-    reg = build_registry(ViewState(), Control(chain), SimpleNamespace(chain=chain), lib.bank,
+    reg = build_registry(ViewState(), Control(chain), SimpleNamespace(chain=chain), lib.project,
                          fx=st)
     lib.attach(reg)
     names = lib.list("fx")
@@ -386,13 +411,13 @@ def test_the_page_draws_and_fits(tmp_path, monkeypatch):
     from imgui_bundle import imgui, implot
 
     from hyperspace.analysis import Analyser
+    from hyperspace.analyzer import Analyzer
     from hyperspace.app import CONTROL_SIZE
-    from hyperspace.bands import Chain
     from hyperspace.control import Control
     from hyperspace.library import Library
     from hyperspace.params import build_registry
-    from hyperspace.render import ViewState
     from hyperspace.ui import PAGE_KEYS, Panel, apply_style, load_fonts
+    from hyperspace.view import ViewState
 
     ictx = imgui.create_context()
     pctx = implot.create_context()
@@ -402,14 +427,14 @@ def test_the_page_draws_and_fits(tmp_path, monkeypatch):
         io.backend_flags |= imgui.BackendFlags_.renderer_has_textures
         apply_style()
         load_fonts()
-        chain = Chain(Analyser())
+        chain = Analyzer(Analyser())
         audio = SimpleNamespace(chain=chain, on=False, mode="", error="", label="", sr=48000.0)
         st = FxState()
         lib = Library(tmp_path, period=0.0)
         view = ViewState()
-        reg = build_registry(view, Control(chain), audio, lib.bank, fx=st)
+        reg = build_registry(view, Control(chain), audio, lib.project, fx=st)
         lib.attach(reg)
-        panel = Panel(Control(chain), audio, view, presets=lib.bank, registry=reg, library=lib)
+        panel = Panel(Control(chain), audio, view, themes=lib.project, registry=reg, library=lib)
         # just enough renderer for the page: the live state and its errors
         panel.renderer = SimpleNamespace(fx=SimpleNamespace(
             state=st, error=lambda n: "line 3: made up" if n == "warp" else ""))
@@ -441,12 +466,12 @@ def test_the_page_has_no_conflicting_ids(tmp_path, monkeypatch):
 
     from hyperspace import ui_fx
     from hyperspace.analysis import Analyser
-    from hyperspace.bands import Chain
+    from hyperspace.analyzer import Analyzer
     from hyperspace.control import Control
     from hyperspace.library import Library
     from hyperspace.params import build_registry
-    from hyperspace.render import ViewState
     from hyperspace.ui import Panel, apply_style, load_fonts
+    from hyperspace.view import ViewState
 
     ictx = imgui.create_context()
     pctx = implot.create_context()
@@ -456,14 +481,14 @@ def test_the_page_has_no_conflicting_ids(tmp_path, monkeypatch):
         io.backend_flags |= imgui.BackendFlags_.renderer_has_textures
         apply_style()
         load_fonts()
-        chain = Chain(Analyser())
+        chain = Analyzer(Analyser())
         audio = SimpleNamespace(chain=chain, on=False, mode="", error="", label="", sr=48000.0)
         st = FxState()
         lib = Library(tmp_path, period=0.0)
         view = ViewState()
-        reg = build_registry(view, Control(chain), audio, lib.bank, fx=st)
+        reg = build_registry(view, Control(chain), audio, lib.project, fx=st)
         lib.attach(reg)
-        panel = Panel(Control(chain), audio, view, presets=lib.bank, registry=reg, library=lib)
+        panel = Panel(Control(chain), audio, view, themes=lib.project, registry=reg, library=lib)
         panel.renderer = SimpleNamespace(fx=SimpleNamespace(state=st, error=lambda n: ""))
         ids: list[str] = []
         for fn in ("button", "checkbox", "slider_float", "slider_int", "combo",

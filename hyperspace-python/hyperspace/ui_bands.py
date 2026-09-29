@@ -164,13 +164,12 @@ def editor(panel) -> None:
     ylo, yhi = float(ly[0]) - h / 2, float(ly[-1]) + h / 2
     m = pooled(spec)
 
-    u32 = imgui.color_convert_float4_to_u32
-    grey = imgui.ImVec4(0.25, 0.25, 0.25, 1)
-    implot.push_style_color(implot.Col_.plot_bg, u32(imgui.ImVec4(0, 0, 0, 1)))
-    implot.push_style_color(implot.Col_.frame_bg, u32(imgui.ImVec4(0, 0, 0, 0)))
-    implot.push_style_color(implot.Col_.plot_border, u32(grey))
-    implot.push_style_color(implot.Col_.axis_text, u32(ui.DIM))
-    implot.push_style_color(implot.Col_.axis_tick, u32(grey))
+    grey = ui.LINE
+    implot.push_style_color(implot.Col_.plot_bg, ui.u32(imgui.ImVec4(0, 0, 0, 1)))
+    implot.push_style_color(implot.Col_.frame_bg, ui.u32(imgui.ImVec4(0, 0, 0, 0)))
+    implot.push_style_color(implot.Col_.plot_border, ui.u32(grey))
+    implot.push_style_color(implot.Col_.axis_text, ui.u32(ui.DIM))
+    implot.push_style_color(implot.Col_.axis_tick, ui.u32(grey))
     implot.push_style_var(implot.StyleVar_.plot_padding, imgui.ImVec2(0, 0))
     implot.push_style_var(implot.StyleVar_.plot_border_size, 1)
     flags = (implot.Flags_.no_title | implot.Flags_.no_legend | implot.Flags_.no_menus
@@ -206,7 +205,6 @@ def _overlays(panel, freqs: np.ndarray, ly: np.ndarray) -> None:
     reg, c = panel.reg, panel.control
     chain = panel.audio.chain
     dl = implot.get_plot_draw_list()
-    u32 = imgui.color_convert_float4_to_u32
     pos, size = implot.get_plot_pos(), implot.get_plot_size()
     x0, x1 = pos.x, pos.x + size.x
     pw = size.x * PROFILE_W
@@ -223,8 +221,8 @@ def _overlays(panel, freqs: np.ndarray, ly: np.ndarray) -> None:
     tw = imgui.calc_text_size(HINT).x
     dl.add_rect_filled(imgui.ImVec2(x0 + 1, pos.y + 1),
                        imgui.ImVec2(x0 + tw + 7, pos.y + ui.FONT_MICRO + 5),
-                       u32(imgui.ImVec4(0, 0, 0, 0.7)))
-    dl.add_text(imgui.ImVec2(x0 + 4, pos.y + 2), u32(ui.DIM), HINT)
+                       ui.u32(imgui.ImVec4(0, 0, 0, 0.7)))
+    dl.add_text(imgui.ImVec2(x0 + 4, pos.y + 2), ui.u32(ui.DIM), HINT)
     order = sorted(range(chain.n), key=lambda i: i == c.selb)   # the selected on top
     for i in order:
         sel = i == c.selb
@@ -232,8 +230,8 @@ def _overlays(panel, freqs: np.ndarray, ly: np.ndarray) -> None:
         lo, hi = edges(f, q)
         y_hi, y_lo = py(math.log2(hi)), py(math.log2(lo))
         tone = ui.RED if sel else imgui.ImVec4(1, 1, 1, 1)
-        fill = u32(imgui.ImVec4(tone.x, tone.y, tone.z, 0.16 if sel else 0.07))
-        line = u32(imgui.ImVec4(tone.x, tone.y, tone.z, 0.9 if sel else 0.3))
+        fill = ui.u32(imgui.ImVec4(tone.x, tone.y, tone.z, 0.16 if sel else 0.07))
+        line = ui.u32(imgui.ImVec4(tone.x, tone.y, tone.z, 0.9 if sel else 0.3))
         dl.add_rect_filled(imgui.ImVec2(x0, y_hi), imgui.ImVec2(x1, y_lo), fill)
         if not sel:                                # the selected band's edges are its handles
             dl.add_line(imgui.ImVec2(x0, y_hi), imgui.ImVec2(x1, y_hi), line)
@@ -250,18 +248,18 @@ def _overlays(panel, freqs: np.ndarray, ly: np.ndarray) -> None:
             pts += [imgui.ImVec2(float(x), float(y)) for x, y in zip(xs, yy)]
             pts.append(imgui.ImVec2(x1, float(ypx[b - 1])))
             dl.add_concave_poly_filled(
-                pts, u32(imgui.ImVec4(tone.x, tone.y, tone.z, 0.45 if sel else 0.22)))
+                pts, ui.u32(imgui.ImVec4(tone.x, tone.y, tone.z, 0.45 if sel else 0.22)))
             dl.add_polyline(pts, line, 1.0, 0)
         # the name at the centre, inside the left edge
         yc = min(max(py(math.log2(f)), pos.y + ui.FONT_MICRO * 1.5 + 6),
                  pos.y + size.y - ui.FONT_MICRO / 2 - 3)
         dl.add_text(imgui.ImVec2(x0 + 4, yc - ui.FONT_MICRO / 2 - 1),
-                    u32(ui.RED if sel else ui.DIM), chain.band_names[i].upper())
+                    ui.u32(ui.RED if sel else ui.DIM), chain.band_names[i].upper())
         # a modulated centre: the effective value as a red hairline ghost
         pf = reg[f"band.{i}.f"]
         if pf.modulated:
             yg = py(math.log2(max(pf.value, 1e-3)))
-            dl.add_line(imgui.ImVec2(x0, yg), imgui.ImVec2(x1, yg), u32(ui.RED), 1.0)
+            dl.add_line(imgui.ImVec2(x0, yg), imgui.ImVec2(x1, yg), ui.u32(ui.RED), 1.0)
             panel.ghosts += 1
     implot.pop_plot_clip_rect()
 
@@ -306,12 +304,11 @@ def _box(panel, handle_busy: bool, n: int, sel: int) -> None:
     y = min(max(mouse.y, lim.y.min), lim.y.max)
     if imgui.is_mouse_down(0):
         dl = implot.get_plot_draw_list()
-        u32 = imgui.color_convert_float4_to_u32
         p0 = implot.plot_to_pixels(implot.Point(bx, by))
         p1 = implot.plot_to_pixels(implot.Point(x, y))
         implot.push_plot_clip_rect()
-        dl.add_rect_filled(p0, p1, u32(imgui.ImVec4(1, 1, 1, 0.08)))
-        dl.add_rect(p0, p1, u32(imgui.ImVec4(1.0, 43 / 255, 43 / 255, 0.8)))
+        dl.add_rect_filled(p0, p1, ui.u32(imgui.ImVec4(1, 1, 1, 0.08)))
+        dl.add_rect(p0, p1, ui.u32(imgui.ImVec4(1.0, 43 / 255, 43 / 255, 0.8)))
         implot.pop_plot_clip_rect()
         return
     st["box"] = None
@@ -352,6 +349,20 @@ def band_row(panel) -> None:
     panel._button("band.reset", "Reset", small=True)
 
 
+def _norm_chip(panel) -> None:
+    """AUTO / MANUAL normalisation for the open band (audit A10): lit red on
+    MANUAL, where the trim is a plain gain."""
+    a = panel.reg["band.sel.norm"]
+    p = panel._real(a)
+    manual = bool(p.base)
+    w = imgui.ImVec2(ui.chip_w("MANUAL"), 0)   # one width: the combos never jump
+    if ui.lit_chip(f"{'MANUAL' if manual else 'AUTO'}##norm", manual, size=w):
+        p.set(0 if manual else 1)
+    panel._tip(a)
+    panel._ctx(a)
+    panel._learn_frame(a)
+
+
 def strip(panel) -> None:
     """The selected band's strip — the band.sel.* aliases follow the selection."""
     c, a, r = panel.control, panel.audio, panel.reg
@@ -361,7 +372,10 @@ def strip(panel) -> None:
     imgui.same_line()
     imgui.text_disabled(f"{lo:.0f}–{hi:.0f} Hz")
     sp = imgui.get_style().item_spacing.x
-    imgui.same_line(imgui.get_content_region_avail().x - 2 * FN_W - sp)
+    imgui.same_line(imgui.get_content_region_avail().x - 2 * FN_W - 2 * sp
+                    - ui.chip_w("MANUAL"))
+    _norm_chip(panel)
+    imgui.same_line()
     panel._combo("band.sel.fn", FN_W, SHAPERS[P.fn].name)
     imgui.same_line()
     panel._combo("band.sel.curve", FN_W)

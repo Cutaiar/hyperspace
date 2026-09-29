@@ -5,11 +5,11 @@ from types import SimpleNamespace
 import pytest
 
 from hyperspace.analysis import Analyser
-from hyperspace.bands import Chain
+from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
 from hyperspace.overlay import Output
 from hyperspace.params import Kind, build_registry
-from hyperspace.render import ViewState
+from hyperspace.view import ViewState
 
 
 class FakeBackend:
@@ -55,7 +55,7 @@ class FakeBackend:
 
 
 def _registry():
-    chain = Chain(Analyser())
+    chain = Analyzer(Analyser())
     return build_registry(ViewState(), Control(chain), SimpleNamespace(chain=chain))
 
 
@@ -78,7 +78,7 @@ def test_params_registered(rig):
     assert r["output.bg"].kind is Kind.CONTINUOUS
     assert r["output.alpha"].kind is Kind.CONTINUOUS
     assert r["output.monitor"].kind is Kind.ENUM
-    assert r["output.monitor"].names == ["Built-in", "Studio"]
+    assert r["output.monitor"].names == ["follow window", "Built-in", "Studio"]
     assert r["output.bg"].text() == "clear"
     assert all(p.group == "output" for p in r.group("output"))
 
@@ -107,7 +107,7 @@ def test_legacy_overlay_ids_are_views(rig):
     assert rig.out.overlay is True and r["output.overlay"].base is True
     r["output.bg"].set_norm(0.5)
     assert r["overlay.bg"].norm == pytest.approx(0.5)
-    assert r["overlay.monitor"].names == ["Built-in", "Studio"]
+    assert r["overlay.monitor"].names == ["follow window", "Built-in", "Studio"]
 
 
 # ---- state machine ----
@@ -213,7 +213,7 @@ def test_bg_and_alpha(rig):
 def test_monitor_switch_while_on(rig):
     rig.reg["output.fullscreen"].set(True)
     rig.out.apply()
-    rig.reg["output.monitor"].set(1)
+    rig.reg["output.monitor"].set(2)
     rig.out.apply()
     assert ("fullscreen", "Studio") in rig.b.calls
     assert rig.b.rect == (1728, 0, 2560, 1440)
@@ -225,13 +225,13 @@ def test_monitor_switch_while_on(rig):
     rig.reg["output.overlay"].set(True)
     rig.out.apply()
     assert rig.b.rect == (1728, 0, 2560, 1440)
-    rig.reg["output.monitor"].set(0)
+    rig.reg["output.monitor"].set(1)
     rig.out.apply()
     assert rig.b.rect == (0, 0, 1728, 1117)
 
 
 def test_monitor_chosen_beforehand_is_the_target(rig):
-    rig.reg["output.monitor"].set(1)
+    rig.reg["output.monitor"].set(2)
     rig.out.apply()
     assert not any(k in ("rect", "fullscreen") for k, _ in rig.b.calls)  # a plain window stays put
     rig.reg["output.overlay"].set(True)
@@ -239,12 +239,31 @@ def test_monitor_chosen_beforehand_is_the_target(rig):
     assert rig.b.rect == (1728, 0, 2560, 1440)
 
 
+def test_follow_window_is_the_first_choice_and_reads_back_as_itself(rig):
+    """monitor −1 — the screen the window is on — is a choice of its own,
+    not screen 0 (audit P3): the readout says so, and choosing a screen by
+    name then going back to it covers the window's own screen again."""
+    p = rig.reg["output.monitor"]
+    assert rig.out.monitor == -1 and p.text() == "follow window"
+    rig.b.rect = (1800, 100, 1280, 820)         # the window sits on Studio
+    rig.reg["output.overlay"].set(True)
+    rig.out.apply()
+    assert rig.b.rect == (1728, 0, 2560, 1440)  # …so the overlay covers Studio
+    p.set(1)                                    # Built-in, by name
+    rig.out.apply()
+    assert rig.out.monitor == 0 and rig.b.rect == (0, 0, 1728, 1117)
+    p.set(0)                                    # back to following the window
+    rig.out.apply()
+    assert rig.out.monitor == -1 and p.text() == "follow window"
+    assert rig.b.rect == (1728, 0, 2560, 1440)  # the saved rect is on Studio
+
+
 def test_no_monitors_means_nothing_to_cover(rig):
     rig.b.mons = []
     rig.reg["output.fullscreen"].set(True)
     rig.out.apply()
     assert rig.b.rect == (100, 100, 1280, 820) and rig.out.error == ""
-    assert rig.reg["output.monitor"].names == []
+    assert rig.reg["output.monitor"].names == ["follow window"]
 
 
 def test_backend_error_is_reported_not_raised(rig):
@@ -264,4 +283,4 @@ def test_headless_output_has_no_window_to_push_to():
     reg["output.overlay"].toggle()
     out.apply()
     assert out.overlay is True and out.bg_alpha == 0.0
-    assert reg["output.monitor"].names == ["screen"]
+    assert reg["output.monitor"].names == ["follow window", "screen"]

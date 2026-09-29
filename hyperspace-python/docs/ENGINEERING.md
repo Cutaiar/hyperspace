@@ -15,7 +15,7 @@ paragraph says so. The HTML-era sections (browser sandbox, deploy) are
 gone; `hyperspace-web/hyperspace.html` is frozen and matters here only as
 the oracle the golden traces were recorded from.
 
-**Run it:** `uv sync`, `uv run pytest` (628 tests, ~15 s), `uv run
+**Run it:** `uv sync`, `uv run pytest` (778 tests, ~20 s), `uv run
 hyperspace`. `?` in the app shows the controls cheat sheet.
 
 ---
@@ -98,10 +98,12 @@ dodecagon reading is covered too.
 
 The transform is the reference's, exactly: rotate in 4D across six planes →
 perspective project 4D→3D (`D4 / (D4 − w)`) → apply drag orientation
-(yaw / pitch) → perspective project 3D→2D (`geometry.project_h`,
-`geometry.py:818-844`; `project` is the same maths kept as the parity
-oracle for the tests). It runs on the CPU; the GPU rasterises. Geometry is
-exact to 1e-12 against the traces (`tests/test_core.py:33-53`).
+(yaw / pitch) → perspective project 3D→2D (`geometry.project_h`; the
+parity oracle `project` is that function without the homogeneous divisor,
+pinned equal to it on every shape — plan 11, V1). It runs on the CPU; the
+GPU rasterises. Geometry is exact to 1e-12 against the traces
+(`tests/test_core.py:33-53`). `ViewState`, the dataclass the renderer
+draws, lives in `view.py` so nothing needs moderngl to hold a view.
 
 `Renderer.draw` (`render.py:446-481`) is five stages, and with look-back
 and FX off the output is bit-identical to the scene pass alone
@@ -146,15 +148,22 @@ and FX off the output is bit-identical to the scene pass alone
 
 True 2-face extraction (cycle walk + support-plane filter) gives
 translucent painter-sorted fills; counts match the known values for all
-polytopes (`tests/test_control.py:184-196`; the 3D shapes' faces in
+polytopes (`tests/test_geometry.py`; the 3D shapes' faces in
 `tests/test_shapes3d.py`). UVs are face-local and
 perspective-correct (`geometry.face_uvs`).
 
 `shaders/patterns.glsl` is user-editable and hot-reloads on save by mtime
-(`render.py:434-444`); a bad edit keeps the last good program and shows
-the GLSL error on the panel. Contract: `vec4 pattern(int mode, vec2 uv,
-float fid)`, reading `u_time` and `u_mod[8]` — the eight `pattern.mod.k`
-params, which any source may drive. Eleven patterned modes ship (plus flat, mode 0); their names live in
+(`render.py`, `_maybe_reload_patterns`); a bad edit keeps the last good
+program and shows the GLSL error on the panel, with the line numbered as
+in the file. Contract: `vec4 pattern(int mode, vec2 uv, float fid)`,
+reading `u_time` and `u_mod[8]` — the eight `pattern.mod.k` params, which
+any source may drive. The colour helpers (`TAU`, `LUMA`, `hsv`, `pal`,
+`hue_rotate`) come from `shaders/_common.glsl`, which `glsl.py` prepends
+to the patterns, every effect and the look-back's post pass alike, and
+which hot-reloads the same way (a broken edit there shows on the panel;
+the post pass, which every frame goes through, falls back to the copy as
+shipped); the pattern file keeps its own 2-D hashes, on which its
+cellular modes were tuned. Eleven patterned modes ship (plus flat, mode 0); their names live in
 `params.PATTERNS`, and a new mode needs both the GLSL case and the name.
 The bitmap layer (`view.bmp_*`) textures faces from a file; a bad file
 never raises and leaves the plain faces (`tests/test_render.py:147`).
@@ -191,7 +200,8 @@ presettable, all modulatable.
 
 One GLSL file per effect under `shaders/fx/`. Every `// @param` uniform
 becomes a registry param `fx.<file>.<key>`, plus `on mix speed blend
-order` per file; `fx.on` and `fx.mix` govern the chain (`fx.py:114-164, 284-327`). Effects hot-reload by polling the folder every 30 frames; a
+order` per file; `fx.on` and `fx.mix` govern the chain (`fx.py:114-164, 284-327`). Every effect is compiled behind `_common.glsl` and `fx/_lib.glsl`, and
+runs on the renderer's one clock (`Renderer.now`). Effects hot-reload by polling the folder every 30 frames (the shared helper files count); a
 parse error keeps the last spec, a compile error skips the pass, all
 broken is a copy. Off is bit-identical (`tests/test_fx.py:268`). The
 blend modes are arithmetic in the shader, not GL blend state, and a pass
@@ -212,26 +222,45 @@ only holds this frame's value after it. `overlay.Output` places the render
 window (window · fullscreen · overlay with passthrough and opacity) from
 the `output.*` params, applied once a frame through an injectable backend
 (`tests/test_overlay.py`); `overlay.*` are aliases the factory table
-binds.
+binds. `output.monitor` offers *follow window* — the screen the window is
+on, config `monitor = -1` — and then each screen by name. Quitting, Cmd+R
+and the panel's restart button all run `app.close_all`: every open
+adapter (MIDI, the bridge, the hands tracker, the dream worker) then the
+audio stream, best-effort, so a broken port never blocks an exit. The
+SYSTEM page shows each adapter's state — MIDI, the bridge (port,
+encoding, messages sent, or why it is off) — beside the hot-reload and
+config notices. The optional adapters and the gamepad are config gates
+(`[midi]` and `[gamepad]` on by default, `[bridge]`, `[dream]`, `[hands]`
+off); `hyperspace/config.py` documents every key. The rig's placement comes from `[output]` in `config.toml`
+(`config.py`); a `[overlay]` section is the same thing under its pre-split
+name, still read and merged under `[output]`, with a note on stderr asking
+for the rename. A `config.toml` that will not parse keeps the defaults and
+shows its error on the SYSTEM page.
 
 ## 3. Audio sources
 
 Two, both through `AudioEngine._attach` (`audio.py:132-140`):
 
 - **A capture device** (`start_mic(index)`): a `sounddevice.InputStream`,
-  mono, at the engine's rate, callback → ring buffer. The device list is
-  every input-capable device (`input_devices`); a loopback driver
-  (BlackHole, Soundflower, anything named "loopback") is recognised by
-  name, pre-selected in the panel's combo, and labelled `System · …`
-  (`audio.py:29-52, 157`). That is the one system-audio route: with the
-  Mac's output on a Multi-Output Device, everything arrives through the
-  plain input path. **Nothing captures at launch** — capture starts when
-  `audio.mic` is toggled (`M`), and the device list is read once at panel
-  construction, so a device plugged in later needs a restart (audit A3).
+  mono, at the engine's capture rate (`sr`, 48 kHz), callback → ring
+  buffer. The device list is every input-capable device
+  (`input_devices`); a loopback driver (BlackHole, Soundflower, anything
+  named "loopback") is recognised by name, pre-selected by the one
+  heuristic `audio.preselect` (the first loopback, else the first
+  device), and labelled `System · …`. That is the one system-audio route:
+  with the Mac's output on a Multi-Output Device, everything arrives
+  through the plain input path. **Nothing captures at launch** — capture
+  starts when `audio.mic` is toggled (`M`). The device list is read once,
+  on first use (`AudioEngine.devices`, which `audio.device` chooses from);
+  the **rescan** button beside the combo (`audio.rescan`) reads it again
+  for an interface plugged in later, keeping the selection by name
+  (`tests/test_audio.py`).
 - **A file** (`start_file(path)`; wav / mp3 / flac / ogg through
   `soundfile`): mono mean, played through an `OutputStream` at the
-  **track's** sample rate, and the analyser is rebuilt at that rate
-  (`audio.py:165-191`).
+  **track's** sample rate. The analyser is built **once**, at that rate
+  (`AudioEngine._attach(mode, label, rate)`), and the source line on the
+  audio page shows the analyser's rate (`AudioEngine.rate`), not the
+  capture rate.
 
 The callbacks only copy samples into the ring; the FFT and the chain run
 on the frame loop in `audio.step(dt)` (`audio.py:235-242`). `audio.chain`
@@ -244,8 +273,13 @@ keeps the user's settings and restarts only the trackers and the warm-up
 
 One chain runs: `analyzer.Analyzer`, the six-band reference chain reshaped
 for N bands (1–16). `bands.py` is its parts bin — every constant under its
-reference name, `soft_ceil`, the shapers, the per-band `Params`, the scene
-rows — and `bands.Chain` is an alias to `Analyzer`. The reference chain
+reference name, `soft_ceil`, the shapers, the per-band `Params` and the
+one default table `default_params()` (the Balanced scene file is pinned to
+it by `test_balanced_is_the_default_table_and_the_reference_edges`).
+Two reference constants live where they are used rather than in the
+chain: `DRIVE` (fader → rotation rate) is `params.DRIVE`, the meters'
+nominal line is `ui.NOM`. The analyzer is constructed by its own name
+everywhere (the `bands.Chain` alias is gone). The reference chain
 survives as the frozen oracle `tests/legacy_chain.py`, and the "Legacy 6"
 layout reproduces it **bit for bit** on the golden fixtures at 60 and 120
 fps, dyn 0 and 1 (`tests/test_analyzer.py:63-83`). That test is the
@@ -287,8 +321,10 @@ The `band.{i}.*` params are rebuilt on every layout change through the
 `Control.on_layout` hook that `build_registry` installs (`control.py:36-45`).
 
 **Headroom.** Nothing hard-clamps the fader path. Four landmarks: `NOM =
-1.0` (a band working normally), `KNEE = 1.25` (where the soft ceiling
-starts to bend), `HEAD = CEIL = 2.6` (the asymptote). `soft_ceil(x, knee,
+1.0` (a band working normally — a meter landmark, `ui.NOM`), `KNEE = 1.25`
+(where the soft ceiling starts to bend), `HEAD = CEIL = 2.6` (the
+asymptote; one value, `HEAD` kept as the reference's name for it on the
+input and transfer stages). `soft_ceil(x, knee,
 ceil)` is the identity below the knee and `knee + r·t/√(1+t²)` above it —
 slope 1 at the knee, a t⁻³ tail, strictly increasing
 (`tests/test_core.py:58-64`). There are three of them, after coupling, after
@@ -327,9 +363,11 @@ a limiter flattens level but cannot flatten change). Global `master.dyn`
 scales the lot; per-band `Contrast` (`exp`) and `Transient` (`trn`) sit at
 the top of the strip. A band with genuinely no dynamics stays flat — this
 recovers what a limiter took, it does not invent motion
-(`tests/test_core.py:111-124`). Note `master.dyn`'s fader runs to 4× while
-the chain clamps it to 1 for the window blend and uses it raw in the
-expansion ratio (audit A7).
+(`tests/test_core.py:111-124`). `master.dyn`'s fader runs to 4× on
+purpose: up to 1× it blends from the absolute to the windowed normaliser
+and grows the expansion ratio; past 1× the blend is full and only the
+expansion keeps growing (owner, 2026-09-28, audit A7; the parity oracle
+is frozen at 0 and 1, where the two agree).
 
 **Input trim** (`band.{i}.trim` and `master.trim`, dB) is the mixer-style
 input stage: off, then −60 dB to +12 dB at 1 dB/step with a detent at 0,
@@ -341,17 +379,25 @@ exists because the window normaliser is a two-point auto-calibration and
 by construction removes any static gain in front of it: pre-envelope trim
 alone is a placebo (`analyzer.py:504-508, 556`).
 
-> ⚠️ **Known limitation, kept on purpose.** On real material from a
-> settled state, BASS trim is non-monotonic through the range you would
-> reach for: cutting 6–12 dB makes the band drive *harder*, and it only
-> attenuates from around −20 dB (measured on the reference: 0 dB → out
-> 0.87; −6 → **1.03**; −12 → **1.01**; −20 → 0.75). A hard off (−60 dB)
-> correctly produces exactly 0. The cause is the trim's calibration
-> depending on harmonic coupling, which the ceiling work moved. It is
-> ported as-is and frozen by the parity test; the structural fix is plan
-> 06's one open decision (§8) — bias the adaptive window in proportion to
-> trim, apply trim as a post-normaliser multiplier, or a per-band manual
-> mode that bypasses adaptive normalisation.
+**AUTO and MANUAL normalisation** (`band.{i}.norm`, the chip on the band
+strip; plan 11 WP15, audit A10). AUTO — every band's default, and every
+scene or preset that does not name the key — is the reference chain above,
+bit for bit, trim applied twice. It keeps the reference's known behaviour:
+on the real track from a settled state, BASS trim is non-monotonic through
+the range you would reach for (0 dB → out 0.87; −6 → **1.03**; −12 →
+**1.01**; −20 → 0.75; −60 → exactly 0), because the trim's calibration
+depends on harmonic coupling. MANUAL is the fix the owner chose
+(2026-09-28): for that band the window, the confidence gating of `dyn`, the
+expansion and the warm-up are bypassed; the level is the envelope itself in
+`u` (1.0 = nominal), which carries the trim once, as a plain gain; the
+transient knob blends toward the peak-normalised flux scaled by that level;
+the gate, coupling, drives, shaper and ceilings are unchanged. The trackers
+keep running, so switching back resumes where the window would have been.
+Measured on the brickwalled fixture, BASS settled, MANUAL: 0 dB → 1.63; −6
+→ 1.51; −12 → 1.34; −20 → 1.05, non-increasing on every band
+(`test_manual_normalisation_makes_trim_monotonic`; `uv run python
+tools/trim_sweep.py --manual` prints a sweep). A MANUAL band gives up the
+limiter-undoing dynamics recovery; that is the trade.
 
 **Analyser** (`analysis.py`): `FFT_SIZE = 4096`, Blackman window, 1/N
 normalisation, `SMOOTHING = 0.15` (the Web Audio smoothing constant) —
@@ -376,19 +422,27 @@ band's scratch state. `CHOP`, `TREM` and `S&H` are fixed-rate and unaware of
 the tempo clock (plan 09's LFOs are the clock-aware oscillators; audit).
 
 **11 scenes** snapshot every band's function, drives, attack, decay,
-threshold, contrast, transient and trim: Balanced, Kick & Sizzle, Glacial
+threshold, contrast, transient and trim (and, since plan 11, the AUTO /
+MANUAL switch, AUTO when a file does not name it): Balanced, Kick & Sizzle, Glacial
 Drift, Strobe Cage, Bass Engine, Air & Lace, Inverse World, Percussive,
-Tremolo Web, Harmonic Bloom, Slow Bass / Fast Air. They exist twice —
-`bands.PRESETS` (what `scene.select`, reset and undo use; keeps the band
-names) and `library/band/*.json` (the preset strip; carries a layout,
-drops the names). Numerically equal today (audit A1). Rows past the sixth
-band take defaults.
+Tremolo Web, Harmonic Bloom, Slow Bass / Fast Air. A scene **is** a band
+preset — the one store is `library/band/*.json`, whose layout carries the
+band names; `control.SCENES` only fixes the combo order, because the
+APC40's clip grid and saved projects address scenes by index (plan 11,
+audit A1). Two ways in: the scene combo, the grid and Reset *re-tune the
+bands you have* from the scene's values (`Analyzer.apply_scene`; rows past
+the scene's take the default strip) and tell the strip which preset is
+current; the preset strip loads the file *whole*, layout included, and
+moves the combo when the file is a scene. A user file of the same name
+shadows the factory scene for both. A band preset saved from the strip
+carries the current layout, names included (`Library.extra`, audit A2).
 
 **Per-band knobs** (`tapers.KNOBS`, registered as `band.{i}.*` and as the
 `band.sel.*` aliases that follow the selection): contrast 1:1–1:5,
 transient 0–100 %, pre-drive and post-drive off / 0.06–8×, attack 0.5 ms–
 2.05 s, decay 5 ms–20.5 s, threshold 0–0.6, trim; plus centre `f` (20 Hz–20
-kHz, log), `q` (0.1–20) and `curve`.
+kHz, log), `q` (0.1–20), `curve`, and `norm` (AUTO / MANUAL, a scene
+setting, never a performer's).
 
 **Fader tapers.** Every fader is an integer position; a `Taper` owns both
 directions and `unmap(map(p)) == p` exactly over the whole throw
@@ -402,11 +456,13 @@ tooltip. For modulation the same taper maps floats without snapping, and a
 sub-detent base survives under a performer (ARCHITECTURE §3.1).
 
 **Reset** resolves to the *currently selected scene* (`Control.scene`),
-never to hard-coded defaults; on Balanced the two coincide. Reset-all is
+never to hard-coded defaults; on Balanced the two coincide. It re-tunes
+the bands loaded and never changes the layout. Reset-all is
 guarded by an 8 s **undo** (the button relabels itself) rather than a
 confirm; the undo snapshot carries the layout too and is discarded on a
-scene change or any structural change, because it belongs to the old
-scene (`control.py:89-127`, `tests/test_control.py:74-112`).
+scene change — a strip load included — or any structural change, because
+it belongs to the old scene (`control.py`, `tests/test_control.py:74-112`,
+`tests/test_analyzer.py` "reset_all_re_tunes").
 
 ## 4b. Transport
 
@@ -417,7 +473,7 @@ on their own time constants — the shape coasts to rest rather than
 freezing. Position is `_offset + _played`, where `_played` counts the
 frames the callback has handed to PortAudio (so it leads the DAC by the
 buffer latency), folded by the track length for the loop (`audio.py:193-
-228`, `tests/test_control.py:126-146`). Restart is return-to-zero preserving
+228`, `tests/test_audio.py` `test_transport_position_math`). Restart is return-to-zero preserving
 the play / pause state. Keys, as table rows: `K` play / pause (`audio.play`),
 `0` restart, `M` capture on / off. In capture mode `stop()` closes the
 stream and `audio.on` goes false, so the chain freezes and every lane row
@@ -449,18 +505,30 @@ unreadable at a party.
   readout inside has no knob, only a red edge under the text. A performed
   param shows a **white** ghost bar at the effective value and names its
   owner in the tooltip.
-- **Layout.** No page scrolls at `app.CONTROL_SIZE` (`tests/test_ui_shell.py:92`
-  holds it for the pages that rig can fill; ROUTING's rows scroll in a
-  child by design). Right-aligned groups are measured with `ui.chip_w` /
-  `ui.button_w`, never hard-coded offsets. Every widget has its own imgui
-  id (`tests/test_ui_lfo.py:86`).
+- **Layout.** No page scrolls at `app.CONTROL_SIZE`
+  (`test_every_page_fits_the_control_window` in `tests/test_ui_shell.py`
+  measures every page with a hands setup, an `Output` and a routed table;
+  ROUTING's rows scroll in a child by design, and
+  `test_the_routing_rows_scroll_in_their_own_child` holds that). The
+  HANDS page puts its switches beside the box and its feel knobs two to a
+  row beside the transfer plot for that reason. Right-aligned groups are measured
+  with `ui.chip_w` / `ui.button_w`, never hard-coded offsets. Every widget
+  has its own imgui id (`tests/test_ui_lfo.py:86`). One grey (`ui.LINE`)
+  for every rule and frame, one `ui.u32`, one `Panel.half` for a slider
+  in a half-width cell.
+- **The cheat sheet** (`ui.CHEATSHEET`) is the canonical human list of the
+  keys; `test_the_cheat_sheet_matches_the_tables_and_the_loop_keys` parses
+  its key column against `routing.keymap()`, `padmap()` and the keys the
+  loop still handles itself (`app.LOOP_KEYS`).
 - The large cell-count readout at the top of the view page is still the
   signature element. Keep new UI consistent with this.
 
 ## 6. Testing
 
-`uv run pytest` — 628 tests, 11 skipped without torch, about 15 s. `ruff`
-is the linter. What holds what:
+`uv run pytest` — 778 tests, 11 skipped without torch, about 20 s. `ruff`
+is the linter. Every test runs with `HYPERSPACE_HOME` pointed at its own
+`tmp_path` (`tests/conftest.py`), so no test can touch `~/Hyperspace`.
+What holds what:
 
 - **Golden traces** (`tests/golden/`, recorded once from the HTML by
   `tools/record_golden.py`): geometry exact to 1e-12 with vertex order,
@@ -476,7 +544,16 @@ is the linter. What holds what:
 - **Boundaries**: the core never imports `midi` / `bridge` / `dream`
   (`tests/test_params.py:286`, `tests/test_bridge.py:381`,
   `tests/test_dream.py:55`); `hands/core.py`, `hands/signal.py`, `lfo.py`,
-  `tempo.py` import nothing from the package (`tests/test_*_boundary.py`).
+  `tempo.py` import nothing from the package, and `routing.py` nothing
+  above it — no panel, host or adapter (`tests/test_*_boundary.py`);
+  `config.py` reads the hands rig defaults from `hands/core.py` (the one table),
+  never the reverse.
+- **Hot reload**: every module but `app.py`, `hotreload.py` and `offline.py`
+  is on the watch list in dependency order (leaves first), an optional
+  adapter that was never imported is skipped, every swap target `app.py`
+  registers is defined in a watched module, and an Enum a reloaded module
+  defines keeps its identity, so live params still recognise their `Kind`
+  (`tests/test_hotreload.py`; plan 11 WP2).
 - **Headless GL and imgui**: every shape renders offscreen; post passes off
   are bit-identical; every panel page draws headless and fits; every
   factory effect compiles and changes the frame.
@@ -488,8 +565,16 @@ is the linter. What holds what:
   `tools/hands_probe.py` (every hand axis live; `--calibrate`).
 
 Untested today, and worth knowing before trusting a change there: the
-frame order in `app.py`, `Keys` and `Mouse`, the `_open_*` config gates,
-`audio.py`'s streams, `analysis.py` on its own, `LeapSource` (audit).
+panel being a leaf (no engine module imports `ui*`, by convention). The
+frame order, `Keys`, `Mouse`, the `_open_*` gates and the host's
+import boundary are `tests/test_app_boundary.py` (the frame runs over
+stubs; the boundary in a subprocess); `audio.py`'s streams and
+`analysis.py` run headless over a fake `sounddevice`
+(`tests/test_audio.py`, the stack's boundary in `tests/test_audio_boundary.py`);
+`LeapSource` and the DAW port's open and retry run against a fake `leap`
+(`tests/test_hands_leap.py`); the loop-order and Learn paths in
+`tests/test_learn.py`. What only the machine can verify is
+[`plans/11-hand-checks.md`](plans/11-hand-checks.md).
 
 ## 7. Process
 
@@ -514,12 +599,15 @@ same PR; when it changes behaviour, the line here does.
 
 ## 8. Open threads
 
-- **Plan 09's hand checks at the machine** (CHECKPOINT): the prompt from a
-  real Learn, `hands-pinch` zoom under pinch + scroll, TAP TEMPO then
-  METRONOME, `lfo-breathe` under the right hand, a knob on a hand-owned
-  param. Audit B1 predicts the last one fails as documented.
-- **The trim decision** (plan 06): the owner picks one of the three fixes
-  above; the oracle is re-frozen after.
+- **The hand checks at the machine** — plan 09's five, plan 08's
+  unverified list, plan 07's WP6c tuning, the first capture, the APC40,
+  the second monitor, IAC + FL Studio and the eyeballing owed for PRs #24–#26:
+  one numbered list with commands, presets, pass and fail in
+  [`plans/11-hand-checks.md`](plans/11-hand-checks.md). Audit B1 (a hand
+  leaving the box did not release its rows) was fixed by plan 11 WP1
+  before these are run.
+- **The trim** (plan 06): decided 2026-09-28 — the per-band AUTO / MANUAL
+  switch, built in plan 11 WP15; the oracle was not re-frozen.
 - **First real capture on this machine.** Every live path is code-complete;
   no session has recorded a human pressing `M` on real hardware with the
   macOS microphone prompt. One click plus a clap.

@@ -1,0 +1,423 @@
+# Decision register — everything that is yours to decide
+
+As of 2026-09-28. This is the one list. Every decision that blocks
+implementing and settling the open work is here, whichever plan or session
+raised it. Each entry stands on its own: what the thing is, what the software
+does today, the options, a recommendation with its reasons, the trade-off you
+accept, and what changes once you answer. The answer sheet at the end takes
+one letter per row.
+
+Sources folded in: plan 11 §2 rows 1–11, the plan 13 ledger (PR #56, rows
+12–18), plan 12 §7, plan 13 §8, DECISIONS.md's pending row. Once you answer,
+DECISIONS.md gets a dated row per decision and this file records the answer.
+
+## Vocabulary, once
+
+- **Parameter**: any setting with an id (brightness, an LFO's depth, tap
+  tempo). Its **base** is what you set with a knob, key or panel. A
+  **performer** (a hand axis, an audio band, an LFO, a DAW lane) adds an
+  offset on top through one routing row per parameter.
+- **Trigger**: a parameter that fires once (tap tempo, LFO reset).
+- **Routing preset**: a saved set of performer rows, optionally with the
+  bases they assume. **Theme**: a saved snapshot of every base.
+- **Clock**: the tap-tempo clock the synced LFOs read. The **trigger
+  button** (⇧B, the APC40's METRONOME) says "the one is now".
+- Plan 13's two nouns, already decided by you on 2026-09-28: a **preset** is
+  one file holding everything a performance moment is (every base, the
+  performer rows, the APC40's preset layer, a label per module); a
+  **session** is the rig boilerplate (the analyzer, the desk's fixed global
+  layer, the startup preset). The APC40 gets two layers under a latched
+  SHIFT: the **preset layer** the loaded preset maps, and the **global
+  layer** the session fixes. **Invariant controls** (faders, preset-select
+  row, SHIFT, TAP TEMPO, METRONOME, NUDGE ±, transport) mean one thing on
+  both layers.
+
+---
+
+## Part A — the thirteen open decisions
+
+### 1. B2 — does a tap ever move the downbeat?
+
+**Recommendation: (a), a tap never moves the downbeat.**
+
+**What it is.** You tap B or TAP TEMPO to set the tempo. You press the
+trigger button to say "the one is now", which restarts every synced LFO
+together. The question is whether a tap may also move the one.
+
+**Today.** Until the first trigger press of the session, every tap moves
+the downbeat to the burst's first tap. After the first trigger, a tap changes
+only the tempo. Two rules depending on history; the decision log states only
+the second.
+
+| Option | What a performer feels | Trade-off |
+|---|---|---|
+| (a) A tap never moves the downbeat | Tapping is always safe; the picture never jolts until you press the trigger. On a fresh launch the swells are unaligned until the first ⇧B. | One extra press at the start of a set. |
+| (b) Keep today's two rules, document them | No change on the desk. | The first burst after launch moves the picture; a later tap does not. Two behaviours for one button. |
+| (c) The first tap of every burst moves the downbeat | Re-tapping re-aligns without the trigger. | Every re-tap mid-set jolts running LFOs, which the trigger button exists to prevent. |
+
+**Why (a).** One rule, matching the decision already recorded; the trigger
+button keeps its one job. Plan 12's `party-trip` preset is the first that
+feels this: its quarter-note pump hiccups on every tap until the first
+METRONOME press under (b).
+
+**What changes.** A small edit in the clock, two tests flip, one sentence in
+three documents. Lands on PR #42. Reversible in an hour.
+
+### 2. B5 — which triggers may a performer fire?
+
+**Recommendation: (a), keep all three modulatable.**
+
+**What it is.** Any parameter can be owned by a performer unless flagged
+otherwise. A performer on a trigger fires it each time its signal rises past
+the on threshold. Three triggers are in question: tap tempo, the global LFO
+trigger, and each LFO's own reset.
+
+**Today.** All three are ownable. A pinch switch or an audio band can be
+routed to any of them. Nothing ships routed that way.
+
+| Option | What it allows | Trade-off |
+|---|---|---|
+| (a) Keep all three ownable | A pinch drops the LFOs on the one; a kick band re-triggers them; a pinch restarts one LFO. | A band routed to tap tempo would tap on every transient. Nobody has to route it. |
+| (b) None ownable | Only keys, the APC40 and the panel can fire them. | The pinch switches lose their most natural use; the per-LFO reset stops being the gesture hook its docstring promises. |
+| (c) LFO triggers ownable, tap tempo not | Everything in (a) except tapping from a hand or a band. | Tapping tempo with a pinch is gone. |
+
+**Why (a).** The pinch switches exist so a pinch can be a button, and the
+rising-edge trigger mechanism was built for exactly this. The one footgun in
+(a) needs a deliberate routing to arm.
+
+**What changes.** Nothing in code. One sentence moves from "not promised" to
+"intended" in ARCHITECTURE; one decision row.
+
+### 3. R1 — where are LFO knob settings saved?
+
+**Recommendation: (c), theme state, and a routing preset may set the bases
+it assumes.** Note: plan 13 dissolves this question, because a preset then
+carries every base and every route in one file. Answer it anyway; it governs
+the code until plan 13 lands.
+
+**What it is.** Each LFO has five knobs. A theme snapshots every base. A
+routing preset carries performer rows and may carry values, the bases its
+rows assume. Today only the eight macro knobs are routing-layer state.
+
+**Today.** LFO knobs are theme state. The factory routing preset that
+demonstrates chaining writes four LFO values so its demo works; the factory
+hands preset writes one effect value the same way; plan 12's `party-trip` and
+`party-wake` do the same with LFO and dream values. That leaves the LFO
+group's "unsaved changes" dot lit after loading the routing preset.
+
+| Option | What it means | Trade-off |
+|---|---|---|
+| (a) LFO and tempo become routing-layer state | LFO settings travel with routing presets, never with themes. | A theme stops carrying "breathe at one bar"; the LFO page's own save/load strip becomes meaningless. |
+| (b) Theme state; routing presets may only set macros | The routing file owns only its own layer. | The factory and party presets that assume LFO or effect settings silently depend on what you have set; their demos break. |
+| (c) Theme state; a routing preset may set any base its rows assume | Every preset stays honest about what it needs; the lit dot is truthful. | A routing preset load can change a look. A test pins that every such value is a real, saved parameter. |
+
+**Why (c).** An LFO arrangement is part of a look. A preset that assumes a
+setting should say so. It matches how the hands preset already works and is
+the shape plan 13 generalises.
+
+**What changes.** One test and two document sentences. (a) instead is a
+one-line code change plus moving the LFO strip, half a day.
+
+### 4. R6 — what does an APC40 LED show under a performer?
+
+**Recommendation: (a), keep it: rings show the base, LEDs show the state.**
+
+**What it is.** A knob's LED ring shows a position; a button's LED shows on
+or off. When a performer owns the parameter behind a control, the base (what
+you set) and the effective value (what the show does) differ.
+
+**Today.** Rings show the base, which is necessary: the knob uses soft pickup
+and a ring that chased the performer would mean the knob could never catch
+its own value. A button's LED on a toggle, or on an enum "set to X" row,
+shows the effective value.
+
+| Option | What the desk shows | Trade-off |
+|---|---|---|
+| (a) Keep the split, document it as intended | Ring = where the knob is. LED = what the show is doing. | Pressing a button on a performer-owned toggle changes the base and the LED may not change. Same as the panel, which shows base and effective side by side. |
+| (b) LEDs show the base too | One rule for all feedback. | A lit button while the show does the opposite. |
+
+**Why (a).** A ring is a pickup readback; an LED is a state light. The
+asymmetry follows from what each light is for.
+
+**What changes.** Prose only: one ARCHITECTURE sentence, the adapter's
+docstring, one decision row.
+
+### 5. A7 — the Dynamics fader's range past 1×
+
+**Recommendation: (b), keep the range and document the split.**
+
+**What it is.** The master Dynamics fader (0.06× to 4×, off at the bottom)
+controls how much of the range a limiter took is put back. Inside the audio
+chain it does two jobs: it blends between an absolute and a windowed
+normaliser, and it scales the expansion ratio.
+
+**Today.** The blend clamps the fader at 1, so from 1× to 4× only the
+expansion keeps growing. The parity oracle that guards the chain is frozen at
+0 and 1, where the two jobs agree.
+
+| Option | Effect | Trade-off |
+|---|---|---|
+| (a) Cap the fader at 1× | The knob means one thing. | Every saved preset's fader position moves (positions are integer detents); presets need a re-map; the extra expansion above 1× is lost. |
+| (b) Keep 4×, say what happens past 1× | Nothing moves; the tooltip says "past 1× only the expansion grows". | One knob still has two meanings, now written down. |
+| (c) Two knobs, blend and expansion | Full control. | A new parameter on the audio page, every preset gains a field, the oracle must be re-frozen. |
+
+**Why (b).** A tooltip and one sentence; nothing moves; the oracle stays
+frozen. (c) is the honest fix if the double meaning ever bothers you at the
+desk.
+
+**What changes.** A tooltip, one ENGINEERING sentence, one decision row.
+
+### 6. A10 — fixing the input trim
+
+**Recommendation: (3), a per-band auto/manual normalisation switch.**
+
+**What it is.** Each audio band has an input trim in dB, plus a master
+trim. The chain then normalises each band adaptively, tracking a moving floor
+and ceiling, so a static gain in front of it is mostly cancelled. To make
+trim do anything the reference design applied it twice: before the envelope
+and again after the trackers.
+
+**Today.** On real material, cutting the bass band by 6 to 12 dB makes it
+drive harder, and it only attenuates from about 20 dB down. Measured on the
+reference: 0 dB gives 0.87 out, −6 gives 1.03, −12 gives 1.01, −20 gives
+0.75. Fully off gives exactly 0. Ported on purpose for parity and frozen by a
+bit-exact test. Open since plan 06.
+
+| Option | How it works | Trade-off |
+|---|---|---|
+| (1) Bias the adaptive window in proportion to trim | The floor and ceiling shift with the trim so the gain is not cancelled. | Changes the reference path for everyone; the parity oracle must be re-recorded; no reference to check the new behaviour against. |
+| (2) Trim as a multiplier after the normaliser | Trim becomes a plain output gain per band. | Same re-freeze; and a post-normaliser gain no longer moves the band against the gate and confidence thresholds, half of what trim is for. |
+| (3) A per-band auto/manual switch | Auto keeps today's chain bit for bit. Manual bypasses the adaptive window for that band; trim becomes a plain gain, monotonic. | One new saved parameter per band and a chip on each strip. Manual bands lose the limiter-undoing dynamics recovery, which is the point of choosing manual. |
+
+**Why (3).** What a mix engineer expects; the auto path and its oracle stay
+untouched; the monotonicity test runs on the manual path. Plan 06 proposed it
+first.
+
+**What changes.** About two days (plan 11 WP15): the switch, the strip chip,
+a monotonicity test on real material, one scene-file field defaulting to auto
+so every saved scene loads unchanged, the ENGINEERING warning rewritten.
+
+### 7. R2 + L2 — the loop keys into the binding table
+
+**Recommendation: (a), make them table rows.**
+
+**What it is.** Almost every key, pad button and APC40 control is a row in
+one binding table, saved in your home folder, editable on the ROUTING page,
+shown on the cheat sheet. Three things are still hard-coded in the frame
+loop: R (camera reset), F1–F8 (load slot) and ⇧F1–F8 (save slot). Cmd+R and
+Esc/Q are also in the loop and would stay there.
+
+**Today.** The loop keys work but cannot be rebound, do not appear on the
+ROUTING page, and need a duplicate "act" code path the audit wants gone. A
+decision from 2026-09-26 kept them in the loop, with scope as the reason.
+
+| Option | Result | Trade-off |
+|---|---|---|
+| (a) Rows for R, F1–F8 and ⇧F1–F8; delete the duplicate path | Every performance key rebinds like any other; the cheat-sheet test covers them; only restart and quit stay outside the table. | Your binding file gains up to seventeen rows on next launch, added only where those keys are free. Supersedes the earlier decision. |
+| (b) Keep them in the loop; delete only the duplicate setter | No change to the file. | The duplicate path stays; F-keys and R remain the one thing the ROUTING page cannot show or change. |
+
+**Why (a).** The earlier decision was about scope, not design; the table was
+built for this; it closes two audit rows. Under plan 13 the F-key rows load
+*preset slots* rather than theme slots; the recommendation is unchanged, only
+the target ids differ.
+
+**What changes.** Half a day (plan 11 WP7): three factory rows, the migration
+that adds them to older files, the cheat sheet, tests, one superseded row.
+
+### 8. Merge one integration PR, or fifteen PRs
+
+**Recommendation: merge PR #55, then #47.**
+
+**What it is.** Plan 11 is fifteen pull requests (#39–#54), one per work
+package, each code-reviewed on its own. They were built in parallel and
+several edit the same document tables and the same few source lines, so they
+were stacked. PR #55 is all fifteen merged in stacking order with the seams
+fixed and tested as one build: 778 tests pass. PR #56 (the plan 13 ledger)
+targets #55's branch and rides with it. PR #47 (plan 12's five party
+presets) merges after #55 as is, which you settled on 2026-09-28.
+
+| Option | What you do | Trade-off |
+|---|---|---|
+| Merge #55 | One merge; GitHub marks the fifteen as merged. | Main receives one large merge; a later bisect lands on the integration commit rather than a work package. |
+| Merge the fifteen in order | Fifteen merges, in the order #55's description lists. | Each after the first few conflicts on the ARCHITECTURE, ENGINEERING and AUDIT tables, the hot-reload module list and the frame loop; the same resolutions as #55, redone by hand. |
+
+**Why #55.** The conflicts are already resolved and the merged result is
+what was tested. Each PR keeps its review and diff.
+
+### 9. P13-a — what the global layer's track knobs carry
+
+**Recommendation: (a) as a first cut.**
+
+**What it is.** Under plan 13 the APC40's eight track knobs have two
+meanings: the loaded preset's on the preset layer, and a fixed set on the
+global layer (reached by latched SHIFT). The global set is defined by the
+session and can never be Learned over. The question is what those eight
+global knobs should do.
+
+**Today.** No layer exists; the track knobs are the view faders on every
+preset.
+
+| Option | The global track knobs | Trade-off |
+|---|---|---|
+| (a) Four hand-feel settings (smoothing, response, catch time, the selected axis's return time) plus BPM; three knobs free | The desk person adjusts the hand feel while someone else is in the box. | Thin: five of eight used. If the box is calibrated once and left, these knobs are rarely touched. |
+| (b) Only the band strip on the device knobs; track knobs dark under SHIFT | Nothing to learn; the global layer is the analyzer only. | Hand feel is panel-only mid-set. |
+| (c) Your own list | Whatever you reach for. | You write it. |
+
+**Why (a).** The hand feel is the one thing that changes with who is in the
+box, and it must not cost every preset a knob. If the box is calibrated once
+and left alone, choose (b).
+
+**What changes.** A session file's global map, one factory table, the LED
+rule for the dark knobs. Part of plan 13 WP2.
+
+### 10. P13-b — partial presets under "a load replaces everything"
+
+**Recommendation: (a), no exception.**
+
+**What it is.** You decided that loading a preset replaces everything: every
+performance parameter lands (the file's value or the app default), every
+performer row is replaced, the desk's preset layer is replaced, no merging.
+Today's routing presets (`legacy6`, `lfo-breathe`, the `hands-*` files) are
+routes-only files with no values. Loaded as presets under that rule they
+would reset the whole picture.
+
+| Option | What a routes-only file does | Trade-off |
+|---|---|---|
+| (a) No exception: the one-time migration turns routes-only files into full presets; "partial" means only a module preset (one group's values from that group's strip) | Every preset load is total and predictable. | Routes-only files stop existing; anyone who liked "load the routes, keep my look" uses module presets and a full preset instead. |
+| (b) A preset may omit values and then leaves the picture alone | Today's routes-only files keep working as they are. | One exception to the no-merge rule, and the place the next exception comes from. Two kinds of load to explain. |
+
+**Why (a).** You chose the rule for having no merge cases. Plan 13 §8 calls
+(a) the clean answer.
+
+**What changes.** The migration writes full presets from the routes-only
+files, with today's theme values filled in. Part of plan 13 WP1.
+
+### 11. P13-c — bank slots by name or inline
+
+**Recommendation: (a), a slot names a preset file.**
+
+**What it is.** F1–F8 and the APC40's preset-select row pick one of eight
+slots. Today a slot (a theme slot) holds its values inline in the project
+file.
+
+| Option | What a slot is | Trade-off |
+|---|---|---|
+| (a) A slot names a preset file; F-key and the preset row load it; ⇧F-key saves the live state *as* that preset into the user folder | A preset is the one unit that is saved, loaded, shared and versioned; a slot is a pointer. | Deleting or renaming a preset file empties a slot; the slot then loads nothing and says so. |
+| (b) Slots keep inline copies, as themes do today | A project is self-contained. | The same performance moment exists twice, in the bank and as a file, and drifts. |
+
+**Why (a).** One unit, one place. Plan 13's design assumes it.
+
+**What changes.** The session's slot list, the save-slot path, the project
+migration. Part of plan 13 WP1.
+
+### 12. P13-d — what a macro is
+
+**Recommendation: (a). This one is waiting for your yes.**
+
+**What it is.** Today a macro is one of eight knobs that scales the *depth*
+of every performer row naming it; it never sets a value itself. Separately,
+no desk row today can set more than one target. You asked on 2026-09-28 what
+a macro is, describing "one knob, multiple bound controls that all change
+simultaneously".
+
+| Option | Meaning | Trade-off |
+|---|---|---|
+| (a) Keep macros as depth attenuators, saved in the preset with their routes, and add multi-target desk rows: one knob sets several bases, each with its own range | Two small jobs, each with one name. The thing you described is the second half. | Two concepts to explain: "macro" (attenuator) and "multi-target row" (fan-out setter). |
+| (b) Macros become the fan-out setter; the attenuator role goes | One word. | Chaining loses its attenuator: a hand can no longer scale how hard an LFO pushes without owning the LFO's depth directly. |
+| (c) Both jobs under one word | One knob can attenuate routes and set bases. | The row format grows two shapes; the ROUTING page has to show both. |
+
+**Why (a).** The two jobs do not compete and each is small.
+
+**What changes.** A `targets` list on a desk row with a range per target;
+the ROUTING page shows it. Part of plan 13 WP3.
+
+### 13. P13-e — the ROUTING page once it edits the loaded preset
+
+**Recommendation: (a), one page.**
+
+**What it is.** Under plan 13 a Learn or an edit on the ROUTING page writes
+into the loaded preset, not into a global file. The page has to show the
+preset's performer rows, the preset's desk rows (the APC40 preset layer), and
+the session's invariant and global rows.
+
+**Today.** The page lists performer rows and a routing-preset strip. MIDI
+rows are not shown at all.
+
+| Option | Layout | Trade-off |
+|---|---|---|
+| (a) One page: the preset's routes table, its desk rows under it, the session's invariant and global rows read-only below | One place to see why a knob does nothing: unmapped, invariant, or on the other layer. | A longer page; the rows scroll in a child (already the case). |
+| (b) Desk rows on their own page | Each page stays short. | Two pages to check when a knob is dead. |
+
+**Why (a).** The question a performer asks at the desk is "why does this
+knob do nothing", and one page answers it.
+
+**What changes.** The ROUTING page layout and its no-scroll test. Part of
+plan 13 WP3.
+
+---
+
+## Part B — built on the recommendation without asking; confirm or overturn
+
+Four calls had a sensible default and waiting would have blocked the work.
+Each is built, reviewed and on PR #55. Overturning any is a small follow-up.
+
+| # | Call | What was built | The alternative | Cost to reverse |
+|---|---|---|---|---|
+| 14 | B1: a hand leaving the box | The moment a hand is out of the box its axes read "absent", so every row it drives lets go and the base returns, as a gate opening already did. The return spring and the "hold on exit" setting shape only the MIDI sent to a DAW. While a returning hand is being caught, the row stays live and glides onto it, so a one-frame tracker dropout does not snap the picture. | Keep "hold" latching a route: the hand leaves and the parameter stays. Latching is instead done by setting the base with a knob, which a performer never blocks. | Half a day; reopens the audit's first finding. |
+| 15 | A1: which scene store survives | The eleven JSON files under the band library are the one source of scenes, with band names in each layout; the scene combo, the APC40 grid, Reset and the strip all read them; a user file of the same name shadows a factory scene. | Delete the JSON files and keep scenes in code; user-authored scenes would not exist. | A day. |
+| 16 | L3: a project's own routing | A project never carries its own copy of the routing table; the live table stays one file in the home folder. The never-written field is gone. (Plan 13 replaces this: a preset carries its routes.) | Fill the field so a project restores its rows on load. | Moot once plan 13 lands. |
+| 17 | B6: a trigger fired after the LFOs stepped | A trigger or LFO reset from the panel or a performer, which arrives after this frame's LFO step, is held to the start of the next step so the LFOs read exactly phase 0 the first frame they see it. Keys still land at once. | Document that those two paths are one frame off. | An hour. |
+
+---
+
+## Part C — already settled by you, listed so nothing is missing
+
+- **Plan 13 D1–D12** (2026-09-28, in DECISIONS.md "Presets and the desk"):
+  two nouns; a load replaces everything; module presets as labels; latched
+  SHIFT with an LED; fixed global layer; invariant controls; knobs jump and
+  faders pick up on a layer switch; an unmapped control does nothing and
+  shows dark; the analyzer is session; a session names its startup preset; a
+  modifier is read at the press. Decided, not built.
+- **Sequencing** (2026-09-28): merge #55, then #47 as is, then plan 13 from
+  its WP1, re-cutting the five `party-*` presets in its WP5.
+- **Plan 12's per-preset desk block**: superseded by plan 13's preset desk
+  layer.
+
+## Part D — not decisions, but gating "settled"
+
+- `docs/plans/11-hand-checks.md`: 32 checks at the machine. Checks 7 and 11
+  read differently under each answer to decisions 1 and 4. Check 31 is the
+  one hardware assumption plan 13 rests on (the APC40's endless knobs
+  re-base from a host CC). Check 32 is plan 12's seven projector-and-box
+  judgements.
+- Two review notes from plan 12 that belong in the audit, not here: named
+  hand addresses (`hand:left.roll`) so a custom `[hands] dofs` list cannot
+  scramble shipped presets; an explicit groups-to-reset list on a theme or
+  preset.
+
+---
+
+## Answer sheet
+
+Write the letter, or "rec" for the recommendation. Rows 14–17 take "keep"
+or "overturn".
+
+| # | Decision | Recommended | Your answer | Note |
+|---|---|---|---|---|
+| 1 | B2 tap and the downbeat | (a) never moves it | **(a)**, 2026-09-28 | |
+| 2 | B5 performer-fired triggers | (a) keep all three | **(c)**, 2026-09-28 | LFO triggers ownable, tap tempo not |
+| 3 | R1 LFO knobs | (c) theme state; presets may set assumed bases | **(c)**, 2026-09-28 | |
+| 4 | R6 APC40 LEDs | (a) rings base, LEDs state | **(a)**, 2026-09-28 | |
+| 5 | A7 Dynamics past 1× | (b) keep 4×, document | **(b)**, 2026-09-28 | |
+| 6 | A10 input trim | (3) auto/manual switch | **(3)**, 2026-09-28 | built, WP15 |
+| 7 | R2 + L2 loop keys | (a) table rows | **(a)**, 2026-09-28 | |
+| 8 | Merge path | PR #55, then #47 | **rec**, 2026-09-28 | #56 folded into #55 first |
+| 9 | P13-a global track knobs | (a) hand feel + BPM | **(a)**, 2026-09-28 | a first cut; expect better globals with use |
+| 10 | P13-b partial presets | (a) no exception | | |
+| 11 | P13-c bank slots | (a) a slot names a file | | |
+| 12 | P13-d what a macro is | (a) attenuator + multi-target rows | | |
+| 13 | P13-e ROUTING page | (a) one page | | |
+| 14 | B1 as built | keep | | |
+| 15 | A1 as built | keep | | |
+| 16 | L3 as built | keep | | |
+| 17 | B6 as built | keep | | |

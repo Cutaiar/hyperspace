@@ -1,13 +1,20 @@
 """The analysis chain's parts — port of the audio module of hyperspace.html.
 
 Every constant keeps its reference name (ENGINEERING §4). The known input-trim
-non-monotonicity is ported as-is; the fix belongs to plan 06, not the port.
+non-monotonicity is ported as-is on the AUTO path; a band switched to MANUAL
+normalisation (``Params.norm``, plan 11 / audit A10) takes a plain monotonic
+trim instead.
 
 The chain itself lives in analyzer.py since plan 07 (N bands, not six);
-this module keeps what it is made of — the reference band table, the
-headroom constants, the transfer functions, the per-band Params and the
-scenes. `bands.Chain` still resolves, to the analyzer, for the code that
-constructs it by that name.
+this module keeps what it is made of — the reference band table (the six
+edges, planes and directions the legacy6 preset and the parity oracle
+need), the headroom constants, the transfer functions and the per-band
+Params. The scenes are the band presets in library/band/*.json
+(control.SCENES names them). The reference's per-band attack / release
+windows live once, in `default_params()`, and `balanced.json` is pinned
+to that table by a test. The constants that belong to other layers moved
+out in plan 11: `DRIVE` (fader → rotation rate) is `params.DRIVE`, the
+meter's nominal line is `ui.NOM`.
 """
 
 from __future__ import annotations
@@ -15,36 +22,40 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
+# the package's one clamp (tapers.py, audit R10), re-exported under the
+# reference's name: the chain and the frozen oracle (tests/legacy_chain.py)
+# read it from here like every other reference constant
+from .tapers import clamp  # noqa: F401
+
 # ------------------------------------------------------------------ bands
 
 @dataclass
 class Band:
+    """One reference band: its edges and the plane it drove. The attack /
+    release windows are not here — `default_params()` is their one home."""
+
     id: str
     plane: int
     pl: str
     lo: float
     hi: float
-    atk: float
-    rel: float
     dir: int
 
 
 BANDS = [
-    Band("SUB", 5, "ZW", 20, 60, 0.250, 0.850, 1),
-    Band("BASS", 3, "XW", 60, 160, 0.015, 0.130, 1),
-    Band("MIDB", 4, "YW", 160, 400, 0.006, 0.070, -1),
-    Band("MID", 0, "XY", 400, 1200, 0.050, 0.300, -1),
-    Band("UPR", 1, "XZ", 1200, 4000, 0.090, 0.500, 1),
-    Band("AIR", 2, "YZ", 4000, 14000, 0.180, 0.900, -1),
+    Band("SUB", 5, "ZW", 20, 60, 1),
+    Band("BASS", 3, "XW", 60, 160, 1),
+    Band("MIDB", 4, "YW", 160, 400, -1),
+    Band("MID", 0, "XY", 400, 1200, -1),
+    Band("UPR", 1, "XZ", 1200, 4000, 1),
+    Band("AIR", 2, "YZ", 4000, 14000, -1),
 ]
 
 # -------------------------------------------------------------- constants
 
-NOM = 1.0        # nominal — a band working normally
 KNEE = 1.25      # where the soft ceiling starts to bend
-HEAD = 2.6       # asymptotic ceiling, input / transfer signal
 CEIL = 2.6       # asymptotic ceiling, fader output
-DRIVE = 3.2      # fader → rotation rate
+HEAD = CEIL      # the reference's name for the same ceiling on the input / transfer signal
 U_LO, U_SPAN = -80.0, 56.0
 PK_TAU, VAL_TAU = 2.5, 6.0
 PK_MIN, SPAN_MIN = 0.10, 0.04
@@ -56,10 +67,6 @@ DEV_AIM, DEV_MIN, WARM_F = 0.70, 0.06, 60
 COUPLE = 0.7
 FAST_A, FAST_R, SLOW_T = 0.003, 0.060, 0.30
 FLUX_G, FLUX_K, FLUX_MIN, TRN_HEAD = 3.2, 0.15, 0.12, 1.4
-
-
-def clamp(x: float, a: float, b: float) -> float:
-    return a if x < a else min(x, b)
 
 
 def soft_ceil(x: float, knee: float, ceil: float) -> float:
@@ -179,6 +186,12 @@ class Params:
     thr: float
     exp: float
     trn: float
+    norm: int = 0    # NORMS index: 0 auto (the reference's adaptive window), 1 manual
+
+
+# per-band normalisation (plan 11, audit A10): AUTO is the reference chain
+# bit for bit; MANUAL bypasses the adaptive window and trim is a plain gain
+NORMS = ["AUTO", "MANUAL"]
 
 
 def default_params() -> list[Params]:
@@ -197,73 +210,8 @@ def default_band_params() -> Params:
     return Params(0, 0, 1, 1, 0.050, 0.300, 0.075, 0.80, 0.22)
 
 
-DEF_EXP = [0.55, 0.90, 0.95, 0.80, 0.85, 0.85]
-DEF_TRN = [0.10, 0.30, 0.38, 0.22, 0.28, 0.32]
-DEF_TRIM = [0, 0, 0, 0, 0, 0]
-# a band past a scene's rows: the same linear / MID-timed strip
-DEF_ROW = [0, 1, 1, 50, 300, .075, .80, .22]
+# A band past a scene's rows takes default_band_params() — the linear,
+# MID-timed strip above. The scenes themselves are the band presets in
+# library/band/*.json (control.SCENES names them in combo order); since
+# plan 11 this module holds no copy of them.
 
-# Scenes: each band row is [fn, pre, post, atk ms, dec ms, thr, exp, trn, trim dB];
-# the last three are optional and fall back per band (older rows still load).
-# A scene may also carry a "layout" ({"bands": [{"f", "q", "curve"}, …]},
-# analyzer.py) that is applied before its rows; these eleven don't — they
-# tune whatever bands are loaded.
-PRESETS: list[dict] = [
-    {"name": "Balanced",
-     "b": [[1, 1, 1, 250, 850, .075, .55, .10], [7, 1, 1, 15, 130, .075, .90, .30],
-           [8, 1, 1, 6, 70, .075, .95, .38], [4, 1, 1, 50, 300, .075, .80, .22],
-           [0, 1, 1, 90, 500, .075, .85, .28], [12, 1, 1, 180, 900, .075, .85, .32]]},
-    {"name": "Kick & Sizzle",
-     "b": [[12, 1, .5, 300, 900, .09, .50, .05], [7, 1.4, 1.8, 4, 180, .10, 1.20, .60],
-           [5, 1, 1.2, 5, 60, .14, 1.20, .65], [0, 1, .6, 60, 260, .08, .70, .20],
-           [2, 1.2, 1, 70, 340, .07, .90, .35], [8, 1.5, 1.6, 10, 150, .08, 1.10, .60]]},
-    {"name": "Glacial Drift",
-     "b": [[1, 1.2, .9, 400, 1600, .05, .45, 0], [12, 1, .8, 300, 1400, .05, .45, 0],
-           [12, 1, .7, 250, 1200, .05, .45, 0], [1, 1, .8, 300, 1400, .05, .45, 0],
-           [12, 1.1, .8, 350, 1500, .05, .50, 0], [12, 1.2, .9, 400, 1800, .05, .50, 0]]},
-    {"name": "Strobe Cage",
-     "b": [[5, 1.2, 1.4, 8, 90, .12, 1.10, .45], [9, 1, 1.6, 4, 60, .12, 1.30, .70],
-           [9, 1.2, 1.6, 4, 50, .12, 1.30, .75], [5, 1, 1.3, 10, 110, .12, 1.10, .50],
-           [9, 1, 1.5, 8, 90, .12, 1.20, .65], [5, 1.2, 1.4, 12, 130, .12, 1.20, .60]]},
-    {"name": "Bass Engine",
-     "b": [[1, 1.4, 1.6, 200, 700, .06, .75, .15, 0], [7, 1.5, 2, 8, 140, .07, 1.25, .55, 0],
-           [8, 1.4, 1.8, 5, 70, .08, 1.20, .55, 0], [0, 1, .15, 60, 300, .10, .60, .15, -10],
-           [0, 1, .1, 90, 500, .10, .60, .15, -16], [0, 1, 0, 180, 900, .10, .60, .15, -24]]},
-    {"name": "Air & Lace",
-     "b": [[12, 1, .12, 300, 1200, .10, .50, .05, -20], [0, 1, .15, 20, 160, .10, .70, .20, -14],
-           [0, 1, .2, 8, 80, .10, .80, .30, -8], [1, 1.2, 1.2, 60, 340, .06, .95, .35, 0],
-           [1, 1.3, 1.7, 80, 420, .05, 1.10, .50, 0], [1, 1.4, 2, 140, 700, .05, 1.15, .55, 0]]},
-    {"name": "Inverse World",
-     "b": [[6, 1, .7, 260, 900, .04, .50, 0], [6, 1, .8, 40, 300, .04, .60, 0],
-           [0, 1, 1, 10, 90, .07, .95, .35], [0, 1, 1, 60, 320, .07, .80, .25],
-           [1, 1, 1.1, 90, 500, .06, .85, .25], [6, 1, .7, 200, 900, .04, .55, 0]]},
-    {"name": "Percussive",
-     "b": [[8, 1.2, 1.2, 6, 140, .09, 1.10, .55], [8, 1.3, 1.5, 4, 110, .09, 1.25, .75],
-           [8, 1.3, 1.5, 4, 80, .09, 1.25, .80], [8, 1.2, 1.3, 6, 140, .09, 1.15, .70],
-           [8, 1.2, 1.3, 8, 180, .09, 1.15, .70], [8, 1.2, 1.2, 10, 220, .09, 1.10, .65]]},
-    {"name": "Tremolo Web",
-     "b": [[7, 1, 1, 200, 700, .07, .60, .10], [7, 1.1, 1.2, 20, 240, .07, .85, .25],
-           [10, 1.2, 1.3, 10, 120, .08, .95, .30], [10, 1.2, 1.4, 50, 300, .07, .90, .25],
-           [10, 1.3, 1.4, 80, 420, .06, .90, .25], [11, 1.2, 1.2, 150, 700, .06, .85, .20]]},
-    {"name": "Harmonic Bloom",
-     "b": [[1, 1.2, 1, 300, 1000, .06, .55, .05], [1, 1.2, 1.1, 60, 420, .06, .80, .15],
-           [4, 1.1, 1.1, 20, 200, .07, .85, .20], [4, 1.2, 1.2, 80, 420, .06, .85, .20],
-           [1, 1.3, 1.3, 120, 600, .05, .90, .25], [1, 1.3, 1.2, 200, 900, .05, .90, .25]]},
-    {"name": "Slow Bass / Fast Air",
-     "b": [[1, 1.1, 1, 500, 1800, .05, .45, 0], [1, 1.1, 1, 300, 1200, .05, .55, .05],
-           [0, 1, 1, 60, 400, .07, .85, .25], [0, 1, 1.1, 20, 160, .08, 1.00, .45],
-           [2, 1.2, 1.4, 8, 90, .09, 1.20, .65], [8, 1.3, 1.6, 4, 60, .10, 1.25, .75]]},
-]
-
-
-
-# ------------------------------------------------------------------ chain
-
-def __getattr__(name: str):
-    """`bands.Chain` is the analyzer (plan 07): resolved lazily because
-    analyzer.py imports this module for the constants above."""
-    if name == "Chain":
-        from .analyzer import Analyzer
-
-        return Analyzer
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -308,6 +308,7 @@ dependencies = [
     { name = "mido" },
     { name = "moderngl" },
     { name = "numpy" },
+    { name = "pillow" },
     { name = "pyobjc-framework-cocoa", marker = "sys_platform == 'darwin'" },
     { name = "pyopengl" },
     { name = "python-rtmidi" },
@@ -318,7 +319,6 @@ dependencies = [
 [package.optional-dependencies]
 dream = [
     { name = "mlx", marker = "sys_platform == 'darwin'" },
-    { name = "pillow" },
     { name = "pyobjc-framework-metal", marker = "sys_platform == 'darwin'" },
     { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'" },
     { name = "torch" },
@@ -327,7 +327,6 @@ dream = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "pillow" },
     { name = "playwright" },
     { name = "pytest" },
     { name = "ruff" },
@@ -343,7 +342,7 @@ requires-dist = [
     { name = "mlx", marker = "sys_platform == 'darwin' and extra == 'dream'", specifier = ">=0.20" },
     { name = "moderngl", specifier = ">=5.12.0" },
     { name = "numpy", specifier = ">=2.0" },
-    { name = "pillow", marker = "extra == 'dream'", specifier = ">=10" },
+    { name = "pillow", specifier = ">=10" },
     { name = "pyobjc-framework-cocoa", marker = "sys_platform == 'darwin'", specifier = ">=12.2.2" },
     { name = "pyobjc-framework-metal", marker = "sys_platform == 'darwin' and extra == 'dream'", specifier = ">=12.2" },
     { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin' and extra == 'dream'", specifier = ">=12.2" },
@@ -358,7 +357,6 @@ provides-extras = ["dream"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "pillow", specifier = ">=12.3.0" },
     { name = "playwright", specifier = ">=1.49" },
     { name = "pytest", specifier = ">=8.0" },
     { name = "ruff", specifier = ">=0.8" },

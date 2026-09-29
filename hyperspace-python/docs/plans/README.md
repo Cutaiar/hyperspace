@@ -10,7 +10,7 @@ Current state and the pick-up list: [`docs/CHECKPOINT.md`](../CHECKPOINT.md).
 |---|---|---|
 | [00 — Golden traces](00-golden-traces.md) | Stage 0 | Python scaffold, recording harness, reference traces from `hyperspace.html` |
 | [01 — Core parity](01-core-parity.md) | Stage 1 | `geometry.py` + `audio.py` + `bands.py`, headless, proven against traces |
-| [02 — Renderer](02-renderer.md) | Stage 2 | `render.py` — the moderngl window, all 18 shapes |
+| [02 — Renderer](02-renderer.md) | Stage 2 | `render.py` — the moderngl window, all 18 shapes (now `app.py` owns the windows; 25 shapes, `geometry.py`) |
 | [03 — UI, scenes & audio](03-ui-scenes.md) | Stage 4 | `ui.py` + `audio.py` — band strips, meters, scenes, transport, capture |
 | [04 — Live inputs](04-live-inputs.md) | Stage 3 | DJ Link, IMU, delay compensation (needs booth hardware) |
 | [05 — DAW bridge](05-daw-bridge.md) | §3.6 (after 03–04) | `params.py` registry + `midi.py`/`apc40.py` inbound control (done); `bridge.py` — outbound MIDI/OSC, FL Studio connectivity |
@@ -19,6 +19,7 @@ Current state and the pick-up list: [`docs/CHECKPOINT.md`](../CHECKPOINT.md).
 | [08 — Hands](08-hands.md) | after 07 | Ultraleap two-hand tracking → 12 shaped analog axes (curve, dead zone, attack/decay, rest springs): float `hand:` sources + Learn in-app, 7/14-bit CC · bend · pressure to a DAW; HANDS page, setups as presets |
 | [09 — One performer](09-one-performer.md) | after 08 | One path for every live source, one performer per parameter with an FL-style replace prompt, two ops (`push` / `position`), macro knobs, tap-tempo clock, four chainable LFOs; bindings schema 2 — executed 2026-09-26 (PRs #33–#37); hand checks pending |
 | [10 — Architecture & documentation](10-architecture.md) | after 09 | The system as built, for maintainers and agents: `ARCHITECTURE.md` (component map, the frame, the control model as the canonical statement, module shapes), `DECISIONS.md` (dated, with the why), `ENGINEERING.md` refreshed for the Python app, `AUDIT-2026-09.md` (findings, sized, filed for plan 11) — executed 2026-09-27; docstrings were the only code touched |
+| [11 — Remediation](11-remediation.md) | after 10 | Settle and close the audit register: every B/H/R/N/V/A/L/U/P/D row fixed or decided, sixteen work packages as one PR each (#40–#54, integrated on `plan-11-integration`), the missing boundary and loop-order tests, `11-hand-checks.md` for what only the owner can verify at the machine — executed 2026-09-27/28; seven owner decisions pending |
 
 ## Conventions that apply to every plan
 

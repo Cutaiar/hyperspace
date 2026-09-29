@@ -23,10 +23,9 @@ what the output is.
 Every control is a registry param, drawn with the panel's own widgets,
 so right-click → Learn and a performer's ownership work on them like on
 anything else. A function over the Panel, like ui_lookback: no state of
-its own (whether a save lands live depends on hotreload.MODULES, which
-does not list this module today). Without a clock and
-LFOs attached (headless tests, a Panel built without app.py) the page
-says so and draws nothing else.
+its own; a save of this file lands live (hotreload.MODULES). Without a
+clock and LFOs attached (headless tests, a Panel built without app.py)
+the page says so and draws nothing else.
 """
 
 from __future__ import annotations
@@ -46,7 +45,6 @@ ROW_LABEL_W = 54.0    # the label column in a half-width cell: short labels
 CYCLES = 2            # the scope shows this many
 SAMPLES = 64          # per cycle
 BEAT_R = 7.0          # the beat light's radius
-DIM_LINE = imgui.ImVec4(0.25, 0.25, 0.25, 1.0)
 WAVE = imgui.ImVec4(0.92, 0.92, 0.92, 1.0)
 
 
@@ -101,15 +99,10 @@ def _clock_strip(panel, clock) -> None:
     # the two faders side by side, so the clock costs the page one row
     if imgui.begin_table("##clock", 2, imgui.TableFlags_.sizing_stretch_same):
         imgui.table_next_column()
-        _half(panel, f"{TEMPO_GROUP}.bpm", "bpm")
+        panel.half(f"{TEMPO_GROUP}.bpm", "bpm", label_w=ROW_LABEL_W)
         imgui.table_next_column()
-        _half(panel, f"{TEMPO_GROUP}.nudge", "nudge")
+        panel.half(f"{TEMPO_GROUP}.nudge", "nudge", label_w=ROW_LABEL_W)
         imgui.end_table()
-
-
-def _half(panel, pid: str, label: str) -> None:
-    """A labelled slider in a half-width table cell: short label, narrow column."""
-    panel._row(pid, label=label, label_w=ROW_LABEL_W)
 
 
 def _beats(clock, h: float) -> None:
@@ -119,11 +112,11 @@ def _beats(clock, h: float) -> None:
     cy = pos.y + h / 2
     on = clock.on_beat()
     dl.add_circle_filled(imgui.ImVec2(pos.x + BEAT_R, cy), BEAT_R,
-                         ui.u32(ui.RED if on else DIM_LINE))
+                         ui.u32(ui.RED if on else ui.LINE))
     bar = int(clock.bar())
     x = pos.x + 2 * BEAT_R + 10
     for k in range(BEATS_PER_BAR):
-        col = ui.TEXT if k == bar else DIM_LINE
+        col = ui.TEXT if k == bar else ui.LINE
         dl.add_circle_filled(imgui.ImVec2(x + k * 12, cy), 3.0, ui.u32(col))
     imgui.dummy(imgui.ImVec2(2 * BEAT_R + 10 + BEATS_PER_BAR * 12, h))
     if imgui.is_item_hovered():
@@ -148,14 +141,14 @@ def _strip(panel, lfos, clock, i: int) -> None:
     panel._combo(f"{p}.sync", COMBO_W)
     imgui.same_line()
     panel._button(f"{p}.reset", "reset", small=True)
-    _half(panel, f"{p}.rate", "rate")
+    panel.half(f"{p}.rate", "rate", label_w=ROW_LABEL_W)
     # depth and phase share the third row: three rows beside a scope, four
     # strips on the page without a scrollbar
     if imgui.begin_table("##knobs", 2, imgui.TableFlags_.sizing_stretch_same):
         imgui.table_next_column()
-        _half(panel, f"{p}.depth", "depth")
+        panel.half(f"{p}.depth", "depth", label_w=ROW_LABEL_W)
         imgui.table_next_column()
-        _half(panel, f"{p}.phase", "phase")
+        panel.half(f"{p}.phase", "phase", label_w=ROW_LABEL_W)
         imgui.end_table()
     imgui.end_group()
     imgui.pop_id()
@@ -176,13 +169,13 @@ def _scope(lf) -> None:
     pos = imgui.get_cursor_screen_pos()
     dl = imgui.get_window_draw_list()
     x0, y0, x1, y1 = pos.x, pos.y, pos.x + SCOPE_W, pos.y + SCOPE_H
-    dl.add_rect(imgui.ImVec2(x0, y0), imgui.ImVec2(x1, y1), ui.u32(DIM_LINE))
+    dl.add_rect(imgui.ImVec2(x0, y0), imgui.ImVec2(x1, y1), ui.u32(ui.LINE))
     # the rest line, and one per cycle boundary
     ym = y0 + SCOPE_H * (1 - REST)
-    dl.add_line(imgui.ImVec2(x0, ym), imgui.ImVec2(x1, ym), ui.u32(DIM_LINE))
+    dl.add_line(imgui.ImVec2(x0, ym), imgui.ImVec2(x1, ym), ui.u32(ui.LINE))
     for c in range(1, CYCLES):
         xc = x0 + SCOPE_W * c / CYCLES
-        dl.add_line(imgui.ImVec2(xc, y0), imgui.ImVec2(xc, y1), ui.u32(DIM_LINE))
+        dl.add_line(imgui.ImVec2(xc, y0), imgui.ImVec2(xc, y1), ui.u32(ui.LINE))
     n = SAMPLES * CYCLES
     pts = []
     for j in range(n + 1):

@@ -30,8 +30,8 @@ outside the table — relative writers — and they nudge a param's *base*
 (Param.nudge / scale), so a performer's offset rides on the move rather
 than folding into it.
 
-The in-app cheat sheet (ui.CHEATSHEET) is the canonical human list —
-keep it in sync when adding bindings.
+The in-app cheat sheet (ui.CHEATSHEET) is the canonical human list;
+tests/test_ui_shell.py checks it against the tables and LOOP_KEYS below.
 
 The engine hot-reloads (hotreload.py): save a module on its watch list
 (hotreload.MODULES) while the app runs and live objects pick the code up
@@ -49,6 +49,8 @@ import math
 import os
 import sys
 import time
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
 # pyGLFW and imgui_bundle each ship a libglfw; loading both trips ObjC class
@@ -70,13 +72,14 @@ from .audio import AudioEngine
 from .control import Control
 from .gamepad import Pad
 from .hotreload import HotReloader
-from .library import Library
+from .learn import Learn
+from .library import SLOTS, Library
 from .overlay import GlfwBackend, Output
 from .params import Registry, build_registry
-from .presets import SLOTS
-from .render import Renderer, ViewState
+from .render import Renderer
 from .routing import Bindings, Router, bindings_path
 from .ui import Panel, apply_style, load_fonts
+from .view import ViewState
 
 TITLE = "Hyperspace"
 RENDER_SIZE = (1280, 820)
@@ -90,7 +93,10 @@ D4_RATE0 = 0.45   # octaves/s at the instant of the press
 D4_RATE1 = 3.6    # octaves/s once the ramp completes
 D4_RAMP = 1.8     # seconds of hold to reach full rate
 
-# the key / pad / MIDI / lane binding tables live in routing.py (bindings.json)
+# the key / pad / MIDI / lane binding tables live in routing.py (bindings.json);
+# these are the keys the loop still handles itself (the cheat-sheet test reads it)
+LOOP_KEYS = ("R", "SUPER+R", "UP", "DOWN", "ESCAPE", "Q",
+             *[f"F{k + 1}" for k in range(SLOTS)], *[f"SHIFT+F{k + 1}" for k in range(SLOTS)])
 
 
 def act(reg: Registry, pid: str, op: str, arg: int = 0) -> None:
@@ -116,17 +122,25 @@ def _quiet(fn) -> None:
         pass
 
 
-def _restart(audio, impl, midi_io, ctrl_win, dream_io=None) -> None:
+def close_all(audio, *adapters) -> None:
+    """Every optional adapter's `close()` — MIDI, the bridge, the hands
+    tracker, the dream worker — then the audio stream, best-effort, so a
+    broken port never blocks a quit or a restart. The one list for both
+    exits (audit P1); `None` for an adapter that was never opened."""
+    for a in adapters:
+        if a is not None:
+            _quiet(a.close)
+    _quiet(audio.stop)
+
+
+def _restart(audio, adapters, impl, ctrl_win) -> None:
     # execv swaps the process image in place — same PID, same terminal,
     # same stdio — so stdout doesn't detach and the user's shell keeps
     # owning the child. The OS reclaims the GL contexts and audio device
-    # on image swap; we still stop the audio stream first so Core Audio
-    # doesn't complain about a stream vanishing mid-callback.
-    if midi_io is not None:
-        _quiet(midi_io.close)
-    if dream_io is not None:
-        _quiet(dream_io.close)
-    _quiet(audio.stop)
+    # on image swap; we still close the ports and stop the audio stream
+    # first so Core Audio doesn't complain about a stream vanishing
+    # mid-callback and the next image finds the MIDI ports free.
+    close_all(audio, *adapters)
     _quiet(lambda: glfw.make_context_current(ctrl_win))  # imgui's GL objects live there
     _quiet(impl.shutdown)
     _quiet(glfw.terminate)
@@ -171,8 +185,9 @@ def _make_output(win, reg: Registry, cfg: dict) -> Output:
     """The render window's output settings, seeded from config."""
     out = Output(win, GlfwBackend(glfw))
     out.register(reg)
-    # [output] in config.toml; the pre-split [overlay] section still counts
-    oc = {**cfg.get("overlay", {}), **cfg.get("output", {})}
+    # [output] in config.toml — config.load has already folded a pre-split
+    # [overlay] section under it, so this is the one place that reads it
+    oc = cfg.get("output", {})
     out.monitor = int(oc.get("monitor", -1))
     out.fullscreen = bool(oc.get("fullscreen", False))
     out.overlay = bool(oc.get("on_start", False))
@@ -182,7 +197,7 @@ def _make_output(win, reg: Registry, cfg: dict) -> Output:
     return out
 
 
-def _open_midi(reg: Registry, cfg: dict, table: Bindings):
+def _open_midi(reg: Registry, cfg: dict, table: Bindings, learn):
     """The adapter, only when configured — the core never imports it."""
     mc = cfg.get("midi", {})
     if not mc.get("enabled", True):
@@ -193,8 +208,8 @@ def _open_midi(reg: Registry, cfg: dict, table: Bindings):
         print(f"midi: adapter unavailable ({e})", file=sys.stderr)
         return None
     try:
-        mapping = midi.MidiMap(table=table)
-        return midi.MidiIO(reg, mapping, port=mc.get("port"), profile=mc.get("profile", "apc40"))
+        return midi.MidiIO(reg, table, port=mc.get("port"), profile=mc.get("profile", "apc40"),
+                           learner=learn)
     except Exception as e:  # noqa: BLE001 — a broken adapter must not stop the show
         print(f"midi: {e}", file=sys.stderr)
         return None
@@ -252,6 +267,15 @@ def _open_dream(reg: Registry, cfg: dict):
         return None
 
 
+def _open_pad(cfg: dict):
+    """The Xbox pad (gamepad.py), unless [gamepad] enabled = false. On by
+    default: the pad never raises when absent, so there is nothing to lose
+    by polling for one (audit P2)."""
+    if not cfg.get("gamepad", {}).get("enabled", True):
+        return None
+    return Pad()
+
+
 class Keys:
     """Edge detection and hold timing over polled key state, across both windows.
 
@@ -281,12 +305,12 @@ class Keys:
         self.prev[key] = down
         return down and not was
 
-    def held(self, key: int) -> float:
-        """Seconds the key has been continuously down; 0.0 when up."""
+    def held(self, key: int, now: float) -> float:
+        """Seconds the key has been continuously down at the frame's `now`;
+        0.0 when up. The loop's clock, not one of its own (audit P4)."""
         if not self._down(key):
             self.down_since.pop(key, None)
             return 0.0
-        now = time.perf_counter()
         return now - self.down_since.setdefault(key, now)
 
     def down(self, *keys: int) -> bool:
@@ -373,6 +397,166 @@ def _ride_depth(p, octaves: float) -> None:
     p.nudge(1.0 + 0.05 * 2.0 ** (u + octaves) - p.base)
 
 
+@dataclass
+class Host:
+    """Everything one frame touches, built once by `main()`; `frame()` runs a
+    frame over it. Optional adapters are `None` when their config gate is
+    shut. `draw_render` / `draw_panel` / `restart` / `quit` are the window
+    system's four moves, closures in `main()` so the order can be tested
+    over stubs (tests/test_app_boundary.py)."""
+
+    reg: Registry
+    view: ViewState
+    control: Control
+    audio: AudioEngine
+    router: Router
+    clock: tempo.Clock
+    lfos: lfo.LFOs
+    keys: Keys
+    mouse: Mouse
+    output: Output
+    renderer: Renderer
+    panel: Panel
+    reloader: HotReloader
+    draw_render: Callable[[float], None]
+    draw_panel: Callable[[float, float], None]
+    restart: Callable[[], None]
+    quit: Callable[[], None]
+    pad: Pad | None = None
+    midi_io: object | None = None
+    hands_io: object | None = None
+    bridge_io: object | None = None
+    dream_io: object | None = None
+    learn: object | None = None       # learn.Learn: what MIDI and the hands complete
+
+    @property
+    def adapters(self) -> tuple:
+        """What `close_all` closes, in shutdown order."""
+        return (self.midi_io, self.bridge_io, self.hands_io, self.dream_io)
+
+
+def frame(h: Host, now: float, dt: float, fps: float) -> bool:
+    """One frame, in the order ARCHITECTURE §2 states: the scene-setters
+    (keys, loop keys, pad, MIDI) write bases; the sources feed the table
+    (hands, output, mouse, audio, bridge, LFOs); the pass lands offsets
+    (`router.modulate`, `reg.apply`, `integrate`); then the two windows
+    draw. Returns False when a guarded block raised — the error is on
+    `reloader.runtime_error` and the loop goes on, so the next save can
+    fix it. `imgui.new_frame()` has already run (main): `keys.typing` is
+    this frame's value."""
+    reg, keys, router, reloader = h.reg, h.keys, h.router, h.reloader
+    h.clock.tick(now)   # the clock's "now" for the frame: a trigger and the LFO step agree
+
+    # the chain object is recreated on source attach; keep bindings fresh
+    h.control.chain = h.audio.chain
+    reloader.poll()     # its own throttle clock (monotonic): a file watch, not a frame clock
+
+    # ---- polled keys, from either window ----
+    if keys.pressed(glfw.KEY_ESCAPE) or keys.pressed(glfw.KEY_Q):
+        h.quit()
+    shift = keys.shift()
+    router.keys(keys)         # B taps, ⇧B triggers: both are table rows
+    if keys.pressed(glfw.KEY_R):
+        if keys.super():
+            h.restart()
+        else:
+            act(reg, "camera.reset", "fire")
+    # ↑/↓ ride depth4 toward its range limit, accelerating with hold
+    for key, sgn in ((glfw.KEY_UP, 1.0), (glfw.KEY_DOWN, -1.0)):
+        hold = keys.held(key, now)
+        if hold > 0.0:
+            ramp = min(hold / D4_RAMP, 1.0)
+            rate = D4_RATE0 + (D4_RATE1 - D4_RATE0) * ramp * ramp
+            _ride_depth(reg["view.depth4"], sgn * rate * dt)
+    # F1–F8 flip whole-surface themes; with ⇧ held they save instead
+    for k in range(SLOTS):
+        if keys.pressed(glfw.KEY_F1 + k):
+            act(reg, f"theme.{'save' if shift else 'load'}.{k}", "fire")
+
+    # ---- gamepad: a second hand on the same controls (imgui never
+    # claims it, so it works even while the panel has keyboard focus) ----
+    pad = h.pad
+    if pad is not None:
+        pad.poll()
+        if pad.on:
+            router.pad(pad)
+            # analog: left stick orbits, right-stick Y zooms about centre,
+            # triggers ride depth4 in its own log space (LT out, RT in)
+            lx, ly = pad.axis(gamepad.AX_LX), pad.axis(gamepad.AX_LY)
+            if lx:
+                reg["camera.yaw"].nudge(lx * 2.2 * dt)
+            if ly:
+                reg["camera.pitch"].nudge(ly * 2.2 * dt)
+            zoom_v = pad.axis(gamepad.AX_RY)
+            if zoom_v:
+                reg["camera.zoom"].scale(2.0 ** (-zoom_v * 1.2 * dt))
+            d4 = pad.trigger(gamepad.AX_RT) - pad.trigger(gamepad.AX_LT)
+            if d4:
+                _ride_depth(reg["view.depth4"], d4 * 2.4 * dt)
+
+    # ---- MIDI controller: routed through the same registry. From here
+    # on a raising block records itself on the reloader and the frame goes
+    # on; `ok` keeps the note alive until a clean frame ----
+    ok = True
+    if h.midi_io is not None:
+        try:
+            h.midi_io.poll()
+        except Exception as e:  # noqa: BLE001 — hot-reloaded code may raise
+            ok, reloader.runtime_error = False, _err("midi", e)
+
+    # ---- Ultraleap hands: hand lanes into the table, MIDI out to a DAW ----
+    if h.hands_io is not None:
+        try:
+            h.hands_io.poll(dt, h.learn, router)
+        except Exception as e:  # noqa: BLE001
+            ok, reloader.runtime_error = False, _err("hands", e)
+
+    # ---- output: the render window follows the output.* params ----
+    h.output.apply()
+    h.renderer.bg_alpha = h.output.bg_alpha
+
+    # ---- mouse: orbit / pan / zoom, render window only ----
+    h.mouse.poll(shift)
+
+    # ---- audio + rotation + draw, guarded: hot-reloaded code may raise;
+    # record it and keep the loop alive so the next save can fix it ----
+    try:
+        audio = h.audio
+        audio.step(dt)
+        audio.publish(router)       # the lanes' names, like every source (R8)
+        if h.bridge_io is not None:   # lanes out, external lanes in (bridge.py)
+            h.bridge_io.step(audio.chain if audio.on else None, router)
+        # the LFOs are a source like any other: stepped on the frame's
+        # clock, fed to the table as `lfo` before the modulation pass
+        h.lfos.step(dt, now, h.clock)
+        h.lfos.publish(router)
+        # the lanes are a modulation source like any other (routing.py);
+        # once every source has spoken for this frame, land base +
+        # offsets on the objects before the integrator reads them
+        router.modulate(audio.chain if audio.on else None)
+        reg.apply()
+        h.view.integrate(dt)
+    except Exception as e:  # noqa: BLE001
+        ok, reloader.runtime_error = False, _err("step", e)
+
+    # ---- render window, then the control window ----
+    try:
+        h.draw_render(dt)
+    except Exception as e:  # noqa: BLE001
+        ok, reloader.runtime_error = False, _err("render.draw", e)
+    try:
+        h.draw_panel(dt, fps)
+    except Exception as e:  # noqa: BLE001
+        ok, reloader.runtime_error = False, _err("panel.draw", e)
+    if ok:
+        reloader.runtime_error = ""
+
+    if h.panel.restart_requested:
+        h.panel.restart_requested = False
+        h.restart()
+    return ok
+
+
 def _hot_error_toast(msg: str) -> None:
     """The hot-reload failure notice, top-left of the control window."""
     imgui.set_next_window_pos(imgui.ImVec2(12, 12), imgui.Cond_.always)
@@ -420,16 +604,23 @@ def main() -> None:
 
     cfg = config.load()
     audio = AudioEngine()
+    audio.rescan()                         # the one PortAudio scan, here at startup — never mid-set on a first read
     control = Control(audio.chain)
-    library = Library()                    # presets, projects, the theme bank
-    presets = library.bank
+    library = Library()                    # presets, projects, the theme bank (its project's)
     # dream.* drives the renderer's look-back (lookback.py); the post pass
     # runs inside renderer.draw
-    reg = build_registry(s, control, audio, presets, dream=renderer.lookback.state,
-                         fx=renderer.fx.state)
+    want = {"restart": False}          # app.restart sets it; polled after the panel draws
+    reg = build_registry(s, control, audio, library.project, dream=renderer.lookback.state,
+                         fx=renderer.fx.state,
+                         restart=lambda: want.__setitem__("restart", True))
     # an analyzer preset carries its band layout; the library hands it to
     # control before restoring values (07-overhaul contracts)
     library.on_layout("band", control.apply_layout)
+    # …and a saved band preset carries the layout back out (audit A2); the
+    # scene combo and the strip keep each other posted (audit A1)
+    library.extra("band", lambda: {"layout": audio.chain.layout()})
+    library.on_load("band", control.scene_loaded)
+    control.library = library
     hand_settings = _hand_settings(reg, cfg)   # before attach: "default" includes them
     # the tap-tempo clock and the four LFOs (tempo.py, lfo.py): their knobs
     # are params too, so a preset carries a tempo and an LFO arrangement
@@ -437,10 +628,12 @@ def main() -> None:
     lfos = lfo.LFOs()
     tempo.register(reg, clock)
     lfo.register(reg, lfos, clock)
-    library.attach(reg)
-    panel = Panel(control, audio, s, renderer, presets, registry=reg, library=library)
-    panel.clock, panel.lfos = clock, lfos     # the LFO page's scopes and beat light
+    # the render window's placement registers before attach, so "default"
+    # includes output.* and reset / the dirty dot see them (audit L6)
     output = _make_output(render_win, reg, cfg)
+    library.attach(reg)
+    panel = Panel(control, audio, s, renderer, library.project, registry=reg, library=library)
+    panel.clock, panel.lfos = clock, lfos     # the LFO page's scopes and beat light
     panel.output = output
     # one binding table for keys, pad, MIDI and lanes (an old midi_map.json migrates)
     mc = cfg.get("midi", {})
@@ -453,7 +646,13 @@ def main() -> None:
     # registry hasn't goes where every other missing id goes
     if router.missing_values:
         library.report(router.missing_values, "bindings.json values")
-    midi_io = _open_midi(reg, cfg, router.table)
+    library.routing(router)                # the routing presets: the library's files, the router's documents
+    # one Learn over the live table, whatever the MIDI gate says: a knob
+    # or a hand completes it, the panel's prompt settles what the referee
+    # refused (learn.py; the band.sel.* rule is the registry's `real`)
+    learn = Learn(reg, router.table)
+    panel.learn = learn
+    midi_io = _open_midi(reg, cfg, router.table, learn)
     panel.midi = midi_io
     panel.router = router                  # the ROUTING page edits the live table
     bridge_io = _open_bridge(reg, cfg)
@@ -463,39 +662,77 @@ def main() -> None:
     dream_io = _open_dream(reg, cfg)
     if dream_io is not None:            # fills the look-back's dream slot
         renderer.lookback.source = dream_io
+    panel.bridge = bridge_io               # the SYSTEM page's bridge line
+    pad = _open_pad(cfg)
     # panel state and chain must stay one object even after source changes
     # the live objects that get re-classed on a hot reload; re-evaluated
     # each swap so recreated ones (the chain after a source attach) count
     reloader = HotReloader(targets=lambda: [
         (renderer, "render", "Renderer"),
+        (renderer.scene, "render", "SceneTarget"),
+        (renderer.cover, "render", "CoverTarget"),
         (renderer.lookback, "lookback", "Lookback"),
         (renderer.lookback.state, "lookback", "DreamState"),
         (renderer.fx, "fx", "FxChain"),
         (renderer.fx.state, "fx", "FxState"),
-        (s, "render", "ViewState"),
+        (s, "view", "ViewState"),
         (panel, "ui", "Panel"),
         (control, "control", "Control"),
         (audio, "audio", "AudioEngine"),
-        (audio.chain, "bands", "Chain"),
+        (audio.chain, "analyzer", "Analyzer"),
         *[(p, "bands", "Params") for p in audio.chain.params],
         *([(audio.analyser, "analysis", "Analyser")] if audio.analyser is not None else []),
         (reg, "params", "Registry"),
         *[(p, "params", "Param") for p in reg],
         (output, "overlay", "Output"),
+        (output.backend, "overlay", "GlfwBackend"),
+        (library, "library", "Library"),
+        (library.project, "library", "Project"),
         (router, "routing", "Router"),
+        (learn, "learn", "Learn"),
         (clock, "tempo", "Clock"),
         (lfos, "lfo", "LFOs"),
         *[(lf, "lfo", "LFO") for lf in lfos.lfos],
-        *([(midi_io, "midi", "MidiIO"), (midi_io.map, "midi", "MidiMap")] if midi_io else []),
+        *([(midi_io, "midi", "MidiIO")] if midi_io else []),
         *([(bridge_io, "bridge", "Bridge")] if bridge_io else []),
-        *([(hands_io, "hands", "HandsIO")] if hands_io else []),
+        *([(hand_settings, "hands.core", "HandSettings")] if hand_settings else []),
+        *([(hands_io, "hands.core", "HandsIO")] if hands_io else []),
         *([(dream_io, "dream", "DreamWorker")] if dream_io else []),
+        *([(pad, "gamepad", "Pad")] if pad else []),
     ], watchers=[library])
     panel.reloader = reloader
+    panel.config_error = cfg.get("error", "")   # a config.toml that would not parse
+    panel.config_notes = cfg.get("notes", [])   # …or that wants a section renamed
     keys = Keys(render_win, ctrl_win)
     mouse = Mouse(render_win, reg, s)
-    pad = Pad()
-    depth4, yaw, pitch, zoom = reg["view.depth4"], reg["camera.yaw"], reg["camera.pitch"], reg["camera.zoom"]
+
+    def draw_render(dt: float) -> None:
+        # the render window: its own size and DPI (a 1080p projector next
+        # to a retina laptop)
+        glfw.make_context_current(render_win)
+        w, h = glfw.get_window_size(render_win)
+        fbw, fbh = glfw.get_framebuffer_size(render_win)
+        ctx.viewport = (0, 0, fbw, fbh)
+        try:
+            renderer.draw(s, max(w, 1), max(h, 1), dpr=fbw / max(w, 1))
+        finally:
+            glfw.swap_buffers(render_win)
+
+    def draw_panel(dt: float, fps: float) -> None:
+        # the control window: black ground, then the imgui frame opened
+        # before the frame's input handling
+        glfw.make_context_current(ctrl_win)
+        ui_gl.clear(0.0, 0.0, 0.0, 1.0)
+        panel.draw(dt, fps)
+
+    host = Host(reg=reg, view=s, control=control, audio=audio, router=router,
+                clock=clock, lfos=lfos, keys=keys, mouse=mouse, output=output,
+                renderer=renderer, panel=panel, reloader=reloader,
+                draw_render=draw_render, draw_panel=draw_panel,
+                restart=lambda: _restart(audio, host.adapters, impl, ctrl_win),
+                quit=lambda: glfw.set_window_should_close(render_win, True),
+                pad=pad, midi_io=midi_io, hands_io=hands_io, bridge_io=bridge_io,
+                dream_io=dream_io, learn=learn)
 
     # smoke-test escape hatch: HYPERSPACE_FRAMES=n closes after n frames
     frames_left = int(os.environ.get("HYPERSPACE_FRAMES", "0")) or None
@@ -516,123 +753,14 @@ def main() -> None:
         impl.process_inputs()
         imgui.new_frame()
         keys.typing = io.want_capture_keyboard
+        # the one frame clock: keys' hold timing, the tempo clock and the
+        # LFOs all read this `now` (the file watchers keep their own)
         now = time.perf_counter()
         dt = min(now - last, 0.05)
         last = now
-        fps = fps * 0.95 + (1.0 / max(now and dt, 1e-6)) * 0.05
-        clock.tick(now)   # the clock's "now" for the frame: a trigger and the LFO step agree
+        fps = fps * 0.95 + (1.0 / max(dt, 1e-6)) * 0.05
 
-        # the chain object is recreated on source attach; keep bindings fresh
-        control.chain = audio.chain
-        reloader.poll()
-
-        # ---- polled keys, from either window ----
-        if keys.pressed(glfw.KEY_ESCAPE) or keys.pressed(glfw.KEY_Q):
-            glfw.set_window_should_close(render_win, True)
-        shift = keys.shift()
-        router.keys(keys)         # B taps, ⇧B triggers: both are table rows
-        if keys.pressed(glfw.KEY_R):
-            if keys.down(glfw.KEY_LEFT_SUPER, glfw.KEY_RIGHT_SUPER):
-                _restart(audio, impl, midi_io, ctrl_win, dream_io)
-            else:
-                act(reg, "camera.reset", "fire")
-        # ↑/↓ ride depth4 toward its range limit, accelerating with hold
-        for key, sgn in ((glfw.KEY_UP, 1.0), (glfw.KEY_DOWN, -1.0)):
-            hold = keys.held(key)
-            if hold > 0.0:
-                ramp = min(hold / D4_RAMP, 1.0)
-                rate = D4_RATE0 + (D4_RATE1 - D4_RATE0) * ramp * ramp
-                _ride_depth(depth4, sgn * rate * dt)
-        # F1–F8 flip whole-surface themes; with ⇧ held they save instead
-        for k in range(SLOTS):
-            if keys.pressed(glfw.KEY_F1 + k):
-                act(reg, f"theme.{'save' if shift else 'load'}.{k}", "fire")
-
-        # ---- gamepad: a second hand on the same controls (imgui never
-        # claims it, so it works even while the panel has keyboard focus) ----
-        pad.poll()
-        if pad.on:
-            router.pad(pad)
-            # analog: left stick orbits, right-stick Y zooms about centre,
-            # triggers ride depth4 in its own log space (LT out, RT in)
-            lx, ly = pad.axis(gamepad.AX_LX), pad.axis(gamepad.AX_LY)
-            if lx:
-                yaw.nudge(lx * 2.2 * dt)
-            if ly:
-                pitch.nudge(ly * 2.2 * dt)
-            zoom_v = pad.axis(gamepad.AX_RY)
-            if zoom_v:
-                zoom.scale(2.0 ** (-zoom_v * 1.2 * dt))
-            d4 = pad.trigger(gamepad.AX_RT) - pad.trigger(gamepad.AX_LT)
-            if d4:
-                _ride_depth(depth4, d4 * 2.4 * dt)
-
-        # ---- MIDI controller: routed through the same registry ----
-        if midi_io is not None:
-            try:
-                midi_io.poll()
-            except Exception as e:  # noqa: BLE001 — hot-reloaded code may raise
-                reloader.runtime_error = _err("midi", e)
-
-        # ---- Ultraleap hands: hand lanes into the table, MIDI out to a DAW ----
-        if hands_io is not None:
-            try:
-                hands_io.poll(dt, midi_io, router)
-            except Exception as e:  # noqa: BLE001
-                reloader.runtime_error = _err("hands", e)
-
-        # ---- output: the render window follows the output.* params ----
-        output.apply()
-        renderer.bg_alpha = output.bg_alpha
-
-        # ---- mouse: orbit / pan / zoom, render window only ----
-        mouse.poll(shift)
-
-        # ---- audio + rotation + draw, guarded: hot-reloaded code may raise;
-        # record it and keep the loop alive so the next save can fix it ----
-        ok = True
-        try:
-            audio.step(dt)
-            if bridge_io is not None:   # lanes out, external lanes in (bridge.py)
-                bridge_io.step(audio.chain if audio.on else None, router)
-            # the LFOs are a source like any other: stepped on the frame's
-            # clock, fed to the table as `lfo` before the modulation pass
-            lfos.step(dt, now, clock)
-            lfos.publish(router)
-            # the lanes are a modulation source like any other (routing.py);
-            # once every source has spoken for this frame, land base +
-            # offsets on the objects before the integrator reads them
-            router.modulate(audio.chain if audio.on else None)
-            reg.apply()
-            s.integrate(dt)
-        except Exception as e:  # noqa: BLE001
-            ok, reloader.runtime_error = False, _err("step", e)
-
-        # ---- render window: its own size and DPI (a 1080p projector next
-        # to a retina laptop) ----
-        glfw.make_context_current(render_win)
-        w, h = glfw.get_window_size(render_win)
-        fbw, fbh = glfw.get_framebuffer_size(render_win)
-        ctx.viewport = (0, 0, fbw, fbh)
-        try:
-            renderer.draw(s, max(w, 1), max(h, 1), dpr=fbw / max(w, 1))
-        except Exception as e:  # noqa: BLE001
-            ok, reloader.runtime_error = False, _err("render.draw", e)
-        glfw.swap_buffers(render_win)
-
-        # ---- control window: black ground, then the imgui frame opened above ----
-        glfw.make_context_current(ctrl_win)
-        ui_gl.clear(0.0, 0.0, 0.0, 1.0)
-        try:
-            panel.draw(dt, fps)
-        except Exception as e:  # noqa: BLE001
-            ok, reloader.runtime_error = False, _err("panel.draw", e)
-        if ok:
-            reloader.runtime_error = ""
-
-        if panel.restart_requested:
-            panel.restart_requested = False
-            _restart(audio, impl, midi_io, ctrl_win, dream_io)
+        frame(host, now, dt, fps)
 
         if reloader.error or reloader.runtime_error:
             _hot_error_toast(reloader.error or reloader.runtime_error)
@@ -641,15 +769,7 @@ def main() -> None:
         impl.render(imgui.get_draw_data())
         glfw.swap_buffers(ctrl_win)
 
-    if midi_io is not None:
-        midi_io.close()
-    if bridge_io is not None:
-        bridge_io.close()
-    if hands_io is not None:
-        hands_io.close()
-    if dream_io is not None:
-        dream_io.close()
-    audio.stop()
+    close_all(audio, *host.adapters)
     impl.shutdown()
     glfw.terminate()
 

@@ -28,7 +28,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from hyperspace.lookback import LAYERS, DreamState
-from hyperspace.render import Renderer, ViewState
+from hyperspace.render import Renderer
+from hyperspace.view import ViewState
 
 OUT = ROOT / "docs" / "plans" / "assets" / "06-lookback" / "dream-live.png"
 W, H = 1280, 820
@@ -38,11 +39,11 @@ def registry(dream):
     from types import SimpleNamespace
 
     from hyperspace.analysis import Analyser
-    from hyperspace.bands import Chain
+    from hyperspace.analyzer import Analyzer
     from hyperspace.control import Control
     from hyperspace.params import build_registry
 
-    chain = Chain(Analyser())
+    chain = Analyzer(Analyser())
     return build_registry(ViewState(), Control(chain), SimpleNamespace(chain=chain), None,
                           dream=dream)
 

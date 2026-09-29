@@ -13,7 +13,9 @@ strip into a name field until Enter (or Esc); reset lands the group on
 its default preset — the "meaningful default" — or its fresh values when
 it has none. The project row is the same idea over the open project
 (name · dirty · save / as… / load / new) and hosts the F1–F8 theme
-bank, whose behaviour is exactly what it was.
+bank, whose behaviour is exactly what it was. The ROUTING page's strip
+is this same strip over the ``bindings`` group — a document kind the
+library keeps for the router (library.py, ``Library.routing``).
 
 These are functions over the Panel rather than widget classes: the
 state they need (the name field, the cached listings) lives on the
@@ -293,7 +295,7 @@ def _project_save_as(panel, name: str) -> None:
 # ---- the F1–F8 theme bank: whole-surface save states inside the project ----
 
 def theme_bank(panel) -> None:
-    pr = panel.presets
+    pr = panel.themes                 # library.Project: slots, active, load/save_slot
     if pr is None:
         return
     r, io = panel.reg, imgui.get_io()
@@ -316,18 +318,19 @@ def theme_bank(panel) -> None:
             imgui.set_tooltip(slot["name"])
         panel._ctx(r[f"theme.load.{k}"])
         panel._learn_frame(r[f"theme.load.{k}"])
-    if pr.error:
-        imgui.text_colored(ui.WARN, pr.error)
+    if pr.bank_error:
+        imgui.text_colored(ui.WARN, pr.bank_error)
 
 
 # ---- the overview: every group, its preset, its dirty dot ----
 
 def groups(panel) -> list[str]:
     """The groups a strip makes sense for: in the library *and* with a
-    persisted param in this registry (a folder alone — the router's
-    bindings/ — is not a module the panel can save)."""
+    persisted param in this registry, or a document kind of their own
+    (the routing presets); a folder alone is not a module the panel can
+    save."""
     lib = panel.library
-    known = {p.group for p in lib.reg if p.persist and p.group}
+    known = {p.group for p in lib.reg if p.persist and p.group} | set(lib.kinds)
     return [g for g in lib.groups() if g in known]
 
 

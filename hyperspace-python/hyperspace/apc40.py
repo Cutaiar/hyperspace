@@ -50,6 +50,11 @@ DEVICE_KNOBS = range(0x10, 0x18)
 TRACK_KNOBS = range(0x30, 0x38)
 CC_FADER, CC_MASTER, CC_XFADE, CC_CUE = 0x07, 0x0E, 0x0F, 0x2F
 
+# The protocol table: every note, ring mode and LED velocity the APC40 mk1
+# speaks, whether or not DEFAULT_MAP below uses it (N_CLIPSTOP, N_DEV_L/R,
+# N_OVERDUB, N_SEND_A/C, N_SHIFT, the *_BLINK velocities and RING_SINGLE /
+# RING_PAN are unused today and kept as the reference for a hand-edited
+# bindings.json or a later map).
 N_ARM, N_SOLO, N_ACTIVATOR, N_SELECT, N_CLIPSTOP = 0x30, 0x31, 0x32, 0x33, 0x34
 N_CLIP = [0x35, 0x36, 0x37, 0x38, 0x39]          # rows 1–5
 N_CLIPTRACK, N_DEVICE_ON, N_DEV_L, N_DEV_R = 0x3A, 0x3B, 0x3C, 0x3D

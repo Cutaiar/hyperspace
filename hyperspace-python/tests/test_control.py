@@ -6,9 +6,8 @@ import pytest
 
 from hyperspace import tapers
 from hyperspace.analysis import Analyser
-from hyperspace.bands import PRESETS, Chain
-from hyperspace.control import UNDO_S, Control
-from hyperspace.geometry import SHAPES, faces
+from hyperspace.analyzer import Analyzer
+from hyperspace.control import SCENES, UNDO_S, Control
 
 # ---------------------------------------------------------------- tapers
 
@@ -67,7 +66,7 @@ class FakeClock:
 @pytest.fixture()
 def ctl():
     clock = FakeClock()
-    c = Control(Chain(Analyser()), clock=clock)
+    c = Control(Analyzer(Analyser()), clock=clock)
     return c, clock
 
 
@@ -117,83 +116,9 @@ def test_shaper_change_resets_scratch(ctl):
     assert c.chain.params[2].fn == 9
 
 
-def test_scene_count_and_rows():
-    assert len(PRESETS) == 11
-
-
-# -------------------------------------------------------------- transport
-
-def test_transport_position_math():
-    import numpy as np
-
-    from hyperspace.audio import AudioEngine
-
-    a = AudioEngine()
-    a.track = np.zeros(48_000 * 4)  # 4 s at 48 kHz
-    a._track_sr = 48_000.0
-    a.playing = True
-    a._offset, a._played = 0, 48_000
-    assert a.position() == pytest.approx(1.0)
-    a.toggle_play()  # pause freezes position
-    assert not a.playing
-    assert a.position() == pytest.approx(1.0)
-    a.toggle_play()  # resume from the same offset
-    assert a.position() == pytest.approx(1.0)
-    a._played = 48_000 * 5  # loop fold: 1s offset + 5s played on a 4s track
-    assert a.position() == pytest.approx(2.0)
-    a.restart()  # RTZ preserves transport state
-    assert a.playing
-    assert a.position() == pytest.approx(0.0)
-
-
-def test_loopback_detection():
-    from hyperspace.audio import is_loopback
-
-    assert is_loopback("BlackHole 2ch")
-    assert is_loopback("Loopback Audio")
-    assert not is_loopback("MacBook Pro Microphone")
-
-
-def test_ring_buffer():
-    import numpy as np
-
-    from hyperspace.audio import _Ring
-
-    r = _Ring(8)
-    r.push(np.array([1.0, 2.0, 3.0]))
-    assert list(r.drain()) == [1.0, 2.0, 3.0]
-    assert len(r.drain()) == 0
-    r.push(np.arange(10.0))  # overflow: only the last 8 survive
-    assert list(r.drain()) == list(np.arange(2.0, 10.0))
-
-
-# ------------------------------------------------------------------ faces
-
-FACE_COUNTS = {
-    "5-cell": 10,
-    "Tesseract": 24,
-    "16-cell": 32,
-    "24-cell": 96,
-    "Rectified 5-cell": 30,
-    "Cubic pyramid": 18,
-    "3,3-duoprism": 15,
-    "Icosahedral prism": 70,
-    "Dodecahedral prism": 54,
-}
-
-
-@pytest.mark.parametrize("name", FACE_COUNTS, ids=str)
-def test_face_counts(name):
-    i = next(k for k, s in enumerate(SHAPES) if s.name == name)
-    assert len(faces(i)) == FACE_COUNTS[name]
-
-
-@pytest.mark.slow
-def test_face_counts_heavy():
-    by_name = {s.name: i for i, s in enumerate(SHAPES)}
-    assert len(faces(by_name["120-cell"])) == 720
-    assert len(faces(by_name["600-cell"])) == 1200
-    assert len(faces(by_name["Clifford torus"])) == 560
+def test_scene_count_and_order():
+    # the index is what the APC40's clip grid and saved projects hold
+    assert len(SCENES) == 11 and SCENES[0] == "Balanced" and SCENES[4] == "Bass Engine"
 
 
 # --------------------------------------------------- headless panel smoke
@@ -204,8 +129,8 @@ def test_panel_draws_headless():
     from imgui_bundle import imgui
 
     from hyperspace.audio import AudioEngine
-    from hyperspace.render import ViewState
     from hyperspace.ui import PAGE_KEYS, PAGES, Panel, apply_style, load_fonts
+    from hyperspace.view import ViewState
 
     ctx = imgui.create_context()
     try:

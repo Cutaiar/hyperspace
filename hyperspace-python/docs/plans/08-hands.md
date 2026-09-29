@@ -15,7 +15,7 @@ argument, and `tests/test_hands_boundary.py` fails the build if that
 ever stops being true. `panel.py` is the one adapter to this host.
 Small hooks in
 `routing.py` (`hand:<i>` sources, `Router.rests` / `gates`), `midi.py`
-(`MidiIO.learn_source` → a `position` route, plan 09), `ui.py`,
+(the MIDI half of Learn; the armed param itself is `learn.py`'s since plan 11, so a hand learns with no MIDI adapter at all), `ui.py`,
 `config.py` and `app.py`.
 
 ![HANDS page with two synthetic hands](assets/08-hands/hands.png)
@@ -87,7 +87,10 @@ available through `[hands] dofs`, but the default stays the palm pose.
    over `Return` seconds (within about 2 %), with `Bounce` from a
    critically damped glide up to a ringing spring.
    **Catch:** a returning hand is glided onto over `Catch` seconds
-   rather than jumped to.
+   rather than jumped to. The spring and the hold shape the **DAW output
+   only**: the routing lane reads NaN while the hand is out of the box,
+   so a row lets go the frame the hand leaves; the catch is live, so a
+   returning hand glides its rows back on (plan 11, B1).
 7. **To MIDI.** `cc` and `pressure` are 0–127. `cc14` (MSB on n, LSB on
    n + 32, n ≤ 31) and `pitch` are 0–16383. Each holds its last value
    with hysteresis, so a still hand sends nothing, and each is limited
@@ -170,8 +173,9 @@ replaces learned hand rows too**; there is no separate class of rows a
 preset leaves alone. Every performer row springs back to the base when
 the gate opens or the hand leaves: the hand grabs, and never yields
 (decision 4). Latching — a hand that "holds where you left it" — is not
-an op any more; set the base with the panel or a knob instead, which a
-performer never blocks.
+an op any more, and not a setup either: `rest = hold` holds the DAW
+output, never a routed param (audit N6). Set the base with the panel or
+a knob instead, which a performer never blocks.
 
 `position` is the one to reach for: the hand's 0–1 is the control's
 *position*, along its own taper, so the hand covers the whole fader
@@ -201,14 +205,15 @@ checks every shipped row still names a real param and a real lane.
 - **The HANDS page** has six parts:
   - the preset strip, the tracker/port status and the last message out
   - the box from above: palms as dots (left white, right red), size = height
-  - the eight pinch switches, each with its live gap
+  - the eight pinch switches beside the box, each with its live gap
   - a live row per axis: output bar, a red hairline where the hand is, a
     tick at the rest value, and the MIDI out and value
   - the selected axis's editor, with its transfer curve drawn and the
     hand's live point on it, plus **mirror** (copy the feel to the other
     hand) and **solo** (only this axis to the DAW, for a DAW's learn)
   - feel & calibration: a 20 s sweep writes the box's ranges
-- **Learn:** right-click → Learn MIDI, then move one axis. The axis that
+- **Learn:** right-click → Learn, then move one axis (no MIDI adapter
+  needed — the armed param is the host's `learn.Learn`). The axis that
   moved furthest wins, and the learn writes a `position` route from it —
   the hand is the fader, in floats, through the Router like every route.
   A learned axis drives one param: learning it onto another *moves* it
@@ -223,7 +228,9 @@ checks every shipped row still names a real param and a real lane.
   the same menu, and it leaves the axis's other routes alone. Loading a
   routing preset replaces learned rows along with every other route.
 - **Rig** settings (tracking mode, which features, the port, presence
-  notes) are `[hands]` in config.toml. **Box** ranges are `hands.json`.
+  notes) are `[hands]` in config.toml, defaulted from the one table in
+  `hands/core.py` (`DEFAULTS`); a DAW port that fails is reopened every
+  two seconds, as the APC40's is. **Box** ranges are `hands.json`.
   **Performance** settings are a setup. Each lives where it changes.
 
 ## Install

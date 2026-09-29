@@ -6,21 +6,22 @@ from types import SimpleNamespace
 import pytest
 
 from hyperspace.analysis import Analyser
-from hyperspace.bands import BANDS, PRESETS, Chain
-from hyperspace.control import Control
+from hyperspace.analyzer import Analyzer
+from hyperspace.bands import BANDS
+from hyperspace.control import SCENES, Control
 from hyperspace.geometry import SHAPES
 from hyperspace.library import Library
 from hyperspace.params import Kind, Registry, build_registry
-from hyperspace.render import ViewState
+from hyperspace.view import ViewState
 
 
 def make(tmp_path):
-    chain = Chain(Analyser())
+    chain = Analyzer(Analyser())
     control = Control(chain)
     audio = SimpleNamespace(chain=chain)
     view = ViewState()
     lib = Library(tmp_path)
-    presets = lib.bank
+    presets = lib.project
     reg = build_registry(view, control, audio, presets)
     lib.attach(reg)
     return reg, view, control, audio, presets
@@ -226,7 +227,7 @@ def test_selected_band_alias_follows_selection(rig):
 def test_params_survive_a_chain_swap(rig):
     """Getters resolve audio.chain live — a source attach replaces it."""
     reg, _view, control, audio, _ = rig
-    new = Chain(Analyser())
+    new = Analyzer(Analyser())
     new.gain = 3.3
     audio.chain = new
     control.chain = new
@@ -250,7 +251,7 @@ def test_theme_params(rig):
 
 
 def test_scene_names_match_presets(rig):
-    assert rig[0]["scene.select"].names == [p["name"] for p in PRESETS]
+    assert rig[0]["scene.select"].names == list(SCENES)
 
 
 def test_macro_knobs_are_persisted_attenuators_with_no_object(rig):
@@ -290,7 +291,7 @@ def test_core_does_not_import_the_midi_adapter():
     sys.modules.pop("hyperspace.midi", None)
     import importlib
 
-    for m in ("hyperspace.params", "hyperspace.control", "hyperspace.presets",
+    for m in ("hyperspace.params", "hyperspace.control", "hyperspace.library",
               "hyperspace.bands", "hyperspace.render"):
         importlib.import_module(m)
     assert "hyperspace.midi" not in sys.modules

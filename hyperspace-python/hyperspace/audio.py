@@ -43,13 +43,12 @@ def input_devices() -> list[dict]:
     return out
 
 
-def preselect_device() -> int | None:
-    """The reference's heuristic: a loopback device wins if present."""
-    devs = input_devices()
-    for d in devs:
-        if d["loopback"]:
-            return d["index"]
-    return devs[0]["index"] if devs else None
+def preselect(devices: list[dict]) -> int:
+    """The reference's heuristic, as a position in `devices`: the first
+    loopback driver wins, else the first device (0 on an empty list). The
+    one implementation: `AudioEngine.device_sel` reads it, and the panel's
+    combo reads `device_sel`."""
+    return next((k for k, d in enumerate(devices) if d["loopback"]), 0)
 
 
 class _Ring:
@@ -89,13 +88,15 @@ class AudioEngine:
     """One live source at a time (mic or file), driving one Analyser+Analyzer."""
 
     def __init__(self, sample_rate: float = 48_000.0):
-        self.sr = sample_rate
+        self.sr = sample_rate               # the capture rate; a file runs at its own (`rate`)
         self.analyser = Analyser(sample_rate)
         self.chain = Analyzer(self.analyser)
         self.on = False
         self.mode: str | None = None     # "mic" | "file"
         self.label = ""
         self.error = ""
+        self._devices: list[dict] | None = None   # see `devices`
+        self._device_sel: int | None = None
         self._ring = _Ring(int(sample_rate * 2))
         self._stream: sd.InputStream | sd.OutputStream | None = None
         # transport (file mode)
@@ -104,6 +105,48 @@ class AudioEngine:
         self.playing = False
         self._offset = 0            # frames into the track at last start
         self._played = 0            # frames emitted since last start (callback-owned)
+
+    # ---- the input devices `audio.device` chooses from ----
+
+    @property
+    def devices(self) -> list[dict]:
+        """Read once, on first use (the panel's combo, a key row toggling the
+        mic) — not at construction, so a headless engine never scans the
+        hardware. `rescan()` reads it again for a device plugged in later."""
+        if self._devices is None:
+            try:
+                self._devices = input_devices()
+            except Exception as e:  # noqa: BLE001 — a failed scan is not fatal
+                self._devices, self.error = [], f"audio devices: {e}"
+        return self._devices
+
+    def rescan(self) -> list[dict]:
+        """Read the device list again (the audio page's rescan button, and
+        app.main once at startup). One scan: a list never read is not read
+        first. The selection follows the device by name where it can, else
+        the heuristic picks afresh; a running capture is left alone; a
+        failed earlier scan's error clears when this one succeeds."""
+        old = self._devices or []
+        sel = self._device_sel
+        name = old[sel]["name"] if sel is not None and 0 <= sel < len(old) else None
+        self._devices = None
+        if self.error.startswith("audio devices:"):
+            self.error = ""
+        new = self.devices
+        self._device_sel = (next((k for k, d in enumerate(new) if d["name"] == name), None)
+                            if name is not None else None)
+        return new
+
+    @property
+    def device_sel(self) -> int:
+        """Position in `devices`; `preselect` picks a loopback driver first."""
+        if self._device_sel is None:
+            self._device_sel = preselect(self.devices)
+        return self._device_sel
+
+    @device_sel.setter
+    def device_sel(self, k: int) -> None:
+        self._device_sel = int(k)
 
     # ---- shared teardown ----
 
@@ -129,15 +172,21 @@ class AudioEngine:
         new.gain, new.dyn, new.trim = old.gain, old.dyn, old.trim
         return new
 
-    def _attach(self, mode: str, label: str) -> None:
-        # fresh trackers per source, like the reference's attach()
-        self.analyser = Analyser(self.sr)
+    def _attach(self, mode: str, label: str, rate: float) -> None:
+        """Fresh trackers per source, like the reference's attach() — once,
+        at the source's own rate (the capture rate, or the track's)."""
+        self.analyser = Analyser(rate)
         self.chain = self._fresh_chain()
-        self._ring = _Ring(int(self.sr * 2))
+        self._ring = _Ring(int(rate * 2))
         self.mode = mode
         self.label = label
         self.error = ""
         self.on = True
+
+    @property
+    def rate(self) -> float:
+        """The rate the analyser runs at: `sr` for a capture, the track's for a file."""
+        return float(self.analyser.sample_rate)
 
     # ---- mic / loopback ----
 
@@ -154,7 +203,7 @@ class AudioEngine:
             self.error = f"could not open input: {e}"
             return False
         self._stream = stream
-        self._attach("mic", ("System · " if is_loopback(name) else "") + name)
+        self._attach("mic", ("System · " if is_loopback(name) else "") + name, self.sr)
         return True
 
     def _on_input(self, indata, _frames, _t, _status) -> None:
@@ -181,10 +230,7 @@ class AudioEngine:
             self.track = None
             return False
         self._stream = stream
-        self.analyser = None  # rebuilt at track rate below
-        self._attach("file", Path(path).name[:20])
-        self.analyser = Analyser(self._track_sr)
-        self.chain = self._fresh_chain()
+        self._attach("file", Path(path).name[:20], self._track_sr)
         self._offset = 0
         self._played = 0
         self.playing = True
@@ -240,3 +286,12 @@ class AudioEngine:
         if len(pending):
             self.analyser.feed(pending)
         self.chain.step(dt)
+
+    def publish(self, router) -> None:
+        """The lanes' names to the router, once a frame like every other
+        source (audit R8; lfo.py's `publish` is the pattern): a lane is
+        named by its band. It publishes no rests — a scheme that says
+        nothing rests at 0 (`Router.rest_of`), which is where a lane idles.
+        The lanes themselves are read by `Router.modulate`, which takes the
+        live chain."""
+        router.labels["lane"] = self.chain.band_names

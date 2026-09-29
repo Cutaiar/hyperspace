@@ -16,14 +16,16 @@ from __future__ import annotations
 
 import glfw
 
-# raw button indices (captured; stick clicks follow the SDL layout)
+# raw button indices (captured; stick clicks follow the SDL layout). The
+# Xbox button is 12 — captured, never bound (it summons the OS overlay).
 A, B, X, Y = 0, 1, 3, 4
 LB, RB = 6, 7
-VIEW, MENU, XBOX = 10, 11, 12
+VIEW, MENU = 10, 11
 LSTICK, RSTICK = 13, 14
 
-# axes: sticks in ±1, triggers resting at −1.0
-AX_LX, AX_LY, AX_RX, AX_RY, AX_LT, AX_RT = 0, 1, 2, 3, 4, 5
+# axes: sticks in ±1, triggers resting at −1.0. The right stick's X is
+# axis 2 — captured, unused: only its Y (zoom) is read (app.py).
+AX_LX, AX_LY, AX_RY, AX_LT, AX_RT = 0, 1, 3, 4, 5
 
 # the D-pad is the hat, a GLFW bitmask
 HAT_UP, HAT_RIGHT, HAT_DOWN, HAT_LEFT = 1, 2, 4, 8

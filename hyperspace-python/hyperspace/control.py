@@ -7,6 +7,18 @@ Reset-all is guarded by an 8 s undo (the button relabels itself) whose
 snapshot is discarded on a scene change because it belongs to the old
 scene. Knob edits and transfer changes never move the scene selection.
 
+A scene *is* a band preset (plan 11, audit A1): the eleven files in
+library/band/*.json, named here in combo order (SCENES) because the APC40's
+clip grid and every saved project address them by index. The combo, the
+grid and Reset re-tune whatever bands are loaded from the scene's values
+— through the registry when one is attached (a base write, as a strip
+load is, so a knob a performer holds keeps its offset and the strip reads
+clean at once), else straight onto the analyzer's Params — and tell the
+library which scene is current;
+a load from the preset strip (Library.load) goes the other way, layout
+included, and tells the combo. With no library attached the factory file
+is read directly (library.factory_doc), so the headless tests need none.
+
 The analyzer has N bands (plan 07), so the panel also adds, removes and
 moves them and applies a preset's layout. Every one of those changes the
 set of `band.*` ids the registry declares; `on_layout` is the hook
@@ -21,16 +33,23 @@ from __future__ import annotations
 import time
 from dataclasses import replace
 
-from .analyzer import Analyzer
-from .bands import PRESETS
+from .analyzer import Analyzer, scene_strip
+from .library import LibraryError, factory_doc
 
 UNDO_S = 8.0
+BAND_GROUP = "band"
+# the scenes, in combo order — the index is what scene.select, the APC40's
+# clip grid and a project's values hold, so this list is append-only
+SCENES = ("Balanced", "Kick & Sizzle", "Glacial Drift", "Strobe Cage", "Bass Engine",
+          "Air & Lace", "Inverse World", "Percussive", "Tremolo Web", "Harmonic Bloom",
+          "Slow Bass / Fast Air")
 
 
 class Control:
-    def __init__(self, chain: Analyzer, clock=time.monotonic):
+    def __init__(self, chain: Analyzer, clock=time.monotonic, library=None):
         self.chain = chain
         self.clock = clock
+        self.library = library   # reads the scenes (user shadows honoured); None → factory files
         self.selb = 0            # band whose strip is open
         self.scene = 0           # the live scene — source of truth for resets
         self.on_layout = None    # rebuilds the band.* params; set by build_registry
@@ -85,10 +104,64 @@ class Control:
 
     # ---- scenes ----
 
+    @property
+    def scene_names(self) -> list[str]:
+        return list(SCENES)
+
+    def scene_doc(self) -> dict:
+        """The selected scene's band preset — the user's file if one shadows
+        the factory's, else the factory's (a missing or broken file falls
+        back to the factory copy and is reported on the library)."""
+        name = SCENES[self.scene]
+        lib = self.library
+        if lib is None:
+            return factory_doc(BAND_GROUP, name)
+        try:
+            return lib.read(BAND_GROUP, name)
+        except LibraryError as e:
+            lib.error = f"library: {e}"
+            return factory_doc(BAND_GROUP, name, lib.factory)
+
+    def scene_values(self) -> dict:
+        """The scene's values, filled in the way a strip load fills a
+        partial file (Library.resolved) when a library is attached, so the
+        two roads never land different strips."""
+        doc = self.scene_doc()
+        values = doc.get("values") or {}
+        lib = self.library
+        if lib is not None and lib.reg is not None:
+            values = lib.resolved(BAND_GROUP, values)
+        return values
+
     def select_scene(self, k: int) -> None:
         self.clear_undo()        # that snapshot belongs to the old scene
-        self.scene = k if 0 <= k < len(PRESETS) else 0
-        self._keeping_layout(lambda: self.chain.apply_preset(self.scene))
+        self.scene = k if 0 <= k < len(SCENES) else 0
+        self._apply_scene()
+
+    def scene_loaded(self, name: str) -> None:
+        """The strip loaded a band preset: if it is a scene, the combo follows
+        (Library.on_load); a user preset that is not one leaves it."""
+        if name in SCENES:
+            self.clear_undo()
+            self.scene = SCENES.index(name)
+
+    def _land(self, strip: dict) -> None:
+        """A scene's strip values onto the bands: through the registry when
+        the library has one (a base write — a performed knob keeps its
+        offset and is_dirty reads clean straight away), else onto the
+        analyzer's Params (the headless tests, no library)."""
+        lib = self.library
+        if lib is not None and lib.reg is not None:
+            lib.restore(strip)
+        else:
+            self.chain.apply_scene(strip)
+
+    def _apply_scene(self) -> None:
+        """The scene's values onto the bands loaded; the library is told,
+        and re-applies it this way if the scene's file changes on disk."""
+        self._land(scene_strip(self.scene_values(), self.chain.n))
+        if self.library is not None:
+            self.library.adopt(BAND_GROUP, SCENES[self.scene], self._apply_scene)
 
     # ---- reset / undo ----
 
@@ -102,7 +175,8 @@ class Control:
         self._undo_snap = None
 
     def reset_band(self, i: int | None = None) -> None:
-        self.chain.apply_preset_band(self.scene, self.selb if i is None else i)
+        i = self.selb if i is None else i
+        self._land(scene_strip(self.scene_values(), self.chain.n, bands=(i,)))
 
     def reset_all_clicked(self) -> None:
         """The one button: resets, or undoes if the window is still open."""
@@ -112,20 +186,25 @@ class Control:
             self._reset_all()
 
     def _reset_all(self) -> None:
-        # the snapshot carries the layout too: a scene may change the bands
-        self._undo_snap = (self.chain.layout(), [replace(p) for p in self.chain.params])
-        self._undo_at = self.clock()
-        self._keeping_layout(lambda: self.chain.apply_preset(self.scene))
+        # the snapshot carries the layout and the strip's current preset
+        # too, so an undo is whole
+        lib = self.library
+        snap = (self.chain.layout(), [replace(p) for p in self.chain.params],
+                None if lib is None else lib.landed(BAND_GROUP))
+        self._apply_scene()
+        self._undo_snap, self._undo_at = snap, self.clock()
 
     def _undo_reset_all(self) -> None:
         snap = self._undo_snap
         self.clear_undo()
         if snap is None:
             return
-        layout, params = snap
+        layout, params, landed = snap
         self._keeping_layout(
             lambda: self.chain.apply_layout(layout, params=[replace(p) for p in params])
         )
+        if landed is not None and self.library is not None:
+            self.library.reland(BAND_GROUP, landed)
 
     # ---- band strip ----
 

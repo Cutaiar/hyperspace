@@ -1,33 +1,30 @@
 """Plan-00 exit checks: the golden traces exist and are self-consistent."""
 
 import json
+import re
 from pathlib import Path
 
 import pytest
 
-GOLDEN = Path(__file__).parent / "golden"
+from hyperspace.geometry import SHAPES, geom
 
-# The V/E table from docs/ENGINEERING.md §2, in slider order.
-VE_TABLE = [
-    ("5-cell", 5, 10),
-    ("3,3-duoprism", 9, 18),
-    ("Cubic pyramid", 9, 20),
-    ("Tesseract", 16, 32),
-    ("Rectified 5-cell", 10, 30),
-    ("4,8-duoprism", 32, 64),
-    ("6,6-duoprism", 36, 72),
-    ("16-cell", 8, 24),
-    ("10,10-duoprism", 100, 200),
-    ("Icosahedral prism", 24, 72),
-    ("24-cell", 24, 96),
-    ("Truncated tesseract", 64, 128),
-    ("12,12-duoprism", 144, 288),
-    ("Dodecahedral prism", 40, 80),
-    ("20,20-duoprism", 400, 800),
-    ("120-cell", 600, 1200),
-    ("600-cell", 120, 720),
-    ("Clifford torus", 512, 1024),
-]
+GOLDEN = Path(__file__).parent / "golden"
+ENGINEERING = Path(__file__).parents[1] / "docs" / "ENGINEERING.md"
+
+
+def ve_table() -> list[tuple[str, int, int]]:
+    """The V/E rows of ENGINEERING §1, parsed, in slider order — the one
+    table readers cite, so it is the one this file checks against the
+    code (audit D6: no third copy here). Both shape tables are read; a
+    row is `| # | name | … | V | E |`."""
+    text = ENGINEERING.read_text()
+    section = text[text.index("## 1. Geometry"):text.index("## 2. Rendering")]
+    rows = []
+    for line in section.splitlines():
+        m = re.match(r"\|\s*(\d+)\s*\|\s*([^|]+?)\s*\|.*\|\s*(\d+)\s*\|\s*(\d+)\s*\|$", line)
+        if m:
+            rows.append((m.group(2), int(m.group(3)), int(m.group(4))))
+    return rows
 
 
 def geometry_files() -> list[Path]:
@@ -38,12 +35,27 @@ def test_geometry_traces_present():
     assert len(geometry_files()) == 18, "expected one trace per shape"
 
 
+def test_the_engineering_table_matches_the_code():
+    """ENGINEERING §1 lists every shape's V and E; the numbers are geom()'s."""
+    rows = ve_table()
+    assert len(rows) == len(SHAPES) == 25
+    for i, (name, n, m) in enumerate(rows):
+        g = geom(i)
+        first = SHAPES[i].name.split(" ")[0].lower()[:4]
+        assert name.lower().startswith(first), (i, name, SHAPES[i].name)
+        assert (g["n"], g["m"]) == (n, m), (
+            f"row {i + 1} {name}: ENGINEERING says {n}/{m}, geom {g['n']}/{g['m']}"
+        )
+
+
 @pytest.mark.parametrize("path", geometry_files(), ids=lambda p: p.stem)
 def test_geometry_trace_consistent(path):
+    """The trace is self-consistent and names the shape at its slider index
+    (its V/E against the code is test_core's `test_construction_exact`)."""
     data = json.loads(path.read_text())
-    name, n, m = VE_TABLE[data["index"]]
-    assert data["name"].startswith(name.split(" ")[0]), (data["name"], name)
-    assert data["n"] == n and data["m"] == m, f"{data['name']}: V/E mismatch vs ENGINEERING §2"
+    shape = SHAPES[data["index"]]
+    n, m = data["n"], data["m"]
+    assert data["name"].startswith(shape.name.split(" ")[0]), (data["name"], shape.name)
     assert len(data["V"]) == n * 4
     assert len(data["E"]) == m * 2
     assert all(0 <= e < n for e in data["E"])

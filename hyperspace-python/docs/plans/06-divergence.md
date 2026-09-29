@@ -19,7 +19,7 @@ cosmetic. Update `README.md` and `ENGINEERING.md` headers to point at the
 Python system as the live implementation, and mark ENGINEERING's HTML
 sections as historical reference for the ported behaviour.
 
-### 2. Fix the input trim non-monotonicity — **decision required first**
+### 2. Fix the input trim non-monotonicity — **decided (3), built in plan 11 WP15**
 
 The one known bug ported on purpose (ENGINEERING §4 warning: cutting 6–12 dB
 makes BASS drive *harder*; only attenuates from ~−20 dB). Three candidate
@@ -69,7 +69,8 @@ This plan is open-ended; it exits by *shipping the decided items*, not by
 emptying the backlog:
 
 - [ ] HTML frozen and tagged; docs point at the Python system.
-- [ ] Trim fix chosen (with the user), implemented, monotonicity test green.
+- [x] Trim fix chosen (with the user), implemented, monotonicity test green —
+      (3) on 2026-09-28; `test_manual_normalisation_makes_trim_monotonic`.
 - [ ] Tempo-locked shapers working against real DJ Link data.
 - [ ] User scenes save and load across restarts.
 

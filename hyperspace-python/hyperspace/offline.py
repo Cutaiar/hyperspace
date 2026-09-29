@@ -2,7 +2,10 @@
 
 Used by the plan-01 behaviour tests and by future constant-tuning work
 (plan 06). Live capture replaces the file reader in plan 03; the chain
-itself neither knows nor cares.
+itself neither knows nor cares. The history ends at the lanes: the
+reference's PLANEDRIVE is a route (routing.legacy_planedrive), and the
+test that needs it computes it from `out` — this module is part of the
+audio stack and imports nothing above it (tests/test_audio_boundary.py).
 """
 
 from __future__ import annotations
@@ -13,8 +16,8 @@ from pathlib import Path
 import numpy as np
 
 from .analysis import Analyser
-from .bands import Chain, Params
-from .routing import legacy_planedrive
+from .analyzer import Analyzer
+from .bands import Params
 
 
 def load_wav(path: Path) -> tuple[np.ndarray, float]:
@@ -36,21 +39,19 @@ def run_wav(
     """Feed the file frame by frame; return the per-frame chain history."""
     samples, sr = load_wav(path)
     an = Analyser(sr)
-    chain = Chain(an, params)
+    chain = Analyzer(an, params)
     chain.dyn = dyn
     hop = round(sr / fps)
     dt = hop / sr
-    t, inp, out, drive = [], [], [], []
+    t, inp, out = [], [], []
     for start in range(0, len(samples) - hop, hop):
         an.feed(samples[start : start + hop])
         chain.step(dt)
         t.append(start / sr)
         inp.append(chain.inp.copy())
         out.append(chain.out.copy())
-        drive.append(legacy_planedrive(chain.out, chain.gain))   # the reference's PLANEDRIVE
     return {
         "t": np.asarray(t),
         "inp": np.asarray(inp),
         "out": np.asarray(out),
-        "drive": np.asarray(drive),
     }

@@ -4,10 +4,13 @@ The home is ``$HYPERSPACE_HOME`` (default ``~/Hyperspace``, library.py);
 a config.toml still sitting in the working directory is copied there on
 the first run. Everything has a default, so the file is only for what
 differs on this machine. Adapters are enabled here, not in code
-(BLUEPRINT §3.6).
+(BLUEPRINT §3.6). Two are on by default because they cost nothing when the
+device is absent — the MIDI adapter (it is the one that also holds Learn)
+and the gamepad; the bridge, the dream worker and the hands tracker are
+off until asked for, and their modules are never imported until then.
 
     [midi]
-    enabled = true          # false leaves the adapter out entirely
+    enabled = true          # false leaves the adapter out entirely (and hand Learn with it)
     port = "APC40"          # substring of the port name; default from the profile
     profile = "apc40"       # device profile (hyperspace/<profile>.py)
     map = "midi_map.json"   # a pre-plan-09 MIDI map, relative to this file's
@@ -16,14 +19,24 @@ differs on this machine. Adapters are enabled here, not in code
                             # not exist yet (Bindings.load). Learn writes
                             # <home>/bindings.json (routing.py), not this file
 
-    [overlay]               # the render window's look when floating; an
-                            # [output] section is read the same way, merged
-                            # over it, and also takes `monitor` (index, -1 =
-                            # the window's own) and `fullscreen` (app.py)
+    [output]                # where the render window goes and how it looks
+                            # (overlay.py; app.py seeds the output.* params)
+    monitor = -1            # screen index for fullscreen; -1 = the window's own
+    fullscreen = false      # launch fullscreen on that screen
     on_start = false        # launch straight into overlay mode
     passthrough = true      # clicks go to the window underneath (G / pan toggles)
     bg = 0.0                # ground darkness in overlay: 0 see-through, 1 black
     alpha = 1.0             # whole-window opacity
+                            # [overlay] is the pre-split name of this section:
+                            # still read, merged under [output] (which wins),
+                            # and noted once on stderr so the file gets renamed
+
+A file that will not parse is not fatal: the defaults stand and
+``cfg["error"]`` carries the message; ``cfg["notes"]`` carries requests
+like the rename above. The SYSTEM page shows both.
+
+    [gamepad]               # the Xbox pad polled through GLFW (gamepad.py)
+    enabled = true          # false never polls for one
 
     [bridge]                # lanes out / external lanes in over MIDI (bridge.py)
     enabled = false         # true opens the bridge; off, it is never imported
@@ -44,7 +57,8 @@ differs on this machine. Adapters are enabled here, not in code
     weights_dir = ""        # pretrained weights; "" = <library home>/weights
 
     [hands]                 # Ultraleap hands (hands/, the `leap` bindings) — the rig;
-                            # the performance setup is the HANDS page / `hands` presets
+                            # the performance setup is the HANDS page / `hands` presets.
+                            # The defaults are hands/core.py's DEFAULTS, the one table
     enabled = false         # true opens the tracker; off, `leap` is never imported
     mode = "desktop"        # camera looks up from below; "screentop" from above, "hmd"
     dofs = ["x", "y", "z", "roll", "pitch", "yaw"]   # per hand, in axis order; also
@@ -61,26 +75,33 @@ differs on this machine. Adapters are enabled here, not in code
 
 from __future__ import annotations
 
+import copy
+import sys
 import tomllib
 from pathlib import Path
 
 from . import library
 
 FILE = Path("config.toml")
+LEGACY_OUTPUT = "overlay"   # the section [output] was called before the split
 
 DEFAULTS: dict = {
     # midi.map: the legacy midi_map.json, merged once when bindings.json is missing
     "midi": {"enabled": True, "port": None, "profile": "apc40", "map": "midi_map.json"},
-    # overlay.py: start floating over the screen; ground 0 = see-through
-    "overlay": {"on_start": False, "passthrough": True, "bg": 0.0, "alpha": 1.0},
+    # overlay.py: the render window's placement and look; ground 0 = see-through
+    "output": {"monitor": -1, "fullscreen": False, "on_start": False, "passthrough": True,
+               "bg": 0.0, "alpha": 1.0},
+    # gamepad.py: the Xbox pad — on by default, inert when absent
+    "gamepad": {"enabled": True},
     # bridge.py: the analyzer's lanes out to a DAW, external lanes in — off by default
     "bridge": {"enabled": False, "out": "IAC", "in": "", "encoding": "pitch", "channel": 0,
                "cc": 16, "rate": 100, "send": ["lane:*"], "in_lanes": 16},
     # dream.py: the temporal Deep Dream behind the look-back — off by default
     "dream": {"enabled": False, "device": "auto", "precision": "fp32", "weights_dir": ""},
-    # hands/: Ultraleap hands as MIDI CCs and hand lanes — off by default;
-    # the rest of its defaults live in hands.DEFAULTS
-    "hands": {"enabled": False, "calibration": "hands.json"},
+    # hands/: Ultraleap hands as MIDI CCs and hand lanes — off by default.
+    # Its section is not here: load() fills it from hands/core.py's DEFAULTS,
+    # the one table (every key documented there), read at call time so this
+    # module imports no adapter
 }
 
 
@@ -88,18 +109,37 @@ def load(path: Path | None = None) -> dict:
     """The config, defaults filled in; `path` defaults to the library home's."""
     if path is None:
         path = library.ensure_home() / FILE
-    cfg = {k: dict(v) for k, v in DEFAULTS.items()}
+    from .hands.core import DEFAULTS as HANDS  # the one [hands] table (audit N1)
+
+    cfg = copy.deepcopy(DEFAULTS)                 # a file may append to a list
+    cfg["hands"] = copy.deepcopy(HANDS)
     if path.exists():
         try:
             data = tomllib.loads(path.read_text())
         except (OSError, ValueError) as e:
             cfg["error"] = f"config: {e}"
             data = {}
+        bad = []
         for section, values in data.items():
             if isinstance(values, dict):
                 cfg.setdefault(section, {}).update(values)
             else:
-                cfg[section] = values
+                # `midi = true` in place of [midi]: the defaults stand and the
+                # SYSTEM page says so — the _open_* gates expect a table
+                bad.append(f"[{section}] must be a table, not {values!r}")
+        if bad:
+            cfg["error"] = "config: " + "; ".join(bad)
+        legacy = cfg.pop(LEGACY_OUTPUT, None)
+        if isinstance(legacy, dict):
+            # the pre-split section name: its keys land under [output], a
+            # real [output] wins key by key, and the file is asked to catch up
+            # — on stderr and on the SYSTEM page (cfg["notes"])
+            real = data.get("output")
+            real = real if isinstance(real, dict) else {}   # a scalar was reported above
+            cfg["output"] = {**DEFAULTS["output"], **legacy, **real}
+            note = f"config: [{LEGACY_OUTPUT}] is now [output] — rename the section in {path}"
+            cfg["notes"] = [note]
+            print(note, file=sys.stderr)
     # the MIDI map lives next to the config unless it says otherwise
     m = cfg["midi"].get("map")
     if m and not Path(m).is_absolute():

@@ -45,14 +45,10 @@ from .signal import shape
 ROW_LABEL_W = 62.0
 OUT_W = 100.0
 BOX_H = 92.0
+BOX_W = 190.0       # the switches sit beside it
 PLOT_W = 96.0
 CAL_SECONDS = 20.0
 LEFT = imgui.ImVec4(0.92, 0.92, 0.92, 1.0)
-DIM_LINE = imgui.ImVec4(0.25, 0.25, 0.25, 1.0)
-
-
-def _u32(c):
-    return imgui.color_convert_float4_to_u32(c)
 
 
 def _sel(panel, n: int) -> int:
@@ -67,12 +63,9 @@ def ctx_rows(panel, p) -> None:
     router = getattr(panel, "router", None)
     if router is None:
         return
-    names = getattr(router, "labels", {}).get("hand") or []
     rows = [b for b in router.table.of("hand") if b.target == p.id]
-    label = lambda i: names[i] if 0 <= i < len(names) else str(i)
-    for b in rows:
-        verb = "positions" if b.op == "position" else "pushes"
-        imgui.text(f"hand {label(b.index)} {verb}" + ("" if b.enabled else " (off)"))
+    for b in rows:                      # in the adapter's words: "R height positions …"
+        imgui.text(router.describe(b) + ("" if b.enabled else " (off)"))
     if rows and _gate_menu(router, rows):
         router.table.write()
     if rows and imgui.menu_item_simple("Unbind hand"):
@@ -115,8 +108,10 @@ def page(panel, dt: float) -> None:
         imgui.text_disabled("no hands setup — see [hands] in config.toml")
         return
     _status(io)
-    _pinches(io)
     _box(io)
+    if _has_pinches(io):        # the switches beside the box: the page has
+        imgui.same_line()       # to fit the control window
+        _pinches(io)
     k = _axes(panel, io, settings)
     imgui.spacing()
     _editor(panel, io, settings, k)
@@ -147,32 +142,39 @@ def _pinches(io) -> None:
     the live gap that closed it. The number is the tuning instrument —
     watch how near a finger actually gets, then set Pinch close under
     it. Ring and pinky never come as close as index and middle."""
-    if io is None or not io.cfg.get("pinch_gates"):
+    if not _has_pinches(io):
         return
     close = io.settings.pinch_close
+    imgui.begin_group()
     for s in SIDES:
-        imgui.text_colored(ui.DIM, f"{s[0].upper()} pinch")
-        for f in PINCHES:
-            on = io.gates[s][f].on
-            d = (io.frame[s] or {}).get(f"pinch_{f}")
-            near = d is not None and d < close * 1.35   # closing in on the threshold
-            col = ui.RED if on else (ui.TEXT if near else ui.FAINT)
-            imgui.same_line()
-            imgui.text_colored(col, f"{f[:3]} {'●' if on else '○'}")
-            imgui.same_line(0.0, 2.0)
-            # the gap moves every frame: the readout face, so it can't jitter
-            ui._readout("  —  " if d is None else f"{d:.2f}", col)
+        for r in range(0, len(PINCHES), 2):        # two switches a line, beside the box
+            imgui.text_colored(ui.DIM, f"{s[0].upper()}" if r == 0 else " ")
+            for f in PINCHES[r:r + 2]:
+                on = io.gates[s][f].on
+                d = (io.frame[s] or {}).get(f"pinch_{f}")
+                near = d is not None and d < close * 1.35   # closing in on the threshold
+                col = ui.RED if on else (ui.TEXT if near else ui.FAINT)
+                imgui.same_line()
+                imgui.text_colored(col, f"{f[:3]} {'●' if on else '○'}")
+                imgui.same_line(0.0, 2.0)
+                # the gap moves every frame: the readout face, so it can't jitter
+                ui._readout("  —  " if d is None else f"{d:.2f}", col)
+    imgui.end_group()
+
+
+def _has_pinches(io) -> bool:
+    return io is not None and bool(io.cfg.get("pinch_gates"))
 
 
 def _box(io) -> None:
     """The box from above: x across, z down toward the performer."""
-    w = imgui.get_content_region_avail().x
+    w = BOX_W
     pos = imgui.get_cursor_screen_pos()
     dl = imgui.get_window_draw_list()
     x0, y0, x1, y1 = pos.x, pos.y, pos.x + w, pos.y + BOX_H
-    dl.add_rect(imgui.ImVec2(x0, y0), imgui.ImVec2(x1, y1), _u32(DIM_LINE))
+    dl.add_rect(imgui.ImVec2(x0, y0), imgui.ImVec2(x1, y1), ui.u32(ui.LINE))
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
-    dl.add_circle_filled(imgui.ImVec2(cx, cy), 2.5, _u32(ui.DIM))      # the camera
+    dl.add_circle_filled(imgui.ImVec2(cx, cy), 2.5, ui.u32(ui.DIM))      # the camera
     if io is not None:
         for side, col in (("left", LEFT), ("right", ui.RED)):
             f = io.frame[side]
@@ -182,7 +184,7 @@ def _box(io) -> None:
             py = cy + f["z"] / 160.0 * (BOX_H / 2 - 6)
             px, py = min(max(px, x0 + 6), x1 - 6), min(max(py, y0 + 6), y1 - 6)
             r = 3.0 + 7.0 * min(max((f["y"] - 80.0) / 320.0, 0.0), 1.0)
-            dl.add_circle_filled(imgui.ImVec2(px, py), r, _u32(col))
+            dl.add_circle_filled(imgui.ImVec2(px, py), r, ui.u32(col))
     imgui.dummy(imgui.ImVec2(w, BOX_H))
     if imgui.is_item_hovered():
         imgui.set_tooltip("The box from above: the camera at the centre, the "
@@ -194,42 +196,57 @@ def _axes(panel, io, settings) -> int:
     k = _sel(panel, len(settings.axes))
     bad = conflicts(settings)
     h = imgui.get_text_line_height() + 2
+    # twelve rows have to share the page with the editor: tight spacing
+    imgui.push_style_var(imgui.StyleVar_.item_spacing,
+                         imgui.ImVec2(imgui.get_style().item_spacing.x, 2.0))
     for i, a in enumerate(settings.axes):
-        st = io.state[i] if io is not None else None
-        here = io is not None and io.present[a.side]
-        imgui.push_style_color(imgui.Col_.text, ui.RED if a.name in bad else
-                               (imgui.ImVec4(0.92, 0.92, 0.92, 1) if here else ui.DIM))
-        if imgui.selectable(f"{a.label}##hax{i}", i == k, 0,
-                            imgui.ImVec2(ROW_LABEL_W, h))[0]:
+        if _axis_row(panel, io, i, a, i == k, h, a.name in bad):
             panel._hands_sel = k = i
-        imgui.pop_style_color()
-        imgui.same_line()
-        bar_w = imgui.get_content_region_avail().x - OUT_W
-        pos = imgui.get_cursor_screen_pos()
-        dl = imgui.get_window_draw_list()
-        bx0, by0, bx1, by1 = pos.x, pos.y + 3, pos.x + bar_w, pos.y + h - 3
-        span = bx1 - bx0 - 2
-        dl.add_rect(imgui.ImVec2(bx0, by0), imgui.ImVec2(bx1, by1), _u32(DIM_LINE))
-        if a.rest == "return":
-            rx = bx0 + 1 + span * a.rest_value
-            dl.add_line(imgui.ImVec2(rx, by1), imgui.ImVec2(rx, by1 + 2), _u32(ui.DIM))
-        if st is not None and st.y is not None:
-            dl.add_rect_filled(imgui.ImVec2(bx0 + 1, by0 + 1),
-                               imgui.ImVec2(bx0 + 1 + span * st.y, by1 - 1),
-                               _u32(imgui.ImVec4(0.92, 0.92, 0.92, 0.85 if here else 0.35)))
-        if st is not None and st.target is not None:
-            tx = bx0 + 1 + span * st.target
-            dl.add_line(imgui.ImVec2(tx, by0 - 1), imgui.ImVec2(tx, by1 + 1), _u32(ui.RED))
-        imgui.dummy(imgui.ImVec2(bar_w, h))
-        if imgui.is_item_hovered():
-            y = "—" if st is None or st.y is None else f"{st.y:.3f}"
-            raw = "—" if st is None or st.raw is None else \
-                f"{st.raw:.1f} {FEATURES[a.feature][0]}"
-            imgui.set_tooltip(f"{a.name}: out {y}  ·  hand {raw}")
-        imgui.same_line()
-        q = "" if st is None or st.q is None else f" {st.q}"
-        imgui.text_disabled(_out_text(a) + q if a.out != "off" else "off")
+    imgui.pop_style_var()
     return k
+
+
+def _axis_row(panel, io, i: int, a, selected: bool, h: float, conflict: bool) -> bool:
+    """One axis: its name, the output bar with the hand's live point and the
+    rest tick, and what goes to the DAW. True when it was clicked."""
+    st = io.state[i] if io is not None else None
+    here = io is not None and io.present[a.side]
+    imgui.push_style_color(imgui.Col_.text, ui.RED if conflict else
+                           (imgui.ImVec4(0.92, 0.92, 0.92, 1) if here else ui.DIM))
+    hit = imgui.selectable(f"{a.label}##hax{i}", selected, 0, imgui.ImVec2(ROW_LABEL_W, h))[0]
+    imgui.pop_style_color()
+    imgui.same_line()
+    bar_w = imgui.get_content_region_avail().x - OUT_W
+    pos = imgui.get_cursor_screen_pos()
+    dl = imgui.get_window_draw_list()
+    bx0, by0, bx1, by1 = pos.x, pos.y + 3, pos.x + bar_w, pos.y + h - 3
+    span = bx1 - bx0 - 2
+    dl.add_rect(imgui.ImVec2(bx0, by0), imgui.ImVec2(bx1, by1), ui.u32(ui.LINE))
+    if a.rest == "return":
+        rx = bx0 + 1 + span * a.rest_value
+        dl.add_line(imgui.ImVec2(rx, by1), imgui.ImVec2(rx, by1 + 2), ui.u32(ui.DIM))
+    if st is not None and st.y is not None:
+        # dim while the hand is away: the bar is then the DAW output
+        # (spring or hold) and the routing lane reads NaN
+        live = st.follow.live
+        dl.add_rect_filled(imgui.ImVec2(bx0 + 1, by0 + 1),
+                           imgui.ImVec2(bx0 + 1 + span * st.y, by1 - 1),
+                           ui.u32(imgui.ImVec4(0.92, 0.92, 0.92, 0.85 if live else 0.35)))
+    if st is not None and st.target is not None:
+        tx = bx0 + 1 + span * st.target
+        dl.add_line(imgui.ImVec2(tx, by0 - 1), imgui.ImVec2(tx, by1 + 1), ui.u32(ui.RED))
+    imgui.dummy(imgui.ImVec2(bar_w, h))
+    if imgui.is_item_hovered():
+        y = "—" if st is None or st.y is None else f"{st.y:.3f}"
+        if st is not None and st.y is not None and not st.follow.live:
+            y += " (DAW only; lane —)"
+        raw = "—" if st is None or st.raw is None else \
+            f"{st.raw:.1f} {FEATURES[a.feature][0]}"
+        imgui.set_tooltip(f"{a.name}: out {y}  ·  hand {raw}")
+    imgui.same_line()
+    q = "" if st is None or st.q is None else f" {st.q}"
+    imgui.text_disabled(_out_text(a) + q if a.out != "off" else "off")
+    return hit
 
 
 def _out_text(a) -> str:
@@ -250,15 +267,25 @@ def _editor(panel, io, settings, k: int) -> None:
     st = io.state[k] if io is not None else None
     _transfer(a, st)
     imgui.same_line()
-    imgui.begin_group()
+    imgui.begin_group()                 # the feel knobs and the flags beside the
+    if imgui.begin_table(f"##feel.{a.name}", 2,   # plot: the page has to fit the window
+                         imgui.TableFlags_.sizing_stretch_same):
+        for key, label in (("deadzone", "zone"), ("curve", "curve"),
+                           ("attack", "attack"), ("decay", "decay")):
+            imgui.table_next_column()
+            panel.half(f"{p}.{key}", label, label_w=ROW_LABEL_W)
+        imgui.end_table()
     panel._check(f"{p}.invert")
+    imgui.same_line()
     panel._check(f"{p}.bipolar")
+    imgui.same_line()
     if imgui.small_button("mirror"):
         mirror(settings, a.name)
     if imgui.is_item_hovered():
         imgui.set_tooltip("Copy this axis's feel (not its MIDI out) to the same axis "
                           "on the other hand.")
     if io is not None:
+        imgui.same_line()
         solo = io.solo == k
         imgui.push_style_color(imgui.Col_.text, ui.RED if solo else ui.DIM)
         if imgui.small_button("solo"):
@@ -267,16 +294,18 @@ def _editor(panel, io, settings, k: int) -> None:
         if imgui.is_item_hovered():
             imgui.set_tooltip("Send only this axis to the DAW port — for a DAW's MIDI learn.")
     imgui.end_group()
-    for key in ("deadzone", "curve", "attack", "decay"):
-        panel._row(f"{p}.{key}")
     ui._micro("On exit")
     imgui.same_line(ui.LABEL_W)
     panel._combo(f"{p}.rest", 70)
     if a.rest == "return":
         imgui.same_line()
         panel._slider(f"{p}.rest_value")
-        panel._row(f"{p}.return")
-        panel._row(f"{p}.bounce")
+        if imgui.begin_table(f"##spring.{a.name}", 2, imgui.TableFlags_.sizing_stretch_same):
+            imgui.table_next_column()
+            panel.half(f"{p}.return", label_w=ROW_LABEL_W)
+            imgui.table_next_column()
+            panel.half(f"{p}.bounce", label_w=ROW_LABEL_W)
+            imgui.end_table()
     ui._micro("MIDI out")
     imgui.same_line(ui.LABEL_W)
     panel._combo(f"{p}.out", 70)
@@ -297,18 +326,18 @@ def _transfer(a, st) -> None:
     dl = imgui.get_window_draw_list()
     s = PLOT_W
     x0, y0 = pos.x, pos.y
-    dl.add_rect(imgui.ImVec2(x0, y0), imgui.ImVec2(x0 + s, y0 + s), _u32(DIM_LINE))
-    dl.add_line(imgui.ImVec2(x0, y0 + s), imgui.ImVec2(x0 + s, y0), _u32(DIM_LINE))
+    dl.add_rect(imgui.ImVec2(x0, y0), imgui.ImVec2(x0 + s, y0 + s), ui.u32(ui.LINE))
+    dl.add_line(imgui.ImVec2(x0, y0 + s), imgui.ImVec2(x0 + s, y0), ui.u32(ui.LINE))
     n = 48
     pts = [imgui.ImVec2(x0 + s * j / n,
                         y0 + s * (1 - shape(j / n, bipolar=a.bipolar, deadzone=a.deadzone,
                                             c=a.curve)))
            for j in range(n + 1)]
     for p0, p1 in itertools.pairwise(pts):
-        dl.add_line(p0, p1, _u32(imgui.ImVec4(0.92, 0.92, 0.92, 1)), 1.2)
+        dl.add_line(p0, p1, ui.u32(imgui.ImVec4(0.92, 0.92, 0.92, 1)), 1.2)
     if st is not None and st.u is not None and st.target is not None:
         dl.add_circle_filled(imgui.ImVec2(x0 + s * st.u, y0 + s * (1 - st.target)), 3.0,
-                             _u32(ui.RED))
+                             ui.u32(ui.RED))
     imgui.dummy(imgui.ImVec2(s, s))
     if imgui.is_item_hovered():
         imgui.set_tooltip("Hand position across the calibrated range (→) against what "

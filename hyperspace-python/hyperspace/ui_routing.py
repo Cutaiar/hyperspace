@@ -36,8 +36,8 @@ height positions — Replace / Keep". Two things raise it: an edit here
 (`add_route`, a row's target combo, a row's checkbox waking onto a taken
 target, "Route a lane here…") holds the question in the page's state
 with what *Replace* would do to the table (`ask`); a hand learn the MIDI
-adapter had to hold (`midi.pending`) is the same question, answered
-through `midi.resolve_pending`. `_question` is whichever is up; `prompt`
+(`learn.Learn`) had to hold (`panel.learn.pending`) is the same question,
+answered through its `resolve_pending`. `_question` is whichever is up; `prompt`
 reads it, `answer` settles it, and *Replace* writes the file. Every
 Replace — here, `_wake`, `_retarget`, the adapter's — is one call,
 `Bindings.replace_owner`, which removes whoever owns the target *when the
@@ -46,14 +46,15 @@ and exactly one owner remains. The owner is named the way its adapter
 names it (`Router.describe`). Rows a preset had to drop for the same
 reason (`table.dropped`) are listed under the header until the next edit.
 
-The strip under the title is the preset strip's look over routing
-preset *files* (routing.preset_files): prev / next / the list load
-through `Router.load_preset`, save / as… write through
-`Router.save_preset` into the user library's bindings/ folder, reset is
-the factory default. The library's own strip can't do this — bindings/
-is a folder without a registry group, so `is_dirty` has nothing to
-compare — hence the dirty dot here is the routes against a snapshot
-taken at the last load or save.
+The strip under the title is the library's own preset strip
+(ui_presets.strip) over the ``bindings`` group — a document kind the
+library keeps for the router (`Library.routing`, audit L1): the files are
+the library's (factory under hyperspace/library/bindings/, the user's
+under <home>/bindings/, user shadowing factory, watched like any preset),
+the documents are the router's (`Router.apply_doc` loads one,
+`Router.preset_doc` is what a save writes) and the dirty dot compares
+`Router.signature` with what the last load or save produced. The page
+registers the kind on first sight when app.py has not (`_strip`).
 
 The panel reaches the router through `panel.router`, which app.py is
 meant to set; until it does, the table is found through the MIDI
@@ -75,9 +76,9 @@ from imgui_bundle import imgui
 from . import ui, ui_presets
 from .bands import CEIL
 from .params import Kind, Param
-from .routing import FACTORY_DIR, Binding, Owned, Router, preset_files
+from .routing import PRESET_DIR, Binding, Owned, Router
 
-KEY = "bindings"          # the name-field / listing key on the panel's preset state
+KEY = PRESET_DIR          # the routing presets' group in the library ("bindings")
 DEPTH_MOD = 1.0           # ±, the depth slider's throw
 # the op chip cycles push ↔ position; what each one's depth means
 OP_CHIP = {"push": "push", "position": "pos"}
@@ -102,8 +103,7 @@ PROMPT_W = 360.0
 def _state(panel) -> dict:
     st = getattr(panel, "_routing_state", None)
     if st is None:
-        st = panel._routing_state = {"current": None, "snap": None, "error": "",
-                                     "names": None, "filter": "", "prompt": None}
+        st = panel._routing_state = {"error": "", "filter": "", "prompt": None}
     return st
 
 
@@ -111,85 +111,27 @@ def router_of(panel) -> Router | None:
     """The app's router, or one over the MIDI adapter's (shared) table."""
     r = getattr(panel, "router", None)
     if r is None and panel.midi is not None:
-        r = panel.router = Router(panel.reg, panel.midi.map.table)
+        r = panel.router = Router(panel.reg, panel.midi.table)
     return r
 
 
-def _home(panel):
+def _sig(router: Router) -> list[dict]:
+    """The performer rows as they would be written: the page's record of
+    what is on disk (`_save_edits`); the library's dirty dot uses the
+    router's own `signature`, which is the same list."""
+    return router.signature()
+
+
+def _strip(panel, router: Router) -> None:
+    """The library's strip over the routing presets. app.py registers the
+    kind (`Library.routing`); a panel built without it — the tests', a
+    router found through the MIDI adapter — gets it here, once."""
     lib = panel.library
-    return lib.home if lib is not None else None
-
-
-def _snapshot(router: Router) -> list[dict]:
-    return [b.to_json() for b in router.table.routes()]
-
-
-def dirty(panel, router: Router) -> bool:
-    st = _state(panel)
-    return st["snap"] is not None and _snapshot(router) != st["snap"]
-
-
-def files(panel) -> dict:
-    """name → path of the routing preset files, re-listed on the strip's
-    poll cadence (a glob per frame would be wasteful, never wrong)."""
-    st, now = _state(panel), imgui.get_time()
-    hit = st["names"]
-    if hit is None or now - hit[0] >= ui_presets.LIST_POLL:
-        st["names"] = hit = (now, preset_files(_home(panel)))
-    return hit[1]
-
-
-def names(panel) -> list[str]:
-    return sorted(files(panel), key=str.lower)
-
-
-def _factory(panel, name: str | None) -> bool:
-    p = files(panel).get(name)
-    return p is not None and FACTORY_DIR in p.parents
-
-
-def invalidate(panel) -> None:
-    _state(panel)["names"] = None
-
-
-# ---- preset actions (what the strip's buttons do; tests call these) ----
-
-def load(panel, router: Router, name: str) -> None:
-    st = _state(panel)
-    try:
-        missing = router.load_preset(name, _home(panel))
-    except (OSError, ValueError, KeyError) as e:
-        st["error"] = f"routing: {e}"
+    if lib is None or lib.reg is None:
         return
-    st["current"], st["snap"], st["error"] = name, _snapshot(router), ""
-    if missing and panel.library is not None:
-        panel.library.report(missing, f"routing preset {name}")
-
-
-def step(panel, router: Router, n: int) -> str | None:
-    """prev / next by name order; from nothing, the first or the last."""
-    listing = names(panel)
-    if not listing:
-        return None
-    cur = _state(panel)["current"]
-    k = listing.index(cur) if cur in listing else (-1 if n > 0 else 0)
-    name = listing[(k + n) % len(listing)]
-    load(panel, router, name)
-    return name
-
-
-def save_as(panel, router: Router, name: str) -> None:
-    st, home = _state(panel), _home(panel)
-    if home is None:
-        st["error"] = "routing: no library to save into"
-        return
-    try:
-        path = router.save_preset(name, home)
-    except OSError as e:
-        st["error"] = f"routing: {e}"
-        return
-    st["current"], st["snap"], st["error"] = path.name[:-5], _snapshot(router), ""
-    invalidate(panel)
+    if KEY not in lib.kinds:
+        lib.routing(router)
+    ui_presets.strip(panel, KEY)
 
 
 def add_route(panel, target: str, source: str | None = None, depth: float = 0.5,
@@ -207,10 +149,6 @@ def add_route(panel, target: str, source: str | None = None, depth: float = 0.5,
         return None
     _write(panel, router)
     return b
-
-
-def _sig(router: Router) -> list[dict]:
-    return [b.to_json() for b in router.table.routes()]
 
 
 def _write(panel, router: Router) -> None:
@@ -245,9 +183,11 @@ def _retarget(router: Router, b: Binding, picked: str) -> Binding | None:
 
 def _question(panel) -> tuple[Binding, Binding, Callable[[bool], object]] | None:
     """(old, new, settle) — the question up now and how to settle it:
-    the page's own first (settle(True) commits; the page then writes), else
-    a hand learn the MIDI adapter is holding (`midi.pending`; settle is its
-    `resolve_pending`, which writes for itself). None when nothing asks."""
+    the page's own first (settle(True) commits and returns nothing; the
+    page then writes), else a learn the referee refused
+    (`panel.learn.pending`; settle is its `resolve_pending`, which writes
+    for itself and returns the row it placed — so `answer` writes only when
+    the settle did not, audit R9). None when nothing asks."""
     st = _state(panel)
     held = st["prompt"]
     if held is not None:
@@ -258,10 +198,10 @@ def _question(panel) -> tuple[Binding, Binding, Callable[[bool], object]] | None
             if replace_it:
                 commit()
         return old, new, settle
-    m = panel.midi
-    if m is not None and m.pending is not None:
-        new, old = m.pending
-        return old, new, m.resolve_pending
+    lrn = panel.learn
+    if lrn is not None and lrn.pending is not None:
+        new, old = lrn.pending
+        return old, new, lrn.resolve_pending
     return None
 
 
@@ -277,9 +217,13 @@ def answer(panel, replace_it: bool) -> None:
     q = _question(panel)
     if q is None:
         return
-    q[2](replace_it)
+    wrote = q[2](replace_it)
     if replace_it:
-        _write(panel, router_of(panel))
+        router = router_of(panel)
+        if wrote:                       # a learn's Replace wrote the file itself
+            _state(panel)["saved"] = _sig(router)
+        else:
+            _write(panel, router)
 
 
 def modal(panel) -> None:
@@ -344,90 +288,25 @@ def ctx_item(panel, p: Param) -> None:
         panel.reg["ui.page"].set(ui.PAGE_KEYS.index("routing"))
 
 
-# ---- the strip ----
-
-def strip(panel, router: Router) -> None:
-    """◀ name ● ▶ · save · as… · reset — over the routing preset files."""
-    st = _state(panel)
-    imgui.push_id("strip.routing")
-    if ui_presets._name_field(panel, KEY, lambda n: save_as(panel, router, n)):
-        imgui.pop_id()
-        return
-    cur = st["current"]
-    listing = names(panel)
-    factory = _factory(panel, cur)
-    is_dirty = dirty(panel, router)
-    imgui.begin_disabled(not listing)
-    if imgui.arrow_button("prev", imgui.Dir.left):
-        step(panel, router, -1)
-    imgui.same_line(0, 2)
-    label = ui_presets._elide(cur) if cur else "—"
-    imgui.push_style_color(imgui.Col_.button, imgui.ImVec4(0, 0, 0, 0))
-    imgui.push_style_color(imgui.Col_.text, ui.DIM if factory or cur is None else
-                           imgui.ImVec4(0.92, 0.92, 0.92, 1))
-    if imgui.button(f"{label}##name", imgui.ImVec2(ui_presets.name_w(), 0)):
-        imgui.open_popup("list")
-    imgui.pop_style_color(2)
-    if imgui.is_item_hovered():
-        imgui.set_tooltip(f"{cur}  ·  {'factory' if factory else 'user'} routing preset — "
-                          "click for the list" if cur else
-                          "the routes as loaded from the project's bindings.json")
-    if is_dirty:
-        imgui.same_line(0, 0)
-        imgui.text_colored(ui.RED, "●")
-        if imgui.is_item_hovered():
-            imgui.set_tooltip("routes edited since the preset loaded")
-    imgui.same_line(0, 2)
-    if imgui.arrow_button("next", imgui.Dir.right):
-        step(panel, router, 1)
-    imgui.end_disabled()
-    if imgui.begin_popup("list"):
-        ui._micro("routing")
-        for name in listing:
-            fac = _factory(panel, name)
-            imgui.push_style_color(imgui.Col_.text, ui.DIM if fac else
-                                   imgui.ImVec4(0.92, 0.92, 0.92, 1))
-            picked, _ = imgui.selectable(f"{name}##pick", name == cur)
-            imgui.pop_style_color()
-            if picked:
-                load(panel, router, name)
-        imgui.end_popup()
-    imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w("save", "as…", "reset"))
-    imgui.begin_disabled(cur is None or factory or _home(panel) is None)
-    if ui.chip("save"):
-        save_as(panel, router, cur)
-    imgui.end_disabled()
-    if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
-        imgui.set_tooltip("Write the routes over the current preset"
-                          + (" — a factory preset: save as… instead" if factory else ""))
-    imgui.same_line()
-    if ui.chip("as…"):
-        ui_presets._begin_naming(panel, KEY, cur or "")
-    if imgui.is_item_hovered():
-        imgui.set_tooltip("Save the routes as a new user preset (library/bindings/)")
-    imgui.same_line()
-    if ui.chip("reset"):
-        load(panel, router, "default")
-    if imgui.is_item_hovered():
-        imgui.set_tooltip("Back to the factory routes — legacy 6 on the pattern base of 1")
-    imgui.pop_id()
-
-
 # ---- the rows ----
 
 SOURCE_ORDER = ("hand", "lfo", "ext")   # the fed schemes, after the analyzer's lanes
 
 
 def _sources(panel, router: Router) -> list[tuple[str, str]]:
-    """(source, label) the combo offers: every analyzer lane as "i NAME",
+    """(source, label) the combo offers: every analyzer lane as "i NAME"
+    (the names the audio engine publishes each frame, `AudioEngine.publish`),
     then each fed scheme (SOURCE_ORDER) that is around — its adapter has
     published labels, it is being fed this frame, or a row names it — one
     entry per lane, labelled as the adapter says ("lfo LFO 1") or by
     index. Nothing here knows what a scheme is; the ext lanes are the one
     case with a fixed count (N_EXT) since the bridge publishes no labels."""
-    chain = panel.audio.chain
-    out = [(f"lane:{i}", f"{i} {name}") for i, name in enumerate(chain.band_names)]
     labels = getattr(router, "labels", {})
+    # the lanes as the engine published them (AudioEngine.publish, each
+    # frame); until it has — a panel with no frame loop behind it — the
+    # chain's own names, so the combo always offers the lanes
+    lanes = labels.get("lane") or panel.audio.chain.band_names
+    out = [(f"lane:{i}", f"{i} {name}") for i, name in enumerate(lanes)]
     for scheme in SOURCE_ORDER:
         names = labels.get(scheme) or []
         vec = router.feeds.get(scheme)
@@ -669,17 +548,16 @@ def _live_bar(panel, router: Router, b: Binding, p: Param | None) -> None:
     h = imgui.get_frame_height()
     pos = imgui.get_cursor_screen_pos()
     dl = imgui.get_window_draw_list()
-    u32 = imgui.color_convert_float4_to_u32
     x0, y0, x1, y1 = pos.x, pos.y + 3, pos.x + BAR_W, pos.y + h - 3
     dl.add_rect(imgui.ImVec2(x0, y0), imgui.ImVec2(x1, y1),
-                u32(ui.LINE), 4.0)
+                ui.u32(ui.LINE), 4.0)
     if u is not None:
         w = (x1 - x0 - 2) * min(max(u, 0.0), 1.0)
         dl.add_rect_filled(imgui.ImVec2(x0 + 1, y0 + 1), imgui.ImVec2(x0 + 1 + w, y1 - 1),
-                           u32(imgui.ImVec4(0.92, 0.92, 0.92, 0.85)), 3.0)
+                           ui.u32(imgui.ImVec4(0.92, 0.92, 0.92, 0.85)), 3.0)
     if p is not None and p.modulated:
         x = x0 + 1 + (x1 - x0 - 2) * p.eff_norm
-        dl.add_line(imgui.ImVec2(x, y0), imgui.ImVec2(x, y1), u32(ui.RED), 2.0)
+        dl.add_line(imgui.ImVec2(x, y0), imgui.ImVec2(x, y1), ui.u32(ui.RED), 2.0)
         panel.ghosts += 1
     imgui.dummy(imgui.ImVec2(BAR_W, h))
     if imgui.is_item_hovered():
@@ -719,7 +597,7 @@ def page(panel, dt: float) -> None:
         imgui.separator()
         imgui.text_disabled("no router attached")
         return
-    strip(panel, router)
+    _strip(panel, router)
     imgui.separator()
     rows = router.table.routes()
     chain = panel.audio.chain
@@ -734,6 +612,9 @@ def page(panel, dt: float) -> None:
                           "any control: Route a lane here…")
     if st["error"]:
         imgui.text_colored(ui.WARN, st["error"])
+    lib = panel.library
+    if lib is not None and lib.error and KEY in lib.error:      # a routing preset that would not load
+        imgui.text_colored(ui.WARN, lib.error)
     # what the referee refused from the last preset (one owner per target)
     # and what a migration dropped or moved, until the next edit
     for b, why in router.table.dropped:

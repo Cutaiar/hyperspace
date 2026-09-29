@@ -12,11 +12,11 @@ argument, duck-typed, never imported:
   HandsIO(settings, cfg,      `source` is anything with .latest(); `out`
           source=…, out=…)    anything with .send(). Both default to the
                               real ones, so tests and a host substitute.
-  HandsIO.poll(dt, midi,      `midi` needs .learning / .learn_source(src,
-                router)       when=) (MIDI learn); `router` needs .feed and
-                              takes .labels / .gates / .rests dicts (poll
-                              creates any that are missing). Pass neither
-                              and the hands still run.
+  HandsIO.poll(dt, learn,     `learn` needs .learning / .learn_source(src,
+                router)       when=) (the host's learn.Learn); `router` needs
+                              .feed and defines the .labels / .gates / .rests
+                              dicts that poll fills. Pass neither and the
+                              hands still run.
 
 panel.py is the one piece that knows this host: it draws the HANDS page
 with the host's imgui panel and palette. Extracting the package means
@@ -32,43 +32,26 @@ What the host must still provide when embedded (see app.py):
 from __future__ import annotations
 
 from .core import (
-    BIPOLAR,
-    CAL_FILE,
-    CAL_MIN_SAMPLES,
-    CAL_SCHEMA,
-    DEFAULT_DOFS,
     DEFAULTS,
     FEATURES,
     GROUP,
-    LEARN_MOVE,
     PALM_W,
     PINCHES,
-    SHAPE_KEYS,
     SIDES,
-    STALE_S,
-    TRACKING_MODES,
-    X_RANGE,
     AxisSettings,
-    AxisState,
     Gate,
     HandSettings,
     HandsIO,
-    LeapSource,
-    OneEuro,
     conflicts,
-    default_range,
     features,
-    load_calibration,
     mirror,
     pinches,
     register,
-    save_calibration,
 )
 
+# what the host, the panel, the tools and the tests reach for; everything
+# else (calibration files, the tracking source, the constants) is core's
 __all__ = [
-    "BIPOLAR", "CAL_FILE", "CAL_MIN_SAMPLES", "CAL_SCHEMA", "DEFAULTS", "DEFAULT_DOFS",
-    "FEATURES", "GROUP", "LEARN_MOVE", "PALM_W", "PINCHES", "SHAPE_KEYS", "SIDES",
-    "STALE_S", "TRACKING_MODES", "X_RANGE", "AxisSettings", "AxisState", "Gate",
-    "HandSettings", "HandsIO", "LeapSource", "OneEuro", "conflicts", "default_range",
-    "features", "load_calibration", "mirror", "pinches", "register", "save_calibration",
+    "DEFAULTS", "FEATURES", "GROUP", "PALM_W", "PINCHES", "SIDES", "AxisSettings", "Gate",
+    "HandSettings", "HandsIO", "conflicts", "features", "mirror", "pinches", "register",
 ]

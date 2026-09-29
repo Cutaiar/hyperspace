@@ -18,7 +18,9 @@ import numpy as np
 import pytest
 
 from hyperspace import bands, geometry
+from hyperspace.analyzer import Analyzer
 from hyperspace.offline import run_wav
+from hyperspace.routing import legacy_planedrive
 
 ROOT = Path(__file__).parent.parent
 GOLDEN = Path(__file__).parent / "golden"
@@ -53,6 +55,28 @@ def test_projection_matches(path):
         np.testing.assert_allclose(pd, np.asarray(view["pd"]), rtol=0, atol=1e-6)
 
 
+@pytest.mark.parametrize("i", range(len(geometry.SHAPES)), ids=lambda i: geometry.SHAPES[i])
+def test_project_is_project_h_without_the_divisor(i):
+    """The parity oracle and the renderer's transform are one function
+    (audit V1): equal to the bit on every shape, not just on the traces."""
+    g = geometry.geom(i)
+    ang, yaw, pitch = [0.3, 0.1, 0.7, 0.2, 0.5, 0.9], 0.4, -0.2
+    px, py, pd = geometry.project(g["V"], ang, yaw, pitch, d4=3.1, w=1000, h=700)
+    hx, hy, hd, wc = geometry.project_h(g["V"], ang, yaw, pitch, d4=3.1, w=1000, h=700)
+    assert np.array_equal(px, hx) and np.array_equal(py, hy) and np.array_equal(pd, hd)
+    assert wc.shape == pd.shape and np.all(wc > 0)
+
+
+def test_the_plane_table_names_its_own_axes():
+    """One PLANES table (audit V4): each name spells the two axes it turns,
+    and the registry's names are that table's, in its order."""
+    from hyperspace.params import PLANES as NAMES
+    for name, i, j in geometry.PLANES:
+        assert (name[0], name[1]) == ("XYZW"[i], "XYZW"[j]) and i < j
+    assert NAMES == [name for name, _, _ in geometry.PLANES]
+    assert len(geometry.PLANES) == len(geometry.RATE) == 6
+
+
 # -------------------------------------------------------------- unit props
 
 def test_soft_ceil_properties():
@@ -66,14 +90,16 @@ def test_soft_ceil_properties():
 
 def test_presets_load():
     from hyperspace.analysis import Analyser
+    from hyperspace.control import SCENES
+    from hyperspace.library import factory_doc
 
-    chain = bands.Chain(Analyser())
-    for k in range(len(bands.PRESETS)):
-        chain.apply_preset(k)
+    chain = Analyzer(Analyser())
+    for name in SCENES:
+        chain.apply_scene(factory_doc("band", name)["values"])
         for p in chain.params:
             assert 0 <= p.fn < len(bands.SHAPERS)
             assert p.atk > 0 and p.dec > 0
-    assert len(bands.PRESETS) == 11
+    assert len(SCENES) == 11
 
 
 # ------------------------------------------------------ chain behaviours
@@ -102,7 +128,9 @@ def test_gate_prover_behaviour(fixture_wavs):
         assert np.all(out[:, i] == 0.0), f"{name} must gate to exactly zero"
     # gated bands leave their planes at the +1 idle drive? No — a gated band
     # drives 0; the plane stops. That is the documented contract.
-    drive = settled(r["drive"], r["t"])
+    # the reference's PLANEDRIVE is a route now (routing.legacy_planedrive);
+    # offline.py ends at the lanes, so compute it here from `out`
+    drive = np.array([legacy_planedrive(row) for row in out])
     for i in (2, 3, 5):
         plane = bands.BANDS[i].plane
         assert np.all(drive[:, plane] == 0.0)

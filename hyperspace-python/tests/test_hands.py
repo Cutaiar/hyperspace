@@ -10,15 +10,16 @@ import pytest
 
 from hyperspace import hands
 from hyperspace.analysis import Analyser
-from hyperspace.bands import Chain
+from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
 from hyperspace.hands import HandSettings, HandsIO, features
 from hyperspace.hands import signal as hs
+from hyperspace.learn import Learn
 from hyperspace.library import Library
-from hyperspace.midi import MidiIO, MidiMap
+from hyperspace.midi import MidiIO
 from hyperspace.params import Registry, build_registry
-from hyperspace.render import ViewState
 from hyperspace.routing import Binding, Bindings, Router
+from hyperspace.view import ViewState
 
 DT = 1 / 60
 
@@ -99,14 +100,14 @@ def rig(tmp_path=None, **cfg):
     return NS(io=io, src=src, clock=clock, s=settings)
 
 
-def run(r, frames=1, *hs_, midi=None, router=None, fresh=True):
+def run(r, frames=1, *hs_, learn=None, router=None, fresh=True):
     """`frames` render frames; a new tracking frame on each when `fresh`."""
     out = []
     for _ in range(frames):
         r.clock.t += DT
         if fresh:
             r.src.put(*hs_)
-        out += r.io.poll(DT, midi, router)
+        out += r.io.poll(DT, learn, router)
     return out
 
 
@@ -295,7 +296,7 @@ def test_setup_is_registry_params_that_round_trip():
 
 
 def test_a_setup_saves_and_loads_through_the_library(tmp_path):
-    chain = Chain(Analyser())
+    chain = Analyzer(Analyser())
     reg = build_registry(ViewState(), Control(chain), NS(chain=chain))
     s = HandSettings.from_config({})
     hands.register(reg, s)
@@ -422,19 +423,20 @@ def test_calibration_sweep_sets_and_saves_ranges(tmp_path):
 
 @pytest.fixture()
 def app(tmp_path):
-    chain = Chain(Analyser())
+    chain = Analyzer(Analyser())
     control = Control(chain)
     view = ViewState()
     lib = Library(tmp_path)
-    reg = build_registry(view, control, NS(chain=chain), lib.bank)
+    reg = build_registry(view, control, NS(chain=chain), lib.project)
     table = Bindings.load(tmp_path / "bindings.json", legacy_midi=None)
 
     class Quiet:
         def iter_pending(self):
             return iter(())
 
-    midi = MidiIO(reg, MidiMap(table=table), inp=Quiet(), out=FakeOut())
-    return NS(reg=reg, view=view, midi=midi, router=Router(reg, table), table=table)
+    learn = Learn(reg, table)
+    midi = MidiIO(reg, table, inp=Quiet(), out=FakeOut(), learner=learn)
+    return NS(reg=reg, view=view, learn=learn, midi=midi, router=Router(reg, table), table=table)
 
 
 def _frame(app):
@@ -445,20 +447,20 @@ def _frame(app):
 
 def test_learn_takes_the_axis_that_moved_as_a_position_route(app):
     r = rig()
-    run(r, 1, hand(), midi=app.midi, router=app.router)
-    app.midi.learn("view.inst_amp")
+    run(r, 1, hand(), learn=app.learn, router=app.router)
+    app.learn.arm("view.inst_amp")
     for k in range(1, 8):                    # x jitters a little, pitch moves a lot
         run(r, 1, hand(pos=(2.0 * k, 200.0, 0.0), direction=tilt(0.12 * k)),
-            midi=app.midi, router=app.router)
-    assert app.midi.learning is None and app.midi.pending is None
+            learn=app.learn, router=app.router)
+    assert app.learn.learning is None and app.learn.pending is None
     rows = [b for b in app.table.of("hand") if b.target == "view.inst_amp"]
     assert [(b.source, b.op, b.value, b.when) for b in rows] == [
         (f"hand:{ax(r, 'right.pitch')}", "position", 1.0, None)]
     assert app.table.owner("view.inst_amp") is rows[0]
-    assert "learned view.inst_amp" in app.midi.last
+    assert "learned view.inst_amp" in app.learn.last
     # the hand is the fader — in floats, off its 100 detents — through the
     # Router like every route; the base is what the panel set
-    run(r, 1, hand(direction=tilt(math.radians(13.0))), midi=app.midi, router=app.router)
+    run(r, 1, hand(direction=tilt(math.radians(13.0))), learn=app.learn, router=app.router)
     _frame(app)
     p = app.reg["view.inst_amp"]
     u = (13.0 + 60) / 120
@@ -486,19 +488,130 @@ def test_a_panel_edit_moves_the_return_value_under_a_hand(app):
     run(r, 1, hand(pos=(0.0, 300.0, 0.0)), router=app.router)
     _frame(app)
     assert p.eff_norm == pytest.approx(0.8, abs=1e-4) and p.norm == pytest.approx(0.9)
-    r.src.on = False                                                  # the camera goes
-    run(r, 1, router=app.router)
+    run(r, 1, router=app.router)                    # the hand leaves; the camera stays on
     _frame(app)
-    assert not p.modulated and p.norm == pytest.approx(0.9)
+    assert r.src.on and not p.modulated and p.norm == pytest.approx(0.9)
+    assert p.eff_norm == pytest.approx(0.9)
+
+
+def test_a_hand_leaving_the_box_releases_its_position_row(app):
+    """Audit B1: with the tracker on, the frame the hand is absent its
+    axes read NaN, the row calls nothing, and apply() writes the base
+    back — the return spring shapes only the DAW output."""
+    r = rig()
+    k = ax(r, "right.y")
+    a = r.s.axes[k]
+    a.rest, a.rest_value, a.return_s, a.bounce = "return", 0.0, 0.3, 0.0
+    app.table.add(Binding(f"hand:{k}", "view.inst_amp", "position"))
+    p = app.reg["view.inst_amp"]
+    base = p.norm
+    run(r, 1, hand(pos=(0.0, 300.0, 0.0)), router=app.router)
+    _frame(app)
+    assert p.modulated and p.eff_norm == pytest.approx(0.8, abs=1e-4)
+    calls = []
+    p_mod = p.modulate
+    p.modulate = lambda off: (calls.append(off), p_mod(off))
+    run(r, 1, router=app.router)                    # gone, tracker still on
+    assert r.src.on and math.isnan(app.router.feeds["hand"][k])
+    _frame(app)
+    assert calls == [] and not p.modulated
+    assert p.eff_norm == pytest.approx(base) and p.norm == pytest.approx(base)
+    # the DAW path still springs home from where the hand was
+    st = r.io.state[k]
+    assert 0.0 < st.y < 0.8
+    run(r, 30, router=app.router)
+    _frame(app)
+    assert st.y == pytest.approx(0.0, abs=0.01) and st.q == 0
+    assert calls == [] and p.eff_norm == pytest.approx(base)
+
+
+def test_a_returning_hand_glides_its_row_back_on_through_the_catch(app):
+    """Away, the row is released (the spring is DAW-only); back, the catch
+    is live and glides the param from where the spring left it onto the hand."""
+    r = rig()
+    r.s.catch_s = 0.2
+    k = ax(r, "right.y")
+    a = r.s.axes[k]
+    a.rest, a.rest_value, a.return_s = "return", 0.0, 0.1
+    app.table.add(Binding(f"hand:{k}", "view.inst_amp", "position"))
+    p = app.reg["view.inst_amp"]
+    base = p.norm
+    run(r, 1, hand(pos=(0.0, 300.0, 0.0)), router=app.router)
+    run(r, 20, router=app.router)                   # away: home at 0
+    _frame(app)
+    st = r.io.state[k]
+    assert st.y == pytest.approx(0.0, abs=0.01) and not p.modulated
+    assert p.eff_norm == pytest.approx(base)
+    run(r, 1, hand(pos=(0.0, 300.0, 0.0)), router=app.router)   # back, far away
+    _frame(app)
+    # the catch is live: the row takes the param back at once and glides
+    # it onto the hand, so a one-frame tracking dropout costs one frame
+    assert 0.0 < st.y < 0.8 and st.follow.mode == st.follow.CATCH and st.follow.live
+    assert app.router.feeds["hand"][k] == pytest.approx(st.y) and p.modulated
+    assert p.eff_norm == pytest.approx(st.y, abs=1e-4)
+    run(r, 20, hand(pos=(0.0, 300.0, 0.0)), router=app.router)
+    _frame(app)
+    assert st.follow.mode == st.follow.FOLLOW and p.eff_norm == pytest.approx(0.8, abs=1e-3)
+
+
+def test_the_tracker_going_dark_feeds_none_and_releases_every_row(app):
+    r = rig()
+    k = ax(r, "right.y")
+    app.table.add(Binding(f"hand:{k}", "view.inst_amp", "position"))
+    p = app.reg["view.inst_amp"]
+    base = p.norm
+    run(r, 1, hand(pos=(0.0, 300.0, 0.0)), router=app.router)
+    _frame(app)
+    assert p.modulated
+    r.src.on = False                                 # the camera goes
+    run(r, 1, hand(pos=(0.0, 300.0, 0.0)), router=app.router)
+    assert app.router.feeds.get("hand") is None
+    _frame(app)
+    assert not p.modulated and p.eff_norm == pytest.approx(base)
+
+
+def test_a_return_spring_never_completes_a_learn(app):
+    """Learn armed, hand pulled out: the spring moves the DAW output a long
+    way, but a learn measures the hand, so nothing is bound."""
+    r = rig()
+    k = ax(r, "right.y")
+    a = r.s.axes[k]
+    a.rest, a.rest_value, a.return_s = "return", 0.0, 0.1
+    run(r, 1, hand(pos=(0.0, 300.0, 0.0)), learn=app.learn, router=app.router)
+    app.learn.arm("view.inst_amp")
+    run(r, 1, hand(pos=(0.0, 300.0, 0.0)), learn=app.learn, router=app.router)
+    run(r, 30, learn=app.learn, router=app.router)     # gone; y springs 0.8 → 0
+    assert r.io.state[k].y == pytest.approx(0.0, abs=0.01)
+    assert app.learn.learning == "view.inst_amp" and app.table.owner("view.inst_amp") is None
+
+
+def test_hold_shapes_the_daw_output_but_never_latches_a_row(app):
+    """Audit N6: `rest = hold` keeps the last value on the DAW port; the
+    routing row still lets go, so the param returns to its base."""
+    r = rig()                                        # every axis rests on hold
+    k = ax(r, "right.y")
+    app.table.add(Binding(f"hand:{k}", "view.inst_amp", "position"))
+    p = app.reg["view.inst_amp"]
+    base = p.norm
+    run(r, 1, hand(pos=(0.0, 300.0, 0.0)), router=app.router)
+    _frame(app)
+    assert p.eff_norm == pytest.approx(0.8, abs=1e-4)
+    st = r.io.state[k]
+    q = st.q
+    run(r, 5, router=app.router)
+    _frame(app)
+    assert st.y == pytest.approx(0.8, abs=1e-4) and st.q == q     # held for the DAW
+    assert not st.follow.live and not p.modulated
+    assert p.eff_norm == pytest.approx(base)
 
 
 def test_a_learn_on_a_performed_param_is_held_for_the_prompt(app):
     """Learn onto a param another hand row performs: the row is not written
     over it and not lost — it waits in `pending` for Replace / Keep."""
-    t, m = app.table, app.midi
+    t, m = app.table, app.learn
     old = t.add(Binding("hand:3", "view.inst_amp", "position"))
     t.add(Binding("hand:3", "view.bright", "push", 0.5))             # one hand, two params
-    m.learn("view.inst_amp")
+    m.arm("view.inst_amp")
     m.learn_source("hand:7", when="hand:18")
     assert m.learning is None
     new, existing = m.pending
@@ -507,7 +620,7 @@ def test_a_learn_on_a_performed_param_is_held_for_the_prompt(app):
     assert m.resolve_pending(False) is None                          # Keep
     assert m.pending is None and t.owner("view.inst_amp") is old and "kept" in m.last
     t.add(Binding("hand:7", "view.speed", "position"))               # hand:7's old param
-    m.learn("view.inst_amp")
+    m.arm("view.inst_amp")
     m.learn_source("hand:7")
     new = m.resolve_pending(True)                                    # Replace
     assert new is t.owner("view.inst_amp") and new.source == "hand:7"
@@ -518,26 +631,50 @@ def test_a_learn_on_a_performed_param_is_held_for_the_prompt(app):
     assert m.resolve_pending(True) is None                           # nothing pending
 
 
+def test_a_hand_learn_needs_no_midi_adapter(tmp_path):
+    """Audit B3: Learn is the host's, not the MIDI adapter's. With no
+    MidiIO anywhere — `[midi] enabled = false`, or the adapter failed to
+    open — right-click → Learn, move a hand, and the row lands."""
+    chain = Analyzer(Analyser())
+    reg = build_registry(ViewState(), Control(chain), NS(chain=chain), Library(tmp_path).project)
+    table = Bindings.load(tmp_path / "bindings.json", legacy_midi=None)
+    learn, router = Learn(reg, table), Router(reg, table)
+    r = rig()
+    run(r, 1, hand(), learn=learn, router=router)
+    learn.arm("view.inst_amp")
+    for k in range(1, 8):
+        run(r, 1, hand(pos=(2.0 * k, 200.0, 0.0), direction=tilt(0.12 * k)),
+            learn=learn, router=router)
+    b = table.owner("view.inst_amp")
+    assert (b.source, b.op) == (f"hand:{ax(r, 'right.pitch')}", "position")
+    assert learn.learning is None and "learned view.inst_amp" in learn.last
+    assert Bindings.load(table.path, legacy_midi=None).owner("view.inst_amp") == b
+    run(r, 1, hand(direction=tilt(math.radians(13.0))), learn=learn, router=router)
+    router.modulate()
+    reg.apply()
+    assert reg["view.inst_amp"].eff_norm == pytest.approx((13.0 + 60) / 120, abs=1e-4)
+
+
 def test_a_held_learn_is_not_fired_again_by_the_hands(app):
-    """The hands adapter keys off `midi.learning`, which is cleared before
+    """The hands adapter keys off `learn.learning`, which is cleared before
     the referee's answer is known: while the prompt is up, moving hands
     learn nothing more; arming a new learn forgets the held one."""
     r = rig()
-    t, m = app.table, app.midi
+    t, m = app.table, app.learn
     old = t.add(Binding("hand:3", "view.inst_amp", "position"))
-    run(r, 1, hand(), midi=m, router=app.router)
-    m.learn("view.inst_amp")
+    run(r, 1, hand(), learn=m, router=app.router)
+    m.arm("view.inst_amp")
     for k in range(1, 8):                                            # R pitch wins the learn
         run(r, 1, hand(pos=(2.0 * k, 200.0, 0.0), direction=tilt(0.12 * k)),
-            midi=m, router=app.router)
+            learn=m, router=app.router)
     assert m.learning is None and m.pending is not None
     held = m.pending
     for k in range(8, 20):                                           # keeps moving: nothing
         run(r, 1, hand(pos=(2.0 * k, 200.0, 0.0), direction=tilt(0.12 * k)),
-            midi=m, router=app.router)
+            learn=m, router=app.router)
     assert m.pending is held and t.owner("view.inst_amp") is old
     assert [b.target for b in t.of("hand")] == ["view.inst_amp"]
-    m.learn("view.speed")                                            # a new learn: forgotten
+    m.arm("view.speed")                                            # a new learn: forgotten
     assert m.pending is None and m.learning == "view.speed"
 
 
@@ -573,16 +710,16 @@ def test_hands_page_draws_live_and_offline(tmp_path):
         io_.backend_flags |= imgui.BackendFlags_.renderer_has_textures
         apply_style()
         load_fonts()
-        chain = Chain(Analyser())
+        chain = Analyzer(Analyser())
         control = Control(chain)
         audio = NS(chain=chain, on=False, mode="", error="", label="", sr=48000.0)
         view = ViewState()
         lib = Library(tmp_path, period=0.0)
-        reg = build_registry(view, control, audio, lib.bank)
+        reg = build_registry(view, control, audio, lib.project)
         r = rig()
         hands.register(reg, r.s)
         lib.attach(reg)
-        panel = Panel(control, audio, view, presets=lib.bank, registry=reg, library=lib)
+        panel = Panel(control, audio, view, themes=lib.project, registry=reg, library=lib)
         panel.hand_settings = r.s
         reg["ui.page"].set(PAGE_KEYS.index("hands"))
 
@@ -764,11 +901,11 @@ def test_learning_while_pinched_gates_the_row_on_that_pinch(app):
     """Pinch, learn, move: the row remembers the thumb as well as the axis."""
     r = rig()
     shut = {"tips": (10.0, 60.0, 60.0, 60.0), "palm_w": 100.0}
-    run(r, 1, hand(**shut), midi=app.midi, router=app.router)
-    app.midi.learn("view.inst_amp")
+    run(r, 1, hand(**shut), learn=app.learn, router=app.router)
+    app.learn.arm("view.inst_amp")
     for k in range(1, 8):
         run(r, 1, hand(pos=(2.0 * k, 200.0, 0.0), direction=tilt(0.12 * k), **shut),
-            midi=app.midi, router=app.router)
+            learn=app.learn, router=app.router)
     rows = [b for b in app.table.of("hand") if b.target == "view.inst_amp"]
     assert len(rows) == 1
     assert rows[0].when == f"hand:{r.io.gate_lane('right', 'index')}"
@@ -777,11 +914,11 @@ def test_learning_while_pinched_gates_the_row_on_that_pinch(app):
 def test_learning_with_an_open_hand_leaves_the_row_ungated(app):
     r = rig()
     wide = {"tips": (60.0, 60.0, 60.0, 60.0), "palm_w": 100.0}
-    run(r, 1, hand(**wide), midi=app.midi, router=app.router)
-    app.midi.learn("view.inst_amp")
+    run(r, 1, hand(**wide), learn=app.learn, router=app.router)
+    app.learn.arm("view.inst_amp")
     for k in range(1, 8):
         run(r, 1, hand(pos=(2.0 * k, 200.0, 0.0), direction=tilt(0.12 * k), **wide),
-            midi=app.midi, router=app.router)
+            learn=app.learn, router=app.router)
     rows = [b for b in app.table.of("hand") if b.target == "view.inst_amp"]
     assert len(rows) == 1 and rows[0].when is None
 
@@ -793,10 +930,10 @@ def test_the_learning_hand_chooses_its_own_thumb(app):
     both = lambda k=0: (hand("left", pos=(-110.0, 200.0, 0.0), **shut),
                         hand("right", pos=(2.0 * k, 200.0, 0.0),
                              direction=tilt(0.12 * k), **shut))
-    run(r, 1, *both(), midi=app.midi, router=app.router)
-    app.midi.learn("view.inst_amp")
+    run(r, 1, *both(), learn=app.learn, router=app.router)
+    app.learn.arm("view.inst_amp")
     for k in range(1, 8):
-        run(r, 1, *both(k), midi=app.midi, router=app.router)
+        run(r, 1, *both(k), learn=app.learn, router=app.router)
     rows = [b for b in app.table.of("hand") if b.target == "view.inst_amp"]
     assert rows[0].when == f"hand:{r.io.gate_lane('right', 'index')}"
 
@@ -824,3 +961,200 @@ def test_the_adapter_publishes_its_switches_as_gates(app):
     run(r, 1, hand(), router=app.router)
     assert app.router.rests["hand"][r.io.axis("left.y")] == 0.2
     assert app.router.rest_of(f"hand:{r.io.axis('right.roll')}") == 0.5
+
+
+# ------------------------------------------------- one rig table (audit N1)
+
+def test_one_defaults_table_for_the_rig(tmp_path):
+    """config.load fills the [hands] section from hands.DEFAULTS (config has
+    no table of its own), and a bare AxisSettings is the axis from_config
+    builds — no second table of defaults anywhere."""
+    from hyperspace import config
+    from hyperspace.hands import AxisSettings
+
+    assert "hands" not in config.DEFAULTS                 # no table of its own
+    (tmp_path / "config.toml").write_text("[hands]\nenabled = true\n")
+    cfg = config.load(tmp_path / "config.toml")["hands"]
+    assert set(cfg) == set(hands.DEFAULTS) and cfg["enabled"] is True
+    assert cfg["calibration"] == str(tmp_path / "hands.json")
+    cfg["dofs"].append("grab")                             # a copy: the table is untouched
+    assert hands.DEFAULTS["dofs"] == hands.core.DEFAULT_DOFS and "grab" not in hands.core.DEFAULT_DOFS
+    filled = hands.core.rig({"dofs": ["x"]})
+    filled["dofs"].append("y")
+    assert hands.DEFAULTS["dofs"][:2] == ["x", "y"] and len(hands.DEFAULTS["dofs"]) == 6
+    s = HandSettings.from_config()
+    for a in s.axes:
+        bare = AxisSettings(a.side, a.feature, number=a.number)
+        assert bare == a, a.name
+    roll, y = AxisSettings("right", "roll"), AxisSettings("left", "y")
+    assert (roll.bipolar, roll.deadzone, roll.rest_value) == (True, 0.04, 0.5)
+    assert (y.bipolar, y.deadzone, y.rest_value) == (False, 0.0, 0.0)
+    assert (y.channel, y.number) == (hands.DEFAULTS["channel"], hands.DEFAULTS["cc"])
+    # an explicit shape is kept
+    assert AxisSettings("left", "y", bipolar=True).rest_value == 0.5
+
+
+# --------------------------------------------- one layout, published once (N2)
+
+class FakeRouter:
+    def __init__(self):
+        self.fed = []
+        self.labels, self.gates, self.rests = {}, {}, {}
+
+    def feed(self, scheme, vec):
+        self.fed.append((scheme, vec))
+
+
+def test_the_layout_is_one_object_published_once_and_rests_on_change():
+    r = rig()
+    router = FakeRouter()
+    run(r, 1, hand(), router=router)
+    lay = r.io.layout
+    assert router.labels["hand"] is lay.names and router.gates["hand"] is lay.gates
+    assert r.io.lane_names is lay.names
+    rests = router.rests["hand"]
+    assert len(lay.names) == len(rests) == len(r.io.lanes()) == lay.n == 22
+    # the index maps agree with the vector lanes() fills
+    lanes = r.io.lanes()
+    assert lanes[lay.presence["right"]] == 1.0 and lanes[lay.presence["left"]] == 0.0
+    assert all(lay.gate[(s, f)] == r.io.gate_lane(s, f) for s in hands.SIDES
+               for f in hands.PINCHES)
+    assert lay.gates == [(lay.gate[(s, f)], lay.names[lay.gate[(s, f)]])
+                         for s in hands.SIDES for f in hands.PINCHES]
+    run(r, 3, hand(), router=router)
+    # nothing republished while nothing changed: the same objects
+    assert router.labels["hand"] is lay.names and router.rests["hand"] is rests
+    assert len(router.fed) == 4                       # feed is every frame
+    r.s.axes[ax(r, "left.y")].rest_value = 0.3        # the setup moved a rest
+    run(r, 1, hand(), router=router)
+    assert router.rests["hand"] is not rests
+    assert router.rests["hand"][ax(r, "left.y")] == 0.3
+    # a router that lost the layout (a fresh one) gets it again
+    fresh = FakeRouter()
+    run(r, 1, hand(), router=fresh)
+    assert fresh.labels["hand"] is lay.names and fresh.rests["hand"] == router.rests["hand"]
+
+
+# ----------------------------------------- the DAW port comes back (N4)
+
+class FlakyOut:
+    name = "Fake DAW"
+
+    def __init__(self):
+        self.sent, self.broken, self.closed = [], False, False
+
+    def send(self, m):
+        if self.broken:
+            raise OSError("port yanked")
+        self.sent.append(m)
+
+    def close(self):
+        self.closed = True
+
+
+class Backend:
+    """mido's output side as the tests see it: a port list and an opener."""
+
+    def __init__(self, names):
+        self.names, self.opened, self.fail = list(names), [], False
+
+    def get_output_names(self):
+        return list(self.names)
+
+    def open_output(self, name, virtual=False):
+        if self.fail:
+            raise RuntimeError("no backend")
+        self.opened.append((name, virtual))
+        return FlakyOut()
+
+
+def daw_rig(monkeypatch, names):
+    from hyperspace.hands import core
+
+    be = Backend(names)
+    monkeypatch.setattr(core.mido, "get_output_names", be.get_output_names)
+    monkeypatch.setattr(core.mido, "open_output", be.open_output)
+    settings = HandSettings.from_config({"out": "fake daw"})
+    settings.catch_s, settings.rate, settings.pinch_hold = 0.0, 0, 0.0
+    clock = Clock()
+    src = FakeSource(clock)
+    io = HandsIO(settings, {"out": "fake daw"}, source=src, clock=clock)
+    return NS(io=io, src=src, clock=clock, s=settings, be=be)
+
+
+def notes(msgs, kind="note_on"):
+    return [m.note for m in msgs if m.type == kind]
+
+
+def test_a_lost_daw_port_is_looked_for_again_and_the_daw_resynced(monkeypatch, capsys):
+    from hyperspace.hands import core
+
+    r = daw_rig(monkeypatch, ["Fake DAW 1"])
+    io, be, clock = r.io, r.be, r.clock
+    assert be.opened == [("Fake DAW 1", False)] and io.out_name == "Fake DAW" and io.error == ""
+    pinched = hand(tips=(10.0, 80.0, 80.0, 80.0), palm_w=100.0)   # R index closed
+    run(r, 1, pinched)
+    port = io.out
+    assert 120 + 1 in notes(port.sent) and 100 + 4 in notes(port.sent)   # presence, R ind
+    assert io.last                                                       # something went out
+    last = io.last
+    # the DAW goes away: the port fails, is closed, and nothing is said to have been sent
+    port.broken = True
+    be.names = []
+    run(r, 1, hand(pos=(50.0, 300.0, 0.0), tips=(10.0, 80.0, 80.0, 80.0), palm_w=100.0))
+    assert io.out is None and io.error.startswith("send: port yanked")
+    assert port.closed and io.last == last
+    # a retry while the DAW is still gone makes no virtual port in its place
+    clock.t += core.RECONNECT_S
+    run(r, 1, hand(pos=(60.0, 310.0, 0.0), tips=(10.0, 80.0, 80.0, 80.0), palm_w=100.0))
+    assert io.out is None and io.error == "out 'fake daw': no such port" and len(be.opened) == 1
+    # the DAW is back: the port reopens, the notes that are on go out again,
+    # and every axis resends its value rather than waiting for a change
+    be.names = ["Fake DAW 1"]
+    clock.t += core.RECONNECT_S
+    run(r, 1, hand(pos=(60.0, 310.0, 0.0), tips=(10.0, 80.0, 80.0, 80.0), palm_w=100.0))
+    assert io.out is not None and io.out is not port and be.opened[-1] == ("Fake DAW 1", False)
+    assert io.error == ""
+    assert notes(io.out.sent)[:2] == [121, 104]                          # presence, R index
+    ccs = [m for m in io.out.sent if m.type == "control_change"]
+    assert {m.control for m in ccs} >= {a.number for a in r.s.axes if a.side == "right"}
+    # the backend refusing: said once on stderr, retried every interval
+    be.fail = True
+    io.out.broken = True
+    run(r, 1, hand(pos=(80.0, 330.0, 0.0)))
+    for _ in range(3):
+        clock.t += core.RECONNECT_S
+        run(r, 1, hand(pos=(90.0, 330.0, 0.0)))
+    assert io.out is None and io.error == "out 'fake daw': no backend"
+    assert capsys.readouterr().err.count("no backend") == 1
+    be.fail = False
+    clock.t += core.RECONNECT_S
+    run(r, 1, hand(pos=(99.0, 330.0, 0.0)))
+    assert io.out is not None and io.error == ""
+
+
+def test_a_virtual_port_is_made_again_when_it_fails(monkeypatch):
+    from hyperspace.hands import core
+
+    r = daw_rig(monkeypatch, [])                       # nothing to join: a virtual port
+    io, be, clock = r.io, r.be, r.clock
+    assert be.opened == [("fake daw", True)] and io.error == ""
+    run(r, 1, hand())
+    io.out.broken = True
+    run(r, 1, hand(pos=(50.0, 300.0, 0.0)))
+    assert io.out is None
+    clock.t += core.RECONNECT_S
+    run(r, 1, hand(pos=(60.0, 300.0, 0.0)))
+    assert io.out is not None and be.opened[-1] == ("fake daw", True) and io.error == ""
+
+
+def test_an_injected_port_is_the_callers_and_never_reopened():
+    r = rig()
+    run(r, 1, hand())
+    out = r.io.out
+    out.send = lambda m: (_ for _ in ()).throw(OSError("gone"))
+    run(r, 1, hand(pos=(50.0, 300.0, 0.0)))
+    assert r.io.out is None and r.io.error.startswith("send: gone")
+    r.clock.t += 10.0
+    run(r, 1, hand(pos=(60.0, 300.0, 0.0)))
+    assert r.io.out is None and r.io.out_name == ""
