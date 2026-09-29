@@ -43,8 +43,11 @@ The banner keeps a render error after the render recovers — its last
 message, time and count — and the warnings, until the performer
 dismisses them: a freeze that fixed itself is still worth knowing about.
 
-**On demand**: ``kill -USR1 <pid>`` dumps every thread into the same file
-(``faulthandler.register``) — no header; the SYSTEM page counts it.
+**Raw dumps** (no header; the SYSTEM page counts them): ``kill -USR1
+<pid>`` dumps every thread into the same file (``faulthandler.register``),
+and a stall that holds the GIL — which the thread cannot see, since it
+cannot run — is caught by faulthandler's own C timer, which the thread
+re-arms every look (`Watchdog._arm`).
 
 It must never stop the show: every failure — the file will not open, the
 platform has no SIGUSR1, a write fails — is kept on `error` and the show
@@ -166,9 +169,22 @@ class Watchdog:
     def _run(self) -> None:
         while not self._stop.wait(self.period):
             try:
+                self._arm()
                 self.check()
             except Exception as e:  # noqa: BLE001 — the watchdog must never stop the show
                 self.error = f"stall log: {type(e).__name__}: {e}"[:160]
+
+    def _arm(self) -> None:
+        """The backstop for a stall that holds the GIL (a C call that never
+        returns): this thread could not run then, so faulthandler's own C
+        timer — which needs no GIL — dumps every thread if the thread has
+        not re-armed it within the limit and a little. Re-armed every look,
+        so while this thread runs the timer never fires; its dump has no
+        header (a "raw dump", like SIGUSR1's)."""
+        f = self._file
+        if f is not None:
+            faulthandler.dump_traceback_later(self.limit + 2 * self.period, repeat=False,
+                                              file=f)
 
     def check(self) -> bool:
         """One look: log a stall if the loop has stalled and this stall has
@@ -192,6 +208,7 @@ class Watchdog:
         if self._thread is not None:
             self._thread.join(timeout=1.0)
             self._thread = None
+        faulthandler.cancel_dump_traceback_later()
         if self._file is not None:
             if hasattr(signal, "SIGUSR1"):
                 try:
@@ -205,9 +222,9 @@ class Watchdog:
     # ---- what the SYSTEM page shows ----
 
     def counts(self) -> dict[str, int]:
-        """Entries in the log by kind, every process's, plus "on demand"
-        (SIGUSR1 dumps: a stack with no header) — re-read only when the
-        file changed."""
+        """Entries in the log by kind, every process's, plus "raw dump" (a
+        stack with no header: kill -USR1, or the GIL-held backstop, `_arm`)
+        — re-read only when the file changed."""
         try:
             st = self.path.stat()
         except OSError:
@@ -221,8 +238,11 @@ class Watchdog:
             self._seen = key
             lines = text.splitlines()
             out = {k: sum(1 for ln in lines if ln.startswith(f"=== {k} ")) for k in KINDS}
+            # a dump from a Python thread marks its caller "Current thread";
+            # the C timer's has none and opens with "Timeout (…)!" instead
             dumps = sum(1 for ln in lines if ln.startswith("Current thread"))
-            out["on demand"] = max(dumps - sum(out.values()), 0)
+            timeouts = sum(1 for ln in lines if ln.startswith("Timeout ("))
+            out["raw dump"] = max(dumps - sum(out.values()), 0) + timeouts
             self._counts = {k: v for k, v in out.items() if v}
         return self._counts
 
@@ -233,7 +253,7 @@ class Watchdog:
             return ""
         parts = []
         for k, n in c.items():
-            plural = "s" if n != 1 and k != "on demand" else ""
+            plural = "s" if n != 1 else ""
             parts.append(f"{n} {k}{plural}")
         return f"stall log: {self.path} ({', '.join(parts)})"
 

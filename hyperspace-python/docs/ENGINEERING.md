@@ -308,7 +308,10 @@ the loaded preset, what happened — then every thread's stack
   modulation rule drops them, and `tapers.clamp` lands NaN on its low end).
 - `warning` — a preset that turns the dream on with no worker.
 
-`kill -USR1 <pid>` dumps every thread into the same file on demand. The
+`kill -USR1 <pid>` dumps every thread into the same file on demand, and
+a stall that holds the GIL — the thread cannot run to see it — is caught
+by faulthandler's C timer, which the thread re-arms every look; both are
+"raw dumps", with no header. The
 SYSTEM page shows `stall log: <path> (N stalls, …)` once the file has
 entries. The control window's red banner, across its bottom and in front
 of every other window, names a live render error or render stall, a

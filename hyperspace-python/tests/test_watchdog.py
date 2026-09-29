@@ -11,6 +11,7 @@ import os
 import signal
 import threading
 import time
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -110,8 +111,8 @@ def test_sigusr1_dumps_on_demand(tmp_path):
         while "Current thread" not in wd.path.read_text() and time.monotonic() < deadline:
             time.sleep(0.02)
         assert "test_sigusr1_dumps_on_demand" in wd.path.read_text()
-        assert wd.counts() == {"on demand": 1}
-        assert wd.status() == f"stall log: {wd.path} (1 on demand)"
+        assert wd.counts() == {"raw dump": 1}
+        assert wd.status() == f"stall log: {wd.path} (1 raw dump)"
     finally:
         wd.close()
 
@@ -287,3 +288,30 @@ def test_the_backend_reads_the_window_state():
     assert st["framebuffer"] == (2560, 1600)
     attrs[2] = 1                          # minimised
     assert not b.window_state("win")["presentable"]
+
+
+def test_a_stall_that_holds_the_gil_is_caught_by_the_c_backstop(tmp_path):
+    """The thread cannot run while a C call holds the GIL, so it re-arms
+    faulthandler's own timer every look; when it stops re-arming, the C
+    timer dumps every thread with no GIL needed."""
+    import subprocess
+    import sys
+
+    log = tmp_path / "stall.log"
+    code = (
+        "import time, ctypes\n"
+        "from hyperspace.watchdog import Watchdog\n"
+        f"wd = Watchdog({str(log)!r}, limit=0.2, period=0.05).start()\n"
+        "time.sleep(0.2)\n"
+        "def holds_the_gil():\n"
+        "    ctypes.PyDLL(None).usleep(800000)\n"     # PyDLL keeps the GIL through the call
+        "holds_the_gil()\n"
+        "wd.close()\n"
+    )
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
+                         timeout=60, cwd=str(Path(__file__).parents[1]), check=False)
+    assert out.returncode == 0, out.stderr
+    text = log.read_text()
+    assert "holds_the_gil" in text, text[-2000:]
+    assert Watchdog(log).counts().get("raw dump", 0) >= 1
+

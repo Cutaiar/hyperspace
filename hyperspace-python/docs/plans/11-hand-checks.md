@@ -618,8 +618,8 @@ Headless: `uv run pytest -q tests/test_watchdog.py`. Launch
 `uv run hyperspace`. From another terminal: `kill -USR1 $(pgrep -f
 "bin/hyperspace")`. *Pass:* `~/Hyperspace/stall.log` gains a block of
 thread stacks (the main thread's ends in `app.py` `main`), the app keeps
-running, and the SYSTEM page shows `stall log: …/stall.log (1 on
-demand)`. If the render ever freezes, or the red banner at the bottom of
+running, and the SYSTEM page shows `stall log: …/stall.log (1 raw
+dump)`. If the render ever freezes, or the red banner at the bottom of
 the control window names a render error or a render stall, keep
 `stall.log`: each entry's header names the kind (`stall`, `render
 error`, `render stall`, `stranded target`, `non-finite`, `warning`), the
