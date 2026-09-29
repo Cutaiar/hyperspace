@@ -1312,6 +1312,32 @@ class Bindings:
         inv = self.invariant_rows() if rows is None else rows
         return any(x is not b and b.overlaps(x) for x in inv)
 
+    @staticmethod
+    def _controls(rows: Iterable[Binding]) -> tuple[set, set, set]:
+        """An index of `rows`' controls for `_on`: (kind, channel, number)
+        of the one-channel rows, (kind, number) of the any-channel rows,
+        (kind, number) of every row."""
+        exact: set = set()
+        wild: set = set()
+        every: set = set()
+        for x in (*rows, _SHIFT):
+            k = (x.kind, x.number)
+            every.add(k)
+            if x.channel is None:
+                wild.add(k)
+            else:
+                exact.add((x.kind, x.channel, x.number))
+        return exact, wild, every
+
+    @staticmethod
+    def _on(b: Binding, index: tuple[set, set, set]) -> bool:
+        """Does `b`'s control overlap one in the index (`Binding.overlaps`)?"""
+        exact, wild, every = index
+        k = (b.kind, b.number)
+        if b.channel is None:
+            return k in every
+        return k in wild or (b.kind, b.channel, b.number) in exact
+
     def dispatch(self, kind: str, channel: int, number: int) -> list[Binding]:
         """The rows a MIDI message goes to now: the invariant rows on its
         control, else the enabled rows of the layer that is up on it —
@@ -1328,9 +1354,9 @@ class Bindings:
     def active(self) -> list[Binding]:
         """The MIDI rows that show on the desk now: every invariant row, and
         the up layer's rows on controls that are not invariant."""
-        inv = self.invariant_rows()
-        return [b for b in self.midi()
-                if b.layer is None or (b.layer == self.layer and not self.is_invariant(b, inv))]
+        index = self._controls(self.invariant_rows())      # once a frame: an index,
+        return [b for b in self.midi()                      # not a pairwise scan
+                if b.layer is None or (b.layer == self.layer and not self._on(b, index))]
 
     def set_layer(self, layer: str) -> None:
         if layer not in LAYERS:

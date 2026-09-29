@@ -135,7 +135,7 @@ why, and a link from the plan or PR that made it.
 
 Settled with the owner on 2026-09-28 while plan 12 was composing the party
 presets; the design is [`plans/13-preset-and-session.md`](plans/13-preset-and-session.md)
-and nothing below is built yet. The open forks are plan 11 §2 rows 12–17.
+and each row's status says what is built (WP1, PR #62; WP3, PR #63). The open forks are plan 11 §2 rows 12–17.
 
 | Date | Decision | Why | Source | Status |
 |---|---|---|---|---|
