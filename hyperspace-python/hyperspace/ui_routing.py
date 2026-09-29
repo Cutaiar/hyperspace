@@ -96,9 +96,8 @@ from . import apc40, ui, ui_presets
 from .bands import CEIL
 from .library import PRESETS
 from .params import Kind, Param
-from .routing import PRESET_DIR, SHIFT_PARAM, Binding, Macro, Owned, Router, Sub, factory_desk
+from .routing import SHIFT_PARAM, Binding, Macro, Owned, Router, Sub, factory_desk
 
-KEY = PRESET_DIR          # the routing presets' group in the library ("bindings")
 NAMING = "routing.preset"  # the head's save as… name field (ui_presets._name_field)
 DEPTH_MOD = 1.0           # ±, the depth slider's throw
 # the op chip cycles push ↔ position; what each one's depth means
@@ -595,7 +594,7 @@ def head(panel, router: Router) -> None:
     _learn_line(panel)
     if st["error"]:
         imgui.text_colored(ui.WARN, st["error"])
-    if lib is not None and lib.error and (PRESETS in lib.error or KEY in lib.error):
+    if lib is not None and lib.error and PRESETS in lib.error:
         imgui.text_colored(ui.WARN, lib.error)          # a preset that would not load
     # the desk rows the last load dropped (an invariant control, D6), on
     # one line so a file full of them never pushes the page off the window

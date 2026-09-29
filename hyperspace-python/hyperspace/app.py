@@ -76,7 +76,7 @@ from .learn import Learn
 from .library import Library
 from .overlay import GlfwBackend, Output
 from .params import Registry, build_registry
-from .preset import Presets
+from .preset import Presets, migrate_home
 from .render import Renderer
 from .routing import Bindings, Router, bindings_path
 from .ui import Panel, apply_style, load_fonts
@@ -634,15 +634,13 @@ def main() -> None:
         bindings_path(library.home), mc.get("profile", "apc40"),
         Path(mc.get("map", "midi_map.json")),
     ))
-    # the macros ride in the table too until plan 13 WP5; the Router landed
-    # them — what the file named and the registry hasn't goes where every
-    # other missing id goes (the startup preset below lands its own)
-    if router.missing_values:
-        library.report(router.missing_values, "bindings.json values")
-    library.routing(router)                # the routing presets: the library's files, the router's documents
     # the presets (preset.py): the library's `presets/` files, landed on the
     # registry and the table; the project's bank loads through it
     presets = Presets(library, reg, router)
+    # plan 13 §6, once: an older home's projects, routing presets and the
+    # preset part of bindings.json become presets (backups beside every
+    # rewritten file); a home already migrated finds nothing to do
+    migrate_home(library, router)
     # one Learn over the live table, whatever the MIDI gate says: a knob
     # or a hand completes it, the panel's prompt settles what the referee
     # refused (learn.py; the band.sel.* rule is the registry's `real`)

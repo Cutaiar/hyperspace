@@ -12,7 +12,7 @@ from types import SimpleNamespace
 import pytest
 from imgui_bundle import imgui, implot
 
-from hyperspace import hands, lfo, tempo, ui_presets, ui_routing
+from hyperspace import hands, lfo, routing, tempo, ui_presets, ui_routing
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.app import CONTROL_SIZE, LOOP_KEYS
@@ -73,6 +73,7 @@ def rig(tmp_path):
     panel.hands, panel.hand_settings = hands_io, settings
     panel.output = output
     router = Router(reg, Bindings.factory(path=tmp_path / "bindings.json"))
+    router.table.set_routes(routing.legacy6_routes())   # a house preset's performer rows
     Presets(lib, reg, router)           # the bank and the preset strip, as app.py builds them
     panel.router = router
     r = SimpleNamespace(panel=panel, lib=lib, reg=reg, view=view, chain=chain, router=router)

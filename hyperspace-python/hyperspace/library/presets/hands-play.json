@@ -1,9 +1,13 @@
 {
- "schema": "hyperspace.bindings/3",
- "profile": "apc40",
- "bindings": [
+ "schema": "hyperspace.preset/2",
+ "name": "hands-play",
+ "note": "Plan 08: brightness, speed and 4D depth on the hands.",
+ "values": {},
+ "routes": [
   {"source": "hand:7", "target": "view.bright", "op": "position"},
   {"source": "hand:1", "target": "view.speed", "op": "position"},
   {"source": "hand:10", "target": "view.depth4", "op": "position"}
- ]
+ ],
+ "macros": {},
+ "modules": {}
 }

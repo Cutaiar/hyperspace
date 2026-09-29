@@ -1,0 +1,35 @@
+{
+ "schema": "hyperspace.preset/2",
+ "name": "legacy6",
+ "note": "The reference's band \u2192 plane table on bases of 0: the parity anchor (the planes stand still until the music drives them).",
+ "values": {
+  "rot.rate.XY": 0.0,
+  "rot.rate.XZ": 0.0,
+  "rot.rate.YZ": 0.0,
+  "rot.rate.XW": 0.0,
+  "rot.rate.YW": 0.0,
+  "rot.rate.ZW": 0.0,
+  "pattern.mod.0": 0.0,
+  "pattern.mod.1": 0.0,
+  "pattern.mod.2": 0.0,
+  "pattern.mod.3": 0.0,
+  "pattern.mod.4": 0.0,
+  "pattern.mod.5": 0.0
+ },
+ "routes": [
+  {"source": "lane:0", "target": "rot.rate.ZW", "op": "push", "value": 0.0625, "scale": "master.gain"},
+  {"source": "lane:1", "target": "rot.rate.XW", "op": "push", "value": 0.0625, "scale": "master.gain"},
+  {"source": "lane:2", "target": "rot.rate.YW", "op": "push", "value": -0.0625, "scale": "master.gain"},
+  {"source": "lane:3", "target": "rot.rate.XY", "op": "push", "value": -0.0625, "scale": "master.gain"},
+  {"source": "lane:4", "target": "rot.rate.XZ", "op": "push", "value": 0.0625, "scale": "master.gain"},
+  {"source": "lane:5", "target": "rot.rate.YZ", "op": "push", "value": -0.0625, "scale": "master.gain"},
+  {"source": "lane:0", "target": "pattern.mod.0", "op": "push"},
+  {"source": "lane:1", "target": "pattern.mod.1", "op": "push"},
+  {"source": "lane:2", "target": "pattern.mod.2", "op": "push"},
+  {"source": "lane:3", "target": "pattern.mod.3", "op": "push"},
+  {"source": "lane:4", "target": "pattern.mod.4", "op": "push"},
+  {"source": "lane:5", "target": "pattern.mod.5", "op": "push"}
+ ],
+ "macros": {},
+ "modules": {}
+}

@@ -342,7 +342,7 @@ def test_the_default_map_is_sorted_as_plan_13_says():
     assert have[(f"note:0:{apc40.N_QUANT}", "preset.next")] is None
     assert {have[(f"note:{k}:{apc40.N_CLIP[0]}", "preset.select")] for k in range(8)} == {None}
     # the factory file carries the layers
-    doc = json.loads((routing.FACTORY_DIR / "default.json").read_text())
+    doc = json.loads(routing.FACTORY_FILE.read_text())
     assert {"source": "cc:0:52", "target": "tempo.bpm", "op": "abs", "feedback": "ring",
             "layer": "global"} in doc["bindings"]
 
@@ -351,7 +351,8 @@ def test_an_old_bindings_file_gets_its_layers_once_with_a_backup(tmp_path, capsy
     path = bindings_path(tmp_path)
     hand = path.with_name("bindings.json.bak-mine")
     hand.write_text("mine")
-    v2 = Bindings.factory().to_json()
+    v2 = {"schema": routing.SCHEMA_V2, "profile": "apc40",      # every row: the preset layer too
+          "bindings": [b.to_json() for b in Bindings.factory().bindings]}
     v2["schema"] = routing.SCHEMA_V2
     new = {"hands.smooth", "hands.response", "hands.catch", "hands.sel.return", "tempo.bpm",
            routing.SHIFT_PARAM}
@@ -366,6 +367,12 @@ def test_an_old_bindings_file_gets_its_layers_once_with_a_backup(tmp_path, capsy
                       if not (b["source"] == "cc:0:7" and b["target"] == "band.0.post")]
     path.write_text(json.dumps(v2))
     t = Bindings.load(path, legacy_midi=None)
+    # the sort is in memory; the file, holding preset-layer rows, is the
+    # first-launch migration's to rewrite (plan 13 WP5): it keeps them in
+    # a preset first, then backs the file up and writes the session's part
+    assert capsys.readouterr().err == "" and t.carried is not None
+    from test_routing import migrate_home
+    migrate_home(tmp_path, t)
     err = capsys.readouterr().err
     layer = {(b.source, b.target): b.layer for b in t.midi()}
     assert layer[("cc:*:16", "band.sel.trim")] == "global"        # identical: the factory's

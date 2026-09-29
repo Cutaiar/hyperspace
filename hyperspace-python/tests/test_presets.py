@@ -2,12 +2,13 @@
 preset names (``hyperspace.project/2``), the F-keys and the startup preset.
 
 Every rig is built the way app.main builds it — Library, registry, attach,
-the Router over the home's bindings.json, the routing kind, `Presets`, the
+the Router over the home's bindings.json, `Presets`, the migration, the
 startup preset — on a tmp_path home, never ~/Hyperspace. The bank tests
 that were tests/test_themes.py (the inline theme bank) are folded in here
 as the bank of names.
 """
 
+import itertools
 import json
 from types import SimpleNamespace
 
@@ -43,8 +44,8 @@ def boot(home):
     lfo.register(reg, lfo.LFOs(), clock)
     lib.attach(reg)
     router = Router(reg, Bindings.load(bindings_path(home), legacy_midi=None))
-    lib.routing(router)
     presets = Presets(lib, reg, router)
+    preset.migrate_home(lib, router)          # plan 13 §6: nothing to do on a fresh home
     lib.project.load_startup()
     return SimpleNamespace(lib=lib, reg=reg, view=view, control=control, chain=chain,
                            router=router, presets=presets, clock=clock, home=home)
@@ -454,28 +455,6 @@ def test_a_preset_edited_on_disk_is_re_applied(rig):
 
 # ---------------------------------------------------------------- the project
 
-def test_a_schema_1_user_project_is_refused_until_the_migration(tmp_path):
-    """Plan 13 WP2 does not migrate a user's schema-1 project (WP5 does):
-    it is refused with a clear error and the factory default stands in; a
-    save over it keeps the old file as a backup first."""
-    old = {"schema": "hyperspace.project/1", "name": "default", "values": {},
-           "modules": {}, "bank": [{"name": "MINE", "values": {"view.shape": 3}}]}
-    (tmp_path / "projects").mkdir(parents=True)
-    (tmp_path / "projects" / "default.hyp.json").write_text(json.dumps(old))
-    (tmp_path / "projects" / "gig.hyp.json").write_text(json.dumps(old))
-    r = boot(tmp_path)
-    assert "schema-1 project; plan 13's migration (WP5) converts it" in r.lib.error
-    assert r.lib.project.path is None and r.lib.project.bank[0] == "BIG BLUE WAVE"
-    with pytest.raises(LibraryError, match=r"gig.hyp.json is a schema-1 project.*WP5"):
-        r.lib.project.load("gig")
-    assert r.lib.project.bank[0] == "BIG BLUE WAVE"          # the refused load changed nothing
-    r.lib.project.save_slot(0)
-    assert json.loads((tmp_path / "projects" / "default.hyp.json").read_text())["schema"] \
-        == "hyperspace.project/2"
-    bak = tmp_path / "projects" / "default.hyp.json.bak-v1"
-    assert json.loads(bak.read_text()) == old
-
-
 def test_a_project_load_brings_its_startup_preset(rig):
     rig.lib.project.load("party")
     assert rig.lib.current("presets") == "TUMBLE" and rig.view.shape == 10
@@ -484,22 +463,6 @@ def test_a_project_load_brings_its_startup_preset(rig):
 
 # ---------------------------------------------------------------- factory files
 
-def test_the_factory_presets_are_preset_2_performance_files():
-    reg_ids = {p.id: p for p in boot_registry()}
-    for path in sorted((FACTORY / "presets").glob("*.json")):
-        doc = json.loads(path.read_text())
-        assert doc["schema"] == preset.SCHEMA, path.name
-        assert doc["macros"] == {}, path.name     # plan 12's macros: WP5's re-cut
-        for pid in doc["values"]:
-            assert part_of(reg_ids[pid]) == "performance", (path.name, pid)
-        for row in doc["routes"]:
-            b = Binding.from_json(row)
-            assert b.scheme in routing.LANE_SCHEMES and b.op in routing.MOD_OPS, (path.name, row)
-    for name in ("default", "party"):
-        proj = json.loads((FACTORY / "projects" / f"{name}.hyp.json").read_text())
-        assert proj["schema"] == "hyperspace.project/2" and proj["startup"] == proj["bank"][0]
-        names = {json.loads(p.read_text())["name"] for p in (FACTORY / "presets").glob("*.json")}
-        assert {n for n in proj["bank"] if n} <= names, name
 
 
 def boot_registry():
@@ -512,13 +475,47 @@ def boot_registry():
     return reg
 
 
+def expected_desk(slug: str) -> list[dict] | None:
+    """What the generator gives a factory preset's `desk`: its entry's
+    (None: no key), else the factory preset layer."""
+    spec = preset.FACTORY_PRESETS.get(slug)
+    desk = preset.fresh_desk if spec is None else spec.desk
+    return None if desk is None else preset.desk_json(desk())
+
+
+def test_the_factory_presets_are_preset_2_performance_files():
+    """Every factory preset is a performance file; its macros are the
+    generator's (plan 13 WP5: lfo-breathe's Breathe, none elsewhere)."""
+    reg_ids = {p.id: p for p in boot_registry()}
+    for path in sorted((FACTORY / "presets").glob("*.json")):
+        doc = json.loads(path.read_text())
+        assert doc["schema"] == preset.SCHEMA, path.name
+        spec = preset.FACTORY_PRESETS.get(path.stem)
+        macros = {} if spec is None else {k: m.to_json() for k, m in spec.macros().items()}
+        assert doc["macros"] == macros, path.name
+        for pid in doc["values"]:
+            assert part_of(reg_ids[pid]) == "performance", (path.name, pid)
+        for row in doc["routes"]:
+            b = Binding.from_json(row)
+            assert b.scheme in routing.LANE_SCHEMES and b.op in routing.MOD_OPS, (path.name, row)
+    assert json.loads((preset.FACTORY_DIR / "lfo-breathe.json").read_text())["macros"]
+    for name in ("default", "party"):
+        proj = json.loads((FACTORY / "projects" / f"{name}.hyp.json").read_text())
+        assert proj["schema"] == "hyperspace.project/2" and proj["startup"] == proj["bank"][0]
+        names = {json.loads(p.read_text())["name"] for p in (FACTORY / "presets").glob("*.json")}
+        assert {n for n in proj["bank"] if n} <= names, name
+
+
 def test_the_party_presets_routes_are_the_codes():
     """`python -m hyperspace.preset` regenerates the five party presets'
-    routes from routing.PRESETS; the files may not drift from the code.
-    The house presets carry the factory table's lane rows."""
-    for slug, name in preset.PARTY.items():
+    routes from `preset.FACTORY_PRESETS`; the files may not drift from the
+    code. The house presets carry the lane rows the factory table shipped."""
+    assert preset.PARTY == ("party-tumble", "party-faces", "party-field", "party-wake",
+                            "party-trip")
+    for slug in preset.PARTY:
         doc = json.loads((preset.FACTORY_DIR / f"{slug}.json").read_text())
-        assert doc["routes"] == [b.to_json() for b in routing.PRESETS[name][0]], slug
+        routes = [b.to_json() for b in preset.FACTORY_PRESETS[slug].routes()]
+        assert doc["routes"] == routes, slug
         assert doc["name"] == slug.split("-", 1)[1].upper()
     lanes = [b.to_json() for b in routing.legacy6_routes()]
     for name in json.loads((FACTORY / "projects" / "default.hyp.json").read_text())["bank"]:
@@ -527,10 +524,12 @@ def test_the_party_presets_routes_are_the_codes():
 
 
 def test_every_factory_presets_desk_is_the_generators():
-    """Plan 13 WP4: every factory preset's `desk` is the factory map's
-    preset layer, as `python -m hyperspace.preset` writes it — the files
-    may not drift from `routing.factory_desk` (plan 12's desk blocks for
-    wake and trip are WP5's re-cut)."""
+    """Plan 13 WP4, re-cut in WP5: every factory preset's `desk` is what
+    `python -m hyperspace.preset` writes — the factory map's preset layer,
+    plus plan 12 §6's eight device knobs on WAKE and TRIP and the Breathe
+    macro on lfo-breathe's device knob 1; the presets made from routes-only
+    files other than lfo-breathe carry no `desk` key (a load gives them the
+    factory layer)."""
     desk = preset.desk_json(preset.fresh_desk())
     assert desk and all("layer" not in d for d in desk)
     from_map = []
@@ -541,17 +540,115 @@ def test_every_factory_presets_desk_is_the_generators():
             from_map.append(row)
     assert desk == from_map
     paths = sorted(preset.FACTORY_DIR.glob("*.json"))
-    assert len(paths) == 13
+    assert len(paths) == 18                  # 8 house, 5 party, 5 made from routing presets
     for path in paths:
-        assert json.loads(path.read_text())["desk"] == desk, path.name
+        doc = json.loads(path.read_text())
+        want = expected_desk(path.stem)
+        if want is None:
+            assert "desk" not in doc, path.name
+        else:
+            assert doc["desk"] == want, path.name
+    knobs = [f"cc:*:{0x10 + k}" for k in range(8)]
+    for slug, targets in (("party-wake", preset.WAKE_KNOBS), ("party-trip", preset.TRIP_KNOBS)):
+        rows = json.loads((preset.FACTORY_DIR / f"{slug}.json").read_text())["desk"]
+        assert rows[:len(desk)] == desk
+        assert [(d["source"], d["target"], d["op"], d["feedback"]) for d in rows[len(desk):]] \
+            == [(k, t, "abs", "ring") for k, t in zip(knobs, targets, strict=True)]
+    breathe = json.loads((preset.FACTORY_DIR / "lfo-breathe.json").read_text())["desk"]
+    assert breathe[-1] == {"source": "cc:*:16", "target": "macro.1", "op": "abs",
+                           "feedback": "ring"}
+    for slug in ("party-tumble", "party-faces", "party-field"):
+        assert json.loads((preset.FACTORY_DIR / f"{slug}.json").read_text())["desk"] == desk
 
 
-def test_write_factory_rewrites_only_the_routes_and_the_desk(tmp_path):
+def test_write_factory_regenerates_every_factory_file(tmp_path):
+    """Was test_write_factory_rewrites_only_the_routes_and_the_desk: the
+    generator rewrites the party presets' routes, desk and macros and every
+    other preset's desk from code, and writes the presets made from routing
+    presets whole; everything else in a file is data it keeps."""
     for path in preset.FACTORY_DIR.glob("*.json"):
+        spec = preset.FACTORY_PRESETS.get(path.stem)
+        if spec is not None and spec.values is not None:
+            continue                                     # written whole: none to start from
         doc = json.loads(path.read_text())
         doc["routes"] = [] if path.stem in preset.PARTY else doc["routes"]
-        doc["desk"] = []
+        doc["desk"], doc["macros"] = [], {"macro.2": {"label": "stale", "subs": []}} \
+            if path.stem in preset.PARTY else doc["macros"]
         (tmp_path / path.name).write_text(json.dumps(doc))
     preset.write_factory(tmp_path)
     for path in preset.FACTORY_DIR.glob("*.json"):
         assert (tmp_path / path.name).read_text() == path.read_text(), path.name
+    assert sorted(p.name for p in tmp_path.glob("*.json")) == \
+        sorted(p.name for p in preset.FACTORY_DIR.glob("*.json"))
+
+
+def test_the_routing_presets_are_full_factory_presets(rig):
+    """Decision 10: `legacy6`, `lfo-breathe` and the three `hands-*` are full
+    presets under library/presets/ — a load lands every performance base
+    (its values, else the defaults) and replaces every route; nothing is
+    left under library/bindings/ and no `bindings` group is listed."""
+    assert not (FACTORY / "bindings").exists() and "bindings" not in rig.lib.groups()
+    for name in ("legacy6", "lfo-breathe", "hands-fx", "hands-pinch", "hands-play"):
+        assert rig.lib.is_factory("presets", name), name
+        doc = json.loads((preset.FACTORY_DIR / f"{name}.json").read_text())
+        assert doc == preset.generated(name), name
+        rig.reg["view.shape"].set(5)
+        rig.presets.load(name)
+        assert rig.presets.notes == [] and rig.lib.current("presets") == name
+        assert [b.to_json() for b in rig.router.table.routes()] == doc["routes"]
+        assert rig.view.shape == rig.lib.defaults("view")["view.shape"], name   # D2
+
+
+def test_a_converted_preset_switches_on_the_effects_its_routes_drive(rig):
+    """PR #29's rule for a routes-only file made a full preset: an effect a
+    route drives is switched on (`fx.on`, `fx.<name>.on`, `dream.on`) unless
+    the file names it — `hands-fx` turns Acid on, so the hand plays into it."""
+    fx = preset.generated("hands-fx")["values"]
+    assert fx["fx.on"] is True and fx["fx.acid.on"] is True and fx["fx.acid.speed"] == 4.0
+    rig.presets.load("hands-fx")
+    assert rig.reg["fx.on"].value is True and rig.reg["fx.acid.on"].value is True
+    assert preset.generated("hands-pinch")["values"] == {"fx.on": True}      # fx.mix alone
+    assert preset.generated("lfo-breathe")["values"]["fx.on"] is True
+    assert "fx.on" not in preset.generated("hands-play")["values"]
+    assert "fx.on" not in preset.generated("legacy6")["values"]
+    rows = [Binding("hand:1", "dream.mix", "position"), Binding("hand:2", "fx.warp.amount",
+                                                                "push", 0.2)]
+    assert preset.effects_on(rows, {"fx.warp.on": False}) == {
+        "fx.warp.on": False, "fx.on": True, "dream.on": True}                # named: kept
+    ids = set(rig.reg.ids())
+    assert preset.effects_on([Binding("hand:1", "fx.nosuch.x", "push", 0.1)], {},
+                             lambda pid: pid in ids) == {"fx.on": True}
+
+
+def test_lfo_breathes_macro_moves_brightness_up_and_speed_down(rig):
+    """Hand check 39's machine half: lfo-breathe loads with Breathe (macro.1,
+    device knob 1) at the bottom; turning it up brightens the picture from
+    1× to 2× while the spin slows from 0.25× to a crawl, both over the
+    knob's whole throw, and the LFO's push on the fx mix deepens with it."""
+    reg, router, table = rig.reg, rig.router, rig.router.table
+    rig.presets.load("lfo-breathe")
+    knob = reg["macro.1"]
+    bright, speed = reg["view.bright"], reg["view.speed"]
+    assert knob.value == 0.0 and table.macros["macro.1"].label == "Breathe"
+    assert bright.value == pytest.approx(1.0) and speed.value == pytest.approx(0.25)
+    row = next(b for b in table.desk() if b.source == "cc:*:16")
+    assert row.target == "macro.1" and row.op == "abs" and row.feedback == "ring"
+    seen = []
+    for m in (0.0, 0.25, 0.5, 0.75, 1.0):
+        knob.set_norm(m)
+        router.follow_macros()
+        seen.append((bright.value, speed.value))
+    assert all(b2 > b1 and s2 < s1 for (b1, s1), (b2, s2) in itertools.pairwise(seen))
+    assert seen[-1][0] == pytest.approx(2.0) and seen[-1][1] < 0.08
+    # the depth subscriber: LFO 2's push on the fx mix scales with the knob
+    mix = reg["fx.mix"]
+    mix.set_norm(0.5)                       # room to push either way
+    router.feed("lfo", [0.5, 1.0])
+    router.rests["lfo"] = [0.5, 0.5]
+    pushes = []
+    for m in (0.0, 1.0):
+        knob.set_norm(m)
+        router.modulate()
+        reg.apply()
+        pushes.append(mix.eff_norm - mix.norm)
+    assert pushes[0] == pytest.approx(0.0, abs=1e-9) and pushes[1] > 0.1

@@ -1,10 +1,16 @@
 {
- "schema": "hyperspace.bindings/3",
- "profile": "apc40",
- "bindings": [
+ "schema": "hyperspace.preset/2",
+ "name": "hands-pinch",
+ "note": "Plan 08: a pinch picks what a hand's height moves.",
+ "values": {
+  "fx.on": true
+ },
+ "routes": [
   {"source": "hand:7", "target": "view.bright", "op": "position", "when": "hand:18"},
   {"source": "hand:7", "target": "view.speed", "op": "position", "when": "hand:19"},
   {"source": "hand:1", "target": "fx.mix", "op": "position", "when": "hand:14"},
   {"source": "hand:1", "target": "camera.zoom", "op": "position", "when": "hand:15"}
- ]
+ ],
+ "macros": {},
+ "modules": {}
 }

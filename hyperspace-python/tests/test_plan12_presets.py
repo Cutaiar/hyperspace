@@ -24,12 +24,11 @@ from hyperspace.hands import HandSettings, HandsIO
 from hyperspace.hands.core import DEFAULT_DOFS, PINCHES, default_range
 from hyperspace.library import FACTORY
 from hyperspace.params import Kind
-from hyperspace.preset import Presets
-from hyperspace.routing import HAND_AXES, PRESETS, Bindings, Router, hand
+from hyperspace.preset import FACTORY_PRESETS, HAND_AXES, PARTY, Presets, hand
+from hyperspace.routing import Bindings, Router
 
 DT = 1 / 60
 HOLD = 90                # frames: the One Euro and the return spring both settle
-PARTY = [n for n in PRESETS if n.startswith("party-")]
 SIDE = {"L": "left", "R": "right"}
 
 
@@ -109,6 +108,74 @@ def offset(p) -> float:
 
 # ---------------------------------------------------------------- the files
 
+def desk_rig(tmp_path):
+    """The full registry, a MIDI adapter on fake ports over the live table,
+    `Presets`, and the party project open — the F-keys' road."""
+    from test_midi import FakeIn, FakeOut
+
+    from hyperspace.midi import MidiIO
+
+    r = rig(tmp_path=tmp_path, full=True)
+    inp, out = FakeIn(), FakeOut()
+    midi = MidiIO(r.reg, Bindings.factory(), inp=inp, out=out)
+    router = Router(r.reg, midi.table)
+    presets = Presets(r.lib, r.reg, router)
+    r.lib.project.load("party")
+    return r, router, presets, midi, inp
+
+
+def test_the_five_party_presets_load_by_f_key_as_presets(tmp_path):
+    """Plan 13 WP5 (§10 exit 15): on the party project F1–F5 load TUMBLE,
+    FACES, FIELD, WAKE, TRIP — one step each, the preset's routes and desk
+    replacing the last's, nothing noted; TUMBLE's left height keeps its
+    push on the drive (decision register row 19 (a): a route may perform a
+    session param)."""
+    r, router, presets, _midi, _inp = desk_rig(tmp_path)
+    for k, slug in enumerate(PARTY):
+        r.reg[f"preset.load.{k}"].fire()
+        name = slug.split("-", 1)[1].upper()
+        assert r.lib.current("presets") == name and r.lib.project.active == k, slug
+        assert presets.notes == [] and router.table.dropped == [], (slug, presets.notes)
+        assert [b.to_json() for b in router.table.routes()] == \
+            [b.to_json() for b in FACTORY_PRESETS[slug].routes()], slug
+        want = json.loads((FACTORY / "presets" / f"{slug}.json").read_text())["desk"]
+        got = [{k2: v for k2, v in b.to_json().items() if k2 != "layer"}
+               for b in router.table.desk()]
+        assert got == want, slug
+        assert not r.lib.is_dirty("presets"), slug
+    r.reg["preset.load.0"].fire()
+    assert [b.target for b in router.table.routes() if b.source == hand("L", "y")] \
+        == ["master.gain"]
+
+
+@pytest.mark.parametrize("slug,targets", [("party-wake", "WAKE_KNOBS"),
+                                          ("party-trip", "TRIP_KNOBS")])
+def test_wake_and_trip_device_knobs_move_their_bases(slug, targets, tmp_path):
+    """Plan 12 §6 on WAKE's and TRIP's preset layer: device knob k sets the
+    k-th base of the preset's eight — the base, not an offset, whether or
+    not a hand also performs it (ARCHITECTURE §3.2) — and the knob is dark
+    on the other three party presets (the band strip stays behind SHIFT)."""
+    from test_midi import cc
+
+    from hyperspace import preset
+
+    r, _router, presets, midi, inp = desk_rig(tmp_path)
+    presets.load(slug.split("-", 1)[1].upper())
+    ids = getattr(preset, targets)
+    for k, pid in enumerate(ids):
+        p = r.reg[pid]
+        for value in (0, 127, 64):
+            inp.queue.append(cc(0x10 + k, value))
+            midi.poll()
+            assert p.norm == pytest.approx(value / 127, abs=0.02), (slug, pid, value)
+            assert not p.modulated, pid
+    presets.load("TUMBLE")
+    before = {pid: r.reg[pid].norm for pid in ids}
+    inp.queue.append(cc(0x10, 0))
+    midi.poll()
+    assert {pid: r.reg[pid].norm for pid in ids} == before
+
+
 def test_hand_lane_numbers_are_the_hands_packages():
     """routing.hand() names the lanes HandsIO publishes on the default dofs."""
     io = HandsIO(HandSettings.from_config(), {"enabled": True}, source=DictSource(),
@@ -143,7 +210,7 @@ def test_position_rows_rest_where_their_base_is(name, tmp_path):
     rest (0.5 on a centred axis, 0 on height), so a hand leaving the box
     lands the same place with or without the fix."""
     r, _ = load(name, tmp_path)
-    routes, _values = PRESETS[name]
+    routes = FACTORY_PRESETS[name].routes()
     for b in routes:
         if b.scheme != "hand" or b.op != "position":
             continue
@@ -156,7 +223,7 @@ def test_position_rows_rest_where_their_base_is(name, tmp_path):
 # ---------------------------------------------------------------- the sweeps
 
 def _hand_rows(name):
-    return [b for b in PRESETS[name][0] if b.scheme == "hand"]
+    return [b for b in FACTORY_PRESETS[name].routes() if b.scheme == "hand"]
 
 
 @pytest.mark.parametrize("name", PARTY)

@@ -14,7 +14,7 @@ from hyperspace.midi import PICKUP_TOL, Binding, MidiIO
 from hyperspace.overlay import Output
 from hyperspace.params import Kind, build_registry
 from hyperspace.preset import Presets
-from hyperspace.routing import Bindings, Router
+from hyperspace.routing import Bindings, Router, is_session_row
 from hyperspace.view import ViewState
 
 
@@ -398,6 +398,37 @@ def test_learn_takes_over_a_key_from_its_old_param(rig):
     assert rig.view.pattern_mix == 1.0
 
 
+def test_unbind_removes_only_preset_layer_rows_and_writes_no_file(rig):
+    """Plan 13 WP5: right-click → Unbind is an edit of the loaded preset —
+    its desk rows on the param go (the knob and the step buttons), no file
+    is written, the preset's dot lights; a param only the session maps (an
+    invariant fader, a global-layer knob) is refused with the reason in
+    the learn line, as Learn refuses, and its row stays."""
+    m, lib = rig.midi, rig.presets.lib
+    lib.load("presets", "BIG BLUE WAVE")
+    assert not lib.is_dirty("presets")
+    path = m.table.path
+    before = path.read_bytes() if path.exists() else None
+    session = [b.to_json() for b in m.table.bindings if b.layer != "preset"]
+    rows = [b for b in m.table.desk() if b.target == "view.bright"]
+    assert {b.kind for b in rows} == {"cc", "note"}               # the knob and ▲ ▼
+    m.unbind("view.bright")
+    assert not [b for b in m.table.bindings if b.target == "view.bright" and b.is_midi]
+    assert not m.learner.refused and "unbound view.bright" in m.learner.last
+    assert (path.read_bytes() if path.exists() else None) == before
+    assert lib.is_dirty("presets")
+    assert [b.to_json() for b in m.table.bindings if b.layer != "preset"] == session
+    push(rig, cc(0x30, 10))                                       # nothing listens now
+    assert rig.view.bright == pytest.approx(lib.read("presets", "BIG BLUE WAVE")["values"]
+                                            .get("view.bright", 1.0))
+    # the session's rows: refused, kept
+    for pid, why in (("band.0.post", "invariant"), ("band.sel.trim", "global layer")):
+        m.unbind(pid)
+        assert m.learner.refused and why in m.learner.last, pid
+        assert m.table.for_param(pid) is not None, pid
+    assert (path.read_bytes() if path.exists() else None) == before
+
+
 def test_relative_cc_learn_keeps_encoder_mode(rig):
     rig.midi.learner.arm("view.instances")
     push(rig, cc(apc40.CC_CUE, 1))
@@ -425,7 +456,7 @@ def test_a_hand_learn_reaches_the_shared_learn_object(rig):
 def test_map_round_trips_json(tmp_path):
     path = tmp_path / "m.json"
     mm = Bindings.load(path)
-    n = len(mm.midi())
+    n = len([b for b in mm.midi() if is_session_row(b)])   # the file keeps the session's
     mm.bind(Binding("pitch:3", "view.zoom", "abs"))
     mm2 = Bindings.load(path)
     assert len(mm2.midi()) == n + 1

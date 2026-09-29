@@ -14,7 +14,7 @@ from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel 
 
 from hyperspace import routing, ui_presets, ui_routing
 from hyperspace.bands import CEIL
-from hyperspace.library import Library, LibraryError
+from hyperspace.library import LibraryError
 from hyperspace.params import Kind
 from hyperspace.routing import Binding, Bindings, Router
 from hyperspace.ui import PAGE_KEYS
@@ -27,6 +27,7 @@ def rig(shell_rig):  # noqa: F811 — pytest hands the shell's rig through under
 
 def _with_router(rig, tmp_path):
     table = Bindings.factory(path=routing.bindings_path(tmp_path))
+    table.set_routes(routing.legacy6_routes())     # a house preset's performer rows
     rig.panel.router = Router(rig.reg, table)
     return rig.panel.router
 
@@ -110,7 +111,7 @@ def test_routing_page_edits_change_the_preset_not_bindings_json(rig, tmp_path):
     frame(panel)
     frame(panel)
     assert (path.read_text(), path.stat().st_mtime_ns) == before
-    assert len(_on_disk(tmp_path).routes()) == 12
+    assert _on_disk(tmp_path).routes() == []        # the file never holds a route (WP5)
 
 
 def test_the_routing_page_shows_the_referees_refusals(rig, tmp_path):
@@ -469,67 +470,48 @@ def test_route_a_lane_here_jumps_to_the_page(rig, tmp_path):
     assert panel.page == PAGE_KEYS.index("routing")
 
 
-def test_routing_presets_step_load_save(rig, tmp_path):
-    """The routing presets are a library document kind (audit L1) — off
-    the ROUTING page since plan 13 WP4 (the preset holds the routes), the
-    kind itself until WP5 removes it: list, prev / next, load, save as,
-    delete, reset."""
+def test_the_old_routing_presets_step_load_save_as_presets(rig, tmp_path):
+    """Was test_routing_presets_step_load_save: the routing presets' kind is
+    gone (plan 13 WP5) and what it held is presets — stepped, loaded, saved
+    and deleted on the one preset strip's library group, the routes with
+    the rest of the preset."""
     panel, lib = rig.panel, rig.panel.library
-    router = _with_router(rig, tmp_path)
-    lib.routing(router)                         # app.py's registration
+    router = rig.router                             # the one the rig's Presets loads into
     frame(panel, "routing")
-    assert "bindings" in lib.kinds
-    listing = lib.list("bindings")
-    assert listing == ["default", "hands-fx", "hands-pinch", "hands-play", "legacy6",
-                       "lfo-breathe", "party-faces", "party-field", "party-trip", "party-tumble", "party-wake"]  # the factory exports
-    # next from nothing: the first; prev wraps to the last
-    assert lib.next("bindings") == "default"
-    assert lib.current("bindings") == "default"
-    assert not lib.is_dirty("bindings")
+    assert lib.kinds == ("presets",)
+    listing = lib.list("presets")
+    assert {"legacy6", "lfo-breathe", "hands-fx", "hands-pinch", "hands-play"} <= set(listing)
+    assert lib.load("presets", "lfo-breathe") == []
+    assert rig.reg["lfo.1.sync"].value == 3         # lfo-breathe lands its bases: 1 bar
+    assert lib.next("presets") == listing[listing.index("lfo-breathe") + 1]
+    lib.load("presets", "legacy6")
+    assert rig.view.pattern_mod[0] == 0.0           # legacy6 lands its bases
+    assert not lib.is_dirty("presets")
     frame(panel)
-    assert lib.prev("bindings") == "party-wake"
-    for _ in range(4):                          # back past the plan-12 presets
-        lib.prev("bindings")
-    assert lib.prev("bindings") == "lfo-breathe"
-    assert rig.reg["lfo.1.sync"].value == 3     # lfo-breathe lands its bases: 1 bar
-    assert lib.prev("bindings") == "legacy6"
-    assert rig.view.pattern_mod[0] == 0.0       # legacy6 lands its bases
-    frame(panel)
-    # an edit dirties; save-as writes the routes to the user folder and cleans
+    # an edit dirties; save as writes the whole preset to the user folder
     router.table.add(Binding("lane:2", "view.bright", "push", 0.3))
-    assert lib.is_dirty("bindings")
+    assert lib.is_dirty("presets")
     frame(panel)
-    path = lib.save_as("bindings", "My Routes")
-    assert path == tmp_path / "bindings" / "my-routes.json"
+    path = lib.save_as("presets", "My Routes")
+    assert path == tmp_path / "presets" / "my-routes.json"
     doc = json.loads(path.read_text())
-    assert doc["schema"] == routing.SCHEMA and len(doc["bindings"]) == 13
-    assert doc["name"] == "My Routes"
-    assert all(b["op"] in routing.MOD_OPS for b in doc["bindings"])
-    assert lib.current("bindings") == "My Routes"
-    assert not lib.is_dirty("bindings")
-    assert lib.list("bindings") == [
-        "default", "hands-fx", "hands-pinch", "hands-play", "legacy6", "lfo-breathe", "My Routes",
-        "party-faces", "party-field", "party-trip", "party-tumble", "party-wake"]
-    assert not lib.is_factory("bindings", "My Routes")
+    assert doc["schema"] == "hyperspace.preset/2" and len(doc["routes"]) == 13
+    assert lib.current("presets") == "My Routes" and not lib.is_dirty("presets")
     frame(panel)
-    # load a factory preset back: the user route goes, the inputs stay
+    # another preset back: the user route goes, the inputs stay
     inputs = ("key", "pad", "hat", *routing.MIDI_SCHEMES)
     n_inputs = len(router.table.of(*inputs))
-    lib.load("bindings", "default")
-    assert not router.table.routes_to("view.bright")
+    lib.load("presets", "hands-play")
+    assert not [b for b in router.table.routes_to("view.bright") if b.source == "lane:2"]
     assert len(router.table.of(*inputs)) == n_inputs
-    # and the user file round-trips
-    lib.load("bindings", "My Routes")
-    assert router.table.routes_to("view.bright")[0].value == 0.3
+    lib.load("presets", "My Routes")
+    assert [b.value for b in router.table.routes_to("view.bright")] == [0.3]
     frame(panel)
-    # a bad name shows in the strip, never raises
     with pytest.raises(LibraryError):
-        lib.load("bindings", "no-such")
-    lib.error = "library: bindings: no preset 'no-such'"    # what the strip's guard records
+        lib.load("presets", "no-such")
+    lib.error = "library: presets: no preset 'no-such'"     # what the strip's guard records
     frame(panel)
-    # reset: the factory default
-    lib.reset("bindings")
-    assert lib.current("bindings") == "default" and not lib.is_dirty("bindings")
+    assert lib.delete("presets", "My Routes")
 
 
 def test_the_routing_heads_name_field_draws(rig):
@@ -545,35 +527,3 @@ def test_the_routing_heads_name_field_draws(rig):
     frame(panel)
     assert lib.current("presets") == "Mine" and not lib.is_dirty("presets")
     assert (rig.lib.home / "presets" / "mine.json").exists()
-
-
-def test_router_preset_documents_and_a_library_over_them(tmp_path):
-    """routing.py's side: `Router.apply_doc` / `preset_doc` / `signature`
-    are the bindings kind's hooks; `Router.load_preset` is the same road
-    through a Library over `home`, for tests and tools."""
-    from test_routing import rig as routing_rig
-
-    r = routing_rig(tmp_path=tmp_path, full=True)
-    router = Router(r.reg, Bindings.factory())
-    lib = Library(tmp_path)
-    lib.routing(router)
-    assert lib.list("bindings") == [
-        "default", "hands-fx", "hands-pinch", "hands-play", "legacy6", "lfo-breathe",
-        "party-faces", "party-field", "party-trip", "party-tumble", "party-wake"]
-    assert lib.is_factory("bindings", "legacy6")
-    router.table.add(Binding("lane:0", "view.bright", "push", 0.5, enabled=False))
-    r.reg["macro.2"].set_value(0.3)                  # routing-layer state: saved with the routes
-    path = lib.save_as("bindings", "Show A")
-    assert path == tmp_path / "bindings" / "show-a.json"
-    saved = Bindings.from_json(json.loads(path.read_text()))
-    assert len(saved.bindings) == 13 and not saved.bindings[-1].enabled
-    assert saved.values == {f"macro.{k}": (0.3 if k == 2 else 1.0) for k in range(1, 9)}
-    assert router.load_preset("legacy6", tmp_path) == []
-    assert len(router.table.routes()) == 12
-    r.reg["macro.2"].set_value(0.9)
-    assert router.load_preset("show-a", tmp_path) == []
-    assert len(router.table.routes()) == 13 and r.reg["macro.2"].value == pytest.approx(0.3)
-    assert router.signature() == [b.to_json() for b in router.table.routes()]
-    with pytest.raises(LibraryError):
-        router.load_preset("nope", tmp_path)
-    assert imgui.get_version()
