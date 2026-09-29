@@ -13,11 +13,12 @@ launch leaves behind — and that a second launch changes nothing.
 """
 
 import json
+import re
 from types import SimpleNamespace
 
 import pytest
 
-from hyperspace import lfo, preset, routing, tempo
+from hyperspace import hands, lfo, preset, routing, tempo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
@@ -45,6 +46,12 @@ ROUTING_PRESET = {"schema": routing.SCHEMA_V2, "name": "Show A", "profile": "apc
                   "values": {"fx.acid.speed": 2.0, "tempo.bpm": 99.0}}
 NEW_GLOBALS = {"hands.smooth", "hands.response", "hands.catch", "hands.sel.return",
                "tempo.bpm", routing.SHIFT_PARAM}
+
+
+def named(rows: list[dict]) -> list[dict]:
+    """`rows` with every hand lane named on the default layout — what the
+    migration writes when `[hands]` is off (decision register row 20)."""
+    return preset.name_hand_rows(rows, {}, hands.default_addresses())[0]
 
 
 def slot(k: int) -> dict:
@@ -88,7 +95,7 @@ def owners_home(home, *, project=True, routing_preset=True):
     return home
 
 
-def boot(home):
+def boot(home, hands_cfg=None):
     """app.main's order, headless; the migration's notes in `notes`."""
     chain = Analyzer(Analyser())
     control = Control(chain)
@@ -106,7 +113,7 @@ def boot(home):
     lib.attach(reg)
     router = Router(reg, Bindings.load(bindings_path(home), legacy_midi=None))
     presets = Presets(lib, reg, router)
-    notes = preset.migrate_home(lib, router)
+    notes = preset.migrate_home(lib, router, hands_cfg)
     lib.project.load_startup()
     return SimpleNamespace(lib=lib, reg=reg, view=view, router=router, presets=presets,
                            notes=notes, home=home)
@@ -266,13 +273,13 @@ def test_bindings_json_performer_rows_move_into_the_startup_preset(home):
     assert not any(b.source == KNOB["source"] for b in rows)
     # the startup preset holds them, and the launch put them live
     start = preset_file(home, "MY WAVE")
-    assert [d for d in start["routes"] if d["source"].startswith("hand:")] == LEARNED[:2]
+    assert [d for d in start["routes"] if d["source"].startswith("hand:")] == named(LEARNED[:2])
     assert {"source": "lane:3", "target": "fx.mix", "op": "push", "value": 0.2} in start["routes"]
     assert {**KNOB, "layer": "preset"} not in start["desk"] and KNOB in start["desk"]
     live = r.router.table
-    hand = [b for b in live.routes() if b.source == "hand:7"]
+    hand = [b for b in live.routes() if b.source == "hand:right.y"]
     assert [(b.target, b.op) for b in hand] == [("view.bright", "position")]
-    assert live.owner("view.bright").source == "hand:7"            # the learned row plays
+    assert live.owner("view.bright").source == "hand:right.y"      # the learned row plays
     assert any(b.source == KNOB["source"] and b.layer == "preset" for b in live.desk())
     assert live.macros_doc() == start["macros"] and r.reg["macro.2"].value == 0.4
     assert live.carried is None and not r.lib.is_dirty("presets")
@@ -335,13 +342,13 @@ def test_routes_only_files_become_full_presets(home):
     made = preset_file(home, "Show A")
     assert made["schema"] == "hyperspace.preset/2" and "desk" not in made
     assert made["values"] == {"fx.acid.speed": 2.0, "fx.on": True, "fx.acid.on": True}
-    assert made["routes"] == ROUTING_PRESET["bindings"] and made["macros"] == {}
+    assert made["routes"] == named(ROUTING_PRESET["bindings"]) and made["macros"] == {}
     assert read(home / "bindings" / "show-a.json") == ROUTING_PRESET
     assert (home / "bindings" / preset.NOT_READ).is_file()
     assert "bindings" not in r.lib.groups()
     r.presets.load("Show A")
     assert r.reg["fx.acid.on"].value is True and r.reg["tempo.bpm"].value != 99.0
-    assert [b.source for b in r.router.table.routes()] == ["hand:10", "hand:7"]
+    assert [b.source for b in r.router.table.routes()] == ["hand:right.pitch", "hand:right.y"]
     assert len(r.router.table.desk()) == len(preset.fresh_desk())    # no desk: the factory layer
     # the factory's
     for name in ("legacy6", "lfo-breathe", "hands-fx", "hands-pinch", "hands-play"):
@@ -359,7 +366,7 @@ def test_the_migration_runs_once(home):
     assert second.notes == [] and tree(home) == after
     assert second.lib.current("presets") == "DEFAULT SAVED" and not second.lib.error
     assert [b.source for b in second.router.table.routes() if b.source.startswith("hand")] \
-        == ["hand:7", "hand:1"]
+        == ["hand:right.y", "hand:left.y"]
 
 
 def test_a_home_with_no_project_keeps_its_routes_in_a_migrated_preset(tmp_path):
@@ -367,7 +374,7 @@ def test_a_home_with_no_project_keeps_its_routes_in_a_migrated_preset(tmp_path):
     r = boot(home)
     kept = preset_file(home, preset.MIGRATED)
     assert kept["name"] == "MIGRATED"
-    assert [d for d in kept["routes"] if d["source"].startswith("hand:")] == LEARNED[:2]
+    assert [d for d in kept["routes"] if d["source"].startswith("hand:")] == named(LEARNED[:2])
     assert KNOB in kept["desk"] and kept["macros"]["macro.2"]["subs"]
     assert kept["values"]["macro.2"] == 0.4 and "view.shape" in kept["values"]
     assert not any(k.partition(".")[0] in SESSION_GROUPS for k in kept["values"])
@@ -378,7 +385,7 @@ def test_a_home_with_no_project_keeps_its_routes_in_a_migrated_preset(tmp_path):
     assert doc["bank"] == ["MIGRATED", *factory["bank"][:7]]     # the last house preset off
     assert any(f"{factory['bank'][7]!r} left the bank" in n for n in r.notes)
     assert r.lib.current("presets") == "MIGRATED"
-    assert r.router.table.owner("view.bright").source == "hand:7"
+    assert r.router.table.owner("view.bright").source == "hand:right.y"
     assert not any(b.op in MOD_OPS for b in Bindings.load(bindings_path(home)).bindings)
     # a user default already at schema 2 keeps its bank, one slot along, and a backup
     home2 = tmp_path / "two"
@@ -446,7 +453,7 @@ def test_a_preset_that_cannot_be_written_never_stops_the_launch(home):
         (home / "presets").chmod(0o755)
     again = boot(home)
     assert (home / "bindings" / preset.NOT_READ).exists()
-    assert preset_file(home, "Show A")["routes"] == ROUTING_PRESET["bindings"]
+    assert preset_file(home, "Show A")["routes"] == named(ROUTING_PRESET["bindings"])
     assert read(home / "projects" / "default.hyp.json")["schema"] == "hyperspace.project/2"
     assert again.router.table.carried is None
 
@@ -467,6 +474,49 @@ def test_a_launch_that_could_not_rewrite_bindings_json_does_not_take_the_default
     assert any("already in a preset" in n for n in r.notes)
 
 
+# ---------------------------------------------------------------- hand names
+
+def test_the_migration_names_the_hand_rows(tmp_path):
+    """Decision register row 20 (plan 13 WP5b): every preset the migration
+    writes names its hand lanes — sources, gates — by the layout the rig
+    has at migration time: the rig's `[hands] dofs` when `[hands]` is
+    enabled, else the default layout; a note says which. It runs once,
+    and a user preset with numbers loaded later is read as it is."""
+    DEFAULT = "the default layout (dofs x, y, z, roll, pitch, yaw)"
+    home = owners_home(tmp_path / "off")
+    r = boot(home, {"enabled": False, "dofs": ["roll"]})    # configured, off: the default
+    assert f"bindings.json: 3 hand address(es) named by {DEFAULT}" in r.notes
+    assert f"bindings/show-a.json: 2 hand address(es) named by {DEFAULT}" in r.notes
+    for p in sorted((home / "presets").glob("*.json")):
+        assert not re.search(r'"hand:\d', p.read_text()), p.name
+    rows = [d for d in preset_file(home, "MY WAVE")["routes"] if d["source"].startswith("hand:")]
+    assert [(d["source"], d.get("when")) for d in rows] == [
+        ("hand:right.y", None), ("hand:left.y", "hand:right.pinch.index")]
+    assert [d["source"] for d in preset_file(home, "Show A")["routes"]] == [
+        "hand:right.pitch", "hand:right.y"]
+    assert boot(home).notes == []                            # once
+    # the rig's own layout, [hands] on with its dofs reordered: lane 7 is
+    # the right hand's second axis — x on this rig — and the note says so
+    rig = owners_home(tmp_path / "rig")
+    dofs = ["y", "x", "z", "roll", "pitch", "yaw"]
+    r2 = boot(rig, {"enabled": True, "dofs": dofs})
+    layout = f"the rig's layout ([hands] dofs {', '.join(dofs)})"
+    assert f"bindings.json: 3 hand address(es) named by {layout}" in r2.notes
+    rows = [d for d in preset_file(rig, "MY WAVE")["routes"] if d["source"].startswith("hand:")]
+    assert [(d["source"], d.get("when")) for d in rows] == [
+        ("hand:right.x", None), ("hand:left.x", "hand:right.pinch.index")]
+    # a user preset saved with numbers later (an older build's) still reads
+    (home / "presets" / "numbers.json").write_text(json.dumps(
+        {"schema": preset.SCHEMA, "name": "numbers", "values": {},
+         "routes": [{"source": "hand:7", "target": "view.bright", "op": "position",
+                     "when": "hand:18"}]}))
+    r.lib._sync(home / "presets" / "numbers.json")
+    assert r.presets.load("numbers") == []
+    row = r.router.table.owner("view.bright")
+    assert (row.source, row.when) == ("hand:7", "hand:18")   # not rewritten at load
+    assert r.router.lane(row.source) == ("hand", 7)
+
+
 # ---------------------------------------------------------------- nothing lost
 
 def _union(docs):
@@ -484,9 +534,11 @@ def test_nothing_is_lost(home):
     values the home held before is what its presets hold after."""
     raw = bindings_v2()
     table = Bindings.from_json(raw)                    # the rows as the table reads them
-    before_routes = {json.dumps(b.to_json(), sort_keys=True) for b in table.routes()}
+    # every hand lane by name after (row 20): the same rows, renamed
+    before_routes = {json.dumps(x, sort_keys=True)
+                     for x in named([b.to_json() for b in table.routes()])}
     before_routes |= {json.dumps(Binding.from_json(x).to_json(), sort_keys=True)
-                      for x in ROUTING_PRESET["bindings"]}
+                      for x in named(ROUTING_PRESET["bindings"])}
     before_desk = {(b.source, b.target, b.op) for b in table.desk()}
     assert (KNOB["source"], KNOB["target"], "abs") in before_desk
     before_macros = table.macros_doc()

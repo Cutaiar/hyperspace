@@ -697,7 +697,10 @@ def write_factory(directory: Path = FACTORY_DIR) -> list[Path]:
 # cannot be made leaves the file as it is); a preset is written only as a
 # new file — never over a user's (a different one of that name gets a
 # numbered name), and not at all where an equal one is already there.
-# A second launch finds nothing to do.
+# A second launch finds nothing to do. Every preset it writes names its
+# hand lanes (decision register row 20, plan 13 WP5b): a ``hand:<i>`` row,
+# gate or depth subscriber becomes ``hand:<name>`` by the layout the rig
+# has at migration time (`hand_layout`), and a note says which layout.
 
 MIGRATED = "MIGRATED"             # the preset a home with no project keeps its routes in
 NOT_READ = "NOT-READ.txt"         # left in <home>/bindings/ once its files are converted
@@ -709,6 +712,82 @@ def factory_carried() -> routing.Carried:
     factory table shipped before plan 13 WP5 (the house presets' routes)."""
     return routing.Carried(routes=[b.to_json() for b in routing.legacy6_routes()],
                            desk=None, macros={}, values={})
+
+
+def hand_layout(cfg: dict | None = None) -> tuple[list[str], str]:
+    """The hand lanes' names in lane order that a ``hand:<i>`` is read by,
+    and which layout that is: the rig's `[hands] dofs` when `[hands]` is
+    enabled (the adapter would publish exactly this), else the default
+    layout (`hands.core.DEFAULTS`' dofs). The hands package is the one
+    place a layout is written; it is imported here, not at the top, as the
+    host imports it (app.py)."""
+    from .hands.core import DEFAULTS, HandSettings, addresses, default_addresses
+
+    if cfg and cfg.get("enabled"):
+        try:
+            settings = HandSettings.from_config(cfg)
+        except (ValueError, TypeError, KeyError) as e:
+            return default_addresses(), (f"the default layout (dofs {', '.join(DEFAULTS['dofs'])}"
+                                         f"; the rig's [hands] would not build: {e})")
+        dofs = [a.feature for a in settings.axes[:len(settings.axes) // 2]]
+        return addresses(settings.axes), f"the rig's layout ([hands] dofs {', '.join(dofs)})"
+    return default_addresses(), f"the default layout (dofs {', '.join(DEFAULTS['dofs'])})"
+
+
+def live_hand_layout(router) -> tuple[list[str], str]:
+    """`hand_layout` for a migration while the show runs (`Project.load`
+    opening a schema-1 file): the layout the hands adapter published, else
+    the default one."""
+    index = (getattr(router, "names", None) or {}).get("hand")
+    if index:
+        lanes = [""] * (max(index.values()) + 1)
+        for name, i in index.items():
+            lanes[i] = name
+        return lanes, "the rig's layout (as the hands adapter published it)"
+    return hand_layout()
+
+
+def _named_hand(addr, lanes: list[str]):
+    """``hand:<i>`` as ``hand:<name>`` by `lanes`; anything else — a name
+    already, another scheme, an index past the layout (dormant either
+    way) — as it is."""
+    if not isinstance(addr, str) or not addr.startswith("hand:"):
+        return addr
+    try:
+        i = int(addr[5:])
+    except ValueError:
+        return addr
+    return f"hand:{lanes[i]}" if 0 <= i < len(lanes) and lanes[i] else addr
+
+
+def name_hand_rows(routes: list[dict], macros: dict, lanes: list[str]
+                   ) -> tuple[list[dict], dict, int]:
+    """`routes` and `macros` (files' JSON) with every numeric hand source,
+    gate and depth subscriber's route named by `lanes` (`hand_layout`).
+    Returns copies and how many addresses changed; idempotent — a named
+    row is left as it is."""
+    n = 0
+
+    def fix(addr):
+        nonlocal n
+        new = _named_hand(addr, lanes)
+        n += new != addr
+        return new
+    out = []
+    for d in routes or []:
+        d = dict(d)
+        if "source" in d:
+            d["source"] = fix(d["source"])
+        if d.get("when") is not None:
+            d["when"] = fix(d["when"])
+        out.append(d)
+    ms = copy.deepcopy(dict(macros or {}))
+    for m in ms.values():
+        for s in (m.get("subs") or []) if isinstance(m, dict) else []:
+            dep = s.get("depth") if isinstance(s, dict) else None
+            if isinstance(dep, dict) and "source" in dep:
+                dep["source"] = fix(dep["source"])
+    return out, ms, n
 
 
 def _part(pid: str) -> str:
@@ -1018,19 +1097,22 @@ def _settled_macros(macros: dict, reg, where: str) -> tuple[dict, list[str]]:
 
 
 def migrate_routing_presets(root: Path, has: Callable[[str], bool] | None = None,
-                            factory: Path = FACTORY, reg=None) -> list[str]:
+                            factory: Path = FACTORY, reg=None,
+                            hands: tuple[list[str], str] | None = None) -> list[str]:
     """Every user routing preset (``<home>/bindings/*.json``) as a full
     preset (decision 10): its values (less session ids, with the effects
     its routes drive switched on, `effects_on`), its performer rows (a
-    ``scale: macro.N`` a depth subscriber), its macros (a base subscriber
-    on a session param dropped with a note, D9), no ``desk`` key.
-    The files stay where they are, untouched; a note beside them
-    (NOT_READ) says they are no longer read, and is what makes this run
-    once."""
+    ``scale: macro.N`` a depth subscriber; a ``hand:<i>`` named by `hands`
+    — `hand_layout`'s (lanes, which layout), the default layout's when
+    None — row 20), its macros (a base subscriber on a session param
+    dropped with a note, D9), no ``desk`` key. The files stay where they
+    are, untouched; a note beside them (NOT_READ) says they are no longer
+    read, and is what makes this run once."""
     folder = root / LEGACY_ROUTING
     files = sorted(folder.glob("*.json")) if folder.is_dir() else []
     if not files or (folder / NOT_READ).exists():
         return []
+    lanes, layout = hands if hands is not None else hand_layout()
     notes: list[str] = []
     stuck = False
     for f in files:
@@ -1045,6 +1127,9 @@ def migrate_routing_presets(root: Path, has: Callable[[str], bool] | None = None
                   if _part(k) == "performance"}
         macros, dropped = _settled_macros(t.macros_doc(), reg, f"bindings/{f.name}")
         notes += dropped
+        routes, macros, n = name_hand_rows(routes, macros, lanes)
+        if n:
+            notes.append(f"bindings/{f.name}: {n} hand address(es) named by {layout}")
         doc = {"schema": SCHEMA, "name": str(raw.get("name") or f.stem),
                "note": f"the routing preset bindings/{f.name}, made a preset (plan 13 WP5)",
                "values": effects_on(routes, values, has), "routes": routes,
@@ -1071,12 +1156,15 @@ def migrate_routing_presets(root: Path, has: Callable[[str], bool] | None = None
     return notes
 
 
-def migrate_home(lib, router) -> list[str]:
+def migrate_home(lib, router, hands_cfg: dict | None = None) -> list[str]:
     """Plan 13 §6's one-time migration of the library home (see above):
     the schema-1 projects, the user routing presets, then `bindings.json`
     — its preset part (`Bindings.carried`) into the presets first (a
     ``MIGRATED`` preset when no project took it), and only then the file
-    rewritten with the session's controls. Re-opens the default project
+    rewritten with the session's controls. Every hand lane a preset it
+    writes names by number is named by `hands_cfg` — the config's
+    ``[hands]`` section: the rig's layout when enabled, else the default
+    (`hand_layout`, decision register row 20). Re-opens the default project
     when one changed. Every note goes to stderr and the sum to
     `lib.warning`; returns the notes. Nothing to do: nothing written."""
     root, table = lib.home, router.table
@@ -1089,6 +1177,11 @@ def migrate_home(lib, router) -> list[str]:
     # from the table's macros (D9)
     use.macros, dropped = _settled_macros(use.macros, reg, "bindings.json")
     notes += dropped
+    # and every hand lane by name, before any preset is made from its rows
+    hands = hand_layout(hands_cfg)
+    use.routes, use.macros, n = name_hand_rows(use.routes, use.macros, hands[0])
+    if n:
+        notes.append(f"bindings.json: {n} hand address(es) named by {hands[1]}")
     written: list[Path] = []
     held = False                          # a preset now holds `carried`
     stuck = False                         # a schema-1 project left as it was
@@ -1107,7 +1200,7 @@ def migrate_home(lib, router) -> list[str]:
             projects = True
             written.append(path)
     notes += migrate_routing_presets(root, (lambda pid: pid in reg) if reg is not None
-                                     else None, factory, reg)
+                                     else None, factory, reg, hands)
     # a user preset already holding the table's part (a launch that
     # converted the projects but could not rewrite bindings.json, or a
     # MIGRATED preset made before) takes it: no second MIGRATED, and the

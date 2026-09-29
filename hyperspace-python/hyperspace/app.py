@@ -640,7 +640,7 @@ def main() -> None:
     # plan 13 §6, once: an older home's projects, routing presets and the
     # preset part of bindings.json become presets (backups beside every
     # rewritten file); a home already migrated finds nothing to do
-    migrate_home(library, router)
+    migrate_home(library, router, cfg.get("hands"))   # hand lanes named by the rig's layout
     # one Learn over the live table, whatever the MIDI gate says: a knob
     # or a hand completes it, the panel's prompt settles what the referee
     # refused (learn.py; the band.sel.* rule is the registry's `real`)

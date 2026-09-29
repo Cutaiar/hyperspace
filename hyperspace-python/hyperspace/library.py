@@ -550,13 +550,18 @@ class Project:
         if doc.get("schema") == PROJECT_V1 and presets is not None:
             # a schema-1 file the launch did not see (opened by path, or
             # put in the folder since): migrated now, the same road
-            from .preset import migrate_project
+            from .preset import live_hand_layout, migrate_project, name_hand_rows
             from .routing import Carried
 
             table = presets.router.table
-            live = Carried(routes=[b.to_json() for b in table.routes()],
+            # its presets name their hand lanes (row 20): by the layout the
+            # hands adapter published, else the default one
+            routes, macros, _n = name_hand_rows(
+                [b.to_json() for b in table.routes()], table.macros_doc(),
+                live_hand_layout(presets.router)[0])
+            live = Carried(routes=routes,
                            desk=[b.to_json() for b in table.desk()] or None,
-                           macros=table.macros_doc(), values={})
+                           macros=macros, values={})
             try:
                 notes, _held, rewrote = migrate_project(lib.home, path, live,
                                                         factory=lib.factory)

@@ -1310,7 +1310,7 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     assert json.loads(bak.read_text()) == V1_FILE and "kept as bindings.json.bak-v1" in err
     kept = json.loads((tmp_path / "presets" / "migrated.json").read_text())
     assert {(d["source"], d["target"]) for d in kept["routes"]} >= {
-        ("lane:0", "pattern.mod.0"), ("hand:7", "camera.zoom"), ("lfo:0", "fx.mix")}
+        ("lane:0", "pattern.mod.0"), ("hand:right.y", "camera.zoom"), ("lfo:0", "fx.mix")}
     assert kept["values"]["pattern.mod.0"] == 0.0
     again = Bindings.load(path, legacy_midi=None)
     assert not again.migrated and again.to_json() == t.to_json() and again.carried is None
@@ -1326,7 +1326,8 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     assert any("bindings/old.json → preset 'old'" in n for n in notes)
     old = json.loads((tmp_path / "presets" / "old.json").read_text())
     assert {r_["op"] for r_ in old["routes"]} == {"push", "position"}
-    assert old["routes"][-1]["source"] == "hand:2" and "desk" not in old
+    assert old["routes"][-1]["source"] == "hand:left.z" and "desk" not in old   # hand:2, named
+    assert any("hand address(es) named by the default layout" in n for n in notes)
     assert json.loads((d / "old.json").read_text()) == V1_FILE          # untouched
 
 
