@@ -12,10 +12,15 @@ a factory one, which can only be saved *as* something; as… turns the
 strip into a name field until Enter (or Esc); reset lands the group on
 its default preset — the "meaningful default" — or its fresh values when
 it has none. The project row is the same idea over the open project
-(name · dirty · save / as… / load / new) and hosts the F1–F8 theme
-bank, whose behaviour is exactly what it was. The ROUTING page's strip
-is this same strip over the ``bindings`` group — a document kind the
-library keeps for the router (library.py, ``Library.routing``).
+(name · dirty · save / as… / load ▾ / new, and the startup preset ▾),
+over the F1–F8 **preset bank**: eight slots, each named by the preset
+file it points at (click or F-key loads, ⇧click or ⇧F-key saves the live
+state as it, the loaded one lit). Under the bank sits the one **preset
+strip** — this same strip over the ``presets`` group, a document kind
+preset.py keeps — and then the module overview (the performance groups
+and the band strip's scene). The ROUTING page's strip is this same strip
+over the ``bindings`` group — a document kind the library keeps for the
+router (library.py, ``Library.routing``).
 
 These are functions over the Panel rather than widget classes: the
 state they need (the name field, the cached listings) lives on the
@@ -30,13 +35,19 @@ from __future__ import annotations
 from imgui_bundle import imgui
 
 from . import ui
-from .library import LibraryError
+from .library import PRESETS, LibraryError
+from .params import PERFORMANCE_GROUPS
 
 LIST_POLL = 1.0      # seconds between re-listings of a group's presets
 NAME_MAX = 14        # chars of a preset name the strip shows before eliding
 PROJECT = "project"  # the listing / name-field key for the project row
 LOAD_W = 88          # the project row's load ▾ combo
-THEME_W = 40         # one F-key slot in the theme bank
+STARTUP_W = 120      # the project row's startup ▾ combo
+SLOT_W = 40          # one F-key slot in the preset bank
+# the module overview: every performance group but the macros (a macro's
+# meaning is its subscribers, which live in the preset), and the band
+# strip's scene, the one session module a project names
+OVERVIEW_GROUPS = (*[g for g in PERFORMANCE_GROUPS if g != "macro"], "band")
 
 
 # ---- state on the panel, created on first use ----
@@ -256,13 +267,15 @@ def project_row(panel) -> None:
             imgui.set_tooltip("the live state differs from the project file")
     sp = imgui.get_style().item_spacing.x
     imgui.same_line(imgui.get_content_region_avail().x
-                    - ui.chip_w("save", "as…", "new") - LOAD_W - sp)
+                    - ui.chip_w("save", "as…", "new") - LOAD_W - STARTUP_W - 2 * sp)
+    _startup_combo(panel, proj)
+    imgui.same_line()
     if ui.chip("save"):
         _guard(panel, proj.save)
         invalidate(panel, PROJECT)
     if imgui.is_item_hovered():
-        imgui.set_tooltip("Snapshot everything — every group, the theme bank — "
-                          "into the project file")
+        imgui.set_tooltip("Save the session — tempo, hands, the analyzer, output — "
+                          "the preset bank and the startup preset into the project file")
     imgui.same_line()
     if ui.chip("as…"):
         _begin_naming(panel, PROJECT, proj.name)
@@ -283,8 +296,26 @@ def project_row(panel) -> None:
     if ui.chip("new"):
         _guard(panel, proj.new)
     if imgui.is_item_hovered():
-        imgui.set_tooltip("A fresh project: default state, the factory theme bank")
+        imgui.set_tooltip("A fresh project: default state, the factory preset bank")
     imgui.pop_id()
+
+
+def _startup_combo(panel, proj) -> None:
+    """startup ▾ — the preset a launch and a project load bring up (D11)."""
+    imgui.set_next_item_width(STARTUP_W)
+    shown = _elide(proj.startup) if proj.startup else "startup"
+    if imgui.begin_combo("##startup", shown):
+        picked, _ = imgui.selectable("— none", proj.startup is None)
+        if picked:
+            proj.startup = None
+        for name in names(panel, PRESETS):
+            picked, _ = imgui.selectable(f"{name}##startup", name == proj.startup)
+            if picked:
+                proj.startup = name
+        imgui.end_combo()
+    if imgui.is_item_hovered():
+        imgui.set_tooltip(f"startup: {proj.startup or 'none'} — the preset a launch and a "
+                          "project load bring up; save writes it into the project")
 
 
 def _project_save_as(panel, name: str) -> None:
@@ -292,46 +323,59 @@ def _project_save_as(panel, name: str) -> None:
     invalidate(panel, PROJECT)
 
 
-# ---- the F1–F8 theme bank: whole-surface save states inside the project ----
+# ---- the F1–F8 preset bank: eight pointers to preset files ----
 
-def theme_bank(panel) -> None:
-    pr = panel.themes                 # library.Project: slots, active, load/save_slot
+def preset_bank(panel) -> None:
+    pr = panel.bank                   # library.Project: bank, active, load/save_slot
     if pr is None:
         return
     r, io = panel.reg, imgui.get_io()
-    ui._micro("themes  ·  F1–F8")
+    ui._micro("presets  ·  F1–F8")
     if imgui.is_item_hovered():
         imgui.set_tooltip(
-            "Whole-surface save states — view, faders, all six band "
-            "strips. Click or F1–F8 loads; ⇧click or ⇧F1–F8 saves the "
-            "current state into the slot. They live in the project file."
+            "The project's eight presets, each one a file in the library: the "
+            "whole performance — the look, its routes, LFOs and macros, never "
+            "the tempo, the hands or the analyzer. Click or F1–F8 loads; "
+            "⇧click or ⇧F1–F8 saves the live state as the slot's preset."
         )
-    for k, slot in enumerate(pr.slots):
+    for k, name in enumerate(pr.bank):
         if k:
             imgui.same_line()
-        lit = k == pr.active and slot is not None
-        pid = f"theme.{'save' if io.key_shift else 'load'}.{k}"
-        if ui.lit_chip(f"{k + 1}##theme{k}", lit, ui.FAINT if slot is None else ui.TEXT,
-                       imgui.ImVec2(THEME_W, 0)):
+        lit = k == pr.active and name is not None
+        pid = f"preset.{'save' if io.key_shift else 'load'}.{k}"
+        if ui.lit_chip(f"{k + 1}##preset{k}", lit, ui.FAINT if name is None else ui.TEXT,
+                       imgui.ImVec2(SLOT_W, 0)):
             r[pid].fire()
-        if imgui.is_item_hovered() and slot is not None:
-            imgui.set_tooltip(slot["name"])
-        panel._ctx(r[f"theme.load.{k}"])
-        panel._learn_frame(r[f"theme.load.{k}"])
+            invalidate(panel, PRESETS)
+        if imgui.is_item_hovered():
+            imgui.set_tooltip(name if name is not None else
+                              f"empty — ⇧F{k + 1} saves the live state here")
+        panel._ctx(r[f"preset.load.{k}"])
+        panel._learn_frame(r[f"preset.load.{k}"])
     if pr.bank_error:
         imgui.text_colored(ui.WARN, pr.bank_error)
+
+
+def preset_strip(panel) -> None:
+    """The one preset strip: the loaded preset, its dirty dot, save / as…
+    — the library's strip over the ``presets`` document kind."""
+    lib = panel.library
+    if lib is None or lib.reg is None or PRESETS not in lib.kinds:
+        return
+    ui._micro("preset")
+    strip(panel, PRESETS)
 
 
 # ---- the overview: every group, its preset, its dirty dot ----
 
 def groups(panel) -> list[str]:
-    """The groups a strip makes sense for: in the library *and* with a
-    persisted param in this registry, or a document kind of their own
-    (the routing presets); a folder alone is not a module the panel can
-    save."""
+    """The groups the overview lists: the performance groups less the
+    macros, and the band strip (OVERVIEW_GROUPS), each in the library
+    *and* with a persisted param in this registry — a folder alone is not
+    a module the panel can save."""
     lib = panel.library
-    known = {p.group for p in lib.reg if p.persist and p.group} | set(lib.kinds)
-    return [g for g in lib.groups() if g in known]
+    known = {p.group for p in lib.reg if p.persist and p.group}
+    return [g for g in lib.groups() if g in known and g in OVERVIEW_GROUPS]
 
 
 def overview(panel) -> None:
