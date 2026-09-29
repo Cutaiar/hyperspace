@@ -13,7 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from hyperspace import lfo, preset, routing, tempo
+from hyperspace import apc40, lfo, preset, routing, tempo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
@@ -84,7 +84,8 @@ def test_a_preset_load_lands_every_base_and_replaces_every_route(rig):
     reg["fx.kaleido.on"].set(not reg["fx.kaleido.on"].value)   # an fx toggle
     reg["dream.decay"].set(0.5)                         # a dream value
     table.add(Binding("hand:7", "view.speed", "push", 0.3))    # a hand route
-    keys = [b.to_json() for b in table.bindings if b.op not in routing.MOD_OPS]
+    keys = [b.to_json() for b in table.bindings
+            if b.op not in routing.MOD_OPS and b.layer != "preset"]
     values = {"view.shape": 4, "fx.on": True, "lfo.1.depth": 0.25}
     routes = [{"source": "lfo:0", "target": "camera.zoom", "op": "push", "value": 0.1},
               {"source": "lane:2", "target": "view.bright", "op": "push", "value": 0.2,
@@ -96,7 +97,9 @@ def test_a_preset_load_lands_every_base_and_replaces_every_route(rig):
     assert reg["view.bright"].value == lib.defaults("view")["view.bright"]
     assert reg["dream.decay"].value == lib.defaults("dream")["dream.decay"]
     assert [b.to_json() for b in table.routes()] == routes   # exactly the file's, disabled too
-    assert [b.to_json() for b in table.bindings if b.op not in routing.MOD_OPS] == keys
+    assert [b.to_json() for b in table.bindings
+            if b.op not in routing.MOD_OPS and b.layer != "preset"] == keys
+    assert table.desk() == []                               # the file's `desk: []`
     assert rig.presets.current == "PARTIAL" and not lib.is_dirty("presets")
 
 
@@ -327,12 +330,14 @@ def test_module_labels_are_recorded_and_never_chain_load(rig):
 
 def test_a_preset_round_trips(rig):
     """Save then load gives the same signature; `desk` and `macros` are
-    carried verbatim (plan 13 WP4 wires them), `modules` names the
-    performance groups' labels."""
-    lib = rig.lib
+    the table's (plan 13 WP4), `modules` names the performance groups'
+    labels. (The base subscriber names a param nothing else in the test
+    moves: the macro is the scene-setter of record, so a param a later
+    module load moved would land back on the subscriber's value.)"""
+    lib, table = rig.lib, rig.router.table
     desk = [{"source": "cc:0:48", "target": "view.bright", "op": "abs"}]
     macros = {"macro.1": {"label": "Heat", "subs": [
-        {"base": "fx.plasma.level", "from": 0.0, "to": 0.6}]}}
+        {"base": "view.depth4", "from": 0.0, "to": 0.6}]}}
     put(rig.home, "SRC", values={"view.shape": 3}, desk=desk, macros=macros, note="a note",
         routes=[{"source": "hand:7", "target": "view.speed", "op": "push", "value": 0.3}])
     rig.presets.load("SRC")
@@ -350,8 +355,88 @@ def test_a_preset_round_trips(rig):
     rig.lib.project.load_slot(0)                            # something else in between
     rig.presets.load("Round Trip")
     assert rig.presets.signature() == sig and not lib.is_dirty("presets")
-    assert rig.presets.desk == desk and rig.presets.macros == macros
+    assert preset.desk_json(table.desk()) == desk and table.macros_doc() == macros
     assert lib.current("fx") == "acid"
+
+
+# ---------------------------------------------------------------- the desk and the macros
+
+DESK = [{"source": "cc:*:16", "target": "view.speed", "op": "abs", "feedback": "ring"},
+        {"source": "note:0:82", "target": "view.points", "op": "toggle", "feedback": "led"}]
+MACROS = {"macro.1": {"label": "Heat", "subs": [
+    {"base": "view.depth4", "from": 0.2, "to": 0.8},
+    {"depth": {"source": "hand:7", "target": "view.bright"}, "from": 0.0, "to": 1.0}]}}
+
+
+def test_a_preset_load_replaces_the_desk_and_the_macros(rig):
+    """Plan 13 D2 / D4, §5 steps 4–5: the preset layer is the file's (a row
+    on an invariant control dropped, its note in the load's), the layer
+    drops to it, the global and invariant rows stay; the macros are the
+    file's and their base subscribers land at once from the macros' bases
+    — over `values` naming the same param (the macro is the scene-setter
+    of record); an explicit `desk: []` leaves every preset control dark."""
+    lib, reg, table = rig.lib, rig.reg, rig.router.table
+    session = [b.to_json() for b in table.midi() if b.layer != "preset"]
+    table.set_layer("global")
+    put(rig.home, "DESKED", values={"macro.1": 0.5, "view.depth4": 1.0},
+        routes=[{"source": "hand:7", "target": "view.bright", "op": "position"}],
+        desk=[*DESK, {"source": "cc:0:7", "target": "view.bright", "op": "abs"}],
+        macros=MACROS)
+    rig.presets.load("DESKED")
+    assert preset.desk_json(table.desk()) == DESK and table.layer == "preset"
+    assert any("cc:0:7 → view.bright" in n and "invariant" in n for n in rig.presets.notes)
+    assert rig.presets.desk_notes and "cc:0:7" in rig.presets.desk_notes[0]
+    assert [b.to_json() for b in table.midi() if b.layer != "preset"] == session
+    assert table.macros_doc() == MACROS
+    depth4 = reg["view.depth4"]
+    assert depth4.norm == pytest.approx(0.5, abs=1e-6)        # 0.2 + 0.5 · (0.8 − 0.2)
+    assert not lib.is_dirty("presets")                        # landed before the clean reference
+    assert rig.router.follow_macros() == []                   # nothing left to land next frame
+    put(rig.home, "DARK", desk=[], macros={})
+    rig.presets.load("DARK")
+    assert table.desk() == [] and table.macros_doc() == {}
+    assert [b.to_json() for b in table.midi() if b.layer != "preset"] == session
+
+
+def test_a_preset_without_a_desk_gets_the_factory_preset_layer(rig):
+    """A file with no `desk` key is a fresh preset's desk: the factory map's
+    preset layer (plan 13 §3.2)."""
+    table = rig.router.table
+    put(rig.home, "EMPTY", desk=[])
+    rig.presets.load("EMPTY")
+    assert table.desk() == []
+    path = put(rig.home, "BARE")
+    doc = json.loads(path.read_text())
+    del doc["desk"], doc["macros"]
+    path.write_text(json.dumps(doc))
+    rig.presets.load("BARE")
+    fresh = [b for b in routing.factory_desk() if b.layer == "preset"]
+    assert [b.to_json() for b in table.desk()] == [b.to_json() for b in fresh]
+    assert preset.desk_json(table.desk()) == preset.desk_json(preset.fresh_desk())
+    assert rig.presets.document("BARE")["desk"] == preset.desk_json(fresh)
+
+
+def test_a_preset_with_a_desk_and_macros_round_trips(rig):
+    """What the table holds is what a save writes: an edit of the desk or a
+    macro moves the dirty dot, a save writes it, a load brings it back."""
+    lib, table = rig.lib, rig.router.table
+    put(rig.home, "SHOW", desk=DESK, macros=MACROS,
+        routes=[{"source": "hand:7", "target": "view.bright", "op": "position"}])
+    rig.presets.load("SHOW")
+    assert not lib.is_dirty("presets")
+    table.desk()[0].target = "view.instances"                 # the page's retarget
+    assert lib.is_dirty("presets")
+    table.macros["macro.1"].label = "Cold"
+    path = rig.presets.save_as("SHOW")
+    doc = json.loads(path.read_text())
+    assert doc["desk"][0]["target"] == "view.instances" and "layer" not in doc["desk"][0]
+    assert doc["macros"]["macro.1"]["label"] == "Cold"
+    assert not lib.is_dirty("presets")
+    rig.presets.load("TRIP")
+    assert table.macros_doc() != doc["macros"]
+    rig.presets.load("SHOW")
+    assert preset.desk_json(table.desk()) == doc["desk"] and table.macros_doc() == doc["macros"]
+    assert not lib.is_dirty("presets")
 
 
 def test_a_preset_edited_on_disk_is_re_applied(rig):
@@ -404,7 +489,7 @@ def test_the_factory_presets_are_preset_2_performance_files():
     for path in sorted((FACTORY / "presets").glob("*.json")):
         doc = json.loads(path.read_text())
         assert doc["schema"] == preset.SCHEMA, path.name
-        assert doc["desk"] == [] and doc["macros"] == {}, path.name
+        assert doc["macros"] == {}, path.name     # plan 12's macros: WP5's re-cut
         for pid in doc["values"]:
             assert part_of(reg_ids[pid]) == "performance", (path.name, pid)
         for row in doc["routes"]:
@@ -441,12 +526,32 @@ def test_the_party_presets_routes_are_the_codes():
         assert json.loads(path.read_text())["routes"] == lanes, name
 
 
-def test_write_factory_rewrites_only_the_routes(tmp_path):
-    for slug in preset.PARTY:
-        doc = json.loads((preset.FACTORY_DIR / f"{slug}.json").read_text())
-        doc["routes"] = []
-        (tmp_path / f"{slug}.json").write_text(json.dumps(doc))
+def test_every_factory_presets_desk_is_the_generators():
+    """Plan 13 WP4: every factory preset's `desk` is the factory map's
+    preset layer, as `python -m hyperspace.preset` writes it — the files
+    may not drift from `routing.factory_desk` (plan 12's desk blocks for
+    wake and trip are WP5's re-cut)."""
+    desk = preset.desk_json(preset.fresh_desk())
+    assert desk and all("layer" not in d for d in desk)
+    from_map = []
+    for d in apc40.DEFAULT_MAP:
+        if d.get("layer") == "preset":
+            row = Binding.from_json(d).to_json()
+            row.pop("layer")
+            from_map.append(row)
+    assert desk == from_map
+    paths = sorted(preset.FACTORY_DIR.glob("*.json"))
+    assert len(paths) == 13
+    for path in paths:
+        assert json.loads(path.read_text())["desk"] == desk, path.name
+
+
+def test_write_factory_rewrites_only_the_routes_and_the_desk(tmp_path):
+    for path in preset.FACTORY_DIR.glob("*.json"):
+        doc = json.loads(path.read_text())
+        doc["routes"] = [] if path.stem in preset.PARTY else doc["routes"]
+        doc["desk"] = []
+        (tmp_path / path.name).write_text(json.dumps(doc))
     preset.write_factory(tmp_path)
-    for slug in preset.PARTY:
-        assert (tmp_path / f"{slug}.json").read_text() == \
-            (preset.FACTORY_DIR / f"{slug}.json").read_text()
+    for path in preset.FACTORY_DIR.glob("*.json"):
+        assert (tmp_path / path.name).read_text() == path.read_text(), path.name
