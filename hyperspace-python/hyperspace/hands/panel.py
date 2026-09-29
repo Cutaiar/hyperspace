@@ -91,12 +91,15 @@ def ctx_rows(panel, p) -> None:
 
 
 def _gate_menu(router, rows) -> bool:
-    """Pick the pinch that has to be held for these rows to act."""
+    """Pick the pinch that has to be held for these rows to act; the pick
+    is written by name (``hand:right.pinch.index``, decision register row
+    20), and a gate an older preset names by number shows as its switch."""
     gates = getattr(router, "gates", {}).get("hand") or []
     if not gates:
         return False
     cur = next((b.when for b in rows if b.when), None)
-    shown = next((lb for src, lb in gates if f"hand:{src}" == cur), None)
+    lane = router.lane(cur)[1] if cur is not None else None
+    shown = next((lb for src, lb in gates if src == lane), None)
     if not imgui.begin_menu(f"Gate: {shown or 'none'}"):
         return False
     hit = False
@@ -105,8 +108,8 @@ def _gate_menu(router, rows) -> bool:
             b.when = None
         hit = True
     for src, lb in gates:
-        addr = f"hand:{src}"
-        if imgui.menu_item_simple(lb, selected=cur == addr) and cur != addr:
+        addr = router.address("hand", src)
+        if imgui.menu_item_simple(lb, selected=src == lane) and cur != addr:
             for b in rows:
                 b.when = addr
             hit = True

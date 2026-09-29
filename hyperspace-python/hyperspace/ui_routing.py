@@ -21,7 +21,7 @@ strip, ⇧F) writes the preset. New desk rows come from Learn (right-click
 a control, then move a knob or button — midi.py's `_learned`).
 
 The routes. Rows are the router's `push` / `position` routes from
-`lane:i` (and `ext:i` / `hand:i` when the bridge / hands feed them), two lines each:
+`lane:i` (and `ext:i` / `hand:<name>` when the bridge / hands feed them), two lines each:
 
   [on] source        target ▾            op ▾           ×
        depth ──────── rest  × scale ▾   ▮▮▮▯▯│ live
@@ -292,8 +292,10 @@ def _sources(panel, router: Router) -> list[tuple[str, str]]:
     then each fed scheme (SOURCE_ORDER) that is around — its adapter has
     published labels, it is being fed this frame, or a row names it — one
     entry per lane, labelled as the adapter says ("lfo LFO 1") or by
-    index. Nothing here knows what a scheme is; the ext lanes are the one
-    case with a fixed count (N_EXT) since the bridge publishes no labels."""
+    index, and addressed by name where the adapter publishes names
+    (`Router.address`: ``hand:right.roll``, decision register row 20).
+    Nothing here knows what a scheme is; the ext lanes are the one case
+    with a fixed count (N_EXT) since the bridge publishes no labels."""
     labels = getattr(router, "labels", {})
     # the lanes as the engine published them (AudioEngine.publish, each
     # frame); until it has — a panel with no frame loop behind it — the
@@ -307,25 +309,42 @@ def _sources(panel, router: Router) -> list[tuple[str, str]]:
         if not (names or vec is not None or used):
             continue
         n = len(names) or (len(vec) if vec is not None else 0) or (N_EXT if scheme == "ext" else 0)
-        out += [(f"{scheme}:{i}", f"{scheme} {names[i] if i < len(names) else i}")
+        out += [(router.address(scheme, i), f"{scheme} {names[i] if i < len(names) else i}")
                 for i in range(n)]
     return out
 
 
 def _gates(router: Router) -> list[tuple[str, str]]:
-    """(address, label) for every switch an adapter offers as a gate."""
-    return [(f"{scheme}:{i}", lb)
+    """(address, label) for every switch an adapter offers as a gate — by
+    name where the adapter publishes names (``hand:right.pinch.index``)."""
+    return [(router.address(scheme, i), lb)
             for scheme, lanes in getattr(router, "gates", {}).items()
             for i, lb in lanes]
 
 
-def _gate_combo(b: Binding, gates: list[tuple[str, str]], width: float) -> None:
-    """Which switch has to be held for this row to act, or none."""
+def _at(router: Router, addrs, addr: str | None) -> int:
+    """Where `addr` is among `addrs`: the same string, else the same lane
+    (a numeric ``hand:7`` from an older preset is the entry that names its
+    lane ``hand:right.y``); −1 when none."""
+    if addr in addrs:
+        return addrs.index(addr)
+    if addr is None:
+        return -1
+    lane = router.lane(addr)
+    if lane[1] < 0:
+        return -1
+    return next((k for k, a in enumerate(addrs) if a is not None and router.lane(a) == lane), -1)
+
+
+def _gate_combo(router: Router, b: Binding, gates: list[tuple[str, str]], width: float) -> None:
+    """Which switch has to be held for this row to act, or none; a pick
+    writes the switch's address (its name, where it has one)."""
     labels = ["no gate"] + [lb for _, lb in gates]
     addrs: list[str | None] = [None] + [a for a, _ in gates]
-    if b.when not in addrs:            # a gate no adapter is offering now
+    cur = _at(router, addrs, b.when)
+    if cur < 0:                        # a gate no adapter is offering now
         labels, addrs = labels + [b.when], addrs + [b.when]
-    cur = addrs.index(b.when)
+        cur = len(addrs) - 1
     imgui.set_next_item_width(width)
     if imgui.begin_combo("##gate", labels[cur], imgui.ComboFlags_.no_arrow_button):
         for i, lb in enumerate(labels):
@@ -340,13 +359,13 @@ def _gate_combo(b: Binding, gates: list[tuple[str, str]], width: float) -> None:
 
 def _live(panel, router: Router, b: Binding) -> float | None:
     """The source's normalized reading this frame, None while it isn't live."""
-    i = b.index
-    if b.scheme == "lane":
+    scheme, i = router.lane(b.source)      # a number, or a name (`Router.names`)
+    if scheme == "lane":
         a = panel.audio
         if not getattr(a, "on", False) or not 0 <= i < a.chain.n:
             return None
         return float(a.chain.lanes[i]) / CEIL
-    vec = router.feeds.get(b.scheme)
+    vec = router.feeds.get(scheme)
     if vec is None or not 0 <= i < len(vec):
         return None
     u = float(vec[i])
@@ -445,7 +464,7 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
     imgui.same_line()
     sources = _sources(panel, router)
     labels = [lb for _, lb in sources]
-    cur = next((i for i, (s, _) in enumerate(sources) if s == b.source), -1)
+    cur = _at(router, [s for s, _ in sources], b.source)
     imgui.set_next_item_width(SRC_W)
     if cur < 0:
         labels, cur = labels + [b.source], len(labels)
@@ -559,7 +578,7 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
                           "a route through its depth subscriber.")
     if gates:
         imgui.same_line()
-        _gate_combo(b, gates, gate_w)
+        _gate_combo(router, b, gates, gate_w)
     imgui.same_line()
     _live_bar(panel, router, b, p)
     imgui.pop_id()

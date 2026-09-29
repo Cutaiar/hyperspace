@@ -4,6 +4,7 @@ puts it; a name the rig lacks is dormant, never another lane; ``hand:<i>``
 still reads the lane at index i."""
 
 import math
+from types import SimpleNamespace as NS
 
 import numpy as np
 import pytest
@@ -126,3 +127,25 @@ def test_the_default_addresses_are_the_generators():
     assert names[:6] == [f"left.{a}" for a in hands.DEFAULTS["dofs"]]
     assert names[12:14] == ["left.present", "right.present"]
     assert names[14:] == [f"{s}.pinch.{f}" for s in hands.SIDES for f in hands.PINCHES]
+
+
+def test_the_routing_page_offers_and_writes_names(app):
+    """The ROUTING page's source and gate combos offer the hand lanes by
+    name — what a pick writes — and find an older numeric row's lane among
+    them, so `hand:7` shows as the right height rather than a stray entry."""
+    from hyperspace import ui_routing
+
+    r = rig()
+    run(r, 1, hand(), router=app.router)
+    panel = NS(audio=NS(chain=NS(band_names=["sub", "bass"])))
+    srcs = ui_routing._sources(panel, app.router)
+    hand_srcs = [s for s, _ in srcs if s.startswith("hand:")]
+    assert hand_srcs == [f"hand:{n}" for n in hands.default_addresses()]
+    assert ("hand:right.roll", "hand R roll") in srcs
+    gates = ui_routing._gates(app.router)
+    assert gates[0] == ("hand:left.pinch.index", "L ind")
+    assert gates[-1] == ("hand:right.pinch.pinky", "R pin")
+    addrs = [s for s, _ in srcs]
+    assert ui_routing._at(app.router, addrs, "hand:7") == addrs.index("hand:right.y")
+    assert ui_routing._at(app.router, addrs, "hand:right.nosuch") == -1
+    assert ui_routing._at(app.router, [None, *(a for a, _ in gates)], "hand:18") == 5
