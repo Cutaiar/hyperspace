@@ -1600,9 +1600,10 @@ def test_lfo_breathe_is_the_chain_the_plan_draws(tmp_path):
 
 
 def test_the_live_table_carries_the_macros(tmp_path):
-    """The macros are routing-layer state no theme saves (ROUTING_GROUPS);
-    the live table saves them as `values` on every write — through the
-    thunk the Router gives it — and `Router.restore_values` lands them at
+    """The macros (the `macro` group) are performance state a theme and a
+    project carry since plan 13 WP1, and until WP5 the live table saves
+    them as `values` on every write — through the thunk the Router gives
+    it — and `Router.restore_values` lands them at
     the next start. A table nobody has attached a registry to writes no
     values; a registry without macros writes none either."""
     path = bindings_path(tmp_path)

@@ -168,8 +168,9 @@ File format (``bindings.json``, schema ``hyperspace.bindings/2``):
 
 Rows carry only what differs from the defaults. `values` in a routing
 preset are the bases its routes assume; in the live table they are the
-routing layer's own bases — the macros (params.ROUTING_GROUPS), which no
-theme or project carries — refreshed on every write through the thunk
+macros' bases (the `macro` group, performance state since plan 13 WP1,
+so a theme and a project carry them too; the table keeps them until
+plan 13 WP5 moves them into presets) — refreshed on every write through the thunk
 the Router gives the table (`Bindings.values_of`) and landed in the
 registry when the Router is built (`Router.restore_values`, the ids the
 registry lacks in `Router.missing_values`). `Bindings.load` reads the file, or builds the
@@ -216,7 +217,7 @@ import numpy as np
 from . import apc40
 from .bands import BANDS, CEIL
 from .lfo import SHAPES, SYNCS
-from .params import DRIVE, PLANES, ROT_RATE_MAX, ROUTING_GROUPS, Kind, Param, Registry
+from .params import DRIVE, PLANES, ROT_RATE_MAX, Kind, Param, Registry
 
 SCHEMA = "hyperspace.bindings/2"
 SCHEMA_V1 = "hyperspace.bindings/1"
@@ -887,9 +888,9 @@ class Bindings:
         self.path = path
         self.profile = profile
         self.values = values
-        # the live table carries the routing layer's own bases — the macros
-        # (params.ROUTING_GROUPS), which no theme or project saves — so a
-        # macro turned on the page is there at the next start. The table
+        # the live table carries the macros' bases (the `macro` group; a
+        # theme and a project carry them too since plan 13 WP1, the table
+        # until WP5) so a macro turned on the page is there at the next start. The table
         # has no registry: the Router hands it this thunk, and every
         # write() refreshes `values` through it before the file goes out
         self.values_of: Callable[[], dict] | None = None
@@ -1182,12 +1183,9 @@ class Router:
             self.missing_values = self.restore_values()
 
     def routing_values(self) -> dict:
-        """{id: base} over params.ROUTING_GROUPS — what the live table and a
+        """{id: base} over the `macro` group — what the live table and a
         routing preset carry as `values`; empty when none are registered."""
-        values: dict = {}
-        for g in ROUTING_GROUPS:
-            values.update(self.reg.snapshot(g))
-        return values
+        return self.reg.snapshot("macro")
 
     def restore_values(self) -> list[str]:
         """The table's `values` — the macros as last written — into the
@@ -1371,8 +1369,7 @@ class Router:
 
     def preset_doc(self, name: str) -> dict:
         """The current routes — disabled ones too — with the macros' bases
-        as `values` (routing-layer state: no theme or project carries them,
-        params.ROUTING_GROUPS) as a routing preset document, named; what
+        as `values` (`routing_values`) as a routing preset document, named; what
         the library writes for a save (`Library.routing`)."""
         doc = Bindings((replace(b) for b in self.table.routes()),
                        values=self.routing_values() or None).to_json()

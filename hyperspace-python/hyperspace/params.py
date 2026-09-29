@@ -79,11 +79,18 @@ PLANES = PLANE_NAMES   # the rotation planes' names, in geometry.PLANES's order
 
 RAW_STEPS = 100  # detents across an untapered continuous range
 N_MACROS = 8     # macro.1–8: knobs that exist to be a route's scale and to be owned
-# groups that are routing-layer state, not the scene's: persisted (a
-# routing preset carries them, `snapshot(group)` works) but outside the
-# whole-surface `snapshot()` — a theme, a project, the library's module
-# list — so a theme change never moves a macro under a route
-ROUTING_GROUPS = ("macro",)
+# the performance / session split (plan 13 §4, D9), by group, declared
+# once. Performance is what a theme slot (later a preset) captures and
+# replaces: the look, its LFOs and its macros. Session is the rig and the
+# room (the clock, the hands' feel, the analyzer and its source, the
+# output, the UI), which a theme never moves, so a tapped BPM or the band
+# scene survives a theme change. Every persisted param is in exactly one
+# (tests/test_params.py walks the full registry); a group in neither
+# (`theme`) has no persisted params, and `rot.phase.*` is `persist=False`.
+PERFORMANCE_GROUPS = ("view", "rot", "camera", "pattern", "dream", "fx", "lfo", "macro")
+SESSION_GROUPS = ("tempo", "hands", "band", "master", "scene", "audio", "output",
+                  "overlay", "ui")
+PARTS = {"performance": PERFORMANCE_GROUPS, "session": SESSION_GROUPS}
 
 # the reference's fader → rotation-rate factor (its PLANEDRIVE was
 # dir · out · DRIVE · gain). It lives here, not in the chain, because it is
@@ -499,6 +506,15 @@ class Param:
         return cur
 
 
+def part_of(p: Param) -> str | None:
+    """"performance" or "session", by the param's group; None for a group
+    in neither (no group, or `theme`, whose params never persist)."""
+    for name, groups in PARTS.items():
+        if p.group in groups:
+            return name
+    return None
+
+
 class Registry:
     """An ordered map of Param by id."""
 
@@ -567,12 +583,14 @@ class Registry:
 
     # ---- persistence: the one serialization every preset is made of ----
 
-    def snapshot(self, group: str | None = None, *, ids=None) -> dict[str, Any]:
-        """{id: base value} for every persistent param (or one group / id set).
-        The whole-surface snapshot leaves the ROUTING_GROUPS out; asked for
-        by group or id they are there."""
+    def snapshot(self, group: str | None = None, *, ids=None,
+                 part: str | None = None) -> dict[str, Any]:
+        """{id: base value} for every persistent param, the macros
+        included, or only one group, one id set, or one part of the split
+        (``part="performance"`` / ``"session"``, PARTS). The filters
+        combine: each one given must hold."""
         out: dict[str, Any] = {}
-        whole = group is None and ids is None
+        groups = None if part is None else PARTS[part]
         for p in self._p.values():
             if not p.persist:
                 continue
@@ -580,7 +598,7 @@ class Registry:
                 continue
             if ids is not None and p.id not in ids:
                 continue
-            if whole and p.group in ROUTING_GROUPS:
+            if groups is not None and p.group not in groups:
                 continue
             v = p.base
             out[p.id] = list(v) if isinstance(v, list) else v
@@ -1013,8 +1031,8 @@ def build_registry(view, control, audio, themes=None, dream=None, fx=None,
         # meta-controls: they *apply* themes, so no preset stores them
         r.enum("theme.select", "Theme", lambda: themes.active, themes.load_slot, names,
                group=g, persist=False, modulatable=False,
-               tip="Whole-surface save states — every persisted parameter except "
-                   "the routing layer's macros.")
+               tip="Save states of the performance: the look, its LFOs and its "
+                   "macros. Never the tempo, the hands or the analyzer.")
         for k in range(len(themes.slots)):
             r.trigger(f"theme.load.{k}", f"Load theme {k + 1}",
                       lambda k=k: themes.load_slot(k), group=g)
