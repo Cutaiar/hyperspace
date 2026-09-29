@@ -26,13 +26,16 @@ Nothing to pinch. A hand out of the box changes nothing.
 ## The desk
 
 - **First:** tap TAP TEMPO four to eight times with the music, then press
-  METRONOME once on a downbeat. (Until METRONOME is pressed once, every
-  tap moves the downbeat and the pump hiccups.)
-- Track knob 8: base zoom. The effect amounts are on the FX page (the
-  `trip` preset in its strip puts them back).
+  METRONOME once on a downbeat, so the pump lands on the one. (A re-tap
+  later changes the tempo, never the downbeat.)
+- Track knob 8: base zoom.
+- Device knobs 1–8: fx mix · plasma level · kaleido segments · kaleido
+  zoom · burst amount · burst glow · hue paint · hue spread — each ring
+  shows its base. (With SHIFT latched they are the band strip; press
+  SHIFT again to get them back. F5 puts every one back where it was.)
 
 ## To load
 
 1. PRESETS page → project → load ▾ → **party** (once per night).
-2. Press **F5** — the TRIP scene.
-3. ROUTING page → strip → **party-trip**.
+2. Press **F5** — TRIP: the look, the hands and the desk
+   in one step.

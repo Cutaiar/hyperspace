@@ -31,5 +31,5 @@ Nothing to pinch. A hand out of the box changes nothing.
 ## To load
 
 1. PRESETS page → project → load ▾ → **party** (once per night).
-2. Press **F3** — the FIELD scene.
-3. ROUTING page → strip → **party-field**.
+2. Press **F3** — FIELD: the look, the hands and the desk
+   in one step.

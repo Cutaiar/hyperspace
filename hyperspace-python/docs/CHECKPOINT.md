@@ -13,7 +13,7 @@ is [`AUDIT-2026-09.md`](AUDIT-2026-09.md); the stages it was built in are
 ```bash
 git clone github.com/Cutaiar/hyperspace && cd hyperspace/hyperspace-python
 uv sync                 # whole environment, from the committed lockfile
-uv run pytest           # 778 tests, ~20 s (11 skipped without torch)
+uv run pytest           # 872 tests, ~40 s (11 skipped without torch)
 uv run hyperspace       # the app: ? shows the controls cheat sheet
 ```
 
@@ -35,7 +35,24 @@ per work package, each code-reviewed, integrated on
 `plan-11-integration` (which is what the owner merges). Seven
 decisions are the owner's and pending (plan 11 §2, rows 1–7: B2, B5, R1,
 R6, A7, A10, R2+L2); the trim fix (A10) and the keys-into-the-table change
-(R2+L2) wait on them.
+(R2+L2) wait on them. (Those seven were answered on 2026-09-28 and built;
+plans 11 and 12 are merged, main 4bffa9d.)
+
+Plan 13 (2026-09-28, [`plans/13-preset-and-session.md`](plans/13-preset-and-session.md))
+is built on `plan-13-integration` (PRs #61–#66, the WP6 docs PR to
+come; 872 tests): the five nouns for saved state are two — a **preset**
+(`library/presets/*.json`, `hyperspace.preset/2`: every performance
+value, the routes, the APC40's preset layer, the macros) and the
+**session** (`config.toml`, `hands.json`, `bindings.json` — now only
+the session's controls — and the project, `hyperspace.project/2`: its
+session values, a startup preset and F1–F8 as a bank of preset names).
+Themes, routing presets and the routing strip are gone; the APC40 has
+two layers under a latched SHIFT (the band strip behind it); a macro
+acts through base and depth subscribers; Learn writes into the loaded
+preset and never a file; the ROUTING page is one page over the loaded
+preset; the first launch migrates an older home once, backing up every
+file it rewrites. Pending: hand checks group H and decision 20 (hand
+routes by name).
 
 **Everything only the machine can verify** — plan 09's five hand checks,
 plan 08's unverified list, plan 07's WP6c dream tuning, the first real
@@ -50,7 +67,9 @@ file what fails as new audit rows dated with plan 11.
 1. **The hand checks** above. Nothing in them has been run by a person
    since plan 09 landed; B1's fix and the HANDS page re-layout (plan 11
    WP13 found it overflowing the panel by 216 px on any rig with hands
-   enabled) are the two things most likely to look different.
+   enabled) are the two things most likely to look different. Plan 13's
+   group H (checks 33–41, check 31 first) starts with the first launch
+   on the new code, which migrates `~/Hyperspace` — copy it first.
 2. **First real audio capture.** Every live path is code-complete and now
    under test over a fake device, but no human has pressed `M` on real
    hardware with the macOS microphone prompt. One click plus a clap
@@ -58,7 +77,8 @@ file what fails as new audit rows dated with plan 11.
 3. **The owner's remaining decisions** (`docs/DECISION-REGISTER.md`).
    Rows 1–6 are answered and built (the trim is the per-band AUTO /
    MANUAL switch, plan 11 WP15); `R` / F1–F8 as table rows (row 7) and
-   plan 13's forks (rows 9–13) are open.
+   plan 13's forks (rows 9–13, 12b, 18, 19) are answered and built. Row
+   20 (hand routes by name, audit N7) is open.
 4. **Plan 04 — booth hardware.** Blocked on access: the pure-Python
    Pro DJ Link spike against the CDJ-3000/XDJ-AZ (BLT+OSC is the standing
    fallback), ESP32+BNO055 IMU ingest (packet format specced in BLUEPRINT
