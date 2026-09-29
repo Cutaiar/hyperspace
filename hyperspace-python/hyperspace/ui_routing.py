@@ -690,13 +690,21 @@ def _op_text(b: Binding) -> str:
     return b.op
 
 
+def _column(names: list[str]) -> float:
+    """The control column: CONTROL_W, or the widest name and a gap."""
+    sp = imgui.get_style().item_spacing.x
+    widest = max((imgui.calc_text_size(n).x for n in names), default=0.0)
+    return max(CONTROL_W, widest + 2 * sp)
+
+
 def preset_controls(table) -> list[Binding]:
     """One factory row per control the profile's map puts on a layer — the
     controls a preset may map (the invariant ones are the session's)."""
     seen: set[str] = set()
     out = []
+    inv = table.invariant_rows()
     for f in factory_desk(table.profile):
-        if f.layer is None or f.source in seen or table.is_invariant(f):
+        if f.layer is None or f.source in seen or table.is_invariant(f, inv):
             continue
         seen.add(f.source)
         out.append(f)
@@ -733,13 +741,16 @@ def desk(panel, router: Router) -> None:
     imgui.text_colored(ui.FAINT, "new rows: right-click a control → Learn, move a knob")
     sp = imgui.get_style().item_spacing.x
     op_w = imgui.calc_text_size("step +10").x
+    dark = unmapped(table)
+    names = [control_name(table, b) for b in rows]
+    col = _column(names + [control_name(table, f) for f in dark])
     dead = None
     for k, b in enumerate(rows):
         imgui.push_id(f"desk{k}")
-        imgui.text(control_name(table, b))
+        imgui.text(names[k])
         if imgui.is_item_hovered():
             imgui.set_tooltip(b.describe())
-        imgui.same_line(CONTROL_W)
+        imgui.same_line(col)
         picked = _param_combo(panel, "##target", b.target, -(op_w + ui.chip_w("×") + 2 * sp),
                               lambda: _desk_targets(panel))
         if picked:
@@ -760,9 +771,9 @@ def desk(panel, router: Router) -> None:
     if dead is not None:
         table.remove(dead)
         _desk_edited(table)
-    for f in unmapped(table):
+    for f in dark:
         imgui.text_colored(ui.FAINT, control_name(table, f))
-        imgui.same_line(CONTROL_W)
+        imgui.same_line(col)
         imgui.text_colored(ui.FAINT, "unmapped — dark")
     if not rows:
         imgui.text_disabled("an empty desk — every preset control is dark")
@@ -936,13 +947,14 @@ def session(panel, router: Router) -> None:
     ui._micro("session")
     imgui.same_line()
     imgui.text_disabled("the session's — edit bindings.json")
+    col = _column([control_name(table, b) for b in (*inv, *glob)])
     for title, rows in (("invariant · both layers", inv), ("global layer · SHIFT on", glob)):
         if not rows:
             continue
         imgui.text_colored(ui.DIM, title)
         for b in rows:
             imgui.text_colored(ui.FAINT, control_name(table, b))
-            imgui.same_line(CONTROL_W)
+            imgui.same_line(col)
             op = _op_text(b)
             imgui.text_colored(ui.FAINT, b.target + ("" if op in ("abs", "toggle") else f"  {op}"))
 
