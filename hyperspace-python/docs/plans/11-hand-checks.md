@@ -89,6 +89,16 @@ syntax error keeps the last pass and shows the error on the page.
 a compile error that takes the frame down → `FxChain` (fx.py) or, since
 WP10, `_common.glsl` — a broken common file falls back to the shipped
 copy and says so on the LOOKBACK page.
+*Plan 14 WP5:* every effect is now in a party preset
+(`uv run pytest -q tests/test_plan12_presets.py -k "effect"`): on the
+`party` show press F6 (ACID: acid, wobble, deconverge, hue cycle), F7
+(MANDALA: plasma, kaleidoscope, fractals, glimmer), F8 (NOITA: trip warp,
+trip colour, fractals, double vision) and watch the FX page's chips light
+for exactly those. The page's faint line says a preset load resets the
+stack. *Pass:* each F-key lights its four and no other; switching on one
+more effect by hand and pressing the same F-key turns it off again.
+*Fail:* a chip left dark → the preset's values (`preset.party_*_values`,
+generated); a stray chip → a value the preset should name.
 
 **6. Cut-through by eye (PR #26; rewritten by plan 14 WP1).**
 Headless: `uv run pytest -q tests/test_lookback.py::test_cut_through_never_cuts_an_opaque_ground tests/test_lookback.py::test_cut_through_still_cuts_in_overlay_mode`.
@@ -152,6 +162,25 @@ single dropped frame. *Fail:* the stall lasting more than a frame or
 recurring every few seconds → `DreamWorker.submit` blocking (dream.py);
 the dream not appearing at all with torch installed → `[dream]` gate and
 the note on SYSTEM (`_open_dream`).
+*Plan 14 WP6 — the dream with no extra step, and echoes you can read:*
+a plain `uv sync` and `uv run hyperspace`, nothing else; the LOOKBACK
+page's worker line names the device (no "no worker"). Headless:
+`uv run python tools/dream_shots.py --preset party-wake` (WAKE's poses
+with the worker on, `docs/plans/assets/12-presets/party-wake-dream-sheet.png`)
+and `uv run pytest -q tests/test_lookback.py -k "trail or per_frame"`.
+Load TRACER from the PRESETS list, then F4 (WAKE). Hover the look-back's
+Fade, Spacing and Echoes: each tooltip says what it does in seconds; the
+history line says how far back the trail reaches (TRACER: 24 echoes, one
+every 67 ms, 1.6 s back, halving every 0.76 s). If the laptop or the
+projector runs at 120 Hz, compare with a 60 Hz screen (System Settings →
+Displays → refresh rate). *Pass:* TRACER's trail reads at a glance, a
+clear fan of copies behind the turning shape; WAKE's wake reads past the
+faces, the dream painted into it; the trail is as long at 120 Hz as at
+60 Hz. *Fail:* a trail half as long at 120 Hz → the renderer not ticking
+the look-back's clock (`Renderer._draw_frame` → `Lookback.tick`); a
+saved look-back preset of yours that looks different → the migration
+(`lookback.migrate_values`; the old file is kept as
+`<file>.bak-v2-frames`).
 
 ## B. APC40 plugged in — about 15 minutes
 
@@ -548,6 +577,9 @@ and no `fx.*` row, the BPM still reads about 100, the band scene has not
 changed. *Fail:* an effect still on → a group `Presets.load_doc` did not
 land; the BPM reset → `tempo` classed as performance
 (`params.SESSION_GROUPS`); an `fx.*` row left → the route replacement.
+*Plan 14 WP5–WP6:* the same from F6 (ACID) to F1, and from F8 (NOITA) to
+F4 (WAKE): every effect off and WAKE's look-back (24 echoes, fade 0.60 s)
+on, with no extra step for the dream.
 
 **39. One macro, two directions (plan 13 D10, §2.4; WP3, WP5).**
 Headless: `uv run pytest -q tests/test_macros.py::test_base_subscribers_of_opposite_polarity_move_opposite_ways`.
@@ -582,14 +614,21 @@ the wrong look → `Project.startup` and the startup load in `app.main`;
 a pick that does not survive the relaunch → `ui_presets.set_starts_on`;
 the wrong show → `Library._open_default` / `last_show`.
 
-**41. The five party presets, re-cut (plan 12 §7, plan 13 WP5).**
+**41. The party presets, re-cut (plan 12 §7, plan 13 WP5; plan 14 WP5–WP6).**
 Headless: `uv run pytest -q tests/test_plan12_presets.py` (the F-keys,
-`test_the_five_party_presets_load_by_f_key_as_presets`; the knobs,
+`test_the_party_presets_load_by_f_key_as_presets`; the knobs,
 `test_wake_and_trip_device_knobs_move_their_bases`) and
 `uv run python tools/preset_shots.py`. Projector and box on. As check 32,
 but each preset is one F-key — F1 TUMBLE, F2 FACES, F3 FIELD, F4 WAKE,
-F5 TRIP on the `party` show, which the rig opens — one step, nothing else to load. *Pass:* check 32's (a)–(f) hold as
-before; WAKE's device knobs 1–8 set echo mix · decay · darken · contrast ·
+F5 TRIP, F6 ACID, F7 MANDALA, F8 NOITA on the `party` show, which the rig opens — one step,
+nothing else to load; then TRACER from the PRESETS list (it is on no
+F-key). Each card (`docs/plans/assets/12-presets/party-*.md`) says what
+each hand does. *Plan 14:* on the glass, ACID, MANDALA, NOITA and TRACER
+keep a black ground with no hand in the box (MANDALA's plasma comes in
+only with the right hand's fingers up); WAKE's wake reads beyond the
+faces, the dream in it; each of the four's device knobs 1–8 sets its
+card's eight bases. *Pass:* check 32's (a)–(f) hold as
+before; WAKE's device knobs 1–8 set echo mix · fade · darken · contrast ·
 occlude · dream mix · dream sat · dream k, and TRIP's set fx mix · plasma
 level · kaleido segments · kaleido zoom · burst amount · burst glow · hue
 paint · hue spread (plan 12 §6) — device knobs 1–8 are `cc:*:16`–`23`, absolute —
@@ -599,7 +638,8 @@ still pushes the drive (row 19 (a)), its ROUTING row marked "session".
 *Fail:* a look → the values in `library/presets/party-*.json` (data)
 or a route in `preset.party_*_routes` (generated: change the generator,
 `python -m hyperspace.preset`, not the file); a knob on the wrong base
-→ `preset.WAKE_KNOBS` / `TRIP_KNOBS`; anything check 32 lists → the same
+→ `preset.WAKE_KNOBS` / `TRIP_KNOBS` / `ACID_KNOBS` / `MANDALA_KNOBS` /
+`NOITA_KNOBS` / `TRACER_KNOBS`; anything check 32 lists → the same
 place it lists.
 
 **42. Hand routes by name survive a reordered `dofs` (plan 13 WP5b,
@@ -687,7 +727,7 @@ another control than the one you turned → `apc40.glyph`.
 **46. WAKE without the dream worker still draws (plan 14 WP1, the freeze).**
 Headless: `uv run pytest -q tests/test_render.py::test_a_look_back_frame_with_no_worker_leaves_the_window_bound tests/test_lookback.py::test_capture_off_the_cadence_with_no_source_puts_the_target_back`.
 In `config.toml` set `[dream] enabled = false` and relaunch. Open the
-`party` project and press F4 (WAKE): `dream.on`, an echo every 2 frames,
+`party` project and press F4 (WAKE): `dream.on`, an echo every 50 ms,
 and no worker. *Pass:* the render window keeps moving — the shape turns,
 the echoes trail it — for a minute and through F1–F5 and back to F4; the
 red banner says "WAKE turns the dream on, but there is no dream worker

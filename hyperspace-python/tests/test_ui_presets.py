@@ -63,7 +63,7 @@ def test_the_preset_buttons_carry_their_presets_names(rig):  # noqa: F811
     frame(panel)
     labels = ui_presets._state(panel)["bank_labels"]
     assert labels == ["F1  TUMBLE", "F2  FACES", "F3  FIELD", "F4  WAKE", "F5  TRIP",
-                      "F6  —", "F7  —", "F8  —"][: len(labels)] and len(labels) == 8
+                      "F6  ACID", "F7  MANDALA", "F8  NOITA"] and len(labels) == 8   # plan 14 WP5 filled F6–F8
     assert lib.project.active == 1                          # FACES, lit
     rects = _rects(panel)
     assert rects["preset.2"][1] > rects["preset.0"][1]       # F3 F4 under F1 F2

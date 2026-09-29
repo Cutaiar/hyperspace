@@ -1,8 +1,10 @@
 {
  "schema": "hyperspace.preset/2",
  "name": "hands-pinch",
- "note": "Plan 08: a pinch picks what a hand's height moves.",
+ "note": "Plan 08: a pinch picks what a hand's height moves \u2014 the left index pinch fades the hue cycle in.",
  "values": {
+  "fx.mix": 0.0,
+  "fx.huecycle.on": true,
   "fx.on": true
  },
  "routes": [

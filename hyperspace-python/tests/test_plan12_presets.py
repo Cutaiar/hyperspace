@@ -24,7 +24,16 @@ from hyperspace.hands import HandSettings, HandsIO
 from hyperspace.hands.core import DEFAULT_DOFS, PINCHES, default_range
 from hyperspace.library import FACTORY
 from hyperspace.params import Kind
-from hyperspace.preset import FACTORY_PRESETS, FINGERS, HAND_AXES, PARTY, Presets, hand, pinch
+from hyperspace.preset import (
+    FACTORY_PRESETS,
+    FINGERS,
+    HAND_AXES,
+    PARTY,
+    PARTY_BANK,
+    Presets,
+    hand,
+    pinch,
+)
 from hyperspace.routing import Bindings, Router
 
 DT = 1 / 60
@@ -124,14 +133,14 @@ def desk_rig(tmp_path):
     return r, router, presets, midi, inp
 
 
-def test_the_five_party_presets_load_by_f_key_as_presets(tmp_path):
+def test_the_party_presets_load_by_f_key_as_presets(tmp_path):
     """Plan 13 WP5 (§10 exit 15): on the party project F1–F5 load TUMBLE,
-    FACES, FIELD, WAKE, TRIP — one step each, the preset's routes and desk
-    replacing the last's, nothing noted; TUMBLE's left height keeps its
-    push on the drive (decision register row 19 (a): a route may perform a
-    session param)."""
+    FACES, FIELD, WAKE, TRIP and (plan 14 WP5) F6–F8 ACID, MANDALA, NOITA
+    — one step each, the preset's routes and desk replacing the last's,
+    nothing noted; TUMBLE's left height keeps its push on the drive
+    (decision register row 19 (a): a route may perform a session param)."""
     r, router, presets, _midi, _inp = desk_rig(tmp_path)
-    for k, slug in enumerate(PARTY):
+    for k, slug in enumerate(PARTY_BANK):
         r.reg[f"preset.load.{k}"].fire()
         name = slug.split("-", 1)[1].upper()
         assert r.lib.current("presets") == name and r.lib.project.active == k, slug
@@ -149,7 +158,11 @@ def test_the_five_party_presets_load_by_f_key_as_presets(tmp_path):
 
 
 @pytest.mark.parametrize("slug,targets", [("party-wake", "WAKE_KNOBS"),
-                                          ("party-trip", "TRIP_KNOBS")])
+                                          ("party-trip", "TRIP_KNOBS"),
+                                          ("party-acid", "ACID_KNOBS"),
+                                          ("party-mandala", "MANDALA_KNOBS"),
+                                          ("party-noita", "NOITA_KNOBS"),
+                                          ("party-tracer", "TRACER_KNOBS")])
 def test_wake_and_trip_device_knobs_move_their_bases(slug, targets, tmp_path):
     """Plan 12 §6 on WAKE's and TRIP's preset layer: device knob k sets the
     k-th base of the preset's eight — the base, not an offset, whether or
@@ -213,10 +226,13 @@ def test_every_party_preset_has_a_preset_a_card_and_only_real_ids(tmp_path):
         assert set(vals) <= ids, (name, set(vals) - ids)
         assert (FACTORY.parents[1] / "docs" / "plans" / "assets" / "12-presets"
                 / f"{name}.md").is_file(), name
-    for group, file in (("fx", "trip.json"), ("dream", "wake.json")):
+    for group, file in (("fx", "trip.json"), ("dream", "wake.json"), ("fx", "acid.json"),
+                        ("fx", "mandala.json"), ("fx", "noita-heavily-tripping.json")):
         vals = json.loads((FACTORY / group / file).read_text())["values"]
         assert set(vals) <= ids, file
-    assert doc["bank"][5:] == [None, None, None]
+    # plan 14 WP5 (decision 24): the effect families on F6–F8
+    assert doc["bank"][5:] == ["ACID", "MANDALA", "NOITA"]
+    assert [f"party-{n.lower()}" for n in doc["bank"]] == list(PARTY_BANK)
 
 
 @pytest.mark.parametrize("name", PARTY)
@@ -331,3 +347,68 @@ def test_trip_left_height_opens_the_pump_through_lfo_depth(tmp_path):
     assert r.reg["lfo.1.depth"].value == pytest.approx(1.0, abs=1e-3)
     gone = frames({}, 90)
     assert abs(gone[-1]) < 1e-6 and r.reg["lfo.1.depth"].value == 0.0
+
+
+# ---------------------------------------------------------------- plan 14 WP5
+
+# effects no factory preset needs on, each with the reason (decision 24:
+# every effect reachable from a preset — this list is empty on purpose)
+EFFECTS_IN_NO_PRESET: dict[str, str] = {}
+
+
+def _factory_docs() -> list[dict]:
+    return [json.loads(p.read_text()) for p in sorted((FACTORY / "presets").glob("*.json"))]
+
+
+def _effects() -> set[str]:
+    from hyperspace import fx
+
+    return {f.stem for f in fx.FX_DIR.glob("*.glsl") if f.name != fx.LIB_FILE}
+
+
+def test_every_effect_is_on_in_a_factory_preset():
+    """Plan 14 WP5: every effect in shaders/fx is switched on (with the
+    chain) in at least one factory preset, or is on the allow-list with
+    why — an effect nothing turns on is one the show cannot reach."""
+    effects = _effects()
+    assert len(effects) >= 12
+    on: dict[str, list[str]] = {n: [] for n in effects}
+    for doc in _factory_docs():
+        v = doc["values"]
+        if v.get("fx.on", True):
+            for n in effects:
+                if v.get(f"fx.{n}.on"):
+                    on[n].append(doc["name"])
+    unreached = {n for n, names in on.items() if not names} - set(EFFECTS_IN_NO_PRESET)
+    assert not unreached, unreached
+    assert set(EFFECTS_IN_NO_PRESET) <= effects
+    # decision 24: the seven no preset used went into ACID, MANDALA, NOITA
+    party = {n for n, names in on.items() if set(names) & {"ACID", "MANDALA", "NOITA"}}
+    assert {"warp", "wobble", "doublevision", "deconverge", "fractals", "glimmer",
+            "tripcolour"} <= party
+
+
+def test_no_factory_route_drives_an_effect_that_is_off(tmp_path):
+    """Plan 14 WP5 (the dead rows): loaded through the real loader, no
+    factory preset has a route or a desk row on an effect's param while
+    that effect or the chain is off, on the chain's mix with no effect on,
+    or on the look-back with the look-back off."""
+    effects = _effects()
+    r = rig(tmp_path=tmp_path, full=True)
+    router = Router(r.reg, Bindings())
+    presets = Presets(r.lib, r.reg, router)
+
+    def on(pid: str) -> bool:
+        return bool(r.reg[pid].value)
+
+    for doc in _factory_docs():
+        presets.load(doc["name"])
+        for b in [*router.table.routes(), *router.table.desk()]:
+            parts = b.target.split(".")
+            where = (doc["name"], b.source, b.target)
+            if parts[:2] == ["fx", "mix"]:
+                assert on("fx.on") and any(on(f"fx.{n}.on") for n in effects), where
+            elif parts[0] == "fx" and len(parts) == 3 and parts[1] in effects:
+                assert on("fx.on") and on(f"fx.{parts[1]}.on"), where
+            elif parts[0] == "dream" and parts[1] != "on":
+                assert on("dream.on"), where

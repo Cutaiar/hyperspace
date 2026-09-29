@@ -356,7 +356,7 @@ def test_end_to_end_offscreen(dream_mod, tmp_path):
         ctx.finish()
         return np.frombuffer(fbo.read(components=4), dtype=np.uint8).reshape(H, W, 4).copy()
 
-    d = DreamState(on=True, echoes=0, every=1)
+    d = DreamState(on=True, echoes=0, gap=0.0)
     fbo, r, s = rig(d)
     reg = registry(d)
     w = dream_mod.DreamWorker(reg, {"enabled": True, "weights_dir": str(tmp_path)})
@@ -371,7 +371,7 @@ def test_end_to_end_offscreen(dream_mod, tmp_path):
     finally:
         w.close()
         fbo.release()
-    fbo, r, s = rig(DreamState(on=True, echoes=0, every=1))
+    fbo, r, s = rig(DreamState(on=True, echoes=0, gap=0.0))
     tracer_only = run(fbo, r, s, None)
     fbo.release()
     a, b = with_dream[..., :3].astype(int), tracer_only[..., :3].astype(int)

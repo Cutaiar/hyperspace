@@ -26,7 +26,8 @@ tools/dream_bench/common.py, made per-layer):
                                                         colour, or the scene's
                                                         own mean hue
     layer i   = colour grade(L_i.rgb) at weight w_i,
-                w_i = echo_mix · decay^age_i   (echoes, age in frames)
+                w_i = echo_mix · ½^(age_i / fade)   (echoes, age in seconds;
+                                                    fade is the half-life)
                 w_D = mix, on grade(chroma(D))  (the dream buffer)
     wake      = layers over one another, oldest → newest, premultiplied:
                 wake ← wake·(1 − a_i) + grade(L_i)·w_i,
@@ -71,6 +72,18 @@ point a frame. It is a frame stale by construction, which no eye sees.
 The echoes are cut from the scene and already match it, so they pass
 untouched. Chroma runs before the grade, so darken and contrast read
 the same on every layer.
+
+Echo time is seconds, not frames (plan 14 WP6). The ring keeps its own
+clock, advanced once a frame by the renderer's time (`tick`): an echo's
+age is the seconds since its capture, its weight halves every ``fade``
+seconds, and a capture is taken every ``gap`` seconds — so a 120 Hz
+screen keeps the same trail as a 60 Hz one (twice the frames, each
+fading half as much). A frame whose clock did not move (a test or a
+tool drawing at one fixed time) counts as one frame at REF_HZ, 60 Hz.
+The old per-frame ``dream.decay`` and ``dream.every`` are read as 60 Hz
+frames and converted (`migrate_values`: decay 0.93 a frame is a fade of
+0.159 s, every 2 frames a gap of 1/30 s), so a saved look is the same at
+60 Hz as it was.
 
 The history lives in one atlas texture, MAX_ECHOES slots of the echo size
 stacked vertically, so a slot is an FBO viewport (no per-layer copies, no
@@ -117,6 +130,134 @@ LAYERS = ["conv2_2", "conv3_3", "conv4_3", "inception3b", "inception4c", "incept
 OCTAVES = ["1", "2 alt", "3 alt"]       # one octave a frame, in rotation (spike D)
 TINT_FROM = ["colour", "scene"]         # dream.tint_from: the tint's hue source
 OCCLUDE_GAIN = 4.0                      # scene brightness × this = its coverage of the wake
+REF_HZ = 60.0                           # the frame rate the old per-frame units meant
+FADE_LO, FADE_HI = 0.02, 10.0           # dream.fade: an echo's half-life, seconds (log)
+GAP_LO, GAP_HI = 0.0, 0.25              # dream.gap: seconds between captures (0 = every frame)
+OLD_DECAY = 0.95                        # the per-frame decay's old default, for a row with no base
+
+
+# ---- the old per-frame units (plan 14 WP6) ----
+
+def fade_of_decay(decay: float, hz: float = REF_HZ) -> float:
+    """The half-life, in seconds, of a per-frame `decay` at `hz`: the
+    seconds after which decay^(age·hz) is one half. Rounded to 4 places,
+    clamped to the fader (a decay of 1 never fades: the longest fade)."""
+    d = float(decay)
+    if not math.isfinite(d):
+        raise ValueError(f"decay {decay!r} is not a number")
+    if d >= 1.0:
+        return FADE_HI
+    if d <= 0.0:
+        return FADE_LO
+    return round(min(max(math.log(0.5) / (hz * math.log(d)), FADE_LO), FADE_HI), 4)
+
+
+def decay_per_frame(fade: float, hz: float = REF_HZ) -> float:
+    """What a half-life of `fade` seconds fades an echo per frame at `hz`."""
+    return 0.5 ** (1.0 / (max(float(fade), 1e-9) * hz))
+
+
+def gap_of_every(every: float, hz: float = REF_HZ) -> float:
+    """Every `every` frames at `hz`, in seconds between captures."""
+    e = float(every)
+    if not math.isfinite(e):
+        raise ValueError(f"every {every!r} is not a number")
+    return round(min(max(e / hz, GAP_LO), GAP_HI), 6)
+
+
+# old id → (new id, the value's conversion)
+LEGACY = {"dream.decay": ("dream.fade", fade_of_decay),
+          "dream.every": ("dream.gap", gap_of_every)}
+
+
+def fade_norm(fade: float) -> float:
+    """dream.fade's fader position (log over FADE_LO…FADE_HI)."""
+    f = min(max(float(fade), FADE_LO), FADE_HI)
+    return math.log(f / FADE_LO) / math.log(FADE_HI / FADE_LO)
+
+
+def migrate_values(values: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    """`values` with the per-frame look-back ids read as 60 Hz frames and
+    written in seconds (LEGACY), in place in the order; a new id the dict
+    already names wins over the old one. Returns (the values, a note per
+    id converted); the dict itself when there was nothing to convert."""
+    if not any(k in LEGACY for k in values):
+        return values, []
+    out: dict[str, Any] = {}
+    notes = []
+    for k, v in values.items():
+        if k in LEGACY:
+            new, conv = LEGACY[k]
+            if new in values:
+                notes.append(f"{k} dropped: {new} is named")
+                continue
+            try:
+                out[new] = conv(v)
+            except (TypeError, ValueError):
+                notes.append(f"{k} {v!r} is not a number, dropped")
+                continue
+            notes.append(f"{k} {v} → {new} {out[new]}")
+        else:
+            out[k] = v
+    return out, notes
+
+
+def migrate_row(row: dict, values: dict[str, Any] | None = None) -> tuple[dict, str | None]:
+    """A route or desk row (its JSON) on an old per-frame id, on the new
+    one. A push on ``dream.decay`` keeps its reach: its depth is re-drawn
+    so the same hand throw spans the same decays, read at the base the
+    file gives (`values`, the old or new id) or the default. Returns (the
+    row, a note or None); the row itself when it was not on an old id."""
+    target = row.get("target")
+    if target not in LEGACY:
+        return row, None
+    new = LEGACY[target][0]
+    out = dict(row, target=new)
+    note = f"{target} → {new}"
+    if target == "dream.decay" and out.get("op") == "push":
+        # a push at the default depth (1) has no "value" key in its file
+        depth = out.get("value", 1.0)
+        new_depth = fade_depth(depth, out.get("source"), values)
+        if new_depth is None:
+            note += f" (push {depth!r} left as it was: not a number)"
+        else:
+            out["value"] = new_depth
+            note += f" (push {float(depth):+g} → {new_depth:+g})"
+    return out, note
+
+
+def old_decay_base(values: dict[str, Any] | None) -> float:
+    """The per-frame decay a file's pushes on ``dream.decay`` were drawn
+    about: its ``dream.fade`` or ``dream.decay``, else the old default —
+    a value that is not a number counts as the default."""
+    vals = values or {}
+    try:
+        if "dream.fade" in vals:
+            base = decay_per_frame(float(vals["dream.fade"]))
+        else:
+            base = float(vals.get("dream.decay", OLD_DECAY))
+    except (TypeError, ValueError, ZeroDivisionError, OverflowError):
+        return OLD_DECAY
+    return base if math.isfinite(base) else OLD_DECAY
+
+
+def fade_depth(depth, source, values: dict[str, Any] | None = None) -> float | None:
+    """A push depth on ``dream.decay`` (its linear 0–1 norm) as one on
+    ``dream.fade`` spanning the same decays, about the file's base
+    (`old_decay_base`); None when `depth` is not a number. A push adds
+    depth · (u − rest): on a height (rest 0) the throw spans base … base +
+    depth, on a centred axis base ± depth / 2."""
+    try:
+        depth = float(depth)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(depth):
+        return None
+    base = old_decay_base(values)
+    height = str(source or "").endswith(".y")
+    a, b = (base, base + depth) if height else (base - depth / 2, base + depth / 2)
+    a, b = (min(max(x, 1e-6), 1.0) for x in (a, b))
+    return round(fade_norm(fade_of_decay(b)) - fade_norm(fade_of_decay(a)), 4)
 
 
 @dataclass
@@ -129,15 +270,16 @@ class DreamState:
     glance while tuning (2026-09-25): k 0.05 and mask decay 0.99, so the
     dream holds ~20 frames and its region lingers ~100 after content
     leaves; ``D`` at 70 % darkened only to 90 %; eight echoes, two frames
-    apart, fading 0.95 a frame. The render covers the wake where it drew
-    (occlude 1). Colours as the net painted them (tint 0).
+    apart, fading 0.95 a frame — in seconds since plan 14 WP6, an echo
+    every 1/30 s halving every 0.225 s. The render covers the wake where
+    it drew (occlude 1). Colours as the net painted them (tint 0).
     """
 
     on: bool = False
     # the composite
     mix: float = 0.7          # the dream buffer's opacity
-    echo_mix: float = 0.4     # the echoes' opacity (times decay^age)
-    decay: float = 0.95       # per-frame age fade of an echo
+    echo_mix: float = 0.4     # the echoes' opacity (times ½^(age / fade))
+    fade: float = 0.2252      # an echo's half-life, seconds (0.95 a frame at 60 Hz)
     darken: float = 0.1       # 0 as bright as the frame … 1 black
     contrast: float = 1.0     # power curve on every layer; 1 is neutral
     occlude: float = 1.0      # 0 the wake adds over the render … 1 the render covers it
@@ -149,7 +291,7 @@ class DreamState:
     tint_hue: float = 200.0   # the tint colour's hue, degrees
     tint_sat: float = 1.0     # …and saturation; 0 tints grey
     echoes: int = 8           # ring depth; 0 = only the dream buffer
-    every: int = 2            # capture cadence, frames
+    gap: float = 0.033333     # seconds between captures (every 2 frames at 60 Hz)
     res: int = 2              # index into RES → 256
     # the dream worker's (WP6b) — declared here so presets carry them
     steps: int = 2
@@ -191,7 +333,7 @@ uniform sampler2D u_cover;   // the faces' coverage mask at the scene's size (re
 uniform int u_has_cover;     // 0 = no mask this frame: brightness alone covers
 uniform ivec2 u_origin;      // the target viewport's origin (gl_FragCoord is window-relative)
 uniform int u_n;             // echoes this frame, oldest first
-uniform float u_w[MAX_ECHOES];    // echo weight: echo_mix · decay^age
+uniform float u_w[MAX_ECHOES];    // echo weight: echo_mix · ½^(age / fade)
 uniform float u_off[MAX_ECHOES];  // the echo's slot origin in atlas v
 uniform float u_slot;        // one slot's height in atlas v
 uniform float u_pad;         // half a texel in v: a slot never bleeds into its neighbour
@@ -315,13 +457,18 @@ class Lookback:
         self.state = state if state is not None else DreamState()
         self.source = source
         self.frame = 0                 # frames captured while on
+        self.clock = 0.0               # the echoes' clock, seconds (tick)
+        self._t_last: float | None = None   # the renderer time the last tick saw
+        self._dt = 1.0 / REF_HZ        # the last tick's step
+        self._ticked = False           # tick() ran for the frame being drawn
+        self._due: float | None = None      # the clock's next capture; None: now
         self.dream_frame = -1          # the submit `D` answers; −1 = nothing shown yet
         self.scene_mean: tuple[float, float, float] | None = None   # newest echo's, scene mode
         self.echo = (0, 0)             # slot size (w, h)
         self.atlas: moderngl.Texture | None = None
         self.dream: moderngl.Texture | None = None
         self._fbo: moderngl.Framebuffer | None = None
-        self._captures: list[tuple[int, int]] = []   # (slot, frame), oldest first
+        self._captures: list[tuple[int, float]] = []   # (slot, clock), oldest first
         self._next = 0                 # the slot the next downsample lands in
         self._host: np.ndarray | None = None          # staging for a source without buffer()
         self._w = np.zeros(MAX_ECHOES, dtype="f4")
@@ -411,19 +558,45 @@ class Lookback:
         ew, eh = self.echo
         return (0, slot * eh, ew, eh)
 
-    def layers(self, now: int | None = None) -> list[tuple[int, int]]:
-        """(slot, age) of the echoes to composite, oldest first — the newest
-        `echoes` captures, aged against `now` (default: the frame being drawn)."""
+    # ---- the clock: echo time in seconds (plan 14 WP6) ----
+
+    def tick(self, t: float | None = None) -> None:
+        """Once a frame, before the composite (render.py): advance the
+        echoes' clock by the renderer's time since the last tick. A time
+        that did not move forward (a frozen test clock, a first frame)
+        counts as one frame at REF_HZ, so a tool drawing at t = 0 sees
+        the old 60 Hz frames."""
+        if t is not None and self._t_last is not None and t > self._t_last:
+            dt = float(t) - self._t_last
+        else:
+            dt = 1.0 / REF_HZ
+        if t is not None:
+            self._t_last = float(t)
+        self._dt = dt
+        self.clock += dt
+        self._ticked = True
+
+    def now(self) -> float:
+        """The clock of the frame being drawn: this frame's tick, or — a
+        caller that drives the composite and the capture without one — one
+        REF_HZ frame past the last capture's."""
+        return self.clock if self._ticked else self.clock + 1.0 / REF_HZ
+
+    def layers(self, now: float | None = None) -> list[tuple[int, float]]:
+        """(slot, age in seconds) of the echoes to composite, oldest first —
+        the newest `echoes` captures, aged against `now` (default: the
+        frame being drawn)."""
         n = max(0, min(int(self.state.echoes), MAX_ECHOES))
         if n == 0 or not self._captures:
             return []
-        now = self.frame + 1 if now is None else now
-        return [(slot, now - f) for slot, f in self._captures[-n:]]
+        now = self.now() if now is None else now
+        return [(slot, now - t) for slot, t in self._captures[-n:]]
 
-    def weights(self, now: int | None = None) -> list[tuple[int, float]]:
-        """(slot, weight) per echo, oldest first: echo_mix · decay^age."""
+    def weights(self, now: float | None = None) -> list[tuple[int, float]]:
+        """(slot, weight) per echo, oldest first: echo_mix · ½^(age / fade)."""
         s = self.state
-        return [(slot, s.echo_mix * s.decay ** age) for slot, age in self.layers(now)]
+        fade = max(float(s.fade), 1e-6)
+        return [(slot, s.echo_mix * 0.5 ** (age / fade)) for slot, age in self.layers(now)]
 
     # ---- the frame: pull → composite → capture ----
 
@@ -480,10 +653,29 @@ class Lookback:
         return, a raise included: `_ensure` binds the atlas, and the early
         return on a frame with nothing to capture (off the cadence, no
         worker, no scene tint) once left it bound for good (plan 14 WP1)."""
+        if not self._ticked:
+            self.tick(None)            # driven without the renderer: one REF_HZ frame
         try:
             self._capture(scene, target)
         finally:
+            self._ticked = False
             target.use()
+
+    def _due_now(self) -> bool:
+        """Whether this frame's capture is committed to the ring: one every
+        `gap` seconds of the echoes' clock, the first a gap after the look-back
+        came on; a frame within half a frame of its due time is on time, so
+        a gap of exactly N frames commits every Nth frame at any rate."""
+        gap = max(float(self.state.gap), 0.0)
+        clock, dt = self.clock, self._dt
+        if self._due is None:
+            self._due = clock - dt + gap
+        if clock + dt / 2 < self._due:
+            return False
+        self._due += gap
+        if self._due <= clock + dt / 2 - dt:       # fell behind (a stall): from now
+            self._due = clock + gap
+        return True
 
     def _capture(self, scene: moderngl.Texture, target: moderngl.Framebuffer) -> None:
         s = self.state
@@ -494,7 +686,7 @@ class Lookback:
         if not self._ensure(w, h):
             return
         self.frame += 1
-        commit = self.frame % max(1, int(s.every)) == 0
+        commit = self._due_now()
         want_mean = self.scene_tinted()
         if not commit and self.source is None and not want_mean:
             return
@@ -505,7 +697,7 @@ class Lookback:
         self._captures = [c for c in self._captures if c[0] != slot]
         self._downsample(scene, slot)
         if commit:
-            self._captures.append((slot, self.frame))
+            self._captures.append((slot, self.clock))
             self._next = (slot + 1) % MAX_ECHOES
         if self.source is not None or want_mean:
             # one read serves both: the worker's copy path and the scene's
@@ -545,6 +737,7 @@ class Lookback:
     def idle(self) -> None:
         """Off: forget the history so a re-enable starts clean."""
         self._captures.clear()
+        self._due = None
         self.dream_frame = -1
         self.scene_mean = None
 
@@ -597,14 +790,15 @@ class Lookback:
         self.dream.write(array)
         self.dream_frame = frame_index
 
-    def write_slot(self, slot: int, array: np.ndarray, frame_index: int | None = None) -> None:
-        """Put pixels straight into an echo slot (tests, tools); with a frame
-        index it also counts as a capture."""
+    def write_slot(self, slot: int, array: np.ndarray, at: float | None = None) -> None:
+        """Put pixels straight into an echo slot (tests, tools); with `at`,
+        the echoes' clock it was taken at (seconds), it also counts as a
+        capture."""
         ew, eh = self.echo
         self.atlas.write(array, viewport=(0, slot * eh, ew, eh))
-        if frame_index is not None:
+        if at is not None:
             self._captures = [c for c in self._captures if c[0] != slot]
-            self._captures.append((slot, frame_index))
+            self._captures.append((slot, float(at)))
             self._captures.sort(key=lambda c: c[1])
             self._next = (slot + 1) % MAX_ECHOES
 

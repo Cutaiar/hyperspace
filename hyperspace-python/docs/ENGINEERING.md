@@ -218,10 +218,25 @@ never raises and leaves the plain faces (`tests/test_render.py:147`).
 `lookback.Lookback` keeps an atlas of downsampled echoes of past frames
 plus one dream buffer `D`, and composites the scene over its own wake,
 age-weighted, premultiplied (`lookback.py:326-600`). With no dream worker
-it is a plain age-faded tracer. `dream.*` params: `on mix echo_mix decay
+it is a plain age-faded tracer. `dream.*` params: `on mix echo_mix fade
 darken contrast occlude hue sat tint tint_from tint_hue tint_sat res
-echoes every steps step k layer octaves mask_decay jitter` — all
-presettable, all modulatable.
+echoes gap steps step k layer octaves mask_decay jitter` — all
+presettable, all modulatable but `gap` and `res`.
+
+- **Echo time is seconds** (plan 14 WP6). The ring keeps its own clock,
+  advanced once a frame by the renderer's time (`Lookback.tick`); an echo's
+  weight is `echo_mix · ½^(age / fade)` with its age in seconds, and a
+  capture is committed every `gap` seconds (a frame within half a frame of
+  its due time is on time). So the trail is the same on a 60 Hz and a
+  120 Hz screen (`tests/test_lookback.py::test_the_same_preset_gives_the_same_trail_at_60_and_120_hz`).
+  A tick whose time did not move counts as one 60 Hz frame, so a test or
+  tool drawing at a fixed `t` sees the old frames. The old per-frame
+  `dream.decay` / `dream.every` are read as 60 Hz frames
+  (`lookback.migrate_values` / `migrate_row`): the factory files are
+  converted, the launch rewrites a user preset or look-back module preset
+  once (`preset.migrate_echo_home`, each kept as `<file>.bak-v2-frames`),
+  and a preset file still naming them loads in seconds with a note. The
+  dream worker's own `k` and `mask_decay` are still per submitted frame.
 
 - **Chroma.** The net paints in its own primaries whatever the scene's
   palette, so `D` is re-coloured on its way in: `hue` / `sat` on the net's

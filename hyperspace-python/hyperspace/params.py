@@ -67,7 +67,18 @@ from .bands import CEIL, NORMS, SHAPERS
 from .fx import FxState
 from .fx import declare as declare_fx
 from .geometry import PLANE_NAMES, SHAPES
-from .lookback import LAYERS, MAX_ECHOES, OCTAVES, RES, TINT_FROM, DreamState
+from .lookback import (
+    FADE_HI,
+    FADE_LO,
+    GAP_HI,
+    GAP_LO,
+    LAYERS,
+    MAX_ECHOES,
+    OCTAVES,
+    RES,
+    TINT_FROM,
+    DreamState,
+)
 from .tapers import Taper
 from .tapers import clamp as _clamp
 
@@ -843,11 +854,14 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                  tip="The dream buffer's opacity under the scene.")
     r.continuous("dream.echo_mix", "Echo mix", *_attr(dream, "echo_mix"), lo=0.0, hi=1.0,
                  fmt=lambda v: f"echo {v:.2f}", group=g,
-                 tip="The echoes' opacity at age zero; each frame of age multiplies "
-                     "by the decay.")
-    r.continuous("dream.decay", "Decay", *_attr(dream, "decay"), lo=0.0, hi=1.0,
-                 fmt=lambda v: f"{v:.3f} / frame", group=g,
-                 tip="Per-frame fade of an echo with its age.")
+                 tip="An echo is a copy of an earlier frame, drawn faintly under this "
+                     "one — together they are the trail a moving shape leaves. Echo mix "
+                     "is how bright the newest echo is; older ones fade by the Fade.")
+    r.continuous("dream.fade", "Fade", *_attr(dream, "fade"), lo=FADE_LO, hi=FADE_HI,
+                 log=True, fmt=lambda v: f"halves in {v:.2f} s", group=g,
+                 tip="How long the trail lasts: an echo's brightness halves every this "
+                     "many seconds of its age, whatever the screen's frame rate "
+                     "(0.23 s is the old 0.95 a frame at 60 Hz; 0.76 s is 0.985).")
     r.continuous("dream.darken", "Darken", *_attr(dream, "darken"), lo=0.0, hi=1.0,
                  fmt=lambda v: f"×{1.0 - v:.2f}", group=g,
                  tip="How much darker the wake is than the frames it came from.")
@@ -885,10 +899,14 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                  tip="The tint colour's saturation: 0 tints grey — a greyscale dream.")
     r.continuous("dream.echoes", "Echoes", *_attr(dream, "echoes"), lo=0, hi=MAX_ECHOES,
                  integer=True, fmt=lambda v: f"{int(v)} echo(es)", group=g,
-                 tip="Frames kept in the history; 0 composites the dream buffer alone.")
-    r.continuous("dream.every", "Every", *_attr(dream, "every"), lo=1, hi=8, integer=True,
-                 fmt=lambda v: f"every {int(v)}", group=g, modulatable=False,
-                 tip="Capture cadence in frames: the spacing between echoes.")
+                 tip="How many echoes the trail holds; 0 composites the dream buffer "
+                     "alone. With Spacing it sets the trail's reach: echoes × spacing "
+                     "seconds back.")
+    r.continuous("dream.gap", "Spacing", *_attr(dream, "gap"), lo=GAP_LO, hi=GAP_HI,
+                 fmt=lambda v: f"every {v * 1000:.0f} ms", group=g, modulatable=False,
+                 tip="Time between echoes, in milliseconds, whatever the frame rate: "
+                     "short is a smooth smear, long a row of separate copies (33 ms is "
+                     "every 2nd frame at 60 Hz, 67 ms every 4th; 0 is every frame).")
     r.enum("dream.res", "Resolution", *_attr(dream, "res"), [str(v) for v in RES], group=g,
            modulatable=False,
            tip="The history's short side in pixels; the render's aspect is kept.")
