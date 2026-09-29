@@ -149,3 +149,24 @@ def test_the_routing_page_offers_and_writes_names(app):
     assert ui_routing._at(app.router, addrs, "hand:7") == addrs.index("hand:right.y")
     assert ui_routing._at(app.router, addrs, "hand:right.nosuch") == -1
     assert ui_routing._at(app.router, [None, *(a for a, _ in gates)], "hand:18") == 5
+
+
+def test_a_learn_knows_a_numbered_row_is_the_same_axis(app):
+    """Review of PR #70: a preset saved with numbers keeps `hand:7`; a learn
+    writes `hand:right.y`. Learn compares the lanes, not the strings: a
+    learn onto the same param refreshes the gate with no Replace / Keep
+    question, and a learn of the right height elsewhere moves the numbered
+    row (one axis, one param)."""
+    r = rig()
+    run(r, 1, hand(), router=app.router)                          # the map published
+    old = app.table.add(Binding("hand:7", "fx.mix", "position"))  # right.y, by number
+    app.learn.arm("fx.mix")
+    app.learn.learn_source("hand:right.y", when="hand:right.pinch.index")
+    assert app.learn.pending is None and app.table.owner("fx.mix") is old
+    assert old.when == "hand:right.pinch.index"                   # refreshed, not asked
+    app.learn.arm("view.bright")
+    app.learn.learn_source("hand:right.y")
+    assert old not in app.table.bindings                          # moved: one axis, one param
+    assert app.table.owner("view.bright").source == "hand:right.y"
+    assert app.learn.same_source("hand:7", "hand:right.y")
+    assert not app.learn.same_source("hand:right.nosuch", "hand:-1")

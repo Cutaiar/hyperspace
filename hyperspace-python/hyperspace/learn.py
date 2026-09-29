@@ -53,13 +53,29 @@ from .routing import Binding, Bindings, Owned
 class Learn:
     """The armed param and the question the referee left for the panel."""
 
-    def __init__(self, reg: Registry, table: Bindings):
+    def __init__(self, reg: Registry, table: Bindings, lane=None):
         self.reg = reg
         self.table = table
+        # the router's `lane` (source → (scheme, index)), so one hand axis
+        # named two ways — `hand:7` in an older preset, `hand:right.y` from
+        # a learn — is one axis here too (decision register row 20); None:
+        # sources compare as strings
+        self.lane = lane
         self.learning: str | None = None
         self.pending: tuple[Binding, Binding] | None = None
         self.last = ""          # what the last learn did, for the status lines
         self.refused = False    # …and whether it was a refusal (drawn as a warning)
+
+    def same_source(self, a: str, b: str) -> bool:
+        """Do two source addresses read the same lane — the same string,
+        or a number and a name the router resolves to one lane?"""
+        if a == b:
+            return True
+        lane = getattr(self, "lane", None)       # a Learn from before a hot reload: None
+        if lane is None:
+            return False
+        la = lane(a)
+        return la[1] >= 0 and la == lane(b)
 
     def said(self, text: str) -> None:
         """What a learn that landed (or was kept) did, for the status lines."""
@@ -118,7 +134,7 @@ class Learn:
             return
         b = Binding(source, p.id, "position", 1.0, when=when)
         cur = self.table.owner(p.id)
-        if cur is not None and cur.source == source and cur.op == "position":
+        if cur is not None and self.same_source(cur.source, source) and cur.op == "position":
             cur.when = when                          # the same axis again: no move
             self.said(f"learned {p.id} ← {cur.describe()} (into the preset)")
             return
@@ -151,7 +167,8 @@ class Learn:
         not whoever did when the question was asked). A route of the
         loaded preset's: no file is written (plan 13 §3.3)."""
         table = self.table
-        for x in [x for x in table.of(b.scheme) if x.source == b.source and x.op == "position"]:
+        for x in [x for x in table.of(b.scheme)
+                  if self.same_source(x.source, b.source) and x.op == "position"]:
             table.remove(x)
         table.replace_owner(b)
         self.said(f"learned {b.target} ← {b.describe()} (into the preset)")

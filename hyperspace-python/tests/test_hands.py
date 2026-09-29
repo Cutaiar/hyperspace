@@ -440,9 +440,10 @@ def make_app(tmp_path):
         def iter_pending(self):
             return iter(())
 
-    learn = Learn(reg, table)
+    router = Router(reg, table)
+    learn = Learn(reg, table, lane=router.lane)          # as app.main builds it
     midi = MidiIO(reg, table, inp=Quiet(), out=FakeOut(), learner=learn)
-    return NS(reg=reg, view=view, learn=learn, midi=midi, router=Router(reg, table), table=table)
+    return NS(reg=reg, view=view, learn=learn, midi=midi, router=router, table=table)
 
 
 def _frame(app):

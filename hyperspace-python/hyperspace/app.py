@@ -644,7 +644,7 @@ def main() -> None:
     # one Learn over the live table, whatever the MIDI gate says: a knob
     # or a hand completes it, the panel's prompt settles what the referee
     # refused (learn.py; the band.sel.* rule is the registry's `real`)
-    learn = Learn(reg, router.table)
+    learn = Learn(reg, router.table, lane=router.lane)   # hand:7 and hand:right.y: one axis
     panel.learn = learn
     midi_io = _open_midi(reg, cfg, router.table, learn)
     panel.midi = midi_io

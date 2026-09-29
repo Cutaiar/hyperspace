@@ -945,10 +945,12 @@ Decision register row 20 (a), audit N7. Stacked on the integration branch.
   published (`live_hand_layout`). A user preset saved with numbers is
   loaded as it is.
 - **Not changed:** the referee, one performer per target, gates, rests,
-  the Replace / Keep prompt. Sources compare as strings, so `hand:7` and
-  `hand:right.y` are different sources to Learn's same-axis refresh and to
-  a depth subscriber's key (ARCHITECTURE §3.10).
-- **Tests.** New: `test_hand_names.py` (six),
+  the Replace / Keep prompt. Learn compares hand sources by lane
+  (`Learn.same_source` over `Router.lane`, the review of this PR): a
+  numbered `hand:7` and a learned `hand:right.y` are one axis to its
+  same-axis refresh and to "one axis, one param". The table still keys a
+  depth subscriber by the source string (ARCHITECTURE §3.10).
+- **Tests.** New: `test_hand_names.py` (seven),
   `test_hands.py::test_a_hand_learn_writes_the_axis_by_name_on_any_dofs`,
   `test_presets.py::test_every_factory_presets_hand_rows_are_named`,
   `test_migration.py::test_the_migration_names_the_hand_rows`. Changed:
@@ -956,5 +958,5 @@ Decision register row 20 (a), audit N7. Stacked on the integration branch.
   `test_plan12_presets.py::test_hand_lane_names_are_the_hands_packages`
   (was `…_numbers_…`) and its two sweeps, four `test_routing.py` tests,
   `test_ui_routing.py::test_a_route_on_a_session_param_is_marked_session`,
-  six `test_migration.py` tests. Hand check 42 at the machine. 885 passed,
+  six `test_migration.py` tests. Hand check 42 at the machine. 886 passed,
   11 skipped; ruff clean.

@@ -701,11 +701,12 @@ guard, each filed where it says:
 - A `hand:<i>` row still reads by index (audit N7 is closed for every
   preset the app writes — plan 13 WP5b); one in a user preset saved by an
   older build and never re-saved still re-points on a rig that reorders
-  `dofs`. The table compares sources as strings, so `hand:7` and
-  `hand:right.y` are two sources to Learn's "the same axis again" check,
-  to `_place`'s "one axis, one param" and to a depth subscriber's
-  (source, target) key — a numeric row learned over asks Replace / Keep
-  instead of refreshing its gate.
+  `dofs`. Learn compares hand sources by the lane they read (`Learn.same_source`
+  over `Router.lane`, review of PR #70), but the table itself compares
+  sources as strings: `hand:7` and `hand:right.y` are two keys to a depth
+  subscriber's (source, target) (`Bindings.depth_subs`), so a depth
+  subscriber written for one spelling does not scale a row carrying the
+  other.
 - A preset saved after a module-preset load moved a param a macro's base
   subscriber sets does not round-trip that param: the reload lands the
   subscriber's value, not the saved one — the macro is the scene-setter
