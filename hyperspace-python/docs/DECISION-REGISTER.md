@@ -19,7 +19,9 @@ DECISIONS.md gets a dated row per decision and this file records the answer.
   offset on top through one routing row per parameter.
 - **Trigger**: a parameter that fires once (tap tempo, LFO reset).
 - **Routing preset**: a saved set of performer rows, optionally with the
-  bases they assume. **Theme**: a saved snapshot of every base.
+  bases they assume. **Theme**: a saved snapshot of every base. (Both are
+  gone since plan 13, built on `plan-13-integration`: a preset holds both,
+  and the questions below that use the words are kept as they were asked.)
 - **Clock**: the tap-tempo clock the synced LFOs read. The **trigger
   button** (⇧B, the APC40's METRONOME) says "the one is now".
 - Plan 13's two nouns, already decided by you on 2026-09-28: a **preset** is
@@ -513,7 +515,9 @@ Each is built, reviewed and on PR #55. Overturning any is a small follow-up.
   SHIFT with an LED; fixed global layer; invariant controls; knobs jump and
   faders pick up on a layer switch; an unmapped control does nothing and
   shows dark; the analyzer is session; a session names its startup preset; a
-  modifier is read at the press. Decided, not built.
+  modifier is read at the press. Built in plan 13 (WP1 #62, WP2 #64, WP3
+  #63, WP4 #65, WP5 #66) on `plan-13-integration`; DECISIONS.md's rows say
+  where and which test holds each.
 - **Sequencing** (2026-09-28): merge #55, then #47 as is, then plan 13 from
   its WP1, re-cutting the five `party-*` presets in its WP5.
 - **Plan 12's per-preset desk block**: superseded by plan 13's preset desk
@@ -521,7 +525,8 @@ Each is built, reviewed and on PR #55. Overturning any is a small follow-up.
 
 ## Part D — not decisions, but gating "settled"
 
-- `docs/plans/11-hand-checks.md`: 32 checks at the machine. Checks 7 and 11
+- `docs/plans/11-hand-checks.md`: 32 checks at the machine (41 since
+  plan 13's group H). Checks 7 and 11
   read differently under each answer to decisions 1 and 4. Check 31 is the
   one hardware assumption plan 13 rests on (the APC40's endless knobs
   re-base from a host CC). Check 32 is plan 12's seven projector-and-box
@@ -529,7 +534,9 @@ Each is built, reviewed and on PR #55. Overturning any is a small follow-up.
 - Two review notes from plan 12 that belong in the audit, not here: named
   hand addresses (`hand:left.roll`) so a custom `[hands] dofs` list cannot
   scramble shipped presets; an explicit groups-to-reset list on a theme or
-  preset. Filed 2026-09-28 as `AUDIT-2026-09.md` rows N7 and L9.
+  preset. Filed 2026-09-28 as `AUDIT-2026-09.md` rows N7 and L9. L9 is moot
+  for presets since plan 13 (a load replaces every performance group, D2);
+  N7 is row 20 here, still open.
 - Plan 13's machine checks: `docs/plans/11-hand-checks.md` group H
   (checks 33–41).
 
@@ -544,22 +551,22 @@ or "overturn".
 |---|---|---|---|---|
 | 1 | B2 tap and the downbeat | (a) never moves it | **(a)**, 2026-09-28 | |
 | 2 | B5 performer-fired triggers | (a) keep all three | **(c)**, 2026-09-28 | LFO triggers ownable, tap tempo not |
-| 3 | R1 LFO knobs | (c) theme state; presets may set assumed bases | **(c)**, 2026-09-28 | |
+| 3 | R1 LFO knobs | (c) theme state; presets may set assumed bases | **(c)**, 2026-09-28 | dissolved by plan 13 WP5 (PR #66): a preset carries every performance base, LFO knobs included, and the routing presets are full presets |
 | 4 | R6 APC40 LEDs | (a) rings base, LEDs state | **(a)**, 2026-09-28 | |
 | 5 | A7 Dynamics past 1× | (b) keep 4×, document | **(b)**, 2026-09-28 | |
 | 6 | A10 input trim | (3) auto/manual switch | **(3)**, 2026-09-28 | built, WP15 |
 | 7 | R2 + L2 loop keys | (a) table rows | **(a)**, 2026-09-28 | built, PR #58 |
 | 8 | Merge path | PR #55, then #47 | **rec**, 2026-09-28 | #56 folded into #55 first |
-| 9 | P13-a global track knobs | (a) hand feel + BPM | **(a)**, 2026-09-28 | a first cut; expect better globals with use. Built in plan 13 WP3 (PR #63): five global rows in `apc40.DEFAULT_MAP`, knobs 6–8 dark |
-| 10 | P13-b partial presets | (a) no exception | **(a)**, 2026-09-28 | built, plan 13 WP2, PR #64 (the F-key bank), and WP5, PR #66: the routes-only files are full presets — `legacy6`, `lfo-breathe`, `hands-*` in `library/presets/`, a user's `bindings/*.json` by the first-launch migration (`preset.migrate_routing_presets`), each with the effects its routes drive switched on |
-| 11 | P13-c bank slots | (a) a slot names a file | **(a)**, 2026-09-28 | built, plan 13 WP2, PR #64 |
-| 12 | P13-d what a macro is | (a) attenuator + multi-target rows | **one concept**, 2026-09-28 | subscribers set a base or a depth, each with its own polarity; see 12b. Built in plan 13 WP3 (PR #63): `routing.Macro` / `Sub`, `Router.follow_macros`, the depth term in `Router.modulate` |
-| 13 | P13-e ROUTING page | (a) one page | **(a)**, 2026-09-28 | built in plan 13 WP4 (PR #65): `ui_routing.page` over the loaded preset — the head (name, dirty dot, save / as…, the layer, the last learn or refusal), routes, the desk with its dark controls, the macros and their subscribers, the session's MIDI rows read-only |
-| 12b | P13-g a performer on a macro | (a) base subscribers follow the base only | **(a)**, 2026-09-28 | built in plan 13 WP3 (PR #63): base subscribers follow `p.base`, depth ones `p.value` |
+| 9 | P13-a global track knobs | (a) hand feel + BPM | **(a)**, 2026-09-28 | a first cut; expect better globals with use. Built in plan 13 WP3 (PR #63): five global rows in `apc40.DEFAULT_MAP` (hand feel and `tempo.bpm` on track knobs 1–5, `hands.sel.return` the selected axis's alias), knobs 6–8 dark; learns kept off the global layer in WP4 (PR #65) |
+| 10 | P13-b partial presets | (a) no exception | **(a)**, 2026-09-28 | built in plan 13 WP2 (PR #64): a load lands every performance base and replaces every route; and WP5 (PR #66): the routes-only files are full presets — `legacy6`, `lfo-breathe`, `hands-*` in `library/presets/`, a user's `bindings/*.json` by the first-launch migration (`preset.migrate_routing_presets`), each with the effects its routes drive switched on |
+| 11 | P13-c bank slots | (a) a slot names a file | **(a)**, 2026-09-28 | built in plan 13 WP2 (PR #64): `Project.bank` is eight preset names, `load_slot` / `save_slot` / `cycle`; schema-1 inline slots become preset files in WP5 (PR #66) |
+| 12 | P13-d what a macro is | (a) attenuator + multi-target rows | **one concept**, 2026-09-28 | subscribers set a base or a depth, each with its own polarity; see 12b. Built in plan 13 WP3 (PR #63): `routing.Macro` / `Sub`, `Router.follow_macros`, the depth term in `Router.modulate`, `scale: macro.N` migrated; the macros became the loaded preset's in WP4 (PR #65) and left `bindings.json` in WP5 (PR #66) |
+| 13 | P13-e ROUTING page | (a) one page | **(a)**, 2026-09-28 | built in plan 13 WP4 (PR #65): `ui_routing.page` over the loaded preset — the head (name, dirty dot, save / as…, the layer, the last learn or refusal), routes, the desk with its dark controls, the macros and their subscribers, the session's MIDI rows read-only; the routing-preset strip left it there |
+| 12b | P13-g a performer on a macro | (a) base subscribers follow the base only | **(a)**, 2026-09-28 | built in plan 13 WP3 (PR #63): base subscribers follow `p.base`, depth ones `p.value` (`test_a_performer_on_a_macro_moves_only_its_depth_subscribers`) |
 | 14 | B1 as built | keep | **keep**, 2026-09-28 | |
 | 15 | A1 as built | keep | **keep**, 2026-09-28 | |
 | 16 | L3 as built | keep | **keep**, 2026-09-28 | |
 | 17 | B6 as built | keep | **keep**, 2026-09-28 | |
-| 18 | P13-h the drive fader and `scale` | (a) keep `scale`, session params only | **(a)**, 2026-09-28 | built in plan 13 WP5 |
-| 19 | P13-i a route onto a session param | (a) yes; D9 is about values | **(a)**, 2026-09-28 | built in plan 13 WP5 (the page's "session" chip) |
+| 18 | P13-h the drive fader and `scale` | (a) keep `scale`, session params only | **(a)**, 2026-09-28 | built in plan 13 WP5 (PR #66): `routing.migrate_scales` — a `scale` kept only on a session param, one on a macro a depth subscriber, one on a performance param dropped with a note |
+| 19 | P13-i a route onto a session param | (a) yes; D9 is about values | **(a)**, 2026-09-28 | built in plan 13 WP5 (PR #66): the ROUTING page marks such a route "session" (`ui_routing.is_session_target`); the scale combo offers session params only |
 | 20 | P13-j hand routes by name | (a) names now, in plan 13 | | open |
