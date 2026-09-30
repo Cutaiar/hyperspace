@@ -9,7 +9,7 @@ worker's ms per submit (p50 / p99) and the renderer's own frame time with
 the worker running against the same loop without one — the contention
 number of spike C on the real pipeline.
 
-    uv run --extra dream python tools/dream_shots.py [--frames 90] [--layer conv3_3]
+    uv run python tools/dream_shots.py [--frames 90] [--layer conv3_3]
 """
 
 from __future__ import annotations
@@ -91,17 +91,73 @@ def run(ctx, dream, worker, frames, fps=60.0):
     return times, px
 
 
+def preset_shot(ctx, slug: str, frames: int, precision: str, poses) -> None:
+    """A party preset (plan 14 WP6: WAKE with the worker on, as the app
+    opens it by default) through the real loader and hand chain
+    (tools/preset_shots.Stage), the DreamWorker on its slot, paced at 60
+    fps; one frame per pose to docs/plans/assets/12-presets/<slug>-dream/,
+    and a sheet beside them."""
+    sys.path.insert(0, str(ROOT / "tools"))
+    import preset_shots as ps
+
+    from hyperspace.dream import DreamWorker
+
+    out = ps.OUT / f"{slug}-dream"
+    out.mkdir(parents=True, exist_ok=True)
+    fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((ps.W, ps.H))])
+    tiles = []
+    for label, pose in poses:
+        st = ps.Stage(slug, ctx)
+        worker = DreamWorker(st.reg, {"enabled": True, "precision": precision})
+        st.renderer.lookback.source = worker
+        st.frame({}, fbo)
+        worker.drain(120.0)                       # the trunk loads on the first submit
+        hands = ps.pose_hands(pose)
+        next_tick = time.perf_counter()
+        for _ in range(frames):
+            st.frame(hands, fbo)
+            ctx.finish()
+            next_tick += 1 / 60
+            rem = next_tick - time.perf_counter()
+            if rem > 0:
+                time.sleep(rem)
+        img = np.frombuffer(fbo.read(components=3), dtype=np.uint8).reshape(ps.H, ps.W, 3)[::-1]
+        p = out / (label.replace(" ", "-").replace("(", "").replace(")", "").lower() + ".png")
+        Image.fromarray(img.copy()).quantize(256, method=Image.Quantize.MEDIANCUT,
+                                              dither=Image.Dither.FLOYDSTEINBERG).save(
+            p, optimize=True)
+        tiles.append((label, p))
+        print(f"{label}: {worker.status()}")
+        worker.close()
+        st.release()
+    ps.sheet(tiles, ps.OUT / f"{slug}-dream-sheet.png", cols=3)
+    print("wrote", (ps.OUT / f"{slug}-dream-sheet.png").relative_to(ROOT))
+    fbo.release()
+
+
+WAKE_POSES = [("no hands", {}), ("L up (speed)", {"L.y": 1}),
+              ("R up + reach in (long)", {"R.y": 1, "R.z": 0}),
+              ("R roll thumb-up (hue)", {"R.roll": 1}),
+              ("R pitch fingers-up (dream)", {"R.pitch": 1}),
+              ("R pitch fingers-down", {"R.pitch": 0})]
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--frames", type=int, default=90)
     ap.add_argument("--layer", default="conv3_3", choices=LAYERS)
     ap.add_argument("--precision", default="fp32", choices=("fp32", "fp16"))
+    ap.add_argument("--preset", default="", help="a party preset slug (party-wake): its "
+                    "poses with the worker on, instead of the spike's scene")
     args = ap.parse_args()
     from hyperspace.dream import DreamWorker
 
     ctx = moderngl.create_context(standalone=True)
+    if args.preset:
+        preset_shot(ctx, args.preset, args.frames, args.precision, WAKE_POSES)
+        return
     # the spike's defaults (DreamState), the dream buffer alone over the scene
-    dream = DreamState(on=True, echoes=0, every=1, layer=LAYERS.index(args.layer))
+    dream = DreamState(on=True, echoes=0, gap=0.0, layer=LAYERS.index(args.layer))
     reg = registry(dream)
     worker = DreamWorker(reg, {"enabled": True, "precision": args.precision})
     # warm: the trunk loads on the first submit; keep the loop from timing that
@@ -122,7 +178,7 @@ def main() -> None:
                                  dither=Image.Dither.FLOYDSTEINBERG).save(OUT, optimize=True)
     print(f"wrote {OUT} ({OUT.stat().st_size / 1e3:.0f} kB)")
 
-    none_times, _ = run(ctx, DreamState(on=True, echoes=0, every=1), None, args.frames)
+    none_times, _ = run(ctx, DreamState(on=True, echoes=0, gap=0.0), None, args.frames)
     print(f"\n{args.layer} {args.precision} at {r.lookback.echo[0]}x{r.lookback.echo[1]}, "
           f"{args.frames} frames paced at 60 fps, renderer at {W}x{H} (ms)")
     print("| what | p50 | p99 | max | n |")

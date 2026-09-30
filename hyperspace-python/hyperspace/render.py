@@ -431,13 +431,32 @@ class Renderer:
         then the post pass (lookback.py) puts it on the target. `t_now`
         pins the clock (offscreen renders and tests); otherwise the frame
         reads the renderer's own, and the patterns, the instance motion
-        and the effect chain all see the same second."""
+        and the effect chain all see the same second.
+
+        The target is captured once and bound again, with its viewport and
+        blending, on every exit — a raise included. The frame binds half a
+        dozen offscreen framebuffers; one left bound made every later
+        frame draw into it while the window swapped a stale picture (the
+        owner's freeze, plan 14 WP1: WAKE without a dream worker left the
+        look-back's atlas bound, with no error anywhere)."""
         ctx = self.ctx
         t = self.now(t_now)
         target = ctx.fbo
         if target is None:
             raise RuntimeError("Renderer.draw: no framebuffer bound (call fbo.use())")
         vx, vy, vw, vh = target.viewport
+        try:
+            self._draw_frame(s, w, h, dpr, t, target, (vx, vy, vw, vh))
+        finally:
+            target.use()
+            ctx.viewport = (vx, vy, vw, vh)
+            ctx.enable(moderngl.BLEND)
+
+    def _draw_frame(self, s: ViewState, w: int, h: int, dpr: float, t: float,
+                    target: moderngl.Framebuffer, vp: tuple[int, int, int, int]) -> None:
+        """draw()'s body: scene, cover, pull, composite, capture, effects."""
+        ctx = self.ctx
+        vx, vy, vw, vh = vp
         self.scene.ensure((max(vw, 1), max(vh, 1)), _samples_of(ctx, target))
         for unit in range(4):
             self._blank.use(location=unit)
@@ -448,9 +467,12 @@ class Renderer:
         lb = self.lookback
         cover = self._draw_cover(w, h) if lb.wants_cover() else None
         target.viewport = (vx, vy, vw, vh)
+        lb.tick(t)                       # echo time is seconds (plan 14 WP6)
         lb.pull()
         fx = self.fx
         fx.tick()
+        # an opaque ground keeps the whole chain at alpha 1 (plan 14 WP1)
+        fx.opaque = getattr(self, "bg_alpha", 1.0) >= 1.0
         if fx.active():
             # the post pass into the chain's first texture; the chain ends
             # on the window. The history captures the scene, not the effects.
@@ -544,12 +566,16 @@ class Renderer:
         # premultiplied ground: black at bg_alpha, so SRC_ALPHA/ONE_MINUS
         # blending leaves the framebuffer correctly composited for a
         # transparent window (colour = Σ c·a, alpha = 1 − Π(1 − a))
-        self.ctx.clear(*BG, getattr(self, "bg_alpha", 1.0))
+        bg_alpha = getattr(self, "bg_alpha", 1.0)
+        self.ctx.clear(*BG, bg_alpha)
         # cut-through: the plain blend also blends alpha (a² + (1 − a)·dst),
         # so a faint fill lowers the ground's alpha and a transparent window
         # shows the desktop through it. Off: alpha composites over the ground
-        # (a + (1 − a)·dst), never below it — the lowest layer shows instead
-        if s.cut_through:
+        # (a + (1 − a)·dst), never below it — the lowest layer shows instead.
+        # Only on a see-through ground (overlay mode): on an opaque one the
+        # frame stays alpha 1 everywhere, so the desktop never shows through
+        # the window (plan 14 WP1 — the Pepper's Ghost rig)
+        if s.cut_through and bg_alpha < 1.0:
             self.ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
         else:
             self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA,

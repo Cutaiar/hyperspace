@@ -1,6 +1,6 @@
 """Question A — the GL -> compute -> GL copy path and how it scales.
 
-    uv run --extra dream python tools/dream_bench/a_copy_path.py [--res 128,256,...]
+    uv run python tools/dream_bench/a_copy_path.py [--res 128,256,...]
 
 For each square resolution it times, one part at a time (each bracketed by
 its own device sync so the number is the part, not the pipeline):

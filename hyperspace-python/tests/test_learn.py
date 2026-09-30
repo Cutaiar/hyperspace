@@ -255,17 +255,17 @@ def test_learn_refuses_the_global_layer_and_invariant_controls(tmp_path):
     lrn.arm("view.depth4")
     push(r, cc(0x30, 90))                                    # track knob 1, SHIFT on
     assert lrn.learning is None and lrn.refused
-    assert lrn.last == ("track knob 1 is on the global layer (the session's) — "
+    assert lrn.last == ("K1 (track knob 1) is on the global layer (the session's) — "
                         "latch SHIFT off to learn into the preset")
     assert rows() == before and table.layer == "global" and reg["view.depth4"].value == depth4
     shift(r)
     assert table.layer == "preset"
     lrn.arm("view.depth4")
     push(r, cc(apc40.CC_FADER, 64, channel=2))               # track fader 3
-    assert lrn.refused and lrn.last == "track fader 3 is invariant (the session's) — not learned"
+    assert lrn.refused and lrn.last == "S3 (track fader 3) is invariant (the session's) — not learned"
     lrn.arm("view.depth4")
     push(r, note(apc40.N_SHIFT))                             # SHIFT itself
-    assert lrn.refused and lrn.last == "SHIFT is invariant (the session's) — not learned"
+    assert lrn.refused and lrn.last == "⇧ (SHIFT) is invariant (the session's) — not learned"
     assert table.layer == "preset"                           # the press did not latch
     push(r, note(apc40.N_SHIFT, 0))
     assert rows() == before and reg["view.depth4"].value == depth4

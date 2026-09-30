@@ -57,8 +57,8 @@ def test_a_shut_gate_opens_nothing():
     assert app._open_bridge(reg, {"bridge": {"enabled": False}}) is None
     assert app._open_hands({"hands": {"enabled": False}}, settings=SimpleNamespace()) is None
     assert app._open_hands({"hands": {"enabled": True}}, settings=None) is None
-    assert app._open_dream(reg, {"dream": {"enabled": False}}) is None
-    assert app._open_dream(reg, {}) is None                  # off by default
+    assert app._open_dream(reg, {"dream": {"enabled": False}}) == (None, "")
+    assert app._open_dream(reg, {}) == (None, "")            # off by default
     assert app._open_bridge(reg, {}) is None
     assert app._open_pad({"gamepad": {"enabled": False}}) is None
 
@@ -89,7 +89,18 @@ def test_a_broken_adapter_is_a_note_not_a_crash(monkeypatch, capsys):
     assert app._open_midi(reg, {"midi": {"enabled": True}}, table=None, learn=None) is None
     assert app._open_bridge(reg, {"bridge": {"enabled": True}}) is None
     assert app._open_hands({"hands": {"enabled": True}}, settings=SimpleNamespace()) is None
-    assert app._open_dream(reg, {"dream": {"enabled": True}}) is None
+    assert app._open_dream(reg, {"dream": {"enabled": True}}) == (
+        None, "dream worker off: RuntimeError: boom")
+    # torch missing (no `dream` extra): dream.py's own `import torch`
+    # fails, and the reason names the fix
+    import hyperspace
+    monkeypatch.delitem(sys.modules, "hyperspace.dream")
+    monkeypatch.delattr(hyperspace, "dream", raising=False)
+    monkeypatch.setitem(sys.modules, "torch", None)
+    off, why = app._open_dream(reg, {"dream": {"enabled": True}})
+    assert off is None
+    assert why == ("dream worker off: torch is not installed — run `uv sync`, "
+                   "then launch with `uv run hyperspace`")
     err = capsys.readouterr().err
     for line in ("midi: boom", "bridge: boom", "hands: boom", "dream: boom"):
         assert line in err
@@ -393,3 +404,49 @@ def test_the_host_close_list_is_every_adapter_in_shutdown_order():
     log: list[str] = []
     h = _host(log)
     assert h.adapters == (h.midi_io, h.bridge_io, h.hands_io, None)
+
+
+# ---- decision 21 (a): the transparent framebuffer only when the config asks ----
+
+class _HintGlfw:
+    """Records window hints and the hints each window was created under."""
+
+    def __init__(self):
+        self.hints: dict = {}
+        self.created: list[dict] = []
+
+    def window_hint(self, k, v):
+        self.hints[k] = v
+
+    def create_window(self, w, h, title, mon, share):
+        self.created.append(dict(self.hints))
+        return f"win{len(self.created)}"
+
+    def get_primary_monitor(self):
+        return None
+
+    def __getattr__(self, name):        # every glfw constant: its own name
+        if name.isupper():
+            return name
+        raise AttributeError(name)
+
+
+@pytest.mark.parametrize(("cfg", "want"), [
+    ({}, False),                                        # the default
+    ({"output": {"overlay": False}}, False),
+    ({"output": {"overlay": True}}, True),
+])
+def test_the_render_window_is_transparent_only_when_the_config_asks(monkeypatch, cfg, want):
+    g = _HintGlfw()
+    monkeypatch.setattr(app, "glfw", g)
+    render, ctrl = app._windows(app._overlay_allowed(cfg))
+    assert (render, ctrl) == ("win1", "win2")
+    assert g.created[0]["TRANSPARENT_FRAMEBUFFER"] is want
+    assert g.created[1]["TRANSPARENT_FRAMEBUFFER"] is False    # the control window, always
+
+
+def test_the_config_defaults_shut_overlay():
+    from hyperspace import config
+
+    assert config.DEFAULTS["output"]["overlay"] is False
+    assert app._overlay_allowed({"output": dict(config.DEFAULTS["output"])}) is False

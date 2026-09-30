@@ -22,6 +22,7 @@ from .fx import FX_DIR
 
 CHIPS_PER_ROW = 4
 ORDER_W = 96        # the order slider beside the blend combo
+RESET_NOTE = "a preset load resets the effect stack; save it as a preset to keep it"
 
 
 def page(panel, dt: float) -> None:
@@ -39,6 +40,9 @@ def page(panel, dt: float) -> None:
               " → ".join(fx.specs[n].label for n in running) if running else "nothing on")
     imgui.push_style_color(imgui.Col_.text, ui.FAINT)
     imgui.text_wrapped(status)
+    # plan 14 WP5: a preset load replaces every effect value (plan 13 D2),
+    # so what is tried here is gone on the next F-key unless it is saved
+    imgui.text_wrapped(RESET_NOTE)
     imgui.pop_style_color()
     if fx is None:
         imgui.text_disabled("no renderer")

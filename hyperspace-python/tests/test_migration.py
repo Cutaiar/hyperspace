@@ -9,7 +9,10 @@ learned hand rows, a learned knob, a macro-scaled route and the macros'
 ``bindings.json.bak-mine``. Then it launches the app's way (`boot`:
 library, registry, Router over the home's bindings.json, `Presets`,
 `preset.migrate_home`, the startup preset) and checks what the first
-launch leaves behind — and that a second launch changes nothing.
+launch leaves behind — and that a second launch changes nothing. Since
+plan 14 WP3 (decision 22) the converted ``default`` show is renamed
+``mine`` (`library.unshadow_default`, a backup first) and the launch opens
+the party show; the tests open ``mine`` to look at what was migrated.
 """
 
 import json
@@ -24,7 +27,7 @@ from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
 from hyperspace.fx import FxState
 from hyperspace.library import FACTORY, SESSION_GROUPS, Library
-from hyperspace.lookback import DreamState
+from hyperspace.lookback import DreamState, migrate_values
 from hyperspace.params import build_registry
 from hyperspace.preset import Presets
 from hyperspace.routing import MOD_OPS, Binding, Bindings, Router, bindings_path
@@ -123,6 +126,11 @@ def read(path):
     return json.loads(path.read_text())
 
 
+def mine_path(home):
+    """Where the migrated show lives since plan 14 WP3: `default` renamed."""
+    return home / "projects" / "mine.hyp.json"
+
+
 def preset_file(home, name):
     return read(home / "presets" / f"{preset.slug(name)}.json")
 
@@ -142,11 +150,13 @@ def home(tmp_path):
 
 def test_a_schema_1_project_becomes_presets_and_a_schema_2_project(home):
     r = boot(home)
-    doc = read(home / "projects" / "default.hyp.json")
-    assert doc["schema"] == "hyperspace.project/2" and doc["name"] == "default"
+    assert not (home / "projects" / "default.hyp.json").exists()     # renamed, decision 22
+    doc = read(mine_path(home))
+    assert doc["schema"] == "hyperspace.project/2" and doc["name"] == "mine"
+    assert read(home / "projects" / "default.hyp.json.bak-v2")["name"] == "default"
     # the bank names the five slots' presets; the empty slots point at the
     # factory house presets their F-keys used to load (the seeds)
-    seeds = read(FACTORY / "projects" / "default.hyp.json")["bank"]
+    seeds = read(FACTORY / "projects" / "house.hyp.json")["bank"]
     # slot 6, the first empty one, holds the project's own look (it differs from
     # every slot: view.shape 9); the rest point at the house presets
     assert doc["bank"] == [*SLOT_NAMES, "DEFAULT SAVED", *seeds[6:]]
@@ -164,15 +174,18 @@ def test_a_schema_1_project_becomes_presets_and_a_schema_2_project(home):
         assert p["note"] == f"slot {k + 1}"
         perf = {pid: v for pid, v in slot(k)["values"].items()
                 if pid.partition(".")[0] not in SESSION_GROUPS}
-        assert p["values"] == {**MACRO_VALUES, **perf}            # the table's macros fill in
+        # the table's macros fill in; the look-back's per-frame ids in seconds (plan 14 WP6)
+        assert p["values"] == migrate_values({**MACRO_VALUES, **perf})[0]
         assert p["modules"] == {"fx": "trip"}                     # the performance labels
         assert len(p["routes"]) == 12 + len(LEARNED)
         assert p["macros"] == {"macro.2": {"subs": [{"depth": {"source": "lane:3",
                                                                 "target": "fx.mix"},
                                                       "from": 0.0, "to": 1.0}]}}
         assert any(d["source"] == KNOB["source"] for d in p["desk"])
-    # the live state: the migrated project is the one open, its startup loaded
-    assert r.lib.project.path == home / "projects" / "default.hyp.json"
+    # the launch opens the party show; the migrated one opens on its startup
+    assert r.lib.project.name == "party" and r.lib.current("presets") == "TUMBLE"
+    r.lib.project.load("mine")
+    assert r.lib.project.path == mine_path(home)
     assert r.lib.project.bank[:5] == SLOT_NAMES and r.lib.current("presets") == "DEFAULT SAVED"
     assert r.view.shape == 9 and r.lib.project.active == 5     # the look it opened on (D11)
     assert not r.lib.error
@@ -198,7 +211,7 @@ def test_a_schema_1_projects_saved_look_becomes_its_startup_preset(tmp_path):
     mine = {"schema": "hyperspace.preset/2", "name": "DEFAULT SAVED", "values": {}}
     (home / "presets" / "default-saved.json").write_text(json.dumps(mine))
     r = boot(home)
-    doc = read(home / "projects" / "default.hyp.json")
+    doc = read(mine_path(home))
     assert doc["startup"] == "DEFAULT SAVED 2" and doc["bank"][5] == "DEFAULT SAVED 2"
     assert read(home / "presets" / "default-saved.json") == mine
     saved = preset_file(home, "DEFAULT SAVED 2")
@@ -207,6 +220,7 @@ def test_a_schema_1_projects_saved_look_becomes_its_startup_preset(tmp_path):
     assert saved["routes"] == preset_file(home, "MY WAVE")["routes"]
     assert KNOB in saved["desk"] and saved["macros"] == preset_file(home, "MY WAVE")["macros"]
     assert saved["modules"] == {"fx": "trip"}
+    r.lib.project.load("mine")
     assert r.lib.current("presets") == "DEFAULT SAVED 2" and r.view.shape == 9
     assert any("own look → preset 'DEFAULT SAVED 2'" in n and "slot 6" in n for n in r.notes)
     # equal to slot 3's: that slot is the startup, no SAVED preset
@@ -216,9 +230,10 @@ def test_a_schema_1_projects_saved_look_becomes_its_startup_preset(tmp_path):
     v1["values"] = {**slot(2)["values"], "tempo.bpm": 128.0}
     (home / "projects" / "default.hyp.json").write_text(json.dumps(v1))
     r = boot(home)
-    doc = read(home / "projects" / "default.hyp.json")
+    doc = read(mine_path(home))
     assert doc["startup"] == "LATE SET" and "DEFAULT SAVED" not in doc["bank"]
     assert not (home / "presets" / "default-saved.json").exists()
+    r.lib.project.load("mine")
     assert r.lib.current("presets") == "LATE SET" and doc["session"]["tempo.bpm"] == 128.0
     # a full bank: the startup, in no slot, and the note says so
     home = tmp_path / "c"
@@ -228,10 +243,11 @@ def test_a_schema_1_projects_saved_look_becomes_its_startup_preset(tmp_path):
     v1["bank"] = [dict(slot(k % 5), name=f"S{k}") for k in range(8)]
     (home / "projects" / "default.hyp.json").write_text(json.dumps(v1))
     r = boot(home)
-    doc = read(home / "projects" / "default.hyp.json")
+    doc = read(mine_path(home))
     assert doc["startup"] == "GIG SAVED" and "GIG SAVED" not in doc["bank"]
     assert preset_file(home, "GIG SAVED")["values"]["view.shape"] == 9
     assert any("GIG SAVED" in n and "no slot (the bank is full)" in n for n in r.notes)
+    r.lib.project.load("mine")
     assert r.lib.current("presets") == "GIG SAVED"
 
 
@@ -271,7 +287,8 @@ def test_bindings_json_performer_rows_move_into_the_startup_preset(home):
     assert any(b.target == "band.0.post" and b.layer is None for b in rows)     # a fader
     assert any(b.target == routing.SHIFT_PARAM for b in rows)
     assert not any(b.source == KNOB["source"] for b in rows)
-    # the startup preset holds them, and the launch put them live
+    # the startup preset holds them, and opening the show puts them live
+    r.lib.project.load("mine")
     start = preset_file(home, "MY WAVE")
     assert [d for d in start["routes"] if d["source"].startswith("hand:")] == named(LEARNED[:2])
     assert {"source": "lane:3", "target": "fx.mix", "op": "push", "value": 0.2} in start["routes"]
@@ -301,7 +318,10 @@ def test_every_rewrite_keeps_a_backup_and_never_over_a_hand_made_one(home, capsy
     assert "migrate: default.hyp.json → hyperspace.project/2 (5 presets); the old file " \
            "kept as default.hyp.json.bak-v1" in err
     assert f"the old file kept as {dated[0].name}" in err
-    assert r.lib.warning.startswith("plan 13 migration: 2 file(s) rewritten")
+    # …and the converted default, renamed mine with its own backup (decision 22)
+    assert (home / "projects" / "default.hyp.json.bak-v2").is_file()
+    assert "default' is now 'mine'" in err
+    assert r.lib.warning.startswith("plan 13 migration: 3 file(s) rewritten")
     # the user routing preset is not rewritten at all
     assert read(home / "bindings" / "show-a.json") == ROUTING_PRESET
     assert not list((home / "bindings").glob("*.bak-*"))
@@ -325,7 +345,7 @@ def test_a_rewrite_whose_backup_cannot_be_made_is_not_done(home, monkeypatch, ca
     assert sorted(p.name for p in home.glob("*.bak-*")) == ["bindings.json.bak-mine"]
     monkeypatch.undo()
     again = boot(home)                                   # the next launch tries again
-    assert read(home / "projects" / "default.hyp.json")["schema"] == "hyperspace.project/2"
+    assert read(mine_path(home))["schema"] == "hyperspace.project/2"
     assert again.router.table.carried is None
 
 
@@ -364,6 +384,8 @@ def test_the_migration_runs_once(home):
     after = tree(home)
     second = boot(home)
     assert second.notes == [] and tree(home) == after
+    assert second.lib.project.name == "party" and not second.lib.error
+    second.lib.project.load("mine")
     assert second.lib.current("presets") == "DEFAULT SAVED" and not second.lib.error
     assert [b.source for b in second.router.table.routes() if b.source.startswith("hand")] \
         == ["hand:right.y", "hand:left.y"]
@@ -378,26 +400,30 @@ def test_a_home_with_no_project_keeps_its_routes_in_a_migrated_preset(tmp_path):
     assert KNOB in kept["desk"] and kept["macros"]["macro.2"]["subs"]
     assert kept["values"]["macro.2"] == 0.4 and "view.shape" in kept["values"]
     assert not any(k.partition(".")[0] in SESSION_GROUPS for k in kept["values"])
-    # the user's default project, made from the factory's, starts on it
-    doc = read(home / "projects" / "default.hyp.json")
-    factory = read(FACTORY / "projects" / "default.hyp.json")
+    # the user's show `mine`, made from the factory house show, starts on it
+    assert not (home / "projects" / "default.hyp.json").exists()
+    doc = read(mine_path(home))
+    factory = read(FACTORY / "projects" / "house.hyp.json")
     assert doc["schema"] == "hyperspace.project/2" and doc["startup"] == "MIGRATED"
     assert doc["bank"] == ["MIGRATED", *factory["bank"][:7]]     # the last house preset off
     assert any(f"{factory['bank'][7]!r} left the bank" in n for n in r.notes)
+    r.lib.project.load("mine")
     assert r.lib.current("presets") == "MIGRATED"
     assert r.router.table.owner("view.bright").source == "hand:right.y"
     assert not any(b.op in MOD_OPS for b in Bindings.load(bindings_path(home)).bindings)
-    # a user default already at schema 2 keeps its bank, one slot along, and a backup
+    # a user default already at schema 2 is renamed mine (a backup), then
+    # keeps its bank, one slot along, and a backup
     home2 = tmp_path / "two"
     owners_home(home2, project=False, routing_preset=False)
-    mine = dict(factory, bank=["EMBER ORBIT", None, "HEX ENGINE", None, None, None, None, None],
-                startup="EMBER ORBIT")
-    (home2 / "projects" / "default.hyp.json").write_text(json.dumps(mine))
+    old = dict(factory, name="default", startup="EMBER ORBIT",
+               bank=["EMBER ORBIT", None, "HEX ENGINE", None, None, None, None, None])
+    (home2 / "projects" / "default.hyp.json").write_text(json.dumps(old))
     boot(home2)
-    doc2 = read(home2 / "projects" / "default.hyp.json")
+    doc2 = read(mine_path(home2))
     assert doc2["bank"] == ["MIGRATED", "EMBER ORBIT", None, "HEX ENGINE", None, None, None, None]
     assert doc2["startup"] == "MIGRATED"
-    assert read(home2 / "projects" / "default.hyp.json.bak-v2") == mine
+    assert read(home2 / "projects" / "default.hyp.json.bak-v2") == old
+    assert read(home2 / "projects" / "mine.hyp.json.bak-v2") == dict(old, name="mine")
 
 
 def test_an_equal_preset_is_pointed_at_and_a_users_is_never_overwritten(tmp_path):
@@ -454,7 +480,7 @@ def test_a_preset_that_cannot_be_written_never_stops_the_launch(home):
     again = boot(home)
     assert (home / "bindings" / preset.NOT_READ).exists()
     assert preset_file(home, "Show A")["routes"] == named(ROUTING_PRESET["bindings"])
-    assert read(home / "projects" / "default.hyp.json")["schema"] == "hyperspace.project/2"
+    assert read(mine_path(home))["schema"] == "hyperspace.project/2"
     assert again.router.table.carried is None
 
 
@@ -464,11 +490,12 @@ def test_a_launch_that_could_not_rewrite_bindings_json_does_not_take_the_default
     — no MIGRATED, the default project left as the first launch made it —
     and only rewrites bindings.json."""
     boot(home)
-    project = (home / "projects" / "default.hyp.json").read_text()
+    project = mine_path(home).read_text()
     bindings_path(home).write_text(json.dumps(bindings_v2()))    # as if the rewrite never landed
     r = boot(home)
     assert not (home / "presets" / "migrated.json").exists()
-    assert (home / "projects" / "default.hyp.json").read_text() == project
+    assert mine_path(home).read_text() == project
+    r.lib.project.load("mine")
     assert r.lib.current("presets") == "DEFAULT SAVED"
     assert not any(b.op in MOD_OPS for b in Bindings.load(bindings_path(home)).bindings)
     assert any("already in a preset" in n for n in r.notes)
@@ -551,16 +578,17 @@ def test_nothing_is_lost(home):
     # the performance values: every slot's, and the macros' bases, in its preset
     for k, name in enumerate(SLOT_NAMES):
         held = preset_file(home, name)["values"]
-        for pid, v in {**slot(k)["values"], **raw["values"]}.items():
+        want = migrate_values({**raw["values"], **slot(k)["values"]})[0]   # plan 14 WP6
+        for pid, v in want.items():
             if pid.partition(".")[0] not in SESSION_GROUPS:
-                assert held[pid] == (slot(k)["values"].get(pid, v)), (name, pid)
+                assert held[pid] == v, (name, pid)
     # the project's own look (what it restored on open) is a preset too
     saved = preset_file(home, "DEFAULT SAVED")["values"]
     for pid, v in {**raw["values"], **project_v1()["values"]}.items():
         if pid.partition(".")[0] not in SESSION_GROUPS:
             assert saved[pid] == project_v1()["values"].get(pid, v), pid
     # the session values went to the project, not lost
-    session = read(home / "projects" / "default.hyp.json")["session"]
+    session = read(mine_path(home))["session"]
     for pid in ("scene.select", "master.gain", "band.0.atk", "tempo.bpm", "hands.smooth"):
         assert pid in session, pid
     made = preset_file(home, "Show A")["values"]

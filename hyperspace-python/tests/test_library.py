@@ -9,6 +9,7 @@ import os
 from types import SimpleNamespace
 
 import pytest
+from conftest import opened_last
 
 from hyperspace import config, library, routing
 from hyperspace.analysis import Analyser
@@ -38,7 +39,11 @@ def edit(path, fn):
     touch(path)
 
 
-def make(home):
+def make(home, show: str | None = "house"):
+    """Over a home that opened `show` last — the house moods these tests
+    were written on (None: a fresh home, which opens the party show)."""
+    if show:
+        opened_last(home, show)
     chain = Analyzer(Analyser())
     control = Control(chain)
     audio = SimpleNamespace(chain=chain)
@@ -83,9 +88,12 @@ def test_first_run_migrates_working_directory_files(tmp_path, monkeypatch, capsy
     assert (cwd / "config.toml").exists()                       # originals stay
     err = capsys.readouterr().err
     assert "config.toml" in err and "presets.json" in err
-    # the legacy theme bank became user presets and a schema-2 default
-    # project naming them (plan 13 WP2); an empty legacy slot stays empty
-    r = make(home)
+    # the legacy theme bank became user presets and a schema-2 show
+    # naming them, `mine` (plan 13 WP2, plan 14 WP3); an empty legacy slot
+    # stays empty
+    assert (home / "projects" / "mine.hyp.json").is_file()
+    assert not (home / "projects" / "default.hyp.json").exists()
+    r = make(home, show="mine")
     assert r.lib.project.bank[:2] == [None, "MINE"] and r.lib.project.startup == "MINE"
     doc = json.loads((home / "presets" / "mine.json").read_text())
     assert doc["schema"] == "hyperspace.preset/2" and doc["routes"]   # the factory lanes
@@ -117,7 +125,9 @@ def test_config_explicit_path_keeps_working(tmp_path):
 # ---------------------------------------------------------------- files
 
 def test_factory_presets_ship_in_the_package():
-    assert (FACTORY / "projects" / "default.hyp.json").is_file()
+    assert (FACTORY / "projects" / "party.hyp.json").is_file()      # what a fresh home opens
+    assert (FACTORY / "projects" / "house.hyp.json").is_file()      # the house moods
+    assert not (FACTORY / "projects" / "default.hyp.json").exists()   # plan 14 WP3
     names = {json.loads(p.read_text())["name"] for p in (FACTORY / "band").glob("*.json")}
     assert names == set(SCENES)
     doc = json.loads((FACTORY / "band" / "balanced.json").read_text())
@@ -383,7 +393,7 @@ def test_a_project_restores_a_modules_layout(rig, tmp_path):
     assert lib.defaults("band")["band.7.atk"] != edited
     # a new project goes back to the layout the app started with
     lib.project.new()
-    assert chain.n == 6 and lib.current("band") is None
+    assert chain.n == 6 and lib.current("band") == "Balanced"   # the party show's scene
     # …and the module as an inline copy, when its file is gone
     lib.project.load("Wide")
     (tmp_path / "band" / "eight.json").unlink()
@@ -563,7 +573,7 @@ def test_legacy_slot_conversion():
 
 def test_project_save_load_new(rig, tmp_path):
     lib, reg = rig.lib, rig.reg
-    assert lib.project.name == "default" and lib.project.path is None   # the factory one
+    assert lib.project.name == "house" and lib.project.path is None   # the factory one
     lib.load("band", "Percussive")
     lib.save_as("view", "Mine")
     reg["camera.zoom"].set_value(3.0)
@@ -571,7 +581,7 @@ def test_project_save_load_new(rig, tmp_path):
     lib.project.save_slot(2)
     p = lib.project.save("Gig")
     assert p == tmp_path / "projects" / "gig.hyp.json"
-    assert lib.project.list() == ["default", "gig", "party"]   # party: the factory one
+    assert lib.project.list() == ["gig", "house", "party"]   # house, party: the factory ones
     doc = json.loads(p.read_text())
     assert doc["schema"] == "hyperspace.project/2" and doc["name"] == "Gig"
     # a performance group's label is the preset's, never the project's
@@ -583,9 +593,10 @@ def test_project_save_load_new(rig, tmp_path):
 
     lib.project.new()
     assert lib.project.name == "untitled" and lib.project.path is None
-    assert rig.chain.gain == 1.0 and lib.current("band") is None    # a fresh session…
-    assert lib.project.bank[2] == "STROBE CAGE"                      # …the factory bank
-    assert lib.current("presets") == "BIG BLUE WAVE"                 # …and its startup preset
+    assert rig.chain.gain == 1.0                                     # a fresh session…
+    assert lib.current("band") == "Balanced"                         # …the party show's scene,
+    assert lib.project.bank[2] == "FIELD"                            # …its bank
+    assert lib.current("presets") == "TUMBLE"                        # …and its first preset
 
     missing = lib.project.load("Gig")
     assert missing == [] and lib.project.path == p
@@ -615,13 +626,13 @@ def test_project_unknown_ids_and_a_short_bank(rig, tmp_path):
     assert rig.lib.project.name == "Odd" and rig.lib.project.path == p
 
 
-def test_user_default_project_opens_on_attach(tmp_path):
+def test_the_users_copy_of_the_last_show_opens_on_attach(tmp_path):
     r = make(tmp_path)
     r.reg["master.gain"].set(2.0)
     r.lib.load("band", "Tremolo Web")
-    r.lib.project.save()
-    r2 = make(tmp_path)
-    assert r2.lib.project.path == tmp_path / "projects" / "default.hyp.json"
+    r.lib.project.save()                              # the factory house show: your copy
+    r2 = make(tmp_path, show=None)
+    assert r2.lib.project.path == tmp_path / "projects" / "house.hyp.json"
     assert r2.chain.gain == 2.0 and r2.lib.current("band") == "Tremolo Web"
 
 
@@ -688,6 +699,7 @@ def test_factory_projects_are_listed_and_load_by_name(rig):
     assert "party" in lib.project.list()
     assert lib.project.load("party") == []
     assert lib.project.name == "party" and lib.project.path is None
-    assert lib.project.bank == ["TUMBLE", "FACES", "FIELD", "WAKE", "TRIP", None, None, None]
+    assert lib.project.bank == ["TUMBLE", "FACES", "FIELD", "WAKE", "TRIP", "ACID", "MANDALA",
+                               "NOITA"]
     assert lib.current("presets") == "TUMBLE" and lib.project.active == 0
     assert rig.view.shape == 10 and lib.current("band") == "Balanced"

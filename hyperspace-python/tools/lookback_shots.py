@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from hyperspace.lookback import DreamState
+from hyperspace.lookback import DreamState, fade_of_decay
 from hyperspace.render import Renderer
 from hyperspace.view import ViewState
 
@@ -55,7 +55,8 @@ def main() -> None:
     ctx = moderngl.create_context(standalone=True)
 
     # the shot: the tracer-only preset's look, a little heavier so it reads in a still
-    dream = DreamState(on=True, echoes=8, every=3, decay=0.94, echo_mix=0.7, darken=0.2,
+    dream = DreamState(on=True, echoes=8, gap=3 / 60, fade=fade_of_decay(0.94), echo_mix=0.7,
+                       darken=0.2,
                        contrast=1.2, res=2)
     fbo, r, s = scene(ctx, dream)
     for k in range(args.frames):
@@ -73,7 +74,7 @@ def main() -> None:
           " (ms, p50 / p99 over 120 frames, ctx.finish per frame)")
     rows = []
     for echoes in (0, 8, 32):
-        dream = DreamState(on=echoes > 0, echoes=echoes, every=1, res=2)
+        dream = DreamState(on=echoes > 0, echoes=echoes, gap=0.0, res=2)
         fbo, r, s = scene(ctx, dream)
         for k in range(40):                     # fill the ring, warm the caches
             frame(ctx, fbo, r, s, k / 60)

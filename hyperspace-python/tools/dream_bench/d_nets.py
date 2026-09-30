@@ -1,6 +1,6 @@
 """Question D (part 1) — what nets/layers/resolutions can we actually run.
 
-    uv run --extra dream python tools/dream_bench/d_nets.py [--res 128,192,256,384,512]
+    uv run python tools/dream_bench/d_nets.py [--res 128,192,256,384,512]
 
 One gradient-ascent step (forward to the hooked layer, mean activation,
 grad wrt input, std-normalise, add, clamp) on torch MPS, isolated (no

@@ -1,7 +1,7 @@
 {
  "schema": "hyperspace.project/2",
- "name": "default",
- "note": "The factory project: fresh state and the eight house presets on F1-F8 (library/presets/). A user file of the same name in $HYPERSPACE_HOME/projects shadows it.",
+ "name": "house",
+ "note": "The eight house moods on F1-F8 (library/presets/). Until plan 14 WP3 this was the factory `default` show; the party show opens now (decision 22).",
  "startup": "BIG BLUE WAVE",
  "bank": [
   "BIG BLUE WAVE",

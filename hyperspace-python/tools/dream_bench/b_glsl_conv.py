@@ -1,6 +1,6 @@
 """Question B.3 — one VGG conv layer as a moderngl fragment shader.
 
-    uv run --extra dream python tools/dream_bench/b_glsl_conv.py [--res 256]
+    uv run python tools/dream_bench/b_glsl_conv.py [--res 256]
 
 macOS is OpenGL 4.1: no compute shaders, no SSBOs, so a conv layer is a
 fullscreen pass that reads the activation tensor as a 2D-array texture

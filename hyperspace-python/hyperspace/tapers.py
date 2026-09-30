@@ -20,8 +20,10 @@ OCT_T = 12   # slider steps per doubling, time constants
 
 def clamp(x, a, b):
     """The package's one clamp (audit R10). tempo.py, lfo.py and the hands
-    package keep a private copy: they import nothing from the package."""
-    return a if x < a else min(x, b)
+    package keep a private copy: they import nothing from the package.
+    NaN lands on `a`, never through: a NaN base once made every integer
+    and enum param raise in `reg.apply` each frame (plan 14 WP1)."""
+    return a if not x >= a else min(x, b)
 
 
 @dataclass(frozen=True)

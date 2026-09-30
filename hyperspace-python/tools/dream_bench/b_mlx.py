@@ -1,6 +1,6 @@
 """Question B.2 — MLX versus torch MPS for the gradient-ascent step.
 
-    uv run --extra dream python tools/dream_bench/b_mlx.py [--res 128,256,512]
+    uv run python tools/dream_bench/b_mlx.py [--res 128,256,512]
 
 Two trunks, identical weights in both frameworks:
 

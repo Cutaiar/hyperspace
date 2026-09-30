@@ -155,6 +155,84 @@ def test_system_page_shows_the_bridge(rig, monkeypatch):
     assert shown() == ["bridge: no such port"]
 
 
+def _drawn(monkeypatch) -> list[str]:
+    """Every string the page code hands imgui's text calls, in order (every
+    ui module shares the one imgui module, so patching it once is enough)."""
+    drawn: list[str] = []
+    colored, disabled, wrapped = imgui.text_colored, imgui.text_disabled, imgui.text_wrapped
+    monkeypatch.setattr(imgui, "text_colored", lambda col, s: (drawn.append(s), colored(col, s)))
+    monkeypatch.setattr(imgui, "text_disabled", lambda s: (drawn.append(s), disabled(s)))
+    monkeypatch.setattr(imgui, "text_wrapped", lambda s: (drawn.append(s), wrapped(s)))
+    return drawn
+
+
+def test_a_render_error_and_the_dream_error_show_in_the_red_banner(rig, monkeypatch, tmp_path):
+    """Plan 14 WP1: a live render error (the render window holding its last
+    frame) and a dream worker that would not start are a red banner across
+    the control window — drawn even with the panel hidden — not only a
+    line on the SYSTEM page."""
+    from hyperspace.watchdog import RenderWatch, Watchdog
+
+    drawn = _drawn(monkeypatch)
+    rw = RenderWatch(Watchdog(tmp_path / "stall.log"))
+    rig.panel.render_watch = rw
+    frame(rig.panel)
+    assert rig.panel.alerts() == [] and not any("render window" in s for s in drawn)
+    rw.failed(ValueError("boom"), 0.0)
+    rig.panel.dream_error = "dream worker off: FileNotFoundError: vgg16 weights"
+    rig.panel.open = False                     # the banner shows with the panel hidden
+    drawn.clear()
+    frame(rig.panel)
+    # the banner is drawn last, in front of everything else
+    assert drawn[-2:] == ["render window stopped — ValueError: boom",
+                          "dream worker off: FileNotFoundError: vgg16 weights"]
+    # the render recovers: the error stays, as what happened, until dismissed
+    rw.drew(1.0)
+    drawn.clear()
+    frame(rig.panel)
+    assert drawn[-2].startswith("the render window stopped once, last at ")
+    assert "ValueError: boom" in drawn[-2] and rw.dismissible
+    rw.dismiss()
+    drawn.clear()
+    frame(rig.panel)
+    assert drawn[-1] == "dream worker off: FileNotFoundError: vgg16 weights"
+    assert not any("render window" in s for s in drawn)
+    # the dream's reason dismisses too (SYSTEM and LOOKBACK keep it)
+    rig.panel.dismiss_alerts()
+    assert rig.panel.alerts() == []
+
+
+def test_system_page_shows_the_dream_error_and_the_stall_log(rig, monkeypatch, tmp_path):
+    """The dream gate's reason sits beside config_error / config_notes; the
+    stall log's line appears once the file has entries."""
+    from hyperspace import app
+    from hyperspace.watchdog import Watchdog
+
+    drawn = _drawn(monkeypatch)
+    rig.panel.dream_error = app.dream_error(ModuleNotFoundError("no torch", name="torch"))
+    assert rig.panel.dream_error == (
+        "dream worker off: torch is not installed — run `uv sync`, "
+        "then launch with `uv run hyperspace`")
+    wd = Watchdog(tmp_path / "stall.log", preset=lambda: "FACES")
+    rig.panel.watchdog = wd
+    frame(rig.panel, "system")
+    assert rig.panel.dream_error in drawn
+    assert not any(s.startswith("stall log:") for s in drawn)
+    assert wd.open() and wd.log("stall", "no frame for 2.4 s")
+    drawn.clear()
+    frame(rig.panel, "system")
+    assert f"stall log: {wd.path} (1 stall)" in drawn
+    wd.close()
+
+
+def test_the_lookback_page_says_why_the_worker_is_off(rig, monkeypatch):
+
+    drawn = _drawn(monkeypatch)
+    rig.panel.dream_error = "dream worker off: torch is not installed — run `uv sync`"
+    frame(rig.panel, "lookback")
+    assert rig.panel.dream_error in drawn
+
+
 def test_page_param_is_ui_state_not_a_preset(rig):
     p = rig.reg["ui.page"]
     assert p.group == "ui" and not p.persist and not p.modulatable
@@ -196,6 +274,7 @@ def test_every_page_fits_the_control_window(rig, monkeypatch):
     a hands setup with a tracker, an Output and a Router with the factory
     rows, so HANDS, OUTPUT and ROUTING are measured full (audit U1)."""
     assert rig.panel.hands is not None and rig.panel.output is not None
+    assert rig.panel.desk                   # the desk diagram on (plan 14 WP7)
     assert rig.router.table.routes()
     over = _page_scroll(rig, monkeypatch)
     assert set(over) == set(PAGE_KEYS)
@@ -291,7 +370,8 @@ _SYMBOLS = {"←": "LEFT", "→": "RIGHT", "↑": "UP", "↓": "DOWN", "space": 
             "?": "SLASH", "Esc": "ESCAPE", "Cmd+R": "SUPER+R"}
 _PADS = {"pad A B": ["A", "B"], "pad X Y": ["X", "Y"], "LB / RB": ["LB", "RB"],
          "view/menu": ["VIEW", "MENU"], "sticks": ["LSTICK", "RSTICK"]}
-_MOUSE = {"drag", "⇧drag", "scroll", "right-click", "d-pad", "LT / RT"}
+_MOUSE = {"drag", "⇧drag", "scroll", "right-click", "d-pad", "LT / RT",
+          "APC40"}                                   # the desk's glyph legend, not a key
 
 
 def _sheet_keys() -> tuple[set[str], set[str]]:
@@ -413,11 +493,11 @@ def test_project_row_and_dirty_state(rig, tmp_path):
     panel, lib, reg = rig.panel, rig.lib, rig.reg
     proj = lib.project
     frame(panel, "presets")
-    assert proj.is_dirty()          # never saved
+    assert not proj.is_dirty() and proj.factory   # a factory show as it shipped: clean
     ui_presets._project_save_as(panel, "Show")
     assert proj.name == "Show" and proj.path == tmp_path / "projects" / "show.hyp.json"
     assert not proj.is_dirty()
-    assert ui_presets.names(panel, ui_presets.PROJECT) == ["default", "party", "show"]
+    assert ui_presets.names(panel, ui_presets.PROJECT) == ["house", "party", "show"]
     frame(panel)
     gain = rig.chain.gain
     reg["master.gain"].set(gain + 1.0)             # a session move
@@ -441,9 +521,9 @@ def test_preset_bank_and_strip_on_the_presets_page(rig):
     frame(panel, "presets")
     reg["view.shape"].set(5)
     reg["preset.save.2"].fire()
-    assert lib.project.active == 2 and lib.project.bank[2] == "STROBE CAGE"
-    assert lib.read("presets", "STROBE CAGE")["values"]["view.shape"] == 5
-    assert lib.current("presets") == "STROBE CAGE" and not lib.is_dirty("presets")
+    assert lib.project.active == 2 and lib.project.bank[2] == "FIELD"
+    assert lib.read("presets", "FIELD")["values"]["view.shape"] == 5
+    assert lib.current("presets") == "FIELD" and not lib.is_dirty("presets")
     reg["view.shape"].set(1)
     assert ui_presets.dirty(panel, "presets")
     frame(panel)

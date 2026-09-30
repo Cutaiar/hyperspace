@@ -306,21 +306,17 @@ dependencies = [
     { name = "imgui-bundle" },
     { name = "leap" },
     { name = "mido" },
+    { name = "mlx", marker = "sys_platform == 'darwin'" },
     { name = "moderngl" },
     { name = "numpy" },
     { name = "pillow" },
     { name = "pyobjc-framework-cocoa", marker = "sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-metal", marker = "sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'" },
     { name = "pyopengl" },
     { name = "python-rtmidi" },
     { name = "sounddevice" },
     { name = "soundfile" },
-]
-
-[package.optional-dependencies]
-dream = [
-    { name = "mlx", marker = "sys_platform == 'darwin'" },
-    { name = "pyobjc-framework-metal", marker = "sys_platform == 'darwin'" },
-    { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'" },
     { name = "torch" },
     { name = "torchvision" },
 ]
@@ -339,21 +335,20 @@ requires-dist = [
     { name = "imgui-bundle", specifier = ">=1.92.900" },
     { name = "leap", git = "https://github.com/ultraleap/leapc-python-bindings?subdirectory=leapc-python-api&rev=2341c6c3db5dc08236bb52890d8c43a224139694" },
     { name = "mido", specifier = ">=1.3.3" },
-    { name = "mlx", marker = "sys_platform == 'darwin' and extra == 'dream'", specifier = ">=0.20" },
+    { name = "mlx", marker = "sys_platform == 'darwin'", specifier = ">=0.20" },
     { name = "moderngl", specifier = ">=5.12.0" },
     { name = "numpy", specifier = ">=2.0" },
     { name = "pillow", specifier = ">=10" },
     { name = "pyobjc-framework-cocoa", marker = "sys_platform == 'darwin'", specifier = ">=12.2.2" },
-    { name = "pyobjc-framework-metal", marker = "sys_platform == 'darwin' and extra == 'dream'", specifier = ">=12.2" },
-    { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin' and extra == 'dream'", specifier = ">=12.2" },
+    { name = "pyobjc-framework-metal", marker = "sys_platform == 'darwin'", specifier = ">=12.2" },
+    { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'", specifier = ">=12.2" },
     { name = "pyopengl", specifier = ">=3.1.10" },
     { name = "python-rtmidi", specifier = ">=1.5.8" },
     { name = "sounddevice", specifier = ">=0.5.6" },
     { name = "soundfile", specifier = ">=0.14.0" },
-    { name = "torch", marker = "extra == 'dream'", specifier = ">=2.2" },
-    { name = "torchvision", marker = "extra == 'dream'", specifier = ">=0.17" },
+    { name = "torch", specifier = ">=2.2" },
+    { name = "torchvision", specifier = ">=0.17" },
 ]
-provides-extras = ["dream"]
 
 [package.metadata.requires-dev]
 dev = [

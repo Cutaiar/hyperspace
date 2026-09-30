@@ -1,6 +1,6 @@
 """Question F — history depth: texture memory and the composite cost.
 
-    uv run --extra dream python tools/dream_bench/f_history.py
+    uv run python tools/dream_bench/f_history.py
 
 Memory per stored frame is arithmetic (printed for RGBA8, RGBA16F and
 RGB32F at the candidate dream resolutions, the 1280x820 window and its 2x

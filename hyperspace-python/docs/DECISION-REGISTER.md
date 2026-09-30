@@ -1,6 +1,6 @@
 # Decision register — everything that is yours to decide
 
-As of 2026-09-29. **Every row is answered** — 18 and 19 on 2026-09-28, 20 on 2026-09-29 (the answer sheet at the end). This is the one list. Every decision that blocks
+As of 2026-09-29. **Every row is answered** (21–25, plan 14, on 2026-09-29) (the answer sheet at the end). This is the one list. Every decision that blocks
 implementing and settling the open work is here, whichever plan or session
 raised it. Each entry stands on its own: what the thing is, what the software
 does today, the options, a recommendation with its reasons, the trade-off you
@@ -494,6 +494,190 @@ WP5b before the integration merge. (b)/(c): audit N7 stays open.
 
 ---
 
+## Part A3 — raised by the first night at the machine (plan 14, 2026-09-29)
+
+The rig is for a party: a render on a black window behind a Pepper's Ghost
+glass, two hands in a box, an APC40. Plan 14 (`docs/plans/14-party-rig.md`)
+has the findings; these five are yours.
+
+### 21. P14-a — does overlay mode survive?
+
+**Answered (a), 2026-09-29.** **Recommendation: (a), keep it behind a config key, off by default.**
+
+**What it is.** Overlay mode floats the render window over the whole
+desktop, see-through and click-through (a feature from an early commit).
+The window is created with a transparent framebuffer for it in *every*
+mode, and the APC40's MASTER select and the `T` key switch into it with one
+press. For Pepper's Ghost the window must be opaque black, always.
+
+**Today.** Plan 14 WP1 makes window and fullscreen opaque (the picture no
+longer cuts the alpha); overlay still exists and one press still reaches it.
+
+| Option | What the rig does | Trade-off |
+|---|---|---|
+| (a) Behind `[output] overlay = true` (default off): no transparent framebuffer, and MASTER select / `T` do nothing, unless the config asks | Can never show the desktop at a party; overlay still there for a laptop demo. | One config line to turn it on. |
+| (b) Remove overlay mode | Simplest; nothing can go see-through. | Drops a feature and its code (pyobjc window raising, the crossfader's ground). |
+| (c) Keep as today (after WP1) | Opaque unless someone presses MASTER select or `T`. | One wrong press mid-show floats the window over the desktop. |
+
+**Why (a).** The show can never go see-through by accident, and nothing is
+thrown away.
+
+**What changes.** (a): the window hint and the two controls gated on the
+config key, the overlay tests, check 26. Plan 14 WP2.
+
+**Built** (plan 14 WP2): `[output] overlay` (default false) in
+`config.DEFAULTS`; `app._windows(overlay)` sets `TRANSPARENT_FRAMEBUFFER`
+only when it is true; `overlay.Output.allowed` gates `output.overlay`, the
+one param the `T` row, the MASTER select row, the panel and a preset land
+on, so each road is shut together; the OUTPUT page greys the toggle and
+says why.
+
+### 22. P14-b — how the rig becomes "the party device"
+
+**Answered the recommendation, 2026-09-29.** **Recommendation: the party show opens by default; the house moods become a
+`house` show; the last show opened is remembered.**
+
+**What it is.** A "show" (today's "project") is a bank of eight presets and
+the one it starts on. The rig always opens the show named `default` — the
+eight house moods, and on your machine the `MIGRATED` preset in front of
+them — and forgets `party` every launch.
+
+**Today.** You open `party` by hand from load ▾ after every launch.
+
+| Option | What a launch opens | Trade-off |
+|---|---|---|
+| (a) Party is the factory default show (the house moods move to a `house` show), the last show opened is remembered, your `MIGRATED` stays a preset in the list (not in the bank) | Party, on every launch; whatever you last opened thereafter. | Your current `default` file is renamed with a backup; its bank moves to `house`. |
+| (b) A config key names the show to open (`[library] show = "party"`) | Party, as long as the key says so. | Explicit, but one more thing in the config. |
+| (c) Only remember the last show | Party after you open it once. | The first launch is still the house moods. |
+
+**Why (a).** The rig is a party device; the first thing it shows should be
+the party.
+
+**What changes.** The factory `default.hyp.json`, a `house` show, a
+remembered last show, a one-off rename of your `default` (with backup).
+Plan 14 WP3.
+
+**Built** (plan 14 WP3): the factory `default.hyp.json` is removed rather
+than re-filled — `party.hyp.json` already was the party show, and a user
+file named `default` (yours, plan 13's) would have gone on shadowing a
+factory `default`; `library.DEFAULT_PROJECT` is `party`. The house moods
+are `house.hyp.json`. `<home>/last_show` holds the name of the show opened
+last (a plain one-line file beside `config.toml`, written by a show load,
+save as, or a "starts on" pick); a name that is gone falls back to the
+party. On the first launch your `projects/default.hyp.json` becomes
+`projects/mine.hyp.json` (named `mine`, bank and startup as they were),
+kept first as `default.hyp.json.bak-v2`, noted on stderr and on the
+PRESETS page; the second launch changes nothing.
+
+### 23. P14-c — "the dream on by default"
+
+**Answered (a): torch is part of the app, 2026-09-29.** **Recommendation: (b), keep torch optional, turn the worker on by default,
+and say loudly when torch is missing.**
+
+**What it is.** The dream worker (the neural "dream" over the look-back
+echoes) needs torch — about 1 GB — installed as an optional extra with
+`uv sync --extra dream`. Without it the look-back shows raw echoes and says
+"no worker"; a plain `uv sync` removes the extra.
+
+| Option | What you get | Trade-off |
+|---|---|---|
+| (a) torch always installed | The dream works on every install. | A ~1 GB install and a slower launch on every machine, dream or not. |
+| (b) Optional extra, worker on by default, the panel says what to run when torch is missing | The dream works once you run the one command; the panel tells you. | You must use `--extra dream` for sync and run. |
+| (c) As today | — | "No worker" with no explanation. |
+
+**Why (b).** The rig gets the dream once, on purpose; a laptop without it
+still starts fast and tells you why.
+
+**What changes.** `[dream] enabled` default, the SYSTEM / LOOKBACK message
+(WP1), the setup docs, the launch command in the hand checks. Plan 14 WP6.
+
+**As built (plan 14 WP1 + WP6).** WP1 made torch an ordinary dependency
+and the worker on by default. WP6 made the echoes it dreams over
+readable: echo time is seconds (`dream.fade`, a half-life; `dream.gap`,
+seconds between echoes — the old per-frame `dream.decay` / `dream.every`
+read as 60 Hz frames, so every saved look is the same at 60 Hz and a
+120 Hz screen no longer halves the trail); a TRACER preset with the
+investigation's legible set (a ninth party preset, in the list, on no
+F-key); WAKE re-tuned (24 echoes over 1.2 s, a 0.6 s half-life, occlude
+0.3) and shot with the worker running
+(`docs/plans/assets/12-presets/party-wake-dream-sheet.png`). No extra
+step: `uv sync` and launch; hand checks 9 and 41 look at it.
+
+### 24. P14-d — which effects go on the party show's F6–F8
+
+**Answered (a), 2026-09-29.** **Recommendation: ACID, MANDALA and NOITA.**
+
+**What it is.** The FX page has twelve effects; the party show uses four,
+all in TRIP. Seven (warp, wobble, doublevision, deconverge, fractals,
+glimmer, tripcolour) are in no preset at all. The party show has three
+empty slots.
+
+| Option | F6–F8 | Trade-off |
+|---|---|---|
+| (a) ACID, MANDALA, NOITA — built from the three module presets already tuned in `library/fx/`, each with hand routes and eight device knobs like TRIP | Three more looks, one effect family each; every effect reachable from the show. | Three presets to compose and judge by eye (check 41). |
+| (b) Your own three | — | You name them. |
+| (c) Leave F6–F8 empty; add the effects to the existing five | No new presets. | The five were composed to plan 12's brief; adding effects changes them. |
+
+**Why (a).** The looks already exist as module presets; this puts them on a
+key.
+
+**What changes.** Three generated presets, the party bank, the FX-coverage
+test. Plan 14 WP5.
+
+**As built (plan 14 WP5).** `party-acid` (acid, wobble, deconverge, hue
+cycle), `party-mandala` (plasma, kaleidoscope, fractals, glimmer) and
+`party-noita` (trip warp, trip colour, fractals, double vision) on F6–F8,
+each taking its effect values from its `library/fx` module preset, with
+plan 12's hand rows and eight device knobs. The seven effects no preset
+used are all on in one of the three. Two deviations from the module
+presets, both for the glass: MANDALA's plasma level and its fractals and
+glimmer grounds start at 0 (the module is a full-frame generator; on a
+Pepper's Ghost the black must stay black — the right hand's pitch floods
+the plasma in), and NOITA adds double vision, which no module preset has.
+The dead `fx.mix` rows: `hands-pinch` fades the hue cycle in, `lfo-breathe`
+breathes the plasma. Cards: `docs/plans/assets/12-presets/party-{acid,
+mandala,noita}.md`; hand checks 5 and 41.
+
+### 25. P14-e — the desk's glyphs and diagram
+
+**Answered (a), 2026-09-29.** **Recommendation: the scheme below, the diagram above the cheat sheet,
+showing the layer that is up.**
+
+**What it is.** Akai's names ("track knob", "device knob", "clip 4·2")
+mean nothing for this show. Each control gets a short glyph, printed on
+every ROUTING row and Learn message, and drawn on an on-screen picture of
+the APC40 with the mapped controls lit.
+
+```
+ K1 K2 … K8   track knobs (top row)         D1 … D8   device knobs (right)
+ G1·1 … G5·8  clip grid, row·column          G1·9 … G5·9  scene launch
+ G6 … G10     clip stop, select, activator, solo, rec-arm rows
+ S1 … S8      track faders    SM  master fader    X  crossfader    C  cue
+ B1 … B22     the other buttons (transport, arrows, TAP, NUDGE, …)    ⇧  SHIFT
+```
+
+| Option | Trade-off |
+|---|---|
+| (a) As above (S for faders, so F stays the F-keys; the diagram shows the up layer) | Short, unique (checked against every control and row shipped). |
+| (b) Letters for the button rows instead of G6–G10 | Easier to say aloud, longer to learn. |
+| (c) The diagram shows both layers at once | Everything visible; twice as dense. |
+
+**Why (a).** One glance from a row to the desk, in four characters.
+
+**What changes.** A layout table, the glyph on the page and in Learn, the
+diagram window, hand check 45. Plan 14 WP7.
+
+**Built (plan 14 WP7).** `apc40.LAYOUT` holds all 137 controls with the
+glyphs above (B1–B4 PAN, SEND A–C; B5–B12 the eight device buttons,
+CLIP/TRACK … METRONOME; B13–B15 PLAY, STOP, REC; B16–B19 ▲ ▼ ▶ ◀; B20
+TAP TEMPO, B21 NUDGE −, B22 NUDGE +). The ROUTING desk and session rows
+print the glyph first, Akai's name in the tooltip; Learn says "D3
+(device knob 3)". The diagram (`ui_desk.py`, `ui.desk`) sits above the
+cheat sheet in the control window and reads the table, not the port.
+Where each control sits is hand check 45's to confirm on the device.
+
+---
+
 ## Part B — built on the recommendation without asking; confirm or overturn
 
 Four calls had a sensible default and waiting would have blocked the work.
@@ -570,3 +754,8 @@ or "overturn".
 | 18 | P13-h the drive fader and `scale` | (a) keep `scale`, session params only | **(a)**, 2026-09-28 | built in plan 13 WP5 (PR #66): `routing.migrate_scales` — a `scale` kept only on a session param, one on a macro a depth subscriber, one on a performance param dropped with a note |
 | 19 | P13-i a route onto a session param | (a) yes; D9 is about values | **(a)**, 2026-09-28 | built in plan 13 WP5 (PR #66): the ROUTING page marks such a route "session" (`ui_routing.is_session_target`); the scale combo offers session params only |
 | 20 | P13-j hand routes by name | (a) names now, in plan 13 | **(a)**, 2026-09-29 | built, plan 13 WP5b, PR #70: `hand:right.roll`, `hand:left.present`, `hand:left.pinch.index`, resolved through the hands adapter's published map (`router.names`); a name the rig lacks is dormant; `hand:<i>` still reads; the factory presets regenerated, the migration names what it carries by the rig's layout |
+| 21 | P14-a overlay mode | (a) behind a config key, off | **(a)**, 2026-09-29 | built, plan 14 WP2 (PR #75): `[output] overlay = false` by default — the render window is created without a transparent framebuffer, `output.overlay` refuses to switch on (`T`, MASTER select, the panel's greyed toggle with the reason, a preset), the crossfader's ground does nothing; `true` is today's overlay |
+| 22 | P14-b the party device | party opens; house moods a `house` show; last show remembered | **rec**, 2026-09-29 | built, plan 14 WP3 + WP4 (PR #75): the factory `default` show is gone — `party` opens, `house` holds the eight house moods; `<home>/last_show` remembers the show opened last; your `default` (MIGRATED + seven house moods) is renamed `mine` once, backed up as `default.hyp.json.bak-v2`, MIGRATED still its first preset; the PRESETS page speaks "show" |
+| 23 | P14-c dream on by default | (b) optional torch, worker on, loud when missing | **(a)**, 2026-09-29 | torch is part of the app, not optional; built: plan 14 WP1 (the dependency, the worker on) and WP6 (echoes in seconds, TRACER, WAKE re-tuned and shot with the worker on) |
+| 24 | P14-d F6–F8 effects | (a) ACID, MANDALA, NOITA | **(a)**, 2026-09-29 | built: plan 14 WP5 — `party-acid` / `party-mandala` / `party-noita` on F6–F8, every effect on in a factory preset, no factory route on an effect that is off |
+| 25 | P14-e desk glyphs and diagram | (a) K/D/S/G/B glyphs, up layer, above the cheat sheet | **(a)**, 2026-09-29 | plan 14 WP7 — built (`apc40.LAYOUT`, `ui_desk.py`, hand check 45) |

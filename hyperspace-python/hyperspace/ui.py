@@ -32,7 +32,7 @@ from collections.abc import Callable
 
 from imgui_bundle import imgui
 
-from . import ui_bands, ui_fx, ui_lfo, ui_lookback, ui_presets, ui_routing
+from . import ui_bands, ui_desk, ui_fx, ui_lfo, ui_lookback, ui_presets, ui_routing
 from .analyzer import N_MAX
 from .audio import AudioEngine
 from .bands import CEIL, KNEE
@@ -293,7 +293,7 @@ CHEATSHEET = [
     ("B", "tap tempo · ⇧B LFO trigger"),
     ("Cmd+R", "restart process"),
     ("H / ?", "panel / this sheet"),
-    ("T", "overlay: float over the screen"),
+    ("T", "overlay (if config.toml allows)"),
     ("G", "overlay: clicks through / back"),
     ("Esc / Q", "quit"),
     # Xbox-layout gamepad, Bluetooth or USB (gamepad.py holds the map)
@@ -306,6 +306,8 @@ CHEATSHEET = [
     ("view/menu", "panel / this sheet"),
     # any control ↔ any MIDI message, through the registry (midi.py)
     ("right-click", "a control: MIDI learn / unbind"),
+    # the APC40's glyphs, as the desk above and the ROUTING rows print them
+    ("APC40", "K D knobs · S faders · G row·col · B ⇧"),
 ]
 
 # ---- the pages: (key, rail label, the group — or groups — whose dirty dot the rail shows) ----
@@ -359,6 +361,7 @@ class Panel:
         self.pin_out = [0.0] * N_MAX
         self.open = True
         self.cheatsheet = True
+        self.desk = True            # the APC40 drawn above the sheet (ui_desk.py)
         self.page = 1               # index into PAGES; the view page opens first
         self.ghosts = 0             # ghost markers drawn this frame (tests read it)
         self._file_dialog = None
@@ -366,6 +369,9 @@ class Panel:
         self.reloader = None  # set by app.py; panel only reads status off it
         self.config_error = ""  # set by app.py: config.toml failed to parse (SYSTEM page)
         self.config_notes: list[str] = []  # set by app.py: config.toml wants a rename
+        self.dream_error = ""  # set by app.py: why the dream worker is off (SYSTEM, LOOKBACK)
+        self.watchdog = None   # set by app.py (watchdog.Watchdog): the stall log line
+        self.render_watch = None   # set by app.py (watchdog.RenderWatch): the red banner
         self.midi = None      # set by app.py when an adapter is up (midi.MidiIO)
         self.learn = None     # set by app.py: the armed param and the held question (learn.Learn)
         self.bridge = None    # set by app.py when [bridge] is enabled (bridge.Bridge)
@@ -392,6 +398,12 @@ class Panel:
                  lambda: self.cheatsheet,
                  lambda on: setattr(self, "cheatsheet", bool(on)), group="ui",
                  persist=False, modulatable=False)
+        r.toggle("ui.desk", "Desk diagram",
+                 lambda: self.desk,
+                 lambda on: setattr(self, "desk", bool(on)), group="ui",
+                 persist=False, modulatable=False,
+                 tip="The APC40 drawn above the cheat sheet: the controls the layer "
+                     "that is up maps lit, each with the glyph the ROUTING rows print.")
         r.enum("ui.page", "Page", lambda: self.page,
                lambda i: setattr(self, "page", int(i)), [lb for _, lb, _ in PAGES],
                group="ui", persist=False, modulatable=False,
@@ -855,6 +867,7 @@ class Panel:
             _readout(key, RED)
             imgui.same_line(x0 + col + 14)
             imgui.text_colored(DIM, action)
+        self._sheet_h = imgui.get_window_height()    # the desk sits above it (ui_desk)
         imgui.end()
         imgui.pop_style_var()
 
@@ -939,11 +952,22 @@ class Panel:
     # ---- main draw: rail · page · footer ----
 
     def draw(self, dt: float, fps: float) -> None:
+        try:
+            self._draw(dt, fps)
+        finally:
+            # the red banner, its own window, last and in front: a render
+            # window that stopped or a dream worker that is off shows even
+            # with the panel hidden or a page that raised
+            self._alert_banner()
+
+    def _draw(self, dt: float, fps: float) -> None:
         # Replace / Keep, its own window, before anything can return: a
         # held hand learn is never parked behind a hidden or collapsed panel
         ui_routing.modal(self)
         if self.cheatsheet:
             self._draw_cheatsheet()
+        if getattr(self, "desk", True):     # (a Panel from before a hot reload)
+            ui_desk.diagram(self)
         if not self.open:
             return
         io = imgui.get_io()
@@ -1021,7 +1045,7 @@ class Panel:
             imgui.same_line(imgui.get_content_region_avail().x - imgui.calc_text_size(text).x)
             imgui.text_colored(RED if proj.is_dirty() else DIM, text)
             if imgui.is_item_hovered():
-                imgui.set_tooltip("the open project — PRESETS page")
+                imgui.set_tooltip("the open show — PRESETS page")
 
     # ---- pages ----
 
@@ -1035,10 +1059,19 @@ class Panel:
             self._combo("output.monitor")
         self._check("output.fullscreen")
         imgui.same_line()
+        # decision 21 (a): overlay only when the config asks — shut, the
+        # toggle is drawn disabled with the reason, and its three overlay-only
+        # settings (click-through, ground, opacity) would do nothing
+        allowed = getattr(self.output, "allowed", True)
+        imgui.begin_disabled(not allowed)
         self._check("output.overlay")
-        self._check("output.passthrough")
-        self._row("output.bg")
-        self._row("output.alpha")
+        if allowed:
+            self._check("output.passthrough")
+            self._row("output.bg")
+            self._row("output.alpha")
+        imgui.end_disabled()
+        if not allowed:
+            imgui.text_disabled(f"overlay {self.output.GATED}")
         if self.output.error:
             imgui.text_colored(WARN, self.output.error)
 
@@ -1260,12 +1293,15 @@ class Panel:
         ui_hands.page(self, dt)
 
     def _page_presets(self, dt: float) -> None:
-        """The project and its preset bank, the loaded preset, the modules."""
-        self._section("project")
+        """Plan 14 WP4, top to bottom: the show (its name, show ▾ · save ·
+        save as · new), starts on ▾, the eight preset buttons, the preset
+        strip, and "more" folded over the module presets (ui_presets)."""
+        self._section("show")
         if self.library is None:
             imgui.text_disabled("no library attached")
         else:
-            ui_presets.project_row(self)
+            ui_presets.show_block(self)
+            ui_presets.starts_on(self)
             imgui.spacing()
         ui_presets.preset_bank(self)
         imgui.spacing()
@@ -1277,6 +1313,9 @@ class Panel:
         self._section("system")
         self._check("ui.cheatsheet")
         imgui.same_line()
+        if "ui.desk" in self.reg:   # (a registry from before a hot reload lacks it)
+            self._check("ui.desk")
+            imgui.same_line()
         self._button("app.restart", "Restart process", small=True)
         if self.reloader is not None:
             imgui.text_disabled(f"hot reload: {self.reloader.status or 'watching'}")
@@ -1287,12 +1326,15 @@ class Panel:
         if self.library is not None:
             imgui.text_disabled(f"library: {self.library.home}")
             if imgui.is_item_hovered():
-                imgui.set_tooltip("$HYPERSPACE_HOME — presets and projects as JSON; "
+                imgui.set_tooltip("$HYPERSPACE_HOME — presets and shows as JSON; "
                                   "edit a file and the app follows")
         if self.config_error:
             imgui.text_colored(WARN, self.config_error)
         for note in self.config_notes:
             imgui.text_disabled(note)
+        if self.dream_error:
+            imgui.text_colored(WARN, self.dream_error)
+        self._stall_status()
         imgui.spacing()
         self._section("midi")
         self._midi_status()
@@ -1300,6 +1342,73 @@ class Panel:
         imgui.spacing()
         self._section("bridge")
         self._bridge_status()
+
+    def alerts(self) -> list[str]:
+        """What the red banner says: a live render error or render stall
+        (watchdog.RenderWatch), and why the dream worker is off."""
+        out: list[str] = []
+        rw = self.render_watch
+        if rw is not None:
+            try:
+                out += rw.alerts()
+            except Exception as e:  # noqa: BLE001 — the banner must not take the panel down
+                out.append(f"render watch: {type(e).__name__}: {e}"[:160])
+        if self.dream_error and not getattr(self, "_dream_waved", False):
+            out.append(self.dream_error)        # dismissible: SYSTEM and LOOKBACK keep it
+        return out
+
+    def dismiss_alerts(self) -> None:
+        """The banner's dismiss: the render watch's sticky lines and the
+        dream's reason; a live render error or stall stays."""
+        if self.render_watch is not None:
+            self.render_watch.dismiss()
+        self._dream_waved = True
+
+    def _alert_banner(self) -> None:
+        """A red strip across the bottom of the control window, one line per
+        alert — impossible to miss from across the room — in front of every
+        other window without taking focus. A render error that recovered
+        and the warnings stay until "dismiss"."""
+        lines = self.alerts()
+        if not lines:
+            return
+        rw = self.render_watch
+        io = imgui.get_io()
+        imgui.set_next_window_pos(imgui.ImVec2(0, io.display_size.y), imgui.Cond_.always,
+                                  imgui.ImVec2(0, 1))
+        imgui.set_next_window_size(imgui.ImVec2(io.display_size.x, 0), imgui.Cond_.always)
+        imgui.push_style_color(imgui.Col_.window_bg, imgui.ImVec4(0.62, 0.05, 0.05, 0.96))
+        imgui.push_style_color(imgui.Col_.text, imgui.ImVec4(1, 1, 1, 1))
+        imgui.begin("##alerts", None,
+                    imgui.WindowFlags_.no_decoration | imgui.WindowFlags_.no_move
+                    | imgui.WindowFlags_.no_focus_on_appearing | imgui.WindowFlags_.no_nav
+                    | imgui.WindowFlags_.no_saved_settings)
+        try:
+            imgui.internal.bring_window_to_display_front(imgui.internal.get_current_window())
+        except Exception:  # noqa: BLE001, S110 — an imgui without the internal call: drawn last
+            pass
+        for line in lines:
+            imgui.text_wrapped(line)
+        dismissible = (rw is not None and getattr(rw, "dismissible", False)) or (
+            self.dream_error and not getattr(self, "_dream_waved", False))
+        if dismissible and imgui.small_button("dismiss##alerts"):
+            self.dismiss_alerts()
+        imgui.end()
+        imgui.pop_style_color(2)
+
+    def _stall_status(self) -> None:
+        """The stall log's line (watchdog.py), once it has entries."""
+        wd = self.watchdog
+        if wd is None:
+            return
+        if wd.error:
+            imgui.text_colored(WARN, wd.error)
+        line = wd.status()
+        if line:
+            imgui.text_colored(WARN, line)
+            if imgui.is_item_hovered():
+                imgui.set_tooltip("a frame took over 2 s, or kill -USR1 asked for a dump: "
+                                  "every thread's stack, newest at the end")
 
     def _bridge_status(self) -> None:
         """The DAW bridge's one sign of life (audit P3): off, a port error,

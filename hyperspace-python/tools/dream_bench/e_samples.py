@@ -1,6 +1,6 @@
 """Question E — sample images for judging the look by eye.
 
-    uv run --extra dream python tools/dream_bench/e_samples.py [--frames 120]
+    uv run python tools/dream_bench/e_samples.py [--frames 120]
 
 Renders real Hyperspace frames at 1280x820 with the moderngl Renderer
 (24-cell or 600-cell, faces + pattern, rotating at speed 1.0 with a fixed

@@ -125,6 +125,46 @@ and FX off the output is bit-identical to the scene pass alone
 5. To the window. All post passes run with GL blending off and write
    premultiplied colour.
 
+**The target is bound explicitly** (plan 14 WP1). `Renderer.draw` draws
+into whatever framebuffer is bound when it is called; it captures that
+target once and binds it again — with its viewport and blending — on
+every exit, a raise included, and `Lookback.capture` binds its own target
+on every return. `app.draw_render` binds the window (`ctx.screen.use()`)
+at the start of every render frame. Before this, a frame that ended on an
+offscreen framebuffer made every later frame draw into it while the
+window swapped a stale picture, with no error anywhere — the owner's
+freeze: WAKE (`dream.on`, `every = 2`) with no dream worker left the
+look-back's atlas bound on each frame off the cadence, and any one
+exception inside the draw stranded a framebuffer the same way
+(`tests/test_render.py::test_a_look_back_frame_with_no_worker_leaves_the_window_bound`,
+`::test_one_raising_frame_does_not_strand_the_next`). A frame that still
+starts on an offscreen framebuffer is logged (§2.6).
+
+**The window is opaque unless it is the overlay** (plan 14 WP1, the
+Pepper's Ghost rig), **and there is no overlay unless the config asks**
+(decision 21 (a), plan 14 WP2). With `[output] overlay = false`, the
+default, the render window is created without `TRANSPARENT_FRAMEBUFFER`
+(`app._windows(overlay)`), `output.overlay` refuses to switch on
+(`Output._set_overlay`: the `T` key and MASTER select `note:0:80` bind the
+`overlay.on` alias, the panel draws the toggle disabled with the reason,
+a preset cannot carry it), and `Output.mode` never reads overlay, so the
+crossfader's `overlay.bg` and `output.alpha` do nothing; `on_start` is
+ignored with a note on stderr (`tests/test_overlay.py::test_overlay_refuses_every_road_while_the_config_shuts_it`,
+`::test_the_ground_and_opacity_do_nothing_while_shut`,
+`tests/test_app_boundary.py::test_the_render_window_is_transparent_only_when_the_config_asks`).
+With `overlay = true` the framebuffer keeps alpha for overlay mode, so the
+compositor shows the desktop wherever the final alpha is below 1. In
+window and fullscreen mode the
+ground clears to alpha 1, cut-through is off whatever `view.cut_through`
+says, and every FX pass writes alpha 1 (`FxChain.opaque`, set by the
+renderer each frame; a multiply-blend effect dropped it to 0); the
+look-back's composite keeps `scene.a ∪ wake.a`, which is 1 on an opaque
+ground. Every factory preset, and one with faces, cut-through, points,
+the look-back and every effect on, renders with every pixel at alpha 255
+(`tests/test_lookback.py::test_every_factory_preset_renders_opaque_in_window_mode`).
+Measured before the fix, offscreen, window mode: TUMBLE 23 % of pixels
+below 255 (lowest 94), HEX ENGINE 40 %, and every factory preset some.
+
 ### 2.1 Edges, points, brightness
 
 - Edges are screen-space quads, not GL lines: 1 px lines lost the
@@ -140,10 +180,14 @@ and FX off the output is bit-identical to the scene pass alone
   invisible.
 - Points are red; radius and alpha are depth-cued, radius also × dpr ×
   zoom with a smaller base for heavy shapes (`render.py:665-669`).
-- `view.cut_through` (default on) keeps the old blend for face fills; off
-  uses separate alpha (ONE, ONE_MINUS_SRC_ALPHA) so in overlay mode a
-  fill does not let the desktop through (`render.py:566-574`; PR #26).
-  On an opaque window it is invisible.
+- `view.cut_through` (default on) matters **only in overlay mode**: on a
+  see-through ground it keeps the old blend, so a faint fill lowers the
+  window's alpha and the desktop shows through it; off uses separate alpha
+  (ONE, ONE_MINUS_SRC_ALPHA), so a fill never drops alpha below the
+  ground's (PR #26). On an opaque ground — window and fullscreen — the
+  renderer never cuts, whatever the toggle (plan 14 WP1;
+  `tests/test_lookback.py::test_cut_through_never_cuts_an_opaque_ground`,
+  `::test_cut_through_still_cuts_in_overlay_mode`).
 
 ### 2.2 Faces, patterns, bitmap
 
@@ -174,10 +218,25 @@ never raises and leaves the plain faces (`tests/test_render.py:147`).
 `lookback.Lookback` keeps an atlas of downsampled echoes of past frames
 plus one dream buffer `D`, and composites the scene over its own wake,
 age-weighted, premultiplied (`lookback.py:326-600`). With no dream worker
-it is a plain age-faded tracer. `dream.*` params: `on mix echo_mix decay
+it is a plain age-faded tracer. `dream.*` params: `on mix echo_mix fade
 darken contrast occlude hue sat tint tint_from tint_hue tint_sat res
-echoes every steps step k layer octaves mask_decay jitter` — all
-presettable, all modulatable.
+echoes gap steps step k layer octaves mask_decay jitter` — all
+presettable, all modulatable but `gap` and `res`.
+
+- **Echo time is seconds** (plan 14 WP6). The ring keeps its own clock,
+  advanced once a frame by the renderer's time (`Lookback.tick`); an echo's
+  weight is `echo_mix · ½^(age / fade)` with its age in seconds, and a
+  capture is committed every `gap` seconds (a frame within half a frame of
+  its due time is on time). So the trail is the same on a 60 Hz and a
+  120 Hz screen (`tests/test_lookback.py::test_the_same_preset_gives_the_same_trail_at_60_and_120_hz`).
+  A tick whose time did not move counts as one 60 Hz frame, so a test or
+  tool drawing at a fixed `t` sees the old frames. The old per-frame
+  `dream.decay` / `dream.every` are read as 60 Hz frames
+  (`lookback.migrate_values` / `migrate_row`): the factory files are
+  converted, the launch rewrites a user preset or look-back module preset
+  once (`preset.migrate_echo_home`, each kept as `<file>.bak-v2-frames`),
+  and a preset file still naming them loads in seconds with a note. The
+  dream worker's own `k` and `mask_decay` are still per submitted frame.
 
 - **Chroma.** The net paints in its own primaries whatever the scene's
   palette, so `D` is re-coloured on its way in: `hue` / `sat` on the net's
@@ -188,14 +247,26 @@ presettable, all modulatable.
   `max(brightness × 4, the faces' mask)`. Face fills draw at 1–6 % alpha,
   so brightness alone barely covered — hence the mask pass
   (`tests/test_lookback.py:353`).
-- **The worker** (`dream.DreamWorker`, optional `[dream]` extra, torch on
-  MPS) is temporal: one running buffer blended with each new echo, a few
+- **The worker** (`dream.DreamWorker`, the optional `dream` extra, torch
+  on MPS) is temporal: one running buffer blended with each new echo, a few
   gradient-ascent steps per submit, back to the compositor a frame or two
   later. `submit` never blocks; the latest finished result wins; `step ×
   steps / k` is clamped to `STABLE_RATIO` so a preset cannot run away
   (`tests/test_dream.py`). It reads the `dream.*` params on the frame thread
   inside `submit`, never from the worker thread. The performance spike
   behind these numbers is `docs/plans/assets/06-lookback-perf.md`.
+- **Setup.** torch and the dream stack are ordinary dependencies
+  (decision register row 23 (a), 2026-09-29): `uv sync` installs them and
+  `[dream] enabled` defaults to on. If the worker cannot start (an unsynced
+  environment without torch, missing weights), `app._open_dream` keeps the
+  reason (`dream_error`) and the panel shows it: the
+  SYSTEM page, the LOOKBACK page's worker line, and the red banner. A
+  preset that asks for the dream (`dream.on`, `dream.mix` > 0) with no worker is a banner warning (until dismissed) and a
+  stall-log entry, once (the look-back then shows the echoes only).
+- **The ring fits the driver.** 32 slots stacked can pass
+  `GL_MAX_TEXTURE_SIZE` on a portrait window at `res` 384; the slot shrinks
+  to fit (`lookback.fit_atlas`), and if the textures cannot be made
+  nothing is captured and `ring_error` says why on the LOOKBACK page.
 
 ### 2.4 FX
 
@@ -212,7 +283,10 @@ Noita's `post_final.frag` maths among them; the factory presets are
 
 ### 2.5 Two windows
 
-`app.py` opens the render window (vsync, 4× MSAA, transparent framebuffer)
+`app.py` opens the render window (vsync, 4× MSAA, a framebuffer with alpha
+only when `[output] overlay = true` — decision 21; opaque in every mode
+but overlay, §2) — reading the config first, since the hint is a
+creation-time one —
 and the control window (opaque, no MSAA, vsync off so it paces off the
 render swap) in one GLFW share group, each with its own moderngl context;
 the only imgui context lives on the control window (`app.py:136-167, 396-419`). The render window has no imgui at all. Mouse orbit / pan / zoom
@@ -223,7 +297,8 @@ only holds this frame's value after it. `overlay.Output` places the render
 window (window · fullscreen · overlay with passthrough and opacity) from
 the `output.*` params, applied once a frame through an injectable backend
 (`tests/test_overlay.py`); `overlay.*` are aliases the factory table
-binds. `output.monitor` offers *follow window* — the screen the window is
+binds, and `Output.allowed` (the config's `overlay`) is the gate every one
+of them passes. `output.monitor` offers *follow window* — the screen the window is
 on, config `monitor = -1` — and then each screen by name. Quitting, Cmd+R
 and the panel's restart button all run `app.close_all`: every open
 adapter (MIDI, the bridge, the hands tracker, the dream worker) then the
@@ -232,11 +307,46 @@ SYSTEM page shows each adapter's state — MIDI, the bridge (port,
 encoding, messages sent, or why it is off) — beside the hot-reload and
 config notices. The optional adapters and the gamepad are config gates
 (`[midi]` and `[gamepad]` on by default, `[bridge]`, `[dream]`, `[hands]`
-off); `hyperspace/config.py` documents every key. The rig's placement comes from `[output]` in `config.toml`
+off; `[dream]` also needs the `dream` extra, §2.3); `hyperspace/config.py` documents every key. The rig's placement comes from `[output]` in `config.toml`
 (`config.py`); a `[overlay]` section is the same thing under its pre-split
 name, still read and merged under `[output]`, with a note on stderr asking
 for the rename. A `config.toml` that will not parse keeps the defaults and
 shows its error on the SYSTEM page.
+
+### 2.6 The stall log and the red banner
+
+`watchdog.py` (cold, like `app.py`: a reload never touches it) writes
+`<home>/stall.log`. Each entry is a `=== <kind>` header — the wall time,
+the loaded preset, what happened — then every thread's stack
+(`faulthandler.dump_traceback(all_threads=True)`):
+
+- `stall` — no frame completed for 2 s. A daemon thread watches; the loop
+  pets it once a frame with a float write. Once per stall.
+- `render error` — `renderer.draw` raised (`app.frame` guards it, so the
+  panel lives on while the render window holds its last frame): the full
+  traceback, once per distinct error.
+- `render stall` — no render frame *presented* for 2 s while the loop
+  runs: the draw did not complete, or the window was hidden, minimised,
+  occluded (macOS occlusion, another Space) or had no framebuffer. The
+  entry lists the window's attributes (`GlfwBackend.window_state`).
+- `stranded target` — a render frame started on an offscreen framebuffer
+  (the freeze's signature, §2), with its `glo` and the last render error.
+- `non-finite` — a param dropped a NaN / inf (`Registry.nonfinite`; §5's
+  modulation rule drops them, and `tapers.clamp` lands NaN on its low end).
+- `warning` — a preset that asks for the dream (`dream.on`, `dream.mix` > 0) with no worker.
+
+`kill -USR1 <pid>` dumps every thread into the same file on demand, and
+a stall that holds the GIL — the thread cannot run to see it — is caught
+by faulthandler's C timer, which the thread re-arms every look; both are
+"raw dumps", with no header. The
+SYSTEM page shows `stall log: <path> (N stalls, …)` once the file has
+entries. The control window's red banner, across its bottom and in front
+of every other window, names a live render error or render stall, a
+render error that recovered (its last message, time and count), the
+warnings and why the dream worker is off; what is not live stays until
+**dismiss**. Nothing in the watchdog may stop the show: a log that will
+not open, a platform without SIGUSR1, a write that fails — each is kept
+on `error` and the loop goes on (`tests/test_watchdog.py`).
 
 ## 3. Audio sources
 
@@ -542,6 +652,45 @@ unreadable at a party.
   one), QUANT and pad B step to the next filled slot (`preset.next`). The
   PRESETS page's preset strip lists, loads, saves and deletes them;
   module presets keep their own strips and replace only their group.
+- **The party show opens** (decision 22, plan 14 WP3). The panel calls a
+  project a **show** (plan 14 §3; the code keeps `Project`). The factory
+  shows are `party` (`library.DEFAULT_PROJECT`: TUMBLE, FACES, FIELD,
+  WAKE, TRIP on F1–F5) and `house` (the eight house moods, the factory
+  default until plan 14); there is no factory `default`. A launch opens
+  the show opened last — its name in `<home>/last_show`, written by every
+  show load, save as and "starts on" pick (`Library.remember`) — else the
+  party, the user's copy of either if there is one (`Library._open_default`).
+  Once, for a home plan 13 migrated: a user `projects/default.hyp.json`
+  (MIGRATED and the house moods) is renamed `projects/mine.hyp.json`,
+  named `mine`, bank and startup as they were, backed up first as
+  `default.hyp.json.bak-v2` (a dated copy if that name is taken), said on
+  stderr and on the PRESETS page's warning line; a `mine` already there
+  leaves both files alone; once settled, `projects/RENAMED.txt` says so and it
+  never runs again, so a show you later save as "default" stays yours;
+  `last_show` holds the show's file name, not the name inside it
+  (`library.unshadow_default`, run by `Library()`
+  and after plan 13's migration converts a schema-1 `default`; plan 13's
+  MIGRATED now lands in `mine`, made from `house`)
+  (`tests/test_party_show.py`).
+- **The PRESETS page** (plan 14 WP4), top to bottom: **SHOW** — the
+  show's name on its own line, never covered, a dim "factory" beside a
+  factory show, then show ▾ (factory shows dim) · save · save as · new;
+  **starts on ▾** — labelled, and written into the show the moment it is
+  picked (`ui_presets.set_starts_on` → `Project.write`; a factory show's
+  write makes your copy); the eight **preset buttons**, two a row, each
+  its F-key and its preset's name (elided to the button), the live one
+  lit, click loads, ⇧click saves; the **preset strip** (the loaded
+  preset, its dot, save / as… / reset — save on a factory preset writes
+  your copy); and **more**, folded, a module-preset strip per group; the
+  library's warning, error and status lines under all of it. One word per
+  thing: show, preset, starts on, module preset, factory. The rail's
+  dirty dots and the footer's mark compare against the loaded preset or
+  show: a preset that names no module preset for a group leaves the group
+  clean as it landed (`Library.label(g, None)`), a show load keeps the
+  performance groups' references and marks the session groups it names
+  no module for clean as it left them (`Project._apply`), and a factory
+  show opened as shipped is not unsaved (`Project.factory`), so loading a
+  factory preset or show shows everything clean (`tests/test_ui_presets.py`).
 - **The desk** (plan 13 §3). The APC40 has two layers under a latched
   SHIFT, whose LED is lit while the global layer is up. The faders, the
   preset row, SHIFT, the clock corner, the transport and the track buttons
@@ -555,6 +704,19 @@ unreadable at a party.
   assumption). A macro is a knob with subscribers: each sets a param's
   base or scales a route's depth over its own `from → to`; a hand on a
   macro moves only the depths.
+- **The desk's glyphs and diagram** (plan 14 WP7, decision 25). Every
+  control has a short glyph (`apc40.LAYOUT`): K1–K8 the track knobs,
+  D1–D8 the device knobs, S1–S8 the faders, SM the master, X the
+  crossfader, C the cue knob, Gr·c the button field (rows 1–5 clip
+  launch, 6 clip stop, 7 track select, 8 activator, 9 solo, 10 rec-arm;
+  column 9 scene launch, STOP ALL, MASTER), B1–B22 the other buttons, ⇧
+  SHIFT. A ROUTING row, a Learn message and the cheat sheet use the
+  glyph; Akai's name stays in the tooltip. The control window draws the
+  desk above the cheat sheet (`ui_desk.py`, `ui.desk`): the layer that is
+  up lit exactly as the device is (`Bindings.active`, `routing.led_lit`),
+  the rest dark, ⇧ red on the global layer; it reads the table, so it
+  works with no device plugged in. A new control in the protocol gets a
+  `LAYOUT` entry, or `tests/test_ui_desk.py` fails.
 - **Learn and the ROUTING page write into the loaded preset** (plan 13
   §3.3). Right-click → Learn, then a knob: a preset-layer row; then a
   hand: a route naming the axis that moved, `hand:right.pitch` (decision
@@ -564,7 +726,7 @@ unreadable at a party.
   or on an invariant control, a knob learn is refused and the reason shows
   on the SYSTEM page's learn line and the ROUTING head. The ROUTING page is
   one page over the loaded preset — head (the preset, its dot, save /
-  as…, the layer), routes, the desk with its dark controls, the macros
+  as…, the layer, said "desk layer: preset" or "desk layer: global"), routes, the desk with its dark controls, the macros
   and their subscribers, the session's MIDI rows read-only. Nothing there
   writes `bindings.json`; the preset's dirty dot shows the edit until a
   save (the head, the PRESETS strip, ⇧F). Right-click → Unbind removes

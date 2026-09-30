@@ -1,6 +1,6 @@
 """Question C — GPU contention: the real renderer against a dream worker.
 
-    uv run --extra dream python tools/dream_bench/c_contention.py [--secs 3] [--fps 60|0]
+    uv run python tools/dream_bench/c_contention.py [--secs 3] [--fps 60|0]
 
 Main thread: the moderngl Renderer draws the 600-cell (faces + pattern on)
 at 1280x820 into an FBO in a tight loop, ctx.finish() per frame, and records

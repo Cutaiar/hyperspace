@@ -17,6 +17,7 @@ fullscreen, overlay) through the output.* params.
   drag  orbit       ⇧drag / right-drag  pan   scroll  zoom about cursor
   L  lines          F  faces          ?  cheat sheet
   T  overlay: float the render over the screen    G  clicks through it
+     (only with [output] overlay = true in config.toml — decision 21)
   F1–F8  load a preset of the bank               ⇧F1–F8  save the live state as it
   B  tap tempo      ⇧B  LFO trigger: the downbeat is now, synced LFOs restart
 
@@ -81,6 +82,7 @@ from .render import Renderer
 from .routing import Bindings, Router, bindings_path
 from .ui import Panel, apply_style, load_fonts
 from .view import ViewState
+from .watchdog import LOG_NAME, RenderWatch, Watchdog
 
 TITLE = "Hyperspace"
 RENDER_SIZE = (1280, 820)
@@ -136,17 +138,24 @@ def _restart(audio, adapters, impl, ctrl_win) -> None:
     os.execv(sys.executable, [sys.executable, *sys.argv])
 
 
-def _windows():
-    """The two GLFW windows on one shared GL context: render first, then controls."""
+def _windows(overlay: bool = False):
+    """The two GLFW windows on one shared GL context: render first, then controls.
+
+    `overlay` is the config's ``[output] overlay`` (decision 21 (a)): only
+    then is the render window's framebuffer transparent."""
     glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
     glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
     glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
     glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, True)
     glfw.window_hint(glfw.SAMPLES, 4)
-    # creation-time hints: the framebuffer keeps alpha so overlay mode can
-    # clear to see-through (the other modes clear opaque), and fullscreen
-    # must not minimise when the control window takes focus (overlay.py)
-    glfw.window_hint(glfw.TRANSPARENT_FRAMEBUFFER, True)
+    # creation-time hints: only when the config asks for overlay does the
+    # framebuffer keep alpha so overlay mode can clear to see-through (the
+    # other modes clear opaque, and the renderer keeps every pixel at alpha
+    # 1 there — plan 14 WP1); otherwise the window is opaque whatever is
+    # drawn, for the Pepper's Ghost glass (decision 21 (a), plan 14 WP2).
+    # Fullscreen must not minimise when the control window takes focus
+    # (overlay.py).
+    glfw.window_hint(glfw.TRANSPARENT_FRAMEBUFFER, bool(overlay))
     glfw.window_hint(glfw.AUTO_ICONIFY, False)
     render_win = glfw.create_window(*RENDER_SIZE, TITLE, None, None)
     if not render_win:
@@ -170,16 +179,25 @@ def _windows():
     return render_win, ctrl_win
 
 
+def _overlay_allowed(cfg: dict) -> bool:
+    """Decision 21 (a): overlay mode exists only when ``[output] overlay``
+    is true (config.DEFAULTS: false)."""
+    return bool(cfg.get("output", {}).get("overlay", False))
+
+
 def _make_output(win, reg: Registry, cfg: dict) -> Output:
     """The render window's output settings, seeded from config."""
-    out = Output(win, GlfwBackend(glfw))
-    out.register(reg)
     # [output] in config.toml — config.load has already folded a pre-split
     # [overlay] section under it, so this is the one place that reads it
     oc = cfg.get("output", {})
+    out = Output(win, GlfwBackend(glfw), allowed=_overlay_allowed(cfg))
+    out.register(reg)
     out.monitor = int(oc.get("monitor", -1))
     out.fullscreen = bool(oc.get("fullscreen", False))
-    out.overlay = bool(oc.get("on_start", False))
+    if oc.get("on_start", False) and not out.allowed:
+        print("output: on_start asks for overlay, but [output] overlay is false — "
+              "the window stays opaque", file=sys.stderr)
+    out.overlay = bool(oc.get("on_start", False)) and out.allowed
     out.passthrough = bool(oc.get("passthrough", True))
     out.bg = float(oc.get("bg", 0.0))
     out.alpha = float(oc.get("alpha", 1.0))
@@ -244,16 +262,32 @@ def _open_hands(cfg: dict, settings):
         return None
 
 
-def _open_dream(reg: Registry, cfg: dict):
-    """The look-back's dream worker (dream.py, torch), only when [dream] enabled."""
+# torch is an ordinary dependency (decision register row 23 (a)): `uv sync`
+# installs it. A missing torch means the environment was not synced.
+DREAM_SETUP = "run `uv sync`, then launch with `uv run hyperspace`"
+
+
+def dream_error(e: Exception) -> str:
+    """What the panel says when the dream worker would not start: torch
+    missing gets the setup commands (README "Dream worker")."""
+    mod = (getattr(e, "name", "") or "").split(".")[0] if isinstance(e, ImportError) else ""
+    if mod in ("torch", "torchvision"):
+        return f"dream worker off: {mod} is not installed — {DREAM_SETUP}"
+    return f"dream worker off: {type(e).__name__}: {e}"[:200]
+
+
+def _open_dream(reg: Registry, cfg: dict) -> tuple[object | None, str]:
+    """The look-back's dream worker (dream.py, torch), only when [dream]
+    enabled; with the reason it is off when it would not start (the SYSTEM
+    and LOOKBACK pages show it), "" otherwise."""
     if not cfg.get("dream", {}).get("enabled", False):
-        return None
+        return None, ""
     try:
         from . import dream
-        return dream.DreamWorker(reg, cfg["dream"])
+        return dream.DreamWorker(reg, cfg["dream"]), ""
     except Exception as e:  # noqa: BLE001 — no torch, no GPU: the plain tracer runs
         print(f"dream: {e}", file=sys.stderr)
-        return None
+        return None, dream_error(e)
 
 
 def _open_pad(cfg: dict):
@@ -417,6 +451,7 @@ class Host:
     bridge_io: object | None = None
     dream_io: object | None = None
     learn: object | None = None       # learn.Learn: what MIDI and the hands complete
+    render_watch: RenderWatch | None = None   # the render window's health (watchdog.py)
 
     @property
     def adapters(self) -> tuple:
@@ -531,18 +566,31 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
         h.view.integrate(dt)
     except Exception as e:  # noqa: BLE001
         ok, reloader.runtime_error = False, _err("step", e)
+    watch = h.render_watch
+    if watch is not None:     # a NaN / inf a param dropped: named once in the stall log
+        watch.nonfinite(getattr(reg, "nonfinite", ()))
 
-    # ---- render window, then the control window ----
+    # ---- render window, then the control window. A raising draw leaves
+    # the render window on its last frame while the panel goes on — the
+    # render watch logs it (traceback, once per error) and the control
+    # window's red banner names it, until dismissed ----
     try:
         h.draw_render(dt)
     except Exception as e:  # noqa: BLE001
         ok, reloader.runtime_error = False, _err("render.draw", e)
+        if watch is not None:
+            watch.failed(e, now)
+    else:
+        if watch is not None:
+            watch.drew(now)
     try:
         h.draw_panel(dt, fps)
     except Exception as e:  # noqa: BLE001
         ok, reloader.runtime_error = False, _err("panel.draw", e)
     if ok:
         reloader.runtime_error = ""
+    if watch is not None:     # no presented render frame for 2 s: logged, bannered
+        watch.tick(now)
 
     if h.panel.restart_requested:
         h.panel.restart_requested = False
@@ -570,7 +618,8 @@ def _hot_error_toast(msg: str) -> None:
 def main() -> None:
     if not glfw.init():
         raise SystemExit("GLFW failed to initialise")
-    render_win, ctrl_win = _windows()
+    cfg = config.load()                   # before the windows: [output] overlay is a creation hint
+    render_win, ctrl_win = _windows(_overlay_allowed(cfg))
 
     # the render side: moderngl on the render window's context, vsynced
     glfw.make_context_current(render_win)
@@ -595,7 +644,6 @@ def main() -> None:
     io.config_error_recovery = True
     io.config_error_recovery_enable_assert = False
 
-    cfg = config.load()
     audio = AudioEngine()
     audio.rescan()                         # the one PortAudio scan, here at startup — never mid-set on a first read
     control = Control(audio.chain)
@@ -654,7 +702,7 @@ def main() -> None:
     hands_io = _open_hands(cfg, hand_settings)
     panel.hands = hands_io
     panel.hand_settings = hand_settings
-    dream_io = _open_dream(reg, cfg)
+    dream_io, panel.dream_error = _open_dream(reg, cfg)
     if dream_io is not None:            # fills the look-back's dream slot
         renderer.lookback.source = dream_io
     panel.bridge = bridge_io               # the SYSTEM page's bridge line
@@ -709,6 +757,14 @@ def main() -> None:
         # the render window: its own size and DPI (a 1080p projector next
         # to a retina laptop)
         glfw.make_context_current(render_win)
+        # the window, bound explicitly every frame: Renderer.draw draws into
+        # whatever is bound, and a frame that once left an offscreen
+        # framebuffer bound froze the picture with no error (plan 14 WP1).
+        # Renderer.draw now puts its target back; the check is the alarm.
+        stranded = ctx.fbo
+        if stranded is not None and stranded.glo != 0:
+            render_watch.stranded(stranded.glo)
+        ctx.screen.use()
         w, h = glfw.get_window_size(render_win)
         fbw, fbh = glfw.get_framebuffer_size(render_win)
         ctx.viewport = (0, 0, fbw, fbh)
@@ -724,17 +780,40 @@ def main() -> None:
         ui_gl.clear(0.0, 0.0, 0.0, 1.0)
         panel.draw(dt, fps)
 
+    # the stall log (watchdog.py), <home>/stall.log: a 2 s whole-loop stall,
+    # a raising render draw, or 2 s with no render frame presented while the
+    # panel runs, each with every thread's stack; kill -USR1 dumps on demand
+    watchdog = Watchdog(library.home / LOG_NAME,
+                        preset=lambda: library.current("presets"))
+    render_watch = RenderWatch(watchdog,
+                               info=lambda: output.backend.window_state(render_win))
+    panel.watchdog, panel.render_watch = watchdog, render_watch
+
+    def dream_check(name: str | None) -> None:
+        # a preset that asks for the dream — the look-back on with a dream
+        # mix above 0 — with no worker to dream: the look-back shows the
+        # echoes only. Said on the banner (until dismissed), logged once.
+        # Echoes alone (dream.mix 0) are a normal mode and say nothing.
+        if reg["dream.on"].base and reg["dream.mix"].base > 0 and dream_io is None:
+            why = panel.dream_error or "[dream] enabled = false in config.toml"
+            render_watch.warn(f"{name} turns the dream on, but there is no dream worker ({why}); "
+                              "the look-back shows the echoes only")
+    presets.listeners.append(dream_check)
+    dream_check(library.current("presets"))     # the startup preset has already landed
+
     host = Host(reg=reg, view=s, control=control, audio=audio, router=router,
                 clock=clock, lfos=lfos, keys=keys, mouse=mouse, output=output,
                 renderer=renderer, panel=panel, reloader=reloader,
                 draw_render=draw_render, draw_panel=draw_panel,
-                restart=lambda: _restart(audio, host.adapters, impl, ctrl_win),
+                restart=lambda: _restart(audio, (watchdog, *host.adapters), impl, ctrl_win),
                 quit=lambda: glfw.set_window_should_close(render_win, True),
                 pad=pad, midi_io=midi_io, hands_io=hands_io, bridge_io=bridge_io,
-                dream_io=dream_io, learn=learn)
+                dream_io=dream_io, learn=learn, render_watch=render_watch)
 
     # smoke-test escape hatch: HYPERSPACE_FRAMES=n closes after n frames
     frames_left = int(os.environ.get("HYPERSPACE_FRAMES", "0")) or None
+
+    watchdog.start()          # last, so startup is not a stall
 
     last = time.perf_counter()
     fps = 0.0
@@ -767,8 +846,9 @@ def main() -> None:
         imgui.render()
         impl.render(imgui.get_draw_data())
         glfw.swap_buffers(ctrl_win)
+        watchdog.pet(now)          # a frame completed: one float write
 
-    close_all(audio, *host.adapters)
+    close_all(audio, watchdog, *host.adapters)   # the watchdog first: teardown is no stall
     impl.shutdown()
     glfw.terminate()
 

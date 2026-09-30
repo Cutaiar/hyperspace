@@ -67,7 +67,18 @@ from .bands import CEIL, NORMS, SHAPERS
 from .fx import FxState
 from .fx import declare as declare_fx
 from .geometry import PLANE_NAMES, SHAPES
-from .lookback import LAYERS, MAX_ECHOES, OCTAVES, RES, TINT_FROM, DreamState
+from .lookback import (
+    FADE_HI,
+    FADE_LO,
+    GAP_HI,
+    GAP_LO,
+    LAYERS,
+    MAX_ECHOES,
+    OCTAVES,
+    RES,
+    TINT_FROM,
+    DreamState,
+)
 from .tapers import Taper
 from .tapers import clamp as _clamp
 
@@ -152,6 +163,7 @@ class Param:
     _last: float | None = field(default=None, repr=False)   # norm we last wrote
     _disc: float | None = field(default=None, repr=False)   # last discrete effective
     _armed: bool = field(default=True, repr=False)          # trigger edge detector
+    _bad: bool = field(default=False, repr=False)           # a non-finite value was dropped
 
     def __post_init__(self):
         if self.alias:
@@ -451,10 +463,15 @@ class Param:
         if not self.modulatable:
             return
         if self._base is None:
-            self._base = self._norm_of(self.get())   # adopt the user's setting
+            base = self._norm_of(self.get())         # adopt the user's setting
+            self._base = base if math.isfinite(base) else 0.0
             self._last = self._base
             self._disc = None
-        self._mod += float(u)
+        u = float(u)
+        if math.isfinite(u):
+            self._mod += u
+        else:                   # a NaN or an inf never reaches the base (plan 14 WP1)
+            self._bad = True
         self._held = True
 
     def apply(self) -> None:
@@ -473,7 +490,9 @@ class Param:
             # something wrote the object since we did (the rotation
             # integrator, presets.load…): that delta belongs to the base
             cur = self._norm_of(self.get())
-            if self._last is not None and cur != self._last:
+            if not math.isfinite(cur):          # the object went non-finite: the base holds
+                self._bad = True
+            elif self._last is not None and cur != self._last:
                 self._base += cur - self._last
                 self._base = self._base % 1.0 if self.wrap else _clamp(self._base, 0.0, 1.0)
         target = self._base + mod
@@ -522,6 +541,7 @@ class Registry:
 
     def __init__(self):
         self._p: dict[str, Param] = {}
+        self.nonfinite: list[str] = []   # params that dropped a NaN / inf last apply()
         # the one rule for what an alias stands for right now (band.sel.*
         # → the selected band), installed by build_registry; the panel's
         # widgets, the Learn object and the routing menu all ask here
@@ -589,10 +609,17 @@ class Registry:
     def apply(self) -> None:
         """Once per frame, after every source has called modulate()."""
         # over a copy: a modulated trigger may add or remove params
-        # (a band layout change) while we are still walking the table
+        # (a band layout change) while we are still walking the table.
+        # `nonfinite`: the params that dropped a NaN / inf this frame (the
+        # stall log names each once, app.py)
+        bad: list[str] = []
         for p in list(self._p.values()):
             if p._base is not None:
                 p.apply()
+                if getattr(p, "_bad", False):
+                    p._bad = False
+                    bad.append(p.id)
+        self.nonfinite = bad
 
     # ---- persistence: the one serialization every preset is made of ----
 
@@ -730,10 +757,10 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
              tip="Translucent fills on the true 2-faces, under the wireframe. "
                  "First build per shape takes a moment (extraction is cached).")
     r.toggle("view.cut_through", "Cut-through", *_attr(view, "cut_through"), group=g,
-             tip="On: the translucent faces (and faint lines) cut the window's alpha, so "
-                 "the screen behind the render window shows through them. Off: they "
-                 "draw over the ground and whatever layer is under them — nothing behind "
-                 "the window shows except where the ground itself is clear.")
+             tip="Overlay mode only: on, the translucent faces (and faint lines) cut the "
+                 "window's alpha, so the screen behind the render window shows through "
+                 "them; off, they draw over the ground and whatever layer is under them. "
+                 "In window and fullscreen the picture is always opaque, on or off.")
     r.toggle("view.rotate", "Rotate", *_attr(view, "playing"), group=g)
     r.continuous("view.instances", "Instances", *_attr(view, "instances"),
                  lo=1, hi=100, integer=True, fmt=lambda v: f"{int(v)} instance(s)", group=g,
@@ -827,11 +854,14 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                  tip="The dream buffer's opacity under the scene.")
     r.continuous("dream.echo_mix", "Echo mix", *_attr(dream, "echo_mix"), lo=0.0, hi=1.0,
                  fmt=lambda v: f"echo {v:.2f}", group=g,
-                 tip="The echoes' opacity at age zero; each frame of age multiplies "
-                     "by the decay.")
-    r.continuous("dream.decay", "Decay", *_attr(dream, "decay"), lo=0.0, hi=1.0,
-                 fmt=lambda v: f"{v:.3f} / frame", group=g,
-                 tip="Per-frame fade of an echo with its age.")
+                 tip="An echo is a copy of an earlier frame, drawn faintly under this "
+                     "one — together they are the trail a moving shape leaves. Echo mix "
+                     "is how bright the newest echo is; older ones fade by the Fade.")
+    r.continuous("dream.fade", "Fade", *_attr(dream, "fade"), lo=FADE_LO, hi=FADE_HI,
+                 log=True, fmt=lambda v: f"halves in {v:.2f} s", group=g,
+                 tip="How long the trail lasts: an echo's brightness halves every this "
+                     "many seconds of its age, whatever the screen's frame rate "
+                     "(0.23 s is the old 0.95 a frame at 60 Hz; 0.76 s is 0.985).")
     r.continuous("dream.darken", "Darken", *_attr(dream, "darken"), lo=0.0, hi=1.0,
                  fmt=lambda v: f"×{1.0 - v:.2f}", group=g,
                  tip="How much darker the wake is than the frames it came from.")
@@ -869,10 +899,14 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                  tip="The tint colour's saturation: 0 tints grey — a greyscale dream.")
     r.continuous("dream.echoes", "Echoes", *_attr(dream, "echoes"), lo=0, hi=MAX_ECHOES,
                  integer=True, fmt=lambda v: f"{int(v)} echo(es)", group=g,
-                 tip="Frames kept in the history; 0 composites the dream buffer alone.")
-    r.continuous("dream.every", "Every", *_attr(dream, "every"), lo=1, hi=8, integer=True,
-                 fmt=lambda v: f"every {int(v)}", group=g, modulatable=False,
-                 tip="Capture cadence in frames: the spacing between echoes.")
+                 tip="How many echoes the trail holds; 0 composites the dream buffer "
+                     "alone. With Spacing it sets the trail's reach: echoes × spacing "
+                     "seconds back.")
+    r.continuous("dream.gap", "Spacing", *_attr(dream, "gap"), lo=GAP_LO, hi=GAP_HI,
+                 fmt=lambda v: f"every {v * 1000:.0f} ms", group=g, modulatable=False,
+                 tip="Time between echoes, in milliseconds, whatever the frame rate: "
+                     "short is a smooth smear, long a row of separate copies (33 ms is "
+                     "every 2nd frame at 60 Hz, 67 ms every 4th; 0 is every frame).")
     r.enum("dream.res", "Resolution", *_attr(dream, "res"), [str(v) for v in RES], group=g,
            modulatable=False,
            tip="The history's short side in pixels; the render's aspect is kept.")

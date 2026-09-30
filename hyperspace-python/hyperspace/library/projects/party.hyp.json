@@ -1,7 +1,7 @@
 {
  "schema": "hyperspace.project/2",
  "name": "party",
- "note": "Plan 12: the five party presets on F1-F5 (library/presets/party-*.json), one per render attraction, each a full preset with its hand routes, WAKE and TRIP with plan 12's eight device knobs (docs/plans/12-presets.md; re-cut in plan 13 WP5). Slots 6-8 are empty. The band strip opens on Balanced.",
+ "note": "Plan 12: the five party presets on F1-F5 (library/presets/party-*.json), one per render attraction, each a full preset with its hand routes, WAKE and TRIP with plan 12's eight device knobs (docs/plans/12-presets.md; re-cut in plan 13 WP5). Plan 14 WP5 (decision 24): the effect families on F6-F8 - ACID, MANDALA, NOITA - each with its hands and eight device knobs. The band strip opens on Balanced.",
  "startup": "TUMBLE",
  "bank": [
   "TUMBLE",
@@ -9,9 +9,9 @@
   "FIELD",
   "WAKE",
   "TRIP",
-  null,
-  null,
-  null
+  "ACID",
+  "MANDALA",
+  "NOITA"
  ],
  "session": {},
  "modules": {

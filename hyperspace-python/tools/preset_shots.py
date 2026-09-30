@@ -8,7 +8,7 @@ load, as its F-key does — and two fake hands are driven through the real ``Han
 (range → One Euro → dead zone → follower) at a handful of poses, each held
 for a second and a half before the frame is taken. No audio source: the
 lane rows are quiet, so what the shots show is the hands alone over the
-preset's bases. No dream worker either (torch is optional), so in the wake
+preset's bases. No dream worker either (the tool attaches none), so in the wake
 shots the echoes are real and the dream buffer is empty.
 
     uv run python tools/preset_shots.py [--only tumble,trip] [--frames 90] [--no-shots]
@@ -98,6 +98,36 @@ POSES: dict[str, list[tuple[str, dict[str, float]]]] = {
         ("R yaw fingers-out (hues)", {"R.yaw": 1}), ("R pitch fingers-up (plasma)", {"R.pitch": 1}),
         ("L up (pump)", {"L.y": 1}), ("L left + R up", {"L.x": 0, "R.y": 1}),
         ("L reach in + R up", {"L.z": 0, "R.y": 1}),
+    ],
+    # plan 14 WP6: the legible echoes (in the list, on no F-key)
+    "party-tracer": [
+        ("no hands", {}), ("both level", {"L.y": 0, "R.y": 0}),
+        ("L roll thumb-up (turn)", {"L.roll": 1}), ("L up (spin)", {"L.y": 1}),
+        ("R up (bright trail)", {"R.y": 1}), ("R reach in (long)", {"R.z": 0}),
+        ("R pull back (short)", {"R.z": 1}), ("R roll thumb-up (covered)", {"R.roll": 1}),
+        ("R roll thumb-down (through)", {"R.roll": 0}), ("R pitch fingers-up (hard)", {"R.pitch": 1}),
+    ],
+    # plan 14 WP5: the effect families on F6–F8
+    "party-acid": [
+        ("no hands", {}), ("both level", {"L.y": 0, "R.y": 0}),
+        ("R up (heave)", {"R.y": 1}), ("R reach in (rings)", {"R.z": 0}),
+        ("R roll thumb-up (twist)", {"R.roll": 1}), ("R pitch fingers-up (split)", {"R.pitch": 1}),
+        ("R yaw fingers-out (hues)", {"R.yaw": 1}), ("L up (wobble)", {"L.y": 1}),
+        ("L roll thumb-up", {"L.roll": 1}), ("both up", {"L.y": 1, "R.y": 1}),
+    ],
+    "party-mandala": [
+        ("no hands", {}), ("both level", {"L.y": 0, "R.y": 0}),
+        ("R up (fractals)", {"R.y": 1}), ("R reach in (fold)", {"R.z": 0}),
+        ("R pull back", {"R.z": 1}), ("R roll thumb-up (swirl)", {"R.roll": 1}),
+        ("R pitch fingers-up (plasma)", {"R.pitch": 1}), ("R yaw fingers-out (cells)", {"R.yaw": 1}),
+        ("L up (glints)", {"L.y": 1}), ("L roll thumb-up", {"L.roll": 1}),
+    ],
+    "party-noita": [
+        ("no hands", {}), ("both level", {"L.y": 0, "R.y": 0}),
+        ("R half up", {"R.y": 0.5}), ("R up (next stage)", {"R.y": 1}),
+        ("R reach in (fine warp)", {"R.z": 0}), ("R roll thumb-up (double)", {"R.roll": 1}),
+        ("R pitch fingers-up (pulse)", {"R.pitch": 1}), ("L up (drift)", {"L.y": 1}),
+        ("L roll thumb-up", {"L.roll": 1}), ("both up", {"L.y": 1, "R.y": 1}),
     ],
 }
 
@@ -234,8 +264,9 @@ def sweep(name: str, frames: int) -> str:
              "| hand axis | target | op | base | u=0 | u=¼ | u=½ | u=¾ | u=1 | out | never |",
              "|---|---|---|---|---|---|---|---|---|---|---|"]
     for b in rows:
-        i = b.index
-        side, axis = ("L", "R")[i // len(HAND_AXES)], HAND_AXES[i % len(HAND_AXES)]
+        # a named hand row (decision register row 20): hand:right.roll
+        hand_side, axis = b.source.split(":", 1)[1].split(".")
+        side = {v: k for k, v in SIDE.items()}[hand_side]
         vals = []
         for u in us:
             st = Stage(name)

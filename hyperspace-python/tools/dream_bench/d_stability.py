@@ -1,6 +1,6 @@
 """Question D (part 2) — step size / gradient normalisation stability.
 
-    uv run --extra dream python tools/dream_bench/d_stability.py [--frames 300]
+    uv run python tools/dream_bench/d_stability.py [--frames 300]
 
 Runs the temporal dream (D <- blend(D, frame, k); s steps on D) on real
 Hyperspace frames — the 24-cell, faces + pattern, rotating at 60 fps — for

@@ -10,6 +10,8 @@
   "lfo.1.shape": 0,
   "lfo.1.depth": 0.6,
   "macro.1": 0.0,
+  "fx.mix": 0.5,
+  "fx.plasma.on": true,
   "fx.on": true
  },
  "routes": [

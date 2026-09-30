@@ -1,4 +1,4 @@
-"""Preset strip and project row — the library's face on the panel.
+"""Preset strip and the PRESETS page — the library's face on the panel.
 
 Every section of the panel that sits on a registry group the library
 knows (library.groups()) carries a strip under its title:
@@ -11,14 +11,30 @@ list (factory presets dim, user ones deletable); the dot is
 a factory one, which can only be saved *as* something; as… turns the
 strip into a name field until Enter (or Esc); reset lands the group on
 its default preset — the "meaningful default" — or its fresh values when
-it has none. The project row is the same idea over the open project
-(name · dirty · save / as… / load ▾ / new, and the startup preset ▾),
-over the F1–F8 **preset bank**: eight slots, each named by the preset
-file it points at (click or F-key loads, ⇧click or ⇧F-key saves the live
-state as it, the loaded one lit). Under the bank sits the one **preset
-strip** — this same strip over the ``presets`` group, a document kind
-preset.py keeps — and then the module overview (the performance groups
-and the band strip's scene). The ROUTING page's head is this strip's
+it has none. Save on a **factory** preset writes your own copy of it
+(``Library.overwrite`` shadows the factory file, never touches it).
+
+The PRESETS page speaks plan 14 §3's words — **show** (what the code
+calls a ``Project``: a bank of eight presets and what it starts on),
+**preset**, **starts on**, **module preset**, **factory** — and reads top
+to bottom (plan 14 WP4):
+
+  SHOW        the show's name on a line of its own, never covered; then
+              show ▾ (every show, factory ones dim) · save · save as · new
+  starts on ▾ the preset the show opens with — written the moment it is
+              picked (``Project.write``), a factory show's making your copy
+  F1–F8       eight preset buttons, each with its preset's name and its
+              F-key, the live one lit: click or F-key loads, ⇧click or
+              ⇧F-key saves the live state as it
+  PRESET      the one preset strip — this strip over the ``presets``
+              group, a document kind preset.py keeps: the loaded preset,
+              its dirty dot, save / as…
+  more ▸      folded: a module-preset strip per performance group and the
+              band strip's scene (the modules overview)
+
+The library's warning, error and status lines stay under all of it,
+outside the fold, so a note like decision 22's rename is seen. The
+ROUTING page's head is the preset strip's
 save / as… over the same ``presets`` group — the loaded preset, whose
 routes, desk and macros that page edits (ui_routing.head); there is no
 strip of routing presets since plan 13 WP5.
@@ -41,10 +57,9 @@ from .params import PERFORMANCE_GROUPS
 
 LIST_POLL = 1.0      # seconds between re-listings of a group's presets
 NAME_MAX = 14        # chars of a preset name the strip shows before eliding
-PROJECT = "project"  # the listing / name-field key for the project row
-LOAD_W = 88          # the project row's load ▾ combo
-STARTUP_W = 120      # the project row's startup ▾ combo
-SLOT_W = 40          # one F-key slot in the preset bank
+PROJECT = "show"     # the listing / name-field key for the show block
+SHOW_W = 96          # the show ▾ menu
+BANK_COLS = 2        # preset buttons a row: F1 F2 over F3 F4 …, wide enough for a name
 # the module overview: every performance group but the macros (a macro's
 # meaning is its subscribers, which live in the preset), and the band
 # strip's scene, the one session module a project names
@@ -57,7 +72,17 @@ def _state(panel) -> dict:
     st = getattr(panel, "_lib_state", None)
     if st is None:
         st = panel._lib_state = {"lists": {}, "naming": None, "buf": "", "dirty": {}}
+    # what the PRESETS page drew last frame: each widget's screen rect by
+    # key, and the preset buttons' labels — for the layout tests
+    st.setdefault("rects", {})
+    st.setdefault("bank_labels", [])
     return st
+
+
+def _rect(panel, key: str) -> None:
+    """Record the last item's screen rect under `key` (_state's `rects`)."""
+    a, b = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+    _state(panel)["rects"][key] = (a.x, a.y, b.x, b.y)
 
 
 def names(panel, key: str) -> list[str]:
@@ -188,14 +213,15 @@ def strip(panel, group: str) -> None:
 
     # save · as… · reset, flush right
     imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w("save", "as…", "reset"))
-    imgui.begin_disabled(cur is None or factory)
+    imgui.begin_disabled(cur is None)
     if ui.chip("save"):
         _guard(panel, lib.overwrite, group)
         invalidate(panel, group)
     imgui.end_disabled()
     if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
-        imgui.set_tooltip("Write the group's settings over the current preset"
-                          + (" — a factory preset: save as… instead" if factory else ""))
+        imgui.set_tooltip("Write the settings over the current preset"
+                          + (" — a factory one: saved as your own copy of it"
+                             if factory else ""))
     imgui.same_line()
     if ui.chip("as…"):
         _begin_naming(panel, group, cur or "")
@@ -245,78 +271,127 @@ def _list_popup(panel, group: str, listing: list[str], cur: str | None) -> None:
     imgui.end_popup()
 
 
-# ---- the project row ----
+# ---- the show: its name, show ▾ · save · save as · new ----
 
-def project_row(panel) -> None:
-    """name ● · save · as… · load ▾ · new — the open project."""
+def show_block(panel) -> None:
+    """The open show: its name on a line of its own (never covered), then
+    show ▾ · save · save as · new."""
     lib = panel.library
     if lib is None or lib.reg is None:
         return
     proj = lib.project
-    imgui.push_id("project")
+    imgui.push_id("show")
     if _name_field(panel, PROJECT, lambda n: _project_save_as(panel, n)):
         imgui.pop_id()
         return
-    imgui.text(proj.name)
+    factory = proj.path is None and getattr(proj, "factory", False)
+    at = imgui.get_cursor_screen_pos()          # the line the name has to itself
+    _state(panel)["rects"]["show.line"] = (at.x, at.y,
+                                           at.x + imgui.get_content_region_avail().x, at.y)
+    ui._readout(proj.name)
+    _rect(panel, "show.name")
     if imgui.is_item_hovered():
         imgui.set_tooltip(str(proj.path) if proj.path else
+                          "a factory show — save makes your copy" if factory else
                           "not saved yet — save writes it into the library")
     if proj.is_dirty():
-        imgui.same_line(0, 2)
+        imgui.same_line(0, 4)
         imgui.text_colored(ui.RED, "●")
+        _rect(panel, "show.dot")
         if imgui.is_item_hovered():
-            imgui.set_tooltip("the live state differs from the project file")
-    sp = imgui.get_style().item_spacing.x
-    imgui.same_line(imgui.get_content_region_avail().x
-                    - ui.chip_w("save", "as…", "new") - LOAD_W - STARTUP_W - 2 * sp)
-    _startup_combo(panel, proj)
+            imgui.set_tooltip("the show differs from its file: the session (tempo, hands, "
+                              "the analyzer, output) or the eight presets")
+    if factory:
+        imgui.same_line(0, 8)
+        imgui.text_disabled("factory")
+    # show ▾ · save · save as · new
+    imgui.set_next_item_width(SHOW_W)
+    if imgui.begin_combo("##shows", "show"):
+        listing = names(panel, PROJECT)
+        for name in listing:
+            fact = not proj.path_for(name).is_file()
+            imgui.push_style_color(imgui.Col_.text, ui.DIM if fact else ui.TEXT)
+            picked, _ = imgui.selectable(name, name == proj.name)
+            imgui.pop_style_color()
+            if picked:
+                _guard(panel, proj.load, name)
+        imgui.end_combo()
+    _rect(panel, "show.menu")
+    if imgui.is_item_hovered():
+        imgui.set_tooltip("Open a show: party and house are factory (dim); yours "
+                          "are in the library")
     imgui.same_line()
     if ui.chip("save"):
         _guard(panel, proj.save)
         invalidate(panel, PROJECT)
+    _rect(panel, "show.save")
     if imgui.is_item_hovered():
-        imgui.set_tooltip("Save the session — tempo, hands, the analyzer, output — "
-                          "the preset bank and the startup preset into the project file")
+        imgui.set_tooltip("Save the show — the session (tempo, hands, the analyzer, "
+                          "output), its eight presets and what it starts on"
+                          + (" — a factory show: saved as your own copy" if factory else ""))
     imgui.same_line()
-    if ui.chip("as…"):
+    if ui.chip("save as"):
         _begin_naming(panel, PROJECT, proj.name)
-    imgui.same_line()
-    imgui.set_next_item_width(LOAD_W)
-    if imgui.begin_combo("##load", "load"):
-        listing = names(panel, PROJECT)
-        if not listing:
-            imgui.text_disabled("no saved projects")
-        for name in listing:
-            picked, _ = imgui.selectable(name, name == proj.name)
-            if picked:
-                _guard(panel, proj.load, name)
-        imgui.end_combo()
-    if imgui.is_item_hovered():
-        imgui.set_tooltip("Open a project from the library")
+    _rect(panel, "show.save_as")
     imgui.same_line()
     if ui.chip("new"):
         _guard(panel, proj.new)
+    _rect(panel, "show.new")
     if imgui.is_item_hovered():
-        imgui.set_tooltip("A fresh project: default state, the factory preset bank")
+        imgui.set_tooltip("A new show: fresh state, the party show's eight presets")
     imgui.pop_id()
 
 
-def _startup_combo(panel, proj) -> None:
-    """startup ▾ — the preset a launch and a project load bring up (D11)."""
-    imgui.set_next_item_width(STARTUP_W)
-    shown = _elide(proj.startup) if proj.startup else "startup"
-    if imgui.begin_combo("##startup", shown):
+def project_row(panel) -> None:
+    """The show block and what it starts on — the page's top (kept under
+    its old name for callers from before plan 14 WP4)."""
+    show_block(panel)
+    starts_on(panel)
+
+
+# ---- starts on ▾ ----
+
+def starts_on(panel) -> None:
+    """starts on ▾ — the preset the show opens with (D11), labelled, and
+    written into the show the moment it is picked."""
+    lib = panel.library
+    if lib is None or lib.reg is None:
+        return
+    proj = lib.project
+    imgui.push_id("starts_on")
+    ui._micro("starts on")
+    _rect(panel, "starts_on.label")
+    imgui.same_line()
+    imgui.set_next_item_width(-1)
+    if imgui.begin_combo("##starts_on", proj.startup or "— none"):
+        choice: list = []
         picked, _ = imgui.selectable("— none", proj.startup is None)
         if picked:
-            proj.startup = None
+            choice.append(None)
         for name in names(panel, PRESETS):
-            picked, _ = imgui.selectable(f"{name}##startup", name == proj.startup)
+            picked, _ = imgui.selectable(f"{name}##starts", name == proj.startup)
             if picked:
-                proj.startup = name
+                choice.append(name)
         imgui.end_combo()
+        if choice:
+            set_starts_on(panel, choice[0])
+    _rect(panel, "starts_on")
     if imgui.is_item_hovered():
-        imgui.set_tooltip(f"startup: {proj.startup or 'none'} — the preset a launch and a "
-                          "project load bring up; save writes it into the project")
+        imgui.set_tooltip(f"starts on: {proj.startup or 'none'} — the preset a launch and "
+                          "opening the show bring up; saved as soon as you pick it")
+    imgui.pop_id()
+
+
+def set_starts_on(panel, name: str | None) -> None:
+    """Pick what the show starts on and write it now (a factory show's
+    write makes your copy); the show is then the one a launch opens."""
+    lib = panel.library
+    proj = lib.project
+    proj.startup = name
+    if _guard(panel, proj.write) is not None:
+        lib.remember(proj.stem)
+        lib.status = f"show: {proj.name} starts on {name or 'nothing'}"
+    invalidate(panel, PROJECT)
 
 
 def _project_save_as(panel, name: str) -> None:
@@ -324,35 +399,66 @@ def _project_save_as(panel, name: str) -> None:
     invalidate(panel, PROJECT)
 
 
-# ---- the F1–F8 preset bank: eight pointers to preset files ----
+# ---- the F1–F8 preset buttons: eight pointers to preset files ----
+
+def _fit(text: str, width: float) -> str:
+    """`text`, elided with … until it fits `width` pixels."""
+    if imgui.calc_text_size(text).x <= width:
+        return text
+    while len(text) > 1 and imgui.calc_text_size(text + "…").x > width:
+        text = text[:-1]
+    return text.rstrip() + "…"
+
 
 def preset_bank(panel) -> None:
+    """Eight buttons, two a row (F1 F2 over F3 F4 …): each its preset's name and its
+    F-key, the live one lit. Click or F-key loads; ⇧click or ⇧F-key saves
+    the live state as the slot's preset."""
     pr = panel.bank                   # library.Project: bank, active, load/save_slot
     if pr is None:
         return
-    r, io = panel.reg, imgui.get_io()
-    ui._micro("presets  ·  F1–F8")
+    r, io, st = panel.reg, imgui.get_io(), _state(panel)
+    ui._micro("presets  ·  F1–F8  ·  ⇧ saves")
     if imgui.is_item_hovered():
         imgui.set_tooltip(
-            "The project's eight presets, each one a file in the library: the "
+            "The show's eight presets, each one a file in the library: the "
             "whole performance — the look, its routes, LFOs and macros, never "
             "the tempo, the hands or the analyzer. Click or F1–F8 loads; "
             "⇧click or ⇧F1–F8 saves the live state as the slot's preset."
         )
+    sp = imgui.get_style().item_spacing.x
+    w = (imgui.get_content_region_avail().x - (BANK_COLS - 1) * sp) / BANK_COLS
+    pad = ui.CHIP_PAD.x
+    labels: list[str] = []
     for k, name in enumerate(pr.bank):
-        if k:
+        if k % BANK_COLS:
             imgui.same_line()
         lit = k == pr.active and name is not None
+        key = f"F{k + 1}"
+        room = w - 2 * pad - imgui.calc_text_size(key + "  ").x
+        shown = _fit(name, room) if name is not None else "—"
+        labels.append(f"{key}  {shown}")
         pid = f"preset.{'save' if io.key_shift else 'load'}.{k}"
-        if ui.lit_chip(f"{k + 1}##preset{k}", lit, ui.FAINT if name is None else ui.TEXT,
-                       imgui.ImVec2(SLOT_W, 0)):
+        if ui.lit_chip(f"##preset{k}", lit, None, imgui.ImVec2(w, 0)):
             r[pid].fire()
             invalidate(panel, PRESETS)
-        if imgui.is_item_hovered():
-            imgui.set_tooltip(name if name is not None else
-                              f"empty — ⇧F{k + 1} saves the live state here")
+        a, b = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        st["rects"][f"preset.{k}"] = (a.x, a.y, b.x, b.y)
+        hov = imgui.is_item_hovered()
+        # the F-key hint quiet, the name bright — drawn over the pill
+        dl = imgui.get_window_draw_list()
+        y = a.y + (b.y - a.y - imgui.get_text_line_height()) / 2
+        white = imgui.ImVec4(1, 1, 1, 1)
+        dl.add_text(imgui.ImVec2(a.x + pad, y), ui.u32(white if lit else ui.FAINT), key)
+        dl.add_text(imgui.ImVec2(a.x + pad + imgui.calc_text_size(key + "  ").x, y),
+                    ui.u32(white if lit else ui.FAINT if name is None else ui.TEXT), shown)
+        if hov:
+            imgui.set_tooltip(f"{key}: {name} — click loads, ⇧click saves the live state "
+                              "as it" if name is not None else
+                              f"{key}: empty — ⇧{key} saves the live state here")
         panel._ctx(r[f"preset.load.{k}"])
         panel._learn_frame(r[f"preset.load.{k}"])
+    st["bank_labels"] = labels
     if pr.bank_error:
         imgui.text_colored(ui.WARN, pr.bank_error)
 
@@ -367,7 +473,7 @@ def preset_strip(panel) -> None:
     strip(panel, PRESETS)
 
 
-# ---- the overview: every group, its preset, its dirty dot ----
+# ---- more: every module preset, its strip ----
 
 def groups(panel) -> list[str]:
     """The groups the overview lists: the performance groups less the
@@ -379,20 +485,32 @@ def groups(panel) -> list[str]:
     return [g for g in lib.groups() if g in known and g in OVERVIEW_GROUPS]
 
 
-def overview(panel) -> None:
+def more(panel) -> None:
+    """The fold: a module-preset strip per group (its name, its dot, save
+    / as… / reset) — the modules overview. Folded unless opened."""
     lib = panel.library
     if lib is None or lib.reg is None:
         return
-    ui._micro("modules")
+    if not imgui.collapsing_header("more  ·  module presets##presets.more"):
+        return
     for group in groups(panel):
-        cur = lib.current(group)
         imgui.text_disabled(f"{group:<8s}")
         imgui.same_line(ui.LABEL_W)
-        imgui.text_colored(ui.DIM if cur is None else imgui.ImVec4(0.92, 0.92, 0.92, 1),
-                           cur or "—")
-        if dirty(panel, group, polled=True):
-            imgui.same_line(0, 2)
-            imgui.text_colored(ui.RED, "●")
+        strip(panel, group)
+
+
+def overview(panel) -> None:
+    """The fold, then the library's warning, error and status lines — never
+    folded, so a note is always seen."""
+    lib = panel.library
+    if lib is None or lib.reg is None:
+        return
+    more(panel)
+    notes(panel)
+
+
+def notes(panel) -> None:
+    lib = panel.library
     imgui.push_style_color(imgui.Col_.text, ui.WARN)
     if lib.warning:
         imgui.text_wrapped(lib.warning)
