@@ -218,6 +218,17 @@ def test_a_palm_only_hand_has_a_skeleton_with_no_digits(leap):
     assert sk["digits"] == [] and sk["arm"] is None and sk["width"] == hc.PALM_W
 
 
+def test_a_skeleton_that_cannot_be_read_never_costs_the_features(leap):
+    from fake_hands import hand as full_hand
+
+    src, conn = source(leap)
+    h = full_hand("right")
+    del h.index.metacarpal.prev_joint               # bindings missing a joint
+    conn.fire("on_tracking_event", NS(hands=[h]))
+    assert src.latest()[2]["right"][0]["y"] == 200.0   # the axes still get the frame
+    assert src.skeletons()[2] == {}
+
+
 def test_hands_io_keeps_the_skeletons_of_the_hands_present_only(leap):
     from fake_hands import hand as full_hand
 

@@ -690,7 +690,10 @@ class LeapSource:
             side, conf = _side(h), float(h.confidence)
             if side not in out or conf > out[side][1]:
                 out[side] = (features(h), conf)
-                skel[side] = skeleton(h)
+                try:
+                    skel[side] = skeleton(h)
+                except Exception:  # noqa: BLE001 — display only: never cost the axes a frame
+                    skel.pop(side, None)
         with self._lock:
             self._hands, self._skel = out, skel
             self._seq, self._t = self._seq + 1, self.clock()
@@ -704,13 +707,19 @@ class LeapSource:
         return seq, t, hands
 
     def skeletons(self) -> tuple[int, float, dict[str, dict]]:
-        """(frame seq, receipt time, side → `skeleton`): the frame
-        `latest()` reads, under the same lock and the same staleness rule."""
-        with self._lock:
-            seq, t, skel = self._seq, self._t, self._skel
-        if self.clock() - t > STALE_S:
-            skel = {}
+        """(frame seq, receipt time, side → `skeleton`), under the same
+        lock and the same staleness rule as `latest()`."""
+        seq, t, _, skel = self.snapshot()
         return seq, t, skel
+
+    def snapshot(self) -> tuple[int, float, dict, dict]:
+        """`latest()` and `skeletons()` of one frame, read under one lock:
+        (seq, receipt time, side → (features, confidence), side → skeleton)."""
+        with self._lock:
+            seq, t, hands, skel = self._seq, self._t, self._hands, self._skel
+        if self.clock() - t > STALE_S:
+            hands, skel = {}, {}
+        return seq, t, hands, skel
 
     @property
     def on(self) -> bool:
@@ -954,7 +963,11 @@ class HandsIO:
         `router` the routing.Router fed the ``hand`` lanes. Returns what
         went to the DAW port (for tests and the probe)."""
         g = self.settings
-        seq, t, hands = self.source.latest()
+        snap = getattr(self.source, "snapshot", None)
+        if snap is not None:          # features and skeletons of one frame
+            seq, t, hands, skel = snap()
+        else:
+            (seq, t, hands), skel = self.source.latest(), {}
         now = self.clock()
         fresh = seq != self._seq
         self._seq = seq
@@ -974,7 +987,7 @@ class HandsIO:
                         channel=int(self.cfg["channel"]) - 1,
                         note=int(self.cfg["note"]) + s, velocity=127 if here else 0))
             msgs += self._pinches(side, s, here, t)
-        self._skeletons()
+        self._skeletons(skel)
         for i, (a, st) in enumerate(zip(self.axes, self.state)):
             h = hands.get(a.side) if self.present[a.side] else None
             if h is None:
@@ -1020,12 +1033,11 @@ class HandsIO:
             self._learn(learn)
         return msgs
 
-    def _skeletons(self) -> None:
-        """This frame's skeletons, for the hands that are present (the
-        same confidence floor as the axes). Raw: no axis's shaping, so the
-        ghost hands never lag or drift from the real ones."""
-        read = getattr(self.source, "skeletons", None)
-        skel = read()[2] if read is not None else {}
+    def _skeletons(self, skel: dict) -> None:
+        """This frame's skeletons (read with its features, `snapshot`),
+        for the hands that are present (the same confidence floor as the
+        axes). Raw: no axis's shaping, so the ghost hands never lag or
+        drift from the real ones."""
         self.skeleton = {s: skel[s] for s in SIDES if self.present[s] and s in skel}
 
     def _pinches(self, side: str, s: int, here: bool, t: float) -> list[mido.Message]:

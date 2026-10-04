@@ -53,7 +53,7 @@ def test_the_params_are_session_off_by_default_and_learnable(tmp_path):
 
 
 def test_the_box_is_the_calibrated_ranges_else_the_defaults():
-    assert G.box_of(None) == G.DEFAULT_BOX
+    assert G.box_of(None) == ((-220.0, 220.0), (100.0, 350.0), (-100.0, 100.0))
     io = HandsIO(HandSettings.from_config({"dofs": ["x", "y", "roll"]}), {},
                  source=NS(latest=lambda: (0, 0.0, {})), out=NS(send=print))
     st = {a.name: s for a, s in zip(io.axes, io.state)}
@@ -63,7 +63,19 @@ def test_the_box_is_the_calibrated_ranges_else_the_defaults():
     (x, y, z) = G.box_of(io)
     assert x == (-180.0, 160.0)
     assert y == (min(120.0, st["left.y"].lo), max(300.0, st["left.y"].hi))
-    assert z == G.DEFAULT_BOX[2]                     # no z axis in this setup: the default
+    assert z == (-100.0, 100.0)                      # no z axis in this setup: the default
+
+
+def test_a_hand_the_setup_has_no_axis_for_is_still_in_frame():
+    """Only right.x in the setup: the left hand's side of the box is its
+    default range, not dropped."""
+    io = HandsIO(HandSettings.from_config({"dofs": ["x"]}), {},
+                 source=NS(latest=lambda: (0, 0.0, {})), out=NS(send=print))
+    io.settings.axes[:] = [a for a in io.axes if a.side == "right"]
+    io.state[:] = io.state[1:]
+    io.state[0].lo, io.state[0].hi = 10.0, 150.0
+    x = G.box_of(io)[0]
+    assert x[0] <= -200.0 and x[1] == 150.0
 
 
 @pytest.mark.parametrize("mode", sorted(G.MODES))
@@ -84,7 +96,7 @@ def test_the_camera_fits_the_padded_box_in_frame(mode, aspect):
 
 
 def test_desktop_keeps_left_on_the_left_and_mirror_flips_it():
-    vp, _ = G.camera(G.DEFAULT_BOX, G.basis("desktop"), 1.5)
+    vp, _ = G.camera(G.box_of(None), G.basis("desktop"), 1.5)
 
     def screen_x(p, m):
         c = np.append(m @ np.asarray(p), 1.0) @ vp.T
@@ -219,6 +231,18 @@ def test_on_draws_both_hands_and_off_is_the_old_frame_exactly(ctx):
     # the right hand is red, the left near-white
     r_px = on[:, W // 2:][changed[:, W // 2:]]
     assert r_px[:, 0].mean() > r_px[:, 2].mean() + 40
+
+
+def test_a_shader_the_driver_refuses_leaves_the_frame_and_says_why(ctx, monkeypatch):
+    base, _ = frame(ctx)
+    monkeypatch.setattr(G, "COMPOSITE_FS", "#version 330\nvoid main() { nope; }")
+    out, r = frame(ctx, src=tracker())
+    assert np.array_equal(out, base)                   # no hands, no half-built pass
+    assert r.ghost.error.startswith("ghost:") and r.ghost.geometry is None
+    monkeypatch.undo()
+    r.ghost.on_reload()                                # a fixed edit builds again
+    out, _ = frame(ctx, src=tracker(), renderer=r, t0=5.0)
+    assert not np.array_equal(out, base) and r.ghost.error == ""
 
 
 def test_the_target_alpha_is_untouched(ctx):

@@ -15,9 +15,15 @@ Like core.py and signal.py, this imports nothing from the host.
 
 from __future__ import annotations
 
+import bisect
 import json
 import time
 from pathlib import Path
+
+# a tape that does not loop goes quiet this long after its last frame, as
+# a camera's frames go stale (hands/core.py STALE_S, not imported: tape is
+# a leaf core imports)
+STALE_S = 0.25
 
 TAPE_SCHEMA = "hyperspace.hands.tape/1"
 
@@ -33,10 +39,12 @@ def record(source, seconds: float, *, mode: str = "desktop", clock=time.monotoni
     last = -1
     first: float | None = None
     while clock() - t0 < seconds:
-        seq, t, hands = source.latest()
+        if hasattr(source, "snapshot"):        # features and skeletons of one frame
+            seq, t, hands, skel = source.snapshot()
+        else:
+            (seq, t, hands), skel = source.latest(), {}
         if seq != last and seq > 0:
             last = seq
-            skel = source.skeletons()[2] if hasattr(source, "skeletons") else {}
             first = t if first is None else first
             frames.append({"t": round(t - first, 6), "hands": {
                 side: {"features": feats, "confidence": conf, "skeleton": skel.get(side)}
@@ -92,6 +100,7 @@ class TapeSource:
         self.tape = tape if isinstance(tape, dict) else load(Path(tape))
         self.mode = self.tape.get("mode", "desktop")
         self.frames = self.tape["frames"]
+        self._ts = [f["t"] for f in self.frames]
         self.clock = clock
         self.loop = loop
         self.t0 = clock()
@@ -102,30 +111,38 @@ class TapeSource:
     def on(self) -> bool:
         return bool(self.frames)
 
-    def _at(self) -> tuple[int, dict]:
-        """(seq, frame) playing now; (0, None) for an empty tape."""
+    def _at(self) -> tuple[int, dict | None]:
+        """(seq, frame) playing now; (0, None) for an empty tape, and for
+        a tape that does not loop once it has gone stale past its end."""
         if not self.frames:
             return 0, None
         el = self.clock() - self.t0
-        lap, pos = divmod(el, self.length) if self.loop else (0, min(el, self.length))
-        k = 0
-        while k + 1 < len(self.frames) and self.frames[k + 1]["t"] <= pos:
-            k += 1
+        if self.loop:
+            lap, pos = divmod(el, self.length)
+        elif el > self.length + STALE_S:
+            return len(self.frames), None
+        else:
+            lap, pos = 0, el
+        k = max(bisect.bisect_right(self._ts, pos) - 1, 0)
         return int(lap) * len(self.frames) + k + 1, self.frames[k]
 
-    def latest(self) -> tuple[int, float, dict]:
+    def snapshot(self) -> tuple[int, float, dict, dict]:
+        """One frame's features and skeletons (`LeapSource.snapshot`)."""
         seq, f = self._at()
         if f is None:
-            return 0, -1.0, {}
-        return seq, self.clock(), {s: (h["features"], float(h["confidence"]))
-                                   for s, h in f["hands"].items()}
+            return seq, -1.0, {}, {}
+        hands = f["hands"]
+        return (seq, self.clock(),
+                {s: (h["features"], float(h["confidence"])) for s, h in hands.items()},
+                {s: h["skeleton"] for s, h in hands.items() if h.get("skeleton")})
+
+    def latest(self) -> tuple[int, float, dict]:
+        seq, t, hands, _ = self.snapshot()
+        return seq, t, hands
 
     def skeletons(self) -> tuple[int, float, dict]:
-        seq, f = self._at()
-        if f is None:
-            return 0, -1.0, {}
-        return seq, self.clock(), {s: h["skeleton"] for s, h in f["hands"].items()
-                                   if h.get("skeleton")}
+        seq, t, _, skel = self.snapshot()
+        return seq, t, skel
 
     def close(self) -> None:
         pass

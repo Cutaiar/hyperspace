@@ -3,7 +3,7 @@
 An open hand or a fist, either side, anywhere in the box — every digit's
 four bones with joints, widths and a rotation, the palm frame and the
 arm. What `hands.core.features` and `hands.core.skeleton` read, so the
-tests (and tools/ghost_shots.py) can drive the ghost hands with no camera.
+tests (and tools/hands_tape.py synth) can drive the ghost hands with no camera.
 Desktop mode: palm down, fingers pointing away from the performer (−z).
 """
 

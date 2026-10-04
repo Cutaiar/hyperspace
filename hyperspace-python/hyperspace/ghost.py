@@ -46,6 +46,8 @@ from dataclasses import dataclass, field
 import moderngl
 import numpy as np
 
+from .glsl import QUAD_VS
+
 GROUP = "ghost"
 
 FADE_IN = 0.10      # s: a hand that enters comes up this fast
@@ -71,11 +73,6 @@ MODES: dict[str, tuple[tuple[float, float, float], ...]] = {
     "screentop": ((-1.0, 0.0, 0.0), (0.0, -1.0, 0.0), (0.0, 0.0, 1.0)),
     "hmd": ((-1.0, 0.0, 0.0), (0.0, 0.0, -1.0), (0.0, -1.0, 0.0)),
 }
-
-# the palm box when there is no source to ask: hands/core.py's defaults
-# (X_RANGE for both hands, FEATURES' y and z)
-DEFAULT_BOX = ((-220.0, 220.0), (100.0, 350.0), (-100.0, 100.0))
-
 
 # ------------------------------------------------------------------ params
 
@@ -121,20 +118,23 @@ def basis(mode: str, mirror: bool = False) -> np.ndarray:
 
 
 def box_of(source) -> tuple[tuple[float, float], ...]:
-    """The palm box in Leap mm, ((x lo, hi), (y …), (z …)): the union of
-    both hands' calibrated ranges for x, y and z where the setup has those
-    axes (`HandsIO.axes` / `.state`, which hold hands.json's ranges), the
-    defaults for the rest. Duck-typed: anything without axes gets
-    DEFAULT_BOX."""
-    out = []
+    """The palm box in Leap mm, ((x lo, hi), (y …), (z …)): the union over
+    both hands of each hand's range on each of x, y and z — its calibrated
+    range where the setup has that axis (`HandsIO.axes` / `.state`, which
+    hold hands.json's ranges), hands/core.py's default for that hand
+    where it has not — so a hand is in frame whichever axes the setup
+    keeps. Anything without axes gets both hands' defaults."""
+    # here, not at the top: params (and through it routing) imports this
+    # module, and routing must never pull in the hands adapter
+    from .hands.core import SIDES, default_range
+
     axes, state = getattr(source, "axes", None) or (), getattr(source, "state", None) or ()
-    for k, feat in enumerate("xyz"):
-        lo, hi = DEFAULT_BOX[k]
-        seen = [(min(st.lo, st.hi), max(st.lo, st.hi)) for a, st in zip(axes, state)
-                if a.feature == feat and st.hi != st.lo]
-        if seen:
-            lo, hi = min(s[0] for s in seen), max(s[1] for s in seen)
-        out.append((float(lo), float(hi)))
+    have = {(a.side, a.feature): (min(st.lo, st.hi), max(st.lo, st.hi))
+            for a, st in zip(axes, state) if st.hi != st.lo}
+    out = []
+    for feat in "xyz":
+        ranges = [have.get((sd, feat), default_range(sd, feat)) for sd in SIDES]
+        out.append((float(min(r[0] for r in ranges)), float(max(r[1] for r in ranges))))
     return tuple(out)
 
 
@@ -333,16 +333,6 @@ void main() {
 }
 """
 
-COMPOSITE_VS = """
-#version 330
-out vec2 v_uv;
-void main() {
-    vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
-    v_uv = p;
-    gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
-}
-"""
-
 COMPOSITE_FS = """
 #version 330
 in vec2 v_uv;
@@ -503,6 +493,7 @@ class Ghost:
         self._fbo: moderngl.Framebuffer | None = None     # on the texture
         self._msaa: moderngl.Framebuffer | None = None    # multisampled, with depth
         self._res: list = []
+        self.error = ""          # why the pass could not build, if it could not
 
     # ---- per frame ----
 
@@ -553,10 +544,8 @@ class Ghost:
             return False
         poses, view_proj, eye = got
         ctx = self.ctx
-        if self.geometry is None:
-            self.geometry = CapsuleHands(ctx)
-            self._comp = ctx.program(vertex_shader=COMPOSITE_VS, fragment_shader=COMPOSITE_FS)
-            self._comp_vao = ctx.vertex_array(self._comp, [])
+        if self.geometry is None and not self._build():
+            return False
         self._ensure((max(vw, 1), max(vh, 1)))
         try:
             draw_fbo = self._msaa if self._msaa is not None else self._fbo
@@ -590,7 +579,28 @@ class Ghost:
             ctx.viewport = (vx, vy, vw, vh)
         return True
 
-    # ---- targets ----
+    # ---- programs and targets ----
+
+    def _build(self) -> bool:
+        """The geometry and the composite, all or nothing: a driver that
+        refuses a shader leaves nothing half-made, says why once on
+        `error`, and the pass stays off rather than retrying every frame."""
+        if self.error:
+            return False
+        made: list = []
+        try:
+            geo = CapsuleHands(self.ctx)
+            made.append(geo)
+            comp = self.ctx.program(vertex_shader=QUAD_VS, fragment_shader=COMPOSITE_FS)
+            made.append(comp)
+            vao = self.ctx.vertex_array(comp, [])
+        except Exception as e:  # noqa: BLE001 — the hands must not take the frame down
+            for res in made:
+                res.release()
+            self.error = f"ghost: {type(e).__name__}: {e}"[:160]
+            return False
+        self.geometry, self._comp, self._comp_vao = geo, comp, vao
+        return True
 
     def _ensure(self, size: tuple[int, int]) -> None:
         if size == self.size and self._tex is not None:
@@ -620,5 +630,17 @@ class Ghost:
         self.size = (0, 0)
 
     def on_reload(self) -> None:
-        if self.geometry is not None:
-            self.geometry.on_reload()
+        """Hot-swap hook: rebuild every program (geometry and composite)
+        from this module's current source; a build that fails keeps the
+        old set drawing."""
+        if self.geometry is None:
+            self.error = ""      # an edit may have fixed what would not build
+            return
+        old = (self.geometry, self._comp_vao, self._comp)
+        self.geometry = self._comp = self._comp_vao = None
+        self.error = ""
+        if self._build():
+            for res in old:
+                res.release()
+        else:
+            self.geometry, self._comp_vao, self._comp = old

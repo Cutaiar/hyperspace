@@ -349,6 +349,7 @@ class Renderer:
         for res in olds:
             res.release()
         self._build_face_program()
+        self.ghost.on_reload()
 
     def _sync_bitmap(self, path: str) -> None:
         """(Re)load the overlay texture when the selected file changes."""
@@ -490,9 +491,7 @@ class Renderer:
         # the hands last, onto the target: no effect, echo or dream touches
         # them and the history (captured above, from the scene) never holds
         # them; off, or with no hand to show, the pass touches nothing
-        ghost = getattr(self, "ghost", None)
-        if ghost is not None:
-            ghost.draw(target, vp, t, opaque=fx.opaque)
+        self.ghost.draw(target, vp, t, opaque=fx.opaque)
 
     def _draw_cover(self, w: int, h: int) -> moderngl.Texture:
         """The faces again, solid, into the coverage mask — from the vertices

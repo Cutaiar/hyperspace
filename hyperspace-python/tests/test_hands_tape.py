@@ -102,6 +102,17 @@ def test_the_app_plays_a_tape_instead_of_the_camera(leap, tmp_path):
     assert np.allclose(poses[1].palm, (-80.0, -200.0, 0.0))
 
 
+def test_a_tape_that_does_not_loop_goes_stale_after_its_end(leap, tmp_path):
+    _, path, _ = _recorded(leap, tmp_path)
+    clock = Clock()
+    src = T.TapeSource(path, clock, loop=False)
+    assert set(src.skeletons()[2]) == {"left", "right"}
+    clock.t = src.length                               # the last frame holds briefly…
+    assert set(src.latest()[2]) == {"right"}
+    clock.t = src.length + T.STALE_S + 0.01            # …then the hands are gone
+    assert src.latest()[2] == {} and src.skeletons()[2] == {}
+
+
 @pytest.mark.skipif(not TAPES, reason="no recorded tape — tools/hands_tape.py record "
                                       "tests/fixtures/hands/<name>.json on the rig")
 @pytest.mark.parametrize("path", TAPES, ids=[p.stem for p in TAPES])
