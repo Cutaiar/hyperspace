@@ -60,8 +60,9 @@ SAMPLES = 4         # MSAA for the hands' own framebuffer
 FINGER_R = 0.085    # finger radius as a fraction of palm width, when bones give none
 BONE_R = 0.42       # a bone's capsule radius as a fraction of its reported width
 
-# per hand, linear: the HANDS page's colours (left white, right red), cooled
-COLOURS = {"left": (0.80, 0.88, 1.00), "right": (1.00, 0.36, 0.30)}
+# per hand, linear: both near-white — the guide's axes own the colours —
+# with a faint cool / warm tint so the two can still be told apart
+COLOURS = {"left": (0.88, 0.92, 1.00), "right": (1.00, 0.96, 0.91)}
 
 # tracking mode → Leap axes in stage axes: stage = M · leap, rows are the
 # stage's x (right), y (up), z (toward the performer). Desktop is the

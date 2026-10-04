@@ -390,9 +390,11 @@ def test_on_draws_both_hands_and_off_is_the_old_frame_exactly(ctx):
     changed = np.abs(on[..., :3].astype(int) - base[..., :3]).sum(axis=2) > 30
     left, right = changed[:, : W // 2].sum(), changed[:, W // 2:].sum()
     assert left > 400 and right > 400, (left, right)   # one hand on each side
-    # the right hand is red, the left near-white
-    r_px = on[:, W // 2:][changed[:, W // 2:]]
-    assert r_px[:, 0].mean() > r_px[:, 2].mean() + 40
+    # both near-white: the left a little cool, the right a little warm
+    l_px = on[:, : W // 2][changed[:, : W // 2]].astype(int)
+    r_px = on[:, W // 2:][changed[:, W // 2:]].astype(int)
+    assert l_px[:, 2].mean() > l_px[:, 0].mean() and r_px[:, 0].mean() > r_px[:, 2].mean()
+    assert r_px[:, 1].mean() > 0.7 * r_px[:, 0].mean()        # not red: a white
 
 
 def test_a_shader_the_driver_refuses_leaves_the_frame_and_says_why(ctx, monkeypatch):

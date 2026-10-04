@@ -391,8 +391,8 @@ display for the performer and for newcomers, not a control source.
   screentop and HMD are not measured (see `MODES`).
 - **The geometry.** `CapsuleHands`: a sphere per joint, a capsule per
   bone, a palm (the four finger metacarpals' bases and knuckles, and the
-  thumb web), lit with one light and a rim, one colour per hand (left
-  near-white, right red, as the HANDS page draws them). A palm-only
+  thumb web), lit with one light and a rim, both hands near-white (left
+  faintly cool, right faintly warm: the guide's axes own the colours). A palm-only
   skeleton draws the palm as an ellipse. `HandPose` is the data path —
   stage-space joints plus the bones' raw rotations and the basis — so a
   skinned mesh can replace `CapsuleHands` behind the same
