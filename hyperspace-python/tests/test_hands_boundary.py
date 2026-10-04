@@ -13,7 +13,7 @@ import pytest
 PKG = Path(__file__).resolve().parents[1] / "hyperspace" / "hands"
 # the instrument: no host imports allowed. panel.py is deliberately absent
 # — it is the adapter to *this* host, and extracting means replacing it.
-STANDALONE = ("core.py", "signal.py")
+STANDALONE = ("core.py", "signal.py", "tape.py")
 
 
 def _imports(path: Path):
@@ -31,7 +31,7 @@ def _imports(path: Path):
 def test_the_instrument_imports_nothing_from_the_host(name):
     for mod, level in _imports(PKG / name):
         if level:                       # relative: only inside this package
-            assert level == 1 and mod in ("signal", "core"), \
+            assert level == 1 and mod in ("signal", "core", "tape"), \
                 f"{name} reaches outside the hands package: {'.' * level}{mod}"
         else:
             assert not mod.startswith("hyperspace"), f"{name} imports {mod}"

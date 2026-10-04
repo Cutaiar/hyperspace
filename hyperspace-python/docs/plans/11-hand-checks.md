@@ -738,6 +738,60 @@ bound (`Renderer.draw`'s `finally`, `Lookback.capture`'s, and the
 `ctx.screen.use()` at the top of `app.draw_render`) — `stall.log` then
 has a `stranded target` entry naming it.
 
+## J. Ghost hands — added 2026-10-04
+
+Run on the ghost-hands branch. Camera and projector (or the laptop
+screen); about 15 minutes. First, headless:
+`uv run pytest -q tests/test_ghost.py tests/test_hands_tape.py tests/test_hands_leap.py`.
+`[hands] enabled = true`; calibrate the box first (15) if
+`~/Hyperspace/hands.json` is old.
+
+**47. The ghost hands follow the real ones.**
+Launch, HANDS page, tick **Ghost hands** (`ghost.on`), opacity about
+60 %. Sit where you perform, both hands in the box. *Pass:* (a) **left
+and right not swapped** — raise only your left hand: the hand on the left
+of the render moves (the near-white one); the right hand, light red, is
+on the right.
+(b) **Fingers track** — spread, close to a fist, pinch thumb to each
+finger in turn, point with one finger: every finger follows, the thumb
+on the correct side of each hand, nothing bending backwards. (c)
+**Mirroring looks right from the performer's side** — move a hand
+right, it moves right; lift it, it rises; push it toward the screen, it
+goes away from you; with your palm down you see the back of the ghost
+hand. Then tick **Ghost mirror** and look at the render the way the
+audience will (in the mirror or the Pepper's Ghost glass): the hands
+should read correctly there; note which setting the rig wants. (d)
+**Latency feels immediate** — shake a hand fast: the ghost stays on it
+with no lag you can feel and no trailing smoothing; hold still: no
+shimmer. (e) **The box fills the frame** — reach to each calibrated
+corner: the hand stays in frame, near the edge. (f) **Leaving** — pull
+a hand out of the box: it fades out where it was in about a third of a
+second, and fades back in when you return; nothing freezes or jumps.
+(g) **Effects never touch it** — F5 (TRIP) and F4 (WAKE): the shape
+warps, colours and trails; the hands do not. (h) **Off is off** —
+untick it: the render is as before. (i) **The guide** — `ghost.guide`
+BESIDE: move the right hand straight right, then straight up, then
+toward the screen: each time one ball moves (red, green, blue) and the
+others stay put; tilt fingers up, turn them outward, roll thumb-up: the
+red arc's dot rises, the green arc's goes out, the blue arc's turns
+toward the palm's new facing, and no dot ever leaves its arc; pinch each finger: its bead lights; close
+to a fist: the grab ring shrinks round a full ball. Route a few left-hand
+axes and none on the right (ROUTING page): the left gauge's routed axes
+keep their colour, everything on the right is grey and smaller but
+still moves. ON HAND: the
+same gauge rides the palm. Tick **Ghost tethers**: each routed left-hand
+axis gets a line in its colour to a label at the left edge naming the
+param it drives (the ROUTING page's target); the lines hold still while
+the balls move; untick it and the gimbals stay. Repeat (c) once in `screentop` if
+the rig ever uses it: those axes are a guess (`ghost.MODES`). *Fail:*
+swapped or mirrored hands → `ghost.MODES` / `ghost.mirror`; a finger on
+the wrong digit or bending wrongly → `hands.core.skeleton` (the bones'
+order); lag → something smoothing the skeleton (it must be raw); the
+hands warped or trailing → the pass order in `Renderer._draw_frame`.
+Then record a tape for everyone else: `uv run python tools/hands_tape.py
+record tests/fixtures/hands/rig.json --seconds 6` — both hands, open,
+fist, pinches, in and out of the box — and commit it.
+
 ## What this list does not ground
 
 Two checks have no headless twin because they are the eye's: the dream

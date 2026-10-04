@@ -652,7 +652,7 @@ def main() -> None:
     # runs inside renderer.draw
     panels: list = []                  # app.restart raises the panel's flag; frame() polls it
     reg = build_registry(s, control, audio, library.project, dream=renderer.lookback.state,
-                         fx=renderer.fx.state,
+                         fx=renderer.fx.state, ghost=renderer.ghost.state,
                          restart=lambda: [setattr(p, "restart_requested", True) for p in panels])
     # an analyzer preset carries its band layout; the library hands it to
     # control before restoring values (07-overhaul contracts)
@@ -701,6 +701,9 @@ def main() -> None:
     bridge_io = _open_bridge(reg, cfg)
     hands_io = _open_hands(cfg, hand_settings)
     panel.hands = hands_io
+    # the ghost hands draw the tracker's skeletons; no tracker, nothing draws
+    renderer.ghost.source = hands_io
+    renderer.ghost.router = router           # the guide lights what the table routes
     panel.hand_settings = hand_settings
     dream_io, panel.dream_error = _open_dream(reg, cfg)
     if dream_io is not None:            # fills the look-back's dream slot
@@ -721,6 +724,8 @@ def main() -> None:
         (renderer.lookback.state, "lookback", "DreamState"),
         (renderer.fx, "fx", "FxChain"),
         (renderer.fx.state, "fx", "FxState"),
+        (renderer.ghost, "ghost", "Ghost"),
+        (renderer.ghost.state, "ghost", "GhostState"),
         (s, "view", "ViewState"),
         (panel, "ui", "Panel"),
         (control, "control", "Control"),

@@ -67,6 +67,8 @@ from .bands import CEIL, NORMS, SHAPERS
 from .fx import FxState
 from .fx import declare as declare_fx
 from .geometry import PLANE_NAMES, SHAPES
+from .ghost import GhostState
+from .ghost import register as declare_ghost
 from .lookback import (
     FADE_HI,
     FADE_LO,
@@ -101,7 +103,7 @@ N_MACROS = 8     # macro.1–8: knobs that act through their subscribers and may
 # (tests/test_params.py walks the full registry); a group in neither
 # (`preset`, the bank) has no persisted params, and `rot.phase.*` is `persist=False`.
 PERFORMANCE_GROUPS = ("view", "rot", "camera", "pattern", "dream", "fx", "lfo", "macro")
-SESSION_GROUPS = ("tempo", "hands", "band", "master", "scene", "audio", "output",
+SESSION_GROUPS = ("tempo", "hands", "ghost", "band", "master", "scene", "audio", "output",
                   "overlay", "ui")
 PARTS = {"performance": PERFORMANCE_GROUPS, "session": SESSION_GROUPS}
 
@@ -716,7 +718,7 @@ def _item(get_list, i):
 
 
 def build_registry(view, control, audio, bank=None, dream=None, fx=None,
-                   restart=None) -> Registry:
+                   restart=None, ghost=None) -> Registry:
     """Declare every parameter the surface owns.
 
     `audio` only needs a `.chain` attribute (tests pass a namespace); the
@@ -727,7 +729,8 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     resolves with or without a panel. `dream` is the renderer's lookback
     state (lookback.DreamState); a fresh one stands in when there is no
     renderer, so the group is always declared; `fx` (fx.FxState, the
-    renderer's effect stack) likewise. `bank` is the open project
+    renderer's effect stack) likewise, and `ghost` (ghost.GhostState, the
+    renderer's ghost hands). `bank` is the open project
     (library.Project), whose eight preset slots the ``preset.*`` params
     load, save and cycle. `restart` is the host's request to
     restart the process (``app.restart``; app.py polls a flag) — a no-op
@@ -942,6 +945,8 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     fx = fx if fx is not None else FxState()
     declare_fx(r, fx)
     fx.on_specs = lambda names: declare_fx(r, fx, names)
+    # the ghost hands' display (ghost.py; the renderer's Ghost.state)
+    declare_ghost(r, ghost if ghost is not None else GhostState())
 
     # ---- master faders ----
     g = "master"

@@ -106,9 +106,9 @@ GPU rasterises. Geometry is exact to 1e-12 against the traces
 (`tests/test_core.py:33-53`). `ViewState`, the dataclass the renderer
 draws, lives in `view.py` so nothing needs moderngl to hold a view.
 
-`Renderer.draw` (`render.py:446-481`) is five stages, and with look-back
-and FX off the output is bit-identical to the scene pass alone
-(`tests/test_render.py:306`):
+`Renderer.draw` (`render.py:446-481`) is six stages, and with look-back,
+FX and the ghost hands off the output is bit-identical to the scene pass
+alone (`tests/test_render.py:306`, `tests/test_ghost.py`):
 
 1. **Scene pass** into an MSAA RGBA target (`draw_scene`, `render.py:498`):
    zoom and pan about the cursor; the instance grid with motion; face
@@ -124,6 +124,9 @@ and FX off the output is bit-identical to the scene pass alone
    (`render.py:475-478`).
 5. To the window. All post passes run with GL blending off and write
    premultiplied colour.
+6. **Ghost hands** — when `ghost.on` and a hand is in view, both hands
+   over the finished target in their own pass and camera (§2.7). Nothing
+   before it sees them.
 
 **The target is bound explicitly** (plan 14 WP1). `Renderer.draw` draws
 into whatever framebuffer is bound when it is called; it captures that
@@ -347,6 +350,98 @@ warnings and why the dream worker is off; what is not live stays until
 **dismiss**. Nothing in the watchdog may stop the show: a log that will
 not open, a platform without SIGUSR1, a write that fails — each is kept
 on `error` and the loop goes on (`tests/test_watchdog.py`).
+
+### 2.7 Ghost hands
+
+`ghost.py`: both tracked hands drawn as generic 3D hands that follow the
+Ultraleap skeleton, the way VR hands follow a headset's tracking — a
+display for the performer and for newcomers, not a control source.
+
+- **The data.** `LeapSource._frame` (SDK thread) copies each hand's
+  skeleton beside its features (`hands.core.skeleton`): palm position,
+  normal, direction and width; for each of the five digits its four
+  bones' `prev_joint`, `next_joint`, width and rotation; the arm when the
+  bindings give one — all plain floats, nothing the SDK owns. The same
+  lock, the same staleness rule (`STALE_S`) and the same more-confident-
+  hand-per-side rule as the features (`LeapSource.skeletons`).
+  `HandsIO.poll` keeps the skeletons of the hands present this frame
+  (`min_confidence`) in `HandsIO.skeleton`. It never passes through an
+  axis — no One Euro, dead zone, envelope or rest spring — so the ghost
+  neither lags nor drifts; it is drawn raw. Fingers stay display-only:
+  no lane, no route, no MIDI (decision: twelve axes, eight switches).
+- **The pass.** Last in `Renderer._draw_frame`, onto the target after
+  the FX chain: the hands draw opaque with a depth buffer into their own
+  framebuffer (4× MSAA where the context has it), and one composite lays
+  that over the target at `ghost.alpha`, premultiplied — so a
+  translucent hand shows none of its own overlaps. On an opaque ground
+  the composite's alpha blend is (0, 1): the target's alpha is left
+  exactly as it was (plan 14 WP1). In overlay the hands add their
+  coverage to the ground's alpha so they show on the desktop. Off, with
+  no tracker, or with no hand fading, the pass touches no GL state and
+  the frame is bit-identical; the target is bound again on every exit.
+- **The camera.** Fixed perspective (38° vertical), independent of the
+  4D view's camera, zoom and instances. Leap mm go through the tracking
+  mode's basis (`ghost.MODES`) into the stage — x right, y up, z toward
+  the performer — then, with `ghost.mirror`, x flips (a mirror or a
+  Pepper's Ghost glass). The camera stands behind the performer's hands,
+  32° above them, at the distance where every corner of the palm box —
+  the union of both hands' x / y / z ranges from `hands.json` (the
+  defaults for an axis the setup lacks) — padded by 60 mm for the
+  fingers fills the frame. Desktop is the table in `hands/core.py`;
+  screentop and HMD are not measured (see `MODES`).
+- **The geometry.** `CapsuleHands`: a sphere per joint, a capsule per
+  bone, a palm (the four finger metacarpals' bases and knuckles, and the
+  thumb web), lit with one light and a rim, both hands near-white (left
+  faintly cool, right a light red, as the HANDS page's dots — pale, so
+  the guide's red x axis stays its own). A palm-only
+  skeleton draws the palm as an ellipse. `HandPose` is the data path —
+  stage-space joints plus the bones' raw rotations and the basis — so a
+  skinned mesh can replace `CapsuleHands` behind the same
+  `draw(poses, view_proj, eye)`.
+- **The guide** (`ghost.guide`: OFF, BESIDE, ON HAND; off by default) —
+  what each hand is doing, drawn in the same pass: a gauge low on the
+  hand's side of the frame, or about its palm. Three axis lines (x red,
+  y green, z blue) each carry a ball at its value, −1 to +1 along the
+  line, so a hand moved only right moves only the x ball. Three arcs,
+  coloured by the axis they turn about, each carry a dot: pitch and yaw
+  where the fingers point, roll where the palm faces (a tick at neutral:
+  fingers forward, palm down). Each arc spans the axis's range —
+  calibrated, else the default — and no more, so it draws the hand's
+  reach: roll's ±90° is the lower half only, pitch and yaw never go
+  behind the hand. Four beads under the gauge light while the pinch
+  switches are closed, and a grab ring beside them closes as the hand
+  does. Everything always shows (`guide_values`): an axis the setup has
+  at its shaped output, any other feature from the native reading over
+  the default range. What a routing row drives keeps its colour at full
+  size: an enabled performer row reads it (`routed_names`, by name or
+  lane index). The rest is grey, thinner and smaller (`UNROUTED_RGB`,
+  `UNROUTED_SIZE`) and still moves.
+- **Tethers** (`ghost.tethers`, off by default; only with a guide on) —
+  what each hand is wired to. From each routed mark a thin line in its
+  colour runs to a label at the frame edge on the hand's side naming the
+  params its rows drive ("Brightness · Speed", the registry labels,
+  `routed_rows`). A tether starts at a fixed point of the gauge — an
+  axis line's outer end, an arc's neutral tick, a pinch bead, the grab
+  ring — never the moving ball, so the lines hold still while the balls
+  move. The labels stack in the order of their anchors' height so no two
+  lines cross, inside the frame. They are drawn flat into the hands'
+  framebuffer after the hands (`TetherLabels`: PIL rasterises each label
+  once into a texture — the panel's system face where there is one, else
+  the Roboto in imgui_bundle), so they fade and composite with the hands
+  and keep the target's alpha.
+- **Leaving the box.** A hand no longer reported fades out over 0.3 s
+  where it was last seen; one that comes back fades in over 0.1 s.
+- **Params.** `ghost.on` (default off), `ghost.alpha` (0.6),
+  `ghost.mirror`, `ghost.guide` — the `ghost` group, a **session** group
+  (`params.PARTS`): the hands are the room's display, like the output's
+  placement, so a preset load never turns them off mid-set. Ordinary
+  params otherwise: on the HANDS page, learnable to a button or knob.
+- **Without a camera.** `tools/hands_tape.py record` keeps a few seconds
+  of real frames — features, confidence, skeleton — as a tape
+  (`hands/tape.py`); `[hands] tape = "<path>"` plays one in the app
+  instead of the camera, `hands_tape.py shots` renders one through the
+  ghost offscreen, and every tape under `tests/fixtures/hands/` is
+  replayed by `tests/test_hands_tape.py`.
 
 ## 3. Audio sources
 

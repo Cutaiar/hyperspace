@@ -131,6 +131,7 @@ def page(panel, dt: float) -> None:
     if _has_pinches(io):        # the switches beside the box: the page has
         imgui.same_line()       # to fit the control window
         _pinches(io)
+    _ghost(panel)
     k = _axes(panel, io, settings)
     imgui.spacing()
     _editor(panel, io, settings, k)
@@ -140,6 +141,22 @@ def page(panel, dt: float) -> None:
                     "pinch_close", "pinch_open", "pinch_hold"):
             panel._row(f"{GROUP}.{pid}")
         _calibrate(io, settings, k)
+
+
+def _ghost(panel) -> None:
+    """The ghost hands' display (hyperspace/ghost.py) — the host's params,
+    shown here because this is where the hands are looked at."""
+    if "ghost.on" not in panel.reg:
+        return
+    panel._check("ghost.on")
+    if panel.reg["ghost.on"].value:
+        imgui.same_line()
+        panel._check("ghost.mirror")
+        panel._row("ghost.alpha")
+        if "ghost.guide" in panel.reg:
+            panel._combo("ghost.guide")
+            if panel.reg["ghost.guide"].value and "ghost.tethers" in panel.reg:
+                panel._check("ghost.tethers")
 
 
 def _status(io) -> None:

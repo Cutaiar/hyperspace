@@ -77,6 +77,8 @@ like the rename above. The SYSTEM page shows both.
     note = 120              # left hand's presence note, right is note+1
     min_confidence = 0.1
     calibration = "hands.json"   # the box's ranges, relative to the library home
+    tape = ""               # a hand tape (tools/hands_tape.py record) to play instead
+                            # of the camera, relative to this file; "" = the camera
 """
 
 from __future__ import annotations
@@ -153,7 +155,8 @@ def load(path: Path | None = None) -> dict:
     m = cfg["midi"].get("map")
     if m and not Path(m).is_absolute():
         cfg["midi"]["map"] = str(path.parent / m)
-    c = cfg["hands"].get("calibration")
-    if c and not Path(c).is_absolute():
-        cfg["hands"]["calibration"] = str(path.parent / c)
+    for key in ("calibration", "tape"):
+        c = cfg["hands"].get(key)
+        if c and not Path(c).is_absolute():
+            cfg["hands"][key] = str(path.parent / c)
     return cfg
