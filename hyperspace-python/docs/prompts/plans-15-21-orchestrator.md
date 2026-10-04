@@ -1,9 +1,9 @@
-# Orchestrator prompt — write and build plans 15 to 21 with subagents
+# Orchestrator prompt — write and build plans 15 to 21, unattended
 
 Paste everything below the line into a new Claude Code session started in
 `/Users/dallman/antigrav_repos/hyperspace`. It is self-contained: it says
 what to read, what is decided, how each plan is written and built, how to
-run the subagents, and what the owner expects back.
+run the subagents, and what the owner finds when they come back.
 
 ---
 
@@ -12,45 +12,58 @@ You are the orchestrator for **plans 15 to 21** of Hyperspace, in
 `hyperspace-python/` (uv, pytest, ruff). You coordinate; subagents in
 their own git worktrees write the plan documents and the code. The work
 comes from one night at the machine (Dan and Dillon, 2026-10-03/04): a
-long wishlist, already read against the code and ordered into seven plans
-in `hyperspace-python/docs/plans/15-21-roadmap.md`. That roadmap is your
-brief. Your job ends when every plan in it is merged on main or parked
-with the owner's answer on record, the documents describe the code, and
-the owner has a short list of checks only they can run at the machine.
+long wishlist, read against the code, ordered into seven plans, and
+answered by the owner, in `hyperspace-python/docs/plans/15-21-roadmap.md`.
+That roadmap is your brief.
 
-Two people own this rig. **Dan** is the owner you talk to and the one who
-merges. **Dillon** (GitHub `Cutaiar`) also opens PRs; treat his open work
-as someone else's (§0).
+**Nobody is watching this run.** The owner (Dan) has answered everything
+that could be asked in advance and will not be there to answer more. You
+do not stop to ask, to get a plan approved, or to get a merge. You decide,
+build, record what you decided where the owner will find it, and go on to
+the next thing. Your job ends when all seven plans are on the
+`finish-line` branch with tests green, the documents describe the code,
+and the owner has one PR to read and one list of checks to run at the
+machine.
+
+Two people own this rig. **Dan** is the owner this prompt speaks for.
+**Dillon** (GitHub `Cutaiar`) opened draft PR #78 (ghost hands); the owner
+has said to finish it as part of this run (§0, plan 21).
 
 ## 0. Before anything
 
 - Work in a git worktree (EnterWorktree). Never edit the shared checkout.
-- The roadmap, the register rows it filed and this prompt are on PR #79
-  (branch `plans-15-21-roadmap`). If it is merged, start from main. If it
-  is still open, base `plan-15-integration` on that branch and tell the
-  owner once that merging #79 is the first thing waiting on them.
+- **Never push to, merge into or rebase main.** Everything lands on one
+  branch, `finish-line`. The owner merges it to main themselves.
 - Confirm main is at or after **fa9b3a1** (plan 14 merged) and that
   `uv run pytest -q` passes (1003 at fa9b3a1) and `uv run ruff check .` is
   clean, both run from `hyperspace-python/`. If main has moved, read the
   new commits first.
-- Look at the open PRs (`gh pr list`). **PR #78** (Dillon's draft, "Ghost
-  hands") touches `render.py`, `hands/core.py`, `params.py`, `app.py` and
-  the docs tables. Do not build on it, rebase it or close it. If it merges
-  while you work, merge main into your integration branch and re-run the
-  suite. It is decision 33.
+- Create `finish-line` from main. If PR #79 (branch `plans-15-21-roadmap`:
+  the roadmap, the register rows, this prompt) is not on main, merge that
+  branch into `finish-line` first.
+- **Merge PR #78's branch** (`claude/ghost-hands-mesh-qq0j00`) into
+  `finish-line` next, before any plan. It touches `render.py`, `params.py`,
+  `hands/core.py`, `app.py` and the document tables every later plan
+  edits, and it is off by default. Get the suite and ruff green on the
+  result; fix what the merge breaks. Do not push to Dillon's branch and do
+  not merge or close #78 itself: its code reaches main when `finish-line`
+  does. If the branch has moved again later in the run, merge it again.
+- Open one **draft PR, `finish-line` → main**, straight away. Its body is
+  the run's status page (§9). Keep it current; it is how the owner learns
+  what happened.
 - **Never read from, write to or launch against the owner's real
   `~/Hyperspace`.** It holds presets saved that night that may have no
   backup. You and every subagent run the app and the tests with
   `HYPERSPACE_HOME` set to a temp folder. Any work package that changes a
-  file format or moves a file must back up first, as `routing.backup`
-  does, and prove it on a copy.
+  file format or moves a file backs up first, as `routing.backup` does,
+  and proves it on a copy.
 
 ## 1. Read, in this order
 
 1. `hyperspace-python/docs/plans/15-21-roadmap.md`, whole. §1 is the
    constraints, §2 is what the session got wrong about the system (do not
    build those), §3 the order, §4 the scope of each plan, §5 the contracts
-   between plans, §6 what is parked.
+   between plans, §6 what is deferred, §7 the owner's answers.
 2. `hyperspace-python/docs/ARCHITECTURE.md`. §3 is the control model and
    is canonical: scene-setters write the base, exactly one performer per
    parameter writes an offset through `Router.modulate`, `Registry.apply()`
@@ -58,16 +71,16 @@ as someone else's (§0).
    `hands/signal.py`, `lfo.py` and `tempo.py` import nothing from the
    package. Nothing in plans 15–21 may break it.
 3. `hyperspace-python/docs/DECISIONS.md`, whole. **Do not re-litigate any
-   row.** The ones this work leans on: a preset load replaces everything
-   (D2); module presets are labels (D3); the global desk layer is fixed and
-   never Learned into (D5); invariant controls mean one thing on both
-   layers (D6); an unmapped control is dark and dead (D8); factory presets
-   are read-only and a user file shadows one; the render window has no
-   imgui; overlay only when the config asks; tap-only tempo; twelve hand
-   axes, no gesture vocabularies.
-4. `hyperspace-python/docs/DECISION-REGISTER.md`: Part A4 (rows 26–33 and
-   the questions) and the answer sheet. Read the answer column every time
-   you start a plan; the owner answers there or in chat.
+   row** except the ones the owner changed on 2026-10-04 (§2 below). The
+   ones this work leans on: a preset load replaces everything (D2); module
+   presets are labels (D3); the global desk layer is fixed and never
+   Learned into (D5); invariant controls mean one thing on both layers
+   (D6); an unmapped control is dark and dead (D8); factory presets are
+   read-only and a user file shadows one; the render window has no imgui;
+   overlay only when the config asks; tap-only tempo; twelve hand axes, no
+   gesture vocabularies.
+4. `hyperspace-python/docs/DECISION-REGISTER.md`: Part A4 (rows 26 on) and
+   the answer sheet. This is where your own decisions go (§5).
 5. `hyperspace-python/docs/plans/14-party-rig.md` (the last plan: its
    shape is the shape of the plans you will write, and its §7 "As built"
    says what the code is now) and `13-preset-and-session.md` §2.
@@ -76,50 +89,67 @@ as someone else's (§0).
 7. `hyperspace-python/docs/ENGINEERING.md` (behaviour; update the sentence
    you change), `docs/plans/11-hand-checks.md` (the owner's machine-side
    list; every plan adds a group to it) and `docs/CHECKPOINT.md`.
+8. PR #78's description and diff (`gh pr view 78`, `gh pr diff 78`).
 
-## 2. What is decided (summary; the documents above are authoritative)
+## 2. What is decided (summary; the roadmap is authoritative)
 
-- **The order**: 15 safety net and the bank → 16 paper cuts → 17 Learn,
-  Unbind and seeing the desk, with 18 hand and knob feel beside it → 19
-  presets and the desk layout, with 20 FX, dream and looks beside it → 21
-  outputs. The roadmap §3 says why.
-- **Plan 15 is due before Wednesday 2026-10-07** (assumed; question Q1)
-  and is the only thing with a date. Its four features: undo, home, master
-  dim on the crossfader, a save gesture on the APC40 plus "put preset
-  here" on a bank slot. Decisions 26–30 govern it and are **built on the
-  recommendation unless the owner has answered otherwise**; each is small
-  to reverse. Record that in the register's Part B style when built.
+- **The order**: #78 merged in → 15 safety net and the bank → 16 paper
+  cuts → 17 Learn, Unbind and seeing the desk, with 18 hand and knob feel
+  beside it → 19 presets and the desk layout, with 20 FX, dream and looks
+  beside it → 21 outputs and the hands. All seven are in scope.
+- **No timetable.** The owner needs the software by Friday 2026-10-09 and
+  has said not to plan around dates. Do not cut scope, skip review or
+  thin the tests to go faster. If the run ends early for any reason, what
+  is on `finish-line` must work and the order above is what got done
+  first.
 - **"We don't want to drown in the number of parameters."** Every work
   package that adds a param, a menu item or a page states what it replaces
   or why nothing. Reject a design that solves a complaint with a new knob
   when a default, a label or an existing concept would do.
-- **Undo is snapshots, not an edit log.** A parameter write fires no
-  event and the ROUTING page edits rows in place from about ten sites; the
-  stack holds whole-preset documents (`Presets.document()`), pushed before
-  each replacing action, restored through the load path. `undo.push(label)`
-  is the contract every later plan calls before a replacing action.
-- **PR shape** (decision 30): one PR per work package, small, with a demo
-  in its body; the PRs of a plan stack on `plan-NN-integration`; the owner
-  merges one integration PR per plan. In plan 15 each feature is one merge
-  commit on the integration branch, so one revert removes one feature.
-- **Not built until answered**: auto BPM (31), anything in plan 21 (32,
-  33), "faces through FX" (Q7), preset folders and more than eight bank
-  slots (plan 19's forks). **Parked**: a blackout switch, hands fixed to
-  one set of properties, the hardware list.
+- **Undo reaches single edits** (decision 26). One gesture is one step: a
+  slider drag, a knob turn, a typed value, a toggle, a routing edit, or a
+  replacing action. It is built without a write hook: a per-frame
+  fingerprint of every param's base and of the routing tables, a settle
+  time, and a restore that puts back only what differs. Performers write
+  offsets, so a moving hand makes no step. Roadmap §4, plan 15 WP1, has
+  the whole design. `undo.push(label)` is the contract every later plan
+  calls before a replacing action.
+- **Home** is the show's "starts on" preset, on the Home key and the
+  APC40's OVERDUB button (27). **The crossfader is master dim** on both
+  layers, left is black (28).
+- **The desk never overwrites a preset** (29, as the owner changed it): a
+  hold on the clip-stop row saves the live state as a new preset, named
+  from the preset it grew from plus a number, into the next empty bank
+  slot. Plain Save on the panel overwrites.
+- **Rate-type params under a hand are allowed.** Nothing flags, warns
+  about or refuses them.
+- **Twenty-four presets on the desk** (plan 19): clip row 1 and clip rows
+  4–5, invariant. This extends D6's list of invariant controls, with the
+  owner's go-ahead, as do the OVERDUB button and the clip-stop row.
+- **The faces are their own effect target** (plan 20): each effect is
+  aimed at the frame or at the faces; the faces' effects run into a
+  texture the faces show, mapped per face or in screen space.
+- **Outputs** (plan 21): the Pepper's Ghost glass and the projector are
+  each a render output showing the same frame, each with its own dim and
+  its own on/off for the scene and for the hands; the laptop is the
+  control view. This replaces the "two windows" decision. **PR #78 is the
+  hand HUD**, finished here, with what is drawn swappable for other
+  objects.
+- **Deferred, do not build**: auto BPM, preset folders, drag-to-map, a
+  blackout switch.
 
 ## 3. The loop for each plan
 
 Run this for plan 15, then 16, then 17 and 18 together, then 19 and 20
-together, then 21 if its decisions are answered.
+together, then 21.
 
-**a. Write the plan.** One subagent (type `Plan`, or `general-purpose` if
-it must write the file itself) per plan, given the roadmap section, the
-contracts in roadmap §5 that touch it, and the instruction to read the
-code it names before writing. It produces
-`docs/plans/NN-<slug>.md` in plan 14's shape:
+**a. Write the plan.** One subagent per plan, given the roadmap section,
+the contracts in roadmap §5 that touch it, and the instruction to read the
+code it names before writing. It produces `docs/plans/NN-<slug>.md` in
+plan 14's shape:
 
-- what the owner hit and what it is, each row citing the code
-  (file and function) as it stands on the branch the plan starts from;
+- what the owner hit and what it is, each row citing the code (file and
+  function) as it stands on `finish-line`;
 - the work packages: what, size, the files each owns, the files it must
   not touch, the contracts between packages (names, signatures, file
   shapes);
@@ -128,98 +158,84 @@ code it names before writing. It produces
   in `11-hand-checks.md` in the existing format (commands, config keys,
   preset, gesture, pass, fail, which code a fail points at, the headless
   test that shows the expected behaviour first);
-- the forks that are the owner's, each filed in the register (§5);
+- every fork it found, each with options, trade-offs and a
+  recommendation (§5);
 - an empty "As built".
 
 Read the plan yourself before anything is built from it. Check three
 things: every claim about existing code is true (open the file), no work
-package contradicts a DECISIONS row, and the parameter count went up only
-where the plan says why. Post it as a docs-only PR onto the plan's
-integration branch. Do not wait for approval unless it contains a fork
-that blocks a work package; start the packages that do not depend on one.
-
-For plan 15, be quick about this step: the roadmap §4 already carries its
-work packages, owned files and contracts. The plan document adds the code
-citations, the test names and hand-check group I, in an hour, not a day.
+package contradicts a DECISIONS row the owner has not changed, and the
+parameter count went up only where the plan says why. Settle its forks
+(§5). Commit it to the plan's integration branch and start building.
 
 **b. Build the work packages** with subagents in worktrees (§6), in the
 waves the plan gives. Independent packages go out in one message.
 
-**c. Integrate.** Keep `plan-NN-integration`: every WP branch merged in
-stacking order, the seams between them fixed there, the full suite and
-ruff run after each merge. Then, on the integration branch, launch the
-real app once against a temp home and drive it past the first frames (a
-small script in `$CLAUDE_JOB_DIR/tmp`; a stubbed test hid a first-frame
-crash on main for a week in September). Report the test count.
+**c. Integrate.** Keep `plan-NN-integration`, branched from `finish-line`:
+every WP branch merged in stacking order, the seams between them fixed
+there, the full suite and ruff run after each merge. Then launch the real
+app once against a temp home and drive it past the first frames and
+through the plan's new behaviour where a script can reach it (a small
+script in `$CLAUDE_JOB_DIR/tmp`; a stubbed test hid a first-frame crash on
+main for a week in September). What you saw yourself and what an agent
+reported are different things; keep them apart in the status.
 
-**d. Hand to the owner.** Open the integration PR against main. One
-message: what the plan delivers, the demo for each package, the checks
-only they can run (the new hand-check group, in order), any fork open.
-**The owner merges.** While you wait, start the next plan on a branch
-stacked on this integration branch; rebase it when the merge lands.
+**d. Land it.** When the integration branch is green, reviewed and
+smoke-launched, merge it into `finish-line` with a merge commit (in plan
+15, one merge commit per feature), push, and update the status page.
+Then start the next plan from the new `finish-line`.
 
-**e. Close the plan.** After the merge: the plan's "As built" (what
-differs from the plan and why), DECISIONS rows for what was decided, the
-register's notes saying where each answer was built, CHECKPOINT's pick-up
-list, the plans README row. These ride in the next plan's docs PR or a
-small one of their own.
-
-**The Wednesday rule (plan 15 only).** Whatever of plan 15 is green on the
-integration branch by the evening of Tuesday 2026-10-06 is offered for
-merge then, as it is. A package that is not ready does not hold the
-others: leave it off the integration branch and say so. Undo goes first
-and alone if it has to. Nothing from plans 16–21 merges before Wednesday
-unless the owner asks for it by name.
+**e. Close the plan.** In the same push or the next: the plan's "As
+built" (what differs from the plan and why), DECISIONS rows for what was
+decided, the register's notes saying where each answer was built,
+CHECKPOINT's pick-up list, the plans README row.
 
 ## 4. The plans, in one table
 
 The roadmap §4 has the scope. This is only what you need to schedule.
 
-| Plan | Packages (roadmap §4) | Runs | Waits on |
-|---|---|---|---|
-| 15 Safety net and the bank | WP1 undo and the trash; WP2 home; WP3 master dim; WP4 save on the desk, "put preset here" | WP1 and WP3 at once; WP2 and WP4 stack on WP1 | nothing; decisions 26–30 on the recommendation |
-| 16 Paper cuts | cheat sheet off; FX chip selects, selection by name; an off effect says so; window placement; the NOITA rate rows, a `rate` flag and its test; instances to 0, `dream.layer`, a docstring | all at once (six small PRs, distinct files; two touch `ui_fx.py` and stack) | plan 15 merged or its integration branch as the base |
-| 17 Learn, Unbind, the desk | one Unbind; Learn desk / Learn hand left / right; Learn where it is missing; the big clickable desk; a ROUTING filter | Unbind and Learn first, the desk view after | its own forks (where the big diagram lives) |
-| 18 Hand and knob feel | an interaction box; rate params under a hand; a learn's default op and depth; knob smoothing; the two-hand orbit as a preset | beside 17; the learn-default package after 17's Learn package merges into its integration branch | Q3 (calibration) |
-| 19 Presets and the desk layout | save and the dirty dot; hide factory presets; the trash view; the home in git; the factory preset layer re-cut; then folders and more slots only if answered | beside 20 | its own forks (always-ask save, folders, more than eight slots, the re-cut layer — drawn) |
-| 20 FX, dream, looks | the chain view; ECHOES and DREAM as two sections with honest labels; one dream "speed"; instance layouts | beside 19 | Q7; its own fork (an echo on-switch is a param id change) |
-| 21 Outputs | an output list with per-output dim under the master; the hand HUD as a layer | last | decisions 32 and 33; not written until both are answered |
+| Plan | Packages (roadmap §4) | Runs |
+|---|---|---|
+| 15 Safety net and the bank | WP1 undo and the trash; WP2 home; WP3 master dim; WP4 save-as on the desk, "put preset here" | WP1 and WP3 at once; WP2 and WP4 stack on WP1 |
+| 16 Paper cuts | cheat sheet off; FX chip selects, selection by name; an off effect says so; window placement; instances to 0 and three drifts | all at once (distinct files; the two that touch `ui_fx.py` stack) |
+| 17 Learn, Unbind, the desk | one Unbind; Learn desk / Learn hand left / right; Learn where it is missing; the big clickable desk; a ROUTING filter | Unbind and Learn first, the desk view after |
+| 18 Hand and knob feel | an interaction box; a learn's default op and depth; knob smoothing; the two-hand orbit as a preset | beside 17; the learn-default package after 17's Learn package is on its integration branch |
+| 19 Presets and the desk layout | twenty-four slots; the factory preset layer re-cut; hide and rename; the dirty dot and save labels; the trash view; the home in git | the slots first (it is the large one and the others read the bank's size); beside 20 |
+| 20 FX, dream, looks | the faces as an effect target; the chain view; ECHOES and DREAM as two sections; one dream "speed"; instance layouts | the face target first; beside 19 |
+| 21 Outputs and the hands | the output list with per-output scene, hands and dim; #78 reviewed and finished; `ghost.style` and the other things to draw | outputs and the #78 review at once; styles after the review |
 
 Keep at most four build subagents running at once. When two plans run
 side by side they share the document tables; give each plan's docs edits
 to one package (its last) so the tables conflict once, not six times.
 
-## 5. Decisions that are the owner's
+## 5. Forks: you decide, and you write it down
 
-Anything that would change the control model in ARCHITECTURE §3, reverse
-a DECISIONS row, change what a performer feels at the desk or the box,
-add a concept the owner has to learn, or choose between designs with real
-trade-offs, is the owner's. For each:
+A fork is anything that would change what a performer feels at the desk
+or the box, add a concept the owner has to learn, or choose between
+designs with real trade-offs. The owner's instruction for this run: take
+your recommendation, build it, and log it for them to confirm or
+overturn. So for each fork:
 
-- add an entry to `docs/DECISION-REGISTER.md` Part A4 in the shape of rows
-  26–33 (what it is, what the code does today, options in a table with the
-  trade-off per option, a recommendation and why, what changes once
-  answered) and a row to its answer sheet;
-- add the same row to the plan and a pending line to DECISIONS.md;
-- if the Claude Docs tools are available, mirror the entry into the
-  owner's phone copy of the register,
-  https://claude.ai/code/artifact/d24a5ece-f873-4020-838a-53d5a0ba3571
-  (read it first; keep the file the canonical copy);
-- tell the owner in one message: the id, one sentence of context, the
-  options, your recommendation. Then keep working on everything that does
-  not depend on it.
+- choose the option that is cheapest to reverse among those that honour
+  the roadmap's constraints, and prefer the one that adds the fewest
+  things to learn;
+- add an entry to `docs/DECISION-REGISTER.md` Part A4 in the shape of the
+  rows already there (what it is, what the code did, the options in a
+  table with the trade-off per option, what you chose and why, the cost
+  to reverse) and a row to the answer sheet reading "built on the
+  recommendation; confirm or overturn";
+- add a dated row to DECISIONS.md marked as built on a recommendation;
+- list it on the status page under "Decided for you".
 
 A decision about the APC40, the box or the outputs comes with a drawing
 (the clip-stop sketch under decision 29 is the model).
 
-When the owner answers, in the register or in chat: record it the same
-day in the register, the plan and DECISIONS.md, then build it. If an
-answer overturns something already built on a recommendation, that is a
-small follow-up package, not a rewrite of the plan.
-
-The session's seven open questions are in the register (Q1–Q4, Q7) and as
-decisions 30 and 32. Ask the owner for Q1–Q4 in your first message; do not
-wait for the answers.
+Three things you may not decide, because they are not reversible or not
+yours: anything that breaks the control model in ARCHITECTURE §3 or a
+boundary test; anything that rewrites or deletes a user's files without a
+backup; anything outside the roadmap's scope. If a work package cannot be
+built without one of these, do not build that package: write down exactly
+what blocks it under "Parked" on the status page, and go on.
 
 ## 6. Running the subagents
 
@@ -258,20 +274,29 @@ order:
    the plan and package in the title and the body ending with the
    attribution its system prompt gives. Then run the code-review skill on
    the PR (`Skill`, skill `code-review`, args `<PR number> high`), fix
-   confirmed findings in its own diff, push. **Never merge.**
-8. **Report back**: PR URL, what changed, tests by name, the demo's path,
+   confirmed findings in its own diff, push. It does not merge.
+8. **No questions.** Nobody can answer one. If the agent meets a fork, it
+   takes the option cheapest to reverse, builds it, and reports the fork
+   with its options so you can log it (§5).
+9. **Report back**: PR URL, what changed, tests by name, the demo's path,
    review findings and what it did with each, any deviation from the plan
-   for "As built", and anything it saw that belongs to another package.
-   Say plainly what it did not verify.
+   for "As built", forks it settled, and anything it saw that belongs to
+   another package. It says plainly what it did not verify.
 
 While they run:
 
 - A subagent's report describes its own branch. Re-run the suite on the
-  integration branch before you tell the owner anything works, and keep
-  clear which results you saw yourself.
+  integration branch before you record anything as working.
+- You merge a WP's PR into its integration branch yourself once its
+  review findings are dealt with and the suite is green there.
 - A review finding that lands in a stacked branch's code belongs to the
   agent that owns that branch: relay it with SendMessage rather than
   fixing it yourself.
+- **When a package will not come right**: one more attempt with a fresh
+  agent and a prompt that says what the first got wrong. If that fails
+  too, leave the package off the integration branch, record it under
+  "Parked" with what was tried and what it blocks, and build everything
+  that does not depend on it. A parked package never holds a plan.
 - Document tables (ARCHITECTURE, ENGINEERING, the register's answer sheet,
   the hand checks, the plans README) conflict constantly. Resolve them row
   by row, three-way: for each row keyed by its first cell, take the side
@@ -285,57 +310,69 @@ While they run:
   or compound pipelines around git, no heredocs. Write a script to
   `$CLAUDE_JOB_DIR/tmp` with the Write tool and run it with
   `uv run python <path>` or `python3 <path>` from `hyperspace-python/`.
-- `gh pr merge` can fail with "Base branch was modified" right after a
-  push; check `git log` on main, and if nothing landed, retry. (Only the
-  owner's go-ahead lets you merge at all.)
 - A branch checked out in a subagent's worktree cannot be checked out in
   yours; send the change to that agent instead.
 - `uv run` warns about `VIRTUAL_ENV`; it is harmless.
 - The dream needs torch (an ordinary dependency since plan 14); a test
   run that skips eleven tests has no torch and is not the full suite.
+- This run is long and your context will be summarised along the way.
+  The status page, the plan documents' "As built" sections and the
+  register are your memory: write to them as you go, and re-read the
+  status page and roadmap §3–§5 whenever you are unsure where you are.
+- You cannot see the rig. Nothing you build is verified on the APC40, the
+  Leap, the projector or the glass until the owner runs the hand checks.
+  Say so wherever you report a result; never write "works" for something
+  only a test or an offscreen render has shown.
 
 ## 8. Rules
 
-- **Nothing here is a redesign.** The control model stands; decided rows
-  stand. Where the session asked for something a decision rules out, it
-  is a register row.
-- **Merge only when the owner says so**, per integration PR. The owner's
-  answer for one does not cover the next.
+- Main is never touched. `finish-line` is the only branch that
+  accumulates; nothing merges into it that is not green, reviewed and
+  smoke-launched.
+- Nothing here is a redesign. The control model stands; decided rows
+  stand, except where the owner changed them on 2026-10-04.
 - One PR per work package, with its demo, tests for every behaviour it
   changes, pytest and ruff green, docs updated in the same PR.
 - Every document you touch describes the code as it is after the PR.
 - No new parameter, menu item or page without the sentence that says what
   it replaces or why nothing.
 - The owner's `~/Hyperspace` is never touched.
-- Dillon's PRs are Dillon's.
+- You do not stop to ask. You decide, record, and continue.
 
-## 9. How to talk to the owner
+## 9. The status page
 
-- **Bottom line first.** After each package lands on the integration
-  branch: what it does, its demo, what is waiting on the owner, what is
-  next. A few lines, not a report.
-- **One document to decide from.** Every open decision is in
-  `docs/DECISION-REGISTER.md`, mirrored to the phone Doc. Never scatter
-  decisions across chat, plans and PR bodies. If the owner asks "what do I
-  need to decide", the answer is that file, current.
-- Each decision stands on its own: no plan jargon without the sentence
-  that explains it, options in a table with their trade-offs, one
-  recommendation with its reason.
-- Do not ask permission for reversible work that follows from the plan.
-  Stop only for the owner's decisions and for merges.
-- When the owner is frustrated, act; do not explain the process.
-- The owner was at the machine and remembers what went wrong, not what
-  the code calls it. Say "the knob under your left hand did nothing
-  because the effect was off", then the fix.
+The body of the draft PR `finish-line` → main, rewritten after every plan
+lands and whenever something is parked. The owner reads this and nothing
+else first, possibly on a phone, with no memory of this prompt. In this
+order:
+
+1. **Where it stands**, in two or three sentences: which plans are on
+   `finish-line`, the test count you saw yourself, what is running now.
+2. **To try it**: the commands to check out `finish-line` and launch,
+   and the reminder to copy `~/Hyperspace` first.
+3. **What each plan delivers**, one line per work package in the words
+   of someone who was at the machine ("Ctrl+Z takes back one slider
+   move"), with a link to its demo.
+4. **Decided for you**: each fork you settled, one line, with its
+   register row. These are the things to confirm or overturn.
+5. **Parked**: anything not built, what blocks it, what it would take.
+6. **Checks only you can run**: the new hand-check groups, in the order
+   to run them, each device plugged in once.
+
+If the Claude Docs tools are available, also mirror new register entries
+into the owner's phone copy of the register,
+https://claude.ai/code/artifact/d24a5ece-f873-4020-838a-53d5a0ba3571
+(read it first; the file stays the canonical copy).
 
 ## 10. Done means
 
-- Plans 15–20 merged on main by the owner, each with its "As built";
-  plan 21 merged, or parked with decisions 32 and 33 on record.
-- Every decision raised along the way answered in the register, or listed
-  as open in the final message with what it blocks.
-- `11-hand-checks.md` carries one new group per plan, every check grounded
-  in a command or a test.
-- CHECKPOINT and the plans README describe main.
-- A final message to the owner: what shipped, what only they can check at
-  the machine in the order to check it, and what is still open.
+- Plans 15–21 on `finish-line`, each with its "As built", or parked with
+  the reason on the status page.
+- The suite and ruff green on `finish-line`, run by you at the end; the
+  real app launched from it against a temp home.
+- Every fork you settled is in the register and on the status page.
+- `11-hand-checks.md` carries one new group per plan, every check
+  grounded in a command or a test.
+- CHECKPOINT and the plans README describe `finish-line`.
+- The status page is current and the draft PR is marked ready for review.
+  You do not merge it.
