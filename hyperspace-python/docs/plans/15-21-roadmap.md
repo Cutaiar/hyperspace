@@ -16,9 +16,10 @@ that plan starts, by the session that runs
   better default, a label, or an existing concept (a macro, a route's
   depth, the show's "starts on") over a new knob.
 - **Undo was called "absolutely the most important thing."** It is first.
-- **Wednesday 2026-10-07 is treated as the deadline** for plan 15 and
-  nothing else (assumed; question Q1). Everything before it must be
-  revertable on its own.
+- **No timetable.** The owner, 2026-10-04: the software is needed by
+  Friday 2026-10-09, and the work is not to be planned around dates.
+  The order below is by what matters, and it holds if time runs out.
+  Each of plan 15's features stays revertable on its own.
 - **The control model stands** (ARCHITECTURE §3) and so does every
   DECISIONS row. Where the session asked for something a standing decision
   rules out, it is a register row, not a work package.
@@ -36,17 +37,17 @@ that plan starts, by the session that runs
 | Rename echo "Spacing" to "complexity" | It is the time between echoes (`dream.gap`) | Rename only to something that says so (plan 20) |
 | Delete the factory presets | Read-only by decision; a user file shadows one | Hide, do not delete (plan 19) |
 | Git-diffable preset files | Already one plain JSON per preset, one row per line | The gap is that `~/Hyperspace` is not in git (plan 19) |
-| Lower hand "sensitivity", tame rotation | There is no sensitivity param. The complaints come from learning hands onto rate-type params, which plan 12 rules out for party presets; a learn writes a `position` row at depth 1 | Fix at the Learn and in the factory data (plan 16 WP5, plan 18) |
+| Lower hand "sensitivity", tame rotation | There is no sensitivity param. A hand learn writes a full-range `position` row at depth 1; on a rotation or speed param that is a lot. Rate-type params under a hand are fine (the owner, 2026-10-04) | Fix the default a learn lands with, and the box (plan 18) |
 | Dimming on the crossfader "in shift mode" | Faders mean one thing on both layers (D6). The crossfader's job today, the overlay ground, is inert since decision 21 | Take the crossfader whole (plan 15 WP3, decision 28) |
 
 ## 3. Sequence
 
 | Order | Plan | What | Size | Gate |
 |---|---|---|---|---|
-| 1 | **15 — Safety net and the bank** | Undo, home, master dim, a save gesture on the APC40 | 4 WPs, S–M each | before Wed 2026-10-07; decisions 26–29 built on the recommendation |
-| 2 | **16 — Paper cuts** | Small fixes with no design fork: cheat sheet off, FX chip and stack selection, window placement, instances to zero, the NOITA rate rows | 6 WPs, S each | after 15 merges; may start in parallel on files 15 does not own |
+| 1 | **15 — Safety net and the bank** | Undo down to single edits, home, master dim, a save gesture on the APC40 | 4 WPs; undo is M–L, the rest S–M | first; decisions 27–29 |
+| 2 | **16 — Paper cuts** | Small fixes with no design fork: cheat sheet off, FX chip and stack selection, window placement, instances to zero | 5 WPs, S each | after 15; may start in parallel on files 15 does not own |
 | 3 | **17 — Learn, unbind and seeing the desk** | One Unbind, a hand learn and a desk learn that cannot be confused, Learn on the controls that lack it, a bigger diagram you can click, a ROUTING filter | 5 WPs, S–M | after 16 |
-| 3 | **18 — Hand and knob feel** | An interaction box, rate-type params under a hand, a learn's default depth and op, knob smoothing | 4–5 WPs, S–M | parallel with 17 (different files, one contract: §5); Q3 calibration answered first |
+| 3 | **18 — Hand and knob feel** | An interaction box, a learn's default depth and op, knob smoothing | 4 WPs, S–M | parallel with 17 (different files, one contract: §5) |
 | 4 | **19 — Presets and the desk layout** | Save-as and the dirty dot, hiding factory presets, a trash, the home in git, folders if still wanted, more slots on the desk, the factory preset layer re-cut toward knobs | 6 WPs, S–M, one L | after 17; decisions filed when the plan is written |
 | 4 | **20 — FX, dream and looks** | A chain view with safe reorder, controls of an effect that is off, the look-back page split into echoes and dream, instance layouts | 5 WPs, S–M | parallel with 19 |
 | 5 | **21 — Outputs** | The hand HUD, a projector output beside the Pepper's Ghost one, per-output dim | L, new architecture | last; blocked on decisions 32 and 33 |
@@ -65,18 +66,18 @@ headless script and its output) in the PR body; the WP PRs of one plan
 stack on a `plan-NN-integration` branch; the owner merges one integration
 PR per plan. For plan 15 each of the four features is also its own merge
 commit on the integration branch, so one `git revert -m 1` takes exactly
-one feature out before Wednesday.
+one feature out.
 
 ## 4. The plans
 
 Sizes: S = under half a day of agent time, M = a day, L = more. "Owns" is
 the file set a work package may edit; the plan document tightens it.
 
-### Plan 15 — Safety net and the bank (before Wednesday)
+### Plan 15 — Safety net and the bank
 
 | WP | What | Scope | Owns | Size |
 |---|---|---|---|---|
-| 1 | **Undo** | A bounded in-memory stack of whole-preset snapshots (`Presets.document()`: values, routes, desk layer, macros). A snapshot is pushed before every action that replaces or removes: preset load (panel, F-key, APC40 row, `preset.next/prev`), show load / new, module-preset load / reset, Learn landing, Unbind, a ROUTING row or macro delete, Replace in the Replace / Keep prompt. Ctrl+Z restores the top through the load path (so D2 holds: a restore replaces everything); Ctrl+Shift+Z redoes. A restore writes no file and leaves the dirty dot honest. One status line names what was undone. File actions get a file-level net: a preset overwritten by a slot save or deleted from a strip goes to `<home>/trash/` first. The 8-second undo on reset-all stays as it is (it restores analyzer objects, which are session). Not in v1: undo of single slider moves (decision 26). | new `undo.py`; call sites in `preset.py`, `library.py`, `learn.py`, `midi.py`, `ui_routing.py`, `hands/panel.py`; a key row in `routing.LOOP_KEY_ROWS`; the cheat sheet | M |
+| 1 | **Undo** | One bounded in-memory stack; **a step is one gesture**: a slider drag, a knob turn on the desk, a typed value, a toggle, a ROUTING field edit, or one replacing action (a preset or show load from any road, a Learn landing, an Unbind, a route or macro delete, Replace in the Replace / Keep prompt, a module-preset load or reset, an FX reorder). It needs no write hook: once a frame the undo compares a cheap fingerprint of every param's **base** and of the routes, desk layer and macros. A performer writes an offset, never the base, so a hand, a band or an LFO moving makes no step. When the fingerprint changes, the last settled state is pushed; changes that keep arriving within about 0.4 s are the same step. Params that are integrated state (rotation angles, clocks, anything `ViewState.integrate` writes) are left out of the fingerprint; the plan lists them from the code. Ctrl+Z puts back only what differs between the step and now (bases through `Param.set`, changed rows through the table's own calls), so undoing one slider does not re-run a load: the desk layer, fader pickup and LFO phases stay put. Ctrl+Shift+Z redoes; a new edit clears the redo side. Session params are registry params and are covered; band add / remove / move keeps the existing 8-second undo unless folding it in is cheap. One status line names what was undone. A restore writes no file and leaves the dirty dot honest. Files get their own net: a preset overwritten by a slot save or deleted from a strip goes to `<home>/trash/` first. (Decision 26, answered 2026-10-04: per-edit undo is in.) | new `undo.py`; one call in the frame loop (`app.py`); explicit pushes in `preset.py`, `library.py`, `learn.py`, `midi.py`, `ui_routing.py`, `hands/panel.py`; key rows in `routing.LOOP_KEY_ROWS`; the cheat sheet | M–L |
 | 2 | **Home** | `preset.home`, a trigger that loads the show's "starts on" preset (no new noun: decision 27). A key row, an invariant APC40 button, lit. Undoable through WP1. The PRESETS page labels the "starts on" preset as home. | `params.py` (one trigger), `library.py`, `apc40.py`, `routing.py`, `ui_presets.py` | S |
 | 3 | **Master dim on the crossfader** | `output.dim`, 0–1, a session param (a preset load never moves it), not persisted (a launch is always full brightness), multiplied into the frame as the last thing before the window, after the FX chain. The crossfader's invariant row moves from `overlay.bg` to `output.dim` with soft pickup, so a crossfader left at black cannot dim the rig until it crosses the value (decision 28). The overlay ground stays on the OUTPUT page. No blackout button: the session settled on dimming. | `render.py` (final pass), `overlay.py`, `apc40.py`, `routing.remap_factory` for existing `bindings.json` | S |
 | 4 | **Save on the desk, and the bank** | A long press (about 0.6 s) on the clip-stop button under column k fires `preset.save.k`; the button blinks to confirm; a short press does nothing (decision 29). The preset it overwrites goes to the trash first (WP1). On the PRESETS page a slot's context menu gains "put preset here…" so a preset saved with "as…" can be reached from the desk without loading it first. | `apc40.py`, `midi.py` (press duration), `routing.py`, `ui_presets.py` | S–M |
@@ -99,8 +100,7 @@ saves and a short press does not; the saved slot loads from clip row 1).
 | 2 | An FX chip click selects; the toggle is its own target on the chip (a lit corner or the strip's "on"). Selection is tracked by effect name, not by index into the order-sorted list, so a reorder or a preset load never changes which effect is open | select without toggling; each reorder click changed which effect was being edited | S |
 | 3 | With an effect off, its strip says so and offers "turn on" beside the greyed controls | effect controls doing nothing while the effect is off | S |
 | 4 | Window placement at launch: `[output]` config for which monitor each window opens on, and the last positions remembered in the home folder | window placement at startup | S |
-| 5 | `party-noita`'s two hand rows on rate params (`fx.tripcolour.pulse`, `fx.warp.drift`, `preset.py` L692–693) re-pointed at non-rate params; a `rate` flag on the registry params plan 12 §2 lists; a test that no factory route puts a hand on a flagged param | plan 12's rule is stated and not enforced; the factory show breaks it | S |
-| 6 | `view.instances` floor 0 (nothing drawn at 0); `dream.layer` not modulatable (plan 12 §2 says never routed); the `ui_presets.py` docstring that contradicts the code | "instances to zero"; two drifts the sweep found | S |
+| 5 | `view.instances` floor 0 (nothing drawn at 0); `dream.layer` not modulatable (plan 12 §2 says never routed); the `ui_presets.py` docstring that contradicts the code; the `preset.py` comment that says `party-noita` follows a no-rate-params rule it does not follow (the comment goes, the rows stay) | "instances to zero"; three drifts the sweep found | S |
 
 ### Plan 17 — Learn, unbind and seeing the desk
 
@@ -132,13 +132,13 @@ whether click-then-click replaces drag.
 - **An interaction box.** Explicit bounds in `hands.json`, drawn on the
   HANDS page's box; a hand outside them reads absent, so its rows let go
   as B1 already does. Today "in the box" is only the tracker's confidence.
-- **Rate-type params under a hand.** Using plan 16's `rate` flag: a Learn
-  onto a flagged param says so and lands as a gentle `push` (a small depth
-  about the base) instead of a full-range `position`. This is what "tamer
-  rotation" and "lower sensitivity" were.
-- **A learn's default.** Centred axes learn as `push` about the base
-  ("bipolar targets"); the default depth is a session setting, one number,
-  not a per-route extra.
+- **A learn's default.** A hand learn today lands as a full-range
+  `position` row at depth 1, on any param; on a rotation or speed param
+  that is what read as "too sensitive". Centred axes learn as `push`
+  about the base ("bipolar targets"), and the default depth is a session
+  setting, one number, not a per-route extra. **Rate-type params under a
+  hand are allowed** (the owner, 2026-10-04): nothing flags, warns about
+  or refuses them, and `party-noita` keeps its two.
 - **Knob smoothing.** One session param: a short slew on values arriving
   from the desk's knobs and faders, off at 0. No per-control settings.
 - **Two-hand orbit camera**: scoped in the plan as a preset (routes onto
@@ -197,7 +197,6 @@ may show or not.
 
 - Plan 15's `undo.push(label)` is called by every later plan's replacing
   action (17's Unbind and click-to-map, 19's hide and trash, 20's reorder).
-- Plan 16 WP5's `rate` flag is read by plan 18.
 - Plan 16 WP2's selection-by-name is what plan 20's chain view drives.
 - Plan 17 and plan 18 both touch a hand learn: 17 owns `learn.py` and the
   menu; 18 owns what a learned row looks like (`_place`'s op and depth) and
@@ -223,7 +222,7 @@ Mirrored in `docs/DECISION-REGISTER.md` Part A4.
 
 | # | Question | Assumed until answered |
 |---|---|---|
-| Q1 | What is Wednesday, when is Rachel's party, and which is the deadline? | Wednesday 2026-10-07 is the deadline for plan 15 |
+| Q1 | Dates | Answered 2026-10-04: needed by Friday 2026-10-09; no timetable in the plans |
 | Q2 | Where are the presets saved that night, and are they backed up? | In `~/Hyperspace/presets/` on the rig, not backed up. Do `cp -R ~/Hyperspace ~/Hyperspace-2026-10-04` before launching any new build |
 | Q3 | Were the hands calibrated on that rig? | No. Plan 18 waits on hand checks 13–18 |
 | Q4 | Which build ran that night? | Main at fa9b3a1 |

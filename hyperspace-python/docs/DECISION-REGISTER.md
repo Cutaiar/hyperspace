@@ -682,16 +682,16 @@ Where each control sits is hand check 45's to confirm on the device.
 
 Dan and Dillon ran the rig for a night and talked through everything it
 still needs. `docs/plans/15-21-roadmap.md` orders that list into seven
-plans. Rows 26–30 belong to plan 15, which is due before Wednesday
-2026-10-07: **they are built on the recommendation unless you answer
-first**, and each is small to reverse. Rows 31–33 are not built until
+plans. Rows 26–30 belong to plan 15, which goes first: **27–30 are built
+on the recommendation unless you answer first**, and each is small to
+reverse. Rows 31–33 are not built until
 answered. Later plans file their own rows here when they are written.
 
 **Questions first** (not decisions; one line each is enough):
 
 | # | Question | Assumed until you say |
 |---|---|---|
-| Q1 | What is Wednesday, when is Rachel's party, and which one is the deadline? | Wednesday 2026-10-07 is the deadline, for plan 15 only |
+| Q1 | Dates | **Answered 2026-10-04**: the software is needed by Friday 2026-10-09; do not plan around dates |
 | Q2 | Where are the roughly ten presets saved that night, and are they backed up? | On the rig in `~/Hyperspace/presets/`, not backed up. Run `cp -R ~/Hyperspace ~/Hyperspace-2026-10-04` before launching any new build |
 | Q3 | Were the hands calibrated on that rig (HANDS page, the 20-second sweep)? | No, so some of the "too sensitive" complaints are not software; plan 18 waits on hand checks 13–18 |
 | Q4 | Which build ran that night? | Main at fa9b3a1 (2026-09-29) |
@@ -699,7 +699,7 @@ answered. Later plans file their own rows here when they are written.
 
 ### 26. P15-a — how deep does undo go?
 
-**Recommendation: (a) for Wednesday, then (b).**
+**Answered 2026-10-04: undo reaches single parameter edits** ("that's part of what we need in order to discover good presets"). Built as (b) with a short settle time, so one slider drag, knob turn or typed value is one step; no write hook is needed. The recommendation had been (a) first, then (b).
 
 **What it is.** Ctrl+Z. The app has no undo except an 8-second one on
 "reset all". A parameter write fires no event, and the ROUTING page edits
@@ -919,7 +919,7 @@ or "overturn".
 | 23 | P14-c dream on by default | (b) optional torch, worker on, loud when missing | **(a)**, 2026-09-29 | torch is part of the app, not optional; built: plan 14 WP1 (the dependency, the worker on) and WP6 (echoes in seconds, TRACER, WAKE re-tuned and shot with the worker on) |
 | 24 | P14-d F6–F8 effects | (a) ACID, MANDALA, NOITA | **(a)**, 2026-09-29 | built: plan 14 WP5 — `party-acid` / `party-mandala` / `party-noita` on F6–F8, every effect on in a factory preset, no factory route on an effect that is off |
 | 25 | P14-e desk glyphs and diagram | (a) K/D/S/G/B glyphs, up layer, above the cheat sheet | **(a)**, 2026-09-29 | plan 14 WP7 — built (`apc40.LAYOUT`, `ui_desk.py`, hand check 45) |
-| 26 | P15-a undo depth | (a) actions for Wednesday, then (b) settled edits | | built on the recommendation unless answered first (plan 15 WP1) |
+| 26 | P15-a undo depth | (a) actions first, then (b) settled edits | **per-edit**, 2026-10-04 | one gesture (a drag, a knob turn, a typed value) is one step; plan 15 WP1 |
 | 27 | P15-b home | (a) the "starts on" preset, on OVERDUB and the Home key | | built on the recommendation unless answered first (plan 15 WP2) |
 | 28 | P15-c crossfader | (a) master dim, both layers, left is black | | built on the recommendation unless answered first (plan 15 WP3) |
 | 29 | P15-d save on the APC40 | (a) hold clip-stop k | | built on the recommendation unless answered first (plan 15 WP4) |
