@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
+from itertools import pairwise
 
 import moderngl
 import numpy as np
@@ -76,6 +77,8 @@ MODES: dict[str, tuple[tuple[float, float, float], ...]] = {
 
 # ------------------------------------------------------------------ params
 
+GUIDES = ["OFF", "BESIDE", "ON HAND"]
+
 @dataclass
 class GhostState:
     """What the ghost.* params write. Session, not performance: see
@@ -84,6 +87,7 @@ class GhostState:
     on: bool = False
     alpha: float = 0.6
     mirror: bool = False
+    guide: int = 0          # GUIDES: off, a gauge beside each hand, or on the palm
 
 
 def register(reg, state: GhostState) -> None:
@@ -105,6 +109,13 @@ def register(reg, state: GhostState) -> None:
                lambda v: setattr(state, "mirror", bool(v)), group=GROUP,
                tip="Flip the ghost hands left for right — for a rig that shows the "
                    "render in a mirror or on a Pepper's Ghost glass.")
+    reg.enum(f"{GROUP}.guide", "Ghost guide", lambda: state.guide,
+             lambda i: setattr(state, "guide", int(i)), GUIDES, group=GROUP,
+             tip="What each hand is doing: a ball per axis (x red, y green, z blue), a "
+                 "ring per rotation with a dot where the fingers point (pitch, yaw) or "
+                 "the palm faces (roll), and the four pinch switches. All six always "
+                 "show; the ones the setup routes are brighter and show what the table "
+                 "is fed. Beside the hand, or on it.")
 
 
 # ------------------------------------------------------------------ camera
@@ -160,14 +171,20 @@ def _perspective(fovy: float, aspect: float, near: float, far: float) -> np.ndar
     return p
 
 
+def stage_box(box, m: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """(lo, hi) of the palm box in the stage, padded by PAD: what the
+    camera frames."""
+    corners = np.array([(x, y, z) for x in box[0] for y in box[1] for z in box[2]])
+    st = corners @ m.T
+    return st.min(axis=0) - PAD, st.max(axis=0) + PAD
+
+
 def camera(box, m: np.ndarray, aspect: float) -> tuple[np.ndarray, np.ndarray]:
     """(view_proj 4×4, eye) for a palm box in Leap mm seen through the
     stage basis `m`: behind the performer's hands and ELEVATION above
     them, looking at the box's centre, as close as it can stand with every
     corner of the padded box in frame."""
-    corners = np.array([(x, y, z) for x in box[0] for y in box[1] for z in box[2]])
-    st = corners @ m.T
-    lo, hi = st.min(axis=0) - PAD, st.max(axis=0) + PAD
+    lo, hi = stage_box(box, m)
     centre = (lo + hi) / 2.0
     pad = np.array([(x, y, z) for x in (lo[0], hi[0]) for y in (lo[1], hi[1])
                     for z in (lo[2], hi[2])]) - centre
@@ -211,6 +228,9 @@ class HandPose:
     basis: np.ndarray
     fade: float = 1.0
     colour: tuple[float, float, float] = (1.0, 1.0, 1.0)
+    # the guide drawn with this hand (`guide`): sphere rows (x, y, z, r, rgba)
+    # and tube rows (ax, ay, az, bx, by, bz, r, rgba), already coloured
+    guide: tuple[list, list] = field(default_factory=lambda: ([], []), repr=False)
 
 
 def pose(side: str, skel: dict, m: np.ndarray, fade: float = 1.0) -> HandPose:
@@ -229,6 +249,119 @@ def pose(side: str, skel: dict, m: np.ndarray, fade: float = 1.0) -> HandPose:
     return HandPose(side, v(skel["palm"]), v(skel["normal"]), v(skel["direction"]),
                     float(skel.get("width") or 85.0), joints, widths, rots, m, fade,
                     COLOURS.get(side, (1.0, 1.0, 1.0)))
+
+
+# ------------------------------------------------------------------ the guide
+
+# what each hand is sending, drawn beside it: the translation axes as balls
+# on three lines, the rotations as dots on three gimbal rings. Colours are
+# the usual x / y / z = red / green / blue; a ring takes its axis's colour
+AXIS_RGB = {"x": (0.95, 0.26, 0.24), "y": (0.30, 0.88, 0.36), "z": (0.32, 0.52, 1.00)}
+RING_OF = {"pitch": "x", "yaw": "y", "roll": "z"}     # the axis a rotation turns about
+PINCH_RGB = (1.0, 0.85, 0.30)
+GUIDE_LINE_R = 1.5       # mm: the axis lines and rings
+GUIDE_BALL_R = 9.0       # mm: a value's ball or dot
+GUIDE_SPAN = 0.15        # half an axis, as a fraction of the framed box's width
+RING_SEGMENTS = 40
+
+
+GUIDE_FEATURES = ("x", "y", "z", "roll", "pitch", "yaw")
+UNROUTED_DIM = 0.6       # a value the setup does not route: drawn, a little darker
+
+
+def guide_values(source, side: str) -> dict[str, tuple[float, float, float, bool]]:
+    """feature → (y, lo, hi, routed) for each of the hand's x y z roll
+    pitch yaw — all six, whatever the setup routes, so the guide is the
+    whole picture. A routed axis gives the shaped value the table is fed
+    (`AxisState.y`, 0–1) over its own range; any other feature its native
+    reading (`HandsIO.frame`) normalised over hands/core.py's default
+    range for that hand. A feature with no value (the hand just left, or
+    a source without frames) is absent."""
+    from .hands.core import default_range  # lazily: see box_of
+
+    out = {}
+    for a, st in zip(getattr(source, "axes", None) or (), getattr(source, "state", None) or ()):
+        y = getattr(st, "y", None)
+        if a.side == side and a.feature in GUIDE_FEATURES and y is not None:
+            out[a.feature] = (float(y), float(st.lo), float(st.hi), True)
+    feats = (getattr(source, "frame", None) or {}).get(side) or {}
+    for f in GUIDE_FEATURES:
+        v = feats.get(f)
+        if f in out or v is None:
+            continue
+        lo, hi = default_range(side, f)
+        u = (float(v) - lo) / (hi - lo) if hi != lo else 0.5
+        out[f] = (min(max(u, 0.0), 1.0), float(lo), float(hi), False)
+    return out
+
+
+def guide_pinches(source, side: str) -> list[bool]:
+    """The hand's four pinch switches, index … pinky (all open without them)."""
+    gates = (getattr(source, "gates", None) or {}).get(side, {})
+    return [bool(getattr(gates.get(f), "on", False))
+            for f in ("index", "middle", "ring", "pinky")]
+
+
+def _lit(value: tuple) -> float:
+    """A value's brightness: full when routed, UNROUTED_DIM when not."""
+    return 1.0 if len(value) < 4 or value[3] else UNROUTED_DIM
+
+
+def guide(side: str, values: dict, pinches: list[bool], centre: np.ndarray, span: float,
+          m: np.ndarray, fade: float) -> tuple[list, list]:
+    """(sphere rows, tube rows) of one hand's guide about `centre` (stage
+    mm), each half-axis `span` long, through basis `m` so a ball moves on
+    screen the way the hand does.
+
+      x y z        a line per axis (its ends are the axis's range) and a
+                   ball at the value: 0 at one end, 1 at the other, ½ in the
+                   middle. Move only up and only the green ball moves.
+                   Routed values full bright, the rest UNROUTED_DIM.
+      pitch, yaw   a ring about x / y, a dot where the fingers point: the
+                   value mapped back through the axis's range, so a dead
+                   zone or a curve shows as the dot sticking or speeding.
+      roll         a ring about z, a dot where the palm faces.
+      pinches      four beads under the gauge, lit while a switch is closed.
+    """
+    c = np.asarray(centre, dtype=np.float64)
+    e = {k: m @ np.eye(3)[i] for i, k in enumerate("xyz")}      # Leap axes in the stage
+    out_x = e["x"] if side == "right" else -e["x"]              # the hand's outward side
+    dim = lambda rgb, k: (*(v * k for v in rgb), fade)
+    spheres, tubes = [], []
+    for k in "xyz":
+        rgb = AXIS_RGB[k]
+        a, b = c - e[k] * span, c + e[k] * span
+        tubes.append((*a, *b, GUIDE_LINE_R, *dim(rgb, 0.45)))
+        spheres += [(*a, 2.2 * GUIDE_LINE_R, *dim(rgb, 0.45)),
+                    (*b, 2.2 * GUIDE_LINE_R, *dim(rgb, 0.45))]
+        if k in values:
+            u = values[k][0] * 2.0 - 1.0
+            spheres.append((*(c + e[k] * span * u), GUIDE_BALL_R, *dim(rgb, _lit(values[k]))))
+    spheres.append((*c, 1.6 * GUIDE_LINE_R, *dim((1.0, 1.0, 1.0), 0.5)))
+    # the rings: each in the plane of two directions, neutral at the first
+    forward, up, down = -e["z"], e["y"], -e["y"]
+    thumb_down = -out_x            # a level palm's thumb side, away from the outward side
+    planes = {"pitch": (forward, up),               # fingers up: the dot rises
+              "yaw": (forward, out_x),              # fingers outward: the dot goes out
+              "roll": (down, thumb_down)}           # thumb up: the palm turns inward
+    r = 0.78 * span
+    for name, (n0, n1) in planes.items():
+        if name not in values:
+            continue
+        rgb = AXIS_RGB[RING_OF[name]]
+        ring = [c + r * (math.cos(a) * n0 + math.sin(a) * n1)
+                for a in np.linspace(0.0, 2 * math.pi, RING_SEGMENTS + 1)]
+        tubes += [(*p, *q, 0.8 * GUIDE_LINE_R, *dim(rgb, 0.4)) for p, q in pairwise(ring)]
+        spheres.append((*(c + r * n0), 1.8 * GUIDE_LINE_R, *dim(rgb, 0.7)))   # neutral
+        y, lo, hi = values[name][:3]
+        ang = math.radians(lo + y * (hi - lo))
+        spheres.append((*(c + r * (math.cos(ang) * n0 + math.sin(ang) * n1)),
+                        0.8 * GUIDE_BALL_R, *dim(rgb, _lit(values[name]))))
+    for i, closed in enumerate(pinches):
+        p = c - e["y"] * span * 1.25 + out_x * span * (-0.45 + 0.3 * i)
+        lit = dim(PINCH_RGB, 1.0) if closed else dim((0.5, 0.5, 0.5), 0.5)
+        spheres.append((*p, 0.6 * GUIDE_BALL_R, *lit))
+    return spheres, tubes
 
 
 # ------------------------------------------------------------------ geometry
@@ -438,6 +571,8 @@ class CapsuleHands:
             t_rows += [(*a, *b, r, *col) for a, b, r in tubes]
             for tri in tris:
                 m_rows += [(*q, *nn, *col) for q, nn in tri]
+            s_rows += p.guide[0]
+            t_rows += p.guide[1]
         vp = np.asarray(view_proj, dtype="f4").T.tobytes()     # column-major
         ey = tuple(float(x) for x in eye)
         for prog in self.progs:
@@ -530,8 +665,25 @@ class Ghost:
             return None
         cfg = getattr(self.source, "cfg", None) or {}
         m = basis(cfg.get("mode", "desktop"), st.mirror)
-        vp, eye = camera(box_of(self.source), m, aspect)
-        return [pose(side, sk, m, fade) for side, sk, fade in seen], vp, eye
+        box = box_of(self.source)
+        vp, eye = camera(box, m, aspect)
+        poses = [pose(side, sk, m, fade) for side, sk, fade in seen]
+        if st.guide:
+            lo, hi = stage_box(box, m)
+            span = GUIDE_SPAN * float(hi[0] - lo[0])
+            mid = (lo + hi) / 2.0
+            for p in poses:
+                if st.guide == 1:        # beside: a fixed gauge low on the hand's side
+                    # (the hand's side of the room, through the basis: every
+                    # mode maps Leap x onto the stage's x, mirror included)
+                    out = m @ np.array([1.0 if p.side == "right" else -1.0, 0.0, 0.0])
+                    centre = mid + out * 0.36 * float(hi[0] - lo[0]) \
+                        - np.array([0.0, 0.2 * float(hi[1] - lo[1]), 0.0])
+                else:                    # on the hand: about the palm
+                    centre = p.palm
+                p.guide = guide(p.side, guide_values(self.source, p.side),
+                                guide_pinches(self.source, p.side), centre, span, m, p.fade)
+        return poses, vp, eye
 
     def draw(self, target: moderngl.Framebuffer, vp: tuple[int, int, int, int], t: float,
              opaque: bool = True) -> bool:

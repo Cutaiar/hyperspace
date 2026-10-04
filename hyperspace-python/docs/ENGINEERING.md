@@ -397,10 +397,23 @@ display for the performer and for newcomers, not a control source.
   stage-space joints plus the bones' raw rotations and the basis — so a
   skinned mesh can replace `CapsuleHands` behind the same
   `draw(poses, view_proj, eye)`.
+- **The guide** (`ghost.guide`: OFF, BESIDE, ON HAND; off by default) —
+  what each hand is doing, drawn in the same pass: a gauge low on the
+  hand's side of the frame, or about its palm. Three axis lines (x red,
+  y green, z blue) each carry a ball at its value, −1 to +1 along the
+  line, so a hand moved only right moves only the red ball. Three gimbal
+  rings, coloured by the axis they turn about, each carry a dot: pitch
+  and yaw where the fingers point, roll where the palm faces (neutral:
+  fingers forward, palm down). Four beads under the gauge light while
+  the pinch switches are closed. All six always show, routed or not
+  (`guide_values`): a routed axis at the shaped value the table is fed —
+  its dead zone and curve show as the ball sticking or speeding — and
+  the others from the native reading over the default range, a little
+  darker.
 - **Leaving the box.** A hand no longer reported fades out over 0.3 s
   where it was last seen; one that comes back fades in over 0.1 s.
 - **Params.** `ghost.on` (default off), `ghost.alpha` (0.6),
-  `ghost.mirror` — the `ghost` group, a **session** group
+  `ghost.mirror`, `ghost.guide` — the `ghost` group, a **session** group
   (`params.PARTS`): the hands are the room's display, like the output's
   placement, so a preset load never turns them off mid-set. Ordinary
   params otherwise: on the HANDS page, learnable to a button or knob.

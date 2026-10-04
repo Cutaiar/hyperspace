@@ -46,10 +46,11 @@ def test_the_params_are_session_off_by_default_and_learnable(tmp_path):
 
     reg = make(tmp_path)[0]
     assert "ghost" in SESSION_GROUPS
-    for pid in ("ghost.on", "ghost.alpha", "ghost.mirror"):
+    for pid in ("ghost.on", "ghost.alpha", "ghost.mirror", "ghost.guide"):
         p = reg[pid]
         assert p.persist and p.modulatable and part_of(p) == "session", pid
     assert reg["ghost.on"].value is False and 0.0 < reg["ghost.alpha"].value <= 1.0
+    assert G.GUIDES[reg["ghost.guide"].value] == "OFF"
 
 
 def test_the_box_is_the_calibrated_ranges_else_the_defaults():
@@ -168,6 +169,92 @@ def test_a_pose_carries_the_skeleton_through_the_basis():
     assert not spheres and not tubes and len(tris) == 16
 
 
+# ---------------------------------------------------------------- the guide
+
+RANGES = {"x": (-20.0, 220.0), "y": (100.0, 350.0), "z": (-100.0, 100.0),
+          "roll": (-90.0, 90.0), "pitch": (-60.0, 60.0), "yaw": (-45.0, 45.0)}
+
+
+def values(**ys) -> dict:
+    """Every axis at ½ (a centred hand) unless given."""
+    return {f: (ys.get(f, 0.5), *RANGES[f]) for f in RANGES}
+
+
+def balls(side, vals, pinches=(False,) * 4, m=None):
+    """{rgb: [positions]} of the guide's big balls (the values)."""
+    sph, _ = G.guide(side, vals, list(pinches), np.zeros(3), 100.0,
+                     G.basis("desktop") if m is None else m, 1.0)
+    out = {}
+    for row in sph:
+        if row[3] >= 0.8 * G.GUIDE_BALL_R - 1e-6:
+            out.setdefault(tuple(round(v, 3) for v in row[4:7]), []).append(np.array(row[:3]))
+    return out
+
+
+def test_one_axis_moved_moves_its_ball_only():
+    """The point of the guide: a hand moved only right moves only the x
+    ball, so the performer sees which motion is isolated."""
+    rest = balls("right", values())
+    for f, axis in (("x", 0), ("y", 1), ("z", 2)):
+        moved = balls("right", values(**{f: 0.9}))
+        changed = [rgb for rgb in rest if not all(
+            np.allclose(a, b) for a, b in zip(rest[rgb], moved[rgb]))]
+        assert changed == [tuple(round(v, 3) for v in G.AXIS_RGB[f])], (f, changed)
+        ball = next(p for p in moved[changed[0]] if abs(p[axis]) > 1.0)
+        assert ball[axis] == pytest.approx(80.0)        # 0.9 → +0.8 of the half-axis
+
+
+def test_the_rings_put_the_dot_where_the_hand_points():
+    """Pitch up: the dot rises. Yaw outward: it goes out — right on the
+    right, left on the left. Roll thumb-up: the palm turns inward."""
+    def dot(side, name, y):
+        rgb = tuple(round(v, 3) for v in G.AXIS_RGB[G.RING_OF[name]])
+        rest = {f: (0.5, *RANGES[f]) for f in (name,)}
+        rest[name] = (y, *RANGES[name])
+        got = balls(side, rest)[rgb]
+        return got[0]
+    assert dot("right", "pitch", 0.5)[2] < 0                     # neutral: fingers forward
+    assert dot("right", "pitch", 1.0)[1] > 0                     # fingers up
+    assert dot("right", "yaw", 1.0)[0] > 0 and dot("left", "yaw", 1.0)[0] < 0
+    assert dot("right", "roll", 0.5)[1] < 0                      # neutral: palm down
+    assert dot("right", "roll", 1.0)[0] < 0 and dot("left", "roll", 1.0)[0] > 0
+    # mirrored, the yaw dot goes out on screen the way the mirrored hand does
+    assert balls("right", {"yaw": (1.0, -45.0, 45.0)},
+                 m=G.basis("desktop", mirror=True))[(0.3, 0.88, 0.36)][0][0] < 0
+
+
+def test_the_guide_shows_all_six_routed_or_not_and_the_pinches():
+    """Every axis shows whatever the setup routes: a routed one at what the
+    table is fed, the rest from the native reading over the default
+    range, a little darker."""
+    io = HandsIO(HandSettings.from_config({"dofs": ["x", "pitch"]}), {},
+                 source=NS(latest=lambda: (0, 0.0, {})), out=NS(send=print))
+    for st in io.state:
+        st.follow.y = 0.7
+    io.frame["right"] = {"x": 0.0, "y": 225.0, "z": 0.0, "roll": 45.0, "pitch": 0.0,
+                         "yaw": -45.0}
+    vals = G.guide_values(io, "right")
+    assert set(vals) == set(G.GUIDE_FEATURES)
+    assert vals["x"] == (0.7, -20.0, 220.0, True)           # routed: the shaped value
+    assert vals["pitch"][0] == 0.7 and vals["pitch"][3]
+    assert vals["y"] == (0.5, 100.0, 350.0, False)          # native over the default range
+    assert vals["roll"][0] == 0.75 and vals["yaw"][0] == 0.0 and not vals["z"][3]
+    sph, _ = G.guide("right", vals, [False] * 4, np.zeros(3), 100.0, G.basis("desktop"), 1.0)
+    big = [r for r in sph if r[3] >= 0.8 * G.GUIDE_BALL_R - 1e-6]
+    assert len(big) == 6                                     # three balls, three dots
+    x_ball = next(r for r in big if r[0] > 1.0)
+    y_ball = [r for r in big if np.allclose(r[4:7], [v * G.UNROUTED_DIM
+                                                     for v in G.AXIS_RGB["y"]])]
+    assert np.allclose(x_ball[4:7], G.AXIS_RGB["x"]) and y_ball   # bright vs dimmed
+    assert set(G.guide_values(io, "left")) == {"x", "pitch"}   # no frame: routed only
+    io.gates["right"]["middle"].on = True
+    assert G.guide_pinches(io, "right") == [False, True, False, False]
+    sph, _ = G.guide("right", {}, [False, True, False, False], np.zeros(3), 100.0,
+                     G.basis("desktop"), 1.0)
+    lit = [r for r in sph if tuple(r[4:7]) == G.PINCH_RGB]
+    assert len(lit) == 1
+
+
 # ---------------------------------------------------------------- GL
 
 @pytest.fixture(scope="module")
@@ -251,6 +338,23 @@ def test_the_target_alpha_is_untouched(ctx):
         on, _ = frame(ctx, src=tracker(), alpha=alpha)
         assert np.array_equal(on[..., 3], base[..., 3])
         assert on[..., 3].min() == 255
+
+
+def test_the_guide_draws_beside_and_on_the_hand_and_keeps_the_alpha(ctx):
+    io = HandsIO(HandSettings.from_config({}), {}, source=NS(latest=lambda: (0, 0.0, {})),
+                 out=NS(send=print))
+    for st in io.state:
+        st.follow.y = 0.7
+    src = NS(skeleton=both(), cfg={"mode": "desktop"}, axes=io.axes, state=io.state,
+             gates=io.gates)
+    plain, _ = frame(ctx, src=src)
+    for g in (1, 2):
+        r = Renderer(ctx)
+        r.ghost.state.guide = g
+        out, _ = frame(ctx, src=src, renderer=r)
+        diff = np.abs(out[..., :3].astype(int) - plain[..., :3]).sum(axis=2) > 30
+        assert diff.sum() > 300, G.GUIDES[g]
+        assert out[..., 3].min() == 255
 
 
 def test_an_open_hand_and_a_fist_differ(ctx):

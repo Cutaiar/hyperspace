@@ -153,6 +153,8 @@ def _ghost(panel) -> None:
         imgui.same_line()
         panel._check("ghost.mirror")
         panel._row("ghost.alpha")
+        if "ghost.guide" in panel.reg:
+            panel._combo("ghost.guide")
 
 
 def _status(io) -> None:

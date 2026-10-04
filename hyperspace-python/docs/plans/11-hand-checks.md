@@ -768,7 +768,13 @@ a hand out of the box: it fades out where it was in about a third of a
 second, and fades back in when you return; nothing freezes or jumps.
 (g) **Effects never touch it** — F5 (TRIP) and F4 (WAKE): the shape
 warps, colours and trails; the hands do not. (h) **Off is off** —
-untick it: the render is as before. Repeat (c) once in `screentop` if
+untick it: the render is as before. (i) **The guide** — `ghost.guide`
+BESIDE: move the right hand straight right, then straight up, then
+toward the screen: each time one ball moves (red, green, blue) and the
+others stay put; tilt fingers up, turn them outward, roll thumb-up: the
+red ring's dot rises, the green ring's goes out, the blue ring's turns
+toward the palm's new facing; pinch each finger: its bead lights. ON
+HAND: the same gauge rides the palm. Repeat (c) once in `screentop` if
 the rig ever uses it: those axes are a guess (`ghost.MODES`). *Fail:*
 swapped or mirrored hands → `ghost.MODES` / `ghost.mirror`; a finger on
 the wrong digit or bending wrongly → `hands.core.skeleton` (the bones'
