@@ -61,8 +61,8 @@ FINGER_R = 0.085    # finger radius as a fraction of palm width, when bones give
 BONE_R = 0.42       # a bone's capsule radius as a fraction of its reported width
 
 # per hand, linear: both near-white — the guide's axes own the colours —
-# with a faint cool / warm tint so the two can still be told apart
-COLOURS = {"left": (0.88, 0.92, 1.00), "right": (1.00, 0.96, 0.91)}
+# with a faint cool tint on the left, a light red one on the right
+COLOURS = {"left": (0.88, 0.92, 1.00), "right": (1.00, 0.82, 0.78)}
 
 # tracking mode → Leap axes in stage axes: stage = M · leap, rows are the
 # stage's x (right), y (up), z (toward the performer). Desktop is the

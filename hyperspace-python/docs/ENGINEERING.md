@@ -392,7 +392,8 @@ display for the performer and for newcomers, not a control source.
 - **The geometry.** `CapsuleHands`: a sphere per joint, a capsule per
   bone, a palm (the four finger metacarpals' bases and knuckles, and the
   thumb web), lit with one light and a rim, both hands near-white (left
-  faintly cool, right faintly warm: the guide's axes own the colours). A palm-only
+  faintly cool, right a light red, as the HANDS page's dots — pale, so
+  the guide's red x axis stays its own). A palm-only
   skeleton draws the palm as an ellipse. `HandPose` is the data path —
   stage-space joints plus the bones' raw rotations and the basis — so a
   skinned mesh can replace `CapsuleHands` behind the same

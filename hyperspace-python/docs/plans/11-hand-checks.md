@@ -750,8 +750,8 @@ screen); about 15 minutes. First, headless:
 Launch, HANDS page, tick **Ghost hands** (`ghost.on`), opacity about
 60 %. Sit where you perform, both hands in the box. *Pass:* (a) **left
 and right not swapped** — raise only your left hand: the hand on the left
-of the render moves (the faintly cool one); the right hand, faintly warm,
-is on the right.
+of the render moves (the near-white one); the right hand, light red, is
+on the right.
 (b) **Fingers track** — spread, close to a fist, pinch thumb to each
 finger in turn, point with one finger: every finger follows, the thumb
 on the correct side of each hand, nothing bending backwards. (c)
