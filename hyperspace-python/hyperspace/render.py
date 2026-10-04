@@ -26,7 +26,8 @@ that pass is a copy and the output is bit-identical to drawing straight
 to the window. With an effect on (fx.py) the post pass lands in the
 effect chain's texture instead and the last effect writes the window.
 `draw_scene` is the scene pass alone, for anything that wants the raw
-frame.
+frame. Last, the ghost hands (ghost.py) go over the finished frame in
+their own pass and camera; off, the frame is untouched.
 """
 
 from __future__ import annotations
@@ -40,6 +41,7 @@ import numpy as np
 
 from .fx import FxChain, FxState
 from .geometry import face_triangles, face_uvs, geom, project_h
+from .ghost import Ghost, GhostState
 from .glsl import common, common_mtime, gl_error
 from .lookback import DreamState, Lookback
 from .tapers import clamp
@@ -272,7 +274,7 @@ class CoverTarget:
 
 class Renderer:
     def __init__(self, ctx: moderngl.Context, dream: DreamState | None = None,
-                 fx: FxState | None = None):
+                 fx: FxState | None = None, ghost: GhostState | None = None):
         self.ctx = ctx
         # clear alpha: 1 is the opaque black ground; overlay mode lowers it
         # so whatever is behind the window shows through (overlay.py)
@@ -283,6 +285,7 @@ class Renderer:
         self.scene = SceneTarget(ctx)
         self.lookback = Lookback(ctx, dream)
         self.fx = FxChain(ctx, fx)      # the effect stack after the post pass
+        self.ghost = Ghost(ctx, ghost)  # the hands, last, over everything (ghost.py)
         self.cover = CoverTarget(ctx)
         self._face_verts = 0           # face vertices in _fbuf from the last scene pass
         self._blank = ctx.texture((1, 1), 4)
@@ -454,7 +457,8 @@ class Renderer:
 
     def _draw_frame(self, s: ViewState, w: int, h: int, dpr: float, t: float,
                     target: moderngl.Framebuffer, vp: tuple[int, int, int, int]) -> None:
-        """draw()'s body: scene, cover, pull, composite, capture, effects."""
+        """draw()'s body: scene, cover, pull, composite, capture, effects,
+        then the ghost hands over the finished frame."""
         ctx = self.ctx
         vx, vy, vw, vh = vp
         self.scene.ensure((max(vw, 1), max(vh, 1)), _samples_of(ctx, target))
@@ -483,6 +487,12 @@ class Renderer:
         else:
             lb.composite(self.scene.tex, target, cover)
             lb.capture(self.scene.tex, target)
+        # the hands last, onto the target: no effect, echo or dream touches
+        # them and the history (captured above, from the scene) never holds
+        # them; off, or with no hand to show, the pass touches nothing
+        ghost = getattr(self, "ghost", None)
+        if ghost is not None:
+            ghost.draw(target, vp, t, opaque=fx.opaque)
 
     def _draw_cover(self, w: int, h: int) -> moderngl.Texture:
         """The faces again, solid, into the coverage mask — from the vertices

@@ -65,6 +65,12 @@ The tracking service calls back on its own thread; `LeapSource` keeps
 the newest frame under a lock and the render loop reads it once per
 frame (`HandsIO.poll`), so nothing from the SDK thread touches the
 registry.
+
+Beside the features, each frame keeps each hand's skeleton (`skeleton`):
+the palm frame and every digit's four bones, copied into plain floats on
+the SDK thread. It is display data only — the ghost hands draw it
+(hyperspace/ghost.py) — and goes through none of the shaping: no axis,
+no lane, no MIDI reads it.
 """
 
 from __future__ import annotations
@@ -92,6 +98,7 @@ from .signal import (
     shape,
     valid,
 )
+from .tape import TapeSource
 
 SIDES = ("left", "right")
 LEARN_MOVE = 0.25        # y an axis must travel to win a learn
@@ -152,6 +159,7 @@ DEFAULTS: dict = {
     "pinch_gates": True,     # the eight thumb-to-finger switches
     "pinch_notes": True,     # each one as a note on/off to the DAW
     "pinch_note": 100,       # left index…pinky = note…note+3, right = note+4…note+7
+    "tape": "",              # a recorded hand tape (tape.py) to play instead of the camera
 }
 # config mode → leap.TrackingMode member
 TRACKING_MODES = {"desktop": "Desktop", "screentop": "ScreenTop", "hmd": "HMD"}
@@ -210,6 +218,67 @@ def features(hand) -> dict[str, float]:
         "grab_angle": math.degrees(float(hand.grab_angle)),
         "pinch_mm": float(hand.pinch_distance),
         **pinches(hand),
+    }
+
+
+# the skeleton's digits and bones, in the bindings' attribute names and order
+DIGITS = ("thumb", "index", "middle", "ring", "pinky")
+BONES = ("metacarpal", "proximal", "intermediate", "distal")
+_NO_ROT = (0.0, 0.0, 0.0, 1.0)
+
+
+def _v3(v) -> tuple[float, float, float]:
+    return (float(v.x), float(v.y), float(v.z))
+
+
+def _quat(q) -> tuple[float, float, float, float]:
+    if q is None:
+        return _NO_ROT
+    return (float(q.x), float(q.y), float(q.z), float(q.w))
+
+
+def _bone(b) -> dict:
+    return {"prev": _v3(b.prev_joint), "next": _v3(b.next_joint),
+            "width": float(getattr(b, "width", 0.0) or 0.0),
+            "rot": _quat(getattr(b, "rotation", None))}
+
+
+def _digit_bones(digit) -> list:
+    """A digit's four bones, base to tip: by name, else the `bones` list."""
+    named = [getattr(digit, n, None) for n in BONES]
+    if all(b is not None for b in named):
+        return named
+    return list(getattr(digit, "bones", ()))[:len(BONES)]
+
+
+def skeleton(hand) -> dict:
+    """One ``leap`` Hand's skeleton as plain floats (mm, the SDK's frame):
+
+      palm, normal, direction   3-tuples; width (mm, PALM_W when unreported)
+      digits                    five lists (DIGITS order) of four bones
+                                (BONES order), each {prev, next, width, rot}:
+                                joints as 3-tuples, rot a quaternion (x, y, z, w)
+      arm                       one bone (elbow → wrist), or None
+
+    Copied, so nothing the SDK owns outlives its callback. `digits` is
+    empty when the bindings gave none (the palm-only namespaces tests build).
+    """
+    palm = hand.palm
+    digits = []
+    if getattr(hand, "thumb", None) is not None:
+        for name in DIGITS:
+            bones = _digit_bones(getattr(hand, name))
+            if len(bones) != len(BONES):
+                digits = []
+                break
+            digits.append([_bone(b) for b in bones])
+    arm = getattr(hand, "arm", None)
+    return {
+        "palm": _v3(palm.position), "normal": _v3(palm.normal),
+        "direction": _v3(palm.direction),
+        "width": float(getattr(palm, "width", 0.0) or 0.0) or PALM_W,
+        "digits": digits,
+        "arm": _bone(arm) if arm is not None and hasattr(arm, "prev_joint") else None,
     }
 
 
@@ -569,6 +638,7 @@ class LeapSource:
         self.status = "connecting"
         self._lock = threading.Lock()
         self._hands: dict[str, tuple[dict, float]] = {}
+        self._skel: dict[str, dict] = {}
         self._seq = 0
         self._t = -1.0
         src = self
@@ -612,14 +682,18 @@ class LeapSource:
 
     def _frame(self, hands) -> None:
         """SDK thread: one tracking frame. Two hands of one side (rare,
-        briefly, on a crossover) keep the more confident."""
+        briefly, on a crossover) keep the more confident — for the
+        features and the skeleton alike, so both are the same hand."""
         out: dict[str, tuple[dict, float]] = {}
+        skel: dict[str, dict] = {}
         for h in hands:
             side, conf = _side(h), float(h.confidence)
             if side not in out or conf > out[side][1]:
                 out[side] = (features(h), conf)
+                skel[side] = skeleton(h)
         with self._lock:
-            self._hands, self._seq, self._t = out, self._seq + 1, self.clock()
+            self._hands, self._skel = out, skel
+            self._seq, self._t = self._seq + 1, self.clock()
 
     def latest(self) -> tuple[int, float, dict[str, tuple[dict, float]]]:
         """(frame seq, receipt time, side → (features, confidence))."""
@@ -628,6 +702,15 @@ class LeapSource:
         if self.clock() - t > STALE_S:
             hands = {}
         return seq, t, hands
+
+    def skeletons(self) -> tuple[int, float, dict[str, dict]]:
+        """(frame seq, receipt time, side → `skeleton`): the frame
+        `latest()` reads, under the same lock and the same staleness rule."""
+        with self._lock:
+            seq, t, skel = self._seq, self._t, self._skel
+        if self.clock() - t > STALE_S:
+            skel = {}
+        return seq, t, skel
 
     @property
     def on(self) -> bool:
@@ -738,6 +821,10 @@ class HandsIO:
             c = cal.get(a.name, {})
             self.state.append(AxisState(float(c.get("lo", lo)), float(c.get("hi", hi))))
         self.min_conf = float(self.cfg["min_confidence"])
+        if source is None and self.cfg.get("tape"):
+            # a recorded tape instead of the camera: its frames, its mode
+            source = TapeSource(Path(self.cfg["tape"]), clock)
+            self.cfg["mode"] = source.mode
         self.source = source if source is not None else LeapSource(self.cfg["mode"], clock)
         self.layout = Layout(settings.axes)
         self._rests: list[float] | None = None      # the rests vector last published
@@ -756,6 +843,9 @@ class HandsIO:
         # the eight pinch switches, whether or not the ratios are axes
         self.gates = {s: {f: Gate() for f in PINCHES} for s in SIDES}
         self.frame: dict[str, dict | None] = {s: None for s in SIDES}  # native features
+        # side → `skeleton` for each hand present this frame: display data
+        # (the ghost hands), never shaped; empty from a source without one
+        self.skeleton: dict[str, dict] = {}
         self.solo: int | None = None      # axis index: only it goes to the DAW
         self.last = ""                    # the last MIDI sent, for the status line
         self._seq = -1
@@ -884,6 +974,7 @@ class HandsIO:
                         channel=int(self.cfg["channel"]) - 1,
                         note=int(self.cfg["note"]) + s, velocity=127 if here else 0))
             msgs += self._pinches(side, s, here, t)
+        self._skeletons()
         for i, (a, st) in enumerate(zip(self.axes, self.state)):
             h = hands.get(a.side) if self.present[a.side] else None
             if h is None:
@@ -928,6 +1019,14 @@ class HandsIO:
         if learn is not None:
             self._learn(learn)
         return msgs
+
+    def _skeletons(self) -> None:
+        """This frame's skeletons, for the hands that are present (the
+        same confidence floor as the axes). Raw: no axis's shaping, so the
+        ghost hands never lag or drift from the real ones."""
+        read = getattr(self.source, "skeletons", None)
+        skel = read()[2] if read is not None else {}
+        self.skeleton = {s: skel[s] for s in SIDES if self.present[s] and s in skel}
 
     def _pinches(self, side: str, s: int, here: bool, t: float) -> list[mido.Message]:
         """Step one hand's four pinch switches; note on/off on each edge.

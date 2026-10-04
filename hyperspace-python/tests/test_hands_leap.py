@@ -154,6 +154,97 @@ def test_losing_the_service_or_the_camera_and_errors_show_in_the_status(leap):
     assert src.status == "error: ValueError: bad frame"
 
 
+# ---------------------------------------------------------------- the skeleton
+
+def _floats(x):
+    """Every leaf of a skeleton, which must be a plain float."""
+    if isinstance(x, dict):
+        return [v for k in x.values() for v in _floats(k)]
+    if isinstance(x, (list, tuple)):
+        return [v for k in x for v in _floats(k)]
+    return [x]
+
+
+def test_a_tracking_frame_yields_a_complete_skeleton_per_side_that_goes_stale(leap):
+    from fake_hands import hand as full_hand
+
+    clock = Clock()
+    src, conn = source(leap, clock=clock)
+    clock.t = 1.0
+    conn.fire("on_tracking_event",
+              NS(hands=[full_hand("right", "fist", (90.0, 210.0, 5.0)),
+                        full_hand("left", "open", (-90.0, 190.0, 0.0))]))
+    seq, t, skel = src.skeletons()
+    assert (seq, t) == src.latest()[:2] == (1, 1.0) and set(skel) == {"left", "right"}
+    for side, sk in skel.items():
+        assert len(sk["digits"]) == len(hc.DIGITS) == 5
+        for digit in sk["digits"]:
+            assert len(digit) == len(hc.BONES) == 4
+            for bone in digit:
+                assert len(bone["prev"]) == len(bone["next"]) == 3 and len(bone["rot"]) == 4
+                assert bone["width"] > 0
+        feats = src.latest()[2][side][0]
+        assert sk["palm"] == (feats["x"], feats["y"], feats["z"])   # the same hand
+        assert len(sk["normal"]) == len(sk["direction"]) == 3 and sk["width"] == 85.0
+        assert sk["arm"] is not None and len(sk["arm"]["prev"]) == 3
+        # nothing the SDK owns survives the callback: plain floats throughout
+        assert all(type(v) is float for v in _floats(sk))
+    assert skel["right"]["palm"] == (90.0, 210.0, 5.0)
+    # the fingertip is the distal bone's far end, as pinches() reads it
+    tip = skel["right"]["digits"][1][3]["next"]
+    f = full_hand("right", "fist", (90.0, 210.0, 5.0)).index.distal.next_joint
+    assert tip == (f.x, f.y, f.z)
+    clock.t = 1.0 + hc.STALE_S + 0.01                # no frame for too long: no skeleton
+    assert src.skeletons() == (1, 1.0, {})
+
+
+def test_the_skeleton_is_the_more_confident_hand_of_a_side(leap):
+    from fake_hands import hand as full_hand
+
+    clock = Clock()
+    src, conn = source(leap, clock=clock)
+    conn.fire("on_tracking_event",
+              NS(hands=[full_hand("right", conf=0.3, at=(0.0, 100.0, 0.0)),
+                        full_hand("right", conf=0.9, at=(0.0, 300.0, 0.0))]))
+    skel = src.skeletons()[2]
+    assert list(skel) == ["right"] and skel["right"]["palm"][1] == 300.0
+    assert src.latest()[2]["right"][0]["y"] == 300.0     # the same hand as the features
+
+
+def test_a_palm_only_hand_has_a_skeleton_with_no_digits(leap):
+    src, conn = source(leap)
+    conn.fire("on_tracking_event", NS(hands=[hand("right")]))
+    sk = src.skeletons()[2]["right"]
+    assert sk["digits"] == [] and sk["arm"] is None and sk["width"] == hc.PALM_W
+
+
+def test_hands_io_keeps_the_skeletons_of_the_hands_present_only(leap):
+    from fake_hands import hand as full_hand
+
+    clock = Clock()
+    io = HandsIO(HandSettings.from_config(), {"out": "", "min_confidence": 0.5}, clock=clock)
+    io.source.connecting.join(5.0)
+    conn = leap.connections[-1]
+    conn.fire("on_tracking_event",
+              NS(hands=[full_hand("right"), full_hand("left", conf=0.2)]))
+    io.poll(1 / 60)
+    assert set(io.skeleton) == {"right"}             # left is under the floor
+    assert io.skeleton["right"] is io.source.skeletons()[2]["right"]
+    clock.t = hc.STALE_S + 0.01
+    io.poll(1 / 60)
+    assert io.skeleton == {}
+    io.close()
+
+
+def test_a_source_without_skeletons_leaves_none():
+    io = HandsIO(HandSettings.from_config(), {}, out=NS(send=lambda m: None),
+                 source=NS(latest=lambda: (1, 0.0, {"right": ({"x": 0.0, "y": 200.0, "z": 0.0,
+                                                               "roll": 0.0, "pitch": 0.0,
+                                                               "yaw": 0.0}, 1.0)})))
+    io.poll(1 / 60)
+    assert io.present["right"] and io.skeleton == {}
+
+
 # ---------------------------------------------------------------- closing
 
 def test_close_disconnects_and_swallows_a_failure(leap):

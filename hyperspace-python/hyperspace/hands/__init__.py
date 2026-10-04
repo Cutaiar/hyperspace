@@ -52,6 +52,7 @@ from .core import (
     pinch_name,
     pinches,
     register,
+    skeleton,
 )
 
 # what the host, the panel, the tools and the tests reach for; everything
@@ -59,5 +60,5 @@ from .core import (
 __all__ = [
     "DEFAULTS", "FEATURES", "GROUP", "PALM_W", "PINCHES", "SIDES", "AxisSettings", "Gate",
     "HandSettings", "HandsIO", "Layout", "addresses", "conflicts", "default_addresses",
-    "features", "mirror", "pinch_name", "pinches", "register",
+    "features", "mirror", "pinch_name", "pinches", "register", "skeleton",
 ]
