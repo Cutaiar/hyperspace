@@ -1,6 +1,6 @@
 # Decision register — everything that is yours to decide
 
-As of 2026-09-29. **Every row is answered** (21–25, plan 14, on 2026-09-29) (the answer sheet at the end). This is the one list. Every decision that blocks
+As of 2026-10-04. **Rows 1–33 are answered** (26–33, from the Oct 3–4 session, on 2026-10-04; Part A4). Rows the unattended run of plans 15–21 adds after 33 are built on its recommendation and wait for you to confirm or overturn (the answer sheet at the end).
 implementing and settling the open work is here, whichever plan or session
 raised it. Each entry stands on its own: what the thing is, what the software
 does today, the options, a recommendation with its reasons, the trade-off you
@@ -678,6 +678,179 @@ Where each control sits is hand check 45's to confirm on the device.
 
 ---
 
+## Part A4 — raised by the Oct 3–4 session (plans 15–21, 2026-10-04)
+
+Dan and Dillon ran the rig for a night and talked through everything it
+still needs. `docs/plans/15-21-roadmap.md` orders that list into seven
+plans. **You answered rows 26–33 on 2026-10-04**; each entry below keeps
+the question as it was asked, with the answer on its first line.
+
+You also set how the work runs, since nobody will be watching it:
+
+- **Nothing touches main.** Every plan lands on one branch,
+  `finish-line`; you run that branch at the machine and merge it.
+- **A fork met mid-run is decided by the run**: it takes its
+  recommendation, builds it, and adds a row here after 33 marked "built
+  on the recommendation; confirm or overturn", with the cost to reverse.
+- **No timetable.** Needed by Friday 2026-10-09; not planned around dates.
+- **Rate-type params under a hand are allowed**; nothing restricts them.
+- **Presets**: more than eight on the desk (twenty-four: clip row 1 and
+  clip rows 4–5); the unwanted ones hidden or trashed from the list;
+  plain Save overwrites without asking for a name; no folders for now.
+- **The faces as their own effect target**: your answer to "faces
+  through FX". Each effect is aimed at the frame or at the faces; the
+  faces' effects run into a texture the faces show, laid on per face or
+  in screen space (plan 20).
+
+**What is still unknown** (none of it blocks the work):
+
+| # | Question | Assumed until you say |
+|---|---|---|
+| Q2 | Where are the roughly ten presets saved that night, and are they backed up? | On the rig in `~/Hyperspace/presets/`, not backed up. Run `cp -R ~/Hyperspace ~/Hyperspace-2026-10-04` before launching any new build |
+| Q3 | Were the hands calibrated on that rig (HANDS page, the 20-second sweep)? | Unknown. Plan 18 is built either way; its hand checks start with calibration |
+| Q4 | Which build ran that night? | Main at fa9b3a1 (2026-09-29) |
+
+### 26. P15-a — how deep does undo go?
+
+**Answered 2026-10-04: undo reaches single parameter edits** ("that's part of what we need in order to discover good presets"). Built as (b) with a short settle time, so one slider drag, knob turn or typed value is one step; no write hook is needed. The recommendation had been (a) first, then (b).
+
+**What it is.** Ctrl+Z. The app has no undo except an 8-second one on
+"reset all". A parameter write fires no event, and the ROUTING page edits
+rows in place, so undo cannot record single edits cheaply; it can keep
+whole snapshots of the loaded preset (values, routes, desk layer, macros).
+
+| Option | What Ctrl+Z takes back | Trade-off |
+|---|---|---|
+| (a) Actions | A preset or show load, a Learn, an Unbind, a deleted route or macro, a module-preset load or reset; an overwritten or deleted preset file goes to a trash folder | A slider you dragged is not undone on its own; the last action before it is. Small. |
+| (b) Actions and settled edits | The above, plus a snapshot whenever the preset has changed and then sat still for a couple of seconds | Slider moves undo in chunks. A day more; the stack fills faster. |
+| (c) Every edit | Each slider move, each field | Needs a write hook through the registry and every in-place table edit. Large. |
+
+**Why.** (a) covers every way the session lost work. (b) is what "undo"
+means to most people and rides on the same stack.
+
+**What changes.** A new `undo.py`, a call before each replacing action,
+Ctrl+Z and Ctrl+Shift+Z as key rows. Plan 15 WP1.
+
+### 27. P15-b — what "home" is, and where its button lives
+
+**Answered (a), 2026-10-04**: the show's "starts on" preset, on the APC40's OVERDUB button (beside METRONOME) and the Home key.
+
+**What it is.** One press back to a known-good look when a preset has gone
+wrong mid-party.
+
+| Option | What a press loads | Trade-off |
+|---|---|---|
+| (a) The show's "starts on" preset | The preset the show opens with | No new thing to set or explain. Home and the opening look are the same preset. |
+| (b) A separate "home" pointer in the show | Whatever you marked as home | One more field and one more picker on the PRESETS page. |
+
+**Why (a).** The show already names one preset as its known-good start.
+The button is added to the invariant controls (the same on both desk
+layers; no preset may remap it), which extends that list by one.
+
+**What changes.** A `preset.home` trigger, one key row, one APC40 row, the
+"starts on" line on the PRESETS page reads "starts on / home". Plan 15 WP2.
+
+### 28. P15-c — the crossfader becomes master dim
+
+**Answered (a), 2026-10-04**: master dim on both layers, left is black.
+
+**What it is.** The session wanted to dim the whole picture from the desk
+(a blackout switch was proposed and turned into dimming). The crossfader
+today sets the overlay's background, which has done nothing since
+decision 21 put overlay behind a config key. "Dimming on the crossfader in
+shift mode" is not possible: faders mean one thing on both layers.
+
+| Option | The crossfader | Trade-off |
+|---|---|---|
+| (a) Master dim on both layers; left is black, right is full | Dims the finished frame, after the effects. A preset load never moves it; a launch always starts at full; it picks up softly, so a crossfader left at black does nothing until you move it through the current value | The overlay background is set from the OUTPUT page only. |
+| (b) Keep the overlay background; put dim on an unused knob | As today | A knob on one layer is not there on the other; dim wants to be always reachable. |
+
+**What changes.** `output.dim` (a rig setting, not saved), one multiply at
+the end of the frame, the crossfader's row in the factory desk and in an
+existing `bindings.json` (backed up first). Plan 15 WP3.
+
+### 29. P15-d — saving a preset from the APC40
+
+**Answered 2026-10-04, changed**: the desk never overwrites. The gesture is a **save-as**: it always makes a new preset, with a name made from the preset the look grew from and the next free number ("TRIP 2"), and puts it in the next empty bank slot. Built as a hold of about 0.6 s anywhere on the clip-stop row (the eight buttons act as one wide bar); a tap does nothing. Plain Save on the panel still overwrites. The options below are the question as first asked, when the gesture saved into the slot above the button.
+
+**What it is.** ⇧F1–F8 on the keyboard saves the live state into a bank
+slot; the desk has no way to. The row of eight clip-stop buttons, directly
+under the grid and in line with the eight slot buttons of clip row 1, is
+unused.
+
+```
+ clip row 1   [ 1 ][ 2 ][ 3 ][ 4 ][ 5 ][ 6 ][ 7 ][ 8 ]   press: load slot k (today)
+ clip rows 2–5  …
+ clip stop    [ 1 ][ 2 ][ 3 ][ 4 ][ 5 ][ 6 ][ 7 ][ 8 ]   hold 0.6 s: save into slot k (new)
+```
+
+| Option | The gesture | Trade-off |
+|---|---|---|
+| (a) Hold clip-stop k for about 0.6 s; it blinks when saved; a tap does nothing | One hand, no modifier, lined up with the slot it writes | A long lean on the row saves. The preset it replaces goes to the trash first and Ctrl+Z still has the look. |
+| (b) Hold a "save" button and press slot k on clip row 1 | Two-button chord, hard to do by accident | Needs a held modifier, which the desk does not have (SHIFT is a latch), and a second meaning for the preset row. |
+| (c) No desk gesture; keyboard only | As today | The session asked for it. |
+
+**What changes.** The eight clip-stop rows as invariant controls, press
+duration in the MIDI adapter, a blink. Plan 15 WP4, which also adds "put
+preset here…" to a slot on the PRESETS page, so a preset saved by name can
+be put in the bank without loading it.
+
+### 30. P15-e — the shape of the PRs
+
+**Answered (a), 2026-10-04, with one change**: the per-plan integration branches merge into one branch, `finish-line`, not into main; you merge `finish-line`.
+
+**What it is.** In the session Dan said Claude makes too many commits and
+asked for one stacked PR per category; Dillon said the commits are too big
+and asked for small PRs. The standing rule is one PR per work package,
+merged through one integration branch per plan.
+
+| Option | What you review and merge | Trade-off |
+|---|---|---|
+| (a) A small PR per work package, each with a demo in its body; they stack on `plan-NN-integration`; you merge that one PR per plan. In plan 15 each feature is its own merge commit, so one revert removes one feature | Small to read (Dillon), one merge per category (Dan), each feature revertable before Wednesday | Two levels of PR to look at. |
+| (b) One PR per plan, no per-package PRs | One thing to look at | Large diffs; a revert takes the whole plan. |
+| (c) Each small PR merged to main on its own | Simplest history | The document tables conflict on every merge; many merges for you. |
+
+### 31. P16+ — automatic BPM
+
+**Answered 2026-10-04: deferred.** "Something we need to put a little bit of thought into." Tap-only stands for this run.
+
+DECISIONS: "One free-running clock, tapped into time … No DJ Link, no MIDI
+clock, no drift correction: re-tap." Auto BPM reverses it. In the session
+Dillon said it is not that important and Dan said it is real work.
+
+| Option | Trade-off |
+|---|---|
+| (a) Stay tap-only | Nothing to build. |
+| (b) Beat detection from the audio input, suggesting a BPM you accept with a press | Real work, tuned by ear; likely wrong on sparse music. |
+
+### 32. P21-a — one output or two
+
+**Answered 2026-10-04**: the Pepper's Ghost glass and the projector are each a render output; the laptop screen is the control view. Each output shows the same frame, has its own dim, and has its own on/off for the polytope pipeline and for the hands (four states per output). This replaces the "two windows" decision with one control window and a list of render outputs. Plan 21.
+
+Plan 14 treats the render window as the Pepper's Ghost picture. That night
+the Pepper's Ghost glass and the projector were separate outputs. The app
+has two windows by decision (render, controls); a third is new
+architecture. What does each surface show: the same frame, the same frame
+with its own dimming, or different content (the shape on the glass, the
+effects on the wall)? Plan 21 is not written until this is answered.
+
+### 33. P21-b — the hand HUD
+
+**Answered 2026-10-04: (a) and (c)**: finish and merge PR #78 as the hand HUD, and make what is drawn swappable, so other objects can stand in for the hands (`ghost.style`). Plan 21.
+
+The session disagreed (ghost-hand meshes against abstract shapes for the
+twelve axes) and settled on simple shapes first. On 2026-10-04 Dillon
+opened draft PR #78: both hands drawn as capsule hands over the finished
+frame, after the effects, off by default (about 2,600 lines, with tests).
+
+| Option | Trade-off |
+|---|---|
+| (a) Review and finish PR #78 as the HUD; it is display only and off by default | It is built. It is the "mesh" side of the disagreement, in its simplest form. |
+| (b) Close #78; draw simple shapes per axis instead | Matches what was settled; throws away working code. |
+| (c) Both: #78 as one HUD style, shapes as another | Two things to maintain; more settings. |
+
+---
+
 ## Part B — built on the recommendation without asking; confirm or overturn
 
 Four calls had a sensible default and waiting would have blocked the work.
@@ -759,3 +932,11 @@ or "overturn".
 | 23 | P14-c dream on by default | (b) optional torch, worker on, loud when missing | **(a)**, 2026-09-29 | torch is part of the app, not optional; built: plan 14 WP1 (the dependency, the worker on) and WP6 (echoes in seconds, TRACER, WAKE re-tuned and shot with the worker on) |
 | 24 | P14-d F6–F8 effects | (a) ACID, MANDALA, NOITA | **(a)**, 2026-09-29 | built: plan 14 WP5 — `party-acid` / `party-mandala` / `party-noita` on F6–F8, every effect on in a factory preset, no factory route on an effect that is off |
 | 25 | P14-e desk glyphs and diagram | (a) K/D/S/G/B glyphs, up layer, above the cheat sheet | **(a)**, 2026-09-29 | plan 14 WP7 — built (`apc40.LAYOUT`, `ui_desk.py`, hand check 45) |
+| 26 | P15-a undo depth | (a) actions first, then (b) settled edits | **per-edit**, 2026-10-04 | one gesture (a drag, a knob turn, a typed value) is one step; plan 15 WP1 |
+| 27 | P15-b home | (a) the "starts on" preset, on OVERDUB and the Home key | **(a)**, 2026-10-04 | plan 15 WP2 |
+| 28 | P15-c crossfader | (a) master dim, both layers, left is black | **(a)**, 2026-10-04 | plan 15 WP3 |
+| 29 | P15-d save on the APC40 | (a) hold clip-stop k to save into slot k | **save-as**, 2026-10-04 | always a new preset with a made-up name, into the next empty slot; the desk never overwrites; plan 15 WP4 |
+| 30 | P15-e PR shape | (a) a PR per work package, an integration PR per plan | **(a)**, 2026-10-04 | everything onto `finish-line`, never main; you merge that |
+| 31 | Auto BPM | (a) stay tap-only | **deferred**, 2026-10-04 | not in this run |
+| 32 | P21-a one output or two | none; describe the rig | **two render outputs**, 2026-10-04 | the same frame; per output a dim, scene on/off, hands on/off; the laptop is the control view; plan 21 |
+| 33 | P21-b the hand HUD | (a) finish PR #78 | **(a) and (c)**, 2026-10-04 | #78 finished as the HUD, with what is drawn swappable; plan 21 |
