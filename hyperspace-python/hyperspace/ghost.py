@@ -267,7 +267,9 @@ RING_SEGMENTS = 40
 
 
 GUIDE_FEATURES = ("x", "y", "z", "roll", "pitch", "yaw", "grab")
-UNROUTED_DIM = 0.45      # an axis no routing row uses: drawn, but dark
+# an axis no routing row uses: drawn grey, thinner and smaller — still moving
+UNROUTED_RGB = (0.42, 0.42, 0.44)
+UNROUTED_SIZE = 0.6
 
 
 def routed_names(router, source) -> set[str] | None:
@@ -322,12 +324,14 @@ def guide_pinches(source, side: str) -> list[bool]:
             for f in ("index", "middle", "ring", "pinky")]
 
 
-def _lit(value: tuple | None) -> float:
-    """A value's brightness: full when a row routes it, UNROUTED_DIM when
-    not (or when there is no value)."""
-    if value is None:
-        return UNROUTED_DIM
-    return 1.0 if len(value) < 4 or value[3] else UNROUTED_DIM
+def _tone(rgb: tuple, value: tuple | None) -> tuple[tuple, float]:
+    """(colour, size) of one value's marks: its own colour at full size
+    when a routing row reads it; grey and smaller when nothing does (or
+    there is no value) — colour says "this drives something", grey says
+    "this is only the hand"."""
+    if value is not None and (len(value) < 4 or value[3]):
+        return rgb, 1.0
+    return UNROUTED_RGB, UNROUTED_SIZE
 
 
 def guide(side: str, values: dict, pinches: list[bool], centre: np.ndarray, span: float,
@@ -339,15 +343,19 @@ def guide(side: str, values: dict, pinches: list[bool], centre: np.ndarray, span
       x y z        a line per axis (its ends are the axis's range) and a
                    ball at the value: 0 at one end, 1 at the other, ½ in the
                    middle. Move only up and only the green ball moves.
-                   An axis a routing row uses is lit, line and all; the
-                   rest are drawn dark (UNROUTED_DIM).
-      pitch, yaw   a ring about x / y, a dot where the fingers point: the
-                   value mapped back through the axis's range, so a dead
-                   zone or a curve shows as the dot sticking or speeding.
-      roll         a ring about z, a dot where the palm faces.
+      pitch, yaw   an arc about x / y, a dot where the fingers point; roll an
+                   arc about z, a dot where the palm faces. Each arc spans
+                   the axis's range (calibrated, else the default) and no
+                   more — the reach of the hand — with a tick at neutral;
+                   the dot is the value mapped back through that range, so
+                   a dead zone or a curve shows as the dot sticking or
+                   speeding.
       pinches      four beads under the gauge, lit while a switch is closed.
       grab         a ring beside the beads that closes as the hand does: an
                    open hand a wide ring, a fist a small one round a full ball.
+
+    Routed (a routing row reads it): the axis's own colour, full size.
+    Not routed: grey, thinner and smaller — still moving (`_tone`).
     """
     c = np.asarray(centre, dtype=np.float64)
     e = {k: m @ np.eye(3)[i] for i, k in enumerate("xyz")}      # Leap axes in the stage
@@ -355,51 +363,52 @@ def guide(side: str, values: dict, pinches: list[bool], centre: np.ndarray, span
     dim = lambda rgb, k: (*(v * k for v in rgb), fade)
     spheres, tubes = [], []
     for k in "xyz":
-        rgb = AXIS_RGB[k]
+        rgb, size = _tone(AXIS_RGB[k], values.get(k))
         a, b = c - e[k] * span, c + e[k] * span
-        k_lit = _lit(values.get(k))
-        tubes.append((*a, *b, GUIDE_LINE_R, *dim(rgb, 0.5 * k_lit)))
-        spheres += [(*a, 2.0 * GUIDE_LINE_R, *dim(rgb, 0.5 * k_lit)),
-                    (*b, 2.0 * GUIDE_LINE_R, *dim(rgb, 0.5 * k_lit))]
+        tubes.append((*a, *b, GUIDE_LINE_R * size, *dim(rgb, 0.55)))
+        spheres += [(*a, 2.0 * GUIDE_LINE_R * size, *dim(rgb, 0.55)),
+                    (*b, 2.0 * GUIDE_LINE_R * size, *dim(rgb, 0.55))]
         if k in values:
             u = values[k][0] * 2.0 - 1.0
-            spheres.append((*(c + e[k] * span * u), GUIDE_BALL_R, *dim(rgb, _lit(values[k]))))
+            spheres.append((*(c + e[k] * span * u), GUIDE_BALL_R * size, *dim(rgb, 1.0)))
     spheres.append((*c, 1.6 * GUIDE_LINE_R, *dim((1.0, 1.0, 1.0), 0.5)))
-    # the rings: each in the plane of two directions, neutral at the first
+    # the arcs: each in the plane of two directions, neutral at the first
     forward, up, down = -e["z"], e["y"], -e["y"]
     thumb_down = -out_x            # a level palm's thumb side, away from the outward side
     planes = {"pitch": (forward, up),               # fingers up: the dot rises
               "yaw": (forward, out_x),              # fingers outward: the dot goes out
               "roll": (down, thumb_down)}           # thumb up: the palm turns inward
     r = 0.78 * span
+    at = lambda deg, n0, n1: c + r * (math.cos(math.radians(deg)) * n0
+                                      + math.sin(math.radians(deg)) * n1)
     for name, (n0, n1) in planes.items():
         if name not in values:
             continue
-        rgb = AXIS_RGB[RING_OF[name]]
-        ring = [c + r * (math.cos(a) * n0 + math.sin(a) * n1)
-                for a in np.linspace(0.0, 2 * math.pi, RING_SEGMENTS + 1)]
-        r_lit = _lit(values[name])
-        tubes += [(*p, *q, 0.8 * GUIDE_LINE_R, *dim(rgb, 0.45 * r_lit))
-                  for p, q in pairwise(ring)]
-        spheres.append((*(c + r * n0), 2.0 * GUIDE_LINE_R, *dim(rgb, 0.7 * r_lit)))  # neutral
+        rgb, size = _tone(AXIS_RGB[RING_OF[name]], values[name])
         y, lo, hi = values[name][:3]
-        ang = math.radians(lo + y * (hi - lo))
-        spheres.append((*(c + r * (math.cos(ang) * n0 + math.sin(ang) * n1)),
-                        0.8 * GUIDE_BALL_R, *dim(rgb, _lit(values[name]))))
+        a0, a1 = min(lo, hi), max(lo, hi)
+        n = max(3, round(RING_SEGMENTS * (a1 - a0) / 360.0))
+        arc = [at(d, n0, n1) for d in np.linspace(a0, a1, n + 1)]
+        tubes += [(*p, *q, GUIDE_LINE_R * size, *dim(rgb, 0.55)) for p, q in pairwise(arc)]
+        spheres += [(*arc[0], 2.0 * GUIDE_LINE_R * size, *dim(rgb, 0.55)),     # the reach
+                    (*arc[-1], 2.0 * GUIDE_LINE_R * size, *dim(rgb, 0.55))]
+        if a0 <= 0.0 <= a1:
+            spheres.append((*at(0.0, n0, n1), 1.6 * GUIDE_LINE_R * size, *dim(rgb, 0.8)))
+        spheres.append((*at(lo + y * (hi - lo), n0, n1), 0.8 * GUIDE_BALL_R * size,
+                        *dim(rgb, 1.0)))
     for i, closed in enumerate(pinches):
         p = c - e["y"] * span * 1.25 + out_x * span * (-0.45 + 0.3 * i)
-        lit = dim(PINCH_RGB, 1.0) if closed else dim((0.5, 0.5, 0.5), 0.5)
+        lit = dim(PINCH_RGB, 1.0) if closed else dim(UNROUTED_RGB, 0.6)
         spheres.append((*p, 0.6 * GUIDE_BALL_R, *lit))
     if "grab" in values:
         g = values["grab"][0]
-        g_lit = _lit(values["grab"])
+        rgb, size = _tone(GRAB_RGB, values["grab"])
         gc = c - e["y"] * span * 1.25 + out_x * span * 0.9
         gr = 0.22 * span * (1.0 - 0.7 * g)                   # closes with the hand
         ring = [gc + gr * (math.cos(a) * e["x"] + math.sin(a) * e["y"])
                 for a in np.linspace(0.0, 2 * math.pi, RING_SEGMENTS // 2 + 1)]
-        tubes += [(*p, *q, GUIDE_LINE_R, *dim(GRAB_RGB, 0.8 * g_lit))
-                  for p, q in pairwise(ring)]
-        spheres.append((*gc, (0.2 + 0.8 * g) * 0.7 * GUIDE_BALL_R, *dim(GRAB_RGB, g_lit)))
+        tubes += [(*p, *q, GUIDE_LINE_R * size, *dim(rgb, 0.8)) for p, q in pairwise(ring)]
+        spheres.append((*gc, (0.2 + 0.8 * g) * 0.7 * GUIDE_BALL_R * size, *dim(rgb, 1.0)))
     return spheres, tubes
 
 

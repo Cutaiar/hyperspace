@@ -772,11 +772,12 @@ untick it: the render is as before. (i) **The guide** — `ghost.guide`
 BESIDE: move the right hand straight right, then straight up, then
 toward the screen: each time one ball moves (red, green, blue) and the
 others stay put; tilt fingers up, turn them outward, roll thumb-up: the
-red ring's dot rises, the green ring's goes out, the blue ring's turns
-toward the palm's new facing; pinch each finger: its bead lights; close
+red arc's dot rises, the green arc's goes out, the blue arc's turns
+toward the palm's new facing, and no dot ever leaves its arc; pinch each finger: its bead lights; close
 to a fist: the grab ring shrinks round a full ball. Route a few left-hand
 axes and none on the right (ROUTING page): the left gauge's routed axes
-are lit, everything on the right is dark but still moves. ON HAND: the
+keep their colour, everything on the right is grey and smaller but
+still moves. ON HAND: the
 same gauge rides the palm. Repeat (c) once in `screentop` if
 the rig ever uses it: those axes are a guess (`ghost.MODES`). *Fail:*
 swapped or mirrored hands → `ghost.MODES` / `ghost.mirror`; a finger on

@@ -401,20 +401,20 @@ display for the performer and for newcomers, not a control source.
   what each hand is doing, drawn in the same pass: a gauge low on the
   hand's side of the frame, or about its palm. Three axis lines (x red,
   y green, z blue) each carry a ball at its value, −1 to +1 along the
-  line, so a hand moved only right moves only the red ball. Three gimbal
-  rings, coloured by the axis they turn about, each carry a dot: pitch
-  and yaw where the fingers point, roll where the palm faces (neutral:
-  fingers forward, palm down). Four beads under the gauge light while
-  the pinch switches are closed, and a grab ring beside them closes as
-  the hand does (wide when open, small round a full ball in a fist).
-  Everything always shows, whatever the setup or the table holds
-  (`guide_values`): an axis the setup has at its shaped output, any other
-  feature from the native reading over the default range. What is lit
-  is what drives something: an axis an enabled performer row in the
-  routing table reads (`routed_names`, by name or lane index) draws
-  bright, line and all; the rest draw dark (`UNROUTED_DIM`), so a
-  left hand with rows and a right hand without show as one lit gauge
-  and one dark one.
+  line, so a hand moved only right moves only the x ball. Three arcs,
+  coloured by the axis they turn about, each carry a dot: pitch and yaw
+  where the fingers point, roll where the palm faces (a tick at neutral:
+  fingers forward, palm down). Each arc spans the axis's range —
+  calibrated, else the default — and no more, so it draws the hand's
+  reach: roll's ±90° is the lower half only, pitch and yaw never go
+  behind the hand. Four beads under the gauge light while the pinch
+  switches are closed, and a grab ring beside them closes as the hand
+  does. Everything always shows (`guide_values`): an axis the setup has
+  at its shaped output, any other feature from the native reading over
+  the default range. What a routing row drives keeps its colour at full
+  size: an enabled performer row reads it (`routed_names`, by name or
+  lane index). The rest is grey, thinner and smaller (`UNROUTED_RGB`,
+  `UNROUTED_SIZE`) and still moves.
 - **Leaving the box.** A hand no longer reported fades out over 0.3 s
   where it was last seen; one that comes back fades in over 0.1 s.
 - **Params.** `ghost.on` (default off), `ghost.alpha` (0.6),

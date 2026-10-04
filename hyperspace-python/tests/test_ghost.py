@@ -261,18 +261,43 @@ def io_index(name: str) -> int:
                    out=NS(send=print)).layout.index[name]
 
 
-def test_routed_axes_draw_bright_and_the_rest_dark():
-    vals = {"x": (0.7, -20.0, 220.0, True), "y": (0.5, 100.0, 350.0, False)}
+def test_routed_axes_keep_their_colour_and_the_rest_go_grey_and_small():
+    vals = {"x": (0.7, -20.0, 220.0, True), "y": (0.5, 100.0, 350.0, False),
+            "roll": (0.5, -90.0, 90.0, False), "pitch": (0.5, -60.0, 60.0, True)}
     sph, tubes = G.guide("right", vals, [False] * 4, np.zeros(3), 100.0,
                          G.basis("desktop"), 1.0)
-    big = [r for r in sph if r[3] >= 0.8 * G.GUIDE_BALL_R - 1e-6]
-    x_ball = next(r for r in big if r[0] > 1.0)
-    y_ball = next(r for r in big if np.allclose(r[4:7], [v * G.UNROUTED_DIM
-                                                          for v in G.AXIS_RGB["y"]]))
-    assert np.allclose(x_ball[4:7], G.AXIS_RGB["x"]) and y_ball is not None
-    x_line = next(t for t in tubes if abs(t[0]) > 1.0)       # the axis lines, dark
-    y_line = next(t for t in tubes if abs(t[1]) > 1.0)       # where nothing routes
-    assert x_line[7] > 2 * y_line[8]
+    x_ball = next(r for r in sph if r[0] > 1.0 and r[3] == G.GUIDE_BALL_R)
+    assert np.allclose(x_ball[4:7], G.AXIS_RGB["x"])                     # routed: colour
+    y_ball = next(r for r in sph if abs(r[1]) < 1e-9 and abs(r[0]) < 1e-9
+                  and r[3] == G.GUIDE_BALL_R * G.UNROUTED_SIZE)
+    assert np.allclose(y_ball[4:7], G.UNROUTED_RGB)                      # not: grey, smaller
+    x_line = next(t for t in tubes if abs(t[0]) > 1.0 and abs(t[3]) > 1.0)
+    y_line = next(t for t in tubes if abs(t[1]) > 1.0 and abs(t[4]) > 1.0)
+    assert x_line[6] > y_line[6]                                         # and thinner
+    grey = [t for t in tubes if np.allclose(t[7:10], [v * 0.55 for v in G.UNROUTED_RGB])]
+    red = [t for t in tubes if np.allclose(t[7:10], [v * 0.55 for v in G.AXIS_RGB["x"]])]
+    assert grey and red            # the roll arc grey, the pitch arc in its own (x) red
+
+
+def test_the_arcs_span_the_reach_and_no_more():
+    """Roll ±90°: the arc is the lower half only (a palm cannot face up
+    past thumb-up); pitch ±60°: never behind the hand. Calibrated ranges
+    narrow the arc further."""
+    def arc(name, lo, hi):
+        _, tubes = G.guide("right", {name: (0.5, lo, hi, True)}, [False] * 4,
+                           np.zeros(3), 100.0, G.basis("desktop"), 1.0)
+        rgb = [v * 0.55 for v in G.AXIS_RGB[G.RING_OF[name]]]
+        return np.array([p for t in tubes if np.allclose(t[7:10], rgb)
+                         for p in (t[:3], t[3:6])])
+    r = 0.78 * 100.0
+    roll = arc("roll", -90.0, 90.0)
+    assert roll[:, 1].max() <= 1e-6 and roll[:, 1].min() == pytest.approx(-r)
+    pitch = arc("pitch", -60.0, 60.0)
+    assert pitch[:, 2].max() < 0                                     # all in front
+    assert pitch[:, 1].max() == pytest.approx(r * np.sin(np.radians(60)), abs=1e-6)
+    narrow = arc("yaw", -20.0, 30.0)
+    span = np.degrees(np.arctan2(narrow[:, 0], -narrow[:, 2]))
+    assert span.min() == pytest.approx(-20.0, abs=1e-6) and span.max() < 30.0 + 1e-6
 
 
 def test_the_guide_takes_every_feature_from_the_frame_and_the_pinches():
