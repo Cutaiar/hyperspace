@@ -405,11 +405,16 @@ display for the performer and for newcomers, not a control source.
   rings, coloured by the axis they turn about, each carry a dot: pitch
   and yaw where the fingers point, roll where the palm faces (neutral:
   fingers forward, palm down). Four beads under the gauge light while
-  the pinch switches are closed. All six always show, routed or not
-  (`guide_values`): a routed axis at the shaped value the table is fed —
-  its dead zone and curve show as the ball sticking or speeding — and
-  the others from the native reading over the default range, a little
-  darker.
+  the pinch switches are closed, and a grab ring beside them closes as
+  the hand does (wide when open, small round a full ball in a fist).
+  Everything always shows, whatever the setup or the table holds
+  (`guide_values`): an axis the setup has at its shaped output, any other
+  feature from the native reading over the default range. What is lit
+  is what drives something: an axis an enabled performer row in the
+  routing table reads (`routed_names`, by name or lane index) draws
+  bright, line and all; the rest draw dark (`UNROUTED_DIM`), so a
+  left hand with rows and a right hand without show as one lit gauge
+  and one dark one.
 - **Leaving the box.** A hand no longer reported fades out over 0.3 s
   where it was last seen; one that comes back fades in over 0.1 s.
 - **Params.** `ghost.on` (default off), `ghost.alpha` (0.6),

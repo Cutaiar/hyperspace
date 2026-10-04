@@ -223,36 +223,86 @@ def test_the_rings_put_the_dot_where_the_hand_points():
                  m=G.basis("desktop", mirror=True))[(0.3, 0.88, 0.36)][0][0] < 0
 
 
-def test_the_guide_shows_all_six_routed_or_not_and_the_pinches():
-    """Every axis shows whatever the setup routes: a routed one at what the
-    table is fed, the rest from the native reading over the default
-    range, a little darker."""
+def _routed_rig(tmp_path, rows):
+    """A real registry, routing table and HandsIO with `rows` (source
+    addresses) as performer rows, the hand lanes published."""
+    from test_params import make
+
+    from hyperspace.routing import Binding, Bindings, Router
+
+    reg = make(tmp_path)[0]
+    router = Router(reg, Bindings([Binding(src, "view.bright", "position") for src in rows]))
+    io = HandsIO(HandSettings.from_config({}), {}, source=NS(latest=lambda: (0, 0.0, {})),
+                 out=NS(send=print))
+    io.poll(1 / 60, router=router)                  # publishes hand:<name> → lane
+    return router, io
+
+
+def test_the_guide_lights_what_the_table_routes(tmp_path):
+    """The owner's case: rows on the left hand, none on the right — the
+    left gauge lit, the right one dark, by name or by lane index."""
+    router, io = _routed_rig(tmp_path, ["hand:left.x", "hand:left.roll",
+                                        f"hand:{io_index('left.pitch')}"])
+    assert G.routed_names(router, io) == {"left.x", "left.roll", "left.pitch"}
+    for st in io.state:
+        st.follow.y = 0.5
+    left, right = (G.guide_values(io, s, G.routed_names(router, io)) for s in ("left", "right"))
+    assert {f for f, v in left.items() if v[3]} == {"x", "roll", "pitch"}
+    assert not any(v[3] for v in right.values()) and set(right) == set(left)
+    b = router.table.bindings[0]
+    b.enabled = False                               # a disabled row drives nothing
+    assert "left.x" not in G.routed_names(router, io)
+    assert G.routed_names(None, io) is None         # no table: everything lit
+    assert all(v[3] for v in G.guide_values(io, "right", None).values())
+
+
+def io_index(name: str) -> int:
+    return HandsIO(HandSettings.from_config({}), {}, source=NS(latest=lambda: (0, 0.0, {})),
+                   out=NS(send=print)).layout.index[name]
+
+
+def test_routed_axes_draw_bright_and_the_rest_dark():
+    vals = {"x": (0.7, -20.0, 220.0, True), "y": (0.5, 100.0, 350.0, False)}
+    sph, tubes = G.guide("right", vals, [False] * 4, np.zeros(3), 100.0,
+                         G.basis("desktop"), 1.0)
+    big = [r for r in sph if r[3] >= 0.8 * G.GUIDE_BALL_R - 1e-6]
+    x_ball = next(r for r in big if r[0] > 1.0)
+    y_ball = next(r for r in big if np.allclose(r[4:7], [v * G.UNROUTED_DIM
+                                                          for v in G.AXIS_RGB["y"]]))
+    assert np.allclose(x_ball[4:7], G.AXIS_RGB["x"]) and y_ball is not None
+    x_line = next(t for t in tubes if abs(t[0]) > 1.0)       # the axis lines, dark
+    y_line = next(t for t in tubes if abs(t[1]) > 1.0)       # where nothing routes
+    assert x_line[7] > 2 * y_line[8]
+
+
+def test_the_guide_takes_every_feature_from_the_frame_and_the_pinches():
+    """No axis for a feature: its native reading over the default range."""
     io = HandsIO(HandSettings.from_config({"dofs": ["x", "pitch"]}), {},
                  source=NS(latest=lambda: (0, 0.0, {})), out=NS(send=print))
     for st in io.state:
         st.follow.y = 0.7
     io.frame["right"] = {"x": 0.0, "y": 225.0, "z": 0.0, "roll": 45.0, "pitch": 0.0,
-                         "yaw": -45.0}
+                         "yaw": -45.0, "grab": 0.25}
     vals = G.guide_values(io, "right")
     assert set(vals) == set(G.GUIDE_FEATURES)
-    assert vals["x"] == (0.7, -20.0, 220.0, True)           # routed: the shaped value
-    assert vals["pitch"][0] == 0.7 and vals["pitch"][3]
-    assert vals["y"] == (0.5, 100.0, 350.0, False)          # native over the default range
-    assert vals["roll"][0] == 0.75 and vals["yaw"][0] == 0.0 and not vals["z"][3]
-    sph, _ = G.guide("right", vals, [False] * 4, np.zeros(3), 100.0, G.basis("desktop"), 1.0)
-    big = [r for r in sph if r[3] >= 0.8 * G.GUIDE_BALL_R - 1e-6]
-    assert len(big) == 6                                     # three balls, three dots
-    x_ball = next(r for r in big if r[0] > 1.0)
-    y_ball = [r for r in big if np.allclose(r[4:7], [v * G.UNROUTED_DIM
-                                                     for v in G.AXIS_RGB["y"]])]
-    assert np.allclose(x_ball[4:7], G.AXIS_RGB["x"]) and y_ball   # bright vs dimmed
-    assert set(G.guide_values(io, "left")) == {"x", "pitch"}   # no frame: routed only
+    assert vals["x"][:3] == (0.7, -20.0, 220.0)              # the setup's axis: shaped
+    assert vals["y"][:3] == (0.5, 100.0, 350.0)              # native over the default range
+    assert vals["roll"][0] == 0.75 and vals["yaw"][0] == 0.0 and vals["grab"][0] == 0.25
     io.gates["right"]["middle"].on = True
     assert G.guide_pinches(io, "right") == [False, True, False, False]
     sph, _ = G.guide("right", {}, [False, True, False, False], np.zeros(3), 100.0,
                      G.basis("desktop"), 1.0)
-    lit = [r for r in sph if tuple(r[4:7]) == G.PINCH_RGB]
-    assert len(lit) == 1
+    assert len([r for r in sph if tuple(r[4:7]) == G.PINCH_RGB]) == 1
+
+
+def test_the_grab_ring_closes_with_the_hand():
+    def ring(g):
+        _, tubes = G.guide("right", {"grab": (g, 0.0, 1.0, True)}, [False] * 4,
+                           np.zeros(3), 100.0, G.basis("desktop"), 1.0)
+        pts = np.array([t[:3] for t in tubes if np.allclose(t[7:10],
+                                                            [v * 0.8 for v in G.GRAB_RGB])])
+        return np.ptp(pts[:, 0])
+    assert ring(0.0) > 2.5 * ring(1.0) > 0
 
 
 # ---------------------------------------------------------------- GL

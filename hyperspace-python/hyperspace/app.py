@@ -703,6 +703,7 @@ def main() -> None:
     panel.hands = hands_io
     # the ghost hands draw the tracker's skeletons; no tracker, nothing draws
     renderer.ghost.source = hands_io
+    renderer.ghost.router = router           # the guide lights what the table routes
     panel.hand_settings = hand_settings
     dream_io, panel.dream_error = _open_dream(reg, cfg)
     if dream_io is not None:            # fills the look-back's dream slot

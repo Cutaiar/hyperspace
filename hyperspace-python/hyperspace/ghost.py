@@ -259,31 +259,51 @@ def pose(side: str, skel: dict, m: np.ndarray, fade: float = 1.0) -> HandPose:
 AXIS_RGB = {"x": (0.95, 0.26, 0.24), "y": (0.30, 0.88, 0.36), "z": (0.32, 0.52, 1.00)}
 RING_OF = {"pitch": "x", "yaw": "y", "roll": "z"}     # the axis a rotation turns about
 PINCH_RGB = (1.0, 0.85, 0.30)
-GUIDE_LINE_R = 1.5       # mm: the axis lines and rings
-GUIDE_BALL_R = 9.0       # mm: a value's ball or dot
+GRAB_RGB = (0.85, 0.55, 1.00)
+GUIDE_LINE_R = 0.8       # mm: the axis lines and rings
+GUIDE_BALL_R = 5.5       # mm: a value's ball or dot
 GUIDE_SPAN = 0.15        # half an axis, as a fraction of the framed box's width
 RING_SEGMENTS = 40
 
 
-GUIDE_FEATURES = ("x", "y", "z", "roll", "pitch", "yaw")
-UNROUTED_DIM = 0.6       # a value the setup does not route: drawn, a little darker
+GUIDE_FEATURES = ("x", "y", "z", "roll", "pitch", "yaw", "grab")
+UNROUTED_DIM = 0.45      # an axis no routing row uses: drawn, but dark
 
 
-def guide_values(source, side: str) -> dict[str, tuple[float, float, float, bool]]:
-    """feature → (y, lo, hi, routed) for each of the hand's x y z roll
-    pitch yaw — all six, whatever the setup routes, so the guide is the
-    whole picture. A routed axis gives the shaped value the table is fed
-    (`AxisState.y`, 0–1) over its own range; any other feature its native
-    reading (`HandsIO.frame`) normalised over hands/core.py's default
-    range for that hand. A feature with no value (the hand just left, or
-    a source without frames) is absent."""
+def routed_names(router, source) -> set[str] | None:
+    """The hand lanes ("left.roll", …) an enabled performer row in the
+    routing table reads now — what the hands are actually driving. None
+    when there is no table to ask (every value then draws lit)."""
+    table = getattr(router, "table", None)
+    addresses = getattr(getattr(source, "layout", None), "addresses", None)
+    if table is None or addresses is None:
+        return None
+    out = set()
+    for b in table.mods():
+        scheme, i = router.lane(b.source)
+        if scheme == "hand" and 0 <= i < len(addresses):
+            out.add(addresses[i])
+    return out
+
+
+def guide_values(source, side: str, routed: set[str] | None = None
+                 ) -> dict[str, tuple[float, float, float, bool]]:
+    """feature → (y, lo, hi, routed) for the hand's x y z roll pitch yaw
+    and grab — all of them, whatever the setup or the table holds, so the
+    guide is the whole picture. An axis the setup has gives its shaped
+    output (`AxisState.y`, 0–1, what a row would be fed) over its own
+    range; any other feature its native reading (`HandsIO.frame`)
+    normalised over hands/core.py's default range for that hand.
+    `routed` (`routed_names`) says which a routing row uses; None: all.
+    A feature with no value (the hand just left) is absent."""
     from .hands.core import default_range  # lazily: see box_of
 
+    lit = lambda f: routed is None or f"{side}.{f}" in routed
     out = {}
     for a, st in zip(getattr(source, "axes", None) or (), getattr(source, "state", None) or ()):
         y = getattr(st, "y", None)
         if a.side == side and a.feature in GUIDE_FEATURES and y is not None:
-            out[a.feature] = (float(y), float(st.lo), float(st.hi), True)
+            out[a.feature] = (float(y), float(st.lo), float(st.hi), lit(a.feature))
     feats = (getattr(source, "frame", None) or {}).get(side) or {}
     for f in GUIDE_FEATURES:
         v = feats.get(f)
@@ -291,7 +311,7 @@ def guide_values(source, side: str) -> dict[str, tuple[float, float, float, bool
             continue
         lo, hi = default_range(side, f)
         u = (float(v) - lo) / (hi - lo) if hi != lo else 0.5
-        out[f] = (min(max(u, 0.0), 1.0), float(lo), float(hi), False)
+        out[f] = (min(max(u, 0.0), 1.0), float(lo), float(hi), lit(f))
     return out
 
 
@@ -302,8 +322,11 @@ def guide_pinches(source, side: str) -> list[bool]:
             for f in ("index", "middle", "ring", "pinky")]
 
 
-def _lit(value: tuple) -> float:
-    """A value's brightness: full when routed, UNROUTED_DIM when not."""
+def _lit(value: tuple | None) -> float:
+    """A value's brightness: full when a row routes it, UNROUTED_DIM when
+    not (or when there is no value)."""
+    if value is None:
+        return UNROUTED_DIM
     return 1.0 if len(value) < 4 or value[3] else UNROUTED_DIM
 
 
@@ -316,12 +339,15 @@ def guide(side: str, values: dict, pinches: list[bool], centre: np.ndarray, span
       x y z        a line per axis (its ends are the axis's range) and a
                    ball at the value: 0 at one end, 1 at the other, ½ in the
                    middle. Move only up and only the green ball moves.
-                   Routed values full bright, the rest UNROUTED_DIM.
+                   An axis a routing row uses is lit, line and all; the
+                   rest are drawn dark (UNROUTED_DIM).
       pitch, yaw   a ring about x / y, a dot where the fingers point: the
                    value mapped back through the axis's range, so a dead
                    zone or a curve shows as the dot sticking or speeding.
       roll         a ring about z, a dot where the palm faces.
       pinches      four beads under the gauge, lit while a switch is closed.
+      grab         a ring beside the beads that closes as the hand does: an
+                   open hand a wide ring, a fist a small one round a full ball.
     """
     c = np.asarray(centre, dtype=np.float64)
     e = {k: m @ np.eye(3)[i] for i, k in enumerate("xyz")}      # Leap axes in the stage
@@ -331,9 +357,10 @@ def guide(side: str, values: dict, pinches: list[bool], centre: np.ndarray, span
     for k in "xyz":
         rgb = AXIS_RGB[k]
         a, b = c - e[k] * span, c + e[k] * span
-        tubes.append((*a, *b, GUIDE_LINE_R, *dim(rgb, 0.45)))
-        spheres += [(*a, 2.2 * GUIDE_LINE_R, *dim(rgb, 0.45)),
-                    (*b, 2.2 * GUIDE_LINE_R, *dim(rgb, 0.45))]
+        k_lit = _lit(values.get(k))
+        tubes.append((*a, *b, GUIDE_LINE_R, *dim(rgb, 0.5 * k_lit)))
+        spheres += [(*a, 2.0 * GUIDE_LINE_R, *dim(rgb, 0.5 * k_lit)),
+                    (*b, 2.0 * GUIDE_LINE_R, *dim(rgb, 0.5 * k_lit))]
         if k in values:
             u = values[k][0] * 2.0 - 1.0
             spheres.append((*(c + e[k] * span * u), GUIDE_BALL_R, *dim(rgb, _lit(values[k]))))
@@ -351,8 +378,10 @@ def guide(side: str, values: dict, pinches: list[bool], centre: np.ndarray, span
         rgb = AXIS_RGB[RING_OF[name]]
         ring = [c + r * (math.cos(a) * n0 + math.sin(a) * n1)
                 for a in np.linspace(0.0, 2 * math.pi, RING_SEGMENTS + 1)]
-        tubes += [(*p, *q, 0.8 * GUIDE_LINE_R, *dim(rgb, 0.4)) for p, q in pairwise(ring)]
-        spheres.append((*(c + r * n0), 1.8 * GUIDE_LINE_R, *dim(rgb, 0.7)))   # neutral
+        r_lit = _lit(values[name])
+        tubes += [(*p, *q, 0.8 * GUIDE_LINE_R, *dim(rgb, 0.45 * r_lit))
+                  for p, q in pairwise(ring)]
+        spheres.append((*(c + r * n0), 2.0 * GUIDE_LINE_R, *dim(rgb, 0.7 * r_lit)))  # neutral
         y, lo, hi = values[name][:3]
         ang = math.radians(lo + y * (hi - lo))
         spheres.append((*(c + r * (math.cos(ang) * n0 + math.sin(ang) * n1)),
@@ -361,6 +390,16 @@ def guide(side: str, values: dict, pinches: list[bool], centre: np.ndarray, span
         p = c - e["y"] * span * 1.25 + out_x * span * (-0.45 + 0.3 * i)
         lit = dim(PINCH_RGB, 1.0) if closed else dim((0.5, 0.5, 0.5), 0.5)
         spheres.append((*p, 0.6 * GUIDE_BALL_R, *lit))
+    if "grab" in values:
+        g = values["grab"][0]
+        g_lit = _lit(values["grab"])
+        gc = c - e["y"] * span * 1.25 + out_x * span * 0.9
+        gr = 0.22 * span * (1.0 - 0.7 * g)                   # closes with the hand
+        ring = [gc + gr * (math.cos(a) * e["x"] + math.sin(a) * e["y"])
+                for a in np.linspace(0.0, 2 * math.pi, RING_SEGMENTS // 2 + 1)]
+        tubes += [(*p, *q, GUIDE_LINE_R, *dim(GRAB_RGB, 0.8 * g_lit))
+                  for p, q in pairwise(ring)]
+        spheres.append((*gc, (0.2 + 0.8 * g) * 0.7 * GUIDE_BALL_R, *dim(GRAB_RGB, g_lit)))
     return spheres, tubes
 
 
@@ -618,6 +657,7 @@ class Ghost:
         self.ctx = ctx
         self.state = state if state is not None else GhostState()
         self.source = None
+        self.router = None       # the routing table, for which values the guide lights
         self.sides = {"left": _Side(), "right": _Side()}
         self.geometry: CapsuleHands | None = None      # built on first use
         self._comp: moderngl.Program | None = None
@@ -672,6 +712,7 @@ class Ghost:
             lo, hi = stage_box(box, m)
             span = GUIDE_SPAN * float(hi[0] - lo[0])
             mid = (lo + hi) / 2.0
+            routed = routed_names(self.router, self.source)
             for p in poses:
                 if st.guide == 1:        # beside: a fixed gauge low on the hand's side
                     # (the hand's side of the room, through the basis: every
@@ -681,7 +722,7 @@ class Ghost:
                         - np.array([0.0, 0.2 * float(hi[1] - lo[1]), 0.0])
                 else:                    # on the hand: about the palm
                     centre = p.palm
-                p.guide = guide(p.side, guide_values(self.source, p.side),
+                p.guide = guide(p.side, guide_values(self.source, p.side, routed),
                                 guide_pinches(self.source, p.side), centre, span, m, p.fade)
         return poses, vp, eye
 
