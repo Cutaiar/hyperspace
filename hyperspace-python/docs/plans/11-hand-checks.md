@@ -779,7 +779,10 @@ to a fist: the grab ring shrinks round a full ball. Route a few left-hand
 axes and none on the right (ROUTING page): the left gauge's routed axes
 keep their colour, everything on the right is grey and smaller but
 still moves. ON HAND: the
-same gauge rides the palm. Repeat (c) once in `screentop` if
+same gauge rides the palm. Tick **Ghost tethers**: each routed left-hand
+axis gets a line in its colour to a label at the left edge naming the
+param it drives (the ROUTING page's target); the lines hold still while
+the balls move; untick it and the gimbals stay. Repeat (c) once in `screentop` if
 the rig ever uses it: those axes are a guess (`ghost.MODES`). *Fail:*
 swapped or mirrored hands → `ghost.MODES` / `ghost.mirror`; a finger on
 the wrong digit or bending wrongly → `hands.core.skeleton` (the bones'

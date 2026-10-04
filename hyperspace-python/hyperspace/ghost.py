@@ -89,6 +89,7 @@ class GhostState:
     alpha: float = 0.6
     mirror: bool = False
     guide: int = 0          # GUIDES: off, a gauge beside each hand, or on the palm
+    tethers: bool = False   # with a guide: a labelled line from each routed mark
 
 
 def register(reg, state: GhostState) -> None:
@@ -117,6 +118,10 @@ def register(reg, state: GhostState) -> None:
                  "the palm faces (roll), and the four pinch switches. All six always "
                  "show; the ones the setup routes are brighter and show what the table "
                  "is fed. Beside the hand, or on it.")
+    reg.toggle(f"{GROUP}.tethers", "Ghost tethers", lambda: state.tethers,
+               lambda v: setattr(state, "tethers", bool(v)), group=GROUP,
+               tip="With a guide on: a line from each routed axis, pinch or grab to a "
+                   "label at the edge of the frame naming the params it drives.")
 
 
 # ------------------------------------------------------------------ camera
@@ -232,6 +237,9 @@ class HandPose:
     # the guide drawn with this hand (`guide`): sphere rows (x, y, z, r, rgba)
     # and tube rows (ax, ay, az, bx, by, bz, r, rgba), already coloured
     guide: tuple[list, list] = field(default_factory=lambda: ([], []), repr=False)
+    # the tethers drawn from this hand's guide (`tethers`): (anchor in the
+    # stage, rgb, label) per routed mark
+    tethers: list = field(default_factory=list, repr=False)
 
 
 def pose(side: str, skel: dict, m: np.ndarray, fade: float = 1.0) -> HandPose:
@@ -268,25 +276,38 @@ RING_SEGMENTS = 40
 
 
 GUIDE_FEATURES = ("x", "y", "z", "roll", "pitch", "yaw", "grab")
+PINCH_NAMES = ("index", "middle", "ring", "pinky")
 # an axis no routing row uses: drawn grey, thinner and smaller — still moving
 UNROUTED_RGB = (0.42, 0.42, 0.44)
 UNROUTED_SIZE = 0.6
 
 
-def routed_names(router, source) -> set[str] | None:
-    """The hand lanes ("left.roll", …) an enabled performer row in the
-    routing table reads now — what the hands are actually driving. None
-    when there is no table to ask (every value then draws lit)."""
+def routed_rows(router, source) -> dict[str, list[str]] | None:
+    """hand lane ("left.roll", "right.pinch.index", …) → the labels of the
+    params its enabled performer rows drive, in table order — what the
+    hands are actually wired to. None when there is no table to ask."""
     table = getattr(router, "table", None)
     addresses = getattr(getattr(source, "layout", None), "addresses", None)
     if table is None or addresses is None:
         return None
-    out = set()
+    reg = getattr(router, "reg", None)
+    out: dict[str, list[str]] = {}
     for b in table.mods():
         scheme, i = router.lane(b.source)
         if scheme == "hand" and 0 <= i < len(addresses):
-            out.add(addresses[i])
+            p = reg[b.target] if reg is not None and b.target in reg else None
+            label = getattr(p, "label", None) or b.target
+            names = out.setdefault(addresses[i], [])
+            if label not in names:
+                names.append(label)
     return out
+
+
+def routed_names(router, source) -> set[str] | None:
+    """The hand lanes an enabled performer row reads now (`routed_rows`'
+    keys); None when there is no table to ask (every value then draws lit)."""
+    rows = routed_rows(router, source)
+    return None if rows is None else set(rows)
 
 
 def guide_values(source, side: str, routed: set[str] | None = None
@@ -321,8 +342,7 @@ def guide_values(source, side: str, routed: set[str] | None = None
 def guide_pinches(source, side: str) -> list[bool]:
     """The hand's four pinch switches, index … pinky (all open without them)."""
     gates = (getattr(source, "gates", None) or {}).get(side, {})
-    return [bool(getattr(gates.get(f), "on", False))
-            for f in ("index", "middle", "ring", "pinky")]
+    return [bool(getattr(gates.get(f), "on", False)) for f in PINCH_NAMES]
 
 
 def _tone(rgb: tuple, value: tuple | None) -> tuple[tuple, float]:
@@ -336,7 +356,7 @@ def _tone(rgb: tuple, value: tuple | None) -> tuple[tuple, float]:
 
 
 def guide(side: str, values: dict, pinches: list[bool], centre: np.ndarray, span: float,
-          m: np.ndarray, fade: float) -> tuple[list, list]:
+          m: np.ndarray, fade: float, anchors: dict | None = None) -> tuple[list, list]:
     """(sphere rows, tube rows) of one hand's guide about `centre` (stage
     mm), each half-axis `span` long, through basis `m` so a ball moves on
     screen the way the hand does.
@@ -357,7 +377,13 @@ def guide(side: str, values: dict, pinches: list[bool], centre: np.ndarray, span
 
     Routed (a routing row reads it): the axis's own colour, full size.
     Not routed: grey, thinner and smaller — still moving (`_tone`).
+
+    `anchors`, when given, is filled with each mark's fixed point (stage
+    mm) — never the moving ball — for the tethers: an axis line's outer end,
+    an arc's neutral tick (its middle when neutral is out of range), a
+    pinch bead, the grab ring's centre, the gauge's centre for presence.
     """
+    anchors = {} if anchors is None else anchors
     c = np.asarray(centre, dtype=np.float64)
     e = {k: m @ np.eye(3)[i] for i, k in enumerate("xyz")}      # Leap axes in the stage
     out_x = e["x"] if side == "right" else -e["x"]              # the hand's outward side
@@ -366,6 +392,10 @@ def guide(side: str, values: dict, pinches: list[bool], centre: np.ndarray, span
     for k in "xyz":
         rgb, size = _tone(AXIS_RGB[k], values.get(k))
         a, b = c - e[k] * span, c + e[k] * span
+        # the line's outer end toward the frame edge the hand's labels sit at
+        # (x: the hand's outward side; y, z: their + end), so a tether never
+        # crosses its own gauge
+        anchors[k] = (c + out_x * span) if k == "x" else b
         tubes.append((*a, *b, GUIDE_LINE_R * size, *dim(rgb, 0.55)))
         spheres += [(*a, 2.0 * GUIDE_LINE_R * size, *dim(rgb, 0.55)),
                     (*b, 2.0 * GUIDE_LINE_R * size, *dim(rgb, 0.55))]
@@ -373,6 +403,7 @@ def guide(side: str, values: dict, pinches: list[bool], centre: np.ndarray, span
             u = values[k][0] * 2.0 - 1.0
             spheres.append((*(c + e[k] * span * u), GUIDE_BALL_R * size, *dim(rgb, 1.0)))
     spheres.append((*c, 1.6 * GUIDE_LINE_R, *dim((1.0, 1.0, 1.0), 0.5)))
+    anchors["present"] = c
     # the arcs: each in the plane of two directions, neutral at the first
     forward, up, down = -e["z"], e["y"], -e["y"]
     thumb_down = -out_x            # a level palm's thumb side, away from the outward side
@@ -395,22 +426,252 @@ def guide(side: str, values: dict, pinches: list[bool], centre: np.ndarray, span
                     (*arc[-1], 2.0 * GUIDE_LINE_R * size, *dim(rgb, 0.55))]
         if a0 <= 0.0 <= a1:
             spheres.append((*at(0.0, n0, n1), 1.6 * GUIDE_LINE_R * size, *dim(rgb, 0.8)))
+        anchors[name] = at(0.0 if a0 <= 0.0 <= a1 else (a0 + a1) / 2.0, n0, n1)
         spheres.append((*at(lo + y * (hi - lo), n0, n1), 0.8 * GUIDE_BALL_R * size,
                         *dim(rgb, 1.0)))
     for i, closed in enumerate(pinches):
         p = c - e["y"] * span * 1.25 + out_x * span * (-0.45 + 0.3 * i)
+        anchors[f"pinch.{PINCH_NAMES[i]}"] = p
         lit = dim(PINCH_RGB, 1.0) if closed else dim(UNROUTED_RGB, 0.6)
         spheres.append((*p, 0.6 * GUIDE_BALL_R, *lit))
     if "grab" in values:
         g = values["grab"][0]
         rgb, size = _tone(GRAB_RGB, values["grab"])
         gc = c - e["y"] * span * 1.25 + out_x * span * 0.9
+        anchors["grab"] = gc
         gr = 0.22 * span * (1.0 - 0.7 * g)                   # closes with the hand
         ring = [gc + gr * (math.cos(a) * e["x"] + math.sin(a) * e["y"])
                 for a in np.linspace(0.0, 2 * math.pi, RING_SEGMENTS // 2 + 1)]
         tubes += [(*p, *q, GUIDE_LINE_R * size, *dim(rgb, 0.8)) for p, q in pairwise(ring)]
         spheres.append((*gc, (0.2 + 0.8 * g) * 0.7 * GUIDE_BALL_R * size, *dim(rgb, 1.0)))
     return spheres, tubes
+
+
+# ------------------------------------------------------------------ tethers
+
+TETHER_LABEL_MAX = 34    # characters: a long label is cut with an ellipsis
+TETHER_TEXT_H = 0.024    # label cap height as a fraction of the frame's height
+TETHER_MARGIN = 0.02     # the labels' distance from the frame's edge, ditto
+
+
+def tether_rgb(mark: str) -> tuple[float, float, float]:
+    """A tether's colour: the mark's own (an axis, its arc's axis, a pinch,
+    the grab), white for presence."""
+    if mark in AXIS_RGB:
+        return AXIS_RGB[mark]
+    if mark in RING_OF:
+        return AXIS_RGB[RING_OF[mark]]
+    if mark.startswith("pinch."):
+        return PINCH_RGB
+    if mark == "grab":
+        return GRAB_RGB
+    return (1.0, 1.0, 1.0)
+
+
+def tethers(side: str, rows: dict[str, list[str]], anchors: dict) -> list:
+    """(anchor, rgb, label) for each of the hand's routed marks that the
+    guide draws: the label is the params its rows drive, joined. Marks in
+    the gauge's order, so the labels stack the way the gauge reads."""
+    out = []
+    for mark, at in anchors.items():
+        names = rows.get(f"{side}.{mark}")
+        if not names:
+            continue
+        text = " · ".join(names)
+        if len(text) > TETHER_LABEL_MAX:
+            text = text[:TETHER_LABEL_MAX - 1].rstrip() + "…"
+        out.append((np.asarray(at, dtype=np.float64), tether_rgb(mark), text))
+    return out
+
+
+def layout_tethers(items: list, view_proj: np.ndarray, size: tuple[int, int],
+                   text_w) -> list:
+    """Screen layout for one hand's tethers: [(anchor px, label box (x, y,
+    w, h), the line's far end px, rgb, text)], y down. The labels stack
+    at the frame edge on the hand's side (where its anchors are), sorted
+    by their anchors' height so the lines do not cross, centred on them
+    and kept inside the frame. `text_w(text, h)` is a label's width."""
+    w, h = size
+    if not items:
+        return []
+    th = max(10.0, TETHER_TEXT_H * h)
+    row = th * 1.55
+    margin = TETHER_MARGIN * h
+    px = []
+    for at, rgb, text in items:
+        c = view_proj @ np.append(at, 1.0)
+        if c[3] <= 1e-6:
+            continue
+        px.append(((c[0] / c[3] + 1.0) * 0.5 * w, (1.0 - c[1] / c[3]) * 0.5 * h, rgb, text))
+    if not px:
+        return []
+    px.sort(key=lambda r: r[1])
+    left = sum(r[0] for r in px) / len(px) < w / 2
+    total = row * len(px)
+    y0 = min(max(sum(r[1] for r in px) / len(px) - total / 2, margin), max(h - margin - total,
+                                                                            margin))
+    out = []
+    for k, (ax, ay, rgb, text) in enumerate(px):
+        tw = text_w(text, th)
+        y = y0 + k * row + (row - th) / 2
+        x = margin if left else w - margin - tw
+        end = (x + tw + 0.6 * th, y + th / 2) if left else (x - 0.6 * th, y + th / 2)
+        out.append(((ax, ay), (x, y, tw, th), end, rgb, text))
+    return out
+
+
+_FONT_PATHS = (
+    ("/System/Library/Fonts/Avenir Next.ttc", 5),
+    ("/System/Library/Fonts/Helvetica.ttc", 0),
+    ("C:/Windows/Fonts/segoeuib.ttf", 0),
+    ("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 0),
+)
+
+
+def _font(px: int):
+    """A PIL font at `px`: the system face the panel uses where there is
+    one, else the Roboto imgui_bundle ships (found by path, not imported),
+    else PIL's own."""
+    from PIL import ImageFont
+
+    cands = list(_FONT_PATHS)
+    try:
+        import importlib.util
+        spec = importlib.util.find_spec("imgui_bundle")
+        for loc in (spec.submodule_search_locations or []) if spec else []:
+            cands.append((f"{loc}/assets/fonts/Roboto/Roboto-Bold.ttf", 0))
+            cands.append((f"{loc}/assets/fonts/Roboto/Roboto-Regular.ttf", 0))
+    except (ImportError, ValueError):
+        pass
+    for path, index in cands:
+        try:
+            return ImageFont.truetype(path, px, index=index)
+        except OSError:
+            continue
+    return ImageFont.load_default(px)
+
+
+TETHER_VS = """
+#version 330
+in vec2 in_px;       // pixels, y down
+in vec2 in_uv;
+in vec4 in_col;      // premultiplied
+uniform vec2 u_size;
+out vec2 v_uv;
+out vec4 v_col;
+void main() {
+    gl_Position = vec4(2.0 * in_px.x / u_size.x - 1.0, 1.0 - 2.0 * in_px.y / u_size.y, 0.0, 1.0);
+    v_uv = in_uv;
+    v_col = in_col;
+}
+"""
+
+TETHER_FS = """
+#version 330
+in vec2 v_uv;
+in vec4 v_col;
+uniform sampler2D u_text;
+uniform int u_textured;
+out vec4 f_color;
+void main() {
+    float a = u_textured != 0 ? texture(u_text, v_uv).r : 1.0;
+    f_color = v_col * a;
+}
+"""
+
+
+class TetherLabels:
+    """The tethers and their labels, drawn flat over the hands in pixels:
+    a line from each fixed anchor to its label, the label rasterised once
+    (PIL) into a texture and kept while it is in use."""
+
+    def __init__(self, ctx: moderngl.Context):
+        self.ctx = ctx
+        self.prog = ctx.program(vertex_shader=TETHER_VS, fragment_shader=TETHER_FS)
+        self.buf = ctx.buffer(reserve=64 * 6 * 8 * 4, dynamic=True)
+        self.vao = ctx.vertex_array(self.prog, [(self.buf, "2f 2f 4f", "in_px", "in_uv",
+                                                 "in_col")])
+        self._text: dict[tuple[str, int], tuple[moderngl.Texture, float]] = {}
+        self._fonts: dict[int, object] = {}
+
+    def width(self, text: str, h: float) -> float:
+        _, aspect = self._label(text, round(h))
+        return aspect * h
+
+    def _label(self, text: str, px: int) -> tuple[moderngl.Texture, float]:
+        key = (text, px)
+        hit = self._text.get(key)
+        if hit is not None:
+            return hit
+        from PIL import Image, ImageDraw
+
+        font = self._fonts.get(px) or self._fonts.setdefault(px, _font(px))
+        l, t, r, b = font.getbbox(text)
+        pad = max(1, px // 6)
+        img = Image.new("L", (max(1, r - l + 2 * pad), max(1, px + 2 * pad)), 0)
+        ImageDraw.Draw(img).text((pad - l, pad + (px - (b - t)) / 2 - t), text, fill=255,
+                                 font=font)
+        tex = self.ctx.texture(img.size, 1, img.tobytes())
+        tex.filter = (moderngl.LINEAR, moderngl.LINEAR)
+        hit = self._text[key] = (tex, img.size[0] / img.size[1])
+        return hit
+
+    def draw(self, layout: list, fade_of: list[float], size: tuple[int, int]) -> None:
+        """`layout` from `layout_tethers` per hand, flattened; `fade_of`
+        each item's hand fade. Lines first, then the labels."""
+        if not layout:
+            return
+        self.prog["u_size"].value = (float(size[0]), float(size[1]))
+        lw = max(1.0, size[1] / 900.0)
+        verts = []
+        for ((ax, ay), _, (ex, ey), rgb, _), f in zip(layout, fade_of):
+            col = (*(v * 0.85 * f * 0.8 for v in rgb), 0.8 * f)
+            verts += _quad_line(ax, ay, ex, ey, lw, col)
+            verts += _quad_box(ax - 1.8 * lw, ay - 1.8 * lw, 3.6 * lw, 3.6 * lw, col)
+        self._render(verts, None)
+        for (_, (x, y, w, h), _, rgb, text), f in zip(layout, fade_of):
+            tex, aspect = self._label(text, round(h))
+            bh = w / aspect
+            light = tuple(f * (0.55 * v + 0.45) for v in rgb)
+            self._render(_quad_box(x, y + (h - bh) / 2, w, bh, (*light, f), uv=True), tex)
+        if len(self._text) > 96:        # labels no longer shown: let them go
+            keep = {(t, round(b[3])) for (_, b, _, _, t) in layout}
+            for k in [k for k in self._text if k not in keep]:
+                self._text.pop(k)[0].release()
+
+    def _render(self, verts: list, tex) -> None:
+        if not verts:
+            return
+        data = np.asarray(verts, dtype="f4")
+        self.buf.orphan(max(data.nbytes, self.buf.size))
+        self.buf.write(data.tobytes())
+        self.prog["u_textured"].value = int(tex is not None)
+        if tex is not None:
+            tex.use(location=1)
+            self.prog["u_text"].value = 1
+        self.vao.render(moderngl.TRIANGLES, vertices=len(data))
+
+    def release(self) -> None:
+        for tex, _ in self._text.values():
+            tex.release()
+        self._text.clear()
+        for res in (self.vao, self.buf, self.prog):
+            res.release()
+
+
+def _quad_line(ax, ay, bx, by, w, col) -> list:
+    dx, dy = bx - ax, by - ay
+    n = math.hypot(dx, dy) or 1.0
+    nx, ny = -dy / n * w / 2, dx / n * w / 2
+    a, b, c, d = (ax + nx, ay + ny), (ax - nx, ay - ny), (bx + nx, by + ny), (bx - nx, by - ny)
+    return [(*p, 0.0, 0.0, *col) for p in (a, b, c, b, d, c)]
+
+
+def _quad_box(x, y, w, h, col, uv: bool = False) -> list:
+    corners = ((x, y, 0, 0), (x + w, y, 1, 0), (x, y + h, 0, 1), (x + w, y + h, 1, 1))
+    pick = (0, 2, 1, 1, 2, 3)
+    return [(c[0], c[1], c[2] if uv else 0.0, c[3] if uv else 0.0, *col)
+            for c in (corners[i] for i in pick)]
 
 
 # ------------------------------------------------------------------ geometry
@@ -679,6 +940,7 @@ class Ghost:
         self._msaa: moderngl.Framebuffer | None = None    # multisampled, with depth
         self._res: list = []
         self.error = ""          # why the pass could not build, if it could not
+        self._labels: TetherLabels | None = None    # the tethers' text, on first use
 
     # ---- per frame ----
 
@@ -722,7 +984,8 @@ class Ghost:
             lo, hi = stage_box(box, m)
             span = GUIDE_SPAN * float(hi[0] - lo[0])
             mid = (lo + hi) / 2.0
-            routed = routed_names(self.router, self.source)
+            rows = routed_rows(self.router, self.source)
+            routed = None if rows is None else set(rows)
             for p in poses:
                 if st.guide == 1:        # beside: a fixed gauge low on the hand's side
                     # (the hand's side of the room, through the basis: every
@@ -732,8 +995,12 @@ class Ghost:
                         - np.array([0.0, 0.2 * float(hi[1] - lo[1]), 0.0])
                 else:                    # on the hand: about the palm
                     centre = p.palm
+                anchors: dict = {}
                 p.guide = guide(p.side, guide_values(self.source, p.side, routed),
-                                guide_pinches(self.source, p.side), centre, span, m, p.fade)
+                                guide_pinches(self.source, p.side), centre, span, m, p.fade,
+                                anchors)
+                if st.tethers and rows:
+                    p.tethers = tethers(p.side, rows, anchors)
         return poses, vp, eye
 
     def draw(self, target: moderngl.Framebuffer, vp: tuple[int, int, int, int], t: float,
@@ -759,6 +1026,8 @@ class Ghost:
             ctx.enable(moderngl.DEPTH_TEST)
             self.geometry.draw(poses, view_proj, eye)
             ctx.disable(moderngl.DEPTH_TEST)
+            if any(p.tethers for p in poses):
+                self._draw_tethers(poses, view_proj)
             if self._msaa is not None:
                 ctx.copy_framebuffer(self._fbo, self._msaa)
             # over the target, premultiplied. On an opaque ground its alpha
@@ -781,6 +1050,29 @@ class Ghost:
             target.use()
             ctx.viewport = (vx, vy, vw, vh)
         return True
+
+    def _draw_tethers(self, poses: list[HandPose], view_proj: np.ndarray) -> None:
+        """The tethers, flat over the hands, into the bound hands' framebuffer
+        (premultiplied, so the composite treats them like the hands)."""
+        ctx = self.ctx
+        if self._labels is None:
+            try:
+                self._labels = TetherLabels(ctx)
+            except Exception as e:  # noqa: BLE001 — no labels, never no hands
+                self.error = f"ghost tethers: {type(e).__name__}: {e}"[:160]
+                self.state.tethers = False
+                return
+        layout, fades = [], []
+        for p in poses:
+            got = layout_tethers(p.tethers, view_proj, self.size, self._labels.width)
+            layout += got
+            fades += [p.fade] * len(got)
+        ctx.enable(moderngl.BLEND)
+        ctx.blend_func = moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA
+        try:
+            self._labels.draw(layout, fades, self.size)
+        finally:
+            ctx.disable(moderngl.BLEND)
 
     # ---- programs and targets ----
 
@@ -839,6 +1131,9 @@ class Ghost:
         if self.geometry is None:
             self.error = ""      # an edit may have fixed what would not build
             return
+        if self._labels is not None:        # rebuilt from the new source on next use
+            self._labels.release()
+            self._labels = None
         old = (self.geometry, self._comp_vao, self._comp)
         self.geometry = self._comp = self._comp_vao = None
         self.error = ""

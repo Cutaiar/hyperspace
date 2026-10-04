@@ -155,6 +155,8 @@ def _ghost(panel) -> None:
         panel._row("ghost.alpha")
         if "ghost.guide" in panel.reg:
             panel._combo("ghost.guide")
+            if panel.reg["ghost.guide"].value and "ghost.tethers" in panel.reg:
+                panel._check("ghost.tethers")
 
 
 def _status(io) -> None:

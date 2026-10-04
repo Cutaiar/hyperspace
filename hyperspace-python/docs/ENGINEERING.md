@@ -416,6 +416,19 @@ display for the performer and for newcomers, not a control source.
   size: an enabled performer row reads it (`routed_names`, by name or
   lane index). The rest is grey, thinner and smaller (`UNROUTED_RGB`,
   `UNROUTED_SIZE`) and still moves.
+- **Tethers** (`ghost.tethers`, off by default; only with a guide on) —
+  what each hand is wired to. From each routed mark a thin line in its
+  colour runs to a label at the frame edge on the hand's side naming the
+  params its rows drive ("Brightness · Speed", the registry labels,
+  `routed_rows`). A tether starts at a fixed point of the gauge — an
+  axis line's outer end, an arc's neutral tick, a pinch bead, the grab
+  ring — never the moving ball, so the lines hold still while the balls
+  move. The labels stack in the order of their anchors' height so no two
+  lines cross, inside the frame. They are drawn flat into the hands'
+  framebuffer after the hands (`TetherLabels`: PIL rasterises each label
+  once into a texture — the panel's system face where there is one, else
+  the Roboto in imgui_bundle), so they fade and composite with the hands
+  and keep the target's alpha.
 - **Leaving the box.** A hand no longer reported fades out over 0.3 s
   where it was last seen; one that comes back fades in over 0.1 s.
 - **Params.** `ghost.on` (default off), `ghost.alpha` (0.6),

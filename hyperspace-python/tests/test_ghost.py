@@ -46,11 +46,11 @@ def test_the_params_are_session_off_by_default_and_learnable(tmp_path):
 
     reg = make(tmp_path)[0]
     assert "ghost" in SESSION_GROUPS
-    for pid in ("ghost.on", "ghost.alpha", "ghost.mirror", "ghost.guide"):
+    for pid in ("ghost.on", "ghost.alpha", "ghost.mirror", "ghost.guide", "ghost.tethers"):
         p = reg[pid]
         assert p.persist and p.modulatable and part_of(p) == "session", pid
     assert reg["ghost.on"].value is False and 0.0 < reg["ghost.alpha"].value <= 1.0
-    assert G.GUIDES[reg["ghost.guide"].value] == "OFF"
+    assert G.GUIDES[reg["ghost.guide"].value] == "OFF" and reg["ghost.tethers"].value is False
 
 
 def test_the_box_is_the_calibrated_ranges_else_the_defaults():
@@ -330,6 +330,48 @@ def test_the_grab_ring_closes_with_the_hand():
     assert ring(0.0) > 2.5 * ring(1.0) > 0
 
 
+# ---------------------------------------------------------------- tethers
+
+def test_a_tether_names_what_its_mark_drives_from_a_fixed_anchor(tmp_path):
+    router, io = _routed_rig(tmp_path, ["hand:left.x", "hand:left.y", "hand:left.pinch.index"])
+    router.table.bindings.append(type(router.table.bindings[0])(
+        "hand:left.y", "view.speed", "push"))
+    rows = G.routed_rows(router, io)
+    assert rows == {"left.x": ["Brightness"], "left.y": ["Brightness", "Speed"],
+                    "left.pinch.index": ["Brightness"]}
+    vals = values()
+    anchors_a, anchors_b = {}, {}
+    G.guide("left", vals, [False] * 4, np.zeros(3), 100.0, G.basis("desktop"), 1.0, anchors_a)
+    G.guide("left", values(x=0.95, roll=0.9), [True] * 4, np.zeros(3), 100.0,
+            G.basis("desktop"), 1.0, anchors_b)
+    assert all(np.allclose(anchors_a[k], anchors_b[k]) for k in anchors_a)   # never the ball
+    teth = G.tethers("left", rows, anchors_a)
+    assert [t[2] for t in teth] == ["Brightness", "Brightness · Speed", "Brightness"]
+    assert np.allclose(teth[0][0], (-100.0, 0.0, 0.0))     # the left hand's x line's outer end
+    assert teth[0][1] == G.AXIS_RGB["x"] and teth[2][1] == G.PINCH_RGB
+    assert G.tethers("right", rows, anchors_a) == []       # nothing routed on the right
+    long = G.tethers("left", {"left.x": ["A very long parameter label indeed", "and more"]},
+                     anchors_a)
+    assert len(long[0][2]) == G.TETHER_LABEL_MAX and long[0][2].endswith("…")
+
+
+def test_the_labels_stack_at_the_hands_edge_in_frame_without_crossing():
+    vp, _ = G.camera(G.box_of(None), G.basis("desktop"), 1.5)
+    items = [(np.array([-150.0, 150.0 + 40 * k, 0.0]), (1, 1, 1), f"p{k}") for k in range(5)]
+    out = G.layout_tethers(items, vp, (960, 640), lambda text, h: 3.0 * h)
+    assert len(out) == 5
+    xs = {round(box[0]) for _, box, _, _, _ in out}
+    assert xs == {round(G.TETHER_MARGIN * 640)}            # the left edge: a left-side hand
+    ys = [box[1] for _, box, _, _, _ in out]
+    assert ys == sorted(ys) and ys[0] >= 0 and ys[-1] + out[-1][1][3] <= 640
+    anchors_y = [a[1] for a, _, _, _, _ in out]
+    assert anchors_y == sorted(anchors_y)                   # sorted the same way: no crossing
+    assert [t for *_, t in out] == ["p4", "p3", "p2", "p1", "p0"]   # highest hand mark on top
+    right = [(np.array([150.0, 200.0, 0.0]), (1, 1, 1), "q")]
+    (_, box, end, _, _), = G.layout_tethers(right, vp, (960, 640), lambda text, h: 3.0 * h)
+    assert box[0] + box[2] == pytest.approx(960 - G.TETHER_MARGIN * 640) and end[0] < box[0]
+
+
 # ---------------------------------------------------------------- GL
 
 @pytest.fixture(scope="module")
@@ -432,6 +474,32 @@ def test_the_guide_draws_beside_and_on_the_hand_and_keeps_the_alpha(ctx):
         diff = np.abs(out[..., :3].astype(int) - plain[..., :3]).sum(axis=2) > 30
         assert diff.sum() > 300, G.GUIDES[g]
         assert out[..., 3].min() == 255
+
+
+def test_tethers_draw_only_when_toggled_and_keep_the_alpha(ctx, tmp_path):
+    router, io = _routed_rig(tmp_path, ["hand:left.x", "hand:left.roll", "hand:right.y"])
+    for st in io.state:
+        st.follow.y = 0.6
+    src = NS(skeleton=both(), cfg={"mode": "desktop"}, axes=io.axes, state=io.state,
+             gates=io.gates, layout=io.layout, frame=io.frame)
+
+    def shot(tethers):
+        r = Renderer(ctx)
+        r.ghost.router = router
+        r.ghost.state.guide, r.ghost.state.tethers = 1, tethers
+        return frame(ctx, src=src, renderer=r)
+
+    gimbals, _ = shot(False)
+    tethered, r = shot(True)
+    diff = np.abs(tethered[..., :3].astype(int) - gimbals[..., :3]).sum(axis=2) > 30
+    assert diff[:, : W // 4].sum() > 50 and diff[:, 3 * W // 4:].sum() > 20   # both edges
+    assert tethered[..., 3].min() == 255 and r.ghost.error == ""
+    r2 = Renderer(ctx)
+    r2.ghost.router = router
+    r2.ghost.state.guide, r2.ghost.state.tethers = 0, True     # no guide: no tethers
+    plain, _ = frame(ctx, src=src)
+    no_guide, _ = frame(ctx, src=src, renderer=r2)
+    assert np.array_equal(no_guide, plain)
 
 
 def test_an_open_hand_and_a_fist_differ(ctx):
