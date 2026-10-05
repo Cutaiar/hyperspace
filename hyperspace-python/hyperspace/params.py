@@ -88,6 +88,7 @@ PATTERNS = [
     "FLAT", "RINGS", "PLAID", "MOIRE", "BLOOM", "CAUSTIC",
     "HEX", "SPIRAL", "CELLS", "PLASMA", "WEAVE", "EMBER",
 ]
+INST_LAYOUT = ["GRID", "HEX", "RING"]   # render.inst_positions' layouts, in its order
 INST_MOTION = ["STILL", "ORBIT", "WAVE", "RIPPLE"]
 BMP_PATHS = ["STILL", "ORBIT", "FIG-8", "SWAY"]
 PLANES = PLANE_NAMES   # the rotation planes' names, in geometry.PLANES's order
@@ -795,15 +796,19 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                  lo=0, hi=100, integer=True,
                  fmt=lambda v: f"{int(v)} instance(s)" if int(v) > 0 else "0 · nothing drawn",
                  group=g,
-                 tip="Synchronized copies in a grid — scroll to zoom out over the field, "
-                     "right-drag to pan. 0 draws nothing: the ground, the echoes and the "
-                     "effects carry on.")
-    r.enum("view.inst_motion", "Grid motion", *_attr(view, "inst_motion"), INST_MOTION,
-           group=g, tip="Trigonometric motion over the instance grid — each copy's phase "
-                        "comes from its grid position, so the field moves as one figure.")
-    r.continuous("view.inst_amp", "Grid amp", *_attr(view, "inst_amp"), lo=0.0, hi=1.0,
+                 tip="Synchronized copies, laid out as Layout says — scroll to zoom out "
+                     "over the field, right-drag to pan. 0 draws nothing: the ground, the "
+                     "echoes and the effects carry on.")
+    r.enum("view.inst_layout", "Layout", *_attr(view, "inst_layout"), INST_LAYOUT,
+           group=g, tip="How the copies are laid out: a square grid, a honeycomb growing "
+                        "from the centre, or one ring.")
+    r.enum("view.inst_motion", "Field motion", *_attr(view, "inst_motion"), INST_MOTION,
+           group=g, tip="Trigonometric motion over the field of copies — each copy's phase "
+                        "comes from its place in the layout, so the field moves as one "
+                        "figure.")
+    r.continuous("view.inst_amp", "Field amp", *_attr(view, "inst_amp"), lo=0.0, hi=1.0,
                  fmt=lambda v: f"amp {v:.2f}", group=g)
-    r.continuous("view.inst_rate", "Grid rate", *_attr(view, "inst_rate"), lo=0.0, hi=6.0,
+    r.continuous("view.inst_rate", "Field rate", *_attr(view, "inst_rate"), lo=0.0, hi=6.0,
                  fmt=lambda v: f"rate {v:.1f}", group=g)
     r.enum("view.pattern", "Pattern", *_attr(view, "pattern"), PATTERNS, group=g,
            tip="Face pattern — edit hyperspace/shaders/patterns.glsl while the app runs; "

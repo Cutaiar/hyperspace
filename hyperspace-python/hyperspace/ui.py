@@ -1215,18 +1215,26 @@ class Panel:
         self._check("view.faces")
         self._slider("view.instances")
         if v.instances > 1:
-            self._combo("view.inst_motion", 140)
+            # the field's one row: how the copies are laid out, how they
+            # move, and — while they move — by how much and how fast
+            self._combo("view.inst_layout", 84)
+            imgui.same_line()
+            self._combo("view.inst_motion", 96)
             if v.inst_motion:
                 imgui.same_line()
-                self._slider("view.inst_amp", 110)
+                self._slider("view.inst_amp", 84)
                 imgui.same_line()
                 self._slider("view.inst_rate")
         imgui.spacing()
 
-        # per-plane rate: what a lane drives to spin a plane (base 1, signed)
+        # per-plane rate: what a lane drives to spin a plane (base 1, signed);
+        # two to a row, so the field's row above has room on the page
         self._section("rotation", "rot")
-        for name in PLANES:
-            self._row(f"rot.rate.{name}")
+        if imgui.begin_table("##rot.rate", 2, imgui.TableFlags_.sizing_stretch_same):
+            for name in PLANES:
+                imgui.table_next_column()
+                self.half(f"rot.rate.{name}")
+            imgui.end_table()
 
     def _page_faces(self, dt: float) -> None:
         self._section("faces & pattern", note="saved with view")
