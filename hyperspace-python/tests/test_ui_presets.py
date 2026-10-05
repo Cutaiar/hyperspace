@@ -658,3 +658,192 @@ def test_the_preset_strip_has_no_reset_and_does_not_overlap(rig, monkeypatch):  
         assert chips[0][2] <= chips[1][0] and chips[1][2] <= chips[2][0], group
         assert chips[2][2] <= page_right + 1, group
     assert _page_scroll(rig, monkeypatch)["presets"] == 0
+
+
+# ------------------------------------------- plan 19 WP4: the list, the trash, a slot gone
+
+def _open_list(panel):
+    """Click the preset strip's name: the list opens (real mouse events),
+    at the control window's size."""
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    frame(panel, "presets")
+    frame(panel)
+    st = ui_presets._state(panel)
+    _click(panel, st["rects"]["strip.presets.name"])
+    frame(panel)
+    assert st["list"]["group"] == "presets"
+    return st
+
+
+def _row(st, name):
+    return next(r for r in st["list"]["rows"] if r[0] == name)
+
+
+def test_the_list_has_a_cross_on_every_preset_and_rename_on_yours(rig, tmp_path):  # noqa: F811
+    """The preset list, driven by real clicks over the real Panel: × on
+    every preset, `rename` only on yours; "show hidden (n)" only while
+    something is hidden, "trash (n) ▸" only while the trash holds
+    something; the list scrolls in its own child past twelve rows and each
+    row's chips clear its name. × on a factory preset hides it, "show
+    hidden" brings it back struck through with `unhide`; `rename` turns the
+    row into the name field and Enter renames."""
+    panel, lib = rig.panel, rig.lib
+    lib.load("presets", "TRIP")
+    lib.save_as("presets", "A MINE")                         # yours, first in the list
+    st = _open_list(panel)
+    rows = st["list"]["rows"]
+    assert len(rows) == len(lib.list("presets")) > ui_presets.LIST_ROWS
+    for name, chips, hidden in rows:
+        assert not hidden
+        assert chips == (("rename", "×") if name == "A MINE" else ("×",)), name
+    assert st["list"]["foot"] == []
+    rects = st["list"]["rects"]
+    box = rects["rows"]
+    assert box[3] - box[1] <= ui_presets.LIST_ROWS * ui_presets.list_row_h() + 1
+    assert box[3] <= CONTROL_SIZE[1]                          # the popup fits the window
+    for name in ("A MINE", "ACID"):
+        row = rects[f"row.{name}"]
+        first = rects[f"rename.{name}"] if name == "A MINE" else rects[f"×.{name}"]
+        assert row[0] + imgui.calc_text_size(name).x < first[0] and first[2] <= box[2]
+    # × on a factory preset: hidden, written to hidden.json, nothing else
+    _click(panel, rects["×.ACID"])
+    frame(panel)
+    assert lib.hidden() == {"party-acid"} and "ACID" not in lib.list("presets")
+    assert lib.status == "hidden ACID — F6 still loads it"
+    assert [r[0] for r in st["list"]["rows"]].count("ACID") == 0
+    assert st["list"]["foot"] == ["show hidden (1)"]
+    # show hidden: back, struck through, with unhide
+    assert st["list"]["rects"]["show_hidden"][3] <= CONTROL_SIZE[1]
+    _click(panel, st["list"]["rects"]["show_hidden"])
+    frame(panel)
+    assert _row(st, "ACID") == ("ACID", ("unhide",), True)
+    _click(panel, st["list"]["rects"]["unhide.ACID"])
+    frame(panel)
+    assert lib.hidden() == frozenset() and _row(st, "ACID") == ("ACID", ("×",), False)
+    assert st["list"]["foot"] == []
+    # rename: the row becomes the name field; Enter renames the file
+    _click(panel, st["list"]["rects"]["rename.A MINE"])
+    frame(panel)
+    assert _row(st, "A MINE")[1] == ("field",) and st["naming"] == "rename:A MINE"
+    io = imgui.get_io()
+    io.add_input_characters_utf8("A SUNRISE")                 # typed over the seeded name
+    frame(panel)
+    io.add_key_event(imgui.Key.enter, True)
+    frame(panel)
+    io.add_key_event(imgui.Key.enter, False)
+    frame(panel)
+    frame(panel)
+    assert lib.current("presets") == "A SUNRISE" and (tmp_path / "presets" /
+                                                       "a-sunrise.json").is_file()
+    assert lib.status == "renamed A MINE → A SUNRISE (0 shows updated)"
+    # × on yours: to the trash, and the foot says the trash holds something
+    frame(panel)
+    _click(panel, st["list"]["rects"]["×.A SUNRISE"])
+    frame(panel)
+    assert "A SUNRISE" not in lib.list("presets") and len(lib.trash()) == 2
+    assert st["list"]["foot"] == ["trash (2) ▸"]
+    # a refused rename shows on the warning line (the footer): factory presets have
+    # no rename chip, and a taken name is refused
+    lib.save_as("presets", "A MINE")
+    frame(panel)
+    frame(panel)
+    ui_presets._rename(panel, "A MINE", "TRIP")
+    assert lib.warning.startswith("library: TRIP: that name is taken")
+
+
+def _trash_view(panel, st):
+    _click(panel, st["list"]["rects"]["trash"])
+    frame(panel)
+    return st["trash_view"]
+
+
+def test_empty_asks_once_and_disarms(rig, tmp_path):  # noqa: F811
+    """"empty trash…" asks once, in place, no modal: one click arms it —
+    "delete N files for good? — click again" — and empties nothing; a
+    second click within four seconds empties. The time running out, any
+    other click, or the popup closing disarms it. Real clicks on the trash
+    popup, opened from the list's "trash (n) ▸"."""
+    panel, lib = rig.panel, rig.lib
+    io = imgui.get_io()
+
+    def fill():
+        lib.load("presets", "TRIP")
+        lib.save_as("presets", "A MINE")
+        lib.delete("presets", "A MINE")
+        ui_presets.invalidate(panel, "presets")
+
+    fill()
+    st = _open_list(panel)
+    view = _trash_view(panel, st)
+    assert view["rows"] and view["empty"] == "empty trash…"
+    files = [t.path for t in lib.trash()]
+    _click(panel, view["rects"]["empty"])
+    view = st["trash_view"]
+    assert view["empty"] == "delete 1 file for good? — click again"
+    assert all(p.exists() for p in files)                     # one click empties nothing
+    # the time runs out
+    io.delta_time = ui_presets.EMPTY_S + 0.5
+    frame(panel)
+    io.delta_time = 1 / 60
+    frame(panel)
+    assert st["trash_view"]["empty"] == "empty trash…"
+    _click(panel, st["trash_view"]["rects"]["empty"])         # armed again, not emptied
+    assert all(p.exists() for p in files)
+    # any other click disarms (the popup's own header, nothing there)
+    rows = st["trash_view"]["rects"]["rows"]
+    _click(panel, (rows[0], rows[1] - 18, rows[0] + 40, rows[1] - 6))
+    assert st["trash_view"]["empty"] == "empty trash…" and all(p.exists() for p in files)
+    # closing the popup disarms
+    _click(panel, st["trash_view"]["rects"]["empty"])
+    assert st["trash_view"]["empty"].startswith("delete 1 file")
+    io.add_key_event(imgui.Key.escape, True)
+    frame(panel)
+    io.add_key_event(imgui.Key.escape, False)
+    frame(panel)
+    _click(panel, (5, 5, 6, 6))                               # outside both popups
+    frame(panel)
+    assert st.get("empty_armed") is None
+    st = _open_list(panel)
+    view = _trash_view(panel, st)
+    assert view["empty"] == "empty trash…"
+    # two clicks within the time: emptied
+    _click(panel, view["rects"]["empty"])
+    _click(panel, st["trash_view"]["rects"]["empty"])
+    assert not any(p.exists() for p in files) and lib.trash() == []
+    assert lib.status == "trash: 1 file deleted for good"
+
+
+def test_a_slot_whose_preset_is_gone_says_so(rig, monkeypatch):  # noqa: F811
+    """× on a preset a slot names: the slot keeps the name (not cleared for
+    you), drawn in the warning ink, its hover saying where to look; the
+    footer said which slots still name it. A restore makes it whole."""
+    panel, lib = rig.panel, rig.lib
+    pr = lib.project
+    lib.load("presets", "TRIP")
+    lib.save_as("presets", "A MINE")
+    pr.put_slot(9, "A MINE")
+    frame(panel, "presets")
+    frame(panel)
+    st = ui_presets._state(panel)
+    assert st["dangling"] == []
+    lib.delete("presets", "A MINE")
+    assert lib.warning == ("A MINE is in the trash — slot 10 still names it; restore it "
+                           "from the trash, or clear the slot")
+    ui_presets.invalidate(panel, "presets")
+    tips: list[str] = []
+    with monkeypatch.context() as m:
+        m.setattr(imgui, "set_tooltip", tips.append)
+        real = imgui.is_item_hovered
+        m.setattr(imgui, "is_item_hovered", lambda *a: True)
+        frame(panel)
+        m.setattr(imgui, "is_item_hovered", real)
+    assert st["dangling"] == [9] and pr.bank[9] == "A MINE"
+    assert st["bank_labels"][9] == "10 A MINE"
+    assert ("slot 10: A MINE — no such preset. It may be in the trash (preset list → trash). "
+            "Right-click → clear slot") in tips
+    # restored: whole again
+    (item,) = lib.trash()
+    lib.restore_trash(item)
+    ui_presets.invalidate(panel, "presets")
+    frame(panel)
+    assert st["dangling"] == []

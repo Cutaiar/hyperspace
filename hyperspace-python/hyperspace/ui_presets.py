@@ -44,7 +44,14 @@ to bottom (plan 14 WP4):
               "more" open (``tests/test_ui_presets.py``)
   PRESET      the one preset strip — this strip over the ``presets``
               group, a document kind preset.py keeps: the loaded preset,
-              its dirty dot, save / as…
+              its dirty dot, save / as…. Its name opens the preset list
+              (plan 19 WP4): × on every preset (yours to the trash, a
+              factory one hidden), rename on yours, and at its foot "show
+              hidden (n)" and "trash (n) ▸" — the trash's own popup, with
+              restore and "empty trash…" asked twice in place — each line
+              only while it has something; no line on the page itself. A
+              bank slot whose preset has no file is drawn in the warning
+              ink, its hover saying where to look
   more ▸      folded: a module-preset strip per performance group and the
               band strip's scene (the modules overview)
 
@@ -80,6 +87,12 @@ FAR_COLS = 4         # slots 9–24 a row: a desk row of eight pads is two page 
 FAR_GAP = 3          # px between the far slots' rows, so twenty-four fit with "more" open
 PUT_ROWS = 12        # rows of "put preset here…" before its list scrolls
 SLOT_DOT_R = 4.0     # the white disc on the loaded slot while its preset is edited (WP5)
+# plan 19 WP4: the preset list's foot and the trash's view
+LIST_ROWS = 12       # rows of the preset list, and of the trash, before each scrolls
+EMPTY_S = 4.0        # how long "empty trash…" stays armed for its second click
+HIDDEN_KEY = "\0hidden"   # the listings cache: a group's list with the hidden ones
+BANK_KEY = "\0bank"       # …whether each name the bank holds has a file
+TRASH_KEY = "\0trash"     # …the trash
 # the module overview: every performance group but the macros (a macro's
 # meaning is its subscribers, which live in the preset), and the band
 # strip's scene, the one session module a project names
@@ -106,24 +119,59 @@ def _rect(panel, key: str) -> None:
     _state(panel)["rects"][key] = (a.x, a.y, b.x, b.y)
 
 
-def names(panel, key: str) -> list[str]:
-    """``library.list(group)`` (or the project list), refreshed on the poll cadence."""
+def names(panel, key: str, *, hidden: bool = False) -> list[str]:
+    """``library.list(group)`` (or the project list), refreshed on the poll
+    cadence; with `hidden`, the factory presets × hid too (plan 19 WP4)."""
     st, lib = _state(panel), panel.library
     now = imgui.get_time()
-    hit = st["lists"].get(key)
+    slot = f"{key}{HIDDEN_KEY}" if hidden else key
+    hit = st["lists"].get(slot)
     if hit is None or now - hit[0] >= LIST_POLL:
         try:
-            listing = lib.project.list() if key == PROJECT else lib.list(key)
+            listing = (lib.project.list() if key == PROJECT
+                       else lib.list(key, hidden=True) if hidden else lib.list(key))
         except (LibraryError, OSError) as e:
             lib.error = f"library: {e}"
             listing = hit[1] if hit else []
-        st["lists"][key] = hit = (now, listing)
+        st["lists"][slot] = hit = (now, listing)
     return hit[1]
 
 
 def invalidate(panel, key: str) -> None:
-    """Our own write: the next frame re-lists rather than waiting out the poll."""
-    _state(panel)["lists"].pop(key, None)
+    """Our own write: the next frame re-lists rather than waiting out the
+    poll — the listing, the one with the hidden presets, whether the
+    bank's names have files, and the trash."""
+    lists = _state(panel)["lists"]
+    for slot in (key, f"{key}{HIDDEN_KEY}", BANK_KEY, TRASH_KEY):
+        lists.pop(slot, None)
+
+
+def trashed(panel) -> list:
+    """``library.trash()``, refreshed on the poll cadence (it lists a folder)."""
+    st, lib = _state(panel), panel.library
+    now = imgui.get_time()
+    hit = st["lists"].get(TRASH_KEY)
+    if hit is None or now - hit[0] >= LIST_POLL:
+        try:
+            listing = lib.trash()
+        except OSError as e:
+            lib.error = f"library: {e}"
+            listing = hit[1] if hit else []
+        st["lists"][TRASH_KEY] = hit = (now, listing)
+    return hit[1]
+
+
+def missing(panel, name: str) -> bool:
+    """Does the bank's `name` have no preset file (in the trash, or never
+    was)? Answered for every name in the bank on the poll cadence, never
+    per frame (`Library.path_of` reads the folders)."""
+    st, lib, pr = _state(panel), panel.library, panel.bank
+    now = imgui.get_time()
+    hit = st["lists"].get(BANK_KEY)
+    if hit is None or now - hit[0] >= LIST_POLL or name not in hit[1]:
+        known = {n: lib.path_of(PRESETS, n) is not None for n in set(pr.bank) | {name} if n}
+        st["lists"][BANK_KEY] = hit = (now, known)
+    return not hit[1].get(name, True)
 
 
 def dirty(panel, group: str, *, polled: bool = False) -> bool:
@@ -309,32 +357,250 @@ def _save_as(panel, group: str, name: str) -> None:
     invalidate(panel, group)
 
 
-def _list_popup(panel, group: str, listing: list[str], cur: str | None) -> None:
+def _said(panel, fn, *args):
+    """Run a library call from the preset list; a refusal goes on the
+    library's warning line, which the footer shows (`Library.say`)."""
     lib = panel.library
+    try:
+        return fn(*args)
+    except (LibraryError, OSError) as e:
+        lib.say(warning=f"library: {e}")
+        return None
+
+
+def _rename(panel, old: str, new: str) -> None:
+    _said(panel, panel.library.rename, PRESETS, old, new)
+    invalidate(panel, PRESETS)
+    invalidate(panel, PROJECT)
+
+
+def _list_popup(panel, group: str, listing: list[str], cur: str | None) -> None:
+    """The list the strip's name opens: every preset, the loaded one
+    selected, factory ones dim; × on your own (to the trash) — and, on the
+    presets' list (plan 19 WP4), × on a factory one (hidden), `rename` on
+    yours (the strip's inline name field in the row), "show hidden (n)"
+    while something is hidden and "trash (n) ▸" while the trash holds
+    something. Past LIST_ROWS rows the list scrolls in its own child. What
+    was drawn is kept in `_state`'s ``list`` for the tests: each row's name,
+    its chips and whether it is hidden; the foot's lines; screen rects."""
+    st = _state(panel)
     if not imgui.begin_popup("list"):
+        if group == PRESETS:
+            st["empty_armed"] = None                  # the list closed: disarmed
         return
+    presets = group == PRESETS
+    show_hidden = presets and st.get("show_hidden", False)
+    rows = names(panel, group, hidden=True) if show_hidden else listing
+    gone = set(names(panel, group, hidden=True)) - set(listing) if presets else set()
+    bin_ = trashed(panel) if presets else []
+    drawn: dict = {"group": group, "rows": [], "foot": [], "rects": {}}
+    st["list"] = drawn
+
+    def rect(key: str) -> None:
+        a, b = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        drawn["rects"][key] = (a.x, a.y, b.x, b.y)
+
     ui._micro(group)
-    if not listing:
+    style = imgui.get_style()
+    chips = ("rename", "×") if presets else ("×",)
+    wide = (max([imgui.calc_text_size(n).x for n in rows] or [0.0]) + 3 * style.item_spacing.x
+            + max(ui.chip_w(*chips), ui.chip_w("unhide")))
+    row_h = list_row_h()
+    imgui.dummy(imgui.ImVec2(wide + style.scrollbar_size, 0))     # the list's width
+    if not rows:
         imgui.text_disabled("no presets — save as… makes one")
-    for name in listing:
-        factory = lib.is_factory(group, name)
-        imgui.push_style_color(imgui.Col_.text, ui.DIM if factory else
-                               imgui.ImVec4(0.92, 0.92, 0.92, 1))
-        picked, _ = imgui.selectable(f"{name}##pick", name == cur,
-                                     imgui.SelectableFlags_.allow_overlap if not factory else 0)
-        imgui.pop_style_color()
-        if picked:
-            _guard(panel, lib.load, group, name)
-        if not factory:  # a user file: deletable from here
-            imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w("×"))
-            imgui.push_style_color(imgui.Col_.text, ui.DIM)
-            if ui.chip(f"×##del.{name}"):
-                _guard(panel, lib.delete, group, name)
-                invalidate(panel, group)
-            imgui.pop_style_color()
+    else:
+        size = imgui.ImVec2(wide + style.scrollbar_size,
+                            row_h * min(len(rows), LIST_ROWS))
+        if imgui.begin_child("##rows", size):
+            for name in rows:
+                _list_row(panel, group, name, cur, name in gone, drawn, rect)
+        imgui.end_child()
+        rect("rows")
+    if presets and (gone or bin_):
+        imgui.separator()
+        if gone:
+            line = f"show hidden ({len(gone)})"
+            hit, _ = imgui.selectable(f"{line}##hidden", show_hidden,
+                                      imgui.SelectableFlags_.no_auto_close_popups)
+            drawn["foot"].append(line)
+            rect("show_hidden")
+            if hit:
+                st["show_hidden"] = not show_hidden
             if imgui.is_item_hovered():
-                imgui.set_tooltip("Delete this user preset (a factory one of the same "
-                                  "name comes back)")
+                imgui.set_tooltip("The factory presets × took off this list: shown struck "
+                                  "through, each with unhide. A slot that names one still "
+                                  "loads it")
+        if bin_:
+            line = f"trash ({len(bin_)}) ▸"
+            hit, _ = imgui.selectable(f"{line}##trash", False,
+                                      imgui.SelectableFlags_.no_auto_close_popups)
+            drawn["foot"].append(line)
+            rect("trash")
+            if hit:
+                st["empty_armed"] = None
+                imgui.open_popup("trash")
+            if imgui.is_item_hovered():
+                imgui.set_tooltip("What × and rename sent to the trash, and every older "
+                                  "version a save replaced: restore puts one back")
+        _trash_popup(panel, bin_)
+    imgui.end_popup()
+
+
+def list_row_h() -> float:
+    """A row of the preset list: a chip's height (the tallest item in it)
+    and the spacing under it."""
+    return (imgui.get_text_line_height() + 2 * ui.CHIP_PAD.y
+            + imgui.get_style().item_spacing.y)
+
+
+def _list_row(panel, group: str, name: str, cur: str | None, hidden: bool, drawn: dict,
+              rect) -> None:
+    """One row of the preset list: the name (a pick loads it), then its chips."""
+    lib, st = panel.library, _state(panel)
+    presets = group == PRESETS
+    key = f"rename:{name}"
+    if presets and st["naming"] == key:            # the row is the name field
+        drawn["rows"].append((name, ("field",), hidden))
+        _name_field(panel, key, lambda n, old=name: _rename(panel, old, n))
+        return
+    factory = lib.is_factory(group, name)
+    ink = (imgui.ImVec4(0.42, 0.42, 0.45, 1) if hidden else ui.DIM if factory
+           else imgui.ImVec4(0.92, 0.92, 0.92, 1))
+    imgui.push_style_color(imgui.Col_.text, ink)
+    picked, _ = imgui.selectable(f"{name}##pick", name == cur,
+                                 imgui.SelectableFlags_.allow_overlap)
+    imgui.pop_style_color()
+    rect(f"row.{name}")
+    if hidden:                                     # struck through
+        a, b = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        y = (a.y + b.y) / 2
+        imgui.get_window_draw_list().add_line(
+            imgui.ImVec2(a.x, y), imgui.ImVec2(a.x + imgui.calc_text_size(name).x, y),
+            ui.u32(ink), 1.5)
+    if picked:
+        _guard(panel, lib.load, group, name)
+    if hidden:
+        chips = ("unhide",)
+    elif not factory:
+        chips = ("rename", "×") if presets else ("×",)
+    else:
+        chips = ("×",) if presets else ()
+    drawn["rows"].append((name, chips, hidden))
+    if not chips:
+        return
+    imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w(*chips))
+    imgui.push_style_color(imgui.Col_.text, ui.DIM)
+    for i, chip in enumerate(chips):
+        if i:
+            imgui.same_line()
+        hit = ui.chip(f"{chip}##{chip}.{name}")
+        rect(f"{chip}.{name}")
+        tip = ("Put it back in the list" if chip == "unhide" else
+               "Give it another name: the file, and every show that names it" if chip == "rename"
+               else "Off the list: the factory file stays, and a slot that names it still "
+                    "loads it — show hidden brings it back" if factory else
+               "To the trash (restore it from there); a factory preset of the same name "
+               "comes back")
+        if imgui.is_item_hovered():
+            imgui.set_tooltip(tip)
+        if not hit:
+            continue
+        if chip == "unhide":
+            _said(panel, lib.unhide, group, name)
+        elif chip == "rename":
+            _begin_naming(panel, f"rename:{name}", name)
+        elif factory:
+            _said(panel, lib.hide, group, name)
+        else:
+            _guard(panel, lib.delete, group, name)
+        invalidate(panel, group)
+    imgui.pop_style_color()
+
+
+def _trash_popup(panel, bin_: list) -> None:
+    """The trash (plan 19 WP4), a popup off the list's "trash (n) ▸": every
+    file it holds, newest first — every group and the shows a rename kept,
+    for "empty" deletes what is listed and nothing else — each with
+    `restore`, in a child that scrolls past LIST_ROWS rows; then "empty
+    trash…", which asks once in place: it becomes "delete N files for
+    good? — click again" in the warning ink for EMPTY_S; a second click in
+    that time empties, anything else (the time running out, the popup
+    closing, any other click) disarms it. No modal: the show runs on."""
+    lib, st = panel.library, _state(panel)
+    if not imgui.begin_popup("trash"):
+        st["empty_armed"] = None                       # closed: disarmed
+        return
+    drawn: dict = {"rows": [], "rects": {}, "empty": None}
+    st["trash_view"] = drawn
+
+    def rect(key: str) -> None:
+        a, b = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        drawn["rects"][key] = (a.x, a.y, b.x, b.y)
+
+    n = len(bin_)
+    ui._micro(f"trash  ·  {n} file{'' if n == 1 else 's'}")
+    style = imgui.get_style()
+    gw = max([imgui.calc_text_size(t.group).x for t in bin_] or [0.0])
+    nw = max([imgui.calc_text_size(t.name).x for t in bin_] or [0.0])
+    ww = imgui.calc_text_size("Oct 30 00:00").x
+    sp = 2 * style.item_spacing.x
+    wide = gw + nw + ww + 3 * sp + ui.chip_w("restore") + style.scrollbar_size
+    row_h = imgui.get_frame_height_with_spacing()
+    if bin_ and imgui.begin_child("##trash.rows",
+                                  imgui.ImVec2(wide, row_h * min(n, LIST_ROWS))):
+        for i, item in enumerate(bin_):
+            x = imgui.get_cursor_pos_x()
+            imgui.align_text_to_frame_padding()
+            imgui.text_disabled(item.group)
+            imgui.same_line(x + gw + sp)
+            imgui.text(item.name)
+            imgui.same_line(x + gw + nw + 2 * sp)
+            imgui.text_disabled(item.when)
+            imgui.same_line(x + gw + nw + ww + 3 * sp)
+            hit = ui.chip(f"restore##restore.{i}")
+            rect(f"restore.{i}")
+            drawn["rows"].append((item.group, item.name, item.when))
+            if imgui.is_item_hovered():
+                imgui.set_tooltip(f"{item.path.name} — back into {item.group}/, never over a "
+                                  "file: a name that is taken gets the next free one")
+            if hit:
+                _said(panel, lib.restore_trash, item)
+                invalidate(panel, item.group)
+                invalidate(panel, PROJECT)
+                invalidate(panel, PRESETS)
+        imgui.end_child()
+        rect("rows")
+    imgui.separator()
+    now = imgui.get_time()
+    armed = st.get("empty_armed")
+    if armed is not None and now - armed > EMPTY_S:
+        armed = st["empty_armed"] = None
+    label = (f"delete {n} file{'' if n == 1 else 's'} for good? — click again"
+             if armed is not None else "empty trash…")
+    elsewhere = imgui.is_mouse_clicked(0) or imgui.is_mouse_clicked(1)
+    if armed is not None:
+        imgui.push_style_color(imgui.Col_.text, ui.WARN)
+    hit = ui.chip(f"{label}##empty")
+    if armed is not None:
+        imgui.pop_style_color()
+    rect("empty")
+    drawn["empty"] = label
+    hov = imgui.is_item_hovered()
+    if hov:
+        imgui.set_tooltip("Delete every file listed here for good — the one delete in "
+                          "the app that keeps no copy. Asks once: click again within "
+                          f"{EMPTY_S:.0f} s")
+    if hit:
+        if armed is not None:
+            st["empty_armed"] = None
+            _said(panel, lib.empty_trash)
+            invalidate(panel, PRESETS)
+            imgui.close_current_popup()
+        else:
+            st["empty_armed"] = now
+    elif armed is not None and elsewhere and not hov:
+        st["empty_armed"] = None                       # any other click: disarmed
     imgui.end_popup()
 
 
@@ -512,6 +778,8 @@ def preset_bank(panel) -> None:
     # loaded preset has unsaved edits (plan 19 WP5)
     edited = pr.active >= 0 and dirty(panel, PRESETS)
     st["rects"].pop("preset.dot", None)
+    dangling: list[int] = []
+    st["dangling"] = dangling                         # the slots drawn in the warning ink
     for k, name in enumerate(pr.bank):
         far = k >= F_KEYS
         if (k - F_KEYS) % FAR_COLS if far else k % BANK_COLS:
@@ -542,15 +810,21 @@ def preset_bank(panel) -> None:
         dl = imgui.get_window_draw_list()
         y = a.y + (b.y - a.y - imgui.get_text_line_height()) / 2
         dl.add_text(imgui.ImVec2(a.x + pad, y), ui.u32(white if lit else ui.FAINT), key)
+        # a slot whose preset has no file (in the trash, plan 19 WP4): the
+        # warning ink, and the hover says where to look; never cleared for you
+        gone = name is not None and missing(panel, name)
+        if gone:
+            dangling.append(k)
         dl.add_text(imgui.ImVec2(a.x + pad + imgui.calc_text_size(key + gap).x, y),
-                    ui.u32(white if lit else ui.FAINT if name is None else ui.TEXT), shown)
+                    ui.u32(white if lit else ui.FAINT if name is None
+                           else ui.WARN if gone else ui.TEXT), shown)
         if lit and edited:
             c = imgui.ImVec2(b.x - pad - SLOT_DOT_R, (a.y + b.y) / 2)
             dl.add_circle_filled(c, SLOT_DOT_R, ui.u32(white))
             st["rects"]["preset.dot"] = (c.x - SLOT_DOT_R, c.y - SLOT_DOT_R,
                                          c.x + SLOT_DOT_R, c.y + SLOT_DOT_R)
         if hov:
-            imgui.set_tooltip(slot_tip(k, name))
+            imgui.set_tooltip(slot_tip(k, name, gone=gone))
         if far:
             # the slot menu under the select param's own items, a popup per
             # slot (as the rail's pills do for `ui.page`)
@@ -563,10 +837,14 @@ def preset_bank(panel) -> None:
         imgui.text_colored(ui.WARN, pr.bank_error)
 
 
-def slot_tip(k: int, name: str | None) -> str:
+def slot_tip(k: int, name: str | None, *, gone: bool = False) -> str:
     """A bank button's hover: what the slot holds and how to reach it — an
-    F-key for the first eight, a pad of the desk's clip rows 4 and 5 after."""
+    F-key for the first eight, a pad of the desk's clip rows 4 and 5 after;
+    for a slot whose preset has no file (`gone`), where to look."""
     key = slot_key(k)
+    if gone and name is not None:
+        return (f"{key}: {name} — no such preset. It may be in the trash (preset list → "
+                "trash). Right-click → clear slot")
     if k < F_KEYS:
         return (f"{key}: {name} — click loads, ⇧click saves the live state as it"
                 if name is not None else f"{key}: empty — ⇧{key} saves the live state here")
