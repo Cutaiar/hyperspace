@@ -1,6 +1,6 @@
 # Decision register — everything that is yours to decide
 
-As of 2026-10-04. **Rows 1–33 are answered** (26–33, from the Oct 3–4 session, on 2026-10-04; Part A4). Rows the unattended run of plans 15–21 adds after 33 are built on its recommendation and wait for you to confirm or overturn (the answer sheet at the end).
+As of 2026-10-04. **Rows 1–33 are answered** (26–33, from the Oct 3–4 session, on 2026-10-04; Part A4). Rows the unattended run of plans 15–21 adds after 33 are built on its recommendation and wait for you to confirm or overturn (the answer sheet at the end). **Plan 15 added rows 34–44** (Part A4, after row 33).
 implementing and settling the open work is here, whichever plan or session
 raised it. Each entry stands on its own: what the thing is, what the software
 does today, the options, a recommendation with its reasons, the trade-off you
@@ -683,7 +683,11 @@ Where each control sits is hand check 45's to confirm on the device.
 Dan and Dillon ran the rig for a night and talked through everything it
 still needs. `docs/plans/15-21-roadmap.md` orders that list into seven
 plans. **You answered rows 26–33 on 2026-10-04**; each entry below keeps
-the question as it was asked, with the answer on its first line.
+the question as it was asked, with the answer on its first line. Rows 26–29
+are built (plan 15, PRs #81–#83 and #87; the answer sheet's notes say
+where). **Rows 34–44,
+after row 33, are the forks plan 15's unattended run settled on its own
+recommendation**: each is built and waits for you to confirm or overturn.
 
 You also set how the work runs, since nobody will be watching it:
 
@@ -849,6 +853,388 @@ frame, after the effects, off by default (about 2,600 lines, with tests).
 | (b) Close #78; draw simple shapes per axis instead | Matches what was settled; throws away working code. |
 | (c) Both: #78 as one HUD style, shapes as another | Two things to maintain; more settings. |
 
+**Rows 34–44 were decided for you while plan 15 was built.** Nobody was
+watching the run, so each fork it met was settled the way
+you set out above: the recommendation was taken and built, and the
+entry is here for you to confirm or overturn. "What the code did" is the
+behaviour before plan 15. Each was shown by tests and scripted launches
+on a laptop, not at the rig; the hand check that would show it to you is
+named. Plan 15 §7 has the same forks in the builder's words (its forks
+2, 3, 11 and 18 are about how the code is put together and change
+nothing you can see, so they are not here).
+
+### 34. P15-f — which keys undo, and what a two-modifier chord fires
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** You asked for Ctrl+Z. The rig is a Mac, where undo is
+⌘Z, and the cheat sheet already says "Cmd+R". Redo is the same key with
+⇧, which is the first time one key has rows with two modifiers.
+
+**What the code did.** There was no Control modifier for a key row at
+all (only ⇧ and ⌘). And a row with modifiers fired whenever its
+modifiers were *among* those held: with rows on ⌘Z and on ⌘⇧Z, pressing
+⌘⇧Z would have fired undo and redo together.
+
+| Option | Trade-off |
+|---|---|
+| (a) ⌘Z / ⌘⇧Z only | No new modifier. "Ctrl+Z", as written and as said, does nothing. |
+| (b) Ctrl+Z / Ctrl+⇧Z only | What was said. Wrong for Mac hands. One new modifier. |
+| **(c) Both** | Either hand finds it. One new modifier name and two more rows. |
+
+**Chosen: (c)**, and with it one rule for every key: **a press fires
+only its own chord**. A row fires when its modifiers are exactly the
+held ones that some row on that key names. ⌘⇧Z redoes and nothing else;
+`B` and ⇧B stay two controls, as before; a modifier that no row on the
+key uses is ignored, as before. A missed undo mid-party costs more than
+two rows. The rule is needed under every option.
+
+One thing changes for a row you made by hand in `bindings.json`: a bare
+`key:Z` row no longer fires while ⇧, ⌘ or Ctrl is held (the undo rows
+now use all three on Z), and two one-modifier rows on one key no longer
+both fire when both modifiers are down. No factory row is affected.
+
+**Cost to reverse.** Delete two rows, or the modifier: minutes. Going
+back to the old "among those held" rule would break redo. Plan 15 WP1
+(PR #82); `Router.keys`, `routing.MODIFIERS`;
+`test_routing.py::test_a_chord_fires_only_its_own_row`. Hand check 48.
+
+### 35. P15-g — undo and the band layout
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** The roadmap said a band added, removed or moved "keeps
+the existing 8-second undo". What happens to Ctrl+Z around such a
+change, and to a strip you had edited before it?
+
+**What the code did.** Those three never had an undo: each *clears* the
+8-second one, which only "Reset all" arms. A layout change also
+re-creates every band parameter, and moving a band shifts values between
+the same ids, so a strip value saved before the change would land on a
+different band after it.
+
+| Option | Trade-off |
+|---|---|
+| (a) Fold it all in: add, remove and move become undo steps; the 8-second button retires | Not cheap: changes in the analyzer's control code, a layout in every saved state, and the reset undo's own snapshot redone. |
+| (b) Clear the whole undo history on any layout change | Adding a band throws away the history of the look. |
+| (c) Drop only the band values from the history on a layout change | Simple, but every factory band preset carries a layout: Ctrl+Z after loading one from the strip would find its own step emptied and undo the edit *before* it. |
+| **(d) Remember which band layout each step was made on; put strip values back only onto that same layout; a load puts its layout back first** | A band preset load, a show load and a scene pick undo whole. Add, remove and move are not steps; a strip edited before one is left alone by an undo until the layout is the same again. |
+
+**Chosen: (d).** Ctrl+Z after adding a band does not remove the band. If
+a step holds strip edits made on another layout, the rest of the step
+still comes back and the footer adds "(the bands have changed: their
+strips were left)". The 8-second "Reset all" button works as before,
+beside it.
+
+**Cost to reverse.** (a) is a later plan's work, about a day, and builds
+on (d). Plan 15 WP1 (PR #82);
+`test_undo.py::test_a_band_add_remove_or_move_makes_no_step`,
+`::test_strips_are_put_back_only_onto_the_layout_they_were_made_on`.
+
+### 36. P15-h — is a tap an undo step?
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** The BPM is a saved setting of the show, so undo could
+watch it like a slider.
+
+**What the code did.** A tap burst rewrites the BPM on every tap, and
+taps at 120 BPM are half a second apart: longer than the 0.4 s of quiet
+that ends an undo step.
+
+| Option | Trade-off |
+|---|---|
+| (a) Watch the BPM | Each tap of a burst is a step; Ctrl+Z after tapping walks back through tempos before it reaches the slider you meant. |
+| **(b) Leave the clock out** | Tapping never touches the undo history. A typed BPM and a nudge are not undone either, and undoing a show load leaves the tempo where it is. |
+
+**Chosen: (b).** "Clocks" were on the roadmap's own list of things to
+leave out.
+
+**Cost to reverse.** One line (`undo.EXCLUDED_GROUPS`). Plan 15 WP1
+(PR #82); `test_undo.py::test_integrated_state_and_the_clock_are_not_watched`.
+
+### 37. P15-i — when a preset file goes to the trash
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** You asked that a preset file about to be overwritten or
+deleted go to a trash folder first (`~/Hyperspace/trash/`). Two details
+were open: whether every Save trashes, and what happens when the copy
+into the trash fails (a full disk).
+
+**What the code did.** Save wrote over the file; the list's × deleted
+it. Nothing was kept.
+
+| Option | Trade-off |
+|---|---|
+| (a) Trash on every overwrite | Pressing Save with nothing changed fills the folder with identical copies. |
+| **(b) Trash only when the file would actually change; a failed copy warns and lets the save go on, and refuses a delete** | Quiet. A full disk cannot make a delete unrecoverable, and cannot block a save. |
+| (c) A failed copy refuses the save too | Safest for the old file, worst at a party: you cannot save at all. |
+
+**Chosen: (b).** The trashed file is named
+`<preset>.<date>-<time>.json` under `trash/presets/` (or the module's
+folder); two in one second get `-2`, `-3`. Copy one back into
+`presets/` under its plain name to restore it. Factory presets are never
+written, so never trashed. Nothing empties the trash and no page shows
+it yet (plan 19).
+
+**Cost to reverse.** One condition. Plan 15 WP1 (PR #82);
+`library.to_trash`, `Library.save_as`, `Library.delete`;
+`test_library.py::test_a_save_that_changes_nothing_trashes_nothing`,
+`::test_a_delete_keeps_the_file_in_the_trash_or_does_not_delete`. Hand
+check 53.
+
+### 38. P15-j — the Home key on a laptop
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** You put home on OVERDUB and "the Home key". A MacBook
+has no Home key; fn+← sends it.
+
+**What the code did.** Nothing: there was no home.
+
+| Option | Trade-off |
+|---|---|
+| **(a) The Home key only; the cheat sheet says "fn ←"** | One row. The desk's OVERDUB is the party road. |
+| (b) A second key as well (say ⇧H) | One more thing on the sheet for a road the desk already has. |
+
+**Chosen: (a).** The row is in `bindings.json` like any key and can be
+moved to another key there.
+
+**Cost to reverse.** One row. Plan 15 WP2 (PR #83);
+`routing.LOOP_KEY_ROWS`. Whether fn+← reaches the app as Home on your
+laptop has not been tried: hand check 54.
+
+### 39. P15-k — are camera moves undo steps?
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** Orbiting with the mouse, the sticks, the wheel, ↑ / ↓
+and R (reset view) all change the camera, and the camera is saved in a
+preset.
+
+**What the code did.** No undo of anything.
+
+| Option | Trade-off |
+|---|---|
+| **(a) Watch the camera like any setting** | R and an orbit undo. Someone who orbits a lot must press Ctrl+Z past the orbits to reach an earlier edit; the history holds 100 steps. |
+| (b) Leave the camera out | Ctrl+Z always reaches a "real" edit. A wrecked camera is not undone, though it is saved in presets. |
+
+**Chosen: (a).** One continuous orbit is one step; an orbit that pauses
+for more than 0.4 s is two (row 43).
+
+**Cost to reverse.** One word: add `"camera"` to
+`undo.EXCLUDED_GROUPS`. Plan 15 WP1 (PR #82).
+
+### 40. P15-l — what a hand or a band may do to home and to the dim
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** Two new parameters, and for each the question whether a
+performer (a pinch, a hand axis, an audio band, an LFO) may be routed
+onto it.
+
+**What the code did.** Neither existed. The other preset triggers (load
+slot k, next preset) may be fired by a performer; the four rig settings
+of the output (screen, fullscreen, overlay, click-through) may not be
+performed.
+
+| Option | Trade-off |
+|---|---|
+| **Home: (a) a performer may fire it**, like load-slot and next-preset | No new rule. A pinch can send the show home if you route one there. |
+| Home: (b) it may not | A second rule for one trigger of a family. |
+| Dim: (a) a performer may drive it | A band or a hand could strobe the room, and a hand leaving the box could black it out. A preset could carry such a route. |
+| **Dim: (b) it may not**, like the rig settings beside it | The dim is the operator's. A strobe is an effect's job. |
+
+**Chosen: home (a), dim (b).** No factory preset routes anything onto
+home. The dim is also never saved and never moved by a preset or a show.
+
+**Cost to reverse.** One flag each. Plan 15 WP2 (PR #83, `preset.home`
+in `params.build_registry`) and WP3 (PR #81, `Output.register`;
+`test_overlay.py::test_dim_is_a_rig_setting_that_starts_bright`).
+
+### 41. P15-m — what the dim does in overlay mode
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** In window and fullscreen the dim multiplies the picture
+toward black and leaves the window opaque, which is what the Pepper's
+Ghost glass needs. In overlay mode (only when `config.toml` asks:
+decision 21) the ground is see-through, and "black" has no obvious
+meaning.
+
+**What the code did.** No dim.
+
+| Option | Trade-off |
+|---|---|
+| (a) Colour only, as on an opaque ground | The ground's darkness stays over the desktop while the shape fades: neither black nor gone. |
+| **(b) Colour and transparency together** | The render fades away and the desktop behind is left as the config asked for. |
+
+**Chosen: (b).** Overlay is off unless the config asks, so the rig as
+set up never sees this.
+
+**Cost to reverse.** One line (the blend in `Renderer.dim_pass`). Plan
+15 WP3 (PR #81); `test_render.py::test_dim_fades_a_see_through_ground`.
+Seen offscreen only.
+
+### 42. P15-n — the save-as gesture on the clip-stop row
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** You decided what the gesture does (row 29: a hold on the
+clip-stop row saves a **new** preset into the next empty slot; the desk
+never overwrites). Four details of how were left to the build.
+
+```
+ the button field (left of the desk)
+
+ clip row 1   [G1·1][G1·2][G1·3][G1·4][G1·5][G1·6][G1·7][G1·8]  [G1·9]   press: load slot k
+ clip rows 2–5   …                                                        (today, unchanged)
+ clip stop    [=============== SAVE AS  ·  G6·1 … G6·8 ==============]  [G6·9]  STOP ALL: reset all,
+               hold any of the eight 0.6 s: a NEW preset → the next               unchanged
+               empty slot, whose pad on clip row 1 blinks; a tap: nothing
+
+ the right-hand section
+
+ device buttons   [B5 ][B6 ][B7 ][B8 ]
+                  [B9 ][B10][B11][B12]      B9 DETAIL: cheat sheet    B10 QUANT: next preset
+                                            B11 OVERDUB: home         B12 METRONOME: LFO trigger
+ crossfader  X    [■■■■■■■■■──────────]     left: black … right: full
+```
+
+**What the code did.** The eight clip-stop buttons had no rows. The
+MIDI adapter kept no press time, and nothing ever sent a blink.
+
+| The detail | Option | Trade-off |
+|---|---|---|
+| How the table spells it | **(a) a new op, `hold`** | The ROUTING page's row says what it does (`G6·1 preset.save_new  hold`); the adapter times any row with it. One more op. |
+| | (b) the adapter treats that one parameter specially | No new op, but the adapter then knows a parameter by name. |
+| | (c) a per-row hold time | A setting per row nobody asked for. |
+| When it fires | **(a) at 0.6 s, while you are still holding** | The blink is the feedback: you see it saved and let go. Something left lying on the row saves once, a new preset, and then nothing. |
+| | (b) on release, after 0.6 s | No confirmation until the hand is gone; a long lean saves nothing, silently. |
+| The bar's lights | (a) lit at rest | Says "mapped", but eight lights under the grid all night, and on this desk a lit button means a state that is on. |
+| | **(b) dark at rest; lit while held; blinking, with the new slot's pad, for 1.5 s when it saves** | The light is the gesture's feedback. The on-screen desk and the hand-check card say what the row is. |
+| What a new name counts against, and what is loaded afterwards | (a) the listed names only | A file whose name on disk matches another preset's would be overwritten, or would hide a factory preset. |
+| | **(b) the files in both preset folders, the listed names and the bank; the new preset becomes the loaded one** | Never overwrites, never hides. A second hold counts on (TRIP 2 → TRIP 3), and Save on the panel then saves the new one. A factory "TRIP" yields your "TRIP 2". |
+| | (c) as (b), but stay on the old preset | Every hold makes the next number from TRIP, but Save on the panel would still write TRIP, which you did not ask to change. |
+
+**Chosen: the bold option of each.** The eight buttons are one bar: two
+fingers save once, and a button still down saves nothing more until it
+is pressed again. With the bank full the preset is still saved, goes to
+the preset list, and the footer says so ("saved TRIP 3 — the bank is
+full: it is in the preset list"); the bar blinks, no pad does, and no
+slot is lit, because the loaded preset is in none. A preset whose name
+ends in a number counts on from it (TRIP 2 → TRIP 3; with TRIP 3 taken,
+TRIP 4).
+
+Four things the build added that the question did not cover:
+
+- **A save that fails blinks nothing.** If the preset cannot be written
+  (a full disk), the bar just goes dark at 0.6 s; the desk never
+  confirms a save that did not happen. The reason is on the PRESETS
+  page.
+- If the preset saves but the show cannot be written, the slot stays
+  empty and the footer says the preset is in the list.
+- The "bank is full" line goes away as soon as you make room (clear a
+  slot, or put a preset somewhere).
+- **A clip-stop button you delete from `bindings.json` comes back on the
+  next launch**, like every factory button the migration adds. To switch
+  one off, keep its row and add `"enabled": false`.
+
+Not built, and not a fault: the on-screen desk lights the bar while it
+is held but does not blink, and the cheat sheet does not mention the
+bar.
+
+**Cost to reverse.** Firing on release: move one call. The bar lit at
+rest: the rows' "off" velocity. Staying on the old preset: one line. A
+different hold time: one constant (`midi.HOLD_S`). Plan 15 WP4
+(PR #87);
+`test_midi.py::test_a_hold_fires_once_at_the_hold_time_while_held`,
+`::test_the_bar_is_one_control`,
+`::test_the_bar_lights_while_held_and_the_new_slots_pad_blinks`,
+`test_presets.py::test_save_new_never_overwrites`. Hand check 56: the
+gesture has been run by tests on a fake clock and fake ports, and the
+save itself by a scripted launch of the app; the hold, the lights and
+the blink have never been on the APC40, and the blink's velocities come
+from Akai's table.
+
+### 43. P15-o — a slider drag that pauses
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** Undo has no "mouse down / mouse up": a step ends after
+0.4 s in which nothing you set has changed. So a slider held still for
+longer than that with the mouse down, then moved again, is two steps,
+and Ctrl+Z takes back the second part first.
+
+**What the code did.** No undo.
+
+| Option | Trade-off |
+|---|---|
+| **(a) The quiet time only** | One rule for the panel, the desk's knobs and faders, keys and typed values. A slow, hesitant drag can take two presses to undo. |
+| (b) Also hold the step open while a panel widget is being dragged | One step per mouse press on the panel. The desk's knobs get nothing from it, and the undo would need the panel to tell it. |
+
+**Chosen: (a)**, as the roadmap described it.
+
+**Cost to reverse.** Small: one flag the panel sets. A different quiet
+time is one constant (`undo.SETTLE_S`; plan 18's knob smoothing must
+stay under it). Plan 15 WP1 (PR #82);
+`test_undo.py::test_a_pause_longer_than_the_settle_time_makes_a_second_step`.
+Whether 0.4 s feels right is hand check 48's.
+
+### 44. P15-p — the faders after a preset load
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** A fader "has" its parameter once it has been moved to
+the parameter's value (soft pickup); until then it does nothing, so a
+fader never makes a value jump. You asked that the crossfader's dim
+survive a preset load.
+
+```
+ a fader that has its parameter          the same fader after a preset load
+
+   value ●━━━━━━━━━━┥ fader               before plan 15: every fader let go
+   moving it moves the value               ●          ┥   dead until brought
+                                                          back across the value
+
+                                          now: let go only if the load
+   S1 … S8   SM    X                      moved that fader's parameter
+   ┃ ┃ ┃ ┃   ┃   ━━┥━━                    S1–S8, SM, X: a preset never moves
+   drive     gain  dim                    theirs, so they carry straight on
+```
+
+**What the code did.** Every preset load made every fader let go,
+whether or not the load had moved its parameter. A fader then took hold
+again only if its next message landed on the value or crossed it. Worked
+out from the MIDI step and the parameter's own steps (not measured),
+that fails roughly one time in ten: the crossfader would be dead after
+about one load in ten until it was brought back across, with the picture
+half dimmed.
+
+| Option | Trade-off |
+|---|---|
+| (a) Leave it | No change to the adapter. The crossfader sometimes dead after a load, mid-party. |
+| **(b) A load makes a fader let go only when the load moved its parameter** | "Survives a preset load" is exact. The same fix reaches S1–S8 and the master fader, whose parameters a preset never moves. |
+| (c) Give the crossfader no pickup at all | It would jump to the fader's position on first touch: a crossfader parked at the left blacks the rig out. Rejected. |
+
+**Chosen: (b).** As built, a fader also lets go when its parameter no
+longer exists, when it has never been moved since launch, and — added by
+the review of PR #81 — when the parameter is not where *that fader* last
+put it (two controls can share one parameter, and the other may have
+moved it).
+
+One gap is older than this and is not closed by it: a fader moved while
+its row is switched off (or by the one message a Learn takes for itself)
+does not notice, and jumps on its next touch. Before, any preset load happened to heal that;
+now only a load that moves the parameter does. It is filed as audit row
+R13.
+
+**Cost to reverse.** One condition (`MidiIO.redraw`). Plan 15 WP3
+(PR #81);
+`test_desk.py::test_the_crossfader_keeps_its_hold_across_a_preset_load`.
+Hand check 55 (e).
+
 ---
 
 ## Part B — built on the recommendation without asking; confirm or overturn
@@ -896,13 +1282,20 @@ Each is built, reviewed and on PR #55. Overturning any is a small follow-up.
   N7 is row 20 here, answered (a) 2026-09-29, built in plan 13 WP5b (PR #70).
 - Plan 13's machine checks: `docs/plans/11-hand-checks.md` group H
   (checks 33–42).
+- The groups added since, in the same file: **I** (plan 14: the opaque
+  window, the stall log, the on-screen desk; checks 43–46), **J** (the
+  ghost hands; check 47) and **K** (plan 15: undo, the trash, home, the
+  master dim, save-as on the desk; checks 48–57 — 57 first, because it
+  is the launch that rewrites `bindings.json`; copy `~/Hyperspace`
+  before it). Rows 34–44 above are each shown by one of group K's
+  checks; nothing in plan 15 has been tried at the rig.
 
 ---
 
 ## Answer sheet
 
-Write the letter, or "rec" for the recommendation. Rows 14–17 take "keep"
-or "overturn".
+Write the letter, or "rec" for the recommendation. Rows 14–17 and 34–44
+take "keep" or "overturn".
 
 | # | Decision | Recommended | Your answer | Note |
 |---|---|---|---|---|
@@ -932,11 +1325,22 @@ or "overturn".
 | 23 | P14-c dream on by default | (b) optional torch, worker on, loud when missing | **(a)**, 2026-09-29 | torch is part of the app, not optional; built: plan 14 WP1 (the dependency, the worker on) and WP6 (echoes in seconds, TRACER, WAKE re-tuned and shot with the worker on) |
 | 24 | P14-d F6–F8 effects | (a) ACID, MANDALA, NOITA | **(a)**, 2026-09-29 | built: plan 14 WP5 — `party-acid` / `party-mandala` / `party-noita` on F6–F8, every effect on in a factory preset, no factory route on an effect that is off |
 | 25 | P14-e desk glyphs and diagram | (a) K/D/S/G/B glyphs, up layer, above the cheat sheet | **(a)**, 2026-09-29 | plan 14 WP7 — built (`apc40.LAYOUT`, `ui_desk.py`, hand check 45) |
-| 26 | P15-a undo depth | (a) actions first, then (b) settled edits | **per-edit**, 2026-10-04 | one gesture (a drag, a knob turn, a typed value) is one step; plan 15 WP1 |
-| 27 | P15-b home | (a) the "starts on" preset, on OVERDUB and the Home key | **(a)**, 2026-10-04 | plan 15 WP2 |
-| 28 | P15-c crossfader | (a) master dim, both layers, left is black | **(a)**, 2026-10-04 | plan 15 WP3 |
-| 29 | P15-d save on the APC40 | (a) hold clip-stop k to save into slot k | **save-as**, 2026-10-04 | always a new preset with a made-up name, into the next empty slot; the desk never overwrites; plan 15 WP4 |
+| 26 | P15-a undo depth | (a) actions first, then (b) settled edits | **per-edit**, 2026-10-04 | one gesture (a drag, a knob turn, a typed value) is one step; built, plan 15 WP1 (PR #82): `undo.py` — `Undo.tick` once a frame in `app.frame` after `router.follow_macros`, a step closed by 0.4 s of quiet (`SETTLE_S`), `undo.push` before every load, Learn, Unbind, delete and Replace, a restore through `Registry.restore` and `Bindings.set_routes` / `set_desk(load=False)` / `set_macros`, `library.Marks` for what is loaded; ⌘Z / Ctrl+Z and ⇧ to redo (`edit.undo`, `edit.redo`); the footer's message line; the trash (`library.to_trash`). `tests/test_undo.py` (27 tests, `test_a_slider_drag_is_one_step_and_undo_sets_only_that_param`, `test_a_performer_moving_makes_no_step`, `test_an_idle_app_makes_no_step` among them), `test_library.py`'s five trash tests. Rows 34–37, 39 and 43 are its forks. Hand checks 48–53 |
+| 27 | P15-b home | (a) the "starts on" preset, on OVERDUB and the Home key | **(a)**, 2026-10-04 | built, plan 15 WP2 (PR #83): `Project.home` (`library.py`), the `preset.home` trigger, `key:HOME` and the invariant OVERDUB row `note:0:64` (lit while the show names a "starts on"), added to an existing `bindings.json` where free; the PRESETS page reads "starts on / home"; one undo step. `test_presets.py::test_home_loads_what_the_show_starts_on`, `::test_home_is_one_undo_step`, `test_desk.py::test_overdub_is_home_on_both_layers_and_is_lit`. Rows 38 and 40 are its forks. Hand check 54 |
+| 28 | P15-c crossfader | (a) master dim, both layers, left is black | **(a)**, 2026-10-04 | built, plan 15 WP3 (PR #81): `output.dim` (`Output.register`: never saved, not modulatable, 1 at launch), `Renderer.dim_pass` as the frame's last pass after the ghost hands, the crossfader's invariant row `cc:0:15 → output.dim` with soft pickup, your old factory row swapped with a backup (`routing.APC_REMAP`), first on the OUTPUT page, `dim 40%` in the footer. `test_render.py`'s seven `dim` tests, `test_midi.py::test_the_crossfader_dims_with_soft_pickup`, `test_desk.py::test_the_crossfader_keeps_its_hold_across_a_preset_load`. That the left end is CC 0 was read from a comment, not the device. Rows 40, 41 and 44 are its forks. Hand check 55 |
+| 29 | P15-d save on the APC40 | (a) hold clip-stop k to save into slot k | **save-as**, 2026-10-04 | always a new preset with a made-up name, into the next empty slot; the desk never overwrites; built, plan 15 WP4 (PR #87): the eight invariant clip-stop rows as one `hold` bar (`midi.HOLD_S` = 0.6 s, `MidiIO._fire_holds`), `preset.save_new` → `Project.save_new`, `library.next_name`, "put preset here…" and "clear slot" on a slot's menu (`ui_presets._slot_menu`, `Project.put_slot` / `clear_slot`). `test_midi.py::test_a_hold_fires_once_at_the_hold_time_while_held`, `::test_a_tap_fires_nothing`, `test_presets.py::test_save_new_never_overwrites`, `::test_save_new_on_a_full_bank_saves_to_the_list_and_says_so`, `test_desk.py::test_the_clip_stop_row_is_invariant`. Row 42 is its forks. Never on the APC40 yet. Hand check 56 |
 | 30 | P15-e PR shape | (a) a PR per work package, an integration PR per plan | **(a)**, 2026-10-04 | everything onto `finish-line`, never main; you merge that |
 | 31 | Auto BPM | (a) stay tap-only | **deferred**, 2026-10-04 | not in this run |
 | 32 | P21-a one output or two | none; describe the rig | **two render outputs**, 2026-10-04 | the same frame; per output a dim, scene on/off, hands on/off; the laptop is the control view; plan 21 |
 | 33 | P21-b the hand HUD | (a) finish PR #78 | **(a) and (c)**, 2026-10-04 | #78 finished as the HUD, with what is drawn swappable; plan 21 |
+| 34 | P15-f undo keys and chords | (c) both ⌘Z and Ctrl+Z; a press fires only its own chord | built on the recommendation; confirm or overturn | plan 15 WP1 (PR #82); a hand-made bare `key:Z` row no longer fires with ⇧, ⌘ or Ctrl held |
+| 35 | P15-g undo and the band layout | (d) add / remove / move are not steps; strips go back only onto the same layout | built on the recommendation; confirm or overturn | plan 15 WP1 (PR #82); the 8-second "Reset all" undo unchanged |
+| 36 | P15-h a tap as an undo step | (b) the clock is left out | built on the recommendation; confirm or overturn | plan 15 WP1 (PR #82); a typed BPM is not undone either |
+| 37 | P15-i the trash on a save | (b) only when the file would change; a failed copy warns on save, refuses a delete | built on the recommendation; confirm or overturn | plan 15 WP1 (PR #82) |
+| 38 | P15-j the Home key on a laptop | (a) the Home key only (fn ←) | built on the recommendation; confirm or overturn | plan 15 WP2 (PR #83) |
+| 39 | P15-k camera moves as undo steps | (a) yes | built on the recommendation; confirm or overturn | plan 15 WP1 (PR #82) |
+| 40 | P15-l performers on home and the dim | home: may be fired; dim: may not be driven | built on the recommendation; confirm or overturn | plan 15 WP2 (PR #83) and WP3 (PR #81) |
+| 41 | P15-m the dim in overlay mode | (b) colour and transparency fade together | built on the recommendation; confirm or overturn | plan 15 WP3 (PR #81); overlay is off unless the config asks |
+| 42 | P15-n the save-as gesture | a `hold` op; fires at 0.6 s while held; the bar dark at rest; names counted against files, list and bank; the new preset becomes the loaded one | built on the recommendation; confirm or overturn | plan 15 WP4 (PR #87); a failed save blinks nothing; a clip-stop row deleted from `bindings.json` comes back unless kept with `enabled: false` |
+| 43 | P15-o a drag that pauses | (a) over 0.4 s still is two steps | built on the recommendation; confirm or overturn | plan 15 WP1 (PR #82) |
+| 44 | P15-p the faders after a preset load | (b) a fader lets go only when the load moved its parameter | built on the recommendation; confirm or overturn | plan 15 WP3 (PR #81), with the per-fader condition its review added; audit R13 is the older gap it no longer hides |
