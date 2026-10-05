@@ -303,14 +303,16 @@ APC_REMAP: dict[tuple[str, str, str, float], tuple[str, str, float]] = {
     (f"note:0:{apc40.N_NUDGE_M}", "view.shape", "step", -1.0): ("tempo.nudge", "step", -1.0),
     (f"cc:0:{apc40.CC_XFADE}", "overlay.bg", "abs", 1.0): ("output.dim", "abs", 1.0),
 }
-# which plan moved each remapped source, for the note `remap_factory`
+# which plan moved or added each source, for the note `remap_factory`
 # writes; a source not named here is plan 09's
-APC_REMAP_PLAN = {f"cc:0:{apc40.CC_XFADE}": "plan 15"}
+APC_REMAP_PLAN = {f"cc:0:{apc40.CC_XFADE}": "plan 15",
+                  f"note:0:{apc40.N_OVERDUB}": "plan 15"}
 # rows added when nothing uses the note: (source, target, op, value, only
 # when the theme cycle was remapped away)
 APC_NEW_ROWS = (
     (f"note:0:{apc40.N_METRO}", "lfo.trigger", "toggle", 1.0, False),
     (f"note:0:{apc40.N_QUANT}", "preset.next", "toggle", 1.0, True),
+    (f"note:0:{apc40.N_OVERDUB}", "preset.home", "toggle", 1.0, False),   # plan 15 WP2
 )
 # the keys WP4 added, likewise only where the key is free
 # the keys plan 11 moved out of app.py's loop into the table (audit R2;
@@ -320,6 +322,8 @@ APC_NEW_ROWS = (
 # Plan 15 WP1 adds undo and redo, on both ⌘ and Ctrl (fork 1): ⌘Z / Ctrl+Z
 # fire `edit.undo`, ⌘⇧Z / Ctrl+⇧Z fire `edit.redo` — a chord fires only
 # its own row (`Router.keys`).
+# Plan 15 WP2 adds Home (fn ← on a laptop; fork 7): it fires `preset.home`,
+# which loads the preset the show starts on.
 BANK_SLOTS = 8
 LOOP_KEY_ROWS = (
     ("R", "camera.reset", "fire"),
@@ -327,6 +331,7 @@ LOOP_KEY_ROWS = (
     *[(f"SHIFT+F{k + 1}", f"preset.save.{k}", "fire") for k in range(BANK_SLOTS)],
     ("SUPER+Z", "edit.undo", "fire"), ("SHIFT+SUPER+Z", "edit.redo", "fire"),
     ("CONTROL+Z", "edit.undo", "fire"), ("CONTROL+SHIFT+Z", "edit.redo", "fire"),
+    ("HOME", "preset.home", "fire"),
 )
 # plan 13 WP2: the theme bank became the preset bank. A row a file wrote
 # before it that targets a theme param — a factory key or APC40 row, or
@@ -722,10 +727,10 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
     """The factory rows plan 09 WP4 and plan 15 WP3 moved, on a table of
     any schema: the old APC40 factory rows swapped for the new (APC_REMAP —
     the clock's three buttons, the crossfader's master dim), the METRONOME /
-    QUANT notes and the B / ⇧B keys added where nothing uses the source
-    (APC_NEW_ROWS, KEY_NEW_ROWS); and, since plan 13 WP2, any row on a
-    ``theme.*`` param moved to the ``preset.*`` param of the same slot
-    (THEME_TO_PRESET). Idempotent: a second pass finds every old row gone
+    QUANT / OVERDUB notes and the B / ⇧B and loop keys (Home among them)
+    added where nothing uses the source (APC_NEW_ROWS, KEY_NEW_ROWS); and,
+    since plan 13 WP2, any row on a ``theme.*`` param moved to the
+    ``preset.*`` param of the same slot (THEME_TO_PRESET). Idempotent: a second pass finds every old row gone
     and every source taken. Returns (rows, a note per change)."""
     out: list[Binding] = []
     notes: list[str] = []
@@ -750,7 +755,8 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
         if source in used or (only_if_moved and not moved_theme):
             continue
         out.append(Binding(source, target, op, value, feedback="led"))
-        notes.append(f"added {source} → {target} (the APC40 map of plan 09)")
+        notes.append(f"added {source} → {target} (the APC40 map of "
+                     f"{APC_REMAP_PLAN.get(source, 'plan 09')})")
     # a key row is taken by its chord, however its modifiers are ordered:
     # "key:SUPER+SHIFT+Z" holds ⌘⇧Z as "key:SHIFT+SUPER+Z" does
     chords = {(b.key_name, b.modifiers) for b in out if b.scheme == "key"}

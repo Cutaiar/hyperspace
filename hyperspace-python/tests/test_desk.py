@@ -430,7 +430,8 @@ def test_the_default_map_is_sorted_as_plan_13_says():
         ("cc:0:48", "hands.smooth", "global"), ("cc:0:49", "hands.response", "global"),
         ("cc:0:50", "hands.catch", "global"), ("cc:0:51", "hands.sel.return", "global"),
         ("cc:0:52", "tempo.bpm", "global"),
-        (routing.SHIFT_SOURCE, routing.SHIFT_PARAM, None)]
+        (routing.SHIFT_SOURCE, routing.SHIFT_PARAM, None),
+        (f"note:0:{apc40.N_OVERDUB}", "preset.home", None)]   # home (plan 15 WP2)
     assert not [b for b in rows if b.layer == "global" and b.number in (0x35, 0x36, 0x37)
                 and b.kind == "cc"]
     assert not [b for b in rows if b.layer == "preset" and b.kind == "cc"
@@ -559,3 +560,54 @@ def test_undoing_a_desk_row_redraws_and_keeps_the_layer_and_the_faders_catch(tmp
     notes = t.set_desk([*t.desk(), Binding(fader.source, "view.bright", "abs")], load=False)
     assert len(notes) == 1 and "invariant" in notes[0]
     assert [b.to_json() for b in t.desk()] == was
+
+
+# ------------------------------------------------------- plan 15 WP2: home
+
+def test_overdub_is_home_on_both_layers_and_is_lit(rig):
+    """Decision 27, D6 as the owner extended it: OVERDUB loads the show's
+    "starts on" preset — one invariant row, the same press on either
+    layer, which no preset's desk may map — and its LED is lit while the
+    show names one, dark when it names none. Home is a load: it drops to
+    the preset layer (D4)."""
+    t, proj = rig.midi.table, rig.presets
+    lib, n = proj.lib, apc40.N_OVERDUB
+    (b,) = t.route("note", 0, n)
+    assert (b.target, b.op, b.layer, b.feedback) == ("preset.home", "toggle", None, "led")
+    assert t.is_invariant(Binding(b.source, "view.points", "toggle", layer="preset"))
+    assert apc40.glyph(b.source) == "B11"
+    assert proj.startup == "TUMBLE"
+    rig.midi.poll()
+    assert sent_notes(rig, n)[-1] == 1                              # lit: there is a home
+    # the preset layer
+    push(rig, note(apc40.N_CLIP[0], channel=4), note(apc40.N_CLIP[0], 0, channel=4))
+    assert lib.current("presets") == "TRIP" and t.layer == "preset"
+    push(rig, note(n), note(n, 0))
+    assert lib.current("presets") == "TUMBLE" and proj.active == 0
+    assert sent_notes(rig, n)[-1] == 1                              # still lit after the release
+    # the global layer: the same press, and the load drops the layer
+    push(rig, note(apc40.N_CLIP[0], channel=6), note(apc40.N_CLIP[0], 0, channel=6))
+    assert lib.current("presets") == "MANDALA"
+    shift(rig)
+    assert t.layer == "global" and len(t.route("note", 0, n)) == 1
+    push(rig, note(n), note(n, 0))
+    assert lib.current("presets") == "TUMBLE" and t.layer == "preset"
+    assert sent_notes(rig, SHIFT)[-1] == 0
+    # no preset may map it: a desk row on OVERDUB is dropped with a note
+    notes = t.set_desk([{"source": f"note:0:{n}", "target": "view.points", "op": "toggle",
+                         "feedback": "led"}])
+    said = f"dropped note:0:{n} → view.points: that control is invariant, the session's"
+    assert notes == [f"{said} (plan 13 D6)"]
+    assert [x.target for x in t.route("note", 0, n)] == ["preset.home"]
+    # no "starts on": dark, and a press loads nothing and says so
+    push(rig, note(apc40.N_CLIP[0], channel=4), note(apc40.N_CLIP[0], 0, channel=4))
+    proj.startup = None
+    rig.midi.poll()
+    assert sent_notes(rig, n)[-1] == 0
+    push(rig, note(n))
+    assert lib.current("presets") == "TRIP" and lib.warning.startswith("home: this show names no")
+    push(rig, note(n, 0))
+    assert sent_notes(rig, n)[-1] == 0                              # the echo ends with the press
+    proj.startup = "TUMBLE"
+    rig.midi.poll()
+    assert sent_notes(rig, n)[-1] == 1

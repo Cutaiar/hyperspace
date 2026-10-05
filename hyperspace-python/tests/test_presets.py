@@ -408,6 +408,100 @@ def test_the_startup_preset_loads_on_launch(tmp_path):
     assert r2.lib.current("presets") == "STROBE CAGE"
 
 
+# ---------------------------------------------------------------- home (plan 15 WP2)
+
+def test_home_loads_what_the_show_starts_on(rig):
+    """Decision 27: `preset.home` loads the show's "starts on" preset —
+    from another preset, with unsaved edits, and it is a load like any
+    other (D2): the values, the routes, the desk, the bank's light, a
+    clean dot. A "starts on" picked later is where home goes next."""
+    reg, lib, proj = rig.reg, rig.lib, rig.lib.project
+    home = reg["preset.home"]
+    assert (home.group, home.label, home.modulatable, home.persist) \
+        == ("preset", "Home", True, False)
+    assert proj.startup == "BIG BLUE WAVE" and home.get() is True      # lit: there is one
+    launched = (reg.snapshot(part="performance"),
+                [b.to_json() for b in rig.router.table.routes()],
+                [b.to_json() for b in rig.router.table.desk()])
+    reg["preset.load.2"].fire()
+    reg["view.bright"].set_value(reg["view.bright"].value + 1.0)       # an unsaved edit
+    assert lib.current("presets") == "STROBE CAGE" and lib.is_dirty("presets")
+    assert proj.active == 2 and rig.view.shape != 17
+    home.fire()
+    assert lib.current("presets") == "BIG BLUE WAVE" and not lib.is_dirty("presets")
+    assert proj.active == 0 and rig.view.shape == 17 and not lib.warning
+    assert (reg.snapshot(part="performance"),
+            [b.to_json() for b in rig.router.table.routes()],
+            [b.to_json() for b in rig.router.table.desk()]) == launched
+    # home follows "starts on": no pointer of its own
+    proj.startup = "STROBE CAGE"
+    home.fire()
+    assert lib.current("presets") == "STROBE CAGE" and proj.active == 2
+    # a "starts on" whose file is gone says so, as a launch does, and loads nothing
+    proj.startup = "GONE"
+    home.fire()
+    assert lib.warning == "startup: no preset 'GONE'"
+    assert lib.current("presets") == "STROBE CAGE"
+
+
+def test_home_with_no_starts_on_says_so_and_loads_nothing(rig):
+    reg, lib, proj = rig.reg, rig.lib, rig.lib.project
+    reg["preset.load.2"].fire()
+    reg["view.bright"].set_value(reg["view.bright"].value + 1.0)
+    before = reg.snapshot(part="performance")
+    proj.startup = None
+    assert reg["preset.home"].get() is False                           # dark: nothing to go to
+    reg["preset.home"].fire()
+    assert lib.warning == ("home: this show names no 'starts on' preset — "
+                           "pick one on the PRESETS page")
+    assert lib.current("presets") == "STROBE CAGE" and lib.is_dirty("presets")
+    assert reg.snapshot(part="performance") == before and proj.active == 2
+    proj.startup = "BIG BLUE WAVE"                                     # picked: home goes there,
+    reg["preset.home"].fire()                                          # and the note is gone
+    assert lib.current("presets") == "BIG BLUE WAVE" and lib.warning == ""
+
+
+def test_home_is_one_undo_step(tmp_path):
+    """Home is one step under its own label — the push `Presets.load_doc`
+    makes inside it is the same frame's and adds none — and one undo
+    brings the look that was up back whole, its unsaved edit included;
+    redo goes home again. A home that loads nothing leaves no step."""
+    from test_undo import boot as undo_boot
+    from test_undo import frames, labels, look, same_look, settle
+
+    r = undo_boot(tmp_path / "home")                   # the party show: starts on TUMBLE
+    reg, lib, proj = r.reg, r.lib, r.lib.project
+    reg["preset.load.4"].fire()                        # TRIP
+    settle(r)
+    reg["view.bright"].step(7)                         # an unsaved edit of TRIP
+    settle(r)
+    trip = look(r)
+    assert lib.current("presets") == "TRIP" and lib.is_dirty("presets")
+    r.undo.clear()
+    reg["preset.home"].fire()
+    assert len(r.undo.stack) == 1                      # at once: the inner push opened none
+    settle(r)
+    assert labels(r) == ["home → TUMBLE"]
+    assert lib.current("presets") == "TUMBLE" and proj.active == 0
+    tumble = look(r)
+    assert not same_look(tumble, trip)
+    assert r.undo.undo() and r.undo.status == "undid home → TUMBLE"
+    assert same_look(look(r), trip)
+    assert lib.current("presets") == "TRIP" and lib.is_dirty("presets") and proj.active == 4
+    frames(r, 5)
+    assert same_look(look(r), trip) and r.undo.stack == []
+    assert r.undo.redo() and r.undo.status == "redid home → TUMBLE"
+    assert same_look(look(r), tumble) and lib.current("presets") == "TUMBLE"
+    settle(r)
+    # nothing to go home to, or a "starts on" with no file: no step
+    r.undo.clear()
+    for name in (None, "GONE"):
+        proj.startup = name
+        reg["preset.home"].fire()
+        settle(r)
+        assert r.undo.stack == [] and lib.current("presets") == "TUMBLE"
+
+
 # ---------------------------------------------------------------- module labels
 
 def test_module_labels_are_recorded_and_never_chain_load(rig):

@@ -237,7 +237,8 @@ def test_a_hand_learn_writes_a_route_into_the_loaded_preset(tmp_path):
 
 def test_learn_refuses_the_global_layer_and_invariant_controls(tmp_path):
     """D5, D6: with the global layer up, and on an invariant control — a
-    fader, SHIFT's own note — a learn is refused: nothing changes (the
+    fader, SHIFT's own note, OVERDUB (home, plan 15 WP2) — a learn is
+    refused: nothing changes (the
     table, the layer, the param, the file, the preset's dot) and the
     reason is in `learner.last`."""
     from test_midi import cc, note, push, shift
@@ -268,6 +269,14 @@ def test_learn_refuses_the_global_layer_and_invariant_controls(tmp_path):
     assert lrn.refused and lrn.last == "⇧ (SHIFT) is invariant (the session's) — not learned"
     assert table.layer == "preset"                           # the press did not latch
     push(r, note(apc40.N_SHIFT, 0))
+    r.reg["preset.load.2"].fire()                            # away from what the show starts on
+    before, depth4, loaded = rows(), reg["view.depth4"].value, lib.current("presets")
+    assert loaded != lib.project.startup
+    lrn.arm("view.depth4")
+    push(r, note(apc40.N_OVERDUB))                           # OVERDUB: home, invariant
+    assert lrn.refused and lrn.last == "B11 (OVERDUB) is invariant (the session's) — not learned"
+    push(r, note(apc40.N_OVERDUB, 0))
+    assert lib.current("presets") == loaded                  # and the press sent nobody home
     assert rows() == before and reg["view.depth4"].value == depth4
     assert not lib.is_dirty("presets") and untouched(r)
     lrn.arm("view.depth4")                                   # and a good learn clears the flag
