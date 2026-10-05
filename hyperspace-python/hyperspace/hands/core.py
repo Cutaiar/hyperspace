@@ -1294,10 +1294,7 @@ class HandsIO:
             # table — and the session's depth for a push
             centred = bool(self.axes[best].bipolar)
             depth = float(self.settings.learn_depth)
-            if gate is None:
-                learn.learn_source(self.address(best), centred=centred, depth=depth)
-            else:
-                learn.learn_source(self.address(best), when=gate, centred=centred, depth=depth)
+            learn.learn_source(self.address(best), when=gate, centred=centred, depth=depth)
 
     def _open(self) -> None:
         """Open the port the config names; on failure say why once and

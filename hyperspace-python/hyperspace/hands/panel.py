@@ -157,7 +157,8 @@ def page(panel, dt: float) -> None:
     if imgui.collapsing_header("feel & calibration"):
         for pid in ("smooth", "response", "catch", "learn_depth", "rate", "steady",
                     "pinch_close", "pinch_open", "pinch_hold"):
-            panel._row(f"{GROUP}.{pid}")
+            if f"{GROUP}.{pid}" in panel.reg:    # a setting newer than a hot-reloaded registry
+                panel._row(f"{GROUP}.{pid}")
         _calibrate(io, settings, k)
 
 

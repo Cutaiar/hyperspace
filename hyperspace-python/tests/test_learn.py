@@ -57,9 +57,10 @@ def test_learn_source_writes_a_position_route_without_any_midi(rig, tmp_path):
 def test_a_learned_axis_drives_one_param(rig):
     """Learning an axis onto another param moves it — its other performer
     rows go, push or position (plan 18 fork 7), and the status line names
-    the params they were on; another axis's rows stay, and so does a row
-    of this axis that is switched off (it performs nothing). Learning it
-    again onto the same param is no move and no prompt, only the gate
+    the params they were on; another axis's rows stay. A row of this axis
+    that is switched off goes too (as a switched-off position row always
+    did), so a learn never leaves the route in the table twice. Learning
+    it again onto the same param is no move and no prompt, only the gate
     refreshed."""
     lrn, t = rig.learn, rig.table
     t.add(Binding("hand:3", "view.bright", "push", 0.5))       # a hand-written push, same axis
@@ -69,8 +70,10 @@ def test_a_learned_axis_drives_one_param(rig):
     lrn.arm("view.inst_amp")
     lrn.learn_source("hand:3")                                 # a position row (today's)
     assert lrn.last == ("learned view.inst_amp ← hand 3 positions "
-                        "(into the preset; moved from view.bright)")
+                        "(into the preset; moved from view.bright, camera.zoom)")
     assert not t.routes_to("view.bright")                      # the push row went with it
+    assert off not in t.bindings                               # and the one switched off
+    twin = t.add(Binding("hand:3", "view.speed", "position", enabled=False))
     lrn.arm("view.speed")
     lrn.learn_source("hand:3", when="hand:14", centred=True)   # moves: inst_amp lets go
     assert t.owner("view.inst_amp") is None and lrn.pending is None
@@ -78,12 +81,12 @@ def test_a_learned_axis_drives_one_param(rig):
     assert (speed.source, speed.op, speed.value, speed.when) == ("hand:3", "push", 0.25, "hand:14")
     assert lrn.last == ("learned view.speed ← hand 3 pushes +0.25 while hand:14 "
                         "(into the preset; moved from view.inst_amp)")
+    assert twin not in t.bindings and t.routes_to("view.speed") == [speed]   # not held twice
     lrn.arm("camera.yaw")
     lrn.learn_source("hand:3", centred=True)                   # a push row moves too
     assert t.owner("view.speed") is None and t.owner("camera.yaw").source == "hand:3"
     assert lrn.last.endswith("(into the preset; moved from view.speed)")
     assert [b for b in t.of("hand", "lfo") if b.source != "hand:3"] == [other, lfo]
-    assert off in t.bindings and not off.enabled               # owns nothing: left alone
     yaw = t.owner("camera.yaw")
     lrn.arm("camera.yaw")
     lrn.learn_source("hand:3", when="hand:14")                 # same axis, same param
@@ -254,6 +257,31 @@ def test_a_discrete_target_keeps_the_position_row(rig):
     assert PUSH_DEPTH * 0.5 < MOD_ON             # why: half a throw of the push from "off"
 
 
+def test_a_whole_number_param_keeps_the_position_row(rig):
+    """Review of PR #100: a whole-number param is stepped too. A push of
+    0.25 about `dream.steps` (1–3) is a quarter of a step each way and
+    never reaches the next one — the learn would land and do nothing — so
+    it keeps the fader, which reaches every step."""
+    p = rig.reg["dream.steps"]
+    assert p.integer and (p.lo, p.hi) == (1, 3)
+    p.set(2)
+    rig.table.add(Binding("hand:3", "dream.steps", "push", 0.25))
+    seen = set()
+    for u in (0.0, 0.25, 0.5, 0.75, 1.0):
+        played(rig, u, 0.5)
+        seen.add(int(p.value))
+    assert seen == {2}                           # the push that is not learned: stuck
+    rig.table.remove(rig.table.owner("dream.steps"))
+    for pid in ("view.instances", "dream.steps"):            # the axis ends on dream.steps
+        b = learned(rig, pid, centred=True, depth=0.25)
+        assert b == Binding("hand:3", pid, "position", 1.0), pid
+    seen = set()
+    for u in (0.0, 0.5, 1.0):
+        played(rig, u, 0.5)
+        seen.add(int(p.value))
+    assert seen == {1, 2, 3}
+
+
 def test_centred_target_reads_the_declared_range(rig):
     """By declaration only — no taper, not log, lo == −hi; never the id."""
     reg = rig.reg
@@ -291,7 +319,7 @@ def test_no_target_is_refused_or_flagged(rig):
             assert not lrn.refused and lrn.pending is None, p.id
             b = t.owner(p.id)
             assert b is not None and lrn.last.startswith(f"learned {p.id} ← "), p.id
-            push = centred or centred_target(p)
+            push = (centred or centred_target(p)) and not p.integer
             assert (b.op, b.value) == (("push", 0.3) if push else ("position", 1.0)), p.id
             t.remove(b)
 

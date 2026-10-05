@@ -545,13 +545,13 @@ def test_learn_passes_the_axiss_centredness_and_the_sessions_depth(tmp_path):
     app, r = make_app(tmp_path / "roll"), rig()
     seen = _spied(app)
     b = _hand_learn(r, app, "view.inst_amp", _rolling)
-    assert seen == [("hand:right.roll", {"centred": True, "depth": 0.25})]
+    assert seen == [("hand:right.roll", {"when": None, "centred": True, "depth": 0.25})]
     assert (b.source, b.op, b.value, b.rest) == ("hand:right.roll", "push", 0.25, None)
 
     app, r = make_app(tmp_path / "height"), rig()
     seen = _spied(app)
     b = _hand_learn(r, app, "view.inst_amp", _rising)
-    assert seen == [("hand:right.y", {"centred": False, "depth": 0.25})]
+    assert seen == [("hand:right.y", {"when": None, "centred": False, "depth": 0.25})]
     assert b == Binding("hand:right.y", "view.inst_amp", "position", 1.0)
 
     app, r = make_app(tmp_path / "uncentred"), rig()
@@ -559,7 +559,7 @@ def test_learn_passes_the_axiss_centredness_and_the_sessions_depth(tmp_path):
     app.reg["hands.right.roll.bipolar"].set(False)           # "Centred" switched off
     seen = _spied(app)
     b = _hand_learn(r, app, "view.inst_amp", _rolling)
-    assert seen == [("hand:right.roll", {"centred": False, "depth": 0.25})]
+    assert seen == [("hand:right.roll", {"when": None, "centred": False, "depth": 0.25})]
     assert (b.op, b.value) == ("position", 1.0)
 
     app, r = make_app(tmp_path / "deeper"), rig()
@@ -568,8 +568,8 @@ def test_learn_passes_the_axiss_centredness_and_the_sessions_depth(tmp_path):
     seen = _spied(app)
     b = _hand_learn(r, app, "view.inst_amp", _rolling)
     up = _hand_learn(r, app, "rot.rate.XW", _rising)
-    assert [kw for _, kw in seen] == [{"centred": True, "depth": 0.5},
-                                      {"centred": False, "depth": 0.5}]
+    assert [kw for _, kw in seen] == [{"when": None, "centred": True, "depth": 0.5},
+                                      {"when": None, "centred": False, "depth": 0.5}]
     assert (b.op, b.value) == ("push", 0.5)
     assert (up.source, up.op, up.value, up.rest) == ("hand:right.y", "push", 0.5, None)
 
