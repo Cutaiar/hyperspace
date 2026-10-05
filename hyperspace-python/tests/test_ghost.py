@@ -599,6 +599,33 @@ def test_a_failed_target_build_is_all_or_nothing(ctx, monkeypatch):
     assert not np.array_equal(on, base_later) and gh._fbo is not None
 
 
+def test_one_reload_round_rebuilds_the_ghost_once(ctx, monkeypatch):
+    """Plan 21 WP5 R5: a ghost.py save reloads ghost.py and render.py, and
+    the reloader calls both `Renderer.on_reload` and `Ghost.on_reload`
+    (app.main's target list, in that order). The ghost's programs are
+    built once in that round, not twice; a render.py save alone (the
+    Ghost not re-classed) rebuilds none of them. Two reloads in a row are
+    harmless: the hands still draw and nothing is left in error."""
+    _, r = frame(ctx, src=tracker())
+    gh = r.ghost
+    assert gh.geometry is not None
+    builds = []
+    real = G.Ghost._build
+    with monkeypatch.context() as m:
+        m.setattr(G.Ghost, "_build", lambda self: builds.append(1) or real(self))
+        geo = gh.geometry
+        r.on_reload()                                      # a render.py save
+        assert builds == [] and gh.geometry is geo
+        r.on_reload()                                      # a ghost.py save: both hooks
+        gh.on_reload()
+        assert len(builds) == 1
+        gh.on_reload()                                     # and once more: still harmless
+        assert len(builds) == 2
+    out, _ = frame(ctx, src=tracker(), renderer=r, t0=5.0)
+    base, _ = frame(ctx, t0=5.0)
+    assert not np.array_equal(out, base) and gh.error == ""
+
+
 def test_an_open_hand_and_a_fist_differ(ctx):
     open_ = hand_mask(ctx, tracker(both(right="open")))
     fist = hand_mask(ctx, tracker(both(right="fist")))

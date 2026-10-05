@@ -515,7 +515,10 @@ class Renderer:
         for res in (old_fx, old_pic):
             if res is not None:
                 res.release()
-        self.ghost.on_reload()
+        # not the ghost hands': their programs live in ghost.py, and the
+        # reloader calls `Ghost.on_reload` itself whenever ghost.py (or a
+        # module before it) changed — calling it here too rebuilt them twice
+        # in one round, and again on a save that never touched them
         # the dim's program: dropped, and built again from this module's
         # current source the next frame that dims (an edit may also have
         # fixed what would not build). getattr: a renderer made before the
