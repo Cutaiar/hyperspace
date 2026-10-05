@@ -12,6 +12,9 @@ looks like. Written against `plan-11-integration` (778 tests); revised
 for plan 13 on `plan-13-integration` (872 tests): F1–F8 load the open
 project's bank of **presets**, the ROUTING page is one page over the
 loaded preset, and `bindings.json` holds only the session's controls.
+A plain-language version of every open check, grouped by the hardware
+each needs and in the order to run them, is
+[`../TESTING-GUIDE.md`](../TESTING-GUIDE.md).
 
 **Before you start.** `git pull`, `uv sync`, `uv run pytest -q`. Your
 `~/Hyperspace/config.toml` today has `[midi] enabled = true`, `[output]`
