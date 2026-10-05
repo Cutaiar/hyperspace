@@ -67,7 +67,7 @@ class Stage(shots.Stage):
     (the party presets load by their upper-case slot name)."""
 
     def __init__(self, ctx=None, mouse: dict[str, float] | None = None):
-        super().__init__(f"-{NAME}".upper(), ctx)   # Stage loads name.split("-", 1)[1].upper()
+        super().__init__(NAME, ctx, load=NAME)
         for pid, v in (mouse or {}).items():
             self.reg[pid].set(v)                    # a scene-setter's write: the base
 
@@ -90,18 +90,20 @@ def reading(side: str, axis: str, u: float) -> str:
 
 
 def camera(st) -> dict[str, float]:
-    return {b.target: st.reg[b.target].value for b in rows()}
+    """The five camera params as the picture has them, in norm units."""
+    return {b.target: st.reg[b.target].eff_norm for b in rows()}
 
 
-def others(st, own: str, base: dict[str, float]) -> str:
+def others(st, own: str, before: dict[str, float]) -> str:
     """The largest move, in norm units, of the four camera params the row
-    does not own."""
+    does not own: what the picture has now against `before` (`camera`,
+    taken before the hold), so a moved base counts as much as an offset."""
     worst = 0.0
-    for pid in base:
+    for pid, was in before.items():
         if pid == own:
             continue
         p = st.reg[pid]
-        d = p.eff_norm - p.norm
+        d = p.eff_norm - was
         worst = max(worst, abs(math.remainder(d, 1.0) if p.wrap else d))
     return f"{worst:.4f}"
 
@@ -120,15 +122,14 @@ def sweeps(frames: int) -> str:
     for b in rows():
         side, axis = axis_of(b)
         s = side[0].upper()
-        st = Stage()
-        p = st.reg[b.target]
-        out += [f"{b.source} → {b.target}   push {b.value:+g}   ({SAY[side, axis]})",
-                f"    base (no hand): {p.fmt(p.value)}",
-                f"    {'u':>6}   {'hand reads':>11}   {p.label.lower():>10}   others"]
+        out.append(f"{b.source} → {b.target}   push {b.value:+g}   ({SAY[side, axis]})")
         for u in US:
             st = Stage()
             p = st.reg[b.target]
             base = camera(st)
+            if u == US[0]:
+                out += [f"    base (no hand): {p.fmt(p.value)}",
+                        f"    {'u':>6}   {'hand reads':>11}   {p.label.lower():>10}   others"]
             st.hold({f"{s}.{axis}": u}, frames)
             rest = "   (rest)" if u == (0.0 if axis == "y" else 0.5) else ""
             out.append(f"    {u:6.3f}   {reading(side, axis, u):>11}   {p.fmt(p.value):>10}   "

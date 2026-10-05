@@ -953,7 +953,9 @@ def test_hands_orbit_is_five_pushes_onto_the_camera(rig):
     assert rig.lib.is_factory("presets", ORBIT) and ORBIT in rig.lib.list("presets")
     for show in (FACTORY / "projects").glob("*.hyp.json"):
         proj = json.loads(show.read_text())
-        assert ORBIT not in proj["bank"] and proj.get("startup") != ORBIT, show.name
+        # a bank names presets by name, in whatever case the show wrote it
+        named = {preset.slug(n) for n in [*proj["bank"], proj.get("startup")] if n}
+        assert named and preset.slug(doc["name"]) == ORBIT and ORBIT not in named, show.name
     orbit(rig)
     assert [b.to_json() for b in rig.router.table.routes()] == doc["routes"]
     assert [rig.router.table.owner(t).source for _, t, _ in ORBIT_ROWS] == \
