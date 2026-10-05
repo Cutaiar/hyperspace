@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""The FX page's chips and which strip is open, shown headless (plan 16 WP2).
+"""The FX page's chips and which strip is open, shown headless (plan 16 WP2),
+and the face target on the page (plan 20 WP2).
 
 Not the app: the registry, the library and the live `FxState` the way the
 FX page reads them, on a fresh temp home of its own (`tools/undo_demo.py`
@@ -8,13 +9,20 @@ window, no MIDI port, no audio device.
 
   uv run python tools/fx_page_demo.py            # the transcript → fx-select.txt
   uv run python tools/fx_page_demo.py --shots    # the page as PNGs, from a hidden window
+  uv run python tools/fx_page_demo.py --faces    # plan 20 WP2's two PNGs, the same way
 
-Both land in docs/plans/assets/16-paper-cuts/. The transcript opens an
+The first two land in docs/plans/assets/16-paper-cuts/. The transcript opens an
 effect by name, moves it and another through the stack, and loads
 presets with different orders: the same effect stays open throughout.
 The shots are the FX page with two effects on and another open but off
 (fx-chips.png), and an off effect's strip saying why it is not running
 (fx-idle.png, plan 16 WP3).
+
+--faces lands in docs/plans/assets/20-fx-dream-looks/: the page with two
+effects aimed at the faces and one on the frame, both status rows, the
+per face / screen chips and the open strip's target combo
+(fx-page-faces.png), and the page with nothing aimed at the faces
+(fx-page-frame-only.png). Hidden-window renders, not the app on a screen.
 """
 
 # undo_demo is imported before anything of hyperspace's, on purpose: it sets
@@ -36,7 +44,9 @@ from hyperspace.library import Library
 from hyperspace.params import build_registry
 from hyperspace.view import ViewState
 
-OUT = Path(__file__).resolve().parents[1] / "docs" / "plans" / "assets" / "16-paper-cuts"
+ASSETS = Path(__file__).resolve().parents[1] / "docs" / "plans" / "assets"
+OUT = ASSETS / "16-paper-cuts"
+OUT20 = ASSETS / "20-fx-dream-looks"
 lines: list[str] = []
 
 
@@ -116,7 +126,10 @@ def transcript() -> None:
     print(f"\nwrote {OUT / 'fx-select.txt'}")
 
 
-def shots() -> None:
+def harness() -> SimpleNamespace:
+    """A hidden window at the control size with the Panel on the FX page:
+    `draw(n)` runs n frames, `shoot(out, name, what)` reads the window back
+    into a PNG, `close()` ends it. `r` is boot()'s."""
     import glfw
     import numpy as np
     from imgui_bundle import imgui, implot
@@ -124,7 +137,6 @@ def shots() -> None:
     from OpenGL import GL
     from PIL import Image
 
-    from hyperspace import ui_fx
     from hyperspace.app import CONTROL_SIZE
     from hyperspace.ui import PAGE_KEYS, Panel, apply_style, load_fonts
 
@@ -149,13 +161,16 @@ def shots() -> None:
     r = boot()
     fx, reg = r.fx, r.reg
     panel = Panel(r.control, r.audio, r.view, bank=r.lib.project, registry=reg, library=r.lib)
-    panel.renderer = SimpleNamespace(fx=SimpleNamespace(state=fx, error=lambda n: ""))
+    panel.renderer = SimpleNamespace(face_error="",
+                                     fx=SimpleNamespace(state=fx, error=lambda n: ""))
     reg["ui.page"].set(PAGE_KEYS.index("fx"))
 
-    def draw(n: int = 8) -> None:
+    def draw(n: int = 8, mouse=None) -> None:
         for _ in range(n):
             glfw.poll_events()
             impl.process_inputs()
+            if mouse is not None:           # a simulated mouse, after the backend's own
+                mouse(imgui.get_io())
             imgui.new_frame()
             GL.glClearColor(0.0, 0.0, 0.0, 1.0)
             GL.glClear(GL.GL_COLOR_BUFFER_BIT)
@@ -164,31 +179,75 @@ def shots() -> None:
             impl.render(imgui.get_draw_data())
             GL.glFinish()
 
-    def shoot(name: str, what: str) -> None:
+    def shoot(out: Path, name: str, what: str) -> None:
         w, h = glfw.get_framebuffer_size(win)
         raw = GL.glReadPixels(0, 0, w, h, GL.GL_RGB, GL.GL_UNSIGNED_BYTE)
         px = np.frombuffer(raw, dtype=np.uint8).reshape(h, w, 3)[::-1]
         if not px.any():
             raise SystemExit("the hidden window read back black: no picture on this machine")
-        OUT.mkdir(parents=True, exist_ok=True)
-        Image.fromarray(px).save(OUT / name, optimize=True)
-        print(f"wrote {OUT / name}  — {what}")
+        out.mkdir(parents=True, exist_ok=True)
+        Image.fromarray(px).save(out / name, optimize=True)
+        print(f"wrote {out / name}  — {what}")
 
+    def close() -> None:
+        impl.shutdown()
+        glfw.terminate()
+
+    return SimpleNamespace(r=r, panel=panel, draw=draw, shoot=shoot, close=close)
+
+
+def shots() -> None:
+    from hyperspace import ui_fx
+    h = harness()
+    fx, reg, draw = h.r.fx, h.r.reg, h.draw
     # the chips: two effects on, another open (outlined) and off
     reg["fx.warp.on"].set(True)
     reg["fx.tripcolour.on"].set(True)
     fx.select("fractals")
     draw()
-    shoot("fx-chips.png", f"on: {fx.chain()}, open: {fx.selected()} "
+    h.shoot(OUT, "fx-chips.png", f"on: {fx.chain()}, open: {fx.selected()} "
                           f"(on={fx.values['fractals']['on']})")
     # plan 16 WP3: an open effect that is off says so, with "turn on" beside
     # the line and its rows dimmed
     fx.select("kaleido")
     draw()
-    shoot("fx-idle.png", f"open: {fx.selected()}, why idle: {ui_fx.why_idle(fx, 'kaleido')}")
-    impl.shutdown()
-    glfw.terminate()
+    h.shoot(OUT, "fx-idle.png", f"open: {fx.selected()}, why idle: {ui_fx.why_idle(fx, 'kaleido')}")
+    h.close()
+
+
+def faces() -> None:
+    """Plan 20 WP2: the face target on the page."""
+    from hyperspace import ui_fx
+    from hyperspace.fx import BLENDS, FACES, FRAME
+    h = harness()
+    fx, reg, draw = h.r.fx, h.r.reg, h.draw
+    # nothing aimed at the faces: the page as it was, with the one-line note
+    for name in ("plasma", "kaleido", "huecycle"):
+        reg[f"fx.{name}.on"].set(True)
+    fx.select("kaleido")
+    draw()
+    h.shoot(OUT20, "fx-page-frame-only.png",
+            f"frame: {fx.chain(FRAME)}, faces: {fx.chain(FACES)}, open: {fx.selected()}")
+    # two effects aimed at the faces (one on, one off), one more on the
+    # faces and running, the rest on the frame; the open strip is a face one
+    reg["fx.kaleido.target"].set(FACES)
+    reg["fx.zoomblur.target"].set(FACES)
+    reg["fx.zoomblur.on"].set(True)
+    reg["fx.glimmer.target"].set(FACES)         # aimed at the faces and off: the outline
+    reg["fx.kaleido.blend"].set(BLENDS.index("multiply"))   # the blend combo's longest entry
+    reg["view.faces"].set(True)
+    draw()
+    h.shoot(OUT20, "fx-page-faces.png",
+            f"frame: {fx.chain(FRAME)}, faces: {fx.chain(FACES)}, open: {fx.selected()}, "
+            f"map: {reg['fx.face_map'].text()}")
+    # the same with Faces off: the row says so, and the open strip offers "faces on"
+    reg["view.faces"].set(False)
+    draw()
+    h.shoot(OUT20, "fx-page-faces-off.png",
+            f"view.faces off, why idle: {ui_fx.why_idle(fx, 'kaleido', h.r.view.faces)}")
+    h.close()
 
 
 if __name__ == "__main__":
-    sys.exit(shots() if "--shots" in sys.argv[1:] else transcript())
+    args = sys.argv[1:]
+    sys.exit(shots() if "--shots" in args else faces() if "--faces" in args else transcript())
