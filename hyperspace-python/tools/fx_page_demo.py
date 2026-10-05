@@ -9,7 +9,7 @@ window, no MIDI port, no audio device.
 
   uv run python tools/fx_page_demo.py            # the transcript → fx-select.txt
   uv run python tools/fx_page_demo.py --shots    # the page as PNGs, from a hidden window
-  uv run python tools/fx_page_demo.py --faces    # plan 20 WP2's two PNGs, the same way
+  uv run python tools/fx_page_demo.py --faces    # plan 20 WP2's three PNGs, the same way
 
 The first two land in docs/plans/assets/16-paper-cuts/. The transcript opens an
 effect by name, moves it and another through the stack, and loads
@@ -21,8 +21,8 @@ The shots are the FX page with two effects on and another open but off
 --faces lands in docs/plans/assets/20-fx-dream-looks/: the page with two
 effects aimed at the faces and one on the frame, both status rows, the
 per face / screen chips and the open strip's target combo
-(fx-page-faces.png), and the page with nothing aimed at the faces
-(fx-page-frame-only.png). Hidden-window renders, not the app on a screen.
+(fx-page-faces.png), the same with Faces off (fx-page-faces-off.png), and
+the page with nothing aimed at the faces (fx-page-frame-only.png). Hidden-window renders, not the app on a screen.
 """
 
 # undo_demo is imported before anything of hyperspace's, on purpose: it sets
@@ -165,12 +165,10 @@ def harness() -> SimpleNamespace:
                                      fx=SimpleNamespace(state=fx, error=lambda n: ""))
     reg["ui.page"].set(PAGE_KEYS.index("fx"))
 
-    def draw(n: int = 8, mouse=None) -> None:
+    def draw(n: int = 8) -> None:
         for _ in range(n):
             glfw.poll_events()
             impl.process_inputs()
-            if mouse is not None:           # a simulated mouse, after the backend's own
-                mouse(imgui.get_io())
             imgui.new_frame()
             GL.glClearColor(0.0, 0.0, 0.0, 1.0)
             GL.glClear(GL.GL_COLOR_BUFFER_BIT)

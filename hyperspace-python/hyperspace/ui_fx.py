@@ -69,14 +69,13 @@ IDLE = {
 RESET_NOTE = "a preset load resets this stack: save a preset to keep it"
 FACES_TIP = "on the faces"      # added to the hovers of a chip aimed at the faces
 FACES_OFF = "(Faces is off)"    # the faces' status row while view.faces is off
+NO_COPIES = "(no copies to show them)"      # …and while view.instances is 0
 
 
 def page(panel, dt: float) -> None:
     r = panel.reg
     chain = getattr(panel.renderer, "fx", None)
-    st = r["fx.on"]
     fx = _state(panel)
-    running = fx.chain() if fx is not None else []
     # plan 20 WP2: the status is per target while any effect — on or off —
     # is aimed at the faces; with none, it is the one line it always was
     aimed = fx is not None and any(_faces(fx, n) for n in fx.specs)
@@ -85,20 +84,16 @@ def page(panel, dt: float) -> None:
     panel._check("fx.on")
     imgui.same_line()
     panel._slider("fx.mix")
+    if fx is None:
+        status = "nothing on" if r["fx.on"].base else "bypassed"
+    else:
+        status = f"frame  {_status(fx, FRAME)}" if aimed else _status(fx)
+    _faint(status)
     if aimed:
-        running = fx.chain(FRAME)
-    status = ("bypassed" if not st.base else
-              " → ".join(fx.specs[n].label for n in running) if running else "nothing on")
-    imgui.push_style_color(imgui.Col_.text, ui.FAINT)
-    imgui.text_wrapped(f"frame  {status}" if aimed else status)
-    if aimed:
-        imgui.pop_style_color()
         _faces_row(panel, fx)
-        imgui.push_style_color(imgui.Col_.text, ui.FAINT)
     # plan 14 WP5: a preset load replaces every effect value (plan 13 D2),
     # so what is tried here is gone on the next F-key unless it is saved
-    imgui.text_wrapped(RESET_NOTE)
-    imgui.pop_style_color()
+    _faint(RESET_NOTE)
     if fx is None:
         imgui.text_disabled("no renderer")
         return
@@ -179,6 +174,31 @@ def page(panel, dt: float) -> None:
         _relearn_frame(panel, rects)
 
 
+def _faint(text: str) -> None:
+    """A wrapped line in the quietest text colour."""
+    imgui.push_style_color(imgui.Col_.text, ui.FAINT)
+    imgui.text_wrapped(text)
+    imgui.pop_style_color()
+
+
+def _status(fx, target: int | None = None) -> str:
+    """What runs, as a status line says it: the chain's labels in order —
+    all of it, or one target's — or why there is none. It reads what runs
+    (the effective `fx.on`), as `why_idle` does."""
+    if not fx.on:
+        return "bypassed"
+    running = fx.chain(target)
+    return " → ".join(fx.specs[n].label for n in running) if running else "nothing on"
+
+
+def _chip_baseline() -> None:
+    """Put the next text on the baseline of a chip beside it: a chip is a
+    frame with CHIP_PAD."""
+    imgui.push_style_var(imgui.StyleVar_.frame_padding, ui.CHIP_PAD)
+    imgui.align_text_to_frame_padding()
+    imgui.pop_style_var()
+
+
 def _faces(fx, name: str) -> bool:
     """Is `name` aimed at the faces? `.get`: a values dict from before a
     hot reload has no "target"."""
@@ -190,30 +210,28 @@ def _faces_row(panel, fx) -> None:
     why nothing does — and at its right end the two chips of `fx.face_map`,
     the lit one being how the faces show their picture. A chip click is
     Param.set; its right-click is the param's menu, so it can be learned."""
-    r = panel.reg
-    p = r.get("fx.face_map")        # None: a registry declared before plan 20
+    p = panel.reg.get("fx.face_map")    # None: a registry declared before plan 20
     chips = FACE_MAPS if p is not None else []
-    running = fx.chain(FACES)
-    err = getattr(panel.renderer, "face_error", "") or ""
+    # "faces: <Type>: <msg>" (render.py); a GL message can be several lines,
+    # and this row is one
+    err = " ".join((getattr(panel.renderer, "face_error", "") or "").split())
     warn = True
-    if err:                                     # "faces: <Type>: <msg>" (render.py)
+    if err:
         text = err
     elif not getattr(panel.view, "faces", True):
         text = f"faces  {FACES_OFF}"
+    elif int(getattr(panel.view, "instances", 1)) <= 0:
+        text = f"faces  {NO_COPIES}"            # the face pass does not run with no copies
     else:
         warn = False
-        text = "faces  " + ("bypassed" if not r["fx.on"].base else
-                            " → ".join(fx.specs[n].label for n in running) if running
-                            else "nothing on")
+        text = f"faces  {_status(fx, FACES)}"
     sp = imgui.get_style().item_spacing.x
     avail = imgui.get_content_region_avail().x
     left = imgui.get_cursor_pos_x()             # same_line's offset is from the window's edge
     chips_w = ui.chip_w(*chips) if chips else 0.0
-    # the text on the chips' baseline (a chip is a frame with CHIP_PAD), and
-    # cut to the room the chips leave: this row is never two lines
-    imgui.push_style_var(imgui.StyleVar_.frame_padding, ui.CHIP_PAD)
-    imgui.align_text_to_frame_padding()
-    imgui.pop_style_var()
+    # the text on the chips' baseline, and cut to the room the chips leave:
+    # this row is never two lines
+    _chip_baseline()
     shown = ui.fit_text(text, avail - chips_w - sp)
     imgui.text_colored(ui.WARN if warn else ui.FAINT, shown)
     if shown != text and imgui.is_item_hovered():
@@ -226,7 +244,9 @@ def _faces_row(panel, fx) -> None:
         imgui.same_line(x) if i == 0 else imgui.same_line()
         if ui.lit_chip(f"{label}##map.{p.id}.{i}", i == now):
             p.set(i)                            # a scene-setter's write to the base
-        panel._tip(p)
+        # the lit chip is what the faces show, a click writes the base: while
+        # a source rides the switch the hover names it, as the LED's does
+        panel._tip(p, lambda: f"{p.tip}\n{panel._mod_line(p)}" if p.modulated else p.tip)
         panel._ctx(p, key=f".map{i}")           # a key each: one popup id per item
         panel._learn_frame(p)
         if i == now:
@@ -244,7 +264,7 @@ def why_idle(fx, name: str, faces_on: bool = True) -> str | None:
     v = fx.values[name]
     if not v["on"]:
         return "off"
-    if not faces_on and v.get("target", FRAME) == FACES:
+    if not faces_on and _faces(fx, name):
         return "faces off"
     if not fx.on:
         return "bypassed"
@@ -264,10 +284,7 @@ def _idle_line(panel, name: str, reason: str) -> None:
         imgui.text_colored(ui.WARN, text)
         return
     p = panel.reg[pid.format(name=name)]
-    # the text on the chip's baseline: a chip is a frame with CHIP_PAD
-    imgui.push_style_var(imgui.StyleVar_.frame_padding, ui.CHIP_PAD)
-    imgui.align_text_to_frame_padding()
-    imgui.pop_style_var()
+    _chip_baseline()
     imgui.text_colored(ui.WARN, text)
     imgui.same_line()
     if ui.chip(f"{chip}##idle.{p.id}"):

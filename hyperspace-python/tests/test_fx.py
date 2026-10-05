@@ -1455,6 +1455,15 @@ def test_the_status_reads_per_target(fxpage):
     fxpage.frame()
     assert fxpage.wrapped[0] == "frame  bypassed" and faces_rows() == ["faces  bypassed"]
     reg["fx.on"].set(True)
+    # …and they read what runs, as why_idle does: a source holding the
+    # bypass off over a base that is on (review of PR #106)
+    reg["fx.on"].modulate(-1.0)
+    reg.apply()
+    assert reg["fx.on"].base is True and st.on is False and st.chain() == []
+    fxpage.frame()
+    assert fxpage.wrapped[0] == "frame  bypassed" and faces_rows() == ["faces  bypassed"]
+    reg.apply()                                      # the source lets go
+    assert st.on is True
 
     # Faces off: the row says so, in the warning colour, and keeps its chips
     panel.view.faces = False
@@ -1462,6 +1471,12 @@ def test_the_status_reads_per_target(fxpage):
     assert faces_rows() == [f"faces  {FACES_OFF}"] == ["faces  (Faces is off)"]
     assert fxpage.colors[faces_rows()[0]] == warn and "map.fx.face_map.1" in fxpage.rects
     panel.view.faces = True
+    # no copies: the face pass does not run either, and the row says so
+    panel.view.instances = 0
+    fxpage.frame()
+    assert faces_rows() == ["faces  (no copies to show them)"]
+    assert fxpage.colors[faces_rows()[0]] == warn
+    panel.view.instances = 1
 
     # the renderer's face_error is the row, cut to the room beside the chips
     panel.renderer.face_error = "faces: RuntimeError: seed pass failed"
@@ -1473,6 +1488,11 @@ def test_the_status_reads_per_target(fxpage):
     row, = faces_rows()
     assert row.endswith("…") and row.startswith("faces: RuntimeError: long")
     assert fxpage.rects["map.fx.face_map.0"][1] == a[1]                     # still one row
+    # a GL message of several lines is still one row (review of PR #106)
+    panel.renderer.face_error = "faces: Error: GLSL\n\n  0:12: bad\n"
+    fxpage.frame()
+    assert faces_rows() == ["faces: Error: GLSL 0:12: bad"]
+    assert fxpage.rects["map.fx.face_map.0"] == pytest.approx(a)
     panel.renderer.face_error = ""
 
     # the last effect aimed back at the frame: one line again
@@ -1522,6 +1542,19 @@ def test_the_map_chips_set_fx_face_map(fxpage, monkeypatch):
     lit.clear()
     fxpage.frame()
     assert ("map.fx.face_map.0", True) in lit and ("map.fx.face_map.1", False) in lit
+    # …and then either chip's hover names the source, as the LED's does: a
+    # click on the unlit one writes a base that is already there
+    tips = []
+    monkeypatch.setattr(imgui, "set_tooltip", lambda t: tips.append(t))
+    x0, y0, x1, y1 = fxpage.rects["map.fx.face_map.1"]
+    imgui.get_io().add_mouse_pos_event((x0 + x1) / 2, (y0 + y1) / 2)
+    for _ in range(3):
+        tips.clear()
+        reg.apply()
+        p.modulate(-1.0)
+        reg.apply()
+        fxpage.frame()
+    assert tips and tips[-1].startswith(p.tip + "\n") and "per face" in tips[-1]
 
 
 def test_the_strips_target_combo_moves_an_effect_between_chains(fxpage, monkeypatch):
