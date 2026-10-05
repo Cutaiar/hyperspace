@@ -509,3 +509,191 @@ def test_one_raising_frame_does_not_strand_the_next(ctx):
     assert ctx.fbo is win
     assert np.abs(_pixels(win) - before).mean() > 0.5, "the next frame must reach the window"
     win.release()
+
+
+# ---- plan 15 WP3: the master dim — the frame's last pass, a multiply ----
+
+DW, DH = 480, 320
+
+
+def _hands():
+    """Two synthetic hands, as tests/test_ghost.py feeds the ghost."""
+    from test_ghost import tracker
+
+    return tracker()
+
+
+def _dim_renderer(ctx, *, effect=True, hands=True, bg_alpha=1.0, echoes=False):
+    """A renderer with an effect on and the ghost hands over it."""
+    from hyperspace.fx import FxState
+    from hyperspace.render import Renderer
+
+    fx = FxState()
+    fx.values["warp"]["on"] = effect
+    r = Renderer(ctx, fx=fx)
+    r.bg_alpha = bg_alpha
+    r.ghost.state.on, r.ghost.state.alpha = hands, 1.0
+    r.ghost.source = _hands() if hands else None
+    if echoes:
+        st = r.lookback.state
+        st.on, st.echoes, st.gap, st.tint_from = True, 8, 0.0, 0
+        r.lookback.source = None
+    return r
+
+
+def _dim_frames(ctx, r, dim, frames=4, t0=2.0, spin=0.0):
+    """RGBA (as ints) after `frames` frames at 30 fps with the master at
+    `dim` (None: left as the renderer has it)."""
+    fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((DW, DH), 4)])
+    if dim is not None:
+        r.dim = dim
+    s = ViewState(shape=10, ang=list(VIEW["ang"]), yaw=VIEW["yaw"], pitch=VIEW["pitch"],
+                  faces=True, pattern=2)
+    for k in range(frames):
+        s.ang = [a + spin for a in s.ang]
+        fbo.use()
+        ctx.viewport = (0, 0, DW, DH)
+        r.draw(s, DW, DH, t_now=t0 + k / 30)
+        assert ctx.fbo is fbo and ctx.viewport == (0, 0, DW, DH)   # ends on its target
+    out = np.frombuffer(fbo.read(components=4), dtype=np.uint8).reshape(DH, DW, 4)[::-1]
+    fbo.release()
+    assert ctx.error == "GL_NO_ERROR"
+    return out.astype(int)
+
+
+def test_dim_at_one_is_the_old_frame_exactly(ctx, monkeypatch):
+    """At 1 the pass does not run — no program is built, `dim_pass` is never
+    called — and the frame, effect and ghost hands on, is bit-identical to
+    one from a renderer that has no `dim` at all (one made before a hot
+    reload brought the attribute)."""
+    from hyperspace.render import Renderer
+
+    old = _dim_renderer(ctx)
+    del old.dim, old.dim_error, old._dim_prog, old._dim_vao
+    want = _dim_frames(ctx, old, None)
+    assert not hasattr(old, "dim")
+    calls = []
+    real = Renderer.dim_pass
+    monkeypatch.setattr(Renderer, "dim_pass",
+                        lambda self, *a, **k: calls.append(a) or real(self, *a, **k))
+    r = _dim_renderer(ctx)
+    got = _dim_frames(ctx, r, 1.0)
+    assert want[..., :3].max() > 100 and r.fx.active()
+    assert np.array_equal(got, want)
+    assert calls == [] and r._dim_prog is None and r.dim_error == ""
+    # and the pass leaves the GL state as it found it: after dimmed frames,
+    # full again is what the renderer that never dimmed draws next
+    later = _dim_frames(ctx, old, None, t0=3.0)
+    again = _dim_frames(ctx, old, None, t0=4.0)
+    assert not np.array_equal(_dim_frames(ctx, r, 0.3, t0=3.0), later)
+    assert len(calls) == 4 and r._dim_prog is not None
+    assert np.array_equal(_dim_frames(ctx, r, 1.0, t0=4.0), again)
+    assert len(calls) == 4
+    old.on_reload()                                # a reload of the old renderer: no raise
+    assert old.dim_error == "" and old._dim_prog is None
+
+
+def test_dim_scales_the_colour_and_leaves_an_opaque_grounds_alpha(ctx):
+    base = _dim_frames(ctx, _dim_renderer(ctx), 1.0)
+    half = _dim_frames(ctx, _dim_renderer(ctx), 0.5)
+    assert base[..., :3].max() > 100
+    assert np.abs(half[..., :3] - base[..., :3] * 0.5).max() <= 1     # within a step
+    assert base[..., 3].min() == 255 and half[..., 3].min() == 255    # opaque everywhere
+    low = _dim_frames(ctx, _dim_renderer(ctx), 0.15)
+    assert np.abs(low[..., :3] - base[..., :3] * 0.15).max() <= 1
+    assert low[..., 3].min() == 255
+
+
+def test_dim_at_zero_is_black_and_opaque(ctx):
+    out = _dim_frames(ctx, _dim_renderer(ctx), 0.0)
+    assert out[..., :3].max() == 0 and out[..., 3].min() == 255
+    # below the range is black too, never a negative factor
+    out = _dim_frames(ctx, _dim_renderer(ctx), -0.5)
+    assert out[..., :3].max() == 0 and out[..., 3].min() == 255
+
+
+def test_dim_is_after_the_effects_and_the_ghost_hands(ctx):
+    """Hands on over an effect: the effect's pixels and the hands' pixels
+    are both there at full, and both come out at the factor — the dim is
+    not under either."""
+    from test_ghost import H, W, hand_mask
+
+    assert (W, H) == (DW, DH)
+    hands = hand_mask(ctx, _hands(), solid=True)
+    assert hands.sum() > 500
+    plain = _dim_frames(ctx, _dim_renderer(ctx, effect=False), 1.0)
+    base = _dim_frames(ctx, _dim_renderer(ctx), 1.0)
+    bare = _dim_frames(ctx, _dim_renderer(ctx, hands=False), 1.0)
+    assert np.abs(base[~hands] - plain[~hands]).sum() > 1000          # the effect ran
+    assert np.abs(base[hands] - bare[hands]).sum() > 1000             # the hands are drawn
+    assert base[hands][:, :3].mean() > 60
+    dimmed = _dim_frames(ctx, _dim_renderer(ctx), 0.4)
+    for where in (hands, ~hands):
+        assert np.abs(dimmed[where][:, :3] - base[where][:, :3] * 0.4).max() <= 1
+    assert dimmed[hands][:, :3].mean() == pytest.approx(0.4 * base[hands][:, :3].mean(), abs=1)
+
+
+def test_dim_fades_a_see_through_ground(ctx):
+    """Overlay mode: the frame is premultiplied, so colour and alpha both
+    scale — the render fades off the desktop instead of leaving a dark
+    ground over it."""
+    for bg in (0.0, 0.6):
+        base = _dim_frames(ctx, _dim_renderer(ctx, bg_alpha=bg), 1.0)
+        half = _dim_frames(ctx, _dim_renderer(ctx, bg_alpha=bg), 0.5)
+        assert base[..., 3].max() == 255 and base[..., 3].min() < 255  # see-through in places
+        assert base[0, 0, 3] == round(bg * 255)                       # the ground, as asked
+        assert np.abs(half - base * 0.5).max() <= 1                   # all four channels
+        gone = _dim_frames(ctx, _dim_renderer(ctx, bg_alpha=bg), 0.0)
+        assert gone.max() == 0                                        # nothing left over it
+
+
+def test_the_history_never_holds_the_dim(ctx):
+    """The look-back's history is captured from the scene texture, before
+    the dim: with echoes trailing a turning shape, the atlas is the same
+    bytes dimmed or not, and the dimmed frame is the undimmed one times the
+    factor — an echo that remembered the dim would come out darker."""
+    def run(dim):
+        r = _dim_renderer(ctx, effect=False, hands=False, echoes=True)
+        out = _dim_frames(ctx, r, dim, frames=8, spin=0.05)
+        assert r.lookback.atlas is not None and r.lookback.layers()
+        scene = np.frombuffer(r.scene.tex.read(), dtype=np.uint8).copy()
+        return out, np.frombuffer(r.lookback.atlas.read(), dtype=np.uint8).copy(), scene
+
+    full, atlas, scene = run(1.0)
+    dimmed, atlas_d, scene_d = run(0.5)
+    assert atlas.max() > 100
+    assert np.array_equal(atlas_d, atlas) and np.array_equal(scene_d, scene)
+    assert np.abs(dimmed[..., :3] - full[..., :3] * 0.5).max() <= 1
+    # the echoes are in the picture: it differs from the same frames without
+    still = _dim_frames(ctx, _dim_renderer(ctx, effect=False, hands=False), 1.0,
+                        frames=8, spin=0.05)
+    assert np.abs(full - still).sum() > 1000
+
+
+def test_a_dim_program_the_driver_refuses_leaves_the_frame_and_says_why(ctx, monkeypatch):
+    import hyperspace.render as R
+
+    ref = _dim_renderer(ctx)                        # the same frames, never dimmed
+    want = [_dim_frames(ctx, ref, 1.0, t0=t0) for t0 in (2.0, 3.0)]
+    ref.on_reload()
+    want.append(_dim_frames(ctx, ref, 1.0, t0=4.0))
+    monkeypatch.setattr(R, "DIM_FS", "#version 330\nvoid main() { nope; }")
+    r = _dim_renderer(ctx)
+    got = _dim_frames(ctx, r, 0.5)                  # never raises
+    assert np.array_equal(got, want[0])             # undimmed, and nothing half-drawn
+    assert r.dim_error.startswith("dim:") and r._dim_prog is None
+    monkeypatch.undo()
+    built = []
+    monkeypatch.setattr(R.Renderer, "_build_dim",
+                        lambda self, real=R.Renderer._build_dim: built.append(1) or real(self))
+    assert np.array_equal(_dim_frames(ctx, r, 0.5, t0=3.0), want[1])
+    assert len(built) == 4 and r._dim_prog is None  # asked, answered from the error: no compile
+    r.on_reload()                                   # a fixed edit builds again
+    assert r.dim_error == ""
+    half = _dim_frames(ctx, r, 0.5, t0=4.0)
+    assert np.abs(half[..., :3] - want[2][..., :3] * 0.5).max() <= 1
+    prog = r._dim_prog
+    r.on_reload()                                   # and a reload rebuilds the program
+    assert r._dim_prog is None
+    _dim_frames(ctx, r, 0.5, frames=1, t0=5.0)
+    assert r._dim_prog is not None and r._dim_prog is not prog

@@ -542,6 +542,7 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     # ---- output: the render window follows the output.* params ----
     h.output.apply()
     h.renderer.bg_alpha = h.output.bg_alpha
+    h.renderer.dim = h.output.dim     # the master dim (plan 15 WP3): the frame's last pass
 
     # ---- mouse: orbit / pan / zoom, render window only ----
     h.mouse.poll(shift)

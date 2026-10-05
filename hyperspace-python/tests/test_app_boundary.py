@@ -274,7 +274,7 @@ def _host(log: list[str], *, pad_on=True, pressed=(), held=(), super_=False, sti
     h = app.Host(
         reg=reg, view=Stub("view", log), control=Stub("control", log), audio=audio,
         router=Stub("router", log), clock=Stub("clock", log), lfos=Stub("lfos", log),
-        keys=keys, mouse=Stub("mouse", log), output=Stub("output", log, bg_alpha=0.5),
+        keys=keys, mouse=Stub("mouse", log), output=Stub("output", log, bg_alpha=0.5, dim=0.4),
         renderer=renderer, panel=panel, reloader=Stub("reloader", log, runtime_error="x"),
         draw_render=lambda dt: log.append("render.draw"),
         draw_panel=lambda dt, fps: log.append("panel.draw"),
@@ -310,6 +310,7 @@ def test_the_frame_runs_in_the_documented_order():
     assert app.frame(h, now=1.0, dt=1 / 60, fps=60.0) is True
     assert log == ORDER
     assert h.renderer.bg_alpha == 0.5                # the output's ground, this frame
+    assert h.renderer.dim == 0.4                     # and its master dim (plan 15 WP3)
     assert h.control.chain is h.audio.chain          # the chain stays one object
     assert h.reloader.runtime_error == ""            # a clean frame clears the toast
 
