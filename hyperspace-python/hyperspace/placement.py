@@ -231,6 +231,33 @@ def _key(kind: str) -> str:
     return "control_monitor" if kind == "control" else "monitor"
 
 
+def index(monitor, n: int | None = None) -> int:
+    """A config value as a screen index: what `int()` reads of it, −1 for
+    anything `int()` will not read ("left", None, a NaN) and for anything
+    under −1; with `n` screens connected, −1 for an index none of them
+    has. The one reading of ``[output] monitor`` / ``control_monitor``
+    (plan 16 WP7) — `place` below, `config.load` and `app._make_output`
+    all go through it, so a window's screen and the one fullscreen covers
+    agree. It never raises and says nothing: the notes are `place`'s and
+    `config.load`'s."""
+    try:
+        i = int(monitor)
+    except (TypeError, ValueError, OverflowError):
+        return -1
+    if i < 0 or (n is not None and i >= n):
+        return -1
+    return i
+
+
+def is_index(monitor) -> bool:
+    """Would `int()` read this config value at all?"""
+    try:
+        int(monitor)
+    except (TypeError, ValueError, OverflowError):
+        return False
+    return True
+
+
 def place(kind: str, size: tuple[int, int], scr: list[Screen],
           monitor: int, remembered: dict | None) -> tuple[Rect, str]:
     """Where one window opens: (rect, note or "").
@@ -250,11 +277,10 @@ def place(kind: str, size: tuple[int, int], scr: list[Screen],
         return (MARGIN, MARGIN, int(size[0]), int(size[1])), ""
     notes = []
     target = None
-    try:
-        # read as app._make_output reads it for `output.monitor`, so the
-        # screen a window opens on and the one fullscreen covers agree
+    if is_index(monitor):
+        # read as app._make_output reads it for `output.monitor` (`index`)
         monitor = int(monitor)
-    except (TypeError, ValueError, OverflowError):
+    else:
         notes.append(f"config: [output] {_key(kind)} = {monitor!r} is not a screen index — "
                      "using the last position")
         monitor = -1
