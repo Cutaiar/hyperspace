@@ -5,8 +5,7 @@ revision describes **`finish-line` with plans 15–21 all landed**: plans
 15–18 (`plan-15-integration`, `plan-16-integration`, then
 `plan-18-integration` with plans 17 and 18), plans 19 and 20
 (`plan-19-integration`), and plan 21 — outputs and the hands — through
-`plan-21-integration` (written on that branch; it reaches `finish-line`
-when the orchestrator merges it), each merged when its last PR was in,
+`plan-21-integration`, now merged into `finish-line`, each merged when its last PR was in,
 each documented. **The build is finished; what is left is the owner's**:
 the hand checks (groups K–Q), the confirm-or-overturn rows 34–88 of the
 decision register, and two merges — PR #113 (the shared presets into
@@ -362,7 +361,9 @@ file what fails as new audit rows dated with plan 11.
 
 ## Not done — in rough priority order
 
-1. **The hand checks** above. Nothing in them has been run by a person
+1. **The hand checks** above. The same checks in plain language,
+   grouped by the hardware each needs and in running order, with a
+   glossary: [`TESTING-GUIDE.md`](TESTING-GUIDE.md). Nothing in them has been run by a person
    since plan 09 landed; B1's fix and the HANDS page re-layout (plan 11
    WP13 found it overflowing the panel by 216 px on any rig with hands
    enabled) are the two things most likely to look different. Plan 13's
@@ -464,8 +465,8 @@ file what fails as new audit rows dated with plan 11.
    tethers no longer following a hand. Rows 34–88 are the last of the
    run: each is built and takes "keep" or "overturn".)
 4. **The rest of the finish line: merge it.** Plans 15–21 are all
-   built, documented and on `finish-line` (plan 21 by its integration
-   branch). Left to do: merge **PR #113** (the owner's shared presets,
+   built, documented and on `finish-line` (plan 21 merged from its
+   integration branch). Left to do: merge **PR #113** (the owner's shared presets,
    `shared/` and `tools/shared_presets.py`, into `main`) and **PR #80**
    (`finish-line` into `main`), after the hand checks the owner wants
    first. Left stale by plan 21, not being documents: `render.py`'s
