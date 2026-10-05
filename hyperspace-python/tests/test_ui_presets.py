@@ -360,3 +360,25 @@ def test_a_line_assigned_every_frame_does_not_pin_the_footer(rig, monkeypatch): 
     assert shown[0] == HOME_UNSET and shown[-1] == "" and lib.said == said
     assert "" in shown and all(s == "" for s in shown[shown.index(""):])
     assert abs(shown.index("") * 0.1 - ui.MESSAGE_S) < 0.25   # gone on time
+    # a knob on `scene.select` sends the same scene many times in one turn:
+    # said once, when it changes, and never again while it is the same
+    # (review of PR #92)
+    scene = rig.reg["scene.select"]
+    panel.control.library = lib                               # as app.py wires it
+    clock[0] += ui.MESSAGE_S + 1
+    scene.set(1)
+    line = lib.status
+    assert line.startswith("band: ") and panel._message() == (line, False)
+    said = dict(lib.said)
+    lib.say(warning=HOME_UNSET)                               # news, a frame later
+    seen = []
+    for _ in range(50):
+        scene.set(1)
+        assert lib.status == line
+        seen.append(panel._message()[0])
+        clock[0] += 0.1
+    # the warning kept the slot for its four seconds, then nothing
+    assert seen[0] == HOME_UNSET and set(seen) == {HOME_UNSET, ""} and seen[-1] == ""
+    assert lib.said["status"] == said["status"]
+    scene.set(2)
+    assert lib.status != line and panel._message() == (lib.status, False)

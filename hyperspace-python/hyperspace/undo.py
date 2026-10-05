@@ -99,13 +99,26 @@ def alike(a, b) -> bool:
     lists, nested): the same shape and keys, every leaf `_same`. What a
     dirty dot compares with (library.py; plan 16 WP7): a base a performer
     took and gave back differs from the file's in its last bits only, and
-    that is not an edit — one detent of any param is far outside it."""
+    that is not an edit — one detent of any param is far outside it. A
+    whole number in a file (`"camera.zoom": 1`) is a number like any
+    other here: it compares with the float base the same way."""
+    if a == b:                            # the usual case, at dict-compare cost
+        return True
     if isinstance(a, dict) and isinstance(b, dict):
         return a.keys() == b.keys() and all(alike(v, b[k]) for k, v in a.items())
     if isinstance(a, list | tuple) and isinstance(b, list | tuple):
         return (type(a) is type(b) and len(a) == len(b)
                 and all(alike(x, y) for x, y in zip(a, b, strict=True)))
+    if _number(a) and _number(b):
+        try:
+            return _same(float(a), float(b))
+        except OverflowError:             # an int no float holds: not that float
+            return False
     return _same(a, b)
+
+
+def _number(v) -> bool:
+    return isinstance(v, int | float) and not isinstance(v, bool)
 
 
 _row = attrgetter(*ROW_FIELDS)        # a row as the tuple of its fields

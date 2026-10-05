@@ -1475,8 +1475,15 @@ class Library:
         not the reference), and `reapply` as what poll() calls when the
         file changes on disk, in place of a whole load."""
         loaded = self.reg.snapshot(group) if self.reg is not None else None
+        again = self._current.get(group) == name
         self._landed(group, name, loaded, reapply)
-        self.say(f"{group}: {name}")
+        if again:
+            # the same scene set again — a knob on `scene.select` sends the
+            # same choice many times in one turn: no news, and the footer's
+            # slot is not taken from a line that is (review of PR #92)
+            self.status = f"{group}: {name}"
+        else:
+            self.say(f"{group}: {name}")
 
     def _step(self, group: str, n: int) -> str | None:
         names = self.list(group)

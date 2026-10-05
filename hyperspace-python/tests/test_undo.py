@@ -663,6 +663,10 @@ def test_alike_is_exact_but_for_float_round_off():
     assert not undo.alike({"x": [1, 2]}, {"x": [1, 2, 3]})
     assert not undo.alike({"x": [1, 2]}, {"x": (1, 2)}) and not undo.alike(0.0, 1e-9)
     assert undo.alike(float("nan"), float("nan")) and undo.alike(None, None)
+    # a whole number written in a file is a number like any other (review of PR #92)
+    assert undo.alike({"camera.zoom": 1}, {"camera.zoom": 0.9999999999999998})
+    assert not undo.alike({"camera.zoom": 1}, {"camera.zoom": 0.999999})
+    assert not undo.alike(True, 0.9999999999999998) and not undo.alike(10**400, 1e308)
 
 
 def test_a_scene_pick_undoes_with_its_strips(rig):

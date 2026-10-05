@@ -164,13 +164,10 @@ def load(path: Path | None = None) -> dict:
     # on (where the window was last time) and the SYSTEM page says so —
     # whether that screen exists is placement's to say, at the launch
     for key in ("monitor", "control_monitor"):
-        raw = cfg["output"].get(key, -1)
-        if not placement.is_index(raw):
-            note = (f"config: [output] {key} = {raw!r} is not a screen index — "
-                    "using the last position")
+        cfg["output"][key], note = placement.read(key, cfg["output"].get(key, -1))
+        if note:
             cfg.setdefault("notes", []).append(note)
             print(note, file=sys.stderr)
-        cfg["output"][key] = placement.index(raw)
     # the MIDI map lives next to the config unless it says otherwise
     m = cfg["midi"].get("map")
     if m and not Path(m).is_absolute():
