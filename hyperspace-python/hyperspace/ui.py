@@ -1038,6 +1038,12 @@ class Panel:
         if self.reloader is not None and self.reloader.status:
             imgui.same_line()
             imgui.text_disabled(f"·  {self.reloader.status}")
+        # the master dim (plan 15 WP3), on every page while it is under
+        # full ("dim 40%", "dim black"): a dark picture is never a mystery
+        dim = self.reg.get("output.dim")
+        if dim is not None and dim.value < 1.0:
+            imgui.same_line()
+            imgui.text_colored(WARN, f"·  dim {dim.text()}")
         lib = self.library
         if lib is not None and lib.reg is not None:
             proj = lib.project
@@ -1055,6 +1061,8 @@ class Panel:
         if self.output is None or "output.overlay" not in self.reg:
             imgui.text_disabled("no render window attached")
             return
+        if "output.dim" in self.reg:        # the master dim: the crossfader (plan 15 WP3)
+            self._row("output.dim")
         if len(self.reg["output.monitor"].names) > 1:
             self._combo("output.monitor")
         self._check("output.fullscreen")
