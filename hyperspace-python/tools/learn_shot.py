@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The right-click menu with its Unbind submenu open, as a PNG (plan 17 WP1).
+"""The right-click menu with a submenu open, as a PNG (plan 17 WP1, WP2).
 
 Not the app: a **hidden** GLFW window with the panel drawn over the same
 headless objects `tools/undo_demo.py` builds — no render window, no MIDI
@@ -12,6 +12,8 @@ imgui the mouse is over its item, so the picture is the menu the panel's
 own code draws, in a real imgui popup.
 
   uv run python tools/learn_shot.py unbind   # → docs/plans/assets/17-learn-and-the-desk/menu-unbind.png
+  uv run python tools/learn_shot.py learn    # → …/menu-learn.png   (Learn desk · Learn hand ▸ left / right)
+  uv run python tools/learn_shot.py armed    # → …/learn-armed.png  (armed for the left hand: frame and footer)
 """
 
 # ruff: noqa: I001 — undo_demo is imported first, on purpose: it sets
@@ -40,6 +42,10 @@ OUT = Path(__file__).resolve().parents[1] / "docs" / "plans" / "assets" / "17-le
 # which shot: (the param whose menu opens, its page, the submenu to open, the file)
 SHOTS = {
     "unbind": ("view.speed", "view", "Unbind", "menu-unbind.png"),
+    # plan 17 WP2: Learn desk and Learn hand ▸ left / right…
+    "learn": ("view.speed", "view", "Learn hand", "menu-learn.png"),
+    # …and a learn armed for the left hand: the red frame and the footer's line (no menu)
+    "armed": ("view.speed", "view", None, "learn-armed.png"),
 }
 
 
@@ -117,13 +123,17 @@ def main() -> None:
     draw()
     if st["anchor"] is None:
         raise SystemExit(f"{pid} is not drawn on the {page} page")
-    st["mouse"] = st["anchor"]                        # the popup opens at the mouse
-    draw(3)
-    st["ask"] = True
-    draw(4)
-    if st["sub"] is not None:
-        st["mouse"] = st["sub"]                       # hover the submenu's item: it opens
-        draw(30)
+    if submenu is None:
+        r.learn.arm(pid, "hand:left")                 # what "Learn hand ▸ left" does
+        draw(4)
+    else:
+        st["mouse"] = st["anchor"]                    # the popup opens at the mouse
+        draw(3)
+        st["ask"] = True
+        draw(4)
+        if st["sub"] is not None:
+            st["mouse"] = st["sub"]                   # hover the submenu's item: it opens
+            draw(30)
     w, h = glfw.get_framebuffer_size(win)
     raw = GL.glReadPixels(0, 0, w, h, GL.GL_RGB, GL.GL_UNSIGNED_BYTE)
     px = np.frombuffer(raw, dtype=np.uint8).reshape(h, w, 3)[::-1]

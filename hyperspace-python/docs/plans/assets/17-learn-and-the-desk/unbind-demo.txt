@@ -10,7 +10,10 @@ home: <home>  ·  preset: TUMBLE  ·  20 routes, 42 desk rows
       K2 (track knob 2)
       R y pushes +0.45
       LFO 1 pushes +0.3 (off)
-    [ Learn ]
+    [ Learn desk ]
+    [ Learn hand ▸ ]
+    [     left ]
+    [     right ]
     [ Unbind ▸ ]
     [     desk — K2 ]
     [     route — R y, LFO 1 ]
@@ -38,7 +41,10 @@ home: <home>  ·  preset: TUMBLE  ·  20 routes, 42 desk rows
     undo stack (1): unbind view.speed
   right-click Speed (VIEW page):
       VIEW.SPEED
-    [ Learn ]
+    [ Learn desk ]
+    [ Learn hand ▸ ]
+    [     left ]
+    [     right ]
     [ Route a lane here… ]
   Ctrl+Z   footer: ·  undid unbind view.speed
       now on view.speed: 1 desk row, 2 routes  ·  every row back: True
@@ -46,7 +52,10 @@ home: <home>  ·  preset: TUMBLE  ·  20 routes, 42 desk rows
   right-click Input trim (AUDIO page):
       MASTER.TRIM
       S8 (track fader 8) · invariant
-    [ Learn ]
+    [ Learn desk ]
+    [ Learn hand ▸ ]
+    [     left ]
+    [     right ]
     [ Route a lane here… ]
       Unbind offered: False
 
@@ -56,7 +65,10 @@ home: <home>  ·  preset: TUMBLE  ·  20 routes, 42 desk rows
       K2 (track knob 2)
       R y pushes +0.45
       LFO 1 pushes +0.3 (off)
-    [ Learn ]
+    [ Learn desk ]
+    [ Learn hand ▸ ]
+    [     left ]
+    [     right ]
     [ Unbind ▸ ]
     [     desk — K2 ]
     [     route — R y, LFO 1 ]
@@ -84,7 +96,10 @@ home: <home>  ·  preset: TUMBLE  ·  20 routes, 42 desk rows
     undo stack (1): unbind view.speed
   right-click Speed (VIEW page):
       VIEW.SPEED
-    [ Learn ]
+    [ Learn desk ]
+    [ Learn hand ▸ ]
+    [     left ]
+    [     right ]
     [ Route a lane here… ]
   Ctrl+Z   footer: ·  undid unbind view.speed
       now on view.speed: 1 desk row, 2 routes  ·  every row back: True
@@ -92,7 +107,10 @@ home: <home>  ·  preset: TUMBLE  ·  20 routes, 42 desk rows
   right-click Input trim (AUDIO page):
       MASTER.TRIM
       S8 (track fader 8) · invariant
-    [ Learn ]
+    [ Learn desk ]
+    [ Learn hand ▸ ]
+    [     left ]
+    [     right ]
     [ Route a lane here… ]
       Unbind offered: False
 
