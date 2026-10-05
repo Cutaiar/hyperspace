@@ -580,7 +580,7 @@ def bar_rig(rig):
 
     def fire():
         fires.append(t[0])
-        real()
+        return real()
     p.fire = fire
     assert (midi.HOLD_S, midi.BLINK_S) == (0.6, 1.5)
 
@@ -758,9 +758,27 @@ def test_the_bar_lights_while_held_and_the_new_slots_pad_blinks(rig):
     assert [leds(rig, STOP, k, mark) for k in range(8)] == [[1, 2]] * 8
     assert [m.velocity for m in rig.out.sent[mark:]
             if m.type == "note_on" and m.note == pad] == [0]         # TRIP 3's pad goes out
+    # a fire that answers False did nothing (a save that failed): the bar
+    # goes dark at the hold time and nothing blinks (review of PR #87)
+    at(30.0)
+    mark = len(rig.out.sent)
+    count = len(fires)
+    with pytest.MonkeyPatch.context() as mp:
+        def full(*a, **k):
+            raise OSError("disk full")
+        mp.setattr(pr.lib, "save_as", full)
+        at(31.0, note(STOP, channel=2))
+        at(31.65)
+        at(33.0, note(STOP, 0, channel=2))
+    assert len(fires) == count + 1 and "disk full" in pr.bank_error
+    assert [leds(rig, STOP, k, mark) for k in range(8)] == [[1, 0]] * 8
+    assert [m.velocity for m in rig.out.sent[mark:]
+            if m.type == "note_on" and m.note == pad] == []
+    at(40.0, note(STOP, channel=0))
+    at(40.65)
     # a redraw mid-blink (a layer switch) re-sends the blink, not the state
     mark = len(rig.out.sent)
     shift(rig)
     assert [leds(rig, STOP, k, mark)[-1] for k in range(8)] == [2] * 8
-    at(20.65 + midi.BLINK_S, note(STOP, 0, channel=0))
+    at(40.65 + midi.BLINK_S, note(STOP, 0, channel=0))
     assert [leds(rig, STOP, k, mark)[-1] for k in range(8)] == [0] * 8

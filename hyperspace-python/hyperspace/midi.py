@@ -28,7 +28,8 @@ that class — with a MIDI source (``cc:<ch>:<n>``, ``note:<ch>:<n>``,
                 them all, a hand across several fires once, and a button
                 still down afterwards fires nothing more. On the fire the
                 bar, and every LED the fire turned on, blink for BLINK_S
-                (the profile's `blink_of`) and then show their own state
+                (the profile's `blink_of`) and then show their own state;
+                a fire that answers False did nothing, and nothing blinks
   pitch abs     14-bit pitch bend → set_norm
 
 Every op here is a scene-setter (plan 09 decision 3): on a param a
@@ -495,7 +496,8 @@ class MidiIO:
         more, only a new press starts a new hold. The bar's rows and each
         LED the fire turned on then blink for BLINK_S (`feedback`) — the
         adapter does not know why a light came on (after a save-as it is
-        the new slot's pad)."""
+        the new slot's pad). A fire that returns False says it did
+        nothing (a save that failed): no blink, the bar just goes dark."""
         holds, blinks = self._hold_state()
         if not holds:
             return
@@ -510,7 +512,8 @@ class MidiIO:
                     continue
                 fired.add(b.target)
                 before = self._leds_on()
-                p.fire()
+                if p.fire() is False:
+                    continue
                 bar = {x.control for x in self.table.active()
                        if x.op == "hold" and x.target == b.target and x.feedback == "led"}
                 for c in (self._leds_on() - before) | bar:

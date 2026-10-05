@@ -294,3 +294,10 @@ def test_the_footer_says_a_library_line_again(rig, monkeypatch):  # noqa: F811
     clock[0] += ui.MESSAGE_S + 1
     lib.status = "show: something else"
     assert panel._message() == ("", False)
+    # a panel kept across a hot reload remembers the lines as plain strings:
+    # they are not news (review of PR #87)
+    panel._msg["seen"] = {"status": lib.status, "warning": lib.warning,
+                          "undo": panel._msg["seen"]["undo"]}
+    assert lib.warning and panel._message() == ("", False)
+    lib.say("show: after the reload")
+    assert panel._message() == ("show: after the reload", False)

@@ -951,6 +951,13 @@ def test_save_new_never_overwrites(tmp_path):
         assert lib.current("presets") == f"TRIP {n}"
     assert user_presets(home) == sorted([*before, *[f"trip-{n}.json" for n in (6, 7, 8, 9)]])
     assert not (home / "trash").exists()
+    # a file stem in another case is the same file on a filesystem that
+    # folds case (this rig's): it counts too (review of PR #87)
+    ten = put(home, "SUNSET").rename(home / "presets" / "Trip-10.json")
+    was = ten.read_bytes()
+    assert reg["preset.save_new"].fire() is True
+    assert lib.current("presets") == "TRIP 11" and ten.read_bytes() == was
+    assert "SUNSET" in lib.list("presets") and not (home / "trash").exists()
     # no preset loaded at all: PRESET 1, then PRESET 2
     lib._landed("presets", None, None)
     reg["preset.save_new"].fire()
@@ -1027,8 +1034,23 @@ def test_save_new_on_a_full_bank_saves_to_the_list_and_says_so(tmp_path):
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(lib, "save_as", full)
         pr.clear_slot(3)
-        reg["preset.save_new"].fire()
+        assert reg["preset.save_new"].fire() is False        # nothing saved: said so
     assert "disk full" in pr.bank_error and pr.bank[3] is None
+    # the preset saves but the show's file will not take the bank: the
+    # slot stays as the file has it, no pad is lit, and it is said
+    # (review of PR #87)
+    show = home / "projects" / "party.hyp.json"
+    before, cur = show.read_text(), lib.current("presets")
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(pr, "write", full)
+        assert reg["preset.save_new"].fire() is True
+    name = lib.current("presets")
+    assert name != cur and name in lib.list("presets")
+    assert pr.bank[3] is None and pr.active == -1 and show.read_text() == before
+    assert "disk full" in pr.bank_error and not pr.is_dirty()
+    assert lib.warning == f"saved {name} — the show could not be written: it is in the preset list"
+    reg["preset.save_new"].fire()                            # the disk is back: F4, and no error
+    assert pr.bank[3] == lib.current("presets") and pr.bank_error == ""
 
 
 def test_the_new_slot_loads_from_the_preset_row(tmp_path):
@@ -1092,6 +1114,13 @@ def test_put_and_clear_slot_write_the_show_and_delete_no_file(tmp_path):
     reg["preset.load.3"].fire()
     pr.put_slot(7, "WAKE")
     assert pr.bank[3] == pr.bank[7] == "WAKE" and pr.active == 3
+    # nothing loaded: no slot is lit — an empty slot least of all (review of PR #87)
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(lib, "current", lambda group: None)
+        pr.clear_slot(6)
+        assert pr.bank[6] is None and pr.active == -1
+        pr.put_slot(6, "MANDALA")
+        assert pr.active == -1
     # a name with no file, a slot that is not there, an empty slot: nothing changes
     before, bank = show.read_text(), list(pr.bank)
     pr.put_slot(1, "NOPE")

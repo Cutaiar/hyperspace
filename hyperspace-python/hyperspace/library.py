@@ -140,9 +140,9 @@ LAST_SHOW = "last_show"             # <home>/last_show: the show opened last
 # this home, so a show you later save as "default" stays "default"
 RENAMED_NOTE = "RENAMED.txt"
 UNTITLED = "untitled"
-# what `Project.home` says when the show names no "starts on" (plan 15 WP2)
 # the tail of save-as's note on a full bank (`Project.save_new`)
 BANK_FULL = "the bank is full: it is in the preset list"
+# what `Project.home` says when the show names no "starts on" (plan 15 WP2)
 HOME_UNSET = "home: this show names no 'starts on' preset — pick one on the PRESETS page"
 
 # the preset a group resets to; any other group uses one named "default"
@@ -700,7 +700,7 @@ class Project:
         is the one place its size is read (plan 15 §1 row 13)."""
         return next((k for k in range(len(self.bank)) if self.bank[k] is None), None)
 
-    def save_new(self) -> None:
+    def save_new(self) -> bool:
         """The desk's save-as (plan 15 WP4, decision 29; the `preset.save_new`
         trigger on the clip-stop row): the live state as a **new** preset,
         named from the loaded one (`next_name`), into the next empty slot.
@@ -709,30 +709,46 @@ class Project:
         the bank's names. The new preset becomes the loaded one with a
         clean dot, as the panel's "as…" does, so a second save counts on.
         A full bank saves to the list and says so. The show is written at
-        once; no undo step — nothing live changes."""
+        once; no undo step — nothing live changes. True when a preset was
+        saved; False when none was (the reason is in `bank_error`), which
+        the desk reads as "nothing to confirm" (midi.py blinks no light)."""
         lib, presets = self.lib, self._loader()
         if lib.reg is None:
-            return
+            return False
         if presets is None:
             self.bank_error = "presets: no preset loader"
-            return
-        taken = ({*lib._files(PRESETS)} | {slug(n) for n in lib.list(PRESETS)}
+            return False
+        # stems as slugs: on a filesystem that folds case, `Trip-2.json`
+        # is the file a save of "TRIP 2" would write over
+        taken = ({slug(s) for s in lib._files(PRESETS)} | {slug(n) for n in lib.list(PRESETS)}
                  | {slug(n) for n in self.bank if n})
         name = next_name(lib.current(PRESETS), taken)
         try:
             presets.save_as(name)
-            k = self.next_empty()
-            if k is None:
-                lib.say(warning=f"saved {name} — {BANK_FULL}")
-            else:
-                self.bank[k] = name
-                self.active = k
-                self.write()
-                self._room()
-                lib.say(f"saved {name} → F{k + 1}")
-            self.bank_error = ""
         except (LibraryError, OSError) as e:          # a full disk must not stop the show
             self.bank_error = f"presets: {e}"
+            return False
+        self.bank_error = ""
+        k = self.next_empty()
+        if k is None:
+            lib.say(warning=f"saved {name} — {BANK_FULL}")
+            return True
+        self.bank[k] = name
+        self.active = k
+        try:
+            self.write()
+        except (LibraryError, OSError) as e:
+            # the preset is saved and loaded, but the show could not take
+            # it: the bank stays as the show's file has it, and it is said
+            self.bank[k] = None
+            self.active = -1
+            self.bank_error = f"presets: {e}"
+            lib.say(warning=f"saved {name} — the show could not be written: it is in "
+                            "the preset list")
+            return True
+        self._room()
+        lib.say(f"saved {name} → F{k + 1}")
+        return True
 
     def put_slot(self, k: int, name: str) -> None:
         """Point slot k at a preset (the PRESETS page's "put preset
@@ -766,7 +782,9 @@ class Project:
             return
         self.bank_error = ""
         cur = lib.current(PRESETS)
-        if not 0 <= self.active < len(self.bank) or self.bank[self.active] != cur:
+        if cur is None:                               # nothing loaded: no slot is lit
+            self.active = -1
+        elif not 0 <= self.active < len(self.bank) or self.bank[self.active] != cur:
             self.active = self.bank.index(cur) if cur in self.bank else -1
         self._room()
         lib.say(said)

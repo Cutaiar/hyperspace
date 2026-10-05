@@ -1075,8 +1075,10 @@ class Panel:
         seen, st["seen"] = st["seen"], cur
         if seen is not None:
             for key in ("status", "warning", "undo"):      # the later wins a tie
-                text = cur[key][0]
-                if cur[key] != seen[key] and text:
+                text, was = cur[key][0], seen[key]
+                if not isinstance(was, tuple):             # remembered before a hot reload
+                    was = (was, cur[key][1])
+                if cur[key] != was and text:
                     st.update(text=text, warn=key == "warning", at=now)
         return (st["text"], st["warn"]) if now - st["at"] < MESSAGE_S else ("", False)
 
