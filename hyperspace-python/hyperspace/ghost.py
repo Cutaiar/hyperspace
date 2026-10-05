@@ -941,7 +941,11 @@ class Ghost:
         self._fbo: moderngl.Framebuffer | None = None     # on the texture
         self._msaa: moderngl.Framebuffer | None = None    # multisampled, with depth
         self._res: list = []
-        self.error = ""          # why the pass could not build, if it could not
+        # why the pass could not build or draw — the first reason, kept until
+        # the ghost is switched off or the module reloads (the HANDS page
+        # shows it); `_build_failed` alone stops the build being retried
+        self.error = ""
+        self._build_failed = False
         self._labels: TetherLabels | None = None    # the tethers' text, on first use
 
     # ---- per frame ----
@@ -973,6 +977,11 @@ class Ghost:
             for sd in self.sides.values():           # off: no stale hand on the way back
                 sd.fade, sd.skel = 0.0, None
             self._t = None
+            # …and a failed draw is forgotten: switching the ghost off and
+            # on again tries it afresh (a build the driver refused waits
+            # for a reload). getattr: a Ghost from before the flag existed
+            if not getattr(self, "_build_failed", False):
+                self.error = ""
             return None
         seen = self.step(t)
         if not seen:
@@ -1018,8 +1027,8 @@ class Ghost:
         ctx = self.ctx
         if self.geometry is None and not self._build():
             return False
-        self._ensure((max(vw, 1), max(vh, 1)))
         try:
+            self._ensure((max(vw, 1), max(vh, 1)))
             draw_fbo = self._msaa if self._msaa is not None else self._fbo
             draw_fbo.use()
             ctx.viewport = (0, 0, *self.size)
@@ -1047,7 +1056,10 @@ class Ghost:
             self._comp["u_alpha"].value = float(self.state.alpha)
             self._comp_vao.render(moderngl.TRIANGLES, vertices=3)
         finally:
+            # a raise anywhere above leaves the state the frame's other
+            # passes expect: blending on, as the scene pass sets it
             ctx.disable(moderngl.DEPTH_TEST)
+            ctx.enable(moderngl.BLEND)
             ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
             target.use()
             ctx.viewport = (vx, vy, vw, vh)
@@ -1081,8 +1093,11 @@ class Ghost:
     def _build(self) -> bool:
         """The geometry and the composite, all or nothing: a driver that
         refuses a shader leaves nothing half-made, says why once on
-        `error`, and the pass stays off rather than retrying every frame."""
-        if self.error:
+        `error`, and the pass stays off rather than retrying every frame.
+        Only a refused build stops it (`_build_failed`): a frame that
+        raised before the first build — a malformed skeleton — does not
+        keep the hands off once the data is good."""
+        if getattr(self, "_build_failed", False):
             return False
         made: list = []
         try:
@@ -1095,6 +1110,7 @@ class Ghost:
             for res in made:
                 res.release()
             self.error = f"ghost: {type(e).__name__}: {e}"[:160]
+            self._build_failed = True
             return False
         self.geometry, self._comp, self._comp_vao = geo, comp, vao
         return True
@@ -1130,6 +1146,7 @@ class Ghost:
         """Hot-swap hook: rebuild every program (geometry and composite)
         from this module's current source; a build that fails keeps the
         old set drawing."""
+        self._build_failed = False
         if self.geometry is None:
             self.error = ""      # an edit may have fixed what would not build
             return

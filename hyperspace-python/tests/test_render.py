@@ -699,6 +699,54 @@ def test_a_dim_program_the_driver_refuses_leaves_the_frame_and_says_why(ctx, mon
     assert r._dim_prog is not None and r._dim_prog is not prog
 
 
+def _ragged():
+    """Two hands whose right skeleton has a digit one bone short — what a
+    hand-edited tape can hold: `ghost.pose` raises on it."""
+    src = _hands()
+    right = dict(src.skeleton["right"])
+    right["digits"] = [list(d) for d in right["digits"]]
+    right["digits"][2] = right["digits"][2][:3]
+    src.skeleton["right"] = right
+    return src
+
+
+@pytest.mark.parametrize("where", ["skeleton", "geometry"])
+def test_a_raising_hands_pass_still_dims(ctx, where, monkeypatch):
+    """Plan 21 WP5 R1: a hands pass that raises — before any GL (a
+    malformed skeleton) or in the middle of it (the geometry's draw) —
+    leaves the frame as the same frame without hands, still dimmed, the
+    target bound; `Ghost.error` keeps the first reason, and no frame
+    raises. Before the guard the frame raised and the dim never ran: a rig
+    at black would have shown the scene full."""
+    from hyperspace import ghost as G
+
+    want = _dim_frames(ctx, _dim_renderer(ctx, hands=False), 0.5)
+    full = _dim_frames(ctx, _dim_renderer(ctx, hands=False), 1.0)
+    r = _dim_renderer(ctx)
+    calls = []
+    with monkeypatch.context() as m:
+        if where == "skeleton":
+            r.ghost.source = _ragged()
+        else:
+            def boom(self, *a, **k):
+                calls.append(1)
+                raise RuntimeError(f"geometry {len(calls)}")
+            m.setattr(G.CapsuleHands, "draw", boom)
+        got = _dim_frames(ctx, r, 0.5)                # four frames, none raises
+    assert np.array_equal(got, want)                  # no hands, dimmed: not full
+    assert not np.array_equal(got, full)
+    if where == "skeleton":
+        assert r.ghost.error.startswith("ghost hands: ValueError")
+    else:
+        assert len(calls) == 4 and r.ghost.error == "ghost hands: RuntimeError: geometry 1"
+    assert ctx.error == "GL_NO_ERROR"
+    # the data mended (or the geometry back): the next frames draw the hands
+    r.ghost.source = _hands()
+    hands = _dim_frames(ctx, r, 0.5, t0=3.0)
+    assert np.abs(hands - _dim_frames(ctx, _dim_renderer(ctx, hands=False), 0.5,
+                                      t0=3.0)).sum() > 1000
+
+
 # ---- plan 16 WP5: instances to zero — the ground alone, the rest carries on ----
 
 def _inst_view(n) -> ViewState:
