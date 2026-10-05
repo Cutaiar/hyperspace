@@ -1703,3 +1703,90 @@ def test_deleting_your_copy_of_a_hidden_factory_preset_says_it_is_hidden(owner_h
     assert lib.status == ("your ACID is in the trash — the factory ACID is hidden: show "
                           "hidden in the list brings it back")
     assert "ACID" not in lib.list("presets") and lib.is_factory("presets", "ACID")
+
+
+# ---- plan 19 WP6: the library's commit hook (homegit.py is the app's) ----
+
+class _Asked:
+    """A committer that records what it is asked for, and has notes."""
+
+    def __init__(self):
+        self.asked: list[str] = []
+        self.said: list[str] = []
+
+    def request(self, message):
+        self.asked.append(message)
+
+    def notes(self):
+        out, self.said = self.said, []
+        return out
+
+
+def test_each_save_asks_for_one_commit_in_the_librarys_words(tmp_path):
+    r = boot_home(tmp_path / "home")
+    lib, pr = r.lib, r.lib.project
+    assert lib.committer is None                     # off: nothing to ask
+    c = lib.committer = _Asked()
+    r.presets.save_as("TRIP 2")
+    lib.save_as("fx", "acid")
+    lib.delete(library.PRESETS, "TRIP 2")
+    lib.delete(library.PRESETS, "TRACER")            # a factory preset: nothing deleted, nothing asked
+    pr.put_slot(10, "TRACER")
+    pr.startup = "TRACER"
+    pr.write()
+    pr.save()
+    pr.save("mine")
+    assert c.asked == ["save preset TRIP 2", "save fx acid", "trash preset TRIP 2",
+                       "show party: bank", "show party: starts on TRACER",
+                       "save show party", "save show mine"]
+    lib.poll()                                       # loads, polls and an idle frame ask nothing
+    r.presets.load("TUMBLE")
+    assert len(c.asked) == 7
+
+
+def test_hide_rename_and_restore_each_ask_for_a_commit(tmp_path):
+    """Where plan 19's WP4 and WP6 meet: the list's file operations ask the
+    committer too, in the library's words; a rename asks before its shows
+    are rewritten, so it is the commit's subject. Emptying the trash asks
+    nothing: the trash is not tracked."""
+    r = boot_home(tmp_path / "home")
+    lib, pr = r.lib, r.lib.project
+    r.presets.save_as("TRIP 3")
+    pr.put_slot(10, "TRIP 3")
+    c = lib.committer = _Asked()
+    assert lib.hide(library.PRESETS, "TRACER")
+    assert lib.unhide(library.PRESETS, "TRACER")
+    assert not lib.unhide(library.PRESETS, "TRACER")             # not hidden: nothing asked
+    lib.rename(library.PRESETS, "TRIP 3", "SUNRISE")
+    lib.delete(library.PRESETS, "SUNRISE")
+    item = next(t for t in lib.trash() if t.name == "SUNRISE")
+    lib.restore_trash(item)
+    assert c.asked[:3] == ["hide preset TRACER", "unhide preset TRACER", "rename preset TRIP 3 → SUNRISE"]
+    assert c.asked[3].startswith("show party")                   # the show the rename repointed
+    assert c.asked[-2:] == ["trash preset SUNRISE", "restore presets SUNRISE"]
+    n = len(c.asked)
+    lib.empty_trash()
+    assert len(c.asked) == n
+
+
+def test_a_committer_that_raises_never_stops_a_save_and_notes_reach_the_warning_line(tmp_path):
+    r = boot_home(tmp_path / "home")
+    lib = r.lib
+
+    class Broken:
+        def request(self, message):
+            raise OSError("no")
+
+        def notes(self):
+            raise RuntimeError("no")
+    lib.committer = Broken()
+    assert r.presets.save_as("KEPT").is_file()
+    lib.poll()                                       # a broken notes() never stops the watcher
+    c = lib.committer = _Asked()
+    c.said = ["git: not committed (x); saves are not affected"]
+    said = lib.said.get("warning", 0)
+    lib.poll()
+    assert lib.warning == "git: not committed (x); saves are not affected"
+    assert lib.said["warning"] == said + 1
+    lib.poll()
+    assert lib.said["warning"] == said + 1           # drained: said once

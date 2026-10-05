@@ -1084,8 +1084,18 @@ class Project:
         self.path = path
         _write_json(self.path, doc)
         self.lib._sync(self.path)
+        # the commit's words (plan 19 WP6): what moved since the show was
+        # opened or last written — "starts on", the bank, else a save
+        bank, startup = self._saved
+        if startup != self.startup:
+            said = f"show {self.name}: starts on {self.startup or 'nothing'}"
+        elif bank != list(self.bank):
+            said = f"show {self.name}: bank"
+        else:
+            said = f"save show {self.name}"
         self._saved = (list(self.bank), self.startup)
         self.factory = False                          # your copy now
+        self.lib._commit(said)
         return self.path
 
     def is_dirty(self) -> bool:
@@ -1247,6 +1257,10 @@ class Library:
         self._mtimes: dict[Path, float] = {}
         self._next = 0.0
         self.presets = None        # preset.Presets, set by its constructor
+        # homegit.Committer when [library] git is on (app.main sets it; plan 19
+        # WP6): asked for a commit after each save (`_commit`), its notes
+        # drained in `poll`. The library never imports homegit or config
+        self.committer = None
         # the hidden factory presets (`hidden.json`, plan 19 WP4), and whether
         # the file there would not parse — kept beside itself before the
         # first rewrite (`_write_hidden`)
@@ -1545,6 +1559,7 @@ class Library:
         self.say(f"hidden {name} — " + (f"{_and(still)} still load{'s' if len(still) == 1 else ''}"
                                          " it" if still else "show hidden in the list brings it "
                                          "back"))
+        self._commit(f"hide preset {name}")
         return True
 
     def unhide(self, group: str, name: str) -> bool:
@@ -1557,6 +1572,7 @@ class Library:
             return False
         self._write_hidden(self.hidden(group) - {stem})
         self.say(f"{name} is back in the list")
+        self._commit(f"unhide preset {name}")
         return True
 
     def still_named(self, name: str, path: Path | None = None) -> list[str]:
@@ -1784,6 +1800,7 @@ class Library:
         hook = self._load_hooks.get(group)
         if kind is not None and hook is not None:   # a kind's current moved: say so
             hook(name)                               # (the bank's light, preset.py)
+        self._commit(f"save {'preset' if group == PRESETS else group} {name}")
         return path
 
     def document(self, group: str, name: str, *, extra: dict | None = None) -> dict:
@@ -1845,6 +1862,7 @@ class Library:
                                  "the trash, or clear the slot")
             else:
                 self.say(f"{name} is in the trash — the preset list's trash can restore it")
+        self._commit(f"trash {'preset' if group == PRESETS else group} {name}")
         return True
 
     def rename(self, group: str, old: str, new: str) -> Path:
@@ -1942,6 +1960,9 @@ class Library:
             hook = self._load_hooks.get(group)
             if hook is not None:
                 hook(new)
+        # asked for before the shows are rewritten, so the rename is the
+        # commit's subject and each show's own request its body (plan 19 WP6)
+        self._commit(f"rename preset {old} → {new}")
         done, left = self._repoint(old, new, mine)         # 5.
         self.project.follow()                              # 6.
         self.say(f"renamed {old} → {new} ({done} show{'' if done == 1 else 's'} updated)")
@@ -2124,6 +2145,7 @@ class Library:
             path.unlink()                                  # only after the write
         except OSError as e:
             self.say(warning=f"restored {now}; its copy stays in the trash ({e})")
+        self._commit(f"restore {item.group} {now}")
         return now
 
     def empty_trash(self) -> int:
@@ -2158,6 +2180,18 @@ class Library:
         else:
             self.say(f"trash: {gone} file{'' if gone == 1 else 's'} deleted for good")
         return gone
+
+    def _commit(self, message: str) -> None:
+        """Ask the committer (homegit.py), if there is one, for a commit of
+        the home as it now is — after the file is on disk. Returns at once
+        and never raises: git can neither block nor fail a save."""
+        committer = self.__dict__.get("committer")   # (a Library from before a hot reload)
+        if committer is None:
+            return
+        try:
+            committer.request(message)
+        except Exception:  # noqa: BLE001, S110 — a save stands whatever git does
+            pass
 
     def is_dirty(self, group: str) -> bool:
         """Have the group's bases moved off the loaded (or default) preset?
@@ -2217,7 +2251,18 @@ class Library:
         self._defaults.clear()
 
     def poll(self, now: float | None = None) -> bool:
-        """Re-apply whatever is loaded from a file that changed on disk."""
+        """Re-apply whatever is loaded from a file that changed on disk.
+        First, every frame: what the committer's worker has to say (git
+        failing, the home inside another repository) onto the warning line —
+        the one road from that thread to the library (plan 19 WP6)."""
+        committer = self.__dict__.get("committer")
+        if committer is not None:
+            try:
+                for note in committer.notes():
+                    print(f"library: {note}", file=sys.stderr)
+                    self.say(warning=note)
+            except Exception:  # noqa: BLE001, S110 — git's notes never stop the watcher
+                pass
         now = time.monotonic() if now is None else now
         if now < self._next:
             return False

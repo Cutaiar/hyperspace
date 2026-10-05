@@ -234,6 +234,18 @@ def test_every_package_module_but_the_cold_core_is_watched():
     assert names - cold == set(_watched()), sorted((names - cold) ^ set(_watched()))
 
 
+def test_homegit_is_watched_among_the_leaves():
+    """Plan 19 WP6: homegit imports nothing from the package, so it sits
+    with the leaves (beside placement), ahead of the library that is told
+    of it. A live Committer is no swap target: it keeps its own code until
+    a restart, so a save of homegit.py never touches a running commit."""
+    order = _watched()
+    assert "homegit" in order
+    assert order.index("homegit") < order.index("library")
+    assert not _module_level_from_imports("homegit")
+    assert not any(mod == "homegit" for mod, _ in _app_swap_targets())
+
+
 def _module_level_from_imports(name: str) -> set[str]:
     """The watched modules `hyperspace.<name>` binds names from at module
     level (`from .x import y`, `from ..x import y`). A bare `from . import

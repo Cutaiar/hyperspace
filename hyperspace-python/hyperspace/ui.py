@@ -1681,10 +1681,15 @@ class Panel:
             if self.reloader.restart:
                 imgui.text_colored(WARN, self.reloader.restart)
         if self.library is not None:
-            imgui.text_disabled(f"library: {self.library.home}")
+            # " · git" while a committer is attached and has not refused (plan 19 WP6)
+            git = getattr(self.library, "committer", None)
+            git = git is not None and not getattr(git, "refused", False)
+            imgui.text_disabled(f"library: {self.library.home}" + (" · git" if git else ""))
             if imgui.is_item_hovered():
                 imgui.set_tooltip("$HYPERSPACE_HOME — presets and shows as JSON; "
-                                  "edit a file and the app follows")
+                                  "edit a file and the app follows"
+                                  + ("; every save is a git commit there ([library] git)"
+                                     if git else ""))
         if self.config_error:
             imgui.text_colored(WARN, self.config_error)
         for note in self.config_notes:
