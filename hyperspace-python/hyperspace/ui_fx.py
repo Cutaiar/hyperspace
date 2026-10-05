@@ -29,7 +29,7 @@ The chip grid is the chain view (plan 20 WP3): a chip's place, left to
 right and top to bottom, is its effect's place in the stack, and a chip
 dragged by its name and dropped on another goes before that one (a white
 bar on the left edge of the chip under the drag says where; the right
-half of the last chip is "to the end"). A drop rewrites the fewest
+half of the last chip's name is "to the end"). A drop rewrites the fewest
 `fx.<name>.order` it can (`fx.reordered`) as one undo step, "reorder
 effects", and opens the dragged effect's strip. It changes order only: an
 effect is re-aimed by the strip's target combo. The order slider in the
@@ -368,7 +368,7 @@ def _drop(panel, fx, moved: str, before: str | None) -> None:
 
 
 def _in_flight() -> bool:
-    """Is a chip in the hand? (The payload outlives the release by a frame.)"""
+    """Is a chip in the hand? (On the release frame: until a target takes it.)"""
     held = imgui.get_drag_drop_payload_py_id()
     return held is not None and held.type == DRAG
 
@@ -377,9 +377,10 @@ def _dragged(panel) -> str | None:
     """The effect whose chip is in the hand, by name: `_chip` notes it on
     the panel while its name is the drag's source, and `page` forgets it
     at the end of the first frame with nothing in the hand. Not gated on
-    `_in_flight()`: on the frame a drop is delivered imgui has already let
-    go of the payload, and that is the frame this is read on. getattr: the
-    Panel was built before this page knew of it."""
+    `_in_flight()`: on the release frame the payload lasts only until a
+    target takes it (imgui clears a delivered payload in
+    `end_drag_drop_target`), and `page` reads this after the grid, when it
+    is gone. getattr: the Panel was built before this page knew of it."""
     return getattr(panel, "_fx_drag", None)
 
 
@@ -428,8 +429,8 @@ def _chip(panel, fx, name: str, label: str, width: float, open_: bool, *,
     opens it too. The payload is `index`, the chip's place in names(); what
     a drop moves is the name noted on the panel. Both parts take a drop,
     which is returned as a 1-tuple: the name the dragged chip goes before
-    — this chip's — or None for the end, which the `last` chip's right
-    half takes."""
+    — this chip's — or None for the end, which the right half of the
+    `last` chip's name takes (its LED is "before it", like any other)."""
     p = panel.reg[f"fx.{name}.on"]
     on = bool(fx.values[name]["on"])
     faces = _faces(fx, name)
