@@ -84,7 +84,7 @@
   {"source": "cc:6:7", "target": "master.dyn", "op": "abs", "ring": 0},
   {"source": "cc:7:7", "target": "master.trim", "op": "abs", "ring": 0},
   {"source": "cc:0:14", "target": "master.gain", "op": "abs", "ring": 0},
-  {"source": "cc:0:15", "target": "overlay.bg", "op": "abs", "ring": 0},
+  {"source": "cc:0:15", "target": "output.dim", "op": "abs", "ring": 0},
   {"source": "note:0:98", "target": "desk.shift", "op": "toggle", "feedback": "led"},
   {"source": "note:0:51", "target": "band.select", "op": "set", "value": 0, "feedback": "led"},
   {"source": "note:1:51", "target": "band.select", "op": "set", "feedback": "led"},

@@ -560,6 +560,9 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     # ---- output: the render window follows the output.* params ----
     h.output.apply()
     h.renderer.bg_alpha = h.output.bg_alpha
+    # the master dim (plan 15 WP3), the frame's last pass; getattr: an
+    # Output made before a hot reload brought the attribute has none
+    h.renderer.dim = getattr(h.output, "dim", 1.0)
 
     # ---- mouse: orbit / pan / zoom, render window only ----
     h.mouse.poll(shift)

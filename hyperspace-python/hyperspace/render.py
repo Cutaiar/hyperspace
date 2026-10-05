@@ -26,8 +26,11 @@ that pass is a copy and the output is bit-identical to drawing straight
 to the window. With an effect on (fx.py) the post pass lands in the
 effect chain's texture instead and the last effect writes the window.
 `draw_scene` is the scene pass alone, for anything that wants the raw
-frame. Last, the ghost hands (ghost.py) go over the finished frame in
-their own pass and camera; off, the frame is untouched.
+frame. The ghost hands (ghost.py) go over the finished frame in their
+own pass and camera; off, the frame is untouched. Last of all the master
+dim (`Renderer.dim`, the crossfader's `output.dim`; plan 15 WP3)
+multiplies what is there — it draws nothing of its own, and at 1 it does
+not run.
 """
 
 from __future__ import annotations
@@ -69,6 +72,24 @@ LINE_FS = """
 in float v_alpha;
 out vec4 f_color;
 void main() { f_color = vec4(1.0, 1.0, 1.0, v_alpha); }
+"""
+
+# the master dim: one full-screen triangle whose only output is its alpha,
+# the factor; the blend function does the multiply (Renderer.dim_pass), so
+# no texture is read
+DIM_VS = """
+#version 330
+void main() {
+    vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
+    gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+}
+"""
+
+DIM_FS = """
+#version 330
+uniform float u_factor;
+out vec4 f_color;
+void main() { f_color = vec4(0.0, 0.0, 0.0, u_factor); }
 """
 
 FACE_VS = """
@@ -279,6 +300,13 @@ class Renderer:
         # clear alpha: 1 is the opaque black ground; overlay mode lowers it
         # so whatever is behind the window shows through (overlay.py)
         self.bg_alpha = 1.0
+        # the master dim (overlay.Output.dim, handed over each frame by
+        # app.frame): 1 is the frame as drawn, 0 is black. Its program is
+        # built on first use (dim_pass); dim_error says why it could not be
+        self.dim = 1.0
+        self.dim_error = ""
+        self._dim_prog: moderngl.Program | None = None
+        self._dim_vao: moderngl.VertexArray | None = None
         # the scene texture and the look-back post pass over it; the blank
         # texture takes the sampler units before the scene pass, so the
         # scene texture is never bound while it is the render target
@@ -350,6 +378,15 @@ class Renderer:
             res.release()
         self._build_face_program()
         self.ghost.on_reload()
+        # the dim's program: dropped, and built again from this module's
+        # current source the next frame that dims (an edit may also have
+        # fixed what would not build). getattr: a renderer made before the
+        # dim existed has none of these
+        for res in (getattr(self, "_dim_vao", None), getattr(self, "_dim_prog", None)):
+            if res is not None:
+                res.release()
+        self._dim_prog = self._dim_vao = None
+        self.dim_error = ""
 
     def _sync_bitmap(self, path: str) -> None:
         """(Re)load the overlay texture when the selected file changes."""
@@ -459,7 +496,7 @@ class Renderer:
     def _draw_frame(self, s: ViewState, w: int, h: int, dpr: float, t: float,
                     target: moderngl.Framebuffer, vp: tuple[int, int, int, int]) -> None:
         """draw()'s body: scene, cover, pull, composite, capture, effects,
-        then the ghost hands over the finished frame."""
+        the ghost hands over the finished frame, then the master dim."""
         ctx = self.ctx
         vx, vy, vw, vh = vp
         self.scene.ensure((max(vw, 1), max(vh, 1)), _samples_of(ctx, target))
@@ -492,6 +529,65 @@ class Renderer:
         # them and the history (captured above, from the scene) never holds
         # them; off, or with no hand to show, the pass touches nothing
         self.ghost.draw(target, vp, t, opaque=fx.opaque)
+        # the master dim, after everything: the scene, the look-back, every
+        # effect and the hands dim alike, and the history and the dream
+        # worker (fed above, from the scene texture) never hold it. At 1
+        # the pass does not run and the frame is bit-identical
+        dim = getattr(self, "dim", 1.0)
+        if dim < 1.0:
+            self.dim_pass(target, vp, dim, opaque=fx.opaque)
+
+    def dim_pass(self, target: moderngl.Framebuffer, vp: tuple[int, int, int, int],
+                 factor: float, opaque: bool = True) -> bool:
+        """Multiply what is on `target`'s viewport `vp` by `factor` (0 black
+        … 1 untouched): one full-screen triangle, blending only — nothing
+        is read and nothing is drawn. On an opaque ground the colour scales
+        and the alpha is left exactly as it was, so the Pepper's Ghost
+        window stays opaque black (plan 14 WP1); on overlay's see-through
+        ground the frame is premultiplied, so colour and alpha both scale
+        and the render fades off the desktop. The multiply is linear in the
+        framebuffer's values; a curve for the bottom of the throw would go
+        here, on `factor`.
+
+        Leaves `target` bound with that viewport and the blend function as
+        the scene pass sets it. A driver that refuses the program leaves
+        the frame undimmed, says why once on `dim_error`, and is not asked
+        again until a reload. True when it dimmed. Called once per frame
+        with the master; plan 21 calls it once per output with master ×
+        that output's own dim."""
+        ctx = self.ctx
+        if getattr(self, "_dim_prog", None) is None and not self._build_dim():
+            return False
+        try:
+            target.use()
+            ctx.viewport = vp
+            ctx.enable(moderngl.BLEND)
+            ctx.blend_func = (moderngl.ZERO, moderngl.SRC_ALPHA, moderngl.ZERO,
+                              moderngl.ONE if opaque else moderngl.SRC_ALPHA)
+            self._dim_prog["u_factor"].value = clamp(float(factor), 0.0, 1.0)
+            self._dim_vao.render(moderngl.TRIANGLES, vertices=3)
+        finally:
+            ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
+            target.use()
+            ctx.viewport = vp
+        return True
+
+    def _build_dim(self) -> bool:
+        """The dim's program and its (attribute-less) vertex array, both or
+        neither; a failure is recorded, never raised, and not retried."""
+        if getattr(self, "dim_error", ""):
+            return False
+        prog = None
+        try:
+            prog = self.ctx.program(vertex_shader=DIM_VS, fragment_shader=DIM_FS)
+            vao = self.ctx.vertex_array(prog, [])
+        except Exception as e:  # noqa: BLE001 — the dim must not take the frame down
+            if prog is not None:
+                prog.release()
+            self.dim_error = f"dim: {type(e).__name__}: {e}"[:160]
+            return False
+        self._dim_prog, self._dim_vao = prog, vao
+        return True
 
     def _draw_cover(self, w: int, h: int) -> moderngl.Texture:
         """The faces again, solid, into the coverage mask — from the vertices

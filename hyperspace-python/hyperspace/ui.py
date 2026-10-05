@@ -1075,12 +1075,16 @@ class Panel:
 
     def _footer_room(self) -> float:
         """The width left on the footer's line for the message: from the
-        cursor to the show's name, which sits flush right."""
+        cursor to the show's name, which sits flush right, less the dim
+        readout that follows the message while the picture is dimmed."""
         room = imgui.get_content_region_avail().x
+        gap = imgui.get_style().item_spacing.x
         lib = self.library
         if lib is not None and lib.reg is not None:
-            room -= (imgui.calc_text_size(f"{lib.project.name} ●").x
-                     + 2 * imgui.get_style().item_spacing.x)
+            room -= imgui.calc_text_size(f"{lib.project.name} ●").x + 2 * gap
+        dim = self.reg.get("output.dim")
+        if dim is not None and dim.value < 1.0:
+            room -= imgui.calc_text_size(f"·  dim {dim.text()}").x + gap
         return room
 
     def _footer(self, fps: float) -> None:
@@ -1100,6 +1104,12 @@ class Panel:
         elif self.reloader is not None and self.reloader.status:
             imgui.same_line()
             imgui.text_disabled(f"·  {self.reloader.status}")
+        # the master dim (plan 15 WP3), on every page while it is under
+        # full ("dim 40%", "dim black"): a dark picture is never a mystery
+        dim = self.reg.get("output.dim")
+        if dim is not None and dim.value < 1.0:
+            imgui.same_line()
+            imgui.text_colored(WARN, f"·  dim {dim.text()}")
         lib = self.library
         if lib is not None and lib.reg is not None:
             proj = lib.project
@@ -1117,6 +1127,13 @@ class Panel:
         if self.output is None or "output.overlay" not in self.reg:
             imgui.text_disabled("no render window attached")
             return
+        if "output.dim" in self.reg:        # the master dim: the crossfader (plan 15 WP3)
+            self._row("output.dim")
+            # a driver that refused the dim's program: the fader moves and
+            # the picture does not — say so here (Renderer.dim_error)
+            err = getattr(self.renderer, "dim_error", "")
+            if err:
+                imgui.text_colored(WARN, f"{err} — the picture is not dimmed")
         if len(self.reg["output.monitor"].names) > 1:
             self._combo("output.monitor")
         self._check("output.fullscreen")

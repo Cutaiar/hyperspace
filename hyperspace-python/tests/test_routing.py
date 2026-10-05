@@ -1533,6 +1533,57 @@ def test_an_older_file_gets_the_undo_keys_where_they_are_free(tmp_path):
     assert path.read_text() == after and len(list(tmp_path.glob("bindings.json.bak-*"))) == 1
 
 
+def test_an_old_crossfader_row_moves_to_the_dim_with_a_backup(tmp_path, capsys):
+    """Plan 15 WP3: a bindings.json written before the master dim carries
+    the factory crossfader row on the overlay's ground. Exactly that row is
+    swapped for the dim, noted with its plan; the file as it was is kept
+    beside itself first; the next load is quiet. A crossfader row the owner
+    changed is left alone, and no dim row is added beside it."""
+    xf = f"cc:0:{apc40.CC_XFADE}"
+
+    def write(home, **change):
+        rows = []
+        for b in session_rows():
+            d = b.to_json()
+            if d["source"] == xf:
+                assert d == {"source": xf, "target": "output.dim", "op": "abs", "ring": 0}
+                d = {**d, "target": "overlay.bg", **change}
+            rows.append(d)
+        path = bindings_path(home)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        doc = {"schema": SCHEMA, "profile": "apc40", "bindings": rows}
+        path.write_text(json.dumps(doc))
+        return path, doc
+
+    path, doc = write(tmp_path / "old")
+    t = Bindings.load(path, legacy_midi=None)
+    err = capsys.readouterr().err
+    assert t.error == ""
+    assert t.notes == [f"remapped {xf}: overlay.bg → output.dim (the APC40 map of plan 15)"]
+    assert t.notes[0] in err and "kept as bindings.json.bak-v" in err
+    row, = [b for b in t.bindings if b.source == xf]
+    assert (row.target, row.op, row.layer, row.pickup, row.feedback) == (
+        "output.dim", "abs", None, True, None)
+    assert [b.to_json() for b in t.bindings] == [b.to_json() for b in session_rows()]
+    bak, = path.parent.glob("bindings.json.bak-*")
+    assert json.loads(bak.read_text()) == doc                 # the file as it was
+    assert json.loads(path.read_text()) == t.to_json()        # written back once
+    again = Bindings.load(path, legacy_midi=None)
+    assert again.notes == [] and not again.changed and capsys.readouterr().err == ""
+    assert len(list(path.parent.glob("bindings.json.bak-*"))) == 1
+    # the owner's own rows on the crossfader: another target, or the ground
+    # with a different op — neither is the factory row, neither is touched
+    for k, change in enumerate(({"target": "view.bright"}, {"op": "toggle"})):
+        path, doc = write(tmp_path / f"mine{k}", **change)
+        t = Bindings.load(path, legacy_midi=None)
+        row, = [b for b in t.bindings if b.source == xf]
+        assert (row.target, row.op) == (change.get("target", "overlay.bg"),
+                                        change.get("op", "abs"))
+        assert not any(b.target == "output.dim" for b in t.bindings)
+        assert t.notes == [] and json.loads(path.read_text()) == doc
+        assert not list(path.parent.glob("bindings.json.bak-*"))
+
+
 def test_a_theme_row_in_an_old_bindings_file_is_remapped_to_the_preset_bank(tmp_path, capsys):
     """Plan 13 WP2: a table written before the preset bank names theme.*
     params — the factory F-keys, clip row 1, QUANT, pad B, and a row the

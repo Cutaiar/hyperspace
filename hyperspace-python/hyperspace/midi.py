@@ -51,7 +51,8 @@ replacement re-sends every ring and LED (`redraw`), a control no active
 row draws going dark. A knob's ring also re-bases the endless encoder
 (`apc40.RING_REBASES_KNOB`, hand check 31), so the row is caught at the
 value just sent; the faders keep soft pickup, and a desk replacement (a
-preset load) clears their catch.
+preset load) clears the catch of a fader whose param it moved — the
+crossfader and the session's faders keep their hold through it.
 
 Bindings persist with every other source's in bindings.json (routing.py;
 an old midi_map.json is migrated on first run). With no file the device
@@ -372,7 +373,7 @@ class MidiIO:
     def _follow_table(self) -> None:
         """A layer switch or a desk replacement since the last look: redraw
         every ring and LED; a replacement (a preset load) also clears the
-        faders' catch; a desk row edited in place (`redraw_serial`, the
+        catch of each fader whose param it moved; a desk row edited in place (`redraw_serial`, the
         ROUTING page) only redraws."""
         seen = self._serials()
         if seen != self._seen:
@@ -546,14 +547,24 @@ class MidiIO:
         desk, the ROUTING page's ×), goes dark unless an active row draws
         it (D8); then every active row is re-sent — a knob's ring re-bases
         it (`_rebase`). `load` (a desk replacement: a preset load) also
-        clears every fader's catch, so a fader whose base the load moved
-        picks up."""
+        clears a fader's catch when its param is no longer where this
+        adapter last put it — `_uncatch_moved`'s test — or it has no last
+        write, or the param is not where this fader itself last was
+        (`_writes` is per param: another control on the same param may
+        have made the last write): a fader whose base the load moved
+        picks up, and one whose param the load left alone (the
+        crossfader's dim, S1–S8 and SM: a preset never moves a session
+        param, D9) keeps its hold (plan 15 WP3, fork 19)."""
         active = self.table.active()
         drawn = {b.control for b in active if b.feedback}
         for b in self.bindings:
             b.last_out = None
             if load and b.kind in ("cc", "pitch") and b.op == "abs" and b.feedback != "ring":
-                b.caught = False
+                p, seen = self.reg.get(b.target), self._writes.get(b.target)
+                if (p is None or seen is None or b.last_hw is None
+                        or abs(p.norm - seen) > PICKUP_TOL
+                        or abs(p.norm - b.last_hw) > PICKUP_TOL):
+                    b.caught = False
         if self.out is None:
             return
         shown, self._shown = getattr(self, "_shown", {}), {}   # hot-reload safe
