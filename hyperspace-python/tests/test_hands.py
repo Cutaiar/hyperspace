@@ -1207,3 +1207,107 @@ def test_an_injected_port_is_the_callers_and_never_reopened():
     r.clock.t += 10.0
     run(r, 1, hand(pos=(60.0, 300.0, 0.0)))
     assert r.io.out is None and r.io.out_name == ""
+
+
+# ------------------------------------- plan 17 WP2: a learn listens to one source
+
+def rolled(deg):
+    """A palm normal rolled by `deg` about the fingers' axis."""
+    a = math.radians(deg)
+    return (math.sin(a), -math.cos(a), 0.0)
+
+
+def _wrong_hand_cases():
+    """Plan 17 §1 row 1's two measured cases, as frames of (left, right)
+    hands (None: not in view). In both the left hand is the one meant and
+    the right hand travels further."""
+    # 1. the left hand rolls slowly on purpose while the right hand — the
+    #    one that armed the learn with the mouse — travels in from the edge
+    entering = [(hand("left", pos=(-120.0, 200.0, 0.0), normal=rolled(2.0 * k)),
+                 None if k < 2 else hand("right", pos=(330.0 - 25.0 * k, 200.0, 0.0)))
+                for k in range(40)]
+    # 2. both hands in the box: the left rolls 29° — and then goes on, a
+    #    roll needs 45° to win — while the right drops 150 mm
+    dropping = [(hand("left", pos=(-120.0, 200.0, 0.0), normal=rolled(min(2.9 * k, 60.0))),
+                 hand("right", pos=(120.0, 320.0 - min(15.0 * k, 150.0), 0.0)))
+                for k in range(40)]
+    return {"the right hand travels in": entering, "the right hand drops": dropping}
+
+
+def _play(r, app, frames) -> int | None:
+    """Feed the frames; the frame number at which the learn completed."""
+    for k, (left, right) in enumerate(frames):
+        run(r, 1, *[h for h in (left, right) if h is not None],
+            learn=app.learn, router=app.router)
+        if app.learn.learning is None:
+            return k
+    return None
+
+
+def test_a_hand_learn_listens_to_one_hand(tmp_path):
+    """The session's "the Leap assigned a learn to the wrong hand" (plan 17
+    §1 row 1). A bare learn takes whichever axis of either hand travelled
+    furthest: in both cases that is the right hand's. Armed with
+    "hand:left" only the left hand's axes can win — the left roll is
+    learned, however far the right hand goes — and armed "hand:right" the
+    same movement lands the right hand's axis."""
+    for n, (name, frames) in enumerate(_wrong_hand_cases().items()):
+        won = {}
+        for want in (None, "hand:left", "hand:right"):
+            app, r = make_app(tmp_path / f"{n}{want}"), rig()
+            run(r, 1, frames[0][0], learn=app.learn, router=app.router)
+            app.learn.arm("view.inst_amp", want)
+            at = _play(r, app, frames)
+            assert at is not None, (name, want)
+            (row,) = app.table.routes_to("view.inst_amp")
+            won[want] = (row.source, at)
+            assert app.learn.want is None and f"learned view.inst_amp ← {row.describe()}" \
+                in app.learn.last
+        assert won[None][0].startswith("hand:right."), (name, won)       # the wrong hand
+        assert won["hand:left"][0] == "hand:left.roll", (name, won)
+        assert won["hand:right"][0] == won[None][0], (name, won)
+        assert won["hand:left"][1] > won[None][1]            # …which got there first
+
+
+def test_the_hands_never_complete_a_desk_learn(app):
+    """Armed "desk", a hand sweeps every axis through its whole range:
+    still armed, no row, no question — and no baseline kept, so a later
+    hand learn starts fresh."""
+    r = rig()
+    run(r, 1, hand(), learn=app.learn, router=app.router)
+    app.learn.arm("view.inst_amp", "desk")
+    for k in range(40):
+        s = math.sin(k / 6.0)
+        for side in ("left", "right"):
+            run(r, 1, hand(side, pos=(200.0 * s, 250.0 + 150.0 * s, 150.0 * s),
+                           normal=rolled(50.0 * s), direction=tilt(0.8 * s), grab=abs(s)),
+                learn=app.learn, router=app.router)
+    assert app.learn.learning == "view.inst_amp" and app.learn.want == "desk"
+    assert app.learn.pending is None and not app.table.of("hand")
+    assert r.io._learn_base is None
+
+
+def test_a_rearm_starts_a_fresh_baseline(app):
+    """The baseline is the learn's own (keyed by the param and the want):
+    arm A, move 0.2, arm B, move 0.1 more — 0.3 since A was armed, 0.1
+    since B — and nothing is learned; the same hand re-armed for the same
+    param with another want starts fresh too."""
+    r = rig()
+    k = ax(r, "right.y")
+    lo, hi = r.io.state[k].lo, r.io.state[k].hi
+    y = lambda u: (0.0, lo + u * (hi - lo), 0.0)
+    run(r, 1, hand(pos=y(0.3)), learn=app.learn, router=app.router)
+    app.learn.arm("view.inst_amp", "hand:right")
+    run(r, 2, hand(pos=y(0.3)), learn=app.learn, router=app.router)
+    run(r, 1, hand(pos=y(0.5)), learn=app.learn, router=app.router)   # 0.2: not enough
+    assert app.learn.learning == "view.inst_amp"
+    app.learn.arm("view.speed", "hand:right")
+    run(r, 1, hand(pos=y(0.6)), learn=app.learn, router=app.router)   # the new baseline
+    run(r, 1, hand(pos=y(0.6)), learn=app.learn, router=app.router)   # 0.1 since B: no
+    assert app.learn.learning == "view.speed" and not app.table.of("hand")
+    app.learn.arm("view.speed")                              # the same param, another want
+    run(r, 1, hand(pos=y(0.8)), learn=app.learn, router=app.router)   # its baseline
+    assert app.learn.learning == "view.speed" and not app.table.of("hand")
+    run(r, 1, hand(pos=y(0.5)), learn=app.learn, router=app.router)   # 0.3 from it: learned
+    assert app.learn.learning is None
+    assert [b.source for b in app.table.routes_to("view.speed")] == ["hand:right.y"]
