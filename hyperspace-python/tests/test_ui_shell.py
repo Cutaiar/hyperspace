@@ -20,7 +20,7 @@ from hyperspace.app import CONTROL_SIZE, LOOP_KEYS
 from hyperspace.control import Control
 from hyperspace.library import Library
 from hyperspace.overlay import Output
-from hyperspace.params import Kind, build_registry
+from hyperspace.params import PLANES, Kind, build_registry
 from hyperspace.preset import Presets
 from hyperspace.routing import Binding, Bindings, Owned, Router, keymap, padmap
 from hyperspace.ui import CHEATSHEET, PAGE_KEYS, PAGES, Panel, apply_style, load_fonts
@@ -412,6 +412,114 @@ def test_the_look_back_page_fits_with_thumbnails(tmp_path, monkeypatch):
     room = lookback_page_room(tmp_path, monkeypatch)
     assert len(room) == 8
     assert {k: v for k, v in room.items() if v[0] > 0 or v[1] < 0} == {}
+
+
+# the VIEW page's field row (plan 20 WP6): the controls it rearranged
+FIELD_ROW = ("view.inst_layout", "view.inst_motion", "view.inst_amp", "view.inst_rate")
+ROT_RATES = tuple(f"rot.rate.{name}" for name in PLANES)
+
+
+def view_page_room(rig, monkeypatch) -> dict[tuple[int, int, int], tuple[float, float]]:
+    """The VIEW page at the control size with the field row showing: every
+    (count, layout, motion) that changes the row. Returns state → (scroll
+    range, room left under the last row), in pixels."""
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    got: list[tuple[float, float]] = []
+    draw = Panel._page_view
+
+    def measured(self, dt):
+        draw(self, dt)
+        got.append((imgui.get_scroll_max_y(),
+                    imgui.get_content_region_avail().y + imgui.get_style().item_spacing.y))
+    monkeypatch.setattr(Panel, "_page_view", measured)
+    room = {}
+    for n in (1, 7, 9, 100):
+        for layout in (0, 1, 2):
+            for motion in (0, 1):
+                rig.reg["view.instances"].set(n)
+                rig.reg["view.inst_layout"].set(layout)
+                rig.reg["view.inst_motion"].set(motion)
+                for _ in range(3):          # the window settles its size, then its content
+                    frame(rig.panel, "view")
+                room[(n, layout, motion)] = got[-1]
+    return room
+
+
+def test_the_view_page_fits_with_a_field_in_motion(rig, monkeypatch):
+    """Plan 20 WP6: the VIEW page does not scroll with more than one copy.
+    The page test above draws it at one copy, where the field row is
+    hidden; above one the row shows (and the page as it was scrolled by
+    19 px there). Measured with 7, 9 and 100 copies in every layout, still
+    and in motion, and at one copy."""
+    room = view_page_room(rig, monkeypatch)
+    assert len(room) == 24
+    assert {k: v for k, v in room.items() if v[0] > 0 or v[1] < 0} == {}
+
+
+def test_the_field_row_and_the_rate_cells_keep_their_menus(rig, monkeypatch):
+    """The controls WP6 moved — the layout, motion, amp and rate in one row,
+    the six plane rates two to a row — each open their own binding menu on
+    a right-click, and the row's controls sit side by side on one line
+    inside the page."""
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    rects: dict[str, tuple[float, float, float, float]] = {}
+    opened: list[str] = []
+
+    def item(fn):
+        real = getattr(imgui, fn)
+
+        def rec(label, *a, **k):
+            out = real(label, *a, **k)
+            lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+            rects[label.split("##", 1)[-1]] = (lo.x, lo.y, hi.x, hi.y)
+            return out
+        monkeypatch.setattr(imgui, fn, rec)
+    for fn in ("combo", "slider_float", "slider_int"):
+        item(fn)
+    real_popup = imgui.begin_popup_context_item
+
+    def popup(str_id, *a, **k):
+        out = real_popup(str_id, *a, **k)
+        if out:
+            opened.append(str_id)
+        return out
+    monkeypatch.setattr(imgui, "begin_popup_context_item", popup)
+
+    rig.reg["view.instances"].set(7)
+    rig.reg["view.inst_layout"].set(1)
+    rig.reg["view.inst_motion"].set(1)
+    for _ in range(3):
+        frame(rig.panel, "view")
+    row = [rects[pid] for pid in FIELD_ROW]
+    assert len({round(r[1]) for r in row}) == 1                    # one line
+    assert all(row[k][2] < row[k + 1][0] for k in range(3))        # none overlaps the next
+    cells = [rects[pid] for pid in ROT_RATES]
+    assert len({round(r[1]) for r in cells}) == 3                  # three rows of two
+    assert all(cells[k][2] < cells[k + 1][0] for k in (0, 2, 4))
+    assert max(r[2] for r in row + cells) <= CONTROL_SIZE[0]
+
+    io = imgui.get_io()
+    io.config_flags |= imgui.ConfigFlags_.nav_enable_keyboard      # Escape closes a menu
+    for pid in FIELD_ROW + ROT_RATES:
+        x0, y0, x1, y1 = rects[pid]
+        opened.clear()
+        io.add_mouse_pos_event((x0 + x1) / 2, (y0 + y1) / 2)
+        frame(rig.panel)
+        io.add_mouse_button_event(1, True)
+        frame(rig.panel)
+        io.add_mouse_button_event(1, False)
+        frame(rig.panel)
+        frame(rig.panel)
+        assert f"##ctx.{pid}" in opened, (pid, opened)
+        assert set(opened) == {f"##ctx.{pid}"}, (pid, opened)
+        io.add_mouse_pos_event(-1.0, -1.0)
+        io.add_key_event(imgui.Key.escape, True)
+        frame(rig.panel)
+        io.add_key_event(imgui.Key.escape, False)
+        frame(rig.panel)
+        frame(rig.panel)
+    # a right-click sets nothing
+    assert rig.view.instances == 7 and rig.view.inst_layout == 1 and rig.view.inst_motion == 1
 
 
 def test_the_dim_is_first_on_output_and_the_footer_says_so_while_dimmed(rig, monkeypatch):

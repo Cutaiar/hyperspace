@@ -415,3 +415,53 @@ def test_a_non_finite_offset_never_poisons_a_base(rig):
     assert math.isfinite(speed._base) and shape.value == base_shape
     reg.apply()                                   # the sources left: the base comes back
     assert speed.value == pytest.approx(base_speed) and not speed.modulated
+
+
+def test_inst_layout_is_declared(tmp_path):
+    """Plan 20 WP6: `view.inst_layout`, three choices, default GRID, in the
+    view group, persisted and modulatable like the motion beside it, and
+    declared just before it. A layout change is one undo step; a preset
+    that does not name the id — every file saved before this plan, the
+    whole factory layer — loads it as GRID."""
+    from test_undo import boot, frames, labels, settle
+
+    from hyperspace.library import FACTORY
+    from hyperspace.params import INST_LAYOUT
+
+    reg, view, *_ = make(tmp_path / "plain")
+    p = reg["view.inst_layout"]
+    assert INST_LAYOUT == ["GRID", "HEX", "RING"]
+    assert p.kind is Kind.ENUM and p.names == INST_LAYOUT and p.label == "Layout"
+    assert p.base == 0 and view.inst_layout == 0 and ViewState().inst_layout == 0
+    assert p.group == "view" and p.persist and p.modulatable
+    motion = reg["view.inst_motion"]
+    assert (p.persist, p.modulatable) == (motion.persist, motion.modulatable)
+    ids = reg.ids()
+    assert ids.index("view.inst_layout") + 1 == ids.index("view.inst_motion")
+    assert [reg[f"view.inst_{k}"].label for k in ("motion", "amp", "rate")] == [
+        "Field motion", "Field amp", "Field rate"]
+    p.set(2)
+    assert view.inst_layout == 2 and reg.snapshot()["view.inst_layout"] == 2
+
+    # a layout change is one undo step, with no code of its own
+    r = boot(tmp_path / "home")
+    settle(r)
+    assert labels(r) == []
+    lay = r.reg["view.inst_layout"]
+    lay.set(1)
+    settle(r)
+    assert r.view.inst_layout == 1 and len(labels(r)) == 1
+    r.reg["edit.undo"].fire()
+    frames(r, 5)
+    assert r.view.inst_layout == 0 and r.undo.stack == []
+
+    # a preset that does not name it loads it as GRID: every factory preset
+    names = r.lib.list("presets")
+    assert len(names) >= 5
+    for name in names:
+        lay.set(2)
+        assert r.view.inst_layout == 2
+        assert "view.inst_layout" not in r.presets.load(name), name
+        assert r.view.inst_layout == 0 and lay.base == 0, name
+    for f in FACTORY.rglob("*.json"):
+        assert "inst_layout" not in f.read_text(), f.name
