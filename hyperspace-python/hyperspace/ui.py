@@ -894,7 +894,13 @@ class Panel:
             _readout(key, RED)
             imgui.same_line(x0 + col + 14)
             imgui.text_colored(DIM, action)
-        self._sheet_h = imgui.get_window_height()    # the desk sits above it (ui_desk)
+        # the desk sits above it (ui_desk). The height is taken from the
+        # rows just laid out, not `get_window_height()`: on the sheet's
+        # first frame the window has no size yet, and the desk would be
+        # drawn one frame in the wrong place (plan 16 WP7)
+        style = imgui.get_style()
+        self._sheet_h = (imgui.get_cursor_pos_y() - style.item_spacing.y
+                         + style.window_padding.y)
         imgui.end()
         imgui.pop_style_var()
 
