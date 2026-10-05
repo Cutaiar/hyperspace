@@ -60,6 +60,7 @@ VIEW_X_MM = 260.0   # the view from above: x over ±this …
 VIEW_Z_MM = 160.0   # … and z over ±this, at a fixed scale
 GAUGE_MM = (80.0, 400.0)    # the gauge, bottom to top: the range a dot's size uses
 OUTSIDE_ALPHA = 0.4
+FACE_PAD = 12.0     # a box face is never drawn nearer the frame than this
 PLOT_W = 96.0
 CAL_SECONDS = 20.0
 LEFT = imgui.ImVec4(0.92, 0.92, 0.92, 1.0)
@@ -266,17 +267,32 @@ def _box(io) -> None:
     def sz(mm: float, pad: float = 6.0) -> float:
         return min(max(cy + mm / VIEW_Z_MM * (BOX_H / 2 - 6), y0 + pad), y1 - pad)
 
+    def high(mm: float) -> float:                   # a height over the gauge's range, 0–1
+        return min(max((mm - GAUGE_MM[0]) / (GAUGE_MM[1] - GAUGE_MM[0]), 0.0), 1.0)
+
     def sy(mm: float) -> float:
-        u = min(max((mm - GAUGE_MM[0]) / (GAUGE_MM[1] - GAUGE_MM[0]), 0.0), 1.0)
-        return y1 - 2 - u * (BOX_H - 4)
+        return y1 - 2 - high(mm) * (BOX_H - 4)
 
     box = getattr(io, "box", None) or {}
     bx, by, bz = (box.get(c) for c in BOX_AXES)
     dim = ui.u32(ui.DIM)
     # the box's faces: a pair of lines per bounded coordinate, each as
     # long as the other coordinate's bound (the whole view when it is open)
-    zs = (sz(bz[0], 1.0), sz(bz[1], 1.0)) if bz else (y0 + 1, y1 - 1)
-    xs = (sx(bx[0], 1.0), sx(bx[1], 1.0)) if bx else (x0 + 1, x1 - 1)
+    # A box wider than the view's fixed scale has its faces clamped FACE_PAD
+    # inside the frame, so there is still room to show a hand beyond them.
+    zs = (sz(bz[0], FACE_PAD), sz(bz[1], FACE_PAD)) if bz else (y0 + 1, y1 - 1)
+    xs = (sx(bx[0], FACE_PAD), sx(bx[1], FACE_PAD)) if bx else (x0 + 1, x1 - 1)
+
+    def place(v: float, at: float, b, faces, out: bool) -> float:
+        """A hand's clamped pixel, kept on its own side of a drawn face:
+        inside one never past it, outside one clear of it."""
+        if b is None:
+            return at
+        if not out:
+            return min(max(at, faces[0]), faces[1])
+        if v > b[1]:
+            return max(at, faces[1] + 6.0)
+        return min(at, faces[0] - 6.0) if v < b[0] else at
     if bx:
         for x in xs:
             dl.add_line(imgui.ImVec2(x, zs[0]), imgui.ImVec2(x, zs[1]), dim)
@@ -296,8 +312,9 @@ def _box(io) -> None:
                 f, out = outside.get(side), True
             if f is None:
                 continue
-            px, py = sx(f["x"]), sz(f["z"])
-            r = 3.0 + 7.0 * min(max((f["y"] - 80.0) / 320.0, 0.0), 1.0)
+            px = place(f["x"], sx(f["x"]), bx, xs, out)
+            py = place(f["z"], sz(f["z"]), bz, zs, out)
+            r = 3.0 + 7.0 * high(f["y"])
             if out:                                 # tracked, outside the box: absent
                 col = imgui.ImVec4(col.x, col.y, col.z, OUTSIDE_ALPHA)
                 dl.add_circle(imgui.ImVec2(px, py), r, ui.u32(col), 0, 1.5)

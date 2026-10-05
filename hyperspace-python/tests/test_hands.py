@@ -1616,6 +1616,65 @@ def test_the_box_round_trips_through_the_file(tmp_path):
     assert hands.core.load_box(None) is None and hands.core.load_box(tmp_path / "no") is None
 
 
+def test_two_still_hands_held_apart_are_not_a_sweep(tmp_path):
+    """Each hand's own travel is what makes a coordinate swept: two hands
+    200 mm apart that never move sideways leave x open, not a slot."""
+    r = rig(tmp_path)
+    sweep(r, lambda j: (hand("left", pos=(-100.0, 120.0 + 200.0 * tri(j, 15), 0.0)),
+                        hand("right", pos=(100.0, 320.0 - 200.0 * tri(j, 15), 60.0))))
+    assert r.io.box["x"] is None and r.io.box["z"] is None and r.io.box["y"] is not None
+    run(r, 1, hand("left", pos=(-190.0, 200.0, 0.0)), hand("right", pos=(190.0, 200.0, 60.0)))
+    assert r.io.present == {"left": True, "right": True}
+
+
+def test_a_dip_in_confidence_does_not_evict_a_hand_in_the_edge_band():
+    """The Schmitt state is the palm's, not presence's: a hand 10 mm past
+    a face (in, by the edge) that the confidence floor drops for a frame
+    is in again the next, without moving."""
+    r = boxed(min_confidence=0.1)
+    at = lambda x, conf=1.0: run(r, 1, hand(pos=(x, 200.0, 0.0), conf=conf))
+    at(190.0)
+    at(210.0)
+    assert r.io.present["right"]
+    at(210.0, conf=0.05)
+    assert not r.io.present["right"] and r.io.outside["right"] is None   # the floor's, not the box's
+    at(210.0)
+    assert r.io.present["right"]
+    run(r, 1)                                         # no hand at all: the state is forgotten
+    at(210.0)
+    assert not r.io.present["right"] and r.io.outside["right"] is not None
+
+
+def test_a_save_that_fails_does_not_copy_the_old_file_again(tmp_path, monkeypatch):
+    path = tmp_path / "hands.json"
+    path.write_text(OLD_FILE)
+    r = rig(tmp_path)
+
+    def refuse(*a, **k):
+        raise PermissionError("read-only file")
+
+    monkeypatch.setattr(hands.core, "save_calibration", refuse)
+    for _ in range(3):
+        r.io.reset_ranges()
+        assert r.io.cal_note == "save: read-only file"
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["hands.json", "hands.json.bak-v1"]
+    assert path.read_text() == OLD_FILE == (tmp_path / "hands.json.bak-v1").read_text()
+
+
+def test_a_frame_without_a_whole_palm_is_no_sample():
+    r = rig()
+    r.io.start_calibration(1.0)
+    r.clock.t += DT
+    r.src.seq += 1
+    f = features(hand())
+    r.src.hands = {"right": ({k: v for k, v in f.items() if k != "z"} | {"y": math.nan}, 1.0),
+                   "left": ({**features(hand("left")), "x": math.inf}, 1.0)}
+    r.io.settings.axes[:] = [a for a in r.io.axes if a.feature == "roll"]
+    r.io.state[:] = r.io.state[:2]
+    r.io.poll(DT)
+    assert r.io._palm == []
+
+
 def test_hands_page_draws_the_box_and_a_hand_outside_it(tmp_path):
     from imgui_bundle import imgui
 

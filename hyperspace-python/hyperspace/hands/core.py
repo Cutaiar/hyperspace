@@ -734,8 +734,9 @@ def _keep(path: Path, schema: str = "1") -> Path:
     that name is taken. An exclusive create, so nothing already there —
     an earlier backup, a copy the owner made — is ever overwritten.
     routing.backup's naming and rule, spelled here because this module
-    imports nothing from the package. Raises OSError when no copy could
-    be made; the caller saves all the same."""
+    imports nothing from the host (only its own package's signal and
+    tape). Raises OSError when no copy could be made; the caller saves
+    all the same."""
     data = path.read_bytes()
     base = f"{path.name}.bak-v{schema}"
     stamp = time.strftime("%Y%m%d-%H%M%S")
@@ -1002,9 +1003,12 @@ class HandsIO:
         self._learn_base: list[float | None] | None = None
         # calibration sweep in progress: axis name → raw samples
         self._cal: dict[str, list[float]] | None = None
-        # and where the palms went during it, (x, y, z) mm, both hands in
-        # one list whatever the dofs: what the box is made from
-        self._palm: list[tuple[float, float, float]] | None = None
+        # and where the palms went during it, (x, y, z) mm and whose, both
+        # hands in one list whatever the dofs: what the box is made from
+        self._palm: list[tuple] | None = None       # (x, y, z, side)
+        # the box's Schmitt state per hand: was the palm in, last frame it was seen
+        self._in_box = {s: False for s in SIDES}
+        self._kept = False      # this build's one backup of an old file was made
         self._cal_until = 0.0
         self.cal_note = ""
         if out is None:
@@ -1126,17 +1130,28 @@ class HandsIO:
             # goes out, so one on a face does not flicker. No box bounds
             # nothing, and a sweep ignores it, or it could never be swept
             # wider. (getattr: a HandsIO from before a hot reload has none.)
+            # The edge's state is the palm's own (`_in_box`), kept through a
+            # frame the confidence floor drops, so a dip in confidence cannot
+            # put a hand in the edge band out for good; it is forgotten when
+            # the tracker has no hand at all.
             tracked = h is not None and h[1] >= self.min_conf
             box = getattr(self, "box", None)
-            grow = BOX_EDGE if self.present[side] else 0.0
-            here = tracked and (box is None or self._cal is not None
-                                or inside(box, h[0], grow))
+            if getattr(self, "_in_box", None) is None:
+                self._in_box = {sd: False for sd in SIDES}
+            if h is None:
+                self._in_box[side] = False
+            elif box is not None:
+                self._in_box[side] = inside(box, h[0],
+                                            BOX_EDGE if self._in_box[side] else 0.0)
+            here = tracked and (box is None or self._cal is not None or self._in_box[side])
             if getattr(self, "outside", None) is None:
                 self.outside = {sd: None for sd in SIDES}
             self.outside[side] = h[0] if tracked and not here else None
             palm = getattr(self, "_palm", None)
             if tracked and fresh and self._cal is not None and palm is not None:
-                palm.append(tuple(float(h[0][c]) for c in BOX_AXES))
+                at = tuple(float(h[0].get(c, math.nan)) for c in BOX_AXES)
+                if all(math.isfinite(v) for v in at):     # a partial frame is no sample
+                    palm.append((*at, side))
             self.frame[side] = h[0] if here else None
             if here != self.present[side]:
                 self.present[side] = here
@@ -1351,22 +1366,26 @@ class HandsIO:
         self.cal_note += " · " + self._sweep_box(palm or [])
         self.save_ranges()
 
-    def _sweep_box(self, palm: list[tuple[float, float, float]]) -> str:
+    def _sweep_box(self, palm: list[tuple]) -> str:
         """The box from where the palms went in a sweep, and the note
-        that says so. Per coordinate, the 2nd–98th percentile (the
-        ranges' own rule) pushed out by BOX_MARGIN — the margin is what
-        lets a hand hold an axis at its end stop. A coordinate swept over
-        less than BOX_MIN_SPAN is left open (a sweep that never moved
-        sideways must not make a slot), and x is made symmetric about
-        the camera, so sweeping one hand cannot shut the other out. Too
-        few samples: the box stays as it was."""
+        that says so. Per coordinate, the 2nd–98th percentile of both
+        hands' samples together (the ranges' own rule) pushed out by
+        BOX_MARGIN — the margin is what lets a hand hold an axis at its
+        end stop. A coordinate no hand swept over BOX_MIN_SPAN is left
+        open (a sweep that never moved sideways must not make a slot;
+        each hand's own travel is what counts, so two still hands held
+        apart are not a sweep), and x is made symmetric about the camera,
+        so sweeping one hand cannot shut the other out. Too few samples:
+        the box stays as it was."""
         if len(palm) < CAL_MIN_SAMPLES:
-            return "box left as it was (no palm seen)"
+            return "box left as it was (too few palm samples)"
+        pct = lambda v: (v[int(0.02 * (len(v) - 1))], v[int(0.98 * (len(v) - 1))])
         box: Box = {}
         for k, c in enumerate(BOX_AXES):
-            v = sorted(p[k] for p in palm)
-            lo, hi = v[int(0.02 * (len(v) - 1))], v[int(0.98 * (len(v) - 1))]
-            if hi - lo < BOX_MIN_SPAN:
+            lo, hi = pct(sorted(p[k] for p in palm))
+            own = [pct(sorted(p[k] for p in palm if p[3] == sd)) for sd in SIDES
+                   if any(p[3] == sd for p in palm)]
+            if max(b - a for a, b in own) < BOX_MIN_SPAN:
                 box[c] = None
             elif c == "x":
                 half = max(abs(lo), abs(hi)) + BOX_MARGIN
@@ -1396,9 +1415,10 @@ class HandsIO:
         if self.cal_path is None:
             return
         try:
-            old = _old_schema(self.cal_path)
+            old = None if getattr(self, "_kept", False) else _old_schema(self.cal_path)
             if old is not None:
                 bak = _keep(self.cal_path, old)
+                self._kept = True       # once: a save that fails must not copy again
                 self.cal_note += f" · the old file kept as {bak.name}"
         except OSError as e:
             self.cal_note += f" · no backup of the old file: {e}"[:120]
