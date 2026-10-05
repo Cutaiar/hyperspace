@@ -450,7 +450,9 @@ def register_switches(reg: Registry, slots) -> list[str]:
                        "untouched by the effects. On: the effects bend them with the "
                        "shape. With no effect on it changes nothing.", **rig)
         ids += [f"{pre}.scene", f"{pre}.hands", f"{pre}.through"]
-        if several:
+        # one output: the master dim is its dim — unless the config gave it a
+        # launch dim of its own, which must then have a fader (review of #124)
+        if several or float(sw.dim) < 1.0:
             reg.continuous(f"{pre}.dim", label("dim"), lambda sw=sw: float(sw.dim),
                            lambda v, sw=sw: setattr(sw, "dim", min(1.0, max(0.0, float(v)))),
                            lo=0.0, hi=1.0, fmt=Output._dim_text, group="output",

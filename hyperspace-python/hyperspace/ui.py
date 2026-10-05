@@ -1544,7 +1544,7 @@ class Panel:
             self._check(f"{pre}.hands", "hands")
             imgui.same_line()
             self._check(f"{pre}.through", "through effects")
-            if several and f"{pre}.dim" in self.reg:
+            if f"{pre}.dim" in self.reg:
                 self._row(f"{pre}.dim", label="dim")
             sw = sl.switches
             why = []

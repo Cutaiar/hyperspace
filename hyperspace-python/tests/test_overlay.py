@@ -475,3 +475,9 @@ def test_one_output_has_no_dim_of_its_own():
     assert "output.1.dim" not in reg
     assert [reg[f"output.1.{k}"].label for k in ("scene", "hands", "through")] == [
         "Scene", "Hands", "Hands through effects"]
+    # …unless a one-entry list gave it a launch dim: then it has its fader
+    one = _slots("glass")
+    one[0].switches.dim = 0.5
+    reg = _registry()
+    assert register_switches(reg, one)[-1] == "output.1.dim"
+    assert reg["output.1.dim"].value == 0.5 and reg["output.1.dim"].label == "Dim"
