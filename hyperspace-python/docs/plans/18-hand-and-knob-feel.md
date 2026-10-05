@@ -932,6 +932,21 @@ exact, and the undo bound is exact (0.33 % a frame on the same turn).
 the default of `Bindings.slew`, plus the test fixtures that assume an
 immediate write.
 
+**Settled by the orchestrator, 2026-10-04: (b), 80 ms in the running
+app.** During a glide the ring carries the knob's own target (fork 14),
+the very message today's code sends, so the glide adds no new assumption
+about the encoder beyond the one hand check 31 already covers; and a fix
+that ships switched off is a new knob where a default would do (roadmap
+§1). How it is built so that (a)'s proof survives: a bare `Bindings`
+still has `slew = 0.0` (every existing test passes unedited and 0 is
+bit-identical to today); `routing.SLEW_DEFAULT_S = 0.08` is what the
+**app** sets on its table before the show's session values land
+(`app.main`, one line; a show that saved `desk.slew` keeps its number, 0
+included), without marking a factory show unsaved at launch. Wherever
+this document says "0 by default" or "off by default", read "0 on a bare
+table, 80 ms in the app". Check N7 becomes "judge 80 ms; turn it down or
+off if a knob feels late". Cost to reverse: one constant.
+
 **13. Where `desk.slew` lives.** **(a) `desk.slew`, with `desk` made a
 session group**: named for what it is, beside `desk.shift`; one tuple
 edit. (b) in an existing group (`ui.`, `master.`, `output.`): no tuple
