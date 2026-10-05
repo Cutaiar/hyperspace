@@ -76,6 +76,19 @@ from .routing import MIDI_SCHEMES, Binding, Bindings, Owned
 WANTS = ("desk", "hand:left", "hand:right")
 
 
+def blocked(table: Bindings, source: str) -> str | None:
+    """Why no desk row can be learned onto the control `source` names, as
+    the table stands: ``"invariant"`` — the session's on both layers (D6)
+    — ``"global"`` — nothing is learned while the global layer is up (D5)
+    — or None when it can. The one rule `Learn.learn_control` refuses by
+    and the on-screen desk asks before a click (`ui_desk.mappable`)."""
+    if table.is_invariant(Binding(source, "", "abs", layer="preset")):
+        return "invariant"
+    if table.layer == "global":
+        return "global"
+    return None
+
+
 class Learn:
     """The armed param and the question the referee left for the panel."""
 
@@ -195,10 +208,11 @@ class Learn:
         def named(x: Binding) -> str:
             name = getattr(profile, "named", None) or getattr(profile, "control_name", None)
             return (name(x.source) if name is not None else None) or x.describe()
-        if table.is_invariant(b):
+        why = blocked(table, source)
+        if why == "invariant":
             self.refuse(f"{named(b)} is invariant (the session's) — not learned")
             return False
-        if table.layer == "global":
+        if why == "global":
             self.refuse(f"{named(b)} is on the global layer (the session's) "
                         "— latch SHIFT off to learn into the preset")
             return False
@@ -238,20 +252,23 @@ class Learn:
 
     def map_picked(self, pid: str, profile=None) -> bool:
         """The picked control takes this param: arm(pid, "desk"), then
-        learn_control(control). True when it landed; the pick is over
-        either way unless it was refused — then the control is still
-        picked, no learn is left armed behind it, and `last` says why (an
-        invariant control, the global layer: the knob learn's words)."""
+        learn_control(control). True when it landed, and the pick is then
+        over. When it did not, the control is still picked, no learn is
+        left armed behind it, and `last` says why: an invariant control or
+        the global layer in the knob learn's words, or a param the
+        registry lacks. (Like any arm, it forgets a held Replace / Keep
+        question.)"""
         source = getattr(self, "control", None)
         if source is None:
             return False
         self.arm(pid, "desk")                # (lets the pick go: `source` holds it)
         landed = self.learn_control(source, profile)
         if not landed:
-            refused = self.refused
+            said = self.refused              # learn_control's own refusal, if it made one
             self.arm(None)
-            if refused:
-                self.control = source
+            self.control = source
+            if not said:
+                self.refuse(f"{pid}: no such param — nothing mapped")
         return landed
 
     # ---- a source completes it ----

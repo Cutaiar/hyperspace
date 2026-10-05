@@ -1288,6 +1288,14 @@ def test_a_click_on_a_param_maps_the_picked_control(rig, monkeypatch):
     monkeypatch.setattr(undo, "push", lambda label, *a, **k: (pushes.append(label),
                                                               push(label, *a, **k))[1])
     rects = _widgets(monkeypatch)
+    labels: dict[str, tuple] = {}
+    ctx_label = Panel._ctx_label
+
+    def label(self, a):
+        lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        labels[a.id] = (lo.x, lo.y, hi.x, hi.y)
+        return ctx_label(self, a)
+    monkeypatch.setattr(Panel, "_ctx_label", label)
     d3 = _control("D3")
     for _ in range(3):
         frame(panel, "view")
@@ -1296,9 +1304,10 @@ def test_a_click_on_a_param_maps_the_picked_control(rig, monkeypatch):
     _click(panel, ui_desk.rect(panel, d3))
     assert lrn.control == d3.source and ui_desk.picking(panel) is d3
     speed, bright = reg["view.speed"].base, reg["view.bright"].base
-    # a click on the dimmed page that is on no param's widget: nothing
-    _click(panel, (rects["view.speed"][0], rects["view.speed"][1] - 14,
-                   rects["view.speed"][0] + 4, rects["view.speed"][1] - 12))
+    # a click on the dimmed page that is on no param's widget or label
+    # (Speed's readout, right of its label): nothing
+    _click(panel, (rects["view.speed"][2] - 12, labels["view.speed"][1],
+                   rects["view.speed"][2] - 4, labels["view.speed"][3]))
     assert lrn.control == d3.source and pushes == []
     _click(panel, rects["view.speed"])
     assert lrn.control is None and ui_desk.picking(panel) is None
@@ -1310,6 +1319,13 @@ def test_a_click_on_a_param_maps_the_picked_control(rig, monkeypatch):
     # bright again: the same click now moves the fader
     _click(panel, rects["view.speed"])
     assert reg["view.speed"].base != speed and pushes == ["learn view.speed"]
+    # a row's label is the param's too (WP3): a click on the word maps
+    lrn.pick(_control("D8").source)
+    frame(panel)
+    depth = reg["view.depth4"].base
+    _click(panel, labels["view.depth4"])
+    assert lrn.control is None and reg["view.depth4"].base == depth
+    assert any(b.source == "cc:*:23" and b.target == "view.depth4" for b in table.desk())
     # a combo and a check are targets too; a file path is not
     for page, pid in (("view", "view.shape"), ("output", "output.overlay")):
         frame(panel, page)
@@ -1338,9 +1354,23 @@ def test_a_click_on_a_param_maps_the_picked_control(rig, monkeypatch):
     target = next(c for c in ui_desk.apc40.LAYOUT if c.kind == "knob" and c.glyph.startswith("K")
                   and ui_desk.rect(panel, c)[0] > rects["view.speed"][0])
     desk = [b.to_json() for b in table.desk()]
-    _click(panel, ui_desk.rect(panel, target))
+    values = reg.snapshot()
+    spot = ui_desk.rect(panel, target)
+    _click(panel, spot)
     assert panel.open and lrn.control == target.source
     assert [b.to_json() for b in table.desk()] == desk and len(pushes) == n
+    # …and nor does a second click at the same spot (a double click, or
+    # "click it again to let go" on a desk that is no longer there): the
+    # page is dimmed, so it moves nothing either
+    assert ui_desk.picking(panel) is target and not ui_desk.armed(panel)
+    _click(panel, spot)
+    _click(panel, spot)
+    assert lrn.control == target.source and reg.snapshot() == values
+    assert [b.to_json() for b in table.desk()] == desk and len(pushes) == n
+    # once the mouse has left that spot a click on a param maps as ever
+    _click(panel, rects["view.bright"])
+    assert lrn.control is None and len(pushes) == n + 1
+    assert any(b.source == target.source and b.target == "view.bright" for b in table.desk())
 
 
 def test_the_footer_says_what_is_picked_and_a_click_lets_go(rig, monkeypatch):
@@ -1348,7 +1378,7 @@ def test_the_footer_says_what_is_picked_and_a_click_lets_go(rig, monkeypatch):
     reads what is picked and the seconds left, in red, on every page; the
     desk's header says it too; a real click on the footer's line lets
     go. An invariant pick reads why, in the dim ink."""
-    from hyperspace import ui
+    from hyperspace import ui, ui_desk
 
     panel = rig.panel
     imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
@@ -1378,10 +1408,15 @@ def test_the_footer_says_what_is_picked_and_a_click_lets_go(rig, monkeypatch):
         return [x for x in lines(page) if x[0].startswith("·  ")]
     assert footer("view") == []
     lrn.pick(_control("D3").source)
-    for page in ("view", "routing", "system"):
+    for page in ("view", "system", "hands"):
         (said,) = footer(page)
         assert said[0].startswith("·  D3 picked (20 s): click a param"), page
         assert said[1] == rgb(ui.RED)
+    # ROUTING is not dimmed — a click there is the widget's own — and both lines say so
+    (said,) = footer("routing")
+    assert said[0].startswith("·  D3 picked (20 s): click a param on any other page")
+    assert [x for x in lines() if x[0].startswith("D3 picked: its line is framed")]
+    frame(panel, "view")
     clock[0] += 7.2
     assert footer("view")[0][0].startswith("·  D3 picked (13 s)")
     # the desk's header says it too, with how to let go
@@ -1391,6 +1426,14 @@ def test_the_footer_says_what_is_picked_and_a_click_lets_go(rig, monkeypatch):
     lrn.said("unbound view.speed from K2 (track knob 2)")
     clock[0] += 0.1
     assert footer()[0][0].startswith("·  unbound view.speed")
+    clock[0] += ui.MESSAGE_S + 0.1
+    # a click on a line that is not the pick's own lets nothing go
+    lrn.said("unbound view.bright from K1 (track knob 1)")
+    clock[0] += 0.1
+    (said,) = footer()
+    assert said[0].startswith("·  unbound view.bright")
+    _click(panel, said[2])
+    assert lrn.control is not None
     clock[0] += ui.MESSAGE_S + 0.1
     (said,) = footer()
     assert said[0].startswith("·  D3 picked (") and lrn.control is not None
@@ -1415,6 +1458,17 @@ def test_the_footer_says_what_is_picked_and_a_click_lets_go(rig, monkeypatch):
     full = [x[0] for x in lines() if x[0].startswith("D3 picked")]
     assert full and full[0].startswith(
         "D3 picked: click a param to put it here · click D3 again to let go · ")
+    # a line said while the panel was hidden (no footer saw it) does not
+    # take the slot from the pick the moment the panel comes back
+    ui_desk.let_go(panel)
+    frame(panel)
+    lrn.said("said while the panel was hidden")
+    clock[0] += 30.0
+    frame(panel)
+    ui_desk.click(panel, rig.router.table, _control("D3"), None)
+    assert panel.open
+    (said,) = footer()
+    assert said[0].startswith("·  D3 picked (20 s)")
 
 
 def test_the_click_wording_is_switched_on(rig, monkeypatch):

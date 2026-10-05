@@ -370,6 +370,7 @@ def test_the_big_desk_labels_every_lit_control_and_never_scrolls(rig, monkeypatc
         assert dark and drawn.count(dark[0]) == 1
     # the layer changes what is named: TRIP's knobs, then the session's
     table.set_layer("preset")
+    monkeypatch.setattr(ui_desk, "SAYS_S", 0.0)                  # (the texts are kept half a second)
     _desk_frames(rig, monkeypatch, 1)
     assert "FX mix" in ui_desk._state(panel)["labels"]
     assert "TRIP" in ui_desk._state(panel)["labels"]             # the bank row: the presets' names
@@ -377,6 +378,12 @@ def test_the_big_desk_labels_every_lit_control_and_never_scrolls(rig, monkeypatc
     _desk_frames(rig, monkeypatch, 1)
     labels = ui_desk._state(panel)["labels"]
     assert "FX mix" not in labels and "Steadiness" in labels and "BPM" in labels
+    # a short, wide window: units wide enough but too flat for labels — glyphs only
+    imgui.get_io().display_size = imgui.ImVec2(1600, 420)
+    got = _desk_frames(rig, monkeypatch)
+    st = ui_desk._state(panel)
+    assert st["unit"][0] >= ui_desk.LABEL_UNIT and st["unit"][1] < ui_desk.LABEL_UNIT_H
+    assert st["labels"] == [] and set(got["texts"]) == glyphs and got["scroll"] == (0.0, 0.0)
 
 
 def test_the_small_desk_draws_glyphs_only(rig, monkeypatch):

@@ -60,14 +60,15 @@ from dataclasses import dataclass, replace
 
 from imgui_bundle import imgui
 
-from . import apc40, ui, ui_routing
+from . import apc40, learn, ui, ui_routing
 from .apc40 import GREEN, GREEN_BLINK, RED, RED_BLINK, YELLOW, YELLOW_BLINK
 from .params import Kind
 from .routing import Binding, led_lit
 
 MIN_W = 300.0              # the window is never narrower, px
 MIN_H = 120.0              # …or shorter (a control window with no room above the sheet)
-LABEL_UNIT = 44.0          # a layout unit this wide or wider carries labels
+LABEL_UNIT = 44.0          # a layout unit this wide or wider carries labels…
+LABEL_UNIT_H = 32.0        # …if it is also this tall (a short, wide window: glyphs only)
 EDGE = 12.0                # from the control window's edges, the panel and the sheet
 PAD = 8.0
 HEAD_H = 26.0              # the header's line: the layer, the preset, the chip
@@ -77,6 +78,8 @@ LABEL_PX = (11.0, 18.0)    # the labels' type size: 0.2 of a unit, kept in this 
 LABEL_LINES = 2            # a label wraps to at most this many lines
 BIG, PANEL = "big", "panel"    # the header's chip: hide the panel / bring it back
 PICK_S = 20.0              # a picked control lets go by itself after this long with no click
+PICK_MOVE = 12.0           # px the mouse must leave a pick's click by before a click can map
+SAYS_S = 0.5               # how long the labels' texts are kept (a renamed preset shows by then)
 LET_GO_TIP = "click to let go"     # the footer's picked line: on it where it fits, and on hover
 
 # LED colours by the grid velocity (apc40's table); any other lit button red
@@ -135,9 +138,10 @@ def mappable(table, c: apc40.Control) -> str | None:
     (D6), and nothing is mapped while the global layer is up (D5) — what
     `Learn.learn_control` refuses, asked before the click."""
     name = apc40.named(c.source) or c.glyph
-    if table.is_invariant(Binding(c.source, "", "abs", layer="preset")):
+    why = learn.blocked(table, c.source)        # the rule `learn_control` refuses by
+    if why == "invariant":
         return f"{name} is invariant (the session's)"
-    if table.layer == "global":
+    if why == "global":
         return (f"{name} is on the global layer (the session's) — latch SHIFT off to map "
                 "into the preset")
     return None
@@ -150,9 +154,15 @@ def picked(panel) -> apc40.Control | None:
     return cs[0] if cs else None
 
 
-def _stamp(panel, source: str, now: float | None = None, frame: int = -1) -> dict:
+def _stamp(panel, source: str, now: float | None = None, frame: int = -1,
+           pos: tuple[float, float] | None = None) -> dict:
+    """The pick's own state: when the count last started (`at`), the
+    frame of the click that made it and where that click was (`pos`,
+    until the mouse has left it: `armed`), whether the footer has shown
+    it yet (`foot`)."""
     now = time.monotonic() if now is None else now
-    pk = _state(panel)["pick"] = {"source": source, "made": now, "at": now, "frame": frame}
+    pk = _state(panel)["pick"] = {"source": source, "at": now, "frame": frame, "pos": pos,
+                                  "foot": False}
     return pk
 
 
@@ -173,10 +183,35 @@ def left(panel, now: float | None = None) -> float:
     return max(0.0, PICK_S - ((time.monotonic() if now is None else now) - pk["at"]))
 
 
-def made(panel) -> float:
-    """When the pick was made (`time.monotonic`), 0.0 with none."""
+def first_sight(panel) -> bool:
+    """True once per pick, the first time the footer asks: whatever line
+    the slot held then was said before the pick (or while the panel was
+    hidden) and gives way to it; a line said later shows first."""
     pk = _state(panel).get("pick")
-    return pk["made"] if pk is not None else 0.0
+    if pk is None or pk.get("foot"):
+        return False
+    pk["foot"] = True
+    return True
+
+
+def armed(panel) -> bool:
+    """May a click on a param map the picked control yet? Not until the
+    mouse has left the spot of the click that picked it (`PICK_MOVE`): on
+    the big desk that click brings the panel back under the mouse, and a
+    second click there — a double click, or "click it again to let go" —
+    must not land on whatever widget is now under it. The page is dimmed
+    meanwhile all the same (`picking`), so that click does nothing at all."""
+    pk = _state(panel).get("pick")
+    if pk is None:
+        return False
+    pos = pk.get("pos")
+    if pos is None:
+        return True
+    m = imgui.get_mouse_pos()
+    if math.hypot(m.x - pos[0], m.y - pos[1]) < PICK_MOVE:
+        return False
+    pk["pos"] = None
+    return True
 
 
 def tick(panel, now: float | None = None) -> None:
@@ -204,7 +239,8 @@ def tick(panel, now: float | None = None) -> None:
 def picking(panel) -> apc40.Control | None:
     """The picked control while a click on a param would map it — the
     state the open page dims for: a mappable pick, and not in the frame
-    of the click that made it (that click is not a param's)."""
+    of the click that made it (that click is not a param's; nor is one
+    more at the same spot: `armed`)."""
     c = picked(panel)
     table = _table(panel)
     if c is None or table is None:
@@ -222,6 +258,10 @@ def pick_line(panel, table, c: apc40.Control) -> tuple[str, bool]:
     does ("S3 (track fader 3) is invariant (the session's): SUB Post-drive")."""
     why = mappable(table, c)
     if why is None:
+        if panel.open and ui.PAGE_KEYS[panel.page] == "routing":
+            # ROUTING is never dimmed: a click there is the widget's own
+            return (f"{c.glyph} picked: its line is framed · on any other page, click a "
+                    f"param to put it there · click {c.glyph} again to let go"), True
         return (f"{c.glyph} picked: click a param to put it here · click {c.glyph} again "
                 "to let go"), True
     b = lit_cached(panel, table).get(c.glyph)
@@ -237,9 +277,11 @@ def footer_line(panel, now: float | None = None) -> tuple[str, bool] | None:
         return None
     line, can = pick_line(panel, table, c)
     secs = math.ceil(left(panel, now))
-    if can:
-        return f"{c.glyph} picked ({secs} s): click a param to put it here", True
-    return f"{line} ({secs} s)", False
+    if not can:
+        return f"{line} ({secs} s)", False
+    if ui.PAGE_KEYS[panel.page] == "routing":
+        return f"{c.glyph} picked ({secs} s): click a param on any other page", True
+    return f"{c.glyph} picked ({secs} s): click a param to put it here", True
 
 
 def click(panel, table, c: apc40.Control, b: Binding | None) -> None:
@@ -266,7 +308,8 @@ def click(panel, table, c: apc40.Control, b: Binding | None) -> None:
         let_go(panel)
         return
     lrn.pick(c.source)
-    _stamp(panel, c.source, frame=imgui.get_frame_count())
+    m = imgui.get_mouse_pos()
+    _stamp(panel, c.source, frame=imgui.get_frame_count(), pos=(m.x, m.y))
     ui_routing.goto(panel, c.source)        # ROUTING scrolls to its line, if or when it is open
     if not panel.open:
         _show_panel(panel, True)
@@ -409,17 +452,33 @@ def is_cut(text: str, rows: list[str]) -> bool:
     return " ".join(rows) != " ".join(text.split())
 
 
-_WRAPS: dict[tuple, list[str]] = {}     # (text, width, lines, px) → wrap(): measured once
+# (text, width, lines, px) → (wrap()'s rows, each row's width, whether it was cut): measured once
+_WRAPS: dict[tuple, tuple[list[str], list[float], bool]] = {}
 
 
-def _wrapped(text: str, width: float, lines: int, px: float) -> list[str]:
+def _wrapped(text: str, width: float, lines: int, px: float
+             ) -> tuple[list[str], list[float], bool]:
     key = (text, round(width), lines, round(px, 1))
     hit = _WRAPS.get(key)
     if hit is None:
         if len(_WRAPS) > 4000:          # preset names come and go; never grows without end
             _WRAPS.clear()
-        hit = _WRAPS[key] = wrap(text, width, lines)
+        rows = wrap(text, width, lines)
+        hit = _WRAPS[key] = (rows, [imgui.calc_text_size(r).x for r in rows],
+                             is_cut(text, rows))
     return hit
+
+
+def _says(panel, table, shown: dict[str, Binding]) -> dict[str, str]:
+    """{glyph: `text`} for the lit controls, kept while the lit map stands
+    and for at most `SAYS_S` (an enum's names are asked of the app — the
+    bank's are its presets' — and can change under a row that did not)."""
+    st = _state(panel)
+    now = time.monotonic()
+    hit = st.get("says")
+    if hit is None or hit[0] is not shown or not 0 <= now - hit[1] < SAYS_S:
+        hit = st["says"] = (shown, now, {g: text(panel.reg, b) for g, b in shown.items()})
+    return hit[2]
 
 
 def label_px(unit: float) -> float:
@@ -569,7 +628,7 @@ class _Job:
 
 
 def _draw_big(panel, dl, table, c: apc40.Control, b: Binding | None,
-              x0: float, y0: float, x1: float, y1: float, lh: float) -> _Job | None:
+              x0: float, y0: float, x1: float, y1: float, lh: float, says: str) -> _Job | None:
     """One control at the labelled size: its face, its glyph small in the
     top-left corner, and — returned, for the label pass, which draws in
     the labels' type — the room its label has. `lh` is a label line's
@@ -582,7 +641,6 @@ def _draw_big(panel, dl, table, c: apc40.Control, b: Binding | None,
     w, h = x1 - x0, y1 - y0
     cx = (x0 + x1) / 2
     gsz = imgui.calc_text_size(c.glyph)
-    says = text(panel.reg, b) if on else ""
     if c.kind in ("grid", "button"):
         led = _face(panel, table, c, b)
         face = _col(led, 0.9) if led else ui.u32(_OFF if on else _DARK)
@@ -638,12 +696,11 @@ def _labels(dl, jobs: list[_Job], px: float, lh: float, last: bool = False) -> l
     for j in jobs:
         # the lines the room holds at this size (a second pass fits more)
         lines = j.lines if not last else max(1, min(LABEL_LINES, int((j.y1 - j.y0 + 1) / lh)))
-        rows = _wrapped(j.says, j.x1 - j.x0, lines, px)
-        if not last and is_cut(j.says, rows):
+        rows, widths, cut = _wrapped(j.says, j.x1 - j.x0, lines, px)
+        if not last and cut:
             small.append(j)
             continue
         y = j.y0 if j.how != "mid" else j.y0 + max(0.0, (j.y1 - j.y0 - len(rows) * lh) / 2)
-        widths = [imgui.calc_text_size(row).x for row in rows]
         if j.run and j.face is not None and rows:      # over the edges between the run's pads
             half, cx = max(widths) / 2 + 4, (j.x0 + j.x1) / 2
             dl.add_rect_filled(_v(cx - half, y), _v(cx + half, y + len(rows) * lh), j.face)
@@ -720,23 +777,22 @@ def _header(panel, table) -> None:
     imgui.set_cursor_pos(_v(start.x, start.y + 3))
     c = picked(panel) if table is not None else None
     line = can = None
+    alone = False                   # the picked line has the header to itself
     if c is not None:
         line, can = pick_line(panel, table, c)
         line = f"{line} · {math.ceil(left(panel))} s"
         words = (ui._micro_width("apc40") + ui._micro_width(f"{table.layer} layer  ·  shift")
                  + imgui.calc_text_size(f"{_preset_name(panel)}").x + 40)
-        if imgui.calc_text_size(line).x > end - start.x - words:
-            imgui.text_colored(ui.RED if can else ui.DIM, ui.fit_text(line, end - start.x))
-            if imgui.is_item_hovered():
-                imgui.set_tooltip(line)
-            imgui.set_cursor_pos(_v(start.x + full - ui.chip_w(BIG if panel.open else PANEL),
-                                    start.y))
-            _chip(panel)
-            imgui.set_cursor_pos(start)
-            imgui.dummy(_v(1, HEAD_H - imgui.get_style().item_spacing.y))
-            return
-    ui._micro("apc40")
-    if table is None:
+        alone = imgui.calc_text_size(line).x > end - start.x - words
+    if alone:
+        imgui.text_colored(ui.RED if can else ui.DIM, ui.fit_text(line, end - start.x))
+        if imgui.is_item_hovered():
+            imgui.set_tooltip(line)
+    else:
+        ui._micro("apc40")
+    if alone:
+        pass
+    elif table is None:
         imgui.same_line()
         imgui.text_disabled("no desk table")
     else:
@@ -768,7 +824,7 @@ def _body(panel, table) -> None:
     avail = imgui.get_content_region_avail()
     sx = avail.x / apc40.LAYOUT_W
     sy = avail.y / apc40.LAYOUT_H
-    big = sx >= LABEL_UNIT
+    big = sx >= LABEL_UNIT and sy >= LABEL_UNIT_H
     px = label_px(sx)
     lh = round(px * 1.12)
     dl = imgui.get_window_draw_list()
@@ -777,6 +833,7 @@ def _body(panel, table) -> None:
     tip = hit = frame = None
     source = getattr(getattr(panel, "learn", None), "control", None)
     jobs: list[tuple[apc40.Control, _Job]] = []
+    says = _says(panel, table, shown) if big else {}
     imgui.push_font(ui._FONTS["ui"], GLYPH_PX if not big else max(GLYPH_PX, 0.16 * sx))
     try:
         st = _state(panel)
@@ -785,7 +842,8 @@ def _body(panel, table) -> None:
             x0, y0, x1, y1 = rect(panel, c)
             b = shown.get(c.glyph)
             if big:
-                job = _draw_big(panel, dl, table, c, b, x0, y0, x1, y1, lh)
+                job = _draw_big(panel, dl, table, c, b, x0, y0, x1, y1, lh,
+                                says.get(c.glyph, ""))
                 if job is not None:
                     jobs.append((c, job))
             else:

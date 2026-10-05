@@ -661,9 +661,12 @@ def test_pick_then_param_maps_through_the_learn(tmp_path):
     assert lrn.control == "cc:*:19" and lrn.learning is None and lrn.want is None
     lrn.pick(None)
     assert lrn.control is None
-    # a param the registry lacks: nothing lands, nothing is left armed
+    # a param the registry lacks: nothing lands, nothing is left armed, and
+    # it says so — the control still picked
     lrn.pick("cc:*:19")
     assert not lrn.map_picked("no.such.param", apc40) and lrn.learning is None
+    assert lrn.control == "cc:*:19" and lrn.refused
+    assert lrn.last == "no.such.param: no such param — nothing mapped"
 
 
 def test_a_pick_on_an_invariant_control_or_the_global_layer_maps_nothing(tmp_path):
@@ -672,7 +675,7 @@ def test_a_pick_on_an_invariant_control_or_the_global_layer_maps_nothing(tmp_pat
     no undo step, no learn left armed, the control still picked."""
     from test_undo import boot, labels, settle
 
-    from hyperspace import apc40, ui_desk
+    from hyperspace import apc40, learn, ui_desk
 
     r = boot(tmp_path / "home")
     table, lrn, u = r.table, r.learn, r.undo
@@ -686,6 +689,9 @@ def test_a_pick_on_an_invariant_control_or_the_global_layer_maps_nothing(tmp_pat
     u.clear()
     before = rows()
     s3 = control("S3")
+    # one rule, asked before the click and refused by after it (`learn.blocked`)
+    assert learn.blocked(table, s3.source) == "invariant"
+    assert learn.blocked(table, "cc:0:48") is None
     assert ui_desk.mappable(table, s3) == "S3 (track fader 3) is invariant (the session's)"
     lrn.pick(s3.source)
     assert not lrn.map_picked("view.speed", apc40)
@@ -704,6 +710,8 @@ def test_a_pick_on_an_invariant_control_or_the_global_layer_maps_nothing(tmp_pat
     k1, k6 = control("K1"), control("K6")
     assert ui_desk.mappable(table, k1) is None and ui_desk.mappable(table, k6) is None
     table.set_layer("global")
+    assert learn.blocked(table, k1.source) == "global"
+    assert learn.blocked(table, s3.source) == "invariant"       # invariant on both layers
     assert ui_desk.mappable(table, k1) == (
         "K1 (track knob 1) is on the global layer (the session's) — latch SHIFT off to map "
         "into the preset")
