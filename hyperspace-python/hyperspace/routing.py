@@ -12,13 +12,15 @@ source like any other, read by the `Router` once per frame.
 Sources are one string, ``scheme:address``:
 
   key:<NAME>       a GLFW key by constant name without KEY_ ("R", "F1",
-                   "LEFT_BRACKET", "1"); with a modifier in front,
-                   "SHIFT+B" or "SUPER+R" (MODIFIERS). A row with a
-                   modifier fires only while it is held; a row on the bare
-                   key then stays quiet while a modifier some other row on
-                   that key names is held, so "B" and "SHIFT+B" are two
-                   controls. R, F1–F8 and ⇧F1–F8 are rows since plan 11
-                   (LOOP_KEY_ROWS). Still app.py's own, outside the
+                   "LEFT_BRACKET", "1"); with modifiers in front,
+                   "SHIFT+B", "SUPER+Z", "CONTROL+SHIFT+Z" (MODIFIERS:
+                   SHIFT, SUPER, CONTROL). A press fires the rows whose
+                   modifiers are exactly the held ones that some row on
+                   that key names — so "B" and "SHIFT+B" are two controls,
+                   "SUPER+Z" and "SHIFT+SUPER+Z" are two more, and a
+                   modifier no row on the key names is ignored. R, F1–F8
+                   and ⇧F1–F8 are rows since plan 11, undo and redo since
+                   plan 15 (LOOP_KEY_ROWS). Still app.py's own, outside the
                    table: Cmd+R, Esc / Q, and the relative writers — ↑/↓,
                    the mouse and the sticks, which nudge camera params
                    directly
@@ -274,9 +276,10 @@ MODE_TO_OP = {"abs": "abs", "rel": "rel", "rel64": "rel64", "trigger": "toggle",
 # it is dropped — its name is kept only to recognise it and say so
 V1_TO_OP = {"mod": "push", "span": "position", "abs": "position"}
 V1_REPLACE = "replace"     # schema 1's op, kept only to recognise it; not in OPS
-# key modifiers a row may name in front of the key ("SHIFT+B"); each is
-# a pair of GLFW keys the adapter reports as one state (app.Keys)
-MODIFIERS = ("SHIFT", "SUPER")
+# key modifiers a row may name in front of the key ("SHIFT+B",
+# "CONTROL+SHIFT+Z"); each is a pair of GLFW keys the adapter reports as
+# one state (app.Keys.shift / super / control)
+MODIFIERS = ("SHIFT", "SUPER", "CONTROL")
 
 # plan 09 WP4 gives three APC40 buttons to the clock (apc40.DEFAULT_MAP):
 # TAP TEMPO taps it, NUDGE ± nudges it, and METRONOME fires the global
@@ -314,11 +317,16 @@ APC_NEW_ROWS = (
 # decision register row 7): R resets the camera, F1–F8 load the preset
 # bank's slots 1–8 (param ids are 0-based), ⇧F1–F8 save the live state
 # as them. Cmd+R (restart), Esc / Q and ↑ / ↓ stay in the loop.
+# Plan 15 WP1 adds undo and redo, on both ⌘ and Ctrl (fork 1): ⌘Z / Ctrl+Z
+# fire `edit.undo`, ⌘⇧Z / Ctrl+⇧Z fire `edit.redo` — a chord fires only
+# its own row (`Router.keys`).
 BANK_SLOTS = 8
 LOOP_KEY_ROWS = (
     ("R", "camera.reset", "fire"),
     *[(f"F{k + 1}", f"preset.load.{k}", "fire") for k in range(BANK_SLOTS)],
     *[(f"SHIFT+F{k + 1}", f"preset.save.{k}", "fire") for k in range(BANK_SLOTS)],
+    ("SUPER+Z", "edit.undo", "fire"), ("SHIFT+SUPER+Z", "edit.redo", "fire"),
+    ("CONTROL+Z", "edit.undo", "fire"), ("CONTROL+SHIFT+Z", "edit.redo", "fire"),
 )
 # plan 13 WP2: the theme bank became the preset bank. A row a file wrote
 # before it that targets a theme param — a factory key or APC40 row, or
@@ -743,11 +751,15 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
             continue
         out.append(Binding(source, target, op, value, feedback="led"))
         notes.append(f"added {source} → {target} (the APC40 map of plan 09)")
+    # a key row is taken by its chord, however its modifiers are ordered:
+    # "key:SUPER+SHIFT+Z" holds ⌘⇧Z as "key:SHIFT+SUPER+Z" does
+    chords = {(b.key_name, b.modifiers) for b in out if b.scheme == "key"}
     for source, target, op, value in KEY_NEW_ROWS:
-        if source in used:
+        new = Binding(source, target, op, value)
+        if source in used or (new.key_name, new.modifiers) in chords:
             continue
-        out.append(Binding(source, target, op, value))
-        notes.append(f"added {source} → {target} (the keys of plan 09 / plan 11)")
+        out.append(new)
+        notes.append(f"added {source} → {target} (the keys of plans 09, 11 and 15)")
     return out, notes
 
 
@@ -1341,13 +1353,18 @@ class Bindings:
         """The preset layer's rows — what a preset's `desk` holds."""
         return [b for b in self.bindings if b.is_midi and b.layer == "preset"]
 
-    def set_desk(self, rows: Iterable[Binding | dict]) -> list[str]:
+    def set_desk(self, rows: Iterable[Binding | dict], *, load: bool = True) -> list[str]:
         """Replace every preset-layer row with `rows` (layer forced to
         "preset"), dropping with a note each row that is not a MIDI control
         and each on an invariant control (D6); drop to the preset layer
         (D4) and ask the adapter to redraw the desk and clear the faders'
         catch (`desk_serial`). Returns the notes; the file is not written —
-        the desk is the loaded preset's."""
+        the desk is the loaded preset's.
+
+        ``load=False`` is an undo's restore (undo.py, plan 15): the same
+        replacement and the same dropping rules, but only a redraw is
+        asked for (`redraw_serial`) — the layer that is up stays up and no
+        fader's catch is cleared, because nothing was loaded."""
         keep = [b for b in self.bindings if not (b.is_midi and b.layer == "preset")]
         inv = [b for b in keep if b.is_midi and b.layer is None and b.enabled]
         notes: list[str] = []
@@ -1363,8 +1380,11 @@ class Bindings:
             else:
                 new.append(b)
         self.bindings = keep + new
-        self.desk_serial += 1
-        self.drop_layer()
+        if load:
+            self.desk_serial += 1
+            self.drop_layer()
+        else:
+            self.redraw_serial = getattr(self, "redraw_serial", 0) + 1
         return notes
 
     # ---- the macros' subscribers (plan 13 §2.4) ----
@@ -1653,6 +1673,16 @@ class Router:
         for p in self.reg.group("macro"):
             self._macro_bases[p.id] = float(p.base)
 
+    def sync_macros(self) -> None:
+        """Mark the macros as they stand — every macro's base and the
+        table's `macros_serial` — as acted on, so the next `follow_macros`
+        lands nothing. An undo's restore calls it (undo.py, plan 15): it
+        has just put the macros' bases and their subscribers' bases back
+        itself, and a re-landing would write the subscribers over the
+        values restored."""
+        self._macros_seen = self.table.macros_serial
+        self._note_macro_bases()
+
     def follow_macros(self, force: bool = False) -> list[str]:
         """The macros' base subscribers, a scene-setter step (plan 13 §2.4,
         decision register row 12b): once a frame, before the hands and the
@@ -1709,12 +1739,16 @@ class Router:
     def keys(self, keys) -> None:
         """One frame of keyboard rows; `keys` is anything with
         pressed(glfw_key) — an edge, asked once per key — and shift() /
-        super() for the modifier state (app.Keys).
+        super() / control() for the modifier state (app.Keys; a keys
+        object without one of them reads as "not held").
 
-        Rows on one key are settled together: a row with modifiers fires
-        when all of them are held; the bare row fires unless a modifier
-        some row on this key names is held — so ``key:B`` taps and
-        ``key:SHIFT+B`` triggers, and neither hears the other's press.
+        Rows on one key are settled together, and a press fires only its
+        own chord: a row fires when its modifiers **equal** the held
+        modifiers that some row on this key names. So ``key:B`` taps and
+        ``key:SHIFT+B`` triggers, neither hearing the other's press;
+        ``key:SUPER+Z`` undoes and ``key:SHIFT+SUPER+Z`` redoes, and ⌘⇧Z
+        fires the second alone (plan 15, fork 1). A held modifier no row
+        on the key names changes nothing.
         """
         by_code: dict[int, list[Binding]] = {}
         for b in self.table.of("key"):
@@ -1726,11 +1760,12 @@ class Router:
             if not keys.pressed(code):
                 continue
             if held is None:
-                held = frozenset(m for m in MODIFIERS if getattr(keys, m.lower())())
+                held = frozenset(m for m in MODIFIERS
+                                 if getattr(keys, m.lower(), bool)())
             used = frozenset().union(*(b.modifiers for b in rows))
+            chord = held & used
             for b in rows:
-                mods = b.modifiers
-                if (mods <= held) if mods else not (held & used):
+                if b.modifiers == chord:
                     act(self.reg, b)
 
     def pad(self, pad) -> None:

@@ -28,6 +28,7 @@ the one hand-arranged thing left here.
 from __future__ import annotations
 
 import os
+import time
 from collections.abc import Callable
 
 from imgui_bundle import imgui
@@ -59,6 +60,7 @@ PIN_AT = CEIL * 0.92
 PIN_HOLD = 0.5
 
 # the panel: a rail of pages on the left, the page beside it, a footer
+MESSAGE_S = 4.0  # how long the footer's message slot shows a line after it changes
 PANEL_W = 540   # leaves the cheat sheet its column in the control window (app.CONTROL_SIZE)
 RAIL_W = 112
 LABEL_W = 104    # the label column in a _row
@@ -196,6 +198,21 @@ def lit_chip(label: str, lit: bool, color: imgui.ImVec4 | None = None,
     return hit
 
 
+def fit_text(text: str, width: float) -> str:
+    """`text`, or its start and an ellipsis when it is wider than `width`
+    pixels in the current font (the footer's message beside the show's name)."""
+    if imgui.calc_text_size(text).x <= width:
+        return text
+    lo, hi = 0, len(text)
+    while lo < hi:                      # the longest start that fits with its "…"
+        mid = (lo + hi + 1) // 2
+        if imgui.calc_text_size(text[:mid] + "…").x <= width:
+            lo = mid
+        else:
+            hi = mid - 1
+    return text[:lo].rstrip() + "…"
+
+
 def chip_w(*labels: str) -> float:
     """Width of chips in a row at the default spacing — flush a group of
     them right with same_line(avail - chip_w(...))."""
@@ -291,6 +308,7 @@ CHEATSHEET = [
     ("R", "reset view + camera"),
     ("F1–F8", "load preset · ⇧ saves"),
     ("B", "tap tempo · ⇧B LFO trigger"),
+    ("Cmd+Z", "undo · ⇧ redo (or Ctrl+Z)"),
     ("Cmd+R", "restart process"),
     ("H / ?", "panel / this sheet"),
     ("T", "overlay (if config.toml allows)"),
@@ -374,6 +392,7 @@ class Panel:
         self.render_watch = None   # set by app.py (watchdog.RenderWatch): the red banner
         self.midi = None      # set by app.py when an adapter is up (midi.MidiIO)
         self.learn = None     # set by app.py: the armed param and the held question (learn.Learn)
+        self.undo = None      # set by app.py (undo.Undo): its status shows in the footer
         self.bridge = None    # set by app.py when [bridge] is enabled (bridge.Bridge)
         self.router = None    # set by app.py (routing.Router); else found via midi's table
         self.output = None    # set by app.py (overlay.Output); its params draw below
@@ -1030,12 +1049,59 @@ class Panel:
                     u32(LINE))
         imgui.end_child()
 
+    def _message(self, now: float | None = None) -> tuple[str, bool]:
+        """The footer's one message slot (plan 15 WP1): the newest of the
+        undo's status ("undid Brightness 1.20× → 0.85×"), the library's
+        status and the library's warning, for `MESSAGE_S` after it
+        changed — so it shows on every page — then ("", False). The second
+        item is whether it is a warning. The panel remembers the strings
+        it last saw; its first look only remembers them, so a launch says
+        nothing. The undo's line is keyed by `said_at` too: the same
+        words said again ("nothing to undo") show again."""
+        now = time.monotonic() if now is None else now
+        st = self.__dict__.setdefault(     # (a Panel from before a hot reload has none)
+            "_msg", {"seen": None, "text": "", "warn": False, "at": -MESSAGE_S})
+        u, lib = getattr(self, "undo", None), self.library
+        cur = {"status": getattr(lib, "status", "") or "",
+               "warning": getattr(lib, "warning", "") or "",
+               "undo": (getattr(u, "status", "") or "", getattr(u, "said_at", 0.0))}
+        seen, st["seen"] = st["seen"], cur
+        if seen is not None:
+            for key in ("status", "warning", "undo"):      # the later wins a tie
+                text = cur[key][0] if key == "undo" else cur[key]
+                if cur[key] != seen[key] and text:
+                    st.update(text=text, warn=key == "warning", at=now)
+        return (st["text"], st["warn"]) if now - st["at"] < MESSAGE_S else ("", False)
+
+    def _footer_room(self) -> float:
+        """The width left on the footer's line for the message: from the
+        cursor to the show's name, which sits flush right, less the dim
+        readout that follows the message while the picture is dimmed."""
+        room = imgui.get_content_region_avail().x
+        gap = imgui.get_style().item_spacing.x
+        lib = self.library
+        if lib is not None and lib.reg is not None:
+            room -= imgui.calc_text_size(f"{lib.project.name} ●").x + 2 * gap
+        dim = self.reg.get("output.dim")
+        if dim is not None and dim.value < 1.0:
+            room -= imgui.calc_text_size(f"·  dim {dim.text()}").x + gap
+        return room
+
     def _footer(self, fps: float) -> None:
         imgui.separator()
         imgui.push_font(_FONTS["num"], FONT_MICRO + 1)
         imgui.text_colored(FAINT, f"{fps:5.1f} FPS")
         imgui.pop_font()
-        if self.reloader is not None and self.reloader.status:
+        note, warn = self._message()
+        if note:
+            # the message slot: one faint line (a warning in its colour),
+            # cut to the room left of the show's name; the whole on hover
+            imgui.same_line()
+            imgui.text_colored(WARN if warn else FAINT,
+                               fit_text(f"·  {note}", self._footer_room()))
+            if imgui.is_item_hovered():
+                imgui.set_tooltip(note)
+        elif self.reloader is not None and self.reloader.status:
             imgui.same_line()
             imgui.text_disabled(f"·  {self.reloader.status}")
         # the master dim (plan 15 WP3), on every page while it is under

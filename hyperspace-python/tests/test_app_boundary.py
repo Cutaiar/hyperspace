@@ -173,10 +173,16 @@ def test_keys_hold_time_reads_the_frames_clock(fake):
 def test_keys_read_the_modifiers_the_table_spells(fake):
     g = app.glfw
     keys = app.Keys("render", "ctrl")
-    assert not keys.shift() and not keys.super()
+    assert not keys.shift() and not keys.super() and not keys.control()
     fake.keys.add(("ctrl", g.KEY_RIGHT_SHIFT))
     fake.keys.add(("render", g.KEY_LEFT_SUPER))
-    assert keys.shift() and keys.super()
+    assert keys.shift() and keys.super() and not keys.control()
+    fake.keys.add(("render", g.KEY_RIGHT_CONTROL))
+    assert keys.control()
+    # every modifier the table may spell is one the adapter reads (plan 15)
+    from hyperspace.routing import MODIFIERS
+    assert MODIFIERS == ("SHIFT", "SUPER", "CONTROL")
+    assert all(callable(getattr(keys, m.lower())) for m in MODIFIERS)
 
 
 def test_mouse_orbits_pans_and_zooms_on_the_base(fake):
@@ -280,7 +286,7 @@ def _host(log: list[str], *, pad_on=True, pressed=(), held=(), super_=False, sti
         draw_panel=lambda dt, fps: log.append("panel.draw"),
         restart=lambda: log.append("restart"), quit=lambda: log.append("quit"),
         pad=pad, midi_io=Stub("midi", log), hands_io=Stub("hands", log),
-        bridge_io=Stub("bridge", log), dream_io=None,
+        bridge_io=Stub("bridge", log), dream_io=None, undo=Stub("undo", log),
     )
     assert g.KEY_ESCAPE  # the fake never touches glfw; the keys are plain ints
     return h
@@ -293,7 +299,8 @@ ORDER = [
     "pad.poll", "router.pad",                        # pad and hat rows, sticks
     "midi.poll",                                     # cc and note rows
     "router.follow_macros",                          # the macros' base subscribers
-    "hands.poll",                                    # feeds hand
+    "undo.tick",                                     # the bases, compared (plan 15 WP1)
+    "hands.poll",                                   # feeds hand
     "output.apply",                                  # reads last frame's objects
     "mouse.poll",                                    # relative writers, to the base
     "audio.step", "audio.publish",                   # new lanes, and their names (R8)

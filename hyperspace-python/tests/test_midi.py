@@ -485,6 +485,43 @@ def test_close_returns_to_generic_mode(rig):
     assert not rig.midi.on
 
 
+# ------------------------------------------------------ plan 15 WP1: undo
+
+def test_an_unbind_is_one_undo_step(tmp_path):
+    """Right-click → Unbind is one undo step: every preset-layer row it
+    took comes back, the desk is redrawn (the control lights again), and
+    it is a restore, not a load. A refused unbind leaves no step."""
+    from test_undo import boot, frames, labels, settle
+
+    r = boot(tmp_path / "home")
+    table, u, m = r.table, r.undo, r.midi
+    knob = next(b for b in table.desk() if b.kind == "cc" and b.feedback == "ring")
+    pid = knob.target
+    was = [b.to_json() for b in table.desk()]
+    gone = [b.to_json() for b in table.desk() if b.target == pid]
+    serial = table.desk_serial
+    m.unbind(pid)
+    assert not any(b.target == pid for b in table.desk())
+    settle(r)
+    assert labels(r) == [f"unbind {pid}"]
+    r.out.sent.clear()
+    assert u.undo() and u.status == f"undid unbind {pid}"
+    assert [b.to_json() for b in table.desk()] == was and table.desk_serial == serial
+    assert [b.to_json() for b in table.desk() if b.target == pid] == gone
+    frames(r)                                             # the adapter follows the table
+    ring = [x for x in r.out.sent if x.type == "control_change" and x.control == knob.number
+            and x.channel == (knob.channel or 0)]
+    assert ring and ring[-1].value == round(r.reg[pid].norm * 127)
+    assert u.redo() and not any(b.target == pid for b in table.desk())
+    u.undo()
+    frames(r, 3)
+    # the session's rows: refused, nothing changes, no step
+    m.unbind("band.0.post")
+    assert m.learner.refused
+    settle(r)
+    assert u.stack == []
+
+
 # ---------------------------------------------------------------- the master dim
 
 def test_the_crossfader_dims_with_soft_pickup(rig):

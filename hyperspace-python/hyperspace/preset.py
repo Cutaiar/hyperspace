@@ -87,7 +87,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
-from . import apc40, routing
+from . import apc40, routing, undo
 from .bands import BANDS
 from .lfo import SHAPES, SYNCS
 from .library import (
@@ -312,6 +312,10 @@ class Presets:
             if group not in PERFORMANCE_GROUPS or group == "macro":
                 notes.append(f"module {group}: not a performance group, ignored")
                 modules.pop(group)
+        # the file parsed, nothing landed yet: one undo step for the whole
+        # load, by whichever road it came (undo.py, plan 15 WP1) — with
+        # what is loaded now, so undoing it puts the earlier name back too
+        undo.push(f"load {doc.get('name') or (path.stem if path else 'preset')}", load=True)
         # 2. every performance param: the file's value, else its group default
         by_group: dict[str, dict[str, Any]] = {g: {} for g in PERFORMANCE_GROUPS}
         for pid, v in values.items():

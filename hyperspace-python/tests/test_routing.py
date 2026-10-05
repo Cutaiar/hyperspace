@@ -454,7 +454,9 @@ def test_factory_table_binds_only_real_params(tmp_path):
             assert r.reg[b.target].modulatable, b
     keys = [(b.key, b.layer) for b in t.bindings if b.scheme != "lane"]
     assert len(keys) == len(set(keys))                  # one row per control per layer
-    assert len(t.of("key")) == 25 + 17 and len(t.of("pad")) == 10 and len(t.of("hat")) == 4  # + R, F1–F8, ⇧F1–F8
+    # + R, F1–F8, ⇧F1–F8 (plan 11), + undo and redo on ⌘ and Ctrl (plan 15 WP1)
+    assert len(t.of("key")) == 25 + 17 + 4
+    assert len(t.of("pad")) == 10 and len(t.of("hat")) == 4
     assert len(t.midi()) == 113 + 6 and t.mods() == []   # + SHIFT, the global track knobs;
     # no performer rows: the house presets carry the lane rows (plan 13 WP5)
     assert routing.referee(t.bindings)[1] == []           # one owner per target
@@ -889,7 +891,7 @@ def test_midi_view_shares_the_table(tmp_path):
     assert m.table.for_param("view.zoom").number == 99
     again = Bindings.load(bindings_path(tmp_path))
     assert again.for_param("view.zoom").source == "cc:0:99"
-    assert len(again.of("key")) == 25 + 17 and again.mods() == []
+    assert len(again.of("key")) == 25 + 17 + 4 and again.mods() == []
     # a session row (no layer: invariant) is edited in bindings.json, not
     # unbound from the panel (plan 13 WP5; tests/test_midi.py has the rest)
     m.unbind("view.zoom")
@@ -1279,8 +1281,10 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     assert f"added note:0:{apc40.N_QUANT} → preset.next" in err
     assert "added key:B → tempo.tap" in err and "added key:SHIFT+B → lfo.trigger" in err
     assert "added key:F1 → preset.load.0" in err and "added key:SHIFT+F8 → preset.save.7" in err
+    assert "added key:SUPER+Z → edit.undo" in err and "added key:CONTROL+SHIFT+Z → edit.redo" in err
     # 7 + the 17 keys of plan 11 + the desk's sort and its 25 global rows and SHIFT (plan 13)
-    assert f"migrated {path} to {SCHEMA} (2 rows dropped, 50 rows changed)" in err
+    # + the 4 undo and redo keys of plan 15
+    assert f"migrated {path} to {SCHEMA} (2 rows dropped, 54 rows changed)" in err
     rows = {(b.source, b.target): b for b in t.bindings}
     assert rows[("key:RIGHT", "view.shape")].op == "step"
     assert rows[("cc:0:48", "view.bright")].op == "abs"                       # MIDI keeps abs
@@ -1294,7 +1298,8 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     assert "pickup" not in z.to_json()                         # dropped with the abs op
     assert ("lane:1", "rot.rate.XY") not in rows and ("hand:2", "view.depth4") not in rows
     assert [b.source for b, _ in t.dropped] == ["hand:2"]
-    assert len(t.notes) == 9 + 17 + 26          # + the moved keys of plan 11, the desk's sort
+    # + the moved keys of plan 11, the desk's sort, the undo keys of plan 15
+    assert len(t.notes) == 9 + 17 + 26 + 4
     # the APC40 rows: the old factory rows swapped for the new, the LED kept
     tap = rows[("note:0:99", "tempo.tap")]
     assert (tap.op, tap.feedback) == ("toggle", "led") and ("note:0:99", "theme.next") not in rows
@@ -1436,7 +1441,8 @@ def test_r_and_the_f_keys_are_table_rows_that_fire_their_params(tmp_path):
 
 
 def test_an_older_file_gets_the_moved_keys_only_where_they_are_free(tmp_path):
-    """remap_factory adds the seventeen rows to a user table that predates
+    """remap_factory adds the loop's rows (seventeen from plan 11, the four
+    undo and redo rows from plan 15) to a user table that predates
     them; a key the user already bound keeps its row; a second pass adds
     nothing; the file is backed up before the one rewrite."""
     moved = {f"key:{k}" for k, _, _ in routing.LOOP_KEY_ROWS}
@@ -1449,10 +1455,89 @@ def test_an_older_file_gets_the_moved_keys_only_where_they_are_free(tmp_path):
     assert rows["key:F3"].target == "view.faces"                        # kept
     assert rows["key:F4"].target == "preset.load.3" and rows["key:R"].target == "camera.reset"
     assert rows["key:SHIFT+F3"].target == "preset.save.2"                # a different source
-    assert moved <= set(rows) and len(moved) == 17
+    assert moved <= set(rows) and len(moved) == 17 + 4
     assert list(tmp_path.glob("bindings.json.bak-*"))                   # kept before the rewrite
     _, notes = routing.remap_factory(t.bindings)
     assert notes == []
+
+
+class _ChordKeys(_EdgeKeys):
+    """`_EdgeKeys` with a Control key (plan 15 WP1)."""
+
+    def __init__(self, pressed=(), shift=False, super_=False, control=False):
+        super().__init__(pressed, shift, super_)
+        self._control = control
+
+    def control(self):
+        return self._control
+
+
+def test_a_chord_fires_only_its_own_row(tmp_path):
+    """Plan 15 WP1 (fork 1): ⌘Z / Ctrl+Z undo, ⌘⇧Z / Ctrl+⇧Z redo, and a
+    two-modifier chord fires its own row alone — under the old subset rule
+    ⌘⇧Z fired undo and redo both. Z alone, ⇧Z and a chord no row spells
+    fire nothing; a keys object with no control() reads as "not held"."""
+    import glfw
+
+    r = rig(tmp_path=tmp_path, full=True)
+    fired: list[str] = []
+    for pid in ("edit.undo", "edit.redo"):
+        assert not r.reg[pid].modulatable and r.reg[pid].group == "ui"
+        r.reg[pid].fire = lambda pid=pid: fired.append(pid)
+    router = Router(r.reg, house())
+    z = {b.source: b.target for b in router.table.of("key") if b.key_name == "Z"}
+    assert z == {"key:SUPER+Z": "edit.undo", "key:SHIFT+SUPER+Z": "edit.redo",
+                 "key:CONTROL+Z": "edit.undo", "key:CONTROL+SHIFT+Z": "edit.redo"}
+
+    def press(**mods) -> list[str]:
+        fired.clear()
+        router.keys(_ChordKeys({glfw.KEY_Z}, **mods))
+        return list(fired)
+
+    assert press(super_=True) == ["edit.undo"]
+    assert press(super_=True, shift=True) == ["edit.redo"]           # redo alone
+    assert press(control=True) == ["edit.undo"]
+    assert press(control=True, shift=True) == ["edit.redo"]
+    assert press() == [] and press(shift=True) == []
+    assert press(super_=True, control=True) == []                    # no row spells it
+    assert press(super_=True, control=True, shift=True) == []
+    fired.clear()
+    router.keys(_EdgeKeys({glfw.KEY_Z}, super_=True))                # no control(): not held
+    assert fired == ["edit.undo"]
+
+
+def test_an_older_file_gets_the_undo_keys_where_they_are_free(tmp_path):
+    """Plan 15 WP1: a `bindings.json` written before the undo keys gains
+    the four rows on its next load — but not on a source the user already
+    uses — with the old file kept beside it, and a second load changes
+    nothing."""
+    undo_rows = {f"key:{k}": pid for k, pid, _ in routing.LOOP_KEY_ROWS
+                 if pid.startswith("edit.")}
+    assert undo_rows == {"key:SUPER+Z": "edit.undo", "key:SHIFT+SUPER+Z": "edit.redo",
+                         "key:CONTROL+Z": "edit.undo", "key:CONTROL+SHIFT+Z": "edit.redo"}
+    old = [b for b in Bindings.factory().bindings if b.source not in undo_rows]
+    old.append(Binding("key:CONTROL+Z", "view.faces", "toggle"))       # the user's Ctrl+Z
+    path = bindings_path(tmp_path)
+    Bindings(old, path=path).write()
+    before = path.read_text()
+    t = Bindings.load(path, legacy_midi=None)
+    rows = {b.source: b.target for b in t.of("key")}
+    assert rows["key:CONTROL+Z"] == "view.faces"                        # kept
+    assert rows["key:SUPER+Z"] == "edit.undo" and rows["key:SHIFT+SUPER+Z"] == "edit.redo"
+    assert rows["key:CONTROL+SHIFT+Z"] == "edit.redo"
+    (bak,) = tmp_path.glob("bindings.json.bak-*")
+    assert bak.read_text() == before                                    # the old file, whole
+    after = path.read_text()
+    assert "key:SUPER+Z" in after
+    Bindings.load(path, legacy_midi=None)
+    assert path.read_text() == after and len(list(tmp_path.glob("bindings.json.bak-*"))) == 1
+    # a chord the user spelled in another order holds it too (review of PR #82)
+    mine = [b for b in Bindings.factory().bindings if b.source not in undo_rows]
+    mine.append(Binding("key:SUPER+SHIFT+Z", "view.lines", "toggle"))
+    out, _ = routing.remap_factory(mine)
+    held = [b.target for b in out if b.scheme == "key" and b.key_name == "Z"
+            and b.modifiers == {"SHIFT", "SUPER"}]
+    assert held == ["view.lines"]
 
 
 def test_an_old_crossfader_row_moves_to_the_dim_with_a_backup(tmp_path, capsys):
@@ -1557,7 +1642,8 @@ def test_a_user_row_on_a_moved_apc_note_is_kept():
     assert ("key:B", "view.points") in by and ("key:SHIFT+B", "lfo.trigger") in by
     assert not any(b.target == "tempo.tap" for b in out)
     assert not any(b.source == f"note:0:{apc40.N_QUANT}" for b in out)   # no QUANT row added
-    assert [n.split(" ")[0] for n in notes] == ["remapped", "added"] + ["added"] * 17  # + R, F-keys
+    # + R and the F-keys (plan 11), + undo and redo (plan 15)
+    assert [n.split(" ")[0] for n in notes] == ["remapped", "added"] + ["added"] * (17 + 4)
     # and a second pass has nothing to do
     again, notes2 = routing.remap_factory(out)
     assert notes2 == [] and [b.source for b in again] == [b.source for b in out]

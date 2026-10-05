@@ -58,6 +58,11 @@ factory's file of the same name:
   $HYPERSPACE_HOME/bindings/      the old routing presets: made presets
                                  once (plan 13 WP5) and never read again,
                                  so no group (LEGACY_DIRS)
+  $HYPERSPACE_HOME/trash/<group>/<slug>.<date>-<time>.json
+                                 a user preset file as it was before a save
+                                 overwrote it or a delete removed it
+                                 (``to_trash``, plan 15): no group, never
+                                 listed or watched, never emptied here
 
 ``home()`` is the one resolver for that folder (config.py and the binding
 table path go through it). On the first run the working-directory ``config.toml``
@@ -101,6 +106,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from . import undo
 from .params import PERFORMANCE_GROUPS, PLANES, SESSION_GROUPS, Registry
 
 SLOTS = 8                 # the F1–F8 preset bank
@@ -108,6 +114,10 @@ PRESETS = "presets"       # the presets' group, a document kind (preset.py)
 # folders in a library root that are no group: the routing presets' old
 # folder, kept as it was by plan 13's migration and never read again
 LEGACY_DIRS = ("bindings",)
+# <home>/trash/<group>/: a user preset file as it was, copied there before
+# a save overwrites it or a delete removes it (`to_trash`, plan 15 WP1).
+# No group, never listed, never watched; nothing empties it (plan 19 will)
+TRASH = "trash"
 HOME_ENV = "HYPERSPACE_HOME"
 DEFAULT_HOME = Path("~/Hyperspace")
 FACTORY = Path(__file__).with_name("library")
@@ -284,8 +294,14 @@ def _read_json(path: Path) -> dict:
     return doc
 
 
+def _json_text(doc: dict) -> str:
+    """A document as the library writes it — the one spelling, so a save
+    can tell whether the file on disk already says the same."""
+    return json.dumps(doc, indent=1) + "\n"
+
+
 def _write_json(path: Path, doc: dict) -> None:
-    _write_text(path, json.dumps(doc, indent=1) + "\n")
+    _write_text(path, _json_text(doc))
 
 
 def _write_text(path: Path, text: str) -> None:
@@ -294,6 +310,37 @@ def _write_text(path: Path, text: str) -> None:
         path.write_text(text)
     except OSError as e:
         raise LibraryError(f"{path.name}: {e}") from e
+
+
+def to_trash(path: Path, root: Path) -> Path | None:
+    """Copy `path` — a preset file about to be overwritten or deleted — to
+    ``<root>/trash/<folder>/<stem>.<YYYYMMDD-HHMMSS><suffix>``, `<folder>`
+    being the file's own folder name (``presets``, ``band``, ``fx``…). A
+    name taken in the same second gets ``-2``, ``-3``, …; the copy is
+    created exclusively, so nothing in the trash is ever overwritten.
+    Returns the path written, or None when the copy failed (said on
+    stderr): the caller decides what that means — a save goes on and
+    warns, a delete is refused."""
+    folder = root / TRASH / path.parent.name
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    try:
+        data = path.read_bytes()
+        folder.mkdir(parents=True, exist_ok=True)
+        for n in range(1, 1000):
+            dst = folder / f"{path.stem}.{stamp}{'' if n == 1 else f'-{n}'}{path.suffix}"
+            try:
+                with open(dst, "xb") as f:
+                    f.write(data)
+            except FileExistsError:
+                continue
+            except OSError:
+                dst.unlink(missing_ok=True)       # no half-written copy left behind
+                raise
+            return dst
+        raise OSError(f"no free name under {folder}")
+    except OSError as e:
+        print(f"library: {path.name} not copied to the trash ({e})", file=sys.stderr)
+        return None
 
 
 # ---- versioning: schema "<kind>/<n>"; each step lifts a doc one version ----
@@ -479,6 +526,32 @@ class Project:
         doc.update(startup=self.startup, bank=list(self.bank), session=self.session,
                    modules=self.modules)
         return doc
+
+    def mark(self) -> tuple:
+        """The show as held, opaque, for an undo to hand back (`remark`):
+        name, note, path, factory, stem, session, modules, bank, startup
+        and the bank and startup as on disk — copies, so a later edit of
+        the live show never reaches a mark."""
+        return (self.name, self.note, self.path, self.factory, getattr(self, "_stem", None),
+                copy.deepcopy(self.session), copy.deepcopy(self.modules), list(self.bank),
+                self.startup, (list(self._saved[0]), self._saved[1]))
+
+    def remark(self, mark: tuple) -> None:
+        """Put back what `mark()` returned: the show's own fields, nothing
+        else — no file is read or written, no value lands (undo.py does
+        that), and `active` is the caller's to recompute (`Marks.put`)."""
+        (self.name, self.note, self.path, self.factory, self._stem,
+         session, modules, bank, self.startup, saved) = mark
+        self.session, self.modules = copy.deepcopy(session), copy.deepcopy(modules)
+        self.bank = list(bank)
+        self._saved = (list(saved[0]), saved[1])
+
+    @staticmethod
+    def same_show(a: tuple, b: tuple) -> bool:
+        """Do two marks name one show — the same name, file and origin?
+        (The bank and "starts on" may differ: they are written to the
+        show's file the moment they change.)"""
+        return (a[0], a[2], a[3], a[4]) == (b[0], b[2], b[3], b[4])
 
     def _apply(self) -> list[str]:
         """Push the document's session into the registry; returns unknown
@@ -678,6 +751,9 @@ class Project:
             lib._sync(path)
             doc = _read_json(path)
         user = lib._is_user(path)
+        # the file is read (and migrated), nothing replaced yet: one undo
+        # step for the show and the startup preset it brings up (undo.py)
+        undo.push(f"show {doc.get('name') or path.name[: -len(PROJECT_SUFFIX)]}", load=True)
         self._take(doc, path if user else None, path.name,
                    factory=path.parent == lib.factory / PROJECTS)
         missing = self._apply()
@@ -692,6 +768,7 @@ class Project:
         """A fresh show: default state, the party show's bank, no file yet
         (not remembered until it is saved)."""
         lib = self.lib
+        undo.push("new show", load=True)              # one undo step (undo.py, plan 15)
         self._take(_read_json(lib.factory / PROJECTS / f"{DEFAULT_PROJECT}{PROJECT_SUFFIX}"),
                    None)                                 # not factory: a new show of yours
         self.name = name
@@ -755,6 +832,87 @@ class Project:
         return ((self.path is None and not self.factory)
                 or self.session != reg.snapshot(part="session")
                 or (self.bank, self.startup) != self._saved)
+
+
+# ---------------------------------------------------------------- marks
+
+class Marks:
+    """What is loaded, for an undo step that undoes a load (undo.py; plan
+    15 WP1, fork 2): the show's own fields, every group's landed name and
+    clean reference, each group's layout, and the loaded preset's note.
+    Opaque to undo.py, which only calls `take`, `before` and `put` — so
+    after undoing a load the library says the earlier preset is loaded
+    again, and Save cannot write the earlier look over the later file."""
+
+    def __init__(self, lib: Library):
+        self.lib = lib
+
+    def take(self) -> tuple:
+        """(the show's mark, {group: landed}, {group: its `extra` hook's
+        dict — the band layout}, the loaded preset's note and the notes
+        its load left for the panel)."""
+        lib, pre = self.lib, self.lib.presets
+        return (lib.project.mark(), self.lands(),
+                {g: copy.deepcopy(hook()) for g, hook in lib._extra_hooks.items()},
+                (getattr(pre, "note", ""), list(getattr(pre, "notes", ())),
+                 list(getattr(pre, "desk_notes", ()))))
+
+    def lands(self) -> dict:
+        """{group: landed} — every group's name, reference and re-apply
+        road, by reference: cheap enough to read every frame."""
+        lib = self.lib
+        return {g: lib.landed(g) for g in {*lib._current, *lib._loaded, *lib._adopted}}
+
+    def mend(self, pre: dict, lands: dict) -> None:
+        """After the restore of a step that is not a load: a group whose
+        landed state the restore itself moved (`pre` is `lands()` from
+        just before it) — a `scene.select` put back adopts its scene —
+        gets the step's own back, so the strip names what it named before
+        the step. A group the restore left alone is left alone: a slider
+        undone after a save-as stays on the new name (plan 15 fork 2)."""
+        lib = self.lib
+        now = self.lands()
+        for group in {*pre, *now}:
+            if now.get(group) != pre.get(group):
+                lib.reland(group, lands.get(group, (None, None, None)))
+
+    def before(self, mark: tuple) -> None:
+        """First in a restore: a group whose layout differs from the
+        mark's gets it back through its own `on_layout` hook, so its
+        params exist before their values land — the order `_apply_doc`
+        keeps."""
+        lib = self.lib
+        for group, extra in mark[2].items():
+            hook, now = lib._layout_hooks.get(group), lib._extra_hooks.get(group)
+            if hook is None or now is None or not extra or extra.get("layout") is None:
+                continue
+            if now() != extra:
+                hook(extra["layout"])
+                lib._fresh_of(group)
+
+    def put(self, mark: tuple) -> None:
+        """Last in a restore: every group's name, reference and re-apply
+        road as they were (`Library.reland`; a group that had none then
+        has none now), the loaded preset's note and its load's notes for the
+        panel, and the bank's lit slot.
+        The show's own fields go back (`Project.remark`) only when the
+        show itself differs — the undo of a show load. Otherwise the bank
+        and "starts on" are left as they are: they are in the show's file
+        the moment they change, and reverting them in memory would make
+        the show's dirty dot lie. `last_show` is never rewritten."""
+        lib, pr = self.lib, self.lib.project
+        show, landed, _extras, note = mark
+        if not Project.same_show(show, pr.mark()):
+            pr.remark(show)
+        for group in {*lib._current, *lib._loaded, *lib._adopted} - set(landed):
+            lib.reland(group, (None, None, None))
+        for group, was in landed.items():
+            lib.reland(group, was)
+        if lib.presets is not None:
+            lib.presets.note, lib.presets.notes, lib.presets.desk_notes = (
+                note[0], list(note[1]), list(note[2]))
+        cur = lib._current.get(PRESETS)
+        pr.active = pr.bank.index(cur) if cur in pr.bank else -1
 
 
 # ---------------------------------------------------------------- library
@@ -952,7 +1110,7 @@ class Library:
         for root in self._roots():
             if root.is_dir():
                 out.update(d.name for d in root.iterdir()
-                           if d.is_dir() and d.name != PROJECTS and d.name not in LEGACY_DIRS
+                           if d.is_dir() and d.name not in (PROJECTS, TRASH, *LEGACY_DIRS)
                            and not d.name.startswith("."))
         return sorted(out)
 
@@ -1128,6 +1286,9 @@ class Library:
                 self._sync(path)                       # a migrated user file, rewritten once
             self._landed(group, doc.get("name") or name, kind.signature())
         else:
+            # a module preset load, step or file-watch re-apply: one undo
+            # step, the layout it may rebuild included (undo.py, plan 15)
+            undo.push(f"{group}: {doc.get('name') or name}", load=True)
             hook = self._layout_hooks.get(group)
             if hook is not None and doc.get("layout") is not None:
                 hook(doc["layout"])                    # rebuild params first
@@ -1172,14 +1333,25 @@ class Library:
         return self._step(group, -1)
 
     def save_as(self, group: str, name: str, *, extra: dict | None = None) -> Path:
-        """Write the group's bases as a user preset and make it current."""
+        """Write the group's bases as a user preset and make it current.
+        A file already there whose text differs is copied to the trash
+        first (`to_trash`); a save that changes nothing trashes nothing,
+        and a copy that fails does not stop the save — `warning` says the
+        old file was not kept (plan 15 fork 6)."""
         doc = self.document(group, name, extra=extra)
         path = self.home / group / f"{slug(name)}.json"
         kind = self._kinds.get(group)
-        if kind is not None and kind.text is not None:
-            _write_text(path, kind.text(doc))
-        else:
-            _write_json(path, doc)
+        text = (kind.text(doc) if kind is not None and kind.text is not None
+                else _json_text(doc))
+        if path.is_file():
+            try:
+                old = path.read_text()
+            except (OSError, ValueError):
+                old = None                               # unreadable as text: keep it anyway
+            if old != text and to_trash(path, self.home) is None:
+                self.warning = (f"{group}/{path.name}: overwritten — the old file could "
+                                "not be kept in the trash")
+        _write_text(path, text)
         self._sync(path)
         self._landed(group, name, kind.signature() if kind is not None
                      else self.resolved(group, doc["values"]))
@@ -1213,11 +1385,20 @@ class Library:
         return None if cur is None else self.save_as(group, cur, extra=extra)
 
     def delete(self, group: str, name: str) -> bool:
-        """Remove a user preset; a factory one stays, a shadow just lifts."""
+        """Remove a user preset; a factory one stays, a shadow just lifts.
+        The file is copied to the trash first (`to_trash`), and a copy that
+        fails **refuses the delete** (`LibraryError`): a full disk cannot
+        make a delete unrecoverable (plan 15 fork 6)."""
         path = self.path_of(group, name)
         if path is None or not self._is_user(path):
             return False
-        path.unlink()
+        if to_trash(path, self.home) is None:
+            raise LibraryError(f"{path.name}: not deleted — it could not be kept in the "
+                               f"trash ({self.home / TRASH})")
+        try:
+            path.unlink()
+        except OSError as e:
+            raise LibraryError(f"{path.name}: {e}") from e
         self._sync(path)
         if self._current.get(group) == name and self.path_of(group, name) is None:
             self._landed(group, None, None)
@@ -1247,6 +1428,7 @@ class Library:
         if group in self._kinds:
             return None
         self._need_reg()
+        undo.push(f"reset {group}", load=True)        # the other branch pushes in `load`
         self.restore(self.resolved(group, {}))
         self._landed(group, None, None)
         return None

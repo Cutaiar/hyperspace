@@ -494,3 +494,68 @@ def test_an_old_bindings_file_gets_its_layers_once_with_a_backup(tmp_path, capsy
     assert capsys.readouterr().err == ""
     assert sorted(p.name for p in tmp_path.glob("bindings.json.bak-*")) == [
         "bindings.json.bak-mine", "bindings.json.bak-v2"]
+
+
+# ------------------------------------------------------ plan 15 WP1: undo
+
+def test_undoing_a_desk_row_redraws_and_keeps_the_layer_and_the_faders_catch(tmp_path):
+    """`Bindings.set_desk(load=False)`, what an undo's restore calls: the
+    preset layer is replaced and the desk redrawn (`redraw_serial`), but
+    nothing was loaded — `desk_serial` stays, the layer that is up stays
+    up, and every fader keeps its catch (D7). `load=True`, the default, is
+    still a preset load's: the layer drops and the catch is cleared."""
+    from test_undo import boot, frames, settle
+
+    from hyperspace import undo
+
+    r = boot(tmp_path / "home")
+    t, reg, u = r.table, r.reg, r.undo
+    reg["band.2.post"].set_norm(0.5)
+    frames(r)
+    r.inp.queue.append(cc(apc40.CC_FADER, 64, channel=2))
+    frames(r)
+    fader = next(b for b in t.midi() if b.target == "band.2.post")
+    assert fader.caught and fader.layer is None
+    settle(r)
+    u.clear()
+    knob = next(b for b in t.desk() if b.kind == "cc" and b.feedback == "ring")
+    was = [b.to_json() for b in t.desk()]
+    undo.push("unmap a knob")                          # the ROUTING page's ×
+    t.remove(knob)
+    t.redraw_serial += 1
+    settle(r)
+    assert len(u.stack) == 1 and knob.control not in {b.control for b in t.active()}
+    # SHIFT latched: the global layer is up when the undo comes
+    r.inp.queue += [note(SHIFT), note(SHIFT, 0)]
+    frames(r)
+    assert t.layer == "global"
+    serials = (t.desk_serial, t.layer_serial, t.redraw_serial)
+    r.out.sent.clear()
+    assert u.undo()
+    assert [b.to_json() for b in t.desk()] == was
+    assert (t.desk_serial, t.layer_serial) == serials[:2] and t.redraw_serial == serials[2] + 1
+    assert t.layer == "global" and fader.caught
+    frames(r)                                          # the adapter follows: a redraw…
+    assert r.out.sent and t.layer == "global" and fader.caught      # …and nothing dropped
+    r.inp.queue.append(cc(apc40.CC_FADER, 30, channel=2))
+    frames(r)
+    assert reg["band.2.post"].norm == pytest.approx(30 / 127, abs=PICKUP_TOL)   # still caught
+    # back on the preset layer the restored knob is drawn again
+    r.inp.queue += [note(SHIFT), note(SHIFT, 0)]
+    r.out.sent.clear()
+    frames(r)
+    row = next(b for b in t.desk() if b.source == knob.source)
+    assert sent_cc(r, row.number, row.channel or 0)[-1:] == [round(reg[row.target].norm * 127)]
+    # the same rows through the default door are a load: the layer drops, and a
+    # fader whose base the load moved loses its catch (plan 15 WP3's rule)
+    r.inp.queue += [note(SHIFT), note(SHIFT, 0)]
+    frames(r)
+    assert t.layer == "global"
+    reg["band.2.post"].set_norm(0.9)
+    t.set_desk(t.desk())
+    frames(r)
+    assert t.layer == "preset" and t.desk_serial == serials[0] + 1 and not fader.caught
+    # the dropping rules are the same under both: a row on an invariant control goes
+    notes = t.set_desk([*t.desk(), Binding(fader.source, "view.bright", "abs")], load=False)
+    assert len(notes) == 1 and "invariant" in notes[0]
+    assert [b.to_json() for b in t.desk()] == was

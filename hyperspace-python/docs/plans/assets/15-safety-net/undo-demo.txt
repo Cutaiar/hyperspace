@@ -1,0 +1,61 @@
+Hyperspace — undo and the trash, headless (tools/undo_demo.py; plan 15 WP1)
+home: <home>  (a temp folder made by this script)
+show: party   preset: TUMBLE   registry: 532 params, 455 watched   table: 20 routes, 42 desk rows
+    undo stack (0): empty
+
+1. Drag one slider over 24 frames (view.bright), then let go
+    Brightness: 2.00× -> 2.96×   (1 step on the stack while still dragging)
+    undo stack (1): Brightness 2.00× → 2.96×
+
+2. Sweep a knob on the desk: CC messages through MidiIO, one a frame
+    K2 (track knob 2) -> view.speed: 30 messages, 0.300 -> 1.07
+    undo stack (2): Brightness 2.00× → 2.96× | Speed 0.300 → 1.07
+
+3. Two hands move through the box for 2 s (the preset's own hand routes)
+    view.depth4: performed 1.67 … 4.79, base 2.60 before and 2.60 after
+    master.gain: performed 1.09× … 4.00×, base 1.00× before and 1.00× after
+    view.speed: performed 1.19 … 4.00, base 1.07 before and 1.07 after
+    3 watched params were held by a performer; the largest change of any watched base was 0.0e+00 (the tolerance is 1e-09 relative)
+    undo stack (2): Brightness 2.00× → 2.96× | Speed 0.300 → 1.07
+
+4. Load a preset (F2, a key row -> preset.load.1)
+    preset: FACES   Brightness: 2.50×   routes: 19
+    undo stack (3): Brightness 2.00× → 2.96× | Speed 0.300 → 1.07 | load FACES
+
+5. Ctrl+Z down the stack (the key rows fire edit.undo); the footer's line each time
+    before: preset FACES, Brightness 2.50×, view.speed 0.200
+  CONTROL+Z        footer: ·  undid load FACES
+    now:    preset TUMBLE, Brightness 2.96×, view.speed 1.07
+  CONTROL+Z        footer: ·  undid Speed 0.300 → 1.07
+    now:    preset TUMBLE, Brightness 2.96×, view.speed 0.300
+  CONTROL+Z        footer: ·  undid Brightness 2.00× → 2.96×
+    now:    preset TUMBLE, Brightness 2.00×, view.speed 0.300
+  CONTROL+Z        footer: ·  nothing to undo
+    now:    preset TUMBLE, Brightness 2.00×, view.speed 0.300
+    undo stack (0): empty
+    redo stack (3): load FACES | Speed 0.300 → 1.07 | Brightness 2.00× → 2.96×
+
+6. Redo (Cmd+Shift+Z fires edit.redo alone), three times
+  SHIFT+SUPER+Z    footer: ·  redid Brightness 2.00× → 2.96×
+    now:    preset TUMBLE, Brightness 2.96×, view.speed 0.300
+  SHIFT+SUPER+Z    footer: ·  redid Speed 0.300 → 1.07
+    now:    preset TUMBLE, Brightness 2.96×, view.speed 1.07
+  SHIFT+SUPER+Z    footer: ·  redid load FACES
+    now:    preset FACES, Brightness 2.50×, view.speed 0.200
+    undo stack (3): Brightness 2.00× → 2.96× | Speed 0.300 → 1.07 | load FACES
+
+7. The trash: save over a user preset, then delete it
+    saved <home>/presets/demo.json  (new: nothing to keep)
+    saved over it with Brightness 1.25×
+    saved again, nothing changed (trashes nothing)
+    deleted DEMO; demo.json exists: False
+    <home>/trash:
+      presets/demo.20261004-180830-2.json   10823 bytes
+      presets/demo.20261004-180830.json   10823 bytes
+    (a save and a delete are not undo steps: their net is the trash)
+    undo stack (4): Brightness 2.00× → 2.96× | Speed 0.300 → 1.07 | load FACES | Brightness 2.50× → 1.25×
+
+8. What Undo.tick costs a frame
+    idle, 1200 frames: median 81 µs, 99th percentile 136 µs, max 305 µs
+    during a drag, 600 frames: median 79 µs, 99th percentile 96 µs, max 107 µs
+    (the budget is 0.5 ms; a frame at 60 Hz is 16 667 µs)

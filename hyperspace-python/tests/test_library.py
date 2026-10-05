@@ -703,3 +703,132 @@ def test_factory_projects_are_listed_and_load_by_name(rig):
                                "NOITA"]
     assert lib.current("presets") == "TUMBLE" and lib.project.active == 0
     assert rig.view.shape == 10 and lib.current("band") == "Balanced"
+
+
+# ------------------------------------------------ plan 15 WP1: the trash
+
+def trash(home, group) -> list:
+    d = home / library.TRASH / group
+    return sorted(d.iterdir()) if d.is_dir() else []
+
+
+def test_a_save_over_a_preset_keeps_the_old_file_in_the_trash(rig, tmp_path, monkeypatch,
+                                                              capsys):
+    """Every road that overwrites a user preset file copies it to
+    `<home>/trash/<group>/` first — the strip's Save and as…, ⇧F — with
+    the file's own name and a date; the copy is the old file, byte for
+    byte. A copy that fails does not stop the save: the warning says so."""
+    lib, reg = rig.lib, rig.reg
+    path = lib.save_as("view", "Loud One")
+    assert trash(tmp_path, "view") == []                     # a new file: nothing to keep
+    first = path.read_bytes()
+    reg["view.bright"].set_value(2.0)
+    assert lib.overwrite("view") == path
+    (kept,) = trash(tmp_path, "view")
+    assert kept.read_bytes() == first and path.read_bytes() != first
+    assert kept.name.startswith("loud-one.") and kept.suffix == ".json"
+    stamp = kept.name[len("loud-one."):-len(".json")]
+    assert len(stamp) == 15 and stamp[8] == "-" and stamp.replace("-", "").isdigit()
+    # a preset (the document kind), by ⇧F: the bank's save
+    lib.project.save_slot(2)
+    name = lib.project.bank[2]
+    mine = lib.path_of("presets", name)
+    old = mine.read_bytes()
+    assert trash(tmp_path, "presets") == []
+    reg["view.shape"].set(7)
+    lib.project.save_slot(2)
+    (kept,) = trash(tmp_path, "presets")
+    assert kept.read_bytes() == old and mine.read_bytes() != old
+    # a factory preset saved over becomes a user shadow: nothing of yours was lost
+    reg["band.0.atk"].set(0.7)
+    lib.load("band", "Balanced")
+    reg["band.0.atk"].set(0.7)
+    lib.overwrite("band")
+    assert trash(tmp_path, "band") == []
+    # a copy that fails: the save goes on, and says the old file was not kept
+    monkeypatch.setattr(library, "to_trash", lambda path, root: None)
+    lib.warning = ""
+    reg["view.bright"].set(3.0)
+    assert lib.overwrite("view") == path
+    assert json.loads(path.read_text())["values"]["view.bright"] == 3.0
+    assert "could not be kept in the trash" in lib.warning
+    assert len(trash(tmp_path, "view")) == 1
+
+
+def test_a_delete_keeps_the_file_in_the_trash_or_does_not_delete(rig, tmp_path, monkeypatch,
+                                                                 capsys):
+    """A delete copies the file to the trash first; when the copy cannot
+    be made the delete is refused (`LibraryError`, which the strip shows)
+    and the file stays."""
+    lib = rig.lib
+    path = lib.save_as("camera", "Wide")
+    body = path.read_bytes()
+    assert lib.delete("camera", "Wide") and not path.exists()
+    (kept,) = trash(tmp_path, "camera")
+    assert kept.read_bytes() == body and lib.list("camera") == []
+    assert not lib.delete("band", "Percussive") and trash(tmp_path, "band") == []   # factory
+    # the copy fails (the trash is a file, say): nothing is deleted
+    path = lib.save_as("camera", "Tall")
+    blocked = tmp_path / "blocked"
+    blocked.mkdir()
+    (blocked / library.TRASH).write_text("not a folder")
+    assert library.to_trash(path, blocked) is None
+    assert "not copied to the trash" in capsys.readouterr().err
+    monkeypatch.setattr(library, "to_trash", lambda path, root: None)
+    with pytest.raises(LibraryError, match="not deleted"):
+        lib.delete("camera", "Tall")
+    assert path.exists() and lib.list("camera") == ["Tall"] and lib.current("camera") == "Tall"
+
+
+def test_a_save_that_changes_nothing_trashes_nothing(rig, tmp_path):
+    """Fork 6 (b): Save on an unchanged preset leaves the trash alone."""
+    lib, reg = rig.lib, rig.reg
+    lib.save_as("view", "Same")
+    for _ in range(3):
+        lib.overwrite("view")
+        lib.save_as("view", "Same")
+    assert trash(tmp_path, "view") == [] and not (tmp_path / library.TRASH).exists()
+    rig.presets.save_as("LOOK")
+    rig.presets.save_as("LOOK")
+    assert not (tmp_path / library.TRASH).exists()
+    reg["view.bright"].set_value(1.5)
+    lib.overwrite("view")
+    assert len(trash(tmp_path, "view")) == 1
+
+
+def test_two_trashings_in_one_second_do_not_collide(rig, tmp_path, monkeypatch):
+    """A name taken in the same second gets -2, -3, …; the copy is made
+    exclusively, so nothing in the trash is ever overwritten."""
+    monkeypatch.setattr(library.time, "strftime", lambda fmt, *a: "20261004-120000")
+    src = tmp_path / "view" / "x.json"
+    src.parent.mkdir(parents=True)
+    made = []
+    for k in range(4):
+        src.write_text(f"version {k}")
+        made.append(library.to_trash(src, tmp_path))
+    assert [p.name for p in made] == ["x.20261004-120000.json", "x.20261004-120000-2.json",
+                                      "x.20261004-120000-3.json", "x.20261004-120000-4.json"]
+    assert [p.read_text() for p in made] == [f"version {k}" for k in range(4)]
+    assert all(p.parent == tmp_path / library.TRASH / "view" for p in made)
+    assert library.to_trash(tmp_path / "view" / "gone.json", tmp_path) is None   # no source
+
+
+def test_the_trash_is_no_group_and_is_never_watched(rig, tmp_path):
+    """`trash` is listed as no group, its files as no presets, and the file
+    watch never sees them: editing or adding a trashed file re-applies
+    nothing."""
+    lib, reg = rig.lib, rig.reg
+    path = lib.save_as("view", "Keeper")
+    reg["view.bright"].set_value(2.0)
+    lib.overwrite("view")
+    (kept,) = trash(tmp_path, "view")
+    assert library.TRASH not in lib.groups() and "view" in lib.groups()
+    assert lib.list("view") == ["Keeper"] and lib.list(library.TRASH) == []
+    assert lib.path_of("view", kept.stem) is None
+    lib.poll(now=1.0)
+    assert not any(library.TRASH in p.parts for p in lib._mtimes)
+    edit(kept, lambda d: d["values"].update({"view.bright": 9.0}))
+    (kept.parent / "keeper.json").write_text(kept.read_text())     # a look-alike in the trash
+    assert lib.poll(now=2.0) is False
+    assert reg["view.bright"].value == 2.0 and lib.current("view") == "Keeper"
+    assert json.loads(path.read_text())["values"]["view.bright"] == 2.0

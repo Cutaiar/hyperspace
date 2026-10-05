@@ -38,7 +38,7 @@ import math
 
 from imgui_bundle import imgui
 
-from .. import ui
+from .. import ui, undo
 from .core import FEATURES, GROUP, PINCHES, SIDES, conflicts, mirror
 from .signal import shape
 
@@ -86,6 +86,7 @@ def ctx_rows(panel, p) -> None:
     if rows:
         _gate_menu(router, rows)
     if rows and imgui.menu_item_simple("Unbind hand"):
+        undo.push(f"unbind hand {p.id}")    # one undo step (undo.py, plan 15)
         for b in rows:                  # the hand's rows only: a lane's stay
             router.table.remove(b)
 
