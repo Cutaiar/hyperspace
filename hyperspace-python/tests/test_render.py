@@ -1546,3 +1546,255 @@ def test_the_render_stack_imports_no_registry():
     called = {n.func.attr for n in ast.walk(src)
               if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)}
     assert not called & {"set_value", "modulate", "apply", "snapshot"}
+
+
+# ---- plan 20 WP6: instance layouts — grid, hex, ring ----
+#
+# `render.inst_positions(n, layout)` says where each copy sits, in cells;
+# `draw_scene` scales it by `cell` and runs the motions over it as before.
+
+def _frozen_grid(n: int, layout: int = 0):
+    """The four lines `draw_scene` had before plan 20 WP6, frozen: what
+    "the frame it was" means below. The layout is ignored."""
+    import math
+
+    cols = math.ceil(math.sqrt(n))
+    rows = math.ceil(n / cols)
+    k = np.arange(n, dtype=np.float32)
+    gx = k % cols - (cols - 1) / 2      # grid position about the centre
+    gy = k // cols - (rows - 1) / 2
+    return gx, gy
+
+
+LW, LH = 160, 120
+
+
+def _layout_view(n, layout=0, motion=0, **kw) -> ViewState:
+    s = ViewState(shape=3, ang=list(VIEW["ang"]), yaw=VIEW["yaw"], pitch=VIEW["pitch"],
+                  faces=True, pattern=2, points=True, lines=True, zoom=0.3,
+                  instances=n, inst_layout=layout, inst_motion=motion, inst_amp=0.4)
+    for k, v in kw.items():
+        setattr(s, k, v)
+    return s
+
+
+def _scene(ctx, r, s, t=2.0):
+    """One `draw_scene` into a small framebuffer: (pixels as RGBA ints, the
+    instance offsets every `_tile` call was handed)."""
+    from hyperspace.render import Renderer
+
+    seen = []
+    real = Renderer._tile
+    r._tile = lambda verts, offs: (seen.append(offs.copy()), real(verts, offs))[1]
+    fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((LW, LH), 4)])
+    fbo.use()
+    ctx.viewport = (0, 0, LW, LH)
+    try:
+        r.draw_scene(s, LW, LH, t_now=t)
+        out = np.frombuffer(fbo.read(components=4), dtype=np.uint8).reshape(LH, LW, 4)
+    finally:
+        del r._tile
+        fbo.release()
+    assert ctx.error == "GL_NO_ERROR"
+    return out.astype(int), seen
+
+
+def test_grid_layout_is_the_frame_it_was(ctx, monkeypatch):
+    """GRID is today's four lines moved into a function: the same float32
+    positions at every count, and the same frame, still and in each motion,
+    as a renderer whose positions come from the frozen lines."""
+    import hyperspace.render as R
+
+    for n in range(2, 101):
+        gx, gy = R.inst_positions(n, R.LAYOUT_GRID)
+        fx, fy = _frozen_grid(n)
+        assert gx.dtype == np.float32 and gy.dtype == np.float32, n
+        assert np.array_equal(gx, fx) and np.array_equal(gy, fy), n
+    r = R.Renderer(ctx)
+    asked = []
+    for n in (2, 3, 9, 16, 100):
+        for motion in (0, 1, 2, 3):
+            s = _layout_view(n, R.LAYOUT_GRID, motion)
+            got, offs = _scene(ctx, r, s)
+            with monkeypatch.context() as m:
+                m.setattr(R, "inst_positions", lambda k, layout: (asked.append(k),
+                                                                 _frozen_grid(k))[1])
+                want, want_offs = _scene(ctx, r, s)
+            assert asked[-1] == n                           # the frozen lines drew `want`
+            assert want[..., :3].max() > 20, (n, motion)
+            assert np.array_equal(got, want), (n, motion)
+            assert len(offs) == 3 and all(np.array_equal(a, b) for a, b in zip(offs, want_offs))
+            assert offs[0].shape == (n, 2)
+
+
+def test_hex_neighbours_are_one_cell_apart(ctx):
+    """A honeycomb spiral: every copy's nearest neighbour one cell away;
+    whole hexagons at 7, 19 and 37 centred on the middle; and a copy never
+    moves as the count grows."""
+    from hyperspace.render import LAYOUT_HEX, inst_positions
+
+    def pts(n):
+        gx, gy = inst_positions(n, LAYOUT_HEX)
+        assert gx.dtype == np.float32 and gy.dtype == np.float32 and len(gx) == n
+        return np.stack([gx, gy], axis=1).astype(np.float64)
+
+    for n in (7, 19, 37):
+        p = pts(n)
+        d = np.hypot(*(p[:, None, :] - p[None, :, :]).transpose(2, 0, 1))
+        np.fill_diagonal(d, np.inf)
+        assert np.allclose(d.min(axis=1), 1.0, atol=1e-5), n
+        assert d.min() > 1 - 1e-5                         # no two copies closer than a cell
+        assert np.allclose(p.mean(axis=0), 0.0, atol=1e-5), n
+        assert np.array_equal(p[0], [0.0, 0.0])
+        # a whole hexagon: the outer ring all at one hex distance
+        ring = (n == 7 and 1) or (n == 19 and 2) or 3
+        assert (np.hypot(p[:, 0], p[:, 1]) <= ring + 1e-5).all()
+    big = pts(100)
+    for n in range(1, 100):
+        assert np.array_equal(pts(n), big[:n]), n
+    # each count's rings: 1 + 6 + 12 + 18 — the 7th copy closes ring 1, the 19th ring 2
+    r = np.hypot(big[:, 0], big[:, 1])
+    assert (r[1:7] > 0.99).all() and (r[1:7] < 1.01).all()
+    assert (r[7:19] > 1.7).all() and (r[7:19] < 2.01).all()
+
+
+def test_ring_is_one_circle_with_neighbours_one_cell_apart(ctx):
+    """RING: every copy at one radius about the centre, neighbours one cell
+    apart, copy 0 at the top and the next clockwise on screen (y is down)."""
+    import math
+
+    from hyperspace.render import LAYOUT_RING, inst_positions
+
+    for n in (2, 3, 12, 100):
+        gx, gy = inst_positions(n, LAYOUT_RING)
+        assert gx.dtype == np.float32 and len(gx) == n
+        p = np.stack([gx, gy], axis=1).astype(np.float64)
+        radius = 1.0 / (2.0 * math.sin(math.pi / n))
+        assert np.allclose(np.hypot(p[:, 0], p[:, 1]), radius, atol=1e-4), n
+        step = np.hypot(*(np.roll(p, -1, axis=0) - p).T)
+        assert np.allclose(step, 1.0, atol=1e-4), n
+        assert np.allclose(p.mean(axis=0), 0.0, atol=1e-4), n
+        assert abs(p[0, 0]) < 1e-6 and p[0, 1] < 0          # copy 0 at the top
+    gx, gy = inst_positions(2, LAYOUT_RING)                   # half a cell above and below
+    assert np.allclose(gx, 0, atol=1e-6) and np.allclose(gy, [-0.5, 0.5], atol=1e-6)
+    gx, gy = inst_positions(3, LAYOUT_RING)
+    assert gx[1] > 0 and gy[1] > 0                            # clockwise: then lower right
+    gx, gy = inst_positions(12, LAYOUT_RING)
+    assert gx[3] > 0 and abs(gy[3]) < 1e-5                    # a quarter turn: at three o'clock
+
+
+def test_positions_for_any_count_and_layout(ctx):
+    """No copies is two empty arrays and one copy the centre, in every layout;
+    a layout `inst_positions` does not know is GRID; nothing is NaN."""
+    from hyperspace.render import LAYOUT_GRID, inst_positions
+
+    for layout in (0, 1, 2, 3, -1, 99):
+        for n in (-3, 0):
+            gx, gy = inst_positions(n, layout)
+            assert gx.shape == (0,) and gy.shape == (0,) and gx.dtype == np.float32
+        gx, gy = inst_positions(1, layout)
+        assert np.array_equal(gx, [0.0]) and np.array_equal(gy, [0.0])
+        for n in range(1, 101):
+            gx, gy = inst_positions(n, layout)
+            assert len(gx) == len(gy) == n and np.isfinite(gx).all() and np.isfinite(gy).all()
+        if layout not in (1, 2):
+            for n in (2, 9, 50):
+                assert all(np.array_equal(a, b) for a, b in
+                           zip(inst_positions(n, layout), inst_positions(n, LAYOUT_GRID)))
+
+
+def test_zero_and_one_are_the_same_in_every_layout(ctx):
+    """`draw_scene` enters a layout only above one copy: 0 draws only the
+    ground and 1 one copy at the centre, the same bits in GRID, HEX and RING,
+    with or without a motion."""
+    from hyperspace.render import Renderer
+
+    r = Renderer(ctx)
+    for n in (0, 1):
+        want, _ = _scene(ctx, r, _layout_view(n, 0, 0))
+        for layout in (0, 1, 2):
+            for motion in (0, 1, 3):
+                got, offs = _scene(ctx, r, _layout_view(n, layout, motion))
+                assert np.array_equal(got, want), (n, layout, motion)
+                if n == 1:
+                    assert len(offs) == 3 and all(o.shape == (1, 2) and not o.any() for o in offs)
+                else:
+                    assert offs == [] and not got[..., :3].any()
+        if n == 1:
+            assert want[..., :3].max() > 20
+
+
+def test_every_motion_moves_every_layout(ctx):
+    """Each motion displaces the copies in each layout, by no more than its
+    amplitude in cells, and the frames differ from the still field."""
+    from hyperspace.render import Renderer
+
+    r = Renderer(ctx)
+    cell = min(LW, LH) * 0.72 * 0.3
+    for layout in (0, 1, 2):
+        for n in (7, 12):
+            still, (o_still, *_) = _scene(ctx, r, _layout_view(n, layout, 0))
+            for motion in (1, 2, 3):
+                moved = []
+                for t in (2.0, 2.7):
+                    img, (o, *_) = _scene(ctx, r, _layout_view(n, layout, motion), t=t)
+                    d = np.hypot(*(o - o_still).T)
+                    assert d.max() > 0.05 * cell, (layout, n, motion, t)
+                    assert d.max() <= 0.4 * cell * 1.07 + 1e-3, (layout, n, motion, t)
+                    moved.append(o)
+                assert not np.array_equal(img, still), (layout, n, motion)
+                assert not np.array_equal(*moved), (layout, n, motion)     # and it moves in time
+    # RIPPLE on a ring: every copy at one distance, so it breathes as one
+    _, (o_still, *_) = _scene(ctx, r, _layout_view(12, 2, 0))
+    _, (o, *_) = _scene(ctx, r, _layout_view(12, 2, 3))
+    radial = np.hypot(*o.T) - np.hypot(*o_still.T)
+    assert np.allclose(radial, radial[0], atol=1e-2) and abs(radial[0]) > 0.5
+
+
+def test_every_layout_and_motion_draws_any_count(ctx):
+    """0 to 100 copies in every layout and motion, at the amp's top: no
+    raise, no GL error, every offset finite."""
+    from hyperspace.render import Renderer
+
+    r = Renderer(ctx)
+    s = _layout_view(0, inst_amp=1.0, inst_rate=6.0, faces=False, pattern=0)
+    for layout in (0, 1, 2):
+        for motion in (0, 1, 2, 3):
+            s.inst_layout, s.inst_motion = layout, motion
+            for n in range(101):
+                s.instances = n
+                _, offs = _scene(ctx, r, s, t=1.3 + n / 30)
+                assert all(np.isfinite(o).all() and len(o) == max(n, 1) for o in offs), (
+                    layout, motion, n)
+
+
+def test_the_face_picture_follows_a_honeycomb(ctx, tmp_path):
+    """HEX with seven copies: per face every copy's faces carry the
+    picture; in screen mapping there is one picture behind the field."""
+    from hyperspace.fx import SCREEN
+    from hyperspace.render import LAYOUT_HEX, Renderer, inst_positions
+
+    card = _card(tmp_path)
+    field = {"instances": 7, "zoom": 0.42, "inst_layout": LAYOUT_HEX}
+    base_r = Renderer(ctx)
+    base = _fdraw(ctx, base_r, _face_view(**field))
+    inside = _cover(ctx, base_r)
+    r = Renderer(ctx, fx=_aimed("plasma"))
+    got = _fdraw(ctx, r, _face_view(**field))
+    assert np.array_equal(got[~inside], base[~inside])
+    cell = min(FW, FH) * 0.72 * 0.42
+    yy, xx = np.mgrid[0:FH, 0:FW]
+    gx, gy = inst_positions(7, LAYOUT_HEX)
+    for k in range(7):                               # every copy's own disc of the window
+        cx, cy = FW / 2 + gx[k] * cell, FH / 2 + gy[k] * cell
+        patch = inside & (np.hypot(xx - cx, yy - cy) < 0.45 * cell)
+        assert patch.sum() > 300, k
+        changed = np.abs(got[patch] - base[patch])[:, :3].sum(axis=1) > 0
+        assert changed.mean() > 0.5, f"copy {k} does not show the picture"
+
+    r = Renderer(ctx, fx=_shown(SCREEN))
+    hue = _hue(_fdraw(ctx, r, _face_view(card, **field)))
+    clear = _cover(ctx, r) & (np.abs(xx - FW / 2) > 6) & (np.abs(yy - FH / 2) > 6)
+    for name, where in (("r", (xx < FW / 2) & (yy < FH / 2)), ("g", (xx > FW / 2) & (yy < FH / 2)),
+                        ("b", (xx < FW / 2) & (yy > FH / 2)), ("y", (xx > FW / 2) & (yy > FH / 2))):
+        assert (clear & where).sum() > 300 and (hue[clear & where] == name).all(), name

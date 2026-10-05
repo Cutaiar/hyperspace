@@ -289,6 +289,65 @@ void main() {
 
 
 
+# ---- instance layouts (plan 20 WP6): where each copy sits, in cells ----
+
+LAYOUT_GRID, LAYOUT_HEX, LAYOUT_RING = 0, 1, 2     # params.INST_LAYOUT's order
+_HEX_STEPS = ((1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1))   # axial (q, r)
+
+
+def _hex_spiral(n: int) -> np.ndarray:
+    """The first `n` cells of a honeycomb spiral as (n, 2) float64 (gx, gy):
+    the centre, then ring 1 (six cells), ring 2 (twelve), ring m (6m), each
+    walked from axial (−m, m) taking m steps along each direction in turn.
+    A cell's place does not depend on `n`."""
+    out = [(0.0, 0.0)]
+    m = 0
+    while len(out) < n:
+        m += 1
+        q, r = -m, m
+        for dq, dr in _HEX_STEPS:
+            for _ in range(m):
+                out.append((q + r / 2, r * math.sqrt(3.0) / 2))
+                q, r = q + dq, r + dr
+    return np.array(out[:n], dtype=np.float64).reshape(-1, 2)
+
+
+def inst_positions(n: int, layout: int) -> tuple[np.ndarray, np.ndarray]:
+    """(gx, gy) for `n` copies, float32, in cells: where each copy sits
+    before `cell` scales it (`Renderer.draw_scene`, which asks only for
+    n ≥ 2). A cell is the spacing between neighbours in every layout. Pure:
+    no GL, no state.
+
+    GRID (and any layout it does not know) — rows of ``ceil(sqrt(n))``,
+    centred; the arithmetic `draw_scene` had inline, in the same order.
+    HEX — a honeycomb spiral from the centre: whole hexagons at 7, 19, 37,
+    61 and 91, and a copy never moves as the count grows.
+    RING — one circle, copy 0 at the top, clockwise on screen (y is down),
+    its radius ``1 / (2 sin(π / n))`` so neighbours stay one cell apart.
+
+    No copies is two empty arrays and one copy is the centre, in every
+    layout."""
+    n = max(0, int(n))
+    if n == 0:
+        return np.zeros(0, dtype=np.float32), np.zeros(0, dtype=np.float32)
+    if layout == LAYOUT_HEX:
+        cells = _hex_spiral(n)
+        return cells[:, 0].astype(np.float32), cells[:, 1].astype(np.float32)
+    if layout == LAYOUT_RING:
+        if n == 1:
+            return np.zeros(1, dtype=np.float32), np.zeros(1, dtype=np.float32)
+        radius = 1.0 / (2.0 * math.sin(math.pi / n))
+        th = 2.0 * math.pi * np.arange(n, dtype=np.float64) / n
+        return ((radius * np.sin(th)).astype(np.float32),
+                (-radius * np.cos(th)).astype(np.float32))
+    cols = math.ceil(math.sqrt(n))
+    rows = math.ceil(n / cols)
+    k = np.arange(n, dtype=np.float32)
+    gx = k % cols - (cols - 1) / 2      # grid position about the centre
+    gy = k // cols - (rows - 1) / 2
+    return gx, gy
+
+
 def _samples_of(ctx: moderngl.Context, fbo: moderngl.Framebuffer) -> int:
     """The bound framebuffer's MSAA sample count. moderngl leaves `samples`
     unset on the detected default framebuffer, so the window is asked
@@ -854,19 +913,16 @@ class Renderer:
         px = (px - w / 2) * zoom + w / 2 + s.pan[0]
         py = (py - h / 2) * zoom + h / 2 + s.pan[1]
 
-        # synchronized instance grid, spaced pre-zoom so the camera sees a field
+        # synchronized instances in a layout (grid, honeycomb or ring:
+        # inst_positions), spaced pre-zoom so the camera sees a field
         n_inst = max(0, int(s.instances))   # 0: the ground alone (returns below)
         t_m = self.now(t_now)
         if n_inst > 1:
-            cols = math.ceil(math.sqrt(n_inst))
-            rows = math.ceil(n_inst / cols)
             cell = min(w, h) * 0.72 * zoom
-            k = np.arange(n_inst, dtype=np.float32)
-            gx = k % cols - (cols - 1) / 2      # grid position about the centre
-            gy = k // cols - (rows - 1) / 2
+            gx, gy = inst_positions(n_inst, int(s.inst_layout))
             offs = np.stack([gx * cell, gy * cell], axis=1).astype(np.float32)
             if s.inst_motion and s.inst_amp > 0.0:
-                # trigonometric motion over the grid: each instance's phase
+                # trigonometric motion over the field: each instance's phase
                 # comes from its position, so the field moves as one figure
                 ph = t_m * s.inst_rate
                 if s.inst_motion == 1:    # ORBIT — circles in a traveling wave
