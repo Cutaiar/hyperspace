@@ -89,9 +89,9 @@ def test_raw_ranges_clamp_int_and_log(rig):
     inst.set_norm(1.0)
     assert view.instances == 100 and isinstance(view.instances, int)
     inst.set_value(-5)
-    assert view.instances == 1
+    assert view.instances == 0          # the floor is zero (plan 16 WP5)
     inst.step(3)
-    assert view.instances == 4
+    assert view.instances == 3
     z = reg["camera.zoom"]
     z.set_norm(0.5)  # log: halfway is the geometric middle
     assert view.zoom == pytest.approx(math.sqrt(0.05 * 40.0))
@@ -100,6 +100,29 @@ def test_raw_ranges_clamp_int_and_log(rig):
     yaw = reg["camera.yaw"]
     yaw.set_value(math.pi + 0.5)  # wraps, never clamps
     assert view.yaw == pytest.approx(-math.pi + 0.5)
+
+
+def test_instances_read_nothing_drawn_at_zero(rig):
+    """Plan 16 WP5 (fork F3): a plain 0–100 range, zero at the very bottom
+    of the throw, and a readout that says what a black render is."""
+    reg, view, *_ = rig
+    inst = reg["view.instances"]
+    assert (inst.lo, inst.hi) == (0, 100) and inst.modulatable and inst.persist
+    assert view.instances == 1 and inst.text() == "1 instance(s)"     # the default stays 1
+    inst.set_norm(0.0)                  # the knob's bottom, the slider's left end
+    assert view.instances == 0 and isinstance(view.instances, int)
+    assert inst.norm == 0.0 and inst.text() == "0 · nothing drawn"
+    inst.step(1)
+    assert view.instances == 1 and inst.text() == "1 instance(s)"
+    inst.set_norm(0.5)                  # linear: no taper to bend the throw
+    assert view.instances == 50 and inst.text() == "50 instance(s)"
+    assert "0 draws nothing" in inst.tip
+    # zero is a value like any other to a snapshot
+    inst.set_value(0)
+    snap = reg.snapshot("view")
+    inst.set_value(7)
+    reg.restore(snap)
+    assert view.instances == 0
 
 
 def test_nudge_and_scale_move_the_base_without_a_detent(rig):

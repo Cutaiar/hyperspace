@@ -7,12 +7,12 @@ knows (library.groups()) carries a strip under its title:
 
 prev / next step through ``library.list(group)``; the name opens the
 list (factory presets dim, user ones deletable); the dot is
-``is_dirty(group)``; save overwrites the current preset — disabled for
-a factory one, which can only be saved *as* something; as… turns the
-strip into a name field until Enter (or Esc); reset lands the group on
-its default preset — the "meaningful default" — or its fresh values when
-it has none. Save on a **factory** preset writes your own copy of it
-(``Library.overwrite`` shadows the factory file, never touches it).
+``is_dirty(group)``; save writes over the current preset and is disabled
+only when none is loaded — on a **factory** preset it writes your own
+copy of it (``Library.overwrite`` shadows the factory file, never
+touches it); as… turns the strip into a name field until Enter (or Esc);
+reset lands the group on its default preset — the "meaningful default" —
+or its fresh values when it has none.
 
 The PRESETS page speaks plan 14 §3's words — **show** (what the code
 calls a ``Project``: a bank of eight presets and what it starts on),

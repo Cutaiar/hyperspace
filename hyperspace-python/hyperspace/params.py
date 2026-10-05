@@ -766,9 +766,12 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                  "In window and fullscreen the picture is always opaque, on or off.")
     r.toggle("view.rotate", "Rotate", *_attr(view, "playing"), group=g)
     r.continuous("view.instances", "Instances", *_attr(view, "instances"),
-                 lo=1, hi=100, integer=True, fmt=lambda v: f"{int(v)} instance(s)", group=g,
+                 lo=0, hi=100, integer=True,
+                 fmt=lambda v: f"{int(v)} instance(s)" if int(v) > 0 else "0 · nothing drawn",
+                 group=g,
                  tip="Synchronized copies in a grid — scroll to zoom out over the field, "
-                     "right-drag to pan.")
+                     "right-drag to pan. 0 draws nothing: the ground, the echoes and the "
+                     "effects carry on.")
     r.enum("view.inst_motion", "Grid motion", *_attr(view, "inst_motion"), INST_MOTION,
            group=g, tip="Trigonometric motion over the instance grid — each copy's phase "
                         "comes from its grid position, so the field moves as one figure.")
@@ -925,6 +928,7 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                  tip="How much of the new frame enters the dream buffer each frame — "
                      "its memory, 33 frames down to 3.")
     r.enum("dream.layer", "Layer", *_attr(dream, "layer"), LAYERS, group=g,
+           modulatable=False,      # a change makes the worker load another trunk
            tip="The net layer the dream maximises: conv2_2 fine grain, conv3_3 the "
                "classic swirl, conv4_3 blotchier, inception the eyes-and-dogs curls.")
     r.enum("dream.octaves", "Octaves", *_attr(dream, "octaves"), OCTAVES, group=g,

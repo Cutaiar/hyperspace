@@ -37,7 +37,7 @@ class ViewState:
     cut_through: bool = True     # overlay only: fills lower the window's alpha (render.py)
     zoom: float = 1.0            # camera magnification about the view centre
     pan: list[float] = field(default_factory=lambda: [0.0, 0.0])  # logical px
-    instances: int = 1           # synchronized copies in a centred grid
+    instances: int = 1           # synchronized copies in a centred grid; 0 draws nothing
     inst_motion: int = 0         # grid motion: 0 still, 1 orbit, 2 wave, 3 ripple
     inst_amp: float = 0.25       # motion amplitude, fraction of a grid cell
     inst_rate: float = 1.0       # motion angular rate, rad/s

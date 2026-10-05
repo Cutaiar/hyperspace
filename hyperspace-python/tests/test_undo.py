@@ -556,6 +556,25 @@ def test_redo_and_a_new_edit_clears_it(rig):
     assert rig.undo.status.startswith("redid ") and len(rig.undo.stack) == 1
 
 
+def test_a_count_taken_to_zero_is_undone(rig):
+    """Plan 16 WP5: the instance count reaches 0 (nothing drawn) from the
+    slider's left end; Ctrl+Z — the `edit.undo` trigger — brings it back."""
+    p = rig.reg["view.instances"]
+    settle(rig)
+    was = rig.view.instances
+    assert was >= 1 and labels(rig) == []
+    p.set_norm(0.0)
+    settle(rig)
+    assert rig.view.instances == 0
+    assert labels(rig) == [f"{p.label} {p.fmt(was)} → 0 · nothing drawn"]
+    rig.reg["edit.undo"].fire()
+    frames(rig, 5)
+    assert rig.view.instances == was and rig.undo.stack == []
+    rig.reg["edit.redo"].fire()
+    frames(rig, 5)
+    assert rig.view.instances == 0
+
+
 def test_undo_writes_no_file_and_the_dirty_dot_is_honest(rig):
     """A restore writes nothing: no file in the home is made or touched.
     The dirty dots compare the live state with the loaded reference, so
