@@ -313,6 +313,44 @@ def test_field_height_is_one_gesture_over_three_params(tmp_path):
     assert (r.view.instances, r.view.zoom, r.view.bright) == pytest.approx((n0, z0, b0))
 
 
+def test_no_factory_hand_row_blanks_the_scene(tmp_path):
+    """Plan 16 WP5: the count's floor is 0 now, which draws nothing. No
+    factory preset stores a count below 1, and every factory route onto
+    `view.instances`, swept over its source's whole throw, keeps the count
+    at or above the preset's base — a hand cannot take the shape away. The
+    one such row today is party-field's right height: 9 at the bottom, 69
+    at the top (68 before the throw grew a step), 9 with the hand gone."""
+    swept = {}
+    for doc in _factory_docs():
+        assert doc["values"].get("view.instances", 1) >= 1, doc["name"]
+        rows = [d for d in doc.get("routes", []) if d["target"] == "view.instances"]
+        for d in rows:
+            assert d["source"].startswith("hand:"), (
+                doc["name"], d, "a new kind of performer on the count: sweep it here")
+            r = rig(tmp_path=tmp_path, full=True)
+            router = Router(r.reg, Bindings())
+            assert Presets(r.lib, r.reg, router).load(doc["name"]) == []
+            b = next(b for b in router.table.routes()
+                     if (b.source, b.target) == (d["source"], d["target"]))
+            src = DictSource()
+            io = HandsIO(HandSettings.from_config(), {"enabled": True}, source=src,
+                         out=NullOut(), clock=lambda src=src: src.t)
+            s, axis = _axis(b)
+            base = r.view.instances
+            assert base >= 1 and r.reg["view.instances"].base == base
+            seen = []
+            for k in range(11):                         # the whole throw, a tenth at a time
+                hold(r, router, src, io, {SIDE[s]: feats(SIDE[s], **{axis: k / 10})})
+                seen.append(r.view.instances)
+            assert min(seen) >= base, (doc["name"], d, seen)
+            hold(r, router, src, io, {})                # the hand leaves the box
+            assert r.view.instances == base
+            swept[doc["name"]] = (base, seen)
+    assert "FIELD" in swept, sorted(swept)               # the sweep found the row it is for
+    base, seen = swept["FIELD"]
+    assert (base, seen[0], seen[-1]) == (9, 9, 69)
+
+
 def test_trip_left_height_opens_the_pump_through_lfo_depth(tmp_path):
     """party-trip: LFO 1 (a quarter-note sine) pushes camera.zoom, but its
     depth is 0 until the left hand rises — the chain the plan draws."""

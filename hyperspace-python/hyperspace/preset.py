@@ -582,12 +582,16 @@ def party_trip_routes() -> list[Binding]:
 # module preset (`fx_module`), and between them every effect in
 # shaders/fx on in a party preset: ACID acid · wobble · deconverge · hue
 # cycle; MANDALA plasma · kaleidoscope · fractals · glimmer; NOITA trip
-# warp · trip colour · fractals · double vision. Plan 12's rules hold
-# (tests/test_plan12_presets.py sweeps them): six DOF, no pinch, every row
-# a push from the axis's rest (the one `position` row, MANDALA's swirl,
-# on a base of 0 as TRIP's), a still or absent hand is the scene. The
-# right hand plays the family's main effect, the left grips the object
-# (as in tumble, faces and wake) and its height adds the second effect.
+# warp · trip colour · fractals · double vision. The plan-12 rules that
+# hold here, and that tests/test_plan12_presets.py sweeps: six DOF, no
+# pinch, every row a push from the axis's rest (the one `position` row,
+# MANDALA's swirl, on a base of 0 as TRIP's), a still or absent hand is
+# the scene. One plan-12 rule does not hold and no test sweeps it: NOITA
+# puts a hand on two rate-type params (`fx.tripcolour.pulse`,
+# `fx.warp.drift`), which plan 12 §2 kept hands off and the owner has
+# since allowed (2026-10-04). The right hand plays the family's main
+# effect, the left grips the object (as in tumble, faces and wake) and
+# its height adds the second effect.
 
 def fx_module(name: str) -> dict[str, Any]:
     """A `library/fx` module preset's values — what an effect preset

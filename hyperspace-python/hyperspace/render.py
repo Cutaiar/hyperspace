@@ -610,7 +610,9 @@ class Renderer:
     ) -> None:
         """The scene pass alone, into whatever is bound: clear, faces, edges,
         points. The pattern uniforms come from `s.pattern_mod`; `t_now` pins
-        pattern time for deterministic renders."""
+        pattern time for deterministic renders. With `s.instances` at 0 it
+        clears to the ground and draws nothing; the passes after it (cover,
+        look-back, effects, ghost hands, dim) run as on any frame."""
         g = geom(s.shape)
         px, py, pd, wc = project_h(g["V"], s.ang, s.yaw, s.pitch, d4=s.depth4, w=w, h=h)
 
@@ -620,7 +622,7 @@ class Renderer:
         py = (py - h / 2) * zoom + h / 2 + s.pan[1]
 
         # synchronized instance grid, spaced pre-zoom so the camera sees a field
-        n_inst = max(1, int(s.instances))
+        n_inst = max(0, int(s.instances))   # 0: the ground alone (returns below)
         t_m = self.now(t_now)
         if n_inst > 1:
             cols = math.ceil(math.sqrt(n_inst))
@@ -691,6 +693,11 @@ class Renderer:
         self._face_verts = 0
         if s.faces:
             self._maybe_reload_patterns()
+        if n_inst == 0:
+            # no copies: the cleared ground is the scene. No vertex buffer is
+            # written and nothing is bound here, so the caller's target and
+            # the passes after this one are as on any other frame
+            return
         if s.faces and self._face_prog is not None:
             tris = face_triangles(s.shape)
             if len(tris):

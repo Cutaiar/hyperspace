@@ -848,9 +848,11 @@ def test_dream_params_declared():
     assert [p.id for p in reg.group("dream")] == DREAM_IDS
     for p in reg.group("dream"):
         assert p.persist, p.id
-    assert not reg["dream.gap"].modulatable and not reg["dream.res"].modulatable
-    assert all(reg[pid].modulatable for pid in DREAM_IDS
-               if pid not in ("dream.gap", "dream.res"))
+    # the three that rebuild things — the ring, the atlas, the net's trunk —
+    # are a scene-setter's, never a performer's (plan 16 WP5 added the layer)
+    rebuild = ("dream.gap", "dream.res", "dream.layer")
+    assert not any(reg[pid].modulatable for pid in rebuild)
+    assert all(reg[pid].modulatable for pid in DREAM_IDS if pid not in rebuild)
     assert reg["dream.res"].names == [str(v) for v in RES]
     assert reg["dream.layer"].names[1] == "conv3_3"
     # the params write the state the compositor reads
@@ -860,6 +862,48 @@ def test_dream_params_declared():
     assert d.on and d.echoes == 8 and d.res == 3
     # a fresh state stands in when no renderer is passed
     assert "dream.k" in registry()
+
+
+def test_a_route_on_the_dream_layer_is_dormant():
+    """Plan 16 WP5: `dream.layer` is not a performer's — a change makes the
+    worker load another trunk. A route onto it does nothing, quietly; a
+    scene-setter (the panel, a preset, a key or desk row) still sets it."""
+    import glfw
+
+    from hyperspace.bands import CEIL
+    from hyperspace.routing import Binding, Bindings, Router
+
+    d = DreamState()
+    reg = registry(d)
+    layer, mix = reg["dream.layer"], reg["dream.mix"]
+    assert not layer.modulatable and layer.persist
+    chain = SimpleNamespace(lanes=np.full(8, CEIL))            # every lane at the top
+    router = Router(reg, Bindings([
+        Binding("lane:0", "dream.layer", "position", 1.0),
+        Binding("lane:0", "dream.mix", "push", 0.2),           # the same source, a live row
+        Binding("key:Y", "dream.layer", "step", 1),            # a scene-setter row
+    ]))
+    before, mix0 = d.layer, mix.norm
+    for _ in range(3):
+        router.modulate(chain)
+        reg.apply()
+    assert mix.modulated and mix.eff_norm == pytest.approx(min(mix0 + 0.2, 1.0))
+    assert not layer.modulated and d.layer == before and layer.value == before
+    # the scene-setters: the panel's write, a preset's restore, a key row
+    layer.set(2)
+    assert d.layer == 2
+    snap = reg.snapshot("dream")
+    assert snap["dream.layer"] == layer.value
+    layer.set(0)
+    reg.restore(snap)
+    assert d.layer == 2
+    router.keys(SimpleNamespace(pressed=lambda key: key == glfw.KEY_Y))
+    assert d.layer == 3
+    # and it has left the ROUTING page's target list
+    from hyperspace import ui_routing
+
+    targets = {p.id for p in ui_routing._targets(SimpleNamespace(reg=reg))}
+    assert "dream.mix" in targets and not targets & {"dream.layer", "dream.gap", "dream.res"}
 
 
 def test_dream_snapshot_round_trip():

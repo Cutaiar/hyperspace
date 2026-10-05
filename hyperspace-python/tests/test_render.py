@@ -697,3 +697,143 @@ def test_a_dim_program_the_driver_refuses_leaves_the_frame_and_says_why(ctx, mon
     assert r._dim_prog is None
     _dim_frames(ctx, r, 0.5, frames=1, t0=5.0)
     assert r._dim_prog is not None and r._dim_prog is not prog
+
+
+# ---- plan 16 WP5: instances to zero — the ground alone, the rest carries on ----
+
+def _inst_view(n) -> ViewState:
+    s = ViewState(shape=10, ang=list(VIEW["ang"]), yaw=VIEW["yaw"], pitch=VIEW["pitch"],
+                  faces=True, pattern=2, points=True, lines=True)
+    s.instances = n
+    return s
+
+
+def _inst_frames(ctx, r, counts, t0=2.0, spin=0.05):
+    """One frame per entry of `counts` on a stand-in window, 30 fps apart;
+    the last as RGBA ints. Every frame has to end on the window."""
+    win = ctx.framebuffer(color_attachments=[ctx.renderbuffer((DW, DH), 4)])
+    s = _inst_view(1)
+    for k, n in enumerate(counts):
+        s.instances = n
+        s.ang = [a + spin for a in s.ang]
+        win.use()
+        ctx.viewport = (0, 0, DW, DH)
+        r.draw(s, DW, DH, t_now=t0 + k / 30)
+        assert ctx.fbo is win and ctx.viewport == (0, 0, DW, DH), f"frame {k} (count {n})"
+    out = np.frombuffer(win.read(components=4), dtype=np.uint8).reshape(DH, DW, 4)[::-1]
+    win.release()
+    assert ctx.error == "GL_NO_ERROR"
+    return out.astype(int)
+
+
+class _CountedBuffer:
+    """A vertex buffer that notes every orphan and write on its way through."""
+
+    def __init__(self, buf, log):
+        self.buf, self.log = buf, log
+
+    def orphan(self, n):
+        self.log.append(n)
+        return self.buf.orphan(n)
+
+    def write(self, data):
+        self.log.append(len(data))
+        return self.buf.write(data)
+
+
+def test_zero_instances_draws_only_the_ground(ctx):
+    """Points, lines and faces all on and the count at 0: every pixel is the
+    ground, no face vertex is left for the cover pass, no vertex buffer is
+    written, and the frame ends on the window like any other."""
+    from hyperspace.render import Renderer
+
+    r = Renderer(ctx)
+    one = _inst_frames(ctx, r, [1])
+    assert one[..., :3].max() > 100 and r._face_verts > 0        # the scene is there at 1
+    writes: list[int] = []
+    real = {name: getattr(r, name) for name in ("_fbuf", "_lbuf", "_pbuf")}
+    for name, buf in real.items():
+        setattr(r, name, _CountedBuffer(buf, writes))
+    zero = _inst_frames(ctx, r, [0])
+    assert r._face_verts == 0 and writes == []
+    assert not zero[..., :3].any() and (zero[..., 3] == 255).all()   # opaque black: the ground
+    # a see-through ground stays the ground too (overlay)
+    r.bg_alpha = 0.0
+    assert not _inst_frames(ctx, r, [0]).any()
+    r.bg_alpha = 1.0
+    # nonsense below the floor (a hand-edited preset) is zero, not a raise
+    assert not _inst_frames(ctx, r, [-3])[..., :3].any()
+    assert writes == []
+    # and the scene comes straight back: the same bits as before the zero
+    back = _inst_frames(ctx, r, [1])
+    assert len(writes) == 6 and np.array_equal(back, one)        # three buffers, orphan + write
+    for name, buf in real.items():
+        setattr(r, name, buf)
+
+
+def test_zero_instances_still_runs_the_look_back_and_the_effects(ctx):
+    """At 0 only the scene pass is empty. A generator effect still paints;
+    the look-back, with the cover pass wanted, composites and captures (the
+    echoes of the last drawn frames fade over the empty scene); the ghost
+    hands and the dim run; every frame ends on its target."""
+    from hyperspace.fx import FxState
+    from hyperspace.render import Renderer
+
+    # a generator on an empty scene: the frame is not black
+    fx = FxState()
+    fx.values["plasma"]["on"] = True
+    r = Renderer(ctx, fx=fx)
+    plasma = _inst_frames(ctx, r, [0, 0])
+    assert r.fx.active() and r._face_verts == 0
+    assert plasma[..., :3].mean() > 5 and (plasma[..., :3].max(axis=2) > 20).mean() > 0.5
+
+    # the look-back with the cover pass wanted
+    r = Renderer(ctx)
+    st = r.lookback.state
+    st.on, st.echoes, st.gap, st.tint_from, st.occlude, st.echo_mix = True, 8, 0.0, 0, 1.0, 0.8
+    r.lookback.source = None
+    assert r.lookback.wants_cover()
+    _inst_frames(ctx, r, [1, 1, 1], spin=0.2)                    # fill the ring
+    trail = [_inst_frames(ctx, r, [0], t0=2.1 + k / 30)[..., :3] for k in range(3)]
+    assert r._face_verts == 0
+    assert trail[0].max() > 20, "the echoes of the drawn frames show over the empty scene"
+    assert trail[0].sum() > trail[2].sum()                       # and fade
+    gone = _inst_frames(ctx, r, [0] * 12, t0=3.0)
+    assert gone[..., :3].max() <= 2                              # the ring has turned over: black
+
+    # the ghost hands and the dim over an empty scene
+    hands = _inst_frames(ctx, _dim_renderer(ctx, effect=False), [0, 0])
+    assert hands[..., :3].max() > 60 and (hands[..., :3].max(axis=2) > 20).mean() < 0.5
+    r = _dim_renderer(ctx, effect=False)
+    r.dim = 0.5
+    dimmed = _inst_frames(ctx, r, [0, 0])
+    assert np.abs(dimmed[..., :3] - hands[..., :3] * 0.5).max() <= 1
+
+
+def test_one_instance_is_the_frame_it_was(ctx):
+    """The floor moved and nothing else did: with an effect, the look-back
+    and the ghost hands on, any count the old clamp (`max(1, int(n))`) read
+    as one copy and that is at least 1 draws the same bits as 1, and the
+    frame at 1 goes through no tiling. Below 1 is where the frame differs."""
+    from hyperspace.render import Renderer
+
+    def frames(n):
+        r = _dim_renderer(ctx, echoes=True)
+        return _inst_frames(ctx, r, [n, n, n])
+
+    want = frames(1)
+    assert want[..., :3].max() > 100
+    for n in (1.0, 1.9, True):
+        assert max(1, int(n)) == 1
+        assert np.array_equal(frames(n), want), n
+    assert not np.array_equal(frames(2), want)
+    assert not np.array_equal(frames(0), want)                   # the old clamp drew `want` here
+    # one copy is not tiled: the vertex arrays reach the buffers as built
+    r = Renderer(ctx)
+    seen = []
+    real = Renderer._tile
+    r._tile = lambda verts, offs: (seen.append(offs.copy()), real(verts, offs))[1]
+    _inst_frames(ctx, r, [1])
+    assert len(seen) == 3 and all(o.shape == (1, 2) and not o.any() for o in seen)
+    v = np.arange(12, dtype=np.float32).reshape(4, 3)
+    assert real(v, seen[0]) is v
