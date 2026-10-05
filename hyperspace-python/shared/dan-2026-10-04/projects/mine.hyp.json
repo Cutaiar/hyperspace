@@ -1,0 +1,17 @@
+{
+ "schema": "hyperspace.project/2",
+ "name": "mine",
+ "startup": "MIGRATED",
+ "bank": [
+  "MIGRATED",
+  "BIG BLUE WAVE",
+  "EMBER ORBIT",
+  "STROBE CAGE",
+  "PLASMA HEART",
+  "WOVEN LATTICE",
+  "SPIRAL SILK",
+  "HEX ENGINE"
+ ],
+ "session": {},
+ "modules": {}
+}

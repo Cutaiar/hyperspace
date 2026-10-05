@@ -1,0 +1,30 @@
+{
+ "schema": "hyperspace.preset/1",
+ "group": "dream",
+ "name": "loud",
+ "values": {
+  "dream.on": true,
+  "dream.mix": 0.9644013047218323,
+  "dream.echo_mix": 0.6,
+  "dream.fade": 0.1096,
+  "dream.darken": 0.3,
+  "dream.contrast": 1.0,
+  "dream.occlude": 1.0,
+  "dream.hue": 0.0,
+  "dream.sat": 1.0,
+  "dream.tint": 0.0,
+  "dream.tint_from": 0,
+  "dream.tint_hue": 200.0,
+  "dream.tint_sat": 1.0,
+  "dream.echoes": 20,
+  "dream.gap": 0.05,
+  "dream.res": 2,
+  "dream.steps": 3,
+  "dream.step": 0.05038834735751152,
+  "dream.k": 0.12349514663219452,
+  "dream.layer": 5,
+  "dream.octaves": 1,
+  "dream.mask_decay": 0.9922419190406799,
+  "dream.jitter": 8.0
+ }
+}
