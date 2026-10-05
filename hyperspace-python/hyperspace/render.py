@@ -26,7 +26,17 @@ that pass is a copy and the output is bit-identical to drawing straight
 to the window. With an effect on (fx.py) the post pass lands in the
 effect chain's texture instead and the last effect writes the window.
 `draw_scene` is the scene pass alone, for anything that wants the raw
-frame. The ghost hands (ghost.py) go over the finished frame in their
+frame.
+
+Effects aimed at the faces (fx.py, plan 20) run before the scene pass, as
+a second chain over a fixed-size picture of what a face shows
+(`Renderer._face_picture`: a seed pass, the chain, mipmaps); the face
+shader then draws that picture on every face, per face or in screen
+space, in place of computing the pattern and the bitmap per fragment. So
+the faces' effects are *in* the scene texture: the echoes and the dream
+carry them, and the frame's effects run over them. With nothing aimed at
+the faces none of it runs, nothing is allocated and the frame is
+bit-identical. The ghost hands (ghost.py) go over the finished frame in their
 own pass and camera; off, the frame is untouched. Last of all the master
 dim (`Renderer.dim`, the crossfader's `output.dim`; plan 15 WP3)
 multiplies what is there — it draws nothing of its own, and at 1 it does
@@ -42,10 +52,10 @@ from pathlib import Path
 import moderngl
 import numpy as np
 
-from .fx import FxChain, FxState
+from .fx import FACES, SCREEN, FxChain, FxState
 from .geometry import face_triangles, face_uvs, geom, project_h
 from .ghost import Ghost, GhostState
-from .glsl import common, common_mtime, gl_error
+from .glsl import QUAD_VS, common, common_mtime, gl_error
 from .lookback import DreamState, Lookback
 from .tapers import clamp
 from .view import N_MOD, RED, ViewState  # re-exported for callers that had them from here
@@ -53,6 +63,11 @@ from .view import N_MOD, RED, ViewState  # re-exported for callers that had them
 PATTERNS_GLSL = Path(__file__).parent / "shaders" / "patterns.glsl"
 
 BG = (0.0, 0.0, 0.0)
+
+# the side, in texels, of the picture the faces' effects run over (plan 20
+# fork F2): square, fixed, a constant and not a param — 512 cannot be told
+# from it on a face and 2048 costs several times as much
+FACE_PIC = 1024
 
 LINE_VS = """
 #version 330
@@ -113,12 +128,9 @@ void main() {
 }
 """
 
-FACE_FS_HEAD = f"""
-#version 330
-in vec2 v_uv;
-in float v_alpha;
-in float v_fid;
-out vec4 f_color;
+# what the face program and the seed program both declare: everything the
+# pattern and the bitmap read
+FACE_UNIFORMS = f"""
 uniform float u_time;
 uniform float u_mod[{N_MOD}];  // pattern.mod.* — the routed pattern inputs
 uniform int u_mode;
@@ -130,18 +142,44 @@ uniform vec2 u_bmp_pos;      // path offset about the face centre, UV units
 uniform vec2 u_bmp_scale;    // (w, h) in face-UV units, aspect preserved
 """
 
-FACE_FS_TAIL = """
-void main() {
-    vec3 rgb = vec3(1.0);
-    float shade = 1.0;
+FACE_FS_HEAD = """
+#version 330
+in vec2 v_uv;
+in float v_alpha;
+in float v_fid;
+out vec4 f_color;
+""" + FACE_UNIFORMS + """
+uniform sampler2D u_pic;     // the faces' effects' picture (Renderer._face_picture)
+uniform int u_pic_on;        // 0 none: pattern and bitmap; 1 the picture per face; 2 in screen space
+uniform vec2 u_pic_fb;       // the scene pass's framebuffer size, px
+"""
+
+# the seed pass: a fullscreen triangle (glsl.QUAD_VS) over the picture
+SEED_FS_HEAD = """
+#version 330
+in vec2 v_uv;
+out vec4 f_color;
+// the face fragment's other inputs, as face 0 at full alpha: a patterns.glsl
+// that reads them by name compiles here as it does there
+const float v_alpha = 1.0;
+const float v_fid = 0.0;
+""" + FACE_UNIFORMS
+
+# what a face shows at its own `uv`: the pattern, then the bitmap over it.
+# One function, called by the face fragment (per fragment, with its face's
+# id) and by the seed (once per texel of the picture, as face 0)
+FACE_PX = """
+void face_px(vec2 uv, float fid, out vec3 rgb, out float shade) {
+    rgb = vec3(1.0);
+    shade = 1.0;
     if (u_mode != 0) {
-        vec4 v = pattern(u_mode, v_uv, v_fid);
+        vec4 v = pattern(u_mode, uv, fid);
         v = clamp(v, 0.0, 1.0);
         shade = mix(1.0, 2.8 * v.a, u_mix);
         rgb = mix(vec3(1.0), v.rgb, u_mix);
     }
     if (u_bmp_on != 0) {
-        vec2 q = (v_uv - 0.5 - u_bmp_pos) / u_bmp_scale + 0.5;
+        vec2 q = (uv - 0.5 - u_bmp_pos) / u_bmp_scale + 0.5;
         if (q.x >= 0.0 && q.x <= 1.0 && q.y >= 0.0 && q.y <= 1.0) {
             vec4 b = texture(u_bitmap, vec2(q.x, 1.0 - q.y));
             float ba = b.a * u_bmp_alpha;
@@ -149,11 +187,55 @@ void main() {
             shade = mix(shade, 2.8, ba);
         }
     }
+}
+"""
+
+FACE_FS_TAIL = FACE_PX + """
+void main() {
+    vec3 rgb;
+    float shade;
+    if (u_pic_on != 0) {
+        // the picture the faces' effects made, premultiplied by its
+        // intensity: per face at the face's own uv (it turns with the
+        // shape); in screen space at the fragment's place in the window,
+        // the square picture centred and scaled to cover the longer side
+        // (the faces are windows onto it)
+        vec2 q = v_uv;
+        if (u_pic_on == 2)
+            q = (gl_FragCoord.xy - 0.5 * u_pic_fb) / max(u_pic_fb.x, u_pic_fb.y) + 0.5;
+        vec4 t = texture(u_pic, q);
+        shade = 2.8 * t.a;
+        rgb = t.a > 1e-4 ? t.rgb / t.a : vec3(0.0);
+    } else {
+        face_px(v_uv, v_fid, rgb, shade);
+    }
     float a = v_alpha * shade;
     if (a <= 0.0) discard;
     f_color = vec4(rgb, a);
 }
 """
+
+# the seed: what face 0 shows, written premultiplied with alpha as its
+# intensity — 2.8 is the face shader's full intensity, so a plain FLAT
+# face (shade 1) is a mid-grey field a generator can light and a multiply
+# can darken
+SEED_FS_TAIL = FACE_PX + """
+void main() {
+    vec3 rgb;
+    float shade;
+    face_px(v_uv, v_fid, rgb, shade);
+    float s = clamp(shade / 2.8, 0.0, 1.0);
+    f_color = vec4(rgb * s, s);
+}
+"""
+
+
+def _face_fragment(head: str, patterns: str, tail: str) -> str:
+    """A face-side fragment shader: the shared helpers first (source
+    string 1), then patterns.glsl (string 2) — a compile error names the
+    file and its own line."""
+    return head + "#line 1 1\n" + common() + "\n#line 1 2\n" + patterns + tail
+
 
 # the faces' coverage mask for the look-back's occlusion: the same
 # geometry as the face pass, written solid — a face covers the wake behind
@@ -293,6 +375,38 @@ class CoverTarget:
         self.size = (0, 0)
 
 
+class FaceTarget:
+    """The picture the faces show while an effect is aimed at them (plan
+    20): one RGBA8 texture, FACE_PIC square, premultiplied with alpha as
+    the face's intensity, mipmapped — per face it lands on a face a
+    hundred or so pixels across. Made on first use, never resized."""
+
+    def __init__(self, ctx: moderngl.Context):
+        self.ctx = ctx
+        self.tex: moderngl.Texture | None = None
+        self.fbo: moderngl.Framebuffer | None = None
+
+    def ensure(self) -> None:
+        if self.tex is not None:
+            return
+        tex = self.ctx.texture((FACE_PIC, FACE_PIC), 4)
+        try:
+            tex.repeat_x = tex.repeat_y = False
+            tex.build_mipmaps()
+            tex.filter = (moderngl.LINEAR_MIPMAP_LINEAR, moderngl.LINEAR)
+            fbo = self.ctx.framebuffer(color_attachments=[tex])
+        except Exception:
+            tex.release()
+            raise
+        self.tex, self.fbo = tex, fbo
+
+    def release(self) -> None:
+        for res in (self.fbo, self.tex):
+            if res is not None:
+                res.release()
+        self.fbo = self.tex = None
+
+
 class Renderer:
     def __init__(self, ctx: moderngl.Context, dream: DreamState | None = None,
                  fx: FxState | None = None, ghost: GhostState | None = None):
@@ -313,6 +427,16 @@ class Renderer:
         self.scene = SceneTarget(ctx)
         self.lookback = Lookback(ctx, dream)
         self.fx = FxChain(ctx, fx)      # the effect stack after the post pass
+        # the effects aimed at the faces: a second chain over the same
+        # state, borrowing the first's programs, and the picture it ends
+        # on. Nothing is allocated until an effect is aimed at the faces.
+        # face_error says why a face pass could not run (the frame is then
+        # drawn as with no face effect); _pic is the picture _draw_frame
+        # hands the one scene pass it wraps
+        self.face_fx = FxChain(ctx, self.fx.state, target=FACES, programs=self.fx)
+        self.face_pic = FaceTarget(ctx)
+        self.face_error = ""
+        self._pic: moderngl.Texture | None = None
         self.ghost = Ghost(ctx, ghost)  # the hands, last, over everything (ghost.py)
         self.cover = CoverTarget(ctx)
         self._face_verts = 0           # face vertices in _fbuf from the last scene pass
@@ -329,6 +453,8 @@ class Renderer:
         self.pattern_error = ""
         self._face_prog: moderngl.Program | None = None
         self._fvao: moderngl.VertexArray | None = None
+        self._seed_prog: moderngl.Program | None = None    # the face picture's first pass
+        self._seed_vao: moderngl.VertexArray | None = None
         self._patterns_mtime = (0.0, 0.0)   # (patterns.glsl, _common.glsl)
         self._reload_check = 0
         self._t0 = time.perf_counter()   # the one wall clock: patterns, instances, effects
@@ -377,6 +503,18 @@ class Renderer:
         for res in olds:
             res.release()
         self._build_face_program()
+        # the faces' chain and its picture are made again from the modules
+        # as they are now (app.py's reloader does not re-class them); they
+        # hold a copy program and three textures, rebuilt on next use. A
+        # renderer from before the face target existed gets them here
+        old_fx, old_pic = getattr(self, "face_fx", None), getattr(self, "face_pic", None)
+        self.face_fx = FxChain(self.ctx, self.fx.state, target=FACES, programs=self.fx)
+        self.face_pic = FaceTarget(self.ctx)
+        self.face_error = ""
+        self._pic = None
+        for res in (old_fx, old_pic):
+            if res is not None:
+                res.release()
         self.ghost.on_reload()
         # the dim's program: dropped, and built again from this module's
         # current source the next frame that dims (an edit may also have
@@ -410,28 +548,38 @@ class Renderer:
             self.bitmap_error = str(e).strip().splitlines()[-1][:160]
 
     def _build_face_program(self) -> None:
+        """The face program and the seed program (the face picture's first
+        pass), from one read of patterns.glsl: replaced together or not at
+        all, so the picture is always what the faces would have drawn."""
+        ctx = self.ctx
+        made: list = []          # released again if a later step raises
         try:
             src = PATTERNS_GLSL.read_text()
             self._patterns_mtime = self._shader_mtime()
-            # the shared helpers first (source string 1), then the file
-            # (string 2): an error names the file and its own line
-            prog = self.ctx.program(
-                vertex_shader=FACE_VS,
-                fragment_shader=(FACE_FS_HEAD + "#line 1 1\n" + common() + "\n#line 1 2\n"
-                                 + src + FACE_FS_TAIL),
+            prog = ctx.program(vertex_shader=FACE_VS,
+                               fragment_shader=_face_fragment(FACE_FS_HEAD, src, FACE_FS_TAIL))
+            made.append(prog)
+            seed = ctx.program(vertex_shader=QUAD_VS,
+                               fragment_shader=_face_fragment(SEED_FS_HEAD, src, SEED_FS_TAIL))
+            made.append(seed)
+            fvao = ctx.vertex_array(
+                prog,
+                [(self._fbuf, "2f 1f 2f 1f 1f", "in_pos", "in_wc", "in_uv", "in_alpha", "in_fid")],
             )
+            made.append(fvao)
+            svao = ctx.vertex_array(seed, [])
         except Exception as e:  # noqa: BLE001 — a bad edit must not kill the app
+            for res in made:
+                res.release()
             self.pattern_error = gl_error(e, {1: "_common.glsl:", 2: "patterns.glsl:"})
             return
-        if self._face_prog is not None:
-            self._face_prog.release()
-        if self._fvao is not None:
-            self._fvao.release()
-        self._face_prog = prog
-        self._fvao = self.ctx.vertex_array(
-            prog,
-            [(self._fbuf, "2f 1f 2f 1f 1f", "in_pos", "in_wc", "in_uv", "in_alpha", "in_fid")],
-        )
+        # getattr: a renderer from before the seed existed has neither
+        for res in (self._fvao, getattr(self, "_seed_vao", None), self._face_prog,
+                    getattr(self, "_seed_prog", None)):
+            if res is not None:
+                res.release()
+        self._face_prog, self._fvao, self._seed_prog, self._seed_vao = prog, fvao, seed, svao
+        prog["u_pic"].value = 1          # its own unit: the bitmap has 0
         self.pattern_error = ""
 
     def now(self, t_now: float | None = None) -> float:
@@ -495,16 +643,25 @@ class Renderer:
 
     def _draw_frame(self, s: ViewState, w: int, h: int, dpr: float, t: float,
                     target: moderngl.Framebuffer, vp: tuple[int, int, int, int]) -> None:
-        """draw()'s body: scene, cover, pull, composite, capture, effects,
-        the ghost hands over the finished frame, then the master dim."""
+        """draw()'s body: the face picture (only while an effect is aimed
+        at the faces), scene, cover, pull, composite, capture, effects, the
+        ghost hands over the finished frame, then the master dim."""
         ctx = self.ctx
         vx, vy, vw, vh = vp
         self.scene.ensure((max(vw, 1), max(vh, 1)), _samples_of(ctx, target))
         for unit in range(4):
             self._blank.use(location=unit)
-        self.scene.draw_fbo.use()
-        ctx.viewport = (0, 0, max(vw, 1), max(vh, 1))
-        self.draw_scene(s, w, h, dpr, t)
+        # the faces' effects first, into their own picture: finished before
+        # the scene pass begins and not bound again this frame. The scene
+        # pass below shows it, so everything after — the echoes, the dream,
+        # the frame's effects — sees the faces' effects as part of the scene
+        self._pic = self._face_picture(s, t)
+        try:
+            self.scene.draw_fbo.use()
+            ctx.viewport = (0, 0, max(vw, 1), max(vh, 1))
+            self.draw_scene(s, w, h, dpr, t)
+        finally:
+            self._pic = None         # handed to that one scene pass only
         self.scene.resolve()
         lb = self.lookback
         cover = self._draw_cover(w, h) if lb.wants_cover() else None
@@ -536,6 +693,79 @@ class Renderer:
         dim = getattr(self, "dim", 1.0)
         if dim < 1.0:
             self.dim_pass(target, vp, dim, opaque=fx.opaque)
+
+    def _face_picture(self, s: ViewState, t: float) -> moderngl.Texture | None:
+        """The picture the faces show this frame, or None for "as ever":
+        the seed (what face 0 shows: pattern and bitmap, premultiplied by
+        its intensity) into the faces' chain, every effect aimed at the
+        faces over it, the last one into the picture's texture, then its
+        mipmaps.
+
+        None, with nothing run and nothing allocated, unless an effect
+        aimed at the faces is running, the faces are on, there is a copy to
+        draw and the face program built. A pass that raises is caught
+        here: `face_error` says why, the frame is drawn as with no face
+        effect, and the caller binds the scene's framebuffer next whatever
+        this left bound."""
+        # getattr: a renderer from before a hot reload has no face chain
+        chain = getattr(self, "face_fx", None)
+        pic = getattr(self, "face_pic", None)
+        seed, vao = getattr(self, "_seed_prog", None), getattr(self, "_seed_vao", None)
+        if (chain is None or pic is None or seed is None or vao is None
+                or self._face_prog is None or not s.faces or int(s.instances) <= 0
+                or not chain.active()):
+            self.face_error = ""     # no pass asked for: nothing is wrong with it
+            return None
+        ctx = self.ctx
+        try:
+            first = chain.begin((FACE_PIC, FACE_PIC))
+            pic.ensure()
+            first.use()
+            ctx.viewport = (0, 0, FACE_PIC, FACE_PIC)
+            ctx.disable(moderngl.BLEND)
+            self._face_uniforms(seed, s, t)
+            vao.render(moderngl.TRIANGLES, vertices=3)
+            chain.run(pic.fbo, t)
+            pic.tex.build_mipmaps()
+        except Exception as e:  # noqa: BLE001 — the faces' effects must not take the frame down
+            self.face_error = f"faces: {type(e).__name__}: {e}"[:160]
+            return None
+        finally:
+            ctx.enable(moderngl.BLEND)
+        self.face_error = ""
+        return pic.tex
+
+    def _face_uniforms(self, p: moderngl.Program, s: ViewState, t: float) -> None:
+        """What the pattern and the bitmap read, on `p` — the face program
+        or the seed — with the bitmap's texture on unit 0."""
+        p["u_time"].value = t
+        p["u_mode"].value = int(s.pattern)
+        p["u_mix"].value = float(s.pattern_mix)
+        # the driver trims the array to the highest index a pattern
+        # reads; upload exactly that many
+        u_mod = p["u_mod"]
+        u_mod.value = tuple(float(v) for v in s.pattern_mod[: u_mod.array_length])
+        self._sync_bitmap(s.bmp_file)
+        bmp_on = self._bmp_tex is not None and s.bmp_alpha > 0.0
+        p["u_bmp_on"].value = int(bmp_on)
+        if bmp_on:
+            self._bmp_tex.use(location=0)
+            p["u_bitmap"].value = 0
+            tw, th = self._bmp_tex.size
+            p["u_bmp_scale"].value = (s.bmp_scale, s.bmp_scale * th / tw)
+            p["u_bmp_alpha"].value = float(s.bmp_alpha)
+            # the bitmap's own path about the face centre — independent
+            # of the instance-grid motion
+            ph = t * s.bmp_rate
+            if s.bmp_mode == 1:      # orbit
+                ox, oy = math.cos(ph), math.sin(ph)
+            elif s.bmp_mode == 2:    # figure-8
+                ox, oy = math.sin(ph), math.sin(2.0 * ph) * 0.5
+            elif s.bmp_mode == 3:    # sway
+                ox, oy = math.sin(ph), 0.0
+            else:                    # still
+                ox = oy = 0.0
+            p["u_bmp_pos"].value = (s.bmp_amp * ox, s.bmp_amp * oy)
 
     def dim_pass(self, target: moderngl.Framebuffer, vp: tuple[int, int, int, int],
                  factor: float, opaque: bool = True) -> bool:
@@ -612,7 +842,10 @@ class Renderer:
         points. The pattern uniforms come from `s.pattern_mod`; `t_now` pins
         pattern time for deterministic renders. With `s.instances` at 0 it
         clears to the ground and draws nothing; the passes after it (cover,
-        look-back, effects, ghost hands, dim) run as on any frame."""
+        look-back, effects, ghost hands, dim) run as on any frame. Called on
+        its own it shows no face picture, as it shows no frame effect: the
+        faces' effects are `draw`'s (`_draw_frame` hands the picture over
+        for the one scene pass it wraps)."""
         g = geom(s.shape)
         px, py, pd, wc = project_h(g["V"], s.ang, s.yaw, s.pitch, d4=s.depth4, w=w, h=h)
 
@@ -723,34 +956,18 @@ class Renderer:
                 self._fbuf.write(fverts.tobytes())
                 p = self._face_prog
                 p["u_size"].value = (float(w), float(h))
-                p["u_time"].value = t_m
-                p["u_mode"].value = int(s.pattern)
-                p["u_mix"].value = float(s.pattern_mix)
-                # the driver trims the array to the highest index a pattern
-                # reads; upload exactly that many
-                u_mod = p["u_mod"]
-                u_mod.value = tuple(float(v) for v in s.pattern_mod[: u_mod.array_length])
-                self._sync_bitmap(s.bmp_file)
-                bmp_on = self._bmp_tex is not None and s.bmp_alpha > 0.0
-                p["u_bmp_on"].value = int(bmp_on)
-                if bmp_on:
-                    self._bmp_tex.use(location=0)
-                    p["u_bitmap"].value = 0
-                    tw, th = self._bmp_tex.size
-                    p["u_bmp_scale"].value = (s.bmp_scale, s.bmp_scale * th / tw)
-                    p["u_bmp_alpha"].value = float(s.bmp_alpha)
-                    # the bitmap's own path about the face centre — independent
-                    # of the instance-grid motion
-                    ph = t_m * s.bmp_rate
-                    if s.bmp_mode == 1:      # orbit
-                        ox, oy = math.cos(ph), math.sin(ph)
-                    elif s.bmp_mode == 2:    # figure-8
-                        ox, oy = math.sin(ph), math.sin(2.0 * ph) * 0.5
-                    elif s.bmp_mode == 3:    # sway
-                        ox, oy = math.sin(ph), 0.0
-                    else:                    # still
-                        ox = oy = 0.0
-                    p["u_bmp_pos"].value = (s.bmp_amp * ox, s.bmp_amp * oy)
+                self._face_uniforms(p, s, t_m)
+                # the faces' effects' picture, when _draw_frame made one for
+                # this pass: on its own unit, per face or in screen space.
+                # Set every frame — a program keeps its uniforms
+                pic = getattr(self, "_pic", None)
+                if pic is None:
+                    p["u_pic_on"].value = 0
+                else:
+                    pic.use(location=1)
+                    screen = int(getattr(self.fx.state, "face_map", 0)) == SCREEN
+                    p["u_pic_on"].value = 2 if screen else 1
+                    p["u_pic_fb"].value = tuple(float(x) for x in self.scene.size)
                 self._fvao.render(moderngl.TRIANGLES, vertices=len(fverts))
                 self._face_verts = len(fverts)
 
