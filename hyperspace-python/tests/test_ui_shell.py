@@ -1105,15 +1105,17 @@ def test_a_rows_label_opens_its_params_menu(rig, monkeypatch):
     labels: dict[str, tuple] = {}
     real = Panel._ctx_label
 
-    def ctx_label(self, a, key=""):
+    def ctx_label(self, a):
         lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
         labels[a.id] = (lo.x, lo.y, hi.x, hi.y)
-        return real(self, a, key)
+        return real(self, a)
     monkeypatch.setattr(Panel, "_ctx_label", ctx_label)
     opened, items = _popups(monkeypatch)
     for page, pid in (("camera", "camera.zoom"),      # a `_row`
                       ("view", "view.bright"),        # a `_fader`
-                      ("audio", "master.gain")):      # a fader whose row is the session's
+                      ("audio", "master.gain"),       # a fader whose row is the session's
+                      ("lfo", "tempo.bpm"),           # a `half`, in a table cell
+                      ("lookback", "dream.tint_hue")):
         labels.clear()
         frame(panel, page)
         frame(panel)
@@ -1132,10 +1134,6 @@ def test_a_rows_label_opens_its_params_menu(rig, monkeypatch):
         opened.clear()
         _click(panel, rect, button=0)
         assert opened == [] and reg[pid].base == before
-    # every label of a page is its own param's: `half` cells too
-    labels.clear()
-    frame(panel, "lookback")
-    assert labels and all(pid in reg for pid in labels)
 
 
 def test_every_meter_has_the_band_select_menu(rig, monkeypatch):
@@ -1171,6 +1169,13 @@ def test_every_meter_has_the_band_select_menu(rig, monkeypatch):
     assert opened and set(opened) == {"##ctx.band.select.3"}
     assert "Learn desk" in items
     assert reg["band.select"].base == sel             # a right-click selects nothing
+    # armed from a meter, the learn's red frame is on the meters too
+    framed: list[str] = []
+    frame_ = Panel._learn_frame
+    monkeypatch.setattr(Panel, "_learn_frame",
+                        lambda self, p: (framed.append(p.id), frame_(self, p))[1])
+    frame(panel)
+    assert framed.count("band.select") >= n
     _click(panel, (2, 2, 4, 4))
     _click(panel, rects[".3"])                        # the left click still selects
     assert reg["band.select"].base == 3

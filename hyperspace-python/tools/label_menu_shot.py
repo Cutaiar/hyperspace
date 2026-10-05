@@ -13,8 +13,8 @@ picture (the OS draws it); a small red cross is drawn where it was.
 
   uv run python tools/label_menu_shot.py     # → docs/plans/assets/17-learn-and-the-desk/menu-on-label.png
 
-`Hidden` (the hidden window, frames, fed mouse events, the read-back) is
-what `tools/desk_shots.py` draws with too.
+`Hidden` is the hidden window, its frames, the fed mouse events and the
+read-back, for any shot that needs a real click.
 """
 
 # ruff: noqa: I001 — undo_demo is imported first, on purpose: it sets
@@ -127,10 +127,10 @@ def main() -> None:
     opened: list[str] = []
     real_label, real_ctx = Panel._ctx_label, imgui.begin_popup_context_item
 
-    def ctx_label(self, a, key=""):
+    def ctx_label(self, a):
         lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
         where[a.id] = (lo.x + 18, (lo.y + hi.y) / 2)      # on the word, near its start
-        return real_label(self, a, key)
+        return real_label(self, a)
 
     def begin_ctx(str_id=None, *a, **k):
         hit = real_ctx(str_id, *a, **k)
@@ -139,19 +139,22 @@ def main() -> None:
         return hit
 
     Panel._ctx_label, imgui.begin_popup_context_item = ctx_label, begin_ctx
-    h.draw(8)
-    if pid not in where:
-        raise SystemExit(f"{pid} has no label on the {page} page")
-    h.cross = True
-    spot = where[pid]
-    h.click(*spot, button=1)                  # a right-click on the word ZOOM
-    h.mouse = spot                            # the cross stays where the click was
-    h.draw(6)
-    if f"##ctx.{pid}" not in opened:
-        raise SystemExit("the right-click on the label opened no menu")
-    out = h.save("menu-on-label.png")
-    print(f"wrote {out}  (right-click fed at {spot}; popup open: ##ctx.{pid})")
-    h.close()
+    try:
+        h.draw(8)
+        if pid not in where:
+            raise SystemExit(f"{pid} has no label on the {page} page")
+        h.cross = True
+        spot = where[pid]
+        h.click(*spot, button=1)                  # a right-click on the word ZOOM
+        h.mouse = spot                            # the cross stays where the click was
+        h.draw(6)
+        if f"##ctx.{pid}" not in opened:
+            raise SystemExit("the right-click on the label opened no menu")
+        out = h.save("menu-on-label.png")
+        print(f"wrote {out}  (right-click fed at {spot}; popup open: ##ctx.{pid})")
+    finally:
+        Panel._ctx_label, imgui.begin_popup_context_item = real_label, real_ctx
+        h.close()
 
 
 if __name__ == "__main__":

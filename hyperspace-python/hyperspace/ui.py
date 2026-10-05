@@ -476,22 +476,21 @@ class Panel:
         """The menu's popup id: one per drawn param (and `key`)."""
         return f"##ctx.{a.id}{key}"
 
-    def _ctx_label(self, a: Param, key: str = "") -> None:
+    def _ctx_label(self, a: Param) -> None:
         """The last item — a row's label — opens the param's menu too
         (plan 17 WP3): the label is where the name is, and where a hand
         lands when it means "this control". Only the opening: the popup
         itself is drawn by the `_ctx` of the widget beside it, so the two
         calls must sit in one id scope (the same window, the same
         `push_id`) to name the same popup."""
-        imgui.open_popup_on_item_click(self._ctx_id(a, key), imgui.PopupFlags_.mouse_button_right)
+        imgui.open_popup_on_item_click(self._ctx_id(a), imgui.PopupFlags_.mouse_button_right)
 
     @staticmethod
     def _desk_target(a: Param) -> bool:
-        """Can a desk control be put on this param? Not on a file path (a
-        knob cannot set one) and not on SHIFT's own param — what
-        `ui_routing._desk_targets` leaves out. The rule "Learn desk" is
-        offered by (plan 17 WP3: Learn only where it can act)."""
-        return a.kind is not Kind.TEXT and a.id != ui_routing.SHIFT_PARAM
+        """Can a desk control be put on this param? The rule "Learn desk"
+        is offered by (plan 17 WP3: Learn only where it can act) — the one
+        ROUTING's desk rows offer their targets by (`ui_routing.desk_target`)."""
+        return ui_routing.desk_target(a)
 
     def _table(self):
         """The live binding table — the router's, else the learn object's —
@@ -1111,6 +1110,7 @@ class Panel:
             # key — the key the rail's pills use — so no two popups share
             # an id with each other or with the band combo's on a page
             self._ctx(self.reg["band.select"], f".{i}")
+            self._learn_frame(self.reg["band.select"])   # armed from a meter: framed on it
         # band tags, centred under their bars, in the micro face
         imgui.push_font(_FONTS["micro"], FONT_MICRO)
         for i, name in enumerate(a.band_names):
