@@ -1094,3 +1094,47 @@ def test_hands_is_the_old_geometry_byte_for_byte(ctx):
     depth.release()
     new.release()
     old.release()
+
+
+def test_the_guide_on_the_hand_reads_the_same_in_every_style_but_hands(ctx):
+    """Review of PR #122: an ON HAND gauge sits at the palm, where PALMS,
+    JOINTS, CAGE and MARIONETTE put a solid far bigger than a guide ball.
+    In those styles the guide is drawn over the style, never hidden by it:
+    the readout layer is the same bytes in all four (the guide alone, no
+    style in front of it), and in the single layer the guide's solid
+    pixels are those same pixels, with the style still drawn round them.
+    HANDS keeps its gauge partly behind the palm (byte for byte, above)."""
+    io = HandsIO(HandSettings.from_config({}), {}, source=NS(latest=lambda: (0, 0.0, {})),
+                 out=NS(send=print))
+    for st in io.state:
+        st.follow.y = 0.5                                     # the balls at the palm
+    src = NS(skeleton=both(), cfg={"mode": "desktop"}, axes=io.axes, state=io.state,
+             gates=io.gates)
+
+    def layer(style, guide, readout):
+        gh = Renderer(ctx).ghost
+        gh.state.on, gh.state.alpha, gh.state.guide, gh.state.style = True, 1.0, guide, style
+        gh.source = src
+        for k in range(4):
+            assert gh.layer((W, H), 1.0 + k / 30, readout=readout)
+        rd = lambda t: np.frombuffer(t.read(), dtype=np.uint8).reshape(H, W, 4).astype(int)
+        return rd(gh.tex), (rd(gh.readout) if gh.readout is not None else None)
+
+    ros = {}
+    for style in range(1, len(G.STYLES)):
+        _, ro = layer(style, 2, True)
+        ros[style] = ro
+        single, _ = layer(style, 2, False)
+        bare, _ = layer(style, 0, False)
+        solid = ro[..., 3] == 255
+        assert solid.sum() > 150, G.STYLES[style]
+        assert np.abs(single[solid] - ro[solid]).max() <= 1, G.STYLES[style]
+        # the style is still there round the guide
+        rest = (bare[..., 3] > 0) & (ro[..., 3] == 0)
+        assert rest.sum() > 200 and np.array_equal(single[rest], bare[rest]), G.STYLES[style]
+    first = ros[1]
+    for style, ro in ros.items():
+        assert np.array_equal(ro, first), G.STYLES[style]
+    # HANDS: the palm still hides part of its gauge
+    _, hands_ro = layer(0, 2, True)
+    assert (hands_ro[..., 3] == 255).sum() < (first[..., 3] == 255).sum()

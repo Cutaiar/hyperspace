@@ -1026,6 +1026,18 @@ def style_parts(i) -> object:
     return PARTS[k] if 0 <= k < len(PARTS) else hands_parts
 
 
+def _clear_depth(ctx: moderngl.Context, fbo: moderngl.Framebuffer) -> None:
+    """Clear `fbo`'s depth and leave its colour: the clear with the colour
+    masked (moderngl applies a framebuffer's mask when it is bound)."""
+    fbo.color_mask = (False, False, False, False)
+    try:
+        fbo.use()
+        ctx.clear(depth=1.0)
+    finally:
+        fbo.color_mask = (True, True, True, True)
+        fbo.use()
+
+
 class Geometry:
     """Draws poses as a style's parts — spheres, tubes and triangles,
     built per frame (a few dozen instances) — into whatever is bound, with
@@ -1320,7 +1332,18 @@ class Ghost:
             ctx.clear(0.0, 0.0, 0.0, 0.0, depth=1.0)
             ctx.disable(moderngl.BLEND)
             ctx.enable(moderngl.DEPTH_TEST)
-            self.geometry.draw(poses, view_proj, eye, parts, None if split else guides)
+            # HANDS draws the guide in the same depth-tested pass, as ever (an
+            # ON HAND gauge partly behind the palm). Any other style puts a
+            # solid at the palm far bigger than a guide ball, so its guide
+            # goes over it: the style first, then the depth cleared, then
+            # the guide — the guide reads the same in every style
+            over = parts is not hands_parts
+            self.geometry.draw(poses, view_proj, eye, parts,
+                               None if split or over else guides)
+            if over and not split and any(g[0] or g[1] for g in guides):
+                _clear_depth(ctx, draw_fbo)
+                ctx.viewport = (0, 0, *self.size)
+                self.geometry.draw(poses, view_proj, eye, None, guides)
             ctx.disable(moderngl.DEPTH_TEST)
             if not split and any(p.tethers for p in poses):
                 self._draw_tethers(poses, view_proj)
@@ -1333,14 +1356,16 @@ class Ghost:
                 ctx.clear(0.0, 0.0, 0.0, 0.0, depth=1.0)
                 ctx.enable(moderngl.DEPTH_TEST)
                 # the hands into the depth buffer only: moderngl applies a
-                # framebuffer's colour mask when it is bound, hence the use()s
-                ro.color_mask = (False, False, False, False)
-                try:
-                    ro.use()
-                    self.geometry.draw(poses, view_proj, eye, parts)
-                finally:
-                    ro.color_mask = (True, True, True, True)
-                    ro.use()
+                # framebuffer's colour mask when it is bound, hence the use()s.
+                # Only for HANDS: any other style's guide is drawn over it
+                if not over:
+                    ro.color_mask = (False, False, False, False)
+                    try:
+                        ro.use()
+                        self.geometry.draw(poses, view_proj, eye, parts)
+                    finally:
+                        ro.color_mask = (True, True, True, True)
+                        ro.use()
                 ctx.viewport = (0, 0, w, h)
                 self.geometry.draw(poses, view_proj, eye, None, guides)
                 ctx.disable(moderngl.DEPTH_TEST)
