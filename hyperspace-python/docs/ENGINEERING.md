@@ -14,12 +14,16 @@ below was read against its module. Where plan 09 changed behaviour the
 paragraph says so. The HTML-era sections (browser sandbox, deploy) are
 gone; `hyperspace-web/hyperspace.html` is frozen and matters here only as
 the oracle the golden traces were recorded from. Revised for plan 13
-(presets, the session, the two-layer desk) on `plan-13-integration`.
+(presets, the session, the two-layer desk) on `plan-13-integration`,
+and for plan 19 (a bank of twenty-four, rows 4–5 as the bank, the knobs
+re-cut, hide / rename / the trash, the dot, the home in git) on
+`plan-19-integration`.
 
 **Run it:** `uv sync`, `uv run pytest` (1178 tests with plan 16; 1276
 on `plan-18-integration`, which holds plans 17 and 18; 1355 and 1
-skipped on `plan-20-integration`, plans 15–18 and 20; about a minute
-and a half), `uv run hyperspace`. `?` in the app shows the controls cheat
+skipped on `plan-20-integration`, plans 15–18 and 20; 1442 and 1
+skipped on `plan-19-integration`, plans 15–20; about two minutes),
+`uv run hyperspace`. `?` in the app shows the controls cheat
 sheet, which is off at launch since plan 16.
 
 ---
@@ -625,7 +629,9 @@ SYSTEM page shows each adapter's state — MIDI, the bridge (port,
 encoding, messages sent, or why it is off) — beside the hot-reload and
 config notices. The optional adapters and the gamepad are config gates
 (`[midi]`, `[gamepad]` and `[dream]` on by default — torch is an ordinary
-dependency since decision 23, §2.3 — `[bridge]` and `[hands]` off); `hyperspace/config.py` documents every key. The rig's placement comes from `[output]` in `config.toml`
+dependency since decision 23, §2.3 — `[bridge]` and `[hands]` off; since
+plan 19 `[library] git`, off, the home in git — §5, and `close_all`
+closes its committer last, giving a commit in flight up to 2 s); `hyperspace/config.py` documents every key. The rig's placement comes from `[output]` in `config.toml`
 (`config.py`); a `[overlay]` section is the same thing under its pre-split
 name, still read and merged under `[output]`, with a note on stderr asking
 for the rename. A `config.toml` that will not parse keeps the defaults and
@@ -1061,12 +1067,26 @@ unreadable at a party.
   performer, a desk row on an invariant control) is noted on the panel
   and ignored. A module label is recorded, never chain-loaded (D3). The
   **project** (`hyperspace.project/2`) is the session's values, a
-  `startup` preset loaded on launch (D11), and a **bank** of eight preset
-  names: F1–F8 and the APC40's clip row 1 load slot k (an empty slot or
-  a dangling name loads nothing and says so), ⇧F1–F8 save the live state
-  as that slot's preset into the user folder (`PRESET <n>` for an empty
-  one), QUANT and pad B step to the next filled slot (`preset.next`). The
-  PRESETS page's preset strip lists, loads, saves and deletes them;
+  `startup` preset loaded on launch (D11), and a **bank** of
+  **twenty-four** preset names (plan 19 WP1; `library.SLOTS`): F1–F8 and
+  the APC40's clip row 1 load slots 1–8 and clip rows 4–5 slots 9–24
+  (`preset.select`; an empty slot or a dangling name loads nothing and
+  says so — "slot 13: an empty slot", "F6: no preset 'TRIP 3'"), ⇧F1–F8
+  save the live state as that slot's preset into the user folder
+  (`PRESET <n>` for an empty one; ⇧click on a far slot's button the
+  same), QUANT and pad B step to the next filled slot (`preset.next`).
+  Only the first eight (`F_KEYS`) have keys and triggers. A show file
+  holds the bank only as far as its last filled slot and never fewer
+  than eight entries (`bank_doc`), so a show that uses only F1–F8 is
+  written as it always was; **a load never rewrites a show**, and the
+  first write that puts a name past slot 8 keeps the eight-slot file
+  first as `<show>.hyp.json.bak-v2-bank8` — if that copy cannot be made
+  nothing is written, the slot is put back and the footer says why. The
+  schema stays `hyperspace.project/2`: a build from before plan 19 reads
+  slots 1–8 and drops the far slots' names the next time it writes that
+  show. The factory party show has TRACER on slot 9 (`house` has no far
+  slot), so a fresh home's save-as lands on slot 10. The PRESETS page's
+  preset strip lists, loads, saves and deletes them;
   module presets keep their own strips and replace only their group.
   **Home** (plan 15 WP2, decision 27) is the `startup` preset again: the
   Home key (fn ← on a laptop) and the APC40's OVERDUB fire `preset.home`
@@ -1084,7 +1104,8 @@ unreadable at a party.
   bank, so it never overwrites a file and never hides a factory preset.
   The new preset becomes the loaded one with a clean dot and goes into
   the next empty bank slot, the show written at once: "saved TRIP 2 →
-  F6". A full bank still saves, to the preset list, and warns "saved
+  F6", or past F8 a far slot, "saved TRIP 2 → slot 10", its pad on clip
+  row 4 or 5 blinking. A full bank (twenty-four) still saves, to the preset list, and warns "saved
   TRIP 3 — the bank is full: it is in the preset list" (no slot is lit;
   the warning goes when the bank next changes). If the preset saves but
   the show's file cannot be written, the slot is put back and the
@@ -1127,11 +1148,22 @@ unreadable at a party.
   show opens with is also the one Home and OVERDUB load, and the tooltip
   says so) — labelled, and written into the show the moment it is
   picked (`ui_presets.set_starts_on` → `Project.write`; a factory show's
-  write makes your copy); the eight **preset buttons**, two a row, each
-  its F-key and its preset's name (elided to the button), the live one
-  lit, click loads, ⇧click saves; the **preset strip** (the loaded
-  preset, its dot, save / as… / reset — save on a factory preset writes
-  your copy); and **more**, folded, a module-preset strip per group; the
+  write makes your copy); the **bank** (plan 19 WP1, layout B): F1–F8
+  as eight **preset buttons**, two a row, each
+  its F-key and its preset's name (elided to the button), then slots
+  9–24 as sixteen smaller buttons four a row, 3 px apart, each its
+  number and its preset's name ("9 TRACER", "10 —"), their hover saying
+  which pad of the desk they are; the live one lit, click loads,
+  ⇧click saves, right-click "put preset here…" / "clear slot"; a slot
+  whose preset has no file is drawn in the warning ink with a hover
+  saying it may be in the trash; the **preset strip** (the loaded
+  preset, its dot, save / as… — "save copy" on a factory preset, which
+  writes your copy; no reset since plan 19 WP5, where it did nothing);
+  and **more**, folded, a module-preset strip per group (save / as… /
+  reset); the
+  twenty-four fit with "more" open and a status line, 12 px to spare —
+  a warning line on top of the status line scrolls the page by 11 px
+  while "more" is open (measured); the
   library's warning, error and status lines under all of it (the status
   and the warning also show in the footer's message slot, on every page:
   below). One word per
@@ -1146,10 +1178,55 @@ unreadable at a party.
   no module for clean as it left them (`Project._apply`), and a factory
   show opened as shipped is not unsaved (`Project.factory`), so loading a
   factory preset or show shows everything clean (`tests/test_ui_presets.py`).
+  **The dot** (plan 19 WP5) is a 12 px red disc (`ui.dirty_dot`,
+  `DOT_R` 6) on every strip and ROUTING's head, the rail's disc radius
+  5 (`RAIL_DOT_R`); while there is something to save the save chip is
+  solid red (`ui.lit_chip`), and the loaded slot's bank button carries a
+  white disc of radius 4. Nothing asks before a save. Known: on a module
+  strip under "more" the save chip overlaps the right end of the name
+  button (it did before plan 19; audit U10).
+- **The preset list** (plan 19 WP4; click the preset strip's name):
+  every preset, factory ones dim, twelve rows (`LIST_ROWS`, 29 px each
+  at the control size) and then it scrolls. **×** on every preset: yours
+  goes to the trash (`Library.delete`; the status names what still
+  points at it, "TRIP 3 is in the trash — F6 and 'starts on' still name
+  it; restore it from the trash, or clear the slot" — slots are not
+  cleared), a factory one is **hidden** (`Library.hide`: its file stem
+  into `<home>/hidden.json`, `{"schema": "hyperspace.hidden/1",
+  "presets": [...]}`; only the list loses it — a slot, "starts on" or the
+  loaded preset that names it still loads it; nothing is hidden as
+  shipped). **rename** on yours: the row becomes the name field; Enter
+  renames the file, the name inside and every show of yours that names
+  it (`Library.rename`: the new file written exclusively, the old copied
+  to the trash and removed, each show copied to the trash then
+  repointed; a factory preset is refused — save copy first; a taken name
+  is refused; a case-only rename rewrites in place after its copy). At
+  the foot, only while each applies: "show hidden (n)" (hidden rows
+  struck through and dimmer, each with **unhide**) and **"trash (n) ▸"**:
+  a popup of every file the trash holds named as `to_trash` names them,
+  newest first, group · name · time · **restore** (`Library.restore_trash`:
+  back into `<home>/<group>/`, never over a file — a taken stem, factory
+  ones included, or a taken name restores as the next free name), then
+  **empty trash…**, which becomes "delete N files for good? — click
+  again" in the warning ink for 4 s: a second click then deletes exactly
+  what is listed (`Library.empty_trash`, the one delete in the app that
+  keeps no copy); the time running out, closing the popup or any other
+  click disarms it. None of these is an undo step. A module strip's list
+  is as before (× on yours only).
 - **The desk** (plan 13 §3). The APC40 has two layers under a latched
   SHIFT, whose LED is lit while the global layer is up. The faders, the
-  preset row, SHIFT, the clock corner, the transport and the track buttons
-  are **invariant**: one meaning on both layers. Plan 15 adds three to
+  preset rows (clip rows 1, 4 and 5 since plan 19), SHIFT, the clock corner, the transport and the track buttons
+  are **invariant**: one meaning on both layers. **A bank pad** (plan
+  19 WP2) is green while its preset is loaded, amber while its slot
+  holds a preset (velocity 5, `apc40.filled_of` — Akai's table, never
+  seen on the mk1), dark when empty, from one rule (`routing.led_level`
+  over `Param.has`) for the device and the on-screen desk, which draws
+  amber at half strength with the preset's name and an empty pad as its
+  glyph alone; the shape is the cue knob's alone (all 25), and no pad
+  shows which shape is up. A preset saved before plan 19 carries the
+  sixteen old shape pads in its desk: they drop at load **without a
+  note** (`routing.RETIRED_DESK_ROWS`) and stay in its file until it is
+  next saved; any other row on those pads is dropped with the note. Plan 15 adds three to
   the invariant list (the owner, 2026-10-04): the **crossfader is the
   master dim** (`output.dim`: left black, right full, soft pickup — a
   launch is at full, so a crossfader parked at the left does nothing
@@ -1170,7 +1247,21 @@ unreadable at a party.
   the session's (the band strip on the device knobs, hand feel and BPM on
   track knobs 1–5, the band scenes on clip rows 2–3); the **preset** layer
   is the loaded preset's (the factory default: the view faders on the
-  track knobs, the shape grid, the render toggles). A control the up layer
+  track knobs, 4D depth · yaw · pitch · pattern on D1–D4 since plan 19
+  WP3 (`apc40.SCENE`; D5–D8 dark), the cue knob's shape, the render
+  toggles). **The device knobs** (plan 19 WP3): every factory preset
+  with no knobs of its own has `SCENE`; `hands-fx` has the FX mix and
+  the Acid shader's five on D1–D6 and depth, yaw on D7–D8; `hands-pinch`
+  the FX mix, the hue cycle's paint and spread, depth, yaw, pitch,
+  pattern; `lfo-breathe` Breathe (macro 1), the FX mix, plasma level,
+  LFO 1 depth, depth, yaw, pitch; WAKE, TRACER, TRIP, ACID, MANDALA and
+  NOITA keep their eight. No factory knob lands on an effect that is off
+  or on the look-back while it is off
+  (`test_plan12_presets.py::test_no_factory_knob_is_dead`); a preset
+  with knobs of its own replaces `SCENE` (`preset.knob_desk`); a user
+  preset's own desk is never re-cut. D4 steps through the twelve
+  patterns, one every ~11 CC values; the pattern shows only where faces
+  are drawn. A control the up layer
   does not map is dark and does nothing. Knobs continue from their ring
   after a switch; faders soft-pick-up (hand check 31 is the hardware
   assumption). **A fader keeps its catch through a preset load unless
@@ -1252,12 +1343,14 @@ unreadable at a party.
   layout unit is 44 px wide and 32 px tall (`LABEL_UNIT`,
   `LABEL_UNIT_H`: a desk about 620 px wide) **every lit control carries
   what it does** (`ui_desk.text`): the param's label; for a `set` row on
-  an enum that value's name (the bank row reads TUMBLE … NOITA, the
-  shape pads the shapes, a scene pad its scene); for a step the label
+  an enum that value's name (the bank row reads TUMBLE … NOITA — and
+  since plan 19 the far pads of rows 4–5 their presets' names, an empty
+  one nothing; a scene pad its scene); for a step the label
   and the amount ("Brightness +3"); the id for a param with no label
   (`audio.play`, `audio.stop`, `audio.restart`). The glyph moves to the
   cell's top-left corner, small and dim. **Bright ink is a row of the
-  layer that is up, grey an invariant one**; a dark control has its
+  layer that is up, grey an invariant one** (a filled bank pad's name,
+  on its half-strength amber, is in the bright ink); a dark control has its
   glyph alone (D8). The type is 0.2 of a unit, kept between 11 and
   18 px (13 px at the control size), on at most two lines broken at
   spaces (`ui_desk.wrap`); a label that would be cut at that size is
@@ -1505,7 +1598,65 @@ unreadable at a party.
   older one, and the first sweep or "reset ranges" that does keeps it
   beside itself as `hands.json.bak-v1`. A show now also saves
   `desk.slew` (knob smoothing) and `hands.learn_depth` with its session
-  values.
+  values. The first launch of plan 19's build adds the bank's sixteen
+  pads on clip rows 4–5 to `bindings.json` (where no MIDI row of yours is
+  on the pad; in a file from before plan 13's migration the sixteen old
+  shape rows are swapped), backed up first as above, and says so in one
+  line on the SYSTEM page as well as stderr (`Bindings.said`). **No
+  backup, no rewrite** (plan 19 fork 12): if the copy cannot be made,
+  `bindings.json` is left as it was for the whole session (the table in
+  memory is the new one) and the next launch tries again. Plan 19 adds
+  to the home: `hidden.json` (the factory presets × took off the list),
+  `<show>.hyp.json.bak-v2-bank8` (once per show, the first time a slot
+  past 8 is written), `hidden.json.bak-v0` (only if an unreadable
+  `hidden.json` had to be replaced), and — only with `[library] git =
+  true` — `.git/` and `.gitignore` (below).
+- **The owner's files** — every file in the home that plan 19's code can
+  rewrite, move or delete, and its net (the full table, with the test
+  that runs each on a copy of an owner-like home, is in
+  `plans/19-presets-and-the-desk.md` §7):
+
+  | File | When | Copied first |
+  |---|---|---|
+  | `projects/<show>.hyp.json` | never by a load; by a bank change, "starts on", save; repointed by a rename | the first write past slot 8: `.bak-v2-bank8`, no copy no write; a rename: `trash/projects/`, a show whose copy fails left alone |
+  | `bindings.json` | once per remap at launch (plans 09, 15, 19) | `.bak-v<n>`; no copy, no rewrite, all session |
+  | `presets/<name>.json` (yours) | never by a load; save (plan 15), ×, rename | `trash/presets/`; a failed copy refuses the × and the rename |
+  | `<group>/…` | restore from the trash, created exclusively | — (never over a file) |
+  | `trash/**` | **empty trash: deleted for good**, only what the popup lists | nothing — asked twice |
+  | `hidden.json` | × on a factory preset, unhide | an unreadable one kept as `.bak-v0` first |
+  | `.git/`, `.gitignore` | `[library] git = true`, at the first save | — (no file of yours is rewritten) |
+- **The home in git** (plan 19 WP6; `homegit.py`, off by default). With
+  `[library] git = true` in `config.toml` (anything but `true` / `false`
+  is `false`, with a note on SYSTEM), the home becomes a **local** git
+  repository at the first save after launch — never at launch — and
+  every save is a commit in the library's words: "save preset TRIP 2",
+  "save fx acid", "trash preset TRIP 3", "rename preset TRIP 3 →
+  SUNRISE" (asked before the shows are rewritten, so the open show's
+  "show mine: bank" is its body), "hide preset legacy6", "unhide preset
+  …", "restore presets …", "show mine: starts on TUMBLE", "show mine:
+  bank", "save show mine". The first commit is "Hyperspace: the home as
+  it was when git was switched on", the save that asked in its body. A
+  commit is `git add -A` and then the messages waiting (the first the
+  subject), so a hand edit of `config.toml` or a launch's migration
+  rides in the next save's commit; nothing staged, no commit; emptying
+  the trash commits nothing. `.gitignore` (`homegit.IGNORE`, written only
+  where there is none) leaves out `weights/`, `trash/`, `*.log`,
+  `last_show`, `windows.json`, `*.bak-*` and `.DS_Store`; presets, shows,
+  module presets, `config.toml`, `bindings.json`, `hands.json` and
+  `hidden.json` are tracked. An existing repository at the home is used
+  as it is; **a home inside another repository is never committed** (one
+  note: "git: <home> is inside another repository (<top>): not
+  committing"). Git runs on its own thread with no hooks, no signing, no
+  prompt and a 10 s timeout (then SIGTERM, then SIGKILL 2 s later): **it
+  never blocks, fails or slows a save** — a missing git, a locked index
+  or a timeout is said once on the warning line ("git: not committed
+  (…); saves are not affected") until a commit succeeds, and the next
+  commit carries the files (not the words) of the ones that failed. No
+  remote, no push or fetch: sharing presets between people is the
+  repository's `shared/` folder and `tools/shared_presets.py install`
+  (never overwrites; `shared/README.md`). The SYSTEM page's library line
+  ends " · git" while it is on. Shown by `tools/homegit_demo.py`
+  (`plans/assets/19-presets-and-the-desk/homegit-demo.txt`).
 - **The trash** (plan 15 WP1; `library.to_trash`). The home's layout
   gains `trash/<group>/<slug>.<YYYYMMDD-HHMMSS>.json`: a **user** preset
   file as it was, copied there before a save overwrites it or a delete
@@ -1517,12 +1668,15 @@ unreadable at a party.
   written, so saving twice with no change adds nothing; if the copy
   fails the save goes on and the warning line says the old file was not
   kept. A delete whose copy fails is **refused** (the file stays). To
-  get a preset back, copy the file into `<home>/<group>/` under its
+  get a preset back, restore it from the preset list's "trash (n) ▸"
+  (plan 19 WP4, above), or copy the file into `<home>/<group>/` under its
   plain name; the file watch lists it within a couple of seconds.
   `trash` is no module group and is never watched; factory files are
   never written, so never trashed; show files and `bindings.json` keep
-  their own `.bak-*` backups instead. Nothing empties the trash and no
-  page shows it yet (plan 19).
+  their own `.bak-*` backups instead — but a rename copies each show it
+  rewrites to `trash/projects/` first. Since plan 19 the trash's popup
+  lists, restores and empties it; emptying is the one delete in the app
+  that keeps no copy.
 - **The cheat sheet** (`ui.CHEATSHEET`) is the canonical human list of the
   keys; `test_the_cheat_sheet_matches_the_tables_and_the_loop_keys` parses
   its key column against `routing.keymap()`, `padmap()` and the keys the
@@ -1692,7 +1846,8 @@ the keys: hand checks 48–52.
 recorded) on `plan-15-integration` with plan 15 whole, about 70 s; 1276
 and the same 1 skipped on `plan-18-integration` (plans 16, 17 and 18),
 about 85 s; 1355 and the same 1 skipped on `plan-20-integration` (plans
-15–18 and 20), about 95 s. `ruff`
+15–18 and 20), about 95 s; 1442 and the same 1 skipped on
+`plan-19-integration` (plans 15–20), about two minutes. `ruff`
 is the linter. Every test runs with `HYPERSPACE_HOME` pointed at its own
 `tmp_path` (`tests/conftest.py`), so no test can touch `~/Hyperspace`.
 What holds what:
@@ -1766,11 +1921,31 @@ What holds what:
   (`tests/test_ui_routing.py`). Where these click, right-click or type,
   the event is fed to imgui by the test at the rect the item was drawn
   at; no test moves a real mouse.
+- **Presets and the desk** (plan 19): the bank of twenty-four and an
+  eight-slot show never rewritten by a load, the first far write's
+  backup, the factory party's slot 9 (`tests/test_library.py`,
+  `test_party_show.py`, `test_params.py::test_the_bank_adds_no_params`);
+  the page's fit with "more" open, the far slots, the dot, "save copy",
+  the list's chips and the trash's two-click empty, through real imgui
+  mouse events (`tests/test_ui_presets.py`, `test_ui_routing.py`); rows
+  4–5 on both layers and invariant (`test_desk.py`), the three lights
+  and the save-as blink on row 4 (`test_midi.py`), the on-screen amber
+  (`test_ui_desk.py`); an older `bindings.json` given the pads once with
+  a backup, and no rewrite without one (`test_routing.py`,
+  `test_migration.py`); an old preset loading quietly and untouched, the
+  knob re-cut and no dead factory knob (`test_presets.py`,
+  `test_plan12_presets.py`); hide, rename, restore and empty on a copy
+  of an owner-like home (`test_library.py`, the `owner_home` fixture in
+  `tests/conftest.py`); the home in git — off by default, init at the
+  first save, a home inside another repository, a locked index, a git
+  past its timeout, no network verb (`tests/test_homegit.py`, which
+  skips the cases that need `git` when there is none).
 - **Boundaries**: the core never imports `midi` / `bridge` / `dream`
   (`tests/test_params.py:286`, `tests/test_bridge.py:381`,
   `tests/test_dream.py:55`); `hands/core.py`, `hands/signal.py`, `lfo.py`,
-  `tempo.py` and `undo.py`
-  (`tests/test_undo.py::test_undo_imports_nothing_from_the_package`)
+  `tempo.py`, `undo.py`
+  (`tests/test_undo.py::test_undo_imports_nothing_from_the_package`) and
+  `homegit.py` (`tests/test_app_boundary.py::test_homegit_is_a_leaf_and_the_library_never_imports_it`)
   import nothing from the package, and `routing.py` nothing
   above it — no panel, host or adapter (`tests/test_*_boundary.py`);
   `config.py` reads the hands rig defaults from `hands/core.py` (the one table),
@@ -1854,6 +2029,16 @@ same PR; when it changes behaviour, the line here does.
   has been learned onto or mapped by a click, and no real hand has
   completed a hand learn. Group M of the hand checks (64–71, after check
   72). Rows 57–64 of `DECISION-REGISTER.md` wait the same way.
+- **Plan 19 at the machine**: the bank of twenty-four, clip rows 4–5 as
+  the bank and their lights, the knobs re-cut, hide / rename / the
+  trash, the dot and "save copy", and the home in git have been shown by
+  tests, hidden-window renders and scripted launches on temp homes, and
+  by nobody at the rig: **amber at velocity 5, the pads of rows 4–5,
+  the knobs' new choices and every popup are unseen**. Group O of the
+  hand checks (81–90), on a copy of `~/Hyperspace`. Rows 72–78 of
+  `DECISION-REGISTER.md` wait the same way. Two known gaps: a learned
+  step or knob on `preset.select` lands on empty slots (audit R14), and
+  a module strip's save chip overlaps its name under "more" (audit U10).
 - **The trim** (plan 06): decided 2026-09-28 — the per-band AUTO / MANUAL
   switch, built in plan 11 WP15; the oracle was not re-frozen.
 - **First real capture on this machine.** Every live path is code-complete;

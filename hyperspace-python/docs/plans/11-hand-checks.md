@@ -1839,13 +1839,15 @@ naming it — "dropped note:3:56 → …: that control is invariant, the
 session's (plan 13 D6)": that mapping is gone from the live desk and
 still in the file until you save.) The orchestrator loaded the
 seventeen presets in `shared/dan-2026-10-04/` this way on a temp home:
-none said anything. Now the save-as: open the factory **party** show,
+none said anything. Now the save-as: open the **party** show,
 right-click F8 → clear slot, change the look, and hold the clip-stop
 row. *Pass:* at about 0.6 s the bar and F8's pad blink; "saved … → F8".
-Change the look and hold again: the bar and **row 4's second pad**
-blink for a second and a half and the footer says "saved … → slot 10"
-(TRACER holds slot 9). On a show of yours from before this build the
-first far save lands "→ slot 9" and that show gets its
+Change the look and hold again: the bar and the next empty far slot's
+pad blink for a second and a half. On the factory party show (as
+shipped, TRACER on slot 9) that is **row 4's second pad** and the
+footer says "saved … → slot 10". If your home has its own `party` (the
+night's copy, from before this build) or you are on any other show of
+yours, it is row 4's first pad, "→ slot 9", and that show gets its
 `.bak-v2-bank8` (81). *Fail:* a warning on every load →
 `routing.RETIRED_DESK_ROWS`; a preset file's time moving on a load →
 `Presets.load_doc`; the blink on row 1 only → `apc40.blink_of`; "the
