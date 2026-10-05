@@ -662,3 +662,321 @@ def test_a_route_delete_and_a_replace_are_undo_steps(rig, tmp_path, monkeypatch)
     assert [s.label for s in u.stack] == [f"replace {owner.target}"]
     assert table.owner(owner.target).source == "hand:1"
     assert u.undo() and state() == was
+
+
+# ------------------------------------------------ plan 17 WP5: the filter
+
+def test_the_filter_matches_glyph_param_and_source(rig):
+    """`matches`: lower-case, every typed word a substring of what the line
+    says — a desk line by its glyph ("d3"), Akai's name, its source, its
+    param or the param's label; a route by its sentence in its adapter's
+    words ("r height", "lfo 1"), its source and its target; a macro by its
+    id, its label and its subscribers. A dark line says no target."""
+    panel, router, table = rig.panel, rig.router, rig.router.table
+    m = ui_routing.matches
+    assert m(panel, router, "", "anything") and m(panel, router, "   ")
+    assert m(panel, router, "a b", "xa", "by") and not m(panel, router, "a z", "xa", "by")
+    assert not m(panel, router, "ab", "a", "b")           # a word never spans two strings
+    rig.lib.load("presets", "TRIP")
+    router.labels["hand"] = ["R x", "R height", "R z"]
+    router.labels["lfo"] = ["LFO 1", "LFO 2"]
+    table.set_routes([Binding("hand:1", "view.bright", "position"),
+                      Binding("lfo:0", "camera.zoom", "push", 0.08)])
+    hand, lfo1 = table.routes()
+    d3 = next(b for b in table.desk() if ui_routing.control_glyph(table, b) == "D3")
+    assert d3.source == "cc:*:18" and d3.target == "fx.kaleido.segments"
+
+    def route(text, b):
+        return m(panel, router, text, *ui_routing.route_hay(panel, router, b))
+
+    def line(text, b, mapped=True):
+        return m(panel, router, text, *ui_routing.control_hay(panel, router, b, mapped))
+    # the glyph, Akai's name, the source, the param, its label
+    for text in ("d3", "D3", "device knob 3", "cc:*:18", "kaleido", "fx.kaleido.seg",
+                 "Kaleidoscope SEGMENTS", "d3 kaleido"):
+        assert line(text, d3), text
+    assert not line("d4", d3) and not line("d3 bright", d3)
+    others = [b for b in table.desk() if line("d3", b)]
+    assert others == [d3]
+    # a route: the param and its label, the adapter's words, the address
+    for text in ("bright", "view.bright", "Brightness", "r height", "R HEIGHT",
+                 "hand:1", "positions", "height bright"):
+        assert route(text, hand), text
+    assert not route("lfo 1", hand) and not route("d3", hand)
+    for text in ("lfo 1", "LFO 1", "lfo:0", "zoom", "lfo 1 zoom", "pushes"):
+        assert route(text, lfo1), text
+    assert not route("lfo 2", lfo1) and not route("r height", lfo1)
+    # a dark line is its control only: the factory row's target is not the preset's
+    dark = ui_routing.unmapped(table)[0]
+    assert line(ui_routing.control_glyph(table, dark).lower(), dark, mapped=False)
+    assert line(dark.target, dark) and not line(dark.target, dark, mapped=False)
+    # a macro: id, label, a base subscriber's param and label, a depth one's route
+    table.set_macros({"macro.2": {"label": "Heat", "subs": [
+        {"base": "fx.kaleido.zoom", "from": 0.0, "to": 1.0},
+        {"depth": {"source": "hand:1", "target": "view.bright"}, "from": 0.0, "to": 1.0}]}})
+    m1, m2 = rig.reg["macro.1"], rig.reg["macro.2"]
+
+    def macro(text, p):
+        return m(panel, router, text, *ui_routing.macro_hay(panel, router, p))
+    for text in ("macro.2", "heat", "kaleido", "Kaleidoscope zoom", "view.bright",
+                 "r height", "heat kaleido"):
+        assert macro(text, m2), text
+    assert macro("macro", m1) and not macro("heat", m1) and not macro("kaleido", m1)
+
+
+def test_a_filtered_page_draws_only_matching_lines_and_keeps_its_ids(rig, monkeypatch):
+    """TRIP with "kaleido" typed: the two kaleidoscope routes, the two desk
+    lines (D3, D4) and the one macro that subscribes one are all the page
+    draws, under the section titles; the session, which has none, says so;
+    the counts read "5 of N rows". Each route is drawn under its place in
+    the unfiltered list, no two widgets share an imgui id, and a × on a
+    filtered line removes the row it is on."""
+    from hyperspace import ui
+
+    panel, router, table = rig.panel, rig.router, rig.router.table
+    rig.lib.load("presets", "TRIP")
+    table.set_macros({"macro.3": {"label": "Heat", "subs": [
+        {"base": "fx.kaleido.zoom", "from": 0.0, "to": 1.0}]},
+        "macro.5": {"label": "Cool", "subs": [{"base": "view.bright"}]}})
+    routes = table.routes()
+    want = [b for b in routes if "kaleido" in b.target]
+    assert len(want) == 2 and len(routes) > 10
+    frame(panel, "routing")
+    _, total = ui_routing.found(panel, router)
+    assert ui_routing.found(panel, router) == (total, total) and total > 100
+    ui_routing._state(panel)["find"] = "Kaleido"
+    assert ui_routing.found(panel, router) == (5, total)
+
+    drawn: list[tuple[Binding, int]] = []
+    knobs: list[str] = []
+    ids: list[int] = []
+    row, slider = ui_routing._row, panel._slider
+    kill: list[Binding] = []
+
+    def rec_row(panel_, router_, b, k):
+        drawn.append((b, k))
+        out = row(panel_, router_, b, k)
+        return out or (kill == [b] and not kill.clear())
+    monkeypatch.setattr(ui_routing, "_row", rec_row)
+    monkeypatch.setattr(panel, "_slider", lambda pid, *a, **k: (knobs.append(pid),
+                                                               slider(pid, *a, **k))[1])
+    for fn in ("button", "checkbox", "slider_float", "slider_int", "combo", "begin_combo",
+               "invisible_button", "arrow_button", "input_text_with_hint"):
+        real = getattr(imgui, fn)
+
+        def rec(label, *a, _real=real, **k):
+            ids.append(imgui.get_id(label))
+            return _real(label, *a, **k)
+        monkeypatch.setattr(imgui, fn, rec)
+    texts, previews = _drawn(monkeypatch)
+    for lst in (drawn, knobs, ids, texts, previews):
+        lst.clear()
+    frame(panel)
+    # the routes: those two, each under its unfiltered index
+    assert [b for b, _ in drawn] == want
+    assert [k for _, k in drawn] == [routes.index(b) for b in want]
+    # the desk: D3 and D4 and nothing else, no dark line
+    assert {"D3", "D4"} <= set(texts) and "D1" not in texts and "D5" not in texts
+    assert "unmapped — dark" not in texts
+    assert {"fx.kaleido.segments", "fx.kaleido.zoom", "fx.kaleido.swirl"} == {
+        p for p in previews if p.startswith("fx.")}
+    # the macros: the one that subscribes a kaleidoscope param, drawn whole
+    assert knobs == ["macro.3"]
+    # the titles stay; the session has no such row and says so, once
+    assert {"ROUTES", "DESK  ·  PRESET LAYER", "MACROS", "SESSION"} <= set(texts)
+    assert texts.count(ui_routing.NO_MATCH) == 1
+    assert "invariant · both layers" not in texts
+    assert f"5 of {total} rows" in texts
+    assert not any("routes  ·" in t for t in texts)          # the unfiltered counts are gone
+    dup = {i for i in ids if ids.count(i) > 1}
+    assert len(ids) > 12 and not dup, f"conflicting ids {sorted(dup)}"
+    # × on the second filtered route: that row goes, the other stays
+    kill.append(want[1])
+    frame(panel)
+    assert not kill and want[1] not in table.routes() and want[0] in table.routes()
+    assert len(table.routes()) == len(routes) - 1
+    # × on a filtered desk line (D4): that row goes, D3 stays
+    d3, d4 = (next(b for b in table.desk() if ui_routing.control_glyph(table, b) == g)
+              for g in ("D3", "D4"))
+    n_desk = len(table.desk())
+    cell, chip = ui_routing._control_cell, ui.chip
+    on: list[Binding] = []
+    go = [d4]
+    with monkeypatch.context() as mp:
+        mp.setattr(ui_routing, "_control_cell",
+                   lambda t, b, *a, **k: (on.append(b), cell(t, b, *a, **k))[1])
+        mp.setattr(ui, "chip", lambda label, *a, **k: bool(
+            chip(label, *a, **k) or (label == "×" and on and on[-1] is d4 and go
+                                     and not go.clear())))
+        frame(panel)
+    assert not go and d4 not in table.desk() and d3 in table.desk()
+    assert len(table.desk()) == n_desk - 1
+    # a filter nothing matches: every section says so and no line is drawn
+    ui_routing._state(panel)["find"] = "no such thing anywhere"
+    for lst in (drawn, knobs, texts):
+        lst.clear()
+    frame(panel)
+    assert not drawn and not knobs and texts.count(ui_routing.NO_MATCH) == 4
+    assert f"0 of {total - 1} rows" in texts     # a route went; D4 is a dark line now
+    # the × chip beside the field is the clear: every row is back
+    with monkeypatch.context() as mp:
+        mp.setattr(ui, "chip", lambda label, *a, **k: bool(
+            chip(label, *a, **k) or label == "×##find"))
+        frame(panel)
+    assert ui_routing._state(panel)["find"] == ""
+    for lst in (drawn, knobs, texts):
+        lst.clear()
+    frame(panel)
+    assert len(drawn) == len(routes) - 1 and len(knobs) == 8
+    assert ui_routing.NO_MATCH not in texts and any("routes  ·" in t for t in texts)
+
+
+def test_the_filter_is_ui_state(rig, tmp_path):
+    """The filter's text lives in the page's state on the panel and nowhere
+    else: no param holds it, a snapshot and a saved preset do not carry it,
+    typing it is no undo step and no dirty dot, a preset load leaves it,
+    and one state write — what `goto` (WP4) does — clears it. A new panel
+    starts with none, and a state dict from before a hot reload gains the
+    key."""
+    from types import SimpleNamespace
+
+    from hyperspace import undo
+
+    panel, lib, reg, router = rig.panel, rig.lib, rig.reg, rig.router
+    lib.load("presets", "TRIP")
+    frame(panel, "routing")
+    ids = [p.id for p in reg]
+    before = (json.dumps(reg.snapshot(), sort_keys=True, default=str),
+              json.dumps(lib.document("presets", "X"), sort_keys=True, default=str))
+    u = undo.Undo(reg, router.table, on_restore=router.sync_macros)
+    undo.install(u)
+    clock = [0.0]
+
+    def quiet():
+        for _ in range(3):
+            clock[0] += 1.0
+            u.tick(clock[0])
+    quiet()
+    u.clear()
+    st = ui_routing._state(panel)
+    assert st["find"] == "" and st["filter"] == ""        # two fields, two keys
+    for text in ("k", "ka", "kaleido zzfind"):            # typed, a frame a letter
+        st["find"] = text
+        frame(panel)
+        quiet()
+    assert [p.id for p in reg] == ids
+    assert not any("zzfind" in str(p.base) for p in reg if p.kind is Kind.TEXT)
+    after = (json.dumps(reg.snapshot(), sort_keys=True, default=str),
+             json.dumps(lib.document("presets", "X"), sort_keys=True, default=str))
+    assert after == before and "zzfind" not in "".join(after)
+    assert u.stack == [] and not lib.is_dirty("presets")
+    path = lib.save_as("presets", "Mine")
+    assert "zzfind" not in path.read_text()
+    assert not [f for f in tmp_path.rglob("*") if f.is_file() and f.suffix in (".json", ".toml")
+                and "zzfind" in f.read_text()]
+    # the param combo's own find field is another key: it does not filter the page
+    st["filter"] = "nothing"
+    assert ui_routing.found(panel, router)[0] == 0
+    st["find"] = "kaleido"
+    assert ui_routing.found(panel, router)[0] == 4
+    st["filter"] = ""
+    # a preset load leaves it (fork 9 (a))
+    lib.load("presets", "MANDALA")
+    frame(panel)
+    assert st["find"] == "kaleido" and ui_routing._state(panel) is st
+    n, m = ui_routing.found(panel, router)
+    assert 0 < n < m
+    # what a desk click does (`goto`, WP4): one state write, every row back
+    ui_routing._state(panel)["find"] = ""
+    frame(panel)
+    assert ui_routing.found(panel, router) == (m, m)
+    # gone at restart; a state from before a hot reload gains the key
+    assert ui_routing._state(SimpleNamespace())["find"] == ""
+    old = SimpleNamespace(_routing_state={"error": "", "filter": "", "prompt": None})
+    assert ui_routing._state(old)["find"] == ""
+
+
+def test_typing_in_the_filter_is_imguis_keyboard_not_the_apps(rig, monkeypatch):
+    """With the field focused imgui wants the keyboard — what the loop
+    copies into `Keys.typing` each frame (app.py: `keys.typing =
+    io.want_capture_keyboard`), so a letter typed in the control window
+    reaches the field and is no app key (`Keys._down` then reads only the
+    render window: test_app_boundary's
+    test_keys_fire_on_the_edge_from_either_window_unless_imgui_is_typing)."""
+    from hyperspace import app
+
+    panel = rig.panel
+    io = imgui.get_io()
+    frame(panel, "routing")
+    frame(panel)
+    assert not io.want_capture_keyboard
+    real = imgui.input_text_with_hint
+    focus = [True]
+
+    def field(label, *a, **k):
+        if label == "##rows" and focus:
+            imgui.set_keyboard_focus_here()               # a click in the field
+        return real(label, *a, **k)
+    monkeypatch.setattr(imgui, "input_text_with_hint", field)
+    for _ in range(3):
+        frame(panel)
+    focus.clear()
+    assert io.want_capture_keyboard and io.want_text_input
+    for ch in "d3":
+        io.add_input_character(ord(ch))
+        frame(panel)
+    assert ui_routing._state(panel)["find"] == "d3"
+    assert not ui_routing._state(panel)["hold"]           # typing here holds no line
+    assert ui_routing.found(panel, rig.router)[0] >= 1
+    # the app's side: the same key held in the control window is not down
+    g = app.glfw
+    monkeypatch.setattr(g, "get_key", lambda win, key: g.PRESS if win == "ctrl" else g.RELEASE)
+    keys = app.Keys("render", "ctrl")
+    keys.typing = io.want_capture_keyboard
+    assert not keys.pressed(g.KEY_D) and not keys.down(g.KEY_3)
+    keys.typing = False
+    assert keys.pressed(g.KEY_D)
+
+
+def test_a_line_in_use_is_not_filtered_away_under_the_hand(rig, monkeypatch):
+    """A filter that found a macro by its label: retyping the label (a
+    widget in use) leaves the macro drawn though it no longer matches, and
+    it goes once the widget is let go. Spaces alone filter nothing: no red
+    count, no × chip."""
+    from hyperspace import ui
+
+    panel, table = rig.panel, rig.router.table
+    rig.lib.load("presets", "TRIP")
+    table.set_macros({"macro.3": {"label": "Heat", "subs": []}})
+    knobs: list[str] = []
+    slider = panel._slider
+    monkeypatch.setattr(panel, "_slider", lambda pid, *a, **k: (knobs.append(pid),
+                                                               slider(pid, *a, **k))[1])
+    st = ui_routing._state(panel)
+    st["find"] = "heat"
+    frame(panel, "routing")
+    knobs.clear()
+    frame(panel)
+    assert knobs == ["macro.3"] and not st["hold"]
+    with monkeypatch.context() as mp:                    # the label field has the keyboard
+        mp.setattr(imgui, "is_any_item_active", lambda: True)
+        table.macros["macro.3"].label = "Hea"
+        for _ in range(3):
+            knobs.clear()
+            frame(panel)
+            assert knobs == ["macro.3"] and st["hold"]
+    knobs.clear()
+    frame(panel)                                          # let go: it no longer matches
+    assert knobs == [] and not st["hold"]
+    # spaces alone: the page is unfiltered and says so
+    st["find"] = "  "
+    chips: list[str] = []
+    chip = ui.chip
+    monkeypatch.setattr(ui, "chip", lambda label, *a, **k: (chips.append(label),
+                                                            chip(label, *a, **k))[1])
+    texts, _ = _drawn(monkeypatch)
+    knobs.clear()
+    frame(panel)
+    assert len(knobs) == 8 and "×##find" not in chips and "+ route" in chips
+    assert not any(t.endswith(" rows") for t in texts)
+    assert any(t.startswith(f"{len(table.routes())} routes") for t in texts)

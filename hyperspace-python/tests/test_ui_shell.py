@@ -772,3 +772,281 @@ def test_every_panel_attribute_the_frame_reads_is_a_real_panels(rig):
     missing = sorted(n for n in names if not hasattr(rig.panel, n))
     assert not missing, f"app.frame reads h.panel.{missing} that Panel never sets"
     assert rig.panel.restart_requested is False
+
+
+# ------------------------------------------------- plan 17: the right-click menu
+
+def menu(panel, monkeypatch, pid: str, page: str, click: str | None = None
+         ) -> tuple[list[str], list[str]]:
+    """One frame of `page` with the context menu of `pid` open: (the lines
+    of text it draws, its clickable items). A submenu is listed as
+    "Unbind ▸" and its items as "Unbind/both"; every submenu is opened.
+    `click` names the one item that reports a click. Nothing here has a
+    mouse: the popup's `begin` is answered for it, so its contents draw
+    into the page's own window."""
+    lines: list[str] = []
+    items: list[str] = []
+    st = {"open": False, "path": []}
+    real = {n: getattr(imgui, n) for n in (
+        "begin_popup_context_item", "end_popup", "menu_item_simple", "begin_menu", "end_menu",
+        "text", "text_disabled", "text_colored")}
+
+    def begin_ctx(str_id=None, *a, **k):
+        if str_id == f"##ctx.{pid}" and not st["open"]:
+            st["open"] = True
+            return True
+        return False
+
+    def end_popup():
+        if st["open"]:
+            st["open"] = False
+        else:
+            real["end_popup"]()
+
+    def item(label, *a, **k):
+        if not st["open"]:
+            return real["menu_item_simple"](label, *a, **k)
+        name = "/".join([*st["path"], label])
+        items.append(name)
+        return name == click
+
+    def begin_menu(label, *a, **k):
+        if not st["open"]:
+            return real["begin_menu"](label, *a, **k)
+        items.append("/".join([*st["path"], label]) + " ▸")
+        st["path"].append(label)
+        return True
+
+    def end_menu():
+        if st["open"]:
+            st["path"].pop()
+        else:
+            real["end_menu"]()
+
+    def text(name):
+        def draw(*a):
+            if st["open"]:
+                lines.append(a[-1])
+            return real[name](*a)
+        return draw
+
+    with monkeypatch.context() as m:
+        m.setattr(imgui, "begin_popup_context_item", begin_ctx)
+        m.setattr(imgui, "end_popup", end_popup)
+        m.setattr(imgui, "menu_item_simple", item)
+        m.setattr(imgui, "begin_menu", begin_menu)
+        m.setattr(imgui, "end_menu", end_menu)
+        for name in ("text", "text_disabled", "text_colored"):
+            m.setattr(imgui, name, text(name))
+        frame(panel, page)
+    return lines, items
+
+
+def _learn_over(rig):
+    from hyperspace.learn import Learn
+
+    rig.panel.learn = Learn(rig.reg, rig.router.table, lane=rig.router.lane)
+    return rig.panel.learn
+
+
+def test_the_menu_lists_and_unbinds_with_no_midi_adapter(rig, monkeypatch):
+    """Plan 17 WP1: the menu reads the table, never the adapter. With
+    `panel.midi` None the desk row's line is drawn with its glyph and
+    Akai's name, each route has its line, and one Unbind removes what the
+    lines list: a plain item with one kind bound, a submenu (desk / route /
+    both) with both. "Unbind hand" and "performed by …" are gone."""
+    panel, table = rig.panel, rig.router.table
+    lrn = _learn_over(rig)
+    assert panel.midi is None
+    # Brightness: a knob and two step buttons, no route → a plain Unbind
+    lines, items = menu(panel, monkeypatch, "view.bright", "view")
+    assert lines[0] == "VIEW.BRIGHT"
+    assert lines[1:] == ["K1 (track knob 1)", "B16 (▲) · step +3", "B17 (▼) · step -3"]
+    assert "Unbind" in items and not any("▸" in i and "Unbind" in i for i in items)
+    assert not any(i.startswith("Unbind hand") for i in items)
+    # Speed: its knob, a hand route and — disabled — an LFO route → a submenu
+    table.add(Binding("hand:8", "view.speed", "position"))
+    table.add(Binding("lfo:0", "view.speed", "push", 0.5, enabled=False))
+    rig.router.labels["hand"] = ["L x", "L depth", "L height", "L pitch", "L roll", "L yaw",
+                                 "R x", "R depth", "R height"]
+    lines, items = menu(panel, monkeypatch, "view.speed", "view")
+    assert lines[1] == "K2 (track knob 2)"
+    assert lines[2].startswith("R height positions") and lines[3].endswith("(off)")
+    assert not any(s.startswith("performed by") for s in lines)
+    unbind = [i for i in items if i.startswith("Unbind")]
+    assert unbind[0] == "Unbind ▸" and unbind[1] == "Unbind/desk — K2"
+    assert unbind[2].startswith("Unbind/route — R height, ") and unbind[3] == "Unbind/both"
+    # by kind, from the submenu
+    menu(panel, monkeypatch, "view.speed", "view", click="Unbind/desk — K2")
+    assert not [b for b in table.desk() if b.target == "view.speed"]
+    assert len(table.routes_to("view.speed")) == 2 and lrn.last.startswith("unbound view.speed")
+    lines, items = menu(panel, monkeypatch, "view.speed", "view")
+    assert "Unbind" in items and "Unbind ▸" not in items       # routes only now: plain
+    menu(panel, monkeypatch, "view.speed", "view", click="Unbind")
+    assert not table.routes_to("view.speed")
+    lines, items = menu(panel, monkeypatch, "view.speed", "view")
+    assert lines == ["VIEW.SPEED"] and not any(i.startswith("Unbind") for i in items)
+    # both at once
+    table.add(Binding("lfo:1", "view.bright", "push", 0.2))
+    menu(panel, monkeypatch, "view.bright", "view", click="Unbind/both")
+    assert not [b for b in table.bindings if b.target == "view.bright" and (b.is_midi or b.op == "push")]
+    assert "K1 (track knob 1)" in lrn.last and lrn.last.startswith("unbound view.bright from ")
+    # a panel with no learn object: the lines, and no Unbind
+    table.bindings.append(Binding("cc:0:48", "view.bright", "abs", layer="preset"))
+    panel.learn = None
+    lines, items = menu(panel, monkeypatch, "view.bright", "view")
+    assert "K1 (track knob 1)" in lines and "no learn" in lines
+    assert not any(i.startswith("Unbind") for i in items)
+
+
+def test_unbind_is_not_offered_on_a_session_only_param(rig, monkeypatch):
+    """A fader's param is the session's (D6): its row's line reads
+    "invariant", dim, and there is no Unbind item — none that could only
+    refuse. A route on it brings a plain Unbind for the route alone."""
+    panel, table = rig.panel, rig.router.table
+    _learn_over(rig)
+    lines, items = menu(panel, monkeypatch, "master.gain", "audio")
+    assert "SM (MASTER fader) · invariant" in lines
+    assert not any(i.startswith("Unbind") for i in items)
+    session = [b.to_json() for b in table.midi() if b.layer != "preset"]
+    table.add(Binding("lfo:0", "master.gain", "push", 0.1))
+    lines, items = menu(panel, monkeypatch, "master.gain", "audio", click="Unbind")
+    assert "Unbind" in items and "Unbind ▸" not in items
+    assert not table.routes_to("master.gain")
+    assert [b.to_json() for b in table.midi() if b.layer != "preset"] == session
+
+
+def _learn_items(items: list[str]) -> list[str]:
+    return [i for i in items if i.startswith(("Learn", "Cancel"))]
+
+
+def test_the_menu_offers_learn_desk_and_learn_hand(rig, monkeypatch):
+    """Plan 17 WP2, fork 5: the one "Learn" is **Learn desk** and **Learn
+    hand ▸ left / right**. With a tracker: both; without: Learn desk only;
+    a param a hand cannot drive (not modulatable): no hand item; a file
+    path: neither. Each arms the learn with what it waits for; armed, the
+    menu reads the hint and offers Cancel. §3's menu count holds."""
+    panel = rig.panel
+    lrn = _learn_over(rig)
+    assert panel.hands is not None and panel.midi is None
+    _, items = menu(panel, monkeypatch, "view.speed", "view")
+    assert _learn_items(items) == ["Learn desk", "Learn hand ▸", "Learn hand/left",
+                                   "Learn hand/right"]
+    assert "Learn" not in items
+    # §3: unmapped, a rig with hands → Learn desk · Learn hand ▸ · Route a lane here…
+    rig.router.table.unbind("view.speed")
+    _, items = menu(panel, monkeypatch, "view.speed", "view")
+    assert [i for i in items if "/" not in i] == ["Learn desk", "Learn hand ▸",
+                                                  "Route a lane here…"]
+    # each arms with its want
+    menu(panel, monkeypatch, "view.speed", "view", click="Learn desk")
+    assert (lrn.learning, lrn.want) == ("view.speed", "desk")
+    lines, items = menu(panel, monkeypatch, "view.speed", "view")
+    assert _learn_items(items) == ["Cancel learn"]
+    assert "nothing to learn from (no MIDI)" in lines        # no adapter, no clickable desk yet
+    panel.midi = SimpleNamespace(table=rig.router.table)
+    lines, _ = menu(panel, monkeypatch, "view.speed", "view")
+    assert "turn a knob or press a button on the desk…" in lines
+    panel.midi = None
+    menu(panel, monkeypatch, "view.speed", "view", click="Cancel learn")
+    assert lrn.learning is None and lrn.want is None
+    for side in ("left", "right"):
+        menu(panel, monkeypatch, "view.speed", "view", click=f"Learn hand/{side}")
+        assert (lrn.learning, lrn.want) == ("view.speed", f"hand:{side}")
+        lines, _ = menu(panel, monkeypatch, "view.speed", "view")
+        assert f"move the {side} hand…" in lines
+        lrn.arm(None)
+    # a bare learn (no want) keeps the old words
+    lrn.arm("view.speed")
+    assert panel._learn_hint() == "move a hand…"
+    lrn.arm(None)
+    # not modulatable: a knob may still set it, a hand may not
+    assert not rig.reg["dream.gap"].modulatable
+    _, items = menu(panel, monkeypatch, "dream.gap", "lookback")
+    assert _learn_items(items) == ["Learn desk"]
+    # a file path: nothing to learn (a knob cannot set a path)
+    assert rig.reg["view.bmp_file"].kind is Kind.TEXT
+    lines, items = menu(panel, monkeypatch, "view.bmp_file", "bitmap")
+    assert items == [] and "not modulatable" in lines
+    # no tracker: Learn desk only — §3: Learn desk · Route a lane here…
+    panel.hands = None
+    _, items = menu(panel, monkeypatch, "view.speed", "view")
+    assert items == ["Learn desk", "Route a lane here…"]
+    # a rig whose axes are one hand's: that side only
+    panel.hands = SimpleNamespace(axes=[SimpleNamespace(side="right")])
+    assert panel._hand_sides() == ["right"]
+
+
+def test_the_footer_says_what_a_learn_waits_for_and_what_it_did(rig, monkeypatch):
+    """Plan 17 WP2: an armed learn has the footer's message slot on every
+    page — what it waits for, in red — and what a learn or an unbind did
+    shows there for `MESSAGE_S` like the undo's line: a refusal in the
+    warning colour, also while the learn it refused stays armed, and the
+    same refusal twice shows twice."""
+    from hyperspace import apc40, ui
+
+    panel, table = rig.panel, rig.router.table
+    lrn = _learn_over(rig)
+    clock = [1000.0]
+    monkeypatch.setattr(ui.time, "monotonic", lambda: clock[0])
+    shown: list[tuple[str, tuple]] = []
+    colored = imgui.text_colored
+
+    def text_colored(col, s):
+        if s.startswith("·  "):
+            shown.append((s, (round(col.x, 3), round(col.y, 3), round(col.z, 3))))
+        return colored(col, s)
+    monkeypatch.setattr(imgui, "text_colored", text_colored)
+
+    def footer(page=None) -> list[tuple[str, tuple]]:
+        shown.clear()
+        frame(panel, page)
+        return list(shown)
+
+    def rgb(c) -> tuple:
+        return (round(c.x, 3), round(c.y, 3), round(c.z, 3))
+    assert footer("view") == []                              # nothing armed, nothing said
+    short = min((p.id for p in rig.reg), key=len)            # room for the whole line
+    lrn.arm(short, "hand:left")
+    line = f"·  learning {short} — move the left hand… (click to cancel)"
+    for page in ("view", "routing", "presets", "system", "hands"):
+        clock[0] += 0.5
+        assert footer(page) == [(line, rgb(ui.RED))], page
+    clock[0] += 10 * ui.MESSAGE_S                            # it never times out
+    assert footer("lfo") == [(line, rgb(ui.RED))]
+    # a longer id: the line keeps what it waits for; "click to cancel" is on the hover
+    lrn.arm("fx.kaleido.segments", "hand:right")
+    assert footer("lfo") == [("·  learning fx.kaleido.segments — move the right hand…",
+                              rgb(ui.RED))]
+    # a refusal that leaves it armed: the warning for MESSAGE_S, then the armed line again
+    lrn.arm("view.depth4", "desk")
+    table.set_layer("global")
+    assert not lrn.learn_control("cc:0:48", apc40) and lrn.learning == "view.depth4"
+    (said,) = footer("view")
+    assert said[0].startswith("·  K1 (track knob 1) is on the global layer")
+    assert said[1] == rgb(ui.WARN)
+    clock[0] += ui.MESSAGE_S + 0.1
+    (said,) = footer("faces")
+    assert said[0].startswith("·  learning view.depth4 — ") and said[1] == rgb(ui.RED)
+    assert not lrn.learn_control("cc:0:48", apc40)           # the same words again: shown again
+    assert footer("faces")[0][1] == rgb(ui.WARN)
+    # it lands: said in the faint colour for MESSAGE_S, then nothing
+    table.set_layer("preset")
+    clock[0] += ui.MESSAGE_S + 0.1
+    assert lrn.learn_control("cc:0:48", apc40) and lrn.learning is None
+    (said,) = footer("audio")
+    assert said[0].startswith("·  learned view.depth4 ← K1 (track knob 1)")
+    assert said[1] == rgb(ui.FAINT)
+    clock[0] += ui.MESSAGE_S + 0.1
+    assert footer("audio") == []
+    # an unbind's line, and its refusal, the same way
+    lrn.unbind("view.depth4", name=panel._row_name)          # as the menu's item calls it
+    assert footer("view")[0][0].startswith("·  unbound view.depth4 from K1 (track knob 1)")
+    clock[0] += 1.0
+    lrn.unbind("master.gain")
+    (said,) = footer("output")
+    assert "invariant" in said[0] and said[1] == rgb(ui.WARN)
+    # a panel with no learn object still draws its footer
+    panel.learn = None
+    clock[0] += ui.MESSAGE_S + 0.1
+    assert footer("view") == []

@@ -516,8 +516,8 @@ def test_an_action_that_changes_nothing_leaves_no_step(rig):
     settle(rig)
     assert len(rig.undo.stack) == 1
     free = next(p.id for p in rig.reg if not any(b.target == p.id for b in rig.table.midi()))
-    rig.midi.unbind(free)                              # nothing mapped there: nothing goes
-    assert len(rig.undo.stack) == 2
+    rig.midi.unbind(free)                              # nothing mapped there: nothing goes,
+    assert len(rig.undo.stack) == 1                    # and no step is opened (plan 17 WP1)
     settle(rig)
     assert len(rig.undo.stack) == 1
     rig.lib.load(PRESETS, "TUMBLE")                    # the same preset… with an edit: a step

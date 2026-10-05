@@ -1249,18 +1249,31 @@ class HandsIO:
         moves all its axes at once, so first-to-move won't do. The route
         goes into the loaded preset through `learn.learn_source` (the
         referee and the Replace / Keep prompt as ever); no file is written,
-        the preset shows dirty until a save (plan 13 §3.3)."""
-        if getattr(learn, "learning", None) is None:
+        the preset shows dirty until a save (plan 13 §3.3).
+
+        A learn says what it waits for (plan 17 WP2: `learn.accepts`,
+        asked per axis address): under "Learn hand ▸ left" only the left
+        hand's axes can win, under "Learn desk" none can; a learn object
+        without `accepts` takes any axis, as before."""
+        ok = getattr(learn, "accepts", None)
+        pid = getattr(learn, "learning", None)
+        if pid is None or (ok is not None
+                           and not any(ok(self.address(i)) for i in range(len(self.state)))):
             self._learn_base = None
             return
+        # a re-arm starts a fresh baseline (`armed_n`: also of the same param and want)
+        key = (pid, getattr(learn, "want", None), getattr(learn, "armed_n", None))
+        if key != getattr(self, "_learn_key", None):
+            self._learn_base, self._learn_key = None, key
         # only a hand counts as movement: an axis whose hand is away reads
         # None, so a return spring can never complete a learn
         ys = [st.y if st.follow.live else None for st in self.state]
         if self._learn_base is None:
             self._learn_base = ys
             return
-        moved = [abs(y - b) if y is not None and b is not None else 0.0
-                 for y, b in zip(ys, self._learn_base)]
+        moved = [abs(y - b) if y is not None and b is not None
+                 and (ok is None or ok(self.address(i))) else 0.0
+                 for i, (y, b) in enumerate(zip(ys, self._learn_base))]
         # an axis first seen after the learn began gets its base now
         self._learn_base = [b if b is not None else y for y, b in zip(ys, self._learn_base)]
         best = max(range(len(moved)), key=moved.__getitem__)
