@@ -97,6 +97,11 @@ Not edited by any package: `hands/signal.py`, `hands/tape.py`,
 `apc40.py`, `bindings.default.json`, `undo.py`, `app.py`, `Param` and
 `Registry` in `params.py`, and `Router.modulate`.
 
+*As built:* `app.py` was edited, by WP2: the 80 ms default (fork 12 as
+settled) needs the desk's params declared before the show's session
+values land, so `app._desk_table` was added and `app.main` reads the
+table before `library.attach` (§7, WP2). The rest of the list held.
+
 **Shared with plan 17.** Plan 17 owns `learn.py`'s arming and listening
 (`Learn.__init__`, `arm`, `take`, `same_source`, `target_for`,
 `resolve_pending`, `said`, `refuse`, and anything it adds to say which
@@ -223,6 +228,15 @@ self.outside[side] = h[0] if tracked and not here else None
 - A `HandsIO` from before a hot reload has no `box`: read it with
   `getattr(self, "box", None)`, and `outside` the same way.
 
+*As built:* the edge does not key on `self.present[side]`. A hand in the
+15 mm band past a face whose confidence dipped under the floor for one
+frame would have gone absent, come back as "out", and stayed out until
+it was moved inside the face. The Schmitt state is the palm's own
+(`HandsIO._in_box[side]`): updated on every frame the tracker has the
+hand, whatever its confidence, and forgotten only when the tracker has
+no hand at all. `here = tracked and (box is None or self._cal is not
+None or self._in_box[side])` (§7, WP1; review of PR #94).
+
 **The sweep sets it.** While a sweep runs, every fresh frame of a hand
 that is `tracked` adds its palm `(x, y, z)` to one list, whatever the
 `dofs` (both hands into the same list). `_finish_calibration`, after the
@@ -239,6 +253,15 @@ ranges:
 - All three open: `box = None`.
 - `cal_note` gains the result: `calibrated 12 axes · box 524 × 330 ×
   279 mm`, or `… · box: x open (not swept)`.
+
+*As built:* the span test is **per hand**. A coordinate is bounded only
+when some one hand's own 2nd–98th percentile travel on it reached
+`BOX_MIN_SPAN`; pooled, two still hands held 30 cm apart would have read
+as a 300 mm sweep of x and made a slot. The bounds themselves are still
+the pooled percentiles plus the margin. Under `CAL_MIN_SAMPLES` palm
+samples the note reads `box left as it was (too few palm samples)`; all
+three open, `box: open (not swept)`. A frame without a whole finite palm
+is no sample (§7, WP1).
 - The margin is what lets a hand hold an axis at its end stop: the range
   ends at the 98th percentile and the box 40 mm beyond it.
 
@@ -269,6 +292,12 @@ left 174 px and a height gauge the right 10 px, 6 px apart:
         ● in the box      ○ tracked, outside it (hollow, dim)
 ```
 
+- *As built:* a box wider than the view's scale (past about ±260 mm in
+  x or ±160 mm in z) has its faces drawn clamped 12 px inside the frame,
+  a hand in the box is kept inside the drawn faces and a hand outside it
+  6 px clear of them, so the hollow ring never sits inside the rectangle
+  (review of PR #94). The gauge is drawn with no box too: ticks, no
+  bracket.
 - The view from above keeps today's fixed scale (x over ±260 mm, z over
   ±160 mm) and clamps to the frame as it does now. The box's x and z
   draw as an inner rectangle in `ui.DIM`; an open coordinate draws no
@@ -299,7 +328,9 @@ today's to the float.
 
 ### WP2 — Knob smoothing
 
-**What.** One session param, `desk.slew`, 0 to 250 ms, **0 by default**.
+**What.** One session param, `desk.slew`, 0 to 250 ms, **0 by default**
+(*as built:* 0 on a bare table, **80 ms in the running app**; fork 12 as
+the orchestrator settled it, §6 and §7).
 Above 0, an absolute knob or fader no longer jumps the base from detent
 to detent: each value it sends arrives over that long, in a straight
 line, and comes to rest on the same value it rests on today. At 0 no
@@ -389,8 +420,18 @@ session param.
   p.steps` (what `set_norm(u)` would land, as a norm) and `s.t_end = now
   + seconds`. One glide per param: a second control on the same param
   re-aims it.
+  *As built:* the target is `MidiIO._landing(p, u)`, the detent read
+  back through the param's own maps the way `Param.norm` reads it after
+  `set_norm`. The bare `round(u · steps) / steps` differs in the last
+  bits, and at a CC whose ring rounds on a half it could have sent a
+  ring one step off and corrected it on landing.
 - **`_glide(now)`**, called once per `poll`, after `_fire_holds` and
   before the second `_follow_table`:
+  *As built:* it runs **after** the second `_follow_table`. A pad that
+  loads a preset in the same poll as a knob message would otherwise have
+  let the new glide take one step over the load's value (review of
+  PR #98). `poll` is: `_follow_table`, `_uncatch_moved`, the messages,
+  `_fire_holds`, `_follow_table`, `_glide`, `feedback`.
 
   ```python
   seconds = getattr(self.table, "slew", 0.0)
@@ -410,6 +451,14 @@ session param.
       self._note_written(p)
   self._polled = now
   ```
+
+  *As built, added by the review:* a param that moves on its own
+  (`rot.phase.*` while its plane turns: the integrator writes it every
+  frame) looked "written by someone else" on every poll, so its glide
+  was dropped each frame and the knob never arrived. A param seen to
+  have moved on the poll right after a glide's first step is remembered
+  (`MidiIO._restless`) and written at once from then on, as with
+  smoothing off. `Slew` has a `steps` count for this.
 
   A straight line that arrives exactly `desk.slew` after the last
   message: no tail and no snap at the end, because the line's end *is*
@@ -450,6 +499,9 @@ session param.
   writes nothing, as today.
 - **The port goes away mid-glide.** `poll`, before it returns for "not
   on", calls `_land_all()`: every glide lands on its target at once.
+  *As built:* `MidiIO.close()` lands them too, so no value is left
+  between detents at exit; and `_land_all` leaves alone a param someone
+  else wrote since the glide's last step.
 - **`desk.slew` turned to 0 mid-glide**: the next `_glide` lands
   everything (`seconds <= 0`).
 - **Undo.** A glide keeps writing the base for up to `desk.slew` after
@@ -541,6 +593,14 @@ from the package; a test pins them equal.
 **The rule**, in `learn_source` where the row is built today (the
 resolved target `p` is in hand):
 
+*As built:* plan 17 had already moved the row-making into
+`Learn._row(source, p, when)`; the table lives there, with `centred=`
+and `depth=` passed through from `learn_source`. And the third row of
+the table is wider: **a whole-number continuous param** (`dream.steps`,
+`view.instances`; seven in the registry) keeps the `position` row from
+any axis, like a toggle. A push of 0.25 about `dream.steps` (1–3) never
+reaches the next step (review of PR #100; §7, WP3).
+
 | The target | A centred axis (`centred=True`) | A one-sided axis |
 |---|---|---|
 | continuous, range centred on zero (`centred_target(p)`) | `push`, depth D | `push`, depth D |
@@ -581,6 +641,13 @@ another target), whatever their op, and the status line says what moved:
 moved from rot.phase.XW)`. It is one undo step as before (`undo.push` is
 already the first line of `_place`), so one ⌘Z brings the rows back.
 
+*As built:* the filter is not `x.is_performer`. That would have left the
+axis's switched-off rows, a switched-off twin on the very target being
+learned among them (the route in the table twice). `_place` takes the
+axis's `push` / `position` rows **whether switched on or off** (`x.op in
+MOD_OPS and same_source(...)`); the status names the other params they
+were on (review of PR #100).
+
 **The page.** `"learn_depth"` joins the list of ids under HANDS' "feel &
 calibration" header, after `catch`. No other widget. ROUTING's depth
 field on each row is where one row is tuned, as today.
@@ -606,6 +673,7 @@ def hands_orbit_routes() -> list[Binding]:
             _push("L", "x", "camera.pan.x", 0.1),      # as FIELD: fly sideways
             _push("L", "z", "camera.pan.y", 0.1),      # as FIELD: reach in
             _push("L", "y", "camera.zoom", 0.3)]       # raise: zoom in
+            # As built: 0.12 (2.23× at the top). 0.3 is 7.43×: see below.
 
 "hands-orbit": Factory(hands_orbit_routes, dict, "hands-orbit",
                        "Two hands on the camera: the right hand orbits (sideways turns, "
@@ -618,6 +686,12 @@ hand adds nothing and the camera the mouse set stays (plan 12's rule for
 a hand row). `values` is `dict` and `desk` is `None`, as `hands-play`:
 the look is the app's defaults and the desk the factory preset layer.
 The depths are a first cut, to be judged at the machine (check N9).
+
+*As built:* the zoom depth is **0.12**, not 0.3. At 0.3 a raised left
+hand reached 7.43×: the offscreen strip showed the default shape off the
+frame at half height and a near-black frame at the top. At 0.12 the top
+is 2.23× and half height 1.49× (commit c6c8783, after PR #97 merged; §7,
+WP4). The other four depths are as written.
 
 ### WP5 — Docs and hand checks
 
@@ -994,7 +1068,439 @@ one entry and one file.
 
 ## 7. As built
 
-Filled as the work packages land.
+Written by WP5 from each PR's "As built" and review sections, every
+statement checked against the code on `plan-18-integration` at 71093f6
+(WP1–WP4 merged, with plan 17's three merged packages beside them: One
+Unbind #93, Learn desk / hand #96, the ROUTING filter #91). On that
+commit: 1259 passed, 1 skipped (the hands tape), `ruff check .` clean.
+Where this section and §2 differ, this section is the code; §2 carries
+an "*As built:*" note at each such place.
+
+**What has been seen, and by whom.** Nothing here was tried by a person
+at the rig. No camera has tracked a hand through any of it, no real
+sweep has set a box, no knob or fader of an APC40 has been turned with
+smoothing on, and nobody has held two hands over `hands-orbit`. Three
+kinds of evidence exist, and the entries below say which is which:
+
+- *tests*: the named pytest nodes, on synthetic hands
+  (`tests/fake_hands.py`: palms placed by the test, through the real
+  `HandsIO` chain), fake MIDI ports with a clock the test moves, and
+  headless imgui;
+- *demos*: the scripts under `tools/`, each on a temp home of its own,
+  with their output kept under `docs/plans/assets/18-hand-and-knob-feel/`
+  (reported by the agent that built the package; the pictures are from a
+  hidden window or an offscreen render, the hands synthetic);
+- *seen in scripted launches by the orchestrator*: the real app
+  (`uv run hyperspace`) started against a temp home on a laptop, on
+  `plan-18-integration`, and driven from a script. What it saw: **Knob
+  smoothing reads 80 ms at launch and the factory show is clean** (no
+  dirty dot); turning it off marks the show unsaved; `hands-orbit` loads
+  with its five camera routes; with "Learn hand ▸ left" armed the right
+  hand's axis is ignored and the left hand's roll is learned — by
+  calling the hands adapter's learn path directly with made-up axis
+  readings, **no real hand**; 1259 passed, 1 skipped, ruff clean; no
+  runtime error and an empty stall log. That is a launch on a laptop
+  with no camera and no desk attached, not a session at the machine.
+
+Hand checks 72–80 (group N of `11-hand-checks.md`) are what the machine
+still owes. Decision register rows 50–56 are the forks this plan's run
+settled, six on the plan's recommendation and one (row 54, knob
+smoothing on at 80 ms) against it.
+
+**Two fixes the orchestrator made at the merge seams**, neither in any
+package's PR:
+
+- *The HANDS panel's imports.* Merging `plan-17-integration` into
+  `plan-18-integration` (c9bdcf6) conflicted in `hands/panel.py` (and in
+  `tests/test_hands.py`): an import conflict, plan 17's Learn and Unbind
+  work and WP1's box having both edited the panel's imports. Resolved by
+  hand to carry both (as the orchestrator reported it; the merge commit
+  records the two conflicted files and not the hunks).
+- *`tests/test_undo.py`'s rig* (d594935). After WP2, a rig that builds
+  its `Router` after `Library.attach` and then asks whether the show is
+  dirty must declare the desk's params first, as `app.main` now does
+  (`routing.register_desk(reg, table)` before `attach`). WP2 fixed the
+  two rigs that asked. On the merged branch `test_undo.py`'s rig needed
+  it too (declared late, `desk.slew` reads as an unsaved show); it now
+  declares them before attach.
+
+### WP1 — The interaction box (PR #94, merged 0d654dd)
+
+**Built.** `hands/core.py`: `CAL_SCHEMA = "hyperspace.hands/2"`,
+`BOX_AXES`, `BOX_MARGIN` 40 mm, `BOX_EDGE` 15 mm, `BOX_MIN_SPAN` 120 mm,
+the `Box` type, `load_box(path)`, `inside(box, feats, grow)`,
+`save_calibration(path, ranges, box=None)` (always writes the `box`
+key), `_old_schema`, `_keep`, and on `HandsIO`: `box`, `outside`,
+`_in_box`, `_palm`, `_kept`, `_sweep_box`. `load_calibration` is
+unchanged. In `poll` a hand is present when the tracker has it at or
+above the confidence floor **and** there is no box, or a sweep is
+running, or its palm is in the box; everything downstream already keyed
+on presence, so its axes read `NaN`, its presence lane and note go off,
+its pinch switches drop and its skeleton is not kept.
+`hands/panel.py`: inside the same 190 × 92 frame, the view from above
+(174 px) with the box as an inner rectangle, a 10 px height gauge with a
+bracket for the box's y and a tick per hand, a hollow ring at 40 % alpha
+for a hand tracked but outside; the status line's `●` / `◌` / `○`; the
+sweep's and "reset ranges"' tooltips; one disabled line under the
+selected axis's range with the box's three ranges or "box open".
+`ghost.py`: `box_of` returns the box's bound per coordinate when there
+is one, else the union of the axis ranges as before. No registry param,
+no widget, no config key.
+
+**Differs from §2, and why.**
+
+- *The span test is per hand* (review). A coordinate is bounded only
+  when one hand's own travel on it reached 120 mm; the plan pooled both
+  hands, so two still hands held apart read as a sweep. The bounds are
+  still the pooled percentiles. Two hands that each sweep under 120 mm
+  on a coordinate leave it open.
+- *The edge follows the palm's own state* (`_in_box`), not `present`
+  (review). A one-frame dip in confidence no longer puts a hand in the
+  15 mm edge band out until it is brought inside the face.
+- *Faces clamp when the box exceeds the view's scale* (review): drawn
+  12 px inside the frame, an inside dot kept within them, an outside
+  ring 6 px clear. Not looked at in a picture at that box size.
+- *One backup per adapter* (`_kept`; review): a save that fails does not
+  copy the old file again on the next attempt.
+- `_keep` raises `OSError` when no copy could be made; `save_ranges`
+  catches it, says `no backup of the old file: …` in `cal_note`, and
+  saves. The backup's number is the old file's own schema number (`/1` →
+  `.bak-v1`), `1` for a file with no schema or one that does not parse;
+  an unparseable file is backed up too. A taken name gets
+  `-<YYYYmmdd-HHMMSS>`, then `-2`, `-3`.
+- `load_box`: a key missing from the `box` object is open and said on
+  stderr, like a bad pair; `null` is open and silent; a `box` that is no
+  object is no box, one line; three open coordinates load as `None`.
+  `inside` treats a NaN palm coordinate as outside a bounded coordinate.
+- `cal_note`: `… · box 419 × 290 × 270 mm`; `… · box: x open (not
+  swept)`; `… · box: open (not swept)`; `… · box left as it was (too few
+  palm samples)`; on the first rewrite `… · the old file kept as
+  hands.json.bak-v1`. `reset_ranges`: `ranges back to the defaults, box
+  open`, set before the save so a save error is not overwritten.
+- The view from above is 174 px wide at the same ±260 mm / ±160 mm
+  mapping, so the dots sit slightly closer together than before even
+  with no box. The gauge is drawn with no box too.
+- The status line has a hover tooltip naming the three glyphs.
+- `hands/__init__.py` is not edited: the box's names are reached as
+  `hands.core.BOX_EDGE` and so on.
+
+**Left as the plan has it, for the owner to know** (review):
+
+- **The box is off for the whole sweep**, so for those 20 s any tracked
+  hand performs and is sampled into the new box. Calibrate with nobody
+  else in view.
+- The ghost camera frames the old box during a sweep and the new one
+  after it.
+- A sweep that sees fewer than 30 palm samples leaves the old box in
+  force.
+- The confidence floor still has no hysteresis (§1 row 5): the
+  tracker's edge, not the box's.
+
+**Tests** (`tests/test_hands.py`). The sixteen of §5's table that live
+there, as named, and five more (the first from the package, four from
+its review):
+`test_a_backup_that_cannot_be_made_never_stops_the_save`,
+`test_two_still_hands_held_apart_are_not_a_sweep`,
+`test_a_dip_in_confidence_does_not_evict_a_hand_in_the_edge_band`,
+`test_a_save_that_fails_does_not_copy_the_old_file_again`,
+`test_a_frame_without_a_whole_palm_is_no_sample`.
+`tests/test_ghost.py::test_the_camera_frames_the_interaction_box_when_one_is_set`,
+`::test_a_hand_outside_the_box_fades_out`. Unchanged and green:
+`test_calibration_sweep_sets_and_saves_ranges`,
+`test_hands_page_draws_live_and_offline`,
+`test_ghost.py::test_the_box_is_the_calibrated_ranges_else_the_defaults`,
+`tests/test_hands_boundary.py`,
+`test_ui_shell.py::test_every_page_fits_the_control_window`.
+
+**Demo.** `docs/plans/assets/18-hand-and-knob-feel/box-hands-page.png`
+(`tools/box_shot.py`: a hidden window; the box set by a synthetic sweep;
+the left hand inside, the right 60 mm past the x face — hollow red ring,
+`R◌`, its rows dim) and `box-demo.txt` (`tools/box_demo.py`: an old
+`hands.json` loaded and left byte for byte; a sweep making a 419 × 290 ×
+270 mm box and `hands.json.bak-v1`; a hand walking out through the x
+face and back, let go at face + 15 mm and taken back at the face; a
+second sweep making no second copy; "reset ranges").
+
+**Not verified.** Anything against a camera, a real hand or a real
+sweep. Whether 40 mm of margin, 15 mm of edge and 120 mm of minimum span
+feel right. Whether a real sweep's box keeps a hand that is on the
+APC40 out: that depends on where the desk stands against what was swept.
+`◌` comes from a fallback font and is smaller than `●`; whether it reads
+at arm's length was not judged. `tools/hands_probe.py --calibrate` ends
+in the same `_finish_calibration` and was not run. A real hot reload
+onto a `HandsIO` from before the box.
+
+### WP2 — Knob smoothing (PR #98, merged a9409bb)
+
+**Built.** `routing.py`: `SLEW_PARAM = "desk.slew"`, `SLEW_MAX_S =
+0.25`, `SLEW_DEFAULT_S = 0.08`, `Bindings.slew = 0.0` (a class
+attribute), and `register_desk` declaring `desk.shift` and `desk.slew`,
+each behind its own `in reg`. `params.py`: `"desk"` in `SESSION_GROUPS`.
+`midi.py`: `SLEW_TOL`, `SLEW_BACK_S`, the `Slew` dataclass, and on
+`MidiIO`: `_slews`, `_polled`, `_restless`, `_aim`, `_glide`,
+`_land_all`, `_landing`, `_ring_norm`. With `desk.slew` above 0, an
+`abs` row on a continuous, non-integer param aims a glide instead of
+writing; `_glide` walks the base to it once a poll, a straight line
+written between detents with `Param.set`, landing `desk.slew` after the
+last message with the `set_norm` the row makes with smoothing off. The
+adapter is still a scene-setter writing the base. `ui.py`: one row,
+"Knob smoothing", first under SYSTEM's "midi". `app.py`:
+`_desk_table(reg, table)`.
+
+**Differs from §2, and why.**
+
+- **On at 80 ms in the app** (fork 12, settled by the orchestrator
+  against the plan's recommendation). `app._desk_table` declares the
+  desk's params on the app's table and sets `table.slew =
+  SLEW_DEFAULT_S`, and `app.main` calls it **before** `library.attach`.
+  `attach` takes the registry as it stands as "fresh" and then lands the
+  show: a show that saved `desk.slew` gets its number, 0 included; one
+  that names none opens at 80 ms and is clean. "New show" returns to
+  80 ms. A bare `Bindings` (every test rig, the probe) is 0.
+- **That is more than the "one line in `app.main`" the settlement
+  expected.** `desk.slew` is the first persisted param `register_desk`
+  declares, and `app.main` used to reach `register_desk` only through
+  `Router(...)`, after attach. A persisted session param declared after
+  attach is reported as an unknown id when a show names it, never gets
+  the show's value, and makes every show unsaved. So the table is read
+  before attach; `library.py` is not edited.
+- *A show switched in a running app* to a show that does not name
+  `desk.slew` keeps the number that was live, not 80 ms (the library's
+  existing rule for an id a file lacks). Only a launch and "new show"
+  start from the default.
+- *`poll`'s order* (review): `_glide` runs after the second
+  `_follow_table`, so a preset a pad loaded in the same poll has ended
+  its glides before any of them steps.
+- *`_restless`* (review): a param that moves on its own (`rot.phase.*`
+  while its plane turns) is written at once from the second message on;
+  its glide could never arrive.
+- *The ring's target as landed*: `Slew.target` is `_landing(p, u)`, the
+  norm `set_norm(u)` leaves as `Param.norm` reads it back, so the ring
+  drawn during a glide is the ring drawn after the write, bit for bit.
+- *`close()` lands every glide* (review); `_land_all` skips a param
+  someone else has written since.
+- `redraw(load=True)` compares a fader's position with `_ring_norm(p)`
+  (the glide's target while a session param is still gliding), not
+  `p.norm`: a preset load in the middle of a crossfader glide would
+  otherwise have dropped the fader's hold, against plan 15 fork 19.
+- `SLEW_BACK_S = 0.05` names "no further back than 50 ms". A glide begun
+  on the adapter's very first poll starts its line at the message.
+- **`desk` in `SESSION_GROUPS` has a side effect on the ROUTING page**:
+  every continuous session param is offered as a route's scale, so
+  "Knob smoothing" is in that list, and `desk.shift` is classed as a
+  session target. Harmless and odd; `ui_routing.py` is plan 17's file
+  and was left.
+
+**Left as they are, for the owner to know** (review):
+
+- A load drops a performance param's glide without landing it, so a
+  param the preset does not name stays where the glide had got to,
+  between detents.
+- An uncaught fader's pickup test reads the base in flight, so it can
+  catch on a value a glide is only passing through.
+- Seen in the demo and the same with smoothing off: a ring can re-base
+  the encoder one CC step from where the hand has it (CC 68 lands detent
+  54, whose ring is 69), because the ring is drawn from the 100-detent
+  value.
+
+**Tests.** `tests/test_midi.py`: the ten of §5's table, and
+`test_the_ring_a_glide_shows_is_the_ring_after_the_write`,
+`test_a_load_from_a_pad_ends_a_glide_before_it_steps`,
+`test_a_param_that_moves_on_its_own_is_written_at_once`,
+`test_closing_the_adapter_lands_every_glide`. `tests/test_desk.py`:
+`test_a_layer_switch_leaves_a_glide_to_finish`,
+`test_a_preset_load_stops_a_glide_on_a_performance_param_and_not_on_the_dim`.
+`tests/test_undo.py`: `test_a_smoothed_knob_turn_is_one_step`,
+`test_undo_during_a_glide_holds`,
+`test_the_slew_can_never_outlast_the_settle_time`.
+`tests/test_app_boundary.py::test_the_app_starts_with_knob_smoothing_at_80_ms_and_a_show_keeps_its_own`.
+Extended: `test_params.py::test_every_persisted_group_is_performance_or_session`,
+`test_presets.py::test_a_preset_load_never_touches_a_session_param`. The
+tests that existed in `test_midi.py`, `test_desk.py` and `test_undo.py`
+pass unedited: on a bare table the adapter is the one from before.
+
+**Demo.** `docs/plans/assets/18-hand-and-knob-feel/slew-demo.txt` and
+`slew.png` (`tools/slew_demo.py`: fake ports, a clock the script moves).
+A slow turn on `camera.pan.x`, one CC step every 50 ms for 2 s: off, the
+base moves on 32 of 150 frames, 80 px at a time; at 80 ms on 123 of 150,
+25.9 px at most; both rest on 2560 px and send the same 32 ring
+messages. A flick of 50 steps in 5 frames: the largest frame-to-frame
+move is 8.0 % of the throw off and 4.9 % at 80 ms, landing 83 ms after
+the last message. One turn is one undo step at 80 ms.
+
+**Not verified.** **Nothing here has been on an APC40.** Whether the
+encoder re-bases cleanly from the ring message while a value is in
+flight (hand check 31, the re-base itself, has still not been seen), and
+whether 80 ms feels right or late under the hand. Real frame timing:
+every test and the demo use an injected clock at an even rate.
+`app.main` itself is run by no test; its order is pinned by reading its
+source and by running `_desk_table` and the same sequence headless. The
+SYSTEM row was measured by the page-fits test, and its value was read in
+the orchestrator's scripted launch; nobody has looked at it.
+
+### WP3 — A learn's default (PR #100, merged 71093f6)
+
+**Built.** `learn.py`: `PUSH_DEPTH = 0.25`, `centred_target(p)`
+(continuous, no taper, not log, `lo == -hi`, `hi > 0`),
+`learn_source(source, when=None, *, centred=False, depth=None)`, and the
+rule in `Learn._row`:
+
+| The target | A centred axis | A one-sided axis (height) |
+|---|---|---|
+| continuous, range centred on zero | `push`, depth D | `push`, depth D |
+| any other continuous param | `push`, depth D | `position`, depth 1 |
+| an enum, a toggle, a trigger, a whole-number param | `position`, depth 1 | `position`, depth 1 |
+
+D is `hands.learn_depth` (`HandSettings.learn_depth`, 0.25, 0.05–1.0:
+session by group, not modulatable, saved by a hands setup and by the
+show), one row under HANDS' "feel & calibration" after Catch. A learned
+push carries no `rest`, so it is centred on the axis's own rest. "Centred"
+is the axis's `bipolar` setting at the moment of the learn
+(`HandsIO._learn` passes `centred=bool(axis.bipolar)`). Rows that exist
+are never rewritten and no preset file changed.
+
+**Differs from §2, and why.**
+
+- *The rule lives in `Learn._row`*, which plan 17 had already extracted;
+  `learn_source` passes the two keywords through. Its `accepts` guard,
+  `take` and `target_for` lines are plan 17's, untouched.
+- *A whole-number continuous param keeps `position`* from any axis
+  (review): a push of 0.25 about `dream.steps` (1–3) never reaches the
+  next step. Seven params in the registry.
+- *`_place` takes the axis's rows whether switched on or off* (review):
+  `x.op in MOD_OPS and same_source(...)`, where the plan had
+  `x.is_performer`. A switched-off twin on the target being learned goes
+  too.
+- *The same-axis path*: when the target's performer is already this
+  axis, the learn refreshes the gate and nothing else, whatever the op.
+  So an existing depth-1 `position` row is **not** tamed by learning it
+  again (Unbind first, or edit the row on ROUTING). That path records an
+  undo step even when the gate did not change, as it did before for
+  `position` rows.
+- Called with neither keyword on a zero-centred range, `learn_source`
+  lands a push at `PUSH_DEPTH`; on any other target, the row as before.
+- The HANDS feel list skips an id the registry lacks (a hot reload onto
+  a registry built before this package).
+- `centred_target` is true for 32 params of the default registry,
+  `rot.phase.*`, the effects' `*.speed`, `fx.kaleido.swirl` and
+  `fx.zoomblur.cx / cy` among them.
+
+**Left as they are, for the owner to know** (review):
+
+- **Centredness is read from the axis's "Centred" switch, while a push
+  centres on its Rest.** Switching Centred on for height without moving
+  its Rest gives a push from the bottom.
+- A one-sided axis on a zero-centred range only adds upward from the
+  base: height on `rot.rate.XY` can no longer stop or reverse the plane,
+  and on a wrapping angle covers a quarter turn at 0.25 (fork 6 (c)).
+- On a factory preset a learn removes the preset's own rows on that
+  axis (fork 7 (b)); the status line names the params and one ⌘Z brings
+  them back.
+
+**Tests.** `tests/test_learn.py`:
+`test_a_centred_axis_learns_as_a_push_about_the_base_at_the_learn_depth`,
+`test_a_one_sided_axis_on_a_one_sided_param_is_still_the_fader`,
+`test_a_one_sided_axis_on_a_zero_centred_range_pushes_up_from_the_base`,
+`test_a_discrete_target_keeps_the_position_row`,
+`test_a_whole_number_param_keeps_the_position_row`,
+`test_centred_target_reads_the_declared_range`,
+`test_no_target_is_refused_or_flagged`,
+`test_the_same_axis_again_only_refreshes_the_gate_whatever_the_op`,
+`test_a_learn_onto_a_performed_param_is_still_held_whatever_the_op`,
+`test_existing_rows_are_never_rewritten`,
+`test_the_two_default_depths_agree`; rewritten
+`test_a_learned_axis_drives_one_param`, extended
+`test_a_learn_is_one_undo_step`. `tests/test_hands.py`:
+`test_learn_passes_the_axiss_centredness_and_the_sessions_depth`,
+`test_learn_depth_changes_only_the_next_learn`,
+`test_learn_takes_the_axis_that_moved_as_a_push_about_the_base` (the
+plan's `…_as_a_position_route`, renamed),
+`test_setup_is_registry_params_that_round_trip`. Plan 17's tests of the
+learn pass unedited.
+
+**Demo.** `docs/plans/assets/18-hand-and-knob-feel/learn-default.txt`
+(`tools/learn_default_demo.py`: a fake palm through the real `HandsIO`
+chain at the default feel). A learned roll on `rot.rate.XY` from a base
+of 1×: before, level 0× and the ends ±66.56×; after, level 1× and the
+ends −15.64× … +17.64× (−1.77× … +3.77× inside ±18°). Height on the same
+rate: before −66.56× at the bottom, after 1× at the bottom and +34.28×
+at the top. Height on brightness: the same row before and after. The
+depth set to 0.1 and the next learn carrying it. An axis learned onto a
+second param, the status line naming the first, and one ⌘Z putting the
+row back.
+
+**Not verified.** No real hand and no tracker: whether 0.25 feels right
+and whether a learned roll on rotation is now gentle enough (checks
+75–77). The HANDS page with the new row was measured by the page-fits
+test only. The owner's saved presets were not opened.
+
+### WP4 — Two hands on the camera (PR #97, merged a9c7d13; the zoom depth in c6c8783, merged 893b33e)
+
+**Built.** `preset.py`: `hands_orbit_routes()` and one `FACTORY_PRESETS`
+entry, `hands-orbit` (`values` is `dict`, `desk` is `None`, as
+`hands-play`); the generated `library/presets/hands-orbit.json`. Five
+rows, each a push from its axis's own rest, named by axis, no pinch:
+
+| hand axis | camera param | depth | at the ends of the default range |
+|---|---|---|---|
+| `hand:right.x` | `camera.yaw` | +0.5 | −90° … +90° |
+| `hand:right.pitch` | `camera.pitch` | +0.5 | −44° … +44° |
+| `hand:left.x` | `camera.pan.x` | +0.1 | −400 px … +400 px |
+| `hand:left.z` | `camera.pan.y` | +0.1 | −400 px … +400 px |
+| `hand:left.y` | `camera.zoom` | +0.12 | base … base × 2.23 (never below the base) |
+
+It is in the preset list and on no show's F-key. No other preset file
+changed.
+
+**Differs from §2, and why.** **The zoom depth is 0.12, not 0.3.** At
+0.3 the top of the range was 7.43×: in the offscreen strip the default
+shape ran off the frame at half height and the frame was near black at
+the top. At 0.12 the top is 2.23× and half height 1.49×; in the
+regenerated strip the shape fills the frame with its corners just
+clipping. The steering-wheel form (the two hands turning the scene
+between them) is not built: it needs a lane derived from two hands
+(fork 17). `tools/preset_shots.py`'s `Stage` gained one optional
+argument, `load`, for the demo; that file was outside the package's
+list.
+
+**Tests** (`tests/test_presets.py`).
+`test_hands_orbit_is_five_pushes_onto_the_camera`,
+`test_an_absent_or_level_hand_leaves_the_orbit_camera_alone`,
+`test_each_orbit_axis_moves_its_camera_param_as_its_row_says`,
+`test_the_orbit_hands_leaving_return_the_camera_to_where_the_mouse_left_it`.
+Extended: `tests/test_routing.py::test_every_factory_preset_names_real_params_with_one_owner`
+(the pinned set), `test_the_routing_presets_are_full_factory_presets`,
+`test_every_factory_presets_desk_is_the_generators` (23 files).
+
+**Demo.** `docs/plans/assets/18-hand-and-knob-feel/orbit-sweeps.txt`
+(each axis across its default range against its camera param, nine
+readings, the other four params not moving; a camera the mouse moved
+first, both hands in, both out) and `orbit.png` (`tools/orbit_demo.py`:
+offscreen renders; columns the right hand at the left, centre and right
+of its range, rows the left hand low, half up and high).
+
+**Not verified.** No real hand has played it. Which way each move reads
+on the glass (does a hand going right orbit the way a performer expects,
+does reaching in pan up or down, is fingers-up "look down") was not
+judged: the signs are the plan's, the pitch and the pans copied from
+FACES and FIELD. Nothing was run with an interaction box set or a
+calibrated `hands.json`: the sweeps use the default ranges. The review
+could not reproduce "`camera.reset` does nothing while a hand is in"
+headless; the R key was not tried in the running app with a hand in.
+
+### WP5 — Docs and hand checks
+
+This section and the "*As built:*" notes above; `ARCHITECTURE.md` (§2,
+§3.2, §3.4, §3.5, §3.7, §4), `ENGINEERING.md` (§2.7, §5's hands, desk,
+Learn and home-folder paragraphs, §6), `DECISIONS.md` (seven rows dated
+2026-10-04 and six extended), `DECISION-REGISTER.md` (rows 50–56),
+`11-hand-checks.md` (group N as checks 72–80, a placeholder heading for
+plan 17's group M, checks 15, 19 and 22), `plans/README.md`,
+`CHECKPOINT.md` and the roadmap's pointer. Plan 17's own documents (its
+"As built", its register rows and its group M) are written by plan 17's
+docs package after this one. One code comment still says a learn
+"writes a `position` route": `hands/core.py`'s module docstring, lines
+12–13. It is code and was left.
 
 ## 8. Appendix — group N for `11-hand-checks.md`
 
@@ -1002,6 +1508,15 @@ WP5 pastes this in after group M (its heading at the level of the other
 groups'), and adds "then plan 18's group N" to the file's opening
 paragraph. The check numbers are placeholders (N1…N9) until the file's
 running numbers are known. The text is final except for PR numbers.
+
+*As built:* N1–N9 are **checks 72–80** of
+[`11-hand-checks.md`](11-hand-checks.md) (64–71 are kept for plan 17's
+group M). The text below is the plan's and is **not** the one to run:
+the copy in that file was made true to the code — knob smoothing reads
+80 ms at launch, not "off" (N7); the box is off for the whole sweep, so
+calibrate with nobody else in view (N1); the zoom depth is 0.12 (N9);
+learning a tilt that a preset already uses takes that row with it (N4,
+N5).
 
 ### N. Plan 18 — the box, a learn's default, knob smoothing — added 2026-10-04
 
