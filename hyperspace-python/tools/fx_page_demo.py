@@ -84,13 +84,15 @@ def transcript() -> None:
     on = {n: fx.values[n]["on"] for n in fx.names()}
     say(f"    effects switched by that: {sum(on.values())} (a click on the name never toggles)")
     say()
-    say("fx.kaleido.order 15 → 99 — its order slider dragged to the far end")
-    for k in range(15, 100):
+    was = fx.values["kaleido"]["order"]
+    say(f"fx.kaleido.order {was} → 99 — its order slider dragged to the far end")
+    for k in range(was, 100):
         reg["fx.kaleido.order"].set_value(k)
         assert fx.selected() == "kaleido"
     stack(r)
     say()
-    say("fx.huecycle.order 85 → 0 — another effect moved past it")
+    was = fx.values["huecycle"]["order"]
+    say(f"fx.huecycle.order {was} → 0 — another effect moved past it")
     reg["fx.huecycle.order"].set_value(0)
     stack(r)
     say()

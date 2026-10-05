@@ -68,6 +68,11 @@ def page(panel, dt: float) -> None:
     # the stack, in order: a chip per effect, lit while on
     names = fx.names()
     sel = fx.selected()
+    # nothing chosen yet (every launch): the first effect is open. Now that
+    # it is on show it is held by name like any other, or dragging its own
+    # order slider would hand the strip to whichever effect became first
+    if sel is not None and getattr(fx, "sel_name", None) is None:
+        fx.select(sel)
     sp = imgui.get_style().item_spacing.x
     w = (imgui.get_content_region_avail().x - sp * (CHIPS_PER_ROW - 1)) / CHIPS_PER_ROW
     for k, name in enumerate(names):
@@ -125,22 +130,34 @@ def _chip(panel, fx, name: str, label: str, width: float, open_: bool) -> None:
         dl.add_circle_filled(c, h * 0.2, ui.u32(ui.TEXT))
     else:
         dl.add_circle(c, h * 0.2, ui.u32(ui.DIM), 0, 1.5)
-    panel._tip(p, LED_ON_TIP if on else LED_OFF_TIP)
-    panel._ctx(p, key=".led")       # the same param's menu, its own popup id
+    panel._tip(p, lambda: _led_tip(panel, p))
+    # the same param's menu on the LED, the name and the strip's check: a
+    # key each, or the three would share one popup id and draw it thrice
+    panel._ctx(p, key=".led")
+    panel._learn_frame(p)
 
-    # the name: opens the strip, and carries the learn frame and the dot
+    # the name: opens the strip, and carries the modulation dot
     imgui.same_line(0, LED_GAP)
     if ui.lit_chip(f"{label}##chip.{p.id}", on, ui.TEXT if open_ else None,
                    imgui.ImVec2(max(1.0, width - h - LED_GAP), 0)):
         fx.select(name)
     panel._tip(p)
-    panel._ctx(p)
+    panel._ctx(p, key=".chip")
     panel._learn_frame(p)
     panel._mod_dot(p)
-    if open_:                       # "open", apart from "on": an outline round both parts
+    armed = panel.learn is not None and panel.learn.learning == p.id
+    if open_ and not armed:         # "open", apart from "on": an outline round both parts
         r1 = imgui.get_item_rect_max()
         dl.add_rect(imgui.ImVec2(r0.x - 1, r0.y - 1), imgui.ImVec2(r1.x + 1, r1.y + 1),
                     ui.u32(ui.TEXT), h / 2 + 1, 2.0)
+
+
+def _led_tip(panel, p) -> str:
+    """The LED's hover: what a click does. A click writes the base, so the
+    base is what it reads; while a source rides the switch the effective
+    state (the dot) can differ, and the modulation line says so."""
+    tip = LED_ON_TIP if p.base else LED_OFF_TIP
+    return f"{tip}\n{panel._mod_line(p)}" if p.modulated else tip
 
 
 def _state(panel):

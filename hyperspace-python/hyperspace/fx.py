@@ -354,8 +354,9 @@ def declare(r, fx: FxState, names: set[str] | None = None) -> None:
 
 def _sel_index(fx: FxState) -> int:
     """fx.select's value: where the open effect sits in names(); 0 with none."""
-    name = fx.selected()
-    return fx.names().index(name) if name is not None else 0
+    names = fx.names()               # sorted once: this is read by every surface that shows it
+    name = getattr(fx, "sel_name", None)
+    return names.index(name) if name in fx.specs else 0
 
 
 def _sel_set(fx: FxState, i) -> None:
