@@ -167,6 +167,14 @@ built either way; the hand checks start with calibration.
 
 ### Plan 19 — Presets and the desk layout
 
+*As built:* [`19-presets-and-the-desk.md`](19-presets-and-the-desk.md)
+§7 (PRs #104, #110, #115, #114, #117 and #119 on `plan-19-integration`;
+decision register rows 72–78; hand checks 81–90). Where it differs from
+the lines below, that section is the code — a preset's old shape pads
+drop at load **without** a note (a note only for a row the owner mapped
+there), and rename repoints every show of the owner's, not only the
+open bank.
+
 - **Twenty-four presets on the desk.** The bank grows from 8 slots to 24:
   clip row 1 is slots 1–8 as today, clip rows 4–5 become slots 9–24, all
   invariant (the same on both layers). Shape selection leaves those two
