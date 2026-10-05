@@ -85,9 +85,11 @@ def main() -> None:
         print(f"wrote {OUT / name}  — cheatsheet {panel.cheatsheet}, desk {panel.desk}")
 
     draw()
+    assert not panel.cheatsheet and panel.desk, "the launch state is not sheet off, desk on"
     shoot("launch-no-sheet.png")                      # nothing pressed: the launch state
     r.router.keys(demo.Keys(glfw.KEY_SLASH))          # the `/` row, through the router
     draw()
+    assert panel.cheatsheet, "the / row did not bring the sheet up"
     shoot("launch-sheet-on.png")
     impl.shutdown()
     glfw.terminate()
