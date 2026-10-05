@@ -347,3 +347,149 @@ def test_a_learn_is_one_undo_step(tmp_path):
     assert labels(r) == [f"learn {target}"]
     assert u.undo() and desk() == before and table.desk_serial == serial
     assert u.redo() and any(b.target == target for b in table.desk())
+
+
+# ------------------------------------------------------ plan 17 WP1: one Unbind
+
+def bound_rig(home):
+    """The app's construction with the undo (tests/test_undo.boot: TUMBLE
+    loaded), and on Brightness — a knob and two step buttons in that preset
+    — a hand route, a disabled LFO route with a macro on its depth, and an
+    invariant row of the session's."""
+    from test_undo import boot, settle
+
+    from hyperspace.routing import Macro, Sub
+
+    r = boot(home)
+    table = r.table
+    pid = r.pid = "view.bright"
+    assert {b.kind for b in table.desk() if b.target == pid} == {"cc", "note"}
+    assert len([b for b in table.desk() if b.target == pid]) == 3 and not table.routes_to(pid)
+    table.add(Binding("hand:right.y", pid, "position"))
+    table.add(Binding("lfo:0", pid, "push", 0.3, enabled=False))
+    table.macros["macro.1"] = Macro("Wobble", [Sub(depth=("lfo:0", pid), lo=0.0, hi=0.6)])
+    r.session = Binding("cc:0:119", pid, "abs")              # no layer: invariant
+    table.bindings.append(r.session)
+    table.write()
+    settle(r)
+    r.undo.clear()
+    r.on_disk = (table.path.read_text(), table.path.stat().st_mtime_ns)
+    r.path = table.path
+    return r
+
+
+def left(table, pid) -> list:
+    """The MIDI rows and routes still on a param."""
+    return [b for b in table.bindings
+            if b.target == pid and (b.is_midi or any(b is x for x in table.routes()))]
+
+
+def test_unbind_removes_the_presets_desk_rows_and_every_route(tmp_path):
+    """Plan 17 WP1, fork 4: one Unbind removes what is bound to the param
+    in the loaded preset — its knob, its two step buttons, the hand route
+    and the disabled LFO route (its depth subscriber with it) — and never
+    a session row. The preset is dirty; no file is written. It needs no
+    MIDI adapter: the call is the learn object's."""
+    r = bound_rig(tmp_path / "home")
+    table, lrn, pid = r.table, r.learn, r.pid
+    serial = table.redraw_serial
+    desk, routes, session = lrn.bound((pid,))
+    assert len(desk) == 3 and [b.scheme for b in routes] == ["hand", "lfo"]
+    assert session == [r.session]
+    gone = lrn.unbind((pid, pid))                            # an id given twice is one id
+    assert len(gone) == 5 and not lrn.refused
+    assert left(table, pid) == [r.session]                   # the keys' rows are not Unbind's
+    assert table.redraw_serial > serial                      # an adapter redraws: dark (D8)
+    assert not table.depth_subs(routes[1]) and not table.macros["macro.1"].subs
+    assert lrn.last.startswith(f"unbound {pid} from ") and " and LFO" not in lrn.last
+    assert lrn.last.count(",") == 3 and " and " in lrn.last  # five rows named
+    assert r.lib.is_dirty("presets") and untouched(r)
+    # a bare Learn over a table, no registry rule, no adapter: the same
+    t = Bindings([Binding("cc:0:48", "a", "abs", layer="preset"), Binding("lane:1", "a", "push"),
+                  Binding("cc:0:7", "a", "abs")])
+    bare = Learn(r.reg, t)
+    assert len(bare.unbind("a", name=lambda b: b.source.upper())) == 2
+    assert bare.last == "unbound a from CC:0:48 and LANE:1"
+    assert [b.source for b in t.bindings] == ["cc:0:7"]
+    # only the session's row left: a refusal, in the words Unbind always used
+    assert bare.unbind("a") == [] and bare.refused
+    assert bare.last == ("MIDI CC 7 ch1 → a is invariant (the session's, edited in "
+                         "bindings.json) — not unbound")
+    assert bare.unbind("nothing.here") == [] and bare.unbind(()) == []
+
+
+def test_unbind_by_kind(tmp_path):
+    """`desk=False` leaves the desk rows; `routes=False` leaves the routes;
+    an alias's routes are its band's (the drawn id and the real one)."""
+    r = bound_rig(tmp_path / "home")
+    table, lrn, pid = r.table, r.learn, r.pid
+    gone = lrn.unbind((pid,), desk=False)
+    assert [b.scheme for b in gone] == ["hand", "lfo"] and not table.routes_to(pid)
+    assert len([b for b in table.desk() if b.target == pid]) == 3
+    assert lrn.unbind((pid,), desk=False) == [] and not lrn.refused   # nothing: said nothing
+    table.add(Binding("hand:left.x", pid, "position"))
+    gone = lrn.unbind((pid,), routes=False)
+    assert len(gone) == 3 and all(b.is_midi for b in gone)
+    assert [b.source for b in table.routes_to(pid)] == ["hand:left.x"]
+    assert not [b for b in table.desk() if b.target == pid]
+    # the drawn alias and its band: the desk row on the alias, the route on the band
+    r.control.selb = 2
+    table.bindings.append(Binding("cc:0:20", "band.sel.thr", "abs", layer="preset"))
+    table.add(Binding("lane:0", "band.2.thr", "push", 0.2))
+    gone = lrn.unbind(("band.sel.thr", "band.2.thr"))
+    assert {b.target for b in gone} >= {"band.sel.thr", "band.2.thr"}
+    assert not table.routes_to("band.2.thr")
+    assert not [b for b in table.desk() if b.target == "band.sel.thr"]
+    assert lrn.last.startswith("unbound band.2.thr from ")
+    # a MIDI row is never a "route", whatever its op (review of PR #93): a
+    # session row with a performer op stays, and is a refusal, not an item
+    odd = Binding("cc:0:118", "view.zoom_rate", "push")           # no layer: the session's
+    mine = Binding("cc:0:117", "view.zoom_rate", "position", layer="preset")
+    table.bindings += [odd, mine]
+    assert lrn.bound("view.zoom_rate") == ([mine], [], [odd])
+    assert lrn.unbind("view.zoom_rate", desk=False) == []
+    assert lrn.unbind("view.zoom_rate") == [mine] and lrn.last.count("MIDI CC 117") == 1
+    assert lrn.unbind("view.zoom_rate") == [] and lrn.refused and odd in table.bindings
+    # a question held against a route that Unbind removes is withdrawn
+    old = table.add(Binding("hand:left.y", "view.inst_amp", "position"))
+    lrn.arm("view.inst_amp")
+    lrn.learn_source("hand:right.y")
+    assert lrn.pending is not None and lrn.pending[1] is old
+    assert lrn.unbind("view.inst_amp", desk=False) == [old] and lrn.pending is None
+
+
+def test_unbind_is_one_undo_step_and_none_when_nothing_goes(tmp_path):
+    """One Ctrl+Z puts every row back, a route's depth subscriber with it;
+    an unbind that removes nothing (a refusal, a free param) pushes no
+    step at all."""
+    from test_undo import frames, labels, settle
+
+    r = bound_rig(tmp_path / "home")
+    table, lrn, u, pid = r.table, r.learn, r.undo, r.pid
+
+    def state():
+        return ([(b.to_json(), b.layer) for b in table.bindings],
+                json.dumps(table.macros_doc(), sort_keys=True))
+    was = state()
+    assert len(lrn.unbind((pid,))) == 5 and state() != was
+    assert len(u.stack) == 1                                 # pushed once, at the call
+    settle(r)
+    assert labels(r) == [f"unbind {pid}"]
+    assert u.undo() and u.status == f"undid unbind {pid}"
+    assert sorted(map(str, state()[0])) == sorted(map(str, was[0])) and state()[1] == was[1]
+    assert u.redo() and left(table, pid) == [r.session]
+    assert u.undo()
+    frames(r, 3)
+    # by kind: still one step each
+    lrn.unbind((pid,), routes=False)
+    settle(r)
+    assert labels(r) == [f"unbind {pid}"] and u.undo()
+    frames(r, 3)
+    # nothing goes: no push — the stack does not grow even before it settles
+    lrn.unbind(("band.0.post",))                             # a fader's: the session's
+    assert lrn.refused and "invariant" in lrn.last and u.stack == []
+    free = next(p.id for p in r.reg if not any(b.target == p.id for b in table.bindings))
+    lrn.unbind((free,))
+    assert u.stack == []
+    settle(r)
+    assert u.stack == [] and len(u.redos) == 1               # and the redo is not spent

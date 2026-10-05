@@ -772,3 +772,145 @@ def test_every_panel_attribute_the_frame_reads_is_a_real_panels(rig):
     missing = sorted(n for n in names if not hasattr(rig.panel, n))
     assert not missing, f"app.frame reads h.panel.{missing} that Panel never sets"
     assert rig.panel.restart_requested is False
+
+
+# ------------------------------------------------- plan 17: the right-click menu
+
+def menu(panel, monkeypatch, pid: str, page: str, click: str | None = None
+         ) -> tuple[list[str], list[str]]:
+    """One frame of `page` with the context menu of `pid` open: (the lines
+    of text it draws, its clickable items). A submenu is listed as
+    "Unbind ▸" and its items as "Unbind/both"; every submenu is opened.
+    `click` names the one item that reports a click. Nothing here has a
+    mouse: the popup's `begin` is answered for it, so its contents draw
+    into the page's own window."""
+    lines: list[str] = []
+    items: list[str] = []
+    st = {"open": False, "path": []}
+    real = {n: getattr(imgui, n) for n in (
+        "begin_popup_context_item", "end_popup", "menu_item_simple", "begin_menu", "end_menu",
+        "text", "text_disabled", "text_colored")}
+
+    def begin_ctx(str_id=None, *a, **k):
+        if str_id == f"##ctx.{pid}" and not st["open"]:
+            st["open"] = True
+            return True
+        return False
+
+    def end_popup():
+        if st["open"]:
+            st["open"] = False
+        else:
+            real["end_popup"]()
+
+    def item(label, *a, **k):
+        if not st["open"]:
+            return real["menu_item_simple"](label, *a, **k)
+        name = "/".join([*st["path"], label])
+        items.append(name)
+        return name == click
+
+    def begin_menu(label, *a, **k):
+        if not st["open"]:
+            return real["begin_menu"](label, *a, **k)
+        items.append("/".join([*st["path"], label]) + " ▸")
+        st["path"].append(label)
+        return True
+
+    def end_menu():
+        if st["open"]:
+            st["path"].pop()
+        else:
+            real["end_menu"]()
+
+    def text(name):
+        def draw(*a):
+            if st["open"]:
+                lines.append(a[-1])
+            return real[name](*a)
+        return draw
+
+    with monkeypatch.context() as m:
+        m.setattr(imgui, "begin_popup_context_item", begin_ctx)
+        m.setattr(imgui, "end_popup", end_popup)
+        m.setattr(imgui, "menu_item_simple", item)
+        m.setattr(imgui, "begin_menu", begin_menu)
+        m.setattr(imgui, "end_menu", end_menu)
+        for name in ("text", "text_disabled", "text_colored"):
+            m.setattr(imgui, name, text(name))
+        frame(panel, page)
+    return lines, items
+
+
+def _learn_over(rig):
+    from hyperspace.learn import Learn
+
+    rig.panel.learn = Learn(rig.reg, rig.router.table, lane=rig.router.lane)
+    return rig.panel.learn
+
+
+def test_the_menu_lists_and_unbinds_with_no_midi_adapter(rig, monkeypatch):
+    """Plan 17 WP1: the menu reads the table, never the adapter. With
+    `panel.midi` None the desk row's line is drawn with its glyph and
+    Akai's name, each route has its line, and one Unbind removes what the
+    lines list: a plain item with one kind bound, a submenu (desk / route /
+    both) with both. "Unbind hand" and "performed by …" are gone."""
+    panel, table = rig.panel, rig.router.table
+    lrn = _learn_over(rig)
+    assert panel.midi is None
+    # Brightness: a knob and two step buttons, no route → a plain Unbind
+    lines, items = menu(panel, monkeypatch, "view.bright", "view")
+    assert lines[0] == "VIEW.BRIGHT"
+    assert lines[1:] == ["K1 (track knob 1)", "B16 (▲) · step +3", "B17 (▼) · step -3"]
+    assert "Unbind" in items and not any("▸" in i and "Unbind" in i for i in items)
+    assert not any(i.startswith("Unbind hand") for i in items)
+    # Speed: its knob, a hand route and — disabled — an LFO route → a submenu
+    table.add(Binding("hand:8", "view.speed", "position"))
+    table.add(Binding("lfo:0", "view.speed", "push", 0.5, enabled=False))
+    rig.router.labels["hand"] = ["L x", "L depth", "L height", "L pitch", "L roll", "L yaw",
+                                 "R x", "R depth", "R height"]
+    lines, items = menu(panel, monkeypatch, "view.speed", "view")
+    assert lines[1] == "K2 (track knob 2)"
+    assert lines[2].startswith("R height positions") and lines[3].endswith("(off)")
+    assert not any(s.startswith("performed by") for s in lines)
+    unbind = [i for i in items if i.startswith("Unbind")]
+    assert unbind[0] == "Unbind ▸" and unbind[1] == "Unbind/desk — K2"
+    assert unbind[2].startswith("Unbind/route — R height, ") and unbind[3] == "Unbind/both"
+    # by kind, from the submenu
+    menu(panel, monkeypatch, "view.speed", "view", click="Unbind/desk — K2")
+    assert not [b for b in table.desk() if b.target == "view.speed"]
+    assert len(table.routes_to("view.speed")) == 2 and lrn.last.startswith("unbound view.speed")
+    lines, items = menu(panel, monkeypatch, "view.speed", "view")
+    assert "Unbind" in items and "Unbind ▸" not in items       # routes only now: plain
+    menu(panel, monkeypatch, "view.speed", "view", click="Unbind")
+    assert not table.routes_to("view.speed")
+    lines, items = menu(panel, monkeypatch, "view.speed", "view")
+    assert lines == ["VIEW.SPEED"] and not any(i.startswith("Unbind") for i in items)
+    # both at once
+    table.add(Binding("lfo:1", "view.bright", "push", 0.2))
+    menu(panel, monkeypatch, "view.bright", "view", click="Unbind/both")
+    assert not [b for b in table.bindings if b.target == "view.bright" and (b.is_midi or b.op == "push")]
+    assert "K1 (track knob 1)" in lrn.last and lrn.last.startswith("unbound view.bright from ")
+    # a panel with no learn object: the lines, and no Unbind
+    table.bindings.append(Binding("cc:0:48", "view.bright", "abs", layer="preset"))
+    panel.learn = None
+    lines, items = menu(panel, monkeypatch, "view.bright", "view")
+    assert "K1 (track knob 1)" in lines and "no learn" in lines
+    assert not any(i.startswith("Unbind") for i in items)
+
+
+def test_unbind_is_not_offered_on_a_session_only_param(rig, monkeypatch):
+    """A fader's param is the session's (D6): its row's line reads
+    "invariant", dim, and there is no Unbind item — none that could only
+    refuse. A route on it brings a plain Unbind for the route alone."""
+    panel, table = rig.panel, rig.router.table
+    _learn_over(rig)
+    lines, items = menu(panel, monkeypatch, "master.gain", "audio")
+    assert "SM (MASTER fader) · invariant" in lines
+    assert not any(i.startswith("Unbind") for i in items)
+    session = [b.to_json() for b in table.midi() if b.layer != "preset"]
+    table.add(Binding("lfo:0", "master.gain", "push", 0.1))
+    lines, items = menu(panel, monkeypatch, "master.gain", "audio", click="Unbind")
+    assert "Unbind" in items and "Unbind ▸" not in items
+    assert not table.routes_to("master.gain")
+    assert [b.to_json() for b in table.midi() if b.layer != "preset"] == session

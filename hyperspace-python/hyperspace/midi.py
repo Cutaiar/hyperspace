@@ -303,27 +303,14 @@ class MidiIO:
     def binding_for(self, pid: str) -> Binding | None:
         return self.table.for_param(pid)
 
-    def unbind(self, pid: str) -> None:
-        """Right-click → Unbind: the loaded preset's desk rows on `pid` go —
-        an edit of the preset, which its dirty dot shows; no file is
-        written (plan 13 §3.3). A param only the session maps (an
-        invariant or a global-layer control) is refused with the reason in
-        the learn line, the way Learn refuses (D5, D6). One undo step
-        (undo.py, plan 15): a refused unbind changes nothing and leaves none."""
-        undo.push(f"unbind {pid}")
-        gone = self.table.unbind(pid)
-        for b in gone:
-            if b.feedback:
-                self._dark(b)
-        if gone:
-            names = ", ".join(self.control_name(b) for b in gone)
-            self.learner.said(f"unbound {pid} from {names} (in the preset)")
-            return
-        b = self.table.for_param(pid)
-        if b is not None:
-            where = "on the global layer" if b.layer == "global" else "invariant"
-            self.learner.refuse(f"{self.control_name(b)} → {pid} is {where} (the session's, "
-                                "edited in bindings.json) — not unbound")
+    def unbind(self, pid: str) -> list[Binding]:
+        """The loaded preset's desk rows on `pid` go — `Learn.unbind` with
+        the routes left alone (plan 17 WP1: the menu calls the learn object
+        itself, so Unbind is there with no adapter). The table's
+        `redraw_serial` moves, so this adapter redraws and the controls go
+        dark (`_follow_table`); the undo step, and the refusal for a param
+        only the session maps (D5, D6), are `Learn.unbind`'s."""
+        return self.learner.unbind((pid,), routes=False, name=self.control_name)
 
     def control_name(self, b: Binding) -> str:
         """The control a row names, in the device's words where the
