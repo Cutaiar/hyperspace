@@ -385,8 +385,11 @@ DEFAULT_MAP: list[dict] = [
     *[_cc(f"band.{i}.post", CC_FADER, i, ring=0) for i in range(6)],
     _cc("master.dyn", CC_FADER, 6, ring=0), _cc("master.trim", CC_FADER, 7, ring=0),
     _cc("master.gain", CC_MASTER, 0, ring=0),
-    # crossfader: the video behind (left) ↔ black ground (right) in overlay mode
-    _cc("overlay.bg", CC_XFADE, 0, ring=0),
+    # crossfader: the master dim (plan 15 WP3, decision 28) — black (left,
+    # CC 0) ↔ full (right); invariant, soft pickup like every fader, so one
+    # parked at the left does nothing until it is brought up to the value.
+    # That CC 0 is the left end is not hand-checked (check 55)
+    _cc("output.dim", CC_XFADE, 0, ring=0),
     _cc("view.shape", CC_CUE, 0, op="rel", ring=0, layer=P),
     # SHIFT latches the layer (routing's `desk.shift`); its LED is lit while
     # the global layer is up

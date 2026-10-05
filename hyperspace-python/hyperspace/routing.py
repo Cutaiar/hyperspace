@@ -196,7 +196,8 @@ A schema-1 file migrates the same way (`migrate_v1`, the op rename only:
 ``mod`` → push, ``span`` → position, a lane-scheme ``abs`` → position at
 depth 1, ``replace`` dropped; then `referee`, a second owner dropped —
 each dropped row named on stderr). Whatever the schema, every load runs
-`remap_factory`: the three APC40 buttons plan 09 WP4 gave to the clock
+`remap_factory`: the three APC40 buttons plan 09 WP4 gave to the clock,
+the crossfader plan 15 WP3 gave to the master dim
 and the B / ⇧B keys are brought up to date where the factory rows still
 stand, each change noted. A changed file is backed up (`backup`) and
 written back once — except a file that still holds a preset's part
@@ -289,11 +290,19 @@ MODIFIERS = ("SHIFT", "SUPER")
 # touched, and a second load finds nothing to do. Named here rather than
 # read from DEFAULT_MAP so the remap says the same thing whatever the map
 # of the day (test_routing pins the two together).
+#
+# plan 15 WP3 (decision 28) gives the crossfader to the master dim: the
+# old factory row on the overlay's ground is swapped the same way, and a
+# crossfader row the owner changed is left alone.
 APC_REMAP: dict[tuple[str, str, str, float], tuple[str, str, float]] = {
     (f"note:0:{apc40.N_TAP}", "theme.next", "toggle", 1.0): ("tempo.tap", "toggle", 1.0),
     (f"note:0:{apc40.N_NUDGE_P}", "view.shape", "step", 1.0): ("tempo.nudge", "step", 1.0),
     (f"note:0:{apc40.N_NUDGE_M}", "view.shape", "step", -1.0): ("tempo.nudge", "step", -1.0),
+    (f"cc:0:{apc40.CC_XFADE}", "overlay.bg", "abs", 1.0): ("output.dim", "abs", 1.0),
 }
+# which plan moved each remapped source, for the note `remap_factory`
+# writes; a source not named here is plan 09's
+APC_REMAP_PLAN = {f"cc:0:{apc40.CC_XFADE}": "plan 15"}
 # rows added when nothing uses the note: (source, target, op, value, only
 # when the theme cycle was remapped away)
 APC_NEW_ROWS = (
@@ -702,8 +711,9 @@ def backup(path: Path, schema: str) -> Path | None:
 
 
 def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
-    """The factory rows plan 09 WP4 moved, on a table of any schema: the
-    old APC40 factory rows swapped for the new (APC_REMAP), the METRONOME /
+    """The factory rows plan 09 WP4 and plan 15 WP3 moved, on a table of
+    any schema: the old APC40 factory rows swapped for the new (APC_REMAP —
+    the clock's three buttons, the crossfader's master dim), the METRONOME /
     QUANT notes and the B / ⇧B keys added where nothing uses the source
     (APC_NEW_ROWS, KEY_NEW_ROWS); and, since plan 13 WP2, any row on a
     ``theme.*`` param moved to the ``preset.*`` param of the same slot
@@ -716,8 +726,9 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
         hit = APC_REMAP.get((b.source, b.target, b.op, float(b.value)))
         if hit is not None:
             target, op, value = hit
+            plan = APC_REMAP_PLAN.get(b.source, "plan 09")
             notes.append(f"remapped {b.source}: {b.target} → {target} (the APC40 map "
-                         "of plan 09)")
+                         f"of {plan})")
             moved_theme = moved_theme or b.target == "theme.next"
             b = replace(b, target=target, op=op, value=value)
         elif b.target in THEME_TO_PRESET:

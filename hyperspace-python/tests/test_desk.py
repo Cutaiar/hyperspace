@@ -161,6 +161,49 @@ def test_a_preset_load_clears_the_faders_catch(rig):
     assert post.norm == pytest.approx(1.0)
 
 
+def test_the_crossfader_keeps_its_hold_across_a_preset_load(rig):
+    """Plan 15 WP3, fork 19: a load clears a fader's catch only when its
+    param is no longer where the adapter last put it. A preset never moves
+    a session param (D9), so the crossfader — and MASTER — stay caught, and
+    the next message moves the value from where it is, in either direction.
+    The fader sits a little off the value (a MIDI step against the param's
+    detent), on the far side from each move: a cleared catch would neither
+    be within the tolerance nor cross, and the fader would be dead."""
+    t, reg = rig.midi.table, rig.reg
+    dim, gain = reg["output.dim"], reg["master.gain"]
+    gain.set_norm(0.5)
+    rig.midi.poll()
+    push(rig, cc(apc40.CC_XFADE, 127), cc(apc40.CC_XFADE, 64), cc(apc40.CC_MASTER, 64))
+    xf, master = row(rig, "output.dim"), row(rig, "master.gain")
+    assert xf.caught and master.caught
+    assert xf.last_hw > dim.norm == pytest.approx(0.5)      # the fader just above the value
+    serial = t.desk_serial
+    push(rig, note(apc40.N_CLIP[0], channel=2))             # a preset load, off the clip row
+    assert rig.presets.active == 2 and t.desk_serial > serial
+    assert xf.caught and master.caught                       # still held
+    assert dim.norm == pytest.approx(0.5)                    # and the load did not move it
+    push(rig, cc(apc40.CC_XFADE, 30))                        # down, away from the fader's side
+    assert dim.norm == pytest.approx(30 / 127, abs=PICKUP_TOL)
+    push(rig, cc(apc40.CC_XFADE, 62))
+    assert xf.last_hw < dim.norm                             # now just below the value
+    t.set_desk(t.desk())                                     # another load
+    rig.midi.poll()
+    assert xf.caught
+    push(rig, cc(apc40.CC_XFADE, 100))                       # up
+    assert dim.norm == pytest.approx(100 / 127, abs=PICKUP_TOL)
+    push(rig, cc(apc40.CC_MASTER, 90))                       # MASTER held through both
+    assert gain.norm == pytest.approx(90 / 127, abs=PICKUP_TOL)
+    # a fader the adapter never wrote is not caught by a load …
+    assert not row(rig, "master.trim").caught
+    # … and the panel moving the dim behind the fader still re-arms pickup
+    dim.set_norm(0.2)
+    t.set_desk(t.desk())
+    rig.midi.poll()
+    assert not xf.caught
+    push(rig, cc(apc40.CC_XFADE, 90))
+    assert dim.norm == pytest.approx(0.2)
+
+
 def test_a_desk_edit_on_the_page_redraws_and_keeps_the_faders_catch(rig):
     """Review of PR #65: a desk row retargeted or removed on the ROUTING
     page redraws the desk, but it is not a load — no base moved, so every
@@ -312,7 +355,8 @@ def _old_map() -> list[tuple[str, str]]:
         *[(f"cc:0:{0x30 + i}", p) for i, p in enumerate(view)],
         *[(f"cc:{i}:{a.CC_FADER}", f"band.{i}.post") for i in range(6)],
         (f"cc:6:{a.CC_FADER}", "master.dyn"), (f"cc:7:{a.CC_FADER}", "master.trim"),
-        (f"cc:0:{a.CC_MASTER}", "master.gain"), (f"cc:0:{a.CC_XFADE}", "overlay.bg"),
+        (f"cc:0:{a.CC_MASTER}", "master.gain"),
+        (f"cc:0:{a.CC_XFADE}", "output.dim"),            # overlay.bg before plan 15 WP3
         (f"cc:0:{a.CC_CUE}", "view.shape"),
         *[(n(a.N_SELECT, i), "band.select") for i in range(6)],
         *[(n(a.N_ACTIVATOR, i), f"view.plane.{pl}") for i, pl in enumerate(planes)],
