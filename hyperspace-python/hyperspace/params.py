@@ -1014,9 +1014,12 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                      "of each new frame blended in.")
     r.enum("dream.layer", "Dream layer", *_attr(dream, "layer"), LAYERS, group=g,
            modulatable=False,      # a change makes the worker load another trunk
-           tip="Which layer of the net the dream brings out; a change loads it, which "
-               "takes a moment. conv2_2 fine grain, conv3_3 the classic swirl, conv4_3 "
-               "blotchier, inception the eyes-and-dogs curls.")
+           tip="Which layer of which net the dream brings out: every conv layer of VGG16 "
+               "and every block of GoogLeNet. Shallow layers draw fine dots and edges, "
+               "middle ones textures and swirls, deep ones larger blobs, eyes and "
+               "object-like parts; the deepest are slower. The first layer used from a "
+               "net loads that net, which takes a moment; the rest of it are then "
+               "instant.")
     r.enum("dream.octaves", "Dream scales", *_attr(dream, "octaves"), OCTAVES, group=g,
            tip="The sizes the dream is worked at, in turn, one a frame: more gives "
                "larger forms for the same cost.")

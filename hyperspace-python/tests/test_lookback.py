@@ -1025,8 +1025,13 @@ DREAM_FROZEN = [
     ("dream.steps", "CONTINUOUS", 1, 3, 2, True, True, True, False, False, None),
     ("dream.step", "CONTINUOUS", 0.005, 0.06, 0.03, True, True, False, False, False, None),
     ("dream.k", "CONTINUOUS", 0.03, 0.3, 0.05, True, True, False, False, False, None),
+    # the layer's first six keep their indices; every other layer of both
+    # nets is appended after them (a preset stores the index)
     ("dream.layer", "ENUM", 0.0, 1.0, 1, True, False, False, False, False,
-     ("conv2_2", "conv3_3", "conv4_3", "inception3b", "inception4c", "inception4e")),
+     ("conv2_2", "conv3_3", "conv4_3", "inception3b", "inception4c", "inception4e",
+      "conv1_1", "conv1_2", "conv2_1", "conv3_1", "conv3_2", "conv4_1", "conv4_2",
+      "conv5_1", "conv5_2", "conv5_3", "conv1", "conv2", "conv3", "inception3a",
+      "inception4a", "inception4b", "inception4d", "inception5a", "inception5b")),
     ("dream.octaves", "ENUM", 0.0, 1.0, 0, True, True, False, False, False,
      ("1", "2 alt", "3 alt")),
     ("dream.mask_decay", "CONTINUOUS", 0.9, 0.995, 0.99, True, True, False, False, False, None),
@@ -1103,7 +1108,7 @@ class LookbackPage:
                 return out
             monkeypatch.setattr(imgui, fn, rec)
         for fn in ("button", "checkbox", "slider_float", "slider_int", "combo",
-                   "invisible_button", "color_button"):
+                   "invisible_button", "color_button", "begin_combo", "selectable"):
             item(fn)
         real_popup = imgui.begin_popup_context_item
 
@@ -1204,14 +1209,12 @@ def test_the_page_has_three_sections_and_every_dream_param_once(lbpage):
     assert {k: tuple(v) for k, v in got.items() if k != "look-back"} == ui_lookback.SECTIONS
     drawn = [pid for ids in got.values() for pid in ids]
     assert sorted(drawn) == sorted(DREAM_IDS)
-    # one widget per param (the layer: one chip per choice), on or off
+    # one widget per param (the layer: its menu), on or off
     for on in (False, True):
         lbpage.dream.on = on
         lbpage.frame()
         ids = [w for w in lbpage.widgets() if "dream." in w]
-        chips = [w for w in ids if w.startswith("chip.dream.layer.")]
-        assert len(chips) == 6 and len(ids) - len(chips) == len(DREAM_IDS) - 1
-        assert sorted(set(ids) - set(chips)) == sorted(set(DREAM_IDS) - {"dream.layer"})
+        assert sorted(ids) == sorted(DREAM_IDS)
     # every cell has a label, and every label is in the page's table
     labels = [text for kind, text in lbpage.events if kind == "label"]
     cells = [pid for title in ("echoes", "dream", "both") for pid in ui_lookback.SECTIONS[title]
@@ -1219,50 +1222,71 @@ def test_the_page_has_three_sections_and_every_dream_param_once(lbpage):
     assert [lb for lb in labels if lb != "the tint"] == [ui_lookback.SHORT[pid] for pid in cells]
 
 
-def test_the_layer_is_a_row_of_chips(lbpage):
-    """`dream.layer` is six chips, one per `lookback.LAYERS` entry in order,
-    the lit one the layer's base; a click sets it (a scene-setter's write:
-    the param is not modulatable); there is no combo for it; and each chip
-    opens the param's own menu on a right-click, one popup apiece."""
-    from hyperspace import ui_lookback
-    from hyperspace.lookback import LAYERS
+def test_the_layer_is_one_menu_of_every_layer(lbpage, monkeypatch):
+    """`dream.layer` is one combo the row wide and one control tall (no
+    taller than the chip row it replaced): closed, it says the layer's
+    name and short description; open, every layer of both nets once, under
+    a heading per net (not a choice), shallow → deep, each with its long
+    description on hover. A pick sets the base — a scene-setter's write and
+    one undo step — and the right-click menu is the param's."""
+    from hyperspace import ui_lookback, undo
+    from hyperspace.lookback import LAYER_INFO, LAYERS
+    from hyperspace.routing import Bindings, Router
 
     reg, d = lbpage.reg, lbpage.dream
     layer = reg["dream.layer"]
-    assert len(LAYERS) == 6 and list(ui_lookback.LAYER_CHIPS) == LAYERS
-    assert len(set(ui_lookback.LAYER_CHIPS.values())) == 6
+    said: list[str] = []
+    real_say = ui_lookback._say
+    monkeypatch.setattr(ui_lookback, "_say", lambda text: (said.append(text), real_say(text)))
     lbpage.frame()
-    chips = [f"chip.dream.layer.{k}" for k in range(6)]
-    assert [w for w in lbpage.widgets() if w.startswith("chip.dream.layer")] == chips
-    assert "dream.layer" not in lbpage.widgets()                 # no combo
-    assert [lbpage.lit[c] for c in chips] == [k == 1 for k in range(6)]    # conv3_3, the default
-    # one row, tiling it: equal widths, left to right, the same line
-    rects = [lbpage.rects[c] for c in chips]
-    assert len({round(r[1]) for r in rects}) == 1
-    assert [r[0] for r in rects] == sorted(r[0] for r in rects)
-    widths = [r[2] - r[0] for r in rects]
-    assert max(widths) - min(widths) < 1.0
-    assert all(rects[k][2] <= rects[k + 1][0] for k in range(5))  # none overlaps the next
-    # a click on each selects it, and it alone is lit
-    for k in (4, 0, 5, 2):
-        lbpage.click(chips[k])
-        assert layer.base == k and d.layer == k
-        assert [lbpage.lit[c] for c in chips] == [j == k for j in range(6)]
-    assert not layer.modulatable and not layer.modulated
-    # a click on the lit one keeps it (a chip is a choice, not a toggle)
-    lbpage.click(chips[2])
-    assert d.layer == 2
-    # the param's menu hangs off every chip, a popup apiece
+    assert lbpage.widgets().count("dream.layer") == 1
+    assert not [w for w in lbpage.widgets() if w.startswith(("chip.", "layer."))]
+    x0, y0, x1, y1 = lbpage.rects["dream.layer"]
+    o = lbpage.rects["dream.octaves"]                     # a plain combo cell, one control tall
+    assert y1 - y0 == pytest.approx(o[3] - o[1])
+    mix = lbpage.rects["dream.tint_sat"]                  # the row is as wide as the two cells
+    assert x1 - x0 > 2 * (mix[2] - mix[0])
+    # the closed menu's text: the name and its short description
+    assert ui_lookback.layer_preview("conv3_3", 1000) == "conv3_3 · small loops, the classic"
+    assert ui_lookback.layer_preview("conv3_3", 60).endswith("…")
+    # open: every layer once, grouped by net, in the table's order
+    lbpage.click("dream.layer")
+    lbpage.frame()
+    items = [w[len("layer."):] for w in lbpage.widgets() if w.startswith("layer.")]
+    assert items == list(LAYER_INFO) and sorted(items) == sorted(LAYERS)
+    assert [(net, len(names)) for net, names in ui_lookback.layer_menu()] == [
+        ("VGG16", 13), ("GoogLeNet", 12)]
+    assert not {"VGG16", "GoogLeNet"} & set(lbpage.widgets())   # headings are not choices
+    # a hover says the long description
+    io = lbpage.imgui.get_io()
+    hx0, hy0, _, hy1 = lbpage.rects["layer.conv1_1"]
+    io.add_mouse_pos_event(hx0 + 20, (hy0 + hy1) / 2)
+    lbpage.frame()
+    lbpage.frame()
+    assert any(LAYER_INFO["conv1_1"][2] in s for s in said)
+    # a pick: the base, the state, one undo step
+    u = undo.Undo(reg, Router(reg, Bindings([])).table)
+    u.tick(0.0)
+    lbpage.click("layer.conv5_3")
+    assert layer.base == LAYERS.index("conv5_3") and d.layer == layer.base
+    assert not layer.modulated
+    lbpage.frame()
+    assert not [w for w in lbpage.widgets() if w.startswith("layer.")]    # it closed
+    u.tick(1.0)
+    u.tick(2.0)
+    assert u.undo() and layer.base == 1 and d.layer == 1
+    assert not u.undo()
+    # the right-click menu is the param's own, one popup
+    lbpage.frame()
     popups = [text for kind, text in lbpage.events if kind == "popup"]
-    assert [p for p in popups if "dream.layer" in p] == [f"##ctx.dream.layer.{k}" for k in range(6)]
-    lbpage.click(chips[3], button=1)                # a right-click opens the menu, sets nothing
-    assert d.layer == 2
+    assert [p for p in popups if "dream.layer" in p] == ["##ctx.dream.layer"]
+    lbpage.click("dream.layer", button=1)
+    assert d.layer == 1
     assert lbpage.imgui.is_popup_open("", lbpage.imgui.PopupFlags_.any_popup_id)
 
 
-def test_an_armed_learn_outlines_the_chip_row_once(lbpage, monkeypatch):
-    """Six chips stand for one param: armed to learn, the row gets one
-    outline (as the combo it replaces had), not one per chip."""
+def test_an_armed_learn_outlines_the_layer_menu(lbpage, monkeypatch):
+    """Armed to learn, the layer menu gets the outline every control gets."""
     from hyperspace import ui
 
     framed: list[str] = []
@@ -1271,9 +1295,7 @@ def test_an_armed_learn_outlines_the_chip_row_once(lbpage, monkeypatch):
                         lambda self, p: (framed.append(p.id), real(self, p))[1])
     lbpage.panel.learn = SimpleNamespace(learning="dream.layer", arm=lambda pid: None)
     lbpage.frame()
-    assert "dream.layer" not in framed and "dream.mix" in framed
-    assert [w for w in lbpage.widgets() if w.startswith("chip.dream.layer")] == [
-        f"chip.dream.layer.{k}" for k in range(6)]
+    assert framed.count("dream.layer") == 1 and "dream.mix" in framed
 
 
 def test_spacing_is_called_time_apart(lbpage):
@@ -1431,8 +1453,7 @@ def test_the_speed_readout_is_the_half_life_in_frames():
 
 def test_the_look_back_page_has_no_conflicting_ids(lbpage):
     """Every widget on the page has its own imgui id and its own popup:
-    six chips stand for one param, and two cells are both called
-    BRIGHTNESS."""
+    two cells are both called BRIGHTNESS."""
     for on in (False, True):
         lbpage.dream.on = on
         lbpage.frame()
@@ -1441,7 +1462,7 @@ def test_the_look_back_page_has_no_conflicting_ids(lbpage):
         popups = [text for kind, text in lbpage.events if kind == "popup"]
         assert not {i for i in popups if popups.count(i) > 1}
         # every dream.* widget offers its param's menu
-        assert {p[len("##ctx."):] for p in popups} >= set(DREAM_IDS) - {"dream.layer"}
+        assert {p[len("##ctx."):] for p in popups} >= set(DREAM_IDS)
 
 
 def test_the_worker_status_is_never_taller_than_its_room(lbpage):
@@ -1540,3 +1561,61 @@ def test_the_atlas_fits_the_drivers_largest_texture(ctx, monkeypatch):
     assert ctx.fbo is fbo
     fbo.release()
     tex.release()
+
+
+# ---------------------------------------------------------------- the dream layer menu
+
+# what `dream.layer`'s stored index meant before every layer was offered
+LAYERS_BEFORE = ["conv2_2", "conv3_3", "conv4_3", "inception3b", "inception4c", "inception4e"]
+
+
+def test_every_layer_has_its_words():
+    """Each name in LAYERS is in LAYER_INFO once (and nothing else is),
+    with a net, a short line that fits the closed menu beside the name and
+    a longer one; the menu is grouped by net, VGG16 first."""
+    from hyperspace.lookback import LAYER_INFO, LAYERS
+
+    assert len(LAYERS) == len(set(LAYERS)) == 25
+    assert set(LAYER_INFO) == set(LAYERS)
+    nets = [net for net, _, _ in LAYER_INFO.values()]
+    assert nets == ["VGG16"] * 13 + ["GoogLeNet"] * 12
+    for name, (_, short, long) in LAYER_INFO.items():
+        assert short and len(short) <= 26 and "\n" not in short, name
+        assert len(long) > len(short) and long.endswith("."), name
+        assert ("slower" in short) == ("Slower" in long), name
+
+
+def test_saved_layers_keep_their_meaning():
+    """`dream.layer` is stored as an index, so the six layers there were
+    keep their indices and the rest are appended: every factory and shared
+    file that names a layer gets the same layer by name as before."""
+    import json
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    reg = registry()
+    layer = reg["dream.layer"]
+    assert layer.names[:6] == LAYERS_BEFORE
+
+    def found(doc):
+        if isinstance(doc, dict):
+            for k, v in doc.items():
+                if k == "dream.layer":
+                    yield v
+                else:
+                    yield from found(v)
+        elif isinstance(doc, list):
+            for v in doc:
+                yield from found(v)
+
+    seen = 0
+    for f in sorted([*(root / "hyperspace" / "library").rglob("*.json"),
+                     *(root / "shared").rglob("*.json")]):
+        for v in found(json.loads(f.read_text())):
+            assert isinstance(v, int) and 0 <= v < len(LAYERS_BEFORE), f
+            reg.restore({"dream.layer": v})
+            assert layer.names[layer.base] == LAYERS_BEFORE[v], f
+            seen += 1
+    assert seen >= 20          # the factory looks and the owner's shared presets
+
+

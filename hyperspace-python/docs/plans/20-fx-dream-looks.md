@@ -100,25 +100,63 @@ rows 65–71.
 
 - **At the machine.** Three sections: **ECHOES** (brightness, fade time,
   count, time apart, the thumbnails), **DREAM** (the worker's status, at
-  most three lines; the layer as six chips — grain, swirl, blot, 3b, 4c,
-  4e; then brightness, speed, strength, passes, linger, jitter, scales,
+  most three lines; the layer as one menu of every layer of both nets;
+  then brightness, speed, strength, passes, linger, jitter, scales,
   hue, saturation, tint, tint from, tint hue, tint sat and the tint's
   swatch) and **BOTH** (darken, contrast, shape hides, detail), two
   cells a row. The registry labels say whose knob each is ("Echo …",
   "Dream …"), so ROUTING, Learn and the desk read the same. No
   `dream.*` id, range, default or flag changed.
-- **Code.** `ui_lookback.SECTIONS`, `SHORT`, `LAYER_CHIPS`, `LABEL_W`,
-  `STATUS_LINES`.
+- **Code.** `ui_lookback.SECTIONS`, `SHORT`, `LABEL_W`, `STATUS_LINES`.
 - **Tests.** `tests/test_lookback.py::test_no_dream_id_range_default_or_flag_changed`,
   `::test_the_page_has_three_sections_and_every_dream_param_once`,
-  `::test_the_layer_is_a_row_of_chips`,
   `::test_every_dream_label_says_whose_knob_it_is`,
   `::test_the_worker_status_is_never_taller_than_its_room`;
   `tests/test_ui_shell.py::test_the_look_back_page_fits_with_thumbnails`.
 - **Demo.** `tools/lookback_page_shots.py` (hidden window over a real
-  renderer, with a stand-in for the dream worker).
+  renderer, with a stand-in for the dream worker; the layer menu open).
 
-![The look-back page](assets/20-fx-dream-looks/lookback-page.png)
+![The look-back page, the layer menu open](assets/20-fx-dream-looks/lookback-page.png)
+
+### The dream layer menu
+
+- **At the machine.** One menu the row wide under the worker's status.
+  Closed, it says the layer's name and a few words ("conv3_3 · small
+  loops, the classic"). Open, it lists every layer of both nets — VGG16's
+  13 conv layers, then GoogLeNet's conv1–conv3 and nine inception blocks
+  — under a heading per net, shallow to deep, the name and its short
+  description on a line; a hover gives a longer one. It scrolls past
+  520 px. The six deepest (conv4_3, conv5_1–5_3, inception5a, 5b) say
+  "slower": over 25 ms a frame at 256 px with two passes, where conv3_3
+  takes about 19 (the worker answers fewer frames; nothing breaks). A
+  pick is one undo step; the layer is still not performable (row 49).
+- **Saved looks.** `dream.layer` is stored as an index; `lookback.LAYERS`
+  keeps the six older layers at 0–5 and appends the rest, so every saved
+  look and shared preset names the layer it did.
+- **Weights.** The same two files serve every layer. A net is read once a
+  run and every layer of it is a cut of that one stack, so moving between
+  layers of one net reads nothing (the first layer of VGG16 takes about
+  1.5 s, GoogLeNet 0.15 s).
+- **The words.** `lookback.LAYER_INFO` (net, short, long), read by the
+  menu, its hovers and `lookback_page_shots.py --labels`. They come from
+  the contact sheets below — one to two seconds of dreaming at the
+  defaults, 256 px — and, where those say little, from depth.
+- **Code.** `lookback.LAYERS`, `LAYER_INFO`; `dream.TRUNKS`, `net_stack`,
+  `load_stack`, `cut_stack`, `build_trunk`; `ui_lookback._layer_menu`,
+  `layer_menu`, `layer_preview`.
+- **Tests.** `tests/test_lookback.py::test_the_layer_is_one_menu_of_every_layer`,
+  `::test_an_armed_learn_outlines_the_layer_menu`,
+  `::test_every_layer_has_its_words`, `::test_saved_layers_keep_their_meaning`;
+  `tests/test_dream.py::test_every_layer_has_a_trunk`,
+  `::test_cuts_end_on_the_named_layer`,
+  `::test_every_layer_dreams_at_the_smallest_size`,
+  `::test_a_layer_change_reads_no_weights_twice`.
+- **Demo.** `tools/dream_layer_sheet.py` (needs the weights; a still
+  24-cell, and a colour field with the mask open).
+
+![A 24-cell dreamed at every layer](assets/20-fx-dream-looks/dream-layers.jpg)
+
+![A colour field dreamed at every layer](assets/20-fx-dream-looks/dream-layers-texture.jpg)
 
 ### Dream speed
 
@@ -160,11 +198,12 @@ rows 65–71.
 ## Not verified by a person
 
 Nobody has seen a face effect on a screen, the projector or the glass,
-dragged a chip with a real mouse or trackpad, looked at the six dream
-layers side by side, or judged the dream at any speed. Per-face effects
+dragged a chip with a real mouse or trackpad, watched the dream at any
+of the 25 layers on the rig (only the offscreen contact sheets), or
+judged the dream at any speed. Per-face effects
 read faint in the offscreen renders (faces draw at low alpha and
 overlap): whether they are worth using at the rig is checks 91 and 98.
-The drag is check 94, the layer chips' names 95, the speed 96, the
+The drag is check 94, the layer menu and its words 95, the speed 96, the
 layouts and motions 97. See also
 [`../TESTING-GUIDE.md`](../TESTING-GUIDE.md).
 

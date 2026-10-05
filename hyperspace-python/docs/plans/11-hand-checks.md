@@ -148,7 +148,7 @@ Headless: `tests/test_dream.py`, `uv run pytest -q tests/test_lookback.py -k "tr
 `--layer conv4_3`, and `--preset party-wake`).
 `[dream] enabled = true` (default). LOOKBACK: DREAM status names a
 device ("dream worker on", not "echoes only: no worker"). Strip:
-`default`, `tracer-only`; **Look-back** on; music. Try six layer chips,
+`default`, `tracer-only`; **Look-back** on; music. Try layers from the menu,
 **passes**, **strength**, **speed**, colour cells (hue, saturation,
 tint, tint from); save two or three keepers to `<home>/dream/` to ship.
 *Pass:* dream in own colours, re-tinted by the cells, echoes not;
@@ -800,9 +800,9 @@ blanks half the cycle. *Fail:* one copy at 0 →
 
 **63. The dream's layer cannot be performed.**
 Headless: `tests/test_lookback.py::{test_dream_params_declared,test_a_route_on_the_dream_layer_is_dormant} tests/test_presets.py::test_a_saved_route_onto_a_setting_is_dropped_with_a_note`.
-LOOKBACK, DREAM: right-click a layer chip. *Pass:* "not
+LOOKBACK, DREAM: right-click the layer menu. *Pass:* "not
 modulatable" where others offer "Route a lane here…"; ROUTING add-route
-targets lack "Dream layer"; chips, presets, learned knobs still change
+targets lack "Dream layer"; the menu, presets, learned knobs still change
 it. Load your preset routing onto it (if any): route dropped, footer
 "preset <NAME>: dropped <source> → dream.layer: not
 modulatable", file untouched. *Fail:* route offered/landed → flag on
@@ -1333,21 +1333,25 @@ so; wrong order → `fx.reordered`; wrong effect → `ui_fx._dragged` /
 `panel._fx_drag`; two ⌘Z → push in `ui_fx._drop`.
 
 **95. The LOOKBACK page reads.**
-Headless: `tests/test_ui_shell.py::test_the_look_back_page_fits_with_thumbnails tests/test_lookback.py::{test_the_page_has_three_sections_and_every_dream_param_once,test_the_layer_is_a_row_of_chips,test_spacing_is_called_time_apart,test_the_routing_page_lists_the_new_labels}`.
+Headless: `tests/test_ui_shell.py::test_the_look_back_page_fits_with_thumbnails tests/test_lookback.py::{test_the_page_has_three_sections_and_every_dream_param_once,test_the_layer_is_one_menu_of_every_layer,test_saved_layers_keep_their_meaning,test_spacing_is_called_time_apart,test_the_routing_page_lists_the_new_labels}`.
 F4 (WAKE), LOOKBACK, dream on. *Pass:* below the switch: **ECHOES**
 (brightness, fade time, count, time apart, thumbnails; "24 × 50 MS ·
 THE TRAIL REACHES 1.20 S"; time apart `50 ms`, fade time `0.60 s`),
-**DREAM** (status ≤ three lines, rest on hover; six layer chips; brightness, speed, strength,
+**DREAM** (status ≤ three lines, rest on hover; the layer menu, reading
+"conv3_3 · small loops, the classic"; brightness, speed, strength,
 passes, linger, jitter, scales, hue, saturation, tint, tint from, tint
 hue, tint sat, tint swatch), **BOTH** (darken, contrast, shape hides,
 detail). No scroll with thumbnails; labels clear without hover (name
 any not). ROUTING: "Echo time apart", "Dream brightness", "Shape hides
-wake". Right-click a chip: "not modulatable". Click each layer chip,
-wait for "loaded": names grain, swirl, blot, 3b, 4c, 4e come from the
-description, not sight — do the first three fit, what should the last
-three be (~five letters)? *Fail:* scrolls → `ui_lookback.SECTIONS` /
-`STATUS_LINES`; chip won't load → click's `Param.set`; name →
-`ui_lookback.LAYER_CHIPS`; label cut → `ui_lookback.LABEL_W`.
+wake". Right-click the layer menu: "not modulatable". Open it: VGG16's
+13 layers, then GoogLeNet's 12, each name with a few words, readable at
+a pace; hover one for more. Pick a layer from each net and several deep
+ones; the status names it at once within a net (the first of a net
+takes a moment). Do the words match what you see — which would you
+rename? Are 25 too many to choose from? Do the "slower" ones drop the
+frame rate or only the dream's? *Fail:* scrolls → `ui_lookback.SECTIONS`
+/ `STATUS_LINES`; a layer won't load → its `dream.TRUNKS` row; words →
+`lookback.LAYER_INFO`; label cut → `ui_lookback.LABEL_W`.
 
 **96. Dream speed.** (laptop; then on the projector)
 Headless: `tests/test_lookback.py::{test_dream_speed_is_dream_k,test_the_speed_readout_is_the_half_life_in_frames}`.

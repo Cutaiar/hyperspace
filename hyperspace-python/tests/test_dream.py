@@ -317,6 +317,92 @@ def test_missing_net_means_no_dream(dream_mod, tmp_path, monkeypatch):
         w.close()
 
 
+# ---------------------------------------------------------------- every layer
+
+def test_every_layer_has_a_trunk(dream_mod):
+    from hyperspace.lookback import LAYER_INFO, LAYERS
+
+    assert set(dream_mod.TRUNKS) == set(LAYERS)
+    for name, (arch, _) in dream_mod.TRUNKS.items():
+        assert {"vgg16": "VGG16", "googlenet": "GoogLeNet"}[arch] == LAYER_INFO[name][0]
+
+
+def test_cuts_end_on_the_named_layer(dream_mod):
+    """Against torchvision's own layer lists, no weights read: a VGG cut
+    ends on the ReLU right after its conv — the conv1_1 … conv5_3 order
+    of .features — and a GoogLeNet cut ends on the child it names."""
+    from torch import nn
+
+    stack = dream_mod.net_stack("vgg16", None)
+    convs = [k for k, (_, m) in enumerate(stack) if isinstance(m, nn.Conv2d)]
+    names = [f"conv{b}_{i}" for b, n in ((1, 2), (2, 2), (3, 3), (4, 3), (5, 3))
+             for i in range(1, n + 1)]
+    assert len(convs) == 13
+    for name, conv in zip(names, convs):
+        arch, cut = dream_mod.TRUNKS[name]
+        assert arch == "vgg16" and cut == conv + 2, name
+        seq = dream_mod.cut_stack(arch, stack, cut)
+        assert isinstance(seq[-1], nn.ReLU) and seq[-2] is stack[conv][1]
+    g = dream_mod.net_stack("googlenet", None)
+    assert [n for n, _ in g][-1] == "inception5b"
+    for name, (arch, cut) in dream_mod.TRUNKS.items():
+        if arch == "googlenet":
+            seq = dream_mod.cut_stack(arch, g, cut)
+            assert seq[-1] is dict(g)[name]
+            assert not any(n.startswith(("aux", "fc")) for n, _ in g)
+
+
+def test_every_layer_dreams_at_the_smallest_size(dream_mod):
+    """Every trunk gives a finite, non-zero step at the smallest frame the
+    worker makes (128 px short side at the third octave's 2.25 scale, the
+    jitter shrunk with it), random weights on the CPU."""
+    import torch
+
+    from hyperspace.lookback import LAYERS, RES
+
+    h = max(16, round(RES[0] / dream_mod.OCTAVE_SCALE ** 2))
+    w = round(h * 1280 / 820)
+    stacks = {arch: dream_mod.net_stack(arch, None) for arch in ("vgg16", "googlenet")}
+    for s in stacks.values():
+        for _, m in s:
+            m.eval()
+            for p in m.parameters():
+                p.requires_grad_(False)
+    torch.manual_seed(0)
+    D = torch.rand(1, 3, h, w)
+    for name in LAYERS:
+        arch, cut = dream_mod.TRUNKS[name]
+        net = dream_mod.cut_stack(arch, stacks[arch], cut)
+        out = dream_mod.dream_step(D, net, 0.03, 4, None)
+        assert torch.isfinite(out).all() and (out - D).abs().mean() > 0, name
+
+
+def test_a_layer_change_reads_no_weights_twice(dream_mod, monkeypatch, tmp_path):
+    """The worker keeps each net's stack once read: moving between layers
+    of one net cuts the same modules, and only the other net's first
+    layer reads its file."""
+    import torch
+
+    reads: list[str] = []
+
+    def load(arch, wd, device, dtype):
+        reads.append(arch)
+        return dream_mod.net_stack(arch, None)
+    monkeypatch.setattr(dream_mod, "load_stack", load)
+    stacks: dict = {}
+    for name in ("conv3_3", "conv1_1", "conv5_3", "inception4c", "conv2", "conv4_3"):
+        dream_mod.build_trunk(name, tmp_path, torch.device("cpu"), torch.float32, stacks)
+    assert reads == ["vgg16", "googlenet"]
+    a = dream_mod.build_trunk("conv1_1", tmp_path, None, None, stacks)
+    b = dream_mod.build_trunk("conv5_3", tmp_path, None, None, stacks)
+    assert a[0] is b[0]                    # the same conv1_1, not a copy
+    w = dream_mod.DreamWorker(registry(), {"enabled": True, "weights_dir": str(tmp_path),
+                                           "device": "cpu"}, start=False)
+    for name in ("conv3_3", "conv5_3", "conv2_2"):
+        assert w._ensure_net(name) and w.layer == name
+    assert reads == ["vgg16", "googlenet", "vgg16"] and list(w.stacks) == ["vgg16"]
+
+
 # ---------------------------------------------------------------- the real thing
 
 @pytest.mark.slow

@@ -97,7 +97,9 @@ the scene over its own wake. **ECHOES**: brightness (`dream.echo_mix`),
 fade time (`fade`, seconds), count (`echoes`), time apart (`gap`,
 seconds), thumbnails, and how far back the trail reaches; echo time is
 in seconds, so a trail is the same at 60 and 120 Hz. **DREAM**: the
-worker's status, the layer as six chips (grain, swirl, blot, 3b, 4c, 4e),
+worker's status, the layer as one menu (every conv layer of VGG16 and
+every block of GoogLeNet, 25, grouped by net shallow → deep, each with a
+short description and a longer one on hover — `lookback.LAYER_INFO`),
 brightness (`mix`), speed (`k`, shown as frames to halve), strength
 (`step`), passes (`steps`), linger (`mask_decay`), jitter, scales
 (`octaves`), hue, saturation, tint, tint from, tint hue, tint sat, and a
@@ -110,9 +112,13 @@ desk use the registry's ("Echo time apart", "Dream speed"). All
 **The dream worker** (`dream.py`, torch, MPS when available) runs a few
 gradient-ascent steps per submitted echo on its own thread; `submit`
 never blocks and the latest result wins; `step × steps / k` is clamped so
-a preset cannot run away. The weights (VGG16, or GoogLeNet for the 3b /
-4c / 4e layers) are read from `weights_dir`, then torch's hub cache, and
-downloaded there on first use.
+a preset cannot run away. The weights (one file per net, VGG16 528 MB or
+GoogLeNet 50 MB, whichever net the layer belongs to) are read from
+`weights_dir`, then torch's hub cache, and downloaded there on first use.
+A net is read once a run: every layer of it is a cut of the same loaded
+stack, so a change between layers of one net is instant (the first layer
+of a net takes about 1.5 s for VGG16). The deepest layers cost about half
+again what conv3_3 does per frame and say "slower" in the menu.
 If the worker cannot start, the reason is on the SYSTEM page, the
 LOOKBACK page and the red banner, and the look-back runs echoes only; a
 preset that asks for the dream with no worker is a warning, once.
