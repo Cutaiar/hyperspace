@@ -194,6 +194,7 @@ The D-numbers are cited from code comments.
 | `desk.slew` and `hands.learn_depth` are session params, and neither is on a global-layer knob. | `routing.register_desk` | row 55 |
 | A device knob only where it does something. A fresh preset layer's D1–D4 are 4D depth, yaw, pitch and the face pattern, and D5–D8 are dark. | `apc40.SCENE`, `preset.knob_desk` | row 75 |
 | The party show is what the rig opens and the last show opened is remembered. The house moods are a `house` show. | `library.DEFAULT_PROJECT`, `last_show` | owner |
+| The party show's F1–F8 are TUMBLE, FACES, FIELD, WAKE, TRIP, ACID, MANDALA and NOITA, so every effect is in some factory preset; TRACER is on slot 9. | `hyperspace/library/projects/party.hyp.json` | owner |
 | The party presets are composed with six DOF only: every hand row is a push from the axis's rest, with no pinch dependence. Rate-type params under a hand are allowed. | `tests/test_plan12_presets.py` | owner |
 | `hands-orbit` is a factory preset: five pushes onto camera params (zoom depth 0.12). | `preset.hands_orbit_routes` | row 56 |
 | **Unwanted presets are hidden or trashed from the list.** × hides a factory preset (`<home>/hidden.json`) and trashes one of yours. | `Library.hide` | owner |
@@ -230,6 +231,7 @@ The D-numbers are cited from code comments.
 | Decision | Who |
 |---|---|
 | Each code PR gets a `/code-review` before merge. Agents work on their own branches, and the owner merges. | owner |
+| Agent work lands on `finish-line`, never on `main`; the owner merges `finish-line` into `main`. | owner |
 
 ## Decided not to build
 
