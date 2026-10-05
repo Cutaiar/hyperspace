@@ -58,6 +58,11 @@ factory's file of the same name:
   $HYPERSPACE_HOME/bindings/      the old routing presets: made presets
                                  once (plan 13 WP5) and never read again,
                                  so no group (LEGACY_DIRS)
+  $HYPERSPACE_HOME/trash/<group>/<slug>.<date>-<time>.json
+                                 a user preset file as it was before a save
+                                 overwrote it or a delete removed it
+                                 (``to_trash``, plan 15): no group, never
+                                 listed or watched, never emptied here
 
 ``home()`` is the one resolver for that folder (config.py and the binding
 table path go through it). On the first run the working-directory ``config.toml``
@@ -109,6 +114,10 @@ PRESETS = "presets"       # the presets' group, a document kind (preset.py)
 # folders in a library root that are no group: the routing presets' old
 # folder, kept as it was by plan 13's migration and never read again
 LEGACY_DIRS = ("bindings",)
+# <home>/trash/<group>/: a user preset file as it was, copied there before
+# a save overwrites it or a delete removes it (`to_trash`, plan 15 WP1).
+# No group, never listed, never watched; nothing empties it (plan 19 will)
+TRASH = "trash"
 HOME_ENV = "HYPERSPACE_HOME"
 DEFAULT_HOME = Path("~/Hyperspace")
 FACTORY = Path(__file__).with_name("library")
@@ -295,6 +304,37 @@ def _write_text(path: Path, text: str) -> None:
         path.write_text(text)
     except OSError as e:
         raise LibraryError(f"{path.name}: {e}") from e
+
+
+def to_trash(path: Path, root: Path) -> Path | None:
+    """Copy `path` — a preset file about to be overwritten or deleted — to
+    ``<root>/trash/<folder>/<stem>.<YYYYMMDD-HHMMSS><suffix>``, `<folder>`
+    being the file's own folder name (``presets``, ``band``, ``fx``…). A
+    name taken in the same second gets ``-2``, ``-3``, …; the copy is
+    created exclusively, so nothing in the trash is ever overwritten.
+    Returns the path written, or None when the copy failed (said on
+    stderr): the caller decides what that means — a save goes on and
+    warns, a delete is refused."""
+    folder = root / TRASH / path.parent.name
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    try:
+        data = path.read_bytes()
+        folder.mkdir(parents=True, exist_ok=True)
+        for n in range(1, 1000):
+            dst = folder / f"{path.stem}.{stamp}{'' if n == 1 else f'-{n}'}{path.suffix}"
+            try:
+                with open(dst, "xb") as f:
+                    f.write(data)
+            except FileExistsError:
+                continue
+            except OSError:
+                dst.unlink(missing_ok=True)       # no half-written copy left behind
+                raise
+            return dst
+        raise OSError(f"no free name under {folder}")
+    except OSError as e:
+        print(f"library: {path.name} not copied to the trash ({e})", file=sys.stderr)
+        return None
 
 
 # ---- versioning: schema "<kind>/<n>"; each step lifts a doc one version ----
@@ -1042,7 +1082,7 @@ class Library:
         for root in self._roots():
             if root.is_dir():
                 out.update(d.name for d in root.iterdir()
-                           if d.is_dir() and d.name != PROJECTS and d.name not in LEGACY_DIRS
+                           if d.is_dir() and d.name not in (PROJECTS, TRASH, *LEGACY_DIRS)
                            and not d.name.startswith("."))
         return sorted(out)
 
@@ -1265,14 +1305,25 @@ class Library:
         return self._step(group, -1)
 
     def save_as(self, group: str, name: str, *, extra: dict | None = None) -> Path:
-        """Write the group's bases as a user preset and make it current."""
+        """Write the group's bases as a user preset and make it current.
+        A file already there whose text differs is copied to the trash
+        first (`to_trash`); a save that changes nothing trashes nothing,
+        and a copy that fails does not stop the save — `warning` says the
+        old file was not kept (plan 15 fork 6)."""
         doc = self.document(group, name, extra=extra)
         path = self.home / group / f"{slug(name)}.json"
         kind = self._kinds.get(group)
-        if kind is not None and kind.text is not None:
-            _write_text(path, kind.text(doc))
-        else:
-            _write_json(path, doc)
+        text = (kind.text(doc) if kind is not None and kind.text is not None
+                else json.dumps(doc, indent=1) + "\n")
+        if path.is_file():
+            try:
+                old = path.read_text()
+            except (OSError, ValueError):
+                old = None                               # unreadable as text: keep it anyway
+            if old != text and to_trash(path, self.home) is None:
+                self.warning = (f"{group}/{path.name}: overwritten — the old file could "
+                                "not be kept in the trash")
+        _write_text(path, text)
         self._sync(path)
         self._landed(group, name, kind.signature() if kind is not None
                      else self.resolved(group, doc["values"]))
@@ -1306,11 +1357,20 @@ class Library:
         return None if cur is None else self.save_as(group, cur, extra=extra)
 
     def delete(self, group: str, name: str) -> bool:
-        """Remove a user preset; a factory one stays, a shadow just lifts."""
+        """Remove a user preset; a factory one stays, a shadow just lifts.
+        The file is copied to the trash first (`to_trash`), and a copy that
+        fails **refuses the delete** (`LibraryError`): a full disk cannot
+        make a delete unrecoverable (plan 15 fork 6)."""
         path = self.path_of(group, name)
         if path is None or not self._is_user(path):
             return False
-        path.unlink()
+        if to_trash(path, self.home) is None:
+            raise LibraryError(f"{path.name}: not deleted — it could not be kept in the "
+                               f"trash ({self.home / TRASH})")
+        try:
+            path.unlink()
+        except OSError as e:
+            raise LibraryError(f"{path.name}: {e}") from e
         self._sync(path)
         if self._current.get(group) == name and self.path_of(group, name) is None:
             self._landed(group, None, None)
