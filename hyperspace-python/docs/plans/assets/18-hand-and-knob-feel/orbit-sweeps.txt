@@ -60,22 +60,22 @@ hand:left.z → camera.pan.y   push +0.1   (reaching in … pulled back)
      1.000     +100.0 mm      +400 px   0.0000
     hand gone, 90 frames after u = 1: +0 px
 
-hand:left.y → camera.zoom   push +0.3   (low … high)
+hand:left.y → camera.zoom   push +0.12   (low … high)
     base (no hand): 1.00×
          u    hand reads         zoom   others
      0.000     +100.0 mm        1.00×   0.0000   (rest)
-     0.125     +131.2 mm        1.28×   0.0000
-     0.250     +162.5 mm        1.65×   0.0000
-     0.375     +193.8 mm        2.12×   0.0000
-     0.500     +225.0 mm        2.73×   0.0000
-     0.625     +256.2 mm        3.50×   0.0000
-     0.750     +287.5 mm        4.50×   0.0000
-     0.875     +318.8 mm        5.78×   0.0000
-     1.000     +350.0 mm        7.43×   0.0000
+     0.125     +131.2 mm        1.11×   0.0000
+     0.250     +162.5 mm        1.22×   0.0000
+     0.375     +193.8 mm        1.35×   0.0000
+     0.500     +225.0 mm        1.49×   0.0000
+     0.625     +256.2 mm        1.65×   0.0000
+     0.750     +287.5 mm        1.83×   0.0000
+     0.875     +318.8 mm        2.02×   0.0000
+     1.000     +350.0 mm        2.23×   0.0000
     hand gone, 90 frames after u = 1: 1.00×
 
 A camera the mouse moved first (bases written as a scene-setter writes them), then both hands, then no hands
     mouse left it at:         yaw 30°  pitch -10°  zoom 1.60×  pan.x +120 px  pan.y -60 px
     both hands in, at rest:   yaw 30°  pitch -10°  zoom 1.60×  pan.x +120 px  pan.y -60 px
-    both hands at an end:     yaw 120°  pitch 34°  zoom 11.89×  pan.x +520 px  pan.y -460 px
+    both hands at an end:     yaw 120°  pitch 34°  zoom 3.57×  pan.x +520 px  pan.y -460 px
     both hands out:           yaw 30°  pitch -10°  zoom 1.60×  pan.x +120 px  pan.y -60 px

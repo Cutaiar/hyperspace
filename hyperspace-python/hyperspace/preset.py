@@ -817,7 +817,9 @@ def hands_orbit_routes() -> list[Binding]:
             _push("R", "pitch", "camera.pitch", 0.5),  # fingers up: look down, ±44° (as FACES)
             _push("L", "x", "camera.pan.x", 0.1),      # as FIELD: fly sideways
             _push("L", "z", "camera.pan.y", 0.1),      # as FIELD: reach in
-            _push("L", "y", "camera.zoom", 0.3)]       # raise: zoom in
+            # raise: zoom in, to 2.2× at the top. The plan's 0.3 (7.4×) put the
+            # frame inside the default shape, near black (the WP4 strip)
+            _push("L", "y", "camera.zoom", 0.12)]
 
 
 def effects_on(routes, values: dict[str, Any],
