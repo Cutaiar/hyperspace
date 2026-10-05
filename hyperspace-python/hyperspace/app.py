@@ -190,6 +190,12 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
             print(note, file=sys.stderr)
             if cfg is not None:
                 cfg.setdefault("notes", []).append(note)
+        # …and the config is left saying what was done: an index no screen
+        # has (or no number at all) is −1 from here on, as the note above
+        # said, so `Output.monitor` cannot carry it further (plan 16 WP7)
+        for key in ("monitor", "control_monitor"):
+            if key in oc:
+                oc[key] = placement.index(oc[key], len(scr))
     render_size = render_rect[2:] if render_rect else RENDER_SIZE
     ctrl_size = ctrl_rect[2:] if ctrl_rect else CONTROL_SIZE
     glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
@@ -241,7 +247,11 @@ def _make_output(win, reg: Registry, cfg: dict) -> Output:
     oc = cfg.get("output", {})
     out = Output(win, GlfwBackend(glfw), allowed=_overlay_allowed(cfg))
     out.register(reg)
-    out.monitor = int(oc.get("monitor", -1))
+    # a screen index, or −1: `_windows` has already put −1 in place of an
+    # index no connected screen has (and placement said so), `config.load`
+    # in place of anything that is not a number — and a cfg that came by
+    # neither road must not stop the launch here either (plan 16 WP7)
+    out.monitor = placement.index(oc.get("monitor", -1))
     out.fullscreen = bool(oc.get("fullscreen", False))
     if oc.get("on_start", False) and not out.allowed:
         print("output: on_start asks for overlay, but [output] overlay is false — "

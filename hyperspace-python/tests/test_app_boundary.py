@@ -510,6 +510,39 @@ def _open(monkeypatch, cfg, home, mons=None):
     return g, render, ctrl
 
 
+@pytest.mark.parametrize(("monitor", "said"), [
+    ("left", "monitor = 'left' is not a screen index"),      # no number at all
+    (7, "monitor = 7, but 2 screens are connected (0–1)"),    # a screen that is not there
+    (None, "monitor = None is not a screen index"),
+])
+def test_a_config_screen_that_cannot_be_used_is_minus_one_and_one_note(
+        monkeypatch, tmp_path, capsys, monitor, said):
+    """Plan 16 WP7: `[output] monitor = "left"` stopped the launch in
+    `_make_output`, and an index no screen has stayed in `Output.monitor`
+    after placement had said it was treated as −1. Both are −1 from
+    `_windows` on, for both windows' keys, and each is said once."""
+    from hyperspace.params import Registry
+
+    cfg = {"output": {"monitor": monitor, "control_monitor": monitor, "fullscreen": True}}
+    g, render, _ = _open(monkeypatch, cfg, tmp_path)
+    assert g.pos[render] == (16, 54)                           # the primary's default spot
+    assert cfg["output"]["monitor"] == cfg["output"]["control_monitor"] == -1
+    notes = cfg["notes"]
+    assert len(notes) == 2 and said in notes[0] and f"control_{said}" in notes[1]
+    out = app._make_output(render, Registry(), cfg)            # raised ValueError on "left"
+    assert out.monitor == -1 and out.fullscreen is True
+    assert cfg["notes"] == notes                               # nothing said twice
+    # a cfg that never went through `_windows` or `config.load` does not raise either
+    out = app._make_output(render, Registry(), {"output": {"monitor": monitor}})
+    assert out.monitor == (7 if monitor == 7 else -1)
+    # and what was good stays: an index a screen has, and −1
+    for good in (1, 0, -1):
+        cfg = {"output": {"monitor": good, "control_monitor": good}}
+        g, render, _ = _open(monkeypatch, cfg, tmp_path)
+        assert cfg == {"output": {"monitor": good, "control_monitor": good}}
+        assert app._make_output(render, Registry(), cfg).monitor == good
+
+
 def test_the_windows_open_where_placement_says(monkeypatch, tmp_path, capsys):
     from hyperspace import config, placement
 

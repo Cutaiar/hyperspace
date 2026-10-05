@@ -44,6 +44,38 @@ def test_a_file_with_only_output_says_nothing(tmp_path, capsys):
     assert capsys.readouterr().err == ""
 
 
+def test_a_screen_that_is_not_a_number_is_minus_one_and_a_note(tmp_path, capsys):
+    """Plan 16 WP7: `monitor = "left"` stopped the launch. A screen index
+    that is not a number is −1 (where the window was last time), for both
+    windows, said on stderr and in `cfg["notes"]` (the SYSTEM page); a
+    number is read as `int()` reads it and nothing is said — whether that
+    screen exists is placement's to say, at the launch."""
+    p = tmp_path / "config.toml"
+    p.write_text('[output]\nmonitor = "left"\ncontrol_monitor = [1]\n[overlay]\nbg = 0.3\n')
+    cfg = config.load(p)
+    assert cfg["output"]["monitor"] == cfg["output"]["control_monitor"] == -1
+    assert cfg["output"]["bg"] == 0.3
+    assert cfg["notes"] == [
+        f"config: [overlay] is now [output] — rename the section in {p}",   # kept, first
+        "config: [output] monitor = 'left' is not a screen index — using the last position",
+        "config: [output] control_monitor = [1] is not a screen index — using the last position",
+    ]
+    err = capsys.readouterr().err
+    assert all(n in err for n in cfg["notes"]) and "error" not in cfg
+    p.write_text("[output]\nmonitor = nan\ncontrol_monitor = inf\n")
+    cfg = config.load(p)
+    assert cfg["output"]["monitor"] == cfg["output"]["control_monitor"] == -1
+    assert len(cfg["notes"]) == 2
+    capsys.readouterr()
+    for text, want in (("monitor = 1\ncontrol_monitor = 0", (1, 0)), ('monitor = "1"', (1, -1)),
+                       ("monitor = 2.0\ncontrol_monitor = -5", (2, -1)), ("monitor = 99", (99, -1))):
+        p.write_text(f"[output]\n{text}\n")
+        cfg = config.load(p)
+        assert (cfg["output"]["monitor"], cfg["output"]["control_monitor"]) == want, text
+        assert type(cfg["output"]["monitor"]) is int and "notes" not in cfg
+    assert capsys.readouterr().err == ""
+
+
 def test_a_bad_file_keeps_the_defaults_and_carries_the_error(tmp_path):
     p = tmp_path / "config.toml"
     p.write_text("[midi\nenabled = true\n")

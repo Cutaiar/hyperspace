@@ -406,8 +406,9 @@ def test_undo_of_a_load_puts_back_the_values_the_routes_the_desk_the_macros_and_
     reg["preset.load.4"].fire()                        # TRIP: other values, routes, desk
     assert lib.current(PRESETS) == "TRIP" and not lib.is_dirty(PRESETS) and pr.active == 4
     settle(rig)
-    # (round-off under a performer may light the dot: plan 15 §1 row 2)
-    trip, dirty = look(rig), lib.is_dirty(PRESETS)
+    # (round-off under a performer lights no dot: plan 16 WP7)
+    trip = look(rig)
+    assert not lib.is_dirty(PRESETS)
     assert all(a != b for a, b in zip(tumble, trip, strict=True))
     serial = rig.table.desk_serial
     assert rig.undo.undo() and rig.undo.status == "undid load TRIP"
@@ -418,7 +419,7 @@ def test_undo_of_a_load_puts_back_the_values_the_routes_the_desk_the_macros_and_
     assert same_look(look(rig), tumble) and rig.undo.redos   # nothing re-landed, redo intact
     assert rig.undo.redo() and rig.undo.status == "redid load TRIP"
     assert same_look(look(rig), trip)
-    assert lib.current(PRESETS) == "TRIP" and lib.is_dirty(PRESETS) == dirty and pr.active == 4
+    assert lib.current(PRESETS) == "TRIP" and not lib.is_dirty(PRESETS) and pr.active == 4
 
 
 def test_save_after_undoing_a_load_writes_the_earlier_preset(rig):
@@ -607,6 +608,65 @@ def test_undo_writes_no_file_and_the_dirty_dot_is_honest(rig):
         rig.undo.redo()
     assert lib.is_dirty(PRESETS) and lib.current(PRESETS) == "FACES"
     assert tree() == files
+
+
+def test_a_performers_round_off_lights_no_dot(rig):
+    """Plan 16 WP7: a performer taking a param moves its base in the last
+    bits (plan 15 §1 row 2) and leaves it so. Every factory preset loaded,
+    two hands through the box for two seconds with the lanes and the LFOs
+    running, then gone: bases have moved, and no dot is lit — the
+    preset's, a module preset's, the show's. One detent of one param
+    lights them."""
+    reg, lib = rig.reg, rig.lib
+
+    def hand(t):
+        return 0.5 + 0.5 * np.sin(t * 5.0 + np.arange(22))
+
+    moved = set()
+    for name in lib.list(PRESETS):
+        lib.load(PRESETS, name)
+        ref = reg.snapshot()
+        assert not lib.is_dirty(PRESETS)
+        frames(rig, 120, hand=hand, lanes=True)
+        frames(rig, 40)                                # the hands gone (an LFO may play on)
+        now = reg.snapshot()
+        moved |= {k for k, v in now.items() if v != ref[k]}
+        assert undo.alike(now, ref), name              # …in their last bits only
+        dots = [g for g in ("presets", "view", "fx", "dream", "band") if lib.is_dirty(g)]
+        assert dots == [] and not lib.project.is_dirty(), name
+    assert moved, "no base moved: this rig no longer shows the round-off"
+    # a real edit, the smallest there is, on a param the round-off touched
+    # and on one it did not
+    lib.load(PRESETS, "TUMBLE")
+    for pid in (min(moved), "view.bright"):
+        p = reg[pid]
+        group = pid.split(".")[0]
+        assert not lib.is_dirty(PRESETS) and not lib.is_dirty(group)
+        up = 1 if p.position() < p.steps else -1
+        p.step(up)
+        assert lib.is_dirty(PRESETS) and lib.is_dirty(group), pid
+        p.step(-up)
+        p.set(p.base * (1 + 1e-6) + 1e-9)             # far smaller than a detent: still an edit
+        assert lib.is_dirty(PRESETS), pid
+        lib.load(PRESETS, "TUMBLE")
+
+
+def test_alike_is_exact_but_for_float_round_off():
+    """`undo.alike`: nested dicts, tuples and lists, floats within
+    REL_TOL / ABS_TOL, everything else exactly."""
+    a = ({"view.speed": 0.3, "x": [1, "a", (2.0, True)]}, '[{"t": 0.3}]')
+    b = ({"view.speed": 0.29999999999859905, "x": [1, "a", (2.0, True)]}, '[{"t": 0.3}]')
+    assert undo.alike(a, b) and a != b
+    assert not undo.alike(a, ({**b[0], "view.speed": 0.3001}, b[1]))
+    assert not undo.alike(a, (b[0], '[{"t": 0.29999999999859905}]'))   # text is exact
+    assert not undo.alike(a, ({**b[0], "y": 0}, b[1]))                  # a key more
+    assert not undo.alike({"x": [1, 2]}, {"x": [1, 2, 3]})
+    assert not undo.alike({"x": [1, 2]}, {"x": (1, 2)}) and not undo.alike(0.0, 1e-9)
+    assert undo.alike(float("nan"), float("nan")) and undo.alike(None, None)
+    # a whole number written in a file is a number like any other (review of PR #92)
+    assert undo.alike({"camera.zoom": 1}, {"camera.zoom": 0.9999999999999998})
+    assert not undo.alike({"camera.zoom": 1}, {"camera.zoom": 0.999999})
+    assert not undo.alike(True, 0.9999999999999998) and not undo.alike(10**400, 1e308)
 
 
 def test_a_scene_pick_undoes_with_its_strips(rig):

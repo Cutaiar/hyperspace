@@ -231,6 +231,28 @@ def _key(kind: str) -> str:
     return "control_monitor" if kind == "control" else "monitor"
 
 
+def read(key: str, monitor) -> tuple[int, str]:
+    """A config value as a screen index: (index, note or ""). The index
+    is what `int()` reads of it, and −1 for anything under −1; a value
+    `int()` will not read ("left", None, a NaN) is −1 with the note. The
+    one reading of ``[output] monitor`` / ``control_monitor`` (plan 16
+    WP7) — `config.load`, `place` below and `app._make_output` all go
+    through it, so a window's screen and the one fullscreen covers agree.
+    It never raises. Whether a screen has that index is `place`'s to say."""
+    try:
+        return max(int(monitor), -1), ""
+    except (TypeError, ValueError, OverflowError):
+        return -1, (f"config: [output] {key} = {monitor!r} is not a screen index — "
+                    "using the last position")
+
+
+def index(monitor, n: int | None = None) -> int:
+    """`read`'s index alone; with `n` screens connected, −1 for an index
+    none of them has. Says nothing: the notes are `read`'s and `place`'s."""
+    i, _ = read("monitor", monitor)
+    return -1 if n is not None and i >= n else i
+
+
 def place(kind: str, size: tuple[int, int], scr: list[Screen],
           monitor: int, remembered: dict | None) -> tuple[Rect, str]:
     """Where one window opens: (rect, note or "").
@@ -250,14 +272,10 @@ def place(kind: str, size: tuple[int, int], scr: list[Screen],
         return (MARGIN, MARGIN, int(size[0]), int(size[1])), ""
     notes = []
     target = None
-    try:
-        # read as app._make_output reads it for `output.monitor`, so the
-        # screen a window opens on and the one fullscreen covers agree
-        monitor = int(monitor)
-    except (TypeError, ValueError, OverflowError):
-        notes.append(f"config: [output] {_key(kind)} = {monitor!r} is not a screen index — "
-                     "using the last position")
-        monitor = -1
+    # read as app._make_output reads it for `output.monitor`
+    monitor, note = read(_key(kind), monitor)
+    if note:
+        notes.append(note)
     if monitor >= len(scr):
         n = len(scr)
         have = "0" if n == 1 else f"0–{n - 1}"
