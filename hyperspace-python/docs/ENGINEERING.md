@@ -8,15 +8,145 @@ setting up a new Mac is [`SETUP.md`](SETUP.md); what a person still has to
 check by hand is [`TESTING-GUIDE.md`](TESTING-GUIDE.md) and
 [`plans/11-hand-checks.md`](plans/11-hand-checks.md).
 
-Contents: 1 Running it · 2 The home folder · 3 `config.toml` · 4 The
-control window · 5 Keys and the gamepad · 6 The APC40 · 7 Learn, Unbind
-and routing · 8 Presets, shows and the bank · 9 Undo · 10 Hands ·
-11 Audio · 12 The picture · 13 Outputs · 14 Hot reload and the watchdog ·
-15 Testing · 16 Known limits.
+Contents: 1 Geometry · 2 Rendering · 3 Running it · 4 The home folder ·
+5 `config.toml` · 6 The control window · 7 Keys and the gamepad · 8 The
+APC40 · 9 Learn, Unbind and routing · 10 Presets, shows and the bank ·
+11 Undo · 12 Hands · 13 Audio · 14 Outputs · 15 Hot reload and the
+watchdog · 16 Testing · 17 Known limits.
 
 ---
 
-## 1. Running it
+## 1. Geometry
+
+**Shapes** (`geometry.py`). The slider index is the identity saved files
+and the golden traces use, so the list is append-only and the vertex
+order of the first eighteen never changes. `tests/test_golden.py` reads
+this table and checks every V and E against the code, so keep it in this
+form under this heading.
+
+| # | Shape | Cells | V | E |
+|---|---|---|---|---|
+| 1 | 5-cell | 5 | 5 | 10 |
+| 2 | 3,3-duoprism | 6 | 9 | 18 |
+| 3 | Cubic pyramid | 7 | 9 | 20 |
+| 4 | Tesseract | 8 | 16 | 32 |
+| 5 | Rectified 5-cell | 10 | 10 | 30 |
+| 6 | 4,8-duoprism | 12 | 32 | 64 |
+| 7 | 6,6-duoprism | 12 | 36 | 72 |
+| 8 | 16-cell | 16 | 8 | 24 |
+| 9 | 10,10-duoprism | 20 | 100 | 200 |
+| 10 | Icosahedral prism | 22 | 24 | 72 |
+| 11 | 24-cell | 24 | 24 | 96 |
+| 12 | Truncated tesseract | 24 | 64 | 128 |
+| 13 | 12,12-duoprism | 24 | 144 | 288 |
+| 14 | Dodecahedral prism | 32 | 40 | 80 |
+| 15 | 20,20-duoprism | 40 | 400 | 800 |
+| 16 | 120-cell | 120 | 600 | 1200 |
+| 17 | 600-cell | 600 | 120 | 720 |
+| 18 | Clifford torus (32×16) | — | 512 | 1024 |
+| 19 | Heart | — | 128 | 192 |
+| 20 | Star | — | 20 | 30 |
+| 21 | Rose | — | 186 | 285 |
+| 22 | Torus | — | 512 | 1024 |
+| 23 | Trefoil knot | — | 576 | 1152 |
+| 24 | Starfruit | — | 522 | 1080 |
+| 25 | Möbius strip | — | 320 | 576 |
+
+Shapes 19–25 are 3D shapes from trig equations, in the w = 0 hyperplane;
+the XW / YW / ZW planes tumble them through the fourth dimension (turn
+those planes off for a plain 3D spin).
+
+## 2. Rendering
+
+**The transform**: rotate in 4D across six planes → project 4D→3D →
+apply the drag orientation → project to 2D, on the CPU; the GPU
+rasterises. Edges are screen-space quads whose width and alpha follow
+w-depth (the near half glows), with brightness compensated for edge
+count so the 120-cell does not clip to a blob. Points are red.
+
+**Faces** are the true 2-faces, translucent and painter-sorted, with
+face-local UVs. `shaders/patterns.glsl` paints them: `vec4 pattern(int
+mode, vec2 uv, float fid)`, reading `u_time` and `u_mod[8]` (the eight
+`pattern.mod.k` params). Twelve patterns (`params.PATTERNS`: FLAT and
+eleven more); a new mode needs both the GLSL case and the name. Shared
+colour helpers are `shaders/_common.glsl`. Both files hot-reload on
+save; a broken edit keeps the last good program and shows the GLSL error
+on the panel. The **bitmap** layer textures faces from a file; a bad file
+leaves the plain faces. **Cut-through** matters only in overlay mode.
+
+**Instances** (`view.instances`, 0–100): copies laid out by
+`view.inst_layout` — **GRID** (rows of ⌈√n⌉), **HEX** (a honeycomb
+spiral from the centre; a copy never moves as the count grows), **RING**
+(one circle, neighbours one cell apart) — and moved by
+`view.inst_motion` (STILL, ORBIT, WAVE, RIPPLE) with `inst_amp` and
+`inst_rate`. At 0 nothing is drawn but the ground, the echoes, the
+effects and the hands carry on.
+
+**The frame** (`render.py`, `Renderer.draw_outputs`), once per frame:
+the face picture (only while an effect is aimed at the faces) → the
+scene → the coverage mask (when the look-back occludes) → the look-back
+composite → the frame's effects → the hands → the master dim; then each
+render output gets its picture (§14). With the look-back, effects and
+ghost off and the dim at full, the output is bit-identical to the scene
+pass alone. The renderer re-binds its target on every exit, a raise
+included, so a failing pass never strands a framebuffer.
+
+**The look-back** (`lookback.py`, LOOKBACK page) keeps an atlas of
+downsampled echoes of past frames and one dream buffer, and composites
+the scene over its own wake. **ECHOES**: brightness (`dream.echo_mix`),
+fade time (`fade`, seconds), count (`echoes`), time apart (`gap`,
+seconds), thumbnails, and how far back the trail reaches; echo time is
+in seconds, so a trail is the same at 60 and 120 Hz. **DREAM**: the
+worker's status, the layer as six chips (grain, swirl, blot, 3b, 4c, 4e),
+brightness (`mix`), speed (`k`, shown as frames to halve), strength
+(`step`), passes (`steps`), linger (`mask_decay`), jitter, scales
+(`octaves`), hue, saturation, tint, tint from, tint hue, tint sat, and a
+swatch of the tint. **BOTH**: darken, contrast, shape hides (`occlude`),
+detail (`res`). The page uses short labels; ROUTING, learn lines and the
+desk use the registry's ("Echo time apart", "Dream speed"). All
+`dream.*` params are presettable and modulatable except `gap`, `res` and
+`layer`.
+
+**The dream worker** (`dream.py`, torch, MPS when available) runs a few
+gradient-ascent steps per submitted echo on its own thread; `submit`
+never blocks and the latest result wins; `step × steps / k` is clamped so
+a preset cannot run away. The weights (VGG16, or GoogLeNet for the 3b /
+4c / 4e layers) are read from `weights_dir`, then torch's hub cache, and
+downloaded there on first use.
+If the worker cannot start, the reason is on the SYSTEM page, the
+LOOKBACK page and the red banner, and the look-back runs echoes only; a
+preset that asks for the dream with no worker is a warning, once.
+
+**Effects** (`fx.py`, FX page). One GLSL file per effect in
+`shaders/fx/` — twelve ship: acid, deconverge, doublevision, fractals,
+glimmer, huecycle, kaleido, plasma, tripcolour, warp, wobble, zoomblur
+(`_lib.glsl` is shared). **A new effect is a new `.glsl` file, not
+Python**: every `// @param` uniform becomes `fx.<file>.<key>`, plus
+`on mix speed blend order target` per effect; `fx.on` bypasses the stack
+and `fx.mix` scales it. The folder is polled every 30 frames; a parse
+error keeps the last version, a compile error skips the pass. Factory
+effect presets are `library/fx/*.json`.
+
+- **The page.** Bypass and mix, the chain in words (`frame  Plasma → Hue
+  cycle`, and a `faces` row while anything is aimed at the faces), then
+  one chip per effect, three to a row, in stack order. A chip's **LED**
+  switches the effect; its **name** opens its strip. An open effect
+  that is not running says why first ("off", "faces off", "the whole
+  stack is bypassed", "FX mix is at 0", "its mix is at 0") with a chip
+  to fix it; its controls stay live under a veil. **Drag a chip by its
+  name** onto another to put it before that one (or onto the right half
+  of the last to move it to the end): one undo step.
+- **Aimed at the faces.** Each effect's `fx.<name>.target` is `frame`
+  (the default) or `faces` (the strip's **target** combo; not
+  modulatable). Effects aimed at the faces run first over a 1024²
+  picture of what a face shows, and the faces show that picture — per
+  face (at each face's own UV, turning with the shape) or screen (one
+  still picture seen through the faces), `fx.face_map`. A chip aimed at
+  the faces has a diamond LED. With an effect on the faces, every face
+  shows face 0's pattern phase; the echoes and the dream carry the
+  faces' effects, never the frame's.
+
+## 3. Running it
 
 ```bash
 cd hyperspace-python
@@ -29,7 +159,7 @@ or the glass; the mouse orbits, ⇧-drag or right-drag pans, scroll zooms
 about the cursor) and the **control window** (the panel, the desk
 diagram, the cheat sheet). Keys work from both, and from every extra
 render output; while a text field in the panel is being typed into, keys
-go to the field. More render outputs come from `[[output.screens]]` (§13).
+go to the field. More render outputs come from `[[output.screens]]` (§14).
 
 - **Quit:** Esc or Q, or close any window.
 - **Restart in place:** Cmd+R or the SYSTEM page's *Restart process*
@@ -45,12 +175,12 @@ Environment variables:
 
 | Variable | Effect |
 |---|---|
-| `HYPERSPACE_HOME` | The home folder (§2). Default `~/Hyperspace`. |
+| `HYPERSPACE_HOME` | The home folder (§4). Default `~/Hyperspace`. |
 | `HYPERSPACE_FRAMES` | Run that many frames, then exit (a windowed smoke test). |
 | `PYGLFW_LIBRARY` | Which GLFW dylib to load; `app.py` sets it to the bundled one when unset. |
 | `LEAPSDK_INSTALL_LOCATION` | Read by Ultraleap's `leap` package when the hand-tracking software is not at its default path (see SETUP). |
 
-## 2. The home folder
+## 4. The home folder
 
 Everything the app writes lives in one folder, `$HYPERSPACE_HOME`
 (default `~/Hyperspace`), created on the first launch. Factory files ship
@@ -62,17 +192,17 @@ of seconds.
 
 | Path | What it is | Format |
 |---|---|---|
-| `config.toml` | The rig's settings (§3). Optional. | TOML |
+| `config.toml` | The rig's settings (§5). Optional. | TOML |
 | `bindings.json` | The session's controls only: keys, gamepad, and the APC40's invariant and global-layer rows. Delete it to get `hyperspace/bindings.default.json` back. | `hyperspace.bindings/3` |
-| `presets/<slug>.json` | Your presets (§8). | `hyperspace.preset/2` |
+| `presets/<slug>.json` | Your presets (§10). | `hyperspace.preset/2` |
 | `projects/<slug>.hyp.json` | Your shows (the code calls them projects). | `hyperspace.project/2` |
 | `<group>/<slug>.json` | Module presets, one registry group each (`band/`, `dream/`, `fx/`, `hands/`, `view/` …). | `hyperspace.preset/1` |
-| `hands.json` | The hands' calibrated ranges and the interaction box (§10). | `hyperspace.hands/2` |
-| `windows.json` | Where the control window and each render output were at the last quit (§13). Machine-specific; safe to delete. | `hyperspace.windows/1` |
+| `hands.json` | The hands' calibrated ranges and the interaction box (§12). | `hyperspace.hands/2` |
+| `windows.json` | Where the control window and each render output were at the last quit (§14). Machine-specific; safe to delete. | `hyperspace.windows/1` |
 | `hidden.json` | Factory presets taken off the preset list. | `hyperspace.hidden/1` |
 | `last_show` | One line: the file name of the show opened last. | text |
 | `trash/<group>/<slug>.<YYYYMMDD-HHMMSS>.json` | Copies of your files taken before an overwrite, delete or rename. Never watched. | as the original |
-| `stall.log` | The watchdog's log (§14). | text |
+| `stall.log` | The watchdog's log (§15). | text |
 | `weights/` | The dream's pretrained network weights, downloaded on first use. | binary |
 | `.git/`, `.gitignore` | Only with `[library] git = true` (below). | git |
 
@@ -127,7 +257,7 @@ presets between people is the repository's `shared/` folder and
 `tools/shared_presets.py` (`list`, `install` — never overwrites —
 `export`).
 
-## 3. `config.toml`
+## 5. `config.toml`
 
 Optional, in the home. Every key has a default; `hyperspace/config.py`
 (`DEFAULTS`, `SCREEN`) and `hyperspace/hands/core.py` (`DEFAULTS`) are the
@@ -152,7 +282,7 @@ passthrough = true      # overlay: clicks go to the window underneath
 bg = 0.0                # overlay: ground, 0 see-through … 1 black
 alpha = 1.0             # overlay: whole-window opacity
 
-[[output.screens]]      # optional; one table per render output, at most 4 (§13)
+[[output.screens]]      # optional; one table per render output, at most 4 (§14)
 name = "glass"
 monitor = 1
 fullscreen = true
@@ -199,7 +329,7 @@ pinch_note = 100        # left index…pinky = note…note+3, right note+4…not
 tape = ""               # a recorded hand tape to play instead of the camera
 
 [library]
-git = false             # true: the home is a local git repository (§2)
+git = false             # true: the home is a local git repository (§4)
 ```
 
 Rules worth knowing:
@@ -207,7 +337,7 @@ Rules worth knowing:
 - An `[overlay]` section is the old name of `[output]`: still read,
   merged under `[output]` (which wins), with a note asking for the rename.
 - A `monitor` that is not a number, or an index no connected screen has,
-  is −1 with a note (but see §13 for later outputs).
+  is −1 with a note (but see §14 for later outputs).
 - With an `[[output.screens]]` list, output 1's entry supplies `monitor`
   and `fullscreen`; the scalar ones are ignored with a note. `overlay`,
   `on_start`, `passthrough`, `bg` and `alpha` stay scalar and belong to
@@ -216,7 +346,7 @@ Rules worth knowing:
 - `[library] git` anything but `true` / `false` is `false`, with a note.
 - `[hands] calibration` and `tape` are relative to the config's folder.
 
-## 4. The control window
+## 6. The control window
 
 The panel is built to be read from a few feet back in a dark room. A
 rail of fourteen pages (`ui.PAGES`); the rail shows a red dirty dot
@@ -231,14 +361,14 @@ scrolls at the control size (960 × 900, `app.CONTROL_SIZE`;
 | FACES | Faces, cut-through, the pattern and its mix; the eight pattern inputs (`pattern.mod.k`). |
 | BITMAP | A bitmap textured onto the faces: file, opacity, scale, mode. |
 | CAMERA | Zoom, yaw, pitch, pan, reset. |
-| LOOKBACK | The look-back switch and three sections: ECHOES, DREAM, BOTH (§12). |
-| FX | The effect stack (§12). |
+| LOOKBACK | The look-back switch and three sections: ECHOES, DREAM, BOTH (§2). |
+| FX | The effect stack (§2). |
 | AUDIO | Listen to mic / Load track / Stop, the device and **rescan**, the transport, the master faders (gain, dynamics, trim). |
 | ANALYZER | The band scene and Reset all, the meters, the band editor (spectrogram with the bands over it, the selected band's strip). |
-| ROUTING | One page over the loaded preset: routes, desk rows, macros, the session's MIDI rows read-only, and a filter (§7). |
+| ROUTING | One page over the loaded preset: routes, desk rows, macros, the session's MIDI rows read-only, and a filter (§9). |
 | LFO | The tap-tempo clock and the four LFOs. |
-| HANDS | The tracker, the box, the axes and their setup, feel and calibration, the ghost hands (§10). |
-| PRESETS | The show, "starts on / home", the bank of twenty-four, the preset strip and preset list, module presets under **more** (§8). |
+| HANDS | The tracker, the box, the axes and their setup, feel and calibration, the ghost hands (§12). |
+| PRESETS | The show, "starts on / home", the bank of twenty-four, the preset strip and preset list, module presets under **more** (§10). |
 | SYSTEM | Cheat sheet and desk-diagram switches, Restart process, hot reload status, the library path, config errors and notes, the dream worker's state, the stall log's line; **midi**: knob smoothing, the port's state, the learn line; **bridge**: port, encoding, messages sent or why it is off. |
 
 Every page that is a registry group carries a preset strip for its
@@ -248,7 +378,7 @@ module presets.
 performer (a hand, a band, an LFO) is driving shows its *setting* as the
 handle and the effective value as a white ghost bar, and its hover names
 the performer. Right-click any param, a row's label or an analyzer meter
-for the menu (§7).
+for the menu (§9).
 
 **The footer**, on every page: the frame rate; one message slot; `dim
 40%` (or `dim black`) in the warning colour while the master dim is under
@@ -284,7 +414,7 @@ latched, is picked only to show its line; the header says why. With
 "Learn desk" armed, a click on the diagram completes the learn as a
 knob would.
 
-## 5. Keys and the gamepad
+## 7. Keys and the gamepad
 
 Every key and pad button is a row in `bindings.json` (factory rows in
 `hyperspace/bindings.default.json`), so each rebinds there; the five
@@ -320,7 +450,7 @@ LB / RB previous / next shape · d-pad brightness (↑↓) and speed (←→) ·
 left stick orbit, right stick zoom, a stick click resets · LT / RT 4D
 depth out / in · VIEW panel · MENU cheat sheet.
 
-## 6. The APC40
+## 8. The APC40
 
 Plug in an Akai APC40 (mk1) and it is found by name on launch and after
 an unplug. On open it is put in Alternate Ableton Live mode (every LED
@@ -425,7 +555,7 @@ again. `[midi] enabled = false` stops all of it.
 subscriber sets a param's base or scales a route's depth over its own
 `from → to`. A hand on a macro moves only the depths.
 
-## 7. Learn, Unbind and routing
+## 9. Learn, Unbind and routing
 
 The control model — the parameter registry, bases and effective values,
 routes (`push` / `position`), one performer per param, the referee — is
@@ -481,7 +611,7 @@ its × and a click on a desk control clear it. A route's `scale` can only
 be a session param; a route may perform a session param, marked
 "session" on its row.
 
-## 8. Presets, shows and the bank
+## 10. Presets, shows and the bank
 
 A **preset** (`presets/<slug>.json`) is one whole performance moment:
 the performance groups' values (`view rot camera pattern dream fx lfo
@@ -550,9 +680,9 @@ each with **restore**, then **empty trash…**, which asks "delete N files
 for good? — click again" for 4 s. None of these is an undo step.
 
 **Module presets** (one group each, `hyperspace.preset/1`) replace only
-their group. The analyzer's band presets are also its **scenes** (§11).
+their group. The analyzer's band presets are also its **scenes** (§13).
 
-## 9. Undo
+## 11. Undo
 
 Cmd+Z or Ctrl+Z undoes; with ⇧, redoes (`undo.py`). The footer says what
 it did ("undid Brightness 2.00× → 2.96×", "nothing to undo").
@@ -589,7 +719,7 @@ a load also puts back what the library calls loaded, so the PRESETS page
 names the earlier preset and **save** writes that one. A restore writes
 no file. The band strips' 8-second "Reset all → Undo" is separate.
 
-## 10. Hands
+## 12. Hands
 
 Ultraleap hands (`hyperspace/hands/`), off until `[hands] enabled =
 true`. Each hand gives its palm's pose — six axes by default, from the
@@ -651,7 +781,7 @@ framing the box (or, with no box, the calibrated ranges); a hand leaving
 fades out over 0.3 s and one coming back fades in over 0.1 s. Desktop is
 the only tracking mode whose axes have been measured; with `screentop`
 or `hmd` and the ghost on, the HANDS page says so. Where the hands show
-on each output, and whether the effects bend them, is §13.
+on each output, and whether the effects bend them, is §14.
 
 **Without a camera.** `tools/hands_tape.py record <file>` keeps a few
 seconds of real frames as a tape; `[hands] tape = "<path>"` (with
@@ -659,7 +789,7 @@ seconds of real frames as a tape; `[hands] tape = "<path>"` (with
 `synth`, `styles` and `info` render, make or describe tapes. A missing
 or malformed tape is a note on the SYSTEM and HANDS pages.
 
-## 11. Audio
+## 13. Audio
 
 **Sources** (`audio.py`). Nothing captures at launch. **A capture
 device**: M or *Listen to mic*; mono, 48 kHz. The device combo lists
@@ -732,129 +862,10 @@ and only on change, and turns the same messages coming in on `in` into
 `ext:<i>` sources for routes. Use two buses: IAC echoes. The SYSTEM page
 shows its state.
 
-## 12. The picture
-
-**Shapes** (`geometry.py`). The slider index is the identity saved files
-and the golden traces use, so the list is append-only and the vertex
-order of the first eighteen never changes.
-
-| # | Shape | Cells | V | E |
-|---|---|---|---|---|
-| 1 | 5-cell | 5 | 5 | 10 |
-| 2 | 3,3-duoprism | 6 | 9 | 18 |
-| 3 | Cubic pyramid | 7 | 9 | 20 |
-| 4 | Tesseract | 8 | 16 | 32 |
-| 5 | Rectified 5-cell | 10 | 10 | 30 |
-| 6 | 4,8-duoprism | 12 | 32 | 64 |
-| 7 | 6,6-duoprism | 12 | 36 | 72 |
-| 8 | 16-cell | 16 | 8 | 24 |
-| 9 | 10,10-duoprism | 20 | 100 | 200 |
-| 10 | Icosahedral prism | 22 | 24 | 72 |
-| 11 | 24-cell | 24 | 24 | 96 |
-| 12 | Truncated tesseract | 24 | 64 | 128 |
-| 13 | 12,12-duoprism | 24 | 144 | 288 |
-| 14 | Dodecahedral prism | 32 | 40 | 80 |
-| 15 | 20,20-duoprism | 40 | 400 | 800 |
-| 16 | 120-cell | 120 | 600 | 1200 |
-| 17 | 600-cell | 600 | 120 | 720 |
-| 18 | Clifford torus (32×16) | — | 512 | 1024 |
-| 19–25 | Heart, Star, Rose, Torus, Trefoil knot, Starfruit, Möbius strip | — | | |
-
-Shapes 19–25 are 3D shapes from trig equations, in the w = 0 hyperplane;
-the XW / YW / ZW planes tumble them through the fourth dimension (turn
-those planes off for a plain 3D spin).
-
-**The transform**: rotate in 4D across six planes → project 4D→3D →
-apply the drag orientation → project to 2D, on the CPU; the GPU
-rasterises. Edges are screen-space quads whose width and alpha follow
-w-depth (the near half glows), with brightness compensated for edge
-count so the 120-cell does not clip to a blob. Points are red.
-
-**Faces** are the true 2-faces, translucent and painter-sorted, with
-face-local UVs. `shaders/patterns.glsl` paints them: `vec4 pattern(int
-mode, vec2 uv, float fid)`, reading `u_time` and `u_mod[8]` (the eight
-`pattern.mod.k` params). Twelve patterns (`params.PATTERNS`: FLAT and
-eleven more); a new mode needs both the GLSL case and the name. Shared
-colour helpers are `shaders/_common.glsl`. Both files hot-reload on
-save; a broken edit keeps the last good program and shows the GLSL error
-on the panel. The **bitmap** layer textures faces from a file; a bad file
-leaves the plain faces. **Cut-through** matters only in overlay mode.
-
-**Instances** (`view.instances`, 0–100): copies laid out by
-`view.inst_layout` — **GRID** (rows of ⌈√n⌉), **HEX** (a honeycomb
-spiral from the centre; a copy never moves as the count grows), **RING**
-(one circle, neighbours one cell apart) — and moved by
-`view.inst_motion` (STILL, ORBIT, WAVE, RIPPLE) with `inst_amp` and
-`inst_rate`. At 0 nothing is drawn but the ground, the echoes, the
-effects and the hands carry on.
-
-**The frame** (`render.py`, `Renderer.draw_outputs`), once per frame:
-the face picture (only while an effect is aimed at the faces) → the
-scene → the coverage mask (when the look-back occludes) → the look-back
-composite → the frame's effects → the hands → the master dim; then each
-render output gets its picture (§13). With the look-back, effects and
-ghost off and the dim at full, the output is bit-identical to the scene
-pass alone. The renderer re-binds its target on every exit, a raise
-included, so a failing pass never strands a framebuffer.
-
-**The look-back** (`lookback.py`, LOOKBACK page) keeps an atlas of
-downsampled echoes of past frames and one dream buffer, and composites
-the scene over its own wake. **ECHOES**: brightness (`dream.echo_mix`),
-fade time (`fade`, seconds), count (`echoes`), time apart (`gap`,
-seconds), thumbnails, and how far back the trail reaches; echo time is
-in seconds, so a trail is the same at 60 and 120 Hz. **DREAM**: the
-worker's status, the layer as six chips (grain, swirl, blot, 3b, 4c, 4e),
-brightness (`mix`), speed (`k`, shown as frames to halve), strength
-(`step`), passes (`steps`), linger (`mask_decay`), jitter, scales
-(`octaves`), hue, saturation, tint, tint from, tint hue, tint sat, and a
-swatch of the tint. **BOTH**: darken, contrast, shape hides (`occlude`),
-detail (`res`). The page uses short labels; ROUTING, learn lines and the
-desk use the registry's ("Echo time apart", "Dream speed"). All
-`dream.*` params are presettable and modulatable except `gap`, `res` and
-`layer`.
-
-**The dream worker** (`dream.py`, torch, MPS when available) runs a few
-gradient-ascent steps per submitted echo on its own thread; `submit`
-never blocks and the latest result wins; `step × steps / k` is clamped so
-a preset cannot run away. The weights (VGG16, or GoogLeNet for the 3b / 4c / 4e layers) are read from
-`weights_dir`, then torch's hub cache, and downloaded there on first use.
-If the worker cannot start, the reason is on the SYSTEM page, the
-LOOKBACK page and the red banner, and the look-back runs echoes only; a
-preset that asks for the dream with no worker is a warning, once.
-
-**Effects** (`fx.py`, FX page). One GLSL file per effect in
-`shaders/fx/` — twelve ship: acid, deconverge, doublevision, fractals,
-glimmer, huecycle, kaleido, plasma, tripcolour, warp, wobble, zoomblur
-(`_lib.glsl` is shared). **A new effect is a new `.glsl` file, not
-Python**: every `// @param` uniform becomes `fx.<file>.<key>`, plus
-`on mix speed blend order target` per effect; `fx.on` bypasses the stack
-and `fx.mix` scales it. The folder is polled every 30 frames; a parse
-error keeps the last version, a compile error skips the pass. Factory
-effect presets are `library/fx/*.json`.
-
-- **The page.** Bypass and mix, the chain in words (`frame  Plasma → Hue
-  cycle`, and a `faces` row while anything is aimed at the faces), then
-  one chip per effect, three to a row, in stack order. A chip's **LED**
-  switches the effect; its **name** opens its strip. An open effect
-  that is not running says why first ("off", "faces off", "the whole
-  stack is bypassed", "FX mix is at 0", "its mix is at 0") with a chip
-  to fix it; its controls stay live under a veil. **Drag a chip by its
-  name** onto another to put it before that one (or onto the right half
-  of the last to move it to the end): one undo step.
-- **Aimed at the faces.** Each effect's `fx.<name>.target` is `frame`
-  (the default) or `faces` (the strip's **target** combo; not
-  modulatable). Effects aimed at the faces run first over a 1024²
-  picture of what a face shows, and the faces show that picture — per
-  face (at each face's own UV, turning with the shape) or screen (one
-  still picture seen through the faces), `fx.face_map`. A chip aimed at
-  the faces has a diamond LED. With an effect on the faces, every face
-  shows face 0's pattern phase; the echoes and the dream carry the
-  faces' effects, never the frame's.
-
-## 13. Outputs
+## 14. Outputs
 
 **One output** by default: the render window, from `[output] monitor` /
-`fullscreen`. **Several** from `[[output.screens]]` (§3), up to four
+`fullscreen`. **Several** from `[[output.screens]]` (§5), up to four
 (`outputs.MAX_OUTPUTS`), numbered by their place in the list whether or
 not they opened. Output 1 is made as the single render window always is
 (4× MSAA; transparent only with `[output] overlay = true`), sets the
@@ -919,7 +930,7 @@ rect is used only when enough of it is on a connected screen; otherwise
 the default spot, with a note. `windows.json` is written on quit and
 Cmd+R only.
 
-## 14. Hot reload and the watchdog
+## 15. Hot reload and the watchdog
 
 **Hot reload** (`hotreload.py`). Save a module on `hotreload.MODULES`
 while the app runs and live objects pick up the new code in place; a
@@ -948,7 +959,7 @@ the GIL is caught by faulthandler's timer. The SYSTEM page shows the
 log's line once it has entries. Nothing in the watchdog can stop the
 show: a log that will not open is kept as an error and the loop goes on.
 
-## 15. Testing
+## 16. Testing
 
 ```bash
 uv run pytest -q
@@ -985,7 +996,7 @@ What only a person at the machine can check is
 [`TESTING-GUIDE.md`](TESTING-GUIDE.md) and the numbered list in
 [`plans/11-hand-checks.md`](plans/11-hand-checks.md).
 
-## 16. Known limits
+## 17. Known limits
 
 - **A screen plugged in after launch is not used** until a relaunch
   (Cmd+R): a later output that did not open stays closed, and output 1's

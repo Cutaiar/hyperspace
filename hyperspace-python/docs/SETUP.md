@@ -4,7 +4,7 @@ From nothing to a running Hyperspace, then each optional part with the
 one switch that turns it on. Every setting named here goes in
 `~/Hyperspace/config.toml` (the home folder; `$HYPERSPACE_HOME` moves it),
 which the app does not need to exist — every key has a default. All keys
-are listed in [`ENGINEERING.md`](ENGINEERING.md) §3.
+are listed in [`ENGINEERING.md`](ENGINEERING.md) §5.
 
 ## The base
 
@@ -66,7 +66,7 @@ the same device list (**rescan** if it was plugged in after launch).
 
 Plug it in (USB). Nothing to configure: the MIDI adapter is on by default
 and looks for a port whose name contains "APC40". The desk map is
-[`ENGINEERING.md`](ENGINEERING.md) §6. To check the device without the
+[`ENGINEERING.md`](ENGINEERING.md) §8. To check the device without the
 app: `uv run python tools/midi_probe.py`. Another port name or no MIDI at
 all:
 
@@ -143,7 +143,7 @@ The screens must be connected **before launch**: a later output whose
 screen is missing is not opened, and a screen plugged in afterwards is
 not used until a relaunch (Cmd+R). The OUTPUT page lists each output and
 what it shows. Details and the per-output switches are
-[`ENGINEERING.md`](ENGINEERING.md) §13.
+[`ENGINEERING.md`](ENGINEERING.md) §14.
 
 ## Re-recording the golden traces (rare)
 
