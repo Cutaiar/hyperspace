@@ -1155,6 +1155,12 @@ class Bindings:
     # anything is written over it, and the next launch tries the lot again.
     # None once the copy exists (or was never needed)
     unbacked: str | None = None
+    # what the launch did to the file, in one line, for the SYSTEM page
+    # (`announce`; app.py adds it to the page's notes). `notes` holds the
+    # rows one by one until the next edit — and the startup preset's load
+    # is an edit (`set_routes`), so they are gone before the first frame;
+    # this line stays for the session. "" when the load wrote nothing
+    said: str = ""
 
     def __init__(self, bindings: Iterable[Binding] = (), *, path: Path | None = None,
                  profile: str = "apc40"):
@@ -1242,11 +1248,12 @@ class Bindings:
             if not carried.empty or "values" in data or "macros" in data:
                 t.carried = carried              # preset.migrate_home writes the file
             elif t.migrated or t.changed or remapped:
-                if backup(path, t.read_at) is None:      # no backup, no rewrite
+                bak = backup(path, t.read_at)
+                if bak is None:                          # no backup, no rewrite
                     t.unbacked, t.error = t.read_at, NOT_REWRITTEN
                     t.announce(path, written=False)
                 else:
-                    t.announce(path)
+                    t.announce(path, kept=bak)
                     t.write()
             return t
         t = cls.factory(profile, path)
@@ -1278,21 +1285,30 @@ class Bindings:
                 t.error = f"bindings: {legacy_midi}: {e}"
         return t
 
-    def announce(self, path: Path, *, written: bool = True) -> None:
+    def announce(self, path: Path, *, written: bool = True, kept: Path | None = None) -> None:
         """A migration's notes on stderr, one line per row, then the sum —
-        or, `written` False, that the file was left as it was."""
+        or, `written` False, that the file was left as it was. The sum, with
+        the backup's name (`kept`), is also `said`: the SYSTEM page's line."""
         for note in self.notes:
             print(f"bindings: {path}: {note}", file=sys.stderr)
         dropped = sum(n.startswith("dropped") for n in self.notes)
         changed = len(self.notes) - dropped
         tail = ", ".join(f"{n} rows {what}" for n, what in ((dropped, "dropped"),
                                                               (changed, "changed")) if n)
-        what = (f"migrated {path} to {SCHEMA}" if self.migrated or self.read_at != "3"
-                else f"updated {path}")
+        verb = "migrated" if self.migrated or self.read_at != "3" else "updated"
+        what = f"migrated {path} to {SCHEMA}" if verb == "migrated" else f"updated {path}"
         if not written:
             what = (f"{path} not rewritten — no backup could be made; the changes above "
                     "are in memory only and the next launch tries again")
-        print(f"bindings: {what}" + (f" ({tail})" if tail else ""), file=sys.stderr)
+        tail = f" ({tail})" if tail else ""
+        print(f"bindings: {what}{tail}", file=sys.stderr)
+        if not written:
+            self.said = (f"{path.name} NOT rewritten{tail}: no backup could be made — "
+                         "in memory only, the next launch tries again")
+        else:
+            self.said = (f"{path.name} {verb}{tail}"
+                         + (f", the old file kept as {kept.name}" if kept is not None else "")
+                         + " — each change is on stderr")
 
     @classmethod
     def from_json(cls, data: dict, path: Path | None = None, *, desk: bool = True) -> Bindings:
@@ -1356,9 +1372,11 @@ class Bindings:
         if self.path is None:
             return
         if self.unbacked is not None and self.path.exists():
-            if backup(self.path, self.unbacked) is None:
+            bak = backup(self.path, self.unbacked)
+            if bak is None:
                 self.error = NOT_REWRITTEN
                 return
+            self.said = f"{self.path.name} updated, the old file kept as {bak.name}"
         self.unbacked = None
         try:
             self.path.write_text(self.dumps())

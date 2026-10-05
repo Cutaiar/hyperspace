@@ -2086,6 +2086,16 @@ def _bank_rows(table) -> dict[str, list]:
     return {s: [b for b in table.bindings if b.source == s] for s in far_pads()}
 
 
+def _added(err: str, path, sources) -> bool:
+    """Did the launch say, on stderr and in order, that it added the bank
+    row on each of `sources` — and on no other pad? (`table.notes` holds
+    the rows only until the next edit, and the startup preset's load is
+    one: what stays for the session is stderr and `said`.)"""
+    lines = [ln for ln in err.splitlines() if "(the APC40 map of plan 19)" in ln]
+    return lines == [f"bindings: {path}: added {s} → preset.select (the APC40 map of plan 19)"
+                     for s in sources]
+
+
 def test_an_older_file_gets_the_bank_pads_with_a_backup(owner_home, capsys):
     """The owner's files (on a copy): the first launch adds the bank's
     sixteen pads of clip rows 4 and 5 to a `bindings.json` written before
@@ -2104,10 +2114,13 @@ def test_an_older_file_gets_the_bank_pads_with_a_backup(owner_home, capsys):
     r = boot_home(home)
     t = r.router.table
     err = capsys.readouterr().err
-    assert t.notes == [f"added {s} → preset.select (the APC40 map of plan 19)" for s in far]
+    # the launch says what it did: each row on stderr, the sum on the SYSTEM page
+    assert _added(err, path, far)
     assert t.error == "" and t.unbacked is None
     assert f"bindings: updated {path} (16 rows changed)" in err
     assert "backup: bindings.json kept as bindings.json.bak-v3 before the rewrite" in err
+    assert t.said == ("bindings.json updated (16 rows changed), the old file kept as "
+                      "bindings.json.bak-v3 — each change is on stderr")
     assert [p.name for p in home.glob("bindings.json.bak-*")] == ["bindings.json.bak-v3"]
     assert path.with_name("bindings.json.bak-v3").read_bytes() == old     # the file as it was
     new = json.loads(path.read_text())
@@ -2140,6 +2153,7 @@ def test_a_second_launch_writes_nothing_and_says_nothing(owner_home, capsys):
     r = boot_home(home)
     err = capsys.readouterr().err
     assert r.router.table.notes == [] and r.router.table.error == ""
+    assert r.router.table.said == ""
     assert "bindings" not in err and "backup" not in err
     assert tree(home, but=QUIET[1:]) == after
     assert len(list(home.glob("bindings.json.bak-*"))) == 1
@@ -2159,10 +2173,12 @@ def test_a_row_the_owner_put_on_a_bank_pad_is_left_alone(owner_home, capsys):
     doc["bindings"].append(mine)
     path.write_text(routing.dumps_doc(doc))
     old = path.read_bytes()
+    capsys.readouterr()
     r = boot_home(home)
     t, pr = r.router.table, r.lib.project
     rest = [s for s in far if s != far[3]]
-    assert t.notes == [f"added {s} → preset.select (the APC40 map of plan 19)" for s in rest]
+    assert _added(capsys.readouterr().err, path, rest)
+    assert t.said.startswith("bindings.json updated (15 rows changed)")
     rows = _bank_rows(t)
     assert [(b.target, b.op, b.layer) for b in rows[far[3]]] == [("view.faces", "toggle", None)]
     assert all([b.target for b in rows[s]] == ["preset.select"] for s in rest)
@@ -2221,31 +2237,39 @@ def test_a_remap_whose_backup_fails_writes_nothing(owner_home, capsys, monkeypat
         assert t.unbacked == "3"
         assert "backup: no backup of" in err and "updated" not in err
         assert f"bindings: {path} not rewritten — no backup could be made" in err
+        assert t.said == ("bindings.json NOT rewritten (16 rows changed): no backup could be "
+                          "made — in memory only, the next launch tries again")
         # in memory the table is the remapped one: the sixteen pads load their slots
-        assert t.notes == [f"added {s} → preset.select (the APC40 map of plan 19)" for s in far]
+        assert _added(err, path, far)
         assert all([b.target for b in rows] == ["preset.select"]
                    for rows in _bank_rows(t).values())
-        r.lib.project.put_slot(12, "WAKE")
+        # (a far slot of `mine` cannot be filled here: its first long write
+        # needs a backup of the show too, which this test makes impossible)
+        r.lib.project.bank[12] = "WAKE"
         n, ch = apc40.BANK_PADS[12]
         (b,) = t.dispatch("note", ch, n)
         routing.act(r.reg, b)
         assert r.lib.current("presets") == "WAKE"
+        r.lib.project.bank[12] = None
         # a later write of the table: the copy is tried again, and nothing is written
         t.write()
         assert as_it_was() and t.error == routing.NOT_REWRITTEN
         # the next launch, the copy still impossible: the same again
         t2 = boot_home(home).router.table
-        assert as_it_was() and t2.error == routing.NOT_REWRITTEN and len(t2.notes) == 16
+        assert as_it_was() and t2.error == routing.NOT_REWRITTEN and t2.unbacked == "3"
+        assert _added(capsys.readouterr().err, path, far)
     # once the copy can be made, a write makes it first — the file as the owner had it
     t.write()
     assert t.error == "" and t.unbacked is None
+    assert t.said == "bindings.json updated, the old file kept as bindings.json.bak-v3"
     assert path.with_name("bindings.json.bak-v3").read_bytes() == old[0]
     assert len([row for row in json.loads(path.read_text())["bindings"]
                 if row["target"] == "preset.select"]) == 24
     assert boot_home(home).router.table.notes == []
 
 
-def test_a_launch_whose_backup_fails_then_succeeds_rewrites_once(owner_home, monkeypatch):
+def test_a_launch_whose_backup_fails_then_succeeds_rewrites_once(owner_home, monkeypatch,
+                                                                capsys):
     """"The next launch tries again": a launch that could not back the
     file up leaves it; the launch after it, able to, backs it up and
     rewrites it as a first launch would."""
@@ -2260,8 +2284,9 @@ def test_a_launch_whose_backup_fails_then_succeeds_rewrites_once(owner_home, mon
         m.setattr(routing, "_write_new", refuse)
         boot_home(home)
     assert path.read_bytes() == old and not list(home.glob("bindings.json.bak-*"))
+    capsys.readouterr()
     t = boot_home(home).router.table
-    assert len(t.notes) == 16 and t.error == ""
+    assert _added(capsys.readouterr().err, path, far_pads()) and t.error == ""
     assert path.with_name("bindings.json.bak-v3").read_bytes() == old
     assert path.read_bytes() != old
 
@@ -2280,7 +2305,7 @@ def test_the_old_shape_pads_are_swapped_and_a_changed_row_is_left_alone(tmp_path
     pads = old_shape_pads()
     assert [p["source"] for p in pads] == far
     assert set(routing.RETIRED_DESK_ROWS) == set(routing.BANK_REMAP) == {
-        (p["source"], "view.shape", "set", float(p["value"] if "value" in p else 1.0))
+        (p["source"], "view.shape", "set", float(p.get("value", 1.0)))
         for p in pads}
     assert [routing.BANK_REMAP[(s, "view.shape", "set", float(k))]
             for k, s in enumerate(far)] == [("preset.select", "set", float(8 + k))
