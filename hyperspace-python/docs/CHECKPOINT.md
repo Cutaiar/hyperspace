@@ -8,8 +8,8 @@ and a projector. It is one Python process in `hyperspace-python/`.
 
 - **The app:** `hyperspace-python/` (package `hyperspace/`, tests in
   `tests/`, tools in `tools/`, the owner's shared presets in `shared/`).
-- **Run it:** `uv sync`, then `uv run hyperspace`; machine setup and the
-  dream's extra are in [`SETUP.md`](SETUP.md).
+- **Run it:** `uv sync`, then `uv run hyperspace`; machine setup is in
+  [`SETUP.md`](SETUP.md).
 - **The docs:**
   - [`ARCHITECTURE.md`](ARCHITECTURE.md): the parts, the frame, who may
     write a parameter.
