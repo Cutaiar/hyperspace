@@ -453,6 +453,19 @@ def test_the_page_draws_and_fits(tmp_path, monkeypatch):
             panel.draw(1 / 60, 60.0)
             imgui.end_frame()
         assert over and over[-1] == 0, "the fx page scrolls"
+        # plan 20 WP2: and with the faces' status row showing (an effect
+        # aimed at the faces), the open strip the longest one still
+        from hyperspace import ui_fx
+        rows = []
+        real_row = ui_fx._faces_row
+        monkeypatch.setattr(ui_fx, "_faces_row",
+                            lambda *a: (rows.append(1), real_row(*a))[1])
+        reg["fx.fractals.target"].set(1)
+        for _ in range(3):
+            imgui.new_frame()
+            panel.draw(1 / 60, 60.0)
+            imgui.end_frame()
+        assert rows and over[-1] == 0, "the fx page scrolls with the faces row"
     finally:
         implot.destroy_context(pctx)
         imgui.destroy_context(ictx)
@@ -502,18 +515,29 @@ def test_the_page_has_no_conflicting_ids(tmp_path, monkeypatch):
                 return _real(label, *a, **k)
             monkeypatch.setattr(imgui, fn, rec)
         for k, name in enumerate(st.names()):     # every effect's strip open in turn
-            reg["fx.select"].set(k)
-            ids.clear()
-            imgui.new_frame()
-            imgui.begin("page")
-            ui_fx.page(panel, 1 / 60)
-            imgui.end()
-            imgui.end_frame()
-            dup = {i for i in ids if ids.count(i) > 1}
-            assert not dup, f"{name}: conflicting ids {sorted(dup)}"
-            # plan 16 WP2: every chip is two items, the LED and the name
-            for n in st.names():
-                assert f"led.fx.{n}.on" in ids and f"chip.fx.{n}.on" in ids, n
+            for aimed in (False, True):           # …on the frame, then aimed at the faces
+                reg["fx.select"].set(k)
+                reg[f"fx.{name}.target"].set(int(aimed))
+                reg[f"fx.{name}.on"].set(aimed)   # on and Faces off: the "faces on" chip too
+                ids.clear()
+                imgui.new_frame()
+                imgui.begin("page")
+                ui_fx.page(panel, 1 / 60)
+                imgui.end()
+                imgui.end_frame()
+                dup = {i for i in ids if ids.count(i) > 1}
+                assert not dup, f"{name}: conflicting ids {sorted(dup)}"
+                # plan 16 WP2: every chip is two items, the LED and the name
+                for n in st.names():
+                    assert f"led.fx.{n}.on" in ids and f"chip.fx.{n}.on" in ids, n
+                # plan 20 WP2: the strip's target combo and its menu, always;
+                # the two map chips, a menu each, and "faces on" while aimed
+                assert f"fx.{name}.target" in ids and f"ctx.fx.{name}.target" in ids
+                faces_ids = {"map.fx.face_map.0", "map.fx.face_map.1", "ctx.fx.face_map.map0",
+                             "ctx.fx.face_map.map1", "idle.view.faces"}
+                assert (faces_ids <= set(ids)) if aimed else not (faces_ids & set(ids)), name
+            reg[f"fx.{name}.target"].set(0)
+            reg[f"fx.{name}.on"].set(False)
     finally:
         implot.destroy_context(pctx)
         imgui.destroy_context(ictx)
@@ -675,6 +699,8 @@ class PageRig:
                                                                  error=lambda n: ""))
         self.rects: dict[str, tuple[float, float, float, float]] = {}
         self.texts: list[str] = []       # every text_colored line of the last frame
+        self.colors: dict[str, tuple] = {}   # …and the colour each was drawn in
+        self.wrapped: list[str] = []     # every text_wrapped line of the last frame
         self.disabled: dict[str, int] = {}   # item id → begin_disabled depth it was drawn at
         self.veils: list[tuple[float, float, float, float]] = []   # ui_fx._dim's rects
         depth = [0]
@@ -697,7 +723,15 @@ class PageRig:
 
         def text_colored(col, text):
             self.texts.append(text)
+            self.colors[text] = (col.x, col.y, col.z, col.w)
             return real_text(col, text)
+
+        real_wrapped = imgui.text_wrapped
+
+        def text_wrapped(text):
+            self.wrapped.append(text)
+            return real_wrapped(text)
+        monkeypatch.setattr(imgui, "text_wrapped", text_wrapped)
 
         def begin_disabled(*a, **k):
             self._stack.append(bool(a[0] if a else k.get("disabled", True)))
@@ -724,6 +758,8 @@ class PageRig:
         imgui = self.imgui
         self.rects.clear()
         self.texts.clear()
+        self.colors.clear()
+        self.wrapped.clear()
         self.disabled.clear()
         self.veils.clear()
         imgui.new_frame()
@@ -741,6 +777,24 @@ class PageRig:
         self.frame()
         x0, y0, x1, y1 = self.rects[item]
         io.add_mouse_pos_event(x0 + (x1 - x0) * at, (y0 + y1) / 2)
+        self.frame()
+        io.add_mouse_button_event(0, True)
+        self.frame()
+        io.add_mouse_button_event(0, False)
+        self.frame()
+        io.add_mouse_pos_event(-1.0, -1.0)
+        self.frame()
+
+    def pick(self, item: str, index: int) -> None:
+        """Choose entry `index` of the combo whose id is `item`, with the
+        mouse: a click opens its list (under it, with the popup's padding),
+        a second click lands on the entry."""
+        imgui = self.imgui
+        io, style = imgui.get_io(), imgui.get_style()
+        self.click(item)
+        x0, _, x1, y1 = self.rects[item]
+        line = imgui.get_text_line_height_with_spacing()
+        io.add_mouse_pos_event((x0 + x1) / 2, y1 + style.window_padding.y + (index + 0.5) * line)
         self.frame()
         io.add_mouse_button_event(0, True)
         self.frame()
@@ -949,7 +1003,7 @@ def test_the_idle_strips_controls_stay_live(fxpage):
     st.select("warp")
     fxpage.frame()
     assert reg["fx.warp.on"].base is False and fxpage.veils
-    rows = ["fx.warp.mix", "fx.warp.speed", "fx.warp.blend", "fx.warp.order",
+    rows = ["fx.warp.mix", "fx.warp.speed", "fx.warp.blend", "fx.warp.target", "fx.warp.order",
             *(f"fx.warp.{p.key}" for p in st.specs["warp"].params)]
     for pid in ("fx.warp.on", *rows):                # no begin_disabled wraps a row
         assert fxpage.disabled[pid] == 0, pid
@@ -987,7 +1041,7 @@ def test_an_armed_rows_learn_frame_is_drawn_over_the_veil(fxpage, monkeypatch):
     panel.learn = SimpleNamespace(learning="fx.warp.speed", arm=lambda pid: None)
     fxpage.frame()
     assert len(seen) == 1 and fxpage.veils          # idle: after the veil, once
-    rows = {"fx.warp.mix", "fx.warp.speed", "fx.warp.blend", "fx.warp.order",
+    rows = {"fx.warp.mix", "fx.warp.speed", "fx.warp.blend", "fx.warp.target", "fx.warp.order",
             *(f"fx.warp.{p.key}" for p in st.specs["warp"].params)}
     assert set(seen[0]) == rows
     r0, r1 = seen[0]["fx.warp.speed"]
@@ -1015,17 +1069,23 @@ def test_the_page_fits_with_the_tightest_strip_idle(fxpage, monkeypatch):
     reg["ui.page"].set(PAGE_KEYS.index("fx"))
     for name in st.names():
         st.select(name)
-        for reason in ("off", "bypassed"):           # the two lines that carry a chip
+        # the three lines that carry a chip; the third (plan 20 WP2) with the
+        # effect aimed at the faces, so the faces' status row is drawn as well
+        for reason in ("off", "bypassed", "faces off"):
             reg[f"fx.{name}.on"].set(reason != "off")
             reg["fx.on"].set(reason != "bypassed")
-            assert why_idle(st, name) == reason
+            reg[f"fx.{name}.target"].set(int(reason == "faces off"))
+            assert why_idle(st, name, panel.view.faces) == reason
             for _ in range(3):
                 fxpage.texts.clear()
                 imgui.new_frame()
                 panel.draw(1 / 60, 60.0)
                 imgui.end_frame()
-            assert any(t.startswith(("off —", "the whole stack")) for t in fxpage.texts)
+            assert any(t.startswith(("off —", "the whole stack", "aimed at the faces"))
+                       for t in fxpage.texts)
+            assert ("faces  (Faces is off)" in fxpage.texts) == (reason == "faces off")
             assert over[-1] == 0, f"the fx page scrolls with {name} open and {reason}"
+        reg[f"fx.{name}.target"].set(0)
 
 
 def test_turn_on_is_one_undo_step(tmp_path, monkeypatch):
@@ -1331,3 +1391,406 @@ def test_every_effect_runs_on_the_face_target(ctx, name):
     print(f"{name}: picture differs from the seed by {change:.2f} / 255 (mean)")
     assert change > 0.25, f"{name} left the picture as the seed was"
     assert np.abs(img.astype(int) - base).sum() > 200, f"{name} does not show on the faces"
+
+
+# ---------------------------------------------------------------- the face target on the page (plan 20 WP2)
+
+def test_the_status_reads_per_target(fxpage):
+    """One line with nothing aimed at the faces — the page as it was — and
+    two rows when something is: the running chain per target, the faces'
+    row one chip tall with the two map chips at its right end."""
+    from hyperspace import ui
+    from hyperspace.fx import FACES
+    from hyperspace.ui_fx import FACES_OFF, RESET_NOTE
+    imgui, st, reg, panel = fxpage.imgui, fxpage.st, fxpage.reg, fxpage.panel
+    panel.view.faces = True
+    faint = (ui.FAINT.x, ui.FAINT.y, ui.FAINT.z, ui.FAINT.w)
+    warn = (ui.WARN.x, ui.WARN.y, ui.WARN.z, ui.WARN.w)
+
+    def label(names):
+        return " → ".join(st.specs[n].label for n in names)
+
+    def faces_rows():
+        return [t for t in fxpage.texts if t.startswith("faces")]
+    for name in ("plasma", "warp", "huecycle"):
+        reg[f"fx.{name}.on"].set(True)
+    fxpage.frame()
+    # nothing aimed at the faces: the one line it always was, no second row
+    assert fxpage.wrapped[:2] == [label(st.chain()), RESET_NOTE]
+    assert not faces_rows() and not [k for k in fxpage.rects if k.startswith("map.")]
+    # the note is one line now: it fits the page's width with room over
+    assert RESET_NOTE == "a preset load resets this stack: save a preset to keep it"
+    width = fxpage.rects["fx.mix"][2] - fxpage.rects["fx.on"][0]
+    imgui.new_frame()
+    assert imgui.calc_text_size(RESET_NOTE).x < width
+    imgui.end_frame()
+
+    # an effect aimed at the faces, even switched off: the second row
+    reg["fx.glimmer.target"].set(FACES)
+    assert not st.values["glimmer"]["on"]
+    fxpage.frame()
+    assert fxpage.wrapped[:2] == ["frame  " + label(st.chain()), RESET_NOTE]
+    assert faces_rows() == ["faces  nothing on"] and fxpage.colors[faces_rows()[0]] == faint
+    a, b = fxpage.rects["map.fx.face_map.0"], fxpage.rects["map.fx.face_map.1"]
+    led = fxpage.rects["led.fx.warp.on"]
+    assert a[1] == b[1] and a[3] - a[1] == pytest.approx(led[3] - led[1])   # one chip tall
+    assert a[2] <= b[0] and b[2] == pytest.approx(fxpage.rects["fx.mix"][2], abs=1.5)  # the right end
+    assert b[3] <= fxpage.rects["led.fx.warp.on"][1]                        # over the chip grid
+
+    # one on the faces, the rest on the frame: each row its own chain, in order
+    reg["fx.warp.target"].set(FACES)
+    reg["fx.glimmer.on"].set(True)
+    fxpage.frame()
+    assert st.chain(FACES) == ["warp", "glimmer"]
+    assert fxpage.wrapped[0] == "frame  " + label(["plasma", "huecycle"])
+    assert faces_rows() == ["faces  " + label(["warp", "glimmer"])]
+    # everything that is on aimed at the faces: the frame's row says so
+    reg["fx.plasma.target"].set(FACES)
+    reg["fx.huecycle.target"].set(FACES)
+    fxpage.frame()
+    assert fxpage.wrapped[0] == "frame  nothing on"
+
+    # bypassed: both rows
+    reg["fx.on"].set(False)
+    fxpage.frame()
+    assert fxpage.wrapped[0] == "frame  bypassed" and faces_rows() == ["faces  bypassed"]
+    reg["fx.on"].set(True)
+
+    # Faces off: the row says so, in the warning colour, and keeps its chips
+    panel.view.faces = False
+    fxpage.frame()
+    assert faces_rows() == [f"faces  {FACES_OFF}"] == ["faces  (Faces is off)"]
+    assert fxpage.colors[faces_rows()[0]] == warn and "map.fx.face_map.1" in fxpage.rects
+    panel.view.faces = True
+
+    # the renderer's face_error is the row, cut to the room beside the chips
+    panel.renderer.face_error = "faces: RuntimeError: seed pass failed"
+    fxpage.frame()
+    assert faces_rows() == ["faces: RuntimeError: seed pass failed"]
+    assert fxpage.colors[faces_rows()[0]] == warn
+    panel.renderer.face_error = "faces: RuntimeError: " + "long " * 30
+    fxpage.frame()
+    row, = faces_rows()
+    assert row.endswith("…") and row.startswith("faces: RuntimeError: long")
+    assert fxpage.rects["map.fx.face_map.0"][1] == a[1]                     # still one row
+    panel.renderer.face_error = ""
+
+    # the last effect aimed back at the frame: one line again
+    for name in ("plasma", "warp", "huecycle", "glimmer"):
+        reg[f"fx.{name}.target"].set(0)
+    fxpage.frame()
+    assert fxpage.wrapped[0] == label(st.chain()) and not faces_rows()
+    assert not [k for k in fxpage.rects if k.startswith("map.")]
+
+
+def test_the_map_chips_set_fx_face_map(fxpage, monkeypatch):
+    """per face / screen: a click on each is Param.set on fx.face_map; the
+    param is an ordinary modulatable enum and each chip opens its menu."""
+    from hyperspace.fx import FACE_MAPS, FACES, PER_FACE, SCREEN
+    imgui, st, reg = fxpage.imgui, fxpage.st, fxpage.reg
+    p = reg["fx.face_map"]
+    assert p.names == FACE_MAPS == ["per face", "screen"] and p.modulatable and p.persist
+    reg["fx.kaleido.target"].set(FACES)
+    sets = []
+    real_set = type(p).set
+    monkeypatch.setattr(type(p), "set", lambda self, v: (sets.append((self.id, v)),
+                                                         real_set(self, v))[1])
+    popups = []
+    real_popup = imgui.begin_popup_context_item
+    monkeypatch.setattr(imgui, "begin_popup_context_item",
+                        lambda label, *a, **k: (popups.append(label), real_popup(label, *a, **k))[1])
+    targets = {n: st.values[n]["target"] for n in st.names()}
+    for want in (SCREEN, PER_FACE, SCREEN):
+        sets.clear()
+        fxpage.click(f"map.fx.face_map.{want}")
+        assert sets == [("fx.face_map", want)]
+        assert p.base == want and st.face_map == want
+    assert {n: st.values[n]["target"] for n in st.names()} == targets
+    assert {"##ctx.fx.face_map.map0", "##ctx.fx.face_map.map1"} <= set(popups)
+    # the lit chip is what the faces show (the effective value): a source
+    # holding the switch at "per face" over a base of "screen"
+    lit = []
+    from hyperspace import ui
+    real_lit = ui.lit_chip
+    monkeypatch.setattr(ui, "lit_chip", lambda label, on, *a, **k: (
+        lit.append((label.split("##", 1)[-1], bool(on))), real_lit(label, on, *a, **k))[1])
+    fxpage.frame()
+    assert ("map.fx.face_map.1", True) in lit and ("map.fx.face_map.0", False) in lit
+    p.modulate(-1.0)
+    reg.apply()
+    assert p.base == SCREEN and st.face_map == PER_FACE
+    lit.clear()
+    fxpage.frame()
+    assert ("map.fx.face_map.0", True) in lit and ("map.fx.face_map.1", False) in lit
+
+
+def test_the_strips_target_combo_moves_an_effect_between_chains(fxpage, monkeypatch):
+    """The open strip's blend row is blend, target, order; the target combo
+    is Param.set on fx.<name>.target, which is structure (not modulatable)."""
+    from hyperspace.fx import FACES, FRAME, TARGETS
+    imgui, st, reg, panel = fxpage.imgui, fxpage.st, fxpage.reg, fxpage.panel
+    panel.view.faces = True
+    reg["fx.warp.on"].set(True)
+    reg["fx.plasma.on"].set(True)
+    st.select("warp")
+    p = reg["fx.warp.target"]
+    assert p.names == TARGETS and not p.modulatable and p.persist
+    popups = []
+    real_popup = imgui.begin_popup_context_item
+    monkeypatch.setattr(imgui, "begin_popup_context_item",
+                        lambda label, *a, **k: (popups.append(label), real_popup(label, *a, **k))[1])
+    fxpage.frame()
+    blend, target, order = (fxpage.rects[f"fx.warp.{k}"] for k in ("blend", "target", "order"))
+    assert blend[1] == target[1] == order[1]                       # one row, no new one
+    assert blend[2] <= target[0] and target[2] <= order[0]          # blend, target, order
+    assert order[2] == pytest.approx(fxpage.rects["fx.warp.mix"][2], abs=1.5)
+    assert blend[2] - blend[0] >= 80                                # room for "multiply"
+    assert "##ctx.fx.warp.target" in popups                         # its menu ("not modulatable")
+    order_was = st.names()
+    assert st.chain(FRAME) == st.chain() and st.chain(FACES) == []
+    fxpage.pick("fx.warp.target", FACES)                            # the mouse: open, choose "faces"
+    assert p.base == FACES and st.values["warp"]["target"] == FACES
+    assert st.chain(FACES) == ["warp"] and st.chain(FRAME) == ["plasma"]
+    fxpage.frame()
+    assert "faces  Trip warp" in fxpage.texts and fxpage.wrapped[0] == "frame  Plasma"
+    # nothing else moved: the stack order, the open strip, every other target
+    assert st.names() == order_was and st.selected() == "warp"
+    assert [n for n in st.names() if st.values[n]["target"] == FACES] == ["warp"]
+    fxpage.pick("fx.warp.target", FRAME)                            # …and back
+    assert p.base == FRAME and st.chain(FACES) == [] and st.chain(FRAME) == st.chain()
+    fxpage.frame()
+    assert not [t for t in fxpage.texts if t.startswith("faces")]
+
+
+def test_a_chip_aimed_at_the_faces_is_marked(fxpage, monkeypatch):
+    """A diamond for the LED of a chip aimed at the faces — filled while on,
+    outlined while off — where a chip on the frame has a dot or a ring; and
+    both of its hovers say "on the faces"."""
+    from hyperspace.fx import FACES
+    from hyperspace.ui_fx import FACES_TIP, LED_OFF_TIP, LED_ON_TIP, _led_tip
+    imgui, st, reg, panel = fxpage.imgui, fxpage.st, fxpage.reg, fxpage.panel
+    marks: list[tuple[str, float, float]] = []
+    dl_type = imgui.ImDrawList
+    for fn in ("add_quad_filled", "add_quad", "add_circle_filled", "add_circle"):
+        real = getattr(dl_type, fn)
+
+        def rec(self, *a, _fn=fn, _real=real, **k):
+            pts = a[:4] if _fn.startswith("add_quad") else a[:1]
+            marks.append((_fn, sum(q.x for q in pts) / len(pts), sum(q.y for q in pts) / len(pts)))
+            return _real(self, *a, **k)
+        monkeypatch.setattr(dl_type, fn, rec)
+
+    def mark(name):
+        """What is drawn at the centre of `name`'s LED."""
+        x0, y0, x1, y1 = fxpage.rects[f"led.fx.{name}.on"]
+        cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+        return [fn for fn, x, y in marks if abs(x - cx) < 0.5 and abs(y - cy) < 0.5]
+    reg["fx.warp.on"].set(True)
+    reg["fx.plasma.on"].set(True)
+    reg["fx.plasma.target"].set(FACES)
+    reg["fx.glimmer.target"].set(FACES)
+    st.select("acid")
+    fxpage.frame()
+    assert mark("warp") == ["add_circle_filled"]         # on the frame: the dot…
+    assert mark("acid") == ["add_circle"]                # …and the ring
+    assert mark("plasma") == ["add_quad_filled"]         # on the faces: the diamond, filled…
+    assert mark("glimmer") == ["add_quad"]               # …and outlined while off
+    # nothing else on the chip changes: the same two items, the same rects
+    faces_rects = {k: fxpage.rects[k] for k in ("led.fx.plasma.on", "chip.fx.plasma.on")}
+    reg["fx.plasma.target"].set(0)
+    reg["fx.glimmer.target"].set(0)
+    marks.clear()
+    fxpage.frame()
+    assert mark("plasma") == ["add_circle_filled"] and mark("glimmer") == ["add_circle"]
+    reg["fx.plasma.target"].set(FACES)
+    marks.clear()
+    fxpage.frame()
+    assert {k: fxpage.rects[k] for k in faces_rects} == faces_rects
+    # the hovers: the LED's says what a click does, then where the effect is aimed
+    p = reg["fx.plasma.on"]
+    assert FACES_TIP == "on the faces"
+    assert _led_tip(panel, p, True) == f"{LED_ON_TIP}\n{FACES_TIP}"
+    assert _led_tip(panel, reg["fx.glimmer.on"], True) == f"{LED_OFF_TIP}\n{FACES_TIP}"
+    assert _led_tip(panel, p) == LED_ON_TIP
+    tips = []
+    monkeypatch.setattr(imgui, "set_tooltip", lambda t: tips.append(t))
+    io = imgui.get_io()
+    for item, want in (("led.fx.plasma.on", f"{LED_ON_TIP}\n{FACES_TIP}"),
+                       ("chip.fx.plasma.on", f"{p.tip}\n{FACES_TIP}"),
+                       ("chip.fx.warp.on", reg["fx.warp.on"].tip)):
+        x0, y0, x1, y1 = fxpage.rects[item]
+        io.add_mouse_pos_event((x0 + x1) / 2, (y0 + y1) / 2)
+        for _ in range(3):
+            tips.clear()
+            fxpage.frame()
+        assert tips == [want], item
+
+
+def test_why_idle_names_faces_off():
+    """ "faces off" after "off" and before "bypassed"; and with the default
+    argument why_idle still agrees with FxState.chain() for an effect aimed
+    at the faces (chain() lists it whatever view.faces is)."""
+    from itertools import product
+
+    from hyperspace.fx import FACES, FRAME
+    from hyperspace.ui_fx import why_idle
+    st = FxState()
+    v = st.values["warp"]
+    v.update(on=True, target=FACES)
+    assert why_idle(st, "warp") is None and why_idle(st, "warp", True) is None
+    assert why_idle(st, "warp", False) == "faces off"
+    # its place in the order: every later reason holding as well
+    v["mix"] = 0.0
+    st.mix = 0.0
+    st.on = False
+    assert why_idle(st, "warp", False) == "faces off"
+    assert why_idle(st, "warp", True) == "bypassed"
+    v["on"] = False
+    assert why_idle(st, "warp", False) == "off"
+    # an effect on the frame never reads "faces off"
+    v.update(on=True, target=FRAME)
+    assert why_idle(st, "warp", False) == "bypassed"
+    v.pop("target")                                   # a values dict from before a hot reload
+    assert why_idle(st, "warp", False) == "bypassed"
+    # every effect in every state, half of them aimed at the faces
+    seen = set()
+    for on, bypass, fxmix, mix, faces_on in product(
+            (True, False), (True, False), (1.0, 0.0), (1.0, 0.0), (True, False)):
+        st.on, st.mix = bypass, fxmix
+        for k, n in enumerate(st.names()):
+            st.values[n].update(on=on, mix=mix, target=k % 2)
+        running = st.chain()
+        assert running == sorted(st.chain(FRAME) + st.chain(FACES), key=st.names().index)
+        for n in st.names():
+            assert (why_idle(st, n) is None) == (n in running), (n, on, bypass, fxmix, mix)
+            why = why_idle(st, n, faces_on)
+            seen.add(why)
+            aimed = st.values[n]["target"] == FACES
+            assert (why == "faces off") == (on and aimed and not faces_on)
+            if why != "faces off":
+                assert why == why_idle(st, n)
+    assert seen == {None, "off", "faces off", "bypassed", "fx mix 0", "mix 0"}
+
+
+def test_faces_on_switches_the_faces_on(fxpage):
+    """An open effect that is on and aimed at the faces while Faces is off
+    says so, with the chip that mends it: Param.set on view.faces."""
+    from hyperspace.fx import FACES
+    from hyperspace.ui_fx import IDLE
+    st, reg, view = fxpage.st, fxpage.reg, fxpage.panel.view
+    line, chip, pid, _tip = IDLE["faces off"]
+    assert (line, chip, pid) == ("aimed at the faces, and Faces is off", "faces on", "view.faces")
+    assert list(IDLE)[:3] == ["off", "faces off", "bypassed"]
+    assert view.faces is False
+    st.select("warp")
+    reg["fx.warp.target"].set(FACES)
+    fxpage.frame()                                   # off: "off" comes first
+    assert IDLE["off"][0] in fxpage.texts and line not in fxpage.texts
+    reg["fx.warp.on"].set(True)
+    fxpage.frame()
+    assert line in fxpage.texts and "idle.view.faces" in fxpage.rects
+    assert "idle.fx.warp.on" not in fxpage.rects and len(fxpage.veils) == 2
+    # the line and its chip are one row inside the page's width
+    assert fxpage.rects["idle.view.faces"][2] <= fxpage.rects["fx.mix"][2] + 1.5
+    assert fxpage.rects["idle.view.faces"][3] <= fxpage.rects["fx.warp.on"][1]
+    assert "faces  (Faces is off)" in fxpage.texts
+    switches = {n: reg[f"fx.{n}.on"].base for n in st.names()}
+    fxpage.click("idle.view.faces")
+    assert reg["view.faces"].base is True and view.faces is True
+    assert {n: reg[f"fx.{n}.on"].base for n in st.names()} == switches
+    assert reg["fx.warp.target"].base == FACES and st.selected() == "warp"
+    fxpage.frame()                                   # running: no line, no chip, no veil
+    assert line not in fxpage.texts and "idle.view.faces" not in fxpage.rects
+    assert not fxpage.veils and "faces  Trip warp" in fxpage.texts
+    # an effect on the frame is not idle because Faces is off
+    reg["view.faces"].set(False)
+    reg["fx.warp.target"].set(0)
+    fxpage.frame()
+    assert line not in fxpage.texts and not fxpage.veils
+
+
+def test_the_page_fits_with_the_faces_row_showing(fxpage, monkeypatch):
+    """No page scrolls at the control size: every effect's strip in turn,
+    aimed at the faces so the second status row shows, an error line on the
+    strip — off, running, idle because Faces is off (the line with its
+    chip), and with the renderer's face_error for the row."""
+    from hyperspace.app import CONTROL_SIZE
+    from hyperspace.fx import FACES
+    from hyperspace.ui import PAGE_KEYS, Panel
+    imgui, st, reg, panel = fxpage.imgui, fxpage.st, fxpage.reg, fxpage.panel
+    assert tuple(imgui.get_io().display_size) == tuple(CONTROL_SIZE)
+    panel.renderer.fx.error = lambda n: "line 3: made up"
+    over, spare = [], []
+    draw = Panel._page_fx
+
+    def measured(self, dt):
+        draw(self, dt)
+        over.append(imgui.get_scroll_max_y())
+        spare.append(imgui.get_content_region_avail().y)
+    monkeypatch.setattr(Panel, "_page_fx", measured)
+    reg["ui.page"].set(PAGE_KEYS.index("fx"))
+    worst = (1e9, "")
+    for name in st.names():
+        st.select(name)
+        reg[f"fx.{name}.target"].set(FACES)
+        for state, on, faces_on, err in (
+                ("off", False, True, ""),
+                ("running", True, True, ""),
+                ("faces off", True, False, ""),
+                ("face error", False, True, "faces: RuntimeError: made up")):
+            reg[f"fx.{name}.on"].set(on)
+            reg["view.faces"].set(faces_on)
+            panel.renderer.face_error = err
+            for _ in range(3):
+                fxpage.texts.clear()
+                imgui.new_frame()
+                panel.draw(1 / 60, 60.0)
+                imgui.end_frame()
+            assert any(t.startswith("faces") for t in fxpage.texts), (name, state)
+            assert "line 3: made up" in fxpage.texts
+            assert ("aimed at the faces, and Faces is off" in fxpage.texts) == (state == "faces off")
+            assert over[-1] == 0, f"the fx page scrolls with {name} open, aimed at the faces, {state}"
+            worst = min(worst, (spare[-1], f"{name}, {state}"))
+        reg[f"fx.{name}.target"].set(0)
+        reg[f"fx.{name}.on"].set(False)
+    print(f"fx page with the faces row: {worst[0]:.0f} px to spare at worst ({worst[1]})")
+    assert worst[0] >= 0
+
+
+def test_the_target_and_the_map_are_one_undo_step_each(tmp_path, monkeypatch):
+    """The target combo and the map chips write a base through Param.set and
+    push nothing: undo's watcher makes each change one step ("Scene-setters
+    write the base")."""
+    from test_undo import boot, frames, labels, settle
+
+    from hyperspace import undo
+    from hyperspace.fx import FACES, FRAME, PER_FACE, SCREEN
+    st = FxState()
+    r = boot(tmp_path / "home", fx=st)
+    r.fx = st
+    pushes = []
+    real_push = undo.push
+    monkeypatch.setattr(undo, "push", lambda *a, **k: (pushes.append(a), real_push(*a, **k))[1])
+    rig = PageRig(tmp_path, monkeypatch, r)
+    try:
+        st.select("warp")
+        r.reg["fx.warp.target"].set(FRAME)
+        r.reg["fx.face_map"].set(PER_FACE)
+        settle(r)
+        start = labels(r)
+        rig.pick("fx.warp.target", FACES)
+        settle(r)
+        assert r.reg["fx.warp.target"].base == FACES
+        assert len(labels(r)) == len(start) + 1 and not pushes
+        rig.click(f"map.fx.face_map.{SCREEN}")
+        settle(r)
+        assert r.reg["fx.face_map"].base == SCREEN
+        assert len(labels(r)) == len(start) + 2 and not pushes
+        undo.undo()
+        frames(r, 3)
+        assert r.reg["fx.face_map"].base == PER_FACE and r.reg["fx.warp.target"].base == FACES
+        undo.undo()
+        frames(r, 3)
+        assert r.reg["fx.warp.target"].base == FRAME and labels(r) == start
+    finally:
+        rig.close()
