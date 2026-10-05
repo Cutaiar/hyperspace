@@ -305,8 +305,9 @@ class Keys:
     A key counts as down when it is down in the render window, or in the
     control window while imgui is not typing (`typing` is io.want_capture_
     keyboard, set each frame after new_frame()). This is the `keys` the
-    router's key rows read: pressed() is an edge, shift() / super() the
-    modifier state a "key:SHIFT+B" row needs. R and F1–F8 / ⇧F1–F8 are
+    router's key rows read: pressed() is an edge, shift() / super() /
+    control() the modifier state a "key:SHIFT+B" or "key:CONTROL+Z" row
+    needs (routing.MODIFIERS). R and F1–F8 / ⇧F1–F8 are
     table rows since plan 11 WP7; Cmd+R, Esc / Q and ↑ / ↓ stay in the
     loop (`frame`), Cmd+R claiming R's edge before the table reads it.
     """
@@ -345,6 +346,9 @@ class Keys:
 
     def super(self) -> bool:  # the modifier's name, as the table spells it
         return self.down(glfw.KEY_LEFT_SUPER, glfw.KEY_RIGHT_SUPER)
+
+    def control(self) -> bool:  # either Control key (plan 15: Ctrl+Z)
+        return self.down(glfw.KEY_LEFT_CONTROL, glfw.KEY_RIGHT_CONTROL)
 
 
 class Mouse:

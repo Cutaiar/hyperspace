@@ -173,10 +173,16 @@ def test_keys_hold_time_reads_the_frames_clock(fake):
 def test_keys_read_the_modifiers_the_table_spells(fake):
     g = app.glfw
     keys = app.Keys("render", "ctrl")
-    assert not keys.shift() and not keys.super()
+    assert not keys.shift() and not keys.super() and not keys.control()
     fake.keys.add(("ctrl", g.KEY_RIGHT_SHIFT))
     fake.keys.add(("render", g.KEY_LEFT_SUPER))
-    assert keys.shift() and keys.super()
+    assert keys.shift() and keys.super() and not keys.control()
+    fake.keys.add(("render", g.KEY_RIGHT_CONTROL))
+    assert keys.control()
+    # every modifier the table may spell is one the adapter reads (plan 15)
+    from hyperspace.routing import MODIFIERS
+    assert MODIFIERS == ("SHIFT", "SUPER", "CONTROL")
+    assert all(callable(getattr(keys, m.lower())) for m in MODIFIERS)
 
 
 def test_mouse_orbits_pans_and_zooms_on_the_base(fake):

@@ -12,13 +12,15 @@ source like any other, read by the `Router` once per frame.
 Sources are one string, ``scheme:address``:
 
   key:<NAME>       a GLFW key by constant name without KEY_ ("R", "F1",
-                   "LEFT_BRACKET", "1"); with a modifier in front,
-                   "SHIFT+B" or "SUPER+R" (MODIFIERS). A row with a
-                   modifier fires only while it is held; a row on the bare
-                   key then stays quiet while a modifier some other row on
-                   that key names is held, so "B" and "SHIFT+B" are two
-                   controls. R, F1–F8 and ⇧F1–F8 are rows since plan 11
-                   (LOOP_KEY_ROWS). Still app.py's own, outside the
+                   "LEFT_BRACKET", "1"); with modifiers in front,
+                   "SHIFT+B", "SUPER+Z", "CONTROL+SHIFT+Z" (MODIFIERS:
+                   SHIFT, SUPER, CONTROL). A press fires the rows whose
+                   modifiers are exactly the held ones that some row on
+                   that key names — so "B" and "SHIFT+B" are two controls,
+                   "SUPER+Z" and "SHIFT+SUPER+Z" are two more, and a
+                   modifier no row on the key names is ignored. R, F1–F8
+                   and ⇧F1–F8 are rows since plan 11, undo and redo since
+                   plan 15 (LOOP_KEY_ROWS). Still app.py's own, outside the
                    table: Cmd+R, Esc / Q, and the relative writers — ↑/↓,
                    the mouse and the sticks, which nudge camera params
                    directly
@@ -273,9 +275,10 @@ MODE_TO_OP = {"abs": "abs", "rel": "rel", "rel64": "rel64", "trigger": "toggle",
 # it is dropped — its name is kept only to recognise it and say so
 V1_TO_OP = {"mod": "push", "span": "position", "abs": "position"}
 V1_REPLACE = "replace"     # schema 1's op, kept only to recognise it; not in OPS
-# key modifiers a row may name in front of the key ("SHIFT+B"); each is
-# a pair of GLFW keys the adapter reports as one state (app.Keys)
-MODIFIERS = ("SHIFT", "SUPER")
+# key modifiers a row may name in front of the key ("SHIFT+B",
+# "CONTROL+SHIFT+Z"); each is a pair of GLFW keys the adapter reports as
+# one state (app.Keys.shift / super / control)
+MODIFIERS = ("SHIFT", "SUPER", "CONTROL")
 
 # plan 09 WP4 gives three APC40 buttons to the clock (apc40.DEFAULT_MAP):
 # TAP TEMPO taps it, NUDGE ± nudges it, and METRONOME fires the global
@@ -1698,12 +1701,16 @@ class Router:
     def keys(self, keys) -> None:
         """One frame of keyboard rows; `keys` is anything with
         pressed(glfw_key) — an edge, asked once per key — and shift() /
-        super() for the modifier state (app.Keys).
+        super() / control() for the modifier state (app.Keys; a keys
+        object without one of them reads as "not held").
 
-        Rows on one key are settled together: a row with modifiers fires
-        when all of them are held; the bare row fires unless a modifier
-        some row on this key names is held — so ``key:B`` taps and
-        ``key:SHIFT+B`` triggers, and neither hears the other's press.
+        Rows on one key are settled together, and a press fires only its
+        own chord: a row fires when its modifiers **equal** the held
+        modifiers that some row on this key names. So ``key:B`` taps and
+        ``key:SHIFT+B`` triggers, neither hearing the other's press;
+        ``key:SUPER+Z`` undoes and ``key:SHIFT+SUPER+Z`` redoes, and ⌘⇧Z
+        fires the second alone (plan 15, fork 1). A held modifier no row
+        on the key names changes nothing.
         """
         by_code: dict[int, list[Binding]] = {}
         for b in self.table.of("key"):
@@ -1715,11 +1722,12 @@ class Router:
             if not keys.pressed(code):
                 continue
             if held is None:
-                held = frozenset(m for m in MODIFIERS if getattr(keys, m.lower())())
+                held = frozenset(m for m in MODIFIERS
+                                 if getattr(keys, m.lower(), bool)())
             used = frozenset().union(*(b.modifiers for b in rows))
+            chord = held & used
             for b in rows:
-                mods = b.modifiers
-                if (mods <= held) if mods else not (held & used):
+                if b.modifiers == chord:
                     act(self.reg, b)
 
     def pad(self, pad) -> None:
