@@ -69,8 +69,13 @@ factory's file of the same name:
   $HYPERSPACE_HOME/trash/<group>/<slug>.<date>-<time>.json
                                  a user preset file as it was before a save
                                  overwrote it or a delete removed it
-                                 (``to_trash``, plan 15): no group, never
-                                 listed or watched, never emptied here
+                                 (``to_trash``, plan 15) or a rename replaced
+                                 it: no group, never watched; listed,
+                                 restored and emptied from the preset list
+                                 (``trash``, ``restore_trash``,
+                                 ``empty_trash``, plan 19 WP4)
+  $HYPERSPACE_HOME/hidden.json   the factory presets × took off the list
+                                 (``hide``, plan 19 WP4)
 
 ``home()`` is the one resolver for that folder (config.py and the binding
 table path go through it). On the first run the working-directory ``config.toml``
@@ -405,6 +410,31 @@ def to_trash(path: Path, root: Path) -> Path | None:
     except OSError as e:
         print(f"library: {path.name} not copied to the trash ({e})", file=sys.stderr)
         return None
+
+
+@dataclass(frozen=True)
+class Trashed:
+    """A file in the trash, as its view lists it (plan 19 WP4)."""
+
+    path: Path          # <home>/trash/presets/trip-3.20261004-011203.json
+    group: str          # its folder: "presets", "fx", "projects", …
+    name: str           # the name inside the file, else its stem
+    when: str           # "Oct 4 01:12", from the stamp in the file name ("" if none)
+
+
+def _when(stamp: str) -> str:
+    """``20261004-011203`` → ``Oct 4 01:12``."""
+    try:
+        t = time.strptime(stamp, "%Y%m%d-%H%M%S")
+    except ValueError:
+        return ""
+    return f"{time.strftime('%b', t)} {t.tm_mday} {time.strftime('%H:%M', t)}"
+
+
+def _order(path: Path) -> tuple[str, int]:
+    """A trashed file's place in time: its stamp, then its ``-n``."""
+    m = _TRASHED.fullmatch(path.name)
+    return (m["stamp"], int(m["n"] or 1)) if m else ("", 0)
 
 
 # ---- versioning: schema "<kind>/<n>"; each step lifts a doc one version ----
@@ -1797,6 +1827,20 @@ class Library:
         self._sync(path)
         if self._current.get(group) == name and self.path_of(group, name) is None:
             self._landed(group, None, None)
+        if group == PRESETS:
+            # what still points at it (plan 19 WP4): the open show's slots and
+            # "starts on" — not cleared for the owner, so a restore to the old
+            # name makes them work again
+            back = self.path_of(group, name)
+            still = self.still_named(name)
+            if back is not None:
+                self.say(f"your {name} is in the trash — the factory {name} is back")
+            elif still:
+                self.say(warning=f"{name} is in the trash — {_and(still)} still "
+                                 f"name{'s' if len(still) == 1 else ''} it; restore it from "
+                                 "the trash, or clear the slot")
+            else:
+                self.say(f"{name} is in the trash — the preset list's trash can restore it")
         return True
 
     def rename(self, group: str, old: str, new: str) -> Path:
@@ -1959,6 +2003,149 @@ class Library:
             pr.bank = [new if hit(n) else n for n in pr.bank]
             pr.startup = new if hit(pr.startup) else pr.startup
         return done, left
+
+    # ---- the trash: a view of it, restore, empty (plan 19 WP4) ----
+
+    def _in_trash(self, path: Path) -> bool:
+        """Does `path` — its symlinks and any ``..`` resolved — lie under
+        ``<home>/trash/``, one folder down? The guard on every file the
+        trash's view restores or deletes."""
+        try:
+            root = (self.home / TRASH).resolve()
+            real = path.resolve()
+        except OSError:
+            return False
+        return real.parent.parent == root
+
+    def trash(self) -> list[Trashed]:
+        """Every file under ``<home>/trash/<folder>/``, newest first — what
+        "empty" removes, and nothing else: what you see is what goes."""
+        root = self.home / TRASH
+        if not root.is_dir():
+            return []
+        out = []
+        for folder in sorted(root.iterdir()):
+            if not folder.is_dir():
+                continue
+            for path in folder.iterdir():
+                if not (path.is_file() or path.is_symlink()):
+                    continue
+                m = _TRASHED.fullmatch(path.name)
+                stem = m["stem"] if m else path.name.rsplit(".", 1)[0]
+                if stem.endswith(PROJECT_SUFFIX[:-5]) and folder.name == PROJECTS:
+                    stem = stem[: -len(PROJECT_SUFFIX[:-5])]
+                name = stem
+                if path.is_file() and self._in_trash(path):
+                    try:
+                        name = str(_read_json(path).get("name") or stem)
+                    except LibraryError:
+                        pass
+                out.append(Trashed(path, folder.name, name, _when(m["stamp"]) if m else ""))
+        return sorted(out, key=lambda t: (_order(t.path), t.path.name), reverse=True)
+
+    def restore_trash(self, item: Trashed) -> str:
+        """Put a trashed file back as ``<home>/<group>/<stem><suffix>`` —
+        never over a file: the target is created exclusively. When the stem
+        is taken (a file of that stem in the group's folder of either
+        root), or for a preset the name inside is taken by another listed
+        one (hidden ones included), it is restored under the next free name
+        (`next_name`) with that name written inside, and the status says
+        so. Only after the write succeeds is the trash copy removed. A
+        restored show is listed, not opened; a restore loads nothing.
+        Returns the name it now has."""
+        path = item.path
+        if not path.is_file() or not self._in_trash(path):
+            raise LibraryError(f"{path.name}: not in the trash ({self.home / TRASH})")
+        m = _TRASHED.fullmatch(path.name)
+        filename = f"{m['stem']}{m['suffix']}" if m else path.name
+        show = item.group == PROJECTS
+        suffix = PROJECT_SUFFIX if show and filename.endswith(PROJECT_SUFFIX) else ".json"
+        stem = filename.removesuffix(suffix)
+        folder = self.home / item.group
+        data = path.read_bytes()
+        try:
+            doc = json.loads(data)
+            doc = doc if isinstance(doc, dict) else None
+        except ValueError:
+            doc = None
+        name = str((doc or {}).get("name") or stem)
+        if show:
+            stems = {p.name[: -len(PROJECT_SUFFIX)] for root in self._roots()
+                     for p in (root / PROJECTS).glob(f"*{PROJECT_SUFFIX}")}
+            names = {slug(s) for s in stems}
+        else:
+            stems = set(self._files(item.group))
+            names = ({slug(n) for n in self.list(item.group, hidden=True)}
+                     if item.group == PRESETS else set())
+        taken = {slug(s) for s in stems} | names
+        renamed = slug(stem) in {slug(s) for s in stems} or (
+            item.group == PRESETS and slug(name) in names)
+        if renamed:
+            if doc is None:
+                raise LibraryError(f"{path.name}: not restored — {stem} is taken and the file "
+                                   "would not read, so it cannot be renamed")
+            new = next_name(name, taken)
+            doc["name"] = new
+            stem = slug(new)
+            kind = self._kinds.get(item.group)
+            text = (kind.text(doc) if kind is not None and kind.text is not None
+                    else _json_text(doc))
+            data = text.encode()
+        dst = folder / f"{stem}{suffix}"
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            with open(dst, "xb") as f:                     # never over a file
+                f.write(data)
+        except FileExistsError as e:
+            raise LibraryError(f"{dst.name}: not restored — a file is there") from e
+        except OSError as e:
+            dst.unlink(missing_ok=True)
+            raise LibraryError(f"{dst.name}: not restored ({e})") from e
+        self._sync(dst)
+        now = str(doc["name"]) if renamed else name
+        what = f"show {now}" if show else now
+        if renamed:
+            self.say(f"restored as {what} — {name} is taken")
+        else:
+            self.say(f"restored {what}" + (" — it is in the show list" if show else ""))
+        try:
+            path.unlink()                                  # only after the write
+        except OSError as e:
+            self.say(warning=f"restored {now}; its copy stays in the trash ({e})")
+        return now
+
+    def empty_trash(self) -> int:
+        """Delete every file `trash()` lists, and then the trash's folders
+        left empty — the one delete in the app that keeps no copy (the
+        panel asks twice). A path that does not resolve under
+        ``<home>/trash/`` (a symlink out, a ``..``) is refused and left,
+        and said. Returns how many files went."""
+        gone, refused = 0, []
+        for item in self.trash():
+            path = item.path
+            if path.is_symlink() or not self._in_trash(path):
+                refused.append(path.name)
+                continue
+            try:
+                path.unlink()
+                gone += 1
+            except OSError as e:
+                refused.append(f"{path.name} ({e})")
+        root = self.home / TRASH
+        if root.is_dir():
+            for folder in root.iterdir():
+                if folder.is_dir() and not folder.is_symlink():
+                    try:
+                        folder.rmdir()                     # only when it is empty
+                    except OSError:
+                        pass
+        if refused:
+            self.say(warning=f"trash: emptied {gone}; left {', '.join(refused[:4])}"
+                             + (f" (+{len(refused) - 4} more)" if len(refused) > 4 else "")
+                             + " — not in the trash folder")
+        else:
+            self.say(f"trash: {gone} file{'' if gone == 1 else 's'} deleted for good")
+        return gone
 
     def is_dirty(self, group: str) -> bool:
         """Have the group's bases moved off the loaded (or default) preset?

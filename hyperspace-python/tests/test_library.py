@@ -337,11 +337,14 @@ def test_a_projects_inline_band_copy_carries_the_layout(rig, tmp_path):
 
 
 def test_delete_is_user_only(rig, tmp_path):
-    """Audit L5: `rename` had no caller and is gone; delete stays user-only."""
+    """Audit L5: `rename` had no caller and went; delete stays user-only.
+    Plan 19 WP4 brings a rename back with a caller (the preset list), for
+    the presets' group only: a module preset is named by shows and scenes."""
     lib = rig.lib
     lib.save_as("camera", "Wide")
     assert lib.list("camera") == ["Wide"] and lib.current("camera") == "Wide"
-    assert not hasattr(lib, "rename")
+    with pytest.raises(LibraryError, match="only a preset can be renamed"):
+        lib.rename("camera", "Wide", "Tall")
     assert not lib.delete("band", "Percussive")             # factory
     assert not lib.delete("camera", "never was")
     assert lib.delete("camera", "Wide")
@@ -1496,3 +1499,166 @@ def test_renaming_the_loaded_preset_keeps_its_unsaved_edit(owner_home):
     assert path == home / "presets" / "sunrise.json" and not lib.is_dirty("presets")
     assert json.loads(path.read_text())["name"] == "SUNRISE"
     assert not (home / "presets" / "night-two.json").exists()
+
+
+def test_a_deleted_preset_says_which_slots_still_name_it(owner_home):
+    """× on your own preset is plan 15's delete, unchanged; new is what is
+    said: which slots and "starts on" still name it. The slots are not
+    cleared for the owner — a restore to the old name makes them work."""
+    home = owner_home
+    r = boot_home(home)
+    lib, pr = r.lib, r.lib.project
+    show = (home / "projects" / "mine.hyp.json").read_bytes()
+    assert lib.delete("presets", "NIGHT ONE")                 # F1 and "starts on"
+    assert lib.warning == ("NIGHT ONE is in the trash — F1 and 'starts on' still name it; "
+                           "restore it from the trash, or clear the slot")
+    assert pr.bank[0] == "NIGHT ONE" and pr.startup == "NIGHT ONE"
+    assert (home / "projects" / "mine.hyp.json").read_bytes() == show
+    pr.load("party", startup=False)                          # a show that names it nowhere
+    assert lib.delete("presets", "NIGHT THREE")
+    assert lib.status == "NIGHT THREE is in the trash — the preset list's trash can restore it"
+    # your copy of a factory preset: the factory one is back (the shadow rule)
+    lib.load("presets", "TRIP")
+    lib.overwrite("presets")
+    assert not lib.is_factory("presets", "TRIP")
+    assert lib.delete("presets", "TRIP") and lib.is_factory("presets", "TRIP")
+    assert lib.status == "your TRIP is in the trash — the factory TRIP is back"
+
+
+def test_the_watcher_never_resurrects_or_reloads(owner_home):
+    """Every file × , rename, restore and empty write or remove is synced
+    as the library's own (`_sync`): the next `poll()` sees no edit — it
+    applies nothing, recreates nothing — and `current` is right after each."""
+    home = owner_home
+    r = boot_home(home)
+    lib, pr = r.lib, r.lib.project
+    loads = []
+    real = lib.load
+    lib.load = lambda *a, **k: (loads.append(a), real(*a, **k))[1]
+    clock = [10_000.0]
+
+    def poll() -> bool:
+        clock[0] += 10
+        return lib.poll(clock[0])
+
+    pr.load_slot(1)
+    assert lib.current("presets") == "NIGHT TWO"
+    loads.clear()
+    lib.rename("presets", "NIGHT TWO", "SUNRISE")
+    assert not poll() and lib.current("presets") == "SUNRISE"
+    assert not (home / "presets" / "night-two.json").exists()
+    lib.delete("presets", "SUNRISE")
+    assert not poll() and lib.current("presets") is None
+    assert not (home / "presets" / "sunrise.json").exists()
+    (item,) = [t for t in lib.trash() if t.name == "SUNRISE"]
+    lib.restore_trash(item)
+    assert not poll() and lib.current("presets") is None       # a restore loads nothing
+    lib.hide("presets", "WAKE")
+    lib.empty_trash()
+    assert not poll()
+    assert loads == [] and lib.list("presets").count("SUNRISE") == 1
+    assert "NIGHT TWO" not in lib.list("presets", hidden=True)
+
+
+def test_restore_never_overwrites(owner_home):
+    """The owner's files (on a copy): a restore creates its target
+    exclusively. A free stem comes back as it was, byte for byte; a taken
+    stem (NIGHT ONE: the copy the home already had in its trash) and a
+    taken name (NIGHT THREE, whose name another file now has) each come
+    back under the next free name, written inside, and say so. The trash
+    copy goes only after the write: a write that fails leaves it. A
+    restored show is listed, not opened. Nothing else changes."""
+    home = owner_home
+    r = boot_home(home)
+    lib, pr = r.lib, r.lib.project
+    night_one = (home / "presets" / "night-one.json").read_bytes()
+    # a taken stem
+    (item,) = [t for t in lib.trash() if t.name == "NIGHT ONE"]
+    assert item.group == "presets" and item.when
+    before = tree(home, but=("trash/",))
+    assert lib.restore_trash(item) == "NIGHT ONE 2"
+    assert lib.status == "restored as NIGHT ONE 2 — NIGHT ONE is taken"
+    assert not item.path.exists()
+    assert json.loads((home / "presets" / "night-one-2.json").read_text())["name"] == "NIGHT ONE 2"
+    assert (home / "presets" / "night-one.json").read_bytes() == night_one
+    assert tree(home, but=("trash/", "presets/night-one-2.json")) == before
+    # a free stem: back as it was, and the slot that named it loads it again
+    three = (home / "presets" / "night-three.json").read_bytes()
+    lib.delete("presets", "NIGHT THREE")
+    (item,) = [t for t in lib.trash() if t.name == "NIGHT THREE"]
+    assert lib.restore_trash(item) == "NIGHT THREE" and lib.status == "restored NIGHT THREE"
+    assert (home / "presets" / "night-three.json").read_bytes() == three
+    pr.load_slot(2)
+    assert lib.current("presets") == "NIGHT THREE"
+    # a taken name: another file of yours now carries it
+    lib.delete("presets", "NIGHT THREE")
+    other = home / "presets" / "elsewhere.json"
+    other.write_text(preset.dumps({**json.loads(three), "name": "NIGHT THREE"}))
+    (item,) = [t for t in lib.trash() if t.name == "NIGHT THREE"]
+    assert lib.restore_trash(item) == "NIGHT THREE 2"
+    assert json.loads((home / "presets" / "night-three-2.json").read_text())["name"] == \
+        "NIGHT THREE 2"
+    assert json.loads(other.read_text())["name"] == "NIGHT THREE"
+    # a write that fails: the trash copy stays
+    lib.delete("presets", "NIGHT TWO")
+    (item,) = [t for t in lib.trash() if t.name == "NIGHT TWO"]
+    os.chmod(home / "presets", 0o555)
+    try:
+        with pytest.raises(LibraryError, match="not restored"):
+            lib.restore_trash(item)
+    finally:
+        os.chmod(home / "presets", 0o755)
+    assert item.path.exists() and not (home / "presets" / "night-two.json").exists()
+    assert lib.restore_trash(item) == "NIGHT TWO" and not item.path.exists()
+    # a show: the copy a rename kept, under the next free name; not opened
+    lib.rename("presets", "NIGHT TWO", "SUNRISE")
+    (item,) = [t for t in lib.trash() if t.group == "projects" and t.name == "mine"]
+    assert lib.restore_trash(item) == "mine 2" and lib.status == "restored as show mine 2 — " \
+        "mine is taken"
+    shown = json.loads((home / "projects" / "mine-2.hyp.json").read_text())
+    assert shown["name"] == "mine 2" and "NIGHT TWO" in shown["bank"]
+    assert "mine-2" in pr.list() and pr.name == "mine"
+    # not in the trash: refused
+    with pytest.raises(LibraryError, match="not in the trash"):
+        lib.restore_trash(library.Trashed(home / "presets" / "sunrise.json", "presets",
+                                          "SUNRISE", ""))
+    assert (home / "presets" / "sunrise.json").exists()
+
+
+def test_empty_trash_removes_only_the_trash(owner_home, tmp_path):
+    """The owner's files (on a copy): empty removes exactly the files
+    `trash()` lists and the folders left empty, and nothing outside
+    `<home>/trash/`: a symlink in the trash pointing out, a symlinked
+    folder, and a path with `..` are refused and left, and said."""
+    home = owner_home
+    r = boot_home(home)
+    lib = r.lib
+    lib.delete("presets", "NIGHT THREE")
+    lib.rename("presets", "NIGHT TWO", "SUNRISE")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "keep.json").write_text("{}")
+    (outside / "dir").mkdir()
+    (outside / "dir" / "also.json").write_text("{}")
+    (home / "trash" / "presets" / "evil.20261004-010101.json").symlink_to(outside / "keep.json")
+    (home / "trash" / "fx").symlink_to(outside / "dir", target_is_directory=True)
+    listed = lib.trash()
+    real = [t.path for t in listed if not t.path.is_symlink() and t.path.parent.name != "fx"]
+    assert len(real) == 4                       # the home's own, NIGHT THREE, NIGHT TWO, mine
+    assert listed == sorted(listed, key=lambda t: (library._order(t.path), t.path.name),
+                            reverse=True)                     # newest first
+    before = tree(home, but=("trash/",))
+    with pytest.MonkeyPatch.context() as m:
+        sneaky = library.Trashed(home / "trash" / "presets" / ".." / ".." / "presets" /
+                                 "night-one.json", "presets", "NIGHT ONE", "")
+        m.setattr(lib, "trash", lambda: [*listed, sneaky])
+        assert lib.empty_trash() == 4
+    assert not any(p.exists() for p in real)
+    assert "evil.20261004-010101.json" in lib.warning and "night-one.json" in lib.warning
+    assert "also.json" in lib.warning
+    assert (outside / "keep.json").read_text() == "{}" and (outside / "dir" / "also.json").exists()
+    assert (home / "presets" / "night-one.json").exists()
+    assert tree(home, but=("trash/",)) == before
+    assert not (home / "trash" / "projects").exists()           # emptied, removed
+    assert (home / "trash" / "presets").is_dir()                # the symlink is still in it
+    assert sorted(p.name for p in (home / "trash").iterdir()) == ["fx", "presets"]
