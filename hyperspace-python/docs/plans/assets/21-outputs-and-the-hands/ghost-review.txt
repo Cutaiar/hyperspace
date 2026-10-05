@@ -33,9 +33,13 @@ R10  yes    Bad [hands] tape: "tracker off", reason   _open_hands appends it to 
             on stderr only.                           (SYSTEM); HANDS page shows it in place of       test_ui_shell.py::test_the_hands_page_says_why_the_ghost_or_the_tracker_is_off
                                                       "tracker off".
 R11  yes    The guide rides inside CapsuleHands.draw. Left for WP6, as asked.                         —
-R12  fork   mirror/guide/tethers were modulatable.    mirror, guide, tethers -> modulatable=False;    test_ghost.py::test_a_desk_button_sets_the_mirror_and_a_lane_cannot_perform_it;
-                                                      on, alpha stay. Desk Learn still works; a lane  ::test_the_params_are_session_off_by_default_and_learnable (edited)
-                                                      row onto the three is dormant, kept.
+R12  fork   mirror/guide/tethers are modulatable,     Left as PR #78 had it (all five modulatable).   test_ghost.py::test_the_params_are_session_off_by_default_and_learnable
+            so a hand/band/LFO row can flip them.     Tried modulatable=False; the code review        (unedited)
+                                                      showed hand Learn then writes a dead row with
+                                                      a success message (learn.py does not check
+                                                      the target). Recommended: the flags off AND
+                                                      learn_source refusing a non-modulatable
+                                                      target — learn.py, outside this package.
 R13  yes    85.0 in ghost.pose; STALE_S in core and   pose uses hands.core.PALM_W (lazy import);      test_hands_tape.py::test_the_stale_time_and_the_palm_width_are_defined_once
             tape.                                     STALE_S lives in tape.py, core imports it.
 R14  noted  Check 47 never run.                       Nothing here; the docs package carries it.      —
