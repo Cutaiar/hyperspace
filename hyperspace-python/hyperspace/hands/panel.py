@@ -39,6 +39,7 @@ import math
 from imgui_bundle import imgui
 
 from .. import ui, undo
+from ..ghost import MODES as GHOST_MODES
 from .core import FEATURES, GROUP, PINCHES, SIDES, conflicts, mirror
 from .signal import shape
 
@@ -47,6 +48,9 @@ OUT_W = 100.0
 BOX_H = 92.0
 BOX_W = 190.0       # the switches sit beside it
 PLOT_W = 96.0
+GHOST_LABEL_W = 62.0    # the ghost line's "Opacity" and "Guide" labels
+GHOST_ALPHA_W = 130.0
+GHOST_GUIDE_W = 120.0
 CAL_SECONDS = 20.0
 LEFT = imgui.ImVec4(0.92, 0.92, 0.92, 1.0)
 
@@ -127,7 +131,7 @@ def page(panel, dt: float) -> None:
     if settings is None:
         imgui.text_disabled("no hands setup — see [hands] in config.toml")
         return
-    _status(io)
+    _status(io, getattr(panel, "config_notes", None) or ())
     _box(io)
     if _has_pinches(io):        # the switches beside the box: the page has
         imgui.same_line()       # to fit the control window
@@ -149,21 +153,55 @@ def _ghost(panel) -> None:
     shown here because this is where the hands are looked at."""
     if "ghost.on" not in panel.reg:
         return
+    # one line, whatever is on: the page has to fit the control window
+    # with every ghost control showing (test_ui_shell)
     panel._check("ghost.on")
     if panel.reg["ghost.on"].value:
         imgui.same_line()
         panel._check("ghost.mirror")
-        panel._row("ghost.alpha")
+        imgui.same_line()
+        panel._label_cell("Opacity", width=GHOST_LABEL_W)
+        panel._slider("ghost.alpha", GHOST_ALPHA_W)
         if "ghost.guide" in panel.reg:
-            panel._combo("ghost.guide")
+            imgui.same_line()
+            panel._label_cell("Guide", width=GHOST_LABEL_W)
+            panel._combo("ghost.guide", GHOST_GUIDE_W)
             if panel.reg["ghost.guide"].value and "ghost.tethers" in panel.reg:
+                imgui.same_line()
                 panel._check("ghost.tethers")
+    # one more line at most, under it: why the ghost could not build or draw
+    # (ghost.Ghost.error — a refused build stays until a reload, anything
+    # else until the ghost goes off), then, with the ghost on in screentop
+    # or HMD, that those modes' axes are reasoned, not seen (ghost.MODES:
+    # only desktop's are the hands/core.py table; hand check Q9)
+    err = getattr(getattr(getattr(panel, "renderer", None), "ghost", None), "error", "")
+    mode = ghost_mode(getattr(panel, "hands", None))
+    # an unknown mode draws as desktop
+    guess = (panel.reg["ghost.on"].value and mode in GHOST_MODES and mode != "desktop")
+    if err:
+        imgui.text_colored(ui.WARN, err)
+    if guess:
+        if err:
+            imgui.same_line()
+        imgui.text_disabled(f"ghost axes for {mode} are unmeasured: "
+                            "left/right and up may be wrong")
 
 
-def _status(io) -> None:
+def ghost_mode(io) -> str:
+    """The tracking mode the ghost draws in (what `Ghost.poses` reads:
+    the source's ``cfg["mode"]``, desktop without one), lower case."""
+    return str((getattr(io, "cfg", None) or {}).get("mode", "desktop")).lower()
+
+
+def _status(io, notes=()) -> None:
     if io is None:
-        imgui.text_disabled("tracker off — [hands] enabled = true in config.toml; "
-                            "the setup still edits and saves")
+        # a tracker that would not open says why (app._open_hands' note)
+        why = next((n for n in notes if n.startswith("hands: ")), "")
+        if why:
+            imgui.text_colored(ui.WARN, why)
+        else:
+            imgui.text_disabled("tracker off — [hands] enabled = true in config.toml; "
+                                "the setup still edits and saves")
         return
     ins = " ".join(f"{s[0].upper()}{'●' if io.present[s] else '○'}" for s in SIDES)
     port = io.out_name or "no DAW port"

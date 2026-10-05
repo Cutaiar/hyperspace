@@ -294,6 +294,78 @@ def test_every_page_fits_the_control_window(rig, monkeypatch):
     assert {k: v for k, v in over.items() if v > 0} == {}
 
 
+def _hands_page_text(rig, monkeypatch) -> tuple[list[str], float]:
+    """Every line the HANDS page draws as text, and its scroll range, at
+    the control size (three frames: the window settles, then its content)."""
+    import hyperspace.hands.panel as hp
+
+    drawn: list[str] = []
+    room: list[float] = []
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    with monkeypatch.context() as m:
+        real_colored, real_disabled = imgui.text_colored, imgui.text_disabled
+        m.setattr(hp.imgui, "text_colored", lambda col, s: (drawn.append(s), real_colored(col, s)))
+        m.setattr(hp.imgui, "text_disabled", lambda s: (drawn.append(s), real_disabled(s)))
+        draw = Panel._page_hands
+
+        def measured(self, dt):
+            draw(self, dt)
+            room.append(imgui.get_scroll_max_y())
+        m.setattr(Panel, "_page_hands", measured)
+        for _ in range(3):
+            drawn.clear()
+            frame(rig.panel, "hands")
+    return drawn, room[-1]
+
+
+def test_the_hands_page_says_the_ghost_axes_are_unmeasured(rig, monkeypatch):
+    """Plan 21 WP5 R6: screentop's and HMD's ghost bases are reasoned, not
+    seen; with the ghost on in such a mode the HANDS page says so. Desktop
+    (the measured table) and the ghost off say nothing."""
+    rig.reg["ghost.on"].set(True)
+    for mode, said in (("desktop", False), ("screentop", True), ("hmd", True),
+                       ("sideways", False)):        # unknown: drawn as desktop
+        rig.panel.hands.cfg["mode"] = mode
+        drawn, _ = _hands_page_text(rig, monkeypatch)
+        assert any("unmeasured" in s and mode in s for s in drawn) is said, mode
+    rig.reg["ghost.on"].set(False)
+    rig.panel.hands.cfg["mode"] = "hmd"
+    assert not any("unmeasured" in s for s in _hands_page_text(rig, monkeypatch)[0])
+
+
+def test_the_hands_page_says_why_the_ghost_or_the_tracker_is_off(rig, monkeypatch):
+    """Plan 21 WP5 R2 / R10: `Ghost.error` (a pass that would not build or
+    draw, the tethers' labels) shows on the HANDS page; a tracker that
+    would not open shows `app._open_hands`' note there instead of "tracker
+    off", which is only for a tracker not asked for."""
+    why = "ghost tethers: OSError: cannot open resource"
+    rig.panel.renderer = SimpleNamespace(ghost=SimpleNamespace(error=why))
+    assert why in _hands_page_text(rig, monkeypatch)[0]
+    rig.panel.renderer.ghost.error = ""
+    assert not any(s.startswith("ghost") for s in _hands_page_text(rig, monkeypatch)[0])
+    note = "hands: [Errno 2] No such file or directory: '/nowhere/tape.json'"
+    rig.panel.hands = None
+    rig.panel.config_notes = ["config: something else", note]
+    drawn, _ = _hands_page_text(rig, monkeypatch)
+    assert note in drawn and not any(s.startswith("tracker off") for s in drawn)
+    rig.panel.config_notes = []
+    assert any(s.startswith("tracker off") for s in _hands_page_text(rig, monkeypatch)[0])
+
+
+def test_the_hands_page_fits_with_every_ghost_line(rig, monkeypatch):
+    """The HANDS page at its tallest for the ghost: on, a guide, tethers,
+    an unmeasured mode and an error line — and it still does not scroll."""
+    for pid, v in (("ghost.on", True), ("ghost.guide", 1), ("ghost.tethers", True)):
+        rig.reg[pid].set(v)
+    rig.panel.hands.cfg["mode"] = "screentop"
+    rig.panel.renderer = SimpleNamespace(ghost=SimpleNamespace(
+        error="ghost hands: ValueError: setting an array element with a sequence. The "
+              "requested array has an inhomogeneous shape after 1 dimensions."))
+    drawn, over = _hands_page_text(rig, monkeypatch)
+    assert any("unmeasured" in s for s in drawn) and any(s.startswith("ghost hands") for s in drawn)
+    assert over <= 0
+
+
 class StandInWorker:
     """In the dream worker's place on the look-back page: it answers each
     submit with the frame it was given, one submit late (so a dream frame
