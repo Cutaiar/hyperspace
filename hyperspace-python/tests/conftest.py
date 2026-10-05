@@ -129,12 +129,15 @@ def _with_old_pads(path, re_aimed: dict | None = None) -> None:
     from hyperspace import preset
 
     doc = json.loads(path.read_text())
-    desk = list(doc.get("desk") or [])
+    # (the fresh layer's device knobs, apc40.SCENE, came with plan 19 WP3:
+    # a preset saved before it had none — its knobs dark, or what was learned)
+    scene = preset.desk_json(b for b in preset.fresh_desk() if preset._is_device_knob(b))
+    desk = [row for row in doc.get("desk") or [] if row not in scene]
     have = {row["source"] for row in desk}
     want = [re_aimed if re_aimed and row["source"] == re_aimed["source"] else row
             for row in old_shape_pads()]
     missing = [row for row in want if row["source"] not in have]
-    if missing:
+    if missing or len(desk) != len(doc.get("desk") or []):
         doc["desk"] = desk + missing
         path.write_text(preset.dumps(doc))
 

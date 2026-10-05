@@ -46,7 +46,13 @@
   {"source": "note:0:86", "target": "camera.reset", "op": "toggle", "feedback": "led"},
   {"source": "note:0:94", "target": "view.bright", "op": "step", "value": 3, "feedback": "led"},
   {"source": "note:0:95", "target": "view.bright", "op": "step", "value": -3, "feedback": "led"},
-  {"source": "cc:*:16", "target": "macro.1", "op": "abs", "feedback": "ring"}
+  {"source": "cc:*:16", "target": "macro.1", "op": "abs", "feedback": "ring"},
+  {"source": "cc:*:17", "target": "fx.mix", "op": "abs", "feedback": "ring"},
+  {"source": "cc:*:18", "target": "fx.plasma.level", "op": "abs", "feedback": "ring"},
+  {"source": "cc:*:19", "target": "lfo.1.depth", "op": "abs", "feedback": "ring"},
+  {"source": "cc:*:20", "target": "view.depth4", "op": "abs", "feedback": "ring"},
+  {"source": "cc:*:21", "target": "camera.yaw", "op": "abs", "feedback": "ring"},
+  {"source": "cc:*:22", "target": "camera.pitch", "op": "abs", "feedback": "ring"}
  ],
  "macros": {
   "macro.1": {

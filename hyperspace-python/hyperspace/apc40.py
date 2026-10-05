@@ -404,9 +404,20 @@ BANK_PADS: list[tuple[int, int]] = [
     *[(N_CLIP[3], k) for k in range(8)],             # row 4: slots 9–16
     *[(N_CLIP[4], k) for k in range(8)]]             # row 5: slots 17–24
 
+# The fresh preset layer's device knobs (plan 19 WP3): D1–D4, the scene
+# params not on K1–K8 that act on every preset whatever is switched on —
+# the 4D perspective, the camera's two angles — and the face pattern (an
+# enum on an absolute knob: it steps through the patterns). D5–D8 stay dark.
+# A fresh preset, a file with no `desk` key and every scene-only factory
+# preset get these; a preset with knobs of its own replaces all eight
+# (preset.knob_desk)
+SCENE = ("view.depth4", "camera.yaw", "camera.pitch", "view.pattern")
+
 DEFAULT_MAP: list[dict] = [
     # device knobs, global layer (SHIFT up): the open band strip, in panel order
     *[_cc(f"band.sel.{k}", cc, layer=G) for k, cc in zip(_KNOB_KEYS, DEVICE_KNOBS)],
+    # device knobs 1–4, preset layer: SCENE (plan 19 WP3); 5–8 dark
+    *[_cc(t, cc, layer=P) for t, cc in zip(SCENE, DEVICE_KNOBS)],
     # track knobs, preset layer: the view faders (a fresh preset's own eight)
     _cc("view.bright", 0x30, 0, layer=P), _cc("view.speed", 0x31, 0, layer=P),
     _cc("view.instances", 0x32, 0, layer=P), _cc("view.pattern_mix", 0x33, 0, layer=P),
