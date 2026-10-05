@@ -638,3 +638,87 @@ def test_the_exits_save_the_windowed_rects(monkeypatch, tmp_path):
         "glfw.terminate()")
     assert "save=save_windows" in src and "home = library_home()" in src
     assert app.library_home is library.home
+
+
+# ---- the desk's table and knob smoothing's default (plan 18 WP2, fork 12) ----
+
+def _launch(home):
+    """`app.main`'s order around the desk's table, headless: the table is
+    read and `_desk_table` called before the library attaches, the router
+    and the presets after, then the show's startup preset."""
+    from hyperspace import lfo, preset, tempo
+    from hyperspace.library import Library
+    from hyperspace.preset import Presets
+    from hyperspace.routing import Bindings, Router, bindings_path
+
+    chain = Analyzer(Analyser())
+    control = Control(chain)
+    lib = Library(home, period=0.0)
+    reg = build_registry(ViewState(), control, SimpleNamespace(chain=chain), lib.project)
+    lib.on_layout("band", control.apply_layout)
+    lib.extra("band", lambda: {"layout": chain.layout()})
+    clock = tempo.Clock(now=lambda: 0.0)
+    tempo.register(reg, clock)
+    lfo.register(reg, lfo.LFOs(), clock)
+    table = app._desk_table(reg, Bindings.load(bindings_path(home), legacy_midi=None))
+    lib.attach(reg)
+    router = Router(reg, table)
+    Presets(lib, reg, router)
+    preset.migrate_home(lib, router)
+    lib.project.load_startup()
+    return SimpleNamespace(lib=lib, reg=reg, table=table, show=lib.project)
+
+
+def test_the_app_starts_with_knob_smoothing_at_80_ms_and_a_show_keeps_its_own(tmp_path):
+    """Fork 12 as settled: a bare table is at 0 and the app's is at
+    `routing.SLEW_DEFAULT_S` before the show lands. A factory show, which
+    names no smoothing, opens at 80 ms and is not unsaved because of it;
+    a show that saved a number keeps it — 0 included — with no unknown-id
+    warning, since the param exists when the session values land (`main`
+    makes the table before `library.attach`); a show file from before the
+    param opens at 80 ms, clean; and a new show goes back to 80 ms."""
+    import inspect
+    import json
+
+    from hyperspace import routing
+
+    assert routing.Bindings().slew == 0.0 and routing.SLEW_DEFAULT_S == 0.08
+    src = inspect.getsource(app.main)
+    assert 0 < src.index("_desk_table(reg, Bindings.load(") < src.index("library.attach(reg)")
+    assert src.index("library.attach(reg)") < src.index("Router(reg, table)")
+
+    home = tmp_path / "home"
+    r = _launch(home)                                   # a fresh home: the factory party show
+    slew = r.reg["desk.slew"]
+    assert r.show.name == "party" and r.show.factory
+    assert r.table.slew == 0.08 and slew.text() == "80 ms"
+    assert not r.show.is_dirty() and not r.lib.is_dirty("desk") and not r.lib.warning
+    assert r.show.session["desk.slew"] == 0.08          # the reference the dot compares with
+    slew.set(0.0)                                       # the owner turns it off: the show's to save
+    assert r.show.is_dirty()
+    slew.set(0.08)
+    assert not r.show.is_dirty()
+    slew.set(0.0)
+    r.show.save("mine")
+    assert not r.show.is_dirty()
+
+    r = _launch(home)                                   # the next launch opens that show
+    assert r.show.name == "mine" and not r.show.factory
+    assert r.table.slew == 0.0 and r.reg["desk.slew"].text() == "off"
+    assert not r.show.is_dirty() and not r.lib.warning
+    r.reg["desk.slew"].set(0.2)
+    r.show.save()
+    r = _launch(home)
+    assert r.table.slew == 0.2 and not r.show.is_dirty() and not r.lib.warning
+
+    r.show.new()                                        # a new show: the app's default again
+    assert r.table.slew == 0.08
+
+    # a show saved before the param existed: no key, 80 ms, clean
+    path = home / "projects" / "mine.hyp.json"
+    doc = json.loads(path.read_text())
+    assert doc["session"].pop("desk.slew") == 0.2
+    path.write_text(json.dumps(doc))
+    r = _launch(home)
+    assert r.show.name == "mine" and r.table.slew == 0.08
+    assert not r.show.is_dirty() and not r.lib.warning

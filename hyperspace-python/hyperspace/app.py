@@ -81,7 +81,7 @@ from .overlay import GlfwBackend, Output
 from .params import Registry, build_registry
 from .preset import Presets, migrate_home
 from .render import Renderer
-from .routing import Bindings, Router, bindings_path
+from .routing import SLEW_DEFAULT_S, Bindings, Router, bindings_path, register_desk
 from .ui import Panel, apply_style, load_fonts
 from .view import ViewState
 from .watchdog import LOG_NAME, RenderWatch, Watchdog
@@ -251,6 +251,19 @@ def _make_output(win, reg: Registry, cfg: dict) -> Output:
     out.bg = float(oc.get("bg", 0.0))
     out.alpha = float(oc.get("alpha", 1.0))
     return out
+
+
+def _desk_table(reg: Registry, table: Bindings) -> Bindings:
+    """The app's binding table, with the desk's own params declared on it
+    and knob smoothing at the app's default (plan 18 WP2, fork 12). Called
+    before `library.attach`, like every session param's registration, so
+    `desk.slew` exists when the show's session values land: a show that
+    saved a number keeps it (0 included), one that names none takes 80 ms
+    as the state it opened with — clean, and what "default" means. A bare
+    `Bindings` (the tests', the probe's) stays at 0."""
+    register_desk(reg, table)
+    table.slew = SLEW_DEFAULT_S
+    return table
 
 
 def _open_midi(reg: Registry, cfg: dict, table: Bindings, learn):
@@ -742,17 +755,21 @@ def main() -> None:
     # the render window's placement registers before attach, so "default"
     # includes output.* and reset / the dirty dot see them (audit L6)
     output = _make_output(render_win, reg, cfg)
+    # one binding table for keys, pad, MIDI and lanes (an old midi_map.json
+    # migrates) — read before attach for the same reason: the desk's
+    # session param, `desk.slew`, is the table's, at the app's default
+    # until the show says otherwise
+    mc = cfg.get("midi", {})
+    table = _desk_table(reg, Bindings.load(
+        bindings_path(library.home), mc.get("profile", "apc40"),
+        Path(mc.get("map", "midi_map.json")),
+    ))
     library.attach(reg)
     panel = Panel(control, audio, s, renderer, library.project, registry=reg, library=library)
     panels.append(panel)
     panel.clock, panel.lfos = clock, lfos     # the LFO page's scopes and beat light
     panel.output = output
-    # one binding table for keys, pad, MIDI and lanes (an old midi_map.json migrates)
-    mc = cfg.get("midi", {})
-    router = Router(reg, Bindings.load(
-        bindings_path(library.home), mc.get("profile", "apc40"),
-        Path(mc.get("map", "midi_map.json")),
-    ))
+    router = Router(reg, table)
     # the presets (preset.py): the library's `presets/` files, landed on the
     # registry and the table; the project's bank loads through it
     presets = Presets(library, reg, router)
