@@ -136,6 +136,7 @@ class Slew:
     t: float            # the clock at the last step
     t_end: float        # the clock when it lands: the last message + desk.slew
     wrote: float        # p.norm as read back after our last write
+    steps: int = 0      # the steps it has taken (`_glide`)
 
 
 def find_port(names: list[str], match: str) -> str | None:
@@ -277,6 +278,8 @@ class MidiIO:
         # at the previous poll (where a new glide's line starts)
         self._slews: dict[str, Slew] = {}
         self._polled: float | None = None
+        # params seen to move on their own (`_glide`): written at once
+        self._restless: set[str] = set()
         # SHIFT's param and the smoothing's, for a bare adapter too
         register_desk(registry, self.table)
         if self.ports.injected:
@@ -326,6 +329,7 @@ class MidiIO:
             self.redraw()
 
     def close(self) -> None:
+        self._land_all()        # knob smoothing: no value is left between detents at exit
         if self.out is not None:
             try:
                 for msg in self.profile.leave():
@@ -437,8 +441,11 @@ class MidiIO:
         for msg in self.ports.recv():
             self._handle(msg)
         self._fire_holds()
-        self._glide(self._now())    # knob smoothing: each glide's step for this frame
         self._follow_table()        # SHIFT pressed just now: this frame's redraw
+        # knob smoothing: each glide's step for this frame — after the
+        # table is followed, so a preset a pad loaded in this very poll has
+        # ended its glides (`redraw`) before any of them steps over it
+        self._glide(self._now())
         self.feedback()
 
     def _follow_table(self) -> None:
@@ -628,7 +635,8 @@ class MidiIO:
             # where set_norm would put it; at desk.slew 0, and on a
             # discrete or integer target, the write is the immediate one
             seconds = getattr(self.table, "slew", 0.0)
-            if seconds > 0.0 and p.kind is Kind.CONTINUOUS and not p.integer:
+            if (seconds > 0.0 and p.kind is Kind.CONTINUOUS and not p.integer
+                    and p.id not in self.__dict__.setdefault("_restless", set())):
                 self._aim(p, u, seconds)
             else:
                 self._slew_state().pop(p.id, None)
@@ -679,13 +687,21 @@ class MidiIO:
         or `desk.slew` is now 0. A param whose base is not where this
         adapter left it was set by someone else: theirs stands and the
         glide is dropped. Scene-setter writes of the base, both of them
-        (`Param.set`, `Param.set_norm`); never an offset."""
+        (`Param.set`, `Param.set_norm`); never an offset.
+
+        A param that has moved on the very poll after a glide's first step
+        is taken to move on its own (`rot.phase.*` while its plane turns:
+        the integrator's, not a setting): a glide on it would be dropped
+        every frame and never arrive, so from then on its knob writes at
+        once, as with smoothing off (`_restless`; review of PR #98)."""
         slews = self._slew_state()
         if slews:
             seconds = getattr(self.table, "slew", 0.0)
             for pid, s in list(slews.items()):
                 p = self.reg.get(pid)
                 if p is None or abs(p.norm - s.wrote) > SLEW_TOL:
+                    if p is not None and s.steps == 1:
+                        self.__dict__.setdefault("_restless", set()).add(pid)
                     del slews[pid]
                     continue
                 if seconds <= 0.0 or now >= s.t_end:
@@ -697,6 +713,7 @@ class MidiIO:
                     p.set(p._value_of_norm(s.y))        # the base, between detents
                     s.t = now
                     s.wrote = p.norm
+                    s.steps += 1
                 self._note_written(p)       # ours: no fader loses its catch to it
         self._polled = now
 

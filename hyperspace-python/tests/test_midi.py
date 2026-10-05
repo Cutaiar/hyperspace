@@ -1114,3 +1114,64 @@ def test_a_glide_on_a_hand_owned_param_moves_the_return_value(rig):
     assert rig.midi._slews == {}
     reg.apply()                                     # the hand leaves: the knob's value
     assert not mix.modulated and mix.value == pytest.approx(0.39)
+
+
+def test_a_param_that_moves_on_its_own_is_written_at_once(rig):
+    """Review of PR #98: `rot.phase.*` is the integrator's angle and moves
+    every frame while its plane turns, so a glide on it would look
+    foreign-written the next poll, be dropped, and never arrive. The first
+    message finds that out (one partial step); from then on the knob
+    writes the phase at once, as with smoothing off. A param that holds
+    still is unaffected."""
+    reg, view = rig.reg, rig.view
+    phase, mix = reg["rot.phase.XY"], reg["view.pattern_mix"]
+    rig.midi.table.add(Binding("cc:0:60", "rot.phase.XY", "abs", layer="preset", pickup=False))
+    at = slew_rig(rig)
+
+    def turning(t, *msgs):                         # the plane turns between polls
+        view.ang[0] += 0.01
+        at(t, *msgs)
+
+    turning(TICK, cc(60, 127))
+    assert "rot.phase.XY" in rig.midi._slews
+    turning(2 * TICK)
+    assert rig.midi._slews == {} and rig.midi._restless == {"rot.phase.XY"}
+    turning(3 * TICK, cc(60, 32))                  # now: where set_norm puts it, this poll
+    landed = phase.value
+    phase.set_norm(32 / 127)
+    assert phase.value == pytest.approx(landed) and rig.midi._slews == {}
+    mix.set_norm(0.0)
+    turning(4 * TICK)                              # (the ring re-bases the knob there)
+    turning(5 * TICK, cc(K_MIX, 127))              # a still param glides as ever
+    assert 0.0 < mix.norm < 1.0 and list(rig.midi._slews) == ["view.pattern_mix"]
+
+
+def test_a_load_from_a_pad_ends_a_glide_before_it_steps(rig):
+    """Review of PR #98: a knob message and a pad that loads a preset in
+    one poll. The load's desk replacement is followed before the glides
+    step, so the glide the knob just aimed is gone and the value the load
+    left stands — even though it equals what the glide last saw."""
+    reg, t = rig.reg, rig.midi.table
+    mix = reg["view.pattern_mix"]
+    mix.set_norm(0.3)
+    reg.trigger("test.load", "Load", lambda: t.set_desk(t.desk()))   # a load that moves nothing
+    t.add(Binding("note:0:121", "test.load", "toggle"))
+    at = slew_rig(rig)
+    at(TICK, cc(K_MIX, 127), note(121))
+    assert mix.norm == 0.3 and rig.midi._slews == {}
+    for k in range(2, 12):
+        at(k * TICK)
+    assert mix.norm == 0.3
+
+
+def test_closing_the_adapter_lands_every_glide(rig):
+    """Review of PR #98: nothing is left between detents when the app
+    quits inside the glide's time."""
+    dim = rig.reg["output.dim"]
+    push(rig, cc(apc40.CC_XFADE, 127))
+    at = slew_rig(rig)
+    at(TICK, cc(apc40.CC_XFADE, 64))
+    at(2 * TICK)
+    assert 0.5 < dim.norm < 1.0
+    rig.midi.close()
+    assert dim.norm == 0.5 and rig.midi._slews == {}
