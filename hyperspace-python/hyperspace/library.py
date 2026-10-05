@@ -1044,8 +1044,18 @@ class Project:
         self.path = path
         _write_json(self.path, doc)
         self.lib._sync(self.path)
+        # the commit's words (plan 19 WP6): what moved since the show was
+        # opened or last written — "starts on", the bank, else a save
+        bank, startup = self._saved
+        if startup != self.startup:
+            said = f"show {self.name}: starts on {self.startup or 'nothing'}"
+        elif bank != list(self.bank):
+            said = f"show {self.name}: bank"
+        else:
+            said = f"save show {self.name}"
         self._saved = (list(self.bank), self.startup)
         self.factory = False                          # your copy now
+        self.lib._commit(said)
         return self.path
 
     def is_dirty(self) -> bool:
@@ -1202,6 +1212,10 @@ class Library:
         self._mtimes: dict[Path, float] = {}
         self._next = 0.0
         self.presets = None        # preset.Presets, set by its constructor
+        # homegit.Committer when [library] git is on (app.main sets it; plan 19
+        # WP6): asked for a commit after each save (`_commit`), its notes
+        # drained in `poll`. The library never imports homegit or config
+        self.committer = None
         self.project = Project(self)
         self.unshadow()
         self._open_default()
@@ -1631,6 +1645,7 @@ class Library:
         hook = self._load_hooks.get(group)
         if kind is not None and hook is not None:   # a kind's current moved: say so
             hook(name)                               # (the bank's light, preset.py)
+        self._commit(f"save {'preset' if group == PRESETS else group} {name}")
         return path
 
     def document(self, group: str, name: str, *, extra: dict | None = None) -> dict:
@@ -1674,7 +1689,20 @@ class Library:
         self._sync(path)
         if self._current.get(group) == name and self.path_of(group, name) is None:
             self._landed(group, None, None)
+        self._commit(f"trash {'preset' if group == PRESETS else group} {name}")
         return True
+
+    def _commit(self, message: str) -> None:
+        """Ask the committer (homegit.py), if there is one, for a commit of
+        the home as it now is — after the file is on disk. Returns at once
+        and never raises: git can neither block nor fail a save."""
+        committer = self.__dict__.get("committer")   # (a Library from before a hot reload)
+        if committer is None:
+            return
+        try:
+            committer.request(message)
+        except Exception:  # noqa: BLE001, S110 — a save stands whatever git does
+            pass
 
     def is_dirty(self, group: str) -> bool:
         """Have the group's bases moved off the loaded (or default) preset?
@@ -1734,7 +1762,18 @@ class Library:
         self._defaults.clear()
 
     def poll(self, now: float | None = None) -> bool:
-        """Re-apply whatever is loaded from a file that changed on disk."""
+        """Re-apply whatever is loaded from a file that changed on disk.
+        First, every frame: what the committer's worker has to say (git
+        failing, the home inside another repository) onto the warning line —
+        the one road from that thread to the library (plan 19 WP6)."""
+        committer = self.__dict__.get("committer")
+        if committer is not None:
+            try:
+                for note in committer.notes():
+                    print(f"library: {note}", file=sys.stderr)
+                    self.say(warning=note)
+            except Exception:  # noqa: BLE001, S110 — git's notes never stop the watcher
+                pass
         now = time.monotonic() if now is None else now
         if now < self._next:
             return False

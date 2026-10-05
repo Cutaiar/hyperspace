@@ -87,6 +87,15 @@ like the rename above. The SYSTEM page shows both.
     calibration = "hands.json"   # the box's ranges, relative to the library home
     tape = ""               # a hand tape (tools/hands_tape.py record) to play instead
                             # of the camera, relative to this file; "" = the camera
+
+    [library]               # the library home itself (homegit.py, plan 19 WP6)
+    git = false             # true: <home> is a git repository and every save is a commit.
+                            # Local only: no other repository is added, nothing leaves
+                            # this machine. Needs git on the PATH; without it saves go
+                            # on and a note says so. A home inside another repository
+                            # is never committed. Anything but true or false is false,
+                            # with a note. To share presets with someone, use the
+                            # repo's shared/ folder (tools/shared_presets.py), not this
 """
 
 from __future__ import annotations
@@ -122,6 +131,9 @@ DEFAULTS: dict = {
     # Its section is not here: load() fills it from hands/core.py's DEFAULTS,
     # the one table (every key documented there), read at call time so this
     # module imports no adapter
+    # homegit.py: the home as a git repository, a commit on each save — off by
+    # default; app.main builds the committer only when this is exactly true
+    "library": {"git": False},
 }
 
 
@@ -168,6 +180,13 @@ def load(path: Path | None = None) -> dict:
         if note:
             cfg.setdefault("notes", []).append(note)
             print(note, file=sys.stderr)
+    # [library] git is a switch: `git = "yes"` is off, and the SYSTEM page says so
+    git = cfg["library"].get("git", False)
+    if not isinstance(git, bool):
+        cfg["library"]["git"] = False
+        note = f"config: [library] git = {git!r} is not true or false — git stays off"
+        cfg.setdefault("notes", []).append(note)
+        print(note, file=sys.stderr)
     # the MIDI map lives next to the config unless it says otherwise
     m = cfg["midi"].get("map")
     if m and not Path(m).is_absolute():

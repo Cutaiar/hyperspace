@@ -1238,3 +1238,65 @@ def test_a_long_bank_read_by_eight_slots_shows_the_first_eight(owner_home):
     assert again.bank == eight + [None] * 16 and not again.is_dirty()
     assert {p.name: p.read_bytes() for p in (home / "presets").glob("*.json")} == presets_before
     assert json.loads(bak8(show)[0].read_text())["bank"] == eight
+
+
+# ---- plan 19 WP6: the library's commit hook (homegit.py is the app's) ----
+
+class _Asked:
+    """A committer that records what it is asked for, and has notes."""
+
+    def __init__(self):
+        self.asked: list[str] = []
+        self.said: list[str] = []
+
+    def request(self, message):
+        self.asked.append(message)
+
+    def notes(self):
+        out, self.said = self.said, []
+        return out
+
+
+def test_each_save_asks_for_one_commit_in_the_librarys_words(tmp_path):
+    r = boot_home(tmp_path / "home")
+    lib, pr = r.lib, r.lib.project
+    assert lib.committer is None                     # off: nothing to ask
+    c = lib.committer = _Asked()
+    r.presets.save_as("TRIP 2")
+    lib.save_as("fx", "acid")
+    lib.delete(library.PRESETS, "TRIP 2")
+    lib.delete(library.PRESETS, "TRACER")            # a factory preset: nothing deleted, nothing asked
+    pr.put_slot(10, "TRACER")
+    pr.startup = "TRACER"
+    pr.write()
+    pr.save()
+    pr.save("mine")
+    assert c.asked == ["save preset TRIP 2", "save fx acid", "trash preset TRIP 2",
+                       "show party: bank", "show party: starts on TRACER",
+                       "save show party", "save show mine"]
+    lib.poll()                                       # loads, polls and an idle frame ask nothing
+    r.presets.load("TUMBLE")
+    assert len(c.asked) == 7
+
+
+def test_a_committer_that_raises_never_stops_a_save_and_notes_reach_the_warning_line(tmp_path):
+    r = boot_home(tmp_path / "home")
+    lib = r.lib
+
+    class Broken:
+        def request(self, message):
+            raise OSError("no")
+
+        def notes(self):
+            raise RuntimeError("no")
+    lib.committer = Broken()
+    assert r.presets.save_as("KEPT").is_file()
+    lib.poll()                                       # a broken notes() never stops the watcher
+    c = lib.committer = _Asked()
+    c.said = ["git: not committed (x); saves are not affected"]
+    said = lib.said.get("warning", 0)
+    lib.poll()
+    assert lib.warning == "git: not committed (x); saves are not affected"
+    assert lib.said["warning"] == said + 1
+    lib.poll()
+    assert lib.said["warning"] == said + 1           # drained: said once

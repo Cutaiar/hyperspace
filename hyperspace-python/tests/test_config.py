@@ -115,3 +115,21 @@ def test_every_test_runs_with_its_own_home(tmp_path, monkeypatch):
     assert library.home() != Path("~/Hyperspace").expanduser()
     assert config.load()["output"] == config.DEFAULTS["output"]   # created under tmp_path
     assert (tmp_path / "home").is_dir()
+
+
+# ---- plan 19 WP6: [library] git, off by default ----
+
+def test_library_git_is_off_by_default_and_a_switch(tmp_path, capsys):
+    assert config.DEFAULTS["library"] == {"git": False}
+    p = tmp_path / "config.toml"
+    assert config.load(p)["library"]["git"] is False             # no file
+    p.write_text("[library]\ngit = true\n")
+    cfg = config.load(p)
+    assert cfg["library"]["git"] is True and "notes" not in cfg
+    for text, value in (('"true"', "true"), ("1", 1), ("[true]", [True])):
+        p.write_text(f"[library]\ngit = {text}\n")
+        cfg = config.load(p)
+        assert cfg["library"]["git"] is False
+        assert cfg["notes"] == [(f"config: [library] git = {value!r} is not true or false "
+                                 "— git stays off")]
+    assert "[library] git" in capsys.readouterr().err
