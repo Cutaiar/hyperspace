@@ -162,6 +162,10 @@ def redo() -> None
   `router.sync_macros`.
 - `undo.push(label)` is the call roadmap §5 promises every later plan. The
   `load` keyword is new and optional (fork 2).
+- *As built:* `marks` may also have `lands()` and `mend(pre, lands)`
+  (both optional to `undo.py`), and `Marks.take()` returns four items,
+  not three — the fourth is the loaded preset's note and its load's
+  notes. `PASSES = 3` is a constant beside the others. §8, WP1.
 
 ```python
 # library.py
@@ -310,6 +314,16 @@ put the state now on the redo stack under the same label (with
 `marks.take()` if the step is a load); restore; set `status`; start the
 absorb count. `redo()` is the mirror. A new gesture or a `push` clears
 the redo stack.
+
+*As built* (review of PR #82; §8, WP1): a `push` clears the redo stack
+only when its step closes with something to put back, so a refused or
+failed action does not cost the redo; `push` step 1 has one exception —
+a `load=True` push under an open action that is no load is its own
+step; a step whose only difference is strips on another band layout is
+not dropped but consumed, with the status line saying the strips were
+left; a load step with equal values and another name is kept; and after
+the restore of a step that is not a load, `marks.mend` puts back a
+landed name the restore itself moved.
 
 **Restore** puts back only what differs:
 
@@ -463,7 +477,9 @@ Returns the path written, or `None` when the copy failed (said on stderr).
   `undo.push(f"home → {startup}", load=True)` and then exactly what
   `load_startup` does (the push inside `Presets.load_doc` is the same
   frame's and is ignored). Unsaved edits to the loaded preset go, as on
-  any load; Ctrl+Z brings them back.
+  any load; Ctrl+Z brings them back. *As built:* the push is made only
+  when the "starts on" file exists, and a successful home clears its own
+  "names no 'starts on'" warning (§8, WP2).
 - `preset.home` (`build_registry`, in the `if bank is not None` block):
   `r.trigger("preset.home", "Home", bank.home, group="preset",
   lit=lambda: bool(bank.startup), tip=…)`. Modulatable like
@@ -576,16 +592,24 @@ named below.
     and SM keep their hold through it; a fader with no last write, or a fader
     whose base a load did move still picks up
     (`test_a_preset_load_clears_the_faders_catch` passes unchanged).
+    *As built:* the catch is also cleared when the param no longer
+    exists, when the fader has no last reading, and when the param is not
+    where **this fader** last was (`Binding.last_hw`; review of PR #81;
+    §8, WP3).
   - Dragging the panel's fader re-arms pickup (`_uncatch_moved`).
 - An existing `bindings.json`: `APC_REMAP` gains
   `(f"cc:0:{apc40.CC_XFADE}", "overlay.bg", "abs", 1.0): ("output.dim",
   "abs", 1.0)`. Only the exact factory row is swapped; a crossfader row
   the owner changed is left alone. The file is backed up first, as above.
-  The note `remap_factory` writes says "plan 15", not "plan 09".
+  The note `remap_factory` writes says "plan 15", not "plan 09". *As
+  built:* only the crossfader's note (and OVERDUB's, WP2) says plan 15;
+  the three rows plan 09 moved keep their note (`routing.APC_REMAP_PLAN`;
+  §8, WP3).
 - The OUTPUT page: `self._row("output.dim")` first on the page. The
   overlay's ground stays where it is, on that page, shown only when the
   config allows overlay. The footer shows `dim 40%` in the warning colour
   while `output.dim` is under 1, so a dark picture is never a mystery.
+  *As built:* at 0 it reads `dim black` (the param's own text).
 - No blackout button (roadmap §6).
 - **The seam for plan 21**: `dim_pass(target, vp, factor, opaque)` takes
   the factor. Plan 21 calls it once per output with
@@ -734,6 +758,18 @@ dim follows it"; the key-modifier row gains CONTROL and the chord rule),
 overturn" with its cost to reverse), `plans/README.md` (a row for this
 plan), `11-hand-checks.md` (§9 below as group K; its opening paragraph;
 check 1's list of keys), and this file's "As built".
+
+*As built:* the register gained rows **34–44**, more forks than the
+eight listed above — 34 fork 1, 35 fork 4, 36 fork 5, 37 fork 6, 38
+fork 7, 39 fork 8, 40 forks 9 and 10, 41 fork 12, 42 forks 13–16, 43
+fork 17, 44 fork 19 — each with a DECISIONS row marked as built on a
+recommendation. Forks 2, 3, 11 and 18 are about how the code is put
+together and have no register row. WP5 also touched `CHECKPOINT.md`,
+`15-21-roadmap.md` (one pointer and "group K") and `AUDIT-2026-09.md`
+(row R13, the pickup gap WP3's review found), and wrote the WP4
+sentences of every document from this plan's WP4 section before WP4's
+PR existed; they are marked "plan 15 WP4" and are reconciled when it
+lands.
 
 ## 3. Parameter budget
 
@@ -1115,13 +1151,364 @@ one condition.
 
 ## 8. As built
 
-Filled as the work packages land.
+Filled as the work packages land. Written by WP5 from each PR's "As
+built" paragraph, every statement checked against the code on
+`plan-15-integration` at 997a39c (WP3, WP1 and WP2 merged; 1105 tests
+pass, 1 skipped). Where this section and §2 differ, this section is the
+code; §2 carries an "as built:" note at each such place.
+
+**What has been seen, and by whom.** Nothing here was tried by a person
+at the rig: no key pressed, no APC40 control moved, no hand tracked, no
+projector or glass looked at. Three kinds of evidence exist, and the
+entries below say which is which:
+
+- *tests*: the named pytest nodes, on fake MIDI ports, offscreen
+  framebuffers and headless imgui;
+- *demos*: the scripts under `tools/`, each on a temp home of its own,
+  with their output kept under `docs/plans/assets/15-safety-net/`
+  (reported by the agent that built the package);
+- *seen in a scripted launch by the orchestrator*: the real app
+  (`uv run hyperspace`) started against a temp home on a laptop and
+  driven from a script — the master dim set to 50 %, a preset load
+  leaving it there, then black, then full; ten slider writes becoming
+  one undo step and a preset load one step, undone and redone through
+  the `edit.undo` / `edit.redo` triggers; home, then undo. That is a
+  launch on a laptop with no desk, camera or second screen attached, not
+  a session at the machine.
+
+Hand checks 48–57 (group K of `11-hand-checks.md`) are what the machine
+still owes.
+
+### WP3 — Master dim on the crossfader (PR #81, merged e7ad6ce)
+
+**Built.** `output.dim` (`Output.register`, `overlay.py`): continuous
+0–1, group `output`, `persist=False, modulatable=False`, no config key,
+no `overlay.*` alias; the setter clamps. `app.frame` hands it to the
+renderer beside the ground (`h.renderer.dim = getattr(h.output, "dim",
+1.0)`). `Renderer._draw_frame` (`render.py`) ends with
+`self.dim_pass(target, vp, dim, opaque=fx.opaque)` when `dim < 1.0`,
+after `self.ghost.draw(...)`: one full-screen triangle, blending only —
+`(ZERO, SRC_ALPHA, ZERO, ONE)` on an opaque ground (colour × factor,
+alpha untouched), `(ZERO, SRC_ALPHA, ZERO, SRC_ALPHA)` on overlay's
+see-through ground (fork 12). At 1 the pass does not run. The crossfader's
+row in `apc40.DEFAULT_MAP` is `_cc("output.dim", CC_XFADE, 0, ring=0)`,
+no layer; `routing.APC_REMAP` swaps the exact old factory row
+(`cc:0:15 → overlay.bg`) in an existing `bindings.json`, after
+`routing.backup`. `MidiIO.redraw(load=True)` clears a fader's catch only
+when its param moved (fork 19; below). `output.dim` is the OUTPUT page's
+first row (`Panel._page_output`, `ui.py`), and the footer reads
+`dim 40%` in the warning colour on every page while the dim is under 1.
+
+**Differs from §2, and why.**
+
+- **The footer at zero reads `dim black`**, not `dim 0%`: it prints the
+  param's own text (`Output._dim_text`), which says "black" only at 0 and
+  "100%" only at full — a value just inside either end reads 1 % or 99 %
+  (review of PR #81), so the readout never says full while the picture is
+  dimmed.
+- **Only the crossfader's remap note says "plan 15".** The three older
+  rows (TAP TEMPO, NUDGE ±) were moved by plan 09 and `test_routing.py`
+  pins their note text. `routing.APC_REMAP_PLAN` names the plan per
+  source; a source not in it is plan 09's. It stays a side table because
+  `test_the_apc_migration_tables_agree_with_the_default_map` unpacks
+  `APC_REMAP`'s values as three fields.
+- **`dim_pass` returns a bool** (True when it dimmed) and clamps the
+  factor to 0–1. A program the driver refuses is recorded on
+  `Renderer.dim_error` and not asked for again until `on_reload` clears
+  it — the ghost pass's behaviour. The OUTPUT page prints the error under
+  the dim row ("… — the picture is not dimmed").
+- **Fork 19's rule has five conditions, not one** (`MidiIO.redraw`): a
+  load clears a fader's catch when its param no longer exists, or the
+  adapter has no last write for it (`_writes`), or the fader itself has
+  no last reading (`Binding.last_hw is None`), or the param is more than
+  `PICKUP_TOL` from the adapter's last write, or more than `PICKUP_TOL`
+  from where **this fader** last was (`last_hw`). The last one came from
+  the review: `_writes` is per param, and another control on the same
+  param may have made the last write.
+- **`app.frame` reads the dim with `getattr`**, so an `Output` made
+  before a hot reload brought the attribute does not raise every frame
+  (review).
+- **The OUTPUT row is drawn only when `output.dim` is registered**, so a
+  panel over a registry without it still draws.
+- **An owner's crossfader row identical to the old factory row is
+  swapped**: "the exact factory row" cannot tell the two apart. The
+  backup and the stderr note are the trace.
+- `overlay.bg` stays registered as an alias of `output.bg`; no factory
+  row binds it now. (`overlay.py`'s module docstring still says the
+  factory table binds "the alias ids … for those rows": true of
+  `overlay.on` and `overlay.passthrough`, no longer of `overlay.bg`. Its
+  comment in `Output.register` was corrected; the docstring sentence is
+  code and is left for a code PR.)
+- `tests/test_desk.py::_old_map` (the frozen pre-plan-13 map) has its
+  crossfader pair changed to `output.dim`, the way the `theme.select`
+  pair was changed for plan 13 WP2.
+
+**Found and not fixed** (filed as `AUDIT-2026-09.md` row R13): a fader
+moved while its messages are swallowed — a Learn armed, or its row
+disabled — stays caught and jumps on its next message. It predates this
+plan; a preset load used to heal it by accident, by clearing every catch.
+
+**Tests.** `tests/test_render.py`: `test_dim_at_one_is_the_old_frame_exactly`,
+`test_dim_scales_the_colour_and_leaves_an_opaque_grounds_alpha`,
+`test_dim_at_zero_is_black_and_opaque`,
+`test_dim_is_after_the_effects_and_the_ghost_hands`,
+`test_dim_fades_a_see_through_ground`,
+`test_the_history_never_holds_the_dim`,
+`test_a_dim_program_the_driver_refuses_leaves_the_frame_and_says_why`
+(not in §5's table). `tests/test_overlay.py::test_dim_is_a_rig_setting_that_starts_bright`;
+`tests/test_midi.py::test_the_crossfader_dims_with_soft_pickup`;
+`tests/test_desk.py::test_the_crossfader_keeps_its_hold_across_a_preset_load`;
+`tests/test_routing.py::test_an_old_crossfader_row_moves_to_the_dim_with_a_backup`;
+`tests/test_ui_shell.py::test_the_dim_is_first_on_output_and_the_footer_says_so_while_dimmed`
+(not in §5's table). Extended:
+`tests/test_presets.py::test_a_preset_load_never_touches_a_session_param`,
+`tests/test_app_boundary.py::test_the_frame_runs_in_the_documented_order`.
+The PR reports three of them checked against a deliberately broken
+build (the old `redraw` rule, the ghost pass removed, alpha scaled on an
+opaque ground): each failed as it should.
+
+**Demo.** `docs/plans/assets/15-safety-net/dim.png`, written by
+`uv run python tools/dim_shots.py`: one frame (a 24-cell, the `warp`
+effect on, two synthetic ghost hands) at dim 1.0, 0.5, 0.15 and 0. The
+script printed mean brightness 1.000 / 0.504 / 0.150 / 0.000 of full,
+and the lowest alpha in every tile was 255. An offscreen render.
+
+**Not verified.** That CC 0 is the crossfader's **left** end (read from
+the old row's comment, not from the device: hand check 55; the other way
+round is a one-line change). The pickup feel, and whether the bottom of
+the throw is too sudden on the glass (the multiply is linear). The pass
+on the real windows: it ran only on offscreen framebuffers without
+multisampling in the tests, and in the orchestrator's scripted launch on
+a laptop window — never fullscreen, in overlay over a desktop, or on the
+Pepper's Ghost glass. Hot reload of `render.py` on a live renderer. The
+"one load in ten" behind fork 19 is worked out, not measured.
+
+### WP1 — Undo and the trash (PR #82, merged 4b5a587)
+
+**Built.** `hyperspace/undo.py`, importing nothing from the package.
+`Undo.tick(now)` runs once a frame in `app.frame`, after
+`router.follow_macros()` and before `hands_io.poll`, in its own guarded
+block. It compares a fingerprint — the watched ids, their bases, the
+performer rows, the preset-layer rows, the macros and the tag — with
+last frame's; a change opens a step, `SETTLE_S` (0.4 s) of quiet closes
+it. Floats compare within `REL_TOL` / `ABS_TOL`. `undo.push(label, *,
+load=False)` is called before each replacing action, at every site in
+the thirteen rows of §2's table (`Presets.load_doc`, `Project.load`,
+`Project.new`, `Library._apply_doc`, `Library.reset`, `Learn._place`,
+`Learn.learn_source`, `MidiIO._learned`, `MidiIO.unbind`,
+`hands.panel.ctx_rows`, and `ui_routing.page` / `desk` / `macros` /
+`answer`). A restore (`Undo._restore`) puts back only what differs:
+`Bindings.set_routes`, `Bindings.set_desk(rows, load=False)`,
+`set_macros`, then `Registry.restore` for the bases (up to `PASSES` = 3),
+then `Router.sync_macros` (`on_restore`), then the marks. `library.Marks`
+and `Project.mark` / `remark` carry "what is loaded" on a load step.
+`routing.MODIFIERS` gains `CONTROL`, `app.Keys.control()` reads it,
+`Router.keys` fires a row only when its modifiers equal the held ones
+that some row on that key names, and four `LOOP_KEY_ROWS` fire the new
+`edit.undo` / `edit.redo` triggers (`build_registry`, group `ui`,
+`modulatable=False`). `library.to_trash`; `Library.save_as` and
+`Library.delete` call it; `Library.groups()` skips `trash`. The footer's
+message slot is `Panel._message` / `Panel._footer` (`ui.MESSAGE_S` =
+4 s). `hotreload.MODULES` has `undo` after `tapers`; the `Undo` and the
+`Marks` are reload targets. The `Undo` is built in `app.main` after
+`library.project.load_startup()`, so a launch starts with an empty
+stack.
+
+**Differs from §2, and why.**
+
+- **The marks carry a fourth item**: the loaded preset's `note` (which a
+  save writes back into the file) with its load's `notes` and
+  `desk_notes`, so after undoing a load the panel stops showing the
+  undone preset's load notes (review). `Library.warning` and the load
+  listeners (the dream banner) are not re-run.
+- **`Marks` has `lands()` and `mend()`, and a `Step` carries `lands`**
+  (review): undoing a scene pick restores `scene.select`, whose setter
+  adopts that scene and so moved the band strip's landed name — a later
+  Save could have written a user preset's look under a factory scene's
+  name. `lands()` is read each quiet frame; after the restore of a step
+  that is not a load, `mend` gives back the step's own landed state to
+  each group the restore itself moved, and leaves every other group
+  alone (so fork 2 (c) stands).
+- **`Project.same_show`** (name, path, factory, stem) decides whether
+  `Marks.put` calls `remark`.
+- **A step whose only difference is strips on another band layout is
+  consumed** by Ctrl+Z, with the status "undid … (the bands have changed:
+  their strips were left)". §2 says a step with nothing to put back is
+  dropped; dropping this one would have made the press undo the step
+  before it instead.
+- **A load step with equal values but another name is kept** (loading a
+  preset identical to the loaded one): its marks differ.
+- **An action clears the redo stack only when it closes with something
+  to put back** (review): a refused unbind or a load that fails changes
+  nothing and must not cost the redo. A gesture clears it at once.
+- **A row an undo brings back picks up afresh** (review): a row not live
+  at restore time comes back with the row type's `_RUNTIME` fields
+  (catch, last reading, last feedback) at their defaults; a row still in
+  the table is handed back as the live object, its catch intact
+  (`Undo._rows_for`).
+- **Two pushes with no tick between them are one action, except a load
+  pushed under an open action that is no load** (review): a delete at
+  the end of one frame and an F-key at the start of the next were
+  merging into one step.
+- **The two frames after a restore** (`ABSORB_FRAMES`) absorb any
+  change, an edit made in them included; that edit is then not a step of
+  its own.
+- **`undo.push`, `undo.undo` and `undo.redo` at module level catch every
+  exception** (`undo._guarded`), print it and set the status line: a bug
+  in undo cannot fail a preset load or the unguarded key block of the
+  frame.
+- **The tick was made cheaper** than the first cut (about 230 µs): the
+  watched filter runs only when the registry holds other `Param` objects
+  than last frame (a list compared by identity), rows are read with one
+  `attrgetter`, and the preset layer is read as the rows whose `layer`
+  is `"preset"`. Measured by `tools/undo_demo.py` on the party show (532
+  params, 455 watched, 20 routes, 42 desk rows): idle, median 81 µs,
+  99th percentile 136 µs; during a drag, median 79 µs.
+- **`remap_factory` matches a new key row by its chord**, not its source
+  string (review): a user's `key:SUPER+SHIFT+Z` holds ⌘⇧Z as
+  `key:SHIFT+SUPER+Z` does. Its note for an added key row reads "(the
+  keys of plans 09, 11 and 15)".
+- **`Library.delete` raises `LibraryError` when the unlink itself fails**
+  (it raised a bare `OSError`). `library._json_text` is the one spelling
+  of a document's text, so `save_as` can tell whether the file on disk
+  already says the same.
+- **The footer shows a library line only when its string changes**: the
+  same warning set twice in a row is shown once (the library has no
+  "said at"). The undo's line is keyed by `said_at` too, so "nothing to
+  undo" shows on every press.
+- **Tempo is not restored** by undoing a show load (fork 5: the `tempo`
+  group is left out); after such an undo the show's dirty dot can light
+  if the two shows' tempi differ.
+- **The chord rule changes two things for hand-made rows**: a bare
+  `key:Z` row no longer fires on ⇧Z (the factory Z rows name SHIFT), and
+  two one-modifier rows on one key no longer both fire on the
+  two-modifier chord. Both are the rule fork 1 asks for.
+- `to_trash` and `routing.backup` stay two "copy aside" helpers: they
+  name files differently, and `library` imports `routing` only lazily.
+
+**Tests.** `tests/test_undo.py`: the twenty-two of §5's table, and five
+more — `test_an_idle_app_makes_no_step` (the real `app.frame` over a real
+`Host` with fake ports, two synthetic hands, a synthetic sweep and the
+renderer drawing offscreen: each of the party show's eight presets
+loaded, 300 frames after each; the stack ends as the eight loads and
+nothing else), `test_undoing_a_scene_pick_names_the_band_preset_it_was_on`,
+`test_an_action_that_changes_nothing_keeps_the_redo`,
+`test_a_row_that_undo_brings_back_picks_up_afresh`,
+`test_a_load_right_after_another_action_is_its_own_step`. Elsewhere, as
+§5 names them: `test_learn.py::test_a_learn_is_one_undo_step`,
+`test_midi.py::test_an_unbind_is_one_undo_step`,
+`test_ui_routing.py::test_a_route_delete_and_a_replace_are_undo_steps`,
+`test_desk.py::test_undoing_a_desk_row_redraws_and_keeps_the_layer_and_the_faders_catch`,
+`test_routing.py::test_a_chord_fires_only_its_own_row`,
+`::test_an_older_file_gets_the_undo_keys_where_they_are_free`,
+`test_ui_shell.py::test_the_footer_says_what_was_undone`, and the five
+trash tests in `test_library.py`. `test_app_boundary.ORDER` has
+`undo.tick` after `router.follow_macros`.
+
+**Demo.** `docs/plans/assets/15-safety-net/undo-demo.txt`, the output of
+`uv run python tools/undo_demo.py` (a slider drag, a knob sweep through
+`MidiIO`, two hands for two seconds, a load, Ctrl+Z down the stack, redo,
+the trash, the tick's cost). `undo-footer.png` and `undo-footer-load.png`
+(`tools/undo_shot.py`: the panel in a hidden window, the footer reading
+"undid Brightness 2.00× → 2.96×" and "undid load FACES").
+
+**Not verified.** Ctrl+Z and ⌘Z reaching the app through GLFW from a real
+keyboard (hand check 48). Whether 0.4 s feels right for a drag that
+pauses, and whether the footer line is legible from where the desk
+stands. Hot reload of `undo.py` with a live stack. The trash on a full or
+read-only disk: the failure paths are tested by faking `to_trash`.
+
+### WP2 — Home (PR #83, merged 997a39c)
+
+**Built.** `Project.home()` (`library.py`): with no "starts on",
+`Library.warning` is `library.HOME_UNSET` ("home: this show names no
+'starts on' preset — pick one on the PRESETS page") and nothing loads;
+otherwise `undo.push("home → <name>", load=True)` and then
+`load_startup()`. The trigger `preset.home` (`build_registry`, the bank
+block; group `preset`, modulatable, `lit=lambda: bool(bank.startup)`).
+`("HOME", "preset.home", "fire")` in `routing.LOOP_KEY_ROWS`;
+`_note("preset.home", N_OVERDUB)` in `apc40.DEFAULT_MAP`, no layer, so
+invariant; one `APC_NEW_ROWS` entry for an existing `bindings.json`. The
+PRESETS page's label reads `starts on / home` (`ui_presets.starts_on`)
+and its tooltip names the key and the button; the cheat sheet has
+`("Home", "home preset (fn ←)")`. Forks 7 and 9 as recommended.
+
+**Differs from §2, and why.**
+
+- **A push only when there is something to load.** `Project.home` pushes
+  only when the "starts on" file exists (`lib.path_of`), so a home that
+  loads nothing leaves no step open for a later slider move to join. A
+  "starts on" whose file is gone says `startup: no preset '<name>'`, as
+  a launch does.
+- **Home clears its own warning.** A successful home clears `HOME_UNSET`
+  if it is still showing, and so does picking a "starts on"
+  (`ui_presets.set_starts_on`; review). No other warning is touched.
+- **The note for an added APC row names its plan.** `remap_factory`
+  said "(the APC40 map of plan 09)" for every added row;
+  `APC_REMAP_PLAN` now names added sources too, and the OVERDUB note says
+  plan 15.
+- **A `bindings.json` migrated from a pre-plan-09 `midi_map.json` gains
+  the OVERDUB row on the launch after the migration**, not the same one:
+  `Bindings.load`'s legacy path does not run `remap_factory`
+  (`test_old_midi_map_migrates_into_bindings_json` says so). METRONOME
+  behaved this way already. Hand check 57 says it.
+- The footer's slot shows a line only when it changes, so a second press
+  of home on a show with no "starts on" shows nothing new in the footer;
+  the warning stays on the PRESETS page. Left for plan 16.
+- The `apc40.py` comment above the protocol table still lists
+  `N_OVERDUB` among the notes "unused today": §2 gives that comment to
+  WP4.
+
+**Tests.** `test_presets.py::test_home_loads_what_the_show_starts_on`,
+`::test_home_with_no_starts_on_says_so_and_loads_nothing`,
+`::test_home_is_one_undo_step`;
+`test_desk.py::test_overdub_is_home_on_both_layers_and_is_lit`;
+`test_routing.py::test_an_older_file_gets_home_where_it_is_free`;
+`test_ui_presets.py::test_starts_on_reads_starts_on_home`; extended,
+`test_learn.py::test_learn_refuses_the_global_layer_and_invariant_controls`
+(OVERDUB refuses a Learn, and the press sends nobody home).
+
+**Demo.** `docs/plans/assets/15-safety-net/home-demo.txt`, the output of
+`uv run python tools/home_demo.py` (OVERDUB on each layer, the Home key
+row, a show with no "starts on", a refused Learn, a preset's desk row on
+OVERDUB dropped). `home-presets-page.png` (`--shot`): the PRESETS page
+reading "STARTS ON / HOME ▾ TUMBLE", B11 lit on the on-screen desk, the
+cheat sheet's Home row.
+
+**Not verified.** That the APC40 mk1 lights OVERDUB on velocity 1 and
+sends note 0x40 on channel 0 (both from the protocol table in
+`apc40.py`); that fn+← reaches GLFW as `KEY_HOME` on the laptop; the
+owner's real `bindings.json` gaining the rows (only a temp copy was
+migrated). Hand checks 54 and 57.
+
+### WP4 — Save-as on the desk
+
+WP4 — filled when its PR lands.
+
+### The orchestrator's own change (commit 1d14f71)
+
+`tests/conftest.py` sets `HYPERSPACE_HOME` in `os.environ` directly, and
+puts the earlier value back after the test, where it used
+`monkeypatch.setenv`. A test that calls `monkeypatch.undo()` mid-way
+dropped the variable and ran its remaining lines against the owner's
+real home. The same file gained an autouse fixture that uninstalls any
+`Undo` a test installed (`undo.install(None)`; PR #82), since the app has
+one per process.
 
 ## 9. Appendix — group K for `11-hand-checks.md`
 
 WP5 pastes this in after group J (its heading at the level of the other
 groups'), and adds "then plan 15's group K" to the file's opening
 paragraph. The text is final except for PR numbers.
+
+*As built:* pasted by WP5, and changed there where the builds changed a
+detail (the footer's `dim black`, home's warning text, the note about a
+home migrated from `midi_map.json`, the PR numbers). Two headless
+commands below do not select what they mean to and are spelled
+differently there: check 55's `-k dim` also filters the two nodes named
+after it (one of them out), and check 56's two `-k` on one line leave
+only the second in force. `11-hand-checks.md` group K is the text to
+run; the copy below is the plan's, kept as written.
 
 ### K. Plan 15 — undo, home, the dim, save-as on the desk — added 2026-10-04
 
