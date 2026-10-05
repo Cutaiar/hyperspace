@@ -1,0 +1,7 @@
+plan 20 WP1: frame time, 1920x1080 offscreen, no MSAA, ctx.finish() around each frame,
+median of 240 frames, 2 runs; face picture 1024x1024; GPU: Apple M3 Max
+
+no effects                                                                         0.91 / 0.89 ms
+frame chain, four effects (Plasma, Kaleidoscope, Zoom burst, Hue cycle)            1.45 / 1.79 ms
+the same four aimed at the faces, none on the frame                                0.91 / 0.92 ms
+four on the frame + four others on the faces (Warp, Acid, Wobble, Trip colour)     1.45 / 1.44 ms
