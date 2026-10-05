@@ -338,6 +338,33 @@ def test_a_preset_carries_the_macros(rig):
 
 # ---------------------------------------------------------------- the bank
 
+def test_a_step_or_cycle_on_the_bank_skips_empty_slots(rig):
+    """Audit R14: `preset.select` has twenty-four choices and most are
+    empty. A learned step or toggle row walks the filled slots only: a step
+    stops at the last filled one, a cycle wraps to the first; nothing ever
+    lands on an empty slot. Setting a slot outright is unchanged."""
+    pr, select = rig.lib.project, rig.reg["preset.select"]
+    pr.put_slot(12, pr.bank[2])                   # F1–F8 filled, and slot 13
+    filled = [k for k in range(SLOTS) if select.has(k)]
+    assert filled == [*range(F_KEYS), 12]
+    select.set(6)
+    select.step(1)
+    assert select.value == 7
+    select.step(1)
+    assert select.value == 12                     # over slots 9–12, not onto slot 9
+    select.step(1)
+    assert select.value == 12                     # the last filled: a step stays
+    select.cycle(1)
+    assert select.value == 0                      # a cycle wraps to the first filled
+    select.cycle(-1)
+    assert select.value == 12
+    select.step(-2)
+    assert select.value == 6
+    select.step(3)
+    assert select.value == 12
+    assert pr.active == 12 and rig.lib.current("presets") == pr.bank[12]
+
+
 def test_the_bank_names_the_house_presets(rig):
     pr = rig.lib.project
     # plan 19 WP1: twenty-four slots; the house show fills the F-keys' eight

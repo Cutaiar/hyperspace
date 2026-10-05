@@ -378,7 +378,9 @@ class Param:
                 self.set_position(self.position() + n)
         elif k is Kind.ENUM:
             m = len(self.names)
-            if m:
+            if m and self.has is not None:
+                self.set(self._walk(n, wrap=False))
+            elif m:
                 self.set(_clamp(self.base + n, 0, m - 1))
         elif k is Kind.TOGGLE:
             if n:
@@ -433,9 +435,32 @@ class Param:
         t = self.taper
         return (t.map(0), t.map(t.steps)) if t is not None else (self.lo, self.hi)
 
+    def _walk(self, n: int, *, wrap: bool) -> int:
+        """Where n steps land on an enum whose choices can be empty
+        (`has`, e.g. the bank's slots): each step goes to the next choice
+        that holds something, so a learned step or toggle never stops on
+        an empty slot (audit R14). Past the last filled choice a step
+        stays put and a cycle wraps; with nothing filled, nothing moves."""
+        m, k = len(self.names), int(self.base)
+        d = 1 if n > 0 else -1
+        for _ in range(abs(int(n))):
+            j = m if (wrap and k < 0 and d < 0) else k    # (nothing loaded: -1)
+            for _ in range(m):
+                j += d
+                if wrap:
+                    j %= m
+                elif not 0 <= j < m:
+                    break
+                if self.has(j):
+                    k = j
+                    break
+        return k
+
     def cycle(self, n: int = 1) -> None:
         """Like step, but an enum wraps around."""
-        if self.kind is Kind.ENUM and self.names:
+        if self.kind is Kind.ENUM and self.names and self.has is not None:
+            self.set(self._walk(n, wrap=True))
+        elif self.kind is Kind.ENUM and self.names:
             self.set((self.base + n) % len(self.names))
         else:
             self.step(n)

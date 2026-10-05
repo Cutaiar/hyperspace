@@ -139,6 +139,29 @@ def test_pickup_catches_when_knob_reaches_value(rig):
     assert b.norm == pytest.approx((target + 20) / 127, abs=PICKUP_TOL)
 
 
+def test_a_fader_moved_while_its_row_is_disabled_has_to_pick_up_again(rig):
+    """Audit R13: a disabled row's messages are passed over, and the fader
+    travels without its param. Re-enabled, its next message must not write
+    the whole distance: the row picks up again from where the fader is."""
+    b = rig.reg["view.bright"]
+    row = next(x for x in rig.midi.bindings if x.target == "view.bright" and x.kind == "cc")
+    b.set_norm(0.5)
+    mid = round(0.5 * 127)
+    push(rig, cc(0x30, mid))
+    assert row.caught
+    row.enabled = False
+    push(rig, cc(0x30, 120))                  # moved while the row is off
+    assert b.norm == pytest.approx(mid / 127, abs=PICKUP_TOL)
+    assert not row.caught and row.last_hw == pytest.approx(120 / 127)
+    row.enabled = True
+    push(rig, cc(0x30, 118))                  # was: a jump from 0.5 to 0.93
+    assert b.norm == pytest.approx(mid / 127, abs=PICKUP_TOL)
+    push(rig, cc(0x30, 90), cc(0x30, mid))    # brought back through the value: caught
+    assert row.caught
+    push(rig, cc(0x30, mid - 10))
+    assert b.norm == pytest.approx((mid - 10) / 127, abs=PICKUP_TOL)
+
+
 def test_fader_without_pickup_jumps(rig):
     for x in rig.midi.bindings:
         if x.target == "master.gain":

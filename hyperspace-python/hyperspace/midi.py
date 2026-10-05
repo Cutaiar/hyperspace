@@ -471,6 +471,8 @@ class MidiIO:
         if lrn.learning is not None and (kind != "note" or value > 0):
             source = Binding.midi_source(kind, ch, number)
             if lrn.accepts(source) and not self.table.is_invariant(Binding(source, lrn.learning)):
+                for b in self.table.dispatch(kind, ch, number):
+                    self._passed_over(b, value)
                 self._learned(kind, ch, number, value)
                 return
         # the layer is read at the press (D12): a note-off goes to the rows
@@ -483,10 +485,14 @@ class MidiIO:
                 rows = self.table.dispatch(kind, ch, number)
         else:
             rows = self.table.dispatch(kind, ch, number)
+            for b in self.table.route(kind, ch, number):    # (dispatch leaves these out)
+                if not b.enabled:
+                    self._passed_over(b, value)
         timed = []
         for b in rows:
             p = self.reg.get(b.target)
             if p is None or not b.enabled:
+                self._passed_over(b, value)
                 continue
             if b.op == "hold":      # timed, never applied; only a note has a press
                 timed.append(b)
@@ -495,6 +501,17 @@ class MidiIO:
         if timed and kind == "note" and value > 0:
             self._hold_state()[0][(ch, number)] = (self._now(), timed)
             self._light_bars()
+
+    @staticmethod
+    def _passed_over(b: Binding, value: int) -> None:
+        """A message its row did not apply (the row is disabled, or an
+        armed learn took it): the fader or knob moved without its param,
+        so a pickup row has to pick up again from where the control is
+        now — its next applied message would otherwise write the whole
+        distance it travelled meanwhile (audit R13)."""
+        if b.kind in ("cc", "pitch") and b.op == "abs" and b.pickup:
+            b.caught = False
+            b.last_hw = value / (16383.0 if b.kind == "pitch" else 127.0)
 
     # ---- hold rows ----
 
