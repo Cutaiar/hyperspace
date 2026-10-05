@@ -12,7 +12,9 @@ window, no MIDI port, no audio device.
 Both land in docs/plans/assets/16-paper-cuts/. The transcript opens an
 effect by name, moves it and another through the stack, and loads
 presets with different orders: the same effect stays open throughout.
-The shot is the FX page with one effect on and another open but off.
+The shots are the FX page with two effects on and another open but off
+(fx-chips.png), and an off effect's strip saying why it is not running
+(fx-idle.png, plan 16 WP3).
 """
 
 # undo_demo is imported before anything of hyperspace's, on purpose: it sets
@@ -122,6 +124,7 @@ def shots() -> None:
     from OpenGL import GL
     from PIL import Image
 
+    from hyperspace import ui_fx
     from hyperspace.app import CONTROL_SIZE
     from hyperspace.ui import PAGE_KEYS, Panel, apply_style, load_fonts
 
@@ -178,6 +181,11 @@ def shots() -> None:
     draw()
     shoot("fx-chips.png", f"on: {fx.chain()}, open: {fx.selected()} "
                           f"(on={fx.values['fractals']['on']})")
+    # plan 16 WP3: an open effect that is off says so, with "turn on" beside
+    # the line and its rows dimmed
+    fx.select("kaleido")
+    draw()
+    shoot("fx-idle.png", f"open: {fx.selected()}, why idle: {ui_fx.why_idle(fx, 'kaleido')}")
     impl.shutdown()
     glfw.terminate()
 

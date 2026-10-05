@@ -632,7 +632,7 @@ class PageRig:
     """The FX page over a real Panel in a headless imgui context, with the
     mouse: `rects` holds every button's screen rect from the last frame."""
 
-    def __init__(self, tmp_path, monkeypatch):
+    def __init__(self, tmp_path, monkeypatch, r=None):
         from imgui_bundle import imgui, implot
 
         from hyperspace import ui_fx
@@ -654,31 +654,78 @@ class PageRig:
         io.backend_flags |= imgui.BackendFlags_.renderer_has_textures
         apply_style()
         load_fonts()
-        chain = Analyzer(Analyser())
-        control = Control(chain)
-        audio = SimpleNamespace(chain=chain, on=False, mode="", error="", label="", sr=48000.0)
-        self.st = FxState()
-        lib = Library(tmp_path, period=0.0)
-        view = ViewState()
-        self.reg = build_registry(view, control, audio, lib.project, fx=self.st)
-        lib.attach(self.reg)
-        self.panel = Panel(control, audio, view, bank=lib.project, registry=self.reg,
-                           library=lib)
+        if r is None:                    # a bare rig; `r` is test_undo.boot's, with an Undo
+            chain = Analyzer(Analyser())
+            control = Control(chain)
+            audio = SimpleNamespace(chain=chain, on=False, mode="", error="", label="",
+                                    sr=48000.0)
+            self.st = FxState()
+            lib = Library(tmp_path, period=0.0)
+            view = ViewState()
+            self.reg = build_registry(view, control, audio, lib.project, fx=self.st)
+            lib.attach(self.reg)
+            self.panel = Panel(control, audio, view, bank=lib.project, registry=self.reg,
+                               library=lib)
+        else:
+            self.st, self.reg = r.fx, r.reg
+            r.audio.__dict__.update(mode="", error="", label="", sr=48000.0)
+            self.panel = Panel(r.control, r.audio, r.view, bank=r.lib.project, registry=r.reg,
+                               library=r.lib)
         self.panel.renderer = SimpleNamespace(fx=SimpleNamespace(state=self.st,
                                                                  error=lambda n: ""))
         self.rects: dict[str, tuple[float, float, float, float]] = {}
-        real = imgui.button
+        self.texts: list[str] = []       # every text_colored line of the last frame
+        self.disabled: dict[str, int] = {}   # item id → begin_disabled depth it was drawn at
+        self.veils: list[tuple[float, float, float, float]] = []   # ui_fx._dim's rects
+        depth = [0]
 
-        def button(label, *a, **k):
-            hit = real(label, *a, **k)
-            lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
-            self.rects[label.split("##", 1)[-1]] = (lo.x, lo.y, hi.x, hi.y)
-            return hit
-        monkeypatch.setattr(imgui, "button", button)
+        def item(fn):
+            real = getattr(imgui, fn)
+
+            def rec(label, *a, **k):
+                out = real(label, *a, **k)
+                lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+                key = label.split("##", 1)[-1]
+                self.rects[key] = (lo.x, lo.y, hi.x, hi.y)
+                self.disabled[key] = depth[0]
+                return out
+            monkeypatch.setattr(imgui, fn, rec)
+        for fn in ("button", "checkbox", "slider_float", "slider_int", "combo"):
+            item(fn)
+        real_text, real_begin, real_end = (imgui.text_colored, imgui.begin_disabled,
+                                           imgui.end_disabled)
+
+        def text_colored(col, text):
+            self.texts.append(text)
+            return real_text(col, text)
+
+        def begin_disabled(*a, **k):
+            self._stack.append(bool(a[0] if a else k.get("disabled", True)))
+            depth[0] = sum(self._stack)
+            return real_begin(*a, **k)
+
+        def end_disabled():
+            self._stack.pop()
+            depth[0] = sum(self._stack)
+            return real_end()
+        self._stack: list[bool] = []
+        monkeypatch.setattr(imgui, "text_colored", text_colored)
+        monkeypatch.setattr(imgui, "begin_disabled", begin_disabled)
+        monkeypatch.setattr(imgui, "end_disabled", end_disabled)
+        real_dim = getattr(ui_fx, "_dim", None)
+        if real_dim is not None:
+
+            def dim(lo, hi):
+                self.veils.append((lo.x, lo.y, hi.x, hi.y))
+                return real_dim(lo, hi)
+            monkeypatch.setattr(ui_fx, "_dim", dim)
 
     def frame(self) -> None:
         imgui = self.imgui
         self.rects.clear()
+        self.texts.clear()
+        self.disabled.clear()
+        self.veils.clear()
         imgui.new_frame()
         imgui.set_next_window_pos(imgui.ImVec2(0, 0))
         imgui.set_next_window_size(imgui.ImVec2(*self.size))
@@ -810,3 +857,208 @@ def test_selecting_an_effect_is_not_an_undo_step(tmp_path):
     undo.undo()
     frames(r, 3)
     assert r.reg["fx.warp.order"].base != 99 and st.selected() == "warp"
+
+
+# ---------------------------------------------------------------- an idle effect says why (plan 16 WP3)
+
+def test_why_idle_names_the_first_reason():
+    from itertools import product
+
+    from hyperspace.ui_fx import why_idle
+    st = FxState()
+    v = st.values["warp"]
+    v["on"] = True
+    assert why_idle(st, "warp") is None                       # running
+    # each reason alone, then the order they are named in when several hold
+    v["mix"] = 0.0
+    assert why_idle(st, "warp") == "mix 0"
+    st.mix = 0.0
+    assert why_idle(st, "warp") == "fx mix 0"
+    st.on = False
+    assert why_idle(st, "warp") == "bypassed"
+    v["on"] = False
+    assert why_idle(st, "warp") == "off"
+    # every effect in every state: None exactly when chain() runs it
+    seen = set()
+    for on, bypass, fxmix, mix in product((True, False), (True, False), (1.0, 0.3, 0.0),
+                                          (1.0, 0.5, 0.0)):
+        st.on, st.mix = bypass, fxmix
+        for n in st.names():
+            st.values[n].update(on=on, mix=mix)
+        st.values["acid"].update(on=not on, mix=1.0)           # one effect out of step
+        running = st.chain()
+        for n in st.names():
+            why = why_idle(st, n)
+            assert (why is None) == (n in running), (n, on, bypass, fxmix, mix, why)
+            seen.add(why)
+    assert seen == {None, "off", "bypassed", "fx mix 0", "mix 0"}
+
+
+def test_an_off_effects_strip_says_so_and_turn_on_switches_it_on(fxpage):
+    from hyperspace.ui_fx import IDLE
+    st, reg = fxpage.st, fxpage.reg
+    line = IDLE["off"][0]
+    assert line == "off — nothing below shows until it is on"
+    st.select("warp")
+    fxpage.frame()
+    assert line in fxpage.texts and "idle.fx.warp.on" in fxpage.rects
+    # the line sits over the strip's "on" row, and the rows under it are veiled
+    assert fxpage.rects["idle.fx.warp.on"][3] <= fxpage.rects["fx.warp.on"][1]
+    assert len(fxpage.veils) == 2
+    others = {n: reg[f"fx.{n}.on"].base for n in st.names() if n != "warp"}
+    fxpage.click("idle.fx.warp.on")
+    assert reg["fx.warp.on"].base is True and st.values["warp"]["on"] is True
+    assert {n: reg[f"fx.{n}.on"].base for n in others} == others
+    assert st.selected() == "warp" and st.chain() == ["warp"]
+    fxpage.frame()                                   # running: no line, no chip, no veil
+    assert line not in fxpage.texts and "idle.fx.warp.on" not in fxpage.rects
+    assert not fxpage.veils and not set(fxpage.texts) & {v[0] for v in IDLE.values()}
+
+
+def test_a_bypassed_stack_says_so_on_the_strip(fxpage):
+    from hyperspace.ui_fx import IDLE
+    st, reg = fxpage.st, fxpage.reg
+    st.select("warp")
+    reg["fx.warp.on"].set(True)
+    reg["fx.on"].set(False)
+    fxpage.frame()
+    assert "the whole stack is bypassed" in fxpage.texts
+    assert "idle.fx.on" in fxpage.rects and "idle.fx.warp.on" not in fxpage.rects
+    fxpage.click("idle.fx.on")
+    assert reg["fx.on"].base is True and st.chain() == ["warp"]
+    fxpage.frame()
+    assert "the whole stack is bypassed" not in fxpage.texts and "idle.fx.on" not in fxpage.rects
+    # the two reasons a fader mends: the line, and no chip beside it
+    reg["fx.mix"].set_value(0.0)
+    fxpage.frame()
+    assert "FX mix is at 0" in fxpage.texts
+    assert not [k for k in fxpage.rects if k.startswith("idle.")]
+    reg["fx.mix"].set_value(1.0)
+    reg["fx.warp.mix"].set_value(0.0)
+    fxpage.frame()
+    assert "its mix is at 0" in fxpage.texts
+    assert not [k for k in fxpage.rects if k.startswith("idle.")]
+    assert {v[0] for v in IDLE.values()} & set(fxpage.texts) == {"its mix is at 0"}
+    # the fader that line names is the one row left undimmed
+    assert len(fxpage.veils) == 1
+    assert fxpage.veils[0][1] >= fxpage.rects["fx.warp.mix"][3]
+
+
+def test_the_idle_strips_controls_stay_live(fxpage):
+    st, reg = fxpage.st, fxpage.reg
+    st.select("warp")
+    fxpage.frame()
+    assert reg["fx.warp.on"].base is False and fxpage.veils
+    rows = ["fx.warp.mix", "fx.warp.speed", "fx.warp.blend", "fx.warp.order",
+            *(f"fx.warp.{p.key}" for p in st.specs["warp"].params)]
+    for pid in ("fx.warp.on", *rows):                # no begin_disabled wraps a row
+        assert fxpage.disabled[pid] == 0, pid
+    lo, hi = fxpage.veils[0], fxpage.veils[1]
+    assert lo == pytest.approx(fxpage.rects["fx.warp.mix"])      # the mix beside the check
+    on = fxpage.rects["fx.warp.on"]
+    assert on[2] <= lo[0], "the 'on' check is not dimmed"
+    for pid in rows[1:]:                             # every other row is under the veil
+        x0, y0, x1, y1 = fxpage.rects[pid]
+        assert hi[0] <= x0 and x1 <= hi[2] and hi[1] <= y0 and y1 <= hi[3], pid
+    # a slider under the veil still takes the mouse: press at 9/10 of its throw
+    amount, speed = reg["fx.warp.amount"], reg["fx.warp.speed"]
+    was = amount.base
+    fxpage.click("fx.warp.amount", 0.9)
+    assert amount.base > was and amount.base == pytest.approx(amount.lo + 0.9 * (
+        amount.hi - amount.lo), abs=0.1 * (amount.hi - amount.lo))
+    fxpage.click("fx.warp.speed", 0.25)
+    assert speed.base < 0
+    fxpage.click("fx.warp.mix", 0.5)
+    assert reg["fx.warp.mix"].base == pytest.approx(0.5, abs=0.1)
+    assert reg["fx.warp.on"].base is False           # and none of that switched it on
+    assert st.values["warp"]["amount"] == pytest.approx(amount.base)
+
+
+def test_an_armed_rows_learn_frame_is_drawn_over_the_veil(fxpage, monkeypatch):
+    """The veil is painted after the rows, so it would dim the red frame of
+    a row armed to learn; the frame is drawn again on top, on that row."""
+    from hyperspace import ui_fx
+    st, panel = fxpage.st, fxpage.panel
+    st.select("warp")
+    seen = []
+    real = ui_fx._relearn_frame
+    monkeypatch.setattr(ui_fx, "_relearn_frame",
+                        lambda p, rects: (seen.append(dict(rects)), real(p, rects))[1])
+    panel.learn = SimpleNamespace(learning="fx.warp.speed", arm=lambda pid: None)
+    fxpage.frame()
+    assert len(seen) == 1 and fxpage.veils          # idle: after the veil, once
+    rows = {"fx.warp.mix", "fx.warp.speed", "fx.warp.blend", "fx.warp.order",
+            *(f"fx.warp.{p.key}" for p in st.specs["warp"].params)}
+    assert set(seen[0]) == rows
+    r0, r1 = seen[0]["fx.warp.speed"]
+    assert (r0.x, r0.y, r1.x, r1.y) == pytest.approx(fxpage.rects["fx.warp.speed"])
+    fxpage.reg["fx.warp.on"].set(True)               # running: no veil, nothing to redraw
+    fxpage.reg["fx.on"].set(True)
+    seen.clear()
+    fxpage.frame()
+    assert not seen and not fxpage.veils
+
+
+def test_the_page_fits_with_the_tightest_strip_idle(fxpage, monkeypatch):
+    from hyperspace.ui import PAGE_KEYS, Panel
+    from hyperspace.ui_fx import why_idle
+    imgui, st, reg, panel = fxpage.imgui, fxpage.st, fxpage.reg, fxpage.panel
+    # the worst case for height: an error line showing on every strip as well
+    panel.renderer.fx.error = lambda n: "line 3: made up"
+    over = []
+    draw = Panel._page_fx
+
+    def measured(self, dt):
+        draw(self, dt)
+        over.append(imgui.get_scroll_max_y())
+    monkeypatch.setattr(Panel, "_page_fx", measured)
+    reg["ui.page"].set(PAGE_KEYS.index("fx"))
+    for name in st.names():
+        st.select(name)
+        for reason in ("off", "bypassed"):           # the two lines that carry a chip
+            reg[f"fx.{name}.on"].set(reason != "off")
+            reg["fx.on"].set(reason != "bypassed")
+            assert why_idle(st, name) == reason
+            for _ in range(3):
+                fxpage.texts.clear()
+                imgui.new_frame()
+                panel.draw(1 / 60, 60.0)
+                imgui.end_frame()
+            assert any(t.startswith(("off —", "the whole stack")) for t in fxpage.texts)
+            assert over[-1] == 0, f"the fx page scrolls with {name} open and {reason}"
+
+
+def test_turn_on_is_one_undo_step(tmp_path, monkeypatch):
+    """ "turn on" and "effects on" write a base through Param.set and push
+    nothing: plan 15's watcher makes each one step, and undo takes it back."""
+    from test_undo import boot, frames, labels, settle
+
+    from hyperspace import undo
+    st = FxState()
+    r = boot(tmp_path / "home", fx=st)
+    r.fx = st
+    pushes = []
+    real_push = undo.push
+    monkeypatch.setattr(undo, "push", lambda *a, **k: (pushes.append(a), real_push(*a, **k))[1])
+    rig = PageRig(tmp_path, monkeypatch, r)
+    try:
+        st.select("warp")
+        r.reg["fx.on"].set(False)                    # the stack bypassed and warp off,
+        r.reg["fx.warp.on"].set(False)               # whatever the startup preset left
+        settle(r)
+        start = labels(r)
+        rig.click("idle.fx.warp.on")                 # "turn on": the first reason's chip
+        settle(r)
+        assert r.reg["fx.warp.on"].base is True and r.reg["fx.on"].base is False
+        assert len(labels(r)) == len(start) + 1 and not pushes
+        rig.click("idle.fx.on")                      # now it reads bypassed: "effects on"
+        settle(r)
+        assert r.reg["fx.on"].base is True and st.chain() == ["warp"]
+        assert len(labels(r)) == len(start) + 2 and not pushes
+        for want_stack, want_warp in ((False, True), (False, False)):
+            undo.undo()
+            frames(r, 3)
+            assert r.reg["fx.on"].base is want_stack and r.reg["fx.warp.on"].base is want_warp
+        assert labels(r) == start
+    finally:
+        rig.close()
