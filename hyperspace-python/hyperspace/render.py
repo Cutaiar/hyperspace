@@ -879,11 +879,14 @@ class Renderer:
                 for i in users[key]:
                     self._view_failed(views[i], f"{NAMES[key]}", e)
                 self._rebind(target, vp)
-        if not stats["captures"]:
-            # no view shows the scene: the history and the dream go on
-            # regardless, so switching the scene back on shows no gap
-            stats["captures"] = 1
-            lb.capture(self.scene.tex, self.scene.fbo)
+        # the history, exactly once, from the scene texture, after every
+        # pipeline has composited it: a capture changes the echoes' weights,
+        # ages and tint, so one before a second pipeline's composite would
+        # give two outputs different echoes in one frame. With no view
+        # showing the scene it runs all the same — the history and the
+        # dream go on, so switching the scene back on shows no gap
+        stats["captures"] = 1
+        lb.capture(self.scene.tex, self.scene.fbo)
         if fx_on and not stats["chain_runs"]:
             fx.state.advance_to(t)       # …and so do the effects' clocks
         for i, v in enumerate(views):
@@ -908,11 +911,10 @@ class Renderer:
         lb, fx, ctx = self.lookback, self.fx, self.ctx
         if not fx_on:
             lb.composite(self.scene.tex, dst, cover)
-            self._capture_once(dst, stats)
             return
         # the post pass into the chain's first texture; the chain ends on
-        # `dst`. The history captures the scene, never the hands or the
-        # effects: it is taken from the scene texture, before the hands
+        # `dst`. The history is captured after every pipeline's composite
+        # (`_draw_frame`), from the scene texture: never the hands or effects
         size = self.scene.size
         buf = fx.begin(size)
         if key == HANDS:
@@ -921,7 +923,6 @@ class Renderer:
             ctx.clear(0.0, 0.0, 0.0, getattr(self, "bg_alpha", 1.0))
         else:
             lb.composite(self.scene.tex, buf, cover)
-            self._capture_once(buf, stats)
         if key != SCENE:
             # the hands onto the chain's input (fork F1: after the look-back
             # composite, before the first effect). Failing, the chain still
@@ -932,14 +933,6 @@ class Renderer:
                 self._hands_failed(e, *restore)
         fx.run(dst, t)
         stats["chain_runs"] += 1
-
-    def _capture_once(self, dst: moderngl.Framebuffer, stats: dict) -> None:
-        """The look-back's capture, from the scene texture, the first time
-        a frame asks (a capture that raises is not tried twice)."""
-        if stats["captures"]:
-            return
-        stats["captures"] = 1
-        self.lookback.capture(self.scene.tex, dst)
 
     def _compose(self, v: View, key: int | None, after: bool,
                  frames: dict[int, moderngl.Texture | None], failed: set[int],

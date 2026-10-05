@@ -729,6 +729,27 @@ def test_each_of_the_eight_states_shows_its_picture(ctx):
     assert np.abs(s2[far] - s3[far]).mean() < 0.5
 
 
+def test_two_pipelines_show_the_same_echoes(ctx):
+    """Echoes on, one output with the hands over and one with them
+    through: both composite the history as it was before this frame's
+    capture, so away from the hands the two scenes are the same picture
+    (review of PR #120: a capture between the two composites gave the
+    second a doubled current frame and echoes a frame older)."""
+    import numpy as np
+    from test_ghost import hand_mask
+
+    S = O.Switches
+    r = rig(ctx, effects=("warp",), echoes=True)
+    over, through, alone = run(ctx, r, views(ctx, S(), S(through=True),
+                                             S(scene=False, through=True)), frames=8)
+    assert r.lookback.layers() and r.stats["captures"] == 1
+    far = ~hand_mask(ctx, _src()) & ~(alone[..., :3].max(axis=2) > 0)
+    assert np.abs(through[far] - over[far]).mean() < 0.5
+    bare = run(ctx, rig(ctx, effects=("warp",), echoes=True, hands=False), views(ctx, S()),
+               frames=8)[0]
+    assert np.array_equal(over[far], bare[far])
+
+
 def test_through_bends_the_hands_with_the_shape(ctx):
     """Under the warp alone, the hands through the effects are not where
     the hands over them are: the pixels moved — while over the effects
