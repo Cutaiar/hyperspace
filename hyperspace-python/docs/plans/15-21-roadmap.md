@@ -102,6 +102,8 @@ from the desk).
 
 ### Plan 16 — Paper cuts (no design forks)
 
+*As built:* [`16-paper-cuts.md`](16-paper-cuts.md) §7 (PRs #84–#86, #89, #90, and #92 for four follow-ups); where it differs from the rows below, that section is the code — three chips to a row, the idle strip dimmed by a veil, a first launch's window size not clipped. Its forks are decision register rows 45–49.
+
 | WP | What | Finding it fixes | Size |
 |---|---|---|---|
 | 1 | The cheat sheet is off at launch (`Panel.cheatsheet = False`); the desk diagram stays on; `/` still toggles | "cheat sheet off by default" | S |
@@ -249,7 +251,12 @@ polytope pipeline on or off, the hands on or off (four states per output).
   reorder).
 - Plan 15 WP4's "next empty slot" reads the bank's size from one place,
   so plan 19's twenty-four slots need no change to it.
-- Plan 16 WP2's selection-by-name is what plan 20's chain view drives.
+- Plan 16 WP2's selection-by-name is what plan 20's chain view drives
+  (as built: `FxState.select(name)` / `selected()`, `fx.py`).
+- Plan 16 WP4's `<home>/windows.json` is machine-specific: plan 19's
+  `.gitignore` for the home should list `windows.json` beside
+  `last_show`. Its `render` entry is a list, shaped for plan 21's second
+  output.
 - Plan 17 and plan 18 both touch a hand learn: 17 owns `learn.py` and the
   menu; 18 owns what a learned row looks like (`_place`'s op and depth) and
   `hands/`. 17 merges first.

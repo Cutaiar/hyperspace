@@ -387,7 +387,7 @@ class Presets:
     def _warn(self, name: str) -> None:
         if self.notes:
             more = f" (+{len(self.notes) - 1} more)" if len(self.notes) > 1 else ""
-            self.lib.warning = f"preset {name}: {self.notes[0]}{more}"
+            self.lib.say(warning=f"preset {name}: {self.notes[0]}{more}")
 
     def _landed(self, name: str | None) -> None:
         """The library's load hook: the bank lights the slot that names
@@ -401,7 +401,7 @@ class Presets:
             except Exception as e:  # noqa: BLE001 — a listener must not fail a load
                 # the library's warning line, never `note` (the preset's own,
                 # saved back into the file)
-                self.lib.warning = f"preset listener: {type(e).__name__}: {e}"[:160]
+                self.lib.say(warning=f"preset listener: {type(e).__name__}: {e}"[:160])
 
 
 # ---------------------------------------------------------------- factory inputs
@@ -1661,8 +1661,8 @@ def migrate_home(lib, router, hands_cfg: dict | None = None) -> list[str]:
         print(f"migrate: {n}", file=sys.stderr)
     if notes:
         what = "plan 13 migration" if len(notes) > len(echo_notes) else "echo time in seconds"
-        lib.warning = (f"{what}: {len(written)} file(s) rewritten, backups beside "
-                       "them — the details are on stderr")
+        lib.say(warning=f"{what}: {len(written)} file(s) rewritten, backups beside "
+                        "them — the details are on stderr")
     return notes
 
 
