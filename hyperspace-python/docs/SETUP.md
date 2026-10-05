@@ -1,144 +1,157 @@
-# Setup — priors for any Mac
+# Setup — a new Mac
 
-Everything that must be true on a machine before the plans in
-[`docs/plans/`](plans/README.md) can be implemented and run there. Tiered:
-tier A unblocks development (plans 00–02); later tiers unblock the plans
-that touch hardware. Nothing outside this list may be assumed — if an
-implementation step needs something not listed here, the fix is to add it
-here, not to install it silently.
+From nothing to a running Hyperspace, then each optional part with the
+one switch that turns it on. Every setting named here goes in
+`~/Hyperspace/config.toml` (the home folder; `$HYPERSPACE_HOME` moves it),
+which the app does not need to exist — every key has a default. All keys
+are listed in [`ENGINEERING.md`](ENGINEERING.md) §3.
 
-## A. Base toolchain — required for all plans
+## The base
 
-- [ ] **macOS 13+**, Apple Silicon or Intel. The GL ceiling everywhere is
-      OpenGL 4.1 core (deprecated-but-working; BLUEPRINT §6) — nothing to
-      install, but nothing newer to rely on either.
-- [ ] **Xcode Command Line Tools** — `xcode-select --install`. Provides git
-      and clang (source-builds of any wheel-less dep).
-- [ ] **Homebrew** — installer of record for everything below that isn't
-      Python.
-- [ ] **uv** — `brew install uv`. Owns the Python toolchain: the interpreter
-      version comes from the repo's `.python-version` (≥3.12), dependencies
-      from `pyproject.toml` + the **committed `uv.lock`**. Setup on a fresh
-      clone is `uv sync` — never global pip, never a hand-built venv.
-- [ ] **Python dependencies** — arrive via `uv sync`, listed here so the
-      full surface is visible. All ship macOS wheels (universal2), so no
-      compiler is exercised in the normal case:
-      - runtime: `numpy`; `moderngl` + `glfw` (02); `sounddevice` —
-        PortAudio is bundled in the wheel (03); `imgui-bundle` (04);
-        `mido`, `python-rtmidi`, `python-osc` (05)
-      - dev-only: `pytest`, `ruff`, `playwright`
-- [ ] **Playwright's Chromium** — `uv run playwright install chromium`
-      (~150 MB download; the only network fetch at setup beyond brew/uv).
-      Needed only where plan-00 traces are (re)recorded; a machine that
-      just consumes committed traces can skip it.
-- [ ] **Repo hygiene that makes the rest portable** (enforced from plan 00):
-      - `uv.lock` and `.python-version` committed; `tests/golden/`
-        committed (minus the real track, which is sha256-referenced — all
-        tests except its trace run without it).
-      - Zero rig-specific values in code. Device names, Δt, IMU port, MIDI
-        port names, bridge lanes live in a git-ignored `config.toml`. Once
-        rig-facing plans land, a `config.example.toml` will be committed for
-        new machines to copy and edit.
-      - No absolute paths anywhere; nothing may reference this machine's
-        checkout location.
-
-**Verify tier A:** fresh clone → `uv sync` → `uv run pytest` passes;
-`uv run hyperspace` opens the render window (post-plan-02).
-
-## B. Live & system audio — plan 03 task 1 (and the current HTML features)
-
-- [ ] **Microphone permission** for the terminal app (or IDE) that launches
-      the process — System Settings → Privacy & Security → Microphone.
-      CoreAudio input prompts once per hosting app; a denied prompt is a
-      silent zero-signal, so check here first when bands sit at nothing.
-- [ ] **BlackHole 2ch** — `brew install blackhole-2ch`. If macOS blocks the
-      driver, allow "Existential Audio" under Privacy & Security, then
-      restart (README has the walkthrough).
-- [ ] **Multi-Output Device** in Audio MIDI Setup containing BlackHole +
-      the speakers, so audio is heard *and* captured. Manual, per-machine,
-      one-time. AirPlay outputs can't join one (README).
-- [ ] **Audio routing helper (optional)** — the CoreAudio switcher previously
-      shipped as `scripts/audio-route` has been extracted to the standalone
-      [`loopback`](https://github.com/Cutaiar/loopback) repo. Clone it if you
-      want a CLI to snapshot and swap default in/out devices.
-- [ ] **Audio interface** (booth-out capture): any class-compliant
-      interface needs no driver; if the rig's interface isn't
-      class-compliant, its vendor driver goes on the rig's own checklist.
-
-## C. DJ booth & sensors — plan 03 tasks 2–4
-
-- [ ] **Wired Ethernet** to the Pro DJ Link switch — on a modern MacBook
-      that means a USB-C/Thunderbolt Ethernet adapter. Wi-Fi to the booth
-      switch is not a substitute for the spike.
-- [ ] **Local Network permission** (macOS 15+ prompts per app) granted to
-      the launching terminal, and — if the macOS firewall is on — incoming
-      UDP allowed for the Python binary. Both failure modes look like "no
-      packets", so check them before debugging code.
-- [ ] **UDP ports free**: Pro DJ Link owns 50000–50002 (exactly one client
-      may bind them — the Python client and Beat-Link-Trigger cannot run
-      simultaneously); the IMU port (default 8888) is configurable in
-      `config.toml`.
-- [ ] **Fallback JVM** — only if the DJ Link spike fails and the
-      Beat-Link-Trigger route is taken: `brew install --cask temurin`
-      (Java 17+) plus the BLT app itself.
-- [ ] **ESP32 toolchain** (firmware flashing only, not the visualizer
-      machine per se): `arduino-cli` or PlatformIO via brew; USB-serial
-      driver if the board uses CH340 (CP210x/native-USB boards need none);
-      a **2.4 GHz** Wi-Fi AP on the same subnet as the visualizer — ESP32
-      has no 5 GHz, and UDP broadcast doesn't cross subnets.
-
-## D. DAW bridge — plan 05, optional
-
-- [ ] **IAC Driver enabled** in Audio MIDI Setup → MIDI Studio (built into
-      macOS, off by default) with a bus named to match `config.toml`.
-- [ ] **FL Studio** (macOS build) installed; the tested FL version pinned
-      in `docs/plans/assets/05-fl.md`; the `fl/HyperspaceBridge` MIDI
-      script copied into FL's user data folder per that walkthrough.
-
-## D2. Dream worker (optional) — plan 07 WP6b
-
-The look-back's Deep Dream worker needs **torch**, which is not part of a
-plain install: it is the `dream` extra (torch, torchvision, and on macOS
-mlx and the Metal / Quartz bindings — about 800 MB).
+- **macOS on Apple Silicon.** The renderer needs OpenGL 4.1, which every
+  Mac has; the dream worker runs on MPS.
+- **Xcode Command Line Tools**: `xcode-select --install` (git, clang).
+- **uv**: `brew install uv` (or uv's own installer). uv provides Python
+  3.12 from `.python-version` and every dependency from `pyproject.toml`
+  and the committed `uv.lock`; never pip into a global Python.
 
 ```bash
-uv sync --extra dream                  # installs torch and the rest of the extra
-uv run --extra dream hyperspace        # launch with it
+git clone <repo> hyperspace
+cd hyperspace/hyperspace-python
+uv sync               # everything, including torch for the dream and the dev tools
+uv run hyperspace     # opens the render window and the control window
 ```
 
-and `[dream] enabled = true` in `~/Hyperspace/config.toml` (off by
-default). Once installed, a plain `uv run hyperspace` keeps it (`uv run`
-only adds what is missing), but a plain **`uv sync` removes it again** —
-`uv sync` makes the environment exactly the lock without extras. Run
-`uv sync --extra dream` whenever you sync. The pretrained weights (VGG16,
-528 MB) are read from `~/Hyperspace/weights`, else torch's hub cache, and
-downloaded there on first use otherwise. With `[dream] enabled = true`
-and no torch the app runs the plain tracer and says why — the red banner
-at the bottom of the control window, the SYSTEM page and the LOOKBACK
-page all read "dream worker off: torch is not installed — run `uv sync
---extra dream`, then launch with `uv run --extra dream hyperspace`".
+`uv sync` also fetches Ultraleap's `leap` wrapper from GitHub (pinned in
+`pyproject.toml`); it is only imported when the hands are switched on.
+To check the install: `uv run pytest -q`.
 
-## E. Ultraleap hands — plan 08, optional
+**Microphone permission.** The first time you press M (or *Listen to
+mic* on the AUDIO page) macOS asks whether the app that launched the
+process — your terminal or editor — may use the microphone. Allow it. If
+you denied it, the bands sit at nothing: turn it on in System Settings →
+Privacy & Security → Microphone.
 
-- [ ] **Ultraleap Hand Tracking** (Gemini ≥ 5.17, macOS) installed and the
-      camera seen by its control panel.
-- [ ] `uv sync` — the `leap` wrapper comes pinned from GitHub and runs on the
-      app's own prebuilt 3.12 module; nothing to compile
-      ([`plans/08-hands.md`](plans/08-hands.md#install)).
-- [ ] `[hands] enabled = true` in `~/Hyperspace/config.toml`; `tools/hands_probe.py
-      --calibrate 20` (or the HANDS page's calibrate) run once in the box.
+## The dream
 
-## Quickstart transcript for a fresh Mac (tiers A+B)
+On by default. torch and torchvision are ordinary dependencies, so plain
+`uv sync` installs them. The first time the dream runs it downloads the
+pretrained weights (VGG16, or GoogLeNet for some layers) into
+`~/Hyperspace/weights` unless they are already there or in torch's hub
+cache. If the worker cannot start, the app runs the echoes alone and
+says why on the red banner, the SYSTEM page and the LOOKBACK page. To
+turn it off:
+
+```toml
+[dream]
+enabled = false
+```
+
+## Capturing the Mac's own sound
+
+To react to music playing on the Mac (not a microphone):
+
+1. `brew install blackhole-2ch`. If macOS blocks the driver, allow it
+   under System Settings → Privacy & Security, then restart.
+2. In Audio MIDI Setup make a **Multi-Output Device** with BlackHole and
+   your speakers, and make it the Mac's output, so you hear the music and
+   the app can capture it.
+3. In the app, AUDIO page: BlackHole appears as `System · …` and is
+   pre-selected. Press M.
+
+An audio interface that is class-compliant needs no driver; pick it in
+the same device list (**rescan** if it was plugged in after launch).
+
+## The APC40
+
+Plug it in (USB). Nothing to configure: the MIDI adapter is on by default
+and looks for a port whose name contains "APC40". The desk map is
+[`ENGINEERING.md`](ENGINEERING.md) §6. To check the device without the
+app: `uv run python tools/midi_probe.py`. Another port name or no MIDI at
+all:
+
+```toml
+[midi]
+port = "APC40"      # a substring of the port name
+enabled = false     # no MIDI adapter at all
+```
+
+## The Ultraleap hands
+
+1. Install **Ultraleap Hand Tracking** for macOS and check its control
+   panel sees the camera. The `leap` wrapper loads its library from
+   `/Applications/Ultraleap Hand Tracking.app/Contents/LeapSDK`; if it is
+   installed elsewhere, set `LEAPSDK_INSTALL_LOCATION` to that `LeapSDK`
+   folder in the shell that launches the app.
+2. Switch the hands on:
+
+   ```toml
+   [hands]
+   enabled = true
+   mode = "screentop"   # only if the camera looks down from above; "desktop" (the default) looks up
+   ```
+
+3. Check the axes live: `uv run python tools/hands_probe.py`.
+4. Calibrate once in the place you will play: the HANDS page's
+   **calibrate 20 s** (or `uv run python tools/hands_probe.py --calibrate
+   20`), moving both hands through everything they should reach, with
+   nobody else in view. This writes `~/Hyperspace/hands.json`.
+
+Only the desktop mode's axes have been measured; with `screentop` or
+`hmd` and the ghost hands on, the HANDS page says so.
+
+## FL Studio (or another DAW) over the IAC bus
+
+1. Audio MIDI Setup → MIDI Studio → **IAC Driver** → tick "Device is
+   online". For lanes both out and in, add a second bus: IAC echoes, so
+   `in` must never be the bus `out` sends to.
+2. Switch the bridge on:
+
+   ```toml
+   [bridge]
+   enabled = true
+   out = "IAC"          # a substring of the bus name the lanes go out on
+   in = ""              # a second bus's name to take lanes in as ext:0, ext:1 …
+   ```
+
+3. In FL Studio take the IAC bus as a MIDI input. By default lane *i* is
+   pitch bend on channel *i* + 1 (`encoding = "cc14"` sends CC pairs
+   instead). The SYSTEM page's bridge line shows the port and a rising
+   count of messages sent.
+
+The hands send to a DAW on their own port, a virtual one called
+"Hyperspace Hands" unless `[hands] out` names another.
+
+## A second screen (or more)
+
+One `[[output.screens]]` table per render output, up to four; the first
+is output 1 (it sets the frame's size and paces the loop):
+
+```toml
+[[output.screens]]
+name = "glass"
+monitor = 1          # screen index, the primary is 0; -1 = a window where it was last
+fullscreen = true
+
+[[output.screens]]
+name = "projector"
+monitor = 2
+fullscreen = true
+```
+
+The screens must be connected **before launch**: a later output whose
+screen is missing is not opened, and a screen plugged in afterwards is
+not used until a relaunch (Cmd+R). The OUTPUT page lists each output and
+what it shows. Details and the per-output switches are
+[`ENGINEERING.md`](ENGINEERING.md) §13.
+
+## Re-recording the golden traces (rare)
+
+Only to re-record the parity traces from the retired HTML app:
 
 ```bash
-xcode-select --install
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-brew install uv blackhole-2ch
-git clone <repo> hyperspace && cd hyperspace/hyperspace-python
-uv sync
-uv run playwright install chromium   # only if re-recording golden traces
-uv run pytest                        # tier-A verification
-# manual, one-time: Multi-Output Device in Audio MIDI Setup;
-# grant mic + local-network permission on first launch
-uv run hyperspace
+uv run playwright install chromium   # one-time, about 150 MB
+uv run python tools/record_golden.py
 ```
+
+Running the tests on committed traces needs neither.
