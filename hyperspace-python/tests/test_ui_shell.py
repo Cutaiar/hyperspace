@@ -514,6 +514,67 @@ def test_project_row_and_dirty_state(rig, tmp_path):
     frame(panel)
 
 
+def test_the_footer_says_what_was_undone(rig, monkeypatch):
+    """Plan 15 WP1: the footer's message slot shows, on every page, the
+    newest of the undo's status, the library's status and the library's
+    warning for `MESSAGE_S` after it changes; a launch says nothing; a
+    line too long for the room beside the show's name is cut, not wrapped."""
+    from hyperspace import ui, undo
+
+    panel, reg, lib = rig.panel, rig.reg, rig.lib
+    clock = [1000.0]
+    monkeypatch.setattr(ui.time, "monotonic", lambda: clock[0])
+    u = panel.undo = undo.Undo(reg, rig.router.table)
+    drawn = _drawn(monkeypatch)
+
+    def shown(page=None) -> list[str]:
+        drawn.clear()
+        frame(panel, page)
+        return [s for s in drawn if s.startswith("·  ")]
+
+    lib.status, lib.warning = "show: party", ""
+    assert shown("view") == []                         # the first look only remembers
+    p = reg["view.bright"]
+    was = p.base
+    p.set(was + 0.4)
+    u.tick(1.0)
+    u.tick(2.0)                                        # a second of quiet: the step closed
+    assert shown() == []                               # an edit says nothing
+    assert u.undo() and p.base == was
+    line = f"·  undid {p.label} {p.fmt(was)} → {p.fmt(was + 0.4)}"
+    for page in ("view", "routing", "presets", "system"):
+        clock[0] += 0.5
+        assert shown(page) == [line], page
+    clock[0] += ui.MESSAGE_S                           # …and it goes
+    assert shown() == []
+    u.undo()                                           # nothing left: said, and said again
+    assert shown() == ["·  nothing to undo"]
+    clock[0] += ui.MESSAGE_S + 1
+    assert shown() == []
+    u.tick(3.0)
+    u.undo()
+    assert shown() == ["·  nothing to undo"]
+    # the library's lines, without opening the PRESETS page: the newest wins
+    clock[0] += 1.0
+    lib.status = "presets: saved TRIP 2"
+    assert shown("lfo") == ["·  presets: saved TRIP 2"]
+    lib.warning = "F3: an empty slot — ⇧F3 saves the live state into it"
+    assert shown("lfo") == [f"·  {lib.warning}"]
+    u.redo()
+    assert shown("lfo") == [f"·  {u.status}"] and u.status.startswith("redid ")
+    # a line longer than the room is cut to fit beside the show's name
+    clock[0] += 1.0
+    lib.status = "presets: " + "a very long preset name " * 12
+    (cut,) = shown("view")
+    assert cut.endswith("…") and cut.startswith("·  presets: a very long")
+    assert imgui.calc_text_size(cut).x < ui.PANEL_W
+    assert ui.fit_text("short", 500.0) == "short"
+    # a panel with no undo and no library still draws its footer
+    panel.undo = None
+    clock[0] += ui.MESSAGE_S + 1
+    assert shown() == []
+
+
 def test_preset_bank_and_strip_on_the_presets_page(rig):
     """Plan 13 WP2: the bank row loads and saves presets by F-key param,
     the one preset strip shows what is loaded and its dirty dot."""

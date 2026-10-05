@@ -58,6 +58,7 @@ from __future__ import annotations
 import math
 import sys
 from dataclasses import dataclass, replace
+from operator import attrgetter
 from typing import Any
 
 SETTLE_S = 0.4        # quiet time that ends a step. Plan 18's knob slew must stay under it.
@@ -93,12 +94,11 @@ def _same(a, b) -> bool:
     return False
 
 
-def _row(b) -> tuple:
-    return tuple(getattr(b, f, None) for f in ROW_FIELDS)
+_row = attrgetter(*ROW_FIELDS)        # a row as the tuple of its fields
 
 
 def _rows(rows) -> tuple:
-    return tuple(_row(b) for b in rows)
+    return tuple(map(_row, rows))
 
 
 def _macros(table) -> tuple:
@@ -143,9 +143,9 @@ class Undo:
 
     `reg` iterates params (`id`, `base`, `persist`, `alias`, `group`,
     `kind`, `label`, `fmt`, `names`) and has `get(id)` and `restore({id:
-    value})`. `table` has `routes()`, `desk()`, `macros`, `macros_doc()`,
-    `set_routes(rows)`, `set_desk(rows, load=False)` and `set_macros(doc,
-    reg)`. `marks` (optional) is "what is loaded", opaque here: `take()`,
+    value})`. `table` has `bindings` (rows with the `ROW_FIELDS`),
+    `routes()`, `desk()`, `macros`, `macros_doc()`, `set_routes(rows)`,
+    `set_desk(rows, load=False)` and `set_macros(doc, reg)`. `marks` (optional) is "what is loaded", opaque here: `take()`,
     `before(mark)` (called first in a load step's restore: the layout) and
     `put(mark)` (called last: the names and references). `tag` (optional)
     is a callable naming the shape the `tagged` id prefixes live on.
@@ -168,6 +168,9 @@ class Undo:
         self._action_frame = -1           # the tick count when an action step was opened
         self._absorb = 0                  # frames left of a restore's own follow-ups
         self._restoring = False           # a restore is running: its own pushes are ignored
+        self._every: list = []            # the registry's params as last read (`_params`)
+        self._watched: list = []          # …the watched ones among them
+        self._ids: tuple = ()             # …and their ids
         self._fp = self._fingerprint()
         self._settled = self._take()
 
@@ -176,14 +179,29 @@ class Undo:
     def _tag(self):
         return self.tag() if self.tag is not None else None
 
+    def _params(self) -> list:
+        """The watched params, in registry order. A band layout change and
+        a shader reload re-declare params, so the registry is read every
+        time — but the filter runs only when it holds other objects than
+        last time (a list comparison by identity: a re-declared param is a
+        new object even under an old id)."""
+        every = list(self.reg)
+        if every != self._every:
+            self._every = every
+            self._watched = [p for p in every if watched(p)]
+            self._ids = tuple(p.id for p in self._watched)
+        return self._watched
+
     def _fingerprint(self) -> tuple:
-        """(ids, bases, routes, desk, macros, tag) as of now. The list of
-        params is rebuilt every time: a band layout change and a shader
-        reload re-declare params."""
-        ps = [p for p in self.reg if watched(p)]
+        """(ids, bases, routes, desk, macros, tag) as of now — the cheap
+        read `tick` makes every frame. The preset layer is read as the
+        table's rows whose `layer` is "preset" (what `table.desk()`
+        returns, without asking every row whether it is a MIDI row)."""
+        ps = self._params()
         table = self.table
-        return (tuple(p.id for p in ps), tuple(p.base for p in ps),
-                _rows(table.routes()), _rows(table.desk()), _macros(table), self._tag())
+        return (self._ids, tuple([p.base for p in ps]), _rows(table.routes()),
+                _rows([b for b in table.bindings if b.layer == "preset"]),
+                _macros(table), self._tag())
 
     @staticmethod
     def _same_fp(a: tuple, b: tuple) -> bool:
@@ -198,10 +216,9 @@ class Undo:
         """The state as it is now; `marks`: with what is loaded."""
         table = self.table
         bases = {}
-        for p in self.reg:
-            if watched(p):
-                v = p.base
-                bases[p.id] = list(v) if isinstance(v, list) else v
+        for p in self._params():
+            v = p.base
+            bases[p.id] = list(v) if isinstance(v, list) else v
         return State(bases, tuple(replace(b) for b in table.routes()),
                      tuple(replace(b) for b in table.desk()), table.macros_doc(),
                      self._tag(),
