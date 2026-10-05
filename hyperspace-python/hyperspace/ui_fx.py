@@ -28,7 +28,7 @@ rows under the line are dimmed but live.
 The chip grid is the chain view (plan 20 WP3): a chip's place, left to
 right and top to bottom, is its effect's place in the stack, and a chip
 dragged by its name and dropped on another goes before that one (a white
-bar at the left edge of the chip under the drag says where; the right
+bar on the left edge of the chip under the drag says where; the right
 half of the last chip is "to the end"). A drop rewrites the fewest
 `fx.<name>.order` it can (`fx.reordered`) as one undo step, "reorder
 effects", and opens the dragged effect's strip. It changes order only: an
@@ -78,8 +78,7 @@ IDLE = {
 # one line at the page's width (plan 20 WP2: it wrapped to two by 2 px)
 RESET_NOTE = "a preset load resets this stack: save a preset to keep it"
 DRAG = "fx.chip"    # the drag-and-drop payload's type: a chip's index in names()
-DRAG_BAR = 2.0      # px: the bar that says where a dragged chip will land…
-DRAG_BAR_GAP = 4.0  # …and how far outside the chip's edge its centre sits
+DRAG_BAR = 2.0      # px: the bar on a chip's edge that says where a dragged chip will land
 REORDER = "reorder effects"     # the undo step a drop makes
 FACES_TIP = "on the faces"      # added to the hovers of a chip aimed at the faces
 FACES_OFF = "(Faces is off)"    # the faces' status row while view.faces is off
@@ -131,15 +130,20 @@ def page(panel, dt: float) -> None:
         if k % CHIPS_PER_ROW:
             imgui.same_line()
         label = fx.specs[name].label + (" !" if _error(chain, fx, name) else "")
-        drop = _chip(panel, fx, name, label, w, name == sel, k, k == len(names) - 1) or drop
+        drop = _chip(panel, fx, name, label, w, name == sel,
+                     index=k, last=k == len(names) - 1) or drop
     imgui.spacing()
     if drop is not None:
-        # after the grid: this frame's chips were drawn in one order. The
-        # payload is a place in this frame's names()
-        moved, before = drop
-        if 0 <= moved < len(names):
-            _drop(panel, fx, names[moved], before)
+        # after the grid: this frame's chips were drawn in one order. What
+        # is moved is the name the drag began on, not the payload's index:
+        # the payload is a frame old on the drop, and the stack may have
+        # moved under the hand (a preset on a desk button, an undo)
+        moved = _dragged(panel)
+        if moved is not None:
+            _drop(panel, fx, moved, drop[0])
             sel = fx.selected()
+    if not _in_flight():
+        panel._fx_drag = None
 
     if sel is None:
         return
@@ -343,52 +347,71 @@ def _drop(panel, fx, moved: str, before: str | None) -> None:
     the registry — a scene-setter's write — under one pushed undo step,
     pushed before the first write and only when something changes."""
     names = fx.names()
-    if moved not in names:
+    if moved not in names:              # its file went away while it was in the hand
         return
     if before != moved:                 # dropped on its own LED: where it is
         seq = [n for n in names if n != moved]
         seq.insert(seq.index(before) if before in seq else len(seq), moved)
-        r = panel.reg
-        new = reordered(seq, {n: int(r[f"fx.{n}.order"].base) for n in names}, moved)
-        if new:
+        # the orders names() sorts by (order is not modulatable: these are the bases)
+        orders = {n: int(fx.values[n]["order"]) for n in names}
+        new = reordered(seq, orders, moved)
+        params = {n: panel.reg.get(f"fx.{n}.order") for n in new}
+        after = {**orders, **new}
+        # all or nothing: every order it needs is declared, and the result
+        # sorts as asked (past a hundred effects orders repeat and it may not)
+        if new and all(p is not None for p in params.values()) \
+                and sorted(names, key=lambda n: (after[n], n)) == seq:
             undo.push(REORDER)
             for n, order in new.items():
-                r[f"fx.{n}.order"].set_value(order)
+                params[n].set_value(order)
     fx.select(moved)                    # by name: the strip is the dragged effect's
 
 
+def _in_flight() -> bool:
+    """Is a chip in the hand? (The payload outlives the release by a frame.)"""
+    held = imgui.get_drag_drop_payload_py_id()
+    return held is not None and held.type == DRAG
+
+
+def _dragged(panel) -> str | None:
+    """The effect whose chip is in the hand, by name: `_chip` notes it on
+    the panel while its name is the drag's source. getattr: the Panel was
+    built before this page knew of it."""
+    return getattr(panel, "_fx_drag", None) if _in_flight() else None
+
+
 def _drop_target(name: str, lo: imgui.ImVec2, hi: imgui.ImVec2,
-                 end: bool = False) -> tuple[int, str | None] | None:
+                 end: bool = False) -> tuple[str | None] | None:
     """The item just drawn as a place to drop a dragged chip. `lo`…`hi` is
     its whole chip. While a drag is over it a bar is drawn where the
-    dragged chip will go: at the chip's left edge (before `name`), or with
-    `end` and the mouse in the item's right half, at its right edge (to
-    the end of the stack). Returns (the payload, the name to go before or
-    None) on the drop."""
+    dragged chip will go: on the chip's left edge (before `name`), or with
+    `end` and the mouse in the item's right half, on its right edge (to
+    the end of the stack). On the drop returns a 1-tuple: the name to go
+    before, or None for the end."""
     if not imgui.begin_drag_drop_target():
         return None
     got = None
-    held = imgui.get_drag_drop_payload_py_id()
-    if held is not None and held.type == DRAG:
-        before, x = name, lo.x - DRAG_BAR_GAP
+    if _in_flight():
+        before, x = name, lo.x
         r0, r1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
         if end and imgui.get_mouse_pos().x > (r0.x + r1.x) / 2:
-            before, x = None, hi.x + DRAG_BAR_GAP
-        # on the foreground: the bar sits in the gap between chips, which
-        # for a row's first chip is outside the page's clip rect
+            before, x = None, hi.x
+        # on the chip's own edge, so a mouse aimed at the bar is still on
+        # the chip (the gaps between chips take no drop); on the foreground
+        # list, since half of it is outside the page's clip rect for a
+        # row's first chip
         imgui.get_foreground_draw_list().add_rect_filled(
             imgui.ImVec2(x - DRAG_BAR / 2, lo.y - 1), imgui.ImVec2(x + DRAG_BAR / 2, hi.y + 1),
             ui.u32(ui.TEXT))
-        payload = imgui.accept_drag_drop_payload_py_id(
-            DRAG, imgui.DragDropFlags_.accept_no_draw_default_rect)
-        if payload is not None:
-            got = (int(payload.data_id), before)
+        if imgui.accept_drag_drop_payload_py_id(
+                DRAG, imgui.DragDropFlags_.accept_no_draw_default_rect) is not None:
+            got = (before,)
     imgui.end_drag_drop_target()
     return got
 
 
-def _chip(panel, fx, name: str, label: str, width: float, open_: bool,
-          index: int = 0, last: bool = False) -> tuple[int, str | None] | None:
+def _chip(panel, fx, name: str, label: str, width: float, open_: bool, *,
+          index: int, last: bool) -> tuple[str | None] | None:
     """One effect's chip, `width` px in all: the LED, then the name.
 
     Two adjacent items rather than one over another (which needs imgui's
@@ -397,11 +420,13 @@ def _chip(panel, fx, name: str, label: str, width: float, open_: bool,
     strip and nothing else. Both are solid red while the effect is on.
 
     The name is also what a chip is dragged by (plan 20 WP3): imgui starts
-    a drag only past its drag threshold, so a click still only opens. The
-    payload is `index`, the chip's place in names(). Both parts take a
-    drop, which is returned: (the dragged chip's index, the name it goes
-    before — this chip's — or None for the end, which the `last` chip's
-    right half takes)."""
+    a drag only past its drag threshold, so a click still only opens; and
+    a press that slips past the threshold and is let go on the same name
+    opens it too. The payload is `index`, the chip's place in names(); what
+    a drop moves is the name noted on the panel. Both parts take a drop,
+    which is returned as a 1-tuple: the name the dragged chip goes before
+    — this chip's — or None for the end, which the `last` chip's right
+    half takes."""
     p = panel.reg[f"fx.{name}.on"]
     on = bool(fx.values[name]["on"])
     faces = _faces(fx, name)
@@ -442,8 +467,16 @@ def _chip(panel, fx, name: str, label: str, width: float, open_: bool,
         fx.select(name)
     if imgui.begin_drag_drop_source():
         imgui.set_drag_drop_payload_py_id(DRAG, index)
+        panel._fx_drag = name                           # what a drop moves: the name
         imgui.text(label)                               # what is in the hand
         imgui.end_drag_drop_source()
+    elif (_dragged(panel) == name and imgui.is_mouse_released(0)
+          and imgui.is_mouse_hovering_rect(imgui.get_item_rect_min(),
+                                           imgui.get_item_rect_max())):
+        # let go on the name it was picked up by: a click that slipped. An
+        # item is never its own drop target, so this is the one place it
+        # would do nothing
+        fx.select(name)
     drop = _drop_target(name, r0, edge, end=last) or drop
     panel._tip(p, (lambda: f"{p.tip}\n{FACES_TIP}" if p.tip else FACES_TIP) if faces else None)
     panel._ctx(p, key=".chip")

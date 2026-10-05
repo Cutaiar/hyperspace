@@ -382,11 +382,10 @@ def reordered(seq: list[str], orders: dict[str, int], moved: str) -> dict[str, i
             if size == 1:
                 new = [(a + b) // 2]                 # the middle of the gap
             else:                                    # evenly through the gap, in seq's order
-                new = [min(a + 1 + ((2 * j + 1) * free) // (2 * size), MAX_ORDER)
-                       for j in range(size)]
+                new = [a + 1 + ((2 * j + 1) * free) // (2 * size) for j in range(size)]
             return {name: o for name, o in zip(seq[lo:hi], new, strict=True)
                     if o != orders[name]}
-    return {}
+    return {}                                        # not reached: the whole list always returns
 
 
 def declare(r, fx: FxState, names: set[str] | None = None) -> None:

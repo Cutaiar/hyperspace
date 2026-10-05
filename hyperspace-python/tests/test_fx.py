@@ -2032,7 +2032,7 @@ def test_a_drop_reorders_selects_and_is_one_undo_step(tmp_path, monkeypatch):
     from test_undo import boot, frames, labels, settle
 
     from hyperspace import undo
-    from hyperspace.ui_fx import DRAG_BAR_GAP, REORDER
+    from hyperspace.ui_fx import REORDER
     st = FxState()
     r = boot(tmp_path / "home", fx=st)
     r.fx = st
@@ -2056,7 +2056,7 @@ def test_a_drop_reorders_selects_and_is_one_undo_step(tmp_path, monkeypatch):
         rig.drag("chip.fx.huecycle.on", "chip.fx.plasma.on", release=False)
         assert rig.imgui.get_drag_drop_payload_py_id().data_id == names.index("huecycle")
         led = rig.rects["led.fx.plasma.on"]
-        assert bars and bars[-1][0] + 1 == pytest.approx(led[0] - DRAG_BAR_GAP)
+        assert bars and bars[-1][0] + 1 == pytest.approx(led[0])     # on the chip's own edge
         assert bars[-1][1] <= led[1] and bars[-1][3] >= led[3]
         assert orders() == before and not pushes and st.selected() == "acid"   # nothing yet
         rig.release()
@@ -2151,7 +2151,6 @@ def test_a_drag_never_changes_a_target_or_a_switch(fxpage, monkeypatch):
     last chip's far half, its own chip — leaves every switch, target and
     mix, and the map, as they were."""
     from hyperspace.fx import FACES, SCREEN
-    from hyperspace.ui_fx import DRAG_BAR_GAP
     st, reg = fxpage.st, fxpage.reg
     bars = _bars(fxpage, monkeypatch)
     reg["fx.warp.on"].set(True)
@@ -2174,7 +2173,7 @@ def test_a_drag_never_changes_a_target_or_a_switch(fxpage, monkeypatch):
     last = st.names()[-1]
     assert last == "huecycle"
     fxpage.drag("chip.fx.acid.on", f"chip.fx.{last}.on", dst_at=0.9, release=False)
-    assert bars[-1][0] + 1 == pytest.approx(fxpage.rects[f"chip.fx.{last}.on"][2] + DRAG_BAR_GAP)
+    assert bars[-1][0] + 1 == pytest.approx(fxpage.rects[f"chip.fx.{last}.on"][2])
     fxpage.release()
     assert st.names()[-1] == "acid" and reg["fx.acid.order"].base > reg["fx.huecycle.order"].base
     # …and its left half is "before it", like any other chip
@@ -2207,3 +2206,66 @@ def test_the_order_slider_still_reorders(fxpage):
     # and after a drag the slider reads what the drop wrote
     fxpage.drag("chip.fx.plasma.on", "chip.fx.warp.on")
     assert st.values["plasma"]["order"] == reg["fx.plasma.order"].base == 18
+
+
+def test_a_drop_moves_the_effect_the_drag_began_on(fxpage, monkeypatch):
+    """Review of PR #108. What a drop moves is a name, not the payload's
+    index: the stack reordered under the hand (a preset on a desk button,
+    an undo) still moves the chip that was picked up. A press that slips
+    past the drag threshold and is let go on the same name opens it. An
+    order the registry does not hold, or a result that would not sort as
+    asked, makes the drop do nothing."""
+    from hyperspace import fx as fx_mod
+    from hyperspace import ui_fx, undo
+    imgui, st, reg, panel = fxpage.imgui, fxpage.st, fxpage.reg, fxpage.panel
+    pushes = []
+    monkeypatch.setattr(undo, "push", lambda *a, **k: pushes.append(a))
+    io = imgui.get_io()
+    fxpage.drag("chip.fx.huecycle.on", "chip.fx.warp.on", release=False)
+    assert panel._fx_drag == "huecycle"
+    # the stack moves while the chip is in the hand: index 11 is now tripcolour
+    reg["fx.tripcolour.order"].set_value(99)
+    reg["fx.plasma.order"].set_value(50)
+    fxpage.frame()
+    fxpage.frame()
+    assert st.names()[-1] == "tripcolour"
+    fxpage.release()
+    names = st.names()
+    assert names.index("huecycle") == names.index("warp") - 1 and st.selected() == "huecycle"
+    assert reg["fx.tripcolour.order"].base == 99 and pushes == [("reorder effects",)]
+    fxpage.frame()
+    assert panel._fx_drag is None                    # nothing in the hand: nothing noted
+
+    # a slipped click: past the threshold, let go on the name it began on
+    pushes.clear()
+    fxpage.frame()
+    x0, y0, x1, y1 = fxpage.rects["chip.fx.fractals.on"]
+    x, y = x0 + 12, (y0 + y1) / 2
+    io.add_mouse_pos_event(x, y)
+    fxpage.frame()
+    io.add_mouse_button_event(0, True)
+    fxpage.frame()
+    for k in range(1, 5):
+        io.add_mouse_pos_event(x + 4 * k, y)
+        fxpage.frame()
+    assert ui_fx._in_flight() and st.selected() == "huecycle"
+    fxpage.release()
+    assert st.selected() == "fractals" and st.names() == names and not pushes
+
+    # an order the registry does not hold: nothing is written, nothing pushed
+    orders = {n: st.values[n]["order"] for n in names}
+    real_get = type(reg).get
+    monkeypatch.setattr(type(reg), "get", lambda self, pid: None if pid == "fx.acid.order"
+                        else real_get(self, pid))
+    ui_fx._drop(panel, st, "acid", None)
+    assert {n: st.values[n]["order"] for n in names} == orders and not pushes
+    monkeypatch.setattr(type(reg), "get", real_get)
+    # a rewrite that would not sort as asked (what a hundred-odd effects give)
+    monkeypatch.setattr(ui_fx, "reordered", lambda seq, o, moved: {moved: o[seq[-1]]})
+    ui_fx._drop(panel, st, "acid", "kaleido")
+    assert {n: st.values[n]["order"] for n in names} == orders and not pushes
+    monkeypatch.setattr(ui_fx, "reordered", fx_mod.reordered)
+    ui_fx._drop(panel, st, "acid", None)
+    assert st.names()[-1] == "acid" and pushes == [("reorder effects",)]
+    # an effect whose file went away mid-drag: no raise
+    ui_fx._drop(panel, st, "no_such_effect", "acid")
