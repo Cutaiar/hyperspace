@@ -1,548 +1,77 @@
-# Checkpoint — 2026-10-04
+# Checkpoint
 
-Where the Python re-platform stands and what to pick up next. This
-revision describes **`finish-line` with plans 15–21 all landed**: plans
-15–18 (`plan-15-integration`, `plan-16-integration`, then
-`plan-18-integration` with plans 17 and 18), plans 19 and 20
-(`plan-19-integration`), and plan 21 — outputs and the hands — through
-`plan-21-integration`, now merged into `finish-line`, each merged when its last PR was in,
-each documented. **The build is finished; what is left is the owner's**:
-the hand checks (groups K–Q), the confirm-or-overturn rows 34–88 of the
-decision register, and two merges — PR #113 (the shared presets into
-`main`) and PR #80 (`finish-line` into `main`). `main` is at plan 14
-(fa9b3a1) and nothing from plans 15–21 touches it until the owner
-merges `finish-line` (decision 30). What the
-system *is* — the parts, the frame, who may write a parameter — is
-[`ARCHITECTURE.md`](ARCHITECTURE.md); how it behaves is
-[`ENGINEERING.md`](ENGINEERING.md); why it is that way, dated, is
-[`DECISIONS.md`](DECISIONS.md); what drifted and how each item was closed
-is [`AUDIT-2026-09.md`](AUDIT-2026-09.md); the stages it was built in are
-[`plans/`](plans/README.md). This file keeps only the pick-up list.
+Hyperspace is a live-visuals app: a 4D polytope driven by music, hands
+(an Ultraleap camera), an APC40 and LFOs, shown on a Pepper's Ghost glass
+and a projector. It is one Python process in `hyperspace-python/`.
 
-## How to pick this up
+## Where things are
 
-```bash
-git clone github.com/Cutaiar/hyperspace && cd hyperspace/hyperspace-python
-uv sync                 # whole environment, from the committed lockfile
-git checkout finish-line      # plans 15–21 land here, never on main
-uv run pytest           # 1178 pass, 1 skipped (the hands tape) with plans 15 and 16;
-                        # 1276 pass, 1 skipped on plan-18-integration (plans 17 and 18);
-                        # 1355 pass, 1 skipped on plan-20-integration (plans 15–18 and 20);
-                        # 1442 pass, 1 skipped on plan-19-integration (plans 15–20);
-                        # 1549 pass, 1 skipped on plan-21-integration (plans 15–21)
-uv run hyperspace       # the app: ? shows the controls cheat sheet (off at launch)
-```
+- **The app:** `hyperspace-python/` (package `hyperspace/`, tests in
+  `tests/`, tools in `tools/`, the owner's shared presets in `shared/`).
+- **Run it:** `uv sync`, then `uv run hyperspace`; machine setup and the
+  dream's extra are in [`SETUP.md`](SETUP.md).
+- **The docs:**
+  - [`ARCHITECTURE.md`](ARCHITECTURE.md): the parts, the frame, who may
+    write a parameter.
+  - [`ENGINEERING.md`](ENGINEERING.md): how each part behaves.
+  - [`DECISIONS.md`](DECISIONS.md): the decisions in force, and what was
+    decided not to build.
+  - [`DECISION-REGISTER.md`](DECISION-REGISTER.md): rows 34–88, built on
+    a recommendation and waiting for the owner's keep or overturn.
+  - [`AUDIT-2026-09.md`](AUDIT-2026-09.md): the open defects.
+  - [`TESTING-GUIDE.md`](TESTING-GUIDE.md): everything a person still has
+    to test, in plain words, by hardware.
+  - [`plans/11-hand-checks.md`](plans/11-hand-checks.md): the same checks,
+    numbered 1–112, with the automated test behind each.
+  - [`plans/`](plans/README.md) `15-…` to `21-…`: what each of the last
+    seven plans built.
+  - [`plans/assets/12-presets/`](plans/assets/12-presets/): the performer
+    cards, one per party preset.
 
-Machine prerequisites: [`SETUP.md`](SETUP.md). Rig-specific values live in
-`~/Hyperspace/config.toml` (documented in `hyperspace/config.py`).
+## Where the code stands
 
-## Where it stands
+Branch `finish-line` holds everything built, through plan 21, plus the
+fixes of 2026-10-05 and this docs prune. `main` is behind it until the
+owner merges PR #80 (`finish-line` into `main`); PR #113 brings the shared
+presets. Both merges are the owner's. Check `git log` and the PRs for the
+current state.
 
-Plans 00–10 are done and described in the documents above, not here. Plan
-11 (2026-09-27/28, [`plans/11-remediation.md`](plans/11-remediation.md))
-closed the September audit register: a hand leaving the box releases its
-rows (B1), hot reload watches every module and keeps `Kind` identity
-(H1–H4), one scene store and layouts on saved band presets (A1, A2), one
-Learn object shared by MIDI and hands (B3, B4), one preset system with
-routing presets in the library (L1–L3, L5, L6, L8), exact trigger phase on
-every path (B6–B8), and one tidy-up sweep per component with the missing
-boundary and loop-order tests (R, N, V, A, L, U, P) — PRs #40–#54, one
-per work package, each code-reviewed, integrated on
-`plan-11-integration` (which is what the owner merges). Seven
-decisions are the owner's and pending (plan 11 §2, rows 1–7: B2, B5, R1,
-R6, A7, A10, R2+L2); the trim fix (A10) and the keys-into-the-table change
-(R2+L2) wait on them. (Those seven were answered on 2026-09-28 and built;
-plans 11 and 12 are merged, main 4bffa9d.)
+## What is left
 
-Plan 13 (2026-09-28, [`plans/13-preset-and-session.md`](plans/13-preset-and-session.md))
-is built on `plan-13-integration` (PRs #61–#66, the WP6 docs PR to
-come; 872 tests): the five nouns for saved state are two — a **preset**
-(`library/presets/*.json`, `hyperspace.preset/2`: every performance
-value, the routes, the APC40's preset layer, the macros) and the
-**session** (`config.toml`, `hands.json`, `bindings.json` — now only
-the session's controls — and the project, `hyperspace.project/2`: its
-session values, a startup preset and F1–F8 as a bank of preset names).
-Themes, routing presets and the routing strip are gone; the APC40 has
-two layers under a latched SHIFT (the band strip behind it); a macro
-acts through base and depth subscribers; Learn writes into the loaded
-preset and never a file; the ROUTING page is one page over the loaded
-preset; the first launch migrates an older home once, backing up every
-file it rewrites. Pending: hand checks group H and decision 20 (hand
-routes by name). (Since merged as PR #69; decision 20 answered and built,
-PR #70.)
+- **The hand checks.** None has been run by a person. Start from
+  [`TESTING-GUIDE.md`](TESTING-GUIDE.md), on a copy of `~/Hyperspace`.
+- **The owner's keep or overturn** on register rows 34–88 (the answer sheet
+  at the top of [`DECISION-REGISTER.md`](DECISION-REGISTER.md)).
+- **The open audit findings:** R14, R15, U9, U10, P6, V8, and the small
+  defects listed under them.
+- **Things nobody has observed:** frame pacing with two screens; a screen
+  unplugged mid-run; anything on the APC40, the hand camera, the projector
+  or the glass. No real hand has been tracked: every hands picture comes
+  from a synthetic tape.
+- **Deliberately not built:** see "Decided not to build" in
+  [`DECISIONS.md`](DECISIONS.md).
 
-Plan 14 (2026-09-29, [`plans/14-party-rig.md`](plans/14-party-rig.md);
-merged, PR #77, main fa9b3a1) made the rig a party device: an opaque
-render window for the Pepper's Ghost glass, the stall log and red
-banner, the `party` show as what opens, the PRESETS page, every effect
-in a factory preset, echoes in seconds with the dream on, the desk drawn
-with glyphs. Its §6 is the owner's to-do list at the machine. The ghost
-hands (PR #78) are on `finish-line` ahead of plan 15.
+## Standing rules
 
-Plan 15 (2026-10-04, [`plans/15-safety-net.md`](plans/15-safety-net.md),
-its §8 "As built"; from the Oct 3–4 session, decisions 26–29) is the
-safety net, on `plan-15-integration` → `finish-line`:
+- Tests and agents never read or write the owner's real `~/Hyperspace`.
+  Tests run against a temp home (`HYPERSPACE_HOME`, set by
+  `tests/conftest.py`).
+- Never push to `main`. The owner merges.
+- A change to a file format backs the old file up before the first
+  rewrite.
 
-- **Undo** (WP1, PR #82): ⌘Z / Ctrl+Z, ⇧ to redo. One step per gesture
-  (a drag, a knob turn, a typed value) or per replacing action (a load,
-  a Learn, an Unbind, a delete, Replace), found by comparing the bases
-  and the loaded preset's table once a frame; a hand, a band or an LFO
-  makes no step; a restore sets only what differs. `undo.py`,
-  ENGINEERING §5b.
-- **The trash** (WP1): a user preset file a save or a delete would
-  destroy is copied to `<home>/trash/` first.
-- **Home** (WP2, PR #83): the Home key and the APC40's OVERDUB load the
-  show's "starts on" preset.
-- **The master dim** (WP3, PR #81): the crossfader dims the finished
-  frame, left black, right full; never saved, 1 at launch; a preset load
-  no longer loosens a fader whose param it did not move.
-- **Save-as on the desk** (WP4, PR #87): a hold of 0.6 s on the
-  clip-stop row saves a new preset ("TRIP 2") into the next empty slot;
-  the desk never overwrites. A bank slot's right-click menu on the
-  PRESETS page has "put preset here…" and "clear slot".
+## Ideas for later (not started)
 
-None of it has been tried by a person at the rig. It was shown by tests
-(1121 pass), offscreen renders, headless demos under
-`plans/assets/15-safety-net/`, and a scripted launch of the app on a
-laptop. Eleven forks were settled by the unattended run on its own
-recommendation and wait for the owner: `DECISION-REGISTER.md` rows
-34–44.
-
-Plan 16 (2026-10-04, [`plans/16-paper-cuts.md`](plans/16-paper-cuts.md),
-its §7 "As built"; from the same session, no decision asked of the
-owner) is the paper cuts, on `plan-16-integration` → `finish-line`. It
-adds no param, page or menu item; one config key and one file in the
-home:
-
-- **The cheat sheet is off at launch** (WP1, PR #89); `/`, the pad's
-  MENU and the APC40's DETAIL show it. The desk diagram stays, in the
-  bottom-left corner.
-- **An FX chip's name opens the effect; a dot at its left end switches
-  it** (WP2, PR #84). Three chips to a row. The open effect is a name
-  (`FxState.select` / `selected`), so a reorder or a preset load never
-  changes it.
-- **An effect that is not running says why** (WP3, PR #86): off,
-  bypassed, FX mix 0, its mix 0, with "turn on" / "effects on"; its
-  controls are dimmed by a veil and stay live.
-- **The windows open where the config says, else where they were**
-  (WP4, PR #85): `[output] monitor` and the new `control_monitor`, then
-  `<home>/windows.json`, written on quit and ⌘R; fullscreen is never
-  remembered. `placement.py`, ENGINEERING §2.5.
-- **Instances to zero** (WP5, PR #90): `view.instances` 0–100, "0 ·
-  nothing drawn", the echoes and effects carry on. `dream.layer` is not
-  modulatable.
-- **Four follow-ups** (WP7, PR #92): a footer line said twice shows
-  twice; a performer's round-off lights no dirty dot; the desk diagram
-  is in its place on the sheet's first frame; a config screen that is
-  not a number is −1 and a note, not a dead launch.
-
-None of plan 16 has been tried by a person at the rig either. It was
-shown by tests (1178 pass with it), pictures from a hidden window or an
-offscreen render and transcripts under `plans/assets/16-paper-cuts/`,
-and a scripted launch on a one-screen laptop — so **window placement has
-never met a second screen**. Five calls were built on the run's
-recommendation and wait for the owner: `DECISION-REGISTER.md` rows
-45–49. Plans 17–21 are ordered in
-[`plans/15-21-roadmap.md`](plans/15-21-roadmap.md); each plan document
-is written when it starts.
-
-Plan 18 (2026-10-04, [`plans/18-hand-and-knob-feel.md`](plans/18-hand-and-knob-feel.md),
-its §7 "As built"; from the same session's "lower hand sensitivity",
-"tame rotation" and the desk's stepping knobs) is hand and knob feel, on
-`plan-18-integration`. It adds two session params, one optional key in
-`hands.json` and one factory preset:
-
-- **An interaction box** (WP1, PR #94): bounds on the palm in
-  `hands.json` (schema 2; an old file is never rewritten at launch and
-  is kept as `hands.json.bak-v1` before the first rewrite). The
-  calibration sweep sets it, "reset ranges" opens it, the HANDS page
-  draws it. A hand outside it is absent everywhere, its ghost included.
-  **The box is off for the whole sweep: calibrate with nobody else in
-  view.**
-- **Knob smoothing** (WP2, PR #98): `desk.slew`, on SYSTEM under
-  "midi". A knob's or fader's value arrives in a straight line between
-  detents and rests where it always did. **80 ms in the running app**,
-  settled by the run's orchestrator against the plan's recommendation of
-  off (register row 54); a show that saved the number keeps it.
-- **What a hand Learn lands with** (WP3, PR #100): a tilt lands as a
-  `push` about the base at `hands.learn_depth` (0.25, HANDS, "feel &
-  calibration"); height is still the fader except onto a range centred
-  on zero; a learn takes the axis's other rows with it, a factory
-  preset's included (one ⌘Z back). Existing rows and every preset file
-  are untouched.
-- **`hands-orbit`** (WP4, PR #97): a factory preset, the right hand
-  orbiting the camera and the left panning and zooming it; in the list,
-  on no F-key. Its zoom depth is 0.12, not the plan's 0.3.
-
-None of plan 18 has been tried by a person at the rig, **and none of it
-has met a camera, a real hand, a real sweep or an APC40**: it was shown
-by tests on synthetic hands and fake MIDI ports (1259 passed with it and
-plan 17's first three packages; 1276 with plan 17 whole), pictures from a hidden window and offscreen renders
-under `plans/assets/18-hand-and-knob-feel/`, and scripted launches on a
-laptop. Seven calls wait for the owner: `DECISION-REGISTER.md` rows
-50–56.
-
-Plan 17 (2026-10-04, [`plans/17-learn-and-the-desk.md`](plans/17-learn-and-the-desk.md),
-its §7 "As built"; from the same session, where mapping lost the most
-time) is Learn, Unbind and seeing the desk, on the same branch. It adds
-no param, page, key, config key or file:
-
-- **One Unbind** (WP1, PR #93): the preset's desk rows and every route
-  on the param, one undo step; a submenu (desk / route / both) only with
-  both kinds; there with MIDI off; not offered where it could only
-  refuse. "Unbind hand" is gone.
-- **Learn desk · Learn hand ▸ left / right** (WP2, PR #96): a learn
-  listens to one source. A knob bumped during a hand learn does its own
-  job; the session's controls (SHIFT, the faders, TAP, the preset pads)
-  work through a desk learn, and a refused learn stays armed. The footer
-  says what is armed on every page; a click on it cancels.
-- **The menu on a row's label and on every meter** (WP3, PR #99).
-- **A ROUTING filter** (WP5, PR #91): one field; it holds across preset
-  loads, and a row added while it is set can be hidden by it.
-- **The desk, big and clickable** (WP4, PR #102): no DESK page — the
-  desk window takes the room it has and, with the panel hidden (H), the
-  whole control window, every lit control named. Click a control, then
-  click a param: **while a control is picked every page but ROUTING is
-  dimmed and takes no input**, and the pick lets go by itself after
-  20 s.
-
-None of plan 17 has been tried by a person at the rig, **and nobody has
-clicked, right-clicked or typed in the real control window**: it was
-shown by tests that feed imgui its mouse and keyboard events (1276 pass
-with it), pictures from a hidden window and transcripts under
-`plans/assets/17-learn-and-the-desk/`, and scripted launches on a laptop
-with no desk and no camera. Eight calls wait for the owner:
-`DECISION-REGISTER.md` rows 57–64. ARCHITECTURE and ENGINEERING describe
-Learn, Unbind and the desk as they are now.
-
-Plan 20 (2026-10-04, [`plans/20-fx-dream-looks.md`](plans/20-fx-dream-looks.md),
-its §7 "As built"; from the same session, with the owner's answer "the
-faces as their own effect target") is FX, dream and looks, on
-`plan-20-integration`. It adds one generated enum per effect
-(`fx.<name>.target`), `fx.face_map` and `view.inst_layout`; no page, key,
-config key or file:
-
-- **The faces as an effect target** (WP1, PR #101; WP2, PR #106): each
-  effect is aimed at the frame or at the faces (the combo on the open
-  strip's blend row). The faces' effects run first, over a 1024² picture
-  of what face 0 shows (its pattern, the bitmap over it), and the faces
-  show it **per face** or in **screen** space; the echoes and the dream
-  carry them. With nothing aimed at the faces the frame is the one it
-  was, to the bit. The FX page's status is two rows while anything is
-  aimed at the faces, with the per face / screen chips; a chip on the
-  faces has a diamond. **Per face, an effect reads faint** at the faces'
-  few percent of alpha (the build's own renders).
-- **Drag to reorder** (WP3, PR #108): drag an effect's chip by its name
-  onto another; one undo step; the drop opens the dragged effect. The
-  order slider stays.
-- **The LOOKBACK page** (WP4, PR #105): ECHOES, DREAM, BOTH; labels that
-  say what each knob does, here and on ROUTING ("Spacing" is "time
-  apart", "Echo time apart"); the dream's layer is six chips.
-- **Dream speed** (WP5, PR #107): `dream.k`, read in dream frames
-  ("≈14 frames"; one decimal under ten). Faster is also shallower, and
-  it follows the worker's rate.
-- **Instance layouts** (WP6, PR #111): GRID (as before), HEX (a
-  honeycomb from the centre), RING; the VIEW page's field in one row.
-
-None of plan 20 has been tried by a person at the rig, **and nobody has
-seen a face effect on a projector or the glass, dragged a chip with a
-real mouse, or judged the dream at any speed**: it was shown by tests
-(1355 pass with plans 15–18 underneath), offscreen and hidden-window
-renders under `plans/assets/20-fx-dream-looks/`, and scripted launches
-on a laptop. The build was handed between agents mid-way at the owner's
-instruction (WP2/WP3 and WP6 finished from pushed work-in-progress
-commits). Seven calls wait for the owner: `DECISION-REGISTER.md` rows
-65–71. ARCHITECTURE and ENGINEERING describe the face target, the chain
-view, the look-back page and the layouts as they are now.
-
-Plan 19 (2026-10-04, [`plans/19-presets-and-the-desk.md`](plans/19-presets-and-the-desk.md),
-its §7 "As built"; from the same session — "more than eight on the
-desk; clean out the unwanted ones; no always-ask on save") is presets
-and the desk, on `plan-19-integration`. It adds no param, page or menu
-item; one config key (`[library] git`, off), one home file
-(`hidden.json`) and, only with the key on, `.git/` and `.gitignore`:
-
-- **A bank of twenty-four** (WP1, PR #104): F1–F8 and clip row 1 are
-  the first eight, slots 9–24 the PRESETS page's sixteen smaller
-  buttons and the desk's clip rows 4–5. A show file is never rewritten
-  by a load; the first write past slot 8 keeps
-  `<show>.hyp.json.bak-v2-bank8` first. The factory party show has
-  TRACER on slot 9, so save-as goes on to slot 10.
-- **Rows 4–5 are the bank** (WP2, PR #110), invariant on both layers: a
-  pad green loaded, **amber filled**, dark empty. The shape is the cue
-  knob's alone. A preset saved before loads without its old shape pads,
-  quietly, and its file is untouched until it is saved. The first launch
-  adds the sixteen pads to `bindings.json`, backed up first, and **never
-  rewrites it without that backup**; what it did is one line on the
-  SYSTEM page (`Bindings.said` — the launch's notes used to be lost
-  before the first frame).
-- **The device knobs** (WP3, PR #115): 4D depth · yaw · pitch · pattern
-  on D1–D4 of every factory preset with no knobs of its own; `hands-fx`,
-  `hands-pinch`, `lfo-breathe` their own; the six eight-knob presets
-  unchanged.
-- **The dirty dot and "save copy"** (WP5, PR #114): a 12 px red disc,
-  the save chip solid red while dirty, "save copy" on a factory preset;
-  the preset strip has no reset.
-- **Hide, rename and the trash** (WP4, PR #117): from the preset list,
-  × on any preset (a factory one hidden), rename on yours (every show of
-  yours repointed), "show hidden", and the trash with restore and
-  **empty — the one delete in the app that keeps no copy**, asked twice.
-- **The home in git** (WP6, PR #119): `[library] git = true` makes the
-  home a local repository with a commit per save; off by default; never
-  inside another repository; git never blocks a save.
-
-None of plan 19 has been tried by a person at the rig, **and nothing of
-it has been on the APC40**: the amber at velocity 5, the pads of rows
-4–5, the knobs' new choices and every popup are unseen. It was shown by
-tests (1442 pass with plans 15–18 and 20 underneath), hidden-window
-renders and transcripts under `plans/assets/19-presets-and-the-desk/`,
-and scripted launches on temp homes; the orchestrator loaded the
-owner's seventeen presets from the night (`shared/dan-2026-10-04/`) on
-it — all load, no note. The build was handed between agents mid-way at
-the owner's instruction (WP2 finished from a pushed work-in-progress
-commit). Seven calls wait for the owner: `DECISION-REGISTER.md` rows
-72–78. ARCHITECTURE and ENGINEERING describe the bank, the desk's
-rows 4–5, the list, the trash and the home in git as they are now.
-
-Plan 21 (2026-10-04, [`plans/21-outputs-and-the-hands.md`](plans/21-outputs-and-the-hands.md),
-its §7 "As built"; the owner's answers 32 and 33, and the owner's
-addition during the run, "hands through effects") is outputs and the
-hands, on `plan-21-integration`. It adds `output.N.scene / hands /
-through` per opened output and `output.N.dim` with two or more listed
-(rig settings: never saved, from `config.toml` at every launch),
-`ghost.style`, and one config list, `[[output.screens]]`; no page or
-menu item:
-
-- **PR #78's ghost hands, reviewed** (WP5, PR #112): a hands pass that
-  raises costs the frame neither its picture nor its dim (`Ghost.error`
-  says why); the pass writes no param; a bad tape is a SYSTEM note.
-- **The compose path and hands through effects** (WP1, WP2, PRs #118,
-  #120): the frame is drawn once and shown per output through its
-  switches; with "through" on an output's hands go in before the
-  effects, which bend them; the echoes and the dream never hold them;
-  the guide and its labels are never bent. Eight states per output, six
-  pictures. One output with the default switches is the old frame, to
-  the bit.
-- **`ghost.style`** (WP6, PR #122): HANDS (as before), JOINTS, PALMS,
-  CAGE, MARIONETTE, saved with the show; Ghost mirror, guide and tethers
-  no longer follow a hand (a hand Learn onto one is refused in words; an
-  old route onto one is dropped at load with a note).
-- **The output list** (WP3, PR #123): `[[output.screens]]` (four at
-  most; no list is one output, as before); output 1's window renders,
-  each later output copies the frame in its own window; only output 1's
-  swap waits for its screen; `windows.json` one rect per output; a later
-  output whose screen is not connected at launch is not opened, and **a
-  screen plugged in later is not picked up until a relaunch**.
-- **The OUTPUT page** (WP4, PR #124): a block per output — three ticks,
-  its dim, "shows: …" in words; the footer names a black output.
-
-None of plan 21 has been tried by a person at the rig, **and no window
-of it has been looked at by a person**: it was shown by tests (1549 pass
-with plans 15–20 underneath), offscreen renders under
-`plans/assets/21-outputs-and-the-hands/`, and scripted launches on the
-laptop's one screen whose windows were read back (output 2's picture
-equal to output 1's, byte for byte). Nothing has met the glass, the
-projector, a second screen or a real hand, and **whether output 1's
-waiting swap paces the loop is unconfirmed** (the build ran unpaced with
-one output and with two). Ten calls wait for the owner:
-`DECISION-REGISTER.md` rows 79–88. ARCHITECTURE and ENGINEERING describe
-the outputs, the frame and the ghost hands as they are now. During the
-run a full pytest run aborted inside CoreMIDI (2026-10-04 22:36); the
-tests are now kept off the machine's MIDI (`tests/conftest.py`), and the
-app's own 2 s port rescan carries the same risk (audit R15, open).
-
-**Everything only the machine can verify** — plan 09's five hand checks,
-plan 08's unverified list, plan 07's WP6c dream tuning, the first real
-capture, the APC40, the second monitor, IAC + FL Studio, and the
-eyeballing owed for PRs #24, #25, #26, the LFO page and the re-laid-out
-HANDS page — is one numbered list with commands, presets, pass and fail:
-[`plans/11-hand-checks.md`](plans/11-hand-checks.md). Do it in that order;
-file what fails as new audit rows dated with plan 11.
-
-## Not done — in rough priority order
-
-1. **The hand checks** above. The same checks in plain language,
-   grouped by the hardware each needs and in running order, with a
-   glossary: [`TESTING-GUIDE.md`](TESTING-GUIDE.md). Nothing in them has been run by a person
-   since plan 09 landed; B1's fix and the HANDS page re-layout (plan 11
-   WP13 found it overflowing the panel by 216 px on any rig with hands
-   enabled) are the two things most likely to look different. Plan 13's
-   group H (checks 33–42, check 31 first) starts with the first launch
-   on the new code, which migrates `~/Hyperspace` — copy it first.
-   Plan 15's **group K** (checks 48–57) is the newest: before launching
-   `finish-line`, `cp -R ~/Hyperspace ~/Hyperspace-2026-10-04`; do check
-   57 first (that launch rewrites `bindings.json` once, with a backup:
-   the crossfader, OVERDUB, the clip-stop row, Home and the undo keys),
-   then 48, 50, 53 on the laptop, 49, 51, 54–56 with the APC40, 52 with
-   the camera. Check 55 settles the one thing read from a comment: that
-   the crossfader's left end is CC 0. Plan 16's **group L** (checks
-   58–63, about 20 minutes): 58–60, 62 and 63 on the laptop, 61 with the
-   projector — the first time window placement meets a second screen; if
-   a window ever opens out of reach, delete `~/Hyperspace/windows.json`.
-   Plan 17's **group M** (checks 64–71, about 35 minutes): 64, 68, 69
-   and 71 on the laptop, 65, 67 and 70 with the APC40, 65–67 with the
-   camera, after check 72. Check 70 is the first real click the
-   on-screen desk and the dimmed page get; 71 the first typing in the
-   filter. Plan 18's **group N** (checks 72–80, about 40 minutes, the
-   camera for all of it and the APC40 for 74, 78 and 79): **72 first** — the calibration sweep, which now sets
-   the interaction box, done with nobody else in the camera's view —
-   then 73 and 74 (a hand outside the box, a hand on the desk), 75–77
-   (what a Learn lands with), 78 and 79 (judge the 80 ms of knob
-   smoothing; SYSTEM → Knob smoothing turns it down or off), 80
-   (`hands-orbit`'s directions and its zoom). Since a hand outside the
-   box is now absent, every older check that needs a hand in the box
-   (group C's, and the hand parts of the later groups) is run after 72.
-   Plan 19's **group O** (checks 81–90, about 40 minutes): **on a copy
-   of `~/Hyperspace`** (`cp -R ~/Hyperspace ~/Hyperspace-before-19` and
-   a second copy to play on, `HYPERSPACE_HOME` pointed at it) — 81 and
-   84 at the first launch (the sixteen pads added to `bindings.json`,
-   its backup, the SYSTEM line), then 82, 83 and 85 with the APC40 (the
-   amber, the far pads on both layers, save-as past F8, the knobs), then
-   86–89 on the laptop (cull, rename, the trash and its two-click empty,
-   the dot), and 90 last (git, if you want it). Plan 20's
-   **group P** (checks 91–98, about 30 minutes): 91–97 on the laptop —
-   an effect on the faces (91; per face may read faint), nothing changed
-   with none (92), the echoes carrying them (93), dragging a chip with a
-   real mouse and the trackpad (94), the look-back page and the six
-   layer chips' names (95), dream speed with the worker running (96),
-   the layouts and HEX + ORBIT's overlap (97) — then 98 on the projector
-   and the glass, where the faces' effects are judged at all. Plan 21's
-   **group Q** (checks 99–112, about an hour): back up the home first;
-   **99 and 100 on the laptop before editing `config.toml`** (one output
-   as it was; PR #78's fixes), then paste check 101's two
-   `[[output.screens]]` entries and run 101–109 with the glass, the
-   projector and the camera (the eight states, over or through, the dims
-   with the APC40's crossfader, black never a mystery, another shape,
-   **107: the frame rate and tearing with two screens — the one claim of
-   plan 21 nobody has confirmed**, 108: the ghost hands following real
-   ones, which finishes check 47 and records the first real tape, 109:
-   the five styles from where the audience stands — say which to keep),
-   110 (a hand cannot learn a ghost setting; the APC40 for its Learn desk
-   step), then 111 and 112 last (the projector unplugged at launch, then
-   pulled mid-run).
-2. **First real audio capture.** Every live path is code-complete and now
-   under test over a fake device, but no human has pressed `M` on real
-   hardware with the macOS microphone prompt. One click plus a clap
-   (hand check 3).
-3. **The owner's remaining decisions** (`docs/DECISION-REGISTER.md`).
-   Rows 1–6 are answered and built (the trim is the per-band AUTO /
-   MANUAL switch, plan 11 WP15); `R` / F1–F8 as table rows (row 7) and
-   plan 13's forks (rows 9–13, 12b, 18, 19) are answered and built. Row
-   20 (hand routes by name, audit N7) is open. (As of 2026-10-04: rows
-   1–33 are all answered. **Rows 34–44 are the open ones** — eleven
-   calls plan 15's unattended run built on its own recommendation, each
-   to confirm or overturn, each with its cost to reverse: the undo keys
-   and the chord rule, the band layout, taps, the trash's rules, the
-   Home key, camera moves, performers on home and the dim, the dim in
-   overlay, the save-as gesture, a drag that pauses, the faders after a
-   load. **Rows 45–49 are plan 16's**, open the same way: the switch on
-   an FX chip and three chips to a row, an idle effect's faders dimmed
-   but live, the instance count reaching zero from the knob, where the
-   windows open, the dream's layer no longer performable. **Rows 50–56
-   are plan 18's**: the interaction box, a hand outside it absent
-   everywhere, what a hand Learn lands with, a Learn taking the axis's
-   other rows, knob smoothing on at 80 ms — the one built against its
-   plan's recommendation — where the two new numbers live, and
-   `hands-orbit`. **Rows 57–64 are plan 17's**: the big desk and what a
-   control says, click a control then a param (with the 20 s), one
-   Unbind, the Learn items, the session's controls through a learn, one
-   road onto the desk, the ROUTING filter, and two things about a hand
-   Learn left alone. **Rows 65–71 are plan 20's**: what the faces'
-   picture holds, its size and the screen fit, performers on the target
-   and the mapping, the chain view, re-aiming by the combo, the
-   look-back page's sections and labels, dream speed, and the
-   layouts. **Rows 72–78 are plan 19's**: the bank of twenty-four (no
-   new triggers, the show file, TRACER on slot 9, the page), rows 4–5
-   and their lights with the old shape pads dropping quietly, no backup
-   no rewrite, the knob re-cut, hide / rename / the trash, the dot and
-   "save copy", and the home in git. **Rows 79–88 are plan 21's**: where
-   "through" puts the hands and what the scene off with it on shows, the
-   guide never bent, the switches as rig settings from the config,
-   letterboxing, one window rendering and the others copying with only
-   the first waiting — its frame-rate reason unconfirmed — Ghost hands
-   against each output's tick, the OUTPUT page in words, a screen not
-   connected at launch, `ghost.style`, and Ghost mirror / guide /
-   tethers no longer following a hand. Rows 34–88 are the last of the
-   run: each is built and takes "keep" or "overturn".)
-4. **The rest of the finish line: merge it.** Plans 15–21 are all
-   built, documented and on `finish-line` (plan 21 merged from its
-   integration branch). Left to do: merge **PR #113** (the owner's shared presets,
-   `shared/` and `tools/shared_presets.py`, into `main`) and **PR #80**
-   (`finish-line` into `main`), after the hand checks the owner wants
-   first. Left stale by plan 21, not being documents: `render.py`'s
-   comment before the pipeline loop says the history is captured "after
-   the first composite" (it is captured once, after every pipeline);
-   `ghost.py`'s module docstring and `ghost.on`'s tip say the hands are
-   drawn "after every effect" (now the default of the through tick
-   only); `app._open_presenters`' docstring quotes "121 fps against
-   60–81" as fact (unconfirmed); `outputs.py`'s module docstring names
-   scene, hands and dim but not through. Three audit rows are filed and
-   open from plan 21: R15 (the app's MIDI rescan and a CoreMIDI abort),
-   P6 (a screen plugged in after launch is not picked up) and V8
-   (`Renderer.on_reload` builds in whichever GL context is current).
-   Left stale by
-   plan 19, not being documents: `ui.py`'s `_page_presets` docstring
-   still says "the eight preset buttons"; `homegit.py`'s module
-   docstring lists the commits a save, a × and a show write ask for, not
-   rename, hide, unhide and restore (added at the merge); the performer
-   cards `plans/assets/12-presets/party-tumble.md`, `party-faces.md` and
-   `party-field.md` still say "Clip rows 4 and 5: the shape" and do not
-   name D1–D4 (now 4D depth, yaw, pitch, pattern). Two plan-19 defects
-   are filed and open: audit R14 (a learned step or knob on
-   `preset.select` lands on empty slots) and U10 (a module strip's save
-   chip overlaps its name under "more"). Left stale by plan 20, not being documents:
-   `library/dream/wake.json`'s note still says "Echo mix, fade, hue and
-   dream mix"; `Renderer._tile`'s docstring and a test message in
-   `tests/test_render.py` still say "instance grid"; the speed shot
-   `plans/assets/20-fx-dream-looks/lookback-speed.png` predates the
-   decimal and shows "≈2 frames" at the fast end. Code comments left stale (listed in plan 17's
-   §7, WP6): `hands/core.py`'s module docstring still says Learn "writes
-   a `position` route" (since plan 18); `midi.py`'s and
-   `ui_routing.py`'s module docstrings still describe a bare Learn
-   completed in `MidiIO._learned`. One small defect is filed and open
-   from plan 17: audit U9 (the LFO page's two nudge chips share one
-   menu id). Nothing of plan 15's desk side has been on
-   the APC40: the hold's timing, the clip-stop LEDs and the blink are
-   from Akai's protocol table (hand check 56). One audit row is open from plan 15: R13 (a fader moved
-   while its row is disabled stays caught and jumps).
-5. **Plan 04 — booth hardware.** Blocked on access: the pure-Python
-   Pro DJ Link spike against the CDJ-3000/XDJ-AZ (BLT+OSC is the standing
-   fallback), ESP32+BNO055 IMU ingest (packet format specced in BLUEPRINT
-   §3.4), Δt delay compensation + metronome calibration. The tempo clock
-   deliberately syncs to nothing until then (DECISIONS).
-6. **Instanced GPU field.** For a *live* field: per-instance rotation
-   phases and true instancing (agent prototype measured 621–845 fps at
-   N=100; 1–2 days). The synchronized field is the v1 (laid out as a
-   grid, a honeycomb or a ring since plan 20).
-7. **Plan 05's rest** — MIDI clock from deck BPM and the FL-side fuser
-   script; the bridge itself is built, off by default, and now has a line
-   on the SYSTEM page.
-8. **Plan 06's non-trim items:** tempo-locked shapers once DJ Link exists,
-   real harmonic detection, a scrub bar. (Saveable scenes and per-band
-   LFO knobs are covered by the JSON scenes and the routable LFOs.)
-9. **Ideas parked:** per-cell (3-cell) grouping for cell-wise
-   colour/pattern assignment.
-
-## Decisions that govern future work
-
-The full, dated list is [`DECISIONS.md`](DECISIONS.md). The ones a new
-session trips over first:
-
-- Full Python re-platform; the HTML is a frozen reference, never executed
-  at runtime (BLUEPRINT §5). FL Studio connects only via the optional
-  bridge (§3.6).
-- Parity bar: geometry exact; audio behavioural; visuals judged by the
-  owner's eye.
-- One performer per parameter; scene-setters write the base; every
-  continuous source reaches a param only through `Router.modulate`;
-  `hands/core.py`, `hands/signal.py`, `lfo.py`, `tempo.py` and `undo.py`
-  import nothing from the package (ARCHITECTURE §3, held by tests).
-- A replacing action calls `undo.push(label)` **before** it changes
-  anything (`load=True` when it changes what is loaded); undo is a
-  scene-setter and never writes an offset or a file. Every later plan's
-  new action does the same.
-- Nothing from plans 15–21 goes to `main`; everything lands on
-  `finish-line` through one integration branch per plan (decision 30).
-- Plans 03/04 swapped (hardware unavailable). The DJ Link spike is the
-  first thing to do when deck access exists — it is the only genuine
-  unknown in the stack.
+- An IMU prop feeding rotation phase offsets over UDP: packet
+  `struct {uint8 ver; uint8 id; float qw, qx, qy, qz}`, little-endian,
+  100 Hz; orientation deltas go to the XW / YW / ZW phase offsets, never
+  to a speed; a silent prop decays to no contribution.
+- DJ Link tempo: `{bpm, beat_phase, bar_phase, master_deck, on_air[]}`;
+  a pure-Python source first, Beat-Link-Trigger over OSC as the fallback.
+  MIDI clock in is the other tempo source. (DECISIONS currently says
+  neither is built: tempo is tap-only.)
+- Audio delay compensation: stream latency + analysis latency − about
+  1 ms, calibrated with a metronome.
+- FL Studio does not fuse 14-bit MSB/LSB pairs in "Link to controller":
+  the bridge needs a small FL MIDI script, or per-channel pitch bend.
+- An instanced GPU field (per-instance rotation phases, true instancing).
