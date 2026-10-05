@@ -909,7 +909,7 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                  tip="The chosen tint colour's saturation: 0 tints grey — a greyscale dream.")
     r.continuous("dream.echoes", "Echo count", *_attr(dream, "echoes"), lo=0, hi=MAX_ECHOES,
                  integer=True, fmt=lambda v: f"{int(v)}", group=g,
-                 tip="How many echoes are drawn; 0 leaves the dream alone. With time "
+                 tip="How many echoes are drawn; at 0 only the dream is. With time "
                      "apart it sets how far back the trail reaches: count × time apart "
                      "seconds.")
     r.continuous("dream.gap", "Echo time apart", *_attr(dream, "gap"), lo=GAP_LO, hi=GAP_HI,

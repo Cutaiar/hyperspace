@@ -63,6 +63,7 @@ LAYER_SAYS = {"conv2_2": "fine grain", "conv3_3": "the classic swirl", "conv4_3"
               "largest"}
 LABEL_W = 94        # a cell's label column: "SHAPE HIDES", the longest, is 88 px
 THUMB_H = 48        # thumbnail height, px; width follows the echo's aspect
+TIP_W = 380         # this page's own hovers wrap at this width (a set_tooltip line does not)
 STATUS_LINES = 3   # the worker's status is at most this tall; the rest is on its hover
 
 
@@ -70,7 +71,7 @@ def page_label(pid: str) -> str:
     """What the page calls `pid`: its cell's label, the switch's own, or —
     for the layer — its chips'."""
     if pid == "dream.layer":
-        return " / ".join(LAYER_CHIPS[name] for name in LAYERS)
+        return " / ".join(LAYER_CHIPS.get(name, name) for name in LAYERS)
     return SHORT.get(pid, "Look-back")
 
 
@@ -97,11 +98,21 @@ def page(panel, dt: float) -> None:
     panel._section("dream", note=NOTES["dream"])
     _worker_line(panel, lb)
     _layer_chips(panel)
-    _cells(panel, lb, "##dream", SECTIONS["dream"][1:])
+    _cells(panel, lb, "##dream", [pid for pid in SECTIONS["dream"] if pid != "dream.layer"])
     imgui.spacing()
 
     panel._section("both", note=NOTES["both"])
     _cells(panel, lb, "##both", SECTIONS["both"])
+
+
+def _say(text: str) -> None:
+    """A hover that wraps: a chip's, the swatch's and the worker's whole
+    status are longer than a tooltip's one line can be wide."""
+    if imgui.begin_tooltip():
+        imgui.push_text_wrap_pos(TIP_W)
+        imgui.text_unformatted(text)
+        imgui.pop_text_wrap_pos()
+        imgui.end_tooltip()
 
 
 def _cells(panel, lb, table: str, ids) -> None:
@@ -133,23 +144,35 @@ def _layer_chips(panel) -> None:
     a = panel.reg["dream.layer"]
     p = panel._real(a)
     gap = imgui.get_style().item_spacing.x
-    w = (imgui.get_content_region_avail().x - gap * (len(LAYERS) - 1)) / len(LAYERS)
+    w = max((imgui.get_content_region_avail().x - gap * (len(LAYERS) - 1)) / len(LAYERS), 1.0)
+    row = None
     for k, name in enumerate(LAYERS):
         if k:
             imgui.same_line()
         hit = ui.lit_chip(f"{LAYER_CHIPS.get(name, name)}##chip.{a.id}.{k}", k == p.base,
                           size=imgui.ImVec2(w, 0))
-        panel._tip(a, lambda name=name: f"{name}: {LAYER_SAYS.get(name, name)}\n\n{a.tip}")
+        if imgui.is_item_hovered():
+            _say(f"{name}: {LAYER_SAYS.get(name, name)}\n\n{a.tip}")
         panel._ctx(a, key=f".{k}")
-        panel._learn_frame(a)
+        lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        row = (lo, hi) if row is None else (row[0], hi)
         if hit:
             p.set(k)
+    # armed to learn: one outline round the row, as a combo would have had
+    # one (panel._learn_frame per chip would draw six)
+    lrn = panel.learn
+    if row is not None and lrn is not None and lrn.learning == a.id:
+        imgui.get_window_draw_list().add_rect(
+            imgui.ImVec2(row[0].x - 2, row[0].y - 2), imgui.ImVec2(row[1].x + 2, row[1].y + 2),
+            ui.u32(ui.RED), 999.0, 2.0)
 
 
 def _trail_note(r) -> str:
     """How far back the trail reaches — in seconds, the same on any screen
     (plan 14 WP6). What an echo is, is the brightness cell's hover."""
     n, gap = int(r["dream.echoes"].value), float(r["dream.gap"].value)
+    if n <= 0:
+        return "no echoes: the dream alone"
     if gap <= 0:
         return f"{n}, one a frame"
     return f"{n} × {gap * 1000:.0f} ms · the trail reaches {n * gap:.2f} s"
@@ -191,7 +214,7 @@ def _tint_swatch(panel, lb) -> None:
             says = "the scene's mean hue"
         else:
             says = "the scene's mean hue — nothing captured yet"
-        imgui.set_tooltip(f"The colour the dream is tinted towards: {says}.")
+        _say(f"The colour the dream is tinted towards: {says}.")
 
 
 def _worker(lb):
@@ -252,7 +275,7 @@ def _worker_line(panel, lb) -> None:
     imgui.text_wrapped(shown)
     imgui.pop_style_color()
     if shown != full and imgui.is_item_hovered():
-        imgui.set_tooltip(full)
+        _say(full)
 
 
 def _echo_text(lb) -> str:

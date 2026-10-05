@@ -12,7 +12,7 @@ dream.on          Look-back  Look-back                            Look-back     
 — echoes —
 dream.echo_mix    echo       brightness                           Echo mix       Echo brightness   0.40       How bright the newest echo is; older ones fade from it by the fade time.
 dream.fade        fade       fade time                            Fade           Echo fade time    0.23 s     How long the trail lasts: an echo halves in brightness every this many seconds of its age, whatever the screen's frame rate (0.23 s is the old 0.95 a frame at 60 Hz; 0.76 s is 0.985).
-dream.echoes      Echoes     count                                Echoes         Echo count        8          How many echoes are drawn; 0 leaves the dream alone.
+dream.echoes      Echoes     count                                Echoes         Echo count        8          How many echoes are drawn; at 0 only the dream is.
 dream.gap         spacing    time apart                           Spacing        Echo time apart   33 ms      The time between one echo and the next, in milliseconds, whatever the frame rate: short is a smear, long a row of separate copies (33 ms is every 2nd frame at 60 Hz, 67 ms every 4th; 0 is every frame).
 — dream —
 dream.layer       net        grain / swirl / blot / 3b / 4c / 4e  Layer          Dream layer       conv3_3    Which layer of the net the dream brings out; a change loads it, which takes a moment.

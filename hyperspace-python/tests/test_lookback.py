@@ -1260,6 +1260,22 @@ def test_the_layer_is_a_row_of_chips(lbpage):
     assert lbpage.imgui.is_popup_open("", lbpage.imgui.PopupFlags_.any_popup_id)
 
 
+def test_an_armed_learn_outlines_the_chip_row_once(lbpage, monkeypatch):
+    """Six chips stand for one param: armed to learn, the row gets one
+    outline (as the combo it replaces had), not one per chip."""
+    from hyperspace import ui
+
+    framed: list[str] = []
+    real = ui.Panel._learn_frame
+    monkeypatch.setattr(ui.Panel, "_learn_frame",
+                        lambda self, p: (framed.append(p.id), real(self, p))[1])
+    lbpage.panel.learn = SimpleNamespace(learning="dream.layer", arm=lambda pid: None)
+    lbpage.frame()
+    assert "dream.layer" not in framed and "dream.mix" in framed
+    assert [w for w in lbpage.widgets() if w.startswith("chip.dream.layer")] == [
+        f"chip.dream.layer.{k}" for k in range(6)]
+
+
 def test_spacing_is_called_time_apart(lbpage):
     """The owner's "Spacing does not say what it is": the page's cell says
     TIME APART, the registry (so ROUTING, Learn and the desk diagram) says
@@ -1286,6 +1302,8 @@ def test_spacing_is_called_time_apart(lbpage):
     assert ui_lookback._trail_note(reg) == "8 × 33 ms · the trail reaches 0.27 s"
     gap.set_value(0.0)
     assert ui_lookback._trail_note(reg) == "8, one a frame"
+    reg["dream.echoes"].set_value(0)                # a supported value: the dream alone
+    assert ui_lookback._trail_note(reg) == "no echoes: the dream alone"
 
 
 def test_every_dream_label_says_whose_knob_it_is():
