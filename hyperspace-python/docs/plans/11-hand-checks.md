@@ -3,7 +3,7 @@
 Everything only the owner can verify, in the order that costs the least
 time at the machine: laptop alone first, then the APC40, then the camera
 and the box (APC40 still plugged in for check 24), then the projector,
-then IAC + FL Studio, then one back on the laptop, then plans 12 and 13's two, then plan 13's group H (plan 13 is built on `plan-13-integration`), then plan 14's group I and the ghost hands' group J, then plan 15's group K (undo, home, the master dim, save-as on the desk; built on `finish-line`), then plan 16's group L (the cheat sheet off at launch, the FX chips, an idle effect's strip, where the windows open, instances to zero, the dream's layer; checks 58–63, the projector for 61), then plan 17's group M (one Unbind, Learn desk / Learn hand ▸ left / right, the menu on a label and on every meter, the desk big and clickable, the ROUTING filter; checks 64–71, the APC40 for 65, 67 and 70, the camera for 65–67 — run it **after check 72**, which sets the box its hand checks sit in), then plan 18's group N (the interaction box, what a hand Learn lands with, knob smoothing, `hands-orbit`; checks 72–80, the camera for all of it, **calibration first**: check 72 sets the box every later hand check now sits in), then plan 19's group O (twenty-four presets, rows 4–5 of the desk as the bank and their lights, the device knobs re-cut, hide / rename / the trash, the dirty dot and "save copy", the home in git; checks 81–90, **on a copy of `~/Hyperspace`**, the APC40 for 82, 83 and 85), then plan 20's group P (effects aimed at the faces, per face or in screen space; dragging an effect's chip to reorder; the look-back page as ECHOES, DREAM and BOTH; dream speed; instance layouts; checks 91–98, the projector and the glass for 98). Each check: the commands, the config, the preset,
+then IAC + FL Studio, then one back on the laptop, then plans 12 and 13's two, then plan 13's group H (plan 13 is built on `plan-13-integration`), then plan 14's group I and the ghost hands' group J, then plan 15's group K (undo, home, the master dim, save-as on the desk; built on `finish-line`), then plan 16's group L (the cheat sheet off at launch, the FX chips, an idle effect's strip, where the windows open, instances to zero, the dream's layer; checks 58–63, the projector for 61), then plan 17's group M (one Unbind, Learn desk / Learn hand ▸ left / right, the menu on a label and on every meter, the desk big and clickable, the ROUTING filter; checks 64–71, the APC40 for 65, 67 and 70, the camera for 65–67 — run it **after check 72**, which sets the box its hand checks sit in), then plan 18's group N (the interaction box, what a hand Learn lands with, knob smoothing, `hands-orbit`; checks 72–80, the camera for all of it, **calibration first**: check 72 sets the box every later hand check now sits in), then plan 19's group O (twenty-four presets, rows 4–5 of the desk as the bank and their lights, the device knobs re-cut, hide / rename / the trash, the dirty dot and "save copy", the home in git; checks 81–90, **on a copy of `~/Hyperspace`**, the APC40 for 82, 83 and 85), then plan 20's group P (effects aimed at the faces, per face or in screen space; dragging an effect's chip to reorder; the look-back page as ECHOES, DREAM and BOTH; dream speed; instance layouts; checks 91–98, the projector and the glass for 98), then plan 21's group Q (the glass and the projector as two render outputs from `[[output.screens]]`, each with scene / hands / hands through effects and its own dim; the OUTPUT page's words; the frame rate with two screens; `ghost.style`; the ghost hands checked against real ones — check 47 finished there; checks 99–112, **99 and 100 before editing `config.toml`**, the glass and the projector for 101–109 and 111–112, the camera for 99 and 102–110, the APC40 for 104 and 110). Each check: the commands, the config, the preset,
 what to do, what a pass and a fail look like, and which audit item or
 code path a fail points at. Where a check can be simulated headless, the
 pytest node or `tools/` command that shows the expected behaviour is
@@ -427,6 +427,11 @@ passthrough, the crossfader darkens the ground; remove the line after.
 order); blurry edges → `dpr` in `app.frame`'s draw; the desktop through
 the window, or `T` floating it, with no `overlay = true` →
 `app._overlay_allowed` / `Output._set_overlay`.
+*Since plan 21 (WP3, WP4):* the OUTPUT page opens with a block per render
+output under Master dim; Screen, Fullscreen and the overlay rows follow
+and are output 1's only. With an `[[output.screens]]` list a later
+output's screen and fullscreen come from its entry, not from these rows,
+and only output 1 can be overlay (checks 101, 111).
 
 ## E. IAC + FL Studio — about 15 minutes
 
@@ -754,6 +759,10 @@ or an FX pass (`FxChain.opaque`); through the whole ground → the window
 is in overlay (`T` or the APC40's MASTER select — check the OUTPUT page)
 or `app._windows`' transparent-framebuffer hint (decision register row
 21, pending).
+*Since plan 21 (WP3):* with two listed outputs, run this on each; every
+output after the first is created opaque whatever the config says, so
+only output 1 can show the desktop through (check 104 for the dims on
+the glass).
 
 **44. The stall log: `kill -USR1` writes a dump (plan 14 WP1).**
 Headless: `uv run pytest -q tests/test_watchdog.py`. Launch
@@ -828,6 +837,11 @@ has a `stranded target` entry naming it.
 
 ## J. Ghost hands — added 2026-10-04
 
+**Finished in group Q (plan 21, 2026-10-04):** check 47 is run as
+check 108, with (g) — "effects never touch it" — now the default of a
+per-output switch and checked as check 103. Run group Q instead of this
+group; the text below is what 108 refers to.
+
 Run on the ghost-hands branch. Camera and projector (or the laptop
 screen); about 15 minutes. First, headless:
 `uv run pytest -q tests/test_ghost.py tests/test_hands_tape.py tests/test_hands_leap.py`.
@@ -835,6 +849,11 @@ screen); about 15 minutes. First, headless:
 `~/Hyperspace/hands.json` is old.
 
 **47. The ghost hands follow the real ones.**
+*Finished in group Q: check 108 runs (a)–(f), (h), (i); (g) is check
+103. Since plan 21 WP6 the drawn object is `ghost.style` (HANDS is
+this check's capsule hands; the others are check 109), and
+`ghost.mirror`, `.guide` and `.tethers` are no longer modulatable
+(check 110).*
 Launch, HANDS page, tick **Ghost hands** (`ghost.on`), opacity about
 60 %. Sit where you perform, both hands in the box. *Pass:* (a) **left
 and right not swapped** — raise only your left hand: the hand on the left
@@ -1034,6 +1053,12 @@ on the glass → the opaque blend in `Renderer.dim_pass`; the fader moving
 and the picture not, with a line under Master dim on the OUTPUT page →
 the driver refused the dim's program (`Renderer.dim_error`); a preset
 moving it → a preset or show landing a rig param.
+*Since plan 21 (WP1, WP4):* each render output dims by the master times
+its own dim (`output.N.dim`, a row in that output's block under Master
+dim on the OUTPUT page — only with two or more listed outputs, or a lone
+one whose config sets `dim` under 1); with one output the master is its
+dim and this check runs as written. With two outputs, the per-output
+part is check 104.
 
 **56. A hold on the clip-stop row saves a new preset; a tap does not (plan 15 WP4, decision 29).**
 Headless: `uv run pytest -q tests/test_midi.py::test_a_hold_fires_once_at_the_hold_time_while_held tests/test_midi.py::test_a_tap_fires_nothing tests/test_midi.py::test_the_bar_is_one_control tests/test_midi.py::test_the_bar_lights_while_held_and_the_new_slots_pad_blinks tests/test_presets.py::test_save_new_never_overwrites tests/test_presets.py::test_save_new_fills_the_next_empty_slot_and_becomes_the_loaded_preset tests/test_presets.py::test_save_new_on_a_full_bank_saves_to_the_list_and_says_so tests/test_presets.py::test_the_new_slot_loads_from_the_preset_row tests/test_library.py::test_next_name_counts_on_from_a_trailing_number`.
@@ -1257,6 +1282,15 @@ size in the file → `Output.windowed_rect`; no file after Esc →
 `app._save_windows` at the end of `app.main`; the app not launching with
 `monitor = "left"` → `placement.read` / `config.load`; a window that
 cannot be reached at all → delete `windows.json`, and log it.
+*Since plan 21 (WP3):* with an `[[output.screens]]` list in the config
+each listed output is its own window with its own `monitor` and
+`fullscreen` (the list wins over `[output] monitor` / `fullscreen`, with
+one note), `windows.json`'s `render` holds one rect per output in the
+list's order (an old one-entry file still loads), a later output's
+default spot is moved 40 px down and right off one already taken, and a
+**later** output whose `monitor` no connected screen has is not opened
+at all — check 111. This check runs as written with no list; with two
+outputs it is check 101.
 
 **62. Instances to zero (plan 16 WP5, register row 47).**
 Headless: `uv run pytest -q tests/test_render.py::test_zero_instances_draws_only_the_ground tests/test_render.py::test_zero_instances_still_runs_the_look_back_and_the_effects tests/test_plan12_presets.py::test_no_factory_hand_row_blanks_the_scene tests/test_params.py::test_instances_read_nothing_drawn_at_zero tests/test_undo.py::test_a_count_taken_to_zero_is_undone`.
@@ -2183,8 +2217,301 @@ row 65); the picture squashed → the cover fit in `FACE_FS_TAIL`
 alpha (`test_the_face_target_keeps_an_opaque_grounds_alpha`); too faint
 to read is a look to tune in a preset, not a fault: say which preset.
 
+## Q. Plan 21 — outputs, the hands through effects, the ghost hands finished — added 2026-10-04
+
+Run on `finish-line` once plan 21 is merged into it (PRs #112 PR #78's
+review fixes, #118 the compose path, #120 hands through effects, #122
+`ghost.style`, #123 the output list, #124 the switches and the OUTPUT
+page). **Back up the home first**: `cp -R ~/Hyperspace
+~/Hyperspace-<date>`. Laptop first with no config change (99, 100 —
+run both **before editing `config.toml`**), then the glass and the
+projector as two outputs (101–109), the camera for 99 and 102–110, the
+APC40 for 104 and 110, then the two unplugging checks last (111, 112). About 60
+minutes. First, headless:
+`uv run pytest -q tests/test_outputs.py tests/test_ghost.py tests/test_app_boundary.py tests/test_overlay.py tests/test_config.py tests/test_watchdog.py`.
+None of this has been tried by a person. It was shown by tests
+(offscreen frames on one GL context; fake window systems for the
+windows, since a second real window cannot exist headless), offscreen
+renders from synthetic hands (the pictures under
+`docs/plans/assets/21-outputs-and-the-hands/`), and scripted launches on
+the laptop's own screen with two small windowed outputs, **whose
+pictures were read back by the scripts and never looked at by eye**
+(`21-outputs-and-the-hands.md` §7). Nothing has been on the glass or the
+projector, no real hand has been in front of any of it, nothing has gone
+fullscreen on a second monitor, and **pacing is unconfirmed** (check
+107). Decision register rows 79–88 are the calls these checks let you
+confirm or overturn.
+
+**99. One output is as it was (plan 21 WP1, WP4; register rows 81, 83).**
+Headless: `uv run pytest -q tests/test_outputs.py::test_one_default_output_is_todays_frame_byte_for_byte tests/test_app_boundary.py::test_one_output_draws_the_view_renderer_draw_would tests/test_ui_shell.py::test_the_output_page_with_one_output_has_no_dim_of_its_own tests/test_overlay.py::test_one_output_has_no_dim_of_its_own`.
+Laptop, `config.toml` as it is (no `[[output.screens]]`). The camera, or
+for a laptop alone a tape: `uv run python tools/hands_tape.py synth
+/tmp/hands.json` and `[hands] enabled = true, tape = "/tmp/hands.json"`
+(take it out after). Launch. *Pass:* two windows as before, the render
+where it was; the OUTPUT page shows, under Master dim, one block "1"
+with **scene** and **hands** ticked and **through effects** unticked, no
+dim row of its own (the master dim is that output's dim), and a
+"shows: scene" line (with the ghost hands on and a hand showing, "shows:
+scene + hands over the effects"); the Screen, Fullscreen and overlay
+rows follow as before. The picture is as on the build before plan 21.
+HANDS page, Ghost hands on, F5 (TRIP): clean hands over a warped shape.
+*Fail:* any difference in the picture → `Renderer.draw_outputs`' direct
+rule (a pipeline whose one consumer is the window writes straight to
+it); a dim row on a one-output rig → `overlay.register_switches` (only a
+config `dim` under 1 adds one).
+
+**100. PR #78's fixes, on the laptop (plan 21 WP5).**
+Headless: `uv run pytest -q tests/test_hands_tape.py::test_a_bad_tape_path_is_a_note_the_pages_show tests/test_ui_shell.py::test_the_hands_page_says_why_the_ghost_or_the_tracker_is_off tests/test_ui_shell.py::test_the_hands_page_says_the_ghost_axes_are_unmeasured tests/test_ui_shell.py::test_the_hands_page_fits_with_every_ghost_line tests/test_render.py::test_a_raising_hands_pass_still_dims tests/test_ghost.py::test_a_failed_label_build_writes_no_param tests/test_ghost.py::test_a_failed_target_build_is_all_or_nothing tests/test_ghost.py::test_one_reload_round_rebuilds_the_ghost_once`.
+(a) Set `[hands] tape = "/tmp/no-such-tape.json"` and launch. *Pass:*
+the SYSTEM page lists a note starting `hands: `, and the HANDS page
+shows that line in the warning colour where it used to say "tracker
+off". Remove the key. (b) With the camera, `[hands] mode =
+"screentop"`, launch, tick Ghost hands. *Pass:* under the ghost's line
+the HANDS page reads "ghost axes for screentop are unmeasured:
+left/right and up may be wrong" (desktop says nothing); the page does
+not scroll with every ghost control showing (on, mirror, opacity,
+guide, tethers, then the style). Put `mode` back. (c) A raising hands
+pass still dimming, a failed label build writing no param and one
+reload round rebuilding the ghost once can only be provoked in tests:
+the headless line is their check. *Fail:* "tracker off" with no reason →
+`app._open_hands`' note; no unmeasured line → `hands.panel` (the
+`guess` branch); the page scrolling → `hands.panel.GHOST_STYLE_W` and
+the ghost's two lines.
+
+**101. Two outputs open where the config says (plan 21 WP3, WP4; register rows 81, 83, 86).**
+Headless: `uv run pytest -q tests/test_config.py::test_no_screens_list_is_one_output_as_today tests/test_config.py::test_a_screens_list_wins_over_the_scalar_keys_with_a_note tests/test_config.py::test_a_config_dim_cannot_launch_an_output_black tests/test_app_boundary.py::test_one_window_per_listed_output tests/test_app_boundary.py::test_the_exits_save_one_rect_per_output tests/test_app_boundary.py::test_the_switches_are_registered_from_the_configs_launch_values tests/test_overlay.py::test_the_output_switches_are_rig_settings`.
+Glass and projector plugged in. Screen numbers are the system's order,
+the main screen first; read them off the OUTPUT page's **Screen** combo
+before editing (they can move when a display is plugged in). In
+`~/Hyperspace/config.toml`, under `[output]`, set `control_monitor` to
+the laptop and **remove `monitor` and `fullscreen` there** (left in,
+they are ignored with one note on the SYSTEM page), then paste below the
+section, with your numbers:
+
+```toml
+[[output.screens]]         # output 1: the glass — sets the frame size, paces the loop
+name = "glass"
+monitor = 1
+fullscreen = true
+
+[[output.screens]]         # output 2: the projector
+name = "projector"
+monitor = 2
+fullscreen = true
+dim = 0.6                  # optional: its own dim at launch (never under 0.1)
+```
+
+Launch. *Pass:* the glass and the projector each go fullscreen with the
+same picture, the control window is on the laptop, and the SYSTEM page
+has no config note. The OUTPUT page shows two blocks, "1  glass" and
+"2  projector", each with its three ticks and a **dim** row (glass 100%,
+projector 60%), and under them "paced by output 1 · frame W×H · below:
+output 1's window". Quit and relaunch: the same. `~/Hyperspace/windows.json`
+has two entries in `render`, in the config's order. *Fail:* one window →
+`config.screens` / `app._windows` (an index no screen has on the second
+entry: check 111); the outputs swapped → the order of the list (output 1
+is the first entry); a later output on the laptop → its `monitor` (the
+glass must be first: it renders and paces); no second rect in the file
+→ `app._save_windows`.
+
+**102. The eight states, on each output (plan 21 WP1, WP2, WP4; register rows 79, 84).**
+Headless: `uv run pytest -q tests/test_outputs.py::test_route tests/test_outputs.py::test_each_of_the_eight_states_shows_its_picture tests/test_outputs.py::test_outputs_that_differ_run_one_chain_per_distinct_input tests/test_outputs.py::test_the_presenter_shows_what_a_target_view_shows`.
+Ghost hands on (HANDS page), a hand in the box, F5 (TRIP: effects on).
+On the OUTPUT page walk output 1 through the eight, then output 2:
+
+| # | scene | hands | through effects | What the output shows |
+|---|---|---|---|---|
+| 1 | on | on | off | the scene with its effects, the hands clean on top (the default) |
+| 2 | on | on | on | the scene and the hands, both bent by the effects |
+| 3 | on | off | off | the scene with its effects |
+| 4 | on | off | on | **the same as 3** (no hands to bend) |
+| 5 | off | on | off | the hands alone on black |
+| 6 | off | on | on | the hands alone, through the effects; an effect that makes its own light (a generator) lights the ground here, where 5 stays black |
+| 7 | off | off | off | black |
+| 8 | off | off | on | **black, the same as 7** |
+
+*Pass:* each state shows its row on that output only; the other output
+does not change; the "shows:" line says what you see. Six different
+pictures from eight states is expected (3 = 4, 7 = 8). With every
+effect off, through effects changes nothing on either. With Ghost hands
+unticked, the hands go from every output whatever its tick (register
+row 84). *Fail:* `outputs.route`; a change on the other output → the
+pipelines are not keyed per output (`Renderer._draw_frame`); 6 showing
+echoes → the HANDS pipeline composited the look-back
+(`Renderer._pipeline`).
+
+**103. Hands over or through the effects, and the guide never bent (plan 21 WP2; register rows 79, 80).**
+Headless: `uv run pytest -q tests/test_outputs.py::test_through_bends_the_hands_with_the_shape tests/test_outputs.py::test_through_with_no_effect_on_is_hands_over tests/test_outputs.py::test_the_guide_is_never_distorted tests/test_outputs.py::test_the_history_never_holds_the_hands_in_any_state tests/test_outputs.py::test_two_pipelines_show_the_same_echoes tests/test_ghost.py::test_the_readout_layer_is_the_guide_apart_from_the_hands`.
+This is check 47 (g) as it now is. Glass: through effects **on**.
+Projector: **off**. F5 (TRIP), then F4 (WAKE). *Pass:* on the glass the
+hands bend and recolour with the shape; on the projector they are clean;
+**on neither do the hands leave echoes or feed the dream**, and the
+echoes are the same on both. With every effect off the two look the
+same and the glass's block says "through: no effect on". Then HANDS
+page: Ghost guide BESIDE, then ON HAND, Ghost tethers on: the gauges and
+the tethers' labels are sharp and the same on both outputs, never
+folded or warped (they go in a layer of their own only while the guide
+is on and some output's hands go through an effect; otherwise they ride
+in the hands' layer as before). *Fail:* hand echoes → the hands reached
+the scene texture (`Renderer._pipeline`: they go in after the look-back
+composite, before the first effect); warped labels → the readout layer
+(`Ghost.layer(…, readout=True)`, `Ghost.composite_readout`); the echoes
+different on the two outputs → the capture's place (once, after every
+pipeline, `Renderer._draw_frame`).
+
+**104. The dims (plan 21 WP1, WP4; register row 81).**
+Headless: `uv run pytest -q tests/test_outputs.py::test_each_output_dims_by_master_times_its_own tests/test_outputs.py::test_an_opaque_grounds_alpha_is_untouched_in_every_state tests/test_undo.py::test_the_output_switches_are_left_alone_by_undo_presets_and_shows`.
+APC40 plugged in. Crossfader to the middle: both outputs dim together.
+Output 2's dim on the OUTPUT page to half: only the projector dims
+further, and its "shows:" line ends in the product ("· 30%" at master
+60%). Crossfader left: both black, the footer says "dim black". Untick
+and tick a switch, ⌘Z: the switch is not taken back (no step). F1, a
+show load: the switches and the dims stay where they are. Quit and
+relaunch: the master is full, the projector's dim is the config's 60%,
+every switch is what `config.toml` says. *Pass* as described, and on
+the glass the ground stays opaque black at every dim, never grey, never
+see-through. *Fail:* the product wrong → `Renderer._compose` (a target)
+or `Presenter.present` (the projector: step 5); a switch taken back by
+⌘Z or moved by a preset → `persist` in `overlay.register_switches`; the
+desktop through the glass → the dim's opaque blend (`Renderer.dim_pass`).
+
+**105. Black is never a mystery (plan 21 WP4; register row 85).**
+Headless: `uv run pytest -q tests/test_ui_shell.py::test_the_output_page_says_what_each_output_shows tests/test_ui_shell.py::test_the_footer_names_a_black_output tests/test_ui_shell.py::test_the_output_page_fits_with_four_outputs_and_overlays_rows`.
+On the OUTPUT page, one output at a time: untick scene and hands; then
+scene off and hands on with no hand in the box; then scene on and its
+own dim to 0; then the crossfader left. *Pass:* the "shows:" line, in
+the warning colour, reads in turn "black — nothing switched on", "black
+— the scene is off and no hand shows", "black — dim 0", "black — master
+dim"; for the first three the footer, on every page, adds "· output 2
+black" ("· outputs 1, 2 black" for both), and for the master it says
+only "dim black". With Ghost hands off and an output's hands ticked, a
+line under its ticks reads "hands: ghost hands are off (HANDS page)"
+(with the tracker off: "hands: no tracker"); with through effects
+ticked and no effect on, "through: no effect on". *Fail:*
+`ui.output_shows`, `Panel._output_blocks`, `Panel.black_outputs`.
+
+**106. An output of another shape (plan 21 WP1; register row 82).**
+Headless: `uv run pytest -q tests/test_outputs.py::test_fit tests/test_outputs.py::test_an_output_of_another_aspect_is_letterboxed_and_the_hands_stay_registered`.
+If the glass and the projector differ in shape (or set the second
+entry's `fullscreen = false`, relaunch and drag its window tall and
+narrow): *Pass:* the second output shows the whole frame centred with
+black bars, circles round, nothing cropped, the hands on the same part
+of the shape as on the glass. The frame is output 1's size, so list the
+larger screen first. *Fail:* `outputs.fit`; the hands off their place →
+the hands laid in a rect other than the frame's (`Renderer._compose`,
+`Presenter.present`).
+
+**107. The frame rate and tearing with two screens (plan 21 WP3; register row 83).**
+Headless: `uv run pytest -q tests/test_app_boundary.py::test_only_the_first_output_waits_for_the_screen tests/test_app_boundary.py::test_the_rendering_context_is_flushed_before_a_presenter`.
+**This is the one claim of plan 21 nobody has seen hold.** The plan
+measured 121 fps on a 120 Hz screen with the first window waiting for
+the screen and the second not, against 60–81 with both waiting; in the
+build's short launches on this laptop both the two-output path and the
+one-window path ran **unpaced** (270–380 fps), so that claim is neither
+confirmed nor refuted. Both outputs fullscreen, F5, a hand in the box,
+output 1 through effects on and output 2 off (two chain runs). *Pass:*
+the footer's FPS holds at the glass's refresh rate (note both screens'
+refresh rates: System Settings → Displays); no tearing on the projector
+during a fast rotation; after five minutes the stall log has no entry.
+Note what you see either way. *Fail:* half rate → a second waiting swap
+(`glfw.swap_interval` in `app.main` — output 1's is 1 — and
+`app._open_presenters` — each later output's is 0); tearing on the
+projector → register row 83: let it wait too, or pace by it; far above
+the refresh rate → the swap is not waiting on this machine at all, as
+in the build's launches: say so.
+
+**108. The ghost hands follow the real ones (check 47, finished here; plan 21 WP5).**
+Headless: `uv run pytest -q tests/test_ghost.py::test_desktop_keeps_left_on_the_left_and_mirror_flips_it tests/test_ghost.py::test_a_hand_that_leaves_fades_out_where_it_was_and_comes_back_up tests/test_ghost.py::test_the_camera_frames_the_interaction_box_when_one_is_set tests/test_hands_tape.py::test_every_recorded_tape_replays_through_the_ghost` (the last skips until a tape is committed).
+On the glass, run check 47 (a) to (f), (h) and (i) as written; (g) is
+now check 103. For (c), tick **Ghost mirror** and look in the glass the
+way the audience will: note which setting the rig wants and save it in
+the show (`ghost.mirror` is saved with the show). If the rig ever runs
+`screentop`, repeat (c) there: those axes are unmeasured and the HANDS
+page says so (check 100). Then record the tape everyone else will test
+against: `uv run python tools/hands_tape.py record
+tests/fixtures/hands/rig.json --seconds 6` — both hands, open, fist,
+pinches, in and out of the box — and commit it. *Fail:* as check 47's.
+
+**109. The five styles, at distance (plan 21 WP6; register row 87).**
+Headless: `uv run pytest -q tests/test_ghost.py::test_every_style_draws_from_the_same_poses tests/test_ghost.py::test_a_style_never_draws_the_guide tests/test_ghost.py::test_a_palm_only_hand_draws_in_every_style tests/test_ghost.py::test_hands_is_the_old_geometry_byte_for_byte tests/test_ghost.py::test_the_guide_on_the_hand_reads_the_same_in_every_style_but_hands tests/test_outputs.py::test_every_style_behaves_as_the_hands_in_every_state tests/test_ui_shell.py::test_the_ghost_style_is_on_the_hands_page_while_the_ghost_is_on`.
+HANDS page, Ghost hands on: the **Style** combo leads the ghost's second
+line. Step through with both hands in the box, from where the audience
+stands: **HANDS** (the capsule hands, as before), **JOINTS** (a bead per
+joint, largest at the fingertips, one at the palm), **PALMS** (an orb at
+the palm that swells as the hand opens, a ring in the palm's plane, a
+spoke where the fingers point), **CAGE** (a wire octahedron that turns
+with the palm and breathes with the grip, a small solid one inside),
+**MARIONETTE** (a bead per fingertip on strings from a bar above the
+hand). *Pass:* each follows the hands with no lag; the orb and the cage
+open and close with your grip (calibrated on synthetic hands only: say
+if a real fist or open hand reads wrong); a hand leaving fades in every
+style; with the guide ON HAND, the guide is drawn **on top** in the four
+new styles and partly behind the palm in HANDS (as before); the frame
+rate does not change; the style is saved with the show (quit, relaunch).
+At the build's camera distance the hands fill about a quarter of the
+frame. Say which to keep. *Fail:* `ghost.PARTS` (the style's parts
+function), `ghost.openness`; a style that misses the guide →
+`Ghost.layer`'s guide-over pass.
+
+**110. A hand cannot learn a ghost setting (plan 21 WP6; register row 88).**
+Headless: `uv run pytest -q tests/test_learn.py::test_a_hand_learn_onto_a_setting_is_refused_in_words tests/test_presets.py::test_a_saved_route_onto_a_setting_is_dropped_with_a_note tests/test_ghost.py::test_the_params_are_session_off_by_default_and_learnable`.
+Camera on (the Learn hand items need a tracker); the APC40 for the
+Learn desk step. HANDS page: right-click **Ghost mirror**, then Ghost
+guide, Ghost tethers and Style. *Pass:* each menu has **Learn desk** but
+no **Learn hand ▸** (the menu offers a hand only on a param a performer
+may drive, `Panel._ctx_learn`); Ghost hands and Ghost opacity still have
+Learn hand. Learn desk on Ghost mirror, then a pad: the pad flips the
+mirror. The OUTPUT page's ticks (`output.N.*`) are the same: Learn desk,
+no Learn hand. If a hand learn
+on one of the four is ever armed some other way, the footer says "Ghost
+mirror can't follow a hand (not modulatable) — not learned; Learn desk
+puts it on a button" and no row is made. A preset you saved before plan
+21 with a route onto `ghost.mirror`, `.guide` or `.tethers` (if you have
+one) loads with the note "dropped `<source>` → ghost.mirror: not
+modulatable" and its file is not rewritten. *Fail:* a Learn hand item
+on one of them → `Panel._ctx_learn`'s `p.modulatable` test; a row made →
+`Learn.learn_source`; a load that fails → `Presets.load_doc` step 1.
+
+**111. A screen not plugged in at launch (plan 21 WP3; register row 86).**
+Headless: `uv run pytest -q tests/test_app_boundary.py::test_a_later_output_whose_screen_is_absent_is_not_opened tests/test_placement.py::test_what_names_a_later_output_in_the_notes`.
+The config of check 101. Quit, unplug the projector, launch. *Pass:*
+only the glass opens; the OUTPUT page shows output 1's block and one
+disabled line, "2  projector — screen 2 is not connected"; the SYSTEM
+page and the terminal say "config: output 2 (projector): monitor = 2,
+but 2 screens are connected (0–1) — not opened" (the counts are yours).
+Plug the projector in while it runs: **nothing happens** — a screen
+plugged in after the launch is not picked up; ⌘R (or a relaunch) opens
+it. Plan 21 does not handle late plugging. *Fail:* a third window on the
+laptop → `app._later_rect` (fork F9); output 2's params present →
+`overlay.register_switches` (an output that did not open gets none).
+
+**112. Unplug the projector mid-run (plan 21 WP3; register row 86).**
+Headless: `uv run pytest -q tests/test_app_boundary.py::test_a_raising_presenter_does_not_stop_the_frame tests/test_watchdog.py::test_one_dark_output_of_two_is_a_warning_not_a_stall tests/test_watchdog.py::test_no_output_presenting_is_the_stall`.
+Last, since it may leave a window somewhere odd. Both outputs running,
+pull the projector's cable; wait ten seconds; plug it back. What the
+code does is known only from tests: each later output is presented in
+its own `try`, a present that raises is the output's error on the
+OUTPUT page and a warning naming it ("output 2 (projector): its picture
+failed — …"); a window that cannot present for 2 s while the glass
+does is a warning "output 2 (projector): no picture for 2 s — …"; the
+loop does not exit. **What macOS does to a fullscreen window whose
+screen goes away has not been seen**: it may move the window to the
+laptop, leave it minimised, or keep presenting it unseen. *Pass:* the
+glass never stops or freezes; the loop does not exit; the control window
+names output 2 if its picture failed; after replugging, the projector
+shows the frame again (or say what it does — it may need ⌘R). *Fail:*
+the loop dies → `app._draw_render`'s per-output `try`; the glass
+freezes → a presenter left its context or framebuffer bound
+(`Presenter.present`, the `finally` in `_draw_render`); a projector
+window over the laptop's controls → log it (fork F9 covers only a
+screen absent at launch).
+
 ## What this list does not ground
 
 Two checks have no headless twin because they are the eye's: the dream
 grade (9) and the default feel (16). Check 25's number is a target, not
 a measurement anyone has made. Everything else names a test or a tool.
+Group Q leaves two things no test grounds: the frame rate with two
+screens (check 107 — the tests pin which swap waits, not what the
+screens do; the build's launches ran unpaced) and what macOS does to a
+window whose screen is unplugged mid-run (check 112).

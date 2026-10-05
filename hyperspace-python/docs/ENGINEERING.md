@@ -17,12 +17,15 @@ the oracle the golden traces were recorded from. Revised for plan 13
 (presets, the session, the two-layer desk) on `plan-13-integration`,
 and for plan 19 (a bank of twenty-four, rows 4–5 as the bank, the knobs
 re-cut, hide / rename / the trash, the dot, the home in git) on
-`plan-19-integration`.
+`plan-19-integration`, and for plan 21 (a list of render outputs, the
+hands over or through the effects, the ghost hands' styles) on
+`plan-21-integration` at 00b6517.
 
 **Run it:** `uv sync`, `uv run pytest` (1178 tests with plan 16; 1276
 on `plan-18-integration`, which holds plans 17 and 18; 1355 and 1
 skipped on `plan-20-integration`, plans 15–18 and 20; 1442 and 1
-skipped on `plan-19-integration`, plans 15–20; about two minutes),
+skipped on `plan-19-integration`, plans 15–20; 1549 passed and 1
+skipped on `plan-21-integration`, plans 15–21; about two minutes),
 `uv run hyperspace`. `?` in the app shows the controls cheat
 sheet, which is off at launch since plan 16.
 
@@ -177,6 +180,103 @@ is bit-identical to the scene pass alone (`tests/test_render.py:306`,
    `dim` tests). Seen offscreen and in a scripted launch on a laptop
    window; not on the projector or the glass (hand check 55).
 
+**Since plan 21 the stages are shared out over the render outputs**
+(WP1–WP4; `Renderer.draw_outputs(s, w, h, dpr, views)`; ARCHITECTURE §2,
+"One frame, a picture per output"). `Renderer.draw` is `draw_outputs`
+with one default `outputs.View` on the bound framebuffer, and with one
+output and the default switches the frame is the old one byte for byte —
+pinned against a verbatim copy of the parent commit's `draw` in seven
+cases at 0 and 4 samples
+(`tests/test_outputs.py::test_one_default_output_is_todays_frame_byte_for_byte`;
+the build also hashed 320 default-path cases on both commits, all equal,
+with a script that is not kept). Once a frame: stages 0–2, the
+look-back's tick and pull, and **the hands' layer** (`Ghost.layer`,
+only while some output's hands switch is on). Then `outputs.route`
+picks each output's pipeline — after the layer, because "hands shown"
+needs a hand drawn this frame. **Once per distinct pipeline**: SCENE
+(the look-back composite and, with an effect on, the chain), SCENE+HANDS
+(the composite, the hands laid onto the chain's first texture, the
+chain) and HANDS (the frame's ground, the hands, the chain; no
+look-back). A pipeline whose only consumer is an output on the
+renderer's context at the frame size writes straight to it ("direct");
+otherwise it writes a frame texture (RGBA8 at the frame size, LINEAR,
+one per key, resized with the frame, dropped by `on_reload`). **The
+look-back's capture runs exactly once, after every pipeline**, from the
+scene texture, whatever the switches — with the scene off everywhere the
+scene pass, the capture, the dream and the effects' clocks
+(`FxState.advance_to`) all go on, so switching the scene back shows no
+gap. (Captured between two pipelines, as first built, it rotated the
+history mid-frame: the through output got the frame doubled as an echo
+and every echo a frame older than the over output's; the review's fix,
+`::test_two_pipelines_show_the_same_echoes`.) **Once per output**: its
+picture — nothing (direct), the frame texture 1:1 by `texelFetch`, or
+scaled into `outputs.fit`'s letterbox rect with the rest cleared to the
+output's ground, or the ground alone with no pipeline — then the hands
+laid over in the same rect, then the readout layer (below), then the dim
+at `Renderer.dim × output.N.dim` when under 1. An output in another
+window's context is drawn by its `Presenter` from an `outputs.Handoff`
+(§2.5). `Renderer.stats` says what the last frame ran: `pipelines`,
+`chain_runs`, `direct`, `captures`, `layer`, `readout`.
+
+**The eight states of one output** (`output.N.scene`, `.hands`,
+`.through`; `tests/test_outputs.py::test_each_of_the_eight_states_shows_its_picture`,
+under warp + kaleido; register rows 79, 84):
+
+| # | Scene | Hands | Through effects | What the output shows |
+|---|---|---|---|---|
+| 1 | on | on | off | The scene with its effects, the hands clean on top. The default: the old frame. |
+| 2 | on | on | on | The scene and the hands, both through the effects. |
+| 3 | on | off | off | The scene with its effects. |
+| 4 | on | off | on | The same picture as 3, byte for byte. |
+| 5 | off | on | off | The hands alone on the output's ground. |
+| 6 | off | on | on | The hands alone, through the effects (fork F2); a generator effect lights the ground here. |
+| 7 | off | off | off | Black (the ground). |
+| 8 | off | off | on | Black, the same as 7, byte for byte. |
+
+"Hands shown" is the output's hands switch **and** `ghost.on` **and** a
+hand drawn this frame (fork F7). With no hand shown, or no effect on,
+"through" changes nothing: the output routes to SCENE or the ground.
+`outputs.route` as built:
+
+| Scene | Hands shown | Through, and an effect on | Pipeline | Hands composited after |
+|---|---|---|---|---|
+| on | no | — | SCENE | no |
+| on | yes | no | SCENE | yes |
+| on | yes | yes | SCENE+HANDS | no |
+| off | no | — | none (the ground) | no |
+| off | yes | no | none (the ground) | yes |
+| off | yes | yes | HANDS | no |
+
+Two outputs need at most two chain runs (one when they agree, or when
+one is "scene, hands over" and the other "scene" or "hands alone,
+over"); four need at most three
+(`::test_outputs_that_differ_run_one_chain_per_distinct_input`,
+`::test_four_outputs_need_at_most_three_chain_runs`). Neither the
+echoes nor the dream ever hold the hands, in any state
+(`::test_the_history_never_holds_the_hands_in_any_state`). A pipeline
+that raises leaves its outputs on their ground and the others drawn; an
+output that raises records `View.error` and the loop goes on; the hands
+raising, in the layer or in any composite, cost no output its frame or
+its dim (`::test_a_raising_pipeline_leaves_its_views_on_the_ground_and_the_rest_drawn`,
+`::test_a_raising_hands_pass_costs_no_output_its_frame_or_its_dim`,
+`::test_a_raising_hands_composite_into_the_chain_still_runs_it`).
+**Alpha**: on an opaque ground every composite leaves the target's alpha
+as it is (`::test_an_opaque_grounds_alpha_is_untouched_in_every_state`);
+in overlay the hands add their coverage before or after the chain
+(`::test_overlay_adds_the_hands_coverage_before_or_after`). The frame
+and the chain are drawn on `Renderer.bg_alpha`, output 1's ground, once
+for every output, so `View.bg_alpha` is honoured only in part: an
+output's own ground can make the frame opaque on it, never see-through.
+
+**Measured** (`docs/plans/assets/21-outputs-and-the-hands/compose-timing.txt`;
+Apple M3 Max, 1920 × 1080, warp + kaleido, two synthetic hands, a
+standalone context with offscreen targets — the first 4× MSAA — 120
+frames each ended by `glFinish`): one output, the default path, median
+1.66 ms (p90 2.01); two outputs agreeing, 1.85 ms (2.27), one chain run;
+two outputs disagreeing (over | through), 2.24 ms (2.52), two chain
+runs. Rendering only: no swap, no second window, no `glFlush` or
+presenter cost.
+
 **Instance layouts** (plan 20 WP6, decision register row 71). Above one
 copy, `draw_scene` asks `render.inst_positions(n, view.inst_layout)` for
 each copy's place in cells, `(gx, gy)`, and scales it by `cell = min(w,
@@ -217,7 +317,13 @@ look-back's atlas bound on each frame off the cadence, and any one
 exception inside the draw stranded a framebuffer the same way
 (`tests/test_render.py::test_a_look_back_frame_with_no_worker_leaves_the_window_bound`,
 `::test_one_raising_frame_does_not_strand_the_next`). A frame that still
-starts on an offscreen framebuffer is logged (§2.6).
+starts on an offscreen framebuffer is logged (§2.6). Since plan 21 the
+target is `views[0].target`, output 1's window, bound again with its
+rect and blending on every exit of `draw_outputs`, a raise in the
+once-a-frame passes included (`tests/test_outputs.py::test_the_first_target_is_bound_after_a_view_raises`);
+`app._draw_render` makes output 1's context current and binds its
+window first, and an error output 1's view caught is raised after the
+later outputs were presented, as `Renderer.draw` raises it.
 
 **The window is opaque unless it is the overlay** (plan 14 WP1, the
 Pepper's Ghost rig), **and there is no overlay unless the config asks**
@@ -244,6 +350,10 @@ the look-back and every effect on, renders with every pixel at alpha 255
 (`tests/test_lookback.py::test_every_factory_preset_renders_opaque_in_window_mode`).
 Measured before the fix, offscreen, window mode: TUMBLE 23 % of pixels
 below 255 (lowest 94), HEX ENGINE 40 %, and every factory preset some.
+Since plan 21 all of this is output 1's: a later output is created
+without `TRANSPARENT_FRAMEBUFFER` whatever the config says, has no
+params of its own for overlay, and its presenter writes alpha 1 where it
+shows the frame on an opaque ground.
 
 ### 2.1 Edges, points, brightness
 
@@ -555,7 +665,12 @@ go on its own name opens too; the order slider stays. The page has
 events in tests and one hidden-window picture; no real mouse (hand check
 94).
 
-### 2.5 Two windows
+### 2.5 The windows: the render outputs and the controls
+
+(Until plan 21, "Two windows". The first two paragraphs below describe
+output 1 and the control window, which are made as they always were;
+the render outputs after the first are "The render outputs", further
+down.)
 
 `app.py` opens the render window (vsync, 4× MSAA, a framebuffer with alpha
 only when `[output] overlay = true` — decision 21; opaque in every mode
@@ -563,8 +678,10 @@ but overlay, §2) — reading the config first, since the hint is a
 creation-time one —
 and the control window (opaque, no MSAA, vsync off so it paces off the
 render swap) in one GLFW share group, each with its own moderngl context;
-the only imgui context lives on the control window (`app.py:136-167, 396-419`). The render window has no imgui at all. Mouse orbit / pan / zoom
-are taken from the render window only; keys from both, with the control
+the only imgui context lives on the control window (`app.py:136-167, 396-419`). The render window has no imgui at all (nor, since plan 21, does any
+render output). Mouse orbit / pan / zoom
+are taken from the render window only; keys from both (since plan 21
+from every render output too), with the control
 window deferring to imgui typing. `imgui.new_frame()` runs before input
 handling on purpose: with the 1.87+ event queue, `want_capture_keyboard`
 only holds this frame's value after it. `overlay.Output` places the render
@@ -619,7 +736,204 @@ the launch is picked on the OUTPUT page, not by the config
 `::test_a_config_screen_that_cannot_be_used_is_minus_one_and_one_note`,
 `tests/test_config.py::test_a_screen_that_is_not_a_number_is_minus_one_and_a_note`).
 All of it was run with fake screens and on one real screen; it has not
-met a second screen (hand check 61).
+met a second screen (hand check 61). Since plan 21 `render` holds one
+rect per render output, in the config's order (below).
+
+**The render outputs** (plan 21 WP3–WP4). `config.toml` may list them:
+
+```toml
+[[output.screens]]         # output 1: sets the frame's size and paces the loop
+name = "glass"             # optional: the OUTPUT page's label and the notes'
+monitor = 1                # a screen index, or -1 = a plain window where it was last
+fullscreen = true
+scene = true               # optional launch values of this output's switches
+hands = true
+through = false
+dim = 1.0                  # under 0.1 is 0.1, with a note
+
+[[output.screens]]         # output 2
+name = "projector"
+monitor = 2
+fullscreen = true
+```
+
+With no `screens` key there is one output from `[output] monitor` /
+`fullscreen`, exactly as before (`config.screens`; no `screens` key is
+added). With a list, `config.load` (`_screens`) checks every key of
+every entry against `config.SCREEN`: an unknown key is a note, a value
+of the wrong kind is its default with a note, a `monitor` that is not a
+number is −1 with a note, `dim` under 0.1 is 0.1 and over 1 is 1;
+entries past `outputs.MAX_OUTPUTS` (4), or that are not tables, are
+dropped with a note, and an empty or non-list `screens` is one output
+with a note. The list wins: output 1's `monitor` / `fullscreen` are
+copied into the scalar keys, which every reader of output 1 reads, and
+scalar ones the file also set are ignored with one note. `overlay`,
+`on_start`, `passthrough`, `bg` and `alpha` stay scalar and are output
+1's alone; `bg` / `alpha` of the wrong kind are now the default with a
+note (`config.number`) where they used to stop the launch in
+`_make_output` (`tests/test_config.py::test_no_screens_list_is_one_output_as_today`,
+`::test_a_screens_list_wins_over_the_scalar_keys_with_a_note`,
+`::test_a_fifth_screen_is_dropped_with_a_note`,
+`::test_a_config_dim_cannot_launch_an_output_black`,
+`::test_a_ground_or_opacity_that_is_not_a_number_is_the_default_with_a_note`).
+Every note goes to stderr and the SYSTEM page.
+
+Outputs are numbered by their place in the list, opened or not
+(`outputs.Slot.n`; `output.2.*` is always the second entry).
+`app._windows` returns `(slots, ctrl_win)` and creates, in order, output
+1 exactly as the render window always was (title "Hyperspace", 4×
+MSAA, transparent only with `[output] overlay`), the control window, then
+each later output in output 1's share group: no MSAA, never transparent,
+`AUTO_ICONIFY` off, titled "Hyperspace — <name>" (or "output N").
+`placement.place("render", …, renders[k], what=slot.label)` places each
+from its entry's `monitor` and its remembered rect; a later output whose
+default spot another output already has is moved 40 px down and right
+(`app.CASCADE`) until it is free, so two `monitor = -1` outputs do not
+open exactly stacked. **A later output whose `monitor` index no
+connected screen has is not opened** (fork F9, register row 86), with
+the note "config: output 2 (projector): monitor = 2, but 2 screens are
+connected (0–1) — not opened"; output 1 always opens, its unknown index
+−1 with a note as before; a later output with `monitor = -1` opens as a
+plain window where it was last. **A screen plugged in after the launch
+is not picked up**: a later output that did not open stays closed for
+the run, and output 1's index stays −1 — relaunch (Cmd+R) to pick it up.
+A later output whose window GLFW will not create, or whose presenter
+will not build (its window is then destroyed), is not opened either,
+with a note (`tests/test_app_boundary.py::test_one_window_per_listed_output`,
+`::test_a_later_output_whose_screen_is_absent_is_not_opened`,
+`::test_a_later_output_is_the_configs_and_never_overlay`). Each later
+output has an `overlay.Output` (`app._later_output`: `allowed=False`, no
+params) whose screen and fullscreen come from its entry (fork F10: the
+OUTPUT page's Screen and Fullscreen rows move output 1 only) and whose
+`apply()` runs every frame after output 1's (`Host.outputs`). Keys are
+read from every output window (no output runs imgui, so it is read even
+while imgui is typing); the mouse stays on output 1; the loop ends when
+any window is closed (`::test_every_output_is_applied_and_polled_for_keys`).
+
+**The presenter and the swaps** (fork F6, F12; register row 83).
+Output 1's context renders everything; each later output gets an
+`outputs.Presenter` on its own context (`app._open_presenters`, at
+launch), with its own copy program, dim program and vertex arrays — a
+share group shares textures, never framebuffers or vertex arrays.
+`app._draw_render`, each frame: make output 1 current, the
+stranded-target check, bind its window; one `View` per output (output
+1's exactly the one `Renderer.draw` builds, each later one with its
+presenter and its framebuffer size); `renderer.draw_outputs`, which
+draws output 1 whole and leaves each later output an `outputs.Handoff`;
+`glFlush` in output 1's context, **only when a later output exists** (so
+one output runs nothing new per frame); then for each later output, in
+its own `try`, make it current, `present(handoff, size)`, swap; then, in a
+`finally`, output 1 current and swapped. The presenter does the
+hand-off's five steps in its own context: clear to `(0, 0, 0,
+bg_alpha)`; the frame into its rect (1:1 by `texelFetch`, else scaled;
+alpha 1 on an opaque ground); the hands' layer into the same rect at
+`ghost.alpha` with `Ghost.composite`'s blend; the readout layer the same
+way; the whole framebuffer × `factor` (master × own dim) with
+`dim_pass`'s blend when under 1. It wraps the renderer's textures by GL
+name (`ctx.external_texture`, cached per name and size), builds nothing
+before its first `present`, leaves its window's framebuffer bound, a
+raise included, and on a hot reload only marks itself stale, rebuilding
+at its next `present` in its own context. Without the flush a second
+context saw last frame's texture on 199 of 200 frames (plan 21 §1,
+measured). A present that raises sets its slot's `error` (the OUTPUT
+page shows it) and warns the watch (§2.6); the frame goes on, and the
+next good present clears it. **Swap intervals are set once, at launch**:
+1 on output 1 (where `main` makes its context), 0 on every later
+output, so only output 1 waits for its screen. **Whether that paces the
+loop is not established**: the plan measured 121 fps with one waiting
+and one free swap against 60–81 with both waiting, on three small
+windows on one screen, but in the build's own short launches on this
+laptop's one 120 Hz screen both the one-output and the two-output path
+ran unpaced (377 and 271 fps), so the swap was not pacing either; hand
+check 107 is the first look with two screens. Tearing on a non-waiting
+fullscreen output, two screens of different refresh rates and real
+fullscreen on two monitors are unseen
+(`tests/test_app_boundary.py::test_only_the_first_output_waits_for_the_screen`,
+`::test_the_rendering_context_is_flushed_before_a_presenter`,
+`::test_a_raising_presenter_does_not_stop_the_frame`,
+`::test_one_output_draws_the_view_renderer_draw_would`;
+`tests/test_outputs.py::test_the_presenter_shows_what_a_target_view_shows`,
+all eight states and three shapes byte for byte against a target view —
+with the presenter on the renderer's own context, a stand-in for another
+window's; `::test_the_presenter_rebuilds_after_a_reload_in_its_own_context`).
+In a real launch on the laptop (two small windowed outputs, a synthetic
+hand tape, warp on) output 2's read-back picture equalled output 1's
+byte for byte at four sampled frames, so the share group, the flush and
+`external_texture` ran for real there; nobody watched the windows.
+
+**An output of another shape** is letterboxed (fork F5, register row
+82): the frame is output 1's size, and a later output shows it whole,
+centred, its aspect kept, in `outputs.fit`'s rect, the bars the ground;
+the hands' layer has the frame's aspect and goes in the same rect, so the
+hands stay on the same part of the shape on every output
+(`tests/test_outputs.py::test_fit`,
+`::test_an_output_of_another_aspect_is_letterboxed_and_the_hands_stay_registered`).
+
+**`windows.json` with several outputs.** The schema
+(`hyperspace.windows/1`) is unchanged; `render` was already a list.
+`app._save_windows` writes one rect per output in config order; an
+output not opened this run, or minimised, is passed as `None`, which
+keeps its old entry (`null` when there was none, read as "no memory").
+An old one-entry file for a two-output rig opens output 1 where it was
+and output 2 at its default spot; with no list the file is written
+exactly as before (`tests/test_app_boundary.py::test_the_exits_save_one_rect_per_output`,
+`tests/test_placement.py::test_what_names_a_later_output_in_the_notes`).
+
+**The OUTPUT page** (plan 21 WP4, fork F8; register rows 81, 85). Under
+the master dim, one block per listed output (`ui.Panel._output_blocks`):
+the number and name, then ticks for **scene**, **hands** and **through
+effects** lined up after the widest name (a long name is cut so the
+ticks fit); the output's **dim** row when `output.N.dim` exists; one line
+only when there is something to say — the output's present error in the
+warning colour (the whole on hover), "hands: ghost hands are off (HANDS
+page)" or "hands: no tracker", "through: no effect on", joined by " · ";
+and "shows: …" in words (`ui.output_shows`: `outputs.route`'s answer
+for the output's switches, whether an effect is on and whether a hand
+drew last frame, with master × own dim): "scene", "scene + hands over
+the effects", "scene + hands through the effects", "hands", "hands
+through the effects", with " · 64%" when dimmed, or, in the warning
+colour, "black — nothing switched on", "black — the scene is off and no
+hand shows", "black — dim 0", "black — master dim". An output the config
+lists that did not open is one disabled line, "2  projector — screen 2
+is not connected" (or why else it did not open). With two or more
+outputs one line follows the blocks: "paced by output 1 · frame W×H ·
+below: output 1's window"; the existing rows (screen, fullscreen,
+overlay and its three) are output 1's, unchanged. **The footer**, on
+every page, says "· output 2 black" (or "· outputs 2, 4 black") while an
+output shows nothing for a reason other than the master dim, which says
+"dim black" itself (`Panel.black_outputs`). There is no picture of any
+output in the control window. The page measures fit with four outputs,
+each with an error line and a reason line, and overlay's rows showing
+(`tests/test_ui_shell.py::test_the_output_page_fits_with_four_outputs_and_overlays_rows`,
+`::test_the_output_page_says_what_each_output_shows`,
+`::test_the_output_page_with_one_output_has_no_dim_of_its_own`,
+`::test_the_footer_names_a_black_output`; `test_every_page_fits_the_control_window`
+runs with four outputs). Seen once read back from a real control
+window on the laptop; never clicked.
+
+**The switches** (`overlay.register_switches`, fork F4, F7). For each
+opened output N: `output.N.scene` "Scene", `output.N.hands` "Hands",
+`output.N.through` "Hands through effects" — with several outputs the
+label leads with the output's name ("Glass scene") — and `output.N.dim`
+"Dim" (0–1, reading "black" / "1–99%" / "100%" like the master's) when
+the config lists two or more outputs, or a lone entry sets `dim` under
+1. With one output and no such entry the master dim is that output's
+dim and there is none. All are group `output`, `persist=False`,
+`modulatable=False`: rig settings, written into the slot's
+`outputs.Switches` that the renderer reads. They persist nowhere: a
+launch and Cmd+R take each from its `[[output.screens]]` entry (the
+defaults with no list: scene on, hands on, through off); no preset,
+show or undo step holds them, and a preset load or save, a show load or
+save and an undo leave them where they are; a switch flipped at the
+party lasts until the restart. They can be learned onto a desk button
+like any toggle; nothing is put on the desk. An output that did not open
+gets none: one output on a laptop 3 params, the two-output rig 8, four
+outputs 16. `ghost.on` stays the one switch for the hands on every
+output; an output's hands tick says where they show
+(`tests/test_overlay.py::test_the_output_switches_are_rig_settings`,
+`::test_one_output_has_no_dim_of_its_own`,
+`tests/test_undo.py::test_the_output_switches_are_left_alone_by_undo_presets_and_shows`,
+`tests/test_app_boundary.py::test_the_switches_are_registered_from_the_configs_launch_values`).
 
 Quitting, Cmd+R
 and the panel's restart button all run `app.close_all`: every open
@@ -653,6 +967,19 @@ the loaded preset, what happened — then every thread's stack
   runs: the draw did not complete, or the window was hidden, minimised,
   occluded (macOS occlusion, another Space) or had no framebuffer. The
   entry lists the window's attributes (`GlfwBackend.window_state`).
+  Since plan 21, with two or more render outputs opened (`RenderWatch`'s
+  `outputs`: a label and window state per output), it means **no output
+  presented**; the entry's body is still output 1's window state.
+- `warning` naming an output (plan 21 WP3) — one output not presentable
+  for 2 s while another presents ("output 2 (projector): no picture for
+  2 s — the window is minimised", its window state in the body), or a
+  present that raised (`RenderWatch.output_failed`: "output 2
+  (projector): its picture failed — …", the traceback in the body); once
+  per message. With one output the watch behaves as before
+  (`tests/test_watchdog.py::test_one_dark_output_of_two_is_a_warning_not_a_stall`,
+  `::test_no_output_presenting_is_the_stall`). Neither has been seen with
+  a real second window going dark or a projector unplugged (hand check
+  112).
 - `stranded target` — a render frame started on an offscreen framebuffer
   (the freeze's signature, §2), with its `glo` and the last render error.
 - `non-finite` — a param dropped a NaN / inf (`Registry.nonfinite`; §5's
@@ -700,6 +1027,68 @@ display for the performer and for newcomers, not a control source.
   coverage to the ground's alpha so they show on the desktop. Off, with
   no tracker, or with no hand fading, the pass touches no GL state and
   the frame is bit-identical; the target is bound again on every exit.
+  **Since plan 21 the pass is split** (WP1): `Ghost.layer(size, t)`
+  renders the hands' layer once a frame at the frame's size (`Ghost.tex`,
+  premultiplied by each hand's fade, so the fade at the box's edge is the
+  same on every output), and `Ghost.composite(target, vp, opaque)` lays it
+  over as many outputs as want it, scaled into each one's letterbox rect;
+  `Ghost.draw` is the two together, its signature unchanged. "Over the
+  finished target" is now the default of each output's "hands through
+  effects" switch (off): with it on, `Renderer._pipeline` lays the layer
+  onto the chain's first texture after the look-back composite and before
+  the first effect, so warp, kaleido and the rest bend the hands with the
+  shape — and the echoes and the dream still never hold them (fork F1,
+  register row 79; `tests/test_outputs.py::test_through_bends_the_hands_with_the_shape`).
+- **The readout layer** (plan 21 WP2, fork F3; register row 80). While
+  an effect is on and some output's hands and through switches are both
+  on, `Ghost.layer(…, readout=True)` draws the guide and the tethers'
+  labels into a second texture, `Ghost.readout`, instead of the hands'
+  layer: for HANDS the hands depth-only first (colour masked — moderngl
+  applies a framebuffer's colour mask only when it is bound, so the pass
+  calls `use()` after each mask change; the first build wrote colour),
+  so an ON HAND gauge is still hidden behind the palm; then the guide's
+  spheres and tubes; then the tethers. `Ghost.composite_readout` lays it
+  on every output whose hands switch is on, over or through, after the
+  hands and before the dim, so the guide and its text are never bent.
+  With the guide off, no through output, no effect on, or a readout
+  target that will not build (`Ghost.error` says why), the guide stays in
+  the hands' layer as before, bit for bit
+  (`tests/test_outputs.py::test_the_guide_is_never_distorted`,
+  `tests/test_ghost.py::test_the_readout_layer_is_the_guide_apart_from_the_hands`).
+- **Cost** (plan 21 WP5, PR #112; Apple M3 Max, a standalone context,
+  two synthetic hands, medians between `glFinish` calls): the hands'
+  pass 1.22–1.60 ms at 1920 × 1080 and 2.13–2.19 ms at 3024 × 1964 (the
+  plan's own probe had 0.93 and 3.4 ms, measured another way). The layer
+  is the frame's full size with 4× colour and depth; no size cap (fork
+  F11, register row 83). `hands.core.skeleton` on the SDK thread: 27 µs
+  per two-hand frame on stand-in objects, real `leap` objects not
+  measured.
+- **When it fails** (plan 21 WP5, PR #78 reviewed). A hands pass that
+  raises — a ragged skeleton in a hand-edited tape, a font, a driver — in
+  the layer or in any composite is caught (`Renderer._hands_failed`): the
+  frame goes on without the hands, `Ghost.error` keeps the first reason
+  (the HANDS page shows it), the target is bound again with blending on,
+  and every output still gets its dim, so a rig at black never flashes
+  full (`tests/test_render.py::test_a_raising_hands_pass_still_dims`).
+  A program build that failed is not retried until a reload
+  (`_build_failed`); a draw error clears when the ghost goes off.
+  `Ghost._ensure` / `_make` build the targets all or nothing, releasing
+  what they made on a failure, so a partial build no longer raises every
+  later frame (`tests/test_ghost.py::test_a_failed_target_build_is_all_or_nothing`).
+  Labels that will not rasterise set a private `_labels_failed` and stop
+  the tethers until the ghost goes off or a reload; `ghost.tethers` is
+  left alone — the render stack writes no param
+  (`::test_a_failed_label_build_writes_no_param`). `Renderer.on_reload`
+  no longer calls `Ghost.on_reload`: the reloader calls it itself, so the
+  programs are rebuilt once a round (`::test_one_reload_round_rebuilds_the_ghost_once`).
+  `pose()` uses `hands.core.PALM_W`, and `STALE_S` lives in
+  `hands/tape.py` alone (`tests/test_hands_tape.py::test_the_stale_time_and_the_palm_width_are_defined_once`).
+  A `[hands] tape` that is missing or malformed is a note on the SYSTEM
+  page, which the HANDS page shows in place of "tracker off"
+  (`::test_a_bad_tape_path_is_a_note_the_pages_show`), and with a
+  screentop or HMD tracking mode and the ghost on the HANDS page says
+  those axes are unmeasured
+  (`tests/test_ui_shell.py::test_the_hands_page_says_the_ghost_axes_are_unmeasured`).
 - **The camera.** Fixed perspective (38° vertical), independent of the
   4D view's camera, zoom and instances. Leap mm go through the tracking
   mode's basis (`ghost.MODES`) into the stage — x right, y up, z toward
@@ -724,7 +1113,47 @@ display for the performer and for newcomers, not a control source.
   skeleton draws the palm as an ellipse. `HandPose` is the data path —
   stage-space joints plus the bones' raw rotations and the basis — so a
   skinned mesh can replace `CapsuleHands` behind the same
-  `draw(poses, view_proj, eye)`.
+  `draw(poses, view_proj, eye)`. **Since plan 21 WP6 the drawn object is
+  `ghost.style`** (register row 87): a style is a pure function from one
+  `HandPose` to spheres, tubes and triangles (`ghost.PARTS`, no GL, no
+  colour, no guide), and `ghost.Geometry.draw(poses, view_proj, eye,
+  parts, extra)` draws whichever is picked into the same hands' layer, in
+  the hand's own colour and fade; `extra` holds, per pose, the guide's
+  rows that `Ghost` passes in, so no style knows the guide exists (per
+  pose, so the instance order, and with it every depth tie, is the old
+  one). `CapsuleHands` stays as the name of a
+  `Geometry` that draws HANDS; `style_parts(i)` falls back to HANDS for an
+  index out of range or not a number.
+
+  | Style | What it is made of |
+  |---|---|
+  | HANDS (default) | The capsule hands, unchanged: a sphere per joint, a capsule per bone, the palm polygon and the thumb web; a palm-only hand is the palm ellipse, as before. |
+  | JOINTS | Beads only, no bones: small at each metacarpal's wrist end, a little larger at the knuckles and mid joints, largest at the fingertips (0.12 × palm width), one at the palm (0.17 ×). |
+  | PALMS | An orb at the palm that grows from 0.2 to 0.4 × palm width as the hand opens; a wire ring (24 segments, 0.78 × palm width) in the palm's plane; a spoke where the fingers point, ending in a bead. |
+  | CAGE | A wire octahedron (12 tubes, 6 corner beads) in the palm's frame, longest along the fingers, turning with the palm and growing from 0.55 to 1.1 × palm width as the hand opens; inside, at the palm, a small solid octahedron turned an eighth of a turn. |
+  | MARIONETTE | A bead per fingertip, each on a string from a level control bar 1.6 × palm width above the highest tip; a short crossbar along the way the fingers point, and a string from its front to a bead at the palm. |
+
+  Openness (`ghost.openness`) is the mean fingertip distance from the
+  palm over the palm's width, mapped so 0.45 is a fist (0) and 1.35 open
+  (1); 0.5 for a palm-only pose. It was set on the tests' synthetic hands
+  (fist 0.42, open 1.37), never on real ones. A palm-only pose draws a
+  palm orb (0.32 × palm width) in every style but HANDS, which keeps its
+  palm ellipse so it stays byte for byte. **HANDS is the old geometry
+  byte for byte** (36 cases against a frozen copy of the parent's draw;
+  `tests/test_ghost.py::test_hands_is_the_old_geometry_byte_for_byte`).
+  In the four new styles **the guide is drawn on top**: the style first,
+  the depth cleared with the colour masked, then the guide — their palm
+  solids are far larger than a guide ball and hid an ON HAND gauge (the
+  review's fix); in HANDS an ON HAND gauge is still partly behind the
+  palm, as before (`::test_the_guide_on_the_hand_reads_the_same_in_every_style_but_hands`,
+  `::test_a_style_never_draws_the_guide`,
+  `::test_every_style_draws_from_the_same_poses`,
+  `::test_a_palm_only_hand_draws_in_every_style`,
+  `tests/test_outputs.py::test_every_style_behaves_as_the_hands_in_every_state`).
+  The five side by side, offscreen from synthetic hands:
+  `docs/plans/assets/21-outputs-and-the-hands/ghost-styles.png`
+  (`tools/hands_tape.py styles`); never seen with real hands, on the
+  glass or the projector (hand check 109).
 - **The guide** (`ghost.guide`: OFF, BESIDE, ON HAND; off by default) —
   what each hand is doing, drawn in the same pass: a gauge low on the
   hand's side of the frame, or about its palm. Three axis lines (x red,
@@ -763,6 +1192,24 @@ display for the performer and for newcomers, not a control source.
   (`params.PARTS`): the hands are the room's display, like the output's
   placement, so a preset load never turns them off mid-set. Ordinary
   params otherwise: on the HANDS page, learnable to a button or knob.
+  `ghost.tethers` and, since plan 21 WP6, `ghost.style` (HANDS, JOINTS,
+  PALMS, CAGE, MARIONETTE; saved with the show; a `STYLE` combo leading
+  the ghost's second line on the HANDS page while the ghost is on —
+  `hands/panel.py`, `GHOST_STYLE_W` 150 px, so "MARIONETTE" shows whole;
+  `tests/test_ui_shell.py::test_the_ghost_style_is_on_the_hands_page_while_the_ghost_is_on`)
+  are in the same group. **Since plan 21 only `ghost.on` and
+  `ghost.alpha` are modulatable**; `mirror`, `guide`, `tethers` and
+  `style` are settings a hand, a band or an LFO cannot drive (register
+  rows 87, 88): a hand Learn onto one is refused in words
+  (`Learn.learn_source`: "Ghost mirror can't follow a hand (not
+  modulatable) — not learned; Learn desk puts it on a button";
+  `tests/test_learn.py::test_a_hand_learn_onto_a_setting_is_refused_in_words`),
+  and a preset's route onto one is dropped at load with the note
+  "dropped <source> → <target>: not modulatable", the file not rewritten
+  (`Presets.load_doc`; `tests/test_presets.py::test_a_saved_route_onto_a_setting_is_dropped_with_a_note`).
+  Each can still be learned onto a desk button. The build scanned the
+  factory presets, the library and `shared/dan-2026-10-04` (90 files,
+  984 routes) and found no such route; the owner's own home was not read.
 - **Without a camera.** `tools/hands_tape.py record` keeps a few seconds
   of real frames — features, confidence, skeleton — as a tape
   (`hands/tape.py`); `[hands] tape = "<path>"` plays one in the app
@@ -1592,7 +2039,8 @@ unreadable at a party.
   these that you delete from the file comes back on the next launch; to
   switch one off, keep it with `"enabled": false`. Since plan 16 the
   home also holds `windows.json`, where the two windows were at the last
-  quit (§2.5): machine-specific, like `last_show`, and safe to delete.
+  quit (§2.5): machine-specific, like `last_show`, and safe to delete
+  (since plan 21, one render rect per listed output).
   Since plan 18, `hands.json` (the hands' calibrated ranges) also holds
   the interaction box and is schema 2; launching does not rewrite an
   older one, and the first sweep or "reset ranges" that does keeps it
@@ -1847,9 +2295,20 @@ recorded) on `plan-15-integration` with plan 15 whole, about 70 s; 1276
 and the same 1 skipped on `plan-18-integration` (plans 16, 17 and 18),
 about 85 s; 1355 and the same 1 skipped on `plan-20-integration` (plans
 15–18 and 20), about 95 s; 1442 and the same 1 skipped on
-`plan-19-integration` (plans 15–20), about two minutes. `ruff`
+`plan-19-integration` (plans 15–20), about two minutes; 1549 passed
+and the same 1 skipped on `plan-21-integration` (plans 15–21). `ruff`
 is the linter. Every test runs with `HYPERSPACE_HOME` pointed at its own
 `tmp_path` (`tests/conftest.py`), so no test can touch `~/Hyperspace`.
+**No test reaches the machine's MIDI either** (`tests/conftest.py::_no_real_midi`,
+autouse, commit f289afb): `mido.get_input_names` / `get_output_names`
+return empty lists and `open_input` / `open_output` raise, unless a test
+patches `mido` itself. On 2026-10-04 at 22:36 a full run aborted inside
+`rtmidi` creating a CoreMIDI client — native code, past any `except`,
+with a crash dialog on the owner's screen; `tests/test_hands_boundary.py`
+was found scanning and opening a real MIDI output. Which path crashed
+(the input side) was not found; the guard closes every road. The app
+itself still rescans the ports every `midi.RECONNECT_S` with no desk
+connected, through the same call (audit, filed by plan 21).
 What holds what:
 
 - **Golden traces** (`tests/golden/`, recorded once from the HTML by
@@ -1940,6 +2399,27 @@ What holds what:
   first save, a home inside another repository, a locked index, a git
   past its timeout, no network verb (`tests/test_homegit.py`, which
   skips the cases that need `git` when there is none).
+- **Outputs and the hands** (plan 21): the compose path on one
+  standalone GL context, offscreen targets standing in for windows — one
+  default output byte for byte against a verbatim copy of the old
+  `draw`, the eight states, chain runs per distinct pipeline, one
+  capture, the history never holding the hands, the letterbox, the dims,
+  alpha in every state, the guide never bent, every raise
+  (`tests/test_outputs.py`); the presenter against a target view of the
+  same size, byte for byte, **on the renderer's own context** — a
+  stand-in for another window's, which a headless run cannot have
+  (`::test_the_presenter_shows_what_a_target_view_shows`); the windows,
+  presenters, swaps, flush and saves over **fake GLFW window systems**,
+  since a real second window cannot exist headless
+  (`tests/test_app_boundary.py`, the plan 21 tests); the config's list
+  (`tests/test_config.py`), the watch (`tests/test_watchdog.py`), the
+  switches as rig settings and their page (`tests/test_overlay.py`,
+  `tests/test_ui_shell.py`, `tests/test_undo.py`); the ghost's split, its
+  failures, its styles and HANDS against a frozen copy of the old
+  geometry (`tests/test_ghost.py`), the learn refusal and the dropped
+  route (`tests/test_learn.py`, `tests/test_presets.py`). No real tape
+  exists yet, so `tests/test_hands_tape.py::test_every_recorded_tape_replays_through_the_ghost`
+  is the one skip.
 - **Boundaries**: the core never imports `midi` / `bridge` / `dream`
   (`tests/test_params.py:286`, `tests/test_bridge.py:381`,
   `tests/test_dream.py:55`); `hands/core.py`, `hands/signal.py`, `lfo.py`,
@@ -1950,12 +2430,18 @@ What holds what:
   above it — no panel, host or adapter (`tests/test_*_boundary.py`);
   `config.py` reads the hands rig defaults from `hands/core.py` (the one table),
   never the reverse.
-- **Hot reload**: every module but `app.py`, `hotreload.py` and `offline.py`
-  is on the watch list in dependency order (leaves first), an optional
+- **Hot reload**: every module but `app.py`, `hotreload.py`, `offline.py`
+  and `watchdog.py` (cold like `app.py`: it diagnoses a freeze, so it
+  must outlive a reload) is on the watch list in dependency order (leaves first), an optional
   adapter that was never imported is skipped, every swap target `app.py`
   registers is defined in a watched module, and an Enum a reloaded module
   defines keeps its identity, so live params still recognise their `Kind`
-  (`tests/test_hotreload.py`; plan 11 WP2).
+  (`tests/test_hotreload.py`; plan 11 WP2). Since plan 21 `outputs` sits
+  after `ghost` and before `view` / `render`
+  (`::test_outputs_is_watched_before_render`); a later output's
+  `Presenter` and `Output` are swap targets, and a presenter's reload
+  hook only marks it stale (a reload runs in whichever GL context is
+  current), so it rebuilds at its next `present` in its own.
 - **Headless GL and imgui**: every shape renders offscreen; post passes off
   are bit-identical; every panel page draws headless and fits; every
   factory effect compiles and changes the frame.
@@ -2039,6 +2525,21 @@ same PR; when it changes behaviour, the line here does.
   `DECISION-REGISTER.md` wait the same way. Two known gaps: a learned
   step or knob on `preset.select` lands on empty slots (audit R14), and
   a module strip's save chip overlaps its name under "more" (audit U10).
+- **Plan 21 at the machine**: the render outputs, the three switches
+  and the dim per output, the hands over or through the effects, the
+  readout layer, the OUTPUT page, the ghost styles and PR #78's fixes
+  have been shown by tests (offscreen targets; the presenter on one
+  context; fake window systems), offscreen renders from synthetic hands,
+  and scripted launches on a laptop with two small windowed outputs on
+  its one screen, whose read-back pictures matched; **nobody has looked
+  at a render output by eye, and nothing has been on the glass, the
+  projector or a second screen, or seen a real hand**. Group Q of the
+  hand checks (99–112). **The pacing is unconfirmed**: output 1 waits
+  for its screen and the others do not (fork F6), but in the build's
+  launches both paths ran unpaced (check 107). **A screen plugged in
+  after launch is not picked up** until a relaunch (fork F9, check
+  111). Check 47 is finished as check 108. Rows 79–88 of
+  `DECISION-REGISTER.md` wait the same way as 34–78.
 - **The trim** (plan 06): decided 2026-09-28 — the per-band AUTO / MANUAL
   switch, built in plan 11 WP15; the oracle was not re-frozen.
 - **First real capture on this machine.** Every live path is code-complete;

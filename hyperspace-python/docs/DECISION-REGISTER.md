@@ -1,6 +1,6 @@
 # Decision register — everything that is yours to decide
 
-As of 2026-10-04. **Rows 1–33 are answered** (26–33, from the Oct 3–4 session, on 2026-10-04; Part A4). Rows the unattended run of plans 15–21 adds after 33 are built on its recommendation and wait for you to confirm or overturn (the answer sheet at the end). **Plan 15 added rows 34–44** (Part A4, after row 33); plans 16, 18, 17 and 20 rows 45–71, and **plan 19 rows 72–78**.
+As of 2026-10-04. **Rows 1–33 are answered** (26–33, from the Oct 3–4 session, on 2026-10-04; Part A4). Rows the unattended run of plans 15–21 adds after 33 are built on its recommendation and wait for you to confirm or overturn (the answer sheet at the end). **Plan 15 added rows 34–44** (Part A4, after row 33); plans 16, 18, 17 and 20 rows 45–71, **plan 19 rows 72–78**, and **plan 21 rows 79–88** — the last of the run.
 implementing and settling the open work is here, whichever plan or session
 raised it. Each entry stands on its own: what the thing is, what the software
 does today, the options, a recommendation with its reasons, the trade-off you
@@ -732,7 +732,23 @@ after), `bindings.json` never rewritten without a backup and the launch
 saying what it did, the device knobs re-cut, hide / rename / the trash
 and its two-click empty, the dirty dot and "save copy", and the home in
 git (with a drawing of what is tracked). Plan 19's twelve forks are
-these seven rows. Plan 21 takes the rows after these.
+these seven rows.
+**Rows 79–88 are plan 21's** (PRs #112, #118, #120, #122, #123 and
+#124), settled the same way, each on its plan's recommendation — the
+switches themselves are yours (two outputs each with a dim, the scene
+and the hands, rows 32 and 33; and "hands through effects", which you
+asked for on 2026-10-04 during the run); what is here is how they were
+built: where "through" puts the hands and what the scene off with
+through on shows (with the eight states drawn), the guide and its
+labels never bent, the switches as rig settings from `config.toml`,
+letterboxing, one window rendering and the others copying with only the
+first waiting for its screen (with the frame's path drawn, and the
+honest note that the frame rate is unconfirmed), Ghost hands against
+each output's hands tick, the control window saying in words what each
+output shows (with the OUTPUT page's block drawn), a screen that is not
+connected at launch, `ghost.style`'s five drawn objects, and Ghost
+mirror / guide / tethers no longer following a hand. Plan 21's twelve
+forks and its review's finding R12 are these ten rows.
 
 You also set how the work runs, since nobody will be watching it:
 
@@ -3192,6 +3208,404 @@ a commit); `test_homegit.py` (20 tests),
 `test_app_boundary.py::test_homegit_is_a_leaf_and_the_library_never_imports_it`.
 Hand check 90. Scripted launches on temp homes only.
 
+### 79. P21-a — "hands through effects": where the hands go in, and the scene off with it on
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** You asked, during the run, for a third switch on each
+output beside "scene" and "hands": **hands through effects**. Off (the
+default, the picture of before): the hands are laid over the finished
+frame and no effect touches them. On: the hands go in *before* the
+effects, so warp, kaleido and the rest bend them with the shape. Two
+things were the build's to choose: where in the frame "before" is, and
+what an output shows with the scene off and the switch on.
+
+```
+ one frame, and where the hands go in (plan 21; ENGINEERING §2)
+
+  scene ──► look-back composite ──►──────────────►  effects  ──► output
+            (scene ⊕ echoes ⊕ dream)       ▲                       ▲
+              ▲                            │                       │
+              │                  through ON: the hands      through OFF: the hands
+   the echoes and the dream      go in here, and the        are laid on here, clean
+   are captured from the         effects bend them          (as before plan 21)
+   scene alone — never the
+   hands, in any state
+
+ one output's eight states (warp + kaleido on, a hand in the box)
+
+   #  scene hands through   what the output shows
+   1   on    on    off      the scene with its effects, the hands clean on top  ← default
+   2   on    on    on       the scene and the hands, both bent by the effects
+   3   on    off   off      the scene with its effects
+   4   on    off   on       the same as 3 (no hands to bend)
+   5   off   on    off      the hands alone, clean, on black
+   6   off   on    on       the hands alone, bent by the effects, on black
+   7   off   off   off      black
+   8   off   off   on       black, the same as 7
+
+   eight states, six pictures. With no effect on, or no hand shown, "through"
+   changes nothing: 2 looks like 1 and 6 like 5.
+```
+
+| The choice | Option | Trade-off |
+|---|---|---|
+| Where "before" is (fork F1) | **(a) after the look-back composite, before the first effect** | The effects bend the hands; the echoes and the dream never hold them, so "never in the look-back history" stands in every state, and one history serves every output. |
+| | (b) onto the scene, before the look-back | The hands also trail in the echoes and feed the dream — but the history is shared, so an output with hands off or "over" would show hand echoes too: the switches would stop being per output. Per output it needs a second history and dream worker. |
+| Scene off, through on (fork F2) | **(a) the hands alone through the effects, on black, no echoes** | Every switch state means something. A generator effect (one that draws its own light) lights the black there, where state 5 shows none. |
+| | (b) the same as "hands over" | Two switch states the same picture for no reason. |
+
+**Chosen: (a) for both.** The echoes come from the scene, and the scene
+is off in 5–8, so those states show no echoes. With two outputs that
+disagree (the glass "over", the projector "through") the effects run
+twice a frame — about 0.4 ms more at 1920 × 1080 in the build's
+offscreen timing — and once when they agree.
+
+**Cost to reverse.** (b) for F1 on every output at once: a few lines in
+`Renderer._pipeline`; per output, a second look-back ring and dream
+worker (days). (b) for F2: one row of `outputs.route`. Plan 21 WP2 (PR
+#120, merged with WP1 as 97a24d7; the review's fix 29c3e4c: the history
+is captured once after every pipeline, or the "through" output showed
+this frame doubled as an echo); `test_outputs.py::test_route`,
+`::test_each_of_the_eight_states_shows_its_picture`,
+`::test_through_bends_the_hands_with_the_shape`,
+`::test_the_history_never_holds_the_hands_in_any_state`,
+`::test_two_pipelines_show_the_same_echoes`,
+`::test_through_with_no_effect_on_is_hands_over`. Hand checks 102 and
+103. Offscreen renders (`eight-states.png`) and a script stepping a real
+window on the laptop through the eight states, read back; never seen on
+the glass or the projector, never with a real hand.
+
+### 80. P21-b — the guide and the tethers' labels are never bent
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** With "hands through effects" on, the effects bend the
+hands. The guide (the balls, rings and pinch beads beside or on each
+hand) and the tethers' text labels ride with the hands. Do they bend
+too?
+
+| Option | Trade-off |
+|---|---|
+| (a) they follow the hands through the effects | Nothing to build. Text through kaleido cannot be read, and the guide exists to be read. |
+| **(b) always laid on after the effects** | Legible in every state, on every output that shows the hands. A second layer, drawn only while the guide is on and some output's hands go through an effect; otherwise one layer as before, bit for bit. |
+
+**Chosen: (b).** An ON HAND gauge is still hidden where the palm is in
+front of it with HANDS (the hands are drawn into the second layer's
+depth only first); in the four other styles the guide is drawn on top
+(row 87).
+
+**Cost to reverse.** Delete the readout layer (`Ghost.readout`,
+`Ghost.composite_readout`, the `readout=` flag), a few hours. Plan 21
+WP2 (PR #120); `test_outputs.py::test_the_guide_is_never_distorted`,
+`test_ghost.py::test_the_readout_layer_is_the_guide_apart_from_the_hands`,
+`test_outputs.py::test_the_presenter_handoff_carries_the_readout`. Hand
+check 103. Offscreen renders (`through-two-outputs.png`,
+`style-through.png`): the guide and the labels the same and unbent on
+both outputs.
+
+### 81. P21-c — each output's switches are rig settings: from `config.toml`, never saved
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** Each opened output N has `output.N.scene`,
+`output.N.hands`, `output.N.through` and, with two or more outputs
+listed, `output.N.dim`. Where do their values live?
+
+| Option | Trade-off |
+|---|---|
+| (a) session params saved in the show | A show made on the rig names `output.2.*` on a laptop that has no second output; a factory show would carry one rig's arrangement. |
+| **(b) rig settings: never saved; every launch takes them from `config.toml`** | ⌘R and a relaunch come back to what the config says; a switch flipped at the party lasts until the restart. |
+
+**Chosen: (b)**, like `output.fullscreen` and the master dim beside
+them: not modulatable (no hand, band or LFO drives them), not in a
+preset or a show, untouched by undo, by a preset or show load or save;
+each can be learned onto a desk button. The config's optional `scene`,
+`hands`, `through` and `dim` per `[[output.screens]]` entry are their
+launch values; **a config `dim` under 0.1 is raised to 0.1**, with a
+note — the config cannot launch an output black (the fader still goes
+to 0). The master dim stays 1 at every launch. **The dim's own fader
+exists when the config lists two or more outputs** — so with the
+projector unplugged the glass keeps its dim row — **or when a lone
+output's entry sets `dim` under 1**; otherwise the master dim is the one
+output's dim.
+
+**Cost to reverse.** Flip `persist` in `overlay.register_switches`, an
+hour (and decide what a laptop does with a show's `output.2.*`). Plan
+21 WP4 (PR #124, the review's c173df6 for the lone dim) and WP3 (PR
+#123, the config keys); `test_overlay.py::test_the_output_switches_are_rig_settings`,
+`::test_one_output_has_no_dim_of_its_own`,
+`test_undo.py::test_the_output_switches_are_left_alone_by_undo_presets_and_shows`,
+`test_config.py::test_a_config_dim_cannot_launch_an_output_black`,
+`test_app_boundary.py::test_the_switches_are_registered_from_the_configs_launch_values`.
+Hand checks 101 and 104. A real launch with two small windows on the
+laptop read the config's launch values and an undo left the switches
+alone; never on the rig.
+
+### 82. P21-d — an output of another shape shows the whole frame, letterboxed
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** The frame is drawn once, at output 1's size. An output
+of another shape (a 4:3 projector beside a 16:9 glass) shows it how?
+
+```
+ output 1 (the glass, 16:9) sets the frame     output 2 (a 4:3 projector), (a) letterbox
+
+  ┌──────────────────────────────┐             ┌──────────────────────┐
+  │                              │             │▓▓▓▓▓▓ black bar ▓▓▓▓▓│
+  │          the frame           │             ├──────────────────────┤
+  │                              │      ──►    │   the whole frame,   │
+  │                              │             │   centred, round     │
+  └──────────────────────────────┘             ├──────────────────────┤
+                                               │▓▓▓▓▓▓ black bar ▓▓▓▓▓│
+                                               └──────────────────────┘
+```
+
+| Option | Trade-off |
+|---|---|
+| **(a) letterbox: the whole frame, centred, its shape kept** | Nothing cropped; the tethers' labels at the edges stay in view; the bars are black, which on the glass is nothing. |
+| (b) cover: fill, crop what overhangs | No bars; one output loses the frame's edges. |
+| (c) stretch | Circles become ovals. |
+| (d) draw the scene per output at its own size | Each output exact; the scene, the look-back and the effects run once per size. Days. |
+
+**Chosen: (a).** The hands are laid in the same rectangle, so they sit
+on the same part of the shape on every output. List the larger screen
+first in the config: the frame is its size.
+
+**Cost to reverse.** (b) or (c): `outputs.fit`, a few lines. Plan 21
+WP1 (PR #118); `test_outputs.py::test_fit`,
+`::test_an_output_of_another_aspect_is_letterboxed_and_the_hands_stay_registered`.
+Hand check 106. Offscreen (`outputs-compose.png`: a square output
+letterboxed); never on two real screens.
+
+### 83. P21-e — one window renders, the others copy; only the first waits for its screen
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** How the one frame reaches two windows, and how their
+swaps are timed.
+
+```
+ one frame, two outputs (fork F12: output 1's context renders everything)
+
+  output 1's window (the glass) — its GL context renders:
+    scene ─► look-back ─► effects ─┬─► straight onto output 1 when it is the only one
+    (once)   composite    (once per├─► or into a frame texture (shared) ──┐
+                           distinct│                                      │
+                           picture)│   the hands' layer (once) ───────────┤
+                                   │   then per output: hands, guide, dim │
+                                   ▼                                      │
+                       glFlush (only with a second output)                │
+                                                                          ▼
+  output 2's window (the projector) — its own context, a "presenter":
+    copies the frame texture (1:1, or letterboxed), lays the hands, the guide,
+    its dim — then swaps at once (interval 0: it never waits)
+
+  output 1 swaps last, waiting for its screen (interval 1): it paces the loop
+```
+
+| The choice | Option | Trade-off |
+|---|---|---|
+| Swap timing (fork F6) | **(a) the first output waits for its screen, the others do not** | On the plan's measurement, two waiting swaps a frame halved the rate (60–81 fps against 121 on the 120 Hz screen). A non-waiting output could tear — macOS composites whole windows, so none is expected — and a second screen of another refresh rate repeats or drops frames. |
+| | (b) every output waits | No tearing anywhere, at a rate the plan measured as half. |
+| Which context renders (fork F12) | **(a) output 1's, as before plan 21** | One output is exactly the old code path; output 1 cannot be absent (it always opens). |
+| | (b) a hidden window renders, every output copies | Symmetric; every frame takes the texture road and the scene's sample count stops following a window. |
+| A size cap on the hands' layer (fork F11) | **(a) no cap** | At 1080p the pass is under about 1.6 ms in the build's timing; a cap would soften the hands on a retina screen. Revisit if the laptop's own screen drops frames. |
+
+**Chosen: (a) for each.** **The frame-rate reason is unconfirmed**: in
+the build's short launches on this laptop the loop ran unpaced both with
+two outputs (271 fps) and with one (377 fps), so the swap was not
+pacing anything and the plan's 121 fps was neither confirmed nor
+refuted. What the code does is pinned by tests; what it does with two
+screens is hand check 107. Output 2's picture was equal to output 1's,
+byte for byte, read back from two real windows on the laptop.
+
+**Cost to reverse.** F6: one `glfw.swap_interval` call per output
+(`app._open_presenters`, `app.main`). F12: days. F11: a constant in
+`Ghost._ensure`. Plan 21 WP3 (PR #123) and WP1 (PR #118);
+`test_app_boundary.py::test_only_the_first_output_waits_for_the_screen`,
+`::test_the_rendering_context_is_flushed_before_a_presenter`,
+`::test_a_raising_presenter_does_not_stop_the_frame`,
+`test_outputs.py::test_the_presenter_shows_what_a_target_view_shows`
+(on one context, a stand-in), `::test_two_outputs_with_the_same_switches_run_the_chain_once`.
+Hand check 107. Never with two screens, fullscreen on two monitors or
+mixed refresh rates.
+
+### 84. P21-f — Ghost hands and each output's hands tick
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** Ghost hands (`ghost.on`, the HANDS page) existed before
+plan 21; now each output also has a hands tick. Which one wins?
+
+| Option | Trade-off |
+|---|---|
+| **(a) both: Ghost hands says whether the hands are drawn at all; each output's tick says where they show** | One output behaves as before with its tick left on; one learned button still takes the hands off everywhere. Two places can hide the hands — the OUTPUT page says which ("hands: ghost hands are off (HANDS page)"). |
+| (b) the output ticks replace Ghost hands | One place; breaks saved shows and learned rows on `ghost.on`, and there is no single off. |
+
+**Chosen: (a).** The hands show on an output when its tick is on, Ghost
+hands is on and a hand is in the box this frame.
+
+**Cost to reverse.** A migration of shows and rows on `ghost.on`, a day
+or two. Plan 21 WP1 (PR #118) and WP4 (PR #124);
+`test_outputs.py::test_route`,
+`::test_through_with_no_hand_showing_runs_nothing_extra`,
+`test_ui_shell.py::test_the_output_page_says_what_each_output_shows`.
+Hand checks 102 and 105.
+
+### 85. P21-g — the control window says in words what each output shows
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** The laptop is the control view; it has never shown the
+render. With two outputs, how do you know what each shows?
+
+```
+ OUTPUT page, two outputs listed (read back from the real control window, wp4-output-page.png)
+
+  MASTER DIM  ██████████████████████████████ 100
+  1 glass      ☑ scene   ☑ hands   ☐ through effects
+  DIM         ██████████████████████████████ 100
+  shows: scene + hands over the effects
+  2 projector  ☑ scene   ☑ hands   ☑ through effects
+  DIM         ████████████░░░░░░░░░░░░░░░░░░  60
+  shows: scene + hands through the effects · 60%
+  paced by output 1 · frame 800×520 · below: output 1's window
+  [ follow window          ▼ ]  ☐ Fullscreen  ☐ Overlay     ← output 1's, as before
+
+  under a block, only when there is something to say (in grey, an error in amber):
+    hands: ghost hands are off (HANDS page) · through: no effect on
+  an output listed but not opened:  2  projector — screen 2 is not connected
+  black, in amber:  shows: black — nothing switched on | black — the scene is off and
+                    no hand shows | black — dim 0 | black — master dim
+  the footer, on every page:  · output 2 black    (· outputs 2, 4 black)
+```
+
+| Option | Trade-off |
+|---|---|
+| **(a) words: each output's "shows:" line, the footer naming a black output** | No picture in the control window; nothing new drawn there. |
+| (b) a small live picture per output | Each output's picture composed again into a small texture (the hands and the dim are in no shared texture): about 0.5 ms per output, and a page that must still fit. |
+
+**Chosen: (a).** With one output the page shows one block with three
+ticks and no dim row of its own (the master dim is its dim).
+
+**Cost to reverse.** (b) later: a day or so. Plan 21 WP4 (PR #124);
+`test_ui_shell.py::test_the_output_page_says_what_each_output_shows`,
+`::test_the_footer_names_a_black_output`,
+`::test_the_output_page_fits_with_four_outputs_and_overlays_rows`,
+`::test_the_output_page_with_one_output_has_no_dim_of_its_own`. Hand
+checks 102 and 105. The page was read back from a real control window
+driven by a script; nobody has clicked it.
+
+### 86. P21-h — a listed screen that is not connected, and the later outputs' screens
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** The config lists two outputs; the projector is not
+plugged in at launch. And where do the second output's screen and
+fullscreen live?
+
+| The choice | Option | Trade-off |
+|---|---|---|
+| A later output's screen is not connected (fork F9) | **(a) not opened, with a note** ("config: output 2 (projector): monitor = 2, but 2 screens are connected (0–1) — not opened"; on the OUTPUT page "2  projector — screen 2 is not connected") | A third window landing on the laptop over the controls is worse than a missing one. Output 1 always opens (an index no screen has is "where it was last", plan 16's rule). |
+| | (b) open it where it was last, or on the first screen | Something always opens; on a one-screen laptop it covers the controls. |
+| The later outputs' screen and fullscreen (fork F10) | **(a) the config says; no live control** | `output.monitor` and `output.fullscreen` on the OUTPUT page stay output 1's; change output 2's in `config.toml` and relaunch. |
+| | (b) a screen and a fullscreen control per output | Two more params per output. |
+
+**Chosen: (a) for both.** **A screen plugged in after the launch is not
+picked up**: the output stays closed for the run (and output 1's config
+index, if it had no screen, stays "where it was last"), until a
+relaunch — ⌘R. Plugging in mid-run is not handled (audit P6). A later
+output whose window or GL context will not open is also "not opened",
+with a note. Pulling a cable mid-run: the frame goes on, the watch warns
+naming the output; what macOS does to that window is unknown.
+
+**Cost to reverse.** F9: one branch in `app._later_rect`. F10: two
+params per output, half a day. Picking up a late screen: a GLFW monitor
+callback and opening the window then, a day. Plan 21 WP3 (PR #123, the
+review's 15d534d); `test_app_boundary.py::test_a_later_output_whose_screen_is_absent_is_not_opened`,
+`::test_a_later_output_is_the_configs_and_never_overlay`,
+`::test_the_windows_open_where_placement_says`,
+`test_watchdog.py::test_one_dark_output_of_two_is_a_warning_not_a_stall`.
+Hand checks 101, 111 and 112. Fake screens only; the build machine had
+one.
+
+### 87. P21-i — `ghost.style`: five drawn objects for the hands
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** Your answer to row 33 was "make what is drawn
+swappable". `ghost.style` (HANDS page, the STYLE combo leading the
+ghost's second line while Ghost hands is on) picks what is drawn where
+your hands are, from the same tracking data:
+
+| Style | What it is made of |
+|---|---|
+| HANDS | The capsule hands, exactly as before. The default. |
+| JOINTS | A bead per joint, no bones; the fingertips' largest, one at the palm. |
+| PALMS | An orb at the palm that swells as the hand opens, a wire ring in the palm's plane, a spoke where the fingers point. |
+| CAGE | A wire octahedron round each hand that turns with the palm and grows as the hand opens, a small solid one inside. |
+| MARIONETTE | A bead per fingertip hung on strings from a bar above each hand. |
+
+| The choice | Option | Trade-off |
+|---|---|---|
+| Kind | **(a) one choice, five values** | One control; the guide, the tethers, the fade, the colours and over / through behave the same in every style. |
+| | (b) five on/off switches | Combinations nobody asked for. |
+| Saved | **(a) with the show (session)** | Your pick comes back with the show; a preset load never changes it. |
+| Driven by a hand, band or LFO | **(a) never (not modulatable)**; a desk button or knob can be learned onto it | A style stepping under an LFO would swap the drawn object mid-gesture. |
+| A palm-only hand (no fingers tracked) | **HANDS keeps its palm disc; the other four draw a palm orb** | HANDS stays byte for byte as before. |
+| The guide on the hand | **drawn on top in the four new styles; partly behind the palm in HANDS, as before** | Their palm solids would hide the guide's small balls (found by the review). |
+
+**Chosen: the bold option of each.**
+
+**Cost to reverse.** A style: one function in `ghost.PARTS`. Modulatable:
+one flag. Plan 21 WP6 (PR #122, the review's 0db74f9);
+`test_ghost.py::test_every_style_draws_from_the_same_poses`,
+`::test_a_style_never_draws_the_guide`,
+`::test_a_palm_only_hand_draws_in_every_style`,
+`::test_hands_is_the_old_geometry_byte_for_byte`,
+`::test_the_guide_on_the_hand_reads_the_same_in_every_style_but_hands`,
+`test_outputs.py::test_every_style_behaves_as_the_hands_in_every_state`,
+`test_ui_shell.py::test_the_ghost_style_is_on_the_hands_page_while_the_ghost_is_on`.
+Hand check 109 — and say which styles to keep. Offscreen renders
+(`ghost-styles.png`: the five clearly distinct, the PALMS orb and the
+CAGE shrinking as the hand closes) and a real launch stepping the style
+by script; never with a real hand, at distance or on the glass.
+
+### 88. P21-j — Ghost mirror, guide and tethers no longer follow a hand
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** PR #78 left `ghost.mirror`, `ghost.guide` and
+`ghost.tethers` modulatable, so a hand, band or LFO route could flip the
+hands left for right with a hand's move. The review (finding R12)
+turned that off — and found that doing it alone would have made a hand
+Learn onto Ghost mirror write a dead route while the footer said it
+worked.
+
+| Option | Trade-off |
+|---|---|
+| **(a) the three are not modulatable (with `ghost.style`); a hand Learn onto one is refused in words; a saved route onto one is dropped at load with a note** | A display setting stays put. `ghost.on` and `ghost.alpha` stay drivable. |
+| (b) leave all five modulatable | A route on the mirror flips the hands mid-set. |
+| (c) not modulatable, nothing else | A Learn writes a dead row; a saved route sits dormant with no word. |
+
+**Chosen: (a).** The refusal reads "Ghost mirror can't follow a hand
+(not modulatable) — not learned; Learn desk puts it on a button"; Learn
+desk still puts them on a button. A preset with a route onto one loads
+with "dropped <source> → ghost.mirror: not modulatable" and **the file is
+not rewritten** (save it to make the drop stick). The factory presets,
+the library and `shared/` hold no such route (984 routes scanned); your
+own home was not read.
+
+**Cost to reverse.** Three flags; the refusal and the drop are general
+(any non-modulatable target) and would stay. Plan 21 WP6 (PR #122) and
+WP5 (PR #112, the built-then-reverted first try);
+`test_learn.py::test_a_hand_learn_onto_a_setting_is_refused_in_words`,
+`test_presets.py::test_a_saved_route_onto_a_setting_is_dropped_with_a_note`,
+`test_ghost.py::test_the_params_are_session_off_by_default_and_learnable`.
+Hand check 110.
+
 ---
 
 ## Part B — built on the recommendation without asking; confirm or overturn
@@ -3297,12 +3711,30 @@ Each is built, reviewed and on PR #55. Overturning any is a small follow-up.
   or the glass, dragged a chip with a real mouse, or judged the dream at
   any speed**. Checks 5, 9, 59, 60, 62 and 63 carry notes where plan 20
   changed what they describe.
+- Group **Q** (plan 21: one output as it was, PR #78's fixes, two
+  outputs from the config, the eight states, hands over or through, the
+  dims, black never a mystery, another shape letterboxed, the frame rate
+  with two screens, the ghost hands following real ones, the five
+  styles, a hand refused on a ghost setting, a screen not plugged in at
+  launch, a cable pulled mid-run; checks 99–112, about an hour, the
+  glass and the projector for 101–109 and 111–112, the camera for most,
+  the APC40 for 104 and 110; **99 and 100 before editing
+  `config.toml`**). Rows 79–88 are shown by checks 102 and 103 (row 79),
+  103 (80), 101 and 104 (81), 106 (82), 107 (83), 102 and 105 (84 and
+  85), 101, 111 and 112 (86), 109 (87) and 110 (88). **Check 47, the
+  ghost hands, is finished by check 108** (its (g) is check 103).
+  Nothing in plan 21 has been tried at the rig: **no window of it has
+  been looked at by a person** (the pictures are offscreen renders and
+  scripts' read-backs of windows on the laptop's one screen), no real
+  hand has been drawn, and **whether output 1's waiting swap paces the
+  loop with two screens is unconfirmed** (check 107). Checks 26, 43, 47,
+  55 and 61 carry notes where plan 21 changed what they describe.
 
 ---
 
 ## Answer sheet
 
-Write the letter, or "rec" for the recommendation. Rows 14–17 and 34–78
+Write the letter, or "rec" for the recommendation. Rows 14–17 and 34–88
 take "keep" or "overturn".
 
 | # | Decision | Recommended | Your answer | Note |
@@ -3339,8 +3771,8 @@ take "keep" or "overturn".
 | 29 | P15-d save on the APC40 | (a) hold clip-stop k to save into slot k | **save-as**, 2026-10-04 | always a new preset with a made-up name, into the next empty slot; the desk never overwrites; built, plan 15 WP4 (PR #87): the eight invariant clip-stop rows as one `hold` bar (`midi.HOLD_S` = 0.6 s, `MidiIO._fire_holds`), `preset.save_new` → `Project.save_new`, `library.next_name`, "put preset here…" and "clear slot" on a slot's menu (`ui_presets._slot_menu`, `Project.put_slot` / `clear_slot`). `test_midi.py::test_a_hold_fires_once_at_the_hold_time_while_held`, `::test_a_tap_fires_nothing`, `test_presets.py::test_save_new_never_overwrites`, `::test_save_new_on_a_full_bank_saves_to_the_list_and_says_so`, `test_desk.py::test_the_clip_stop_row_is_invariant`. Row 42 is its forks. Never on the APC40 yet. Hand check 56 |
 | 30 | P15-e PR shape | (a) a PR per work package, an integration PR per plan | **(a)**, 2026-10-04 | everything onto `finish-line`, never main; you merge that |
 | 31 | Auto BPM | (a) stay tap-only | **deferred**, 2026-10-04 | not in this run |
-| 32 | P21-a one output or two | none; describe the rig | **two render outputs**, 2026-10-04 | the same frame; per output a dim, scene on/off, hands on/off; the laptop is the control view; plan 21 |
-| 33 | P21-b the hand HUD | (a) finish PR #78 | **(a) and (c)**, 2026-10-04 | #78 finished as the HUD, with what is drawn swappable; plan 21 |
+| 32 | P21-a one output or two | none; describe the rig | **two render outputs**, 2026-10-04 | the same frame; per output a dim, scene on/off, hands on/off; the laptop is the control view; plan 21. Built, plan 21 WP1–WP4 (PRs #118, #120, #123, #124): `[[output.screens]]`, a window per output, `output.N.scene / hands / through / dim` on the OUTPUT page — with the third switch, "hands through effects", that you asked for on 2026-10-04 during the run; rows 79–86 are its forks. Hand checks 99, 101–107, 111, 112 |
+| 33 | P21-b the hand HUD | (a) finish PR #78 | **(a) and (c)**, 2026-10-04 | #78 finished as the HUD, with what is drawn swappable; plan 21. Built, plan 21 WP5 (PR #112: #78's review, its findings fixed) and WP6 (PR #122: `ghost.style`, five drawn objects); rows 87 and 88 are its forks. Hand checks 100, 108–110 |
 | 34 | P15-f undo keys and chords | (c) both ⌘Z and Ctrl+Z; a press fires only its own chord | built on the recommendation; confirm or overturn | plan 15 WP1 (PR #82); a hand-made bare `key:Z` row no longer fires with ⇧, ⌘ or Ctrl held |
 | 35 | P15-g undo and the band layout | (d) add / remove / move are not steps; strips go back only onto the same layout | built on the recommendation; confirm or overturn | plan 15 WP1 (PR #82); the 8-second "Reset all" undo unchanged |
 | 36 | P15-h a tap as an undo step | (b) the clock is left out | built on the recommendation; confirm or overturn | plan 15 WP1 (PR #82); a typed BPM is not undone either |
@@ -3386,3 +3818,13 @@ take "keep" or "overturn".
 | 76 | P19-e hide, rename, the trash | (a) a factory preset cannot be renamed (save copy first); (a) the trash and "show hidden" at the foot of the preset list; empty asks again in place for 4 s | built on the recommendation; confirm or overturn | plan 19 WP4 (PR #117); **empty trash is the one delete with no copy kept**; rename repoints every show of yours, each copied first, and is no undo step; a slot naming a trashed preset is left in the warning colour |
 | 77 | P19-f the dot and "save copy" | (a) a 12 px disc, the save chip solid red while dirty; "save copy" on the preset strip and ROUTING's head, the preset strip's reset removed | built on the recommendation; confirm or overturn | plan 19 WP5 (PR #114); a module strip's save chip still overlaps its name under "more" (audit U10) |
 | 78 | P19-g the home in git | (a) the trash ignored; off by default, local only, never inside another repository, init at the first save | built on the recommendation; confirm or overturn | plan 19 WP6 (PR #119) and the merge 7190ff2 (rename, hide, unhide, restore commit; empty does not); git never blocks a save; the words of a failed commit are lost, its files are not |
+| 79 | P21-a where "through" puts the hands | (a) after the look-back composite, before the first effect; (a) scene off + through is the hands alone through the effects | built on the recommendation; confirm or overturn | plan 21 WP2 (PR #120, the review's 29c3e4c); the switch itself is yours (2026-10-04); the echoes and the dream never hold the hands in any state; eight states, six pictures (3 = 4, 7 = 8) |
+| 80 | P21-b the guide and labels never bent | (b) laid on after the effects, a second layer only while needed | built on the recommendation; confirm or overturn | plan 21 WP2 (PR #120); otherwise one layer as before, bit for bit |
+| 81 | P21-c the switches are rig settings | (b) never saved; every launch from `config.toml`; the config cannot launch an output under 10 % | built on the recommendation; confirm or overturn | plan 21 WP4 (PR #124, c173df6) and WP3 (PR #123); a per-output dim fader with two or more outputs listed, or one listed with a dim under 1; untouched by undo, presets and shows |
+| 82 | P21-d another shape | (a) letterbox, the frame at output 1's size | built on the recommendation; confirm or overturn | plan 21 WP1 (PR #118); list the larger screen first |
+| 83 | P21-e one renders, the others copy | (a) output 1 waits for its screen, the others never; (a) output 1's context renders; (a) no cap on the hands' layer | built on the recommendation; confirm or overturn | plan 21 WP3 (PR #123) and WP1 (PR #118); **the frame-rate reason is unconfirmed** (the build ran unpaced with one output and with two); never with two screens |
+| 84 | P21-f Ghost hands and the hands tick | (a) both: Ghost hands everywhere, the tick per output | built on the recommendation; confirm or overturn | plan 21 WP1 and WP4; the OUTPUT page names Ghost hands when it is the reason |
+| 85 | P21-g what the control window shows | (a) words: "shows: …", the footer's "output N black" | built on the recommendation; confirm or overturn | plan 21 WP4 (PR #124); no picture; with one output no dim row of its own |
+| 86 | P21-h a screen not connected; later outputs' screens | (a) not opened, with a note; (a) the config says, no live control | built on the recommendation; confirm or overturn | plan 21 WP3 (PR #123, 15d534d); **a screen plugged in after launch is not picked up until a relaunch** (audit P6) |
+| 87 | P21-i `ghost.style` | one choice of five (HANDS, JOINTS, PALMS, CAGE, MARIONETTE), saved with the show, never driven by a hand, band or LFO | built on the recommendation; confirm or overturn | plan 21 WP6 (PR #122, 0db74f9); HANDS byte for byte as before; the guide on top in the four new styles; say which to keep (check 109) |
+| 88 | P21-j mirror, guide, tethers not modulatable | (a) with a Learn refusal in words and a load note dropping an old route | built on the recommendation; confirm or overturn | plan 21 WP6 (PR #122), R12 of WP5 (PR #112); the preset file is not rewritten by the drop |
