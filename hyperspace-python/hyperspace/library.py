@@ -1799,6 +1799,167 @@ class Library:
             self._landed(group, None, None)
         return True
 
+    def rename(self, group: str, old: str, new: str) -> Path:
+        """Rename a user preset (plan 19 WP4): the file, the name inside it,
+        and every show in the home that names it. Raises LibraryError and
+        changes nothing when `old` is not a user preset of the presets'
+        group, `new` is empty or taken, or the old file cannot be kept in
+        the trash. No undo step: the nets are the old file in
+        ``trash/presets/``, each rewritten show in ``trash/projects/``, and
+        renaming it back.
+
+        In order, so that a stop at any point loses nothing:
+
+        1. refuse — a factory preset ("save copy, then rename the copy"),
+           an empty name, a name whose slug is taken (`_taken`: a file stem
+           in either folder or a listed name, hidden ones included, less
+           this preset's own). A new name with the old file's slug (case or
+           spacing) keeps the file's stem: the file is rewritten in place,
+           its old text kept in the trash first;
+        2. the new file ``presets/<slug(new)>.json`` is written, created
+           exclusively — the old document with only ``name`` changed, in the
+           kind's own text. *Stopped here: two files, one look; nothing lost*;
+        3. the old file is copied to the trash (`to_trash`) — a copy that
+           fails removes the new file and raises — and then removed.
+           *Stopped after the copy: both files and the copy. After the
+           removal: the new file and the copy; the shows still name the old
+           name (a slot says "no preset", the trash holds it)*;
+        4. both paths are synced (our own writes: the watcher sees no
+           edit); the loaded preset keeps its clean reference under the new
+           name, so an unsaved edit stays one, and the load hook is told;
+        5. every ``hyperspace.project/2`` show in ``<home>/projects`` whose
+           bank or "starts on" names the old preset is copied to the trash,
+           then written with the new name — the open show through its
+           `Project` (its dot and the bank's light stay right). A show whose
+           copy or write fails is left as it is; a schema-1 show is left
+           alone; both are named in the warning. Factory shows are never
+           written. *Stopped mid-way: the shows done name the new name and
+           their old files are in the trash; the rest name the old one*;
+        6. `Project.follow()`; the status says how many shows changed."""
+        if group != PRESETS:
+            raise LibraryError(f"{group}: only a preset can be renamed")
+        path = self.path_of(group, old)
+        if path is None:
+            raise LibraryError(f"no preset {old!r}")
+        if not self._is_user(path):
+            raise LibraryError(f"{old} is a factory preset: save copy, then rename the copy")
+        new = (new or "").strip()
+        if not new:
+            raise LibraryError("a preset needs a name")
+        stem = path.name[:-5]
+        if new == old:
+            return path
+        doc = _read_json(path)
+        mine = {stem} | {slug(n) for n, p in self._index(group).items() if p == path}
+        in_place = slug(new) == stem
+        # `_taken` less this preset's own stem and name (the list at
+        # hidden=True: `_index` is every file, hidden or not)
+        taken = ({slug(s) for s, p in self._files(group).items() if p != path}
+                 | {slug(n) for n, p in self._index(group).items() if p != path})
+        if slug(new) in taken:
+            raise LibraryError(f"{new}: that name is taken — pick another")
+        kind = self._kinds.get(group)
+        doc["name"] = new
+        text = (kind.text(doc) if kind is not None and kind.text is not None
+                else _json_text(doc))
+        dst = path if in_place else self.home / group / f"{slug(new)}.json"
+        if in_place:
+            # 2–3 in one: keep the old text, then write over it
+            if to_trash(path, self.home) is None:
+                raise LibraryError(f"{path.name}: not renamed — it could not be kept in the "
+                                   f"trash ({self.home / TRASH})")
+            _write_text(path, text)
+        else:
+            try:
+                with open(dst, "x") as f:                  # 2. never over a file
+                    f.write(text)
+            except FileExistsError as e:
+                raise LibraryError(f"{new}: that name is taken — pick another") from e
+            except OSError as e:
+                dst.unlink(missing_ok=True)
+                raise LibraryError(f"{dst.name}: {e}") from e
+            if to_trash(path, self.home) is None:          # 3.
+                dst.unlink(missing_ok=True)
+                raise LibraryError(f"{path.name}: not renamed — it could not be kept in the "
+                                   f"trash ({self.home / TRASH})")
+            try:
+                path.unlink()
+            except OSError as e:
+                dst.unlink(missing_ok=True)
+                raise LibraryError(f"{path.name}: not renamed ({e})") from e
+        self._sync(path, dst)                              # 4.
+        cur = self._current.get(group)
+        if cur is not None and (cur == old or slug(cur) in mine):
+            self._landed(group, new, self._loaded.get(group))
+            hook = self._load_hooks.get(group)
+            if hook is not None:
+                hook(new)
+        done, left = self._repoint(old, new, mine)         # 5.
+        self.project.follow()                              # 6.
+        self.say(f"renamed {old} → {new} ({done} show{'' if done == 1 else 's'} updated)")
+        if left:
+            self.say(warning=f"renamed {old} → {new}; not updated: {', '.join(left)}")
+        return dst
+
+    def _repoint(self, old: str, new: str, mine: set[str]) -> tuple[int, list[str]]:
+        """Step 5 of `rename`: every user show naming the old preset (by its
+        name, or a slug of it or of its file stem) names the new one, each
+        copied to the trash first. Returns (shows written, shows left as
+        they were with why)."""
+
+        def hit(n) -> bool:
+            return isinstance(n, str) and bool(n) and (n == old or slug(n) in mine)
+
+        pr, done, left = self.project, 0, []
+        for show in sorted((self.home / PROJECTS).glob(f"*{PROJECT_SUFFIX}")):
+            label = show.name[: -len(PROJECT_SUFFIX)]
+            if pr.path is not None and show == pr.path:
+                if not (any(hit(n) for n in pr.bank) or hit(pr.startup)):
+                    continue
+                if to_trash(show, self.home) is None:
+                    left.append(f"{label} (it could not be kept in the trash)")
+                    continue
+                was = (list(pr.bank), pr.startup)
+                pr.bank = [new if hit(n) else n for n in pr.bank]
+                pr.startup = new if hit(pr.startup) else pr.startup
+                try:
+                    pr.write()
+                except (LibraryError, OSError) as e:
+                    pr.bank, pr.startup = was
+                    left.append(f"{label} ({e})")
+                    continue
+                done += 1
+                continue
+            try:
+                doc = _read_json(show)
+            except LibraryError as e:
+                left.append(f"{label} (would not read: {e})")
+                continue
+            bank = doc.get("bank") if isinstance(doc.get("bank"), list) else []
+            if not (any(hit(n) for n in bank) or hit(doc.get("startup"))):
+                continue
+            if doc.get("schema") != PROJECT_SCHEMA:
+                left.append(f"{label} (a {doc.get('schema')} show: plan 13's migration owns it)")
+                continue
+            if to_trash(show, self.home) is None:
+                left.append(f"{label} (it could not be kept in the trash)")
+                continue
+            doc["bank"] = [new if hit(n) else n for n in bank]
+            if hit(doc.get("startup")):
+                doc["startup"] = new
+            try:
+                _write_json(show, doc)
+            except LibraryError as e:
+                left.append(f"{label} ({e})")
+                continue
+            self._sync(show)
+            done += 1
+        # the open show with no file yet (a new show): its bank in memory
+        if pr.path is None and (any(hit(n) for n in pr.bank) or hit(pr.startup)):
+            pr.bank = [new if hit(n) else n for n in pr.bank]
+            pr.startup = new if hit(pr.startup) else pr.startup
+        return done, left
+
     def is_dirty(self, group: str) -> bool:
         """Have the group's bases moved off the loaded (or default) preset?
         For a document kind: has its signature moved since the last load or

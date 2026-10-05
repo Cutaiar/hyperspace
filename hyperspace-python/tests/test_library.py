@@ -1337,3 +1337,162 @@ def test_an_unreadable_hidden_list_is_kept_before_it_is_replaced(owner_home, mon
     assert lib.hide("presets", "TRIP")
     assert sorted(p.name for p in home.glob("hidden.json*")) == ["hidden.json",
                                                                  "hidden.json.bak-v0"]
+
+
+def _shows_naming(r, name: str) -> None:
+    """The owner's two shows both name `name` on a slot and as "starts on",
+    and `mine` (open, `name` loaded from F2) is clean."""
+    pr = r.lib.project
+    pr.load("party", startup=False)
+    pr.put_slot(5, name)
+    pr.startup = name
+    pr.write()
+    pr.load("mine", startup=False)
+    pr.startup = name
+    pr.write()
+    pr.load_slot(1)
+    assert r.lib.current("presets") == name and pr.active == 1 and not pr.is_dirty()
+
+
+def _trashed(home, folder: str) -> list:
+    d = home / "trash" / folder
+    return sorted(d.iterdir()) if d.is_dir() else []
+
+
+def test_rename_updates_every_show_and_keeps_each_old_file(owner_home):
+    """The owner's files (on a copy): rename NIGHT TWO → SUNRISE. The new
+    file is the old document with only its name changed; the old file is
+    in `trash/presets/` byte for byte; `mine` (open) and the user copy of
+    `party` name SUNRISE on their slots and as "starts on", each old show
+    file in `trash/projects/` byte for byte; the open show's dot is clean
+    and its light on the slot. A schema-1 show naming it is left alone, and
+    so is a show whose copy cannot be made — both named in the warning.
+    Factory shows are never written; nothing else in the home changes."""
+    home = owner_home
+    r = boot_home(home)
+    lib, pr = r.lib, r.lib.project
+    _shows_naming(r, "NIGHT TWO")
+    shows = home / "projects"
+    old1 = {"schema": "hyperspace.project/1", "name": "old",
+            "bank": [{"name": "NIGHT TWO", "view": {}}], "startup": "NIGHT TWO"}
+    (shows / "old.hyp.json").write_text(json.dumps(old1))
+    spare = json.loads((shows / "party.hyp.json").read_text())
+    (shows / "spare.hyp.json").write_text(json.dumps({**spare, "name": "spare"}))
+    (shows / "other.hyp.json").write_text(json.dumps({**spare, "name": "other",
+                                                      "bank": ["WAKE"], "startup": None}))
+    lib.poll()
+    preset_before = (home / "presets" / "night-two.json").read_bytes()
+    show_before = {s: (shows / f"{s}.hyp.json").read_bytes()
+                   for s in ("mine", "party", "old", "spare", "other")}
+    factory_before = {p.name: p.read_bytes() for p in (FACTORY / "projects").iterdir()}
+    trash_before = {p.name for p in home.rglob("trash/**/*") if p.is_file()}
+    before = tree(home)
+    real = library.to_trash
+    with pytest.MonkeyPatch.context() as m:
+        m.setattr(library, "to_trash",
+                  lambda p, root: None if p.name == "spare.hyp.json" else real(p, root))
+        new = lib.rename("presets", "NIGHT TWO", "SUNRISE")
+    assert new == home / "presets" / "sunrise.json"
+    assert not (home / "presets" / "night-two.json").exists()
+    doc, was = json.loads(new.read_text()), json.loads(preset_before)
+    assert doc == {**was, "name": "SUNRISE"}
+    (kept,) = [p for p in _trashed(home, "presets") if p.name.startswith("night-two.")]
+    assert kept.read_bytes() == preset_before
+    for s in ("mine", "party"):
+        d = json.loads((shows / f"{s}.hyp.json").read_text())
+        assert "SUNRISE" in d["bank"] and "NIGHT TWO" not in d["bank"], s
+        assert d["startup"] == "SUNRISE", s
+        (k,) = [p for p in _trashed(home, "projects") if p.name.startswith(f"{s}.hyp.")]
+        assert k.read_bytes() == show_before[s] and k.name.endswith(".json")
+    for s in ("old", "spare", "other"):                            # left as they were
+        assert (shows / f"{s}.hyp.json").read_bytes() == show_before[s], s
+    assert {p.name for p in _trashed(home, "projects")} == {
+        p.name for p in _trashed(home, "projects") if p.name.startswith(("mine.", "party."))}
+    assert lib.status == "renamed NIGHT TWO → SUNRISE (2 shows updated)"
+    assert "spare (it could not be kept in the trash)" in lib.warning
+    assert "old (a hyperspace.project/1 show" in lib.warning and "other" not in lib.warning
+    # the open show, through its Project: the name on the slot, clean, the light on it
+    assert pr.bank[1] == "SUNRISE" and pr.startup == "SUNRISE" and not pr.is_dirty()
+    assert lib.current("presets") == "SUNRISE" and pr.active == 1
+    assert "SUNRISE" in lib.list("presets") and "NIGHT TWO" not in lib.list("presets")
+    # nothing else changed; the factory shows never
+    changed = {"presets/night-two.json", "presets/sunrise.json", "projects/mine.hyp.json",
+               "projects/party.hyp.json"}
+    after = tree(home, but=("trash/",))
+    assert {k: v for k, v in after.items() if k not in changed} == {
+        k: v for k, v in before.items() if k not in changed and not k.startswith("trash/")}
+    assert trash_before <= {p.name for p in home.rglob("trash/**/*") if p.is_file()}
+    assert {p.name: p.read_bytes() for p in (FACTORY / "projects").iterdir()} == factory_before
+    # the other show, opened: its slot has the new name and loads it
+    pr.load("party")
+    assert pr.bank[5] == "SUNRISE" and lib.current("presets") == "SUNRISE"
+
+
+def test_rename_refuses_a_taken_name_and_a_factory_preset(owner_home):
+    """Refused, nothing on disk changed: a factory preset ("save copy,
+    then rename the copy"), an empty name, a name taken by a preset of
+    yours, by a factory preset's name or its file stem, by a hidden one,
+    or by another spelling of the same slug. A rename that only changes
+    case or spacing keeps the file's stem: rewritten in place, its old
+    text in the trash."""
+    home = owner_home
+    r = boot_home(home)
+    lib = r.lib
+    assert lib.hide("presets", "WAKE")
+    before = tree(home)
+    for old, new, why in (("TRIP", "MY TRIP", "factory preset: save copy, then rename the copy"),
+                          ("NIGHT TWO", "   ", "needs a name"),
+                          ("NIGHT TWO", "NIGHT ONE", "taken"),
+                          ("NIGHT TWO", "night  one!", "taken"),
+                          ("NIGHT TWO", "TRIP", "taken"),
+                          ("NIGHT TWO", "party-trip", "taken"),
+                          ("NIGHT TWO", "WAKE", "taken"),          # hidden, still taken
+                          ("GONE", "X", "no preset")):
+        with pytest.raises(LibraryError, match=why):
+            lib.rename("presets", old, new)
+        assert tree(home) == before, (old, new)
+    assert lib.rename("presets", "NIGHT TWO", "NIGHT TWO") == home / "presets" / "night-two.json"
+    assert tree(home) == before                                    # the same name: nothing
+    old = (home / "presets" / "night-two.json").read_bytes()
+    assert lib.rename("presets", "NIGHT TWO", "Night Two") == home / "presets" / "night-two.json"
+    assert json.loads((home / "presets" / "night-two.json").read_text())["name"] == "Night Two"
+    assert [p.read_bytes() for p in _trashed(home, "presets")
+            if p.name.startswith("night-two.")] == [old]
+    assert "Night Two" in lib.list("presets") and "NIGHT TWO" not in lib.list("presets")
+    assert lib.project.bank[1] == "Night Two"
+
+
+def test_a_rename_that_cannot_keep_the_old_file_changes_nothing(owner_home):
+    """`to_trash` failing: the new file written first is removed again, the
+    old one is where it was, no show is touched — and so for the in-place
+    case: nothing is written over a file whose copy failed."""
+    home = owner_home
+    r = boot_home(home)
+    lib = r.lib
+    before = tree(home)
+    with pytest.MonkeyPatch.context() as m:
+        m.setattr(library, "to_trash", lambda path, root: None)
+        for new in ("SUNRISE", "night two"):
+            with pytest.raises(LibraryError, match="could not be kept in the trash"):
+                lib.rename("presets", "NIGHT TWO", new)
+            assert tree(home) == before, new
+    assert "NIGHT TWO" in lib.list("presets") and "SUNRISE" not in lib.list("presets")
+    assert lib.project.bank[1] == "NIGHT TWO"
+
+
+def test_renaming_the_loaded_preset_keeps_its_unsaved_edit(owner_home):
+    """The loaded preset renamed: the name changes, the dot stays lit (the
+    clean reference is the one it had), and save writes the new file."""
+    home = owner_home
+    r = boot_home(home)
+    lib, reg = r.lib, r.reg
+    lib.project.load_slot(1)
+    reg["view.bright"].set(reg["view.bright"].value * 0.5 + 0.1)
+    assert lib.is_dirty("presets")
+    lib.rename("presets", "NIGHT TWO", "SUNRISE")
+    assert lib.current("presets") == "SUNRISE" and lib.is_dirty("presets")
+    assert lib.project.active == 1
+    path = lib.overwrite("presets")
+    assert path == home / "presets" / "sunrise.json" and not lib.is_dirty("presets")
+    assert json.loads(path.read_text())["name"] == "SUNRISE"
+    assert not (home / "presets" / "night-two.json").exists()
