@@ -19,7 +19,7 @@ from test_ui_shell import (
     rig,  # noqa: F401 — the headless panel fixture
 )
 
-from hyperspace import apc40, routing, ui, ui_desk
+from hyperspace import apc40, routing, ui, ui_desk, ui_routing
 from hyperspace.app import CONTROL_SIZE
 from hyperspace.library import FACTORY
 from hyperspace.routing import Binding
@@ -480,9 +480,13 @@ def test_a_click_picks_and_a_second_click_lets_go(rig, monkeypatch):
     d3, d4 = _control("D3"), _control("D4")
     frame(panel, "view")
     lit = ui_desk.lit_cached(panel, table)
+    ui_routing._state(panel)["find"] = "kaleido"
     ui_desk.click(panel, table, d3, lit.get("D3"))
     assert lrn.control == d3.source == "cc:*:18" and ui_desk.picked(panel) is d3
-    assert panel.open
+    # ROUTING is told where to scroll and its filter is cleared; the page is not changed
+    assert ui_routing._state(panel)["goto"] == d3.source
+    assert ui_routing._state(panel)["find"] == ""
+    assert panel.open and ui.PAGE_KEYS[panel.page] == "view"
     ui_desk.click(panel, table, d3, lit.get("D3"))
     assert lrn.control is None and ui_desk.picked(panel) is None
     # the panel hidden: the click brings it back, the pick still stands

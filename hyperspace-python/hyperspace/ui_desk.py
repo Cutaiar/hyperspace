@@ -32,7 +32,8 @@ serials (`layer_serial`, `desk_serial`, `redraw_serial`) or a row added
 or dropped — and the values are read every frame.
 
 **A click picks a control** (`click`, plan 17 forks 2 and 3): it is
-framed in red here and on its ROUTING line, and the next click on a
+framed in red here and on its ROUTING line (which the rows scroll to,
+`ui_routing.goto`), and the next click on a
 param's widget — on a page drawn dimmed, taking no other input
 (`Panel._draw`, `Panel._ctx`) — puts the control on that param, through
 `Learn.map_picked`: the knob learn's road, its refusals, its undo step.
@@ -250,8 +251,10 @@ def click(panel, table, c: apc40.Control, b: Binding | None) -> None:
     2. A hand learn is armed → nothing: the footer keeps saying what the
        learn waits for.
     3. The control is the picked one → it is let go.
-    4. Otherwise → it is picked, and a hidden panel comes back (the desk
-       shrinks to its column and the pick is still framed)."""
+    4. Otherwise → it is picked; ROUTING scrolls to its line if it is
+       open, or when it next is (`ui_routing.goto` — the page is not
+       changed, fork 2), its filter cleared; and a hidden panel comes back
+       (the desk shrinks to its column and the pick is still framed)."""
     lrn = getattr(panel, "learn", None)
     if lrn is None:
         return
@@ -264,6 +267,7 @@ def click(panel, table, c: apc40.Control, b: Binding | None) -> None:
         return
     lrn.pick(c.source)
     _stamp(panel, c.source, frame=imgui.get_frame_count())
+    ui_routing.goto(panel, c.source)        # ROUTING scrolls to its line, if or when it is open
     if not panel.open:
         _show_panel(panel, True)
 
