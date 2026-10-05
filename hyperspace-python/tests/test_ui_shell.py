@@ -7,6 +7,7 @@ make and checks that every state the strip can be in draws.
 """
 
 import re
+from contextlib import contextmanager
 from types import SimpleNamespace
 
 import pytest
@@ -40,8 +41,11 @@ class FakeLeap:
         pass
 
 
-@pytest.fixture()
-def rig(tmp_path):
+@contextmanager
+def build_rig(tmp_path, renderer=None):
+    """The panel with everything app.py gives it, on a headless imgui
+    context. With a `renderer` the registry's `dream.*` and `fx.*` are its
+    own states and the panel draws over it, as in the app."""
     ctx = imgui.create_context()
     pctx = implot.create_context()      # the band editor plots (ui_bands.py)
     io = imgui.get_io()
@@ -54,7 +58,9 @@ def rig(tmp_path):
     audio = SimpleNamespace(chain=chain, on=False, mode="", error="", label="", sr=48000.0)
     view = ViewState()
     lib = Library(tmp_path, period=0.0)
-    reg = build_registry(view, control, audio, lib.project)
+    live = {} if renderer is None else {"dream": renderer.lookback.state,
+                                        "fx": renderer.fx.state}
+    reg = build_registry(view, control, audio, lib.project, **live)
     lib.on_layout("band", control.apply_layout)
     # the rig has everything app.py gives the panel, so every page is
     # measured full: a hands setup over a tracker that sees no hands, an
@@ -68,7 +74,8 @@ def rig(tmp_path):
     output = Output(None, None)
     output.register(reg)
     lib.attach(reg)
-    panel = Panel(control, audio, view, bank=lib.project, registry=reg, library=lib)
+    panel = Panel(control, audio, view, renderer=renderer, bank=lib.project, registry=reg,
+                  library=lib)
     panel.clock, panel.lfos = clock, lfos
     panel.hands, panel.hand_settings = hands_io, settings
     panel.output = output
@@ -82,6 +89,12 @@ def rig(tmp_path):
     finally:
         implot.destroy_context(pctx)
         imgui.destroy_context(ctx)
+
+
+@pytest.fixture()
+def rig(tmp_path):
+    with build_rig(tmp_path) as r:
+        yield r
 
 
 def frame(panel, page=None):
@@ -279,6 +292,126 @@ def test_every_page_fits_the_control_window(rig, monkeypatch):
     over = _page_scroll(rig, monkeypatch)
     assert set(over) == set(PAGE_KEYS)
     assert {k: v for k, v in over.items() if v > 0} == {}
+
+
+class StandInWorker:
+    """In the dream worker's place on the look-back page: it answers each
+    submit with the frame it was given, one submit late (so a dream frame
+    shows and its thumbnail is drawn), and says `line` as its status."""
+
+    def __init__(self, line: str):
+        self.line = line
+        self.pending = self.done = None
+
+    def submit(self, frame, frame_index):
+        self.done, self.pending = self.pending, (frame.copy(), frame_index)
+
+    def latest(self):
+        return self.done
+
+    def status(self) -> str:
+        return self.line
+
+
+# the worker's status at its shortest, and with everything it can say at
+# once (dream.DreamWorker.status: drops, NaN resets, the clamp, and an
+# error cut at 120 characters); and app.dream_error's line with no worker
+WORKER_SHORT = "mps · alias · conv3_3 fp32 · 11.3 ms · 1 behind"
+WORKER_LONG = ("cuda · staging · inception4e fp16 · 1234.5 ms · 12 behind · 3456 dropped · "
+               "12 nan reset(s) · step clamped · " + ("RuntimeError: " + "out of memory " * 9)[:120])
+NO_TORCH = ("dream worker off: torch is not installed — run `uv sync`, "
+            "then launch with `uv run hyperspace`")
+
+
+def lookback_page_room(tmp_path, monkeypatch) -> dict[str, tuple[float, float]]:
+    """The look-back page drawn as the app draws it — over a real offscreen
+    `Renderer` whose look-back has captured eight echoes, so the thumbnail
+    row is its 48 px row of images and not the one line of text a page gets
+    with no renderer — in every state that changes its height. Returns
+    state → (scroll range, room left under the last row), in pixels at the
+    control size."""
+    moderngl = pytest.importorskip("moderngl")
+    from hyperspace.render import Renderer
+
+    try:
+        gl = moderngl.create_context(standalone=True)
+    except Exception as e:  # noqa: BLE001 — any GL failure means skip
+        pytest.skip(f"no standalone GL context available: {e}")
+    w, h = 1280, 820
+    tex = gl.texture((w, h), 4)
+    fbo = gl.framebuffer(color_attachments=[tex])
+    renderer = Renderer(gl)
+    lb, t = renderer.lookback, [0.0]
+    room: dict[str, tuple[float, float]] = {}
+    try:
+        with build_rig(tmp_path, renderer) as rig:
+            imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+            panel, reg, view = rig.panel, rig.reg, rig.view
+            view.shape = 3
+            got: list[tuple[float, float]] = []
+            draw = Panel._page_lookback
+
+            def measured(self, dt):
+                draw(self, dt)
+                got.append((imgui.get_scroll_max_y(),
+                            imgui.get_content_region_avail().y + imgui.get_style().item_spacing.y))
+            monkeypatch.setattr(Panel, "_page_lookback", measured)
+
+            def render(n: int) -> None:
+                for _ in range(n):
+                    t[0] += 1 / 60
+                    view.ang[3] += 0.03
+                    fbo.use()
+                    gl.viewport = (0, 0, w, h)
+                    renderer.draw(view, w, h, t_now=t[0])
+
+            def measure(state: str) -> None:
+                render(4)
+                for _ in range(3):          # the window settles its size, then its content
+                    frame(panel, "lookback")
+                room[state] = got[-1]
+
+            reg["dream.on"].set(True)
+            assert reg["dream.echoes"].value == 8 and lb.state.on
+            lb.source = StandInWorker(WORKER_SHORT)
+            render(40)
+            assert len(lb.thumbnails()) == 8 and lb.dream_frame >= 0 and lb.atlas is not None
+            measure("on, worker")
+            lb.source.line = WORKER_LONG
+            measure("on, worker saying everything")
+            lb.error = "_common.glsl:1: syntax error"     # the post pass on its fallback
+            measure("on, worker saying everything, GLSL error")
+            lb.error = ""
+            reg["dream.tint_from"].set(1)                 # the tint from the scene
+            measure("on, tint from the scene")
+            reg["dream.tint_from"].set(0)
+            lb.source = None
+            panel.dream_error = NO_TORCH
+            measure("on, no worker: torch missing")
+            panel.dream_error = ""
+            measure("on, no worker")
+            reg["dream.on"].set(False)
+            measure("off, no worker")
+            lb.source = StandInWorker(WORKER_LONG)
+            measure("off, worker saying everything")
+    finally:
+        fbo.release()
+        tex.release()
+        gl.release()
+    return room
+
+
+def test_the_look_back_page_fits_with_thumbnails(tmp_path, monkeypatch):
+    """Plan 20 WP4: the look-back page does not scroll in the app. The page
+    test above draws it with no renderer, where the thumbnail row is a line
+    of text; with a renderer and echoes it is a 48 px row of images, and the
+    page as it was overflowed by 23 px there. Measured here with a real
+    `Renderer` that has captured eight echoes, a source with a status line
+    and a dream frame shown, the dream on and off, and the worker's status
+    at its longest."""
+    room = lookback_page_room(tmp_path, monkeypatch)
+    assert len(room) == 8
+    assert {k: v for k, v in room.items() if v[0] > 0 or v[1] < 0} == {}
 
 
 def test_the_dim_is_first_on_output_and_the_footer_says_so_while_dimmed(rig, monkeypatch):
