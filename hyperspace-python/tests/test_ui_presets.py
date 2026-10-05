@@ -15,7 +15,7 @@ from test_ui_routing import _drawn
 from test_ui_shell import _page_scroll, frame, rig  # noqa: F401 — the fixture
 
 from hyperspace import ui_presets
-from hyperspace.library import Library
+from hyperspace.library import HOME_UNSET, Library
 from hyperspace.ui import PAGES
 
 
@@ -139,6 +139,18 @@ def test_starts_on_reads_starts_on_home(rig, monkeypatch):  # noqa: F811
     longest = max(ui_presets.names(panel, "presets"), key=len)
     assert combo[2] - combo[0] > imgui.calc_text_size(longest).x
     assert [k for k in rects if k.startswith("starts_on")] == ["starts_on.label", "starts_on"]
+    # home on a show with no "starts on" asks for one to be picked here;
+    # picking one takes the note away (review of PR #83), and no other note
+    ui_presets.set_starts_on(panel, None)
+    rig.reg["preset.home"].fire()
+    assert lib.warning == HOME_UNSET
+    ui_presets.set_starts_on(panel, None)
+    assert lib.warning == HOME_UNSET
+    ui_presets.set_starts_on(panel, "WAKE")
+    assert lib.warning == "" and lib.project.startup == "WAKE"
+    lib.warning = "something else"
+    ui_presets.set_starts_on(panel, "TUMBLE")
+    assert lib.warning == "something else"
 
 
 def test_the_page_speaks_one_word_per_thing(rig, monkeypatch):  # noqa: F811

@@ -54,7 +54,7 @@ from __future__ import annotations
 from imgui_bundle import imgui
 
 from . import ui
-from .library import PRESETS, LibraryError
+from .library import HOME_UNSET, PRESETS, LibraryError
 from .params import PERFORMANCE_GROUPS
 
 LIST_POLL = 1.0      # seconds between re-listings of a group's presets
@@ -392,6 +392,8 @@ def set_starts_on(panel, name: str | None) -> None:
     lib = panel.library
     proj = lib.project
     proj.startup = name
+    if name and lib.warning == HOME_UNSET:        # home's "pick one": it has been picked
+        lib.warning = ""
     if _guard(panel, proj.write) is not None:
         lib.remember(proj.stem)
         lib.status = f"show: {proj.name} starts on {name or 'nothing'}"
