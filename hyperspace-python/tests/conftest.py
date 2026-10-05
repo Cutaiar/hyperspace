@@ -7,12 +7,23 @@ itself, on top of this. ``library.home()`` reads the variable on every
 call, so there is no cache to clear.
 """
 
+import os
+
 import pytest
 
 
 @pytest.fixture(autouse=True)
-def _library_home(tmp_path, monkeypatch):
-    monkeypatch.setenv("HYPERSPACE_HOME", str(tmp_path / "home"))
+def _library_home(tmp_path):
+    # set in os.environ directly, not through monkeypatch: a test that calls
+    # monkeypatch.undo() mid-way would otherwise drop the variable and run
+    # its remaining lines against the owner's real home
+    before = os.environ.get("HYPERSPACE_HOME")
+    os.environ["HYPERSPACE_HOME"] = str(tmp_path / "home")
+    yield
+    if before is None:
+        os.environ.pop("HYPERSPACE_HOME", None)
+    else:
+        os.environ["HYPERSPACE_HOME"] = before
 
 
 @pytest.fixture(autouse=True)
