@@ -375,9 +375,12 @@ def _in_flight() -> bool:
 
 def _dragged(panel) -> str | None:
     """The effect whose chip is in the hand, by name: `_chip` notes it on
-    the panel while its name is the drag's source. getattr: the Panel was
-    built before this page knew of it."""
-    return getattr(panel, "_fx_drag", None) if _in_flight() else None
+    the panel while its name is the drag's source, and `page` forgets it
+    at the end of the first frame with nothing in the hand. Not gated on
+    `_in_flight()`: on the frame a drop is delivered imgui has already let
+    go of the payload, and that is the frame this is read on. getattr: the
+    Panel was built before this page knew of it."""
+    return getattr(panel, "_fx_drag", None)
 
 
 def _drop_target(name: str, lo: imgui.ImVec2, hi: imgui.ImVec2,

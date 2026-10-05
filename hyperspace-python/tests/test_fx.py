@@ -2223,12 +2223,14 @@ def test_a_drop_moves_the_effect_the_drag_began_on(fxpage, monkeypatch):
     io = imgui.get_io()
     fxpage.drag("chip.fx.huecycle.on", "chip.fx.warp.on", release=False)
     assert panel._fx_drag == "huecycle"
-    # the stack moves while the chip is in the hand: index 11 is now tripcolour
+    assert imgui.get_drag_drop_payload_py_id().data_id == 11       # huecycle's place
+    # the stack moves under the hand just before the release frame (the
+    # source re-sets the payload only while the button is down, so on the
+    # drop it is the last held frame's index): index 11 is now tripcolour,
+    # and warp's chip, under the mouse, stays put
+    held = st.names()
     reg["fx.tripcolour.order"].set_value(99)
-    reg["fx.plasma.order"].set_value(50)
-    fxpage.frame()
-    fxpage.frame()
-    assert st.names()[-1] == "tripcolour"
+    assert st.names() == [*held[:10], "huecycle", "tripcolour"] and held[11] == "huecycle"
     fxpage.release()
     names = st.names()
     assert names.index("huecycle") == names.index("warp") - 1 and st.selected() == "huecycle"
@@ -2239,7 +2241,7 @@ def test_a_drop_moves_the_effect_the_drag_began_on(fxpage, monkeypatch):
     # a slipped click: past the threshold, let go on the name it began on
     pushes.clear()
     fxpage.frame()
-    x0, y0, x1, y1 = fxpage.rects["chip.fx.fractals.on"]
+    x0, y0, _, y1 = fxpage.rects["chip.fx.fractals.on"]
     x, y = x0 + 12, (y0 + y1) / 2
     io.add_mouse_pos_event(x, y)
     fxpage.frame()
