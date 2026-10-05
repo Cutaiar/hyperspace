@@ -559,3 +559,208 @@ def test_the_crossfader_dims_with_soft_pickup(rig):
     assert dim.value == pytest.approx(0.5)
     push(rig, cc(apc40.CC_XFADE, 40))              # swept through it
     assert dim.value == pytest.approx(40 / 127, abs=PICKUP_TOL)
+
+
+# ------------------------------------------- plan 15 WP4: the hold, the bar, the blink
+
+STOP = apc40.N_CLIPSTOP
+
+
+def bar_rig(rig):
+    """The rig with a clock the test moves and a counter on the bar's
+    target: `fires` grows by one each time `preset.save_new` fires (the
+    save itself still runs)."""
+    from hyperspace import midi
+
+    t = [0.0]
+    rig.midi.clock = lambda: t[0]
+    p = rig.reg["preset.save_new"]
+    fires: list[float] = []
+    real = p.fire
+
+    def fire():
+        fires.append(t[0])
+        real()
+    p.fire = fire
+    assert (midi.HOLD_S, midi.BLINK_S) == (0.6, 1.5)
+
+    def at(seconds, *msgs):
+        t[0] = seconds
+        push(rig, *msgs)
+    return at, fires
+
+
+def leds(rig, n, channel=0, since=0):
+    return [m.velocity for m in rig.out.sent[since:]
+            if m.type == "note_on" and m.note == n and m.channel == channel]
+
+
+def test_a_hold_fires_once_at_the_hold_time_while_held(rig):
+    """A `hold` row fires when its button has been down HOLD_S — while it
+    is still down (fork 14) — and never again for that press."""
+    at, fires = bar_rig(rig)
+    lib, pr = rig.presets.lib, rig.presets
+    rows = [b for b in rig.midi.bindings if b.op == "hold"]
+    assert [(b.source, b.target, b.layer) for b in rows] \
+        == [(f"note:{k}:{STOP}", "preset.save_new", None) for k in range(8)]
+    pr.clear_slot(5)
+    push(rig, note(apc40.N_CLIP[0], channel=4), note(apc40.N_CLIP[0], 0, channel=4))
+    assert lib.current("presets") == "TRIP"
+    at(0.0, note(STOP, channel=2))
+    at(0.3)
+    at(0.59)
+    assert fires == [] and lib.current("presets") == "TRIP"
+    at(0.6)                                                  # still held: it fires now
+    assert fires == [0.6]
+    assert lib.current("presets") == "TRIP 2" and pr.bank[5] == "TRIP 2"
+    at(1.0)
+    at(2.0)                                                  # still down: nothing more
+    assert fires == [0.6]
+    at(2.5, note(STOP, 0, channel=2))                        # the release does nothing
+    at(5.0)
+    assert fires == [0.6] and lib.current("presets") == "TRIP 2"
+    # a key or pad row with the op does nothing (`routing.act` ignores it)
+    from hyperspace import routing
+    routing.act(rig.reg, Binding("key:F9", "preset.save_new", "hold"))
+    assert fires == [0.6]
+    # a press held across a reconnect is forgotten
+    at(10.0, note(STOP, channel=0))
+    rig.midi._enter()
+    at(11.0)
+    assert fires == [0.6] and not any(b.lit for b in rows)
+
+
+def test_a_tap_fires_nothing(rig):
+    at, fires = bar_rig(rig)
+    lib = rig.presets.lib
+    was, bank = lib.current("presets"), list(rig.presets.bank)
+    at(0.0, note(STOP, channel=3))
+    at(0.3, note(STOP, 0, channel=3))                        # released at 0.3 s
+    at(0.6)
+    at(2.0)
+    assert fires == [] and lib.current("presets") == was and rig.presets.bank == bank
+    # a tap in one poll, and taps one after the other, likewise
+    at(3.0, note(STOP, channel=3), note(STOP, 0, channel=3))
+    at(3.5, note(STOP, channel=3))
+    at(4.0, note(STOP, 0, channel=3), note(STOP, channel=4))  # 0.5 s each, never 0.6 on one
+    at(4.5, note(STOP, 0, channel=4))
+    at(6.0)
+    assert fires == []
+    # a release while a Learn is armed still ends the press
+    at(7.0, note(STOP, channel=1))
+    rig.midi.learner.arm("view.bright")
+    at(7.2, note(STOP, 0, channel=1))
+    rig.midi.learner.arm(None)
+    at(8.0)
+    assert fires == []
+
+
+def test_the_bar_is_one_control(rig):
+    """The eight buttons are one bar: a hand across several fires once; a
+    button still down afterwards fires nothing more; only a new press
+    starts a new hold."""
+    at, fires = bar_rig(rig)
+    at(0.0, note(STOP, channel=1))
+    at(0.2, note(STOP, channel=2), note(STOP, channel=6))    # a hand lying across the row
+    at(0.6)
+    assert fires == [0.6]                                    # the first press's time; one fire
+    at(0.8)                                                  # the others pass 0.6 s: nothing
+    at(1.5)
+    assert fires == [0.6]
+    at(1.6, note(STOP, 0, channel=1))                        # one lifted, two still down
+    at(3.0)
+    assert fires == [0.6]
+    at(3.1, note(STOP, channel=1))                           # a new press: a new hold
+    at(3.6)
+    assert fires == [0.6]
+    at(3.75)
+    assert fires == [0.6, 3.75]
+    at(3.8, note(STOP, 0, channel=1), note(STOP, 0, channel=2), note(STOP, 0, channel=6))
+    at(9.0)
+    assert fires == [0.6, 3.75]
+    # the same press on either layer (invariant), and SHIFT's state at the
+    # press is what counts (D12)
+    shift(rig)
+    at(10.0, note(STOP, channel=7))
+    at(10.7)
+    assert len(fires) == 3
+
+
+def test_the_bar_lights_while_held_and_the_new_slots_pad_blinks(rig):
+    """The velocities sent, and for how long: dark at rest (fork 15); the
+    whole bar lit while any of it is held; on the save the bar and the new
+    slot's pad blink for BLINK_S (2: the protocol's blink for a plain
+    button and green blink on the grid); then the bar is dark and the pad
+    green. A tap lights the bar for as long as it lasts."""
+    from hyperspace import midi
+
+    at, fires = bar_rig(rig)
+    pr = rig.presets
+    pad = apc40.N_CLIP[0]
+    assert apc40.blink_of(STOP, 1) == 2 and apc40.blink_of(pad, apc40.GREEN) == apc40.GREEN_BLINK
+    assert apc40.blink_of(apc40.N_CLIP[2], apc40.RED) == apc40.RED_BLINK
+    assert apc40.blink_of(apc40.N_CLIP[4], apc40.YELLOW) == apc40.YELLOW_BLINK
+    assert apc40.blink_of(apc40.N_OVERDUB, 1) == 2
+    pr.clear_slot(5)
+    push(rig, note(pad, channel=4), note(pad, 0, channel=4))        # TRIP: pad 5 green
+    assert all(leds(rig, STOP, k)[-1] == 0 for k in range(8))       # dark at rest
+    assert leds(rig, pad, 4)[-1] == apc40.GREEN and leds(rig, pad, 5)[-1] == 0
+    # a tap: the whole bar for as long as it lasts
+    mark = len(rig.out.sent)
+    at(0.0, note(STOP, channel=3))
+    assert [leds(rig, STOP, k, mark) for k in range(8)] == [[1]] * 8
+    at(0.2, note(STOP, 0, channel=3))
+    assert [leds(rig, STOP, k, mark) for k in range(8)] == [[1, 0]] * 8
+    # two held, one let go: lit until the last is up
+    mark = len(rig.out.sent)
+    at(1.0, note(STOP, channel=0), note(STOP, channel=1))
+    at(1.2, note(STOP, 0, channel=0))
+    assert [leds(rig, STOP, k, mark) for k in range(8)] == [[1]] * 8
+    at(1.4, note(STOP, 0, channel=1))
+    assert [leds(rig, STOP, k, mark) for k in range(8)] == [[1, 0]] * 8
+    # the hold: lit, then on the save the bar and pad 6 blink
+    mark = len(rig.out.sent)
+    at(2.0, note(STOP, channel=3))
+    at(2.5)
+    assert [leds(rig, STOP, k, mark) for k in range(8)] == [[1]] * 8
+    assert leds(rig, pad, 5, mark) == []
+    at(2.65)
+    assert fires == [2.65] and pr.bank[5] == "TRIP 2" and pr.active == 5
+    assert [leds(rig, STOP, k, mark) for k in range(8)] == [[1, 2]] * 8
+    assert leds(rig, pad, 5, mark) == [apc40.GREEN_BLINK]           # the new slot's pad
+    assert leds(rig, pad, 4, mark) == [0]                           # TRIP's pad goes out
+    assert [leds(rig, pad, k, mark) for k in (0, 1, 2, 3, 6, 7)] == [[]] * 6   # no other pad
+    at(3.0, note(STOP, 0, channel=3))                               # letting go changes nothing
+    at(2.65 + midi.BLINK_S - 0.01)
+    assert [leds(rig, STOP, k, mark) for k in range(8)] == [[1, 2]] * 8
+    assert leds(rig, pad, 5, mark) == [apc40.GREEN_BLINK]
+    at(2.65 + midi.BLINK_S)                                         # the time is up
+    assert [leds(rig, STOP, k, mark) for k in range(8)] == [[1, 2, 0]] * 8
+    assert leds(rig, pad, 5, mark) == [apc40.GREEN_BLINK, apc40.GREEN]
+    at(9.0)
+    assert [leds(rig, STOP, k, mark) for k in range(8)] == [[1, 2, 0]] * 8
+    # a button kept down through the blink: the bar still goes dark after it
+    mark = len(rig.out.sent)
+    pr.clear_slot(1)
+    at(10.0, note(STOP, channel=7))
+    at(10.65)
+    at(10.65 + midi.BLINK_S)
+    assert pr.bank[1] == "TRIP 3"
+    assert [leds(rig, STOP, k, mark) for k in range(8)] == [[1, 2, 0]] * 8
+    assert leds(rig, pad, 1, mark) == [apc40.GREEN_BLINK, apc40.GREEN]
+    at(12.5, note(STOP, 0, channel=7))
+    # a full bank: only the bar blinks — no pad came on
+    mark = len(rig.out.sent)
+    assert pr.next_empty() is None
+    at(20.0, note(STOP, channel=0))
+    at(20.65)
+    assert pr.lib.warning == "saved TRIP 4 — the bank is full: it is in the preset list"
+    assert [leds(rig, STOP, k, mark) for k in range(8)] == [[1, 2]] * 8
+    assert [m.velocity for m in rig.out.sent[mark:]
+            if m.type == "note_on" and m.note == pad] == [0]         # TRIP 3's pad goes out
+    # a redraw mid-blink (a layer switch) re-sends the blink, not the state
+    mark = len(rig.out.sent)
+    shift(rig)
+    assert [leds(rig, STOP, k, mark)[-1] for k in range(8)] == [2] * 8
+    at(20.65 + midi.BLINK_S, note(STOP, 0, channel=0))
+    assert [leds(rig, STOP, k, mark)[-1] for k in range(8)] == [0] * 8

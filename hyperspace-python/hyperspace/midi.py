@@ -21,6 +21,14 @@ that class — with a MIDI source (``cc:<ch>:<n>``, ``note:<ch>:<n>``,
        momentary note-on sets on, note-off sets off (toggle params)
        set      note-on → set(value) — one button per enum choice
        step     note-on → step(value)
+       hold     the target fires once the button has been down HOLD_S,
+                while it is still held; a shorter press does nothing.
+                Rows with one target are one control (the APC40's
+                clip-stop row is a SAVE AS bar): any of them held lights
+                them all, a hand across several fires once, and a button
+                still down afterwards fires nothing more. On the fire the
+                bar, and every LED the fire turned on, blink for BLINK_S
+                (the profile's `blink_of`) and then show their own state
   pitch abs     14-bit pitch bend → set_norm
 
 Every op here is a scene-setter (plan 09 decision 3): on a param a
@@ -81,6 +89,8 @@ from .routing import PICKUP_TOL, Binding, Bindings, act, bindings_path, led_lit,
 
 PROFILES = {"apc40": apc40}          # config's `[midi] profile` names one of these
 RECONNECT_S = 2.0
+HOLD_S = 0.6        # a `hold` row fires once its button has been down this long
+BLINK_S = 1.5       # how long the LEDs blink after a hold fires
 
 __all__ = ["PICKUP_TOL", "Binding", "MidiIO", "Ports", "find_port"]
 
@@ -197,6 +207,7 @@ class MidiIO:
         self.profile = PROFILES.get(self.table.profile) or PROFILES[profile]
         self.port_match = port or self.profile.PORT_MATCH
         self.ports = Ports(self.port_match, self.port_match, inp=inp, out=out, clock=clock)
+        self.clock = clock      # times a `hold` row's press and the blink after it
         self.last = ""          # last message seen, for the status line
         # the armed param and the held question (learn.py) — the app's
         # shared one, so a hand can complete a learn this adapter never
@@ -206,6 +217,11 @@ class MidiIO:
         # D12: a note-on's rows, by (channel, note), so its note-off goes to
         # the same rows whatever layer is up by then
         self._held: dict[tuple[int, int], list[Binding]] = {}
+        # the `hold` rows of each note still down, with the time of its
+        # press, by (channel, note); and the controls blinking after a
+        # hold fired, with the time each stops
+        self._holds: dict[tuple[int, int], tuple[float, list[Binding]]] = {}
+        self._blinks: dict[tuple, float] = {}
         # the table's layer / desk counters as last drawn (`_follow_table`)
         self._seen = self._serials()
         # every control feedback has drawn since the last redraw, by
@@ -248,7 +264,11 @@ class MidiIO:
         self._enter()
 
     def _enter(self) -> None:
-        """Device power-up: mode SysEx and every ring/LED at its true value."""
+        """Device power-up: mode SysEx and every ring/LED at its true value.
+        A press held across a reconnect is forgotten: no hold, no blink."""
+        self._hold_state()[0].clear()
+        self._hold_state()[1].clear()
+        self._light_bars()
         for b in self.bindings:
             b.last_out = None
             b.caught = False
@@ -367,6 +387,7 @@ class MidiIO:
         self._uncatch_moved()
         for msg in self.ports.recv():
             self._handle(msg)
+        self._fire_holds()
         self._follow_table()        # SHIFT pressed just now: this frame's redraw
         self.feedback()
 
@@ -410,6 +431,8 @@ class MidiIO:
             return
         ch = msg.channel
         self.last = f"{kind} {number} ch{ch + 1} = {value}"
+        if kind == "note" and value == 0 and self._hold_state()[0].pop((ch, number), None):
+            self._light_bars()      # let go before HOLD_S: a tap, nothing fires
         if self.learner.learning is not None:
             if kind != "note" or value > 0:
                 self._learned(kind, ch, number, value)
@@ -424,10 +447,79 @@ class MidiIO:
                 rows = self.table.dispatch(kind, ch, number)
         else:
             rows = self.table.dispatch(kind, ch, number)
+        timed = []
         for b in rows:
             p = self.reg.get(b.target)
-            if p is not None and b.enabled:
+            if p is None or not b.enabled:
+                continue
+            if b.op == "hold":      # timed, never applied; only a note has a press
+                timed.append(b)
+            else:
                 self._apply(b, p, value)
+        if timed and kind == "note" and value > 0:
+            self._hold_state()[0][(ch, number)] = (self._now(), timed)
+            self._light_bars()
+
+    # ---- hold rows ----
+
+    def _hold_state(self) -> tuple[dict, dict]:
+        """(`_holds`, `_blinks`) — made here for an adapter from before a
+        hot reload, which keeps the object and never re-runs __init__."""
+        d = self.__dict__
+        return d.setdefault("_holds", {}), d.setdefault("_blinks", {})
+
+    def _now(self) -> float:
+        return self.__dict__.setdefault("clock", self.ports.clock)()
+
+    def _light_bars(self) -> None:
+        """A `hold` row's press echo, spread over its bar: every enabled
+        hold row is lit while any press on its target is being timed."""
+        held = {b.target for _t, rows in self._hold_state()[0].values() for b in rows}
+        for b in self.bindings:
+            if b.op == "hold":
+                b.lit = b.enabled and b.target in held
+
+    def _leds_on(self) -> set[tuple]:
+        """The controls whose LED an active row lights now."""
+        on = set()
+        for b in self.table.active():
+            p = self.reg.get(b.target) if b.feedback == "led" else None
+            if p is not None and self._lit(b, p):
+                on.add(b.control)
+        return on
+
+    def _fire_holds(self) -> None:
+        """Every press held HOLD_S or longer fires its target, once per
+        target however many buttons of the bar are down, and every press
+        on that target is forgotten: a button still down fires nothing
+        more, only a new press starts a new hold. The bar's rows and each
+        LED the fire turned on then blink for BLINK_S (`feedback`) — the
+        adapter does not know why a light came on (after a save-as it is
+        the new slot's pad)."""
+        holds, blinks = self._hold_state()
+        if not holds:
+            return
+        now = self._now()
+        fired: set[str] = set()
+        for t0, rows in list(holds.values()):
+            if now - t0 < HOLD_S:
+                continue
+            for b in rows:
+                p = self.reg.get(b.target)
+                if p is None or not b.enabled or b.target in fired:
+                    continue
+                fired.add(b.target)
+                before = self._leds_on()
+                p.fire()
+                bar = {x.control for x in self.table.active()
+                       if x.op == "hold" and x.target == b.target and x.feedback == "led"}
+                for c in (self._leds_on() - before) | bar:
+                    blinks[c] = now + BLINK_S
+        if fired:
+            for key in [k for k, (_t, rows) in holds.items()
+                        if any(b.target in fired for b in rows)]:
+                del holds[key]
+            self._light_bars()
 
     def _apply(self, b: Binding, p: Param, value: int) -> None:
         op = b.op
@@ -496,9 +588,17 @@ class MidiIO:
         catch its own value under a performer. LEDs on a toggle or an
         enum `set` row show the effective value — a state light shows
         what the show is doing. Intended (owner, 2026-09-28, audit R6).
+        A control blinking after a hold fired (`_fire_holds`) gets its
+        blink velocity, whatever its state, until BLINK_S is up.
         """
         if self.out is None:
             return
+        blinks = self._hold_state()[1]
+        if blinks:
+            now = self._now()
+            for c in [c for c, until in blinks.items() if now >= until]:
+                del blinks[c]
+        blink_of = getattr(self.profile, "blink_of", None)
         # an adapter made before `_shown` existed (a hot reload keeps the
         # object and never re-runs __init__) gets it here
         shown = self.__dict__.setdefault("_shown", {})
@@ -523,6 +623,8 @@ class MidiIO:
             elif b.feedback == "led":
                 lit = self._lit(b, p)
                 v = b.on if lit else b.off
+                if b.control in blinks:
+                    v = blink_of(b.number, b.on) if blink_of is not None else b.on
                 if v != b.last_out:
                     b.last_out = v
                     self._send(mido.Message(

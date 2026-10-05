@@ -259,7 +259,11 @@ FACTORY_FILE = Path(__file__).with_name("bindings.default.json")
 MIDI_SCHEMES = ("cc", "note", "pitch")
 LANE_SCHEMES = ("lane", "ext", "lfo", "hand")          # continuous, read by the Router
 MOD_OPS = ("push", "position")                 # the performer ops: the Router's rows
-OPS = ("fire", "toggle", "step", "set", "abs", "rel", "rel64", "momentary", *MOD_OPS)
+# `hold` is a MIDI note row's op (plan 15 WP4, fork 13): the target fires
+# once the button has been down midi.HOLD_S, and a shorter press does
+# nothing — the adapter times it; `act` ignores it, so a key or pad row
+# with it does nothing
+OPS = ("fire", "toggle", "step", "set", "abs", "rel", "rel64", "momentary", "hold", *MOD_OPS)
 # the APC40's two layers (plan 13 §3): a MIDI row's `layer` is None — the
 # control is invariant, the session's, one meaning on both layers — or one
 # of these. The table's `layer` says which is up; SHIFT latches it.
@@ -306,13 +310,17 @@ APC_REMAP: dict[tuple[str, str, str, float], tuple[str, str, float]] = {
 # which plan moved or added each source, for the note `remap_factory`
 # writes; a source not named here is plan 09's
 APC_REMAP_PLAN = {f"cc:0:{apc40.CC_XFADE}": "plan 15",
-                  f"note:0:{apc40.N_OVERDUB}": "plan 15"}
+                  f"note:0:{apc40.N_OVERDUB}": "plan 15",
+                  **{f"note:{k}:{apc40.N_CLIPSTOP}": "plan 15" for k in range(8)}}
 # rows added when nothing uses the note: (source, target, op, value, only
 # when the theme cycle was remapped away)
 APC_NEW_ROWS = (
     (f"note:0:{apc40.N_METRO}", "lfo.trigger", "toggle", 1.0, False),
     (f"note:0:{apc40.N_QUANT}", "preset.next", "toggle", 1.0, True),
     (f"note:0:{apc40.N_OVERDUB}", "preset.home", "toggle", 1.0, False),   # plan 15 WP2
+    # plan 15 WP4: the clip-stop row is one SAVE AS bar, held
+    *[(f"note:{k}:{apc40.N_CLIPSTOP}", "preset.save_new", "hold", 1.0, False)
+      for k in range(8)],
 )
 # the keys WP4 added, likewise only where the key is free
 # the keys plan 11 moved out of app.py's loop into the table (audit R2;
@@ -564,7 +572,8 @@ def _macro_n(mid: str) -> int:
 # ------------------------------------------------------------------- ops
 
 def act(reg: Registry, b: Binding) -> None:
-    """A discrete row fires: keys, pad buttons and MIDI buttons share this."""
+    """A discrete row fires: keys, pad buttons and MIDI buttons share this.
+    A `hold` row does nothing here: only midi.py times a press."""
     p = reg.get(b.target)
     if p is None or not b.enabled:
         return
@@ -727,7 +736,8 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
     """The factory rows plan 09 WP4 and plan 15 WP3 moved, on a table of
     any schema: the old APC40 factory rows swapped for the new (APC_REMAP —
     the clock's three buttons, the crossfader's master dim), the METRONOME /
-    QUANT / OVERDUB notes and the B / ⇧B and loop keys (Home among them)
+    QUANT / OVERDUB notes, the clip-stop row's eight (plan 15 WP4: save-as,
+    held) and the B / ⇧B and loop keys (Home among them)
     added where nothing uses the source (APC_NEW_ROWS, KEY_NEW_ROWS); and,
     since plan 13 WP2, any row on a ``theme.*`` param moved to the
     ``preset.*`` param of the same slot (THEME_TO_PRESET). Idempotent: a second pass finds every old row gone
