@@ -730,6 +730,19 @@ def dream_half_life(k: float) -> int:
     return max(1, round(math.log(0.5) / math.log(1.0 - k)))
 
 
+def dream_speed_text(k: float) -> str:
+    """`dream.k`'s readout. Whole frames from ten up ("≈14 frames"); under
+    ten, one decimal ("1.9 frames"), because whole frames read "≈2 frames"
+    over nearly half the knob's travel at its fast end and an undo label
+    said "≈2 frames → ≈2 frames". The same width either way."""
+    k = float(k)
+    if not math.isfinite(k):
+        return "≈1 frames"
+    k = min(max(k, 1e-6), 1.0 - 1e-9)
+    h = max(1.0, math.log(0.5) / math.log(1.0 - k))
+    return f"{h:.1f} frames" if h < 9.95 else f"≈{round(h)} frames"
+
+
 def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                    restart=None, ghost=None) -> Registry:
     """Declare every parameter the surface owns.
@@ -948,7 +961,7 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     # the dream's "speed" is its one time constant (plan 20 WP5, fork F8): the
     # share of the newest frame blended into the buffer each processed frame
     r.continuous("dream.k", "Dream speed", *_attr(dream, "k"), lo=0.03, hi=0.3,
-                 fmt=lambda v: f"≈{dream_half_life(v)} frames", group=g,
+                 fmt=dream_speed_text, group=g,
                  tip="How fast the dream follows the picture: fast, it keeps up and lets "
                      "go of what has left; slow, it lags, lingers and grows deeper. In "
                      "dream frames, so it also follows the worker's rate. Slower than "

@@ -1404,12 +1404,12 @@ def test_the_speed_readout_is_the_half_life_in_frames():
     reg = registry()
     k = reg["dream.k"]
     assert k.text() == "≈14 frames"                         # the default, 0.05
-    for value, reads in ((0.05, "≈14 frames"), (0.3, "≈2 frames"), (0.03, "≈23 frames"),
-                         (0.04, "≈17 frames"), (0.1, "≈7 frames")):
+    for value, reads in ((0.05, "≈14 frames"), (0.3, "1.9 frames"), (0.03, "≈23 frames"),
+                         (0.04, "≈17 frames"), (0.1, "6.6 frames")):
         k.set_value(value)
         assert k.text() == reads, value
         assert k.fmt(value) == reads
-    assert (k.fmt(k.lo), k.fmt(k.hi)) == ("≈23 frames", "≈2 frames")
+    assert (k.fmt(k.lo), k.fmt(k.hi)) == ("≈23 frames", "1.9 frames")
     # it is the half-life: after that many frames a frame's share is about a half
     for value in (0.03, 0.05, 0.1, 0.3):
         n = dream_half_life(value)
@@ -1421,6 +1421,10 @@ def test_the_speed_readout_is_the_half_life_in_frames():
     assert dream_half_life(0.0) >= 1 and dream_half_life(1.0) == 1 and dream_half_life(2.0) == 1
     for bad in (float("nan"), float("inf"), -float("inf")):
         assert dream_half_life(bad) == 1 and k.fmt(bad) == "≈1 frames"
+    # under ten frames the readout carries a decimal, so the fast end of the
+    # knob does not read "≈2 frames" over nearly half its travel
+    fast = [k.fmt(0.2 + 0.1 * i / 10) for i in range(11)]
+    assert len(set(fast)) >= 8, fast
     # the speed's readout fits its half-width cell like the others
     assert max(len(k.fmt(v)) for v in (k.lo, k.hi, 0.05)) <= 10
 
