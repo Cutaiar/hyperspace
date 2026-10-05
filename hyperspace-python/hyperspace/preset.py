@@ -67,8 +67,8 @@ The factory presets are generated (`python -m hyperspace.preset`,
 `write_factory`, pinned by tests/test_presets.py): the code below holds
 the generator's inputs — plan 12's five party presets' routes and their
 desk blocks, and whole the five that were routing presets (``legacy6``,
-``lfo-breathe``, ``hands-fx``, ``hands-pinch``, ``hands-play``,
-`FACTORY_PRESETS`); every factory preset's ``desk`` is the factory
+``lfo-breathe``, ``hands-fx``, ``hands-pinch``, ``hands-play``) and
+plan 18's ``hands-orbit`` (`FACTORY_PRESETS`); every factory preset's ``desk`` is the factory
 preset layer unless its entry says otherwise. The house presets' and the
 party presets' values are data in their files.
 
@@ -803,6 +803,23 @@ def hands_play_routes() -> list[Binding]:
             Binding(hand("R", "pitch"), "view.depth4", "position")]
 
 
+def hands_orbit_routes() -> list[Binding]:
+    """Plan 18 WP4: two hands on the camera, on the camera params and the
+    axes that exist. The right hand orbits: sideways turns the camera a
+    quarter turn each way, fingers up tip it to look down (±44°, as FACES).
+    The left hand pans (sideways and reaching in, as FIELD) and its height
+    zooms in. Every row is a push from its axis's own rest, so a level,
+    low or absent hand adds nothing and the camera the mouse set stays;
+    five targets, one performer each, no pinch. The hands relative to each
+    other (a steering wheel) would need a derived lane and is not built
+    (plan 18 fork 17). The depths are a first cut (hand check N9)."""
+    return [_push("R", "x", "camera.yaw", 0.5),        # sideways: orbit, ±90°
+            _push("R", "pitch", "camera.pitch", 0.5),  # fingers up: look down, ±44° (as FACES)
+            _push("L", "x", "camera.pan.x", 0.1),      # as FIELD: fly sideways
+            _push("L", "z", "camera.pan.y", 0.1),      # as FIELD: reach in
+            _push("L", "y", "camera.zoom", 0.3)]       # raise: zoom in
+
+
 def effects_on(routes, values: dict[str, Any],
                has: Callable[[str], bool] | None = None) -> dict[str, Any]:
     """`values` with the effects its routes drive switched on (PR #29's
@@ -931,6 +948,11 @@ FACTORY_PRESETS: dict[str, Factory] = {
                            "index pinch fades the hue cycle in.", desk=None),
     "hands-play": Factory(hands_play_routes, dict, "hands-play",
                           "Plan 08: brightness, speed and 4D depth on the hands.", desk=None),
+    # plan 18 WP4: two hands on the camera (in the list, on no F-key)
+    "hands-orbit": Factory(hands_orbit_routes, dict, "hands-orbit",
+                           "Two hands on the camera: the right hand orbits (sideways turns, "
+                           "fingers up tips), the left pans (sideways, reaching in) and "
+                           "zooms (height).", desk=None),
 }
 # the party presets, by file slug: plan 12's five and plan 14's, in the
 # party show's bank order (F1–F8) and then those in no slot
