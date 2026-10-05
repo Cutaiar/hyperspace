@@ -190,13 +190,7 @@ class Learn:
         """What is bound to a param: (the loaded preset's desk rows, its
         routes, the session's MIDI rows). `ids` as for `unbind`. The first
         two are what `unbind` may remove; the third it never does."""
-        ids = _ids(ids)
-        midi = [b for b in self.table.bindings if b.is_midi and b.target in ids]
-        desk = [b for b in midi if b.layer == "preset"]
-        routes: list[Binding] = []
-        for pid in ids:
-            routes += [b for b in self.table.routes_to(pid) if not any(b is x for x in routes)]
-        return desk, routes, [b for b in midi if b.layer != "preset"]
+        return bound(self.table, ids)
 
     def unbind(self, ids, *, desk: bool = True, routes: bool = True, name=None) -> list[Binding]:
         """Remove what is bound to a param, in the loaded preset: its
@@ -227,12 +221,17 @@ class Learn:
                             "edited in bindings.json) — not unbound")
             return []
         undo.push(f"unbind {real}")                  # one undo step (undo.py, plan 15)
+        gone = []
         if desk:
             for pid in ids:
-                self.table.unbind(pid)
+                gone += self.table.unbind(pid)       # what the table took out
         if routes:
             for b in routed:
                 self.table.remove(b)
+            gone += routed
+        # a question held against a row that just went has nothing to ask
+        if self.pending is not None and any(self.pending[1] is g for g in gone):
+            self.pending = None
         names = [name(b) for b in gone]
         told = names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
         self.said(f"unbound {real} from {told}")
@@ -242,3 +241,19 @@ class Learn:
 def _ids(ids) -> tuple[str, ...]:
     """One id or several, as a tuple with no repeats, in order."""
     return (ids,) if isinstance(ids, str) else tuple(dict.fromkeys(ids))
+
+
+def bound(table: Bindings, ids) -> tuple[list[Binding], list[Binding], list[Binding]]:
+    """`Learn.bound` over any table (the panel's menu lists from it with
+    or without a learn object, so its lines are what Unbind removes):
+    (preset-layer desk rows, routes, the session's MIDI rows) on `ids`. A
+    route is a performer row from a continuous source — never a MIDI row,
+    whatever its op, so a session row can not come back as a "route"."""
+    ids = _ids(ids)
+    midi = [b for b in table.bindings if b.is_midi and b.target in ids]
+    routes: list[Binding] = []
+    for pid in ids:
+        routes += [b for b in table.routes_to(pid)
+                   if not b.is_midi and not any(b is x for x in routes)]
+    return ([b for b in midi if b.layer == "preset"], routes,
+            [b for b in midi if b.layer != "preset"])

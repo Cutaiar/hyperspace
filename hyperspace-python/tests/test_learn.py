@@ -441,6 +441,21 @@ def test_unbind_by_kind(tmp_path):
     assert not table.routes_to("band.2.thr")
     assert not [b for b in table.desk() if b.target == "band.sel.thr"]
     assert lrn.last.startswith("unbound band.2.thr from ")
+    # a MIDI row is never a "route", whatever its op (review of PR #93): a
+    # session row with a performer op stays, and is a refusal, not an item
+    odd = Binding("cc:0:118", "view.zoom_rate", "push")           # no layer: the session's
+    mine = Binding("cc:0:117", "view.zoom_rate", "position", layer="preset")
+    table.bindings += [odd, mine]
+    assert lrn.bound("view.zoom_rate") == ([mine], [], [odd])
+    assert lrn.unbind("view.zoom_rate", desk=False) == []
+    assert lrn.unbind("view.zoom_rate") == [mine] and lrn.last.count("MIDI CC 117") == 1
+    assert lrn.unbind("view.zoom_rate") == [] and lrn.refused and odd in table.bindings
+    # a question held against a route that Unbind removes is withdrawn
+    old = table.add(Binding("hand:left.y", "view.inst_amp", "position"))
+    lrn.arm("view.inst_amp")
+    lrn.learn_source("hand:right.y")
+    assert lrn.pending is not None and lrn.pending[1] is old
+    assert lrn.unbind("view.inst_amp", desk=False) == [old] and lrn.pending is None
 
 
 def test_unbind_is_one_undo_step_and_none_when_nothing_goes(tmp_path):

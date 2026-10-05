@@ -33,7 +33,7 @@ from collections.abc import Callable
 
 from imgui_bundle import imgui
 
-from . import apc40, ui_bands, ui_desk, ui_fx, ui_lfo, ui_lookback, ui_presets, ui_routing
+from . import apc40, learn, ui_bands, ui_desk, ui_fx, ui_lfo, ui_lookback, ui_presets, ui_routing
 from .analyzer import N_MAX
 from .audio import AudioEngine
 from .bands import CEIL, KNEE
@@ -509,21 +509,18 @@ class Panel:
         table = self._table()
         if table is None:
             return [], []
-        ids = (a.id, p.id)
-        midi = [b for b in table.bindings if b.is_midi and b.target in ids]
-        desk = [b for b in midi if b.layer == "preset"]
-        routes = table.routes_to(p.id)
+        # the same question `Learn.unbind` asks, so the lines are what it removes
+        desk, routes, session = learn.bound(table, (a.id, p.id))
         for b in desk:
             op = "" if b.op in ("abs", "rel") else f" · {ui_routing._op_text(b)}"
             imgui.text(self._row_name(b) + op)
         ui_hands.ctx_rows(self, p, gate=False)
-        for b in routes:
-            if b.scheme != "hand" or self.router is None:    # ctx_rows drew the hand's
+        for b in routes:                # ctx_rows drew the hand's rows on the real param
+            if b.scheme != "hand" or b.target != p.id or self.router is None:
                 imgui.text(self._row_name(b) + ("" if b.enabled else " (off)"))
-        for b in midi:
-            if b.layer != "preset":
-                where = "global layer" if b.layer == "global" else "invariant"
-                imgui.text_disabled(f"{self._row_name(b)} · {where}")
+        for b in session:
+            where = "global layer" if b.layer == "global" else "invariant"
+            imgui.text_disabled(f"{self._row_name(b)} · {where}")
         return desk, routes
 
     def _ctx_unbind(self, a: Param, p: Param, desk: list, routes: list) -> None:
