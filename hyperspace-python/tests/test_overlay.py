@@ -407,3 +407,77 @@ def test_fullscreen_still_works_while_overlay_is_shut(gated):
     gated.reg["output.fullscreen"].set(True)
     gated.out.apply()
     assert gated.out.mode == "fullscreen" and ("fullscreen", "Built-in") in gated.b.calls
+
+
+# ---- plan 21 WP4: the per-output switches ----
+
+def _slots(*names, missing=()):
+    from hyperspace.outputs import Slot, Switches
+
+    return [Slot(k + 1, name=n, switches=Switches(),
+                 win=None if k + 1 in missing else f"w{k + 1}") for k, n in enumerate(names)]
+
+
+def test_the_output_switches_are_rig_settings():
+    """Fork F4: output.N.scene / .hands / .through / .dim are rig settings —
+    group `output` (the session's), never persisted (no preset, show or
+    undo step holds them: `undo.watched` needs persist), not modulatable
+    (no lane rides them) — and they write the output's `Switches`, which
+    the renderer reads. Generated for the outputs that opened, numbered by
+    their place in the config's list; labels name the output when there
+    are several."""
+    from hyperspace import undo
+    from hyperspace.overlay import register_switches
+    from hyperspace.params import part_of
+
+    reg = _registry()
+    slots = _slots("glass", "projector", "wall", missing=(2,))
+    ids = register_switches(reg, slots)
+    assert ids == ["output.1.scene", "output.1.hands", "output.1.through", "output.1.dim",
+                   "output.3.scene", "output.3.hands", "output.3.through", "output.3.dim"]
+    assert not any(p.id.startswith("output.2.") for p in reg)       # not opened: none
+    for pid in ids:
+        p = reg[pid]
+        assert p.group == "output" and part_of(p) == "session"
+        assert not p.persist and not p.modulatable and not p.alias and not undo.watched(p)
+    assert not any(pid in reg.snapshot() for pid in ids)
+    assert not any(pid in reg.snapshot(part="session") for pid in ids)
+    assert reg["output.1.scene"].kind is Kind.TOGGLE and reg["output.1.dim"].kind is Kind.CONTINUOUS
+    assert reg["output.1.scene"].label == "Glass scene"
+    assert reg["output.3.through"].label == "Wall hands through effects"
+    # they write the Switches the app hands the renderer
+    sw = slots[2].switches
+    reg["output.3.scene"].set(False)
+    reg["output.3.through"].set(True)
+    reg["output.3.dim"].set(0.25)
+    assert (sw.scene, sw.hands, sw.through, sw.dim) == (False, True, True, 0.25)
+    reg["output.3.dim"].set(4.0)
+    assert sw.dim == 1.0 and reg["output.3.dim"].text() == "100%"
+    reg["output.3.dim"].set(0.0)
+    assert sw.dim == 0.0 and reg["output.3.dim"].text() == "black"
+    # the launch values are the slot's (the config's) as the params find them
+    from hyperspace.outputs import Slot, Switches
+
+    seeded = Slot(1, win="w", switches=Switches(scene=False, dim=0.4))
+    reg2 = _registry()
+    register_switches(reg2, [seeded, *_slots("x", "y")[1:]])
+    assert reg2["output.1.scene"].value is False and reg2["output.1.dim"].value == 0.4
+
+
+def test_one_output_has_no_dim_of_its_own():
+    """With one output the master dim is that output's dim (§3 budget):
+    three switches, plainly labelled, no output.1.dim."""
+    from hyperspace.overlay import register_switches
+
+    reg = _registry()
+    assert register_switches(reg, _slots("")) == [
+        "output.1.scene", "output.1.hands", "output.1.through"]
+    assert "output.1.dim" not in reg
+    assert [reg[f"output.1.{k}"].label for k in ("scene", "hands", "through")] == [
+        "Scene", "Hands", "Hands through effects"]
+    # …unless a one-entry list gave it a launch dim: then it has its fader
+    one = _slots("glass")
+    one[0].switches.dim = 0.5
+    reg = _registry()
+    assert register_switches(reg, one)[-1] == "output.1.dim"
+    assert reg["output.1.dim"].value == 0.5 and reg["output.1.dim"].label == "Dim"

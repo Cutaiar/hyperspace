@@ -1,7 +1,10 @@
-"""Hyperspace entry point — two GLFW windows on one GL context.
+"""Hyperspace entry point — GLFW windows in one GL share group.
 
 The *render* window is pure moderngl output, the thing on the projector or
-TV: no imgui in it, ever. The *control* window holds every widget — the
+TV: no imgui in it, ever. With ``[[output.screens]]`` in config.toml
+(plan 21 WP3) there is one render window per listed output: output 1's
+context renders the frame and paces the loop, each later output's window
+shows it through an `outputs.Presenter` in its own context (`_draw_render`). The *control* window holds every widget — the
 CONTROLS panel, the cheat sheet, the hot-reload error toast — in its own
 imgui context and GlfwRenderer. Keys are polled, not callback-driven, so
 they work from whichever window is focused (the control window defers to
@@ -52,7 +55,7 @@ import os
 import sys
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 # pyGLFW and imgui_bundle each ship a libglfw; loading both trips ObjC class
@@ -77,7 +80,8 @@ from .hotreload import HotReloader
 from .learn import Learn
 from .library import Library, Marks
 from .library import home as library_home
-from .overlay import GlfwBackend, Output
+from .outputs import Presenter, Slot, Switches, View
+from .overlay import GlfwBackend, Output, register_switches
 from .params import Registry, build_registry
 from .preset import Presets, migrate_home
 from .render import Renderer
@@ -144,36 +148,99 @@ def _restart(audio, adapters, impl, ctrl_win, save=None) -> None:
     os.execv(sys.executable, [sys.executable, *sys.argv])
 
 
-def _save_windows(home, render_win, ctrl_win, output) -> None:
+def _save_windows(home, render_win, ctrl_win, output, more=()) -> None:
     """Remember where the windows are, in <home>/windows.json
     (placement.py) — on quit and on restart only. Always the *windowed*
     rect: a fullscreen or overlay render window is remembered by the rect
-    `Output` would restore, and a minimised window keeps its old entry."""
+    `Output` would restore, and a minimised window keeps its old entry.
+    `more`: the later render outputs' `Output`s in the config's order
+    (plan 21 WP3), None for one not opened this run — its old entry is
+    kept, as a minimised window's is."""
     def minimised(win) -> bool:
         return bool(glfw.get_window_attrib(win, glfw.ICONIFIED))
 
     control = None
     if not minimised(ctrl_win):
         control = (*glfw.get_window_pos(ctrl_win), *glfw.get_window_size(ctrl_win))
-    render = None if minimised(render_win) else output.windowed_rect()
-    placement.save(home, control, [render], placement.screens(glfw))
+    render = [None if minimised(render_win) else output.windowed_rect()]
+    for o in more:
+        render.append(None if o is None or o.win is None or minimised(o.win)
+                      else o.windowed_rect())
+    placement.save(home, control, render, placement.screens(glfw))
+
+
+def _slots(cfg: dict | None) -> list[Slot]:
+    """The render outputs the config lists (config.screens: one with no
+    list), numbered from 1, with their launch switches; no window yet."""
+    from . import config
+
+    out = []
+    for k, e in enumerate(config.screens(cfg or {})):
+        sw = Switches(scene=bool(e["scene"]), hands=bool(e["hands"]),
+                      through=bool(e["through"]), dim=float(e["dim"]))
+        out.append(Slot(k + 1, name=str(e["name"] or ""), switches=sw,
+                        monitor=placement.index(e["monitor"]),
+                        fullscreen=bool(e["fullscreen"])))
+    return out
+
+
+CASCADE = 40     # px: a later output's default spot, down and right of the one before
+
+
+def _later_rect(slot: Slot, k: int, scr, renders: list,
+                taken: list) -> tuple[tuple | None, str]:
+    """Where a later output (`k` ≥ 1, its place in the list from 0) opens,
+    or (None, why) when its screen is not connected (fork F9): an index
+    no connected screen has means that output is not opened at all — a
+    window landing on the laptop over the controls is worse than none.
+    A default spot another output already has (`taken`, their top-left
+    corners) is moved down and right by CASCADE until it is free."""
+    n = len(scr)
+    if slot.monitor >= n:
+        have = "0" if n == 1 else f"0–{n - 1}"
+        slot.missing = f"screen {slot.monitor} is not connected"
+        return None, (f"config: {slot.label}: monitor = {slot.monitor}, but {n} "
+                      f"screen{'s are' if n != 1 else ' is'} connected ({have}) — "
+                      "not opened")
+    remembered = renders[k] if k < len(renders) else None
+    rect, note = placement.place("render", RENDER_SIZE, scr, slot.monitor, remembered,
+                                 what=slot.label)
+    on = scr[slot.monitor] if slot.monitor >= 0 else scr[0]
+    if tuple(rect) == placement.default_rect("render", RENDER_SIZE, on):
+        # the default spot: cascaded, so it does not sit exactly on another output
+        while tuple(rect[:2]) in taken:
+            rect = (rect[0] + CASCADE, rect[1] + CASCADE, rect[2], rect[3])
+    taken.append(tuple(rect[:2]))
+    return rect, note
 
 
 def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None = None):
-    """The two GLFW windows on one shared GL context: render first, then controls.
+    """The GLFW windows on one shared GL context: the render outputs and
+    the controls. Returns (slots, control window): one `outputs.Slot` per
+    output the config lists (plan 21 WP3; one with no list, as before),
+    `slot.win` its window — or None, with `slot.missing` saying why, for a
+    later output whose screen is not connected (fork F9). Output 1 always
+    opens. Created in this order: output 1, the controls (as before), then
+    the later outputs.
 
     `overlay` is the config's ``[output] overlay`` (decision 21 (a)): only
-    then is the render window's framebuffer transparent.
+    then is output 1's framebuffer transparent. A later output is never
+    transparent, has no MSAA (it only shows the frame) and its own title.
 
     Where they open is placement.py's say: ``[output] monitor`` /
-    ``control_monitor`` in `cfg`, else where they were (`home`'s
-    windows.json), else the default spots on the primary screen. Its notes
-    go to stderr and `cfg["notes"]` (the SYSTEM page). With no screens no
-    position is set."""
+    ``control_monitor`` in `cfg` (with a list, `config.load` put output 1's
+    entry there) and each later output's ``monitor``, else where they were
+    (`home`'s windows.json, one render entry per output), else the default
+    spots on the primary screen — a later output's cascaded from output
+    1's. Its notes go to stderr and `cfg["notes"]` (the SYSTEM page). With
+    no screens no position is set and every output opens."""
     scr = placement.screens(glfw)
     oc = (cfg or {}).get("output", {})
     oc = oc if isinstance(oc, dict) else {}
+    slots = _slots(cfg)
     render_rect = ctrl_rect = None
+    later_rects: list = [None] * len(slots)
+    notes: list[str] = []
     if scr:
         try:
             seen = placement.load(home) if home is not None else {}
@@ -182,11 +249,22 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
                                               oc.get("monitor", -1), renders[0])
             ctrl_rect, n2 = placement.place("control", CONTROL_SIZE, scr,
                                             oc.get("control_monitor", -1), seen.get("control"))
+            notes += [n1, n2]
+            taken = [tuple(render_rect[:2])]
+            for k, slot in enumerate(slots[1:], start=1):
+                later_rects[k], n = _later_rect(slot, k, scr, renders, taken)
+                notes.append(n)
         except Exception as e:  # noqa: BLE001 — a file nobody foresaw must not stop a launch
             render_rect = placement.default_rect("render", RENDER_SIZE, scr[0])
             ctrl_rect = placement.default_rect("control", CONTROL_SIZE, scr[0])
-            n1, n2 = _err("placement", e) + " — the windows open at their default spots", ""
-        for note in filter(None, (n1, n2)):
+            notes = [_err("placement", e) + " — the windows open at their default spots"]
+            for k, slot in enumerate(slots[1:], start=1):
+                if slot.monitor >= len(scr):        # fork F9 holds here too (review of #123)
+                    slot.missing = f"screen {slot.monitor} is not connected"
+                if not slot.missing:
+                    r = placement.default_rect("render", RENDER_SIZE, scr[0])
+                    later_rects[k] = (r[0] + CASCADE * k, r[1] + CASCADE * k, r[2], r[3])
+        for note in filter(None, notes):
             print(note, file=sys.stderr)
             if cfg is not None:
                 cfg.setdefault("notes", []).append(note)
@@ -196,6 +274,7 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
         for key in ("monitor", "control_monitor"):
             if key in oc:
                 oc[key] = placement.index(oc[key], len(scr))
+    slots[0].monitor = placement.index(oc.get("monitor", -1))
     render_size = render_rect[2:] if render_rect else RENDER_SIZE
     ctrl_size = ctrl_rect[2:] if ctrl_rect else CONTROL_SIZE
     glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
@@ -231,7 +310,29 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
         glfw.set_window_pos(render_win, *render_rect[:2])
     if ctrl_rect:
         glfw.set_window_pos(ctrl_win, *ctrl_rect[:2])
-    return render_win, ctrl_win
+    slots[0].win = render_win
+    # the later outputs (plan 21 WP3): in output 1's share group (they
+    # sample its frame textures), opaque, no MSAA, never minimised when
+    # another window takes focus — the hints above still hold
+    # (TRANSPARENT_FRAMEBUFFER off, SAMPLES 0, AUTO_ICONIFY off)
+    for k, slot in enumerate(slots[1:], start=1):
+        if slot.missing:
+            continue
+        rect = later_rects[k]
+        size = rect[2:] if rect else RENDER_SIZE
+        title = f"{TITLE} — {slot.name or f'output {slot.n}'}"
+        win = glfw.create_window(*size, title, None, render_win)
+        if not win:
+            slot.missing = "its window could not be created"
+            note = f"output: {slot.label}: {slot.missing} — not opened"
+            print(note, file=sys.stderr)
+            if cfg is not None:
+                cfg.setdefault("notes", []).append(note)
+            continue
+        slot.win = win
+        if rect:
+            glfw.set_window_pos(win, *rect[:2])
+    return slots, ctrl_win
 
 
 def _overlay_allowed(cfg: dict) -> bool:
@@ -258,9 +359,127 @@ def _make_output(win, reg: Registry, cfg: dict) -> Output:
               "the window stays opaque", file=sys.stderr)
     out.overlay = bool(oc.get("on_start", False)) and out.allowed
     out.passthrough = bool(oc.get("passthrough", True))
-    out.bg = float(oc.get("bg", 0.0))
-    out.alpha = float(oc.get("alpha", 1.0))
+    # `bg = "x"` stopped the launch here; config.load now says so and
+    # keeps the default — and a cfg that came another road falls back too
+    from .config import number
+
+    bg, alpha = number(oc.get("bg", 0.0)), number(oc.get("alpha", 1.0))
+    out.bg = 0.0 if bg is None else bg
+    out.alpha = 1.0 if alpha is None else alpha
     return out
+
+
+def _later_output(slot: Slot) -> Output:
+    """A later render output's window settings (plan 21 WP3): its screen
+    and fullscreen from its config entry (fork F10: no params — the
+    output.* params are output 1's), never overlay; `apply()` runs each
+    frame as output 1's does."""
+    out = Output(slot.win, GlfwBackend(glfw), allowed=False)
+    out.monitor = placement.index(slot.monitor)
+    out.fullscreen = bool(slot.fullscreen)
+    return out
+
+
+def _open_presenters(slots: list[Slot], make_context=None, notes: list | None = None) -> None:
+    """Each later output's `Presenter`, on its own window's context, and
+    the swap rule (fork F6): output 1 waits for its screen (interval 1,
+    set where its context is made), every later output does not
+    (interval 0) — two waiting swaps a frame halve the rate (plan 21 §1:
+    121 fps against 60–81). One that will not build is closed and counts
+    as not opened, its `missing` saying why (`notes`, the SYSTEM page): a
+    window that is never drawn would show garbage and fool the watch
+    (review of #123). The others go on. Leaves output 1's context
+    current."""
+    make = make_context or moderngl.create_context
+    for slot in slots[1:]:
+        if not slot.opened:
+            continue
+        try:
+            glfw.make_context_current(slot.win)
+            glfw.swap_interval(0)
+            slot.presenter = Presenter(make())
+        except Exception as e:  # noqa: BLE001 — one output must not stop the launch
+            glfw.make_context_current(slots[0].win)
+            _quiet(lambda w=slot.win: glfw.destroy_window(w))
+            slot.win, slot.presenter = None, None
+            slot.missing = f"its GL context would not open ({_err('presenter', e)})"
+            note = f"output: {slot.label}: {slot.missing} — not opened"
+            print(note, file=sys.stderr)
+            if notes is not None:
+                notes.append(note)
+    glfw.make_context_current(slots[0].win)
+
+
+def _gl_flush() -> None:
+    """glFlush in the current context: a presenter's context samples the
+    renderer's frame textures, and without the flush it sees last frame's
+    (plan 21 §1, measured: 199 of 200 frames late)."""
+    from OpenGL import GL
+
+    GL.glFlush()
+
+
+def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None) -> None:
+    """One render frame onto every output (plan 21 WP3, "the frame in
+    app.draw_render"):
+
+    1. output 1 current; the stranded-target check; its window bound;
+    2. a `View` per output — output 1 on its window's framebuffer (the
+       `View` `Renderer.draw` builds, so one output is today's frame), each
+       later one with its presenter and its framebuffer's size;
+    3. `renderer.draw_outputs`: output 1 drawn whole, a `Handoff` left for
+       the others;
+    4. glFlush in output 1's context;
+    5. each later output, in its own `try`: current, `present`, swap (it
+       does not wait). One that raises sets its slot's `error` and tells
+       the watch; the frame goes on;
+    6. output 1 current and swapped, whatever happened (it waits: it paces
+       the loop).
+
+    What output 1's view caught is raised after the others were presented,
+    as `Renderer.draw` raises it."""
+    first = slots[0]
+    win = first.win
+    glfw.make_context_current(win)
+    # the window, bound explicitly every frame: the renderer draws into
+    # whatever is bound, and a frame that once left an offscreen
+    # framebuffer bound froze the picture with no error (plan 14 WP1).
+    # draw_outputs puts its target back; the check is the alarm.
+    stranded = ctx.fbo
+    if stranded is not None and stranded.glo != 0 and watch is not None:
+        watch.stranded(stranded.glo)
+    ctx.screen.use()
+    # its own size and DPI (a 1080p projector next to a retina laptop)
+    w, h = glfw.get_window_size(win)
+    fbw, fbh = glfw.get_framebuffer_size(win)
+    ctx.viewport = (0, 0, fbw, fbh)
+    first.size = (fbw, fbh)
+    later = [sl for sl in slots[1:] if sl.opened and sl.presenter is not None]
+    try:
+        views = [View(first.switches, (fbw, fbh), target=ctx.screen,
+                      bg_alpha=getattr(renderer, "bg_alpha", 1.0), viewport=(0, 0, fbw, fbh))]
+        for sl in later:
+            sl.size = tuple(int(v) for v in glfw.get_framebuffer_size(sl.win))
+            views.append(View(sl.switches, sl.size, presenter=sl.presenter))
+        renderer.draw_outputs(s, max(w, 1), max(h, 1), fbw / max(w, 1), views)
+        if later:
+            (flush or _gl_flush)()
+        for sl, v in zip(later, views[1:], strict=True):
+            try:
+                glfw.make_context_current(sl.win)
+                if v.handoff is not None and sl.size[0] > 0 and sl.size[1] > 0:
+                    sl.presenter.present(v.handoff, sl.size)
+                glfw.swap_buffers(sl.win)
+                sl.error = v.error
+            except Exception as e:  # noqa: BLE001 — one output must not take the frame down
+                sl.error = _err("present", e)
+                if watch is not None:
+                    watch.output_failed(sl.label, e)
+        if views[0].exc is not None:
+            raise views[0].exc
+    finally:
+        glfw.make_context_current(win)
+        glfw.swap_buffers(win)
 
 
 def _desk_table(reg: Registry, table: Bindings) -> Bindings:
@@ -405,8 +624,9 @@ class Keys:
     loop (`frame`), Cmd+R claiming R's edge before the table reads it.
     """
 
-    def __init__(self, render_win, ctrl_win):
+    def __init__(self, render_win, ctrl_win, more=()):
         self.render_win, self.ctrl_win = render_win, ctrl_win
+        self.more = tuple(more)     # the later render outputs' windows (plan 21 WP3)
         self.typing = False
         self.prev: dict[int, bool] = {}
         self.down_since: dict[int, float] = {}
@@ -414,6 +634,9 @@ class Keys:
     def _down(self, key: int) -> bool:
         if glfw.get_key(self.render_win, key) == glfw.PRESS:
             return True
+        for win in getattr(self, "more", ()):
+            if glfw.get_key(win, key) == glfw.PRESS:
+                return True
         return not self.typing and glfw.get_key(self.ctrl_win, key) == glfw.PRESS
 
     def pressed(self, key: int) -> bool:
@@ -551,6 +774,9 @@ class Host:
     render_watch: RenderWatch | None = None   # the render window's health (watchdog.py)
     undo: object | None = None        # undo.Undo: ticked once a frame (plan 15 WP1)
     committer: object | None = None   # homegit.Committer when [library] git is on
+    # every opened render output's window settings, output 1's (`output`)
+    # first; each applied once a frame (plan 21 WP3)
+    outputs: list = field(default_factory=list)
 
     @property
     def adapters(self) -> tuple:
@@ -651,8 +877,12 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
         except Exception as e:  # noqa: BLE001
             ok, reloader.runtime_error = False, _err("hands", e)
 
-    # ---- output: the render window follows the output.* params ----
+    # ---- output: the render window follows the output.* params; a later
+    # render output follows its config entry (plan 21 WP3) ----
     h.output.apply()
+    for out in h.outputs:
+        if out is not h.output:
+            out.apply()
     h.renderer.bg_alpha = h.output.bg_alpha
     # the master dim (plan 15 WP3), the frame's last pass; getattr: an
     # Output made before a hot reload brought the attribute has none
@@ -735,14 +965,21 @@ def main() -> None:
         raise SystemExit("GLFW failed to initialise")
     cfg = config.load()                   # before the windows: [output] overlay is a creation hint
     home = library_home()                 # the folder config.load has just ensured
-    render_win, ctrl_win = _windows(_overlay_allowed(cfg), cfg, home)
+    # the render outputs (plan 21 WP3: one per [[output.screens]] entry, one
+    # with no list) and the controls; output 1's window is the render window
+    slots, ctrl_win = _windows(_overlay_allowed(cfg), cfg, home)
+    render_win = slots[0].win
 
-    # the render side: moderngl on the render window's context, vsynced
+    # the render side: moderngl on output 1's context, vsynced — it renders
+    # every output's frame (fork F12) and paces the loop (fork F6)
     glfw.make_context_current(render_win)
     glfw.swap_interval(1)
     ctx = moderngl.create_context()
     renderer = Renderer(ctx)
     s = ViewState()
+    # each later output: a presenter on its own context, never waiting
+    _open_presenters(slots, notes=cfg.setdefault("notes", []))
+    later = [sl for sl in slots[1:] if sl.opened]
 
     # the control side: imgui on the control window's context. Its swap
     # never waits for a vblank — two vsynced swaps a frame would halve the
@@ -788,6 +1025,12 @@ def main() -> None:
     # the render window's placement registers before attach, so "default"
     # includes output.* and reset / the dirty dot see them (audit L6)
     output = _make_output(render_win, reg, cfg)
+    slots[0].output = output
+    for sl in later:                       # no params: the config says (fork F10)
+        sl.output = _later_output(sl)
+    # each opened output's switches (plan 21 WP4): rig settings, seeded
+    # from the config's launch values already on the slots, never saved
+    register_switches(reg, slots)
     # one binding table for keys, pad, MIDI and lanes (an old midi_map.json
     # migrates) — read before attach for the same reason: the desk's
     # session param, `desk.slew`, is the table's, at the app's default
@@ -802,6 +1045,7 @@ def main() -> None:
     panels.append(panel)
     panel.clock, panel.lfos = clock, lfos     # the LFO page's scopes and beat light
     panel.output = output
+    panel.outputs = slots                  # the OUTPUT page: a block per output (plan 21 WP4)
     router = Router(reg, table)
     # the presets (preset.py): the library's `presets/` files, landed on the
     # registry and the table; the project's bank loads through it
@@ -873,6 +1117,11 @@ def main() -> None:
         *[(p, "params", "Param") for p in reg],
         (output, "overlay", "Output"),
         (output.backend, "overlay", "GlfwBackend"),
+        # the later render outputs (plan 21 WP3); a presenter rebuilds its
+        # programs at its next present, in its own context
+        *[(sl.output, "overlay", "Output") for sl in later],
+        *[(sl.output.backend, "overlay", "GlfwBackend") for sl in later],
+        *[(sl.presenter, "outputs", "Presenter") for sl in later if sl.presenter],
         (library, "library", "Library"),
         (library.project, "library", "Project"),
         (marks, "library", "Marks"),
@@ -895,28 +1144,13 @@ def main() -> None:
     panel.config_notes = cfg.get("notes", [])   # …or that wants a section renamed
     if router.table.said:                       # what the launch did to bindings.json
         panel.config_notes = [*panel.config_notes, router.table.said]
-    keys = Keys(render_win, ctrl_win)
-    mouse = Mouse(render_win, reg, s)
+    keys = Keys(render_win, ctrl_win, [sl.win for sl in later])   # keys from every window
+    mouse = Mouse(render_win, reg, s)                              # the mouse: output 1 only
 
     def draw_render(dt: float) -> None:
-        # the render window: its own size and DPI (a 1080p projector next
-        # to a retina laptop)
-        glfw.make_context_current(render_win)
-        # the window, bound explicitly every frame: Renderer.draw draws into
-        # whatever is bound, and a frame that once left an offscreen
-        # framebuffer bound froze the picture with no error (plan 14 WP1).
-        # Renderer.draw now puts its target back; the check is the alarm.
-        stranded = ctx.fbo
-        if stranded is not None and stranded.glo != 0:
-            render_watch.stranded(stranded.glo)
-        ctx.screen.use()
-        w, h = glfw.get_window_size(render_win)
-        fbw, fbh = glfw.get_framebuffer_size(render_win)
-        ctx.viewport = (0, 0, fbw, fbh)
-        try:
-            renderer.draw(s, max(w, 1), max(h, 1), dpr=fbw / max(w, 1))
-        finally:
-            glfw.swap_buffers(render_win)
+        # every render output: output 1 drawn, the others presented, the
+        # others swapped first and output 1 last (_draw_render)
+        _draw_render(renderer, ctx, s, slots, render_watch)
 
     def draw_panel(dt: float, fps: float) -> None:
         # the control window: black ground, then the imgui frame opened
@@ -930,8 +1164,13 @@ def main() -> None:
     # panel runs, each with every thread's stack; kill -USR1 dumps on demand
     watchdog = Watchdog(library.home / LOG_NAME,
                         preset=lambda: library.current("presets"))
-    render_watch = RenderWatch(watchdog,
-                               info=lambda: output.backend.window_state(render_win))
+    # with two or more outputs the stall is "no output presented", and one
+    # output dark while another presents is a warning naming it (WP3)
+    opened = [sl for sl in slots if sl.opened and sl.output is not None]
+    render_watch = RenderWatch(
+        watchdog, info=lambda: output.backend.window_state(render_win),
+        outputs=(lambda: [(sl.label, sl.output.backend.window_state(sl.win))
+                          for sl in opened]) if len(opened) > 1 else None)
     panel.watchdog, panel.render_watch = watchdog, render_watch
 
     def dream_check(name: str | None) -> None:
@@ -947,7 +1186,7 @@ def main() -> None:
     dream_check(library.current("presets"))     # the startup preset has already landed
 
     def save_windows() -> None:           # both exits: quit below, ⌘R in _restart
-        _save_windows(home, render_win, ctrl_win, output)
+        _save_windows(home, render_win, ctrl_win, output, [sl.output for sl in slots[1:]])
 
     host = Host(reg=reg, view=s, control=control, audio=audio, router=router,
                 clock=clock, lfos=lfos, keys=keys, mouse=mouse, output=output,
@@ -958,7 +1197,8 @@ def main() -> None:
                 quit=lambda: glfw.set_window_should_close(render_win, True),
                 pad=pad, midi_io=midi_io, hands_io=hands_io, bridge_io=bridge_io,
                 dream_io=dream_io, learn=learn, render_watch=render_watch,
-                undo=undo_obj, committer=committer)
+                undo=undo_obj, committer=committer,
+                outputs=[sl.output for sl in slots if sl.output is not None])
 
     # smoke-test escape hatch: HYPERSPACE_FRAMES=n closes after n frames
     frames_left = int(os.environ.get("HYPERSPACE_FRAMES", "0")) or None
@@ -967,7 +1207,9 @@ def main() -> None:
 
     last = time.perf_counter()
     fps = 0.0
-    while not (glfw.window_should_close(render_win) or glfw.window_should_close(ctrl_win)):
+    # the loop ends when any window is closed (the smoke run closes output 1)
+    while not (any(glfw.window_should_close(sl.win) for sl in slots if sl.opened)
+               or glfw.window_should_close(ctrl_win)):
         if frames_left is not None:
             frames_left -= 1
             if frames_left <= 0:

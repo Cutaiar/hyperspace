@@ -19,7 +19,8 @@ from hyperspace.analyzer import Analyzer
 from hyperspace.app import CONTROL_SIZE, LOOP_KEYS
 from hyperspace.control import Control
 from hyperspace.library import Library
-from hyperspace.overlay import Output
+from hyperspace.outputs import Slot
+from hyperspace.overlay import Output, register_switches
 from hyperspace.params import PLANES, Kind, build_registry
 from hyperspace.preset import Presets
 from hyperspace.routing import Binding, Bindings, Owned, Router, keymap, padmap
@@ -73,6 +74,12 @@ def build_rig(tmp_path, renderer=None):
     lfo.register(reg, lfos, clock)
     output = Output(None, None)
     output.register(reg)
+    # four render outputs, the most the config allows (plan 21 WP4): the
+    # OUTPUT page measured full, each with its switches and its own dim
+    slots = [Slot(k + 1, name=nm, win=f"w{k + 1}")
+             for k, nm in enumerate(("glass", "projector", "wall", "floor"))]
+    slots[0].size = (1920, 1080)
+    register_switches(reg, slots)
     # the table before attach, as app.main reads it: the desk's session
     # param (`desk.slew`) is the table's and exists when the show lands
     table = Bindings.factory(path=tmp_path / "bindings.json")
@@ -83,11 +90,13 @@ def build_rig(tmp_path, renderer=None):
     panel.clock, panel.lfos = clock, lfos
     panel.hands, panel.hand_settings = hands_io, settings
     panel.output = output
+    panel.outputs = slots
     router = Router(reg, table)
     router.table.set_routes(routing.legacy6_routes())   # a house preset's performer rows
     Presets(lib, reg, router)           # the bank and the preset strip, as app.py builds them
     panel.router = router
-    r = SimpleNamespace(panel=panel, lib=lib, reg=reg, view=view, chain=chain, router=router)
+    r = SimpleNamespace(panel=panel, lib=lib, reg=reg, view=view, chain=chain, router=router,
+                        slots=slots)
     try:
         yield r
     finally:
@@ -1853,3 +1862,141 @@ def test_the_ghost_style_is_on_the_hands_page_while_the_ghost_is_on(rig, monkeyp
     rig.reg["ghost.on"].set(False)
     _hands_page_text(rig, monkeypatch)
     assert "ghost.style" not in combos
+
+
+# ---- plan 21 WP4: the OUTPUT page's blocks and the footer ----
+
+def _output_page(rig, monkeypatch, page="output") -> tuple[list[str], list[tuple]]:
+    """Every text and checkbox label the page (and the footer) draws, and
+    each item's right edge against its window's, at the control size."""
+    import hyperspace.ui as ui_mod
+
+    drawn: list[str] = []
+    edges: list[tuple] = []
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+
+    def rec(s):
+        drawn.append(s)
+        edges.append((s, imgui.get_item_rect_max().x,
+                      imgui.get_window_pos().x + imgui.get_window_width()))
+
+    real = {n: getattr(imgui, n) for n in ("text", "text_colored", "text_disabled", "checkbox")}
+    with monkeypatch.context() as m:
+        m.setattr(ui_mod.imgui, "text", lambda s: (real["text"](s), rec(s))[0])
+        m.setattr(ui_mod.imgui, "text_colored",
+                  lambda c, s: (real["text_colored"](c, s), rec(s))[0])
+        m.setattr(ui_mod.imgui, "text_disabled", lambda s: (real["text_disabled"](s), rec(s))[0])
+        m.setattr(ui_mod.imgui, "checkbox",
+                  lambda label, v: (real["checkbox"](label, v), rec(label.split("##")[0]))[0])
+        for _ in range(3):
+            drawn.clear()
+            edges.clear()
+            frame(rig.panel, page)
+    return drawn, list(edges)
+
+
+def test_the_output_page_fits_with_four_outputs_and_overlays_rows(rig, monkeypatch):
+    """Four outputs (the most), each block's three lines, a missing
+    output's line and overlay's three rows showing: the OUTPUT page does not
+    scroll at the control size and no line runs past the page's right edge."""
+    rig.panel.output.allowed = True
+    for sl in rig.slots:
+        sl.error = "present: RuntimeError: a long error that the page must cut to fit"
+    over = _page_scroll(rig, monkeypatch)
+    assert over["output"] <= 0
+    drawn, edges = _output_page(rig, monkeypatch)
+    assert drawn.count("scene") == 4 and drawn.count("through effects") == 4
+    for s, right, edge in edges:
+        assert right <= edge + 1, f"{s!r} runs past the page ({right} > {edge})"
+
+
+def test_the_output_page_says_what_each_output_shows(rig, monkeypatch):
+    """Plan 21 WP4 / fork F8: words, not a picture. Each output's "shows:"
+    line is `outputs.route`'s answer with master × own dim; a switch that
+    can do nothing says why; an output that did not open is one line."""
+    from hyperspace.outputs import Switches as S
+    from hyperspace.ui import output_shows
+
+    # the words, as a pure function of the switches and the frame
+    assert output_shows(S(), False, True, 1.0) == ("scene + hands over the effects", "")
+    assert output_shows(S(), False, False, 1.0) == ("scene", "")
+    assert output_shows(S(through=True), True, True, 1.0) == (
+        "scene + hands through the effects", "")
+    assert output_shows(S(scene=False), True, True, 1.0) == ("hands", "")
+    assert output_shows(S(scene=False, through=True), True, True, 1.0) == (
+        "hands through the effects", "")
+    assert output_shows(S(hands=False, dim=0.8), True, True, 0.8) == ("scene · 64%", "")
+    assert output_shows(S(scene=False, hands=False), True, True, 1.0) == (
+        "black — nothing switched on", "nothing")
+    assert output_shows(S(scene=False), True, False, 1.0)[1] == "no hand"
+    assert output_shows(S(dim=0.0), True, True, 1.0) == ("black — dim 0", "dim")
+    assert output_shows(S(), True, True, 0.0) == ("black — master dim", "master")
+    # on the page
+    reg, slots = rig.reg, rig.slots
+    reg["output.2.hands"].set(False)
+    reg["output.2.dim"].set(0.6)
+    reg["output.3.scene"].set(False)
+    reg["output.3.hands"].set(False)
+    reg["output.4.through"].set(True)
+    slots[1].error = "present: RuntimeError: lost the context"
+    drawn, _ = _output_page(rig, monkeypatch)
+    assert "1  glass" in drawn and "2  projector" in drawn
+    shows = [s for s in drawn if s.startswith("shows: ")]
+    assert shows == ["shows: scene", "shows: scene · 60%", "shows: black — nothing switched on",
+                     "shows: scene"]          # no hand shows in this rig: the hands add nothing
+    assert "present: RuntimeError: lost the context" in drawn
+    # ghost hands off: said beside the outputs whose hands are on; no effect: said on 4
+    reg["ghost.on"].set(False)
+    drawn, _ = _output_page(rig, monkeypatch)
+    why = [s for s in drawn if s.startswith(("hands:", "through:"))]
+    assert why[0] == "hands: ghost hands are off (HANDS page)"
+    assert why[-1] == "hands: ghost hands are off (HANDS page) · through: no effect on"
+    assert "paced by output 1 · frame 1920×1080 · below: output 1's window" in drawn
+    # an output the config lists but that did not open: one line, why
+    slots[1].win, slots[1].missing = None, "screen 2 is not connected"
+    drawn, _ = _output_page(rig, monkeypatch)
+    assert "2  projector — screen 2 is not connected" in drawn
+    assert len([s for s in drawn if s.startswith("shows: ")]) == 3
+
+
+def test_the_output_page_with_one_output_has_no_dim_of_its_own(tmp_path, monkeypatch):
+    """No list in the config: one block, "1", scene and hands ticked,
+    through effects not, and no dim row of its own (hand check Q1)."""
+    from hyperspace.overlay import register_switches as reg_sw
+
+    with build_rig(tmp_path) as r:
+        for p in list(r.reg):
+            if p.id.startswith(("output.2.", "output.3.", "output.4.", "output.1.")):
+                r.reg.remove_prefix(p.id.rsplit(".", 1)[0] + ".")
+        one = [Slot(1, win="w1")]
+        reg_sw(r.reg, one)
+        r.panel.outputs = one
+        drawn, _ = _output_page(r, monkeypatch)
+        assert drawn[drawn.index("1"):drawn.index("1") + 4] == [
+            "1", "scene", "hands", "through effects"]
+        assert "output.1.dim" not in r.reg and not any(s.startswith("paced") for s in drawn)
+        assert [s for s in drawn if s.startswith("shows: ")] == ["shows: scene"]
+        assert r.reg["output.1.scene"].label == "Scene"
+
+
+def test_the_footer_names_a_black_output(rig, monkeypatch):
+    """On every page: "· output 2 black" while an output shows nothing for
+    a reason other than the master dim (which says "dim black" itself)."""
+    reg = rig.reg
+    drawn, _ = _output_page(rig, monkeypatch, "view")
+    assert not any("black" in s for s in drawn)
+    reg["output.2.scene"].set(False)
+    reg["output.2.hands"].set(False)
+    for page in ("view", "presets", "output"):
+        drawn, _ = _output_page(rig, monkeypatch, page)
+        assert "·  output 2 black" in drawn, page
+    reg["output.4.dim"].set(0.0)
+    drawn, _ = _output_page(rig, monkeypatch, "view")
+    assert "·  outputs 2, 4 black" in drawn
+    # the master at black: the footer's "dim black" says it; no output is named for it
+    reg["output.2.scene"].set(True)
+    reg["output.4.dim"].set(1.0)
+    reg["output.dim"].set(0.0)
+    drawn, _ = _output_page(rig, monkeypatch, "view")
+    assert "·  dim black" in drawn and not any(s.endswith(" black") and "output" in s
+                                                for s in drawn)

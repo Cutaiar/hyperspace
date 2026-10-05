@@ -1176,3 +1176,47 @@ def test_the_slew_can_never_outlast_the_settle_time(rig):
 
 
 test_slew_max_stays_under_the_undo_settle_time = test_the_slew_can_never_outlast_the_settle_time
+
+
+def test_the_output_switches_are_left_alone_by_undo_presets_and_shows(rig):
+    """Plan 21 WP4 / fork F4: output.N.* are rig settings. Flipping one
+    opens no undo step; an undo and a redo of a real step around it leave
+    it where it is; no preset save or show save writes it; a preset load
+    and a show load leave it alone."""
+    from hyperspace.outputs import Slot
+    from hyperspace.overlay import register_switches
+
+    r, reg = rig, rig.reg
+    slots = [Slot(1, name="glass", win="w1"), Slot(2, name="projector", win="w2")]
+    ids = register_switches(reg, slots)
+    settle(r)
+    depth = len(r.undo.stack)
+    reg["output.2.scene"].set(False)
+    reg["output.1.through"].set(True)
+    reg["output.2.dim"].set(0.3)
+    settle(r)
+    assert len(r.undo.stack) == depth                 # no step for a rig setting
+    speed = reg["view.speed"]
+    was = speed.base
+    speed.set(was + 0.5)
+    settle(r)
+    reg["output.2.hands"].set(False)                 # flipped between the step and its undo
+    settle(r)
+    assert r.undo.undo() and speed.base == pytest.approx(was)
+    assert r.undo.redo() and speed.base == pytest.approx(was + 0.5)
+    sw1, sw2 = slots[0].switches, slots[1].switches
+    assert (sw2.scene, sw2.hands, sw2.dim, sw1.through) == (False, False, 0.3, True)
+    # a preset save names none of them, and neither does a show save
+    path = r.presets.save_as("RIG")
+    text = path.read_text()
+    assert not any(pid in text for pid in ids)
+    r.lib.project.save("rigshow")
+    assert not any(pid in r.lib.project.path.read_text() for pid in ids)
+    # loads leave them where they are
+    for load in (lambda: r.presets.load("RIG"), lambda: r.presets.load("TRIP"),
+                 lambda: r.lib.project.load("party")):
+        load()
+        settle(r)
+        assert (sw2.scene, sw2.hands, sw2.dim, sw1.through) == (False, False, 0.3, True)
+    assert r.undo.undo()                             # undoing a load does not move them either
+    assert (sw2.scene, sw2.hands, sw2.dim, sw1.through) == (False, False, 0.3, True)

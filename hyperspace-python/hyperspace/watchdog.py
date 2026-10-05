@@ -26,7 +26,11 @@ main thread:
   was invisible, minimised, occluded or had no framebuffer (vsync on a
   second display, a fullscreen Space). The entry has the window's
   attributes (visible, iconified, focused, monitor, framebuffer size,
-  macOS occlusion) as `info()` reads them.
+  macOS occlusion) as `info()` reads them. With several render outputs
+  (plan 21 WP3, `outputs`) it is "no output presented"; one output dark
+  for 2 s while another presents, or whose present raised
+  (`output_failed`), is a ``warning`` naming it ("output 2 (projector):
+  …"), once per message, with its window state or traceback.
 - ``stranded target`` — a render frame started with an offscreen
   framebuffer still bound (`app.draw_render` checks before it binds the
   window). That was the freeze itself: `Renderer.draw` draws into
@@ -271,10 +275,18 @@ class RenderWatch:
 
     def __init__(self, log: Watchdog | None, *, limit: float = LIMIT, poll: float = POLL,
                  info: Callable[[], dict] | None = None,
-                 wall: Callable[[], float] = time.time):
+                 wall: Callable[[], float] = time.time,
+                 outputs: Callable[[], list[tuple[str, dict]]] | None = None):
         self.watchdog = log
         self.limit, self.poll = float(limit), float(poll)
         self.info, self.wall = info, wall
+        # plan 21 WP3: with two or more render outputs, (label, window state)
+        # for each opened one, the first included. The stall is then "no
+        # output presented"; one output dark for `limit` while another
+        # presents is a warning that names it. None, or one entry: today's
+        self.outputs = outputs
+        self._others: list[tuple[str, dict]] = []
+        self._dark: dict[str, float] = {}     # label → since when it is not presentable
         self.error = ""               # the live render error: the last draw raised
         self.stalled = ""             # the live render stall
         self.frames = 0               # render frames completed
@@ -345,15 +357,45 @@ class RenderWatch:
         except Exception:  # noqa: BLE001, S110
             pass
 
-    def warn(self, msg: str, *, kind: str = "warning", key: str | None = None) -> None:
+    def warn(self, msg: str, *, kind: str = "warning", key: str | None = None,
+             body: str = "") -> None:
         """A show problem: on the banner until dismissed, in the log once."""
         try:
             if msg not in self.warnings and msg not in self._waved:
                 self.warnings.append(msg)
                 self.dismissed = False
-            self._once(f"{kind}:{key or msg}", kind, msg[:300])
+            self._once(f"{kind}:{key or msg}", kind, msg[:300], body)
         except Exception:  # noqa: BLE001, S110
             pass
+
+    def output_failed(self, label: str, exc: BaseException) -> None:
+        """A render output after the first raised in its present (plan 21
+        WP3): the frame went on; a warning naming it, once per message,
+        with the traceback in the log."""
+        try:
+            msg = f"{label}: its picture failed — {type(exc).__name__}: {exc}"[:240]
+            tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+            self.warn(msg, body=tb)
+        except Exception:  # noqa: BLE001, S110
+            pass
+
+    def _outputs(self, now: float, first: bool) -> bool:
+        """Whether any render output can present (`first`: the first
+        output's own answer); each one dark for `limit` while another
+        presents is a warning naming it, with its window state."""
+        others = self._others
+        if len(others) < 2:
+            return first
+        live = [bool(st.get("presentable", True)) for _, st in others]
+        for (label, st), ok in zip(others, live, strict=True):
+            if ok:
+                self._dark.pop(label, None)
+                continue
+            since = self._dark.setdefault(label, now)
+            if now - since >= self.limit and any(live):
+                self.warn(f"{label}: no picture for {self.limit:.0f} s — {_why(st)}",
+                          body=f"{label}: " + ", ".join(f"{k}={v}" for k, v in st.items()))
+        return any(live)
 
     def dismiss(self) -> None:
         """The banner's button: forget the sticky error and the warnings
@@ -367,7 +409,9 @@ class RenderWatch:
             if self._polled is None or now - self._polled >= self.poll:
                 self._polled = now
                 self._state = _quiet_call(self.info, {}) or {}
-            presentable = bool(self._state.get("presentable", True))
+                self._others = _quiet_call(getattr(self, "outputs", None), []) or []
+            # with several outputs: "no output presented" is the stall
+            presentable = self._outputs(now, bool(self._state.get("presentable", True)))
             if self._last_ok is None:
                 self._last_ok = now
             if self._drew and presentable:
