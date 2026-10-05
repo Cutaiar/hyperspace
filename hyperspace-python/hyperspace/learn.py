@@ -113,10 +113,19 @@ class Learn:
         """Arm (or cancel with None). `want` is what may complete it — one
         of `WANTS`, or None for anything. A learn the prompt hasn't
         answered yet is forgotten: the new one is what the performer means
-        now."""
+        now. Arming starts clean: an earlier refusal is no longer this
+        learn's (`refused` while armed means *this* learn was refused and
+        still waits), and `armed_n` counts the arms, so an adapter that
+        keeps something per learn (the hands' baseline) can tell a re-arm
+        of the same param from the learn it already knew."""
+        if want is not None and want not in WANTS:
+            raise ValueError(f"no such want {want!r}; one of {', '.join(WANTS)}")
         self.learning = pid
         self.want = want if pid is not None else None
         self.pending = None
+        if pid is not None:
+            self.refused = False
+        self.armed_n = getattr(self, "armed_n", 0) + 1
 
     def take(self) -> str | None:
         """The armed id, cleared — an adapter about to complete the learn
@@ -163,6 +172,8 @@ class Learn:
         (`Bindings.bind`); no file is written. One undo step. The table's
         `redraw_serial` moves, so an adapter redraws the desk: the
         replaced rows' controls go dark and the new row's ring is sent."""
+        if not self.accepts(source):     # nothing armed, or armed for a hand: not the desk's
+            return False
         pid = self.learning
         p = self.reg.get(pid) if pid is not None else None
         if p is None:

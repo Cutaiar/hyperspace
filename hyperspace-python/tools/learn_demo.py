@@ -163,7 +163,7 @@ def footer(r, panel) -> str:
     the open page; the panel's clock is the demo's), with its colour."""
     from hyperspace import ui
 
-    ui.time = SimpleNamespace(monotonic=lambda: r.t)         # MESSAGE_S in the demo's time
+    clock, ui.time = ui.time, SimpleNamespace(monotonic=lambda: r.t)   # MESSAGE_S in demo time
     names = {(round(c.x, 3), round(c.y, 3)): n
              for n, c in (("red", ui.RED), ("warning", ui.WARN), ("faint", ui.FAINT))}
     seen: list[str] = []
@@ -179,7 +179,7 @@ def footer(r, panel) -> str:
         panel.draw(demo.DT, 60.0)
         imgui.end_frame()
     finally:
-        imgui.text_colored = real
+        imgui.text_colored, ui.time = real, clock
     return seen[0] if seen else "(empty)"
 
 
@@ -309,6 +309,7 @@ def learn_demo() -> None:
         "on-screen desk")
     say("   takes clicks (plan 17 WP4) nothing can complete it, and the line says so")
     panel.midi = None
+    footer(r, panel)
     r.t += 5.0
     lrn.arm(pid, "desk")
     step(r, panel, f"right-click {reg[pid].label} → Learn desk")

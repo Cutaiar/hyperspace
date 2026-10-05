@@ -322,7 +322,13 @@ def test_accepts_by_want():
     lrn.arm("view.bright", "hand:right")
     assert lrn.accepts("hand:right.y") and not lrn.accepts("hand:left.roll")
     lrn.learn_source("hand:left.roll")                       # the wrong hand: not taken
+    assert not lrn.learn_control("cc:0:48")                  # nor the desk (review of PR #96)
     assert lrn.learning == "view.bright" and lrn.want == "hand:right"
+    with pytest.raises(ValueError, match="no such want"):
+        lrn.arm("view.bright", "hand:both")
+    n = lrn.armed_n
+    lrn.arm("view.bright", "hand:right")                     # a re-arm is a new learn
+    assert lrn.armed_n == n + 1
     assert lrn.take() == "view.bright" and lrn.want is None
     lrn.arm("view.bright", "desk")
     lrn.arm(None)

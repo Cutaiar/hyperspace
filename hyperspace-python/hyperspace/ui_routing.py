@@ -712,12 +712,14 @@ def _learn_line(panel) -> None:
     lrn = panel.learn
     if lrn is None:
         return
-    if lrn.learning:
+    refused = getattr(lrn, "refused", False)
+    if lrn.learning and not (refused and lrn.last):
         imgui.text_colored(ui.RED, f"learning {lrn.learning} — {panel._learn_hint()}")
     elif lrn.last:
-        refused = getattr(lrn, "refused", False)
+        # a refusal leaves the learn armed (plan 17 fork 6): the reason, and that it still waits
+        still = f" — still learning {lrn.learning}" if lrn.learning and refused else ""
         imgui.push_style_color(imgui.Col_.text, ui.WARN if refused else ui.FAINT)
-        imgui.text_wrapped(f"learn: {lrn.last}")
+        imgui.text_wrapped(f"learn: {lrn.last}{still}")
         imgui.pop_style_color()
 
 

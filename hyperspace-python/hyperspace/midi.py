@@ -323,8 +323,9 @@ class MidiIO:
         """A desk message completes the armed learn: `Learn.learn_control`
         with this device's profile (plan 17 WP2, fork 7 — the row-making
         lives there, so a click on the on-screen desk makes the same row
-        with no adapter). Landed or refused (the global layer, D5), the
-        table's `redraw_serial` tells this adapter to redraw."""
+        with no adapter). When it lands, the table's `redraw_serial` tells
+        this adapter to redraw; a refusal (the global layer, D5) changes
+        nothing and leaves the learn armed."""
         self.learner.learn_control(Binding.midi_source(kind, channel, number), self.profile)
 
     # ---- per frame ----

@@ -1087,7 +1087,8 @@ class HandsIO:
                            and not any(ok(self.address(i)) for i in range(len(self.state)))):
             self._learn_base = None
             return
-        key = (pid, getattr(learn, "want", None))    # a re-arm starts a fresh baseline
+        # a re-arm starts a fresh baseline (`armed_n`: also of the same param and want)
+        key = (pid, getattr(learn, "want", None), getattr(learn, "armed_n", None))
         if key != getattr(self, "_learn_key", None):
             self._learn_base, self._learn_key = None, key
         # only a hand counts as movement: an axis whose hand is away reads

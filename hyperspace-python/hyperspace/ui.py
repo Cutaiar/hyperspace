@@ -1230,15 +1230,14 @@ class Panel:
         note, warn = self._message()
         color = WARN if warn else FAINT
         # an armed learn has the slot, on every page (plan 17 WP2): what it
-        # waits for, in red, and a click on it cancels. A refusal that left
-        # it armed (the global layer) shows first, for its MESSAGE_S
+        # waits for, in red, and a click on it cancels. Any line just said —
+        # a refusal that left it armed, a library warning, an undo — shows
+        # first, for its MESSAGE_S
         lrn = self.learn
         armed = lrn is not None and bool(getattr(lrn, "learning", None))
         tip = ""
-        if armed and not (note and warn and self._msg.get("key") == "learn"):
+        if armed and not note:      # a fresh line (a refusal, a warning, an undo) shows first
             note, color, tip = f"learning {lrn.learning} — {self._learn_hint()}", RED, CANCEL_TIP
-        elif armed:
-            tip = CANCEL_TIP
         if note:
             # the message slot: one faint line (a warning in its colour),
             # cut to the room left of the show's name; the whole on hover
@@ -1680,12 +1679,14 @@ class Panel:
         lrn = self.learn
         if lrn is None:
             return
-        if lrn.learning:
+        refused = getattr(lrn, "refused", False)
+        if lrn.learning and not (refused and lrn.last):
             imgui.text_colored(RED, f"learning {lrn.learning} — {self._learn_hint()}")
         elif lrn.last:
-            if getattr(lrn, "refused", False):
+            if refused:         # (a refusal leaves the learn armed, plan 17 fork 6: say both)
+                still = f" — still learning {lrn.learning}" if lrn.learning else ""
                 imgui.push_style_color(imgui.Col_.text, WARN)
-                imgui.text_wrapped(f"learn: {lrn.last}")
+                imgui.text_wrapped(f"learn: {lrn.last}{still}")
                 imgui.pop_style_color()
             else:
                 imgui.text_disabled(f"learn: {lrn.last}")

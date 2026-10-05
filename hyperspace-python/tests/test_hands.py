@@ -1305,6 +1305,11 @@ def test_a_rearm_starts_a_fresh_baseline(app):
     run(r, 1, hand(pos=y(0.6)), learn=app.learn, router=app.router)   # the new baseline
     run(r, 1, hand(pos=y(0.6)), learn=app.learn, router=app.router)   # 0.1 since B: no
     assert app.learn.learning == "view.speed" and not app.table.of("hand")
+    app.learn.arm(None)                                      # cancelled and armed again, the
+    app.learn.arm("view.speed", "hand:right")                # same, between two polls: fresh
+    run(r, 1, hand(pos=y(0.7)), learn=app.learn, router=app.router)   # its baseline
+    assert app.learn.learning == "view.speed" and not app.table.of("hand")
+    run(r, 1, hand(pos=y(0.6)), learn=app.learn, router=app.router)
     app.learn.arm("view.speed")                              # the same param, another want
     run(r, 1, hand(pos=y(0.8)), learn=app.learn, router=app.router)   # its baseline
     assert app.learn.learning == "view.speed" and not app.table.of("hand")
