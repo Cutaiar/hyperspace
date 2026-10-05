@@ -7,8 +7,7 @@ hand moves it, which is what paints the wake; your right hand is the wake.*
 
 ![the poses, echoes only](party-wake-sheet.png)
 
-The dream is on by default (torch comes with `uv sync`); the same poses
-with the worker running (`tools/dream_shots.py --preset party-wake`):
+The dream worker is on by default; the same poses with it running:
 
 ![the poses, dream on](party-wake-dream-sheet.png)
 
@@ -21,27 +20,28 @@ with the worker running (`tools/dream_shots.py --preset party-wake`):
 - Level, nothing; out of the box, it eases back.
 
 **Right hand — the wake.**
-- Raise the hand: more echoes (faint at the bottom, solid at the top).
+- Raise the hand: brighter echoes (0.6 at the bottom, full at the top).
 - Reach in: the trail lasts (each echo halving in 1.5 s). Pull back: it
   snaps off short (0.24 s).
 - Roll your palm: the dream's colours go round the whole wheel (level =
   as painted).
-- Tip your fingers up: more of the dream texture under the wake; down: less.
+- Tip your fingers up: more of the dream under the wake; down: less.
 
 Nothing to pinch. A hand out of the box changes nothing. The two dream
-controls (roll, tip) need the dream worker, which runs by default — the LOOKBACK page
-says whether it is.
+controls (roll, tip) need the dream worker — the LOOKBACK page says
+whether it is running.
 
 ## The desk
 
 - Track knob 1: base brightness. Knob 2: base speed.
-- Device knobs 1–8: echo mix · fade · darken · contrast · occlude ·
-  dream mix · dream sat · dream k — each ring shows its base. (With
-  SHIFT latched they are the band strip; press SHIFT again to get
-  them back. F4 puts every one back where it was.)
+- Device knobs 1–8: Echo brightness · Echo fade time · Darken · Contrast ·
+  Shape hides wake · Dream brightness · Dream saturation · Dream speed —
+  each ring shows its base. (With SHIFT latched they are the band strip;
+  press SHIFT again to get them back. F4 puts every one back where it was.)
+- Cue knob: the shape.
 
 ## To load
 
-1. PRESETS page → the **party** show (once per night).
-2. Press **F4** — WAKE: the look, the hands and the desk
-   in one step.
+1. PRESETS page → show ▾ → **party**, if it is not the open show.
+2. Press **F4**, or clip row 1's fourth pad — WAKE: the look, the hands
+   and the desk in one step.
