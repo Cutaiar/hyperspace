@@ -41,6 +41,14 @@ own pass and camera; off, the frame is untouched. Last of all the master
 dim (`Renderer.dim`, the crossfader's `output.dim`; plan 15 WP3)
 multiplies what is there — it draws nothing of its own, and at 1 it does
 not run.
+
+Plan 21: `Renderer.draw_outputs` shows that one frame on several outputs
+(`outputs.View`), each through its own switches — the scene, the hands,
+its own dim. The scene, the capture and the hands' layer run once a
+frame; the look-back composite and the effect chain once per distinct
+pipeline (`outputs.route`); the picture, the hands over it and the dim
+once per output. `draw` is `draw_outputs` with one default view on the
+bound framebuffer, and is the frame it always was, byte for byte.
 """
 
 from __future__ import annotations
