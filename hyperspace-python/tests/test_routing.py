@@ -1531,6 +1531,13 @@ def test_an_older_file_gets_the_undo_keys_where_they_are_free(tmp_path):
     assert "key:SUPER+Z" in after
     Bindings.load(path, legacy_midi=None)
     assert path.read_text() == after and len(list(tmp_path.glob("bindings.json.bak-*"))) == 1
+    # a chord the user spelled in another order holds it too (review of PR #82)
+    mine = [b for b in Bindings.factory().bindings if b.source not in undo_rows]
+    mine.append(Binding("key:SUPER+SHIFT+Z", "view.lines", "toggle"))
+    out, _ = routing.remap_factory(mine)
+    held = [b.target for b in out if b.scheme == "key" and b.key_name == "Z"
+            and b.modifiers == {"SHIFT", "SUPER"}]
+    assert held == ["view.lines"]
 
 
 def test_an_old_crossfader_row_moves_to_the_dim_with_a_backup(tmp_path, capsys):

@@ -50,12 +50,12 @@ show: party   preset: TUMBLE   registry: 532 params, 455 watched   table: 20 rou
     saved again, nothing changed (trashes nothing)
     deleted DEMO; demo.json exists: False
     <home>/trash:
-      presets/demo.20261004-175525-2.json   10823 bytes
-      presets/demo.20261004-175525.json   10823 bytes
+      presets/demo.20261004-180830-2.json   10823 bytes
+      presets/demo.20261004-180830.json   10823 bytes
     (a save and a delete are not undo steps: their net is the trash)
     undo stack (4): Brightness 2.00× → 2.96× | Speed 0.300 → 1.07 | load FACES | Brightness 2.50× → 1.25×
 
 8. What Undo.tick costs a frame
-    idle, 1200 frames: median 82 µs, 99th percentile 117 µs, max 294 µs
-    during a drag, 600 frames: median 85 µs, 99th percentile 102 µs, max 109 µs
+    idle, 1200 frames: median 81 µs, 99th percentile 136 µs, max 305 µs
+    during a drag, 600 frames: median 79 µs, 99th percentile 96 µs, max 107 µs
     (the budget is 0.5 ms; a frame at 60 Hz is 16 667 µs)

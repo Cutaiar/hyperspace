@@ -751,10 +751,14 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
             continue
         out.append(Binding(source, target, op, value, feedback="led"))
         notes.append(f"added {source} → {target} (the APC40 map of plan 09)")
+    # a key row is taken by its chord, however its modifiers are ordered:
+    # "key:SUPER+SHIFT+Z" holds ⌘⇧Z as "key:SHIFT+SUPER+Z" does
+    chords = {(b.key_name, b.modifiers) for b in out if b.scheme == "key"}
     for source, target, op, value in KEY_NEW_ROWS:
-        if source in used:
+        new = Binding(source, target, op, value)
+        if source in used or (new.key_name, new.modifiers) in chords:
             continue
-        out.append(Binding(source, target, op, value))
+        out.append(new)
         notes.append(f"added {source} → {target} (the keys of plans 09, 11 and 15)")
     return out, notes
 

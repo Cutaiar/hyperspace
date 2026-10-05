@@ -57,7 +57,7 @@ from __future__ import annotations
 
 import math
 import sys
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields, replace
 from operator import attrgetter
 from typing import Any
 
@@ -136,6 +136,9 @@ class Step:
     before: State
     load: bool = False
     action: bool = False
+    # a step that is not a load: every group's landed name and reference
+    # as of the last quiet frame before it (`marks.lands()`), for `mend`
+    lands: Any = None
 
 
 class Undo:
@@ -147,7 +150,11 @@ class Undo:
     `routes()`, `desk()`, `macros`, `macros_doc()`, `set_routes(rows)`,
     `set_desk(rows, load=False)` and `set_macros(doc, reg)`. `marks` (optional) is "what is loaded", opaque here: `take()`,
     `before(mark)` (called first in a load step's restore: the layout) and
-    `put(mark)` (called last: the names and references). `tag` (optional)
+    `put(mark)` (called last: the names and references). Two more are
+    optional: `lands()`, a cheap read of every group's landed name, taken
+    each quiet frame, and `mend(pre, lands)`, called after the restore of
+    a step that is not a load — a setter's side effect may have moved a
+    name (`scene.select` adopts its scene), and `mend` puts those back. `tag` (optional)
     is a callable naming the shape the `tagged` id prefixes live on.
     `on_restore` is called after every restore's writes.
     """
@@ -171,6 +178,7 @@ class Undo:
         self._every: list = []            # the registry's params as last read (`_params`)
         self._watched: list = []          # …the watched ones among them
         self._ids: tuple = ()             # …and their ids
+        self._lands = self._read_lands()  # what is landed, as of the last quiet frame
         self._fp = self._fingerprint()
         self._settled = self._take()
 
@@ -224,6 +232,10 @@ class Undo:
                      self._tag(),
                      self.marks.take() if marks and self.marks is not None else None)
 
+    def _read_lands(self):
+        lands = getattr(self.marks, "lands", None)
+        return lands() if lands is not None else None
+
     # ---- the frame ----
 
     def tick(self, now: float) -> None:
@@ -233,6 +245,8 @@ class Undo:
         fp = self._fingerprint()
         if self._observe(fp):
             return
+        if self._open is None:
+            self._lands = self._read_lands()
         # quiet this frame: an open step closes once the settle time has passed
         if self._open is not None and now - self._changed_at >= SETTLE_S:
             self._close()
@@ -259,15 +273,19 @@ class Undo:
             if not self._same_fp(fp, last):
                 self._changed_at = self._now
                 if self._open is None:
-                    self._begin(Step("", self._settled))
+                    self._begin(Step("", self._settled, lands=self._lands))
+                    self.redos.clear()
                 return True
         return False
 
     def _begin(self, step: Step) -> None:
+        """Open `step` on the undo stack. A gesture clears the redo stack
+        at once (its caller); an action only when it closes with something
+        to put back — a refused unbind or a load that fails changes
+        nothing and must not cost the redo."""
         self._open = step
         self.stack.append(step)
         del self.stack[:-LIMIT]
-        self.redos.clear()
 
     def _close(self) -> None:
         """End the open step, if any: `settled` becomes the state now, a
@@ -283,7 +301,10 @@ class Undo:
             empty = self._marks_equal(step.before.marks)
         if empty:
             self.stack[:] = [s for s in self.stack if s is not step]
-        elif not step.label:
+            return
+        if step.action:
+            self.redos.clear()
+        if not step.label:
             step.label = self._label(step.before, now, ids, parts)
 
     def _marks_equal(self, mark) -> bool:
@@ -307,15 +328,22 @@ class Undo:
         """A replacing action is about to change something: open its step.
         Called **before** the change. `load`: the step also carries what
         is loaded (the library's names and references; a band layout).
-        A second push in the same frame is the same action from the inside
-        (a show load that loads its startup preset): the outer label stands."""
-        if self._restoring or self._action_frame == self._frame:
+        A second push with no tick since is the same action from the inside
+        (a show load that loads its startup preset; Replace landing a held
+        learn): the outer label stands. Not so a load pushed under an open
+        action that is no load — nothing nests that way, so it is another
+        action (a delete at the end of one frame, an F-key at the start of
+        the next) and gets its own step."""
+        if self._restoring:
+            return
+        inner = self._action_frame == self._frame and self._open is not None
+        if inner and not (load and not self._open.load):
             return
         self._flush()
         before = self._settled
         if load and self.marks is not None:
             before = replace(before, marks=self.marks.take())
-        self._begin(Step(label, before, load=load, action=True))
+        self._begin(Step(label, before, load=load, action=True, lands=self._read_lands()))
         self._changed_at = self._now
         self._action_frame = self._frame
 
@@ -339,12 +367,14 @@ class Undo:
                        and not self._marks_equal(step.before.marks))
             if not (ids or parts or left or relabel):
                 continue                      # nothing to put back: dropped
-            dst.append(Step(step.label, now, load=step.load, action=step.action))
+            dst.append(Step(step.label, now, load=step.load, action=step.action,
+                            lands=self._read_lands()))
             del dst[:-LIMIT]
-            left = self._restore(step.before, load=step.load)
+            left = self._restore(step.before, load=step.load, lands=step.lands)
             self._say(f"{verb} {step.label}" + (f" ({LEFT})" if left else ""))
             self._fp = self._fingerprint()
             self._settled = self._take()
+            self._lands = self._read_lands()
             self._absorb = ABSORB_FRAMES
             return True
         self._say(none)
@@ -390,20 +420,29 @@ class Undo:
     def _rows_for(want: tuple, have: list) -> list:
         """The rows to hand a table call: the live row where one with the
         same fields is still in the table (its runtime state — a fader's
-        catch — stays), else a copy of the state's."""
+        catch — stays), else a copy of the state's with its runtime fields
+        (the row type's `_RUNTIME`: catch, last reading, last feedback) back
+        at their defaults — a row that was gone must pick up afresh."""
         pool: dict[tuple, list] = {}
         for b in have:
             pool.setdefault(_row(b), []).append(b)
         out = []
         for b in want:
             live = pool.get(_row(b))
-            out.append(live.pop(0) if live else replace(b))
+            if live:
+                out.append(live.pop(0))
+                continue
+            runtime = getattr(type(b), "_RUNTIME", ())
+            out.append(replace(b, **{f.name: f.default for f in fields(b)
+                                     if f.name in runtime}))
         return out
 
-    def _restore(self, state: State, *, load: bool) -> bool:
+    def _restore(self, state: State, *, load: bool, lands=None) -> bool:
         """Put `state` back, touching only what differs. Returns whether
         tagged ids were left because the bands have changed."""
         reg, table, marks = self.reg, self.table, self.marks
+        mend = getattr(marks, "mend", None) if not load and lands is not None else None
+        pre = self._read_lands() if mend is not None else None
         self._restoring = True
         try:
             # 1. a load: the layout first, so the params exist before their values
@@ -443,6 +482,10 @@ class Undo:
             # 7. a load: what is loaded, last (a scene landing in 5 moves a mark)
             if load and marks is not None and state.marks is not None:
                 marks.put(state.marks)
+            elif mend is not None:
+                # not a load, but a setter's side effect may have moved a
+                # landed name (a scene adopted): those go back to the step's
+                mend(pre, lands)
         finally:
             self._restoring = False
         return left

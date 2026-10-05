@@ -760,6 +760,95 @@ def test_the_stack_is_bounded(rig):
     assert p.base == pytest.approx(1.0 + 0.001 * 6)    # the seven oldest are gone
 
 
+# ---------------------------------------------------------------- review of PR #82
+
+def test_undoing_a_scene_pick_names_the_band_preset_it_was_on(rig):
+    """A scene pick is a watcher step (control.py pushes nothing), and
+    putting `scene.select` back adopts that scene: `Marks.mend` then puts
+    the strip's own name back, so Save cannot write a user preset's look
+    under a factory scene's name. A slider undone after a save-as stays
+    on the new name (fork 2)."""
+    reg, lib = rig.reg, rig.lib
+    reg["band.1.thr"].step(4)
+    lib.save_as("band", "Mine")                        # scene 0's strips, edited, as Mine
+    settle(rig)
+    rig.undo.clear()
+    band = reg.snapshot("band")
+    reg["scene.select"].set(3)
+    settle(rig)
+    assert lib.current("band") != "Mine" and len(rig.undo.stack) == 1
+    assert rig.undo.undo()
+    assert lib.current("band") == "Mine" and not lib.is_dirty("band")
+    assert reg.snapshot("band") == band and reg["scene.select"].base == 0
+    assert rig.undo.redo() and lib.current("band") != "Mine"
+    assert rig.undo.undo() and lib.current("band") == "Mine"
+    # a slider, then a save-as, then undo: the value goes back, the name stays
+    frames(rig, 3)
+    reg["view.bright"].step(3)
+    settle(rig)
+    rig.presets.save_as("LATER")
+    settle(rig)
+    assert rig.undo.undo() and lib.current(PRESETS) == "LATER"
+
+
+def test_an_action_that_changes_nothing_keeps_the_redo(rig):
+    """A refused unbind, or a load that fails, leaves no step — and must
+    not cost the redo stack either; an action that does change something
+    clears it, as a gesture does."""
+    reg = rig.reg
+    reg["view.bright"].step(3)
+    settle(rig)
+    assert rig.undo.undo() and len(rig.undo.redos) == 1
+    frames(rig, 3)
+    rig.midi.unbind("band.0.post")                     # the session's row: refused
+    assert rig.learn.refused
+    settle(rig)
+    assert rig.undo.stack == [] and len(rig.undo.redos) == 1
+    assert rig.undo.redo()
+    assert rig.undo.undo()
+    frames(rig, 3)
+    reg["preset.load.2"].fire()                        # a real action: the redo goes
+    settle(rig)
+    assert rig.undo.redos == [] and labels(rig) == ["load FIELD"]
+
+
+def test_a_row_that_undo_brings_back_picks_up_afresh(rig):
+    """A desk row removed and restored is a new row: its runtime state (a
+    fader's catch, its last reading) starts over, while the rows that
+    never left keep theirs."""
+    table = rig.table
+    table.set_desk([*table.desk(), Binding("cc:5:99", "view.bright", "abs", pickup=True)],
+                   load=False)
+    settle(rig)
+    rig.undo.clear()
+    row = next(b for b in table.desk() if b.source == "cc:5:99")
+    other = table.desk()[0]
+    row.caught, row.last_hw, other.caught = True, 0.9, True
+    undo.push("unmap")
+    table.remove(row)
+    settle(rig)
+    assert rig.undo.undo()
+    back = next(b for b in table.desk() if b.source == "cc:5:99")
+    assert back is not row and (back.caught, back.last_hw, back.last_out) == (False, None, None)
+    assert next(b for b in table.desk() if b.source == other.source).caught
+
+
+def test_a_load_right_after_another_action_is_its_own_step(rig):
+    """An action at the end of one frame (the panel's ×) and a preset load
+    at the start of the next (a key, before the tick) are two steps: a
+    load never nests inside an action that is no load."""
+    table, lib = rig.table, rig.lib
+    routes = [b.to_json() for b in table.routes()]
+    undo.push("delete route")
+    table.remove(table.routes()[0])
+    rig.reg["preset.load.1"].fire()                    # no tick in between
+    settle(rig)
+    assert labels(rig) == ["delete route", "load FACES"]
+    assert rig.undo.undo() and lib.current(PRESETS) == "TUMBLE"
+    assert len(table.routes()) == len(routes) - 1
+    assert rig.undo.undo() and [b.to_json() for b in table.routes()] == routes
+
+
 # ---------------------------------------------------------------- an idle app
 
 class _Keys:

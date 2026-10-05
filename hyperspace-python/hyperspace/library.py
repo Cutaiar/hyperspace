@@ -294,8 +294,14 @@ def _read_json(path: Path) -> dict:
     return doc
 
 
+def _json_text(doc: dict) -> str:
+    """A document as the library writes it — the one spelling, so a save
+    can tell whether the file on disk already says the same."""
+    return json.dumps(doc, indent=1) + "\n"
+
+
 def _write_json(path: Path, doc: dict) -> None:
-    _write_text(path, json.dumps(doc, indent=1) + "\n")
+    _write_text(path, _json_text(doc))
 
 
 def _write_text(path: Path, text: str) -> None:
@@ -843,12 +849,32 @@ class Marks:
 
     def take(self) -> tuple:
         """(the show's mark, {group: landed}, {group: its `extra` hook's
-        dict — the band layout}, the loaded preset's note)."""
-        lib = self.lib
-        groups = {*lib._current, *lib._loaded, *lib._adopted}
-        return (lib.project.mark(), {g: lib.landed(g) for g in groups},
+        dict — the band layout}, the loaded preset's note and the notes
+        its load left for the panel)."""
+        lib, pre = self.lib, self.lib.presets
+        return (lib.project.mark(), self.lands(),
                 {g: copy.deepcopy(hook()) for g, hook in lib._extra_hooks.items()},
-                getattr(lib.presets, "note", ""))
+                (getattr(pre, "note", ""), list(getattr(pre, "notes", ())),
+                 list(getattr(pre, "desk_notes", ()))))
+
+    def lands(self) -> dict:
+        """{group: landed} — every group's name, reference and re-apply
+        road, by reference: cheap enough to read every frame."""
+        lib = self.lib
+        return {g: lib.landed(g) for g in {*lib._current, *lib._loaded, *lib._adopted}}
+
+    def mend(self, pre: dict, lands: dict) -> None:
+        """After the restore of a step that is not a load: a group whose
+        landed state the restore itself moved (`pre` is `lands()` from
+        just before it) — a `scene.select` put back adopts its scene —
+        gets the step's own back, so the strip names what it named before
+        the step. A group the restore left alone is left alone: a slider
+        undone after a save-as stays on the new name (plan 15 fork 2)."""
+        lib = self.lib
+        now = self.lands()
+        for group in {*pre, *now}:
+            if now.get(group) != pre.get(group):
+                lib.reland(group, lands.get(group, (None, None, None)))
 
     def before(self, mark: tuple) -> None:
         """First in a restore: a group whose layout differs from the
@@ -867,7 +893,8 @@ class Marks:
     def put(self, mark: tuple) -> None:
         """Last in a restore: every group's name, reference and re-apply
         road as they were (`Library.reland`; a group that had none then
-        has none now), the loaded preset's note, and the bank's lit slot.
+        has none now), the loaded preset's note and its load's notes for the
+        panel, and the bank's lit slot.
         The show's own fields go back (`Project.remark`) only when the
         show itself differs — the undo of a show load. Otherwise the bank
         and "starts on" are left as they are: they are in the show's file
@@ -882,7 +909,8 @@ class Marks:
         for group, was in landed.items():
             lib.reland(group, was)
         if lib.presets is not None:
-            lib.presets.note = note
+            lib.presets.note, lib.presets.notes, lib.presets.desk_notes = (
+                note[0], list(note[1]), list(note[2]))
         cur = lib._current.get(PRESETS)
         pr.active = pr.bank.index(cur) if cur in pr.bank else -1
 
@@ -1314,7 +1342,7 @@ class Library:
         path = self.home / group / f"{slug(name)}.json"
         kind = self._kinds.get(group)
         text = (kind.text(doc) if kind is not None and kind.text is not None
-                else json.dumps(doc, indent=1) + "\n")
+                else _json_text(doc))
         if path.is_file():
             try:
                 old = path.read_text()
