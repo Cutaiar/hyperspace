@@ -16,8 +16,9 @@ gone; `hyperspace-web/hyperspace.html` is frozen and matters here only as
 the oracle the golden traces were recorded from. Revised for plan 13
 (presets, the session, the two-layer desk) on `plan-13-integration`.
 
-**Run it:** `uv sync`, `uv run pytest` (1178 tests with plan 16, about a
-minute), `uv run hyperspace`. `?` in the app shows the controls cheat
+**Run it:** `uv sync`, `uv run pytest` (1178 tests with plan 16; 1259
+on `plan-18-integration`, which holds plan 18 and plan 17's merged
+packages; about a minute and a half), `uv run hyperspace`. `?` in the app shows the controls cheat
 sheet, which is off at launch since plan 16.
 
 ---
@@ -499,7 +500,13 @@ display for the performer and for newcomers, not a control source.
   32° above them, at the distance where every corner of the palm box —
   the union of both hands' x / y / z ranges from `hands.json` (the
   defaults for an axis the setup lacks) — padded by 60 mm for the
-  fingers fills the frame. Desktop is the table in `hands/core.py`;
+  fingers fills the frame. Since plan 18 WP1, where `hands.json` holds
+  an interaction box (§5) the palm box is that box, coordinate by
+  coordinate (`ghost.box_of`; a coordinate the box leaves open uses the
+  ranges as before): the frame is then exactly where a hand counts, and
+  a hand leaving the box fades out at the frame's edge, because a hand
+  outside the box has no skeleton kept. During a calibration sweep the
+  frame still shows the old box. Desktop is the table in `hands/core.py`;
   screentop and HMD are not measured (see `MODES`).
 - **The geometry.** `CapsuleHands`: a sphere per joint, a capsule per
   bone, a palm (the four finger metacarpals' bases and knuckles, and the
@@ -977,6 +984,44 @@ unreadable at a party.
   message the same way, so that jump is one message's worth). A macro is a knob with subscribers: each sets a param's
   base or scales a route's depth over its own `from → to`; a hand on a
   macro moves only the depths.
+- **Knob smoothing** (plan 18 WP2; `desk.slew`, "Knob smoothing", first
+  under "midi" on the SYSTEM page; off, or up to 250 ms). A knob or
+  fader that sets a value directly (`abs`) used to land it at once on
+  one of the param's detents — 100 across an untapered range — so a slow
+  turn moved the picture a detent at a time: 80 px of pan, 1.33× of a
+  rotation rate, 6.9 % of zoom. With smoothing on, each value arrives
+  over that long in a straight line, written between the detents, and
+  comes to rest on the very detent it rested on before; the line always
+  ends `desk.slew` after the last message. **The running app starts at 80 ms**
+  (`routing.SLEW_DEFAULT_S`, set by `app._desk_table` before the show
+  lands): a show that saved the number keeps it, "off" included; one
+  that did not opens at 80 ms and is clean; changing it marks the show
+  unsaved. A bare table (every test rig) is at 0, and at 0 nothing new
+  runs: every base and every MIDI message is the one from before.
+  What is smoothed: `cc` and `pitch` rows with op `abs` on a continuous,
+  non-integer param — the track and device knobs, S1–S8, SM and the
+  crossfader, wherever the row's target is such a param. What is not: the cue knob and every other `rel` row (one
+  detent a click, on purpose), buttons, and an `abs` row on an enum, a
+  toggle, a trigger or a whole-number param (`view.instances`). A param
+  that moves by itself (`rot.phase.*` while its plane turns) is written
+  at once after its first message. While a value arrives, **the ring
+  shows where the knob is sending it**, the message the desk sent before
+  there was smoothing, so the encoder is re-based at the fingers and
+  never behind them. A value someone else sets meanwhile (the panel, a
+  key, an undo) stands and the glide stops; a preset load ends every
+  glide but a session param's (the crossfader's dim arrives through a
+  load); a layer switch ends none; setting it to off, unplugging the
+  desk or quitting lands every value at once. A fader's soft pickup is
+  tested as before, and a fader that is caught stays caught through its
+  own glide. A knob on a hand-owned param glides the return value under
+  the hand. One knob turn is still one undo step: the longest setting,
+  250 ms, is held under undo's 0.4 s settle time by a test, and two
+  turns merge when closer than the settle time plus the smoothing
+  (0.48 s at 80 ms). A preset never moves the setting (D9), and it is on
+  no desk knob (decision register rows 54, 55). Never tried on an
+  APC40: shown against fake ports and an injected clock
+  (`tools/slew_demo.py`), and it leans on hand check 31; hand checks 78
+  and 79.
 - **The desk's glyphs and diagram** (plan 14 WP7, decision 25). Every
   control has a short glyph (`apc40.LAYOUT`): K1–K8 the track knobs,
   D1–D8 the device knobs, S1–S8 the faders, SM the master, X the
@@ -996,7 +1041,32 @@ unreadable at a party.
   hand: a route naming the axis that moved, `hand:right.pitch` (decision
   register row 20: hand routes are addressed by name, so a rig that
   reorders `[hands] dofs` keeps every preset on its axes; a name the rig
-  lacks is dormant; the Replace / Keep prompt as ever). With SHIFT latched,
+  lacks is dormant; the Replace / Keep prompt as ever). **What that
+  route is** (plan 18 WP3; decision register rows 52, 53): until plan 18
+  it was always "positions" — the hand was the param's fader end to end,
+  and the param's own setting was ignored while the hand was in. Now a
+  tilt, or a hand moving sideways or in (an axis whose "Centred" is on),
+  lands "pushes +0.25": it adds to the setting, a quarter of the throw
+  over the hand's whole travel, and nothing while level. Height (rests
+  at the bottom) pushes the same way onto a range centred on zero (a
+  rotation rate, a camera angle, a pan, the hue) and is still the fader
+  on anything else (brightness, a mix, speed). A toggle, a list, a
+  trigger or a whole-number param keeps the fader from any axis. The
+  0.25 is **Learn depth** (`hands.learn_depth`, 0.05–1, on the HANDS
+  page under "feel & calibration" after Catch; a session setting, saved
+  with the show and with a hands setup); changing it changes only the
+  next learn. Measured on a synthetic palm: a learned roll on
+  `rot.rate.XY` set at 1× read 0× when level and ±66.56× at the ends
+  before, and reads 1× when level and −15.64× … +17.64× now
+  (`docs/plans/assets/18-hand-and-knob-feel/learn-default.txt`). A
+  learn takes the axis's other routes with it, pushes and positions
+  alike, switched on or off — on a factory preset that is the preset's
+  own row on that axis — and the learn line says "moved from …"; one ⌘Z
+  puts them back. Learning the same axis onto the same param again only
+  refreshes the pinch: it never changes a row's op or depth. Rows that
+  exist and every preset file are untouched; nothing is refused or
+  flagged, a rate under a hand included. No real hand has felt it (hand
+  checks 75–77). With SHIFT latched,
   or on an invariant control, a knob learn is refused and the reason shows
   on the SYSTEM page's learn line and the ROUTING head. The ROUTING page is
   one page over the loaded preset — head (the preset, its dot, save /
@@ -1008,6 +1078,71 @@ unreadable at a party.
   the way Learn does. A route's `scale` is a session param only (the
   drive fader; decision register row 18 (a)); a route may perform a
   session param, marked "session" on its row (row 19 (a)).
+- **The hands' interaction box** (plan 18 WP1; decision register rows
+  50, 51). A hand counts only while its palm is inside a box: three
+  ranges in the Leap's millimetres (x across, y up, z toward the
+  performer; the origin is the camera), one box for both hands, x the
+  same distance either side of the camera. A hand the tracker sees
+  outside it is **absent to everything**: its axes read nothing, so
+  every route on them lets go and the settings return that frame, its
+  pinch switches drop, its presence lane and note go off, its ghost
+  fades. Before plan 18 "in the box" was only the tracker's confidence,
+  so a hand reaching for the APC40, or a passer-by's, performed.
+  - *Setting it.* The HANDS page's **calibrate 20 s** sweep sets it,
+    with each axis's range: the box is where the palms went (2nd–98th
+    percentile, both hands together) plus 40 mm, the margin that lets a
+    hand hold an axis at its end stop. A direction is bounded only if
+    one hand travelled more than 12 cm along it; otherwise it is left
+    open and the note says so ("box: x open (not swept)"). **The box is
+    off for the whole sweep** (or it could never be swept wider), so
+    any hand in view then performs and is counted: calibrate with
+    nobody else in view. **reset ranges** opens the box and puts every
+    range back to its default. There is no other control: no switch, no
+    sliders, no dragging; the file can be edited by hand.
+  - *The edge.* A hand that is in stays in until its palm is 15 mm past
+    a face; one that is out comes in only inside the face. The state is
+    the palm's own, kept through a frame the confidence floor drops. A
+    hand coming back in is caught and glided onto over Catch, like one
+    the tracker lost.
+  - *The file.* `hands.json`, schema `hyperspace.hands/2`: `"axes"` as
+    before and `"box": {"x": [lo, hi], "y": [lo, hi], "z": null}` — a
+    `null` coordinate is open, a `null` or missing `box` is no box. A
+    schema-1 file (no box) is read as it is and **never rewritten at
+    launch**; the first time a sweep or "reset ranges" rewrites it, it
+    is first copied beside itself as `hands.json.bak-v1` (a dated name
+    if that is taken; nothing there is overwritten; a copy that cannot
+    be made is said in the note and the save goes on). A pair that is
+    not two finite numbers with lo < hi opens that coordinate and says
+    so once on stderr: a bad box opens, it never hides the hands.
+  - *The page.* Inside the same 190 × 92 frame as before:
+
+    ```
+       the box from above (x across, z down)            height
+     ┌──────────────────────────────────────────────┐   ┌──┐
+     │                                              │   │  │
+     │      ┌──────────────────────────────┐        │   │┬ │  y hi
+     │      │                              │        │   ││ │
+     │      │     ●            ●           │    ○   │   │● │  right hand
+     │      │   left    ·    right         │        │   │● │  left hand
+     │      │        (camera)              │        │   ││ │
+     │      └──────────────────────────────┘        │   │┴ │  y lo
+     │                  performer                   │   │  │
+     └──────────────────────────────────────────────┘   └──┘
+            inner rectangle: the box's x and z            bracket: the box's y
+            ● in the box      ○ tracked, outside it (hollow, dim)
+    ```
+
+    The view from above is 174 px wide at a fixed scale (x over
+    ±260 mm, z over ±160 mm) and the gauge maps 80–400 mm; a box wider
+    than the scale has its faces drawn clamped just inside the frame,
+    with an outside hand's ring kept clear of them. With no box there
+    is no rectangle and no bracket. The status line shows each hand as
+    `●` in the box, `◌` tracked but outside it, `○` not seen; under the
+    selected axis's range a line gives the box's three ranges, or "box
+    open"; the box view's tooltip says the same.
+  - Never seen by a camera: synthetic hands, a hidden-window picture
+    (`docs/plans/assets/18-hand-and-knob-feel/box-hands-page.png`) and a
+    headless transcript (`box-demo.txt`). Hand checks 72–74.
 - **The home folder** (`~/Hyperspace`). `bindings.json` holds only the
   session's controls — keys, pad, the invariant and global-layer MIDI
   rows; the routes, the preset layer and the macros are the presets'
@@ -1029,6 +1164,12 @@ unreadable at a party.
   switch one off, keep it with `"enabled": false`. Since plan 16 the
   home also holds `windows.json`, where the two windows were at the last
   quit (§2.5): machine-specific, like `last_show`, and safe to delete.
+  Since plan 18, `hands.json` (the hands' calibrated ranges) also holds
+  the interaction box and is schema 2; launching does not rewrite an
+  older one, and the first sweep or "reset ranges" that does keeps it
+  beside itself as `hands.json.bak-v1`. A show now also saves
+  `desk.slew` (knob smoothing) and `hands.learn_depth` with its session
+  values.
 - **The trash** (plan 15 WP1; `library.to_trash`). The home's layout
   gains `trash/<group>/<slug>.<YYYYMMDD-HHMMSS>.json`: a **user** preset
   file as it was, copied there before a save overwrites it or a delete
@@ -1200,7 +1341,9 @@ the keys: hand checks 48–52.
 ## 6. Testing
 
 `uv run pytest` — 1121 tests and 1 skipped (the hands tape, until one is
-recorded) on `plan-15-integration` with plan 15 whole, about 70 s. `ruff`
+recorded) on `plan-15-integration` with plan 15 whole, about 70 s; 1259
+and the same 1 skipped on `plan-18-integration` (plans 16 and 18, and
+plan 17's merged packages), about 85 s. `ruff`
 is the linter. Every test runs with `HYPERSPACE_HOME` pointed at its own
 `tmp_path` (`tests/conftest.py`), so no test can touch `~/Hyperspace`.
 What holds what:

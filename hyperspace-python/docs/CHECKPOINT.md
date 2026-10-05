@@ -3,7 +3,12 @@
 Where the Python re-platform stands and what to pick up next. This
 revision describes the **`finish-line`** branch with plans 15 and 16 on
 it (`plan-15-integration`, then `plan-16-integration`, each merged into
-it when its last PR is in); `main` is at plan 14 (fa9b3a1) and nothing from
+it when its last PR is in), and **`plan-18-integration`** on top of it:
+plan 18 whole (the interaction box, knob smoothing, what a hand Learn
+lands with, `hands-orbit`) together with plan 17's three merged code
+packages (One Unbind, Learn desk / hand, the ROUTING filter), whose own
+documents are still to be written by plan 17's docs package. It merges
+into `finish-line` when both are documented; `main` is at plan 14 (fa9b3a1) and nothing from
 plans 15–21 touches it until the owner merges `finish-line` (decision
 30). What the
 system *is* — the parts, the frame, who may write a parameter — is
@@ -19,7 +24,8 @@ is [`AUDIT-2026-09.md`](AUDIT-2026-09.md); the stages it was built in are
 git clone github.com/Cutaiar/hyperspace && cd hyperspace/hyperspace-python
 uv sync                 # whole environment, from the committed lockfile
 git checkout finish-line      # plans 15–21 land here, never on main
-uv run pytest           # 1178 pass, 1 skipped (the hands tape) with plans 15 and 16
+uv run pytest           # 1178 pass, 1 skipped (the hands tape) with plans 15 and 16;
+                        # 1259 pass, 1 skipped on plan-18-integration (plan 18, and plan 17's code)
 uv run hyperspace       # the app: ? shows the controls cheat sheet (off at launch)
 ```
 
@@ -136,6 +142,44 @@ recommendation and wait for the owner: `DECISION-REGISTER.md` rows
 [`plans/15-21-roadmap.md`](plans/15-21-roadmap.md); each plan document
 is written when it starts.
 
+Plan 18 (2026-10-04, [`plans/18-hand-and-knob-feel.md`](plans/18-hand-and-knob-feel.md),
+its §7 "As built"; from the same session's "lower hand sensitivity",
+"tame rotation" and the desk's stepping knobs) is hand and knob feel, on
+`plan-18-integration`. It adds two session params, one optional key in
+`hands.json` and one factory preset:
+
+- **An interaction box** (WP1, PR #94): bounds on the palm in
+  `hands.json` (schema 2; an old file is never rewritten at launch and
+  is kept as `hands.json.bak-v1` before the first rewrite). The
+  calibration sweep sets it, "reset ranges" opens it, the HANDS page
+  draws it. A hand outside it is absent everywhere, its ghost included.
+  **The box is off for the whole sweep: calibrate with nobody else in
+  view.**
+- **Knob smoothing** (WP2, PR #98): `desk.slew`, on SYSTEM under
+  "midi". A knob's or fader's value arrives in a straight line between
+  detents and rests where it always did. **80 ms in the running app**,
+  settled by the run's orchestrator against the plan's recommendation of
+  off (register row 54); a show that saved the number keeps it.
+- **What a hand Learn lands with** (WP3, PR #100): a tilt lands as a
+  `push` about the base at `hands.learn_depth` (0.25, HANDS, "feel &
+  calibration"); height is still the fader except onto a range centred
+  on zero; a learn takes the axis's other rows with it, a factory
+  preset's included (one ⌘Z back). Existing rows and every preset file
+  are untouched.
+- **`hands-orbit`** (WP4, PR #97): a factory preset, the right hand
+  orbiting the camera and the left panning and zooming it; in the list,
+  on no F-key. Its zoom depth is 0.12, not the plan's 0.3.
+
+None of plan 18 has been tried by a person at the rig, **and none of it
+has met a camera, a real hand, a real sweep or an APC40**: it was shown
+by tests on synthetic hands and fake MIDI ports (1259 pass with it and
+plan 17's code), pictures from a hidden window and offscreen renders
+under `plans/assets/18-hand-and-knob-feel/`, and scripted launches on a
+laptop. Seven calls wait for the owner: `DECISION-REGISTER.md` rows
+50–56. Plan 17's code is on the same branch and its documents are not
+written yet; ARCHITECTURE and ENGINEERING describe Learn and Unbind as
+they were before plan 17 except where plan 18 changed a sentence.
+
 **Everything only the machine can verify** — plan 09's five hand checks,
 plan 08's unverified list, plan 07's WP6c dream tuning, the first real
 capture, the APC40, the second monitor, IAC + FL Studio, and the
@@ -162,6 +206,16 @@ file what fails as new audit rows dated with plan 11.
    58–63, about 20 minutes): 58–60, 62 and 63 on the laptop, 61 with the
    projector — the first time window placement meets a second screen; if
    a window ever opens out of reach, delete `~/Hyperspace/windows.json`.
+   Plan 18's **group N** (checks 72–80, about 40 minutes, the camera for
+   all of it and the APC40 for 74, 78 and 79; 64–71 are kept for plan
+   17's group M): **72 first** — the calibration sweep, which now sets
+   the interaction box, done with nobody else in the camera's view —
+   then 73 and 74 (a hand outside the box, a hand on the desk), 75–77
+   (what a Learn lands with), 78 and 79 (judge the 80 ms of knob
+   smoothing; SYSTEM → Knob smoothing turns it down or off), 80
+   (`hands-orbit`'s directions and its zoom). Since a hand outside the
+   box is now absent, every older check that needs a hand in the box
+   (group C's, and the hand parts of the later groups) is run after 72.
 2. **First real audio capture.** Every live path is code-complete and now
    under test over a fake device, but no human has pressed `M` on real
    hardware with the macOS microphone prompt. One click plus a clap
@@ -180,9 +234,20 @@ file what fails as new audit rows dated with plan 11.
    load. **Rows 45–49 are plan 16's**, open the same way: the switch on
    an FX chip and three chips to a row, an idle effect's faders dimmed
    but live, the instance count reaching zero from the knob, where the
-   windows open, the dream's layer no longer performable.)
+   windows open, the dream's layer no longer performable. **Rows 50–56
+   are plan 18's**: the interaction box, a hand outside it absent
+   everywhere, what a hand Learn lands with, a Learn taking the axis's
+   other rows, knob smoothing on at 80 ms — the one built against its
+   plan's recommendation — where the two new numbers live, and
+   `hands-orbit`. Plan 17's rows follow, from its own documents.)
 4. **The rest of the finish line**: plans 17–21 in the roadmap's order,
-   each onto `finish-line`. Nothing of plan 15's desk side has been on
+   each onto `finish-line`. Plan 18 is built and documented; plan 17's
+   three code packages are merged beside it and its documents (its "As
+   built", its register rows after 56, hand checks 64–71) are owed, then
+   `plan-18-integration` goes to `finish-line`. Plans 19–21 are not
+   started. One code comment is stale since plan 18:
+   `hands/core.py`'s module docstring still says Learn "writes a
+   `position` route". Nothing of plan 15's desk side has been on
    the APC40: the hold's timing, the clip-stop LEDs and the blink are
    from Akai's protocol table (hand check 56). One audit row is open from plan 15: R13 (a fader moved
    while its row is disabled stays caught and jumps).

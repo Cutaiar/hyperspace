@@ -137,6 +137,12 @@ scrolls" stands).
 
 ### Plan 18 — Hand and knob feel
 
+*As built:* [`18-hand-and-knob-feel.md`](18-hand-and-knob-feel.md) §7
+(PRs #94, #97, #98, #100 on `plan-18-integration`; decision register
+rows 50–56; hand checks 72–80). Two things differ from the lines below:
+knob smoothing is on at 80 ms in the running app, and `hands-orbit`'s
+zoom depth is 0.12.
+
 - **An interaction box.** Explicit bounds in `hands.json`, drawn on the
   HANDS page's box; a hand outside them reads absent, so its rows let go
   as B1 already does. Today "in the box" is only the tracker's confidence.

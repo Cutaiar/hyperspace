@@ -694,6 +694,17 @@ to a row), what an idle effect's faders do, the instance count reaching
 zero, where the windows open — the one with a drawing — and the dream's
 layer no longer performable. Plan 16 asked you nothing before it was
 built; these five are everything in it that is a choice.
+**Rows 50–56 are plan 18's** (PRs #94, #97, #98 and #100), settled the
+same way: the interaction box (how it is set, one box, no switch, the
+file — with the HANDS page's drawing), a hand outside it absent
+everywhere, what a hand Learn lands with (with the numbers before and
+after), a Learn taking the hand axis's other rows with it, knob
+smoothing (with a drawing), where the two new numbers live, and
+`hands-orbit`. Six were built on the plan's recommendation. **Row 54 was
+not: the plan recommended knob smoothing off until you turned it up, and
+the run's orchestrator built it on at 80 ms**; both sides are in the
+row. Plan 17's rows (Learn desk / hand, Unbind, the ROUTING filter)
+follow these, written by plan 17's own documents.
 
 You also set how the work runs, since nobody will be watching it:
 
@@ -717,7 +728,7 @@ You also set how the work runs, since nobody will be watching it:
 | # | Question | Assumed until you say |
 |---|---|---|
 | Q2 | Where are the roughly ten presets saved that night, and are they backed up? | On the rig in `~/Hyperspace/presets/`, not backed up. Run `cp -R ~/Hyperspace ~/Hyperspace-2026-10-04` before launching any new build |
-| Q3 | Were the hands calibrated on that rig (HANDS page, the 20-second sweep)? | Unknown. Plan 18 is built either way; its hand checks start with calibration |
+| Q3 | Were the hands calibrated on that rig (HANDS page, the 20-second sweep)? | Unknown. Plan 18 is built either way; its hand checks start with calibration (check 72, which also sets the interaction box, row 50) |
 | Q4 | Which build ran that night? | Main at fa9b3a1 (2026-09-29) |
 
 ### 26. P15-a — how deep does undo go?
@@ -1507,6 +1518,417 @@ WP5 (PR #90); `test_lookback.py::test_dream_params_declared`,
 route used to make the dream reload was read from the code; the dream
 was not run to see it.
 
+### 50. P18-a — the interaction box: how it is set, one box, no switch
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** You asked for a hand to count only inside a box, so that
+a hand reaching for the APC40, or a passer-by's, does not perform. The
+box is three ranges in the camera's own millimetres (side to side, up
+and down, near and far). A hand whose palm is outside it reads as not
+there (row 51). Four things about it were left to the build.
+
+```
+ the HANDS page's box view: the same 190 × 92 frame, nothing new to click
+
+   the box from above (x across, z down)            height
+ ┌──────────────────────────────────────────────┐   ┌──┐
+ │                                              │   │  │
+ │      ┌──────────────────────────────┐        │   │┬ │  top of the box
+ │      │                              │        │   ││ │
+ │      │     ●            ●           │    ○   │   │● │  right hand
+ │      │   left    ·    right         │        │   │● │  left hand
+ │      │        (camera)              │        │   ││ │
+ │      └──────────────────────────────┘        │   │┴ │  bottom of the box
+ │                  performer                   │   │  │
+ └──────────────────────────────────────────────┘   └──┘
+        inner rectangle: the box, side to side         bracket: the box,
+        and near to far                                 low to high
+        ● in the box      ○ tracked, but outside it (hollow, dim)
+
+ status line:   L● R◌     ● in the box   ◌ seen, but outside it   ○ not seen
+ no box set:    no rectangle and no bracket; a hand counts wherever it is seen
+```
+
+**What the code did.** There was no box. A hand counted wherever the
+tracker could see it with enough confidence: a palm far outside every
+calibrated range was present and read as "at the end" of each axis.
+`hands.json` held only each axis's range.
+
+| The detail | Option | Trade-off |
+|---|---|---|
+| How the box is set | **(a) the 20-second calibration sweep sets it: where your palms went, plus 40 mm all round** | No new control; the box is where you actually played. A careless sweep makes a careless box, and another sweep fixes it. **The box is off for the whole sweep**, so anyone the camera sees during those 20 seconds performs and is counted into the new box: calibrate with nobody else in view. |
+| | (b) drag the box's faces on the drawing | Direct. The drawing is from above, so height needs a second drawing and handles small enough to miss at arm's length. |
+| | (c) six sliders | Exact. Six controls for a thing set once per venue. |
+| One box or two | **(a) one box for both hands, the same distance left and right of the camera** | Three ranges. Hands may cross. Sweeping with one hand cannot shut the other out. |
+| | (b) a box per hand | Each hand kept to its side; six ranges, two rectangles, and a hand that crosses the middle drops out. |
+| A switch | **(a) none: there is a box when the file has one; "reset ranges" opens it** | Nothing to learn. Opening the box this way also puts every axis's range back to its default, so it is followed by another sweep. |
+| | (b) a "use box" checkbox | Keeps the ranges while the box is off. One more control for something a sweep fixes in 20 seconds. |
+| The file | **(a) `hands.json` gains a `box` and its format number goes from 1 to 2; your existing file is read as it is and never rewritten just by launching; the first time a sweep or "reset ranges" rewrites it, the old file is kept beside it as `hands.json.bak-v1`** | Launching this build leaves your calibration byte for byte, with no box, until you sweep. One backup, once. An older build reading the new file keeps the ranges and drops the box the next time it saves. |
+| | (b) add the box and keep calling the format 1 | No number to explain; a file that changed shape under one name. |
+
+**Chosen: the bold option of each.** Three things the build added that
+the question did not cover:
+
+- A direction gets a bound only if **one hand** travelled more than
+  12 cm along it. Two hands held still and apart are not a sweep, and a
+  direction nobody swept is left open ("x open (not swept)" in the
+  note) rather than made into a slot.
+- At the box's edge a hand that is in stays in until it is 15 mm past a
+  face, and one that is out comes in only inside the face, so a hand
+  held on a face does not flicker. A one-frame dip in the tracker's
+  confidence does not throw out a hand that is in that 15 mm band.
+- A box wider than the drawing can show has its rectangle drawn just
+  inside the frame, so a hand outside it is still drawn outside.
+
+A bad `box` in a hand-edited file opens (that direction, or the whole
+box) and says so in the terminal; it never hides the hands.
+
+**Cost to reverse.** Dragging or sliders: widgets over the same three
+ranges (`HandsIO.box`). A box per hand: the file's `box` becomes two and
+`hands.core.inside` takes the side. A checkbox: one param and one test
+in `HandsIO.poll`. The margin, the edge and the 12 cm are three
+constants (`BOX_MARGIN`, `BOX_EDGE`, `BOX_MIN_SPAN`). Plan 18 WP1
+(PR #94);
+`test_hands.py::test_the_sweep_sets_the_box_with_its_margin_and_a_symmetric_x`,
+`::test_two_still_hands_held_apart_are_not_a_sweep`,
+`::test_reset_ranges_opens_the_box`,
+`::test_an_old_hands_json_reads_as_before_and_is_not_rewritten_at_load`,
+`::test_the_first_rewrite_of_an_old_file_keeps_a_backup`,
+`::test_the_boxs_edge_has_hysteresis`. Hand checks 72–74. **No camera
+has seen any of this**: the sweeps and the hands in the tests and the
+picture are made-up palm positions. Whether 40 mm, 15 mm and 12 cm are
+the right sizes, and whether a real sweep's box leaves a hand on the
+APC40 outside it, are for the machine.
+
+### 51. P18-b — a hand outside the box is absent everywhere, the ghost included
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** What "outside the box" means for everything that reads a
+hand, and what the ghost hands' frame shows once there is a box.
+
+**What the code did.** With no box, a hand left only when the tracker
+lost it. The ghost hands' camera framed the calibrated ranges of the x,
+y and z axes.
+
+| The detail | Option | Trade-off |
+|---|---|---|
+| Is a hand outside the box still drawn as a ghost | (a) yes, dimmed | Shows people where the edge is. A hand that performs nothing is on the glass. |
+| | **(b) no: it is absent everywhere** | One meaning of "in". Its rows let go and the values go back to where you set them that frame, its pinches drop, its "present" light goes off, and its ghost fades out at the edge. Only the HANDS page still shows it, as a hollow ring and `◌`. |
+| What the ghost hands' frame shows | (a) the axis ranges, as before | With a box 40 mm wider than the ranges, a hand in that margin sits at the frame's edge or past it. |
+| | **(b) the box, when there is one** | The frame is exactly where a hand counts: a ghost fading at the edge of the glass is a hand leaving the box. A direction the box leaves open is framed by the ranges as before. |
+
+**Chosen: (b) and (b).** A hand coming back in is caught and glided
+onto over the Catch time, exactly as a hand the tracker lost and found
+again is: no jump. During a calibration sweep the frame still shows the
+old box, and changes when the sweep ends.
+
+**Cost to reverse.** Drawing an outside hand's ghost: one line
+(`HandsIO._skeletons` reading "tracked" instead of "present"). Framing
+the ranges: one branch in `ghost.box_of`. Plan 18 WP1 (PR #94);
+`test_hands.py::test_a_hand_outside_the_box_reads_absent_everywhere`,
+`::test_a_hand_outside_the_box_releases_its_rows_and_the_base_returns`,
+`::test_a_hand_re_entering_the_box_is_caught_not_jumped`,
+`test_ghost.py::test_the_camera_frames_the_interaction_box_when_one_is_set`,
+`::test_a_hand_outside_the_box_fades_out`. Hand checks 73 and 74. Seen
+only with made-up hands; the ghost at the box's edge has not been looked
+at on the glass.
+
+### 52. P18-c — what a hand Learn lands with
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** You asked to "lower hand sensitivity" and "tame
+rotation". There was no sensitivity setting. What you felt was what a
+Learn made: right-click → Learn, move a hand, and the hand *became* that
+control's fader, end to end. This changes what a **new** Learn makes.
+Rows you already have, and every factory preset, are untouched.
+
+**What the code did.** Every hand Learn made a full-range "positions"
+row: the hand's reading was the fader, and where you had set the control
+was ignored while the hand was in.
+
+```
+ right roll learned onto the XY rotation rate, which the preset had at 1×
+
+                     before (positions, full range)    now (pushes +0.25)
+   rolled left  90°          −66.56×                        −15.64×
+   rolled left  18°          −11.09×                         −1.77×
+   level                       0×  (the plane stops)          1×  (as you set it)
+   rolled right 18°          +11.09×                         +3.77×
+   rolled right 90°          +66.56×                        +17.64×
+   hand out of the box         1×                             1×
+
+ left height learned onto the same rate
+   hand at the bottom        −66.56×  (full reverse)          1×  (as you set it)
+   hand at the top           +66.56×                        +34.28×
+
+ a tilt learned onto Speed, set at 0.35:  before: stop … 4.00 (0.25 when level)
+                                           now:    0.175 … 0.70 (0.35 when level)
+```
+
+| What you learn onto | A tilt, or a hand moving sideways or in (an axis that rests in the middle) | Height (an axis that rests at the bottom) |
+|---|---|---|
+| a control whose range runs equally either side of zero (a rotation rate, a camera angle, a pan, the hue) | **pushes**, at the Learn depth | **pushes**, at the Learn depth |
+| any other fader (speed, brightness, a mix) | **pushes**, at the Learn depth | **positions**: the hand is the fader, as before |
+| a switch, a list, a button, or a whole-number count (Instances, the dream's steps) | **positions**, as before | **positions**, as before |
+
+"Pushes" means the hand adds to where you set the control, and adds
+nothing while it rests: a level hand, or a hand at the bottom, leaves
+the preset's value showing. The depth is how far: 0.25 moves the control
+a quarter of its travel over the hand's whole range.
+
+Four choices are in that table:
+
+| The choice | Option | Trade-off |
+|---|---|---|
+| What height learns as | (a) the fader on everything, as before | "The hand is the fader" everywhere. Height on a rotation rate still starts at full reverse. |
+| | (b) a push on everything | One rule. Height can only add, so on a control already near its top a learn seems to do nothing, and "height is brightness" stops being what a Learn makes. |
+| | **(c) a push where the range is centred on zero, the fader elsewhere** | Height on brightness, a mix or speed is still the fader; height on a rate, an angle or a pan adds from where you set it. Two sentences instead of one. |
+| The depth a push lands with | 0.5 | A full tilt is a quarter of the travel each way: speed ×¼ … ×4, a rate ±33×. Lively; close to the complaint. |
+| | **0.25** | An eighth each way: speed about half … double, yaw ±45°, a rate ±16.6×. The party presets' own turn depth. |
+| | 0.1 | A rate ±6.7×, but on a mix or on speed it reads as "the learn did nothing". |
+| Where that number lives | **(a) "Learn depth" on the HANDS page, under "feel & calibration"** (`hands.learn_depth`) | With the hands' other feel settings; saved with the show and with a hands setup; changeable at the machine. It only matters at the next Learn. |
+| | (b) a key in `config.toml` | Not changeable without a restart. |
+| | (c) a page or group of its own | A new home for one number. |
+| A whole-number count (met in the build's review) | (a) a push, by the table | A push of 0.25 on the dream's steps (1–3) never reaches the next step: the learn lands and does nothing. |
+| | **(b) the fader, like a switch** | The learn does something. Seven controls. |
+
+**Chosen: the bold option of each.** No single depth is gentle on a
+rotation rate and noticeable on everything else, because a rate's range
+is 133× wide (it is that wide to match the original's largest drive, and
+narrowing it would move the reference the app is checked against). Turn
+Learn depth down for a session on the rates, or turn down the one row's
+depth on the ROUTING page.
+
+Things to know:
+
+- **Learning the same hand axis onto the same control again does not
+  tame a row you already have.** It only refreshes the pinch; the row
+  keeps "positions" and its depth. Unbind it and learn it fresh, or flip
+  the row to "push" on the ROUTING page.
+- Height on a rotation rate now only speeds the plane up from where you
+  set it. It can no longer stop it or run it backwards.
+- Whether an axis "rests in the middle" is its **Centred** switch on the
+  HANDS page at the moment of the Learn. Switching Centred on for height
+  without also moving its Rest gives a push that starts from the bottom.
+- Nothing is refused, flagged or warned about. A control that integrates
+  what it is given (a rate, a drift) under a hand is allowed, as you
+  said.
+
+**Cost to reverse.** Height's rule, or the whole-number rule: one
+condition each in `Learn._row`. The depth: two constants
+(`learn.PUSH_DEPTH`, `HandSettings.learn_depth`). Moving the number:
+rename one id. Plan 18 WP3 (PR #100);
+`test_learn.py::test_a_centred_axis_learns_as_a_push_about_the_base_at_the_learn_depth`,
+`::test_a_one_sided_axis_on_a_one_sided_param_is_still_the_fader`,
+`::test_a_one_sided_axis_on_a_zero_centred_range_pushes_up_from_the_base`,
+`::test_a_whole_number_param_keeps_the_position_row`,
+`::test_existing_rows_are_never_rewritten`,
+`test_hands.py::test_learn_passes_the_axiss_centredness_and_the_sessions_depth`.
+Hand checks 75 and 76. Every number above is from a made-up palm run
+through the real hand chain at its default settings; **no real hand has
+felt 0.25**.
+
+### 53. P18-d — a Learn takes the hand axis's other rows with it
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** One hand axis (right roll, say) learned onto a second
+control: does it now drive both, or does it move?
+
+**What the code did.** It moved, but only its "positions" rows; a
+"pushes" row written by hand on ROUTING, or by a preset, stayed. Until
+now every learned row was a "positions" row, so in practice a learned
+axis always moved.
+
+| Option | Trade-off |
+|---|---|
+| (a) Leave the rule: only "positions" rows move | Nothing changes in the code. But five axes in six now learn as pushes, so "learn it again somewhere else" would quietly stop moving the axis and start adding: roll ends up on three controls. |
+| **(b) The axis's other rows go, whichever kind they are** | "A learned axis drives one control" stays true, and matches a knob Learn (the knob moves). **On a factory preset this removes the preset's own rows on that axis.** |
+| (c) Only rows of the new row's kind go | The old behaviour to the letter for a "positions" learn. Height learned onto brightness and then onto a rate keeps both. |
+
+**Chosen: (b).** Said plainly: on F1 (TUMBLE), right roll turns the XW
+plane. Learn right roll onto Brightness and the XW row is **gone** from
+the loaded preset. The line at the bottom says so — "learned view.bright
+← hand right.roll pushes +0.25 (into the preset; moved from
+rot.phase.XW)" — and **one ⌘Z brings it back** (and takes the new row
+out). The file on disk is not touched until you save. As built it takes
+the axis's switched-off rows too, so the same route can never be in the
+table twice.
+
+**Cost to reverse.** One condition in `Learn._place`, and one test.
+Plan 18 WP3 (PR #100);
+`test_learn.py::test_a_learned_axis_drives_one_param`,
+`::test_a_learn_is_one_undo_step`. Hand check 77, which asks whether you
+would rather a learn added.
+
+### 54. P18-e — knob smoothing, on at 80 ms
+
+**Built 2026-10-04 (unattended run) against the plan's recommendation; confirm or overturn.**
+
+**What it is.** The desk's knobs and faders moved wide controls in
+steps: a slow turn of the pan knob moved the picture 80 px at a time, a
+rotation rate 1.33× at a time. Now a value from a knob or fader takes a
+short time to arrive, in a straight line, and comes to rest exactly
+where it rested before. One number sets how long: **Knob smoothing** on
+the SYSTEM page, off to 250 ms.
+
+```
+ a slow turn of one knob: the control's value over time
+
+ off: a whole step each time a          80 ms: a straight line toward each
+ message arrives, nothing between       new value; it lands on the same step
+
+ value                                  value
+   │              ┌──────                 │                ╱──────
+   │        ┌─────┘                       │           ╱───╱
+   │  ┌─────┘                             │      ╱───╱
+   │──┘                                   │─────╱
+   └────────────────────── time           └────────────────────── time
+      ▲     ▲     ▲   messages               ▲     ▲     ▲
+                                            the ring shows where the knob
+                                            is sending it, not where it is
+```
+
+**What the code did.** A knob or fader's value landed at once, on one of
+the control's steps (100 across most ranges). Measured on a slow turn:
+the value moved on 32 frames out of 150, a whole step each time.
+
+| The detail | Option | Trade-off |
+|---|---|---|
+| The default | (a) **the plan's recommendation: off** until you turn it up | The desk exactly as it was. The stepping stays until someone finds SYSTEM → Knob smoothing. The plan's worry: smoothing leans on the APC40 accepting a ring message mid-turn, and the ring re-basing a knob (hand check 31) has never been seen on the device; a wrong guess would make every knob feel bad at the party. |
+| | **(b) what was built: on, 80 ms** | Fixed without anyone looking for a setting. The orchestrator's reasons: while a value is arriving the ring is sent where the knob is heading, which is the very message the desk sent before there was smoothing, so smoothing adds no new assumption about the device beyond check 31's; and a fix that ships switched off is a new knob where a default would do. The cost if that is wrong: knobs that feel late or fight you until it is turned off. |
+| How it moves | (a) step to step, just more slowly | A slow turn is exactly as stepped as before. Does not fix what was seen. |
+| | **(b) between the steps on the way, landing on the step it always landed on** | Smooth at any speed, and a saved preset holds the same values as before. |
+| | (c) come to rest between steps too | Smoothest. Every knob-set value in a saved preset would differ from before. |
+| The shape | (a) an easing that slows as it nears | Familiar; it never quite arrives, so the time has no plain meaning. |
+| | **(b) a straight line that arrives exactly that long after the last message** | The number means what it says. |
+| The ring while a value arrives | (a) follow the value | The ring would lag the fingers and pull the knob backwards mid-turn. |
+| | (b) freeze until it lands | The ring stops under the fingers. |
+| | **(c) show where the knob is sending it** | The same message as before. |
+
+**Chosen: (b), (b), (b), (c)**: the first against the plan's
+recommendation, settled by the orchestrator; the other three as
+recommended. How "on by default" is built: the app starts every launch
+and every new show at 80 ms; **a show that saved the number keeps it,
+"off" included**, and a factory show opening at 80 ms is clean, not
+"unsaved". Changing it marks the show unsaved, and saving the show keeps
+it. No preset can change it.
+
+Things to know:
+
+- Smoothed: every knob and fader that sets a value directly, the
+  crossfader included. Not smoothed: buttons, the cue knob (one step a
+  click, on purpose), and a knob on a list, a switch or a whole-number
+  count.
+- A preset loaded while a knob's value is still arriving wins; the
+  crossfader's dim carries on arriving through the load.
+- One knob turn is still one undo step. The longest setting (250 ms) is
+  kept under undo's settle time (0.4 s) so that stays true.
+- A knob on something that moves by itself (a rotation's angle while the
+  plane turns) is not smoothed after its first message.
+- A hand on a control does not stop the knob: the knob's value glides
+  in underneath and shows when the hand leaves.
+- "Knob smoothing" also turns up in the ROUTING page's list of things a
+  route's depth can be scaled by. It is there because it is a session
+  setting; scaling a route by it is not useful.
+
+**Cost to reverse.** Off by default: one constant
+(`routing.SLEW_DEFAULT_S` to 0); your show then keeps whatever it has
+saved. The shape, the ring: one function each in `midi.py`. Plan 18 WP2
+(PR #98);
+`test_app_boundary.py::test_the_app_starts_with_knob_smoothing_at_80_ms_and_a_show_keeps_its_own`,
+`test_midi.py::test_a_smoothed_knob_arrives_in_a_straight_line_and_rests_on_the_detent`,
+`::test_the_ring_shows_where_the_knob_is_going`,
+`::test_smoothing_is_off_by_default_and_every_write_is_immediate` (a
+table with no app behind it),
+`test_undo.py::test_a_smoothed_knob_turn_is_one_step`. Hand checks 78
+and 79. **Nothing here has been on an APC40**: the glide, the ring and
+the 80 ms were run against made-up MIDI ports and a made-up clock, and
+the "80 ms, clean show" at launch was read in a scripted launch on a
+laptop with no desk. Whether 80 ms feels smooth or late is check 78's.
+
+### 55. P18-f — where the two new numbers live
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** Plan 18 adds two numbers: Learn depth (row 52) and Knob
+smoothing (row 54). Where each is found, what saves it, and whether
+either gets a knob on the APC40's global layer, where track knobs 6–8
+are free.
+
+**What the code did.** Neither existed.
+
+| The detail | Option | Trade-off |
+|---|---|---|
+| Knob smoothing | **(a) on the SYSTEM page under "midi", saved with the show** (`desk.slew`; the desk's settings become part of what a show saves) | Named for what it is. A preset never moves it. |
+| | (b) filed under an existing group (the UI's, the master's, the output's) | A misleading name. |
+| | (c) owned by the MIDI adapter | It would not exist with MIDI switched off in the config, and a show's saved value would be reported as unknown. |
+| Learn depth | **(a) on the HANDS page with the hands' feel** (row 52) | Saved with the show and with a hands setup. |
+| A free global-layer knob for either | **(a) neither** | Both are set once per room or per performer, not ridden. No new factory row, so your `bindings.json` is not rewritten again. K6–K8 stay yours to give away. |
+| | (b) Learn depth on K6 | Beside the other hand feel. A knob for a number that only matters at the next Learn. |
+| | (c) Knob smoothing on K6 | A knob that sets how knobs feel: hard to judge while turning it. |
+
+**Chosen: (a) of each.** Either number can still be put on a control of
+your own by right-click → Learn.
+
+**Cost to reverse.** A knob for either: one line in the factory map and
+one entry in the list of rows added to an existing `bindings.json`
+(with its backup). Moving either number: rename one id; a show's one
+saved value is then dropped with a note. Plan 18 WP2 (PR #98) and WP3
+(PR #100); `test_params.py::test_every_persisted_group_is_performance_or_session`,
+`test_presets.py::test_a_preset_load_never_touches_a_session_param`,
+`test_hands.py::test_setup_is_registry_params_that_round_trip`. Hand
+checks 75 and 78 use both rows; nobody has looked at either on the
+screen.
+
+### 56. P18-g — two hands on the camera: `hands-orbit`
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** The session asked for a two-hand orbit camera. Built as
+one more factory preset, `hands-orbit`, in the preset list and on no
+F-key: the right hand orbits, the left hand pans and zooms.
+
+```
+ right hand                               left hand
+   side to side   orbit, a quarter          side to side   pan sideways
+                  turn each way             reaching in    pan up / down
+   fingers up     tip to look down          raising it     zoom in, to 2.2×
+                  (44° each way)                           at the top
+
+ a level, low or absent hand adds nothing: the camera stays where the mouse left it
+```
+
+**What the code did.** No preset put a hand on the camera's orbit. The
+hands' axes are each one hand's own reading; nothing measures one hand
+against the other.
+
+| Option | Trade-off |
+|---|---|
+| **(a) A preset where each hand owns some of the camera** | Five rows on things that already exist. It is two hands *on* the camera, not the two hands turning the scene between them. |
+| (b) Nothing | One fewer preset in a list you want shorter. The ask goes unanswered. |
+| (c) The steering wheel: the distance and the angle between the two hands as new axes | What "orbit" may have meant. Two new hand axes, against the standing rule of twelve axes and no more. **Not built.** |
+
+**Chosen: (a).** One number differs from the plan: **the zoom's depth is
+0.12, not 0.3.** At 0.3 a raised left hand zoomed to 7.4×, and in an
+offscreen picture the frame was inside the shape and nearly black. At
+0.12 the top is 2.2×.
+
+**Cost to reverse.** Delete one entry in `preset.FACTORY_PRESETS` and
+one file; or hide it from the list (plan 19). The depths and directions
+are the five numbers in `preset.hands_orbit_routes`. Plan 18 WP4
+(PR #97);
+`test_presets.py::test_hands_orbit_is_five_pushes_onto_the_camera`,
+`::test_an_absent_or_level_hand_leaves_the_orbit_camera_alone`,
+`::test_each_orbit_axis_moves_its_camera_param_as_its_row_says`. Hand
+check 80. **Nobody has played it**: the depths are a first cut, the
+zoom's was chosen from a picture, and which way each move reads on the
+glass (does a hand going right turn the scene the way you expect) has
+not been judged at all.
+
 ---
 
 ## Part B — built on the recommendation without asking; confirm or overturn
@@ -1567,12 +1989,25 @@ Each is built, reviewed and on PR #55. Overturning any is a small follow-up.
   Rows 45–49 are shown by checks 59, 60, 62, 61 and 63 in that order.
   Nothing in plan 16 has been tried at the rig, and check 61 is the
   first time window placement meets a second screen.
+- Group **M** is plan 17's, written by its own documents (checks 64–71
+  are kept for it).
+- Group **N** (plan 18: the interaction box, what a hand Learn lands
+  with, knob smoothing, `hands-orbit`; checks 72–80, about 40 minutes,
+  the camera for all of it and the APC40 for 74, 78 and 79). **72 comes
+  first**: it is the calibration sweep, which now also sets the box, and
+  it is done with nobody else in the camera's view. Rows 50–56 are shown
+  by checks 72–74 (rows 50 and 51), 75 and 76 (52), 77 (53), 78 and 79
+  (54), 75 and 78 (55) and 80 (56). Nothing in plan 18 has been tried at
+  the rig: no camera, no real hand, no real sweep and no APC40 has seen
+  any of it. Check 78 is where row 54's 80 ms is judged, and it leans on
+  check 31 (the knobs re-basing from the ring), which has itself never
+  been seen on the device.
 
 ---
 
 ## Answer sheet
 
-Write the letter, or "rec" for the recommendation. Rows 14–17 and 34–49
+Write the letter, or "rec" for the recommendation. Rows 14–17 and 34–56
 take "keep" or "overturn".
 
 | # | Decision | Recommended | Your answer | Note |
@@ -1627,3 +2062,10 @@ take "keep" or "overturn".
 | 47 | P16-c instances to zero | (a) reachable from the slider's left end and K3's bottom | built on the recommendation; confirm or overturn | plan 16 WP5 (PR #90); K3's bottom is nothing drawn, not one copy; a route of yours that pushes both ways on the count can blank the scene for half its cycle; FIELD's top is 69 copies, not 68 |
 | 48 | P16-d where the windows open | a screen number in the config beats the remembered file; written on quit and ⌘R only; fullscreen never remembered; a first launch at full size | built on the recommendation; confirm or overturn | plan 16 WP4 (PR #85) and WP7 (PR #92); `~/Hyperspace/windows.json`, new key `[output] control_monitor`; a screen number with no screen at launch is ignored for the whole run; never run with a second screen |
 | 49 | P16-e the dream's layer | (a) not the target of a route, like Spacing and Resolution | built on the recommendation; confirm or overturn | plan 16 WP5 (PR #90); a route of yours onto it goes dormant with no note at load |
+| 50 | P18-a the interaction box | the calibration sweep sets it (where the palms went plus 40 mm); one box for both hands; no switch — "reset ranges" opens it; `hands.json` format 2, an old file never rewritten at launch, one backup | built on the recommendation; confirm or overturn | plan 18 WP1 (PR #94); the box is off for the whole sweep, so calibrate with nobody else in view; a direction is bounded only if one hand travelled over 12 cm along it; never seen by a camera |
+| 51 | P18-b a hand outside the box | absent everywhere, its ghost included; the ghost hands' frame is the box | built on the recommendation; confirm or overturn | plan 18 WP1 (PR #94); the HANDS page alone still shows it, hollow and as `◌` |
+| 52 | P18-c what a hand Learn lands with | a tilt pushes at the Learn depth (0.25, on HANDS under "feel & calibration"); height pushes on a range centred on zero and is the fader elsewhere; a switch, a list or a whole-number count keeps the fader | built on the recommendation; confirm or overturn | plan 18 WP3 (PR #100); existing rows and factory presets untouched; learning the same axis onto the same control again does not tame an old row; the whole-number rule was added by the review; no real hand has felt 0.25 |
+| 53 | P18-d a Learn and the axis's other rows | (b) they go, whichever kind, switched off or on | built on the recommendation; confirm or overturn | plan 18 WP3 (PR #100); on a factory preset this removes the preset's own rows on that axis, named in the line at the bottom, one ⌘Z back |
+| 54 | P18-e knob smoothing | the plan: (a) off until turned up. The orchestrator: (b) on at 80 ms. Between the steps on a straight line, landing on the step it always did; the ring shows where the knob is sending it | built on the orchestrator's recommendation, against the plan's; confirm or overturn | plan 18 WP2 (PR #98); a show that saved the number keeps it, "off" included; SYSTEM → Knob smoothing; never on an APC40, and it leans on hand check 31, itself never seen |
+| 55 | P18-f where the two new numbers live | Knob smoothing on SYSTEM, Learn depth on HANDS, both saved with the show; neither on a global-layer knob | built on the recommendation; confirm or overturn | plan 18 WP2 (PR #98) and WP3 (PR #100); K6–K8 still free; "Knob smoothing" also shows in ROUTING's scale list |
+| 56 | P18-g two hands on the camera | (a) a preset, `hands-orbit`: right hand orbits, left pans and zooms; the steering wheel not built | built on the recommendation; confirm or overturn | plan 18 WP4 (PR #97); the zoom's depth is 0.12, not the plan's 0.3 (0.3 blacked the frame); in the list, on no F-key; directions and depths never judged by a person |
