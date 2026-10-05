@@ -175,7 +175,9 @@ def pose_hands(pose: dict[str, float]) -> dict[str, dict[str, float]]:
 class Stage:
     """Everything one preset needs: registry, router, hands, clock, LFOs."""
 
-    def __init__(self, name: str, ctx=None):
+    def __init__(self, name: str, ctx=None, load: str | None = None):
+        """`load`: the name the list holds the preset under, when it is not
+        a party preset's upper-case slot name (tools/orbit_demo.py)."""
         self.t = 0.0
         self.view = ViewState()
         self.fx, self.dream = FxState(), DreamState()
@@ -193,7 +195,7 @@ class Stage:
         lib.attach(self.reg)
         self.router = Router(self.reg, Bindings())
         presets = Presets(lib, self.reg, self.router)
-        missing = presets.load(name.split("-", 1)[1].upper())
+        missing = presets.load(load or name.split("-", 1)[1].upper())
         assert not missing and not presets.notes and not self.router.table.dropped, (
             name, missing, presets.notes)
         self.src = DictSource(lambda: self.t)

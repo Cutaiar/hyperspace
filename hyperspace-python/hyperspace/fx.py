@@ -342,6 +342,52 @@ def _target(v: dict) -> int:
     return FACES if v.get("target", FRAME) == FACES else FRAME
 
 
+def reordered(seq: list[str], orders: dict[str, int], moved: str) -> dict[str, int]:
+    """Orders (0…MAX_ORDER) under which sorting by (order, name) gives
+    `seq`, changing as few effects as possible: `moved` alone when it can
+    be done, else the smallest run of neighbours that can. Returns only
+    the effects whose order changes.
+
+    `seq` is `names()` with `moved` taken out and put back somewhere (a
+    chip dragged on the FX page, plan 20 WP3); `orders` is every effect's
+    order now. Pure: it reads nothing but its arguments.
+
+    One run of `seq` is renumbered: the shortest whose two sides already
+    sort as `seq` has them and which has room — as many integers strictly
+    between the orders either side of it as it has effects. It gets those
+    integers evenly spaced (one effect alone: the middle of its gap). So
+    no tie is ever made or relied on, and the name tie-break in `names()`
+    cannot reorder the result; a tie that is already there and not in the
+    way is left alone. Of two runs of one length, one holding `moved` is
+    taken, then the one further right: the same drop always gives the
+    same orders. With no room for a short run the run grows, to the whole
+    list at worst (0…99: up to a hundred effects; past that orders repeat)."""
+    def key(k: int) -> tuple[int, str]:
+        return orders[seq[k]], seq[k]
+    n = len(seq)
+    bad = [k for k in range(1, n) if not key(k - 1) < key(k)]    # seq[k] is out of place
+    if not bad:
+        return {}                                    # it already sorts that way
+    first, last = bad[0], bad[-1]                    # seq[:first] and seq[last:] sort as they are
+    i = seq.index(moved)
+    for size in range(max(1, last - first), n + 1):
+        los = range(min(first, n - size), max(0, last - size) - 1, -1)
+        for lo in sorted(los, key=lambda lo: not lo <= i < lo + size):   # stable: right first
+            hi = lo + size                           # the run is seq[lo:hi]
+            a = orders[seq[lo - 1]] if lo > 0 else -1
+            b = orders[seq[hi]] if hi < n else MAX_ORDER + 1
+            free = b - a - 1                         # the integers strictly between
+            if free < size and size != n:            # no room; the whole list is the last resort
+                continue
+            if size == 1:
+                new = [(a + b) // 2]                 # the middle of the gap
+            else:                                    # evenly through the gap, in seq's order
+                new = [a + 1 + ((2 * j + 1) * free) // (2 * size) for j in range(size)]
+            return {name: o for name, o in zip(seq[lo:hi], new, strict=True)
+                    if o != orders[name]}
+    return {}                                        # not reached: the whole list always returns
+
+
 def declare(r, fx: FxState, names: set[str] | None = None) -> None:
     """The fx.* params on registry `r`: everything, or with `names` just
     those effects' (a file changed shape on reload). Bindings to an id that

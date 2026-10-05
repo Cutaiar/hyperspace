@@ -114,6 +114,8 @@ from the desk).
 
 ### Plan 17 — Learn, unbind and seeing the desk
 
+*As built:* [`17-learn-and-the-desk.md`](17-learn-and-the-desk.md) §7 (PRs #93, #96, #99, #91 and #102); where it differs from the rows below, that section is the code — no DESK page (the desk window grows, and fills the control window with the panel hidden), Unbind covers every route and not only the hand's, an invariant control works through a learn, and a picked control lets go by itself after 20 s. Decision register rows 57–64; hand checks 64–71.
+
 - **One Unbind.** One menu item that removes whatever performs the param
   (desk row, hand rows); a submenu only when there are two kinds. Shown
   whether or not a MIDI port is open. Undoable.
@@ -136,6 +138,12 @@ diagram lives (its own page, or the existing one enlarged; "no page
 scrolls" stands).
 
 ### Plan 18 — Hand and knob feel
+
+*As built:* [`18-hand-and-knob-feel.md`](18-hand-and-knob-feel.md) §7
+(PRs #94, #97, #98, #100 on `plan-18-integration`; decision register
+rows 50–56; hand checks 72–80). Two things differ from the lines below:
+knob smoothing is on at 80 ms in the running app, and `hands-orbit`'s
+zoom depth is 0.12.
 
 - **An interaction box.** Explicit bounds in `hands.json`, drawn on the
   HANDS page's box; a hand outside them reads absent, so its rows let go

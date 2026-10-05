@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """The FX page's chips and which strip is open, shown headless (plan 16 WP2),
-and the face target on the page (plan 20 WP2).
+the face target on the page (plan 20 WP2) and a chip dragged to reorder
+the stack (plan 20 WP3).
 
 Not the app: the registry, the library and the live `FxState` the way the
 FX page reads them, on a fresh temp home of its own (`tools/undo_demo.py`
@@ -10,6 +11,8 @@ window, no MIDI port, no audio device.
   uv run python tools/fx_page_demo.py            # the transcript → fx-select.txt
   uv run python tools/fx_page_demo.py --shots    # the page as PNGs, from a hidden window
   uv run python tools/fx_page_demo.py --faces    # plan 20 WP2's three PNGs, the same way
+  uv run python tools/fx_page_demo.py --reorder  # plan 20 WP3's transcript → fx-reorder.txt
+  uv run python tools/fx_page_demo.py --drag     # plan 20 WP3: a drag in flight → fx-drag.png
 
 The first two land in docs/plans/assets/16-paper-cuts/. The transcript opens an
 effect by name, moves it and another through the stack, and loads
@@ -22,7 +25,12 @@ The shots are the FX page with two effects on and another open but off
 effects aimed at the faces and one on the frame, both status rows, the
 per face / screen chips and the open strip's target combo
 (fx-page-faces.png), the same with Faces off (fx-page-faces-off.png), and
-the page with nothing aimed at the faces (fx-page-frame-only.png). Hidden-window renders, not the app on a screen.
+the page with nothing aimed at the faces (fx-page-frame-only.png).
+--reorder and --drag land there too: the transcript drops chips through
+the page's drop handler (no window, no mouse) with the app's undo
+installed, and prints the orders before and after and what Ctrl+Z puts
+back; the PNG is the page with a chip in the hand, the mouse simulated
+through imgui's event queue. Hidden-window renders, not the app on a screen.
 """
 
 # undo_demo is imported before anything of hyperspace's, on purpose: it sets
@@ -165,10 +173,12 @@ def harness() -> SimpleNamespace:
                                      fx=SimpleNamespace(state=fx, error=lambda n: ""))
     reg["ui.page"].set(PAGE_KEYS.index("fx"))
 
-    def draw(n: int = 8) -> None:
+    def draw(n: int = 8, mouse=None) -> None:
         for _ in range(n):
             glfw.poll_events()
             impl.process_inputs()
+            if mouse is not None:           # a simulated mouse, after the backend's own
+                mouse(imgui.get_io())
             imgui.new_frame()
             GL.glClearColor(0.0, 0.0, 0.0, 1.0)
             GL.glClear(GL.GL_COLOR_BUFFER_BIT)
@@ -246,6 +256,131 @@ def faces() -> None:
     h.close()
 
 
+def reorder() -> None:
+    """Plan 20 WP3: drops through the page's drop handler, with the app's undo."""
+    from hyperspace import ui_fx
+    from hyperspace.fx import FACES, FRAME
+    fx = FxState()
+    real, demo.FxState = demo.FxState, lambda: fx       # undo_demo.boot's registry over this one
+    try:
+        r = demo.boot()
+    finally:
+        demo.FxState = real
+    reg, out = r.reg, demo.say
+    panel = SimpleNamespace(reg=reg)                    # all the drop handler reads of the Panel
+
+    def orders() -> dict[str, int]:
+        return {n: int(reg[f"fx.{n}.order"].base) for n in fx.names()}
+
+    def show() -> None:
+        o = orders()
+        out("    stack:  " + "  ".join(f"{'●' if fx.values[n]['on'] else '○'}"
+                                         f"{'◆' if fx.values[n]['target'] == FACES else ''}"
+                                         f" {n} #{o[n]}" for n in fx.names()))
+        out(f"    frame  {ui_fx._status(fx, FRAME)}")
+        out(f"    faces  {ui_fx._status(fx, FACES)}")
+        out(f"    open: {fx.selected()}")
+
+    def drop(moved: str, before: str | None) -> None:
+        was = orders()
+        out(f"drop: the {fx.specs[moved].label} chip "
+            + (f"onto {fx.specs[before].label} (it goes before it)" if before else "to the end"))
+        ui_fx._drop(panel, fx, moved, before)
+        demo.settle(r)
+        now = orders()
+        changed = [n for n in now if now[n] != was[n]]
+        out(f"    orders rewritten: {len(changed)}  ("
+            + ", ".join(f"{n} #{was[n]} → #{now[n]}" for n in changed) + ")")
+        show()
+        demo.stack(r)
+
+    out("Plan 20 WP3: a chip dropped on another reorders the stack")
+    out("=========================================================")
+    out("The page's drop handler (ui_fx._drop) called directly: no window and no mouse here.")
+    out("● on, ○ off, ◆ aimed at the faces, #n the effect's order.")
+    out()
+    for name in ("plasma", "kaleido", "zoomblur", "huecycle"):
+        reg[f"fx.{name}.on"].set(True)
+    reg["fx.zoomblur.target"].set(FACES)
+    reg["fx.on"].set(True)
+    fx.select("kaleido")
+    demo.settle(r)
+    out("before — the factory orders, four effects on, Zoom burst aimed at the faces")
+    show()
+    demo.stack(r)
+    out()
+    drop("huecycle", "plasma")
+    out()
+    demo.press(r, "Z", "CONTROL")
+    demo.frames(r, 3)
+    show()
+    demo.stack(r)
+    out()
+    out("a gap of one: Hue cycle between Kaleidoscope (#15) and Zoom burst (#17) takes #16")
+    drop("huecycle", "zoomblur")
+    out()
+    out("…and then no gap at all: Plasma between Kaleidoscope (#15) and Hue cycle (#16)")
+    drop("plasma", "huecycle")
+    out()
+    demo.press(r, "Z", "CONTROL")
+    demo.frames(r, 3)
+    show()
+    out()
+    drop("acid", None)
+    out()
+    out("a drop where it already is changes nothing and makes no step")
+    drop("acid", None)
+    OUT20.mkdir(parents=True, exist_ok=True)
+    (OUT20 / "fx-reorder.txt").write_text("\n".join(demo.lines) + "\n")
+    print(f"\nwrote {OUT20 / 'fx-reorder.txt'}")
+
+
+def drag() -> None:
+    """Plan 20 WP3: the page with a chip in the hand."""
+    from imgui_bundle import imgui
+    h = harness()
+    fx, reg = h.r.fx, h.r.reg
+    for name in ("plasma", "kaleido", "huecycle"):
+        reg[f"fx.{name}.on"].set(True)
+    fx.select("kaleido")
+    rects: dict[str, tuple[float, float, float, float]] = {}
+    real = imgui.button
+
+    def button(label, *a, **k):                         # where each chip is, as the tests find it
+        hit = real(label, *a, **k)
+        lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        rects[label.split("##", 1)[-1]] = (lo.x, lo.y, hi.x, hi.y)
+        return hit
+    imgui.button = button
+    try:
+        h.draw(3)
+        x0, y0, x1, y1 = rects["chip.fx.huecycle.on"]
+        x, y = (x0 + x1) / 2, (y0 + y1) / 2
+        h.draw(2, lambda io: io.add_mouse_pos_event(x, y))
+        h.draw(1, lambda io: io.add_mouse_button_event(0, True))
+        for k in range(1, 6):
+            h.draw(1, lambda io, k=k: io.add_mouse_pos_event(x - 6 * k, y - 4 * k))
+        x0, y0, x1, y1 = rects["chip.fx.acid.on"]
+        tx, ty = x0 + (x1 - x0) * 0.35, (y0 + y1) / 2
+        h.draw(4, lambda io: io.add_mouse_pos_event(tx, ty))
+        held = imgui.get_drag_drop_payload_py_id()
+        if held is None:
+            raise SystemExit("no drag in flight: the simulated mouse did not start one here")
+        h.shoot(OUT20, "fx-drag.png",
+                f"dragging {fx.names()[held.data_id]} over acid, before the drop: "
+                f"{fx.names()}")
+        h.draw(1, lambda io: io.add_mouse_button_event(0, False))
+        h.draw(3, lambda io: io.add_mouse_pos_event(-1.0, -1.0))
+        print(f"after the drop: {fx.names()}, open: {fx.selected()}")
+    finally:
+        imgui.button = real
+        h.close()
+
+
 if __name__ == "__main__":
     args = sys.argv[1:]
-    sys.exit(shots() if "--shots" in args else faces() if "--faces" in args else transcript())
+    for flag, run in (("--shots", shots), ("--faces", faces), ("--reorder", reorder),
+                      ("--drag", drag)):
+        if flag in args:
+            sys.exit(run())
+    sys.exit(transcript())

@@ -10,17 +10,20 @@ as the bank of names.
 
 import itertools
 import json
+import math
 import re
 from types import SimpleNamespace
 
 import pytest
 from conftest import opened_last
+from test_plan12_presets import DictSource, NullOut, feats, hold, offset
 
 from hyperspace import apc40, lfo, preset, routing, tempo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
 from hyperspace.fx import FxState
+from hyperspace.hands import HandSettings, HandsIO
 from hyperspace.library import FACTORY, SLOTS, Library, LibraryError
 from hyperspace.lookback import DreamState
 from hyperspace.params import PERFORMANCE_GROUPS, build_registry, part_of
@@ -48,8 +51,12 @@ def boot(home, show: str | None = "house"):
     clock = tempo.Clock(now=lambda: 0.0)
     tempo.register(reg, clock)
     lfo.register(reg, lfo.LFOs(), clock)
+    # the table before attach, as app.main reads it: the desk's session
+    # param (`desk.slew`) is the table's and exists when the show lands
+    table = Bindings.load(bindings_path(home), legacy_midi=None)
+    routing.register_desk(reg, table)
     lib.attach(reg)
-    router = Router(reg, Bindings.load(bindings_path(home), legacy_midi=None))
+    router = Router(reg, table)
     presets = Presets(lib, reg, router)
     preset.migrate_home(lib, router)          # plan 13 §6: nothing to do on a fresh home
     lib.project.load_startup()
@@ -197,7 +204,10 @@ def test_the_home_is_rewritten_in_seconds_once_with_backups(tmp_path):
 def test_a_preset_load_never_touches_a_session_param(rig):
     """Plan 13 §10 exit 2: a tapped BPM survives TRIP, and so do the drive,
     an analyzer strip and the band scene, even when the file names them —
-    and the master dim (plan 15 WP3), through a preset load and a show load."""
+    and the master dim (plan 15 WP3), through a preset load and a show load.
+    Knob smoothing too (`desk.slew`, plan 18 WP2): no preset moves it, a
+    show that does not name it leaves it, and a show save and load
+    round-trips it."""
     from hyperspace.overlay import Output
 
     reg, control = rig.reg, rig.control
@@ -208,11 +218,16 @@ def test_a_preset_load_never_touches_a_session_param(rig):
     reg["tempo.bpm"].set(100.0)
     reg["master.gain"].set(2.0)
     reg["band.0.atk"].set(0.3)
+    slew = reg["desk.slew"]
+    slew.set(0.12)
+    assert part_of(slew) == "session" and rig.router.table.slew == 0.12
     scene = control.scene
-    put(rig.home, "FAST", values={"view.shape": 5, "tempo.bpm": 140.0,
+    put(rig.home, "FAST", values={"view.shape": 5, "tempo.bpm": 140.0, "desk.slew": 0.2,
                                   "scene.select": (scene + 1) % 3, "output.dim": 1.0})
     before = reg.snapshot(part="session")
+    assert before["desk.slew"] == 0.12
     rig.presets.load("FAST")
+    assert slew.value == 0.12 and "desk.slew is the session's, ignored" in rig.presets.notes
     assert rig.view.shape == 5
     assert rig.clock.bpm == 100.0 and rig.chain.gain == 2.0 and rig.chain.params[0].atk == 0.3
     assert control.scene == scene and reg.snapshot(part="session") == before
@@ -222,6 +237,12 @@ def test_a_preset_load_never_touches_a_session_param(rig):
     assert out.dim == 0.4
     rig.lib.project.load("party")                     # a show load, startup preset and all
     assert rig.lib.current("presets") == "TUMBLE" and out.dim == 0.4
+    assert slew.value == 0.12                         # the factory show names no smoothing
+    rig.lib.project.save("mine")                      # a show keeps the number
+    assert rig.lib.project.session["desk.slew"] == 0.12
+    slew.set(0.03)
+    rig.lib.project.load("mine")
+    assert slew.value == 0.12 and not rig.lib.project.is_dirty()
 
 
 def test_session_ids_in_a_preset_are_noted_and_ignored(rig):
@@ -736,7 +757,8 @@ def test_every_factory_presets_desk_is_the_generators():
             from_map.append(row)
     assert desk == from_map
     paths = sorted(preset.FACTORY_DIR.glob("*.json"))
-    assert len(paths) == 22                  # 8 house, 9 party, 5 made from routing presets
+    # 8 house, 9 party, 5 made from routing presets, plan 18's hands-orbit
+    assert len(paths) == 23
     for path in paths:
         doc = json.loads(path.read_text())
         want = expected_desk(path.stem)
@@ -811,7 +833,8 @@ def test_the_routing_presets_are_full_factory_presets(rig):
     (its values, else the defaults) and replaces every route; nothing is
     left under library/bindings/ and no `bindings` group is listed."""
     assert not (FACTORY / "bindings").exists() and "bindings" not in rig.lib.groups()
-    for name in ("legacy6", "lfo-breathe", "hands-fx", "hands-pinch", "hands-play"):
+    for name in ("legacy6", "lfo-breathe", "hands-fx", "hands-pinch", "hands-play",
+                 "hands-orbit"):                         # plan 18 WP4's, made the same way
         assert rig.lib.is_factory("presets", name), name
         doc = json.loads((preset.FACTORY_DIR / f"{name}.json").read_text())
         assert doc == preset.generated(name), name
@@ -891,6 +914,150 @@ def test_a_load_tells_the_listeners_its_name(rig):
     assert heard == [rig.lib.current("presets")]
     assert rig.lib.warning.startswith("preset listener: ZeroDivisionError")
     assert not rig.presets.note.startswith("preset listener")   # the preset's own note
+
+
+# ------------------------------------------- plan 18 WP4: two hands on the camera
+
+ORBIT = "hands-orbit"
+ORBIT_ROWS = [("hand:right.x", "camera.yaw", 0.5), ("hand:right.pitch", "camera.pitch", 0.5),
+              ("hand:left.x", "camera.pan.x", 0.1), ("hand:left.z", "camera.pan.y", 0.1),
+              ("hand:left.y", "camera.zoom", 0.12)]      # not the plan's 0.3: 7.4× blacked the frame
+# a camera the mouse moved before the hands came in: a scene-setter's bases
+MOUSE = {"camera.yaw": 0.5, "camera.pitch": -0.2, "camera.zoom": 1.6,
+         "camera.pan.x": 120.0, "camera.pan.y": -60.0}
+
+
+def orbit(rig, mouse: dict | None = None):
+    """`hands-orbit` loaded through the one loader, the camera then moved as
+    the mouse moves it (bases), and two fake hands on the real hand chain
+    (test_plan12_presets' harness: default feel, default ranges, no box)."""
+    assert rig.presets.load(ORBIT) == [] and rig.presets.notes == []
+    assert rig.router.table.dropped == []
+    for pid, v in (mouse or {}).items():
+        rig.reg[pid].set(v)
+    src = DictSource()
+    io = HandsIO(HandSettings.from_config(), {"enabled": True}, source=src, out=NullOut(),
+                 clock=lambda: src.t)
+    return src, io
+
+
+def camera(rig) -> dict[str, float]:
+    """The five camera params as the picture has them (effective)."""
+    return {pid: rig.reg[pid].value for pid in MOUSE}
+
+
+def test_hands_orbit_is_five_pushes_onto_the_camera(rig):
+    """Plan 18 WP4 (fork 17 (a)): `hands-orbit` is five rows and nothing
+    else — each a push, from a default hand axis named by axis, onto a
+    real `camera.*` param, one performer per target, no pinch gate, no
+    values, no desk key, no macro. It is a factory preset in the list, on
+    no show's F-key; its file is the generator's; loaded on the default
+    rig its five routes all stand."""
+    routes = preset.hands_orbit_routes()
+    assert [(b.source, b.target, b.value) for b in routes] == ORBIT_ROWS
+    axes = {preset.hand(s, a) for s in "LR" for a in preset.HAND_AXES}
+    for b in routes:
+        p = rig.reg[b.target]
+        assert b.target.startswith("camera.") and p.modulatable, b
+        assert b.op == "push" and b.source in axes and b.when is None and b.scale is None, b
+        assert b.is_performer and b.rest is None, b      # from the axis's own rest
+    assert len({b.target for b in routes}) == len({b.source for b in routes}) == 5
+    assert routing.referee(routes)[1] == []
+    spec = preset.FACTORY_PRESETS[ORBIT]
+    assert spec.routes is preset.hands_orbit_routes and spec.desk is None
+    doc = json.loads((preset.FACTORY_DIR / f"{ORBIT}.json").read_text())
+    assert doc == preset.generated(ORBIT)
+    assert doc["values"] == {} and doc["macros"] == {} and "desk" not in doc
+    assert rig.lib.is_factory("presets", ORBIT) and ORBIT in rig.lib.list("presets")
+    for show in (FACTORY / "projects").glob("*.hyp.json"):
+        proj = json.loads(show.read_text())
+        # a bank names presets by name, in whatever case the show wrote it
+        named = {preset.slug(n) for n in [*proj["bank"], proj.get("startup")] if n}
+        assert named and preset.slug(doc["name"]) == ORBIT and ORBIT not in named, show.name
+    orbit(rig)
+    assert [b.to_json() for b in rig.router.table.routes()] == doc["routes"]
+    assert [rig.router.table.owner(t).source for _, t, _ in ORBIT_ROWS] == \
+        [s for s, _, _ in ORBIT_ROWS]
+
+
+def test_an_absent_or_level_hand_leaves_the_orbit_camera_alone(rig):
+    """Plan 12's rule for a hand row: no hand, and both hands in at rest
+    (level, centred, at the bottom of the height range), add nothing — the
+    camera stays exactly where the mouse left it, and the bases are never
+    written."""
+    src, io = orbit(rig, MOUSE)
+    hold(rig, rig.router, src, io, {}, 10)
+    assert camera(rig) == pytest.approx(MOUSE, abs=1e-9)
+    assert not any(rig.reg[pid].modulated for pid in MOUSE)
+    hold(rig, rig.router, src, io, {"left": feats("left"), "right": feats("right")})
+    assert camera(rig) == pytest.approx(MOUSE, abs=1e-6)
+    for pid, left_at in MOUSE.items():
+        assert offset(rig.reg[pid]) == pytest.approx(0, abs=1e-6), pid
+        assert rig.reg[pid].base == pytest.approx(left_at), pid
+    # one hand alone at rest is the same
+    for side in ("left", "right"):
+        hold(rig, rig.router, src, io, {side: feats(side)})
+        assert camera(rig) == pytest.approx(MOUSE, abs=1e-6), side
+
+
+def test_each_orbit_axis_moves_its_camera_param_as_its_row_says(tmp_path):
+    """Each row's axis swept across its range from the default camera: at
+    rest the param is its base; the ends are what the depth says — the
+    yaw a quarter turn each way, the pitch ±44° (a quarter of its ±1.55
+    range), each pan ±400 px, the zoom up from 1× to 800^0.12 = 2.23× at the
+    top and never below the base; the move is monotonic; no other camera
+    param moves; the hand leaving brings the base back."""
+    ends = {"camera.yaw": (-math.pi / 2, math.pi / 2),
+            "camera.pitch": (-0.25 * 3.1, 0.25 * 3.1),
+            "camera.pan.x": (-400.0, 400.0), "camera.pan.y": (-400.0, 400.0),
+            "camera.zoom": (1.0, 2.23)}                  # 800 ** 0.12, as measured
+    assert math.degrees(ends["camera.pitch"][1]) == pytest.approx(44.4, abs=0.05)
+    for k, (source, target, depth) in enumerate(ORBIT_ROWS):
+        side, axis = source.split(":")[1].split(".")
+        seen = []
+        for u in (0.0, 0.25, 0.5, 0.75, 1.0):
+            r = boot(tmp_path / f"{k}-{u}")
+            src, io = orbit(r)
+            p = r.reg[target]
+            base = camera(r)
+            hold(r, r.router, src, io, {side: feats(side, **{axis: u})})
+            seen.append(p.value)
+            assert offset(p) == pytest.approx(depth * (u - (0.0 if axis == "y" else 0.5)),
+                                              abs=0.02), (source, u)
+            for other in MOUSE:
+                if other != target:
+                    assert r.reg[other].value == pytest.approx(base[other], abs=1e-6), \
+                        (source, u, other)
+                    assert offset(r.reg[other]) == pytest.approx(0, abs=1e-6), (source, other)
+        rest = 0 if axis == "y" else 2
+        assert seen[rest] == pytest.approx(base[target], abs=1e-6), (source, seen)
+        tol = 2e-3 * (p.hi - p.lo)
+        assert seen[0] == pytest.approx(ends[target][0], abs=tol), (source, seen)
+        assert seen[-1] == pytest.approx(ends[target][1], rel=0.02, abs=tol), (source, seen)
+        assert all(b > a - 1e-9 for a, b in itertools.pairwise(seen)), (source, seen)
+        assert seen[-1] > seen[0]
+        hold(r, r.router, src, io, {})                   # the hand at u = 1 leaves
+        assert p.value == pytest.approx(base[target], abs=tol) and not p.modulated, source
+        assert p.base == pytest.approx(base[target]), source
+
+
+def test_the_orbit_hands_leaving_return_the_camera_to_where_the_mouse_left_it(rig):
+    """Both hands at an end of every axis push all five params off a camera
+    the mouse had moved; both hands out, each is back on the mouse's value
+    and no row holds it. The mouse's bases were never written by a hand."""
+    src, io = orbit(rig, MOUSE)
+    hands = {"right": feats("right", x=1.0, pitch=1.0),
+             "left": feats("left", x=0.0, z=1.0, y=1.0)}
+    hold(rig, rig.router, src, io, hands)
+    played = camera(rig)
+    for pid, sign in (("camera.yaw", 1), ("camera.pitch", 1), ("camera.pan.x", -1),
+                      ("camera.pan.y", 1), ("camera.zoom", 1)):
+        assert sign * (played[pid] - MOUSE[pid]) > 0.1, (pid, played)
+        assert rig.reg[pid].modulated and rig.reg[pid].base == pytest.approx(MOUSE[pid]), pid
+    assert played["camera.yaw"] == pytest.approx(MOUSE["camera.yaw"] + math.pi / 2, abs=0.02)
+    hold(rig, rig.router, src, io, {})
+    assert camera(rig) == pytest.approx(MOUSE, abs=1e-3)
+    assert not any(rig.reg[pid].modulated for pid in MOUSE)
 
 
 

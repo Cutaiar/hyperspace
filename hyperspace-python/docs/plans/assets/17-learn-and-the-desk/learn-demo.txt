@@ -1,0 +1,67 @@
+Plan 17 WP2 — a learn that cannot pick the wrong source (headless: no window, no device, no camera;
+the desk's messages are put on fake ports, the hands are synthetic, the menu and the footer are read as text)
+home: <home>  ·  preset: TUMBLE
+
+1. The menu
+  right-click Yaw (CAMERA page):
+      CAMERA.YAW
+    [ Learn desk ]
+    [ Learn hand ▸ ]
+    [     left ]
+    [     right ]
+    [ Route a lane here… ]
+
+2. The session's wrong hand — the two measured cases, each replayed twice
+  case: the left hand rolls on purpose while the right hand travels in
+    a bare Learn, as before  armed:  ·  learning camera.yaw — move a control or a hand…   [red]
+                             frame 8: learned camera.yaw ← hand right.x positions (into the preset)
+                             the route: hand:right.x
+    Learn hand ▸ left        armed:  ·  learning camera.yaw — move the left hand…   [red]
+                             frame 25: learned camera.yaw ← hand left.roll positions (into the preset)
+                             the route: hand:left.roll
+
+  case: the left hand rolls on purpose while the right hand drops
+    a bare Learn, as before  armed:  ·  learning camera.yaw — move a control or a hand…   [red]
+                             frame 2: learned camera.yaw ← hand right.y positions (into the preset)
+                             the route: hand:right.y
+    Learn hand ▸ left        armed:  ·  learning camera.yaw — move the left hand…   [red]
+                             frame 18: learned camera.yaw ← hand left.roll positions (into the preset)
+                             the route: hand:left.roll
+
+3. A knob bump during a hand learn does its own job
+  right-click Yaw → Learn hand ▸ left
+      footer: ·  learning camera.yaw — move the left hand…   [red]
+  turn K1 (track knob 1)
+      footer: ·  learning camera.yaw — move the left hand…   [red]
+      Brightness 2.00× → 0.90×  ·  still armed: camera.yaw / hand:left  ·  desk rows changed: False
+  click the footer's line (Learn.arm(None))
+      footer: (empty)
+
+4. A fader and SHIFT work through a desk learn; the global layer refuses and it stays armed
+  right-click Yaw → Learn desk
+      footer: ·  learning camera.yaw — turn a knob or press a button on th…   [red]
+  move S3 (track fader 3)
+      footer: ·  learning camera.yaw — turn a knob or press a button on th…   [red]
+      MIDB Post-drive (band 3) 1.00× → 2.64×  ·  still armed: camera.yaw
+  press SHIFT
+      footer: ·  learning camera.yaw — turn a knob or press a button on th…   [red]
+      layer: global  ·  still armed: camera.yaw
+  turn K1 (track knob 1)
+      footer: ·  K1 (track knob 1) is on the global layer (the session's) — lat…   [warning]
+      refused: True  ·  still armed: camera.yaw  ·  desk rows changed: False
+  4.5 s later
+      footer: ·  learning camera.yaw — turn a knob or press a button on th…   [red]
+  press SHIFT again
+      footer: ·  learning camera.yaw — turn a knob or press a button on th…   [red]
+      layer: preset  ·  still armed: camera.yaw
+  turn D5 (device knob 5)
+      footer: ·  learned camera.yaw ← D5 (device knob 5) (into the preset)   [faint]
+      the row: cc:0:20 → camera.yaw  op abs  layer preset  feedback ring  ·  armed: None
+    undo stack (2): 2 changes | learn camera.yaw
+  Ctrl+Z   footer: ·  undid learn camera.yaw
+      desk rows as before the learn: True
+
+5. With no MIDI adapter (panel.midi = None): Learn desk is still offered; until the on-screen desk
+   takes clicks (plan 17 WP4) nothing can complete it, and the line says so
+  right-click Yaw → Learn desk
+      footer: ·  learning camera.yaw — nothing to learn from (no MIDI)   [red]

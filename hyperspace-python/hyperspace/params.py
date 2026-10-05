@@ -88,6 +88,7 @@ PATTERNS = [
     "FLAT", "RINGS", "PLAID", "MOIRE", "BLOOM", "CAUSTIC",
     "HEX", "SPIRAL", "CELLS", "PLASMA", "WEAVE", "EMBER",
 ]
+INST_LAYOUT = ["GRID", "HEX", "RING"]   # render.inst_positions' layouts, in its order
 INST_MOTION = ["STILL", "ORBIT", "WAVE", "RIPPLE"]
 BMP_PATHS = ["STILL", "ORBIT", "FIG-8", "SWAY"]
 PLANES = PLANE_NAMES   # the rotation planes' names, in geometry.PLANES's order
@@ -98,13 +99,14 @@ N_MACROS = 8     # macro.1–8: knobs that act through their subscribers and may
 # once. Performance is what a preset (preset.py) holds and
 # replaces: the look, its LFOs and its macros. Session is the rig and the
 # room (the clock, the hands' feel, the analyzer and its source, the
-# output, the UI), which a preset never moves, so a tapped BPM or the band
+# output, the UI, the desk's own feel: `desk.slew`, routing.register_desk),
+# which a preset never moves, so a tapped BPM or the band
 # scene survives a preset load. Every persisted param is in exactly one
 # (tests/test_params.py walks the full registry); a group in neither
 # (`preset`, the bank) has no persisted params, and `rot.phase.*` is `persist=False`.
 PERFORMANCE_GROUPS = ("view", "rot", "camera", "pattern", "dream", "fx", "lfo", "macro")
 SESSION_GROUPS = ("tempo", "hands", "ghost", "band", "master", "scene", "audio", "output",
-                  "overlay", "ui")
+                  "overlay", "ui", "desk")
 PARTS = {"performance": PERFORMANCE_GROUPS, "session": SESSION_GROUPS}
 
 # the reference's fader → rotation-rate factor (its PLANEDRIVE was
@@ -795,15 +797,19 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                  lo=0, hi=100, integer=True,
                  fmt=lambda v: f"{int(v)} instance(s)" if int(v) > 0 else "0 · nothing drawn",
                  group=g,
-                 tip="Synchronized copies in a grid — scroll to zoom out over the field, "
-                     "right-drag to pan. 0 draws nothing: the ground, the echoes and the "
-                     "effects carry on.")
-    r.enum("view.inst_motion", "Grid motion", *_attr(view, "inst_motion"), INST_MOTION,
-           group=g, tip="Trigonometric motion over the instance grid — each copy's phase "
-                        "comes from its grid position, so the field moves as one figure.")
-    r.continuous("view.inst_amp", "Grid amp", *_attr(view, "inst_amp"), lo=0.0, hi=1.0,
+                 tip="Synchronized copies, laid out as Layout says — scroll to zoom out "
+                     "over the field, right-drag to pan. 0 draws nothing: the ground, the "
+                     "echoes and the effects carry on.")
+    r.enum("view.inst_layout", "Layout", *_attr(view, "inst_layout"), INST_LAYOUT,
+           group=g, tip="How the copies are laid out: a square grid, a honeycomb growing "
+                        "from the centre, or one ring.")
+    r.enum("view.inst_motion", "Field motion", *_attr(view, "inst_motion"), INST_MOTION,
+           group=g, tip="Trigonometric motion over the field of copies — each copy's phase "
+                        "comes from its place in the layout, so the field moves as one "
+                        "figure.")
+    r.continuous("view.inst_amp", "Field amp", *_attr(view, "inst_amp"), lo=0.0, hi=1.0,
                  fmt=lambda v: f"amp {v:.2f}", group=g)
-    r.continuous("view.inst_rate", "Grid rate", *_attr(view, "inst_rate"), lo=0.0, hi=6.0,
+    r.continuous("view.inst_rate", "Field rate", *_attr(view, "inst_rate"), lo=0.0, hi=6.0,
                  fmt=lambda v: f"rate {v:.1f}", group=g)
     r.enum("view.pattern", "Pattern", *_attr(view, "pattern"), PATTERNS, group=g,
            tip="Face pattern — edit hyperspace/shaders/patterns.glsl while the app runs; "
