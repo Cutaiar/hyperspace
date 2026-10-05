@@ -33,7 +33,7 @@ from collections.abc import Callable
 
 from imgui_bundle import imgui
 
-from . import ui_bands, ui_desk, ui_fx, ui_lfo, ui_lookback, ui_presets, ui_routing
+from . import apc40, ui_bands, ui_desk, ui_fx, ui_lfo, ui_lookback, ui_presets, ui_routing
 from .analyzer import N_MAX
 from .audio import AudioEngine
 from .bands import CEIL, KNEE
@@ -449,14 +449,8 @@ class Panel:
         p = self._real(a)
         if p.modulated:
             imgui.text_disabled(f"modulated: {self._mod_text(p)}")
-            who = self._performer(p)
-            if who:
-                imgui.text_disabled(who)
-        # the MIDI row on it, whatever Learn there is
-        m, lrn = self.midi, self.learn
-        b = m.binding_for(a.id) if m is not None else None
-        if b is not None and (lrn is None or lrn.learning != a.id):
-            imgui.text(b.describe())
+        lrn = self.learn
+        desk, routes = self._ctx_lines(a, p)    # what is bound here, a line each
         # Learn is the host's, not the MIDI adapter's: a hand completes it
         # with no MIDI at all, a knob with the message it sends
         if lrn is None:
@@ -467,13 +461,95 @@ class Panel:
                 lrn.arm(None)
         elif imgui.menu_item_simple("Learn"):
             lrn.arm(a.id)
-        if b is not None and imgui.menu_item_simple("Unbind"):
-            m.unbind(a.id)
-        ui_hands.ctx_rows(self, p)      # the hand rows on it — a learn lands on the real param — and Unbind
+        if lrn is not None:
+            self._ctx_unbind(a, p, desk, routes)
+        ui_hands.ctx_rows(self, p, lines=False)     # the hand rows' "Gate: … ▸"
         ui_routing.ctx_item(self, a)    # "Route a lane here…" — the routing matrix
         if extra is not None:
             extra()
         imgui.end_popup()
+
+    def _table(self):
+        """The live binding table — the router's, else the learn object's —
+        never the MIDI adapter's: the menu reads and edits the table with
+        or without one (plan 17 WP1). None on a panel with neither."""
+        router = ui_routing.router_of(self)
+        if router is not None:
+            return router.table
+        return getattr(self.learn, "table", None)
+
+    def _row_name(self, b) -> str:
+        """A row in the menu's and the message's words: a desk row by its
+        control ("K1 (track knob 1)": the glyph, then Akai's name), a route
+        as the router describes it ("R height positions")."""
+        table = self._table()
+        if b.is_midi:
+            named = apc40.named(b.source) if getattr(table, "profile", None) == "apc40" else None
+            return named or b.describe()
+        router = ui_routing.router_of(self)
+        return router.describe(b) if router is not None else b.describe()
+
+    def _route_source(self, b) -> str:
+        """A route's source alone, in its adapter's words ("R height",
+        "LFO 1"), for the Unbind submenu."""
+        router = ui_routing.router_of(self)
+        if router is not None:
+            scheme, i = router.lane(b.source)
+            names = router.labels.get(scheme) or []
+            if 0 <= i < len(names):
+                return names[i]
+        return b.source
+
+    def _ctx_lines(self, a: Param, p: Param) -> tuple[list, list]:
+        """The menu's lines, one per thing bound to the param, read from
+        the table: the loaded preset's desk rows, the routes ("(off)" when
+        disabled; the hand rows through hands/panel.py), then the session's
+        rows, dim — those are never an item (D5, D6). Returns (the desk
+        rows, the routes) an Unbind would remove."""
+        table = self._table()
+        if table is None:
+            return [], []
+        ids = (a.id, p.id)
+        midi = [b for b in table.bindings if b.is_midi and b.target in ids]
+        desk = [b for b in midi if b.layer == "preset"]
+        routes = table.routes_to(p.id)
+        for b in desk:
+            op = "" if b.op in ("abs", "rel") else f" · {ui_routing._op_text(b)}"
+            imgui.text(self._row_name(b) + op)
+        ui_hands.ctx_rows(self, p, gate=False)
+        for b in routes:
+            if b.scheme != "hand" or self.router is None:    # ctx_rows drew the hand's
+                imgui.text(self._row_name(b) + ("" if b.enabled else " (off)"))
+        for b in midi:
+            if b.layer != "preset":
+                where = "global layer" if b.layer == "global" else "invariant"
+                imgui.text_disabled(f"{self._row_name(b)} · {where}")
+        return desk, routes
+
+    def _ctx_unbind(self, a: Param, p: Param, desk: list, routes: list) -> None:
+        """The one Unbind (plan 17 WP1): drawn only when it would remove
+        something — a plain item with one kind bound, a submenu (desk /
+        route / both) with both. `Learn.unbind` does it: one undo step, the
+        loaded preset edited, no file written."""
+        if not desk and not routes:
+            return
+        ids, lrn = (a.id, p.id), self.learn
+        if not (desk and routes):
+            if imgui.menu_item_simple("Unbind"):
+                lrn.unbind(ids, name=self._row_name)
+            return
+        if not imgui.begin_menu("Unbind"):
+            return
+        table = self._table()
+        glyphs = ", ".join(ui_routing.control_glyph(table, b) for b in desk)
+        sources = ", ".join(self._route_source(b) for b in routes)
+        if imgui.menu_item_simple(f"desk — {glyphs}"):
+            lrn.unbind(ids, routes=False, name=self._row_name)
+        if imgui.menu_item_simple(f"route — {sources}"):
+            lrn.unbind(ids, desk=False, name=self._row_name)
+        if imgui.menu_item_simple("both"):
+            lrn.unbind(ids, name=self._row_name)
+        imgui.end_menu()
 
     def _learn_hint(self) -> str:
         """What can complete the armed learn on this rig."""

@@ -38,7 +38,7 @@ import math
 
 from imgui_bundle import imgui
 
-from .. import ui, undo
+from .. import ui
 from .core import FEATURES, GROUP, PINCHES, SIDES, conflicts, mirror
 from .signal import shape
 
@@ -73,22 +73,24 @@ def _select(panel, k: int) -> None:
 
 # ---- right-click menu: a param's hand bindings ----
 
-def ctx_rows(panel, p) -> None:
-    """The context menu's hand part: what hand axis drives this param."""
+def ctx_rows(panel, p, *, lines: bool = True, gate: bool = True) -> None:
+    """The context menu's hand part: what hand axis drives this param
+    (`lines`: a line per hand row, in the adapter's words) and the pinch
+    that gates it (`gate`: the "Gate: … ▸" submenu). The menu draws the
+    lines above its items and the gate among them, so it calls this twice.
+    Removing the rows is the menu's one Unbind (`Learn.unbind`, plan 17
+    WP1); a gate is not an unbind."""
     router = getattr(panel, "router", None)
     if router is None:
         return
     rows = [b for b in router.table.of("hand") if b.target == p.id]
-    for b in rows:                      # in the adapter's words: "R height positions …"
-        imgui.text(router.describe(b) + ("" if b.enabled else " (off)"))
+    if lines:
+        for b in rows:                  # in the adapter's words: "R height positions …"
+            imgui.text(router.describe(b) + ("" if b.enabled else " (off)"))
     # routes are the loaded preset's (plan 13 §3.3): an edit here changes
     # the table and the preset's dirty dot, and writes no file
-    if rows:
+    if gate and rows:
         _gate_menu(router, rows)
-    if rows and imgui.menu_item_simple("Unbind hand"):
-        undo.push(f"unbind hand {p.id}")    # one undo step (undo.py, plan 15)
-        for b in rows:                  # the hand's rows only: a lane's stay
-            router.table.remove(b)
 
 
 def _gate_menu(router, rows) -> bool:
