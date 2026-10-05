@@ -1,6 +1,10 @@
-# Checkpoint — 2026-09-28
+# Checkpoint — 2026-10-04
 
-Where the Python re-platform stands and what to pick up next. What the
+Where the Python re-platform stands and what to pick up next. This
+revision describes the **`finish-line`** branch with plan 15 on it
+(`plan-15-integration`); `main` is at plan 14 (fa9b3a1) and nothing from
+plans 15–21 touches it until the owner merges `finish-line` (decision
+30). What the
 system *is* — the parts, the frame, who may write a parameter — is
 [`ARCHITECTURE.md`](ARCHITECTURE.md); how it behaves is
 [`ENGINEERING.md`](ENGINEERING.md); why it is that way, dated, is
@@ -13,7 +17,8 @@ is [`AUDIT-2026-09.md`](AUDIT-2026-09.md); the stages it was built in are
 ```bash
 git clone github.com/Cutaiar/hyperspace && cd hyperspace/hyperspace-python
 uv sync                 # whole environment, from the committed lockfile
-uv run pytest           # 872 tests, ~40 s (11 skipped without torch)
+git checkout finish-line      # plans 15–21 land here, never on main
+uv run pytest           # 1105 pass, 1 skipped (the hands tape) with plan 15 WP1–WP3
 uv run hyperspace       # the app: ? shows the controls cheat sheet
 ```
 
@@ -52,7 +57,45 @@ acts through base and depth subscribers; Learn writes into the loaded
 preset and never a file; the ROUTING page is one page over the loaded
 preset; the first launch migrates an older home once, backing up every
 file it rewrites. Pending: hand checks group H and decision 20 (hand
-routes by name).
+routes by name). (Since merged as PR #69; decision 20 answered and built,
+PR #70.)
+
+Plan 14 (2026-09-29, [`plans/14-party-rig.md`](plans/14-party-rig.md);
+merged, PR #77, main fa9b3a1) made the rig a party device: an opaque
+render window for the Pepper's Ghost glass, the stall log and red
+banner, the `party` show as what opens, the PRESETS page, every effect
+in a factory preset, echoes in seconds with the dream on, the desk drawn
+with glyphs. Its §6 is the owner's to-do list at the machine. The ghost
+hands (PR #78) are on `finish-line` ahead of plan 15.
+
+Plan 15 (2026-10-04, [`plans/15-safety-net.md`](plans/15-safety-net.md),
+its §8 "As built"; from the Oct 3–4 session, decisions 26–29) is the
+safety net, on `plan-15-integration` → `finish-line`:
+
+- **Undo** (WP1, PR #82): ⌘Z / Ctrl+Z, ⇧ to redo. One step per gesture
+  (a drag, a knob turn, a typed value) or per replacing action (a load,
+  a Learn, an Unbind, a delete, Replace), found by comparing the bases
+  and the loaded preset's table once a frame; a hand, a band or an LFO
+  makes no step; a restore sets only what differs. `undo.py`,
+  ENGINEERING §5b.
+- **The trash** (WP1): a user preset file a save or a delete would
+  destroy is copied to `<home>/trash/` first.
+- **Home** (WP2, PR #83): the Home key and the APC40's OVERDUB load the
+  show's "starts on" preset.
+- **The master dim** (WP3, PR #81): the crossfader dims the finished
+  frame, left black, right full; never saved, 1 at launch; a preset load
+  no longer loosens a fader whose param it did not move.
+- **Save-as on the desk** (WP4): a hold on the clip-stop row saves a new
+  preset into the next empty slot. Its PR follows #83.
+
+None of it has been tried by a person at the rig. It was shown by tests
+(1105 pass), offscreen renders, headless demos under
+`plans/assets/15-safety-net/`, and a scripted launch of the app on a
+laptop. Eleven forks were settled by the unattended run on its own
+recommendation and wait for the owner: `DECISION-REGISTER.md` rows
+34–44. Plans 16–21 are ordered in
+[`plans/15-21-roadmap.md`](plans/15-21-roadmap.md); each plan document
+is written when it starts.
 
 **Everything only the machine can verify** — plan 09's five hand checks,
 plan 08's unverified list, plan 07's WP6c dream tuning, the first real
@@ -70,6 +113,13 @@ file what fails as new audit rows dated with plan 11.
    enabled) are the two things most likely to look different. Plan 13's
    group H (checks 33–42, check 31 first) starts with the first launch
    on the new code, which migrates `~/Hyperspace` — copy it first.
+   Plan 15's **group K** (checks 48–57) is the newest: before launching
+   `finish-line`, `cp -R ~/Hyperspace ~/Hyperspace-2026-10-04`; do check
+   57 first (that launch rewrites `bindings.json` once, with a backup:
+   the crossfader, OVERDUB, the clip-stop row, Home and the undo keys),
+   then 48, 50, 53 on the laptop, 49, 51, 54–56 with the APC40, 52 with
+   the camera. Check 55 settles the one thing read from a comment: that
+   the crossfader's left end is CC 0.
 2. **First real audio capture.** Every live path is code-complete and now
    under test over a fake device, but no human has pressed `M` on real
    hardware with the macOS microphone prompt. One click plus a clap
@@ -78,22 +128,34 @@ file what fails as new audit rows dated with plan 11.
    Rows 1–6 are answered and built (the trim is the per-band AUTO /
    MANUAL switch, plan 11 WP15); `R` / F1–F8 as table rows (row 7) and
    plan 13's forks (rows 9–13, 12b, 18, 19) are answered and built. Row
-   20 (hand routes by name, audit N7) is open.
-4. **Plan 04 — booth hardware.** Blocked on access: the pure-Python
+   20 (hand routes by name, audit N7) is open. (As of 2026-10-04: rows
+   1–33 are all answered. **Rows 34–44 are the open ones** — eleven
+   calls plan 15's unattended run built on its own recommendation, each
+   to confirm or overturn, each with its cost to reverse: the undo keys
+   and the chord rule, the band layout, taps, the trash's rules, the
+   Home key, camera moves, performers on home and the dim, the dim in
+   overlay, the save-as gesture, a drag that pauses, the faders after a
+   load.)
+4. **The rest of the finish line**: plan 15 WP4's reconciliation in the
+   documents (the sentences marked "plan 15 WP4" were written from the
+   plan), then plans 16–21 in the roadmap's order, each onto
+   `finish-line`. One audit row is open from plan 15: R13 (a fader moved
+   while its row is disabled stays caught and jumps).
+5. **Plan 04 — booth hardware.** Blocked on access: the pure-Python
    Pro DJ Link spike against the CDJ-3000/XDJ-AZ (BLT+OSC is the standing
    fallback), ESP32+BNO055 IMU ingest (packet format specced in BLUEPRINT
    §3.4), Δt delay compensation + metronome calibration. The tempo clock
    deliberately syncs to nothing until then (DECISIONS).
-5. **Instanced GPU field.** For a *live* field: per-instance rotation
+6. **Instanced GPU field.** For a *live* field: per-instance rotation
    phases and true instancing (agent prototype measured 621–845 fps at
    N=100; 1–2 days). The synchronized-grid mode is the v1.
-6. **Plan 05's rest** — MIDI clock from deck BPM and the FL-side fuser
+7. **Plan 05's rest** — MIDI clock from deck BPM and the FL-side fuser
    script; the bridge itself is built, off by default, and now has a line
    on the SYSTEM page.
-7. **Plan 06's non-trim items:** tempo-locked shapers once DJ Link exists,
+8. **Plan 06's non-trim items:** tempo-locked shapers once DJ Link exists,
    real harmonic detection, a scrub bar. (Saveable scenes and per-band
    LFO knobs are covered by the JSON scenes and the routable LFOs.)
-8. **Ideas parked:** per-cell (3-cell) grouping for cell-wise
+9. **Ideas parked:** per-cell (3-cell) grouping for cell-wise
    colour/pattern assignment.
 
 ## Decisions that govern future work
@@ -108,8 +170,14 @@ session trips over first:
   owner's eye.
 - One performer per parameter; scene-setters write the base; every
   continuous source reaches a param only through `Router.modulate`;
-  `hands/core.py`, `hands/signal.py`, `lfo.py` and `tempo.py` import
-  nothing from the package (ARCHITECTURE §3, held by tests).
+  `hands/core.py`, `hands/signal.py`, `lfo.py`, `tempo.py` and `undo.py`
+  import nothing from the package (ARCHITECTURE §3, held by tests).
+- A replacing action calls `undo.push(label)` **before** it changes
+  anything (`load=True` when it changes what is loaded); undo is a
+  scene-setter and never writes an offset or a file. Every later plan's
+  new action does the same.
+- Nothing from plans 15–21 goes to `main`; everything lands on
+  `finish-line` through one integration branch per plan (decision 30).
 - Plans 03/04 swapped (hardware unavailable). The DJ Link spike is the
   first thing to do when deck access exists — it is the only genuine
   unknown in the stack.
