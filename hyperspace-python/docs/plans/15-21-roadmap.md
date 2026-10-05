@@ -9,6 +9,12 @@ document (`15-…md` to `21-…md`) is written against the code as it stands
 when that plan starts, by the session that runs
 [`docs/prompts/plans-15-21-orchestrator.md`](../prompts/plans-15-21-orchestrator.md).
 
+**As built (2026-10-04): all seven plans are built**, onto `finish-line`
+(plan 21 through `plan-21-integration`); each plan's §7 "As built" is
+the record, its forks are decision register rows 34–88 to confirm or
+overturn, and its machine checks are `11-hand-checks.md` groups K–Q
+(checks 48–112). Nothing from plans 15–21 has been tried at the rig.
+
 ## 1. The constraints on everything below
 
 - **"We don't want to drown in the number of parameters."** Said in the
@@ -242,6 +248,15 @@ and "speed" is `dream.k`.
 - **Instance layouts**: `view.inst_layout` — grid, hex, ring.
 
 ### Plan 21 — Outputs and the hands
+
+*As built:* [`21-outputs-and-the-hands.md`](21-outputs-and-the-hands.md)
+§7 (PRs #112, #118, #120, #122, #123 and #124 on `plan-21-integration`;
+decision register rows 79–88; hand checks 99–112, check 47 finished as
+108); where it differs from the lines below, that section is the code —
+**a third switch per output, "hands through effects"** (asked by the
+owner during the run: eight states per output, not four), the outputs
+listed in `[[output.screens]]`, output 1's window rendering and the
+others copying, and `ghost.style` with five drawn objects.
 
 The owner, 2026-10-04: the Pepper's Ghost glass and the projector are each
 a render target; the laptop screen is the control view. Each target shows

@@ -1,18 +1,18 @@
 # Checkpoint — 2026-10-04
 
 Where the Python re-platform stands and what to pick up next. This
-revision describes **`plan-19-integration`**: the **`finish-line`**
-branch with plans 15–18 on it (`plan-15-integration`,
-`plan-16-integration`, then `plan-18-integration` with plans 17 and 18,
-each merged into it when its last PR was in) and plan 20 (the faces as
-an effect target, the chain view with drag to reorder, the look-back
-page as ECHOES / DREAM / BOTH, dream speed, instance layouts), merged
-in, and plan 19 whole on top (a bank of twenty-four, clip rows 4–5 as
-the bank, the device knobs re-cut, hide / rename / the trash, the dirty
-dot, the home in git), documented. It merges into `finish-line` next.
-**Plan 21 (outputs and the hands) is in progress** on its own
-integration branch and is not described here yet. `main` is at plan 14 (fa9b3a1) and nothing from plans 15–21
-touches it until the owner merges `finish-line` (decision 30). What the
+revision describes **`finish-line` with plans 15–21 all landed**: plans
+15–18 (`plan-15-integration`, `plan-16-integration`, then
+`plan-18-integration` with plans 17 and 18), plans 19 and 20
+(`plan-19-integration`), and plan 21 — outputs and the hands — through
+`plan-21-integration` (written on that branch; it reaches `finish-line`
+when the orchestrator merges it), each merged when its last PR was in,
+each documented. **The build is finished; what is left is the owner's**:
+the hand checks (groups K–Q), the confirm-or-overturn rows 34–88 of the
+decision register, and two merges — PR #113 (the shared presets into
+`main`) and PR #80 (`finish-line` into `main`). `main` is at plan 14
+(fa9b3a1) and nothing from plans 15–21 touches it until the owner
+merges `finish-line` (decision 30). What the
 system *is* — the parts, the frame, who may write a parameter — is
 [`ARCHITECTURE.md`](ARCHITECTURE.md); how it behaves is
 [`ENGINEERING.md`](ENGINEERING.md); why it is that way, dated, is
@@ -29,7 +29,8 @@ git checkout finish-line      # plans 15–21 land here, never on main
 uv run pytest           # 1178 pass, 1 skipped (the hands tape) with plans 15 and 16;
                         # 1276 pass, 1 skipped on plan-18-integration (plans 17 and 18);
                         # 1355 pass, 1 skipped on plan-20-integration (plans 15–18 and 20);
-                        # 1442 pass, 1 skipped on plan-19-integration (plans 15–20)
+                        # 1442 pass, 1 skipped on plan-19-integration (plans 15–20);
+                        # 1549 pass, 1 skipped on plan-21-integration (plans 15–21)
 uv run hyperspace       # the app: ? shows the controls cheat sheet (off at launch)
 ```
 
@@ -304,6 +305,53 @@ commit). Seven calls wait for the owner: `DECISION-REGISTER.md` rows
 72–78. ARCHITECTURE and ENGINEERING describe the bank, the desk's
 rows 4–5, the list, the trash and the home in git as they are now.
 
+Plan 21 (2026-10-04, [`plans/21-outputs-and-the-hands.md`](plans/21-outputs-and-the-hands.md),
+its §7 "As built"; the owner's answers 32 and 33, and the owner's
+addition during the run, "hands through effects") is outputs and the
+hands, on `plan-21-integration`. It adds `output.N.scene / hands /
+through` per opened output and `output.N.dim` with two or more listed
+(rig settings: never saved, from `config.toml` at every launch),
+`ghost.style`, and one config list, `[[output.screens]]`; no page or
+menu item:
+
+- **PR #78's ghost hands, reviewed** (WP5, PR #112): a hands pass that
+  raises costs the frame neither its picture nor its dim (`Ghost.error`
+  says why); the pass writes no param; a bad tape is a SYSTEM note.
+- **The compose path and hands through effects** (WP1, WP2, PRs #118,
+  #120): the frame is drawn once and shown per output through its
+  switches; with "through" on an output's hands go in before the
+  effects, which bend them; the echoes and the dream never hold them;
+  the guide and its labels are never bent. Eight states per output, six
+  pictures. One output with the default switches is the old frame, to
+  the bit.
+- **`ghost.style`** (WP6, PR #122): HANDS (as before), JOINTS, PALMS,
+  CAGE, MARIONETTE, saved with the show; Ghost mirror, guide and tethers
+  no longer follow a hand (a hand Learn onto one is refused in words; an
+  old route onto one is dropped at load with a note).
+- **The output list** (WP3, PR #123): `[[output.screens]]` (four at
+  most; no list is one output, as before); output 1's window renders,
+  each later output copies the frame in its own window; only output 1's
+  swap waits for its screen; `windows.json` one rect per output; a later
+  output whose screen is not connected at launch is not opened, and **a
+  screen plugged in later is not picked up until a relaunch**.
+- **The OUTPUT page** (WP4, PR #124): a block per output — three ticks,
+  its dim, "shows: …" in words; the footer names a black output.
+
+None of plan 21 has been tried by a person at the rig, **and no window
+of it has been looked at by a person**: it was shown by tests (1549 pass
+with plans 15–20 underneath), offscreen renders under
+`plans/assets/21-outputs-and-the-hands/`, and scripted launches on the
+laptop's one screen whose windows were read back (output 2's picture
+equal to output 1's, byte for byte). Nothing has met the glass, the
+projector, a second screen or a real hand, and **whether output 1's
+waiting swap paces the loop is unconfirmed** (the build ran unpaced with
+one output and with two). Ten calls wait for the owner:
+`DECISION-REGISTER.md` rows 79–88. ARCHITECTURE and ENGINEERING describe
+the outputs, the frame and the ghost hands as they are now. During the
+run a full pytest run aborted inside CoreMIDI (2026-10-04 22:36); the
+tests are now kept off the machine's MIDI (`tests/conftest.py`), and the
+app's own 2 s port rescan carries the same risk (audit R15, open).
+
 **Everything only the machine can verify** — plan 09's five hand checks,
 plan 08's unverified list, plan 07's WP6c dream tuning, the first real
 capture, the APC40, the second monitor, IAC + FL Studio, and the
@@ -357,7 +405,20 @@ file what fails as new audit rows dated with plan 11.
    real mouse and the trackpad (94), the look-back page and the six
    layer chips' names (95), dream speed with the worker running (96),
    the layouts and HEX + ORBIT's overlap (97) — then 98 on the projector
-   and the glass, where the faces' effects are judged at all.
+   and the glass, where the faces' effects are judged at all. Plan 21's
+   **group Q** (checks 99–112, about an hour): back up the home first;
+   **99 and 100 on the laptop before editing `config.toml`** (one output
+   as it was; PR #78's fixes), then paste check 101's two
+   `[[output.screens]]` entries and run 101–109 with the glass, the
+   projector and the camera (the eight states, over or through, the dims
+   with the APC40's crossfader, black never a mystery, another shape,
+   **107: the frame rate and tearing with two screens — the one claim of
+   plan 21 nobody has confirmed**, 108: the ghost hands following real
+   ones, which finishes check 47 and records the first real tape, 109:
+   the five styles from where the audience stands — say which to keep),
+   110 (a hand cannot learn a ghost setting; the APC40 for its Learn desk
+   step), then 111 and 112 last (the projector unplugged at launch, then
+   pulled mid-run).
 2. **First real audio capture.** Every live path is code-complete and now
    under test over a fake device, but no human has pressed `M` on real
    hardware with the macOS microphone prompt. One click plus a clap
@@ -393,12 +454,32 @@ file what fails as new audit rows dated with plan 11.
    new triggers, the show file, TRACER on slot 9, the page), rows 4–5
    and their lights with the old shape pads dropping quietly, no backup
    no rewrite, the knob re-cut, hide / rename / the trash, the dot and
-   "save copy", and the home in git.)
-4. **The rest of the finish line**: plans 17–21 in the roadmap's order,
-   each onto `finish-line`. Plans 17 and 18 are built, documented and on
-   `finish-line`. Plan 20 is built and documented, and merged into
-   `plan-19-integration`; plan 19 is built and documented there, which
-   goes to `finish-line` next. **Plan 21 is in progress.** Left stale by
+   "save copy", and the home in git. **Rows 79–88 are plan 21's**: where
+   "through" puts the hands and what the scene off with it on shows, the
+   guide never bent, the switches as rig settings from the config,
+   letterboxing, one window rendering and the others copying with only
+   the first waiting — its frame-rate reason unconfirmed — Ghost hands
+   against each output's tick, the OUTPUT page in words, a screen not
+   connected at launch, `ghost.style`, and Ghost mirror / guide /
+   tethers no longer following a hand. Rows 34–88 are the last of the
+   run: each is built and takes "keep" or "overturn".)
+4. **The rest of the finish line: merge it.** Plans 15–21 are all
+   built, documented and on `finish-line` (plan 21 by its integration
+   branch). Left to do: merge **PR #113** (the owner's shared presets,
+   `shared/` and `tools/shared_presets.py`, into `main`) and **PR #80**
+   (`finish-line` into `main`), after the hand checks the owner wants
+   first. Left stale by plan 21, not being documents: `render.py`'s
+   comment before the pipeline loop says the history is captured "after
+   the first composite" (it is captured once, after every pipeline);
+   `ghost.py`'s module docstring and `ghost.on`'s tip say the hands are
+   drawn "after every effect" (now the default of the through tick
+   only); `app._open_presenters`' docstring quotes "121 fps against
+   60–81" as fact (unconfirmed); `outputs.py`'s module docstring names
+   scene, hands and dim but not through. Three audit rows are filed and
+   open from plan 21: R15 (the app's MIDI rescan and a CoreMIDI abort),
+   P6 (a screen plugged in after launch is not picked up) and V8
+   (`Renderer.on_reload` builds in whichever GL context is current).
+   Left stale by
    plan 19, not being documents: `ui.py`'s `_page_presets` docstring
    still says "the eight preset buttons"; `homegit.py`'s module
    docstring lists the commits a save, a × and a show write ask for, not
