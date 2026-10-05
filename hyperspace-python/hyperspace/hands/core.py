@@ -434,6 +434,7 @@ class HandSettings:
     smooth: float = 1.0          # One Euro min cutoff, Hz — lower is steadier at rest
     response: float = 4.0        # One Euro beta — higher follows fast moves closer
     catch_s: float = 0.15        # glide onto a returning hand
+    learn_depth: float = 0.25    # the depth a Learn lands with when it lands as a push
     rate: int = 200              # MIDI messages a second per axis at most (0 = no cap)
     steady: float = 0.35         # 7-bit hysteresis, in steps past the half-step
     pinch_close: float = 0.34    # ×palm: tips closer than this close the switch
@@ -507,6 +508,12 @@ def register(reg, settings: HandSettings) -> None:
              "track closer; lower: steadier but laggier.")
     cont(f"{GROUP}.catch", "Catch", g, "catch_s", 0.0, 1.0, fmt=secs,
          tip="When a hand comes back, glide onto it over this long instead of jumping.")
+    cont(f"{GROUP}.learn_depth", "Learn depth", g, "learn_depth", 0.05, 1.0,
+         fmt=lambda v: f"{v:.2f}",
+         tip="The depth a hand Learn lands with when it lands as a push — the number "
+             "the ROUTING row shows. 0.25: the whole tilt moves the param a quarter of "
+             "its throw, half each way from where you set it. Rows you already have "
+             "keep theirs.")
     cont(f"{GROUP}.rate", "MIDI rate", g, "rate", 0, 1000, integer=True,
          fmt=lambda v: "no cap" if v <= 0 else f"{int(v)}/s",
          tip="Most messages a second per axis to the DAW port (0: no cap). "
@@ -1282,10 +1289,12 @@ class HandsIO:
             # pinched while learning: the pinch becomes the row's gate, so
             # the same movement means this only while the thumb agrees
             gate = self.held_gate(self.axes[best].side)
-            if gate is None:
-                learn.learn_source(self.address(best))
-            else:
-                learn.learn_source(self.address(best), when=gate)
+            # what the row lands as is the learn's (plan 18 WP3): told whether
+            # this axis rests in the middle — its setup now, not the feature
+            # table — and the session's depth for a push
+            centred = bool(self.axes[best].bipolar)
+            depth = float(self.settings.learn_depth)
+            learn.learn_source(self.address(best), when=gate, centred=centred, depth=depth)
 
     def _open(self) -> None:
         """Open the port the config names; on failure say why once and

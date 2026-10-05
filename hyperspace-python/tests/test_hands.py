@@ -285,17 +285,24 @@ def test_setup_is_registry_params_that_round_trip():
     hands.register(reg, s)
     hands.register(reg, s)                                   # idempotent
     ps = reg.group("hands")
-    # 8 settings, 13 per axis, and the selection with its alias (plan 13 WP3)
-    assert len(ps) == 8 + 12 * 13 + 2 and not any(p.modulatable for p in ps)
+    # 9 settings (the learn depth is plan 18 WP3's), 13 per axis, and the
+    # selection with its alias (plan 13 WP3)
+    assert len(ps) == 9 + 12 * 13 + 2 and not any(p.modulatable for p in ps)
+    depth = reg["hands.learn_depth"]
+    assert (depth.lo, depth.hi, depth.value, depth.text()) == (0.05, 1.0, 0.25, "0.25")
     snap = reg.snapshot("hands")
+    assert snap["hands.learn_depth"] == 0.25
     reg["hands.right.pitch.curve"].set_value(-0.5)
     reg["hands.right.pitch.rest"].set(0)
     reg["hands.right.pitch.out"].set(hs.OUTS.index("pitch"))
     reg["hands.smooth"].set_value(3.0)
+    depth.set_value(0.6)
     a = s.axes[10]
     assert (a.curve, a.rest, a.out, s.smooth) == (-0.5, "hold", "pitch", 3.0)
+    assert s.learn_depth == 0.6 and reg.snapshot("hands")["hands.learn_depth"] == 0.6
     reg.restore(snap)
     assert (a.curve, a.rest, a.out, s.smooth) == (0.0, "return", "cc", 1.0)
+    assert s.learn_depth == 0.25
 
 
 def test_a_setup_saves_and_loads_through_the_library(tmp_path):
@@ -306,11 +313,12 @@ def test_a_setup_saves_and_loads_through_the_library(tmp_path):
     lib = Library(tmp_path)
     lib.attach(reg)
     assert "hands" in lib.groups()
-    s.axes[0].curve = 0.4
+    s.axes[0].curve, s.learn_depth = 0.4, 0.1
     lib.save_as("hands", "Soft")
-    s.axes[0].curve = 0.0
+    s.axes[0].curve, s.learn_depth = 0.0, 0.25
     lib.load("hands", "Soft")
     assert s.axes[0].curve == pytest.approx(0.4)
+    assert s.learn_depth == pytest.approx(0.1)               # the learn depth is the setup's
 
 
 # ---------------------------------------------------------------- the adapter
@@ -454,7 +462,9 @@ def _frame(app):
     app.reg.apply()
 
 
-def test_learn_takes_the_axis_that_moved_as_a_position_route(app):
+def test_learn_takes_the_axis_that_moved_as_a_push_about_the_base(app):
+    """Until plan 18 WP3 `…_as_a_position_route`: the moved pitch — a
+    centred axis — now lands a push at the session's learn depth."""
     r = rig()
     run(r, 1, hand(), learn=app.learn, router=app.router)
     app.learn.arm("view.inst_amp")
@@ -464,22 +474,146 @@ def test_learn_takes_the_axis_that_moved_as_a_position_route(app):
     assert app.learn.learning is None and app.learn.pending is None
     rows = [b for b in app.table.of("hand") if b.target == "view.inst_amp"]
     assert [(b.source, b.op, b.value, b.when) for b in rows] == [
-        ("hand:right.pitch", "position", 1.0, None)]
+        ("hand:right.pitch", "push", 0.25, None)]
+    assert rows[0].rest is None                       # the axis's own rest, each frame
     assert app.table.owner("view.inst_amp") is rows[0]
-    assert "learned view.inst_amp" in app.learn.last
-    # the hand is the fader — in floats, off its 100 detents — through the
-    # Router like every route; the base is what the panel set
+    assert app.learn.last == ("learned view.inst_amp ← hand right.pitch pushes +0.25 "
+                              "(into the preset)")
+    # the hand pushes about the base — in floats, off its 100 detents —
+    # through the Router like every route; the base is what the panel set
     run(r, 1, hand(direction=tilt(math.radians(13.0))), learn=app.learn, router=app.router)
     _frame(app)
     p = app.reg["view.inst_amp"]
     u = (13.0 + 60) / 120
-    assert p.eff_norm == pytest.approx(u, abs=1e-4)   # the filter at 1 MHz: all but exact
+    # the filter at 1 MHz: all but exact
+    assert p.eff_norm == pytest.approx(0.25 + 0.25 * (u - 0.5), abs=1e-4)
     assert abs(p.eff_norm * p.steps - round(p.eff_norm * p.steps)) > 1e-3
     assert p.norm == pytest.approx(0.25) and p.modulated
+    run(r, 1, hand(), learn=app.learn, router=app.router)      # level: the base shows
+    _frame(app)
+    assert p.eff_norm == pytest.approx(0.25, abs=1e-4)
     # into the loaded preset: the table has it, bindings.json does not
     # (plan 13 §3.3 — a save of the preset writes it)
     on_disk = Bindings.load(app.table.path, legacy_midi=None)
     assert on_disk.owner("view.inst_amp") is None
+
+
+def _hand_learn(r, app, pid, pose, want=None):
+    """Arm `pid` and move until the learn completes: `pose(k)` is the hand
+    on frame k. Returns the param's performer."""
+    run(r, 1, pose(0), learn=app.learn, router=app.router)
+    app.learn.arm(pid, want)
+    for k in range(1, 12):
+        run(r, 1, pose(k), learn=app.learn, router=app.router)
+        if app.learn.learning is None:
+            break
+    assert app.learn.learning is None and app.learn.pending is None
+    return app.table.owner(pid)
+
+
+def _rolling(k):
+    return hand(normal=rolled(8.0 * k))
+
+
+def _rising(k):
+    return hand(pos=(0.0, 200.0 + 20.0 * k, 0.0))
+
+
+def _spied(app) -> list:
+    """Record what the adapter passes to `learn_source`."""
+    seen, real = [], app.learn.learn_source
+
+    def spy(source, **kw):
+        seen.append((source, kw))
+        return real(source, **kw)
+    app.learn.learn_source = spy
+    return seen
+
+
+def test_learn_passes_the_axiss_centredness_and_the_sessions_depth(tmp_path):
+    """Plan 18 WP3, the adapter's half: a learn is told whether the axis
+    that won rests in the middle — its setup *now* (`hands.<axis>.bipolar`,
+    "Centred"), not the feature table — and the session's `hands.learn_depth`.
+    Roll lands a push at 0.25; height on a one-sided param is still the
+    fader; a roll whose "Centred" was switched off is one-sided too; at
+    0.5 a push lands 0.5, a one-sided axis on a zero-centred range included.
+
+    And the owner's complaint in numbers ("lower hand sensitivity", "tame
+    rotation"), with the default dead zone: a roll learned onto
+    `rot.rate.XY` from 1× reads 1× level (it read 0×: the plane stopped),
+    2.04× at 9° (4.16×) and 3.77× / −1.77× at ±18° (±11.09×)."""
+    app, r = make_app(tmp_path / "roll"), rig()
+    seen = _spied(app)
+    b = _hand_learn(r, app, "view.inst_amp", _rolling)
+    assert seen == [("hand:right.roll", {"when": None, "centred": True, "depth": 0.25})]
+    assert (b.source, b.op, b.value, b.rest) == ("hand:right.roll", "push", 0.25, None)
+
+    app, r = make_app(tmp_path / "height"), rig()
+    seen = _spied(app)
+    b = _hand_learn(r, app, "view.inst_amp", _rising)
+    assert seen == [("hand:right.y", {"when": None, "centred": False, "depth": 0.25})]
+    assert b == Binding("hand:right.y", "view.inst_amp", "position", 1.0)
+
+    app, r = make_app(tmp_path / "uncentred"), rig()
+    hands.register(app.reg, r.s)
+    app.reg["hands.right.roll.bipolar"].set(False)           # "Centred" switched off
+    seen = _spied(app)
+    b = _hand_learn(r, app, "view.inst_amp", _rolling)
+    assert seen == [("hand:right.roll", {"when": None, "centred": False, "depth": 0.25})]
+    assert (b.op, b.value) == ("position", 1.0)
+
+    app, r = make_app(tmp_path / "deeper"), rig()
+    hands.register(app.reg, r.s)
+    app.reg["hands.learn_depth"].set_value(0.5)
+    seen = _spied(app)
+    b = _hand_learn(r, app, "view.inst_amp", _rolling)
+    up = _hand_learn(r, app, "rot.rate.XW", _rising)
+    assert [kw for _, kw in seen] == [{"when": None, "centred": True, "depth": 0.5},
+                                      {"when": None, "centred": False, "depth": 0.5}]
+    assert (b.op, b.value) == ("push", 0.5)
+    assert (up.source, up.op, up.value, up.rest) == ("hand:right.y", "push", 0.5, None)
+
+    # rotation, in the plan's own figures (§1 row 2)
+    app, r = make_app(tmp_path / "rate"), rig()
+    r.s.axes[ax(r, "right.roll")].deadzone = 0.04            # the default feel's dead zone
+    rate = app.reg["rot.rate.XY"]
+    rate.set(1.0)
+    b = _hand_learn(r, app, "rot.rate.XY", _rolling)
+    assert (b.source, b.op, b.value) == ("hand:right.roll", "push", 0.25)
+
+    def reads(deg):                                          # thumb up is + on a right hand
+        assert features(hand(normal=rolled(-deg)))["roll"] == pytest.approx(deg)
+        run(r, 1, hand(normal=rolled(-deg)), router=app.router)
+        _frame(app)
+        return rate.value
+    for deg, want in ((0.0, 1.0), (9.0, 2.04), (18.0, 3.773), (-18.0, -1.773), (90.0, 17.64),
+                      (-90.0, -15.64)):
+        assert reads(deg) == pytest.approx(want, abs=0.01), deg
+    assert rate.base == pytest.approx(1.0)
+    run(r, 1, router=app.router)                             # the hand leaves: the preset's 1×
+    _frame(app)
+    assert rate.value == pytest.approx(1.0) and not rate.modulated
+    app.table.remove(b)                                      # the row before this package
+    app.table.add(Binding("hand:right.roll", "rot.rate.XY", "position", 1.0))
+    for deg, want in ((0.0, 0.0), (9.0, 4.16), (18.0, 11.093), (-18.0, -11.093), (90.0, 66.56)):
+        assert reads(deg) == pytest.approx(want, abs=0.01), deg
+
+
+def test_learn_depth_changes_only_the_next_learn(app):
+    """`hands.learn_depth` is what a *new* learn lands with: a row learned
+    at 0.25 stays 0.25 when the param moves, and the next learn takes the
+    new number."""
+    r = rig()
+    hands.register(app.reg, r.s)
+    first = _hand_learn(r, app, "view.inst_amp", _rolling)
+    assert first.value == 0.25
+    app.reg["hands.learn_depth"].set_value(0.6)
+    run(r, 5, hand(), learn=app.learn, router=app.router)
+    _frame(app)
+    assert first.value == 0.25 and app.table.owner("view.inst_amp") is first
+    second = _hand_learn(r, app, "view.speed", lambda k: hand(direction=tilt(0.12 * k)))
+    assert (second.source, second.op, second.value) == ("hand:right.pitch", "push", 0.6)
+    assert first.value == 0.25 and (first.op, first.source) == ("push", "hand:right.roll")
 
 
 def test_a_panel_edit_moves_the_return_value_under_a_hand(app):
@@ -656,13 +790,14 @@ def test_a_hand_learn_needs_no_midi_adapter(tmp_path):
         run(r, 1, hand(pos=(2.0 * k, 200.0, 0.0), direction=tilt(0.12 * k)),
             learn=learn, router=router)
     b = table.owner("view.inst_amp")
-    assert (b.source, b.op) == ("hand:right.pitch", "position")
+    assert (b.source, b.op, b.value) == ("hand:right.pitch", "push", 0.25)   # plan 18 WP3
     assert learn.learning is None and "learned view.inst_amp" in learn.last
     assert Bindings.load(table.path, legacy_midi=None).owner("view.inst_amp") is None  # the preset's
     run(r, 1, hand(direction=tilt(math.radians(13.0))), learn=learn, router=router)
     router.modulate()
     reg.apply()
-    assert reg["view.inst_amp"].eff_norm == pytest.approx((13.0 + 60) / 120, abs=1e-4)
+    assert reg["view.inst_amp"].eff_norm == pytest.approx(
+        0.25 + 0.25 * ((13.0 + 60) / 120 - 0.5), abs=1e-4)
 
 
 def test_a_held_learn_is_not_fired_again_by_the_hands(app):
@@ -934,7 +1069,7 @@ def test_a_hand_learn_writes_the_axis_by_name_on_any_dofs(app):
     b = app.table.owner("view.inst_amp")
     assert (b.source, b.when) == ("hand:right.pitch", "hand:right.pinch.index")
     assert app.router.lane(b.source) == ("hand", r.io.axis("right.pitch")) == ("hand", 3)
-    assert app.router.describe(b) == "R pitch positions while R ind"
+    assert app.router.describe(b) == "R pitch pushes +0.25 while R ind"   # plan 18 WP3: a push
 
 
 def test_learning_with_an_open_hand_leaves_the_row_ungated(app):
