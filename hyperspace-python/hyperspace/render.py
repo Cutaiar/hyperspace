@@ -574,7 +574,10 @@ class Renderer:
         for res in (old_fx, old_pic):
             if res is not None:
                 res.release()
-        self.ghost.on_reload()
+        # not the ghost hands': their programs live in ghost.py, and the
+        # reloader calls `Ghost.on_reload` itself whenever ghost.py (or a
+        # module before it) changed — calling it here too rebuilt them twice
+        # in one round, and again on a save that never touched them
         # the dim's program: dropped, and built again from this module's
         # current source the next frame that dims (an edit may also have
         # fixed what would not build). getattr: a renderer made before the
@@ -743,8 +746,21 @@ class Renderer:
             lb.capture(self.scene.tex, target)
         # the hands last, onto the target: no effect, echo or dream touches
         # them and the history (captured above, from the scene) never holds
-        # them; off, or with no hand to show, the pass touches nothing
-        self.ghost.draw(target, vp, t, opaque=fx.opaque)
+        # them; off, or with no hand to show, the pass touches nothing. A
+        # pass that raises (a malformed skeleton, a font, a driver) is
+        # caught here, as the faces' is: the frame stays as drawn without
+        # the hands, `Ghost.error` says why (the first reason, kept), the
+        # target is bound again and the dim below still runs — a rig at
+        # black must never flash full because of the hands
+        try:
+            self.ghost.draw(target, vp, t, opaque=fx.opaque)
+        except Exception as e:  # noqa: BLE001 — the hands must not take the frame down
+            if not self.ghost.error:
+                self.ghost.error = f"ghost hands: {type(e).__name__}: {e}"[:160]
+            target.use()
+            ctx.viewport = vp
+            ctx.enable(moderngl.BLEND)
+            ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
         # the master dim, after everything: the scene, the look-back, every
         # effect and the hands dim alike, and the history and the dream
         # worker (fed above, from the scene texture) never hold it. At 1

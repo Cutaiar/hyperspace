@@ -253,6 +253,8 @@ class HandPose:
 
 def pose(side: str, skel: dict, m: np.ndarray, fade: float = 1.0) -> HandPose:
     """A `hands.core.skeleton` dict as a `HandPose` through basis `m`."""
+    from .hands.core import PALM_W  # lazily: see box_of
+
     v = lambda p: m @ np.asarray(p, dtype=np.float64)
     digits = skel.get("digits") or []
     if digits:
@@ -265,7 +267,7 @@ def pose(side: str, skel: dict, m: np.ndarray, fade: float = 1.0) -> HandPose:
         joints = np.zeros((0, 5, 3))
         widths, rots = np.zeros((0, 4)), np.zeros((0, 4, 4))
     return HandPose(side, v(skel["palm"]), v(skel["normal"]), v(skel["direction"]),
-                    float(skel.get("width") or 85.0), joints, widths, rots, m, fade,
+                    float(skel.get("width") or PALM_W), joints, widths, rots, m, fade,
                     COLOURS.get(side, (1.0, 1.0, 1.0)))
 
 
@@ -596,10 +598,18 @@ class TetherLabels:
 
     def __init__(self, ctx: moderngl.Context):
         self.ctx = ctx
-        self.prog = ctx.program(vertex_shader=TETHER_VS, fragment_shader=TETHER_FS)
-        self.buf = ctx.buffer(reserve=64 * 6 * 8 * 4, dynamic=True)
-        self.vao = ctx.vertex_array(self.prog, [(self.buf, "2f 2f 4f", "in_px", "in_uv",
-                                                 "in_col")])
+        made: list = []          # all or nothing: released again if a later step raises
+        try:
+            self.prog = ctx.program(vertex_shader=TETHER_VS, fragment_shader=TETHER_FS)
+            made.append(self.prog)
+            self.buf = ctx.buffer(reserve=64 * 6 * 8 * 4, dynamic=True)
+            made.append(self.buf)
+            self.vao = ctx.vertex_array(self.prog, [(self.buf, "2f 2f 4f", "in_px", "in_uv",
+                                                     "in_col")])
+        except Exception:
+            for res in made:
+                res.release()
+            raise
         self._text: dict[tuple[str, int], tuple[moderngl.Texture, float]] = {}
         self._fonts: dict[int, object] = {}
 
@@ -948,8 +958,13 @@ class Ghost:
         self._fbo: moderngl.Framebuffer | None = None     # on the texture
         self._msaa: moderngl.Framebuffer | None = None    # multisampled, with depth
         self._res: list = []
-        self.error = ""          # why the pass could not build, if it could not
+        # why the pass could not build or draw — the first reason, kept until
+        # the ghost is switched off or the module reloads (the HANDS page
+        # shows it); `_build_failed` alone stops the build being retried
+        self.error = ""
+        self._build_failed = False
         self._labels: TetherLabels | None = None    # the tethers' text, on first use
+        self._labels_failed = False                 # …which would not build or draw
 
     # ---- per frame ----
 
@@ -980,6 +995,12 @@ class Ghost:
             for sd in self.sides.values():           # off: no stale hand on the way back
                 sd.fade, sd.skel = 0.0, None
             self._t = None
+            # …and a failed draw is forgotten: switching the ghost off and
+            # on again tries it afresh (a build the driver refused waits
+            # for a reload). getattr: a Ghost from before the flag existed
+            if not getattr(self, "_build_failed", False):
+                self.error = ""
+            self._labels_failed = False
             return None
         seen = self.step(t)
         if not seen:
@@ -1025,7 +1046,8 @@ class Ghost:
         ctx = self.ctx
         if self.geometry is None and not self._build():
             return False
-        self._ensure((max(vw, 1), max(vh, 1)))
+        if not self._ensure((max(vw, 1), max(vh, 1))):
+            return False                 # nothing bound, nothing drawn: no layer
         try:
             draw_fbo = self._msaa if self._msaa is not None else self._fbo
             draw_fbo.use()
@@ -1054,7 +1076,10 @@ class Ghost:
             self._comp["u_alpha"].value = float(self.state.alpha)
             self._comp_vao.render(moderngl.TRIANGLES, vertices=3)
         finally:
+            # a raise anywhere above leaves the state the frame's other
+            # passes expect: blending on, as the scene pass sets it
             ctx.disable(moderngl.DEPTH_TEST)
+            ctx.enable(moderngl.BLEND)
             ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
             target.use()
             ctx.viewport = (vx, vy, vw, vh)
@@ -1062,24 +1087,32 @@ class Ghost:
 
     def _draw_tethers(self, poses: list[HandPose], view_proj: np.ndarray) -> None:
         """The tethers, flat over the hands, into the bound hands' framebuffer
-        (premultiplied, so the composite treats them like the hands)."""
+        (premultiplied, so the composite treats them like the hands).
+
+        No labels, never no hands: a program, a font or a label that will
+        not build or draw stops the tethers — the hands still composite —
+        says why once on `error` (the HANDS page shows it) and is not
+        tried again until the ghost is switched off or the module reloads.
+        `ghost.tethers` is left as the performer set it: the render stack
+        only reads parameters (ARCHITECTURE §3)."""
+        if getattr(self, "_labels_failed", False):   # getattr: a pre-reload Ghost
+            return
         ctx = self.ctx
-        if self._labels is None:
-            try:
-                self._labels = TetherLabels(ctx)
-            except Exception as e:  # noqa: BLE001 — no labels, never no hands
-                self.error = f"ghost tethers: {type(e).__name__}: {e}"[:160]
-                self.state.tethers = False
-                return
-        layout, fades = [], []
-        for p in poses:
-            got = layout_tethers(p.tethers, view_proj, self.size, self._labels.width)
-            layout += got
-            fades += [p.fade] * len(got)
-        ctx.enable(moderngl.BLEND)
-        ctx.blend_func = moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA
         try:
+            if self._labels is None:
+                self._labels = TetherLabels(ctx)
+            layout, fades = [], []
+            for p in poses:
+                got = layout_tethers(p.tethers, view_proj, self.size, self._labels.width)
+                layout += got
+                fades += [p.fade] * len(got)
+            ctx.enable(moderngl.BLEND)
+            ctx.blend_func = moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA
             self._labels.draw(layout, fades, self.size)
+        except Exception as e:  # noqa: BLE001 — no labels, never no hands
+            self._labels_failed = True
+            if not self.error:
+                self.error = f"ghost tethers: {type(e).__name__}: {e}"[:160]
         finally:
             ctx.disable(moderngl.BLEND)
 
@@ -1088,8 +1121,11 @@ class Ghost:
     def _build(self) -> bool:
         """The geometry and the composite, all or nothing: a driver that
         refuses a shader leaves nothing half-made, says why once on
-        `error`, and the pass stays off rather than retrying every frame."""
-        if self.error:
+        `error`, and the pass stays off rather than retrying every frame.
+        Only a refused build stops it (`_build_failed`): a frame that
+        raised before the first build — a malformed skeleton — does not
+        keep the hands off once the data is good."""
+        if getattr(self, "_build_failed", False):
             return False
         made: list = []
         try:
@@ -1102,29 +1138,50 @@ class Ghost:
             for res in made:
                 res.release()
             self.error = f"ghost: {type(e).__name__}: {e}"[:160]
+            self._build_failed = True
             return False
         self.geometry, self._comp, self._comp_vao = geo, comp, vao
         return True
 
-    def _ensure(self, size: tuple[int, int]) -> None:
-        if size == self.size and self._tex is not None:
-            return
+    def _ensure(self, size: tuple[int, int]) -> bool:
+        """The hands' layer at `size`, all or nothing: built into locals and
+        kept only when every piece was made. A piece the driver refuses
+        releases the rest, leaves no target (so the next frame tries again
+        from nothing, never on a half-built set), says why once on `error`
+        and returns False: that frame draws no hands."""
+        if size == self.size and self._fbo is not None:
+            return True
         self.release_targets()
         ctx = self.ctx
-        self.size = size
-        self._tex = ctx.texture(size, 4)
-        self._tex.repeat_x = self._tex.repeat_y = False
-        n = min(SAMPLES, int(getattr(ctx, "max_samples", 0) or 0))
-        if n > 1:
-            rb = ctx.renderbuffer(size, 4, samples=n)
-            depth = ctx.depth_renderbuffer(size, samples=n)
-            self._msaa = ctx.framebuffer(color_attachments=[rb], depth_attachment=depth)
-            self._fbo = ctx.framebuffer(color_attachments=[self._tex])
-            self._res = [self._msaa, rb, depth, self._fbo]
-        else:
-            depth = ctx.depth_renderbuffer(size)
-            self._fbo = ctx.framebuffer(color_attachments=[self._tex], depth_attachment=depth)
-            self._res = [self._fbo, depth]
+        made: list = []
+        try:
+            tex = ctx.texture(size, 4)
+            made.append(tex)
+            tex.repeat_x = tex.repeat_y = False
+            n = min(SAMPLES, int(getattr(ctx, "max_samples", 0) or 0))
+            if n > 1:
+                rb = ctx.renderbuffer(size, 4, samples=n)
+                made.append(rb)
+                depth = ctx.depth_renderbuffer(size, samples=n)
+                made.append(depth)
+                msaa = ctx.framebuffer(color_attachments=[rb], depth_attachment=depth)
+                made.append(msaa)
+                fbo = ctx.framebuffer(color_attachments=[tex])
+                res = [msaa, rb, depth, fbo]
+            else:
+                depth = ctx.depth_renderbuffer(size)
+                made.append(depth)
+                msaa = None
+                fbo = ctx.framebuffer(color_attachments=[tex], depth_attachment=depth)
+                res = [fbo, depth]
+        except Exception as e:  # noqa: BLE001 — the hands must not take the frame down
+            for r in reversed(made):
+                r.release()
+            if not self.error:
+                self.error = f"ghost layer {size[0]}×{size[1]}: {type(e).__name__}: {e}"[:160]
+            return False
+        self.size, self._tex, self._fbo, self._msaa, self._res = size, tex, fbo, msaa, res
+        return True
 
     def release_targets(self) -> None:
         for res in (*self._res, self._tex):
@@ -1137,6 +1194,7 @@ class Ghost:
         """Hot-swap hook: rebuild every program (geometry and composite)
         from this module's current source; a build that fails keeps the
         old set drawing."""
+        self._build_failed = self._labels_failed = False
         if self.geometry is None:
             self.error = ""      # an edit may have fixed what would not build
             return

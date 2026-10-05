@@ -589,6 +589,130 @@ def test_tethers_draw_only_when_toggled_and_keep_the_alpha(ctx, tmp_path):
     assert np.array_equal(no_guide, plain)
 
 
+def _tethered(ctx, tmp_path):
+    """A renderer drawing the guide beside each hand with tethers on, its
+    ghost.* params in a registry of its own, and the source it reads."""
+    from hyperspace.params import Registry
+
+    router, io = _routed_rig(tmp_path, ["hand:left.x", "hand:left.roll", "hand:right.y"])
+    for st in io.state:
+        st.follow.y = 0.6
+    src = NS(skeleton=both(), cfg={"mode": "desktop"}, axes=io.axes, state=io.state,
+             gates=io.gates, layout=io.layout, frame=io.frame)
+    r = Renderer(ctx)
+    reg = Registry()
+    G.register(reg, r.ghost.state)
+    r.ghost.router = router
+    reg["ghost.guide"].set(1)
+    reg["ghost.tethers"].set(True)
+    return r, reg, src
+
+
+@pytest.mark.parametrize("where", ["build", "label"])
+def test_a_failed_label_build_writes_no_param(ctx, tmp_path, monkeypatch, where):
+    """Plan 21 WP5 R2: the tethers' labels failing — their program will not
+    build, or a label will not rasterise (a font) — leaves `ghost.tethers`
+    as the performer set it (the render stack only reads), says why once
+    on `Ghost.error`, still draws the hands and the guide, and is not
+    tried again every frame. Off and on again tries afresh."""
+    gimbals_r, _, src = _tethered(ctx, tmp_path)
+    gimbals_r.ghost.state.tethers = False
+    gimbals, _ = frame(ctx, src=src, renderer=gimbals_r)
+    r, reg, src = _tethered(ctx, tmp_path)
+    tries = []
+    with monkeypatch.context() as m:
+        if where == "build":
+            def refuse(self, ctx):
+                tries.append(1)
+                raise RuntimeError("no program")
+            m.setattr(G.TetherLabels, "__init__", refuse)
+        else:
+            def no_font(self, text, px):
+                tries.append(1)
+                raise OSError("no font")
+            m.setattr(G.TetherLabels, "_label", no_font)
+        out, _ = frame(ctx, src=src, renderer=r)          # four frames, none raises
+    assert reg["ghost.tethers"].value is True and r.ghost.state.tethers is True
+    assert len(tries) == 1                                # once, not every frame
+    assert r.ghost.error.startswith("ghost tethers: ")
+    assert np.array_equal(out, gimbals)                   # the hands and the guide, no tethers
+    assert out[..., 3].min() == 255
+    # switched off and on: tried again, and now the labels draw
+    r.ghost.state.on = False
+    frame(ctx, src=src, renderer=r, on=False, frames=1)
+    assert r.ghost.error == ""
+    again, _ = frame(ctx, src=src, renderer=r, t0=4.0)
+    gimbals_later, _ = frame(ctx, src=src, renderer=gimbals_r, t0=4.0)
+    assert r.ghost.error == ""
+    assert (np.abs(again[..., :3].astype(int) - gimbals_later[..., :3]).sum(axis=2) > 30).sum() > 50
+
+
+def test_a_failed_target_build_is_all_or_nothing(ctx, monkeypatch):
+    """Plan 21 WP5 R3: a piece of the hands' layer the driver refuses (here
+    the depth buffer) leaves nothing half-built — what was made is
+    released, no target is kept — the frame is the frame without hands,
+    `Ghost.error` says why once, and no frame raises. The old `_ensure`
+    kept the texture and the size, so every later frame found them
+    "ready" and raised on the missing framebuffer."""
+    base, _ = frame(ctx)
+    r = Renderer(ctx)
+    frame(ctx, renderer=r, on=False, frames=1)            # the renderer's own targets first
+    made, refused = [], []
+    real_tex = moderngl.Context.texture
+
+    def tex(self, *a, **k):
+        t = real_tex(self, *a, **k)
+        made.append(t)
+        return t
+
+    def no_depth(self, *a, **k):
+        refused.append(1)
+        raise moderngl.Error("out of memory")
+
+    with monkeypatch.context() as m:
+        m.setattr(moderngl.Context, "texture", tex)
+        m.setattr(moderngl.Context, "depth_renderbuffer", no_depth)
+        out, _ = frame(ctx, src=tracker(), renderer=r)     # four frames, none raises
+    gh = r.ghost
+    assert np.array_equal(out, base)
+    assert len(refused) == 4                               # each frame tried from nothing
+    assert gh._tex is None and gh._fbo is None and gh._msaa is None and gh._res == []
+    assert gh.size == (0, 0)
+    ours = [t for t in made if t.size == (W, H) and t.components == 4]
+    assert len(ours) == 4 and all(type(t.mglo).__name__ == "InvalidObject" for t in ours)
+    assert gh.error == "ghost layer 480×320: Error: out of memory"
+    on, _ = frame(ctx, src=tracker(), renderer=r, t0=5.0)  # the driver relents: hands
+    base_later, _ = frame(ctx, t0=5.0)
+    assert not np.array_equal(on, base_later) and gh._fbo is not None
+
+
+def test_one_reload_round_rebuilds_the_ghost_once(ctx, monkeypatch):
+    """Plan 21 WP5 R5: a ghost.py save reloads ghost.py and render.py, and
+    the reloader calls both `Renderer.on_reload` and `Ghost.on_reload`
+    (app.main's target list, in that order). The ghost's programs are
+    built once in that round, not twice; a render.py save alone (the
+    Ghost not re-classed) rebuilds none of them. Two reloads in a row are
+    harmless: the hands still draw and nothing is left in error."""
+    _, r = frame(ctx, src=tracker())
+    gh = r.ghost
+    assert gh.geometry is not None
+    builds = []
+    real = G.Ghost._build
+    with monkeypatch.context() as m:
+        m.setattr(G.Ghost, "_build", lambda self: builds.append(1) or real(self))
+        geo = gh.geometry
+        r.on_reload()                                      # a render.py save
+        assert builds == [] and gh.geometry is geo
+        r.on_reload()                                      # a ghost.py save: both hooks
+        gh.on_reload()
+        assert len(builds) == 1
+        gh.on_reload()                                     # and once more: still harmless
+        assert len(builds) == 2
+    out, _ = frame(ctx, src=tracker(), renderer=r, t0=5.0)
+    base, _ = frame(ctx, t0=5.0)
+    assert not np.array_equal(out, base) and gh.error == ""
+
+
 def test_an_open_hand_and_a_fist_differ(ctx):
     open_ = hand_mask(ctx, tracker(both(right="open")))
     fist = hand_mask(ctx, tracker(both(right="fist")))

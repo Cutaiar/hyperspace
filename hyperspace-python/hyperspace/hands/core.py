@@ -117,11 +117,10 @@ from .signal import (
     shape,
     valid,
 )
-from .tape import TapeSource
+from .tape import STALE_S, TapeSource  # STALE_S: no frame for this long, no hands
 
 SIDES = ("left", "right")
 LEARN_MOVE = 0.25        # y an axis must travel to win a learn
-STALE_S = 0.25           # no tracking frame for this long: no hands
 CAL_FILE = "hands.json"
 CAL_SCHEMA = "hyperspace.hands/2"
 CAL_MIN_SAMPLES = 30

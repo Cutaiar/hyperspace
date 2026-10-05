@@ -321,7 +321,11 @@ def _hand_settings(reg: Registry, cfg: dict):
 
 
 def _open_hands(cfg: dict, settings):
-    """Ultraleap hands (hands/), only when [hands] enabled — the same rule."""
+    """Ultraleap hands (hands/), only when [hands] enabled — the same rule.
+    One that would not open — no `leap` package, a `[hands] tape` that is
+    missing or not a tape — is said on stderr and in `cfg["notes"]`, which
+    the SYSTEM page lists and the HANDS page shows in place of "tracker
+    off" (plan 21 WP5 R10)."""
     hc = cfg.get("hands", {})
     if settings is None or not hc.get("enabled", False):
         return None
@@ -330,7 +334,9 @@ def _open_hands(cfg: dict, settings):
         cal = hc.get("calibration")
         return hands.HandsIO(settings, hc, cal_path=Path(cal) if cal else None)
     except Exception as e:  # noqa: BLE001 — a broken adapter must not stop the show
-        print(f"hands: {e}", file=sys.stderr)
+        note = f"hands: {e}"[:200]
+        print(note, file=sys.stderr)
+        cfg.setdefault("notes", []).append(note)
         return None
 
 
