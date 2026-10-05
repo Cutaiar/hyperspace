@@ -785,6 +785,37 @@ class PageRig:
         io.add_mouse_pos_event(-1.0, -1.0)
         self.frame()
 
+    def drag(self, src: str, dst: str, dst_at: float = 0.5, release: bool = True) -> None:
+        """Press on the item `src`, drag it — past imgui's drag threshold,
+        a few frames of travel — to `dst_at` of the way along the item
+        `dst`, and (with `release`) let go there."""
+        io = self.imgui.get_io()
+        self.frame()
+        x0, y0, x1, y1 = self.rects[src]
+        x, y = (x0 + x1) / 2, (y0 + y1) / 2
+        io.add_mouse_pos_event(x, y)
+        self.frame()
+        io.add_mouse_button_event(0, True)
+        self.frame()
+        for k in range(1, 6):
+            io.add_mouse_pos_event(x + 4 * k, y - 2 * k)
+            self.frame()
+        x0, y0, x1, y1 = self.rects[dst]
+        io.add_mouse_pos_event(x0 + (x1 - x0) * dst_at, (y0 + y1) / 2)
+        self.frame()
+        self.frame()
+        if release:
+            self.release()
+
+    def release(self) -> None:
+        """Let go of the mouse button where it is, and take the mouse away."""
+        io = self.imgui.get_io()
+        io.add_mouse_button_event(0, False)
+        self.frame()
+        self.frame()
+        io.add_mouse_pos_event(-1.0, -1.0)
+        self.frame()
+
     def pick(self, item: str, index: int) -> None:
         """Choose entry `index` of the combo whose id is `item`, with the
         mouse: a click opens its list (under it, with the popup's padding),
@@ -1827,3 +1858,352 @@ def test_the_target_and_the_map_are_one_undo_step_each(tmp_path, monkeypatch):
         assert r.reg["fx.warp.target"].base == FRAME and labels(r) == start
     finally:
         rig.close()
+
+
+# ---------------------------------------------------------------- drag a chip to reorder (plan 20 WP3)
+
+FACTORY_ORDERS = {"plasma": 5, "acid": 10, "kaleido": 15, "zoomblur": 17, "warp": 20,
+                  "wobble": 25, "doublevision": 30, "deconverge": 40, "fractals": 60,
+                  "glimmer": 70, "tripcolour": 80, "huecycle": 85}
+
+
+def _moved_to(names: list[str], moved: str, place: int) -> list[str]:
+    """`names` with `moved` taken out and put back at `place`."""
+    seq = [n for n in names if n != moved]
+    seq.insert(place, moved)
+    return seq
+
+
+def _sorted_by(orders: dict[str, int]) -> list[str]:
+    return sorted(orders, key=lambda n: (orders[n], n))      # FxState.names()'s rule
+
+
+def _fewest(seq: list[str], orders: dict[str, int]) -> int:
+    """The fewest orders any rewrite must change for `seq` to sort that
+    way, by trying every set of effects to leave alone (small lists only)."""
+    from itertools import combinations
+
+    from hyperspace.fx import MAX_ORDER
+    for k in range(len(seq) + 1):
+        for changed in combinations(seq, k):
+            prev, prev_name, ok = -1, None, True     # prev_name: None after a rewritten one
+            for n in seq:
+                if n in changed:
+                    prev, prev_name = prev + 1, None  # the smallest integer still free
+                else:
+                    o = orders[n]
+                    if not (o > prev or (o == prev and prev_name is not None and prev_name < n)):
+                        ok = False
+                        break
+                    prev, prev_name = o, n
+                if prev > MAX_ORDER:
+                    ok = False
+                    break
+            if ok:
+                return k
+    raise AssertionError("no rewrite at all")
+
+
+def test_reordered_moves_one_effect_when_there_is_room():
+    from hyperspace.fx import reordered
+    st = FxState()
+    orders = {n: st.values[n]["order"] for n in st.names()}
+    assert orders == FACTORY_ORDERS
+    names = st.names()
+    for moved in names:
+        for place in range(len(names)):
+            seq = _moved_to(names, moved, place)
+            new = reordered(seq, orders, moved)
+            if seq == names:
+                assert new == {}, (moved, place)             # dropped where it was
+                continue
+            # every single move changes exactly one order: the moved effect's
+            assert list(new) == [moved], (moved, place, new)
+            a = orders[seq[place - 1]] if place else -1
+            b = orders[seq[place + 1]] if place + 1 < len(seq) else 100
+            assert new[moved] == (a + b) // 2 and a < new[moved] < b
+            assert _sorted_by({**orders, **new}) == seq
+    # the one gap of one integer: between 15 and 17, twice running
+    seq = _moved_to(names, "huecycle", names.index("zoomblur"))
+    once = {**orders, **reordered(seq, orders, "huecycle")}
+    assert once["huecycle"] == 16
+    again = _moved_to(_sorted_by(once), "plasma", 3)         # between 15 and 16: no room
+    new = reordered(again, once, "plasma")
+    assert len(new) == 2 and "plasma" in new and _sorted_by({**once, **new}) == again
+    # the inputs are read, never written
+    assert orders == FACTORY_ORDERS
+
+
+def test_reordered_renumbers_the_smallest_window():
+    from itertools import permutations
+
+    from hyperspace.fx import reordered
+    orders = {"a": 10, "b": 11, "c": 12, "d": 40, "e": 41}
+    names = _sorted_by(orders)
+    # d between a and b: no integer between 10 and 11. One neighbour moves
+    # with it (a: 10 → lower), not the whole packed run
+    seq = ["a", "d", "b", "c", "e"]
+    new = reordered(seq, orders, "d")
+    assert set(new) == {"a", "d"} and _sorted_by({**orders, **new}) == seq
+    assert new["a"] < new["d"] < 11 and orders["b"] == 11
+    # a to the end: 41 < a < 100, alone
+    assert reordered(["b", "c", "d", "e", "a"], orders, "a") == {"a": 70}
+    # e to the front: alone again
+    assert reordered(["e", "a", "b", "c", "d"], orders, "e") == {"e": 4}
+    # stable: the same drop gives the same orders, whatever the dict's order
+    for perm in permutations(orders.items()):
+        assert reordered(seq, dict(perm), "d") == new
+    # every move over lists packed tight in different places: the result
+    # sorts to what was asked, and no rewrite of fewer orders would
+    for packed in ({"a": 10, "b": 11, "c": 12, "d": 13, "e": 14},
+                   {"a": 0, "b": 1, "c": 2, "d": 3, "e": 50},
+                   {"a": 50, "b": 96, "c": 97, "d": 98, "e": 99},
+                   {"a": 0, "b": 1, "c": 2, "d": 98, "e": 99},
+                   orders):
+        names = _sorted_by(packed)
+        for moved in names:
+            for place in range(len(names)):
+                seq = _moved_to(names, moved, place)
+                new = reordered(seq, packed, moved)
+                after = {**packed, **new}
+                assert _sorted_by(after) == seq, (packed, moved, place, new)
+                assert len(set(after.values())) == len(after)            # no tie made
+                assert all(o != packed[n] for n, o in new.items())       # only real changes
+                assert len(new) == _fewest(seq, packed), (packed, moved, place, new)
+    # ties that are already there (two effects at one order, told apart by
+    # name) are left alone unless the move lands between them
+    tied = {"a": 10, "b": 10, "c": 10, "d": 30}
+    assert reordered(["a", "b", "c", "d"], tied, "b") == {}
+    new = reordered(["d", "a", "b", "c"], tied, "d")
+    assert list(new) == ["d"] and new["d"] < 10
+    seq = ["a", "d", "b", "c"]                                           # between two of the tie
+    new = reordered(seq, tied, "d")
+    assert _sorted_by({**tied, **new}) == seq and "c" not in new
+    seq = ["b", "a", "c", "d"]                                           # the tie itself reordered
+    new = reordered(seq, tied, "b")
+    assert _sorted_by({**tied, **new}) == seq and "d" not in new
+
+
+def test_reordered_always_sorts_to_the_sequence_asked_for():
+    from hyperspace.fx import MAX_ORDER, reordered
+    hundred = {f"e{k:03d}": k for k in range(MAX_ORDER + 1)}     # every order taken
+    for orders in (FACTORY_ORDERS, hundred):
+        names = _sorted_by(orders)
+        for moved in names:
+            for place in range(len(names)):
+                seq = _moved_to(names, moved, place)
+                new = reordered(seq, orders, moved)
+                after = {**orders, **new}
+                assert _sorted_by(after) == seq, (moved, place)
+                assert all(isinstance(o, int) and 0 <= o <= MAX_ORDER for o in new.values())
+                assert len(set(after.values())) == len(after)    # never a tie to break by name
+    # and a run of drops, each from the state the last one left
+    import random
+    rnd = random.Random(20)
+    orders = dict(FACTORY_ORDERS)
+    for _ in range(400):
+        names = _sorted_by(orders)
+        moved = rnd.choice(names)
+        seq = _moved_to(names, moved, rnd.randrange(len(names)))
+        orders.update(reordered(seq, orders, moved))
+        assert _sorted_by(orders) == seq and all(0 <= o <= MAX_ORDER for o in orders.values())
+
+
+def _bars(fxpage, monkeypatch) -> list[tuple[float, float, float, float]]:
+    """Every DRAG_BAR-wide filled rect drawn from here on: the drop bars."""
+    from hyperspace.ui_fx import DRAG_BAR
+    bars: list[tuple[float, float, float, float]] = []
+    dl_type = fxpage.imgui.ImDrawList
+    real = dl_type.add_rect_filled
+
+    def rec(self, lo, hi, *a, **k):
+        if hi.x - lo.x == pytest.approx(DRAG_BAR):
+            bars.append((lo.x, lo.y, hi.x, hi.y))
+        return real(self, lo, hi, *a, **k)
+    monkeypatch.setattr(dl_type, "add_rect_filled", rec)
+    return bars
+
+
+def test_a_drop_reorders_selects_and_is_one_undo_step(tmp_path, monkeypatch):
+    """A simulated mouse drags one chip by its name onto another, over the
+    real Panel with a real Undo: the dragged effect goes before the one it
+    was dropped on, its strip opens, and the whole reorder — one order
+    rewritten or several — is one step, "reorder effects"."""
+    from test_undo import boot, frames, labels, settle
+
+    from hyperspace import undo
+    from hyperspace.ui_fx import DRAG_BAR_GAP, REORDER
+    st = FxState()
+    r = boot(tmp_path / "home", fx=st)
+    r.fx = st
+    pushes = []
+    real_push = undo.push
+    monkeypatch.setattr(undo, "push", lambda *a, **k: (pushes.append(a), real_push(*a, **k))[1])
+    rig = PageRig(tmp_path, monkeypatch, r)
+    bars = _bars(rig, monkeypatch)
+    try:
+        for n, o in FACTORY_ORDERS.items():          # whatever the startup preset left
+            r.reg[f"fx.{n}.order"].set_value(o)
+        st.select("acid")
+        settle(r)
+        start, names = labels(r), st.names()
+        assert names[0] == "plasma" and names[-1] == "huecycle"
+
+        def orders():
+            return {n: r.reg[f"fx.{n}.order"].base for n in st.names()}
+        before = orders()
+        # in flight over Plasma: a bar at the left edge of the chip under the mouse
+        rig.drag("chip.fx.huecycle.on", "chip.fx.plasma.on", release=False)
+        assert rig.imgui.get_drag_drop_payload_py_id().data_id == names.index("huecycle")
+        led = rig.rects["led.fx.plasma.on"]
+        assert bars and bars[-1][0] + 1 == pytest.approx(led[0] - DRAG_BAR_GAP)
+        assert bars[-1][1] <= led[1] and bars[-1][3] >= led[3]
+        assert orders() == before and not pushes and st.selected() == "acid"   # nothing yet
+        rig.release()
+        settle(r)
+        assert st.names() == ["huecycle", *names[:-1]]
+        assert st.selected() == "huecycle" and st.sel_name == "huecycle"   # the strip opens on it
+        after = orders()
+        assert {n for n in after if after[n] != before[n]} == {"huecycle"} and after["huecycle"] == 2
+        assert pushes == [(REORDER,)] and labels(r) == [*start, "reorder effects"]
+        undo.undo()                                  # what edit.undo (⌘Z / Ctrl+Z) fires
+        frames(r, 3)
+        assert orders() == before and st.names() == names and labels(r) == start
+        assert st.selected() == "huecycle"           # the open strip is no undo step
+        undo.redo()
+        frames(r, 3)
+        assert orders() == after
+
+        # a drop that has to rewrite several orders is still one push, one step
+        undo.undo()
+        frames(r, 3)
+        for k, n in enumerate(names):                # packed: no gap anywhere near the front
+            r.reg[f"fx.{n}.order"].set_value(k)
+        settle(r)
+        start, before = labels(r), orders()
+        pushes.clear()
+        rig.drag("chip.fx.huecycle.on", "led.fx.acid.on")      # the LED takes a drop too
+        settle(r)
+        assert st.names() == ["plasma", "huecycle", *names[1:-1]]
+        after = orders()
+        assert len({n for n in after if after[n] != before[n]}) > 1
+        assert pushes == [(REORDER,)] and labels(r) == [*start, "reorder effects"]
+        undo.undo()
+        frames(r, 3)
+        assert orders() == before and labels(r) == start
+
+        # a drop that changes nothing — onto the chip already after it — is no step
+        pushes.clear()
+        rig.drag("chip.fx.plasma.on", "chip.fx.acid.on")
+        settle(r)
+        assert orders() == before and not pushes and labels(r) == start
+        assert st.selected() == "plasma"
+    finally:
+        rig.close()
+
+
+def test_a_click_without_a_drag_still_only_opens(fxpage, monkeypatch):
+    """imgui starts a drag only past its drag threshold: a press and a
+    release on a name — the mouse still, or shaking a pixel or two — opens
+    the strip and moves nothing; the LED still only switches."""
+    from hyperspace import undo
+    imgui, st, reg = fxpage.imgui, fxpage.st, fxpage.reg
+    pushes = []
+    monkeypatch.setattr(undo, "push", lambda *a, **k: pushes.append(a))
+    io = imgui.get_io()
+    names = st.names()
+    orders = {n: reg[f"fx.{n}.order"].base for n in names}
+    switches = {n: reg[f"fx.{n}.on"].base for n in names}
+    fxpage.frame()
+    assert st.selected() == "plasma"
+    fxpage.click("chip.fx.warp.on")
+    assert st.selected() == "warp"
+    # a shaky click: under the threshold, and released on the same chip
+    x0, y0, x1, y1 = fxpage.rects["chip.fx.fractals.on"]
+    x, y = (x0 + x1) / 2, (y0 + y1) / 2
+    assert io.mouse_drag_threshold >= 4
+    io.add_mouse_pos_event(x, y)
+    fxpage.frame()
+    io.add_mouse_button_event(0, True)
+    fxpage.frame()
+    for dx, dy in ((1, 0), (2, 1), (1, -1), (0, 0)):
+        io.add_mouse_pos_event(x + dx, y + dy)
+        fxpage.frame()
+        assert imgui.get_drag_drop_payload_py_id() is None
+    io.add_mouse_button_event(0, False)
+    fxpage.frame()
+    io.add_mouse_pos_event(-1.0, -1.0)
+    fxpage.frame()
+    assert st.selected() == "fractals"
+    fxpage.click("led.fx.fractals.on")               # the LED: switches, never opens or drags
+    switches["fractals"] = True
+    fxpage.click("chip.fx.warp.on")
+    # a press on an LED dragged away is not a drag: the LED is no source
+    fxpage.drag("led.fx.acid.on", "chip.fx.plasma.on")
+    assert st.names() == names and st.selected() == "warp"
+    assert {n: reg[f"fx.{n}.order"].base for n in names} == orders and not pushes
+    assert {n: reg[f"fx.{n}.on"].base for n in names} == switches
+
+
+def test_a_drag_never_changes_a_target_or_a_switch(fxpage, monkeypatch):
+    """A drag changes order and nothing else (fork F6: an effect is re-aimed
+    by the strip's target combo): every drop — onto a name, an LED, the
+    last chip's far half, its own chip — leaves every switch, target and
+    mix, and the map, as they were."""
+    from hyperspace.fx import FACES, SCREEN
+    from hyperspace.ui_fx import DRAG_BAR_GAP
+    st, reg = fxpage.st, fxpage.reg
+    bars = _bars(fxpage, monkeypatch)
+    reg["fx.warp.on"].set(True)
+    reg["fx.plasma.on"].set(True)
+    reg["fx.plasma.target"].set(FACES)
+    reg["fx.glimmer.target"].set(FACES)
+    reg["fx.face_map"].set(SCREEN)
+    fxpage.panel.view.faces = True
+
+    def rest():
+        return {n: {k: v for k, v in st.values[n].items() if k != "order"} for n in st.specs}
+    was, names = rest(), st.names()
+    # a face-aimed chip dragged among frame ones, and a frame one among face ones
+    fxpage.drag("chip.fx.plasma.on", "chip.fx.warp.on")
+    assert st.names().index("plasma") == st.names().index("warp") - 1 and st.selected() == "plasma"
+    fxpage.drag("chip.fx.warp.on", "led.fx.glimmer.on")
+    assert st.names().index("warp") == st.names().index("glimmer") - 1 and st.selected() == "warp"
+    assert st.chain(FACES) == ["plasma"] and st.chain() == ["plasma", "warp"]
+    # the last chip's right half is "to the end": the bar is at its right edge
+    last = st.names()[-1]
+    assert last == "huecycle"
+    fxpage.drag("chip.fx.acid.on", f"chip.fx.{last}.on", dst_at=0.9, release=False)
+    assert bars[-1][0] + 1 == pytest.approx(fxpage.rects[f"chip.fx.{last}.on"][2] + DRAG_BAR_GAP)
+    fxpage.release()
+    assert st.names()[-1] == "acid" and reg["fx.acid.order"].base > reg["fx.huecycle.order"].base
+    # …and its left half is "before it", like any other chip
+    fxpage.drag("chip.fx.kaleido.on", "chip.fx.acid.on", dst_at=0.1)
+    assert st.names()[-2:] == ["kaleido", "acid"]
+    # onto its own LED: where it is
+    now = st.names()
+    fxpage.drag("chip.fx.wobble.on", "led.fx.wobble.on")
+    assert st.names() == now and st.selected() == "wobble"
+    assert rest() == was and st.face_map == SCREEN and sorted(now) == sorted(names)
+    assert reg["fx.plasma.target"].base == FACES and reg["fx.warp.target"].base == 0
+    # no bar once nothing is in the hand
+    bars.clear()
+    fxpage.frame()
+    assert not bars
+
+
+def test_the_order_slider_still_reorders(fxpage):
+    """Fork F7's fallback: the strip's order slider is still there and still
+    moves its effect through the stack, the strip staying open on it."""
+    st, reg = fxpage.st, fxpage.reg
+    st.select("plasma")
+    fxpage.frame()
+    assert "fx.plasma.order" in fxpage.rects and st.names()[0] == "plasma"
+    fxpage.click("fx.plasma.order", 0.95)
+    assert reg["fx.plasma.order"].base > 85 and st.names()[-1] == "plasma"
+    assert st.selected() == "plasma"
+    fxpage.click("fx.plasma.order", 0.05)
+    assert reg["fx.plasma.order"].base < 10 and st.names()[0] == "plasma"
+    # and after a drag the slider reads what the drop wrote
+    fxpage.drag("chip.fx.plasma.on", "chip.fx.warp.on")
+    assert st.values["plasma"]["order"] == reg["fx.plasma.order"].base == 18
