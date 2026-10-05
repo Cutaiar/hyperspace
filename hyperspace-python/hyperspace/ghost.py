@@ -95,12 +95,8 @@ class GhostState:
 def register(reg, state: GhostState) -> None:
     """ghost.on / .alpha / .mirror — session params (params.SESSION_GROUPS):
     the hands are the room's display, like the output's placement, so a
-    preset load never switches them off mid-set. They show on the HANDS
-    page and can be learned onto a desk button or knob (a scene-setter:
-    that needs no `modulatable`). Only `on` and `alpha` can be performed
-    by a lane (a hand, a band, an LFO); `mirror`, `guide` and `tethers`
-    are settings of the rig's display, like `output.*`, and a performer
-    row onto one is dormant (plan 21 WP5 R12)."""
+    preset load never switches them off mid-set. Ordinary otherwise: they
+    show on the HANDS page and can be learned onto a button or a knob."""
     if f"{GROUP}.on" in reg:
         return
     reg.toggle(f"{GROUP}.on", "Ghost hands", lambda: state.on,
@@ -112,18 +108,18 @@ def register(reg, state: GhostState) -> None:
                    fmt=lambda v: f"{v * 100:.0f}%", group=GROUP,
                    tip="How solid the ghost hands are over the picture.")
     reg.toggle(f"{GROUP}.mirror", "Ghost mirror", lambda: state.mirror,
-               lambda v: setattr(state, "mirror", bool(v)), group=GROUP, modulatable=False,
+               lambda v: setattr(state, "mirror", bool(v)), group=GROUP,
                tip="Flip the ghost hands left for right — for a rig that shows the "
                    "render in a mirror or on a Pepper's Ghost glass.")
     reg.enum(f"{GROUP}.guide", "Ghost guide", lambda: state.guide,
-             lambda i: setattr(state, "guide", int(i)), GUIDES, group=GROUP, modulatable=False,
+             lambda i: setattr(state, "guide", int(i)), GUIDES, group=GROUP,
              tip="What each hand is doing: a ball per axis (x red, y green, z blue), a "
                  "ring per rotation with a dot where the fingers point (pitch, yaw) or "
                  "the palm faces (roll), and the four pinch switches. All six always "
                  "show; the ones the setup routes are brighter and show what the table "
                  "is fed. Beside the hand, or on it.")
     reg.toggle(f"{GROUP}.tethers", "Ghost tethers", lambda: state.tethers,
-               lambda v: setattr(state, "tethers", bool(v)), group=GROUP, modulatable=False,
+               lambda v: setattr(state, "tethers", bool(v)), group=GROUP,
                tip="With a guide on: a line from each routed axis, pinch or grab to a "
                    "label at the edge of the frame naming the params it drives.")
 
