@@ -431,13 +431,15 @@ class Panel:
 
     # ---- binding menu: every widget gets one on right-click ----
 
-    def _ctx(self, a: Param, key: str = "") -> None:
+    def _ctx(self, a: Param, key: str = "", extra=None) -> None:
         """The param's context menu, attached to the last drawn item.
 
         `a` is the drawn param — the bindings hang off it; the modulation
         line reads the one it stands for (a band.sel.* alias → its band).
         `key` tells apart several items that stand for one param (the rail's
-        pills all set ``ui.page``), so each gets its own popup."""
+        pills all set ``ui.page``), so each gets its own popup. `extra`,
+        when given, is called inside the popup after the param's own items
+        to draw the caller's (a bank slot's "put preset here…")."""
         if not imgui.begin_popup_context_item(f"##ctx.{a.id}{key}"):
             return
         _micro(a.id, DIM)
@@ -466,6 +468,8 @@ class Panel:
             m.unbind(a.id)
         ui_hands.ctx_rows(self, p)      # the hand rows on it — a learn lands on the real param — and Unbind
         ui_routing.ctx_item(self, a)    # "Route a lane here…" — the routing matrix
+        if extra is not None:
+            extra()
         imgui.end_popup()
 
     def _learn_hint(self) -> str:
@@ -1058,19 +1062,23 @@ class Panel:
         item is whether it is a warning. The panel remembers the strings
         it last saw; its first look only remembers them, so a launch says
         nothing. The undo's line is keyed by `said_at` too: the same
-        words said again ("nothing to undo") show again."""
+        words said again ("nothing to undo") show again; so is a library
+        line set through `Library.say`, by its count (plan 15 WP4)."""
         now = time.monotonic() if now is None else now
         st = self.__dict__.setdefault(     # (a Panel from before a hot reload has none)
             "_msg", {"seen": None, "text": "", "warn": False, "at": -MESSAGE_S})
         u, lib = getattr(self, "undo", None), self.library
-        cur = {"status": getattr(lib, "status", "") or "",
-               "warning": getattr(lib, "warning", "") or "",
+        said = getattr(lib, "said", None) or {}
+        cur = {"status": (getattr(lib, "status", "") or "", said.get("status", 0)),
+               "warning": (getattr(lib, "warning", "") or "", said.get("warning", 0)),
                "undo": (getattr(u, "status", "") or "", getattr(u, "said_at", 0.0))}
         seen, st["seen"] = st["seen"], cur
         if seen is not None:
             for key in ("status", "warning", "undo"):      # the later wins a tie
-                text = cur[key][0] if key == "undo" else cur[key]
-                if cur[key] != seen[key] and text:
+                text, was = cur[key][0], seen[key]
+                if not isinstance(was, tuple):             # remembered before a hot reload
+                    was = (was, cur[key][1])
+                if cur[key] != was and text:
                     st.update(text=text, warn=key == "warning", at=now)
         return (st["text"], st["warn"]) if now - st["at"] < MESSAGE_S else ("", False)
 
