@@ -25,7 +25,8 @@ Controls (in):
 
 LEDs (out): note velocity on the button's own note. Clip-launch grid:
 0 off · 1 green · 2 green blink · 3 red · 4 red blink · 5 yellow · 6 yellow
-blink. Every other button: 0 off · 1 on · 2 blink. Knob rings: the knob's
+blink. Every other button: 0 off · 1 on · 2 blink (`blink_of` turns a
+row's "on" velocity into its blink). Knob rings: the knob's
 own CC carries the value; CC number + 8 sets the ring style
 (0 off · 1 single · 2 volume · 3 pan).
 
@@ -41,8 +42,10 @@ and the row stays a plain trigger row that Learn can move like any other.
 
 Two layers under a latched SHIFT (plan 13 §3). Every MIDI row carries a
 ``layer``: none is **invariant** (the session defines the control; one
-meaning on both layers — the faders, the preset row, SHIFT, the clock and
-transport corner, the track buttons), ``"global"`` is the SHIFT layer
+meaning on both layers — the faders, the crossfader as the master dim,
+the preset row, the clip-stop row as one SAVE AS bar, SHIFT, the clock and
+transport corner, OVERDUB as home, the track buttons), ``"global"`` is the
+SHIFT layer
 (the band strip on the device knobs, the hand feel and BPM on track knobs
 1–5, the band scenes on clip rows 2–3), ``"preset"`` is the loaded
 preset's own (the factory default below is what a fresh preset starts
@@ -68,10 +71,10 @@ TRACK_KNOBS = range(0x30, 0x38)
 CC_FADER, CC_MASTER, CC_XFADE, CC_CUE = 0x07, 0x0E, 0x0F, 0x2F
 
 # The protocol table: every note, ring mode and LED velocity the APC40 mk1
-# speaks, whether or not DEFAULT_MAP below uses it (N_CLIPSTOP, N_DEV_L/R,
-# N_OVERDUB, N_SEND_A/C, the *_BLINK velocities and RING_SINGLE /
-# RING_PAN are unused today and kept as the reference for a hand-edited
-# bindings.json or a later map).
+# speaks, whether or not DEFAULT_MAP below uses it (N_DEV_L/R, N_SEND_A/C,
+# RING_SINGLE / RING_PAN and the red and yellow blinks by name are unused
+# today and kept as the reference for a hand-edited bindings.json or a
+# later map; a blink is sent through `blink_of`).
 N_ARM, N_SOLO, N_ACTIVATOR, N_SELECT, N_CLIPSTOP = 0x30, 0x31, 0x32, 0x33, 0x34
 N_CLIP = [0x35, 0x36, 0x37, 0x38, 0x39]          # rows 1–5
 N_CLIPTRACK, N_DEVICE_ON, N_DEV_L, N_DEV_R = 0x3A, 0x3B, 0x3C, 0x3D
@@ -136,6 +139,15 @@ def feedback_for(kind: str, channel: int, number: int) -> dict | None:
         grid = N_CLIP[0] <= number <= N_CLIP[-1]
         return {"feedback": "led", "on": GREEN if grid else 1, "off": 0}
     return None
+
+
+def blink_of(number: int, on: int) -> int:
+    """The velocity that blinks a button's LED, from the row's "on"
+    velocity (the protocol table in the module docstring): on the clip
+    grid the colour's blink is the colour + 1 (green 1 → 2, red 3 → 4,
+    yellow 5 → 6); any other button has one blink, 2. Not hand-checked on
+    the mk1 (plan 15, group K)."""
+    return on + 1 if N_CLIP[0] <= number <= N_CLIP[-1] else 2
 
 
 # Akai's names for the controls, for the panel ("track knob 3", "clip 4·2")
@@ -401,6 +413,12 @@ DEFAULT_MAP: list[dict] = [
     *[_note(f"band.{i}.reset", N_ARM, i) for i in range(6)],
     # clip grid: the preset bank (invariant) · scenes (global) · grid motion · shapes (preset)
     *[_note("preset.select", N_CLIP[0], k, op="set", value=k, on=GREEN) for k in range(8)],
+    # clip stop: one SAVE AS bar (plan 15 WP4, decision 29). Any of the
+    # eight held midi.HOLD_S saves the live state as a new preset into the
+    # next empty slot — never over one; a tap does nothing. No layer, so
+    # invariant. Dark at rest, lit while held, blinking with the new
+    # slot's pad on a save (fork 15)
+    *[_note("preset.save_new", N_CLIPSTOP, k, op="hold") for k in range(8)],
     *[_note("scene.select", N_CLIP[1], k, op="set", value=k, on=YELLOW, layer=G)
       for k in range(8)],
     *[_note("scene.select", N_CLIP[2], k, op="set", value=8 + k, on=YELLOW, layer=G)
