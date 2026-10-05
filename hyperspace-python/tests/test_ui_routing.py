@@ -926,6 +926,7 @@ def test_typing_in_the_filter_is_imguis_keyboard_not_the_apps(rig, monkeypatch):
         io.add_input_character(ord(ch))
         frame(panel)
     assert ui_routing._state(panel)["find"] == "d3"
+    assert not ui_routing._state(panel)["hold"]           # typing here holds no line
     assert ui_routing.found(panel, rig.router)[0] >= 1
     # the app's side: the same key held in the control window is not down
     g = app.glfw
@@ -935,3 +936,47 @@ def test_typing_in_the_filter_is_imguis_keyboard_not_the_apps(rig, monkeypatch):
     assert not keys.pressed(g.KEY_D) and not keys.down(g.KEY_3)
     keys.typing = False
     assert keys.pressed(g.KEY_D)
+
+
+def test_a_line_in_use_is_not_filtered_away_under_the_hand(rig, monkeypatch):
+    """A filter that found a macro by its label: retyping the label (a
+    widget in use) leaves the macro drawn though it no longer matches, and
+    it goes once the widget is let go. Spaces alone filter nothing: no red
+    count, no × chip."""
+    from hyperspace import ui
+
+    panel, table = rig.panel, rig.router.table
+    rig.lib.load("presets", "TRIP")
+    table.set_macros({"macro.3": {"label": "Heat", "subs": []}})
+    knobs: list[str] = []
+    slider = panel._slider
+    monkeypatch.setattr(panel, "_slider", lambda pid, *a, **k: (knobs.append(pid),
+                                                               slider(pid, *a, **k))[1])
+    st = ui_routing._state(panel)
+    st["find"] = "heat"
+    frame(panel, "routing")
+    knobs.clear()
+    frame(panel)
+    assert knobs == ["macro.3"] and not st["hold"]
+    with monkeypatch.context() as mp:                    # the label field has the keyboard
+        mp.setattr(imgui, "is_any_item_active", lambda: True)
+        table.macros["macro.3"].label = "Hea"
+        for _ in range(3):
+            knobs.clear()
+            frame(panel)
+            assert knobs == ["macro.3"] and st["hold"]
+    knobs.clear()
+    frame(panel)                                          # let go: it no longer matches
+    assert knobs == [] and not st["hold"]
+    # spaces alone: the page is unfiltered and says so
+    st["find"] = "  "
+    chips: list[str] = []
+    chip = ui.chip
+    monkeypatch.setattr(ui, "chip", lambda label, *a, **k: (chips.append(label),
+                                                            chip(label, *a, **k))[1])
+    texts, _ = _drawn(monkeypatch)
+    knobs.clear()
+    frame(panel)
+    assert len(knobs) == 8 and "×##find" not in chips and "+ route" in chips
+    assert not any(t.endswith(" rows") for t in texts)
+    assert any(t.startswith(f"{len(table.routes())} routes") for t in texts)

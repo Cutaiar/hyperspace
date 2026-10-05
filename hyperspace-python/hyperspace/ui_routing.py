@@ -78,7 +78,8 @@ reason (`table.dropped`) are listed under the header until the next edit.
 
 The filter (plan 17 WP5): one text field on the counts line, left of
 `+ route`. While it holds text, only the lines that match are drawn — in
-every section — the counts read "3 of 41 rows" in red and a × beside the
+every section (and a line a widget is in use on, until it is let go:
+`_shown`) — the counts read "3 of 41 rows" in red and a × beside the
 field clears it. Lower-case; every typed word must be somewhere in what
 the line says (`matches`): a route's sentence, source, target and the
 target's label; a desk, dark or session line's glyph, Akai's name,
@@ -149,6 +150,11 @@ def _state(panel) -> dict:
     # the page's filter (plan 17 WP5); "filter" is the param combo's find
     # field. setdefault: a state dict from before a hot reload has no key
     st.setdefault("find", "")
+    # a line in use is not filtered away under the hand (`_shown`): the
+    # lines drawn last frame, this frame's, and whether a widget is in use
+    st.setdefault("kept", set())
+    st.setdefault("drawn", set())
+    st.setdefault("hold", False)
     return st
 
 
@@ -165,6 +171,25 @@ def matches(panel, router, text: str, *hay: str) -> bool:
         return True
     said = "\n".join(h for h in hay if h).lower()
     return all(w in said for w in words)
+
+
+def _shown(panel, router, key, hay, *args) -> bool:
+    """Is this line drawn? Every line while the filter is empty (nothing is
+    asked of the line then: `hay(panel, router, *args)` is not called);
+    else a line that `matches` — and a line that was drawn last frame, for
+    as long as a widget is in use or a popup is open (`st["hold"]`, set
+    where the field is drawn), so a row being edited does not vanish under
+    the hand the moment the edit stops it matching (a macro's label
+    retyped, a target picked, a depth dragged). `key` names the line
+    across frames."""
+    st = _state(panel)
+    if not st["find"].strip():
+        return True
+    hit = (matches(panel, router, st["find"], *hay(panel, router, *args))
+           or (st["hold"] and key in st["kept"]))
+    if hit:
+        st["drawn"].add(key)
+    return hit
 
 
 def _label(panel, pid: str | None) -> str:
@@ -899,9 +924,9 @@ def desk(panel, router: Router) -> None:
     dark = unmapped(table)
     col = _column([control_glyph(table, b) for b in (*rows, *dark)])
     dead = None
-    find, drawn = _state(panel)["find"], 0
+    drawn = 0
     for k, b in enumerate(rows):                 # k: its place unfiltered — the imgui id
-        if not matches(panel, router, find, *control_hay(panel, router, b)):
+        if not _shown(panel, router, ("desk", id(b)), control_hay, b):
             continue
         drawn += 1
         imgui.push_id(f"desk{k}")
@@ -929,7 +954,7 @@ def desk(panel, router: Router) -> None:
         table.remove(dead)
         _desk_edited(table)
     for f in dark:
-        if not matches(panel, router, find, *control_hay(panel, router, f, mapped=False)):
+        if not _shown(panel, router, ("dark", f.source), control_hay, f, False):
             continue
         drawn += 1
         _control_cell(table, f, ui.FAINT)
@@ -1059,9 +1084,9 @@ def macros(panel, router: Router) -> None:
     shared = shared_bases(table)
     sp = imgui.get_style().item_spacing.x
     routes = table.routes()
-    find, drawn = _state(panel)["find"], 0
+    drawn = 0
     for k, p in enumerate(ms):                   # a macro that matches is drawn whole
-        if not matches(panel, router, find, *macro_hay(panel, router, p)):
+        if not _shown(panel, router, ("macro", p.id), macro_hay, p):
             continue
         drawn += 1
         imgui.push_id(f"macro{k}")
@@ -1119,12 +1144,12 @@ def session(panel, router: Router) -> None:
     imgui.same_line()
     imgui.text_disabled("the session's — edit bindings.json")
     col = _column([control_glyph(table, b) for b in (*inv, *glob)])
-    find = _state(panel)["find"]
-    if (inv or glob) and not any(matches(panel, router, find, *control_hay(panel, router, b))
-                                 for b in (*inv, *glob)):
+    had = bool(inv or glob)
+    inv, glob = ([b for b in rows if _shown(panel, router, ("session", id(b)), control_hay, b)]
+                 for rows in (inv, glob))
+    if had and not (inv or glob):
         imgui.text_disabled(NO_MATCH)
     for title, rows in (("invariant · both layers", inv), ("global layer · SHIFT on", glob)):
-        rows = [b for b in rows if matches(panel, router, find, *control_hay(panel, router, b))]
         if not rows:
             continue
         imgui.text_colored(ui.DIM, title)
@@ -1147,12 +1172,17 @@ def _find_w(on: bool) -> float:
 def _find_field(panel) -> None:
     """The filter, on the counts line and flush right, leaving `+ route`
     its place: the field and, while it holds text, the × that empties it.
-    Emptying it is one state write — `_state(panel)["find"] = ""`."""
+    Emptying it is one state write — `_state(panel)["find"] = ""`. Drawn
+    before the rows: it starts the frame's set of drawn lines."""
     st = _state(panel)
-    on = bool(st["find"])
+    on = bool(st["find"].strip())               # spaces alone filter nothing
     imgui.same_line(imgui.get_content_region_avail().x - _find_w(on))
     imgui.set_next_item_width(FIND_W)
     _, st["find"] = imgui.input_text_with_hint("##rows", "filter", st["find"])
+    # a widget in use other than this field holds the lines it is on (`_shown`)
+    st["hold"] = not imgui.is_item_active() and (
+        imgui.is_any_item_active() or imgui.is_popup_open("", imgui.PopupFlags_.any_popup))
+    st["kept"], st["drawn"] = st["drawn"], set()
     if imgui.is_item_hovered():
         imgui.set_tooltip("Show only the lines that say every word typed: a glyph (d3), "
                           "a param (kaleido), a source (lfo 1)")
@@ -1209,7 +1239,7 @@ def page(panel, dt: float) -> None:
         ui._micro("routes")
         dead, drawn = None, 0
         for k, b in enumerate(rows):            # k: its place unfiltered — the imgui id
-            if not matches(panel, router, st["find"], *route_hay(panel, router, b)):
+            if not _shown(panel, router, ("route", id(b)), route_hay, b):
                 continue
             drawn += 1
             if _row(panel, router, b, k):
