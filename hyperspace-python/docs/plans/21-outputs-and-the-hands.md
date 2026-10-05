@@ -1545,6 +1545,12 @@ a raise included.
   two-output path and today's one-window path ran unpaced (270–380 fps),
   so fork F6's frame-rate claim (the first output vsynced, the others
   not) is neither confirmed nor refuted: hand check 107.
+- **The unpaced launches are not this run's doing.** The orchestrator ran
+  the same 240-frame scripted launch (temp home, one window) from main's
+  code (fa9b3a1) and from this branch: a median of 2.48 ms a frame (403
+  fps) on main and 2.44 ms (409 fps) on this branch. The swap does not
+  wait in these scripted launches on either; why was not found, and a
+  launch by hand at the rig has not been timed.
 
 ### During the run: a test run aborted in CoreMIDI
 
