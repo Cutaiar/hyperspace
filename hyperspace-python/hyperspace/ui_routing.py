@@ -897,8 +897,15 @@ def unmapped(table) -> list[Binding]:
     return [f for f in preset_controls(table) if not any(b.overlaps(f) for b in rows)]
 
 
+def desk_target(p: Param) -> bool:
+    """Can a desk control be put on this param? Not on a file path (a knob
+    cannot set one) and not on SHIFT's own param. One rule for the desk
+    rows' target combo and for the menu's "Learn desk" (`Panel._desk_target`)."""
+    return p.kind is not Kind.TEXT and p.id != SHIFT_PARAM
+
+
 def _desk_targets(panel) -> list[Param]:
-    return [p for p in panel.reg if p.kind is not Kind.TEXT and p.id != SHIFT_PARAM]
+    return [p for p in panel.reg if desk_target(p)]
 
 
 def _desk_edited(table, b: Binding | None = None) -> None:

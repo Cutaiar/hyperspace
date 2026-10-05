@@ -444,7 +444,7 @@ class Panel:
         pills all set ``ui.page``), so each gets its own popup. `extra`,
         when given, is called inside the popup after the param's own items
         to draw the caller's (a bank slot's "put preset here…")."""
-        if not imgui.begin_popup_context_item(f"##ctx.{a.id}{key}"):
+        if not imgui.begin_popup_context_item(self._ctx_id(a, key)):
             return
         _micro(a.id, DIM)
         p = self._real(a)
@@ -470,6 +470,27 @@ class Panel:
         if extra is not None:
             extra()
         imgui.end_popup()
+
+    @staticmethod
+    def _ctx_id(a: Param, key: str = "") -> str:
+        """The menu's popup id: one per drawn param (and `key`)."""
+        return f"##ctx.{a.id}{key}"
+
+    def _ctx_label(self, a: Param) -> None:
+        """The last item — a row's label — opens the param's menu too
+        (plan 17 WP3): the label is where the name is, and where a hand
+        lands when it means "this control". Only the opening: the popup
+        itself is drawn by the `_ctx` of the widget beside it, so the two
+        calls must sit in one id scope (the same window, the same
+        `push_id`) to name the same popup."""
+        imgui.open_popup_on_item_click(self._ctx_id(a), imgui.PopupFlags_.mouse_button_right)
+
+    @staticmethod
+    def _desk_target(a: Param) -> bool:
+        """Can a desk control be put on this param? The rule "Learn desk"
+        is offered by (plan 17 WP3: Learn only where it can act) — the one
+        ROUTING's desk rows offer their targets by (`ui_routing.desk_target`)."""
+        return ui_routing.desk_target(a)
 
     def _table(self):
         """The live binding table — the router's, else the learn object's —
@@ -558,8 +579,7 @@ class Panel:
         with a tracker, on a param a hand can drive (the real one is
         modulatable), for the sides the rig's axes have."""
         lrn = self.learn
-        if a.kind is not Kind.TEXT and a.id != ui_routing.SHIFT_PARAM \
-                and imgui.menu_item_simple("Learn desk"):
+        if self._desk_target(a) and imgui.menu_item_simple("Learn desk"):
             lrn.arm(a.id, "desk")
         sides = self._hand_sides() if p.modulatable else []
         if sides and imgui.begin_menu("Learn hand"):
@@ -790,6 +810,7 @@ class Panel:
         imgui.set_cursor_pos_y(y0 + drop)
         _micro(a.label)
         self._tip(a)
+        self._ctx_label(a)      # the label opens the menu the fader's `_ctx` draws
         if show_tag:
             imgui.same_line(0, 0)
             imgui.set_cursor_pos_y(y0 + drop)
@@ -881,6 +902,7 @@ class Panel:
         """A labelled compact slider: label in a column, slider beside it."""
         p = self.reg[pid]
         self._label_cell(p.label if label is None else label, width=label_w)
+        self._ctx_label(p)      # the label opens the menu the slider's `_ctx` draws
         return self._slider(pid, width)
 
     def half(self, pid: str, label: str | None = None, label_w: float = HALF_LABEL_W) -> bool:
@@ -1084,8 +1106,11 @@ class Panel:
             if imgui.is_item_hovered():
                 lo, hi = a.edges(i)
                 imgui.set_tooltip(f"{name} {lo:.0f}–{hi:.0f} Hz{self._lane_plane(i)}")
-            if i == 0:
-                self._ctx(self.reg["band.select"])
+            # every meter has the menu (plan 17 WP3), each under its own
+            # key — the key the rail's pills use — so no two popups share
+            # an id with each other or with the band combo's on a page
+            self._ctx(self.reg["band.select"], f".{i}")
+            self._learn_frame(self.reg["band.select"])   # armed from a meter: framed on it
         # band tags, centred under their bars, in the micro face
         imgui.push_font(_FONTS["micro"], FONT_MICRO)
         for i, name in enumerate(a.band_names):

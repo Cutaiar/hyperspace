@@ -1050,3 +1050,132 @@ def test_the_footer_says_what_a_learn_waits_for_and_what_it_did(rig, monkeypatch
     panel.learn = None
     clock[0] += ui.MESSAGE_S + 0.1
     assert footer("view") == []
+
+
+# ------------------------------------------- plan 17 WP3: where the menu opens
+
+def _mouse(panel, x, y, button=None, down=False):
+    """One frame with the mouse at (x, y), a button going down or up."""
+    io = imgui.get_io()
+    io.add_mouse_pos_event(x, y)
+    if button is not None:
+        io.add_mouse_button_event(button, down)
+    frame(panel)
+
+
+def _click(panel, rect, button=0):
+    x, y = (rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2
+    _mouse(panel, x, y)
+    _mouse(panel, x, y, button, True)
+    _mouse(panel, x, y, button, False)
+    frame(panel)
+
+
+def _popups(monkeypatch) -> tuple[list[str], list[str]]:
+    """(the ids of the context popups that are open, the items they draw),
+    appended to as frames draw: the real `begin_popup_context_item`, so a
+    popup is open only because a real right-click opened it."""
+    opened: list[str] = []
+    items: list[str] = []
+    begin, item = imgui.begin_popup_context_item, imgui.menu_item_simple
+
+    def begin_ctx(str_id=None, *a, **k):
+        hit = begin(str_id, *a, **k)
+        if hit:
+            opened.append(str_id)
+        return hit
+
+    def menu_item(label, *a, **k):
+        items.append(label)
+        return item(label, *a, **k)
+    monkeypatch.setattr(imgui, "begin_popup_context_item", begin_ctx)
+    monkeypatch.setattr(imgui, "menu_item_simple", menu_item)
+    return opened, items
+
+
+def test_a_rows_label_opens_its_params_menu(rig, monkeypatch):
+    """Plan 17 WP3: a right-click on a row's label — the dummy `_row` and
+    `half` draw, the label line of a `_fader` — opens the menu the widget
+    beside it draws: `open_popup_on_item_click` with the id `_ctx` uses,
+    in the same id scope. Real mouse events over the real Panel: the popup
+    that opens is the param's own, with its items, and nothing moved."""
+    panel, reg = rig.panel, rig.reg
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)   # the desk clear of the panel
+    _learn_over(rig)
+    labels: dict[str, tuple] = {}
+    real = Panel._ctx_label
+
+    def ctx_label(self, a):
+        lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        labels[a.id] = (lo.x, lo.y, hi.x, hi.y)
+        return real(self, a)
+    monkeypatch.setattr(Panel, "_ctx_label", ctx_label)
+    opened, items = _popups(monkeypatch)
+    for page, pid in (("camera", "camera.zoom"),      # a `_row`
+                      ("view", "view.bright"),        # a `_fader`
+                      ("audio", "master.gain"),       # a fader whose row is the session's
+                      ("lfo", "tempo.bpm"),           # a `half`, in a table cell
+                      ("lookback", "dream.tint_hue")):
+        labels.clear()
+        frame(panel, page)
+        frame(panel)
+        assert pid in labels, f"{pid}: no label on {page}"
+        rect = labels[pid]
+        assert rect[2] - rect[0] > 8 and rect[3] - rect[1] > 8
+        before = reg[pid].base
+        opened.clear()
+        items.clear()
+        _click(panel, rect, button=1)
+        assert opened and set(opened) == {f"##ctx.{pid}"}, (pid, opened)
+        assert "Learn desk" in items and "Route a lane here…" in items
+        assert reg[pid].base == before
+        # a left click elsewhere closes it; a left click on the label opens nothing
+        _click(panel, (2, 2, 4, 4))
+        opened.clear()
+        _click(panel, rect, button=0)
+        assert opened == [] and reg[pid].base == before
+
+
+def test_every_meter_has_the_band_select_menu(rig, monkeypatch):
+    """Plan 17 WP3: one `_ctx` per meter — it was meter 0 only — each
+    under its own key, so no two popups on the page share an id (the band
+    combo's is the bare one). A real right-click on the fourth meter opens
+    that meter's menu and selects nothing."""
+    panel, reg = rig.panel, rig.reg
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    _learn_over(rig)
+    n = rig.chain.n
+    keys: list[str] = []
+    rects: dict[str, tuple] = {}
+    real = Panel._ctx
+
+    def ctx(self, a, key="", extra=None):
+        if a.id == "band.select":
+            keys.append(key)
+            lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+            rects[key] = (lo.x, lo.y, hi.x, hi.y)
+        return real(self, a, key, extra)
+    monkeypatch.setattr(Panel, "_ctx", ctx)
+    frame(panel, "analyzer")
+    keys.clear()
+    frame(panel)
+    meters = [f".{i}" for i in range(n)]
+    assert [k for k in keys if k] == meters
+    assert len(keys) == len(set(keys)), f"two menus share an id: {keys}"
+    opened, items = _popups(monkeypatch)
+    sel = reg["band.select"].base
+    assert sel != 3
+    _click(panel, rects[".3"], button=1)
+    assert opened and set(opened) == {"##ctx.band.select.3"}
+    assert "Learn desk" in items
+    assert reg["band.select"].base == sel             # a right-click selects nothing
+    # armed from a meter, the learn's red frame is on the meters too
+    framed: list[str] = []
+    frame_ = Panel._learn_frame
+    monkeypatch.setattr(Panel, "_learn_frame",
+                        lambda self, p: (framed.append(p.id), frame_(self, p))[1])
+    frame(panel)
+    assert framed.count("band.select") >= n
+    _click(panel, (2, 2, 4, 4))
+    _click(panel, rects[".3"])                        # the left click still selects
+    assert reg["band.select"].base == 3
