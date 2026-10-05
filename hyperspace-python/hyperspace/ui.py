@@ -1228,12 +1228,14 @@ class Panel:
         imgui.spacing()
 
         # per-plane rate: what a lane drives to spin a plane (base 1, signed);
-        # two to a row, so the field's row above has room on the page
+        # two to a row, so the field's row above has room on the page. The
+        # cell says only the plane (the section and the tooltip say "rate"):
+        # a driven rate reads `base → effective`, which needs the width
         self._section("rotation", "rot")
         if imgui.begin_table("##rot.rate", 2, imgui.TableFlags_.sizing_stretch_same):
             for name in PLANES:
                 imgui.table_next_column()
-                self.half(f"rot.rate.{name}")
+                self.half(f"rot.rate.{name}", name, label_w=32)
             imgui.end_table()
 
     def _page_faces(self, dt: float) -> None:

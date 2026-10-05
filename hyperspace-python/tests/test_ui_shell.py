@@ -497,6 +497,17 @@ def test_the_field_row_and_the_rate_cells_keep_their_menus(rig, monkeypatch):
     assert len({round(r[1]) for r in cells}) == 3                  # three rows of two
     assert all(cells[k][2] < cells[k + 1][0] for k in (0, 2, 4))
     assert max(r[2] for r in row + cells) <= CONTROL_SIZE[0]
+    # a lane on a plane rate (the party presets route them) reads
+    # `base → effective` in the cell: the widest such readout fits it
+    from hyperspace import ui
+    p = rig.reg["rot.rate.XY"]
+    widest = f"{p.fmt(p.lo)} → {p.fmt(p.lo)}"
+    imgui.new_frame()
+    imgui.push_font(ui._FONTS["num"], ui.FONT_NUM)
+    need = imgui.calc_text_size(widest).x + 2 * imgui.get_style().frame_padding.x
+    imgui.pop_font()
+    imgui.end_frame()
+    assert all(r[2] - r[0] >= need for r in cells), (widest, need, cells[0])
 
     io = imgui.get_io()
     io.config_flags |= imgui.ConfigFlags_.nav_enable_keyboard      # Escape closes a menu
