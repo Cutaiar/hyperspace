@@ -324,6 +324,11 @@ class Learn:
         prompt (`resolve_pending`) — the table untouched until it answers —
         rather than taking the target or being lost. `learning` is cleared
         first, so the hands adapter, which keys off it, cannot fire again.
+
+        A target that is not modulatable (`Param.modulatable`: a rig or
+        show setting such as ``ghost.mirror``) is refused with a line the
+        performer can read in `last`, the table untouched: the panel never
+        offers Learn hand there, and this is the door's own check.
         """
         if not self.accepts(source):     # nothing armed, or armed for something else
             return
@@ -332,6 +337,13 @@ class Learn:
             return
         p = self.target_for(pid)
         if p is None:
+            return
+        if not p.modulatable:
+            # a setting no performer may drive (ghost.mirror, a rig switch):
+            # a route on it would sit dormant, so none is made. The learn
+            # is over — no hand can ever complete it — and nothing changed
+            self.refuse(f"{p.label} can't follow a hand (not modulatable) "
+                        "— not learned; Learn desk puts it on a button")
             return
         b = self._row(source, p, when, centred=centred, depth=depth)
         cur = self.table.owner(p.id)

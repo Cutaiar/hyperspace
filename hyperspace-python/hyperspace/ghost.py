@@ -31,11 +31,14 @@ Leaving the box: a hand that is no longer reported fades out over
 FADE_OUT where it was last seen, and fades in over FADE_IN when it comes
 back — it neither freezes nor snaps.
 
-The geometry is replaceable. `HandPose` is the data path (stage-space
-joints and the bones' raw rotations, per hand, with its fade and
-colour); `CapsuleHands` turns poses into a sphere per joint, a capsule
-per bone and a palm. A skinned mesh is another class with the same
-`draw(poses, view_proj, eye)`.
+The drawn object is swappable (`ghost.style`, plan 21 WP6). `HandPose` is
+the data path (stage-space joints and the bones' raw rotations, per hand,
+with its fade and colour); a style is a pure function from one pose to
+spheres, tubes and triangles (`PARTS`: HANDS — a sphere per joint, a
+capsule per bone and a palm — JOINTS, PALMS, CAGE, MARIONETTE), and
+`Geometry` draws whichever is picked. The guide is not a style's: `Ghost`
+passes its rows to `Geometry.draw` beside the hands'. A skinned mesh is
+another parts function, or another class with the same `draw`.
 """
 
 from __future__ import annotations
@@ -79,6 +82,7 @@ MODES: dict[str, tuple[tuple[float, float, float], ...]] = {
 # ------------------------------------------------------------------ params
 
 GUIDES = ["OFF", "BESIDE", "ON HAND"]
+STYLES = ["HANDS", "JOINTS", "PALMS", "CAGE", "MARIONETTE"]   # PARTS, in this order
 
 @dataclass
 class GhostState:
@@ -90,13 +94,19 @@ class GhostState:
     mirror: bool = False
     guide: int = 0          # GUIDES: off, a gauge beside each hand, or on the palm
     tethers: bool = False   # with a guide: a labelled line from each routed mark
+    style: int = 0          # STYLES: what is drawn from the poses (HANDS, the capsules)
 
 
 def register(reg, state: GhostState) -> None:
-    """ghost.on / .alpha / .mirror — session params (params.SESSION_GROUPS):
-    the hands are the room's display, like the output's placement, so a
-    preset load never switches them off mid-set. Ordinary otherwise: they
-    show on the HANDS page and can be learned onto a button or a knob."""
+    """ghost.* — session params (params.SESSION_GROUPS): the hands are the
+    room's display, like the output's placement, so a preset load never
+    switches them off mid-set. They show on the HANDS page and can be
+    learned onto a desk button or knob. Only `on` and `alpha` are
+    modulatable (a hand or an LFO may drive them); `mirror`, `guide`,
+    `tethers` and `style` are settings of the rig and the show — a
+    performer's row on the mirror would flip the hands with a hand's move,
+    and a style stepping under an LFO would swap the drawn object
+    mid-gesture (plan 21 WP5 R12, WP6)."""
     if f"{GROUP}.on" in reg:
         return
     reg.toggle(f"{GROUP}.on", "Ghost hands", lambda: state.on,
@@ -108,20 +118,29 @@ def register(reg, state: GhostState) -> None:
                    fmt=lambda v: f"{v * 100:.0f}%", group=GROUP,
                    tip="How solid the ghost hands are over the picture.")
     reg.toggle(f"{GROUP}.mirror", "Ghost mirror", lambda: state.mirror,
-               lambda v: setattr(state, "mirror", bool(v)), group=GROUP,
+               lambda v: setattr(state, "mirror", bool(v)), group=GROUP, modulatable=False,
                tip="Flip the ghost hands left for right — for a rig that shows the "
                    "render in a mirror or on a Pepper's Ghost glass.")
     reg.enum(f"{GROUP}.guide", "Ghost guide", lambda: state.guide,
              lambda i: setattr(state, "guide", int(i)), GUIDES, group=GROUP,
+             modulatable=False,
              tip="What each hand is doing: a ball per axis (x red, y green, z blue), a "
                  "ring per rotation with a dot where the fingers point (pitch, yaw) or "
                  "the palm faces (roll), and the four pinch switches. All six always "
                  "show; the ones the setup routes are brighter and show what the table "
                  "is fed. Beside the hand, or on it.")
     reg.toggle(f"{GROUP}.tethers", "Ghost tethers", lambda: state.tethers,
-               lambda v: setattr(state, "tethers", bool(v)), group=GROUP,
+               lambda v: setattr(state, "tethers", bool(v)), group=GROUP, modulatable=False,
                tip="With a guide on: a line from each routed axis, pinch or grab to a "
                    "label at the edge of the frame naming the params it drives.")
+    reg.enum(f"{GROUP}.style", "Ghost style", lambda: getattr(state, "style", 0),
+             lambda i: setattr(state, "style", int(i)), STYLES, group=GROUP,
+             modulatable=False,
+             tip="What is drawn where your hands are: HANDS (capsule hands), JOINTS (a "
+                 "bead per joint), PALMS (an orb that swells as the hand opens, a ring, a "
+                 "spoke where the fingers point), CAGE (a wire octahedron that turns with "
+                 "the palm and breathes with the grip), MARIONETTE (fingertips on strings "
+                 "from a bar). The guide and the tethers are the same in every style.")
 
 
 # ------------------------------------------------------------------ camera
@@ -805,12 +824,216 @@ void main() { f_color = texture(u_hands, v_uv) * u_alpha; }
 """
 
 
-class CapsuleHands:
-    """The first geometry: a sphere per joint, a capsule per bone, a palm.
+# ---- the styles: what is drawn from one pose ----
+#
+# A style is a pure function from one `HandPose` to (spheres, tubes,
+# triangles) in the stage (mm): each sphere (centre, r), each tube (a, b,
+# r), each triangle three (position, normal). No GL, no colour, no fade —
+# `Geometry.draw` gives every part the hand's colour and fade — and no
+# guide: `Ghost` hands the guide's rows to `draw` as `extra`, so no style
+# knows the guide exists (plan 21 WP6). A palm-only pose (no digits) draws
+# a palm in every style.
 
-    Built per frame from the poses (a few dozen instances), drawn into
-    whatever is bound with the depth test on. Replace this class — same
-    `draw` — to put a skinned mesh on the same data."""
+# openness: the mean fingertip distance from the palm over the palm's
+# width, mapped so a fist is 0 and an open hand 1 (the tests' synthetic
+# hands measure 0.42 and 1.37 on this scale)
+FIST_REACH = 0.45
+OPEN_REACH = 1.35
+WIRE_R = 0.03        # a wire's radius (the cage, the palm's ring), as a fraction of palm width
+STRING_R = 0.025     # a marionette string's
+RING_SEG = 24
+
+
+def openness(p: HandPose) -> float:
+    """0 for a fist, 1 for an open hand, from the pose alone (no route,
+    no new data); 0.5 for a palm-only pose, which has no fingertips."""
+    if not len(p.joints):
+        return 0.5
+    reach = float(np.mean(np.linalg.norm(p.joints[:, 4] - p.palm, axis=1)))
+    u = (reach / max(p.width, 1e-6) - FIST_REACH) / (OPEN_REACH - FIST_REACH)
+    return min(max(u, 0.0), 1.0)
+
+
+def palm_frame(p: HandPose) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """(forward, side, normal), unit, in the stage: where the fingers
+    point, across the palm, out of it."""
+    n = p.normal / max(np.linalg.norm(p.normal), 1e-9)
+    f = p.direction / max(np.linalg.norm(p.direction), 1e-9)
+    s = np.cross(n, f)
+    s /= max(np.linalg.norm(s), 1e-9)
+    return f, s, n
+
+
+def _orb(p: HandPose) -> tuple:
+    """The palm orb every style but HANDS draws for a palm-only pose."""
+    return (p.palm, 0.32 * p.width)
+
+
+def _loop(points: list, r: float) -> list:
+    """Tubes joining `points` round in a closed loop."""
+    return [(a, b, r) for a, b in pairwise([*points, points[0]])]
+
+
+def hands_parts(p: HandPose) -> tuple[list, list, list]:
+    """HANDS, the capsule hands: a sphere per joint, a capsule per bone, a
+    palm (an ellipse in the palm's plane for a palm-only pose)."""
+    col_r = FINGER_R * p.width
+    spheres, tubes, tris = [], [], []
+    n = p.normal / max(np.linalg.norm(p.normal), 1e-9)
+    if len(p.joints):
+        for d in range(len(p.joints)):
+            for b in range(4):
+                w = p.widths[d, b]
+                r = BONE_R * w if w > 0 else col_r
+                if d == 0 and b == 0:
+                    continue            # the thumb's metacarpal has no length
+                a, e = p.joints[d, b], p.joints[d, b + 1]
+                if np.linalg.norm(e - a) > 1e-3:
+                    tubes.append((a, e, r))
+                spheres.append((e, r))
+                if b == 0 or (d == 0 and b == 1):
+                    spheres.append((a, r))
+        # the palm: the four finger metacarpals' bases and knuckles
+        ring = ([p.joints[d, 0] for d in (1,)] + [p.joints[d, 1] for d in (1, 2, 3, 4)]
+                + [p.joints[d, 0] for d in (4, 3, 2)])
+    else:
+        # palm only: an ellipse in the palm's plane, a palm long and wide
+        f = p.direction / max(np.linalg.norm(p.direction), 1e-9)
+        s = np.cross(n, f)
+        ring = [p.palm + f * 0.55 * p.width * math.cos(a) + s * 0.5 * p.width * math.sin(a)
+                for a in np.linspace(0.0, 2 * math.pi, 16, endpoint=False)]
+    c = np.mean(ring, axis=0)
+    for k in range(len(ring)):
+        tris.append(((c, n), (ring[k], n), (ring[(k + 1) % len(ring)], n)))
+    if len(p.joints):
+        # the web between the thumb and the index metacarpal
+        tb, tm = p.joints[0, 1], p.joints[0, 2]
+        ib, ik = p.joints[1, 0], p.joints[1, 1]
+        tris.append(((tb, n), (tm, n), (ik, n)))
+        tris.append(((tb, n), (ik, n), (ib, n)))
+    return spheres, tubes, tris
+
+
+def joints_parts(p: HandPose) -> tuple[list, list, list]:
+    """JOINTS: a bead per joint and nothing between them — small at the
+    wrist, a little larger at the knuckles, largest at the fingertips —
+    and one at the palm."""
+    w = p.width
+    if not len(p.joints):
+        return [_orb(p)], [], []
+    spheres = [(p.palm, 0.17 * w)]
+    sizes = (0.055, 0.075, 0.065, 0.07, 0.12)       # base, knuckle, two mid joints, tip
+    for d in range(len(p.joints)):
+        for j in range(5):
+            if d == 0 and j == 0:
+                continue            # the thumb's metacarpal has no length: one bead there
+            spheres.append((p.joints[d, j], sizes[j] * w))
+    return spheres, [], []
+
+
+def palms_parts(p: HandPose) -> tuple[list, list, list]:
+    """PALMS: an orb at the palm that swells as the hand opens, a wire ring
+    in the palm's plane round it, and a spoke out of the ring's edge where
+    the fingers point, a bead at its end."""
+    w, (f, s, _) = p.width, palm_frame(p)
+    o = openness(p)
+    orb = (0.2 + 0.2 * o) * w
+    ring_r = 0.78 * w
+    ring = [p.palm + ring_r * (math.cos(a) * f + math.sin(a) * s)
+            for a in np.linspace(0.0, 2 * math.pi, RING_SEG, endpoint=False)]
+    tip = p.palm + f * (ring_r + 0.55 * w)
+    spheres = [(p.palm, orb), (tip, 0.09 * w)]
+    tubes = [*_loop(ring, WIRE_R * w), (p.palm + f * orb, tip, 1.5 * WIRE_R * w)]
+    return spheres, tubes, []
+
+
+# the octahedron: its six corners as (forward, side, normal) signs, the
+# twelve edges between them, the eight faces
+_OCTA = ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1))
+_OCTA_EDGES = tuple((a, b) for a in range(6) for b in range(a + 1, 6) if a // 2 != b // 2)
+_OCTA_FACES = tuple((a, b, c) for a in (0, 1) for b in (2, 3) for c in (4, 5))
+
+
+def cage_parts(p: HandPose) -> tuple[list, list, list]:
+    """CAGE: a wire octahedron round the hand, set in the palm's frame so it
+    turns with the palm, longest where the fingers point; it breathes with
+    the grip (a fist pulls it in, an open hand pushes it out). Inside, at
+    the palm, a small solid octahedron turned an eighth of a turn."""
+    w, (f, s, n) = p.width, palm_frame(p)
+    k = (0.55 + 0.55 * openness(p)) * w
+    centre = p.palm + f * 0.3 * w
+    axes = (f * 1.25 * k, s * k, n * 0.75 * k)
+    corners = [centre + sum(c * a for c, a in zip(sign, axes)) for sign in _OCTA]
+    spheres = [(c, 0.05 * w) for c in corners]
+    tubes = [(corners[a], corners[b], WIRE_R * w) for a, b in _OCTA_EDGES]
+    # the little polytope: the same shape, solid, turned about the normal
+    g = 0.17 * w
+    fa, sa = (f + s) / math.sqrt(2.0), (s - f) / math.sqrt(2.0)
+    inner = [p.palm + g * (c[0] * fa + c[1] * sa + 0.8 * c[2] * n) for c in _OCTA]
+    tris = []
+    for a, b, c in _OCTA_FACES:
+        pa, pb, pc = inner[a], inner[b], inner[c]
+        nn = np.cross(pb - pa, pc - pa)
+        nn /= max(np.linalg.norm(nn), 1e-9)
+        tris.append(((pa, nn), (pb, nn), (pc, nn)))
+    if not len(p.joints):
+        spheres.append(_orb(p))
+    return spheres, tubes, tris
+
+
+def marionette_parts(p: HandPose) -> tuple[list, list, list]:
+    """MARIONETTE: a bead per fingertip, each hung on a string from a
+    control bar above the hand — the bar level, across the hand, a short
+    crossbar along it where the fingers point, a string from its front to
+    the back of the palm."""
+    w, (f, s, _) = p.width, palm_frame(p)
+    up = np.array([0.0, 1.0, 0.0])
+    across = s - up * float(s @ up)
+    if np.linalg.norm(across) < 1e-3:
+        across = np.array([1.0, 0.0, 0.0])
+    across /= np.linalg.norm(across)
+    ahead = np.cross(across, up)
+    if float(ahead @ f) < 0.0:
+        ahead = -ahead
+    tips = list(p.joints[:, 4]) if len(p.joints) else []
+    top = max([float(p.palm[1]), *(float(t[1]) for t in tips)])
+    bar_c = np.array([p.palm[0], top + 1.6 * w, p.palm[2]])
+    half = 0.7 * w
+    ends = (bar_c - across * half, bar_c + across * half)
+    front = bar_c + ahead * 0.45 * w
+    spheres = [(ends[0], 0.07 * w), (ends[1], 0.07 * w), (front, 0.06 * w)]
+    tubes = [(ends[0], ends[1], 0.045 * w), (bar_c - ahead * 0.45 * w, front, 0.04 * w)]
+    for t in tips:
+        u = min(max(float((t - bar_c) @ across), -half), half)
+        hook = bar_c + across * u
+        tubes.append((hook, t, STRING_R * w))
+        spheres.append((t, 0.11 * w))
+    # the palm's own string, from the crossbar's front
+    tubes.append((front, p.palm, STRING_R * w))
+    spheres.append(_orb(p) if not tips else (p.palm, 0.1 * w))
+    return spheres, tubes, []
+
+
+PARTS = (hands_parts, joints_parts, palms_parts, cage_parts, marionette_parts)
+
+
+def style_parts(i) -> object:
+    """The parts function of style index `i` (HANDS for anything else)."""
+    try:
+        k = int(i)
+    except (TypeError, ValueError):
+        return hands_parts
+    return PARTS[k] if 0 <= k < len(PARTS) else hands_parts
+
+
+class Geometry:
+    """Draws poses as a style's parts — spheres, tubes and triangles,
+    built per frame (a few dozen instances) — into whatever is bound, with
+    the depth test on.
+
+    `draw(poses, view_proj, eye, parts, extra)`: `parts` is one of
+    `PARTS` (None draws no hand at all), `extra` per pose the rows drawn
+    with it, already coloured (the guide's, from `Ghost`)."""
 
     def __init__(self, ctx: moderngl.Context):
         self.ctx = ctx
@@ -851,64 +1074,24 @@ class CapsuleHands:
         for res in old:
             res.release()
 
-    @staticmethod
-    def parts(p: HandPose) -> tuple[list, list, list]:
-        """(spheres, tubes, palm triangles) for one pose: each sphere
-        (centre, r), each tube (a, b, r), each triangle three (pos, normal)."""
-        col_r = FINGER_R * p.width
-        spheres, tubes, tris = [], [], []
-        n = p.normal / max(np.linalg.norm(p.normal), 1e-9)
-        if len(p.joints):
-            for d in range(len(p.joints)):
-                for b in range(4):
-                    w = p.widths[d, b]
-                    r = BONE_R * w if w > 0 else col_r
-                    if d == 0 and b == 0:
-                        continue            # the thumb's metacarpal has no length
-                    a, e = p.joints[d, b], p.joints[d, b + 1]
-                    if np.linalg.norm(e - a) > 1e-3:
-                        tubes.append((a, e, r))
-                    spheres.append((e, r))
-                    if b == 0 or (d == 0 and b == 1):
-                        spheres.append((a, r))
-            # the palm: the four finger metacarpals' bases and knuckles
-            ring = ([p.joints[d, 0] for d in (1,)] + [p.joints[d, 1] for d in (1, 2, 3, 4)]
-                    + [p.joints[d, 0] for d in (4, 3, 2)])
-        else:
-            # palm only: an ellipse in the palm's plane, a palm long and wide
-            f = p.direction / max(np.linalg.norm(p.direction), 1e-9)
-            s = np.cross(n, f)
-            ring = [p.palm + f * 0.55 * p.width * math.cos(a) + s * 0.5 * p.width * math.sin(a)
-                    for a in np.linspace(0.0, 2 * math.pi, 16, endpoint=False)]
-        c = np.mean(ring, axis=0)
-        for k in range(len(ring)):
-            tris.append(((c, n), (ring[k], n), (ring[(k + 1) % len(ring)], n)))
-        if len(p.joints):
-            # the web between the thumb and the index metacarpal
-            tb, tm = p.joints[0, 1], p.joints[0, 2]
-            ib, ik = p.joints[1, 0], p.joints[1, 1]
-            tris.append(((tb, n), (tm, n), (ik, n)))
-            tris.append(((tb, n), (ik, n), (ib, n)))
-        return spheres, tubes, tris
-
-    def draw(self, poses: list[HandPose], view_proj: np.ndarray, eye: np.ndarray, *,
-             hands: bool = True, guide: bool = True) -> None:
-        """The poses' hands and their guides (each `HandPose.guide`) in one
-        go. `hands` / `guide` False leaves that part out — plan 21 WP2 draws
-        them apart when the guide is a layer of its own (`Ghost.readout`);
-        both on is the one call it always was."""
+    def draw(self, poses: list[HandPose], view_proj: np.ndarray, eye: np.ndarray,
+             parts=hands_parts, extra: list | None = None) -> None:
+        """Each pose as `parts` draws it, in its colour and fade, then the
+        pose's `extra` rows — (sphere rows, tube rows), aligned with `poses`
+        — in the same instanced draws, so they share the depth test. With
+        `parts` None only the extra rows draw."""
         s_rows, t_rows, m_rows = [], [], []
-        for p in poses:
-            if hands:
+        for k, p in enumerate(poses):
+            if parts is not None:
                 col = (*p.colour, float(p.fade))
-                spheres, tubes, tris = self.parts(p)
+                spheres, tubes, tris = parts(p)
                 s_rows += [(*c, r, *col) for c, r in spheres]
                 t_rows += [(*a, *b, r, *col) for a, b, r in tubes]
                 for tri in tris:
                     m_rows += [(*q, *nn, *col) for q, nn in tri]
-            if guide:
-                s_rows += p.guide[0]
-                t_rows += p.guide[1]
+            if extra is not None and k < len(extra):
+                s_rows += extra[k][0]
+                t_rows += extra[k][1]
         vp = np.asarray(view_proj, dtype="f4").T.tobytes()     # column-major
         ey = tuple(float(x) for x in eye)
         for prog in self.progs:
@@ -931,6 +1114,12 @@ class CapsuleHands:
         for res in (*self.vaos, *self.progs, self._unit_s, self._unit_t, self._inst_s,
                     self._inst_t, self._mesh):
             res.release()
+
+
+class CapsuleHands(Geometry):
+    """The first geometry's name, kept: a `Geometry` that draws HANDS."""
+
+    parts = staticmethod(hands_parts)
 
 
 # ------------------------------------------------------------------ the pass
@@ -959,7 +1148,7 @@ class Ghost:
         self.source = None
         self.router = None       # the routing table, for which values the guide lights
         self.sides = {"left": _Side(), "right": _Side()}
-        self.geometry: CapsuleHands | None = None      # built on first use
+        self.geometry: Geometry | None = None          # built on first use
         self._comp: moderngl.Program | None = None
         self._comp_vao: moderngl.VertexArray | None = None
         self._t: float | None = None
@@ -1119,6 +1308,11 @@ class Ghost:
             return False                 # nothing bound, nothing drawn: no layer
         split = (readout and any(p.guide[0] or p.guide[1] or p.tethers for p in poses)
                  and self._ensure_readout((w, h)))
+        # the style draws the hands; the guide's rows ride with each pose as
+        # `extra` (no style knows the guide exists, plan 21 WP6).
+        # getattr: a GhostState from before the style existed
+        parts = style_parts(getattr(self.state, "style", 0))
+        guides = [p.guide for p in poses]
         try:
             draw_fbo = self._msaa if self._msaa is not None else self._fbo
             draw_fbo.use()
@@ -1126,10 +1320,7 @@ class Ghost:
             ctx.clear(0.0, 0.0, 0.0, 0.0, depth=1.0)
             ctx.disable(moderngl.BLEND)
             ctx.enable(moderngl.DEPTH_TEST)
-            if split:
-                self.geometry.draw(poses, view_proj, eye, guide=False)
-            else:
-                self.geometry.draw(poses, view_proj, eye)
+            self.geometry.draw(poses, view_proj, eye, parts, None if split else guides)
             ctx.disable(moderngl.DEPTH_TEST)
             if not split and any(p.tethers for p in poses):
                 self._draw_tethers(poses, view_proj)
@@ -1146,12 +1337,12 @@ class Ghost:
                 ro.color_mask = (False, False, False, False)
                 try:
                     ro.use()
-                    self.geometry.draw(poses, view_proj, eye, guide=False)
+                    self.geometry.draw(poses, view_proj, eye, parts)
                 finally:
                     ro.color_mask = (True, True, True, True)
                     ro.use()
                 ctx.viewport = (0, 0, w, h)
-                self.geometry.draw(poses, view_proj, eye, hands=False)
+                self.geometry.draw(poses, view_proj, eye, None, guides)
                 ctx.disable(moderngl.DEPTH_TEST)
                 if any(p.tethers for p in poses):
                     self._draw_tethers(poses, view_proj)
@@ -1248,7 +1439,7 @@ class Ghost:
             return False
         made: list = []
         try:
-            geo = CapsuleHands(self.ctx)
+            geo = Geometry(self.ctx)
             made.append(geo)
             comp = self.ctx.program(vertex_shader=QUAD_VS, fragment_shader=COMPOSITE_FS)
             made.append(comp)

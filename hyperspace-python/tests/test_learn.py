@@ -1021,3 +1021,24 @@ def test_a_pick_on_an_invariant_control_or_the_global_layer_maps_nothing(tmp_pat
     assert lrn.map_picked("view.depth4", apc40) and lrn.control is None
     assert [b.source for b in table.desk() if b.target == "view.depth4" and b.kind == "cc"] \
         == [k1.source]
+
+
+def test_a_hand_learn_onto_a_setting_is_refused_in_words(rig):
+    """Plan 21 R12: `ghost.mirror`, `.guide`, `.tethers` and `.style` are
+    not modulatable. A hand completing a learn armed on one (the panel
+    never offers Learn hand there; a bare arm can still get here) makes no
+    row, holds no question, ends the learn and says why in a line the
+    performer can read; a modulatable ghost param still learns."""
+    lrn, t = rig.learn, rig.table
+    for pid in ("ghost.mirror", "ghost.guide", "ghost.tethers", "ghost.style"):
+        n = len(t.bindings)
+        lrn.arm(pid, "hand:right")
+        lrn.learn_source("hand:right.x")
+        assert lrn.refused and lrn.pending is None and lrn.learning is None, pid
+        assert t.owner(pid) is None and len(t.bindings) == n, pid
+        label = rig.reg[pid].label
+        assert lrn.last == (f"{label} can't follow a hand (not modulatable) — not learned; "
+                            "Learn desk puts it on a button"), pid
+    lrn.arm("ghost.alpha", "hand:right")
+    lrn.learn_source("hand:right.y")
+    assert not lrn.refused and t.owner("ghost.alpha").source == "hand:right.y"

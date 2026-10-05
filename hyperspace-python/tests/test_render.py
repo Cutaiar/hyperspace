@@ -731,7 +731,7 @@ def test_a_raising_hands_pass_still_dims(ctx, where, monkeypatch):
             def boom(self, *a, **k):
                 calls.append(1)
                 raise RuntimeError(f"geometry {len(calls)}")
-            m.setattr(G.CapsuleHands, "draw", boom)
+            m.setattr(G.Geometry, "draw", boom)
         got = _dim_frames(ctx, r, 0.5)                # four frames, none raises
     assert np.array_equal(got, want)                  # no hands, dimmed: not full
     assert not np.array_equal(got, full)

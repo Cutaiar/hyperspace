@@ -46,11 +46,16 @@ def test_the_params_are_session_off_by_default_and_learnable(tmp_path):
 
     reg = make(tmp_path)[0]
     assert "ghost" in SESSION_GROUPS
-    for pid in ("ghost.on", "ghost.alpha", "ghost.mirror", "ghost.guide", "ghost.tethers"):
+    for pid in ("ghost.on", "ghost.alpha", "ghost.mirror", "ghost.guide", "ghost.tethers",
+                "ghost.style"):
         p = reg[pid]
-        assert p.persist and p.modulatable and part_of(p) == "session", pid
+        assert p.persist and part_of(p) == "session", pid
+        # plan 21 R12 / WP6: only the switch and the opacity may follow a
+        # hand or an LFO; the rest are settings (still learnable on the desk)
+        assert p.modulatable is (pid in ("ghost.on", "ghost.alpha")), pid
     assert reg["ghost.on"].value is False and 0.0 < reg["ghost.alpha"].value <= 1.0
     assert G.GUIDES[reg["ghost.guide"].value] == "OFF" and reg["ghost.tethers"].value is False
+    assert reg["ghost.style"].names == G.STYLES and G.STYLES[reg["ghost.style"].value] == "HANDS"
 
 
 def test_the_box_is_the_calibrated_ranges_else_the_defaults():
@@ -846,3 +851,246 @@ def test_the_readout_layer_is_the_guide_apart_from_the_hands(ctx):
             assert hidden.sum() > 500 and ro[hidden][..., 3].max() == 0
         gh.layer((W, H), 1.2, readout=False)              # asked for nothing: back to one layer
         assert gh.readout is None
+
+
+# ---------------------------------------------------------------- ghost.style (plan 21 WP6)
+
+def _guided_poses(skel=None, guide=2, mirror=False, style=0):
+    """(poses with their guide rows, view_proj, eye) from a Ghost with no
+    GL drawn, the synthetic hands faded fully in."""
+    io = HandsIO(HandSettings.from_config({}), {}, source=NS(latest=lambda: (0, 0.0, {})),
+                 out=NS(send=print))
+    for st in io.state:
+        st.follow.y = 0.7
+    src = NS(skeleton=both() if skel is None else skel, cfg={"mode": "desktop"}, axes=io.axes,
+             state=io.state, gates=io.gates)
+    gh = G.Ghost(None)
+    gh.state.on, gh.state.guide, gh.state.mirror, gh.state.style = True, guide, mirror, style
+    gh.source = src
+    for k in range(4):
+        got = gh.poses(1.0 + k / 30, W / H)
+    return got
+
+
+def _palm_only() -> dict:
+    sk = both()
+    for v in sk.values():
+        v["digits"] = []
+    return sk
+
+
+def test_every_style_draws_from_the_same_poses():
+    """Each style is a pure function of one pose (no GL): something for
+    every hand, a different picture from every other style, the same
+    parts for the same pose, and openness read from the pose alone — 0 a
+    fist, 1 open — which PALMS' orb and CAGE's size follow."""
+    poses, _, _ = _guided_poses()
+    assert G.STYLES == ["HANDS", "JOINTS", "PALMS", "CAGE", "MARIONETTE"]
+    assert len(G.PARTS) == len(G.STYLES) and G.PARTS[0] is G.hands_parts
+    for p in poses:
+        drawn = []
+        for name, fn in zip(G.STYLES, G.PARTS):
+            a, b = fn(p), fn(p)
+            assert repr(a) == repr(b), name                       # pure
+            spheres, _, _ = a
+            assert spheres, name
+            assert all(np.all(np.isfinite(c)) and r > 0 for c, r in spheres), name
+            drawn.append(repr(a))
+        assert len(set(drawn)) == len(G.STYLES)
+    left, right = poses                                           # left open, right a fist
+    assert G.openness(left) == 1.0 and G.openness(right) == 0.0
+    orb = lambda p: G.palms_parts(p)[0][0][1]
+    cage = lambda p: np.ptp(np.array([c for c, _ in G.cage_parts(p)[0]]), axis=0).max()
+    assert orb(left) / left.width > orb(right) / right.width
+    assert cage(left) > 1.5 * cage(right)
+    # the cage turns with the palm: a palm rolled a quarter turn turns its corners
+    m = np.array([[1.0, 0, 0], [0, 0, -1.0], [0, 1.0, 0]])
+    turned = G.HandPose(right.side, right.palm, m @ right.normal, right.direction, right.width,
+                        right.joints, right.widths, right.rots, right.basis)
+    a = np.array([c for c, _ in G.cage_parts(right)[0]]) - right.palm
+    b = np.array([c for c, _ in G.cage_parts(turned)[0]]) - right.palm
+    assert not np.allclose(a, b)
+    # out-of-range or junk style indexes draw HANDS
+    for bad in (-1, 5, 99, "x", None):
+        assert G.style_parts(bad) is G.hands_parts
+
+
+def test_a_style_never_draws_the_guide(ctx):
+    """No style reads the guide: a pose's parts are the same with its guide
+    rows or without. Drawn, the hands' layer with the readout split off
+    is the same bytes as a ghost with no guide at all, in every style —
+    the guide goes to the readout layer only."""
+    poses, _, _ = _guided_poses()
+    for p in poses:
+        assert p.guide[0] and p.guide[1]
+        bare = G.HandPose(p.side, p.palm, p.normal, p.direction, p.width, p.joints, p.widths,
+                          p.rots, p.basis, p.fade, p.colour)
+        for fn in G.PARTS:
+            assert repr(fn(p)) == repr(fn(bare))
+    io = HandsIO(HandSettings.from_config({}), {}, source=NS(latest=lambda: (0, 0.0, {})),
+                 out=NS(send=print))
+    for st in io.state:
+        st.follow.y = 0.7
+    src = NS(skeleton=both(), cfg={"mode": "desktop"}, axes=io.axes, state=io.state,
+             gates=io.gates)
+
+    def layer(style, guide):
+        gh = Renderer(ctx).ghost
+        gh.state.on, gh.state.alpha, gh.state.guide, gh.state.style = True, 1.0, guide, style
+        gh.source = src
+        for k in range(4):
+            assert gh.layer((W, H), 1.0 + k / 30, readout=True)
+        rd = lambda t: np.frombuffer(t.read(), dtype=np.uint8)
+        return rd(gh.tex), (rd(gh.readout) if gh.readout is not None else None)
+
+    seen = set()
+    for style in range(len(G.STYLES)):
+        hands, none = layer(style, 0)
+        assert none is None
+        split, ro = layer(style, 2)
+        assert np.array_equal(split, hands), G.STYLES[style]
+        assert ro is not None and ro.reshape(-1, 4)[:, 3].max() == 255
+        seen.add(hands.tobytes())
+    assert len(seen) == len(G.STYLES)                             # five different layers
+
+
+def test_a_palm_only_hand_draws_in_every_style(ctx):
+    """A skeleton with no digits (bindings that gave none): every style
+    still draws the hand — a palm orb (HANDS: its palm disc, as ever) —
+    on both sides of the frame."""
+    poses, _, _ = _guided_poses(_palm_only(), guide=0)
+    for p in poses:
+        assert not len(p.joints)
+        for name, fn in zip(G.STYLES, G.PARTS):
+            spheres, _, tris = fn(p)
+            assert spheres or tris, name
+            if name != "HANDS":
+                assert any(np.allclose(c, p.palm) and r >= 0.3 * p.width
+                           for c, r in spheres), name
+    base, _ = frame(ctx)
+    for style in range(len(G.STYLES)):
+        r = Renderer(ctx)
+        r.ghost.state.style = style
+        out, _ = frame(ctx, src=tracker(_palm_only()), renderer=r)
+        changed = np.abs(out[..., :3].astype(int) - base[..., :3]).sum(axis=2) > 30
+        assert changed[:, : W // 2].sum() > 100 and changed[:, W // 2:].sum() > 100, style
+        assert r.ghost.error == ""
+
+
+def _old_parts(p):
+    """CapsuleHands.parts as it stood on the parent commit (b7aa67a), frozen."""
+    import math
+    col_r = G.FINGER_R * p.width
+    spheres, tubes, tris = [], [], []
+    n = p.normal / max(np.linalg.norm(p.normal), 1e-9)
+    if len(p.joints):
+        for d in range(len(p.joints)):
+            for b in range(4):
+                w = p.widths[d, b]
+                r = G.BONE_R * w if w > 0 else col_r
+                if d == 0 and b == 0:
+                    continue
+                a, e = p.joints[d, b], p.joints[d, b + 1]
+                if np.linalg.norm(e - a) > 1e-3:
+                    tubes.append((a, e, r))
+                spheres.append((e, r))
+                if b == 0 or (d == 0 and b == 1):
+                    spheres.append((a, r))
+        ring = ([p.joints[d, 0] for d in (1,)] + [p.joints[d, 1] for d in (1, 2, 3, 4)]
+                + [p.joints[d, 0] for d in (4, 3, 2)])
+    else:
+        f = p.direction / max(np.linalg.norm(p.direction), 1e-9)
+        s = np.cross(n, f)
+        ring = [p.palm + f * 0.55 * p.width * math.cos(a) + s * 0.5 * p.width * math.sin(a)
+                for a in np.linspace(0.0, 2 * math.pi, 16, endpoint=False)]
+    c = np.mean(ring, axis=0)
+    for k in range(len(ring)):
+        tris.append(((c, n), (ring[k], n), (ring[(k + 1) % len(ring)], n)))
+    if len(p.joints):
+        tb, tm = p.joints[0, 1], p.joints[0, 2]
+        ib, ik = p.joints[1, 0], p.joints[1, 1]
+        tris.append(((tb, n), (tm, n), (ik, n)))
+        tris.append(((tb, n), (ik, n), (ib, n)))
+    return spheres, tubes, tris
+
+
+class _OldCapsuleHands(G.Geometry):
+    """CapsuleHands.draw as it stood on the parent commit (b7aa67a), with
+    the guide inside it behind two flags — frozen, to hold HANDS to it."""
+
+    def draw(self, poses, view_proj, eye, *, hands=True, guide=True):
+        s_rows, t_rows, m_rows = [], [], []
+        for p in poses:
+            if hands:
+                col = (*p.colour, float(p.fade))
+                spheres, tubes, tris = _old_parts(p)
+                s_rows += [(*c, r, *col) for c, r in spheres]
+                t_rows += [(*a, *b, r, *col) for a, b, r in tubes]
+                for tri in tris:
+                    m_rows += [(*q, *nn, *col) for q, nn in tri]
+            if guide:
+                s_rows += p.guide[0]
+                t_rows += p.guide[1]
+        vp = np.asarray(view_proj, dtype="f4").T.tobytes()
+        ey = tuple(float(x) for x in eye)
+        for prog in self.progs:
+            prog["u_vp"].write(vp)
+            prog["u_eye"].value = ey
+        for rows, buf, vao, verts in ((m_rows, self._mesh, self.vaos[2], None),
+                                      (s_rows, self._inst_s, self.vaos[0], self._n_s),
+                                      (t_rows, self._inst_t, self.vaos[1], self._n_t)):
+            if not rows:
+                continue
+            data = np.asarray(rows, dtype="f4")
+            buf.orphan(max(data.nbytes, buf.size))
+            buf.write(data.tobytes())
+            if verts is None:
+                vao.render(moderngl.TRIANGLES, vertices=len(data))
+            else:
+                vao.render(moderngl.TRIANGLES, vertices=verts, instances=len(data))
+
+
+def test_hands_is_the_old_geometry_byte_for_byte(ctx):
+    """HANDS through the new `Geometry` — the guide's rows passed in by
+    `Ghost` as `extra` — draws the same bytes as the parent commit's
+    `CapsuleHands.draw` with the guide inside it, in each of the three
+    ways the pass calls it (hands and guide, hands alone, the guide alone),
+    for full and palm-only hands, mirrored or not, the guide beside or on
+    the hand. (Also checked once at the layer and whole-frame level
+    against hashes taken on the parent commit when this was built.)"""
+    new, old = G.Geometry(ctx), _OldCapsuleHands(ctx)
+    assert G.CapsuleHands.parts is G.hands_parts
+    depth = ctx.depth_renderbuffer((W, H))
+    target = ctx.framebuffer(color_attachments=[ctx.renderbuffer((W, H), 4)],
+                             depth_attachment=depth)
+
+    def shot(geo, *a, **k):
+        target.use()
+        ctx.viewport = (0, 0, W, H)
+        ctx.clear(0.0, 0.0, 0.0, 0.0, depth=1.0)
+        ctx.disable(moderngl.BLEND)
+        ctx.enable(moderngl.DEPTH_TEST)
+        geo.draw(*a, **k)
+        ctx.disable(moderngl.DEPTH_TEST)
+        ctx.enable(moderngl.BLEND)
+        return target.read(components=4)
+
+    n = 0
+    for skel in (None, _palm_only(), both("open", "open")):
+        for guide in (1, 2):
+            for mirror in (False, True):
+                poses, vp, eye = _guided_poses(skel, guide, mirror)
+                guides = [p.guide for p in poses]
+                for (parts, extra), legacy in (((G.hands_parts, guides), {}),
+                                               ((G.hands_parts, None), {"guide": False}),
+                                               ((None, guides), {"hands": False})):
+                    want = shot(old, poses, vp, eye, **legacy)
+                    got = shot(new, poses, vp, eye, parts, extra)
+                    assert got == want, (guide, mirror, legacy)
+                    assert any(want), legacy
+                    n += 1
+    assert n == 36
+    target.release()
+    depth.release()
+    new.release()
+    old.release()
