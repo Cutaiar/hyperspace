@@ -67,12 +67,16 @@ def rig(tmp_path):
     lfo.register(reg, lfos, clock)
     output = Output(None, None)
     output.register(reg)
+    # the table before attach, as app.main reads it: the desk's session
+    # param (`desk.slew`) is the table's and exists when the show lands
+    table = Bindings.factory(path=tmp_path / "bindings.json")
+    routing.register_desk(reg, table)
     lib.attach(reg)
     panel = Panel(control, audio, view, bank=lib.project, registry=reg, library=lib)
     panel.clock, panel.lfos = clock, lfos
     panel.hands, panel.hand_settings = hands_io, settings
     panel.output = output
-    router = Router(reg, Bindings.factory(path=tmp_path / "bindings.json"))
+    router = Router(reg, table)
     router.table.set_routes(routing.legacy6_routes())   # a house preset's performer rows
     Presets(lib, reg, router)           # the bank and the preset strip, as app.py builds them
     panel.router = router

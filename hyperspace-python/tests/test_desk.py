@@ -677,3 +677,98 @@ def test_the_clip_stop_row_is_invariant(rig):
         desk = lib.read("presets", name).get("desk") or []
         assert not [d for d in desk if d["source"].endswith(f":{n}")
                     and d["source"].startswith("note:")], name
+
+
+# ------------------------------------------- plan 18 WP2: knob smoothing
+
+def test_a_layer_switch_leaves_a_glide_to_finish(rig):
+    """A glide belongs to the param, not to the control: SHIFT latched
+    mid-glide redraws the desk for the global layer — the knob's ring now
+    shows the global row's base — and the preset-layer param still arrives
+    on its detent. Back on the preset layer its ring shows where it landed;
+    a redraw during a glide shows the glide's target."""
+    from test_midi import K_MIX, TICK, slew_rig
+
+    reg, t = rig.reg, rig.midi.table
+    mix, ret = reg["view.pattern_mix"], reg["hands.sel.return"]
+    assert row(rig, "hands.sel.return", "global").number == K_MIX
+    mix.set_norm(0.0)
+    at = slew_rig(rig)
+    at(TICK, cc(K_MIX, 127))
+    at(2 * TICK)
+    mid = mix.norm
+    rig.out.sent.clear()
+    at(3 * TICK, note(SHIFT), note(SHIFT, 0))       # the global layer, mid-glide
+    assert t.layer == "global" and mid < mix.norm < 1.0 and mix.id in rig.midi._slews
+    assert sent_cc(rig, K_MIX)[-1] == round(ret.norm * 127)       # the new layer's ring
+    was = ret.norm
+    for k in range(4, 9):
+        at(k * TICK)
+        assert mix.norm > mid
+        mid = mix.norm
+    at(9 * TICK)
+    assert mix.norm == 1.0 and rig.midi._slews == {} and ret.norm == was
+    rig.out.sent.clear()
+    at(10 * TICK, note(SHIFT), note(SHIFT, 0))      # back: the ring shows where it landed
+    assert t.layer == "preset" and sent_cc(rig, K_MIX)[-1] == 127
+    # a redraw with a glide in flight draws the target, not the base on its way
+    at(11 * TICK, cc(K_MIX, 0))
+    rig.out.sent.clear()
+    at(12 * TICK, note(SHIFT), note(SHIFT, 0))
+    at(13 * TICK, note(SHIFT), note(SHIFT, 0))
+    assert 0.0 < mix.norm < 1.0 and sent_cc(rig, K_MIX)[-1] == 0
+    for k in range(14, 24):
+        at(k * TICK)
+    assert mix.norm == 0.0
+
+
+def test_a_preset_load_stops_a_glide_on_a_performance_param_and_not_on_the_dim(tmp_path):
+    """D2 and D9, mid-glide. A real preset load (the host's objects,
+    tests/test_undo.py's boot): the knob's glide on a performance param is
+    dropped and the load's value stands; the crossfader's glide on
+    `output.dim`, a session param no preset moves, goes on arriving and
+    the fader keeps its hold. A desk replacement that leaves the value
+    where the glide last wrote it (the load's value happens to equal it)
+    still ends the glide."""
+    from test_undo import boot, frames
+
+    r = boot(tmp_path / "home")
+    r.midi.clock = lambda: r.t
+    reg, t, slews = r.reg, r.table, r.midi._slews
+    reg["desk.slew"].set(routing.SLEW_MAX_S)        # fifteen frames
+
+    def knob():
+        return next(b for b in t.active() if b.kind == "cc" and b.op == "abs"
+                    and b.feedback == "ring" and b.layer == "preset"
+                    and not reg[b.target].integer)
+
+    dim = reg["output.dim"]
+    xfade = next(b for b in t.midi() if b.target == "output.dim")
+    r.inp.queue.append(cc(apc40.CC_XFADE, 127))     # brought up to full: caught
+    frames(r, 20)
+    assert xfade.caught and dim.value == 1.0 and not slews
+    k = knob()
+    p = reg[k.target]
+    r.inp.queue += [cc(k.number, 0 if p.norm > 0.5 else 127, k.channel or 0),
+                    cc(apc40.CC_XFADE, 0)]
+    frames(r, 3)
+    assert set(slews) == {p.id, "output.dim"}
+    assert r.lib.current("presets") == "TUMBLE"
+    r.presets.load("TRIP")                          # mid-glide
+    loaded, dim_mid = p.base, dim.norm
+    frames(r)
+    assert set(slews) == {"output.dim"} and p.base == loaded and dim.norm < dim_mid
+    frames(r, 20)
+    assert p.base == loaded                         # the load's value stands
+    assert dim.value == 0.0 and xfade.caught and not slews      # the dim arrived
+    # a desk replacement that moves nothing: the glide ends where it is
+    k = knob()
+    p = reg[k.target]
+    r.inp.queue.append(cc(k.number, 0 if p.norm > 0.5 else 127, k.channel or 0))
+    frames(r, 3)
+    assert set(slews) == {p.id}
+    here = p.base
+    t.set_desk(t.desk())
+    frames(r, 20)
+    assert not slews and p.base == here
+    assert abs(p.norm - round(p.norm)) > 0.05       # it never went on to the knob's end

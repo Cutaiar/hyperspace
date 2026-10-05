@@ -328,11 +328,13 @@ def test_macro_knobs_are_persisted_attenuators_with_no_object(rig):
 
 def _full_registry(tmp_path):
     """Every param the app registers: build_registry, the hands setup, the
-    clock, the LFOs and the render window's output (headless)."""
-    from hyperspace import hands, lfo, tempo
+    clock, the LFOs, the render window's output and the desk's own pair
+    over a table (headless)."""
+    from hyperspace import hands, lfo, routing, tempo
     from hyperspace.overlay import Output
 
     reg = make(tmp_path)[0]
+    routing.register_desk(reg, routing.Bindings())
     hands.register(reg, hands.HandSettings())
     clock = tempo.Clock()
     tempo.register(reg, clock)
@@ -348,8 +350,12 @@ def test_every_persisted_group_is_performance_or_session(tmp_path):
     reg = _full_registry(tmp_path)
     assert not set(PERFORMANCE_GROUPS) & set(SESSION_GROUPS)
     persisted = [p for p in reg if p.persist]
-    for must in ("hands", "tempo", "lfo", "output", "macro", "band"):
+    for must in ("hands", "tempo", "lfo", "output", "macro", "band", "desk"):
         assert any(p.group == must for p in persisted), must
+    # the desk (plan 18 WP2): knob smoothing is the session's and a show
+    # keeps it; the layer latch beside it is still never saved
+    assert part_of(reg["desk.slew"]) == "session" and reg["desk.slew"].persist
+    assert not reg["desk.shift"].persist and "desk" in SESSION_GROUPS
     for p in persisted:
         assert (p.group in PERFORMANCE_GROUPS) + (p.group in SESSION_GROUPS) == 1, p.id
         assert part_of(p) in ("performance", "session"), p.id

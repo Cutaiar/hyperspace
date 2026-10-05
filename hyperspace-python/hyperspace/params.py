@@ -98,13 +98,14 @@ N_MACROS = 8     # macro.1–8: knobs that act through their subscribers and may
 # once. Performance is what a preset (preset.py) holds and
 # replaces: the look, its LFOs and its macros. Session is the rig and the
 # room (the clock, the hands' feel, the analyzer and its source, the
-# output, the UI), which a preset never moves, so a tapped BPM or the band
+# output, the UI, the desk's own feel: `desk.slew`, routing.register_desk),
+# which a preset never moves, so a tapped BPM or the band
 # scene survives a preset load. Every persisted param is in exactly one
 # (tests/test_params.py walks the full registry); a group in neither
 # (`preset`, the bank) has no persisted params, and `rot.phase.*` is `persist=False`.
 PERFORMANCE_GROUPS = ("view", "rot", "camera", "pattern", "dream", "fx", "lfo", "macro")
 SESSION_GROUPS = ("tempo", "hands", "ghost", "band", "master", "scene", "audio", "output",
-                  "overlay", "ui")
+                  "overlay", "ui", "desk")
 PARTS = {"performance": PERFORMANCE_GROUPS, "session": SESSION_GROUPS}
 
 # the reference's fader → rotation-rate factor (its PLANEDRIVE was

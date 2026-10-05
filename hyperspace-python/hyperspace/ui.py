@@ -1428,6 +1428,8 @@ class Panel:
         self._stall_status()
         imgui.spacing()
         self._section("midi")
+        if "desk.slew" in self.reg:     # knob smoothing (a registry with no table lacks it)
+            self._row("desk.slew")
         self._midi_status()
         self._learn_status()
         imgui.spacing()

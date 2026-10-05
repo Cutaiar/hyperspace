@@ -21,7 +21,7 @@ import numpy as np
 import pytest
 from conftest import opened_last
 
-from hyperspace import hands, lfo, preset, tempo, undo
+from hyperspace import hands, lfo, preset, routing, tempo, undo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
@@ -1025,3 +1025,89 @@ def test_an_idle_app_makes_no_step(tmp_path):
     table_sources = {b.source.split(":")[0] for b in r.table.routes()}
     assert len(performed) > 20 and "hand" in table_sources
     assert r.view.ang != [0.0] * 6
+
+
+# ------------------------------------------- plan 18 WP2: knob smoothing
+
+def _smoothed(rig, seconds=routing.SLEW_MAX_S):
+    """Knob smoothing on, the adapter on the rig's clock, the stack empty;
+    returns a preset-layer ring knob's row and its param."""
+    rig.midi.clock = lambda: rig.t
+    rig.reg["desk.slew"].set(seconds)
+    settle(rig)
+    rig.undo.clear()
+    row = next(b for b in rig.table.active()
+               if b.kind == "cc" and b.op == "abs" and b.feedback == "ring"
+               and b.layer == "preset" and undo.watched(rig.reg[b.target])
+               and not rig.reg[b.target].integer)
+    return row, rig.reg[row.target]
+
+
+def test_a_smoothed_knob_turn_is_one_step(rig):
+    """At the longest glide (250 ms) with the tick running: a sweep, then a
+    slow turn (a CC every 50 ms, each glide still in flight when the next
+    message comes), are one step each — the glide's own writes after the
+    hand stops never close the step early or open a second one — labelled
+    with the landed value; undo puts back the value before the turn."""
+    row, p = _smoothed(rig)
+    assert undo.watched(rig.reg["desk.slew"])       # the setting itself is a step of its own
+    for every in (1, 3):
+        was, was_text = p.base, p.text()
+        start = round(p.norm * 127)
+        sweep = (list(range(start + 1, 128))[:24] if start < 100
+                 else list(range(start - 1, 0, -1))[:24])
+        for v in sweep:
+            rig.inp.queue.append(cc(row.number, v, row.channel or 0))
+            frames(rig, every)
+        assert p.id in rig.midi._slews and labels(rig) == [""]     # still arriving, still open
+        frames(rig, math.ceil(routing.SLEW_MAX_S / DT) + 1)
+        assert p.id not in rig.midi._slews
+        landed = p.base
+        p.set_norm(sweep[-1] / 127)
+        assert p.base == landed                     # where smoothing-off rests
+        settle(rig)
+        assert labels(rig) == [f"{p.label} {was_text} → {p.text()}"]
+        rig.undo.undo()
+        assert p.base == pytest.approx(was)
+        frames(rig, 30)                             # and nothing glides on afterwards
+        assert p.base == pytest.approx(was)
+        settle(rig)
+        rig.undo.clear()
+
+
+def test_undo_during_a_glide_holds(rig):
+    """⌘Z while a value is still arriving: the earlier value is put back,
+    the glide sees a write that is not its own and stops, and the value
+    holds through the next polls. A redo returns to where the glide had
+    got to, not to where the knob was heading."""
+    row, p = _smoothed(rig)
+    was = p.base
+    far = 0 if p.norm > 0.5 else 127
+    rig.inp.queue.append(cc(row.number, far, row.channel or 0))
+    frames(rig, 5)
+    mid = p.base
+    assert p.id in rig.midi._slews and mid != was
+    assert rig.undo.undo()
+    assert p.base == pytest.approx(was)
+    frames(rig, 40)
+    assert p.base == pytest.approx(was) and not rig.midi._slews
+    assert rig.undo.redo()
+    frames(rig, 40)
+    assert p.base == pytest.approx(mid) and not rig.midi._slews
+    assert p.norm != pytest.approx(far / 127, abs=0.05)
+
+
+def test_the_slew_can_never_outlast_the_settle_time(rig):
+    """Plan 15: one knob turn is one undo step. The glide writes for up to
+    `desk.slew` after the hand stops, so its maximum stays under the
+    settle time by more than a slow (100 ms) frame, and the param cannot
+    be set past it."""
+    assert routing.SLEW_MAX_S <= undo.SETTLE_S - 0.1
+    assert 0.0 < routing.SLEW_DEFAULT_S <= routing.SLEW_MAX_S
+    slew = rig.reg["desk.slew"]
+    assert (slew.lo, slew.hi) == (0.0, routing.SLEW_MAX_S)
+    slew.set(undo.SETTLE_S * 2)
+    assert rig.table.slew == routing.SLEW_MAX_S
+
+
+test_slew_max_stays_under_the_undo_settle_time = test_the_slew_can_never_outlast_the_settle_time
