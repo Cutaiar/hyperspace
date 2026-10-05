@@ -3,6 +3,8 @@
 import itertools
 import json
 import math
+import os
+import re
 from types import SimpleNamespace as NS
 
 import numpy as np
@@ -1207,3 +1209,409 @@ def test_an_injected_port_is_the_callers_and_never_reopened():
     r.clock.t += 10.0
     run(r, 1, hand(pos=(60.0, 300.0, 0.0)))
     assert r.io.out is None and r.io.out_name == ""
+
+
+# ---------------------------------------------------------------- the interaction box (plan 18 WP1)
+
+BOX = {"x": (-200.0, 200.0), "y": (80.0, 400.0), "z": (-150.0, 150.0)}
+# a calibration file as a build before plan 18 wrote it — and not in this
+# build's own formatting, so "the bytes are the same" proves nothing rewrote it
+OLD_FILE = ('{"schema": "hyperspace.hands/1",\n'
+            '   "axes": {"right.y": {"lo": 150.0, "hi": 250.0},'
+            ' "left.x": {"lo": -214.2, "hi": 18.5}}}\n')
+
+
+class SkelSource(FakeSource):
+    """A FakeSource that also hands out a skeleton per hand (`snapshot`)."""
+
+    def snapshot(self):
+        return self.seq, self.clock(), self.hands, {s: {"palm": s} for s in self.hands}
+
+
+def boxed(tmp_path=None, box=BOX, **cfg):
+    r = rig(tmp_path, **cfg)
+    r.io.box = dict(box) if box is not None else None
+    return r
+
+
+def pct(vals):
+    """The sweep's own rule: the 2nd and 98th percentile."""
+    v = sorted(vals)
+    return v[int(0.02 * (len(v) - 1))], v[int(0.98 * (len(v) - 1))]
+
+
+def tri(j, n):
+    return (j % n) / (n - 1)
+
+
+def wide(j, side="right"):
+    """A hand sweeping x 20…200, y 120…320, z −90…90 mm, out of step."""
+    return hand(side, pos=(20.0 + 180.0 * tri(j, 20), 120.0 + 200.0 * tri(j, 15),
+                           -90.0 + 180.0 * tri(j, 12)))
+
+
+def sweep(r, path, seconds=1.0):
+    """A whole calibration sweep of `path(j)` → hands; the palms it saw."""
+    r.io.start_calibration(seconds)
+    seen, j = [], 0
+    while r.io._cal is not None:
+        assert j < 1000
+        hs_ = path(j)
+        hs_ = hs_ if isinstance(hs_, tuple) else (hs_,)
+        seen += [(h.palm.position.x, h.palm.position.y, h.palm.position.z) for h in hs_]
+        run(r, 1, *hs_)
+        j += 1
+    return seen
+
+
+def same(a, b):
+    return len(a) == len(b) and all((math.isnan(x) and math.isnan(y)) or x == y
+                                    for x, y in zip(a, b))
+
+
+def test_no_box_is_todays_presence():
+    """No box (the default): a palm far outside every range is present and
+    reads 1.0, as before plan 18 — and a box that holds everything changes
+    no lane and no message, to the float."""
+    r = rig()
+    assert r.io.box is None and r.io.outside == {"left": None, "right": None}
+    run(r, 2, hand(pos=(600.0, 900.0, 500.0)))
+    assert r.io.present == {"left": False, "right": True}
+    lanes = r.io.lanes()
+    assert [lanes[ax(r, f"right.{c}")] for c in "xyz"] == [1.0, 1.0, 1.0]
+    assert r.io.outside["right"] is None and r.io.frame["right"]["x"] == 600.0
+    a, b = rig(), boxed(box={c: (-1e6, 1e6) for c in "xyz"})
+    for q in (a, b):
+        q.s.smooth, q.s.response, q.s.catch_s = 1.0, 4.0, 0.15     # the real filter and catch
+    for j in range(90):
+        hs_ = [] if 30 <= j < 40 else [                      # ten frames away, then back
+            hand("left", pos=(-300.0 + 9.0 * j, 60.0 + 5.0 * j, 200.0 - 4.0 * j),
+                 tips=(10.0 + j, 80.0, 80.0, 80.0), palm_w=85.0),
+            hand("right", pos=(700.0 - 11.0 * j, 950.0 - 9.0 * j, -400.0 + 7.0 * j),
+                 direction=tilt(0.01 * j))]
+        assert run(a, 1, *hs_) == run(b, 1, *hs_)
+        assert same(a.io.lanes(), b.io.lanes()) and a.io.present == b.io.present
+        assert a.io.frame == b.io.frame and b.io.outside == {"left": None, "right": None}
+
+
+def test_a_hand_outside_the_box_reads_absent_everywhere():
+    r = boxed()
+    r.src = r.io.source = SkelSource(r.clock)
+    pinched = {"tips": (10.0, 80.0, 80.0, 80.0), "palm_w": 85.0}
+    msgs = run(r, 2, hand(pos=(100.0, 200.0, 0.0), **pinched))
+    assert r.io.present["right"] and r.io.gates["right"]["index"].on
+    assert "right" in r.io.skeleton and r.io.outside["right"] is None
+    assert {(m.type, m.note) for m in msgs if m.type == "note_on"} == {
+        ("note_on", 121), ("note_on", 104)}
+    k = ax(r, "right.y")
+    assert r.io.lanes()[k] == pytest.approx(0.4)
+    msgs = run(r, 1, hand(pos=(300.0, 200.0, 0.0), **pinched))     # tracked, 100 mm past a face
+    lanes = r.io.lanes()
+    assert all(math.isnan(u) for u in lanes[:12])                   # every axis lets go
+    assert lanes[r.io.layout.presence["right"]] == 0.0
+    assert lanes[r.io.gate_lane("right", "index")] == 0.0
+    assert not r.io.present["right"] and not r.io.gates["right"]["index"].on
+    assert {(m.type, m.note) for m in msgs} == {("note_off", 121), ("note_off", 104)}
+    assert r.io.skeleton == {} and r.io.frame["right"] is None
+    assert r.io.outside["right"]["x"] == 300.0 and r.io.outside["left"] is None
+    run(r, 1)                                                        # and gone altogether
+    assert r.io.outside == {"left": None, "right": None}
+
+
+def test_a_hand_outside_the_box_releases_its_rows_and_the_base_returns(app):
+    """B1 with the box as the cause: the frame the palm is past a face —
+    still tracked — a position row and a push row both call nothing and
+    apply() writes the bases back."""
+    r = boxed()
+    ky, kx = ax(r, "right.y"), ax(r, "right.x")
+    app.table.add(Binding(f"hand:{ky}", "view.inst_amp", "position"))
+    app.table.add(Binding(f"hand:{kx}", "view.speed", "push", 0.5))
+    p, q = app.reg["view.inst_amp"], app.reg["view.speed"]
+    bases = p.norm, q.norm
+    run(r, 1, hand(pos=(180.0, 300.0, 0.0)), router=app.router)
+    _frame(app)
+    assert p.modulated and p.eff_norm == pytest.approx(0.8, abs=1e-4)
+    assert q.modulated and q.eff_norm != pytest.approx(bases[1])
+    calls = []
+    for prm in (p, q):
+        real = prm.modulate
+        prm.modulate = lambda off, real=real: (calls.append(off), real(off))
+    run(r, 1, hand(pos=(260.0, 300.0, 0.0)), router=app.router)    # out through the x face
+    assert r.src.on and r.io.outside["right"] is not None
+    assert math.isnan(app.router.feeds["hand"][ky]) and math.isnan(app.router.feeds["hand"][kx])
+    _frame(app)
+    assert calls == [] and not p.modulated and not q.modulated
+    assert (p.eff_norm, q.eff_norm) == pytest.approx(bases)
+    assert (p.norm, q.norm) == pytest.approx(bases)
+
+
+def test_the_boxs_edge_has_hysteresis():
+    r = boxed()
+    at = lambda x: run(r, 1, hand(pos=(x, 200.0, 0.0)))
+    at(190.0)
+    assert r.io.present["right"]
+    flips = []
+    for j in range(40):                              # ±5 mm about the face at 200
+        flips += at(195.0 if j % 2 else 205.0)
+        assert r.io.present["right"] and r.io.outside["right"] is None
+    assert [m for m in flips if m.type in ("note_on", "note_off")] == []
+    at(200.0 + hands.core.BOX_EDGE - 0.5)
+    assert r.io.present["right"]                     # still in, just short of the edge
+    at(200.0 + hands.core.BOX_EDGE + 0.5)
+    assert not r.io.present["right"] and r.io.outside["right"] is not None
+    for j in range(40):                              # out: hovering past the face stays out
+        at(200.5 if j % 2 else 210.0)
+        assert not r.io.present["right"]
+    at(199.5)                                        # in only inside the face
+    assert r.io.present["right"] and r.io.outside["right"] is None
+    # every face, and both directions of each
+    for c, (lo, hi) in BOX.items():
+        for face, sign in ((lo, -1.0), (hi, 1.0)):
+            pos = {"x": 0.0, "y": 200.0, "z": 0.0}
+            f = lambda d, c=c, face=face, sign=sign, pos=pos: {**pos, c: face + sign * d}
+            assert hands.core.inside(BOX, f(0.0)) and not hands.core.inside(BOX, f(0.1))
+            assert hands.core.inside(BOX, f(hands.core.BOX_EDGE), hands.core.BOX_EDGE)
+            assert not hands.core.inside(BOX, f(hands.core.BOX_EDGE + 0.1), hands.core.BOX_EDGE)
+
+
+def test_a_hand_re_entering_the_box_is_caught_not_jumped(app):
+    """Out through a face and back: the Follower catches the hand as it
+    catches one the tracker lost — live on the first frame back, gliding."""
+    r = boxed()
+    r.s.catch_s = 0.2
+    k = ax(r, "right.y")
+    a = r.s.axes[k]
+    a.rest, a.rest_value, a.return_s = "return", 0.0, 0.1
+    app.table.add(Binding(f"hand:{k}", "view.inst_amp", "position"))
+    p = app.reg["view.inst_amp"]
+    base = p.norm
+    run(r, 1, hand(pos=(0.0, 300.0, 0.0)), router=app.router)
+    run(r, 20, hand(pos=(300.0, 300.0, 0.0)), router=app.router)   # tracked, outside: home at 0
+    _frame(app)
+    st = r.io.state[k]
+    assert st.y == pytest.approx(0.0, abs=0.01) and not st.follow.live
+    assert not p.modulated and p.eff_norm == pytest.approx(base)
+    run(r, 1, hand(pos=(150.0, 300.0, 0.0)), router=app.router)    # back inside
+    _frame(app)
+    assert st.follow.mode == st.follow.CATCH and st.follow.live and 0.0 < st.y < 0.8
+    assert app.router.feeds["hand"][k] == pytest.approx(st.y) and p.modulated
+    assert p.eff_norm == pytest.approx(st.y, abs=1e-4)
+    ys = [st.y]
+    for _ in range(20):
+        run(r, 1, hand(pos=(150.0, 300.0, 0.0)), router=app.router)
+        ys.append(st.y)
+    _frame(app)
+    assert ys == sorted(ys) and max(b - a for a, b in itertools.pairwise(ys)) < 0.2
+    assert st.follow.mode == st.follow.FOLLOW and p.eff_norm == pytest.approx(0.8, abs=1e-3)
+
+
+def test_an_open_coordinate_bounds_nothing(tmp_path):
+    (tmp_path / "hands.json").write_text(json.dumps({
+        "schema": "hyperspace.hands/2", "axes": {},
+        "box": {"x": [-200, 200], "y": None, "z": [-150, 150]}}))
+    r = rig(tmp_path)
+    assert r.io.box == {"x": (-200.0, 200.0), "y": None, "z": (-150.0, 150.0)}
+    for y in (-50.0, 5.0, 900.0, 5000.0):
+        run(r, 1, hand(pos=(0.0, y, 0.0)))
+        assert r.io.present["right"], y
+    run(r, 1, hand(pos=(0.0, 900.0, 200.0)))         # the bounded ones still bound
+    assert not r.io.present["right"] and r.io.outside["right"]["z"] == 200.0
+
+
+def test_the_sweep_sets_the_box_with_its_margin_and_a_symmetric_x(tmp_path):
+    r = rig(tmp_path)
+    seen = sweep(r, wide)                             # the right hand only
+    xs, ys, zs = (pct([p[k] for p in seen]) for k in range(3))
+    m = hands.core.BOX_MARGIN
+    assert r.io.box == {"x": (-(xs[1] + m), xs[1] + m),          # symmetric about the camera
+                        "y": (ys[0] - m, ys[1] + m), "z": (zs[0] - m, zs[1] + m)}
+    assert xs[1] > 190 and ys[0] < 130 and zs[1] > 80            # the sweep was the wide one
+    bx, by, bz = (r.io.box[c] for c in "xyz")
+    assert r.io.cal_note.startswith("calibrated 3 axes, 9 not reached · box "
+                                    f"{bx[1] - bx[0]:.0f} × {by[1] - by[0]:.0f} × "
+                                    f"{bz[1] - bz[0]:.0f} mm")
+    saved = json.loads((tmp_path / "hands.json").read_text())
+    assert saved["schema"] == "hyperspace.hands/2"
+    assert saved["box"]["x"] == [round(-(xs[1] + m), 3), round(xs[1] + m, 3)]
+    # the other hand, never swept, is inside on its own side
+    run(r, 1, hand("left", pos=(-xs[1], 200.0, 0.0)), hand("right", pos=(xs[1], ys[1], zs[0])))
+    assert r.io.present == {"left": True, "right": True}
+    # and a hand at an axis's end stop is still in: the box ends a margin past it
+    st = r.io.state[ax(r, "right.x")]
+    assert st.hi == pytest.approx(xs[1]) and r.io.lanes()[ax(r, "right.x")] == pytest.approx(1.0)
+
+
+def test_a_coordinate_not_swept_is_left_open(tmp_path):
+    r = rig(tmp_path)
+    sweep(r, lambda j: hand(pos=(60.0 + 40.0 * tri(j, 9), 120.0 + 200.0 * tri(j, 15),
+                                 -90.0 + 180.0 * tri(j, 12))))    # 40 mm sideways: a slot
+    assert r.io.box["x"] is None and r.io.box["y"] is not None and r.io.box["z"] is not None
+    assert r.io.cal_note.endswith("box: x open (not swept)")
+    run(r, 1, hand(pos=(900.0, 200.0, 0.0)))
+    assert r.io.present["right"]                      # x bounds nothing
+    sweep(r, lambda j: hand(pos=(0.0, 150.0 + 100.0 * tri(j, 35), 0.0)))   # nothing wide enough
+    assert r.io.box is None and r.io.cal_note.endswith("box: open (not swept)")
+    assert json.loads((tmp_path / "hands.json").read_text())["box"] is None
+    # a sweep that saw no hand leaves the box as it was
+    r.io.box = dict(BOX)
+    sweep(r, lambda j: ())
+    assert r.io.box == BOX and "box left as it was" in r.io.cal_note
+
+
+def test_the_box_is_not_applied_during_a_sweep(tmp_path):
+    tight = {"x": (-50.0, 50.0), "y": (150.0, 250.0), "z": (-50.0, 50.0)}
+    r = boxed(tmp_path, tight)
+    run(r, 1, wide(19))
+    assert not r.io.present["right"]                  # x 200: well outside the tight box
+    r.io.start_calibration(1.0)
+    j = 0
+    while r.io._cal is not None:
+        run(r, 1, wide(j))
+        if r.io._cal is not None:
+            assert r.io.present["right"] and r.io.outside["right"] is None, j
+        j += 1
+    for c in "xyz":
+        assert r.io.box[c][0] < tight[c][0] and r.io.box[c][1] > tight[c][1]
+    run(r, 1, wide(19))
+    assert r.io.present["right"]
+
+
+def test_the_palm_is_sampled_whatever_the_dofs(tmp_path):
+    r = rig(tmp_path, dofs=["roll", "pitch"])
+    assert not {a.feature for a in r.io.axes} & {"x", "y", "z"}
+    seen = sweep(r, wide)
+    assert r.io.box is not None and all(r.io.box[c] is not None for c in "xyz")
+    assert r.io.box["y"] == (pct([p[1] for p in seen])[0] - hands.core.BOX_MARGIN,
+                             pct([p[1] for p in seen])[1] + hands.core.BOX_MARGIN)
+    run(r, 1, hand(pos=(0.0, 900.0, 0.0)))
+    assert not r.io.present["right"]
+
+
+def test_reset_ranges_opens_the_box(tmp_path):
+    r = rig(tmp_path)
+    sweep(r, wide)
+    assert r.io.box is not None and json.loads((tmp_path / "hands.json").read_text())["box"]
+    r.io.reset_ranges()
+    assert r.io.box is None and r.io.cal_note == "ranges back to the defaults, box open"
+    saved = json.loads((tmp_path / "hands.json").read_text())
+    assert "box" in saved and saved["box"] is None
+    run(r, 1, hand(pos=(600.0, 900.0, 500.0)))
+    assert r.io.present["right"]
+    assert rig(tmp_path).io.box is None
+
+
+def test_an_old_hands_json_reads_as_before_and_is_not_rewritten_at_load(tmp_path, capsys):
+    path = tmp_path / "hands.json"
+    path.write_text(OLD_FILE)
+    then = 1_600_000_000 * 10**9
+    os.utime(path, ns=(then, then))
+    r = rig(tmp_path)
+    assert r.io.box is None
+    st = r.io.state[ax(r, "right.y")]
+    assert (st.lo, st.hi) == (150.0, 250.0)
+    assert (r.io.state[ax(r, "left.x")].lo, r.io.state[ax(r, "left.x")].hi) == (-214.2, 18.5)
+    assert (r.io.state[ax(r, "right.x")].lo, r.io.state[ax(r, "right.x")].hi) == (-20.0, 220.0)
+    for j in range(60):
+        run(r, 1, hand(pos=(600.0 - j, 900.0, 500.0)), hand("left"))
+    assert r.io.present == {"left": True, "right": True}             # no bounds
+    assert path.read_text() == OLD_FILE and path.stat().st_mtime_ns == then
+    assert [p.name for p in tmp_path.iterdir()] == ["hands.json"]    # and no copy made
+    assert capsys.readouterr().err == ""
+
+
+def test_the_first_rewrite_of_an_old_file_keeps_a_backup(tmp_path):
+    path, bak = tmp_path / "hands.json", tmp_path / "hands.json.bak-v1"
+    path.write_text(OLD_FILE)
+    r = rig(tmp_path)
+    sweep(r, wide)                                    # the first save of this build
+    assert bak.read_text() == OLD_FILE
+    assert json.loads(path.read_text())["schema"] == "hyperspace.hands/2"
+    assert "the old file kept as hands.json.bak-v1" in r.io.cal_note
+    sweep(r, wide)                                    # a /2 file now: no second copy
+    r.io.reset_ranges()
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["hands.json", "hands.json.bak-v1"]
+    assert bak.read_text() == OLD_FILE and "kept" not in r.io.cal_note
+    # a name already taken — an older backup, the owner's own copy — is never overwritten
+    path.write_text(OLD_FILE.replace("150.0", "151.0"))
+    rig(tmp_path).io.reset_ranges()
+    assert bak.read_text() == OLD_FILE
+    more = [p for p in tmp_path.iterdir() if p.name.startswith("hands.json.bak-v1-")]
+    assert len(more) == 1 and more[0].read_text() == OLD_FILE.replace("150.0", "151.0")
+    assert re.fullmatch(r"hands\.json\.bak-v1-\d{8}-\d{6}", more[0].name)
+    path.write_text("not json at all")                # a third in the same second: still kept
+    rig(tmp_path).io.reset_ranges()
+    baks = {p.name: p.read_text() for p in tmp_path.iterdir() if ".bak-" in p.name}
+    assert len(baks) == 3 and "not json at all" in baks.values()
+    assert json.loads(path.read_text())["box"] is None
+    # no file yet: nothing to keep
+    fresh = tmp_path / "fresh"
+    rig(fresh).io.reset_ranges()
+    assert [p.name for p in fresh.iterdir()] == ["hands.json"]
+
+
+def test_a_backup_that_cannot_be_made_never_stops_the_save(tmp_path, monkeypatch):
+    path = tmp_path / "hands.json"
+    path.write_text(OLD_FILE)
+    r = rig(tmp_path)
+
+    def refuse(*a, **k):
+        raise PermissionError("read-only folder")
+
+    monkeypatch.setattr(hands.core, "_keep", refuse)
+    sweep(r, wide)
+    saved = json.loads(path.read_text())
+    assert saved["schema"] == "hyperspace.hands/2" and saved["box"] is not None
+    assert "no backup of the old file: read-only folder" in r.io.cal_note
+    assert "calibrated" in r.io.cal_note
+    assert [p.name for p in tmp_path.iterdir()] == ["hands.json"]
+
+
+def test_a_malformed_box_opens_and_says_so(tmp_path, capsys):
+    path = tmp_path / "hands.json"
+
+    def load(box):
+        path.write_text(json.dumps({"schema": "hyperspace.hands/2", "axes": {}, "box": box}))
+        capsys.readouterr()
+        r = rig(tmp_path)
+        return r, capsys.readouterr().err.splitlines()
+
+    r, said = load({"x": [5, 1], "y": "tall", "z": [-150, 150]})
+    assert r.io.box == {"x": None, "y": None, "z": (-150.0, 150.0)}
+    assert len(said) == 2 and said[0].startswith("hands: hands.json: box.x:")
+    assert said[1].startswith("hands: hands.json: box.y:")
+    run(r, 1, hand(pos=(900.0, 900.0, 0.0)))
+    assert r.io.present["right"]                      # the bad coordinates bound nothing
+    run(r, 1, hand(pos=(900.0, 900.0, 300.0)))
+    assert not r.io.present["right"]                  # the good one still does
+    r, said = load({"x": [-200, 200], "y": [80, 400]})              # a missing pair
+    assert r.io.box == {"x": (-200.0, 200.0), "y": (80.0, 400.0), "z": None}
+    assert len(said) == 1 and said[0].startswith("hands: hands.json: box.z:")
+    for bad in ([1, 2, 3], [1], [True, 5], [None, 5], ["1", "2"], [3, 3], {"lo": 1, "hi": 2},
+                [float("nan"), 5], [0, float("inf")]):
+        r, said = load({"x": bad, "y": None, "z": None})
+        assert r.io.box is None and len(said) == 1, bad
+        run(r, 1, hand(pos=(900.0, 900.0, 900.0)))
+        assert r.io.present["right"], bad
+    for bad in ("shut", [1, 2], 7):                   # no object at all: no box
+        r, said = load(bad)
+        assert r.io.box is None and len(said) == 1 and "box:" in said[0], bad
+    r, said = load(None)
+    assert r.io.box is None and said == []
+    r, said = load({"x": None, "y": None, "z": None})
+    assert r.io.box is None and said == []
+
+
+def test_the_box_round_trips_through_the_file(tmp_path):
+    r = rig(tmp_path)
+    sweep(r, wide)
+    again = rig(tmp_path)
+    assert again.io.box == {c: tuple(round(n, 3) for n in r.io.box[c]) for c in "xyz"}
+    r.io.box = {"x": (-262.0, 262.0), "y": None, "z": (-148.1234567, 131.0)}
+    r.io.save_ranges()
+    assert rig(tmp_path).io.box == {"x": (-262.0, 262.0), "y": None, "z": (-148.123, 131.0)}
+    saved = json.loads((tmp_path / "hands.json").read_text())
+    assert saved["box"] == {"x": [-262.0, 262.0], "y": None, "z": [-148.123, 131.0]}
+    assert saved["axes"]["right.y"]["hi"] == pytest.approx(r.io.state[ax(r, "right.y")].hi,
+                                                           abs=1e-3)
+    assert hands.core.load_box(None) is None and hands.core.load_box(tmp_path / "no") is None
+
