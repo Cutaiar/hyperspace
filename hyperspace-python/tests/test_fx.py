@@ -1062,3 +1062,272 @@ def test_turn_on_is_one_undo_step(tmp_path, monkeypatch):
         assert labels(r) == start
     finally:
         rig.close()
+
+
+# ---------------------------------------------------------------- the face target (plan 20 WP1)
+
+def test_target_is_declared_per_effect_and_is_not_modulatable():
+    """One generated enum per effect, declared by the loop that declares
+    `order`, and one mapping switch for the whole target (fork F4: the
+    target is structure, the mapping is a move)."""
+    from hyperspace import undo
+    from hyperspace.fx import FACE_MAPS, FACES, FRAME, PER_FACE, SCREEN, TARGETS
+    from hyperspace.params import Kind
+    assert TARGETS == ["frame", "faces"] and (FRAME, FACES) == (0, 1)
+    assert FACE_MAPS == ["per face", "screen"] and (PER_FACE, SCREEN) == (0, 1)
+    st = FxState()
+    r = Registry()
+    declare(r, st)
+    assert len(st.specs) >= 12
+    for name in st.specs:
+        p = r[f"fx.{name}.target"]
+        assert p.kind is Kind.ENUM and p.names == TARGETS and p.group == "fx"
+        assert p.value == FRAME and st.values[name]["target"] == FRAME
+        assert p.persist and not p.modulatable and undo.watched(p)
+    m = r["fx.face_map"]
+    assert m.kind is Kind.ENUM and m.names == FACE_MAPS and m.value == PER_FACE
+    assert m.persist and m.modulatable and m.group == "fx" and undo.watched(m)
+    # nothing else came with them: one id per effect and one for the stack
+    new = [p.id for p in r if p.id.endswith(".target") or p.id == "fx.face_map"]
+    assert len(new) == len(st.specs) + 1
+    # the params write the state the renderer reads, and back
+    r["fx.warp.target"].set(FACES)
+    r["fx.face_map"].set(SCREEN)
+    assert st.values["warp"]["target"] == FACES and st.face_map == SCREEN
+    # a re-declare of one effect (its file changed shape) keeps its target
+    declare(r, st, {"warp"})
+    assert r["fx.warp.target"].value == FACES
+
+
+def test_a_retargeted_effect_survives_a_reshape_of_its_file(fxdir):
+    write(fxdir, "test", EFFECT)
+    st = FxState(fxdir)
+    st.values["test"]["target"] = 1
+    write(fxdir, "test", EFFECT + "uniform float u_extra; // @param 0 1 0.5 \"Extra\"\n")
+    assert st.poll() == {"test"}
+    assert st.values["test"]["target"] == 1 and "extra" in st.values["test"]
+
+
+def test_a_preset_without_targets_loads_all_frame(tmp_path):
+    """D2: a load lands every fx.* value, and a file that names neither new
+    id — every file saved before this plan, the whole factory layer — gets
+    the group's defaults. No migration."""
+    from test_undo import boot
+
+    from hyperspace.fx import FACES, FRAME, PER_FACE, SCREEN
+    from hyperspace.library import FACTORY
+    st = FxState()
+    r = boot(tmp_path / "home", fx=st)
+
+    def aim():
+        r.reg["fx.warp.target"].set(FACES)
+        r.reg["fx.plasma.target"].set(FACES)
+        r.reg["fx.face_map"].set(SCREEN)
+        assert st.values["warp"]["target"] == FACES and st.face_map == SCREEN
+
+    def all_frame(what):
+        assert [st.values[n]["target"] for n in st.specs] == [FRAME] * len(st.specs), what
+        assert st.face_map == PER_FACE, what
+
+    names = r.lib.list("fx")
+    assert len(names) >= 5
+    for name in names:
+        aim()
+        assert r.lib.load("fx", name) == [], name
+        all_frame(name)
+    aim()
+    assert r.presets.load("TRIP") == []
+    all_frame("TRIP")
+    # and no factory file names either id: the files are sparse, none was regenerated
+    for f in FACTORY.rglob("*.json"):
+        text = f.read_text()
+        assert ".target" not in text and "fx.face_map" not in text, f.name
+
+
+def test_chain_splits_by_target_and_keeps_order():
+    from hyperspace.fx import FACES, FRAME
+    st = FxState()
+    on = ("warp", "acid", "huecycle", "plasma", "kaleido")
+    for n in on:
+        st.values[n]["on"] = True
+    whole = st.chain()
+    assert st.chain(None) == whole and st.chain(FRAME) == whole and st.chain(FACES) == []
+    st.values["acid"]["target"] = FACES
+    st.values["huecycle"]["target"] = FACES
+    frame, faces = st.chain(FRAME), st.chain(FACES)
+    assert st.chain() == whole                               # chain(None) is unchanged
+    assert faces == [n for n in whole if n in ("acid", "huecycle")]
+    assert frame == [n for n in whole if n not in ("acid", "huecycle")]
+    st.values["acid"]["order"] = 99                          # each in order, still
+    assert st.chain(FACES) == ["huecycle", "acid"]
+    st.values["huecycle"]["mix"] = 0.0
+    assert st.chain(FACES) == ["acid"]
+    st.on = False                                            # the bypass is both chains'
+    assert st.chain(FACES) == [] and st.chain(FRAME) == []
+    st.on, st.mix = True, 0.0
+    assert st.chain(FACES) == [] and st.chain(FRAME) == []
+    # a values dict from before a hot reload has no target: the frame's
+    st.mix = 1.0
+    del st.values["warp"]["target"]
+    assert "warp" in st.chain(FRAME) and "warp" not in st.chain(FACES)
+
+
+def test_advance_to_moves_the_clocks_once_per_frame_time():
+    st = FxState()
+    st.values["warp"]["speed"] = 2.0
+    assert st.advance_to(5.0) == 0.0                         # the first call: no dt yet
+    assert st.advance_to(5.1) == pytest.approx(0.1)
+    assert st.advance_to(5.1) == 0.0                         # the second chain, same frame
+    assert st.phase["warp"] == pytest.approx(0.2)
+    assert st.advance_to(9.0) == 0.25                        # a stall is clamped
+    assert st.advance_to(8.0) == 0.0                         # and time never runs back
+    assert st.phase["warp"] == pytest.approx(0.7)
+    old = FxState()                                          # one from before a hot reload
+    del old._t_last, old.face_map
+    assert old.advance_to(1.0) == 0.0 and old.advance_to(1.5) == 0.25
+
+
+def test_u_target_is_a_reserved_uniform_name():
+    from hyperspace.fx import RESERVED
+    assert RESERVED == {"on", "mix", "speed", "blend", "order", "target"}
+    with pytest.raises(SpecError, match="'target' is taken"):
+        parse("x", 'uniform float u_target; // @param 0 1 0 "Target"\n'
+                   "vec4 effect(vec2 uv) { return src(uv); }")
+    for f in FX_DIR.glob("*.glsl"):                          # and no factory file wants it
+        assert "u_target" not in f.read_text(), f.name
+
+
+def _two_chains(ctx, st):
+    from hyperspace.fx import FACES
+    frame = FxChain(ctx, st)
+    return frame, FxChain(ctx, st, target=FACES, programs=frame)
+
+
+def test_two_chains_advance_the_clocks_once(ctx):
+    """A frame chain and a face chain over one state, both run at the same
+    `t`: every phase is what one chain alone gives — not double speed."""
+    from hyperspace.fx import FACES
+
+    def run(split: bool) -> dict:
+        st = FxState()
+        for n, speed in (("warp", 2.0), ("plasma", -1.0), ("acid", 0.5)):
+            st.values[n].update(on=True, speed=speed)
+        if split:
+            st.values["plasma"]["target"] = FACES
+        frame, faces = _two_chains(ctx, st)
+        out = ctx.framebuffer(color_attachments=[ctx.texture((16, 16), 4)])
+        for k in range(5):
+            t = 3.0 + k * 0.1
+            if split:                                        # the faces' chain runs first
+                faces.begin((32, 32))
+                assert faces.run(out, t) == ["plasma"]
+            frame.begin((16, 16))
+            assert frame.run(out, t) == st.chain(0)
+        return dict(st.phase)
+
+    one, two = run(False), run(True)
+    assert one["warp"] == pytest.approx(0.8) and one["plasma"] == pytest.approx(-0.4)
+    assert two == pytest.approx(one)
+
+
+def test_the_face_chain_borrows_the_frame_chains_programs(ctx, fxdir):
+    """One program per effect across both chains, and one error line: the
+    frame chain's `error(name)` speaks for an effect aimed at the faces."""
+    from hyperspace.fx import FACES
+    write(fxdir, "good", EFFECT.replace("@blend add", "@blend mix"))
+    write(fxdir, "bad", EFFECT.replace("src(uv) * u_amount", "src(uv) * nope"))
+    st = FxState(fxdir)
+    for n in ("good", "bad"):
+        st.values[n].update(on=True, target=FACES)
+    frame, faces = _two_chains(ctx, st)
+    assert faces.active() and not frame.active()
+    out = ctx.framebuffer(color_attachments=[ctx.texture((8, 8), 4)])
+    faces.begin((8, 8)).use()
+    ctx.clear(0.5, 0.5, 0.5, 0.5)
+    assert faces.run(out, 0.0) == ["good"]                   # the broken one is passed over
+    assert faces._progs == {} and set(frame._progs) == {"good"}
+    assert faces._program("good")[0] is frame._program("good")[0]
+    assert "line" in frame.error("bad") and faces.error("bad") == frame.error("bad")
+    assert faces.errors is frame.errors and faces.compile_all() == frame.compile_all()
+    prog = frame._program("good")[0]
+    faces.on_reload()                                        # a borrower releases no program
+    assert frame._program("good")[0] is prog and prog.glo
+    st.values["good"]["target"] = 0                          # and aimed back, the same program
+    frame.begin((8, 8))
+    assert frame.run(out, 0.1) == ["good"] and frame._program("good")[0] is prog
+    # only the broken one aimed at the faces: the seed is copied through
+    st.values["good"]["on"] = False
+    faces.begin((8, 8)).use()
+    ctx.clear(0.5, 0.25, 0.75, 1.0)
+    assert faces.run(out, 0.2) == []
+    px = np.frombuffer(out.read(components=4), dtype=np.uint8).reshape(8, 8, 4)
+    assert np.allclose(px[4, 4], [128, 64, 191, 255], atol=1)
+
+
+def test_the_face_chain_never_forces_alpha(ctx, fxdir):
+    """In the faces' picture alpha is a face's intensity: the chain aimed at
+    the faces writes u_opaque 0 whatever its `opaque` says."""
+    from hyperspace.fx import FACES
+    write(fxdir, "flat", CONST.format(blend="mix"))
+    st = FxState(fxdir)
+    st.values["flat"].update(on=True, target=FACES, level=0.1)
+    frame, faces = _two_chains(ctx, st)
+    faces.opaque = True
+    out = ctx.framebuffer(color_attachments=[ctx.texture((8, 8), 4)])
+    faces.begin((8, 8)).use()
+    ctx.clear(0.0, 0.0, 0.0, 0.0)
+    assert faces.run(out, 0.0) == ["flat"]
+    px = np.frombuffer(out.read(components=4), dtype=np.uint8).reshape(8, 8, 4)
+    assert px[4, 4, 3] == 102                    # covers its own colour (0.4), never lifted to 1
+    st.values["flat"]["target"] = 0              # the same pass on an opaque frame: alpha 1
+    frame.opaque = True
+    frame.begin((8, 8)).use()
+    ctx.clear(0.0, 0.0, 0.0, 0.0)
+    assert frame.run(out, 0.0) == ["flat"]
+    px = np.frombuffer(out.read(components=4), dtype=np.uint8).reshape(8, 8, 4)
+    assert px[4, 4, 3] == 255
+
+
+def face_frame(ctx, fx: FxState, frames: int = 3, pattern: int = 2):
+    """`render` with the renderer handed back: the frame, the renderer."""
+    from hyperspace.render import Renderer
+    from hyperspace.view import ViewState
+    fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((W, H))])
+    r = Renderer(ctx, fx=fx)
+    s = ViewState(shape=10, faces=True, pattern=pattern, bright=1.3)
+    s.ang = [0.3, 0.7, 1.1, 0.5, 0.9, 1.3]
+    for k in range(frames):
+        fbo.use()
+        ctx.viewport = (0, 0, W, H)
+        r.draw(s, W, H, t_now=4.0 + k / 30)
+    out = np.frombuffer(fbo.read(components=4), dtype=np.uint8).reshape(H, W, 4).copy()
+    fbo.release()
+    return out, r
+
+
+@pytest.mark.parametrize("name", sorted(FxState().specs))
+def test_every_effect_runs_on_the_face_target(ctx, name):
+    """Aimed at the faces alone, every factory effect compiles, the frame
+    draws with no GL error, the picture is not the seed, and the frame is
+    not the frame without it. No effect is adapted and none is refused."""
+    from hyperspace.fx import FACES
+    from hyperspace.render import FACE_PIC
+    base, r0 = face_frame(ctx, FxState())
+    assert r0.face_pic.tex is None
+    st = FxState()
+    st.values[name].update(on=True, target=FACES)
+    if name == "glimmer":
+        st.values[name]["density"] = 1.0
+    img, r = face_frame(ctx, st)
+    assert ctx.error == "GL_NO_ERROR"
+    assert r.face_error == "" and r.fx.errors == {} and not r.fx.active()
+    assert r.face_fx.size == (FACE_PIC, FACE_PIC) and r.face_pic.tex.size == (FACE_PIC, FACE_PIC)
+    # the chain's first texture still holds the seed (one pass: read, never written)
+    seed = np.frombuffer(r.face_fx._tex[0].read(), dtype=np.float16).astype(np.float32)
+    seed = np.clip(seed * 255.0, 0, 255).reshape(FACE_PIC, FACE_PIC, 4)
+    pic = np.frombuffer(r.face_pic.tex.read(), dtype=np.uint8).reshape(FACE_PIC, FACE_PIC, 4)
+    assert seed[..., 3].max() > 100                          # the pattern is in the seed
+    change = np.abs(pic.astype(np.float32) - seed).mean()
+    print(f"{name}: picture differs from the seed by {change:.2f} / 255 (mean)")
+    assert change > 0.25, f"{name} left the picture as the seed was"
+    assert np.abs(img.astype(int) - base).sum() > 200, f"{name} does not show on the faces"
