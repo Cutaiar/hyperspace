@@ -115,6 +115,7 @@ def test_dim_is_a_rig_setting_that_starts_bright(rig):
     assert out.dim == pytest.approx(0.4) and p.text() == "40%"
     p.set_norm(0.0)
     assert out.dim == 0.0 and p.text() == "black"
+    assert (p.fmt(0.996), p.fmt(0.004), p.fmt(1.0)) == ("99%", "1%", "100%")
     p.set(7.0)                                     # the setter holds the range
     assert out.dim == 1.0
     p.set(-3.0)

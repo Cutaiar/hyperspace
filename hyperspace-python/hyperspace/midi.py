@@ -546,17 +546,21 @@ class MidiIO:
         it (`_rebase`). `load` (a desk replacement: a preset load) also
         clears a fader's catch when its param is no longer where this
         adapter last put it — `_uncatch_moved`'s test — or it has no last
-        write: a fader whose base the load moved picks up, and one whose
-        param the load left alone (the crossfader's dim, S1–S8 and SM: a
-        preset never moves a session param, D9) keeps its hold (plan 15
-        WP3, fork 19)."""
+        write, or the param is not where this fader itself last was
+        (`_writes` is per param: another control on the same param may
+        have made the last write): a fader whose base the load moved
+        picks up, and one whose param the load left alone (the
+        crossfader's dim, S1–S8 and SM: a preset never moves a session
+        param, D9) keeps its hold (plan 15 WP3, fork 19)."""
         active = self.table.active()
         drawn = {b.control for b in active if b.feedback}
         for b in self.bindings:
             b.last_out = None
             if load and b.kind in ("cc", "pitch") and b.op == "abs" and b.feedback != "ring":
                 p, seen = self.reg.get(b.target), self._writes.get(b.target)
-                if p is None or seen is None or abs(p.norm - seen) > PICKUP_TOL:
+                if (p is None or seen is None or b.last_hw is None
+                        or abs(p.norm - seen) > PICKUP_TOL
+                        or abs(p.norm - b.last_hw) > PICKUP_TOL):
                     b.caught = False
         if self.out is None:
             return

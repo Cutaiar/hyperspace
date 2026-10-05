@@ -1063,6 +1063,11 @@ class Panel:
             return
         if "output.dim" in self.reg:        # the master dim: the crossfader (plan 15 WP3)
             self._row("output.dim")
+            # a driver that refused the dim's program: the fader moves and
+            # the picture does not — say so here (Renderer.dim_error)
+            err = getattr(self.renderer, "dim_error", "")
+            if err:
+                imgui.text_colored(WARN, f"{err} — the picture is not dimmed")
         if len(self.reg["output.monitor"].names) > 1:
             self._combo("output.monitor")
         self._check("output.fullscreen")

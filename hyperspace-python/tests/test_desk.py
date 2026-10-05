@@ -195,13 +195,26 @@ def test_the_crossfader_keeps_its_hold_across_a_preset_load(rig):
     assert gain.norm == pytest.approx(90 / 127, abs=PICKUP_TOL)
     # a fader the adapter never wrote is not caught by a load …
     assert not row(rig, "master.trim").caught
-    # … and the panel moving the dim behind the fader still re-arms pickup
-    dim.set_norm(0.2)
+    # … nor does one keep its hold when another control made the param's
+    # last write (review of PR #81): the fader is not where the value is
+    push(rig, cc(apc40.CC_XFADE, 100))
+    assert xf.caught
+    dim.set_norm(0.3)
+    rig.midi._note_written(dim)                              # as a button row on it would
     t.set_desk(t.desk())
     rig.midi.poll()
     assert not xf.caught
-    push(rig, cc(apc40.CC_XFADE, 90))
-    assert dim.norm == pytest.approx(0.2)
+    push(rig, cc(apc40.CC_XFADE, 101))
+    assert dim.norm == pytest.approx(0.3)                    # no jump
+    push(rig, cc(apc40.CC_XFADE, 20))                        # swept through: caught again
+    assert xf.caught
+    # … and the panel moving the dim behind the fader still re-arms pickup
+    dim.set_norm(0.6)
+    t.set_desk(t.desk())
+    rig.midi.poll()
+    assert not xf.caught
+    push(rig, cc(apc40.CC_XFADE, 5))                         # the fader is below it: nothing
+    assert dim.norm == pytest.approx(0.6)
 
 
 def test_a_desk_edit_on_the_page_redraws_and_keeps_the_faders_catch(rig):

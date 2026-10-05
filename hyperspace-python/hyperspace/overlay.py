@@ -234,7 +234,7 @@ class Output:
         reg.continuous("output.dim", "Master dim", lambda: self.dim,
                        lambda v: setattr(self, "dim", min(1.0, max(0.0, float(v)))),
                        lo=0.0, hi=1.0,
-                       fmt=lambda v: "black" if v <= 0 else f"{v * 100:.0f}%", group=g,
+                       fmt=self._dim_text, group=g,
                        tip="Dims the whole finished picture — the scene, the effects "
                            "and the ghost hands alike: 0 black, 1 full. The APC40's "
                            "crossfader (left is black). Never saved; a launch starts "
@@ -248,6 +248,15 @@ class Output:
             reg.add(Param(f"overlay.{old}", p.label, p.kind, p.get, p.put, group=g,
                           tip=p.tip, lo=p.lo, hi=p.hi, fmt=p.fmt, choices=p.choices,
                           alias=True))
+
+    @staticmethod
+    def _dim_text(v: float) -> str:
+        """"black" only at 0 and "100%" only at full: a value just inside
+        either end reads 1% or 99%, so the readout never says full while
+        the picture is dimmed, nor black while it is not."""
+        if v <= 0:
+            return "black"
+        return "100%" if v >= 1 else f"{min(99, max(1, round(v * 100)))}%"
 
     def _set_overlay(self, v) -> None:
         """The one door into overlay mode: shut unless the config asks."""

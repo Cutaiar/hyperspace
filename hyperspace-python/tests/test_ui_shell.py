@@ -302,6 +302,12 @@ def test_the_dim_is_first_on_output_and_the_footer_says_so_while_dimmed(rig, mon
     drawn.clear()
     frame(rig.panel, "view")
     assert "·  dim black" in drawn
+    # a dim the driver refused is said on the OUTPUT page (review of PR #81)
+    rig.panel.renderer = SimpleNamespace(dim_error="dim: Error: refused", pattern_error="",
+                                         bitmap_error="")
+    drawn.clear()
+    frame(rig.panel, "output")
+    assert "dim: Error: refused — the picture is not dimmed" in drawn
 
 
 def test_the_routing_rows_scroll_in_their_own_child(rig, monkeypatch):
