@@ -30,13 +30,14 @@ Nothing to pinch. A hand out of the box changes nothing.
 
 ## The desk
 
-- Device knobs 1–8: fx mix · acid bend · acid twist · acid reach · acid
-  breathe · wobble · colour split · hue spread — each ring shows its base.
-  (With SHIFT latched they are the band strip; press SHIFT again to get
-  them back. F6 puts every one back where it was.)
+- Device knobs 1–8: FX mix · Acid bend · Acid twist · Acid reach · Acid
+  breathe · Wobble amount · Deconverge amount · Hue cycle spread — each
+  ring shows its base. (With SHIFT latched they are the band strip; press
+  SHIFT again to get them back. F6 puts every one back where it was.)
 - Track knobs as on every preset: brightness, speed, … zoom on 8.
 
 ## To load
 
-1. PRESETS page → the **party** show (once per night).
-2. Press **F6** — ACID: the look, the hands and the desk in one step.
+1. PRESETS page → show ▾ → **party**, if it is not the open show.
+2. Press **F6**, or clip row 1's sixth pad — ACID: the look, the hands
+   and the desk in one step.

@@ -1,6 +1,6 @@
 # TUMBLE — the polytope
 
-*One object, turned inside out by the music. Your left hand holds it;
+*A 24-cell turned inside out by the music. Your left hand holds it;
 your right hand drives it.*
 
 ![the poses](party-tumble-sheet.png)
@@ -12,7 +12,7 @@ your right hand drives it.*
 - Tip your fingers up or down: it tips away from you or toward you.
 - Turn your fingers out or in: it turns about the vertical.
 - Raise the hand: the music grips it harder (every kick and bass hit spins
-  it further). Bottom of the box = the desk's drive fader as set.
+  it further). Bottom of the box = the MASTER fader as set.
 - Hold it level and it does nothing. Take it out and it eases back.
 
 **Right hand — drive it.**
@@ -27,11 +27,14 @@ Nothing to pinch. A hand out of the box changes nothing.
 
 - MASTER fader: the drive your left hand pushes from.
 - Track knobs 1 and 2: base brightness and speed. Knob 8: zoom.
-- Clip rows 4 and 5: the shape. Activator buttons: which planes the music
-  turns (XW, YW, ZW are set).
+- Device knobs 1–4: 4D depth · yaw · pitch · pattern (5–8 dark).
+- Cue knob: the shape.
+- Activator buttons 1–6: which planes the music turns — ZW · XW · YW ·
+  XY · XZ · YZ (ZW, XW and YW are on).
 
 ## To load
 
-1. PRESETS page → project → load ▾ → **party** (once per night).
-2. Press **F1** (or the first green button of clip row 1) — TUMBLE: the look, the hands and the desk
-   in one step.
+1. PRESETS page → show ▾ → **party**, if it is not the open show.
+2. Press **F1**, or clip row 1's first pad — TUMBLE: the look, the hands
+   and the desk in one step. (A pad that holds a preset is amber; the
+   loaded one is green.)
