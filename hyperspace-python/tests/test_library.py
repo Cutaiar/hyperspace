@@ -1144,6 +1144,14 @@ def test_the_first_write_past_slot_eight_keeps_the_eight_slot_file(owner_home):
         pr.put_slot(2, "NIGHT ONE")
         assert pr.bank[2] == "NIGHT ONE" and json.loads(show.read_text())["bank"][2] == "NIGHT ONE"
         assert pr.bank_error == ""
+        # save as onto that eight-slot file from a show with a far slot: refused,
+        # and the open show is still the one it was (review of PR #104)
+        pr.load("mine")
+        held, as_was = (pr.name, pr.path, pr.stem), show.read_bytes()
+        with pytest.raises(LibraryError, match="no backup"):
+            pr.save("party")
+        assert (pr.name, pr.path, pr.stem) == held and show.read_bytes() == as_was
+        pr.load("party")
     assert own.read_text() == "a copy the owner made by hand" and mine.is_file()
     assert [p for p in bak8(show) if p != own] == []       # nothing was copied, nothing written
     # the disk is back: the same call writes, the copy taken first under a free name
@@ -1153,6 +1161,21 @@ def test_the_first_write_past_slot_eight_keeps_the_eight_slot_file(owner_home):
     made = [p for p in bak8(show) if p != own]
     assert len(made) == 1 and made[0].read_bytes() == old
     assert own.read_text() == "a copy the owner made by hand"      # never over an existing file
+    # the same eight-slot file again — the far slot cleared, or a write that
+    # failed after its backup and is tried again: it is kept already, no second copy
+    pr.clear_slot(9)
+    assert show.read_bytes() == old
+    pr.put_slot(4, "NIGHT TWO")                            # …and a different eight-slot file
+    copies = len(bak8(show))
+    with pytest.MonkeyPatch.context() as mp:
+        def full(*a, **k):
+            raise LibraryError("disk full")
+        mp.setattr(library, "_write_json", full)
+        pr.put_slot(9, "WAKE")
+        pr.put_slot(9, "WAKE")
+    assert pr.bank[9] is None and len(bak8(show)) == copies + 1
+    pr.put_slot(9, "WAKE")
+    assert pr.bank[9] == "WAKE" and len(bak8(show)) == copies + 1
 
 
 def test_save_as_lands_on_slot_nine_once_the_f_keys_are_full(owner_home):

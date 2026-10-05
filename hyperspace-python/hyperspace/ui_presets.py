@@ -454,21 +454,15 @@ def preset_bank(panel) -> None:
     w_far = (avail - (FAR_COLS - 1) * sp) / FAR_COLS
     pad = ui.CHIP_PAD.x
     labels: list[str] = []
-    n, tight = len(pr.bank), False
     white = imgui.ImVec4(1, 1, 1, 1)
     for k, name in enumerate(pr.bank):
         far = k >= F_KEYS
         if (k - F_KEYS) % FAR_COLS if far else k % BANK_COLS:
             imgui.same_line()
-        # the far rows sit FAR_GAP apart; the row after the last one keeps
-        # the page's own spacing (an item's spacing is the one in force
-        # when it is drawn)
-        if far and not tight and k < n - 1:
-            imgui.push_style_var(imgui.StyleVar_.item_spacing, imgui.ImVec2(sp, FAR_GAP))
-            tight = True
-        elif tight and k == n - 1:
-            imgui.pop_style_var()
-            tight = False
+        elif k > F_KEYS:
+            # the far rows sit FAR_GAP apart: the row is moved up, with no
+            # style pushed, so a slot's menu and hover keep the panel's spacing
+            imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() - (style.item_spacing.y - FAR_GAP))
         lit = k == pr.active and name is not None
         key = str(k + 1) if far else slot_key(k)
         gap = " " if far else "  "
@@ -500,8 +494,6 @@ def preset_bank(panel) -> None:
         else:
             panel._ctx(r[f"preset.load.{k}"], extra=lambda k=k: _slot_menu(panel, k))
             panel._learn_frame(r[f"preset.load.{k}"])
-    if tight:                         # (a bank that ends mid-way: never left pushed)
-        imgui.pop_style_var()
     st["bank_labels"] = labels
     if pr.bank_error:
         imgui.text_colored(ui.WARN, pr.bank_error)

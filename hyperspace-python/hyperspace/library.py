@@ -983,6 +983,7 @@ class Project:
         """The session into the project file (as `name` if given), with the
         bank and startup as held."""
         lib = self.lib
+        held = (self.name, self.path, self.session, self.modules)
         if name:
             self.name = name
             self.path = self.path_for(name)
@@ -999,7 +1000,13 @@ class Project:
                 doc = lib.document(group, cur)
                 self.modules[group] = {k: v for k, v in doc.items()
                                        if k not in ("schema", "group")}
-        self.write()
+        try:
+            self.write()
+        except (LibraryError, OSError):
+            # nothing was written (a backup that could not be made, a full
+            # disk): the show is still the one it was, under its own name
+            self.name, self.path, self.session, self.modules = held
+            raise
         lib.say(f"show: saved {self.name}")
         lib.remember(self.stem)
         return self.path
@@ -1031,7 +1038,7 @@ class Project:
             if old.get("schema") == PROJECT_V1:
                 backup(path, "1")
             elif (len(doc["bank"]) > F_KEYS and _bank_len(old) <= F_KEYS
-                  and backup(path, BANK8_BACKUP) is None):
+                  and not _kept(path) and backup(path, BANK8_BACKUP) is None):
                 raise LibraryError(f"{path.name}: not written — no backup of the "
                                    "eight-slot file could be made")
         self.path = path
@@ -1051,6 +1058,18 @@ class Project:
         return ((self.path is None and not self.factory)
                 or not undo.alike(self.session, reg.snapshot(part="session"))
                 or (self.bank, self.startup) != self._saved)
+
+
+def _kept(path: Path) -> bool:
+    """Is the file at `path` already kept, byte for byte, in one of its
+    eight-slot backups? Then a write that failed after its backup, tried
+    again, makes no second copy of the same file."""
+    try:
+        data = path.read_bytes()
+        return any(p.read_bytes() == data
+                   for p in path.parent.glob(f"{path.name}.bak-v{BANK8_BACKUP}*"))
+    except OSError:
+        return False
 
 
 def _bank_len(doc: dict) -> int:
