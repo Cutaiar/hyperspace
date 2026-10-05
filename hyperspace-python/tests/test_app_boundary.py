@@ -458,3 +458,183 @@ def test_the_config_defaults_shut_overlay():
 
     assert config.DEFAULTS["output"]["overlay"] is False
     assert app._overlay_allowed({"output": dict(config.DEFAULTS["output"])}) is False
+
+
+# ---- plan 16 WP4: the windows open where placement says, and the exits remember ----
+
+class _PlaceGlfw(_HintGlfw):
+    """Two screens (the laptop, then a projector to its right) and windows
+    that record the size they were created at and where they were put."""
+
+    def __init__(self, mons=None):
+        super().__init__()
+        self.mons = mons if mons is not None else {
+            "Built-in": (0, 38, 1728, 1041), "Projector": (1728, 0, 1920, 1080)}
+        self.size: dict = {}
+        self.pos: dict = {}
+        self.iconified: set = set()
+
+    def get_monitors(self):
+        return list(self.mons)
+
+    def get_monitor_workarea(self, m):
+        return self.mons[m]
+
+    def get_monitor_name(self, m):
+        return m.encode()
+
+    def create_window(self, w, h, title, mon, share):
+        win = super().create_window(w, h, title, mon, share)
+        self.size[win] = (w, h)
+        return win
+
+    def set_window_pos(self, win, x, y):
+        self.pos[win] = (x, y)
+
+    def get_window_pos(self, win):
+        return self.pos[win]
+
+    def get_window_size(self, win):
+        return self.size[win]
+
+    def get_window_attrib(self, win, attr):
+        assert attr == "ICONIFIED"
+        return int(win in self.iconified)
+
+
+def _open(monkeypatch, cfg, home, mons=None):
+    """A launch's `_windows` on a fresh fake window system."""
+    g = _PlaceGlfw(mons)
+    monkeypatch.setattr(app, "glfw", g)
+    render, ctrl = app._windows(False, cfg, home)
+    return g, render, ctrl
+
+
+def test_the_windows_open_where_placement_says(monkeypatch, tmp_path, capsys):
+    from hyperspace import config, placement
+
+    place = placement.place
+    # first launch — no file, default config: the spots and sizes as before
+    cfg = {"output": dict(config.DEFAULTS["output"])}
+    g, render, ctrl = _open(monkeypatch, cfg, tmp_path)
+    assert (g.size[render], g.pos[render]) == (app.RENDER_SIZE, (16, 54))
+    assert (g.size[ctrl], g.pos[ctrl]) == (app.CONTROL_SIZE, (1728 - 960 - 16, 54))
+    assert "notes" not in cfg and not (tmp_path / placement.FILE).exists()   # a launch only reads
+
+    # remembered: created at the remembered size, put at the remembered spot
+    placement.save(tmp_path, (300, 90, 800, 850), [(1900, 120, 1000, 700)],
+                   placement.screens(g))
+    g, render, ctrl = _open(monkeypatch, cfg, tmp_path)
+    assert (g.size[render], g.pos[render]) == ((1000, 700), (1900, 120))
+    assert (g.size[ctrl], g.pos[ctrl]) == ((800, 850), (300, 90))
+
+    # the config's screens win: the control window on control_monitor, the
+    # render window (remembered on the projector) on monitor 0
+    cfg = {"output": {"monitor": 0, "control_monitor": 1}}
+    g, render, ctrl = _open(monkeypatch, cfg, tmp_path)
+    assert (g.size[render], g.pos[render]) == (app.RENDER_SIZE, (16, 54))
+    assert (g.size[ctrl], g.pos[ctrl]) == (app.CONTROL_SIZE, (1728 + 1920 - 960 - 16, 16))
+    assert "notes" not in cfg
+
+    # the projector unplugged, and a config index with no screen: default
+    # spots on the primary, said on stderr and in cfg["notes"] (the SYSTEM page)
+    cfg = {"output": {"monitor": -1, "control_monitor": 1}, "notes": ["an earlier note"]}
+    capsys.readouterr()
+    g, render, ctrl = _open(monkeypatch, cfg, tmp_path, {"Built-in": (0, 38, 1728, 1041)})
+    assert (g.size[render], g.pos[render]) == (app.RENDER_SIZE, (16, 54))
+    assert (g.size[ctrl], g.pos[ctrl]) == ((800, 850), (300, 90))     # −1 after the note
+    assert cfg["notes"][0] == "an earlier note" and len(cfg["notes"]) == 3
+    assert '"Projector", which is not connected' in cfg["notes"][1]
+    assert "control_monitor = 1, but 1 screen is connected" in cfg["notes"][2]
+    err = capsys.readouterr().err
+    assert all(n in err for n in cfg["notes"][1:])
+
+    # no screens at all: default sizes, no position set — as before
+    g, render, ctrl = _open(monkeypatch, cfg, tmp_path, {})
+    assert (g.size[render], g.size[ctrl]) == (app.RENDER_SIZE, app.CONTROL_SIZE) and g.pos == {}
+
+    # placement raising on something nobody foresaw: default spots and a note, never a dead launch
+    cfg = {"output": {}}
+    monkeypatch.setattr(placement, "place", _boom)
+    g, render, ctrl = _open(monkeypatch, cfg, tmp_path)
+    assert (g.pos[render], g.pos[ctrl]) == ((16, 54), (1728 - 960 - 16, 54))
+    assert len(cfg["notes"]) == 1 and cfg["notes"][0].startswith("placement: ")
+    monkeypatch.setattr(placement, "place", place)
+
+    # and with no home given nothing is read: the old one-argument call
+    g = _PlaceGlfw()
+    monkeypatch.setattr(app, "glfw", g)
+    render, ctrl = app._windows(False)
+    assert (g.pos[render], g.pos[ctrl]) == ((16, 54), (1728 - 960 - 16, 54))
+
+
+def test_the_exits_save_the_windowed_rects(monkeypatch, tmp_path):
+    import inspect
+
+    from hyperspace import library, placement
+    from hyperspace.overlay import Output
+
+    g, render, ctrl = _open(monkeypatch, {}, tmp_path)
+
+    class Backend:                       # the render window's rect, as overlay.GlfwBackend reads it
+        def window_rect(self, win):
+            return (*g.pos[win], *g.size[win])
+
+    out = Output(render, Backend())
+    g.pos[render], g.size[render] = (1900, 120), (1000, 700)   # dragged to the projector
+    g.pos[ctrl] = (300, 90)
+
+    # quit: main's helper writes both windows' rects
+    app._save_windows(tmp_path, render, ctrl, out)
+    doc = placement.load(tmp_path)
+    assert doc["control"] == {"x": 300, "y": 90, "w": 960, "h": 900, "screen": "Built-in"}
+    assert doc["render"] == [{"x": 1900, "y": 120, "w": 1000, "h": 700, "screen": "Projector"}]
+
+    # fullscreen at the exit: the windowed rect, never the cover of the screen (F6)
+    out._applied["mode"], out._saved_rect = "fullscreen", (1900, 120, 1000, 700)
+    g.pos[render], g.size[render] = (1728, 0), (1920, 1080)
+    g.pos[ctrl] = (340, 90)
+    app._save_windows(tmp_path, render, ctrl, out)
+    doc = placement.load(tmp_path)
+    assert doc["render"][0]["w"] == 1000 and doc["render"][0]["x"] == 1900
+    assert doc["control"]["x"] == 340
+
+    # a minimised window keeps its old entry
+    g.iconified = {ctrl, render}
+    g.pos[ctrl] = (-32000, -32000)
+    app._save_windows(tmp_path, render, ctrl, out)
+    assert placement.load(tmp_path) == doc
+
+    # restart (⌘R): saved before the windows go, and a save that raises
+    # stops nothing
+    log: list[str] = []
+    g.make_context_current = lambda w: None
+    g.terminate = lambda: log.append("terminate")
+    monkeypatch.setattr(app.os, "execv", lambda *a: log.append("execv"))
+    audio = SimpleNamespace(stop=lambda: log.append("audio"))
+    impl = SimpleNamespace(shutdown=lambda: log.append("shutdown"))
+    g.iconified = set()
+    g.pos[ctrl] = (360, 90)
+
+    def save():
+        log.append("save")
+        app._save_windows(tmp_path, render, ctrl, out)
+
+    app._restart(audio, (), impl, ctrl, save=save)
+    assert log == ["save", "audio", "shutdown", "terminate", "execv"]
+    assert placement.load(tmp_path)["control"]["x"] == 360
+    log.clear()
+    app._restart(audio, (), impl, ctrl, save=_boom)
+    assert log == ["audio", "shutdown", "terminate", "execv"]
+    app._restart(audio, (), impl, ctrl)                       # and none given is none
+    # an unwritable home costs only the memory
+    app._save_windows(tmp_path / "gone", render, ctrl, out)
+
+    # both exits are wired in main: the quit saves before the windows are
+    # torn down, the restart is handed the same save, and the home is the
+    # one config.load uses (library.home(): $HYPERSPACE_HOME)
+    src = inspect.getsource(app.main)
+    assert src.index("_quiet(save_windows)") < src.index("impl.shutdown()") < src.index(
+        "glfw.terminate()")
+    assert "save=save_windows" in src and "home = library_home()" in src
+    assert app.library_home is library.home

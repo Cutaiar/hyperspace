@@ -1,0 +1,179 @@
+Plan 16 WP4 — where the windows open at launch (tools/placement_demo.py)
+Fake screens; hyperspace.placement only. Rects are x, y, w, h in screen coordinates.
+
+-- first launch: no file, default config, the laptop alone
+   screens: 0 = Built-in Retina Display 1728×1010 at (0, 33)
+   config:  [output] monitor = -1, control_monitor = -1
+   file:    render = nothing
+   render   opens at (16, 49), 1280×820, on screen 0 (Built-in Retina Display)
+   file:    control = nothing
+   control  opens at (752, 49), 960×900, on screen 0 (Built-in Retina Display)
+
+-- a quit, the render dragged onto the projector: <home>/windows.json
+   {
+    "schema": "hyperspace.windows/1",
+    "control": {
+     "x": 300,
+     "y": 90,
+     "w": 900,
+     "h": 860,
+     "screen": "Built-in Retina Display"
+    },
+    "render": [
+     {
+      "x": 2000,
+      "y": 140,
+      "w": 1600,
+      "h": 900,
+      "screen": "DELL U2720Q"
+     }
+    ]
+   }
+
+-- remembered: the same two screens, default config
+   screens: 0 = Built-in Retina Display 1728×1010 at (0, 33); 1 = DELL U2720Q 1920×1080 at (1728, 0)
+   config:  [output] monitor = -1, control_monitor = -1
+   file:    render = {"x": 2000, "y": 140, "w": 1600, "h": 900, "screen": "DELL U2720Q"}
+   render   opens at (2000, 140), 1600×900, on screen 1 (DELL U2720Q)
+   file:    control = {"x": 300, "y": 90, "w": 900, "h": 860, "screen": "Built-in Retina Display"}
+   control  opens at (300, 90), 900×860, on screen 0 (Built-in Retina Display)
+
+-- the projector unplugged
+   screens: 0 = Built-in Retina Display 1728×1010 at (0, 33)
+   config:  [output] monitor = -1, control_monitor = -1
+   file:    render = {"x": 2000, "y": 140, "w": 1600, "h": 900, "screen": "DELL U2720Q"}
+   render   opens at (16, 49), 1280×820, on screen 0 (Built-in Retina Display)
+            note: placement: the render window was last on "DELL U2720Q", which is not connected — opening on "Built-in Retina Display"
+   file:    control = {"x": 300, "y": 90, "w": 900, "h": 860, "screen": "Built-in Retina Display"}
+   control  opens at (300, 90), 900×860, on screen 0 (Built-in Retina Display)
+
+-- config beats file: monitor = 0, the render was last on screen 1
+   screens: 0 = Built-in Retina Display 1728×1010 at (0, 33); 1 = DELL U2720Q 1920×1080 at (1728, 0)
+   config:  [output] monitor = 0, control_monitor = -1
+   file:    render = {"x": 2000, "y": 140, "w": 1600, "h": 900, "screen": "DELL U2720Q"}
+   render   opens at (16, 49), 1280×820, on screen 0 (Built-in Retina Display)
+   file:    control = {"x": 300, "y": 90, "w": 900, "h": 860, "screen": "Built-in Retina Display"}
+   control  opens at (300, 90), 900×860, on screen 0 (Built-in Retina Display)
+
+-- config and file agree: monitor = 1, the render was last on screen 1
+   screens: 0 = Built-in Retina Display 1728×1010 at (0, 33); 1 = DELL U2720Q 1920×1080 at (1728, 0)
+   config:  [output] monitor = 1, control_monitor = -1
+   file:    render = {"x": 2000, "y": 140, "w": 1600, "h": 900, "screen": "DELL U2720Q"}
+   render   opens at (2000, 140), 1600×900, on screen 1 (DELL U2720Q)
+   file:    control = {"x": 300, "y": 90, "w": 900, "h": 860, "screen": "Built-in Retina Display"}
+   control  opens at (300, 90), 900×860, on screen 0 (Built-in Retina Display)
+
+-- config pins the controls: control_monitor = 1, they were last on screen 0
+   screens: 0 = Built-in Retina Display 1728×1010 at (0, 33); 1 = DELL U2720Q 1920×1080 at (1728, 0)
+   config:  [output] monitor = -1, control_monitor = 1
+   file:    render = {"x": 2000, "y": 140, "w": 1600, "h": 900, "screen": "DELL U2720Q"}
+   render   opens at (2000, 140), 1600×900, on screen 1 (DELL U2720Q)
+   file:    control = {"x": 300, "y": 90, "w": 900, "h": 860, "screen": "Built-in Retina Display"}
+   control  opens at (2672, 16), 960×900, on screen 1 (DELL U2720Q)
+
+-- config screen missing: monitor = 2 with two screens
+   screens: 0 = Built-in Retina Display 1728×1010 at (0, 33); 1 = DELL U2720Q 1920×1080 at (1728, 0)
+   config:  [output] monitor = 2, control_monitor = -1
+   file:    render = {"x": 2000, "y": 140, "w": 1600, "h": 900, "screen": "DELL U2720Q"}
+   render   opens at (2000, 140), 1600×900, on screen 1 (DELL U2720Q)
+            note: config: [output] monitor = 2, but 2 screens are connected (0–1) — using the last position
+   file:    control = {"x": 300, "y": 90, "w": 900, "h": 860, "screen": "Built-in Retina Display"}
+   control  opens at (300, 90), 900×860, on screen 0 (Built-in Retina Display)
+
+-- config screen missing and no projector: monitor = 1 with one screen
+   screens: 0 = Built-in Retina Display 1728×1010 at (0, 33)
+   config:  [output] monitor = 1, control_monitor = -1
+   file:    render = {"x": 2000, "y": 140, "w": 1600, "h": 900, "screen": "DELL U2720Q"}
+   render   opens at (16, 49), 1280×820, on screen 0 (Built-in Retina Display)
+            note: config: [output] monitor = 1, but 1 screen is connected (0) — using the last position
+            note: placement: the render window was last on "DELL U2720Q", which is not connected — opening on "Built-in Retina Display"
+   file:    control = {"x": 300, "y": 90, "w": 900, "h": 860, "screen": "Built-in Retina Display"}
+   control  opens at (300, 90), 900×860, on screen 0 (Built-in Retina Display)
+
+-- a quit with the control window minimised: its entry is kept
+   control = {"x": 300, "y": 90, "w": 900, "h": 860, "screen": "Built-in Retina Display"}
+   render  = [{"x": 2100, "y": 200, "w": 1280, "h": 820, "screen": "DELL U2720Q"}]
+
+-- nonsense file: a rect off every screen
+   screens: 0 = Built-in Retina Display 1728×1010 at (0, 33); 1 = DELL U2720Q 1920×1080 at (1728, 0)
+   config:  [output] monitor = -1, control_monitor = -1
+   file:    render = {"x": 500, "y": 9000, "w": 1280, "h": 820}
+   render   opens at (16, 49), 1280×820, on screen 0 (Built-in Retina Display)
+            note: placement: the render window's last position (500, 9000) is on no screen — opening on "Built-in Retina Display"
+   file:    control = {"x": -9000, "y": 50, "w": 960, "h": 900}
+   control  opens at (752, 49), 960×900, on screen 0 (Built-in Retina Display)
+            note: placement: the control window's last position (-9000, 50) is on no screen — opening on "Built-in Retina Display"
+
+-- nonsense file: entries that are not rects
+   screens: 0 = Built-in Retina Display 1728×1010 at (0, 33); 1 = DELL U2720Q 1920×1080 at (1728, 0)
+   config:  [output] monitor = -1, control_monitor = -1
+   file:    render = {"x": "left", "y": null}
+   render   opens at (16, 49), 1280×820, on screen 0 (Built-in Retina Display)
+            note: placement: the render window's entry in windows.json is not a rect — ignored
+   file:    control = "top right"
+   control  opens at (752, 49), 960×900, on screen 0 (Built-in Retina Display)
+            note: placement: the control window's entry in windows.json is not a rect — ignored
+
+-- nonsense file: another schema
+   screens: 0 = Built-in Retina Display 1728×1010 at (0, 33); 1 = DELL U2720Q 1920×1080 at (1728, 0)
+   config:  [output] monitor = -1, control_monitor = -1
+   file:    render = nothing
+   render   opens at (16, 49), 1280×820, on screen 0 (Built-in Retina Display)
+   file:    control = nothing
+   control  opens at (752, 49), 960×900, on screen 0 (Built-in Retina Display)
+
+-- nonsense file: not JSON
+   screens: 0 = Built-in Retina Display 1728×1010 at (0, 33); 1 = DELL U2720Q 1920×1080 at (1728, 0)
+   config:  [output] monitor = -1, control_monitor = -1
+   file:    render = nothing
+   render   opens at (16, 49), 1280×820, on screen 0 (Built-in Retina Display)
+   file:    control = nothing
+   control  opens at (752, 49), 960×900, on screen 0 (Built-in Retina Display)
+
+-- an unwritable home: the quit goes on, only the memory is lost
+   save() returned; stderr got: "placement: could not write <home>/windows.json (…) — the windows' positions are not remembered"
+
+==== real launches (2026-10-04, pasted by hand; everything above this line is the script's)
+
+This machine, one screen connected — GLFW says:
+  screen 0: 'Built-in Retina Display' work area x=0 y=33 w=1728 h=1010
+No second screen, no projector: nothing below shows a window moving between screens.
+Every launch ran on a fresh temp home (HYPERSPACE_HOME=/tmp/p16wp4/home.odT5Tt), 20 frames.
+Launches 2–4 went through a wrapper that calls app.main() with app._windows wrapped to
+print glfw.get_window_pos / get_window_size of both windows right after creation
+("probe:" lines); the app's code was not instrumented.
+
+-- launch 1: first launch, no windows.json, no config.toml
+$ HYPERSPACE_HOME=<tmp> HYPERSPACE_FRAMES=20 uv run hyperspace
+dream: mps · alias copy path · fp32 · weights <tmp>/weights
+(exit 0)
+<tmp>/windows.json, written at the quit:
+  control = {"x": 752, "y": 65, "w": 960, "h": 900, "screen": "Built-in Retina Display"}
+  render  = [{"x": 16, "y": 65, "w": 1280, "h": 820, "screen": "Built-in Retina Display"}]
+(placement asks for y = 33 + 16 = 49; macOS puts the content area at 65, title bar under
+the menu bar — the same as before this change, which asked for the same spot.)
+
+-- launch 2: the file as launch 1 left it
+$ HYPERSPACE_HOME=<tmp> HYPERSPACE_FRAMES=20 uv run python probe.py
+probe: render: pos=(16, 65) size=(1280, 820)
+probe: control: pos=(752, 65) size=(960, 900)
+(exit 0; windows.json rewritten with the same numbers — the round trip does not drift)
+
+-- launch 3: windows.json edited by hand to another spot on the same screen
+  control = {"x": 520, "y": 140, "w": 900, "h": 760, ...}
+  render  = [{"x": 180, "y": 210, "w": 1000, "h": 640, ...}]
+$ HYPERSPACE_HOME=<tmp> HYPERSPACE_FRAMES=20 uv run python probe.py
+probe: render: pos=(180, 210) size=(1000, 640)
+probe: control: pos=(520, 140) size=(900, 760)
+(exit 0; windows.json after the quit: control 520, 140, 900×760; render 180, 210, 1000×640)
+
+-- launch 4: a nonsense file and a config screen that is not there
+<tmp>/config.toml:   [output]  control_monitor = 1
+<tmp>/windows.json:  "control": "top right please",
+                     "render": [{"x": 4000, "y": 300, "w": 1280, "h": 820, "screen": "DELL U2720Q"}]
+$ HYPERSPACE_HOME=<tmp> HYPERSPACE_FRAMES=20 uv run python probe.py
+placement: the render window was last on "DELL U2720Q", which is not connected — opening on "Built-in Retina Display"
+config: [output] control_monitor = 1, but 1 screen is connected (0) — using the last position; placement: the control window's entry in windows.json is not a rect — ignored
+probe: render: pos=(16, 65) size=(1280, 820)
+probe: control: pos=(752, 65) size=(960, 900)
+(exit 0; windows.json after the quit holds the two default rects again)

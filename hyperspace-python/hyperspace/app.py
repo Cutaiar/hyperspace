@@ -69,13 +69,14 @@ import moderngl
 from imgui_bundle import imgui
 from imgui_bundle.python_backends.glfw_backend import GlfwRenderer
 
-from . import config, gamepad, lfo, tempo, undo
+from . import config, gamepad, lfo, placement, tempo, undo
 from .audio import AudioEngine
 from .control import Control
 from .gamepad import Pad
 from .hotreload import HotReloader
 from .learn import Learn
 from .library import Library, Marks
+from .library import home as library_home
 from .overlay import GlfwBackend, Output
 from .params import Registry, build_registry
 from .preset import Presets, migrate_home
@@ -125,13 +126,17 @@ def close_all(audio, *adapters) -> None:
     _quiet(audio.stop)
 
 
-def _restart(audio, adapters, impl, ctrl_win) -> None:
+def _restart(audio, adapters, impl, ctrl_win, save=None) -> None:
     # execv swaps the process image in place — same PID, same terminal,
     # same stdio — so stdout doesn't detach and the user's shell keeps
     # owning the child. The OS reclaims the GL contexts and audio device
     # on image swap; we still close the ports and stop the audio stream
     # first so Core Audio doesn't complain about a stream vanishing
     # mid-callback and the next image finds the MIDI ports free.
+    # `save` remembers where the windows are (_save_windows), so the next
+    # image opens them there.
+    if save is not None:
+        _quiet(save)
     close_all(audio, *adapters)
     _quiet(lambda: glfw.make_context_current(ctrl_win))  # imgui's GL objects live there
     _quiet(impl.shutdown)
@@ -139,11 +144,54 @@ def _restart(audio, adapters, impl, ctrl_win) -> None:
     os.execv(sys.executable, [sys.executable, *sys.argv])
 
 
-def _windows(overlay: bool = False):
+def _save_windows(home, render_win, ctrl_win, output) -> None:
+    """Remember where the windows are, in <home>/windows.json
+    (placement.py) — on quit and on restart only. Always the *windowed*
+    rect: a fullscreen or overlay render window is remembered by the rect
+    `Output` would restore, and a minimised window keeps its old entry."""
+    def minimised(win) -> bool:
+        return bool(glfw.get_window_attrib(win, glfw.ICONIFIED))
+
+    control = None
+    if not minimised(ctrl_win):
+        control = (*glfw.get_window_pos(ctrl_win), *glfw.get_window_size(ctrl_win))
+    render = None if minimised(render_win) else output.windowed_rect()
+    placement.save(home, control, [render], placement.screens(glfw))
+
+
+def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None = None):
     """The two GLFW windows on one shared GL context: render first, then controls.
 
     `overlay` is the config's ``[output] overlay`` (decision 21 (a)): only
-    then is the render window's framebuffer transparent."""
+    then is the render window's framebuffer transparent.
+
+    Where they open is placement.py's say: ``[output] monitor`` /
+    ``control_monitor`` in `cfg`, else where they were (`home`'s
+    windows.json), else the default spots on the primary screen. Its notes
+    go to stderr and `cfg["notes"]` (the SYSTEM page). With no screens no
+    position is set."""
+    scr = placement.screens(glfw)
+    oc = (cfg or {}).get("output", {})
+    oc = oc if isinstance(oc, dict) else {}
+    render_rect = ctrl_rect = None
+    if scr:
+        try:
+            seen = placement.load(home) if home is not None else {}
+            renders = seen.get("render") or [None]
+            render_rect, n1 = placement.place("render", RENDER_SIZE, scr,
+                                              oc.get("monitor", -1), renders[0])
+            ctrl_rect, n2 = placement.place("control", CONTROL_SIZE, scr,
+                                            oc.get("control_monitor", -1), seen.get("control"))
+        except Exception as e:  # noqa: BLE001 — a file nobody foresaw must not stop a launch
+            render_rect = placement.default_rect("render", RENDER_SIZE, scr[0])
+            ctrl_rect = placement.default_rect("control", CONTROL_SIZE, scr[0])
+            n1, n2 = _err("placement", e) + " — the windows open at their default spots", ""
+        for note in filter(None, (n1, n2)):
+            print(note, file=sys.stderr)
+            if cfg is not None:
+                cfg.setdefault("notes", []).append(note)
+    render_size = render_rect[2:] if render_rect else RENDER_SIZE
+    ctrl_size = ctrl_rect[2:] if ctrl_rect else CONTROL_SIZE
     glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
     glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
     glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
@@ -158,7 +206,7 @@ def _windows(overlay: bool = False):
     # (overlay.py).
     glfw.window_hint(glfw.TRANSPARENT_FRAMEBUFFER, bool(overlay))
     glfw.window_hint(glfw.AUTO_ICONIFY, False)
-    render_win = glfw.create_window(*RENDER_SIZE, TITLE, None, None)
+    render_win = glfw.create_window(*render_size, TITLE, None, None)
     if not render_win:
         glfw.terminate()
         raise SystemExit("could not create the render window")
@@ -166,17 +214,17 @@ def _windows(overlay: bool = False):
     # lets both sides see the same buffers, textures and programs
     glfw.window_hint(glfw.TRANSPARENT_FRAMEBUFFER, False)
     glfw.window_hint(glfw.SAMPLES, 0)
-    ctrl_win = glfw.create_window(*CONTROL_SIZE, f"{TITLE} — controls", None, render_win)
+    ctrl_win = glfw.create_window(*ctrl_size, f"{TITLE} — controls", None, render_win)
     if not ctrl_win:
         glfw.terminate()
         raise SystemExit("could not create the control window")
-    # render left, controls flush right on the primary screen's work area;
-    # they overlap on a narrow laptop screen until one goes to a projector
-    mon = glfw.get_primary_monitor()
-    if mon:
-        x, y, w, _ = glfw.get_monitor_workarea(mon)
-        glfw.set_window_pos(render_win, x + 16, y + 16)
-        glfw.set_window_pos(ctrl_win, max(x + w - CONTROL_SIZE[0] - 16, x + 16), y + 16)
+    # by default: render left, controls flush right on the primary screen's
+    # work area; they overlap on a narrow laptop screen until one goes to a
+    # projector (placement.default_rect)
+    if render_rect:
+        glfw.set_window_pos(render_win, *render_rect[:2])
+    if ctrl_rect:
+        glfw.set_window_pos(ctrl_win, *ctrl_rect[:2])
     return render_win, ctrl_win
 
 
@@ -640,7 +688,8 @@ def main() -> None:
     if not glfw.init():
         raise SystemExit("GLFW failed to initialise")
     cfg = config.load()                   # before the windows: [output] overlay is a creation hint
-    render_win, ctrl_win = _windows(_overlay_allowed(cfg))
+    home = library_home()                 # the folder config.load has just ensured
+    render_win, ctrl_win = _windows(_overlay_allowed(cfg), cfg, home)
 
     # the render side: moderngl on the render window's context, vsynced
     glfw.make_context_current(render_win)
@@ -840,11 +889,15 @@ def main() -> None:
     presets.listeners.append(dream_check)
     dream_check(library.current("presets"))     # the startup preset has already landed
 
+    def save_windows() -> None:           # both exits: quit below, ⌘R in _restart
+        _save_windows(home, render_win, ctrl_win, output)
+
     host = Host(reg=reg, view=s, control=control, audio=audio, router=router,
                 clock=clock, lfos=lfos, keys=keys, mouse=mouse, output=output,
                 renderer=renderer, panel=panel, reloader=reloader,
                 draw_render=draw_render, draw_panel=draw_panel,
-                restart=lambda: _restart(audio, (watchdog, *host.adapters), impl, ctrl_win),
+                restart=lambda: _restart(audio, (watchdog, *host.adapters), impl, ctrl_win,
+                                         save=save_windows),
                 quit=lambda: glfw.set_window_should_close(render_win, True),
                 pad=pad, midi_io=midi_io, hands_io=hands_io, bridge_io=bridge_io,
                 dream_io=dream_io, learn=learn, render_watch=render_watch,
@@ -888,6 +941,7 @@ def main() -> None:
         glfw.swap_buffers(ctrl_win)
         watchdog.pet(now)          # a frame completed: one float write
 
+    _quiet(save_windows)      # where the windows are, for the next launch (placement.py)
     close_all(audio, watchdog, *host.adapters)   # the watchdog first: teardown is no stall
     impl.shutdown()
     glfw.terminate()

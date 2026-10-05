@@ -27,7 +27,15 @@ dream.py, too, is imported only when its gate is open.
                             # the render window is always opaque — no transparent
                             # framebuffer, and T / MASTER select / the panel cannot
                             # float it see-through; true for a laptop demo
-    monitor = -1            # screen index for fullscreen; -1 = the window's own
+    monitor = -1            # which screen the RENDER window opens on, and the one
+                            # fullscreen covers: a screen index, or -1 = where it
+                            # was last time (else the primary screen)
+    control_monitor = -1    # which screen the CONTROL window opens on: an index,
+                            # or -1 = where it was last time (else the primary).
+                            # "Last time" is <home>/windows.json (placement.py),
+                            # written on quit and on restart; delete it to forget.
+                            # An index with no such screen is treated as -1, with
+                            # a note
     fullscreen = false      # launch fullscreen on that screen
     on_start = false        # launch straight into overlay mode (needs overlay = true)
     passthrough = true      # clicks go to the window underneath (G / pan toggles)
@@ -98,9 +106,10 @@ DEFAULTS: dict = {
     "midi": {"enabled": True, "port": None, "profile": "apc40", "map": "midi_map.json"},
     # overlay.py: the render window's placement and look; ground 0 = see-through.
     # overlay: off, the window is opaque and overlay cannot switch on
-    # (decision 21 (a), plan 14 WP2)
-    "output": {"overlay": False, "monitor": -1, "fullscreen": False, "on_start": False,
-               "passthrough": True, "bg": 0.0, "alpha": 1.0},
+    # (decision 21 (a), plan 14 WP2). monitor / control_monitor: the screen
+    # each window opens on, −1 = where it was last time (placement.py)
+    "output": {"overlay": False, "monitor": -1, "control_monitor": -1, "fullscreen": False,
+               "on_start": False, "passthrough": True, "bg": 0.0, "alpha": 1.0},
     # gamepad.py: the Xbox pad — on by default, inert when absent
     "gamepad": {"enabled": True},
     # bridge.py: the analyzer's lanes out to a DAW, external lanes in — off by default
