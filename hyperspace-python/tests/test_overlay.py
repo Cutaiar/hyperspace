@@ -95,6 +95,37 @@ def test_rig_settings_never_persist_or_modulate(rig):
     assert set(saved) == {"output.bg", "output.alpha"}
 
 
+def test_dim_is_a_rig_setting_that_starts_bright(rig):
+    """Plan 15 WP3 (decision 28): the master dim is the operator's — 1 on a
+    fresh Output whatever the config says (there is no key), never saved,
+    never modulated, the session's by group, no `overlay.*` alias — and it
+    is not a window-system setting: `apply` pushes nothing for it."""
+    from hyperspace.params import part_of
+
+    assert Output(None, None).dim == 1.0 and Output("win", FakeBackend(), allowed=True).dim == 1.0
+    r, out = rig.reg, rig.out
+    p = r["output.dim"]
+    assert p.kind is Kind.CONTINUOUS and (p.lo, p.hi) == (0.0, 1.0) and p.value == 1.0
+    assert not p.persist and not p.modulatable and not p.alias
+    assert p.group == "output" and part_of(p) == "session"
+    assert "overlay.dim" not in r
+    assert "output.dim" not in r.snapshot("output") and "output.dim" not in r.snapshot()
+    assert p.text() == "100%"
+    p.set_norm(0.4)
+    assert out.dim == pytest.approx(0.4) and p.text() == "40%"
+    p.set_norm(0.0)
+    assert out.dim == 0.0 and p.text() == "black"
+    assert (p.fmt(0.996), p.fmt(0.004), p.fmt(1.0)) == ("99%", "1%", "100%")
+    p.set(7.0)                                     # the setter holds the range
+    assert out.dim == 1.0
+    p.set(-3.0)
+    assert out.dim == 0.0
+    # the ground is its own thing: the dim never touches what the window clears to
+    assert out.bg_alpha == 1.0
+    out.apply()
+    assert not any("dim" in str(c) for c in rig.b.calls)
+
+
 def test_legacy_overlay_ids_are_views(rig):
     r = rig.reg
     for old, new in (("on", "overlay"), ("passthrough", "passthrough"), ("bg", "bg"),
@@ -327,7 +358,7 @@ def test_overlay_refuses_every_road_while_the_config_shuts_it(gated):
 
 
 def test_the_ground_and_opacity_do_nothing_while_shut(gated):
-    """The crossfader's `overlay.bg` still lands a value, but the window
+    """`overlay.bg` still lands a value, but the window
     clears opaque and its opacity is never touched."""
     gated.reg["overlay.bg"].set_norm(0.0)
     gated.reg["output.alpha"].set_norm(0.2)

@@ -281,6 +281,35 @@ def test_every_page_fits_the_control_window(rig, monkeypatch):
     assert {k: v for k, v in over.items() if v > 0} == {}
 
 
+def test_the_dim_is_first_on_output_and_the_footer_says_so_while_dimmed(rig, monkeypatch):
+    """Plan 15 WP3: the master dim is the OUTPUT page's first row, and on
+    every page the footer reads `dim NN%` while it is under full — a dark
+    picture is never a mystery — and says nothing at full."""
+    rows: list[str] = []
+    real = Panel._row
+    monkeypatch.setattr(Panel, "_row",
+                        lambda self, pid, *a, **k: (rows.append(pid), real(self, pid, *a, **k))[1])
+    drawn = _drawn(monkeypatch)
+    frame(rig.panel, "output")
+    assert rows[0] == "output.dim"
+    assert not any("dim " in s for s in drawn)
+    rig.reg["output.dim"].set(0.4)
+    for page in ("output", "view", "system"):
+        drawn.clear()
+        frame(rig.panel, page)
+        assert "·  dim 40%" in drawn, page
+    rig.reg["output.dim"].set(0.0)
+    drawn.clear()
+    frame(rig.panel, "view")
+    assert "·  dim black" in drawn
+    # a dim the driver refused is said on the OUTPUT page (review of PR #81)
+    rig.panel.renderer = SimpleNamespace(dim_error="dim: Error: refused", pattern_error="",
+                                         bitmap_error="")
+    drawn.clear()
+    frame(rig.panel, "output")
+    assert "dim: Error: refused — the picture is not dimmed" in drawn
+
+
 def test_the_routing_rows_scroll_in_their_own_child(rig, monkeypatch):
     """ROUTING is the one page whose list may outgrow the window: the rows
     scroll inside a child and the page itself never does, so the preset

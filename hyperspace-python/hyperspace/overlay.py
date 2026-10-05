@@ -14,6 +14,8 @@ window-system state is three settings and the params that drive them:
   output.passthrough  toggle   in overlay: clicks go to the window underneath
   output.bg           0–1      in overlay: ground darkness, 0 clear … 1 black
   output.alpha        0–1      in overlay: whole-window opacity
+  output.dim          0–1      master dim of the finished frame, in every
+                               mode: 0 black … 1 full (the crossfader)
 
 Fullscreen asks GLFW for the monitor's current video mode, so a projector
 never re-syncs; the window is created with AUTO_ICONIFY off (app.py) so
@@ -23,9 +25,13 @@ orbit and zoom stop reaching it (keys, the gamepad and MIDI still do via
 the control window) — G, or the pan button on the APC40, takes clicks
 back.
 
-Rig-specific settings (monitor, fullscreen, overlay, passthrough) never
-persist in a preset and cannot be modulated; ground and opacity are a look
-and can. The ``overlay.*`` ids from before the split stay registered as
+Rig-specific settings (monitor, fullscreen, overlay, passthrough, dim)
+never persist in a preset and cannot be modulated; ground and opacity are
+a look and can. The dim (plan 15 WP3, decision 28) is the operator's: it
+is not a window-system setting — the renderer multiplies the finished
+frame by it (render.Renderer.dim_pass; app.frame hands it over beside
+the ground) — it has no config key, so a launch always starts at full,
+and no ``overlay.*`` alias. The ``overlay.*`` ids from before the split stay registered as
 aliases of the ``output.*`` params; the factory table (routing.py) and
 the APC40 profile bind the alias ids, so they are the live names for
 those rows, not a shim.
@@ -35,7 +41,7 @@ WP2): ``[output] overlay = true``. Otherwise the render window is created
 without a transparent framebuffer (app._windows) and ``output.overlay``
 refuses to switch on — the ``T`` key, the APC40's MASTER select, the
 panel and a preset all land on the one param, so one gate covers every
-road — and the ground (``output.bg``, the crossfader) and opacity do
+road — and the ground (``output.bg``) and opacity do
 nothing, since they only ever act in overlay. The show behind a Pepper's
 Ghost glass can never go see-through by accident.
 
@@ -184,6 +190,7 @@ class Output:
         self.passthrough = True  # an overlay should not block what is under it
         self.bg = 0.0
         self.alpha = 1.0
+        self.dim = 1.0           # master dim: 1 full … 0 black; never saved, never loaded
         self.monitor = -1        # index into backend.monitors(); −1 = the window's own
                                  # ("follow window", the enum's first choice)
         self._applied: dict = {"mode": "window"}  # the window starts as a plain window
@@ -224,15 +231,32 @@ class Output:
                        lambda v: setattr(self, "alpha", float(v)), lo=0.0, hi=1.0,
                        fmt=lambda v: f"{v * 100:.0f}%", group=g,
                        tip="Opacity of the whole render window in overlay mode.")
+        reg.continuous("output.dim", "Master dim", lambda: self.dim,
+                       lambda v: setattr(self, "dim", min(1.0, max(0.0, float(v)))),
+                       lo=0.0, hi=1.0,
+                       fmt=self._dim_text, group=g,
+                       tip="Dims the whole finished picture — the scene, the effects "
+                           "and the ghost hands alike: 0 black, 1 full. The APC40's "
+                           "crossfader (left is black). Never saved; a launch starts "
+                           "at full and a preset load never moves it.", **rig)
         # the pre-split ids: views onto the params above, never saved or
         # driven. The factory table and apc40.py bind these (overlay.on /
-        # .passthrough / .bg), so they are what the rows name
+        # .passthrough), so they are what the rows name
         for old, new in (("on", "overlay"), ("passthrough", "passthrough"),
                          ("bg", "bg"), ("alpha", "alpha"), ("monitor", "monitor")):
             p = reg[f"output.{new}"]
             reg.add(Param(f"overlay.{old}", p.label, p.kind, p.get, p.put, group=g,
                           tip=p.tip, lo=p.lo, hi=p.hi, fmt=p.fmt, choices=p.choices,
                           alias=True))
+
+    @staticmethod
+    def _dim_text(v: float) -> str:
+        """"black" only at 0 and "100%" only at full: a value just inside
+        either end reads 1% or 99%, so the readout never says full while
+        the picture is dimmed, nor black while it is not."""
+        if v <= 0:
+            return "black"
+        return "100%" if v >= 1 else f"{min(99, max(1, round(v * 100)))}%"
 
     def _set_overlay(self, v) -> None:
         """The one door into overlay mode: shut unless the config asks."""

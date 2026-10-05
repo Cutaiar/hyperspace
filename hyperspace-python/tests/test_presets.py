@@ -196,21 +196,32 @@ def test_the_home_is_rewritten_in_seconds_once_with_backups(tmp_path):
 
 def test_a_preset_load_never_touches_a_session_param(rig):
     """Plan 13 §10 exit 2: a tapped BPM survives TRIP, and so do the drive,
-    an analyzer strip and the band scene, even when the file names them."""
+    an analyzer strip and the band scene, even when the file names them —
+    and the master dim (plan 15 WP3), through a preset load and a show load."""
+    from hyperspace.overlay import Output
+
     reg, control = rig.reg, rig.control
+    out = Output(None, None)
+    out.register(reg)
+    reg["output.dim"].set(0.4)
+    assert part_of(reg["output.dim"]) == "session"
     reg["tempo.bpm"].set(100.0)
     reg["master.gain"].set(2.0)
     reg["band.0.atk"].set(0.3)
     scene = control.scene
     put(rig.home, "FAST", values={"view.shape": 5, "tempo.bpm": 140.0,
-                                  "scene.select": (scene + 1) % 3})
+                                  "scene.select": (scene + 1) % 3, "output.dim": 1.0})
     before = reg.snapshot(part="session")
     rig.presets.load("FAST")
     assert rig.view.shape == 5
     assert rig.clock.bpm == 100.0 and rig.chain.gain == 2.0 and rig.chain.params[0].atk == 0.3
     assert control.scene == scene and reg.snapshot(part="session") == before
+    assert out.dim == 0.4 and "output.dim is the session's, ignored" in rig.presets.notes
     rig.presets.load("TRIP")                          # the factory party preset, too
     assert rig.clock.bpm == 100.0 and reg.snapshot(part="session") == before
+    assert out.dim == 0.4
+    rig.lib.project.load("party")                     # a show load, startup preset and all
+    assert rig.lib.current("presets") == "TUMBLE" and out.dim == 0.4
 
 
 def test_session_ids_in_a_preset_are_noted_and_ignored(rig):

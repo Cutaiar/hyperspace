@@ -483,3 +483,42 @@ def test_close_returns_to_generic_mode(rig):
     assert rig.out.sent[-1].type == "sysex"
     assert list(rig.out.sent[-1].data)[6] == apc40.MODE_GENERIC
     assert not rig.midi.on
+
+
+# ---------------------------------------------------------------- the master dim
+
+def test_the_crossfader_dims_with_soft_pickup(rig):
+    """Plan 15 WP3: the crossfader is the master dim on both layers, CC 0
+    black. A launch is at full with the fader wherever it was left: parked
+    at the left it does nothing — it cannot black the rig out by being
+    touched — until it is brought up to the value; then it follows."""
+    dim = rig.reg["output.dim"]
+    b = next(x for x in rig.midi.bindings if x.source == f"cc:0:{apc40.CC_XFADE}")
+    assert (b.target, b.op, b.layer, b.pickup, b.feedback) == ("output.dim", "abs", None,
+                                                               True, None)
+    # invariant (D6): a preset's row on the control would never act
+    assert rig.midi.table.is_invariant(Binding(b.source, "view.bright", "abs", layer="preset"))
+    assert dim.value == 1.0 and not b.caught
+    for v in (0, 0, 3, 40, 90, 120):               # parked at black, then on the way up
+        push(rig, cc(apc40.CC_XFADE, v))
+        assert dim.value == 1.0 and not b.caught, v
+    push(rig, cc(apc40.CC_XFADE, 127))             # reached it
+    assert b.caught and dim.value == 1.0
+    push(rig, cc(apc40.CC_XFADE, 64))
+    assert dim.value == pytest.approx(64 / 127, abs=PICKUP_TOL)
+    shift(rig)                                     # the same on the global layer
+    assert b.caught
+    push(rig, cc(apc40.CC_XFADE, 20))
+    assert dim.value == pytest.approx(20 / 127, abs=PICKUP_TOL)
+    push(rig, cc(apc40.CC_XFADE, 0))               # the left end
+    assert dim.value == 0.0 and dim.text() == "black"
+    push(rig, cc(apc40.CC_XFADE, 127))
+    assert dim.value == 1.0
+    # the panel's fader moved it: pickup again, no jump
+    dim.set_norm(0.5)
+    rig.midi.poll()
+    assert not b.caught
+    push(rig, cc(apc40.CC_XFADE, 126))
+    assert dim.value == pytest.approx(0.5)
+    push(rig, cc(apc40.CC_XFADE, 40))              # swept through it
+    assert dim.value == pytest.approx(40 / 127, abs=PICKUP_TOL)
