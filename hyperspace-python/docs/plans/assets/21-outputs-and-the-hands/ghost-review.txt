@@ -1,0 +1,59 @@
+Plan 21 WP5 — PR #78 (the ghost hands), reviewed: the findings and what was done
+==========================================================================================
+Branch plan-21-wp5-ghost-review, on plan-21-integration (d8126aa). Measured on this
+laptop (Apple M3 Max), a temp HYPERSPACE_HOME, synthetic hands (tests/fake_hands.py).
+No camera, no real hand, no rig.
+
+#    real?  what the code did                         what was done                                  test that holds it
+---  -----  ----------------------------------------  ---------------------------------------------  ------------------------------------------------
+R1   yes    _draw_frame called ghost.draw unguarded,  Guarded like _face_picture: no hands, the      test_render.py::test_a_raising_hands_pass_still_dims
+            dim_pass after it: a raise (a ragged      first reason kept on Ghost.error, target        [skeleton] [geometry] (raised on the old code)
+            skeleton, a font) failed the frame and    bound again, the dim still runs. Ghost.draw's
+            skipped the master dim.                   finally re-enables BLEND; _ensure inside it.
+R2   yes    _draw_tethers wrote state.tethers=False   Private _labels_failed; Ghost.error says why    test_ghost.py::test_a_failed_label_build_writes_no_param
+            (the render stack writing a param). A     once; param untouched; a label that will not    [build] [label] (failed on the old code)
+            label that would not rasterise raised     rasterise is caught too, the hands still draw.
+            out of the whole pass.                    Off/on or a reload retries.
+R3   yes    _ensure set size and texture first; a     Built into locals, kept only when complete,     test_ghost.py::test_a_failed_target_build_is_all_or_nothing
+            refused renderbuffer left _fbo None and   released otherwise; error once; False = no      (failed on the old code)
+            every later frame raised.                 hands that frame, the next tries from nothing.
+R4   noted  0.93 / 3.4 ms (plan's figures).           Nothing plainly wasteful (profiled: GPU clear/   (measurement below)
+                                                      resolve and ~0.5 ms of numpy). No change.
+R5   yes    A ghost.py save: Renderer.on_reload       Renderer.on_reload no longer calls it; the      test_ghost.py::test_one_reload_round_rebuilds_the_ghost_once
+            called ghost.on_reload, then the          reloader's hook on the Ghost target is the      (failed on the old code; hooks called in the
+            reloader called it again; a render.py     one call. Two in a row stay harmless.           reloader's order, not a real module reload)
+            save rebuilt it needlessly.
+R6   yes    screentop/HMD bases are reasoned guesses  HANDS page, ghost on in those modes: "ghost     test_ui_shell.py::test_the_hands_page_says_the_ghost_axes_are_unmeasured
+            (both proper rotations).                  axes for <mode> are unmeasured". Maths kept.
+R7   no     Bone names match leap/datatypes.py.       Nothing.                                        —
+R8   noted  skeleton() on the SDK thread every frame. Measured below: not material. No change; SDK    (measurement below)
+                                                      objects are still copied in the callback.
+R9   noted  No real tape: the replay test skips.     Nothing: needs the rig (Q9 / check 47).          test_hands_tape.py::test_every_recorded_tape_replays_through_the_ghost (skips)
+R10  yes    Bad [hands] tape: "tracker off", reason   _open_hands appends it to cfg["notes"]          test_hands_tape.py::test_a_bad_tape_path_is_a_note_the_pages_show,
+            on stderr only.                           (SYSTEM); HANDS page shows it in place of       test_ui_shell.py::test_the_hands_page_says_why_the_ghost_or_the_tracker_is_off
+                                                      "tracker off".
+R11  yes    The guide rides inside CapsuleHands.draw. Left for WP6, as asked.                         —
+R12  fork   mirror/guide/tethers were modulatable.    mirror, guide, tethers -> modulatable=False;    test_ghost.py::test_a_desk_button_sets_the_mirror_and_a_lane_cannot_perform_it;
+                                                      on, alpha stay. Desk Learn still works; a lane  ::test_the_params_are_session_off_by_default_and_learnable (edited)
+                                                      row onto the three is dormant, kept.
+R13  yes    85.0 in ghost.pose; STALE_S in core and   pose uses hands.core.PALM_W (lazy import);      test_hands_tape.py::test_the_stale_time_and_the_palm_width_are_defined_once
+            tape.                                     STALE_S lives in tape.py, core imports it.
+R14  noted  Check 47 never run.                       Nothing here; the docs package carries it.      —
+A1   yes    _build refused whenever ANY error was     A refused build is its own flag                 test_render.py::test_a_raising_hands_pass_still_dims[skeleton]
+     (own)  set: with R1's guard, one bad frame       (_build_failed); a draw error clears when the   (its last step: the hands draw once the data is good)
+            before the first build kept the hands     ghost goes off.
+            off until a reload.
+A2   yes    Ghost on, the HANDS page already          The ghost's controls on one line; at most one   test_ui_shell.py::test_the_hands_page_fits_with_every_ghost_line
+     (own)  scrolled at the control size (34 px;      more line for the error and the note.
+            69 px with guide and tethers); the fit
+            test only measured it off.
+
+Measured (medians of 120 frames between glFinish calls, standalone context, 4-sample target,
+two synthetic hands, no guide; three runs each):
+  ghost pass 1920x1080   before 1.55 / 1.63 / 1.62 ms (Python 0.63-0.68)   after 1.22 / 1.27 / 1.60 ms (Python 0.49-0.59)
+  ghost pass 3024x1964   before 2.35 / 2.28 / 2.79 ms                       after 2.13 / 2.19 / 2.13 ms
+  (no change to the pass's work was made: the spread is run-to-run noise; these figures include
+  the wait in glFinish and differ from the plan's 0.93 / 3.4 ms, measured another way)
+  skeleton(), two hands, fake namespaces: 27 us per tracking frame (features(): 4.7 us).
+  At 120 tracking frames/s that is about 3 ms of SDK-thread time per second. Real `leap` cffi
+  objects may be slower to read: not measured.
