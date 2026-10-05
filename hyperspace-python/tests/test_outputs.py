@@ -602,7 +602,10 @@ def test_the_presenter_handoff(ctx):
     first = views(ctx, S(dim=0.5))[0]
     pv = O.View(S(dim=0.5), (W, H), presenter=object())
     pv2 = O.View(S(scene=False, hands=False), (300, 300), presenter=object())
-    want = run(ctx, r, [first, pv, pv2])[0]
+    pv3 = O.View(S(), (400, 400), presenter=object(), viewport=(10, 20, 300, 300))
+    want = run(ctx, r, [first, pv, pv2, pv3])[0]
+    x, y, w, h = fit((W, H), (300, 300))
+    assert pv3.handoff.rect == (10 + x, 20 + y, w, h)              # inside its viewport
     ho = pv.handoff
     assert ho.frame is not None and ho.frame.size == (W, H) and ho.frame_size == (W, H)
     assert ho.rect == (0, 0, W, H) and ho.hands is r.ghost.tex and ho.readout is None

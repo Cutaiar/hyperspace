@@ -86,7 +86,7 @@ class Handoff:
 
     1. clears its framebuffer to (0, 0, 0, `bg_alpha`);
     2. draws `frame` (RGBA8, `frame_size`, premultiplied, LINEAR) into
-       `rect` — 1:1 when `rect`'s size is `frame_size`, else scaled; with
+       `rect` (in its framebuffer, the view's `viewport` included) — 1:1 when `rect`'s size is `frame_size`, else scaled; with
        `bg_alpha` 1 it writes alpha 1. `frame` None: the ground only;
     3. lays `hands` (the hands' layer, premultiplied, frame-sized) over the
        same `rect` at `alpha`: colour ONE / ONE_MINUS_SRC_ALPHA, and alpha
@@ -123,7 +123,15 @@ class View:
     renderer's context (the first output's window, or an offscreen
     stand-in); `presenter` an output in another window's context (WP3),
     which `draw_outputs` leaves a `handoff` for. `viewport` is the rect of
-    `target` to draw (None: (0, 0) and `size`)."""
+    `target` (or of the presenter's framebuffer) to draw (None: (0, 0) and
+    `size`).
+
+    `bg_alpha` is this output's own ground: its bars, its clear when it
+    shows no pipeline, and whether its composites and dim keep alpha. The
+    frame itself — the scene's clear, the effect chain — is drawn on
+    `Renderer.bg_alpha`, once for every output: overlay is the first
+    output's only (plan 21 §4), so an output's ground can make the frame
+    opaque on it (alpha forced to 1) but never see-through."""
 
     switches: Switches
     size: tuple[int, int]                       # its framebuffer, px

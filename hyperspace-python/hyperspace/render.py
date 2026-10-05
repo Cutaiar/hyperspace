@@ -924,7 +924,9 @@ class Renderer:
         if v.target is None:
             if v.presenter is None:
                 raise RuntimeError("a view needs a target or a presenter")
-            v.handoff = Handoff(frame, size, fit(size, v.size),
+            rx, ry, rw, rh = v.rect
+            ix, iy, iw, ih = fit(size, (rw, rh))
+            v.handoff = Handoff(frame, size, (rx + ix, ry + iy, iw, ih),
                                 hands=gh.tex if after else None,
                                 alpha=float(gh.state.alpha), factor=factor,
                                 bg_alpha=float(v.bg_alpha))
