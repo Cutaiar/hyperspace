@@ -94,6 +94,10 @@ PLANES = PLANE_NAMES   # the rotation planes' names, in geometry.PLANES's order
 
 RAW_STEPS = 100  # detents across an untapered continuous range
 N_MACROS = 8     # macro.1–8: knobs that act through their subscribers and may be owned
+# the bank slots a function key reaches (F1–F8): each has a `preset.load.k`
+# and a `preset.save.k` trigger. The bank itself is longer (library.SLOTS);
+# `library.F_KEYS` and `routing.F_KEYS` are this number
+F_KEYS = 8
 # the performance / session split (plan 13 §4, D9), by group, declared
 # once. Performance is what a preset (preset.py) holds and
 # replaces: the look, its LFOs and its macros. Session is the rig and the
@@ -155,6 +159,9 @@ class Param:
     fmt: Callable[[float], str] = field(repr=False, default=lambda v: f"{v:.2f}")
     # ENUM: a list, or a callable returning one (preset names change on save)
     choices: list[str] | Callable[[], list[str]] = field(default_factory=list)
+    # ENUM: which of the choices hold something (a bank slot that names a
+    # preset) — what a light needs to say "filled"; None: no such notion
+    has: Callable[[int], bool] | None = field(repr=False, default=None)
     # what the param is for
     persist: bool = True         # belongs in a snapshot: a preset or a project's session (part_of)
     modulatable: bool = True     # a lane may drive it
@@ -682,10 +689,15 @@ class Registry:
         ))
 
     def enum(self, pid, label, get, set, choices, *, group="", tip="",
-             persist=True, modulatable=True, alias=False) -> Param:
+             persist=True, modulatable=True, alias=False,
+             has: Callable[[int], bool] | None = None) -> Param:
+        """`has`, if given, says which choices hold something — the enum's
+        counterpart of `trigger(lit=)`: the param carries what its lights
+        need (a filled bank slot), so an adapter learns nothing about what
+        the choices are. Stored as `Param.has`."""
         return self.add(Param(pid, label, Kind.ENUM, get, set, group=group, tip=tip,
                               choices=choices, persist=persist, modulatable=modulatable,
-                              alias=alias))
+                              alias=alias, has=has))
 
     def toggle(self, pid, label, get, set, *, group="", tip="",
                persist=True, modulatable=True, alias=False) -> Param:
@@ -732,7 +744,7 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     renderer, so the group is always declared; `fx` (fx.FxState, the
     renderer's effect stack) likewise, and `ghost` (ghost.GhostState, the
     renderer's ghost hands). `bank` is the open project
-    (library.Project), whose eight preset slots the ``preset.*`` params
+    (library.Project), whose preset slots the ``preset.*`` params
     load, save and cycle. `restart` is the host's request to
     restart the process (``app.restart``; app.py polls a flag) — a no-op
     without a host. Only the panel's own state (``ui.*``) is added by the
@@ -1083,17 +1095,24 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     control.on_layout = build_bands
 
     # ---- the preset bank ----
-    if bank is not None:                   # library.Project: the F1–F8 bank of preset names
+    if bank is not None:                   # library.Project: the bank of preset names
         g = "preset"
         names = lambda: [n or f"SLOT {k + 1}" for k, n in enumerate(bank.bank)]
         # active is −1 until a preset loads: no choice selected, no LED lit
         # meta-controls: they *apply* presets, so no preset stores them
+        # every slot is a choice (plan 19 WP1: twenty-four); `has` says
+        # which hold a preset, for a pad's "filled" light
         r.enum("preset.select", "Preset", lambda: bank.active, bank.load_slot, names,
                group=g, persist=False, modulatable=False,
-               tip="The project's eight presets: each one the whole performance — "
-                   "the look, its routes, its LFOs and macros. Never the tempo, the "
-                   "hands or the analyzer.")
-        for k in range(len(bank.bank)):
+               has=lambda k: 0 <= k < len(bank.bank) and bank.bank[k] is not None,
+               tip="The show's twenty-four presets: F1–F8, then the desk's clip rows "
+                   "4 and 5. Each one is the whole performance — the look, its "
+                   "routes, its LFOs and macros. Never the tempo, the hands or the "
+                   "analyzer.")
+        # the F-keys' slots have a load and a save trigger each; slots past
+        # them are reached through `preset.select` and the page (plan 19
+        # fork 1: no params added)
+        for k in range(min(len(bank.bank), F_KEYS)):
             r.trigger(f"preset.load.{k}", f"Load preset {k + 1}",
                       lambda k=k: bank.load_slot(k), group=g)
             r.trigger(f"preset.save.{k}", f"Save preset {k + 1}",

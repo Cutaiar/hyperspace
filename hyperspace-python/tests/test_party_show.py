@@ -165,3 +165,25 @@ def test_the_owners_rename_is_noted_as_done(tmp_path):
     boot(tmp_path, show=None).lib.project.save("default")
     boot(tmp_path, show=None)
     assert (tmp_path / "projects" / "default.hyp.json").is_file()
+
+
+def test_the_party_show_has_tracer_on_slot_nine_and_room_after(tmp_path):
+    """Plan 19 WP1 (fork 3): the factory party show gains one name —
+    TRACER, the party preset with no F-key, on slot 9 — and `house` is
+    unchanged. A fresh home has fifteen empty slots for save-as, the first
+    being slot 10; opening and playing the show writes no file."""
+    party = json.loads((FACTORY / "projects" / "party.hyp.json").read_text())
+    assert party["bank"] == ["TUMBLE", "FACES", "FIELD", "WAKE", "TRIP", "ACID", "MANDALA",
+                             "NOITA", "TRACER"]
+    assert party["schema"] == "hyperspace.project/2" and party["startup"] == "TUMBLE"
+    assert len(HOUSE) == 8 and all(HOUSE)
+    r = boot(tmp_path, show=None)
+    lib, pr = r.lib, r.lib.project
+    assert pr.name == "party" and pr.factory and not pr.is_dirty()
+    assert pr.bank[8] == "TRACER" and pr.bank[9:] == [None] * 15 and len(pr.bank) == 24
+    assert lib.is_factory("presets", "TRACER") and pr.next_empty() == 9
+    r.reg["preset.select"].set(8)
+    assert lib.current("presets") == "TRACER" and pr.active == 8
+    assert not (tmp_path / "projects" / "party.hyp.json").exists() and not pr.is_dirty()
+    house = boot(tmp_path / "house", show="house").lib.project
+    assert house.bank == HOUSE + [None] * 16

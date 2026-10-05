@@ -15,7 +15,7 @@ reset lands the group on its default preset — the "meaningful default" —
 or its fresh values when it has none.
 
 The PRESETS page speaks plan 14 §3's words — **show** (what the code
-calls a ``Project``: a bank of eight presets and what it starts on),
+calls a ``Project``: a bank of twenty-four presets and what it starts on),
 **preset**, **starts on**, **module preset**, **factory** — and reads top
 to bottom (plan 14 WP4):
 
@@ -25,11 +25,18 @@ to bottom (plan 14 WP4):
               the preset the show opens with, and the one Home (the Home
               key, the desk's OVERDUB) loads — written the moment it is
               picked (``Project.write``), a factory show's making your copy
-  F1–F8       eight preset buttons, each with its preset's name and its
-              F-key, the live one lit: click or F-key loads, ⇧click or
-              ⇧F-key saves the live state as it; a right-click adds
-              "put preset here…" (any preset into the slot) and "clear
-              slot" — the show is written at once, no file is deleted
+  F1–F8       eight preset buttons two a row, each with its preset's name
+              and its F-key, the live one lit: click or F-key loads,
+              ⇧click or ⇧F-key saves the live state as it; a right-click
+              adds "put preset here…" (any preset into the slot) and
+              "clear slot" — the show is written at once, no file is
+              deleted
+  9–24        sixteen smaller buttons four a row (plan 19 WP1, layout B):
+              the bank's far slots, the desk's clip rows 4 and 5, each its
+              number and its preset's name; click loads, ⇧click saves, the
+              same right-click menu. All twenty-four are on the page at
+              once: no paging, no fold, and the page does not scroll with
+              "more" open (``tests/test_ui_presets.py``)
   PRESET      the one preset strip — this strip over the ``presets``
               group, a document kind preset.py keeps: the loaded preset,
               its dirty dot, save / as…
@@ -56,7 +63,7 @@ from __future__ import annotations
 from imgui_bundle import imgui
 
 from . import ui
-from .library import HOME_UNSET, PRESETS, LibraryError
+from .library import F_KEYS, HOME_UNSET, PRESETS, LibraryError, slot_key
 from .params import PERFORMANCE_GROUPS
 
 LIST_POLL = 1.0      # seconds between re-listings of a group's presets
@@ -64,6 +71,8 @@ NAME_MAX = 14        # chars of a preset name the strip shows before eliding
 PROJECT = "show"     # the listing / name-field key for the show block
 SHOW_W = 96          # the show ▾ menu
 BANK_COLS = 2        # preset buttons a row: F1 F2 over F3 F4 …, wide enough for a name
+FAR_COLS = 4         # slots 9–24 a row: a desk row of eight pads is two page rows
+FAR_GAP = 3          # px between the far slots' rows, so twenty-four fit with "more" open
 PUT_ROWS = 12        # rows of "put preset here…" before its list scrolls
 # the module overview: every performance group but the macros (a macro's
 # meaning is its subscribers, which live in the preset), and the band
@@ -305,7 +314,7 @@ def show_block(panel) -> None:
         _rect(panel, "show.dot")
         if imgui.is_item_hovered():
             imgui.set_tooltip("the show differs from its file: the session (tempo, hands, "
-                              "the analyzer, output) or the eight presets")
+                              "the analyzer, output) or the bank's presets")
     if factory:
         imgui.same_line(0, 8)
         imgui.text_disabled("factory")
@@ -332,7 +341,7 @@ def show_block(panel) -> None:
     _rect(panel, "show.save")
     if imgui.is_item_hovered():
         imgui.set_tooltip("Save the show — the session (tempo, hands, the analyzer, "
-                          "output), its eight presets and what it starts on"
+                          "output), its presets and what it starts on"
                           + (" — a factory show: saved as your own copy" if factory else ""))
     imgui.same_line()
     if ui.chip("save as"):
@@ -343,7 +352,7 @@ def show_block(panel) -> None:
         _guard(panel, proj.new)
     _rect(panel, "show.new")
     if imgui.is_item_hovered():
-        imgui.set_tooltip("A new show: fresh state, the party show's eight presets")
+        imgui.set_tooltip("A new show: fresh state, the party show's presets")
     imgui.pop_id()
 
 
@@ -408,7 +417,7 @@ def _project_save_as(panel, name: str) -> None:
     invalidate(panel, PROJECT)
 
 
-# ---- the F1–F8 preset buttons: eight pointers to preset files ----
+# ---- the bank's buttons: F1–F8, then slots 9–24 — pointers to preset files ----
 
 def _fit(text: str, width: float) -> str:
     """`text`, elided with … until it fits `width` pixels."""
@@ -420,56 +429,89 @@ def _fit(text: str, width: float) -> str:
 
 
 def preset_bank(panel) -> None:
-    """Eight buttons, two a row (F1 F2 over F3 F4 …): each its preset's name and its
-    F-key, the live one lit. Click or F-key loads; ⇧click or ⇧F-key saves
-    the live state as the slot's preset."""
+    """The bank's buttons (plan 19 WP1, layout B): the F-keys' eight two a
+    row (F1 F2 over F3 F4 …), each its preset's name and its F-key, then
+    the far slots four a row, each its number and name — the live one lit.
+    Click or F-key loads; ⇧click or ⇧F-key saves the live state as the
+    slot's preset. A far slot has no trigger of its own (plan 19 fork 1):
+    its click calls the bank, and its menu hangs off `preset.select`."""
     pr = panel.bank                   # library.Project: bank, active, load/save_slot
     if pr is None:
         return
     r, io, st = panel.reg, imgui.get_io(), _state(panel)
-    ui._micro("presets  ·  F1–F8  ·  ⇧ saves")
+    ui._micro("presets  ·  F1–F8  ·  ⇧ saves  ·  9–24 on the desk")
     if imgui.is_item_hovered():
         imgui.set_tooltip(
-            "The show's eight presets, each one a file in the library: the "
+            "The show's twenty-four presets, each one a file in the library: the "
             "whole performance — the look, its routes, LFOs and macros, never "
             "the tempo, the hands or the analyzer. Click or F1–F8 loads; "
-            "⇧click or ⇧F1–F8 saves the live state as the slot's preset."
+            "⇧click or ⇧F1–F8 saves the live state as the slot's preset. "
+            "Slots 9–24 are the desk's clip rows 4 and 5."
         )
-    sp = imgui.get_style().item_spacing.x
-    w = (imgui.get_content_region_avail().x - (BANK_COLS - 1) * sp) / BANK_COLS
+    style = imgui.get_style()
+    sp, avail = style.item_spacing.x, imgui.get_content_region_avail().x
+    w_key = (avail - (BANK_COLS - 1) * sp) / BANK_COLS
+    w_far = (avail - (FAR_COLS - 1) * sp) / FAR_COLS
     pad = ui.CHIP_PAD.x
     labels: list[str] = []
+    white = imgui.ImVec4(1, 1, 1, 1)
     for k, name in enumerate(pr.bank):
-        if k % BANK_COLS:
+        far = k >= F_KEYS
+        if (k - F_KEYS) % FAR_COLS if far else k % BANK_COLS:
             imgui.same_line()
+        elif k > F_KEYS:
+            # the far rows sit FAR_GAP apart: the row is moved up, with no
+            # style pushed, so a slot's menu and hover keep the panel's spacing
+            imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() - (style.item_spacing.y - FAR_GAP))
         lit = k == pr.active and name is not None
-        key = f"F{k + 1}"
-        room = w - 2 * pad - imgui.calc_text_size(key + "  ").x
+        key = str(k + 1) if far else slot_key(k)
+        gap = " " if far else "  "
+        w = w_far if far else w_key
+        room = w - 2 * pad - imgui.calc_text_size(key + gap).x
         shown = _fit(name, room) if name is not None else "—"
-        labels.append(f"{key}  {shown}")
-        pid = f"preset.{'save' if io.key_shift else 'load'}.{k}"
+        labels.append(f"{key}{gap}{shown}")
         if ui.lit_chip(f"##preset{k}", lit, None, imgui.ImVec2(w, 0)):
-            r[pid].fire()
+            if far:
+                _guard(panel, pr.save_slot if io.key_shift else pr.load_slot, k)
+            else:
+                r[f"preset.{'save' if io.key_shift else 'load'}.{k}"].fire()
             invalidate(panel, PRESETS)
         a, b = imgui.get_item_rect_min(), imgui.get_item_rect_max()
         st["rects"][f"preset.{k}"] = (a.x, a.y, b.x, b.y)
         hov = imgui.is_item_hovered()
-        # the F-key hint quiet, the name bright — drawn over the pill
+        # the key hint quiet, the name bright — drawn over the pill
         dl = imgui.get_window_draw_list()
         y = a.y + (b.y - a.y - imgui.get_text_line_height()) / 2
-        white = imgui.ImVec4(1, 1, 1, 1)
         dl.add_text(imgui.ImVec2(a.x + pad, y), ui.u32(white if lit else ui.FAINT), key)
-        dl.add_text(imgui.ImVec2(a.x + pad + imgui.calc_text_size(key + "  ").x, y),
+        dl.add_text(imgui.ImVec2(a.x + pad + imgui.calc_text_size(key + gap).x, y),
                     ui.u32(white if lit else ui.FAINT if name is None else ui.TEXT), shown)
         if hov:
-            imgui.set_tooltip(f"{key}: {name} — click loads, ⇧click saves the live state "
-                              "as it" if name is not None else
-                              f"{key}: empty — ⇧{key} saves the live state here")
-        panel._ctx(r[f"preset.load.{k}"], extra=lambda k=k: _slot_menu(panel, k))
-        panel._learn_frame(r[f"preset.load.{k}"])
+            imgui.set_tooltip(slot_tip(k, name))
+        if far:
+            # the slot menu under the select param's own items, a popup per
+            # slot (as the rail's pills do for `ui.page`)
+            panel._ctx(r["preset.select"], f".{k}", extra=lambda k=k: _slot_menu(panel, k))
+        else:
+            panel._ctx(r[f"preset.load.{k}"], extra=lambda k=k: _slot_menu(panel, k))
+            panel._learn_frame(r[f"preset.load.{k}"])
     st["bank_labels"] = labels
     if pr.bank_error:
         imgui.text_colored(ui.WARN, pr.bank_error)
+
+
+def slot_tip(k: int, name: str | None) -> str:
+    """A bank button's hover: what the slot holds and how to reach it — an
+    F-key for the first eight, a pad of the desk's clip rows 4 and 5 after."""
+    key = slot_key(k)
+    if k < F_KEYS:
+        return (f"{key}: {name} — click loads, ⇧click saves the live state as it"
+                if name is not None else f"{key}: empty — ⇧{key} saves the live state here")
+    row, col = divmod(k - F_KEYS, 8)
+    if name is not None:
+        return (f"{key}: {name} — the desk's row {4 + row}, pad {col + 1}. Click loads, "
+                "⇧click saves the live state as it")
+    return (f"{key}: empty — right-click to put a preset here; a hold on the clip-stop "
+            "row fills the next empty slot")
 
 
 def _slot_menu(panel, k: int) -> None:

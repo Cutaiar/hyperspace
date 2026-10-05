@@ -16,21 +16,29 @@ Two kinds of file, both plain JSON you can open in a text editor:
                   library) and ``adopt``s the one it landed; a strip load
                   tells the combo through ``on_load`` (control.py).
   project         the session — ``{"schema": "hyperspace.project/2",
-                  "name", "note", "startup": <preset name>, "bank": [8 ×
-                  <preset name> | null], "session": <session snapshot>,
+                  "name", "note", "startup": <preset name>, "bank": [8–24
+                  × <preset name> | null], "session": <session snapshot>,
                   "modules": {group: name | {"name", "values", …}}}``, in
                   a ``*.hyp.json`` file (params.PARTS is the split; plan
                   13 §2.2). ``session`` lands on a project load and a
                   preset never touches it; ``modules`` names the session
                   groups' module presets (the band strip's scene and
-                  layout). The **bank** is eight pointers to preset files
-                  (preset.py, ``hyperspace.preset/2``): F1–F8 and the
-                  APC40's clip row 1 load one (``Project.load_slot``),
-                  ⇧F1–F8 save the live state *as* it (``save_slot``), and
-                  ``startup`` is the preset loaded on launch and with the
-                  project (D11). A module the project names by a preset
-                  that carries a ``layout`` gets that layout back on
-                  load, the same road a strip load takes. A schema-1
+                  layout). The **bank** is twenty-four pointers to preset
+                  files (``SLOTS``; preset.py, ``hyperspace.preset/2``):
+                  F1–F8 and the APC40's clip row 1 load one of the first
+                  eight (``F_KEYS``; ``Project.load_slot``), ⇧F1–F8 save
+                  the live state *as* it (``save_slot``), slots 9–24 are
+                  the PRESETS page's and the desk's, and ``startup`` is the
+                  preset loaded on launch and with the project (D11). The
+                  file holds the bank only as far as its last filled slot,
+                  never fewer than eight entries (``bank_doc``, plan 19
+                  WP1): a show that uses only F1–F8 is written as it always
+                  was, and the first write that makes a file's bank longer
+                  keeps the eight-slot file beside it first
+                  (``<file>.bak-v2-bank8``, ``Project.write``). A module
+                  the project names by a preset that carries a ``layout``
+                  gets that layout back on load, the same road a strip
+                  load takes. A schema-1
                   project (an inline theme bank) is migrated by plan 13's
                   first-launch migration (preset.migrate_home: its slots
                   become presets), and one opened by hand later on the
@@ -107,9 +115,17 @@ from pathlib import Path
 from typing import Any
 
 from . import undo
-from .params import PERFORMANCE_GROUPS, PLANES, SESSION_GROUPS, Registry
+from .params import F_KEYS, PERFORMANCE_GROUPS, PLANES, SESSION_GROUPS, Registry
 
-SLOTS = 8                 # the F1–F8 preset bank
+SLOTS = 24                # the bank: F1–F8, then the desk's clip rows 4 and 5
+# F_KEYS (8) is the slots a function key reaches, and a show file's bank is
+# never shorter. It is imported from params, where the F-keys' load / save
+# triggers are declared (params may not import library); `library.F_KEYS`
+# is the name the rest of the app reads.
+# BANK8_BACKUP: the copy `Project.write` makes before the first write that
+# puts more than F_KEYS entries in a show file, <file>.bak-v2-bank8
+# (routing.backup's schema argument)
+BANK8_BACKUP = "2-bank8"
 PRESETS = "presets"       # the presets' group, a document kind (preset.py)
 # folders in a library root that are no group: the routing presets' old
 # folder, kept as it was by plan 13's migration and never read again
@@ -207,13 +223,14 @@ def migrate(root: Path, cwd: Path | None = None) -> list[str]:
 
         try:
             doc = _read_json(src)
-            slots = [legacy_slot(s) if s else None for s in doc.get("slots", [])[:SLOTS]]
+            # a presets.json bank is the F-keys' eight (as before plan 19)
+            slots = [legacy_slot(s) if s else None for s in doc.get("slots", [])[:F_KEYS]]
             bank, session, _notes = preset.slot_presets(root, slots, preset.factory_carried(),
                                                         {})
         except (LibraryError, OSError, ValueError) as e:
             done.append(f"library: {src} not migrated ({e})")
         else:
-            bank += [None] * (SLOTS - len(bank))
+            bank = bank_doc(bank)
             _write_json(dst, {"schema": PROJECT_SCHEMA, "name": MINE_PROJECT,
                               "startup": next((n for n in bank if n), None),
                               "bank": bank, "session": session, "modules": {}})
@@ -305,6 +322,21 @@ def next_name(base: str | None, taken: set[str]) -> str:
     while slug(f"{stem} {n}") in taken:
         n += 1
     return f"{stem} {n}"
+
+
+def slot_key(k: int) -> str:
+    """What a slot is called in a message and on the page: "F3" for the
+    first F_KEYS, "slot 12" after."""
+    return f"F{k + 1}" if k < F_KEYS else f"slot {k + 1}"
+
+
+def bank_doc(bank: list[str | None]) -> list[str | None]:
+    """A bank as a show file holds it: trailing empty slots left off, never
+    shorter than F_KEYS."""
+    out = list(bank)
+    while len(out) > F_KEYS and out[-1] is None:
+        out.pop()
+    return out + [None] * (F_KEYS - len(out))
 
 
 def _read_json(path: Path) -> dict:
@@ -474,7 +506,7 @@ def legacy_slot(slot: dict) -> dict:
 class Project:
     """The open project — the session (plan 13 §2.2): its file (None
     until saved), the session values, the session groups' module labels,
-    and the F1–F8 preset bank.
+    and the preset bank (F1–F8, then slots 9–24).
 
     ``session`` / ``modules`` / ``bank`` / ``startup`` are what the *file*
     holds; ``save()`` refreshes ``session`` and ``modules`` from the live
@@ -484,10 +516,13 @@ class Project:
 
     ``session`` is the session part of the registry (params.PARTS: tempo,
     hands, the analyzer, output), landed on a project load and never
-    touched by a preset. The **bank** is eight preset names (or None):
+    touched by a preset. The **bank** is ``SLOTS`` preset names (or None):
     a slot is a pointer to a preset file (preset.py), loaded through
-    ``Library.presets`` — F<k+1> and the APC40's clip row 1 load it,
-    ⇧F<k+1> saves the live state as that preset into the user folder.
+    ``Library.presets`` — F<k+1> and the APC40's clip row 1 load one of
+    the first ``F_KEYS``, ⇧F<k+1> saves the live state as that preset into
+    the user folder; the rest are reached from the PRESETS page and the
+    desk (``slot_key`` names a slot). A show file's shorter bank is padded
+    in memory and the file is left as it is (``_take``, ``bank_doc``).
     ``startup`` is the preset a launch and a project load bring up (D11).
     """
 
@@ -546,7 +581,7 @@ class Project:
         doc: dict[str, Any] = {"schema": PROJECT_SCHEMA, "name": self.name}
         if self.note:
             doc["note"] = self.note
-        doc.update(startup=self.startup, bank=list(self.bank), session=self.session,
+        doc.update(startup=self.startup, bank=bank_doc(self.bank), session=self.session,
                    modules=self.modules)
         return doc
 
@@ -635,24 +670,36 @@ class Project:
                 if group not in named and group not in lib._kinds:
                     lib._landed(group, None, lib.reg.snapshot(group))
         # the bank lights the slot naming the preset still loaded, if any
-        cur = lib._current.get(PRESETS)
-        self.active = self.bank.index(cur) if cur in self.bank else -1
+        self.follow()
         return missing
 
-    # ---- the bank: eight pointers to preset files ----
+    # ---- the bank: SLOTS pointers to preset files ----
+
+    def follow(self) -> None:
+        """`active` follows the loaded preset — the one place (plan 19
+        WP1): kept where it is when that slot still names it, else the
+        first slot that names it, else −1; −1 when nothing is loaded."""
+        cur = self.lib.current(PRESETS)
+        if cur is None:                               # nothing loaded: no slot is lit
+            self.active = -1
+        elif not 0 <= self.active < len(self.bank) or self.bank[self.active] != cur:
+            self.active = self.bank.index(cur) if cur in self.bank else -1
 
     def _loader(self):
         return getattr(self.lib, "presets", None)
 
     def load_slot(self, k: int) -> None:
-        """F<k+1>: the preset slot k names, through the one loader. An
-        empty slot, or a name with no file, loads nothing and says so."""
-        if not 0 <= k < SLOTS:
+        """Slot k (F<k+1> for the first eight): the preset it names,
+        through the one loader. An empty slot, or a name with no file,
+        loads nothing and says so. `active` is the slot that was asked
+        for, so a preset on two slots lights the one pressed."""
+        if not 0 <= k < len(self.bank):
             return
-        lib, name, key = self.lib, self.bank[k], f"F{k + 1}"
+        lib, name, key = self.lib, self.bank[k], slot_key(k)
         presets = self._loader()
         if name is None:
-            lib.say(warning=f"{key}: an empty slot — ⇧{key} saves the live state into it")
+            lib.say(warning=f"{key}: an empty slot" + (
+                f" — ⇧{key} saves the live state into it" if k < F_KEYS else ""))
             return
         if presets is None or lib.path_of(PRESETS, name) is None:
             lib.say(warning=f"{key}: no preset {name!r}")
@@ -668,22 +715,32 @@ class Project:
         """⇧F<k+1>: the live state as the preset slot k names — a new one,
         ``PRESET <k+1>``, for an empty slot — into the user folder (a
         factory preset of that name is shadowed, never overwritten); the
-        bank and the project file with it."""
+        bank and the project file with it. A show file that cannot take
+        the slot (`write`) leaves the bank as the file has it: the preset
+        is saved and in the list, and the footer says why."""
         presets = self._loader()
-        if not 0 <= k < SLOTS or self.lib.reg is None:
+        if not 0 <= k < len(self.bank) or self.lib.reg is None:
             return
         if presets is None:
             self.bank_error = "presets: no preset loader"
             return
-        name = self.bank[k] or self._fresh_name(k)
+        was = self.bank[k]
+        name = was or self._fresh_name(k)
         try:
             presets.save_as(name)
-            self.bank[k] = name
-            self.active = k
-            self.write()
-            self.bank_error = ""
         except LibraryError as e:                     # a full disk must not stop the show
             self.bank_error = f"presets: {e}"
+            return
+        self.bank[k] = name
+        self.active = k
+        try:
+            self.write()
+        except (LibraryError, OSError) as e:
+            self.bank[k] = was
+            self.follow()                             # the light goes where the preset is
+            self._refused(f"saved {name} — {slot_key(k)} not changed", e)
+            return
+        self.bank_error = ""
 
     def _fresh_name(self, k: int) -> str:
         """``PRESET <k+1>``, made unique against every preset there is."""
@@ -744,10 +801,10 @@ class Project:
             self.active = -1
             self.bank_error = f"presets: {e}"
             lib.say(warning=f"saved {name} — the show could not be written: it is in "
-                            "the preset list")
+                            f"the preset list ({e})")
             return True
         self._room()
-        lib.say(f"saved {name} → F{k + 1}")
+        lib.say(f"saved {name} → {slot_key(k)}")
         return True
 
     def put_slot(self, k: int, name: str) -> None:
@@ -758,36 +815,40 @@ class Project:
         if not 0 <= k < len(self.bank):
             return
         if self.lib.path_of(PRESETS, name) is None:
-            self.lib.say(warning=f"F{k + 1}: no preset {name!r}")
+            self.lib.say(warning=f"{slot_key(k)}: no preset {name!r}")
             return
-        self._set_slot(k, name, f"F{k + 1}: {name}")
+        self._set_slot(k, name, f"{slot_key(k)}: {name}")
 
     def clear_slot(self, k: int) -> None:
         """Empty slot k (the PRESETS page's "clear slot"): the show is
         written at once; the preset's file stays in the list."""
         if 0 <= k < len(self.bank) and self.bank[k] is not None:
-            self._set_slot(k, None, f"F{k + 1}: cleared — {self.bank[k]} is still in the "
-                                    "preset list")
+            self._set_slot(k, None, f"{slot_key(k)}: cleared — {self.bank[k]} is still in "
+                                    "the preset list")
 
     def _set_slot(self, k: int, name: str | None, said: str) -> None:
         """One slot's pointer, written into the show now; `active` follows
-        the loaded preset to a slot that names it, or to none."""
+        the loaded preset to a slot that names it, or to none (`follow`).
+        A show file that cannot be written leaves the slot as it was, and
+        the footer says why."""
         lib, was = self.lib, self.bank[k]
         self.bank[k] = name
         try:
             self.write()
         except (LibraryError, OSError) as e:          # said, and the bank as on disk
             self.bank[k] = was
-            self.bank_error = f"presets: {e}"
+            self._refused(f"{slot_key(k)}: not changed", e)
             return
         self.bank_error = ""
-        cur = lib.current(PRESETS)
-        if cur is None:                               # nothing loaded: no slot is lit
-            self.active = -1
-        elif not 0 <= self.active < len(self.bank) or self.bank[self.active] != cur:
-            self.active = self.bank.index(cur) if cur in self.bank else -1
+        self.follow()
         self._room()
         lib.say(said)
+
+    def _refused(self, what: str, e: Exception) -> None:
+        """A bank change the show's file could not take: the reason under
+        the bank (`bank_error`) and on the footer (`Library.say`)."""
+        self.bank_error = f"presets: {e}"
+        self.lib.say(warning=f"{what} — {e}")
 
     def _room(self) -> None:
         """The bank changed: an earlier "the bank is full" is no longer news."""
@@ -922,6 +983,7 @@ class Project:
         """The session into the project file (as `name` if given), with the
         bank and startup as held."""
         lib = self.lib
+        held = (self.name, self.path, self.session, self.modules)
         if name:
             self.name = name
             self.path = self.path_for(name)
@@ -938,7 +1000,13 @@ class Project:
                 doc = lib.document(group, cur)
                 self.modules[group] = {k: v for k, v in doc.items()
                                        if k not in ("schema", "group")}
-        self.write()
+        try:
+            self.write()
+        except (LibraryError, OSError):
+            # nothing was written (a backup that could not be made, a full
+            # disk): the show is still the one it was, under its own name
+            self.name, self.path, self.session, self.modules = held
+            raise
         lib.say(f"show: saved {self.name}")
         lib.remember(self.stem)
         return self.path
@@ -946,17 +1014,35 @@ class Project:
     def write(self) -> Path:
         """Write the document as held — the bank's autosave. A schema-1
         file in the way (one the migration could not convert) is kept
-        beside itself first (routing.backup), never lost."""
-        if self.path is None:
-            self.path = self.path_for(self.name)
+        beside itself first (routing.backup), never lost.
+
+        The first write that makes a show file's bank longer than F_KEYS
+        (plan 19 WP1) — the file on disk parses and holds at most eight
+        slots, the document about to be written holds more — keeps the
+        eight-slot file first as ``<file>.bak-v2-bank8`` (never over a
+        file already there). **No backup, no write**: it raises
+        LibraryError and the file is as it was; the callers put the slot
+        back. The next write finds a long bank on disk and makes no
+        second copy. A build from before plan 19 reads a long bank by
+        cutting it to eight, and drops the far slots' names from the file
+        the next time it writes that show; the backup is the file from
+        before any far slot existed."""
+        path = self.path_for(self.name) if self.path is None else self.path
         try:
-            old = json.loads(self.path.read_text()) if self.path.is_file() else {}
+            old = json.loads(path.read_text()) if path.is_file() else None
         except (OSError, ValueError):
-            old = {}
-        if isinstance(old, dict) and old.get("schema") == PROJECT_V1:
+            old = None
+        doc = self.to_doc()
+        if isinstance(old, dict):
             from .routing import backup
-            backup(self.path, "1")
-        _write_json(self.path, self.to_doc())
+            if old.get("schema") == PROJECT_V1:
+                backup(path, "1")
+            elif (len(doc["bank"]) > F_KEYS and _bank_len(old) <= F_KEYS
+                  and not _kept(path) and backup(path, BANK8_BACKUP) is None):
+                raise LibraryError(f"{path.name}: not written — no backup of the "
+                                   "eight-slot file could be made")
+        self.path = path
+        _write_json(self.path, doc)
         self.lib._sync(self.path)
         self._saved = (list(self.bank), self.startup)
         self.factory = False                          # your copy now
@@ -972,6 +1058,25 @@ class Project:
         return ((self.path is None and not self.factory)
                 or not undo.alike(self.session, reg.snapshot(part="session"))
                 or (self.bank, self.startup) != self._saved)
+
+
+def _kept(path: Path) -> bool:
+    """Is the file at `path` already kept, byte for byte, in one of its
+    eight-slot backups? Then a write that failed after its backup, tried
+    again, makes no second copy of the same file."""
+    try:
+        data = path.read_bytes()
+        return any(p.read_bytes() == data
+                   for p in path.parent.glob(f"{path.name}.bak-v{BANK8_BACKUP}*"))
+    except OSError:
+        return False
+
+
+def _bank_len(doc: dict) -> int:
+    """How many slots a show document on disk holds (0 for none, or for a
+    `bank` that is no list)."""
+    bank = doc.get("bank")
+    return len(bank) if isinstance(bank, list) else 0
 
 
 # ---------------------------------------------------------------- marks
@@ -1051,8 +1156,7 @@ class Marks:
         if lib.presets is not None:
             lib.presets.note, lib.presets.notes, lib.presets.desk_notes = (
                 note[0], list(note[1]), list(note[2]))
-        cur = lib._current.get(PRESETS)
-        pr.active = pr.bank.index(cur) if cur in pr.bank else -1
+        pr.follow()
 
 
 # ---------------------------------------------------------------- library

@@ -1074,7 +1074,8 @@ def test_an_idle_app_makes_no_step(tmp_path):
     performed: set[str] = set()
     try:
         for name in order:
-            reg[f"preset.load.{bank.index(name)}"].fire()
+            # what a pad sends: slot 9 (TRACER, plan 19 WP1) has no trigger of its own
+            reg["preset.select"].set(bank.index(name))
             for _ in range(5):                          # 5 × 60 frames: five seconds
                 run(60)
                 performed |= {p.id for p in reg if p.modulated}
