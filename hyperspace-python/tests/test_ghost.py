@@ -20,7 +20,7 @@ from fake_hands import hand
 
 from hyperspace import ghost as G
 from hyperspace.fx import FxState
-from hyperspace.hands import HandSettings, HandsIO, skeleton
+from hyperspace.hands import HandSettings, HandsIO, features, skeleton
 from hyperspace.params import SESSION_GROUPS, part_of
 from hyperspace.render import Renderer
 from hyperspace.view import ViewState
@@ -77,6 +77,93 @@ def test_a_hand_the_setup_has_no_axis_for_is_still_in_frame():
     io.state[0].lo, io.state[0].hi = 10.0, 150.0
     x = G.box_of(io)[0]
     assert x[0] <= -200.0 and x[1] == 150.0
+
+
+class Synth:
+    """A tracker of synthetic hands with skeletons (`snapshot`), no camera."""
+
+    status, on = "tracking", True
+
+    def __init__(self):
+        self.seq, self.now = 0, []
+
+    def put(self, *hands_):
+        self.seq, self.now = self.seq + 1, list(hands_)
+
+    def snapshot(self):
+        side = lambda h: h.type.name.lower()
+        return (self.seq, 0.0, {side(h): (features(h), 1.0) for h in self.now},
+                {side(h): skeleton(h) for h in self.now})
+
+
+def boxed_io(box, dofs=("x", "y", "z", "roll", "pitch", "yaw")) -> HandsIO:
+    io = HandsIO(HandSettings.from_config({"dofs": list(dofs)}), {}, source=Synth(),
+                 out=NS(send=lambda m: None), clock=lambda: 0.0)
+    io.box = box
+    return io
+
+
+def test_the_camera_frames_the_interaction_box_when_one_is_set():
+    """Plan 18 fork 4: with a box, `box_of` is the box — and the axis
+    ranges, as before, for a coordinate the box leaves open."""
+    box = {"x": (-262.0, 262.0), "y": (71.5, 402.0), "z": (-148.0, 131.0)}
+    io = boxed_io(None)
+    before = G.box_of(io)
+    assert before == ((-220.0, 220.0), (100.0, 350.0), (-100.0, 100.0))   # no box: today's
+    io.box = box
+    assert G.box_of(io) == ((-262.0, 262.0), (71.5, 402.0), (-148.0, 131.0))
+    io.box = {**box, "y": None}                       # open: that coordinate's axis ranges
+    st = {a.name: s for a, s in zip(io.axes, io.state)}
+    st["right.y"].lo, st["right.y"].hi = 120.0, 300.0
+    assert G.box_of(io) == ((-262.0, 262.0), (100.0, 350.0), (-148.0, 131.0))
+    io.box = {"x": None, "y": None, "z": None}
+    assert G.box_of(io) == G.box_of(boxed_io(None, dofs=("x", "y", "z"))) == before
+    # a source with a box and no axes (and one from before a hot reload, with neither)
+    assert G.box_of(NS(box={**box, "z": None})) == ((-262.0, 262.0), (71.5, 402.0),
+                                                    (-100.0, 100.0))
+    assert G.box_of(NS()) == before
+    # and the camera frames it: the padded box's corners are in frame, one on the edge
+    io.box = box
+    m = G.basis("desktop")
+    vp, _ = G.camera(G.box_of(io), m, 16 / 9)
+    corners = np.array([(x, y, z) for x in box["x"] for y in box["y"] for z in box["z"]]) @ m.T
+    lo, hi = corners.min(0) - G.PAD, corners.max(0) + G.PAD
+    clip = np.array([(x, y, z, 1.0) for x in (lo[0], hi[0]) for y in (lo[1], hi[1])
+                     for z in (lo[2], hi[2])]) @ vp.T
+    ndc = clip[:, :3] / clip[:, 3:]
+    assert (clip[:, 3] > 0).all() and (np.abs(ndc) <= 1.0 + 1e-6).all()
+    assert np.abs(ndc[:, :2]).max() > 0.99
+
+
+def test_a_hand_outside_the_box_fades_out():
+    """Plan 18 fork 5: a hand tracked but outside the box is absent to the
+    ghost too — no dim ghost; it fades over FADE_OUT where it left."""
+    io = boxed_io({"x": (-200.0, 200.0), "y": (80.0, 400.0), "z": (-150.0, 150.0)})
+    gh = G.Ghost(ctx=None, state=G.GhostState(on=True))
+    gh.source = io
+    inside = (hand("left", "open", (-90.0, 210.0, 0.0)), hand("right", "fist", (90.0, 200.0, 0.0)))
+    for k in range(20):
+        io.source.put(*inside)
+        io.poll(1 / 60)
+        seen = gh.step(k / 60)
+    assert {s for s, _, _ in seen} == {"left", "right"} and gh.sides["right"].fade == 1.0
+    last = io.skeleton["right"]
+    fades, t = [], 20 / 60
+    while gh.sides["right"].fade > 0.0:
+        io.source.put(inside[0], hand("right", "fist", (300.0, 200.0, 0.0)))   # tracked, outside
+        io.poll(1 / 60)
+        assert set(io.skeleton) == {"left"} and io.outside["right"]["x"] == 300.0
+        seen = {s: (sk, f) for s, sk, f in gh.step(t)}
+        if "right" in seen:
+            assert seen["right"][0] is last           # where it left, not where it is now
+        assert seen["left"][1] == 1.0
+        fades.append(gh.sides["right"].fade)
+        t += 1 / 60
+    assert len(fades) >= int(G.FADE_OUT * 60) - 1 and all(a > b for a, b in pairwise(fades))
+    assert {s for s, _, _ in gh.step(t)} == {"left"}                 # gone: no dim ghost
+    io.source.put(*inside)                            # back inside: fading up
+    io.poll(1 / 60)
+    assert 0.0 < {s: f for s, _, f in gh.step(t + 1 / 60)}["right"] <= 1.0
 
 
 @pytest.mark.parametrize("mode", sorted(G.MODES))

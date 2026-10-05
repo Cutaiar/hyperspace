@@ -135,12 +135,17 @@ def basis(mode: str, mirror: bool = False) -> np.ndarray:
 
 
 def box_of(source) -> tuple[tuple[float, float], ...]:
-    """The palm box in Leap mm, ((x lo, hi), (y …), (z …)): the union over
-    both hands of each hand's range on each of x, y and z — its calibrated
-    range where the setup has that axis (`HandsIO.axes` / `.state`, which
-    hold hands.json's ranges), hands/core.py's default for that hand
-    where it has not — so a hand is in frame whichever axes the setup
-    keeps. Anything without axes gets both hands' defaults."""
+    """The palm box in Leap mm, ((x lo, hi), (y …), (z …)).
+
+    For each of x, y and z: the interaction box's bound when the source
+    has one (`HandsIO.box`, plan 18 — a hand outside it is absent, so the
+    frame is exactly where a hand counts and its ghost fades at the edge).
+    Otherwise, as before there was a box: the union over both hands of
+    each hand's range — its calibrated range where the setup has that
+    axis (`HandsIO.axes` / `.state`, which hold hands.json's ranges),
+    hands/core.py's default for that hand where it has not — so a hand is
+    in frame whichever axes the setup keeps. Anything without axes gets
+    both hands' defaults."""
     # here, not at the top: params (and through it routing) imports this
     # module, and routing must never pull in the hands adapter
     from .hands.core import SIDES, default_range
@@ -148,8 +153,12 @@ def box_of(source) -> tuple[tuple[float, float], ...]:
     axes, state = getattr(source, "axes", None) or (), getattr(source, "state", None) or ()
     have = {(a.side, a.feature): (min(st.lo, st.hi), max(st.lo, st.hi))
             for a, st in zip(axes, state) if st.hi != st.lo}
+    bounds = getattr(source, "box", None) or {}
     out = []
     for feat in "xyz":
+        if bounds.get(feat) is not None:
+            out.append((float(bounds[feat][0]), float(bounds[feat][1])))
+            continue
         ranges = [have.get((sd, feat), default_range(sd, feat)) for sd in SIDES]
         out.append((float(min(r[0] for r in ranges)), float(max(r[1] for r in ranges))))
     return tuple(out)
