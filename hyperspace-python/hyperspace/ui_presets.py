@@ -27,7 +27,9 @@ to bottom (plan 14 WP4):
               picked (``Project.write``), a factory show's making your copy
   F1–F8       eight preset buttons, each with its preset's name and its
               F-key, the live one lit: click or F-key loads, ⇧click or
-              ⇧F-key saves the live state as it
+              ⇧F-key saves the live state as it; a right-click adds
+              "put preset here…" (any preset into the slot) and "clear
+              slot" — the show is written at once, no file is deleted
   PRESET      the one preset strip — this strip over the ``presets``
               group, a document kind preset.py keeps: the loaded preset,
               its dirty dot, save / as…
@@ -62,6 +64,7 @@ NAME_MAX = 14        # chars of a preset name the strip shows before eliding
 PROJECT = "show"     # the listing / name-field key for the show block
 SHOW_W = 96          # the show ▾ menu
 BANK_COLS = 2        # preset buttons a row: F1 F2 over F3 F4 …, wide enough for a name
+PUT_ROWS = 12        # rows of "put preset here…" before its list scrolls
 # the module overview: every performance group but the macros (a macro's
 # meaning is its subscribers, which live in the preset), and the band
 # strip's scene, the one session module a project names
@@ -462,11 +465,62 @@ def preset_bank(panel) -> None:
             imgui.set_tooltip(f"{key}: {name} — click loads, ⇧click saves the live state "
                               "as it" if name is not None else
                               f"{key}: empty — ⇧{key} saves the live state here")
-        panel._ctx(r[f"preset.load.{k}"])
+        panel._ctx(r[f"preset.load.{k}"], extra=lambda k=k: _slot_menu(panel, k))
         panel._learn_frame(r[f"preset.load.{k}"])
     st["bank_labels"] = labels
     if pr.bank_error:
         imgui.text_colored(ui.WARN, pr.bank_error)
+
+
+def _slot_menu(panel, k: int) -> None:
+    """A bank slot's own items in its right-click menu (plan 15 WP4):
+    **put preset here…**, a submenu of every preset in a child at most
+    PUT_ROWS rows tall, and **clear slot**, disabled on an empty slot.
+    Each writes the show at once (`Project.put_slot` / `clear_slot`) and
+    deletes no file. What was drawn is recorded in `_state`'s `slot_menu`
+    for the tests: the slot, each item's label and whether it is enabled,
+    the names listed, and screen rects (the two items, the list's child,
+    each name's row)."""
+    pr, st = panel.bank, _state(panel)
+    name = pr.bank[k]
+    imgui.separator()
+    rects: dict[str, tuple] = {}
+    drawn = st["slot_menu"] = {"slot": k, "names": [], "rects": rects,
+                               "items": [("put preset here…", True),
+                                         ("clear slot", name is not None)]}
+
+    def rect(key: str) -> None:
+        a, b = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        rects[key] = (a.x, a.y, b.x, b.y)
+
+    at = imgui.get_cursor_screen_pos()
+    rects["put"] = (at.x, at.y, at.x + imgui.get_content_region_avail().x,
+                    at.y + imgui.get_text_line_height())
+    if imgui.begin_menu("put preset here…"):
+        listing = names(panel, PRESETS)
+        drawn["names"] = list(listing)
+        style = imgui.get_style()
+        wide = max([imgui.calc_text_size(n).x for n in listing] or [0.0])
+        size = imgui.ImVec2(wide + style.scrollbar_size + 2 * style.item_spacing.x,
+                            imgui.get_text_line_height_with_spacing()
+                            * max(1, min(len(listing), PUT_ROWS)))
+        if imgui.begin_child("##put", size):
+            if not listing:
+                imgui.text_disabled("no presets")
+            for n in listing:
+                picked, _ = imgui.selectable(f"{n}##put", n == name)
+                rect(f"name.{n}")
+                if picked:
+                    _guard(panel, pr.put_slot, k, n)
+                    invalidate(panel, PROJECT)
+                    imgui.close_current_popup()
+        imgui.end_child()
+        rect("list")
+        imgui.end_menu()
+    if imgui.menu_item("clear slot", "", False, name is not None)[0]:
+        _guard(panel, pr.clear_slot, k)
+        invalidate(panel, PROJECT)
+    rect("clear")
 
 
 def preset_strip(panel) -> None:

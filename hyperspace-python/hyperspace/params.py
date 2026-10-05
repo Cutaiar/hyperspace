@@ -1093,6 +1093,14 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                       lambda k=k: bank.load_slot(k), group=g)
             r.trigger(f"preset.save.{k}", f"Save preset {k + 1}",
                       lambda k=k: bank.save_slot(k), group=g, modulatable=False)
+        # save-as from the desk (plan 15 WP4, decision 29): a new preset
+        # into the next empty slot, never over one — `preset.save.k`
+        # overwrites, which the desk must not do
+        r.trigger("preset.save_new", "Save as a new preset", bank.save_new,
+                  group=g, modulatable=False,
+                  tip="Save the live state as a new preset, named from the loaded "
+                      "one (TRIP → TRIP 2), into the next empty slot — hold the "
+                      "desk's clip-stop row. It never overwrites a preset.")
         r.trigger("preset.next", "Next preset", lambda: bank.cycle(1), group=g)
         r.trigger("preset.prev", "Previous preset", lambda: bank.cycle(-1), group=g)
         # home (plan 15 WP2, decision 27): the preset the show starts on.
