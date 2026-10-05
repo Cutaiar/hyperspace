@@ -502,6 +502,64 @@ def test_tethers_draw_only_when_toggled_and_keep_the_alpha(ctx, tmp_path):
     assert np.array_equal(no_guide, plain)
 
 
+def _tethered(ctx, tmp_path):
+    """A renderer drawing the guide beside each hand with tethers on, its
+    ghost.* params in a registry of its own, and the source it reads."""
+    from hyperspace.params import Registry
+
+    router, io = _routed_rig(tmp_path, ["hand:left.x", "hand:left.roll", "hand:right.y"])
+    for st in io.state:
+        st.follow.y = 0.6
+    src = NS(skeleton=both(), cfg={"mode": "desktop"}, axes=io.axes, state=io.state,
+             gates=io.gates, layout=io.layout, frame=io.frame)
+    r = Renderer(ctx)
+    reg = Registry()
+    G.register(reg, r.ghost.state)
+    r.ghost.router = router
+    reg["ghost.guide"].set(1)
+    reg["ghost.tethers"].set(True)
+    return r, reg, src
+
+
+@pytest.mark.parametrize("where", ["build", "label"])
+def test_a_failed_label_build_writes_no_param(ctx, tmp_path, monkeypatch, where):
+    """Plan 21 WP5 R2: the tethers' labels failing — their program will not
+    build, or a label will not rasterise (a font) — leaves `ghost.tethers`
+    as the performer set it (the render stack only reads), says why once
+    on `Ghost.error`, still draws the hands and the guide, and is not
+    tried again every frame. Off and on again tries afresh."""
+    gimbals_r, _, src = _tethered(ctx, tmp_path)
+    gimbals_r.ghost.state.tethers = False
+    gimbals, _ = frame(ctx, src=src, renderer=gimbals_r)
+    r, reg, src = _tethered(ctx, tmp_path)
+    tries = []
+    with monkeypatch.context() as m:
+        if where == "build":
+            def refuse(self, ctx):
+                tries.append(1)
+                raise RuntimeError("no program")
+            m.setattr(G.TetherLabels, "__init__", refuse)
+        else:
+            def no_font(self, text, px):
+                tries.append(1)
+                raise OSError("no font")
+            m.setattr(G.TetherLabels, "_label", no_font)
+        out, _ = frame(ctx, src=src, renderer=r)          # four frames, none raises
+    assert reg["ghost.tethers"].value is True and r.ghost.state.tethers is True
+    assert len(tries) == 1                                # once, not every frame
+    assert r.ghost.error.startswith("ghost tethers: ")
+    assert np.array_equal(out, gimbals)                   # the hands and the guide, no tethers
+    assert out[..., 3].min() == 255
+    # switched off and on: tried again, and now the labels draw
+    r.ghost.state.on = False
+    frame(ctx, src=src, renderer=r, on=False, frames=1)
+    assert r.ghost.error == ""
+    again, _ = frame(ctx, src=src, renderer=r, t0=4.0)
+    gimbals_later, _ = frame(ctx, src=src, renderer=gimbals_r, t0=4.0)
+    assert r.ghost.error == ""
+    assert (np.abs(again[..., :3].astype(int) - gimbals_later[..., :3]).sum(axis=2) > 30).sum() > 50
+
+
 def test_an_open_hand_and_a_fist_differ(ctx):
     open_ = hand_mask(ctx, tracker(both(right="open")))
     fist = hand_mask(ctx, tracker(both(right="fist")))
