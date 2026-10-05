@@ -13,6 +13,8 @@ import json
 
 from imgui_bundle import imgui
 from test_ui_shell import (
+    _click,
+    _learn_over,
     frame,
     rig,  # noqa: F401 — the headless panel fixture
 )
@@ -444,3 +446,172 @@ def test_a_controls_text(rig):
     assert ui_desk.label_px(67) == 0.2 * 67 and ui_desk.label_px(20) == 11 \
         and ui_desk.label_px(200) == 18
     imgui.end_frame()
+
+
+# ------------------------------------------- plan 17 WP4: the desk, clickable
+
+def _control(glyph: str) -> apc40.Control:
+    return next(c for c in apc40.LAYOUT if c.glyph == glyph)
+
+
+def _pushes(monkeypatch) -> list[str]:
+    """The undo steps pushed (the rig has no Undo installed: count the calls)."""
+    from hyperspace import undo
+
+    out: list[str] = []
+    real = undo.push
+    monkeypatch.setattr(undo, "push", lambda label, *a, **k: (out.append(label),
+                                                              real(label, *a, **k))[1])
+    return out
+
+
+def test_a_click_picks_and_a_second_click_lets_go(rig, monkeypatch):
+    """`click` on D3 picks it (`Learn.control`) and a hidden panel comes
+    back; a second click lets go. Then the same with real mouse events on
+    the drawn desk: a click on the control's cell, on another control (the
+    pick moves), and on the ground between the controls (it lets go). A
+    pick changes no table and pushes no undo step."""
+    panel, table = rig.panel, rig.router.table
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    lrn = _learn_over(rig)
+    rig.lib.load("presets", "TRIP")
+    pushes = _pushes(monkeypatch)
+    rows = [b.to_json() for b in table.bindings]
+    d3, d4 = _control("D3"), _control("D4")
+    frame(panel, "view")
+    lit = ui_desk.lit_cached(panel, table)
+    ui_desk.click(panel, table, d3, lit.get("D3"))
+    assert lrn.control == d3.source == "cc:*:18" and ui_desk.picked(panel) is d3
+    assert panel.open
+    ui_desk.click(panel, table, d3, lit.get("D3"))
+    assert lrn.control is None and ui_desk.picked(panel) is None
+    # the panel hidden: the click brings it back, the pick still stands
+    panel.reg["ui.panel"].set(False)
+    frame(panel)
+    ui_desk.click(panel, table, d3, lit.get("D3"))
+    assert lrn.control == d3.source and panel.open
+    ui_desk.let_go(panel)
+    assert lrn.control is None
+    # real mouse events over the drawn desk
+    for _ in range(3):
+        frame(panel)
+    assert ui_desk._state(panel)["unit"][0] < ui_desk.LABEL_UNIT    # the small desk
+    _click(panel, ui_desk.rect(panel, d3))
+    assert lrn.control == d3.source
+    _click(panel, ui_desk.rect(panel, d4))                   # another control: the pick moves
+    assert lrn.control == d4.source
+    _click(panel, ui_desk.rect(panel, d4))                   # the same one: let go
+    assert lrn.control is None
+    _click(panel, ui_desk.rect(panel, d3))
+    assert lrn.control == d3.source
+    g18, g19 = ui_desk.rect(panel, _control("G1·8")), ui_desk.rect(panel, _control("G1·9"))
+    assert g19[0] - g18[2] > 3                                # the gap before the scene column
+    _click(panel, (g18[2] + 1, g18[1], g19[0] - 1, g18[3]))  # the ground: let go
+    assert lrn.control is None
+    # a right click picks nothing; a dark control can be picked (to map it)
+    _click(panel, ui_desk.rect(panel, d3), button=1)
+    assert lrn.control is None
+    dark = next(c for c in apc40.LAYOUT if c.kind == "grid" and c.glyph not in lit)
+    _click(panel, ui_desk.rect(panel, dark))
+    assert lrn.control == dark.source and ui_desk.mappable(table, dark) is None
+    ui_desk.let_go(panel)
+    assert [b.to_json() for b in table.bindings] == rows and pushes == []
+
+
+def test_a_click_completes_an_armed_desk_learn(rig, monkeypatch):
+    """"Learn desk" armed, a click on D5: the row `learn_control` makes,
+    one undo step, nothing picked — with no MIDI adapter anywhere. Armed
+    for a hand: the click does nothing and the learn still waits. A click
+    on an invariant control, or with the global layer up, is refused in
+    the knob learn's words and the learn stays armed."""
+    panel, table = rig.panel, rig.router.table
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    lrn = _learn_over(rig)
+    assert panel.midi is None
+    pushes = _pushes(monkeypatch)
+    d5, s3 = _control("D5"), _control("S3")
+    for _ in range(3):
+        frame(panel, "view")
+    lrn.arm("view.depth4", "desk")
+    _click(panel, ui_desk.rect(panel, d5))
+    (row,) = [b for b in table.desk() if b.target == "view.depth4" and b.kind == "cc"]
+    assert (row.source, row.op, row.layer, row.feedback) == (d5.source, "abs", "preset", "ring")
+    assert lrn.learning is None and lrn.control is None
+    assert lrn.last.startswith("learned view.depth4 ← D5 (device knob 5) (into the preset)")
+    assert pushes == ["learn view.depth4"]
+    assert ui_desk.lit_cached(panel, table)["D5"] is row      # the desk shows it at once
+    # a hand learn: the desk's click is not what it waits for
+    rows = [b.to_json() for b in table.bindings]
+    lrn.arm("view.speed", "hand:left")
+    _click(panel, ui_desk.rect(panel, d5))
+    assert (lrn.learning, lrn.want, lrn.control) == ("view.speed", "hand:left", None)
+    assert [b.to_json() for b in table.bindings] == rows and len(pushes) == 1
+    # the refusals are the knob learn's, and leave it armed
+    lrn.arm("view.speed", "desk")
+    _click(panel, ui_desk.rect(panel, s3))
+    assert lrn.refused and lrn.last == "S3 (track fader 3) is invariant (the session's) — not learned"
+    assert lrn.learning == "view.speed" and lrn.control is None
+    table.set_layer("global")
+    frame(panel)
+    _click(panel, ui_desk.rect(panel, d5))
+    assert lrn.refused and "is on the global layer (the session's)" in lrn.last
+    assert lrn.learning == "view.speed"
+    assert [b.to_json() for b in table.bindings] == rows and len(pushes) == 1
+    table.set_layer("preset")
+    frame(panel)
+    _click(panel, ui_desk.rect(panel, _control("D6")))
+    assert lrn.learning is None and len(pushes) == 2
+    assert any(b.source == "cc:*:21" and b.target == "view.speed" for b in table.desk())
+
+
+def test_a_pick_lets_go_by_itself(rig, monkeypatch):
+    """A picked control dims the page, so it never stands for long:
+    `ui_desk.PICK_S` seconds with no click anywhere in the window and it
+    lets go by itself, saying so. A click starts the count again; the
+    header and the footer count the seconds down; it runs with the desk
+    hidden too."""
+    panel, table = rig.panel, rig.router.table
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    lrn = _learn_over(rig)
+    assert ui_desk.PICK_S == 20.0
+    clock = [5000.0]
+    monkeypatch.setattr(ui_desk.time, "monotonic", lambda: clock[0])
+    d3 = _control("D3")
+    for _ in range(3):
+        frame(panel, "view")
+    _click(panel, ui_desk.rect(panel, d3))
+    assert lrn.control == d3.source
+    assert ui_desk.footer_line(panel) == ("D3 picked (20 s): click a param to put it here", True)
+    clock[0] += 12.4
+    frame(panel)
+    assert lrn.control == d3.source and ui_desk.picking(panel) is d3
+    assert ui_desk.footer_line(panel)[0].startswith("D3 picked (8 s)")
+    _click(panel, (2, 2, 4, 4))                              # a click anywhere: the count restarts
+    assert ui_desk.footer_line(panel)[0].startswith("D3 picked (20 s)")
+    clock[0] += ui_desk.PICK_S - 0.5
+    frame(panel)
+    assert lrn.control == d3.source
+    clock[0] += 0.6                                          # 20 s with no click
+    frame(panel)
+    assert lrn.control is None and ui_desk.picking(panel) is None
+    assert lrn.last == "D3 let go — no click for 20 s" and not lrn.refused
+    assert ui_desk.footer_line(panel) is None
+    # the desk hidden: a pick made before still lets go
+    lrn.pick(d3.source)
+    panel.reg["ui.desk"].set(False)
+    frame(panel)                                             # the tick meets it: the count starts
+    assert ui_desk.picking(panel) is d3
+    clock[0] += ui_desk.PICK_S + 0.1
+    frame(panel)
+    assert lrn.control is None
+    # an invariant pick (framed, dimming nothing) lets go the same way
+    panel.reg["ui.desk"].set(True)
+    lrn.pick(_control("S3").source)
+    frame(panel)
+    assert ui_desk.picking(panel) is None and ui_desk.picked(panel) is not None
+    does = ui_desk.text(rig.reg, ui_desk.lit_cached(panel, table)["S3"])
+    assert ui_desk.footer_line(panel) == (
+        f"S3 (track fader 3) is invariant (the session's): {does} (20 s)", False)
+    clock[0] += ui_desk.PICK_S + 0.1
+    frame(panel)
+    assert lrn.control is None

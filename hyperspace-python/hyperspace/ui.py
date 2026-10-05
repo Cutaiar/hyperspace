@@ -445,6 +445,9 @@ class Panel:
         pills all set ``ui.page``), so each gets its own popup. `extra`,
         when given, is called inside the popup after the param's own items
         to draw the caller's (a bank slot's "put preset here…")."""
+        if getattr(self, "_picking", False):    # a desk control is picked: the click is its
+            self._ctx_pick(a)
+            return
         if not imgui.begin_popup_context_item(self._ctx_id(a, key)):
             return
         _micro(a.id, DIM)
@@ -471,6 +474,29 @@ class Panel:
         if extra is not None:
             extra()
         imgui.end_popup()
+
+    def _ctx_pick(self, a: Param) -> None:
+        """"Click a control, then a param" (plan 17 WP4, fork 3): while a
+        desk control is picked the page is drawn disabled (`_draw`) and
+        this stands in for the menu on every param widget. The widget
+        under the mouse — hover is asked with `allow_when_disabled` —
+        gets the learn's red frame, and a left click on it puts the picked
+        control there: `Learn.map_picked`, the knob learn's road. The
+        widget itself takes no click: it is disabled. A param no desk
+        control can go on (`_desk_target`) is not a target."""
+        if not self._desk_target(a) \
+                or not imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
+            return
+        c = ui_desk.picked(self)
+        if c is None or self.learn is None:
+            return
+        r0, r1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        imgui.get_window_draw_list().add_rect(
+            imgui.ImVec2(r0.x - 2, r0.y - 2), imgui.ImVec2(r1.x + 2, r1.y + 2),
+            u32(RED), ROUND + 2, 2.0)
+        imgui.set_tooltip(f"click: put {c.glyph} on {a.label or a.id}")
+        if imgui.is_mouse_clicked(0):
+            self.learn.map_picked(a.id, apc40)
 
     @staticmethod
     def _ctx_id(a: Param, key: str = "") -> str:
@@ -1143,6 +1169,7 @@ class Panel:
         # Replace / Keep, its own window, before anything can return: a
         # held hand learn is never parked behind a hidden or collapsed panel
         ui_routing.modal(self)
+        ui_desk.tick(self)      # a picked control lets go by itself (ui_desk.PICK_S)
         if self.cheatsheet:
             self._draw_cheatsheet()
         if getattr(self, "desk", True):     # (a Panel from before a hot reload)
@@ -1170,7 +1197,21 @@ class Panel:
         # the page: a child so its own scroll, if it ever needs one, never
         # moves the rail; every page is laid out to fit without it
         if imgui.begin_child("##page", imgui.ImVec2(0, -foot)):
-            getattr(self, f"_page_{PAGE_KEYS[self.page]}")(dt)
+            key = PAGE_KEYS[self.page]
+            # a desk control is picked and can be mapped (plan 17 WP4): the
+            # page is drawn disabled — dimmed, no widget takes a click — and
+            # the click on a param is `_ctx_pick`'s. Never ROUTING: there the
+            # picked control's own line is what the user came for. The rail
+            # and the footer are outside it: pages change, the line lets go
+            self._picking = key != "routing" and ui_desk.picking(self) is not None
+            if self._picking:
+                imgui.begin_disabled()
+            try:
+                getattr(self, f"_page_{key}")(dt)
+            finally:
+                if self._picking:
+                    imgui.end_disabled()
+                self._picking = False
         imgui.end_child()
         self._footer(fps)
         imgui.end()
@@ -1276,8 +1317,16 @@ class Panel:
         lrn = self.learn
         armed = lrn is not None and bool(getattr(lrn, "learning", None))
         tip = ""
+        # a picked desk control has it the same way (plan 17 WP4): what is
+        # picked, the seconds until it lets go by itself, and a click on the
+        # line lets go at once. A line said before the pick gives way to it
+        pick = None if armed else ui_desk.footer_line(self)
+        if pick is not None and note and self._msg.get("at", 0.0) < ui_desk.made(self):
+            note = ""
         if armed and not note:      # a fresh line (a refusal, a warning, an undo) shows first
             note, color, tip = f"learning {lrn.learning} — {self._learn_hint()}", RED, CANCEL_TIP
+        elif pick is not None and not note:
+            note, color, tip = pick[0], RED if pick[1] else DIM, ui_desk.LET_GO_TIP
         if note:
             # the message slot: one faint line (a warning in its colour),
             # cut to the room left of the show's name; the whole on hover
@@ -1291,6 +1340,8 @@ class Panel:
                 imgui.set_tooltip(f"{note} ({tip})" if tip else note)
             if armed and imgui.is_item_clicked():
                 lrn.arm(None)
+            elif pick is not None and imgui.is_item_clicked():
+                ui_desk.let_go(self)
         elif self.reloader is not None and self.reloader.status:
             imgui.same_line()
             imgui.text_disabled(f"·  {self.reloader.status}")

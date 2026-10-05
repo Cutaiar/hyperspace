@@ -33,6 +33,14 @@ exists. `bound` is the same question without the edit (the menu asks it
 to know what to list and whether to offer the item at all). A session row
 (invariant or global layer) is never removed (D5, D6).
 
+**Click a control, then a param** (plan 17 WP4) is the same road taken
+from the other end: `pick` holds a desk control (`control`, the on-screen
+desk's click), and `map_picked(pid)` is `arm(pid, "desk")` then
+`learn_control(control)` — so the op, the feedback, the refusals (D5, D6),
+the undo step and the message are the knob learn's. A pick and an armed
+learn never stand together: arming lets the pick go, picking cancels the
+learn.
+
 Two things the object owns:
 
   * **`learning`** — the armed param id, or None. Arming forgets a held
@@ -81,6 +89,7 @@ class Learn:
         self.lane = lane
         self.learning: str | None = None
         self.want: str | None = None   # what may complete `learning` (WANTS); None: anything
+        self.control: str | None = None    # the picked desk control's source; None: none
         self.pending: tuple[Binding, Binding] | None = None
         self.last = ""          # what the last learn did, for the status lines
         self.refused = False    # …and whether it was a refusal (drawn as a warning)
@@ -125,6 +134,7 @@ class Learn:
         self.pending = None
         if pid is not None:
             self.refused = False
+            self.control = None          # arming a param lets a picked control go
         self.armed_n = getattr(self, "armed_n", 0) + 1
 
     def take(self) -> str | None:
@@ -215,6 +225,34 @@ class Learn:
         self.said(f"learned {pid} ← {named(b)} (into the preset)"
                   + (f"; {', '.join(let_go)} let go" if let_go else ""))
         return True
+
+    # ---- click a control, then a param ----
+
+    def pick(self, source: str | None) -> None:
+        """Pick a desk control (None lets go). Arming a param lets it
+        go; picking a control cancels an armed learn. A pick changes no
+        table and is no undo step."""
+        if source is not None and getattr(self, "learning", None) is not None:
+            self.arm(None)
+        self.control = source
+
+    def map_picked(self, pid: str, profile=None) -> bool:
+        """The picked control takes this param: arm(pid, "desk"), then
+        learn_control(control). True when it landed; the pick is over
+        either way unless it was refused — then the control is still
+        picked, no learn is left armed behind it, and `last` says why (an
+        invariant control, the global layer: the knob learn's words)."""
+        source = getattr(self, "control", None)
+        if source is None:
+            return False
+        self.arm(pid, "desk")                # (lets the pick go: `source` holds it)
+        landed = self.learn_control(source, profile)
+        if not landed:
+            refused = self.refused
+            self.arm(None)
+            if refused:
+                self.control = source
+        return landed
 
     # ---- a source completes it ----
 

@@ -927,9 +927,19 @@ def desk(panel, router: Router) -> None:
         imgui.set_tooltip("The loaded preset's own controls on the APC40 (SHIFT off). "
                           "A control the preset leaves unmapped is dark and does nothing.")
     imgui.same_line()
-    # (the click is the on-screen desk's, once it has one: plan 17 WP4's `ui_desk.click`)
-    imgui.text_colored(ui.FAINT, "new rows: right-click a param → Learn desk"
-                       + (", or click a control" if hasattr(ui.ui_desk, "click") else ""))
+    # (the click is the on-screen desk's, once it has one: plan 17 WP4's
+    # `ui_desk.click`.) The longest wording that fits beside the title; the
+    # whole of it on hover
+    full = ("new rows: right-click a param → Learn desk"
+            + (", or click a control" if hasattr(ui.ui_desk, "click") else ""))
+    room = imgui.get_content_region_avail().x
+    short = full.replace("right-click a param → ", "")
+    said = next((t for t in (full, short, short.replace("new rows:", "new:"))
+                 if imgui.calc_text_size(t).x <= room),
+                ui.fit_text(short.replace("new rows:", "new:"), room))
+    imgui.text_colored(ui.FAINT, said)
+    if said != full and imgui.is_item_hovered():
+        imgui.set_tooltip(full)
     sp = imgui.get_style().item_spacing.x
     op_w = imgui.calc_text_size("step +10").x
     dark = unmapped(table)
