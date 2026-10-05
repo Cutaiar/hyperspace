@@ -96,7 +96,7 @@ import sys
 import tomllib
 from pathlib import Path
 
-from . import library
+from . import library, placement
 
 FILE = Path("config.toml")
 LEGACY_OUTPUT = "overlay"   # the section [output] was called before the split
@@ -159,6 +159,14 @@ def load(path: Path | None = None) -> dict:
             cfg["output"] = {**DEFAULTS["output"], **legacy, **real}
             note = f"config: [{LEGACY_OUTPUT}] is now [output] — rename the section in {path}"
             cfg["notes"] = [note]
+            print(note, file=sys.stderr)
+    # a screen index is a whole number: `monitor = "left"` is −1 from here
+    # on (where the window was last time) and the SYSTEM page says so —
+    # whether that screen exists is placement's to say, at the launch
+    for key in ("monitor", "control_monitor"):
+        cfg["output"][key], note = placement.read(key, cfg["output"].get(key, -1))
+        if note:
+            cfg.setdefault("notes", []).append(note)
             print(note, file=sys.stderr)
     # the MIDI map lives next to the config unless it says otherwise
     m = cfg["midi"].get("map")

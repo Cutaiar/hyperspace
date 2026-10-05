@@ -195,6 +195,41 @@ def test_the_diagram_draws_on_both_layers_and_hides(rig, monkeypatch):
     assert len(calls) == 4
 
 
+def test_the_desk_does_not_jump_when_the_sheet_comes_up(rig, monkeypatch):
+    """Plan 16 WP7: the sheet is off at launch, and the frame `/` first
+    brings it up the desk is already where it stays — above the sheet's
+    real height, not the height imgui gives a window it has not laid out."""
+    panel = rig.panel
+    rects = []
+    real = ui_desk._body
+
+    def body(p, table):
+        pos, size = imgui.get_window_pos(), imgui.get_window_size()
+        rects.append((pos.x, pos.y, size.x, size.y))
+        return real(p, table)
+    monkeypatch.setattr(ui_desk, "_body", body)
+    assert panel.cheatsheet is False
+    for _ in range(2):
+        frame(panel)
+    off = rects[-1]
+    panel.reg["ui.cheatsheet"].set(True)
+    for _ in range(3):
+        frame(panel)
+    first, second, third = rects[-3:]
+    assert first == second == third
+    assert first[1] < off[1] - 100                     # it moved up by a whole sheet, at once
+    # …and the height it stands on is the sheet window's own, once laid out
+    imgui.new_frame()
+    imgui.begin("##cheatsheet")
+    laid_out = imgui.get_window_height()
+    imgui.end()
+    imgui.end_frame()
+    assert abs(panel._sheet_h - laid_out) <= 1.0
+    panel.reg["ui.cheatsheet"].set(False)
+    frame(panel)
+    assert rects[-1] == off
+
+
 def test_the_routing_rows_print_the_glyph(rig, monkeypatch):
     """A desk row and a session row: the glyph first, the param after it."""
     texts: list[str] = []

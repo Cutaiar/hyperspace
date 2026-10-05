@@ -3,7 +3,7 @@
 Everything only the owner can verify, in the order that costs the least
 time at the machine: laptop alone first, then the APC40, then the camera
 and the box (APC40 still plugged in for check 24), then the projector,
-then IAC + FL Studio, then one back on the laptop, then plans 12 and 13's two, then plan 13's group H (plan 13 is built on `plan-13-integration`), then plan 14's group I and the ghost hands' group J, then plan 15's group K (undo, home, the master dim, save-as on the desk; built on `finish-line`). Each check: the commands, the config, the preset,
+then IAC + FL Studio, then one back on the laptop, then plans 12 and 13's two, then plan 13's group H (plan 13 is built on `plan-13-integration`), then plan 14's group I and the ghost hands' group J, then plan 15's group K (undo, home, the master dim, save-as on the desk; built on `finish-line`), then plan 16's group L (the cheat sheet off at launch, the FX chips, an idle effect's strip, where the windows open, instances to zero, the dream's layer; checks 58–63, the projector for 61). Each check: the commands, the config, the preset,
 what to do, what a pass and a fail look like, and which audit item or
 code path a fail points at. Where a check can be simulated headless, the
 pytest node or `tools/` command that shows the expected behaviour is
@@ -34,7 +34,8 @@ page: SHOW `party`, starts on TUMBLE — plan 14 WP3), R resets the camera,
 F1 loads preset 1 (TUMBLE), ⇧F1 saves the live state as it (a user file
 shadowing the factory one), `T` does nothing (overlay is off unless
 `[output] overlay = true`, decision 21), ⌘R restarts without resetting the camera first, and the
-cheat sheet (`/`) names all twenty-two rows — R, F1–F8, ⇧F1–F8 (WP7),
+cheat sheet (`/` — press `/` first: it is off at launch since plan 16,
+check 58) names all twenty-two rows — R, F1–F8, ⇧F1–F8 (WP7),
 and since plan 15 ⌘Z / ⌘⇧Z / Ctrl+Z / Ctrl+⇧Z on its "Cmd+Z" line
 ("undo · ⇧ redo (or Ctrl+Z)") and Home on its "Home" line ("home preset
 (fn ←)") (the rows are the session's, in `bindings.json`; headless:
@@ -201,7 +202,7 @@ from it (the ring re-bases the encoder — group H, check 31, is that
 check). A fader moved behind your back still waits for a pickup. (The
 glyphs, plan 14 WP7: the track knobs are K1–K8, the device knobs D1–D8,
 the channel faders S1–S8, the track-select buttons G7·1–G7·8 — the
-on-screen desk above the cheat sheet lights each as you use it.) *Fail:*
+on-screen desk, bottom-left of the control window, lights each as you use it.) *Fail:*
 no LEDs → `apc40.mode_on` / the port name (`[midi] port`); a knob that
 moves the wrong param → `apc40.DEFAULT_MAP` (and its `layer`); a knob
 jumping back to its old place after a switch → check 31;
@@ -371,7 +372,11 @@ config: set [output] overlay = true in config.toml", and `T`, the APC40's
 MASTER select and the crossfader change nothing — the window stays opaque;
 back to "follow window" and fullscreen off returns a window. Set
 `[output] monitor = 1, fullscreen = true`, relaunch: straight to the
-projector. Then, for a laptop demo only, add `overlay = true` under
+projector. (Since plan 16 `monitor` also says which screen the render
+window *opens* on, `control_monitor` does the same for the control
+window, and both windows otherwise open where they were at the last
+quit: that is check 61, which also covers an index with no screen.)
+Then, for a laptop demo only, add `overlay = true` under
 `[output]` and relaunch: `T` floats the render over the screen, `G` is
 passthrough, the crossfader darkens the ground; remove the line after.
 *Fail:* the wrong screen → `overlay.Output.apply` (the GLFW monitor list
@@ -544,7 +549,7 @@ F1 (TUMBLE, whose desk leaves the device knobs free). *Pass:* the eight
 device-knob rings are off; turning one changes nothing on the panel; the
 ROUTING page's DESK · PRESET LAYER section lists them, dimmed, under the
 desk rows as "D1  unmapped — dark" (through "D8"; hover one for "device
-knob 1"), and the on-screen desk above the cheat sheet draws D1–D8 dark;
+knob 1"), and the on-screen desk (bottom-left) draws D1–D8 dark;
 with SHIFT latched they light (on the device and on screen, where ⇧ turns
 red) and move the band strip, and the ROUTING head reads LAYER GLOBAL. *Fail:* a lit ring on an unmapped knob → the dark
 rule in `MidiIO.redraw`; a device knob moving the band strip without SHIFT
@@ -704,7 +709,8 @@ did not run (the default action of SIGUSR1 is to terminate).
 **45. The on-screen desk matches the device, control by control (plan 14 WP7, decision 25).**
 Headless: `uv run pytest -q tests/test_ui_desk.py`. APC40 plugged in;
 launch, open the `party` project, F5 (TRIP), ROUTING page. The desk is
-drawn at the top left of the control window, above the cheat sheet
+drawn at the bottom left of the control window — in the corner since
+plan 16, above the cheat sheet once `/` shows that
 (SYSTEM page: `Desk diagram` hides and shows it). *Pass:* the picture is
 the device's face — the 8 × 5 clip grid with the scene-launch column on
 its right, then the clip-stop row with STOP ALL, track select with MASTER,
@@ -1024,6 +1030,145 @@ may only swap the exact factory row — one caveat: a crossfader row of
 yours that was *identical* to the old factory row cannot be told from it
 and is swapped; the backup has it); the notes every launch → the remap
 is not finding its own rows.
+
+## L. Plan 16 — paper cuts — added 2026-10-04
+
+Run on `finish-line` once plan 16 is merged into it (PRs #89 the cheat
+sheet, #84 the FX chips, #86 the idle strip, #85 window placement, #90
+instances and the dream's layer, #92 four follow-ups). Laptop first
+(58–60, 62, 63), then the projector (61). About 20 minutes. First,
+headless: `uv run pytest -q tests/test_fx.py tests/test_placement.py tests/test_ui_shell.py tests/test_render.py`.
+No config change unless a check says so. None of this has been tried by
+a person: it was shown by tests, pictures from a hidden window or an
+offscreen render, and scripted launches on a one-screen laptop
+(`16-paper-cuts.md` §7). Decision register rows 45–49 are the calls
+these checks let you confirm or overturn.
+
+**58. The cheat sheet is off at launch (plan 16 WP1).**
+Headless: `uv run pytest -q tests/test_ui_shell.py::test_the_cheat_sheet_is_off_at_launch_and_the_desk_is_on tests/test_ui_shell.py::test_slash_still_toggles_the_cheat_sheet tests/test_ui_desk.py::test_the_desk_does_not_jump_when_the_sheet_comes_up`.
+`uv run hyperspace`. *Pass:* the control window opens with no key legend;
+the APC40 diagram sits in the bottom-left corner; `/` shows the legend
+with the diagram above it, already in its place on the first frame (no
+flicker of the diagram somewhere else); `/` again hides it and the
+diagram drops back; the SYSTEM page's "Cheat sheet" box follows, and its
+hover says `/` toggles; with the APC40 in, DETAIL (B9) does the same and
+its LED is dark at launch. Quit and relaunch with the legend showing:
+it is off again (it is not remembered). *Fail:* the legend showing at
+launch → `Panel.__init__`; the diagram gone, or floating with a gap
+under it → `ui_desk.diagram`'s `below`; the diagram jumping on the first
+`/` → `Panel._draw_cheatsheet`'s `_sheet_h`; `/` dead → the `key:SLASH`
+row (`routing.py`, your `bindings.json`).
+
+**59. An FX chip opens without switching (plan 16 WP2, register row 45).**
+Headless: `uv run pytest -q tests/test_fx.py::test_a_chip_click_selects_and_never_toggles tests/test_fx.py::test_the_chips_led_toggles_and_never_selects tests/test_fx.py::test_selection_is_by_name_and_survives_a_reorder tests/test_fx.py::test_selection_survives_a_preset_load`.
+F5 (TRIP), FX page. The chips are **three to a row** (four rows for the
+twelve effects), each with a dot or a ring at its left end. Click the
+name of an effect that is off. *Pass:* its strip opens, the chip gains a
+white outline round the whole chip, and it stays off (not red, a ring at
+its left end, the render unchanged). Click the ring at the chip's left
+end: the effect switches on, the chip goes red and the ring becomes a
+filled dot, and the strip that is open does not change. Hover the dot:
+"on — click to switch off". Open the kaleidoscope and drag its order
+slider end to end: the strip stays the kaleidoscope's the whole way
+while its chip moves along the rows. Press F6, then F5: the same effect
+is still open. Read the names: only the two longest should be cut short.
+*Fail:* a click on the name switching the effect → `ui_fx._chip` (the
+name's item); the strip jumping to another effect while the order moves
+or on an F-key → `FxState.selected` / `sel_name`; the dot hard to hit
+from where you stand, or hit by mistake when you meant the name → fork
+F1, say so (register row 45); names cut short that matter, or the fourth
+row costing too much of the page → `ui_fx.CHIPS_PER_ROW`.
+
+**60. An effect that is not running says why (plan 16 WP3, register row 46).**
+Headless: `uv run pytest -q tests/test_fx.py::test_an_off_effects_strip_says_so_and_turn_on_switches_it_on tests/test_fx.py::test_a_bypassed_stack_says_so_on_the_strip tests/test_fx.py::test_the_idle_strips_controls_stay_live`.
+FX page, open an effect that is off. *Pass:* under its description a
+line reads "off — nothing below shows until it is on" with a **turn on**
+chip; the "on" box is at full strength and the faders under it are
+dimmed (a veil over them) but still move, and right-click → Learn on one
+of them opens a menu at full strength; **turn on** switches the effect
+on and the line and the dimming go. Untick "Effects" at the top: the
+open strip reads "the whole stack is bypassed" with **effects on**. Pull
+FX mix to 0: "FX mix is at 0". Pull the effect's own mix to 0: "its mix
+is at 0", and that one fader is not dimmed. No page scrolls in any of
+these. Say whether the dimming reads from a step back: too faint to
+notice, or so strong the values cannot be read. *Fail:* no line, or the
+wrong reason → `ui_fx.why_idle`; the faders dead while dimmed → the
+strip was disabled, not dimmed (fork F2); a dimmed menu → the veil is
+being drawn over a popup (`ui_fx._dim`); the page scrolling → the line's
+row, `tests/test_fx.py::test_the_page_fits_with_the_tightest_strip_idle`.
+
+**61. The windows open where you left them (projector; plan 16 WP4, register row 48).**
+Headless: `uv run pytest -q tests/test_placement.py tests/test_app_boundary.py::test_the_windows_open_where_placement_says tests/test_app_boundary.py::test_the_exits_save_the_windowed_rects tests/test_app_boundary.py::test_a_config_screen_that_cannot_be_used_is_minus_one_and_one_note tests/test_config.py::test_a_screen_that_is_not_a_number_is_minus_one_and_a_note`.
+**This is the first time any of it meets a second screen**: the build
+machine had one, so everything about two screens — which index is the
+projector, a window opening on it, its coordinates — was exercised with
+made-up screens only.
+(a) Laptop alone: drag and resize both windows, Esc. Relaunch. *Pass:*
+both where and as big as they were; `~/Hyperspace/windows.json` exists
+with one `control` entry and one entry in `render`.
+(b) Plug the projector in. Drag the render window onto it, Esc,
+relaunch: it opens on the projector, the control window on the laptop.
+(c) Set `[output] fullscreen = true` (leave `monitor` at −1), relaunch:
+fullscreen on the projector with no drag. Esc, open `windows.json`: the
+render entry is still the windowed size, not the projector's.
+(d) Unplug the projector, relaunch: the render window opens on the
+laptop at the default spot, and the terminal and the SYSTEM page name
+the screen it was last on. Put `fullscreen` back.
+(e) Projector in again. Set `[output] monitor = 0`, `control_monitor =
+1`, relaunch: the windows are swapped — render on screen 0, controls on
+screen 1 — whatever the file said. Set `monitor = 7`: the SYSTEM page
+and the terminal say "monitor = 7, but 2 screens are connected (0–1) —
+using the last position", and the last position is used. Set `monitor =
+"left"`: the app still launches, and the note reads "monitor = 'left' is
+not a screen index — using the last position". Remove both keys.
+(f) Delete `windows.json`, relaunch: the placement of before — render
+top-left, controls flush right, on the primary screen, at their full
+sizes (on a small laptop screen they overlap and may overhang it, as
+they always did).
+(g) ⌘R with a window moved: after the restart it is where you moved it.
+One thing to know: a screen index that is not there **at launch** is
+ignored for the whole run, so with `monitor = 1` in the config, plug the
+projector in *before* launching (or pick it on the OUTPUT page's Screen
+combo).
+*Fail:* a window off every screen, or not where it was →
+`placement.place` / `usable`; the wrong screen for an index →
+`placement.screens` (GLFW's monitor order, as check 26); the fullscreen
+size in the file → `Output.windowed_rect`; no file after Esc →
+`app._save_windows` at the end of `app.main`; the app not launching with
+`monitor = "left"` → `placement.read` / `config.load`; a window that
+cannot be reached at all → delete `windows.json`, and log it.
+
+**62. Instances to zero (plan 16 WP5, register row 47).**
+Headless: `uv run pytest -q tests/test_render.py::test_zero_instances_draws_only_the_ground tests/test_render.py::test_zero_instances_still_runs_the_look_back_and_the_effects tests/test_plan12_presets.py::test_no_factory_hand_row_blanks_the_scene tests/test_params.py::test_instances_read_nothing_drawn_at_zero tests/test_undo.py::test_a_count_taken_to_zero_is_undone`.
+F1 (TUMBLE), VIEW page: drag Instances to the left end. *Pass:* it reads
+"0 · nothing drawn" and the render is black; ⌘Z brings the count back;
+back to 1 by hand, the shape is there. With the APC40: track knob 3 (K3)
+fully left does the same — **the bottom of that knob is now nothing
+drawn, not one copy**; say if that is too easy to land on. F4 (WAKE):
+take the count to 0 — the trail fades out over black rather than
+cutting. F5 (TRIP), count 0: the effects that paint on their own
+(plasma, with its level up) still show. F3 (FIELD) with a hand in the
+box: right hand at the bottom of the box is nine copies, never none; at
+the top the room fills as before (69 copies, one more than before).
+With ghost hands on, they still draw at 0. *Fail:* one copy still drawn
+at 0 → `Renderer.draw_scene`'s clamp; a traceback or a frozen render at
+0 → the same function (the red banner and `stall.log` will say); FIELD
+blanking with a low hand → the row's rest
+(`tests/test_plan12_presets.py`). Not a fail, and for you to know: a
+route of your own that pushes both ways (an LFO onto Instances with the
+count at 1) now blanks the scene for half its cycle.
+
+**63. The dream's layer cannot be performed (plan 16 WP5, register row 49).**
+Headless: `uv run pytest -q tests/test_lookback.py::test_dream_params_declared tests/test_lookback.py::test_a_route_on_the_dream_layer_is_dormant`.
+LOOKBACK page, right-click the Layer combo. *Pass:* the menu reads "not
+modulatable" where other controls offer "Route a lane here…"; on the
+ROUTING page, adding a route, `dream.layer` is not in the target list;
+the combo itself, a preset and a learned knob still change the layer.
+If one of your saved presets had a route onto the layer, load it: the
+row is still listed on the ROUTING page and does nothing; hovering its
+target says "dream.layer is not modulatable — the row is dormant", and
+nothing says so when the preset loads. *Fail:* a route offered or listed → the flag on
+`dream.layer` (`params.py`).
 
 ## What this list does not ground
 
