@@ -20,6 +20,13 @@ on an invariant control or with the global layer up is refused (midi.py's
 `_learned` calls `refuse`): the reason is `last`, `refused` is set, and
 nothing changes.
 
+**Unbind** is here too (plan 17 WP1): `unbind` removes what is bound to a
+param in the loaded preset — its preset-layer desk rows and its routes,
+one kind or both — as one undo step, whether or not a MIDI adapter
+exists. `bound` is the same question without the edit (the menu asks it
+to know what to list and whether to offer the item at all). A session row
+(invariant or global layer) is never removed (D5, D6).
+
 Two things the object owns:
 
   * **`learning`** — the armed param id, or None. Arming forgets a held
@@ -176,3 +183,62 @@ class Learn:
             table.remove(x)
         table.replace_owner(b)
         self.said(f"learned {b.target} ← {b.describe()} (into the preset)")
+
+    # ---- unbind ----
+
+    def bound(self, ids) -> tuple[list[Binding], list[Binding], list[Binding]]:
+        """What is bound to a param: (the loaded preset's desk rows, its
+        routes, the session's MIDI rows). `ids` as for `unbind`. The first
+        two are what `unbind` may remove; the third it never does."""
+        ids = _ids(ids)
+        midi = [b for b in self.table.bindings if b.is_midi and b.target in ids]
+        desk = [b for b in midi if b.layer == "preset"]
+        routes: list[Binding] = []
+        for pid in ids:
+            routes += [b for b in self.table.routes_to(pid) if not any(b is x for x in routes)]
+        return desk, routes, [b for b in midi if b.layer != "preset"]
+
+    def unbind(self, ids, *, desk: bool = True, routes: bool = True, name=None) -> list[Binding]:
+        """Remove what is bound to a param, in the loaded preset: its
+        preset-layer desk rows (`desk`) and its routes (`routes`). `ids` is
+        the drawn param's id and the real one's (an alias and its band; one
+        id when they are the same). Returns the rows removed.
+
+        A desk row goes through `Bindings.unbind` (it bumps
+        `redraw_serial`: an adapter redraws and the control goes dark, D8);
+        a route — any scheme, enabled or not — through `Bindings.remove`,
+        its depth subscribers with it. No file is written: the edit is the
+        loaded preset's (plan 13 §3.3). One undo step, pushed once and only
+        when something goes. `name(b)` gives each row's words for the
+        message; without it, `Binding.describe()`. A session row is never
+        removed: with nothing else to remove, that is a refusal."""
+        ids = _ids(ids)
+        if not ids:
+            return []
+        real = ids[-1]
+        name = name if name is not None else Binding.describe
+        mine, routed, session = self.bound(ids)
+        gone = (mine if desk else []) + (routed if routes else [])
+        if not gone:
+            if desk and session:
+                b = session[0]
+                where = "on the global layer" if b.layer == "global" else "invariant"
+                self.refuse(f"{name(b)} → {b.target} is {where} (the session's, "
+                            "edited in bindings.json) — not unbound")
+            return []
+        undo.push(f"unbind {real}")                  # one undo step (undo.py, plan 15)
+        if desk:
+            for pid in ids:
+                self.table.unbind(pid)
+        if routes:
+            for b in routed:
+                self.table.remove(b)
+        names = [name(b) for b in gone]
+        told = names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
+        self.said(f"unbound {real} from {told}")
+        return gone
+
+
+def _ids(ids) -> tuple[str, ...]:
+    """One id or several, as a tuple with no repeats, in order."""
+    return (ids,) if isinstance(ids, str) else tuple(dict.fromkeys(ids))
