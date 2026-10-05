@@ -94,6 +94,20 @@ def _same(a, b) -> bool:
     return False
 
 
+def alike(a, b) -> bool:
+    """Two snapshots, or two signatures holding them (dicts, tuples and
+    lists, nested): the same shape and keys, every leaf `_same`. What a
+    dirty dot compares with (library.py; plan 16 WP7): a base a performer
+    took and gave back differs from the file's in its last bits only, and
+    that is not an edit — one detent of any param is far outside it."""
+    if isinstance(a, dict) and isinstance(b, dict):
+        return a.keys() == b.keys() and all(alike(v, b[k]) for k, v in a.items())
+    if isinstance(a, list | tuple) and isinstance(b, list | tuple):
+        return (type(a) is type(b) and len(a) == len(b)
+                and all(alike(x, y) for x, y in zip(a, b, strict=True)))
+    return _same(a, b)
+
+
 _row = attrgetter(*ROW_FIELDS)        # a row as the tuple of its fields
 
 

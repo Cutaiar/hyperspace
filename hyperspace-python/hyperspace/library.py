@@ -970,7 +970,7 @@ class Project:
         if reg is None:
             return False
         return ((self.path is None and not self.factory)
-                or self.session != reg.snapshot(part="session")
+                or not undo.alike(self.session, reg.snapshot(part="session"))
                 or (self.bank, self.startup) != self._saved)
 
 
@@ -1568,17 +1568,19 @@ class Library:
     def is_dirty(self, group: str) -> bool:
         """Have the group's bases moved off the loaded (or default) preset?
         For a document kind: has its signature moved since the last load or
-        save (nothing loaded yet is never dirty)."""
+        save (nothing loaded yet is never dirty). Floats compare within
+        undo's tolerance (`undo.alike`, plan 16 WP7): the last bits a
+        performer leaves in a base it took light no dot."""
         kind = self._kinds.get(group)
         if kind is not None:
             ref = self._loaded.get(group)
-            return ref is not None and kind.signature() != ref
+            return ref is not None and not undo.alike(kind.signature(), ref)
         reg = self._need_reg()
         ref = self._loaded.get(group)
         if ref is None:
             ref = self.resolved(group, {})
         snap = reg.snapshot(group)
-        return any(snap.get(k) != v for k, v in ref.items())
+        return any(not undo.alike(snap.get(k), v) for k, v in ref.items())
 
     def reset(self, group: str) -> str | None:
         """Back to the group's default preset (or its fresh values)."""
