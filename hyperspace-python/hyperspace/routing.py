@@ -270,6 +270,17 @@ OPS = ("fire", "toggle", "step", "set", "abs", "rel", "rel64", "momentary", "hol
 LAYERS = ("preset", "global")
 SHIFT_SOURCE = f"note:0:{apc40.N_SHIFT}"     # always invariant: it is the latch
 SHIFT_PARAM = "desk.shift"
+# knob smoothing (plan 18 WP2): how long a value from one of the desk's
+# absolute knobs or faders takes to arrive (midi.py's glide). One session
+# param for the whole desk. SLEW_MAX_S stays under undo.SETTLE_S by more
+# than a slow frame, so one knob turn is still one undo step
+# (tests/test_undo.py pins the two together). A bare table has it off —
+# the adapter is then the one from before the glide, to the bit;
+# SLEW_DEFAULT_S is what the app sets on its table before the show's
+# session values land (app.main), so a show that saved the number keeps it.
+SLEW_PARAM = "desk.slew"
+SLEW_MAX_S = 0.25
+SLEW_DEFAULT_S = 0.08
 MACRO_PREFIX = "macro."
 
 # midi_map.json's `mode` → op
@@ -1002,15 +1013,25 @@ def register_desk(reg: Registry, table: Bindings) -> None:
     """`desk.shift`: the layer latch as a toggle over the table — on while
     the global layer is up — so SHIFT is a row like any other (a note row
     toggles it, its LED reads it) and a page or key row can reach it too.
-    Never saved, never performed. The first table a registry meets keeps it."""
-    if SHIFT_PARAM in reg:
-        return
-    reg.toggle(SHIFT_PARAM, "Shift", lambda: table.layer == "global",
-               lambda v: table.set_layer("global" if v else "preset"), group="desk",
-               persist=False, modulatable=False,
-               tip="The APC40's SHIFT, latched: on, the desk shows the global layer "
-                   "(the band strip, the hand feel, BPM, the band scenes); off, the "
-                   "loaded preset's. Loading a preset turns it off.")
+    Never saved, never performed. And `desk.slew`: the table's knob
+    smoothing (plan 18 WP2), a session param a show keeps and no preset
+    may name. The first table a registry meets keeps each."""
+    if SHIFT_PARAM not in reg:
+        reg.toggle(SHIFT_PARAM, "Shift", lambda: table.layer == "global",
+                   lambda v: table.set_layer("global" if v else "preset"), group="desk",
+                   persist=False, modulatable=False,
+                   tip="The APC40's SHIFT, latched: on, the desk shows the global layer "
+                       "(the band strip, the hand feel, BPM, the band scenes); off, the "
+                       "loaded preset's. Loading a preset turns it off.")
+    if SLEW_PARAM not in reg:
+        reg.continuous(SLEW_PARAM, "Knob smoothing",
+                       lambda: getattr(table, "slew", 0.0),
+                       lambda v: setattr(table, "slew", min(max(float(v), 0.0), SLEW_MAX_S)),
+                       lo=0.0, hi=SLEW_MAX_S, group="desk", modulatable=False,
+                       fmt=lambda v: "off" if v <= 0 else f"{v * 1000:.0f} ms",
+                       tip="How long a value from a desk knob or fader takes to arrive. "
+                           "Off: it jumps a detent at a time, as before. One setting for "
+                           "every knob and fader; buttons and the cue knob are not smoothed.")
 
 
 def legacy_planedrive(lanes, gain: float = 1.0) -> np.ndarray:
@@ -1063,6 +1084,11 @@ class Bindings:
     In memory the table holds the session's controls and the loaded
     preset's performer rows, preset layer and macros; the file
     (`to_json`, `write`) holds only the session's (`is_session_row`)."""
+
+    # knob smoothing in seconds (`desk.slew`, register_desk; midi.py reads
+    # it): the session's — a show keeps it, bindings.json never does. On
+    # the class, so a table from before a hot reload has it too
+    slew: float = 0.0
 
     def __init__(self, bindings: Iterable[Binding] = (), *, path: Path | None = None,
                  profile: str = "apc40"):

@@ -51,8 +51,12 @@ def boot(home, show: str | None = "house"):
     clock = tempo.Clock(now=lambda: 0.0)
     tempo.register(reg, clock)
     lfo.register(reg, lfo.LFOs(), clock)
+    # the table before attach, as app.main reads it: the desk's session
+    # param (`desk.slew`) is the table's and exists when the show lands
+    table = Bindings.load(bindings_path(home), legacy_midi=None)
+    routing.register_desk(reg, table)
     lib.attach(reg)
-    router = Router(reg, Bindings.load(bindings_path(home), legacy_midi=None))
+    router = Router(reg, table)
     presets = Presets(lib, reg, router)
     preset.migrate_home(lib, router)          # plan 13 §6: nothing to do on a fresh home
     lib.project.load_startup()
@@ -200,7 +204,10 @@ def test_the_home_is_rewritten_in_seconds_once_with_backups(tmp_path):
 def test_a_preset_load_never_touches_a_session_param(rig):
     """Plan 13 §10 exit 2: a tapped BPM survives TRIP, and so do the drive,
     an analyzer strip and the band scene, even when the file names them —
-    and the master dim (plan 15 WP3), through a preset load and a show load."""
+    and the master dim (plan 15 WP3), through a preset load and a show load.
+    Knob smoothing too (`desk.slew`, plan 18 WP2): no preset moves it, a
+    show that does not name it leaves it, and a show save and load
+    round-trips it."""
     from hyperspace.overlay import Output
 
     reg, control = rig.reg, rig.control
@@ -211,11 +218,16 @@ def test_a_preset_load_never_touches_a_session_param(rig):
     reg["tempo.bpm"].set(100.0)
     reg["master.gain"].set(2.0)
     reg["band.0.atk"].set(0.3)
+    slew = reg["desk.slew"]
+    slew.set(0.12)
+    assert part_of(slew) == "session" and rig.router.table.slew == 0.12
     scene = control.scene
-    put(rig.home, "FAST", values={"view.shape": 5, "tempo.bpm": 140.0,
+    put(rig.home, "FAST", values={"view.shape": 5, "tempo.bpm": 140.0, "desk.slew": 0.2,
                                   "scene.select": (scene + 1) % 3, "output.dim": 1.0})
     before = reg.snapshot(part="session")
+    assert before["desk.slew"] == 0.12
     rig.presets.load("FAST")
+    assert slew.value == 0.12 and "desk.slew is the session's, ignored" in rig.presets.notes
     assert rig.view.shape == 5
     assert rig.clock.bpm == 100.0 and rig.chain.gain == 2.0 and rig.chain.params[0].atk == 0.3
     assert control.scene == scene and reg.snapshot(part="session") == before
@@ -225,6 +237,12 @@ def test_a_preset_load_never_touches_a_session_param(rig):
     assert out.dim == 0.4
     rig.lib.project.load("party")                     # a show load, startup preset and all
     assert rig.lib.current("presets") == "TUMBLE" and out.dim == 0.4
+    assert slew.value == 0.12                         # the factory show names no smoothing
+    rig.lib.project.save("mine")                      # a show keeps the number
+    assert rig.lib.project.session["desk.slew"] == 0.12
+    slew.set(0.03)
+    rig.lib.project.load("mine")
+    assert slew.value == 0.12 and not rig.lib.project.is_dirty()
 
 
 def test_session_ids_in_a_preset_are_noted_and_ignored(rig):
