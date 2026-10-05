@@ -892,3 +892,263 @@ def test_a_load_tells_the_listeners_its_name(rig):
     assert rig.lib.warning.startswith("preset listener: ZeroDivisionError")
     assert not rig.presets.note.startswith("preset listener")   # the preset's own note
 
+
+
+# ------------------------------------------- plan 15 WP4: save-as from the desk
+
+def party(tmp_path):
+    """The party show on a fresh home, slot 6 (ACID) emptied, TRIP loaded."""
+    r = boot(tmp_path, None)
+    pr = r.lib.project
+    assert pr.bank == ["TUMBLE", "FACES", "FIELD", "WAKE", "TRIP", "ACID", "MANDALA", "NOITA"]
+    pr.clear_slot(5)
+    r.reg["preset.load.4"].fire()
+    assert r.lib.current("presets") == "TRIP" and pr.active == 4
+    return r
+
+
+def user_presets(home):
+    return sorted(p.name for p in (home / "presets").glob("*.json"))
+
+
+def test_save_new_never_overwrites(tmp_path):
+    """Decision 29: the desk's save-as makes a new file every time. The
+    made name's slug is free among the file stems of both preset folders
+    (a user file with a factory file's stem would hide that preset), the
+    listed names and the bank's names — so nothing is written over and no
+    factory preset is shadowed, whatever the files are called inside."""
+    import shutil
+
+    r = party(tmp_path)
+    lib, reg, pr, home = r.lib, r.reg, r.lib.project, r.home
+    # a factory folder with one more file: its stem is trip-4, its name is not
+    factory = tmp_path.parent / f"{tmp_path.name}-factory"
+    shutil.copytree(FACTORY, factory)
+    (factory / "presets" / "trip-4.json").write_text(
+        (FACTORY / "presets" / "party-wake.json").read_text().replace('"WAKE"', '"FOUR"', 1))
+    lib.factory = factory
+    assert lib.is_factory("presets", "FOUR")
+    # the user's folder: trip-2.json under another name, a "TRIP 3" in a
+    # file of another stem; and the bank names a "TRIP 5" that has no file
+    two = put(home, "SOMETHING ELSE").rename(home / "presets" / "trip-2.json")
+    three = put(home, "TRIP 3").rename(home / "presets" / "mine.json")
+    kept = {p: p.read_bytes() for p in (two, three, factory / "presets" / "trip-4.json")}
+    pr.bank[5] = "TRIP 5"
+    pr.clear_slot(6)
+    before = user_presets(home)
+    reg["view.shape"].set(9)
+    reg["preset.save_new"].fire()
+    assert lib.current("presets") == "TRIP 6" and pr.bank[6] == "TRIP 6"
+    assert user_presets(home) == sorted([*before, "trip-6.json"])
+    assert all(p.read_bytes() == was for p, was in kept.items())
+    assert lib.is_factory("presets", "FOUR") and lib.is_factory("presets", "TRIP")
+    assert lib.read("presets", "TRIP")["values"]["view.shape"] != 9     # TRIP itself untouched
+    assert json.loads((home / "presets" / "trip-6.json").read_text())["values"]["view.shape"] == 9
+    assert not (home / "trash").exists()                    # nothing was replaced
+    # held again and again: a new file each time, never the same one twice
+    for n in (7, 8, 9):
+        reg["preset.save_new"].fire()
+        assert lib.current("presets") == f"TRIP {n}"
+    assert user_presets(home) == sorted([*before, *[f"trip-{n}.json" for n in (6, 7, 8, 9)]])
+    assert not (home / "trash").exists()
+    # a file stem in another case is the same file on a filesystem that
+    # folds case (this rig's): it counts too (review of PR #87)
+    ten = put(home, "SUNSET").rename(home / "presets" / "Trip-10.json")
+    was = ten.read_bytes()
+    assert reg["preset.save_new"].fire() is True
+    assert lib.current("presets") == "TRIP 11" and ten.read_bytes() == was
+    assert "SUNSET" in lib.list("presets") and not (home / "trash").exists()
+    # no preset loaded at all: PRESET 1, then PRESET 2
+    lib._landed("presets", None, None)
+    reg["preset.save_new"].fire()
+    assert lib.current("presets") == "PRESET 1"
+    reg["preset.save_new"].fire()
+    assert lib.current("presets") == "PRESET 2"
+
+
+def test_save_new_fills_the_next_empty_slot_and_becomes_the_loaded_preset(tmp_path):
+    """The bank, the show's file, what is loaded and its clean dot: the new
+    preset takes the first empty slot, the show is written at once (the
+    factory show's first write makes your copy), and — as the panel's
+    "as…" does — the new preset is the loaded one, so a second save counts
+    on and Save on the panel writes the new file, not TRIP."""
+    r = party(tmp_path)
+    lib, reg, pr, home = r.lib, r.reg, r.lib.project, r.home
+    show = home / "projects" / "party.hyp.json"
+    assert pr.next_empty() == 5
+    pr.clear_slot(1)                                         # two holes: the first is taken first
+    assert pr.next_empty() == 1
+    reg["view.bright"].set(reg["view.bright"].value + 0.5)
+    assert lib.is_dirty("presets")
+    reg["preset.save_new"].fire()
+    assert pr.bank[1] == "TRIP 2" and pr.active == 1 and pr.bank[4] == "TRIP"
+    assert lib.current("presets") == "TRIP 2" and not lib.is_dirty("presets")
+    assert lib.status == "saved TRIP 2 → F2" and pr.bank_error == ""
+    assert json.loads(show.read_text())["bank"] == pr.bank and not pr.is_dirty()
+    assert reg["preset.select"].names[1] == "TRIP 2" and reg["preset.select"].value == 1
+    assert not lib.is_factory("presets", "TRIP 2") and lib.is_factory("presets", "TRIP")
+    doc = lib.read("presets", "TRIP 2")
+    assert doc["name"] == "TRIP 2" and doc["values"]["view.bright"] == reg["view.bright"].value
+    # the second counts on from the new one, into the next hole
+    reg["preset.save_new"].fire()
+    assert pr.bank[5] == "TRIP 3" and pr.active == 5 and lib.current("presets") == "TRIP 3"
+    assert lib.status == "saved TRIP 3 → F6"
+    assert json.loads(show.read_text())["bank"] == pr.bank
+    assert pr.next_empty() is None
+    # the trigger is a session-side control: never saved, never performed
+    p = reg["preset.save_new"]
+    assert (p.group, p.persist, p.modulatable) == ("preset", False, False)
+    # a launch finds the bank as it was left
+    again = boot(home, None)
+    assert again.lib.project.bank == pr.bank
+
+
+def test_save_new_on_a_full_bank_saves_to_the_list_and_says_so(tmp_path):
+    """A full bank: the preset is still made and loaded, it is in the
+    list, the bank and the show's file are untouched, no pad is lit, and
+    the warning says where it went — every time it happens."""
+    r = boot(tmp_path, None)
+    lib, reg, pr, home = r.lib, r.reg, r.lib.project, r.home
+    reg["preset.load.4"].fire()
+    bank = list(pr.bank)
+    assert pr.next_empty() is None
+    shows = sorted(p.name for p in (home / "projects").iterdir())
+    reg["preset.save_new"].fire()
+    assert lib.warning == "saved TRIP 2 — the bank is full: it is in the preset list"
+    assert pr.bank == bank and sorted(p.name for p in (home / "projects").iterdir()) == shows
+    assert "TRIP 2" in lib.list("presets") and lib.current("presets") == "TRIP 2"
+    assert pr.active == -1 and reg["preset.select"].value == -1
+    assert not lib.is_dirty("presets") and not pr.is_dirty()
+    said = dict(lib.said)
+    reg["preset.save_new"].fire()
+    assert lib.warning == "saved TRIP 3 — the bank is full: it is in the preset list"
+    assert lib.said["warning"] == said["warning"] + 1
+    # room made: the next save lands in it, and the old warning goes
+    pr.clear_slot(2)
+    assert lib.warning == ""
+    reg["preset.save_new"].fire()
+    assert pr.bank[2] == "TRIP 4" and lib.status == "saved TRIP 4 → F3" and lib.warning == ""
+    # a disk that will not take the file: said, and the show goes on
+    def full(*a, **k):
+        raise LibraryError("disk full")
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(lib, "save_as", full)
+        pr.clear_slot(3)
+        assert reg["preset.save_new"].fire() is False        # nothing saved: said so
+    assert "disk full" in pr.bank_error and pr.bank[3] is None
+    # the preset saves but the show's file will not take the bank: the
+    # slot stays as the file has it, no pad is lit, and it is said
+    # (review of PR #87)
+    show = home / "projects" / "party.hyp.json"
+    before, cur = show.read_text(), lib.current("presets")
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(pr, "write", full)
+        assert reg["preset.save_new"].fire() is True
+    name = lib.current("presets")
+    assert name != cur and name in lib.list("presets")
+    assert pr.bank[3] is None and pr.active == -1 and show.read_text() == before
+    assert "disk full" in pr.bank_error and not pr.is_dirty()
+    assert lib.warning == f"saved {name} — the show could not be written: it is in the preset list"
+    reg["preset.save_new"].fire()                            # the disk is back: F4, and no error
+    assert pr.bank[3] == lib.current("presets") and pr.bank_error == ""
+
+
+def test_the_new_slot_loads_from_the_preset_row(tmp_path):
+    """The pad over the new slot is an ordinary preset pad: clip row 1's
+    button k loads what the save-as put there."""
+    from test_midi import FakeIn, FakeOut, note, push
+
+    from hyperspace.midi import MidiIO
+
+    r = party(tmp_path)
+    lib, reg, pr = r.lib, r.reg, r.lib.project
+    inp, out = FakeIn(), FakeOut()
+    desk = SimpleNamespace(midi=MidiIO(reg, r.router.table, inp=inp, out=out), inp=inp, out=out)
+    reg["view.shape"].set(11)
+    reg["preset.save_new"].fire()
+    assert pr.bank[5] == "TRIP 2" and pr.active == 5
+    push(desk, note(apc40.N_CLIP[0], channel=0), note(apc40.N_CLIP[0], 0, channel=0))
+    assert lib.current("presets") == "TUMBLE" and pr.active == 0
+    assert reg["view.shape"].value != 11
+    push(desk, note(apc40.N_CLIP[0], channel=5), note(apc40.N_CLIP[0], 0, channel=5))
+    assert lib.current("presets") == "TRIP 2" and pr.active == 5
+    assert reg["view.shape"].value == 11 and not lib.is_dirty("presets")
+    leds = [m.velocity for m in out.sent
+            if m.type == "note_on" and m.note == apc40.N_CLIP[0] and m.channel == 5]
+    assert leds[-1] == apc40.GREEN
+    reg["preset.load.5"].fire()                              # and F6 is the same slot
+    assert lib.current("presets") == "TRIP 2"
+
+
+def test_put_and_clear_slot_write_the_show_and_delete_no_file(tmp_path):
+    """The PRESETS page's two slot items: "put preset here…" points a slot
+    at any preset, "clear slot" empties it. Both write the show at once,
+    neither writes, moves or deletes a preset file, and the lit slot
+    follows the loaded preset."""
+    r = boot(tmp_path, None)
+    lib, reg, pr, home = r.lib, r.reg, r.lib.project, r.home
+    show = home / "projects" / "party.hyp.json"
+    assert pr.factory and not show.exists()
+    put(home, "MINE")
+    files = user_presets(home)
+    assert lib.current("presets") == "TUMBLE" and pr.active == 0
+    pr.clear_slot(5)
+    assert pr.bank[5] is None and json.loads(show.read_text())["bank"][5] is None
+    assert not pr.factory and not pr.is_dirty()             # your copy, written
+    assert lib.status == "F6: cleared — ACID is still in the preset list"
+    assert "ACID" in lib.list("presets") and lib.is_factory("presets", "ACID")
+    pr.put_slot(5, "MINE")
+    assert pr.bank[5] == "MINE" and json.loads(show.read_text())["bank"][5] == "MINE"
+    assert lib.status == "F6: MINE" and lib.current("presets") == "TUMBLE" and pr.active == 0
+    reg["preset.load.5"].fire()
+    assert lib.current("presets") == "MINE" and pr.active == 5
+    # the loaded preset's slot cleared: no pad lit; put back elsewhere: that one
+    pr.clear_slot(5)
+    assert pr.active == -1 and lib.current("presets") == "MINE"
+    pr.put_slot(2, "MINE")
+    assert pr.bank[2] == "MINE" and pr.active == 2
+    # the slot of the loaded preset pointed elsewhere: its light goes
+    pr.put_slot(2, "WAKE")
+    assert pr.active == -1
+    # a preset may sit in two slots; the light stays where it is
+    reg["preset.load.3"].fire()
+    pr.put_slot(7, "WAKE")
+    assert pr.bank[3] == pr.bank[7] == "WAKE" and pr.active == 3
+    # nothing loaded: no slot is lit — an empty slot least of all (review of PR #87)
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(lib, "current", lambda group: None)
+        pr.clear_slot(6)
+        assert pr.bank[6] is None and pr.active == -1
+        pr.put_slot(6, "MANDALA")
+        assert pr.active == -1
+    # a name with no file, a slot that is not there, an empty slot: nothing changes
+    before, bank = show.read_text(), list(pr.bank)
+    pr.put_slot(1, "NOPE")
+    assert lib.warning == "F2: no preset 'NOPE'" and pr.bank == bank
+    pr.put_slot(len(pr.bank), "WAKE")
+    pr.clear_slot(-1)
+    pr.clear_slot(5)
+    assert pr.bank == bank and show.read_text() == before
+    assert json.loads(show.read_text())["bank"] == pr.bank
+    assert user_presets(home) == files and not (home / "trash").exists()
+
+
+def test_the_bank_calls_are_no_undo_step(tmp_path):
+    """A save-as from the desk, a slot filled, a slot cleared: nothing live
+    changes, so none of them is an undo step (plan 15 WP4)."""
+    from test_undo import boot as undo_boot
+    from test_undo import settle
+
+    r = undo_boot(tmp_path / "home")
+    reg, pr = r.reg, r.lib.project
+    reg["preset.load.4"].fire()
+    settle(r)
+    r.undo.clear()
+    pr.clear_slot(5)
+    settle(r)
+    reg["preset.save_new"].fire()
+    settle(r)
+    pr.put_slot(0, "WAKE")
+    settle(r)
+    assert pr.bank[5] == "TRIP 2" and pr.bank[0] == "WAKE"
+    assert r.undo.stack == [] and not r.undo.undo()

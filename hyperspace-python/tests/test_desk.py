@@ -431,6 +431,8 @@ def test_the_default_map_is_sorted_as_plan_13_says():
         ("cc:0:50", "hands.catch", "global"), ("cc:0:51", "hands.sel.return", "global"),
         ("cc:0:52", "tempo.bpm", "global"),
         (routing.SHIFT_SOURCE, routing.SHIFT_PARAM, None),
+        # the clip-stop row: one SAVE AS bar (plan 15 WP4)
+        *[(f"note:{k}:{apc40.N_CLIPSTOP}", "preset.save_new", None) for k in range(8)],
         (f"note:0:{apc40.N_OVERDUB}", "preset.home", None)]   # home (plan 15 WP2)
     assert not [b for b in rows if b.layer == "global" and b.number in (0x35, 0x36, 0x37)
                 and b.kind == "cc"]
@@ -611,3 +613,67 @@ def test_overdub_is_home_on_both_layers_and_is_lit(rig):
     proj.startup = "TUMBLE"
     rig.midi.poll()
     assert sent_notes(rig, n)[-1] == 1
+
+
+# ------------------------------------------- plan 15 WP4: the SAVE AS bar
+
+def test_the_clip_stop_row_is_invariant(rig):
+    """Decision 29, D6 as the owner extended it: the eight clip-stop
+    buttons are one SAVE AS bar — eight invariant `hold` rows on
+    `preset.save_new`, the same on both layers, which no Learn takes and
+    no preset's desk may map."""
+    t, pr, m = rig.midi.table, rig.presets, rig.midi
+    lib, n = pr.lib, apc40.N_CLIPSTOP
+    now = [0.0]
+    m.clock = lambda: now[0]
+
+    def hold(channel):
+        push(rig, note(n, channel=channel))
+        now[0] += 0.7
+        rig.midi.poll()                                      # held 0.7 s: it saves here
+        push(rig, note(n, 0, channel=channel))
+        now[0] += 5.0
+        rig.midi.poll()
+
+    for k in range(8):
+        (b,) = t.route("note", k, n)
+        assert (b.target, b.op, b.layer, b.feedback, b.on, b.off) \
+            == ("preset.save_new", "hold", None, "led", 1, 0)
+        assert t.is_invariant(Binding(b.source, "view.points", "toggle", layer="preset"))
+        assert apc40.glyph(b.source) == f"G6·{k + 1}"
+        assert b in t.active()
+    assert "hold" in routing.OPS and "hold" not in routing.MOD_OPS
+    # the preset layer, then the global one: the same hold, the same save
+    push(rig, note(apc40.N_CLIP[0], channel=4), note(apc40.N_CLIP[0], 0, channel=4))
+    assert lib.current("presets") == "TRIP" and t.layer == "preset"
+    hold(0)
+    assert lib.current("presets") == "TRIP 2"
+    shift(rig)
+    assert t.layer == "global" and len(t.dispatch("note", 3, n)) == 1
+    assert all(b in t.active() for b in t.midi() if b.op == "hold")
+    hold(3)
+    assert lib.current("presets") == "TRIP 3"
+    assert t.layer == "global"                               # a save is no load: the layer stays
+    shift(rig)
+    # a Learn refuses it: nothing binds, nothing saves, the press starts no hold
+    rows = [(b.to_json(), b.layer) for b in t.bindings]
+    m.learner.arm("view.depth4")
+    push(rig, note(n, channel=5))
+    assert m.learner.learning is None and m.learner.refused
+    assert m.learner.last == "G6·6 (clip stop 6) is invariant (the session's) — not learned"
+    now[0] += 2.0
+    push(rig, note(n, 0, channel=5))
+    assert lib.current("presets") == "TRIP 3"
+    assert [(b.to_json(), b.layer) for b in t.bindings] == rows
+    assert sent_notes(rig, n, 5)[-1] == 0                    # and the bar never lit for it
+    # no preset may map it: a desk row on any of the eight is dropped with a note
+    notes = t.set_desk([{"source": f"note:{k}:{n}", "target": "view.points", "op": "toggle",
+                         "feedback": "led"} for k in (0, 7)])
+    assert notes == [f"dropped note:{k}:{n} → view.points: that control is invariant, the "
+                     "session's (plan 13 D6)" for k in (0, 7)]
+    assert all([x.target for x in t.route("note", k, n)] == ["preset.save_new"] for k in range(8))
+    # no factory preset's desk names the row
+    for name in lib.list("presets"):
+        desk = lib.read("presets", name).get("desk") or []
+        assert not [d for d in desk if d["source"].endswith(f":{n}")
+                    and d["source"].startswith("note:")], name
