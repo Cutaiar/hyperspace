@@ -721,8 +721,12 @@ def dream_half_life(k: float) -> int:
     """`dream.k` as its readout: the processed frames in which a frame's
     share of the dream buffer halves, ``log ½ / log(1 − k)``, rounded (the
     buffer is ``D ← D·(1 − k) + frame·k``, dream.py). 23 at the slow end
-    of the knob, 14 at the default, 2 at the fast end; never under 1."""
-    k = min(max(float(k), 1e-6), 1.0 - 1e-9)
+    of the knob, 14 at the default, 2 at the fast end; never under 1, and 1
+    for a value that is not a number (a readout must not raise mid-frame)."""
+    k = float(k)
+    if not math.isfinite(k):
+        return 1
+    k = min(max(k, 1e-6), 1.0 - 1e-9)
     return max(1, round(math.log(0.5) / math.log(1.0 - k)))
 
 

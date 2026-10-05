@@ -246,6 +246,9 @@ def shots(name: str, speed: bool = False) -> None:
     def speed_sheet() -> None:
         """The top of the DREAM section at three speeds, one under another."""
         k = reg["dream.k"]
+        was = k.base
+        if not dream_at:
+            raise SystemExit("the page drew no DREAM section: nothing to crop")
         scale = glfw.get_framebuffer_size(win)[0] / CONTROL_SIZE[0]
         font = ImageFont.load_default(size=int(15 * scale))
         tiles, said = [], []
@@ -261,6 +264,7 @@ def shots(name: str, speed: bool = False) -> None:
                                      fill=(235, 235, 235), font=font)
             tiles += [cap, tile]
             said.append(f"{v:g} → {k.text()}")
+        k.set_value(was)
         sheet = Image.new("RGB", (tiles[0].width, sum(t.height for t in tiles)))
         y = 0
         for t in tiles:
@@ -274,13 +278,15 @@ def shots(name: str, speed: bool = False) -> None:
     lb = renderer.lookback
     what = (f"{len(lb.thumbnails())} echoes at {lb.echo[0]}×{lb.echo[1]}, the stand-in's "
             f"frame {lb.dream_frame} as the dream")
-    if speed:
-        speed_sheet()
-    else:
-        shoot(name, what)
-    Panel._section = real_section
-    impl.shutdown()
-    glfw.terminate()
+    try:
+        if speed:
+            speed_sheet()
+        else:
+            shoot(name, what)
+    finally:
+        Panel._section = real_section
+        impl.shutdown()
+        glfw.terminate()
 
 
 if __name__ == "__main__":

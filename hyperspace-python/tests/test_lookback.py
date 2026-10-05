@@ -1399,8 +1399,6 @@ def test_the_speed_readout_is_the_half_life_in_frames():
     """The readout is the frames in which a frame's share of the dream
     halves, log ½ / log(1 − k), rounded: 14 at the default, 2 at the fast
     end, 23 at the slow end — and fewer frames the further right."""
-    import math
-
     from hyperspace.params import dream_half_life
 
     reg = registry()
@@ -1415,13 +1413,14 @@ def test_the_speed_readout_is_the_half_life_in_frames():
     # it is the half-life: after that many frames a frame's share is about a half
     for value in (0.03, 0.05, 0.1, 0.3):
         n = dream_half_life(value)
-        assert n == round(math.log(0.5) / math.log(1 - value))
         assert (1 - value) ** (n - 0.5) > 0.5 > (1 - value) ** (n + 0.5)
     # monotone across the knob, and safe off its ends (a performer's overshoot is clamped
     # by the registry, but the format must not raise on any float)
     frames = [dream_half_life(0.03 + 0.27 * i / 50) for i in range(51)]
     assert frames == sorted(frames, reverse=True)
     assert dream_half_life(0.0) >= 1 and dream_half_life(1.0) == 1 and dream_half_life(2.0) == 1
+    for bad in (float("nan"), float("inf"), -float("inf")):
+        assert dream_half_life(bad) == 1 and k.fmt(bad) == "≈1 frames"
     # the speed's readout fits its half-width cell like the others
     assert max(len(k.fmt(v)) for v in (k.lo, k.hi, 0.05)) <= 10
 
