@@ -259,6 +259,8 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
             ctrl_rect = placement.default_rect("control", CONTROL_SIZE, scr[0])
             notes = [_err("placement", e) + " — the windows open at their default spots"]
             for k, slot in enumerate(slots[1:], start=1):
+                if slot.monitor >= len(scr):        # fork F9 holds here too (review of #123)
+                    slot.missing = f"screen {slot.monitor} is not connected"
                 if not slot.missing:
                     r = placement.default_rect("render", RENDER_SIZE, scr[0])
                     later_rects[k] = (r[0] + CASCADE * k, r[1] + CASCADE * k, r[2], r[3])
@@ -378,13 +380,16 @@ def _later_output(slot: Slot) -> Output:
     return out
 
 
-def _open_presenters(slots: list[Slot], make_context=None) -> None:
+def _open_presenters(slots: list[Slot], make_context=None, notes: list | None = None) -> None:
     """Each later output's `Presenter`, on its own window's context, and
     the swap rule (fork F6): output 1 waits for its screen (interval 1,
     set where its context is made), every later output does not
     (interval 0) — two waiting swaps a frame halve the rate (plan 21 §1:
-    121 fps against 60–81). One that will not build is said on the slot
-    and the others go on. Leaves output 1's context current."""
+    121 fps against 60–81). One that will not build is closed and counts
+    as not opened, its `missing` saying why (`notes`, the SYSTEM page): a
+    window that is never drawn would show garbage and fool the watch
+    (review of #123). The others go on. Leaves output 1's context
+    current."""
     make = make_context or moderngl.create_context
     for slot in slots[1:]:
         if not slot.opened:
@@ -394,7 +399,14 @@ def _open_presenters(slots: list[Slot], make_context=None) -> None:
             glfw.swap_interval(0)
             slot.presenter = Presenter(make())
         except Exception as e:  # noqa: BLE001 — one output must not stop the launch
-            slot.error = _err("presenter", e)
+            glfw.make_context_current(slots[0].win)
+            _quiet(lambda w=slot.win: glfw.destroy_window(w))
+            slot.win, slot.presenter = None, None
+            slot.missing = f"its GL context would not open ({_err('presenter', e)})"
+            note = f"output: {slot.label}: {slot.missing} — not opened"
+            print(note, file=sys.stderr)
+            if notes is not None:
+                notes.append(note)
     glfw.make_context_current(slots[0].win)
 
 
@@ -966,7 +978,7 @@ def main() -> None:
     renderer = Renderer(ctx)
     s = ViewState()
     # each later output: a presenter on its own context, never waiting
-    _open_presenters(slots)
+    _open_presenters(slots, notes=cfg.setdefault("notes", []))
     later = [sl for sl in slots[1:] if sl.opened]
 
     # the control side: imgui on the control window's context. Its swap

@@ -631,6 +631,14 @@ def test_the_windows_open_where_placement_says(monkeypatch, tmp_path, capsys):
     g, render, ctrl = _open(monkeypatch, cfg, tmp_path)
     assert (g.pos[render], g.pos[ctrl]) == ((16, 54), (1728 - 960 - 16, 54))
     assert len(cfg["notes"]) == 1 and cfg["notes"][0].startswith("placement: ")
+    # …and a later output whose screen is not connected stays closed then
+    # too (fork F9; review of #123), while one on a connected screen opens
+    cfg = {"output": {"screens": [{}, {"monitor": 5}, {"monitor": 1}]}}
+    g = _PlaceGlfw()
+    monkeypatch.setattr(app, "glfw", g)
+    slots, _ = app._windows(False, cfg, tmp_path)
+    assert [s.opened for s in slots] == [True, False, True]
+    assert slots[1].missing == "screen 5 is not connected"
     monkeypatch.setattr(placement, "place", place)
 
     # and with no home given nothing is read: the old one-argument call
@@ -988,13 +996,21 @@ def test_only_the_first_output_waits_for_the_screen(monkeypatch):
             raise m
         return m
 
-    app._open_presenters(slots, make)
-    assert log == ["current w2", "interval 0", "current w3", "interval 0", "current w1"]
+    destroyed: list = []
+    app.glfw.destroy_window = destroyed.append
+    notes: list[str] = []
+    app._open_presenters(slots, make, notes)
+    assert log == ["current w2", "interval 0", "current w3", "interval 0", "current w1",
+                   "current w1"]
     assert isinstance(slots[1].presenter, app.Presenter) and slots[2].presenter is None
-    assert slots[2].error == "presenter: RuntimeError: no context"
+    # one that will not build is closed and counts as not opened (review of #123):
+    # never drawn, it would show garbage and the watch would count it as live
+    assert destroyed == ["w3"] and not slots[2].opened
+    assert slots[2].missing == "its GL context would not open (presenter: RuntimeError: no context)"
+    assert notes == [f"output: output 3 (third): {slots[2].missing} — not opened"]
     src = inspect.getsource(app.main)
     assert src.index("glfw.make_context_current(render_win)") < src.index(
-        "glfw.swap_interval(1)") < src.index("_open_presenters(slots)")
+        "glfw.swap_interval(1)") < src.index("_open_presenters(slots, ")
     assert src.index("glfw.swap_interval(0)") > src.index("glfw.make_context_current(ctrl_win)")
 
 
