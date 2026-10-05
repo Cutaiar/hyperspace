@@ -10,6 +10,11 @@ any widget. The open strip is the effect's own five (on, mix, speed,
 blend, order) and a row per annotated uniform, with the file's parse or
 compile error under it.
 
+An open effect that is not running says why (plan 16 WP3, `why_idle`):
+one line over its rows — off, the stack bypassed, the stack's mix at 0,
+its own mix at 0 — with a chip that mends the first two ("turn on",
+"effects on"). The rows under the line are dimmed but live.
+
 Which strip is open is a name (`FxState.sel_name`), not a place in the
 stack: moving an effect's order or loading a preset never changes it.
 
@@ -35,6 +40,16 @@ ORDER_W = 96        # the order slider beside the blend combo
 LED_GAP = 2.0       # px between a chip's LED and its name
 LED_ON_TIP = "on — click to switch off"
 LED_OFF_TIP = "off — click to switch on"
+IDLE_ALPHA = 0.45   # how much of an idle strip's rows shows through the veil
+# why_idle's reason → the strip's line, the chip beside it, the param it sets
+IDLE = {
+    "off": ("off — nothing below shows until it is on", "turn on", "fx.{name}.on"),
+    "bypassed": ("the whole stack is bypassed", "effects on", "fx.on"),
+    "fx mix 0": ("FX mix is at 0", None, ""),         # its fader is at the top of the page
+    "mix 0": ("its mix is at 0", None, ""),           # its fader is the next row
+}
+IDLE_TIPS = {"off": "Switch this effect on.",
+             "bypassed": "Switch the effect stack on (the Effects check at the top)."}
 RESET_NOTE = "a preset load resets the effect stack; save it as a preset to keep it"
 
 
@@ -89,9 +104,18 @@ def page(panel, dt: float) -> None:
     err = _error(chain, fx, sel)
     if err:
         imgui.text_colored(ui.WARN, err)
+    # plan 16 WP3: an effect that is not running says why, and the rows
+    # under the line are dimmed but live — set it up dark, then switch it on
+    idle = why_idle(fx, sel)
+    if idle is not None:
+        _idle_line(panel, sel, idle)
     panel._check(f"{pre}.on")
     imgui.same_line()
     panel._slider(f"{pre}.mix")
+    if idle is not None:
+        _dim(imgui.get_item_rect_min(), imgui.get_item_rect_max())
+    top = imgui.get_cursor_screen_pos()
+    right = top.x + imgui.get_content_region_avail().x
     panel._row(f"{pre}.speed", label="speed")
     panel._label_cell("blend")
     panel._tip(r[f"{pre}.blend"])
@@ -102,6 +126,53 @@ def page(panel, dt: float) -> None:
     for p in spec.params:
         if f"{pre}.{p.key}" in r:
             panel._row(f"{pre}.{p.key}", label=p.label.lower())
+    if idle is not None:
+        _dim(top, imgui.ImVec2(right, imgui.get_cursor_screen_pos().y))
+
+
+def why_idle(fx, name: str) -> str | None:
+    """Why `name` is not in fx.chain(), first reason only; None while it runs.
+    "off" | "bypassed" | "fx mix 0" | "mix 0"."""
+    v = fx.values[name]
+    if not v["on"]:
+        return "off"
+    if not fx.on:
+        return "bypassed"
+    if fx.mix <= 0.0:
+        return "fx mix 0"
+    if v["mix"] <= 0.0:
+        return "mix 0"
+    return None
+
+
+def _idle_line(panel, name: str, reason: str) -> None:
+    """The open strip's one line saying why its effect is not running, and
+    for the two reasons a click mends, the chip that mends it. The chip
+    writes a base through Param.set, as the checks do."""
+    text, chip, pid = IDLE[reason]
+    pid = pid.format(name=name)
+    if chip is None:
+        imgui.text_colored(ui.WARN, text)
+        return
+    # the text on the chip's baseline: a chip is a frame with CHIP_PAD
+    imgui.push_style_var(imgui.StyleVar_.frame_padding, ui.CHIP_PAD)
+    imgui.align_text_to_frame_padding()
+    imgui.pop_style_var()
+    imgui.text_colored(ui.WARN, text)
+    imgui.same_line()
+    if ui.chip(f"{chip}##idle.{pid}"):
+        panel.reg[pid].set(True)
+    panel._tip(panel.reg[pid], IDLE_TIPS[reason])
+
+
+def _dim(lo: imgui.ImVec2, hi: imgui.ImVec2) -> None:
+    """Dim what is already drawn in the rect: a veil of the window's ground
+    over it. The controls under it stay live (they are not disabled, fork
+    F2), and their menus, tooltips and combo lists — windows of their own —
+    stay at full strength, which a pushed style alpha would not leave them."""
+    c = imgui.get_style_color_vec4(imgui.Col_.window_bg)
+    imgui.get_window_draw_list().add_rect_filled(
+        lo, hi, ui.u32(imgui.ImVec4(c.x, c.y, c.z, 1.0 - IDLE_ALPHA)))
 
 
 def _chip(panel, fx, name: str, label: str, width: float, open_: bool) -> None:
