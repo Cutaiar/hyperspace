@@ -290,6 +290,23 @@ class Output:
         """What the renderer clears to this frame."""
         return self.bg if self.mode == "overlay" else 1.0
 
+    def windowed_rect(self) -> tuple[int, int, int, int] | None:
+        """The window's rect as a plain window (x, y, w, h): where it is
+        while it is one, and the rect a fullscreen or overlay window goes
+        back to (`_saved_rect`) otherwise — what the launch placement
+        remembers (placement.py), never the cover of a screen. Read-only;
+        None with no backend or when the window system will not say."""
+        if self.win is None or self.backend is None:
+            return None
+        # the mode the window is actually in, not the one the params ask
+        # for: until apply() has run, a just-flipped toggle has moved nothing
+        if self._applied["mode"] != "window":
+            return self._saved_rect
+        try:
+            return tuple(self.backend.window_rect(self.win))
+        except Exception:  # noqa: BLE001 — as apply(): a hiccup is not a crash
+            return None
+
     def apply(self) -> None:
         """Push state to the window; each attribute only when it changed."""
         if self.win is None or self.backend is None:

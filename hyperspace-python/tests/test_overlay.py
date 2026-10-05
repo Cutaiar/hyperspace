@@ -307,6 +307,41 @@ def test_backend_error_is_reported_not_raised(rig):
     assert rig.out.error.startswith("output: no cocoa")
 
 
+def test_windowed_rect_is_the_saved_rect_while_fullscreen_or_overlay(rig):
+    """What the launch placement remembers (plan 16 WP4, fork F6): the
+    plain window's rect, never the cover of a screen — and reading it
+    moves nothing."""
+    home = (100, 100, 1280, 820)
+    assert rig.out.windowed_rect() == home
+    rig.b.rect = home = (240, 180, 1000, 700)            # dragged and resized
+    assert rig.out.windowed_rect() == home
+    for mode in ("fullscreen", "overlay"):
+        # the toggle flipped but not yet applied: the window is still a window
+        rig.reg[f"output.{mode}"].set(True)
+        assert rig.out.windowed_rect() == home
+        rig.out.apply()
+        assert rig.b.rect == (0, 0, 1728, 1117)          # it covers the screen…
+        assert rig.out.windowed_rect() == home           # …and is remembered by its window
+        rig.reg["output.monitor"].set(2)                 # another screen while on: the same
+        rig.out.apply()
+        assert rig.b.rect == (1728, 0, 2560, 1440) and rig.out.windowed_rect() == home
+        rig.reg["output.monitor"].set(0)
+        rig.reg[f"output.{mode}"].set(False)
+        rig.out.apply()
+        assert rig.b.rect == home and rig.out.windowed_rect() == home
+    # read-only: no window-system call, no state moved
+    rig.reg["output.fullscreen"].set(True)
+    rig.out.apply()
+    calls, applied, saved = list(rig.b.calls), dict(rig.out._applied), rig.out._saved_rect
+    rig.out.windowed_rect()
+    assert (rig.b.calls, rig.out._applied, rig.out._saved_rect) == (calls, applied, saved)
+    # no backend: nothing to say; a window system that raises: the same
+    assert Output(None, None).windowed_rect() is None and Output("win", None).windowed_rect() is None
+    out = Output("win", FakeBackend())
+    out.backend.window_rect = lambda win: 1 / 0
+    assert out.windowed_rect() is None
+
+
 def test_headless_output_has_no_window_to_push_to():
     reg = _registry()
     out = Output(None, None, allowed=True)
