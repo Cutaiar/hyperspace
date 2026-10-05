@@ -6,9 +6,9 @@ live thumbnails — the echoes newest first, straight from the atlas
 texture, with the dream buffer at the end when a worker has filled it),
 DREAM (the worker's status line — device and copy path, ms per submit,
 frames behind, drops, NaN resets, the stability clamp — or why there is
-none; the net layer as a row of chips; the worker's settings; the dream
-buffer's hue, saturation and tint — lookback.py's chroma()), and BOTH
-(the grade, the occlusion and the size, which every layer of the wake
+none; the net layer as one menu of every layer of both nets; the
+worker's settings; the dream buffer's hue, saturation and tint —
+lookback.py's chroma()), and BOTH (the grade, the occlusion and the size, which every layer of the wake
 shares). `SECTIONS` is the layout: which param is drawn under which
 title, in order, two to a row. One preset strip for the group, under the
 page's title.
@@ -26,11 +26,11 @@ from __future__ import annotations
 from imgui_bundle import imgui
 
 from . import ui
-from .lookback import LAYERS, RES, tint_colour
+from .lookback import LAYER_INFO, LAYERS, RES, tint_colour
 from .params import Kind
 
 # what is drawn under each title, in order. `dream.on` is the page's own
-# switch, above them; `dream.layer` is the DREAM section's chip row and the
+# switch, above them; `dream.layer` is the DREAM section's layer menu and the
 # rest are half-width cells, two to a row.
 SECTIONS = {
     "echoes": ("dream.echo_mix", "dream.fade", "dream.echoes", "dream.gap"),
@@ -51,17 +51,8 @@ SHORT = {"dream.echo_mix": "brightness", "dream.fade": "fade time", "dream.echoe
          "dream.sat": "saturation", "dream.tint": "tint", "dream.tint_from": "tint from",
          "dream.tint_hue": "tint hue", "dream.tint_sat": "tint sat", "dream.darken": "darken",
          "dream.contrast": "contrast", "dream.occlude": "shape hides", "dream.res": "detail"}
-# dream.layer's chips, one per lookback.LAYERS entry. The first three are
-# the words the param's tip uses; the inception layers share one description
-# there, so they keep the end of their names until someone has looked at
-# them side by side (plan 20 hand check P5). Renaming is one line each.
-LAYER_CHIPS = {"conv2_2": "grain", "conv3_3": "swirl", "conv4_3": "blot",
-               "inception3b": "3b", "inception4c": "4c", "inception4e": "4e"}
-LAYER_SAYS = {"conv2_2": "fine grain", "conv3_3": "the classic swirl", "conv4_3": "blotchier",
-              "inception3b": "the eyes-and-dogs curls, finest",
-              "inception4c": "the eyes-and-dogs curls", "inception4e": "the eyes-and-dogs curls, "
-              "largest"}
 LABEL_W = 94        # a cell's label column: "SHAPE HIDES", the longest, is 88 px
+LAYER_POPUP_H = 520  # the layer menu's most height before it scrolls, px
 THUMB_H = 48        # thumbnail height, px; width follows the echo's aspect
 TIP_W = 380         # this page's own hovers wrap at this width (a set_tooltip line does not)
 STATUS_LINES = 3   # the worker's status is at most this tall; the rest is on its hover
@@ -69,9 +60,9 @@ STATUS_LINES = 3   # the worker's status is at most this tall; the rest is on it
 
 def page_label(pid: str) -> str:
     """What the page calls `pid`: its cell's label, the switch's own, or —
-    for the layer — its chips'."""
+    for the layer, a menu with no label — the layer's own name."""
     if pid == "dream.layer":
-        return " / ".join(LAYER_CHIPS.get(name, name) for name in LAYERS)
+        return "(the layer's name)"
     return SHORT.get(pid, "Look-back")
 
 
@@ -97,7 +88,7 @@ def page(panel, dt: float) -> None:
 
     panel._section("dream", note=NOTES["dream"])
     _worker_line(panel, lb)
-    _layer_chips(panel)
+    _layer_menu(panel)
     _cells(panel, lb, "##dream", [pid for pid in SECTIONS["dream"] if pid != "dream.layer"])
     imgui.spacing()
 
@@ -106,7 +97,7 @@ def page(panel, dt: float) -> None:
 
 
 def _say(text: str) -> None:
-    """A hover that wraps: a chip's, the swatch's and the worker's whole
+    """A hover that wraps: a layer's, the swatch's and the worker's whole
     status are longer than a tooltip's one line can be wide."""
     if imgui.begin_tooltip():
         imgui.push_text_wrap_pos(TIP_W)
@@ -137,34 +128,70 @@ def _cells(panel, lb, table: str, ids) -> None:
     imgui.end_table()
 
 
-def _layer_chips(panel) -> None:
-    """`dream.layer` as six chips tiling the row, the lit one its base. A
-    click is a scene-setter's write (the layer is not modulatable: a change
-    loads another trunk); a right-click on any of them is the param's menu."""
+def layer_menu() -> list[tuple[str, list[str]]]:
+    """The layer menu's groups in order: (net, its layer names shallow →
+    deep), from lookback.LAYER_INFO."""
+    out: list[tuple[str, list[str]]] = []
+    for name, (net, _, _) in LAYER_INFO.items():
+        if not out or out[-1][0] != net:
+            out.append((net, []))
+        out[-1][1].append(name)
+    return out
+
+
+def layer_preview(name: str, width: float) -> str:
+    """The closed menu's text: the layer's name and its short description,
+    cut to `width` in the current font."""
+    short = LAYER_INFO.get(name, ("", "", ""))[1]
+    return ui.fit_text(f"{name} · {short}" if short else name, width)
+
+
+def _layer_menu(panel) -> None:
+    """`dream.layer` as one combo the row wide: closed, the layer's name and
+    short description; open, every layer of both nets under a heading for
+    each, shallow → deep, the name and its short description on a line,
+    the longer description on hover. The popup scrolls past LAYER_POPUP_H.
+    A pick is a scene-setter's write (the layer is not modulatable: a change
+    loads another trunk); a right-click is the param's menu."""
     a = panel.reg["dream.layer"]
     p = panel._real(a)
-    gap = imgui.get_style().item_spacing.x
-    w = max((imgui.get_content_region_avail().x - gap * (len(LAYERS) - 1)) / len(LAYERS), 1.0)
-    row = None
-    for k, name in enumerate(LAYERS):
-        if k:
-            imgui.same_line()
-        hit = ui.lit_chip(f"{LAYER_CHIPS.get(name, name)}##chip.{a.id}.{k}", k == p.base,
-                          size=imgui.ImVec2(w, 0))
-        if imgui.is_item_hovered():
-            _say(f"{name}: {LAYER_SAYS.get(name, name)}\n\n{a.tip}")
-        panel._ctx(a, key=f".{k}")
-        lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
-        row = (lo, hi) if row is None else (row[0], hi)
-        if hit:
-            p.set(k)
-    # armed to learn: one outline round the row, as a combo would have had
-    # one (panel._learn_frame per chip would draw six)
-    lrn = panel.learn
-    if row is not None and lrn is not None and lrn.learning == a.id:
-        imgui.get_window_draw_list().add_rect(
-            imgui.ImVec2(row[0].x - 2, row[0].y - 2), imgui.ImVec2(row[1].x + 2, row[1].y + 2),
-            ui.u32(ui.RED), 999.0, 2.0)
+    k_now = int(p.base)
+    now = LAYERS[k_now] if 0 <= k_now < len(LAYERS) else "—"
+    imgui.set_next_item_width(-1)
+    pad = imgui.get_style().frame_padding.x
+    room = imgui.get_content_region_avail().x - imgui.get_frame_height() - 2 * pad
+    imgui.set_next_window_size_constraints(
+        imgui.ImVec2(0, 0), imgui.ImVec2(1e6, min(LAYER_POPUP_H,
+                                                  imgui.get_io().display_size.y * 0.7)))
+    if not imgui.begin_combo(f"##{a.id}", layer_preview(now, room)):
+        # closed: the frame is the last item, for the hover, the param's
+        # menu and the learn outline (open, the popup is the last window)
+        if imgui.is_item_hovered() and now in LAYER_INFO:
+            net, _, long = LAYER_INFO[now]
+            _say(f"{now} · {net}\n\n{long}\n\n{a.tip}")
+        panel._ctx(a)
+        panel._learn_frame(a)
+        panel._mod_dot(p)
+        return
+    name_w = max(imgui.calc_text_size(n).x for n in LAYERS) + 3 * pad
+    for net, names in layer_menu():
+        imgui.spacing()
+        ui._micro(net, ui.FAINT)              # a heading, not a choice
+        for name in names:
+            k = LAYERS.index(name)
+            _, short, long = LAYER_INFO[name]
+            chosen = k == k_now
+            x = imgui.get_cursor_pos_x()
+            if imgui.selectable(f"{name}##layer.{name}", chosen)[0] and not chosen:
+                p.set(k)
+            if imgui.is_item_hovered():
+                _say(f"{name} · {net}\n\n{long}")
+            if chosen and imgui.is_window_appearing():
+                imgui.set_item_default_focus()
+                imgui.set_scroll_here_y()
+            imgui.same_line(x + name_w)
+            imgui.text_colored(ui.TEXT if chosen else ui.DIM, short)
+    imgui.end_combo()
 
 
 def _trail_note(r) -> str:

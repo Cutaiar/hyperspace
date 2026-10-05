@@ -759,7 +759,7 @@ usual setting).
    device (not "no worker").
 2. From the page's preset strip load `default`, then `tracer-only`. Turn
    on the page's **Look-back** switch. Play music.
-3. Try each of the six layer chips, **passes**, **strength**, **speed**
+3. Try layers from the layer menu, **passes**, **strength**, **speed**
    and the colour settings (hue, saturation, tint, tint from). Save two
    or three looks you like as presets in `<home>/dream/` — candidates to
    ship.
@@ -790,27 +790,33 @@ looking different (the old file is kept as `<file>.bak-v2-frames`).
 
 **Needs:** laptop; the dream running.
 
-**Do:** F4 (WAKE), LOOKBACK page. Read every label aloud. Click each of
-the six layer chips in turn and wait for the status line to say it has
-loaded. Right-click a chip.
+**Do:** F4 (WAKE), LOOKBACK page. Read every label aloud. Open the layer
+menu under the DREAM status: read it, hover a few lines, and choose
+layers from both nets — several shallow, several deep — waiting each
+time for the status line to name the layer. Right-click the menu.
 
 **Right if:** three sections — **ECHOES** (brightness, fade time, count,
 time apart, then thumbnails; the note reads "24 × 50 MS · THE TRAIL
 REACHES 1.20 S"; time apart `50 ms`, fade time `0.60 s`), **DREAM**
-(status, at most three lines; six layer chips; brightness, speed,
-strength, passes, linger, jitter, scales, hue, saturation, tint, tint
-from, tint hue, tint sat, and the tint swatch) and **BOTH** (darken,
-contrast, shape hides, detail). The page does not scroll. Each label
-says what it does without the hover. On the ROUTING page the longer
-names read "Echo time apart", "Dream brightness", "Shape hides wake".
-Right-click on a chip: "not modulatable".
+(status, at most three lines; the layer menu, closed it reads "conv3_3 ·
+small loops, the classic"; brightness, speed, strength, passes, linger,
+jitter, scales, hue, saturation, tint, tint from, tint hue, tint sat, and
+the tint swatch) and **BOTH** (darken, contrast, shape hides, detail).
+The page does not scroll. Each label says what it does without the
+hover. The menu lists VGG16's 13 layers, then GoogLeNet's 12, each with a
+few words, readable at a pace; a hover says more. Within one net a new
+layer shows at once; the first layer of the other net takes a moment.
+On the ROUTING page the longer names read "Echo time apart", "Dream
+brightness", "Shape hides wake". Right-click on the menu: "not
+modulatable".
 
-**Judge:** the layer chips are called grain, swirl, blot, 3b, 4c and 4e.
-These names were guessed: say whether the first three fit and what the
-last three should be called (about five letters fit).
+**Judge:** the words beside each layer were written from offscreen
+pictures (`plans/assets/20-fx-dream-looks/dream-layers*.jpg`) and from
+how deep the layer is, not from the rig: say which ones do not match
+what you see, whether 25 layers is too many to choose from, and whether
+the ones marked "slower" are too slow to keep.
 
-**Wrong if:** the page scrolls; a chip does not load its layer; a label
-is cut.
+**Wrong if:** the page scrolls; a layer does not load; a label is cut.
 
 *(check 95)*
 
@@ -837,12 +843,12 @@ is enough (faster is also shallower, by design).
 
 **Needs:** laptop.
 
-**Do:** LOOKBACK page, right-click a layer chip. ROUTING page: add a
-route and open its target list. Change the layer with a chip.
+**Do:** LOOKBACK page, right-click the layer menu. ROUTING page: add a
+route and open its target list. Change the layer from the menu.
 
-**Right if:** the menu says "not modulatable" where other controls offer
-"Route a lane here…"; "Dream layer" is not in the target list; the
-chips, a preset and a learned knob still change it. If a preset of yours
+**Right if:** the right-click menu says "not modulatable" where other
+controls offer "Route a lane here…"; "Dream layer" is not in the target
+list; the layer menu, a preset and a learned knob still change it. If a preset of yours
 had a route onto the layer: load it — the route is dropped and the footer
 says "preset <NAME>: dropped <source> → dream.layer: not modulatable";
 the file is not rewritten.
@@ -2861,8 +2867,9 @@ what you want changed.
 
 - **Knob smoothing at 80 ms** — does a knob feel late or right? Try 50
   and 200 ms. (A17, B27; checks 78, 79)
-- **The names of the six dream-layer buttons** — grain, swirl, blot, 3b,
-  4c, 4e were guessed. (L23; check 95)
+- **The dream-layer menu's words** — each of the 25 layers has a few
+  words on what it draws, written from offscreen pictures and depth;
+  which are wrong, and are 25 too many? (L23; check 95)
 - **Which hand styles to keep** — HANDS, JOINTS, PALMS, CAGE, MARIONETTE.
   (D9; check 109)
 - **The dream's look** — save two or three dream presets you like as

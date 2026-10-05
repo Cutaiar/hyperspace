@@ -54,7 +54,7 @@ here; overturn → the change, then the same.
 | 66 | Performers on effect target and face mapping | 91 | |
 | 67 | The chip grid is the chain; drag to reorder | 94 | |
 | 68 | Re-aim an effect by the strip's combo | 91, 94 | |
-| 69 | LOOKBACK as ECHOES / DREAM / BOTH | 95 | |
+| 69 | LOOKBACK as ECHOES / DREAM / BOTH; every layer in one menu | 95 | |
 | 70 | Dream "speed" is `dream.k`, in frames | 96 | |
 | 71 | Instance layouts: grid, honeycomb, ring | 97 | |
 | 72 | The bank of twenty-four | 81, 83 | |
@@ -285,7 +285,7 @@ here; overturn → the change, then the same.
 
 - **Built.** `dream.layer` (which net layer the dream works on) is not a
   route target, like "Echo time apart" and "Look-back detail": changing it
-  reloads part of the net. A preset, a key, the page's chips and a learned
+  reloads part of the net. A preset, a key, the page's menu and a learned
   knob or button still set it. A saved preset's route onto it is dropped
   at load with a note.
 - **Other option.** Leave it performable: a band on it reloads the net on
@@ -606,21 +606,30 @@ here; overturn → the change, then the same.
 - **To reverse.** A dozen lines in `ui_fx._faces_row` and the frame line.
 - **Judge it.** Checks 91 and 94.
 
-### 69. The LOOKBACK page as ECHOES, DREAM and BOTH, and its labels everywhere
+### 69. The LOOKBACK page as ECHOES, DREAM and BOTH, and every dream layer in one menu
 
-- **Built.** The page has three sections named for what a knob acts on;
-  the dream's layer is a row of six chips (grain, swirl, blot, 3b, 4c,
-  4e). The new labels are used everywhere: ROUTING, a Learn's line and
-  the desk say "Echo time apart" (was Spacing), "Shape hides wake" (was
-  Occlude), "Look-back detail" (was Resolution), "Dream speed", and so on.
-  No id, range or file changed.
-- **Other option.** Change the page only.
-- **To reverse.** The strings in the `dream.*` block of
-  `params.build_registry`; a chip name is one line of
-  `ui_lookback.LAYER_CHIPS`.
-- **Rough edge.** The six chip names come from the param's tooltip, not
-  from looking at the layers. Nobody has seen the page running.
-- **Judge it.** Check 95.
+- **Built.** The page has three sections named for what a knob acts on.
+  The dream's layer is one menu offering every layer of both nets — the
+  13 conv layers of VGG16 and GoogLeNet's conv1–conv3 and nine inception
+  blocks, 25 in all — under a heading per net, shallow to deep, each
+  with its own name and a few words on what it draws; a hover says more.
+  The deepest six say "slower" (over 25 ms a frame at 256 px). The new
+  labels are used everywhere: ROUTING, a Learn's line and the desk say
+  "Echo time apart" (was Spacing), "Shape hides wake" (was Occlude),
+  "Look-back detail" (was Resolution), "Dream speed", and so on. A saved
+  look keeps its layer: the stored index of the six older layers is
+  unchanged.
+- **Other option.** Offer only a few hand-picked layers, under nicknames.
+- **To reverse.** The words are one table, `lookback.LAYER_INFO`; a layer
+  left out is a line there and in `dream.TRUNKS` (append-only `LAYERS`
+  keeps saved indices).
+- **Rough edge.** The descriptions come from one to two seconds of
+  dreaming a still 24-cell and a colour field at the defaults
+  (`assets/20-fx-dream-looks/dream-layers*.jpg`), and from depth; nobody
+  has watched the new layers on the rig. A key or desk row that *steps*
+  the layer walks the stored order (the six older layers first), not the
+  menu's.
+- **Judge it.** Check 95: are the words right, and are 25 too many?
 
 ### 70. The dream's "speed" is `dream.k`, read in frames
 

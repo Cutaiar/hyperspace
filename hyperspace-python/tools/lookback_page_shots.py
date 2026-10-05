@@ -15,11 +15,13 @@ on import): no MIDI port, no audio device, no tracker.
 
   uv run python tools/lookback_page_shots.py                  # → lookback-page.png
   uv run python tools/lookback_page_shots.py --name NAME.png  # the same page, another file
+  uv run python tools/lookback_page_shots.py --closed --name NAME.png   # the layer menu shut
   uv run python tools/lookback_page_shots.py --speed          # → lookback-speed.png
   uv run python tools/lookback_page_shots.py --labels         # → lookback-labels.txt
 
-All land in docs/plans/assets/20-fx-dream-looks/. `--speed` is the top of
-the DREAM section (the status, the layer chips, the speed cell and its
+All land in docs/plans/assets/20-fx-dream-looks/. The page shot has the
+layer menu open and one layer's hover up (`--closed`: shut). `--speed` is the top of
+the DREAM section (the status, the layer menu, the speed cell and its
 readout) three times: `dream.k` at the slow end, the default and the fast
 end, each under a caption this tool draws. `--labels` writes the
 table old label → new label → what the knob does: the new labels and the
@@ -141,8 +143,10 @@ def labels() -> None:
         out.append("  ".join(c.ljust(w) for c, w in zip(row, widths)) + "  " + row[-1])
         if n == 0:
             out.append("  ".join("-" * w for w in widths) + "  " + "-" * 12)
-    out += ["", "dream.layer's chips: " + ", ".join(
-        f"{ui_lookback.LAYER_CHIPS[name]} = {name}" for name in LAYERS)]
+    from hyperspace.lookback import LAYER_INFO
+
+    out += ["", "dream.layer's menu (lookback.LAYER_INFO), in its order:"]
+    out += [f"  {net:<10} {name:<12} {short}" for name, (net, short, _) in LAYER_INFO.items()]
     OUT.mkdir(parents=True, exist_ok=True)
     text = "\n".join(line.rstrip() for line in out) + "\n"
     (OUT / "lookback-labels.txt").write_text(text)
@@ -153,7 +157,7 @@ def labels() -> None:
 SPEED_ROWS_H = 150      # the DREAM title, status, chips and two rows of cells, in points
 
 
-def shots(name: str, speed: bool = False) -> None:
+def shots(name: str, speed: bool = False, closed: bool = False) -> None:
     import glfw
     import moderngl
     import numpy as np
@@ -274,6 +278,41 @@ def shots(name: str, speed: bool = False) -> None:
         sheet.save(OUT / "lookback-speed.png", optimize=True)
         print(f"wrote {OUT / 'lookback-speed.png'}  — {'; '.join(said)}")
 
+    def open_layer_menu(hover: str) -> None:
+        """A click on the layer menu, then the mouse on `hover`'s line in
+        it, so the picture has the menu open and that layer's hover up."""
+        rects: dict[str, tuple] = {}
+        real_combo, real_sel = imgui.begin_combo, imgui.selectable
+
+        def combo(label, *a, **k):
+            out = real_combo(label, *a, **k)
+            if label == "##dream.layer" and not out:
+                lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+                rects["menu"] = (lo.x, lo.y, hi.x, hi.y)
+            return out
+
+        def sel(label, *a, **k):
+            out = real_sel(label, *a, **k)
+            lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+            rects[label.split("##", 1)[-1]] = (lo.x, lo.y, hi.x, hi.y)
+            return out
+        imgui.begin_combo, imgui.selectable = combo, sel
+        io = imgui.get_io()
+        try:
+            draw(2)
+            x0, y0, x1, y1 = rects["menu"]
+            io.add_mouse_pos_event((x0 + x1) / 2, (y0 + y1) / 2)
+            draw(1)
+            io.add_mouse_button_event(0, True)
+            draw(1)
+            io.add_mouse_button_event(0, False)
+            draw(2)
+            x0, y0, x1, y1 = rects[f"layer.{hover}"]
+            io.add_mouse_pos_event(x0 + 40, (y0 + y1) / 2)
+            draw(4)
+        finally:
+            imgui.begin_combo, imgui.selectable = real_combo, real_sel
+
     draw(40)
     lb = renderer.lookback
     what = (f"{len(lb.thumbnails())} echoes at {lb.echo[0]}×{lb.echo[1]}, the stand-in's "
@@ -281,8 +320,11 @@ def shots(name: str, speed: bool = False) -> None:
     try:
         if speed:
             speed_sheet()
+        elif closed:
+            shoot(name, what + ", the layer menu closed")
         else:
-            shoot(name, what)
+            open_layer_menu("conv4_3")
+            shoot(name, what + ", the layer menu open, conv4_3's hover up")
     finally:
         Panel._section = real_section
         impl.shutdown()
@@ -294,4 +336,4 @@ if __name__ == "__main__":
     if "--labels" in args:
         sys.exit(labels())
     name = args[args.index("--name") + 1] if "--name" in args else "lookback-page.png"
-    sys.exit(shots(name, speed="--speed" in args))
+    sys.exit(shots(name, speed="--speed" in args, closed="--closed" in args))

@@ -149,7 +149,9 @@ replaces a row, rewrite that row instead of adding a new one.
 | The compositor re-colours the dream buffer (`dream.hue / sat / tint`). Echoes pass untouched. | `lookback.py` | owner |
 | `dream.occlude` ("Shape hides wake"): the shape covers the wake where it drew. | `params.py` | owner |
 | Echo time is in seconds: `dream.fade` is a half-life and `dream.gap` is the time between echoes. | `params.py` | owner |
-| The LOOKBACK page has three sections: ECHOES, DREAM and BOTH. The dream layer is a row of six chips, and the registry labels match the page. | `ui_lookback.SECTIONS`, `ui_lookback.LAYER_CHIPS` | row 69 |
+| The LOOKBACK page has three sections: ECHOES, DREAM and BOTH. The dream layer is one menu of every layer of VGG16 and GoogLeNet (25), grouped by net, each with its name and a short description, a longer one on hover; the registry labels match the page. | `ui_lookback.SECTIONS`, `lookback.LAYER_INFO` | row 69 |
+| `dream.layer` is stored as an index into `lookback.LAYERS`, which is append-only: a new layer goes at the end, so a saved look keeps its layer. The menu's order is `LAYER_INFO`'s. | `lookback.LAYERS` | row 69 |
+| A net's weights are read once a run: every layer of that net is a cut of the same loaded stack. | `dream.build_trunk`, `DreamWorker.stacks` | row 69 |
 | The dream's "speed" is `dream.k`, read as the dream frames in which a frame's share halves. | `params.dream_speed_text` | row 70 |
 
 ## Library and persistence

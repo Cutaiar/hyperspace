@@ -47,8 +47,12 @@ status line. The IOSurface/DLPack zero-copy path the spike prototyped
 is documented there as the fallback if the alias API disappears; it is
 not built.
 
-Models. torchvision's pretrained VGG16 (conv2_2 / conv3_3 / conv4_3,
-through the ReLU) and GoogLeNet (inception 3b / 4c / 4e). Weights are
+Models. torchvision's pretrained VGG16 (every conv, conv1_1 … conv5_3,
+through its ReLU) and GoogLeNet (conv1 … conv3 and every inception block,
+3a … 5b) — lookback.LAYERS, TRUNKS below. A net's feature stack is read
+once and kept (``DreamWorker.stacks``): a layer is a cut of it, so a
+change between layers of one net reads no file and builds nothing (a
+first read builds the whole net, ~1.5 s for VGG16). Weights are
 looked for in ``weights_dir`` (default ``<library home>/weights``), then
 in torch's own hub cache, and otherwise downloaded on first use — 528 MB
 for VGG16, 50 MB for GoogLeNet, announced on stderr. A net that cannot
@@ -87,15 +91,30 @@ IMAGENET_STD = (0.229, 0.224, 0.225)
 
 # lookback.LAYERS name → (torchvision arch, where to cut). VGG cuts index
 # .features and include the ReLU after the named conv, as Deep Dream
-# conventionally hooks; GoogLeNet cuts after the named child.
+# conventionally hooks (cut = that ReLU's index + 1); GoogLeNet cuts after
+# the named child (its convs are conv + batch norm + ReLU already).
 TRUNKS: dict[str, tuple[str, Any]] = {
+    "conv1_1": ("vgg16", 2),
+    "conv1_2": ("vgg16", 4),
+    "conv2_1": ("vgg16", 7),
     "conv2_2": ("vgg16", 9),
+    "conv3_1": ("vgg16", 12),
+    "conv3_2": ("vgg16", 14),
     "conv3_3": ("vgg16", 16),
+    "conv4_1": ("vgg16", 19),
+    "conv4_2": ("vgg16", 21),
     "conv4_3": ("vgg16", 23),
-    "inception3b": ("googlenet", "inception3b"),
-    "inception4c": ("googlenet", "inception4c"),
-    "inception4e": ("googlenet", "inception4e"),
+    "conv5_1": ("vgg16", 26),
+    "conv5_2": ("vgg16", 28),
+    "conv5_3": ("vgg16", 30),
+    **{name: ("googlenet", name) for name in (
+        "conv1", "conv2", "conv3", "inception3a", "inception3b", "inception4a",
+        "inception4b", "inception4c", "inception4d", "inception4e", "inception5a",
+        "inception5b")},
 }
+# GoogLeNet's children through the deepest one a layer names: the pools
+# between them ride along in a cut, the aux heads and classifier never do
+GOOGLENET_LAST = "inception5b"
 WEIGHTS = {"vgg16": "VGG16_Weights", "googlenet": "GoogLeNet_Weights"}
 
 # step × steps / k at most. The spike's unmasked rule is 0.5; with the
@@ -155,32 +174,63 @@ def load_state(arch: str, weights_dir: Path) -> dict:
     return w.get_state_dict(progress=True, check_hash=True, model_dir=str(model_dir))
 
 
-def build_trunk(layer: str, weights_dir: Path, device, dtype) -> torch.nn.Module:
-    """The pretrained net cut at `layer`, frozen, in eval, on the device."""
+def net_stack(arch: str, state: dict | None) -> list[tuple[str, Any]]:
+    """The net's feature stack as (name, module) in order: VGG16's
+    .features (named by index), GoogLeNet's children through inception5b.
+    `state` None leaves the weights random (tests)."""
     import torchvision.models as tvm
-    from torch import nn
 
-    arch, cut = TRUNKS[layer]
-    state = load_state(arch, weights_dir)
     if arch == "vgg16":
         net = tvm.vgg16(weights=None)
+        if state is not None:
+            net.load_state_dict(state)
+        return [(str(k), m) for k, m in enumerate(net.features.children())]
+    # the pretrained dict carries the aux heads; build with them, cut before
+    net = tvm.googlenet(weights=None, aux_logits=True, init_weights=False,
+                        transform_input=False)
+    if state is not None:
         net.load_state_dict(state)
-        seq = nn.Sequential(*list(net.features.children())[:cut])
-    else:
-        # the pretrained dict carries the aux heads; build with them, cut before
-        net = tvm.googlenet(weights=None, aux_logits=True, init_weights=False,
-                            transform_input=False)
-        net.load_state_dict(state)
-        mods = []
-        for name, child in net.named_children():
-            mods.append(child)
-            if name == cut:
-                break
-        seq = nn.Sequential(*mods)
-    seq.eval()
-    for p in seq.parameters():
-        p.requires_grad_(False)
-    return seq.to(device=device, dtype=dtype)
+    stack = []
+    for name, child in net.named_children():
+        stack.append((name, child))
+        if name == GOOGLENET_LAST:
+            break
+    return stack
+
+
+def load_stack(arch: str, weights_dir: Path, device, dtype) -> list[tuple[str, Any]]:
+    """`net_stack` with the pretrained weights, frozen, in eval, on the
+    device. One read of the weights file serves every layer of the net."""
+    stack = net_stack(arch, load_state(arch, weights_dir))
+    for _, m in stack:
+        m.eval()
+        for p in m.parameters():
+            p.requires_grad_(False)
+        m.to(device=device, dtype=dtype)
+    return stack
+
+
+def cut_stack(arch: str, stack: list[tuple[str, Any]], cut) -> torch.nn.Module:
+    """The stack up to and including `cut` (TRUNKS's second half) as one
+    module. It shares the stack's own modules: a cut copies nothing."""
+    from torch import nn
+
+    n = cut if arch == "vgg16" else [name for name, _ in stack].index(cut) + 1
+    return nn.Sequential(*(m for _, m in stack[:n])).eval()
+
+
+def build_trunk(layer: str, weights_dir: Path, device, dtype,
+                stacks: dict[str, list] | None = None) -> torch.nn.Module:
+    """The pretrained net cut at `layer`, frozen, in eval, on the device.
+    `stacks` (arch → load_stack's list) keeps each net once it is read, so
+    a change to another layer of the same net reads no file."""
+    arch, cut = TRUNKS[layer]
+    stack = None if stacks is None else stacks.get(arch)
+    if stack is None:
+        stack = load_stack(arch, weights_dir, device, dtype)
+        if stacks is not None:
+            stacks[arch] = stack
+    return cut_stack(arch, stack, cut)
 
 
 # ------------------------------------------------------------------ the step
@@ -310,6 +360,7 @@ class DreamWorker:
         self._latest: tuple[int, np.ndarray, int] | None = None   # (output, pixels, frame)
         # the dream
         self.net = None
+        self.stacks: dict[str, list] = {}     # arch → its feature stack, read once
         self.layer = ""                       # the loaded trunk's layer name
         self._failed_layer = ""               # a layer that could not be had
         self.D: torch.Tensor | None = None
@@ -458,7 +509,8 @@ class DreamWorker:
             return False
         self.loading = layer
         try:
-            self.net = build_trunk(layer, self.weights_dir, self.device, self.dtype)
+            self.net = build_trunk(layer, self.weights_dir, self.device, self.dtype,
+                                   self.stacks)
         except Exception as e:  # noqa: BLE001 — no net means no dream, not a crash
             self.net, self._failed_layer = None, layer
             self.error = f"no {layer}: {type(e).__name__}: {e}"[:120]
