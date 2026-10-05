@@ -1,6 +1,6 @@
 # Decision register — everything that is yours to decide
 
-As of 2026-10-04. **Rows 1–33 are answered** (26–33, from the Oct 3–4 session, on 2026-10-04; Part A4). Rows the unattended run of plans 15–21 adds after 33 are built on its recommendation and wait for you to confirm or overturn (the answer sheet at the end). **Plan 15 added rows 34–44** (Part A4, after row 33).
+As of 2026-10-04. **Rows 1–33 are answered** (26–33, from the Oct 3–4 session, on 2026-10-04; Part A4). Rows the unattended run of plans 15–21 adds after 33 are built on its recommendation and wait for you to confirm or overturn (the answer sheet at the end). **Plan 15 added rows 34–44** (Part A4, after row 33); plans 16, 18, 17 and 20 rows 45–71, and **plan 19 rows 72–78**.
 implementing and settling the open work is here, whichever plan or session
 raised it. Each entry stands on its own: what the thing is, what the software
 does today, the options, a recommendation with its reasons, the trade-off you
@@ -722,8 +722,17 @@ performer may drive there, the chain view (the chip grid, dragged to
 reorder, with a drawing), re-aiming an effect by the strip's combo, the
 look-back page's sections and labels (the old → new names in brief),
 the dream's "speed", and instance layouts (with a drawing). Plan 20's
-forks F1–F10 are these seven rows. Plan 19 is still being built and
-takes the rows after these.
+forks F1–F10 are these seven rows.
+**Rows 72–78 are plan 19's** (PRs #104, #110, #115, #114, #117 and
+#119), settled the same way, each on its plan's recommendation: the bank
+of twenty-four (no new triggers, the show file, TRACER on slot 9, the
+PRESETS page — with its drawing), clip rows 4–5 as the bank with their
+lights and the old shape pads dropping quietly (with the desk before and
+after), `bindings.json` never rewritten without a backup and the launch
+saying what it did, the device knobs re-cut, hide / rename / the trash
+and its two-click empty, the dirty dot and "save copy", and the home in
+git (with a drawing of what is tracked). Plan 19's twelve forks are
+these seven rows. Plan 21 takes the rows after these.
 
 You also set how the work runs, since nobody will be watching it:
 
@@ -2774,6 +2783,415 @@ whole.
 Hand check 97. Seen as offscreen renders and hidden-window pictures of
 the page; never on the projector.
 
+### 72. P19-a — a bank of twenty-four: no new triggers, the show file, slot 9, the page
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** You asked for more than eight presets on the desk
+(twenty-four: clip row 1 and clip rows 4–5). The bank — the show's list
+of preset names — is now twenty-four slots; the first eight are still
+F1–F8 and clip row 1, slots 9–24 are the desk's clip rows 4 and 5 (row
+73) and the PRESETS page's sixteen smaller buttons. Four details were
+left to the build.
+
+```
+ PRESETS page, a fresh home's party show, TRIP loaded and edited
+
+ presets  ·  F1–F8  ·  ⇧ saves  ·  9–24 on the desk
+ ┌──────────────────────┐ ┌──────────────────────┐
+ │ F1  TUMBLE           │ │ F2  FACES            │
+ │ F3  FIELD            │ │ F4  WAKE             │
+ │ F5  TRIP           ○ │ │ F6  ACID             │   lit: the loaded one; ○ its preset is edited
+ │ F7  MANDALA          │ │ F8  NOITA            │
+ └──────────────────────┘ └──────────────────────┘
+ ┌──────────┐┌──────────┐┌──────────┐┌──────────┐
+ │ 9 TRACER ││ 10 —     ││ 11 —     ││ 12 —     │   desk row 4, pads 1–4
+ │ 13 —     ││ 14 —     ││ 15 —     ││ 16 —     │   desk row 4, pads 5–8
+ │ 17 —     ││ 18 —     ││ 19 —     ││ 20 —     │   desk row 5, pads 1–4
+ │ 21 —     ││ 22 —     ││ 23 —     ││ 24 —     │   desk row 5, pads 5–8
+ └──────────┘└──────────┘└──────────┘└──────────┘
+ click loads · ⇧click saves the live state as it · right-click: put preset here… / clear slot
+```
+
+**What the code did.** Eight slots, two a row, each with a load and a
+save trigger (`preset.load.k`, `preset.save.k`); the show file held
+eight names.
+
+| The detail | Option | Trade-off |
+|---|---|---|
+| Triggers for slots 9–24 (fork 1) | **(a) none: `preset.select` (24 choices) and the page's buttons** | No params added. A learned button or a performer cannot fire "load slot 17" by its own id. |
+| | (b) `preset.load.8…23`, `preset.save.8…23` | One spelling for all 24; 32 more params in every target list. |
+| The show file (fork 2) | **(a) `hyperspace.project/2`, the bank only as long as it needs; never rewritten by a load** | An older build still opens your show and plays F1–F8; it drops slots 9–24 from the file the next time it writes that show. |
+| | (b) a new `hyperspace.project/3` | An older build cannot damage the far slots, but refuses your show outright and opens the factory party instead. |
+| The factory shows' far slots (fork 3) | **(b) `party`: TRACER on slot 9, the rest empty; `house` empty** | The one party preset with no key gets a pad; save-as has fifteen empty slots. |
+| | (a) all empty; (c) every unslotted preset on row 4 | (a) TRACER stays off the desk; (c) puts the demos you are likely to cull on it and leaves nine for save-as. |
+| The page (fork 6) | **(B) F1–F8 two a row as before, then 9–24 four a row** | Names readable on all 24; the first eight unchanged; thin (below). |
+| | (A) 9–24 eight a row | Mirrors the desk, 46 px more room; a far slot reads as a number and one letter. |
+
+**Chosen: the bold option of each.** Things to know:
+
+- **No load rewrites a show.** A show of yours with eight names is
+  padded in memory and stays byte for byte as it was; a show that uses
+  only F1–F8 is still written with eight entries. **The first write
+  that puts a name past slot 8 keeps the eight-slot file first**, as
+  `<show>.hyp.json.bak-v2-bank8`, and if that copy cannot be made the
+  write is refused and the slot put back, with the reason in the footer.
+- **Only a fresh home's factory party show has TRACER on slot 9**; a
+  show you already have is never changed for it. So save-as lands on
+  slot 10 of the factory party show and on slot 9 of yours.
+- **The page with "more" open has 12 px to spare** once the status line
+  shows (measured); **a warning line on top of it scrolls the page by
+  11 px** while "more" is open. (A) is a change of two constants.
+- **A learned step, toggle or knob on `preset.select` lands on empty
+  slots** — a step stops on one ("slot 13: an empty slot") instead of
+  wrapping, a knob spreads over all 24. No factory row does this (the
+  pads are one slot each; QUANT walks the filled slots). Not fixed:
+  audit R14.
+- A show from before this build read by an older build after a far slot
+  is used: slots 1–8 play; the far slots' names go from the file at its
+  next write; the `.bak-v2-bank8` is the file from before any far slot.
+
+**Cost to reverse.** (b) triggers: the loop's bound in
+`params.build_registry`, one line. (b) schema: a migration step and a
+backup on first open. A different factory slot 9: one line of
+`library/projects/party.hyp.json`. Layout (A): `ui_presets.FAR_COLS`
+and the far chips' width. Plan 19 WP1 (PR #104);
+`test_library.py::test_the_bank_is_twenty_four_and_the_f_keys_eight`,
+`::test_an_eight_slot_show_loads_and_is_not_rewritten`,
+`::test_a_show_that_uses_only_the_first_eight_is_written_with_eight`,
+`::test_the_first_write_past_slot_eight_keeps_the_eight_slot_file`,
+`::test_a_long_bank_read_by_eight_slots_shows_the_first_eight`,
+`test_params.py::test_the_bank_adds_no_params`,
+`test_party_show.py::test_the_party_show_has_tracer_on_slot_nine_and_room_after`,
+`test_ui_presets.py::test_twenty_four_slots_fit_the_page_with_more_open`,
+`::test_a_far_slot_reads_its_number_and_name_and_has_the_slot_menu`.
+Hand checks 81 and 83. Hidden-window renders only; nobody has read the
+far slots' names from a step back.
+
+### 73. P19-b — clip rows 4–5 are the bank, their lights, and the old shape pads
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** Your answer made clip rows 4–5 slots 9–24, the same on
+both layers (invariant, D6 extended). Two details were left: what the
+bank's pads light up as, and what happens to the sixteen shape pads
+every preset you saved before carries in its desk.
+
+```
+ BEFORE                  preset layer                              under SHIFT (global layer)
+        1     2     3     4     5     6     7     8      9         1 … 8                  9
+ G1   [F1]  [F2]  [F3]  [F4]  [F5]  [F6]  [F7]  [F8]   Points      [F1] … [F8]            ·
+ G2     ·     ·     ·     ·     ·     ·     ·     ·    Lines       scene 1 … scene 8      ·
+ G3     ·     ·     ·     ·   STILL ORBIT WAVE RIPPLE  Faces       scene 9, 10, 11 · · · · ·   ·
+ G4   shape 1 …………………………………………………………… shape 8       Rotate      · · · · · · · ·        ·
+ G5   shape 9 …………………………………………………………… shape 16      Reset view  · · · · · · · ·        ·
+ G6   [════════════ SAVE AS (hold) ════════════]      [Reset all]  [════ SAVE AS ════]   [Reset all]
+ C    cue knob: Shape (relative, all 25)                           ·
+
+ AFTER (plan 19)         preset layer                              under SHIFT (global layer)
+        1     2     3     4     5     6     7     8      9         1 … 8                  9
+ G1   [F1]  [F2]  [F3]  [F4]  [F5]  [F6]  [F7]  [F8]   Points      [F1] … [F8]            ·
+ G2     ·     ·     ·     ·     ·     ·     ·     ·    Lines       scene 1 … scene 8      ·
+ G3     ·     ·     ·     ·   STILL ORBIT WAVE RIPPLE  Faces       scene 9, 10, 11 · · · · ·   ·
+ G4   [ 9]  [10]  [11]  [12]  [13]  [14]  [15]  [16]   Rotate      [ 9] … [16]            ·
+ G5   [17]  [18]  [19]  [20]  [21]  [22]  [23]  [24]   Reset view  [17] … [24]            ·
+ G6   [════════════ SAVE AS (hold) ════════════]      [Reset all]  [════ SAVE AS ════]   [Reset all]
+ C    cue knob: Shape (relative, all 25)                           ·
+
+ [ ] invariant (the same on both layers)   · dark
+ a bank pad:  green = the loaded preset (velocity 1)   amber = a preset is here (5)   dark = empty (0)
+ the on-screen desk: amber at half strength with the preset's name; an empty pad its glyph only
+```
+
+**What the code did.** Rows 4–5 set `view.shape` 0–15 on the preset
+layer — 16 of the 25 shapes; the cue knob reaches all 25. Row 1 lit
+only the loaded preset's pad: every other pad dark, filled or not.
+
+| The detail | Option | Trade-off |
+|---|---|---|
+| The lights (fork 5) | **(b) green loaded, amber filled, dark empty** | The desk shows where your presets are. Amber at velocity 5 is Akai's table, never seen on the mk1 beside green. |
+| | (a) the loaded pad green, all others dark | Nothing to build; 23 dark pads, full and empty alike. |
+| | (c) green, and dim green for filled | The mk1's clip LEDs have no dim level. |
+| The old shape pads in your presets (fork 4) | **(c) the sixteen exact old factory rows drop quietly at load; any other row on those pads is dropped with a note** | A warning means something you mapped was dropped. Your file and the live desk differ by rows nobody chose until the next save. |
+| | (a) a note per row, as for any row on an invariant control | Sixteen notes on every load of every preset you saved; "(+15 more)" all night hides a real one. |
+| | (b) one summary note per load | Still a warning on every load about nothing you did. |
+
+**Chosen: (b) and (c).** Things to know:
+
+- **The lit pad no longer shows which shape is up.** The cue knob
+  selects shapes (all 25, as before); it has no light. The VIEW page's
+  shape combo and the on-screen desk's "Shape" label show it.
+- **A preset file is never rewritten by a load**: the old pads are gone
+  from the live desk only, and the file loses them the next time you
+  save that preset (the old file to the trash). The orchestrator loaded
+  your seventeen presets from the night (`shared/dan-2026-10-04/`) on
+  this build: all load, routes intact, no note at all.
+- **`bindings.json` gets the sixteen pads once**, where no MIDI row of
+  yours is on the pad (a row you put there by hand keeps the pad; its
+  slot is then reached from the page only) — backed up first (row 74).
+- Row 2 and row 3's pads 1–4 are still free on the preset layer for a
+  preset to map.
+
+**Cost to reverse.** The lights: `apc40.filled_of` returns `None` (one
+line). The quiet drop: empty `routing.RETIRED_DESK_ROWS`. Rows 4–5 back
+to shapes: the `BANK_PADS` rows in `apc40.DEFAULT_MAP` and a remap the
+other way, with a backup. Plan 19 WP2 (PR #110);
+`test_desk.py::test_rows_four_and_five_load_slots_nine_to_twenty_four_on_both_layers`,
+`::test_the_bank_pads_are_invariant`,
+`test_midi.py::test_a_bank_pad_is_green_loaded_amber_filled_and_dark_empty`,
+`::test_save_as_blinks_the_new_pad_on_row_four`,
+`test_presets.py::test_an_old_preset_loads_without_its_shape_pads_and_its_file_is_untouched`,
+`test_routing.py::test_the_old_shape_pads_are_swapped_and_a_changed_row_is_left_alone`,
+`::test_a_row_the_owner_put_on_a_bank_pad_is_left_alone`,
+`test_ui_desk.py::test_a_filled_pad_is_amber_and_an_empty_one_has_no_label`.
+Hand checks 82–84. **Never on the APC40**: the amber, the pads and
+their feel are unseen.
+
+### 74. P19-c — `bindings.json` is never rewritten without a backup, and the launch says what it did
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** When a launch brings `bindings.json` up to date (plan
+09's, plan 15's and now plan 19's rows), the file was backed up first —
+but if that copy failed, the file was rewritten anyway. And what the
+launch changed was printed on stderr only. Plan 19's rule for your
+files forbids a rewrite with no copy (fork 12).
+
+**What the code did.** `Bindings.load` called `backup(…)` and then
+`write()` whatever the backup returned. The per-row notes
+(`Bindings.notes`) were cleared by the startup preset's load before the
+first frame, so no launch's changes ever reached the ROUTING page.
+
+| Option | Trade-off |
+|---|---|
+| **(a) No backup, no rewrite — for every remap and for the rest of the session; one line on the SYSTEM page says what the launch did** | A full disk leaves the file as it was and the table in memory updated; the next launch tries again. |
+| (b) Rewrite anyway, as before | The file is changed with nothing to go back to. |
+
+**Chosen: (a).** As built: `Bindings.load`, `Bindings.write` (which
+tries the owed copy first: `Bindings.unbacked`) and
+`preset.migrate_home` (which now backs up before it announces) all keep
+it; `Bindings.error` reads "bindings: not rewritten — no backup could
+be made". **`Bindings.said`** is the SYSTEM page's line —
+"bindings.json updated (16 rows changed), the old file kept as
+bindings.json.bak-v3 — each change is on stderr", or "… NOT rewritten
+(16 rows changed): no backup could be made — in memory only, the next
+launch tries again" — found because the WP2 build's notes were being
+lost (it was finished by a second agent). Each row is still on stderr.
+
+**Cost to reverse.** The three `backup(…) is None` branches. Plan 19 WP2
+(PR #110 and its review, 4ac4320);
+`test_routing.py::test_a_remap_whose_backup_fails_writes_nothing`,
+`::test_a_launch_whose_backup_fails_then_succeeds_rewrites_once`,
+`::test_a_second_launch_writes_nothing_and_says_nothing`,
+`test_migration.py::test_bindings_json_whose_backup_fails_after_its_part_moved_is_never_rewritten`.
+Hand checks 84 and 57. The SYSTEM line was tested as `said`, never
+looked at on screen.
+
+### 75. P19-d — the device knobs re-cut
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** D1–D8 were dark on 16 of the 23 factory presets. Now a
+fresh preset — and every factory preset with no knobs of its own — has
+four scene knobs, three presets that had none or one have their own,
+and the six with eight are unchanged. The fork was whether the knobs you
+reached for everywhere (the effect mix, the echo mix) go on every
+preset (fork 7).
+
+| Preset | D1 | D2 | D3 | D4 | D5 | D6 | D7 | D8 |
+|---|---|---|---|---|---|---|---|---|
+| the eight house moods, TUMBLE, FACES, FIELD, `legacy6`, `hands-play`, `hands-orbit` | 4D depth | Yaw | Pitch | Pattern | · | · | · | · |
+| `hands-fx` | FX mix | Acid bend | Acid twist | Acid reach | Acid breathe | Acid speed | 4D depth | Yaw |
+| `hands-pinch` | FX mix | Hue paint | Hue spread | 4D depth | Yaw | Pitch | Pattern | · |
+| `lfo-breathe` | Breathe (macro 1) | FX mix | Plasma level | LFO 1 depth | 4D depth | Yaw | Pitch | · |
+| WAKE, TRACER, TRIP, ACID, MANDALA, NOITA | unchanged (byte-identical files) | | | | | | | |
+
+| Option | Trade-off |
+|---|---|
+| **(a) A knob only where it does something: the effect knobs where the stack is on, no echo knob on a preset with the look-back off** | No factory preset's look or cost changes; every mapped knob works. TUMBLE, FACES, FIELD and the house moods have no echo or effect knob. |
+| (b) Make every scene preset "echo-ready": the look-back on at an echo mix of 0, echo mix and fade on D5–D6 | The same two knobs everywhere; every party preset pays for a dream nobody sees, and it rewrites plan 20's values. |
+
+**Chosen: (a).** Things to know:
+
+- **D4 (Pattern) is an enum on a knob**: one pattern every ~11 CC
+  values, all twelve in order both ways (tested with smoothing on). The
+  pattern shows only where faces are drawn: on a preset with faces off,
+  D4 changes nothing you can see.
+- **A preset you saved before keeps its own desk**: its dark knobs stay
+  dark, a knob you learned stays. Only a file with no `desk` key at all
+  gains the four.
+- K1–K8 are not re-cut; K7 (Bitmap alpha) moves nothing on any factory
+  preset (none names a bitmap).
+
+**Cost to reverse.** (b) is a data change once the look-back idles its
+worker at a dream mix of 0. Any knob: one tuple in `preset.py` or
+`apc40.SCENE`, then `python -m hyperspace.preset`. Plan 19 WP3 (PR
+#115); `test_plan12_presets.py::test_no_factory_knob_is_dead`,
+`test_midi.py::test_a_knob_on_the_pattern_steps_through_every_pattern`,
+`test_presets.py::test_every_factory_presets_desk_is_the_generators`,
+`::test_a_users_desk_is_untouched_by_the_recut`. Hand check 85. **Never
+turned on an APC40.**
+
+### 76. P19-e — hide, rename and the trash, and where they live
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** Your answer: the unwanted presets hidden or trashed from
+the list; no folders. All of it is in the preset list the strip's name
+opens: **×** on every preset (yours to the trash, a factory one
+hidden — the factory file is never touched, `<home>/hidden.json` lists
+it), **rename** on yours, and at the list's foot "show hidden (n)" and
+"trash (n) ▸" (only while there is something), the trash's own popup
+with **restore** and **empty trash…**. Three forks (8, 9, 10).
+
+```
+ the preset list                                    trash ▸
+ ACID                              ×                trash  ·  12 files
+ TRIP 2                   rename   ×                presets   TRIP 3   Oct 4 01:12   restore
+ TRIP 3                   rename   ×                presets   TRIP 3   Oct 4 00:58   restore
+ legacy6  (struck through)      unhide              projects  mine     Oct 4 01:20   restore
+ …  twelve rows, then it scrolls                    …  twelve rows, then it scrolls
+ ─────────────────────────────────                  ──────────────────────────────────
+ show hidden (5)                                    empty trash…   → "delete 12 files for good? — click again" (4 s)
+ trash (12) ▸
+```
+
+| The fork | Option | Trade-off |
+|---|---|---|
+| Renaming a factory preset (8) | **(a) refused: "TRIP is a factory preset: save copy, then rename the copy"** | One meaning for rename: your file moves. Two steps for a factory one. |
+| | (b) makes your copy under the new name and hides the factory one | One step; rename does three things and "unhide" brings back a preset you thought was renamed. |
+| Where the trash and "show hidden" live (9) | **(a) at the foot of the preset list** | Where × is; no page height. One level down. |
+| | (b) a line under "more" on PRESETS | One click from the page; the page would scroll by 17 px with "more" open. |
+| | (c) a TRASH page | Room; a fifteenth page. |
+| How empty asks (10) | **an in-place second click within 4 s, no modal** | Cannot be done by one stray click and never stops the frame. No option that deletes without asking, or that stops the show with a modal, was considered. |
+
+**Chosen: the bold option of each.** Things to know:
+
+- **Empty trash is the one action in the app that deletes with no copy
+  kept.** It deletes exactly the files the popup lists (every group, and
+  the shows a rename kept) and nothing outside `<home>/trash/`. With the
+  home in git the trash is ignored (row 78), so it is final there too.
+- **Rename** writes the new file first, then copies the old one to the
+  trash and removes it, then repoints **every show of yours** in
+  `projects/` that names it, each copied to the trash first. Nothing is
+  lost if it stops at any step. It is no undo step: rename it back. A
+  name another preset has is refused; the names in the open bank are not
+  counted, so renaming to the name a dangling slot holds makes it load.
+- **Hiding changes only the list**: a slot, "starts on" or the loaded
+  preset that names a hidden preset still loads it. Nothing is hidden as
+  shipped.
+- **× on yours does not clear the slots that name it**: they turn the
+  warning colour ("F6: TRIP 3 — no such preset. It may be in the trash
+  …"), their pads stay amber, and a restore makes them work again.
+- **Restore never writes over a file**: a taken name (a factory one
+  included) restores as the next free one ("restored as TRIP 4 — TRIP 3
+  is taken").
+- A module strip's list (under "more") is as before: × on yours only.
+
+**Cost to reverse.** (b) for fork 8: a branch in `Library.rename`. (b)
+for fork 9: the two lines move from `ui_presets._list_popup` to the
+page (and the fold's spare room goes). Plan 19 WP4 (PR #117);
+`test_library.py::test_hiding_a_factory_preset_takes_it_off_the_list_and_nothing_else`,
+`::test_rename_updates_every_show_and_keeps_each_old_file`,
+`::test_rename_refuses_a_taken_name_and_a_factory_preset`,
+`::test_a_rename_that_cannot_keep_the_old_file_changes_nothing`,
+`::test_restore_never_overwrites`, `::test_empty_trash_removes_only_the_trash`,
+`::test_the_trash_lists_only_what_it_kept`,
+`test_ui_presets.py::test_the_list_has_a_cross_on_every_preset_and_rename_on_yours`,
+`::test_empty_asks_once_and_disarms`, `::test_a_slot_whose_preset_is_gone_says_so`.
+Hand checks 86–88. **No person has clicked any of these popups.**
+
+### 77. P19-f — the dirty dot you can see, and "save copy"
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** You asked for a dirty dot that reads at arm's length and
+no "always ask" on save. The dot is now a 12 px red disc on every strip
+and ROUTING's head (it was a ~7 px glyph); **the save chip is solid red
+while there is something to save**; the loaded slot's button carries a
+small white disc; the rail's disc is larger. And the save chip says what
+it does: **"save copy"** on a factory preset (your copy takes its place
+in the list; the factory file is kept), "save" on yours. Nothing
+prompts.
+
+| Option | Trade-off |
+|---|---|
+| **(a) "save copy" on the preset strip and ROUTING's head; the preset strip's `reset` removed (it did nothing there); module strips keep "save" and reset** | Fits; the label is where the presets are. A module strip's save on a factory module preset still writes your copy, as its hover says. |
+| (b) "save copy" on every strip | A module strip with reset would be 401 px wide in 392. |
+
+**Chosen: (a).** One thing left: on a module strip under "more", **the
+save chip overlaps the right end of the name button** (measured: name
+676–808 px, save 771–821 px). It was already so before plan 19 and was
+not changed; fixing it needs a layout decision — fewer chips there, or
+a narrower name (audit U10).
+
+**Cost to reverse.** `ui.DOT_R`, one number; the label, `ui_presets.save_label`;
+`reset` back on the preset strip, one condition in `ui_presets.strip`.
+Plan 19 WP5 (PR #114);
+`test_ui_presets.py::test_the_dot_is_a_twelve_pixel_disc_and_save_is_lit_while_dirty`,
+`::test_save_reads_save_copy_on_a_factory_preset`,
+`::test_the_preset_strip_has_no_reset_and_does_not_overlap`,
+`test_ui_routing.py::test_the_head_has_the_same_dot_and_label`. Hand
+check 89. Hidden-window renders only; nobody has looked from arm's
+length.
+
+### 78. P19-g — the home in git
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** With `[library] git = true` in `config.toml`, the home
+folder is a local git repository and every save is a commit, in the
+library's words ("save preset TRIP 2", "rename preset TRIP 3 →
+SUNRISE", "trash preset TRIP 3", "hide preset legacy6", "show mine:
+bank"). The fork was whether the trash is in git (fork 11); the rest
+was the build's to choose.
+
+```
+ ~/Hyperspace  with [library] git = true, after the first save
+
+ TRACKED (in each commit)              IGNORED (.gitignore, written once if there is none)
+ presets/        your presets          weights/        the dream's downloaded weights
+ projects/       your shows            trash/          older copies git already has
+ fx/ band/ …     module presets        *.log           stall.log
+ config.toml                           last_show       this machine's
+ bindings.json                         windows.json    this machine's
+ hands.json                            *.bak-*         the migrations' backups
+ hidden.json                           .DS_Store
+ .gitignore
+```
+
+| The choice | Option | Trade-off |
+|---|---|---|
+| The trash (fork 11) | **(a) ignored** | Every trashed file was committed at its last save while git was on; no double history. A file trashed before git was switched on is only in the trash. |
+| | (b) tracked | "Empty" would be recoverable from history; every overwrite stored twice. |
+| On by default? | **off** | Nothing changes for anyone who does not ask. |
+| Where it goes | **local only: no remote added, nothing pushed or fetched** | Nothing leaves the machine; sharing presets between people is `shared/` and `tools/shared_presets.py`, not this. |
+| A home inside another repository (a dotfiles repo) | **never initialised, never committed; one note** | The key does nothing for the run there. |
+| When the repository is made | **at the first save after launch, never at launch** | Turning the key on writes nothing until you save; that first commit holds the home as it then was. |
+
+**Chosen: the bold option of each.** Things to know:
+
+- **Git never blocks, fails or slows a save**: the commit runs on its own
+  thread, with no hooks and no signing; a missing git, a locked index or
+  a timeout is said once on the warning line — "git: not committed
+  (…); saves are not affected" — and the next good commit takes up what
+  the failed one missed (its words are lost, the files are not).
+- An existing repository at the home is used as it is, with your own
+  `.gitignore` and branch.
+- The SYSTEM page's library line ends "· git" while it is on.
+- Emptying the trash makes no commit; nothing else in the app restores
+  from git (use git yourself).
+
+**Cost to reverse.** (b) for fork 11: delete one line of
+`homegit.IGNORE` (homes already set up keep their own `.gitignore`).
+Off: the key. Plan 19 WP6 (PR #119, the review's 3d87f44) and the
+orchestrator's merge (7190ff2: rename, hide, unhide and restore ask for
+a commit); `test_homegit.py` (20 tests),
+`test_library.py::test_hide_rename_and_restore_each_ask_for_a_commit`,
+`test_config.py::test_library_git_is_off_by_default_and_a_switch`,
+`test_app_boundary.py::test_homegit_is_a_leaf_and_the_library_never_imports_it`.
+Hand check 90. Scripted launches on temp homes only.
+
 ---
 
 ## Part B — built on the recommendation without asking; confirm or overturn
@@ -2857,8 +3275,18 @@ Each is built, reviewed and on PR #55. Overturning any is a small follow-up.
   any of it. Check 78 is where row 54's 80 ms is judged, and it leans on
   check 31 (the knobs re-basing from the ring), which has itself never
   been seen on the device.
-- Group **O** (plan 19; checks 81–90) is written by plan 19's docs
-  package.
+- Group **O** (plan 19: twenty-four presets, rows 4–5 of the desk as
+  the bank and their lights, an old preset loading quietly, the launch's
+  backup and its SYSTEM line, the device knobs, hide / rename / the
+  trash, the dot and "save copy", the home in git; checks 81–90, about
+  40 minutes, **on a copy of `~/Hyperspace`**, the APC40 for 82, 83 and
+  85; 81 and 84 are the first launch). Rows 72–78 are shown by checks
+  81 and 83 (row 72), 82–84 (73), 84 (74), 85 (75), 86–88 (76), 89 (77)
+  and 90 (78). Nothing in plan 19 has been tried at the rig: **the
+  amber at velocity 5, the pads of rows 4–5, the knobs' new choices and
+  every popup are unseen by a person**. Checks 12, 34, 36, 37, 41, 45,
+  53, 56, 57, 67 and 69 carry notes where plan 19 changed what they
+  describe.
 - Group **P** (plan 20: an effect aimed at the faces, nothing changed
   with none, the echoes carrying them, dragging a chip, the look-back
   page, dream speed, instance layouts, the projector and the glass;
@@ -2874,7 +3302,7 @@ Each is built, reviewed and on PR #55. Overturning any is a small follow-up.
 
 ## Answer sheet
 
-Write the letter, or "rec" for the recommendation. Rows 14–17 and 34–71
+Write the letter, or "rec" for the recommendation. Rows 14–17 and 34–78
 take "keep" or "overturn".
 
 | # | Decision | Recommended | Your answer | Note |
@@ -2951,3 +3379,10 @@ take "keep" or "overturn".
 | 69 | P20-e the look-back page | ECHOES, DREAM, BOTH; labels that say what a knob does; (a) the registry's labels change too ("Spacing" → "Echo time apart", "Occlude" → "Shape hides wake"); the layer as six chips | built on the recommendation; confirm or overturn | plan 20 WP4 (PR #105); no id, range or file changed; the chip names grain / swirl / blot / 3b / 4c / 4e are from a tooltip, not from looking |
 | 70 | P20-f dream speed | (a) `dream.k` relabelled "speed", read in dream frames | built on the recommendation; confirm or overturn | plan 20 WP5 (PR #107) and 56e7b0a; faster is also shallower; it follows the worker's rate, not seconds; one decimal under ten frames ("1.9 frames"); nobody has judged the dream at any speed |
 | 71 | P20-g instance layouts | (a) HEX a honeycomb spiral, (a) RING one circle; the motions unchanged | built on the recommendation; confirm or overturn | plan 20 WP6 (PR #111); GRID is the frame it was; HEX + ORBIT at amp 0.35 overlaps neighbours; "Grid motion / amp / rate" are "Field …" |
+| 72 | P19-a the bank of twenty-four | (a) no triggers for slots 9–24; (a) the show stays `hyperspace.project/2`, never rewritten by a load, `.bak-v2-bank8` before the first far write; (b) TRACER on the factory party's slot 9; (B) the page: F1–F8 two a row, 9–24 four a row | built on the recommendation; confirm or overturn | plan 19 WP1 (PR #104); `F_KEYS` declared once in `params.py`; a schema-1 bank read as eight; with "more" open a warning on top of the status line scrolls the page by 11 px; a learned step or knob on `preset.select` lands on empty slots (audit R14) |
+| 73 | P19-b rows 4–5 and their lights | (b) green loaded, amber filled, dark empty; (c) the sixteen old shape pads drop quietly, anything else on those pads with a note | built on the recommendation; confirm or overturn | plan 19 WP2 (PR #110); the lit pad no longer shows the shape (the cue knob selects shapes); a row you put on a far pad keeps it; amber at velocity 5 never seen on the mk1 |
+| 74 | P19-c no backup, no rewrite | (a) `bindings.json` never rewritten without its copy, all session; the launch's sum on the SYSTEM page (`Bindings.said`) | built on the recommendation; confirm or overturn | plan 19 WP2 (PR #110, review 4ac4320); the launch's notes had been lost before the first frame since plan 13 |
+| 75 | P19-d the device knobs | (a) a knob only where it does something: D1–D4 4D depth · yaw · pitch · pattern on the scene presets; `hands-fx`, `hands-pinch`, `lfo-breathe` their own; the six eight-knob presets unchanged | built on the recommendation; confirm or overturn | plan 19 WP3 (PR #115); no echo or effect knob on the scene presets; a preset you saved before keeps its own desk; never turned on an APC40 |
+| 76 | P19-e hide, rename, the trash | (a) a factory preset cannot be renamed (save copy first); (a) the trash and "show hidden" at the foot of the preset list; empty asks again in place for 4 s | built on the recommendation; confirm or overturn | plan 19 WP4 (PR #117); **empty trash is the one delete with no copy kept**; rename repoints every show of yours, each copied first, and is no undo step; a slot naming a trashed preset is left in the warning colour |
+| 77 | P19-f the dot and "save copy" | (a) a 12 px disc, the save chip solid red while dirty; "save copy" on the preset strip and ROUTING's head, the preset strip's reset removed | built on the recommendation; confirm or overturn | plan 19 WP5 (PR #114); a module strip's save chip still overlaps its name under "more" (audit U10) |
+| 78 | P19-g the home in git | (a) the trash ignored; off by default, local only, never inside another repository, init at the first save | built on the recommendation; confirm or overturn | plan 19 WP6 (PR #119) and the merge 7190ff2 (rename, hide, unhide, restore commit; empty does not); git never blocks a save; the words of a failed commit are lost, its files are not |

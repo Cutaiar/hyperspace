@@ -167,6 +167,11 @@ def bank_doc(bank: list[str | None]) -> list[str | None]:
     shorter than F_KEYS."""
 ```
 
+*As built:* `F_KEYS = 8` is declared once, in `params.py` (which needs
+it for the trigger loop and may not import `library`); `library.F_KEYS`
+and `routing.F_KEYS` are that name imported, and the test pins all
+three (§7 WP1).
+
 `routing.BANK_SLOTS` is renamed `routing.F_KEYS` and stays 8: it has only
 ever counted the F-key rows (`LOOP_KEY_ROWS`, `THEME_TO_PRESET`). The test
 that pinned it to `SLOTS` pins `routing.F_KEYS == library.F_KEYS`. The
@@ -198,7 +203,10 @@ may not import `library` each hold a list whose length a test ties to it.
   before any far slot existed.
 - `preset.migrate_project`, `preset._into_default` and `library.migrate`
   write their banks through `bank_doc` (they build `SLOTS`-long lists
-  today and would start writing twenty-four entries).
+  today and would start writing twenty-four entries). *As built:* they
+  read a schema-1 or `presets.json` bank as the F-keys' eight
+  (`[:F_KEYS]`), so the migration writes into a show exactly what it
+  wrote before this plan (§7 WP1).
 
 #### The bank's calls
 
@@ -429,7 +437,9 @@ APC_NEW_ROWS += tuple(
 
 `remap_factory` adds a row only where nothing uses the source and builds
 it with `feedback="led"`, `on=1` (green) and no layer: exactly the factory
-row. A file from **before** plan 13's migration still holds the sixteen
+row. *As built:* only where **no MIDI row overlaps the control**
+(`Binding.overlaps`), so an any-channel row the owner wrote by hand
+holds the pad too — for every `APC_NEW_ROWS` entry (§7 WP2). A file from **before** plan 13's migration still holds the sixteen
 shape rows; `sort_layers` now finds them on an invariant factory control
 and leaves them invariant, so they are swapped by name:
 
@@ -450,14 +460,21 @@ sixteen invariant rows from being added.
   and takes the source, so nothing is added there. That pad then does
   what the owner's row says and its slot is reached from the PRESETS page
   only. `remap_factory`'s notes say what was added and swapped; hand
-  check O4 tells the owner where to look.
+  check O4 tells the owner where to look. *As built:* those notes never
+  reached the panel — the startup preset's load clears `Bindings.notes`
+  before the first frame, as it always had — so the launch's sum is kept
+  in `Bindings.said`, one line on the SYSTEM page; each row is on stderr
+  (§7 WP2).
 - **Backed up first**: `Bindings.load` already calls `backup(path,
   t.read_at)` before `t.write()` when `remap_factory` changed anything.
   WP2 makes that branch `if backup(…) is None: t.error = "bindings: not
   rewritten — no backup could be made"` and **skips the write**: the
   table in memory is the remapped one, the file is as it was, and the
   next launch tries again. This also covers plan 09's and plan 15's
-  remaps, which go through the same branch.
+  remaps, which go through the same branch. *As built:* `Bindings.write`
+  keeps the rule for the rest of the session (`Bindings.unbacked`: it
+  tries the copy first and writes nothing without it), and
+  `preset.migrate_home`'s rewrite backs up before it announces.
 - **Once**: a second load finds every source taken.
 - **Proved on a copy**: `owner_home`'s `bindings.json`, loaded twice.
 
@@ -601,7 +618,11 @@ one to seven; six are unchanged.
 
 - No control mapped twice on a layer; no row on an invariant control
   (`test_presets.py::test_every_factory_presets_desk_is_the_generators`,
-  extended to assert one row per control).
+  extended to assert one row per control). *As built:*
+  `test_plan12_presets.py::test_wake_and_trip_device_knobs_move_their_bases`
+  could not stay unchanged: TUMBLE's D1 is now 4D depth, which is also
+  TRACER's D8, so its "does nothing on another preset" check leaves that
+  one param out (§7 WP3).
 - Every desk target is a persisted performance param, never a session
   one (the existing check over `values`, applied to `desk` targets).
 - No factory route onto an effect that is off (unchanged).
@@ -777,6 +798,11 @@ loses nothing:
    presets folder or of any listed name at `hidden=True` — the same
    `taken` set `save_new` builds. A rename that only changes case or
    spacing within one slug is allowed (the file keeps its stem).
+   *As built:* not quite save-as's set — the renamed file's own stem
+   and names are left out, and so are **the open bank's names**, so
+   renaming to the name a dangling slot holds makes that slot load
+   again; the case-only rename rewrites the file in place after a trash
+   copy (§7 WP4).
 2. **Write the new file** `<home>/presets/<slug(new)>.json`, created
    exclusively: the old document with `name` replaced, in the kind's own
    text (`preset.dumps`). Nothing else in it changes.
@@ -847,7 +873,10 @@ def empty_trash(self) -> int:                # how many files went
 
 - **It lists everything the trash holds**, every group and the shows a
   rename kept, because "empty" deletes what is listed and nothing else:
-  what you see is what goes.
+  what you see is what goes. *As built:* "everything" is every file
+  named as `to_trash` writes them (`<stem>.<stamp>[-n]<suffix>`, never a
+  dotfile); anything else in a trash folder — a Finder `.DS_Store` — is
+  not listed, restored or emptied (§7 WP4).
 - **Restore** puts the file back as `<home>/<group>/<stem>.json`, the
   stem being the trash name less its stamp. **Never over a file**: the
   target is created exclusively. When the stem is taken, or (for a
@@ -940,12 +969,19 @@ inside a `try` that swallows everything. The library never imports
   preset TRIP 3"), `rename` ("rename preset TRIP 3 → SUNRISE"), `hide` /
   `unhide`, `restore_trash`, and `Project.write` ("show mine: bank",
   "show mine: starts on TUMBLE", "save show mine"). Not at launch, not on
-  a load, not on a timer.
+  a load, not on a timer. *As built:* `rename` asks **before** its shows
+  are rewritten (so it is the commit's subject), `restore_trash` asks
+  "restore presets X" (the folder's name), `empty_trash` asks nothing,
+  and the committer is attached only after the startup preset (§7 WP6).
 - **What a commit is**: `git add -A` then `git commit -m <message>`,
   everything not ignored — so a hand edit of `config.toml`, or a
   migration's rewrite at launch, rides in the next save's commit.
   Nothing staged: no commit. Several requests waiting are one commit,
-  the first message its subject and the rest its body.
+  the first message its subject and the rest its body. *As built:* the
+  waiting messages are taken **after** `add -A`, so a save staged by a
+  commit already running is named in it (the scripted launch found the
+  words lost otherwise); the words waiting at a failure are dropped and
+  their files ride in the next commit.
 - **`git init`, and when.** At the first request, never at launch
   (turning the key on writes nothing until something is saved). The
   worker first asks `git rev-parse --show-toplevel` in the home:
@@ -977,7 +1013,10 @@ inside a `try` that swallows everything. The library never imports
   the owner adds one, nothing here uses it.
 - **Identity.** If `git config user.email` is empty the commit carries
   `-c user.name=Hyperspace -c user.email=hyperspace@localhost`; otherwise
-  the machine's identity is used as it is.
+  the machine's identity is used as it is. *As built:* each of the two
+  is passed only when the machine lacks that one; past its timeout a
+  command gets SIGTERM (git removes its own lock), then SIGKILL 2 s
+  later.
 - **Quit.** `close` waits up to 2 s for the queue; what is left is
   committed by the next run's first save.
 - **Tests never run it against a real home.** `Committer.__init__`
@@ -1311,12 +1350,435 @@ remap, not only this plan's.
 
 ## 7. As built
 
-Filled as the work packages land.
+Built 2026-10-04 by the unattended run onto `plan-19-integration`, in
+the merge order of §2: WP1, WP2, WP3, WP5, WP4, WP6, then these
+documents (WP7). Every fork in §6 was settled as recommended — by the
+run's orchestrator, not the owner — and waits in
+[`DECISION-REGISTER.md`](../DECISION-REGISTER.md) rows 72–78. Hand
+checks: [`11-hand-checks.md`](11-hand-checks.md) group O, checks 81–90
+(§8's O1–O10, made true to the code as built). Demos are under
+`docs/plans/assets/19-presets-and-the-desk/`. **Nothing of this plan
+has been on the APC40 or in front of a person**: amber at velocity 5,
+the pads of rows 4–5, the knobs' new choices and every popup (the list,
+rename, the trash) are unseen. The build was handed between agents
+mid-way at the owner's instruction: WP2 was finished by a second agent
+from a pushed work-in-progress commit (`74e9db0`, four tests failing),
+which is where the lost launch notes below were found.
+
+On `plan-19-integration` with plans 15–18 and 20 merged in (4647741),
+`uv run pytest -q`: **1442 passed, 1 skipped** (the hands tape);
+`uv run ruff check .` clean.
+
+### WP1 — a bank of twenty-four (PR #104, merge 94566bd)
+
+Built as §2 WP1 says, layout B on the page, TRACER on the factory
+party show's slot 9, no params added (`preset.select` 24 choices with
+`has`, the sixteen F-key triggers unchanged, the `preset` group still 21
+params). Where it differs:
+
+- **`F_KEYS` is declared once, in `params.py`**; `library.F_KEYS` and
+  `routing.F_KEYS` are that name imported (both already import
+  `params`, which needs the number for the trigger loop and may not
+  import `library`). `routing.BANK_SLOTS` is gone. A test pins
+  `routing.F_KEYS == library.F_KEYS == params.F_KEYS == 8 < SLOTS`.
+- **A schema-1 bank is read as eight**: `preset.migrate_project` and
+  `library.migrate` (the old `presets.json` bank) take `[:F_KEYS]`, then
+  write through `bank_doc`. Read as `[:SLOTS]`, a full schema-1 bank's
+  "own look" would have landed on slot 9 instead of "no slot", changing
+  what the migration writes into the owner's show.
+  `preset._into_default` shifts the bank within the length the file
+  has: an eight-entry file behaves exactly as before.
+- **`Project.write`** decides on the file at its path: it parses, is not
+  schema 1, holds at most eight entries, and the document holds more →
+  `routing.backup(path, "2-bank8")` first (`library.BANK8_BACKUP`), and
+  `LibraryError` when that returns `None`. `library._kept` skips the
+  copy when a `.bak-v2-bank8*` beside the file already holds the same
+  bytes (a write retried after its backup); a bank that shrinks to eight
+  and grows again with other content is copied again under a stamped
+  name — more kept, never less.
+- **`save_slot` puts the slot back when the show's write fails** (it
+  used to leave it changed in memory), then `follow()` re-aims the
+  light; `Project.save` puts name, path, session and modules back and
+  re-raises. The footer says why through `Project._refused`.
+- **`Project.follow()`** is the one spelling of "the lit slot follows
+  the loaded preset", called from `_set_slot`, `_apply`, `Marks.put` and
+  `Presets._landed`; `load_slot` still sets `active = k`, so a preset on
+  two slots lights the pad pressed.
+- An empty far slot says "slot 12: an empty slot" (no "⇧F… saves" tail).
+  A far slot has no learn outline on the page.
+- **The page's fit, measured** at `CONTROL_SIZE` with "more" open and 24
+  slots: 35 px spare with nothing under the fold, **12 px with the
+  status line** (there after any load), and **a one-line warning on top
+  of the status line scrolls the page by 11 px** while the fold is open
+  (pressing an empty far slot is one way to get one); a two-line warning
+  with no status scrolls it by 4 px. Folded, about 315 px spare. The
+  fit test draws the fold open, all 24 filled and a status line.
+- **Not fixed, from the review**: `preset.select` now has 24 choices,
+  most of them empty on a fresh show, so **a learned step or toggle row,
+  or a knob learned onto it, lands on empty slots** — a step stops on
+  one ("slot 13: an empty slot") instead of wrapping, and an `abs` knob
+  spreads over all 24. No factory row does this (the pads are `set k`;
+  QUANT and pad B walk filled slots through `Project.cycle`). Filed as
+  audit R14.
+
+Tests: `test_library.py::test_the_bank_is_twenty_four_and_the_f_keys_eight`,
+`::test_a_bank_is_written_as_far_as_its_last_filled_slot`,
+`::test_the_owner_home_is_shaped_like_the_owners`,
+`::test_an_eight_slot_show_loads_and_is_not_rewritten`,
+`::test_loading_never_rewrites_a_preset_file`,
+`::test_a_show_that_uses_only_the_first_eight_is_written_with_eight`,
+`::test_the_first_write_past_slot_eight_keeps_the_eight_slot_file`,
+`::test_save_as_lands_on_slot_nine_once_the_f_keys_are_full`,
+`::test_a_long_bank_read_by_eight_slots_shows_the_first_eight`,
+`::test_next_empty_reads_the_banks_own_length` (rewritten: the party
+show's first empty slot is 10);
+`test_presets.py::test_save_new_lands_past_the_f_keys_and_a_full_bank_says_so`,
+`::test_active_follows_the_loaded_preset_from_one_place`;
+`test_params.py::test_the_bank_adds_no_params`;
+`test_ui_presets.py::test_twenty_four_slots_fit_the_page_with_more_open`,
+`::test_a_far_slot_reads_its_number_and_name_and_has_the_slot_menu`;
+`test_party_show.py::test_the_party_show_has_tracer_on_slot_nine_and_room_after`;
+`test_migration.py::test_the_migrations_still_write_an_eight_slot_bank`.
+The `owner_home` fixture (`tests/conftest.py`: `build_owner_home`,
+`boot_home`, `tree`) is what every "on a copy" test of this plan runs
+on. Demos: `bank-24.png`, `bank-24-more.png` (hidden-window renders),
+`bank-24.txt` (`tools/bank_demo.py`). Not verified: the far slots' names
+from a step back; an older build actually run against a long bank (the
+downgrade test replays its three lines of `_take`).
+
+### WP2 — rows 4–5 are the bank (PR #110, merge 0b4e407)
+
+Clip rows 4 and 5 load slots 9–24, invariant on both layers
+(`apc40.BANK_PADS`, 24 `(note, channel)` pairs; `DEFAULT_MAP` has 24
+`preset.select` rows where the row-1 line and the two `view.shape` lines
+were). A bank pad is **green loaded (velocity 1), amber filled
+(velocity 5, `apc40.filled_of`), dark empty (0)**, from one rule,
+`routing.led_level` (2 / 1 / 0, reading `Param.has`); `MidiIO.feedback`
+sends `filled_of(…)` at level 1 and a blink still wins. On the
+on-screen desk a filled pad is amber at **half strength**
+(`ui_desk.FILLED = 0.5`) with its preset's name in the bright ink, and
+an empty bank pad is a dark control with its glyph only (`text` is ""
+for it; the hover says "slot N: empty"). A fresh desk is 26 rows, down
+from 42; `bindings.default.json` and the 18 factory presets with a
+`desk` key were regenerated. Where it differs from §2:
+
+- **`remap_factory` adds an APC40 row only where no MIDI row overlaps
+  the control** (`Binding.overlaps`), not where nothing uses the source
+  string: an any-channel row the owner wrote by hand (`note:*:57`)
+  holds every track's pad. This applies to every `APC_NEW_ROWS` entry,
+  plan 09's and 15's included — only more conservative; a file already
+  migrated has those rows. The sixteen plan-19 swaps (`BANK_REMAP`,
+  merged into `APC_REMAP`) clear the row's `layer` and take the factory
+  light. `RETIRED_DESK_ROWS = frozenset(BANK_REMAP)`.
+- **No backup, no rewrite** (fork 12) is in `Bindings.load` *and*
+  `Bindings.write`: when the copy fails the load sets
+  `Bindings.unbacked` and `error = NOT_REWRITTEN` ("bindings: not
+  rewritten — no backup could be made") and writes nothing; any later
+  `write()` in the session tries the copy first and writes nothing
+  without it (a Learn on a session row would otherwise have rewritten
+  the file with no copy).
+- **`Bindings.said` — a launch's notes were being lost.** The startup
+  preset's load is an edit (`Bindings.set_routes` sets `notes = []`), so
+  `remap_factory`'s per-row notes were gone before the first frame —
+  true before this plan too: no launch's remap ever reached the ROUTING
+  head; only stderr kept them. `Bindings.said` now holds one line for
+  the session — "bindings.json updated (16 rows changed), the old file
+  kept as bindings.json.bak-v3 — each change is on stderr", or "…NOT
+  rewritten (16 rows changed): no backup could be made — in memory
+  only, the next launch tries again" — and `app.main` adds it to the
+  SYSTEM page's notes (`panel.config_notes`). A later `write()` that
+  finally makes the backup updates the line. stderr still has every row.
+- **`preset.migrate_home` backs up before it announces** (the review):
+  with the copy refused it had claimed the file was migrated, and had
+  not set `unbacked`. It now announces what happened and sets
+  `unbacked` / `NOT_REWRITTEN`
+  (`test_migration.py::test_bindings_json_whose_backup_fails_after_its_part_moved_is_never_rewritten`).
+- `ui_desk.text` was there as plan 17 built it. A narrow edge is left
+  as the plan has it: in a schema-3 file from between plan 13's WP3 and
+  WP5, a re-aimed pad with `"layer": "preset"` keeps its pad through the
+  migration, gets a bank row on the next launch, and is then dropped
+  from the migrated preset with the note.
+
+Tests: `test_desk.py::test_rows_four_and_five_load_slots_nine_to_twenty_four_on_both_layers`,
+`::test_the_bank_pads_are_invariant`;
+`test_midi.py::test_a_bank_pad_is_green_loaded_amber_filled_and_dark_empty`,
+`::test_save_as_blinks_the_new_pad_on_row_four`;
+`test_routing.py::test_an_older_file_gets_the_bank_pads_with_a_backup`,
+`::test_the_old_shape_pads_are_swapped_and_a_changed_row_is_left_alone`,
+`::test_a_remap_whose_backup_fails_writes_nothing`,
+`::test_a_second_launch_writes_nothing_and_says_nothing`,
+`::test_a_row_the_owner_put_on_a_bank_pad_is_left_alone`,
+`::test_a_launch_whose_backup_fails_then_succeeds_rewrites_once`;
+`test_presets.py::test_an_old_preset_loads_without_its_shape_pads_and_its_file_is_untouched`,
+`::test_the_next_save_of_an_old_preset_writes_the_desk_without_the_pads`,
+`::test_every_factory_presets_desk_is_the_generators`;
+`test_ui_desk.py::test_a_filled_pad_is_amber_and_an_empty_one_has_no_label`.
+Demos: `desk-bank.png`, `desk-bank-shift.png` (hidden-window renders of
+the big desk: the bank pads identical under SHIFT, and the half-strength
+amber apart from a selected scene's full yellow); `bank-pads.txt` (the
+first launch's sixteen "added" lines, `said` and the backup; a second
+launch saying nothing; an old preset loading quietly and a re-aimed pad
+dropped with its note; the velocities 1 / 5 / 0; a far pad loading on
+both layers; a clip-stop hold landing in slot 10). The PR's scripted
+launch of the real app on an owner-like temp home: `bindings.json` 147
+→ 163 rows, the owner's changed row intact, every other file
+byte-identical but `windows.json`; the second launch said nothing. Not
+verified: amber on the mk1 beside green; the SYSTEM line as drawn.
+
+### WP3 — the factory preset layer re-cut (PR #115, merge 174cc60)
+
+As §2 WP3's table, exactly: `apc40.SCENE = ("view.depth4",
+"camera.yaw", "camera.pitch", "view.pattern")` on D1–D4 of the fresh
+preset layer, so **fourteen presets** (the eight house moods, TUMBLE,
+FACES, FIELD, `legacy6`, `hands-play`, `hands-orbit`) have 4D depth ·
+Yaw · Pitch · Pattern and D5–D8 dark; `hands-fx`, `hands-pinch` and
+`lfo-breathe` have their own (`HANDS_FX_KNOBS`, `HANDS_PINCH_KNOBS`,
+`BREATHE_KNOBS`; `hands-fx` and `hands-pinch` gained a `desk` key); **the
+six eight-knob presets (WAKE, TRACER, TRIP, ACID, MANDALA, NOITA) are
+byte-identical**. `preset.knob_desk` replaces the fresh layer's device
+knobs (`_is_device_knob`) instead of adding to them. 14 of the 23 files
+changed; `bindings.default.json` did not (the preset layer is not in
+it). **D4 passed its gate**:
+`test_midi.py::test_a_knob_on_the_pattern_steps_through_every_pattern`
+turns D4 0 → 127 → 0 with smoothing on and visits all twelve patterns
+in order both ways, the ring following, so D4 carries `view.pattern`.
+Where it differs: `test_plan12_presets.py::test_wake_and_trip_device_knobs_move_their_bases`
+could not stay unchanged (TUMBLE's D1 is now 4D depth, TRACER's D8
+target too): its "does nothing on another preset" check leaves that one
+param out and asserts D1 moved depth on TUMBLE. **`view.pattern` shows
+only where faces are drawn**: on a preset with faces off D4 changes the
+state and nothing on screen. A user preset saved before plan 19 keeps
+its own desk (dark knobs stay dark); only a user file with no `desk`
+key gains `SCENE`. Tests: `test_plan12_presets.py::test_no_factory_knob_is_dead`,
+`test_presets.py::test_a_users_desk_is_untouched_by_the_recut`,
+`::test_every_factory_presets_desk_is_the_generators` (extended: the
+fresh desk 30 rows, the D1–D8 table preset by preset, one row per
+control, none on an invariant control). Demos: `factory-desks.md`
+(before and after, generated), `desk-knobs.png` (TUMBLE on the big
+desk). The review found nothing. Not verified: how the four knobs feel,
+and a Pattern knob that steps every ~11 CC values on the mk1's endless
+encoders.
+
+### WP5 — the dirty dot and the save label (PR #114, merge 338ceba)
+
+`ui.dirty_dot(tip)` — a filled red disc, `ui.DOT_R = 6` (12 px), in a
+cell one text line tall — on every strip (the preset strip and each
+module strip under "more") and ROUTING's head, where the "●" glyph was;
+the rail's disc `ui.RAIL_DOT_R = 5`; **the save chip lit** (`ui.lit_chip`,
+solid red) while the group is dirty (`ui_presets.save_chip`, shared by
+the strip and the head); **a white disc of radius 4 on the loaded bank
+slot** while its preset is dirty (`SLOT_DOT_R`); **"save copy"** on a
+factory preset (`ui_presets.save_label`, hover `save_tip`) on the
+preset strip and ROUTING's head only — module strips keep "save"; **the
+preset strip's `reset` is removed**: `Library.reset` on a document kind
+loads a preset called "default", none ships, so it did nothing there.
+The show's own dot is unchanged. **Not fixed, measured**: on a module
+strip under "more" (258 px from `ui.LABEL_W`), ◀ name ▶ takes 178 px
+(192 with the disc) and save · as… · reset 163 px, so **the save chip
+sits over the right end of the name button** (name 676–808 px, save
+771–821 px), with or without a disc. It was already so before this
+plan; fixing it needs a layout decision (fewer chips there, or a
+narrower name) — audit U10. Tests:
+`test_ui_presets.py::test_the_dot_is_a_twelve_pixel_disc_and_save_is_lit_while_dirty`,
+`::test_save_reads_save_copy_on_a_factory_preset`,
+`::test_the_preset_strip_has_no_reset_and_does_not_overlap`,
+`test_ui_routing.py::test_the_head_has_the_same_dot_and_label`. Demo:
+`dirty-dot.png` (`tools/dot_demo.py`, hidden-window renders). Not
+verified: whether the disc and the lit chip read at arm's length on the
+control screen; the app was not launched for this package.
+
+### WP4 — hide, rename and the trash (PR #117, merge a1efb4b)
+
+From the preset list (the strip's name): **×** on every preset — yours
+to the trash (`Library.delete`, unchanged), a factory one hidden
+(`Library.hide`: its file stem in `<home>/hidden.json`,
+`{"schema": "hyperspace.hidden/1", "presets": […]}`); **rename** on
+yours (the row becomes the strip's inline name field, key
+`rename:<name>`); at the foot **"show hidden (n)"** while something is
+hidden (the hidden rows then struck through and dimmer, each with
+**unhide**) and **"trash (n) ▸"** while the trash holds something,
+which opens the trash popup — group, name, time and **restore** per
+row, newest first, then **"empty trash…"**. Both lists show **twelve
+rows** (`LIST_ROWS`) and then scroll in their own child; a list row is
+a chip's height, **29 px** at the control size. **Empty asks once, in
+place**: the chip becomes "delete N files for good? — click again" in
+the warning ink for 4 s (`EMPTY_S`); the time running out, any other
+click or closing the popup disarms it; no modal. A bank slot whose
+preset has no file is drawn in **the warning ink** with the hover
+"F6: TRIP 3 — no such preset. It may be in the trash (preset list →
+trash). Right-click → clear slot" (checked on the list's poll, never per
+frame); its pad stays amber. × on yours says what still names it: "TRIP
+3 is in the trash — F6 and 'starts on' still name it; restore it from
+the trash, or clear the slot". The page gained no line. Where it
+differs or settled what §2 left open:
+
+- **Rename's order and nets**: the new file written exclusively, then
+  the old one copied to the trash (a failed copy removes the new file
+  and changes nothing), then removed; then every `hyperspace.project/2`
+  show in `<home>/projects` that names it, each copied to
+  `trash/projects/` first (the open one through its `Project`); a show
+  whose copy or write fails, or a schema-1 show, is left and named; the
+  loaded preset keeps its clean reference under the new name. **A
+  rename that only changes case or spacing** keeps the stem and
+  rewrites the file in place, after a trash copy (a failed copy
+  refuses it).
+- **Rename's "taken"** is `_taken` less the renamed file's own stem and
+  names — it **does not include the open bank's names** (save-as's set
+  does): renaming to a name a dangling slot holds makes that slot load
+  again.
+- **Restore counts factory stems as taken** (a file of that stem in the
+  group's folder of either root), so a restored file never shadows a
+  factory file it did not shadow before; restore never writes over a
+  file and removes the trash copy only after the write.
+- **The trash lists only files named as `to_trash` writes them**
+  (`<stem>.<YYYYMMDD-HHMMSS>[-n]<suffix>`, never a dotfile): a Finder
+  `.DS_Store` is not listed, restored or emptied (review fix, 69e5427).
+  `empty_trash` refuses a symlink and any path that does not resolve one
+  folder under `<home>/trash/`.
+- A restore clears the warning × left about that preset. Deleting your
+  copy of a factory preset that is hidden says it is hidden (review fix).
+- The popups' background is slightly translucent (the panel's existing
+  style): page text shows faintly behind them in the renders.
+
+Tests: `test_library.py::test_hiding_a_factory_preset_takes_it_off_the_list_and_nothing_else`,
+`::test_a_user_file_that_shadows_a_hidden_factory_preset_shows_as_itself`,
+`::test_a_made_up_name_never_collides_with_a_hidden_preset`,
+`::test_an_unreadable_hidden_list_is_kept_before_it_is_replaced`,
+`::test_rename_updates_every_show_and_keeps_each_old_file`,
+`::test_rename_refuses_a_taken_name_and_a_factory_preset`,
+`::test_a_rename_that_cannot_keep_the_old_file_changes_nothing`,
+`::test_renaming_the_loaded_preset_keeps_its_unsaved_edit`,
+`::test_a_deleted_preset_says_which_slots_still_name_it`,
+`::test_the_watcher_never_resurrects_or_reloads`,
+`::test_restore_never_overwrites`, `::test_empty_trash_removes_only_the_trash`,
+`::test_the_trash_lists_only_what_it_kept`,
+`::test_deleting_your_copy_of_a_hidden_factory_preset_says_it_is_hidden`;
+`test_presets.py::test_rename_and_trash_are_no_undo_step`;
+`test_ui_presets.py::test_the_list_has_a_cross_on_every_preset_and_rename_on_yours`,
+`::test_empty_asks_once_and_disarms`, `::test_a_slot_whose_preset_is_gone_says_so`
+(real imgui mouse events, the nested trash popup included). Demos:
+`files-demo.txt` (`tools/trash_demo.py`: what changed on disk at each
+step), `preset-list.png`, `trash.png`, `bank-dangling.png` (hidden-window
+renders); `tools/trash_launch.py` drove hide, rename, delete and restore
+through a running app's library (120 frames, no error). Not verified:
+any popup clicked by a person.
+
+### WP6 — the home in git (PR #119, merge 7190ff2)
+
+`homegit.py`, a leaf that imports nothing from the package, behind
+`[library] git` (`config.DEFAULTS["library"] = {"git": False}`; a value
+that is not a boolean is `False` with a note). **Off by default**: with
+the key off `homegit` is never imported, no thread starts and nothing is
+written. `app._open_homegit` builds a `Committer` only for `git = true`
+and **attaches it after the startup preset** (after `migrate_home` too),
+so a launch's own writes ask for no commit and ride in the first
+save's; `Host.committer` is last in `Host.adapters` and `close` waits up
+to 2 s on quit and ⌘R. The library calls `_commit(message)` — which
+never raises and never waits — at the end of `save_as` ("save preset
+TRIP 2", "save fx acid"), `delete` ("trash preset TRIP 3") and
+`Project.write`, whose words are what moved since the show was opened or
+last written: "show mine: starts on TUMBLE", else "show mine: bank",
+else "save show mine". `Library.poll` drains `committer.notes()` onto the
+warning line every call, before its period gate. The worker: **`git
+init` at the first request, never at launch**; a home whose repository's
+top level is somewhere above it (a dotfiles repository) is **never
+initialised or committed** — one note, `refused` for the run; an
+existing repository at the home is used as it is, its `.gitignore` and
+branch kept (ours written only where there is none). A commit is `add
+-A` then **the waiting messages taken after `add -A`** (the first its
+subject, the rest its body; nothing staged, no commit) — a first version
+took them before, and in the scripted launch two saves landing during
+the first commit's 0.3 s lost their words. Every command: `-c
+core.hooksPath=/dev/null -c commit.gpgsign=false`,
+`GIT_TERMINAL_PROMPT=0`, `LC_ALL=C`, the `GIT_DIR`-style variables
+removed, a 10 s timeout and then **SIGTERM, then SIGKILL 2 s later**
+(the review: a SIGKILLed `git add` left `.git/index.lock` and every
+later commit failed; 3d87f44). A failure is said once — "git: not
+committed (<reason>); saves are not affected" — until a commit
+succeeds; the words waiting at a failure are dropped and the files ride
+in the next commit. Identity `Hyperspace <hyperspace@localhost>` only
+for whichever of name and email the machine lacks. The SYSTEM page's
+home line reads "library: <home> · git". `"homegit"` is in
+`hotreload.MODULES` beside `placement`. The module names no network
+command.
+
+**The seam at the merge (the orchestrator, 7190ff2)**: WP4's calls were
+not on WP6's branch, so the merge added them — `rename` asks "rename
+preset TRIP 3 → SUNRISE" **before** its shows are rewritten, so it is
+the commit's subject and the open show's "show mine: bank" its body;
+`hide` / `unhide` ask "hide preset X" / "unhide preset X"; `restore_trash`
+asks "restore presets X" (the group's folder name); **`empty_trash`
+asks nothing** (the trash is ignored).
+`test_library.py::test_hide_rename_and_restore_each_ask_for_a_commit`.
+
+Tests: `tests/test_homegit.py` (20; 14 need `git` and all 14 ran on
+Apple Git 2.50.1), `test_library.py::test_each_save_asks_for_one_commit_in_the_librarys_words`,
+`::test_a_committer_that_raises_never_stops_a_save_and_notes_reach_the_warning_line`,
+`test_config.py::test_library_git_is_off_by_default_and_a_switch`,
+`test_app_boundary.py::test_homegit_is_a_leaf_and_the_library_never_imports_it`,
+`::test_the_homegit_gate`, `test_hotreload.py::test_homegit_is_watched_among_the_leaves`.
+Demo: `homegit-demo.txt` (`tools/homegit_demo.py`: off, the first save,
+a commit per save, git missing, a locked index, a home inside another
+repository, timing — `request()` 10 µs median, a commit 71 ms median).
+The PR's scripted launches on an owner-like temp home: no frame raised,
+first commit 321 ms after the first save, a clean status. Not verified:
+the " · git" line on screen, a ⌘R with a commit in flight, a remote the
+owner adds, a home on a network drive, any OS or git but this laptop's.
+
+### What the orchestrator saw (first-hand, apart from the agents' reports)
+
+- **The owner's seventeen real presets from the night** — the files
+  under `shared/dan-2026-10-04/presets/` (PR #113, installed with
+  `tools/shared_presets.py install`) — were installed into a fresh temp
+  home and loaded one by one through the app's loader on this branch:
+  **all load, their routes intact, with no load note at all**. The
+  sixteen retired shape pads they carry dropped quietly (fork 4).
+- **A scripted launch of the real app** against a temp home: with F8
+  cleared, a save-as filled F8 and **the next save-as landed in slot 10**
+  of the twenty-four (TRACER holds slot 9); no runtime error and an
+  empty stall log.
+- The suite on this branch with plans 15–18 and 20: 1442 passed,
+  1 skipped; ruff clean.
+
+### The owner's files, as built
+
+Every file in the home this plan's code can rewrite, move or delete,
+and its net. "Proved" names the test that runs it on a copy
+(`owner_home`).
+
+| File | What happens, and when | Copied first | Proved |
+|---|---|---|---|
+| `projects/<show>.hyp.json` | **Never rewritten by a load**: an eight-name bank is padded to 24 in memory and the show is clean. Written only by a bank change, "starts on", save, and rename (below); a show using only slots 1–8 is written with eight entries | before the first write that makes the file's bank longer than eight: `routing.backup(path, "2-bank8")` → `<file>.bak-v2-bank8` (a stamped name when that exists; skipped when one already holds the same bytes). **No backup, no write**: `LibraryError`, the slot put back, the footer says why | `test_library.py::test_an_eight_slot_show_loads_and_is_not_rewritten`, `::test_the_first_write_past_slot_eight_keeps_the_eight_slot_file` |
+| `projects/<show>.hyp.json`, every user show | a rename repoints its `bank` and `startup` (schema 2 only; a schema-1 show is left and named; factory shows never written) | `to_trash` → `trash/projects/<show>.hyp.<stamp>.json`; a show whose copy fails is left as it is, and named | `test_library.py::test_rename_updates_every_show_and_keeps_each_old_file` |
+| `bindings.json` | once: sixteen invariant rows added where no MIDI row overlaps the pad; in a file from before plan 13's migration the sixteen old shape rows swapped. Every launch's notes on stderr; the sum on the SYSTEM page (`Bindings.said`) | `routing.backup(path, read_at)` → `bindings.json.bak-v3` (a stamped name when that exists). **No backup, no rewrite**, in `Bindings.load`, `Bindings.write` and `preset.migrate_home` | `test_routing.py::test_an_older_file_gets_the_bank_pads_with_a_backup`, `::test_a_remap_whose_backup_fails_writes_nothing`, `::test_a_launch_whose_backup_fails_then_succeeds_rewrites_once`, `test_migration.py::test_bindings_json_whose_backup_fails_after_its_part_moved_is_never_rewritten` |
+| `presets/<name>.json` (yours) | **never rewritten by a load**: the sixteen old pads dropped in memory, quietly; the file keeps them until you save it | the save's `to_trash` (plan 15, unchanged) | `test_presets.py::test_an_old_preset_loads_without_its_shape_pads_and_its_file_is_untouched`, `::test_the_next_save_of_an_old_preset_writes_the_desk_without_the_pads` |
+| the same | ×: copied, then removed (plan 15). Rename: the new file written exclusively, the old one copied to the trash, then removed; a case- or spacing-only rename rewrites the file in place after its copy | `to_trash`; a failed copy refuses the delete, undoes the rename (removes the new file), or refuses the in-place rename | `test_library.py::test_a_rename_that_cannot_keep_the_old_file_changes_nothing`, `::test_rename_refuses_a_taken_name_and_a_factory_preset` |
+| `<group>/<stem>.json`, `projects/<stem>.hyp.json` | restore from the trash: created exclusively, under the next free name when the stem (factory stems included) or the preset's name is taken; the trash copy removed only after | — (never over a file) | `test_library.py::test_restore_never_overwrites` |
+| `trash/**` | **empty deletes for good** — the one place in the app that keeps no copy; only the files `trash()` lists (named as `to_trash` writes them), then the folders left empty; a symlink or a path outside `trash/` is refused | nothing: asked twice, in place | `test_library.py::test_empty_trash_removes_only_the_trash`, `::test_the_trash_lists_only_what_it_kept` |
+| `hidden.json` (new) | written by × on a factory preset and by unhide | an unreadable one is kept as `hidden.json.bak-v0` (`routing.backup(path, "0")`) before the first rewrite; no backup, no rewrite | `test_library.py::test_an_unreadable_hidden_list_is_kept_before_it_is_replaced` |
+| `.git/`, `.gitignore` (new, opt-in) | with `[library] git = true`: at the first save after launch, never at launch; `.gitignore` only when there is none; never when the home is inside another repository | — (no file of the owner's is rewritten) | `test_homegit.py::test_the_first_save_inits_ignores_and_commits`, `::test_an_existing_repository_and_gitignore_are_kept`, `::test_a_home_inside_another_repository_is_never_committed`, `::test_it_rewrites_no_file_of_the_owners` |
+| factory files (the repo's) | regenerated (`python -m hyperspace.preset`, `python -m hyperspace.routing`) | git | `test_presets.py::test_write_factory_regenerates_every_factory_file` |
+
+A launch of this build on a home as the night left it does one thing to
+the owner's files that this plan adds: `bindings.json` is rewritten
+once, backed up first (`last_show` and `windows.json` are written as
+always; plan 15's own first-launch rewrite of `bindings.json`, if it has
+not happened yet, is the same rewrite and the same backup).
 
 ## 8. Appendix — group O for `11-hand-checks.md`
 
 WP7 pastes this in after plan 18's group N, with final numbers in place
 of O1–O10. The text is final except for numbers and PR numbers.
+
+*As built:* the checks as they are run are
+[`11-hand-checks.md`](11-hand-checks.md) group O, checks 81–90 (O1 →
+81 … O10 → 90), made true to the code: the first launch's sixteen
+"added" lines and the SYSTEM page's one line (O4), save-as landing
+"→ slot 10" on the factory party show, a TUMBLE of your own keeping its
+dark knobs (O5), the trash's two-click empty and its 4 s (O8), and the
+locked index's catch-up commit carrying both files under the later
+save's words (O10). Where this appendix and that file differ, that file
+is right.
 
 ### O. Plan 19 — twenty-four presets, the knobs, the list, the trash, git — added 2026-10-04
 

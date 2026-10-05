@@ -1,16 +1,17 @@
 # Checkpoint — 2026-10-04
 
 Where the Python re-platform stands and what to pick up next. This
-revision describes the **`finish-line`** branch with plans 15–18 on it
-(`plan-15-integration`, `plan-16-integration`, then
-`plan-18-integration` with plans 17 and 18, each merged into it when its
-last PR was in), and **`plan-20-integration`** on top of it: plan 20
-whole (the faces as an effect target, the chain view with drag to
-reorder, the look-back page as ECHOES / DREAM / BOTH, dream speed,
-instance layouts), documented. It merges into `finish-line` next.
-**Plans 19 (presets and the desk) and 21 (outputs and the hands) are in
-progress** on their own integration branches and are not described
-here yet. `main` is at plan 14 (fa9b3a1) and nothing from plans 15–21
+revision describes **`plan-19-integration`**: the **`finish-line`**
+branch with plans 15–18 on it (`plan-15-integration`,
+`plan-16-integration`, then `plan-18-integration` with plans 17 and 18,
+each merged into it when its last PR was in) and plan 20 (the faces as
+an effect target, the chain view with drag to reorder, the look-back
+page as ECHOES / DREAM / BOTH, dream speed, instance layouts), merged
+in, and plan 19 whole on top (a bank of twenty-four, clip rows 4–5 as
+the bank, the device knobs re-cut, hide / rename / the trash, the dirty
+dot, the home in git), documented. It merges into `finish-line` next.
+**Plan 21 (outputs and the hands) is in progress** on its own
+integration branch and is not described here yet. `main` is at plan 14 (fa9b3a1) and nothing from plans 15–21
 touches it until the owner merges `finish-line` (decision 30). What the
 system *is* — the parts, the frame, who may write a parameter — is
 [`ARCHITECTURE.md`](ARCHITECTURE.md); how it behaves is
@@ -27,7 +28,8 @@ uv sync                 # whole environment, from the committed lockfile
 git checkout finish-line      # plans 15–21 land here, never on main
 uv run pytest           # 1178 pass, 1 skipped (the hands tape) with plans 15 and 16;
                         # 1276 pass, 1 skipped on plan-18-integration (plans 17 and 18);
-                        # 1355 pass, 1 skipped on plan-20-integration (plans 15–18 and 20)
+                        # 1355 pass, 1 skipped on plan-20-integration (plans 15–18 and 20);
+                        # 1442 pass, 1 skipped on plan-19-integration (plans 15–20)
 uv run hyperspace       # the app: ? shows the controls cheat sheet (off at launch)
 ```
 
@@ -253,6 +255,55 @@ commits). Seven calls wait for the owner: `DECISION-REGISTER.md` rows
 65–71. ARCHITECTURE and ENGINEERING describe the face target, the chain
 view, the look-back page and the layouts as they are now.
 
+Plan 19 (2026-10-04, [`plans/19-presets-and-the-desk.md`](plans/19-presets-and-the-desk.md),
+its §7 "As built"; from the same session — "more than eight on the
+desk; clean out the unwanted ones; no always-ask on save") is presets
+and the desk, on `plan-19-integration`. It adds no param, page or menu
+item; one config key (`[library] git`, off), one home file
+(`hidden.json`) and, only with the key on, `.git/` and `.gitignore`:
+
+- **A bank of twenty-four** (WP1, PR #104): F1–F8 and clip row 1 are
+  the first eight, slots 9–24 the PRESETS page's sixteen smaller
+  buttons and the desk's clip rows 4–5. A show file is never rewritten
+  by a load; the first write past slot 8 keeps
+  `<show>.hyp.json.bak-v2-bank8` first. The factory party show has
+  TRACER on slot 9, so save-as goes on to slot 10.
+- **Rows 4–5 are the bank** (WP2, PR #110), invariant on both layers: a
+  pad green loaded, **amber filled**, dark empty. The shape is the cue
+  knob's alone. A preset saved before loads without its old shape pads,
+  quietly, and its file is untouched until it is saved. The first launch
+  adds the sixteen pads to `bindings.json`, backed up first, and **never
+  rewrites it without that backup**; what it did is one line on the
+  SYSTEM page (`Bindings.said` — the launch's notes used to be lost
+  before the first frame).
+- **The device knobs** (WP3, PR #115): 4D depth · yaw · pitch · pattern
+  on D1–D4 of every factory preset with no knobs of its own; `hands-fx`,
+  `hands-pinch`, `lfo-breathe` their own; the six eight-knob presets
+  unchanged.
+- **The dirty dot and "save copy"** (WP5, PR #114): a 12 px red disc,
+  the save chip solid red while dirty, "save copy" on a factory preset;
+  the preset strip has no reset.
+- **Hide, rename and the trash** (WP4, PR #117): from the preset list,
+  × on any preset (a factory one hidden), rename on yours (every show of
+  yours repointed), "show hidden", and the trash with restore and
+  **empty — the one delete in the app that keeps no copy**, asked twice.
+- **The home in git** (WP6, PR #119): `[library] git = true` makes the
+  home a local repository with a commit per save; off by default; never
+  inside another repository; git never blocks a save.
+
+None of plan 19 has been tried by a person at the rig, **and nothing of
+it has been on the APC40**: the amber at velocity 5, the pads of rows
+4–5, the knobs' new choices and every popup are unseen. It was shown by
+tests (1442 pass with plans 15–18 and 20 underneath), hidden-window
+renders and transcripts under `plans/assets/19-presets-and-the-desk/`,
+and scripted launches on temp homes; the orchestrator loaded the
+owner's seventeen presets from the night (`shared/dan-2026-10-04/`) on
+it — all load, no note. The build was handed between agents mid-way at
+the owner's instruction (WP2 finished from a pushed work-in-progress
+commit). Seven calls wait for the owner: `DECISION-REGISTER.md` rows
+72–78. ARCHITECTURE and ENGINEERING describe the bank, the desk's
+rows 4–5, the list, the trash and the home in git as they are now.
+
 **Everything only the machine can verify** — plan 09's five hand checks,
 plan 08's unverified list, plan 07's WP6c dream tuning, the first real
 capture, the APC40, the second monitor, IAC + FL Studio, and the
@@ -292,7 +343,14 @@ file what fails as new audit rows dated with plan 11.
    (`hands-orbit`'s directions and its zoom). Since a hand outside the
    box is now absent, every older check that needs a hand in the box
    (group C's, and the hand parts of the later groups) is run after 72.
-   Plan 19's **group O** (checks 81–90) is written by plan 19. Plan 20's
+   Plan 19's **group O** (checks 81–90, about 40 minutes): **on a copy
+   of `~/Hyperspace`** (`cp -R ~/Hyperspace ~/Hyperspace-before-19` and
+   a second copy to play on, `HYPERSPACE_HOME` pointed at it) — 81 and
+   84 at the first launch (the sixteen pads added to `bindings.json`,
+   its backup, the SYSTEM line), then 82, 83 and 85 with the APC40 (the
+   amber, the far pads on both layers, save-as past F8, the knobs), then
+   86–89 on the laptop (cull, rename, the trash and its two-click empty,
+   the dot), and 90 last (git, if you want it). Plan 20's
    **group P** (checks 91–98, about 30 minutes): 91–97 on the laptop —
    an effect on the faces (91; per face may read faint), nothing changed
    with none (92), the echoes carrying them (93), dragging a chip with a
@@ -331,12 +389,26 @@ file what fails as new audit rows dated with plan 11.
    picture holds, its size and the screen fit, performers on the target
    and the mapping, the chain view, re-aiming by the combo, the
    look-back page's sections and labels, dream speed, and the
-   layouts.)
+   layouts. **Rows 72–78 are plan 19's**: the bank of twenty-four (no
+   new triggers, the show file, TRACER on slot 9, the page), rows 4–5
+   and their lights with the old shape pads dropping quietly, no backup
+   no rewrite, the knob re-cut, hide / rename / the trash, the dot and
+   "save copy", and the home in git.)
 4. **The rest of the finish line**: plans 17–21 in the roadmap's order,
    each onto `finish-line`. Plans 17 and 18 are built, documented and on
-   `finish-line`. Plan 20 is built and documented on
-   `plan-20-integration`, which goes to `finish-line` next. **Plans 19
-   and 21 are in progress.** Left stale by plan 20, not being documents:
+   `finish-line`. Plan 20 is built and documented, and merged into
+   `plan-19-integration`; plan 19 is built and documented there, which
+   goes to `finish-line` next. **Plan 21 is in progress.** Left stale by
+   plan 19, not being documents: `ui.py`'s `_page_presets` docstring
+   still says "the eight preset buttons"; `homegit.py`'s module
+   docstring lists the commits a save, a × and a show write ask for, not
+   rename, hide, unhide and restore (added at the merge); the performer
+   cards `plans/assets/12-presets/party-tumble.md`, `party-faces.md` and
+   `party-field.md` still say "Clip rows 4 and 5: the shape" and do not
+   name D1–D4 (now 4D depth, yaw, pitch, pattern). Two plan-19 defects
+   are filed and open: audit R14 (a learned step or knob on
+   `preset.select` lands on empty slots) and U10 (a module strip's save
+   chip overlaps its name under "more"). Left stale by plan 20, not being documents:
    `library/dream/wake.json`'s note still says "Echo mix, fade, hue and
    dream mix"; `Renderer._tile`'s docstring and a test message in
    `tests/test_render.py` still say "instance grid"; the speed shot
