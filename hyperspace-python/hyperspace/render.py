@@ -41,6 +41,14 @@ own pass and camera; off, the frame is untouched. Last of all the master
 dim (`Renderer.dim`, the crossfader's `output.dim`; plan 15 WP3)
 multiplies what is there — it draws nothing of its own, and at 1 it does
 not run.
+
+Plan 21: `Renderer.draw_outputs` shows that one frame on several outputs
+(`outputs.View`), each through its own switches — the scene, the hands,
+its own dim. The scene, the capture and the hands' layer run once a
+frame; the look-back composite and the effect chain once per distinct
+pipeline (`outputs.route`); the picture, the hands over it and the dim
+once per output. `draw` is `draw_outputs` with one default view on the
+bound framebuffer, and is the frame it always was, byte for byte.
 """
 
 from __future__ import annotations
@@ -57,6 +65,7 @@ from .geometry import face_triangles, face_uvs, geom, project_h
 from .ghost import Ghost, GhostState
 from .glsl import QUAD_VS, common, common_mtime, gl_error
 from .lookback import DreamState, Lookback
+from .outputs import HANDS, NAMES, PIPELINES, SCENE, Handoff, Switches, View, fit, route
 from .tapers import clamp
 from .view import N_MOD, RED, ViewState  # re-exported for callers that had them from here
 
@@ -105,6 +114,26 @@ DIM_FS = """
 uniform float u_factor;
 out vec4 f_color;
 void main() { f_color = vec4(0.0, 0.0, 0.0, u_factor); }
+"""
+
+# a frame texture onto an output (plan 21 WP1): 1:1 by texelFetch — the
+# same bytes, as the look-back's post pass reads the scene — or scaled
+# through the fit rect (the viewport) by the sampler. On an opaque ground
+# the output keeps alpha 1 whatever the frame holds
+SHOW_FS = """
+#version 330
+in vec2 v_uv;
+uniform sampler2D u_src;
+uniform int u_scaled;
+uniform ivec2 u_origin;      // the rect's origin (gl_FragCoord is window-relative)
+uniform int u_opaque;
+out vec4 f_color;
+void main() {
+    vec4 c = u_scaled != 0 ? texture(u_src, v_uv)
+                           : texelFetch(u_src, ivec2(gl_FragCoord.xy) - u_origin, 0);
+    if (u_opaque != 0) c.a = 1.0;
+    f_color = c;
+}
 """
 
 FACE_VS = """
@@ -497,6 +526,14 @@ class Renderer:
         self.face_error = ""
         self._pic: moderngl.Texture | None = None
         self.ghost = Ghost(ctx, ghost)  # the hands, last, over everything (ghost.py)
+        # plan 21: the outputs. A pipeline with more than one consumer (or
+        # one not drawn here) ends in a frame texture, one per pipeline key,
+        # made on first use; the program that shows one on an output, too.
+        # `stats` is what the last frame ran
+        self._frames: dict[int, tuple[moderngl.Texture, moderngl.Framebuffer]] = {}
+        self._show_prog: moderngl.Program | None = None
+        self._show_vao: moderngl.VertexArray | None = None
+        self.stats: dict = {"pipelines": [], "chain_runs": 0, "direct": True}
         self.cover = CoverTarget(ctx)
         self._face_verts = 0           # face vertices in _fbuf from the last scene pass
         self._blank = ctx.texture((1, 1), 4)
@@ -587,6 +624,14 @@ class Renderer:
                 res.release()
         self._dim_prog = self._dim_vao = None
         self.dim_error = ""
+        # plan 21's frame textures and the program that shows them: dropped,
+        # made again from this module's source on next use. getattr: a
+        # renderer from before the outputs existed has none of them
+        self._release_frames()
+        for res in (getattr(self, "_show_vao", None), getattr(self, "_show_prog", None)):
+            if res is not None:
+                res.release()
+        self._show_prog = self._show_vao = None
 
     def _sync_bitmap(self, path: str) -> None:
         """(Re)load the overlay texture when the selected file changes."""
@@ -691,26 +736,72 @@ class Renderer:
         owner's freeze, plan 14 WP1: WAKE without a dream worker left the
         look-back's atlas bound, with no error anywhere)."""
         ctx = self.ctx
-        t = self.now(t_now)
         target = ctx.fbo
         if target is None:
             raise RuntimeError("Renderer.draw: no framebuffer bound (call fbo.use())")
-        vx, vy, vw, vh = target.viewport
+        vp = tuple(target.viewport)
+        # one output, today's: the default switches on the bound framebuffer
+        view = View(Switches(), (vp[2], vp[3]), target=target,
+                    bg_alpha=getattr(self, "bg_alpha", 1.0), viewport=vp)
+        self.draw_outputs(s, w, h, dpr, [view], t_now)
+        if view.exc is not None:
+            # what the view caught is raised here, as it was before there
+            # were views — the frame finished, the dim ran, the target bound
+            raise view.exc
+
+    def draw_outputs(self, s: ViewState, w: int, h: int, dpr: float, views: list[View],
+                     t_now: float | None = None) -> None:
+        """One frame, a picture per output (plan 21 WP1): `views[0]` is the
+        first output — a framebuffer on this context; its rect sets the
+        frame's size and its framebuffer the scene's sample count (fork
+        F12) — and every view shows that frame through its own switches.
+
+        Once a frame: the face picture, the scene pass, the cover, the
+        look-back's tick and pull, the hands' layer (only while some view
+        shows hands), the look-back's capture (from the scene texture,
+        exactly once, whatever the switches). Once per distinct pipeline
+        (`outputs.route`): the look-back composite and the effect chain,
+        ending straight on the view when it is the pipeline's only
+        consumer at the frame size, else in a frame texture. Once per
+        view: the picture (nothing, a 1:1 copy, or scaled into
+        `outputs.fit`'s rect with the rest cleared to the view's ground),
+        the hands over it, the dim (master × the view's). A view with a
+        `presenter` instead of a `target` is left a `Handoff`.
+
+        A view that raises records `view.error` (and `view.exc`) and the
+        loop goes on to the next; a pipeline that raises records it on its
+        views, which show their ground; the hands failing never costs the
+        frame or the dim (`Ghost.error`). Every exit — a raise in the
+        once-a-frame passes included — binds `views[0].target` again with
+        its rect and blending. `stats` says what ran."""
+        if not views or views[0].target is None:
+            raise RuntimeError("Renderer.draw_outputs: the first view needs a target "
+                               "on this context")
+        ctx = self.ctx
+        t = self.now(t_now)
+        for v in views:
+            v.error, v.exc, v.handoff = "", None, None
+        first = views[0]
+        target, vp = first.target, first.rect
         try:
-            self._draw_frame(s, w, h, dpr, t, target, (vx, vy, vw, vh))
+            self._draw_frame(s, w, h, dpr, t, views)
         finally:
             target.use()
-            ctx.viewport = (vx, vy, vw, vh)
+            ctx.viewport = vp
             ctx.enable(moderngl.BLEND)
 
     def _draw_frame(self, s: ViewState, w: int, h: int, dpr: float, t: float,
-                    target: moderngl.Framebuffer, vp: tuple[int, int, int, int]) -> None:
-        """draw()'s body: the face picture (only while an effect is aimed
-        at the faces), scene, cover, pull, composite, capture, effects, the
-        ghost hands over the finished frame, then the master dim."""
+                    views: list[View]) -> None:
+        """draw_outputs()'s body: the face picture (only while an effect is
+        aimed at the faces), scene, cover, pull, the hands' layer, each
+        pipeline once (composite, capture, effects), then each view's
+        picture, the ghost hands over it and its dim."""
         ctx = self.ctx
-        vx, vy, vw, vh = vp
-        self.scene.ensure((max(vw, 1), max(vh, 1)), _samples_of(ctx, target))
+        first = views[0]
+        target = first.target
+        vp = first.rect
+        size = (max(vp[2], 1), max(vp[3], 1))
+        self.scene.ensure(size, _samples_of(ctx, target))
         for unit in range(4):
             self._blank.use(location=unit)
         # the faces' effects first, into their own picture: finished before
@@ -720,54 +811,264 @@ class Renderer:
         self._pic = self._face_picture(s, t)
         try:
             self.scene.draw_fbo.use()
-            ctx.viewport = (0, 0, max(vw, 1), max(vh, 1))
+            ctx.viewport = (0, 0, *size)
             self.draw_scene(s, w, h, dpr, t)
         finally:
             self._pic = None         # handed to that one scene pass only
         self.scene.resolve()
         lb = self.lookback
         cover = self._draw_cover(w, h) if lb.wants_cover() else None
-        target.viewport = (vx, vy, vw, vh)
+        target.viewport = vp
         lb.tick(t)                       # echo time is seconds (plan 14 WP6)
         lb.pull()
         fx = self.fx
         fx.tick()
         # an opaque ground keeps the whole chain at alpha 1 (plan 14 WP1)
         fx.opaque = getattr(self, "bg_alpha", 1.0) >= 1.0
-        if fx.active():
-            # the post pass into the chain's first texture; the chain ends
-            # on the window. The history captures the scene, not the effects.
-            buf = fx.begin(self.scene.size)
-            lb.composite(self.scene.tex, buf, cover)
-            lb.capture(self.scene.tex, buf)
-            fx.run(target, t)
+        fx_on = fx.active()
+        stats = {"pipelines": [], "chain_runs": 0, "direct": True, "captures": 0,
+                 "layer": False}
+        self.stats = stats
+        # the hands' layer, once, before any pipeline that might want it —
+        # only while some view shows hands. A pass that raises (a malformed
+        # skeleton, a font, a driver) is caught, as the faces' is: the frame
+        # goes on without the hands, `Ghost.error` says why (the first
+        # reason, kept), the target is bound again and the dim still runs —
+        # a rig at black must never flash full because of the hands
+        # With an effect on and some view's hands going through it, the
+        # guide and the tethers' labels are drawn into a layer of their own
+        # (`Ghost.readout`, fork F3) and laid over after everything, so the
+        # effects never bend them; otherwise they are in the hands' layer
+        hands = False
+        if any(v.switches.hands for v in views):
+            through = fx_on and any(v.switches.hands and v.switches.through for v in views)
+            try:
+                hands = bool(self.ghost.layer(size, t, readout=through))
+            except Exception as e:  # noqa: BLE001 — the hands must not take the frame down
+                self._hands_failed(e, target, vp)
+        readout = self.ghost.readout if hands else None
+        stats["layer"], stats["readout"] = hands, readout is not None
+        routes = [route(v.switches, fx_on, hands) for v in views]
+        # each distinct pipeline once, in key order. The history is
+        # captured after the first composite of the scene, from the scene
+        # texture: it never holds the hands, the effects or the dim
+        users: dict[int, list[int]] = {}
+        for i, (key, _) in enumerate(routes):
+            if key is not None:
+                users.setdefault(key, []).append(i)
+        frames: dict[int, moderngl.Texture | None] = {}   # key → its texture; None: drawn direct
+        failed: set[int] = set()
+        for key in PIPELINES:
+            if key not in users:
+                continue
+            only = views[users[key][0]]
+            direct = (len(users[key]) == 1 and only.target is not None
+                      and tuple(only.rect[2:]) == size)
+            stats["pipelines"].append(key)
+            try:
+                if direct:
+                    dst, tex = only.target, None
+                    dst.viewport = only.rect
+                else:
+                    tex, dst = self._frame_target(key, size)
+                    stats["direct"] = False
+                self._pipeline(key, dst, cover, t, fx_on, stats, (target, vp))
+                frames[key] = tex
+            except Exception as e:  # noqa: BLE001 — one pipeline must not take the others down
+                failed.add(key)
+                for i in users[key]:
+                    self._view_failed(views[i], f"{NAMES[key]}", e)
+                self._rebind(target, vp)
+        # the history, exactly once, from the scene texture, after every
+        # pipeline has composited it: a capture changes the echoes' weights,
+        # ages and tint, so one before a second pipeline's composite would
+        # give two outputs different echoes in one frame. With no view
+        # showing the scene it runs all the same — the history and the
+        # dream go on, so switching the scene back on shows no gap
+        stats["captures"] = 1
+        lb.capture(self.scene.tex, self.scene.fbo)
+        if fx_on and not stats["chain_runs"]:
+            fx.state.advance_to(t)       # …and so do the effects' clocks
+        for i, v in enumerate(views):
+            key, after = routes[i]
+            # the readout goes on every output that shows the hands, over
+            # or through: in its own layer the guide is in neither
+            ro = readout if v.switches.hands else None
+            try:
+                self._compose(v, key, after, frames, failed, size, ro)
+            except Exception as e:  # noqa: BLE001 — one view must not take the others down
+                self._view_failed(v, "output", e)
+                self._rebind(target, vp)
+
+    def _pipeline(self, key: int, dst: moderngl.Framebuffer, cover, t: float, fx_on: bool,
+                  stats: dict, restore: tuple) -> None:
+        """One pipeline into `dst` (its viewport). SCENE: the look-back
+        composite and, with an effect on, the chain after it. SCENE_HANDS
+        (WP2): the composite, the hands over it, then the chain — the
+        effects bend the hands with the shape. HANDS: the ground, the hands,
+        the chain; no look-back (the echoes are the scene's, and the scene
+        is off). Both only ever with an effect on (`outputs.route`)."""
+        lb, fx, ctx = self.lookback, self.fx, self.ctx
+        if not fx_on:
+            lb.composite(self.scene.tex, dst, cover)
+            return
+        # the post pass into the chain's first texture; the chain ends on
+        # `dst`. The history is captured after every pipeline's composite
+        # (`_draw_frame`), from the scene texture: never the hands or effects
+        size = self.scene.size
+        buf = fx.begin(size)
+        if key == HANDS:
+            buf.use()
+            ctx.viewport = (0, 0, *size)
+            ctx.clear(0.0, 0.0, 0.0, getattr(self, "bg_alpha", 1.0))
         else:
-            lb.composite(self.scene.tex, target, cover)
-            lb.capture(self.scene.tex, target)
+            lb.composite(self.scene.tex, buf, cover)
+        if key != SCENE:
+            # the hands onto the chain's input (fork F1: after the look-back
+            # composite, before the first effect). Failing, the chain still
+            # runs on the scene alone and `Ghost.error` says why
+            try:
+                self.ghost.composite(buf, (0, 0, *size), opaque=fx.opaque)
+            except Exception as e:  # noqa: BLE001 — the hands must not take the frame down
+                self._hands_failed(e, *restore)
+        fx.run(dst, t)
+        stats["chain_runs"] += 1
+
+    def _compose(self, v: View, key: int | None, after: bool,
+                 frames: dict[int, moderngl.Texture | None], failed: set[int],
+                 size: tuple[int, int], readout: moderngl.Texture | None = None) -> None:
+        """One view's picture: the pipeline's frame (already there when it
+        was drawn direct), the hands over it in the same rect, the readout
+        layer over that when there is one, its dim."""
+        ctx, gh = self.ctx, self.ghost
+        factor = clamp(getattr(self, "dim", 1.0) * float(v.switches.dim), 0.0, 1.0)
+        frame = None if key is None or key in failed else frames.get(key)
+        if v.target is None:
+            if v.presenter is None:
+                raise RuntimeError("a view needs a target or a presenter")
+            rx, ry, rw, rh = v.rect
+            ix, iy, iw, ih = fit(size, (rw, rh))
+            v.handoff = Handoff(frame, size, (rx + ix, ry + iy, iw, ih),
+                                hands=gh.tex if after else None, readout=readout,
+                                alpha=float(gh.state.alpha), factor=factor,
+                                bg_alpha=float(v.bg_alpha))
+            return
+        tgt, rect = v.target, v.rect
+        opaque = v.bg_alpha >= 1.0
+        fx_, fy, fw, fh = fit(size, rect[2:])
+        inner = (rect[0] + fx_, rect[1] + fy, fw, fh)
+        if key is None or key in failed:
+            tgt.use()
+            ctx.viewport = rect
+            ctx.clear(0.0, 0.0, 0.0, float(v.bg_alpha), viewport=rect)
+        elif frame is not None:
+            self._show(tgt, rect, inner, frame, size, opaque, float(v.bg_alpha))
         # the hands last, onto the target: no effect, echo or dream touches
-        # them and the history (captured above, from the scene) never holds
-        # them; off, or with no hand to show, the pass touches nothing. A
-        # pass that raises (a malformed skeleton, a font, a driver) is
-        # caught here, as the faces' is: the frame stays as drawn without
-        # the hands, `Ghost.error` says why (the first reason, kept), the
-        # target is bound again and the dim below still runs — a rig at
-        # black must never flash full because of the hands
-        try:
-            self.ghost.draw(target, vp, t, opaque=fx.opaque)
-        except Exception as e:  # noqa: BLE001 — the hands must not take the frame down
-            if not self.ghost.error:
-                self.ghost.error = f"ghost hands: {type(e).__name__}: {e}"[:160]
-            target.use()
-            ctx.viewport = vp
-            ctx.enable(moderngl.BLEND)
-            ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
-        # the master dim, after everything: the scene, the look-back, every
-        # effect and the hands dim alike, and the history and the dream
-        # worker (fed above, from the scene texture) never hold it. At 1
-        # the pass does not run and the frame is bit-identical
-        dim = getattr(self, "dim", 1.0)
+        # them and the history (captured from the scene) never holds them
+        if after or readout is not None:
+            try:
+                if after:
+                    gh.composite(tgt, inner, opaque=opaque)
+                if readout is not None:      # the guide and its labels, never bent
+                    gh.composite_readout(tgt, inner, opaque=opaque)
+            except Exception as e:  # noqa: BLE001 — the hands must not take the frame down
+                self._hands_failed(e, tgt, rect)
+        # the dim, after everything: the scene, the look-back, every effect
+        # and the hands dim alike, and the history and the dream worker
+        # never hold it. At 1 the pass does not run and the frame is
+        # bit-identical
+        dim = getattr(self, "dim", 1.0) * float(v.switches.dim)
         if dim < 1.0:
-            self.dim_pass(target, vp, dim, opaque=fx.opaque)
+            self.dim_pass(tgt, rect, dim, opaque=opaque)
+
+    def _show(self, tgt: moderngl.Framebuffer, rect: tuple, inner: tuple,
+              tex: moderngl.Texture, size: tuple[int, int], opaque: bool,
+              bg_alpha: float) -> None:
+        """A frame texture onto `tgt`: 1:1 when `inner` is the frame's size,
+        else scaled into `inner` with the rest of `rect` the ground."""
+        prog, vao = self._show_program()
+        ctx = self.ctx
+        tgt.use()
+        if tuple(inner) != tuple(rect):
+            ctx.clear(0.0, 0.0, 0.0, bg_alpha, viewport=rect)
+        ctx.viewport = inner
+        ctx.disable(moderngl.BLEND)
+        try:
+            tex.use(location=0)
+            prog["u_src"].value = 0
+            prog["u_scaled"].value = int(tuple(inner[2:]) != tuple(size))
+            prog["u_origin"].value = (int(inner[0]), int(inner[1]))
+            prog["u_opaque"].value = int(opaque)
+            vao.render(moderngl.TRIANGLES, vertices=3)
+        finally:
+            ctx.enable(moderngl.BLEND)
+
+    def _show_program(self) -> tuple[moderngl.Program, moderngl.VertexArray]:
+        """The program that shows a frame texture, built on first use;
+        getattr: a renderer from before the outputs has none."""
+        prog, vao = getattr(self, "_show_prog", None), getattr(self, "_show_vao", None)
+        if prog is not None and vao is not None:
+            return prog, vao
+        prog = self.ctx.program(vertex_shader=QUAD_VS, fragment_shader=SHOW_FS)
+        try:
+            vao = self.ctx.vertex_array(prog, [])
+        except Exception:
+            prog.release()
+            raise
+        self._show_prog, self._show_vao = prog, vao
+        return prog, vao
+
+    def _frame_target(self, key: int, size: tuple[int, int]
+                      ) -> tuple[moderngl.Texture, moderngl.Framebuffer]:
+        """The frame texture for a pipeline: RGBA8 at the frame's size,
+        LINEAR (a 1:1 show reads it by texelFetch), made on first use and
+        again when the frame's size changes."""
+        frames = getattr(self, "_frames", None)
+        if frames is None:
+            frames = self._frames = {}
+        have = frames.get(key)
+        if have is not None and have[0].size == size:
+            return have
+        if have is not None:
+            for res in (have[1], have[0]):
+                res.release()
+            del frames[key]
+        tex = self.ctx.texture(size, 4)
+        try:
+            tex.repeat_x = tex.repeat_y = False
+            tex.filter = (moderngl.LINEAR, moderngl.LINEAR)
+            fbo = self.ctx.framebuffer(color_attachments=[tex])
+        except Exception:
+            tex.release()
+            raise
+        frames[key] = (tex, fbo)
+        return tex, fbo
+
+    def _release_frames(self) -> None:
+        for tex, fbo in (getattr(self, "_frames", None) or {}).values():
+            fbo.release()
+            tex.release()
+        self._frames = {}
+
+    def _hands_failed(self, e: Exception, target: moderngl.Framebuffer, vp: tuple) -> None:
+        """The hands raised: say why (the first reason, kept) and put back
+        the state the frame's other passes expect."""
+        if not self.ghost.error:
+            self.ghost.error = f"ghost hands: {type(e).__name__}: {e}"[:160]
+        self._rebind(target, vp)
+
+    @staticmethod
+    def _view_failed(v: View, what: str, e: Exception) -> None:
+        if not v.error:
+            v.error, v.exc = f"{what}: {type(e).__name__}: {e}"[:160], e
+
+    def _rebind(self, target: moderngl.Framebuffer, vp: tuple) -> None:
+        ctx = self.ctx
+        ctx.disable(moderngl.DEPTH_TEST)
+        target.use()
+        ctx.viewport = tuple(vp)
+        ctx.enable(moderngl.BLEND)
+        ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
 
     def _face_picture(self, s: ViewState, t: float) -> moderngl.Texture | None:
         """The picture the faces show this frame, or None for "as ever":

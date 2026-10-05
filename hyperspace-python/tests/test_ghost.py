@@ -768,3 +768,81 @@ def test_a_hand_that_leaves_fades_out_on_screen(ctx):
     lit = lambda a: a[left][..., :3].astype(int).sum()
     assert lit(full) > lit(fading) > lit(gone)
     assert np.array_equal(gone[left], none[left])
+
+
+def test_one_layer_composites_onto_many_targets_as_draw_does(ctx):
+    """Plan 21 WP1: `layer` renders the hands once, `composite` lays them
+    over any number of targets — each the same bytes `draw` leaves — and
+    `tex` is the layer only while one was drawn. With nothing to show,
+    `layer` says so and `composite` touches nothing."""
+    def ground():
+        fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((W, H), 4)])
+        fbo.use()
+        ctx.viewport = (0, 0, W, H)
+        ctx.clear(0.1, 0.2, 0.3, 1.0)
+        return fbo
+
+    def px(fbo):
+        return np.frombuffer(fbo.read(components=4), dtype=np.uint8).copy()
+
+    a = Renderer(ctx).ghost
+    a.state.on, a.state.alpha, a.source = True, 0.7, tracker()
+    want = ground()
+    assert a.draw(want, (0, 0, W, H), 1.0)
+    b = Renderer(ctx).ghost
+    b.state.on, b.state.alpha, b.source = True, 0.7, tracker()
+    assert b.tex is None
+    assert b.layer((W, H), 1.0) and b.tex is not None and b.tex.size == (W, H)
+    for _ in range(2):
+        got = ground()
+        assert b.composite(got, (0, 0, W, H), opaque=True)
+        assert ctx.fbo is got and ctx.viewport == (0, 0, W, H)
+        assert np.array_equal(px(got), px(want))
+        got.release()
+    assert b.readout is None                           # no readout asked for: one layer
+    b.source = tracker({})                             # no hand: no layer, nothing composited
+    assert not b.layer((W, H), 2.0) and b.tex is None
+    empty = ground()
+    assert not b.composite(empty, (0, 0, W, H))
+    assert np.array_equal(px(empty), px(ground()))
+    assert ctx.error == "GL_NO_ERROR"
+
+
+def test_the_readout_layer_is_the_guide_apart_from_the_hands(ctx):
+    """Plan 21 WP2 (fork F3): `layer(…, readout=True)` with the guide on
+    puts the hands alone in `tex` — the same bytes as a ghost with no
+    guide — and the guide in `readout`, drawn behind the hands' depth:
+    where the one-layer picture shows the guide, the readout shows the
+    same colour; where a palm hides an ON HAND gauge, the readout is
+    empty. With the guide off there is no readout."""
+    io = HandsIO(HandSettings.from_config({}), {}, source=NS(latest=lambda: (0, 0.0, {})),
+                 out=NS(send=print))
+    for st in io.state:
+        st.follow.y = 0.7
+    src = NS(skeleton=both(), cfg={"mode": "desktop"}, axes=io.axes, state=io.state,
+             gates=io.gates)
+
+    def layers(guide, readout):
+        gh = Renderer(ctx).ghost
+        gh.state.on, gh.state.alpha, gh.state.guide, gh.source = True, 1.0, guide, src
+        for k in range(4):                                # faded fully in
+            assert gh.layer((W, H), 1.0 + k / 30, readout=readout)
+        rd = lambda t: np.frombuffer(t.read(), dtype=np.uint8).reshape(H, W, 4).astype(int)
+        return gh, rd(gh.tex), (rd(gh.readout) if gh.readout is not None else None)
+
+    _, hands_only, none = layers(0, True)
+    assert none is None                                   # no guide: no readout
+    for guide in (1, 2):
+        _, single, none = layers(guide, False)
+        assert none is None
+        gh, hands, ro = layers(guide, True)
+        assert np.array_equal(hands, hands_only), G.GUIDES[guide]
+        solid = ro[..., 3] == 255
+        assert solid.sum() > 150
+        assert np.abs(ro[solid] - single[solid]).max() <= 1
+        if guide == 2:                                    # on the palm: partly hidden by it
+            hidden = (single[..., 3] == 255) & (np.abs(single - hands_only).sum(axis=2) == 0) \
+                & (hands_only[..., 3] == 255)
+            assert hidden.sum() > 500 and ro[hidden][..., 3].max() == 0
+        gh.layer((W, H), 1.2, readout=False)              # asked for nothing: back to one layer
+        assert gh.readout is None

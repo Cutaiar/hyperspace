@@ -891,17 +891,24 @@ class CapsuleHands:
             tris.append(((tb, n), (ik, n), (ib, n)))
         return spheres, tubes, tris
 
-    def draw(self, poses: list[HandPose], view_proj: np.ndarray, eye: np.ndarray) -> None:
+    def draw(self, poses: list[HandPose], view_proj: np.ndarray, eye: np.ndarray, *,
+             hands: bool = True, guide: bool = True) -> None:
+        """The poses' hands and their guides (each `HandPose.guide`) in one
+        go. `hands` / `guide` False leaves that part out — plan 21 WP2 draws
+        them apart when the guide is a layer of its own (`Ghost.readout`);
+        both on is the one call it always was."""
         s_rows, t_rows, m_rows = [], [], []
         for p in poses:
-            col = (*p.colour, float(p.fade))
-            spheres, tubes, tris = self.parts(p)
-            s_rows += [(*c, r, *col) for c, r in spheres]
-            t_rows += [(*a, *b, r, *col) for a, b, r in tubes]
-            for tri in tris:
-                m_rows += [(*q, *nn, *col) for q, nn in tri]
-            s_rows += p.guide[0]
-            t_rows += p.guide[1]
+            if hands:
+                col = (*p.colour, float(p.fade))
+                spheres, tubes, tris = self.parts(p)
+                s_rows += [(*c, r, *col) for c, r in spheres]
+                t_rows += [(*a, *b, r, *col) for a, b, r in tubes]
+                for tri in tris:
+                    m_rows += [(*q, *nn, *col) for q, nn in tri]
+            if guide:
+                s_rows += p.guide[0]
+                t_rows += p.guide[1]
         vp = np.asarray(view_proj, dtype="f4").T.tobytes()     # column-major
         ey = tuple(float(x) for x in eye)
         for prog in self.progs:
@@ -935,7 +942,10 @@ class _Side:
 
 
 class Ghost:
-    """The ghost-hands pass: `draw` after the FX chain, onto the target.
+    """The ghost-hands pass: `layer` renders the hands once a frame into
+    their own texture (`tex`), `composite` lays it over a target — after
+    the FX chain, onto each output that shows the hands (plan 21 WP1).
+    `draw` is the two together, onto one target.
 
     `source` is anything with ``.skeleton`` (side → `hands.core.skeleton`
     for the hands present this frame) — the HandsIO, set by the app when
@@ -958,6 +968,16 @@ class Ghost:
         self._fbo: moderngl.Framebuffer | None = None     # on the texture
         self._msaa: moderngl.Framebuffer | None = None    # multisampled, with depth
         self._res: list = []
+        self._shown = False      # `layer` drew this frame: `tex` is the layer
+        # the readout layer (plan 21 WP2): the guide and the tethers apart
+        # from the hands, made on first use, only while a pipeline puts the
+        # hands through the effects with the guide on
+        self._ro_size = (0, 0)
+        self._ro_tex: moderngl.Texture | None = None
+        self._ro_fbo: moderngl.Framebuffer | None = None
+        self._ro_msaa: moderngl.Framebuffer | None = None
+        self._ro_res: list = []
+        self._ro_shown = False
         # why the pass could not build or draw — the first reason, kept until
         # the ghost is switched off or the module reloads (the HANDS page
         # shows it); `_build_failed` alone stops the build being retried
@@ -1035,19 +1055,70 @@ class Ghost:
 
     def draw(self, target: moderngl.Framebuffer, vp: tuple[int, int, int, int], t: float,
              opaque: bool = True) -> bool:
-        """The hands over `target`'s viewport `vp`, if any show. Leaves
-        `target` bound with that viewport; touches no GL state when nothing
+        """The hands over `target`'s viewport `vp`, if any show: `layer` at
+        the viewport's size, then `composite`. Leaves `target` bound with
+        that viewport, a raise included; touches no GL state when nothing
         draws. True when it drew."""
         vx, vy, vw, vh = vp
-        got = self.poses(t, max(vw, 1) / max(vh, 1))
+        try:
+            if not self.layer((max(vw, 1), max(vh, 1)), t):
+                return False
+        except BaseException:
+            self.ctx.disable(moderngl.DEPTH_TEST)
+            self.ctx.enable(moderngl.BLEND)
+            self.ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
+            target.use()
+            self.ctx.viewport = (vx, vy, vw, vh)
+            raise
+        self.composite(target, vp, opaque)
+        return True
+
+    @property
+    def tex(self) -> moderngl.Texture | None:
+        """The hands' layer `layer` drew last (premultiplied by each hand's
+        fade, frame-sized, the guide and the tethers in it unless `readout`
+        holds them); None when it drew nothing. Valid until the next
+        `layer`."""
+        return self._tex if getattr(self, "_shown", False) else None
+
+    @property
+    def readout(self) -> moderngl.Texture | None:
+        """The readout layer (plan 21 WP2, fork F3): the guide and the
+        tethers' labels, apart from the hands so the effects never bend
+        them — drawn by `layer(…, readout=True)` only while the guide is on;
+        None otherwise (then they are in `tex`, as they always were)."""
+        return self._ro_tex if getattr(self, "_ro_shown", False) else None
+
+    def layer(self, size: tuple[int, int], t: float, readout: bool = False) -> bool:
+        """Render the hands' layer at `size` (the frame's) for time `t`:
+        the fades stepped, the hands drawn opaque with depth into their own
+        framebuffer, the tethers flat over them, resolved into `tex`.
+        False — nothing drawn, no GL state touched when nothing shows —
+        when the ghost is off, no hand shows, or the programs or the
+        target would not build (`error` says why). Called once a frame;
+        `composite` lays it over as many targets as want it. Leaves its own
+        framebuffer bound: the caller binds its target next (a raise
+        included — `draw` and `Renderer._draw_frame` do).
+
+        `readout` (a pipeline will put the hands through the effects): the
+        guide and the tethers go into a second layer, `readout`, instead —
+        the hands drawn there depth-only first, so an ON HAND gauge is
+        still hidden behind the palm, then the guide's spheres and tubes,
+        then the tethers. Only while the guide is on; with it off, or if
+        that layer will not build, the one layer as ever."""
+        self._shown = self._ro_shown = False
+        w, h = max(int(size[0]), 1), max(int(size[1]), 1)
+        got = self.poses(t, w / h)
         if got is None:
             return False
         poses, view_proj, eye = got
         ctx = self.ctx
         if self.geometry is None and not self._build():
             return False
-        if not self._ensure((max(vw, 1), max(vh, 1))):
+        if not self._ensure((w, h)):
             return False                 # nothing bound, nothing drawn: no layer
+        split = (readout and any(p.guide[0] or p.guide[1] or p.tethers for p in poses)
+                 and self._ensure_readout((w, h)))
         try:
             draw_fbo = self._msaa if self._msaa is not None else self._fbo
             draw_fbo.use()
@@ -1055,34 +1126,82 @@ class Ghost:
             ctx.clear(0.0, 0.0, 0.0, 0.0, depth=1.0)
             ctx.disable(moderngl.BLEND)
             ctx.enable(moderngl.DEPTH_TEST)
-            self.geometry.draw(poses, view_proj, eye)
+            if split:
+                self.geometry.draw(poses, view_proj, eye, guide=False)
+            else:
+                self.geometry.draw(poses, view_proj, eye)
             ctx.disable(moderngl.DEPTH_TEST)
-            if any(p.tethers for p in poses):
+            if not split and any(p.tethers for p in poses):
                 self._draw_tethers(poses, view_proj)
             if self._msaa is not None:
                 ctx.copy_framebuffer(self._fbo, self._msaa)
-            # over the target, premultiplied. On an opaque ground its alpha
-            # is left exactly as it is (plan 14 WP1); on overlay's
-            # see-through ground the hands add their coverage to it
-            target.use()
-            ctx.viewport = (vx, vy, vw, vh)
-            ctx.enable(moderngl.BLEND)
-            ctx.blend_func = ((moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA, moderngl.ZERO,
-                               moderngl.ONE) if opaque else
-                              (moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA, moderngl.ONE,
-                               moderngl.ONE_MINUS_SRC_ALPHA))
-            self._tex.use(location=0)
-            self._comp["u_hands"].value = 0
-            self._comp["u_alpha"].value = float(self.state.alpha)
-            self._comp_vao.render(moderngl.TRIANGLES, vertices=3)
+            if split:
+                ro = self._ro_msaa if self._ro_msaa is not None else self._ro_fbo
+                ro.use()
+                ctx.viewport = (0, 0, w, h)
+                ctx.clear(0.0, 0.0, 0.0, 0.0, depth=1.0)
+                ctx.enable(moderngl.DEPTH_TEST)
+                # the hands into the depth buffer only: moderngl applies a
+                # framebuffer's colour mask when it is bound, hence the use()s
+                ro.color_mask = (False, False, False, False)
+                try:
+                    ro.use()
+                    self.geometry.draw(poses, view_proj, eye, guide=False)
+                finally:
+                    ro.color_mask = (True, True, True, True)
+                    ro.use()
+                ctx.viewport = (0, 0, w, h)
+                self.geometry.draw(poses, view_proj, eye, hands=False)
+                ctx.disable(moderngl.DEPTH_TEST)
+                if any(p.tethers for p in poses):
+                    self._draw_tethers(poses, view_proj)
+                if self._ro_msaa is not None:
+                    ctx.copy_framebuffer(self._ro_fbo, self._ro_msaa)
         finally:
             # a raise anywhere above leaves the state the frame's other
             # passes expect: blending on, as the scene pass sets it
             ctx.disable(moderngl.DEPTH_TEST)
             ctx.enable(moderngl.BLEND)
             ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
+        self._shown, self._ro_shown = True, bool(split)
+        return True
+
+    def composite(self, target: moderngl.Framebuffer, vp: tuple[int, int, int, int],
+                  opaque: bool = True) -> bool:
+        """Lay the layer `layer` drew over `target`'s rect `vp` at
+        `ghost.alpha`, premultiplied, scaled to the rect (1:1 when it is
+        the layer's size). On an opaque ground the target's alpha is left
+        exactly as it is (plan 14 WP1); on overlay's see-through ground the
+        hands add their coverage to it. Leaves `target` bound with `vp`
+        and blending on, a raise included. False when there is no layer."""
+        return self._lay(self.tex, target, vp, opaque)
+
+    def composite_readout(self, target: moderngl.Framebuffer,
+                          vp: tuple[int, int, int, int], opaque: bool = True) -> bool:
+        """`composite` for the readout layer, when there is one."""
+        return self._lay(self.readout, target, vp, opaque)
+
+    def _lay(self, tex, target, vp, opaque: bool) -> bool:
+        if tex is None or self._comp is None:
+            return False
+        ctx = self.ctx
+        try:
             target.use()
-            ctx.viewport = (vx, vy, vw, vh)
+            ctx.viewport = tuple(vp)
+            ctx.enable(moderngl.BLEND)
+            ctx.blend_func = ((moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA, moderngl.ZERO,
+                               moderngl.ONE) if opaque else
+                              (moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA, moderngl.ONE,
+                               moderngl.ONE_MINUS_SRC_ALPHA))
+            tex.use(location=0)
+            self._comp["u_hands"].value = 0
+            self._comp["u_alpha"].value = float(self.state.alpha)
+            self._comp_vao.render(moderngl.TRIANGLES, vertices=3)
+        finally:
+            ctx.enable(moderngl.BLEND)
+            ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
+            target.use()
+            ctx.viewport = tuple(vp)
         return True
 
     def _draw_tethers(self, poses: list[HandPose], view_proj: np.ndarray) -> None:
@@ -1143,15 +1262,10 @@ class Ghost:
         self.geometry, self._comp, self._comp_vao = geo, comp, vao
         return True
 
-    def _ensure(self, size: tuple[int, int]) -> bool:
-        """The hands' layer at `size`, all or nothing: built into locals and
-        kept only when every piece was made. A piece the driver refuses
-        releases the rest, leaves no target (so the next frame tries again
-        from nothing, never on a half-built set), says why once on `error`
-        and returns False: that frame draws no hands."""
-        if size == self.size and self._fbo is not None:
-            return True
-        self.release_targets()
+    def _make(self, size: tuple[int, int]):
+        """(texture, its framebuffer, the multisampled one with depth or
+        None, every resource) for one layer at `size`, all or nothing: what
+        was made is released again if a piece raises, and the raise goes on."""
         ctx = self.ctx
         made: list = []
         try:
@@ -1174,14 +1288,53 @@ class Ghost:
                 msaa = None
                 fbo = ctx.framebuffer(color_attachments=[tex], depth_attachment=depth)
                 res = [fbo, depth]
-        except Exception as e:  # noqa: BLE001 — the hands must not take the frame down
+        except Exception:
             for r in reversed(made):
                 r.release()
+            raise
+        return tex, fbo, msaa, res
+
+    def _ensure(self, size: tuple[int, int]) -> bool:
+        """The hands' layer at `size`, all or nothing: built into locals and
+        kept only when every piece was made. A piece the driver refuses
+        releases the rest, leaves no target (so the next frame tries again
+        from nothing, never on a half-built set), says why once on `error`
+        and returns False: that frame draws no hands."""
+        if size == self.size and self._fbo is not None:
+            return True
+        self.release_targets()
+        try:
+            tex, fbo, msaa, res = self._make(size)
+        except Exception as e:  # noqa: BLE001 — the hands must not take the frame down
             if not self.error:
                 self.error = f"ghost layer {size[0]}×{size[1]}: {type(e).__name__}: {e}"[:160]
             return False
         self.size, self._tex, self._fbo, self._msaa, self._res = size, tex, fbo, msaa, res
         return True
+
+    def _ensure_readout(self, size: tuple[int, int]) -> bool:
+        """The readout layer at `size`, as `_ensure` builds the hands' one.
+        False (the guide stays in the hands' layer this frame): it would not
+        build, and `error` says why. getattr: a Ghost from before WP2."""
+        if size == getattr(self, "_ro_size", None) and getattr(self, "_ro_fbo", None) is not None:
+            return True
+        self.release_readout()
+        try:
+            tex, fbo, msaa, res = self._make(size)
+        except Exception as e:  # noqa: BLE001 — the guide must not take the hands down
+            if not self.error:
+                self.error = f"ghost readout {size[0]}×{size[1]}: {type(e).__name__}: {e}"[:160]
+            return False
+        self._ro_size, self._ro_tex, self._ro_fbo, self._ro_msaa, self._ro_res = (
+            size, tex, fbo, msaa, res)
+        return True
+
+    def release_readout(self) -> None:
+        for res in (*(getattr(self, "_ro_res", None) or []), getattr(self, "_ro_tex", None)):
+            if res is not None:
+                res.release()
+        self._ro_res, self._ro_tex, self._ro_fbo, self._ro_msaa = [], None, None, None
+        self._ro_size, self._ro_shown = (0, 0), False
 
     def release_targets(self) -> None:
         for res in (*self._res, self._tex):

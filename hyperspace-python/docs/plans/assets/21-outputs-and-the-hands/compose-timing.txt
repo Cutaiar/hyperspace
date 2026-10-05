@@ -1,0 +1,6 @@
+Plan 21 WP2 — compose timing, 1920×1080, Apple M3 Max, GL renderer Apple M3 Max
+standalone context, offscreen targets (first 4x MSAA, others single-sampled), warp + kaleido on, two synthetic hands; ms per frame, each frame ended by glFinish; 120 frames after 20 warm-up
+
+one view, default (Renderer.draw's path)             median   1.66 ms · p90   2.01 ms · chain runs 1 · pipelines ['SCENE']
+two views agreeing (scene + hands over)              median   1.85 ms · p90   2.27 ms · chain runs 1 · pipelines ['SCENE']
+two views disagreeing (hands over | hands through)   median   2.24 ms · p90   2.52 ms · chain runs 2 · pipelines ['SCENE', 'SCENE+HANDS']

@@ -269,6 +269,13 @@ def test_the_watch_list_is_in_dependency_order():
     assert not late, late
 
 
+def test_outputs_is_watched_before_render():
+    """Plan 21 WP1: render.py imports `Switches`, `View` and `route` from
+    outputs.py, so a save of outputs.py reloads render.py after it."""
+    order = _watched()
+    assert "outputs" in order and order.index("outputs") < order.index("render")
+
+
 def test_dotted_names_reach_a_subpackage_module(pkg):
     """`hands.core` in MODULES is sys.modules['hyperspace.hands.core']."""
     sub = pkg / "sub"
