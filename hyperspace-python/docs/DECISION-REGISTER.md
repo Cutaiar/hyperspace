@@ -688,6 +688,12 @@ are built (plan 15, PRs #81–#83 and #87; the answer sheet's notes say
 where). **Rows 34–44,
 after row 33, are the forks plan 15's unattended run settled on its own
 recommendation**: each is built and waits for you to confirm or overturn.
+**Rows 45–49 are plan 16's, settled the same way** (PRs #84–#86, #89,
+#90 and #92): where an effect's switch sits on its chip (and three chips
+to a row), what an idle effect's faders do, the instance count reaching
+zero, where the windows open — the one with a drawing — and the dream's
+layer no longer performable. Plan 16 asked you nothing before it was
+built; these five are everything in it that is a choice.
 
 You also set how the work runs, since nobody will be watching it:
 
@@ -1235,6 +1241,272 @@ R13.
 `test_desk.py::test_the_crossfader_keeps_its_hold_across_a_preset_load`.
 Hand check 55 (e).
 
+### 45. P16-a — where an effect's on/off sits on its chip, and three chips to a row
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** On the FX page every effect has a chip. You asked to be
+able to open an effect and look at its faders without switching it. So a
+click on the chip now only opens it, and the switch needs a place of its
+own.
+
+```
+ before: one click did both          now: two places to click on each chip
+
+ ┌──────────────┐                    ┌────┬───────────────┐
+ │ Kaleidoscope │  click: switch     │ ●  │ Kaleidoscope  │   red = on
+ └──────────────┘  AND open          └────┴───────────────┘
+                                       │         └ the name: open its faders
+                                       └ the dot (● on, ○ off): switch it
+
+ four to a row                       three to a row (the dot takes room)
+ [    ][    ][    ][    ]            [ ●      ][ ○      ][ ○      ]
+ [    ][    ][    ][    ]            [ ○      ][ ●      ][ ○      ]
+ [    ][    ][    ][    ]            [ ○      ][ ○      ][ ○      ]
+                                     [ ○      ][ ○      ][ ○      ]
+```
+
+**What the code did.** A click on a chip switched the effect on or off
+and opened it, both at once. Which effect was open was remembered as a
+position in the stack, so dragging an effect's order, or loading a
+preset, opened a different effect.
+
+| Option | Trade-off |
+|---|---|
+| **(a) A dot at the left end of each chip switches; the name opens; the strip's own "on" box stays** | Any effect is switched in one click without opening it, as before. The two places are apart by position, which is meant to suit a trackpad. The dot is small and can be hit by mistake when you meant the name. |
+| (b) No switch on the chip; only the "on" box in the open strip | Nothing to hit by mistake. Two clicks to switch an effect, and the page stops being a row of switches. |
+| (c) Click opens, ⇧click switches | No new place to click. Invisible, and needs the keyboard at a party. |
+
+**Chosen: (a).** The open chip has a white outline round it, so "open"
+and "on" (red) read apart. The open effect is now remembered by name:
+reordering, a preset load or a show load never changes which one is
+open.
+
+**One thing the build changed that the question did not cover: the chips
+are three to a row, not four.** With the dot's square taken out of each
+chip, four to a row cut seven of the twelve effect names short
+("Kaleidosc", "Trip colou"). At three to a row only the two longest lose
+a few pixels. The cost is one more row of chips, about 29 px of the
+page; every effect's strip still fits without scrolling.
+
+**Cost to reverse.** To (b): delete the dot, a dozen lines in
+`ui_fx._chip`. Back to four to a row: one constant
+(`ui_fx.CHIPS_PER_ROW`). Remembering the open effect by name is the same
+either way. Plan 16 WP2 (PR #84);
+`test_fx.py::test_a_chip_click_selects_and_never_toggles`,
+`::test_the_chips_led_toggles_and_never_selects`,
+`::test_selection_is_by_name_and_survives_a_reorder`. Hand check 59: the
+clicks were simulated in tests; nobody has tried the dot with a real
+trackpad or looked at the page from a step back.
+
+### 46. P16-b — an effect that is not running: dimmed and live, or disabled
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** You hit an effect whose faders did nothing, with no word
+why: it was off. Now the open effect says why it is not running — "off
+— nothing below shows until it is on" with a **turn on** button, "the
+whole stack is bypassed" with **effects on**, "FX mix is at 0", or "its
+mix is at 0". The question is what its faders do meanwhile.
+
+**What the code did.** An effect that was off drew exactly like one that
+was on.
+
+| Option | Trade-off |
+|---|---|
+| **(a) Dimmed, but still live** | You can set an effect up dark and then switch it on, and right-click → Learn is still offered on every fader. The signal is weaker: the line and the button carry the message. |
+| (b) Disabled (greyed and dead) | The strongest signal. Nothing can be set up before the effect is on, and right-click stops working too, so nothing on an off effect could be learned. |
+
+**Chosen: (a).** As built the dimming is a veil drawn over the faders,
+not the faders themselves made faint: that way a fader's right-click
+menu and the blend list open at full strength. The "on" box is never
+dimmed, and when the reason is "its mix is at 0" that mix fader is left
+undimmed too, since it is the one to move.
+
+**Cost to reverse.** To (b): wrap the rows in a disable and drop the
+veil, a few lines in `ui_fx.page`. How strong the dimming is: one
+constant (`ui_fx.IDLE_ALPHA`). Plan 16 WP3 (PR #86);
+`test_fx.py::test_the_idle_strips_controls_stay_live`,
+`::test_an_off_effects_strip_says_so_and_turn_on_switches_it_on`. Hand
+check 60: whether the dimming reads from where you stand has only been
+seen in a picture from a hidden window; right-click → Learn on a dimmed
+fader has not been tried at all.
+
+### 47. P16-c — the instance count reaches zero from the knob and the slider
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** You asked for "instances to zero": a way to have nothing
+drawn, with the echoes and the effects carrying on. The count now goes
+0–100. The question is whether zero can be reached by hand.
+
+**What the code did.** The count stopped at 1, in two places: the
+parameter's range, and the renderer, which drew one copy even if handed
+0.
+
+| Option | Trade-off |
+|---|---|
+| **(a) Yes: the slider's left end and the bottom of track knob 3 (K3) are zero** | What was asked for: a hand on the knob takes the shape out. A knob left at the bottom is a black render with no error; the readout says "0 · nothing drawn". |
+| (b) The slider and the knob stop at 1; only a preset or a typed number reaches 0 | No accidental black. Zero becomes a state nobody can reach live, which was the ask. |
+| (c) A separate "blank" switch | Explicit. One more control for what the count already says. |
+
+**Chosen: (a).** At zero the ground, the echoes (which fade out over the
+empty scene), the effects, the ghost hands and the master dim all carry
+on. Ctrl+Z brings the count back. No factory preset, desk value or hand
+route lands on zero.
+
+Two things that follow, for you to know:
+
+- **The bottom of K3 is now "nothing drawn", not one copy**, wherever a
+  preset has K3 on the count (the factory desk layout does).
+- **A route of your own that pushes both ways can now blank the scene.**
+  An LFO routed onto the count with the count at 1 used to stop at one
+  copy on its way down; now it reaches zero for half its cycle. The
+  factory presets' hand routes only push up from the count they start
+  on, so a hand never takes them below it.
+
+The knob's travel is 100 steps where it was 99, so a saved route lands
+up to one copy differently: FIELD's hand at the top of the box gives 69
+copies where it gave 68.
+
+**Cost to reverse.** The range's floor and the renderer's clamp, two
+lines; a preset saved at 0 would then load as 1. Plan 16 WP5 (PR #90);
+`test_render.py::test_zero_instances_draws_only_the_ground`,
+`::test_zero_instances_still_runs_the_look_back_and_the_effects`,
+`test_plan12_presets.py::test_no_factory_hand_row_blanks_the_scene`,
+`test_undo.py::test_a_count_taken_to_zero_is_undone`. Hand check 62:
+seen as an offscreen render and in a scripted launch on a laptop, never
+on the knob or the projector.
+
+### 48. P16-d — where the windows open
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** Both windows opened in the same spot on the laptop at
+every launch, and the render had to be dragged to the projector each
+time. Now the app remembers where both windows were when you quit, and
+`config.toml` can name a screen for each. Three details of how were left
+to the build, and a fourth turned up in it.
+
+```
+ first launch, or after deleting windows.json: both on the first screen, as before
+
+  ┌───────────────── screen 0 (laptop) ──────────────────┐
+  │ ┌─ render 1280 × 820 ─────┬────────────────────────┐ │   render top-left,
+  │ │                         │  controls 960 × 900    │ │   controls flush right,
+  │ │       (they overlap on a small screen)           │ │   at their full sizes
+  │ └─────────────────────────┤                        │ │
+  │                           └────────────────────────┘ │
+  └──────────────────────────────────────────────────────┘
+
+ after you drag the render onto the projector once and quit: every launch
+
+  ┌──────── screen 0 (laptop) ────────┐ ┌──────── screen 1 (projector) ───────┐
+  │           ┌─ controls ──────────┐ │ │ ┌─ render ────────────────────────┐ │
+  │           │ where you left them │ │ │ │ where you left it, at its size  │ │
+  │           └─────────────────────┘ │ │ └─────────────────────────────────┘ │
+  └───────────────────────────────────┘ └─────────────────────────────────────┘
+   ~/Hyperspace/windows.json:  control {x, y, w, h}     render [ {x, y, w, h} ]
+
+ config.toml, when it names a screen, wins over the file:
+
+   [output]
+   monitor = 1            the render opens on screen 1 (and fullscreen covers it)
+   control_monitor = 0    the controls open on screen 0
+                          on the named screen: the remembered spot if it was on
+                          that screen, else that screen's default spot
+```
+
+**What the code did.** Nothing was remembered and nothing in the config
+moved a window at launch. `[output] monitor` existed, but only said
+which screen fullscreen covers.
+
+| The detail | Option | Trade-off |
+|---|---|---|
+| Config or the remembered file | **(a) a screen number in `config.toml` wins; the file fills in what the config leaves at −1** | The config is the rig's statement and always does what it says. A window dragged to another screen comes back to the configured one at the next launch. |
+| | (b) the file always wins once it exists | "Where I left it" always. A key in `config.toml` silently stops working after the first quit. |
+| When the file is written | **(a) when you quit, and on ⌘R** | Nothing added to the frame loop. A crash or a `kill` costs one drag. |
+| | (b) also while running, a second after a window stops moving | Survives a crash. Needs a check every frame. |
+| Is fullscreen remembered | **(a) no: the file holds the window's size and place as a plain window; `[output] fullscreen` says whether a launch is fullscreen** | One place says it. Quit while fullscreen and the next launch is a plain window, where it was before it went fullscreen, unless the config asks for fullscreen. |
+| | (b) yes | A launch goes fullscreen because the last quit did: a second source of truth beside the config. |
+| The size on a first launch (met in the build) | (a) shrunk to fit the screen | Nothing overhangs a small laptop screen. The shrunk size is then what gets remembered and carried to a bigger screen. |
+| | **(b) the full size, as before** | A first launch is exactly what it always was. On a small screen the windows overlap and may overhang, as they always did. |
+
+**Chosen: the bold option of each.** So: drag the render to the
+projector once, quit, and every later launch opens it there; with
+`fullscreen = true` in the config it then goes fullscreen on that
+screen with no drag.
+
+What keeps a window reachable: a remembered spot is used only if a
+good part of the window, and its top edge, is on a screen that is
+connected. Otherwise — the projector unplugged, a hand-edited file — the
+window opens at the default spot on the first screen, and the terminal
+and the SYSTEM page say which screen it was last on. A remembered size
+is cut down to the screen it lands on. A window that is minimised at the
+quit keeps its old entry. To forget everything, delete
+`~/Hyperspace/windows.json`; no setting turns the memory off.
+
+A screen number the config names that is not there (`monitor = 2` with
+two screens), or something that is not a number (`monitor = "left"`),
+is treated as "where it was last time", with a note on the SYSTEM page;
+the app still launches. One consequence: a number that has no screen
+**at launch** is ignored for the whole run, so with `monitor = 1` plug
+the projector in before launching, or pick it on the OUTPUT page.
+
+Screens are numbered as the system lists them, the main one first. The
+numbers can move when a display is plugged in; the remembered file goes
+by position, not number.
+
+**Cost to reverse.** The file winning: reorder two branches in
+`placement.place`. Writing while running: add a check to the frame loop;
+the file does not change. Remembering fullscreen: one true/false in the
+file's render entry. A first launch fitted to the screen: one line in
+`placement.default_rect`. Honouring a screen plugged in after launch:
+three lines in `app._windows`. Plan 16 WP4 (PR #85) and WP7 (PR #92);
+`test_placement.py::test_a_config_monitor_beats_the_remembered_screen`,
+`::test_a_remembered_rect_is_restored`,
+`::test_a_rect_on_a_screen_that_is_gone_falls_back`,
+`test_app_boundary.py::test_the_exits_save_the_windowed_rects`,
+`test_overlay.py::test_windowed_rect_is_the_saved_rect_while_fullscreen_or_overlay`.
+Hand check 61. **Nothing here has met a second screen**: the machine it
+was built on had one, so two screens, a projector being unplugged and
+fullscreen on the glass were run with made-up screens only; on the one
+real screen, four launches put the windows back where the file said.
+
+### 49. P16-e — the dream's layer can no longer be performed
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** The dream's Layer (which layer of the net it dreams on)
+could be the target of a route: a hand, a band or an LFO could change
+it. Changing the layer makes the dream load a different part of the net,
+which is slow. Its two neighbours that also rebuild things, Spacing and
+Resolution, were already closed to routes. This one was found in a sweep
+of the code, not asked for.
+
+**What the code did.** Layer was an ordinary parameter, so the ROUTING
+page offered it as a target. No factory preset routed onto it.
+
+| Option | Trade-off |
+|---|---|
+| **(a) Layer cannot be the target of a route**, like Spacing and Resolution | A performer cannot make the dream reload mid-set. The Layer list on the LOOKBACK page, a preset, a key and a learned knob or button still set it. |
+| (b) Leave it routable | Nothing changes for a preset that already routes onto it. A band on it would reload the net on every swing. |
+
+**Chosen: (a).** Right-clicking Layer now reads "not modulatable", and
+it is gone from the ROUTING page's list of targets.
+
+**One thing to know: a preset of yours that has a route onto Layer keeps
+the route, but it now does nothing, and nothing tells you so when the
+preset loads.** The row is still on the ROUTING page, and hovering its
+target says it is dormant.
+
+**Cost to reverse.** One flag (`dream.layer` in `params.py`); a note at
+load for such a route would be a small addition in `routing.py`. Plan 16
+WP5 (PR #90); `test_lookback.py::test_dream_params_declared`,
+`::test_a_route_on_the_dream_layer_is_dormant`. Hand check 63. That a
+route used to make the dream reload was read from the code; the dream
+was not run to see it.
+
 ---
 
 ## Part B — built on the recommendation without asking; confirm or overturn
@@ -1289,12 +1561,18 @@ Each is built, reviewed and on PR #55. Overturning any is a small follow-up.
   is the launch that rewrites `bindings.json`; copy `~/Hyperspace`
   before it). Rows 34–44 above are each shown by one of group K's
   checks; nothing in plan 15 has been tried at the rig.
+- Group **L** (plan 16: the cheat sheet off at launch, the FX chips, an
+  idle effect's strip, where the windows open, instances to zero, the
+  dream's layer; checks 58–63, about 20 minutes, the projector for 61).
+  Rows 45–49 are shown by checks 59, 60, 62, 61 and 63 in that order.
+  Nothing in plan 16 has been tried at the rig, and check 61 is the
+  first time window placement meets a second screen.
 
 ---
 
 ## Answer sheet
 
-Write the letter, or "rec" for the recommendation. Rows 14–17 and 34–44
+Write the letter, or "rec" for the recommendation. Rows 14–17 and 34–49
 take "keep" or "overturn".
 
 | # | Decision | Recommended | Your answer | Note |
@@ -1344,3 +1622,8 @@ take "keep" or "overturn".
 | 42 | P15-n the save-as gesture | a `hold` op; fires at 0.6 s while held; the bar dark at rest; names counted against files, list and bank; the new preset becomes the loaded one | built on the recommendation; confirm or overturn | plan 15 WP4 (PR #87); a failed save blinks nothing; a clip-stop row deleted from `bindings.json` comes back unless kept with `enabled: false` |
 | 43 | P15-o a drag that pauses | (a) over 0.4 s still is two steps | built on the recommendation; confirm or overturn | plan 15 WP1 (PR #82) |
 | 44 | P15-p the faders after a preset load | (b) a fader lets go only when the load moved its parameter | built on the recommendation; confirm or overturn | plan 15 WP3 (PR #81), with the per-fader condition its review added; audit R13 is the older gap it no longer hides |
+| 45 | P16-a an effect's switch on its chip | (a) a dot at the chip's left end switches; the name opens | built on the recommendation; confirm or overturn | plan 16 WP2 (PR #84); the chips are three to a row, not four (four cut seven of twelve names); the open effect is remembered by name |
+| 46 | P16-b an idle effect's faders | (a) dimmed but live, with a line saying why and "turn on" / "effects on" | built on the recommendation; confirm or overturn | plan 16 WP3 (PR #86); built as a veil over the faders, so their right-click menus stay at full strength; the fader a line names is not dimmed |
+| 47 | P16-c instances to zero | (a) reachable from the slider's left end and K3's bottom | built on the recommendation; confirm or overturn | plan 16 WP5 (PR #90); K3's bottom is nothing drawn, not one copy; a route of yours that pushes both ways on the count can blank the scene for half its cycle; FIELD's top is 69 copies, not 68 |
+| 48 | P16-d where the windows open | a screen number in the config beats the remembered file; written on quit and ⌘R only; fullscreen never remembered; a first launch at full size | built on the recommendation; confirm or overturn | plan 16 WP4 (PR #85) and WP7 (PR #92); `~/Hyperspace/windows.json`, new key `[output] control_monitor`; a screen number with no screen at launch is ignored for the whole run; never run with a second screen |
+| 49 | P16-e the dream's layer | (a) not the target of a route, like Spacing and Resolution | built on the recommendation; confirm or overturn | plan 16 WP5 (PR #90); a route of yours onto it goes dormant with no note at load |
