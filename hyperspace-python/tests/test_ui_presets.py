@@ -504,3 +504,157 @@ def test_a_far_slot_reads_its_number_and_name_and_has_the_slot_menu(rig, tmp_pat
                              "the clip-stop row fills the next empty slot")
     assert tip(2, "FIELD") == "F3: FIELD — click loads, ⇧click saves the live state as it"
     assert tip(2, None) == "F3: empty — ⇧F3 saves the live state here"
+
+
+# ------------------------------------------- plan 19 WP5: the dot and the save label
+
+def _dirty(r):
+    """An edit the loaded preset does not hold: the presets group (and the
+    view's) is dirty."""
+    reg = r.reg
+    reg["view.bright"].set(reg["view.bright"].value * 0.5 + 0.1)
+    assert r.lib.is_dirty("presets")
+
+
+def test_the_dot_is_a_twelve_pixel_disc_and_save_is_lit_while_dirty(rig, monkeypatch):  # noqa: F811
+    """The dot reads from a step back: a filled red disc 12 px across
+    (`ui.DOT_R`), centred on the name's line, where the "●" glyph left
+    about 7 px of ink; while it shows the save chip is the lit one (solid
+    red), and the loaded slot carries a white disc of radius 4. The row
+    does not grow: with "more" open every module strip under it is where
+    it was, and the page still fits."""
+    from hyperspace import ui
+
+    panel, lib = rig.panel, rig.lib
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    _open_more(monkeypatch)
+    lib.project.load_slot(4)                                  # F5: TRIP, a factory preset
+    assert lib.current("presets") == "TRIP" and lib.project.active == 4
+    frame(panel, "presets")
+    frame(panel)
+    st = ui_presets._state(panel)
+    clean = dict(st["rects"])
+    assert "strip.presets.dot" not in clean and "preset.dot" not in clean
+    assert st["save"]["strip.presets"] == ("save copy", False)
+    _dirty(rig)
+    frame(panel)
+    frame(panel)
+    rects = st["rects"]
+    x0, y0, x1, y1 = rects["strip.presets.dot"]
+    assert x1 - x0 == y1 - y0 == 2 * ui.DOT_R == 12
+    name = rects["strip.presets.name"]
+    assert abs((y0 + y1) / 2 - (name[1] + name[3]) / 2) < 0.5     # on the name's middle
+    assert name[2] <= x0 and x1 <= rects["strip.presets.next"][0]  # between the name and ▶
+    assert st["save"]["strip.presets"] == ("save copy", True)     # lit while dirty
+    # the loaded slot's white disc, radius 4, inside its button at the right end
+    d, slot = rects["preset.dot"], rects["preset.4"]
+    assert d[2] - d[0] == 2 * ui_presets.SLOT_DOT_R == 8
+    assert slot[0] < d[0] and d[2] <= slot[2] and slot[1] < d[1] and d[3] < slot[3]
+    # no row grew: the strip's own items, and every strip under it, are where they were
+    for key in ("strip.presets.name", "strip.presets.save", "strip.presets.as",
+                *[k for k in clean if k.startswith("strip.") and not k.startswith("strip.presets")]):
+        assert rects[key][1] == clean[key][1] and rects[key][3] == clean[key][3], key
+    assert any(k.startswith("strip.camera.") for k in clean)       # "more" was open
+    assert ui.RAIL_DOT_R == 5                                      # the rail's disc, from 3.5
+    assert _page_scroll(rig, monkeypatch)["presets"] == 0
+    # saved: the dot goes and the chip is quiet again — and reads "save" (yours now)
+    lib.overwrite("presets")
+    frame(panel, "presets")
+    frame(panel)
+    assert "strip.presets.dot" not in st["rects"] and "preset.dot" not in st["rects"]
+    assert st["save"]["strip.presets"] == ("save", False)
+
+
+def test_save_reads_save_copy_on_a_factory_preset(rig, tmp_path, monkeypatch):  # noqa: F811
+    """"save copy" while the loaded preset is a factory one — the save
+    writes your own copy, which takes its place in the list — and "save"
+    on yours; the hover says which. Clicking it is `Library.overwrite`,
+    unchanged: after it the chip reads "save" and TRIP is listed once. A
+    module strip keeps "save" (and its reset) whatever is loaded."""
+    panel, lib = rig.panel, rig.lib
+    lib.load("presets", "TRIP")
+    assert ui_presets.save_label(lib, "presets") == "save copy"
+    assert ui_presets.save_tip(lib, "presets") == (
+        "Save your own copy of TRIP: the factory one is kept and yours takes its place "
+        "in the list")
+    _dirty(rig)
+    frame(panel, "presets")
+    frame(panel)
+    st = ui_presets._state(panel)
+    assert st["save"]["strip.presets"] == ("save copy", True)
+    assert not (tmp_path / "presets" / "trip.json").exists()
+    _click(panel, st["rects"]["strip.presets.save"])
+    assert (tmp_path / "presets" / "trip.json").is_file()
+    assert not lib.is_factory("presets", "TRIP") and lib.list("presets").count("TRIP") == 1
+    frame(panel)
+    assert st["save"]["strip.presets"] == ("save", False)
+    assert ui_presets.save_label(lib, "presets") == "save"
+    assert ui_presets.save_tip(lib, "presets") == (
+        "Write the settings over TRIP (the old file goes to the trash)")
+    # nothing loaded: "save", disabled
+    lib.reland("presets", (None, None, None))
+    assert ui_presets.save_label(lib, "presets") == "save"
+    # a module strip keeps "save" and its reset
+    _open_more(monkeypatch)
+    lib.load("band", "Balanced")
+    assert lib.is_factory("band", "Balanced")
+    frame(panel)
+    frame(panel)
+    assert st["save"]["strip.band"][0] == "save" and "strip.band.reset" in st["rects"]
+
+
+def test_the_preset_strip_has_no_reset_and_does_not_overlap(rig, monkeypatch):  # noqa: F811
+    """The preset strip drops `reset` (on a document kind `Library.reset`
+    loads a preset called "default", and none ships) so "save copy" fits:
+    at the control size, the longest factory name loaded and dirty, the
+    strip's items clear one another and the page's edge. With "more" open
+    every module strip (dot, save, as…, reset) clears too — measured, as
+    the plan asked, with the new dot's width."""
+    panel, lib = rig.panel, rig.lib
+    assert lib.default_name("presets") is None                 # what reset would load: none
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    _open_more(monkeypatch)
+    factory = [n for n in lib.list("presets") if lib.is_factory("presets", n)]
+    longest = max(factory, key=lambda n: (len(n), n))
+    lib.load("presets", longest)
+    _dirty(rig)
+    for group in ui_presets.groups(panel):                    # every module strip dirty too
+        if not lib.is_dirty(group):
+            p = next(p for p in rig.reg if p.group == group and p.persist)
+            p.set_norm(0.5 if p.norm != 0.5 else 0.25)
+    frame(panel, "presets")
+    frame(panel)
+    frame(panel)
+    st = ui_presets._state(panel)
+    rects = st["rects"]
+    assert "strip.presets.reset" not in rects
+    assert st["save"]["strip.presets"] == ("save copy", True)
+    page_right = max(r[2] for k, r in rects.items() if k.startswith("preset."))
+    strips: dict[str, dict] = {}
+    for k, r in rects.items():
+        if k.startswith("strip."):
+            strips.setdefault(k.split(".")[1], {})[k] = r
+    assert set(strips) >= {"presets", "view", "camera", "band"}
+    # the preset strip: every item clear of every other, inside the page
+    items = strips.pop("presets")
+    keys = sorted(items)
+    for i, a in enumerate(keys):
+        assert items[a][2] <= page_right + 1, a
+        for b in keys[i + 1:]:
+            assert not _overlap(items[a], items[b]), (a, b)
+    # a module strip under "more" (measured, as the plan asked): its row
+    # starts at ui.LABEL_W, so ◀ name ▶ (192 px with the dot) and save ·
+    # as… · reset (163 px) do not both fit its 258 px — the save chip sits
+    # over the name button's right end with or without a dot, as it did
+    # before this package (reported, not changed here). What the dot must
+    # not do is make that worse: the disc clears the name and ▶, and the
+    # three chips clear one another and the page's edge
+    for group, items in strips.items():
+        dot = items.get(f"strip.{group}.dot")
+        if dot is not None:
+            assert not _overlap(dot, items[f"strip.{group}.name"])
+            assert not _overlap(dot, items[f"strip.{group}.next"])
+        chips = [items[f"strip.{group}.{c}"] for c in ("save", "as", "reset")]
+        assert chips[0][2] <= chips[1][0] and chips[1][2] <= chips[2][0], group
+        assert chips[2][2] <= page_right + 1, group
+    assert _page_scroll(rig, monkeypatch)["presets"] == 0
