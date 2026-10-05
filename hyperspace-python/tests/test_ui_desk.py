@@ -351,12 +351,16 @@ def test_the_big_desk_labels_every_lit_control_and_never_scrolls(rig, monkeypatc
         assert st["unit"][0] >= ui_desk.LABEL_UNIT and st["unit"][1] <= st["unit"][0]
         lit = ui_desk.lit_cached(panel, table)
         says = {g: ui_desk.text(reg, b) for g, b in lit.items()}
+        # an empty bank slot's pad is mapped but drawn dark: no label (plan 19 WP2)
+        empty = {g for g, b in lit.items() if ui_desk.empty(reg, b)}
+        assert empty and all(g.split("·")[0] in ("G4", "G5") for g in empty)
+        assert all(says.pop(g) == "" for g in empty)
         assert len(lit) > 80 and all(says.values())
         # a label for every lit control: the eight clip-stop pads share one
         assert set(st["labels"]) == set(says.values()), layer
         stop = [says[f"G6·{k}"] for k in range(1, 9)]
         assert len(set(stop)) == 1 and st["labels"].count(stop[0]) == 1
-        assert len(st["labels"]) == len(lit) - 7, layer
+        assert len(st["labels"]) == len(says) - 7, layer
         # what reached the draw list: every glyph (dark ones too), and
         # the labels' lines — nothing else, so a dark control has no label
         drawn = got["texts"]

@@ -15,7 +15,14 @@ import re
 from types import SimpleNamespace
 
 import pytest
-from conftest import opened_last
+from conftest import (
+    OWNER_KNOB,
+    OWNER_PAD,
+    boot_home,
+    far_pads,
+    old_shape_pads,
+    opened_last,
+)
 from test_plan12_presets import DictSource, NullOut, feats, hold, offset
 
 from hyperspace import apc40, lfo, preset, routing, tempo
@@ -761,6 +768,9 @@ def test_every_factory_presets_desk_is_the_generators():
     factory layer)."""
     desk = preset.desk_json(preset.fresh_desk())
     assert desk and all("layer" not in d for d in desk)
+    # plan 19 WP2: the sixteen shape pads left the fresh desk (42 rows → 26)
+    # and no factory file maps a pad of clip rows 4 or 5 — they are the bank's
+    assert len(desk) == 26 and not _on_bank_rows(desk)
     from_map = []
     for d in apc40.DEFAULT_MAP:
         if d.get("layer") == "preset":
@@ -778,6 +788,7 @@ def test_every_factory_presets_desk_is_the_generators():
             assert "desk" not in doc, path.name
         else:
             assert doc["desk"] == want, path.name
+            assert not _on_bank_rows(doc["desk"]), path.name
     knobs = [f"cc:*:{0x10 + k}" for k in range(8)]
     for slug, targets in (("party-wake", preset.WAKE_KNOBS), ("party-trip", preset.TRIP_KNOBS),
                           ("party-acid", preset.ACID_KNOBS),
@@ -1420,3 +1431,107 @@ def test_active_follows_the_loaded_preset_from_one_place(tmp_path):
         assert "follow()" in src and "bank.index" not in src, fn.__qualname__
     assert inspect.getsource(library).count("bank.index(") == 1
     assert "pr.bank.index(" not in inspect.getsource(preset)
+
+
+# ------------------------------ plan 19 WP2: a preset saved before the bank's rows
+
+def _files(home) -> dict:
+    return {p.name: (p.read_bytes(), p.stat().st_mtime_ns)
+            for p in sorted((home / "presets").glob("*.json"))}
+
+
+def _on_bank_rows(rows) -> list:
+    """The rows of a desk that sit on a pad of clip rows 4 or 5."""
+    far = set(far_pads())
+    return [r for r in rows if (r.source if isinstance(r, Binding) else r["source"]) in far]
+
+
+def test_an_old_preset_loads_without_its_shape_pads_and_its_file_is_untouched(owner_home):
+    """The owner's files (on a copy), fork 4. A preset saved before plan
+    19 holds the sixteen shape pads of clip rows 4–5 in its `desk`. At a
+    load those sixteen exact old factory rows are dropped **quietly** — no
+    note, no warning line — while a pad the owner re-aimed is dropped
+    **with** the existing "that control is invariant" note; a learned
+    device knob is kept; the preset's dot is clean; and **no preset file
+    changes by a byte or a tick** — the file keeps the rows until the
+    owner saves."""
+    home = owner_home
+    before = _files(home)
+    assert set(before) == {"night-one.json", "night-two.json", "night-three.json"}
+    for name in before:                                    # each file does hold the sixteen
+        desk = json.loads((home / "presets" / name).read_text())["desk"]
+        assert len(_on_bank_rows(desk)) == 16, name
+    r = boot_home(home)                                    # the launch lands NIGHT ONE
+    lib, table, pr, presets = r.lib, r.router.table, r.lib.project, r.presets
+    fresh = len(preset.fresh_desk())
+    # NIGHT ONE: the sixteen exact rows — nothing said
+    assert lib.current("presets") == "NIGHT ONE"
+    assert presets.desk_notes == [] and presets.notes == [] and lib.warning == ""
+    assert _on_bank_rows(table.desk()) == [] and len(table.desk()) == fresh
+    assert not lib.is_dirty("presets")
+    # NIGHT TWO: fifteen quiet, the owner's re-aimed pad with its note, the knob kept
+    pr.load_slot(1)
+    said = (f"dropped {OWNER_PAD['source']} → {OWNER_PAD['target']}: that control is "
+            "invariant, the session's (plan 13 D6)")
+    assert lib.current("presets") == "NIGHT TWO"
+    assert presets.desk_notes == [said] and presets.notes == [said]
+    assert lib.warning == f"preset NIGHT TWO: {said}"       # one note: no "(+15 more)"
+    assert _on_bank_rows(table.desk()) == []
+    knob = preset.device_knob(*OWNER_KNOB)
+    assert [(b.source, b.target) for b in table.desk() if b.source == knob.source] \
+        == [(knob.source, knob.target)]
+    assert len(table.desk()) == fresh + 1 and not lib.is_dirty("presets")
+    # the pad the owner had re-aimed is the bank's now, on both layers
+    kind, ch, n = OWNER_PAD["source"].split(":")
+    assert [b.target for b in table.dispatch(kind, int(ch), int(n))] == ["preset.select"]
+    # NIGHT THREE (WAKE's eight device knobs): quiet, the eight kept
+    lib.warning = ""
+    lib.load("presets", "NIGHT THREE")
+    assert presets.desk_notes == [] and lib.warning == ""
+    assert [b.target for b in table.desk() if b.kind == "cc"
+            and b.number in apc40.DEVICE_KNOBS] == list(preset.WAKE_KNOBS)
+    assert not lib.is_dirty("presets")
+    # an undo's restore of a desk meets the same rule (`set_desk(load=False)`)
+    notes = table.set_desk([*old_shape_pads(), OWNER_PAD], load=False)
+    assert notes == [said]
+    lib.load("presets", "NIGHT ONE")
+    # every load, from the bank, the list and the file watch: no file moved
+    lib.poll()
+    assert _files(home) == before
+    assert len(list((home / "trash" / "presets").iterdir())) == 1      # nothing new in the trash
+    # emptying the list is fork 4's way back: every row on those pads is noted again
+    with pytest.MonkeyPatch.context() as m:
+        m.setattr(routing, "RETIRED_DESK_ROWS", frozenset())
+        lib.load("presets", "NIGHT ONE")
+        assert len(presets.desk_notes) == 16 and "(+15 more)" in lib.warning
+
+
+def test_the_next_save_of_an_old_preset_writes_the_desk_without_the_pads(owner_home):
+    """…and the next save writes the desk as it is live — without the
+    rows on clip rows 4–5 — the old file going to the trash first (plan
+    15's rule), byte for byte. The other presets' files are not touched."""
+    home = owner_home
+    before = _files(home)
+    r = boot_home(home)
+    lib = r.lib
+    r.lib.project.load_slot(1)                             # NIGHT TWO
+    path = home / "presets" / "night-two.json"
+    trash = home / "trash" / "presets"
+    assert not list(trash.glob("night-two.*.json"))
+    r.reg["view.bright"].set(r.reg["view.bright"].value * 0.9)
+    assert lib.is_dirty("presets")
+    assert lib.overwrite("presets") == path
+    doc = json.loads(path.read_text())
+    assert _on_bank_rows(doc["desk"]) == []
+    knob = preset.desk_json([preset.device_knob(*OWNER_KNOB)])[0]
+    assert knob in doc["desk"] and len(doc["desk"]) == len(preset.fresh_desk()) + 1
+    (kept,) = list(trash.glob("night-two.*.json"))
+    assert kept.read_bytes() == before["night-two.json"][0]        # the old file, whole
+    assert len(_on_bank_rows(json.loads(kept.read_text())["desk"])) == 16
+    after = _files(home)
+    assert {k: v for k, v in after.items() if k != "night-two.json"} \
+        == {k: v for k, v in before.items() if k != "night-two.json"}
+    # it loads clean and quiet from now on
+    lib.load("presets", "NIGHT ONE")
+    lib.load("presets", "NIGHT TWO")
+    assert r.presets.desk_notes == [] and not lib.is_dirty("presets")

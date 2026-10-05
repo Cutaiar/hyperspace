@@ -139,6 +139,32 @@ def _with_old_pads(path, re_aimed: dict | None = None) -> None:
         path.write_text(preset.dumps(doc))
 
 
+def far_pads() -> list[str]:
+    """The sources of the bank's sixteen pads on clip rows 4 and 5 (slots
+    9–24), in slot order."""
+    from hyperspace import apc40, library
+
+    return [f"note:{ch}:{n}" for n, ch in apc40.BANK_PADS[library.F_KEYS:]]
+
+
+def _without_bank_pads(path) -> None:
+    """A bindings.json as a build from before plan 19 WP2 wrote it: no row
+    on the pads of clip rows 4 and 5 (they were the preset layer's shape
+    pads, which the session file never held). Today's writer puts the
+    bank's sixteen rows there, so they are taken out again, in the table's
+    own text — the rest of the file is byte for byte what was written."""
+    import json
+
+    from hyperspace import routing
+
+    doc = json.loads(path.read_text())
+    far = set(far_pads())
+    rows = [row for row in doc["bindings"]
+            if not (row["source"] in far and row["target"] == "preset.select")]
+    if len(rows) != len(doc["bindings"]):
+        path.write_text(routing.dumps_doc(dict(doc, bindings=rows)))
+
+
 @pytest.fixture()
 def owner_home(tmp_path):
     """`build_owner_home` in a temp folder of the test's own: a home shaped
@@ -165,7 +191,8 @@ def build_owner_home(home):
       each with a `desk` holding the sixteen shape pads of clip rows 4–5
       (`old_shape_pads`); NIGHT TWO has one of those pads re-aimed
       (`OWNER_PAD`) and a learned device knob (`OWNER_KNOB`);
-    - ``bindings.json`` as the table writes it, one session row changed
+    - ``bindings.json`` as the table wrote it before plan 19 WP2 — no row
+      on clip rows 4 and 5 (`_without_bank_pads`) — one session row changed
       (`OWNER_ROW`);
     - ``last_show``, ``windows.json``, a ``stall.log``, a file under
       ``weights/`` and one file already in ``trash/presets/``.
@@ -215,6 +242,7 @@ def build_owner_home(home):
     row = next(b for b in table.bindings if b.source == source and b.layer != "preset")
     row.target = target
     table.write()
+    _without_bank_pads(table.path)
     placement.save(home, (40, 60, 960, 900), [(1040, 60, 1280, 720)],
                    [placement.Screen("test", 0, 0, 2560, 1440)])
     (home / "stall.log").write_text("2026-10-03 23:58:01 stall 2.4 s in frame (dream)\n")

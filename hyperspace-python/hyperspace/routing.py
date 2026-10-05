@@ -313,17 +313,41 @@ MODIFIERS = ("SHIFT", "SUPER", "CONTROL")
 # plan 15 WP3 (decision 28) gives the crossfader to the master dim: the
 # old factory row on the overlay's ground is swapped the same way, and a
 # crossfader row the owner changed is left alone.
+#
+# plan 19 WP2 gives clip rows 4 and 5 to the bank (slots 9–24,
+# apc40.BANK_PADS; invariant, D6 extended). A session file since plan 13
+# WP5 has no row on those pads, so the sixteen are added (APC_NEW_ROWS) —
+# only where nothing uses the pad: a row the owner put there is left alone
+# and that pad does what the owner's row says. A file from before plan
+# 13's migration still holds the sixteen shape pads, which are swapped by
+# name (BANK_REMAP, in APC_REMAP); a row on one of them the owner changed
+# matches no key, keeps the pad, and gets no bank row.
+_FAR_PADS = tuple((k, f"note:{ch}:{n}") for k, (n, ch) in enumerate(apc40.BANK_PADS)
+                  if k >= F_KEYS)         # (slot, source) of clip rows 4 and 5
+# the shape those pads set before plan 19: pad k of row 4 shape k, of row 5 shape 8 + k
+BANK_REMAP: dict[tuple[str, str, str, float], tuple[str, str, float]] = {
+    (source, "view.shape", "set", float(k - F_KEYS)): ("preset.select", "set", float(k))
+    for k, source in _FAR_PADS}
 APC_REMAP: dict[tuple[str, str, str, float], tuple[str, str, float]] = {
     (f"note:0:{apc40.N_TAP}", "theme.next", "toggle", 1.0): ("tempo.tap", "toggle", 1.0),
     (f"note:0:{apc40.N_NUDGE_P}", "view.shape", "step", 1.0): ("tempo.nudge", "step", 1.0),
     (f"note:0:{apc40.N_NUDGE_M}", "view.shape", "step", -1.0): ("tempo.nudge", "step", -1.0),
     (f"cc:0:{apc40.CC_XFADE}", "overlay.bg", "abs", 1.0): ("output.dim", "abs", 1.0),
+    **BANK_REMAP,
 }
 # which plan moved or added each source, for the note `remap_factory`
 # writes; a source not named here is plan 09's
 APC_REMAP_PLAN = {f"cc:0:{apc40.CC_XFADE}": "plan 15",
                   f"note:0:{apc40.N_OVERDUB}": "plan 15",
-                  **{f"note:{k}:{apc40.N_CLIPSTOP}": "plan 15" for k in range(8)}}
+                  **{f"note:{k}:{apc40.N_CLIPSTOP}": "plan 15" for k in range(8)},
+                  **{source: "plan 19" for _k, source in _FAR_PADS}}
+# Factory preset-layer rows a later plan took for the session, as (source,
+# target, op, value): plan 19's sixteen shape pads. Every preset saved
+# before it holds them in its `desk`; `Bindings.set_desk` drops such a row
+# without a note (plan 19 fork 4 — a note means something the owner mapped
+# was dropped), while any other row on those pads keeps the note. Emptying
+# this set brings the note back for all of them.
+RETIRED_DESK_ROWS: frozenset[tuple[str, str, str, float]] = frozenset(BANK_REMAP)
 # rows added when nothing uses the note: (source, target, op, value, only
 # when the theme cycle was remapped away)
 APC_NEW_ROWS = (
@@ -333,6 +357,8 @@ APC_NEW_ROWS = (
     # plan 15 WP4: the clip-stop row is one SAVE AS bar, held
     *[(f"note:{k}:{apc40.N_CLIPSTOP}", "preset.save_new", "hold", 1.0, False)
       for k in range(8)],
+    # plan 19 WP2: clip rows 4 and 5 load the bank's slots 9–24
+    *[(source, "preset.select", "set", float(k), False) for k, source in _FAR_PADS],
 )
 # the keys WP4 added, likewise only where the key is free
 # the keys plan 11 moved out of app.py's loop into the table (audit R2;
@@ -719,6 +745,10 @@ def _write_new(path: Path, data: bytes) -> None:
         f.write(data)
 
 
+# `Bindings.error` while the file is owed a backup that cannot be made
+NOT_REWRITTEN = "bindings: not rewritten — no backup could be made"
+
+
 def backup(path: Path, schema: str) -> Path | None:
     """The file as it is, kept beside itself before the loader rewrites it
     (a migration or a factory remap, audit R12): ``<file>.bak-v<schema>``
@@ -749,11 +779,19 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
     any schema: the old APC40 factory rows swapped for the new (APC_REMAP —
     the clock's three buttons, the crossfader's master dim), the METRONOME /
     QUANT / OVERDUB notes, the clip-stop row's eight (plan 15 WP4: save-as,
-    held) and the B / ⇧B and loop keys (Home among them)
+    held), the bank's sixteen pads on clip rows 4 and 5 (plan 19 WP2) and
+    the B / ⇧B and loop keys (Home among them)
     added where nothing uses the source (APC_NEW_ROWS, KEY_NEW_ROWS); and,
     since plan 13 WP2, any row on a ``theme.*`` param moved to the
     ``preset.*`` param of the same slot (THEME_TO_PRESET). Idempotent: a second pass finds every old row gone
-    and every source taken. Returns (rows, a note per change)."""
+    and every source taken. Returns (rows, a note per change).
+
+    Plan 19's swap (the sixteen old shape pads, BANK_REMAP) also clears
+    the row's layer and gives it the factory row's light: the pad is
+    invariant now, and a file from between plan 13's WP3 and WP5 has those
+    rows on the preset layer. An APC40 row is added only where no MIDI row
+    of the table is on its control (`Binding.overlaps`: an any-channel row
+    the owner wrote by hand holds every track's pad)."""
     out: list[Binding] = []
     notes: list[str] = []
     moved_theme = False
@@ -766,6 +804,8 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
                          f"of {plan})")
             moved_theme = moved_theme or b.target == "theme.next"
             b = replace(b, target=target, op=op, value=value)
+            if plan == "plan 19":
+                b = replace(b, layer=None, feedback="led", on=apc40.GREEN, off=0)
         elif b.target in THEME_TO_PRESET:
             target = THEME_TO_PRESET[b.target]
             notes.append(f"remapped {b.source}: {b.target} → {target} (the preset bank "
@@ -773,10 +813,13 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
             b = replace(b, target=target)
         out.append(b)
     used = {b.source for b in out}
+    midi = [b for b in out if b.is_midi]
     for source, target, op, value, only_if_moved in APC_NEW_ROWS:
-        if source in used or (only_if_moved and not moved_theme):
+        new = Binding(source, target, op, value, feedback="led")
+        if (source in used or (only_if_moved and not moved_theme)
+                or any(b.overlaps(new) for b in midi)):
             continue
-        out.append(Binding(source, target, op, value, feedback="led"))
+        out.append(new)
         notes.append(f"added {source} → {target} (the APC40 map of "
                      f"{APC_REMAP_PLAN.get(source, 'plan 09')})")
     # a key row is taken by its chord, however its modifiers are ordered:
@@ -1010,6 +1053,21 @@ def led_lit(b: Binding, p: Param) -> bool:
     return b.lit
 
 
+def led_level(b: Binding, p: Param) -> int:
+    """A note row's light as a level (plan 19 WP2, fork 5). 2: lit
+    (`led_lit`). 1: a `set` row on an enum whose param says that choice
+    holds something (`Param.has` — only the bank's `preset.select` does)
+    and is not the one selected: a bank pad whose slot is filled. 0: off.
+    The device's light (midi.py: the profile's `filled_of` at level 1) and
+    the on-screen desk's (ui_desk.py) from one rule."""
+    if led_lit(b, p):
+        return 2
+    has = getattr(p, "has", None)        # (a Param from before a hot reload has none)
+    if b.op == "set" and p.kind is Kind.ENUM and has is not None and has(int(b.value)):
+        return 1
+    return 0
+
+
 def register_desk(reg: Registry, table: Bindings) -> None:
     """`desk.shift`: the layer latch as a toggle over the table — on while
     the global layer is up — so SHIFT is a row like any other (a note row
@@ -1090,6 +1148,13 @@ class Bindings:
     # it): the session's — a show keeps it, bindings.json never does. On
     # the class, so a table from before a hot reload has it too
     slew: float = 0.0
+    # no backup, no rewrite (plan 19 fork 12): the schema number the file
+    # was read at while a load changed the table in memory (a migration, a
+    # factory remap) and the copy of the file as it was could not be made.
+    # The file is then left as it is; `write` tries the copy again before
+    # anything is written over it, and the next launch tries the lot again.
+    # None once the copy exists (or was never needed)
+    unbacked: str | None = None
 
     def __init__(self, bindings: Iterable[Binding] = (), *, path: Path | None = None,
                  profile: str = "apc40"):
@@ -1148,7 +1213,10 @@ class Bindings:
         back once, and from then on the file rules. Whatever the schema,
         the factory rows plan 09 moved are brought up to date on every load
         (`remap_factory`) — a change is noted and written back once, and a
-        table already current is left alone.
+        table already current is left alone. The file as it was is copied
+        beside itself first (`backup`); **if that copy cannot be made the
+        file is not rewritten** (plan 19 fork 12): the table in memory is
+        the changed one, `error` says so, and the next launch tries again.
 
         A file that still holds a preset's part — performer rows,
         preset-layer MIDI rows, `macros`, `values` (every file before plan
@@ -1174,9 +1242,12 @@ class Bindings:
             if not carried.empty or "values" in data or "macros" in data:
                 t.carried = carried              # preset.migrate_home writes the file
             elif t.migrated or t.changed or remapped:
-                t.announce(path)
-                backup(path, t.read_at)
-                t.write()
+                if backup(path, t.read_at) is None:      # no backup, no rewrite
+                    t.unbacked, t.error = t.read_at, NOT_REWRITTEN
+                    t.announce(path, written=False)
+                else:
+                    t.announce(path)
+                    t.write()
             return t
         t = cls.factory(profile, path)
         if legacy_midi is not None and legacy_midi.exists():
@@ -1207,8 +1278,9 @@ class Bindings:
                 t.error = f"bindings: {legacy_midi}: {e}"
         return t
 
-    def announce(self, path: Path) -> None:
-        """A migration's notes on stderr, one line per row, then the sum."""
+    def announce(self, path: Path, *, written: bool = True) -> None:
+        """A migration's notes on stderr, one line per row, then the sum —
+        or, `written` False, that the file was left as it was."""
         for note in self.notes:
             print(f"bindings: {path}: {note}", file=sys.stderr)
         dropped = sum(n.startswith("dropped") for n in self.notes)
@@ -1217,6 +1289,9 @@ class Bindings:
                                                               (changed, "changed")) if n)
         what = (f"migrated {path} to {SCHEMA}" if self.migrated or self.read_at != "3"
                 else f"updated {path}")
+        if not written:
+            what = (f"{path} not rewritten — no backup could be made; the changes above "
+                    "are in memory only and the next launch tries again")
         print(f"bindings: {what}" + (f" ({tail})" if tail else ""), file=sys.stderr)
 
     @classmethod
@@ -1274,9 +1349,17 @@ class Bindings:
         return dumps_doc(self.to_json())
 
     def write(self) -> None:
-        """The session's controls to the file (`to_json`)."""
+        """The session's controls to the file (`to_json`). While the load
+        owes the file a backup (`unbacked`) that copy is made first, and
+        nothing is written without it — the file stays as the owner had
+        it, `error` says so."""
         if self.path is None:
             return
+        if self.unbacked is not None and self.path.exists():
+            if backup(self.path, self.unbacked) is None:
+                self.error = NOT_REWRITTEN
+                return
+        self.unbacked = None
         try:
             self.path.write_text(self.dumps())
             self.error = ""
@@ -1399,7 +1482,11 @@ class Bindings:
     def set_desk(self, rows: Iterable[Binding | dict], *, load: bool = True) -> list[str]:
         """Replace every preset-layer row with `rows` (layer forced to
         "preset"), dropping with a note each row that is not a MIDI control
-        and each on an invariant control (D6); drop to the preset layer
+        and each on an invariant control (D6) — but one of
+        `RETIRED_DESK_ROWS` on an invariant control goes without a note:
+        it is a factory row of an older desk (plan 19: the sixteen shape
+        pads every earlier preset holds), nothing the owner mapped. Drop
+        to the preset layer
         (D4) and ask the adapter to redraw the desk and clear the faders'
         catch (`desk_serial`). Returns the notes; the file is not written —
         the desk is the loaded preset's.
@@ -1418,6 +1505,8 @@ class Bindings:
             if not b.is_midi:
                 notes.append(f"dropped {b.source} → {b.target}: not a desk control")
             elif self.is_invariant(b, inv):
+                if (b.source, b.target, b.op, float(b.value)) in RETIRED_DESK_ROWS:
+                    continue
                 notes.append(f"dropped {b.source} → {b.target}: that control is "
                              "invariant, the session's (plan 13 D6)")
             else:

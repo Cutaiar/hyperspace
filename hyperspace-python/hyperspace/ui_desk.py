@@ -21,9 +21,13 @@ controls mapped on it and the invariant ones are lit, every other control
 is dark, exactly as the device's own LEDs and rings are (plan 13 D8), at
 either size. ⇧ fills red while the global layer is up. A knob's arc is
 its ring — the param's base (audit R6); a fader's cap the param's value;
-a button's LED is filled when the device's would be (`routing.led_lit`,
-the rule midi.py lights by). The hover names the control: glyph · param ·
-its label · layer, and Akai's name.
+a button's LED is filled when the device's would be (`routing.led_level`,
+the rule midi.py lights by). A **bank pad** (clip rows 1, 4 and 5, plan 19
+WP2) has three states, as on the device: the loaded preset's is green, a
+slot that holds another preset is amber at half strength and reads that
+preset's name, and an empty slot's is drawn as a dark control — its glyph
+only, no label (`empty`); its hover still says what the pad is. The hover
+names the control: glyph · param · its label · layer, and Akai's name.
 
 It reads the table, never the port: with no MIDI device (or `[midi]
 enabled = false`) it draws the same picture from the router's table. The
@@ -63,7 +67,7 @@ from imgui_bundle import imgui
 from . import apc40, learn, ui, ui_routing
 from .apc40 import GREEN, GREEN_BLINK, RED, RED_BLINK, YELLOW, YELLOW_BLINK
 from .params import Kind
-from .routing import Binding, led_lit
+from .routing import Binding, led_level
 
 MIN_W = 300.0              # the window is never narrower, px
 MIN_H = 120.0              # …or shorter (a control window with no room above the sheet)
@@ -87,6 +91,7 @@ _LED = {GREEN: (0.30, 0.85, 0.40), GREEN_BLINK: (0.30, 0.85, 0.40),
         RED: (1.0, 43 / 255, 43 / 255), RED_BLINK: (1.0, 43 / 255, 43 / 255),
         YELLOW: (0.95, 0.80, 0.25), YELLOW_BLINK: (0.95, 0.80, 0.25)}
 _ON = (1.0, 43 / 255, 43 / 255)
+FILLED = 0.5               # a "filled, not selected" pad: its colour at this strength
 _DARK = imgui.ImVec4(0.09, 0.09, 0.10, 1.0)    # a dark control's face
 _OFF = imgui.ImVec4(0.34, 0.34, 0.37, 1.0)     # a mapped control's face, LED off
 _BLACK = imgui.ImVec4(0, 0, 0, 1)              # ink on a lit LED
@@ -265,7 +270,8 @@ def pick_line(panel, table, c: apc40.Control) -> tuple[str, bool]:
         return (f"{c.glyph} picked: click a param to put it here · click {c.glyph} again "
                 "to let go"), True
     b = lit_cached(panel, table).get(c.glyph)
-    does = text(panel.reg, b) if b is not None else f"unmapped on the {table.layer} layer"
+    does = ((text(panel.reg, b) or "an empty slot") if b is not None
+            else f"unmapped on the {table.layer} layer")
     return f"{why}: {does}", False
 
 
@@ -399,13 +405,17 @@ def _room(panel) -> tuple[float, float, float, float]:
 def text(reg, b: Binding) -> str:
     """What a lit control does, in the panel's words (plan 17 fork 8): a
     `set` row on an enum → that value's name (the bank row reads the
-    presets' names, a shape pad the shape's); a `step` row → the label and
+    presets' names, a scene pad the scene's); a `step` row → the label and
     the step ("Brightness +3"); anything else → the param's label; a
-    target the registry lacks (or a param with no label) → the id."""
+    target the registry lacks (or a param with no label) → the id. A bank
+    pad whose slot is empty says nothing (`empty`): "" — it is drawn as a
+    dark control."""
     p = reg.get(b.target)
     if p is None:
         return b.target
     if b.op == "set" and p.kind is Kind.ENUM:
+        if empty(reg, b):
+            return ""
         names = p.names
         i = round(b.value)
         if 0 <= i < len(names) and names[i]:
@@ -413,6 +423,21 @@ def text(reg, b: Binding) -> str:
     if b.op == "step":
         return f"{p.label or b.target} {b.value:+g}"
     return p.label or b.target
+
+
+def empty(reg, b: Binding | None) -> bool:
+    """Is this a `set` row on an enum that says which of its choices hold
+    something (`Param.has`: the bank's `preset.select`), on a choice that
+    holds nothing — a bank pad whose slot is empty? Such a pad is dark on
+    the device (D8) and pressing it only says the slot is empty."""
+    p = reg.get(b.target) if b is not None else None
+    has = getattr(p, "has", None)
+    if p is None or has is None or b.op != "set" or p.kind is not Kind.ENUM:
+        return False
+    try:
+        return not has(round(b.value))
+    except (TypeError, ValueError):
+        return False
 
 
 _STEP = re.compile(r"^[+\-−]\d")      # a step's amount, the last word of `text` for a step row
@@ -499,6 +524,8 @@ def label(table, c: apc40.Control, b: Binding | None, reg=None) -> str:
     if b is None:
         return f"{c.glyph} · unmapped — dark on the {table.layer} layer\n{c.name}"
     says = text(reg, b) if reg is not None else b.target
+    if reg is not None and empty(reg, b):
+        says = f"slot {round(b.value) + 1}: empty"
     mid = b.target if says == b.target else f"{b.target} · {says}"
     return f"{c.glyph} · {mid} · {_layer_word(table, b)}\n{c.name}"
 
@@ -510,20 +537,33 @@ def _preset_name(panel) -> str:
 
 
 def _led(panel, b: Binding) -> tuple[float, float, float] | None:
-    """The colour the device's LED shows for a lit button row, or None (off)."""
+    """The colour the device's LED shows for a lit button row, or None
+    (off). A row at level 1 (`routing.led_level`: a bank pad whose slot
+    holds a preset that is not the loaded one) shows the profile's
+    "filled" colour — amber on the clip grid — at `FILLED` strength."""
     p = panel.reg.get(b.target)
     if p is None or b.feedback != "led":
         return None
     try:
-        on = led_lit(b, p)
+        level = led_level(b, p)
     except (TypeError, ValueError):
         return None
-    if not on:
+    if not level:
         return None
+    if level == 1:
+        filled = apc40.filled_of(b.number, int(b.on)) if b.kind == "note" else None
+        rgb = _LED.get(filled) if filled is not None else None
+        return None if rgb is None else tuple(FILLED * x for x in rgb)
     # the clip grid shows the row's colour (green, red, yellow); every
     # other button's LED is a plain on, drawn in the panel's red
     grid = b.kind == "note" and b.number in apc40.N_CLIP
     return _LED.get(int(b.on), _ON) if grid else _ON
+
+
+def _bright(led) -> bool:
+    """Is a face this colour bright enough to want black ink (a lit LED;
+    a "filled" one at `FILLED` strength keeps the light inks)?"""
+    return led is not None and max(led) > 0.7
 
 
 def _norm(panel, b: Binding) -> float | None:
@@ -570,7 +610,7 @@ def _ring(dl, cx: float, cy: float, r: float, v: float | None) -> None:
 def _draw(panel, dl, table, c: apc40.Control, b: Binding | None,
           x0: float, y0: float, x1: float, y1: float) -> None:
     """One control at the small size: its glyph on its face."""
-    on = b is not None
+    on = b is not None and not empty(panel.reg, b)     # an empty bank slot's pad is dark
     edge = ui.u32(ui.DIM if on else ui.LINE)
     ink = ui.u32(ui.TEXT if on else ui.FAINT)
     w, h = x1 - x0, y1 - y0
@@ -580,7 +620,7 @@ def _draw(panel, dl, table, c: apc40.Control, b: Binding | None,
         face = _col(led, 0.9) if led else ui.u32(_OFF if on else _DARK)
         dl.add_rect_filled(_v(x0, y0), _v(x1, y1), face, 2.0)
         dl.add_rect(_v(x0, y0), _v(x1, y1), edge, 2.0)
-        _text(dl, c.glyph, cx, cy, ui.u32(_BLACK) if led else ink, w - 2)
+        _text(dl, c.glyph, cx, cy, ui.u32(_BLACK) if _bright(led) else ink, w - 2)
     elif c.kind == "knob":
         r = min(w, h) / 2 - 1
         ky = y0 + r + 1
@@ -632,8 +672,9 @@ def _draw_big(panel, dl, table, c: apc40.Control, b: Binding | None,
     """One control at the labelled size: its face, its glyph small in the
     top-left corner, and — returned, for the label pass, which draws in
     the labels' type — the room its label has. `lh` is a label line's
-    height. A dark control gets no label (D8)."""
-    on = b is not None
+    height. A dark control gets no label (D8), and an empty bank slot's
+    pad is drawn as one (`empty`)."""
+    on = b is not None and not empty(panel.reg, b)
     edge = ui.u32(ui.DIM if on else ui.LINE)
     small = ui.u32(ui.DIM if on else ui.FAINT)          # the glyph: small and dim
     # whose row it is: the up layer's in the bright ink, an invariant one grey
@@ -646,9 +687,11 @@ def _draw_big(panel, dl, table, c: apc40.Control, b: Binding | None,
         face = _col(led, 0.9) if led else ui.u32(_OFF if on else _DARK)
         dl.add_rect_filled(_v(x0, y0), _v(x1, y1), face, 3.0)
         dl.add_rect(_v(x0, y0), _v(x1, y1), edge, 3.0)
-        if led:
+        if _bright(led):
             small = ui.u32(_BLACK)
             ink = ui.u32(_BLACK if b.layer is not None else _ON_LED)
+        elif led:                   # filled, not selected: the name in the bright ink
+            ink = ui.u32(ui.TEXT)
         below = int((h - gsz.y - 1) / lh)               # lines that fit under the glyph
         if below >= 1:
             dl.add_text(_v(x0 + 3, y0 + 1), small, c.glyph)

@@ -265,7 +265,8 @@ def test_preset_row_lights_the_active_preset(rig):
     assert rig.presets.active == 2
     leds = {(m.channel, m.note): m.velocity for m in rig.out.sent if m.type == "note_on"}
     assert leds[(2, apc40.N_CLIP[0])] == apc40.GREEN
-    assert leds[(0, apc40.N_CLIP[0])] == 0
+    # a slot that holds another preset is amber, not dark (plan 19 WP2)
+    assert leds[(0, apc40.N_CLIP[0])] == apc40.YELLOW
 
 
 # ---------------------------------------------------------------- feedback
@@ -790,7 +791,7 @@ def test_the_bar_lights_while_held_and_the_new_slots_pad_blinks(rig):
     assert fires == [2.65] and pr.bank[5] == "TRIP 2" and pr.active == 5
     assert [leds(rig, STOP, k, mark) for k in range(8)] == [[1, 2]] * 8
     assert leds(rig, pad, 5, mark) == [apc40.GREEN_BLINK]           # the new slot's pad
-    assert leds(rig, pad, 4, mark) == [0]                           # TRIP's pad goes out
+    assert leds(rig, pad, 4, mark) == [apc40.YELLOW]     # TRIP's pad: filled, not loaded
     assert [leds(rig, pad, k, mark) for k in (0, 1, 2, 3, 6, 7)] == [[]] * 6   # no other pad
     at(3.0, note(STOP, 0, channel=3))                               # letting go changes nothing
     at(2.65 + midi.BLINK_S - 0.01)
@@ -809,7 +810,8 @@ def test_the_bar_lights_while_held_and_the_new_slots_pad_blinks(rig):
     at(10.65 + midi.BLINK_S)
     assert pr.bank[1] == "TRIP 3"
     assert [leds(rig, STOP, k, mark) for k in range(8)] == [[1, 2, 0]] * 8
-    assert leds(rig, pad, 1, mark) == [apc40.GREEN_BLINK, apc40.GREEN]
+    # (the cleared slot's pad went from amber to dark first: plan 19 WP2)
+    assert leds(rig, pad, 1, mark) == [0, apc40.GREEN_BLINK, apc40.GREEN]
     at(12.5, note(STOP, 0, channel=7))
     # a full bank: only the bar blinks — no pad came on (plan 19 WP1: the
     # bank is twenty-four, so the far slots are filled first)
@@ -822,8 +824,8 @@ def test_the_bar_lights_while_held_and_the_new_slots_pad_blinks(rig):
     at(20.65)
     assert pr.lib.warning == "saved TRIP 4 — the bank is full: it is in the preset list"
     assert [leds(rig, STOP, k, mark) for k in range(8)] == [[1, 2]] * 8
-    assert [m.velocity for m in rig.out.sent[mark:]
-            if m.type == "note_on" and m.note == pad] == [0]         # TRIP 3's pad goes out
+    assert [m.velocity for m in rig.out.sent[mark:]                 # TRIP 3's pad: amber
+            if m.type == "note_on" and m.note == pad] == [apc40.YELLOW]
     # a fire that answers False did nothing (a save that failed): the bar
     # goes dark at the hold time and nothing blinks (review of PR #87)
     at(30.0)
@@ -1241,3 +1243,112 @@ def test_closing_the_adapter_lands_every_glide(rig):
     assert 0.5 < dim.norm < 1.0
     rig.midi.close()
     assert dim.norm == 0.5 and rig.midi._slews == {}
+
+
+# ------------------------------------------- plan 19 WP2: the bank's lights
+
+def test_a_bank_pad_is_green_loaded_amber_filled_and_dark_empty(rig, monkeypatch):
+    """Fork 5: the velocities sent for a bank pad's three states — GREEN
+    (1) for the loaded preset's slot, YELLOW (5) for a slot that holds
+    another preset, 0 for an empty one — on rows 1, 4 and 5 alike, and
+    the same under SHIFT. A load moves the green; a cleared slot goes
+    dark; a filled one comes up amber. `filled_of` answering None (the
+    way to turn the third state off) leaves a filled pad dark."""
+    from hyperspace import routing
+
+    pr = rig.presets
+
+    def led(k):
+        n, ch = apc40.BANK_PADS[k]
+        return leds(rig, n, ch)[-1]
+    assert (apc40.GREEN, apc40.YELLOW) == (1, 5)
+    assert apc40.filled_of(apc40.N_CLIP[3], apc40.GREEN) == apc40.YELLOW
+    assert apc40.filled_of(apc40.N_CLIP[1], apc40.YELLOW) is None      # no third state of its own
+    assert apc40.filled_of(apc40.N_OVERDUB, 1) is None                 # nor off the clip grid
+    rig.midi.poll()
+    # the party show as a fresh home has it: nine filled, nothing loaded yet
+    assert all(pr.bank[:9]) and pr.bank[9:] == [None] * 15 and pr.active == -1
+    assert [led(k) for k in range(24)] == [apc40.YELLOW] * 9 + [0] * 15
+    # the rule the lights read, as levels
+    p = rig.reg["preset.select"]
+    row = {int(b.value): b for b in rig.midi.bindings if b.target == "preset.select"}
+    assert [routing.led_level(row[k], p) for k in (0, 8, 9)] == [1, 1, 0]
+    # a press on row 4's first pad loads slot 9: green there, amber elsewhere
+    n, ch = apc40.BANK_PADS[8]
+    push(rig, note(n, channel=ch), note(n, 0, channel=ch))
+    assert pr.active == 8 and pr.lib.current("presets") == "TRACER"
+    assert [routing.led_level(row[k], p) for k in (0, 8, 9)] == [1, 2, 0]
+    assert [led(k) for k in range(24)] == [apc40.YELLOW] * 8 + [apc40.GREEN] + [0] * 15
+    # a load from row 1 moves the green; slot 9 falls back to amber
+    push(rig, note(apc40.N_CLIP[0], channel=2), note(apc40.N_CLIP[0], 0, channel=2))
+    assert [led(k) for k in (2, 8, 0, 9)] == [apc40.GREEN, apc40.YELLOW, apc40.YELLOW, 0]
+    # a slot filled from the page comes up amber; a cleared one goes dark
+    pr.put_slot(20, "WAKE")
+    pr.clear_slot(8)
+    rig.midi.poll()
+    assert [led(k) for k in (20, 8, 2)] == [apc40.YELLOW, 0, apc40.GREEN]
+    # the same under SHIFT: the bank rows are invariant, the redraw re-sends them
+    mark = len(rig.out.sent)
+    shift(rig)
+    for k, want in ((2, apc40.GREEN), (20, apc40.YELLOW), (0, apc40.YELLOW)):
+        n, ch = apc40.BANK_PADS[k]
+        assert leds(rig, n, ch, mark)[-1] == want, k
+    for k in (8, 9, 23):                    # an empty slot's pad: dark (0, or never lit)
+        n, ch = apc40.BANK_PADS[k]
+        assert set(leds(rig, n, ch, mark)) <= {0}, k
+    shift(rig)
+    # the scene pads (yellow when selected) and the motion pads have no third state
+    assert not [m for m in rig.out.sent if m.type == "note_on" and m.velocity == apc40.YELLOW
+                and m.note in (apc40.N_CLIP[1], apc40.N_CLIP[2])
+                and rig.reg["scene.select"].value != m.channel + 8 * (m.note == apc40.N_CLIP[2])]
+    # fork 5's way back: no "filled" velocity, and a filled pad is dark again
+    monkeypatch.setattr(apc40, "filled_of", lambda number, on: None)
+    rig.midi.redraw()
+    assert [led(k) for k in (2, 20, 0)] == [apc40.GREEN, 0, 0]
+
+
+def test_save_as_blinks_the_new_pad_on_row_four(rig):
+    """Plan 15 row 42, now on rows 4–5 too: with F1–F8 and slot 9 full the
+    hold on the clip-stop row lands in slot 10 — row 4, pad 2 — and that
+    pad blinks green with the bar for BLINK_S (`blink_of`), then shows
+    green; the pad of the preset that was up falls to amber. The same
+    under SHIFT, into slot 11."""
+    from hyperspace import midi
+
+    at, fires = bar_rig(rig)
+    pr = rig.presets
+    assert pr.next_empty() == 9                                     # slot 10
+    pad = apc40.N_CLIP[0]
+    push(rig, note(pad, channel=4), note(pad, 0, channel=4))        # TRIP, on F5
+    assert leds(rig, pad, 4)[-1] == apc40.GREEN
+    n10, ch10 = apc40.BANK_PADS[9]
+    assert (n10, ch10) == (apc40.N_CLIP[3], 1) and leds(rig, n10, ch10)[-1] == 0
+    assert apc40.blink_of(n10, apc40.GREEN) == apc40.GREEN_BLINK
+    mark = len(rig.out.sent)
+    at(1.0, note(STOP, channel=6))
+    at(1.5)
+    assert leds(rig, n10, ch10, mark) == []
+    at(1.65)                                                        # held HOLD_S: the save
+    assert fires == [1.65] and pr.bank[9] == "TRIP 2" and pr.active == 9
+    assert pr.lib.status == "saved TRIP 2 → slot 10"
+    assert leds(rig, n10, ch10, mark) == [apc40.GREEN_BLINK]        # the new slot's pad
+    assert [leds(rig, STOP, k, mark) for k in range(8)] == [[1, 2]] * 8     # and the bar
+    assert leds(rig, pad, 4, mark) == [apc40.YELLOW]                # TRIP: filled, not loaded
+    others = [k for k in range(24) if k not in (4, 9)]
+    assert [leds(rig, *apc40.BANK_PADS[k], mark) for k in others] == [[]] * 22
+    at(1.65 + midi.BLINK_S - 0.01, note(STOP, 0, channel=6))
+    assert leds(rig, n10, ch10, mark) == [apc40.GREEN_BLINK]
+    at(1.65 + midi.BLINK_S)
+    assert leds(rig, n10, ch10, mark) == [apc40.GREEN_BLINK, apc40.GREEN]
+    assert [leds(rig, STOP, k, mark) for k in range(8)] == [[1, 2, 0]] * 8
+    # under SHIFT: the bar and the bank are invariant — slot 11, row 4 pad 3
+    shift(rig)
+    n11, ch11 = apc40.BANK_PADS[10]
+    mark = len(rig.out.sent)
+    at(10.0, note(STOP, channel=0))
+    at(10.65)
+    assert pr.bank[10] == "TRIP 3" and pr.active == 10
+    assert leds(rig, n11, ch11, mark) == [apc40.GREEN_BLINK]
+    assert leds(rig, n10, ch10, mark) == [apc40.YELLOW]
+    at(10.65 + midi.BLINK_S, note(STOP, 0, channel=0))
+    assert leds(rig, n11, ch11, mark) == [apc40.GREEN_BLINK, apc40.GREEN]
