@@ -165,6 +165,8 @@ DEADZONE_CENTRED = 0.04  # a level hand reads exactly neutral; a height axis sta
 # same policy as midi.Ports (reopen only a port that is back; never a new
 # one), spelled twice because this module imports nothing from the package.
 RECONNECT_S = 2.0
+RECONNECT_FAST = 5        # looks at RECONNECT_S, then every RECONNECT_SLOW_S: each
+RECONNECT_SLOW_S = 10.0   # look makes a CoreMIDI client (midi.retry_after, audit R15)
 
 # [hands] in config.toml — the rig, not the performance. The one table:
 # config.DEFAULTS["hands"] is this dict, HandSettings.from_config and
@@ -991,6 +993,7 @@ class HandsIO:
         self._out_match = "" if out is not None else (self.cfg.get("out") or "")
         self._out_virtual: bool | None = None      # what the first open made
         self._out_next = 0.0
+        self._out_misses = 0
         self._lost = False
         self.out = out
         self.present = {s: False for s in SIDES}
@@ -1297,10 +1300,13 @@ class HandsIO:
 
     def _open(self) -> None:
         """Open the port the config names; on failure say why once and
-        look again in RECONNECT_S. After a loss, only a port that is back
+        look again in RECONNECT_S (RECONNECT_SLOW_S after RECONNECT_FAST
+        looks that found nothing). After a loss, only a port that is back
         (or, if the first open made a virtual port, a new virtual one),
         and the DAW is brought up to date when it opens."""
-        self._out_next = self.clock() + RECONNECT_S
+        self._out_misses += 1
+        self._out_next = self.clock() + (RECONNECT_S if self._out_misses <= RECONNECT_FAST
+                                         else RECONNECT_SLOW_S)
         self.out, err, virtual = _open_out(self._out_match,
                                            virtual=self._out_virtual is not False)
         if err and err != self.error:
@@ -1308,6 +1314,7 @@ class HandsIO:
         self.error = err
         if self.out is None:
             return
+        self._out_misses = 0
         if self._out_virtual is None:
             self._out_virtual = virtual
         if self._lost:

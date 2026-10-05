@@ -120,12 +120,17 @@ from .routing import (
 
 PROFILES = {"apc40": apc40}          # config's `[midi] profile` names one of these
 RECONNECT_S = 2.0
+RECONNECT_FAST = 5        # looks at RECONNECT_S after a port goes missing, then
+RECONNECT_SLOW_S = 10.0   # this often. Every look makes a CoreMIDI client; one
+#                           the system refuses aborts the process inside rtmidi,
+#                           past any `except` (audit R15), so a desk that is not
+#                           there is not asked after thirty times a minute all night
 HOLD_S = 0.6        # a `hold` row fires once its button has been down this long
 BLINK_S = 1.5       # how long the LEDs blink after a hold fires
 SLEW_TOL = 1e-6     # norm: further than this from our last write, someone else set it
 SLEW_BACK_S = 0.05  # a new glide starts at the previous poll, no further back than this
 
-__all__ = ["PICKUP_TOL", "Binding", "MidiIO", "Ports", "Slew", "find_port"]
+__all__ = ["PICKUP_TOL", "Binding", "MidiIO", "Ports", "Slew", "find_port", "retry_after"]
 
 
 @dataclass
@@ -145,6 +150,12 @@ def find_port(names: list[str], match: str) -> str | None:
     return next((n for n in names if m in n.lower()), None)
 
 
+def retry_after(misses: int) -> float:
+    """Seconds until the next look for a missing port, after `misses` looks
+    in a row that opened nothing."""
+    return RECONNECT_S if misses <= RECONNECT_FAST else RECONNECT_SLOW_S
+
+
 class Ports:
     """An input and an output, found by name substring, reopened on their
     own when they vanish — the port handling MidiIO and bridge.py share.
@@ -152,7 +163,10 @@ class Ports:
     `inp`/`out` may be injected (tests hand in fakes with iter_pending()
     and send()). A controller names both by one substring; the bridge
     names each side on its own — None leaves that side closed. An error
-    on either side drops both, and `retry` reopens them after RECONNECT_S.
+    on either side drops both, and `retry` reopens them after RECONNECT_S
+    — after RECONNECT_FAST looks that found nothing, every RECONNECT_SLOW_S
+    (`retry_after`); a port that opens puts the count back to zero, so one
+    that drops mid-set is looked for quickly again.
     """
 
     def __init__(self, in_match: str | None, out_match: str | None = None, *,
@@ -165,6 +179,7 @@ class Ports:
         self.in_name = self.out_name = self.name
         self.error = ""
         self._next_try = 0.0
+        self.misses = 0           # looks in a row that opened nothing
 
     @property
     def on(self) -> bool:
@@ -172,7 +187,8 @@ class Ports:
 
     def connect(self) -> bool:
         """Open whatever is present now; True when something opened."""
-        self._next_try = self.clock() + RECONNECT_S
+        self.misses += 1
+        self._next_try = self.clock() + retry_after(self.misses)
         try:
             iname = find_port(mido.get_input_names(), self.in_match) if self.in_match else None
             oname = find_port(mido.get_output_names(), self.out_match) if self.out_match else None
@@ -192,6 +208,8 @@ class Ports:
         self.in_name, self.out_name = iname or "", oname or ""
         self.name = iname or oname
         self.error = ""
+        self.misses = 0
+        self._next_try = self.clock() + RECONNECT_S      # (not the slow pace it was found at)
         return True
 
     def retry(self) -> bool:

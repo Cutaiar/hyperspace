@@ -1319,6 +1319,38 @@ def test_a_lost_daw_port_is_looked_for_again_and_the_daw_resynced(monkeypatch, c
     assert io.out is not None and io.error == ""
 
 
+def test_a_daw_port_that_stays_missing_is_looked_for_less_often(monkeypatch):
+    """The hands' out port keeps midi.Ports' pace (audit R15): RECONNECT_S
+    for RECONNECT_FAST looks, then RECONNECT_SLOW_S, and from the start
+    again once it has opened."""
+    from hyperspace.hands import core
+
+    r = daw_rig(monkeypatch, ["Fake DAW 1"])
+    io, be, clock = r.io, r.be, r.clock
+    looks: list[float] = []
+    real = be.get_output_names
+    monkeypatch.setattr(core.mido, "get_output_names", lambda: (looks.append(clock.t), real())[1])
+    run(r, 1, hand())
+    io.out.broken = True
+    be.names = []
+    run(r, 1, hand(pos=(50.0, 300.0, 0.0)))
+    assert io.out is None
+    for k in range(600):
+        clock.t += 0.1
+        run(r, 1, hand(pos=(50.0 + k % 7, 300.0, 0.0)))
+    import itertools
+
+    gaps = [round(b - a, 1) for a, b in itertools.pairwise(looks)]
+    fast, slow = gaps[:core.RECONNECT_FAST - 1], gaps[core.RECONNECT_FAST:]  # (a 0.1 s poll)
+    assert all(core.RECONNECT_S <= g <= core.RECONNECT_S + 0.2 for g in fast), fast
+    assert slow and all(core.RECONNECT_SLOW_S <= g <= core.RECONNECT_SLOW_S + 0.2 for g in slow), slow
+    assert len(looks) <= 12
+    be.names = ["Fake DAW 1"]
+    clock.t += core.RECONNECT_SLOW_S
+    run(r, 1, hand(pos=(60.0, 300.0, 0.0)))
+    assert io.out is not None and io._out_misses == 0
+
+
 def test_a_virtual_port_is_made_again_when_it_fails(monkeypatch):
     from hyperspace.hands import core
 

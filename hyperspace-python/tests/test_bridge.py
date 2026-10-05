@@ -376,6 +376,50 @@ def test_a_dead_port_drops_both_and_retries_later(monkeypatch):
     assert not p.retry() and not p.on         # due, but nothing there
 
 
+def test_a_port_that_stays_missing_is_looked_for_less_often(monkeypatch):
+    """Audit R15: every look makes a CoreMIDI client, and one the system
+    refuses aborts the process where no `except` reaches. A missing desk is
+    looked for every RECONNECT_S a few times, then every RECONNECT_SLOW_S;
+    a port that opens puts the count back, so one lost mid-set is looked
+    for quickly again."""
+    from hyperspace import midi
+
+    looks: list[float] = []
+    names: list[str] = []
+    clk = Clock()
+
+    def scan():
+        looks.append(clk.t)
+        return list(names)
+    monkeypatch.setattr(mido, "get_input_names", scan)
+    monkeypatch.setattr(mido, "get_output_names", list)
+    monkeypatch.setattr(mido, "open_input", lambda name: FakeIn())
+    p = Ports("desk", None, clock=clk)
+    assert not p.connect()
+    for _ in range(600):                      # a minute, polled every 0.1 s
+        clk.t += 0.1
+        p.retry()
+    import itertools
+
+    gaps = [round(b - a, 1) for a, b in itertools.pairwise(looks)]
+    fast, slow = gaps[:midi.RECONNECT_FAST], gaps[midi.RECONNECT_FAST:]     # (a 0.1 s poll)
+    assert all(midi.RECONNECT_S <= g <= midi.RECONNECT_S + 0.2 for g in fast), fast
+    assert slow and all(midi.RECONNECT_SLOW_S <= g <= midi.RECONNECT_SLOW_S + 0.2 for g in slow), slow
+    assert len(looks) <= 12                   # it was 31 a minute
+    # plugged in: found at the next look, and the count starts again
+    names.append("The Desk")
+    clk.t += midi.RECONNECT_SLOW_S
+    assert p.retry() and p.on and p.misses == 0
+    # lost mid-set: looked for at the fast pace again
+    p.inp = None
+    names.clear()
+    n = len(looks)
+    for _ in range(midi.RECONNECT_FAST):
+        clk.t += midi.RECONNECT_S
+        assert not p.retry()
+    assert len(looks) == n + midi.RECONNECT_FAST
+
+
 # ---------------------------------------------------------------- the rule
 
 def test_core_does_not_import_the_bridge():
