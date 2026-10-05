@@ -114,6 +114,8 @@ from the desk).
 
 ### Plan 17 — Learn, unbind and seeing the desk
 
+*As built:* [`17-learn-and-the-desk.md`](17-learn-and-the-desk.md) §7 (PRs #93, #96, #99, #91 and #102); where it differs from the rows below, that section is the code — no DESK page (the desk window grows, and fills the control window with the panel hidden), Unbind covers every route and not only the hand's, an invariant control works through a learn, and a picked control lets go by itself after 20 s. Decision register rows 57–64; hand checks 64–71.
+
 - **One Unbind.** One menu item that removes whatever performs the param
   (desk row, hand rows); a submenu only when there are two kinds. Shown
   whether or not a MIDI port is open. Undoable.

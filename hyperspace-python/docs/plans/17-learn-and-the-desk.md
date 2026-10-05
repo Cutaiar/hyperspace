@@ -140,6 +140,12 @@ def unbind(self, ids, *, desk: bool = True, routes: bool = True, name=None) -> l
 - `MidiIO.unbind(pid)` becomes `return self.learner.unbind((pid,),
   routes=False)`: its two tests keep passing.
 
+*As built:* the delegate also passes `name=self.control_name`, so its
+message names the control by glyph. The routes are taken on both ids,
+never a MIDI row among them, and `Learn.bound(ids)` /
+`learn.bound(table, ids)` answer "what is bound here" for `unbind` and
+for the menu alike (§7, WP1).
+
 **The menu** (`Panel._ctx`, with `ctx_rows`). Above the items, one line
 per thing bound, read from `self.router.table` (`ui_routing.router_of`),
 never from `self.midi`:
@@ -160,6 +166,11 @@ something:
   `Unbind`;
 - both kinds: a submenu, `Unbind ▸` with `desk — K1`, `route — R
   height`, `both`.
+
+*As built:* the submenu's label is `Unbind` (imgui draws the arrow) and
+its items read `desk — K2`, `route — R height, LFO 1`, `both`; a
+global-layer row's line reads "· global layer"; `ctx_rows` takes
+`lines=` and `gate=` and the menu calls it twice.
 
 "Unbind hand" is gone. `ctx_rows` keeps printing the hand rows' lines
 and the `Gate: … ▸` submenu (a gate is not an unbind). The "performed
@@ -200,6 +211,11 @@ class Learn:
     def _row(self, source: str, p: Param, when: str | None) -> Binding: ...   # plan 18's
 ```
 
+*As built:* `arm` raises on a want outside `WANTS`, clears `refused`
+and counts the arms (`armed_n`); `take()` clears `want` too; `said_n`
+counts what was said. `_row` has since gained `centred=` and `depth=`
+and a rule table: it is plan 18's (register row 52).
+
 `arm(None)` clears `want`. New fields are read with `getattr(…, None)`
 wherever an object from before a hot reload may be met (`Learn.same_source`
 already does this for `lane`).
@@ -208,6 +224,9 @@ already does this for `lane`).
 complete a learn with no adapter (WP4). In order:
 
 1. `pid = self.learning`; no param by that id → `False`.
+   *As built:* before this it asks `accepts(source)` (a click must not
+   complete a hand learn), and an id the registry lacks **clears** the
+   learn: left armed it would swallow every desk message.
 2. `b = Binding(source, pid, "abs", layer="preset")`. The control is
    invariant (`table.is_invariant(b)`) → `refuse("S3 (track fader 3) is
    invariant (the session's) — not learned")`, `False`. The global layer
@@ -260,6 +279,9 @@ moved = [abs(y - b) if y is not None and b is not None and (ok is None or ok(sel
          else 0.0 for i, (y, b) in enumerate(zip(ys, self._learn_base))]
 ```
 
+*As built:* the key is `(pid, want, armed_n)`, so a cancel and re-arm
+of the same param and want also starts fresh.
+
 So under "Learn hand ▸ left" only the left hand's axes can win, and
 under "Learn desk" no axis can. `_learn_key` is read with `getattr`
 (an adapter from before a hot reload). The pinch that becomes the gate
@@ -283,6 +305,10 @@ other hand's (plan 08; not changed here, see fork 10).
 desk, or click one on the diagram…", "move the left hand…", "move the
 right hand…"; with `want` `None`, today's words.
 
+*As built:* the click's words are said only when `ui_desk.click` exists
+(it does since WP4). With no MIDI adapter the desk hint reads "click a
+control on the desk diagram…".
+
 **The footer** (`Panel._message`, `_footer`). While a learn is armed the
 message slot reads, in red, `learning view.bright — move the left hand…
 (click to cancel)`; a click on it calls `lrn.arm(None)`. When
@@ -291,10 +317,20 @@ the warning colour when `lrn.refused`: a refusal is then seen on every
 page. `_message` gains the key `"learn"` beside `"status"`, `"warning"`
 and `"undo"`.
 
+*As built:* "(click to cancel)" is on the line only where it fits, and
+on the hover otherwise. A line just said (a refusal that left the learn
+armed, a warning, an undo) shows first for `MESSAGE_S`; then the armed
+line returns.
+
 **Elsewhere.** `ui_routing._learn_line` and `Panel._learn_status` print
 the same hint. `ui_routing.desk()`'s faint line becomes "new rows:
 right-click a param → Learn desk, or click a control". The cheat sheet's
 row becomes `("right-click", "a control: learn desk / hand · unbind")`.
+
+*As built:* ROUTING's line takes the longest wording that fits ("new:
+Learn desk, or click a control" at the control size), the whole on
+hover. A refusal that left the learn armed shows on ROUTING and SYSTEM
+as the reason and "— still learning `<id>`".
 
 **Undo.** `Learn.learn_control` pushes (the push `_learned` has today,
 moved). The hand's pushes in `learn_source` and `_place` are untouched.
@@ -314,6 +350,11 @@ moved). The hand's pushes in `learn_source` and `_place` are untouched.
 | Meters 2–N (`_meters`) | Meter 0 only | `self._ctx(self.reg["band.select"], f".{i}")` for each (the `key` the rail's pills use) | Every meter but the first did nothing on right-click |
 | A file path (`_path`) | Learn offered (a `Kind.TEXT` param is never modulatable, so `ctx_item` already prints "not modulatable") | No Learn items (WP2's rule: not `Kind.TEXT`) | A knob cannot set a path |
 | A param that is not modulatable (every `hands.*`, the rig's settings) | A hand Learn lands a route the router skips | No "Learn hand ▸" (WP2's rule); "Learn desk" stays | A knob on `hands.smooth` is a real use; a hand on it is a dead row |
+
+*As built:* the label's hook is `Panel._ctx_label` (with `_ctx_id`),
+called by `_row` and `_fader`; the rule for "Learn desk" is
+`ui_routing.desk_target`; a learn armed from a meter frames the meters;
+meter 0's menu id is now `##ctx.band.select.0`.
 
 **Left alone, and why.**
 
@@ -374,6 +415,12 @@ hides every line that does not match.
 - Section titles are always drawn; a section with no matching line says
   "no row matches".
 
+*As built:* "n of m rows" counts every line of the page (176 over
+TRIP), not the routes; a line a widget is in use on stays drawn until
+it is let go; a dark line matches on its glyph, name and source only; a
+filter of spaces alone is no filter; the unfiltered counts shorten to
+fit beside the field (§7, WP5).
+
 **Undo.** None.
 
 ### WP4 — The desk, big and clickable
@@ -410,6 +457,10 @@ def room(display: tuple[float, float], panel_x: float | None, sheet: tuple[float
   left edge at `12 + sheet_w + GAP`), full height;
 - height: all there is, capped so a layout unit is never taller than it
   is wide.
+
+*As built:* there are more constants (`MIN_H`, `LABEL_UNIT_H` 32,
+`PICK_S`, `PICK_MOVE`), `room` returns whole pixels, and labels need a
+unit `LABEL_UNIT` wide **and** `LABEL_UNIT_H` tall.
 
 `Panel._draw` records the CONTROLS window's position each frame it is
 open (`self._panel_x`); the desk, drawn before the panel, reads last
@@ -448,10 +499,13 @@ Labelled (`LABEL_UNIT` or wider):
   ```python
   def wrap(text: str, width: float, lines: int) -> list[str]    # pure, tested
   ```
+  *As built:* a label that would be cut at that size is drawn at 11 px
+  instead, and a step keeps its amount when cut ("Brightne… +3").
 - Adjacent pads of one row whose text is the same share one label drawn
   across the run (the clip-stop row reads "Save as a new preset" once);
   each pad is still its own control to the mouse.
-- A dark control: its glyph, dark, as today (D8).
+- A dark control: its glyph, dark, as today (D8). *As built:* at the
+  labelled size its glyph is in the top-left corner like every other.
 - **Whose row it is.** A control mapped on the layer that is up: the
   label in the bright ink. An invariant control: the label in the dim
   ink. The header names the layer, red while it is the global one, as
@@ -463,6 +517,11 @@ Labelled (`LABEL_UNIT` or wider):
   segments · preset layer", then Akai's name.
 
 #### The drawing
+
+*As built:* this drawing is of an idealised device. The layout that is
+drawn (`apc40.LAYOUT`: the knobs in two rows of four, the bank cross
+and the transport on the right) is in §7, WP4, and in
+`assets/17-learn-and-the-desk/desk-big.png`.
 
 The panel hidden, TRIP loaded, the preset layer up, D3 picked. Cells are
 cut here to fit the page; `·` is a dark control, `▓` a lit LED, `▛ ▜` the
@@ -531,6 +590,11 @@ def click(panel, table, c: apc40.Control, b: Binding | None) -> None    # ui_des
 
 A click on the window where no control is lets the picked control go.
 
+*As built:* a pick also lets go by itself after `ui_desk.PICK_S` = 20 s
+with no click in the window (`ui_desk.tick`), the header and the footer
+count it down, and no click on a param maps until the mouse has moved
+`PICK_MOVE` = 12 px from the click that picked (`ui_desk.armed`).
+
 #### Picked: "click a control, then a param"
 
 ```python
@@ -547,6 +611,9 @@ class Learn:
         either way unless it was refused."""
 ```
 
+*As built:* a `map_picked` that does not land — refused, or a param the
+registry lacks — keeps the pick and leaves no learn armed.
+
 One mapping path: `map_picked` is `arm` and `learn_control`, so D5, D6,
 the op, the feedback, the undo step and the message are the knob
 learn's.
@@ -555,6 +622,9 @@ learn's.
 either size. The desk's header and the footer's message slot read "D3
 picked: click a param to put it here · click D3 again to let go". On
 ROUTING the control's line is framed (below).
+
+*As built:* with a countdown ("D3 picked (20 s): …"); on ROUTING, which
+is never dimmed, the lines say to click a param on any other page.
 
 **Whether it can be mapped** (`ui_desk.mappable(table, c) -> str | None`,
 the reason it cannot, or `None`):
@@ -591,7 +661,8 @@ preset); K1 let go") and one Ctrl+Z puts both back.
 **Letting go.** A click on the picked control, on the desk's empty
 ground, or on the footer's line; picking another control; arming a
 learn; a successful map. Not Esc (it quits). A preset load keeps the
-pick (the control is still there).
+pick (the control is still there). *As built:* and 20 s with no click
+(`PICK_S`).
 
 #### ROUTING scrolls to its row
 
@@ -616,7 +687,9 @@ def goto(panel, source: str) -> None:
 - The line of the picked control (`panel.learn.control`) is framed in
   red for as long as it is picked.
 - A control dark on the global layer has no line: the learn line says
-  "K6 · unmapped on the global layer" and nothing scrolls.
+  "K6 · unmapped on the global layer" and nothing scrolls. *As built:*
+  the desk's header and the footer say it; ROUTING's head gains no
+  line.
 
 **Undo.** `Learn.learn_control` pushes (WP2). `pick` changes no table and
 is no step.
@@ -681,7 +754,8 @@ the shorter spellings.
 Rejected because an existing concept does the job: a DESK page (the
 window grows); a `ui.desk_big` param and key (`ui.panel`); a "map mode"
 toggle (a pick is a click); a learn timeout setting (the footer shows an
-armed learn and a click cancels it); a filter per section (one field);
+armed learn and a click cancels it — *as built:* still so for a learn;
+a *pick* does time out, after a fixed 20 s, because it dims a page); a filter per section (one field);
 a "show on desk" item on ROUTING lines (the picked frame is both ways
 already); a mapping dialog (the click).
 
@@ -720,7 +794,9 @@ already); a mapping dialog (the click).
 - **The glyphs and the layout** (decision 25): `apc40.LAYOUT` is not
   edited.
 - **Drag-to-map** stays deferred (roadmap §6).
-- What a learned hand row is (`position`, depth 1): plan 18's.
+- What a learned hand row is (`position`, depth 1): plan 18's. *As
+  built:* plan 18 changed it — a `push` at `hands.learn_depth` by
+  `Learn._row`'s table (register row 52).
 
 ## 5. Exit criteria
 
@@ -924,12 +1000,595 @@ winning within one hand, (b) is the fix and plan 18 has the file.
 
 ## 7. As built
 
-Filled as the work packages land.
+Written by WP6 from each PR's "As built" and review sections, every
+statement checked against the code on `plan-18-integration` at 8c0e416
+(plan 17's five code packages and plan 18 whole). On that commit: 1276
+passed, 1 skipped (the hands tape), `ruff check .` clean. Where this
+section and §2 differ, this section is the code; §2 carries an
+"*As built:*" note at each such place.
+
+**What has been seen, and by whom.** Nothing here was tried by a person
+at the rig. No APC40 has had a knob learned, unbound or mapped by a
+click, no real hand has completed "Learn hand ▸ left", and **nobody has
+clicked, right-clicked or typed in the real control window**: not a menu,
+not a label, not a control of the desk, not the filter field. Three
+kinds of evidence exist, and the entries below say which is which:
+
+- *tests*: the named pytest nodes — synthetic hands
+  (`tests/fake_hands.py`), fake MIDI ports, headless imgui, and for the
+  menu on a label, the desk's click, the click on a param and the filter
+  field, **imgui mouse and keyboard events fed by the test** at the
+  place the item was drawn;
+- *demos*: the scripts under `tools/`, each on a temp home of its own,
+  with their output kept under `docs/plans/assets/17-learn-and-the-desk/`
+  (reported by the agent that built the package; every picture is a
+  read-back from a hidden window, every popup opened by the script and
+  every click a fed event);
+- *seen in scripted launches by the orchestrator*: the real app
+  (`uv run hyperspace`) started against a temp home on a laptop and
+  driven from a script, with no APC40 and no camera. What it saw:
+  - a "Learn desk" armed on `view.bright` and completed on D3 put
+    Brightness on D3 and said K1 let go;
+  - with "Learn hand ▸ left" armed, the right hand's axis was ignored
+    and the left hand's roll was learned — by calling the hands
+    adapter's learn path directly with made-up axis readings, **no real
+    hand**;
+  - Unbind removed a knob row and a hand route in one go, and three
+    undos put everything back with the preset clean;
+  - picking D3 and then `Learn.map_picked` put Speed on D3 and said K2
+    let go; a pick on a fader was refused as invariant; the control
+    window ran with the panel hidden (the big desk drawn) and came
+    back; one undo took the map back;
+  - on the combined branch: 1276 passed, 1 skipped, ruff clean, no
+    runtime error and an empty stall log.
+
+  That is a launch on a laptop driven by function calls, not a session
+  at the machine: no menu was opened and nothing was clicked in it.
+
+Hand checks 64–71 (group M of `11-hand-checks.md`) are what the machine
+still owes. Decision register rows 57–64 are this plan's forks, each
+built on the plan's recommendation by the run's orchestrator, not by the
+owner; row 58 also carries what the orchestrator required beyond the
+plan (a pick that lets go by itself, said loudly).
+
+**Where it was merged.** WP1, WP2 and WP5 went onto
+`plan-17-integration` and from there into `plan-18-integration`
+(c9bdcf6), where plan 18's learn-default package was built on top of
+WP2 (§2's seam); WP3 and WP4 followed the same way (8c0e416). This
+package, WP6, is written on `plan-18-integration`, after plan 18's own
+documents, so the shared tables are edited once. PRs #96 and #102 show
+as open on GitHub: their branches were merged into
+`plan-17-integration` by the merge commits named below.
+
+### WP1 — One Unbind (PR #93, merged 9b13e34)
+
+**Built.** `learn.py`: `Learn.unbind(ids, *, desk=True, routes=True,
+name=None) -> list[Binding]`, `Learn.bound(ids)` and the module function
+`learn.bound(table, ids)` → (the loaded preset's desk rows, the routes,
+the session's MIDI rows). A desk row goes through `Bindings.unbind` (it
+bumps `redraw_serial`), a route — any scheme, enabled or not — through
+`Bindings.remove`, its depth subscribers with it; one
+`undo.push(f"unbind {real_id}")`, only when something goes; no file
+written; a session row is never removed, and with nothing else to remove
+that is a refusal in the old words. `midi.py`: `MidiIO.unbind(pid)` is
+`self.learner.unbind((pid,), routes=False, name=self.control_name)`.
+`ui.py`: `Panel._table` (the router's table, else the learn object's,
+never the adapter's), `_ctx_lines`, `_ctx_unbind`, `_row_name`,
+`_route_source`. The menu lists one line per thing bound — a preset desk
+row as glyph and Akai's name (`K2 (track knob 2)`, `B16 (▲) · step +3`),
+a route as `Router.describe` gives it (`(off)` when disabled), a session
+row dim (`SM (MASTER fader) · invariant`, `… · global layer`) — and
+draws **Unbind** only when it would remove something: a plain item with
+one kind bound, a submenu `desk — K2` / `route — R height, LFO 1` /
+`both` with both. "Unbind hand" and the "performed by …" line are gone.
+`hands/panel.py`: `ctx_rows(panel, p, *, lines=True, gate=True)`.
+
+**Differs from §2, and why.**
+
+- *`MidiIO.unbind` passes `name=self.control_name`.* Without it the
+  adapter's message would read "MIDI CC 48 ch1" where it read "K1 (track
+  knob 1)".
+- *`Learn.bound` and `learn.bound(table, ids)` are new.* `unbind` needed
+  the three lists; the menu asks the same function, so its lines are
+  exactly what Unbind removes, also on a panel with no learn object.
+- *A route is never a MIDI row* (review). `Bindings.routes_to` filters
+  on the op alone, so a session MIDI row with a `push` op could have
+  been listed and removed as a "route"; `learn.bound` leaves every MIDI
+  row out of the routes.
+- *Routes are taken on both ids* (the drawn param's and the real one's),
+  as the desk rows are; the plan had `routes_to(real_id)` only.
+- *`ctx_rows` takes `lines=` and `gate=`* and `_ctx` calls it twice: the
+  hand rows' lines above the items, the `Gate: … ▸` submenu among them.
+- *The rows `unbind` returns and names are the ones the table took out*
+  (`Bindings.unbind`'s own return values; review).
+- *A Replace / Keep question held against a route Unbind removes is
+  withdrawn* (`pending` cleared; review). Not reachable from the panel,
+  where the prompt is modal.
+- *The message* is "unbound view.speed from K2 (track knob 2), R height
+  pushes +0.45 and LFO 1 pushes +0.3"; the old "(in the preset)" tail is
+  gone, and it names the real id.
+- *The submenu's label is `Unbind`*; imgui draws the arrow.
+- *A no-op unbind opens no undo step at all* (it used to open an empty
+  one that was dropped): one assertion of
+  `tests/test_undo.py::test_an_action_that_changes_nothing_leaves_no_step`
+  was amended.
+- *With an adapter, the control goes dark one poll later*, at the
+  adapter's next `_follow_table` (the `redraw_serial` bump), not inside
+  `MidiIO.unbind`.
+
+**Left as the plan has it, for the owner to know** (review):
+
+- Unbind on a drawn alias (`band.sel.*`) also removes the desk rows on
+  the selected band, and the message names the band's own id.
+- `MidiIO.unbind` has no caller in the app any more; it stays as the
+  delegate its two tests call.
+- `Panel._row_name` is one more place a control is named (beside
+  `ui_routing.control_name` / `control_glyph` and `MidiIO.control_name`).
+
+**Tests.** `tests/test_learn.py::test_unbind_removes_the_presets_desk_rows_and_every_route`,
+`::test_unbind_by_kind`,
+`::test_unbind_is_one_undo_step_and_none_when_nothing_goes`;
+`tests/test_ui_shell.py::test_the_menu_lists_and_unbinds_with_no_midi_adapter`,
+`::test_unbind_is_not_offered_on_a_session_only_param`. Through the
+delegate, unchanged:
+`tests/test_midi.py::test_unbind_removes_only_preset_layer_rows_and_writes_no_file`,
+`::test_an_unbind_is_one_undo_step`.
+
+**Demo.** `docs/plans/assets/17-learn-and-the-desk/unbind-demo.txt`
+(`tools/learn_demo.py unbind`: headless; the menu read as text, with the
+popup's `begin` answered for it; the same transcript with and without
+`panel.midi`) and `menu-unbind.png` (`tools/learn_shot.py unbind`: a
+hidden window, the popup opened with `open_popup`, the submenu by
+telling imgui the mouse is over its item). Both were regenerated by WP2
+and show the Learn items as they are now.
+
+**Not verified.** A real right-click; whether the submenu is comfortable
+to hit and how the menu reads at distance. That a control goes dark on
+an APC40 after an Unbind (fake ports only). `[midi] enabled = false` was
+stood in for by `panel.midi = None` in the tests and the demo.
+
+### WP2 — Learn that cannot pick the wrong source (PR #96, merged 0132f3f)
+
+**Built.** `learn.py`: `WANTS = ("desk", "hand:left", "hand:right")`,
+`Learn.want`, `Learn.arm(pid, want=None)`, `Learn.accepts(source)`,
+`Learn.learn_control(source, profile=None) -> bool` (the body of
+`MidiIO._learned`, moved: the same preset-layer row, op, feedback and
+one `undo.push`, the profile an argument, `redraw_serial` bumped),
+`Learn._row` (extracted for plan 18), `Learn.said_n`, `Learn.armed_n`;
+`learn_source` asks `accepts` first. `midi.py`: `_learned` is
+`self.learner.learn_control(Binding.midi_source(kind, channel, number),
+self.profile)`; in `_handle`, a CC or a press is a candidate for the
+armed learn only when the learn accepts a desk source **and** the
+control is not invariant — a candidate is not dispatched, landed or
+refused; everything else is dispatched as if no learn were armed.
+`hands/core.py`: `HandsIO._learn`'s guard, its baseline's key and its
+`moved` list. `ui.py`: `_ctx_learn` (**Learn desk**; **Learn hand ▸
+left / right**), `_hand_sides`, `_learn_hint` reading the want, the
+footer's armed line and the `"learn"` key of `_message`, `_learn_status`,
+the cheat sheet's row `("right-click", "a control: learn desk / hand ·
+unbind")`. `ui_routing.py`: `_learn_line`, the hint in `desk()`.
+
+**Differs from §2, and why.**
+
+- *`learn_control` asks `accepts` itself* (review). Only its caller in
+  `MidiIO._handle` did, so a click on the desk could have completed a
+  hand learn.
+- *`learn_control` on an id the registry lacks clears the learn*
+  (`take()`); the plan said only "→ False". Left armed it would swallow
+  every desk message until cancelled.
+- *`arm()` raises `ValueError` on a want outside `WANTS`*, clears
+  `refused` (so `refused` while armed means *this* learn was refused and
+  still waits), and counts the arms in `armed_n`; `take()` clears `want`
+  too.
+- *The hands' baseline key is `(pid, want, armed_n)`* (review): a cancel
+  and re-arm of the same param and want between two polls starts fresh.
+- *`said_n` counts what was said*, so the same refusal twice shows twice
+  in the footer.
+- *The footer.* "(click to cancel)" is on the line only where it fits
+  and on the hover otherwise (`ui.CANCEL_TIP`); the click cancels either
+  way. A line just said — a refusal that left the learn armed, a library
+  warning, an undo — shows first for `MESSAGE_S`, then the armed line
+  returns (review: the armed line used to hide them). At the control
+  size the desk's hint is cut ("turn a knob or press a button on th…");
+  the whole is on the hover.
+- *ROUTING's and SYSTEM's learn lines* show a refusal that left the
+  learn armed as the reason and "— still learning `<id>`" until the
+  learn lands, is cancelled or is armed again.
+- *The click's wording is switched on by `ui_desk.click` existing*
+  (`hasattr`): `_learn_hint` says "…, or click one on the diagram…" and
+  ROUTING's desk hint ", or click a control" only once the desk can be
+  clicked (it can, since WP4). With no MIDI adapter and no clickable
+  desk an armed desk learn would read "nothing to learn from (no MIDI)";
+  with WP4 in, it reads "click a control on the desk diagram…".
+- *"Let go" is said by glyph* when the profile has `glyph` ("…; K1 let
+  go"), else by name.
+- *`tests/test_desk.py::test_the_clip_stop_row_is_invariant` was
+  rewritten* though §5 does not list it: under fork 6 a clip-stop press
+  during a learn saves, as it always does, and the learn stays armed.
+
+**What plan 18 then changed** (§2's seam; not this plan's work).
+`Learn._row` is no longer the verbatim `position` row: it takes
+`centred=` and `depth=` and lands a `push` at `hands.learn_depth` by its
+rule table (plan 18 WP3, register row 52), and `learn_source` and
+`HandsIO._learn` pass them. The demo transcript `learn-demo.txt` was
+written before that and still shows "positions" rows.
+
+**Left as the plan has it, for the owner to know** (review):
+
+- **A desk learn armed while SHIFT is latched swallows every control
+  that is not invariant** until it lands or is cancelled: each is
+  refused for the global layer and not dispatched. The footer says so in
+  the warning colour, a press of SHIFT (invariant) unlatches it, and a
+  click on the footer's line cancels.
+- **A preset pad pressed mid-learn loads its preset** (the bank row is
+  invariant), and the learn then lands in that preset.
+- Under "Learn hand ▸ left" the row's gate can be the right hand's
+  pinch (fork 10; `held_gate` is plan 18's).
+- A fader that is passed over while a learn is armed is no longer the
+  audit's R13 case: an invariant control is dispatched. A preset-layer
+  control refused for the global layer is still swallowed.
+
+**Tests.** `tests/test_learn.py::test_accepts_by_want`,
+`::test_learn_control_needs_no_adapter`,
+`::test_learn_refuses_the_global_layer_and_invariant_controls`
+(rewritten); `tests/test_hands.py::test_a_hand_learn_listens_to_one_hand`,
+`::test_the_hands_never_complete_a_desk_learn`,
+`::test_a_rearm_starts_a_fresh_baseline`;
+`tests/test_midi.py::test_a_knob_bump_during_a_hand_learn_does_its_own_job`,
+`::test_an_invariant_control_works_through_a_desk_learn`;
+`tests/test_ui_shell.py::test_the_menu_offers_learn_desk_and_learn_hand`,
+`::test_the_footer_says_what_a_learn_waits_for_and_what_it_did`;
+`tests/test_desk.py::test_the_clip_stop_row_is_invariant`. Through the
+delegate: `tests/test_learn.py::test_a_knob_learn_writes_a_desk_row_into_the_loaded_preset`,
+`::test_a_knob_learn_replaces_an_any_channel_row_on_the_same_knob`,
+`::test_a_learn_is_one_undo_step`, and `tests/test_midi.py`'s
+`test_learn_*`. The three boundary tests are unchanged.
+
+**Demo.** `learn-demo.txt` (`tools/learn_demo.py learn`: synthetic
+hands, desk messages on fake ports, the footer read from a drawn frame —
+§1 row 1's two cases replayed with a bare learn and with "Learn hand ▸
+left"; a knob bump during a hand learn; a fader and SHIFT through a desk
+learn, the global layer's refusal and the learn still armed),
+`menu-learn.png` and `learn-armed.png` (`tools/learn_shot.py learn` /
+`armed`: a hidden window, nothing clicked).
+
+**Not verified.** A real hand, knob, fader or right-click. Whether
+"Learn hand ▸ left" feels right at the box, and whether the wrong *axis*
+within one hand still wins (fork 11's fallback). That SHIFT's LED
+lights and a ring follows after a learn on an APC40. The footer's
+click-to-cancel is `imgui.is_item_clicked()` on a text item: drawn,
+and no test clicks it. A real hot reload onto a `Learn`, `HandsIO` or
+`Panel` from before the new fields (they are read with `getattr`).
+
+### WP3 — Learn where it is missing (PR #99, merged df65ce7)
+
+**Built.** All in `ui.py`, with one predicate in `ui_routing.py`.
+`Panel._ctx_id(a, key)` is the menu's popup id; `Panel._ctx_label(a)`
+calls `imgui.open_popup_on_item_click` on the last item with that id.
+`_row` (and so `half`) calls it on the label's dummy, `_fader` on its
+label line inside the fader's `push_id`; the popup is still drawn by the
+widget's own `_ctx`. Every analyzer meter calls
+`_ctx(reg["band.select"], f".{i}")` and `_learn_frame`.
+`ui_routing.desk_target(p)` (not `Kind.TEXT`, not `desk.shift`) is the
+one rule "Learn desk", ROUTING's desk rows' target combo and the pick's
+targets go by, reached as `Panel._desk_target`.
+
+**Differs from §2, and why.**
+
+- *The hook is `_ctx_label` / `_ctx_id`*, shared by `_row` and `_fader`,
+  not a direct `open_popup_on_item_click` in `_row`: the label and the
+  widget build the id in one place.
+- *Meter 0's menu id changed* from `##ctx.band.select` to
+  `##ctx.band.select.0`. That also ended a popup id shared with the band
+  combo on the same page.
+- *A learn armed from a meter frames the meters* (review): each meter
+  gets the learn's red frame while `band.select` is armed.
+- *WP2 had already written the two "what is offered" rules*; WP3 named
+  the desk one (`ui_routing.desk_target`, a three-line edit outside its
+  table) so WP4's pick uses it too. What the menu offers did not change.
+
+**Left as the plan has it** (review): the hook is at `_row` / `_fader`,
+not `_label_cell`, so a label a page draws on its own (FX "blend",
+LOOKBACK's "from" / "spacing" / "net", a macro's number, "scene",
+"path") opens nothing. **Found and not fixed** (outside the package):
+`ui_lfo._clock_strip`'s two nudge chips both call `panel._ctx(nudge)`
+with the bare id in one id scope, so their menu draws its items twice —
+the defect this package fixed for the meters. Filed as audit row U9.
+
+**Tests.** `tests/test_ui_shell.py::test_a_rows_label_opens_its_params_menu`
+(fed right-clicks over the real `Panel`: the label of a `_row`, of a
+`_fader`, of a fader whose row is the session's, and of a `half` label
+inside a table cell open exactly `##ctx.<pid>`; the param does not move;
+a left click opens nothing),
+`::test_every_meter_has_the_band_select_menu`. Unchanged:
+`::test_every_page_fits_the_control_window`.
+
+**Demo.** `menu-on-label.png` (`tools/label_menu_shot.py`: a hidden
+window; imgui is fed a mouse position on the word ZOOM and a right
+button down and up; the red cross marks the fed click).
+
+**Not verified.** A real mouse or a trackpad's two-finger click on a
+label or a meter.
+
+### WP5 — A ROUTING filter (PR #91, merged db7d861)
+
+**Built.** `ui_routing.py`: the field `##rows` (hint "filter",
+`FIND_W` = 120 px) on the counts line, left of `+ route`; the state
+`_state(panel)["find"]`; `matches(panel, router, text, *hay)`,
+`route_hay`, `control_hay`, `macro_hay`, `found(panel, router) ->
+(shown, total)`, `_shown`, `_find_field`, `NO_MATCH`. While the field
+holds text only the lines that say every typed word are drawn, in every
+section, each under the index it has unfiltered; the counts read "N of M
+rows" in red and a × chip clears it; a section with nothing to show says
+"no row matches".
+
+**Differs from §2, and why.**
+
+- *A line in use is held* (review). A filtered line a widget is in use
+  on stays drawn until the widget is let go (`_shown`: last frame's
+  lines are kept while any item is active or a popup is open, the field
+  itself excepted). Without it a macro found by its label vanished at
+  the first backspace in that label.
+- *"M rows" counts every line of the page* — routes, desk rows, dark
+  controls, the eight macros, the session's rows (176 over TRIP) — not
+  the routes alone.
+- *The unfiltered counts give way to the field*: the longest wording
+  that fits beside it ("21 routes · 6 lanes · live", else "21 routes ·
+  6 lanes", else "21 routes"), the whole on hover.
+- *A dark line matches on its glyph, Akai's name and source only*; its
+  factory row's target is not the preset's. Nor do the words "unmapped"
+  and "dark", or a line's op text, match.
+- *The session section* prints one "no row matches" and drops a
+  sub-title with no matching row.
+- *A filter of spaces alone is no filter*, and with the field empty no
+  haystack is built.
+- *The clear waits for the field to lose focus* (WP4, `st["unfind"]`): a
+  field that has the keyboard writes its edit buffer back on the frame
+  it lets go, so `goto`'s clear holds until it has.
+
+**Left as the plan has it, for the owner to know** (review; register
+row 63):
+
+- **A row added while a filter is set can be hidden by it.** `+ route`,
+  "Route a lane here…", a Learn and an Unbind's undo all add rows a set
+  filter may not show; the red count is the only sign.
+- **"lfo 1" also matches LFO 2's routes**: the haystack holds the raw
+  source, and LFO 2's is `lfo:1`. Any digit or one-letter word matches
+  widely.
+- `matches` takes `panel` and `router` and reads neither (the plan's
+  signature).
+
+**Tests.** `tests/test_ui_routing.py::test_the_filter_matches_glyph_param_and_source`,
+`::test_a_filtered_page_draws_only_matching_lines_and_keeps_its_ids`,
+`::test_the_filter_is_ui_state` (amended by WP4: it calls `goto`),
+`::test_typing_in_the_filter_is_imguis_keyboard_not_the_apps`,
+`::test_a_line_in_use_is_not_filtered_away_under_the_hand`.
+
+**Demo.** `routing-filter.png` (`tools/routing_filter_shot.py`: a hidden
+window; ROUTING over TRIP unfiltered and with "kaleido" — "4 of 176
+rows" in red; the text was put in the state by the script).
+
+**Not verified.** Typing in the real window: the caret, backspace, Esc
+(imgui reverts an edit on Esc) and ⌘Z with the field focused. The hold
+with a real drag, a real label edit or an open target combo (the test
+patches `is_any_item_active`).
+
+### WP4 — The desk, big and clickable (PR #102, merged a0a0661)
+
+**Built.** `ui_desk.py`: `room(display, panel_x, sheet)` and the
+constants `MIN_W` 300, `MIN_H` 120, `LABEL_UNIT` 44, `LABEL_UNIT_H` 32,
+`LABEL_PX` (11, 18), `LABEL_LINES` 2, `PICK_S` 20, `PICK_MOVE` 12;
+`text(reg, b)`, `wrap(text, width, lines)`, `label_px`; `click(panel,
+table, c, b)`, `mappable(table, c)`, `picked`, `picking`, `armed`,
+`tick`, `let_go`, `left`, `first_sight`, `pick_line`, `footer_line`,
+`rect`; the header's one chip (`big` / `panel`, `ui.panel`).
+`learn.py`: `Learn.control`, `Learn.pick`, `Learn.map_picked`, and
+`learn.blocked(table, source)`. `ui.py`: `Panel._draw` records
+`_panel_x`, runs `ui_desk.tick` and draws the open page inside
+`begin_disabled` while a mappable control is picked (never ROUTING);
+`_ctx_pick`; `_frame_item`; the footer's picked line; `_sheet_w`.
+`ui_routing.py`: `goto(panel, source)`, `_pick_row`, `is_line_of`,
+`_mark_line`.
+
+The desk as it is drawn with the panel hidden at 960 × 900, TRIP loaded
+(`desk-big.png`; names in parentheses are grey — invariant; `·` is a
+dark control; a button's glyph is in its top-left corner):
+
+```
+ APC40 · PRESET LAYER · TRIP                                                            [ panel ]
+
+      1       2        3       4        5       6       7        8         9
+ G1 (TUMBLE)(FACES) (FIELD) (WAKE)  ▓(TRIP)▓ (ACID) (MANDALA)(NOITA)    Points      K1        K2       K3        K4
+ G2    ·       ·        ·       ·        ·       ·       ·        ·      ▓Lines▓     (◔)       (◔)      (◔)       (◔)
+ G3    ·       ·        ·       ·     ▓STILL▓  ORBIT    WAVE    RIPPLE   ▓Faces▓   Brightness  Speed  Instances Pattern mix
+ G4  5-cell 3,3-duo… Cubic   Tesser- Rectified 4,8-duo… 6,6-duo… 16-cell ▓Rotate▓     K5        K6       K7        K8
+                     pyramid  act     5-cell                                          (◔)       (◔)      (◔)       (◔)
+ G5 10,10-… Icosah…  ▓24-   Truncat… 12,12-… Dodecah… 20,20-…  120-cell  Reset     Grid amp  Grid rate Bitmap    Zoom
+             prism    cell▓  tesseract        prism                       view                          alpha
+
+ G6 (────────────── Save as a new preset ──────────────────────────)   (Reset all)  B1 ▓(Click-  B2 ·   B3 ·    B4 ·
+                                                                                        through)▓
+ G7 ▓(SUB)▓ (BASS)  (MIDB)   (MID)   (UPR)    (AIR)      ·        ·     (Overlay)        B16 Brightne… +3     B20 (Tap tempo)
+                                                                                    B19 (Band −1)  B18 (Band +1)  B21 (Nudge −1) B22 (Nudge +1)
+ G8  ▓ZW▓    ▓XW▓     YW      XY       XZ      ▓YZ▓      ·        ·      C (◔)           B17 Brightne… −3     ⇧  (Shift)
+ G9  (SUB    (BASS   (MIDB    (MID    (UPR     (AIR      ·        ·      Shape
+     Transfer)Transfer)Transfer)Transfer)Transfer)Transfer)                           D1        D2       D3        D4
+ G10 (SUB    (BASS   (MIDB    (MID    (UPR     (AIR      ·        ·                   (◔)       (◔)      (◔)       (◔)
+      reset)  reset)  reset)   reset)  reset)   reset)                              FX mix   Plasma   Kaleido-  Kaleido-
+                                                                                              level    scope     scope
+     S1      S2       S3      S4       S5      S6       S7       S8       SM                           segments  zoom
+      │       │        │       │        │       │        │        █        │          D5        D6       D7        D8
+      │       │        │       │        │       │        █        │        █          (◔)       (◔)      (◔)       (◔)
+      █       █        █       █        █       █        │        │        │       Zoom burst Zoom burst Hue cycle Hue cycle
+      │       │        │       │        │       │        │        │        │        amount     glow      paint     spread
+    (SUB    (BASS    (MIDB    (MID    (UPR     (AIR   (Dynamics)(Input   (Audio    B5 (audio.   B6 (Control  B7 ·   B8 ·
+     Post-   Post-    Post-    Post-   Post-    Post-            trim)    drive)       restart)     panel)
+     drive)  drive)   drive)   drive)  drive)   drive)                             B9 (Cheat   B10 (Next   B11 ▓(Home)▓ B12 (LFO
+                                                                                       sheet)      preset)               trigger)
+                                                                                   B13 (audio.play) B14 (audio.stop) B15 (Mic)
+                                                                                   X (Master dim) ├───────────────────────█┤
+```
+
+`▓ … ▓` is a lit LED (the clip grid in its row's colour, any other
+button red). The knobs are two rows of four with the name under each
+ring; the faders run along the bottom with the name at the foot; the
+crossfader is bottom right with its name beside its glyph.
+
+**Differs from §2, and why.**
+
+- **A pick lets go by itself after 20 s, and says so** (`PICK_S`,
+  `ui_desk.tick`, run every frame, desk shown or not): "D3 let go — no
+  click for 20 s". Required by the orchestrator beyond the plan, so a
+  dimmed page is never left standing at a party. The desk's header and
+  the footer count the seconds down ("D3 picked (20 s): click a param to
+  put it here"), **the footer's line is clickable to let go**
+  (`ui_desk.LET_GO_TIP`, on the line where it fits and on the hover),
+  and a click anywhere in the control window — left or right — starts
+  the count again. An armed *learn* still never times out (§3).
+- **No click maps until the mouse has moved `PICK_MOVE` (12 px) from the
+  click that picked** (`ui_desk.armed`; review). On the big desk that
+  click brings the panel back under the mouse, and a second click at the
+  same spot — a double click, or "click it again to let go" — would have
+  landed on whatever widget was now under it. The page is dimmed
+  meanwhile, so that click does nothing at all. Added by the build.
+- *`learn.blocked(table, source)` is new* (review): the one rule
+  `Learn.learn_control` refuses by and `ui_desk.mappable` asks before
+  the click. The two sentences differ on purpose ("to map" before the
+  click, "to learn" in the refusal).
+- *`Learn.arm` gained one line* (`self.control = None` when a param is
+  armed): "arming a param lets the pick go" cannot hold without it.
+- *A `map_picked` that does not land keeps the pick and leaves no learn
+  armed.* `learn_control` leaves a refused learn armed (fork 6); behind
+  a pick that would be a learn nobody asked for. On a param the registry
+  lacks it says "…: no such param — nothing mapped" (review).
+- *Labels need height too*: `LABEL_UNIT_H` (32 px). A short, wide desk
+  drew inverted faders; it now draws glyphs only (review; tested at
+  1600 × 420).
+- *The label's type*: `clamp(0.2 × unit, 11, 18)` px as planned (13 px
+  at 960 × 900), plus one rule the plan lacks — **a label that would be
+  cut at that size is drawn at 11 px**, where a low button holds two
+  lines. A step keeps its amount when cut ("Brightne… +3").
+- *The glyph sits in the cell's top-left corner on every control at the
+  labelled size*, dark ones too (the plan had a dark control "as today",
+  centred).
+- *A row's label is a target while picked*, like its widget (review).
+- *ROUTING says something else while picked*: it is never dimmed, so the
+  header reads "D3 picked: its line is framed · on any other page, click
+  a param to put it there · click D3 again to let go" and the footer
+  "D3 picked (20 s): click a param on any other page" (review).
+- *ROUTING has no pick line in its head.* The plan had the learn line
+  say "K6 · unmapped on the global layer"; that would add a line to the
+  page. The desk's header and the footer say it ("K6 (track knob 6) is
+  on the global layer … : unmapped on the global layer").
+- *The footer's line for a pick made before another line was said*:
+  whatever the slot held when the footer first saw the pick gives way
+  to it (`ui_desk.first_sight`); a line said after it shows first for
+  its 4 s, as for a learn. The let-go click fires only on the pick's own
+  line.
+- *The hover names what a click would do* ("click: pick it — then click
+  a param to put it there", "click: let go", "click: learn view.depth4
+  here").
+- *The tooltip on a target* reads "click: put D3 on Speed".
+- *`room` returns whole pixels*; at 960 × 900 the desk is 384 × 431
+  beside the panel (it was 380 × 290) and 936 × 876 with it hidden.
+- *`Panel._footer` and `_draw_cheatsheet` were edited* (the picked line;
+  `_sheet_w`, so the desk can sit beside the sheet), and
+  `ui_routing.desk()`'s hint and `_find_field` (WP2's and WP5's lines):
+  the hint now takes the longest wording that fits ("new: Learn desk, or
+  click a control" at the control size, the whole on hover), the field
+  holds `goto`'s clear until it has lost the keyboard.
+- *The drawing in §2 is of an idealised device.* `apc40.LAYOUT` (not
+  edited) puts the knobs in two rows of four and the buttons 0.7–0.75
+  units tall, which is why those labels are one line or small. The
+  drawing above is what is built.
+
+**What the pictures show, judged by the agent that made them.** All 105
+labels are drawn at 960 × 900 and nothing overlaps. Five are still cut
+with an ellipsis ("10,10-duopr…", "12,12-duopri…", "20,20-duop…", and ▲
+▼ as "Brightne… +3 / −3"); about a dozen are at 11 px (the duoprisms,
+the two Kaleidoscope knobs, Click-through, Control panel,
+audio.restart), which is small for a step back; `audio.play`,
+`audio.stop` and `audio.restart` show their ids (fork 8). The dimming of
+a picked page is imgui's disabled alpha (0.6): visible beside the rail,
+not dramatic.
+
+**Tests.** `tests/test_ui_desk.py::test_the_desk_takes_the_room_it_has`,
+`::test_the_big_desk_labels_every_lit_control_and_never_scrolls`,
+`::test_the_small_desk_draws_glyphs_only`, `::test_a_controls_text`,
+`::test_a_click_picks_and_a_second_click_lets_go` (the function, then
+fed mouse events on the drawn desk: another control, the ground, a right
+click, a dark control),
+`::test_a_click_completes_an_armed_desk_learn`,
+`::test_a_pick_lets_go_by_itself`,
+`::test_the_diagram_draws_on_both_layers_and_hides` (amended: the one
+widget id is `big##desk`);
+`tests/test_learn.py::test_pick_then_param_maps_through_the_learn`,
+`::test_a_pick_on_an_invariant_control_or_the_global_layer_maps_nothing`;
+`tests/test_ui_shell.py::test_a_picked_control_dims_every_page_but_routing`,
+`::test_a_click_on_a_param_maps_the_picked_control` (fed events: a desk
+click, then a click on Speed's fader on the dimmed page — mapped, the
+fader did not move; a label; a combo and a check; a file path is no
+target; the big desk's pick click and two more at the same spot map and
+move nothing),
+`::test_the_footer_says_what_is_picked_and_a_click_lets_go`,
+`::test_the_click_wording_is_switched_on`;
+`tests/test_ui_routing.py::test_goto_scrolls_the_rows_child_to_the_controls_line`,
+`::test_a_desk_click_clears_a_filter_that_has_the_keyboard`.
+
+**Demo.** `desk-big.png`, `desk-big-global.png`, `desk-picked.png`,
+`routing-goto.png` and `desk-map.txt` (`tools/desk_shots.py`, and
+`tools/desk_shots.py map`: a hidden 960 × 900 window, the real Panel on
+a temp home, TRIP loaded; every click an imgui mouse event fed at the
+rect the control or widget was drawn at; the timeout's clock moved
+forward, not waited for).
+
+**Not verified.** A real mouse or trackpad anywhere: hover on a disabled
+item was confirmed in headless imgui and a hidden GL window only. An
+APC40's rings and LEDs following a click-made row. Readability from a
+step back: the pictures are 2× read-backs looked at up close, and 13 px
+and 11 px may be too small at two paces. A maximised control window with
+the panel open (labels beside the panel), and the cheat sheet on with
+the panel hidden (the desk beside the sheet): `room`'s arithmetic only,
+no render looked at. A hot reload of `ui_desk.py` or `learn.py` with a
+pick standing. Measured in the hidden window, the desk window costs
+0.36 ms a frame small and 0.80 ms big.
+
+### WP6 — Docs and hand checks
+
+This section; the "*As built:*" notes in §2–§4; `ARCHITECTURE.md` (§1's
+adapters and panel rows, §2's frame, §3.5, §3.7, §3.8, §3.10, §4's rows for
+`midi.py`, `hands/`, `learn.py` and the panel); `ENGINEERING.md` (§5,
+where the panel's conventions are — the plan's "§7" is that document's
+Process section — §6's counts, §8); `DECISIONS.md` and
+`DECISION-REGISTER.md` rows 57–64; `11-hand-checks.md` group M as checks
+64–71, with the notes on checks 19, 37, 45 and 51; `plans/README.md`,
+`CHECKPOINT.md`, the roadmap's pointer; audit row U9. No code.
+
+**Code comments this plan left stale** (code, so not edited here):
+`midi.py`'s module docstring ("Right-click → Learn on any panel control,
+then a knob or button … (`_learned` …) … a learn on an invariant control
+… is refused with the reason": the item is "Learn desk", the row-making
+is `Learn.learn_control`, and an invariant control is no candidate at
+all); `ui_routing.py`'s module docstring ("New desk rows come from Learn
+(right-click a control, then move a knob or button — midi.py's
+`_learned`)"); `hands/core.py`'s module docstring (Learn "writes a
+`position` route": stale since plan 18) and `HandsIO.poll`'s (a learn's
+`learning`, `learn_source`: it also asks `accepts`, `want`, `armed_n`);
+`Panel._ctx_learn`'s docstring names `ui_routing._desk_targets` where
+the rule is now `ui_routing.desk_target`; "right-click → Learn" in the
+docstrings of `app.py`, `ui_lfo.py` and `hands/panel.py` names an item
+that is now two.
 
 ## 8. Appendix — group M for `11-hand-checks.md`
 
 WP6 pastes this in after plan 16's group L, with final numbers in place
 of M1–M8. The text is final except for numbers and PR numbers.
+
+*As built:* M1–M8 are checks 64–71 of
+[`11-hand-checks.md`](11-hand-checks.md), and the text there is the one
+to run: it was made true to the code (the pick's 20 s and its footer
+line, the refusals' wording, what a hand learn lands with since plan
+18). The text below is the plan's, kept as written.
 
 ### M. Plan 17 — Learn, Unbind and seeing the desk — added 2026-10-04
 
