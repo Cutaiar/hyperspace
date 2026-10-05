@@ -1228,3 +1228,112 @@ def test_a_long_bank_read_by_eight_slots_shows_the_first_eight(owner_home):
     assert again.bank == eight + [None] * 16 and not again.is_dirty()
     assert {p.name: p.read_bytes() for p in (home / "presets").glob("*.json")} == presets_before
     assert json.loads(bak8(show)[0].read_text())["bank"] == eight
+
+
+# ------------------------------------------- plan 19 WP4: hide, rename, the trash
+
+def test_hiding_a_factory_preset_takes_it_off_the_list_and_nothing_else(owner_home):
+    """The owner's files (on a copy): × on a factory preset writes
+    `<home>/hidden.json` and nothing else — its stem, never a display name
+    — and takes it off `list()` only. `list(hidden=True)` keeps it; a slot
+    and "starts on" that name it still load it; a user preset is never
+    hidden by it. Unhide puts it back, again touching only `hidden.json`."""
+    home = owner_home
+    r = boot_home(home)
+    lib, pr = r.lib, r.lib.project
+    assert pr.bank[3] == "WAKE" and lib.is_factory("presets", "WAKE")
+    factory_wake = lib.path_of("presets", "WAKE")
+    factory_bytes = factory_wake.read_bytes()
+    before = tree(home)
+    assert lib.hide("presets", "WAKE")
+    assert lib.status == "hidden WAKE — F4 still loads it"
+    assert tree(home, but=("hidden.json",)) == before          # nothing else written
+    assert json.loads((home / "hidden.json").read_text()) == {
+        "schema": "hyperspace.hidden/1", "presets": ["party-wake"]}
+    assert "WAKE" not in lib.list("presets") and "WAKE" in lib.list("presets", hidden=True)
+    assert lib.hidden() == {"party-wake"} and factory_wake.read_bytes() == factory_bytes
+    # a slot and "starts on" still load it; a load is no edit of a file
+    pr.load_slot(3)
+    assert lib.current("presets") == "WAKE" and pr.active == 3
+    pr.startup = "WAKE"                                        # (in memory: no write)
+    lib.load("presets", "NIGHT ONE")
+    pr.load_startup()
+    assert lib.current("presets") == "WAKE"
+    pr.startup = "NIGHT ONE"
+    assert tree(home, but=("hidden.json",)) == before
+    # a user preset is never hidden by it, and a second hide writes nothing
+    assert not lib.hide("presets", "NIGHT TWO") and "NIGHT TWO" in lib.list("presets")
+    hidden = tree(home)
+    assert lib.hide("presets", "WAKE") and tree(home) == hidden
+    # a new Library reads it back
+    assert "WAKE" not in Library(home, period=0.0).list("presets")
+    # unhide: back on the list, only hidden.json rewritten
+    assert lib.unhide("presets", "WAKE") and "WAKE" in lib.list("presets")
+    assert json.loads((home / "hidden.json").read_text())["presets"] == []
+    assert tree(home, but=("hidden.json",)) == before
+    assert not lib.unhide("presets", "WAKE")                   # not hidden: nothing to do
+
+
+def test_a_user_file_that_shadows_a_hidden_factory_preset_shows_as_itself(tmp_path):
+    lib = make(tmp_path).lib
+    assert lib.hide("presets", "TRIP")
+    stem = lib.path_of("presets", "TRIP").name                # party-trip.json, the factory's
+    (tmp_path / "presets").mkdir(exist_ok=True)
+    (tmp_path / "presets" / stem).write_text(
+        (FACTORY / "presets" / stem).read_text())              # your copy under the same stem
+    assert "TRIP" in lib.list("presets") and not lib.is_factory("presets", "TRIP")
+
+
+def test_a_made_up_name_never_collides_with_a_hidden_preset(owner_home, tmp_path):
+    """`Project.save_new` and `_fresh_name` ask the list with
+    `hidden=True`: with TRACER loaded and a hidden factory preset called
+    "TRACER 2" (its stem says nothing of the name), save-as makes
+    "TRACER 3"; an empty slot's ⇧-save skips a hidden "PRESET 10"."""
+    import shutil
+
+    r = boot_home(owner_home)
+    lib, pr = r.lib, r.lib.project
+    factory = tmp_path / "factory"
+    shutil.copytree(FACTORY, factory)
+    for stem, name in (("party-tracer-two", "TRACER 2"), ("odd-one", "PRESET 10")):
+        doc = json.loads((factory / "presets" / "party-tracer.json").read_text())
+        (factory / "presets" / f"{stem}.json").write_text(preset.dumps({**doc, "name": name}))
+    lib.factory = factory
+    assert lib.hide("presets", "TRACER 2") and lib.hide("presets", "PRESET 10")
+    assert "TRACER 2" not in lib.list("presets")
+    lib.load("presets", "TRACER")
+    assert lib.hidden() == {"party-tracer-two", "odd-one"}
+    assert pr.save_new() and lib.current("presets") == "TRACER 3"
+    assert lib.path_of("presets", "TRACER 2") == factory / "presets" / "party-tracer-two.json"
+    pr.save_slot(9)                                            # an empty slot: PRESET 10…
+    assert pr.bank[9] == "PRESET 10 (2)"
+    assert lib.path_of("presets", "PRESET 10").parent == factory / "presets"
+
+
+def test_an_unreadable_hidden_list_is_kept_before_it_is_replaced(owner_home, monkeypatch):
+    """`hidden.json` that will not parse reads as nothing hidden, with a
+    warning; the first rewrite keeps it beside itself
+    (`hidden.json.bak-v0`); a backup that cannot be made means no
+    rewrite — and nothing else in the home changes either way."""
+    home = owner_home
+    bad = b'{"schema": "hyperspace.hidden/1", "presets": [ "party-wake",'
+    (home / "hidden.json").write_bytes(bad)
+    r = boot_home(home)
+    lib = r.lib
+    assert lib.hidden() == frozenset() and "WAKE" in lib.list("presets")
+    assert lib.warning.startswith("hidden.json:") and "nothing is hidden" in lib.warning
+    before = tree(home)
+    with monkeypatch.context() as m:
+        m.setattr(routing, "backup", lambda path, schema: None)
+        with pytest.raises(LibraryError, match="not rewritten"):
+            lib.hide("presets", "WAKE")
+    assert tree(home) == before and "WAKE" in lib.list("presets")
+    assert lib.hide("presets", "WAKE")
+    assert (home / "hidden.json.bak-v0").read_bytes() == bad
+    assert json.loads((home / "hidden.json").read_text())["presets"] == ["party-wake"]
+    assert tree(home, but=("hidden.json",)) == {k: v for k, v in before.items()
+                                                if k != "hidden.json"}
+    # the next write finds a good file: no second backup
+    assert lib.hide("presets", "TRIP")
+    assert sorted(p.name for p in home.glob("hidden.json*")) == ["hidden.json",
+                                                                 "hidden.json.bak-v0"]

@@ -132,8 +132,17 @@ PRESETS = "presets"       # the presets' group, a document kind (preset.py)
 LEGACY_DIRS = ("bindings",)
 # <home>/trash/<group>/: a user preset file as it was, copied there before
 # a save overwrites it or a delete removes it (`to_trash`, plan 15 WP1).
-# No group, never listed, never watched; nothing empties it (plan 19 will)
+# No group and never watched. Plan 19 WP4 lists it (`Library.trash`), puts a
+# file back (`restore_trash`, never over a file) and empties it
+# (`empty_trash`, the one delete in the app that keeps no copy)
 TRASH = "trash"
+# <home>/hidden.json (plan 19 WP4): the factory presets × took off the list,
+# by file stem — {"schema": HIDDEN_SCHEMA, "presets": [stem, …]}. A list of
+# taste, the home's; hiding deletes nothing and changes only `list()`
+HIDDEN = "hidden.json"
+HIDDEN_SCHEMA = "hyperspace.hidden/1"
+# the trash's file names: <stem>.<YYYYMMDD-HHMMSS>[-n]<suffix> (`to_trash`)
+_TRASHED = re.compile(r"(?P<stem>.+)\.(?P<stamp>\d{8}-\d{6})(?:-(?P<n>\d+))?(?P<suffix>\.[^.]+)")
 HOME_ENV = "HYPERSPACE_HOME"
 DEFAULT_HOME = Path("~/Hyperspace")
 FACTORY = Path(__file__).with_name("library")
@@ -744,7 +753,9 @@ class Project:
 
     def _fresh_name(self, k: int) -> str:
         """``PRESET <k+1>``, made unique against every preset there is."""
-        taken = {slug(n) for n in self.lib.list(PRESETS)} | {slug(n) for n in self.bank if n}
+        # hidden ones too (plan 19 WP4): a made-up name never lands on one
+        taken = ({slug(n) for n in self.lib.list(PRESETS, hidden=True)}
+                 | {slug(n) for n in self.bank if n})
         base = name = f"PRESET {k + 1}"
         n = 1
         while slug(name) in taken:
@@ -762,8 +773,8 @@ class Project:
         trigger on the clip-stop row): the live state as a **new** preset,
         named from the loaded one (`next_name`), into the next empty slot.
         It never overwrites and never shadows: the name's slug is free
-        among the file stems of both preset folders, every listed name and
-        the bank's names. The new preset becomes the loaded one with a
+        among the file stems of both preset folders, every listed name
+        (hidden ones included, plan 19 WP4: `_taken`) and the bank's names. The new preset becomes the loaded one with a
         clean dot, as the panel's "as…" does, so a second save counts on.
         A full bank saves to the list and says so. The show is written at
         once; no undo step — nothing live changes. True when a preset was
@@ -777,8 +788,7 @@ class Project:
             return False
         # stems as slugs: on a filesystem that folds case, `Trip-2.json`
         # is the file a save of "TRIP 2" would write over
-        taken = ({slug(s) for s in lib._files(PRESETS)} | {slug(n) for n in lib.list(PRESETS)}
-                 | {slug(n) for n in self.bank if n})
+        taken = lib._taken(PRESETS) | {slug(n) for n in self.bank if n}
         name = next_name(lib.current(PRESETS), taken)
         try:
             presets.save_as(name)
@@ -1072,6 +1082,11 @@ def _kept(path: Path) -> bool:
         return False
 
 
+def _and(items: list[str]) -> str:
+    """``F6``, ``F6 and 'starts on'``, ``F2, F6 and slot 9``."""
+    return items[0] if len(items) == 1 else ", ".join(items[:-1]) + " and " + items[-1]
+
+
 def _bank_len(doc: dict) -> int:
     """How many slots a show document on disk holds (0 for none, or for a
     `bank` that is no list)."""
@@ -1202,6 +1217,12 @@ class Library:
         self._mtimes: dict[Path, float] = {}
         self._next = 0.0
         self.presets = None        # preset.Presets, set by its constructor
+        # the hidden factory presets (`hidden.json`, plan 19 WP4), and whether
+        # the file there would not parse — kept beside itself before the
+        # first rewrite (`_write_hidden`)
+        self._hidden: frozenset[str] = frozenset()
+        self._hidden_bad = False
+        self._read_hidden()
         self.project = Project(self)
         self.unshadow()
         self._open_default()
@@ -1417,8 +1438,110 @@ class Library:
         p = self.path_of(group, name)
         return p is not None and not self._is_user(p)
 
-    def list(self, group: str) -> list[str]:
-        return sorted(self._index(group), key=str.lower)
+    def list(self, group: str, *, hidden: bool = False) -> list[str]:
+        """Every preset of the group by name, the user's shadowing the
+        factory's. A factory preset × hid (`hide`, plan 19 WP4) is left out
+        unless `hidden`: the strip's list and arrows, "starts on" and "put
+        preset here…" lose it, while `path_of`, `load` and `read` still find
+        it — a slot or a show that names it loads it."""
+        idx = self._index(group)
+        if not hidden:
+            gone = self.hidden(group)
+            if gone:
+                idx = {n: p for n, p in idx.items()
+                       if self._is_user(p) or p.name[:-5] not in gone}
+        return sorted(idx, key=str.lower)
+
+    def _taken(self, group: str) -> set[str]:
+        """The slugs a new file of the group may not take: every file stem in
+        either folder and every listed name, hidden ones included — on a
+        filesystem that folds case `Trip-2.json` is the file a save of
+        "TRIP 2" would write over (`save_new`, `rename`)."""
+        return ({slug(s) for s in self._files(group)}
+                | {slug(n) for n in self.list(group, hidden=True)})
+
+    # ---- hidden factory presets: <home>/hidden.json (plan 19 WP4) ----
+
+    def _read_hidden(self) -> None:
+        """Read `hidden.json`. None there: nothing hidden. One that will not
+        parse, or is not the shape it should be, reads as nothing hidden
+        with a warning, and is kept beside itself before the first rewrite."""
+        path = self.home / HIDDEN
+        self._hidden, self._hidden_bad = frozenset(), False
+        if not path.exists():
+            return
+        try:
+            doc = _read_json(path)
+            stems = doc.get("presets")
+            if doc.get("schema") != HIDDEN_SCHEMA or not isinstance(stems, list):
+                raise LibraryError(f"{HIDDEN}: not a {HIDDEN_SCHEMA} list")
+            self._hidden = frozenset(str(s) for s in stems if isinstance(s, str) and s)
+        except LibraryError as e:
+            self._hidden_bad = True
+            self.say(warning=f"{e} — nothing is hidden; the file is kept as it is until "
+                             "you hide or unhide a preset")
+
+    def hidden(self, group: str = PRESETS) -> frozenset[str]:
+        """The factory file stems hidden from the group's list (only the
+        presets' group has any)."""
+        return getattr(self, "_hidden", frozenset()) if group == PRESETS else frozenset()
+
+    def _write_hidden(self, stems: frozenset[str]) -> None:
+        """Write `hidden.json`. A file there that did not parse is kept first
+        (`routing.backup(path, "0")`, ``hidden.json.bak-v0``): no backup, no
+        rewrite (LibraryError)."""
+        path = self.home / HIDDEN
+        if getattr(self, "_hidden_bad", False) and path.exists():
+            from .routing import backup
+
+            if backup(path, "0") is None:
+                raise LibraryError(f"{HIDDEN}: not rewritten — the unreadable file there "
+                                   "could not be kept first")
+        _write_json(path, {"schema": HIDDEN_SCHEMA, "presets": sorted(stems)})
+        self._hidden, self._hidden_bad = frozenset(stems), False
+
+    def hide(self, group: str, name: str) -> bool:
+        """× on a factory preset: off the list, by its file stem in
+        `hidden.json`; its file is untouched and a slot or a show that names
+        it still loads it. False (nothing written) for anything but a
+        factory preset of the presets' group."""
+        path = self.path_of(group, name)
+        if group != PRESETS or path is None or self._is_user(path):
+            return False
+        stem = path.name[:-5]
+        if stem not in self.hidden(group):
+            self._write_hidden(self.hidden(group) | {stem})
+        still = self.still_named(name, path)
+        self.say(f"hidden {name} — " + (f"{_and(still)} still load{'s' if len(still) == 1 else ''}"
+                                         " it" if still else "show hidden in the list brings it "
+                                         "back"))
+        return True
+
+    def unhide(self, group: str, name: str) -> bool:
+        """Put a hidden factory preset back on the list."""
+        path = self.path_of(group, name)
+        if path is None or self._is_user(path):
+            return False
+        stem = path.name[:-5]
+        if stem not in self.hidden(group):
+            return False
+        self._write_hidden(self.hidden(group) - {stem})
+        self.say(f"{name} is back in the list")
+        return True
+
+    def still_named(self, name: str, path: Path | None = None) -> list[str]:
+        """What in the open show still names the preset `name` (or, given,
+        the file at `path`): its slots (``F6``, ``slot 12``) and
+        ``'starts on'``."""
+        pr, key = self.project, slug(name)
+
+        def names(n: str | None) -> bool:
+            return bool(n) and (n == name or slug(n) == key
+                                or (path is not None and self.path_of(PRESETS, n) == path))
+        out = [slot_key(k) for k, n in enumerate(pr.bank) if names(n)]
+        if names(pr.startup):
+            out.append("'starts on'")
+        return out
 
     def read(self, group: str, name: str) -> dict:
         path = self.path_of(group, name)
