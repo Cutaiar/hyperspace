@@ -23,8 +23,9 @@ replaces rows, never an offset. In order (plan 13 §5):
 
 1. note what the file names that a preset may not: a session param
    ("`tempo.bpm` is the session's, ignored"), an id nobody has, a
-   ``routes`` row that is not a performer row, a second performer on one
-   target (the referee's, below);
+   ``routes`` row that is not a performer row or that aims at a param
+   that is not modulatable (dropped), a second performer on one target
+   (the referee's, below);
 2. land the values: **every** persisted param of every performance group
    gets the file's value or its group default (`Library.resolved`: the
    group's default module preset over the build values), in registry
@@ -295,6 +296,14 @@ class Presets:
             b = Binding.from_json(row)
             if b.scheme not in LANE_SCHEMES or b.op not in MOD_OPS:
                 notes.append(f"dropped {b.source} → {b.target} ({b.op}): not a performer row")
+                continue
+            # a route on a param no performer may drive — one saved before
+            # it stopped being modulatable (ghost.mirror / .guide /
+            # .tethers, plan 21 R12) — is dropped with a note; the file is
+            # not rewritten. An id this build lacks is kept (dormant)
+            tp = reg.get(b.target)
+            if tp is not None and not tp.modulatable:
+                notes.append(f"dropped {b.source} → {b.target}: not modulatable")
                 continue
             routes.append(b)
         # no `desk` key: a fresh preset's, the factory preset layer; an

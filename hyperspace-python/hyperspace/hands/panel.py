@@ -66,6 +66,7 @@ PLOT_W = 96.0
 GHOST_LABEL_W = 62.0    # the ghost line's "Opacity" and "Guide" labels
 GHOST_ALPHA_W = 130.0
 GHOST_GUIDE_W = 120.0
+GHOST_STYLE_W = 150.0   # its own line: "MARIONETTE" whole
 CAL_SECONDS = 20.0
 LEFT = imgui.ImVec4(0.92, 0.92, 0.92, 1.0)
 
@@ -171,8 +172,8 @@ def _ghost(panel) -> None:
     shown here because this is where the hands are looked at."""
     if "ghost.on" not in panel.reg:
         return
-    # one line, whatever is on: the page has to fit the control window
-    # with every ghost control showing (test_ui_shell)
+    # one line of controls, whatever is on: the page has to fit the
+    # control window with every ghost control showing (test_ui_shell)
     panel._check("ghost.on")
     if panel.reg["ghost.on"].value:
         imgui.same_line()
@@ -187,7 +188,7 @@ def _ghost(panel) -> None:
             if panel.reg["ghost.guide"].value and "ghost.tethers" in panel.reg:
                 imgui.same_line()
                 panel._check("ghost.tethers")
-    # one more line at most, under it: why the ghost could not build or draw
+    # one more line at most, under it: the style (below), why the ghost could not build or draw
     # (ghost.Ghost.error — a refused build stays until a reload, anything
     # else until the ghost goes off), then, with the ghost on in screentop
     # or HMD, that those modes' axes are reasoned, not seen (ghost.MODES:
@@ -196,10 +197,19 @@ def _ghost(panel) -> None:
     mode = ghost_mode(getattr(panel, "hands", None))
     # an unknown mode draws as desktop
     guess = (panel.reg["ghost.on"].value and mode in GHOST_MODES and mode != "desktop")
+    # the style leads that line while the ghost is on: the line above has
+    # no room for a combo wide enough to read "MARIONETTE" (plan 21 WP6),
+    # and a line of its own would push the page past the window
+    styled = panel.reg["ghost.on"].value and "ghost.style" in panel.reg
+    if styled:
+        panel._label_cell("Style", width=GHOST_LABEL_W)
+        panel._combo("ghost.style", GHOST_STYLE_W)
     if err:
+        if styled:
+            imgui.same_line()
         imgui.text_colored(ui.WARN, err)
     if guess:
-        if err:
+        if err or styled:
             imgui.same_line()
         imgui.text_disabled(f"ghost axes for {mode} are unmeasured: "
                             "left/right and up may be wrong")

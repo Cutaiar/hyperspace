@@ -1832,3 +1832,24 @@ def test_the_click_wording_is_switched_on(rig, monkeypatch):
     frame(panel)
     assert hint and hint[-1][0].endswith(", or click a control")
     assert hint[-1][1] <= hint[-1][2], "the desk section's hint runs past its child"
+
+
+def test_the_ghost_style_is_on_the_hands_page_while_the_ghost_is_on(rig, monkeypatch):
+    """Plan 21 WP6: the style combo leads the ghost's second line (the
+    first has no room) while the ghost is on, with the error and the
+    unmeasured-mode note after it; off, it is not drawn. The page still
+    fits with everything showing (test_the_hands_page_fits_with_every_ghost_line)."""
+    combos: list[str] = []
+    real = Panel._combo
+
+    def seen(self, pid, *a, **k):
+        combos.append(pid)
+        return real(self, pid, *a, **k)
+    monkeypatch.setattr(Panel, "_combo", seen)
+    rig.reg["ghost.on"].set(True)
+    _hands_page_text(rig, monkeypatch)
+    assert "ghost.style" in combos
+    combos.clear()
+    rig.reg["ghost.on"].set(False)
+    _hands_page_text(rig, monkeypatch)
+    assert "ghost.style" not in combos

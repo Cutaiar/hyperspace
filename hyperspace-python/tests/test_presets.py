@@ -1638,3 +1638,27 @@ def test_a_users_desk_is_untouched_by_the_recut(owner_home):
     lib.poll()
     lib.load("presets", "NO DESK")
     assert list(dials().values()) == list(apc40.SCENE)
+
+
+def test_a_saved_route_onto_a_setting_is_dropped_with_a_note(rig):
+    """Plan 21 R12: a preset saved while `ghost.mirror` (or `.guide`,
+    `.tethers`) was modulatable may carry a hand's route onto it. Loading
+    it drops that route with a note — no crash, the other routes land —
+    and the file on disk is not rewritten."""
+    path = put(rig.home, "MIRRORED", routes=[
+        {"source": "hand:right.x", "target": "ghost.mirror", "op": "position"},
+        {"source": "hand:left.roll", "target": "ghost.guide", "op": "position"},
+        {"source": "lfo:0", "target": "ghost.tethers", "op": "push", "value": 0.5},
+        {"source": "hand:right.y", "target": "view.inst_amp", "op": "position"}])
+    before = (path.read_bytes(), path.stat().st_mtime_ns)
+    rig.presets.load("MIRRORED")
+    table = rig.router.table
+    for pid in ("ghost.mirror", "ghost.guide", "ghost.tethers"):
+        assert not table.routes_to(pid), pid
+    assert table.owner("view.inst_amp").source == "hand:right.y"
+    notes = rig.presets.notes
+    assert "dropped hand:right.x → ghost.mirror: not modulatable" in notes
+    assert "dropped hand:left.roll → ghost.guide: not modulatable" in notes
+    assert "dropped lfo:0 → ghost.tethers: not modulatable" in notes
+    assert (path.read_bytes(), path.stat().st_mtime_ns) == before
+    assert rig.reg["ghost.mirror"].value is False

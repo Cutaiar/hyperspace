@@ -12,6 +12,7 @@ each output's framebuffer, not how it looks on the rig.
     uv run python tools/outputs_shots.py eight     # WP2: eight-states.png
     uv run python tools/outputs_shots.py through   # WP2: through-two-outputs.png
     uv run python tools/outputs_shots.py timing    # WP2: compose-timing.txt
+    uv run python tools/outputs_shots.py style     # WP6: style-through.png
 
 writes into docs/plans/assets/21-outputs-and-the-hands/.
 """
@@ -206,6 +207,48 @@ def through(ctx) -> Path:
     return path
 
 
+def style(ctx, name: str = "CAGE") -> Path:
+    """WP6: one style with the guide beside each hand and the tethers on,
+    over the effects on one output and through them on the other — the
+    style bends with the shape, the guide and its labels do not."""
+    import tempfile
+
+    from test_ghost import _routed_rig
+
+    from hyperspace import ghost as G
+
+    pad, head = 14, 26
+    small, title = _font(14), _font(17)
+    router, io = _routed_rig(Path(tempfile.mkdtemp()),
+                             ["hand:left.x", "hand:left.roll", "hand:right.y", "hand:right.pitch"])
+    for st in io.state:
+        st.follow.y = 0.65
+    r = renderer(ctx, effects=("warp", "kaleido"), guide=1)
+    sk = r.ghost.source.skeleton
+    r.ghost.source = NS(skeleton=sk, cfg={"mode": "desktop"}, axes=io.axes, state=io.state,
+                        gates=io.gates, layout=io.layout, frame=io.frame)
+    r.ghost.router = router
+    r.ghost.state.tethers = True
+    r.ghost.state.style = G.STYLES.index(name)
+    glass = O.View(O.Switches(), (FW, FH), target=target(ctx, (FW, FH)))
+    proj = O.View(O.Switches(through=True), (FW, FH), target=target(ctx, (FW, FH)))
+    frames(ctx, r, [glass, proj])
+    sheet = Image.new("RGB", (pad + 2 * (FW + pad), 34 + head + FH + 40), BG)
+    d = ImageDraw.Draw(sheet)
+    d.text((pad, 8), f"Plan 21 WP6 — ghost.style {name}, guide beside each hand, tethers on "
+           "(offscreen, synthetic hands, warp + kaleido)", fill=INK, font=title)
+    for k, (v, lab) in enumerate(((glass, f"{name} over the effects"),
+                                  (proj, f"{name} through the effects — guide and labels unbent"))):
+        x = pad + k * (FW + pad)
+        d.text((x, 34), lab, fill=(240, 200, 120), font=small)
+        sheet.paste(pixels(v.target), (x, 34 + head))
+    d.text((pad, 34 + head + FH + 10), stats_line(r) + f" · readout layer {r.stats['readout']}"
+           + f" · ghost.error {r.ghost.error!r}", fill=DIM_INK, font=small)
+    path = OUT / "style-through.png"
+    sheet.save(path)
+    return path
+
+
 def timing(ctx, n: int = 120) -> Path:
     """Frame time at 1920×1080 (the first output 4× MSAA, as the window
     is): one default view, two that agree, two that disagree (hands over
@@ -260,12 +303,12 @@ def timing(ctx, n: int = 120) -> Path:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("what", choices=["compose", "eight", "through", "timing", "all"])
+    ap.add_argument("what", choices=["compose", "eight", "through", "timing", "style", "all"])
     args = ap.parse_args()
     ctx = moderngl.create_context(standalone=True)
     OUT.mkdir(parents=True, exist_ok=True)
     for name, fn in (("compose", compose), ("eight", eight), ("through", through),
-                     ("timing", timing)):
+                     ("timing", timing), ("style", style)):
         if args.what in (name, "all"):
             print(fn(ctx))
 

@@ -606,7 +606,7 @@ def test_a_raising_hands_pass_costs_no_output_its_frame_or_its_dim(ctx, monkeypa
         r = rig(ctx, dim=0.5)
         with monkeypatch.context() as m:
             if where == "layer":
-                m.setattr(G.CapsuleHands, "draw", lambda *a, **k: 1 / 0)
+                m.setattr(G.Geometry, "draw", lambda *a, **k: 1 / 0)
             else:
                 m.setattr(G.Ghost, "composite", lambda *a, **k: 1 / 0)
             got = run(ctx, r, views(ctx, S(), S(dim=0.5)))
@@ -887,3 +887,30 @@ def test_the_presenter_handoff_carries_the_readout(ctx):
     assert pv.handoff.hands is r.ghost.tex
     assert pv_off.handoff.readout is None and pv_off.handoff.hands is None
     assert r.stats["chain_runs"] == 2 and r.stats["direct"] is False
+
+
+@pytest.mark.parametrize("style", range(1, 5))
+def test_every_style_behaves_as_the_hands_in_every_state(ctx, style):
+    """Plan 21 WP6: a style is drawn into the same hands' layer, so the
+    eight states hold for it as for HANDS — 3 = 4 and 7 = 8, six pictures,
+    the style alone on the ground in 5, bent by the effects in 2 and 6 —
+    and with the guide on and a through pipeline the guide is the readout
+    layer, unbent: the same pixels over and through."""
+    import numpy as np
+
+    from hyperspace import ghost as G
+
+    fx = ("warp", "kaleido")
+    r = rig(ctx, effects=fx, guide=1)
+    r.ghost.state.style = style
+    p = run(ctx, r, views(ctx, *EIGHT))
+    s1, s2, s3, s4, s5, s6, s7, s8 = p
+    assert np.array_equal(s3, s4) and np.array_equal(s7, s8), G.STYLES[style]
+    assert len({a.tobytes() for a in p}) == 6
+    assert s5[..., :3].max() > 100 and s7[..., :3].max() == 0
+    cover = s5[..., :3].max(axis=2) > 0
+    assert np.abs(s6[cover] - s5[cover])[..., :3].sum() > 20_000      # bent
+    solid = _readout_alpha(r) == 255
+    assert solid.sum() > 150
+    for through, over in ((s2, s1), (s6, s5)):
+        assert np.array_equal(through[solid], over[solid])

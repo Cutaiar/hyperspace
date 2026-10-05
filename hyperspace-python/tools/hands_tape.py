@@ -4,6 +4,7 @@
     uv run python tools/hands_tape.py info tests/fixtures/hands/rig.json
     uv run python tools/hands_tape.py shots tests/fixtures/hands/rig.json --out shots/
     uv run python tools/hands_tape.py synth tests/fixtures/hands/synthetic.json
+    uv run python tools/hands_tape.py styles tests/fixtures/hands/synthetic.json
 
 `record` needs the camera: it opens the tracker in `[hands] mode` (or
 --mode) and keeps every frame for --seconds — features, confidence and
@@ -15,7 +16,9 @@ tests replay every tape under tests/fixtures/hands/.
 
 `info` prints what a tape holds; `shots` renders it offscreen through
 the ghost hands over a running scene, a PNG every --every frames;
-`synth` writes a tape of the synthetic hands the tests use (no camera).
+`synth` writes a tape of the synthetic hands the tests use (no camera);
+`styles` renders the five `ghost.style`s side by side from a tape, the
+ghost alone on black, at two moments (--at, seconds into the tape).
 """
 
 from __future__ import annotations
@@ -46,8 +49,15 @@ def main() -> None:
     sh.add_argument("--fx", default="warp", help="effects on, comma-separated ('' none)")
     sy = sub.add_parser("synth", help="a tape of the tests' synthetic hands")
     sy.add_argument("path", type=Path)
+    st = sub.add_parser("styles", help="the ghost styles side by side, from a tape")
+    st.add_argument("path", type=Path)
+    st.add_argument("--out", type=Path, default=ROOT / "docs" / "plans" / "assets"
+                    / "21-outputs-and-the-hands" / "ghost-styles.png")
+    st.add_argument("--at", default="0.3,0.9", help="moments, seconds, comma-separated")
+    st.add_argument("--size", default="400x300", help="one cell, px")
     args = ap.parse_args()
-    {"record": _record, "info": _info, "shots": _shots, "synth": _synth}[args.cmd](args)
+    {"record": _record, "info": _info, "shots": _shots, "synth": _synth,
+     "styles": _styles}[args.cmd](args)
 
 
 def _record(args) -> None:
@@ -145,6 +155,56 @@ def _shots(args) -> None:
             img = np.frombuffer(fbo.read(components=3), np.uint8).reshape(h, w, 3)[::-1]
             Image.fromarray(img).save(args.out / f"ghost-{k:04d}.png")
     print(f"{n} frames, a shot every {args.every} → {args.out}/")
+
+
+def _styles(args) -> None:
+    """A sheet: a column per style, a row per moment, the ghost alone on
+    black at full opacity — what the hands' layer holds, no scene."""
+    import moderngl
+    import numpy as np
+    from PIL import Image, ImageDraw
+
+    from hyperspace import ghost as G
+    from hyperspace.hands import HandSettings, HandsIO
+
+    w, h = (int(v) for v in args.size.split("x"))
+    moments = [float(v) for v in args.at.split(",")]
+    ctx = moderngl.create_context(standalone=True)
+    fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((w, h), 4)])
+    pad, head, top = 10, 24, 34
+    sheet = Image.new("RGB", (pad + len(G.STYLES) * (w + pad), top + len(moments) * (head + h + pad)),
+                      (18, 18, 22))
+    d = ImageDraw.Draw(sheet)
+    title, small = G._font(17), G._font(14)
+    d.text((pad, 8), f"ghost.style — the five styles from the same poses ({args.path.name}, "
+           "offscreen, the ghost alone on black)", fill=(225, 225, 230), font=title)
+    for row, at in enumerate(moments):
+        clock = _Clock()
+        io = HandsIO(HandSettings.from_config({}), {"out": "", "tape": str(args.path)},
+                     clock=clock)
+        gh = G.Ghost(ctx)
+        gh.state.on, gh.state.alpha, gh.source = True, 1.0, io
+        for k in range(int(at * 60) + 1):           # the tape played up to `at`: fades settle
+            clock.t = k / 60
+            io.poll(1 / 60)
+            gh.layer((w, h), clock.t)
+        open_ = {p.side: G.openness(p) for p in (gh.poses(clock.t, w / h) or ([],))[0]}
+        for col, name in enumerate(G.STYLES):
+            gh.state.style = col
+            fbo.use()
+            ctx.viewport = (0, 0, w, h)
+            ctx.clear(0.0, 0.0, 0.0, 1.0)
+            gh.draw(fbo, (0, 0, w, h), clock.t)
+            img = np.frombuffer(fbo.read(components=3), np.uint8).reshape(h, w, 3)[::-1]
+            x, y = pad + col * (w + pad), top + row * (head + h + pad)
+            sides = " · ".join(f"{s} open {o:.2f}" for s, o in sorted(open_.items()))
+            d.text((x, y), f"{name}   t {at:.1f} s · {sides}", fill=(240, 200, 120), font=small)
+            sheet.paste(Image.fromarray(img.copy()), (x, y + head))
+        if gh.error:
+            print(f"ghost.error: {gh.error}", file=sys.stderr)
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    sheet.save(args.out)
+    print(f"{len(G.STYLES)} styles × {len(moments)} moments → {args.out}")
 
 
 class _Clock:
