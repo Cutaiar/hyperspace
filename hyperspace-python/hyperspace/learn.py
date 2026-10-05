@@ -7,7 +7,12 @@ can complete it (`accepts`). The MIDI adapter completes a desk learn with
 the message it received (midi.py, ``MidiIO._learned`` → `learn_control`
 → an ``abs`` / ``rel`` / ``toggle`` MIDI row); the hands adapter a hand
 learn with the axis *of that hand* that moved furthest (hands/core.py,
-``HandsIO._learn`` → ``learn_source`` → a ``position`` route). A knob
+``HandsIO._learn`` → ``learn_source`` → a route: a ``push`` about the
+param's base at the session's learn depth wherever the axis or the
+target's range is centred, the ``position`` fader only for a one-sided
+axis on a one-sided param or a discrete target — plan 18 WP3, `_row`). A
+row already in the table is never rewritten: this is what a *new* learn
+lands with. A knob
 bumped during a hand learn does its own job; a hand waved during a desk
 learn does nothing. A bare ``arm(pid)`` (`want` None) takes whichever
 comes first, as every learn did before plan 17. Until plan 11 this state
@@ -66,6 +71,21 @@ from .routing import MIDI_SCHEMES, Binding, Bindings, Owned
 # what an armed learn may wait for (`Learn.want`): the desk — a knob, a
 # button, a click on the on-screen desk — or one hand, by name
 WANTS = ("desk", "hand:left", "hand:right")
+
+# a push learn's depth when the adapter names none (plan 18 WP3). The hands
+# adapter passes its own `hands.learn_depth`, whose default is this number
+# written a second time: hands/core.py imports nothing from the package
+# (tests/test_learn.py::test_the_two_default_depths_agree holds them equal)
+PUSH_DEPTH = 0.25
+
+
+def centred_target(p: Param) -> bool:
+    """A continuous range centred on zero, by declaration: no taper, not
+    log, lo == -hi (rot.rate.*, rot.phase.*, camera.yaw / pitch / pan.*,
+    dream.hue, any effect uniform declared that way). Nothing here reads
+    the param's id or group."""
+    return (p.kind is Kind.CONTINUOUS and p.taper is None and not p.log
+            and p.hi > 0 and p.lo == -p.hi)
 
 
 class Learn:
@@ -227,17 +247,24 @@ class Learn:
         real = getattr(self.reg, "real", None)
         return real(p) if real is not None else p
 
-    def learn_source(self, source: str, when: str | None = None) -> None:
+    def learn_source(self, source: str, when: str | None = None, *,
+                     centred: bool = False, depth: float | None = None) -> None:
         """An adapter completes the learn with one of its own sources
-        (hands/core.py: ``hand:right.pitch``, by name): a `position` route at depth 1 — the
-        source is the whole fader, through the Router like every route,
-        with no pickup and no device feedback. `when` gates the row on a
-        second source (a pinch held while learning), so the row only acts
-        while that reads on.
+        (hands/core.py: ``hand:right.pitch``, by name): a route through
+        the Router like every route, with no pickup and no device
+        feedback — a `push` about the param's base or the `position`
+        fader, by `_row`'s table. `centred` says the source rests in the
+        middle of its travel (a hand's roll; not its height) and `depth`
+        is the depth a push lands with (the hands pass
+        `hands.learn_depth`; None: `PUSH_DEPTH`). `when` gates the row on
+        a second source (a pinch held while learning), so the row only
+        acts while that reads on.
 
         A learned axis drives one param: learning it onto another *moves*
-        it (its other position rows go), and learning it again onto the
-        same param only refreshes the gate. If the param already has a
+        it (its other performer rows go, whatever their op — `_place`),
+        and learning it again onto the same param only refreshes the gate
+        (the row's op and depth, a preset's or one tuned on ROUTING,
+        stay). If the param already has a
         different performer the learn is held in `pending` for the panel's
         prompt (`resolve_pending`) — the table untouched until it answers —
         rather than taking the target or being lost. `learning` is cleared
@@ -251,9 +278,9 @@ class Learn:
         p = self.target_for(pid)
         if p is None:
             return
-        b = self._row(source, p, when)
+        b = self._row(source, p, when, centred=centred, depth=depth)
         cur = self.table.owner(p.id)
-        if cur is not None and self.same_source(cur.source, source) and cur.op == "position":
+        if cur is not None and self.same_source(cur.source, source):
             undo.push(f"learn {p.id}")               # one undo step (undo.py, plan 15)
             cur.when = when                          # the same axis again: no move
             self.said(f"learned {p.id} ← {cur.describe()} (into the preset)")
@@ -264,9 +291,27 @@ class Learn:
             return
         self._place(b)
 
-    def _row(self, source: str, p: Param, when: str | None) -> Binding:
-        """The row a hand learn makes (plan 18 owns this body: the op and
-        the depth of a learned row)."""
+    def _row(self, source: str, p: Param, when: str | None, *,
+             centred: bool = False, depth: float | None = None) -> Binding:
+        """The row a hand learn makes (plan 18 WP3): its op and depth.
+
+            the target                       a centred axis   a one-sided axis
+            continuous, centred on zero      push, depth D    push, depth D
+            any other continuous param       push, depth D    position, depth 1
+            an enum, a toggle, a trigger     position, 1      position, 1
+
+        D is `depth`, or `PUSH_DEPTH` when the caller named none. A push
+        carries no `rest` of its own, so it is centred where the axis
+        rests, resolved every frame (`Router.rest_of`): a level hand, or
+        a height at the bottom, adds nothing and the preset's value shows
+        until the hand moves. A discrete target keeps the fader because a
+        push of D about a toggle's base never crosses `params.MOD_ON`: the
+        learn would land and do nothing. Nothing reads the target's id or
+        group and nothing is refused: a rate-type param lands by the same
+        table as any other."""
+        if p.kind is Kind.CONTINUOUS and (centred or centred_target(p)):
+            d = PUSH_DEPTH if depth is None else float(depth)
+            return Binding(source, p.id, "push", d, when=when)
         return Binding(source, p.id, "position", 1.0, when=when)
 
     def resolve_pending(self, replace: bool) -> Binding | None:
@@ -285,8 +330,10 @@ class Learn:
         return new
 
     def _place(self, b: Binding) -> None:
-        """The learned row into the table: the axis's other position rows
-        go first (one axis, one param), then `replace_owner` — the one door
+        """The learned row into the table: the axis's other performer rows
+        go first, whatever their op (one axis, one param; plan 18 fork 7 —
+        the status line names the params they were on), then
+        `replace_owner` — the one door
         onto a target, which reads the owner *now* (a free target takes the
         row; the prompt's Replace removes whoever holds it at this moment,
         not whoever did when the question was asked). A route of the
@@ -294,11 +341,15 @@ class Learn:
         (undo.py): the rows it took out come back with a Ctrl+Z."""
         undo.push(f"learn {b.target}")
         table = self.table
-        for x in [x for x in table.of(b.scheme)
-                  if self.same_source(x.source, b.source) and x.op == "position"]:
+        moved = [x for x in table.of(b.scheme)
+                 if x.is_performer and self.same_source(x.source, b.source)
+                 and x.target != b.target]
+        for x in moved:
             table.remove(x)
         table.replace_owner(b)
-        self.said(f"learned {b.target} ← {b.describe()} (into the preset)")
+        frm = ", ".join(dict.fromkeys(x.target for x in moved))
+        self.said(f"learned {b.target} ← {b.describe()} (into the preset"
+                  + (f"; moved from {frm})" if frm else ")"))
 
     # ---- unbind ----
 

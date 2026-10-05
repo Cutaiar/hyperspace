@@ -11,11 +11,11 @@ import pytest
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
-from hyperspace.learn import Learn
+from hyperspace.learn import PUSH_DEPTH, Learn, centred_target
 from hyperspace.library import Library
-from hyperspace.params import build_registry
+from hyperspace.params import Kind, build_registry
 from hyperspace.render import ViewState
-from hyperspace.routing import Binding, Bindings
+from hyperspace.routing import Binding, Bindings, Router
 
 
 @pytest.fixture()
@@ -55,23 +55,41 @@ def test_learn_source_writes_a_position_route_without_any_midi(rig, tmp_path):
 
 
 def test_a_learned_axis_drives_one_param(rig):
-    """Learning an axis onto another param moves it — its other position
-    rows go, its push rows stay; learning it again onto the same param is
-    no move and no prompt, only the gate refreshed."""
+    """Learning an axis onto another param moves it — its other performer
+    rows go, push or position (plan 18 fork 7), and the status line names
+    the params they were on; another axis's rows stay, and so does a row
+    of this axis that is switched off (it performs nothing). Learning it
+    again onto the same param is no move and no prompt, only the gate
+    refreshed."""
     lrn, t = rig.learn, rig.table
-    t.add(Binding("hand:3", "view.bright", "push", 0.5))       # a route on the same axis
+    t.add(Binding("hand:3", "view.bright", "push", 0.5))       # a hand-written push, same axis
+    other = t.add(Binding("hand:7", "view.depth4", "push", 0.5))   # another axis
+    lfo = t.add(Binding("lfo:3", "fx.mix", "push", 0.2))       # the same number, another scheme
+    off = t.add(Binding("hand:3", "camera.zoom", "push", 0.3, enabled=False))
     lrn.arm("view.inst_amp")
-    lrn.learn_source("hand:3")
+    lrn.learn_source("hand:3")                                 # a position row (today's)
+    assert lrn.last == ("learned view.inst_amp ← hand 3 positions "
+                        "(into the preset; moved from view.bright)")
+    assert not t.routes_to("view.bright")                      # the push row went with it
     lrn.arm("view.speed")
-    lrn.learn_source("hand:3", when="hand:14")                 # moves: inst_amp lets go
+    lrn.learn_source("hand:3", when="hand:14", centred=True)   # moves: inst_amp lets go
     assert t.owner("view.inst_amp") is None and lrn.pending is None
     speed = t.owner("view.speed")
-    assert (speed.source, speed.when) == ("hand:3", "hand:14")
-    assert t.routes_to("view.bright")[0].op == "push"          # the push row stays
-    lrn.arm("view.speed")
-    lrn.learn_source("hand:3")                                 # same axis, same param
-    assert lrn.pending is None and t.owner("view.speed") is speed and speed.when is None
-    assert len(t.routes_to("view.speed")) == 1 and "learned view.speed" in lrn.last
+    assert (speed.source, speed.op, speed.value, speed.when) == ("hand:3", "push", 0.25, "hand:14")
+    assert lrn.last == ("learned view.speed ← hand 3 pushes +0.25 while hand:14 "
+                        "(into the preset; moved from view.inst_amp)")
+    lrn.arm("camera.yaw")
+    lrn.learn_source("hand:3", centred=True)                   # a push row moves too
+    assert t.owner("view.speed") is None and t.owner("camera.yaw").source == "hand:3"
+    assert lrn.last.endswith("(into the preset; moved from view.speed)")
+    assert [b for b in t.of("hand", "lfo") if b.source != "hand:3"] == [other, lfo]
+    assert off in t.bindings and not off.enabled               # owns nothing: left alone
+    yaw = t.owner("camera.yaw")
+    lrn.arm("camera.yaw")
+    lrn.learn_source("hand:3", when="hand:14")                 # same axis, same param
+    assert lrn.pending is None and t.owner("camera.yaw") is yaw and yaw.when == "hand:14"
+    assert len(t.routes_to("camera.yaw")) == 1
+    assert lrn.last == "learned camera.yaw ← hand 3 pushes +0.25 while hand:14 (into the preset)"
 
 
 def test_the_prompts_answer_replaces_or_keeps(rig):
@@ -110,6 +128,243 @@ def test_a_learn_on_a_band_sel_alias_lands_on_the_selected_band(rig):
     assert reg.real(reg["band.sel.thr"]) is reg["band.2.thr"]
     reg.real_of = None
     assert Learn(reg, t).target_for("band.sel.thr").id == "band.sel.thr"
+
+
+# ------------------------------------------- plan 18 WP3: a learn's default
+
+def played(rig, u: float, rest: float, lane: int = 3) -> None:
+    """One frame of the modulation pass with the hand lane `lane` reading
+    `u` and resting at `rest`, as the hands adapter publishes them."""
+    router = Router(rig.reg, rig.table)
+    vec, rests = [float("nan")] * 8, [0.0] * 8
+    vec[lane], rests[lane] = u, rest
+    router.feed("hand", vec)
+    router.rests["hand"] = rests
+    router.modulate()
+    rig.reg.apply()
+
+
+def learned(rig, pid: str, source: str = "hand:3", **kw) -> Binding:
+    rig.learn.arm(pid)
+    rig.learn.learn_source(source, **kw)
+    assert rig.learn.pending is None and not rig.learn.refused
+    return rig.table.owner(pid)
+
+
+def test_a_centred_axis_learns_as_a_push_about_the_base_at_the_learn_depth(rig):
+    """The rule's first column: a centred axis (roll) on a continuous param
+    lands a push at the depth the adapter names, with no rest of its own,
+    so it is centred where the axis rests. A level hand leaves the base;
+    the ends move it ±depth/2 of the throw. And the session's complaint in
+    its own numbers: on `rot.rate.XY` from 1× a level hand reads 1× (the
+    position row read 0×: the plane stopped) and the ends are −15.64× and
+    +17.64× (they were ±66.56×)."""
+    reg = rig.reg
+    b = learned(rig, "view.speed", centred=True, depth=0.25)
+    assert (b.op, b.value, b.rest, b.when, b.scale) == ("push", 0.25, None, None, None)
+    assert b == Binding("hand:3", "view.speed", "push", 0.25)
+    p = reg["view.speed"]
+    base = p.norm
+    played(rig, 0.5, 0.5)
+    assert p.eff_norm == pytest.approx(base) and p.norm == pytest.approx(base)
+    played(rig, 1.0, 0.5)
+    assert p.eff_norm == pytest.approx(base + 0.125) and p.norm == pytest.approx(base)
+    played(rig, 0.0, 0.5)
+    assert p.eff_norm == pytest.approx(base - 0.125)
+    # the rest is the axis's, read every frame: move it and the push follows
+    played(rig, 0.3, 0.3)
+    assert p.eff_norm == pytest.approx(base)
+    # rotation, from the preset's 1×
+    rig.table.remove(b)
+    rate = reg["rot.rate.XY"]
+    rate.set(1.0)
+    b = learned(rig, "rot.rate.XY", centred=True, depth=0.25)
+    assert (b.op, b.value, b.rest) == ("push", 0.25, None)
+    for u, want in ((0.5, 1.0), (1.0, 17.64), (0.0, -15.64), (0.6, 4.328)):
+        played(rig, u, 0.5)
+        assert rate.value == pytest.approx(want, abs=1e-3), u
+        assert rate.base == pytest.approx(1.0)
+    # the row before this package, on the same readings
+    rig.table.remove(b)
+    rig.table.add(Binding("hand:3", "rot.rate.XY", "position", 1.0))
+    for u, want in ((0.5, 0.0), (1.0, 66.56), (0.0, -66.56)):
+        played(rig, u, 0.5)
+        assert rate.value == pytest.approx(want, abs=1e-3), u
+
+
+def test_a_one_sided_axis_on_a_one_sided_param_is_still_the_fader(rig):
+    """Height on brightness: today's row, field for field — whatever depth
+    the adapter named, and when it named nothing at all."""
+    today = Binding("hand:7", "view.bright", "position", 1.0, when="hand:14")
+    b = learned(rig, "view.bright", "hand:7", when="hand:14", centred=False, depth=0.25)
+    assert b == today and b.rest is None
+    rig.table.remove(b)
+    assert learned(rig, "view.bright", "hand:7", when="hand:14") == today
+    p = rig.reg["view.bright"]
+    played(rig, 1.0, 0.0, lane=7)                # no gate lane fed: shut, the base shows
+    assert not p.modulated
+    rig.table.owner("view.bright").when = None
+    for u in (0.0, 0.4, 1.0):                    # the hand is the fader, end to end
+        played(rig, u, 0.0, lane=7)
+        assert p.eff_norm == pytest.approx(u)
+    for pid in ("view.speed", "view.inst_amp", "camera.zoom", "fx.mix"):
+        b = learned(rig, pid, "hand:2")          # neither keyword: today's row
+        assert b == Binding("hand:2", pid, "position", 1.0), pid
+
+
+def test_a_one_sided_axis_on_a_zero_centred_range_pushes_up_from_the_base(rig):
+    """Height on a rate, an angle or a pan: a push from the axis's rest (the
+    bottom), so a low hand adds nothing and a high one adds up to the
+    depth — where the position row started at the bottom of the range
+    (−66.56× on `rot.rate.XY`). With no keyword at all it is the same row
+    at `PUSH_DEPTH`."""
+    reg = rig.reg
+    for pid in ("rot.rate.XY", "camera.yaw", "camera.pan.x"):
+        b = learned(rig, pid, "hand:7", centred=False, depth=0.25)
+        assert (b.op, b.value, b.rest) == ("push", 0.25, None), pid
+        p = reg[pid]
+        base = p.norm
+        played(rig, 0.0, 0.0, lane=7)
+        assert p.eff_norm == pytest.approx(base), pid       # a reading of 0 adds nothing
+        played(rig, 1.0, 0.0, lane=7)
+        assert p.eff_norm == pytest.approx(base + 0.25), pid
+        rig.table.remove(b)
+    rate = reg["rot.rate.XY"]
+    rate.set(1.0)
+    b = learned(rig, "rot.rate.XY", "hand:7")
+    assert b == Binding("hand:7", "rot.rate.XY", "push", PUSH_DEPTH)
+    for u, want in ((0.0, 1.0), (0.1, 4.328), (1.0, 34.28)):
+        played(rig, u, 0.0, lane=7)
+        assert rate.value == pytest.approx(want, abs=1e-3), u
+
+
+def test_a_discrete_target_keeps_the_position_row(rig):
+    """A toggle, an enum and a trigger keep the fader from any axis: a
+    push of 0.25 about a toggle's base never crosses `MOD_ON`, so that
+    learn would land and do nothing."""
+    from hyperspace.params import MOD_ON
+
+    kinds = {"view.plane.XY": Kind.TOGGLE, "view.shape": Kind.ENUM, "camera.reset": Kind.TRIGGER}
+    for pid, kind in kinds.items():
+        assert rig.reg[pid].kind is kind
+        for centred in (True, False):
+            b = learned(rig, pid, centred=centred, depth=0.25)
+            assert b == Binding("hand:3", pid, "position", 1.0), (pid, centred)
+            rig.table.remove(b)
+    assert PUSH_DEPTH * 0.5 < MOD_ON             # why: half a throw of the push from "off"
+
+
+def test_centred_target_reads_the_declared_range(rig):
+    """By declaration only — no taper, not log, lo == −hi; never the id."""
+    reg = rig.reg
+    yes = [f"rot.rate.{pl}" for pl in ("XY", "XZ", "YZ", "XW", "YW", "ZW")]
+    yes += ["camera.yaw", "camera.pitch", "camera.pan.x", "camera.pan.y", "dream.hue"]
+    for pid in yes:
+        assert centred_target(reg[pid]), pid
+    for pid in ("view.speed", "view.bright", "camera.zoom", "fx.mix",
+                "view.plane.XY", "view.shape", "camera.reset"):
+        assert not centred_target(reg[pid]), pid
+    from hyperspace.params import Param
+    assert centred_target(Param("x.a", "a", Kind.CONTINUOUS, lo=-2.0, hi=2.0))
+    assert not centred_target(Param("x.b", "b", Kind.CONTINUOUS, lo=-2.0, hi=3.0))
+    assert not centred_target(Param("x.c", "c", Kind.CONTINUOUS, lo=0.0, hi=0.0))
+    assert not centred_target(Param("x.d", "d", Kind.CONTINUOUS, lo=-2.0, hi=2.0, log=True))
+    assert not centred_target(Param("x.e", "e", Kind.TOGGLE, lo=-1.0, hi=1.0))
+
+
+def test_no_target_is_refused_or_flagged(rig):
+    """Rate-type params under a hand are allowed (the owner, 2026-10-04):
+    every modulatable continuous param in the registry takes a learn from
+    each kind of axis — nothing refused, nothing held, nothing warned
+    about — and lands by the one table."""
+    lrn, t = rig.learn, rig.table
+    for b in list(t.routes()):
+        t.remove(b)
+    ps = [p for p in rig.reg if p.kind is Kind.CONTINUOUS and p.modulatable]
+    ids = {p.id for p in ps}
+    assert {"rot.rate.XY", "rot.rate.ZW", "fx.warp.drift", "fx.tripcolour.pulse",
+            "view.speed"} <= ids and len(ps) > 150
+    for p in ps:
+        for centred in (True, False):
+            lrn.arm(p.id)
+            lrn.learn_source("hand:3", centred=centred, depth=0.3)
+            assert not lrn.refused and lrn.pending is None, p.id
+            b = t.owner(p.id)
+            assert b is not None and lrn.last.startswith(f"learned {p.id} ← "), p.id
+            push = centred or centred_target(p)
+            assert (b.op, b.value) == (("push", 0.3) if push else ("position", 1.0)), p.id
+            t.remove(b)
+
+
+def test_the_same_axis_again_only_refreshes_the_gate_whatever_the_op(rig):
+    """The target's performer is this same axis: the learn refreshes `when`
+    and changes nothing else — a push row with a tuned depth (a preset's,
+    or one the owner turned down on ROUTING) keeps its op and depth, and a
+    position row is not turned into a push. No prompt either way."""
+    lrn, t = rig.learn, rig.table
+    tuned = t.add(Binding("hand:3", "view.speed", "push", 0.6, rest=0.4, scale="master.gain"))
+    lrn.arm("view.speed")
+    lrn.learn_source("hand:3", when="hand:14", centred=True, depth=0.25)
+    assert lrn.pending is None and t.routes_to("view.speed") == [tuned]
+    assert tuned == Binding("hand:3", "view.speed", "push", 0.6, rest=0.4, scale="master.gain",
+                            when="hand:14")
+    assert "learned view.speed ← hand 3 pushes +0.6" in lrn.last
+    fader = t.add(Binding("hand:7", "rot.rate.XY", "position", 0.8))
+    lrn.arm("rot.rate.XY")
+    lrn.learn_source("hand:7", when="hand:15", centred=True, depth=0.25)
+    assert t.routes_to("rot.rate.XY") == [fader]
+    assert fader == Binding("hand:7", "rot.rate.XY", "position", 0.8, when="hand:15")
+    lrn.arm("rot.rate.XY")
+    lrn.learn_source("hand:7")                                 # and the gate comes off again
+    assert fader.when is None and (fader.op, fader.value) == ("position", 0.8)
+
+
+def test_a_learn_onto_a_performed_param_is_still_held_whatever_the_op(rig):
+    """One performer per parameter: a learned push asks Replace / Keep
+    exactly as a learned position did, and the table waits for the answer."""
+    lrn, t = rig.learn, rig.table
+    old = t.add(Binding("lfo:0", "rot.rate.XY", "push", 0.1))
+    mine = t.add(Binding("hand:3", "view.bright", "push", 0.5))
+    lrn.arm("rot.rate.XY")
+    lrn.learn_source("hand:3", centred=True, depth=0.25)
+    new, cur = lrn.pending
+    assert cur is old and new == Binding("hand:3", "rot.rate.XY", "push", 0.25)
+    assert "replace?" in lrn.last and t.owner("rot.rate.XY") is old
+    assert t.owner("view.bright") is mine                      # nothing moved while it asks
+    assert lrn.resolve_pending(False) is None and t.owner("view.bright") is mine   # Keep
+    lrn.arm("rot.rate.XY")
+    lrn.learn_source("hand:3", centred=True, depth=0.25)
+    assert lrn.resolve_pending(True) is t.owner("rot.rate.XY")                     # Replace
+    assert old not in t.bindings and mine not in t.bindings
+    assert lrn.last == ("learned rot.rate.XY ← hand 3 pushes +0.25 "
+                        "(into the preset; moved from view.bright)")
+
+
+def test_existing_rows_are_never_rewritten(rig):
+    """This is what a *new* learn lands with: rows already in the table —
+    a preset's, the owner's — keep their op and depth through learns on
+    other params, and a table read back from its own JSON is unchanged."""
+    t = rig.table
+    mine = [Binding("hand:1", "view.speed", "position", 1.0),
+            Binding("hand:4", "rot.rate.XY", "position", 1.0),
+            Binding("hand:5", "camera.yaw", "push", 0.5, rest=0.5),
+            Binding("lfo:0", "view.bright", "push", 0.3)]
+    for b in mine:
+        t.add(b)
+    was = [b.to_json() for b in mine]
+    learned(rig, "view.inst_amp", "hand:3", centred=True, depth=0.25)
+    learned(rig, "rot.rate.XW", "hand:7", depth=0.25)
+    assert [b.to_json() for b in mine] == was
+    assert all(any(b is x for x in t.bindings) for b in mine)
+    assert [Binding.from_json(d).to_json() for d in was] == was
+
+
+def test_the_two_default_depths_agree():
+    """0.25 is written twice — `learn.PUSH_DEPTH` and the hands' own
+    default — because hands/core.py imports nothing from the package."""
+    from hyperspace.hands import HandSettings
+
+    assert PUSH_DEPTH == HandSettings().learn_depth == 0.25
 
 
 # ------------------------------------------ plan 13 WP4: into the loaded preset
@@ -416,14 +671,18 @@ def test_a_learn_is_one_undo_step(tmp_path):
     def desk():
         return [b.to_json() for b in table.desk()]
     table.set_routes([Binding("hand:3", "view.inst_amp", "position"),
+                      Binding("hand:3", "view.depth4", "push", 0.4, when="hand:14"),
                       Binding("lfo:0", "view.bright", "push", 0.3)])
     settle(r)
     u.clear()
     was = routes()
-    # a hand learn: the axis moves to the new param (its old row goes)
+    # a hand learn: the axis moves to the new param — its old rows go, the
+    # position and the push (plan 18 fork 7), and one ⌘Z brings both back
     lrn.arm("view.speed")
     lrn.learn_source("hand:3")
     assert table.owner("view.speed").source == "hand:3" and table.owner("view.inst_amp") is None
+    assert table.owner("view.depth4") is None
+    assert lrn.last.endswith("(into the preset; moved from view.inst_amp, view.depth4)")
     settle(r)
     assert labels(r) == ["learn view.speed"]
     assert u.undo() and routes() == was and u.status == "undid learn view.speed"

@@ -155,7 +155,7 @@ def page(panel, dt: float) -> None:
     _editor(panel, io, settings, k)
     imgui.spacing()
     if imgui.collapsing_header("feel & calibration"):
-        for pid in ("smooth", "response", "catch", "rate", "steady",
+        for pid in ("smooth", "response", "catch", "learn_depth", "rate", "steady",
                     "pinch_close", "pinch_open", "pinch_hold"):
             panel._row(f"{GROUP}.{pid}")
         _calibrate(io, settings, k)
