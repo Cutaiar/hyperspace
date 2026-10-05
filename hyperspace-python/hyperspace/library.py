@@ -1833,7 +1833,11 @@ class Library:
             # name makes them work again
             back = self.path_of(group, name)
             still = self.still_named(name)
-            if back is not None:
+            if back is not None and back.name[:-5] in self.hidden(group):
+                # the factory one is there but hidden (review of PR #117)
+                self.say(f"your {name} is in the trash — the factory {name} is hidden: "
+                         "show hidden in the list brings it back")
+            elif back is not None:
                 self.say(f"your {name} is in the trash — the factory {name} is back")
             elif still:
                 self.say(warning=f"{name} is in the trash — {_and(still)} still "
@@ -2028,10 +2032,14 @@ class Library:
             if not folder.is_dir():
                 continue
             for path in folder.iterdir():
-                if not (path.is_file() or path.is_symlink()):
-                    continue
+                # only what `to_trash` writes: <stem>.<stamp>[-n]<suffix>, never a
+                # dotfile — a Finder `.DS_Store` is not the owner's, and a restore
+                # would make it a preset (review of PR #117)
                 m = _TRASHED.fullmatch(path.name)
-                stem = m["stem"] if m else path.name.rsplit(".", 1)[0]
+                if (m is None or path.name.startswith(".")
+                        or not (path.is_file() or path.is_symlink())):
+                    continue
+                stem = m["stem"]
                 if stem.endswith(PROJECT_SUFFIX[:-5]) and folder.name == PROJECTS:
                     stem = stem[: -len(PROJECT_SUFFIX[:-5])]
                 name = stem
@@ -2057,7 +2065,9 @@ class Library:
         if not path.is_file() or not self._in_trash(path):
             raise LibraryError(f"{path.name}: not in the trash ({self.home / TRASH})")
         m = _TRASHED.fullmatch(path.name)
-        filename = f"{m['stem']}{m['suffix']}" if m else path.name
+        if m is None or path.name.startswith("."):
+            raise LibraryError(f"{path.name}: not restored — not a file the trash kept")
+        filename = f"{m['stem']}{m['suffix']}"
         show = item.group == PROJECTS
         suffix = PROJECT_SUFFIX if show and filename.endswith(PROJECT_SUFFIX) else ".json"
         stem = filename.removesuffix(suffix)

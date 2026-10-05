@@ -1639,7 +1639,7 @@ def test_empty_trash_removes_only_the_trash(owner_home, tmp_path):
     outside.mkdir()
     (outside / "keep.json").write_text("{}")
     (outside / "dir").mkdir()
-    (outside / "dir" / "also.json").write_text("{}")
+    (outside / "dir" / "also.20261004-010102.json").write_text("{}")
     (home / "trash" / "presets" / "evil.20261004-010101.json").symlink_to(outside / "keep.json")
     (home / "trash" / "fx").symlink_to(outside / "dir", target_is_directory=True)
     listed = lib.trash()
@@ -1655,10 +1655,41 @@ def test_empty_trash_removes_only_the_trash(owner_home, tmp_path):
         assert lib.empty_trash() == 4
     assert not any(p.exists() for p in real)
     assert "evil.20261004-010101.json" in lib.warning and "night-one.json" in lib.warning
-    assert "also.json" in lib.warning
-    assert (outside / "keep.json").read_text() == "{}" and (outside / "dir" / "also.json").exists()
+    assert "also.20261004-010102.json" in lib.warning
+    assert (outside / "keep.json").read_text() == "{}"
+    assert (outside / "dir" / "also.20261004-010102.json").exists()
     assert (home / "presets" / "night-one.json").exists()
     assert tree(home, but=("trash/",)) == before
     assert not (home / "trash" / "projects").exists()           # emptied, removed
     assert (home / "trash" / "presets").is_dir()                # the symlink is still in it
     assert sorted(p.name for p in (home / "trash").iterdir()) == ["fx", "presets"]
+
+
+def test_the_trash_lists_only_what_it_kept(owner_home):
+    """Review of PR #117: a Finder `.DS_Store` (or any file `to_trash` did
+    not write) in a trash folder is not listed, not restored and not
+    emptied — a restore would have made it a preset."""
+    home = owner_home
+    lib = boot_home(home).lib
+    junk = [home / "trash" / "presets" / ".DS_Store", home / "trash" / "presets" / "notes.txt"]
+    for p in junk:
+        p.write_bytes(b"\x00\x01Bud1")
+    assert [t.path.name.split(".")[0] for t in lib.trash()] == ["night-one"]
+    with pytest.raises(LibraryError, match="not a file the trash kept"):
+        lib.restore_trash(library.Trashed(junk[0], "presets", "", ""))
+    assert ".DS_Store" not in lib.list("presets", hidden=True)
+    assert lib.empty_trash() == 1 and all(p.exists() for p in junk)
+
+
+def test_deleting_your_copy_of_a_hidden_factory_preset_says_it_is_hidden(owner_home):
+    """Review of PR #117: × on your ACID while the factory ACID is hidden
+    says the factory one is hidden, not that it is back."""
+    lib = boot_home(owner_home).lib
+    assert lib.hide("presets", "ACID")
+    lib.load("presets", "ACID")
+    lib.overwrite("presets")                                   # your copy, acid.json
+    assert "ACID" in lib.list("presets") and not lib.is_factory("presets", "ACID")
+    assert lib.delete("presets", "ACID")
+    assert lib.status == ("your ACID is in the trash — the factory ACID is hidden: show "
+                          "hidden in the list brings it back")
+    assert "ACID" not in lib.list("presets") and lib.is_factory("presets", "ACID")
