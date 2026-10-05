@@ -62,6 +62,7 @@ windows.json
 
 FIRST = "Hyperspace: the home as it was when git was switched on"
 NAME, EMAIL = "Hyperspace", "hyperspace@localhost"   # only when the machine has no identity
+KILL_AFTER = 2.0     # s a git past its timeout gets after SIGTERM to clean up before SIGKILL
 
 # every command: no hook of the machine's runs, and no signing prompt can hang it
 SAFE = ("-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false")
@@ -199,18 +200,30 @@ class Committer:
 
     def _git(self, *args: str, pre: tuple[str, ...] = (), ok: tuple[int, ...] | None = (0,)):
         verb = args[0]
+        cmd = [self.git, *SAFE, *pre, *args]
         try:
-            r = subprocess.run([self.git, *SAFE, *pre, *args], cwd=self.home, env=self._env(),
-                               stdin=subprocess.DEVNULL, capture_output=True, text=True,
-                               encoding="utf-8", errors="replace", timeout=self.timeout,
-                               check=False)
+            p = subprocess.Popen(cmd, cwd=self.home, env=self._env(), stdin=subprocess.DEVNULL,
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                                 encoding="utf-8", errors="replace")
         except FileNotFoundError as e:
             raise GitFailed("git is not on the PATH" if os.sep not in self.git
                             else f"no git at {self.git}") from e
-        except subprocess.TimeoutExpired as e:
-            raise GitFailed(f"git {verb} took longer than {self.timeout:g} s") from e
         except OSError as e:
             raise GitFailed(f"git {verb}: {e}") from e
+        try:
+            out, err = p.communicate(timeout=self.timeout)
+        except subprocess.TimeoutExpired as e:
+            # SIGTERM first: git removes its own lock files (.git/index.lock)
+            # on the way out, where a SIGKILL would leave one that refuses
+            # every later commit until someone deletes it by hand
+            p.terminate()
+            try:
+                p.communicate(timeout=KILL_AFTER)
+            except subprocess.TimeoutExpired:
+                p.kill()
+                p.communicate()
+            raise GitFailed(f"git {verb} took longer than {self.timeout:g} s") from e
+        r = subprocess.CompletedProcess(cmd, p.returncode, out, err)
         if ok is not None and r.returncode not in ok:
             said = next((ln.strip() for ln in r.stderr.splitlines() if ln.strip()), "")
             raise GitFailed(f"git {verb} exited {r.returncode}" + (f": {said}" if said else ""))

@@ -408,21 +408,26 @@ def test_commands_run_with_no_prompt_no_hooks_no_signing_and_a_timeout(tmp_path,
     home.mkdir()
     (home / "x.json").write_text("{}\n")
     calls: list = []
-    real = subprocess.run
+    waits: list = []
 
-    def record(cmd, **kw):
-        calls.append((cmd, kw))
-        return real(cmd, **kw)
+    class Recording(subprocess.Popen):
+        def __init__(self, cmd, **kw):
+            calls.append((cmd, kw))
+            super().__init__(cmd, **kw)
+
+        def communicate(self, input=None, timeout=None):
+            waits.append(timeout)
+            return super().communicate(input, timeout)
     c = homegit.Committer(home, timeout=7.0)
     with monkeypatch.context() as m:
-        m.setattr(homegit.subprocess, "run", record)
+        m.setattr(homegit.subprocess, "Popen", Recording)
         m.setenv("GIT_DIR", str(tmp_path / "elsewhere"))   # never aims it elsewhere
         c.request("save preset X")
         assert c.wait(15.0)
-    assert c.commits == 1 and calls
+    assert c.commits == 1 and calls and waits == [7.0] * len(calls)
     for cmd, kw in calls:
         assert cmd[1:5] == ["-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false"]
-        assert kw["timeout"] == 7.0 and kw["env"]["GIT_TERMINAL_PROMPT"] == "0"
+        assert kw["env"]["GIT_TERMINAL_PROMPT"] == "0" and kw["stdin"] == subprocess.DEVNULL
         assert "GIT_DIR" not in kw["env"] and kw["cwd"] == home
     verbs = {next(a for a in cmd[5:] if not a.startswith("-") and "=" not in a)
              for cmd, _ in calls}
@@ -434,6 +439,28 @@ def test_commands_run_with_no_prompt_no_hooks_no_signing_and_a_timeout(tmp_path,
     c.request("save preset Y")
     assert c.wait(15.0) and c.commits == 2
     assert not (tmp_path / "hook-ran").exists()
+
+
+def test_a_git_past_its_timeout_is_asked_to_stop_and_clean_up_first(tmp_path):
+    """Review of PR #119: a SIGKILLed `git add` leaves `.git/index.lock`,
+    and every later commit fails until it is deleted by hand. Past its
+    timeout a command gets SIGTERM — on which git removes its own lock
+    files — and SIGKILL only if it is still there `KILL_AFTER` later. The
+    stand-in holds a lock file and removes it on SIGTERM, as git does."""
+    home = tmp_path / "home"
+    home.mkdir()
+    lock = tmp_path / "index.lock"
+    slow = _script(tmp_path / "git-with-a-lock",
+                   f"trap 'rm -f {lock}; exit 143' TERM\ntouch {lock}\n"
+                   "sleep 30 >/dev/null 2>&1 </dev/null & wait")
+    c = homegit.Committer(home, git=slow, timeout=0.5)
+    t = time.perf_counter()
+    c.request("save preset X")
+    assert c.wait(15.0)
+    assert time.perf_counter() - t < 0.5 + homegit.KILL_AFTER + 1.0
+    assert not lock.exists()                               # cleaned up, not killed mid-write
+    assert c.notes() == [("git: not committed (git rev-parse took longer than 0.5 s); "
+                          "saves are not affected")]
 
 
 @needs_git
