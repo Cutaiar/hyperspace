@@ -767,8 +767,9 @@ def lfo_breathe_values() -> dict[str, Any]:
 
 
 def lfo_breathe_desk() -> list[Binding]:
-    """The factory preset layer, and the Breathe macro on device knob 1."""
-    return [*fresh_desk(), device_knob(1, "macro.1")]
+    """The factory preset layer with its own device knobs (`BREATHE_KNOBS`):
+    the Breathe macro still on device knob 1 (hand check 39)."""
+    return knob_desk(BREATHE_KNOBS)()
 
 
 def hands_fx_routes() -> list[Binding]:
@@ -877,10 +878,33 @@ TRACER_KNOBS = ("dream.echo_mix", "dream.fade", "dream.echoes", "dream.gap",
 NOITA_KNOBS = ("fx.mix", "fx.warp.amount", "fx.warp.scale", "fx.tripcolour.amount",
                "fx.fractals.amount", "fx.fractals.size", "fx.doublevision.amount",
                "fx.doublevision.ghost")
+# plan 19 WP3: the device knobs of the three presets whose eight were dark
+# (or one), each on what that preset has switched on — no knob on an effect
+# that is off (fork 7). None leaves that knob dark. Every other scene-only
+# preset has the fresh layer's four (apc40.SCENE)
+# hands-fx: the Acid shader is its one effect; three of these a hand
+# positions while it is in the box, and the knob is what they come back to
+HANDS_FX_KNOBS = ("fx.mix", "fx.acid.bend", "fx.acid.twist", "fx.acid.reach",
+                  "fx.acid.breathe", "fx.acid.speed", "view.depth4", "camera.yaw")
+# hands-pinch: the hue cycle is its one effect, at a mix of 0 until a pinch or D1 lifts it
+HANDS_PINCH_KNOBS = ("fx.mix", "fx.huecycle.paint", "fx.huecycle.spread", "view.depth4",
+                     "camera.yaw", "camera.pitch", "view.pattern", None)
+# lfo-breathe: Breathe stays on D1; the mix LFO 2 swells, the plasma it
+# swells, LFO 1's pulse, and the scene's depth and angles
+BREATHE_KNOBS = ("macro.1", "fx.mix", "fx.plasma.level", "lfo.1.depth", "view.depth4",
+                 "camera.yaw", "camera.pitch", None)
 
 
-def knob_desk(targets: tuple[str, ...]) -> Callable[[], list[Binding]]:
-    return lambda: [*fresh_desk(), *(device_knob(k + 1, t) for k, t in enumerate(targets))]
+def _is_device_knob(b: Binding) -> bool:
+    return b.kind == "cc" and b.number in apc40.DEVICE_KNOBS
+
+
+def knob_desk(targets: tuple[str | None, ...]) -> Callable[[], list[Binding]]:
+    """A preset layer with device knobs of its own: the fresh desk **less
+    its device knobs** (apc40.SCENE), plus device knob k + 1 on
+    `targets[k]` — so no knob is mapped twice. A None leaves that knob dark."""
+    return lambda: [*(b for b in fresh_desk() if not _is_device_knob(b)),
+                    *(device_knob(k + 1, t) for k, t in enumerate(targets) if t)]
 
 
 # ---------------------------------------------------------------- the generator
@@ -945,10 +969,11 @@ FACTORY_PRESETS: dict[str, Factory] = {
                            macros=lfo_breathe_macros, desk=lfo_breathe_desk),
     "hands-fx": Factory(hands_fx_routes, lambda: {"fx.acid.speed": 4.0}, "hands-fx",
                         "Plan 08: both hands play the Acid shader and the fx mix.",
-                        desk=None),
+                        desk=knob_desk(HANDS_FX_KNOBS)),
     "hands-pinch": Factory(hands_pinch_routes, hands_pinch_values, "hands-pinch",
                            "Plan 08: a pinch picks what a hand's height moves — the left "
-                           "index pinch fades the hue cycle in.", desk=None),
+                           "index pinch fades the hue cycle in.",
+                           desk=knob_desk(HANDS_PINCH_KNOBS)),
     "hands-play": Factory(hands_play_routes, dict, "hands-play",
                           "Plan 08: brightness, speed and 4D depth on the hands.", desk=None),
     # plan 18 WP4: two hands on the camera (in the list, on no F-key)

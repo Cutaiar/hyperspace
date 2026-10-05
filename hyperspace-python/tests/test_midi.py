@@ -477,7 +477,9 @@ def test_a_knob_bump_during_a_hand_learn_does_its_own_job(rig):
     # the hand then completes it; the knob had no part in it
     lrn.learn_source("hand:left.roll")
     assert lrn.learning is None and m.table.owner("view.depth4").source == "hand:left.roll"
-    assert not any(b.target == "view.depth4" and b.is_midi for b in m.table.desk())
+    # no knob learned: depth's one desk row is the fresh layer's D1 (apc40.SCENE, plan 19 WP3)
+    assert [b.source for b in m.table.desk() if b.target == "view.depth4" and b.is_midi] \
+        == ["cc:*:16"]
 
 
 def test_an_invariant_control_works_through_a_desk_learn(rig):
@@ -1352,3 +1354,40 @@ def test_save_as_blinks_the_new_pad_on_row_four(rig):
     assert leds(rig, n10, ch10, mark) == [apc40.YELLOW]
     at(10.65 + midi.BLINK_S, note(STOP, 0, channel=0))
     assert leds(rig, n11, ch11, mark) == [apc40.GREEN_BLINK, apc40.GREEN]
+
+
+# --------------------------------- plan 19 WP3: the fresh layer's device knobs
+
+def test_a_knob_on_the_pattern_steps_through_every_pattern(rig):
+    """The gate for D4 (plan 19 WP3): `view.pattern` is an enum on an
+    absolute knob. Turned from one end to the other and back, it lands on
+    every pattern, one step at a time, in order — never a skip, never a
+    jump back — each value where `set_norm` puts it, and the ring follows
+    the pattern the knob landed on. The knob smoothing never glides an
+    enum (it is a discrete target), so each turn lands at once."""
+    from hyperspace.params import PATTERNS
+
+    m = rig.midi
+    m.table.slew = 0.12                               # smoothing on, as in the app
+    (row,) = [b for b in m.table.desk() if b.source == "cc:*:19"]
+    assert (row.target, row.op, row.feedback, row.layer) == ("view.pattern", "abs", "ring",
+                                                             "preset")
+    p = rig.reg["view.pattern"]
+    n = len(PATTERNS)
+    assert p.kind is Kind.ENUM and p.steps == n - 1 == 11
+    for x in m.bindings:
+        x.pickup = False
+    seen: list[int] = []
+    for v in [*range(128), *range(127, -1, -1)]:
+        push(rig, cc(0x13, v))
+        k = int(p.value)
+        assert k == round(v / 127 * (n - 1)), v
+        rings = [msg.value for msg in rig.out.sent
+                 if msg.type == "control_change" and msg.control == 0x13]
+        assert rings[-1] == round(k / (n - 1) * 127), v           # the ring: where it landed
+        if not seen or seen[-1] != k:
+            seen.append(k)
+    up = seen[:n]
+    assert up == list(range(n))                                   # every pattern, in order
+    assert seen[n - 1:] == list(range(n - 1, -1, -1))             # and back down
+    assert rig.view.pattern == 0

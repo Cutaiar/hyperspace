@@ -473,8 +473,10 @@ def test_factory_table_binds_only_real_params(tmp_path):
     # + Home (plan 15 WP2)
     assert len(t.of("key")) == 25 + 17 + 4 + 1
     assert len(t.of("pad")) == 10 and len(t.of("hat")) == 4
-    assert len(t.midi()) == 113 + 6 + 1 + 8 and t.mods() == []   # + SHIFT, the global track
-    # knobs, OVERDUB (plan 15 WP2), the clip-stop row's eight (plan 15 WP4);
+    assert len(t.midi()) == 113 + 6 + 1 + 8 + 4 and t.mods() == []   # + SHIFT, the global track
+    # knobs, OVERDUB (plan 15 WP2), the clip-stop row's eight (plan 15 WP4),
+    # the preset layer's four SCENE device knobs (plan 19 WP3; the sixteen
+    # bank pads of plan 19 WP2 took the sixteen shape pads' place);
     # no performer rows: the house presets carry the lane rows (plan 13 WP5)
     assert routing.referee(t.bindings)[1] == []           # one owner per target
     assert routing.remap_factory(t.bindings)[1] == []     # the factory table is current
@@ -903,7 +905,7 @@ def test_midi_view_shares_the_table(tmp_path):
 
     t = Bindings.factory(path=bindings_path(tmp_path))
     m = MidiIO(rig(tmp_path=tmp_path, full=True).reg, t, inp=Quiet(), out=Quiet())
-    assert len(m.bindings) == 113 + 6 + 1 + 8 and all(b.is_midi for b in m.bindings)
+    assert len(m.bindings) == 113 + 6 + 1 + 8 + 4 and all(b.is_midi for b in m.bindings)
     m.table.bind(Binding("cc:0:99", "view.zoom", "abs"))
     assert m.table.for_param("view.zoom").number == 99
     again = Bindings.load(bindings_path(tmp_path))

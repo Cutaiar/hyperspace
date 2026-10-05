@@ -183,10 +183,15 @@ def test_wake_and_trip_device_knobs_move_their_bases(slug, targets, tmp_path):
             assert p.norm == pytest.approx(value / 127, abs=0.02), (slug, pid, value)
             assert not p.modulated, pid
     presets.load("TUMBLE")
-    before = {pid: r.reg[pid].norm for pid in ids}
+    # on TUMBLE the knob is not this preset's: D1 there is the fresh layer's
+    # SCENE (plan 19 WP3, 4D depth), so only that one param of the eight
+    # (TRACER's D8) may move
+    from hyperspace import apc40
+    before = {pid: r.reg[pid].norm for pid in ids if pid != apc40.SCENE[0]}
     inp.queue.append(cc(0x10, 0))
     midi.poll()
-    assert {pid: r.reg[pid].norm for pid in ids} == before
+    assert {pid: r.reg[pid].norm for pid in ids if pid != apc40.SCENE[0]} == before
+    assert r.reg[apc40.SCENE[0]].norm == pytest.approx(0.0, abs=0.02)
 
 
 def test_hand_lane_names_are_the_hands_packages():
@@ -427,6 +432,57 @@ def test_every_effect_is_on_in_a_factory_preset():
     party = {n for n, names in on.items() if set(names) & {"ACID", "MANDALA", "NOITA"}}
     assert {"warp", "wobble", "doublevision", "deconverge", "fractals", "glimmer",
             "tripcolour"} <= party
+
+
+def test_no_factory_knob_is_dead(tmp_path):
+    """Plan 19 WP3, the desk's version of the rule below: loaded through
+    the real loader (a file with no `desk` key gets the fresh layer), no
+    factory preset has a device knob on an effect that is off, on the
+    chain's mix with no effect on, or on the look-back while it is off; a
+    knob on an LFO's setting has that LFO routed, one on a macro has the
+    macro. Every knob's target — every desk row's — is a persisted
+    performance param the registry has, never a session one (D9). Every
+    factory preset has at least four device knobs (fork 7: the dark ones
+    are D5–D8 on a scene preset)."""
+    from hyperspace import apc40
+    from hyperspace.params import part_of
+
+    effects = _effects()
+    r = rig(tmp_path=tmp_path, full=True)
+    router = Router(r.reg, Bindings())
+    presets = Presets(r.lib, r.reg, router)
+
+    def on(pid: str) -> bool:
+        return bool(r.reg[pid].value)
+
+    seen = 0
+    for doc in _factory_docs():
+        presets.load(doc["name"])
+        desk = router.table.desk()
+        knobs = [b for b in desk if b.kind == "cc" and b.number in apc40.DEVICE_KNOBS]
+        assert len(knobs) >= 4, doc["name"]
+        lfos = {b.source for b in router.table.routes() if b.source.startswith("lfo:")}
+        for b in desk:
+            where = (doc["name"], b.source, b.target)
+            assert b.target in r.reg and part_of(r.reg[b.target]) != "session", where
+        for b in knobs:
+            seen += 1
+            parts = b.target.split(".")
+            where = (doc["name"], b.source, b.target)
+            p = r.reg[b.target]
+            assert p.persist and part_of(p) == "performance", where
+            if parts[:2] == ["fx", "mix"]:
+                assert on("fx.on") and any(on(f"fx.{n}.on") for n in effects), where
+            elif parts[0] == "fx":
+                assert len(parts) == 3 and parts[1] in effects, where
+                assert on("fx.on") and on(f"fx.{parts[1]}.on"), where
+            elif parts[0] == "dream":
+                assert on("dream.on"), where
+            elif parts[0] == "lfo":
+                assert f"lfo:{int(parts[1]) - 1}" in lfos, where
+            elif parts[0] == "macro":
+                assert b.target in router.table.macros, where
+    assert seen >= 4 * len(_factory_docs())
 
 
 def test_no_factory_route_drives_an_effect_that_is_off(tmp_path):

@@ -284,13 +284,14 @@ def test_a_control_that_loses_its_row_goes_dark(rig):
 
 def test_an_unmapped_control_is_dark_and_does_nothing(rig):
     reg = rig.reg
-    # preset layer: the device knobs are free in the factory desk — their
-    # rings off, their turns dead; the band scenes' clip row is dark
-    styles = sent_cc(rig, 0x10 + 8)
+    # preset layer: device knobs 5–8 are free in the factory desk (1–4 are
+    # apc40.SCENE since plan 19 WP3) — their rings off, their turns dead;
+    # the band scenes' clip row is dark
+    styles = sent_cc(rig, 0x14 + 8)
     assert styles and styles[-1] == apc40.RING_OFF
-    trim = reg["band.sel.trim"].norm
-    push(rig, cc(0x10, 5), cc(0x10, 120))
-    assert reg["band.sel.trim"].norm == pytest.approx(trim)
+    post = reg["band.sel.post"].norm                # D5's param on the global layer
+    push(rig, cc(0x14, 5), cc(0x14, 120))
+    assert reg["band.sel.post"].norm == pytest.approx(post)
     assert sent_notes(rig, apc40.N_CLIP[1], channel=0)[-1] == 0
     scene = rig.control.scene
     push(rig, note(apc40.N_CLIP[1], channel=4))
@@ -435,6 +436,8 @@ def test_the_default_map_is_sorted_as_plan_13_says():
     # the new rows: SHIFT, invariant, and the global track knobs — which
     # are data, rows in the map: hand feel and BPM on 1–5, 6–8 free
     assert [(b.source, b.target, b.layer) for b in new] == [
+        # device knobs 1–4 on the preset layer: SCENE (plan 19 WP3)
+        *[(f"cc:*:{cc}", t, "preset") for t, cc in zip(apc40.SCENE, apc40.DEVICE_KNOBS)],
         ("cc:0:48", "hands.smooth", "global"), ("cc:0:49", "hands.response", "global"),
         ("cc:0:50", "hands.catch", "global"), ("cc:0:51", "hands.sel.return", "global"),
         ("cc:0:52", "tempo.bpm", "global"),
@@ -446,8 +449,10 @@ def test_the_default_map_is_sorted_as_plan_13_says():
         (f"note:0:{apc40.N_OVERDUB}", "preset.home", None)]   # home (plan 15 WP2)
     assert not [b for b in rows if b.layer == "global" and b.number in (0x35, 0x36, 0x37)
                 and b.kind == "cc"]
-    assert not [b for b in rows if b.layer == "preset" and b.kind == "cc"
-                and b.number in apc40.DEVICE_KNOBS]
+    # the preset layer's device knobs: SCENE on 1–4, 5–8 dark (plan 19 WP3)
+    assert [(b.number, b.target) for b in rows if b.layer == "preset" and b.kind == "cc"
+            and b.number in apc40.DEVICE_KNOBS] == list(zip(apc40.DEVICE_KNOBS, apc40.SCENE))
+    assert apc40.SCENE == ("view.depth4", "camera.yaw", "camera.pitch", "view.pattern")
     # QUANT is invariant (plan 13 §3.2's note), and so is the preset row
     assert have[(f"note:0:{apc40.N_QUANT}", "preset.next")] is None
     assert {have[(f"note:{k}:{apc40.N_CLIP[0]}", "preset.select")] for k in range(8)} == {None}

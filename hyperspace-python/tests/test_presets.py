@@ -769,8 +769,9 @@ def test_every_factory_presets_desk_is_the_generators():
     desk = preset.desk_json(preset.fresh_desk())
     assert desk and all("layer" not in d for d in desk)
     # plan 19 WP2: the sixteen shape pads left the fresh desk (42 rows → 26)
-    # and no factory file maps a pad of clip rows 4 or 5 — they are the bank's
-    assert len(desk) == 26 and not _on_bank_rows(desk)
+    # and no factory file maps a pad of clip rows 4 or 5 — they are the bank's;
+    # plan 19 WP3: SCENE on device knobs 1–4 (26 → 30)
+    assert len(desk) == 30 and not _on_bank_rows(desk)
     from_map = []
     for d in apc40.DEFAULT_MAP:
         if d.get("layer") == "preset":
@@ -790,18 +791,45 @@ def test_every_factory_presets_desk_is_the_generators():
             assert doc["desk"] == want, path.name
             assert not _on_bank_rows(doc["desk"]), path.name
     knobs = [f"cc:*:{0x10 + k}" for k in range(8)]
-    for slug, targets in (("party-wake", preset.WAKE_KNOBS), ("party-trip", preset.TRIP_KNOBS),
-                          ("party-acid", preset.ACID_KNOBS),
-                          ("party-mandala", preset.MANDALA_KNOBS),
-                          ("party-noita", preset.NOITA_KNOBS),
-                          ("party-tracer", preset.TRACER_KNOBS)):
-        rows = json.loads((preset.FACTORY_DIR / f"{slug}.json").read_text())["desk"]
-        assert rows[:len(desk)] == desk
-        assert [(d["source"], d["target"], d["op"], d["feedback"]) for d in rows[len(desk):]] \
-            == [(k, t, "abs", "ring") for k, t in zip(knobs, targets, strict=True)]
-    breathe = json.loads((preset.FACTORY_DIR / "lfo-breathe.json").read_text())["desk"]
-    assert breathe[-1] == {"source": "cc:*:16", "target": "macro.1", "op": "abs",
-                           "feedback": "ring"}
+    rest = [d for d in desk if d["source"] not in knobs]       # the fresh layer less its knobs
+    # plan 19 WP3: every factory preset's device knobs, D1–D8, as the plan's
+    # table has them (None: dark). A file with no `desk` key gets the fresh layer
+    scene = ("view.depth4", "camera.yaw", "camera.pitch", "view.pattern", None, None, None, None)
+    table = {
+        **{s: scene for s in ("big-blue-wave", "ember-orbit", "hex-engine", "inverse-halo",
+                              "plasma-heart", "spiral-silk", "strobe-cage", "woven-lattice",
+                              "party-tumble", "party-faces", "party-field",
+                              "legacy6", "hands-play", "hands-orbit")},
+        "hands-fx": ("fx.mix", "fx.acid.bend", "fx.acid.twist", "fx.acid.reach",
+                     "fx.acid.breathe", "fx.acid.speed", "view.depth4", "camera.yaw"),
+        "hands-pinch": ("fx.mix", "fx.huecycle.paint", "fx.huecycle.spread", "view.depth4",
+                        "camera.yaw", "camera.pitch", "view.pattern", None),
+        "lfo-breathe": ("macro.1", "fx.mix", "fx.plasma.level", "lfo.1.depth", "view.depth4",
+                        "camera.yaw", "camera.pitch", None),
+        "party-wake": preset.WAKE_KNOBS, "party-trip": preset.TRIP_KNOBS,
+        "party-acid": preset.ACID_KNOBS, "party-mandala": preset.MANDALA_KNOBS,
+        "party-noita": preset.NOITA_KNOBS, "party-tracer": preset.TRACER_KNOBS}
+    assert set(table) == {p.stem for p in paths}
+    # the six that already had eight are as plan 12 §6 and plan 14 left them
+    assert preset.WAKE_KNOBS[:2] == ("dream.echo_mix", "dream.fade")
+    assert preset.TRIP_KNOBS[0] == preset.ACID_KNOBS[0] == "fx.mix"
+    assert preset.TRACER_KNOBS[-1] == "view.depth4"
+    inv = routing.Bindings.factory()
+    for path in paths:
+        doc = json.loads(path.read_text())
+        rows = doc.get("desk") or desk
+        dial = dict.fromkeys(knobs)
+        for d in rows:
+            if d["source"] in knobs:
+                assert (d["op"], d["feedback"]) == ("abs", "ring"), path.name
+                dial[d["source"]] = d["target"]
+        assert tuple(dial.values()) == tuple(table[path.stem]), path.name
+        # the rest is the fresh layer's, in its order, the knobs after it
+        assert [d for d in rows if d["source"] not in knobs] == rest, path.name
+        # one row per control, and none on an invariant one
+        assert len({d["source"] for d in rows}) == len(rows), path.name
+        assert not [d for d in rows
+                    if inv.is_invariant(Binding.from_json({**d, "layer": "preset"}))], path.name
     for slug in ("party-tumble", "party-faces", "party-field"):
         assert json.loads((preset.FACTORY_DIR / f"{slug}.json").read_text())["desk"] == desk
 
@@ -1463,7 +1491,8 @@ def test_an_old_preset_loads_without_its_shape_pads_and_its_file_is_untouched(ow
         assert len(_on_bank_rows(desk)) == 16, name
     r = boot_home(home)                                    # the launch lands NIGHT ONE
     lib, table, pr, presets = r.lib, r.router.table, r.lib.project, r.presets
-    fresh = len(preset.fresh_desk())
+    # saved before plan 19: the fresh layer had no device knob then (WP3's SCENE)
+    fresh = len([b for b in preset.fresh_desk() if not preset._is_device_knob(b)])
     # NIGHT ONE: the sixteen exact rows — nothing said
     assert lib.current("presets") == "NIGHT ONE"
     assert presets.desk_notes == [] and presets.notes == [] and lib.warning == ""
@@ -1524,7 +1553,9 @@ def test_the_next_save_of_an_old_preset_writes_the_desk_without_the_pads(owner_h
     doc = json.loads(path.read_text())
     assert _on_bank_rows(doc["desk"]) == []
     knob = preset.desk_json([preset.device_knob(*OWNER_KNOB)])[0]
-    assert knob in doc["desk"] and len(doc["desk"]) == len(preset.fresh_desk()) + 1
+    # (the fresh layer less the device knobs it gained in plan 19 WP3, + the learned one)
+    fresh = [b for b in preset.fresh_desk() if not preset._is_device_knob(b)]
+    assert knob in doc["desk"] and len(doc["desk"]) == len(fresh) + 1
     (kept,) = list(trash.glob("night-two.*.json"))
     assert kept.read_bytes() == before["night-two.json"][0]        # the old file, whole
     assert len(_on_bank_rows(json.loads(kept.read_text())["desk"])) == 16
@@ -1535,3 +1566,43 @@ def test_the_next_save_of_an_old_preset_writes_the_desk_without_the_pads(owner_h
     lib.load("presets", "NIGHT ONE")
     lib.load("presets", "NIGHT TWO")
     assert r.presets.desk_notes == [] and not lib.is_dirty("presets")
+
+
+# ------------------------------- plan 19 WP3: a user's desk and the re-cut
+
+def test_a_users_desk_is_untouched_by_the_recut(owner_home):
+    """The owner's files (on a copy): a preset saved before plan 19 carries
+    its own `desk`, and the factory re-cut does not reach it. NIGHT ONE's
+    eight device knobs stay dark — D1 turned moves no 4D depth; NIGHT TWO
+    keeps the knob the owner learned (D3) and the seven dark ones; NIGHT
+    THREE keeps WAKE's eight as saved. No file changes. A user file with
+    **no** `desk` key gets the fresh layer by the standing rule, and so
+    the four SCENE knobs."""
+    from hyperspace import apc40
+
+    home = owner_home
+    before = _files(home)
+    r = boot_home(home)
+    lib, table = r.lib, r.router.table
+
+    def dials() -> dict[str, str]:
+        return {b.source: b.target for b in table.desk()
+                if b.kind == "cc" and b.number in apc40.DEVICE_KNOBS}
+    assert lib.current("presets") == "NIGHT ONE" and dials() == {}       # all eight dark
+    assert [b.target for b in table.dispatch("cc", 0, 0x10)] == []        # D1 does nothing
+    lib.load("presets", "NIGHT TWO")
+    knob = preset.device_knob(*OWNER_KNOB)
+    assert dials() == {knob.source: knob.target}                         # D3 alone, learned
+    lib.load("presets", "NIGHT THREE")
+    assert list(dials().values()) == list(preset.WAKE_KNOBS)
+    assert not lib.is_dirty("presets")
+    lib.poll()
+    assert _files(home) == before
+    # a user preset with no desk key: the fresh layer, SCENE on D1–D4
+    doc = json.loads((home / "presets" / "night-one.json").read_text())
+    doc.pop("desk")
+    doc["name"] = "NO DESK"
+    (home / "presets" / "no-desk.json").write_text(preset.dumps(doc))
+    lib.poll()
+    lib.load("presets", "NO DESK")
+    assert list(dials().values()) == list(apc40.SCENE)

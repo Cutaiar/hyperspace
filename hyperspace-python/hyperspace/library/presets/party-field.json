@@ -67,6 +67,10 @@
   {"source": "hand:left.y", "target": "view.inst_amp", "op": "push", "value": 0.5}
  ],
  "desk": [
+  {"source": "cc:*:16", "target": "view.depth4", "op": "abs", "feedback": "ring"},
+  {"source": "cc:*:17", "target": "camera.yaw", "op": "abs", "feedback": "ring"},
+  {"source": "cc:*:18", "target": "camera.pitch", "op": "abs", "feedback": "ring"},
+  {"source": "cc:*:19", "target": "view.pattern", "op": "abs", "feedback": "ring"},
   {"source": "cc:0:48", "target": "view.bright", "op": "abs", "feedback": "ring"},
   {"source": "cc:0:49", "target": "view.speed", "op": "abs", "feedback": "ring"},
   {"source": "cc:0:50", "target": "view.instances", "op": "abs", "feedback": "ring"},
