@@ -24,7 +24,23 @@ script from the renderer's existing passes, not by the build**. Nobody
 was available to answer questions: every fork is in §6 with the option
 taken.
 
-## HAND-OFF NOTES (2026-10-04, the plan's author stopped here)
+## HAND-OFF NOTES (2026-10-04)
+
+**Built.** All seven work packages are done: WP5 (PR #112), WP1 and WP2
+(PRs #118, #120), WP6 (PR #122), WP3 and WP4 (PRs #123, #124) are merged
+into `plan-21-integration`, and WP7 (this document's §7, decision
+register rows 79–88, hand checks group Q, 99–112) is its docs package.
+**§7 "As built" is the record**: where the build proved a sentence below
+false, the sentence stays and an *As built:* note follows it. What is
+left is only the owner's: hand checks 99–112 at the machine, and rows
+79–88 to confirm or overturn. Nothing in this plan has been seen on the
+glass or the projector, with a real hand, or with two screens; **the
+frame-rate claim of fork F6 is unconfirmed** (§7, "What the orchestrator
+saw").
+
+The notes the plan's author left when they stopped, kept as they were
+(each "still to do" in them is done: the register rows are 79–88, the
+test names of §5 now exist, with the differences §7 lists):
 
 The plan below is complete as a first draft: every section asked for is
 written, and every finding, measurement and fork made so far is in it
@@ -96,6 +112,10 @@ with the shape.
 - **The frame rate holds.** One output's swap waits for the screen; the
   others do not. Measured here with two windows: 121 fps on the 120 Hz
   screen; with both waiting, 60 to 81.
+  *As built:* the swap rule is built as stated, but the 121 fps was
+  **not reproduced**: in the build's short launches both the two-output
+  path and the one-window path ran unpaced (270–380 fps), so the claim is
+  neither confirmed nor refuted (§7; hand check 107, register row 83).
 - **PR #78 reviewed.** Fourteen findings, two that must be fixed (a
   raising hands pass skips the master dim; the pass writes a parameter).
   Check 47 is finished as part of group Q.
@@ -129,6 +149,10 @@ effects warp + kaleido on):
 Eight switch states, six different pictures: with the hands off, the
 third switch has nothing to act on. The probe confirmed 3 = 4 and 7 = 8
 byte for byte.
+*As built:* `eight-states.png` was regenerated from the merged code by
+`tools/outputs_shots.py` (WP2) and replaces the probe's picture; still an
+offscreen render from synthetic hands. 3 = 4 and 7 = 8 are held by
+`test_outputs.py::test_each_of_the_eight_states_shows_its_picture`.
 
 ![The eight states, an offscreen render from a probe script](assets/21-outputs-and-the-hands/eight-states.png)
 
@@ -169,6 +193,15 @@ Three measurements this section leans on:
   | A does not, B waits | 89 fps |
   | both wait, B minimised | 60 fps |
   | A waits, B does not, B minimised or covered | 121 fps |
+
+  *As built:* not reproduced by the build. In WP3's and WP4's real
+  launches (two small windows on this laptop's one screen) the loop ran
+  at a median 271 fps with two outputs **and 377 fps with one output (no
+  list, today's one render window)**: the waiting swap did not pace the
+  loop in either case, so this table neither confirms nor refutes fork
+  F6. The code sets the intervals the design names
+  (`test_app_boundary.py::test_only_the_first_output_waits_for_the_screen`);
+  what they do with two screens is hand check 107.
 
 ## 2. Work packages
 
@@ -234,6 +267,18 @@ ONCE PER OUTPUT
 11  dim: output.dim × this output's dim, when under 1
 12  swap: the others first (they do not wait), the first output last (it waits)
 ```
+
+*As built* (§7 has the order as built): **routing runs after the hands'
+layer** (step 6 before step 5), because "hands shown" (fork F7) needs "a
+hand visible this frame", which only the layer knows; and **`lb.capture`
+runs once, after every pipeline has composited**, not after the first
+composite — with a capture between two pipelines' composites the second
+pipeline showed this frame doubled as an echo, one echo short and every
+echo a frame older (the review of PR #120, fixed in 29c3e4c;
+`test_outputs.py::test_two_pipelines_show_the_same_echoes`). Frame
+textures are always LINEAR (a 1:1 copy reads by `texelFetch`, so the
+filter does not matter there). A pipeline that raises leaves its outputs
+showing their ground.
 
 What an output is given depends only on its switches, whether an effect
 is on, and whether a hand shows. `outputs.route` is that table, pure
@@ -355,6 +400,17 @@ class Ghost:
     # draw(target, vp, t, opaque) stays: layer(vp's size) then composite
 ```
 
+*As built:* `stats` also has `captures`, `layer` and (WP2) `readout`;
+`View` also has `viewport` (a rect of its target; None is the whole
+size), `handoff` (an `outputs.Handoff` for a presenter view) and `exc`
+(what set `error`, re-raised by `Renderer.draw` after the frame
+finished); `outputs.Handoff` and `Slot` are additions. `View.bg_alpha`
+is honoured only in part: the frame and the chain are drawn on
+`Renderer.bg_alpha`, so an output's own ground can make the frame opaque
+on it but never see-through (the review of PR #118; in `View`'s
+docstring). WP2 adds `Ghost.layer(size, t, readout=False)`,
+`Ghost.readout` and `Ghost.composite_readout`.
+
 **Behaviour.**
 
 - `views[0]` sets the frame size and the scene's sample count
@@ -378,7 +434,9 @@ class Ghost:
   off everywhere the scene pass still runs: the echoes, the dream worker
   and the effects' clocks carry on, so switching the scene back on shows
   no gap. `FxState.advance_to(t)` already advances once however many
-  times the chain runs.
+  times the chain runs. *As built:* once, **after every pipeline**
+  (above); with an effect on and no chain run this frame the renderer
+  calls `fx.state.advance_to(t)` itself.
 - Every exit binds `views[0].target` again with its viewport and
   blending, a raise included (the 2026-09-29 rule). A `View` that raises
   records `view.error` and the loop goes to the next one.
@@ -402,7 +460,8 @@ class Ghost:
   `ghost.composite(buf, …)`; `fx.run(dst, t)`. No look-back: the echoes
   are the scene's, and the scene is off. A generator effect will light
   the ground here, where state 5 (hands over) shows none: with the scene
-  off the effects exist only to act on the hands.
+  off the effects exist only to act on the hands. *As built:* the clear
+  is the frame's ground, `Renderer.bg_alpha`, not a view's own.
 - With no effect on, `route` never returns these keys. The switch then
   changes nothing, and the OUTPUT page says "no effect on" beside it.
 - **The readout** (the guide and the tethers' text labels) is never
@@ -479,6 +538,18 @@ called once per output with `renders[k]`; it gains an optional
 writes one rect per opened output, `None` for one not opened (the old
 entry is kept, as for a minimised window).
 
+*As built:* `_windows` returns **`(slots, ctrl_win)`**, one
+`outputs.Slot` per listed output (name, launch switches, monitor,
+fullscreen, window, `missing`, `output`, `presenter`, `error`, `size`,
+`label`); output 1 and the control window are created first and exactly
+as before, then the later outputs. A later output's default spot
+**cascades 40 px** (`app.CASCADE`) off a spot another output has. A later
+output whose window or presenter will not build is **closed and counts
+as not opened**, with a note (the review of PR #123). `_save_windows`
+takes the later outputs as `more=`. Output 1's monitor and fullscreen
+are the list's first entry, copied into `[output]` by `config.load`.
+
+
 `windows.json` as it already is:
 
 ```json
@@ -505,6 +576,13 @@ class Presenter:
 context, wrapped with `ctx.external_texture` (probed: it samples
 correctly). `present` leaves the window's framebuffer bound.
 
+*As built:* **`present(handoff, size, target=None)`** takes WP1's
+`outputs.Handoff` instead of eight loose arguments (`target` is another
+framebuffer on the presenter's context, for the tests); the wrapped
+textures are cached per (name, size). Nothing is built before the first
+`present`, and `on_reload` only marks it stale, because a reload runs in
+whatever context is current (§7, "The presenter hand-off as built").
+
 **The frame in `app.draw_render`.**
 
 1. Make output 1 current; the stranded-target check; `ctx.screen.use()`.
@@ -518,6 +596,13 @@ correctly). `present` leaves the window's framebuffer bound.
    Its swap interval is 0.
 6. Make output 1 current and swap (`finally`, as today). Its interval is
    1: it paces the loop (fork F6).
+
+*As built* (`app._draw_render`): the six steps as written, except that
+**the swap intervals are set once at the launch** (output 1's `1` where
+`main` makes its context, each later one's `0` in `_open_presenters`),
+not per frame, and **`glFlush` runs only when a later output exists**,
+so a one-output frame runs nothing new. What output 1's view caught is
+re-raised after the others were presented.
 
 A presenter that raises sets its output's `error` and the loop goes on:
 a failing output cannot take the frame down. `Keys` polls every output
@@ -557,6 +642,15 @@ undo does not watch them (`undo.watched` needs `persist`), a launch
 takes them from the config, and they can be learned onto a desk button
 like any toggle. Nothing is put on the desk by this plan.
 
+*As built:* `output.N.dim` is registered when **the config lists** two
+or more outputs (not when two open: with the projector unplugged output
+1 keeps its own dim row, so its launch dim is never a mystery), **or
+when a lone listed output's entry sets `dim` under 1** (otherwise its
+picture would be dimmed with no fader; the review of PR #124). Persisted
+nowhere: every launch and every ⌘R starts from `config.toml`; undo, a
+preset load or save and a show load or save leave them where they are
+(`test_undo.py::test_the_output_switches_are_left_alone_by_undo_presets_and_shows`).
+
 **The page.** Under the master dim, one block per output, two or three
 lines (measured: the page's content is 392 px wide; a one-line row with
 a name, three ticks, a slider and a status needs more than that):
@@ -574,7 +668,15 @@ a name, three ticks, a slider and a status needs more than that):
   black.
 - Beside "hands" when it can show nothing: "ghost hands are off (HANDS
   page)" or "no tracker". Beside "through effects" with no effect on:
-  "no effect on".
+  "no effect on". *As built:* on a line of their own under the ticks
+  ("hands: ghost hands are off (HANDS page) · through: no effect on"),
+  shared with the output's present error, which comes first; beside the
+  ticks they did not fit the page's width at the panel's legible size.
+  Two more "shows:" phrases: "black — the scene is off and no hand
+  shows" and "black — master dim"; the footer names several outputs
+  together ("· outputs 2, 4 black"); with two or more outputs the line
+  under the blocks reads "paced by output 1 · frame W×H · below: output
+  1's window".
 - An output the config lists but that did not open: one disabled line,
   "2 projector — screen 2 is not connected".
 - One line under the blocks: "paced by output 1 · frame 1920×1080", and
@@ -611,7 +713,7 @@ with its fix:
 | R9 | No real tape exists: `tests/fixtures/` is not in the tree, so the replay test skips. | `tests/test_hands_tape.py` | Q9 records one. |
 | R10 | A `[hands] tape` that is missing or malformed raises in `HandsIO.__init__`; `app._open_hands` prints to stderr and returns `None`. On the panel that is "no hands" with no reason. | `app.py::_open_hands` | Append the message to `cfg["notes"]` (the SYSTEM page). |
 | R11 | The guide's rows are drawn by `CapsuleHands.draw` (§1 row 5). | `ghost.py` | WP6. |
-| R12 | `ghost.on`, `.mirror`, `.guide` and `.tethers` are `modulatable` (the test asserts it). A performer's row on `ghost.mirror` would flip the hands with a hand's move. | `ghost.py::register` | `mirror`, `guide`, `tethers` and the new `style` become `modulatable=False`; `on` and `alpha` stay (the PR says they are meant to be learned). The test changes with it. |
+| R12 | `ghost.on`, `.mirror`, `.guide` and `.tethers` are `modulatable` (the test asserts it). A performer's row on `ghost.mirror` would flip the hands with a hand's move. | `ghost.py::register` | `mirror`, `guide`, `tethers` and the new `style` become `modulatable=False`; `on` and `alpha` stay (the PR says they are meant to be learned). The test changes with it. *As built:* reverted in WP5 (a hand Learn would have written a dead row, `learn_source` never checked the target) and built in WP6 together with that check and a preset-load drop (§7, WP6). |
 | R13 | `pose()` falls back to `85.0`, a second copy of `hands.core.PALM_W`; `tape.STALE_S` is a second copy of core's (said in a comment). | `ghost.py`, `hands/tape.py` | `pose()` imports the constant lazily, as `box_of` does; the tape's stays (a leaf). |
 | R14 | Check 47 has never been run; its (g) "effects never touch it" is now the default of a switch. | `11-hand-checks.md` | Q9 and Q4. |
 
@@ -660,6 +762,17 @@ exists. `CapsuleHands` stays as a name for `Geometry` drawing
 style. The fade, the colours, the camera, the guide and the tethers are
 the same in every style.
 
+*As built:* **`extra` is a list aligned with the poses** (each pose's
+guide rows), not one `((), ())` pair, so the instances are drawn in the
+old order and even exact depth ties resolve as before; `parts=None`
+draws only the extra rows. **HANDS keeps its palm disc** for a
+palm-only pose (byte-for-byte wins); the other four draw a palm orb
+(0.32 × palm width). In the four new styles **the guide is drawn on top**
+(the style, then the depth cleared, then the guide), because their palm
+solids hid an ON HAND gauge; in HANDS it stays partly behind the palm as
+before (the review of PR #122). `style_parts(i)` falls back to HANDS for
+an index out of range or not a number.
+
 **Owns:** `ghost.py`, `hands/panel.py` (one combo), `tests/test_ghost.py`,
 a `styles` command in `tools/hands_tape.py` (the demo sheet).
 
@@ -668,7 +781,8 @@ a `styles` command in `tools/hands_tape.py` (the demo sheet).
 **Owns** the shared documents and nothing else: `ARCHITECTURE.md` (§1
 Render stack and Host rows, §2 the frame and "the ghost hands are the
 frame's last pass"), `ENGINEERING.md`, `DECISIONS.md` (the two rows
-below), `DECISION-REGISTER.md` (the forks of §6 as rows after 56),
+below), `DECISION-REGISTER.md` (the forks of §6 as rows after 56 — *as built:*
+rows 79–88, after plan 19's 72–78),
 `plans/README.md`, `CHECKPOINT.md`, `11-hand-checks.md` (group Q, check
 47 marked as carried into Q9), `config.py`'s docstring is WP3's, and
 this plan's §7.
@@ -792,9 +906,23 @@ The whole suite green, `ruff` clean, `HYPERSPACE_FRAMES=120` exits clean
 on a temp home with no `screens` list and with a two-entry list on one
 screen (`monitor = -1` on both).
 
+*As built:* every name above exists and passes on
+`plan-21-integration` (`test_overlay_adds_the_hands_coverage_before_or_after`
+is WP1's `…_after`, renamed by WP2). WP4's undo / preset / show test,
+which the plan put in `test_params.py`, is
+`test_undo.py::test_the_output_switches_are_left_alone_by_undo_presets_and_shows`;
+`test_every_page_fits_the_control_window` runs with four outputs (its
+rig carries them), beside
+`::test_the_output_page_fits_with_four_outputs_and_overlays_rows`. The
+tests the build added beyond the list are named in §7. The scripted
+launches (150–330 frames, temp homes) ran with no list and with a
+two-entry list on the laptop's one screen, `monitor = -1` on both.
+
 ### At the machine
 
 Group Q, in full in the appendix. Check 47 is finished as Q9.
+*As built:* group Q in `11-hand-checks.md` is checks **99–112**; check
+47 is finished by check 108 (its (g) is check 103).
 
 ## 6. Forks
 
@@ -858,6 +986,9 @@ screen first. Reverse to (b) or (c): `outputs.fit`, a few lines.
 
 **Taken: the first output's swap waits for its screen, the others' do
 not.** Measured here: 121 fps against 60–81 with two waiting swaps.
+*As built:* built so, but the 121 fps was not reproduced: the build's
+launches ran unpaced with one output and with two (270–380 fps), so this
+fork's frame-rate reason is unconfirmed (§1's table; hand check 107).
 Reverse: one `swap_interval` call per output. Not measurable without a
 second screen: tearing on a non-waiting fullscreen output (macOS
 composites whole windows, so none is expected), two screens of
@@ -912,7 +1043,557 @@ laptop's own screen dropping frames.
 
 ## 7. As built
 
-*(empty)*
+Built 2026-10-04 by the unattended run, one PR per work package onto
+`plan-21-integration`, merged by the orchestrator in the plan's order
+(5; 1 and 2; 6; 3 and 4), with plans 19 and 20 merged underneath
+(b7aa67a, 284d754; conflicts only in `hotreload.MODULES` and two test
+files, both append against append). On that branch: **1549 passed, 1
+skipped** (the tape replay, R9), `ruff` clean. Every fork of §6 was
+settled as recommended, by the orchestrator, not the owner (register
+rows 79–88). **The owner asked for three things** this plan builds: two
+render outputs each with a dim, the scene on/off and the hands on/off
+(roadmap decision 32); the ghost hands finished as a HUD with swappable
+drawn objects (decision 33); and, on 2026-10-04 during the run, the
+third per-output switch, **hands through effects** (eight states per
+output).
+
+What each piece of evidence is: a **test** is headless (offscreen GL
+targets, fake window systems); an **offscreen render** is a picture made
+by a tool from synthetic hands; a **real launch** is the app on this
+laptop's one screen against a temp home, its windows **read back by a
+script** — nobody looked at a window by eye; nothing here has met the
+glass, the projector, a second screen or a real hand.
+
+### WP5 — PR #78 reviewed (PR #112, merged b49b61a)
+
+**Built.** The fourteen findings, with two of the build's own:
+
+| # | As built |
+|---|---|
+| R1 | `_draw_frame` guards the hands as it guards the faces: a raise leaves the frame without hands, `Ghost.error` (the first reason) on the HANDS page, the target bound again and **the dim still runs**. `Ghost.draw`'s `finally` re-enables BLEND. |
+| R2 | `_draw_tethers` writes no param: a private `_labels_failed`; the hands and the guide still draw; switching the ghost off and on, or a reload, retries. `TetherLabels.__init__` is all or nothing. |
+| R3 | `_ensure` builds into locals, releases on failure, records the error once, returns False; the next frame tries from nothing. |
+| R4 | No change. Pass 1.22–1.60 ms at 1920×1080, 2.13–2.19 ms at 3024×1964 (medians between `glFinish`, standalone context; they differ from §2's 0.93 / 3.4 ms by the method). |
+| R5 | `Renderer.on_reload` no longer calls `ghost.on_reload`. |
+| R6 | With the ghost on in `screentop` or HMD mode the HANDS page says those axes are unmeasured; the maths is unchanged. |
+| R7 | None (the names match the pinned `leap`). |
+| R8 | None: `skeleton()` 27 µs per two-hand frame on fake namespaces; real `leap` objects not measured. |
+| R9 | None: no real tape exists; the replay test still skips (hand check 108 records one). |
+| R10 | A bad `[hands] tape` is a note on the SYSTEM page, and the HANDS page shows it in place of "tracker off". |
+| R11 | Left for WP6 (done there). |
+| R12 | **Built, then reverted** (dc327ab and its revert): the review showed a hand Learn would write a dead row onto a non-modulatable `ghost.mirror` while the footer said it worked, because `learn_source` never checked the target. Built in WP6 together with that check. |
+| R13 | `pose` uses `hands.core.PALM_W`; `STALE_S` lives in `hands/tape.py` only and `core` imports it. |
+| R14 | Check 47 is finished by group Q (this package's docs, WP7). |
+| A1 | `_build_failed` apart from `error`, so one bad frame before the first build does not keep the hands off until a reload. |
+| A2 | The ghost's controls on one line (on, mirror, opacity, guide, tethers), at most one more line under it: the HANDS page already scrolled with the ghost on. |
+
+**Tests.** `test_render.py::test_a_raising_hands_pass_still_dims[skeleton,geometry]`,
+`test_ghost.py::test_a_failed_label_build_writes_no_param[build,label]`,
+`::test_a_failed_target_build_is_all_or_nothing`,
+`::test_one_reload_round_rebuilds_the_ghost_once`,
+`test_hands_tape.py::test_a_bad_tape_path_is_a_note_the_pages_show`,
+`::test_the_stale_time_and_the_palm_width_are_defined_once`,
+`test_ui_shell.py::test_the_hands_page_says_the_ghost_axes_are_unmeasured`,
+`::test_the_hands_page_says_why_the_ghost_or_the_tracker_is_off`,
+`::test_the_hands_page_fits_with_every_ghost_line`. Each failed on the
+code before its fix (the builder swapped the old files back in).
+
+**Demo.** [`ghost-guard.png`](assets/21-outputs-and-the-hands/ghost-guard.png)
+(offscreen: the hands at dim 0.5; the pass forced to raise, the scene
+dimmed with no hands, byte-equal to the frame without hands; the scene
+at dim 1) and [`ghost-review.txt`](assets/21-outputs-and-the-hands/ghost-review.txt)
+(the findings and timings). **Real launch:** 150 frames with a synthetic
+tape, the ghost, guide and tethers switched on by a script and the dim
+at 0.5 from frame 91: nothing raised, `ghost.error` empty, the stall log
+empty; the window was not looked at.
+
+**Not verified.** No camera, no real hand, no rig; screentop / HMD not
+seen; a font failure only simulated; R5 tested by calling the hooks in
+the reloader's order, not by a real module reload.
+
+### WP1 — The compose path (PR #118, merged with WP2 as 97a24d7)
+
+**Built.** `outputs.py` (`MAX_OUTPUTS`, the keys and `NAMES`,
+`Switches`, `route`, `fit`, `View`, `Handoff`), `Ghost.layer` /
+`composite` / `tex` with `draw` as the two together, and
+`Renderer.draw_outputs(s, w, h, dpr, views, t_now=None)` with `stats`.
+**`Renderer.draw` is `draw_outputs` with one default `View` on the bound
+framebuffer's viewport**, and raises what that view caught after the
+frame finished, where it raised before. `"outputs"` is in
+`hotreload.MODULES` after `"ghost"`, before `"view"` and `"render"`.
+
+**Differs from the plan, and why.** Routing runs after the hands' layer
+(F7 needs "a hand visible this frame"). Frame textures are always
+LINEAR (the 1:1 copy reads by `texelFetch`). `stats` has `captures` and
+`layer` (and WP2's `readout`); `View` has `viewport`, `handoff`, `exc`.
+A pipeline that raises leaves its outputs showing their ground (the plan
+did not say). `View.bg_alpha` is honoured in part: an output's ground
+can make the frame opaque on it, never see-through (the review; overlay
+is output 1's only). The presenter's rect is `fit()` inside the view's
+rect (the review, d8100f6).
+
+**Tests.** New `tests/test_outputs.py`: `test_route`, `test_fit`,
+`test_a_view_defaults_to_its_whole_size`,
+`test_outputs_imports_nothing_from_app_ui_or_params`,
+`test_one_default_output_is_todays_frame_byte_for_byte` (7 cases × MSAA
+0 / 4 against `_parent_draw`, a verbatim copy of the parent's
+`draw` / `_draw_frame`), `test_the_frame_through_a_texture_is_the_same_bytes`,
+`test_two_outputs_with_the_same_switches_run_the_chain_once`,
+`test_outputs_that_differ_run_one_chain_per_distinct_input`,
+`test_the_four_scene_and_hands_states_show_their_pictures`,
+`test_capture_runs_once_a_frame_whatever_the_switches`,
+`test_the_echoes_carry_on_with_the_scene_off_everywhere`,
+`test_the_history_never_holds_the_hands_in_any_state`,
+`test_each_output_dims_by_master_times_its_own`,
+`test_an_output_of_another_aspect_is_letterboxed_and_the_hands_stay_registered`,
+`test_an_opaque_grounds_alpha_is_untouched_in_every_state`,
+`test_the_first_target_is_bound_after_a_view_raises`,
+`test_a_raising_pipeline_leaves_its_views_on_the_ground_and_the_rest_drawn`,
+`test_a_raising_hands_pass_costs_no_output_its_frame_or_its_dim`,
+`test_the_presenter_handoff`,
+`test_a_renderer_from_before_the_outputs_still_draws_and_reloads`;
+`test_ghost.py::test_one_layer_composites_onto_many_targets_as_draw_does`;
+`test_hotreload.py::test_outputs_is_watched_before_render`. No existing
+test was edited. **Byte identity beyond the tests:** 320 default-path
+cases (effects × echoes × ghost × dim × MSAA × ground) hashed on the
+parent and after each commit — all identical (the script is not kept).
+
+**Demo.** [`outputs-compose.png`](assets/21-outputs-and-the-hands/outputs-compose.png)
+(`tools/outputs_shots.py compose`, offscreen, synthetic hands): one
+640×400 frame on two outputs, the second 400×400 and letterboxed at its
+own 60 % dim. **Real launch:** 150 frames on the default path only (the
+app still called `Renderer.draw`): one direct pipeline, nothing raised.
+
+**Not verified.** One GPU; offscreen targets; the presenter test a
+stand-in on the same context; no timing for WP1 alone.
+
+### WP2 — Hands through effects (PR #120, stacked on #118, merged as 97a24d7)
+
+**Built.** `route`'s through rows (only with an effect on and a hand
+shown: scene on → SCENE+HANDS, scene off → HANDS, fork F2). In
+`Renderer._pipeline`: **SCENE+HANDS** = `fx.begin` → `lb.composite(scene)`
+→ the hands (`Ghost.composite(buf, (0, 0, size), opaque=fx.opaque)`) →
+`fx.run(dst)`; **HANDS** = `fx.begin` → clear to `(0, 0, 0,
+Renderer.bg_alpha)` → the hands → `fx.run(dst)`, no look-back. A hands
+composite that raises inside a pipeline leaves the chain running on the
+scene alone and `Ghost.error` saying why. **The readout layer** (fork
+F3): `Ghost.layer(size, t, readout=…)` asks for it only when an effect
+is on and some output has its hands and through ticks on; it splits only
+while the guide is on and its target builds — then the hands' layer has
+the hands alone and `Ghost.readout` has the hands depth-only (so an ON
+HAND gauge stays behind the palm), the guide's spheres and tubes, and
+the tethers; `Ghost.composite_readout` lays it on **every output whose
+hands tick is on, over or through**, after the hands and before the dim.
+Otherwise the single layer, bit for bit. `stats["readout"]`.
+
+**Differs from the plan, and why.** **The capture runs once, after all
+pipelines** (the review: with echoes on, a capture before
+SCENE+HANDS's composite gave the through output this frame doubled as an
+echo, one echo short and every echo a frame older; fixed in 29c3e4c).
+moderngl applies a framebuffer's `color_mask` only on `use()`, so the
+first depth-only pass wrote colour until each mask change was followed
+by a `use()` (caught by the readout test). The readout is skipped if its
+target fails to build (`Ghost.error` says why); `composite_readout` is
+an addition; the HANDS ground is the frame's, not the view's.
+
+**Tests.** `test_outputs.py`: extended `test_route`,
+`test_outputs_that_differ_run_one_chain_per_distinct_input`,
+`test_capture_runs_once_a_frame_whatever_the_switches`,
+`test_the_history_never_holds_the_hands_in_any_state`,
+`test_an_opaque_grounds_alpha_is_untouched_in_every_state` (all eight
+states × no effect, warp, warp + kaleido),
+`test_overlay_adds_the_hands_coverage_before_or_after` (renamed); new
+`test_each_of_the_eight_states_shows_its_picture`,
+`test_two_pipelines_show_the_same_echoes` (the review),
+`test_through_bends_the_hands_with_the_shape`,
+`test_through_with_no_effect_on_is_hands_over`,
+`test_through_with_no_hand_showing_runs_nothing_extra`,
+`test_four_outputs_need_at_most_three_chain_runs`,
+`test_the_guide_is_never_distorted[beside|on hand]`,
+`test_a_raising_hands_composite_into_the_chain_still_runs_it`,
+`test_the_presenter_handoff_carries_the_readout`;
+`test_ghost.py::test_the_readout_layer_is_the_guide_apart_from_the_hands`.
+The 320-case default-path matrix still identical.
+
+**Demo** (offscreen, synthetic hands, `tools/outputs_shots.py`):
+[`eight-states.png`](assets/21-outputs-and-the-hands/eight-states.png)
+(regenerated from the build; three pipelines, three chain runs, one
+capture), [`through-two-outputs.png`](assets/21-outputs-and-the-hands/through-two-outputs.png)
+(the glass over, the projector through, the guide the same and unbent
+on both), [`compose-timing.txt`](assets/21-outputs-and-the-hands/compose-timing.txt):
+1920×1080, warp + kaleido, two synthetic hands, standalone context, each
+frame ended by `glFinish` — one view 1.66 ms median, two agreeing 1.85
+ms, two disagreeing (over | through) 2.24 ms. **Rendering only**: no
+swap, no second window, no flush or presenter cost.
+
+**Not verified.** The same as WP1; "legible" and "bent" are judged from
+the offscreen images, not the glass.
+
+### WP6 — `ghost.style` (PR #122, merged b231079)
+
+**Built.** `ghost.style` (HANDS, JOINTS, PALMS, CAGE, MARIONETTE): a
+session enum, **saved with the show, not modulatable**, learnable onto a
+desk control, on the HANDS page as a 150 px STYLE combo leading the
+ghost's second line while the ghost is on (a line of its own pushed the
+page 22 px past the window). Each style is a pure function in
+`ghost.PARTS`; `ghost.Geometry.draw(poses, view_proj, eye, parts,
+extra)` draws whichever is picked into the same hands' layer, so over,
+through, the readout, the guide and the tethers behave as with HANDS;
+`CapsuleHands` stays as a name (a `Geometry` that draws HANDS).
+Openness is the mean fingertip distance from the palm over the palm
+width, mapped 0.45 → 0 (a fist), 1.35 → 1 (open).
+
+| Style | What it is made of |
+|---|---|
+| HANDS | The capsule hands, byte for byte as before: a sphere per joint, a capsule per bone, the palm and the thumb web; a palm-only hand is the palm ellipse. The default. |
+| JOINTS | Beads only: small at the metacarpals' bases, larger at knuckles and mid joints, largest at the tips (0.12 × palm width), one at the palm (0.17 ×). |
+| PALMS | An orb at the palm, 0.2 → 0.4 × palm width as the hand opens; a 24-segment wire ring (0.78 ×) in the palm's plane; a spoke where the fingers point, ending in a bead. |
+| CAGE | A wire octahedron (12 tubes, 6 corner beads) in the palm's frame, longest along the fingers, 0.55 → 1.1 × palm width with openness; inside, a small solid octahedron turned 45°. |
+| MARIONETTE | A bead per fingertip on a string from a level bar 1.6 × palm width above the highest tip; a crossbar pointing the fingers' way and a string from its front to a bead at the palm. |
+
+**R12 with it.** `ghost.mirror`, `.guide`, `.tethers` (and `.style`) are
+`modulatable=False`; `on` and `alpha` stay modulatable. **`Learn.learn_source`
+refuses a non-modulatable target in words** ("Ghost mirror can't follow
+a hand (not modulatable) — not learned; Learn desk puts it on a
+button") and makes no row; **`Presets.load_doc` drops a saved route onto
+a known non-modulatable param** with the note `dropped <source> →
+<target>: not modulatable`, the file not rewritten (an unknown target
+id is still kept, dormant). 90 files and 984 routes in the factory
+presets, the library and `shared/dan-2026-10-04` were scanned: none aims
+at such a param; the owner's home was not read.
+
+**Differs from the plan, and why.** `extra` is per pose, not one pair
+(the old instance order, so depth ties resolve as before). HANDS keeps
+its palm disc for a palm-only pose (byte-for-byte wins); the others draw
+an orb (0.32 ×). **The guide is drawn on top in the four new styles**
+(the review: their palm solids hid an ON HAND gauge's 5.5 mm balls;
+0db74f9); in HANDS it stays partly behind the palm. `style_parts` falls
+back to HANDS for a bad index. Two tests that patched
+`CapsuleHands.draw` now patch `Geometry.draw`.
+
+**Tests.** `test_ghost.py::test_every_style_draws_from_the_same_poses`,
+`::test_a_style_never_draws_the_guide`,
+`::test_a_palm_only_hand_draws_in_every_style`,
+`::test_hands_is_the_old_geometry_byte_for_byte` (36 cases against a
+frozen copy of the parent's), `::test_the_guide_on_the_hand_reads_the_same_in_every_style_but_hands`,
+`::test_the_params_are_session_off_by_default_and_learnable` (updated:
+only `on` and `alpha` modulatable),
+`test_outputs.py::test_every_style_behaves_as_the_hands_in_every_state`,
+`test_learn.py::test_a_hand_learn_onto_a_setting_is_refused_in_words`,
+`test_presets.py::test_a_saved_route_onto_a_setting_is_dropped_with_a_note`,
+`test_ui_shell.py::test_the_ghost_style_is_on_the_hands_page_while_the_ghost_is_on`.
+148 hashes (layers and whole frames) equal on the parent and the branch.
+
+**Demo** (offscreen, synthetic hands): [`ghost-styles.png`](assets/21-outputs-and-the-hands/ghost-styles.png)
+(`tools/hands_tape.py styles`: the five side by side, both hands open
+and one a fist) and [`style-through.png`](assets/21-outputs-and-the-hands/style-through.png)
+(CAGE over and through warp + kaleido, the guide and labels unbent on
+both). [`styles.png`](assets/21-outputs-and-the-hands/styles.png) is the
+plan's probe of candidate styles, not the build. **Real launch:** 330
+frames twice, `ghost.style` stepped 0 → 4 by a script: nothing raised,
+`ghost.error` empty, the stall log empty, the hands' layer drawn in
+every style; the window not looked at.
+
+**Not verified.** How the styles read at distance with real hands (hand
+check 109); openness calibrated on synthetic hands only; the combo never
+seen in a real control window; whether a preset in the owner's home
+carries a route onto mirror, guide or tethers (if one does it now loads
+with a note).
+
+### WP3 — The output list (PR #123, merged with WP4 as 00b6517)
+
+**Built.** `[[output.screens]]` (`config.py`: `SCREEN`, `screens`,
+`number`; keys `name`, `monitor`, `fullscreen`, `scene`, `hands`,
+`through`, `dim`, each checked, a wrong kind back to its default with a
+note, an unknown key a note). **The list wins** over `[output] monitor /
+fullscreen` (one note when both are set; output 1's entry is copied into
+the scalar keys); a fifth entry, an entry that is not a table, an empty
+or non-list `screens` are each dropped with a note; a config `dim` under
+0.1 is 0.1 with a note, over 1 is 1. **`[output] bg` / `alpha` of the
+wrong kind falls back with a note** (it crashed the launch before).
+`app._windows` → `(slots, ctrl_win)`; `_later_output` (an
+`overlay.Output`, `allowed=False`, no params, its monitor and fullscreen
+from its entry — fork F10); `_open_presenters` (each later context
+current, `swap_interval(0)`, `Presenter(moderngl.create_context())`;
+output 1's `swap_interval(1)` stays where `main` makes its context —
+fork F6); `_draw_render` (the six steps); `Keys` polls every output
+window, the mouse stays on output 1, the loop ends when any window
+closes; reload targets gain each later `Output`, its backend and each
+`Presenter`. **`outputs.Presenter`**: its own programs and vertex arrays
+on its window's context. **`windows.json`**: schema unchanged, one rect
+per opened output in config order, an output not opened (or minimised)
+keeps its old entry or is `null`; **an old one-entry file loads** (output
+2 at its default spot). **The watch** (`RenderWatch(outputs=…)`): the
+stall is "no output presented"; one output dark for 2 s while another
+presents is a warning naming it, once per message; a present that
+raises is `output_failed`, a warning with its traceback.
+`placement.place(…, what=)` names the output in its notes.
+
+**Fork F9 as built, plainly:** a later output whose `monitor` index no
+connected screen has **is not opened**, with a note ("config: output 2
+(projector): monitor = 2, but 2 screens are connected (0–1) — not
+opened") and a disabled line on the OUTPUT page; output 1 always opens
+(an index no screen has is −1, plan 16's rule). **A screen plugged in
+after the launch is not picked up** — a later output that did not open
+stays closed for the run, and output 1's −1 stays −1 — until a relaunch
+(⌘R). Late plugging is not handled (audit P6).
+
+**Differs from the plan, and why.** `(slots, ctrl)` and `outputs.Slot`
+instead of a list of windows (the page needs the name, launch switches,
+the reason it is missing and the error); `present(handoff, size,
+target=None)`; the swap intervals set once at the launch; `glFlush` only
+with a later output; the 40 px cascade; a later output whose window or
+presenter will not build is closed and counts as not opened (the
+review: a never-drawn window showed garbage and fooled the watch;
+15d534d); the placement fallback keeps F9 (the review).
+`RenderWatch` takes an `outputs` callable instead of a composite `info`.
+
+**Tests.** New `tests/test_config.py::test_no_screens_list_is_one_output_as_today`,
+`::test_a_screens_list_wins_over_the_scalar_keys_with_a_note`,
+`::test_a_fifth_screen_is_dropped_with_a_note`,
+`::test_a_config_dim_cannot_launch_an_output_black`,
+`::test_a_ground_or_opacity_that_is_not_a_number_is_the_default_with_a_note`;
+`test_app_boundary.py` (fake window systems: a real second window
+cannot exist headless) `::test_one_window_per_listed_output`,
+`::test_a_later_output_whose_screen_is_absent_is_not_opened`,
+`::test_the_exits_save_one_rect_per_output`,
+`::test_only_the_first_output_waits_for_the_screen`,
+`::test_one_output_draws_the_view_renderer_draw_would`,
+`::test_the_rendering_context_is_flushed_before_a_presenter`,
+`::test_a_raising_presenter_does_not_stop_the_frame`,
+`::test_every_output_is_applied_and_polled_for_keys`,
+`::test_a_later_output_is_the_configs_and_never_overlay`;
+`test_watchdog.py::test_one_dark_output_of_two_is_a_warning_not_a_stall`,
+`::test_no_output_presenting_is_the_stall`;
+`test_placement.py::test_what_names_a_later_output_in_the_notes`;
+`test_outputs.py::test_the_presenter_shows_what_a_target_view_shows`
+(all eight states and three other shapes, byte for byte — **on the same
+context** as the renderer, a stand-in) and
+`::test_the_presenter_rebuilds_after_a_reload_in_its_own_context`.
+
+**Demo.** [`wp3-two-windows.png`](assets/21-outputs-and-the-hands/wp3-two-windows.png):
+output 1 and output 2 **read back from two real windows** on this
+laptop (400×260 each, `monitor = -1`, synthetic tape, warp on). **Real
+launches:** two outputs, 150 frames: output 2's picture equal to output
+1's byte for byte at frames 60, 90, 120 and 140 (the real share group,
+`external_texture` and the flush exercised); `windows.json` rewritten
+with two entries. No list, 150 frames: today's direct path, one entry.
+**Pacing not established**: median 271 fps with two outputs and 377 fps
+with one; the swap was not pacing the loop in either.
+
+**Not verified.** Two physical screens, fullscreen on a second monitor,
+mixed refresh rates, tearing, unplugging, minimising, ⌘R, real hands;
+`Output.apply()` moving a later output to fullscreen (output 1's code,
+not run here); hot reload of `outputs.py` with a live presenter (a
+standalone context only).
+
+### WP4 — The params and the OUTPUT page (PR #124, stacked on #123, merged as 00b6517)
+
+**Built.** `overlay.register_switches(reg, slots)`, called by `app.main`
+right after `_make_output` and before `library.attach`:
+`output.N.scene`, `.hands`, `.through` per **opened** output N (its
+place in the list), and `output.N.dim` when the config lists two or
+more outputs **or a lone entry sets `dim` under 1** (the review,
+c173df6). All group `output`, `persist=False`, `modulatable=False`;
+labels "Scene" / "Hands" / "Hands through effects" with one output, the
+output's name before them with several ("Glass scene"). They write the
+slot's `Switches`, which `_draw_render` hands the renderer in that
+output's `View` every frame. **Persisted nowhere**: every launch and
+every ⌘R starts from `config.toml`; undo, a preset load or save and a
+show load or save leave them alone. The OUTPUT page
+(`Panel._output_blocks`): under Master dim, a block per listed output —
+"N  name" and the three ticks (lined up after the widest name, the name
+cut so the ticks fit); the DIM row when the param exists; one line only
+when there is something to say (the present error first, then "hands:
+ghost hands are off (HANDS page)" or "hands: no tracker", "through: no
+effect on"); "shows: …" in words (`ui.output_shows`), in the warning
+colour when black; a disabled line for an output that did not open; and
+with several outputs "paced by output 1 · frame W×H · below: output 1's
+window". **With one output the page has no dim of its own: the master
+dim is it.** The footer, on every page: "· output 2 black" / "· outputs
+2, 4 black" for a reason other than the master dim. `Panel._check` takes
+an optional short label.
+
+Counts: 3 params on a one-output laptop, 8 on the two-output rig, 16 at
+four outputs (with `ghost.style`, the plan's 4 / 9 / 17).
+
+**Differs from the plan, and why.** The dim's registration rule (above);
+the notes on their own line (they did not fit beside the ticks); two
+more "shows:" phrases ("black — the scene is off and no hand shows",
+"black — master dim"); several black outputs named together; the
+undo / preset test in `test_undo.py`.
+
+**Tests.** New `test_overlay.py::test_the_output_switches_are_rig_settings`,
+`::test_one_output_has_no_dim_of_its_own`;
+`test_ui_shell.py` (`build_rig` carries four outputs, so
+`test_every_page_fits_the_control_window` runs with them)
+`::test_the_output_page_fits_with_four_outputs_and_overlays_rows`,
+`::test_the_output_page_says_what_each_output_shows`,
+`::test_the_output_page_with_one_output_has_no_dim_of_its_own`,
+`::test_the_footer_names_a_black_output`;
+`test_undo.py::test_the_output_switches_are_left_alone_by_undo_presets_and_shows`;
+`test_app_boundary.py::test_the_switches_are_registered_from_the_configs_launch_values`.
+
+**Demo** (read back from real windows on this laptop):
+[`wp4-eight-states-real.png`](assets/21-outputs-and-the-hands/wp4-eight-states-real.png)
+— output 2 stepped through the eight states by a script, its presenter
+window read back each time — and
+[`wp4-output-page.png`](assets/21-outputs-and-the-hands/wp4-output-page.png),
+the control window read back. **Real launch:** 210 frames, nothing
+raised; `Renderer.stats` for each state of output 2 (output 1 at state
+1) matched the route table and the two-output table (state 2 and 6:
+two chain runs; the rest one); state 1's output 2 equal to output 1 byte
+for byte. Nobody clicked the page: every change went through the params
+from a script.
+
+**Not verified.** The glass, the projector, real hands, a desk button
+learned onto a switch, a real click.
+
+### The eight states as built
+
+`outputs.route` (`hands shown` = the output's hands tick ∧ `ghost.on` ∧
+a hand drawn this frame, fork F7); the words are `ui.output_shows`'.
+Warp + kaleido on:
+
+| # | Scene | Hands | Through | Pipeline | Hands after | "shows:" |
+|---|---|---|---|---|---|---|
+| 1 | on | on | off | SCENE | yes | scene + hands over the effects |
+| 2 | on | on | on | SCENE+HANDS | no | scene + hands through the effects |
+| 3 | on | off | off | SCENE | no | scene |
+| 4 | on | off | on | SCENE | no | scene (= 3) |
+| 5 | off | on | off | none (the ground) | yes | hands |
+| 6 | off | on | on | HANDS | no | hands through the effects |
+| 7 | off | off | off | none | no | black — nothing switched on |
+| 8 | off | off | on | none | no | black — nothing switched on (= 7) |
+
+With no effect on, or no hand shown, the through tick changes nothing (2
+is 1, 6 is 5); with the scene off and no hand shown the output is
+"black — the scene is off and no hand shows". The readout layer (the
+guide and the tethers' labels) is laid on every output whose hands tick
+is on, after the hands, while it is split.
+
+### The frame as built
+
+```text
+app._draw_render
+ 1  output 1's context current; the stranded-target check; ctx.screen bound
+ 2  a View per output: output 1's on its framebuffer (Renderer.draw's View, so one
+    output is today's frame), each later one with its presenter and its size
+ 3  renderer.draw_outputs(...)
+      once:      the face picture; the scene pass; resolve; the cover; lookback.tick, pull;
+                 fx.tick; fx.opaque
+                 the hands' layer (Ghost.layer), only if some View's hands tick is on —
+                 guarded; the readout split only with an effect on, some output
+                 through, the guide on
+                 route every View (after the layer: "a hand shown" needs it)
+      per key:   SCENE, SCENE+HANDS, HANDS in that order, each once, into the View
+                 itself (its only consumer, at the frame size) or a frame texture
+                 (RGBA8, LINEAR, frame size); a raise → its Views show their ground
+      once:      lb.capture(scene.tex) — after every pipeline; fx.state.advance_to(t)
+                 when an effect is on and no chain ran
+      per View:  the picture (nothing | 1:1 texelFetch | scaled into fit()'s rect, the
+                 rest the ground | the ground); the hands after; the readout; the dim
+                 (output.dim × its own) — or, for a presenter View, a Handoff
+      exit:      views[0].target bound with its rect and BLEND on, a raise included
+ 4  glFlush, only when a later output exists
+ 5  each later output, in its own try: current, Presenter.present(handoff, size), swap
+    (interval 0); a raise → slot.error, watch.output_failed, the frame goes on
+ 6  finally: output 1 current, swap (interval 1: it paces the loop)
+```
+
+### The presenter hand-off as built
+
+`View.handoff` is an `outputs.Handoff(frame, frame_size, rect, hands,
+readout, alpha, factor, bg_alpha)`: `frame` the pipeline's frame texture
+or None (the ground); `rect` `fit(frame_size, …)` inside the view's
+rect; `hands` `Ghost.tex` when this output's hands go over the effects;
+`readout` `Ghost.readout` when split and this output's hands tick is on;
+`alpha` `ghost.alpha`; `factor` master × own dim, clamped; `bg_alpha`
+the output's ground. `Presenter.present(handoff, size, target=None)`,
+in its own context: (1) clear to `(0, 0, 0, bg_alpha)`; (2) the frame
+into `rect`, 1:1 by `texelFetch` or scaled, alpha 1 on an opaque ground;
+(3) the hands and (4) the readout into `rect` at `alpha` with
+`Ghost.composite`'s blend; (5) the dim with `dim_pass`'s blend when
+`factor` is under 1. Textures are wrapped by GL name
+(`ctx.external_texture`), cached per (name, size); nothing is built
+before the first `present`; `on_reload` marks it stale and the next
+`present` rebuilds in its own context; it leaves its framebuffer bound,
+a raise included.
+
+### What the orchestrator saw (apart from what the agents reported)
+
+- Merged WP5, then WP1 + WP2, WP6, WP3 + WP4 into `plan-21-integration`
+  with plans 19 and 20 underneath; the conflicts were in
+  `hotreload.MODULES` and two test files, both append against append.
+- Ran the suite on that branch: **1549 passed, 1 skipped**; `ruff`
+  clean.
+- Looked at `ghost-styles.png` (offscreen): the five styles are clearly
+  distinct; the PALMS orb and the CAGE shrink as the hand closes; the
+  hands fill about a quarter of each cell at that camera distance.
+- **Launched the real app** on this laptop against a temp home, with a
+  two-entry `[[output.screens]]` (glass; projector with `through =
+  true`, `dim = 0.6`), two small windows on the laptop's own display,
+  190 frames: both outputs' params read the config's launch values;
+  warp + kaleido switched on gave `chain_runs 1`; flipping output 2's
+  scene and through from a script changed the stats with no error;
+  `ghost.style` stepped to CAGE; an undo took back the style and effect
+  edits and left the output switches where they were; `ghost.error`
+  empty; the stall log empty. No hand was in view (no tape), so `layer`
+  stayed False: **the hands were not drawn in that launch**. The windows
+  were not looked at by eye.
+- **Pacing is not confirmed.** In the agents' short launches both the
+  two-output path and today's one-window path ran unpaced (270–380 fps),
+  so fork F6's frame-rate claim (the first output vsynced, the others
+  not) is neither confirmed nor refuted: hand check 107.
+
+### During the run: a test run aborted in CoreMIDI
+
+At 22:36 on 2026-10-04 a full pytest run aborted inside `rtmidi`
+creating a CoreMIDI client (a crash dialog on the owner's screen).
+`tests/test_hands_boundary.py` was found scanning and opening a real
+MIDI output. `tests/conftest.py::_no_real_midi` (autouse, f289afb "Tests
+never reach the machine's MIDI") now gives every test empty port lists
+and an open that raises, unless a test patches `mido` itself. **The
+exact crashing path (the input side) was not found.** The app has the
+same exposure: with no desk connected it rescans the ports every
+`midi.RECONNECT_S` (2 s) through `mido.get_input_names()`, and if
+CoreMIDI refuses a client there rtmidi aborts in native code that the
+`except` in `midi.Ports.connect` cannot catch. Not seen to happen in the
+app; filed as audit R15.
+
+### WP7 — Docs, decisions, hand checks (this PR)
+
+This section and the *As built* notes above; `DECISION-REGISTER.md` rows
+**79–88**; `DECISIONS.md`'s 2026-10-04 rows (the owner's three, the
+rest on a recommendation) and the extended rows (the 2026-09-18 two
+windows, the ghost hands' last pass, the master dim, window placement,
+"any param a modulation target"); `11-hand-checks.md` group **Q, checks
+99–112**, check 47 finished by 108; `ARCHITECTURE.md`, `ENGINEERING.md`;
+`AUDIT-2026-09.md` rows R15 (the MIDI rescan), P6 (a screen plugged in
+after launch) and V8 (`Renderer.on_reload`'s context);
+`plans/README.md`, `CHECKPOINT.md`, the roadmap's pointer.
+
+**Left stale in code** (comments and docstrings are not this package's
+to edit; listed in the PR): `render.py`'s comment before the pipeline
+loop ("captured after the first composite"); `ghost.py`'s module
+docstring ("its own pass, after everything else … no effect … ever
+touches them") and `ghost.on`'s tip ("after every effect"), both now
+the default of the through tick only; `app._open_presenters`'
+docstring quoting "121 fps against 60–81" as a fact; `outputs.py`'s
+module docstring naming scene, hands and dim as an output's switches
+but not through; `Ghost.readout`'s docstring ("only while the guide is
+on"; it also needs `readout=True` and a target that builds).
+
+### Not verified, in one place
+
+Nothing in plan 21 has met the glass, the projector, a second screen, a
+real hand or the APC40. Unseen by a person: any window of it (every
+picture was an offscreen render or a script's read-back), the OUTPUT
+page clicked, a style at distance, a switch learned onto the desk.
+Unmeasured: pacing and tearing with two screens (F6), mixed refresh
+rates, real fullscreen on two monitors, a screen unplugged or plugged in
+mid-run, `skeleton()` on real `leap` objects, hot reload of `outputs.py`
+under a live presenter. The order to see them in is group Q.
 
 ## Appendix — group Q for `11-hand-checks.md`
 
