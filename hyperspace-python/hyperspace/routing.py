@@ -236,6 +236,7 @@ from . import apc40
 from .bands import BANDS, CEIL
 from .params import (
     DRIVE,
+    F_KEYS,
     PERFORMANCE_GROUPS,
     PLANES,
     ROT_RATE_MAX,
@@ -343,11 +344,11 @@ APC_NEW_ROWS = (
 # its own row (`Router.keys`).
 # Plan 15 WP2 adds Home (fn ← on a laptop; fork 7): it fires `preset.home`,
 # which loads the preset the show starts on.
-BANK_SLOTS = 8
+# F_KEYS (params): the F-key rows are the bank's first eight slots
 LOOP_KEY_ROWS = (
     ("R", "camera.reset", "fire"),
-    *[(f"F{k + 1}", f"preset.load.{k}", "fire") for k in range(BANK_SLOTS)],
-    *[(f"SHIFT+F{k + 1}", f"preset.save.{k}", "fire") for k in range(BANK_SLOTS)],
+    *[(f"F{k + 1}", f"preset.load.{k}", "fire") for k in range(F_KEYS)],
+    *[(f"SHIFT+F{k + 1}", f"preset.save.{k}", "fire") for k in range(F_KEYS)],
     ("SUPER+Z", "edit.undo", "fire"), ("SHIFT+SUPER+Z", "edit.redo", "fire"),
     ("CONTROL+Z", "edit.undo", "fire"), ("CONTROL+SHIFT+Z", "edit.redo", "fire"),
     ("HOME", "preset.home", "fire"),
@@ -359,7 +360,7 @@ LOOP_KEY_ROWS = (
 THEME_TO_PRESET = {
     "theme.select": "preset.select", "theme.next": "preset.next",
     "theme.prev": "preset.prev",
-    **{f"theme.{w}.{k}": f"preset.{w}.{k}" for w in ("load", "save") for k in range(BANK_SLOTS)},
+    **{f"theme.{w}.{k}": f"preset.{w}.{k}" for w in ("load", "save") for k in range(F_KEYS)},
 }
 KEY_NEW_ROWS = (
     ("key:B", "tempo.tap", "fire", 1.0),

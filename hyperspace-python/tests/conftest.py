@@ -5,6 +5,9 @@ Every test runs with ``HYPERSPACE_HOME`` pointed at its own tmp_path
 accident — a test that needs a specific home still sets the variable
 itself, on top of this. ``library.home()`` reads the variable on every
 call, so there is no cache to clear.
+
+``owner_home`` (plan 19 WP1) is a home shaped like the owner's, for every
+test that proves a rule about the owner's files "on a copy".
 """
 
 import os
@@ -46,3 +49,191 @@ def opened_last(home, show: str = "house"):
     home.mkdir(parents=True, exist_ok=True)
     (home / "last_show").write_text(f"{show}\n")
     return home
+
+
+# ------------------------------------------------ plan 19: a home like the owner's
+
+# the three presets `owner_home` holds, saved through `Presets.save_as`
+OWNER_PRESETS = ("NIGHT ONE", "NIGHT TWO", "NIGHT THREE")
+# in NIGHT TWO: a pad of clip row 4 the owner re-aimed, as its desk row,
+# and a device knob the owner learned (knob 1–8, target)
+OWNER_PAD = {"source": "note:2:56", "target": "fx.acid.on", "op": "toggle", "feedback": "led"}
+OWNER_KNOB = (3, "fx.mix")
+# the session row of bindings.json the owner changed: (source, new target)
+OWNER_ROW = ("cc:0:15", "master.gain")
+OWNER_SHOWS = ("mine", "party")           # each with an eight-name bank
+
+
+def old_shape_pads() -> list[dict]:
+    """The sixteen shape pads of clip rows 4 and 5 as a preset saved before
+    plan 19 WP2 holds them in its `desk` (`preset.desk_json` of the rows
+    `apc40.DEFAULT_MAP` had on the preset layer): pad k of row 4 sets shape
+    k, pad k of row 5 shape 8 + k."""
+    from hyperspace import apc40, preset
+    from hyperspace.routing import Binding
+
+    return preset.desk_json(
+        Binding(f"note:{k}:{apc40.N_CLIP[3 + row]}", "view.shape", "set", float(8 * row + k),
+                feedback="led", on=apc40.GREEN, layer="preset")
+        for row in range(2) for k in range(8))
+
+
+def boot_home(home):
+    """The app's construction order (app.main), headless, over `home` as it
+    is: the library, the registry, the table from `<home>/bindings.json`,
+    the router, the presets, the launch's migration and the startup preset."""
+    from types import SimpleNamespace
+
+    from hyperspace import lfo, preset, routing, tempo
+    from hyperspace.analysis import Analyser
+    from hyperspace.analyzer import Analyzer
+    from hyperspace.control import Control
+    from hyperspace.fx import FxState
+    from hyperspace.library import Library
+    from hyperspace.lookback import DreamState
+    from hyperspace.params import build_registry
+    from hyperspace.view import ViewState
+
+    chain = Analyzer(Analyser())
+    control = Control(chain)
+    view = ViewState()
+    lib = Library(home, period=0.0)
+    reg = build_registry(view, control, SimpleNamespace(chain=chain), lib.project,
+                         dream=DreamState(), fx=FxState())
+    lib.on_layout("band", control.apply_layout)
+    lib.extra("band", lambda: {"layout": chain.layout()})
+    lib.on_load("band", control.scene_loaded)
+    control.library = lib
+    clock = tempo.Clock(now=lambda: 0.0)
+    tempo.register(reg, clock)
+    lfo.register(reg, lfo.LFOs(), clock)
+    table = routing.Bindings.load(routing.bindings_path(home), legacy_midi=None)
+    routing.register_desk(reg, table)
+    lib.attach(reg)
+    router = routing.Router(reg, table)
+    presets = preset.Presets(lib, reg, router)
+    preset.migrate_home(lib, router)
+    lib.project.load_startup()
+    return SimpleNamespace(lib=lib, reg=reg, view=view, control=control, chain=chain,
+                           router=router, presets=presets, clock=clock, home=home)
+
+
+def _with_old_pads(path, re_aimed: dict | None = None) -> None:
+    """A preset file as a build from before plan 19 WP2 saved it: every one
+    of the sixteen pads of clip rows 4 and 5 has its row in `desk` — the
+    old shape row, or `re_aimed` on its pad. Today's writer puts them there
+    itself and the file is left alone; once the desk stops mapping those
+    pads (WP2) they are written in, in the kind's own text."""
+    import json
+
+    from hyperspace import preset
+
+    doc = json.loads(path.read_text())
+    desk = list(doc.get("desk") or [])
+    have = {row["source"] for row in desk}
+    want = [re_aimed if re_aimed and row["source"] == re_aimed["source"] else row
+            for row in old_shape_pads()]
+    missing = [row for row in want if row["source"] not in have]
+    if missing:
+        doc["desk"] = desk + missing
+        path.write_text(preset.dumps(doc))
+
+
+@pytest.fixture()
+def owner_home(tmp_path):
+    """`build_owner_home` in a temp folder of the test's own: a home shaped
+    like the owner's, for a rule about the owner's files proved "on a
+    copy". Returns the home's path, with ``HYPERSPACE_HOME`` pointing at
+    it. A test opens it with `boot_home(owner_home)` and compares what its
+    rule says is untouched byte for byte (`tree`)."""
+    home = tmp_path / "owner-home"
+    os.environ["HYPERSPACE_HOME"] = str(home)       # (the autouse fixture puts it back)
+    return build_owner_home(home)
+
+
+def build_owner_home(home):
+    """Make `home` (a folder that does not exist yet) a home shaped like
+    the owner's after a night on the build from before plan 19, by running
+    the writers (`Presets.save_as`, `Project.save`, `Bindings.write`,
+    `placement.save`, `to_trash`), not by hand-written JSON, so it tracks
+    the formats (tools/bank_demo.py builds its home here too):
+
+    - ``projects/mine.hyp.json`` and ``projects/party.hyp.json`` (a user
+      copy of the party show), each with an **eight-name** bank; ``mine``
+      names the three presets below and is the show opened last;
+    - ``presets/``: NIGHT ONE, NIGHT TWO, NIGHT THREE (`OWNER_PRESETS`),
+      each with a `desk` holding the sixteen shape pads of clip rows 4–5
+      (`old_shape_pads`); NIGHT TWO has one of those pads re-aimed
+      (`OWNER_PAD`) and a learned device knob (`OWNER_KNOB`);
+    - ``bindings.json`` as the table writes it, one session row changed
+      (`OWNER_ROW`);
+    - ``last_show``, ``windows.json``, a ``stall.log``, a file under
+      ``weights/`` and one file already in ``trash/presets/``.
+
+    Returns `home`. Never run on a real home: it is built from nothing."""
+    import json
+    from pathlib import Path
+
+    from hyperspace import library, placement, preset
+    from hyperspace.routing import Binding
+
+    home = Path(home)
+    if home.exists():
+        raise FileExistsError(f"{home}: an owner-like home is built in a new folder")
+    r = boot_home(home)                             # a fresh home: the factory party show
+    reg, pr, table = r.reg, r.lib.project, r.router.table
+    one, two, three = OWNER_PRESETS
+    # NIGHT ONE: TUMBLE, dimmer
+    reg["view.bright"].set(reg["view.bright"].value * 0.8)
+    r.presets.save_as(one)
+    # NIGHT TWO: a pad of row 4 re-aimed and a device knob learned
+    rows = [b for b in table.desk() if b.source != OWNER_PAD["source"]]
+    rows.append(Binding.from_json({**OWNER_PAD, "layer": "preset"}))
+    rows.append(preset.device_knob(*OWNER_KNOB))
+    table.set_desk(rows, load=False)
+    reg["view.speed"].set(reg["view.speed"].value * 0.5)
+    r.presets.save_as(two)
+    # NIGHT THREE: WAKE with its eight device knobs, the trail longer
+    r.presets.load("WAKE")
+    reg["dream.fade"].set_norm(0.7)
+    r.presets.save_as(three)
+    folder = home / library.PRESETS
+    for name in OWNER_PRESETS:
+        _with_old_pads(folder / f"{library.slug(name)}.json",
+                       OWNER_PAD if name == two else None)
+    # the user copy of the party show, with the eight names it had before
+    # plan 19 gave the factory one a ninth
+    pr.load("party", startup=False)
+    pr.bank[library.F_KEYS:] = [None] * (len(pr.bank) - library.F_KEYS)
+    pr.save()
+    # mine: the three presets and five of the party's, starting on NIGHT ONE
+    pr.bank[:3] = [one, two, three]
+    pr.startup = one
+    pr.save("mine")
+    # bindings.json: the session's rows, one of them the owner's own
+    source, target = OWNER_ROW
+    row = next(b for b in table.bindings if b.source == source and b.layer != "preset")
+    row.target = target
+    table.write()
+    placement.save(home, (40, 60, 960, 900), [(1040, 60, 1280, 720)],
+                   [placement.Screen("test", 0, 0, 2560, 1440)])
+    (home / "stall.log").write_text("2026-10-03 23:58:01 stall 2.4 s in frame (dream)\n")
+    (home / "weights").mkdir()
+    (home / "weights" / "model.safetensors").write_bytes(bytes(range(256)) * 4)
+    assert library.to_trash(folder / f"{library.slug(one)}.json", home) is not None
+    for show in OWNER_SHOWS:
+        doc = json.loads((home / "projects" / f"{show}.hyp.json").read_text())
+        assert len(doc["bank"]) == library.F_KEYS, show
+    return home
+
+
+def tree(home, *, but: tuple[str, ...] = ()) -> dict:
+    """Every file under `home` — {path: (bytes, mtime_ns)} — less those
+    whose relative path starts with one of `but`: what "untouched, byte
+    for byte" compares."""
+    from pathlib import Path
+
+    home = Path(home)
+    return {p.relative_to(home).as_posix(): (p.read_bytes(), p.stat().st_mtime_ns)
+            for p in sorted(home.rglob("*"))
+            if p.is_file() and not p.relative_to(home).as_posix().startswith(but)}

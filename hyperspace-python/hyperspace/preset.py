@@ -91,6 +91,7 @@ from . import apc40, routing, undo
 from .bands import BANDS
 from .lfo import SHAPES, SYNCS
 from .library import (
+    F_KEYS,
     FACTORY,
     HOUSE_PROJECT,
     MINE_PROJECT,
@@ -103,6 +104,7 @@ from .library import (
     SLOTS,
     LibraryError,
     _write_text,
+    bank_doc,
     slug,
 )
 from .lookback import (
@@ -393,8 +395,7 @@ class Presets:
         """The library's load hook: the bank lights the slot that names
         what just loaded, whichever road it came in by (the strip, an F-key,
         a file edited on disk); a preset the bank does not name lights none."""
-        pr = self.lib.project
-        pr.active = pr.bank.index(name) if name in pr.bank else -1
+        self.lib.project.follow()
         for fn in getattr(self, "listeners", ()):
             try:
                 fn(name)
@@ -1326,8 +1327,10 @@ def migrate_project(root: Path, path: Path, carried: routing.Carried, *,
     if not isinstance(doc, dict) or doc.get("schema") != PROJECT_V1:
         return [], False, False
     keep, labels = _labels(doc.get("modules") or {})
-    raw = list(doc.get("bank") or [])[:SLOTS]
-    raw += [None] * (SLOTS - len(raw))
+    # a schema-1 bank is the F-keys' eight: the file written holds eight
+    # entries (`bank_doc`), as it did before the bank grew (plan 19 WP1)
+    raw = list(doc.get("bank") or [])[:F_KEYS]
+    raw += [None] * (F_KEYS - len(raw))
     bank, first, notes = slot_presets(root, raw, carried, labels, factory)
     try:
         seeds = list(json.loads((factory / PROJECTS / f"{HOUSE_PROJECT}{PROJECT_SUFFIX}")
@@ -1377,7 +1380,7 @@ def migrate_project(root: Path, path: Path, carried: routing.Carried, *,
     if doc.get("note"):
         new["note"] = str(doc["note"])
     new.update(startup=startup or next((n for n in bank if n), None),
-               bank=bank, session=session, modules=keep)
+               bank=bank_doc(bank), session=session, modules=keep)
     bak = routing.backup(path, "1")
     if bak is None:
         return [*notes, f"{path.name} NOT migrated: no backup could be made"], False, False
@@ -1400,17 +1403,22 @@ def _into_default(root: Path, name: str, factory: Path = FACTORY) -> str:
     doc = json.loads(src.read_text())
     if not isinstance(doc, dict) or doc.get("schema") != PROJECT_SCHEMA:
         raise ValueError(f"{path.name} is not a {PROJECT_SCHEMA} project")
-    bank =[n for n in list(doc.get("bank") or [])[:SLOTS] if n != name]
+    # the bank moves one slot along over the length the file has (eight,
+    # or as far as its last far slot: plan 19 WP1), so a name leaves the
+    # F-keys' eight exactly as it did before the bank grew
+    had = bank_doc(list(doc.get("bank") or [])[:SLOTS])
+    bank = [n for n in had if n != name]
     bank.insert(0, name)
-    bank += [None] * (SLOTS - len(bank))
+    bank += [None] * (len(had) - len(bank))
     gone = ""
-    if len(bank) > SLOTS:
+    if len(bank) > len(had):
         spare = next((k for k in range(len(bank) - 1, 0, -1) if bank[k] is None), None)
         if spare is not None:
             bank.pop(spare)
-        else:
+        elif len(had) == F_KEYS or len(bank) > SLOTS:
             gone = f"; {bank.pop()!r} left the bank (its file stays)"
-    doc.update(bank=bank, startup=name)
+        # (a bank already past the F-keys, and full to its end, grows by one)
+    doc.update(bank=bank_doc(bank), startup=name)
     if fresh:
         doc["name"] = MINE_PROJECT
         doc.pop("note", None)

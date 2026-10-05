@@ -811,7 +811,11 @@ def test_the_bar_lights_while_held_and_the_new_slots_pad_blinks(rig):
     assert [leds(rig, STOP, k, mark) for k in range(8)] == [[1, 2, 0]] * 8
     assert leds(rig, pad, 1, mark) == [apc40.GREEN_BLINK, apc40.GREEN]
     at(12.5, note(STOP, 0, channel=7))
-    # a full bank: only the bar blinks — no pad came on
+    # a full bank: only the bar blinks — no pad came on (plan 19 WP1: the
+    # bank is twenty-four, so the far slots are filled first)
+    for k in range(8, len(pr.bank)):
+        if pr.bank[k] is None:
+            pr.put_slot(k, "WAKE")
     mark = len(rig.out.sent)
     assert pr.next_empty() is None
     at(20.0, note(STOP, channel=0))

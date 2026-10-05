@@ -24,7 +24,7 @@ from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
 from hyperspace.fx import FxState
 from hyperspace.hands import HandSettings, HandsIO
-from hyperspace.library import FACTORY, SLOTS, Library, LibraryError
+from hyperspace.library import F_KEYS, FACTORY, SLOTS, Library, LibraryError, bank_doc
 from hyperspace.lookback import DreamState
 from hyperspace.params import PERFORMANCE_GROUPS, build_registry, part_of
 from hyperspace.preset import Presets
@@ -333,9 +333,14 @@ def test_a_preset_carries_the_macros(rig):
 
 def test_the_bank_names_the_house_presets(rig):
     pr = rig.lib.project
-    assert len(pr.bank) == SLOTS and pr.bank[0] == "BIG BLUE WAVE"
-    assert len(set(pr.bank)) == SLOTS and all(rig.lib.is_factory("presets", n) for n in pr.bank)
-    assert rig.reg["preset.select"].names == pr.bank
+    # plan 19 WP1: twenty-four slots; the house show fills the F-keys' eight
+    assert len(pr.bank) == SLOTS == 24 and pr.bank[0] == "BIG BLUE WAVE"
+    eight = pr.bank[:F_KEYS]
+    assert len(set(eight)) == F_KEYS and all(rig.lib.is_factory("presets", n) for n in eight)
+    assert pr.bank[F_KEYS:] == [None] * (SLOTS - F_KEYS)
+    select = rig.reg["preset.select"]
+    assert select.names == eight + [f"SLOT {k + 1}" for k in range(F_KEYS, SLOTS)]
+    assert [select.has(k) for k in range(SLOTS)] == [True] * F_KEYS + [False] * (SLOTS - F_KEYS)
 
 
 def test_a_slot_names_a_preset_file(rig):
@@ -363,13 +368,18 @@ def test_cycle_flips_through_the_filled_slots(rig):
     assert pr.active == 1
     pr.cycle()
     assert pr.active == 3                                  # the empty slot is skipped
-    for _ in range(SLOTS - 4):
+    for _ in range(F_KEYS - 4):                            # the house show fills eight
         pr.cycle()
-    assert pr.active == SLOTS - 1
+    assert pr.active == F_KEYS - 1
     pr.cycle()
-    assert pr.active == 0                                  # wraps
+    assert pr.active == 0                                  # wraps past the empty far slots
     pr.cycle(-1)
-    assert pr.active == SLOTS - 1                          # and backwards
+    assert pr.active == F_KEYS - 1                         # and backwards
+    pr.put_slot(19, "WAKE")                                # a far slot is in the round
+    pr.cycle()
+    assert pr.active == 19 and rig.lib.current("presets") == "WAKE"
+    pr.cycle()
+    assert pr.active == 0
 
 
 def test_shift_f_saves_the_live_state_as_the_slots_preset(rig):
@@ -390,7 +400,8 @@ def test_shift_f_saves_the_live_state_as_the_slots_preset(rig):
     assert "tempo.bpm" not in user["values"] and "master.gain" not in user["values"]
     assert pr.bank[2] == "STROBE CAGE" and pr.active == 2
     doc = json.loads((home / "projects" / "house.hyp.json").read_text())
-    assert doc["schema"] == "hyperspace.project/2" and doc["bank"] == pr.bank
+    assert doc["schema"] == "hyperspace.project/2"
+    assert doc["bank"] == pr.bank[:F_KEYS] == bank_doc(pr.bank)     # eight in the file
     # an empty slot: a new name, made unique against what is there
     put(home, "PRESET 8")
     pr.bank[6] = pr.bank[7] = None
@@ -398,7 +409,8 @@ def test_shift_f_saves_the_live_state_as_the_slots_preset(rig):
     reg["preset.save.7"].fire()
     assert pr.bank[6] == "PRESET 7" and pr.bank[7] == "PRESET 8 (2)"
     assert (home / "presets" / "preset-7.json").is_file()
-    assert json.loads((home / "projects" / "house.hyp.json").read_text())["bank"] == pr.bank
+    assert (json.loads((home / "projects" / "house.hyp.json").read_text())["bank"]
+            == bank_doc(pr.bank))
     assert not pr.is_dirty() and pr.bank_error == ""
 
 
@@ -1063,11 +1075,24 @@ def test_the_orbit_hands_leaving_return_the_camera_to_where_the_mouse_left_it(ri
 
 # ------------------------------------------- plan 15 WP4: save-as from the desk
 
-def party(tmp_path):
-    """The party show on a fresh home, slot 6 (ACID) emptied, TRIP loaded."""
+def fill_far(pr, name: str = "WAKE") -> None:
+    """Every empty slot past the F-keys pointed at `name`: a bank with no
+    room there (the show is written, as any slot change writes it)."""
+    for k in range(F_KEYS, len(pr.bank)):
+        if pr.bank[k] is None:
+            pr.put_slot(k, name)
+
+
+def party(tmp_path, full: bool = True):
+    """The party show on a fresh home, slot 6 (ACID) emptied, TRIP loaded.
+    `full`: slots 10–24 filled too, so the F-keys' holes are the only room
+    (the tests written on the bank of eight)."""
     r = boot(tmp_path, None)
     pr = r.lib.project
-    assert pr.bank == ["TUMBLE", "FACES", "FIELD", "WAKE", "TRIP", "ACID", "MANDALA", "NOITA"]
+    assert pr.bank == ["TUMBLE", "FACES", "FIELD", "WAKE", "TRIP", "ACID", "MANDALA", "NOITA",
+                       "TRACER"] + [None] * 15
+    if full:
+        fill_far(pr)
     pr.clear_slot(5)
     r.reg["preset.load.4"].fire()
     assert r.lib.current("presets") == "TRIP" and pr.active == 4
@@ -1151,7 +1176,7 @@ def test_save_new_fills_the_next_empty_slot_and_becomes_the_loaded_preset(tmp_pa
     assert pr.bank[1] == "TRIP 2" and pr.active == 1 and pr.bank[4] == "TRIP"
     assert lib.current("presets") == "TRIP 2" and not lib.is_dirty("presets")
     assert lib.status == "saved TRIP 2 → F2" and pr.bank_error == ""
-    assert json.loads(show.read_text())["bank"] == pr.bank and not pr.is_dirty()
+    assert json.loads(show.read_text())["bank"] == bank_doc(pr.bank) and not pr.is_dirty()
     assert reg["preset.select"].names[1] == "TRIP 2" and reg["preset.select"].value == 1
     assert not lib.is_factory("presets", "TRIP 2") and lib.is_factory("presets", "TRIP")
     doc = lib.read("presets", "TRIP 2")
@@ -1160,7 +1185,7 @@ def test_save_new_fills_the_next_empty_slot_and_becomes_the_loaded_preset(tmp_pa
     reg["preset.save_new"].fire()
     assert pr.bank[5] == "TRIP 3" and pr.active == 5 and lib.current("presets") == "TRIP 3"
     assert lib.status == "saved TRIP 3 → F6"
-    assert json.loads(show.read_text())["bank"] == pr.bank
+    assert json.loads(show.read_text())["bank"] == bank_doc(pr.bank)
     assert pr.next_empty() is None
     # the trigger is a session-side control: never saved, never performed
     p = reg["preset.save_new"]
@@ -1176,6 +1201,7 @@ def test_save_new_on_a_full_bank_saves_to_the_list_and_says_so(tmp_path):
     the warning says where it went — every time it happens."""
     r = boot(tmp_path, None)
     lib, reg, pr, home = r.lib, r.reg, r.lib.project, r.home
+    fill_far(pr)                                 # (plan 19 WP1: the party show has 15 empty)
     reg["preset.load.4"].fire()
     bank = list(pr.bank)
     assert pr.next_empty() is None
@@ -1215,7 +1241,9 @@ def test_save_new_on_a_full_bank_saves_to_the_list_and_says_so(tmp_path):
     assert name != cur and name in lib.list("presets")
     assert pr.bank[3] is None and pr.active == -1 and show.read_text() == before
     assert "disk full" in pr.bank_error and not pr.is_dirty()
-    assert lib.warning == f"saved {name} — the show could not be written: it is in the preset list"
+    # the footer says why (plan 19 WP1: a show that cannot be backed up says so here)
+    assert lib.warning == (f"saved {name} — the show could not be written: it is in the "
+                           "preset list (disk full)")
     reg["preset.save_new"].fire()                            # the disk is back: F4, and no error
     assert pr.bank[3] == lib.current("presets") and pr.bank_error == ""
 
@@ -1261,6 +1289,7 @@ def test_put_and_clear_slot_write_the_show_and_delete_no_file(tmp_path):
     assert lib.current("presets") == "TUMBLE" and pr.active == 0
     pr.clear_slot(5)
     assert pr.bank[5] is None and json.loads(show.read_text())["bank"][5] is None
+    assert json.loads(show.read_text())["bank"] == bank_doc(pr.bank)
     assert not pr.factory and not pr.is_dirty()             # your copy, written
     assert lib.status == "F6: cleared — ACID is still in the preset list"
     assert "ACID" in lib.list("presets") and lib.is_factory("presets", "ACID")
@@ -1296,7 +1325,7 @@ def test_put_and_clear_slot_write_the_show_and_delete_no_file(tmp_path):
     pr.clear_slot(-1)
     pr.clear_slot(5)
     assert pr.bank == bank and show.read_text() == before
-    assert json.loads(show.read_text())["bank"] == pr.bank
+    assert json.loads(show.read_text())["bank"] == bank_doc(pr.bank)
     assert user_presets(home) == files and not (home / "trash").exists()
 
 
@@ -1319,3 +1348,75 @@ def test_the_bank_calls_are_no_undo_step(tmp_path):
     settle(r)
     assert pr.bank[5] == "TRIP 2" and pr.bank[0] == "WAKE"
     assert r.undo.stack == [] and not r.undo.undo()
+
+
+# ------------------------------------------- plan 19 WP1: a bank of twenty-four
+
+def test_save_new_lands_past_the_f_keys_and_a_full_bank_says_so(tmp_path):
+    """The desk's save-as on the party show: F1–F8 and slot 9 are filled,
+    so fifteen saves fill slots 10–24, each said by its slot; the sixteenth
+    finds the bank full and saves to the list. A factory show's first
+    write makes your copy: there is no eight-slot file of yours to keep,
+    so no backup."""
+    r = boot(tmp_path, None)
+    lib, reg, pr, home = r.lib, r.reg, r.lib.project, r.home
+    show = home / "projects" / "party.hyp.json"
+    reg["preset.load.4"].fire()
+    assert lib.current("presets") == "TRIP" and pr.next_empty() == 9 and not show.exists()
+    for n in range(15):
+        assert reg["preset.save_new"].fire() is True
+        assert pr.bank[9 + n] == f"TRIP {n + 2}" and pr.active == 9 + n
+        assert lib.status == f"saved TRIP {n + 2} → slot {10 + n}"
+        assert json.loads(show.read_text())["bank"] == bank_doc(pr.bank)
+    assert pr.next_empty() is None and len(json.loads(show.read_text())["bank"]) == SLOTS
+    assert reg["preset.select"].names[9:] == [f"TRIP {n}" for n in range(2, 17)]
+    assert all(reg["preset.select"].has(k) for k in range(SLOTS))
+    bank = list(pr.bank)
+    assert reg["preset.save_new"].fire() is True
+    assert lib.warning == "saved TRIP 17 — the bank is full: it is in the preset list"
+    assert pr.bank == bank and "TRIP 17" in lib.list("presets") and pr.active == -1
+    assert not list(home.rglob("*.bak-*")) and not pr.is_dirty()
+
+
+def test_active_follows_the_loaded_preset_from_one_place(tmp_path):
+    """`Project.follow` is the one spelling of "the lit slot follows the
+    loaded preset": kept where it is while that slot still names it, else
+    the first slot that names it, else none; none when nothing is loaded.
+    A preset on two slots lights the one that was pressed."""
+    import inspect
+
+    from hyperspace import library
+
+    r = boot(tmp_path, None)
+    lib, reg, pr = r.lib, r.reg, r.lib.project
+    pr.put_slot(13, "WAKE")                                # WAKE on F4 and on slot 14
+    pr.load_slot(13)
+    assert lib.current("presets") == "WAKE" and pr.active == 13       # the one pressed
+    reg["preset.load.3"].fire()
+    assert pr.active == 3
+    reg["preset.select"].set(13)
+    assert pr.active == 13 and reg["preset.select"].value == 13
+    pr.put_slot(20, "FACES")                               # another slot changes: it stays
+    assert pr.active == 13
+    pr.clear_slot(13)                                      # its slot cleared: the other one
+    assert pr.active == 3
+    pr.clear_slot(3)                                       # no slot names it: none
+    assert pr.active == -1 and lib.current("presets") == "WAKE"
+    pr.put_slot(22, "WAKE")                                # one names it again
+    assert pr.active == 22
+    lib.load("presets", "FACES")                           # the strip: the first slot that names it
+    assert pr.active == 1
+    lib.load("presets", "hands-play")                      # a preset in no slot
+    assert pr.active == -1
+    pr.active = 5
+    with pytest.MonkeyPatch.context() as mp:               # nothing loaded: none
+        mp.setattr(lib, "current", lambda group: None)
+        pr.follow()
+    assert pr.active == -1
+    # the four sites call it, and nothing else looks a preset up in the bank
+    for fn in (library.Project._set_slot, library.Project._apply, library.Marks.put,
+               preset.Presets._landed):
+        src = inspect.getsource(fn)
+        assert "follow()" in src and "bank.index" not in src, fn.__qualname__
+    assert inspect.getsource(library).count("bank.index(") == 1
+    assert "pr.bank.index(" not in inspect.getsource(preset)

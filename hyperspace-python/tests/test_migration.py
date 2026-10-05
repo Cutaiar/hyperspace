@@ -593,3 +593,45 @@ def test_nothing_is_lost(home):
         assert pid in session, pid
     made = preset_file(home, "Show A")["values"]
     assert made["fx.acid.speed"] == 2.0                   # its session id (tempo.bpm) dropped
+
+
+# ------------------------------------------- plan 19 WP1: the bank of twenty-four
+
+def test_the_migrations_still_write_an_eight_slot_bank(home, tmp_path):
+    """The bank is twenty-four slots in memory; a show the migrations
+    write still holds eight entries (`library.bank_doc`), as it did before
+    the bank grew. A schema-1 bank is the F-keys' eight: its own look, on
+    a full bank, still gets no slot rather than a ninth."""
+    from hyperspace import library
+
+    boot(home)
+    doc = read(mine_path(home))
+    assert doc["schema"] == "hyperspace.project/2" and len(doc["bank"]) == library.F_KEYS == 8
+    assert all(doc["bank"])                                # five slots and the house seeds
+    # a full schema-1 bank whose own look matches no slot
+    full = tmp_path / "full"
+    (full / "projects").mkdir(parents=True)
+    v1 = project_v1()
+    v1["bank"] = [dict(slot(k % 5), name=f"S{k}") for k in range(8)]
+    for k, s in enumerate(v1["bank"]):
+        s["values"] = dict(s["values"], **{"view.shape": k + 2})
+    path = full / "projects" / "default.hyp.json"
+    path.write_text(json.dumps(v1, indent=1))
+    notes, _held, rewrote = preset.migrate_project(full, path, preset.factory_carried())
+    assert rewrote and any("no slot (the bank is full)" in n for n in notes)
+    assert read(path)["bank"] == [f"S{k}" for k in range(8)]
+    # `_into_default`: a fresh `mine` from the house show, and one that has eight
+    root = tmp_path / "into"
+    (root / "projects").mkdir(parents=True)
+    said = preset._into_default(root, "CARRIED")
+    mine = root / "projects" / "mine.hyp.json"
+    house = read(FACTORY / "projects" / "house.hyp.json")["bank"]
+    assert read(mine)["bank"] == ["CARRIED", *house[:7]] and "left the bank" in said
+    # a `mine` whose bank is already past the F-keys keeps its far slots
+    doc = read(mine)
+    doc["bank"] = [*doc["bank"], None, "FAR"]
+    mine.write_text(json.dumps(doc, indent=1))
+    said = preset._into_default(root, "AGAIN")
+    assert read(mine)["bank"] == ["AGAIN", "CARRIED", *house[:7], "FAR"]
+    assert "left the bank" not in said
+    assert (root / "projects" / "mine.hyp.json.bak-v2").is_file()

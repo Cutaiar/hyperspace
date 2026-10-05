@@ -231,8 +231,9 @@ def test_every_party_preset_has_a_preset_a_card_and_only_real_ids(tmp_path):
         vals = json.loads((FACTORY / group / file).read_text())["values"]
         assert set(vals) <= ids, file
     # plan 14 WP5 (decision 24): the effect families on F6–F8
-    assert doc["bank"][5:] == ["ACID", "MANDALA", "NOITA"]
-    assert [f"party-{n.lower()}" for n in doc["bank"]] == list(PARTY_BANK)
+    assert doc["bank"][5:8] == ["ACID", "MANDALA", "NOITA"]
+    assert [f"party-{n.lower()}" for n in doc["bank"][:8]] == list(PARTY_BANK)
+    assert doc["bank"][8:] == ["TRACER"]                    # plan 19 WP1: slot 9
 
 
 @pytest.mark.parametrize("name", PARTY)

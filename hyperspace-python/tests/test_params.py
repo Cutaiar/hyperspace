@@ -268,7 +268,8 @@ def test_params_survive_a_chain_swap(rig):
 
 def test_preset_bank_params(rig):
     """The bank's params (plan 13 WP2): select, load, save, next / prev
-    over the project's eight preset names, loading through `Presets`."""
+    over the project's preset names, loading through `Presets` (plan 19
+    WP1: twenty-four choices, the F-keys' eight with a trigger each)."""
     from hyperspace.preset import Presets
     from hyperspace.routing import Bindings, Router
 
@@ -276,7 +277,8 @@ def test_preset_bank_params(rig):
     Presets(bank.lib, reg, Router(reg, Bindings()))
     bank.load("house", startup=False)          # the house moods (a fresh home opens party)
     assert reg["preset.select"].names[:2] == ["BIG BLUE WAVE", "EMBER ORBIT"]
-    assert len(reg["preset.select"].names) == 8
+    assert len(reg["preset.select"].names) == 24
+    assert reg["preset.select"].names[8:] == [f"SLOT {k}" for k in range(9, 25)]
     reg["preset.load.1"].fire()
     assert bank.active == 1 and view.shape == 10
     reg["preset.select"].set_norm(0.0)
@@ -421,3 +423,32 @@ def test_a_non_finite_offset_never_poisons_a_base(rig):
     assert math.isfinite(speed._base) and shape.value == base_shape
     reg.apply()                                   # the sources left: the base comes back
     assert speed.value == pytest.approx(base_speed) and not speed.modulated
+
+
+def test_the_bank_adds_no_params(rig):
+    """Plan 19 WP1's budget: a bank of twenty-four adds no param. The
+    `preset` group is the 21 it was — select, a load and a save for each
+    F-key, save-as, next, prev, home; slots 9–24 are choices of
+    `preset.select`, which says which of them hold a preset (`Param.has`,
+    what a pad's "filled" light reads)."""
+    reg, _view, _control, _audio, bank = rig
+    ids = [p.id for p in reg if p.group == "preset"]
+    assert len(ids) == 21 and ids == [
+        "preset.select",
+        *[f"preset.{w}.{k}" for k in range(8) for w in ("load", "save")],
+        "preset.save_new", "preset.next", "preset.prev", "preset.home"]
+    select = reg["preset.select"]
+    assert len(select.names) == 24 == len(bank.bank)
+    assert callable(select.has)
+    assert [select.has(k) for k in range(24)] == [n is not None for n in bank.bank]
+    assert select.has(8) and not select.has(9)             # the party show: TRACER on slot 9
+    bank.bank[9], bank.bank[8] = "WAKE", None
+    assert select.has(9) and not select.has(8)             # read live, never cached
+    assert not select.has(-1) and not select.has(24)       # −1 is "nothing loaded"
+    assert "twenty-four" in select.tip
+    # only the bank's enum has the notion; `Registry.enum(has=)` stores it
+    assert [p.id for p in reg if p.has is not None] == ["preset.select"]
+    r = Registry()
+    p = r.enum("x.pick", "Pick", lambda: 0, lambda v: None, ["a", "b"], has=lambda k: k == 1)
+    assert p.has(1) and not p.has(0)
+    assert r.enum("x.other", "Other", lambda: 0, lambda v: None, ["a"]).has is None

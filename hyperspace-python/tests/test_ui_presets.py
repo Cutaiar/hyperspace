@@ -12,7 +12,7 @@ import json
 
 from imgui_bundle import imgui
 from test_ui_routing import _drawn
-from test_ui_shell import _page_scroll, frame, rig  # noqa: F401 — the fixture
+from test_ui_shell import CONTROL_SIZE, _page_scroll, frame, rig  # noqa: F401 — the fixture
 
 from hyperspace import ui_presets
 from hyperspace.library import HOME_UNSET, Library
@@ -62,8 +62,10 @@ def test_the_preset_buttons_carry_their_presets_names(rig):  # noqa: F811
     frame(panel, "presets")
     frame(panel)
     labels = ui_presets._state(panel)["bank_labels"]
-    assert labels == ["F1  TUMBLE", "F2  FACES", "F3  FIELD", "F4  WAKE", "F5  TRIP",
-                      "F6  ACID", "F7  MANDALA", "F8  NOITA"] and len(labels) == 8   # plan 14 WP5 filled F6–F8
+    assert labels[:8] == ["F1  TUMBLE", "F2  FACES", "F3  FIELD", "F4  WAKE", "F5  TRIP",
+                          "F6  ACID", "F7  MANDALA", "F8  NOITA"]   # plan 14 WP5 filled F6–F8
+    # plan 19 WP1: the far slots under them, by number
+    assert labels[8:] == ["9 TRACER", *[f"{k} —" for k in range(10, 25)]]
     assert lib.project.active == 1                          # FACES, lit
     rects = _rects(panel)
     assert rects["preset.2"][1] > rects["preset.0"][1]       # F3 F4 under F1 F2
@@ -168,6 +170,10 @@ def test_the_page_speaks_one_word_per_thing(rig, monkeypatch):  # noqa: F811
 
 
 def test_more_opened_holds_a_strip_per_module_and_still_fits(rig, monkeypatch):  # noqa: F811
+    # at the control size from the first frame: the panel takes its height
+    # once (`Cond_.once`), and the rig's 820 px display is 80 px shorter
+    # than the control window the rule is about (plan 19 WP1)
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
     real = imgui.collapsing_header
     monkeypatch.setattr(imgui, "collapsing_header",
                         lambda label, *a: (real(label, *a), True)[1] if "more" in label
@@ -382,3 +388,119 @@ def test_a_line_assigned_every_frame_does_not_pin_the_footer(rig, monkeypatch): 
     assert lib.said["status"] == said["status"]
     scene.set(2)
     assert lib.status != line and panel._message() == (lib.status, False)
+
+
+# ------------------------------------------- plan 19 WP1: twenty-four slots (layout B)
+
+def _open_more(monkeypatch):
+    real = imgui.collapsing_header
+    monkeypatch.setattr(imgui, "collapsing_header",
+                        lambda label, *a: (real(label, *a), True)[1] if "more" in label
+                        else real(label, *a))
+
+
+def test_twenty_four_slots_fit_the_page_with_more_open(rig, monkeypatch):  # noqa: F811
+    """No page scrolls at the control size — the PRESETS page with all
+    twenty-four slots filled (the longest factory names first), a preset
+    loaded so the status line is drawn, and "more" open. Layout B: F1–F8
+    two a row, then 9–24 four a row, their rows FAR_GAP apart; no slot
+    overlaps another and every one is inside the page."""
+    panel, lib = rig.panel, rig.lib
+    pr = lib.project
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    _open_more(monkeypatch)
+    names = sorted(lib.list("presets"), key=lambda n: (-len(n), n))
+    pr.bank[:] = [names[k % len(names)] for k in range(24)]
+    lib.load("presets", names[0])
+    assert lib.status and len(pr.bank) == 24 and all(pr.bank)
+    assert _page_scroll(rig, monkeypatch)["presets"] == 0
+    st = ui_presets._state(panel)
+    labels, rects = st["bank_labels"], st["rects"]
+    assert len(labels) == 24 and not any(label.endswith("—") for label in labels)
+    slots = [rects[f"preset.{k}"] for k in range(24)]
+    for i, a in enumerate(slots):
+        for b in slots[i + 1:]:
+            assert not _overlap(a, b)
+    # F1–F8 two a row; 9–24 four a row, each row FAR_GAP under the last
+    assert slots[0][1] == slots[1][1] < slots[2][1] and slots[0][0] == slots[2][0]
+    for row in range(4):
+        four = slots[8 + 4 * row: 12 + 4 * row]
+        assert len({s[1] for s in four}) == 1 and [s[0] for s in four] == sorted(s[0] for s in four)
+        assert [s[0] for s in four] == [s[0] for s in slots[8:12]]
+        if row:
+            above = slots[8 + 4 * (row - 1)]
+            assert four[0][1] - above[3] == ui_presets.FAR_GAP
+    assert slots[8][1] > slots[7][3] and slots[11][2] <= slots[1][2] + 1
+    widths = {round(s[2] - s[0]) for s in slots[8:]}
+    assert len(widths) == 1 and widths.pop() >= 90         # room for a number and a name
+    # the sixteen filled and the rest empty: the same height, and it still fits
+    pr.bank[16:] = [None] * 8
+    assert _page_scroll(rig, monkeypatch)["presets"] == 0
+    assert ui_presets._state(panel)["bank_labels"][16:] == [f"{k} —" for k in range(17, 25)]
+
+
+def test_a_far_slot_reads_its_number_and_name_and_has_the_slot_menu(rig, tmp_path):  # noqa: F811
+    """Slots 9–24 on the page: a number and the preset's name ("9 TRACER",
+    "11 —"), the loaded one lit. A click loads the slot and ⇧click saves
+    into it — through the bank, for a far slot has no trigger of its own —
+    and the right-click menu is the slot menu under `preset.select`'s own
+    items: "put preset here…" and "clear slot"."""
+    panel, lib, reg = rig.panel, rig.lib, rig.reg
+    proj = lib.project
+    show = tmp_path / "projects" / "party.hyp.json"
+    frame(panel, "presets")
+    frame(panel)
+    st = ui_presets._state(panel)
+    assert st["bank_labels"][8] == "9 TRACER" and st["bank_labels"][10] == "11 —"
+    assert "preset.load.8" not in reg and "preset.save.8" not in reg
+    # a click loads slot 9
+    _click(panel, st["rects"]["preset.8"])
+    assert lib.current("presets") == "TRACER" and proj.active == 8
+    assert reg["preset.select"].value == 8 and not show.exists()
+    # an empty far slot: said, nothing loaded
+    _click(panel, st["rects"]["preset.10"])
+    assert lib.warning == "slot 11: an empty slot" and lib.current("presets") == "TRACER"
+    # its menu: the slot's two items, "clear slot" disabled while it is empty
+    _click(panel, st["rects"]["preset.10"], button=1)
+    menu = st["slot_menu"]
+    assert menu["slot"] == 10
+    assert menu["items"] == [("put preset here…", True), ("clear slot", False)]
+    _click(panel, menu["rects"]["put"])
+    menu = st["slot_menu"]
+    pick = menu["names"][2]
+    _click(panel, menu["rects"][f"name.{pick}"])
+    assert proj.bank[10] == pick and json.loads(show.read_text())["bank"][10] == pick
+    assert lib.status == f"slot 11: {pick}"
+    frame(panel)
+    frame(panel)
+    assert ui_presets._state(panel)["bank_labels"][10].startswith("11 ")
+    assert ui_presets._state(panel)["bank_labels"][10] != "11 —"
+    # clear slot on a filled far slot
+    st.pop("slot_menu")
+    _click(panel, st["rects"]["preset.8"], button=1)
+    menu = st["slot_menu"]
+    assert menu["slot"] == 8 and menu["items"][1] == ("clear slot", True)
+    _click(panel, menu["rects"]["clear"])
+    assert proj.bank[8] is None and lib.status.startswith("slot 9: cleared — TRACER")
+    assert "TRACER" in lib.list("presets")
+    frame(panel)
+    assert ui_presets._state(panel)["bank_labels"][8] == "9 —"
+    # ⇧click saves the live state into the slot
+    io = imgui.get_io()
+    io.add_key_event(imgui.Key.mod_shift, True)
+    frame(panel)
+    _click(panel, st["rects"]["preset.14"])
+    io.add_key_event(imgui.Key.mod_shift, False)
+    frame(panel)
+    assert proj.bank[14] == "PRESET 15" == lib.current("presets") and proj.active == 14
+    assert json.loads(show.read_text())["bank"][14] == "PRESET 15"
+    # the hovers say where a slot is
+    tip = ui_presets.slot_tip
+    assert tip(11, "TRIP 3") == ("slot 12: TRIP 3 — the desk's row 4, pad 4. Click loads, "
+                                 "⇧click saves the live state as it")
+    assert tip(16, "A").startswith("slot 17: A — the desk's row 5, pad 1.")
+    assert tip(23, "A").startswith("slot 24: A — the desk's row 5, pad 8.")
+    assert tip(11, None) == ("slot 12: empty — right-click to put a preset here; a hold on "
+                             "the clip-stop row fills the next empty slot")
+    assert tip(2, "FIELD") == "F3: FIELD — click loads, ⇧click saves the live state as it"
+    assert tip(2, None) == "F3: empty — ⇧F3 saves the live state here"

@@ -1438,8 +1438,11 @@ def test_r_and_the_f_keys_are_table_rows_that_fire_their_params(tmp_path):
     like every other key row."""
     import glfw
 
-    from hyperspace.library import SLOTS
-    assert routing.BANK_SLOTS == SLOTS              # routing may not import library
+    from hyperspace import library, params
+    # one number, declared where the triggers are (plan 19 WP1): the F-keys
+    # are the bank's first eight slots, and the bank is longer
+    assert routing.F_KEYS == library.F_KEYS == params.F_KEYS == 8 < library.SLOTS
+    SLOTS = routing.F_KEYS
     r = rig(tmp_path=tmp_path, full=True)
     fired: list[str] = []
     for pid in ["camera.reset", *[f"preset.{w}.{k}" for w in ("load", "save") for k in range(SLOTS)]]:
@@ -1731,7 +1734,7 @@ def test_a_theme_row_in_an_old_bindings_file_is_remapped_to_the_preset_bank(tmp_
     path = bindings_path(tmp_path)
     old = {"preset.select": "theme.select", "preset.next": "theme.next",
            **{f"preset.{w}.{k}": f"theme.{w}.{k}" for w in ("load", "save")
-              for k in range(routing.BANK_SLOTS)}}
+              for k in range(routing.F_KEYS)}}
     rows = []
     for b in session_rows():
         d = b.to_json()
