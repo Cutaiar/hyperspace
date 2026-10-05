@@ -655,17 +655,21 @@ def test_the_clip_stop_row_is_invariant(rig):
     assert lib.current("presets") == "TRIP 3"
     assert t.layer == "global"                               # a save is no load: the layer stays
     shift(rig)
-    # a Learn refuses it: nothing binds, nothing saves, the press starts no hold
+    # no Learn takes it. Plan 17 fork 6: an invariant control is not a
+    # candidate at all — a press while a learn is armed does its own job
+    # (the hold saves) and the learn stays armed; and the road a click
+    # takes (`Learn.learn_control`) refuses it, still armed, nothing bound
     rows = [(b.to_json(), b.layer) for b in t.bindings]
-    m.learner.arm("view.depth4")
-    push(rig, note(n, channel=5))
-    assert m.learner.learning is None and m.learner.refused
-    assert m.learner.last == "G6·6 (clip stop 6) is invariant (the session's) — not learned"
-    now[0] += 2.0
-    push(rig, note(n, 0, channel=5))
-    assert lib.current("presets") == "TRIP 3"
+    m.learner.arm("view.depth4", "desk")
+    hold(5)
+    assert m.learner.learning == "view.depth4" and not m.learner.refused
+    assert lib.current("presets") == "TRIP 4"
     assert [(b.to_json(), b.layer) for b in t.bindings] == rows
-    assert sent_notes(rig, n, 5)[-1] == 0                    # and the bar never lit for it
+    assert not m.learner.learn_control(f"note:5:{n}", apc40)
+    assert m.learner.learning == "view.depth4" and m.learner.refused
+    assert m.learner.last == "G6·6 (clip stop 6) is invariant (the session's) — not learned"
+    assert [(b.to_json(), b.layer) for b in t.bindings] == rows
+    m.learner.arm(None)
     # no preset may map it: a desk row on any of the eight is dropped with a note
     notes = t.set_desk([{"source": f"note:{k}:{n}", "target": "view.points", "op": "toggle",
                          "feedback": "led"} for k in (0, 7)])

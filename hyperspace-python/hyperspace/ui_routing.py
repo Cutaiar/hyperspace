@@ -825,12 +825,14 @@ def _learn_line(panel) -> None:
     lrn = panel.learn
     if lrn is None:
         return
-    if lrn.learning:
+    refused = getattr(lrn, "refused", False)
+    if lrn.learning and not (refused and lrn.last):
         imgui.text_colored(ui.RED, f"learning {lrn.learning} — {panel._learn_hint()}")
     elif lrn.last:
-        refused = getattr(lrn, "refused", False)
+        # a refusal leaves the learn armed (plan 17 fork 6): the reason, and that it still waits
+        still = f" — still learning {lrn.learning}" if lrn.learning and refused else ""
         imgui.push_style_color(imgui.Col_.text, ui.WARN if refused else ui.FAINT)
-        imgui.text_wrapped(f"learn: {lrn.last}")
+        imgui.text_wrapped(f"learn: {lrn.last}{still}")
         imgui.pop_style_color()
 
 
@@ -918,7 +920,9 @@ def desk(panel, router: Router) -> None:
         imgui.set_tooltip("The loaded preset's own controls on the APC40 (SHIFT off). "
                           "A control the preset leaves unmapped is dark and does nothing.")
     imgui.same_line()
-    imgui.text_colored(ui.FAINT, "new rows: right-click a control → Learn, move a knob")
+    # (the click is the on-screen desk's, once it has one: plan 17 WP4's `ui_desk.click`)
+    imgui.text_colored(ui.FAINT, "new rows: right-click a param → Learn desk"
+                       + (", or click a control" if hasattr(ui.ui_desk, "click") else ""))
     sp = imgui.get_style().item_spacing.x
     op_w = imgui.calc_text_size("step +10").x
     dark = unmapped(table)

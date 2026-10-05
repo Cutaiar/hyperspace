@@ -1,24 +1,30 @@
 """Learn — the one armed param, shared by every adapter that can complete it.
 
-Right-click → Learn arms a param id here; whichever adapter sees the
-performer move first completes it: the MIDI adapter with the message it
-received (midi.py, ``MidiIO._learned`` → an ``abs`` / ``rel`` / ``toggle``
-MIDI row), the hands adapter with the axis that moved furthest
-(hands/core.py, ``HandsIO._learn`` → ``learn_source`` → a ``position``
-route). Until plan 11 this state lived in ``MidiIO``, so with ``[midi]
-enabled = false`` — or the adapter failing to open — there was no hand
-Learn at all (audit B3). Now ``app.main`` builds one ``Learn`` over the
-live table whatever the MIDI gate says and hands it to both adapters and
-to the panel.
+Right-click → Learn arms a param id here, with what the learn waits for
+(`want`, plan 17 WP2): **Learn desk** arms ``"desk"``, **Learn hand ▸
+left / right** arms ``"hand:left"`` / ``"hand:right"``, and nothing else
+can complete it (`accepts`). The MIDI adapter completes a desk learn with
+the message it received (midi.py, ``MidiIO._learned`` → `learn_control`
+→ an ``abs`` / ``rel`` / ``toggle`` MIDI row); the hands adapter a hand
+learn with the axis *of that hand* that moved furthest (hands/core.py,
+``HandsIO._learn`` → ``learn_source`` → a ``position`` route). A knob
+bumped during a hand learn does its own job; a hand waved during a desk
+learn does nothing. A bare ``arm(pid)`` (`want` None) takes whichever
+comes first, as every learn did before plan 17. Until plan 11 this state
+lived in ``MidiIO``, so with ``[midi] enabled = false`` — or the adapter
+failing to open — there was no hand Learn at all (audit B3). Now
+``app.main`` builds one ``Learn`` over the live table whatever the MIDI
+gate says and hands it to both adapters and to the panel.
 
 A learn writes into the **loaded preset** (plan 13 §3.3, D5): the row
 goes into the live table — a knob's as a preset-layer desk row, a hand's
 as a route — and no file is written. The preset's dirty dot (preset.py,
 `Presets.signature` over the table) shows it until a save (⇧F, the preset
-strip's save / as…); loading the preset again throws it away. A knob learn
-on an invariant control or with the global layer up is refused (midi.py's
-`_learned` calls `refuse`): the reason is `last`, `refused` is set, and
-nothing changes.
+strip's save / as…); loading the preset again throws it away. A desk learn
+on an invariant control or with the global layer up is refused
+(`learn_control` calls `refuse`): the reason is `last`, `refused` is set,
+nothing changes, and the learn **stays armed** (plan 17 fork 6) — the
+next control that can take it does.
 
 **Unbind** is here too (plan 17 WP1): `unbind` removes what is bound to a
 param in the loaded preset — its preset-layer desk rows and its routes,
@@ -54,8 +60,12 @@ table are all it needs.
 from __future__ import annotations
 
 from . import undo
-from .params import Param, Registry
-from .routing import Binding, Bindings, Owned
+from .params import Kind, Param, Registry
+from .routing import MIDI_SCHEMES, Binding, Bindings, Owned
+
+# what an armed learn may wait for (`Learn.want`): the desk — a knob, a
+# button, a click on the on-screen desk — or one hand, by name
+WANTS = ("desk", "hand:left", "hand:right")
 
 
 class Learn:
@@ -70,9 +80,11 @@ class Learn:
         # sources compare as strings
         self.lane = lane
         self.learning: str | None = None
+        self.want: str | None = None   # what may complete `learning` (WANTS); None: anything
         self.pending: tuple[Binding, Binding] | None = None
         self.last = ""          # what the last learn did, for the status lines
         self.refused = False    # …and whether it was a refusal (drawn as a warning)
+        self.said_n = 0         # how many times `last` was set: the same words twice are two
 
     def same_source(self, a: str, b: str) -> bool:
         """Do two source addresses read the same lane — the same string,
@@ -88,24 +100,121 @@ class Learn:
     def said(self, text: str) -> None:
         """What a learn that landed (or was kept) did, for the status lines."""
         self.last, self.refused = text, False
+        self.said_n = getattr(self, "said_n", 0) + 1     # the footer shows each saying once
 
     def refuse(self, why: str) -> None:
         """A learn that may not land: nothing changes, `last` says why."""
         self.last, self.refused = why, True
+        self.said_n = getattr(self, "said_n", 0) + 1
 
     # ---- arming ----
 
-    def arm(self, pid: str | None) -> None:
-        """Arm (or cancel with None). A learn the prompt hasn't answered
-        yet is forgotten: the new one is what the performer means now."""
+    def arm(self, pid: str | None, want: str | None = None) -> None:
+        """Arm (or cancel with None). `want` is what may complete it — one
+        of `WANTS`, or None for anything. A learn the prompt hasn't
+        answered yet is forgotten: the new one is what the performer means
+        now. Arming starts clean: an earlier refusal is no longer this
+        learn's (`refused` while armed means *this* learn was refused and
+        still waits), and `armed_n` counts the arms, so an adapter that
+        keeps something per learn (the hands' baseline) can tell a re-arm
+        of the same param from the learn it already knew."""
+        if want is not None and want not in WANTS:
+            raise ValueError(f"no such want {want!r}; one of {', '.join(WANTS)}")
         self.learning = pid
+        self.want = want if pid is not None else None
         self.pending = None
+        if pid is not None:
+            self.refused = False
+        self.armed_n = getattr(self, "armed_n", 0) + 1
 
     def take(self) -> str | None:
         """The armed id, cleared — an adapter about to complete the learn
         calls this first so nothing else can complete it too."""
         pid, self.learning = self.learning, None
+        self.want = None
         return pid
+
+    def accepts(self, source: str) -> bool:
+        """May this source complete the armed learn? False when nothing
+        is armed. want None: any source. "desk": a cc / note / pitch
+        source. "hand:left": a source that starts "hand:left." (an axis
+        or a switch of that hand, by name)."""
+        if getattr(self, "learning", None) is None:
+            return False
+        want = getattr(self, "want", None)       # a Learn from before a hot reload: None
+        if want is None:
+            return True
+        if want == "desk":
+            return source.partition(":")[0] in MIDI_SCHEMES
+        return source.startswith(f"{want}.")
+
+    # ---- a desk control completes it ----
+
+    def learn_control(self, source: str, profile=None) -> bool:
+        """A desk control completes the armed learn: a preset-layer row
+        into the loaded preset (plan 13 §3.3). True when it landed.
+
+        The one road onto the desk (plan 17 WP2): the MIDI adapter calls
+        it with the message it received, the on-screen desk with the
+        control clicked — so it needs no adapter. `profile` is the device's
+        module, duck-typed (`is_relative`, `feedback_for`, `named`), for
+        the op, the feedback and the control's name; None gives a plain
+        `abs` row named by `Binding.describe`.
+
+        It binds the param as armed — a ``band.sel.*`` alias included, on
+        purpose: a knob on "the selected band's threshold" should follow
+        the selection. Refused, with the reason in `last`, nothing changed
+        and **the learn still armed**, on an invariant control (D6) and
+        while the global layer is up (D5): both are the session's.
+        Otherwise the row replaces every preset-layer row on the control
+        (an any-channel row on it included, `Binding.overlaps`) and the
+        param's previous preset-layer row in the same role
+        (`Bindings.bind`); no file is written. One undo step. The table's
+        `redraw_serial` moves, so an adapter redraws the desk: the
+        replaced rows' controls go dark and the new row's ring is sent."""
+        if not self.accepts(source):     # nothing armed, or armed for a hand: not the desk's
+            return False
+        pid = self.learning
+        p = self.reg.get(pid) if pid is not None else None
+        if p is None:
+            self.take()                  # an id the registry lacks can never land
+            return False
+        table = self.table
+        b = Binding(source, pid, "abs", layer="preset")
+
+        def named(x: Binding) -> str:
+            name = getattr(profile, "named", None) or getattr(profile, "control_name", None)
+            return (name(x.source) if name is not None else None) or x.describe()
+        if table.is_invariant(b):
+            self.refuse(f"{named(b)} is invariant (the session's) — not learned")
+            return False
+        if table.layer == "global":
+            self.refuse(f"{named(b)} is on the global layer (the session's) "
+                        "— latch SHIFT off to learn into the preset")
+            return False
+        kind, number = b.kind, b.number
+        if kind == "cc":
+            if profile is not None and profile.is_relative(number):
+                b.op = "rel"
+            elif p.kind is Kind.TRIGGER:
+                b.op = "toggle"
+        elif kind == "note":
+            b.op = "toggle"
+        fb = profile.feedback_for(kind, b.channel, number) if profile is not None else None
+        if fb:
+            b.feedback, b.ring = fb["feedback"], fb.get("ring", b.ring)
+            b.on, b.off = fb.get("on", b.on), fb.get("off", b.off)
+        self.take()
+        undo.push(f"learn {pid}")                    # one undo step (undo.py, plan 15)
+        gone = table.bind(b, write=False)            # the preset rows it replaced
+        table.redraw_serial = getattr(table, "redraw_serial", 0) + 1
+        glyph = getattr(profile, "glyph", None)
+        let_go = list(dict.fromkeys(
+            (glyph(x.source) if glyph is not None else None) or named(x)
+            for x in gone if not x.overlaps(b)))
+        self.said(f"learned {pid} ← {named(b)} (into the preset)"
+                  + (f"; {', '.join(let_go)} let go" if let_go else ""))
+        return True
 
     # ---- a source completes it ----
 
@@ -134,13 +243,15 @@ class Learn:
         rather than taking the target or being lost. `learning` is cleared
         first, so the hands adapter, which keys off it, cannot fire again.
         """
+        if not self.accepts(source):     # nothing armed, or armed for something else
+            return
         pid = self.take()
         if pid is None:
             return
         p = self.target_for(pid)
         if p is None:
             return
-        b = Binding(source, p.id, "position", 1.0, when=when)
+        b = self._row(source, p, when)
         cur = self.table.owner(p.id)
         if cur is not None and self.same_source(cur.source, source) and cur.op == "position":
             undo.push(f"learn {p.id}")               # one undo step (undo.py, plan 15)
@@ -152,6 +263,11 @@ class Learn:
             self.said(f"{Owned(cur, b)} — replace?")
             return
         self._place(b)
+
+    def _row(self, source: str, p: Param, when: str | None) -> Binding:
+        """The row a hand learn makes (plan 18 owns this body: the op and
+        the depth of a learned row)."""
+        return Binding(source, p.id, "position", 1.0, when=when)
 
     def resolve_pending(self, replace: bool) -> Binding | None:
         """The prompt's answer to a held learn: *Replace* swaps the target's
