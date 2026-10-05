@@ -1316,8 +1316,7 @@ def test_every_dream_label_says_whose_knob_it_is():
     for pid in ui_lookback.SECTIONS["echoes"]:
         assert reg[pid].label.startswith("Echo "), pid
     for pid in ui_lookback.SECTIONS["dream"]:
-        if pid != "dream.k":                        # the speed: plan 20 WP5
-            assert reg[pid].label.startswith("Dream "), pid
+        assert reg[pid].label.startswith("Dream "), pid
     assert [reg[pid].label for pid in ui_lookback.SECTIONS["both"]] == [
         "Darken", "Contrast", "Shape hides wake", "Look-back detail"]
     assert reg["dream.on"].label == "Look-back"
@@ -1327,7 +1326,7 @@ def test_every_dream_label_says_whose_knob_it_is():
         assert p.tip and (p.tip[0].isupper() or p.tip[0].isdigit()), p.id
     # a readout fits its half-width cell: nothing longer than the slider is wide
     for p in reg.group("dream"):
-        if p.id != "dream.k" and p.fmt is not None and p.kind.name == "CONTINUOUS":
+        if p.fmt is not None and p.kind.name == "CONTINUOUS":
             for v in (p.lo, p.hi, p.base):
                 assert len(p.fmt(v)) <= 10, (p.id, p.fmt(v))
 
@@ -1354,6 +1353,77 @@ def test_the_routing_page_lists_the_new_labels():
     assert not old & set(targets.values())
     # the three that rebuild things are still not a performer's
     assert not set(targets) & {"dream.gap", "dream.res", "dream.layer"}
+
+
+# ---------------------------------------------------------------- plan 20 WP5: dream speed
+
+def test_dream_speed_is_dream_k(lbpage):
+    """Fork F8: the dream's "speed" is `dream.k`, relabelled — one cell
+    labelled SPEED drawing that param in the DREAM section's first row,
+    beside BRIGHTNESS; no `dream.speed` and no other new id; the registry
+    (ROUTING, Learn, the desk) says "Dream speed"; and nothing else about
+    the param moved, so every saved look means what it did."""
+    from hyperspace import ui_lookback, ui_routing
+
+    reg = lbpage.reg
+    k = reg["dream.k"]
+    assert "dream.speed" not in reg
+    assert [p.id for p in reg.group("dream")] == DREAM_IDS
+    assert k.label == "Dream speed" and ui_lookback.SHORT["dream.k"] == "speed"
+    assert (k.lo, k.hi, k.base, k.persist, k.modulatable) == (0.03, 0.3, 0.05, True, True)
+    assert not k.log and not k.integer and k.taper is None
+    assert k.tip.startswith("How fast the dream follows the picture")
+    assert "dream frames" in k.tip and "step clamped" in k.tip
+    lbpage.frame()
+    events = lbpage.events
+    labels = [text for kind, text in events if kind == "label"]
+    assert labels.count("speed") == 1
+    at = events.index(("label", "speed"))
+    assert events[at + 1] == ("widget", "dream.k")
+    assert lbpage.widgets().count("dream.k") == 1
+    # the DREAM section's first row: brightness, then speed, on one line
+    cells = [w for w in lbpage.by_section()["dream"] if w != "dream.layer"]
+    assert cells[:2] == ["dream.mix", "dream.k"]
+    mix, speed = lbpage.rects["dream.mix"], lbpage.rects["dream.k"]
+    assert round(mix[1]) == round(speed[1]) and mix[2] < speed[0]
+    # right is faster: the slider's value is k itself, and it writes the state
+    k.set_value(0.2)
+    assert lbpage.dream.k == pytest.approx(0.2)
+    # ROUTING lists it under the new name; a preset still carries the old id
+    assert {p.id: p.label for p in ui_routing._targets(SimpleNamespace(reg=reg))}[
+        "dream.k"] == "Dream speed"
+    assert reg.snapshot("dream")["dream.k"] == pytest.approx(0.2)
+
+
+def test_the_speed_readout_is_the_half_life_in_frames():
+    """The readout is the frames in which a frame's share of the dream
+    halves, log ½ / log(1 − k), rounded: 14 at the default, 2 at the fast
+    end, 23 at the slow end — and fewer frames the further right."""
+    import math
+
+    from hyperspace.params import dream_half_life
+
+    reg = registry()
+    k = reg["dream.k"]
+    assert k.text() == "≈14 frames"                         # the default, 0.05
+    for value, reads in ((0.05, "≈14 frames"), (0.3, "≈2 frames"), (0.03, "≈23 frames"),
+                         (0.04, "≈17 frames"), (0.1, "≈7 frames")):
+        k.set_value(value)
+        assert k.text() == reads, value
+        assert k.fmt(value) == reads
+    assert (k.fmt(k.lo), k.fmt(k.hi)) == ("≈23 frames", "≈2 frames")
+    # it is the half-life: after that many frames a frame's share is about a half
+    for value in (0.03, 0.05, 0.1, 0.3):
+        n = dream_half_life(value)
+        assert n == round(math.log(0.5) / math.log(1 - value))
+        assert (1 - value) ** (n - 0.5) > 0.5 > (1 - value) ** (n + 0.5)
+    # monotone across the knob, and safe off its ends (a performer's overshoot is clamped
+    # by the registry, but the format must not raise on any float)
+    frames = [dream_half_life(0.03 + 0.27 * i / 50) for i in range(51)]
+    assert frames == sorted(frames, reverse=True)
+    assert dream_half_life(0.0) >= 1 and dream_half_life(1.0) == 1 and dream_half_life(2.0) == 1
+    # the speed's readout fits its half-width cell like the others
+    assert max(len(k.fmt(v)) for v in (k.lo, k.hi, 0.05)) <= 10
 
 
 def test_the_look_back_page_has_no_conflicting_ids(lbpage):
