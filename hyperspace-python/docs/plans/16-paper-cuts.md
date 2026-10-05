@@ -54,6 +54,12 @@ they do not open those files.
 One PR per package on `plan-16-integration`, each with a demo (decision
 30). Every agent runs with `HYPERSPACE_HOME` at a temp folder.
 
+*As built:* PRs #89 (WP1), #84 (WP2), #86 (WP3), #85 (WP4), #90 (WP5).
+A seventh package was added after them, **WP7 — four small fixes found
+while building plans 15 and 16** (PR #92): a footer line said twice, the
+dirty dot lit by round-off, the desk diagram's one-frame jump, and a
+config screen that is not a number. It is described in §7 only.
+
 ### WP1 — The cheat sheet off at launch
 
 **Owns:** `hyperspace/ui.py` (`Panel.__init__`, `_register_panel_params`
@@ -73,7 +79,10 @@ Behaviour:
    checkbox says how to get the sheet back: "Keys, pad and desk legend,
    bottom-left of this window. / toggles it."
 4. The desk diagram needs no change: with the sheet off it is drawn at
-   the bottom-left corner (`ui_desk.diagram`).
+   the bottom-left corner (`ui_desk.diagram`). *As built:* true of its
+   resting place, but on the first frame the sheet shows the diagram was
+   placed from a height the sheet did not yet have, and jumped one frame
+   later. WP7 fixed it in `Panel._draw_cheatsheet` (§7).
 
 Not remembered across launches and not in the config: it is off every
 launch (§3).
@@ -128,6 +137,10 @@ The page (`ui_fx.page`), per chip:
 - The chip is still solid red while its effect is on. The **selected**
   chip also carries a 2 px outline in `ui.TEXT`, so "open" and "on" read
   apart from a step back; today selection is only a text colour.
+  *As built:* the outline goes round both parts, LED and name, and the
+  chips are **three to a row**, not four: with the LED's square taken
+  out of each chip, four to a row cut seven of the twelve names short
+  (§7, WP2; register row 45).
 - Right-click on either part opens the `fx.<name>.on` menu as today
   (`panel._ctx`, with a `key` so the two items do not share a popup id);
   the learn frame and the modulation dot stay on the body.
@@ -173,13 +186,20 @@ uniform rows) are drawn **dimmed but live**: `imgui.push_style_var(alpha
 switched on, right-click Learn still works on every row, and the order
 slider still moves it. The "on" check itself is not dimmed. (Fork F2.)
 
+*As built:* the dimming is a **veil** — a rect of the window's ground
+drawn over the rows (`ui_fx._dim`) — not a pushed style alpha, which
+would also have dimmed each row's right-click menu and the blend combo's
+list. At "its mix is at 0" the effect's own mix fader is left undimmed:
+it is the control the line names (§7, WP3; register row 46).
+
 Both chips write a base through `Param.set`, as the check does, so each
 is one undo step under plan 15 with no explicit `undo.push`.
 
 Room: *measured* on `finish-line`, the tightest strip at the control size
 is `zoomblur` with 110 px to spare (`fractals` 126); a row is 35 px. One
 more line fits. The fit test is extended to draw the tightest strip with
-the line showing.
+the line showing. *As built:* with WP2's fourth chip row, `zoomblur` has
+52 px to spare with the line showing.
 
 ### WP4 — Window placement at launch
 
@@ -215,7 +235,11 @@ control_monitor = -1   # which screen the CONTROL window opens on: an index,
   appended to `cfg["notes"]` and printed on stderr ("config: [output]
   monitor = 2, but 2 screens are connected (0–1) — using the last
   position"). `panel.config_notes` already shows `cfg["notes"]` on the
-  SYSTEM page (`app.py:757`), so `ui.py` is not edited.
+  SYSTEM page (`app.py:757`), so `ui.py` is not edited. *As built:* a
+  value that is not a number at all (`monitor = "left"`) is −1 with a
+  note too, written by `config.load`; and after the note the index is −1
+  in the config for the rest of the run, so `Output.monitor` does not
+  keep a screen that is not there (WP7, §7).
 
 How the keys extend to plan 21's list of outputs: `[output]` stays the
 table of rig-wide settings (`overlay`, `control_monitor`), and the outputs
@@ -288,7 +312,10 @@ least `MIN_VISIBLE`, and the rect's top edge is inside that work area
 
 `default_rect`: today's spots on the given screen. Render: top-left +
 `MARGIN`. Control: flush right − `MARGIN`, top + `MARGIN`. The size is
-clipped to the work area.
+clipped to the work area. *As built:* **the size is not clipped**: a
+clipped size would be written at the quit and follow the window to a
+bigger screen, and a first launch would differ from before on a small
+screen. Only a remembered size is clipped, in `place` (§7, WP4).
 
 `place`, in order (fork F4 is the order of 1 and 2):
 
@@ -380,7 +407,9 @@ should check that paragraph is still about the strip after plan 15).
     pushes +0.6 from rest 0): hand at the bottom 9 → 9, a tenth up
     15 → 15, half 39 → 39, top 68 → **69**; hand gone, 9. No factory
     hand row can take the count below its base, because every height
-    row pushes from rest 0.
+    row pushes from rest 0. *As built:* a user's row can — one that
+    pushes both ways (an LFO) on a count of 1 reaches 0 for part of its
+    cycle (§7, WP5; register row 47).
   - `tests/test_params.py::test_raw_ranges_clamp_int_and_log` sets −5
     and expects 1, then steps 3 and expects 4: it becomes 0 and 3.
   - No factory preset file changes (they store the count, not the
@@ -471,7 +500,9 @@ The DECISIONS rows it leans on:
 - **No page scrolls at the control size** (2026-09-26), held by
   `tests/test_ui_shell.py::test_every_page_fits_the_control_window` and
   `tests/test_fx.py::test_the_page_draws_and_fits`. WP2 keeps the chip
-  grid's shape; WP3 adds one line, measured to fit.
+  grid's shape; WP3 adds one line, measured to fit. *As built:* WP2 did
+  not keep the grid's shape — three chips to a row, so four rows where
+  there were three; the page still fits (§7).
 - **Overlay only when the config asks** (decision 21). Placement never
   sets a mode; an overlay or fullscreen window is remembered by its
   windowed rect.
@@ -599,6 +630,12 @@ projector.
 None needs the owner before the build. Each is built on the
 recommendation and logged in `DECISION-REGISTER.md` (WP6).
 
+*As built:* all six were settled as recommended, by the orchestrator and
+not by the owner. They are register rows **45** (F1, with three chips to
+a row), **46** (F2, built as a veil), **47** (F3), **48** (F4, F5 and F6
+together, "window placement") and **49** (`dream.layer` not performable,
+which §6 did not list as a fork), each to confirm or overturn.
+
 **F1. Where the on/off target sits on a chip.**
 
 | Option | For | Against |
@@ -661,13 +698,453 @@ the rig turns out to need it.
 
 ## 7. As built
 
-Filled as the work packages land.
+Written by WP6 from each PR's "As built" paragraph and its notes for the
+documents, every statement checked against the code on
+`plan-16-wp7-followups` (WP1–WP5 as merged into `plan-16-integration` at
+8970f0a, 1169 tests; with WP7, 1178 pass, 1 skipped — the hands tape).
+Where this section and §2 differ, this section is the code; §2 carries an
+"*As built:*" note at each such place.
+
+**What has been seen, and by whom.** Nothing here was tried by a person
+at the rig: no key pressed, no chip clicked with a real mouse, no APC40
+control moved, no window dragged to a projector. Three kinds of evidence
+exist, and the entries below say which is which:
+
+- *tests*: the named pytest nodes, on headless imgui (clicks are
+  simulated mouse events on the real page), offscreen framebuffers, a
+  stubbed GLFW and fake screens;
+- *demos*: the scripts under `tools/`, each on a temp home of its own,
+  with their output kept under `docs/plans/assets/16-paper-cuts/`
+  (reported by the agent that built the package; the pictures are from a
+  hidden window or an offscreen render, not the app on a screen);
+- *seen in a scripted launch by the orchestrator*: the real app
+  (`uv run hyperspace`) started against a temp home on a one-screen
+  laptop, on `plan-16-integration` at 1169 tests, and driven from a
+  script. What it saw: the control window launches with the cheat sheet
+  off and the desk diagram on; `view.instances` set to 0 reads
+  "0 · nothing drawn", and the `edit.undo` trigger brings the count
+  back; the open effect stays `kaleido` through its order being changed
+  to 99 and through a preset load; `ui.cheatsheet` toggles;
+  `<home>/windows.json` is written at quit; `dream.layer` is not
+  modulatable; no runtime error, and an empty stall log. That is a
+  launch on a laptop with no desk, camera or second screen attached, not
+  a session at the machine. It was run before WP7; WP7's four fixes were
+  seen by tests and a headless transcript only.
+
+Hand checks 58–63 (group L of `11-hand-checks.md`) are what the machine
+still owes. Decision register rows 45–49 are the forks this plan's run
+settled on its own recommendation.
+
+### WP1 — The cheat sheet off at launch (PR #89, merged 491d540)
+
+**Built.** `Panel.__init__` (`ui.py`) sets `self.cheatsheet = False`;
+`self.desk` stays `True`. `ui.cheatsheet` gains the tip "Keys, pad and
+desk legend, bottom-left of this window. / toggles it." The three roads
+(`key:SLASH`, the pad's MENU, the APC40's DETAIL) and the SYSTEM page's
+checkbox are unchanged and still toggle the one param; DETAIL's LED
+shows the param, so it reads dark at launch. `ui_desk.diagram` needed no
+edit: with the sheet off it sits in the bottom-left corner. Not
+remembered, no config key.
+
+**Differs from §2, and why.** Nothing in the behaviour. Two additions:
+`tools/sheet_shots.py`, which makes the two pictures; and the `ui.desk`
+tip and the comment by `Panel.desk` now say "bottom-left of this window
+(above the cheat sheet when that shows)" (its review). Comments in
+`app.py` still describe the sheet as part of the launch layout: the
+module docstring's "?  cheat sheet" line is still true (the key shows
+it), and `CONTROL_SIZE`'s comment "wide enough for the cheat sheet on
+the left and the panel on the right" is still what the width is for, but
+neither says the sheet is off until `/`. They are code and were left for
+a code PR.
+
+**Found by its review and fixed in WP7:** on the frame `/` first brings
+the sheet up, the desk diagram was drawn in the wrong place for that one
+frame (below).
+
+**Tests.** `tests/test_ui_shell.py::test_the_cheat_sheet_is_off_at_launch_and_the_desk_is_on`,
+`::test_slash_still_toggles_the_cheat_sheet`;
+`::test_every_page_fits_the_control_window` and
+`tests/test_ui_desk.py::test_the_diagram_draws_on_both_layers_and_hides`
+unchanged.
+
+**Demo.** `docs/plans/assets/16-paper-cuts/launch-no-sheet.png` and
+`launch-sheet-on.png` (`uv run python tools/sheet_shots.py`): the real
+`Panel` in a hidden GLFW window over headless objects, before and after
+the `key:SLASH` row fires once.
+
+**Not verified.** `/` on a keyboard, MENU on the pad, DETAIL on the
+APC40 and its LED; the tooltip drawn (the test reads the param's `tip`).
+The orchestrator's scripted launch saw the window open with no sheet and
+the param toggle, not a key press.
+
+### WP2 — A chip click selects; selection by name (PR #84, merged 363bd41)
+
+**Built.** `fx.py`: `FxState.sel` (an index) is gone;
+`FxState.sel_name` holds the open effect's name. `FxState.select(name)`
+opens it (a name with no spec is ignored; `None` means "whatever is
+first") and writes nothing else. `FxState.selected()` is `sel_name`
+while it has a spec, else the first of `names()`, else `None`; it never
+writes, and reads `getattr(self, "sel_name", None)` so an `FxState` from
+before a hot reload does not raise. `fx.select` keeps its id, label,
+`persist=False`, `modulatable=False` and choices and is a view: it reads
+the open effect's index in `names()`, a write selects `names()[i]` with
+`i` clamped. The selection is in no preset, show or file, and — because
+`undo.watched` requires `persist` — opening a strip is not an undo step.
+
+`ui_fx._chip`: each chip is two adjacent items. The **LED**
+(`##led.fx.<name>.on`), a chip-height square at the left end — a filled
+dot while the effect is on, a ring while off — toggles `fx.<name>.on`
+and never selects; its hover reads "on — click to switch off" / "off —
+click to switch on" (from the base, with the modulation line while a
+source rides the switch). The **name** (`##chip.fx.<name>.on`) calls
+`fx.select(name)` and never writes the switch. Both parts are solid red
+while the effect is on; the open chip has a 2 px outline in `ui.TEXT`.
+Right-click on either part opens the `fx.<name>.on` menu, each with its
+own popup id (`key=".led"` / `".chip"`). The strip's own "on" check is
+unchanged; `ui.py` is not touched.
+
+**Differs from §2, and why.**
+
+- **Three chips to a row, not four** (`ui_fx.CHIPS_PER_ROW = 3`). §4
+  said WP2 "keeps the chip grid's shape". With the LED taking a square
+  of each chip, seven of the twelve factory names were cut short at four
+  to a row ("Kaleidosc", "Trip colou"); at three only the two longest
+  lose 3 px. The cost is a fourth chip row, about 29 px of the page. One
+  constant to reverse. Register row 45.
+- **The outline goes round both parts** of the open chip, not the name
+  alone, and is not drawn while the chip's Learn is armed (the learn
+  frame has the same place).
+- **The page pins the launch fallback** (review): with nothing chosen,
+  `selected()` is the first effect, which is a position; the first time
+  the page draws it, it calls `fx.select(sel)`, so from then on it is
+  held by name. `selected()` itself still never writes. While `sel_name`
+  names an effect whose file is away, the fallback stays positional and
+  the effect reopens when the file returns.
+- `fx.select`'s getter and setter are two module functions (`_sel_index`,
+  `_sel_set`), so `FxState` publishes only the contract's three names.
+
+**Tests** (`tests/test_fx.py`). `test_selection_is_by_name_and_survives_a_reorder`,
+`test_selection_survives_a_preset_load`,
+`test_a_removed_effect_falls_back_and_comes_back`,
+`test_fx_select_is_a_view_onto_the_name`,
+`test_a_chip_click_selects_and_never_toggles`,
+`test_the_chips_led_toggles_and_never_selects`,
+`test_selecting_an_effect_is_not_an_undo_step`,
+`test_the_first_effect_is_held_by_name_once_it_is_shown`,
+`test_the_leds_hover_says_what_a_click_does`;
+`test_the_page_has_no_conflicting_ids` now also checks both items of
+every chip and that no two context menus share a popup id.
+
+**Demo.** `docs/plans/assets/16-paper-cuts/fx-chips.png`
+(`uv run python tools/fx_page_demo.py --shots`, a hidden window): twelve
+chips, three to a row, two on, one open and off. `fx-select.txt` (the
+same tool without `--shots`): the open effect stays `kaleido` while its
+order goes 15 → 99, another effect moves past it, and three presets
+load.
+
+**Not verified.** A real mouse click on the LED or the name (the tests
+send imgui mouse events at the item's rect): whether the LED is
+comfortable to hit on a trackpad, or easy to hit by mistake, is hand
+check 59. The right-click menus on the two parts were not opened. A live
+hot reload of `fx.py` across this change leaves `fx.select` on its old
+closures until a restart.
+
+### WP3 — An effect that is not running says why (PR #86, merged aa1e54e)
+
+PR #86 was stacked on WP2's branch and went onto `plan-16-integration`
+by a merge commit; GitHub shows it closed, not merged, because its base
+branch was deleted.
+
+**Built.** `ui_fx.why_idle(fx, name)` returns `"off"`, `"bypassed"`,
+`"fx mix 0"`, `"mix 0"` or `None`, checked in that order against the
+four conditions of `FxState.chain()`. When it is not `None` the open
+strip draws one line in `ui.WARN` — after the effect's tip and its error
+line, before its "on" row — with a chip for the first two reasons:
+"off — nothing below shows until it is on" + **turn on**
+(`fx.<name>.on`), "the whole stack is bypassed" + **effects on**
+(`fx.on`), "FX mix is at 0", "its mix is at 0" (`ui_fx.IDLE`). The rows
+under it are dimmed and stay live; the "on" check is not dimmed. Both
+chips are `Param.set` on a persisted param: one undo step each, no
+explicit push.
+
+**Differs from §2, and why.**
+
+- **The dimming is a veil, not a pushed style alpha** (`ui_fx._dim`: a
+  rect of the window's ground drawn over the rows after they are drawn;
+  `IDLE_ALPHA = 0.45` is how much of a row shows through). A pushed
+  alpha would still be on the stack when a row's right-click menu or the
+  blend combo's list is drawn, so the Learn menu would be at 45 % too,
+  on the one strip that must stay learnable. Register row 46.
+- **At "its mix is at 0" the effect's own mix fader is not dimmed**: it
+  is the control the line names.
+- A row whose Learn is armed has its learn frame drawn again over the
+  veil (`_relearn_frame`; review). Its ghost bar and modulation dot stay
+  dimmed with the row.
+- `why_idle` reads the effective values `chain()` reads; the chips write
+  the base. With a routed source holding the switch off, "turn on" sets
+  the base and the line stays (it is still true); the chip's hover names
+  who is riding it.
+- Room: with WP2's fourth chip row the tightest strip (`zoomblur`) has
+  52 px to spare with the line showing, against §2's 110 px measured
+  before either package.
+
+**Tests** (`tests/test_fx.py`). `test_why_idle_names_the_first_reason`,
+`test_an_off_effects_strip_says_so_and_turn_on_switches_it_on`,
+`test_a_bypassed_stack_says_so_on_the_strip`,
+`test_the_idle_strips_controls_stay_live`,
+`test_the_page_fits_with_the_tightest_strip_idle`,
+`test_turn_on_is_one_undo_step`,
+`test_an_armed_rows_learn_frame_is_drawn_over_the_veil`.
+
+**Demo.** `docs/plans/assets/16-paper-cuts/fx-idle.png` (the same tool,
+`--shots`): Kaleidoscope open and off, the line and **turn on**, the
+check at full strength, the rows under it dimmed.
+
+**Not verified.** A real click on either chip or on a dimmed fader;
+right-click → Learn on a dimmed row was not exercised by a test or a
+hand. How the dimming reads from a step back is hand check 60's. The
+veil assumes the page's ground is the window background colour. The
+line and its chip are not wrapped: they fit at the control size and no
+test holds them narrower. An effect whose shader never compiled gets its
+error line and no idle line. The page's status line reads `fx.on`'s base
+while the strip's line reads the effective value; under a route on
+`fx.on` they can disagree.
+
+### WP4 — Window placement at launch (PR #85, merged 6f7736f)
+
+**Built.** `hyperspace/placement.py`, importing nothing from the package
+(`glfw` is passed in): `screens`, `load`, `save`, `usable`,
+`default_rect`, `place(kind, size, screens, monitor, remembered) ->
+(rect, note)`. `[output] monitor` is widened — at 0 or above the render
+window is also created on that screen — and `[output] control_monitor`
+is new, default −1. `<home>/windows.json` (`hyperspace.windows/1`) holds
+the control window's rect and a list of render rects, one entry today.
+`app._windows(overlay, cfg, home)` asks `place` for each window; notes
+go to stderr and `cfg["notes"]` (the SYSTEM page). `app._save_windows`
+runs through `_quiet` first thing after the loop in `main` and at the
+top of `_restart`. `Output.windowed_rect()` (`overlay.py`) is read-only.
+`hotreload.MODULES` lists `"placement"` among the leaves. Forks F4, F5
+and F6 as recommended: register row 48.
+
+**Differs from §2, and why.**
+
+- **`default_rect` does not clip the size to the work area.** A first
+  launch is then exactly as it was on every screen, and a small laptop's
+  clipped size is not what gets written at the quit and carried to a
+  bigger screen. A *remembered* size is still clipped to the screen it
+  lands on.
+- `Output.windowed_rect()` reads the mode the window is actually in
+  (`_applied["mode"]`), not the one the params ask for.
+- The save runs before `close_all`, so a port that hangs on close cannot
+  cost the memory.
+- A remembered size is floored at 320 × 240 before the usable check, and
+  the check runs again after the clip.
+- A render slot with no rect and no old entry is written as `null`, so
+  the list stays positional for plan 21.
+- `save` does not write a rect no launch would restore (a window in the
+  OS's own fullscreen, whose content area sits above the work area):
+  that window's old entry is kept, as for a minimised one.
+- If `place` raises on something unforeseen, `_windows` opens both
+  windows at the default spots with a note.
+- `screens()` is all or nothing: if any monitor's work area cannot be
+  read it returns `[]` and no position is set.
+- A file with another schema, or that is not JSON, is ignored without a
+  note; a bad entry in a good file, or a rect on no screen, gets one.
+  Two things wrong for one window arrive as one line joined by `; `.
+- The temp file is per process (`windows.json.<pid>.tmp`).
+- On macOS the default spot asks for the work area's top + 16 and the OS
+  puts the content area lower (65, not 49, on the build machine); the
+  remembered 65 restores to 65.
+- **A config value that is not a number** (`monitor = "left"`) was
+  treated as −1 by `place` but still stopped the launch in
+  `app._make_output`. WP7 settled it (below).
+
+**Tests.** `tests/test_placement.py` (fifteen tests:
+`test_first_launch_places_as_before`, `test_a_remembered_rect_is_restored`,
+`test_a_rect_on_a_screen_that_is_gone_falls_back`,
+`test_an_off_screen_rect_falls_back`,
+`test_a_config_monitor_beats_the_remembered_screen`,
+`test_a_remembered_rect_on_the_configured_screen_is_kept`,
+`test_a_config_monitor_that_is_not_there_is_a_note`,
+`test_a_remembered_size_is_clipped_to_its_screen`,
+`test_save_round_trips_and_render_is_a_list`,
+`test_a_none_keeps_the_old_entry`, `test_a_bad_file_is_ignored`,
+`test_a_bad_file_is_ignored_entry_by_entry`,
+`test_an_unwritable_home_costs_only_the_memory`,
+`test_screens_reads_the_work_areas_in_monitor_order`,
+`test_placement_imports_nothing_from_the_package`);
+`tests/test_overlay.py::test_windowed_rect_is_the_saved_rect_while_fullscreen_or_overlay`;
+`tests/test_app_boundary.py::test_the_windows_open_where_placement_says`,
+`::test_the_exits_save_the_windowed_rects`.
+
+**Demo.** `docs/plans/assets/16-paper-cuts/placement-demo.txt`: the
+output of `tools/placement_demo.py` (fake screens), then the transcript
+of four real launches on the build machine's one screen, each on a temp
+home (no file; that file; the file edited by hand; a nonsense file with
+`control_monitor = 1`).
+
+**Not verified.** **A second screen**: opening a window on another
+monitor, negative or offset screen coordinates, mixed DPI and GLFW's
+monitor order against the config index were exercised with fake screens
+only. A projector unplugged between launches. Fullscreen and overlay on
+the glass (that a fullscreen quit saves the windowed rect is covered
+with a fake backend). ⌘R in a real run. A minimised window at quit. The
+SYSTEM page showing a placement note. Windows and Linux window managers.
+
+### WP5 — Instances to zero; `dream.layer`; two comments (PR #90, merged 8970f0a)
+
+**Built.** `view.instances` is `lo=0, hi=100`, an integer, linear,
+default 1; it reads "0 · nothing drawn" at 0 and "N instance(s)"
+otherwise, and its tip says what 0 does. `Renderer.draw_scene`:
+`n_inst = max(0, int(s.instances))`; at 0 it still clears to the ground,
+sets the blend function and `self._face_verts = 0`, then returns —
+no faces, lines or points, no vertex buffer written. `_draw_frame` is
+untouched: the cover pass, the look-back's composite and capture, the FX
+chain, the ghost hands and the dim run as on any frame. Zero is reached
+from the slider's left end and track knob 3's bottom. `dream.layer` is
+`modulatable=False`, with `dream.gap` and `dream.res`; it is still
+persisted and set by the panel, a preset and a key or desk row. The
+`ui_presets.py` docstring and the `preset.py` comment over the effect
+presets say what the code does. Register rows 47 (the floor) and 49
+(the layer).
+
+**Differs from §2, and why.**
+
+- Three additions outside the "owns" list: `tools/instances_shots.py`,
+  one test in `tests/test_undo.py`, a line in `draw_scene`'s docstring.
+- At 0 `draw_scene` still computes the projection and the edge order
+  before it returns (the early exit sits after the clear).
+- **Plan 12's "n = 68"** at the top of `party-field`'s right-hand height
+  is **69**: the throw is 100 steps, not 99. Plan 12's document is
+  history and is not edited.
+
+**For the owner to know** (its review; register row 47): a performer row
+that pushes both ways (an LFO, a negative lane push) on a count of 1 now
+reaches 0 for part of its cycle, and a `position` row reads 0 at the
+bottom of its source. No factory row does either (tested). A user's
+saved route onto `dream.layer` goes dormant with no note at load
+(register row 49).
+
+**Tests.** `tests/test_params.py::test_raw_ranges_clamp_int_and_log`
+(changed), `::test_instances_read_nothing_drawn_at_zero`;
+`tests/test_render.py::test_zero_instances_draws_only_the_ground`,
+`::test_zero_instances_still_runs_the_look_back_and_the_effects`,
+`::test_one_instance_is_the_frame_it_was`;
+`tests/test_plan12_presets.py::test_no_factory_hand_row_blanks_the_scene`,
+`::test_field_height_is_one_gesture_over_three_params` (unchanged);
+`tests/test_lookback.py::test_dream_params_declared` (changed),
+`::test_a_route_on_the_dream_layer_is_dormant`;
+`tests/test_undo.py::test_a_count_taken_to_zero_is_undone`. The PR also
+reports a throwaway comparison of the old and new `render.py` at counts
+1, 5 and 100 (byte-equal) and 0 (different); the committed test pins the
+clamp instead.
+
+**Demo.** `docs/plans/assets/16-paper-cuts/instances-zero.png`
+(`tools/instances_shots.py`, an offscreen render): one scene at count 1;
+at 0; at 0 with plasma on; at 0 with the look-back on, 3 and 12 frames
+after the count left 1.
+
+**Not verified.** Track knob 3 at the bottom on the APC40, the slider
+dragged to its left end, a black render window with echoes fading on a
+screen. The LOOKBACK page's menu reading "not modulatable" for the
+layer. That a route onto `dream.layer` used to make the worker reload
+trunks is from reading `DreamWorker._ensure_net`, not from a run with
+the net. "Bit-identical at 1" was measured on one GL driver.
+
+### WP7 — Four small fixes found while building 15 and 16 (PR #92)
+
+Not in §2: added by the orchestrator after WP1–WP5, from what their
+agents reported. Each was checked in the code first; all four were real.
+No new param, menu item or page.
+
+**1. A footer line said twice shows twice.** Every line that reports
+something that just happened is now set through `Library.say`, which
+counts it (`Library.said`), so `Panel._message` shows the same words
+again: an empty F-key pressed twice, home with no "starts on" pressed
+twice, a slot naming no file, a show saved twice. A plain assignment of
+`lib.status` / `lib.warning` is left for clearing a line and is not
+counted, so nothing that assigned the same words every frame could hold
+the footer open; no site does. One exception, from the review:
+`Library.adopt` says a scene only when it changes, because a knob on
+`scene.select` sends the same choice many times in one turn.
+`tests/test_ui_presets.py::test_a_line_said_twice_shows_twice`,
+`::test_a_line_assigned_every_frame_does_not_pin_the_footer`.
+
+**2. A performer's round-off lights no dirty dot.** `undo.alike(a, b)`
+compares nested dicts, tuples and lists with floats (and a whole number
+against a float) within undo's `REL_TOL` / `ABS_TOL`, everything else
+exactly. `Library.is_dirty` (a module preset; a document kind's
+signature, so the preset's dot) and `Project.is_dirty` (the show's
+session part) compare through it. `Param` is untouched; the routes, desk
+and macros in the signature are JSON text and compare exactly. Measured
+with the demo's synthetic hands: 8 of the 22 factory presets read
+"unsaved" after two seconds of hands on their own routes before the
+change (`view.speed` 0.3 → 0.29999999999859905), none after; one detent
+still lights the dot.
+`tests/test_undo.py::test_a_performers_round_off_lights_no_dot`,
+`::test_alike_is_exact_but_for_float_round_off`.
+
+**3. The desk diagram does not jump when the sheet first shows.**
+`Panel._draw_cheatsheet` takes the sheet's height from the rows it has
+just laid out, not `get_window_height()`, which on the sheet's first
+frame is not its laid-out height.
+`tests/test_ui_desk.py::test_the_desk_does_not_jump_when_the_sheet_comes_up`.
+
+**4. A config screen that cannot be used is −1 and a note, not a dead
+launch.** `placement.read(key, value)` is the one reading of `[output]
+monitor` / `control_monitor`. `config.load` turns a value `int()` will
+not read into −1 with a note on stderr and in `cfg["notes"]`.
+`app._windows`, after `place` has written its note, leaves −1 in the
+config in place of an index no connected screen has, so
+`Output.monitor` no longer carries it. One note per key.
+`tests/test_config.py::test_a_screen_that_is_not_a_number_is_minus_one_and_a_note`,
+`tests/test_app_boundary.py::test_a_config_screen_that_cannot_be_used_is_minus_one_and_one_note`.
+
+**A consequence of 4, for the owner to know.** An index no screen has
+*at launch* is −1 for the whole run. Before, `Output.monitor` kept the
+index and fullscreen went to that screen once it was plugged in; now a
+projector plugged in after the launch is picked by hand (the OUTPUT
+page's Screen combo) or by relaunching. To reverse: the three write-back
+lines in `app._windows`.
+
+**Demo.** `docs/plans/assets/16-paper-cuts/followups-demo.txt`
+(`uv run python tools/followups_demo.py`, headless, a temp home): fixes
+1, 2 and 4 before and after, in words and values. "Before" is the old
+rule applied to the same state inside the script. Fix 3 has no demo
+beyond its test.
+
+**Not verified.** None of the four in the running app. Fix 3 on a
+screen. Noticed and left: `[output] bg = "x"` or `alpha = "x"` still
+raises in `_make_output`; `monitor = true` or `1.9` is read as `int()`
+reads it (1), with no note; the `macro` group reads dirty right after
+`lfo-breathe` loads (`macro.1` at 0 against a group default of 1), which
+is not round-off and was not touched.
+
+### WP6 — Docs and hand checks
+
+This section; group L of `11-hand-checks.md` (checks 58–63) and check
+1's and check 26's sentences; decision register rows 45–49;
+`DECISIONS.md`'s 2026-10-04 rows for this plan; `ARCHITECTURE.md` and
+`ENGINEERING.md` where these packages changed a sentence;
+`plans/README.md`, `CHECKPOINT.md` and the roadmap's pointer.
+
+*As built:* the register gained five rows for six forks (F4, F5 and F6
+are one row, "window placement") plus one that was not a fork in §6
+(`dream.layer`); the chips-per-row consequence is part of F1's row.
 
 ## Appendix A — Hand checks, group L
 
 For `docs/plans/11-hand-checks.md` (WP6 copies it there and gives the
 checks their final numbers after plan 15's group K; `L1`–`L6` are
 placeholders).
+
+*As built:* copied by WP6 as checks **58–63** (L1 → 58 … L6 → 63), and
+changed there where the builds changed a detail: three chips to a row
+and the outline round both parts (59); the veil, and the own-mix fader
+left undimmed (60); the one-screen caveat, `control_monitor`, and a
+config screen that is not a number (61); the knob's bottom and a user's
+two-way route (62). The text below is the plan's, kept as written;
+`11-hand-checks.md` is the one to run.
 
 ## L. Plan 16 — paper cuts — added with plan 16
 
