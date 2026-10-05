@@ -48,9 +48,36 @@ def test_the_params_are_session_off_by_default_and_learnable(tmp_path):
     assert "ghost" in SESSION_GROUPS
     for pid in ("ghost.on", "ghost.alpha", "ghost.mirror", "ghost.guide", "ghost.tethers"):
         p = reg[pid]
-        assert p.persist and p.modulatable and part_of(p) == "session", pid
+        assert p.persist and part_of(p) == "session", pid
+        # plan 21 WP5 R12: a lane may perform the hands' presence and
+        # opacity; the mirror, the guide and the tethers are display settings
+        assert p.modulatable is (pid in ("ghost.on", "ghost.alpha")), pid
     assert reg["ghost.on"].value is False and 0.0 < reg["ghost.alpha"].value <= 1.0
     assert G.GUIDES[reg["ghost.guide"].value] == "OFF" and reg["ghost.tethers"].value is False
+
+
+def test_a_desk_button_sets_the_mirror_and_a_lane_cannot_perform_it(tmp_path):
+    """Plan 21 WP5 R12: a learned desk button (a scene-setter, `toggle`)
+    still flips `ghost.mirror`; an LFO's performer row onto it is dormant,
+    so a moving source can no longer flip the hands left for right. The
+    same row onto `ghost.alpha` still performs it."""
+    from test_params import make
+
+    from hyperspace import routing
+    from hyperspace.routing import Binding, Bindings, Router
+
+    reg = make(tmp_path)[0]
+    routing.act(reg, Binding("note:0:60", "ghost.mirror", "toggle"))
+    assert reg["ghost.mirror"].value is True
+    router = Router(reg, Bindings([Binding("lfo:0", "ghost.mirror", "position"),
+                                   Binding("lfo:0", "ghost.alpha", "position")]))
+    alpha = reg["ghost.alpha"].value
+    for _ in range(3):
+        router.feed("lfo", [0.0, 0.0, 0.0, 0.0])
+        router.modulate()
+        reg.apply()
+    assert reg["ghost.mirror"].value is True               # the row is dormant
+    assert reg["ghost.alpha"].value != alpha               # the alpha row still acts
 
 
 def test_the_box_is_the_calibrated_ranges_else_the_defaults():
