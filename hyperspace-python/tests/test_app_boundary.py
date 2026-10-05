@@ -513,6 +513,7 @@ def _open(monkeypatch, cfg, home, mons=None):
 def test_the_windows_open_where_placement_says(monkeypatch, tmp_path, capsys):
     from hyperspace import config, placement
 
+    place = placement.place
     # first launch — no file, default config: the spots and sizes as before
     cfg = {"output": dict(config.DEFAULTS["output"])}
     g, render, ctrl = _open(monkeypatch, cfg, tmp_path)
@@ -551,6 +552,14 @@ def test_the_windows_open_where_placement_says(monkeypatch, tmp_path, capsys):
     # no screens at all: default sizes, no position set — as before
     g, render, ctrl = _open(monkeypatch, cfg, tmp_path, {})
     assert (g.size[render], g.size[ctrl]) == (app.RENDER_SIZE, app.CONTROL_SIZE) and g.pos == {}
+
+    # placement raising on something nobody foresaw: default spots and a note, never a dead launch
+    cfg = {"output": {}}
+    monkeypatch.setattr(placement, "place", _boom)
+    g, render, ctrl = _open(monkeypatch, cfg, tmp_path)
+    assert (g.pos[render], g.pos[ctrl]) == ((16, 54), (1728 - 960 - 16, 54))
+    assert len(cfg["notes"]) == 1 and cfg["notes"][0].startswith("placement: ")
+    monkeypatch.setattr(placement, "place", place)
 
     # and with no home given nothing is read: the old one-argument call
     g = _PlaceGlfw()

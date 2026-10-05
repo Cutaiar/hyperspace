@@ -104,6 +104,12 @@ def test_a_config_monitor_that_is_not_there_is_a_note():
     # a key that is not a number at all is the same case, said
     r, note = place("render", RENDER, BOTH, "projector", None)
     assert r == placement.default_rect("render", RENDER, LAPTOP) and "not a screen index" in note
+    for odd in (float("nan"), float("inf"), None, [1]):
+        assert "not a screen index" in place("render", RENDER, BOTH, odd, None)[1]
+    # what int() reads is read the same way app._make_output reads it
+    for one in (1.0, "1", True):
+        assert place("render", RENDER, BOTH, one, None) == (
+            placement.default_rect("render", RENDER, PROJECTOR), "")
     # below −1 is −1
     assert place("render", RENDER, BOTH, -7, None) == (
         placement.default_rect("render", RENDER, LAPTOP), "")
@@ -115,9 +121,10 @@ def test_a_remembered_size_is_clipped_to_its_screen():
     # never under 320 × 240
     r, _ = place("render", RENDER, BOTH, -1, entry(1800, 40, 10, 10, PROJECTOR.name))
     assert r == (1800, 40, 320, 240)
-    # a default size is clipped to a small screen's work area too
+    # the default size is not clipped — as before this module, and so a
+    # small screen's size is never what gets remembered
     tiny = Screen("tiny", 0, 0, 800, 600)
-    assert placement.default_rect("render", RENDER, tiny) == (16, 16, 800, 600)
+    assert placement.default_rect("render", RENDER, tiny) == (16, 16, 1280, 820)
     # a huge rect that the clip would push off its screen is not used
     far = entry(PROJECTOR.x - 4000, 40, 5000, 900)
     r, note = place("render", RENDER, [PROJECTOR], -1, far)
@@ -157,6 +164,10 @@ def test_a_none_keeps_the_old_entry(tmp_path):
     placement.save(tmp_path, (310, 90, 960, 900), [None], BOTH)
     doc = placement.load(tmp_path)
     assert doc["control"]["x"] == 310 and doc["render"][0]["x"] == 50
+    # so does a rect no launch would restore: the OS's own fullscreen (the
+    # content area above the work area), or a window off every screen
+    placement.save(tmp_path, (0, 0, 1728, 1117), [(9000, 9000, 1280, 820)], BOTH)
+    assert placement.load(tmp_path) == doc
     # nothing before it to keep: the slot is empty, and an empty slot is a first launch
     other = tmp_path / "other"
     other.mkdir()
@@ -189,7 +200,7 @@ def test_a_bad_file_is_ignored_entry_by_entry(tmp_path):
                 entry("100", 100, 800, 600), entry(True, 100, 800, 600),
                 entry(100, 100, 0, 600), entry(100, 100, 800, -600),
                 entry(float("nan"), 100, 800, 600), entry(float("inf"), 100, 800, 600),
-                entry(10 ** 30, 100, 800, 600)):
+                entry(10 ** 30, 100, 800, 600), entry(100, 10 ** 400, 800, 600)):
         (tmp_path / FILE).write_text(json.dumps(
             {"schema": SCHEMA, "control": entry(300, 90, 960, 900), "render": [bad]}))
         doc = placement.load(tmp_path)

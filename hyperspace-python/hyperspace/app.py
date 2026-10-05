@@ -175,12 +175,17 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
     oc = oc if isinstance(oc, dict) else {}
     render_rect = ctrl_rect = None
     if scr:
-        seen = placement.load(home) if home is not None else {}
-        renders = seen.get("render") or [None]
-        render_rect, n1 = placement.place("render", RENDER_SIZE, scr,
-                                          oc.get("monitor", -1), renders[0])
-        ctrl_rect, n2 = placement.place("control", CONTROL_SIZE, scr,
-                                        oc.get("control_monitor", -1), seen.get("control"))
+        try:
+            seen = placement.load(home) if home is not None else {}
+            renders = seen.get("render") or [None]
+            render_rect, n1 = placement.place("render", RENDER_SIZE, scr,
+                                              oc.get("monitor", -1), renders[0])
+            ctrl_rect, n2 = placement.place("control", CONTROL_SIZE, scr,
+                                            oc.get("control_monitor", -1), seen.get("control"))
+        except Exception as e:  # noqa: BLE001 — a file nobody foresaw must not stop a launch
+            render_rect = placement.default_rect("render", RENDER_SIZE, scr[0])
+            ctrl_rect = placement.default_rect("control", CONTROL_SIZE, scr[0])
+            n1, n2 = _err("placement", e) + " — the windows open at their default spots", ""
         for note in filter(None, (n1, n2)):
             print(note, file=sys.stderr)
             if cfg is not None:
@@ -686,9 +691,6 @@ def main() -> None:
     home = library_home()                 # the folder config.load has just ensured
     render_win, ctrl_win = _windows(_overlay_allowed(cfg), cfg, home)
 
-    def save_windows() -> None:           # both exits: quit below, ⌘R in _restart
-        _save_windows(home, render_win, ctrl_win, output)
-
     # the render side: moderngl on the render window's context, vsynced
     glfw.make_context_current(render_win)
     glfw.swap_interval(1)
@@ -886,6 +888,9 @@ def main() -> None:
                               "the look-back shows the echoes only")
     presets.listeners.append(dream_check)
     dream_check(library.current("presets"))     # the startup preset has already landed
+
+    def save_windows() -> None:           # both exits: quit below, ⌘R in _restart
+        _save_windows(home, render_win, ctrl_win, output)
 
     host = Host(reg=reg, view=s, control=control, audio=audio, router=router,
                 clock=clock, lfos=lfos, keys=keys, mouse=mouse, output=output,

@@ -119,7 +119,7 @@ def save(home: Path, control: Rect | None, render: list[Rect | None],
     doc = {"schema": SCHEMA,
            "control": _entry(control, scr) or old.get("control"),
            "render": entries}
-    tmp = home / f"{FILE}.tmp"
+    tmp = home / f"{FILE}.{os.getpid()}.tmp"     # its own: two instances may share a home
     try:
         tmp.write_text(json.dumps(doc, indent=1) + "\n")
         os.replace(tmp, home / FILE)
@@ -133,9 +133,12 @@ def save(home: Path, control: Rect | None, render: list[Rect | None],
 
 
 def _entry(rect, scr: list[Screen]) -> dict | None:
-    """A file entry for a rect; None for a None or a rect that is not one."""
+    """A file entry for a rect; None for a None, a rect that is not one, or
+    one no launch would restore (not `usable` on the screens as they are —
+    a window in the OS's own fullscreen sits above the work area): the old
+    entry is worth more than that."""
     r = _rect(dict(zip("xywh", rect, strict=False))) if rect is not None else None
-    if r is None:
+    if r is None or not usable(r, scr):
         return None
     on = _centre_screen(r, scr) or _landing(r, scr)
     return {"x": r[0], "y": r[1], "w": r[2], "h": r[3], "screen": on.name if on else ""}
@@ -148,9 +151,11 @@ def _rect(entry) -> Rect | None:
     out = []
     for k in "xywh":
         v = entry.get(k)
-        if isinstance(v, bool) or not isinstance(v, int | float) or not math.isfinite(v):
+        if isinstance(v, bool) or not isinstance(v, int | float):
             return None
-        if abs(v) > 1_000_000:
+        # the bound first: isfinite() raises on an int too big for a float,
+        # and a NaN fails the comparison
+        if not abs(v) <= 1_000_000 or not math.isfinite(v):
             return None
         out.append(round(v))
     if out[2] <= 0 or out[3] <= 0:
@@ -209,9 +214,11 @@ def _fit(rect: Rect, scr: list[Screen]) -> Rect | None:
 
 def default_rect(kind: str, size: tuple[int, int], s: Screen) -> Rect:
     """The default spot on a screen. Render (and anything else): top-left
-    + MARGIN. Control: flush right − MARGIN, top + MARGIN. The size is
-    clipped to the work area."""
-    w, h = min(int(size[0]), s.w), min(int(size[1]), s.h)
+    + MARGIN. Control: flush right − MARGIN, top + MARGIN. The size is the
+    one asked for, as it always was: on a screen smaller than the window
+    it overhangs, and a clipped size would be remembered at the quit and
+    follow the window to a bigger screen."""
+    w, h = int(size[0]), int(size[1])
     x = s.x + MARGIN
     if kind == "control":
         x = max(s.x + s.w - w - MARGIN, x)
@@ -243,10 +250,15 @@ def place(kind: str, size: tuple[int, int], scr: list[Screen],
         return (MARGIN, MARGIN, int(size[0]), int(size[1])), ""
     notes = []
     target = None
-    if isinstance(monitor, bool) or not isinstance(monitor, int):
+    try:
+        # read as app._make_output reads it for `output.monitor`, so the
+        # screen a window opens on and the one fullscreen covers agree
+        monitor = int(monitor)
+    except (TypeError, ValueError, OverflowError):
         notes.append(f"config: [output] {_key(kind)} = {monitor!r} is not a screen index — "
                      "using the last position")
-    elif monitor >= len(scr):
+        monitor = -1
+    if monitor >= len(scr):
         n = len(scr)
         have = "0" if n == 1 else f"0–{n - 1}"
         notes.append(f"config: [output] {_key(kind)} = {monitor}, but {n} "
