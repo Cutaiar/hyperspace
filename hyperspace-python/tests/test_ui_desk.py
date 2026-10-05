@@ -420,10 +420,15 @@ def test_a_controls_text(rig):
     spaces, each cut to the width; a step keeps its amount."""
     reg = rig.reg
     text = ui_desk.text
-    names = reg["view.shape"].names
-    assert text(reg, Binding("note:3:56", "view.shape", "set", 3.0)) == names[3]
+    names = reg["scene.select"].names                             # a band-scene pad, G2·4
+    assert text(reg, Binding("note:3:54", "scene.select", "set", 3.0)) == names[3]
     bank = reg["preset.select"].names
     assert text(reg, Binding("note:4:53", "preset.select", "set", 4.0)) == bank[4]
+    # a bank pad of rows 4–5 (plan 19 WP2): a filled slot its preset's name,
+    # an empty one nothing at all — not "SLOT 10"
+    assert rig.lib.project.bank[8] and rig.lib.project.bank[9] is None
+    assert text(reg, Binding("note:0:56", "preset.select", "set", 8.0)) == bank[8]
+    assert text(reg, Binding("note:1:56", "preset.select", "set", 9.0)) == ""
     assert text(reg, Binding("note:0:94", "view.bright", "step", 3.0)) == "Brightness +3"
     assert text(reg, Binding("note:0:95", "view.bright", "step", -3.0)) == "Brightness -3"
     assert text(reg, Binding("cc:0:48", "view.bright", "abs")) == "Brightness"
@@ -457,6 +462,58 @@ def test_a_controls_text(rig):
     assert ui_desk.label_px(67) == 0.2 * 67 and ui_desk.label_px(20) == 11 \
         and ui_desk.label_px(200) == 18
     imgui.end_frame()
+
+
+def test_a_filled_pad_is_amber_and_an_empty_one_has_no_label(rig, monkeypatch):
+    """Plan 19 WP2, fork 5, on screen as on the device: a bank pad is the
+    loaded preset's (green), a filled slot's (amber at `FILLED` strength,
+    its preset's name in the bright ink) or an empty slot's — drawn as a
+    dark control, its glyph and no label, on both layers. Its hover and
+    the pick line still say what the pad is: an empty slot."""
+    from hyperspace.learn import Learn
+
+    panel, table, reg, pr = rig.panel, rig.router.table, rig.reg, rig.lib.project
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    pr.put_slot(11, "WAKE")                                  # G4·4: filled
+    pr.load_slot(4)                                          # TRIP on F5: loaded
+    assert pr.bank[8] == "TRACER" and pr.bank[9] is None and pr.active == 4
+    reg["ui.panel"].set(False)
+    green = ui_desk._LED[apc40.GREEN]
+    amber = tuple(ui_desk.FILLED * x for x in ui_desk._LED[apc40.YELLOW])
+    for layer in ("preset", "global"):
+        table.set_layer(layer)
+        got = _desk_frames(rig, monkeypatch)
+        lit = ui_desk.lit_cached(panel, table)
+        leds = {g: ui_desk._led(panel, lit[g]) for g in ("G1·5", "G1·1", "G4·1", "G4·4",
+                                                        "G4·2", "G5·8")}
+        assert leds == {"G1·5": green, "G1·1": amber, "G4·1": amber, "G4·4": amber,
+                        "G4·2": None, "G5·8": None}, layer
+        assert not ui_desk._bright(amber) and ui_desk._bright(green)
+        empty = sorted(g for g, b in lit.items() if ui_desk.empty(reg, b))
+        assert empty == sorted(apc40.glyph(f"note:{ch}:{n}")
+                               for k, (n, ch) in enumerate(apc40.BANK_PADS) if pr.bank[k] is None)
+        assert len(empty) == 14
+        labels = ui_desk._state(panel)["labels"]
+        assert {"TRIP", "TUMBLE", "TRACER", "WAKE"} <= set(labels), layer
+        assert not [t for t in got["texts"] if t.upper().startswith("SLOT")], layer
+        assert not [t for t in labels if t.upper().startswith("SLOT")]
+        # each glyph once, the empty pads' too: drawn, with nothing under them
+        assert all(got["texts"].count(g) == 1 for g in empty)
+    table.set_layer("preset")
+    # the hover: what the pad is, and that its slot is empty
+    c = next(c for c in apc40.LAYOUT if c.glyph == "G4·2")
+    b = ui_desk.lit(table)["G4·2"]
+    assert ui_desk.label(table, c, b, reg) == (
+        f"G4·2 · preset.select · slot 10: empty · invariant\n{c.name}")
+    c4 = next(c for c in apc40.LAYOUT if c.glyph == "G4·4")
+    assert ui_desk.label(table, c4, ui_desk.lit(table)["G4·4"], reg) == (
+        f"G4·4 · preset.select · WAKE · invariant\n{c4.name}")
+    # a pick on it: refused as invariant (D6), and it says the slot is empty
+    panel.learn = Learn(reg, table)
+    panel.learn.pick(c.source)
+    line, ok = ui_desk.pick_line(panel, table, c)
+    assert not ok and line == "G4·2 (clip 4·2) is invariant (the session's): an empty slot"
+    panel.learn.pick(None)
 
 
 # ------------------------------------------- plan 17 WP4: the desk, clickable
