@@ -684,8 +684,8 @@ Dan and Dillon ran the rig for a night and talked through everything it
 still needs. `docs/plans/15-21-roadmap.md` orders that list into seven
 plans. **You answered rows 26–33 on 2026-10-04**; each entry below keeps
 the question as it was asked, with the answer on its first line. Rows 26–29
-are plan 15's (the answer sheet's notes say where each was built; row
-29's, the save-as, is its WP4). **Rows 34–44,
+are built (plan 15, PRs #81–#83 and #87; the answer sheet's notes say
+where). **Rows 34–44,
 after row 33, are the forks plan 15's unattended run settled on its own
 recommendation**: each is built and waits for you to confirm or overturn.
 
@@ -1121,19 +1121,42 @@ MIDI adapter kept no press time, and nothing ever sent a blink.
 **Chosen: the bold option of each.** The eight buttons are one bar: two
 fingers save once, and a button still down saves nothing more until it
 is pressed again. With the bank full the preset is still saved, goes to
-the preset list, and the footer says so; no pad blinks. A preset whose
-name ends in a number counts on from it (TRIP 2 → TRIP 3; with TRIP 3
-taken, TRIP 4).
+the preset list, and the footer says so ("saved TRIP 3 — the bank is
+full: it is in the preset list"); the bar blinks, no pad does, and no
+slot is lit, because the loaded preset is in none. A preset whose name
+ends in a number counts on from it (TRIP 2 → TRIP 3; with TRIP 3 taken,
+TRIP 4).
+
+Four things the build added that the question did not cover:
+
+- **A save that fails blinks nothing.** If the preset cannot be written
+  (a full disk), the bar just goes dark at 0.6 s; the desk never
+  confirms a save that did not happen. The reason is on the PRESETS
+  page.
+- If the preset saves but the show cannot be written, the slot stays
+  empty and the footer says the preset is in the list.
+- The "bank is full" line goes away as soon as you make room (clear a
+  slot, or put a preset somewhere).
+- **A clip-stop button you delete from `bindings.json` comes back on the
+  next launch**, like every factory button the migration adds. To switch
+  one off, keep its row and add `"enabled": false`.
+
+Not built, and not a fault: the on-screen desk lights the bar while it
+is held but does not blink, and the cheat sheet does not mention the
+bar.
 
 **Cost to reverse.** Firing on release: move one call. The bar lit at
 rest: the rows' "off" velocity. Staying on the old preset: one line. A
-different hold time: one constant (`midi.HOLD_S`). Plan 15 WP4;
+different hold time: one constant (`midi.HOLD_S`). Plan 15 WP4
+(PR #87);
 `test_midi.py::test_a_hold_fires_once_at_the_hold_time_while_held`,
 `::test_the_bar_is_one_control`,
 `::test_the_bar_lights_while_held_and_the_new_slots_pad_blinks`,
-`test_presets.py::test_save_new_never_overwrites`. Hand check 56.
-*Written from the plan before WP4's PR landed; to be reconciled with
-it.*
+`test_presets.py::test_save_new_never_overwrites`. Hand check 56: the
+gesture has been run by tests on a fake clock and fake ports, and the
+save itself by a scripted launch of the app; the hold, the lights and
+the blink have never been on the APC40, and the blink's velocities come
+from Akai's table.
 
 ### 43. P15-o — a slider drag that pauses
 
@@ -1305,7 +1328,7 @@ take "keep" or "overturn".
 | 26 | P15-a undo depth | (a) actions first, then (b) settled edits | **per-edit**, 2026-10-04 | one gesture (a drag, a knob turn, a typed value) is one step; built, plan 15 WP1 (PR #82): `undo.py` — `Undo.tick` once a frame in `app.frame` after `router.follow_macros`, a step closed by 0.4 s of quiet (`SETTLE_S`), `undo.push` before every load, Learn, Unbind, delete and Replace, a restore through `Registry.restore` and `Bindings.set_routes` / `set_desk(load=False)` / `set_macros`, `library.Marks` for what is loaded; ⌘Z / Ctrl+Z and ⇧ to redo (`edit.undo`, `edit.redo`); the footer's message line; the trash (`library.to_trash`). `tests/test_undo.py` (27 tests, `test_a_slider_drag_is_one_step_and_undo_sets_only_that_param`, `test_a_performer_moving_makes_no_step`, `test_an_idle_app_makes_no_step` among them), `test_library.py`'s five trash tests. Rows 34–37, 39 and 43 are its forks. Hand checks 48–53 |
 | 27 | P15-b home | (a) the "starts on" preset, on OVERDUB and the Home key | **(a)**, 2026-10-04 | built, plan 15 WP2 (PR #83): `Project.home` (`library.py`), the `preset.home` trigger, `key:HOME` and the invariant OVERDUB row `note:0:64` (lit while the show names a "starts on"), added to an existing `bindings.json` where free; the PRESETS page reads "starts on / home"; one undo step. `test_presets.py::test_home_loads_what_the_show_starts_on`, `::test_home_is_one_undo_step`, `test_desk.py::test_overdub_is_home_on_both_layers_and_is_lit`. Rows 38 and 40 are its forks. Hand check 54 |
 | 28 | P15-c crossfader | (a) master dim, both layers, left is black | **(a)**, 2026-10-04 | built, plan 15 WP3 (PR #81): `output.dim` (`Output.register`: never saved, not modulatable, 1 at launch), `Renderer.dim_pass` as the frame's last pass after the ghost hands, the crossfader's invariant row `cc:0:15 → output.dim` with soft pickup, your old factory row swapped with a backup (`routing.APC_REMAP`), first on the OUTPUT page, `dim 40%` in the footer. `test_render.py`'s seven `dim` tests, `test_midi.py::test_the_crossfader_dims_with_soft_pickup`, `test_desk.py::test_the_crossfader_keeps_its_hold_across_a_preset_load`. That the left end is CC 0 was read from a comment, not the device. Rows 40, 41 and 44 are its forks. Hand check 55 |
-| 29 | P15-d save on the APC40 | (a) hold clip-stop k to save into slot k | **save-as**, 2026-10-04 | always a new preset with a made-up name, into the next empty slot; the desk never overwrites; plan 15 WP4 (PR to come): the eight invariant clip-stop rows as one `hold` bar (`midi.HOLD_S` = 0.6 s), `preset.save_new` → `Project.save_new`, `library.next_name`, "put preset here…" and "clear slot" on a slot's menu. `test_midi.py::test_a_hold_fires_once_at_the_hold_time_while_held`, `::test_a_tap_fires_nothing`, `test_presets.py::test_save_new_never_overwrites`. Row 42 is its forks. Hand check 56. *Written from the plan; to be reconciled with WP4's PR* |
+| 29 | P15-d save on the APC40 | (a) hold clip-stop k to save into slot k | **save-as**, 2026-10-04 | always a new preset with a made-up name, into the next empty slot; the desk never overwrites; built, plan 15 WP4 (PR #87): the eight invariant clip-stop rows as one `hold` bar (`midi.HOLD_S` = 0.6 s, `MidiIO._fire_holds`), `preset.save_new` → `Project.save_new`, `library.next_name`, "put preset here…" and "clear slot" on a slot's menu (`ui_presets._slot_menu`, `Project.put_slot` / `clear_slot`). `test_midi.py::test_a_hold_fires_once_at_the_hold_time_while_held`, `::test_a_tap_fires_nothing`, `test_presets.py::test_save_new_never_overwrites`, `::test_save_new_on_a_full_bank_saves_to_the_list_and_says_so`, `test_desk.py::test_the_clip_stop_row_is_invariant`. Row 42 is its forks. Never on the APC40 yet. Hand check 56 |
 | 30 | P15-e PR shape | (a) a PR per work package, an integration PR per plan | **(a)**, 2026-10-04 | everything onto `finish-line`, never main; you merge that |
 | 31 | Auto BPM | (a) stay tap-only | **deferred**, 2026-10-04 | not in this run |
 | 32 | P21-a one output or two | none; describe the rig | **two render outputs**, 2026-10-04 | the same frame; per output a dim, scene on/off, hands on/off; the laptop is the control view; plan 21 |
@@ -1318,6 +1341,6 @@ take "keep" or "overturn".
 | 39 | P15-k camera moves as undo steps | (a) yes | built on the recommendation; confirm or overturn | plan 15 WP1 (PR #82) |
 | 40 | P15-l performers on home and the dim | home: may be fired; dim: may not be driven | built on the recommendation; confirm or overturn | plan 15 WP2 (PR #83) and WP3 (PR #81) |
 | 41 | P15-m the dim in overlay mode | (b) colour and transparency fade together | built on the recommendation; confirm or overturn | plan 15 WP3 (PR #81); overlay is off unless the config asks |
-| 42 | P15-n the save-as gesture | a `hold` op; fires at 0.6 s while held; the bar dark at rest; names counted against files, list and bank; the new preset becomes the loaded one | built on the recommendation; confirm or overturn | plan 15 WP4 (PR to come); *to be reconciled with it* |
+| 42 | P15-n the save-as gesture | a `hold` op; fires at 0.6 s while held; the bar dark at rest; names counted against files, list and bank; the new preset becomes the loaded one | built on the recommendation; confirm or overturn | plan 15 WP4 (PR #87); a failed save blinks nothing; a clip-stop row deleted from `bindings.json` comes back unless kept with `enabled: false` |
 | 43 | P15-o a drag that pauses | (a) over 0.4 s still is two steps | built on the recommendation; confirm or overturn | plan 15 WP1 (PR #82) |
 | 44 | P15-p the faders after a preset load | (b) a fader lets go only when the load moved its parameter | built on the recommendation; confirm or overturn | plan 15 WP3 (PR #81), with the per-fader condition its review added; audit R13 is the older gap it no longer hides |

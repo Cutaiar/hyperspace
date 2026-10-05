@@ -337,8 +337,8 @@ audio stream, best-effort, so a broken port never blocks an exit. The
 SYSTEM page shows each adapter's state — MIDI, the bridge (port,
 encoding, messages sent, or why it is off) — beside the hot-reload and
 config notices. The optional adapters and the gamepad are config gates
-(`[midi]` and `[gamepad]` on by default, `[bridge]`, `[dream]`, `[hands]`
-off; `[dream]` also needs the `dream` extra, §2.3); `hyperspace/config.py` documents every key. The rig's placement comes from `[output]` in `config.toml`
+(`[midi]`, `[gamepad]` and `[dream]` on by default — torch is an ordinary
+dependency since decision 23, §2.3 — `[bridge]` and `[hands]` off); `hyperspace/config.py` documents every key. The rig's placement comes from `[output]` in `config.toml`
 (`config.py`); a `[overlay]` section is the same thing under its pre-split
 name, still read and merged under `[output]`, with a note on stderr asking
 for the rename. A `config.toml` that will not parse keeps the defaults and
@@ -780,20 +780,33 @@ unreadable at a party.
   → `Project.home`, a load like any other and one undo step ("home →
   TUMBLE"); a show that names no "starts on" loads nothing and says
   "home: this show names no 'starts on' preset — pick one on the PRESETS
-  page". **Save-as on the desk** (plan 15 WP4, decision 29): a hold of
-  0.6 s anywhere on the APC40's clip-stop row fires `preset.save_new` →
-  `Project.save_new`, which saves the live state as a **new** user
-  preset named from the loaded one with the next free number (TRIP →
-  TRIP 2 → TRIP 3; `library.next_name`, counted against the file stems in
-  both preset folders, the listed names and the bank, so it never
-  overwrites a file and never hides a factory preset), makes it the
-  loaded preset with a clean dot, and puts it in the next empty bank
-  slot ("saved TRIP 2 → F6"); a full bank saves to the list and says so.
-  The desk never overwrites: plain **save** on the panel and ⇧F1–F8
-  still do, and what they replace goes to the trash first (below). On
-  the PRESETS page a slot's right-click menu has **put preset here…**
-  and **clear slot** (`Project.put_slot` / `clear_slot`: they write the
-  show at once and delete no file).
+  page". **Save-as on the desk** (plan 15 WP4, PR #87, decision 29): a
+  hold of 0.6 s (`midi.HOLD_S`) anywhere on the APC40's clip-stop row
+  fires `preset.save_new` → `Project.save_new`, which saves the live
+  state as a **new** user preset named from the loaded one with the next
+  free number (TRIP → TRIP 2 → TRIP 3; a name ending in a number counts
+  on from it; with nothing loaded, PRESET 1; `library.next_name`). The
+  name is counted against the file stems in both preset folders (as
+  slugs, so a file in another case counts), the listed names and the
+  bank, so it never overwrites a file and never hides a factory preset.
+  The new preset becomes the loaded one with a clean dot and goes into
+  the next empty bank slot, the show written at once: "saved TRIP 2 →
+  F6". A full bank still saves, to the preset list, and warns "saved
+  TRIP 3 — the bank is full: it is in the preset list" (no slot is lit;
+  the warning goes when the bank next changes). If the preset saves but
+  the show's file cannot be written, the slot is put back and the
+  warning is "saved TRIP 2 — the show could not be written: it is in the
+  preset list". If the preset itself cannot be saved nothing changes and
+  the reason is on the PRESETS page. A tap does nothing. The desk never
+  overwrites: plain **save** on the panel and ⇧F1–F8 still do, and what
+  they replace goes to the trash first (below). On the PRESETS page a
+  slot's right-click menu has **put preset here…** (a list of every
+  preset, twelve rows tall before it scrolls; "F6: TRIP 3") and **clear
+  slot** (greyed on an empty slot; "F6: cleared — ACID is still in the
+  preset list") — `Project.put_slot` / `clear_slot`: they write the show
+  at once (a factory show's first write makes your copy), delete no
+  file, and put the slot back if the show cannot be written. None of the
+  three is an undo step: the bank is the show file's.
 - **The party show opens** (decision 22, plan 14 WP3). The panel calls a
   project a **show** (plan 14 §3; the code keeps `Project`). The factory
   shows are `party` (`library.DEFAULT_PROJECT`: TUMBLE, FACES, FIELD,
@@ -846,9 +859,15 @@ unreadable at a party.
   launch is at full, so a crossfader parked at the left does nothing
   until it is brought up to the value; that CC 0 is the left end is not
   hand-checked), **OVERDUB is home** (lit while the show names a "starts
-  on"), and the **clip-stop row is one save-as bar** (WP4: dark at rest,
-  lit while held, blinking with the new slot's pad when it saves; a tap
-  does nothing). A Learn on any of them is refused, and a preset's desk
+  on"), and the **clip-stop row is one save-as bar** (WP4, PR #87: dark
+  at rest; the whole bar lit while any of it is held; at 0.6 s, if a
+  preset was saved, the bar and the new slot's pad blink for 1.5 s and
+  then the bar is dark and the pad green — on a full bank only the bar
+  blinks, and if nothing was saved nothing blinks; a tap does nothing;
+  two fingers save once, and a button still down saves nothing more).
+  The blink velocities are Akai's table as `apc40.blink_of` reads it,
+  never seen on the device. The on-screen desk shows the bar lit while
+  held but does not blink, and the cheat sheet does not name the bar. A Learn on any of them is refused, and a preset's desk
   row on one is dropped at load with a note. The **global** layer is
   the session's (the band strip on the device knobs, hand feel and BPM on
   track knobs 1–5, the band scenes on clip rows 2–3); the **preset** layer
@@ -866,8 +885,9 @@ unreadable at a party.
   the value or crossed it. So the crossfader, S1–S8 and SM (session
   params, which a preset never moves) carry on from where they are after
   a load, and a fader whose base the load did move picks up as before.
-  Not covered (audit R13): a fader moved while a Learn is armed or its
-  row is disabled stays caught and jumps on its next message. A macro is a knob with subscribers: each sets a param's
+  Not covered (audit R13): a fader moved while its row is disabled stays
+  caught and jumps on its next applied message (an armed Learn takes one
+  message the same way, so that jump is one message's worth). A macro is a knob with subscribers: each sets a param's
   base or scales a route's depth over its own `from → to`; a hand on a
   macro moves only the depths.
 - **The desk's glyphs and diagram** (plan 14 WP7, decision 25). Every
@@ -915,8 +935,10 @@ unreadable at a party.
   launch of plan 15's build rewrites `bindings.json` once more, the same
   way (`remap_factory`, ARCHITECTURE §3.8): the crossfader's old factory
   row becomes the master dim's, and rows are added for OVERDUB, the
-  clip-stop row (WP4), Home and the four undo keys wherever the control
-  or chord is free; a row you changed is left as you had it.
+  clip-stop row, Home and the four undo keys wherever the control
+  or chord is free; a row you changed is left as you had it. A row of
+  these that you delete from the file comes back on the next launch; to
+  switch one off, keep it with `"enabled": false`.
 - **The trash** (plan 15 WP1; `library.to_trash`). The home's layout
   gains `trash/<group>/<slug>.<YYYYMMDD-HHMMSS>.json`: a **user** preset
   file as it was, copied there before a save overwrites it or a delete
@@ -957,16 +979,24 @@ unreadable at a party.
   slot (plan 15 WP1; `Panel._message`) shows the newest of three lines
   for 4 s after it changes (`ui.MESSAGE_S`): the undo's status ("undid
   Brightness 2.00× → 2.96×", "redid load FACES", "nothing to undo"),
-  the library's status ("show: party starts on TUMBLE"; WP4's "saved
-  TRIP 2 → F6") and the library's warning (in the warning colour: an
-  empty F-key's note, home with no "starts on") — so none of them needs
-  the PRESETS page open. It is cut with an ellipsis to the room left of
-  the show's name, the whole line on hover; while it shows, the hot
-  reloader's status gives way to it. A library line shows when its text
-  changes, so the same warning raised twice in a row shows once; the
-  undo's line shows on every press. A launch says nothing
+  the library's status ("show: party starts on TUMBLE", "saved TRIP 2 →
+  F6", "F6: cleared — ACID is still in the preset list") and the
+  library's warning (in the warning colour: an empty F-key's note, home
+  with no "starts on", "saved TRIP 3 — the bank is full: it is in the
+  preset list") — so none of them needs the PRESETS page open. It is cut
+  with an ellipsis to the room left of the show's name, the whole line
+  on hover; while it shows, the hot reloader's status gives way to it.
+  The undo's line shows on every press. A library line shows when its
+  text changes, **or** when it was set through `Library.say`, which
+  counts each call (`Library.said`): the bank's lines — save-as, put
+  preset here, clear slot — show again even in the same words. Every
+  older line is a plain assignment and shows once: an empty F-key
+  pressed twice, or home with no "starts on" pressed twice, says its
+  line the first time only (it stays on the PRESETS page). A launch
+  says nothing
   (`tests/test_ui_shell.py::test_the_footer_says_what_was_undone`,
-  `::test_the_dim_is_first_on_output_and_the_footer_says_so_while_dimmed`).
+  `::test_the_dim_is_first_on_output_and_the_footer_says_so_while_dimmed`,
+  `tests/test_ui_presets.py::test_the_footer_says_a_library_line_again`).
 - The large cell-count readout at the top of the view page is still the
   signature element. Keep new UI consistent with this.
 
@@ -1065,8 +1095,8 @@ the keys: hand checks 48–52.
 
 ## 6. Testing
 
-`uv run pytest` — 1105 tests and 1 skipped (the hands tape, until one is
-recorded) on `plan-15-integration` with WP1–WP3, about 70 s. `ruff`
+`uv run pytest` — 1121 tests and 1 skipped (the hands tape, until one is
+recorded) on `plan-15-integration` with plan 15 whole, about 70 s. `ruff`
 is the linter. Every test runs with `HYPERSPACE_HOME` pointed at its own
 `tmp_path` (`tests/conftest.py`), so no test can touch `~/Hyperspace`.
 What holds what:
@@ -1115,7 +1145,14 @@ What holds what:
   master dim — the pass (`test_render.py`, the `dim` tests), the param
   (`test_overlay.py::test_dim_is_a_rig_setting_that_starts_bright`),
   the crossfader's pickup and its hold through a load (`test_midi.py`,
-  `test_desk.py`). Every test also runs with no `Undo` left installed
+  `test_desk.py`); save-as on the desk — the hold on a fake clock, a tap,
+  the bar as one control, the velocities sent and when (`test_midi.py`,
+  the four `hold` / `tap` / `bar` tests), the row invariant
+  (`test_desk.py::test_the_clip_stop_row_is_invariant`), the name and
+  the bank (`test_library.py::test_next_name_counts_on_from_a_trailing_number`,
+  `test_presets.py` `test_save_new_*`, `::test_put_and_clear_slot_write_the_show_and_delete_no_file`),
+  the slot menu through real imgui mouse events
+  (`test_ui_presets.py::test_a_slots_menu_offers_put_and_clear`). Every test also runs with no `Undo` left installed
   by the one before it (`tests/conftest.py`), and `HYPERSPACE_HOME` is
   set in `os.environ` itself, so a test that calls `monkeypatch.undo()`
   cannot fall back to the real home.

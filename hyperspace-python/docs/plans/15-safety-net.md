@@ -744,6 +744,14 @@ a function that draws:
 
 Plain Save and "as…" on the strip are unchanged. ⇧F1–F8 is unchanged.
 
+*As built* (PR #87; §8, WP4): `save_new()` returns a bool and a save
+that failed blinks nothing; `taken` holds `slug(stem)`; a slot is rolled
+back when the show's file cannot be written; the bank-full warning is
+withdrawn when the bank next changes; `put_slot` / `clear_slot` set a
+status line; the bank's lines go through `Library.say`, so the footer
+shows the same words again; the hold fires in `MidiIO._fire_holds`,
+which `poll` calls; a note-off ends a press even while a Learn is armed.
+
 ### WP5 — Docs and hand checks
 
 **Owns.** `ARCHITECTURE.md` (§1 a row for `undo.py` and the library row's
@@ -766,10 +774,9 @@ fork 17, 44 fork 19 — each with a DECISIONS row marked as built on a
 recommendation. Forks 2, 3, 11 and 18 are about how the code is put
 together and have no register row. WP5 also touched `CHECKPOINT.md`,
 `15-21-roadmap.md` (one pointer and "group K") and `AUDIT-2026-09.md`
-(row R13, the pickup gap WP3's review found), and wrote the WP4
-sentences of every document from this plan's WP4 section before WP4's
-PR existed; they are marked "plan 15 WP4" and are reconciled when it
-lands.
+(row R13, the pickup gap WP3's review found). The WP4 sentences of every
+document were first written from this plan's WP4 section and then
+reconciled with PR #87 and the code once it merged.
 
 ## 3. Parameter budget
 
@@ -1154,7 +1161,7 @@ one condition.
 Filled as the work packages land. Written by WP5 from each PR's "As
 built" paragraph, every statement checked against the code on
 `plan-15-integration` at 997a39c (WP3, WP1 and WP2 merged; 1105 tests
-pass, 1 skipped). Where this section and §2 differ, this section is the
+pass, 1 skipped) and, for WP4, at 2c3b282 (1121 pass, 1 skipped). Where this section and §2 differ, this section is the
 code; §2 carries an "as built:" note at each such place.
 
 **What has been seen, and by whom.** Nothing here was tried by a person
@@ -1172,7 +1179,8 @@ entries below say which is which:
   driven from a script — the master dim set to 50 %, a preset load
   leaving it there, then black, then full; ten slider writes becoming
   one undo step and a preset load one step, undone and redone through
-  the `edit.undo` / `edit.redo` triggers; home, then undo. That is a
+  the `edit.undo` / `edit.redo` triggers; home, then undo; and, after
+  WP4 merged, save-as by firing `preset.save_new` (its entry below). That is a
   launch on a laptop with no desk, camera or second screen attached, not
   a session at the machine.
 
@@ -1244,9 +1252,11 @@ first row (`Panel._page_output`, `ui.py`), and the footer reads
   pair was changed for plan 13 WP2.
 
 **Found and not fixed** (filed as `AUDIT-2026-09.md` row R13): a fader
-moved while its messages are swallowed — a Learn armed, or its row
-disabled — stays caught and jumps on its next message. It predates this
-plan; a preset load used to heal it by accident, by clearing every catch.
+moved while its row is disabled stays caught, and jumps on its next
+applied message by however far it travelled. (PR #81 names an armed
+Learn too; that case swallows one message only, because `Learn.take`
+disarms on it.) It predates this plan; a preset load used to heal it by
+accident, by clearing every catch.
 
 **Tests.** `tests/test_render.py`: `test_dim_at_one_is_the_old_frame_exactly`,
 `test_dim_scales_the_colour_and_leaves_an_opaque_grounds_alpha`,
@@ -1455,9 +1465,9 @@ and its tooltip names the key and the button; the cheat sheet has
 - The footer's slot shows a line only when it changes, so a second press
   of home on a show with no "starts on" shows nothing new in the footer;
   the warning stays on the PRESETS page. Left for plan 16.
-- The `apc40.py` comment above the protocol table still lists
-  `N_OVERDUB` among the notes "unused today": §2 gives that comment to
-  WP4.
+- The `apc40.py` comment above the protocol table listed `N_OVERDUB`
+  among the notes "unused today" until WP4, which §2 gives that comment
+  to, rewrote it (PR #87).
 
 **Tests.** `test_presets.py::test_home_loads_what_the_show_starts_on`,
 `::test_home_with_no_starts_on_says_so_and_loads_nothing`,
@@ -1481,9 +1491,134 @@ sends note 0x40 on channel 0 (both from the protocol table in
 owner's real `bindings.json` gaining the rows (only a temp copy was
 migrated). Hand checks 54 and 57.
 
-### WP4 — Save-as on the desk
+### WP4 — Save-as on the desk; "put preset here…" and "clear slot" (PR #87, merged 2c3b282)
 
-WP4 — filled when its PR lands.
+1121 tests pass, 1 skipped, with it merged.
+
+**Built.** The clip-stop row is one SAVE AS bar: eight rows
+`_note("preset.save_new", N_CLIPSTOP, k, op="hold")` in
+`apc40.DEFAULT_MAP` (`note:<k>:52`, no layer, so invariant: the same on
+both layers, refused by Learn, dropped from a preset's desk with a
+note). `hold` is in `routing.OPS`; `routing.act` ignores it. In
+`midi.py`: `HOLD_S = 0.6`, `BLINK_S = 1.5`, `MidiIO.clock`; `_handle`
+records a note-on whose dispatched rows include enabled `hold` rows in
+`_holds` (by channel and note, with the press time) and lights every
+enabled hold row with that target (`_light_bars`); a note-off forgets
+the press, even while a Learn is armed; `_fire_holds`, called by `poll`
+after the messages, fires the target of a press held `HOLD_S`, once per
+target, while it is still held, and forgets every press on that target.
+The bar's rows and every LED the fire turned on then blink for `BLINK_S`
+(`_blinks`, sent by `feedback` at `apc40.blink_of(number, on)`: `on + 1`
+on the clip grid, 2 elsewhere). `_enter` (a reconnect) clears holds and
+blinks. The trigger is `preset.save_new` (`build_registry`, the bank
+block; group `preset`, `modulatable=False`). `library.next_name(base,
+taken)`; `Project.next_empty` / `save_new` / `put_slot` / `clear_slot`.
+`APC_NEW_ROWS` gains the eight rows for an existing `bindings.json`.
+`Panel._ctx(a, key="", extra=None)`; `ui_presets._slot_menu` draws "put
+preset here…" (a submenu whose list is a child at most `PUT_ROWS` = 12
+rows tall) and "clear slot" (disabled on an empty slot). Forks 13 (a),
+14 (a), 15 (b) and 16 (b) as recommended.
+
+**Differs from §2, and why.**
+
+- **`Project.save_new()` returns a bool, and a failed save blinks
+  nothing** (review of PR #87). True when a preset was saved, False when
+  none was (no registry, no loader, or the preset's file could not be
+  written; the reason is in `bank_error`). `_fire_holds` reads that one
+  bool off `p.fire()`: on False the bar just goes dark at the hold time,
+  so the desk never confirms a save that did not happen. `midi.py` still
+  knows nothing of the bank.
+- **`taken` counts the file stems as slugs** (`slug(stem)`; review): on a
+  filesystem that folds case, `Trip-2.json` is the file a save of
+  "TRIP 2" would write over.
+- **A slot is rolled back if the show's file cannot be written.** In
+  `save_new` the preset is saved and loaded, the slot goes back to empty,
+  no pad is lit, and the warning is `saved <name> — the show could not be
+  written: it is in the preset list` (it still returns True: a preset
+  was saved, and the bar blinks). `_set_slot` (behind `put_slot` and
+  `clear_slot`) puts the slot back as it was, with the reason in
+  `bank_error`.
+- **The bank-full warning is withdrawn when the bank next changes**
+  through `save_new`, `put_slot` or `clear_slot` (`Project._room`,
+  `library.BANK_FULL`), the way home's note is withdrawn; otherwise it
+  would sit on the PRESETS page after room was made.
+- **`put_slot` and `clear_slot` say what they did** in `status`: `F6:
+  TRIP 3`, and `F6: cleared — ACID is still in the preset list`. A
+  `put_slot` naming no file warns `F6: no preset 'NOPE'`. §2 gave them no
+  words.
+- **`Library.say(status=None, *, warning=None)` and `Library.said`.**
+  `say` sets the line and counts it; `Panel._message` keys the library's
+  two lines by text *and* count, so a line said again in the same words
+  shows again in the footer (two presets saved to a full bank; a slot
+  cleared twice). **Only the new bank calls use `say`**: every older
+  `lib.status = …` / `lib.warning = …` still shows once, so "F3: an empty
+  slot" pressed twice, and home with no "starts on" pressed twice, still
+  show once (review finding 7, left).
+- **`APC_REMAP_PLAN` names the eight clip-stop sources**, so the note for
+  each added row says "(the APC40 map of plan 15)".
+- **A clip-stop row the owner deleted from `bindings.json` comes back on
+  the next load** (review finding 6, left): `APC_NEW_ROWS` adds a row
+  wherever nothing uses the source, as it does for OVERDUB and
+  METRONOME. To keep a button of the bar off, leave its row in the file
+  with `"enabled": false`. Hand check 57 says so.
+- **With no preset loaded, `_set_slot` lights no slot** (review finding
+  3): `active` is −1, not the first empty slot.
+- **On a full bank the old slot's pad goes out**: the new preset is the
+  loaded one and no slot names it, so `active` is −1
+  (`Presets._landed`); only the bar blinks.
+- `put_slot` / `clear_slot` move `active` only when the loaded preset's
+  slot stops naming it (then to another slot that names it, or to none).
+- `tests/test_ui_desk.py::test_the_hover_names_glyph_param_layer_and_akais_name`
+  was changed, outside WP4's file list: its example of a dark control
+  was G6·1 (now B7), and it checks the eight G6 hovers.
+- **Not done, on purpose:** the cheat sheet does not name the SAVE AS
+  bar (the sheet lists keys), and the on-screen desk shows the bar lit
+  while held (it shares `routing.led_lit`) but does not blink.
+- "The active slot follows the loaded preset" is spelled in four places
+  (`_set_slot`, `Project._apply`, `Marks.put`, `preset._landed`); only
+  `_set_slot`'s guards the nothing-loaded case (review finding 9, left).
+
+**Tests** (16 new). `test_midi.py::test_a_hold_fires_once_at_the_hold_time_while_held`,
+`::test_a_tap_fires_nothing`, `::test_the_bar_is_one_control`,
+`::test_the_bar_lights_while_held_and_the_new_slots_pad_blinks`;
+`test_desk.py::test_the_clip_stop_row_is_invariant`;
+`test_library.py::test_next_name_counts_on_from_a_trailing_number`,
+`::test_next_empty_reads_the_banks_own_length`;
+`test_presets.py::test_save_new_never_overwrites`,
+`::test_save_new_fills_the_next_empty_slot_and_becomes_the_loaded_preset`,
+`::test_save_new_on_a_full_bank_saves_to_the_list_and_says_so`,
+`::test_the_new_slot_loads_from_the_preset_row`,
+`::test_put_and_clear_slot_write_the_show_and_delete_no_file`,
+`::test_the_bank_calls_are_no_undo_step` (not in §5's table);
+`test_routing.py::test_an_older_file_gets_the_save_bar_where_it_is_free`;
+`test_ui_presets.py::test_a_slots_menu_offers_put_and_clear`,
+`::test_the_footer_says_a_library_line_again` (not in §5's table).
+
+**Demo.** `docs/plans/assets/15-safety-net/save-as-demo.txt`, the output
+of `uv run python tools/save_as_demo.py` (a tap, a hold with the LED
+velocities and when they were sent, a full bank, two buttons held, the
+new pad, put / clear slot, a refused Learn; fake ports, the adapter's
+clock is the script's frames). `save-as-slot-menu.png`: the PRESETS page
+in a hidden window, F6's menu open on "put preset here…".
+
+**Seen in a scripted launch by the orchestrator**, after the merge: the
+real app against a temp home on a laptop, no desk attached. With F8
+cleared and TRIP edited, firing `preset.save_new` saved "TRIP 2" into F8
+(`presets/trip-2.json` written, the show's file written to the temp
+home); a second fire saved "TRIP 3" with "the bank is full: it is in the
+preset list"; loading slot 8 brought the edited look back. No runtime
+error and an empty stall log. The trigger was fired directly: the
+APC40's hold timing, its LEDs and the blink were **not** seen.
+
+**Not verified.** Nothing here has been on the APC40. Whether the mk1's
+clip-stop LEDs light at velocity 1 and blink at velocity 2 in mode 0x42,
+and whether a clip-launch pad blinks green at velocity 2, rest on Akai's
+protocol table as `apc40.py` transcribes it; only the messages sent are
+tested. That the device sends note-on / note-off for clip stop on
+channels 0–7, and what a hand lying on the row actually sends. Whether
+0.6 s and 1.5 s feel right. The slot menu was driven by synthetic mouse
+events in headless imgui, not clicked by a person. Hand checks 56 and
+57.
 
 ### The orchestrator's own change (commit 1d14f71)
 

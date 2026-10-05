@@ -799,7 +799,7 @@ fist, pinches, in and out of the box — and commit it.
 ## K. Plan 15 — undo, home, the dim, save-as on the desk — added 2026-10-04
 
 Run on `finish-line` once plan 15 is merged into it (PRs #81 the dim,
-#82 undo and the trash, #83 home; save-as is WP4's PR). 48, 50 and 53
+#82 undo and the trash, #83 home, #87 save-as). 48, 50 and 53
 run on the laptop alone; 49, 51 and 54–57 need the APC40; 52 needs the
 camera and the box. About 35 minutes. The headless tests named are the
 ones each package adds; run them first. None of this has been tried by a
@@ -941,32 +941,52 @@ moving it → a preset or show landing a rig param.
 
 **56. A hold on the clip-stop row saves a new preset; a tap does not (plan 15 WP4, decision 29).**
 Headless: `uv run pytest -q tests/test_midi.py::test_a_hold_fires_once_at_the_hold_time_while_held tests/test_midi.py::test_a_tap_fires_nothing tests/test_midi.py::test_the_bar_is_one_control tests/test_midi.py::test_the_bar_lights_while_held_and_the_new_slots_pad_blinks tests/test_presets.py::test_save_new_never_overwrites tests/test_presets.py::test_save_new_fills_the_next_empty_slot_and_becomes_the_loaded_preset tests/test_presets.py::test_save_new_on_a_full_bank_saves_to_the_list_and_says_so tests/test_presets.py::test_the_new_slot_loads_from_the_preset_row tests/test_library.py::test_next_name_counts_on_from_a_trailing_number`.
+Then `uv run pytest -q tests/test_presets.py::test_put_and_clear_slot_write_the_show_and_delete_no_file tests/test_ui_presets.py::test_a_slots_menu_offers_put_and_clear tests/test_desk.py::test_the_clip_stop_row_is_invariant`; what the desk should send, and when, is `docs/plans/assets/15-safety-net/save-as-demo.txt`.
 Make room first: PRESETS page, right-click F8's button → **clear slot**
-(F8 reads "—"; NOITA is still in the preset list). F5 (TRIP); change the
+(F8 reads "—"; the footer says "F8: cleared — NOITA is still in the
+preset list", and it is). F5 (TRIP); change the
 look. Tap any clip-stop button, quickly. *Pass (a):* the row lights
 while your finger is down and nothing else happens: no new preset in the
 list, no file in `~/Hyperspace/presets`. *(b):* hold any clip-stop
 button. After a little over half a second the whole row and pad 8 of
-clip row 1 blink; let go. F8's button reads **TRIP 2** and is lit, the
+clip row 1 blink for about a second and a half, and pad 5 (TRIP's) goes
+out; let go. The row is dark again and pad 8 stays green. F8's button
+reads **TRIP 2** and is lit, the
 PRESETS strip says TRIP 2 with no dot, the footer says "saved TRIP 2 →
 F8", and `~/Hyperspace/presets/trip-2.json` exists. *(c), the new slot
 loads from the desk:* press pad 1 (TUMBLE), then pad 8: your look is
 back. *(d), it never overwrites:* change the look, hold the row again
-(a different button of it): the footer says "saved TRIP 3 — the bank is
-full: it is in the preset list"; the row blinks and no pad does; TRIP 2
-is unchanged (load it). *(e), one bar:* lay two fingers on the row and
-hold: one new preset, not two; keep holding for five seconds: still one.
+(a different button of it): the footer says, in the warning colour,
+"saved TRIP 3 — the bank is full: it is in the preset list"; the row
+blinks, no pad does, and pad 8 goes out (TRIP 3 is loaded and no slot
+names it); TRIP 2 is unchanged (load it). Hold once more: TRIP 4, and
+the footer says the same line again. *(e), one bar:* lay two fingers on
+the row and hold: one new preset, not two; keep holding for five
+seconds: still one.
 *(f):* latch SHIFT and hold the row: it saves the same way. *(g):*
-right-click F8 → **put preset here…** → NOITA: F8 is NOITA again, and
-TRIP 2 and TRIP 3 are still in the list. Plain **save** on the panel
-still writes over the loaded preset (check 53). *Fail:* a tap saving →
+right-click F8 → **put preset here…** (a list of every preset, twelve
+rows tall at most, scrolling past that) → NOITA: F8 is NOITA again, the
+footer says "F8: NOITA", the "bank is full" line has gone from the
+PRESETS page, and TRIP 2, TRIP 3 and TRIP 4 are still in the list.
+**clear slot** is greyed on an empty slot. Plain **save** on the panel
+still writes over the loaded preset (check 53). *(h):* right-click any
+control → Learn, then hold a clip-stop button: refused ("G6·5 (clip stop
+5) is invariant (the session's) — not learned"), nothing saved. Two
+things this build does **not** do, so they are not fails: the on-screen
+desk lights the bar while it is held but does not blink, and the cheat
+sheet does not name the bar. *Fail:* a tap saving →
 the hold time (`midi.HOLD_S`, `MidiIO._handle`); a save into a taken slot
 or over a file → `Project.next_empty`, `library.next_name`; no blink →
 `apc40.blink_of` and the blink in `MidiIO.feedback` (if the clip-stop
-LEDs never light at all on this device, note it: the save still works
-and the pad's blink is the sign); two presets from one hold → the bar
-rule in `MidiIO.poll`; the row doing nothing → its rows (`apc40.DEFAULT_MAP`;
-your `bindings.json` after check 57).
+LEDs never light or never blink on this device, note what they do
+instead: the velocities are from Akai's table, never seen on the mk1;
+the save does not depend on them, and the footer's line is the sign);
+the row going dark at 0.6 s with no blink and no new preset → the save
+itself failed, by design shown that way (`Project.save_new` returned
+False; the reason is on the PRESETS page, `bank_error`); two presets
+from one hold → the bar rule in `MidiIO._fire_holds`; the row doing
+nothing → its rows (`apc40.DEFAULT_MAP`; your `bindings.json` after
+check 57).
 
 **57. The first launch brings your `bindings.json` up to date, with a backup (plan 15 WP1–WP4).**
 Headless: `uv run pytest -q tests/test_routing.py -k "older_file or old_crossfader"`.
@@ -974,18 +994,23 @@ Before the first launch of this build, `ls -la ~/Hyperspace`. Launch and
 read stderr. *Pass:* one `backup:` line naming `bindings.json.bak-v3`
 (or a dated name if you already had one), and one line per change:
 `remapped cc:0:15: overlay.bg → output.dim (the APC40 map of plan 15)`;
-`added note:0:64 → preset.home (the APC40 map of plan 15)`; a line for
-each of the eight clip-stop buttons (WP4); and `added key:… (the keys of
+`added note:0:64 → preset.home (the APC40 map of plan 15)`; eight lines
+`added note:0:52 → preset.save_new (the APC40 map of plan 15)` …
+`note:7:52` for the clip-stop buttons; and `added key:… (the keys of
 plans 09, 11 and 15)` for ⌘Z, ⌘⇧Z, Ctrl+Z, Ctrl+⇧Z and Home. The ROUTING
 page's session section lists X → `output.dim`, B11 → `preset.home`, and
 G6·1–G6·8 → `preset.save_new  hold` under "invariant · both layers". A
 crossfader, OVERDUB or clip-stop row you had changed by hand is left as
 you had it (and that control then does what you set, not this plan's
 job); a key you had already put on one of those chords keeps yours.
-Launch again: stderr says nothing and no file's time moves. **If your
+Launch again: stderr says nothing and no file's time moves. One thing to
+know: a row is added wherever **nothing uses the control**, so if you
+later *delete* the OVERDUB row or a clip-stop row from `bindings.json`
+it comes back on the next launch (as METRONOME's does); to switch a
+button off, keep its row and add `"enabled": false`. **If your
 `bindings.json` was itself made on this launch from a pre-plan-09
 `midi_map.json`**, the first launch only converts the old file, and the
-OVERDUB row (with WP4's clip-stop rows) is added on the *second* launch,
+OVERDUB row and the eight clip-stop rows are added on the *second* launch,
 which says so on stderr
 (`tests/test_routing.py::test_old_midi_map_migrates_into_bindings_json`;
 METRONOME's row always arrived this way). Then load

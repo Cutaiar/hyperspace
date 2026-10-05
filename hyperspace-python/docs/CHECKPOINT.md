@@ -18,7 +18,7 @@ is [`AUDIT-2026-09.md`](AUDIT-2026-09.md); the stages it was built in are
 git clone github.com/Cutaiar/hyperspace && cd hyperspace/hyperspace-python
 uv sync                 # whole environment, from the committed lockfile
 git checkout finish-line      # plans 15–21 land here, never on main
-uv run pytest           # 1105 pass, 1 skipped (the hands tape) with plan 15 WP1–WP3
+uv run pytest           # 1121 pass, 1 skipped (the hands tape) with plan 15
 uv run hyperspace       # the app: ? shows the controls cheat sheet
 ```
 
@@ -85,11 +85,13 @@ safety net, on `plan-15-integration` → `finish-line`:
 - **The master dim** (WP3, PR #81): the crossfader dims the finished
   frame, left black, right full; never saved, 1 at launch; a preset load
   no longer loosens a fader whose param it did not move.
-- **Save-as on the desk** (WP4): a hold on the clip-stop row saves a new
-  preset into the next empty slot. Its PR follows #83.
+- **Save-as on the desk** (WP4, PR #87): a hold of 0.6 s on the
+  clip-stop row saves a new preset ("TRIP 2") into the next empty slot;
+  the desk never overwrites. A bank slot's right-click menu on the
+  PRESETS page has "put preset here…" and "clear slot".
 
 None of it has been tried by a person at the rig. It was shown by tests
-(1105 pass), offscreen renders, headless demos under
+(1121 pass), offscreen renders, headless demos under
 `plans/assets/15-safety-net/`, and a scripted launch of the app on a
 laptop. Eleven forks were settled by the unattended run on its own
 recommendation and wait for the owner: `DECISION-REGISTER.md` rows
@@ -136,10 +138,10 @@ file what fails as new audit rows dated with plan 11.
    Home key, camera moves, performers on home and the dim, the dim in
    overlay, the save-as gesture, a drag that pauses, the faders after a
    load.)
-4. **The rest of the finish line**: plan 15 WP4's reconciliation in the
-   documents (the sentences marked "plan 15 WP4" were written from the
-   plan), then plans 16–21 in the roadmap's order, each onto
-   `finish-line`. One audit row is open from plan 15: R13 (a fader moved
+4. **The rest of the finish line**: plans 16–21 in the roadmap's order,
+   each onto `finish-line`. Nothing of plan 15's desk side has been on
+   the APC40: the hold's timing, the clip-stop LEDs and the blink are
+   from Akai's protocol table (hand check 56). One audit row is open from plan 15: R13 (a fader moved
    while its row is disabled stays caught and jumps).
 5. **Plan 04 — booth hardware.** Blocked on access: the pure-Python
    Pro DJ Link spike against the CDJ-3000/XDJ-AZ (BLT+OSC is the standing
