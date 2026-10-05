@@ -1389,6 +1389,38 @@ def test_the_bank_calls_are_no_undo_step(tmp_path):
     assert r.undo.stack == [] and not r.undo.undo()
 
 
+def test_rename_and_trash_are_no_undo_step(tmp_path):
+    """Plan 19 WP4 (§1 row 10): hide, unhide, rename (of the loaded preset
+    too), × on yours, restore and empty write files and change nothing
+    live, so none is an undo step — undo cannot put a file back; the
+    trash is the net."""
+    from test_undo import boot as undo_boot
+    from test_undo import settle
+
+    r = undo_boot(tmp_path / "home")
+    reg, lib = r.reg, r.lib
+    reg["preset.load.4"].fire()
+    settle(r)
+    reg["preset.save_new"].fire()                     # TRIP 2, yours, loaded
+    settle(r)
+    r.undo.clear()
+    steps = []
+    for fn, *args in ((lib.hide, "presets", "WAKE"), (lib.unhide, "presets", "WAKE"),
+                      (lib.rename, "presets", "TRIP 2", "SUNRISE"),
+                      (lib.delete, "presets", "SUNRISE")):
+        fn(*args)
+        settle(r)
+        steps.append(len(r.undo.stack))
+    (item,) = [t for t in lib.trash() if t.name == "SUNRISE"]
+    lib.restore_trash(item)
+    settle(r)
+    lib.empty_trash()
+    settle(r)
+    steps.append(len(r.undo.stack))
+    assert steps == [0, 0, 0, 0, 0] and not r.undo.undo()
+    assert "SUNRISE" in lib.list("presets") and lib.trash() == []
+
+
 # ------------------------------------------- plan 19 WP1: a bank of twenty-four
 
 def test_save_new_lands_past_the_f_keys_and_a_full_bank_says_so(tmp_path):
