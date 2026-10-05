@@ -491,8 +491,10 @@ def test_the_page_has_no_conflicting_ids(tmp_path, monkeypatch):
         panel = Panel(Control(chain), audio, view, bank=lib.project, registry=reg, library=lib)
         panel.renderer = SimpleNamespace(fx=SimpleNamespace(state=st, error=lambda n: ""))
         ids: list[str] = []
+        # …and its own popup: a param's menu hangs off its chip's LED, its
+        # chip's name and its strip's check (plan 16 WP2: a key apiece)
         for fn in ("button", "checkbox", "slider_float", "slider_int", "combo",
-                   "invisible_button"):
+                   "invisible_button", "begin_popup_context_item"):
             real = getattr(imgui, fn)
 
             def rec(label, *a, _real=real, **k):
@@ -509,6 +511,302 @@ def test_the_page_has_no_conflicting_ids(tmp_path, monkeypatch):
             imgui.end_frame()
             dup = {i for i in ids if ids.count(i) > 1}
             assert not dup, f"{name}: conflicting ids {sorted(dup)}"
+            # plan 16 WP2: every chip is two items, the LED and the name
+            for n in st.names():
+                assert f"led.fx.{n}.on" in ids and f"chip.fx.{n}.on" in ids, n
     finally:
         implot.destroy_context(pctx)
         imgui.destroy_context(ictx)
+
+
+# ---------------------------------------------------------------- which strip is open (plan 16 WP2)
+
+def test_selection_is_by_name_and_survives_a_reorder():
+    st = FxState()
+    r = Registry()
+    declare(r, st)
+    assert st.selected() == st.names()[0] and st.sel_name is None    # nothing chosen: the first
+    st.select("warp")
+    was = st.names().index("warp")
+    assert st.selected() == "warp" and r["fx.select"].value == was
+    r["fx.warp.order"].set_value(99)                 # the open effect to the end of the stack…
+    assert st.names()[-1] == "warp" and st.selected() == "warp"
+    assert r["fx.select"].value == len(st.names()) - 1 != was
+    r["fx.huecycle.order"].set_value(0)              # …and another one past it to the front
+    assert st.names()[0] == "huecycle" and st.selected() == "warp"
+    assert r["fx.select"].value == st.names().index("warp")
+    # every step of a drag across the whole range: never another effect
+    for k in range(100):
+        r["fx.warp.order"].set_value(k)
+        assert st.selected() == "warp"
+    st.select("no_such_effect")                      # a name with no spec is ignored
+    assert st.selected() == "warp"
+    st.select(None)                                  # None: whatever is first
+    assert st.sel_name is None and st.selected() == st.names()[0]
+
+
+def test_selection_survives_a_preset_load(tmp_path):
+    from hyperspace.analysis import Analyser
+    from hyperspace.analyzer import Analyzer
+    from hyperspace.control import Control
+    from hyperspace.library import Library
+    from hyperspace.params import build_registry
+    from hyperspace.view import ViewState
+    chain = Analyzer(Analyser())
+    st = FxState()
+    lib = Library(tmp_path, period=0.0)
+    reg = build_registry(ViewState(), Control(chain), SimpleNamespace(chain=chain), lib.project,
+                         fx=st)
+    lib.attach(reg)
+    st.select("acid")
+    orders = []
+    for name in ("mandala", "acid", "mandala", "noita tripping balls"):
+        assert lib.load("fx", name) == []
+        orders.append(tuple(st.names()))
+        assert st.selected() == "acid", name
+        assert reg["fx.select"].value == st.names().index("acid")
+    assert orders[0] != orders[1], "the two presets must differ in order for this to mean anything"
+    assert orders[0].index("acid") != orders[1].index("acid")
+    # and the selection is in no file: nothing a preset saves names it
+    assert "fx.select" not in reg.snapshot(part="performance")
+    assert not any("sel" in k for k in lib.read("fx", "mandala")["values"])
+
+
+def test_a_removed_effect_falls_back_and_comes_back(fxdir):
+    write(fxdir, "alpha", EFFECT.replace("@order 12", "@order 1"))
+    write(fxdir, "beta", EFFECT.replace("@order 12", "@order 2"))
+    write(fxdir, "gamma", EFFECT.replace("@order 12", "@order 3"))
+    st = FxState(fxdir)
+    r = Registry()
+    declare(r, st)
+    st.on_specs = lambda names: declare(r, st, names)
+    st.select("gamma")
+    (fxdir / "alpha.glsl").unlink()                  # another effect's file goes: no change
+    st.poll()
+    assert st.selected() == "gamma" and r["fx.select"].value == 1
+    write(fxdir, "aardvark", EFFECT.replace("@order 12", "@order 0"))   # one is added: no change
+    st.poll()
+    assert st.selected() == "gamma" and st.names()[0] == "aardvark"
+    (fxdir / "gamma.glsl").unlink()                  # the open one goes: the first is open
+    st.poll()
+    assert st.selected() == "aardvark" and r["fx.select"].value == 0
+    assert st.sel_name == "gamma"                    # selected() never writes
+    write(fxdir, "gamma", EFFECT)                    # …and it is open again when it returns
+    st.poll()
+    assert st.selected() == "gamma"
+    for name in list(st.specs):                      # no effects at all
+        (fxdir / f"{name}.glsl").unlink()
+    st.poll()
+    assert st.selected() is None and r["fx.select"].value == 0
+    r["fx.select"].set(3)                            # nothing to open: no raise, no write
+    assert st.sel_name == "gamma"
+
+
+def test_fx_select_is_a_view_onto_the_name():
+    st = FxState()
+    r = Registry()
+    declare(r, st)
+    p = r["fx.select"]
+    names = st.names()
+    assert p.value == 0                              # nothing chosen: the first
+    p.set(names.index("fractals"))
+    assert st.sel_name == "fractals" and st.selected() == "fractals"
+    assert p.value == names.index("fractals")
+    p.set(10_000)                                    # out of range clamps
+    assert st.sel_name == names[-1]
+    p.set(-3)
+    assert st.sel_name == names[0]
+    assert (p.id, p.label) == ("fx.select", "Edit")
+    assert not p.persist and not p.modulatable
+    assert p.names == [st.specs[n].label for n in st.names()]
+    assert not hasattr(st, "sel")                    # the index is no longer what is stored
+    # a live FxState re-classed by a hot reload never ran this __init__
+    old = FxState.__new__(FxState)
+    old.specs, old.values = st.specs, st.values
+    assert old.selected() == names[0]
+    old.select("warp")
+    assert old.selected() == "warp"
+
+
+class PageRig:
+    """The FX page over a real Panel in a headless imgui context, with the
+    mouse: `rects` holds every button's screen rect from the last frame."""
+
+    def __init__(self, tmp_path, monkeypatch):
+        from imgui_bundle import imgui, implot
+
+        from hyperspace import ui_fx
+        from hyperspace.analysis import Analyser
+        from hyperspace.analyzer import Analyzer
+        from hyperspace.app import CONTROL_SIZE
+        from hyperspace.control import Control
+        from hyperspace.library import Library
+        from hyperspace.params import build_registry
+        from hyperspace.ui import Panel, apply_style, load_fonts
+        from hyperspace.view import ViewState
+
+        self.imgui, self.ui_fx, self.size = imgui, ui_fx, CONTROL_SIZE
+        self.ictx = imgui.create_context()
+        self.pctx = implot.create_context()
+        self._implot = implot
+        io = imgui.get_io()
+        io.display_size = imgui.ImVec2(*CONTROL_SIZE)
+        io.backend_flags |= imgui.BackendFlags_.renderer_has_textures
+        apply_style()
+        load_fonts()
+        chain = Analyzer(Analyser())
+        control = Control(chain)
+        audio = SimpleNamespace(chain=chain, on=False, mode="", error="", label="", sr=48000.0)
+        self.st = FxState()
+        lib = Library(tmp_path, period=0.0)
+        view = ViewState()
+        self.reg = build_registry(view, control, audio, lib.project, fx=self.st)
+        lib.attach(self.reg)
+        self.panel = Panel(control, audio, view, bank=lib.project, registry=self.reg,
+                           library=lib)
+        self.panel.renderer = SimpleNamespace(fx=SimpleNamespace(state=self.st,
+                                                                 error=lambda n: ""))
+        self.rects: dict[str, tuple[float, float, float, float]] = {}
+        real = imgui.button
+
+        def button(label, *a, **k):
+            hit = real(label, *a, **k)
+            lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+            self.rects[label.split("##", 1)[-1]] = (lo.x, lo.y, hi.x, hi.y)
+            return hit
+        monkeypatch.setattr(imgui, "button", button)
+
+    def frame(self) -> None:
+        imgui = self.imgui
+        self.rects.clear()
+        imgui.new_frame()
+        imgui.set_next_window_pos(imgui.ImVec2(0, 0))
+        imgui.set_next_window_size(imgui.ImVec2(*self.size))
+        imgui.begin("page", None, imgui.WindowFlags_.no_title_bar | imgui.WindowFlags_.no_move)
+        self.ui_fx.page(self.panel, 1 / 60)
+        imgui.end()
+        imgui.end_frame()
+
+    def click(self, item: str, at: float = 0.5) -> None:
+        """A left click on the button whose id is `item`, `at` of the way
+        along it: the mouse moves there, presses, releases, and leaves."""
+        io = self.imgui.get_io()
+        self.frame()
+        x0, y0, x1, y1 = self.rects[item]
+        io.add_mouse_pos_event(x0 + (x1 - x0) * at, (y0 + y1) / 2)
+        self.frame()
+        io.add_mouse_button_event(0, True)
+        self.frame()
+        io.add_mouse_button_event(0, False)
+        self.frame()
+        io.add_mouse_pos_event(-1.0, -1.0)
+        self.frame()
+
+    def close(self) -> None:
+        self._implot.destroy_context(self.pctx)
+        self.imgui.destroy_context(self.ictx)
+
+
+@pytest.fixture()
+def fxpage(tmp_path, monkeypatch):
+    rig = PageRig(tmp_path, monkeypatch)
+    yield rig
+    rig.close()
+
+
+def test_a_chip_click_selects_and_never_toggles(fxpage):
+    st, reg = fxpage.st, fxpage.reg
+    reg["fx.warp.on"].set(True)
+    fxpage.frame()
+    assert st.selected() == st.names()[0] != "fractals"
+
+    def switches():
+        return {n: reg[f"fx.{n}.on"].base for n in st.names()}
+    before = switches()
+    # the whole width of the name, end to end: an off effect, then one that is on
+    for name in ("fractals", "warp", "fractals"):
+        for at in (0.02, 0.5, 0.98):
+            fxpage.click(f"chip.fx.{name}.on", at)
+            assert st.selected() == name, (name, at)
+            assert switches() == before, (name, at)
+    assert reg["fx.select"].value == st.names().index("fractals")
+
+
+def test_the_first_effect_is_held_by_name_once_it_is_shown(fxpage):
+    """Nothing chosen (every launch) means the first effect is open; once
+    the page has drawn it, it is held by name, so dragging its own order
+    slider — or a preset load — does not hand the strip to the new first."""
+    st, reg = fxpage.st, fxpage.reg
+    first = st.names()[0]
+    assert st.sel_name is None
+    fxpage.frame()
+    assert st.sel_name == first
+    for k in range(100):                             # its own order, end to end
+        reg[f"fx.{first}.order"].set_value(k)
+        fxpage.frame()
+        assert st.selected() == first, k
+    assert st.names()[-1] == first
+
+
+def test_the_leds_hover_says_what_a_click_does(fxpage):
+    """The LED shows what runs (the effective value); a click writes the
+    base. Its hover reads the base, and names the source riding it."""
+    from hyperspace.ui_fx import LED_OFF_TIP, LED_ON_TIP, _led_tip
+    st, reg, panel = fxpage.st, fxpage.reg, fxpage.panel
+    p = reg["fx.warp.on"]
+    assert _led_tip(panel, p) == LED_OFF_TIP == "off — click to switch on"
+    p.set(True)
+    assert _led_tip(panel, p) == LED_ON_TIP == "on — click to switch off"
+    p.set(False)
+    p.modulate(1.0)                                  # a source holds it on over an off base
+    reg.apply()
+    assert st.values["warp"]["on"] and not p.base
+    tip = _led_tip(panel, p)
+    assert tip.startswith(LED_OFF_TIP + "\n") and "→ on" in tip
+    fxpage.click("led.fx.warp.on")                   # the click does what the hover said
+    assert p.base is True
+
+
+def test_the_chips_led_toggles_and_never_selects(fxpage):
+    st, reg = fxpage.st, fxpage.reg
+    st.select("acid")
+    fxpage.frame()
+    led, body = fxpage.rects["led.fx.warp.on"], fxpage.rects["chip.fx.warp.on"]
+    assert led[3] - led[1] == pytest.approx(led[2] - led[0])        # a square…
+    assert led[3] - led[1] == pytest.approx(body[3] - body[1])      # …the chip's height…
+    assert led[2] <= body[0] and led[1] == pytest.approx(body[1])   # …at its left end
+    others = {n: reg[f"fx.{n}.on"].base for n in st.names() if n != "warp"}
+    for want in (True, False, True):
+        fxpage.click("led.fx.warp.on")
+        assert reg["fx.warp.on"].base is want
+        assert st.values["warp"]["on"] is want
+        assert st.selected() == "acid" and st.sel_name == "acid"
+        assert {n: reg[f"fx.{n}.on"].base for n in others} == others
+
+
+def test_selecting_an_effect_is_not_an_undo_step(tmp_path):
+    """Plan 15's undo watches persisted params only (`undo.watched`), and
+    fx.select is persist=False: opening a strip — through the param, or by
+    name as the page does — makes no step. Reordering does (it is an edit),
+    and undoing it leaves the open strip where it was."""
+    from test_undo import boot, frames, labels, settle
+
+    from hyperspace import undo
+    st = FxState()
+    r = boot(tmp_path / "home", fx=st)
+    settle(r)
+    start = labels(r)
+    assert not undo.watched(r.reg["fx.select"])
+    for name in ("warp", "fractals", "acid"):
+        st.select(name)
+        settle(r)
+        r.reg["fx.select"].set(st.names().index(name) + 1)
+        settle(r)
+    assert labels(r) == start
+    st.select("warp")
+    r.reg["fx.warp.order"].set_value(99)
+    settle(r)
+    assert len(labels(r)) == len(start) + 1
+    undo.undo()
+    frames(r, 3)
+    assert r.reg["fx.warp.order"].base != 99 and st.selected() == "warp"
