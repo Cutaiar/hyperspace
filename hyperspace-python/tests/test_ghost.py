@@ -560,6 +560,45 @@ def test_a_failed_label_build_writes_no_param(ctx, tmp_path, monkeypatch, where)
     assert (np.abs(again[..., :3].astype(int) - gimbals_later[..., :3]).sum(axis=2) > 30).sum() > 50
 
 
+def test_a_failed_target_build_is_all_or_nothing(ctx, monkeypatch):
+    """Plan 21 WP5 R3: a piece of the hands' layer the driver refuses (here
+    the depth buffer) leaves nothing half-built — what was made is
+    released, no target is kept — the frame is the frame without hands,
+    `Ghost.error` says why once, and no frame raises. The old `_ensure`
+    kept the texture and the size, so every later frame found them
+    "ready" and raised on the missing framebuffer."""
+    base, _ = frame(ctx)
+    r = Renderer(ctx)
+    frame(ctx, renderer=r, on=False, frames=1)            # the renderer's own targets first
+    made, refused = [], []
+    real_tex = moderngl.Context.texture
+
+    def tex(self, *a, **k):
+        t = real_tex(self, *a, **k)
+        made.append(t)
+        return t
+
+    def no_depth(self, *a, **k):
+        refused.append(1)
+        raise moderngl.Error("out of memory")
+
+    with monkeypatch.context() as m:
+        m.setattr(moderngl.Context, "texture", tex)
+        m.setattr(moderngl.Context, "depth_renderbuffer", no_depth)
+        out, _ = frame(ctx, src=tracker(), renderer=r)     # four frames, none raises
+    gh = r.ghost
+    assert np.array_equal(out, base)
+    assert len(refused) == 4                               # each frame tried from nothing
+    assert gh._tex is None and gh._fbo is None and gh._msaa is None and gh._res == []
+    assert gh.size == (0, 0)
+    ours = [t for t in made if t.size == (W, H) and t.components == 4]
+    assert len(ours) == 4 and all(type(t.mglo).__name__ == "InvalidObject" for t in ours)
+    assert gh.error == "ghost layer 480×320: Error: out of memory"
+    on, _ = frame(ctx, src=tracker(), renderer=r, t0=5.0)  # the driver relents: hands
+    base_later, _ = frame(ctx, t0=5.0)
+    assert not np.array_equal(on, base_later) and gh._fbo is not None
+
+
 def test_an_open_hand_and_a_fist_differ(ctx):
     open_ = hand_mask(ctx, tracker(both(right="open")))
     fist = hand_mask(ctx, tracker(both(right="fist")))

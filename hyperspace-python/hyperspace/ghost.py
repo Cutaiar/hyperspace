@@ -1037,8 +1037,9 @@ class Ghost:
         ctx = self.ctx
         if self.geometry is None and not self._build():
             return False
+        if not self._ensure((max(vw, 1), max(vh, 1))):
+            return False                 # nothing bound, nothing drawn: no layer
         try:
-            self._ensure((max(vw, 1), max(vh, 1)))
             draw_fbo = self._msaa if self._msaa is not None else self._fbo
             draw_fbo.use()
             ctx.viewport = (0, 0, *self.size)
@@ -1133,25 +1134,45 @@ class Ghost:
         self.geometry, self._comp, self._comp_vao = geo, comp, vao
         return True
 
-    def _ensure(self, size: tuple[int, int]) -> None:
-        if size == self.size and self._tex is not None:
-            return
+    def _ensure(self, size: tuple[int, int]) -> bool:
+        """The hands' layer at `size`, all or nothing: built into locals and
+        kept only when every piece was made. A piece the driver refuses
+        releases the rest, leaves no target (so the next frame tries again
+        from nothing, never on a half-built set), says why once on `error`
+        and returns False: that frame draws no hands."""
+        if size == self.size and self._fbo is not None:
+            return True
         self.release_targets()
         ctx = self.ctx
-        self.size = size
-        self._tex = ctx.texture(size, 4)
-        self._tex.repeat_x = self._tex.repeat_y = False
-        n = min(SAMPLES, int(getattr(ctx, "max_samples", 0) or 0))
-        if n > 1:
-            rb = ctx.renderbuffer(size, 4, samples=n)
-            depth = ctx.depth_renderbuffer(size, samples=n)
-            self._msaa = ctx.framebuffer(color_attachments=[rb], depth_attachment=depth)
-            self._fbo = ctx.framebuffer(color_attachments=[self._tex])
-            self._res = [self._msaa, rb, depth, self._fbo]
-        else:
-            depth = ctx.depth_renderbuffer(size)
-            self._fbo = ctx.framebuffer(color_attachments=[self._tex], depth_attachment=depth)
-            self._res = [self._fbo, depth]
+        made: list = []
+        try:
+            tex = ctx.texture(size, 4)
+            made.append(tex)
+            tex.repeat_x = tex.repeat_y = False
+            n = min(SAMPLES, int(getattr(ctx, "max_samples", 0) or 0))
+            if n > 1:
+                rb = ctx.renderbuffer(size, 4, samples=n)
+                made.append(rb)
+                depth = ctx.depth_renderbuffer(size, samples=n)
+                made.append(depth)
+                msaa = ctx.framebuffer(color_attachments=[rb], depth_attachment=depth)
+                made.append(msaa)
+                fbo = ctx.framebuffer(color_attachments=[tex])
+                res = [msaa, rb, depth, fbo]
+            else:
+                depth = ctx.depth_renderbuffer(size)
+                made.append(depth)
+                msaa = None
+                fbo = ctx.framebuffer(color_attachments=[tex], depth_attachment=depth)
+                res = [fbo, depth]
+        except Exception as e:  # noqa: BLE001 — the hands must not take the frame down
+            for r in reversed(made):
+                r.release()
+            if not self.error:
+                self.error = f"ghost layer {size[0]}×{size[1]}: {type(e).__name__}: {e}"[:160]
+            return False
+        self.size, self._tex, self._fbo, self._msaa, self._res = size, tex, fbo, msaa, res
+        return True
 
     def release_targets(self) -> None:
         for res in (*self._res, self._tex):
