@@ -73,27 +73,70 @@ refused with the reason. `MidiIO.bindings` is the MIDI-side view of that table �
 what this adapter routes through and the panel edits. The profile (apc40.py is the
 first) knows the device's port name, its power-up SysEx, which controls
 have rings, and what velocities its LEDs take.
+
+Knob smoothing (plan 18 WP2). `set_norm` lands on a detent, and an
+untapered param has 100 of them, so a slow turn used to move the base a
+whole detent at a time. With the session's `desk.slew` above 0
+(`Bindings.slew`, seconds; 0 on a bare table, routing.SLEW_DEFAULT_S in
+the app) an `abs` row on a continuous, non-integer param aims a glide
+instead (`_aim`), and `_glide` walks the base to it once a poll: a
+straight line, written between detents with `Param.set`, that arrives
+`desk.slew` after the last message with the very `set_norm` the row makes
+today, so the value rests where it always did. Still a scene-setter
+writing the base, never an offset. One glide per param, whoever sent it.
+Anyone else's write to the param ends its glide and stands (the panel, a
+key, an undo); a preset load ends every glide but a session param's
+(`redraw`); a layer switch ends none; turning `desk.slew` to 0, or the
+port going away, lands them all at once. A ring shows where the knob is
+sending the base, not the base in flight (`_ring_norm`): the same message
+as before, so the encoder is never re-based behind the hand. `rel` and
+`rel64` knobs, buttons and discrete targets are not smoothed. At 0 no
+glide is ever made and every base and every message sent is as before.
 """
 
 from __future__ import annotations
 
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 import mido
 
-from . import apc40, undo
+from . import apc40
 from .learn import Learn
 from .params import Kind, Param, Registry
-from .routing import PICKUP_TOL, Binding, Bindings, act, bindings_path, led_lit, register_desk
+from .routing import (
+    PICKUP_TOL,
+    Binding,
+    Bindings,
+    act,
+    bindings_path,
+    is_session_id,
+    led_lit,
+    register_desk,
+)
 
 PROFILES = {"apc40": apc40}          # config's `[midi] profile` names one of these
 RECONNECT_S = 2.0
 HOLD_S = 0.6        # a `hold` row fires once its button has been down this long
 BLINK_S = 1.5       # how long the LEDs blink after a hold fires
+SLEW_TOL = 1e-6     # norm: further than this from our last write, someone else set it
+SLEW_BACK_S = 0.05  # a new glide starts at the previous poll, no further back than this
 
-__all__ = ["PICKUP_TOL", "Binding", "MidiIO", "Ports", "find_port"]
+__all__ = ["PICKUP_TOL", "Binding", "MidiIO", "Ports", "Slew", "find_port"]
+
+
+@dataclass
+class Slew:
+    """One param's glide (knob smoothing, `MidiIO._aim` / `_glide`)."""
+
+    y: float            # where the base is now, norm, between detents
+    target: float       # where it will rest: the norm `set_norm(u)` lands
+    t: float            # the clock at the last step
+    t_end: float        # the clock when it lands: the last message + desk.slew
+    wrote: float        # p.norm as read back after our last write
+    steps: int = 0      # the steps it has taken (`_glide`)
 
 
 def find_port(names: list[str], match: str) -> str | None:
@@ -231,7 +274,14 @@ class MidiIO:
         # lit it has left the table (a preset load's smaller desk, the
         # ROUTING page's ×) — D8, review of PR #67
         self._shown: dict[tuple, Binding] = {}
-        register_desk(registry, self.table)     # SHIFT's param, for a bare adapter too
+        # knob smoothing: the glides in flight, by param id, and the clock
+        # at the previous poll (where a new glide's line starts)
+        self._slews: dict[str, Slew] = {}
+        self._polled: float | None = None
+        # params seen to move on their own (`_glide`): written at once
+        self._restless: set[str] = set()
+        # SHIFT's param and the smoothing's, for a bare adapter too
+        register_desk(registry, self.table)
         if self.ports.injected:
             self._enter()
         elif self.ports.connect():
@@ -279,6 +329,7 @@ class MidiIO:
             self.redraw()
 
     def close(self) -> None:
+        self._land_all()        # knob smoothing: no value is left between detents at exit
         if self.out is not None:
             try:
                 for msg in self.profile.leave():
@@ -303,27 +354,14 @@ class MidiIO:
     def binding_for(self, pid: str) -> Binding | None:
         return self.table.for_param(pid)
 
-    def unbind(self, pid: str) -> None:
-        """Right-click → Unbind: the loaded preset's desk rows on `pid` go —
-        an edit of the preset, which its dirty dot shows; no file is
-        written (plan 13 §3.3). A param only the session maps (an
-        invariant or a global-layer control) is refused with the reason in
-        the learn line, the way Learn refuses (D5, D6). One undo step
-        (undo.py, plan 15): a refused unbind changes nothing and leaves none."""
-        undo.push(f"unbind {pid}")
-        gone = self.table.unbind(pid)
-        for b in gone:
-            if b.feedback:
-                self._dark(b)
-        if gone:
-            names = ", ".join(self.control_name(b) for b in gone)
-            self.learner.said(f"unbound {pid} from {names} (in the preset)")
-            return
-        b = self.table.for_param(pid)
-        if b is not None:
-            where = "on the global layer" if b.layer == "global" else "invariant"
-            self.learner.refuse(f"{self.control_name(b)} → {pid} is {where} (the session's, "
-                                "edited in bindings.json) — not unbound")
+    def unbind(self, pid: str) -> list[Binding]:
+        """The loaded preset's desk rows on `pid` go — `Learn.unbind` with
+        the routes left alone (plan 17 WP1: the menu calls the learn object
+        itself, so Unbind is there with no adapter). The table's
+        `redraw_serial` moves, so this adapter redraws and the controls go
+        dark (`_follow_table`); the undo step, and the refusal for a param
+        only the session maps (D5, D6), are `Learn.unbind`'s."""
+        return self.learner.unbind((pid,), routes=False, name=self.control_name)
 
     def control_name(self, b: Binding) -> str:
         """The control a row names, in the device's words where the
@@ -333,48 +371,13 @@ class MidiIO:
         return (name(b.source) if name is not None else None) or b.describe()
 
     def _learned(self, kind: str, channel: int, number: int, value: int) -> None:
-        """A message while armed: a preset-layer row into the loaded preset
-        (plan 13 §3.3). It binds the param as armed — a ``band.sel.*``
-        alias included, on purpose: a knob on "the selected band's
-        threshold" should follow the selection.
-
-        Refused, with the reason in `learner.last` and nothing changed, on
-        an invariant control — SHIFT among them (D6) — and while the global
-        layer is up (D5): both are the session's, edited in bindings.json.
-        Otherwise the row replaces every preset-layer row on the control
-        (an any-channel row on it included, `Binding.overlaps`) and the
-        param's previous preset-layer row in the same role (`Bindings.bind`)
-        and the file is **not** written: the row is the preset's, and the
-        preset's dirty dot shows it until a save (⇧F, the strip)."""
-        lrn = self.learner
-        pid = lrn.take()
-        p = self.reg.get(pid) if pid is not None else None
-        if p is None:
-            return
-        b = Binding(Binding.midi_source(kind, channel, number), pid, "abs", layer="preset")
-        if self.table.is_invariant(b):
-            lrn.refuse(f"{self.control_name(b)} is invariant (the session's) — not learned")
-            return
-        if self.table.layer == "global":
-            lrn.refuse(f"{self.control_name(b)} is on the global layer (the session's) "
-                       "— latch SHIFT off to learn into the preset")
-            return
-        if kind == "cc":
-            if self.profile.is_relative(number):
-                b.op = "rel"
-            elif p.kind is Kind.TRIGGER:
-                b.op = "toggle"
-        elif kind == "note":
-            b.op = "toggle"
-        fb = self.profile.feedback_for(kind, channel, number)
-        if fb:
-            b.feedback, b.ring = fb["feedback"], fb.get("ring", b.ring)
-            b.on, b.off = fb.get("on", b.on), fb.get("off", b.off)
-        undo.push(f"learn {pid}")                      # one undo step (undo.py, plan 15)
-        for x in self.table.bind(b, write=False):     # the preset rows it replaced
-            if x.feedback:
-                self._dark(x)                          # the new row redraws its own control
-        lrn.said(f"learned {pid} ← {self.control_name(b)} (into the preset)")
+        """A desk message completes the armed learn: `Learn.learn_control`
+        with this device's profile (plan 17 WP2, fork 7 — the row-making
+        lives there, so a click on the on-screen desk makes the same row
+        with no adapter). When it lands, the table's `redraw_serial` tells
+        this adapter to redraw; a refusal (the global layer, D5) changes
+        nothing and leaves the learn armed."""
+        self.learner.learn_control(Binding.midi_source(kind, channel, number), self.profile)
 
     # ---- per frame ----
 
@@ -383,6 +386,7 @@ class MidiIO:
             if self.ports.retry():
                 self._connected()
             if not self.on:
+                self._land_all()    # no device: nothing is left in flight
                 return
         self._follow_table()
         self._uncatch_moved()
@@ -390,6 +394,10 @@ class MidiIO:
             self._handle(msg)
         self._fire_holds()
         self._follow_table()        # SHIFT pressed just now: this frame's redraw
+        # knob smoothing: each glide's step for this frame — after the
+        # table is followed, so a preset a pad loaded in this very poll has
+        # ended its glides (`redraw`) before any of them steps over it
+        self._glide(self._now())
         self.feedback()
 
     def _follow_table(self) -> None:
@@ -434,10 +442,18 @@ class MidiIO:
         self.last = f"{kind} {number} ch{ch + 1} = {value}"
         if kind == "note" and value == 0 and self._hold_state()[0].pop((ch, number), None):
             self._light_bars()      # let go before HOLD_S: a tap, nothing fires
-        if self.learner.learning is not None:
-            if kind != "note" or value > 0:
+        # an armed learn (plan 17 WP2): a CC or a press is a candidate only
+        # when the learn waits for the desk (`Learn.accepts`: not during a
+        # hand learn) and the control is not invariant (fork 6: SHIFT, a
+        # fader, TAP do their own job while a learn is armed). A candidate
+        # is not dispatched, landed or refused; everything else is, as if
+        # no learn were armed — a note-off included (never a candidate)
+        lrn = self.learner
+        if lrn.learning is not None and (kind != "note" or value > 0):
+            source = Binding.midi_source(kind, ch, number)
+            if lrn.accepts(source) and not self.table.is_invariant(Binding(source, lrn.learning)):
                 self._learned(kind, ch, number, value)
-            return
+                return
         # the layer is read at the press (D12): a note-off goes to the rows
         # its note-on went to, whatever is up by now
         if kind == "note" and value > 0:
@@ -575,12 +591,111 @@ class MidiIO:
                 if not b.caught:
                     return
             b.last_hw = u
-            p.set_norm(u)
+            # knob smoothing (plan 18 WP2): a continuous value glides to
+            # where set_norm would put it; at desk.slew 0, and on a
+            # discrete or integer target, the write is the immediate one
+            seconds = getattr(self.table, "slew", 0.0)
+            if (seconds > 0.0 and p.kind is Kind.CONTINUOUS and not p.integer
+                    and p.id not in self.__dict__.setdefault("_restless", set())):
+                self._aim(p, u, seconds)
+            else:
+                self._slew_state().pop(p.id, None)
+                p.set_norm(u)
         self._note_written(p)
 
     def _note_written(self, p: Param) -> None:
         if p.kind is not Kind.TRIGGER:
             self._writes[p.id] = p.norm
+
+    # ---- knob smoothing ----
+
+    def _slew_state(self) -> dict[str, Slew]:
+        """`_slews` — made here for an adapter from before a hot reload."""
+        return self.__dict__.setdefault("_slews", {})
+
+    @staticmethod
+    def _landing(p: Param, u: float) -> float:
+        """The norm `p.set_norm(u)` would leave: the detent, read back the
+        way `Param.norm` reads it, so a ring drawn from it is the ring
+        drawn after the write."""
+        k = round(min(max(float(u), 0.0), 1.0) * p.steps)
+        v = p.taper.map(k) if p.taper is not None else p._value_of_norm(k / p.steps)
+        return p._norm_of(v)
+
+    def _aim(self, p: Param, u: float, seconds: float) -> None:
+        """Point the param's glide at what `set_norm(u)` would land, to
+        arrive `seconds` from now. A param with no glide — or one somebody
+        else has written since ours — starts one from where the base is,
+        its line beginning at the previous poll (no further back than
+        SLEW_BACK_S), so the first step lands on the frame the message
+        arrives: the glide adds no dead frame. One glide per param: a
+        second control on the same param re-aims it, from where it is."""
+        slews, now = self._slew_state(), self._now()
+        s = slews.get(p.id)
+        if s is None or abs(p.norm - s.wrote) > SLEW_TOL:
+            y = p.norm
+            polled = self.__dict__.get("_polled")
+            t = now if polled is None else min(max(polled, now - SLEW_BACK_S), now)
+            s = slews[p.id] = Slew(y, y, t, now, y)
+        s.target = self._landing(p, u)
+        s.t_end = now + seconds
+
+    def _glide(self, now: float) -> None:
+        """Once a poll: every glide one step along its straight line, or
+        its landing — the `set_norm` the knob's row makes with smoothing
+        off, so the value rests on the same detent — when its time is up
+        or `desk.slew` is now 0. A param whose base is not where this
+        adapter left it was set by someone else: theirs stands and the
+        glide is dropped. Scene-setter writes of the base, both of them
+        (`Param.set`, `Param.set_norm`); never an offset.
+
+        A param that has moved on the very poll after a glide's first step
+        is taken to move on its own (`rot.phase.*` while its plane turns:
+        the integrator's, not a setting): a glide on it would be dropped
+        every frame and never arrive, so from then on its knob writes at
+        once, as with smoothing off (`_restless`; review of PR #98)."""
+        slews = self._slew_state()
+        if slews:
+            seconds = getattr(self.table, "slew", 0.0)
+            for pid, s in list(slews.items()):
+                p = self.reg.get(pid)
+                if p is None or abs(p.norm - s.wrote) > SLEW_TOL:
+                    if p is not None and s.steps == 1:
+                        self.__dict__.setdefault("_restless", set()).add(pid)
+                    del slews[pid]
+                    continue
+                if seconds <= 0.0 or now >= s.t_end:
+                    p.set_norm(s.target)
+                    del slews[pid]
+                else:
+                    f = min(max((now - s.t) / (s.t_end - s.t), 0.0), 1.0)
+                    s.y += (s.target - s.y) * f
+                    p.set(p._value_of_norm(s.y))        # the base, between detents
+                    s.t = now
+                    s.wrote = p.norm
+                    s.steps += 1
+                self._note_written(p)       # ours: no fader loses its catch to it
+        self._polled = now
+
+    def _land_all(self) -> None:
+        """Every glide lands on its target now (the port went away): no
+        value is left in flight with nothing polling it. One a foreign
+        write has ended is only forgotten."""
+        slews = self._slew_state()
+        for pid, s in list(slews.items()):
+            p = self.reg.get(pid)
+            if p is not None and abs(p.norm - s.wrote) <= SLEW_TOL:
+                p.set_norm(s.target)
+                self._note_written(p)
+        slews.clear()
+
+    def _ring_norm(self, p: Param) -> float:
+        """What a ring shows for `p`: the base — during a glide the base
+        the knob is setting (the glide's target, the value the ring showed
+        the same frame before there was a glide), never the base in
+        flight, which would re-base the encoder behind the hand."""
+        s = self._slew_state().get(p.id)
+        return p.norm if s is None else s.target
 
     # ---- feedback ----
 
@@ -613,7 +728,7 @@ class MidiIO:
                 continue
             shown.setdefault(b.control, b)
             if b.feedback == "ring":
-                v = round(p.norm * 127)
+                v = round(self._ring_norm(p) * 127)
                 if b.last_out is None:
                     for msg in self.profile.ring_setup(b.channel or 0, b.number, b.ring):
                         self._send(msg)
@@ -659,7 +774,16 @@ class MidiIO:
         have made the last write): a fader whose base the load moved
         picks up, and one whose param the load left alone (the
         crossfader's dim, S1–S8 and SM: a preset never moves a session
-        param, D9) keeps its hold (plan 15 WP3, fork 19)."""
+        param, D9) keeps its hold (plan 15 WP3, fork 19). A load also ends
+        every glide (knob smoothing) but a session param's, before anything
+        else: the load's value stands, even where it equals the glide's
+        last write; a session param the load never moves goes on arriving,
+        and its fader is compared with where the glide is taking the param
+        (the fader's own position), so it keeps its hold too."""
+        if load:
+            slews = self._slew_state()
+            for pid in [pid for pid in slews if not is_session_id(pid)]:
+                del slews[pid]
         active = self.table.active()
         drawn = {b.control for b in active if b.feedback}
         for b in self.bindings:
@@ -668,7 +792,7 @@ class MidiIO:
                 p, seen = self.reg.get(b.target), self._writes.get(b.target)
                 if (p is None or seen is None or b.last_hw is None
                         or abs(p.norm - seen) > PICKUP_TOL
-                        or abs(p.norm - b.last_hw) > PICKUP_TOL):
+                        or abs(self._ring_norm(p) - b.last_hw) > PICKUP_TOL):
                     b.caught = False
         if self.out is None:
             return

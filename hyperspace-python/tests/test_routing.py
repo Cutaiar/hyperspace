@@ -1906,7 +1906,7 @@ def test_every_factory_preset_names_real_params_with_one_owner(tmp_path):
         if spec.values is not None:
             assert set(preset.generated(name)["values"]) <= ids, name
     assert set(preset.FACTORY_PRESETS) == {
-        "legacy6", "lfo-breathe", "hands-fx", "hands-pinch", "hands-play",
+        "legacy6", "lfo-breathe", "hands-fx", "hands-pinch", "hands-play", "hands-orbit",
         "party-tumble", "party-faces", "party-field", "party-wake", "party-trip",
         "party-acid", "party-mandala", "party-noita", "party-tracer"}
     assert (preset.FACTORY_DIR / "lfo-breathe.json").exists()

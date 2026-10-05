@@ -1,0 +1,84 @@
+Hyperspace — a learn's default, headless (tools/learn_default_demo.py; plan 18 WP3)
+SYNTHETIC HANDS through the real HandsIO chain (default ranges, default feel, no box):
+nothing here was seen by a tracker, and nobody has felt these depths (hand checks N4–N6).
+home: <home>  (a temp folder made by this script)
+The startup preset's own routes are taken out first, so every row is one learned here;
+bases: rot.rate.XY +1.00×, view.bright 2.00×, view.speed 0.350; hands.learn_depth 0.25.
+'before' is the row every learn landed until this package (position, depth 1), measured the same way.
+
+1. Learn hand ▸ right on rot.rate.XY, then roll the right hand (a centred axis, a range centred on zero)
+    status line: learned rot.rate.XY ← hand right.roll pushes +0.25 (into the preset)
+    ROUTING (1 row):
+      hand:right.roll   → rot.rate.XY  push     depth +0.25  rest the axis’s "R roll pushes +0.25"
+    rot.rate.XY (base +1.00×) against the hand, measured:
+      hand reads                  before: position, depth 1          after: push +0.25
+      roll -90°                                     -66.56×                    -15.64×
+      roll -18°                                     -11.09×                     -1.77×
+      roll -9°                                       -4.16×                     -0.04×
+      roll 0° (level)                                +0.00×                     +1.00×
+      roll +9°                                       +4.16×                     +2.04×
+      roll +18°                                     +11.09×                     +3.77×
+      roll +90°                                     +66.56×                    +17.64×
+      no hand                                        +1.00×                     +1.00×
+
+2. Learn hand ▸ right on view.bright, then raise the right hand (a one-sided axis, a one-sided param: still the fader)
+    status line: learned view.bright ← hand right.y positions (into the preset)
+    ROUTING (2 rows):
+      hand:right.roll   → rot.rate.XY  push     depth +0.25  rest the axis’s "R roll pushes +0.25"
+      hand:right.y      → view.bright  position depth 1                      "R y positions"
+    view.bright (base 2.00×) against the hand, measured   (the same row):
+      hand reads                  before: position, depth 1   after: position, depth 1
+      height 100 mm (the bottom)                      0.12×                      0.12×
+      height 125 mm                                   0.18×                      0.18×
+      height 225 mm                                   0.71×                      0.71×
+      height 350 mm                                   4.00×                      4.00×
+      no hand                                         2.00×                      2.00×
+
+3. Learn hand ▸ left on rot.rate.XY, then raise the left hand (a one-sided axis, a range centred on zero)
+   The right roll already performs rot.rate.XY: one performer per parameter, so the learn is held for the prompt.
+    status line: rot.rate.XY is already performed by hand right.roll pushes +0.25 — replace?
+    held: hand:left.y push +0.25  against  hand:right.roll — the table is untouched until the prompt answers
+    Replace
+    status line: learned rot.rate.XY ← hand left.y pushes +0.25 (into the preset)
+    ROUTING (2 rows):
+      hand:right.y      → view.bright  position depth 1                      "R y positions"
+      hand:left.y       → rot.rate.XY  push     depth +0.25  rest the axis’s "L y pushes +0.25"
+    rot.rate.XY (base +1.00×) against the hand, measured:
+      hand reads                  before: position, depth 1          after: push +0.25
+      height 100 mm (the bottom)                    -66.56×                     +1.00×
+      height 125 mm                                 -53.25×                     +4.33×
+      height 225 mm                                  -0.00×                    +17.64×
+      height 350 mm                                 +66.56×                    +34.28×
+      no hand                                        +1.00×                     +1.00×
+
+4. hands.learn_depth set to 0.1 (HANDS ▸ feel & calibration ▸ Learn depth), then Learn hand ▸ right on view.speed and tilt the fingers up
+    status line: learned view.speed ← hand right.pitch pushes +0.1 (into the preset)
+    ROUTING (3 rows):
+      hand:right.y      → view.bright  position depth 1                      "R y positions"
+      hand:left.y       → rot.rate.XY  push     depth +0.25  rest the axis’s "L y pushes +0.25"
+      hand:right.pitch  → view.speed   push     depth +0.1   rest the axis’s "R pitch pushes +0.1"
+    (the rows learned at 0.25 and at position 1 keep theirs: the depth is what the next learn lands with)
+    view.speed (base 0.350) against the hand, measured:
+      hand reads                  before: position, depth 1           after: push +0.1
+      pitch -60°                                       stop                      0.265
+      pitch -18°                                      0.118                      0.325
+      pitch 0° (level)                                0.250                      0.350
+      pitch +18°                                      0.530                      0.377
+      pitch +60°                                       4.00                      0.462
+      no hand                                         0.350                      0.350
+
+5. The same axis learned onto a second param: Learn hand ▸ right on camera.yaw, tilt the fingers up again
+    status line: learned camera.yaw ← hand right.pitch pushes +0.1 (into the preset; moved from view.speed)
+    ROUTING (3 rows):
+      hand:right.y      → view.bright  position depth 1                      "R y positions"
+      hand:left.y       → rot.rate.XY  push     depth +0.25  rest the axis’s "L y pushes +0.25"
+      hand:right.pitch  → camera.yaw   push     depth +0.1   rest the axis’s "R pitch pushes +0.1"
+    undo stack (6): learn rot.rate.XY | learn view.bright | learn rot.rate.XY | Learn depth 0.25 → 0.10 | learn view.speed | learn camera.yaw
+   Cmd+Z, once
+  SUPER+Z          footer: ·  undid learn camera.yaw
+    ROUTING (3 rows):
+      hand:right.y      → view.bright  position depth 1                      "R y positions"
+      hand:left.y       → rot.rate.XY  push     depth +0.25  rest the axis’s "L y pushes +0.25"
+      hand:right.pitch  → view.speed   push     depth +0.1   rest the axis’s "R pitch pushes +0.1"
+    undo stack (5): learn rot.rate.XY | learn view.bright | learn rot.rate.XY | Learn depth 0.25 → 0.10 | learn view.speed
+    redo stack (1): learn camera.yaw

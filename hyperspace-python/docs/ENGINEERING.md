@@ -16,8 +16,9 @@ gone; `hyperspace-web/hyperspace.html` is frozen and matters here only as
 the oracle the golden traces were recorded from. Revised for plan 13
 (presets, the session, the two-layer desk) on `plan-13-integration`.
 
-**Run it:** `uv sync`, `uv run pytest` (1178 tests with plan 16, about a
-minute), `uv run hyperspace`. `?` in the app shows the controls cheat
+**Run it:** `uv sync`, `uv run pytest` (1178 tests with plan 16; 1276
+on `plan-18-integration`, which holds plans 17 and 18; about a minute
+and a half), `uv run hyperspace`. `?` in the app shows the controls cheat
 sheet, which is off at launch since plan 16.
 
 ---
@@ -499,7 +500,13 @@ display for the performer and for newcomers, not a control source.
   32° above them, at the distance where every corner of the palm box —
   the union of both hands' x / y / z ranges from `hands.json` (the
   defaults for an axis the setup lacks) — padded by 60 mm for the
-  fingers fills the frame. Desktop is the table in `hands/core.py`;
+  fingers fills the frame. Since plan 18 WP1, where `hands.json` holds
+  an interaction box (§5) the palm box is that box, coordinate by
+  coordinate (`ghost.box_of`; a coordinate the box leaves open uses the
+  ranges as before): the frame is then exactly where a hand counts, and
+  a hand leaving the box fades out at the frame's edge, because a hand
+  outside the box has no skeleton kept. During a calibration sweep the
+  frame still shows the old box. Desktop is the table in `hands/core.py`;
   screentop and HMD are not measured (see `MODES`).
 - **The geometry.** `CapsuleHands`: a sphere per joint, a capsule per
   bone, a palm (the four finger metacarpals' bases and knuckles, and the
@@ -954,7 +961,9 @@ unreadable at a party.
   two fingers save once, and a button still down saves nothing more).
   The blink velocities are Akai's table as `apc40.blink_of` reads it,
   never seen on the device. The on-screen desk shows the bar lit while
-  held but does not blink, and the cheat sheet does not name the bar. A Learn on any of them is refused, and a preset's desk
+  held but does not blink, and the cheat sheet does not name the bar. None of them can be learned, mapped by a click or unbound; since
+  plan 17 each keeps doing its one job while a learn is armed (below),
+  and a preset's desk
   row on one is dropped at load with a note. The **global** layer is
   the session's (the band strip on the device knobs, hand feel and BPM on
   track knobs 1–5, the band scenes on clip rows 2–3); the **preset** layer
@@ -973,10 +982,49 @@ unreadable at a party.
   params, which a preset never moves) carry on from where they are after
   a load, and a fader whose base the load did move picks up as before.
   Not covered (audit R13): a fader moved while its row is disabled stays
-  caught and jumps on its next applied message (an armed Learn takes one
-  message the same way, so that jump is one message's worth). A macro is a knob with subscribers: each sets a param's
+  caught and jumps on its next applied message (until plan 17 an armed
+  Learn took one message the same way; an invariant control, which every
+  factory fader is, is now dispatched through a learn). A macro is a knob with subscribers: each sets a param's
   base or scales a route's depth over its own `from → to`; a hand on a
   macro moves only the depths.
+- **Knob smoothing** (plan 18 WP2; `desk.slew`, "Knob smoothing", first
+  under "midi" on the SYSTEM page; off, or up to 250 ms). A knob or
+  fader that sets a value directly (`abs`) used to land it at once on
+  one of the param's detents — 100 across an untapered range — so a slow
+  turn moved the picture a detent at a time: 80 px of pan, 1.33× of a
+  rotation rate, 6.9 % of zoom. With smoothing on, each value arrives
+  over that long in a straight line, written between the detents, and
+  comes to rest on the very detent it rested on before; the line always
+  ends `desk.slew` after the last message. **The running app starts at 80 ms**
+  (`routing.SLEW_DEFAULT_S`, set by `app._desk_table` before the show
+  lands): a show that saved the number keeps it, "off" included; one
+  that did not opens at 80 ms and is clean; changing it marks the show
+  unsaved. A bare table (every test rig) is at 0, and at 0 nothing new
+  runs: every base and every MIDI message is the one from before.
+  What is smoothed: `cc` and `pitch` rows with op `abs` on a continuous,
+  non-integer param — the track and device knobs, S1–S8, SM and the
+  crossfader, wherever the row's target is such a param. What is not: the cue knob and every other `rel` row (one
+  detent a click, on purpose), buttons, and an `abs` row on an enum, a
+  toggle, a trigger or a whole-number param (`view.instances`). A param
+  that moves by itself (`rot.phase.*` while its plane turns) is written
+  at once after its first message. While a value arrives, **the ring
+  shows where the knob is sending it**, the message the desk sent before
+  there was smoothing, so the encoder is re-based at the fingers and
+  never behind them. A value someone else sets meanwhile (the panel, a
+  key, an undo) stands and the glide stops; a preset load ends every
+  glide but a session param's (the crossfader's dim arrives through a
+  load); a layer switch ends none; setting it to off, unplugging the
+  desk or quitting lands every value at once. A fader's soft pickup is
+  tested as before, and a fader that is caught stays caught through its
+  own glide. A knob on a hand-owned param glides the return value under
+  the hand. One knob turn is still one undo step: the longest setting,
+  250 ms, is held under undo's 0.4 s settle time by a test, and two
+  turns merge when closer than the settle time plus the smoothing
+  (0.48 s at 80 ms). A preset never moves the setting (D9), and it is on
+  no desk knob (decision register rows 54, 55). Never tried on an
+  APC40: shown against fake ports and an injected clock
+  (`tools/slew_demo.py`), and it leans on hand check 31; hand checks 78
+  and 79.
 - **The desk's glyphs and diagram** (plan 14 WP7, decision 25). Every
   control has a short glyph (`apc40.LAYOUT`): K1–K8 the track knobs,
   D1–D8 the device knobs, S1–S8 the faders, SM the master, X the
@@ -991,23 +1039,244 @@ unreadable at a party.
   the rest dark, ⇧ red on the global layer; it reads the table, so it
   works with no device plugged in. A new control in the protocol gets a
   `LAYOUT` entry, or `tests/test_ui_desk.py` fails.
+- **The desk's size and labels** (plan 17 WP4; decision register row
+  57). There is no DESK page: the one desk window takes the room it has
+  (`ui_desk.room`). With the panel open it is the column left of it —
+  384 × 431 at the 960 × 900 control size, where it was a fixed 380 ×
+  290 — above the cheat sheet when that shows. With the panel hidden
+  (`ui.panel`: H, the APC40's DEVICE ON/OFF, or the one chip in the
+  desk's header, `big` / `panel`) it is the whole control window, 936 ×
+  876, beside the cheat sheet when that shows. It never scrolls. Once a
+  layout unit is 44 px wide and 32 px tall (`LABEL_UNIT`,
+  `LABEL_UNIT_H`: a desk about 620 px wide) **every lit control carries
+  what it does** (`ui_desk.text`): the param's label; for a `set` row on
+  an enum that value's name (the bank row reads TUMBLE … NOITA, the
+  shape pads the shapes, a scene pad its scene); for a step the label
+  and the amount ("Brightness +3"); the id for a param with no label
+  (`audio.play`, `audio.stop`, `audio.restart`). The glyph moves to the
+  cell's top-left corner, small and dim. **Bright ink is a row of the
+  layer that is up, grey an invariant one**; a dark control has its
+  glyph alone (D8). The type is 0.2 of a unit, kept between 11 and
+  18 px (13 px at the control size), on at most two lines broken at
+  spaces (`ui_desk.wrap`); a label that would be cut at that size is
+  drawn at 11 px instead, and one still too long ends in "…" (a step
+  keeps its amount: "Brightne… +3"). Adjacent pads of a row that say the
+  same share one label (the clip-stop bar reads "Save as a new preset"
+  once). Under that size the drawing is the glyphs alone, as before. The
+  hover reads "D3 · fx.kaleido.segments · Kaleidoscope segments · preset
+  layer", Akai's name, and what a click would do. The panel is placed
+  once, at launch (`Cond_.once`), so widening the window afterwards
+  widens the desk only once the panel is dragged right. At 960 × 900
+  with TRIP: 105 labels, about a dozen at 11 px, five cut. Seen only as
+  read-backs from a hidden window (`tools/desk_shots.py`,
+  `docs/plans/assets/17-learn-and-the-desk/desk-big.png`); whether it
+  reads from a step back is hand check 69.
+- **Click a control, then a param** (plan 17 WP4; decision register row
+  58). The desk window is hit-tested, with no widget per control. A left
+  click on a control (`ui_desk.click`): with "Learn desk" armed it
+  completes the learn, as a knob bump would; with a hand learn armed it
+  does nothing; on the picked control it lets go; otherwise it **picks**
+  the control (`Learn.control`). A picked control is framed red on the
+  desk and on its ROUTING line, the rows of ROUTING scroll to that line
+  — at once if the page is open, else when it is next opened; the page
+  is never changed for you — the ROUTING filter is cleared, and a hidden
+  panel comes back. If the control can be mapped (not invariant, SHIFT
+  not latched: `ui_desk.mappable`) **the open page is drawn disabled —
+  dimmed, and taking no input at all — on every page but ROUTING**; the
+  rail, the footer and the desk still work. The widget or row label
+  under the mouse is framed, with "click: put D3 on Speed", and a left
+  click on it maps (`Panel._ctx_pick` → `Learn.map_picked`): the knob
+  learn's row, refusals, undo step and message ("learned view.speed ← D3
+  (device knob 3) (into the preset); K2 let go"). The widget does not
+  move. A file path and `desk.shift` are not targets. An invariant
+  control, or any control under SHIFT, is picked for the frame and the
+  scroll only; the desk's header says why and what it does ("S3 (track
+  fader 3) is invariant (the session's): MIDB Post-drive") and nothing
+  dims. The desk's header and the footer say what is picked and count
+  down: **a pick lets go by itself after 20 s with no click anywhere in
+  the control window** (`ui_desk.PICK_S`, `ui_desk.tick`), saying "D3
+  let go — no click for 20 s"; any click restarts the count. It is also
+  let go by a click on the picked control, on the desk's empty ground or
+  on the footer's line, by picking another control, by arming a learn
+  and by a map that lands; not by Esc (which quits) and not by a preset
+  load. **No click maps until the mouse has moved 12 px from the click
+  that picked** (`PICK_MOVE`, `ui_desk.armed`): on the big desk that
+  click brings the panel back under the mouse. On ROUTING, which is
+  never dimmed, both lines say to click a param on any other page. An
+  armed learn, unlike a pick, never times out. Every click here has been
+  an imgui event fed by a test or by `tools/desk_shots.py`; no mouse has
+  made one (hand check 70).
+- **The right-click menu** (plan 17 WP1–WP3; decision register rows
+  59, 60). It opens from a param's widget, from **a row's label**
+  (`Panel._ctx_label`: the label of a slider row, of a half row and of a
+  fader) and from **every analyzer meter** (`band.select`'s menu; a
+  label a page draws by itself, the band ◀ ▶ and the load buttons open
+  nothing). It reads the table, never the MIDI adapter, so it is the
+  same with `[midi] enabled = false`. Under the id and the "modulated:"
+  line it lists what is bound: each of the preset's desk rows as glyph
+  and Akai's name ("K2 (track knob 2)", "B16 (▲) · step +3"), each route
+  in the router's words ("R height pushes +0.45", "(off)" when
+  disabled), each session row dim ("S8 (track fader 8) · invariant", "…
+  · global layer"). Then the items. **Learn desk** — wherever a desk row
+  can go (`ui_routing.desk_target`: not a file path, not SHIFT's own
+  param), device or no device. **Learn hand ▸ left / right** — only with
+  a tracker, on a param a hand can drive, for the sides the rig's axes
+  have. While this param is armed: the hint in red and **Cancel learn**.
+  **Unbind** — drawn only when it would remove something: a plain item
+  when the param has desk rows or routes, a submenu ("desk — K2", "route
+  — R height, LFO 1", "both") when it has both; it removes the preset's
+  desk rows and every route on the param, whatever drives it, as one
+  undo step (`Learn.unbind`), and never a session row. Then the hand
+  rows' "Gate: … ▸" and "Route a lane here…". "Unbind hand" and the
+  "performed by …" line are gone. Shown by tests that answer the popup
+  and by fed right-clicks; never opened with a real one (hand checks 64,
+  68).
+- **A learn listens to one source** (plan 17 WP2; decision register
+  rows 60–62). A learn armed as "Learn hand ▸ left" can be completed
+  only by an axis of the left hand: the right hand may move freely, and
+  a knob, button or fader touched meanwhile does its own job. A learn
+  armed as "Learn desk" can be completed only by the desk — a knob, a
+  button, or a click on the on-screen desk — and no hand. **The
+  session's controls work through an armed desk learn**: a fader moves
+  its param, SHIFT latches, TAP taps, a preset pad loads its preset,
+  OVERDUB goes home, the clip-stop bar saves, and the learn stays armed
+  (to land, after a preset pad, in the preset just loaded). With SHIFT
+  latched, any other control is refused — "K2 (track knob 2) is on the
+  global layer (the session's) — latch SHIFT off to learn into the
+  preset" — and swallowed, **and the learn stays armed**: unlatch SHIFT
+  and the same learn lands. A learn that lands on a control says what
+  let go ("learned view.bright ← D3 (device knob 3) (into the preset);
+  K1 let go"). The row-making is `Learn.learn_control`, in `learn.py`,
+  so a click makes the same row with no MIDI adapter at all. Synthetic
+  hands and fake ports only (hand checks 65–67).
 - **Learn and the ROUTING page write into the loaded preset** (plan 13
-  §3.3). Right-click → Learn, then a knob: a preset-layer row; then a
+  §3.3). Right-click → Learn desk, then a knob: a preset-layer row;
+  right-click → Learn hand ▸ left / right, then that
   hand: a route naming the axis that moved, `hand:right.pitch` (decision
   register row 20: hand routes are addressed by name, so a rig that
   reorders `[hands] dofs` keeps every preset on its axes; a name the rig
-  lacks is dormant; the Replace / Keep prompt as ever). With SHIFT latched,
-  or on an invariant control, a knob learn is refused and the reason shows
-  on the SYSTEM page's learn line and the ROUTING head. The ROUTING page is
+  lacks is dormant; the Replace / Keep prompt as ever). **What that
+  route is** (plan 18 WP3; decision register rows 52, 53): until plan 18
+  it was always "positions" — the hand was the param's fader end to end,
+  and the param's own setting was ignored while the hand was in. Now a
+  tilt, or a hand moving sideways or in (an axis whose "Centred" is on),
+  lands "pushes +0.25": it adds to the setting, a quarter of the throw
+  over the hand's whole travel, and nothing while level. Height (rests
+  at the bottom) pushes the same way onto a range centred on zero (a
+  rotation rate, a camera angle, a pan, the hue) and is still the fader
+  on anything else (brightness, a mix, speed). A toggle, a list, a
+  trigger or a whole-number param keeps the fader from any axis. The
+  0.25 is **Learn depth** (`hands.learn_depth`, 0.05–1, on the HANDS
+  page under "feel & calibration" after Catch; a session setting, saved
+  with the show and with a hands setup); changing it changes only the
+  next learn. Measured on a synthetic palm: a learned roll on
+  `rot.rate.XY` set at 1× read 0× when level and ±66.56× at the ends
+  before, and reads 1× when level and −15.64× … +17.64× now
+  (`docs/plans/assets/18-hand-and-knob-feel/learn-default.txt`). A
+  learn takes the axis's other routes with it, pushes and positions
+  alike, switched on or off — on a factory preset that is the preset's
+  own row on that axis — and the learn line says "moved from …"; one ⌘Z
+  puts them back. Learning the same axis onto the same param again only
+  refreshes the pinch: it never changes a row's op or depth. Rows that
+  exist and every preset file are untouched; nothing is refused or
+  flagged, a rate under a hand included. No real hand has felt it (hand
+  checks 75–77). With SHIFT latched
+  a knob learn is refused and stays armed (above); the reason shows in
+  the footer for 4 s on every page and, with "— still learning <id>", on
+  the SYSTEM page's learn line and the ROUTING head. The ROUTING page is
   one page over the loaded preset — head (the preset, its dot, save /
   as…, the layer, said "desk layer: preset" or "desk layer: global"), routes, the desk with its dark controls, the macros
   and their subscribers, the session's MIDI rows read-only. Nothing there
   writes `bindings.json`; the preset's dirty dot shows the edit until a
   save (the head, the PRESETS strip, ⇧F). Right-click → Unbind removes
-  the loaded preset's desk rows on the param, and refuses a session row
-  the way Learn does. A route's `scale` is a session param only (the
+  the loaded preset's desk rows on the param and its routes (above), and
+  is not offered where only a session row is bound. **The page has a
+  filter** (plan 17 WP5; decision register row 63): one field on the
+  counts line, left of `+ route`. While it holds text only the lines
+  that say every typed word are drawn, in all four sections — a route by
+  its sentence ("R roll pushes …"), its source, its target and the
+  target's label; a desk, dark or session line by its glyph, Akai's
+  name, its source and (when mapped) its target and label; a macro by
+  its id, its label and its subscribers, drawn whole. Case does not
+  matter; a word is matched anywhere in those strings, raw addresses
+  included, so "lfo 1" also finds LFO 2 (`lfo:1`). The counts read "4 of
+  176 rows" in red and a × beside the field clears it; a section with
+  nothing to show says "no row matches". A line a widget is in use on
+  stays until the widget is let go. The filter is UI state — no param,
+  not saved, no undo step, empty at launch — and **a preset load leaves
+  it**; only emptying it, its × and a click on a desk control clear it.
+  A row added while it is set (`+ route`, "Route a lane here…", a Learn)
+  shows only if it matches. Nobody has typed in the field in the real
+  window (hand check 71). A click on a desk control scrolls the rows —
+  their own child, never the page — to that control's line and frames it
+  while it is picked (`ui_routing.goto`). A route's `scale` is a session param only (the
   drive fader; decision register row 18 (a)); a route may perform a
   session param, marked "session" on its row (row 19 (a)).
+- **The hands' interaction box** (plan 18 WP1; decision register rows
+  50, 51). A hand counts only while its palm is inside a box: three
+  ranges in the Leap's millimetres (x across, y up, z toward the
+  performer; the origin is the camera), one box for both hands, x the
+  same distance either side of the camera. A hand the tracker sees
+  outside it is **absent to everything**: its axes read nothing, so
+  every route on them lets go and the settings return that frame, its
+  pinch switches drop, its presence lane and note go off, its ghost
+  fades. Before plan 18 "in the box" was only the tracker's confidence,
+  so a hand reaching for the APC40, or a passer-by's, performed.
+  - *Setting it.* The HANDS page's **calibrate 20 s** sweep sets it,
+    with each axis's range: the box is where the palms went (2nd–98th
+    percentile, both hands together) plus 40 mm, the margin that lets a
+    hand hold an axis at its end stop. A direction is bounded only if
+    one hand travelled more than 12 cm along it; otherwise it is left
+    open and the note says so ("box: x open (not swept)"). **The box is
+    off for the whole sweep** (or it could never be swept wider), so
+    any hand in view then performs and is counted: calibrate with
+    nobody else in view. **reset ranges** opens the box and puts every
+    range back to its default. There is no other control: no switch, no
+    sliders, no dragging; the file can be edited by hand.
+  - *The edge.* A hand that is in stays in until its palm is 15 mm past
+    a face; one that is out comes in only inside the face. The state is
+    the palm's own, kept through a frame the confidence floor drops. A
+    hand coming back in is caught and glided onto over Catch, like one
+    the tracker lost.
+  - *The file.* `hands.json`, schema `hyperspace.hands/2`: `"axes"` as
+    before and `"box": {"x": [lo, hi], "y": [lo, hi], "z": null}` — a
+    `null` coordinate is open, a `null` or missing `box` is no box. A
+    schema-1 file (no box) is read as it is and **never rewritten at
+    launch**; the first time a sweep or "reset ranges" rewrites it, it
+    is first copied beside itself as `hands.json.bak-v1` (a dated name
+    if that is taken; nothing there is overwritten; a copy that cannot
+    be made is said in the note and the save goes on). A pair that is
+    not two finite numbers with lo < hi opens that coordinate and says
+    so once on stderr: a bad box opens, it never hides the hands.
+  - *The page.* Inside the same 190 × 92 frame as before:
+
+    ```
+       the box from above (x across, z down)            height
+     ┌──────────────────────────────────────────────┐   ┌──┐
+     │                                              │   │  │
+     │      ┌──────────────────────────────┐        │   │┬ │  y hi
+     │      │                              │        │   ││ │
+     │      │     ●            ●           │    ○   │   │● │  right hand
+     │      │   left    ·    right         │        │   │● │  left hand
+     │      │        (camera)              │        │   ││ │
+     │      └──────────────────────────────┘        │   │┴ │  y lo
+     │                  performer                   │   │  │
+     └──────────────────────────────────────────────┘   └──┘
+            inner rectangle: the box's x and z            bracket: the box's y
+            ● in the box      ○ tracked, outside it (hollow, dim)
+    ```
+
+    The view from above is 174 px wide at a fixed scale (x over
+    ±260 mm, z over ±160 mm) and the gauge maps 80–400 mm; a box wider
+    than the scale has its faces drawn clamped just inside the frame,
+    with an outside hand's ring kept clear of them. With no box there
+    is no rectangle and no bracket. The status line shows each hand as
+    `●` in the box, `◌` tracked but outside it, `○` not seen; under the
+    selected axis's range a line gives the box's three ranges, or "box
+    open"; the box view's tooltip says the same.
+  - Never seen by a camera: synthetic hands, a hidden-window picture
+    (`docs/plans/assets/18-hand-and-knob-feel/box-hands-page.png`) and a
+    headless transcript (`box-demo.txt`). Hand checks 72–74.
 - **The home folder** (`~/Hyperspace`). `bindings.json` holds only the
   session's controls — keys, pad, the invariant and global-layer MIDI
   rows; the routes, the preset layer and the macros are the presets'
@@ -1029,6 +1298,12 @@ unreadable at a party.
   switch one off, keep it with `"enabled": false`. Since plan 16 the
   home also holds `windows.json`, where the two windows were at the last
   quit (§2.5): machine-specific, like `last_show`, and safe to delete.
+  Since plan 18, `hands.json` (the hands' calibrated ranges) also holds
+  the interaction box and is schema 2; launching does not rewrite an
+  older one, and the first sweep or "reset ranges" that does keeps it
+  beside itself as `hands.json.bak-v1`. A show now also saves
+  `desk.slew` (knob smoothing) and `hands.learn_depth` with its session
+  values.
 - **The trash** (plan 15 WP1; `library.to_trash`). The home's layout
   gains `trash/<group>/<slug>.<YYYYMMDD-HHMMSS>.json`: a **user** preset
   file as it was, copied there before a save overwrites it or a delete
@@ -1073,8 +1348,20 @@ unreadable at a party.
 - **The footer** (`Panel._footer`), on every page: the frame rate; one
   **message slot**; `dim 40%` (or `dim black`) in the warning colour
   while the master dim is under full, so a dark picture is never a
-  mystery; the show's name and dirty mark, flush right. The message
-  slot (plan 15 WP1; `Panel._message`) shows the newest of three lines
+  mystery; the show's name and dirty mark, flush right. Since plan 17
+  the slot also carries the learn: what the last learn or unbind did
+  ("unbound view.speed from K2 (track knob 2) and R height pushes
+  +0.45"), a refusal in the warning colour, each for the same 4 s; and
+  when nothing newer is up, **an armed learn's line in red** — "learning
+  camera.zoom — move the left hand… (click to cancel)", a click on it
+  cancels — or **a picked desk control's** — "D3 picked (20 s): click a
+  param to put it here (click to let go)", a click on it lets go. The
+  words in brackets are on the line where they fit and on its hover
+  otherwise; the desk learn's hint is cut at the control size ("turn a
+  knob or press a button on th…")
+  (`tests/test_ui_shell.py::test_the_footer_says_what_a_learn_waits_for_and_what_it_did`,
+  `::test_the_footer_says_what_is_picked_and_a_click_lets_go`). The message
+  slot (plan 15 WP1; `Panel._message`) shows the newest of its lines
   for 4 s after it changes (`ui.MESSAGE_S`): the undo's status ("undid
   Brightness 2.00× → 2.96×", "redid load FACES", "nothing to undo"),
   the library's status ("show: party starts on TUMBLE", "saved TRIP 2 →
@@ -1200,7 +1487,9 @@ the keys: hand checks 48–52.
 ## 6. Testing
 
 `uv run pytest` — 1121 tests and 1 skipped (the hands tape, until one is
-recorded) on `plan-15-integration` with plan 15 whole, about 70 s. `ruff`
+recorded) on `plan-15-integration` with plan 15 whole, about 70 s; 1276
+and the same 1 skipped on `plan-18-integration` (plans 16, 17 and 18),
+about 85 s. `ruff`
 is the linter. Every test runs with `HYPERSPACE_HOME` pointed at its own
 `tmp_path` (`tests/conftest.py`), so no test can touch `~/Hyperspace`.
 What holds what:
@@ -1260,6 +1549,20 @@ What holds what:
   by the one before it (`tests/conftest.py`), and `HYPERSPACE_HOME` is
   set in `os.environ` itself, so a test that calls `monkeypatch.undo()`
   cannot fall back to the real home.
+- **Learn, Unbind and the desk** (plan 17): what a learn accepts, the
+  one road onto the desk, the refusals that leave it armed, Unbind by
+  kind and as one step, pick-then-param (`tests/test_learn.py`); one
+  hand, a fresh baseline on a re-arm, no hand on a desk learn
+  (`tests/test_hands.py`); a knob through a hand learn and the invariant
+  controls through a desk learn (`tests/test_midi.py`,
+  `tests/test_desk.py::test_the_clip_stop_row_is_invariant`); the menu's
+  lines and items, the label and the meters, the footer's learn and pick
+  lines, the dimmed page and the click on a param
+  (`tests/test_ui_shell.py`); the desk's room, labels, click and timeout
+  (`tests/test_ui_desk.py`); the filter and `goto`
+  (`tests/test_ui_routing.py`). Where these click, right-click or type,
+  the event is fed to imgui by the test at the rect the item was drawn
+  at; no test moves a real mouse.
 - **Boundaries**: the core never imports `midi` / `bridge` / `dream`
   (`tests/test_params.py:286`, `tests/test_bridge.py:381`,
   `tests/test_dream.py:55`); `hands/core.py`, `hands/signal.py`, `lfo.py`,
@@ -1340,6 +1643,14 @@ same PR; when it changes behaviour, the line here does.
   and by nobody at the rig. Group L of the hand checks (58–63); check 61
   is the first time window placement meets a second screen. Rows 45–49
   of `DECISION-REGISTER.md` wait the same way as 34–44.
+- **Plan 17 at the machine**: one Unbind, Learn desk / hand, the menu
+  on labels and meters, the big clickable desk and the ROUTING filter
+  have been shown by tests with fed mouse and keyboard events, pictures
+  from a hidden window and scripted launches on a laptop. Nobody has
+  clicked, right-clicked or typed in the real control window, no APC40
+  has been learned onto or mapped by a click, and no real hand has
+  completed a hand learn. Group M of the hand checks (64–71, after check
+  72). Rows 57–64 of `DECISION-REGISTER.md` wait the same way.
 - **The trim** (plan 06): decided 2026-09-28 — the per-band AUTO / MANUAL
   switch, built in plan 11 WP15; the oracle was not re-frozen.
 - **First real capture on this machine.** Every live path is code-complete;

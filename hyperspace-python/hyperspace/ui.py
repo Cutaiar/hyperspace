@@ -33,7 +33,7 @@ from collections.abc import Callable
 
 from imgui_bundle import imgui
 
-from . import ui_bands, ui_desk, ui_fx, ui_lfo, ui_lookback, ui_presets, ui_routing
+from . import apc40, learn, ui_bands, ui_desk, ui_fx, ui_lfo, ui_lookback, ui_presets, ui_routing
 from .analyzer import N_MAX
 from .audio import AudioEngine
 from .bands import CEIL, KNEE
@@ -61,6 +61,7 @@ PIN_HOLD = 0.5
 
 # the panel: a rail of pages on the left, the page beside it, a footer
 MESSAGE_S = 4.0  # how long the footer's message slot shows a line after it changes
+CANCEL_TIP = "click to cancel"  # the footer's armed-learn line: on it where it fits, and on hover
 PANEL_W = 540   # leaves the cheat sheet its column in the control window (app.CONTROL_SIZE)
 RAIL_W = 112
 LABEL_W = 104    # the label column in a _row
@@ -324,7 +325,7 @@ CHEATSHEET = [
     ("LT / RT", "4D depth out / in"),
     ("view/menu", "panel / this sheet"),
     # any control ↔ any MIDI message, through the registry (midi.py)
-    ("right-click", "a control: MIDI learn / unbind"),
+    ("right-click", "a control: learn desk / hand · unbind"),
     # the APC40's glyphs, as the desk above and the ROUTING rows print them
     ("APC40", "K D knobs · S faders · G row·col · B ⇧"),
 ]
@@ -380,7 +381,7 @@ class Panel:
         self.pin_out = [0.0] * N_MAX
         self.open = True
         self.cheatsheet = False     # off at every launch; / brings it up (plan 16 WP1)
-        self.desk = True            # the APC40, bottom-left; above the sheet when it shows
+        self.desk = True            # the APC40, left of the panel; the whole window without it
         self.page = 1               # index into PAGES; the view page opens first
         self.ghosts = 0             # ghost markers drawn this frame (tests read it)
         self._file_dialog = None
@@ -424,9 +425,10 @@ class Panel:
                  lambda: self.desk,
                  lambda on: setattr(self, "desk", bool(on)), group="ui",
                  persist=False, modulatable=False,
-                 tip="The APC40 drawn bottom-left of this window (above the cheat sheet "
-                     "when that shows): the controls the layer that is up maps lit, "
-                     "each with the glyph the ROUTING rows print.")
+                 tip="The APC40 drawn left of the panel: the controls the layer that is "
+                     "up maps lit, each with the glyph the ROUTING rows print. Hide the "
+                     "panel (H, or the desk's big chip) and it fills the window, every lit "
+                     "control named.")
         r.enum("ui.page", "Page", lambda: self.page,
                lambda i: setattr(self, "page", int(i)), [lb for _, lb, _ in PAGES],
                group="ui", persist=False, modulatable=False,
@@ -443,40 +445,203 @@ class Panel:
         pills all set ``ui.page``), so each gets its own popup. `extra`,
         when given, is called inside the popup after the param's own items
         to draw the caller's (a bank slot's "put preset here…")."""
-        if not imgui.begin_popup_context_item(f"##ctx.{a.id}{key}"):
+        if getattr(self, "_picking", False):    # a desk control is picked: the click is its
+            self._ctx_pick(a)
+            return
+        if not imgui.begin_popup_context_item(self._ctx_id(a, key)):
             return
         _micro(a.id, DIM)
         p = self._real(a)
         if p.modulated:
             imgui.text_disabled(f"modulated: {self._mod_text(p)}")
-            who = self._performer(p)
-            if who:
-                imgui.text_disabled(who)
-        # the MIDI row on it, whatever Learn there is
-        m, lrn = self.midi, self.learn
-        b = m.binding_for(a.id) if m is not None else None
-        if b is not None and (lrn is None or lrn.learning != a.id):
-            imgui.text(b.describe())
-        # Learn is the host's, not the MIDI adapter's: a hand completes it
-        # with no MIDI at all, a knob with the message it sends
+        lrn = self.learn
+        desk, routes = self._ctx_lines(a, p)    # what is bound here, a line each
+        # Learn is the host's, not the MIDI adapter's, and it says what it
+        # waits for (plan 17 WP2): the desk, or one hand — nothing else can
+        # complete it
         if lrn is None:
             imgui.text_disabled("no learn")
         elif lrn.learning == a.id:
             imgui.text_colored(RED, self._learn_hint())
             if imgui.menu_item_simple("Cancel learn"):
                 lrn.arm(None)
-        elif imgui.menu_item_simple("Learn"):
-            lrn.arm(a.id)
-        if b is not None and imgui.menu_item_simple("Unbind"):
-            m.unbind(a.id)
-        ui_hands.ctx_rows(self, p)      # the hand rows on it — a learn lands on the real param — and Unbind
+        else:
+            self._ctx_learn(a, p)
+        if lrn is not None:
+            self._ctx_unbind(a, p, desk, routes)
+        ui_hands.ctx_rows(self, p, lines=False)     # the hand rows' "Gate: … ▸"
         ui_routing.ctx_item(self, a)    # "Route a lane here…" — the routing matrix
         if extra is not None:
             extra()
         imgui.end_popup()
 
+    def _ctx_pick(self, a: Param) -> None:
+        """"Click a control, then a param" (plan 17 WP4, fork 3): while a
+        desk control is picked the page is drawn disabled (`_draw`) and
+        this stands in for the menu on every param widget, and on a
+        row's label (`_ctx_label`). The item under the mouse — hover is
+        asked with `allow_when_disabled` — gets the learn's red frame, and
+        a left click on it puts the picked control there:
+        `Learn.map_picked`, the knob learn's road. The widget itself takes
+        no click: it is disabled. A param no desk control can go on
+        (`_desk_target`) is not a target; and no click maps until the
+        mouse has left the spot of the click that picked (`ui_desk.armed`)."""
+        if not self._desk_target(a) \
+                or not imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
+            return
+        c = ui_desk.picked(self)
+        if c is None or self.learn is None or not ui_desk.armed(self):
+            return
+        self._frame_item()
+        imgui.set_tooltip(f"click: put {c.glyph} on {a.label or a.id}")
+        if imgui.is_mouse_clicked(0):
+            self.learn.map_picked(a.id, apc40)
+
+    @staticmethod
+    def _ctx_id(a: Param, key: str = "") -> str:
+        """The menu's popup id: one per drawn param (and `key`)."""
+        return f"##ctx.{a.id}{key}"
+
+    def _ctx_label(self, a: Param) -> None:
+        """The last item — a row's label — opens the param's menu too
+        (plan 17 WP3): the label is where the name is, and where a hand
+        lands when it means "this control". Only the opening: the popup
+        itself is drawn by the `_ctx` of the widget beside it, so the two
+        calls must sit in one id scope (the same window, the same
+        `push_id`) to name the same popup. While a desk control is picked
+        the label is the pick's target like the widget (`_ctx_pick`)."""
+        if getattr(self, "_picking", False):
+            self._ctx_pick(a)
+            return
+        imgui.open_popup_on_item_click(self._ctx_id(a), imgui.PopupFlags_.mouse_button_right)
+
+    @staticmethod
+    def _desk_target(a: Param) -> bool:
+        """Can a desk control be put on this param? The rule "Learn desk"
+        is offered by (plan 17 WP3: Learn only where it can act) — the one
+        ROUTING's desk rows offer their targets by (`ui_routing.desk_target`)."""
+        return ui_routing.desk_target(a)
+
+    def _table(self):
+        """The live binding table — the router's, else the learn object's —
+        never the MIDI adapter's: the menu reads and edits the table with
+        or without one (plan 17 WP1). None on a panel with neither."""
+        router = ui_routing.router_of(self)
+        if router is not None:
+            return router.table
+        return getattr(self.learn, "table", None)
+
+    def _row_name(self, b) -> str:
+        """A row in the menu's and the message's words: a desk row by its
+        control ("K1 (track knob 1)": the glyph, then Akai's name), a route
+        as the router describes it ("R height positions")."""
+        table = self._table()
+        if b.is_midi:
+            named = apc40.named(b.source) if getattr(table, "profile", None) == "apc40" else None
+            return named or b.describe()
+        router = ui_routing.router_of(self)
+        return router.describe(b) if router is not None else b.describe()
+
+    def _route_source(self, b) -> str:
+        """A route's source alone, in its adapter's words ("R height",
+        "LFO 1"), for the Unbind submenu."""
+        router = ui_routing.router_of(self)
+        if router is not None:
+            scheme, i = router.lane(b.source)
+            names = router.labels.get(scheme) or []
+            if 0 <= i < len(names):
+                return names[i]
+        return b.source
+
+    def _ctx_lines(self, a: Param, p: Param) -> tuple[list, list]:
+        """The menu's lines, one per thing bound to the param, read from
+        the table: the loaded preset's desk rows, the routes ("(off)" when
+        disabled; the hand rows through hands/panel.py), then the session's
+        rows, dim — those are never an item (D5, D6). Returns (the desk
+        rows, the routes) an Unbind would remove."""
+        table = self._table()
+        if table is None:
+            return [], []
+        # the same question `Learn.unbind` asks, so the lines are what it removes
+        desk, routes, session = learn.bound(table, (a.id, p.id))
+        for b in desk:
+            op = "" if b.op in ("abs", "rel") else f" · {ui_routing._op_text(b)}"
+            imgui.text(self._row_name(b) + op)
+        ui_hands.ctx_rows(self, p, gate=False)
+        for b in routes:                # ctx_rows drew the hand's rows on the real param
+            if b.scheme != "hand" or b.target != p.id or self.router is None:
+                imgui.text(self._row_name(b) + ("" if b.enabled else " (off)"))
+        for b in session:
+            where = "global layer" if b.layer == "global" else "invariant"
+            imgui.text_disabled(f"{self._row_name(b)} · {where}")
+        return desk, routes
+
+    def _ctx_unbind(self, a: Param, p: Param, desk: list, routes: list) -> None:
+        """The one Unbind (plan 17 WP1): drawn only when it would remove
+        something — a plain item with one kind bound, a submenu (desk /
+        route / both) with both. `Learn.unbind` does it: one undo step, the
+        loaded preset edited, no file written."""
+        if not desk and not routes:
+            return
+        ids, lrn = (a.id, p.id), self.learn
+        if not (desk and routes):
+            if imgui.menu_item_simple("Unbind"):
+                lrn.unbind(ids, name=self._row_name)
+            return
+        if not imgui.begin_menu("Unbind"):
+            return
+        table = self._table()
+        glyphs = ", ".join(ui_routing.control_glyph(table, b) for b in desk)
+        sources = ", ".join(self._route_source(b) for b in routes)
+        if imgui.menu_item_simple(f"desk — {glyphs}"):
+            lrn.unbind(ids, routes=False, name=self._row_name)
+        if imgui.menu_item_simple(f"route — {sources}"):
+            lrn.unbind(ids, desk=False, name=self._row_name)
+        if imgui.menu_item_simple("both"):
+            lrn.unbind(ids, name=self._row_name)
+        imgui.end_menu()
+
+    def _ctx_learn(self, a: Param, p: Param) -> None:
+        """The Learn items of a param not armed (plan 17 WP2, fork 5).
+        **Learn desk**: wherever a desk row can go — not a file path, not
+        SHIFT's own param (what `ui_routing._desk_targets` leaves out) —
+        with or without a MIDI adapter. **Learn hand ▸ left / right**: only
+        with a tracker, on a param a hand can drive (the real one is
+        modulatable), for the sides the rig's axes have."""
+        lrn = self.learn
+        if self._desk_target(a) and imgui.menu_item_simple("Learn desk"):
+            lrn.arm(a.id, "desk")
+        sides = self._hand_sides() if p.modulatable else []
+        if sides and imgui.begin_menu("Learn hand"):
+            for side in sides:
+                if imgui.menu_item_simple(side):
+                    lrn.arm(a.id, f"hand:{side}")
+            imgui.end_menu()
+
+    def _hand_sides(self) -> list[str]:
+        """The hands this rig's axes belong to, left first; none without a
+        tracker."""
+        axes = getattr(self.hands, "axes", None) or []
+        return [s for s in ("left", "right") if any(getattr(x, "side", None) == s for x in axes)]
+
     def _learn_hint(self) -> str:
-        """What can complete the armed learn on this rig."""
+        """What the armed learn waits for (its `want`, plan 17 WP2), in the
+        words the menu, the footer, ROUTING and SYSTEM all print. A bare
+        learn (`want` None) waits for whatever this rig has."""
+        want = getattr(self.learn, "want", None)
+        if want == "desk":
+            # a click on the on-screen desk completes it once the desk is
+            # clickable (plan 17 WP4: `ui_desk.click`)
+            knob, click = self.midi is not None, hasattr(ui_desk, "click")
+            if knob and click:
+                return "turn a knob or press a button on the desk, or click one on the diagram…"
+            if knob:
+                return "turn a knob or press a button on the desk…"
+            if click:
+                return "click a control on the desk diagram…"
+            return "nothing to learn from (no MIDI)"
+        if want in ("hand:left", "hand:right"):
+            return f"move the {want.partition(':')[2]} hand…"
         knob, hand = self.midi is not None, self.hands is not None
         if knob and hand:
             return "move a control or a hand…"
@@ -490,6 +655,12 @@ class Panel:
         """Red outline around the last item while it is armed to learn."""
         if self.learn is None or self.learn.learning != p.id:
             return
+        self._frame_item()
+
+    @staticmethod
+    def _frame_item() -> None:
+        """The learn's red outline around the last item (armed to learn;
+        the target of a picked desk control)."""
         r0, r1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
         dl = imgui.get_window_draw_list()
         dl.add_rect(
@@ -675,6 +846,7 @@ class Panel:
         imgui.set_cursor_pos_y(y0 + drop)
         _micro(a.label)
         self._tip(a)
+        self._ctx_label(a)      # the label opens the menu the fader's `_ctx` draws
         if show_tag:
             imgui.same_line(0, 0)
             imgui.set_cursor_pos_y(y0 + drop)
@@ -766,6 +938,7 @@ class Panel:
         """A labelled compact slider: label in a column, slider beside it."""
         p = self.reg[pid]
         self._label_cell(p.label if label is None else label, width=label_w)
+        self._ctx_label(p)      # the label opens the menu the slider's `_ctx` draws
         return self._slider(pid, width)
 
     def half(self, pid: str, label: str | None = None, label_w: float = HALF_LABEL_W) -> bool:
@@ -889,11 +1062,13 @@ class Panel:
         imgui.begin("##cheatsheet", None, flags)
         col = max(_readout_width(key) for key, _ in CHEATSHEET)
         x0 = imgui.get_cursor_pos_x()
+        right = 0.0
         for key, action in CHEATSHEET:
             imgui.set_cursor_pos_x(x0 + col - _readout_width(key))
             _readout(key, RED)
             imgui.same_line(x0 + col + 14)
             imgui.text_colored(DIM, action)
+            right = max(right, imgui.get_item_rect_max().x)
         # the desk sits above it (ui_desk). The height is taken from the
         # rows just laid out, not `get_window_height()`: on the sheet's
         # first frame the window has no size yet, and the desk would be
@@ -901,6 +1076,9 @@ class Panel:
         style = imgui.get_style()
         self._sheet_h = (imgui.get_cursor_pos_y() - style.item_spacing.y
                          + style.window_padding.y)
+        # …and its width the same way: with the panel hidden the desk
+        # sits beside the sheet (ui_desk.room, plan 17 WP4)
+        self._sheet_w = right - imgui.get_window_pos().x + style.window_padding.x
         imgui.end()
         imgui.pop_style_var()
 
@@ -969,8 +1147,11 @@ class Panel:
             if imgui.is_item_hovered():
                 lo, hi = a.edges(i)
                 imgui.set_tooltip(f"{name} {lo:.0f}–{hi:.0f} Hz{self._lane_plane(i)}")
-            if i == 0:
-                self._ctx(self.reg["band.select"])
+            # every meter has the menu (plan 17 WP3), each under its own
+            # key — the key the rail's pills use — so no two popups share
+            # an id with each other or with the band combo's on a page
+            self._ctx(self.reg["band.select"], f".{i}")
+            self._learn_frame(self.reg["band.select"])   # armed from a meter: framed on it
         # band tags, centred under their bars, in the micro face
         imgui.push_font(_FONTS["micro"], FONT_MICRO)
         for i, name in enumerate(a.band_names):
@@ -997,6 +1178,7 @@ class Panel:
         # Replace / Keep, its own window, before anything can return: a
         # held hand learn is never parked behind a hidden or collapsed panel
         ui_routing.modal(self)
+        ui_desk.tick(self)      # a picked control lets go by itself (ui_desk.PICK_S)
         if self.cheatsheet:
             self._draw_cheatsheet()
         if getattr(self, "desk", True):     # (a Panel from before a hot reload)
@@ -1010,6 +1192,9 @@ class Panel:
         imgui.set_next_window_size(imgui.ImVec2(PANEL_W, io.display_size.y - 24),
                                    imgui.Cond_.once)
         opened, self.open = imgui.begin("CONTROLS", self.open)
+        # where the panel is: the desk takes the room left of it (ui_desk.room;
+        # drawn before the panel, it reads this next frame)
+        self._panel_x = imgui.get_window_pos().x
         if not opened:
             imgui.end()
             return
@@ -1021,7 +1206,21 @@ class Panel:
         # the page: a child so its own scroll, if it ever needs one, never
         # moves the rail; every page is laid out to fit without it
         if imgui.begin_child("##page", imgui.ImVec2(0, -foot)):
-            getattr(self, f"_page_{PAGE_KEYS[self.page]}")(dt)
+            key = PAGE_KEYS[self.page]
+            # a desk control is picked and can be mapped (plan 17 WP4): the
+            # page is drawn disabled — dimmed, no widget takes a click — and
+            # the click on a param is `_ctx_pick`'s. Never ROUTING: there the
+            # picked control's own line is what the user came for. The rail
+            # and the footer are outside it: pages change, the line lets go
+            self._picking = key != "routing" and ui_desk.picking(self) is not None
+            if self._picking:
+                imgui.begin_disabled()
+            try:
+                getattr(self, f"_page_{key}")(dt)
+            finally:
+                if self._picking:
+                    imgui.end_disabled()
+                self._picking = False
         imgui.end_child()
         self._footer(fps)
         imgui.end()
@@ -1072,23 +1271,31 @@ class Panel:
         it last saw; its first look only remembers them, so a launch says
         nothing. The undo's line is keyed by `said_at` too: the same
         words said again ("nothing to undo") show again; so is a library
-        line set through `Library.say`, by its count (plan 15 WP4)."""
+        line set through `Library.say`, by its count (plan 15 WP4).
+
+        The learn's line is the fourth (plan 17 WP2): what the last learn
+        or unbind did (`Learn.last`), in the warning colour when it was a
+        refusal — so a refusal is seen on every page — keyed by the
+        learn's count of things said, so the same refusal twice shows
+        twice. `_msg["key"]` names whose line is up."""
         now = time.monotonic() if now is None else now
         st = self.__dict__.setdefault(     # (a Panel from before a hot reload has none)
             "_msg", {"seen": None, "text": "", "warn": False, "at": -MESSAGE_S})
-        u, lib = getattr(self, "undo", None), self.library
+        u, lib, lrn = getattr(self, "undo", None), self.library, getattr(self, "learn", None)
         said = getattr(lib, "said", None) or {}
         cur = {"status": (getattr(lib, "status", "") or "", said.get("status", 0)),
                "warning": (getattr(lib, "warning", "") or "", said.get("warning", 0)),
-               "undo": (getattr(u, "status", "") or "", getattr(u, "said_at", 0.0))}
+               "undo": (getattr(u, "status", "") or "", getattr(u, "said_at", 0.0)),
+               "learn": (getattr(lrn, "last", "") or "", getattr(lrn, "said_n", 0))}
         seen, st["seen"] = st["seen"], cur
         if seen is not None:
-            for key in ("status", "warning", "undo"):      # the later wins a tie
-                text, was = cur[key][0], seen[key]
+            for key in ("status", "warning", "undo", "learn"):   # the later wins a tie
+                text, was = cur[key][0], seen.get(key, cur[key])  # (no such key before a reload)
                 if not isinstance(was, tuple):             # remembered before a hot reload
                     was = (was, cur[key][1])
                 if cur[key] != was and text:
-                    st.update(text=text, warn=key == "warning", at=now)
+                    warn = key == "warning" or (key == "learn" and getattr(lrn, "refused", False))
+                    st.update(text=text, warn=warn, at=now, key=key)
         return (st["text"], st["warn"]) if now - st["at"] < MESSAGE_S else ("", False)
 
     def _footer_room(self) -> float:
@@ -1111,14 +1318,43 @@ class Panel:
         imgui.text_colored(FAINT, f"{fps:5.1f} FPS")
         imgui.pop_font()
         note, warn = self._message()
+        color = WARN if warn else FAINT
+        # an armed learn has the slot, on every page (plan 17 WP2): what it
+        # waits for, in red, and a click on it cancels. Any line just said —
+        # a refusal that left it armed, a library warning, an undo — shows
+        # first, for its MESSAGE_S
+        lrn = self.learn
+        armed = lrn is not None and bool(getattr(lrn, "learning", None))
+        tip = ""
+        # a picked desk control has it the same way (plan 17 WP4): what is
+        # picked, the seconds until it lets go by itself, and a click on the
+        # line lets go at once. Whatever the slot held when the pick was
+        # first seen here was said before it and gives way; a line said
+        # after it (a refusal, an undo) shows first, as for a learn
+        pick = None if armed else ui_desk.footer_line(self)
+        if pick is not None and ui_desk.first_sight(self):
+            note, self._msg["at"] = "", -MESSAGE_S
+        picked_line = False         # is the slot's line the pick's own?
+        if armed and not note:      # a fresh line (a refusal, a warning, an undo) shows first
+            note, color, tip = f"learning {lrn.learning} — {self._learn_hint()}", RED, CANCEL_TIP
+        elif pick is not None and not note:
+            note, color, tip = pick[0], RED if pick[1] else DIM, ui_desk.LET_GO_TIP
+            picked_line = True
         if note:
             # the message slot: one faint line (a warning in its colour),
             # cut to the room left of the show's name; the whole on hover
             imgui.same_line()
-            imgui.text_colored(WARN if warn else FAINT,
-                               fit_text(f"·  {note}", self._footer_room()))
+            room = self._footer_room()
+            line = f"·  {note}"
+            if tip and imgui.calc_text_size(f"{line} ({tip})").x <= room:
+                line = f"{line} ({tip})"     # said on the line where there is room for it
+            imgui.text_colored(color, fit_text(line, room))
             if imgui.is_item_hovered():
-                imgui.set_tooltip(note)
+                imgui.set_tooltip(f"{note} ({tip})" if tip else note)
+            if armed and imgui.is_item_clicked():
+                lrn.arm(None)
+            elif picked_line and imgui.is_item_clicked():
+                ui_desk.let_go(self)
         elif self.reloader is not None and self.reloader.status:
             imgui.same_line()
             imgui.text_disabled(f"·  {self.reloader.status}")
@@ -1434,6 +1670,8 @@ class Panel:
         self._stall_status()
         imgui.spacing()
         self._section("midi")
+        if "desk.slew" in self.reg:     # knob smoothing (a registry with no table lacks it)
+            self._row("desk.slew")
         self._midi_status()
         self._learn_status()
         imgui.spacing()
@@ -1547,12 +1785,14 @@ class Panel:
         lrn = self.learn
         if lrn is None:
             return
-        if lrn.learning:
+        refused = getattr(lrn, "refused", False)
+        if lrn.learning and not (refused and lrn.last):
             imgui.text_colored(RED, f"learning {lrn.learning} — {self._learn_hint()}")
         elif lrn.last:
-            if getattr(lrn, "refused", False):
+            if refused:         # (a refusal leaves the learn armed, plan 17 fork 6: say both)
+                still = f" — still learning {lrn.learning}" if lrn.learning else ""
                 imgui.push_style_color(imgui.Col_.text, WARN)
-                imgui.text_wrapped(f"learn: {lrn.last}")
+                imgui.text_wrapped(f"learn: {lrn.last}{still}")
                 imgui.pop_style_color()
             else:
                 imgui.text_disabled(f"learn: {lrn.last}")

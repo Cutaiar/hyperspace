@@ -168,5 +168,20 @@ def test_a_learn_knows_a_numbered_row_is_the_same_axis(app):
     app.learn.learn_source("hand:right.y")
     assert old not in app.table.bindings                          # moved: one axis, one param
     assert app.table.owner("view.bright").source == "hand:right.y"
+    assert app.learn.last.endswith("(into the preset; moved from fx.mix)")
+    # plan 18 WP3: the same holds whatever the numbered row's op — a
+    # numbered push keeps its op and depth through a learn by name, and
+    # moves like any other row of the axis
+    push = app.table.add(Binding("hand:3", "view.speed", "push", 0.4))   # left.roll, by number
+    app.learn.arm("view.speed")
+    app.learn.learn_source("hand:left.roll", when="hand:left.pinch.index", centred=True)
+    assert app.learn.pending is None and app.table.owner("view.speed") is push
+    assert (push.op, push.value, push.when) == ("push", 0.4, "hand:left.pinch.index")
+    app.learn.arm("camera.yaw")
+    app.learn.learn_source("hand:left.roll", centred=True, depth=0.25)
+    assert push not in app.table.bindings
+    yaw = app.table.owner("camera.yaw")
+    assert (yaw.source, yaw.op, yaw.value) == ("hand:left.roll", "push", 0.25)
+    assert app.learn.last.endswith("(into the preset; moved from view.speed)")
     assert app.learn.same_source("hand:7", "hand:right.y")
     assert not app.learn.same_source("hand:right.nosuch", "hand:-1")

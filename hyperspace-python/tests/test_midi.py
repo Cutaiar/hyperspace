@@ -451,6 +451,68 @@ def test_a_hand_learn_reaches_the_shared_learn_object(rig):
     assert "learned view.inst_amp" in m.learner.last
 
 
+# ------------------------------------- plan 17 WP2: a learn listens to one source
+
+def test_a_knob_bump_during_a_hand_learn_does_its_own_job(rig):
+    """Armed for a hand ("Learn hand ▸ left"), the desk is not listening
+    for the learn: K1 turns and Brightness moves, a pad toggles its param,
+    the learn is still armed and no row was added or replaced (plan 17 §1
+    row 2: it used to take the param, or kill the learn)."""
+    m, lrn, bright = rig.midi, rig.midi.learner, rig.reg["view.bright"]
+    for x in m.bindings:
+        x.pickup = False
+    rows = [(b.to_json(), b.layer) for b in m.table.bindings]
+    lrn.arm("view.depth4", "hand:left")
+    push(rig, cc(0x30, 20))
+    low = bright.norm
+    push(rig, cc(0x30, 110))
+    assert bright.norm > low and bright.norm == pytest.approx(110 / 127, abs=0.02)
+    lines = rig.view.lines
+    pad = next(b for b in m.table.desk() if b.target == "view.lines" and b.kind == "note")
+    push(rig, note(pad.number, channel=pad.channel or 0), note(pad.number, 0, channel=pad.channel or 0))
+    assert rig.view.lines != lines
+    assert lrn.learning == "view.depth4" and lrn.want == "hand:left" and not lrn.refused
+    assert [(b.to_json(), b.layer) for b in m.table.bindings] == rows
+    # the hand then completes it; the knob had no part in it
+    lrn.learn_source("hand:left.roll")
+    assert lrn.learning is None and m.table.owner("view.depth4").source == "hand:left.roll"
+    assert not any(b.target == "view.depth4" and b.is_midi for b in m.table.desk())
+
+
+def test_an_invariant_control_works_through_a_desk_learn(rig):
+    """Fork 6: armed for the desk, an invariant control is not a candidate
+    — it does its one job. A fader moves its param, SHIFT latches (and
+    latches back), TAP taps, and the learn is still armed, unrefused, the
+    table untouched; a release is never a candidate; then a knob the
+    preset may map lands it, and that message is not dispatched."""
+    m, lrn, reg = rig.midi, rig.midi.learner, rig.reg
+    for x in m.bindings:
+        x.pickup = False
+    rows = [(b.to_json(), b.layer) for b in m.table.bindings]
+    lrn.arm("view.depth4", "desk")
+    post = reg["band.2.post"]
+    push(rig, cc(apc40.CC_FADER, 0, channel=2))              # S3: a fader's jitter
+    low = post.norm
+    push(rig, cc(apc40.CC_FADER, 127, channel=2))
+    assert post.norm > low
+    assert lrn.learning == "view.depth4" and not lrn.refused and lrn.last == ""
+    shift(rig)                                               # SHIFT latches through it
+    assert m.table.layer == "global" and lrn.learning == "view.depth4"
+    shift(rig)
+    assert m.table.layer == "preset" and lrn.learning == "view.depth4"
+    taps = len(rig.clock.taps)
+    tap = next(b for b in m.table.midi() if b.target == "tempo.tap" and b.layer is None)
+    push(rig, note(tap.number, channel=tap.channel or 0), note(tap.number, 0, channel=tap.channel or 0))
+    assert lrn.learning == "view.depth4" and len(rig.clock.taps) == taps + 1
+    assert [(b.to_json(), b.layer) for b in m.table.bindings] == rows
+    depth4, bright = reg["view.depth4"].norm, reg["view.bright"].norm
+    push(rig, cc(0x30, 100))                                 # K1: the preset's to map
+    assert lrn.learning is None and "learned view.depth4 ← K1 (track knob 1)" in lrn.last
+    assert "B16" not in lrn.last                             # Brightness keeps its buttons
+    assert reg["view.depth4"].norm == depth4 and reg["view.bright"].norm == bright
+    assert [b.source for b in m.table.desk() if b.target == "view.depth4"] == ["cc:0:48"]
+
+
 # ---------------------------------------------------------------- map file
 
 def test_map_round_trips_json(tmp_path):
@@ -782,3 +844,396 @@ def test_the_bar_lights_while_held_and_the_new_slots_pad_blinks(rig):
     assert [leds(rig, STOP, k, mark)[-1] for k in range(8)] == [2] * 8
     at(40.65 + midi.BLINK_S, note(STOP, 0, channel=0))
     assert [leds(rig, STOP, k, mark)[-1] for k in range(8)] == [0] * 8
+
+
+# ------------------------------------------- plan 18 WP2: knob smoothing
+
+TICK = 1 / 64               # a frame, exact in binary: so are the sums below
+GLIDE = 0.125               # desk.slew for these tests: eight frames
+K_MIX = 0x33                # track knob 4 on the preset layer: view.pattern_mix, 100 detents
+
+
+def slew_rig(rig, seconds=GLIDE):
+    """The rig with a clock the test moves and smoothing on: `at(t, …)`
+    sets the clock and polls with the messages; one poll at t = 0 is made."""
+    t = [0.0]
+    rig.midi.clock = lambda: t[0]
+    rig.reg["desk.slew"].set(seconds)
+
+    def at(seconds, *msgs):
+        t[0] = seconds
+        push(rig, *msgs)
+    at(0.0)
+    return at
+
+
+def rings(rig, ccn=K_MIX, channel=0):
+    return [m.value for m in rig.out.sent
+            if m.type == "control_change" and m.control == ccn and m.channel == channel]
+
+
+def test_smoothing_is_off_by_default_and_every_write_is_immediate(rig):
+    """A bare table has `slew` 0 (the app sets its own default,
+    tests/test_app_boundary.py): a CC lands on its detent in the poll that
+    reads it and no glide is ever made."""
+    from hyperspace import routing
+
+    slew, mix = rig.reg["desk.slew"], rig.reg["view.pattern_mix"]
+    assert Bindings().slew == 0.0 and rig.midi.table.slew == 0.0
+    assert slew.value == 0.0 and slew.text() == "off" and not slew.modulatable
+    assert (slew.lo, slew.hi, slew.persist) == (0.0, routing.SLEW_MAX_S, True)
+    slew.set(9.0)                                   # clamped to the maximum
+    assert rig.midi.table.slew == routing.SLEW_MAX_S and slew.text() == "250 ms"
+    slew.set(0.0)
+    for v in (100, 3, 64):
+        push(rig, cc(K_MIX, v))
+        assert mix.position() == round(v / 127 * 100) and mix.norm == mix.position() / 100
+        assert rig.midi._slews == {}
+    rig.midi.poll()
+    assert rig.midi._slews == {}
+
+
+def test_a_smoothed_knob_arrives_in_a_straight_line_and_rests_on_the_detent(rig):
+    """One message, eight frames: the base moves on every poll, by the same
+    amount each time, between detents on the way, and on the poll GLIDE
+    after the message it is exactly what `set_norm(u)` gives — the detent."""
+    mix = rig.reg["view.pattern_mix"]
+    mix.set_norm(0.0)
+    at = slew_rig(rig)
+    at(TICK, cc(K_MIX, 90))                        # the message: lands at TICK + GLIDE
+    seen = [mix.norm]
+    for k in range(2, 9):
+        at(k * TICK)
+        seen.append(mix.norm)
+    # a straight line from the previous poll (t = 0) to the landing
+    span, target = TICK + GLIDE, round(90 / 127 * 100) / 100
+    assert seen == pytest.approx([target * k * TICK / span for k in range(1, 9)], abs=1e-12)
+    steps = [b - a for a, b in zip([0.0, *seen], seen, strict=False)]
+    assert all(s == pytest.approx(steps[0], abs=1e-12) and s > 0 for s in steps)
+    assert sum(abs(u * 100 - round(u * 100)) > 0.01 for u in seen) >= 6   # between detents
+    assert "view.pattern_mix" in rig.midi._slews
+    at(9 * TICK)                                    # GLIDE after the message: the landing
+    landed = mix.value
+    assert rig.midi._slews == {} and mix.position() == 71 and mix.norm == 0.71
+    mix.set_norm(90 / 127)                          # the write smoothing-off makes
+    assert mix.value == landed
+    at(10 * TICK)
+    assert mix.value == landed                      # and it rests
+
+
+def test_a_glide_starts_on_the_frame_of_the_message(rig):
+    """No dead frame: the poll that reads the message already moved the
+    base — the line starts at the previous poll, and after a long gap
+    between polls no further back than 50 ms."""
+    from hyperspace import midi
+
+    mix = rig.reg["view.pattern_mix"]
+    mix.set_norm(0.0)
+    at = slew_rig(rig)
+    at(TICK, cc(K_MIX, 127))
+    assert mix.norm == pytest.approx(TICK / (TICK + GLIDE)) and mix.norm > 0.1
+    for k in range(2, 10):
+        at(k * TICK)
+    assert mix.norm == 1.0
+    at(5.0, cc(K_MIX, 0))                          # the last poll was seconds ago
+    assert midi.SLEW_BACK_S == 0.05
+    assert 1.0 - mix.norm == pytest.approx(0.05 / (0.05 + GLIDE))
+
+
+def test_a_new_message_re_aims_the_glide_from_where_it_is(rig):
+    """A turn is many messages: each re-aims the one glide from where the
+    base has got to — no jump back to an old target, no jump on to the new
+    one — and it lands GLIDE after the last. A second control on the same
+    param re-aims the same glide: one per param."""
+    mix = rig.reg["view.pattern_mix"]
+    mix.set_norm(0.0)
+    rig.midi.table.add(Binding("cc:0:60", "view.pattern_mix", "abs", layer="preset",
+                               pickup=False))
+    at = slew_rig(rig)
+    at(TICK, cc(K_MIX, 127))
+    at(2 * TICK)
+    at(3 * TICK)
+    up = mix.norm
+    assert 0.3 < up < 0.4
+    at(4 * TICK, cc(K_MIX, 0))                     # turned back: from here, downward
+    assert 0.0 < mix.norm < up and up - mix.norm < 0.1
+    s = rig.midi._slews["view.pattern_mix"]
+    assert s.target == 0.0 and s.t_end == 4 * TICK + GLIDE
+    at(5 * TICK, cc(60, 127))                      # the other control takes the same glide
+    assert list(rig.midi._slews) == ["view.pattern_mix"]
+    assert rig.midi._slews["view.pattern_mix"] is s and s.target == 1.0
+    assert s.t_end == 5 * TICK + GLIDE
+    low = mix.norm
+    for k in range(6, 13):
+        at(k * TICK)
+        assert mix.norm > low
+        low = mix.norm
+    at(13 * TICK)                                   # GLIDE after the last message
+    assert mix.norm == 1.0 and rig.midi._slews == {}
+
+
+def test_the_ring_shows_where_the_knob_is_going(rig):
+    """During a glide the ring CC is the knob's own target — the message a
+    desk without smoothing sends, on the same poll — never the base in
+    flight, so `_rebase` leaves the encoder where the hand has it. The
+    whole turn's ring messages are the ones smoothing-off sends."""
+    mix = rig.reg["view.pattern_mix"]
+    b = next(x for x in rig.midi.bindings if x.target == "view.pattern_mix")
+    turn = [70, 71, 73, 76, 80, 90, 127, 126, 64, 63, 0]
+
+    def play(seconds):
+        mix.set_norm(0.0)
+        at = slew_rig(rig, seconds)
+        rig.out.sent.clear()
+        hw = []
+        for k, v in enumerate(turn, start=1):
+            at(k * TICK, cc(K_MIX, v))
+            hw.append((b.caught, b.last_hw))
+        for k in range(len(turn) + 1, len(turn) + 12):
+            at(k * TICK)
+        return rings(rig), hw, mix.value
+
+    off = play(0.0)
+    rig.out.sent.clear()
+    mix.set_norm(0.0)
+    at = slew_rig(rig)
+    rig.out.sent.clear()
+    at(TICK, cc(K_MIX, 90))                        # one message, looked at closely
+    target = round(round(90 / 127 * 100) / 100 * 127)
+    assert rings(rig) == [target] and mix.norm < 0.2          # the ring is ahead of the base
+    assert b.caught and b.last_hw == target / 127             # the knob's own position
+    for k in range(2, 12):
+        at(k * TICK)
+    assert rings(rig) == [target]                             # nothing more: no lagging value
+    on = play(GLIDE)
+    assert on == off and len(on[0]) >= 8
+    assert all(caught for caught, _hw in on[1])
+
+
+def test_the_ring_a_glide_shows_is_the_ring_after_the_write(rig):
+    """`_landing` is the norm `set_norm` leaves, bit for bit, on every
+    continuous param at every 7-bit value — tapered, logarithmic, wrapped
+    — so the ring sent ahead of a glide is the ring sent after the write."""
+    n = 0
+    for p in rig.reg:
+        if p.kind is not Kind.CONTINUOUS or p.integer or p.alias:
+            continue
+        keep = p.base
+        for v in range(128):
+            want = MidiIO._landing(p, v / 127)
+            p.set_norm(v / 127)
+            assert p.norm == want, (p.id, v)
+            n += 1
+        p.set(keep)
+    assert n > 128 * 100
+
+
+def test_a_fader_keeps_its_catch_through_a_glide_and_an_uncaught_one_writes_nothing(rig):
+    """Soft pickup is unchanged: the glide's own writes are the adapter's
+    (`_note_written`), so `_uncatch_moved` never reads them as "moved
+    without us" and a caught fader stays caught while its value arrives;
+    a fader that has not reached its param's value starts no glide."""
+    dim, gain = rig.reg["output.dim"], rig.reg["master.gain"]
+    x = next(b for b in rig.midi.bindings if b.source == f"cc:0:{apc40.CC_XFADE}")
+    m = next(b for b in rig.midi.bindings if b.target == "master.gain")
+    push(rig, cc(apc40.CC_XFADE, 127))             # brought up to the value: caught
+    assert x.caught and x.pickup and dim.value == 1.0
+    at = slew_rig(rig)
+    at(TICK, cc(apc40.CC_XFADE, 0))
+    seen = []
+    for k in range(2, 9):
+        at(k * TICK)
+        seen.append(dim.norm)
+        assert x.caught, k
+    assert seen == sorted(seen, reverse=True) and 0.0 < seen[-1] < seen[0] < 1.0
+    at(9 * TICK)
+    assert dim.value == 0.0 and x.caught and rig.midi._slews == {}
+    at(10 * TICK, cc(apc40.CC_XFADE, 64))          # still caught: it follows, gliding
+    assert x.caught and 0.0 < dim.norm < 0.2
+    # master.gain's fader has not been brought to its value: nothing
+    was = gain.value
+    assert m.pickup and not m.caught
+    far = 0 if gain.norm > 0.5 else 127
+    at(11 * TICK, cc(apc40.CC_MASTER, far))
+    assert not m.caught and gain.value == was and "master.gain" not in rig.midi._slews
+    for k in range(12, 24):
+        at(k * TICK)
+    assert gain.value == was and dim.norm == round(64 / 127 * 100) / 100
+
+
+def test_someone_elses_write_stops_a_glide(rig):
+    """The panel, a key, an undo: a write the adapter did not make ends
+    the glide the next poll, and that value stands."""
+    mix = rig.reg["view.pattern_mix"]
+    mix.set_norm(0.0)
+    at = slew_rig(rig)
+    at(TICK, cc(K_MIX, 127))
+    at(2 * TICK)
+    assert 0.0 < mix.norm < 1.0 and rig.midi._slews
+    mix.set(mix._value_of_norm(0.6234))             # someone else, between detents
+    theirs = mix.value
+    for k in range(3, 14):
+        at(k * TICK)
+        assert mix.value == theirs and rig.midi._slews == {}
+    # and the knob takes it again from there (the ring re-based it)
+    at(14 * TICK, cc(K_MIX, 0))
+    assert mix.norm < 0.6234 and rig.midi._slews
+
+
+def test_buttons_relative_knobs_and_discrete_targets_are_not_smoothed(rig):
+    """With smoothing on: the cue knob (`rel`) and a `rel64` encoder step
+    detents at once, a note `set` lands at once, and an `abs` row on an
+    enum, on a toggle and on an integer param (`view.instances`: its steps
+    are the integers) writes the value in the poll that reads it."""
+    reg, t = rig.reg, rig.midi.table
+    for src, target, op in (("cc:0:60", "view.pattern_mix", "rel64"),
+                            ("cc:0:61", "view.shape", "abs"),
+                            ("cc:0:62", "view.faces", "abs"),
+                            ("note:0:120", "view.pattern_mix", "set")):
+        t.add(Binding(src, target, op, value=0.25, layer="preset", pickup=False))
+    assert reg["view.shape"].kind is Kind.ENUM and reg["view.faces"].kind is Kind.TOGGLE
+    assert reg["view.instances"].integer
+    at = slew_rig(rig)
+    mix = reg["view.pattern_mix"]
+    mix.set_norm(0.5)
+    at(TICK)
+    rig.view.shape = 5
+    at(2 * TICK, cc(apc40.CC_CUE, 1))              # rel: the cue knob
+    assert rig.view.shape == 6
+    at(3 * TICK, cc(60, 64 + 3))                   # rel64: three detents
+    assert mix.norm == pytest.approx(0.53)
+    at(4 * TICK, note(120))                         # a note `set`
+    assert mix.value == pytest.approx(0.25)
+    at(5 * TICK, cc(61, 127))                       # abs on an enum
+    assert reg["view.shape"].norm == 1.0
+    faces = reg["view.faces"].value
+    at(6 * TICK, cc(62, 0 if faces else 127))       # abs on a toggle
+    assert reg["view.faces"].value is (not faces)
+    inst = reg["view.instances"]
+    at(7 * TICK, cc(0x32, 127))                     # abs on an integer param
+    assert inst.norm == 1.0 and inst.value == inst.hi
+    assert rig.midi._slews == {}
+
+
+def test_turning_smoothing_off_or_losing_the_port_lands_every_glide(rig):
+    """Both roads out: `desk.slew` set to 0 mid-glide lands every glide on
+    the next poll (`_glide`), and so does the port going away
+    (`_land_all`) — each on the detent the knob was sending it to. A glide
+    someone else has ended is not landed by either."""
+    reg = rig.reg
+    mix, amp, rate = reg["view.pattern_mix"], reg["view.inst_amp"], reg["view.inst_rate"]
+
+    def start(at):
+        for p in (mix, amp, rate):
+            p.set_norm(0.0)
+        at(TICK)
+        at(2 * TICK, cc(K_MIX, 90), cc(0x34, 40), cc(0x35, 127))
+        at(3 * TICK)
+        assert set(rig.midi._slews) == {mix.id, amp.id, rate.id}
+        assert 0 < mix.norm < 0.71 and 0 < amp.norm < 0.31
+        rate.set_norm(0.02)                         # someone else's: stands
+    at = slew_rig(rig)
+    start(at)
+    reg["desk.slew"].set(0.0)
+    at(4 * TICK)
+    assert (mix.norm, amp.norm, rate.norm) == (0.71, 0.31, 0.02) and rig.midi._slews == {}
+    at = slew_rig(rig)
+    start(at)
+    rig.midi.ports.inp = rig.midi.ports.out = None  # the device is gone
+    at(4 * TICK)
+    assert not rig.midi.on
+    assert (mix.norm, amp.norm, rate.norm) == (0.71, 0.31, 0.02) and rig.midi._slews == {}
+
+
+def test_a_glide_on_a_hand_owned_param_moves_the_return_value(rig):
+    """A knob on a param a performer holds is still a scene-setter: the
+    glide writes the base (`Param.set`, then `set_norm`) under a live
+    position-style offset, the effective value stays the performer's all
+    the way, and when the performer leaves the param is where the knob
+    put it. The adapter never calls `Param.modulate`
+    (tests/test_routing_boundary.py pins that for the whole module)."""
+    reg, mix = rig.reg, rig.reg["view.pattern_mix"]
+    mix.set_norm(0.0)
+    at = slew_rig(rig)
+    hand = 0.9                                      # where the hand holds the param
+
+    def perform(t, *msgs):                         # the frame: midi, the performer, apply
+        at(t, *msgs)
+        mix.modulate(hand - mix.norm)               # a position row lands the reading
+        reg.apply()
+
+    perform(TICK)
+    assert mix.modulated and mix.eff_norm == pytest.approx(hand)
+    bases = []
+    perform(2 * TICK, cc(K_MIX, 50))
+    for k in range(3, 10):
+        bases.append(mix.norm)
+        assert mix.modulated and mix.eff_norm == pytest.approx(hand)
+        perform(k * TICK)
+    assert bases == sorted(bases) and len(set(bases)) == len(bases)   # the base glides
+    perform(10 * TICK)
+    assert mix.norm == 0.39 and mix.eff_norm == pytest.approx(hand)
+    assert rig.midi._slews == {}
+    reg.apply()                                     # the hand leaves: the knob's value
+    assert not mix.modulated and mix.value == pytest.approx(0.39)
+
+
+def test_a_param_that_moves_on_its_own_is_written_at_once(rig):
+    """Review of PR #98: `rot.phase.*` is the integrator's angle and moves
+    every frame while its plane turns, so a glide on it would look
+    foreign-written the next poll, be dropped, and never arrive. The first
+    message finds that out (one partial step); from then on the knob
+    writes the phase at once, as with smoothing off. A param that holds
+    still is unaffected."""
+    reg, view = rig.reg, rig.view
+    phase, mix = reg["rot.phase.XY"], reg["view.pattern_mix"]
+    rig.midi.table.add(Binding("cc:0:60", "rot.phase.XY", "abs", layer="preset", pickup=False))
+    at = slew_rig(rig)
+
+    def turning(t, *msgs):                         # the plane turns between polls
+        view.ang[0] += 0.01
+        at(t, *msgs)
+
+    turning(TICK, cc(60, 127))
+    assert "rot.phase.XY" in rig.midi._slews
+    turning(2 * TICK)
+    assert rig.midi._slews == {} and rig.midi._restless == {"rot.phase.XY"}
+    turning(3 * TICK, cc(60, 32))                  # now: where set_norm puts it, this poll
+    landed = phase.value
+    phase.set_norm(32 / 127)
+    assert phase.value == pytest.approx(landed) and rig.midi._slews == {}
+    mix.set_norm(0.0)
+    turning(4 * TICK)                              # (the ring re-bases the knob there)
+    turning(5 * TICK, cc(K_MIX, 127))              # a still param glides as ever
+    assert 0.0 < mix.norm < 1.0 and list(rig.midi._slews) == ["view.pattern_mix"]
+
+
+def test_a_load_from_a_pad_ends_a_glide_before_it_steps(rig):
+    """Review of PR #98: a knob message and a pad that loads a preset in
+    one poll. The load's desk replacement is followed before the glides
+    step, so the glide the knob just aimed is gone and the value the load
+    left stands — even though it equals what the glide last saw."""
+    reg, t = rig.reg, rig.midi.table
+    mix = reg["view.pattern_mix"]
+    mix.set_norm(0.3)
+    reg.trigger("test.load", "Load", lambda: t.set_desk(t.desk()))   # a load that moves nothing
+    t.add(Binding("note:0:121", "test.load", "toggle"))
+    at = slew_rig(rig)
+    at(TICK, cc(K_MIX, 127), note(121))
+    assert mix.norm == 0.3 and rig.midi._slews == {}
+    for k in range(2, 12):
+        at(k * TICK)
+    assert mix.norm == 0.3
+
+
+def test_closing_the_adapter_lands_every_glide(rig):
+    """Review of PR #98: nothing is left between detents when the app
+    quits inside the glide's time."""
+    dim = rig.reg["output.dim"]
+    push(rig, cc(apc40.CC_XFADE, 127))
+    at = slew_rig(rig)
+    at(TICK, cc(apc40.CC_XFADE, 64))
+    at(2 * TICK)
+    assert 0.5 < dim.norm < 1.0
+    rig.midi.close()
+    assert dim.norm == 0.5 and rig.midi._slews == {}
