@@ -714,6 +714,16 @@ onto the desk, the ROUTING filter, and two things about a hand Learn
 left alone. Plan 17 asked you nothing before it was built; its eleven
 forks are these eight rows. They are numbered after plan 18's because
 they were written after them.
+**Rows 65–71 are plan 20's** (PRs #101, #105–#108 and #111), settled
+the same way, each on its plan's recommendation: the faces as an effect
+target — what the picture holds, its size and how it meets a wide screen,
+with a drawing of the frame and of per face against screen — what a
+performer may drive there, the chain view (the chip grid, dragged to
+reorder, with a drawing), re-aiming an effect by the strip's combo, the
+look-back page's sections and labels (the old → new names in brief),
+the dream's "speed", and instance layouts (with a drawing). Plan 20's
+forks F1–F10 are these seven rows. Plan 19 is still being built and
+takes the rows after these.
 
 You also set how the work runs, since nobody will be watching it:
 
@@ -1501,7 +1511,8 @@ real screen, four launches put the windows back where the file said.
 could be the target of a route: a hand, a band or an LFO could change
 it. Changing the layer makes the dream load a different part of the net,
 which is slow. Its two neighbours that also rebuild things, Spacing and
-Resolution, were already closed to routes. This one was found in a sweep
+Resolution (since plan 20: "Echo time apart" and "Look-back detail", row
+69), were already closed to routes. This one was found in a sweep
 of the code, not asked for.
 
 **What the code did.** Layer was an ordinary parameter, so the ROUTING
@@ -1509,7 +1520,7 @@ page offered it as a target. No factory preset routed onto it.
 
 | Option | Trade-off |
 |---|---|
-| **(a) Layer cannot be the target of a route**, like Spacing and Resolution | A performer cannot make the dream reload mid-set. The Layer list on the LOOKBACK page, a preset, a key and a learned knob or button still set it. |
+| **(a) Layer cannot be the target of a route**, like Spacing and Resolution | A performer cannot make the dream reload mid-set. The Layer list on the LOOKBACK page (since plan 20: a row of six chips, "Dream layer" elsewhere; row 69), a preset, a key and a learned knob or button still set it. |
 | (b) Leave it routable | Nothing changes for a preset that already routes onto it. A band on it would reload the net on every swing. |
 
 **Chosen: (a).** Right-clicking Layer now reads "not modulatable", and
@@ -1979,6 +1990,9 @@ words go on a control.
  The picture itself: docs/plans/assets/17-learn-and-the-desk/desk-big.png (and desk-big-global.png under SHIFT).
 ```
 
+(Since plan 20: K5 and K6 read "Field amp" and "Field rate", the
+labels' new names; row 71.)
+
 **What the code did.** The desk was a fixed 380 × 290 picture in the
 bottom-left corner showing only each control's short glyph. What a
 control did was in its hover, one control at a time.
@@ -2377,6 +2391,389 @@ axis-first learn: a click handler on the HANDS page's axis rows calling
 `test_hands.py::test_the_learning_hand_chooses_its_own_thumb` holds the
 pinch rule as it is. Hand check 66.
 
+### 65. P20-a — the faces as an effect target: what the picture holds, its size, and how it meets a wide screen
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** You asked for effects that run on the picture in the
+faces rather than on the whole frame ("faces through FX", your answer of
+2026-10-04). Now each effect is aimed at the **frame**, as before, or at
+the **faces**: the effects aimed at the faces run first, over a square
+picture of what a face shows, and the faces then show that picture,
+**per face** or in **screen** space (`fx.face_map`, "Faces show"). Three
+details were left to the build: what that picture starts from, how big
+it is, and how a square picture meets a wide screen.
+
+```
+ one frame, with an effect aimed at the faces (Renderer._draw_frame)
+
+ ┌ 1  THE FACE PICTURE — only while an effect aimed at the faces is running ───────────┐
+ │    what face 0 shows           the faces' effects, in order       a 1024 × 1024     │
+ │    (the pattern, the bitmap ──▶ Kaleidoscope → Plasma        ──▶ picture, mipmapped │
+ │     over it)                                                                         │
+ └──────────────────────────────────────────────────────────────────────────┬──────────┘
+                                                      handed to the one scene pass below
+ 2  THE SCENE PASS   the faces, showing the picture · the edges · the points ◀┘
+ 3–4  the scene resolved · the faces' cover mask
+ 5–8  the look-back: echoes and dream composited, then the SCENE CAPTURED
+        → the echoes and the dream carry the faces' effects (never the frame's)
+ 9  THE FRAME'S EFFECTS   Hue cycle …   — they run over the faces' effects too
+ 10 the ghost hands     11 the master dim
+
+ nothing aimed at the faces: step 1 does not run, nothing is allocated,
+ and the frame is the one it was, to the bit
+```
+
+```
+ the picture                 per face                           screen
+ (1024 × 1024)               every face carries the whole       the faces are windows onto one
+                             picture; it turns with the shape   picture that stays still while
+ ┌───────────┐                                                  the shape turns across it
+ │ ◢◣    ◢◣  │                  ╱╲         ╱╲
+ │ ◥◤    ◥◤  │                 ╱◢◣╲       ╱◢◣╲               ┌ cropped ─────────────────────┐
+ │    ◢◣     │                 ╲◥◤╱       ╲◥◤╱               │ ◢◣  ╱╲  ◢◣    ◢◣   ╱╲  ◢◣  │
+ │    ◥◤     │                  ╲╱         ╲╱                │ ◥◤ ╱◥◤╲ ◥◤    ◥◤  ╱◥◤╲ ◥◤  │
+ └───────────┘                                                │    ╲◢◣╱          ╲◢◣╱      │
+                                                              │     ╲╱  ◢◣    ◢◣  ╲╱       │
+                                                              └ cropped ─────────────────────┘
+                                                              a 16:9 screen: the square is
+                                                              scaled to the width and about a
+                                                              fifth is cut off top and bottom
+```
+
+**What the code did.** Effects ran only on the whole frame, after the
+look-back. A face computed its pattern and its bitmap for itself, with a
+phase per face (`fid`) in the patterns that use one.
+
+| The detail | Option | Trade-off |
+|---|---|---|
+| What the picture holds | **(a) the whole face: the pattern with the bitmap over it, as face 0 shows them** | One rule — the effects run on what a face shows — with a bitmap, a pattern, both or neither; every bitmap and pattern setting keeps its meaning, and the effects see the bitmap move on its path. **While any effect is aimed at the faces, every face shows face 0's pattern**: the per-face phase is gone (measured on PLAID: up to 23 / 255). |
+| | (b) the bitmap only, the pattern still per face under it | Keeps the per-face phase. With no bitmap loaded there is nothing to show, and the effects never touch the pattern. |
+| | (c) one picture per face | Keeps everything. Up to 720 pictures and 720 effect chains a frame. |
+| How big | (a) 512 × 512 | Free; on a face it could not be told from 1024 in the prototype's renders. |
+| | **(b) 1024 × 1024, a fixed number, not a setting** | About 0.1–0.15 ms a frame for four effects on the faces on the build laptop; under 2× magnified on a 1920-wide output in screen mapping. |
+| | (c) 2048 × 2048 | Several times the cost (the plan measured +0.8 to +0.9 ms) for a difference the renders did not show. |
+| The square picture on a wide screen (screen mapping) | **(a) cover: scaled to the longer side, cropped on the shorter** | Nothing stretches and no face goes dark; at 16:9 about a fifth of the picture is off the top and as much off the bottom. |
+| | (b) stretch | All of it shows; circles become ellipses. |
+| | (c) contain | Bars of nothing at the sides, so faces there go dark. |
+
+**Chosen: the bold option of each.** Things to know:
+
+- **Per face, an effect may read faint.** The faces are drawn at a few
+  percent alpha and overlap. In the build's own renders a strong
+  re-colour (Hue cycle, Kaleidoscope) reads and a subtle one (Double
+  vision, Deconverge, Trip colour, Wobble) is hard to tell from no
+  effect; screen mapping reads clearly. Whether it reads on the glass is
+  the first thing to look at.
+- **The faces' effects are in the scene**, so the echoes and the dream
+  carry them; a frame effect never was in the echoes and still is not.
+- The picture starts from the faces' pattern and bitmap: with the plain
+  FLAT faces and no bitmap it is a mid-grey field, so a warp alone shows
+  nothing there (nothing to bend) and a generator like Plasma does.
+- Faces off, no copies, or the stack bypassed: nothing runs on the
+  faces. The FX page says which.
+- A preset saved before this loads as every effect on the frame and per
+  face; no file was changed and nothing migrates.
+
+**Cost to reverse.** To (b), the bitmap only: the two shader tails and
+the seed, about thirty lines, no setting and no file format. A different
+size: one number (`render.FACE_PIC`), or a setting later that no file
+would need migrating for. Stretch or contain: one line of GLSL in the
+face fragment. Plan 20 WP1 (PR #101) and WP2 (PR #106);
+`test_render.py::test_nothing_aimed_at_the_faces_is_the_old_frame_exactly`,
+`::test_the_face_target_costs_nothing_while_unused`,
+`::test_a_face_effect_changes_the_faces_and_nothing_else`,
+`::test_per_face_turns_with_the_shape_and_screen_stays_still`,
+`::test_screen_mapping_is_a_cover_fit_window_onto_the_picture`,
+`::test_the_echoes_carry_the_faces_effects`,
+`test_fx.py::test_a_preset_without_targets_loads_all_frame`. Hand checks
+91, 92, 93 and 98. **Nobody has seen a face effect on a projector or on
+the glass**: offscreen renders and a scripted launch on a laptop only.
+
+### 66. P20-b — may a performer drive where an effect runs, or how the faces show it?
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** Two new settings: each effect's **target** (frame or
+faces; twelve today, one per effect, all the same question) and the
+faces' **mapping** (per face or screen; one for the whole target). The
+fork is whether a hand, a band or an LFO may drive them, as it may most
+settings.
+
+**What the code did.** Neither existed. An effect's `order`, its other
+"structure" setting, was already closed to performers.
+
+| The setting | Option | Trade-off |
+|---|---|---|
+| An effect's target | **(a) no performer; a knob, a key, the page or a preset sets it** (like `order`) | It is the stack's structure, and the page shows it as structure (the diamond, the second status row). A hand swinging an effect between the frame and the faces would be a flicker, not a move. |
+| | (b) any performer | Allowed for its own sake; every swing re-aims the effect for a frame or two. |
+| The mapping | **(a) any performer** | A pinch that flips per face to screen is a move someone will want. |
+| | (b) no performer | Nothing flips mid-set by accident. |
+
+**Chosen: (a) and (a).** The target's right-click menu says "not
+modulatable", like `order`'s; the mapping's two chips on the FX page
+offer "Route a lane here…" and Learn. While a performer holds the
+mapping, the lit chip is what the faces show and a click sets the base
+under it (the chips' hover names the source).
+
+**Cost to reverse.** One flag each (`fx.declare`); a route onto a
+param that stops being modulatable goes dormant with its hover saying
+why, as the dream's layer did (row 49). Plan 20 WP1 (PR #101);
+`test_fx.py::test_target_is_declared_per_effect_and_is_not_modulatable`,
+`::test_the_map_chips_set_fx_face_map`. Hand check 91.
+
+### 67. P20-c — the chain view: the chip grid, dragged to reorder
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** You asked to see the effects that are on, in order, per
+target, and to reorder them by dragging. The FX page already drew every
+effect as a chip in stack order, three to a row; a list of rows beside
+it did not fit (29 px to spare). So the chip grid **is** the chain view,
+and the drag was added to it.
+
+```
+ FX page, while an effect is aimed at the faces
+
+  [x] Effects  ═══════ mix 1.00
+  frame  Plasma → Hue cycle                          ← what runs on the frame, in order
+  faces  Kaleidoscope → Zoom burst  [per face][screen] ← what runs on the faces; how they show it
+  a preset load resets this stack: save a preset to keep it
+
+  [● Plasma      ][○ Acid        ][◆ Kaleidoscope]    ● on   ○ off      (on the frame)
+  [◆ Zoom burst  ][○ Trip warp   ][○ Wobble      ]    ◆ on   ◇ off      (on the faces)
+  [○ Double vision][○ Deconverge ][○ Fractals    ]
+  [○ Glimmer     ][○ Trip colour ][● Hue cycle   ]
+                                    ▲
+         drag a chip by its NAME and drop it on another: it goes before that one,
+         and a white bar on that chip's left edge says so while you hold it.
+         The right half of the LAST chip's name is "to the end".
+
+  the open strip:  blend [mix ▾]  target [faces ▾]  order [#15]    ← the order slider stays
+```
+
+**What the code did.** Reordering was the open strip's order slider,
+one effect and one number at a time; the status was one line of text.
+
+| Option | Trade-off |
+|---|---|
+| **(a) The chip grid is the list: drag a chip to reorder; two status lines read the running chain per target; a diamond marks a chip aimed at the faces; the order slider stays as the fallback** | Fits (16 px to spare with everything showing). Nothing new to find. "Per target" is two lines of text and a mark, not two lists, and the effects that are off are in the grid too. |
+| (b) Two lists of rows, one per target, only the effects that are on | The roadmap's words. A row per effect is 29 px; four on is 116 px on a page with 29 to spare, so the chip grid — one-click switching of any effect (row 45) — would have to go. |
+| (c) The grid split into two groups, frame and faces | Per target, and re-aiming by drag. About 75 px against 52 available. |
+
+**Chosen: (a).** As built:
+
+- **A drop opens the dragged effect's strip**, by name, and is **one
+  undo step**, "reorder effects". A plain click on a name still only
+  opens it; the dot still only switches.
+- **What a drop moves is the effect you picked up**, by name, even if
+  the stack moved under your hand (a preset from a desk button, an
+  undo).
+- **It rewrites as few orders as it can**: usually only the dragged
+  effect's number changes; with no room between two numbers, the
+  shortest run of neighbours anywhere in the list is renumbered (the
+  plan widened around the dragged effect instead, which a test found
+  rewrites more than it needs). A drop it cannot make sort as asked
+  changes nothing.
+- Three things left: a 2 px gap between a chip's dot and its name takes
+  no drop; the floating name can be cut at the window's right edge; past
+  a hundred effects orders repeat and a drop can be refused.
+
+**Cost to reverse.** Toward (c): the grouping is one loop in
+`ui_fx.page`; `fx.reordered` and the settings stay. The drag itself:
+delete the source and target blocks in `ui_fx._chip`. Plan 20 WP2 (PR
+#106) and WP3 (PR #108); `test_fx.py::test_the_status_reads_per_target`,
+`::test_a_drop_reorders_selects_and_is_one_undo_step`,
+`::test_reordered_always_sorts_to_the_sequence_asked_for`,
+`::test_a_drop_moves_the_effect_the_drag_began_on`,
+`::test_the_order_slider_still_reorders`,
+`::test_the_page_fits_with_the_faces_row_showing`. Hand check 94.
+**Nobody has dragged a chip with a real mouse or trackpad**: the drag
+was driven by imgui events in tests and one hidden-window picture.
+
+### 68. P20-d — moving an effect between the frame and the faces
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** With the chip grid as the chain view (row 67) there are
+not two lists to drag between. The question is how an effect is
+re-aimed.
+
+**What the code did.** There was one target.
+
+| Option | Trade-off |
+|---|---|
+| **(a) The open strip's target combo, between blend and order; a drag changes only order** | One click on the open effect; no new row on the page. Re-aiming is not a gesture on the grid. |
+| (b) A drop target on each status line, so a chip dropped on "faces" re-aims it | Re-aiming by drag. The drop target is a line of text; a dozen lines. |
+
+**Chosen: (a).** A drag never changes a target or a switch. A target
+change, like a map chip, is one undo step.
+
+**Cost to reverse.** (b): a drop target on each status line in
+`ui_fx._faces_row` and the frame line, a dozen lines. Plan 20 WP2 (PR
+#106); `test_fx.py::test_the_strips_target_combo_moves_an_effect_between_chains`,
+`::test_a_drag_never_changes_a_target_or_a_switch`,
+`::test_the_target_and_the_map_are_one_undo_step_each`. Hand check 91.
+
+### 69. P20-e — the look-back page as ECHOES, DREAM and BOTH, and its labels everywhere
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** You found the LOOKBACK page hard to read: "Spacing" did
+not say what it was, and the dream's layer was a list called "net". The
+page is now three sections named for what a knob acts on — **ECHOES**,
+**DREAM**, **BOTH** — every label says what the knob does, and the
+dream's layer is a row of six chips. No setting was added, removed or
+changed, so no file changes and nothing migrates. The fork was whether
+the names the ROUTING page, a Learn's line and the desk diagram use
+change too.
+
+The labels, page → registry (old → new; the full table, with every
+tip's first sentence, is
+`plans/assets/20-fx-dream-looks/lookback-labels.txt`):
+
+| | Page | Registry (ROUTING, Learn, the desk) |
+|---|---|---|
+| ECHOES | brightness · fade time · count · time apart | Echo mix → Echo brightness · Fade → Echo fade time · Echoes → Echo count · **Spacing → Echo time apart** |
+| DREAM | the six layer chips (grain, swirl, blot, 3b, 4c, 4e) · brightness · speed · strength · passes · linger · jitter · scales · hue · saturation · tint · tint from · tint hue · tint sat · the tint | Layer → Dream layer · Dream mix → Dream brightness · Blend k → Dream speed (row 70) · Step size → Dream strength · Steps → Dream passes · Mask decay → Dream linger · Jitter → Dream jitter · Octaves → Dream scales · Hue shift → Dream hue · Saturation → Dream saturation · Tint → Dream tint · Tint from / hue / sat → Dream tint from / hue / sat |
+| BOTH | darken · contrast · shape hides · detail | Darken, Contrast unchanged · **Occlude → Shape hides wake** · **Resolution → Look-back detail** |
+
+**What the code did.** Four sections named for the pipeline
+(*composite*, *chroma*, *history*, *dream worker*), with echo and dream
+knobs mixed, and the page scrolled by a few pixels with the thumbnails
+showing.
+
+| Option | Trade-off |
+|---|---|
+| **(a) The registry's labels change with the page's** | ROUTING, a Learn's line and the desk say the same words as the page, with "Echo …" or "Dream …" in front because they have no section to say it. The old names are gone from every screen. |
+| (b) The page only | The rest still says "Spacing" and "Occlude". |
+
+**Chosen: (a).** Things to know:
+
+- **The six chip names were chosen from the param's tooltip, not by
+  looking at the layers**: grain, swirl and blot are the tooltip's own
+  words for the first three; 3b, 4c and 4e are the ends of the inception
+  layers' names, which the tooltip describes together. Each is one line
+  to rename.
+- Two readouts are shorter than planned, to fit: fade time reads `0.23
+  s` and time apart `33 ms`.
+- The worker's status line is at most three lines; the rest is on its
+  hover.
+- The page fits with the thumbnails showing (26 px to spare at worst,
+  measured over a real renderer with echoes; with a stand-in for the
+  dream worker).
+- A library note still says the old names: `library/dream/wake.json`
+  ("Echo mix, fade, hue and dream mix").
+
+**Cost to reverse.** (b): the registry strings back, in the `dream.*`
+block of `params.build_registry`. A chip's name: one line of
+`ui_lookback.LAYER_CHIPS`. Plan 20 WP4 (PR #105);
+`test_lookback.py::test_no_dream_id_range_default_or_flag_changed`,
+`::test_the_page_has_three_sections_and_every_dream_param_once`,
+`::test_the_layer_is_a_row_of_chips`, `::test_spacing_is_called_time_apart`,
+`::test_the_routing_page_lists_the_new_labels`,
+`test_ui_shell.py::test_the_look_back_page_fits_with_thumbnails`. Hand
+check 95. Nobody has seen the page in the running app.
+
+### 70. P20-f — the dream's "speed" is the blend knob, read in frames
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** You asked for a dream "speed". The transcript is not in
+the repository, so which knob that was is argued from the code. Of the
+four candidates, Spacing and Fade act only on the echoes, not the
+dream; Steps is how hard the dream is pushed, bought with worker time;
+**`dream.k` is the dream's one time constant**: the share of each new
+frame blended into the dream. High, the dream follows the picture
+closely and lets go of what left; low, it lags, lingers and grows deep.
+
+**What the code did.** `dream.k` was on the page as "blend k", reading
+`k 0.050`.
+
+| Option | Trade-off |
+|---|---|
+| **(a) `dream.k`, relabelled "speed" ("Dream speed" in the registry), its readout in frames** | No new setting, no migration, no saved look changes. **Faster is also shallower**: the dream has less time to grow. **It counts the dream worker's frames, not seconds**, so a slower worker is a slower dream. Slow speeds meet the stability guard ("step clamped"). |
+| (b) A new `dream.speed` that moves `k` and scales the strength with it to hold the depth | One knob that only changes speed. A second knob for one quantity, with `k` and the strength still in every preset: which wins on load? |
+| (c) Make `k` per second, as the echoes became in plan 14 | The same dream at any worker rate. Changes the worker and what every saved `k` means: a migration. |
+
+**Chosen: (a).** The readout is how many dream frames it takes a frame's
+share of the dream to halve: "≈23 frames" at the slow (left) end, "≈14
+frames" at the default, and **under ten frames one decimal**: "6.6
+frames", "1.9 frames" at the fast (right) end. The decimal was the
+orchestrator's change after the review: whole frames read "≈2 frames"
+over nearly half the knob's travel. The hover says it is in dream frames
+and that slower than about 17 frames, at the default strength, the
+strength is held back.
+
+**Cost to reverse.** To (b) or a different readout: three strings and
+one format function (`params.dream_speed_text`). (c) is the follow-up if
+the dream feels different on the rig than on the laptop at the same
+number. Plan 20 WP5 (PR #107) and 56e7b0a;
+`test_lookback.py::test_dream_speed_is_dream_k`,
+`::test_the_speed_readout_is_the_half_life_in_frames`. Hand check 96.
+**Nobody has judged the dream at any speed**: no dream worker ran for
+this work, and the speed shot (`lookback-speed.png`) predates the
+decimal.
+
+### 71. P20-g — instance layouts: grid, honeycomb, ring
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** You asked for layouts other than the grid. A new
+setting, **Layout** (`view.inst_layout`: GRID, HEX, RING; default GRID),
+sits in one row under the count on the VIEW page with the field's motion,
+amp and rate. The fork was what HEX and RING mean.
+
+```
+  GRID, 7 (as before)     HEX, 7 and 19 (a honeycomb       RING, 12 (one circle,
+  rows of ⌈√n⌉            spiral from the centre)          neighbours one cell apart)
+
+   ○ ○ ○                        ○ ○ ○                              ○ ○
+   ○ ○ ○                      ○ ● ● ○                          ○         ○
+   ○                        ○ ● ● ● ○                        ○             ○
+                              ○ ● ● ○                        ○             ○
+                                ○ ○ ○                          ○         ○
+                                                                   ○ ○
+                          ● the first 7; at 19 the ring of ○
+                          is added round them, and no copy      copy 0 at the top,
+                          already there moves                   then clockwise
+```
+
+**What the code did.** One layout: rows of ⌈√n⌉, which re-flow whenever
+the number of columns changes.
+
+| The layout | Option | Trade-off |
+|---|---|---|
+| HEX | **(a) a honeycomb spiral from the centre: whole hexagons at 7, 19, 37, 61, 91** | A copy never moves as the count grows; any other count leaves the outer ring part filled. |
+| | (b) today's rows, every other one shifted half a cell | A brick-shaped block that re-flows like the grid. |
+| RING | **(a) one circle** | The shape its name says; a hundred copies is a ring 16 cells across, zoomed out over like a 10 × 10 grid. |
+| | (b) concentric rings | More compact at high counts. |
+
+**Chosen: (a) for both.** GRID is the old arithmetic moved, the same to
+the bit. 0 and 1 copies are the same in every layout. **The three
+motions are unchanged**: each copy's motion still comes from its place,
+so ORBIT sends a wave across a honeycomb and round a ring, and RIPPLE
+makes a ring breathe as one. **One thing to judge: HEX with ORBIT at amp
+0.35 overlaps neighbours visibly** — ORBIT's phase does not step evenly
+on a honeycomb, so neighbours orbit out of step. The motion labels say
+"Field motion", "Field amp", "Field rate" where they said "Grid …"; the
+six rotation rates on the VIEW page are three rows of two, each labelled
+with its plane alone, so a rate a lane drives reads `base → effective`
+whole.
+
+**Cost to reverse.** Either shape: the body of one branch of
+`render.inst_positions`. HEX + ORBIT: the motion block of
+`Renderer.draw_scene` (it is the grid's maths). Plan 20 WP6 (PR #111);
+`test_render.py::test_grid_layout_is_the_frame_it_was`,
+`::test_hex_neighbours_are_one_cell_apart`,
+`::test_ring_is_one_circle_with_neighbours_one_cell_apart`,
+`::test_zero_and_one_are_the_same_in_every_layout`,
+`::test_every_motion_moves_every_layout`,
+`test_params.py::test_inst_layout_is_declared`,
+`test_ui_shell.py::test_the_view_page_fits_with_a_field_in_motion`.
+Hand check 97. Seen as offscreen renders and hidden-window pictures of
+the page; never on the projector.
+
 ---
 
 ## Part B — built on the recommendation without asking; confirm or overturn
@@ -2460,12 +2857,24 @@ Each is built, reviewed and on PR #55. Overturning any is a small follow-up.
   any of it. Check 78 is where row 54's 80 ms is judged, and it leans on
   check 31 (the knobs re-basing from the ring), which has itself never
   been seen on the device.
+- Group **O** (plan 19; checks 81–90) is written by plan 19's docs
+  package.
+- Group **P** (plan 20: an effect aimed at the faces, nothing changed
+  with none, the echoes carrying them, dragging a chip, the look-back
+  page, dream speed, instance layouts, the projector and the glass;
+  checks 91–98, about 30 minutes, the projector and the glass for 98).
+  Rows 65–71 are shown by checks 91, 92, 93 and 98 (row 65), 91 (66 and
+  68), 94 (67), 95 (69), 96 (70) and 97 (71). Nothing in plan 20 has
+  been tried at the rig: **nobody has seen a face effect on a projector
+  or the glass, dragged a chip with a real mouse, or judged the dream at
+  any speed**. Checks 5, 9, 59, 60, 62 and 63 carry notes where plan 20
+  changed what they describe.
 
 ---
 
 ## Answer sheet
 
-Write the letter, or "rec" for the recommendation. Rows 14–17 and 34–64
+Write the letter, or "rec" for the recommendation. Rows 14–17 and 34–71
 take "keep" or "overturn".
 
 | # | Decision | Recommended | Your answer | Note |
@@ -2519,7 +2928,7 @@ take "keep" or "overturn".
 | 46 | P16-b an idle effect's faders | (a) dimmed but live, with a line saying why and "turn on" / "effects on" | built on the recommendation; confirm or overturn | plan 16 WP3 (PR #86); built as a veil over the faders, so their right-click menus stay at full strength; the fader a line names is not dimmed |
 | 47 | P16-c instances to zero | (a) reachable from the slider's left end and K3's bottom | built on the recommendation; confirm or overturn | plan 16 WP5 (PR #90); K3's bottom is nothing drawn, not one copy; a route of yours that pushes both ways on the count can blank the scene for half its cycle; FIELD's top is 69 copies, not 68 |
 | 48 | P16-d where the windows open | a screen number in the config beats the remembered file; written on quit and ⌘R only; fullscreen never remembered; a first launch at full size | built on the recommendation; confirm or overturn | plan 16 WP4 (PR #85) and WP7 (PR #92); `~/Hyperspace/windows.json`, new key `[output] control_monitor`; a screen number with no screen at launch is ignored for the whole run; never run with a second screen |
-| 49 | P16-e the dream's layer | (a) not the target of a route, like Spacing and Resolution | built on the recommendation; confirm or overturn | plan 16 WP5 (PR #90); a route of yours onto it goes dormant with no note at load |
+| 49 | P16-e the dream's layer | (a) not the target of a route, like Spacing and Resolution (since plan 20: Echo time apart and Look-back detail) | built on the recommendation; confirm or overturn | plan 16 WP5 (PR #90); a route of yours onto it goes dormant with no note at load |
 | 50 | P18-a the interaction box | the calibration sweep sets it (where the palms went plus 40 mm); one box for both hands; no switch — "reset ranges" opens it; `hands.json` format 2, an old file never rewritten at launch, one backup | built on the recommendation; confirm or overturn | plan 18 WP1 (PR #94); the box is off for the whole sweep, so calibrate with nobody else in view; a direction is bounded only if one hand travelled over 12 cm along it; never seen by a camera |
 | 51 | P18-b a hand outside the box | absent everywhere, its ghost included; the ghost hands' frame is the box | built on the recommendation; confirm or overturn | plan 18 WP1 (PR #94); the HANDS page alone still shows it, hollow and as `◌` |
 | 52 | P18-c what a hand Learn lands with | a tilt pushes at the Learn depth (0.25, on HANDS under "feel & calibration"); height pushes on a range centred on zero and is the fader elsewhere; a switch, a list or a whole-number count keeps the fader | built on the recommendation; confirm or overturn | plan 18 WP3 (PR #100); existing rows and factory presets untouched; learning the same axis onto the same control again does not tame an old row; the whole-number rule was added by the review; no real hand has felt 0.25 |
@@ -2535,3 +2944,10 @@ take "keep" or "overturn".
 | 62 | P17-f one road onto the desk | (b) in the Learn object; the knob, the click and pick-then-click all use it | built on the recommendation; confirm or overturn | plan 17 WP2 (PR #96) and WP4 (PR #102); a preset's desk can be laid out with no APC40 plugged in |
 | 63 | P17-g the ROUTING filter | (a) cleared only by you and by a click on a desk control; it holds across presets | built on the recommendation; confirm or overturn | plan 17 WP5 (PR #91); a route, a Learn or "+ route" added while it is set can be hidden by it; "lfo 1" also matches LFO 2 (`lfo:1`); nobody has typed in it |
 | 64 | P17-h two things left alone | (a) the other hand's pinch may still gate a hand learn; (a) no "click an axis, then a param" | built on the recommendation; confirm or overturn | plan 17 §6 forks 10 and 11; no code; the second is the fix if the wrong axis of the right hand keeps winning (check 66) |
+| 65 | P20-a the faces as an effect target | the picture is the whole face (pattern and bitmap) as face 0 shows it; 1024 × 1024, a fixed number; cover-fit in screen mapping | built on the recommendation; confirm or overturn | plan 20 WP1 (PR #101) and WP2 (PR #106); while any effect is on the faces every face shows face 0's pattern phase; per face an effect may read faint; the echoes and the dream carry the faces' effects; never seen on a projector or the glass |
+| 66 | P20-b performers on the target and the mapping | an effect's target: no performer (like `order`); the mapping (per face / screen): any performer | built on the recommendation; confirm or overturn | plan 20 WP1 (PR #101) |
+| 67 | P20-c the chain view | (a) the chip grid is the list, dragged by a chip's name; two status rows per target; a diamond for the faces; the order slider stays | built on the recommendation; confirm or overturn | plan 20 WP2 (PR #106) and WP3 (PR #108); a drop opens the dragged effect and is one undo step; the shortest run of numbers is rewritten, not the plan's widening; "to the end" is the right half of the last chip's name; no real mouse has dragged a chip |
+| 68 | P20-d re-aiming an effect | (a) the strip's target combo; a drag changes only order | built on the recommendation; confirm or overturn | plan 20 WP2 (PR #106) |
+| 69 | P20-e the look-back page | ECHOES, DREAM, BOTH; labels that say what a knob does; (a) the registry's labels change too ("Spacing" → "Echo time apart", "Occlude" → "Shape hides wake"); the layer as six chips | built on the recommendation; confirm or overturn | plan 20 WP4 (PR #105); no id, range or file changed; the chip names grain / swirl / blot / 3b / 4c / 4e are from a tooltip, not from looking |
+| 70 | P20-f dream speed | (a) `dream.k` relabelled "speed", read in dream frames | built on the recommendation; confirm or overturn | plan 20 WP5 (PR #107) and 56e7b0a; faster is also shallower; it follows the worker's rate, not seconds; one decimal under ten frames ("1.9 frames"); nobody has judged the dream at any speed |
+| 71 | P20-g instance layouts | (a) HEX a honeycomb spiral, (a) RING one circle; the motions unchanged | built on the recommendation; confirm or overturn | plan 20 WP6 (PR #111); GRID is the frame it was; HEX + ORBIT at amp 0.35 overlaps neighbours; "Grid motion / amp / rate" are "Field …" |

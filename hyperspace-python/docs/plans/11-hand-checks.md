@@ -3,7 +3,7 @@
 Everything only the owner can verify, in the order that costs the least
 time at the machine: laptop alone first, then the APC40, then the camera
 and the box (APC40 still plugged in for check 24), then the projector,
-then IAC + FL Studio, then one back on the laptop, then plans 12 and 13's two, then plan 13's group H (plan 13 is built on `plan-13-integration`), then plan 14's group I and the ghost hands' group J, then plan 15's group K (undo, home, the master dim, save-as on the desk; built on `finish-line`), then plan 16's group L (the cheat sheet off at launch, the FX chips, an idle effect's strip, where the windows open, instances to zero, the dream's layer; checks 58–63, the projector for 61), then plan 17's group M (one Unbind, Learn desk / Learn hand ▸ left / right, the menu on a label and on every meter, the desk big and clickable, the ROUTING filter; checks 64–71, the APC40 for 65, 67 and 70, the camera for 65–67 — run it **after check 72**, which sets the box its hand checks sit in), then plan 18's group N (the interaction box, what a hand Learn lands with, knob smoothing, `hands-orbit`; checks 72–80, the camera for all of it, **calibration first**: check 72 sets the box every later hand check now sits in). Each check: the commands, the config, the preset,
+then IAC + FL Studio, then one back on the laptop, then plans 12 and 13's two, then plan 13's group H (plan 13 is built on `plan-13-integration`), then plan 14's group I and the ghost hands' group J, then plan 15's group K (undo, home, the master dim, save-as on the desk; built on `finish-line`), then plan 16's group L (the cheat sheet off at launch, the FX chips, an idle effect's strip, where the windows open, instances to zero, the dream's layer; checks 58–63, the projector for 61), then plan 17's group M (one Unbind, Learn desk / Learn hand ▸ left / right, the menu on a label and on every meter, the desk big and clickable, the ROUTING filter; checks 64–71, the APC40 for 65, 67 and 70, the camera for 65–67 — run it **after check 72**, which sets the box its hand checks sit in), then plan 18's group N (the interaction box, what a hand Learn lands with, knob smoothing, `hands-orbit`; checks 72–80, the camera for all of it, **calibration first**: check 72 sets the box every later hand check now sits in), then plan 19's group O (checks 81–90, written by plan 19's docs package), then plan 20's group P (effects aimed at the faces, per face or in screen space; dragging an effect's chip to reorder; the look-back page as ECHOES, DREAM and BOTH; dream speed; instance layouts; checks 91–98, the projector and the glass for 98). Each check: the commands, the config, the preset,
 what to do, what a pass and a fail look like, and which audit item or
 code path a fail points at. Where a check can be simulated headless, the
 pytest node or `tools/` command that shows the expected behaviour is
@@ -104,6 +104,11 @@ stack. *Pass:* each F-key lights its four and no other; switching on one
 more effect by hand and pressing the same F-key turns it off again.
 *Fail:* a chip left dark → the preset's values (`preset.party_*_values`,
 generated); a stray chip → a value the preset should name.
+*Plan 20:* an effect is aimed at the frame or at the faces (the combo on
+the open strip's blend row); every factory preset aims every effect at
+the frame, so this check reads as before. The "preset load resets this
+stack" note is one line now. Effects on the faces are check 91; the
+order by drag is check 94.
 
 **6. Cut-through by eye (PR #26; rewritten by plan 14 WP1).**
 Headless: `uv run pytest -q tests/test_lookback.py::test_cut_through_never_cuts_an_opaque_ground tests/test_lookback.py::test_cut_through_still_cuts_in_overlay_mode`.
@@ -186,6 +191,17 @@ the look-back's clock (`Renderer._draw_frame` → `Lookback.tick`); a
 saved look-back preset of yours that looks different → the migration
 (`lookback.migrate_values`; the old file is kept as
 `<file>.bak-v2-frames`).
+*Plan 20:* the LOOKBACK page is three sections, ECHOES, DREAM and BOTH,
+and the knobs named above are relabelled (ids unchanged): Fade is
+**fade time**, Spacing is **time apart**, Echoes is **count**; the
+layer is a row of six chips, `steps` is **passes**, `step` is
+**strength**, `k` is **speed** (read in dream frames), `occlude` is
+**shape hides**; the grade (`hue`, `sat`, `tint`, `tint from`) is under
+DREAM. The history line is the ECHOES section's note ("24 × 67 MS · THE
+TRAIL REACHES 1.60 S" on TRACER). Since plan 20 an effect aimed at the
+faces is in the scene the history captures, so the trail can carry it
+(check 93); one on the frame still never is. The page itself is check
+95; speed is check 96.
 
 ## B. APC40 plugged in — about 15 minutes
 
@@ -1134,6 +1150,13 @@ or on an F-key → `FxState.selected` / `sel_name`; the dot hard to hit
 from where you stand, or hit by mistake when you meant the name → fork
 F1, say so (register row 45); names cut short that matter, or the fourth
 row costing too much of the page → `ui_fx.CHIPS_PER_ROW`.
+*Plan 20:* a chip whose effect is aimed at the faces has a diamond where
+the dot or ring is (filled while on); the name is also what a chip is
+dragged by — a click still only opens it (check 94); dragging the order
+slider is now one of two ways to reorder. The open strip's blend row is
+blend, **target**, order. The "preset load resets this stack" note under
+the status is one line, where plan 16's pictures
+(`assets/16-paper-cuts/`) show two.
 
 **60. An effect that is not running says why (plan 16 WP3, register row 46).**
 Headless: `uv run pytest -q tests/test_fx.py::test_an_off_effects_strip_says_so_and_turn_on_switches_it_on tests/test_fx.py::test_a_bypassed_stack_says_so_on_the_strip tests/test_fx.py::test_the_idle_strips_controls_stay_live`.
@@ -1152,6 +1175,10 @@ wrong reason → `ui_fx.why_idle`; the faders dead while dimmed → the
 strip was disabled, not dimmed (fork F2); a dimmed menu → the veil is
 being drawn over a popup (`ui_fx._dim`); the page scrolling → the line's
 row, `tests/test_fx.py::test_the_page_fits_with_the_tightest_strip_idle`.
+*Plan 20:* one more reason, after "off" and before "bypassed": an effect
+aimed at the faces while Faces is off reads "aimed at the faces, and
+Faces is off" with a **faces on** chip (check 91;
+`tests/test_fx.py::test_why_idle_names_faces_off`).
 
 **61. The windows open where you left them (projector; plan 16 WP4, register row 48).**
 Headless: `uv run pytest -q tests/test_placement.py tests/test_app_boundary.py::test_the_windows_open_where_placement_says tests/test_app_boundary.py::test_the_exits_save_the_windowed_rects tests/test_app_boundary.py::test_a_config_screen_that_cannot_be_used_is_minus_one_and_one_note tests/test_config.py::test_a_screen_that_is_not_a_number_is_minus_one_and_a_note`.
@@ -1213,6 +1240,11 @@ blanking with a low hand → the row's rest
 (`tests/test_plan12_presets.py`). Not a fail, and for you to know: a
 route of your own that pushes both ways (an LFO onto Instances with the
 count at 1) now blanks the scene for half its cycle.
+*Plan 20:* above one copy the VIEW page shows one field row under the
+count — layout, motion and, while moving, amp and rate — and 0 and 1
+copy are the same in every layout (check 97). With an effect aimed at
+the faces, the FX page's faces row reads "(no copies to show them)" at
+0.
 
 **63. The dream's layer cannot be performed (plan 16 WP5, register row 49).**
 Headless: `uv run pytest -q tests/test_lookback.py::test_dream_params_declared tests/test_lookback.py::test_a_route_on_the_dream_layer_is_dormant`.
@@ -1225,6 +1257,10 @@ row is still listed on the ROUTING page and does nothing; hovering its
 target says "dream.layer is not modulatable — the row is dormant", and
 nothing says so when the preset loads. *Fail:* a route offered or listed → the flag on
 `dream.layer` (`params.py`).
+*Plan 20:* the Layer combo is now a row of six chips in the LOOKBACK
+page's DREAM section (right-click any of them for the menu), and the
+param is called "Dream layer" on ROUTING and in a Learn's line (check
+95).
 
 ## M. Plan 17 — Learn, Unbind and seeing the desk — added 2026-10-04
 
@@ -1670,6 +1706,192 @@ the version where the two hands turn the scene between them needs a new
 axis and was not built (register row 56). Press R with a hand in the
 box and say whether the camera resets (a review suspected it does not;
 headless it did). If the preset is not wanted, hide it (plan 19).
+
+## O. Plan 19 — written by plan 19's docs package
+
+## P. Plan 20 — the faces as an effect target, the chain view, the look-back page, layouts — added 2026-10-04
+
+Run on `finish-line` once plan 20 is merged into it (PRs #101 the face
+target, #106 the FX page, #108 drag to reorder, #105 the look-back page,
+#107 dream speed, #111 instance layouts). Laptop first (91–97), then the
+projector (98). About 30 minutes. First, headless:
+`uv run pytest -q tests/test_fx.py tests/test_render.py tests/test_lookback.py tests/test_ui_shell.py`.
+No config change. None of this has been tried by a person: it was shown
+by tests (offscreen frames, and the panel driven by imgui events a test
+feeds it), offscreen and hidden-window renders, and scripted launches on
+a laptop (`20-fx-dream-looks.md` §7). **Nobody has seen a face effect on
+a projector or the glass, dragged a chip with a real mouse, or judged
+the dream at any speed.** Decision register rows 65–71 are the calls
+these checks let you confirm or overturn.
+
+**91. An effect aimed at the faces (plan 20 WP1, WP2; register rows 65, 66, 68).**
+Headless: `uv run pytest -q tests/test_render.py::test_a_face_effect_changes_the_faces_and_nothing_else tests/test_render.py::test_per_face_turns_with_the_shape_and_screen_stays_still tests/test_render.py::test_screen_mapping_is_a_cover_fit_window_onto_the_picture tests/test_fx.py::test_the_status_reads_per_target tests/test_fx.py::test_the_strips_target_combo_moves_an_effect_between_chains tests/test_fx.py::test_a_chip_aimed_at_the_faces_is_marked tests/test_fx.py::test_why_idle_names_faces_off`.
+F2 (FACES). On the BITMAP page load any picture. FX page: the status
+under "Effects" is one line, as before. Open Kaleidoscope, switch it on
+(its dot), and on the strip's blend row set the combo between blend and
+order from `frame` to `faces`. *Pass:* the wireframe is no longer
+folded and the picture inside every face is; the status is now two
+rows, `frame  …` and `faces  Kaleidoscope`, the second ending in two
+chips, **per face** (lit) and **screen**; Kaleidoscope's chip has a
+filled **diamond** where the dot was (switch it off: an outlined
+diamond), and its hover says "on the faces". Click **screen**: the faces
+become windows onto one folded picture that stays put, upright, while
+the shape turns across it. Back to **per face**: it turns with the shape
+again. Unload the bitmap, pattern FLAT, aim Plasma at the faces too: the
+faces glow with the plasma and the space between them stays black. Turn
+Faces off on the VIEW page: the faces' row reads `faces  (Faces is off)`
+in the warning colour, and Kaleidoscope's open strip reads "aimed at the
+faces, and Faces is off" with a **faces on** chip that puts them back.
+Take Instances to 0: the row reads `faces  (no copies to show them)`.
+⌘Z after the combo and after a map chip: each is one step. Judge from a
+step back whether the diamond reads apart from the dot. **Per face, an
+effect may read faint**: the faces are drawn at a few percent alpha and
+overlap, so in the build's own renders a strong re-colour (Hue cycle,
+Kaleidoscope) showed and a subtle one (Double vision, Deconverge, Trip
+colour, Wobble) was hard to tell from none — judge it here and again on
+the glass (98). *Fail:* nothing changing in the faces → the faces' row
+(a `faces: …` error there is `Renderer.face_error`) and
+`Renderer._face_picture`; the whole frame still folding → the effect is
+still in `chain(FRAME)` (`FxState.chain`, `fx._target`); the picture
+upside down or mirrored against the bitmap → `FACE_PX`'s `1.0 − q.y` and
+the screen branch of `FACE_FS_TAIL`; the strip's combo or the map chips
+doing nothing → `ui_fx.page` / `_faces_row`. Every face showing the same
+pattern where it used to vary is expected (register row 65: the picture
+is face 0's); say whether it matters.
+
+**92. With nothing aimed at the faces, nothing changed (plan 20 WP1; register row 65).**
+Headless: `uv run pytest -q tests/test_render.py::test_nothing_aimed_at_the_faces_is_the_old_frame_exactly tests/test_render.py::test_the_face_target_costs_nothing_while_unused tests/test_render.py::test_the_old_frame_holds_under_frame_effects_the_hands_and_the_dim`.
+F1 through F8 in turn, as you know them. *Pass:* every preset looks as
+it did before this build, the FX page's status is one line with no
+`frame` prefix, and the frame rate in the control window's footer is
+what it was. Then F5 (TRIP): aim its four effects (Plasma,
+Kaleidoscope, Zoom burst, Hue cycle) at the faces: the frame rate does
+not drop by anything you can read (on the build laptop, four effects on
+the faces cost about 0.1–0.15 ms offscreen). F5 again puts them back on
+the frame (a preset load lands every target; a preset saved before plan
+20 loads as all `frame`, per face). *Fail:* any preset looking different
+with every effect on `frame` → the face fragment's `u_pic_on == 0`
+branch; a drop in frame rate with effects on the faces →
+`render.FACE_PIC` (register row 65), and say which machine.
+
+**93. The echoes and the dream carry the faces' effects (plan 20 WP1; register row 65).**
+Headless: `uv run pytest -q tests/test_render.py::test_the_echoes_carry_the_faces_effects tests/test_render.py::test_a_frame_effect_runs_over_a_face_effect`.
+F4 (WAKE), with the dream worker running. Aim Hue cycle at the faces
+and switch it on. *Pass:* the trail behind the shape has the cycling
+colours of the faces it came from, and the dream grows out of them; an
+effect left on `frame` still does not appear in the trail (it never
+did). *Fail:* a trail in the old colours → the face pass running after
+the capture (`Renderer._draw_frame`'s order: the face picture is step 1,
+before the scene pass).
+
+**94. Drag an effect to reorder (plan 20 WP3; register rows 67, 68).**
+Headless: `uv run pytest -q tests/test_fx.py::test_a_drop_reorders_selects_and_is_one_undo_step tests/test_fx.py::test_reordered_always_sorts_to_the_sequence_asked_for tests/test_fx.py::test_a_click_without_a_drag_still_only_opens tests/test_fx.py::test_a_drop_moves_the_effect_the_drag_began_on tests/test_fx.py::test_the_order_slider_still_reorders`.
+F5 (TRIP), FX page. **Drag the Hue cycle chip by its name** (not its
+dot) and drop it on the Plasma chip. *Pass:* while you drag, the chip's
+name floats with the mouse and a white bar shows on the left edge of the
+chip you are over; on the drop Hue cycle is the first chip, the status
+line now starts with it, the picture changes (the colour is applied
+before the fold), and the strip opens on **Hue cycle**. ⌘Z: the order is
+back in one press and the footer says "undid reorder effects". Drag a
+chip onto the **right half of the last chip's name**: the bar moves to
+that chip's right edge, and the drop puts the dragged effect at the
+end. A plain click on a name still only opens it; a press that slips a
+little and is let go on the same name opens it too; the dot still only
+switches. The order slider in the strip still works. Do it on the
+trackpad and with a mouse. A drag never changes a target or a switch.
+Three things the build left, to notice: a 2 px gap between a chip's dot
+and its name takes no drop (hover again); the floating name can be cut
+at the window's right edge; past a hundred effects a drop can be
+refused. *Fail:* a click starting a drag, or a drag that cannot be
+started → use the order slider in the strip and say so (register row
+67); the order wrong after a drop → `fx.reordered`; a different effect
+moved than the one you picked up → `ui_fx._dragged` /
+`panel._fx_drag`; two presses of ⌘Z needed → the push in `ui_fx._drop`.
+
+**95. The look-back page reads (plan 20 WP4; register row 69).**
+Headless: `uv run pytest -q tests/test_ui_shell.py::test_the_look_back_page_fits_with_thumbnails tests/test_lookback.py::test_the_page_has_three_sections_and_every_dream_param_once tests/test_lookback.py::test_the_layer_is_a_row_of_chips tests/test_lookback.py::test_spacing_is_called_time_apart tests/test_lookback.py::test_the_routing_page_lists_the_new_labels`.
+F4 (WAKE), LOOKBACK page, with the dream worker running. *Pass:* under
+the page's own switch, three sections: **ECHOES** (brightness, fade
+time, count, time apart, then the thumbnails; on WAKE its note reads
+"24 × 50 MS · THE TRAIL REACHES 1.20 S"), **DREAM** (the worker's status, at
+most three lines, the rest on its hover; a row of six layer chips;
+brightness, speed, strength, passes, linger, jitter, scales, hue,
+saturation, tint, tint from, tint hue, tint sat, and **the tint**, the
+swatch, in its own cell) and **BOTH** (darken, contrast, shape hides,
+detail). The page does **not** scroll with the thumbnails showing (it
+did, by a few pixels, before this build). Every label says what the knob
+does without the hover: read them out and name any that does not. "time
+apart" is the old "Spacing" and reads `50 ms` on WAKE; "fade time"
+reads `0.60 s`; "shape hides" is the old "Occlude"; "detail" is the old
+resolution combo. On the ROUTING page a route's target says the
+registry's longer names ("Echo time apart", "Dream brightness", "Shape
+hides wake"). **The six layer chips — grain, swirl, blot, 3b, 4c, 4e —
+were named from the param's tooltip, not from looking**: click each in
+turn, wait for the worker to load it (its status line says so), and say
+whether grain, swirl and blot are the right names for the first three
+and what 3b, 4c and 4e should be called (about five letters fit).
+Right-click a chip: "not modulatable", as before. *Fail:* the page
+scrolling → `ui_lookback.SECTIONS` / `STATUS_LINES`; a chip not loading
+its layer → the click's `Param.set`; a name wrong →
+`ui_lookback.LAYER_CHIPS`, one line each; a label cut → `LABEL_W`.
+
+**96. Dream speed (plan 20 WP5; register row 70).**
+Headless: `uv run pytest -q tests/test_lookback.py::test_dream_speed_is_dream_k tests/test_lookback.py::test_the_speed_readout_is_the_half_life_in_frames`.
+F4 (WAKE), DREAM section, **speed** (beside brightness). Move a hand
+through the box and drag speed end to end. *Pass:* right is faster: at
+the fast end the dream keeps up with the shape and lets go of where it
+was almost at once, and is shallower; at the slow end it trails well
+behind and grows deeper. The readout is in dream frames: "≈23 frames" at
+the slow end, "≈14 frames" at the default, and under ten frames one
+decimal ("6.6 frames", "1.9 frames" at the fast end); slower than about
+17 frames the worker's status says "step clamped". Say whether this is
+the "speed" you meant, whether one knob is enough (faster is also
+shallower, by design), and whether the dream feels the same speed here
+as on the laptop screen at the same number — it counts the worker's
+frames, not seconds. *Fail:* the wrong quantity → register row 70, say
+which you meant; a different feel on the rig than on the laptop at the
+same number → row 70's per-second follow-up.
+
+**97. Instance layouts (plan 20 WP6; register row 71).**
+Headless: `uv run pytest -q tests/test_render.py::test_grid_layout_is_the_frame_it_was tests/test_render.py::test_hex_neighbours_are_one_cell_apart tests/test_render.py::test_ring_is_one_circle_with_neighbours_one_cell_apart tests/test_render.py::test_zero_and_one_are_the_same_in_every_layout tests/test_ui_shell.py::test_the_view_page_fits_with_a_field_in_motion tests/test_ui_shell.py::test_the_field_row_and_the_rate_cells_keep_their_menus`.
+F3 (FIELD), VIEW page. *Pass:* the field looks as it did, and the page
+does not scroll (it did, with more than one copy, before this build).
+Under Instances one row: **layout**, **motion**, and while the motion is
+not STILL its **amp** and **rate**; the six rotation rates are three
+rows of two, each labelled with its plane alone ("XY"). On the house
+show's first preset (a lane on each rate) a rate cell reads `base →
+effective` whole. Set **layout** to HEX with 7 copies: one in the middle
+and six round it; 19: two rings; raise the count slowly: the copies
+already there do not move. RING with 12: one circle; ORBIT sends a wave
+round it, RIPPLE makes it breathe as one. Take the count to 1 and to 0
+in each layout: one copy at the centre, then nothing. ⌘Z after a layout
+change puts it back. **HEX with ORBIT, amp up to about 0.35: neighbours
+overlap** (ORBIT's phase does not step evenly on a honeycomb, so
+neighbours orbit out of step; the motion maths is unchanged from the
+grid's) — judge whether that is a look or a fault. Right-click the
+layout combo and a rate cell: each opens its own menu. ROUTING and a
+Learn say "Field motion", "Field amp", "Field rate" where they said
+"Grid …". *Fail:* the grid different from before → `inst_positions`'
+GRID branch; copies jumping as the count rises in HEX → `_hex_spiral`;
+the page scrolling → `Panel._page_view`; HEX + ORBIT unusable → register
+row 71 (the motion block of `draw_scene`, not the layout).
+
+**98. On the projector and the glass (plan 20 WP1; register row 65).**
+Headless: `uv run pytest -q tests/test_render.py::test_screen_mapping_is_a_cover_fit_window_onto_the_picture tests/test_render.py::test_the_face_target_keeps_an_opaque_grounds_alpha`.
+With the render on the projector, then on the Pepper's Ghost glass,
+check 91's looks again (Kaleidoscope on the faces with a bitmap, per
+face and screen; Plasma on the faces over FLAT). *Pass:* in screen
+mapping the picture behind the faces is sharp enough at the size the
+room sees it, and not stretched (it is cropped top and bottom on a wide
+output); per face, a face close to the camera does not show blocks; the
+glass shows no desktop or grey through the faces. From where the
+audience stands, **say whether the faces' effects read at all at the
+faces' brightness**, per face especially, or need the pattern mix or
+the brightness up. *Fail:* soft or blocky → `render.FACE_PIC` (register
+row 65); the picture squashed → the cover fit in `FACE_FS_TAIL`
+(register row 65); see-through faces on the glass → the face fragment's
+alpha (`test_the_face_target_keeps_an_opaque_grounds_alpha`); too faint
+to read is a look to tune in a preset, not a fault: say which preset.
 
 ## What this list does not ground
 

@@ -1,16 +1,17 @@
 # Checkpoint — 2026-10-04
 
 Where the Python re-platform stands and what to pick up next. This
-revision describes the **`finish-line`** branch with plans 15 and 16 on
-it (`plan-15-integration`, then `plan-16-integration`, each merged into
-it when its last PR is in), and **`plan-18-integration`** on top of it:
-plan 18 whole (the interaction box, knob smoothing, what a hand Learn
-lands with, `hands-orbit`) together with plan 17 whole (one Unbind,
-Learn desk / hand, the menu on labels and meters, the ROUTING filter,
-the desk big and clickable), both documented. It merges
-into `finish-line` next; `main` is at plan 14 (fa9b3a1) and nothing from
-plans 15–21 touches it until the owner merges `finish-line` (decision
-30). What the
+revision describes the **`finish-line`** branch with plans 15–18 on it
+(`plan-15-integration`, `plan-16-integration`, then
+`plan-18-integration` with plans 17 and 18, each merged into it when its
+last PR was in), and **`plan-20-integration`** on top of it: plan 20
+whole (the faces as an effect target, the chain view with drag to
+reorder, the look-back page as ECHOES / DREAM / BOTH, dream speed,
+instance layouts), documented. It merges into `finish-line` next.
+**Plans 19 (presets and the desk) and 21 (outputs and the hands) are in
+progress** on their own integration branches and are not described
+here yet. `main` is at plan 14 (fa9b3a1) and nothing from plans 15–21
+touches it until the owner merges `finish-line` (decision 30). What the
 system *is* — the parts, the frame, who may write a parameter — is
 [`ARCHITECTURE.md`](ARCHITECTURE.md); how it behaves is
 [`ENGINEERING.md`](ENGINEERING.md); why it is that way, dated, is
@@ -25,7 +26,8 @@ git clone github.com/Cutaiar/hyperspace && cd hyperspace/hyperspace-python
 uv sync                 # whole environment, from the committed lockfile
 git checkout finish-line      # plans 15–21 land here, never on main
 uv run pytest           # 1178 pass, 1 skipped (the hands tape) with plans 15 and 16;
-                        # 1276 pass, 1 skipped on plan-18-integration (plans 17 and 18)
+                        # 1276 pass, 1 skipped on plan-18-integration (plans 17 and 18);
+                        # 1355 pass, 1 skipped on plan-20-integration (plans 15–18 and 20)
 uv run hyperspace       # the app: ? shows the controls cheat sheet (off at launch)
 ```
 
@@ -211,6 +213,46 @@ with no desk and no camera. Eight calls wait for the owner:
 `DECISION-REGISTER.md` rows 57–64. ARCHITECTURE and ENGINEERING describe
 Learn, Unbind and the desk as they are now.
 
+Plan 20 (2026-10-04, [`plans/20-fx-dream-looks.md`](plans/20-fx-dream-looks.md),
+its §7 "As built"; from the same session, with the owner's answer "the
+faces as their own effect target") is FX, dream and looks, on
+`plan-20-integration`. It adds one generated enum per effect
+(`fx.<name>.target`), `fx.face_map` and `view.inst_layout`; no page, key,
+config key or file:
+
+- **The faces as an effect target** (WP1, PR #101; WP2, PR #106): each
+  effect is aimed at the frame or at the faces (the combo on the open
+  strip's blend row). The faces' effects run first, over a 1024² picture
+  of what face 0 shows (its pattern, the bitmap over it), and the faces
+  show it **per face** or in **screen** space; the echoes and the dream
+  carry them. With nothing aimed at the faces the frame is the one it
+  was, to the bit. The FX page's status is two rows while anything is
+  aimed at the faces, with the per face / screen chips; a chip on the
+  faces has a diamond. **Per face, an effect reads faint** at the faces'
+  few percent of alpha (the build's own renders).
+- **Drag to reorder** (WP3, PR #108): drag an effect's chip by its name
+  onto another; one undo step; the drop opens the dragged effect. The
+  order slider stays.
+- **The LOOKBACK page** (WP4, PR #105): ECHOES, DREAM, BOTH; labels that
+  say what each knob does, here and on ROUTING ("Spacing" is "time
+  apart", "Echo time apart"); the dream's layer is six chips.
+- **Dream speed** (WP5, PR #107): `dream.k`, read in dream frames
+  ("≈14 frames"; one decimal under ten). Faster is also shallower, and
+  it follows the worker's rate.
+- **Instance layouts** (WP6, PR #111): GRID (as before), HEX (a
+  honeycomb from the centre), RING; the VIEW page's field in one row.
+
+None of plan 20 has been tried by a person at the rig, **and nobody has
+seen a face effect on a projector or the glass, dragged a chip with a
+real mouse, or judged the dream at any speed**: it was shown by tests
+(1355 pass with plans 15–18 underneath), offscreen and hidden-window
+renders under `plans/assets/20-fx-dream-looks/`, and scripted launches
+on a laptop. The build was handed between agents mid-way at the owner's
+instruction (WP2/WP3 and WP6 finished from pushed work-in-progress
+commits). Seven calls wait for the owner: `DECISION-REGISTER.md` rows
+65–71. ARCHITECTURE and ENGINEERING describe the face target, the chain
+view, the look-back page and the layouts as they are now.
+
 **Everything only the machine can verify** — plan 09's five hand checks,
 plan 08's unverified list, plan 07's WP6c dream tuning, the first real
 capture, the APC40, the second monitor, IAC + FL Studio, and the
@@ -250,6 +292,14 @@ file what fails as new audit rows dated with plan 11.
    (`hands-orbit`'s directions and its zoom). Since a hand outside the
    box is now absent, every older check that needs a hand in the box
    (group C's, and the hand parts of the later groups) is run after 72.
+   Plan 19's **group O** (checks 81–90) is written by plan 19. Plan 20's
+   **group P** (checks 91–98, about 30 minutes): 91–97 on the laptop —
+   an effect on the faces (91; per face may read faint), nothing changed
+   with none (92), the echoes carrying them (93), dragging a chip with a
+   real mouse and the trackpad (94), the look-back page and the six
+   layer chips' names (95), dream speed with the worker running (96),
+   the layouts and HEX + ORBIT's overlap (97) — then 98 on the projector
+   and the glass, where the faces' effects are judged at all.
 2. **First real audio capture.** Every live path is code-complete and now
    under test over a fake device, but no human has pressed `M` on real
    hardware with the macOS microphone prompt. One click plus a clap
@@ -277,11 +327,21 @@ file what fails as new audit rows dated with plan 11.
    control says, click a control then a param (with the 20 s), one
    Unbind, the Learn items, the session's controls through a learn, one
    road onto the desk, the ROUTING filter, and two things about a hand
-   Learn left alone.)
+   Learn left alone. **Rows 65–71 are plan 20's**: what the faces'
+   picture holds, its size and the screen fit, performers on the target
+   and the mapping, the chain view, re-aiming by the combo, the
+   look-back page's sections and labels, dream speed, and the
+   layouts.)
 4. **The rest of the finish line**: plans 17–21 in the roadmap's order,
-   each onto `finish-line`. Plans 17 and 18 are built and documented
-   on `plan-18-integration`, which goes to `finish-line` next. Plans
-   19–21 are not started. Code comments left stale (listed in plan 17's
+   each onto `finish-line`. Plans 17 and 18 are built, documented and on
+   `finish-line`. Plan 20 is built and documented on
+   `plan-20-integration`, which goes to `finish-line` next. **Plans 19
+   and 21 are in progress.** Left stale by plan 20, not being documents:
+   `library/dream/wake.json`'s note still says "Echo mix, fade, hue and
+   dream mix"; `Renderer._tile`'s docstring and a test message in
+   `tests/test_render.py` still say "instance grid"; the speed shot
+   `plans/assets/20-fx-dream-looks/lookback-speed.png` predates the
+   decimal and shows "≈2 frames" at the fast end. Code comments left stale (listed in plan 17's
    §7, WP6): `hands/core.py`'s module docstring still says Learn "writes
    a `position` route" (since plan 18); `midi.py`'s and
    `ui_routing.py`'s module docstrings still describe a bare Learn
@@ -298,7 +358,8 @@ file what fails as new audit rows dated with plan 11.
    deliberately syncs to nothing until then (DECISIONS).
 6. **Instanced GPU field.** For a *live* field: per-instance rotation
    phases and true instancing (agent prototype measured 621–845 fps at
-   N=100; 1–2 days). The synchronized-grid mode is the v1.
+   N=100; 1–2 days). The synchronized field is the v1 (laid out as a
+   grid, a honeycomb or a ring since plan 20).
 7. **Plan 05's rest** — MIDI clock from deck BPM and the FL-side fuser
    script; the bridge itself is built, off by default, and now has a line
    on the SYSTEM page.

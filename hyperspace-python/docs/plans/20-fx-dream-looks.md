@@ -369,6 +369,11 @@ watches every persisted base (`undo.watched`).
   the prototype's renders do not show. It is a constant, not a param
   (§3). The timing is this laptop's, not the rig's (hand check P2).
 
+  *As built:* the merged code was timed again with a different table
+  (an effect has one target, so no effect runs on both): four effects on
+  the faces and none on the frame cost about 0.1–0.15 ms over no
+  effects; `face-target-timing.txt` and §7, WP1.
+
 **What "starts from the face bitmap or the flat pattern" is exactly: the
 seed.** One fullscreen pass (`glsl.QUAD_VS`) into the chain's first
 texture, whose fragment computes, for `uv = v_uv` and **`fid = 0.0`**,
@@ -497,6 +502,13 @@ from before the reload has no `face_fx`: `_draw_frame` reads it with
 `getattr(self, "face_fx", None)` and runs no face pass until a restart,
 as the dim did (`getattr(self, "dim", 1.0)`).
 
+*As built:* `Renderer.on_reload` makes the faces' chain and picture
+again (a new `FxChain` borrowing the frame chain's programs, a new
+`FaceTarget`, the old ones released), so a reloaded renderer runs the
+face pass without a restart; the `getattr` reads stay. The handover to
+the scene pass is `Renderer._pic`, and a borrowing chain's `errors` is
+the owner's dict (§7, WP1).
+
 **Nothing here touches the registry.** The renderer reads
 `st.values[name]["target"]`, `st.face_map` and the `ViewState`, as it
 reads every other value (ARCHITECTURE §3: the render stack only reads).
@@ -529,6 +541,13 @@ Room first. *Measured:* 29 px to spare at worst, and `RESET_NOTE`
      `ui.WARN`. With `Renderer.face_error` set, the row is the error.
    The second row is a chip's height: 29 px. Spare with it showing:
    23 px.
+
+   *As built:* with nothing aimed at the faces the one line has **no
+   `frame` prefix** (the page looks as it did); both rows read
+   "bypassed" while the stack is; the faces' row also reads "(no copies
+   to show them)" at 0 copies. The one-line note freed **16 px, not
+   23**: 45 px to spare at worst without the faces' row, **16 px** with
+   it (§7, WP2).
 3. **The open strip's target.** On the blend row, between the blend
    combo and the order slider: a combo on `fx.<name>.target`, about
    84 px (`frame` is 35 px, `faces` 34 px of text, plus the arrow). The
@@ -580,6 +599,12 @@ stack; within each target the effects run in that order.
   bar in `ui.TEXT` is drawn at the chip's left edge: the dragged effect
   will go **before** it. A slim target after the last chip takes "to the
   end".
+
+  *As built:* the bar is drawn on the target chip's own left edge (the
+  gaps take no drop), and "to the end" is **the right half of the last
+  chip's name**, with the bar on its right edge. What a drop moves is the
+  name the drag began on (`panel._fx_drag`), not the payload's index,
+  which is a frame old on the drop.
 - On the drop: `undo.push("reorder effects")`, then the new orders are
   written through `reg[f"fx.{n}.order"].set_value(o)` for each effect
   whose order changes, then `fx.select(dragged)`, so the strip opens on
@@ -613,6 +638,14 @@ back at the drop place. Let `a` be the order of the effect before
    integers in that span, in `seq`'s order.
 3. With the window grown to the whole list the span is 0…99, which holds
    up to a hundred effects.
+
+*As built:* not rule 2. `fx.reordered` renumbers **the shortest run of
+`seq`, anywhere in the list, whose two sides already sort as asked and
+which has room**, preferring a run that holds `moved`, then the one
+further right; a brute-force test found the alternate widening rewrites
+more effects than it needs in two cases. `ui_fx._drop` is all or
+nothing: it writes only when every order param exists and the result
+sorts as asked.
 
 Ties are never relied on, so the name tie-break in `names()` cannot
 reorder the result. With the factory orders (5, 10, 15, 17, 20, 25, 30,
@@ -666,6 +699,12 @@ BOTH                                               echoes and dream alike
 Each pair is one row of a two-column table of `panel.half` cells, as the
 page's *composite* and *chroma* columns are today.
 
+*As built:* the tint's swatch has its own cell, **THE TINT**, beside
+TINT SAT (a combo and a swatch do not both fit in 92 px); the label
+column is 94 px (`ui_lookback.LABEL_W`); the worker's status is at most
+three lines (`STATUS_LINES`). The page has 26 px to spare at worst over
+a real renderer (§7, WP4).
+
 **Every label, old → new.** The page label is `ui_lookback.SHORT`; the
 registry label is what the ROUTING page, a Learn message and the desk
 diagram say, and it changes with it so the two agree (fork F9). Ids,
@@ -695,6 +734,11 @@ ranges, defaults and flags do not change.
 | `dream.contrast` | Contrast → **contrast** | unchanged | kept | Above 1 only the bright parts of the echoes and the dream show. |
 | `dream.occlude` | Occlude → **shape hides** | Occlude → **Shape hides wake** | `occlude 1.00` → `1.00` | At 1 the shape covers the echoes and the dream behind it; at 0 they glow through it. |
 | `dream.res` | (no label) → **detail** | Resolution → **Look-back detail** | choices unchanged | The size, in pixels, the echoes and the dream are kept at; a change starts the trail again. |
+
+*As built:* two readouts are shorter, to fit a half cell's 92 px
+slider: `dream.fade` reads `0.23 s` and `dream.gap` reads `33 ms`; the
+labels beside them say the rest. The table as generated from the
+registry is `assets/20-fx-dream-looks/lookback-labels.txt`.
 
 The tips are rewritten to open with the sentence in the last column and
 keep the numbers they carry today (the 60 Hz equivalents in `dream.fade`
@@ -764,6 +808,11 @@ knob exists, on the wrong name (§1; fork F8).
 - Readout `k 0.050` → **`≈14 frames`**: the frames in which a frame's
   share of the dream halves, `log(0.5) / log(1 − k)`, rounded (23 at the
   slow end, 2 at the fast end).
+  *As built:* rounded from ten frames up ("≈14 frames"); **under ten,
+  one decimal and no "≈"** ("6.6 frames" at 0.1, "1.9 frames" at the
+  fast end), because whole frames read "≈2 frames" over nearly half the
+  knob's travel (the orchestrator's change after the review, 56e7b0a;
+  `params.dream_speed_text`).
 - Tip: "How fast the dream follows the picture: fast, it keeps up and
   lets go of what has left; slow, it lags, lingers and grows deeper. In
   dream frames, so it also follows the worker's rate. Slower than about
@@ -850,6 +899,10 @@ whenever the count is above 1 (*measured*), so room comes first.
 1. The six rotation-rate rows (`rot.rate.XY` …) become three rows of two
    `panel.half` cells in a two-column table. Frees 105 px. Each keeps
    its Learn menu and modulation dot (`half` is `_row`).
+   *As built:* each cell is labelled with the plane alone ("XY") in a
+   32 px column, so a rate a lane drives reads `base → effective` whole
+   in the 159 px slider; the page has 88 px to spare with the field row
+   showing (§7, WP6).
 2. Under the count slider, while the count is above 1, one row: the
    **layout** combo (84 px), the **motion** combo (96 px, was 140) and,
    while the motion is not STILL, **amp** (84 px, was 110) and **rate**
@@ -1105,7 +1158,8 @@ The DECISIONS rows it leans on.
 - `test_dream_speed_is_dream_k`: one cell labelled "speed" drawing
   `dream.k`; no `dream.speed` id; the registry label is "Dream speed".
 - `test_the_speed_readout_is_the_half_life_in_frames`: 0.05 → "≈14
-  frames", 0.3 → "≈2 frames", 0.03 → "≈23 frames".
+  frames", 0.3 → "≈2 frames", 0.03 → "≈23 frames". *As built:* 0.3 →
+  "1.9 frames" (one decimal under ten frames).
 
 **WP6**
 - `tests/test_render.py::test_grid_layout_is_the_frame_it_was`: counts
@@ -1229,12 +1283,565 @@ today.
 
 ## 7. As built
 
-Filled as the work packages land.
+Written by WP7 from each PR's "As built", review and "what the documents
+should say" sections, every statement checked against the code on
+`plan-20-integration` at b822426 (WP1–WP6 merged, with `finish-line`
+— plans 15–18 and their documents — merged in underneath at 61d0246).
+On that commit: 1355 passed, 1 skipped (the hands tape), `ruff check .`
+clean. Where this section and §2 differ, this section is the code; §2
+carries an "*As built:*" note at each such place.
+
+Merge order onto `plan-20-integration`, first parent: WP1 (8345f4f), WP4
+(36806a2), WP5 (6780824, then the orchestrator's 56e7b0a), WP2
+(05acb97), `finish-line` with plans 17 and 18 (61d0246), WP3 (adea80f),
+WP6 (b822426). The plan asked for WP1, WP6, WP2, WP3, WP4, WP5; the
+packages that were ready went first, and each merge was green.
+
+**What has been seen, and by whom.** Nothing here was tried by a person
+at the rig. Nobody has seen a face effect on a projector or on the
+glass, dragged a chip with a real mouse or trackpad, or judged the dream
+at any speed. Three kinds of evidence exist, and the entries below say
+which is which:
+
+- *tests*: the named pytest nodes — offscreen GL frames compared pixel
+  for pixel, and the control panel driven by imgui mouse events a test
+  feeds it (`PageRig.click`, `PageRig.pick`, a drag through the event
+  queue);
+- *demos*: the scripts under `tools/`, each on a temp home of its own,
+  with their output under `docs/plans/assets/20-fx-dream-looks/`
+  (reported by the agent that built the package; offscreen renders and
+  hidden-window renders, not the app on a screen; the look-back shots
+  have a stand-in for the dream worker, not a worker);
+- *seen in scripted launches by the orchestrator*: the real app
+  (`uv run hyperspace`) started against a temp home on a laptop, on
+  `plan-20-integration`, driven from a script for 210 frames. What it
+  saw: with the effect stack on, **Plasma and Kaleidoscope ran on the
+  faces with Hue cycle on the frame**; the face picture was allocated;
+  the mapping switched to screen and four copies drew; the effects
+  moved back to the frame; and undo stepped back — with no runtime error
+  on any frame and an empty stall log. On the integration branch with
+  plans 15–18 underneath, 1355 passed, 1 skipped, ruff clean. That is a
+  launch on a laptop that nobody looked at, not a session at the
+  machine.
+
+**How the build ran.** The packages were built by agents, reviewed with
+`/code-review` at high effort, and merged by the orchestrator. Mid-way,
+at the owner's instruction, the build was handed between agents: **WP2
+/ WP3** (one agent, WP3 stacked on WP2) and **WP6** were each finished
+by a second agent from a pushed work-in-progress commit — 485a94d
+("WIP: hand-off — Plan 20 WP3 review fixes, unfinished (4 tests fail, 1
+ruff error)") and 6031142 ("WIP: hand-off — Plan 20 WP6 instance layouts
+(untested)"). **PR #108's first review text was not kept** across the
+hand-off: the second agent listed what the first had changed as R1–R11
+and ran `/code-review 108 high` again on dfe9e1d (no correctness bug,
+three minor notes). PRs #107 and #108 were stacked on #105 and #106 and
+merged into `plan-20-integration` by hand, so GitHub shows them closed,
+not merged.
+
+Hand checks 91–98 (group P of `11-hand-checks.md`) are what the machine
+still owes. Decision register rows 65–71 are the forks F1–F10 the run
+settled, every one on the plan's recommendation.
+
+### WP1 — The face target: the render path and its params (PR #101, merged 8345f4f)
+
+**Built.** `fx.py`: `TARGETS` / `FRAME` / `FACES`, `FACE_MAPS` /
+`PER_FACE` / `SCREEN`, `RESERVED` gains `target`; `FxState.face_map`,
+`FxState.chain(target=None)` (`None` is exactly the old list),
+`FxState.advance_to(t)` (the clocks once a frame, whichever chain runs
+first; `_t_last` moved onto the state); `fx._target(v)`; `declare`
+generates `fx.<name>.target` (after `order`, not modulatable) and
+`fx.face_map` (modulatable); `FxChain(ctx, state, *, target=FRAME,
+programs=None)` — a chain made with `programs=` runs the owner's
+programs and its `errors` **is the owner's dict**; `FxChain.release()`.
+`render.py`: `FACE_PIC = 1024`, `FACE_UNIFORMS`, `FACE_PX` (the GLSL
+`face_px(uv, fid, out rgb, out shade)`: the face fragment's old lines,
+called by the face fragment and the seed), `SEED_FS_HEAD` /
+`SEED_FS_TAIL`, `FaceTarget`, `Renderer.face_fx` / `face_pic` /
+`face_error` / `_pic`, `_face_picture`, `_face_uniforms`, step 1 of
+`_draw_frame`, the `u_pic*` uniforms in the face block of `draw_scene`,
+`_build_face_program` building the face and seed programs together, and
+`on_reload`. No shader file, `ui_fx.py`, `params.py` or factory file
+touched.
+
+The frame as built (`Renderer._draw_frame`): step 0 as before; **step 1,
+the face picture** (`_face_picture`), only when `face_fx.active()` and
+`s.faces` and `s.instances > 0` and the face and seed programs built —
+the seed pass into `face_fx.begin((1024, 1024))` (RGBA16F, blending
+off), `face_fx.run` into `face_pic.fbo` (RGBA8 1024²), then
+`build_mipmaps()`; the picture is handed to the one scene pass as
+`Renderer._pic` and cleared in a `finally`; steps 2–11 are the old
+lines, the frame chain now `state.chain(FRAME)`.
+
+**Differs from §2, and why.**
+
+- **`Renderer.on_reload` makes the faces' chain and picture again** (a
+  new `FxChain` and `FaceTarget`, the old ones released), where the plan
+  had a renderer from before a reload run no face pass until a restart:
+  `app.py`'s reloader re-classes `renderer.fx` but knows nothing of
+  `renderer.face_fx`, and `app.py` was not this package's. `_draw_frame`
+  still reads every new attribute with `getattr`, so a renderer with no
+  `face_fx` draws (tested).
+- **The handover is `Renderer._pic`**, set around the one scene pass and
+  cleared in a `finally`; `draw_scene` reads `getattr(self, "_pic",
+  None)`. `draw_scene` called on its own shows no face picture.
+- **A borrower's `errors` is the owner's dict object**
+  (`faces.errors is frame.errors`), so `error()` needed no change.
+- `u_opaque` is forced to 0 in `run` when the chain's target is `FACES`.
+  `fx._target(v)` reads any value but `FACES` as `FRAME`, so a stray
+  value in a hand-edited file cannot drop an effect out of both chains.
+- **`face_error` is cleared whenever no face pass is asked for** (review),
+  not only after one that ran clean.
+- **The seed declares `const float v_alpha = 1.0` and `const float v_fid
+  = 0.0`** (review): a `patterns.glsl` that reads the face fragment's
+  inputs by name compiles in the seed too, so "both programs or neither"
+  cannot take the faces away for a file that used to build.
+- **Screen mapping is upright**: the face UV has y up (the bitmap is
+  sampled at `1 − q.y`) and so does `gl_FragCoord` (a test holds it).
+- **`FaceTarget.ensure` builds the (empty) mipmap chain at creation**, so
+  the texture is complete before its first use. `u_pic` is set to unit 1
+  once, at build; `u_pic_on` on every pass that draws faces; `u_pic_fb`
+  only when a picture is shown. `_build_face_program` builds the vertex
+  arrays inside its `try`, so a failure there is a `pattern_error`.
+- **The timing, re-measured from the merged code** (`face-target-timing.txt`;
+  Apple M3 Max, 1920×1080 offscreen, no MSAA, median of 240, three runs,
+  other work on the machine, noise about ±0.25 ms): no effects 0.89–0.92
+  ms; the frame chain with four effects 1.28–1.73 ms; **the same four
+  aimed at the faces, none on the frame, 1.03–1.05 ms**; four on the
+  frame and four others on the faces 1.44–1.49 ms. Not the plan's table:
+  in the merged code an effect has one target, so the last row uses four
+  other effects (Warp, Acid, Wobble, Trip colour). Four effects on the
+  faces cost about 0.1–0.15 ms here.
+- **Per-face effects read faint.** The package's own judgement of its
+  renders: screen mapping reads clearly as windows onto one still,
+  upright picture; **per face is faint** — faces draw at a few percent
+  alpha and overlap, so a strong re-colour (Hue cycle, Kaleidoscope,
+  Fractals' tint) reads and a subtle one (Double vision, Deconverge, Trip
+  colour, Wobble) is hard to tell from no effect at the demo's size; on
+  PLAID per face the differences are smaller still. A warp of the FLAT
+  field shows nothing (true: nothing to bend). Hand checks 91 and 98.
+- With every face effect failed to compile, `run` copies the seed
+  through, so the faces show face 0's pattern (the plan's "right
+  picture"; noted by the review).
+
+Forks F1–F4 are built as recommended (register rows 65–66): the whole
+face, seeded as face 0, so while any effect is aimed at the faces every
+face shows face 0's pattern phase; `FACE_PIC = 1024`, a constant;
+cover-fit in screen mapping; the target not modulatable, the mapping
+modulatable.
+
+**Tests** (39 new; no existing test edited). `tests/test_fx.py`:
+`test_target_is_declared_per_effect_and_is_not_modulatable`,
+`test_a_retargeted_effect_survives_a_reshape_of_its_file`,
+`test_a_preset_without_targets_loads_all_frame`,
+`test_chain_splits_by_target_and_keeps_order`,
+`test_advance_to_moves_the_clocks_once_per_frame_time`,
+`test_u_target_is_a_reserved_uniform_name`,
+`test_two_chains_advance_the_clocks_once`,
+`test_the_face_chain_borrows_the_frame_chains_programs`,
+`test_the_face_chain_never_forces_alpha`,
+`test_every_effect_runs_on_the_face_target` (twelve cases).
+`tests/test_render.py`:
+`test_nothing_aimed_at_the_faces_is_the_old_frame_exactly` (against a
+face program built from the pre-plan source frozen in the test),
+`test_the_old_frame_holds_under_frame_effects_the_hands_and_the_dim`,
+`test_the_face_target_costs_nothing_while_unused`,
+`test_a_face_effect_changes_the_faces_and_nothing_else`,
+`test_per_face_puts_the_picture_at_the_faces_own_uv`,
+`test_screen_mapping_is_a_cover_fit_window_onto_the_picture`,
+`test_per_face_turns_with_the_shape_and_screen_stays_still`,
+`test_the_face_target_keeps_an_opaque_grounds_alpha`,
+`test_a_face_pass_that_raises_leaves_the_frame_and_the_window_bound`,
+`test_the_echoes_carry_the_faces_effects`,
+`test_a_frame_effect_runs_over_a_face_effect`,
+`test_both_chains_in_a_frame_run_the_clocks_once`,
+`test_draw_scene_alone_shows_no_face_picture`,
+`test_the_face_picture_follows_instances_and_zero`,
+`test_on_reload_rebuilds_the_seed_with_the_face_program`,
+`test_a_face_program_that_did_not_build_runs_no_face_pass`,
+`test_a_pattern_file_that_reads_the_faces_inputs_builds_the_seed_too`,
+`test_the_render_stack_imports_no_registry`.
+
+**Demo.** `tools/face_target_shots.py` →
+`docs/plans/assets/20-fx-dream-looks/face-target-contact-sheet.png` (all
+twelve effects, from the merged code, replacing the prototype's; tiles
+256×160), `face-target.png` (no effect, Kaleidoscope, Plasma, Zoom
+burst, Hue cycle) and `face-target-timing.txt`. Offscreen renders on one
+laptop GPU.
+
+**Not verified.** Anything on a screen, a projector or the glass:
+whether per-face effects are visible enough at the rig's brightness to
+be worth using is open (hand checks 91, 98). One GPU and driver (Apple
+M3 Max, macOS): the off path's bit-identity rests on this driver
+compiling `face_px(...)` to the same arithmetic as the inline lines; the
+test would catch a driver where it does not, only when run there. Hot
+reload was exercised by calling `on_reload` in tests, not by saving a
+file under the running app. MSAA with a face picture showing (screen
+mapping reads `gl_FragCoord`) was not tested; MSAA is tested on the off
+path only.
+
+### WP2 — The face target on the FX page (PR #106, merged 05acb97)
+
+**Built.** `ui_fx.py`. While any effect — on or off — is aimed at the
+faces, the status under the bypass is two rows: `frame  Plasma → Hue
+cycle` (`fx.chain(FRAME)`) and the faces' row, `faces  Kaleidoscope →
+Zoom burst` (`fx.chain(FACES)`), each "nothing on" or **"bypassed"** as
+the one line was (`ui_fx._status`, reading the effective `fx.on`). The
+faces' row is one chip tall and never wraps (`ui.fit_text`, the whole
+text on hover); at its right end two chips, **per face** and **screen**
+(`ui.lit_chip`, the lit one `FxState.face_map`'s effective value; a
+click is `Param.set` on `fx.face_map`; each carries the param's hover,
+right-click menu, learn frame and modulation dot). The row reads `faces
+(Faces is off)` in `ui.WARN` while `view.faces` is off, **`faces  (no
+copies to show them)`** while `view.instances` is 0, and
+`Renderer.face_error` (flattened to one line) when that is set. The open
+strip's blend row is blend, **target** (`fx.<name>.target`, 84 px,
+`TARGET_W`), order. A chip aimed at the faces has a **diamond** for its
+LED (`ui_fx.DIAMOND`), filled while on and outlined while off; both of
+its hovers gain "on the faces". `why_idle(fx, name, faces_on=True)`
+answers "faces off" after "off" and before "bypassed", with the line
+"aimed at the faces, and Faces is off" and the chip **faces on**
+(`Param.set` on `view.faces`). `RESET_NOTE` is one line.
+
+**Differs from §2, and why.**
+
+- **No `frame` prefix while nothing is aimed at the faces**: the single
+  status line is the one it was, so the page looks as before until the
+  first effect is aimed at the faces. To reverse: one conditional in
+  `ui_fx.page`.
+- **"bypassed" on both rows** while the stack is bypassed (the plan named
+  only "nothing on" for the faces' row).
+- **"(no copies to show them)"** at 0 copies (review). No new `why_idle`
+  reason for it, nor for a face program that did not build (that is the
+  FACES page's `pattern_error`, as before).
+- **The measured fit**: 45 px to spare at worst with nothing aimed at the
+  faces, **16 px** with the faces' row showing (also with Faces off and
+  with `face_error`; Zoom burst open is the worst). The plan budgeted 52
+  and 23: **the one-line note freed 16 px, not 23** — a wrapped second
+  line costs a line of text, not a line plus item spacing. The faces'
+  row costs 29 px as budgeted.
+- From the review: a map chip's hover names the source while
+  `fx.face_map` is modulated (the chip lights the effective value and a
+  click writes the base, so a click can do nothing visible); a
+  `face_error` of several lines is one row.
+
+**Tests** (`tests/test_fx.py`). The plan's: `test_the_status_reads_per_target`,
+`test_the_map_chips_set_fx_face_map`,
+`test_the_strips_target_combo_moves_an_effect_between_chains`,
+`test_a_chip_aimed_at_the_faces_is_marked` (the diamond recorded from
+`ImDrawList.add_quad*`), `test_why_idle_names_faces_off`,
+`test_faces_on_switches_the_faces_on`,
+`test_the_page_fits_with_the_faces_row_showing`; and
+`test_the_target_and_the_map_are_one_undo_step_each` (a real
+`undo.Undo`). Extended: `test_the_page_draws_and_fits`,
+`test_the_page_fits_with_the_tightest_strip_idle`,
+`test_the_page_has_no_conflicting_ids`.
+
+**Demo.** `tools/fx_page_demo.py --faces` → `fx-page-faces.png` (two
+effects on the faces, one aimed and off, two on the frame, both rows,
+the map chips, the strip's target combo), `fx-page-frame-only.png`,
+`fx-page-faces-off.png`. Hidden-window renders.
+
+**Not verified.** No real mouse or trackpad touched the combo or the
+chips. Whether the diamond reads apart from the dot at a distance is
+judged from renders only. With the faces' row showing, one wrapped
+frame line leaves 0 px and a second scrolls (the single line always
+wrapped the same way). **Plan 16's images under
+`docs/plans/assets/16-paper-cuts/` (`fx-chips.png`, `fx-idle.png`) still
+show the FX page's old two-line note**; they are left as they are, a
+record of plan 16.
+
+### WP3 — The chain view: drag to reorder (PR #108, merged adea80f)
+
+**Built.** `ui_fx.py` and one function in `fx.py`. A chip's **name** is
+an imgui drag source (payload type `ui_fx.DRAG`, its index in
+`names()`; the label is what shows in the hand). Both parts of every
+chip take a drop: the dragged effect goes **before** that chip, and a
+2 px bar in `ui.TEXT` (`DRAG_BAR`) is drawn **on that chip's own left
+edge** on the foreground list. **The right half of the last chip's
+name** takes "to the end", with the bar on its right edge.
+`ui_fx._drop(panel, fx, moved, before)` reads the orders from
+`fx.values`, asks `fx.reordered(seq, orders, moved)` which to rewrite,
+and is **all or nothing**: every order param it needs must be declared
+and the result must sort as asked; then `undo.push("reorder effects")`
+once and `set_value` for each changed order; a drop that changes
+nothing pushes and writes nothing. Last, **`fx.select(moved)` opens the
+dragged effect's strip** by name. A press that slips past the drag
+threshold and is let go on its own name opens it. The order slider
+stays.
+
+**Differs from §2, and why.**
+
+- **`fx.reordered` renumbers the shortest run with room, anywhere in the
+  list**, not the plan's run widened alternately right and left around
+  `moved`: a brute-force test found the plan's rule rewrites more
+  effects than it needs in two cases. Of two runs of one length, one
+  holding `moved` is taken, then the one further right. Past a hundred
+  effects orders repeat (the plan's limit), and `_drop` then refuses.
+- **A drop moves a name, not the payload's index** (review R1).
+  `_chip` notes the dragged effect on the panel (`panel._fx_drag`) while
+  its name is the source; `page` forgets it at the end of the first
+  frame with nothing in the hand. On the release frame the payload is the
+  last held frame's index and the stack may have moved under the hand
+  (a preset from a desk button, an undo).
+- **"To the end" is the right half of the last chip's name**, not a slim
+  target after the last chip; the bar sits on a chip's own edge, not in
+  the gap (where nothing takes a drop).
+- **The WIP's defect, and its fix.** In 485a94d no simulated drop
+  landed: imgui clears a delivered payload in `end_drag_drop_target`, so
+  by the time `page` read the drop `_in_flight()` was already false and
+  the gate on it returned None. `_dragged` now reads `panel._fx_drag`
+  directly (dfe9e1d).
+- **Left as they are** (review): a 2 px dead zone between a chip's LED and
+  its name takes no drop (R8); orders repeat past 100 effects (R9); the
+  drag's label can be cut at the window's right edge, imgui's tooltip
+  placement (R10); if the page stops drawing mid-drag `_fx_drag` can stay
+  set for a frame (N1).
+
+**Tests** (`tests/test_fx.py`). `test_reordered_moves_one_effect_when_there_is_room`,
+`test_reordered_renumbers_the_smallest_window` (against a brute-force
+minimum), `test_reordered_always_sorts_to_the_sequence_asked_for` (a
+hundred effects at 0…99, 400 random drops),
+`test_a_drop_reorders_selects_and_is_one_undo_step` (a simulated mouse
+over the real `Panel` with a real `undo.Undo`: the bar, one push, one
+undo restores every order),
+`test_a_click_without_a_drag_still_only_opens`,
+`test_a_drag_never_changes_a_target_or_a_switch`,
+`test_the_order_slider_still_reorders`,
+`test_a_drop_moves_the_effect_the_drag_began_on`. The fit is unchanged
+from WP2 (45 px, 16 px): the bar takes no layout.
+
+**Demo.** `tools/fx_page_demo.py --reorder` → `fx-reorder.txt` (a
+transcript calling `_drop` with undo) and `--drag` → `fx-drag.png` (Hue
+cycle in the hand over Acid, the bar on Acid's own left edge;
+mouse events through imgui's queue in a hidden window; no cursor is
+drawn).
+
+**Not verified.** **No real mouse or trackpad drag.** Whether a
+trackpad starts a drag comfortably and whether a slow click is ever
+taken for one is hand check 94. The dead zone and the cut label were not
+looked at on a screen. The stack moving mid-drag was tested by a param
+write between frames, not by a real desk button.
+
+### WP4 — The look-back page as ECHOES, DREAM and BOTH (PR #105, merged 36806a2)
+
+**Built.** `ui_lookback.py`, whole: three sections under the page's
+title and switch, drawn from `ui_lookback.SECTIONS` — **ECHOES**
+(`dream.echo_mix`, `fade`, `echoes`, `gap`, the thumbnails), **DREAM**
+(the worker's status, `dream.layer` as six chips, then `mix`, `k`,
+`step`, `steps`, `mask_decay`, `jitter`, `octaves`, `hue`, `sat`,
+`tint`, `tint_from`, `tint_hue`, `tint_sat` and the tint's swatch) and
+**BOTH** (`darken`, `contrast`, `occlude`, `res`). Cells are
+`panel.half` sliders or a label and a combo, two to a row; the page's
+labels are `ui_lookback.SHORT`. `dream.layer` is six `ui.lit_chip`s
+(`LAYER_CHIPS`: grain, swirl, blot, 3b, 4c, 4e), the lit one the base, a
+click `Param.set(index)`, a right-click the param's menu (one popup
+each), which still says "not modulatable". The `dream.*` registry labels
+change with the page's (fork F9): "Echo …" / "Dream …" by section, the
+switch and the three grades neither; every tip opens with what the knob
+does and keeps the numbers it carried. No `dream.*` id, range, default,
+kind or flag changed, and no saved file. The old → new table, generated
+from the registry, is `lookback-labels.txt`.
+
+**Differs from §2, and why.**
+
+- **Two readouts are shorter**: `dream.fade` reads `0.23 s` (the plan
+  kept `halves in 0.23 s`) and `dream.gap` reads `33 ms` (the plan: `33
+  ms apart`). A half cell's slider is 92 px, 11 characters of the readout
+  face; the label says the rest.
+- **The tint's swatch has its own cell, THE TINT**, beside TINT SAT,
+  where the plan had it share TINT FROM's: the combo and a swatch do not
+  both fit in 92 px.
+- **The label column is 94 px** (`ui_lookback.LABEL_W`), not the panel's
+  78: BRIGHTNESS, SATURATION and SHAPE HIDES are 86–88 px.
+- **The worker's status is at most three lines** (`STATUS_LINES`), the
+  rest on its hover, so what the worker says cannot make the page
+  scroll.
+- Section notes are upper-cased by `panel._section`: `8 × 33 MS · THE
+  TRAIL REACHES 0.27 S`; at no echoes, "no echoes: the dream alone".
+- **The measured fit, over a real renderer** with eight echoes captured
+  (`test_the_look_back_page_fits_with_thumbnails`): scroll range 0 in
+  every state; 81 px to spare in the usual state, **26 px at worst** (the
+  worker saying everything it can and the GLSL fallback line).
+
+**Tests.** `tests/test_lookback.py`:
+`test_no_dream_id_range_default_or_flag_changed` (a table frozen before
+the first edit), `test_the_page_has_three_sections_and_every_dream_param_once`,
+`test_the_layer_is_a_row_of_chips`,
+`test_an_armed_learn_outlines_the_chip_row_once`,
+`test_spacing_is_called_time_apart`,
+`test_every_dream_label_says_whose_knob_it_is`,
+`test_the_routing_page_lists_the_new_labels`,
+`test_the_look_back_page_has_no_conflicting_ids`,
+`test_the_worker_status_is_never_taller_than_its_room`,
+`test_the_relabel_changes_no_factory_file`. `tests/test_ui_shell.py::test_the_look_back_page_fits_with_thumbnails`.
+
+**Demo.** `tools/lookback_page_shots.py` → `lookback-page-before.png`
+(the base commit: the scrollbar and the cut-off last row),
+`lookback-page.png`, and `--labels` → `lookback-labels.txt`.
+Hidden-window renders over a real `Renderer` that has drawn a turning
+tesseract offscreen until eight echoes were captured, with **a stand-in
+for the dream worker** (each frame handed back as "the dream", a canned
+status line).
+
+**Not verified.** Nobody has seen the page in the running app. The chip
+names come from the param's tooltip, not from looking at the six layers
+side by side (hand check 95). Learn messages and the desk diagram were
+not drawn with the new labels (they read `Param.label`, which the tests
+check). The fit was measured with this laptop's fonts at 960 × 900.
+`library/dream/wake.json`'s note still says "Echo mix, fade, hue and
+dream mix" (a library file, not this package's).
+
+### WP5 — Dream speed (PR #107, merged 6780824; the readout's decimal in 56e7b0a)
+
+**Built.** `params.py`, strings and one pure function: `dream.k`'s
+registry label "Blend k" → **"Dream speed"**; its readout the frames in
+which a frame's share of the dream halves, `log ½ / log(1 − k)`
+(`params.dream_half_life`, `params.dream_speed_text`); its tip says it
+is in dream frames, so it follows the worker's rate, and where the
+stability guard holds the strength back ("step clamped"). `dream.step`'s
+tip says "1.5 × k (the speed's value)". `ui_lookback.py` was not edited:
+WP4 had already labelled the cell **speed**, in the DREAM section's
+first row beside **brightness**. Right is faster. No param added;
+`dream.k`'s id, range (0.03–0.3), default (0.05) and flags unchanged;
+`dream.py` and `lookback.py` untouched.
+
+**Differs from §2, and why.**
+
+- **Under ten frames the readout carries one decimal** (the
+  orchestrator's change after the review, 56e7b0a): "≈23 frames" at the
+  slow end, "≈14 frames" at the default, **"6.6 frames" at 0.1, "1.9
+  frames" at the fast end**. Whole frames read "≈2 frames" or "≈3
+  frames" over nearly half the knob's travel (the slider is linear in
+  `k`), and an undo line read "≈2 frames → ≈2 frames". From ten frames
+  up it is whole frames with "≈". The plan and the package's own test
+  had pinned 0.3 → "≈2 frames"; the test now pins "1.9 frames".
+- The tip has one sentence more than the plan's: what the readout is and
+  that the value is `k`.
+
+What it does not do (fork F8): it does not move `dream.step` to hold the
+depth — **faster is also shallower** — and it does not convert `k` to
+seconds: **a slower worker is a slower dream**.
+
+**Tests.** `tests/test_lookback.py::test_dream_speed_is_dream_k`,
+`::test_the_speed_readout_is_the_half_life_in_frames` (0.05 → "≈14
+frames", 0.3 → "1.9 frames", 0.03 → "≈23 frames", 0.04 → "≈17 frames",
+0.1 → "6.6 frames"; the decimal under ten; safe off its ends);
+`::test_every_dream_label_says_whose_knob_it_is` no longer excuses
+`dream.k`.
+
+**Demo.** `tools/lookback_page_shots.py --speed` → `lookback-speed.png`
+(the top of the DREAM section at the slow end, the default and the fast
+end); `lookback-page.png` and `lookback-labels.txt` regenerated. **The
+speed shot predates 56e7b0a: its fast end shows "≈2 frames" where the
+code now reads "1.9 frames".**
+
+**Not verified.** **Nobody has judged the dream at any speed**: no dream
+worker ran for this package, and that `k` is what the owners meant by
+"speed" is argued from the code (§1), not confirmed by anyone looking
+(hand check 96). "About 17 frames" in the tip is the default strength
+and passes, not recomputed from the live values. "≈" is outside
+Latin-1; on a machine with none of this app's (macOS system) faces it
+would draw "?".
+
+### WP6 — Instance layouts (PR #111, merged b822426)
+
+**Built.** `render.py`: `LAYOUT_GRID, LAYOUT_HEX, LAYOUT_RING = 0, 1,
+2`, `_hex_spiral(n)` and the pure `inst_positions(n, layout) -> (gx,
+gy)` (float32, in cells), which the instance block of `draw_scene`
+calls where it had four lines inline; the motion block after it is
+unchanged. GRID is the old four lines moved as they were (and any layout
+it does not know falls back to GRID); HEX a honeycomb spiral from the
+centre (whole at 7, 19, 37, 61, 91; a copy never moves as the count
+grows); RING one circle with `R = 1 / (2 sin(π/n))`, copy 0 at the top,
+clockwise on screen. 0 copies are two empty arrays and 1 the centre, in
+every layout. `view.py`: `ViewState.inst_layout`. `params.py`:
+`INST_LAYOUT = ["GRID", "HEX", "RING"]`, `view.inst_layout` ("Layout",
+`view` group, default GRID, persisted, modulatable like
+`view.inst_motion`, declared just before it); **"Grid motion / amp /
+rate" → "Field motion", "Field amp", "Field rate"**; `view.instances`'
+tip "laid out as Layout says". `ui.py`, `_page_view` only: under the
+count, while it is above 1, one row — layout (84 px), motion (96 px)
+and, while the motion is not STILL, amp (84 px) and rate (the rest); the
+six `rot.rate.*` rows are three rows of two `panel.half` cells.
+
+**Differs from §2, and why.**
+
+- **The folded rate cells say only the plane** ("XY") in a 32 px label
+  column (`self.half(f"rot.rate.{name}", name, label_w=32)`), the fix
+  over the hand-off commit: with the 78 px column and "XY RATE", a rate a
+  lane drives (the party presets route lanes onto `rot.rate.*`) reads
+  `base → effective` and was clipped at both ends of a 113 px slider; the
+  slider is now 159 px and the widest readout, `-66.56× → -66.56×`, fits
+  (measured by a test). The section ("rotation"), the hover and the
+  right-click menu still say "XY rate".
+- **The measured fit**: scroll range 0 in every state of 1, 7, 9 and 100
+  copies × GRID / HEX / RING × STILL / ORBIT; **88 px to spare with the
+  field row showing**, 123 px at one copy. The "before" 19 px is the
+  plan's measurement, not re-measured.
+- **HEX + ORBIT at amp 0.35 overlaps neighbours visibly** in the demo's
+  still frame. ORBIT's phase is `ph + (gx + gy) × 0.9`, and `gx + gy` is
+  not an integer on a honeycomb, so neighbours orbit out of step. It is
+  the plan's unchanged motion maths, not a bug; it wants judging (hand
+  check 97).
+- The amp slider (84 px) and the rate slider in the field row would clip
+  a modulated `base → effective` readout (the old 110 px amp slider
+  already did). No factory preset modulates them.
+
+**Tests.** `tests/test_render.py`: `test_grid_layout_is_the_frame_it_was`
+(positions for n = 2…100 and frames at 2, 3, 9, 16, 100, still and in
+each motion, against a frozen copy of the old lines),
+`test_hex_neighbours_are_one_cell_apart`,
+`test_ring_is_one_circle_with_neighbours_one_cell_apart`,
+`test_positions_for_any_count_and_layout`,
+`test_zero_and_one_are_the_same_in_every_layout`,
+`test_every_motion_moves_every_layout`,
+`test_every_layout_and_motion_draws_any_count`,
+`test_the_face_picture_follows_a_honeycomb`.
+`tests/test_params.py::test_inst_layout_is_declared` (and every factory
+preset, loaded over RING, brings back GRID).
+`tests/test_ui_shell.py::test_the_view_page_fits_with_a_field_in_motion`,
+`::test_the_field_row_and_the_rate_cells_keep_their_menus` (a real
+right-click on each of the ten rearranged controls opens its own menu).
+
+**Demo.** `tools/layout_shots.py` → `inst-layouts.png` (GRID, HEX and
+RING at 7, 19 and 37 copies, then GRID 19 WAVE, HEX 19 ORBIT, RING 12
+RIPPLE with the clock pinned; offscreen); `--page` →
+`view-page-layout.png` (7 copies, HEX, ORBIT) and `--page --driven` →
+`view-page-layout-driven.png` (a lane on every plane rate); hidden
+window.
+
+**Not verified.** Nothing was looked at in the running app, the real
+render window or on a projector: whether the motions read well in each
+layout, and whether HEX + ORBIT's overlap is wanted, is hand check 97.
+HiDPI: the page shots are at the hidden window's framebuffer scale; the
+fit was measured in logical pixels.
+
+### WP7 — Docs and hand checks
+
+This section and the "*As built:*" notes above; `ARCHITECTURE.md` (§1,
+§2, §3.1, §4), `ENGINEERING.md` (§2's stages, §2.3 and its LOOKBACK
+page, §2.4 and the FX page, §6), `DECISIONS.md` (dated 2026-10-04 rows
+in Render, UI and The control model, one of them the owner's, and five
+extended), `DECISION-REGISTER.md` (rows 65–71),
+`11-hand-checks.md` (a placeholder heading for plan 19's group O, group
+P as checks 91–98, notes on checks 5, 9, 59, 60, 62 and 63),
+`plans/README.md`, `CHECKPOINT.md` and the roadmap's pointer. Plan 19's
+documents (its "As built", its register rows and group O, checks 81–90)
+are written by plan 19's docs package after this one. Left stale, not
+being documents: `library/dream/wake.json`'s note ("Echo mix, fade, hue
+and dream mix"); `Renderer._tile`'s docstring ("across the instance
+grid"); `tests/test_render.py`'s assertion message "instance grid
+missing from a quadrant"; and `lookback-speed.png` (above).
 
 ## Appendix A — Hand checks, group P
 
 For `11-hand-checks.md`, added by WP7 with final numbers. The text below
 is the group as it will read.
+
+*As built:* the group as it is run is `11-hand-checks.md` checks 91–98
+(P1–P8 in order), made true to the code: the readouts, the drag's
+targets, the faint per-face effects and the HEX + ORBIT overlap are
+there, not here.
 
 ## P. Plan 20 — the faces as an effect target, the chain view, the look-back page, layouts
 
