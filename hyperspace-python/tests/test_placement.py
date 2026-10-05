@@ -115,6 +115,18 @@ def test_a_config_monitor_that_is_not_there_is_a_note():
         placement.default_rect("render", RENDER, LAPTOP), "")
 
 
+def test_what_names_a_later_output_in_the_notes():
+    """Plan 21 WP3: `place` is called once per render output; `what`
+    ("output 2 (projector)") names it in the notes and changes nothing else."""
+    gone = entry(1900, 120, 1000, 700, PROJECTOR.name)
+    for args in ((2, gone), (-1, {"x": "a"}), (-1, gone)):
+        scr = BOTH if args[1] is not gone or args[0] == 2 else [LAPTOP]
+        plain = place("render", RENDER, scr, *args)
+        named = place("render", RENDER, scr, *args, what="output 2 (projector)")
+        assert named[0] == plain[0] and plain[1] and "output 2 (projector)" in named[1]
+        assert "[output] monitor" not in named[1] and "render window" not in named[1]
+
+
 def test_a_remembered_size_is_clipped_to_its_screen():
     r, _ = place("render", RENDER, BOTH, -1, entry(1800, 40, 5000, 3000, PROJECTOR.name))
     assert r == (1800, 40, PROJECTOR.w, PROJECTOR.h)

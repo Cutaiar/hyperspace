@@ -24,9 +24,11 @@ The file::
 
 ``x, y, w, h`` are GLFW screen coordinates of the content area, always the
 *windowed* rect (never a fullscreen or overlay cover: whether a launch is
-fullscreen is the config's say, fork F6). ``render`` is a list — one entry
-today, one per output later — and `place` is called once per window, so
-nothing here assumes how many render windows there are. ``screen`` is the
+fullscreen is the config's say, fork F6). ``render`` is a list, one entry
+per render output in the config's order (plan 21: ``[[output.screens]]``;
+one entry with no list), and `place` is called once per window, so
+nothing here assumes how many render windows there are. A file with one
+entry still loads for a rig with two: the second opens at its default spot. ``screen`` is the
 name of the screen the rect was on, kept for the note; placement is decided
 by geometry alone. The file is written on quit and on restart only (fork
 F5); delete it to forget.
@@ -254,11 +256,13 @@ def index(monitor, n: int | None = None) -> int:
 
 
 def place(kind: str, size: tuple[int, int], scr: list[Screen],
-          monitor: int, remembered: dict | None) -> tuple[Rect, str]:
+          monitor: int, remembered: dict | None, what: str = "") -> tuple[Rect, str]:
     """Where one window opens: (rect, note or "").
 
     `kind` is "render" or "control"; `monitor` is that window's config
     index (−1: no say); `remembered` is its entry from the file, or None.
+    `what` names the window in the notes in place of `kind` ("output 2",
+    plan 21: one call per render output); it changes nothing else.
 
     1. `monitor` ≥ 0 and that screen exists: the remembered rect if it is
        usable and its centre is on that screen; else the default spot there.
@@ -279,18 +283,20 @@ def place(kind: str, size: tuple[int, int], scr: list[Screen],
     if monitor >= len(scr):
         n = len(scr)
         have = "0" if n == 1 else f"0–{n - 1}"
-        notes.append(f"config: [output] {_key(kind)} = {monitor}, but {n} "
+        key = f"{what} monitor" if what else f"[output] {_key(kind)}"
+        notes.append(f"config: {key} = {monitor}, but {n} "
                      f"screen{'s are' if n != 1 else ' is'} connected ({have}) — "
                      "using the last position")
     elif monitor >= 0:
         target = scr[monitor]
     rect = _rect(remembered)
     if remembered is not None and rect is None:
-        notes.append(f"placement: the {kind} window's entry in {FILE} is not a rect — ignored")
+        notes.append(f"placement: the {what or kind} window's entry in {FILE} is not a rect — "
+                     "ignored")
     if rect is not None:
         fitted = _fit(rect, scr)
         if fitted is None:
-            notes.append(_gone(kind, remembered, rect, target or scr[0], scr))
+            notes.append(_gone(what or kind, remembered, rect, target or scr[0], scr))
         elif target is None or _on(fitted, target):
             return fitted, "; ".join(notes)
         # else the config names another screen than the one it was on: the

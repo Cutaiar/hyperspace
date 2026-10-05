@@ -8,7 +8,9 @@ dim. This module is the pure half of that: what an output asks for
 an output of another shape (`fit`), and the one-frame record the
 renderer fills in for an output (`View`, with `Handoff` for an output in
 another window's context). `Renderer.draw_outputs` (render.py) does the
-drawing.
+drawing. WP3 adds the rig's side: `Slot`, one listed output for the run
+(app.py fills it from `[[output.screens]]`), and `Presenter`, which shows
+a `Handoff` in another window's context.
 
 Render stack (ARCHITECTURE §3): it only reads. This module imports
 moderngl and glsl at most — never app, ui or params — and the
@@ -21,6 +23,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import moderngl
+
+from .glsl import QUAD_VS
 
 MAX_OUTPUTS = 4
 
@@ -155,3 +159,199 @@ class View:
         if self.viewport is not None:
             return tuple(int(v) for v in self.viewport)
         return 0, 0, int(self.size[0]), int(self.size[1])
+
+
+# ---------------------------------------------------------------- WP3: the list
+
+@dataclass
+class Slot:
+    """One output the config lists (`[[output.screens]]`, or the one
+    `[output]` window when there is no list), for the whole run: its place
+    `n` (1-based — `output.2.*` is always the second entry, opened or
+    not), its name, its switches (the config's launch values; the
+    output.N.* params write them, WP4), and its window — or, for a later
+    output whose screen is not connected, `missing`, the reason it was not
+    opened (fork F9). `output` is its `overlay.Output`, `presenter` its
+    `Presenter` (outputs after the first), `error` the last present that
+    raised ("" once one succeeds), `size` its framebuffer at the last frame.
+    The app fills it; the renderer never sees it, only the `View` built
+    from it each frame."""
+
+    n: int
+    name: str = ""
+    switches: Switches = field(default_factory=Switches)
+    monitor: int = -1
+    fullscreen: bool = False
+    win: Any = None
+    missing: str = ""
+    output: Any = None
+    presenter: Any = None
+    error: str = ""
+    size: tuple[int, int] = (0, 0)
+
+    @property
+    def label(self) -> str:
+        """"output 2 (projector)", or "output 2" with no name."""
+        return f"output {self.n} ({self.name})" if self.name else f"output {self.n}"
+
+    @property
+    def opened(self) -> bool:
+        return self.win is not None
+
+
+# a frame texture or a layer into a rect of a presenter's framebuffer:
+# 1:1 by texelFetch (the renderer's SHOW_FS) or scaled by the sampler,
+# times `u_k` (1 for the frame, ghost.alpha for a layer); on an opaque
+# ground the frame writes alpha 1
+PRESENT_FS = """
+#version 330
+in vec2 v_uv;
+uniform sampler2D u_src;
+uniform int u_scaled;
+uniform ivec2 u_origin;      // the rect's origin (gl_FragCoord is window-relative)
+uniform float u_k;
+uniform int u_opaque;
+out vec4 f_color;
+void main() {
+    vec4 c = u_scaled != 0 ? texture(u_src, v_uv)
+                           : texelFetch(u_src, ivec2(gl_FragCoord.xy) - u_origin, 0);
+    c *= u_k;
+    if (u_opaque != 0) c.a = 1.0;
+    f_color = c;
+}
+"""
+
+# the dim: blending only (render.DIM_FS, `Renderer.dim_pass`'s blend)
+PRESENT_DIM_FS = """
+#version 330
+uniform float u_factor;
+out vec4 f_color;
+void main() { f_color = vec4(0.0, 0.0, 0.0, u_factor); }
+"""
+
+
+class Presenter:
+    """One output after the first (plan 21 WP3): a moderngl handle on that
+    window's context and its own programs and vertex arrays — a share
+    group shares textures and programs, never framebuffers or vertex
+    arrays, so the renderer's cannot draw here (§1 row 1).
+
+    `present(handoff, size)` follows `Handoff`'s five steps in this
+    context: the ground, the frame into its rect, the hands, the readout,
+    the dim. The handoff's textures belong to the renderer's context and
+    are wrapped by GL name (`ctx.external_texture`); the caller has flushed
+    that context first. Builds nothing until the first `present`, which
+    runs with this context current; `on_reload` only marks the programs
+    stale (a reload runs in whatever context is current), so the next
+    `present` rebuilds them here. Leaves this context's window
+    framebuffer bound, a raise included."""
+
+    def __init__(self, ctx: moderngl.Context):
+        self.ctx = ctx
+        self._prog = self._vao = self._dim = self._dim_vao = None
+        self._ext: dict[tuple[int, tuple[int, int]], moderngl.Texture] = {}
+        self._stale = False
+        self.presented = 0
+
+    def _build(self) -> None:
+        if getattr(self, "_stale", False):
+            self._drop()
+            self._stale = False
+        if self._prog is not None:
+            return
+        ctx, made = self.ctx, []
+        try:
+            prog = ctx.program(vertex_shader=QUAD_VS, fragment_shader=PRESENT_FS)
+            made.append(prog)
+            vao = ctx.vertex_array(prog, [])
+            made.append(vao)
+            dim = ctx.program(vertex_shader=QUAD_VS, fragment_shader=PRESENT_DIM_FS)
+            made.append(dim)
+            dim_vao = ctx.vertex_array(dim, [])
+        except Exception:
+            for res in made:
+                res.release()
+            raise
+        self._prog, self._vao, self._dim, self._dim_vao = prog, vao, dim, dim_vao
+
+    def _wrap(self, tex) -> moderngl.Texture:
+        """The renderer's texture as this context sees it, by GL name."""
+        key = (int(Handoff.name(tex)), tuple(int(v) for v in tex.size))
+        have = self._ext.get(key)
+        if have is None:
+            if len(self._ext) > 16:      # names of textures long gone
+                self._ext.clear()
+            have = self._ext[key] = self.ctx.external_texture(key[0], key[1], 4, 0, "f1")
+        return have
+
+    def present(self, ho: Handoff, size: tuple[int, int], target=None) -> None:
+        """Draw `ho` into this window's framebuffer (`target`: another
+        framebuffer on this context, for the tests) of `size` px."""
+        ctx = self.ctx
+        fb = target if target is not None else ctx.screen
+        full = (0, 0, int(size[0]), int(size[1]))
+        try:
+            self._build()
+            fb.use()
+            ctx.viewport = full
+            ctx.clear(0.0, 0.0, 0.0, float(ho.bg_alpha))                         # 1
+            opaque = ho.bg_alpha >= 1.0
+            prog, vao = self._prog, self._vao
+            prog["u_src"].value = 0
+            rect = tuple(int(v) for v in ho.rect)
+            if ho.frame is not None and rect[2] > 0 and rect[3] > 0:            # 2
+                ctx.viewport = rect
+                ctx.disable(moderngl.BLEND)
+                self._wrap(ho.frame).use(location=0)
+                prog["u_scaled"].value = int(tuple(rect[2:]) != tuple(ho.frame_size))
+                prog["u_origin"].value = rect[:2]
+                prog["u_k"].value = 1.0
+                prog["u_opaque"].value = int(opaque)
+                vao.render(moderngl.TRIANGLES, vertices=3)
+            for layer in (ho.hands, ho.readout):                                # 3, 4
+                if layer is None or rect[2] <= 0 or rect[3] <= 0:
+                    continue
+                ctx.viewport = rect
+                ctx.enable(moderngl.BLEND)
+                ctx.blend_func = ((moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA, moderngl.ZERO,
+                                   moderngl.ONE) if opaque else
+                                  (moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA, moderngl.ONE,
+                                   moderngl.ONE_MINUS_SRC_ALPHA))
+                self._wrap(layer).use(location=0)
+                prog["u_scaled"].value = 1          # as Ghost.composite samples it
+                prog["u_origin"].value = rect[:2]
+                prog["u_k"].value = float(ho.alpha)
+                prog["u_opaque"].value = 0
+                vao.render(moderngl.TRIANGLES, vertices=3)
+            factor = min(max(float(ho.factor), 0.0), 1.0)
+            if factor < 1.0:                                                    # 5
+                ctx.viewport = full
+                ctx.enable(moderngl.BLEND)
+                ctx.blend_func = (moderngl.ZERO, moderngl.SRC_ALPHA, moderngl.ZERO,
+                                  moderngl.ONE if opaque else moderngl.SRC_ALPHA)
+                self._dim["u_factor"].value = factor
+                self._dim_vao.render(moderngl.TRIANGLES, vertices=3)
+            self.presented += 1
+        finally:
+            ctx.enable(moderngl.BLEND)
+            ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
+            fb.use()
+            ctx.viewport = full
+
+    def on_reload(self) -> None:
+        """Hot reload: rebuild at the next `present`, in this context."""
+        self._stale = True
+
+    def _drop(self) -> None:
+        for res in (self._dim_vao, self._dim, self._vao, self._prog):
+            if res is not None:
+                try:
+                    res.release()
+                except Exception:  # noqa: BLE001, S110 — teardown is best-effort
+                    pass
+        self._prog = self._vao = self._dim = self._dim_vao = None
+        self._ext = {}
+
+    def release(self) -> None:
+        """Free the programs and arrays; call with this context current."""
+        self._drop()

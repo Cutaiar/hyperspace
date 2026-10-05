@@ -887,3 +887,71 @@ def test_the_presenter_handoff_carries_the_readout(ctx):
     assert pv.handoff.hands is r.ghost.tex
     assert pv_off.handoff.readout is None and pv_off.handoff.hands is None
     assert r.stats["chain_runs"] == 2 and r.stats["direct"] is False
+
+
+# ---------------------------------------------------------------- WP3: the presenter
+
+def _presented(ctx, r, pairs, frames=4):
+    """Each (switches, size) twice in one frame: a target view and a
+    presenter view. The presenter (outputs.Presenter, on this context:
+    a stand-in for another window's, which shares textures by GL name)
+    shows its handoff into a framebuffer of that size. Returns
+    [(target picture, presented picture)]."""
+    pres = O.Presenter(ctx)
+    vs = [O.View(O.Switches(), (W, H), target=fbo(ctx))]
+    for sw, size in pairs:
+        vs.append(O.View(sw, size, target=fbo(ctx, *size)))
+        vs.append(O.View(sw, size, presenter=pres))
+    run(ctx, r, vs, frames=frames)
+    out = []
+    for i in range(len(pairs)):
+        tv, pv = vs[1 + 2 * i], vs[2 + 2 * i]
+        dst = fbo(ctx, *pv.size)
+        pres.present(pv.handoff, pv.size, target=dst)
+        assert ctx.fbo is dst and ctx.viewport == (0, 0, *pv.size)    # left bound
+        out.append((px(ctx, tv.target), px(ctx, dst)))
+    vs[0].target.use()
+    pres.release()
+    return out
+
+
+@pytest.mark.parametrize("effects", [(), ("warp", "kaleido")])
+def test_the_presenter_shows_what_a_target_view_shows(ctx, effects):
+    """WP3's presenter follows the `Handoff`'s five steps with its own
+    programs: for every switch state, at the frame's size and letterboxed
+    into another shape, with ghost.alpha, the guide's readout layer and
+    master × own dim, its picture is the target view's, byte for byte."""
+    import numpy as np
+
+    S = O.Switches
+    r = rig(ctx, effects=effects, alpha=0.7, dim=0.8, guide=1)
+    pairs = [(sw, (W, H)) for sw in EIGHT]
+    pairs += [(S(dim=0.5), (300, 300)), (S(through=True, dim=0.6), (W, H)),
+              (S(scene=False), (640, 300))]
+    got = _presented(ctx, r, pairs)
+    for (sw, size), (want, shown) in zip(pairs, got, strict=True):
+        assert np.array_equal(want, shown), (sw, size)
+        assert shown[..., 3].min() == 255                    # a later output is opaque
+    assert any(p[0][..., :3].max() > 100 for p in got)       # something was drawn
+
+
+def test_the_presenter_rebuilds_after_a_reload_in_its_own_context(ctx):
+    """`on_reload` touches no GL (a reload runs in whatever context is
+    current); the next `present` rebuilds the programs, and the picture
+    is the same."""
+    import numpy as np
+
+    r = rig(ctx)
+    pres = O.Presenter(ctx)
+    assert pres._prog is None                               # nothing built before a present
+    pv = O.View(O.Switches(), (W, H), presenter=pres)
+    run(ctx, r, [O.View(O.Switches(), (W, H), target=fbo(ctx)), pv], frames=2)
+    a, b = fbo(ctx), fbo(ctx)
+    pres.present(pv.handoff, pv.size, target=a)
+    old = pres._prog
+    pres.on_reload()
+    assert pres._prog is old                                # marked, not released
+    pres.present(pv.handoff, pv.size, target=b)
+    assert pres._prog is not old and np.array_equal(px(ctx, a), px(ctx, b))
+    pres.release()
+    assert pres._prog is None and pres._ext == {}
