@@ -86,12 +86,16 @@ def boot(home, show: str | None = None, *, fx=None, dream=None, ghost=None):
     lfo.register(reg, lfos, clock)
     output = Output(None, None)
     output.register(reg)
+    # the desk's session params before attach, as app.main has them (plan 18
+    # WP2): declared late, desk.slew would read as an unsaved show
+    table = Bindings.load(bindings_path(home), legacy_midi=None)
+    routing.register_desk(reg, table)
     lib.attach(reg)
     # the panel's own params, declared as ui.Panel declares them (no imgui)
     from hyperspace.ui import Panel
     Panel._register_panel_params(SimpleNamespace(reg=reg, open=True, cheatsheet=True,
                                                  desk=True, page=1))
-    router = Router(reg, Bindings.load(bindings_path(home), legacy_midi=None))
+    router = Router(reg, table)
     presets = Presets(lib, reg, router)
     preset.migrate_home(lib, router)
     learn = Learn(reg, router.table, lane=router.lane)
