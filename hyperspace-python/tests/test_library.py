@@ -832,3 +832,62 @@ def test_the_trash_is_no_group_and_is_never_watched(rig, tmp_path):
     assert lib.poll(now=2.0) is False
     assert reg["view.bright"].value == 2.0 and lib.current("view") == "Keeper"
     assert json.loads(path.read_text())["values"]["view.bright"] == 2.0
+
+
+# ------------------------------------------- plan 15 WP4: save-as's name and slot
+
+def test_next_name_counts_on_from_a_trailing_number():
+    """`next_name(base, taken)`: the first "<stem> <n>" whose slug is free.
+    A base ending in a number after a stem counts on from it; any other
+    base is its own stem and starts at 2; no base is PRESET, from 1."""
+    nn = library.next_name
+    assert nn("TRIP", set()) == "TRIP 2"
+    assert nn("TRIP 2", set()) == "TRIP 3"
+    assert nn("TRIP 2", {"trip-3"}) == "TRIP 4"                # a gap is skipped…
+    assert nn("TRIP", {"trip-2", "trip-3", "trip-5"}) == "TRIP 4"
+    assert nn("TRIP 2", {"trip-2"}) == "TRIP 3"                # …and the base's own number never reused
+    assert nn("2001", set()) == "2001 2"                       # a number alone is a name
+    assert nn("2001 2", set()) == "2001 3"
+    assert nn("BIG BLUE WAVE", set()) == "BIG BLUE WAVE 2"
+    assert nn("BIG BLUE WAVE 9", set()) == "BIG BLUE WAVE 10"
+    assert nn("TRIP2", set()) == "TRIP2 2"                     # no space: not a count
+    assert nn("TRIP  7", set()) == "TRIP 8"                    # any whitespace before it is
+    assert nn("ACID (2)", set()) == "ACID (2) 2"
+    for none in (None, "", "   "):
+        assert nn(none, set()) == "PRESET 1"
+    assert nn(None, {"preset-1", "preset-2"}) == "PRESET 3"
+    # `taken` is slugs: a name that differs only in case or punctuation is taken
+    assert nn("Trip", {slug("TRIP 2")}) == "Trip 3"
+    assert nn("TRIP", {"trip-2"}) != nn("TRIP", set())
+
+
+def test_next_empty_reads_the_banks_own_length(tmp_path):
+    """Plan 15 §1 row 13: the next empty slot is read off the bank's own
+    list — neither `library.SLOTS` nor `routing.BANK_SLOTS` — so plan 19's
+    bank of twenty-four answers with no change here, and a save-as and the
+    slot menu's two calls reach its far slots."""
+    import inspect
+
+    r = make(tmp_path, None)
+    pr = r.lib.project
+    assert len(pr.bank) == library.SLOTS == routing.BANK_SLOTS == 8
+    assert pr.next_empty() is None                              # the party show is full
+    pr.bank[6] = pr.bank[2] = None
+    assert pr.next_empty() == 2
+    pr.bank = [f"P{k}" for k in range(24)]                      # a bank of 24
+    assert pr.next_empty() is None
+    pr.bank[23] = None
+    assert pr.next_empty() == 23
+    pr.bank[17] = None
+    assert pr.next_empty() == 17
+    r.reg["preset.save_new"].fire()                             # into slot 18
+    name = r.lib.current("presets")
+    assert pr.bank[17] == name and pr.active == 17 and r.lib.status == f"saved {name} → F18"
+    pr.put_slot(23, "WAKE")
+    assert pr.bank[23] == "WAKE" and pr.next_empty() is None
+    pr.clear_slot(20)
+    assert pr.bank[20] is None and pr.next_empty() == 20
+    for fn in (library.Project.next_empty, library.Project.save_new, library.Project.put_slot,
+               library.Project.clear_slot, library.Project._set_slot):
+        src = inspect.getsource(fn)
+        assert "SLOTS" not in src, fn.__name__

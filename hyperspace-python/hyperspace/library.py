@@ -141,6 +141,8 @@ LAST_SHOW = "last_show"             # <home>/last_show: the show opened last
 RENAMED_NOTE = "RENAMED.txt"
 UNTITLED = "untitled"
 # what `Project.home` says when the show names no "starts on" (plan 15 WP2)
+# the tail of save-as's note on a full bank (`Project.save_new`)
+BANK_FULL = "the bank is full: it is in the preset list"
 HOME_UNSET = "home: this show names no 'starts on' preset — pick one on the PRESETS page"
 
 # the preset a group resets to; any other group uses one named "default"
@@ -284,6 +286,25 @@ def _settled(note: Path, what: str) -> None:
 def slug(name: str) -> str:
     s = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
     return s or "untitled"
+
+
+def next_name(base: str | None, taken: set[str]) -> str:
+    """A name for a new preset grown from `base`, the loaded preset's name
+    (plan 15 WP4, fork 16): the first ``"<stem> <n>"`` whose slug is not in
+    `taken`, a set of slugs. A base that ends in whitespace and a number
+    after a non-empty stem counts on from that number (``TRIP 2`` →
+    ``TRIP 3``); any other is its own stem and counting starts at 2
+    (``TRIP`` → ``TRIP 2``, ``2001`` → ``2001 2``). With no base the stem
+    is ``PRESET`` and counting starts at 1."""
+    base = (base or "").strip()
+    if not base:
+        stem, n = "PRESET", 1
+    else:
+        m = re.fullmatch(r"(.*\S)\s+(\d+)", base, re.DOTALL)
+        stem, n = (m.group(1), int(m.group(2)) + 1) if m else (base, 2)
+    while slug(f"{stem} {n}") in taken:
+        n += 1
+    return f"{stem} {n}"
 
 
 def _read_json(path: Path) -> dict:
@@ -674,6 +695,87 @@ class Project:
             name = f"{base} ({n})"
         return name
 
+    def next_empty(self) -> int | None:
+        """The first empty slot, None on a full bank. The bank's own list
+        is the one place its size is read (plan 15 §1 row 13)."""
+        return next((k for k in range(len(self.bank)) if self.bank[k] is None), None)
+
+    def save_new(self) -> None:
+        """The desk's save-as (plan 15 WP4, decision 29; the `preset.save_new`
+        trigger on the clip-stop row): the live state as a **new** preset,
+        named from the loaded one (`next_name`), into the next empty slot.
+        It never overwrites and never shadows: the name's slug is free
+        among the file stems of both preset folders, every listed name and
+        the bank's names. The new preset becomes the loaded one with a
+        clean dot, as the panel's "as…" does, so a second save counts on.
+        A full bank saves to the list and says so. The show is written at
+        once; no undo step — nothing live changes."""
+        lib, presets = self.lib, self._loader()
+        if lib.reg is None:
+            return
+        if presets is None:
+            self.bank_error = "presets: no preset loader"
+            return
+        taken = ({*lib._files(PRESETS)} | {slug(n) for n in lib.list(PRESETS)}
+                 | {slug(n) for n in self.bank if n})
+        name = next_name(lib.current(PRESETS), taken)
+        try:
+            presets.save_as(name)
+            k = self.next_empty()
+            if k is None:
+                lib.say(warning=f"saved {name} — {BANK_FULL}")
+            else:
+                self.bank[k] = name
+                self.active = k
+                self.write()
+                self._room()
+                lib.say(f"saved {name} → F{k + 1}")
+            self.bank_error = ""
+        except (LibraryError, OSError) as e:          # a full disk must not stop the show
+            self.bank_error = f"presets: {e}"
+
+    def put_slot(self, k: int, name: str) -> None:
+        """Point slot k at a preset (the PRESETS page's "put preset
+        here…"): the file must exist, else a warning and nothing changes.
+        The show is written at once (a factory show's first write makes
+        your copy); no preset file is written or deleted; no undo step."""
+        if not 0 <= k < len(self.bank):
+            return
+        if self.lib.path_of(PRESETS, name) is None:
+            self.lib.say(warning=f"F{k + 1}: no preset {name!r}")
+            return
+        self._set_slot(k, name, f"F{k + 1}: {name}")
+
+    def clear_slot(self, k: int) -> None:
+        """Empty slot k (the PRESETS page's "clear slot"): the show is
+        written at once; the preset's file stays in the list."""
+        if 0 <= k < len(self.bank) and self.bank[k] is not None:
+            self._set_slot(k, None, f"F{k + 1}: cleared — {self.bank[k]} is still in the "
+                                    "preset list")
+
+    def _set_slot(self, k: int, name: str | None, said: str) -> None:
+        """One slot's pointer, written into the show now; `active` follows
+        the loaded preset to a slot that names it, or to none."""
+        lib, was = self.lib, self.bank[k]
+        self.bank[k] = name
+        try:
+            self.write()
+        except (LibraryError, OSError) as e:          # said, and the bank as on disk
+            self.bank[k] = was
+            self.bank_error = f"presets: {e}"
+            return
+        self.bank_error = ""
+        cur = lib.current(PRESETS)
+        if not 0 <= self.active < len(self.bank) or self.bank[self.active] != cur:
+            self.active = self.bank.index(cur) if cur in self.bank else -1
+        self._room()
+        lib.say(said)
+
+    def _room(self) -> None:
+        """The bank changed: an earlier "the bank is full" is no longer news."""
+        if self.lib.warning.endswith(BANK_FULL):
+            self.lib.warning = ""
+
     def cycle(self, step: int = 1) -> None:
         """Flip to the next filled slot — the pad's B and the APC's QUANT."""
         filled = [k for k, s in enumerate(self.bank) if s is not None]
@@ -960,6 +1062,9 @@ class Library:
         self.status = ""
         self.error = ""
         self.warning = ""
+        # how many times `say` set each of `status` and `warning`: a line
+        # said again in the same words shows again (the footer, ui.py)
+        self.said: dict[str, int] = {}
         self._fresh: dict[str, Any] = {}
         self._current: dict[str, str | None] = {}     # group → loaded preset name
         self._loaded: dict[str, Any] = {}             # group → what that load produced
@@ -978,6 +1083,19 @@ class Library:
         self.unshadow()
         self._open_default()
         self._mtimes = self._scan()
+
+    def say(self, status: str | None = None, *, warning: str | None = None) -> None:
+        """Set `status` or `warning` and count it in `said`, so the footer
+        shows the line again even when its words are the ones it showed
+        last (plan 15 WP4: two presets put into slots one after the other,
+        a slot cleared twice)."""
+        said = self.__dict__.setdefault("said", {})   # (a Library from before a hot reload)
+        if status is not None:
+            self.status = status
+            said["status"] = said.get("status", 0) + 1
+        if warning is not None:
+            self.warning = warning
+            said["warning"] = said.get("warning", 0) + 1
 
     def unshadow(self) -> list[str]:
         """`unshadow_default` over this home: each note on stderr and in
