@@ -768,3 +768,40 @@ def test_a_hand_that_leaves_fades_out_on_screen(ctx):
     lit = lambda a: a[left][..., :3].astype(int).sum()
     assert lit(full) > lit(fading) > lit(gone)
     assert np.array_equal(gone[left], none[left])
+
+
+def test_one_layer_composites_onto_many_targets_as_draw_does(ctx):
+    """Plan 21 WP1: `layer` renders the hands once, `composite` lays them
+    over any number of targets — each the same bytes `draw` leaves — and
+    `tex` is the layer only while one was drawn. With nothing to show,
+    `layer` says so and `composite` touches nothing."""
+    def ground():
+        fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((W, H), 4)])
+        fbo.use()
+        ctx.viewport = (0, 0, W, H)
+        ctx.clear(0.1, 0.2, 0.3, 1.0)
+        return fbo
+
+    def px(fbo):
+        return np.frombuffer(fbo.read(components=4), dtype=np.uint8).copy()
+
+    a = Renderer(ctx).ghost
+    a.state.on, a.state.alpha, a.source = True, 0.7, tracker()
+    want = ground()
+    assert a.draw(want, (0, 0, W, H), 1.0)
+    b = Renderer(ctx).ghost
+    b.state.on, b.state.alpha, b.source = True, 0.7, tracker()
+    assert b.tex is None
+    assert b.layer((W, H), 1.0) and b.tex is not None and b.tex.size == (W, H)
+    for _ in range(2):
+        got = ground()
+        assert b.composite(got, (0, 0, W, H), opaque=True)
+        assert ctx.fbo is got and ctx.viewport == (0, 0, W, H)
+        assert np.array_equal(px(got), px(want))
+        got.release()
+    b.source = tracker({})                             # no hand: no layer, nothing composited
+    assert not b.layer((W, H), 2.0) and b.tex is None
+    empty = ground()
+    assert not b.composite(empty, (0, 0, W, H))
+    assert np.array_equal(px(empty), px(ground()))
+    assert ctx.error == "GL_NO_ERROR"

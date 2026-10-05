@@ -935,7 +935,10 @@ class _Side:
 
 
 class Ghost:
-    """The ghost-hands pass: `draw` after the FX chain, onto the target.
+    """The ghost-hands pass: `layer` renders the hands once a frame into
+    their own texture (`tex`), `composite` lays it over a target — after
+    the FX chain, onto each output that shows the hands (plan 21 WP1).
+    `draw` is the two together, onto one target.
 
     `source` is anything with ``.skeleton`` (side → `hands.core.skeleton`
     for the hands present this frame) — the HandsIO, set by the app when
@@ -958,6 +961,7 @@ class Ghost:
         self._fbo: moderngl.Framebuffer | None = None     # on the texture
         self._msaa: moderngl.Framebuffer | None = None    # multisampled, with depth
         self._res: list = []
+        self._shown = False      # `layer` drew this frame: `tex` is the layer
         # why the pass could not build or draw — the first reason, kept until
         # the ghost is switched off or the module reloads (the HANDS page
         # shows it); `_build_failed` alone stops the build being retried
@@ -1035,18 +1039,51 @@ class Ghost:
 
     def draw(self, target: moderngl.Framebuffer, vp: tuple[int, int, int, int], t: float,
              opaque: bool = True) -> bool:
-        """The hands over `target`'s viewport `vp`, if any show. Leaves
-        `target` bound with that viewport; touches no GL state when nothing
+        """The hands over `target`'s viewport `vp`, if any show: `layer` at
+        the viewport's size, then `composite`. Leaves `target` bound with
+        that viewport, a raise included; touches no GL state when nothing
         draws. True when it drew."""
         vx, vy, vw, vh = vp
-        got = self.poses(t, max(vw, 1) / max(vh, 1))
+        try:
+            if not self.layer((max(vw, 1), max(vh, 1)), t):
+                return False
+        except BaseException:
+            self.ctx.disable(moderngl.DEPTH_TEST)
+            self.ctx.enable(moderngl.BLEND)
+            self.ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
+            target.use()
+            self.ctx.viewport = (vx, vy, vw, vh)
+            raise
+        self.composite(target, vp, opaque)
+        return True
+
+    @property
+    def tex(self) -> moderngl.Texture | None:
+        """The hands' layer `layer` drew last (premultiplied by each hand's
+        fade, frame-sized, the readout in it unless `readout` holds that);
+        None when it drew nothing. Valid until the next `layer`."""
+        return self._tex if getattr(self, "_shown", False) else None
+
+    def layer(self, size: tuple[int, int], t: float) -> bool:
+        """Render the hands' layer at `size` (the frame's) for time `t`:
+        the fades stepped, the hands drawn opaque with depth into their own
+        framebuffer, the tethers flat over them, resolved into `tex`.
+        False — nothing drawn, no GL state touched when nothing shows —
+        when the ghost is off, no hand shows, or the programs or the
+        target would not build (`error` says why). Called once a frame;
+        `composite` lays it over as many targets as want it. Leaves its own
+        framebuffer bound: the caller binds its target next (a raise
+        included — `draw` and `Renderer._draw_frame` do)."""
+        self._shown = False
+        w, h = max(int(size[0]), 1), max(int(size[1]), 1)
+        got = self.poses(t, w / h)
         if got is None:
             return False
         poses, view_proj, eye = got
         ctx = self.ctx
         if self.geometry is None and not self._build():
             return False
-        if not self._ensure((max(vw, 1), max(vh, 1))):
+        if not self._ensure((w, h)):
             return False                 # nothing bound, nothing drawn: no layer
         try:
             draw_fbo = self._msaa if self._msaa is not None else self._fbo
@@ -1061,28 +1098,44 @@ class Ghost:
                 self._draw_tethers(poses, view_proj)
             if self._msaa is not None:
                 ctx.copy_framebuffer(self._fbo, self._msaa)
-            # over the target, premultiplied. On an opaque ground its alpha
-            # is left exactly as it is (plan 14 WP1); on overlay's
-            # see-through ground the hands add their coverage to it
-            target.use()
-            ctx.viewport = (vx, vy, vw, vh)
-            ctx.enable(moderngl.BLEND)
-            ctx.blend_func = ((moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA, moderngl.ZERO,
-                               moderngl.ONE) if opaque else
-                              (moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA, moderngl.ONE,
-                               moderngl.ONE_MINUS_SRC_ALPHA))
-            self._tex.use(location=0)
-            self._comp["u_hands"].value = 0
-            self._comp["u_alpha"].value = float(self.state.alpha)
-            self._comp_vao.render(moderngl.TRIANGLES, vertices=3)
         finally:
             # a raise anywhere above leaves the state the frame's other
             # passes expect: blending on, as the scene pass sets it
             ctx.disable(moderngl.DEPTH_TEST)
             ctx.enable(moderngl.BLEND)
             ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
+        self._shown = True
+        return True
+
+    def composite(self, target: moderngl.Framebuffer, vp: tuple[int, int, int, int],
+                  opaque: bool = True) -> bool:
+        """Lay the layer `layer` drew over `target`'s rect `vp` at
+        `ghost.alpha`, premultiplied, scaled to the rect (1:1 when it is
+        the layer's size). On an opaque ground the target's alpha is left
+        exactly as it is (plan 14 WP1); on overlay's see-through ground the
+        hands add their coverage to it. Leaves `target` bound with `vp`
+        and blending on, a raise included. False when there is no layer."""
+        tex = self.tex
+        if tex is None or self._comp is None:
+            return False
+        ctx = self.ctx
+        try:
             target.use()
-            ctx.viewport = (vx, vy, vw, vh)
+            ctx.viewport = tuple(vp)
+            ctx.enable(moderngl.BLEND)
+            ctx.blend_func = ((moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA, moderngl.ZERO,
+                               moderngl.ONE) if opaque else
+                              (moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA, moderngl.ONE,
+                               moderngl.ONE_MINUS_SRC_ALPHA))
+            tex.use(location=0)
+            self._comp["u_hands"].value = 0
+            self._comp["u_alpha"].value = float(self.state.alpha)
+            self._comp_vao.render(moderngl.TRIANGLES, vertices=3)
+        finally:
+            ctx.enable(moderngl.BLEND)
+            ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
+            target.use()
+            ctx.viewport = tuple(vp)
         return True
 
     def _draw_tethers(self, poses: list[HandPose], view_proj: np.ndarray) -> None:
