@@ -20,9 +20,10 @@ import json
 import time
 from pathlib import Path
 
-# a tape that does not loop goes quiet this long after its last frame, as
-# a camera's frames go stale (hands/core.py STALE_S, not imported: tape is
-# a leaf core imports)
+# no tracking frame for this long: no hands. The one definition: a camera's
+# frames go stale after it (hands/core.py imports it from here — tape is
+# the leaf core imports, so the constant lives with it), and a tape that
+# does not loop goes quiet this long after its last frame
 STALE_S = 0.25
 
 TAPE_SCHEMA = "hyperspace.hands.tape/1"

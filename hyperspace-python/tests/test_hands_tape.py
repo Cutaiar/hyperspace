@@ -113,6 +113,28 @@ def test_a_tape_that_does_not_loop_goes_stale_after_its_end(leap, tmp_path):
     assert src.latest()[2] == {} and src.skeletons()[2] == {}
 
 
+def test_the_stale_time_and_the_palm_width_are_defined_once(monkeypatch):
+    """Plan 21 WP5 R13: `STALE_S` is assigned in one module of the hands
+    package (tape.py, the leaf; core.py imports it) and the ghost's palm
+    fallback is core's `PALM_W`, not a second 85.0."""
+    import ast
+
+    import hyperspace.hands.core as hc
+
+    pkg = Path(G.__file__).parent
+    where = [f.name for f in sorted((pkg / "hands").glob("*.py"))
+             for n in ast.parse(f.read_text()).body
+             if isinstance(n, ast.Assign) and any(getattr(t, "id", "") == "STALE_S"
+                                                  for t in n.targets)]
+    assert where == ["tape.py"] and hc.STALE_S == T.STALE_S
+    assert "85.0" not in (pkg / "ghost.py").read_text()
+    sk = {"palm": (0.0, 200.0, 0.0), "normal": (0.0, -1.0, 0.0),
+          "direction": (0.0, 0.0, -1.0), "width": 0.0, "digits": []}
+    with monkeypatch.context() as m:
+        m.setattr(hc, "PALM_W", 70.0)
+        assert G.pose("left", sk, np.eye(3)).width == 70.0
+
+
 @pytest.mark.skipif(not TAPES, reason="no recorded tape — tools/hands_tape.py record "
                                       "tests/fixtures/hands/<name>.json on the rig")
 @pytest.mark.parametrize("path", TAPES, ids=[p.stem for p in TAPES])

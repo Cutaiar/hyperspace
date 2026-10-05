@@ -244,6 +244,8 @@ class HandPose:
 
 def pose(side: str, skel: dict, m: np.ndarray, fade: float = 1.0) -> HandPose:
     """A `hands.core.skeleton` dict as a `HandPose` through basis `m`."""
+    from .hands.core import PALM_W  # lazily: see box_of
+
     v = lambda p: m @ np.asarray(p, dtype=np.float64)
     digits = skel.get("digits") or []
     if digits:
@@ -256,7 +258,7 @@ def pose(side: str, skel: dict, m: np.ndarray, fade: float = 1.0) -> HandPose:
         joints = np.zeros((0, 5, 3))
         widths, rots = np.zeros((0, 4)), np.zeros((0, 4, 4))
     return HandPose(side, v(skel["palm"]), v(skel["normal"]), v(skel["direction"]),
-                    float(skel.get("width") or 85.0), joints, widths, rots, m, fade,
+                    float(skel.get("width") or PALM_W), joints, widths, rots, m, fade,
                     COLOURS.get(side, (1.0, 1.0, 1.0)))
 
 
