@@ -30,6 +30,24 @@ def _library_home(tmp_path):
 
 
 @pytest.fixture(autouse=True)
+def _no_real_midi(monkeypatch):
+    """No test reaches the machine's MIDI: the port lists are empty and an
+    open raises, unless the test patches mido itself (a later setattr wins).
+    A real scan creates a CoreMIDI client, which reaches the owner's desk
+    and, when CoreMIDI refuses one, aborts the process inside rtmidi where
+    no `except` can catch it (the crash of 2026-10-04 22:36)."""
+    import mido
+
+    def closed(name=None, *a, **k):
+        raise OSError(f"the tests have no MIDI ports ({name})")
+
+    monkeypatch.setattr(mido, "get_input_names", list)
+    monkeypatch.setattr(mido, "get_output_names", list)
+    monkeypatch.setattr(mido, "open_input", closed)
+    monkeypatch.setattr(mido, "open_output", closed)
+
+
+@pytest.fixture(autouse=True)
 def _no_undo_left_installed():
     """`undo.install` is one per process (the app has one Undo): a test
     that installs one must not leave it for the next test's push sites."""
