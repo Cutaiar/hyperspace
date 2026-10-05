@@ -17,6 +17,18 @@ window-system state is three settings and the params that drive them:
   output.dim          0–1      master dim of the finished frame, in every
                                mode: 0 black … 1 full (the crossfader)
 
+and, per opened render output N (plan 21 WP4, `register_switches`; the
+config's ``[[output.screens]]``, one output with no list):
+
+  output.N.scene      toggle   the scene on that output
+  output.N.hands      toggle   the ghost hands on that output
+  output.N.through    toggle   the hands through the effects (else over them)
+  output.N.dim        0–1      that output's own dim, times the master —
+                               only when the config lists two or more outputs
+
+The monitor / fullscreen / overlay params above are output 1's; a later
+output's screen and fullscreen are its config entry's (plan 21 fork F10).
+
 Fullscreen asks GLFW for the monitor's current video mode, so a projector
 never re-syncs; the window is created with AUTO_ICONIFY off (app.py) so
 focusing the control window does not minimise it. Overlay wins when both
@@ -25,8 +37,8 @@ orbit and zoom stop reaching it (keys, the gamepad and MIDI still do via
 the control window) — G, or the pan button on the APC40, takes clicks
 back.
 
-Rig-specific settings (monitor, fullscreen, overlay, passthrough, dim)
-never persist in a preset and cannot be modulated; ground and opacity are
+Rig-specific settings (monitor, fullscreen, overlay, passthrough, dim,
+and every output.N.*) never persist in a preset and cannot be modulated; ground and opacity are
 a look and can. The dim (plan 15 WP3, decision 28) is the operator's: it
 is not a window-system setting — the renderer multiplies the finished
 frame by it (render.Renderer.dim_pass; app.frame hands it over beside
@@ -386,3 +398,64 @@ class Output:
             if mx <= cx < mx + mw and my <= cy < my + mh:
                 return m
         return mons[0]
+
+
+def _cap(s: str) -> str:
+    return s[:1].upper() + s[1:]
+
+
+def register_switches(reg: Registry, slots) -> list[str]:
+    """The per-output switches (plan 21 WP4): for each opened render output
+    N (an `outputs.Slot`, numbered by its place in the config's list),
+    ``output.N.scene``, ``output.N.hands``, ``output.N.through`` and — only
+    when the config lists two or more outputs — ``output.N.dim``. They
+    write the slot's `outputs.Switches`, which `app._draw_render` hands the
+    renderer each frame in that output's `View`; the renderer only reads
+    them (ARCHITECTURE §3).
+
+    Rig settings, like ``output.fullscreen`` beside them (fork F4): group
+    ``output``, never persisted — no preset, show or undo step holds them
+    — and not modulatable; a launch (and ⌘R) takes them from the config's
+    ``[[output.screens]]`` entry, so a switch flipped at the party lasts
+    until the restart. They can be learned onto a desk button like any
+    toggle. An output that did not open gets none. Returns the ids."""
+    rig = {"persist": False, "modulatable": False}
+    several = len(slots) > 1
+    ids: list[str] = []
+    for sl in slots:
+        if not sl.opened:
+            continue
+        sw, pre = sl.switches, f"output.{sl.n}"
+        who = _cap(sl.name or f"output {sl.n}")
+
+        def label(what: str, who=who) -> str:
+            # one output: "Scene"; several: "Glass scene" (the desk and Learn name it)
+            return f"{who} {what}" if several else _cap(what)
+
+        def flag(attr: str, sw=sw):
+            return (lambda: bool(getattr(sw, attr)),
+                    lambda v: setattr(sw, attr, bool(v)))
+
+        whose = f" on {sl.label}" if several else ""
+        reg.toggle(f"{pre}.scene", label("scene"), *flag("scene"), group="output",
+                   tip=f"The scene — the shape, the echoes and the effects{whose}. Off: "
+                       "only the ghost hands, on black. A rig setting: the config's "
+                       "launch value comes back at a restart.", **rig)
+        reg.toggle(f"{pre}.hands", label("hands"), *flag("hands"), group="output",
+                   tip=f"The ghost hands{whose}. Ghost hands (HANDS page) is the switch "
+                       "for every output at once; this one says where they show.", **rig)
+        reg.toggle(f"{pre}.through", label("hands through effects"), *flag("through"),
+                   group="output",
+                   tip=f"Off: the hands are laid over the finished picture{whose}, "
+                       "untouched by the effects. On: the effects bend them with the "
+                       "shape. With no effect on it changes nothing.", **rig)
+        ids += [f"{pre}.scene", f"{pre}.hands", f"{pre}.through"]
+        if several:
+            reg.continuous(f"{pre}.dim", label("dim"), lambda sw=sw: float(sw.dim),
+                           lambda v, sw=sw: setattr(sw, "dim", min(1.0, max(0.0, float(v)))),
+                           lo=0.0, hi=1.0, fmt=Output._dim_text, group="output",
+                           tip=f"Dims {sl.label} alone, after everything, times the master "
+                               "dim: 0 black, 1 full. Its launch value is the config's (never "
+                               "under 10%).", **rig)
+            ids.append(f"{pre}.dim")
+    return ids

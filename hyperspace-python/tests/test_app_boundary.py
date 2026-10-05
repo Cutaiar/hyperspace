@@ -1187,3 +1187,37 @@ def test_a_later_output_is_the_configs_and_never_overlay(monkeypatch):
     assert out.mode == "fullscreen" and out.bg_alpha == 1.0
     assert list(reg) == []
     assert app._later_output(Slot(3, monitor=-1, win="w3")).mode == "window"
+
+
+def test_the_switches_are_registered_from_the_configs_launch_values(monkeypatch, tmp_path):
+    """Plan 21 WP4: main registers each opened output's switches before
+    the library attaches (with the other rig settings), seeded from the
+    slots `_windows` filled from the config; the panel gets the slots;
+    and what a param writes is the `View` the next frame draws."""
+    import inspect
+
+    from hyperspace.overlay import register_switches
+    from hyperspace.params import Registry
+
+    src = inspect.getsource(app.main)
+    assert src.index("_make_output(render_win, reg, cfg)") < src.index(
+        "register_switches(reg, slots)") < src.index("library.attach(reg)")
+    assert "panel.outputs = slots" in src
+    g = _OutGlfw()
+    monkeypatch.setattr(app, "glfw", g)
+    cfg = _screens_cfg({"name": "glass"}, {"name": "projector", "monitor": 1, "scene": False,
+                                           "through": True, "dim": 0.5})
+    slots, _ = app._windows(False, cfg, tmp_path)
+    reg = Registry()
+    register_switches(reg, slots)
+    assert reg["output.2.scene"].value is False and reg["output.2.through"].value is True
+    assert reg["output.2.dim"].value == 0.5 and reg["output.1.dim"].value == 1.0
+    reg["output.2.scene"].set(True)
+    log: list[str] = []
+    sizes = {"win1": (640, 400), "win3": (640, 400)}
+    monkeypatch.setattr(app, "glfw", _SwapGlfw(log, sizes))
+    for sl in slots[1:]:
+        sl.presenter = _Pres(log, sl.name)
+    r = _Renderer(log)
+    app._draw_render(r, _Ctx(log), object(), slots, flush=lambda: None)
+    assert r.calls[0][1].switches is slots[1].switches and r.calls[0][1].switches.scene

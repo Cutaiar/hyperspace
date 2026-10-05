@@ -40,6 +40,7 @@ from .bands import CEIL, KNEE
 from .control import Control
 from .geometry import SHAPES, geom
 from .hands import panel as ui_hands
+from .outputs import HANDS, SCENE, SCENE_HANDS, route
 from .params import PLANES, Kind, Param, Registry, build_registry
 from .view import RED as RED_RGB
 from .view import ViewState
@@ -236,6 +237,39 @@ def fit_text(text: str, width: float) -> str:
         else:
             hi = mid - 1
     return text[:lo].rstrip() + "…"
+
+
+def output_shows(sw, fx_on: bool, visible: bool, master: float) -> tuple[str, str]:
+    """What one render output shows, in words, and why it is black ("" when
+    it is not) — the OUTPUT page's "shows:" line (plan 21 WP4, fork F8:
+    words, no picture). It is `outputs.route`'s answer for the output's
+    switches, whether an effect is on and whether a hand shows (`visible`:
+    the ghost hands are on and the layer drew, fork F7), with master × its
+    own dim. The reasons: "nothing" (scene and hands off), "no hand" (the
+    scene off and no hand showing), "dim" (its own dim at 0), "master" (the
+    crossfader at black — the footer already says "dim black")."""
+    key, after = route(sw, fx_on, visible)
+    own = float(sw.dim)
+    if key is None and not after:
+        if not sw.scene and not sw.hands:
+            return "black — nothing switched on", "nothing"
+        return "black — the scene is off and no hand shows", "no hand"
+    if own <= 0.0:
+        return "black — dim 0", "dim"
+    if master <= 0.0:
+        return "black — master dim", "master"
+    if key == SCENE:
+        words = "scene + hands over the effects" if after else "scene"
+    elif key == SCENE_HANDS:
+        words = "scene + hands through the effects"
+    elif key == HANDS:
+        words = "hands through the effects"
+    else:
+        words = "hands"
+    factor = min(1.0, master * own)
+    if factor < 1.0:
+        words += f" · {min(99, max(1, round(factor * 100)))}%"
+    return words, ""
 
 
 def chip_w(*labels: str) -> float:
@@ -999,10 +1033,11 @@ class Panel:
             p.set(i)
         return changed
 
-    def _check(self, pid: str) -> bool:
+    def _check(self, pid: str, label: str | None = None) -> bool:
         a = self.reg[pid]
         p = self._real(a)
-        changed, on = imgui.checkbox(f"{a.label}##{pid}", bool(p.base))
+        text = a.label if label is None else label
+        changed, on = imgui.checkbox(f"{text}##{pid}", bool(p.base))
         self._tip(a)
         self._ctx(a)
         self._learn_frame(a)
@@ -1334,6 +1369,9 @@ class Panel:
         dim = self.reg.get("output.dim")
         if dim is not None and dim.value < 1.0:
             room -= imgui.calc_text_size(f"·  dim {dim.text()}").x + gap
+        black = self._black_text(self.black_outputs())
+        if black:
+            room -= imgui.calc_text_size(black).x + gap
         return room
 
     def _footer(self, fps: float) -> None:
@@ -1388,6 +1426,12 @@ class Panel:
         if dim is not None and dim.value < 1.0:
             imgui.same_line()
             imgui.text_colored(WARN, f"·  dim {dim.text()}")
+        # …and an output black for another reason — its switches, its own
+        # dim — named on every page too (plan 21 WP4)
+        black = self._black_text(self.black_outputs())
+        if black:
+            imgui.same_line()
+            imgui.text_colored(WARN, black)
         lib = self.library
         if lib is not None and lib.reg is not None:
             proj = lib.project
@@ -1412,6 +1456,7 @@ class Panel:
             err = getattr(self.renderer, "dim_error", "")
             if err:
                 imgui.text_colored(WARN, f"{err} — the picture is not dimmed")
+        self._output_blocks()
         if len(self.reg["output.monitor"].names) > 1:
             self._combo("output.monitor")
         self._check("output.fullscreen")
@@ -1431,6 +1476,102 @@ class Panel:
             imgui.text_disabled(f"overlay {self.output.GATED}")
         if self.output.error:
             imgui.text_colored(WARN, self.output.error)
+
+    def _outputs_now(self) -> tuple[bool, bool, float]:
+        """(an effect is on, a ghost hand showed last frame, the master dim):
+        what `output_shows` reads, from the renderer as it last drew. Any
+        piece missing (no renderer, a stand-in) reads as off / full."""
+        r = self.renderer
+        try:
+            fx_on = bool(r.fx.active())
+        except Exception:  # noqa: BLE001 — no renderer, or a stand-in
+            fx_on = False
+        visible = bool((getattr(r, "stats", None) or {}).get("layer", False))
+        dim = self.reg.get("output.dim")
+        return fx_on, visible, (dim.value if dim is not None else 1.0)
+
+    def black_outputs(self) -> list[int]:
+        """The opened outputs showing nothing for a reason other than the
+        master dim (which the footer already says): the footer names them
+        on every page (plan 21 WP4)."""
+        fx_on, visible, master = self._outputs_now()
+        return [sl.n for sl in (getattr(self, "outputs", None) or [])
+                if sl.opened and output_shows(sl.switches, fx_on, visible, master)[1]
+                not in ("", "master")]
+
+    @staticmethod
+    def _black_text(ns: list[int]) -> str:
+        if not ns:
+            return ""
+        which = f"output {ns[0]}" if len(ns) == 1 else f"outputs {', '.join(map(str, ns))}"
+        return f"·  {which} black"
+
+    def _output_blocks(self) -> None:
+        """One block per render output the config lists (plan 21 WP4): its
+        number and name and its three switches, its own dim (with two or
+        more outputs), why a switch can do nothing, and "shows:" — what it
+        shows in words (fork F8), in the warning colour when it is black.
+        An output that did not open is one disabled line saying why; under
+        the blocks, which output paces the loop and the frame's size."""
+        slots = getattr(self, "outputs", None) or []
+        if not slots:
+            return
+        several = len(slots) > 1
+        fx_on, visible, master = self._outputs_now()
+        ghost = self.reg.get("ghost.on")
+        # the switches line up after the widest "N  name", which is cut so
+        # the three ticks always fit the page's width
+        ticks = sum(imgui.calc_text_size(s).x for s in ("scene", "hands", "through effects"))
+        ticks += 3 * (imgui.get_frame_height() + 2 * imgui.get_style().item_inner_spacing.x)
+        ticks += 2 * imgui.get_style().item_spacing.x
+        room = max(imgui.get_content_region_avail().x - ticks - 8, 40)
+        labels = {sl.n: fit_text(f"{sl.n}  {sl.name}" if sl.name else f"{sl.n}", room)
+                  for sl in slots}
+        col = imgui.get_cursor_pos_x() + 8 + max(imgui.calc_text_size(t).x
+                                                 for t in labels.values())
+        for sl in slots:
+            pre = f"output.{sl.n}"
+            name = sl.name or ("output" if several else "")
+            if not sl.opened or f"{pre}.scene" not in self.reg:
+                imgui.text_disabled(fit_text(f"{sl.n}  {name} — {sl.missing or 'not opened'}",
+                                             imgui.get_content_region_avail().x))
+                continue
+            imgui.align_text_to_frame_padding()
+            imgui.text(labels[sl.n])
+            imgui.same_line(col)
+            self._check(f"{pre}.scene", "scene")
+            imgui.same_line()
+            self._check(f"{pre}.hands", "hands")
+            imgui.same_line()
+            self._check(f"{pre}.through", "through effects")
+            if several and f"{pre}.dim" in self.reg:
+                self._row(f"{pre}.dim", label="dim")
+            sw = sl.switches
+            why = []
+            if sw.hands and ghost is not None and not ghost.value:
+                why.append("hands: ghost hands are off (HANDS page)")
+            elif sw.hands and getattr(self, "hands", None) is None:
+                why.append("hands: no tracker")
+            if sw.through and not fx_on:
+                why.append("through: no effect on")
+            # one line for what is wrong: its present's error first (warning
+            # colour, the whole on hover), then why a switch can do nothing
+            if sl.error:
+                why.insert(0, sl.error)
+            if why:
+                line = " · ".join(why)
+                imgui.text_colored(WARN if sl.error else FAINT,
+                                   fit_text(line, imgui.get_content_region_avail().x))
+                if imgui.is_item_hovered():
+                    imgui.set_tooltip(line)
+            words, black = output_shows(sw, fx_on, visible, master)
+            imgui.text_colored(WARN if black else FAINT, f"shows: {words}")
+        if several:
+            w, h = slots[0].size
+            size = f" · frame {w}×{h}" if w and h else ""
+            imgui.text_colored(FAINT, fit_text(f"paced by output 1{size} · below: output 1's "
+                                               "window", imgui.get_content_region_avail().x))
+        imgui.dummy(imgui.ImVec2(0, 2))
 
     def _page_view(self, dt: float) -> None:
         v = self.view

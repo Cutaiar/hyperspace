@@ -81,7 +81,7 @@ from .learn import Learn
 from .library import Library, Marks
 from .library import home as library_home
 from .outputs import Presenter, Slot, Switches, View
-from .overlay import GlfwBackend, Output
+from .overlay import GlfwBackend, Output, register_switches
 from .params import Registry, build_registry
 from .preset import Presets, migrate_home
 from .render import Renderer
@@ -1028,6 +1028,9 @@ def main() -> None:
     slots[0].output = output
     for sl in later:                       # no params: the config says (fork F10)
         sl.output = _later_output(sl)
+    # each opened output's switches (plan 21 WP4): rig settings, seeded
+    # from the config's launch values already on the slots, never saved
+    register_switches(reg, slots)
     # one binding table for keys, pad, MIDI and lanes (an old midi_map.json
     # migrates) — read before attach for the same reason: the desk's
     # session param, `desk.slew`, is the table's, at the app's default
@@ -1042,6 +1045,7 @@ def main() -> None:
     panels.append(panel)
     panel.clock, panel.lfos = clock, lfos     # the LFO page's scopes and beat light
     panel.output = output
+    panel.outputs = slots                  # the OUTPUT page: a block per output (plan 21 WP4)
     router = Router(reg, table)
     # the presets (preset.py): the library's `presets/` files, landed on the
     # registry and the table; the project's bank loads through it
