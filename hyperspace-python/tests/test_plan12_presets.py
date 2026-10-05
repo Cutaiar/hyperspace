@@ -315,11 +315,13 @@ def test_field_height_is_one_gesture_over_three_params(tmp_path):
 
 def test_no_factory_hand_row_blanks_the_scene(tmp_path):
     """Plan 16 WP5: the count's floor is 0 now, which draws nothing. No
-    factory preset stores a count below 1, and every factory route onto
-    `view.instances`, swept over its source's whole throw, keeps the count
-    at or above the preset's base — a hand cannot take the shape away. The
-    one such row today is party-field's right height: 9 at the bottom, 69
-    at the top (68 before the throw grew a step), 9 with the hand gone."""
+    factory preset stores a count below 1, and every factory performer row
+    (the `routes` block) onto `view.instances`, swept over its source's
+    whole throw, keeps the count at or above the preset's base — a hand
+    cannot take the shape away. The one such row today is party-field's
+    right height: 9 at the bottom, 69 at the top (68 before the throw grew
+    a step), 9 with the hand gone. The desk's track knob 3 (a `desk` row, a
+    scene-setter) is not swept: its bottom is 0 on purpose (fork F3)."""
     swept = {}
     for doc in _factory_docs():
         assert doc["values"].get("view.instances", 1) >= 1, doc["name"]

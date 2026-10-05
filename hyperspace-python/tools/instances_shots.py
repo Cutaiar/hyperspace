@@ -24,17 +24,21 @@ framebuffer, not what a projector shows.
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 import moderngl
 import numpy as np
 from PIL import Image, ImageDraw
 
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from hyperspace.fx import FxState
 from hyperspace.render import Renderer
 from hyperspace.view import ViewState
 
-ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "docs" / "plans" / "assets" / "16-paper-cuts"
 W, H = 640, 400
 LABEL = 20
