@@ -67,6 +67,11 @@ RAIL_W = 112
 LABEL_W = 104    # the label column in a _row
 HALF_LABEL_W = 78    # the label column in a half-width table cell (Panel.half)
 ROUND = 8.0      # corner radius of frames; chips and grabs go rounder
+# the dirty dot (plan 19 WP5): a filled red disc 12 px across beside a
+# preset's name — where the "●" glyph left about 7 px of ink — and the
+# rail's dot, radius 5, beside a page whose group has moved off its preset
+DOT_R = 6.0
+RAIL_DOT_R = 5.0
 
 # ---- font atlas (ENGINEERING.md, control-surface conventions) ----
 # Four roles. UI for words (buttons, combos, names), MICRO for the
@@ -197,6 +202,25 @@ def lit_chip(label: str, lit: bool, color: imgui.ImVec4 | None = None,
     hit = chip(label, size)
     imgui.pop_style_color(4 if lit else 1)
     return hit
+
+
+def dirty_dot(tip: str) -> tuple[float, float, float, float]:
+    """The dirty dot (plan 19 WP5): a filled disc of radius `DOT_R` in
+    `RED`, in a cell of its own on the current line — call it after
+    ``same_line`` beside the name it belongs to. The cell is one text line
+    tall, never taller than the frame items beside it, so no row grows;
+    the disc is centred on the item before it (the name), so it sits on
+    that item's middle whatever the line's height. `tip` is its hover.
+    Returns the disc's bounding box on screen (x0, y0, x1, y1)."""
+    a, b = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+    cy = (a.y + b.y) / 2
+    at = imgui.get_cursor_screen_pos()
+    imgui.dummy(imgui.ImVec2(2 * DOT_R, imgui.get_text_line_height()))
+    cx = at.x + DOT_R
+    imgui.get_window_draw_list().add_circle_filled(imgui.ImVec2(cx, cy), DOT_R, u32(RED))
+    if imgui.is_item_hovered():
+        imgui.set_tooltip(tip)
+    return (cx - DOT_R, cy - DOT_R, cx + DOT_R, cy + DOT_R)
 
 
 def fit_text(text: str, width: float) -> str:
@@ -1253,7 +1277,7 @@ class Panel:
                         label.upper())
             groups = (group,) if isinstance(group, str) else (group or ())
             if any(ui_presets.dirty(self, g, polled=True) for g in groups):
-                dl.add_circle_filled(imgui.ImVec2(p1.x - 11, p0.y + h / 2), 3.5,
+                dl.add_circle_filled(imgui.ImVec2(p1.x - 11, p0.y + h / 2), RAIL_DOT_R,
                                      u32(imgui.ImVec4(1, 1, 1, 1) if lit else RED))
         imgui.pop_font()
         # the rule between rail and page
@@ -1667,10 +1691,15 @@ class Panel:
             if self.reloader.restart:
                 imgui.text_colored(WARN, self.reloader.restart)
         if self.library is not None:
-            imgui.text_disabled(f"library: {self.library.home}")
+            # " · git" while a committer is attached and has not refused (plan 19 WP6)
+            git = getattr(self.library, "committer", None)
+            git = git is not None and not getattr(git, "refused", False)
+            imgui.text_disabled(f"library: {self.library.home}" + (" · git" if git else ""))
             if imgui.is_item_hovered():
                 imgui.set_tooltip("$HYPERSPACE_HOME — presets and shows as JSON; "
-                                  "edit a file and the app follows")
+                                  "edit a file and the app follows"
+                                  + ("; every save is a git commit there ([library] git)"
+                                     if git else ""))
         if self.config_error:
             imgui.text_colored(WARN, self.config_error)
         for note in self.config_notes:

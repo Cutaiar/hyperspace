@@ -1,0 +1,56 @@
+Plan 19 WP2 — clip rows 4–5 are the bank. Headless, on a temp home built like the
+owner's (tests/conftest.py::build_owner_home; <home> is that temp folder, never
+~/Hyperspace). A MidiIO over fake ports: nothing is plugged in; the velocities below are
+what the adapter sent to the port, not what an APC40 showed.
+
+1. The home before the launch
+   bindings.json: 147 rows, 8 on preset.select, 0 on clip rows 4–5   sha d0c48f3efcd5
+   presets/night-one.json     desk 42 rows, 16 on clip rows 4–5   sha 7327d14460f3
+   presets/night-three.json   desk 50 rows, 16 on clip rows 4–5   sha 975e7ceb10aa
+   presets/night-two.json     desk 43 rows, 16 on clip rows 4–5   sha 6fd2ae9e2dd4
+
+2. The first launch (app.main's order, headless). What it printed:
+   backup: bindings.json kept as bindings.json.bak-v3 before the rewrite
+   bindings: <home>/bindings.json: added note:0:56 → preset.select (the APC40 map of plan 19)
+   bindings: <home>/bindings.json: added note:1:56 → preset.select (the APC40 map of plan 19)
+   … (13 more 'added' lines, one per pad)
+   bindings: <home>/bindings.json: added note:7:57 → preset.select (the APC40 map of plan 19)
+   bindings: updated <home>/bindings.json (16 rows changed)
+   the SYSTEM page's line (Bindings.said): bindings.json updated (16 rows changed), the old file kept as bindings.json.bak-v3 — each change is on stderr
+   bindings.json.bak-v3 == the file as it was: True
+   bindings.json now: 163 rows, 24 on preset.select; every old row in place: True
+
+3. A second launch
+   stderr lines about bindings: none   bindings.json sha 0e42f172798a   backups: ['bindings.json.bak-v3']
+
+4. An old preset loads without its shape pads (fork 4)
+   the launch loaded 'NIGHT ONE' (mine starts on it): desk notes none, warning '', dirty False
+   F2 → 'NIGHT TWO': desk notes ["dropped note:2:56 → fx.acid.on: that control is invariant, the session's (plan 13 D6)"]
+      (the pad the owner re-aimed, note:2:56 → fx.acid.on, is dropped with the note; the fifteen factory shape rows go quietly)
+   warning line: "preset NIGHT TWO: dropped note:2:56 → fx.acid.on: that control is invariant, the session's (plan 13 D6)"   dirty: False
+   live desk rows on clip rows 4–5: none
+   every preset file byte- and mtime-identical after the loads: True
+
+5. The lights. `mine` holds three of the owner's presets and five of the party's on
+   slots 1–8; slots 9–24 are empty. TRACER is put on slot 9 and WAKE on slot 12 from
+   the PRESETS page (put_slot).
+   slot  2 (G1·2, NIGHT TWO  ) loaded  velocity 1 = GREEN
+   slot  1 (G1·1, NIGHT ONE  ) filled  velocity 5 = YELLOW (amber)
+   slot  9 (G4·1, TRACER     ) filled  velocity 5 = YELLOW (amber)
+   slot 12 (G4·4, WAKE       ) filled  velocity 5 = YELLOW (amber)
+   slot 10 (G4·2, —          ) empty   velocity 0 = off
+   slot 24 (G5·8, —          ) empty   velocity 0 = off
+
+6. A press on G4·1 (slot 9) loads its preset — on the preset layer and under SHIFT
+   layer preset: G4·1 → loaded 'TRACER', slot 9, layer now preset; G4·1 sent GREEN, F1's pad YELLOW (amber)
+   layer global: G4·1 → loaded 'TRACER', slot 9, layer now preset; G4·1 sent GREEN, F1's pad YELLOW (amber)
+
+7. Save-as: a hold on the clip-stop row lands in the next empty slot, a far one,
+   and that slot's pad blinks with the bar
+   next empty slot: 10 (G4·2)
+   held 0.65 s: footer 'saved TRACER 2 → slot 10'; slot 10 = 'TRACER 2'
+   G4·2 sent GREEN blink (apc40.blink_of covers every clip row)
+   after BLINK_S (1.5 s): G4·2 sent GREEN; slot 9 (TRACER, was loaded) YELLOW (amber)
+
+8. An empty slot's pad: dark, and a press says so
+   G4·8 (slot 16, empty): footer warning 'slot 16: an empty slot'; still loaded 'TRACER 2'

@@ -16,21 +16,29 @@ Two kinds of file, both plain JSON you can open in a text editor:
                   library) and ``adopt``s the one it landed; a strip load
                   tells the combo through ``on_load`` (control.py).
   project         the session — ``{"schema": "hyperspace.project/2",
-                  "name", "note", "startup": <preset name>, "bank": [8 ×
-                  <preset name> | null], "session": <session snapshot>,
+                  "name", "note", "startup": <preset name>, "bank": [8–24
+                  × <preset name> | null], "session": <session snapshot>,
                   "modules": {group: name | {"name", "values", …}}}``, in
                   a ``*.hyp.json`` file (params.PARTS is the split; plan
                   13 §2.2). ``session`` lands on a project load and a
                   preset never touches it; ``modules`` names the session
                   groups' module presets (the band strip's scene and
-                  layout). The **bank** is eight pointers to preset files
-                  (preset.py, ``hyperspace.preset/2``): F1–F8 and the
-                  APC40's clip row 1 load one (``Project.load_slot``),
-                  ⇧F1–F8 save the live state *as* it (``save_slot``), and
-                  ``startup`` is the preset loaded on launch and with the
-                  project (D11). A module the project names by a preset
-                  that carries a ``layout`` gets that layout back on
-                  load, the same road a strip load takes. A schema-1
+                  layout). The **bank** is twenty-four pointers to preset
+                  files (``SLOTS``; preset.py, ``hyperspace.preset/2``):
+                  F1–F8 and the APC40's clip row 1 load one of the first
+                  eight (``F_KEYS``; ``Project.load_slot``), ⇧F1–F8 save
+                  the live state *as* it (``save_slot``), slots 9–24 are
+                  the PRESETS page's and the desk's, and ``startup`` is the
+                  preset loaded on launch and with the project (D11). The
+                  file holds the bank only as far as its last filled slot,
+                  never fewer than eight entries (``bank_doc``, plan 19
+                  WP1): a show that uses only F1–F8 is written as it always
+                  was, and the first write that makes a file's bank longer
+                  keeps the eight-slot file beside it first
+                  (``<file>.bak-v2-bank8``, ``Project.write``). A module
+                  the project names by a preset that carries a ``layout``
+                  gets that layout back on load, the same road a strip
+                  load takes. A schema-1
                   project (an inline theme bank) is migrated by plan 13's
                   first-launch migration (preset.migrate_home: its slots
                   become presets), and one opened by hand later on the
@@ -61,8 +69,13 @@ factory's file of the same name:
   $HYPERSPACE_HOME/trash/<group>/<slug>.<date>-<time>.json
                                  a user preset file as it was before a save
                                  overwrote it or a delete removed it
-                                 (``to_trash``, plan 15): no group, never
-                                 listed or watched, never emptied here
+                                 (``to_trash``, plan 15) or a rename replaced
+                                 it: no group, never watched; listed,
+                                 restored and emptied from the preset list
+                                 (``trash``, ``restore_trash``,
+                                 ``empty_trash``, plan 19 WP4)
+  $HYPERSPACE_HOME/hidden.json   the factory presets × took off the list
+                                 (``hide``, plan 19 WP4)
 
 ``home()`` is the one resolver for that folder (config.py and the binding
 table path go through it). On the first run the working-directory ``config.toml``
@@ -107,17 +120,34 @@ from pathlib import Path
 from typing import Any
 
 from . import undo
-from .params import PERFORMANCE_GROUPS, PLANES, SESSION_GROUPS, Registry
+from .params import F_KEYS, PERFORMANCE_GROUPS, PLANES, SESSION_GROUPS, Registry
 
-SLOTS = 8                 # the F1–F8 preset bank
+SLOTS = 24                # the bank: F1–F8, then the desk's clip rows 4 and 5
+# F_KEYS (8) is the slots a function key reaches, and a show file's bank is
+# never shorter. It is imported from params, where the F-keys' load / save
+# triggers are declared (params may not import library); `library.F_KEYS`
+# is the name the rest of the app reads.
+# BANK8_BACKUP: the copy `Project.write` makes before the first write that
+# puts more than F_KEYS entries in a show file, <file>.bak-v2-bank8
+# (routing.backup's schema argument)
+BANK8_BACKUP = "2-bank8"
 PRESETS = "presets"       # the presets' group, a document kind (preset.py)
 # folders in a library root that are no group: the routing presets' old
 # folder, kept as it was by plan 13's migration and never read again
 LEGACY_DIRS = ("bindings",)
 # <home>/trash/<group>/: a user preset file as it was, copied there before
 # a save overwrites it or a delete removes it (`to_trash`, plan 15 WP1).
-# No group, never listed, never watched; nothing empties it (plan 19 will)
+# No group and never watched. Plan 19 WP4 lists it (`Library.trash`), puts a
+# file back (`restore_trash`, never over a file) and empties it
+# (`empty_trash`, the one delete in the app that keeps no copy)
 TRASH = "trash"
+# <home>/hidden.json (plan 19 WP4): the factory presets × took off the list,
+# by file stem — {"schema": HIDDEN_SCHEMA, "presets": [stem, …]}. A list of
+# taste, the home's; hiding deletes nothing and changes only `list()`
+HIDDEN = "hidden.json"
+HIDDEN_SCHEMA = "hyperspace.hidden/1"
+# the trash's file names: <stem>.<YYYYMMDD-HHMMSS>[-n]<suffix> (`to_trash`)
+_TRASHED = re.compile(r"(?P<stem>.+)\.(?P<stamp>\d{8}-\d{6})(?:-(?P<n>\d+))?(?P<suffix>\.[^.]+)")
 HOME_ENV = "HYPERSPACE_HOME"
 DEFAULT_HOME = Path("~/Hyperspace")
 FACTORY = Path(__file__).with_name("library")
@@ -207,13 +237,14 @@ def migrate(root: Path, cwd: Path | None = None) -> list[str]:
 
         try:
             doc = _read_json(src)
-            slots = [legacy_slot(s) if s else None for s in doc.get("slots", [])[:SLOTS]]
+            # a presets.json bank is the F-keys' eight (as before plan 19)
+            slots = [legacy_slot(s) if s else None for s in doc.get("slots", [])[:F_KEYS]]
             bank, session, _notes = preset.slot_presets(root, slots, preset.factory_carried(),
                                                         {})
         except (LibraryError, OSError, ValueError) as e:
             done.append(f"library: {src} not migrated ({e})")
         else:
-            bank += [None] * (SLOTS - len(bank))
+            bank = bank_doc(bank)
             _write_json(dst, {"schema": PROJECT_SCHEMA, "name": MINE_PROJECT,
                               "startup": next((n for n in bank if n), None),
                               "bank": bank, "session": session, "modules": {}})
@@ -307,6 +338,21 @@ def next_name(base: str | None, taken: set[str]) -> str:
     return f"{stem} {n}"
 
 
+def slot_key(k: int) -> str:
+    """What a slot is called in a message and on the page: "F3" for the
+    first F_KEYS, "slot 12" after."""
+    return f"F{k + 1}" if k < F_KEYS else f"slot {k + 1}"
+
+
+def bank_doc(bank: list[str | None]) -> list[str | None]:
+    """A bank as a show file holds it: trailing empty slots left off, never
+    shorter than F_KEYS."""
+    out = list(bank)
+    while len(out) > F_KEYS and out[-1] is None:
+        out.pop()
+    return out + [None] * (F_KEYS - len(out))
+
+
 def _read_json(path: Path) -> dict:
     try:
         doc = json.loads(path.read_text())
@@ -364,6 +410,31 @@ def to_trash(path: Path, root: Path) -> Path | None:
     except OSError as e:
         print(f"library: {path.name} not copied to the trash ({e})", file=sys.stderr)
         return None
+
+
+@dataclass(frozen=True)
+class Trashed:
+    """A file in the trash, as its view lists it (plan 19 WP4)."""
+
+    path: Path          # <home>/trash/presets/trip-3.20261004-011203.json
+    group: str          # its folder: "presets", "fx", "projects", …
+    name: str           # the name inside the file, else its stem
+    when: str           # "Oct 4 01:12", from the stamp in the file name ("" if none)
+
+
+def _when(stamp: str) -> str:
+    """``20261004-011203`` → ``Oct 4 01:12``."""
+    try:
+        t = time.strptime(stamp, "%Y%m%d-%H%M%S")
+    except ValueError:
+        return ""
+    return f"{time.strftime('%b', t)} {t.tm_mday} {time.strftime('%H:%M', t)}"
+
+
+def _order(path: Path) -> tuple[str, int]:
+    """A trashed file's place in time: its stamp, then its ``-n``."""
+    m = _TRASHED.fullmatch(path.name)
+    return (m["stamp"], int(m["n"] or 1)) if m else ("", 0)
 
 
 # ---- versioning: schema "<kind>/<n>"; each step lifts a doc one version ----
@@ -474,7 +545,7 @@ def legacy_slot(slot: dict) -> dict:
 class Project:
     """The open project — the session (plan 13 §2.2): its file (None
     until saved), the session values, the session groups' module labels,
-    and the F1–F8 preset bank.
+    and the preset bank (F1–F8, then slots 9–24).
 
     ``session`` / ``modules`` / ``bank`` / ``startup`` are what the *file*
     holds; ``save()`` refreshes ``session`` and ``modules`` from the live
@@ -484,10 +555,13 @@ class Project:
 
     ``session`` is the session part of the registry (params.PARTS: tempo,
     hands, the analyzer, output), landed on a project load and never
-    touched by a preset. The **bank** is eight preset names (or None):
+    touched by a preset. The **bank** is ``SLOTS`` preset names (or None):
     a slot is a pointer to a preset file (preset.py), loaded through
-    ``Library.presets`` — F<k+1> and the APC40's clip row 1 load it,
-    ⇧F<k+1> saves the live state as that preset into the user folder.
+    ``Library.presets`` — F<k+1> and the APC40's clip row 1 load one of
+    the first ``F_KEYS``, ⇧F<k+1> saves the live state as that preset into
+    the user folder; the rest are reached from the PRESETS page and the
+    desk (``slot_key`` names a slot). A show file's shorter bank is padded
+    in memory and the file is left as it is (``_take``, ``bank_doc``).
     ``startup`` is the preset a launch and a project load bring up (D11).
     """
 
@@ -546,7 +620,7 @@ class Project:
         doc: dict[str, Any] = {"schema": PROJECT_SCHEMA, "name": self.name}
         if self.note:
             doc["note"] = self.note
-        doc.update(startup=self.startup, bank=list(self.bank), session=self.session,
+        doc.update(startup=self.startup, bank=bank_doc(self.bank), session=self.session,
                    modules=self.modules)
         return doc
 
@@ -635,24 +709,36 @@ class Project:
                 if group not in named and group not in lib._kinds:
                     lib._landed(group, None, lib.reg.snapshot(group))
         # the bank lights the slot naming the preset still loaded, if any
-        cur = lib._current.get(PRESETS)
-        self.active = self.bank.index(cur) if cur in self.bank else -1
+        self.follow()
         return missing
 
-    # ---- the bank: eight pointers to preset files ----
+    # ---- the bank: SLOTS pointers to preset files ----
+
+    def follow(self) -> None:
+        """`active` follows the loaded preset — the one place (plan 19
+        WP1): kept where it is when that slot still names it, else the
+        first slot that names it, else −1; −1 when nothing is loaded."""
+        cur = self.lib.current(PRESETS)
+        if cur is None:                               # nothing loaded: no slot is lit
+            self.active = -1
+        elif not 0 <= self.active < len(self.bank) or self.bank[self.active] != cur:
+            self.active = self.bank.index(cur) if cur in self.bank else -1
 
     def _loader(self):
         return getattr(self.lib, "presets", None)
 
     def load_slot(self, k: int) -> None:
-        """F<k+1>: the preset slot k names, through the one loader. An
-        empty slot, or a name with no file, loads nothing and says so."""
-        if not 0 <= k < SLOTS:
+        """Slot k (F<k+1> for the first eight): the preset it names,
+        through the one loader. An empty slot, or a name with no file,
+        loads nothing and says so. `active` is the slot that was asked
+        for, so a preset on two slots lights the one pressed."""
+        if not 0 <= k < len(self.bank):
             return
-        lib, name, key = self.lib, self.bank[k], f"F{k + 1}"
+        lib, name, key = self.lib, self.bank[k], slot_key(k)
         presets = self._loader()
         if name is None:
-            lib.say(warning=f"{key}: an empty slot — ⇧{key} saves the live state into it")
+            lib.say(warning=f"{key}: an empty slot" + (
+                f" — ⇧{key} saves the live state into it" if k < F_KEYS else ""))
             return
         if presets is None or lib.path_of(PRESETS, name) is None:
             lib.say(warning=f"{key}: no preset {name!r}")
@@ -668,26 +754,38 @@ class Project:
         """⇧F<k+1>: the live state as the preset slot k names — a new one,
         ``PRESET <k+1>``, for an empty slot — into the user folder (a
         factory preset of that name is shadowed, never overwritten); the
-        bank and the project file with it."""
+        bank and the project file with it. A show file that cannot take
+        the slot (`write`) leaves the bank as the file has it: the preset
+        is saved and in the list, and the footer says why."""
         presets = self._loader()
-        if not 0 <= k < SLOTS or self.lib.reg is None:
+        if not 0 <= k < len(self.bank) or self.lib.reg is None:
             return
         if presets is None:
             self.bank_error = "presets: no preset loader"
             return
-        name = self.bank[k] or self._fresh_name(k)
+        was = self.bank[k]
+        name = was or self._fresh_name(k)
         try:
             presets.save_as(name)
-            self.bank[k] = name
-            self.active = k
-            self.write()
-            self.bank_error = ""
         except LibraryError as e:                     # a full disk must not stop the show
             self.bank_error = f"presets: {e}"
+            return
+        self.bank[k] = name
+        self.active = k
+        try:
+            self.write()
+        except (LibraryError, OSError) as e:
+            self.bank[k] = was
+            self.follow()                             # the light goes where the preset is
+            self._refused(f"saved {name} — {slot_key(k)} not changed", e)
+            return
+        self.bank_error = ""
 
     def _fresh_name(self, k: int) -> str:
         """``PRESET <k+1>``, made unique against every preset there is."""
-        taken = {slug(n) for n in self.lib.list(PRESETS)} | {slug(n) for n in self.bank if n}
+        # hidden ones too (plan 19 WP4): a made-up name never lands on one
+        taken = ({slug(n) for n in self.lib.list(PRESETS, hidden=True)}
+                 | {slug(n) for n in self.bank if n})
         base = name = f"PRESET {k + 1}"
         n = 1
         while slug(name) in taken:
@@ -705,8 +803,8 @@ class Project:
         trigger on the clip-stop row): the live state as a **new** preset,
         named from the loaded one (`next_name`), into the next empty slot.
         It never overwrites and never shadows: the name's slug is free
-        among the file stems of both preset folders, every listed name and
-        the bank's names. The new preset becomes the loaded one with a
+        among the file stems of both preset folders, every listed name
+        (hidden ones included, plan 19 WP4: `_taken`) and the bank's names. The new preset becomes the loaded one with a
         clean dot, as the panel's "as…" does, so a second save counts on.
         A full bank saves to the list and says so. The show is written at
         once; no undo step — nothing live changes. True when a preset was
@@ -720,8 +818,7 @@ class Project:
             return False
         # stems as slugs: on a filesystem that folds case, `Trip-2.json`
         # is the file a save of "TRIP 2" would write over
-        taken = ({slug(s) for s in lib._files(PRESETS)} | {slug(n) for n in lib.list(PRESETS)}
-                 | {slug(n) for n in self.bank if n})
+        taken = lib._taken(PRESETS) | {slug(n) for n in self.bank if n}
         name = next_name(lib.current(PRESETS), taken)
         try:
             presets.save_as(name)
@@ -744,10 +841,10 @@ class Project:
             self.active = -1
             self.bank_error = f"presets: {e}"
             lib.say(warning=f"saved {name} — the show could not be written: it is in "
-                            "the preset list")
+                            f"the preset list ({e})")
             return True
         self._room()
-        lib.say(f"saved {name} → F{k + 1}")
+        lib.say(f"saved {name} → {slot_key(k)}")
         return True
 
     def put_slot(self, k: int, name: str) -> None:
@@ -758,36 +855,40 @@ class Project:
         if not 0 <= k < len(self.bank):
             return
         if self.lib.path_of(PRESETS, name) is None:
-            self.lib.say(warning=f"F{k + 1}: no preset {name!r}")
+            self.lib.say(warning=f"{slot_key(k)}: no preset {name!r}")
             return
-        self._set_slot(k, name, f"F{k + 1}: {name}")
+        self._set_slot(k, name, f"{slot_key(k)}: {name}")
 
     def clear_slot(self, k: int) -> None:
         """Empty slot k (the PRESETS page's "clear slot"): the show is
         written at once; the preset's file stays in the list."""
         if 0 <= k < len(self.bank) and self.bank[k] is not None:
-            self._set_slot(k, None, f"F{k + 1}: cleared — {self.bank[k]} is still in the "
-                                    "preset list")
+            self._set_slot(k, None, f"{slot_key(k)}: cleared — {self.bank[k]} is still in "
+                                    "the preset list")
 
     def _set_slot(self, k: int, name: str | None, said: str) -> None:
         """One slot's pointer, written into the show now; `active` follows
-        the loaded preset to a slot that names it, or to none."""
+        the loaded preset to a slot that names it, or to none (`follow`).
+        A show file that cannot be written leaves the slot as it was, and
+        the footer says why."""
         lib, was = self.lib, self.bank[k]
         self.bank[k] = name
         try:
             self.write()
         except (LibraryError, OSError) as e:          # said, and the bank as on disk
             self.bank[k] = was
-            self.bank_error = f"presets: {e}"
+            self._refused(f"{slot_key(k)}: not changed", e)
             return
         self.bank_error = ""
-        cur = lib.current(PRESETS)
-        if cur is None:                               # nothing loaded: no slot is lit
-            self.active = -1
-        elif not 0 <= self.active < len(self.bank) or self.bank[self.active] != cur:
-            self.active = self.bank.index(cur) if cur in self.bank else -1
+        self.follow()
         self._room()
         lib.say(said)
+
+    def _refused(self, what: str, e: Exception) -> None:
+        """A bank change the show's file could not take: the reason under
+        the bank (`bank_error`) and on the footer (`Library.say`)."""
+        self.bank_error = f"presets: {e}"
+        self.lib.say(warning=f"{what} — {e}")
 
     def _room(self) -> None:
         """The bank changed: an earlier "the bank is full" is no longer news."""
@@ -922,6 +1023,7 @@ class Project:
         """The session into the project file (as `name` if given), with the
         bank and startup as held."""
         lib = self.lib
+        held = (self.name, self.path, self.session, self.modules)
         if name:
             self.name = name
             self.path = self.path_for(name)
@@ -938,7 +1040,13 @@ class Project:
                 doc = lib.document(group, cur)
                 self.modules[group] = {k: v for k, v in doc.items()
                                        if k not in ("schema", "group")}
-        self.write()
+        try:
+            self.write()
+        except (LibraryError, OSError):
+            # nothing was written (a backup that could not be made, a full
+            # disk): the show is still the one it was, under its own name
+            self.name, self.path, self.session, self.modules = held
+            raise
         lib.say(f"show: saved {self.name}")
         lib.remember(self.stem)
         return self.path
@@ -946,20 +1054,48 @@ class Project:
     def write(self) -> Path:
         """Write the document as held — the bank's autosave. A schema-1
         file in the way (one the migration could not convert) is kept
-        beside itself first (routing.backup), never lost."""
-        if self.path is None:
-            self.path = self.path_for(self.name)
+        beside itself first (routing.backup), never lost.
+
+        The first write that makes a show file's bank longer than F_KEYS
+        (plan 19 WP1) — the file on disk parses and holds at most eight
+        slots, the document about to be written holds more — keeps the
+        eight-slot file first as ``<file>.bak-v2-bank8`` (never over a
+        file already there). **No backup, no write**: it raises
+        LibraryError and the file is as it was; the callers put the slot
+        back. The next write finds a long bank on disk and makes no
+        second copy. A build from before plan 19 reads a long bank by
+        cutting it to eight, and drops the far slots' names from the file
+        the next time it writes that show; the backup is the file from
+        before any far slot existed."""
+        path = self.path_for(self.name) if self.path is None else self.path
         try:
-            old = json.loads(self.path.read_text()) if self.path.is_file() else {}
+            old = json.loads(path.read_text()) if path.is_file() else None
         except (OSError, ValueError):
-            old = {}
-        if isinstance(old, dict) and old.get("schema") == PROJECT_V1:
+            old = None
+        doc = self.to_doc()
+        if isinstance(old, dict):
             from .routing import backup
-            backup(self.path, "1")
-        _write_json(self.path, self.to_doc())
+            if old.get("schema") == PROJECT_V1:
+                backup(path, "1")
+            elif (len(doc["bank"]) > F_KEYS and _bank_len(old) <= F_KEYS
+                  and not _kept(path) and backup(path, BANK8_BACKUP) is None):
+                raise LibraryError(f"{path.name}: not written — no backup of the "
+                                   "eight-slot file could be made")
+        self.path = path
+        _write_json(self.path, doc)
         self.lib._sync(self.path)
+        # the commit's words (plan 19 WP6): what moved since the show was
+        # opened or last written — "starts on", the bank, else a save
+        bank, startup = self._saved
+        if startup != self.startup:
+            said = f"show {self.name}: starts on {self.startup or 'nothing'}"
+        elif bank != list(self.bank):
+            said = f"show {self.name}: bank"
+        else:
+            said = f"save show {self.name}"
         self._saved = (list(self.bank), self.startup)
         self.factory = False                          # your copy now
+        self.lib._commit(said)
         return self.path
 
     def is_dirty(self) -> bool:
@@ -972,6 +1108,30 @@ class Project:
         return ((self.path is None and not self.factory)
                 or not undo.alike(self.session, reg.snapshot(part="session"))
                 or (self.bank, self.startup) != self._saved)
+
+
+def _kept(path: Path) -> bool:
+    """Is the file at `path` already kept, byte for byte, in one of its
+    eight-slot backups? Then a write that failed after its backup, tried
+    again, makes no second copy of the same file."""
+    try:
+        data = path.read_bytes()
+        return any(p.read_bytes() == data
+                   for p in path.parent.glob(f"{path.name}.bak-v{BANK8_BACKUP}*"))
+    except OSError:
+        return False
+
+
+def _and(items: list[str]) -> str:
+    """``F6``, ``F6 and 'starts on'``, ``F2, F6 and slot 9``."""
+    return items[0] if len(items) == 1 else ", ".join(items[:-1]) + " and " + items[-1]
+
+
+def _bank_len(doc: dict) -> int:
+    """How many slots a show document on disk holds (0 for none, or for a
+    `bank` that is no list)."""
+    bank = doc.get("bank")
+    return len(bank) if isinstance(bank, list) else 0
 
 
 # ---------------------------------------------------------------- marks
@@ -1051,8 +1211,7 @@ class Marks:
         if lib.presets is not None:
             lib.presets.note, lib.presets.notes, lib.presets.desk_notes = (
                 note[0], list(note[1]), list(note[2]))
-        cur = lib._current.get(PRESETS)
-        pr.active = pr.bank.index(cur) if cur in pr.bank else -1
+        pr.follow()
 
 
 # ---------------------------------------------------------------- library
@@ -1098,6 +1257,16 @@ class Library:
         self._mtimes: dict[Path, float] = {}
         self._next = 0.0
         self.presets = None        # preset.Presets, set by its constructor
+        # homegit.Committer when [library] git is on (app.main sets it; plan 19
+        # WP6): asked for a commit after each save (`_commit`), its notes
+        # drained in `poll`. The library never imports homegit or config
+        self.committer = None
+        # the hidden factory presets (`hidden.json`, plan 19 WP4), and whether
+        # the file there would not parse — kept beside itself before the
+        # first rewrite (`_write_hidden`)
+        self._hidden: frozenset[str] = frozenset()
+        self._hidden_bad = False
+        self._read_hidden()
         self.project = Project(self)
         self.unshadow()
         self._open_default()
@@ -1313,8 +1482,112 @@ class Library:
         p = self.path_of(group, name)
         return p is not None and not self._is_user(p)
 
-    def list(self, group: str) -> list[str]:
-        return sorted(self._index(group), key=str.lower)
+    def list(self, group: str, *, hidden: bool = False) -> list[str]:
+        """Every preset of the group by name, the user's shadowing the
+        factory's. A factory preset × hid (`hide`, plan 19 WP4) is left out
+        unless `hidden`: the strip's list and arrows, "starts on" and "put
+        preset here…" lose it, while `path_of`, `load` and `read` still find
+        it — a slot or a show that names it loads it."""
+        idx = self._index(group)
+        if not hidden:
+            gone = self.hidden(group)
+            if gone:
+                idx = {n: p for n, p in idx.items()
+                       if self._is_user(p) or p.name[:-5] not in gone}
+        return sorted(idx, key=str.lower)
+
+    def _taken(self, group: str) -> set[str]:
+        """The slugs a new file of the group may not take: every file stem in
+        either folder and every listed name, hidden ones included — on a
+        filesystem that folds case `Trip-2.json` is the file a save of
+        "TRIP 2" would write over (`save_new`, `rename`)."""
+        return ({slug(s) for s in self._files(group)}
+                | {slug(n) for n in self.list(group, hidden=True)})
+
+    # ---- hidden factory presets: <home>/hidden.json (plan 19 WP4) ----
+
+    def _read_hidden(self) -> None:
+        """Read `hidden.json`. None there: nothing hidden. One that will not
+        parse, or is not the shape it should be, reads as nothing hidden
+        with a warning, and is kept beside itself before the first rewrite."""
+        path = self.home / HIDDEN
+        self._hidden, self._hidden_bad = frozenset(), False
+        if not path.exists():
+            return
+        try:
+            doc = _read_json(path)
+            stems = doc.get("presets")
+            if doc.get("schema") != HIDDEN_SCHEMA or not isinstance(stems, list):
+                raise LibraryError(f"{HIDDEN}: not a {HIDDEN_SCHEMA} list")
+            self._hidden = frozenset(str(s) for s in stems if isinstance(s, str) and s)
+        except LibraryError as e:
+            self._hidden_bad = True
+            self.say(warning=f"{e} — nothing is hidden; the file is kept as it is until "
+                             "you hide or unhide a preset")
+
+    def hidden(self, group: str = PRESETS) -> frozenset[str]:
+        """The factory file stems hidden from the group's list (only the
+        presets' group has any)."""
+        return getattr(self, "_hidden", frozenset()) if group == PRESETS else frozenset()
+
+    def _write_hidden(self, stems: frozenset[str]) -> None:
+        """Write `hidden.json`. A file there that did not parse is kept first
+        (`routing.backup(path, "0")`, ``hidden.json.bak-v0``): no backup, no
+        rewrite (LibraryError)."""
+        path = self.home / HIDDEN
+        if getattr(self, "_hidden_bad", False) and path.exists():
+            from .routing import backup
+
+            if backup(path, "0") is None:
+                raise LibraryError(f"{HIDDEN}: not rewritten — the unreadable file there "
+                                   "could not be kept first")
+        _write_json(path, {"schema": HIDDEN_SCHEMA, "presets": sorted(stems)})
+        self._hidden, self._hidden_bad = frozenset(stems), False
+
+    def hide(self, group: str, name: str) -> bool:
+        """× on a factory preset: off the list, by its file stem in
+        `hidden.json`; its file is untouched and a slot or a show that names
+        it still loads it. False (nothing written) for anything but a
+        factory preset of the presets' group."""
+        path = self.path_of(group, name)
+        if group != PRESETS or path is None or self._is_user(path):
+            return False
+        stem = path.name[:-5]
+        if stem not in self.hidden(group):
+            self._write_hidden(self.hidden(group) | {stem})
+        still = self.still_named(name, path)
+        self.say(f"hidden {name} — " + (f"{_and(still)} still load{'s' if len(still) == 1 else ''}"
+                                         " it" if still else "show hidden in the list brings it "
+                                         "back"))
+        self._commit(f"hide preset {name}")
+        return True
+
+    def unhide(self, group: str, name: str) -> bool:
+        """Put a hidden factory preset back on the list."""
+        path = self.path_of(group, name)
+        if path is None or self._is_user(path):
+            return False
+        stem = path.name[:-5]
+        if stem not in self.hidden(group):
+            return False
+        self._write_hidden(self.hidden(group) - {stem})
+        self.say(f"{name} is back in the list")
+        self._commit(f"unhide preset {name}")
+        return True
+
+    def still_named(self, name: str, path: Path | None = None) -> list[str]:
+        """What in the open show still names the preset `name` (or, given,
+        the file at `path`): its slots (``F6``, ``slot 12``) and
+        ``'starts on'``."""
+        pr, key = self.project, slug(name)
+
+        def names(n: str | None) -> bool:
+            return bool(n) and (n == name or slug(n) == key
+                                or (path is not None and self.path_of(PRESETS, n) == path))
+        out = [slot_key(k) for k, n in enumerate(pr.bank) if names(n)]
+        if names(pr.startup):
+            out.append("'starts on'")
+        return out
 
     def read(self, group: str, name: str) -> dict:
         path = self.path_of(group, name)
@@ -1527,6 +1800,7 @@ class Library:
         hook = self._load_hooks.get(group)
         if kind is not None and hook is not None:   # a kind's current moved: say so
             hook(name)                               # (the bank's light, preset.py)
+        self._commit(f"save {'preset' if group == PRESETS else group} {name}")
         return path
 
     def document(self, group: str, name: str, *, extra: dict | None = None) -> dict:
@@ -1570,7 +1844,354 @@ class Library:
         self._sync(path)
         if self._current.get(group) == name and self.path_of(group, name) is None:
             self._landed(group, None, None)
+        if group == PRESETS:
+            # what still points at it (plan 19 WP4): the open show's slots and
+            # "starts on" — not cleared for the owner, so a restore to the old
+            # name makes them work again
+            back = self.path_of(group, name)
+            still = self.still_named(name)
+            if back is not None and back.name[:-5] in self.hidden(group):
+                # the factory one is there but hidden (review of PR #117)
+                self.say(f"your {name} is in the trash — the factory {name} is hidden: "
+                         "show hidden in the list brings it back")
+            elif back is not None:
+                self.say(f"your {name} is in the trash — the factory {name} is back")
+            elif still:
+                self.say(warning=f"{name} is in the trash — {_and(still)} still "
+                                 f"name{'s' if len(still) == 1 else ''} it; restore it from "
+                                 "the trash, or clear the slot")
+            else:
+                self.say(f"{name} is in the trash — the preset list's trash can restore it")
+        self._commit(f"trash {'preset' if group == PRESETS else group} {name}")
         return True
+
+    def rename(self, group: str, old: str, new: str) -> Path:
+        """Rename a user preset (plan 19 WP4): the file, the name inside it,
+        and every show in the home that names it. Raises LibraryError and
+        changes nothing when `old` is not a user preset of the presets'
+        group, `new` is empty or taken, or the old file cannot be kept in
+        the trash. No undo step: the nets are the old file in
+        ``trash/presets/``, each rewritten show in ``trash/projects/``, and
+        renaming it back.
+
+        In order, so that a stop at any point loses nothing:
+
+        1. refuse — a factory preset ("save copy, then rename the copy"),
+           an empty name, a name whose slug is taken (`_taken`: a file stem
+           in either folder or a listed name, hidden ones included, less
+           this preset's own). A new name with the old file's slug (case or
+           spacing) keeps the file's stem: the file is rewritten in place,
+           its old text kept in the trash first;
+        2. the new file ``presets/<slug(new)>.json`` is written, created
+           exclusively — the old document with only ``name`` changed, in the
+           kind's own text. *Stopped here: two files, one look; nothing lost*;
+        3. the old file is copied to the trash (`to_trash`) — a copy that
+           fails removes the new file and raises — and then removed.
+           *Stopped after the copy: both files and the copy. After the
+           removal: the new file and the copy; the shows still name the old
+           name (a slot says "no preset", the trash holds it)*;
+        4. both paths are synced (our own writes: the watcher sees no
+           edit); the loaded preset keeps its clean reference under the new
+           name, so an unsaved edit stays one, and the load hook is told;
+        5. every ``hyperspace.project/2`` show in ``<home>/projects`` whose
+           bank or "starts on" names the old preset is copied to the trash,
+           then written with the new name — the open show through its
+           `Project` (its dot and the bank's light stay right). A show whose
+           copy or write fails is left as it is; a schema-1 show is left
+           alone; both are named in the warning. Factory shows are never
+           written. *Stopped mid-way: the shows done name the new name and
+           their old files are in the trash; the rest name the old one*;
+        6. `Project.follow()`; the status says how many shows changed."""
+        if group != PRESETS:
+            raise LibraryError(f"{group}: only a preset can be renamed")
+        path = self.path_of(group, old)
+        if path is None:
+            raise LibraryError(f"no preset {old!r}")
+        if not self._is_user(path):
+            raise LibraryError(f"{old} is a factory preset: save copy, then rename the copy")
+        new = (new or "").strip()
+        if not new:
+            raise LibraryError("a preset needs a name")
+        stem = path.name[:-5]
+        if new == old:
+            return path
+        doc = _read_json(path)
+        mine = {stem} | {slug(n) for n, p in self._index(group).items() if p == path}
+        in_place = slug(new) == stem
+        # `_taken` less this preset's own stem and name (the list at
+        # hidden=True: `_index` is every file, hidden or not)
+        taken = ({slug(s) for s, p in self._files(group).items() if p != path}
+                 | {slug(n) for n, p in self._index(group).items() if p != path})
+        if slug(new) in taken:
+            raise LibraryError(f"{new}: that name is taken — pick another")
+        kind = self._kinds.get(group)
+        doc["name"] = new
+        text = (kind.text(doc) if kind is not None and kind.text is not None
+                else _json_text(doc))
+        dst = path if in_place else self.home / group / f"{slug(new)}.json"
+        if in_place:
+            # 2–3 in one: keep the old text, then write over it
+            if to_trash(path, self.home) is None:
+                raise LibraryError(f"{path.name}: not renamed — it could not be kept in the "
+                                   f"trash ({self.home / TRASH})")
+            _write_text(path, text)
+        else:
+            try:
+                with open(dst, "x") as f:                  # 2. never over a file
+                    f.write(text)
+            except FileExistsError as e:
+                raise LibraryError(f"{new}: that name is taken — pick another") from e
+            except OSError as e:
+                dst.unlink(missing_ok=True)
+                raise LibraryError(f"{dst.name}: {e}") from e
+            if to_trash(path, self.home) is None:          # 3.
+                dst.unlink(missing_ok=True)
+                raise LibraryError(f"{path.name}: not renamed — it could not be kept in the "
+                                   f"trash ({self.home / TRASH})")
+            try:
+                path.unlink()
+            except OSError as e:
+                dst.unlink(missing_ok=True)
+                raise LibraryError(f"{path.name}: not renamed ({e})") from e
+        self._sync(path, dst)                              # 4.
+        cur = self._current.get(group)
+        if cur is not None and (cur == old or slug(cur) in mine):
+            self._landed(group, new, self._loaded.get(group))
+            hook = self._load_hooks.get(group)
+            if hook is not None:
+                hook(new)
+        # asked for before the shows are rewritten, so the rename is the
+        # commit's subject and each show's own request its body (plan 19 WP6)
+        self._commit(f"rename preset {old} → {new}")
+        done, left = self._repoint(old, new, mine)         # 5.
+        self.project.follow()                              # 6.
+        self.say(f"renamed {old} → {new} ({done} show{'' if done == 1 else 's'} updated)")
+        if left:
+            self.say(warning=f"renamed {old} → {new}; not updated: {', '.join(left)}")
+        return dst
+
+    def _repoint(self, old: str, new: str, mine: set[str]) -> tuple[int, list[str]]:
+        """Step 5 of `rename`: every user show naming the old preset (by its
+        name, or a slug of it or of its file stem) names the new one, each
+        copied to the trash first. Returns (shows written, shows left as
+        they were with why)."""
+
+        def hit(n) -> bool:
+            return isinstance(n, str) and bool(n) and (n == old or slug(n) in mine)
+
+        pr, done, left = self.project, 0, []
+        for show in sorted((self.home / PROJECTS).glob(f"*{PROJECT_SUFFIX}")):
+            label = show.name[: -len(PROJECT_SUFFIX)]
+            if pr.path is not None and show == pr.path:
+                if not (any(hit(n) for n in pr.bank) or hit(pr.startup)):
+                    continue
+                if to_trash(show, self.home) is None:
+                    left.append(f"{label} (it could not be kept in the trash)")
+                    continue
+                was = (list(pr.bank), pr.startup)
+                pr.bank = [new if hit(n) else n for n in pr.bank]
+                pr.startup = new if hit(pr.startup) else pr.startup
+                try:
+                    pr.write()
+                except (LibraryError, OSError) as e:
+                    pr.bank, pr.startup = was
+                    left.append(f"{label} ({e})")
+                    continue
+                done += 1
+                continue
+            try:
+                doc = _read_json(show)
+            except LibraryError as e:
+                left.append(f"{label} (would not read: {e})")
+                continue
+            bank = doc.get("bank") if isinstance(doc.get("bank"), list) else []
+            if not (any(hit(n) for n in bank) or hit(doc.get("startup"))):
+                continue
+            if doc.get("schema") != PROJECT_SCHEMA:
+                left.append(f"{label} (a {doc.get('schema')} show: plan 13's migration owns it)")
+                continue
+            if to_trash(show, self.home) is None:
+                left.append(f"{label} (it could not be kept in the trash)")
+                continue
+            doc["bank"] = [new if hit(n) else n for n in bank]
+            if hit(doc.get("startup")):
+                doc["startup"] = new
+            try:
+                _write_json(show, doc)
+            except LibraryError as e:
+                left.append(f"{label} ({e})")
+                continue
+            self._sync(show)
+            done += 1
+        # the open show with no file yet (a new show): its bank in memory
+        if pr.path is None and (any(hit(n) for n in pr.bank) or hit(pr.startup)):
+            pr.bank = [new if hit(n) else n for n in pr.bank]
+            pr.startup = new if hit(pr.startup) else pr.startup
+        return done, left
+
+    # ---- the trash: a view of it, restore, empty (plan 19 WP4) ----
+
+    def _in_trash(self, path: Path) -> bool:
+        """Does `path` — its symlinks and any ``..`` resolved — lie under
+        ``<home>/trash/``, one folder down? The guard on every file the
+        trash's view restores or deletes."""
+        try:
+            root = (self.home / TRASH).resolve()
+            real = path.resolve()
+        except OSError:
+            return False
+        return real.parent.parent == root
+
+    def trash(self) -> list[Trashed]:
+        """Every file under ``<home>/trash/<folder>/``, newest first — what
+        "empty" removes, and nothing else: what you see is what goes."""
+        root = self.home / TRASH
+        if not root.is_dir():
+            return []
+        out = []
+        for folder in sorted(root.iterdir()):
+            if not folder.is_dir():
+                continue
+            for path in folder.iterdir():
+                # only what `to_trash` writes: <stem>.<stamp>[-n]<suffix>, never a
+                # dotfile — a Finder `.DS_Store` is not the owner's, and a restore
+                # would make it a preset (review of PR #117)
+                m = _TRASHED.fullmatch(path.name)
+                if (m is None or path.name.startswith(".")
+                        or not (path.is_file() or path.is_symlink())):
+                    continue
+                stem = m["stem"]
+                if stem.endswith(PROJECT_SUFFIX[:-5]) and folder.name == PROJECTS:
+                    stem = stem[: -len(PROJECT_SUFFIX[:-5])]
+                name = stem
+                if path.is_file() and self._in_trash(path):
+                    try:
+                        name = str(_read_json(path).get("name") or stem)
+                    except LibraryError:
+                        pass
+                out.append(Trashed(path, folder.name, name, _when(m["stamp"]) if m else ""))
+        return sorted(out, key=lambda t: (_order(t.path), t.path.name), reverse=True)
+
+    def restore_trash(self, item: Trashed) -> str:
+        """Put a trashed file back as ``<home>/<group>/<stem><suffix>`` —
+        never over a file: the target is created exclusively. When the stem
+        is taken (a file of that stem in the group's folder of either
+        root), or for a preset the name inside is taken by another listed
+        one (hidden ones included), it is restored under the next free name
+        (`next_name`) with that name written inside, and the status says
+        so. Only after the write succeeds is the trash copy removed. A
+        restored show is listed, not opened; a restore loads nothing.
+        Returns the name it now has."""
+        path = item.path
+        if not path.is_file() or not self._in_trash(path):
+            raise LibraryError(f"{path.name}: not in the trash ({self.home / TRASH})")
+        m = _TRASHED.fullmatch(path.name)
+        if m is None or path.name.startswith("."):
+            raise LibraryError(f"{path.name}: not restored — not a file the trash kept")
+        filename = f"{m['stem']}{m['suffix']}"
+        show = item.group == PROJECTS
+        suffix = PROJECT_SUFFIX if show and filename.endswith(PROJECT_SUFFIX) else ".json"
+        stem = filename.removesuffix(suffix)
+        folder = self.home / item.group
+        data = path.read_bytes()
+        try:
+            doc = json.loads(data)
+            doc = doc if isinstance(doc, dict) else None
+        except ValueError:
+            doc = None
+        name = str((doc or {}).get("name") or stem)
+        if show:
+            stems = {p.name[: -len(PROJECT_SUFFIX)] for root in self._roots()
+                     for p in (root / PROJECTS).glob(f"*{PROJECT_SUFFIX}")}
+            names = {slug(s) for s in stems}
+        else:
+            stems = set(self._files(item.group))
+            names = ({slug(n) for n in self.list(item.group, hidden=True)}
+                     if item.group == PRESETS else set())
+        taken = {slug(s) for s in stems} | names
+        renamed = slug(stem) in {slug(s) for s in stems} or (
+            item.group == PRESETS and slug(name) in names)
+        if renamed:
+            if doc is None:
+                raise LibraryError(f"{path.name}: not restored — {stem} is taken and the file "
+                                   "would not read, so it cannot be renamed")
+            new = next_name(name, taken)
+            doc["name"] = new
+            stem = slug(new)
+            kind = self._kinds.get(item.group)
+            text = (kind.text(doc) if kind is not None and kind.text is not None
+                    else _json_text(doc))
+            data = text.encode()
+        dst = folder / f"{stem}{suffix}"
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            with open(dst, "xb") as f:                     # never over a file
+                f.write(data)
+        except FileExistsError as e:
+            raise LibraryError(f"{dst.name}: not restored — a file is there") from e
+        except OSError as e:
+            dst.unlink(missing_ok=True)
+            raise LibraryError(f"{dst.name}: not restored ({e})") from e
+        self._sync(dst)
+        if item.group == PRESETS and self.warning.startswith(f"{name} is in the trash"):
+            self.warning = ""                              # what × said is no longer so
+        now = str(doc["name"]) if renamed else name
+        what = f"show {now}" if show else now
+        if renamed:
+            self.say(f"restored as {what} — {name} is taken")
+        else:
+            self.say(f"restored {what}" + (" — it is in the show list" if show else ""))
+        try:
+            path.unlink()                                  # only after the write
+        except OSError as e:
+            self.say(warning=f"restored {now}; its copy stays in the trash ({e})")
+        self._commit(f"restore {item.group} {now}")
+        return now
+
+    def empty_trash(self) -> int:
+        """Delete every file `trash()` lists, and then the trash's folders
+        left empty — the one delete in the app that keeps no copy (the
+        panel asks twice). A path that does not resolve under
+        ``<home>/trash/`` (a symlink out, a ``..``) is refused and left,
+        and said. Returns how many files went."""
+        gone, refused = 0, []
+        for item in self.trash():
+            path = item.path
+            if path.is_symlink() or not self._in_trash(path):
+                refused.append(path.name)
+                continue
+            try:
+                path.unlink()
+                gone += 1
+            except OSError as e:
+                refused.append(f"{path.name} ({e})")
+        root = self.home / TRASH
+        if root.is_dir():
+            for folder in root.iterdir():
+                if folder.is_dir() and not folder.is_symlink():
+                    try:
+                        folder.rmdir()                     # only when it is empty
+                    except OSError:
+                        pass
+        if refused:
+            self.say(warning=f"trash: emptied {gone}; left {', '.join(refused[:4])}"
+                             + (f" (+{len(refused) - 4} more)" if len(refused) > 4 else "")
+                             + " — not in the trash folder")
+        else:
+            self.say(f"trash: {gone} file{'' if gone == 1 else 's'} deleted for good")
+        return gone
+
+    def _commit(self, message: str) -> None:
+        """Ask the committer (homegit.py), if there is one, for a commit of
+        the home as it now is — after the file is on disk. Returns at once
+        and never raises: git can neither block nor fail a save."""
+        committer = self.__dict__.get("committer")   # (a Library from before a hot reload)
+        if committer is None:
+            return
+        try:
+            committer.request(message)
+        except Exception:  # noqa: BLE001, S110 — a save stands whatever git does
+            pass
 
     def is_dirty(self, group: str) -> bool:
         """Have the group's bases moved off the loaded (or default) preset?
@@ -1630,7 +2251,18 @@ class Library:
         self._defaults.clear()
 
     def poll(self, now: float | None = None) -> bool:
-        """Re-apply whatever is loaded from a file that changed on disk."""
+        """Re-apply whatever is loaded from a file that changed on disk.
+        First, every frame: what the committer's worker has to say (git
+        failing, the home inside another repository) onto the warning line —
+        the one road from that thread to the library (plan 19 WP6)."""
+        committer = self.__dict__.get("committer")
+        if committer is not None:
+            try:
+                for note in committer.notes():
+                    print(f"library: {note}", file=sys.stderr)
+                    self.say(warning=note)
+            except Exception:  # noqa: BLE001, S110 — git's notes never stop the watcher
+                pass
         now = time.monotonic() if now is None else now
         if now < self._next:
             return False

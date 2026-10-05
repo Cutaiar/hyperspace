@@ -91,6 +91,7 @@ from . import apc40, routing, undo
 from .bands import BANDS
 from .lfo import SHAPES, SYNCS
 from .library import (
+    F_KEYS,
     FACTORY,
     HOUSE_PROJECT,
     MINE_PROJECT,
@@ -103,6 +104,7 @@ from .library import (
     SLOTS,
     LibraryError,
     _write_text,
+    bank_doc,
     slug,
 )
 from .lookback import (
@@ -393,8 +395,7 @@ class Presets:
         """The library's load hook: the bank lights the slot that names
         what just loaded, whichever road it came in by (the strip, an F-key,
         a file edited on disk); a preset the bank does not name lights none."""
-        pr = self.lib.project
-        pr.active = pr.bank.index(name) if name in pr.bank else -1
+        self.lib.project.follow()
         for fn in getattr(self, "listeners", ()):
             try:
                 fn(name)
@@ -766,8 +767,9 @@ def lfo_breathe_values() -> dict[str, Any]:
 
 
 def lfo_breathe_desk() -> list[Binding]:
-    """The factory preset layer, and the Breathe macro on device knob 1."""
-    return [*fresh_desk(), device_knob(1, "macro.1")]
+    """The factory preset layer with its own device knobs (`BREATHE_KNOBS`):
+    the Breathe macro still on device knob 1 (hand check 39)."""
+    return knob_desk(BREATHE_KNOBS)()
 
 
 def hands_fx_routes() -> list[Binding]:
@@ -876,10 +878,33 @@ TRACER_KNOBS = ("dream.echo_mix", "dream.fade", "dream.echoes", "dream.gap",
 NOITA_KNOBS = ("fx.mix", "fx.warp.amount", "fx.warp.scale", "fx.tripcolour.amount",
                "fx.fractals.amount", "fx.fractals.size", "fx.doublevision.amount",
                "fx.doublevision.ghost")
+# plan 19 WP3: the device knobs of the three presets whose eight were dark
+# (or one), each on what that preset has switched on — no knob on an effect
+# that is off (fork 7). None leaves that knob dark. Every other scene-only
+# preset has the fresh layer's four (apc40.SCENE)
+# hands-fx: the Acid shader is its one effect; three of these a hand
+# positions while it is in the box, and the knob is what they come back to
+HANDS_FX_KNOBS = ("fx.mix", "fx.acid.bend", "fx.acid.twist", "fx.acid.reach",
+                  "fx.acid.breathe", "fx.acid.speed", "view.depth4", "camera.yaw")
+# hands-pinch: the hue cycle is its one effect, at a mix of 0 until a pinch or D1 lifts it
+HANDS_PINCH_KNOBS = ("fx.mix", "fx.huecycle.paint", "fx.huecycle.spread", "view.depth4",
+                     "camera.yaw", "camera.pitch", "view.pattern", None)
+# lfo-breathe: Breathe stays on D1; the mix LFO 2 swells, the plasma it
+# swells, LFO 1's pulse, and the scene's depth and angles
+BREATHE_KNOBS = ("macro.1", "fx.mix", "fx.plasma.level", "lfo.1.depth", "view.depth4",
+                 "camera.yaw", "camera.pitch", None)
 
 
-def knob_desk(targets: tuple[str, ...]) -> Callable[[], list[Binding]]:
-    return lambda: [*fresh_desk(), *(device_knob(k + 1, t) for k, t in enumerate(targets))]
+def _is_device_knob(b: Binding) -> bool:
+    return b.kind == "cc" and b.number in apc40.DEVICE_KNOBS
+
+
+def knob_desk(targets: tuple[str | None, ...]) -> Callable[[], list[Binding]]:
+    """A preset layer with device knobs of its own: the fresh desk **less
+    its device knobs** (apc40.SCENE), plus device knob k + 1 on
+    `targets[k]` — so no knob is mapped twice. A None leaves that knob dark."""
+    return lambda: [*(b for b in fresh_desk() if not _is_device_knob(b)),
+                    *(device_knob(k + 1, t) for k, t in enumerate(targets) if t)]
 
 
 # ---------------------------------------------------------------- the generator
@@ -944,10 +969,11 @@ FACTORY_PRESETS: dict[str, Factory] = {
                            macros=lfo_breathe_macros, desk=lfo_breathe_desk),
     "hands-fx": Factory(hands_fx_routes, lambda: {"fx.acid.speed": 4.0}, "hands-fx",
                         "Plan 08: both hands play the Acid shader and the fx mix.",
-                        desk=None),
+                        desk=knob_desk(HANDS_FX_KNOBS)),
     "hands-pinch": Factory(hands_pinch_routes, hands_pinch_values, "hands-pinch",
                            "Plan 08: a pinch picks what a hand's height moves — the left "
-                           "index pinch fades the hue cycle in.", desk=None),
+                           "index pinch fades the hue cycle in.",
+                           desk=knob_desk(HANDS_PINCH_KNOBS)),
     "hands-play": Factory(hands_play_routes, dict, "hands-play",
                           "Plan 08: brightness, speed and 4D depth on the hands.", desk=None),
     # plan 18 WP4: two hands on the camera (in the list, on no F-key)
@@ -1326,8 +1352,10 @@ def migrate_project(root: Path, path: Path, carried: routing.Carried, *,
     if not isinstance(doc, dict) or doc.get("schema") != PROJECT_V1:
         return [], False, False
     keep, labels = _labels(doc.get("modules") or {})
-    raw = list(doc.get("bank") or [])[:SLOTS]
-    raw += [None] * (SLOTS - len(raw))
+    # a schema-1 bank is the F-keys' eight: the file written holds eight
+    # entries (`bank_doc`), as it did before the bank grew (plan 19 WP1)
+    raw = list(doc.get("bank") or [])[:F_KEYS]
+    raw += [None] * (F_KEYS - len(raw))
     bank, first, notes = slot_presets(root, raw, carried, labels, factory)
     try:
         seeds = list(json.loads((factory / PROJECTS / f"{HOUSE_PROJECT}{PROJECT_SUFFIX}")
@@ -1377,7 +1405,7 @@ def migrate_project(root: Path, path: Path, carried: routing.Carried, *,
     if doc.get("note"):
         new["note"] = str(doc["note"])
     new.update(startup=startup or next((n for n in bank if n), None),
-               bank=bank, session=session, modules=keep)
+               bank=bank_doc(bank), session=session, modules=keep)
     bak = routing.backup(path, "1")
     if bak is None:
         return [*notes, f"{path.name} NOT migrated: no backup could be made"], False, False
@@ -1400,17 +1428,22 @@ def _into_default(root: Path, name: str, factory: Path = FACTORY) -> str:
     doc = json.loads(src.read_text())
     if not isinstance(doc, dict) or doc.get("schema") != PROJECT_SCHEMA:
         raise ValueError(f"{path.name} is not a {PROJECT_SCHEMA} project")
-    bank =[n for n in list(doc.get("bank") or [])[:SLOTS] if n != name]
+    # the bank moves one slot along over the length the file has (eight,
+    # or as far as its last far slot: plan 19 WP1), so a name leaves the
+    # F-keys' eight exactly as it did before the bank grew
+    had = bank_doc(list(doc.get("bank") or [])[:SLOTS])
+    bank = [n for n in had if n != name]
     bank.insert(0, name)
-    bank += [None] * (SLOTS - len(bank))
+    bank += [None] * (len(had) - len(bank))
     gone = ""
-    if len(bank) > SLOTS:
+    if len(bank) > len(had):
         spare = next((k for k in range(len(bank) - 1, 0, -1) if bank[k] is None), None)
         if spare is not None:
             bank.pop(spare)
-        else:
+        elif len(had) == F_KEYS or len(bank) > SLOTS:
             gone = f"; {bank.pop()!r} left the bank (its file stays)"
-    doc.update(bank=bank, startup=name)
+        # (a bank already past the F-keys, and full to its end, grows by one)
+    doc.update(bank=bank_doc(bank), startup=name)
     if fresh:
         doc["name"] = MINE_PROJECT
         doc.pop("note", None)
@@ -1633,13 +1666,18 @@ def migrate_home(lib, router, hands_cfg: dict | None = None) -> list[str]:
         except (OSError, ValueError, LibraryError) as e:
             notes.append(f"bindings.json's routes NOT moved ({e}); the file is left as it is")
     if carried is not None and table.path is not None and (held or carried.empty):
-        if table.notes:
-            table.announce(table.path)
         # no file yet (an old midi_map.json's rows, carried): nothing to keep
         fresh = not table.path.exists()
         bak = None if fresh else routing.backup(table.path, table.read_at)
         kept = "" if fresh else f"; the old file kept as {bak.name}" if bak else ""
+        if table.notes:          # after the backup: what it says is what happened
+            table.announce(table.path, written=fresh or bak is not None, kept=bak)
         if bak is None and not fresh:
+            # no backup, no rewrite (plan 19 fork 12) — and no later write
+            # either until the copy is made (`Bindings.write` retries it)
+            table.unbacked, table.error = table.read_at, routing.NOT_REWRITTEN
+            table.said = table.said or (f"{table.path.name} NOT rewritten: no backup could "
+                                        "be made")
             notes.append("bindings.json NOT rewritten: no backup could be made")
         else:
             table.write()

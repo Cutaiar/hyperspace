@@ -450,7 +450,8 @@ def test_the_routing_page_is_one_page_over_the_loaded_preset(rig, tmp_path, monk
     assert lib.is_dirty("presets")
     texts.clear()
     frame(panel)
-    assert "●" in texts                                         # the head's dot
+    # the head's dot: a disc since plan 19 WP5, no longer the "●" glyph
+    assert "head.dot" in ui_presets._state(panel)["rects"]
     assert (path.read_text(), path.stat().st_mtime_ns) == before   # no file written
     # SHIFT latched: the head says so
     table.set_layer("global")
@@ -1177,3 +1178,31 @@ def test_a_desk_click_clears_a_filter_that_has_the_keyboard(rig, monkeypatch):
     assert not st["unfind"] and not io.want_text_input
     assert ui_routing.found(panel, rig.router) == (m, m)
     assert st["marked"] == 1                                  # its line is drawn, and framed
+
+
+def test_the_head_has_the_same_dot_and_label(rig, tmp_path):
+    """Plan 19 WP5: ROUTING's head is the preset strip's save over the
+    same preset — the same 12 px disc beside the name, the save chip lit
+    while dirty and saying "save copy" on a factory preset, "save" on
+    yours. Clicking it is `Library.overwrite`, as before."""
+    from test_ui_shell import _click
+
+    from hyperspace import ui
+
+    panel, lib, reg = rig.panel, rig.lib, rig.reg
+    lib.load("presets", "TRIP")
+    frame(panel, "routing")
+    frame(panel)
+    st = ui_presets._state(panel)
+    assert "head.dot" not in st["rects"] and st["save"]["head"] == ("save copy", False)
+    reg["view.bright"].set(reg["view.bright"].value * 0.5 + 0.1)
+    frame(panel)
+    frame(panel)
+    x0, y0, x1, y1 = st["rects"]["head.dot"]
+    assert x1 - x0 == y1 - y0 == 2 * ui.DOT_R
+    assert st["save"]["head"] == ("save copy", True)
+    assert not (tmp_path / "presets" / "trip.json").exists()
+    _click(panel, st["rects"]["head.save"])
+    assert (tmp_path / "presets" / "trip.json").is_file() and not lib.is_dirty("presets")
+    frame(panel)
+    assert "head.dot" not in st["rects"] and st["save"]["head"] == ("save", False)

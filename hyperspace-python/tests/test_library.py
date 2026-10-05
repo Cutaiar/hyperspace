@@ -9,9 +9,20 @@ import os
 from types import SimpleNamespace
 
 import pytest
-from conftest import opened_last
+from conftest import (
+    OWNER_KNOB,
+    OWNER_PAD,
+    OWNER_PRESETS,
+    OWNER_ROW,
+    OWNER_SHOWS,
+    boot_home,
+    far_pads,
+    old_shape_pads,
+    opened_last,
+    tree,
+)
 
-from hyperspace import config, library, routing
+from hyperspace import config, library, params, placement, preset, routing
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.bands import BANDS
@@ -184,7 +195,9 @@ def test_a_project_keeps_the_session_apart(rig, tmp_path):
     assert doc["schema"] == "hyperspace.project/2" and "values" not in doc
     assert doc["session"] == reg.snapshot(part="session")
     assert "master.gain" in doc["session"] and "view.shape" not in doc["session"]
-    assert doc["bank"] == lib.project.bank and doc["startup"] == "BIG BLUE WAVE"
+    # the file holds the F-keys' eight (plan 19 WP1: `bank_doc`), the show 24
+    assert doc["bank"] == lib.project.bank[:8] == library.bank_doc(lib.project.bank)
+    assert doc["startup"] == "BIG BLUE WAVE"
     assert not lib.project.is_dirty()
     reg["view.shape"].set(6)                         # a performance move: the preset's
     assert not lib.project.is_dirty()
@@ -325,11 +338,14 @@ def test_a_projects_inline_band_copy_carries_the_layout(rig, tmp_path):
 
 
 def test_delete_is_user_only(rig, tmp_path):
-    """Audit L5: `rename` had no caller and is gone; delete stays user-only."""
+    """Audit L5: `rename` had no caller and went; delete stays user-only.
+    Plan 19 WP4 brings a rename back with a caller (the preset list), for
+    the presets' group only: a module preset is named by shows and scenes."""
     lib = rig.lib
     lib.save_as("camera", "Wide")
     assert lib.list("camera") == ["Wide"] and lib.current("camera") == "Wide"
-    assert not hasattr(lib, "rename")
+    with pytest.raises(LibraryError, match="only a preset can be renamed"):
+        lib.rename("camera", "Wide", "Tall")
     assert not lib.delete("band", "Percussive")             # factory
     assert not lib.delete("camera", "never was")
     assert lib.delete("camera", "Wide")
@@ -700,7 +716,7 @@ def test_factory_projects_are_listed_and_load_by_name(rig):
     assert lib.project.load("party") == []
     assert lib.project.name == "party" and lib.project.path is None
     assert lib.project.bank == ["TUMBLE", "FACES", "FIELD", "WAKE", "TRIP", "ACID", "MANDALA",
-                               "NOITA"]
+                                "NOITA", "TRACER"] + [None] * 15    # plan 19 WP1: slot 9
     assert lib.current("presets") == "TUMBLE" and lib.project.active == 0
     assert rig.view.shape == 10 and lib.current("band") == "Balanced"
 
@@ -863,18 +879,24 @@ def test_next_name_counts_on_from_a_trailing_number():
 
 def test_next_empty_reads_the_banks_own_length(tmp_path):
     """Plan 15 §1 row 13: the next empty slot is read off the bank's own
-    list — neither `library.SLOTS` nor `routing.BANK_SLOTS` — so plan 19's
-    bank of twenty-four answers with no change here, and a save-as and the
-    slot menu's two calls reach its far slots."""
+    list — neither `library.SLOTS` nor `routing.F_KEYS` — so plan 19's
+    bank of twenty-four answers with no change to it, and a save-as and
+    the slot menu's two calls reach its far slots: the party show's first
+    empty slot is 10, and that is where the desk's save-as lands."""
     import inspect
 
     r = make(tmp_path, None)
     pr = r.lib.project
-    assert len(pr.bank) == library.SLOTS == routing.BANK_SLOTS == 8
-    assert pr.next_empty() is None                              # the party show is full
+    assert len(pr.bank) == library.SLOTS == 24 and routing.F_KEYS == 8
+    assert pr.next_empty() == 9                                 # the party show: slot 10
+    r.reg["preset.save_new"].fire()
+    name = r.lib.current("presets")
+    assert pr.bank[9] == name and pr.active == 9
+    assert r.lib.status == f"saved {name} → slot 10"
+    assert pr.next_empty() == 10
     pr.bank[6] = pr.bank[2] = None
-    assert pr.next_empty() == 2
-    pr.bank = [f"P{k}" for k in range(24)]                      # a bank of 24
+    assert pr.next_empty() == 2                                 # a hole in the F-keys first
+    pr.bank = [f"P{k}" for k in range(24)]                      # full
     assert pr.next_empty() is None
     pr.bank[23] = None
     assert pr.next_empty() == 23
@@ -882,12 +904,889 @@ def test_next_empty_reads_the_banks_own_length(tmp_path):
     assert pr.next_empty() == 17
     r.reg["preset.save_new"].fire()                             # into slot 18
     name = r.lib.current("presets")
-    assert pr.bank[17] == name and pr.active == 17 and r.lib.status == f"saved {name} → F18"
+    assert pr.bank[17] == name and pr.active == 17
+    assert r.lib.status == f"saved {name} → slot 18"
     pr.put_slot(23, "WAKE")
     assert pr.bank[23] == "WAKE" and pr.next_empty() is None
+    assert r.lib.status == "slot 24: WAKE"
     pr.clear_slot(20)
     assert pr.bank[20] is None and pr.next_empty() == 20
     for fn in (library.Project.next_empty, library.Project.save_new, library.Project.put_slot,
                library.Project.clear_slot, library.Project._set_slot):
         src = inspect.getsource(fn)
         assert "SLOTS" not in src, fn.__name__
+
+
+# ------------------------------------------- plan 19 WP1: a bank of twenty-four
+
+def bak8(show):
+    """The backups `Project.write` has made of an eight-slot show file."""
+    return sorted(show.parent.glob(f"{show.name}.bak-v{library.BANK8_BACKUP}*"))
+
+
+def quit_(home):
+    """What a quit writes into the home: where the windows were (app.py)."""
+    placement.save(home, (60, 80, 960, 900), [(1100, 80, 1280, 720)],
+                   [placement.Screen("test", 0, 0, 2560, 1440)])
+
+
+def test_the_bank_is_twenty_four_and_the_f_keys_eight(tmp_path):
+    """One size for the bank, one for the F-keys: `library.SLOTS` slots,
+    the first `F_KEYS` of them a function key's — the number `routing` and
+    `params` hold too (neither may import `library`)."""
+    assert library.SLOTS == 24
+    assert library.F_KEYS == 8 == routing.F_KEYS == params.F_KEYS
+    assert len(make(tmp_path).lib.project.bank) == 24
+    assert len(library.Project(SimpleNamespace()).bank) == 24
+    assert [library.slot_key(k) for k in (0, 7, 8, 11, 23)] == ["F1", "F8", "slot 9", "slot 12",
+                                                                 "slot 24"]
+
+
+def test_a_bank_is_written_as_far_as_its_last_filled_slot():
+    """`bank_doc`: trailing empty slots left off, never fewer than eight
+    entries, and a hole before a far slot kept — so slot k is entry k."""
+    doc = library.bank_doc
+    assert doc([None] * 24) == [None] * 8
+    assert doc(["A", None, "C"] + [None] * 21) == ["A", None, "C"] + [None] * 5
+    assert doc(["A"] * 8 + [None] * 16) == ["A"] * 8
+    assert doc(["A"] * 8 + [None, None, "K"] + [None] * 13) == ["A"] * 8 + [None, None, "K"]
+    assert doc(["A"] * 24) == ["A"] * 24
+    assert doc(["A", "B"]) == ["A", "B"] + [None] * 6       # a short list is padded to eight
+    bank = ["A"] * 8 + [None] * 16
+    assert doc(bank) is not bank and len(bank) == 24        # a copy: the bank is not cut
+
+
+def test_the_owner_home_is_shaped_like_the_owners(owner_home):
+    """The fixture every "on a copy" test stands on: two shows with
+    eight-name banks, three presets whose desks hold the sixteen shape pads
+    as today's writer wrote them (one with a re-aimed pad and a learned
+    knob), a bindings.json with the owner's row, and the machine's files."""
+    home = owner_home
+    for show in OWNER_SHOWS:
+        doc = json.loads((home / "projects" / f"{show}.hyp.json").read_text())
+        assert doc["schema"] == "hyperspace.project/2" and len(doc["bank"]) == 8
+        assert all(doc["bank"]), show
+    mine = json.loads((home / "projects" / "mine.hyp.json").read_text())
+    assert mine["bank"][:3] == list(OWNER_PRESETS) and mine["startup"] == "NIGHT ONE"
+    assert (home / "last_show").read_text().strip() == "mine"
+    pads = old_shape_pads()
+    assert len(pads) == 16 and {p["target"] for p in pads} == {"view.shape"}
+    for name in OWNER_PRESETS:
+        doc = json.loads((home / "presets" / f"{slug(name)}.json").read_text())
+        assert doc["schema"] == "hyperspace.preset/2" and doc["name"] == name
+        by_source = {row["source"]: row for row in doc["desk"]}
+        for pad in pads:
+            if name == "NIGHT TWO" and pad["source"] == OWNER_PAD["source"]:
+                assert by_source[pad["source"]] == OWNER_PAD        # the pad the owner re-aimed
+            else:
+                assert by_source[pad["source"]] == pad, (name, pad["source"])
+    two = json.loads((home / "presets" / "night-two.json").read_text())
+    knob = preset.desk_json([preset.device_knob(*OWNER_KNOB)])[0]
+    assert knob in two["desk"]                                      # the knob the owner learned
+    table = json.loads((home / "bindings.json").read_text())
+    source, target = OWNER_ROW
+    assert [b["target"] for b in table["bindings"] if b["source"] == source] == [target]
+    assert not any(b.get("layer") == "preset" for b in table["bindings"])
+    # as written before plan 19 WP2: nothing on clip rows 4 and 5, the first eight pads only
+    assert not {b["source"] for b in table["bindings"]} & set(far_pads())
+    assert len([b for b in table["bindings"] if b["target"] == "preset.select"]) == 8
+    assert json.loads((home / "windows.json").read_text())["schema"] == "hyperspace.windows/1"
+    assert (home / "stall.log").is_file() and (home / "weights" / "model.safetensors").is_file()
+    assert len(list((home / "trash" / "presets").glob("night-one.*.json"))) == 1
+    assert os.environ["HYPERSPACE_HOME"] == str(home)
+
+
+def test_an_eight_slot_show_loads_and_is_not_rewritten(owner_home):
+    """The owner's files, rule 1 (on a copy): a show with an eight-name
+    bank opens, padded to twenty-four in memory, clean — and is not
+    rewritten: after a launch, preset loads, home, opening the other show
+    and a quit, every file in the home but `last_show` and `windows.json`
+    (written as they always were) has the bytes and the mtime it had —
+    and but `bindings.json`, which the first launch of plan 19 WP2 rewrites
+    once, backed up first (test_routing.py's tests on this home)."""
+    home = owner_home
+    quiet = ("last_show", "windows.json", "bindings.json")
+    before = tree(home, but=quiet)
+    r = boot_home(home)                                   # the launch: `mine`, opened last
+    lib, pr = r.lib, r.lib.project
+    assert pr.name == "mine" and pr.path == home / "projects" / "mine.hyp.json"
+    assert len(pr.bank) == 24 and pr.bank[:3] == list(OWNER_PRESETS)
+    assert all(pr.bank[:8]) and pr.bank[8:] == [None] * 16
+    assert not pr.is_dirty() and lib.current("presets") == "NIGHT ONE" and pr.active == 0
+    assert [r.reg["preset.select"].has(k) for k in (0, 7, 8, 23)] == [True, True, False, False]
+    r.reg["preset.load.1"].fire()                          # F2
+    assert lib.current("presets") == "NIGHT TWO" and pr.active == 1
+    r.reg["preset.select"].set(4)                          # a pad of clip row 1
+    r.reg["preset.home"].fire()
+    assert lib.current("presets") == "NIGHT ONE" and not pr.is_dirty()
+    pr.load_slot(12)                                       # an empty far slot: said, nothing else
+    assert lib.warning == "slot 13: an empty slot"
+    lib.poll()
+    assert tree(home, but=quiet) == before
+    pr.load("party")                                       # the user copy of the party show
+    assert pr.path == home / "projects" / "party.hyp.json" and not pr.is_dirty()
+    assert len(pr.bank) == 24 and pr.bank[8:] == [None] * 16      # no TRACER: the file is yours
+    r.reg["preset.load.7"].fire()
+    lib.poll()
+    quit_(home)
+    assert tree(home, but=quiet) == before
+    assert [p.name for p in home.rglob("*.bak-*")] == ["bindings.json.bak-v3"]
+    # and a second launch finds the same, bindings.json and its backup too
+    after = tree(home, but=quiet[:2])
+    again = boot_home(home)
+    assert again.lib.project.name == "party" and not again.lib.project.is_dirty()
+    assert tree(home, but=quiet[:2]) == after
+
+
+def test_loading_never_rewrites_a_preset_file(owner_home):
+    """The owner's files (on a copy): every preset in the home and in the
+    factory folder loads — from the bank, the strip and the file watch —
+    and no preset file changes by a byte or a tick of its mtime."""
+    home = owner_home
+    def presets_of(root):
+        return {p.name: (p.read_bytes(), p.stat().st_mtime_ns)
+                for p in sorted((root / "presets").glob("*.json"))}
+    before, factory = presets_of(home), presets_of(FACTORY)
+    r = boot_home(home)
+    lib, pr = r.lib, r.lib.project
+    for k in range(8):
+        pr.load_slot(k)
+        assert lib.current("presets") == pr.bank[k] and not lib.is_dirty("presets"), pr.bank[k]
+    for name in lib.list("presets"):
+        lib.load("presets", name)
+        lib.poll()
+    assert set(OWNER_PRESETS) <= set(lib.list("presets"))
+    assert presets_of(home) == before and presets_of(FACTORY) == factory
+    assert len(list((home / "trash" / "presets").iterdir())) == 1        # nothing new in the trash
+
+
+def test_a_show_that_uses_only_the_first_eight_is_written_with_eight(owner_home):
+    """The owner's files, rule 2 (on a copy): a show that uses only slots
+    1–8 is written in the shape it has today — eight entries — whatever
+    rewrites it: "starts on", a slot put or cleared, save. No backup is
+    made: nothing about the file's shape changes."""
+    home = owner_home
+    r = boot_home(home)
+    lib, pr = r.lib, r.lib.project
+    show = home / "projects" / "mine.hyp.json"
+    was = json.loads(show.read_text())
+    pr.startup = "NIGHT TWO"                               # "starts on" (ui_presets.set_starts_on)
+    pr.write()
+    doc = json.loads(show.read_text())
+    assert doc == {**was, "startup": "NIGHT TWO"} and len(doc["bank"]) == 8
+    assert list(doc) == list(was)                          # the same keys in the same order
+    pr.put_slot(3, "NIGHT THREE")
+    pr.clear_slot(6)
+    pr.save()
+    doc = json.loads(show.read_text())
+    assert len(doc["bank"]) == 8 and doc["bank"][3] == "NIGHT THREE" and doc["bank"][6] is None
+    r.reg["preset.save.6"].fire()                          # ⇧F7 into the hole
+    assert len(json.loads(show.read_text())["bank"]) == 8 and pr.bank[6] == "PRESET 7"
+    # (the one backup in the home is bindings.json's, from the launch: plan 19 WP2)
+    assert [p.name for p in home.rglob("*.bak-*")] == ["bindings.json.bak-v3"]
+    assert not pr.is_dirty() and pr.bank_error == ""
+    assert lib.warning == ""
+    # a far slot filled and cleared again: the file is back to eight entries
+    pr.put_slot(15, "WAKE")
+    assert len(json.loads(show.read_text())["bank"]) == 16
+    pr.clear_slot(15)
+    assert len(json.loads(show.read_text())["bank"]) == 8
+
+
+def test_the_first_write_past_slot_eight_keeps_the_eight_slot_file(owner_home):
+    """The owner's files, rule 3 (on a copy): the first write that makes a
+    show file's bank longer than eight keeps the eight-slot file beside it
+    first, `<file>.bak-v2-bank8`, never over a file already there; a second
+    far write makes no second backup. **No backup, no write**: the slot is
+    put back, the file is as it was, and the footer says why — from the
+    slot menu, from ⇧click and from the desk's save-as."""
+    home = owner_home
+    r = boot_home(home)
+    lib, pr = r.lib, r.lib.project
+    show = home / "projects" / "mine.hyp.json"
+    old = show.read_bytes()
+    pr.put_slot(11, "NIGHT TWO")
+    assert pr.bank[11] == "NIGHT TWO" and lib.status == "slot 12: NIGHT TWO"
+    assert [p.name for p in bak8(show)] == ["mine.hyp.json.bak-v2-bank8"]
+    assert bak8(show)[0].read_bytes() == old               # the file from before any far slot
+    doc = json.loads(show.read_text())
+    assert doc["schema"] == "hyperspace.project/2"         # the schema stays (fork 2)
+    assert len(doc["bank"]) == 12 and doc["bank"][8:] == [None, None, None, "NIGHT TWO"]
+    assert doc["bank"][:8] == json.loads(old)["bank"] and not pr.is_dirty()
+    # a second far write, a save and "starts on": the long bank is on disk, no second copy
+    pr.put_slot(20, "WAKE")
+    pr.startup = "WAKE"
+    pr.write()
+    pr.save()
+    r.reg["preset.save_new"].fire()
+    assert len(bak8(show)) == 1 and bak8(show)[0].read_bytes() == old
+    assert len(json.loads(show.read_text())["bank"]) == 21
+    # a launch reads the long bank back
+    again = boot_home(home).lib.project
+    assert again.bank == pr.bank and again.bank[20] == "WAKE" and not again.is_dirty()
+
+    # ---- no backup, no write: the other show, its eight-slot file still on disk
+    pr.load("party")
+    show = home / "projects" / "party.hyp.json"
+    old = show.read_bytes()
+    mine = (home / "projects" / "mine.hyp.json.bak-v2-bank8")
+    own = show.with_name(show.name + ".bak-v2-bank8")
+    own.write_text("a copy the owner made by hand")        # a name already taken
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(routing, "backup", lambda path, schema: None)
+        said = dict(lib.said)
+        why = "party.hyp.json: not written — no backup of the eight-slot file could be made"
+        pr.put_slot(9, "WAKE")                             # the slot menu
+        assert pr.bank[9] is None and show.read_bytes() == old
+        assert pr.bank_error == f"presets: {why}"
+        assert lib.warning == f"slot 10: not changed — {why}"
+        assert lib.said["warning"] == said.get("warning", 0) + 1     # the footer shows it
+        assert not pr.is_dirty()
+        pr.save_slot(12)                                   # ⇧click on a far slot
+        assert pr.bank[12] is None and show.read_bytes() == old
+        assert lib.current("presets") == "PRESET 13" and pr.active == -1   # in no slot: none lit
+        assert "PRESET 13" in lib.list("presets")          # the preset is saved, and listed
+        assert lib.warning == f"saved PRESET 13 — slot 13 not changed — {why}"
+        assert r.reg["preset.save_new"].fire() is True     # the desk's save-as: F1–F8 are full
+        name = lib.current("presets")
+        assert name in lib.list("presets") and name not in pr.bank and pr.active == -1
+        assert show.read_bytes() == old and not pr.is_dirty()
+        assert lib.warning == (f"saved {name} — the show could not be written: it is in the "
+                               f"preset list ({why})")
+        # a write that keeps the bank at eight needs no backup, and goes through
+        pr.put_slot(2, "NIGHT ONE")
+        assert pr.bank[2] == "NIGHT ONE" and json.loads(show.read_text())["bank"][2] == "NIGHT ONE"
+        assert pr.bank_error == ""
+        # save as onto that eight-slot file from a show with a far slot: refused,
+        # and the open show is still the one it was (review of PR #104)
+        pr.load("mine")
+        held, as_was = (pr.name, pr.path, pr.stem), show.read_bytes()
+        with pytest.raises(LibraryError, match="no backup"):
+            pr.save("party")
+        assert (pr.name, pr.path, pr.stem) == held and show.read_bytes() == as_was
+        pr.load("party")
+    assert own.read_text() == "a copy the owner made by hand" and mine.is_file()
+    assert [p for p in bak8(show) if p != own] == []       # nothing was copied, nothing written
+    # the disk is back: the same call writes, the copy taken first under a free name
+    old = show.read_bytes()
+    pr.put_slot(9, "WAKE")
+    assert pr.bank[9] == "WAKE" and len(json.loads(show.read_text())["bank"]) == 10
+    made = [p for p in bak8(show) if p != own]
+    assert len(made) == 1 and made[0].read_bytes() == old
+    assert own.read_text() == "a copy the owner made by hand"      # never over an existing file
+    # the same eight-slot file again — the far slot cleared, or a write that
+    # failed after its backup and is tried again: it is kept already, no second copy
+    pr.clear_slot(9)
+    assert show.read_bytes() == old
+    pr.put_slot(4, "NIGHT TWO")                            # …and a different eight-slot file
+    copies = len(bak8(show))
+    with pytest.MonkeyPatch.context() as mp:
+        def full(*a, **k):
+            raise LibraryError("disk full")
+        mp.setattr(library, "_write_json", full)
+        pr.put_slot(9, "WAKE")
+        pr.put_slot(9, "WAKE")
+    assert pr.bank[9] is None and len(bak8(show)) == copies + 1
+    pr.put_slot(9, "WAKE")
+    assert pr.bank[9] == "WAKE" and len(bak8(show)) == copies + 1
+
+
+def test_save_as_lands_on_slot_nine_once_the_f_keys_are_full(owner_home):
+    """`next_empty` reads the bank's own length, unchanged: on the owner's
+    show, F1–F8 full, the desk's save-as lands in slot 9, then 10 — the
+    eight-slot file kept once."""
+    home = owner_home
+    r = boot_home(home)
+    lib, pr = r.lib, r.lib.project
+    show = home / "projects" / "mine.hyp.json"
+    old = show.read_bytes()
+    assert pr.next_empty() == 8
+    assert r.reg["preset.save_new"].fire() is True
+    assert pr.bank[8] == "NIGHT ONE 2" == lib.current("presets") and pr.active == 8
+    assert lib.status == "saved NIGHT ONE 2 → slot 9"
+    assert json.loads(show.read_text())["bank"] == [*json.loads(old)["bank"], "NIGHT ONE 2"]
+    r.reg["preset.save_new"].fire()
+    assert pr.bank[9] == "NIGHT ONE 3" and lib.status == "saved NIGHT ONE 3 → slot 10"
+    assert len(bak8(show)) == 1 and bak8(show)[0].read_bytes() == old
+    r.reg["preset.select"].set(8)                          # what a pad of clip row 4 will send
+    assert lib.current("presets") == "NIGHT ONE 2" and pr.active == 8
+
+
+def test_a_long_bank_read_by_eight_slots_shows_the_first_eight(owner_home):
+    """Fork 2's known cost, stated: the schema stays `hyperspace.project/2`,
+    so a build from before plan 19 opens a long bank by cutting it to
+    eight (`_take`'s `[:SLOTS]` with SLOTS = 8). It shows slots 1–8
+    correctly, and its next write of that show drops the far slots'
+    names from the file. The presets' files are untouched, and
+    `.bak-v2-bank8` is the file from before any far slot existed."""
+    home = owner_home
+    r = boot_home(home)
+    pr = r.lib.project
+    show = home / "projects" / "mine.hyp.json"
+    eight = json.loads(show.read_text())["bank"]
+    pr.put_slot(8, "WAKE")
+    pr.put_slot(23, "TRIP")
+    doc = json.loads(show.read_text())
+    assert len(doc["bank"]) == 24 and doc["schema"] == "hyperspace.project/2"
+    presets_before = {p.name: p.read_bytes() for p in (home / "presets").glob("*.json")}
+    # the older build's reading of the file (library.py before plan 19, SLOTS = 8)
+    old_slots = 8
+    bank = [str(s) if isinstance(s, str) and s else None
+            for s in list(doc.get("bank") or [])[:old_slots]]
+    bank += [None] * (old_slots - len(bank))
+    assert bank == eight == pr.bank[:8]                    # slots 1–8, right
+    # …and what it writes back: eight entries, the far names gone from the file
+    show.write_text(json.dumps({**doc, "bank": bank}, indent=1) + "\n")
+    again = boot_home(home).lib.project
+    assert again.bank == eight + [None] * 16 and not again.is_dirty()
+    assert {p.name: p.read_bytes() for p in (home / "presets").glob("*.json")} == presets_before
+    assert json.loads(bak8(show)[0].read_text())["bank"] == eight
+
+
+# ------------------------------------------- plan 19 WP4: hide, rename, the trash
+
+def test_hiding_a_factory_preset_takes_it_off_the_list_and_nothing_else(owner_home):
+    """The owner's files (on a copy): × on a factory preset writes
+    `<home>/hidden.json` and nothing else — its stem, never a display name
+    — and takes it off `list()` only. `list(hidden=True)` keeps it; a slot
+    and "starts on" that name it still load it; a user preset is never
+    hidden by it. Unhide puts it back, again touching only `hidden.json`."""
+    home = owner_home
+    r = boot_home(home)
+    lib, pr = r.lib, r.lib.project
+    assert pr.bank[3] == "WAKE" and lib.is_factory("presets", "WAKE")
+    factory_wake = lib.path_of("presets", "WAKE")
+    factory_bytes = factory_wake.read_bytes()
+    before = tree(home)
+    assert lib.hide("presets", "WAKE")
+    assert lib.status == "hidden WAKE — F4 still loads it"
+    assert tree(home, but=("hidden.json",)) == before          # nothing else written
+    assert json.loads((home / "hidden.json").read_text()) == {
+        "schema": "hyperspace.hidden/1", "presets": ["party-wake"]}
+    assert "WAKE" not in lib.list("presets") and "WAKE" in lib.list("presets", hidden=True)
+    assert lib.hidden() == {"party-wake"} and factory_wake.read_bytes() == factory_bytes
+    # a slot and "starts on" still load it; a load is no edit of a file
+    pr.load_slot(3)
+    assert lib.current("presets") == "WAKE" and pr.active == 3
+    pr.startup = "WAKE"                                        # (in memory: no write)
+    lib.load("presets", "NIGHT ONE")
+    pr.load_startup()
+    assert lib.current("presets") == "WAKE"
+    pr.startup = "NIGHT ONE"
+    assert tree(home, but=("hidden.json",)) == before
+    # a user preset is never hidden by it, and a second hide writes nothing
+    assert not lib.hide("presets", "NIGHT TWO") and "NIGHT TWO" in lib.list("presets")
+    hidden = tree(home)
+    assert lib.hide("presets", "WAKE") and tree(home) == hidden
+    # a new Library reads it back
+    assert "WAKE" not in Library(home, period=0.0).list("presets")
+    # unhide: back on the list, only hidden.json rewritten
+    assert lib.unhide("presets", "WAKE") and "WAKE" in lib.list("presets")
+    assert json.loads((home / "hidden.json").read_text())["presets"] == []
+    assert tree(home, but=("hidden.json",)) == before
+    assert not lib.unhide("presets", "WAKE")                   # not hidden: nothing to do
+
+
+def test_a_user_file_that_shadows_a_hidden_factory_preset_shows_as_itself(tmp_path):
+    lib = make(tmp_path).lib
+    assert lib.hide("presets", "TRIP")
+    stem = lib.path_of("presets", "TRIP").name                # party-trip.json, the factory's
+    (tmp_path / "presets").mkdir(exist_ok=True)
+    (tmp_path / "presets" / stem).write_text(
+        (FACTORY / "presets" / stem).read_text())              # your copy under the same stem
+    assert "TRIP" in lib.list("presets") and not lib.is_factory("presets", "TRIP")
+
+
+def test_a_made_up_name_never_collides_with_a_hidden_preset(owner_home, tmp_path):
+    """`Project.save_new` and `_fresh_name` ask the list with
+    `hidden=True`: with TRACER loaded and a hidden factory preset called
+    "TRACER 2" (its stem says nothing of the name), save-as makes
+    "TRACER 3"; an empty slot's ⇧-save skips a hidden "PRESET 10"."""
+    import shutil
+
+    r = boot_home(owner_home)
+    lib, pr = r.lib, r.lib.project
+    factory = tmp_path / "factory"
+    shutil.copytree(FACTORY, factory)
+    for stem, name in (("party-tracer-two", "TRACER 2"), ("odd-one", "PRESET 10")):
+        doc = json.loads((factory / "presets" / "party-tracer.json").read_text())
+        (factory / "presets" / f"{stem}.json").write_text(preset.dumps({**doc, "name": name}))
+    lib.factory = factory
+    assert lib.hide("presets", "TRACER 2") and lib.hide("presets", "PRESET 10")
+    assert "TRACER 2" not in lib.list("presets")
+    lib.load("presets", "TRACER")
+    assert lib.hidden() == {"party-tracer-two", "odd-one"}
+    assert pr.save_new() and lib.current("presets") == "TRACER 3"
+    assert lib.path_of("presets", "TRACER 2") == factory / "presets" / "party-tracer-two.json"
+    pr.save_slot(9)                                            # an empty slot: PRESET 10…
+    assert pr.bank[9] == "PRESET 10 (2)"
+    assert lib.path_of("presets", "PRESET 10").parent == factory / "presets"
+
+
+def test_an_unreadable_hidden_list_is_kept_before_it_is_replaced(owner_home, monkeypatch):
+    """`hidden.json` that will not parse reads as nothing hidden, with a
+    warning; the first rewrite keeps it beside itself
+    (`hidden.json.bak-v0`); a backup that cannot be made means no
+    rewrite — and nothing else in the home changes either way."""
+    home = owner_home
+    bad = b'{"schema": "hyperspace.hidden/1", "presets": [ "party-wake",'
+    (home / "hidden.json").write_bytes(bad)
+    r = boot_home(home)
+    lib = r.lib
+    assert lib.hidden() == frozenset() and "WAKE" in lib.list("presets")
+    assert lib.warning.startswith("hidden.json:") and "nothing is hidden" in lib.warning
+    before = tree(home)
+    with monkeypatch.context() as m:
+        m.setattr(routing, "backup", lambda path, schema: None)
+        with pytest.raises(LibraryError, match="not rewritten"):
+            lib.hide("presets", "WAKE")
+    assert tree(home) == before and "WAKE" in lib.list("presets")
+    assert lib.hide("presets", "WAKE")
+    assert (home / "hidden.json.bak-v0").read_bytes() == bad
+    assert json.loads((home / "hidden.json").read_text())["presets"] == ["party-wake"]
+    assert tree(home, but=("hidden.json",)) == {k: v for k, v in before.items()
+                                                if k != "hidden.json"}
+    # the next write finds a good file: no second backup
+    assert lib.hide("presets", "TRIP")
+    assert sorted(p.name for p in home.glob("hidden.json*")) == ["hidden.json",
+                                                                 "hidden.json.bak-v0"]
+
+
+def _shows_naming(r, name: str) -> None:
+    """The owner's two shows both name `name` on a slot and as "starts on",
+    and `mine` (open, `name` loaded from F2) is clean."""
+    pr = r.lib.project
+    pr.load("party", startup=False)
+    pr.put_slot(5, name)
+    pr.startup = name
+    pr.write()
+    pr.load("mine", startup=False)
+    pr.startup = name
+    pr.write()
+    pr.load_slot(1)
+    assert r.lib.current("presets") == name and pr.active == 1 and not pr.is_dirty()
+
+
+def _trashed(home, folder: str) -> list:
+    d = home / "trash" / folder
+    return sorted(d.iterdir()) if d.is_dir() else []
+
+
+def test_rename_updates_every_show_and_keeps_each_old_file(owner_home):
+    """The owner's files (on a copy): rename NIGHT TWO → SUNRISE. The new
+    file is the old document with only its name changed; the old file is
+    in `trash/presets/` byte for byte; `mine` (open) and the user copy of
+    `party` name SUNRISE on their slots and as "starts on", each old show
+    file in `trash/projects/` byte for byte; the open show's dot is clean
+    and its light on the slot. A schema-1 show naming it is left alone, and
+    so is a show whose copy cannot be made — both named in the warning.
+    Factory shows are never written; nothing else in the home changes."""
+    home = owner_home
+    r = boot_home(home)
+    lib, pr = r.lib, r.lib.project
+    _shows_naming(r, "NIGHT TWO")
+    shows = home / "projects"
+    old1 = {"schema": "hyperspace.project/1", "name": "old",
+            "bank": [{"name": "NIGHT TWO", "view": {}}], "startup": "NIGHT TWO"}
+    (shows / "old.hyp.json").write_text(json.dumps(old1))
+    spare = json.loads((shows / "party.hyp.json").read_text())
+    (shows / "spare.hyp.json").write_text(json.dumps({**spare, "name": "spare"}))
+    (shows / "other.hyp.json").write_text(json.dumps({**spare, "name": "other",
+                                                      "bank": ["WAKE"], "startup": None}))
+    lib.poll()
+    preset_before = (home / "presets" / "night-two.json").read_bytes()
+    show_before = {s: (shows / f"{s}.hyp.json").read_bytes()
+                   for s in ("mine", "party", "old", "spare", "other")}
+    factory_before = {p.name: p.read_bytes() for p in (FACTORY / "projects").iterdir()}
+    trash_before = {p.name for p in home.rglob("trash/**/*") if p.is_file()}
+    before = tree(home)
+    real = library.to_trash
+    with pytest.MonkeyPatch.context() as m:
+        m.setattr(library, "to_trash",
+                  lambda p, root: None if p.name == "spare.hyp.json" else real(p, root))
+        new = lib.rename("presets", "NIGHT TWO", "SUNRISE")
+    assert new == home / "presets" / "sunrise.json"
+    assert not (home / "presets" / "night-two.json").exists()
+    doc, was = json.loads(new.read_text()), json.loads(preset_before)
+    assert doc == {**was, "name": "SUNRISE"}
+    (kept,) = [p for p in _trashed(home, "presets") if p.name.startswith("night-two.")]
+    assert kept.read_bytes() == preset_before
+    for s in ("mine", "party"):
+        d = json.loads((shows / f"{s}.hyp.json").read_text())
+        assert "SUNRISE" in d["bank"] and "NIGHT TWO" not in d["bank"], s
+        assert d["startup"] == "SUNRISE", s
+        (k,) = [p for p in _trashed(home, "projects") if p.name.startswith(f"{s}.hyp.")]
+        assert k.read_bytes() == show_before[s] and k.name.endswith(".json")
+    for s in ("old", "spare", "other"):                            # left as they were
+        assert (shows / f"{s}.hyp.json").read_bytes() == show_before[s], s
+    assert {p.name for p in _trashed(home, "projects")} == {
+        p.name for p in _trashed(home, "projects") if p.name.startswith(("mine.", "party."))}
+    assert lib.status == "renamed NIGHT TWO → SUNRISE (2 shows updated)"
+    assert "spare (it could not be kept in the trash)" in lib.warning
+    assert "old (a hyperspace.project/1 show" in lib.warning and "other" not in lib.warning
+    # the open show, through its Project: the name on the slot, clean, the light on it
+    assert pr.bank[1] == "SUNRISE" and pr.startup == "SUNRISE" and not pr.is_dirty()
+    assert lib.current("presets") == "SUNRISE" and pr.active == 1
+    assert "SUNRISE" in lib.list("presets") and "NIGHT TWO" not in lib.list("presets")
+    # nothing else changed; the factory shows never
+    changed = {"presets/night-two.json", "presets/sunrise.json", "projects/mine.hyp.json",
+               "projects/party.hyp.json"}
+    after = tree(home, but=("trash/",))
+    assert {k: v for k, v in after.items() if k not in changed} == {
+        k: v for k, v in before.items() if k not in changed and not k.startswith("trash/")}
+    assert trash_before <= {p.name for p in home.rglob("trash/**/*") if p.is_file()}
+    assert {p.name: p.read_bytes() for p in (FACTORY / "projects").iterdir()} == factory_before
+    # the other show, opened: its slot has the new name and loads it
+    pr.load("party")
+    assert pr.bank[5] == "SUNRISE" and lib.current("presets") == "SUNRISE"
+
+
+def test_rename_refuses_a_taken_name_and_a_factory_preset(owner_home):
+    """Refused, nothing on disk changed: a factory preset ("save copy,
+    then rename the copy"), an empty name, a name taken by a preset of
+    yours, by a factory preset's name or its file stem, by a hidden one,
+    or by another spelling of the same slug. A rename that only changes
+    case or spacing keeps the file's stem: rewritten in place, its old
+    text in the trash."""
+    home = owner_home
+    r = boot_home(home)
+    lib = r.lib
+    assert lib.hide("presets", "WAKE")
+    before = tree(home)
+    for old, new, why in (("TRIP", "MY TRIP", "factory preset: save copy, then rename the copy"),
+                          ("NIGHT TWO", "   ", "needs a name"),
+                          ("NIGHT TWO", "NIGHT ONE", "taken"),
+                          ("NIGHT TWO", "night  one!", "taken"),
+                          ("NIGHT TWO", "TRIP", "taken"),
+                          ("NIGHT TWO", "party-trip", "taken"),
+                          ("NIGHT TWO", "WAKE", "taken"),          # hidden, still taken
+                          ("GONE", "X", "no preset")):
+        with pytest.raises(LibraryError, match=why):
+            lib.rename("presets", old, new)
+        assert tree(home) == before, (old, new)
+    assert lib.rename("presets", "NIGHT TWO", "NIGHT TWO") == home / "presets" / "night-two.json"
+    assert tree(home) == before                                    # the same name: nothing
+    old = (home / "presets" / "night-two.json").read_bytes()
+    assert lib.rename("presets", "NIGHT TWO", "Night Two") == home / "presets" / "night-two.json"
+    assert json.loads((home / "presets" / "night-two.json").read_text())["name"] == "Night Two"
+    assert [p.read_bytes() for p in _trashed(home, "presets")
+            if p.name.startswith("night-two.")] == [old]
+    assert "Night Two" in lib.list("presets") and "NIGHT TWO" not in lib.list("presets")
+    assert lib.project.bank[1] == "Night Two"
+
+
+def test_a_rename_that_cannot_keep_the_old_file_changes_nothing(owner_home):
+    """`to_trash` failing: the new file written first is removed again, the
+    old one is where it was, no show is touched — and so for the in-place
+    case: nothing is written over a file whose copy failed."""
+    home = owner_home
+    r = boot_home(home)
+    lib = r.lib
+    before = tree(home)
+    with pytest.MonkeyPatch.context() as m:
+        m.setattr(library, "to_trash", lambda path, root: None)
+        for new in ("SUNRISE", "night two"):
+            with pytest.raises(LibraryError, match="could not be kept in the trash"):
+                lib.rename("presets", "NIGHT TWO", new)
+            assert tree(home) == before, new
+    assert "NIGHT TWO" in lib.list("presets") and "SUNRISE" not in lib.list("presets")
+    assert lib.project.bank[1] == "NIGHT TWO"
+
+
+def test_renaming_the_loaded_preset_keeps_its_unsaved_edit(owner_home):
+    """The loaded preset renamed: the name changes, the dot stays lit (the
+    clean reference is the one it had), and save writes the new file."""
+    home = owner_home
+    r = boot_home(home)
+    lib, reg = r.lib, r.reg
+    lib.project.load_slot(1)
+    reg["view.bright"].set(reg["view.bright"].value * 0.5 + 0.1)
+    assert lib.is_dirty("presets")
+    lib.rename("presets", "NIGHT TWO", "SUNRISE")
+    assert lib.current("presets") == "SUNRISE" and lib.is_dirty("presets")
+    assert lib.project.active == 1
+    path = lib.overwrite("presets")
+    assert path == home / "presets" / "sunrise.json" and not lib.is_dirty("presets")
+    assert json.loads(path.read_text())["name"] == "SUNRISE"
+    assert not (home / "presets" / "night-two.json").exists()
+
+
+def test_a_deleted_preset_says_which_slots_still_name_it(owner_home):
+    """× on your own preset is plan 15's delete, unchanged; new is what is
+    said: which slots and "starts on" still name it. The slots are not
+    cleared for the owner — a restore to the old name makes them work."""
+    home = owner_home
+    r = boot_home(home)
+    lib, pr = r.lib, r.lib.project
+    show = (home / "projects" / "mine.hyp.json").read_bytes()
+    assert lib.delete("presets", "NIGHT ONE")                 # F1 and "starts on"
+    assert lib.warning == ("NIGHT ONE is in the trash — F1 and 'starts on' still name it; "
+                           "restore it from the trash, or clear the slot")
+    assert pr.bank[0] == "NIGHT ONE" and pr.startup == "NIGHT ONE"
+    assert (home / "projects" / "mine.hyp.json").read_bytes() == show
+    pr.load("party", startup=False)                          # a show that names it nowhere
+    assert lib.delete("presets", "NIGHT THREE")
+    assert lib.status == "NIGHT THREE is in the trash — the preset list's trash can restore it"
+    # your copy of a factory preset: the factory one is back (the shadow rule)
+    lib.load("presets", "TRIP")
+    lib.overwrite("presets")
+    assert not lib.is_factory("presets", "TRIP")
+    assert lib.delete("presets", "TRIP") and lib.is_factory("presets", "TRIP")
+    assert lib.status == "your TRIP is in the trash — the factory TRIP is back"
+
+
+def test_the_watcher_never_resurrects_or_reloads(owner_home):
+    """Every file × , rename, restore and empty write or remove is synced
+    as the library's own (`_sync`): the next `poll()` sees no edit — it
+    applies nothing, recreates nothing — and `current` is right after each."""
+    home = owner_home
+    r = boot_home(home)
+    lib, pr = r.lib, r.lib.project
+    loads = []
+    real = lib.load
+    lib.load = lambda *a, **k: (loads.append(a), real(*a, **k))[1]
+    clock = [10_000.0]
+
+    def poll() -> bool:
+        clock[0] += 10
+        return lib.poll(clock[0])
+
+    pr.load_slot(1)
+    assert lib.current("presets") == "NIGHT TWO"
+    loads.clear()
+    lib.rename("presets", "NIGHT TWO", "SUNRISE")
+    assert not poll() and lib.current("presets") == "SUNRISE"
+    assert not (home / "presets" / "night-two.json").exists()
+    lib.delete("presets", "SUNRISE")
+    assert not poll() and lib.current("presets") is None
+    assert not (home / "presets" / "sunrise.json").exists()
+    (item,) = [t for t in lib.trash() if t.name == "SUNRISE"]
+    lib.restore_trash(item)
+    assert not poll() and lib.current("presets") is None       # a restore loads nothing
+    lib.hide("presets", "WAKE")
+    lib.empty_trash()
+    assert not poll()
+    assert loads == [] and lib.list("presets").count("SUNRISE") == 1
+    assert "NIGHT TWO" not in lib.list("presets", hidden=True)
+
+
+def test_restore_never_overwrites(owner_home):
+    """The owner's files (on a copy): a restore creates its target
+    exclusively. A free stem comes back as it was, byte for byte; a taken
+    stem (NIGHT ONE: the copy the home already had in its trash) and a
+    taken name (NIGHT THREE, whose name another file now has) each come
+    back under the next free name, written inside, and say so. The trash
+    copy goes only after the write: a write that fails leaves it. A
+    restored show is listed, not opened. Nothing else changes."""
+    home = owner_home
+    r = boot_home(home)
+    lib, pr = r.lib, r.lib.project
+    night_one = (home / "presets" / "night-one.json").read_bytes()
+    # a taken stem
+    (item,) = [t for t in lib.trash() if t.name == "NIGHT ONE"]
+    assert item.group == "presets" and item.when
+    before = tree(home, but=("trash/",))
+    assert lib.restore_trash(item) == "NIGHT ONE 2"
+    assert lib.status == "restored as NIGHT ONE 2 — NIGHT ONE is taken"
+    assert not item.path.exists()
+    assert json.loads((home / "presets" / "night-one-2.json").read_text())["name"] == "NIGHT ONE 2"
+    assert (home / "presets" / "night-one.json").read_bytes() == night_one
+    assert tree(home, but=("trash/", "presets/night-one-2.json")) == before
+    # a free stem: back as it was, and the slot that named it loads it again
+    three = (home / "presets" / "night-three.json").read_bytes()
+    lib.delete("presets", "NIGHT THREE")
+    (item,) = [t for t in lib.trash() if t.name == "NIGHT THREE"]
+    assert lib.restore_trash(item) == "NIGHT THREE" and lib.status == "restored NIGHT THREE"
+    assert (home / "presets" / "night-three.json").read_bytes() == three
+    pr.load_slot(2)
+    assert lib.current("presets") == "NIGHT THREE"
+    # a taken name: another file of yours now carries it
+    lib.delete("presets", "NIGHT THREE")
+    other = home / "presets" / "elsewhere.json"
+    other.write_text(preset.dumps({**json.loads(three), "name": "NIGHT THREE"}))
+    (item,) = [t for t in lib.trash() if t.name == "NIGHT THREE"]
+    assert lib.restore_trash(item) == "NIGHT THREE 2"
+    assert json.loads((home / "presets" / "night-three-2.json").read_text())["name"] == \
+        "NIGHT THREE 2"
+    assert json.loads(other.read_text())["name"] == "NIGHT THREE"
+    # a write that fails: the trash copy stays
+    lib.delete("presets", "NIGHT TWO")
+    (item,) = [t for t in lib.trash() if t.name == "NIGHT TWO"]
+    os.chmod(home / "presets", 0o555)
+    try:
+        with pytest.raises(LibraryError, match="not restored"):
+            lib.restore_trash(item)
+    finally:
+        os.chmod(home / "presets", 0o755)
+    assert item.path.exists() and not (home / "presets" / "night-two.json").exists()
+    assert lib.restore_trash(item) == "NIGHT TWO" and not item.path.exists()
+    # a show: the copy a rename kept, under the next free name; not opened
+    lib.rename("presets", "NIGHT TWO", "SUNRISE")
+    (item,) = [t for t in lib.trash() if t.group == "projects" and t.name == "mine"]
+    assert lib.restore_trash(item) == "mine 2" and lib.status == "restored as show mine 2 — " \
+        "mine is taken"
+    shown = json.loads((home / "projects" / "mine-2.hyp.json").read_text())
+    assert shown["name"] == "mine 2" and "NIGHT TWO" in shown["bank"]
+    assert "mine-2" in pr.list() and pr.name == "mine"
+    # not in the trash: refused
+    with pytest.raises(LibraryError, match="not in the trash"):
+        lib.restore_trash(library.Trashed(home / "presets" / "sunrise.json", "presets",
+                                          "SUNRISE", ""))
+    assert (home / "presets" / "sunrise.json").exists()
+
+
+def test_empty_trash_removes_only_the_trash(owner_home, tmp_path):
+    """The owner's files (on a copy): empty removes exactly the files
+    `trash()` lists and the folders left empty, and nothing outside
+    `<home>/trash/`: a symlink in the trash pointing out, a symlinked
+    folder, and a path with `..` are refused and left, and said."""
+    home = owner_home
+    r = boot_home(home)
+    lib = r.lib
+    lib.delete("presets", "NIGHT THREE")
+    lib.rename("presets", "NIGHT TWO", "SUNRISE")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "keep.json").write_text("{}")
+    (outside / "dir").mkdir()
+    (outside / "dir" / "also.20261004-010102.json").write_text("{}")
+    (home / "trash" / "presets" / "evil.20261004-010101.json").symlink_to(outside / "keep.json")
+    (home / "trash" / "fx").symlink_to(outside / "dir", target_is_directory=True)
+    listed = lib.trash()
+    real = [t.path for t in listed if not t.path.is_symlink() and t.path.parent.name != "fx"]
+    assert len(real) == 4                       # the home's own, NIGHT THREE, NIGHT TWO, mine
+    assert listed == sorted(listed, key=lambda t: (library._order(t.path), t.path.name),
+                            reverse=True)                     # newest first
+    before = tree(home, but=("trash/",))
+    with pytest.MonkeyPatch.context() as m:
+        sneaky = library.Trashed(home / "trash" / "presets" / ".." / ".." / "presets" /
+                                 "night-one.json", "presets", "NIGHT ONE", "")
+        m.setattr(lib, "trash", lambda: [*listed, sneaky])
+        assert lib.empty_trash() == 4
+    assert not any(p.exists() for p in real)
+    assert "evil.20261004-010101.json" in lib.warning and "night-one.json" in lib.warning
+    assert "also.20261004-010102.json" in lib.warning
+    assert (outside / "keep.json").read_text() == "{}"
+    assert (outside / "dir" / "also.20261004-010102.json").exists()
+    assert (home / "presets" / "night-one.json").exists()
+    assert tree(home, but=("trash/",)) == before
+    assert not (home / "trash" / "projects").exists()           # emptied, removed
+    assert (home / "trash" / "presets").is_dir()                # the symlink is still in it
+    assert sorted(p.name for p in (home / "trash").iterdir()) == ["fx", "presets"]
+
+
+def test_the_trash_lists_only_what_it_kept(owner_home):
+    """Review of PR #117: a Finder `.DS_Store` (or any file `to_trash` did
+    not write) in a trash folder is not listed, not restored and not
+    emptied — a restore would have made it a preset."""
+    home = owner_home
+    lib = boot_home(home).lib
+    junk = [home / "trash" / "presets" / ".DS_Store", home / "trash" / "presets" / "notes.txt"]
+    for p in junk:
+        p.write_bytes(b"\x00\x01Bud1")
+    assert [t.path.name.split(".")[0] for t in lib.trash()] == ["night-one"]
+    with pytest.raises(LibraryError, match="not a file the trash kept"):
+        lib.restore_trash(library.Trashed(junk[0], "presets", "", ""))
+    assert ".DS_Store" not in lib.list("presets", hidden=True)
+    assert lib.empty_trash() == 1 and all(p.exists() for p in junk)
+
+
+def test_deleting_your_copy_of_a_hidden_factory_preset_says_it_is_hidden(owner_home):
+    """Review of PR #117: × on your ACID while the factory ACID is hidden
+    says the factory one is hidden, not that it is back."""
+    lib = boot_home(owner_home).lib
+    assert lib.hide("presets", "ACID")
+    lib.load("presets", "ACID")
+    lib.overwrite("presets")                                   # your copy, acid.json
+    assert "ACID" in lib.list("presets") and not lib.is_factory("presets", "ACID")
+    assert lib.delete("presets", "ACID")
+    assert lib.status == ("your ACID is in the trash — the factory ACID is hidden: show "
+                          "hidden in the list brings it back")
+    assert "ACID" not in lib.list("presets") and lib.is_factory("presets", "ACID")
+
+
+# ---- plan 19 WP6: the library's commit hook (homegit.py is the app's) ----
+
+class _Asked:
+    """A committer that records what it is asked for, and has notes."""
+
+    def __init__(self):
+        self.asked: list[str] = []
+        self.said: list[str] = []
+
+    def request(self, message):
+        self.asked.append(message)
+
+    def notes(self):
+        out, self.said = self.said, []
+        return out
+
+
+def test_each_save_asks_for_one_commit_in_the_librarys_words(tmp_path):
+    r = boot_home(tmp_path / "home")
+    lib, pr = r.lib, r.lib.project
+    assert lib.committer is None                     # off: nothing to ask
+    c = lib.committer = _Asked()
+    r.presets.save_as("TRIP 2")
+    lib.save_as("fx", "acid")
+    lib.delete(library.PRESETS, "TRIP 2")
+    lib.delete(library.PRESETS, "TRACER")            # a factory preset: nothing deleted, nothing asked
+    pr.put_slot(10, "TRACER")
+    pr.startup = "TRACER"
+    pr.write()
+    pr.save()
+    pr.save("mine")
+    assert c.asked == ["save preset TRIP 2", "save fx acid", "trash preset TRIP 2",
+                       "show party: bank", "show party: starts on TRACER",
+                       "save show party", "save show mine"]
+    lib.poll()                                       # loads, polls and an idle frame ask nothing
+    r.presets.load("TUMBLE")
+    assert len(c.asked) == 7
+
+
+def test_hide_rename_and_restore_each_ask_for_a_commit(tmp_path):
+    """Where plan 19's WP4 and WP6 meet: the list's file operations ask the
+    committer too, in the library's words; a rename asks before its shows
+    are rewritten, so it is the commit's subject. Emptying the trash asks
+    nothing: the trash is not tracked."""
+    r = boot_home(tmp_path / "home")
+    lib, pr = r.lib, r.lib.project
+    r.presets.save_as("TRIP 3")
+    pr.put_slot(10, "TRIP 3")
+    c = lib.committer = _Asked()
+    assert lib.hide(library.PRESETS, "TRACER")
+    assert lib.unhide(library.PRESETS, "TRACER")
+    assert not lib.unhide(library.PRESETS, "TRACER")             # not hidden: nothing asked
+    lib.rename(library.PRESETS, "TRIP 3", "SUNRISE")
+    lib.delete(library.PRESETS, "SUNRISE")
+    item = next(t for t in lib.trash() if t.name == "SUNRISE")
+    lib.restore_trash(item)
+    assert c.asked[:3] == ["hide preset TRACER", "unhide preset TRACER", "rename preset TRIP 3 → SUNRISE"]
+    assert c.asked[3].startswith("show party")                   # the show the rename repointed
+    assert c.asked[-2:] == ["trash preset SUNRISE", "restore presets SUNRISE"]
+    n = len(c.asked)
+    lib.empty_trash()
+    assert len(c.asked) == n
+
+
+def test_a_committer_that_raises_never_stops_a_save_and_notes_reach_the_warning_line(tmp_path):
+    r = boot_home(tmp_path / "home")
+    lib = r.lib
+
+    class Broken:
+        def request(self, message):
+            raise OSError("no")
+
+        def notes(self):
+            raise RuntimeError("no")
+    lib.committer = Broken()
+    assert r.presets.save_as("KEPT").is_file()
+    lib.poll()                                       # a broken notes() never stops the watcher
+    c = lib.committer = _Asked()
+    c.said = ["git: not committed (x); saves are not affected"]
+    said = lib.said.get("warning", 0)
+    lib.poll()
+    assert lib.warning == "git: not committed (x); saves are not affected"
+    assert lib.said["warning"] == said + 1
+    lib.poll()
+    assert lib.said["warning"] == said + 1           # drained: said once

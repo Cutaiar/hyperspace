@@ -859,32 +859,33 @@ def _preset_line(panel, pr, table) -> None:
         imgui.set_tooltip("The loaded preset: its routes, its desk and its macros are "
                           "this page. A learn or an edit here changes it — the dot — "
                           "and writes nothing until save" if cur else "no preset loaded")
-    if pr is not None and cur is not None and ui_presets.dirty(panel, PRESETS):
-        imgui.same_line(0, 2)
-        imgui.text_colored(ui.RED, "●")
-        if imgui.is_item_hovered():
-            imgui.set_tooltip("edited since it loaded — save writes it")
+    edited = pr is not None and cur is not None and ui_presets.dirty(panel, PRESETS)
+    rects = ui_presets._state(panel)["rects"]
+    rects.pop("head.dot", None)
+    if edited:
+        imgui.same_line(0, 4)
+        rects["head.dot"] = ui.dirty_dot("edited since it loaded — save writes it")
     glob = table.layer == "global"
     layer = f"desk layer: {'global' if glob else 'preset'}"
+    word = ui_presets.save_label(lib, PRESETS) if lib is not None else "save"
     sp = imgui.get_style().item_spacing.x
     imgui.same_line(imgui.get_content_region_avail().x
-                    - ui.chip_w("save", "as…") - ui._micro_width(layer) - sp)
+                    - ui.chip_w(word, "as…") - ui._micro_width(layer) - sp)
     ui._micro(layer, ui.RED if glob else ui.DIM)
     if imgui.is_item_hovered():
         imgui.set_tooltip("The desk's layer — SHIFT latches it (desk.shift). Global: "
                           "the session's controls, never learned (a learn is refused); "
                           "preset: the loaded preset's desk. A preset load drops to it.")
     imgui.same_line()
-    factory = cur is not None and lib.is_factory(PRESETS, cur)
-    imgui.begin_disabled(cur is None)
-    if ui.chip("save"):
+    # the preset strip's own save chip: "save copy" on a factory preset,
+    # lit while there is something to save (plan 19 WP5)
+    if lib is None:
+        imgui.begin_disabled()
+        ui.chip(word)
+        imgui.end_disabled()
+    elif ui_presets.save_chip(panel, PRESETS, word, edited, key="head"):
         ui_presets._guard(panel, lib.overwrite, PRESETS)
         ui_presets.invalidate(panel, PRESETS)
-    imgui.end_disabled()
-    if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
-        imgui.set_tooltip("Write the live state over the loaded preset"
-                          + (" — a factory preset: saved as your own copy of it"
-                             if factory else ""))
     imgui.same_line()
     imgui.begin_disabled(pr is None)
     if ui.chip("as…"):

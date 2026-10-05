@@ -26,7 +26,9 @@ Controls (in):
 LEDs (out): note velocity on the button's own note. Clip-launch grid:
 0 off · 1 green · 2 green blink · 3 red · 4 red blink · 5 yellow · 6 yellow
 blink. Every other button: 0 off · 1 on · 2 blink (`blink_of` turns a
-row's "on" velocity into its blink). Knob rings: the knob's
+row's "on" velocity into its blink; `filled_of` gives a clip pad's third
+state — yellow, "something is here, not selected": a bank pad whose slot
+holds a preset that is not the loaded one). Knob rings: the knob's
 own CC carries the value; CC number + 8 sets the ring style
 (0 off · 1 single · 2 volume · 3 pan).
 
@@ -43,8 +45,9 @@ and the row stays a plain trigger row that Learn can move like any other.
 Two layers under a latched SHIFT (plan 13 §3). Every MIDI row carries a
 ``layer``: none is **invariant** (the session defines the control; one
 meaning on both layers — the faders, the crossfader as the master dim,
-the preset row, the clip-stop row as one SAVE AS bar, SHIFT, the clock and
-transport corner, OVERDUB as home, the track buttons), ``"global"`` is the
+the bank's twenty-four pads — clip row 1 and, since plan 19, clip rows 4
+and 5 (`BANK_PADS`) — the clip-stop row as one SAVE AS bar, SHIFT, the
+clock and transport corner, OVERDUB as home, the track buttons), ``"global"`` is the
 SHIFT layer
 (the band strip on the device knobs, the hand feel and BPM on track knobs
 1–5, the band scenes on clip rows 2–3), ``"preset"`` is the loaded
@@ -148,6 +151,19 @@ def blink_of(number: int, on: int) -> int:
     yellow 5 → 6); any other button has one blink, 2. Not hand-checked on
     the mk1 (plan 15, group K)."""
     return on + 1 if N_CLIP[0] <= number <= N_CLIP[-1] else 2
+
+
+def filled_of(number: int, on: int) -> int | None:
+    """The velocity for "something is here, not selected" (plan 19 WP2,
+    fork 5: a bank pad whose slot holds a preset that is not the loaded
+    one): YELLOW on the clip grid, None on any other button — it has no
+    third state — and None for a row whose "on" is already yellow, which
+    would then show filled and selected alike. Yellow at velocity 5 is
+    Akai's table; how it reads beside green on the mk1 is not hand-checked
+    (plan 19, check O2). Returning None here turns the third state off."""
+    if N_CLIP[0] <= number <= N_CLIP[-1] and on not in (YELLOW, YELLOW_BLINK):
+        return YELLOW
+    return None
 
 
 # Akai's names for the controls, for the panel ("track knob 3", "clip 4·2")
@@ -379,9 +395,29 @@ _BAND_PLANES = ("ZW", "XW", "YW", "XY", "XZ", "YZ")  # bands.BANDS[i].pl, SUB→
 
 G, P = "global", "preset"    # the layers (plan 13 §3.2); no layer = invariant
 
+# The bank's pads (plan 19 WP2): (note, channel) of slot k — clip row 1 is
+# slots 1–8 (the F-keys' eight), rows 4 and 5 slots 9–24. Its length is the
+# bank's size on the desk; a test pins it to library.SLOTS (this module
+# imports nothing of the app's)
+BANK_PADS: list[tuple[int, int]] = [
+    *[(N_CLIP[0], k) for k in range(8)],             # row 1: slots 1–8
+    *[(N_CLIP[3], k) for k in range(8)],             # row 4: slots 9–16
+    *[(N_CLIP[4], k) for k in range(8)]]             # row 5: slots 17–24
+
+# The fresh preset layer's device knobs (plan 19 WP3): D1–D4, the scene
+# params not on K1–K8 that act on every preset whatever is switched on —
+# the 4D perspective, the camera's two angles — and the face pattern (an
+# enum on an absolute knob: it steps through the patterns). D5–D8 stay dark.
+# A fresh preset, a file with no `desk` key and every scene-only factory
+# preset get these; a preset with knobs of its own replaces all eight
+# (preset.knob_desk)
+SCENE = ("view.depth4", "camera.yaw", "camera.pitch", "view.pattern")
+
 DEFAULT_MAP: list[dict] = [
     # device knobs, global layer (SHIFT up): the open band strip, in panel order
     *[_cc(f"band.sel.{k}", cc, layer=G) for k, cc in zip(_KNOB_KEYS, DEVICE_KNOBS)],
+    # device knobs 1–4, preset layer: SCENE (plan 19 WP3); 5–8 dark
+    *[_cc(t, cc, layer=P) for t, cc in zip(SCENE, DEVICE_KNOBS)],
     # track knobs, preset layer: the view faders (a fresh preset's own eight)
     _cc("view.bright", 0x30, 0, layer=P), _cc("view.speed", 0x31, 0, layer=P),
     _cc("view.instances", 0x32, 0, layer=P), _cc("view.pattern_mix", 0x33, 0, layer=P),
@@ -411,8 +447,13 @@ DEFAULT_MAP: list[dict] = [
     *[_note(f"view.plane.{pl}", N_ACTIVATOR, i, layer=P) for i, pl in enumerate(_BAND_PLANES)],
     *[_note(f"band.{i}.fn", N_SOLO, i) for i in range(6)],
     *[_note(f"band.{i}.reset", N_ARM, i) for i in range(6)],
-    # clip grid: the preset bank (invariant) · scenes (global) · grid motion · shapes (preset)
-    *[_note("preset.select", N_CLIP[0], k, op="set", value=k, on=GREEN) for k in range(8)],
+    # clip grid: the preset bank on rows 1, 4 and 5 (invariant: no layer,
+    # so one meaning on both layers, no Learn takes a pad, no preset maps
+    # one — D6, extended by plan 19) · scenes (global) · grid motion
+    # (preset). Shape selection left rows 4–5 for the cue knob above,
+    # which reaches every shape
+    *[_note("preset.select", n, ch, op="set", value=k, on=GREEN)
+      for k, (n, ch) in enumerate(BANK_PADS)],
     # clip stop: one SAVE AS bar (plan 15 WP4, decision 29). Any of the
     # eight held midi.HOLD_S saves the live state as a new preset into the
     # next empty slot — never over one; a tap does nothing. No layer, so
@@ -425,9 +466,6 @@ DEFAULT_MAP: list[dict] = [
       for k in range(3)],
     *[_note("view.inst_motion", N_CLIP[2], 4 + k, op="set", value=k, on=RED, layer=P)
       for k in range(4)],
-    *[_note("view.shape", N_CLIP[3], k, op="set", value=k, on=GREEN, layer=P) for k in range(8)],
-    *[_note("view.shape", N_CLIP[4], k, op="set", value=8 + k, on=GREEN, layer=P)
-      for k in range(8)],
     # scene launch column (preset): render toggles and the view reset
     _note("view.points", N_SCENE[0], layer=P), _note("view.lines", N_SCENE[1], layer=P),
     _note("view.faces", N_SCENE[2], layer=P), _note("view.rotate", N_SCENE[3], layer=P),

@@ -12,7 +12,7 @@ import json
 
 from imgui_bundle import imgui
 from test_ui_routing import _drawn
-from test_ui_shell import _page_scroll, frame, rig  # noqa: F401 — the fixture
+from test_ui_shell import CONTROL_SIZE, _page_scroll, frame, rig  # noqa: F401 — the fixture
 
 from hyperspace import ui_presets
 from hyperspace.library import HOME_UNSET, Library
@@ -62,8 +62,10 @@ def test_the_preset_buttons_carry_their_presets_names(rig):  # noqa: F811
     frame(panel, "presets")
     frame(panel)
     labels = ui_presets._state(panel)["bank_labels"]
-    assert labels == ["F1  TUMBLE", "F2  FACES", "F3  FIELD", "F4  WAKE", "F5  TRIP",
-                      "F6  ACID", "F7  MANDALA", "F8  NOITA"] and len(labels) == 8   # plan 14 WP5 filled F6–F8
+    assert labels[:8] == ["F1  TUMBLE", "F2  FACES", "F3  FIELD", "F4  WAKE", "F5  TRIP",
+                          "F6  ACID", "F7  MANDALA", "F8  NOITA"]   # plan 14 WP5 filled F6–F8
+    # plan 19 WP1: the far slots under them, by number
+    assert labels[8:] == ["9 TRACER", *[f"{k} —" for k in range(10, 25)]]
     assert lib.project.active == 1                          # FACES, lit
     rects = _rects(panel)
     assert rects["preset.2"][1] > rects["preset.0"][1]       # F3 F4 under F1 F2
@@ -168,6 +170,10 @@ def test_the_page_speaks_one_word_per_thing(rig, monkeypatch):  # noqa: F811
 
 
 def test_more_opened_holds_a_strip_per_module_and_still_fits(rig, monkeypatch):  # noqa: F811
+    # at the control size from the first frame: the panel takes its height
+    # once (`Cond_.once`), and the rig's 820 px display is 80 px shorter
+    # than the control window the rule is about (plan 19 WP1)
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
     real = imgui.collapsing_header
     monkeypatch.setattr(imgui, "collapsing_header",
                         lambda label, *a: (real(label, *a), True)[1] if "more" in label
@@ -382,3 +388,463 @@ def test_a_line_assigned_every_frame_does_not_pin_the_footer(rig, monkeypatch): 
     assert lib.said["status"] == said["status"]
     scene.set(2)
     assert lib.status != line and panel._message() == (lib.status, False)
+
+
+# ------------------------------------------- plan 19 WP1: twenty-four slots (layout B)
+
+def _open_more(monkeypatch):
+    real = imgui.collapsing_header
+    monkeypatch.setattr(imgui, "collapsing_header",
+                        lambda label, *a: (real(label, *a), True)[1] if "more" in label
+                        else real(label, *a))
+
+
+def test_twenty_four_slots_fit_the_page_with_more_open(rig, monkeypatch):  # noqa: F811
+    """No page scrolls at the control size — the PRESETS page with all
+    twenty-four slots filled (the longest factory names first), a preset
+    loaded so the status line is drawn, and "more" open. Layout B: F1–F8
+    two a row, then 9–24 four a row, their rows FAR_GAP apart; no slot
+    overlaps another and every one is inside the page."""
+    panel, lib = rig.panel, rig.lib
+    pr = lib.project
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    _open_more(monkeypatch)
+    names = sorted(lib.list("presets"), key=lambda n: (-len(n), n))
+    pr.bank[:] = [names[k % len(names)] for k in range(24)]
+    lib.load("presets", names[0])
+    assert lib.status and len(pr.bank) == 24 and all(pr.bank)
+    assert _page_scroll(rig, monkeypatch)["presets"] == 0
+    st = ui_presets._state(panel)
+    labels, rects = st["bank_labels"], st["rects"]
+    assert len(labels) == 24 and not any(label.endswith("—") for label in labels)
+    slots = [rects[f"preset.{k}"] for k in range(24)]
+    for i, a in enumerate(slots):
+        for b in slots[i + 1:]:
+            assert not _overlap(a, b)
+    # F1–F8 two a row; 9–24 four a row, each row FAR_GAP under the last
+    assert slots[0][1] == slots[1][1] < slots[2][1] and slots[0][0] == slots[2][0]
+    for row in range(4):
+        four = slots[8 + 4 * row: 12 + 4 * row]
+        assert len({s[1] for s in four}) == 1 and [s[0] for s in four] == sorted(s[0] for s in four)
+        assert [s[0] for s in four] == [s[0] for s in slots[8:12]]
+        if row:
+            above = slots[8 + 4 * (row - 1)]
+            assert four[0][1] - above[3] == ui_presets.FAR_GAP
+    assert slots[8][1] > slots[7][3] and slots[11][2] <= slots[1][2] + 1
+    widths = {round(s[2] - s[0]) for s in slots[8:]}
+    assert len(widths) == 1 and widths.pop() >= 90         # room for a number and a name
+    # the sixteen filled and the rest empty: the same height, and it still fits
+    pr.bank[16:] = [None] * 8
+    assert _page_scroll(rig, monkeypatch)["presets"] == 0
+    assert ui_presets._state(panel)["bank_labels"][16:] == [f"{k} —" for k in range(17, 25)]
+
+
+def test_a_far_slot_reads_its_number_and_name_and_has_the_slot_menu(rig, tmp_path):  # noqa: F811
+    """Slots 9–24 on the page: a number and the preset's name ("9 TRACER",
+    "11 —"), the loaded one lit. A click loads the slot and ⇧click saves
+    into it — through the bank, for a far slot has no trigger of its own —
+    and the right-click menu is the slot menu under `preset.select`'s own
+    items: "put preset here…" and "clear slot"."""
+    panel, lib, reg = rig.panel, rig.lib, rig.reg
+    proj = lib.project
+    show = tmp_path / "projects" / "party.hyp.json"
+    frame(panel, "presets")
+    frame(panel)
+    st = ui_presets._state(panel)
+    assert st["bank_labels"][8] == "9 TRACER" and st["bank_labels"][10] == "11 —"
+    assert "preset.load.8" not in reg and "preset.save.8" not in reg
+    # a click loads slot 9
+    _click(panel, st["rects"]["preset.8"])
+    assert lib.current("presets") == "TRACER" and proj.active == 8
+    assert reg["preset.select"].value == 8 and not show.exists()
+    # an empty far slot: said, nothing loaded
+    _click(panel, st["rects"]["preset.10"])
+    assert lib.warning == "slot 11: an empty slot" and lib.current("presets") == "TRACER"
+    # its menu: the slot's two items, "clear slot" disabled while it is empty
+    _click(panel, st["rects"]["preset.10"], button=1)
+    menu = st["slot_menu"]
+    assert menu["slot"] == 10
+    assert menu["items"] == [("put preset here…", True), ("clear slot", False)]
+    _click(panel, menu["rects"]["put"])
+    menu = st["slot_menu"]
+    pick = menu["names"][2]
+    _click(panel, menu["rects"][f"name.{pick}"])
+    assert proj.bank[10] == pick and json.loads(show.read_text())["bank"][10] == pick
+    assert lib.status == f"slot 11: {pick}"
+    frame(panel)
+    frame(panel)
+    assert ui_presets._state(panel)["bank_labels"][10].startswith("11 ")
+    assert ui_presets._state(panel)["bank_labels"][10] != "11 —"
+    # clear slot on a filled far slot
+    st.pop("slot_menu")
+    _click(panel, st["rects"]["preset.8"], button=1)
+    menu = st["slot_menu"]
+    assert menu["slot"] == 8 and menu["items"][1] == ("clear slot", True)
+    _click(panel, menu["rects"]["clear"])
+    assert proj.bank[8] is None and lib.status.startswith("slot 9: cleared — TRACER")
+    assert "TRACER" in lib.list("presets")
+    frame(panel)
+    assert ui_presets._state(panel)["bank_labels"][8] == "9 —"
+    # ⇧click saves the live state into the slot
+    io = imgui.get_io()
+    io.add_key_event(imgui.Key.mod_shift, True)
+    frame(panel)
+    _click(panel, st["rects"]["preset.14"])
+    io.add_key_event(imgui.Key.mod_shift, False)
+    frame(panel)
+    assert proj.bank[14] == "PRESET 15" == lib.current("presets") and proj.active == 14
+    assert json.loads(show.read_text())["bank"][14] == "PRESET 15"
+    # the hovers say where a slot is
+    tip = ui_presets.slot_tip
+    assert tip(11, "TRIP 3") == ("slot 12: TRIP 3 — the desk's row 4, pad 4. Click loads, "
+                                 "⇧click saves the live state as it")
+    assert tip(16, "A").startswith("slot 17: A — the desk's row 5, pad 1.")
+    assert tip(23, "A").startswith("slot 24: A — the desk's row 5, pad 8.")
+    assert tip(11, None) == ("slot 12: empty — right-click to put a preset here; a hold on "
+                             "the clip-stop row fills the next empty slot")
+    assert tip(2, "FIELD") == "F3: FIELD — click loads, ⇧click saves the live state as it"
+    assert tip(2, None) == "F3: empty — ⇧F3 saves the live state here"
+
+
+# ------------------------------------------- plan 19 WP5: the dot and the save label
+
+def _dirty(r):
+    """An edit the loaded preset does not hold: the presets group (and the
+    view's) is dirty."""
+    reg = r.reg
+    reg["view.bright"].set(reg["view.bright"].value * 0.5 + 0.1)
+    assert r.lib.is_dirty("presets")
+
+
+def test_the_dot_is_a_twelve_pixel_disc_and_save_is_lit_while_dirty(rig, monkeypatch):  # noqa: F811
+    """The dot reads from a step back: a filled red disc 12 px across
+    (`ui.DOT_R`), centred on the name's line, where the "●" glyph left
+    about 7 px of ink; while it shows the save chip is the lit one (solid
+    red), and the loaded slot carries a white disc of radius 4. The row
+    does not grow: with "more" open every module strip under it is where
+    it was, and the page still fits."""
+    from hyperspace import ui
+
+    panel, lib = rig.panel, rig.lib
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    _open_more(monkeypatch)
+    lib.project.load_slot(4)                                  # F5: TRIP, a factory preset
+    assert lib.current("presets") == "TRIP" and lib.project.active == 4
+    frame(panel, "presets")
+    frame(panel)
+    st = ui_presets._state(panel)
+    clean = dict(st["rects"])
+    assert "strip.presets.dot" not in clean and "preset.dot" not in clean
+    assert st["save"]["strip.presets"] == ("save copy", False)
+    _dirty(rig)
+    frame(panel)
+    frame(panel)
+    rects = st["rects"]
+    x0, y0, x1, y1 = rects["strip.presets.dot"]
+    assert x1 - x0 == y1 - y0 == 2 * ui.DOT_R == 12
+    name = rects["strip.presets.name"]
+    assert abs((y0 + y1) / 2 - (name[1] + name[3]) / 2) < 0.5     # on the name's middle
+    assert name[2] <= x0 and x1 <= rects["strip.presets.next"][0]  # between the name and ▶
+    assert st["save"]["strip.presets"] == ("save copy", True)     # lit while dirty
+    # the loaded slot's white disc, radius 4, inside its button at the right end
+    d, slot = rects["preset.dot"], rects["preset.4"]
+    assert d[2] - d[0] == 2 * ui_presets.SLOT_DOT_R == 8
+    assert slot[0] < d[0] and d[2] <= slot[2] and slot[1] < d[1] and d[3] < slot[3]
+    # no row grew: the strip's own items, and every strip under it, are where they were
+    for key in ("strip.presets.name", "strip.presets.save", "strip.presets.as",
+                *[k for k in clean if k.startswith("strip.") and not k.startswith("strip.presets")]):
+        assert rects[key][1] == clean[key][1] and rects[key][3] == clean[key][3], key
+    assert any(k.startswith("strip.camera.") for k in clean)       # "more" was open
+    assert ui.RAIL_DOT_R == 5                                      # the rail's disc, from 3.5
+    assert _page_scroll(rig, monkeypatch)["presets"] == 0
+    # saved: the dot goes and the chip is quiet again — and reads "save" (yours now)
+    lib.overwrite("presets")
+    frame(panel, "presets")
+    frame(panel)
+    assert "strip.presets.dot" not in st["rects"] and "preset.dot" not in st["rects"]
+    assert st["save"]["strip.presets"] == ("save", False)
+
+
+def test_save_reads_save_copy_on_a_factory_preset(rig, tmp_path, monkeypatch):  # noqa: F811
+    """"save copy" while the loaded preset is a factory one — the save
+    writes your own copy, which takes its place in the list — and "save"
+    on yours; the hover says which. Clicking it is `Library.overwrite`,
+    unchanged: after it the chip reads "save" and TRIP is listed once. A
+    module strip keeps "save" (and its reset) whatever is loaded."""
+    panel, lib = rig.panel, rig.lib
+    lib.load("presets", "TRIP")
+    assert ui_presets.save_label(lib, "presets") == "save copy"
+    assert ui_presets.save_tip(lib, "presets") == (
+        "Save your own copy of TRIP: the factory one is kept and yours takes its place "
+        "in the list")
+    _dirty(rig)
+    frame(panel, "presets")
+    frame(panel)
+    st = ui_presets._state(panel)
+    assert st["save"]["strip.presets"] == ("save copy", True)
+    assert not (tmp_path / "presets" / "trip.json").exists()
+    _click(panel, st["rects"]["strip.presets.save"])
+    assert (tmp_path / "presets" / "trip.json").is_file()
+    assert not lib.is_factory("presets", "TRIP") and lib.list("presets").count("TRIP") == 1
+    frame(panel)
+    assert st["save"]["strip.presets"] == ("save", False)
+    assert ui_presets.save_label(lib, "presets") == "save"
+    assert ui_presets.save_tip(lib, "presets") == (
+        "Write the settings over TRIP (the old file goes to the trash)")
+    # nothing loaded: "save", disabled
+    lib.reland("presets", (None, None, None))
+    assert ui_presets.save_label(lib, "presets") == "save"
+    # a module strip keeps "save" and its reset
+    _open_more(monkeypatch)
+    lib.load("band", "Balanced")
+    assert lib.is_factory("band", "Balanced")
+    frame(panel)
+    frame(panel)
+    assert st["save"]["strip.band"][0] == "save" and "strip.band.reset" in st["rects"]
+
+
+def test_the_preset_strip_has_no_reset_and_does_not_overlap(rig, monkeypatch):  # noqa: F811
+    """The preset strip drops `reset` (on a document kind `Library.reset`
+    loads a preset called "default", and none ships) so "save copy" fits:
+    at the control size, the longest factory name loaded and dirty, the
+    strip's items clear one another and the page's edge. With "more" open
+    every module strip (dot, save, as…, reset) clears too — measured, as
+    the plan asked, with the new dot's width."""
+    panel, lib = rig.panel, rig.lib
+    assert lib.default_name("presets") is None                 # what reset would load: none
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    _open_more(monkeypatch)
+    factory = [n for n in lib.list("presets") if lib.is_factory("presets", n)]
+    longest = max(factory, key=lambda n: (len(n), n))
+    lib.load("presets", longest)
+    _dirty(rig)
+    for group in ui_presets.groups(panel):                    # every module strip dirty too
+        if not lib.is_dirty(group):
+            p = next(p for p in rig.reg if p.group == group and p.persist)
+            p.set_norm(0.5 if p.norm != 0.5 else 0.25)
+    frame(panel, "presets")
+    frame(panel)
+    frame(panel)
+    st = ui_presets._state(panel)
+    rects = st["rects"]
+    assert "strip.presets.reset" not in rects
+    assert st["save"]["strip.presets"] == ("save copy", True)
+    page_right = max(r[2] for k, r in rects.items() if k.startswith("preset."))
+    strips: dict[str, dict] = {}
+    for k, r in rects.items():
+        if k.startswith("strip."):
+            strips.setdefault(k.split(".")[1], {})[k] = r
+    assert set(strips) >= {"presets", "view", "camera", "band"}
+    # the preset strip: every item clear of every other, inside the page
+    items = strips.pop("presets")
+    keys = sorted(items)
+    for i, a in enumerate(keys):
+        assert items[a][2] <= page_right + 1, a
+        for b in keys[i + 1:]:
+            assert not _overlap(items[a], items[b]), (a, b)
+    # a module strip under "more" (measured, as the plan asked): its row
+    # starts at ui.LABEL_W, so ◀ name ▶ (192 px with the dot) and save ·
+    # as… · reset (163 px) do not both fit its 258 px — the save chip sits
+    # over the name button's right end with or without a dot, as it did
+    # before this package (reported, not changed here). What the dot must
+    # not do is make that worse: the disc clears the name and ▶, and the
+    # three chips clear one another and the page's edge
+    for group, items in strips.items():
+        dot = items.get(f"strip.{group}.dot")
+        if dot is not None:
+            assert not _overlap(dot, items[f"strip.{group}.name"])
+            assert not _overlap(dot, items[f"strip.{group}.next"])
+        chips = [items[f"strip.{group}.{c}"] for c in ("save", "as", "reset")]
+        assert chips[0][2] <= chips[1][0] and chips[1][2] <= chips[2][0], group
+        assert chips[2][2] <= page_right + 1, group
+    assert _page_scroll(rig, monkeypatch)["presets"] == 0
+
+
+# ------------------------------------------- plan 19 WP4: the list, the trash, a slot gone
+
+def _open_list(panel):
+    """Click the preset strip's name: the list opens (real mouse events),
+    at the control window's size."""
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    frame(panel, "presets")
+    frame(panel)
+    st = ui_presets._state(panel)
+    _click(panel, st["rects"]["strip.presets.name"])
+    frame(panel)
+    assert st["list"]["group"] == "presets"
+    return st
+
+
+def _row(st, name):
+    return next(r for r in st["list"]["rows"] if r[0] == name)
+
+
+def test_the_list_has_a_cross_on_every_preset_and_rename_on_yours(rig, tmp_path):  # noqa: F811
+    """The preset list, driven by real clicks over the real Panel: × on
+    every preset, `rename` only on yours; "show hidden (n)" only while
+    something is hidden, "trash (n) ▸" only while the trash holds
+    something; the list scrolls in its own child past twelve rows and each
+    row's chips clear its name. × on a factory preset hides it, "show
+    hidden" brings it back struck through with `unhide`; `rename` turns the
+    row into the name field and Enter renames."""
+    panel, lib = rig.panel, rig.lib
+    lib.load("presets", "TRIP")
+    lib.save_as("presets", "A MINE")                         # yours, first in the list
+    st = _open_list(panel)
+    rows = st["list"]["rows"]
+    assert len(rows) == len(lib.list("presets")) > ui_presets.LIST_ROWS
+    for name, chips, hidden in rows:
+        assert not hidden
+        assert chips == (("rename", "×") if name == "A MINE" else ("×",)), name
+    assert st["list"]["foot"] == []
+    rects = st["list"]["rects"]
+    box = rects["rows"]
+    assert box[3] - box[1] <= ui_presets.LIST_ROWS * ui_presets.list_row_h() + 1
+    assert box[3] <= CONTROL_SIZE[1]                          # the popup fits the window
+    for name in ("A MINE", "ACID"):
+        row = rects[f"row.{name}"]
+        first = rects[f"rename.{name}"] if name == "A MINE" else rects[f"×.{name}"]
+        assert row[0] + imgui.calc_text_size(name).x < first[0] and first[2] <= box[2]
+    # × on a factory preset: hidden, written to hidden.json, nothing else
+    _click(panel, rects["×.ACID"])
+    frame(panel)
+    assert lib.hidden() == {"party-acid"} and "ACID" not in lib.list("presets")
+    assert lib.status == "hidden ACID — F6 still loads it"
+    assert [r[0] for r in st["list"]["rows"]].count("ACID") == 0
+    assert st["list"]["foot"] == ["show hidden (1)"]
+    # show hidden: back, struck through, with unhide
+    assert st["list"]["rects"]["show_hidden"][3] <= CONTROL_SIZE[1]
+    _click(panel, st["list"]["rects"]["show_hidden"])
+    frame(panel)
+    assert _row(st, "ACID") == ("ACID", ("unhide",), True)
+    _click(panel, st["list"]["rects"]["unhide.ACID"])
+    frame(panel)
+    assert lib.hidden() == frozenset() and _row(st, "ACID") == ("ACID", ("×",), False)
+    assert st["list"]["foot"] == []
+    # rename: the row becomes the name field; Enter renames the file
+    _click(panel, st["list"]["rects"]["rename.A MINE"])
+    frame(panel)
+    assert _row(st, "A MINE")[1] == ("field",) and st["naming"] == "rename:A MINE"
+    io = imgui.get_io()
+    io.add_input_characters_utf8("A SUNRISE")                 # typed over the seeded name
+    frame(panel)
+    io.add_key_event(imgui.Key.enter, True)
+    frame(panel)
+    io.add_key_event(imgui.Key.enter, False)
+    frame(panel)
+    frame(panel)
+    assert lib.current("presets") == "A SUNRISE" and (tmp_path / "presets" /
+                                                       "a-sunrise.json").is_file()
+    assert lib.status == "renamed A MINE → A SUNRISE (0 shows updated)"
+    # × on yours: to the trash, and the foot says the trash holds something
+    frame(panel)
+    _click(panel, st["list"]["rects"]["×.A SUNRISE"])
+    frame(panel)
+    assert "A SUNRISE" not in lib.list("presets") and len(lib.trash()) == 2
+    assert st["list"]["foot"] == ["trash (2) ▸"]
+    # a refused rename shows on the warning line (the footer): factory presets have
+    # no rename chip, and a taken name is refused
+    lib.save_as("presets", "A MINE")
+    frame(panel)
+    frame(panel)
+    ui_presets._rename(panel, "A MINE", "TRIP")
+    assert lib.warning.startswith("library: TRIP: that name is taken")
+
+
+def _trash_view(panel, st):
+    _click(panel, st["list"]["rects"]["trash"])
+    frame(panel)
+    return st["trash_view"]
+
+
+def test_empty_asks_once_and_disarms(rig, tmp_path):  # noqa: F811
+    """"empty trash…" asks once, in place, no modal: one click arms it —
+    "delete N files for good? — click again" — and empties nothing; a
+    second click within four seconds empties. The time running out, any
+    other click, or the popup closing disarms it. Real clicks on the trash
+    popup, opened from the list's "trash (n) ▸"."""
+    panel, lib = rig.panel, rig.lib
+    io = imgui.get_io()
+
+    def fill():
+        lib.load("presets", "TRIP")
+        lib.save_as("presets", "A MINE")
+        lib.delete("presets", "A MINE")
+        ui_presets.invalidate(panel, "presets")
+
+    fill()
+    st = _open_list(panel)
+    view = _trash_view(panel, st)
+    assert view["rows"] and view["empty"] == "empty trash…"
+    files = [t.path for t in lib.trash()]
+    _click(panel, view["rects"]["empty"])
+    view = st["trash_view"]
+    assert view["empty"] == "delete 1 file for good? — click again"
+    assert all(p.exists() for p in files)                     # one click empties nothing
+    # the time runs out
+    io.delta_time = ui_presets.EMPTY_S + 0.5
+    frame(panel)
+    io.delta_time = 1 / 60
+    frame(panel)
+    assert st["trash_view"]["empty"] == "empty trash…"
+    _click(panel, st["trash_view"]["rects"]["empty"])         # armed again, not emptied
+    assert all(p.exists() for p in files)
+    # any other click disarms (the popup's own header, nothing there)
+    rows = st["trash_view"]["rects"]["rows"]
+    _click(panel, (rows[0], rows[1] - 18, rows[0] + 40, rows[1] - 6))
+    assert st["trash_view"]["empty"] == "empty trash…" and all(p.exists() for p in files)
+    # closing the popup disarms
+    _click(panel, st["trash_view"]["rects"]["empty"])
+    assert st["trash_view"]["empty"].startswith("delete 1 file")
+    io.add_key_event(imgui.Key.escape, True)
+    frame(panel)
+    io.add_key_event(imgui.Key.escape, False)
+    frame(panel)
+    _click(panel, (5, 5, 6, 6))                               # outside both popups
+    frame(panel)
+    assert st.get("empty_armed") is None
+    st = _open_list(panel)
+    view = _trash_view(panel, st)
+    assert view["empty"] == "empty trash…"
+    # two clicks within the time: emptied
+    _click(panel, view["rects"]["empty"])
+    _click(panel, st["trash_view"]["rects"]["empty"])
+    assert not any(p.exists() for p in files) and lib.trash() == []
+    assert lib.status == "trash: 1 file deleted for good"
+
+
+def test_a_slot_whose_preset_is_gone_says_so(rig, monkeypatch):  # noqa: F811
+    """× on a preset a slot names: the slot keeps the name (not cleared for
+    you), drawn in the warning ink, its hover saying where to look; the
+    footer said which slots still name it. A restore makes it whole."""
+    panel, lib = rig.panel, rig.lib
+    pr = lib.project
+    lib.load("presets", "TRIP")
+    lib.save_as("presets", "A MINE")
+    pr.put_slot(9, "A MINE")
+    frame(panel, "presets")
+    frame(panel)
+    st = ui_presets._state(panel)
+    assert st["dangling"] == []
+    lib.delete("presets", "A MINE")
+    assert lib.warning == ("A MINE is in the trash — slot 10 still names it; restore it "
+                           "from the trash, or clear the slot")
+    ui_presets.invalidate(panel, "presets")
+    tips: list[str] = []
+    with monkeypatch.context() as m:
+        m.setattr(imgui, "set_tooltip", tips.append)
+        real = imgui.is_item_hovered
+        m.setattr(imgui, "is_item_hovered", lambda *a: True)
+        frame(panel)
+        m.setattr(imgui, "is_item_hovered", real)
+    assert st["dangling"] == [9] and pr.bank[9] == "A MINE"
+    assert st["bank_labels"][9] == "10 A MINE"
+    assert ("slot 10: A MINE — no such preset. It may be in the trash (preset list → trash). "
+            "Right-click → clear slot") in tips
+    # restored: whole again
+    (item,) = lib.trash()
+    lib.restore_trash(item)
+    assert lib.warning == "" and lib.status == "restored A MINE"   # × said is no longer so
+    ui_presets.invalidate(panel, "presets")
+    frame(panel)
+    assert st["dangling"] == []

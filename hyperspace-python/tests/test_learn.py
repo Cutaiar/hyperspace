@@ -568,7 +568,9 @@ def test_learn_refuses_the_global_layer_and_invariant_controls(tmp_path):
     before = rows()
     push(r, note(apc40.N_OVERDUB), note(apc40.N_OVERDUB, 0))
     assert lib.current("presets") == lib.project.startup and lrn.learning == "view.depth4"
-    assert not any(b.target == "view.depth4" and b.is_midi for b in table.desk())
+    # nothing learned: depth's one desk row is the fresh layer's D1 (apc40.SCENE, plan 19 WP3)
+    assert [b.source for b in table.desk() if b.target == "view.depth4" and b.is_midi] \
+        == ["cc:*:16"]
     assert not lib.is_dirty("presets") and untouched(r)
     # …and after SHIFT the same knob lands, and a good learn clears the flag
     push(r, cc(0x30, 64))
@@ -646,11 +648,13 @@ def test_learn_control_needs_no_adapter(tmp_path):
         == ("cc:*:18", "abs", "preset", "ring", apc40.RING_VOLUME)
     assert table.redraw_serial > serial and table.desk_serial == desk_serial
     assert lrn.learning is None and not lrn.refused
-    assert lrn.last == "learned view.depth4 ← D3 (device knob 3) (into the preset)"
+    # its old knob lets go and is named: D1, the fresh layer's (apc40.SCENE, plan 19 WP3)
+    assert lrn.last == "learned view.depth4 ← D3 (device knob 3) (into the preset); D1 let go"
     assert (table.path.read_bytes() if table.path.exists() else None) == on_disk
     settle(r)
     assert labels(r) == ["learn view.depth4"]
-    assert r.undo.undo() and not [b for b in table.desk() if b.target == "view.depth4"]
+    assert r.undo.undo()                                     # back on D1 alone
+    assert [b.source for b in table.desk() if b.target == "view.depth4"] == ["cc:*:16"]
     # the param's knob moves to another control: the old one lets go, by glyph
     assert [b.source for b in table.desk() if b.target == "view.bright" and b.kind == "cc"] \
         == ["cc:0:48"]
@@ -985,9 +989,10 @@ def test_a_pick_on_an_invariant_control_or_the_global_layer_maps_nothing(tmp_pat
     assert lrn.refused and lrn.last == "S3 (track fader 3) is invariant (the session's) — not learned"
     assert lrn.control == s3.source and lrn.learning is None and rows() == before
     # every invariant control of D6: the faders, the bank row, SHIFT, TAP,
-    # METRONOME, NUDGE, the transport, the crossfader, OVERDUB, the clip-stop row
+    # METRONOME, NUDGE, the transport, the crossfader, OVERDUB, the clip-stop row;
+    # and since plan 19 WP2 clip rows 4 and 5, the bank's slots 9–24
     for glyph in ("S1", "SM", "G1·1", "G1·8", "⇧", "B20", "B12", "B21", "B22", "B13", "B14",
-                  "X", "B11", "G6·1", "G6·8"):
+                  "X", "B11", "G6·1", "G6·8", "G4·1", "G5·8"):
         c = control(glyph)
         assert "is invariant (the session's)" in (ui_desk.mappable(table, c) or ""), glyph
         lrn.pick(c.source)

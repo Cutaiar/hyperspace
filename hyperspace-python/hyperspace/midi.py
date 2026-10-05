@@ -113,6 +113,7 @@ from .routing import (
     act,
     bindings_path,
     is_session_id,
+    led_level,
     led_lit,
     register_desk,
 )
@@ -706,6 +707,10 @@ class MidiIO:
         catch its own value under a performer. LEDs on a toggle or an
         enum `set` row show the effective value — a state light shows
         what the show is doing. Intended (owner, 2026-09-28, audit R6).
+        An unlit `set` row on an enum whose choice holds something
+        (`led_level` 1: a bank pad whose slot is filled, plan 19 WP2) gets
+        the profile's `filled_of` velocity where the control has one —
+        amber on the clip grid — else its off.
         A control blinking after a hold fired (`_fire_holds`) gets its
         blink velocity, whatever its state, until BLINK_S is up.
         """
@@ -741,6 +746,10 @@ class MidiIO:
             elif b.feedback == "led":
                 lit = self._lit(b, p)
                 v = b.on if lit else b.off
+                if not lit and led_level(b, p) == 1:
+                    filled_of = getattr(self.profile, "filled_of", None)
+                    filled = filled_of(b.number, b.on) if filled_of is not None else None
+                    v = b.off if filled is None else filled
                 if b.control in blinks:
                     v = blink_of(b.number, b.on) if blink_of is not None else b.on
                 if v != b.last_out:
