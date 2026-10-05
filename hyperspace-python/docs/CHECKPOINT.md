@@ -1,8 +1,9 @@
 # Checkpoint — 2026-10-04
 
 Where the Python re-platform stands and what to pick up next. This
-revision describes the **`finish-line`** branch with plan 15 on it
-(`plan-15-integration`); `main` is at plan 14 (fa9b3a1) and nothing from
+revision describes the **`finish-line`** branch with plans 15 and 16 on
+it (`plan-15-integration`, then `plan-16-integration`, each merged into
+it when its last PR is in); `main` is at plan 14 (fa9b3a1) and nothing from
 plans 15–21 touches it until the owner merges `finish-line` (decision
 30). What the
 system *is* — the parts, the frame, who may write a parameter — is
@@ -18,8 +19,8 @@ is [`AUDIT-2026-09.md`](AUDIT-2026-09.md); the stages it was built in are
 git clone github.com/Cutaiar/hyperspace && cd hyperspace/hyperspace-python
 uv sync                 # whole environment, from the committed lockfile
 git checkout finish-line      # plans 15–21 land here, never on main
-uv run pytest           # 1121 pass, 1 skipped (the hands tape) with plan 15
-uv run hyperspace       # the app: ? shows the controls cheat sheet
+uv run pytest           # 1178 pass, 1 skipped (the hands tape) with plans 15 and 16
+uv run hyperspace       # the app: ? shows the controls cheat sheet (off at launch)
 ```
 
 Machine prerequisites: [`SETUP.md`](SETUP.md). Rig-specific values live in
@@ -95,7 +96,43 @@ None of it has been tried by a person at the rig. It was shown by tests
 `plans/assets/15-safety-net/`, and a scripted launch of the app on a
 laptop. Eleven forks were settled by the unattended run on its own
 recommendation and wait for the owner: `DECISION-REGISTER.md` rows
-34–44. Plans 16–21 are ordered in
+34–44.
+
+Plan 16 (2026-10-04, [`plans/16-paper-cuts.md`](plans/16-paper-cuts.md),
+its §7 "As built"; from the same session, no decision asked of the
+owner) is the paper cuts, on `plan-16-integration` → `finish-line`. It
+adds no param, page or menu item; one config key and one file in the
+home:
+
+- **The cheat sheet is off at launch** (WP1, PR #89); `/`, the pad's
+  MENU and the APC40's DETAIL show it. The desk diagram stays, in the
+  bottom-left corner.
+- **An FX chip's name opens the effect; a dot at its left end switches
+  it** (WP2, PR #84). Three chips to a row. The open effect is a name
+  (`FxState.select` / `selected`), so a reorder or a preset load never
+  changes it.
+- **An effect that is not running says why** (WP3, PR #86): off,
+  bypassed, FX mix 0, its mix 0, with "turn on" / "effects on"; its
+  controls are dimmed by a veil and stay live.
+- **The windows open where the config says, else where they were**
+  (WP4, PR #85): `[output] monitor` and the new `control_monitor`, then
+  `<home>/windows.json`, written on quit and ⌘R; fullscreen is never
+  remembered. `placement.py`, ENGINEERING §2.5.
+- **Instances to zero** (WP5, PR #90): `view.instances` 0–100, "0 ·
+  nothing drawn", the echoes and effects carry on. `dream.layer` is not
+  modulatable.
+- **Four follow-ups** (WP7, PR #92): a footer line said twice shows
+  twice; a performer's round-off lights no dirty dot; the desk diagram
+  is in its place on the sheet's first frame; a config screen that is
+  not a number is −1 and a note, not a dead launch.
+
+None of plan 16 has been tried by a person at the rig either. It was
+shown by tests (1178 pass with it), pictures from a hidden window or an
+offscreen render and transcripts under `plans/assets/16-paper-cuts/`,
+and a scripted launch on a one-screen laptop — so **window placement has
+never met a second screen**. Five calls were built on the run's
+recommendation and wait for the owner: `DECISION-REGISTER.md` rows
+45–49. Plans 17–21 are ordered in
 [`plans/15-21-roadmap.md`](plans/15-21-roadmap.md); each plan document
 is written when it starts.
 
@@ -121,7 +158,10 @@ file what fails as new audit rows dated with plan 11.
    the crossfader, OVERDUB, the clip-stop row, Home and the undo keys),
    then 48, 50, 53 on the laptop, 49, 51, 54–56 with the APC40, 52 with
    the camera. Check 55 settles the one thing read from a comment: that
-   the crossfader's left end is CC 0.
+   the crossfader's left end is CC 0. Plan 16's **group L** (checks
+   58–63, about 20 minutes): 58–60, 62 and 63 on the laptop, 61 with the
+   projector — the first time window placement meets a second screen; if
+   a window ever opens out of reach, delete `~/Hyperspace/windows.json`.
 2. **First real audio capture.** Every live path is code-complete and now
    under test over a fake device, but no human has pressed `M` on real
    hardware with the macOS microphone prompt. One click plus a clap
@@ -137,8 +177,11 @@ file what fails as new audit rows dated with plan 11.
    and the chord rule, the band layout, taps, the trash's rules, the
    Home key, camera moves, performers on home and the dim, the dim in
    overlay, the save-as gesture, a drag that pauses, the faders after a
-   load.)
-4. **The rest of the finish line**: plans 16–21 in the roadmap's order,
+   load. **Rows 45–49 are plan 16's**, open the same way: the switch on
+   an FX chip and three chips to a row, an idle effect's faders dimmed
+   but live, the instance count reaching zero from the knob, where the
+   windows open, the dream's layer no longer performable.)
+4. **The rest of the finish line**: plans 17–21 in the roadmap's order,
    each onto `finish-line`. Nothing of plan 15's desk side has been on
    the APC40: the hold's timing, the clip-stop LEDs and the blink are
    from Akai's protocol table (hand check 56). One audit row is open from plan 15: R13 (a fader moved

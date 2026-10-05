@@ -16,8 +16,9 @@ gone; `hyperspace-web/hyperspace.html` is frozen and matters here only as
 the oracle the golden traces were recorded from. Revised for plan 13
 (presets, the session, the two-layer desk) on `plan-13-integration`.
 
-**Run it:** `uv sync`, `uv run pytest` (886 tests, ~35 s), `uv run
-hyperspace`. `?` in the app shows the controls cheat sheet.
+**Run it:** `uv sync`, `uv run pytest` (1178 tests with plan 16, about a
+minute), `uv run hyperspace`. `?` in the app shows the controls cheat
+sheet, which is off at launch since plan 16.
 
 ---
 
@@ -114,7 +115,17 @@ is bit-identical to the scene pass alone (`tests/test_render.py:306`,
 1. **Scene pass** into an MSAA RGBA target (`draw_scene`, `render.py:498`):
    zoom and pan about the cursor; the instance grid with motion; face
    fills through `patterns.glsl` and the optional bitmap layer; edges;
-   points. Painter order on w-depth.
+   points. Painter order on w-depth. With `view.instances` at **0**
+   (plan 16 WP5; the range is 0–100, the readout "0 · nothing drawn") the
+   pass clears to the ground and draws nothing — no faces, lines or
+   points, no vertex buffer written — and every stage below still runs:
+   the coverage mask sees no faces, the look-back composites and
+   captures (so the echoes already there fade out over the empty scene),
+   an effect that paints on its own still paints, the ghost hands draw,
+   the dim dims. At 1 the frame is bit for bit the one it was
+   (`tests/test_render.py::test_zero_instances_draws_only_the_ground`,
+   `::test_zero_instances_still_runs_the_look_back_and_the_effects`,
+   `::test_one_instance_is_the_frame_it_was`).
 2. **Coverage mask** — the faces again, solid, when the look-back is on
    and occluding, so the wake fills the space between shapes rather than
    glowing over them (`render.py:293-318, 467`).
@@ -300,9 +311,42 @@ runs on the renderer's one clock (`Renderer.now`). Effects hot-reload by polling
 parse error keeps the last spec, a compile error skips the pass, all
 broken is a copy. Off is bit-identical (`tests/test_fx.py:268`). The
 blend modes are arithmetic in the shader, not GL blend state, and a pass
-never leaves alpha below its brightest channel. Eleven effects ship,
+never leaves alpha below its brightest channel. Twelve effects ship,
 Noita's `post_final.frag` maths among them; the factory presets are
 `library/fx/*.json`. **New effects are new `.glsl` files, not Python.**
+
+**The FX page** (`ui_fx.py`; plan 16 WP2 and WP3). The chain's bypass
+and mix, then one chip per effect in stack order, **three to a row**
+(`CHIPS_PER_ROW`; at four the LED's square cut seven of the twelve names
+short). A chip is two click targets: the **LED** at its left end
+(`##led.fx.<name>.on`, a filled dot while the effect is on, a ring while
+off) switches the effect and never opens it; the **name**
+(`##chip.fx.<name>.on`) opens the effect's strip and never switches it.
+Both parts are red while the effect is on, and the open chip has an
+outline round both. Which strip is open is a **name**
+(`FxState.sel_name`, through `FxState.select(name)` / `selected()` —
+the contract plan 20's chain view drives), not a place in the stack:
+dragging an effect's order, a preset, module-preset or show load, and an
+effect file added or removed never change it; an open effect whose file
+goes away falls back to the first and is open again when the file
+returns. `fx.select` is a view onto the name, in no preset or file, and
+opening a strip is not an undo step. An open effect that is **not
+running says why** (`ui_fx.why_idle`, the four conditions of
+`FxState.chain()`, first reason only): "off — nothing below shows until
+it is on" with a **turn on** chip, "the whole stack is bypassed" with
+**effects on**, "FX mix is at 0", "its mix is at 0". Under the line the
+strip's rows are dimmed by a veil drawn over them (`ui_fx._dim`) and
+stay live — an effect can be set up dark, and a row's right-click menu
+opens at full strength; the "on" check is never dimmed, nor the effect's
+own mix fader when that is the reason. The two chips write the base
+(`Param.set`), one undo step each
+(`tests/test_fx.py::test_a_chip_click_selects_and_never_toggles`,
+`::test_the_chips_led_toggles_and_never_selects`,
+`::test_selection_is_by_name_and_survives_a_reorder`,
+`::test_why_idle_names_the_first_reason`,
+`::test_the_idle_strips_controls_stay_live`,
+`::test_the_page_fits_with_the_tightest_strip_idle`). The clicks in those
+tests are simulated mouse events on the real page.
 
 ### 2.5 Two windows
 
@@ -330,7 +374,47 @@ so a launch always starts at full and no preset or show can move it. It
 is the OUTPUT page's first row, reading "black" at 0, "100%" only at
 full and 1–99 % between; the APC40's crossfader drives it (§5).
 `output.monitor` offers *follow window* — the screen the window is
-on, config `monitor = -1` — and then each screen by name. Quitting, Cmd+R
+on, config `monitor = -1` — and then each screen by name.
+
+**Where the windows open** (plan 16 WP4; `placement.py`, asked by
+`app._windows`). Two sources, in this order. First `[output] monitor`
+(the render window; the same key still says which screen fullscreen
+covers) and `[output] control_monitor` (the control window): a screen
+index in `glfw.get_monitors()` order, the primary first; at 0 or above
+the window opens on that screen. Then `<home>/windows.json`
+(`hyperspace.windows/1`): the control window's rect and a list of render
+rects — one entry today — as they were at the last quit, always the
+rect of the plain window, never a fullscreen or overlay cover (whether a
+launch is fullscreen is `[output] fullscreen`'s say and is never
+remembered). The file fills in what the config leaves at −1, and on a
+configured screen it still supplies the spot when the last position was
+on that screen. With neither, the windows open where they always did:
+render top-left of the primary screen's work area, controls flush right,
+16 px in, at their full sizes (on a small screen they overlap and may
+overhang). A remembered rect is used only when at least 120 × 80 px of
+it, and its top edge, are on a connected screen's work area; a
+projector that is gone, a hand-edited file or a rect off every screen
+falls back to the default spot with a note on stderr and on the SYSTEM
+page (`cfg["notes"]`), so no window opens out of reach. A remembered
+size is clipped to the screen it lands on and never opens under
+320 × 240. The file is written by `app._save_windows` on quit and on
+Cmd+R only — not while running, so a crash costs one drag — and a window
+minimised at the quit keeps its old entry; a failed write costs only the
+memory. Delete the file to forget; no setting turns it off. It is
+machine-specific, like `last_show`. A config index no connected screen
+has, or a value that is not a number (`monitor = "left"`), is −1 with
+one note and the app launches (`placement.read`, `config.load`; plan 16
+WP7); the index then stays −1 for the run, so a screen plugged in after
+the launch is picked on the OUTPUT page, not by the config
+(`tests/test_placement.py`,
+`tests/test_app_boundary.py::test_the_windows_open_where_placement_says`,
+`::test_the_exits_save_the_windowed_rects`,
+`::test_a_config_screen_that_cannot_be_used_is_minus_one_and_one_note`,
+`tests/test_config.py::test_a_screen_that_is_not_a_number_is_minus_one_and_a_note`).
+All of it was run with fake screens and on one real screen; it has not
+met a second screen (hand check 61).
+
+Quitting, Cmd+R
 and the panel's restart button all run `app.close_all`: every open
 adapter (MIDI, the bridge, the hands tracker, the dream worker) then the
 audio stream, best-effort, so a broken port never blocks an exit. The
@@ -844,7 +928,10 @@ unreadable at a party.
   below). One word per
   thing: show, preset, starts on, module preset, factory. The rail's
   dirty dots and the footer's mark compare against the loaded preset or
-  show: a preset that names no module preset for a group leaves the group
+  show, floats within undo's tolerance (`undo.alike`, 1e-9 relative;
+  plan 16 WP7) — a performer taking a param leaves its base changed in
+  the last bits, and that lights no dot, while one detent does
+  (`tests/test_undo.py::test_a_performers_round_off_lights_no_dot`): a preset that names no module preset for a group leaves the group
   clean as it landed (`Library.label(g, None)`), a show load keeps the
   performance groups' references and marks the session groups it names
   no module for clean as it left them (`Project._apply`), and a factory
@@ -898,7 +985,8 @@ unreadable at a party.
   column 9 scene launch, STOP ALL, MASTER), B1–B22 the other buttons, ⇧
   SHIFT. A ROUTING row, a Learn message and the cheat sheet use the
   glyph; Akai's name stays in the tooltip. The control window draws the
-  desk above the cheat sheet (`ui_desk.py`, `ui.desk`): the layer that is
+  desk in its bottom-left corner, above the cheat sheet when that shows
+  (`ui_desk.py`, `ui.desk`): the layer that is
   up lit exactly as the device is (`Bindings.active`, `routing.led_lit`),
   the rest dark, ⇧ red on the global layer; it reads the table, so it
   works with no device plugged in. A new control in the protocol gets a
@@ -938,7 +1026,9 @@ unreadable at a party.
   clip-stop row, Home and the four undo keys wherever the control
   or chord is free; a row you changed is left as you had it. A row of
   these that you delete from the file comes back on the next launch; to
-  switch one off, keep it with `"enabled": false`.
+  switch one off, keep it with `"enabled": false`. Since plan 16 the
+  home also holds `windows.json`, where the two windows were at the last
+  quit (§2.5): machine-specific, like `last_show`, and safe to delete.
 - **The trash** (plan 15 WP1; `library.to_trash`). The home's layout
   gains `trash/<group>/<slug>.<YYYYMMDD-HHMMSS>.json`: a **user** preset
   file as it was, copied there before a save overwrites it or a delete
@@ -959,7 +1049,15 @@ unreadable at a party.
 - **The cheat sheet** (`ui.CHEATSHEET`) is the canonical human list of the
   keys; `test_the_cheat_sheet_matches_the_tables_and_the_loop_keys` parses
   its key column against `routing.keymap()`, `padmap()` and the keys the
-  loop still handles itself (`app.LOOP_KEYS`).
+  loop still handles itself (`app.LOOP_KEYS`). It is **off at every
+  launch** (plan 16 WP1): `/`, the pad's MENU and the APC40's DETAIL
+  toggle it (`ui.cheatsheet`; DETAIL's LED is dark until then), the
+  SYSTEM page's checkbox says so in its hover, and it is not remembered.
+  The desk diagram stays on and is already in its place on the first
+  frame the sheet shows
+  (`tests/test_ui_shell.py::test_the_cheat_sheet_is_off_at_launch_and_the_desk_is_on`,
+  `::test_slash_still_toggles_the_cheat_sheet`,
+  `tests/test_ui_desk.py::test_the_desk_does_not_jump_when_the_sheet_comes_up`).
 - **The keys plan 15 added**, all table rows (`routing.LOOP_KEY_ROWS`),
   so they rebind in `bindings.json` like any other: **⌘Z** and
   **Ctrl+Z** undo, **⌘⇧Z** and **Ctrl+⇧Z** redo (§5b), **Home** (fn ←
@@ -988,15 +1086,21 @@ unreadable at a party.
   on hover; while it shows, the hot reloader's status gives way to it.
   The undo's line shows on every press. A library line shows when its
   text changes, **or** when it was set through `Library.say`, which
-  counts each call (`Library.said`): the bank's lines — save-as, put
-  preset here, clear slot — show again even in the same words. Every
-  older line is a plain assignment and shows once: an empty F-key
-  pressed twice, or home with no "starts on" pressed twice, says its
-  line the first time only (it stays on the PRESETS page). A launch
+  counts each call (`Library.said`). Since plan 16 WP7 every line that
+  reports something that just happened is set through `say` — the
+  bank's lines, an empty F-key's note, home with no "starts on", a slot
+  naming no file, a load, a save — so the same press giving the same
+  words shows them again. A plain assignment of the line is only for
+  clearing it and is not counted, so nothing that assigned the same
+  words every frame could hold the slot open (no site does). One line
+  is said only when it changes: the band scene landed by `scene.select`
+  (`Library.adopt`), which a knob sets many times in one turn. A launch
   says nothing
   (`tests/test_ui_shell.py::test_the_footer_says_what_was_undone`,
   `::test_the_dim_is_first_on_output_and_the_footer_says_so_while_dimmed`,
-  `tests/test_ui_presets.py::test_the_footer_says_a_library_line_again`).
+  `tests/test_ui_presets.py::test_the_footer_says_a_library_line_again`,
+  `::test_a_line_said_twice_shows_twice`,
+  `::test_a_line_assigned_every_frame_does_not_pin_the_footer`).
 - The large cell-count readout at the top of the view page is still the
   signature element. Keep new UI consistent with this.
 
@@ -1229,6 +1333,13 @@ same PR; when it changes behaviour, the line here does.
   the hand checks (48–57), 57 first: it is the launch that rewrites
   `bindings.json`. The decisions the unattended run took on its own
   recommendation wait in `DECISION-REGISTER.md` rows 34–44.
+- **Plan 16 at the machine**: the cheat sheet off at launch, the FX
+  chips and the idle strip, window placement, instances to zero and the
+  dream's layer have been shown by tests, pictures from a hidden window
+  or an offscreen render, and scripted launches on a one-screen laptop,
+  and by nobody at the rig. Group L of the hand checks (58–63); check 61
+  is the first time window placement meets a second screen. Rows 45–49
+  of `DECISION-REGISTER.md` wait the same way as 34–44.
 - **The trim** (plan 06): decided 2026-09-28 — the per-band AUTO / MANUAL
   switch, built in plan 11 WP15; the oracle was not re-frozen.
 - **First real capture on this machine.** Every live path is code-complete;
