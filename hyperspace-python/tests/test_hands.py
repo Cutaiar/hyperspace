@@ -1615,3 +1615,71 @@ def test_the_box_round_trips_through_the_file(tmp_path):
                                                            abs=1e-3)
     assert hands.core.load_box(None) is None and hands.core.load_box(tmp_path / "no") is None
 
+
+def test_hands_page_draws_the_box_and_a_hand_outside_it(tmp_path):
+    from imgui_bundle import imgui
+
+    from hyperspace.hands import panel as hp
+    from hyperspace.ui import PAGE_KEYS, Panel, apply_style, load_fonts
+
+    ctx = imgui.create_context()
+    try:
+        io_ = imgui.get_io()
+        io_.display_size = imgui.ImVec2(820, 820)
+        io_.backend_flags |= imgui.BackendFlags_.renderer_has_textures
+        apply_style()
+        load_fonts()
+        chain = Analyzer(Analyser())
+        control = Control(chain)
+        audio = NS(chain=chain, on=False, mode="", error="", label="", sr=48000.0)
+        view = ViewState()
+        lib = Library(tmp_path, period=0.0)
+        reg = build_registry(view, control, audio, lib.project)
+        r = boxed()
+        hands.register(reg, r.s)
+        lib.attach(reg)
+        panel = Panel(control, audio, view, bank=lib.project, registry=reg, library=lib)
+        panel.hand_settings = r.s
+        reg["ui.page"].set(PAGE_KEYS.index("hands"))
+        said = []
+        real, header = imgui.text_disabled, imgui.collapsing_header
+        imgui.text_disabled = lambda t: (said.append(t), real(t))[1]
+        # "feel & calibration" open, so the calibrate block's box line draws
+        imgui.collapsing_header = lambda *a, **k: (header(*a, **k), True)[1]
+
+        def frame():
+            said.clear()
+            imgui.new_frame()
+            panel.draw(DT, 60.0)
+            imgui.end_frame()
+
+        try:
+            frame()                                   # no tracker
+            assert not any("L" in s and "R" in s and "●" in s for s in said)
+            panel.hands = r.io
+            run(r, 2, hand("left", pos=(-100.0, 200.0, 0.0)),
+                hand("right", pos=(300.0, 380.0, 60.0)))             # the right one outside
+            assert r.io.present == {"left": True, "right": False} and r.io.outside["right"]
+            frame()
+            assert hp._ins(r.io) == "L● R◌" and any("L● R◌" in s for s in said)
+            assert any(s.startswith("box x −200…200 · y 80…400 · z −150…150 mm") for s in said)
+            r.io.box = {"x": None, "y": (80.0, 400.0), "z": (-150.0, 150.0)}   # an open coordinate
+            frame()
+            assert any(s.startswith("box x open · y 80…400") for s in said)
+            r.io.box = {"x": (-900.0, 900.0), "y": None, "z": None}  # wider than the view: clamped
+            frame()
+            run(r, 1)                                 # nobody there
+            frame()
+            assert hp._ins(r.io) == "L○ R○"
+            r.io.box = None                           # no box: today's view
+            run(r, 1, hand("left"), hand("right"))
+            frame()
+            assert hp._ins(r.io) == "L● R●" and "box open" in said
+            del r.io.box, r.io.outside                # a HandsIO from before a hot reload
+            frame()
+        finally:
+            imgui.text_disabled, imgui.collapsing_header = real, header
+        assert hp._box_text(None) == "" and hp._box_text({}) == ""
+        assert (hp.BOX_W, hp.BOX_H) == (190.0, 92.0)  # the frame keeps its size
+    finally:
+        imgui.destroy_context(ctx)
