@@ -379,8 +379,8 @@ class Panel:
         self.pin_in = [0.0] * N_MAX
         self.pin_out = [0.0] * N_MAX
         self.open = True
-        self.cheatsheet = True
-        self.desk = True            # the APC40 drawn above the sheet (ui_desk.py)
+        self.cheatsheet = False     # off at every launch; / brings it up (plan 16 WP1)
+        self.desk = True            # the APC40, bottom-left; above the sheet when it shows
         self.page = 1               # index into PAGES; the view page opens first
         self.ghosts = 0             # ghost markers drawn this frame (tests read it)
         self._file_dialog = None
@@ -417,13 +417,16 @@ class Panel:
         r.toggle("ui.cheatsheet", "Cheat sheet",
                  lambda: self.cheatsheet,
                  lambda on: setattr(self, "cheatsheet", bool(on)), group="ui",
-                 persist=False, modulatable=False)
+                 persist=False, modulatable=False,
+                 tip="Keys, pad and desk legend, bottom-left of this window. "
+                     "/ toggles it.")
         r.toggle("ui.desk", "Desk diagram",
                  lambda: self.desk,
                  lambda on: setattr(self, "desk", bool(on)), group="ui",
                  persist=False, modulatable=False,
-                 tip="The APC40 drawn above the cheat sheet: the controls the layer "
-                     "that is up maps lit, each with the glyph the ROUTING rows print.")
+                 tip="The APC40 drawn bottom-left of this window (above the cheat sheet "
+                     "when that shows): the controls the layer that is up maps lit, "
+                     "each with the glyph the ROUTING rows print.")
         r.enum("ui.page", "Page", lambda: self.page,
                lambda i: setattr(self, "page", int(i)), [lb for _, lb, _ in PAGES],
                group="ui", persist=False, modulatable=False,

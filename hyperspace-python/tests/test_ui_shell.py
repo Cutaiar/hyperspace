@@ -444,6 +444,57 @@ def test_the_cheat_sheet_matches_the_tables_and_the_loop_keys():
     assert any(b.scheme == "hat" for b in padmap()) and any(c == "d-pad" for c, _ in CHEATSHEET)
 
 
+def _windows(monkeypatch) -> list[str]:
+    """The name of every window a frame begins, in order."""
+    begun: list[str] = []
+    real = imgui.begin
+    monkeypatch.setattr(imgui, "begin", lambda name, *a, **k: (begun.append(name),
+                                                               real(name, *a, **k))[1])
+    return begun
+
+
+def test_the_cheat_sheet_is_off_at_launch_and_the_desk_is_on(rig, monkeypatch):
+    """Plan 16 WP1: a fresh panel draws the desk diagram and no legend —
+    the sheet was in the way at every launch. Its checkbox says how to get
+    it back."""
+    panel = rig.panel
+    assert panel.cheatsheet is False and panel.desk is True
+    assert rig.reg["ui.cheatsheet"].base is False and rig.reg["ui.desk"].base is True
+    begun = _windows(monkeypatch)
+    for _ in range(2):
+        frame(panel)
+    assert "##desk" in begun and "##cheatsheet" not in begun
+    sheet = rig.reg["ui.cheatsheet"]
+    assert "/" in sheet.tip and "bottom-left" in sheet.tip
+    assert not sheet.persist and not sheet.modulatable      # off every launch, nobody's target
+
+
+def test_slash_still_toggles_the_cheat_sheet(rig, monkeypatch):
+    """The key row is the factory table's, and a press of the real key
+    through the router draws the sheet on the next frame and hides it on
+    the one after the second press."""
+    import glfw
+
+    rows = [b for b in rig.router.table.of("key") if b.key_name == "SLASH"]
+    assert [(b.source, b.target, b.op) for b in rows] == [("key:SLASH", "ui.cheatsheet", "toggle")]
+
+    keys = SimpleNamespace(pressed=lambda key: key == glfw.KEY_SLASH)   # one press, no modifier
+    begun = _windows(monkeypatch)
+
+    def press_and_draw() -> list[str]:
+        rig.router.keys(keys)
+        begun.clear()
+        frame(rig.panel)
+        return list(begun)
+
+    frame(rig.panel)
+    assert "##cheatsheet" not in begun
+    assert "##cheatsheet" in press_and_draw() and rig.panel.cheatsheet is True
+    assert "##desk" in begun                                # the desk moves up, it does not go
+    assert "##cheatsheet" not in press_and_draw() and rig.panel.cheatsheet is False
+    assert "##desk" in begun
+
+
 # ---------------------------------------------------------------- strip
 
 def test_strip_round_trip(rig):
