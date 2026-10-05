@@ -1,0 +1,99 @@
+Plan 17 WP1 — one Unbind (headless: no window, no device, no hand; the menu is read as text)
+home: <home>  ·  preset: TUMBLE  ·  20 routes, 42 desk rows
+
+0. view.speed in this preset has a knob and a hand route; add an LFO route, switched off
+   (one performer per parameter: a second enabled route would be the Replace / Keep prompt)
+
+1. With the MIDI adapter on the panel (panel.midi is a MidiIO over ports nobody is plugged into)
+  right-click Speed (VIEW page):
+      VIEW.SPEED
+      K2 (track knob 2)
+      R y pushes +0.45
+      LFO 1 pushes +0.3 (off)
+    [ Learn ]
+    [ Unbind ▸ ]
+    [     desk — K2 ]
+    [     route — R y, LFO 1 ]
+    [     both ]
+    [ Gate: none ▸ ]
+    [ Route a lane here… ]
+
+  click  Unbind ▸ desk — K2
+      learn line: unbound view.speed from K2 (track knob 2)
+      now on view.speed: 0 desk rows, 2 routes  ·  bindings.json written: False
+    undo stack (1): unbind view.speed
+  Ctrl+Z   footer: ·  undid unbind view.speed
+      now on view.speed: 1 desk row, 2 routes  ·  every row back: True
+
+  click  Unbind ▸ route — R y, LFO 1
+      learn line: unbound view.speed from R y pushes +0.45 and LFO 1 pushes +0.3
+      now on view.speed: 1 desk row, 0 routes  ·  bindings.json written: False
+    undo stack (1): unbind view.speed
+  Ctrl+Z   footer: ·  undid unbind view.speed
+      now on view.speed: 1 desk row, 2 routes  ·  every row back: True
+
+  click  Unbind ▸ both
+      learn line: unbound view.speed from K2 (track knob 2), R y pushes +0.45 and LFO 1 pushes +0.3
+      now on view.speed: 0 desk rows, 0 routes  ·  bindings.json written: False
+    undo stack (1): unbind view.speed
+  right-click Speed (VIEW page):
+      VIEW.SPEED
+    [ Learn ]
+    [ Route a lane here… ]
+  Ctrl+Z   footer: ·  undid unbind view.speed
+      now on view.speed: 1 desk row, 2 routes  ·  every row back: True
+
+  right-click Input trim (AUDIO page):
+      MASTER.TRIM
+      S8 (track fader 8) · invariant
+    [ Learn ]
+    [ Route a lane here… ]
+      Unbind offered: False
+
+2. The same with no MIDI adapter (panel.midi = None, as with [midi] enabled = false)
+  right-click Speed (VIEW page):
+      VIEW.SPEED
+      K2 (track knob 2)
+      R y pushes +0.45
+      LFO 1 pushes +0.3 (off)
+    [ Learn ]
+    [ Unbind ▸ ]
+    [     desk — K2 ]
+    [     route — R y, LFO 1 ]
+    [     both ]
+    [ Gate: none ▸ ]
+    [ Route a lane here… ]
+
+  click  Unbind ▸ desk — K2
+      learn line: unbound view.speed from K2 (track knob 2)
+      now on view.speed: 0 desk rows, 2 routes  ·  bindings.json written: False
+    undo stack (1): unbind view.speed
+  Ctrl+Z   footer: ·  undid unbind view.speed
+      now on view.speed: 1 desk row, 2 routes  ·  every row back: True
+
+  click  Unbind ▸ route — R y, LFO 1
+      learn line: unbound view.speed from R y pushes +0.45 and LFO 1 pushes +0.3
+      now on view.speed: 1 desk row, 0 routes  ·  bindings.json written: False
+    undo stack (1): unbind view.speed
+  Ctrl+Z   footer: ·  undid unbind view.speed
+      now on view.speed: 1 desk row, 2 routes  ·  every row back: True
+
+  click  Unbind ▸ both
+      learn line: unbound view.speed from K2 (track knob 2), R y pushes +0.45 and LFO 1 pushes +0.3
+      now on view.speed: 0 desk rows, 0 routes  ·  bindings.json written: False
+    undo stack (1): unbind view.speed
+  right-click Speed (VIEW page):
+      VIEW.SPEED
+    [ Learn ]
+    [ Route a lane here… ]
+  Ctrl+Z   footer: ·  undid unbind view.speed
+      now on view.speed: 1 desk row, 2 routes  ·  every row back: True
+
+  right-click Input trim (AUDIO page):
+      MASTER.TRIM
+      S8 (track fader 8) · invariant
+    [ Learn ]
+    [ Route a lane here… ]
+      Unbind offered: False
+
+   the two transcripts are the same, line for line: True
