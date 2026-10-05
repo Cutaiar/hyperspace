@@ -3,7 +3,7 @@
 Everything only the owner can verify, in the order that costs the least
 time at the machine: laptop alone first, then the APC40, then the camera
 and the box (APC40 still plugged in for check 24), then the projector,
-then IAC + FL Studio, then one back on the laptop, then plans 12 and 13's two, then plan 13's group H (plan 13 is built on `plan-13-integration`), then plan 14's group I and the ghost hands' group J, then plan 15's group K (undo, home, the master dim, save-as on the desk; built on `finish-line`), then plan 16's group L (the cheat sheet off at launch, the FX chips, an idle effect's strip, where the windows open, instances to zero, the dream's layer; checks 58–63, the projector for 61). Each check: the commands, the config, the preset,
+then IAC + FL Studio, then one back on the laptop, then plans 12 and 13's two, then plan 13's group H (plan 13 is built on `plan-13-integration`), then plan 14's group I and the ghost hands' group J, then plan 15's group K (undo, home, the master dim, save-as on the desk; built on `finish-line`), then plan 16's group L (the cheat sheet off at launch, the FX chips, an idle effect's strip, where the windows open, instances to zero, the dream's layer; checks 58–63, the projector for 61), then plan 17's group M (one Unbind, Learn desk / Learn hand ▸ left / right, the menu on a label and on every meter, the desk big and clickable, the ROUTING filter; checks 64–71, the APC40 for 65, 67 and 70, the camera for 65–67 — run it **after check 72**, which sets the box its hand checks sit in), then plan 18's group N (the interaction box, what a hand Learn lands with, knob smoothing, `hands-orbit`; checks 72–80, the camera for all of it, **calibration first**: check 72 sets the box every later hand check now sits in). Each check: the commands, the config, the preset,
 what to do, what a pass and a fail look like, and which audit item or
 code path a fail points at. Where a check can be simulated headless, the
 pytest node or `tools/` command that shows the expected behaviour is
@@ -260,6 +260,14 @@ HANDS page: **calibrate 20 s** (or `uv run python tools/hands_probe.py
 now reaches both 0 and 1 in its row. *Fail:* "N not reached" → sweep
 those again; ranges that make a resting hand read off-centre → the 2nd /
 98th percentile in `_finish_calibration`.
+**Since plan 18 the sweep also sets the interaction box** (check 72 is
+this check with the box, and replaces this pass text): the note reads
+"calibrated 12 axes · box W × H × D mm", the HANDS page's box view gains
+an inner rectangle and its height gauge a bracket, `hands.json` holds
+`"schema": "hyperspace.hands/2"` and a `box`, and a file that was there
+before is kept beside it as `hands.json.bak-v1`. A hand outside that box
+reads absent from then on, so sweep everything the hands should reach,
+with nobody else in the camera's view.
 
 **16. The default feel, saved as the factory setup (plan 08).**
 Headless reference: `uv run pytest -q tests/test_hands.py::test_follower_catches_a_returning_hand_instead_of_jumping`.
@@ -297,6 +305,17 @@ height positions — Replace / Keep" appears on whatever page you are on;
 the row now reads L height and the preset's dirty dot lights —
 `~/Hyperspace/bindings.json` is not written (plan 13 WP4: a learn goes
 into the loaded preset; ⇧F or the strip's save keeps it).
+Since plan 18: the new row still reads "L height positions" (height onto
+brightness is the fader, as before), and the preset's own L height row
+on Speed is gone — a learn moves the axis, and the learn line ends
+"moved from view.speed" (check 77). Had a tilt moved furthest instead
+(roll, pitch, yaw, or the hand sliding sideways or in), the row would
+read "pushes +0.25": a tilt now learns as a push about the base (check
+75).
+Since plan 17 the menu has no plain "Learn": choose **Learn hand ▸
+left**. Only the left hand's axes can then complete it, whatever the
+right hand does (check 66), and the footer reads "learning view.bright —
+move the left hand…" on every page until it lands.
 While the prompt is up, moving hands learns nothing more. Optional: set
 `[midi] enabled = false`, relaunch, repeat — Learn still works (B3, PR
 #50); put it back. *Fail:* the learn lands with no prompt → `Learn.learn_source`
@@ -330,7 +349,13 @@ the APC40's brightness knob (track knob, VIEW fader `view.bright`).
 *Pass:* the fader's *setting* moves (the readout's base; the ring
 follows the knob), the picture does not; take the hand out of the box
 with the tracker still on: brightness lands on the knob's value at once
-(no fade to minimum — that was B1). *Fail:* brightness going to 0.13× when
+(no fade to minimum — that was B1). Since plan 18: with knob smoothing
+on (80 ms at launch) the setting glides to the knob's value instead of
+stepping, still under the hand; "out of the box" also means past the
+interaction box's faces (check 73); and a row a learn made that reads
+"pushes" lets go the same way as this one that "positions"
+(`tests/test_hands.py::test_a_hand_outside_the_box_releases_its_rows_and_the_base_returns`
+holds both). *Fail:* brightness going to 0.13× when
 the hand leaves → `HandsIO.lanes` NaN rule (`hands/core.py`); the knob
 dead while the hand is in → a `drive`-style base write somewhere (must
 not exist since plan 09).
@@ -572,8 +597,19 @@ abs" and K1 (brightness's old knob) as "unmapped — dark", the on-screen
 desk lights D3 and darkens K1, the
 head's dot (and the PRESETS strip's) is lit, and `bindings.json`'s time
 has not moved. Load the preset again (F1) to throw the learn away: the
-dot goes out, track knob 1 is brightness again. *Fail:* a learn on a
-fader or under SHIFT → the refusals in `MidiIO._learned`; `bindings.json`
+dot goes out, track knob 1 is brightness again.
+**Superseded in part by plan 17** (check 65 is this check as it now
+runs; register row 61). The menu item is **Learn desk**. A fader is no
+longer refused: it is not a candidate at all, so moving track fader 1
+drives SUB's drive as always, **nothing is said, and the learn stays
+armed** (the refusal "S1 (track fader 1) is invariant (the session's) —
+not learned" is now met only by clicking S1 on the on-screen desk while
+a desk learn is armed). SHIFT latches through an armed learn, so "Learn
+again" is not needed: the K6 refusal shows in the footer as well, the
+learn is still armed after it, and after unlatching SHIFT the same learn
+lands on device knob 3. The message ends "; K1 let go". *Fail:* a learn on a
+fader or under SHIFT → `Learn.learn_control` (`learn.blocked`) and the
+learning branch of `MidiIO._handle`; `bindings.json`
 rewritten → a learn still writing the session file; no dot → the desk in
 `Presets.signature`.
 
@@ -728,7 +764,15 @@ header says GLOBAL LAYER · SHIFT, D1–D8 and K1–K5 stay lit with the band
 strip and the hand feel, K6–K8 go dark — on the device the same. Pick
 any row of the ROUTING page's DESK section, read its glyph (say "D4"),
 find D4 on the diagram, then the same place on the device, and turn it:
-that row's param moves. *Fail:* a control drawn in the wrong place →
+that row's param moves.
+**Superseded in part by plan 17** (check 69; register row 57): the desk
+is no longer a fixed 380 × 290. It takes the room left of the panel (384
+× 431 at the control size), and with the panel hidden (H, DEVICE ON/OFF,
+the header's `big` chip) it fills the control window and every lit
+control carries its param's name, the glyph small in the corner. The
+walk above is easier at that size. A click on a control now picks it
+(check 70): click it again, or the ground between controls, to let go.
+*Fail:* a control drawn in the wrong place →
 `apc40._layout` (its x, y); lit on screen but dark on the device, or the
 reverse → the screen reads `Bindings.active` and the device
 `MidiIO.redraw` — they must agree (`ui_desk.lit`); a glyph that names
@@ -867,8 +911,12 @@ footer says "undid learn view.bright", the preset's dot is as it was.
 Right-click a param a desk knob drives → Unbind; its ring goes dark; ⌘Z:
 the row and the ring are back. Delete a route with its ×; ⌘Z: it is back
 with its depth and its gate. `ls -l ~/Hyperspace/presets` before and
-after: no file's time moved. *Fail:* a row not back → the push before
-the edit (`MidiIO._learned`, `MidiIO.unbind`, `ui_routing.page`); the
+after: no file's time moved. Since plan 17: the item is **Learn desk**;
+the footer's line after the learn ends "; K1 let go" (K1 had
+Brightness), and the one ⌘Z gives K1 its row back too; **Unbind** on a
+param with a knob and a route is a submenu (desk / route / both), and
+"both" is still one ⌘Z (check 64). *Fail:* a row not back → the push before
+the edit (`Learn.learn_control`, `Learn.unbind`, `ui_routing.page`); the
 ring staying dark → `redraw_serial` in `set_desk(load=False)`.
 
 **52. A hand moving makes no undo step (plan 15 WP1).**
@@ -910,6 +958,10 @@ page" once (a second press shows nothing new in the footer: the line is
 still on the PRESETS page). Set it back to TUMBLE: that line goes.
 Right-click any control → Learn, press OVERDUB: refused ("B11 (OVERDUB)
 is invariant (the session's) — not learned"), and nobody is sent home.
+**Superseded in part by plan 17** (register row 61): with **Learn desk**
+armed, OVERDUB does its job — the show's "starts on" preset loads — no
+refusal is said, and the learn stays armed, to land in that preset on
+the next knob. Cancel it from the footer's line.
 *Fail:* OVERDUB dark or dead → its row (`apc40.DEFAULT_MAP`; in your
 `bindings.json` after check 57); doing something else under SHIFT → the
 row has a layer; fn+← nothing → `key:HOME` in `routing.LOOP_KEY_ROWS`,
@@ -977,7 +1029,11 @@ PRESETS page, and TRIP 2, TRIP 3 and TRIP 4 are still in the list.
 **clear slot** is greyed on an empty slot. Plain **save** on the panel
 still writes over the loaded preset (check 53). *(h):* right-click any
 control → Learn, then hold a clip-stop button: refused ("G6·5 (clip stop
-5) is invariant (the session's) — not learned"), nothing saved. Two
+5) is invariant (the session's) — not learned"), nothing saved.
+**Superseded in part by plan 17** (register row 61): with **Learn desk**
+armed, a hold on the bar saves a new preset as it always does, no
+refusal is said, and the learn stays armed
+(`tests/test_desk.py::test_the_clip_stop_row_is_invariant`). Two
 things this build does **not** do, so they are not fails: the on-screen
 desk lights the bar while it is held but does not blink, and the cheat
 sheet does not name the bar. *Fail:* a tap saving →
@@ -1169,6 +1225,451 @@ row is still listed on the ROUTING page and does nothing; hovering its
 target says "dream.layer is not modulatable — the row is dormant", and
 nothing says so when the preset loads. *Fail:* a route offered or listed → the flag on
 `dream.layer` (`params.py`).
+
+## M. Plan 17 — Learn, Unbind and seeing the desk — added 2026-10-04
+
+Run on `finish-line` once plans 17 and 18 are merged into it (PRs #93
+one Unbind, #96 Learn desk / hand, #99 the menu on labels and meters,
+#91 the ROUTING filter, #102 the desk big and clickable). 64, 68, 69 and
+71 run on the laptop alone; 65, 67 and 70 need the APC40; 65, 66 and 67
+need the camera and the box, so **run check 72 (calibration) before
+them**. About 35 minutes. Use a copy of the home: `cp -R ~/Hyperspace
+~/Hyperspace-2026-10-04` if that copy does not exist yet. **None of this
+has been tried by a person, and nobody has clicked, right-clicked or
+typed in the real control window**: it was shown by tests that feed
+imgui its mouse and keyboard events, pictures from a hidden window, and
+scripted launches on a laptop with no desk and no camera
+(`17-learn-and-the-desk.md` §7). Decision register rows 57–64 are the
+calls these checks let you confirm or overturn. Since plan 18 a hand
+learn lands as "pushes +0.25" or "positions" by its own table (checks
+75, 76) and takes the axis's other rows with it (check 77); the lines
+quoted below allow for both.
+
+**64. One Unbind, with or without the desk (plan 17 WP1, register row 59).**
+Headless: `uv run pytest -q tests/test_learn.py::test_unbind_removes_the_presets_desk_rows_and_every_route tests/test_learn.py::test_unbind_is_one_undo_step_and_none_when_nothing_goes tests/test_ui_shell.py::test_the_menu_lists_and_unbinds_with_no_midi_adapter tests/test_ui_shell.py::test_unbind_is_not_offered_on_a_session_only_param`.
+APC40 unplugged, `[midi] enabled = true`. F1 (TUMBLE). VIEW page,
+right-click Speed. *Pass:* under the id the menu lists "K2 (track knob
+2)" and the right hand's height route in ROUTING's words (with the
+tracker on, "R height pushes …"), then **Learn desk**, **Learn hand** (a
+submenu: left, right; only with the tracker on), one **Unbind** that
+opens a submenu — "desk — K2", "route — R height", "both" — then, with
+the tracker on, "Gate: none", and "Route a lane here…". There is no "Unbind hand" and no "performed by …" line. Choose
+**both**: on the next right-click the two lines are gone and so is
+Unbind, the preset's dot is lit, and the footer said "unbound view.speed
+from K2 (track knob 2) and R height pushes …". ⌘Z: both are back
+("undid unbind view.speed"). Right-click Brightness (a knob and the two
+step buttons, no route): the lines read "K1 (track knob 1)", "B16 (▲) ·
+step +3", "B17 (▼) · step -3" and Unbind is a plain item, no submenu.
+Now set `[midi] enabled = false`, relaunch, and do it again: the same
+lines and the same items. AUDIO page, right-click Input trim (S8's
+param): the line reads "S8 (track fader 8) · invariant", dim, and there
+is no Unbind. (The drive fader is not the one to try on TUMBLE: the left
+hand's height is routed onto it, so its menu rightly offers Unbind for
+that route.) Put `[midi] enabled` back. *Fail:* no desk line with MIDI
+off → `Panel._ctx_lines` / `Panel._table` reading `self.midi`; an Unbind
+that only refuses → the offer rule in `Panel._ctx_unbind`; ⌘Z brings
+back half → `Learn.unbind` pushed twice or after the change; a line the
+Unbind did not remove, or the reverse → `learn.bound`.
+
+**65. A desk learn listens only to the desk, and the session's controls work through it (plan 17 WP2, register rows 60–62; this is check 37 as it now runs).**
+Headless: `uv run pytest -q tests/test_midi.py::test_an_invariant_control_works_through_a_desk_learn tests/test_hands.py::test_the_hands_never_complete_a_desk_learn tests/test_learn.py::test_learn_refuses_the_global_layer_and_invariant_controls tests/test_ui_shell.py::test_the_footer_says_what_a_learn_waits_for_and_what_it_did`.
+APC40 in, camera on, F1. VIEW page, right-click 4D depth → **Learn
+desk**. *Pass:* its control is framed red and the footer reads, in red,
+"learning view.depth4 — turn a knob or press a button on th…" (cut to
+the room it has; the whole line, ending "…or click one on the diagram…
+(click to cancel)", is on its hover) on every page. Wave both hands
+through the box for five seconds: the learn is still armed and no new
+route appears on ROUTING (TUMBLE's own right-hand route still moves the
+depth; that is the preset, not the learn). Move S3 a little: the third
+band's drive moves, nothing is said, the learn is still armed. Tap TAP
+TEMPO: it taps. Press SHIFT: its LED lights and the desk's header says
+GLOBAL LAYER. Turn K2: the footer says, in the warning colour, "K2
+(track knob 2) is on the global layer (the session's) — latch SHIFT off
+to learn into the preset" for four seconds, then the red "learning …"
+line is back — **still armed**; K2 did not move Response (while a desk
+learn is armed under SHIFT every control but the session's own is
+swallowed this way: say if that is a trap). Press SHIFT again, turn D5:
+"learned view.depth4 ← D5 (device knob 5) (into the preset)", D5's ring
+lights and follows, the frame and the red line go. One more thing to
+know, and to try once: arm **Learn desk** again and press a preset pad
+on clip row 1 — **the preset loads and the learn is still armed**, so
+the next knob lands in the preset you just loaded (no test presses a
+preset pad mid-learn; this is from reading `MidiIO._handle`). Click the
+footer's red line to cancel. *Fail:* the hands took it →
+`HandsIO._learn`'s guard (`Learn.accepts`); the fader or TAP ended the
+learn, or SHIFT did not latch → the learning branch of
+`MidiIO._handle`; the learn gone after the K2 refusal →
+`Learn.learn_control` took before refusing; no line in the footer →
+`Panel._footer` / the `"learn"` key of `Panel._message`.
+
+**66. A hand learn listens to one hand (plan 17 WP2 — the session's "wrong hand"; register row 60).**
+Headless: `uv run pytest -q tests/test_hands.py::test_a_hand_learn_listens_to_one_hand tests/test_hands.py::test_a_rearm_starts_a_fresh_baseline tests/test_learn.py::test_accepts_by_want`.
+Camera and box, calibrated (check 72). F1. Keep the left hand still in
+the box. With the right hand on the trackpad, CAMERA page, right-click
+Zoom → **Learn hand ▸ left**. Now bring the right hand back over the box
+and move it about freely for five seconds. *Pass:* nothing is learned;
+the footer reads "learning camera.zoom — move the left hand… (click to
+cancel)". Raise the left hand slowly: the footer says "learned
+camera.zoom ← hand left.y positions (into the preset; moved from
+master.gain)" — height onto zoom is the fader (check 76), and TUMBLE's
+own left-height row on the audio drive goes with it (check 77; one ⌘Z
+brings it back) — ROUTING lists the new route as "L height", and Zoom
+follows the left hand only. (Had a tilt travelled furthest the line
+would name it, "hand left.roll pushes +0.25" or the like: any
+left-hand axis is a pass.) ⌘Z, then repeat with **Learn hand ▸
+right** and the hands swapped. Then arm **Learn hand ▸ left**, click
+the footer's line to cancel, arm it again at once and keep both hands
+still: nothing is learned until the left hand moves. *Fail:* the right
+hand took it → the `moved` list in `HandsIO._learn`, or `Learn.accepts`
+on the address (`hand:left.` must be the prefix `HandsIO.address`
+writes); learned at once on arming → the baseline's key (`_learn_key`:
+the param, the want and `Learn.armed_n`); the wrong *axis* of the right
+hand, again and again → say so: that is fork 11 (register row 64), not a
+fail of this check.
+
+**67. A knob bump during a hand learn does its own job (plan 17 WP2, register row 60).**
+Headless: `uv run pytest -q tests/test_midi.py::test_a_knob_bump_during_a_hand_learn_does_its_own_job`.
+APC40 and camera, F5 (TRIP), hands out of the box. VIEW page,
+right-click Speed → **Learn hand ▸ right**. Turn D1 and press a clip pad
+of row 4. *Pass:* FX mix moves with D1 and the shape changes; the footer
+still reads "learning view.speed — move the right hand…"; ROUTING's desk
+has no new line and K2 still has Speed. Click a control on the on-screen
+desk: nothing happens (a hand learn is armed). Click the footer's red
+line: the learn is cancelled and the frame goes. *Fail:* D1 now drives
+Speed → `MidiIO._handle` did not ask `Learn.accepts`; the desk click
+mapped something → `ui_desk.click` / `Learn.learn_control`'s own
+`accepts`; the footer's line does not take the click → `Panel._footer`
+(`imgui.is_item_clicked` on a text item: no test clicks it).
+
+**68. The menu opens from the label and from every meter (plan 17 WP3).**
+Headless: `uv run pytest -q tests/test_ui_shell.py::test_a_rows_label_opens_its_params_menu tests/test_ui_shell.py::test_every_meter_has_the_band_select_menu tests/test_ui_shell.py::test_the_menu_offers_learn_desk_and_learn_hand`.
+Laptop alone. CAMERA page: right-click the word ZOOM. VIEW page:
+right-click the word BRIGHTNESS above its fader. ANALYZER page:
+right-click the fourth meter, choose Learn desk, then cancel it from the
+footer. BITMAP page: right-click the file's name. *Pass:* the first two
+open that param's menu at the mouse, the same menu its slider opens, and
+the value does not move; the meter opens `band.select`'s menu without
+selecting the band (a left click still selects it), and while it is
+armed every meter is framed red; the file's name offers no Learn item at
+all, over a dim "not modulatable". With the tracker off there is no
+"Learn hand" anywhere; on the HANDS page's own settings (Steadiness,
+say) there is "Learn desk" and never "Learn hand". Known and not a fail:
+a label a page draws by itself opens nothing (FX "blend", LOOKBACK's
+"from", "scene", "path"), and on the LFO page the two nudge chips' menu
+lists its items twice (audit U9). *Fail:* nothing opens on a label →
+`Panel._ctx_label` (it and the widget's `_ctx` must build the same id,
+`Panel._ctx_id`, inside the same id scope); a two-finger click on the
+trackpad does not count as a right-click → say so, with the page.
+
+**69. The desk from a step back (plan 17 WP4, register row 57; this is check 45 at the new size).**
+Headless: `uv run pytest -q tests/test_ui_desk.py::test_the_desk_takes_the_room_it_has tests/test_ui_desk.py::test_the_big_desk_labels_every_lit_control_and_never_scrolls tests/test_ui_desk.py::test_the_small_desk_draws_glyphs_only tests/test_ui_desk.py::test_a_controls_text`.
+F5 (TRIP). With the panel open the desk fills the column left of it,
+glyphs only. Press H (or DEVICE ON/OFF, B6, on the APC40, or the `big`
+chip at the right of the desk's header). *Pass:* the panel goes and the
+desk fills the control window; every lit control carries a name with its
+glyph small in the top-left corner, and a dark control only its glyph;
+the bank row reads TUMBLE … NOITA with TRIP lit green; the track knobs
+read Brightness, Speed, Instances, Pattern mix, Grid amp, Grid rate,
+Bitmap alpha, Zoom; the device knobs FX mix, Plasma level, Kaleidoscope
+segments, Kaleidoscope zoom, Zoom burst amount, Zoom burst glow, Hue
+cycle paint, Hue cycle spread; the clip-stop row reads "Save as a new
+preset" once across the bar; the names of the faders, the bank row, the
+band rows, Tap tempo and Shift are grey (the session's, the same on both
+layers) and the preset's are white. Nothing overlaps and the window has
+no scrollbar. Step back two paces and say which names you can read: at
+960 × 900 most are 13 px, about a dozen are 11 px (the duoprisms, the
+two Kaleidoscope knobs, Click-through, Control panel, audio.restart),
+five are cut with an ellipsis (three duoprisms, and ▲ ▼ as "Brightne…
++3 / −3"), and three buttons show an id (audio.play, audio.stop,
+audio.restart: they have no name of their own). Hover a control: "D3 ·
+fx.kaleido.segments · Kaleidoscope segments · preset layer", Akai's
+name, and what a click would do. With the APC40: press SHIFT — the
+header reads GLOBAL LAYER · SHIFT in red, K1–K5 read Steadiness,
+Response, Catch, Return, BPM, D1–D8 the band strip, clip rows 2–3 the
+scenes, and every preset control is dark. The `panel` chip (or H) brings
+the panel back. Labels beside the open panel need a desk about 620 px
+wide, so a control window about 1200 px wide: the panel is placed once,
+at launch, so after widening the window drag the panel to the right edge
+(or quit and relaunch: the size is remembered, check 61) — the desk left
+of it then carries its names. Press `/` with the panel hidden: the desk
+moves over to sit beside the cheat sheet. Hold the APC40 beside the
+screen: each control is where the drawing says (check 45's walk). *Fail:*
+names cut to nothing → `ui_desk.wrap` / `ui_desk.label_px`; the desk
+under the panel → `Panel._panel_x` not recorded (`Panel._draw`) or
+`ui_desk.room`; the desk and the cheat sheet overlapping →
+`Panel._sheet_w` / `room`; not readable at two paces at 960 × 900 → say
+so: the remedy is the control window's size (plan 16's placement), or
+`ui_desk.LABEL_PX`.
+
+**70. Click a control; click a param (plan 17 WP4, register rows 58 and 62).**
+Headless: `uv run pytest -q tests/test_ui_desk.py::test_a_click_picks_and_a_second_click_lets_go tests/test_ui_desk.py::test_a_pick_lets_go_by_itself tests/test_ui_desk.py::test_a_click_completes_an_armed_desk_learn tests/test_learn.py::test_pick_then_param_maps_through_the_learn tests/test_learn.py::test_a_pick_on_an_invariant_control_or_the_global_layer_maps_nothing tests/test_ui_shell.py::test_a_click_on_a_param_maps_the_picked_control tests/test_ui_shell.py::test_a_picked_control_dims_every_page_but_routing tests/test_ui_shell.py::test_the_footer_says_what_is_picked_and_a_click_lets_go tests/test_ui_routing.py::test_goto_scrolls_the_rows_child_to_the_controls_line`.
+**The first real clicks any of this gets.** APC40 in, F1, ROUTING page
+open. *(a)* Click D6 on the desk. *Pass:* D6 is framed red on the desk;
+ROUTING's rows scroll (the rows only, not the page) to D6's line — "D6
+unmapped — dark" or its row — framed red; ROUTING is **not** dimmed and
+the footer reads "D6 picked (20 s): click a param on any other page",
+counting down. *(b)* Open VIEW: the page is dimmed and **takes no
+input** — no slider moves, no menu opens; the rail and the footer still
+work. The footer reads "D6 picked (… s): click a param to put it here
+(click to let go)". Move the mouse over Speed: it is framed red, with
+"click: put D6 on Speed". Click it: "learned view.speed ← D6 (device
+knob 6) (into the preset); K2 let go" (cut in the footer; whole on its
+hover and on ROUTING's head); Speed did not move; the page is bright
+again; D6's ring on the device lights and turning it moves Speed; K2 is
+dark. ⌘Z: D6 is as it was and K2 has Speed. *(c)* The 20 seconds: click
+D6 again, open VIEW and take your hands off. The count runs down, the
+page comes back by itself and the footer says "D6 let go — no click for
+20 s". Any click anywhere in the window starts the count again. *(d)*
+Letting go by hand: pick D6 and click it again; pick it and click the
+ground between two controls; pick it and click the footer's line. Each
+lets go at once. *(e)* The big desk: press H, click D6. The panel comes
+back with VIEW dimmed and something under the mouse. **Click again
+without moving the mouse: nothing is mapped and nothing moves** — a
+click maps only once the mouse has moved about 12 px from where it
+picked. Now move to Speed and click: mapped. ⌘Z. *(f)* Click S2: the
+desk's header reads "S2 (track fader 2) is invariant (the session's):
+BASS Post-drive", VIEW is not dimmed, ROUTING scrolls to S2's line under
+"session". Latch SHIFT, click K1: "K1 (track knob 1) is on the global
+layer (the session's) — latch SHIFT off to map into the preset:
+Steadiness", not dimmed. *(g)* With SHIFT off: right-click Brightness →
+**Learn desk**, then click D7 on the desk instead of turning it:
+"learned view.bright ← D7 (device knob 7) (into the preset); K1 let go",
+and K1 goes dark (▲ and ▼ keep Brightness). ⌘Z. *(h)* Pull the APC40's
+cable and map D8 the same two ways: the same lines, the dot lit.
+Say, for the register: whether the dimming reads as "the page is
+waiting for a click" (it is imgui's plain disabled look), whether 20 s
+is too short to change page and find a param, and whether you would
+rather the click opened ROUTING. *Fail:* the click on Speed moved the
+slider → the disabled wrap in `Panel._draw`; nothing maps, or no frame
+under the mouse → `Panel._ctx_pick` (`allow_when_disabled`,
+`ui_desk.armed`); the second click in *(e)* mapped → `ui_desk.armed` /
+`PICK_MOVE`; the page never came back → `ui_desk.tick` (`PICK_S`);
+ROUTING's whole page scrolled → `set_scroll_here_y` called outside the
+`##routes` child (`ui_routing._mark_line`); a map landed under SHIFT or
+on a fader → `learn.blocked`.
+
+**71. The ROUTING filter (plan 17 WP5, register row 63).**
+Headless: `uv run pytest -q tests/test_ui_routing.py::test_the_filter_matches_glyph_param_and_source tests/test_ui_routing.py::test_a_filtered_page_draws_only_matching_lines_and_keeps_its_ids tests/test_ui_routing.py::test_the_filter_is_ui_state tests/test_ui_routing.py::test_typing_in_the_filter_is_imguis_keyboard_not_the_apps tests/test_ui_routing.py::test_a_line_in_use_is_not_filtered_away_under_the_hand tests/test_ui_routing.py::test_a_desk_click_clears_a_filter_that_has_the_keyboard`.
+**Nobody has typed in this field.** F7 (MANDALA), ROUTING page. Click
+the field that says "filter", on the counts line left of `+ route`, and
+type `kaleido`. *Pass:* only the kaleidoscope's lines remain — the two
+right-hand routes (R depth → `fx.kaleido.zoom`, R roll →
+`fx.kaleido.swirl`) and the desk lines D3 and D4; MACROS and SESSION
+each say "no row matches" unless a macro subscribes to one of them; the
+counts read "n of m rows" in red, m being every line of the page (some
+170); a × chip sits beside the field. While typing, no key does anything
+else (B, F, R, the number keys). Clear it and type `d3`: one desk line.
+Type `r roll`: that route. Type `lfo 1` on F5 (TRIP): LFO 1's route —
+and any route from LFO 2 would show too (its source is `lfo:1`); say if
+that matters. With `kaleido` typed, press F5: the filter is still there,
+now over TRIP's rows. With a filter set, press `+ route`: **the new
+route may not be shown** (it shows only if it matches); the red count is
+the only sign — say if that is a trap. Drag a filtered route's depth, or
+retype a macro's label so it stops matching: the line stays under your
+hand until you let go. Click the ×: every row is back. Type a filter
+again and, with the caret still in the field, click a control on the
+desk: the filter clears and the rows scroll to that control's line. Also
+try Esc, backspace and ⌘Z with the caret in the field and say what each
+did (none was tried). *Fail:* a row deleted with × was not the one shown
+→ the row's index (`_row`'s `k` must be its place in the unfiltered
+list); the page scrolls → the field added a line (`ui_routing.page`);
+the filter comes back after a desk click → `ui_routing._find_field`'s
+`unfind`; a key typed in the field also fired its shortcut → `app.Keys`
+(`typing`).
+
+## N. Plan 18 — the box, a learn's default, knob smoothing, two hands on the camera — added 2026-10-04
+
+Run on `finish-line` once plan 18 is merged into it (PRs #94 the
+interaction box, #98 knob smoothing, #100 what a hand Learn lands with,
+#97 `hands-orbit`). All of it needs the camera and the box; 74, 78 and
+79 also need the APC40. About 40 minutes. Whether the rig was calibrated
+on Oct 3 is not known, so **72 comes first** and everything after it
+assumes its box. Before the first launch: `cp -R ~/Hyperspace
+~/Hyperspace-2026-10-04` if that copy does not exist yet. None of this
+has been tried by a person or seen by a camera: it was shown by tests on
+synthetic hands and fake MIDI ports, pictures from a hidden window,
+offscreen renders, and scripted launches on a laptop with no camera and
+no desk (`18-hand-and-knob-feel.md` §7). Decision register rows 50–56
+are the calls these checks let you confirm or overturn. The Learn items
+named below ("Learn hand ▸ left / right") are plan 17's menu; its own
+checks are group M's.
+
+**72. Calibrate, and the box it draws (plan 18 WP1, register row 50; replaces the pass text of check 15).**
+Headless: `uv run pytest -q tests/test_hands.py::test_the_sweep_sets_the_box_with_its_margin_and_a_symmetric_x tests/test_hands.py::test_an_old_hands_json_reads_as_before_and_is_not_rewritten_at_load tests/test_hands.py::test_the_first_rewrite_of_an_old_file_keeps_a_backup tests/test_hands.py::test_two_still_hands_held_apart_are_not_a_sweep`.
+Launch, HANDS page. Before touching anything: if `~/Hyperspace/hands.json`
+existed, the page's ranges are the ones it held and the box view shows
+**no inner rectangle** (an old file has no box); under "feel &
+calibration" the line under the axis's range reads "box open".
+**Clear the camera's view of everyone but you**: the box is off for the
+whole sweep, so for those 20 seconds any hand the tracker sees performs
+and is counted into the new box. Open "feel & calibration", press
+**calibrate 20 s**, and move both hands through everything they should
+reach: side to side, low to high, near to far, and each tilt end to end.
+Each hand has to travel more than 12 cm in a direction for that
+direction to get a bound; two hands held still and apart do not count as
+a sweep. *Pass:* the note reads "calibrated 12 axes · box W × H × D mm
+· the old file kept as hands.json.bak-v1" (the last part only if the
+file existed before); the box view now has an inner rectangle and the
+height gauge a bracket; both hands' dots are inside it wherever you
+played; `hands.json` holds `"schema": "hyperspace.hands/2"` and a `box`;
+if the file existed before, `hands.json.bak-v1` beside it is the old
+one. Every axis still reaches both ends of its row (the box stands 40 mm
+outside what you swept, so a hand at an end stop is still in). *Fail:*
+"x open (not swept)" → sweep wider than 12 cm on that direction with one
+hand and run it again; "box left as it was (too few palm samples)" → the
+tracker barely saw a hand; no rectangle → `HandsIO._sweep_box`
+(`hands/core.py`); no `.bak-v1` → `HandsIO.save_ranges` / `_keep`; the
+rectangle hard against the frame's edge → the box is wider than the
+view's scale and its faces are drawn clamped (not a fail: say whether it
+reads).
+
+**73. A hand outside the box reads absent, and the edge does not flicker (plan 18 WP1, register rows 50–51).**
+Headless: `uv run pytest -q tests/test_hands.py::test_a_hand_outside_the_box_reads_absent_everywhere tests/test_hands.py::test_the_boxs_edge_has_hysteresis tests/test_hands.py::test_a_hand_re_entering_the_box_is_caught_not_jumped tests/test_hands.py::test_a_dip_in_confidence_does_not_evict_a_hand_in_the_edge_band`.
+PRESETS: `hands-play` (R height positions brightness). Right hand in the
+box, mid height. Move it slowly out through the right face. *Pass:* a
+centimetre or two past the rectangle its dot turns into a hollow, dim
+ring, the status line shows `R◌` (hover it: "tracked, but outside the
+box"), its axis rows dim, and brightness is back at its base that frame.
+Hold the hand right at the edge and wobble it a centimetre: brightness
+does not flicker between the two. Bring it back in: the row glides onto
+the hand (the catch), no jump. Repeat upward past the gauge's bracket
+and toward yourself past the near face. Say whether `◌` can be told from
+`●` and `○` at arm's length (it comes from another font and is smaller).
+*Fail:* still performing far outside → `HandsIO.box` is `None` (72) or
+the presence line in `poll`; flicker at the edge → `BOX_EDGE` /
+`HandsIO._in_box`; a jump on re-entry → `hands.catch` is 0, or the lane
+read `NaN` during the catch (`Follower.live`).
+
+**74. A hand on the desk does not perform; the ghost; reset (plan 18 WP1, register rows 50–51).**
+Headless: `uv run pytest -q tests/test_ghost.py::test_the_camera_frames_the_interaction_box_when_one_is_set tests/test_ghost.py::test_a_hand_outside_the_box_fades_out tests/test_hands.py::test_reset_ranges_opens_the_box`.
+With `hands-play` still loaded and the APC40 where it will stand for the
+show, reach for it and turn a knob with the right hand, the left hand
+out of the way. *Pass:* brightness moves only by the knob; the right
+hand's mark is a hollow ring (or gone) the whole time. If the dot is
+filled while your hand is on the desk, the desk stands inside the swept
+box: move it, or run 72 again keeping the sweep clear of it. With ghost
+hands on (HANDS page), a hand leaving the box fades out at the frame's
+edge and the frame shows the whole box. *Fail:* the ghost still drawn
+outside → `HandsIO._skeletons`; the frame not matching the box →
+`ghost.box_of`. Last: press **reset ranges**. *Pass:* the rectangle and
+the bracket go, the note reads "ranges back to the defaults, box open",
+and a hand is present wherever the tracker sees it, as before this plan.
+Then run 72 again to put the box back.
+
+**75. A tilt learned onto speed and rotation is gentle (plan 18 WP3, register row 52).**
+Headless: `uv run pytest -q tests/test_learn.py::test_a_centred_axis_learns_as_a_push_about_the_base_at_the_learn_depth tests/test_hands.py::test_learn_passes_the_axiss_centredness_and_the_sessions_depth tests/test_hands.py::test_learn_depth_changes_only_the_next_learn`.
+PRESETS: `hands-play` (it has no band rows on the rotation rates). VIEW
+page: right-click Speed → Learn hand ▸ right, and roll the right hand.
+Speed is already performed by L height, so the prompt asks: **Replace**.
+*Pass:* the ROUTING row reads "R roll pushes +0.25"; **with the hand
+level the speed is the preset's** (a learned roll reads the base when
+level); a full roll either way takes it to about half and about double,
+not to stop and flat out. Now the same onto a rotation rate (VIEW page,
+"rotation", the XY rate) with the right hand's yaw: level leaves the
+plane turning as the preset set it; a small turn nudges it. If rotation
+is still more than you want, lower **Learn depth** on the HANDS page
+under "feel & calibration" (0.10 is ±6.7× on a rate) and learn the right
+hand's pitch onto another rate (XZ): that row carries the new number,
+the two earlier rows kept their 0.25, and the learn line ends "moved
+from view.depth4" — the preset's own R pitch row went with it (77).
+Learning the same axis onto the same param again changes only its gate:
+it never changes a row's "pushes" / "positions" or its depth, so a
+full-range row you already have is tamed on ROUTING, or by Unbind and a
+fresh learn. *Fail:* "positions" on a tilt → `HandsIO._learn` is not
+passing `centred` (`hands/core.py`) or `Learn._row`'s table
+(`learn.py`); the param jumps when the hand enters → the row has a
+`rest` of its own.
+
+**76. Height is still the fader where that makes sense (plan 18 WP3, register row 52).**
+Headless: `uv run pytest -q tests/test_learn.py::test_a_one_sided_axis_on_a_one_sided_param_is_still_the_fader tests/test_learn.py::test_a_one_sided_axis_on_a_zero_centred_range_pushes_up_from_the_base tests/test_learn.py::test_a_discrete_target_keeps_the_position_row tests/test_learn.py::test_a_whole_number_param_keeps_the_position_row tests/test_learn.py::test_existing_rows_are_never_rewritten`.
+Still on `hands-play` as 75 left it. Learn the left hand's **height**
+onto a fader nothing performs yet (Pattern mix, say). *Pass:* "L height
+positions": low is none, high is full, the hand is the fader as before.
+Learn the left hand's height onto a rotation rate nothing performs (YZ):
+"L height pushes +0.25" (or your Learn depth), and the Pattern mix row
+is gone (77); with the hand low the plane turns as the preset set it,
+and raising it speeds it up; it never runs backwards at the bottom, and
+it can no longer stop the plane either. Learn any tilt onto a toggle
+(Faces): "positions", and tilting past the middle flips it. Learn a tilt
+onto Instances (a whole-number count): "positions" too. Load
+`hands-play`, `hands-pinch` and F1–F8 in turn and open ROUTING on each:
+every factory row reads as it did before this plan. *Fail:* a factory
+row changed → a preset file was regenerated or a load converted rows
+(neither may happen).
+
+**77. A learn moves the axis (plan 18 WP3, register row 53).**
+Headless: `uv run pytest -q tests/test_learn.py::test_a_learned_axis_drives_one_param tests/test_learn.py::test_a_learn_is_one_undo_step tests/test_learn.py::test_the_same_axis_again_only_refreshes_the_gate_whatever_the_op`.
+F1 (TUMBLE): right roll turns the XW plane. Learn right roll onto
+Brightness (Learn hand ▸ right, roll). *Pass:* the learn line says
+"learned view.bright ← … pushes +0.25 (into the preset; moved from
+rot.phase.XW)", ROUTING no longer has the XW row, and roll moves
+brightness only. **That was the factory preset's own row: a learn on a
+factory preset takes the preset's rows on that axis out**, switched-off
+ones too. ⌘Z once: the XW row is back and the brightness row is gone.
+Say here whether you would rather a learn *added* (the old row staying):
+that is register row 53, one condition in `Learn._place`.
+
+**78. Knob smoothing: judge 80 ms (plan 18 WP2, register row 54).**
+Headless: `uv run pytest -q tests/test_app_boundary.py::test_the_app_starts_with_knob_smoothing_at_80_ms_and_a_show_keeps_its_own tests/test_midi.py::test_smoothing_is_off_by_default_and_every_write_is_immediate tests/test_midi.py::test_a_smoothed_knob_arrives_in_a_straight_line_and_rests_on_the_detent tests/test_midi.py::test_the_ring_shows_where_the_knob_is_going`.
+APC40 in, F3 (FIELD) so a pan or zoom step is easy to see. SYSTEM page,
+under "midi": **Knob smoothing** reads "80 ms" and the show's dot is
+clean. Turn K8 (zoom) slowly. *Pass:* the zoom glides; when you stop it
+settles within a blink and the ring sits where your fingers left it; a
+fast spin neither lags behind noticeably nor overshoots; the ring never
+crawls backwards under your fingers and the next turn carries on from
+it. Drag Knob smoothing to "off" and turn K8 slowly again: the picture
+moves in steps, as it always did (and the show's dot lights: the number
+is the show's). **Judge 80 ms; turn it down or off on SYSTEM → Knob
+smoothing if a knob feels late**; try 50 and 200 ms and leave it where
+it feels right. That number is saved with the show. Move a fader (S1)
+and the crossfader: they glide too, and a fader that had not been picked
+up still does nothing until it reaches its value. Turn the cue knob
+(shapes) and press a clip button: unchanged, one step a click. *Fail:*
+the knob fights you or the ring runs behind → `MidiIO._ring_norm` /
+`_rebase` (and check 31 if the ring misbehaves with smoothing off too);
+a value that never settles → `MidiIO._glide`'s landing; "off" at launch
+on a show that never saved the number → `app._desk_table` running after
+`library.attach`. Set it to "off" and the desk is as it was before this
+plan.
+
+**79. A smoothed knob with everything else (plan 18 WP2, register row 54).**
+Headless: `uv run pytest -q tests/test_desk.py::test_a_layer_switch_leaves_a_glide_to_finish tests/test_desk.py::test_a_preset_load_stops_a_glide_on_a_performance_param_and_not_on_the_dim tests/test_undo.py::test_a_smoothed_knob_turn_is_one_step tests/test_undo.py::test_undo_during_a_glide_holds tests/test_midi.py::test_a_glide_on_a_hand_owned_param_moves_the_return_value tests/test_midi.py::test_a_load_from_a_pad_ends_a_glide_before_it_steps`.
+Knob smoothing at 250 ms (the maximum, to see it). Spin K1 (brightness)
+and press F5 at once, then the same with F5's pad on the desk. *Pass:*
+the look is TRIP's, with TRIP's brightness, not the knob's. Spin K1 and
+latch SHIFT at once: brightness still arrives; K1's ring now shows the
+global layer's value. Sweep K1 once, wait a second, ⌘Z: brightness is
+back where it was before the sweep in **one** press, and the footer
+names the value the sweep landed on. Sweep K1 and press ⌘Z while it is
+still moving: it goes back and stays back. With a hand owning brightness
+(`hands-play`, hand in the box), turn K1: the picture does not move;
+take the hand out and brightness is where the knob put it. Slide the
+crossfader to dim and press F2 mid-slide: the dim finishes arriving.
+*Fail:* the knob's value winning over a load → `redraw(load=True)`'s
+rule, or `poll`'s order (`_glide` after `_follow_table`); two presses to
+undo one sweep → `SLEW_MAX_S` against `undo.SETTLE_S`. Put Knob
+smoothing back where 78 left it.
+
+**80. Two hands on the camera (plan 18 WP4, register row 56).**
+Headless: `uv run pytest -q tests/test_presets.py::test_hands_orbit_is_five_pushes_onto_the_camera tests/test_presets.py::test_an_absent_or_level_hand_leaves_the_orbit_camera_alone tests/test_presets.py::test_each_orbit_axis_moves_its_camera_param_as_its_row_says`.
+PRESETS: `hands-orbit` (in the list, on no F-key). Right hand in, level,
+mid box: nothing moves. Slide it left and right: the camera orbits,
+about a quarter turn each way. Tip the fingers up: it looks down onto
+the shape. Left hand: side to side and reaching in pan; raising it zooms
+in, to a little over double at the top (2.2×). Take both hands out: the
+camera is back where the mouse left it. *Pass:* each move does the one
+thing, a still hand is calm, and it can be taught in a sentence. **Judge
+the directions** — nobody has: does a hand going right turn the scene
+the way you expect, does reaching in pan up or down, is fingers-up
+"look down" — and **judge the zoom**: its depth is 0.12 because the
+plan's 0.3 (7.4× at the top) put the frame inside the shape, near black,
+in an offscreen picture; 0.12 has not been felt either. Note any depth
+or sign that wants changing (the five numbers in
+`preset.hands_orbit_routes`), and whether this is the "orbit" you meant:
+the version where the two hands turn the scene between them needs a new
+axis and was not built (register row 56). Press R with a hand in the
+box and say whether the camera resets (a review suspected it does not;
+headless it did). If the preset is not wanted, hide it (plan 19).
 
 ## What this list does not ground
 

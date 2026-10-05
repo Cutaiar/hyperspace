@@ -7,6 +7,7 @@ make and checks that every state the strip can be in draws.
 """
 
 import re
+from contextlib import contextmanager
 from types import SimpleNamespace
 
 import pytest
@@ -40,8 +41,11 @@ class FakeLeap:
         pass
 
 
-@pytest.fixture()
-def rig(tmp_path):
+@contextmanager
+def build_rig(tmp_path, renderer=None):
+    """The panel with everything app.py gives it, on a headless imgui
+    context. With a `renderer` the registry's `dream.*` and `fx.*` are its
+    own states and the panel draws over it, as in the app."""
     ctx = imgui.create_context()
     pctx = implot.create_context()      # the band editor plots (ui_bands.py)
     io = imgui.get_io()
@@ -54,7 +58,9 @@ def rig(tmp_path):
     audio = SimpleNamespace(chain=chain, on=False, mode="", error="", label="", sr=48000.0)
     view = ViewState()
     lib = Library(tmp_path, period=0.0)
-    reg = build_registry(view, control, audio, lib.project)
+    live = {} if renderer is None else {"dream": renderer.lookback.state,
+                                        "fx": renderer.fx.state}
+    reg = build_registry(view, control, audio, lib.project, **live)
     lib.on_layout("band", control.apply_layout)
     # the rig has everything app.py gives the panel, so every page is
     # measured full: a hands setup over a tracker that sees no hands, an
@@ -67,12 +73,17 @@ def rig(tmp_path):
     lfo.register(reg, lfos, clock)
     output = Output(None, None)
     output.register(reg)
+    # the table before attach, as app.main reads it: the desk's session
+    # param (`desk.slew`) is the table's and exists when the show lands
+    table = Bindings.factory(path=tmp_path / "bindings.json")
+    routing.register_desk(reg, table)
     lib.attach(reg)
-    panel = Panel(control, audio, view, bank=lib.project, registry=reg, library=lib)
+    panel = Panel(control, audio, view, renderer=renderer, bank=lib.project, registry=reg,
+                  library=lib)
     panel.clock, panel.lfos = clock, lfos
     panel.hands, panel.hand_settings = hands_io, settings
     panel.output = output
-    router = Router(reg, Bindings.factory(path=tmp_path / "bindings.json"))
+    router = Router(reg, table)
     router.table.set_routes(routing.legacy6_routes())   # a house preset's performer rows
     Presets(lib, reg, router)           # the bank and the preset strip, as app.py builds them
     panel.router = router
@@ -82,6 +93,12 @@ def rig(tmp_path):
     finally:
         implot.destroy_context(pctx)
         imgui.destroy_context(ctx)
+
+
+@pytest.fixture()
+def rig(tmp_path):
+    with build_rig(tmp_path) as r:
+        yield r
 
 
 def frame(panel, page=None):
@@ -279,6 +296,126 @@ def test_every_page_fits_the_control_window(rig, monkeypatch):
     over = _page_scroll(rig, monkeypatch)
     assert set(over) == set(PAGE_KEYS)
     assert {k: v for k, v in over.items() if v > 0} == {}
+
+
+class StandInWorker:
+    """In the dream worker's place on the look-back page: it answers each
+    submit with the frame it was given, one submit late (so a dream frame
+    shows and its thumbnail is drawn), and says `line` as its status."""
+
+    def __init__(self, line: str):
+        self.line = line
+        self.pending = self.done = None
+
+    def submit(self, frame, frame_index):
+        self.done, self.pending = self.pending, (frame.copy(), frame_index)
+
+    def latest(self):
+        return self.done
+
+    def status(self) -> str:
+        return self.line
+
+
+# the worker's status at its shortest, and with everything it can say at
+# once (dream.DreamWorker.status: drops, NaN resets, the clamp, and an
+# error cut at 120 characters); and app.dream_error's line with no worker
+WORKER_SHORT = "mps · alias · conv3_3 fp32 · 11.3 ms · 1 behind"
+WORKER_LONG = ("cuda · staging · inception4e fp16 · 1234.5 ms · 12 behind · 3456 dropped · "
+               "12 nan reset(s) · step clamped · " + ("RuntimeError: " + "out of memory " * 9)[:120])
+NO_TORCH = ("dream worker off: torch is not installed — run `uv sync`, "
+            "then launch with `uv run hyperspace`")
+
+
+def lookback_page_room(tmp_path, monkeypatch) -> dict[str, tuple[float, float]]:
+    """The look-back page drawn as the app draws it — over a real offscreen
+    `Renderer` whose look-back has captured eight echoes, so the thumbnail
+    row is its 48 px row of images and not the one line of text a page gets
+    with no renderer — in every state that changes its height. Returns
+    state → (scroll range, room left under the last row), in pixels at the
+    control size."""
+    moderngl = pytest.importorskip("moderngl")
+    from hyperspace.render import Renderer
+
+    try:
+        gl = moderngl.create_context(standalone=True)
+    except Exception as e:  # noqa: BLE001 — any GL failure means skip
+        pytest.skip(f"no standalone GL context available: {e}")
+    w, h = 1280, 820
+    tex = gl.texture((w, h), 4)
+    fbo = gl.framebuffer(color_attachments=[tex])
+    renderer = Renderer(gl)
+    lb, t = renderer.lookback, [0.0]
+    room: dict[str, tuple[float, float]] = {}
+    try:
+        with build_rig(tmp_path, renderer) as rig:
+            imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+            panel, reg, view = rig.panel, rig.reg, rig.view
+            view.shape = 3
+            got: list[tuple[float, float]] = []
+            draw = Panel._page_lookback
+
+            def measured(self, dt):
+                draw(self, dt)
+                got.append((imgui.get_scroll_max_y(),
+                            imgui.get_content_region_avail().y + imgui.get_style().item_spacing.y))
+            monkeypatch.setattr(Panel, "_page_lookback", measured)
+
+            def render(n: int) -> None:
+                for _ in range(n):
+                    t[0] += 1 / 60
+                    view.ang[3] += 0.03
+                    fbo.use()
+                    gl.viewport = (0, 0, w, h)
+                    renderer.draw(view, w, h, t_now=t[0])
+
+            def measure(state: str) -> None:
+                render(4)
+                for _ in range(3):          # the window settles its size, then its content
+                    frame(panel, "lookback")
+                room[state] = got[-1]
+
+            reg["dream.on"].set(True)
+            assert reg["dream.echoes"].value == 8 and lb.state.on
+            lb.source = StandInWorker(WORKER_SHORT)
+            render(40)
+            assert len(lb.thumbnails()) == 8 and lb.dream_frame >= 0 and lb.atlas is not None
+            measure("on, worker")
+            lb.source.line = WORKER_LONG
+            measure("on, worker saying everything")
+            lb.error = "_common.glsl:1: syntax error"     # the post pass on its fallback
+            measure("on, worker saying everything, GLSL error")
+            lb.error = ""
+            reg["dream.tint_from"].set(1)                 # the tint from the scene
+            measure("on, tint from the scene")
+            reg["dream.tint_from"].set(0)
+            lb.source = None
+            panel.dream_error = NO_TORCH
+            measure("on, no worker: torch missing")
+            panel.dream_error = ""
+            measure("on, no worker")
+            reg["dream.on"].set(False)
+            measure("off, no worker")
+            lb.source = StandInWorker(WORKER_LONG)
+            measure("off, worker saying everything")
+    finally:
+        fbo.release()
+        tex.release()
+        gl.release()
+    return room
+
+
+def test_the_look_back_page_fits_with_thumbnails(tmp_path, monkeypatch):
+    """Plan 20 WP4: the look-back page does not scroll in the app. The page
+    test above draws it with no renderer, where the thumbnail row is a line
+    of text; with a renderer and echoes it is a 48 px row of images, and the
+    page as it was overflowed by 23 px there. Measured here with a real
+    `Renderer` that has captured eight echoes, a source with a status line
+    and a dream frame shown, the dream on and off, and the worker's status
+    at its longest."""
+    room = lookback_page_room(tmp_path, monkeypatch)
+    assert len(room) == 8
+    assert {k: v for k, v in room.items() if v[0] > 0 or v[1] < 0} == {}
 
 
 def test_the_dim_is_first_on_output_and_the_footer_says_so_while_dimmed(rig, monkeypatch):
@@ -772,3 +909,735 @@ def test_every_panel_attribute_the_frame_reads_is_a_real_panels(rig):
     missing = sorted(n for n in names if not hasattr(rig.panel, n))
     assert not missing, f"app.frame reads h.panel.{missing} that Panel never sets"
     assert rig.panel.restart_requested is False
+
+
+# ------------------------------------------------- plan 17: the right-click menu
+
+def menu(panel, monkeypatch, pid: str, page: str, click: str | None = None
+         ) -> tuple[list[str], list[str]]:
+    """One frame of `page` with the context menu of `pid` open: (the lines
+    of text it draws, its clickable items). A submenu is listed as
+    "Unbind ▸" and its items as "Unbind/both"; every submenu is opened.
+    `click` names the one item that reports a click. Nothing here has a
+    mouse: the popup's `begin` is answered for it, so its contents draw
+    into the page's own window."""
+    lines: list[str] = []
+    items: list[str] = []
+    st = {"open": False, "path": []}
+    real = {n: getattr(imgui, n) for n in (
+        "begin_popup_context_item", "end_popup", "menu_item_simple", "begin_menu", "end_menu",
+        "text", "text_disabled", "text_colored")}
+
+    def begin_ctx(str_id=None, *a, **k):
+        if str_id == f"##ctx.{pid}" and not st["open"]:
+            st["open"] = True
+            return True
+        return False
+
+    def end_popup():
+        if st["open"]:
+            st["open"] = False
+        else:
+            real["end_popup"]()
+
+    def item(label, *a, **k):
+        if not st["open"]:
+            return real["menu_item_simple"](label, *a, **k)
+        name = "/".join([*st["path"], label])
+        items.append(name)
+        return name == click
+
+    def begin_menu(label, *a, **k):
+        if not st["open"]:
+            return real["begin_menu"](label, *a, **k)
+        items.append("/".join([*st["path"], label]) + " ▸")
+        st["path"].append(label)
+        return True
+
+    def end_menu():
+        if st["open"]:
+            st["path"].pop()
+        else:
+            real["end_menu"]()
+
+    def text(name):
+        def draw(*a):
+            if st["open"]:
+                lines.append(a[-1])
+            return real[name](*a)
+        return draw
+
+    with monkeypatch.context() as m:
+        m.setattr(imgui, "begin_popup_context_item", begin_ctx)
+        m.setattr(imgui, "end_popup", end_popup)
+        m.setattr(imgui, "menu_item_simple", item)
+        m.setattr(imgui, "begin_menu", begin_menu)
+        m.setattr(imgui, "end_menu", end_menu)
+        for name in ("text", "text_disabled", "text_colored"):
+            m.setattr(imgui, name, text(name))
+        frame(panel, page)
+    return lines, items
+
+
+def _learn_over(rig):
+    from hyperspace.learn import Learn
+
+    rig.panel.learn = Learn(rig.reg, rig.router.table, lane=rig.router.lane)
+    return rig.panel.learn
+
+
+def test_the_menu_lists_and_unbinds_with_no_midi_adapter(rig, monkeypatch):
+    """Plan 17 WP1: the menu reads the table, never the adapter. With
+    `panel.midi` None the desk row's line is drawn with its glyph and
+    Akai's name, each route has its line, and one Unbind removes what the
+    lines list: a plain item with one kind bound, a submenu (desk / route /
+    both) with both. "Unbind hand" and "performed by …" are gone."""
+    panel, table = rig.panel, rig.router.table
+    lrn = _learn_over(rig)
+    assert panel.midi is None
+    # Brightness: a knob and two step buttons, no route → a plain Unbind
+    lines, items = menu(panel, monkeypatch, "view.bright", "view")
+    assert lines[0] == "VIEW.BRIGHT"
+    assert lines[1:] == ["K1 (track knob 1)", "B16 (▲) · step +3", "B17 (▼) · step -3"]
+    assert "Unbind" in items and not any("▸" in i and "Unbind" in i for i in items)
+    assert not any(i.startswith("Unbind hand") for i in items)
+    # Speed: its knob, a hand route and — disabled — an LFO route → a submenu
+    table.add(Binding("hand:8", "view.speed", "position"))
+    table.add(Binding("lfo:0", "view.speed", "push", 0.5, enabled=False))
+    rig.router.labels["hand"] = ["L x", "L depth", "L height", "L pitch", "L roll", "L yaw",
+                                 "R x", "R depth", "R height"]
+    lines, items = menu(panel, monkeypatch, "view.speed", "view")
+    assert lines[1] == "K2 (track knob 2)"
+    assert lines[2].startswith("R height positions") and lines[3].endswith("(off)")
+    assert not any(s.startswith("performed by") for s in lines)
+    unbind = [i for i in items if i.startswith("Unbind")]
+    assert unbind[0] == "Unbind ▸" and unbind[1] == "Unbind/desk — K2"
+    assert unbind[2].startswith("Unbind/route — R height, ") and unbind[3] == "Unbind/both"
+    # by kind, from the submenu
+    menu(panel, monkeypatch, "view.speed", "view", click="Unbind/desk — K2")
+    assert not [b for b in table.desk() if b.target == "view.speed"]
+    assert len(table.routes_to("view.speed")) == 2 and lrn.last.startswith("unbound view.speed")
+    lines, items = menu(panel, monkeypatch, "view.speed", "view")
+    assert "Unbind" in items and "Unbind ▸" not in items       # routes only now: plain
+    menu(panel, monkeypatch, "view.speed", "view", click="Unbind")
+    assert not table.routes_to("view.speed")
+    lines, items = menu(panel, monkeypatch, "view.speed", "view")
+    assert lines == ["VIEW.SPEED"] and not any(i.startswith("Unbind") for i in items)
+    # both at once
+    table.add(Binding("lfo:1", "view.bright", "push", 0.2))
+    menu(panel, monkeypatch, "view.bright", "view", click="Unbind/both")
+    assert not [b for b in table.bindings if b.target == "view.bright" and (b.is_midi or b.op == "push")]
+    assert "K1 (track knob 1)" in lrn.last and lrn.last.startswith("unbound view.bright from ")
+    # a panel with no learn object: the lines, and no Unbind
+    table.bindings.append(Binding("cc:0:48", "view.bright", "abs", layer="preset"))
+    panel.learn = None
+    lines, items = menu(panel, monkeypatch, "view.bright", "view")
+    assert "K1 (track knob 1)" in lines and "no learn" in lines
+    assert not any(i.startswith("Unbind") for i in items)
+
+
+def test_unbind_is_not_offered_on_a_session_only_param(rig, monkeypatch):
+    """A fader's param is the session's (D6): its row's line reads
+    "invariant", dim, and there is no Unbind item — none that could only
+    refuse. A route on it brings a plain Unbind for the route alone."""
+    panel, table = rig.panel, rig.router.table
+    _learn_over(rig)
+    lines, items = menu(panel, monkeypatch, "master.gain", "audio")
+    assert "SM (MASTER fader) · invariant" in lines
+    assert not any(i.startswith("Unbind") for i in items)
+    session = [b.to_json() for b in table.midi() if b.layer != "preset"]
+    table.add(Binding("lfo:0", "master.gain", "push", 0.1))
+    lines, items = menu(panel, monkeypatch, "master.gain", "audio", click="Unbind")
+    assert "Unbind" in items and "Unbind ▸" not in items
+    assert not table.routes_to("master.gain")
+    assert [b.to_json() for b in table.midi() if b.layer != "preset"] == session
+
+
+def _learn_items(items: list[str]) -> list[str]:
+    return [i for i in items if i.startswith(("Learn", "Cancel"))]
+
+
+def test_the_menu_offers_learn_desk_and_learn_hand(rig, monkeypatch):
+    """Plan 17 WP2, fork 5: the one "Learn" is **Learn desk** and **Learn
+    hand ▸ left / right**. With a tracker: both; without: Learn desk only;
+    a param a hand cannot drive (not modulatable): no hand item; a file
+    path: neither. Each arms the learn with what it waits for; armed, the
+    menu reads the hint and offers Cancel. §3's menu count holds."""
+    panel = rig.panel
+    lrn = _learn_over(rig)
+    assert panel.hands is not None and panel.midi is None
+    _, items = menu(panel, monkeypatch, "view.speed", "view")
+    assert _learn_items(items) == ["Learn desk", "Learn hand ▸", "Learn hand/left",
+                                   "Learn hand/right"]
+    assert "Learn" not in items
+    # §3: unmapped, a rig with hands → Learn desk · Learn hand ▸ · Route a lane here…
+    rig.router.table.unbind("view.speed")
+    _, items = menu(panel, monkeypatch, "view.speed", "view")
+    assert [i for i in items if "/" not in i] == ["Learn desk", "Learn hand ▸",
+                                                  "Route a lane here…"]
+    # each arms with its want
+    menu(panel, monkeypatch, "view.speed", "view", click="Learn desk")
+    assert (lrn.learning, lrn.want) == ("view.speed", "desk")
+    lines, items = menu(panel, monkeypatch, "view.speed", "view")
+    assert _learn_items(items) == ["Cancel learn"]
+    assert "click a control on the desk diagram…" in lines   # no adapter: the on-screen desk
+    panel.midi = SimpleNamespace(table=rig.router.table)
+    lines, _ = menu(panel, monkeypatch, "view.speed", "view")
+    assert "turn a knob or press a button on the desk, or click one on the diagram…" in lines
+    panel.midi = None
+    menu(panel, monkeypatch, "view.speed", "view", click="Cancel learn")
+    assert lrn.learning is None and lrn.want is None
+    for side in ("left", "right"):
+        menu(panel, monkeypatch, "view.speed", "view", click=f"Learn hand/{side}")
+        assert (lrn.learning, lrn.want) == ("view.speed", f"hand:{side}")
+        lines, _ = menu(panel, monkeypatch, "view.speed", "view")
+        assert f"move the {side} hand…" in lines
+        lrn.arm(None)
+    # a bare learn (no want) keeps the old words
+    lrn.arm("view.speed")
+    assert panel._learn_hint() == "move a hand…"
+    lrn.arm(None)
+    # not modulatable: a knob may still set it, a hand may not
+    assert not rig.reg["dream.gap"].modulatable
+    _, items = menu(panel, monkeypatch, "dream.gap", "lookback")
+    assert _learn_items(items) == ["Learn desk"]
+    # a file path: nothing to learn (a knob cannot set a path)
+    assert rig.reg["view.bmp_file"].kind is Kind.TEXT
+    lines, items = menu(panel, monkeypatch, "view.bmp_file", "bitmap")
+    assert items == [] and "not modulatable" in lines
+    # no tracker: Learn desk only — §3: Learn desk · Route a lane here…
+    panel.hands = None
+    _, items = menu(panel, monkeypatch, "view.speed", "view")
+    assert items == ["Learn desk", "Route a lane here…"]
+    # a rig whose axes are one hand's: that side only
+    panel.hands = SimpleNamespace(axes=[SimpleNamespace(side="right")])
+    assert panel._hand_sides() == ["right"]
+
+
+def test_the_footer_says_what_a_learn_waits_for_and_what_it_did(rig, monkeypatch):
+    """Plan 17 WP2: an armed learn has the footer's message slot on every
+    page — what it waits for, in red — and what a learn or an unbind did
+    shows there for `MESSAGE_S` like the undo's line: a refusal in the
+    warning colour, also while the learn it refused stays armed, and the
+    same refusal twice shows twice."""
+    from hyperspace import apc40, ui
+
+    panel, table = rig.panel, rig.router.table
+    lrn = _learn_over(rig)
+    clock = [1000.0]
+    monkeypatch.setattr(ui.time, "monotonic", lambda: clock[0])
+    shown: list[tuple[str, tuple]] = []
+    colored = imgui.text_colored
+
+    def text_colored(col, s):
+        if s.startswith("·  "):
+            shown.append((s, (round(col.x, 3), round(col.y, 3), round(col.z, 3))))
+        return colored(col, s)
+    monkeypatch.setattr(imgui, "text_colored", text_colored)
+
+    def footer(page=None) -> list[tuple[str, tuple]]:
+        shown.clear()
+        frame(panel, page)
+        return list(shown)
+
+    def rgb(c) -> tuple:
+        return (round(c.x, 3), round(c.y, 3), round(c.z, 3))
+    assert footer("view") == []                              # nothing armed, nothing said
+    short = min((p.id for p in rig.reg), key=len)            # room for the whole line
+    lrn.arm(short, "hand:left")
+    line = f"·  learning {short} — move the left hand… (click to cancel)"
+    for page in ("view", "routing", "presets", "system", "hands"):
+        clock[0] += 0.5
+        assert footer(page) == [(line, rgb(ui.RED))], page
+    clock[0] += 10 * ui.MESSAGE_S                            # it never times out
+    assert footer("lfo") == [(line, rgb(ui.RED))]
+    # a longer id: the line keeps what it waits for; "click to cancel" is on the hover
+    lrn.arm("fx.kaleido.segments", "hand:right")
+    assert footer("lfo") == [("·  learning fx.kaleido.segments — move the right hand…",
+                              rgb(ui.RED))]
+    # a refusal that leaves it armed: the warning for MESSAGE_S, then the armed line again
+    lrn.arm("view.depth4", "desk")
+    table.set_layer("global")
+    assert not lrn.learn_control("cc:0:48", apc40) and lrn.learning == "view.depth4"
+    (said,) = footer("view")
+    assert said[0].startswith("·  K1 (track knob 1) is on the global layer")
+    assert said[1] == rgb(ui.WARN)
+    clock[0] += ui.MESSAGE_S + 0.1
+    (said,) = footer("faces")
+    assert said[0].startswith("·  learning view.depth4 — ") and said[1] == rgb(ui.RED)
+    assert not lrn.learn_control("cc:0:48", apc40)           # the same words again: shown again
+    assert footer("faces")[0][1] == rgb(ui.WARN)
+    # it lands: said in the faint colour for MESSAGE_S, then nothing
+    table.set_layer("preset")
+    clock[0] += ui.MESSAGE_S + 0.1
+    assert lrn.learn_control("cc:0:48", apc40) and lrn.learning is None
+    (said,) = footer("audio")
+    assert said[0].startswith("·  learned view.depth4 ← K1 (track knob 1)")
+    assert said[1] == rgb(ui.FAINT)
+    clock[0] += ui.MESSAGE_S + 0.1
+    assert footer("audio") == []
+    # an unbind's line, and its refusal, the same way
+    lrn.unbind("view.depth4", name=panel._row_name)          # as the menu's item calls it
+    assert footer("view")[0][0].startswith("·  unbound view.depth4 from K1 (track knob 1)")
+    clock[0] += 1.0
+    lrn.unbind("master.gain")
+    (said,) = footer("output")
+    assert "invariant" in said[0] and said[1] == rgb(ui.WARN)
+    # a panel with no learn object still draws its footer
+    panel.learn = None
+    clock[0] += ui.MESSAGE_S + 0.1
+    assert footer("view") == []
+
+
+# ------------------------------------------- plan 17 WP3: where the menu opens
+
+def _mouse(panel, x, y, button=None, down=False):
+    """One frame with the mouse at (x, y), a button going down or up."""
+    io = imgui.get_io()
+    io.add_mouse_pos_event(x, y)
+    if button is not None:
+        io.add_mouse_button_event(button, down)
+    frame(panel)
+
+
+def _click(panel, rect, button=0):
+    x, y = (rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2
+    _mouse(panel, x, y)
+    _mouse(panel, x, y, button, True)
+    _mouse(panel, x, y, button, False)
+    frame(panel)
+
+
+def _popups(monkeypatch) -> tuple[list[str], list[str]]:
+    """(the ids of the context popups that are open, the items they draw),
+    appended to as frames draw: the real `begin_popup_context_item`, so a
+    popup is open only because a real right-click opened it."""
+    opened: list[str] = []
+    items: list[str] = []
+    begin, item = imgui.begin_popup_context_item, imgui.menu_item_simple
+
+    def begin_ctx(str_id=None, *a, **k):
+        hit = begin(str_id, *a, **k)
+        if hit:
+            opened.append(str_id)
+        return hit
+
+    def menu_item(label, *a, **k):
+        items.append(label)
+        return item(label, *a, **k)
+    monkeypatch.setattr(imgui, "begin_popup_context_item", begin_ctx)
+    monkeypatch.setattr(imgui, "menu_item_simple", menu_item)
+    return opened, items
+
+
+def test_a_rows_label_opens_its_params_menu(rig, monkeypatch):
+    """Plan 17 WP3: a right-click on a row's label — the dummy `_row` and
+    `half` draw, the label line of a `_fader` — opens the menu the widget
+    beside it draws: `open_popup_on_item_click` with the id `_ctx` uses,
+    in the same id scope. Real mouse events over the real Panel: the popup
+    that opens is the param's own, with its items, and nothing moved."""
+    panel, reg = rig.panel, rig.reg
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)   # the desk clear of the panel
+    _learn_over(rig)
+    labels: dict[str, tuple] = {}
+    real = Panel._ctx_label
+
+    def ctx_label(self, a):
+        lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        labels[a.id] = (lo.x, lo.y, hi.x, hi.y)
+        return real(self, a)
+    monkeypatch.setattr(Panel, "_ctx_label", ctx_label)
+    opened, items = _popups(monkeypatch)
+    for page, pid in (("camera", "camera.zoom"),      # a `_row`
+                      ("view", "view.bright"),        # a `_fader`
+                      ("audio", "master.gain"),       # a fader whose row is the session's
+                      ("lfo", "tempo.bpm"),           # a `half`, in a table cell
+                      ("lookback", "dream.tint_hue")):
+        labels.clear()
+        frame(panel, page)
+        frame(panel)
+        assert pid in labels, f"{pid}: no label on {page}"
+        rect = labels[pid]
+        assert rect[2] - rect[0] > 8 and rect[3] - rect[1] > 8
+        before = reg[pid].base
+        opened.clear()
+        items.clear()
+        _click(panel, rect, button=1)
+        assert opened and set(opened) == {f"##ctx.{pid}"}, (pid, opened)
+        assert "Learn desk" in items and "Route a lane here…" in items
+        assert reg[pid].base == before
+        # a left click elsewhere closes it; a left click on the label opens nothing
+        _click(panel, (2, 2, 4, 4))
+        opened.clear()
+        _click(panel, rect, button=0)
+        assert opened == [] and reg[pid].base == before
+
+
+def test_every_meter_has_the_band_select_menu(rig, monkeypatch):
+    """Plan 17 WP3: one `_ctx` per meter — it was meter 0 only — each
+    under its own key, so no two popups on the page share an id (the band
+    combo's is the bare one). A real right-click on the fourth meter opens
+    that meter's menu and selects nothing."""
+    panel, reg = rig.panel, rig.reg
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    _learn_over(rig)
+    n = rig.chain.n
+    keys: list[str] = []
+    rects: dict[str, tuple] = {}
+    real = Panel._ctx
+
+    def ctx(self, a, key="", extra=None):
+        if a.id == "band.select":
+            keys.append(key)
+            lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+            rects[key] = (lo.x, lo.y, hi.x, hi.y)
+        return real(self, a, key, extra)
+    monkeypatch.setattr(Panel, "_ctx", ctx)
+    frame(panel, "analyzer")
+    keys.clear()
+    frame(panel)
+    meters = [f".{i}" for i in range(n)]
+    assert [k for k in keys if k] == meters
+    assert len(keys) == len(set(keys)), f"two menus share an id: {keys}"
+    opened, items = _popups(monkeypatch)
+    sel = reg["band.select"].base
+    assert sel != 3
+    _click(panel, rects[".3"], button=1)
+    assert opened and set(opened) == {"##ctx.band.select.3"}
+    assert "Learn desk" in items
+    assert reg["band.select"].base == sel             # a right-click selects nothing
+    # armed from a meter, the learn's red frame is on the meters too
+    framed: list[str] = []
+    frame_ = Panel._learn_frame
+    monkeypatch.setattr(Panel, "_learn_frame",
+                        lambda self, p: (framed.append(p.id), frame_(self, p))[1])
+    frame(panel)
+    assert framed.count("band.select") >= n
+    _click(panel, (2, 2, 4, 4))
+    _click(panel, rects[".3"])                        # the left click still selects
+    assert reg["band.select"].base == 3
+
+
+# ------------------------------------------- plan 17 WP4: click a control, then a param
+
+def _control(glyph: str):
+    from hyperspace import apc40
+
+    return next(c for c in apc40.LAYOUT if c.glyph == glyph)
+
+
+def _depths(monkeypatch) -> dict[str, tuple[int, bool]]:
+    """Each page as it is entered: {key: (how many `begin_disabled` are
+    open around it, `Panel._picking`)}."""
+    depth = [0]
+    seen: dict[str, tuple[int, bool]] = {}
+    begin, end = imgui.begin_disabled, imgui.end_disabled
+
+    def begin_disabled(*a, **k):
+        depth[0] += 1
+        return begin(*a, **k)
+
+    def end_disabled():
+        depth[0] -= 1
+        return end()
+    monkeypatch.setattr(imgui, "begin_disabled", begin_disabled)
+    monkeypatch.setattr(imgui, "end_disabled", end_disabled)
+    for key in PAGE_KEYS:
+        draw = getattr(Panel, f"_page_{key}")
+
+        def page(self, dt, _draw=draw, _key=key):
+            seen[_key] = (depth[0], self._picking)
+            return _draw(self, dt)
+        monkeypatch.setattr(Panel, f"_page_{key}", page)
+    return seen
+
+
+def test_a_picked_control_dims_every_page_but_routing(rig, monkeypatch):
+    """While a mappable control is picked `Panel._draw` draws the open
+    page inside `begin_disabled` — dimmed, no widget taking a click — for
+    every page but ROUTING; and never otherwise: nothing picked, an
+    invariant control picked, the global layer up, a learn armed."""
+    from hyperspace import ui_desk
+
+    panel, table = rig.panel, rig.router.table
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    lrn = _learn_over(rig)
+    seen = _depths(monkeypatch)
+
+    def pages() -> dict[str, tuple[int, bool]]:
+        seen.clear()
+        for key in PAGE_KEYS:
+            frame(panel, key)
+        assert set(seen) == set(PAGE_KEYS)
+        return dict(seen)
+    idle = {k: (0, False) for k in PAGE_KEYS}
+    assert pages() == idle
+    lrn.pick(_control("D3").source)
+    dimmed = pages()
+    assert dimmed.pop("routing") == (0, False)
+    assert dimmed == {k: (1, True) for k in PAGE_KEYS if k != "routing"}
+    assert panel._picking is False                           # only while the page draws
+    lrn.pick(_control("S3").source)                          # invariant: picked for the look only
+    assert ui_desk.picked(panel) is not None and pages() == idle
+    lrn.pick(_control("D3").source)
+    table.set_layer("global")                                # the session's layer: nothing maps
+    assert pages() == idle
+    table.set_layer("preset")
+    assert pages()["view"] == (1, True)
+    lrn.arm("view.speed", "desk")                            # arming lets the pick go
+    assert lrn.control is None and pages() == idle
+    lrn.arm(None)
+    lrn.pick(_control("D3").source)
+    assert pages()["view"] == (1, True)
+    ui_desk.let_go(panel)
+    assert pages() == idle
+
+
+def _widgets(monkeypatch) -> dict[str, tuple]:
+    """Where each param's widget was last drawn: {id: its item rect}, read
+    as `Panel._ctx` is called on it."""
+    rects: dict[str, tuple] = {}
+    real = Panel._ctx
+
+    def ctx(self, a, key="", extra=None):
+        lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        rects[a.id] = (lo.x, lo.y, hi.x, hi.y)
+        return real(self, a, key, extra)
+    monkeypatch.setattr(Panel, "_ctx", ctx)
+    return rects
+
+
+def test_a_click_on_a_param_maps_the_picked_control(rig, monkeypatch):
+    """Fork 3 (a), with real mouse events over the real Panel: click D3
+    on the desk, then click a param's widget on the dimmed page — the
+    control is on that param (the row the knob learn makes, one undo
+    step, the old knob named), the widget did not move, the page is
+    bright again. A file path is no target. The click that picks a
+    control on the big desk — which brings the panel back under the
+    mouse — maps nothing."""
+    from hyperspace import ui_desk, undo
+
+    panel, table, reg = rig.panel, rig.router.table, rig.reg
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    lrn = _learn_over(rig)
+    pushes: list[str] = []
+    push = undo.push
+    monkeypatch.setattr(undo, "push", lambda label, *a, **k: (pushes.append(label),
+                                                              push(label, *a, **k))[1])
+    rects = _widgets(monkeypatch)
+    labels: dict[str, tuple] = {}
+    ctx_label = Panel._ctx_label
+
+    def label(self, a):
+        lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        labels[a.id] = (lo.x, lo.y, hi.x, hi.y)
+        return ctx_label(self, a)
+    monkeypatch.setattr(Panel, "_ctx_label", label)
+    d3 = _control("D3")
+    for _ in range(3):
+        frame(panel, "view")
+    assert [b.source for b in table.desk() if b.target == "view.speed" and b.kind == "cc"] \
+        == ["cc:0:49"]
+    _click(panel, ui_desk.rect(panel, d3))
+    assert lrn.control == d3.source and ui_desk.picking(panel) is d3
+    speed, bright = reg["view.speed"].base, reg["view.bright"].base
+    # a click on the dimmed page that is on no param's widget or label
+    # (Speed's readout, right of its label): nothing
+    _click(panel, (rects["view.speed"][2] - 12, labels["view.speed"][1],
+                   rects["view.speed"][2] - 4, labels["view.speed"][3]))
+    assert lrn.control == d3.source and pushes == []
+    _click(panel, rects["view.speed"])
+    assert lrn.control is None and ui_desk.picking(panel) is None
+    assert [b.source for b in table.desk() if b.target == "view.speed" and b.kind == "cc"] \
+        == [d3.source]
+    assert lrn.last == "learned view.speed ← D3 (device knob 3) (into the preset); K2 let go"
+    assert pushes == ["learn view.speed"]
+    assert (reg["view.speed"].base, reg["view.bright"].base) == (speed, bright)   # nothing moved
+    # bright again: the same click now moves the fader
+    _click(panel, rects["view.speed"])
+    assert reg["view.speed"].base != speed and pushes == ["learn view.speed"]
+    # a row's label is the param's too (WP3): a click on the word maps
+    lrn.pick(_control("D8").source)
+    frame(panel)
+    depth = reg["view.depth4"].base
+    _click(panel, labels["view.depth4"])
+    assert lrn.control is None and reg["view.depth4"].base == depth
+    assert any(b.source == "cc:*:23" and b.target == "view.depth4" for b in table.desk())
+    # a combo and a check are targets too; a file path is not
+    for page, pid in (("view", "view.shape"), ("output", "output.overlay")):
+        frame(panel, page)
+        frame(panel)
+        assert pid in rects, pid
+        lrn.pick(_control("D4").source)
+        frame(panel)
+        before = reg[pid].base
+        _click(panel, rects[pid])
+        assert lrn.control is None and reg[pid].base == before, pid
+        assert any(b.source == "cc:*:19" and b.target == pid for b in table.desk()), pid
+    frame(panel, "bitmap")
+    frame(panel)
+    lrn.pick(_control("D5").source)
+    frame(panel)
+    n = len(pushes)
+    _click(panel, rects["view.bmp_file"])
+    assert lrn.control == "cc:*:20" and len(pushes) == n
+    ui_desk.let_go(panel)
+    # the big desk: the click that picks brings the panel back under the
+    # mouse — that click is the desk's, and maps nothing
+    panel.reg["ui.panel"].set(False)
+    for _ in range(3):
+        frame(panel, "view")
+    assert ui_desk._state(panel)["unit"][0] >= ui_desk.LABEL_UNIT
+    target = next(c for c in ui_desk.apc40.LAYOUT if c.kind == "knob" and c.glyph.startswith("K")
+                  and ui_desk.rect(panel, c)[0] > rects["view.speed"][0])
+    desk = [b.to_json() for b in table.desk()]
+    values = reg.snapshot()
+    spot = ui_desk.rect(panel, target)
+    _click(panel, spot)
+    assert panel.open and lrn.control == target.source
+    assert [b.to_json() for b in table.desk()] == desk and len(pushes) == n
+    # …and nor does a second click at the same spot (a double click, or
+    # "click it again to let go" on a desk that is no longer there): the
+    # page is dimmed, so it moves nothing either
+    assert ui_desk.picking(panel) is target and not ui_desk.armed(panel)
+    _click(panel, spot)
+    _click(panel, spot)
+    assert lrn.control == target.source and reg.snapshot() == values
+    assert [b.to_json() for b in table.desk()] == desk and len(pushes) == n
+    # once the mouse has left that spot a click on a param maps as ever
+    _click(panel, rects["view.bright"])
+    assert lrn.control is None and len(pushes) == n + 1
+    assert any(b.source == target.source and b.target == "view.bright" for b in table.desk())
+
+
+def test_the_footer_says_what_is_picked_and_a_click_lets_go(rig, monkeypatch):
+    """The picked state is loud and easy to leave: the footer's slot
+    reads what is picked and the seconds left, in red, on every page; the
+    desk's header says it too; a real click on the footer's line lets
+    go. An invariant pick reads why, in the dim ink."""
+    from hyperspace import ui, ui_desk
+
+    panel = rig.panel
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    lrn = _learn_over(rig)
+    clock = [3000.0]
+    monkeypatch.setattr(ui.time, "monotonic", lambda: clock[0])
+    shown: list[tuple[str, tuple, tuple]] = []
+    colored = imgui.text_colored
+
+    def text_colored(col, s):
+        out = colored(col, s)
+        lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        shown.append((s, (round(col.x, 3), round(col.y, 3), round(col.z, 3)),
+                      (lo.x, lo.y, hi.x, hi.y)))
+        return out
+    monkeypatch.setattr(imgui, "text_colored", text_colored)
+
+    def rgb(c) -> tuple:
+        return (round(c.x, 3), round(c.y, 3), round(c.z, 3))
+
+    def lines(page=None) -> list[tuple[str, tuple, tuple]]:
+        shown.clear()
+        frame(panel, page)
+        return list(shown)
+
+    def footer(page=None):
+        return [x for x in lines(page) if x[0].startswith("·  ")]
+    assert footer("view") == []
+    lrn.pick(_control("D3").source)
+    for page in ("view", "system", "hands"):
+        (said,) = footer(page)
+        assert said[0].startswith("·  D3 picked (20 s): click a param"), page
+        assert said[1] == rgb(ui.RED)
+    # ROUTING is not dimmed — a click there is the widget's own — and both lines say so
+    (said,) = footer("routing")
+    assert said[0].startswith("·  D3 picked (20 s): click a param on any other page")
+    assert [x for x in lines() if x[0].startswith("D3 picked: its line is framed")]
+    frame(panel, "view")
+    clock[0] += 7.2
+    assert footer("view")[0][0].startswith("·  D3 picked (13 s)")
+    # the desk's header says it too, with how to let go
+    head = [x for x in lines() if x[0].startswith("D3 picked: click a param")]
+    assert head and head[0][1] == rgb(ui.RED)
+    # a line said before the pick gives way to it; one said after shows first
+    lrn.said("unbound view.speed from K2 (track knob 2)")
+    clock[0] += 0.1
+    assert footer()[0][0].startswith("·  unbound view.speed")
+    clock[0] += ui.MESSAGE_S + 0.1
+    # a click on a line that is not the pick's own lets nothing go
+    lrn.said("unbound view.bright from K1 (track knob 1)")
+    clock[0] += 0.1
+    (said,) = footer()
+    assert said[0].startswith("·  unbound view.bright")
+    _click(panel, said[2])
+    assert lrn.control is not None
+    clock[0] += ui.MESSAGE_S + 0.1
+    (said,) = footer()
+    assert said[0].startswith("·  D3 picked (") and lrn.control is not None
+    _click(panel, said[2])                                   # a real click on the line
+    assert lrn.control is None and footer() == []
+    lrn.said("learned something")
+    clock[0] += 0.1
+    assert footer()[0][0] == "·  learned something"
+    clock[0] += 1.0
+    lrn.pick(_control("D3").source)
+    clock[0] += 0.1
+    assert footer()[0][0].startswith("·  D3 picked (20 s)")   # the pick is newer: it shows at once
+    # an invariant control: why it cannot be mapped, dim
+    lrn.pick(_control("S3").source)
+    clock[0] += 0.1
+    (said,) = footer("view")
+    assert said[0].startswith("·  S3 (track fader 3) is invariant") and said[1] == rgb(ui.DIM)
+    # with the panel hidden the header alone carries it — the whole line
+    panel.reg["ui.panel"].set(False)
+    lrn.pick(_control("D3").source)
+    frame(panel)
+    full = [x[0] for x in lines() if x[0].startswith("D3 picked")]
+    assert full and full[0].startswith(
+        "D3 picked: click a param to put it here · click D3 again to let go · ")
+    # a line said while the panel was hidden (no footer saw it) does not
+    # take the slot from the pick the moment the panel comes back
+    ui_desk.let_go(panel)
+    frame(panel)
+    lrn.said("said while the panel was hidden")
+    clock[0] += 30.0
+    frame(panel)
+    ui_desk.click(panel, rig.router.table, _control("D3"), None)
+    assert panel.open
+    (said,) = footer()
+    assert said[0].startswith("·  D3 picked (20 s)")
+
+
+def test_the_click_wording_is_switched_on(rig, monkeypatch):
+    """WP2 wrote the click's wording behind `hasattr(ui_desk, "click")`;
+    WP4's `click` switches it on: the armed hint and ROUTING's desk
+    section both say a control can be clicked — and ROUTING's line still
+    fits its child."""
+    from hyperspace import ui_desk
+
+    panel = rig.panel
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    lrn = _learn_over(rig)
+    assert callable(ui_desk.click)
+    lrn.arm("view.speed", "desk")
+    assert panel.midi is None
+    assert panel._learn_hint() == "click a control on the desk diagram…"
+    panel.midi = SimpleNamespace(table=rig.router.table)
+    assert panel._learn_hint() \
+        == "turn a knob or press a button on the desk, or click one on the diagram…"
+    panel.midi = None
+    lrn.arm(None)
+    hint: list[tuple[str, float, float]] = []
+    colored = imgui.text_colored
+
+    def text_colored(col, s):
+        out = colored(col, s)
+        if s.startswith("new"):
+            hint.append((s, imgui.get_item_rect_max().x,
+                         imgui.get_window_pos().x + imgui.get_window_width()))
+        return out
+    monkeypatch.setattr(imgui, "text_colored", text_colored)
+    frame(panel, "routing")
+    frame(panel)
+    assert hint and hint[-1][0].endswith(", or click a control")
+    assert hint[-1][1] <= hint[-1][2], "the desk section's hint runs past its child"

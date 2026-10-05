@@ -694,6 +694,26 @@ to a row), what an idle effect's faders do, the instance count reaching
 zero, where the windows open — the one with a drawing — and the dream's
 layer no longer performable. Plan 16 asked you nothing before it was
 built; these five are everything in it that is a choice.
+**Rows 50–56 are plan 18's** (PRs #94, #97, #98 and #100), settled the
+same way: the interaction box (how it is set, one box, no switch, the
+file — with the HANDS page's drawing), a hand outside it absent
+everywhere, what a hand Learn lands with (with the numbers before and
+after), a Learn taking the hand axis's other rows with it, knob
+smoothing (with a drawing), where the two new numbers live, and
+`hands-orbit`. Six were built on the plan's recommendation. **Row 54 was
+not: the plan recommended knob smoothing off until you turned it up, and
+the run's orchestrator built it on at 80 ms**; both sides are in the
+row. **Rows 57–64 are plan 17's** (PRs #91, #93, #96, #99 and #102),
+settled the same way, each on its plan's recommendation: the big desk
+(where it lives and what a control says — with a drawing), click a
+control then click a param (with the 20 seconds and the two other
+guards the run added), one Unbind and what it removes, "Learn desk" and
+"Learn hand ▸ left / right", what the session's controls do while a
+learn is armed (with a drawing of which controls those are), one road
+onto the desk, the ROUTING filter, and two things about a hand Learn
+left alone. Plan 17 asked you nothing before it was built; its eleven
+forks are these eight rows. They are numbered after plan 18's because
+they were written after them.
 
 You also set how the work runs, since nobody will be watching it:
 
@@ -717,7 +737,7 @@ You also set how the work runs, since nobody will be watching it:
 | # | Question | Assumed until you say |
 |---|---|---|
 | Q2 | Where are the roughly ten presets saved that night, and are they backed up? | On the rig in `~/Hyperspace/presets/`, not backed up. Run `cp -R ~/Hyperspace ~/Hyperspace-2026-10-04` before launching any new build |
-| Q3 | Were the hands calibrated on that rig (HANDS page, the 20-second sweep)? | Unknown. Plan 18 is built either way; its hand checks start with calibration |
+| Q3 | Were the hands calibrated on that rig (HANDS page, the 20-second sweep)? | Unknown. Plan 18 is built either way; its hand checks start with calibration (check 72, which also sets the interaction box, row 50) |
 | Q4 | Which build ran that night? | Main at fa9b3a1 (2026-09-29) |
 
 ### 26. P15-a — how deep does undo go?
@@ -1507,6 +1527,856 @@ WP5 (PR #90); `test_lookback.py::test_dream_params_declared`,
 route used to make the dream reload was read from the code; the dream
 was not run to see it.
 
+### 50. P18-a — the interaction box: how it is set, one box, no switch
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** You asked for a hand to count only inside a box, so that
+a hand reaching for the APC40, or a passer-by's, does not perform. The
+box is three ranges in the camera's own millimetres (side to side, up
+and down, near and far). A hand whose palm is outside it reads as not
+there (row 51). Four things about it were left to the build.
+
+```
+ the HANDS page's box view: the same 190 × 92 frame, nothing new to click
+
+   the box from above (x across, z down)            height
+ ┌──────────────────────────────────────────────┐   ┌──┐
+ │                                              │   │  │
+ │      ┌──────────────────────────────┐        │   │┬ │  top of the box
+ │      │                              │        │   ││ │
+ │      │     ●            ●           │    ○   │   │● │  right hand
+ │      │   left    ·    right         │        │   │● │  left hand
+ │      │        (camera)              │        │   ││ │
+ │      └──────────────────────────────┘        │   │┴ │  bottom of the box
+ │                  performer                   │   │  │
+ └──────────────────────────────────────────────┘   └──┘
+        inner rectangle: the box, side to side         bracket: the box,
+        and near to far                                 low to high
+        ● in the box      ○ tracked, but outside it (hollow, dim)
+
+ status line:   L● R◌     ● in the box   ◌ seen, but outside it   ○ not seen
+ no box set:    no rectangle and no bracket; a hand counts wherever it is seen
+```
+
+**What the code did.** There was no box. A hand counted wherever the
+tracker could see it with enough confidence: a palm far outside every
+calibrated range was present and read as "at the end" of each axis.
+`hands.json` held only each axis's range.
+
+| The detail | Option | Trade-off |
+|---|---|---|
+| How the box is set | **(a) the 20-second calibration sweep sets it: where your palms went, plus 40 mm all round** | No new control; the box is where you actually played. A careless sweep makes a careless box, and another sweep fixes it. **The box is off for the whole sweep**, so anyone the camera sees during those 20 seconds performs and is counted into the new box: calibrate with nobody else in view. |
+| | (b) drag the box's faces on the drawing | Direct. The drawing is from above, so height needs a second drawing and handles small enough to miss at arm's length. |
+| | (c) six sliders | Exact. Six controls for a thing set once per venue. |
+| One box or two | **(a) one box for both hands, the same distance left and right of the camera** | Three ranges. Hands may cross. Sweeping with one hand cannot shut the other out. |
+| | (b) a box per hand | Each hand kept to its side; six ranges, two rectangles, and a hand that crosses the middle drops out. |
+| A switch | **(a) none: there is a box when the file has one; "reset ranges" opens it** | Nothing to learn. Opening the box this way also puts every axis's range back to its default, so it is followed by another sweep. |
+| | (b) a "use box" checkbox | Keeps the ranges while the box is off. One more control for something a sweep fixes in 20 seconds. |
+| The file | **(a) `hands.json` gains a `box` and its format number goes from 1 to 2; your existing file is read as it is and never rewritten just by launching; the first time a sweep or "reset ranges" rewrites it, the old file is kept beside it as `hands.json.bak-v1`** | Launching this build leaves your calibration byte for byte, with no box, until you sweep. One backup, once. An older build reading the new file keeps the ranges and drops the box the next time it saves. |
+| | (b) add the box and keep calling the format 1 | No number to explain; a file that changed shape under one name. |
+
+**Chosen: the bold option of each.** Three things the build added that
+the question did not cover:
+
+- A direction gets a bound only if **one hand** travelled more than
+  12 cm along it. Two hands held still and apart are not a sweep, and a
+  direction nobody swept is left open ("x open (not swept)" in the
+  note) rather than made into a slot.
+- At the box's edge a hand that is in stays in until it is 15 mm past a
+  face, and one that is out comes in only inside the face, so a hand
+  held on a face does not flicker. A one-frame dip in the tracker's
+  confidence does not throw out a hand that is in that 15 mm band.
+- A box wider than the drawing can show has its rectangle drawn just
+  inside the frame, so a hand outside it is still drawn outside.
+
+A bad `box` in a hand-edited file opens (that direction, or the whole
+box) and says so in the terminal; it never hides the hands.
+
+**Cost to reverse.** Dragging or sliders: widgets over the same three
+ranges (`HandsIO.box`). A box per hand: the file's `box` becomes two and
+`hands.core.inside` takes the side. A checkbox: one param and one test
+in `HandsIO.poll`. The margin, the edge and the 12 cm are three
+constants (`BOX_MARGIN`, `BOX_EDGE`, `BOX_MIN_SPAN`). Plan 18 WP1
+(PR #94);
+`test_hands.py::test_the_sweep_sets_the_box_with_its_margin_and_a_symmetric_x`,
+`::test_two_still_hands_held_apart_are_not_a_sweep`,
+`::test_reset_ranges_opens_the_box`,
+`::test_an_old_hands_json_reads_as_before_and_is_not_rewritten_at_load`,
+`::test_the_first_rewrite_of_an_old_file_keeps_a_backup`,
+`::test_the_boxs_edge_has_hysteresis`. Hand checks 72–74. **No camera
+has seen any of this**: the sweeps and the hands in the tests and the
+picture are made-up palm positions. Whether 40 mm, 15 mm and 12 cm are
+the right sizes, and whether a real sweep's box leaves a hand on the
+APC40 outside it, are for the machine.
+
+### 51. P18-b — a hand outside the box is absent everywhere, the ghost included
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** What "outside the box" means for everything that reads a
+hand, and what the ghost hands' frame shows once there is a box.
+
+**What the code did.** With no box, a hand left only when the tracker
+lost it. The ghost hands' camera framed the calibrated ranges of the x,
+y and z axes.
+
+| The detail | Option | Trade-off |
+|---|---|---|
+| Is a hand outside the box still drawn as a ghost | (a) yes, dimmed | Shows people where the edge is. A hand that performs nothing is on the glass. |
+| | **(b) no: it is absent everywhere** | One meaning of "in". Its rows let go and the values go back to where you set them that frame, its pinches drop, its "present" light goes off, and its ghost fades out at the edge. Only the HANDS page still shows it, as a hollow ring and `◌`. |
+| What the ghost hands' frame shows | (a) the axis ranges, as before | With a box 40 mm wider than the ranges, a hand in that margin sits at the frame's edge or past it. |
+| | **(b) the box, when there is one** | The frame is exactly where a hand counts: a ghost fading at the edge of the glass is a hand leaving the box. A direction the box leaves open is framed by the ranges as before. |
+
+**Chosen: (b) and (b).** A hand coming back in is caught and glided
+onto over the Catch time, exactly as a hand the tracker lost and found
+again is: no jump. During a calibration sweep the frame still shows the
+old box, and changes when the sweep ends.
+
+**Cost to reverse.** Drawing an outside hand's ghost: one line
+(`HandsIO._skeletons` reading "tracked" instead of "present"). Framing
+the ranges: one branch in `ghost.box_of`. Plan 18 WP1 (PR #94);
+`test_hands.py::test_a_hand_outside_the_box_reads_absent_everywhere`,
+`::test_a_hand_outside_the_box_releases_its_rows_and_the_base_returns`,
+`::test_a_hand_re_entering_the_box_is_caught_not_jumped`,
+`test_ghost.py::test_the_camera_frames_the_interaction_box_when_one_is_set`,
+`::test_a_hand_outside_the_box_fades_out`. Hand checks 73 and 74. Seen
+only with made-up hands; the ghost at the box's edge has not been looked
+at on the glass.
+
+### 52. P18-c — what a hand Learn lands with
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** You asked to "lower hand sensitivity" and "tame
+rotation". There was no sensitivity setting. What you felt was what a
+Learn made: right-click → Learn, move a hand, and the hand *became* that
+control's fader, end to end. This changes what a **new** Learn makes.
+Rows you already have, and every factory preset, are untouched.
+
+**What the code did.** Every hand Learn made a full-range "positions"
+row: the hand's reading was the fader, and where you had set the control
+was ignored while the hand was in.
+
+```
+ right roll learned onto the XY rotation rate, which the preset had at 1×
+
+                     before (positions, full range)    now (pushes +0.25)
+   rolled left  90°          −66.56×                        −15.64×
+   rolled left  18°          −11.09×                         −1.77×
+   level                       0×  (the plane stops)          1×  (as you set it)
+   rolled right 18°          +11.09×                         +3.77×
+   rolled right 90°          +66.56×                        +17.64×
+   hand out of the box         1×                             1×
+
+ left height learned onto the same rate
+   hand at the bottom        −66.56×  (full reverse)          1×  (as you set it)
+   hand at the top           +66.56×                        +34.28×
+
+ a tilt learned onto Speed, set at 0.35:  before: stop … 4.00 (0.25 when level)
+                                           now:    0.175 … 0.70 (0.35 when level)
+```
+
+| What you learn onto | A tilt, or a hand moving sideways or in (an axis that rests in the middle) | Height (an axis that rests at the bottom) |
+|---|---|---|
+| a control whose range runs equally either side of zero (a rotation rate, a camera angle, a pan, the hue) | **pushes**, at the Learn depth | **pushes**, at the Learn depth |
+| any other fader (speed, brightness, a mix) | **pushes**, at the Learn depth | **positions**: the hand is the fader, as before |
+| a switch, a list, a button, or a whole-number count (Instances, the dream's steps) | **positions**, as before | **positions**, as before |
+
+"Pushes" means the hand adds to where you set the control, and adds
+nothing while it rests: a level hand, or a hand at the bottom, leaves
+the preset's value showing. The depth is how far: 0.25 moves the control
+a quarter of its travel over the hand's whole range.
+
+Four choices are in that table:
+
+| The choice | Option | Trade-off |
+|---|---|---|
+| What height learns as | (a) the fader on everything, as before | "The hand is the fader" everywhere. Height on a rotation rate still starts at full reverse. |
+| | (b) a push on everything | One rule. Height can only add, so on a control already near its top a learn seems to do nothing, and "height is brightness" stops being what a Learn makes. |
+| | **(c) a push where the range is centred on zero, the fader elsewhere** | Height on brightness, a mix or speed is still the fader; height on a rate, an angle or a pan adds from where you set it. Two sentences instead of one. |
+| The depth a push lands with | 0.5 | A full tilt is a quarter of the travel each way: speed ×¼ … ×4, a rate ±33×. Lively; close to the complaint. |
+| | **0.25** | An eighth each way: speed about half … double, yaw ±45°, a rate ±16.6×. The party presets' own turn depth. |
+| | 0.1 | A rate ±6.7×, but on a mix or on speed it reads as "the learn did nothing". |
+| Where that number lives | **(a) "Learn depth" on the HANDS page, under "feel & calibration"** (`hands.learn_depth`) | With the hands' other feel settings; saved with the show and with a hands setup; changeable at the machine. It only matters at the next Learn. |
+| | (b) a key in `config.toml` | Not changeable without a restart. |
+| | (c) a page or group of its own | A new home for one number. |
+| A whole-number count (met in the build's review) | (a) a push, by the table | A push of 0.25 on the dream's steps (1–3) never reaches the next step: the learn lands and does nothing. |
+| | **(b) the fader, like a switch** | The learn does something. Seven controls. |
+
+**Chosen: the bold option of each.** No single depth is gentle on a
+rotation rate and noticeable on everything else, because a rate's range
+is 133× wide (it is that wide to match the original's largest drive, and
+narrowing it would move the reference the app is checked against). Turn
+Learn depth down for a session on the rates, or turn down the one row's
+depth on the ROUTING page.
+
+Things to know:
+
+- **Learning the same hand axis onto the same control again does not
+  tame a row you already have.** It only refreshes the pinch; the row
+  keeps "positions" and its depth. Unbind it and learn it fresh, or flip
+  the row to "push" on the ROUTING page.
+- Height on a rotation rate now only speeds the plane up from where you
+  set it. It can no longer stop it or run it backwards.
+- Whether an axis "rests in the middle" is its **Centred** switch on the
+  HANDS page at the moment of the Learn. Switching Centred on for height
+  without also moving its Rest gives a push that starts from the bottom.
+- Nothing is refused, flagged or warned about. A control that integrates
+  what it is given (a rate, a drift) under a hand is allowed, as you
+  said.
+
+**Cost to reverse.** Height's rule, or the whole-number rule: one
+condition each in `Learn._row`. The depth: two constants
+(`learn.PUSH_DEPTH`, `HandSettings.learn_depth`). Moving the number:
+rename one id. Plan 18 WP3 (PR #100);
+`test_learn.py::test_a_centred_axis_learns_as_a_push_about_the_base_at_the_learn_depth`,
+`::test_a_one_sided_axis_on_a_one_sided_param_is_still_the_fader`,
+`::test_a_one_sided_axis_on_a_zero_centred_range_pushes_up_from_the_base`,
+`::test_a_whole_number_param_keeps_the_position_row`,
+`::test_existing_rows_are_never_rewritten`,
+`test_hands.py::test_learn_passes_the_axiss_centredness_and_the_sessions_depth`.
+Hand checks 75 and 76. Every number above is from a made-up palm run
+through the real hand chain at its default settings; **no real hand has
+felt 0.25**.
+
+### 53. P18-d — a Learn takes the hand axis's other rows with it
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** One hand axis (right roll, say) learned onto a second
+control: does it now drive both, or does it move?
+
+**What the code did.** It moved, but only its "positions" rows; a
+"pushes" row written by hand on ROUTING, or by a preset, stayed. Until
+now every learned row was a "positions" row, so in practice a learned
+axis always moved.
+
+| Option | Trade-off |
+|---|---|
+| (a) Leave the rule: only "positions" rows move | Nothing changes in the code. But five axes in six now learn as pushes, so "learn it again somewhere else" would quietly stop moving the axis and start adding: roll ends up on three controls. |
+| **(b) The axis's other rows go, whichever kind they are** | "A learned axis drives one control" stays true, and matches a knob Learn (the knob moves). **On a factory preset this removes the preset's own rows on that axis.** |
+| (c) Only rows of the new row's kind go | The old behaviour to the letter for a "positions" learn. Height learned onto brightness and then onto a rate keeps both. |
+
+**Chosen: (b).** Said plainly: on F1 (TUMBLE), right roll turns the XW
+plane. Learn right roll onto Brightness and the XW row is **gone** from
+the loaded preset. The line at the bottom says so — "learned view.bright
+← hand right.roll pushes +0.25 (into the preset; moved from
+rot.phase.XW)" — and **one ⌘Z brings it back** (and takes the new row
+out). The file on disk is not touched until you save. As built it takes
+the axis's switched-off rows too, so the same route can never be in the
+table twice.
+
+**Cost to reverse.** One condition in `Learn._place`, and one test.
+Plan 18 WP3 (PR #100);
+`test_learn.py::test_a_learned_axis_drives_one_param`,
+`::test_a_learn_is_one_undo_step`. Hand check 77, which asks whether you
+would rather a learn added.
+
+### 54. P18-e — knob smoothing, on at 80 ms
+
+**Built 2026-10-04 (unattended run) against the plan's recommendation; confirm or overturn.**
+
+**What it is.** The desk's knobs and faders moved wide controls in
+steps: a slow turn of the pan knob moved the picture 80 px at a time, a
+rotation rate 1.33× at a time. Now a value from a knob or fader takes a
+short time to arrive, in a straight line, and comes to rest exactly
+where it rested before. One number sets how long: **Knob smoothing** on
+the SYSTEM page, off to 250 ms.
+
+```
+ a slow turn of one knob: the control's value over time
+
+ off: a whole step each time a          80 ms: a straight line toward each
+ message arrives, nothing between       new value; it lands on the same step
+
+ value                                  value
+   │              ┌──────                 │                ╱──────
+   │        ┌─────┘                       │           ╱───╱
+   │  ┌─────┘                             │      ╱───╱
+   │──┘                                   │─────╱
+   └────────────────────── time           └────────────────────── time
+      ▲     ▲     ▲   messages               ▲     ▲     ▲
+                                            the ring shows where the knob
+                                            is sending it, not where it is
+```
+
+**What the code did.** A knob or fader's value landed at once, on one of
+the control's steps (100 across most ranges). Measured on a slow turn:
+the value moved on 32 frames out of 150, a whole step each time.
+
+| The detail | Option | Trade-off |
+|---|---|---|
+| The default | (a) **the plan's recommendation: off** until you turn it up | The desk exactly as it was. The stepping stays until someone finds SYSTEM → Knob smoothing. The plan's worry: smoothing leans on the APC40 accepting a ring message mid-turn, and the ring re-basing a knob (hand check 31) has never been seen on the device; a wrong guess would make every knob feel bad at the party. |
+| | **(b) what was built: on, 80 ms** | Fixed without anyone looking for a setting. The orchestrator's reasons: while a value is arriving the ring is sent where the knob is heading, which is the very message the desk sent before there was smoothing, so smoothing adds no new assumption about the device beyond check 31's; and a fix that ships switched off is a new knob where a default would do. The cost if that is wrong: knobs that feel late or fight you until it is turned off. |
+| How it moves | (a) step to step, just more slowly | A slow turn is exactly as stepped as before. Does not fix what was seen. |
+| | **(b) between the steps on the way, landing on the step it always landed on** | Smooth at any speed, and a saved preset holds the same values as before. |
+| | (c) come to rest between steps too | Smoothest. Every knob-set value in a saved preset would differ from before. |
+| The shape | (a) an easing that slows as it nears | Familiar; it never quite arrives, so the time has no plain meaning. |
+| | **(b) a straight line that arrives exactly that long after the last message** | The number means what it says. |
+| The ring while a value arrives | (a) follow the value | The ring would lag the fingers and pull the knob backwards mid-turn. |
+| | (b) freeze until it lands | The ring stops under the fingers. |
+| | **(c) show where the knob is sending it** | The same message as before. |
+
+**Chosen: (b), (b), (b), (c)**: the first against the plan's
+recommendation, settled by the orchestrator; the other three as
+recommended. How "on by default" is built: the app starts every launch
+and every new show at 80 ms; **a show that saved the number keeps it,
+"off" included**, and a factory show opening at 80 ms is clean, not
+"unsaved". Changing it marks the show unsaved, and saving the show keeps
+it. No preset can change it.
+
+Things to know:
+
+- Smoothed: every knob and fader that sets a value directly, the
+  crossfader included. Not smoothed: buttons, the cue knob (one step a
+  click, on purpose), and a knob on a list, a switch or a whole-number
+  count.
+- A preset loaded while a knob's value is still arriving wins; the
+  crossfader's dim carries on arriving through the load.
+- One knob turn is still one undo step. The longest setting (250 ms) is
+  kept under undo's settle time (0.4 s) so that stays true.
+- A knob on something that moves by itself (a rotation's angle while the
+  plane turns) is not smoothed after its first message.
+- A hand on a control does not stop the knob: the knob's value glides
+  in underneath and shows when the hand leaves.
+- "Knob smoothing" also turns up in the ROUTING page's list of things a
+  route's depth can be scaled by. It is there because it is a session
+  setting; scaling a route by it is not useful.
+
+**Cost to reverse.** Off by default: one constant
+(`routing.SLEW_DEFAULT_S` to 0); your show then keeps whatever it has
+saved. The shape, the ring: one function each in `midi.py`. Plan 18 WP2
+(PR #98);
+`test_app_boundary.py::test_the_app_starts_with_knob_smoothing_at_80_ms_and_a_show_keeps_its_own`,
+`test_midi.py::test_a_smoothed_knob_arrives_in_a_straight_line_and_rests_on_the_detent`,
+`::test_the_ring_shows_where_the_knob_is_going`,
+`::test_smoothing_is_off_by_default_and_every_write_is_immediate` (a
+table with no app behind it),
+`test_undo.py::test_a_smoothed_knob_turn_is_one_step`. Hand checks 78
+and 79. **Nothing here has been on an APC40**: the glide, the ring and
+the 80 ms were run against made-up MIDI ports and a made-up clock, and
+the "80 ms, clean show" at launch was read in a scripted launch on a
+laptop with no desk. Whether 80 ms feels smooth or late is check 78's.
+
+### 55. P18-f — where the two new numbers live
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** Plan 18 adds two numbers: Learn depth (row 52) and Knob
+smoothing (row 54). Where each is found, what saves it, and whether
+either gets a knob on the APC40's global layer, where track knobs 6–8
+are free.
+
+**What the code did.** Neither existed.
+
+| The detail | Option | Trade-off |
+|---|---|---|
+| Knob smoothing | **(a) on the SYSTEM page under "midi", saved with the show** (`desk.slew`; the desk's settings become part of what a show saves) | Named for what it is. A preset never moves it. |
+| | (b) filed under an existing group (the UI's, the master's, the output's) | A misleading name. |
+| | (c) owned by the MIDI adapter | It would not exist with MIDI switched off in the config, and a show's saved value would be reported as unknown. |
+| Learn depth | **(a) on the HANDS page with the hands' feel** (row 52) | Saved with the show and with a hands setup. |
+| A free global-layer knob for either | **(a) neither** | Both are set once per room or per performer, not ridden. No new factory row, so your `bindings.json` is not rewritten again. K6–K8 stay yours to give away. |
+| | (b) Learn depth on K6 | Beside the other hand feel. A knob for a number that only matters at the next Learn. |
+| | (c) Knob smoothing on K6 | A knob that sets how knobs feel: hard to judge while turning it. |
+
+**Chosen: (a) of each.** Either number can still be put on a control of
+your own by right-click → Learn.
+
+**Cost to reverse.** A knob for either: one line in the factory map and
+one entry in the list of rows added to an existing `bindings.json`
+(with its backup). Moving either number: rename one id; a show's one
+saved value is then dropped with a note. Plan 18 WP2 (PR #98) and WP3
+(PR #100); `test_params.py::test_every_persisted_group_is_performance_or_session`,
+`test_presets.py::test_a_preset_load_never_touches_a_session_param`,
+`test_hands.py::test_setup_is_registry_params_that_round_trip`. Hand
+checks 75 and 78 use both rows; nobody has looked at either on the
+screen.
+
+### 56. P18-g — two hands on the camera: `hands-orbit`
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** The session asked for a two-hand orbit camera. Built as
+one more factory preset, `hands-orbit`, in the preset list and on no
+F-key: the right hand orbits, the left hand pans and zooms.
+
+```
+ right hand                               left hand
+   side to side   orbit, a quarter          side to side   pan sideways
+                  turn each way             reaching in    pan up / down
+   fingers up     tip to look down          raising it     zoom in, to 2.2×
+                  (44° each way)                           at the top
+
+ a level, low or absent hand adds nothing: the camera stays where the mouse left it
+```
+
+**What the code did.** No preset put a hand on the camera's orbit. The
+hands' axes are each one hand's own reading; nothing measures one hand
+against the other.
+
+| Option | Trade-off |
+|---|---|
+| **(a) A preset where each hand owns some of the camera** | Five rows on things that already exist. It is two hands *on* the camera, not the two hands turning the scene between them. |
+| (b) Nothing | One fewer preset in a list you want shorter. The ask goes unanswered. |
+| (c) The steering wheel: the distance and the angle between the two hands as new axes | What "orbit" may have meant. Two new hand axes, against the standing rule of twelve axes and no more. **Not built.** |
+
+**Chosen: (a).** One number differs from the plan: **the zoom's depth is
+0.12, not 0.3.** At 0.3 a raised left hand zoomed to 7.4×, and in an
+offscreen picture the frame was inside the shape and nearly black. At
+0.12 the top is 2.2×.
+
+**Cost to reverse.** Delete one entry in `preset.FACTORY_PRESETS` and
+one file; or hide it from the list (plan 19). The depths and directions
+are the five numbers in `preset.hands_orbit_routes`. Plan 18 WP4
+(PR #97);
+`test_presets.py::test_hands_orbit_is_five_pushes_onto_the_camera`,
+`::test_an_absent_or_level_hand_leaves_the_orbit_camera_alone`,
+`::test_each_orbit_axis_moves_its_camera_param_as_its_row_says`. Hand
+check 80. **Nobody has played it**: the depths are a first cut, the
+zoom's was chosen from a picture, and which way each move reads on the
+glass (does a hand going right turn the scene the way you expect) has
+not been judged at all.
+
+### 57. P17-a — the big desk: where it lives, and what a control says
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** You asked for the desk drawn "at a size you can read
+from a step back", every mapped control labelled with what it does. Two
+things were left to the build: where that big drawing lives, and what
+words go on a control.
+
+```
+ the control window with the panel hidden (H, DEVICE ON/OFF, or the desk's "big" chip): 960 × 900
+ names in (parentheses) are grey: the session's, the same on both layers.  ·  is a dark control.
+
+ APC40 · PRESET LAYER · TRIP                                                               [ panel ]
+     1        2       3        4       5        6        7        8        9
+ G1 (TUMBLE)(FACES)(FIELD)  (WAKE) [(TRIP)] (ACID) (MANDALA)(NOITA)     Points       K1         K2        K3         K4
+ G2    ·       ·      ·        ·       ·       ·        ·       ·       [Lines]     Brightness  Speed   Instances  Pattern mix
+ G3    ·       ·      ·        ·    [STILL]  ORBIT    WAVE    RIPPLE    [Faces]       K5         K6        K7         K8
+ G4  5-cell 3,3-du… Cubic   Tesser- Rectif.  4,8-du…  6,6-du… 16-cell   [Rotate]    Grid amp   Grid rate  Bitmap     Zoom
+                    pyramid  act    5-cell                                                                 alpha
+ G5 10,10-… Icosah… [24-   Trunc.  12,12-…  Dodecah. 20,20-…  120-cell  Reset view  B1 [(Click-through)]  B2 ·  B3 ·  B4 ·
+            prism    cell]  tess.            prism
+ G6 (───────────── Save as a new preset ──────────────────────────)    (Reset all)      ▲ Brightne… +3      (Tap tempo)
+ G7 [(SUB)] (BASS) (MIDB)   (MID)   (UPR)    (AIR)      ·       ·      (Overlay)    (Band −1)   (Band +1)  (Nudge −1) (Nudge +1)
+ G8  [ZW]    [XW]    YW       XY      XZ      [YZ]      ·       ·       C Shape         ▼ Brightne… −3      (Shift)
+ G9  (SUB Transfer) … (AIR Transfer)                    ·       ·                     D1         D2        D3         D4
+ G10 (SUB reset)    … (AIR reset)                       ·       ·                   FX mix     Plasma    Kaleido-   Kaleido-
+                                                                                               level     scope seg… scope zoom
+     S1      S2      S3       S4      S5       S6       S7      S8       SM            D5         D6        D7         D8
+      │       │       │        │       │        │        █       █        █         Zoom burst Zoom burst Hue cycle  Hue cycle
+      █       █       █        █       █        █        │       │        │         amount     glow       paint      spread
+   (SUB    (BASS   (MIDB    (MID    (UPR     (AIR    (Dynamics)(Input  (Audio      (audio.restart)(Control panel)  ·    ·
+    Post-   Post-   Post-    Post-   Post-    Post-             trim)   drive)     (Cheat sheet)(Next preset)[(Home)](LFO trigger)
+    drive)  drive)  drive)   drive)  drive)   drive)                               (audio.play)  (audio.stop)  (Mic)
+                                                                                   X (Master dim) ├────────────────────█┤
+
+ [ … ] is a lit button. Each control's glyph (K1, G4·3, B16 …) sits small in its top-left corner.
+ With the panel open at this size the desk is the 384 × 431 column left of it, glyphs only, as before.
+ The picture itself: docs/plans/assets/17-learn-and-the-desk/desk-big.png (and desk-big-global.png under SHIFT).
+```
+
+**What the code did.** The desk was a fixed 380 × 290 picture in the
+bottom-left corner showing only each control's short glyph. What a
+control did was in its hover, one control at a time.
+
+| The detail | Option | Trade-off |
+|---|---|---|
+| Where it lives | (a) its own page in the rail | A page is 392 px wide; the picture was 380 already. No room for one name. |
+| | (b) a page that widens the panel while it is open | Room, and a panel that changes width by page. |
+| | **(c) the one desk window takes whatever room there is; with the panel hidden it is the whole control window** | Nothing new to learn: H and DEVICE ON/OFF already hide the panel, and the desk's header gains one chip, `big` / `panel`. Names appear by size, so a wide control window shows them beside the panel. At 960 px wide the desk and the panel are not both big at once. |
+| | (d) its own "big desk" switch, drawn over the panel | One more setting and key for what (c) does with the panel's. |
+| What a control says | (a) the parameter's id (`fx.kaleido.segments`) | What ROUTING prints. Long, and reads as code from a step back. |
+| | **(b) the panel's own name for it; for a pad that sets one of a list, that item's name** | The bank row reads TUMBLE … NOITA, the shape pads read the shapes, a step button reads "Brightness +3". Three buttons have no name of their own and show their id: `audio.play`, `audio.stop`, `audio.restart`. The id is always in the hover. |
+
+**Chosen: (c) and (b).** As built:
+
+- **White names are the loaded preset's** (or, under SHIFT, the global
+  layer's); **grey names are the session's**, the same on both layers.
+  A dark control shows only its glyph and does nothing.
+- Names appear once the desk is wide and tall enough (about 620 px
+  wide). They are 13 px at 960 × 900; **a name that would not fit is
+  drawn at 11 px** on two lines, about a dozen of them, and five are
+  still cut with "…" (three duoprisms, and ▲ ▼ as "Brightne… +3 / −3").
+- Pads in a row that say the same thing share one name ("Save as a new
+  preset" once across the clip-stop bar).
+- With the cheat sheet showing and the panel hidden, the desk sits
+  beside the sheet.
+- The panel is placed once, at launch. After widening the control
+  window, drag the panel to the right edge (or relaunch: the size is
+  remembered) to get the named desk beside it.
+
+**Cost to reverse.** A DESK page: the drawing goes into any rectangle
+(`ui_desk._body`), so a page is one function that calls it. Ids instead
+of names: `ui_desk.text`. The sizes: `ui_desk.LABEL_UNIT`,
+`LABEL_UNIT_H`, `LABEL_PX`. Plan 17 WP4 (PR #102);
+`test_ui_desk.py::test_the_desk_takes_the_room_it_has`,
+`::test_the_big_desk_labels_every_lit_control_and_never_scrolls`,
+`::test_the_small_desk_draws_glyphs_only`, `::test_a_controls_text`.
+Hand check 69. **Nobody has looked at it on the control window**: the
+pictures are read-backs from a hidden window looked at up close, and
+whether 13 px and 11 px can be read from two paces is exactly what check
+69 asks. A wide window with the panel open, and the desk beside the
+cheat sheet, were never rendered at all.
+
+### 58. P17-b — click a control on the desk, then click what it should drive
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** The session asked for "drag to map". Deferred to two
+clicks: click a control on the on-screen desk, then click a control on
+the panel, and the desk control now drives it. The roadmap also wanted a
+click on the desk to take you to that control's line on ROUTING.
+
+```
+ 1. click D3 on the desk          2. the open page dims; the thing under      3. click it
+                                     the mouse is framed red
+ ┌ desk ──────────┐               ┌ VIEW (dimmed) ───────────────┐           "learned view.speed ← D3 (device knob 3)
+ │  D1  D2 ▛D3▜ D4│               │  BRIGHTNESS  ▒▒▒▒▒▒▒▒        │            (into the preset); K2 let go"
+ │        ▙──▟    │               │ ▛SPEED       ▒▒▒▒▒▒▒▒▜       │           the page is bright again; D3 drives Speed;
+ └────────────────┘               │ ▙─────────────────────▟      │           K2, which had Speed, is dark; one ⌘Z undoes both
+                                  │  click: put D3 on Speed      │
+ footer:  · D3 picked (20 s): click a param to put it here (click to let go)
+```
+
+**What the code did.** The desk picture took no clicks. The only way to
+put a param on a control was right-click → Learn and then touching the
+real knob; with no APC40 plugged in there was no way at all.
+
+| The detail | Option | Trade-off |
+|---|---|---|
+| What a click on a desk control does | (a) always open ROUTING at that control's line; map from the line's list | No "picked" state. The param is then found in a list of some 450 ids, and a click made from VIEW throws your page away. |
+| | **(b) pick it: frame it red; ROUTING scrolls to its line if it is open, or when you next open it; the next click on a param maps** | One click, one state. The page you are on stays. |
+| | (c) pick it and open ROUTING | Both at once, and you must leave ROUTING again to click the param. |
+| How the param is chosen | **(a) a plain click on its control, on a dimmed page** | "Click, click." The page is switched off while it waits so the click cannot also move the slider. A stray click maps (one ⌘Z). |
+| | (b) an item in the param's right-click menu, "put D3 here" | No dimmed page, no stray map. Three clicks, the same as Learn desk and then a click on the desk. |
+| | (c) only ROUTING's list | See (a) above. |
+
+**Chosen: (b) and (a).** Said plainly: **while a control is picked,
+every page but ROUTING takes no input.** Its sliders do not move, its
+buttons do not press, its right-click menus do not open; the only thing
+a click on that page does is map. The rail (changing page), the footer
+and the desk still work. ROUTING is never dimmed — there the picked
+control's own line is what you came for — and on ROUTING the footer says
+to click a param on any other page.
+
+Three things were added so that state is never left standing. The first
+two were required by the run's orchestrator beyond the plan; the third
+was added by the build:
+
+- **A pick lets go by itself after 20 seconds with no click anywhere in
+  the window**, and says so ("D3 let go — no click for 20 s"). The desk's
+  header and the footer count the seconds down. Any click starts the
+  count again.
+- **The footer's line is clickable**: click it and the pick is let go
+  at once. So is a click on the picked control again, or on the desk's
+  empty ground. Esc does not (Esc quits).
+- **No click maps until the mouse has moved about 12 px from the click
+  that picked.** On the big desk that first click brings the panel back
+  under the mouse; a double click must not map onto whatever landed
+  there. That second click does nothing at all.
+
+Other things to know:
+
+- The session's controls cannot be mapped (a fader, the bank row, SHIFT,
+  TAP …), and nothing can while SHIFT is latched. Clicking one frames it
+  and scrolls ROUTING to it, says why in the desk's header, and dims
+  nothing.
+- If the param already had a knob, that knob lets go, as with a Learn;
+  the message names it and one ⌘Z puts both back.
+- A file path and SHIFT's own setting are not targets. A row's label is
+  a target like its slider.
+- A pick survives a preset load. Arming a Learn lets it go.
+- A control that is dark under SHIFT has no line on ROUTING: nothing
+  scrolls, and the header says "unmapped on the global layer".
+- The dimming is the toolkit's plain "disabled" look: visible beside the
+  rail, not dramatic.
+
+**Cost to reverse.** Open ROUTING on a click: one line in
+`ui_desk.click`. A menu item instead of the dimmed page: remove the wrap
+in `Panel._draw`, add one item. The 20 s and the 12 px: `ui_desk.PICK_S`,
+`PICK_MOVE`. Count only clicks on the desk toward the 20 s: one line in
+`ui_desk.tick`. Plan 17 WP4 (PR #102);
+`test_ui_desk.py::test_a_click_picks_and_a_second_click_lets_go`,
+`::test_a_pick_lets_go_by_itself`,
+`test_ui_shell.py::test_a_click_on_a_param_maps_the_picked_control`,
+`::test_a_picked_control_dims_every_page_but_routing`,
+`::test_the_footer_says_what_is_picked_and_a_click_lets_go`,
+`test_learn.py::test_pick_then_param_maps_through_the_learn`,
+`::test_a_pick_on_an_invariant_control_or_the_global_layer_maps_nothing`,
+`test_ui_routing.py::test_goto_scrolls_the_rows_child_to_the_controls_line`.
+Hand check 70. **No real mouse has clicked any of this.** Every click
+was an event fed to the toolkit by a test or a script; that a dimmed
+control still reports the mouse over it was confirmed that way only.
+Whether 20 s is long enough to change page and find a param, and whether
+the dimmed page reads as "waiting for a click", are for you.
+
+### 59. P17-c — one Unbind, and what it removes
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** "Unbind" was two menu items that each removed half. Now
+it is one, and the question left was how much it covers.
+
+**What the code did.** "Unbind" removed the loaded preset's knob and
+button rows on the param, and was missing altogether with MIDI switched
+off in the config. "Unbind hand" removed the hand rows. Neither removed
+an LFO, a band or a DAW lane driving the param, though the same menu
+said "performed by LFO 1". On a param only a fader drives, "Unbind" was
+offered and then refused.
+
+| Option | Trade-off |
+|---|---|
+| (a) The preset's desk rows and the hand rows, as the roadmap lists | A param an LFO or a band drives still cannot be unbound from its own menu. |
+| **(b) The preset's desk rows and every route on the param, whatever drives it** | One rule: Unbind removes what the menu's lines list. An LFO or band route can be removed from the control it moves. |
+
+**Chosen: (b).** The menu lists a line for each thing bound — "K2 (track
+knob 2)", "R height pushes +0.45", "LFO 1 pushes +0.3 (off)" — and then:
+
+- one kind bound: a plain **Unbind**;
+- a knob *and* a route: **Unbind ▸** with "desk — K2", "route — R
+  height, LFO 1", "both";
+- nothing it could remove: **no Unbind item at all**. A fader's line
+  reads "S8 (track fader 8) · invariant", dim; the session's controls
+  are edited in `bindings.json`, never from the menu.
+
+It is there with or without the APC40 and with MIDI off. Whatever it
+removes is one ⌘Z. Nothing is written to disk; the preset shows unsaved.
+On a control that stands for "the selected band's …", it also removes
+the rows on that band itself. A route that is switched off is removed
+too.
+
+**Cost to reverse.** Hand rows only: a filter on the source's kind in
+`Learn.unbind`. Plan 17 WP1 (PR #93);
+`test_learn.py::test_unbind_removes_the_presets_desk_rows_and_every_route`,
+`::test_unbind_by_kind`,
+`::test_unbind_is_one_undo_step_and_none_when_nothing_goes`,
+`test_ui_shell.py::test_the_menu_lists_and_unbinds_with_no_midi_adapter`,
+`::test_unbind_is_not_offered_on_a_session_only_param`. Hand check 64.
+The menu has been read as text by tests and drawn in a hidden window;
+**nobody has opened it with a right-click**, and no APC40 has had a
+control go dark from it.
+
+### 60. P17-d — "Learn desk" and "Learn hand ▸ left / right"
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** "The Leap assigned a learn to the wrong hand." A Learn
+took whatever moved first: either hand, or a knob. Now you say what it
+should listen to, and nothing else can complete it. The fork was how the
+menu spells that.
+
+**What the code did.** One item, "Learn". Then the hand axis that had
+travelled furthest took it, over all twelve axes of both hands —
+measured: the left hand rolling on purpose while the right hand came
+back from the trackpad learned the *right* hand's sideways axis in 8
+frames. And any knob, button or fader touched meanwhile took it or
+killed it.
+
+| Option | Trade-off |
+|---|---|
+| **(a) `Learn desk` · `Learn hand ▸ left / right`** | The roadmap's. The commonest learn is one click. One item more than before on a rig with hands. |
+| (b) `Learn desk` · `Learn left hand` · `Learn right hand` | No submenu; two items more. |
+| (c) `Learn ▸ desk / left hand / right hand / lane` | The shortest menu. Every learn costs a hover, and "Route a lane here…" loses its name. |
+
+**Chosen: (a).** What follows from it:
+
+- **Learn hand ▸ left** listens to the left hand only. The right hand
+  can do anything. **A knob turned meanwhile does its own job** and the
+  learn waits on.
+- **Learn desk** listens to the desk only: a knob, a button, or a click
+  on the on-screen desk. A waving hand does nothing to it.
+- **The footer says what is armed, on every page**, in red: "learning
+  camera.zoom — move the left hand… (click to cancel)". Click the line
+  to cancel. What a learn did, or why it was refused, shows there too.
+  An armed learn never times out.
+- "Learn hand" is offered only with the tracker on and only where a
+  hand can drive the thing; "Learn desk" is not offered on a file path.
+  The menu also opens from a row's **label** and from **every meter**
+  now.
+- What the hand row then *is* (a gentle push, or the fader) is row 52.
+
+**Cost to reverse.** The item list in `Panel._ctx_learn`. Plan 17 WP2
+(PR #96) and WP3 (PR #99); `test_learn.py::test_accepts_by_want`,
+`test_hands.py::test_a_hand_learn_listens_to_one_hand`,
+`::test_the_hands_never_complete_a_desk_learn`,
+`::test_a_rearm_starts_a_fresh_baseline`,
+`test_midi.py::test_a_knob_bump_during_a_hand_learn_does_its_own_job`,
+`test_ui_shell.py::test_the_menu_offers_learn_desk_and_learn_hand`,
+`::test_the_footer_says_what_a_learn_waits_for_and_what_it_did`,
+`::test_a_rows_label_opens_its_params_menu`,
+`::test_every_meter_has_the_band_select_menu`. Hand checks 66, 67 and
+68. **No real hand has completed one**: the two wrong-hand cases were
+replayed with made-up palm positions. Whether the wrong *axis* of the
+right hand still wins is not answered by this (row 64).
+
+### 61. P17-e — what the session's controls do while a desk learn is armed
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** With "Learn desk" armed, you touch a control that can
+never be learned — a fader, SHIFT, a preset pad. What happens to the
+learn, and does the control still do its job?
+
+```
+ the session's controls: the same on both layers, never learned, never mapped by a click, never unbound
+
+   S1–S8, SM        the faders                      G1·1–G1·8    the preset pads (clip row 1)
+   X                the crossfader (master dim)     G6·1–G6·8    the clip-stop row (hold: save as a new preset)
+   ⇧                SHIFT                           G6·9         STOP ALL CLIPS (reset all)
+   B20              TAP TEMPO                       G7·1–G7·6    track select (pick a band)
+   B21, B22         NUDGE − / +                     G7·9         MASTER select (overlay)
+   B19, B18         ◀ ▶ (band −1 / +1)              G9·1–G9·6    the solo row (a band's transfer)
+   B10              QUANT (next preset)             G10·1–G10·6  the rec-arm row (a band's reset)
+   B11              OVERDUB (home)                  B13–B15      PLAY, STOP, REC (the mic)
+   B12              METRONOME (LFO trigger)         B1           PAN (click-through)
+   B5, B6, B9       CLIP/TRACK (audio restart), DEVICE ON/OFF (the panel), DETAIL (the cheat sheet)
+
+ everything else is the preset's to map: the 16 knobs, the cue knob, clip rows 2–5, the scene-launch
+ column, the activator row, ▲ ▼, and the dark buttons.
+```
+
+**What the code did.** The first message from *any* control ended the
+learn — landed or refused — and was swallowed. A fader that jittered
+killed the learn. With SHIFT latched, SHIFT itself was refused, so the
+only way out was to arm again.
+
+| Option | Trade-off |
+|---|---|
+| (a) As before | Nothing to build. Part of the session's "learn did nothing". |
+| (b) A refusal leaves the learn armed; the touch is still swallowed | A fader's jitter no longer ends a learn. SHIFT still cannot be pressed while armed. |
+| **(c) A refusal leaves the learn armed, and a session control is not a candidate at all: it does its own job** | SHIFT, the faders, TAP and the preset pads work through a learn, which is what "the same everywhere" promises. |
+
+**Chosen: (c).** Said plainly, because two of these will surprise:
+
+- **A preset pad pressed while a learn is armed loads that preset, and
+  the learn is still armed** — so the next knob lands in the preset you
+  just loaded. The same for OVERDUB (home) and for a hold on the
+  clip-stop bar (it saves a new preset; the learn waits on).
+- **With SHIFT latched and a desk learn armed, every control that is not
+  the session's is swallowed**: each is refused ("K2 (track knob 2) is
+  on the global layer (the session's) — latch SHIFT off to learn into
+  the preset") and does nothing. Press SHIFT again and the same learn
+  lands.
+- A fader moved mid-learn moves its param and nothing is said.
+- The refusal "… is invariant (the session's) — not learned" is now seen
+  only when a session control is *clicked on the on-screen desk* with a
+  learn armed.
+- Checks 37, 54 and 56 were written when these touches were refused and
+  swallowed; each now carries a note.
+
+**Cost to reverse.** One branch in `MidiIO._handle` and one line in
+`Learn.learn_control`. Plan 17 WP2 (PR #96);
+`test_midi.py::test_an_invariant_control_works_through_a_desk_learn`,
+`test_learn.py::test_learn_refuses_the_global_layer_and_invariant_controls`,
+`test_desk.py::test_the_clip_stop_row_is_invariant`. Hand check 65.
+Shown against made-up MIDI ports; **never on an APC40**. That a preset
+pad mid-learn loads its preset is read from the code: no test presses
+one.
+
+### 62. P17-f — one road onto the desk, with or without the APC40
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** Where the code that puts a param on a desk control
+lives. It decides whether you can map with no APC40 plugged in, and
+whether a click and a knob bump can ever disagree.
+
+**What the code did.** It lived in the MIDI adapter. With MIDI off in
+the config, or the adapter failing to open, nothing could add a desk
+row.
+
+| Option | Trade-off |
+|---|---|
+| (a) Leave it in the MIDI adapter; the click calls the adapter | No move. No adapter, no mapping. |
+| **(b) Move it to the Learn object; the adapter and the click both call it** | One path, working with no device. |
+
+**Chosen: (b).** A knob bump, a click on the desk with "Learn desk"
+armed, and pick-then-click all make the same row, refuse in the same
+words (the session's controls; SHIFT latched), say the same line and
+cost one ⌘Z. With the APC40 unplugged you can still lay out a preset's
+desk by clicking; the rings and LEDs follow when it is plugged in.
+
+**Cost to reverse.** Move the body back. Plan 17 WP2 (PR #96) and WP4
+(PR #102); `test_learn.py::test_learn_control_needs_no_adapter`,
+`test_ui_desk.py::test_a_click_completes_an_armed_desk_learn`,
+`test_learn.py::test_pick_then_param_maps_through_the_learn`. Hand check
+70 (g) and (h). Not seen: the device's ring lighting for a row made by a
+click.
+
+### 63. P17-g — the ROUTING filter, and what clears it
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** One text field on the ROUTING page, on the counts line.
+Type and only the lines that say every word you typed stay: a glyph
+(`d3`), a param (`kaleido`), a source (`r roll`, `lfo 1`). The fork was
+what empties it.
+
+**What the code did.** No filter; finding a line meant scrolling the
+rows.
+
+| Option | Trade-off |
+|---|---|
+| **(a) Only you (emptying it, or its ×) and a click on a desk control** | It holds across presets, which is the use: "show me what is on the kaleidoscope in each". A forgotten filter hides rows; the count turns red ("4 of 176 rows") to say so. |
+| (b) Also a preset load | Never stale. Lost on every F-key while comparing. |
+
+**Chosen: (a).** Things to know:
+
+- **Something you add while a filter is set can be hidden by it.**
+  `+ route`, "Route a lane here…", a Learn, and an undo that brings a
+  row back all add lines that show only if they match. The red count is
+  the only sign. (Options if this bites: clear the filter on `+ route`,
+  or always show a row added since the filter was typed.)
+- **"lfo 1" also matches LFO 2's routes.** A line is matched on its
+  words *and* on its raw address, and LFO 2's address is `lfo:1`. Any
+  single digit or letter matches widely. (Option: leave the raw address
+  out for sources that have a name.)
+- A line you are working on (dragging its depth, retyping a macro's
+  name) stays put until you let go, even if the edit stops it matching.
+- The words "unmapped" and "dark" do not find the dark controls; their
+  glyphs do.
+- It is not saved, not in a preset, not an undo step, and is empty at
+  every launch. Keys typed in it do nothing else.
+
+**Cost to reverse.** Clear on a preset load: one line where a load is
+called. Plan 17 WP5 (PR #91);
+`test_ui_routing.py::test_the_filter_matches_glyph_param_and_source`,
+`::test_a_filtered_page_draws_only_matching_lines_and_keeps_its_ids`,
+`::test_the_filter_is_ui_state`,
+`::test_a_line_in_use_is_not_filtered_away_under_the_hand`,
+`::test_a_desk_click_clears_a_filter_that_has_the_keyboard`. Hand check
+71. **Nobody has typed in the field in the real window**: the caret,
+backspace, Esc and ⌘Z inside it were not tried.
+
+### 64. P17-h — two things about a hand Learn that were left alone
+
+**Built on the recommendation, 2026-10-04 (unattended run); confirm or overturn.**
+
+**What it is.** Two smaller questions the "one hand" work raised, both
+settled as "leave it".
+
+**What the code did.** As described in each row; neither changed.
+
+| The detail | Option | Trade-off |
+|---|---|---|
+| Whose pinch becomes the row's gate. If a finger is pinched while a hand learn lands, that pinch becomes the row's "only while held" switch. It looks at the learning hand's thumb first and then **the other hand's**. | **(a) leave it** | One hand's pinch gating the other hand's movement is a use from the hands plan. Under "Learn hand ▸ left", a pinch the *right* hand happens to be holding becomes the gate when the left holds none. |
+| | (b) only the learning hand's pinch | A stricter "one hand". Removes that use. |
+| Naming the axis outright: click an axis on the HANDS page, then click a param, with no "which moved furthest" guess | **(a) not built** | The roadmap does not ask for it, and "Learn hand ▸" now picks the right *hand*. Within that hand the axis is still the one that travelled furthest. |
+| | (b) build it | About twenty lines on top of the desk's pick (row 58). A second meaning for a click on an axis row, which selects the axis today. |
+
+**Chosen: (a) and (a).** If check 66 shows the wrong axis of the right
+hand winning again and again, (b) of the second row is the fix.
+
+**Cost to reverse.** The pinch: one line in `HandsIO.held_gate`. The
+axis-first learn: a click handler on the HANDS page's axis rows calling
+`Learn.pick`'s twin. Plan 17 §6 forks 10 and 11; no code.
+`test_hands.py::test_the_learning_hand_chooses_its_own_thumb` holds the
+pinch rule as it is. Hand check 66.
+
 ---
 
 ## Part B — built on the recommendation without asking; confirm or overturn
@@ -1567,12 +2437,35 @@ Each is built, reviewed and on PR #55. Overturning any is a small follow-up.
   Rows 45–49 are shown by checks 59, 60, 62, 61 and 63 in that order.
   Nothing in plan 16 has been tried at the rig, and check 61 is the
   first time window placement meets a second screen.
+- Group **M** (plan 17: one Unbind, Learn desk / hand, the menu on
+  labels and meters, the desk big and clickable, the ROUTING filter;
+  checks 64–71, about 35 minutes, the APC40 for 65, 67 and 70, the
+  camera for 65–67 — after check 72). Rows 57–64 are shown by checks 69
+  (row 57), 70 (58 and 62), 64 (59), 66–68 (60), 65 (61), 71 (63) and
+  66 (64). Nothing in plan 17 has been tried at the rig, **and nobody
+  has clicked, right-clicked or typed in the real control window**: the
+  menus, the desk's click, the click on a dimmed page and the filter
+  field were driven by events fed in tests and by scripts, never by a
+  mouse or a keyboard. Check 70 is the first real click any of it gets.
+  Checks 37, 45, 54 and 56 carry notes where plan 17 changed what they
+  describe.
+- Group **N** (plan 18: the interaction box, what a hand Learn lands
+  with, knob smoothing, `hands-orbit`; checks 72–80, about 40 minutes,
+  the camera for all of it and the APC40 for 74, 78 and 79). **72 comes
+  first**: it is the calibration sweep, which now also sets the box, and
+  it is done with nobody else in the camera's view. Rows 50–56 are shown
+  by checks 72–74 (rows 50 and 51), 75 and 76 (52), 77 (53), 78 and 79
+  (54), 75 and 78 (55) and 80 (56). Nothing in plan 18 has been tried at
+  the rig: no camera, no real hand, no real sweep and no APC40 has seen
+  any of it. Check 78 is where row 54's 80 ms is judged, and it leans on
+  check 31 (the knobs re-basing from the ring), which has itself never
+  been seen on the device.
 
 ---
 
 ## Answer sheet
 
-Write the letter, or "rec" for the recommendation. Rows 14–17 and 34–49
+Write the letter, or "rec" for the recommendation. Rows 14–17 and 34–64
 take "keep" or "overturn".
 
 | # | Decision | Recommended | Your answer | Note |
@@ -1627,3 +2520,18 @@ take "keep" or "overturn".
 | 47 | P16-c instances to zero | (a) reachable from the slider's left end and K3's bottom | built on the recommendation; confirm or overturn | plan 16 WP5 (PR #90); K3's bottom is nothing drawn, not one copy; a route of yours that pushes both ways on the count can blank the scene for half its cycle; FIELD's top is 69 copies, not 68 |
 | 48 | P16-d where the windows open | a screen number in the config beats the remembered file; written on quit and ⌘R only; fullscreen never remembered; a first launch at full size | built on the recommendation; confirm or overturn | plan 16 WP4 (PR #85) and WP7 (PR #92); `~/Hyperspace/windows.json`, new key `[output] control_monitor`; a screen number with no screen at launch is ignored for the whole run; never run with a second screen |
 | 49 | P16-e the dream's layer | (a) not the target of a route, like Spacing and Resolution | built on the recommendation; confirm or overturn | plan 16 WP5 (PR #90); a route of yours onto it goes dormant with no note at load |
+| 50 | P18-a the interaction box | the calibration sweep sets it (where the palms went plus 40 mm); one box for both hands; no switch — "reset ranges" opens it; `hands.json` format 2, an old file never rewritten at launch, one backup | built on the recommendation; confirm or overturn | plan 18 WP1 (PR #94); the box is off for the whole sweep, so calibrate with nobody else in view; a direction is bounded only if one hand travelled over 12 cm along it; never seen by a camera |
+| 51 | P18-b a hand outside the box | absent everywhere, its ghost included; the ghost hands' frame is the box | built on the recommendation; confirm or overturn | plan 18 WP1 (PR #94); the HANDS page alone still shows it, hollow and as `◌` |
+| 52 | P18-c what a hand Learn lands with | a tilt pushes at the Learn depth (0.25, on HANDS under "feel & calibration"); height pushes on a range centred on zero and is the fader elsewhere; a switch, a list or a whole-number count keeps the fader | built on the recommendation; confirm or overturn | plan 18 WP3 (PR #100); existing rows and factory presets untouched; learning the same axis onto the same control again does not tame an old row; the whole-number rule was added by the review; no real hand has felt 0.25 |
+| 53 | P18-d a Learn and the axis's other rows | (b) they go, whichever kind, switched off or on | built on the recommendation; confirm or overturn | plan 18 WP3 (PR #100); on a factory preset this removes the preset's own rows on that axis, named in the line at the bottom, one ⌘Z back |
+| 54 | P18-e knob smoothing | the plan: (a) off until turned up. The orchestrator: (b) on at 80 ms. Between the steps on a straight line, landing on the step it always did; the ring shows where the knob is sending it | built on the orchestrator's recommendation, against the plan's; confirm or overturn | plan 18 WP2 (PR #98); a show that saved the number keeps it, "off" included; SYSTEM → Knob smoothing; never on an APC40, and it leans on hand check 31, itself never seen |
+| 55 | P18-f where the two new numbers live | Knob smoothing on SYSTEM, Learn depth on HANDS, both saved with the show; neither on a global-layer knob | built on the recommendation; confirm or overturn | plan 18 WP2 (PR #98) and WP3 (PR #100); K6–K8 still free; "Knob smoothing" also shows in ROUTING's scale list |
+| 56 | P18-g two hands on the camera | (a) a preset, `hands-orbit`: right hand orbits, left pans and zooms; the steering wheel not built | built on the recommendation; confirm or overturn | plan 18 WP4 (PR #97); the zoom's depth is 0.12, not the plan's 0.3 (0.3 blacked the frame); in the list, on no F-key; directions and depths never judged by a person |
+| 57 | P17-a the big desk | (c) the desk window takes the room it has, the whole control window with the panel hidden (H, DEVICE ON/OFF, the `big` chip); a control says the panel's name for what it does | built on the recommendation; confirm or overturn | plan 17 WP4 (PR #102); white names the preset's, grey the session's; 13 px at 960 × 900, a dozen at 11 px, five cut; never looked at on the control window |
+| 58 | P17-b click a control, then a param | (b) a click picks and ROUTING scrolls to its line; (a) the next click on a param's control maps, on a dimmed page | built on the recommendation; confirm or overturn | plan 17 WP4 (PR #102); while picked every page but ROUTING takes no input; the pick lets go by itself after 20 s and the footer's line lets go on a click (both required by the orchestrator); no click maps until the mouse has moved 12 px (added by the build); no real mouse has clicked it |
+| 59 | P17-c one Unbind | (b) the preset's desk rows and every route on the param; a submenu only with both kinds; not offered where it could only refuse | built on the recommendation; confirm or overturn | plan 17 WP1 (PR #93); there with MIDI off; one ⌘Z; "Unbind hand" and "performed by …" are gone |
+| 60 | P17-d the Learn items | (a) `Learn desk` · `Learn hand ▸ left / right`; a learn listens only to what it names | built on the recommendation; confirm or overturn | plan 17 WP2 (PR #96) and WP3 (PR #99); the footer says what is armed on every page, click it to cancel; the menu opens from labels and every meter; no real hand has completed one |
+| 61 | P17-e the session's controls during a desk learn | (c) a refusal leaves the learn armed, and a session control does its own job | built on the recommendation; confirm or overturn | plan 17 WP2 (PR #96); a preset pad pressed mid-learn loads its preset and the learn then lands there; under SHIFT every other control is swallowed until SHIFT is unlatched; never on an APC40 |
+| 62 | P17-f one road onto the desk | (b) in the Learn object; the knob, the click and pick-then-click all use it | built on the recommendation; confirm or overturn | plan 17 WP2 (PR #96) and WP4 (PR #102); a preset's desk can be laid out with no APC40 plugged in |
+| 63 | P17-g the ROUTING filter | (a) cleared only by you and by a click on a desk control; it holds across presets | built on the recommendation; confirm or overturn | plan 17 WP5 (PR #91); a route, a Learn or "+ route" added while it is set can be hidden by it; "lfo 1" also matches LFO 2 (`lfo:1`); nobody has typed in it |
+| 64 | P17-h two things left alone | (a) the other hand's pinch may still gate a hand learn; (a) no "click an axis, then a param" | built on the recommendation; confirm or overturn | plan 17 §6 forks 10 and 11; no code; the second is the fix if the wrong axis of the right hand keeps winning (check 66) |

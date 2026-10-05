@@ -1,0 +1,67 @@
+Knob smoothing (plan 18 WP2): desk.slew, off and at 80 ms (the app's default). 60 frames a second.
+
+1. A slow turn: one CC step every 50 ms for 2 s (CC 64 → 104), the base per frame
+   camera.pan.x: one detent is 80.0 px
+   frame    ms   CC          off        80 ms
+       0     0   65         80.0         13.8
+       1    17              80.0         27.6
+       2    33              80.0         41.4
+       3    50   66        160.0         61.8
+       4    67             160.0         82.3
+       5    83             160.0        102.7
+       6   100   67        240.0        126.4
+       7   117             240.0        150.1
+       8   133             240.0        173.7
+       9   150   68        320.0        199.0
+      10   167             320.0        224.2
+      11   183             320.0        249.4
+      12   200   69        320.0        261.6
+   …
+      off: the base moves on  32 of 150 frames, largest step 80.0 px, rests at 2560.0 px
+    80 ms: the base moves on 123 of 150 frames, largest step 25.9 px, rests at 2560.0 px
+   the rest values are identical: True
+   ring messages sent: 32 and 32, identical: True  (first six: [65, 66, 67, 69, 70, 71])
+
+   rot.rate.XY: one detent is 1.331 ×
+   frame    ms   CC          off        80 ms
+       0     0   65        1.331        0.230
+       1    17             1.331        0.459
+       2    33             1.331        0.689
+       3    50   66        2.662        1.029
+       4    67             2.662        1.369
+       5    83             2.662        1.710
+       6   100   67        3.994        2.103
+       7   117             3.994        2.497
+       8   133             3.994        2.891
+       9   150   68        5.325        3.311
+      10   167             5.325        3.730
+      11   183             5.325        4.150
+      12   200   69        5.325        4.352
+   …
+      off: the base moves on  32 of 150 frames, largest step 1.331 ×, rests at 42.598 ×
+    80 ms: the base moves on 123 of 150 frames, largest step 0.431 ×, rests at 42.598 ×
+   the rest values are identical: True
+   ring messages sent: 32 and 32, identical: True  (first six: [65, 66, 67, 69, 70, 71])
+
+2. A fast flick on camera.pan.x: 50 CC steps in 5 frames (CC 64 → 114)
+      off: moves on  5 frames, largest frame-to-frame move  8.0 % of the throw, at rest from frame 4 (67 ms) at 3200 px
+    80 ms: moves on 10 frames, largest frame-to-frame move  4.9 % of the throw, at rest from frame 9 (150 ms) at 3200 px
+   the last message arrives on frame 4 (67 ms); the glide lands 83 ms after it (the first frame at or after 80 ms)
+   the rest values are identical: True; ring messages identical: True (5 sent)
+
+3. The rings: in 1 and 2 the CC sent back to the knob is the same list, off and on —
+   during a glide the ring carries the knob's own target, never the base in flight.
+
+4. A preset load in the middle of a glide
+   2 frames into a turn to the end and a fade to black: pan 1379 px, dim 0.655; gliding: ['camera.pan.x', 'output.dim']
+   load TRIP: pan is 0 px (the preset's)
+   next frame: pan 0 px, dim 0.483; gliding: ['output.dim']
+   20 frames on: pan 0 px (the load's value stands), dim 0.000 (the session's: it arrived), the crossfader still caught: True
+
+5. One turn is one undo step at 80 ms
+   after the 2 s turn: 1 step on the stack, still open (label '')
+   400 ms of quiet after the landing: ['Pan X +0 px → +2560 px']
+   undo: pan back at 0 px (was 0); nothing glides on: True
+
+Not shown here: the APC40 itself. Whether its encoder re-bases cleanly with a
+value in flight, and how 80 ms feels under the hand, are for the machine.

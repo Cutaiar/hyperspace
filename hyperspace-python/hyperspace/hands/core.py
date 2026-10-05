@@ -61,6 +61,24 @@ ranges belong to the box, not to a setup: they live in
 tools/hands_probe.py --calibrate). Rig choices — tracking mode, which
 features, the MIDI port — are the ``[hands]`` section of config.toml.
 
+The same file holds the interaction box (plan 18): bounds on the palm's
+x, y and z in the Leap's millimetres, one box for both hands, any
+coordinate open. A hand the tracker sees but whose palm is outside it
+reads absent — its axes NaN, its switches dropped, presence off, no
+skeleton — exactly as if tracking had lost it (`HandsIO.poll`), with a
+Schmitt edge (`BOX_EDGE`) so a hand on a face does not flicker. The
+sweep sets the box from where the palms went (`_sweep_box`); "reset
+ranges" opens it; no box, the default, bounds nothing.
+
+  {"schema": "hyperspace.hands/2",
+   "axes": {"left.x": {"lo": -214.2, "hi": 18.5}, …},
+   "box": {"x": [-262.0, 262.0], "y": [71.5, 402.0], "z": null}}
+
+``box`` is absent or null (no bounds) or has x, y, z each ``[lo, hi]``
+or null (open). A ``/1`` file has no box, is read as it is and is never
+rewritten at load; the first save over a file that is not ``/2`` first
+keeps it beside itself as ``hands.json.bak-v1`` (`_keep`).
+
 The tracking service calls back on its own thread; `LeapSource` keeps
 the newest frame under a lock and the render loop reads it once per
 frame (`HandsIO.poll`), so nothing from the SDK thread touches the
@@ -76,6 +94,7 @@ no lane, no MIDI reads it.
 from __future__ import annotations
 
 import copy
+import itertools
 import json
 import math
 import sys
@@ -104,8 +123,15 @@ SIDES = ("left", "right")
 LEARN_MOVE = 0.25        # y an axis must travel to win a learn
 STALE_S = 0.25           # no tracking frame for this long: no hands
 CAL_FILE = "hands.json"
-CAL_SCHEMA = "hyperspace.hands/1"
+CAL_SCHEMA = "hyperspace.hands/2"
 CAL_MIN_SAMPLES = 30
+# the interaction box: bounds on the palm, in the Leap's mm (plan 18 WP1)
+BOX_AXES = ("x", "y", "z")
+BOX_MARGIN = 40.0     # mm: the sweep's box stands this far outside what the palms covered
+BOX_EDGE = 15.0       # mm: a hand that is in stays in until it is this far past a face
+BOX_MIN_SPAN = 120.0  # mm: a coordinate swept over less than this is left open
+# "x" / "y" / "z" → (lo, hi) in mm, or None for an open coordinate
+Box = dict[str, tuple[float, float] | None]
 GROUP = "hands"
 
 # feature → (unit, default lo, default hi); x has a per-hand default below
@@ -408,6 +434,7 @@ class HandSettings:
     smooth: float = 1.0          # One Euro min cutoff, Hz — lower is steadier at rest
     response: float = 4.0        # One Euro beta — higher follows fast moves closer
     catch_s: float = 0.15        # glide onto a returning hand
+    learn_depth: float = 0.25    # the depth a Learn lands with when it lands as a push
     rate: int = 200              # MIDI messages a second per axis at most (0 = no cap)
     steady: float = 0.35         # 7-bit hysteresis, in steps past the half-step
     pinch_close: float = 0.34    # ×palm: tips closer than this close the switch
@@ -481,6 +508,12 @@ def register(reg, settings: HandSettings) -> None:
              "track closer; lower: steadier but laggier.")
     cont(f"{GROUP}.catch", "Catch", g, "catch_s", 0.0, 1.0, fmt=secs,
          tip="When a hand comes back, glide onto it over this long instead of jumping.")
+    cont(f"{GROUP}.learn_depth", "Learn depth", g, "learn_depth", 0.05, 1.0,
+         fmt=lambda v: f"{v:.2f}",
+         tip="The depth a hand Learn lands with when it lands as a push — the number "
+             "the ROUTING row shows. 0.25: the whole tilt moves the param a quarter of "
+             "its throw, half each way from where you set it. Rows you already have "
+             "keep theirs.")
     cont(f"{GROUP}.rate", "MIDI rate", g, "rate", 0, 1000, integer=True,
          fmt=lambda v: "no cap" if v <= 0 else f"{int(v)}/s",
          tip="Most messages a second per axis to the DAW port (0: no cap). "
@@ -613,12 +646,123 @@ def load_calibration(path: Path | None) -> dict[str, dict]:
         return {}
 
 
-def save_calibration(path: Path, ranges: dict[str, tuple[float, float]]) -> None:
+def _pair(v) -> tuple[float, float] | None:
+    """A box coordinate as the file spells it, ``[lo, hi]``: two finite
+    numbers, lo < hi — else None."""
+    if not isinstance(v, (list, tuple)) or len(v) != 2:
+        return None
+    if any(isinstance(n, bool) or not isinstance(n, (int, float)) for n in v):
+        return None
+    lo, hi = float(v[0]), float(v[1])
+    return (lo, hi) if math.isfinite(lo) and math.isfinite(hi) and lo < hi else None
+
+
+def load_box(path: Path | None) -> Box | None:
+    """The interaction box in the calibration file, or None when it has
+    none (no file, a ``/1`` file, ``"box": null``, every coordinate open).
+
+    A bad box opens, it never hides the hands: a coordinate that is not
+    ``[lo, hi]`` with two finite numbers, lo < hi, is open, and a `box`
+    that is no object is no box — each said once on stderr. A file that
+    does not read is `load_calibration`'s to report."""
+    if path is None or not path.exists():
+        return None
+    try:
+        raw = json.loads(path.read_text()).get("box")
+    except (OSError, ValueError, AttributeError):
+        return None
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        print(f"hands: {path.name}: box: not an object ({str(raw)[:40]!r}); no box",
+              file=sys.stderr)
+        return None
+    box: Box = {}
+    for c in BOX_AXES:
+        v = raw.get(c)
+        box[c] = None if v is None else _pair(v)
+        if box[c] is None and (v is not None or c not in raw):
+            why = ("missing" if c not in raw
+                   else f"not [lo, hi] with lo < hi ({str(v)[:40]!r})")
+            print(f"hands: {path.name}: box.{c}: {why}; left open", file=sys.stderr)
+    return box if any(b is not None for b in box.values()) else None
+
+
+def inside(box: Box | None, feats: dict, grow: float = 0.0) -> bool:
+    """Is a palm (`features`' x, y, z in mm) in the box? Each coordinate
+    with a bound must lie within it, `grow` mm past either face allowed
+    (the Schmitt edge: `BOX_EDGE` for a hand already in). No box: True."""
+    if box is None:
+        return True
+    for c in BOX_AXES:
+        b = box.get(c)
+        if b is not None and c in feats and not b[0] - grow <= feats[c] <= b[1] + grow:
+            return False
+    return True
+
+
+def save_calibration(path: Path, ranges: dict[str, tuple[float, float]],
+                     box: Box | None = None) -> None:
     data = {"schema": CAL_SCHEMA,
             "axes": {k: {"lo": round(lo, 3), "hi": round(hi, 3)}
-                     for k, (lo, hi) in ranges.items()}}
+                     for k, (lo, hi) in ranges.items()},
+            "box": None if box is None else
+            {c: None if box.get(c) is None else [round(n, 3) for n in box[c]]
+             for c in BOX_AXES}}
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=1) + "\n")
+
+
+def _old_schema(path: Path) -> str | None:
+    """What a file about to be overwritten is, when it is not this
+    build's: its schema's number ("1"), "1" for a file with no schema or
+    one that does not parse — None when there is no file or it is
+    already `CAL_SCHEMA` (nothing to keep)."""
+    try:
+        raw = path.read_bytes()
+    except FileNotFoundError:
+        return None
+    except OSError:
+        return "1"              # there, unreadable: let `_keep` say why
+    try:
+        schema = json.loads(raw).get("schema")
+    except (ValueError, AttributeError):
+        return "1"
+    if schema == CAL_SCHEMA:
+        return None
+    n = schema.rsplit("/", 1)[-1] if isinstance(schema, str) else ""
+    return n if n.isdigit() else "1"
+
+
+def _keep(path: Path, schema: str = "1") -> Path:
+    """The file as it is, copied beside itself before the first save of
+    this build rewrites it: ``hands.json.bak-v1``, or
+    ``hands.json.bak-v1-<YYYYmmdd-HHMMSS>`` (then ``-2``, ``-3`` …) when
+    that name is taken. An exclusive create, so nothing already there —
+    an earlier backup, a copy the owner made — is ever overwritten.
+    routing.backup's naming and rule, spelled here because this module
+    imports nothing from the host (only its own package's signal and
+    tape). Raises OSError when no copy could be made; the caller saves
+    all the same."""
+    data = path.read_bytes()
+    base = f"{path.name}.bak-v{schema}"
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    names = itertools.chain([base, f"{base}-{stamp}"],
+                            (f"{base}-{stamp}-{n}" for n in range(2, 100)))
+    for name in names:
+        bak = path.with_name(name)
+        try:
+            f = bak.open("xb")
+        except FileExistsError:
+            continue
+        try:
+            with f:
+                f.write(data)
+        except OSError:
+            bak.unlink(missing_ok=True)     # ours, and incomplete
+            raise
+        return bak
+    raise FileExistsError(f"every name from {base} on is taken")
 
 
 # --------------------------------------------------------------- source
@@ -824,6 +968,8 @@ class HandsIO:
         self.cal_path = cal_path
         self.clock = clock
         cal = load_calibration(cal_path)
+        # the interaction box, None for no bounds (the default, an old file)
+        self.box: Box | None = load_box(cal_path)
         self.state = []
         for a in settings.axes:
             lo, hi = default_range(a.side, a.feature)
@@ -852,6 +998,9 @@ class HandsIO:
         # the eight pinch switches, whether or not the ratios are axes
         self.gates = {s: {f: Gate() for f in PINCHES} for s in SIDES}
         self.frame: dict[str, dict | None] = {s: None for s in SIDES}  # native features
+        # side → the features of a hand the tracker sees but the box keeps
+        # out: absent to everything, drawn hollow on the HANDS page
+        self.outside: dict[str, dict | None] = {s: None for s in SIDES}
         # side → `skeleton` for each hand present this frame: display data
         # (the ghost hands), never shaped; empty from a source without one
         self.skeleton: dict[str, dict] = {}
@@ -861,6 +1010,12 @@ class HandsIO:
         self._learn_base: list[float | None] | None = None
         # calibration sweep in progress: axis name → raw samples
         self._cal: dict[str, list[float]] | None = None
+        # and where the palms went during it, (x, y, z) mm and whose, both
+        # hands in one list whatever the dofs: what the box is made from
+        self._palm: list[tuple] | None = None       # (x, y, z, side)
+        # the box's Schmitt state per hand: was the palm in, last frame it was seen
+        self._in_box = {s: False for s in SIDES}
+        self._kept = False      # this build's one backup of an old file was made
         self._cal_until = 0.0
         self.cal_note = ""
         if out is None:
@@ -977,7 +1132,33 @@ class HandsIO:
         msgs: list[mido.Message] = []
         for s, side in enumerate(SIDES):
             h = hands.get(side)
-            here = h is not None and h[1] >= self.min_conf
+            # in the box: the tracker has the hand, and its palm is inside
+            # the bounds — past a face by BOX_EDGE before a hand that is in
+            # goes out, so one on a face does not flicker. No box bounds
+            # nothing, and a sweep ignores it, or it could never be swept
+            # wider. (getattr: a HandsIO from before a hot reload has none.)
+            # The edge's state is the palm's own (`_in_box`), kept through a
+            # frame the confidence floor drops, so a dip in confidence cannot
+            # put a hand in the edge band out for good; it is forgotten when
+            # the tracker has no hand at all.
+            tracked = h is not None and h[1] >= self.min_conf
+            box = getattr(self, "box", None)
+            if getattr(self, "_in_box", None) is None:
+                self._in_box = {sd: False for sd in SIDES}
+            if h is None:
+                self._in_box[side] = False
+            elif box is not None:
+                self._in_box[side] = inside(box, h[0],
+                                            BOX_EDGE if self._in_box[side] else 0.0)
+            here = tracked and (box is None or self._cal is not None or self._in_box[side])
+            if getattr(self, "outside", None) is None:
+                self.outside = {sd: None for sd in SIDES}
+            self.outside[side] = h[0] if tracked and not here else None
+            palm = getattr(self, "_palm", None)
+            if tracked and fresh and self._cal is not None and palm is not None:
+                at = tuple(float(h[0].get(c, math.nan)) for c in BOX_AXES)
+                if all(math.isfinite(v) for v in at):     # a partial frame is no sample
+                    palm.append((*at, side))
             self.frame[side] = h[0] if here else None
             if here != self.present[side]:
                 self.present[side] = here
@@ -1075,18 +1256,31 @@ class HandsIO:
         moves all its axes at once, so first-to-move won't do. The route
         goes into the loaded preset through `learn.learn_source` (the
         referee and the Replace / Keep prompt as ever); no file is written,
-        the preset shows dirty until a save (plan 13 §3.3)."""
-        if getattr(learn, "learning", None) is None:
+        the preset shows dirty until a save (plan 13 §3.3).
+
+        A learn says what it waits for (plan 17 WP2: `learn.accepts`,
+        asked per axis address): under "Learn hand ▸ left" only the left
+        hand's axes can win, under "Learn desk" none can; a learn object
+        without `accepts` takes any axis, as before."""
+        ok = getattr(learn, "accepts", None)
+        pid = getattr(learn, "learning", None)
+        if pid is None or (ok is not None
+                           and not any(ok(self.address(i)) for i in range(len(self.state)))):
             self._learn_base = None
             return
+        # a re-arm starts a fresh baseline (`armed_n`: also of the same param and want)
+        key = (pid, getattr(learn, "want", None), getattr(learn, "armed_n", None))
+        if key != getattr(self, "_learn_key", None):
+            self._learn_base, self._learn_key = None, key
         # only a hand counts as movement: an axis whose hand is away reads
         # None, so a return spring can never complete a learn
         ys = [st.y if st.follow.live else None for st in self.state]
         if self._learn_base is None:
             self._learn_base = ys
             return
-        moved = [abs(y - b) if y is not None and b is not None else 0.0
-                 for y, b in zip(ys, self._learn_base)]
+        moved = [abs(y - b) if y is not None and b is not None
+                 and (ok is None or ok(self.address(i))) else 0.0
+                 for i, (y, b) in enumerate(zip(ys, self._learn_base))]
         # an axis first seen after the learn began gets its base now
         self._learn_base = [b if b is not None else y for y, b in zip(ys, self._learn_base)]
         best = max(range(len(moved)), key=moved.__getitem__)
@@ -1095,10 +1289,12 @@ class HandsIO:
             # pinched while learning: the pinch becomes the row's gate, so
             # the same movement means this only while the thumb agrees
             gate = self.held_gate(self.axes[best].side)
-            if gate is None:
-                learn.learn_source(self.address(best))
-            else:
-                learn.learn_source(self.address(best), when=gate)
+            # what the row lands as is the learn's (plan 18 WP3): told whether
+            # this axis rests in the middle — its setup now, not the feature
+            # table — and the session's depth for a push
+            centred = bool(self.axes[best].bipolar)
+            depth = float(self.settings.learn_depth)
+            learn.learn_source(self.address(best), when=gate, centred=centred, depth=depth)
 
     def _open(self) -> None:
         """Open the port the config names; on failure say why once and
@@ -1164,11 +1360,13 @@ class HandsIO:
 
     def start_calibration(self, seconds: float = 20.0) -> None:
         self._cal = {a.name: [] for a in self.axes}
+        self._palm = []
         self._cal_until = self.clock() + seconds
         self.cal_note = "sweep every axis end to end"
 
     def cancel_calibration(self) -> None:
         self._cal = None
+        self._palm = None
         self.cal_note = "calibration cancelled"
 
     def _finish_calibration(self, now: float) -> None:
@@ -1186,20 +1384,70 @@ class HandsIO:
                 done += 1
         missed = len(self.axes) - done
         self.cal_note = f"calibrated {done} axes" + (f", {missed} not reached" if missed else "")
+        palm, self._palm = getattr(self, "_palm", None), None
+        self.cal_note += " · " + self._sweep_box(palm or [])
         self.save_ranges()
+
+    def _sweep_box(self, palm: list[tuple]) -> str:
+        """The box from where the palms went in a sweep, and the note
+        that says so. Per coordinate, the 2nd–98th percentile of both
+        hands' samples together (the ranges' own rule) pushed out by
+        BOX_MARGIN — the margin is what lets a hand hold an axis at its
+        end stop. A coordinate no hand swept over BOX_MIN_SPAN is left
+        open (a sweep that never moved sideways must not make a slot;
+        each hand's own travel is what counts, so two still hands held
+        apart are not a sweep), and x is made symmetric about the camera,
+        so sweeping one hand cannot shut the other out. Too few samples:
+        the box stays as it was."""
+        if len(palm) < CAL_MIN_SAMPLES:
+            return "box left as it was (too few palm samples)"
+        pct = lambda v: (v[int(0.02 * (len(v) - 1))], v[int(0.98 * (len(v) - 1))])
+        box: Box = {}
+        for k, c in enumerate(BOX_AXES):
+            lo, hi = pct(sorted(p[k] for p in palm))
+            own = [pct(sorted(p[k] for p in palm if p[3] == sd)) for sd in SIDES
+                   if any(p[3] == sd for p in palm)]
+            if max(b - a for a, b in own) < BOX_MIN_SPAN:
+                box[c] = None
+            elif c == "x":
+                half = max(abs(lo), abs(hi)) + BOX_MARGIN
+                box[c] = (-half, half)
+            else:
+                box[c] = (lo - BOX_MARGIN, hi + BOX_MARGIN)
+        is_open = [c for c in BOX_AXES if box[c] is None]
+        self.box = box if len(is_open) < len(BOX_AXES) else None
+        if self.box is None:
+            return "box: open (not swept)"
+        if is_open:
+            return f"box: {', '.join(is_open)} open (not swept)"
+        return "box " + " × ".join(f"{box[c][1] - box[c][0]:.0f}" for c in BOX_AXES) + " mm"
 
     def reset_ranges(self) -> None:
         for a, st in zip(self.axes, self.state):
             st.lo, st.hi = default_range(a.side, a.feature)
+        self.box = None
+        self.cal_note = "ranges back to the defaults, box open"
         self.save_ranges()
-        self.cal_note = "ranges back to the defaults"
 
     def save_ranges(self) -> None:
+        """The ranges and the box to hands.json. The first time the file
+        there is not this build's (`_old_schema`), it is first kept beside
+        itself (`_keep`); a copy that cannot be made is said in `cal_note`
+        and never stops the save."""
         if self.cal_path is None:
             return
         try:
-            save_calibration(self.cal_path, {a.name: (st.lo, st.hi)
-                                             for a, st in zip(self.axes, self.state)})
+            old = None if getattr(self, "_kept", False) else _old_schema(self.cal_path)
+            if old is not None:
+                bak = _keep(self.cal_path, old)
+                self._kept = True       # once: a save that fails must not copy again
+                self.cal_note += f" · the old file kept as {bak.name}"
+        except OSError as e:
+            self.cal_note += f" · no backup of the old file: {e}"[:120]
+        try:
+            save_calibration(self.cal_path,
+                             {a.name: (st.lo, st.hi) for a, st in zip(self.axes, self.state)},
+                             getattr(self, "box", None))
         except OSError as e:
             self.cal_note = f"save: {e}"[:120]
 

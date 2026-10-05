@@ -1,14 +1,17 @@
 """The LOOKBACK page — the frame history and its composite (lookback.py).
 
-Four sections on the dream group: the composite (on, the two mixes, the
-age fade and the grade), the chroma (the dream buffer's hue, saturation and
-tint — lookback.py's chroma()), the history (depth, cadence, size, and a row of
+Three sections on the dream group, named for what a knob acts on (plan 20
+WP4): ECHOES (how bright, how long, how many, how far apart, and a row of
 live thumbnails — the echoes newest first, straight from the atlas
 texture, with the dream buffer at the end when a worker has filled it),
-and the dream worker's settings (dream.py) with its status line —
-device and copy path, ms per submit, frames behind, drops, NaN resets,
-the stability clamp — or why there is none. One preset strip for the
-group, under the first title.
+DREAM (the worker's status line — device and copy path, ms per submit,
+frames behind, drops, NaN resets, the stability clamp — or why there is
+none; the net layer as a row of chips; the worker's settings; the dream
+buffer's hue, saturation and tint — lookback.py's chroma()), and BOTH
+(the grade, the occlusion and the size, which every layer of the wake
+shares). `SECTIONS` is the layout: which param is drawn under which
+title, in order, two to a row. One preset strip for the group, under the
+page's title.
 
 A function over the Panel, like ui_presets: it draws with the panel's
 widget helpers and keeps no state, so a hot reload of this module lands
@@ -23,15 +26,53 @@ from __future__ import annotations
 from imgui_bundle import imgui
 
 from . import ui
-from .lookback import RES, tint_colour
+from .lookback import LAYERS, RES, tint_colour
+from .params import Kind
 
-RES_W = 84          # the res and octaves combos
-# the half-width cells' labels: the registry's are too long for them
-SHORT = {"dream.mix": "dream", "dream.echo_mix": "echo", "dream.hue": "hue",
-         "dream.sat": "sat", "dream.tint_hue": "tint hue", "dream.tint_sat": "tint sat",
-         "dream.k": "blend k", "dream.mask_decay": "mask", "dream.step": "step",
-         "dream.fade": "fade"}
+# what is drawn under each title, in order. `dream.on` is the page's own
+# switch, above them; `dream.layer` is the DREAM section's chip row and the
+# rest are half-width cells, two to a row.
+SECTIONS = {
+    "echoes": ("dream.echo_mix", "dream.fade", "dream.echoes", "dream.gap"),
+    "dream": ("dream.layer", "dream.mix", "dream.k", "dream.step", "dream.steps",
+              "dream.mask_decay", "dream.jitter", "dream.octaves", "dream.hue",
+              "dream.sat", "dream.tint", "dream.tint_from", "dream.tint_hue",
+              "dream.tint_sat"),
+    "both": ("dream.darken", "dream.contrast", "dream.occlude", "dream.res"),
+}
+NOTES = {"dream": "[dream] in config.toml", "both": "echoes and dream alike"}
+# a cell's label: the section says whose knob it is, so the registry's
+# "Echo …" / "Dream …" is dropped here (the ROUTING page, a Learn message
+# and the desk diagram say the registry's)
+SHORT = {"dream.echo_mix": "brightness", "dream.fade": "fade time", "dream.echoes": "count",
+         "dream.gap": "time apart", "dream.mix": "brightness", "dream.k": "speed",
+         "dream.step": "strength", "dream.steps": "passes", "dream.mask_decay": "linger",
+         "dream.jitter": "jitter", "dream.octaves": "scales", "dream.hue": "hue",
+         "dream.sat": "saturation", "dream.tint": "tint", "dream.tint_from": "tint from",
+         "dream.tint_hue": "tint hue", "dream.tint_sat": "tint sat", "dream.darken": "darken",
+         "dream.contrast": "contrast", "dream.occlude": "shape hides", "dream.res": "detail"}
+# dream.layer's chips, one per lookback.LAYERS entry. The first three are
+# the words the param's tip uses; the inception layers share one description
+# there, so they keep the end of their names until someone has looked at
+# them side by side (plan 20 hand check P5). Renaming is one line each.
+LAYER_CHIPS = {"conv2_2": "grain", "conv3_3": "swirl", "conv4_3": "blot",
+               "inception3b": "3b", "inception4c": "4c", "inception4e": "4e"}
+LAYER_SAYS = {"conv2_2": "fine grain", "conv3_3": "the classic swirl", "conv4_3": "blotchier",
+              "inception3b": "the eyes-and-dogs curls, finest",
+              "inception4c": "the eyes-and-dogs curls", "inception4e": "the eyes-and-dogs curls, "
+              "largest"}
+LABEL_W = 94        # a cell's label column: "SHAPE HIDES", the longest, is 88 px
 THUMB_H = 48        # thumbnail height, px; width follows the echo's aspect
+TIP_W = 380         # this page's own hovers wrap at this width (a set_tooltip line does not)
+STATUS_LINES = 3   # the worker's status is at most this tall; the rest is on its hover
+
+
+def page_label(pid: str) -> str:
+    """What the page calls `pid`: its cell's label, the switch's own, or —
+    for the layer — its chips'."""
+    if pid == "dream.layer":
+        return " / ".join(LAYER_CHIPS.get(name, name) for name in LAYERS)
+    return SHORT.get(pid, "Look-back")
 
 
 def page(panel, dt: float) -> None:
@@ -47,75 +88,94 @@ def page(panel, dt: float) -> None:
     imgui.text_disabled(status)
     if getattr(lb, "error", ""):
         imgui.text_colored(ui.WARN, f"GLSL: {lb.error} — on the shipped helpers")
-    # the composite and the dream's chroma side by side, so the page fits
-    if imgui.begin_table("##lookback", 2, imgui.TableFlags_.sizing_stretch_same):
-        # the titles in a row of their own: a table aligns the text baseline
-        # across a row's cells, which would drop one title below the other
-        imgui.table_next_column()
-        panel._section("composite")
-        imgui.table_next_column()
-        panel._section("chroma")
-        imgui.table_next_column()
-        for pid in ("dream.mix", "dream.echo_mix", "dream.fade", "dream.darken",
-                    "dream.contrast", "dream.occlude"):
-            panel.half(pid, SHORT.get(pid))
-        imgui.table_next_column()
-        for pid in ("dream.hue", "dream.sat", "dream.tint"):
-            panel.half(pid, SHORT.get(pid))
-        panel._label_cell("from", width=ui.HALF_LABEL_W)
-        panel._tip(r["dream.tint_from"])
-        panel._combo("dream.tint_from", 80)
-        imgui.same_line()
-        _tint_swatch(r, lb)
-        panel.half("dream.tint_hue", SHORT.get("dream.tint_hue"))
-        panel.half("dream.tint_sat", SHORT.get("dream.tint_sat"))
-        imgui.end_table()
     imgui.spacing()
 
-    panel._section("history", note="size rebuilds the ring")
-    imgui.push_style_color(imgui.Col_.text, ui.FAINT)
-    imgui.text_wrapped(_trail_text(r))
-    imgui.pop_style_color()
-    panel._row("dream.echoes")
-    panel._label_cell("spacing")
-    panel._tip(r["dream.gap"])
-    panel._slider("dream.gap", -(RES_W + imgui.get_style().item_spacing.x))
-    imgui.same_line()
-    panel._combo("dream.res", RES_W)
-    imgui.text_disabled(f"echo size  {_echo_text(lb)}")
+    panel._section("echoes", note=_trail_note(r))
+    _cells(panel, lb, "##echoes", SECTIONS["echoes"])
     _thumbnails(panel, lb)
     imgui.spacing()
 
-    panel._section("dream worker", note="[dream] in config.toml")
-    imgui.push_style_color(imgui.Col_.text, ui.FAINT)
-    err = getattr(panel, "dream_error", "")
-    if err:                               # torch missing: said plainly, in the warning colour
-        imgui.pop_style_color()
-        imgui.push_style_color(imgui.Col_.text, ui.WARN)
-    imgui.text_wrapped(_worker_status(lb, err))
-    imgui.pop_style_color()
-    panel._label_cell("net")
-    panel._tip(r["dream.layer"])
-    panel._combo("dream.layer", -(RES_W + imgui.get_style().item_spacing.x))
-    imgui.same_line()
-    panel._combo("dream.octaves", RES_W)
-    if imgui.begin_table("##worker", 2, imgui.TableFlags_.sizing_stretch_same):
-        for pid in ("dream.k", "dream.mask_decay", "dream.step", "dream.steps",
-                    "dream.jitter"):
-            imgui.table_next_column()
-            panel.half(pid, SHORT.get(pid))
-        imgui.end_table()
+    panel._section("dream", note=NOTES["dream"])
+    _worker_line(panel, lb)
+    _layer_chips(panel)
+    _cells(panel, lb, "##dream", [pid for pid in SECTIONS["dream"] if pid != "dream.layer"])
+    imgui.spacing()
+
+    panel._section("both", note=NOTES["both"])
+    _cells(panel, lb, "##both", SECTIONS["both"])
 
 
-def _trail_text(r) -> str:
-    """What an echo is, and how far back this trail reaches — in seconds,
-    the same on any screen (plan 14 WP6)."""
+def _say(text: str) -> None:
+    """A hover that wraps: a chip's, the swatch's and the worker's whole
+    status are longer than a tooltip's one line can be wide."""
+    if imgui.begin_tooltip():
+        imgui.push_text_wrap_pos(TIP_W)
+        imgui.text_unformatted(text)
+        imgui.pop_text_wrap_pos()
+        imgui.end_tooltip()
+
+
+def _cells(panel, lb, table: str, ids) -> None:
+    """`ids` two to a row: a slider, or a combo for an enum, behind its label."""
+    if not imgui.begin_table(table, 2, imgui.TableFlags_.sizing_stretch_same):
+        return
+    for pid in ids:
+        imgui.table_next_column()
+        p = panel.reg[pid]
+        if p.kind is not Kind.ENUM:
+            panel.half(pid, SHORT[pid], label_w=LABEL_W)
+            continue
+        panel._label_cell(SHORT[pid], width=LABEL_W)
+        panel._tip(p)
+        if pid == "dream.res":          # the size it comes to, where the page had a line for it
+            panel._combo(pid, -1, tip=f"{p.tip}\n\nNow: {_echo_text(lb)}.")
+        else:
+            panel._combo(pid, -1)
+    if "dream.tint_sat" in ids:         # the colour those three make, in the cell left over
+        imgui.table_next_column()
+        _tint_swatch(panel, lb)
+    imgui.end_table()
+
+
+def _layer_chips(panel) -> None:
+    """`dream.layer` as six chips tiling the row, the lit one its base. A
+    click is a scene-setter's write (the layer is not modulatable: a change
+    loads another trunk); a right-click on any of them is the param's menu."""
+    a = panel.reg["dream.layer"]
+    p = panel._real(a)
+    gap = imgui.get_style().item_spacing.x
+    w = max((imgui.get_content_region_avail().x - gap * (len(LAYERS) - 1)) / len(LAYERS), 1.0)
+    row = None
+    for k, name in enumerate(LAYERS):
+        if k:
+            imgui.same_line()
+        hit = ui.lit_chip(f"{LAYER_CHIPS.get(name, name)}##chip.{a.id}.{k}", k == p.base,
+                          size=imgui.ImVec2(w, 0))
+        if imgui.is_item_hovered():
+            _say(f"{name}: {LAYER_SAYS.get(name, name)}\n\n{a.tip}")
+        panel._ctx(a, key=f".{k}")
+        lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        row = (lo, hi) if row is None else (row[0], hi)
+        if hit:
+            p.set(k)
+    # armed to learn: one outline round the row, as a combo would have had
+    # one (panel._learn_frame per chip would draw six)
+    lrn = panel.learn
+    if row is not None and lrn is not None and lrn.learning == a.id:
+        imgui.get_window_draw_list().add_rect(
+            imgui.ImVec2(row[0].x - 2, row[0].y - 2), imgui.ImVec2(row[1].x + 2, row[1].y + 2),
+            ui.u32(ui.RED), 999.0, 2.0)
+
+
+def _trail_note(r) -> str:
+    """How far back the trail reaches — in seconds, the same on any screen
+    (plan 14 WP6). What an echo is, is the brightness cell's hover."""
     n, gap = int(r["dream.echoes"].value), float(r["dream.gap"].value)
-    fade = float(r["dream.fade"].value)
-    reach = f"{n} echo(es), one every {gap * 1000:.0f} ms: the trail reaches " \
-            f"{n * gap:.2f} s back" if gap > 0 else f"{n} echo(es), one a frame"
-    return (f"an echo is an earlier frame, drawn faintly under this one. {reach}; "
-            f"each halves in brightness every {fade:.2f} s")
+    if n <= 0:
+        return "no echoes: the dream alone"
+    if gap <= 0:
+        return f"{n}, one a frame"
+    return f"{n} × {gap * 1000:.0f} ms · the trail reaches {n * gap:.2f} s"
 
 
 def _status(lb, on: bool) -> str:
@@ -130,9 +190,10 @@ def _status(lb, on: bool) -> str:
     return f"{n} echo(es) · {dream}"
 
 
-def _tint_swatch(r, lb) -> None:
+def _tint_swatch(panel, lb) -> None:
     """The tint colour the composite uses this frame, as a swatch: the
     chosen one, or — from the scene — whatever hue the newest echo had."""
+    r = panel.reg
     scene = int(r["dream.tint_from"].value) == 1
     live = getattr(lb, "tint_rgb", None)         # None without a renderer
     if live is not None:
@@ -141,13 +202,19 @@ def _tint_swatch(r, lb) -> None:
         rgb = (1.0, 1.0, 1.0)
     else:
         rgb = tint_colour(r["dream.tint_hue"].value, r["dream.tint_sat"].value)
+    panel._label_cell("the tint", width=LABEL_W)
     imgui.color_button("##tint", imgui.ImVec4(*rgb, 1.0),
                        imgui.ColorEditFlags_.no_tooltip | imgui.ColorEditFlags_.no_alpha,
-                       imgui.ImVec2(36, imgui.get_frame_height()))
-    if scene:
-        imgui.same_line()
-        imgui.text_disabled("the scene's mean hue" if getattr(lb, "scene_mean", None)
-                            else "the scene's mean hue — nothing captured yet")
+                       imgui.ImVec2(max(imgui.get_content_region_avail().x, 1.0),
+                                    imgui.get_frame_height()))
+    if imgui.is_item_hovered():
+        if not scene:
+            says = "the colour chosen (tint hue, tint sat)"
+        elif getattr(lb, "scene_mean", None):
+            says = "the scene's mean hue"
+        else:
+            says = "the scene's mean hue — nothing captured yet"
+        _say(f"The colour the dream is tinted towards: {says}.")
 
 
 def _worker(lb):
@@ -173,6 +240,42 @@ def _worker_status(lb, error: str = "") -> str:
         return w.status()
     except Exception as e:  # noqa: BLE001 — a status line must not take the page down
         return f"worker: {type(e).__name__}: {e}"[:120]
+
+
+def fit_lines(text: str, width: float, lines: int) -> str:
+    """`text`, or its start and an ellipsis when it would wrap to more than
+    `lines` lines of `width` pixels in the current font (ui.fit_text for a
+    wrapped paragraph)."""
+    room = lines * imgui.get_text_line_height() + 0.5
+
+    def fits(s: str) -> bool:
+        return imgui.calc_text_size(s, wrap_width=width).y <= room
+    if fits(text):
+        return text
+    lo, hi = 0, len(text)
+    while lo < hi:                      # the longest start that fits with its "…"
+        mid = (lo + hi + 1) // 2
+        if fits(text[:mid] + "…"):
+            lo = mid
+        else:
+            hi = mid - 1
+    return text[:lo].rstrip() + "…"
+
+
+def _worker_line(panel, lb) -> None:
+    """The worker's status, at most STATUS_LINES tall so the page's height
+    does not depend on what the worker has to say: a longer one (drops, NaN
+    resets, the clamp and an error at once) ends in an ellipsis and is whole
+    on its hover."""
+    err = getattr(panel, "dream_error", "")
+    full = _worker_status(lb, err)
+    shown = fit_lines(full, imgui.get_content_region_avail().x, STATUS_LINES)
+    # torch missing: said plainly, in the warning colour
+    imgui.push_style_color(imgui.Col_.text, ui.WARN if err else ui.FAINT)
+    imgui.text_wrapped(shown)
+    imgui.pop_style_color()
+    if shown != full and imgui.is_item_hovered():
+        _say(full)
 
 
 def _echo_text(lb) -> str:
