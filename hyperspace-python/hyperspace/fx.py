@@ -520,11 +520,7 @@ class FxChain:
     def on_reload(self) -> None:
         """Hot-swap hook: every program is rebuilt from source on next use.
         A borrower holds none: only the owner releases programs."""
-        for _, prog, vao in self._progs.values():
-            vao.release()
-            prog.release()
-        self._progs.clear()
-        self._tried.clear()
+        self._release_programs()
         self._copy_vao.release()
         self._copy.release()
         self._build_copy()
@@ -563,14 +559,17 @@ class FxChain:
         """Everything this chain made on the GL context: its textures, its
         copy program and — unless it borrows them — its effect programs."""
         self.release_targets()
-        if getattr(self, "programs", None) is None:
-            for _, prog, vao in self._progs.values():
-                vao.release()
-                prog.release()
-            self._progs.clear()
-            self._tried.clear()
+        self._release_programs()
         self._copy_vao.release()
         self._copy.release()
+
+    def _release_programs(self) -> None:
+        """This chain's own effect programs (a borrower has none)."""
+        for _, prog, vao in self._progs.values():
+            vao.release()
+            prog.release()
+        self._progs.clear()
+        self._tried.clear()
 
     def run(self, target: moderngl.Framebuffer, t: float) -> list[str]:
         """Every active effect over the frame `begin()` handed out, the last

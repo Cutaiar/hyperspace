@@ -1268,6 +1268,14 @@ def test_a_face_pass_that_raises_leaves_the_frame_and_the_window_bound(ctx, tmp_
     r._seed_vao = vao                                # mended: the picture is back, the error gone
     assert not np.array_equal(_fdraw(ctx, r, _face_view(card, pattern=2), frames=2), want)
     assert r.face_error == ""
+    r._seed_vao = _Raises("again")                   # and an error does not outlive its pass:
+    _fdraw(ctx, r, _face_view(card, pattern=2))
+    assert r.face_error
+    r.fx.state.values["plasma"]["on"] = False        # nothing aimed at the faces any more
+    _fdraw(ctx, r, _face_view(card, pattern=2))
+    assert r.face_error == ""
+    r.fx.state.values["plasma"]["on"] = True
+    r._seed_vao = vao
 
     r = Renderer(ctx, fx=_aimed("plasma"))
 
@@ -1494,6 +1502,23 @@ def test_a_face_program_that_did_not_build_runs_no_face_pass(ctx, monkeypatch):
     assert _unused(r) and r.face_error == ""
     assert np.array_equal(got, _fdraw(ctx, R.Renderer(ctx), _face_view(faces=False, lines=True),
                                       frames=2))
+
+
+def test_a_pattern_file_that_reads_the_faces_inputs_builds_the_seed_too(ctx, tmp_path,
+                                                                        monkeypatch):
+    """patterns.glsl is the owner's to edit, and the face fragment's inputs
+    (v_fid, v_alpha) are in scope there: a file that reads them by name
+    must not lose the faces because the seed could not compile."""
+    import hyperspace.render as R
+
+    f = tmp_path / "patterns.glsl"
+    f.write_text("vec4 pattern(int mode, vec2 uv, float fid) "
+                 "{ return vec4(uv, v_fid * 0.1 + u_mod[0] + u_mod[1] + 0.001 * u_time, 0.5 * v_alpha + 0.3); }\n")
+    monkeypatch.setattr(R, "PATTERNS_GLSL", f)
+    r = R.Renderer(ctx, fx=_aimed("plasma"))
+    assert r.pattern_error == "" and r._face_prog is not None and r._seed_prog is not None
+    got = _fdraw(ctx, r, _face_view(pattern=1))
+    assert r.face_error == "" and r.face_pic.tex is not None and got[..., :3].max() > 20
 
 
 def test_the_render_stack_imports_no_registry():

@@ -159,6 +159,10 @@ SEED_FS_HEAD = """
 #version 330
 in vec2 v_uv;
 out vec4 f_color;
+// the face fragment's other inputs, as face 0 at full alpha: a patterns.glsl
+// that reads them by name compiles here as it does there
+const float v_alpha = 1.0;
+const float v_fid = 0.0;
 """ + FACE_UNIFORMS
 
 # what a face shows at its own `uv`: the pattern, then the bitmap over it.
@@ -219,7 +223,7 @@ SEED_FS_TAIL = FACE_PX + """
 void main() {
     vec3 rgb;
     float shade;
-    face_px(v_uv, 0.0, rgb, shade);
+    face_px(v_uv, v_fid, rgb, shade);
     float s = clamp(shade / 2.8, 0.0, 1.0);
     f_color = vec4(rgb * s, s);
 }
@@ -710,6 +714,7 @@ class Renderer:
         if (chain is None or pic is None or seed is None or vao is None
                 or self._face_prog is None or not s.faces or int(s.instances) <= 0
                 or not chain.active()):
+            self.face_error = ""     # no pass asked for: nothing is wrong with it
             return None
         ctx = self.ctx
         try:

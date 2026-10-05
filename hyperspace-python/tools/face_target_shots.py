@@ -47,7 +47,8 @@ from hyperspace.view import ViewState
 
 OUT = ROOT / "docs" / "plans" / "assets" / "20-fx-dream-looks"
 W, H = 960, 600
-TW, TH = 384, 240            # a tile on the sheet
+TILE = (256, 160)            # a tile on the full sheet
+PR_TILE = (256, 160)         # and on the PR's four rows
 BAR = 18                     # a row's label strip
 PR_ROWS = ("kaleido", "plasma", "zoomblur", "huecycle")
 FOUR = ("plasma", "kaleido", "zoomblur", "huecycle")     # party-trip's stack
@@ -117,19 +118,20 @@ def shot(ctx, fbo, s: ViewState, fx: FxState, frames: int) -> tuple[np.ndarray, 
     return img, pic
 
 
-def tile(img: np.ndarray | None) -> Image.Image:
+def tile(img: np.ndarray | None, size: tuple[int, int]) -> Image.Image:
     """An image fitted into a tile, centred on black (the picture is square)."""
-    out = Image.new("RGB", (TW, TH), "black")
+    tw, th = size
+    out = Image.new("RGB", size, "black")
     if img is None:
         return out
     im = Image.fromarray(img)
-    k = min(TW / im.width, TH / im.height)
+    k = min(tw / im.width, th / im.height)
     im = im.resize((max(1, round(im.width * k)), max(1, round(im.height * k))), Image.LANCZOS)
-    out.paste(im, ((TW - im.width) // 2, (TH - im.height) // 2))
+    out.paste(im, ((tw - im.width) // 2, (th - im.height) // 2))
     return out
 
 
-def row(ctx, fbo, card: str, name: str | None, frames: int) -> list[Image.Image]:
+def row(ctx, fbo, card: str, name: str | None, frames: int) -> list[np.ndarray | None]:
     f_bmp, pic_bmp = shot(ctx, fbo, view(card), state(name, FACES), frames)
     f_scr, _ = shot(ctx, fbo, view(card), state(name, FACES, SCREEN), frames)
     f_pla, pic_pla = shot(ctx, fbo, view(pattern=PLAID), state(name, FACES), frames)
@@ -138,27 +140,31 @@ def row(ctx, fbo, card: str, name: str | None, frames: int) -> list[Image.Image]
         f_bmp, _ = shot(ctx, fbo, view(card), FxState(), frames)
         f_scr = f_bmp
         f_pla, _ = shot(ctx, fbo, view(pattern=PLAID), FxState(), frames)
-    return [tile(x) for x in (pic_bmp, f_bmp, f_scr, pic_pla, f_pla, f_frm)]
+    return [pic_bmp, f_bmp, f_scr, pic_pla, f_pla, f_frm]
 
 
 COLS = ("picture (bitmap over FLAT)", "faces: per face", "faces: screen",
         "picture (PLAID)", "faces: per face (PLAID)", "the effect on the frame")
 
 
-def sheet(rows: list[tuple[str, list[Image.Image]]], path: Path) -> None:
-    im = Image.new("RGB", (len(COLS) * TW, BAR + len(rows) * (TH + BAR)), "black")
+def sheet(rows: list[tuple[str, list[np.ndarray | None]]], path: Path,
+          size: tuple[int, int]) -> None:
+    """The rows as one image, small enough to live in git (the full
+    sheet is about a megabyte)."""
+    tw, th = size
+    im = Image.new("RGB", (len(COLS) * tw, BAR + len(rows) * (th + BAR)), "black")
     d = ImageDraw.Draw(im)
     for c, label in enumerate(COLS):
-        d.text((c * TW + 4, 3), label, fill=(160, 160, 160))
-    for k, (label, tiles) in enumerate(rows):
-        y = BAR + k * (TH + BAR)
+        d.text((c * tw + 4, 3), label, fill=(160, 160, 160))
+    for k, (label, shots) in enumerate(rows):
+        y = BAR + k * (th + BAR)
         d.text((4, y + 3), label, fill="white")
-        for c, t in enumerate(tiles):
-            im.paste(t, (c * TW, y + BAR))
-    im.save(path)
+        for c, img in enumerate(shots):
+            im.paste(tile(img, size), (c * tw, y + BAR))
+    im.save(path, optimize=True)
 
 
-def timing(ctx, frames: int = 240, runs: int = 2) -> str:
+def timing(ctx, frames: int = 240, runs: int = 3) -> str:
     """Median frame time at 1920×1080, no MSAA, ctx.finish() around each
     frame: what the face target adds to a frame."""
     w, h = 1920, 1080
@@ -219,10 +225,10 @@ def main() -> None:
         for name in base.names():
             rows.append((f"{base.specs[name].label}  ({name})", row(ctx, fbo, card, name, a.frames)))
             print("rendered", name)
-    sheet(rows, OUT / "face-target-contact-sheet.png")
+    sheet(rows, OUT / "face-target-contact-sheet.png", TILE)
     names = ["no effect", *base.names()]
     pr = [rows[0]] + [rows[names.index(n)] for n in PR_ROWS]
-    sheet(pr, OUT / "face-target.png")
+    sheet(pr, OUT / "face-target.png", PR_TILE)
     print("wrote", (OUT / "face-target-contact-sheet.png").relative_to(ROOT))
     print("wrote", (OUT / "face-target.png").relative_to(ROOT))
     if not a.no_timing:
