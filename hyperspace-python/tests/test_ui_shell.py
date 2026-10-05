@@ -914,3 +914,139 @@ def test_unbind_is_not_offered_on_a_session_only_param(rig, monkeypatch):
     assert "Unbind" in items and "Unbind ▸" not in items
     assert not table.routes_to("master.gain")
     assert [b.to_json() for b in table.midi() if b.layer != "preset"] == session
+
+
+def _learn_items(items: list[str]) -> list[str]:
+    return [i for i in items if i.startswith(("Learn", "Cancel"))]
+
+
+def test_the_menu_offers_learn_desk_and_learn_hand(rig, monkeypatch):
+    """Plan 17 WP2, fork 5: the one "Learn" is **Learn desk** and **Learn
+    hand ▸ left / right**. With a tracker: both; without: Learn desk only;
+    a param a hand cannot drive (not modulatable): no hand item; a file
+    path: neither. Each arms the learn with what it waits for; armed, the
+    menu reads the hint and offers Cancel. §3's menu count holds."""
+    panel = rig.panel
+    lrn = _learn_over(rig)
+    assert panel.hands is not None and panel.midi is None
+    _, items = menu(panel, monkeypatch, "view.speed", "view")
+    assert _learn_items(items) == ["Learn desk", "Learn hand ▸", "Learn hand/left",
+                                   "Learn hand/right"]
+    assert "Learn" not in items
+    # §3: unmapped, a rig with hands → Learn desk · Learn hand ▸ · Route a lane here…
+    rig.router.table.unbind("view.speed")
+    _, items = menu(panel, monkeypatch, "view.speed", "view")
+    assert [i for i in items if "/" not in i] == ["Learn desk", "Learn hand ▸",
+                                                  "Route a lane here…"]
+    # each arms with its want
+    menu(panel, monkeypatch, "view.speed", "view", click="Learn desk")
+    assert (lrn.learning, lrn.want) == ("view.speed", "desk")
+    lines, items = menu(panel, monkeypatch, "view.speed", "view")
+    assert _learn_items(items) == ["Cancel learn"]
+    assert "nothing to learn from (no MIDI)" in lines        # no adapter, no clickable desk yet
+    panel.midi = SimpleNamespace(table=rig.router.table)
+    lines, _ = menu(panel, monkeypatch, "view.speed", "view")
+    assert "turn a knob or press a button on the desk…" in lines
+    panel.midi = None
+    menu(panel, monkeypatch, "view.speed", "view", click="Cancel learn")
+    assert lrn.learning is None and lrn.want is None
+    for side in ("left", "right"):
+        menu(panel, monkeypatch, "view.speed", "view", click=f"Learn hand/{side}")
+        assert (lrn.learning, lrn.want) == ("view.speed", f"hand:{side}")
+        lines, _ = menu(panel, monkeypatch, "view.speed", "view")
+        assert f"move the {side} hand…" in lines
+        lrn.arm(None)
+    # a bare learn (no want) keeps the old words
+    lrn.arm("view.speed")
+    assert panel._learn_hint() == "move a hand…"
+    lrn.arm(None)
+    # not modulatable: a knob may still set it, a hand may not
+    assert not rig.reg["dream.gap"].modulatable
+    _, items = menu(panel, monkeypatch, "dream.gap", "lookback")
+    assert _learn_items(items) == ["Learn desk"]
+    # a file path: nothing to learn (a knob cannot set a path)
+    assert rig.reg["view.bmp_file"].kind is Kind.TEXT
+    lines, items = menu(panel, monkeypatch, "view.bmp_file", "bitmap")
+    assert items == [] and "not modulatable" in lines
+    # no tracker: Learn desk only — §3: Learn desk · Route a lane here…
+    panel.hands = None
+    _, items = menu(panel, monkeypatch, "view.speed", "view")
+    assert items == ["Learn desk", "Route a lane here…"]
+    # a rig whose axes are one hand's: that side only
+    panel.hands = SimpleNamespace(axes=[SimpleNamespace(side="right")])
+    assert panel._hand_sides() == ["right"]
+
+
+def test_the_footer_says_what_a_learn_waits_for_and_what_it_did(rig, monkeypatch):
+    """Plan 17 WP2: an armed learn has the footer's message slot on every
+    page — what it waits for, in red — and what a learn or an unbind did
+    shows there for `MESSAGE_S` like the undo's line: a refusal in the
+    warning colour, also while the learn it refused stays armed, and the
+    same refusal twice shows twice."""
+    from hyperspace import apc40, ui
+
+    panel, table = rig.panel, rig.router.table
+    lrn = _learn_over(rig)
+    clock = [1000.0]
+    monkeypatch.setattr(ui.time, "monotonic", lambda: clock[0])
+    shown: list[tuple[str, tuple]] = []
+    colored = imgui.text_colored
+
+    def text_colored(col, s):
+        if s.startswith("·  "):
+            shown.append((s, (round(col.x, 3), round(col.y, 3), round(col.z, 3))))
+        return colored(col, s)
+    monkeypatch.setattr(imgui, "text_colored", text_colored)
+
+    def footer(page=None) -> list[tuple[str, tuple]]:
+        shown.clear()
+        frame(panel, page)
+        return list(shown)
+
+    def rgb(c) -> tuple:
+        return (round(c.x, 3), round(c.y, 3), round(c.z, 3))
+    assert footer("view") == []                              # nothing armed, nothing said
+    short = min((p.id for p in rig.reg), key=len)            # room for the whole line
+    lrn.arm(short, "hand:left")
+    line = f"·  learning {short} — move the left hand… (click to cancel)"
+    for page in ("view", "routing", "presets", "system", "hands"):
+        clock[0] += 0.5
+        assert footer(page) == [(line, rgb(ui.RED))], page
+    clock[0] += 10 * ui.MESSAGE_S                            # it never times out
+    assert footer("lfo") == [(line, rgb(ui.RED))]
+    # a longer id: the line keeps what it waits for; "click to cancel" is on the hover
+    lrn.arm("fx.kaleido.segments", "hand:right")
+    assert footer("lfo") == [("·  learning fx.kaleido.segments — move the right hand…",
+                              rgb(ui.RED))]
+    # a refusal that leaves it armed: the warning for MESSAGE_S, then the armed line again
+    lrn.arm("view.depth4", "desk")
+    table.set_layer("global")
+    assert not lrn.learn_control("cc:0:48", apc40) and lrn.learning == "view.depth4"
+    (said,) = footer("view")
+    assert said[0].startswith("·  K1 (track knob 1) is on the global layer")
+    assert said[1] == rgb(ui.WARN)
+    clock[0] += ui.MESSAGE_S + 0.1
+    (said,) = footer("faces")
+    assert said[0].startswith("·  learning view.depth4 — ") and said[1] == rgb(ui.RED)
+    assert not lrn.learn_control("cc:0:48", apc40)           # the same words again: shown again
+    assert footer("faces")[0][1] == rgb(ui.WARN)
+    # it lands: said in the faint colour for MESSAGE_S, then nothing
+    table.set_layer("preset")
+    clock[0] += ui.MESSAGE_S + 0.1
+    assert lrn.learn_control("cc:0:48", apc40) and lrn.learning is None
+    (said,) = footer("audio")
+    assert said[0].startswith("·  learned view.depth4 ← K1 (track knob 1)")
+    assert said[1] == rgb(ui.FAINT)
+    clock[0] += ui.MESSAGE_S + 0.1
+    assert footer("audio") == []
+    # an unbind's line, and its refusal, the same way
+    lrn.unbind("view.depth4", name=panel._row_name)          # as the menu's item calls it
+    assert footer("view")[0][0].startswith("·  unbound view.depth4 from K1 (track knob 1)")
+    clock[0] += 1.0
+    lrn.unbind("master.gain")
+    (said,) = footer("output")
+    assert "invariant" in said[0] and said[1] == rgb(ui.WARN)
+    # a panel with no learn object still draws its footer
+    panel.learn = None
+    clock[0] += ui.MESSAGE_S + 0.1
+    assert footer("view") == []

@@ -805,7 +805,9 @@ def desk(panel, router: Router) -> None:
         imgui.set_tooltip("The loaded preset's own controls on the APC40 (SHIFT off). "
                           "A control the preset leaves unmapped is dark and does nothing.")
     imgui.same_line()
-    imgui.text_colored(ui.FAINT, "new rows: right-click a control → Learn, move a knob")
+    # (the click is the on-screen desk's, once it has one: plan 17 WP4's `ui_desk.click`)
+    imgui.text_colored(ui.FAINT, "new rows: right-click a param → Learn desk"
+                       + (", or click a control" if hasattr(ui.ui_desk, "click") else ""))
     sp = imgui.get_style().item_spacing.x
     op_w = imgui.calc_text_size("step +10").x
     dark = unmapped(table)
