@@ -886,8 +886,8 @@ def test_the_filter_is_ui_state(rig, tmp_path):
     assert st["find"] == "kaleido" and ui_routing._state(panel) is st
     n, m = ui_routing.found(panel, router)
     assert 0 < n < m
-    # what a desk click does (`goto`, WP4): one state write, every row back
-    ui_routing._state(panel)["find"] = ""
+    # what a desk click does (`goto`, WP4): the filter cleared, every row back
+    ui_routing.goto(panel, "cc:*:18")
     frame(panel)
     assert ui_routing.found(panel, router) == (m, m)
     # gone at restart; a state from before a hot reload gains the key
@@ -980,3 +980,200 @@ def test_a_line_in_use_is_not_filtered_away_under_the_hand(rig, monkeypatch):
     assert len(knobs) == 8 and "×##find" not in chips and "+ route" in chips
     assert not any(t.endswith(" rows") for t in texts)
     assert any(t.startswith(f"{len(table.routes())} routes") for t in texts)
+
+
+# ------------------------------------------- plan 17 WP4: the picked control's line
+
+def _many_routes(rig, n=30) -> None:
+    """Enough routes that the desk and session sections start under the fold."""
+    reg, table = rig.reg, rig.router.table
+    for p in reg:
+        if len(table.routes()) >= n:
+            break
+        if p.kind is Kind.CONTINUOUS and p.modulatable and table.owner(p.id) is None:
+            try:
+                table.add(Binding("lfo:1", p.id, "push", 0.1))
+            except routing.Owned:
+                continue
+    assert len(table.routes()) >= n
+
+
+def _routing_probe(monkeypatch) -> dict:
+    """What the ROUTING page did on its last draw: the page's own scroll,
+    the rows child's, and each framed line's rect against the child's."""
+    from hyperspace.ui import Panel
+
+    out: dict = {"lines": []}
+    page, session, mark = Panel._page_routing, ui_routing.session, ui_routing._mark_line
+
+    def page_(self, dt):
+        out["lines"] = []
+        page(self, dt)
+        out["page"] = (imgui.get_scroll_y(), imgui.get_scroll_max_y())
+
+    def session_(panel, router):
+        session(panel, router)
+        out["child"] = (imgui.get_scroll_y(), imgui.get_scroll_max_y())
+
+    def mark_(panel, table, b, section, y0):
+        before = ui_routing._state(panel).get("marked", 0)
+        mark(panel, table, b, section, y0)
+        if ui_routing._state(panel).get("marked", 0) > before:
+            top = imgui.get_window_pos().y
+            out["lines"].append((b, section, y0, top, top + imgui.get_window_height()))
+    monkeypatch.setattr(Panel, "_page_routing", page_)
+    monkeypatch.setattr(ui_routing, "session", session_)
+    monkeypatch.setattr(ui_routing, "_mark_line", mark_)
+    return out
+
+
+def _seen(got) -> bool:
+    """Is the one framed line inside the rows child's own rect?"""
+    (_, _, y0, top, bottom), = got["lines"]
+    return top <= y0 <= bottom - 16
+
+
+def test_goto_scrolls_the_rows_child_to_the_controls_line(rig, monkeypatch):
+    """`goto` (fork 2): the rows' child scrolls to the picked control's
+    line — its row on the layer that is up, its "unmapped — dark" line, an
+    invariant row in the session section — and frames it for as long as
+    it is picked; the page itself never scrolls and is never changed. If
+    ROUTING is not open the scroll waits until it is, while the control is
+    still picked. A control dark on the global layer has no line. The
+    filter is cleared — also under a field that has the keyboard."""
+    from test_ui_shell import _click, _learn_over
+
+    from hyperspace import apc40, ui_desk
+    from hyperspace.app import CONTROL_SIZE
+
+    panel, table = rig.panel, rig.router.table
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    lrn = _learn_over(rig)
+    rig.lib.load("presets", "TRIP")
+    _many_routes(rig)
+    got = _routing_probe(monkeypatch)
+    st = ui_routing._state(panel)
+
+    def control(glyph):
+        return next(c for c in apc40.LAYOUT if c.glyph == glyph)
+
+    def draw(n=3, page=None):
+        for _ in range(n):
+            frame(panel, page)
+    draw(3, "routing")
+    assert got["child"][1] > 0 and got["child"][0] == 0 and got["page"] == (0, 0)
+    assert got["lines"] == [] and st["marked"] == 0
+    # ROUTING open: it scrolls on the next draws, and the line is framed
+    st["find"] = "kaleido"
+    lrn.pick("cc:*:18")                                       # D3: a row of TRIP's desk
+    ui_routing.goto(panel, "cc:*:18")
+    assert st["find"] == ""
+    draw(2)
+    assert got["child"][0] > 0 and got["page"] == (0, 0)
+    assert st["goto"] is None and st["marked"] == 1
+    (b, section, *_), = got["lines"]
+    assert (b.source, b.layer, section) == ("cc:*:18", "preset", "desk") and _seen(got)
+    at = got["child"][0]
+    draw(3)
+    assert got["child"][0] == at and st["marked"] == 1       # once: it does not keep pulling
+    # an invariant control: its row in the session section, further down
+    s3 = control("S3")
+    lrn.pick(s3.source)
+    ui_routing.goto(panel, s3.source)
+    draw(2)
+    (b, section, *_), = got["lines"]
+    assert (b.source, b.layer, section) == (s3.source, None, "session") and _seen(got)
+    assert got["child"][0] > at and got["page"] == (0, 0)
+    # a dark preset control: its "unmapped — dark" line
+    dark = ui_routing.unmapped(table)[0]
+    lrn.pick(dark.source)
+    ui_routing.goto(panel, dark.source)
+    draw(2)
+    (b, section, *_), = got["lines"]
+    assert b.source == dark.source and section == "desk" and _seen(got)
+    assert not any(x.overlaps(dark) for x in table.desk())
+    # the global layer up: a global row's line; a control dark on it has none
+    table.set_layer("global")
+    lrn.pick("cc:*:18")
+    ui_routing.goto(panel, "cc:*:18")
+    draw(2)
+    (b, section, *_), = got["lines"]
+    assert (b.layer, section) == ("global", "session") and _seen(got)
+    k6 = control("K6")
+    assert k6.glyph not in ui_desk.lit(table)
+    at = got["child"][0]
+    lrn.pick(k6.source)
+    ui_routing.goto(panel, k6.source)
+    draw(2)
+    assert got["lines"] == [] and st["goto"] is None and got["child"][0] == at
+    table.set_layer("preset")
+    # let go: no frame
+    lrn.pick(None)
+    draw(1)
+    assert got["lines"] == [] and st["marked"] == 0
+    # another page open: a real click on the desk does not change the page;
+    # the scroll waits for ROUTING, while the control is still picked
+    draw(3, "view")
+    st["find"] = "kaleido"
+    _click(panel, ui_desk.rect(panel, control("D3")))
+    assert lrn.control == "cc:*:18" and st["goto"] == "cc:*:18" and st["find"] == ""
+    assert PAGE_KEYS[panel.page] == "view"
+    draw(2)
+    assert st["goto"] == "cc:*:18"
+    got["lines"] = []
+    draw(2, "routing")
+    assert st["goto"] is None and _seen(got) and got["page"] == (0, 0)
+    # …and not at all once it is let go first
+    draw(2, "view")
+    _click(panel, ui_desk.rect(panel, control("SM")))
+    assert st["goto"] == control("SM").source
+    ui_desk.let_go(panel)
+    at = got["child"][0]
+    draw(2, "routing")
+    assert st["goto"] is None and got["lines"] == [] and got["child"][0] == at
+
+
+def test_a_desk_click_clears_a_filter_that_has_the_keyboard(rig, monkeypatch):
+    """Fork 9: a desk click clears the ROUTING filter even while its field
+    has the keyboard — imgui writes a focused field's edit buffer back
+    over a state write, so the clear holds until the field has let go.
+    Real typing, a real click."""
+    from test_ui_shell import _click, _learn_over
+
+    from hyperspace import apc40, ui_desk
+    from hyperspace.app import CONTROL_SIZE
+
+    panel = rig.panel
+    io = imgui.get_io()
+    io.display_size = imgui.ImVec2(*CONTROL_SIZE)
+    lrn = _learn_over(rig)
+    rig.lib.load("presets", "TRIP")
+    for _ in range(3):
+        frame(panel, "routing")
+    real = imgui.input_text_with_hint
+    focus = [True]
+
+    def field(label, *a, **k):
+        if label == "##rows" and focus:
+            imgui.set_keyboard_focus_here()                   # a click in the field
+        return real(label, *a, **k)
+    monkeypatch.setattr(imgui, "input_text_with_hint", field)
+    for _ in range(3):
+        frame(panel)
+    focus.clear()
+    for ch in "kaleido":
+        io.add_input_character(ord(ch))
+        frame(panel)
+    st = ui_routing._state(panel)
+    assert st["find"] == "kaleido" and io.want_text_input
+    n, m = ui_routing.found(panel, rig.router)
+    assert 0 < n < m
+    d6 = next(c for c in apc40.LAYOUT if c.glyph == "D6")
+    _click(panel, ui_desk.rect(panel, d6))
+    assert lrn.control == d6.source
+    for _ in range(4):
+        frame(panel)
+        assert st["find"] == ""
+    assert not st["unfind"] and not io.want_text_input
+    assert ui_routing.found(panel, rig.router) == (m, m)
+    assert st["marked"] == 1                                  # its line is drawn, and framed
