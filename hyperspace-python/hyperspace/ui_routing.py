@@ -256,8 +256,16 @@ def _mark_line(panel, table, b: Binding, section: str, y0: float) -> None:
     start = imgui.get_cursor_screen_pos()       # the next line's start: this line's left edge
     y1 = start.y - imgui.get_style().item_spacing.y
     x1 = start.x + imgui.get_content_region_avail().x - 1
-    imgui.get_window_draw_list().add_rect(
-        imgui.ImVec2(start.x, y0 - 1), imgui.ImVec2(x1, y1 + 1), ui.u32(ui.RED), 4.0, 1.5)
+    # the frame stands a little left of the line's first letter: the
+    # child's clip is widened that much for it (and only across: a line
+    # scrolled half out of the child is still cut at the child's edge)
+    pos, dl = imgui.get_window_pos(), imgui.get_window_draw_list()
+    imgui.push_clip_rect(imgui.ImVec2(pos.x - 6, pos.y),
+                         imgui.ImVec2(pos.x + imgui.get_window_width(),
+                                      pos.y + imgui.get_window_height()), False)
+    dl.add_rect(imgui.ImVec2(start.x - 5, y0 - 1), imgui.ImVec2(x1, y1 + 1),
+                ui.u32(ui.RED), 4.0, 1.5)
+    imgui.pop_clip_rect()
     st["marked"] = st.get("marked", 0) + 1
     if st.get("goto") is not None:
         imgui.set_scroll_here_y(0.3)
