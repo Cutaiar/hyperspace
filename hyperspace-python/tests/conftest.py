@@ -15,6 +15,16 @@ def _library_home(tmp_path, monkeypatch):
     monkeypatch.setenv("HYPERSPACE_HOME", str(tmp_path / "home"))
 
 
+@pytest.fixture(autouse=True)
+def _no_undo_left_installed():
+    """`undo.install` is one per process (the app has one Undo): a test
+    that installs one must not leave it for the next test's push sites."""
+    yield
+    from hyperspace import undo
+
+    undo.install(None)
+
+
 def opened_last(home, show: str = "house"):
     """A home whose last opened show is `show` (library.LAST_SHOW) — what
     the tests written against the house moods, the factory default until

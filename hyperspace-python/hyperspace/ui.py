@@ -291,6 +291,7 @@ CHEATSHEET = [
     ("R", "reset view + camera"),
     ("F1–F8", "load preset · ⇧ saves"),
     ("B", "tap tempo · ⇧B LFO trigger"),
+    ("Cmd+Z", "undo · ⇧ redo (or Ctrl+Z)"),
     ("Cmd+R", "restart process"),
     ("H / ?", "panel / this sheet"),
     ("T", "overlay (if config.toml allows)"),

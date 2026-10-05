@@ -367,7 +367,7 @@ def test_the_meter_tooltip_names_the_plane_from_the_live_table(rig):
 
 _SYMBOLS = {"←": "LEFT", "→": "RIGHT", "↑": "UP", "↓": "DOWN", "space": "SPACE",
             "[": "LEFT_BRACKET", "]": "RIGHT_BRACKET", ",": "COMMA", ".": "PERIOD",
-            "?": "SLASH", "Esc": "ESCAPE", "Cmd+R": "SUPER+R"}
+            "?": "SLASH", "Esc": "ESCAPE", "Cmd+R": "SUPER+R", "Cmd+Z": "SUPER+Z"}
 _PADS = {"pad A B": ["A", "B"], "pad X Y": ["X", "Y"], "LB / RB": ["LB", "RB"],
          "view/menu": ["VIEW", "MENU"], "sticks": ["LSTICK", "RSTICK"]}
 _MOUSE = {"drag", "⇧drag", "scroll", "right-click", "d-pad", "LT / RT",

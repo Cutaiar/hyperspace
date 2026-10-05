@@ -61,7 +61,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-from . import tapers
+from . import tapers, undo
 from .analyzer import CURVES, F_HI, F_LO, Q_HI, Q_LO
 from .bands import CEIL, NORMS, SHAPERS
 from .fx import FxState
@@ -1126,6 +1126,13 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
               restart if restart is not None else (lambda: None), group="ui",
               modulatable=False,
               tip="Restart the process (Cmd+R). Full cold reload; view state is lost.")
+    # undo and redo (undo.py, plan 15 WP1): key rows fire them (⌘Z / Ctrl+Z,
+    # with ⇧ to redo); with no Undo installed they do nothing
+    r.trigger("edit.undo", "Undo", lambda: undo.undo(), group="ui", modulatable=False,
+              tip="Take back the last gesture or the last load, learn or delete "
+                  "(Cmd+Z or Ctrl+Z).")
+    r.trigger("edit.redo", "Redo", lambda: undo.redo(), group="ui", modulatable=False,
+              tip="Put back what the last undo took (Cmd+Shift+Z or Ctrl+Shift+Z).")
     if hasattr(audio, "toggle_play"):
         r.toggle("audio.play", "Play",
                  lambda: bool(getattr(audio, "playing", False)),

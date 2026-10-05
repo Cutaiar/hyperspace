@@ -73,7 +73,7 @@ from pathlib import Path
 
 import mido
 
-from . import apc40
+from . import apc40, undo
 from .learn import Learn
 from .params import Kind, Param, Registry
 from .routing import PICKUP_TOL, Binding, Bindings, act, bindings_path, led_lit, register_desk
@@ -286,7 +286,9 @@ class MidiIO:
         an edit of the preset, which its dirty dot shows; no file is
         written (plan 13 §3.3). A param only the session maps (an
         invariant or a global-layer control) is refused with the reason in
-        the learn line, the way Learn refuses (D5, D6)."""
+        the learn line, the way Learn refuses (D5, D6). One undo step
+        (undo.py, plan 15): a refused unbind changes nothing and leaves none."""
+        undo.push(f"unbind {pid}")
         gone = self.table.unbind(pid)
         for b in gone:
             if b.feedback:
@@ -346,6 +348,7 @@ class MidiIO:
         if fb:
             b.feedback, b.ring = fb["feedback"], fb.get("ring", b.ring)
             b.on, b.off = fb.get("on", b.on), fb.get("off", b.off)
+        undo.push(f"learn {pid}")                      # one undo step (undo.py, plan 15)
         for x in self.table.bind(b, write=False):     # the preset rows it replaced
             if x.feedback:
                 self._dark(x)                          # the new row redraws its own control

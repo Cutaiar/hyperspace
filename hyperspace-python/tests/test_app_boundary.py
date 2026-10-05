@@ -286,7 +286,7 @@ def _host(log: list[str], *, pad_on=True, pressed=(), held=(), super_=False, sti
         draw_panel=lambda dt, fps: log.append("panel.draw"),
         restart=lambda: log.append("restart"), quit=lambda: log.append("quit"),
         pad=pad, midi_io=Stub("midi", log), hands_io=Stub("hands", log),
-        bridge_io=Stub("bridge", log), dream_io=None,
+        bridge_io=Stub("bridge", log), dream_io=None, undo=Stub("undo", log),
     )
     assert g.KEY_ESCAPE  # the fake never touches glfw; the keys are plain ints
     return h
@@ -299,7 +299,8 @@ ORDER = [
     "pad.poll", "router.pad",                        # pad and hat rows, sticks
     "midi.poll",                                     # cc and note rows
     "router.follow_macros",                          # the macros' base subscribers
-    "hands.poll",                                    # feeds hand
+    "undo.tick",                                     # the bases, compared (plan 15 WP1)
+    "hands.poll",                                   # feeds hand
     "output.apply",                                  # reads last frame's objects
     "mouse.poll",                                    # relative writers, to the base
     "audio.step", "audio.publish",                   # new lanes, and their names (R8)

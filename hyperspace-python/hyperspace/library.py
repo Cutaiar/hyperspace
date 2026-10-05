@@ -101,6 +101,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from . import undo
 from .params import PERFORMANCE_GROUPS, PLANES, SESSION_GROUPS, Registry
 
 SLOTS = 8                 # the F1–F8 preset bank
@@ -480,6 +481,32 @@ class Project:
                    modules=self.modules)
         return doc
 
+    def mark(self) -> tuple:
+        """The show as held, opaque, for an undo to hand back (`remark`):
+        name, note, path, factory, stem, session, modules, bank, startup
+        and the bank and startup as on disk — copies, so a later edit of
+        the live show never reaches a mark."""
+        return (self.name, self.note, self.path, self.factory, getattr(self, "_stem", None),
+                copy.deepcopy(self.session), copy.deepcopy(self.modules), list(self.bank),
+                self.startup, (list(self._saved[0]), self._saved[1]))
+
+    def remark(self, mark: tuple) -> None:
+        """Put back what `mark()` returned: the show's own fields, nothing
+        else — no file is read or written, no value lands (undo.py does
+        that), and `active` is the caller's to recompute (`Marks.put`)."""
+        (self.name, self.note, self.path, self.factory, self._stem,
+         session, modules, bank, self.startup, saved) = mark
+        self.session, self.modules = copy.deepcopy(session), copy.deepcopy(modules)
+        self.bank = list(bank)
+        self._saved = (list(saved[0]), saved[1])
+
+    @staticmethod
+    def same_show(a: tuple, b: tuple) -> bool:
+        """Do two marks name one show — the same name, file and origin?
+        (The bank and "starts on" may differ: they are written to the
+        show's file the moment they change.)"""
+        return (a[0], a[2], a[3], a[4]) == (b[0], b[2], b[3], b[4])
+
     def _apply(self) -> list[str]:
         """Push the document's session into the registry; returns unknown
         ids. A module's `layout` lands first (a project saved on eight
@@ -678,6 +705,9 @@ class Project:
             lib._sync(path)
             doc = _read_json(path)
         user = lib._is_user(path)
+        # the file is read (and migrated), nothing replaced yet: one undo
+        # step for the show and the startup preset it brings up (undo.py)
+        undo.push(f"show {doc.get('name') or path.name[: -len(PROJECT_SUFFIX)]}", load=True)
         self._take(doc, path if user else None, path.name,
                    factory=path.parent == lib.factory / PROJECTS)
         missing = self._apply()
@@ -692,6 +722,7 @@ class Project:
         """A fresh show: default state, the party show's bank, no file yet
         (not remembered until it is saved)."""
         lib = self.lib
+        undo.push("new show", load=True)              # one undo step (undo.py, plan 15)
         self._take(_read_json(lib.factory / PROJECTS / f"{DEFAULT_PROJECT}{PROJECT_SUFFIX}"),
                    None)                                 # not factory: a new show of yours
         self.name = name
@@ -755,6 +786,65 @@ class Project:
         return ((self.path is None and not self.factory)
                 or self.session != reg.snapshot(part="session")
                 or (self.bank, self.startup) != self._saved)
+
+
+# ---------------------------------------------------------------- marks
+
+class Marks:
+    """What is loaded, for an undo step that undoes a load (undo.py; plan
+    15 WP1, fork 2): the show's own fields, every group's landed name and
+    clean reference, each group's layout, and the loaded preset's note.
+    Opaque to undo.py, which only calls `take`, `before` and `put` — so
+    after undoing a load the library says the earlier preset is loaded
+    again, and Save cannot write the earlier look over the later file."""
+
+    def __init__(self, lib: Library):
+        self.lib = lib
+
+    def take(self) -> tuple:
+        """(the show's mark, {group: landed}, {group: its `extra` hook's
+        dict — the band layout}, the loaded preset's note)."""
+        lib = self.lib
+        groups = {*lib._current, *lib._loaded, *lib._adopted}
+        return (lib.project.mark(), {g: lib.landed(g) for g in groups},
+                {g: copy.deepcopy(hook()) for g, hook in lib._extra_hooks.items()},
+                getattr(lib.presets, "note", ""))
+
+    def before(self, mark: tuple) -> None:
+        """First in a restore: a group whose layout differs from the
+        mark's gets it back through its own `on_layout` hook, so its
+        params exist before their values land — the order `_apply_doc`
+        keeps."""
+        lib = self.lib
+        for group, extra in mark[2].items():
+            hook, now = lib._layout_hooks.get(group), lib._extra_hooks.get(group)
+            if hook is None or now is None or not extra or extra.get("layout") is None:
+                continue
+            if now() != extra:
+                hook(extra["layout"])
+                lib._fresh_of(group)
+
+    def put(self, mark: tuple) -> None:
+        """Last in a restore: every group's name, reference and re-apply
+        road as they were (`Library.reland`; a group that had none then
+        has none now), the loaded preset's note, and the bank's lit slot.
+        The show's own fields go back (`Project.remark`) only when the
+        show itself differs — the undo of a show load. Otherwise the bank
+        and "starts on" are left as they are: they are in the show's file
+        the moment they change, and reverting them in memory would make
+        the show's dirty dot lie. `last_show` is never rewritten."""
+        lib, pr = self.lib, self.lib.project
+        show, landed, _extras, note = mark
+        if not Project.same_show(show, pr.mark()):
+            pr.remark(show)
+        for group in {*lib._current, *lib._loaded, *lib._adopted} - set(landed):
+            lib.reland(group, (None, None, None))
+        for group, was in landed.items():
+            lib.reland(group, was)
+        if lib.presets is not None:
+            lib.presets.note = note
+        cur = lib._current.get(PRESETS)
+        pr.active = pr.bank.index(cur) if cur in pr.bank else -1
 
 
 # ---------------------------------------------------------------- library
@@ -1128,6 +1218,9 @@ class Library:
                 self._sync(path)                       # a migrated user file, rewritten once
             self._landed(group, doc.get("name") or name, kind.signature())
         else:
+            # a module preset load, step or file-watch re-apply: one undo
+            # step, the layout it may rebuild included (undo.py, plan 15)
+            undo.push(f"{group}: {doc.get('name') or name}", load=True)
             hook = self._layout_hooks.get(group)
             if hook is not None and doc.get("layout") is not None:
                 hook(doc["layout"])                    # rebuild params first
@@ -1247,6 +1340,7 @@ class Library:
         if group in self._kinds:
             return None
         self._need_reg()
+        undo.push(f"reset {group}", load=True)        # the other branch pushes in `load`
         self.restore(self.resolved(group, {}))
         self._landed(group, None, None)
         return None

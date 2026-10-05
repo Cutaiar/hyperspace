@@ -273,3 +273,68 @@ def test_learn_refuses_the_global_layer_and_invariant_controls(tmp_path):
     lrn.arm("view.depth4")                                   # and a good learn clears the flag
     push(r, cc(0x10, 64))
     assert not lrn.refused and "learned view.depth4" in lrn.last
+
+
+# ------------------------------------------------------ plan 15 WP1: undo
+
+def test_a_learn_is_one_undo_step(tmp_path):
+    """A learn landing is one undo step, by either adapter: a hand's (the
+    axis's other row and the target's old owner go with it, and come back
+    whole), the prompt's Replace, and a knob's desk row. Undoing it is a
+    restore, not a load: `desk_serial` does not move."""
+    from test_undo import boot, cc, frames, labels, settle
+
+    r = boot(tmp_path / "home")
+    reg, table, lrn, u = r.reg, r.table, r.learn, r.undo
+
+    def routes():
+        return [b.to_json() for b in table.routes()]
+
+    def desk():
+        return [b.to_json() for b in table.desk()]
+    table.set_routes([Binding("hand:3", "view.inst_amp", "position"),
+                      Binding("lfo:0", "view.bright", "push", 0.3)])
+    settle(r)
+    u.clear()
+    was = routes()
+    # a hand learn: the axis moves to the new param (its old row goes)
+    lrn.arm("view.speed")
+    lrn.learn_source("hand:3")
+    assert table.owner("view.speed").source == "hand:3" and table.owner("view.inst_amp") is None
+    settle(r)
+    assert labels(r) == ["learn view.speed"]
+    assert u.undo() and routes() == was and u.status == "undid learn view.speed"
+    assert u.redo() and table.owner("view.speed").source == "hand:3"
+    assert u.undo() and routes() == was
+    # a taken target asks; Replace is the step, and the old owner comes back
+    frames(r, 3)
+    lrn.arm("view.bright")
+    lrn.learn_source("hand:7")
+    assert lrn.pending is not None
+    settle(r)
+    assert u.stack == []                                     # a question changes nothing
+    lrn.resolve_pending(True)
+    settle(r)
+    assert labels(r) == ["learn view.bright"] and table.owner("view.bright").source == "hand:7"
+    assert u.undo() and routes() == was
+    # the same axis again onto the same param only refreshes the gate: a step too
+    frames(r, 3)
+    lrn.arm("view.inst_amp")
+    lrn.learn_source("hand:3", when="hand:18")
+    settle(r)
+    assert table.owner("view.inst_amp").when == "hand:18" and len(u.stack) == 1
+    assert u.undo() and routes() == was
+    # a knob learn: a desk row of the preset's, taking the control's old row
+    frames(r, 3)
+    knob = next(b for b in table.desk() if b.kind == "cc" and b.op == "abs")
+    target = next(p.id for p in reg if p.group == "view" and p.id != knob.target
+                  and not any(b.target == p.id for b in table.midi()))
+    before, serial = desk(), table.desk_serial
+    lrn.arm(target)
+    r.inp.queue.append(cc(knob.number, 64, knob.channel or 0))
+    frames(r)
+    assert "learned" in lrn.last and desk() != before
+    settle(r)
+    assert labels(r) == [f"learn {target}"]
+    assert u.undo() and desk() == before and table.desk_serial == serial
+    assert u.redo() and any(b.target == target for b in table.desk())

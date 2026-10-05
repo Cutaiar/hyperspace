@@ -96,7 +96,7 @@ from dataclasses import replace
 
 from imgui_bundle import imgui
 
-from . import apc40, ui, ui_presets
+from . import apc40, ui, ui_presets, undo
 from .bands import CEIL
 from .library import PRESETS
 from .params import Kind, Param, part_of
@@ -216,6 +216,10 @@ def answer(panel, replace_it: bool) -> None:
     q = _question(panel)
     if q is None:
         return
+    if replace_it:
+        # one undo step for the swap (undo.py, plan 15); a held learn's own
+        # push inside `resolve_pending` is this same frame's and is ignored
+        undo.push(f"replace {q[0].target}")
     q[2](replace_it)
 
 
@@ -829,6 +833,7 @@ def desk(panel, router: Router) -> None:
             imgui.set_tooltip("Take this control out of the preset — it goes dark")
         imgui.pop_id()
     if dead is not None:
+        undo.push(f"unmap {control_glyph(table, dead)}")     # one undo step (undo.py)
         table.remove(dead)
         _desk_edited(table)
     for f in dark:
@@ -993,6 +998,7 @@ def macros(panel, router: Router) -> None:
                     dead = j
                 imgui.pop_id()
             if dead is not None:
+                undo.push(f"delete subscriber of {m.label or p.id}")   # one undo step
                 m.subs.pop(dead)
                 _macros_edited(table)
         imgui.pop_id()
@@ -1054,6 +1060,9 @@ def page(panel, dt: float) -> None:
                 dead = b
             imgui.separator()
         if dead is not None:
+            # one undo step (undo.py, plan 15): the row and the depth
+            # subscribers that go with it come back with a Ctrl+Z
+            undo.push(f"delete route {dead.source} → {dead.target}")
             router.table.remove(dead)
         if not rows:
             imgui.text_disabled("no routes — the lanes drive nothing")

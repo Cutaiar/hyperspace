@@ -308,11 +308,16 @@ APC_NEW_ROWS = (
 # decision register row 7): R resets the camera, F1–F8 load the preset
 # bank's slots 1–8 (param ids are 0-based), ⇧F1–F8 save the live state
 # as them. Cmd+R (restart), Esc / Q and ↑ / ↓ stay in the loop.
+# Plan 15 WP1 adds undo and redo, on both ⌘ and Ctrl (fork 1): ⌘Z / Ctrl+Z
+# fire `edit.undo`, ⌘⇧Z / Ctrl+⇧Z fire `edit.redo` — a chord fires only
+# its own row (`Router.keys`).
 BANK_SLOTS = 8
 LOOP_KEY_ROWS = (
     ("R", "camera.reset", "fire"),
     *[(f"F{k + 1}", f"preset.load.{k}", "fire") for k in range(BANK_SLOTS)],
     *[(f"SHIFT+F{k + 1}", f"preset.save.{k}", "fire") for k in range(BANK_SLOTS)],
+    ("SUPER+Z", "edit.undo", "fire"), ("SHIFT+SUPER+Z", "edit.redo", "fire"),
+    ("CONTROL+Z", "edit.undo", "fire"), ("CONTROL+SHIFT+Z", "edit.redo", "fire"),
 )
 # plan 13 WP2: the theme bank became the preset bank. A row a file wrote
 # before it that targets a theme param — a factory key or APC40 row, or
@@ -739,7 +744,7 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
         if source in used:
             continue
         out.append(Binding(source, target, op, value))
-        notes.append(f"added {source} → {target} (the keys of plan 09 / plan 11)")
+        notes.append(f"added {source} → {target} (the keys of plans 09, 11 and 15)")
     return out, notes
 
 
@@ -1333,13 +1338,18 @@ class Bindings:
         """The preset layer's rows — what a preset's `desk` holds."""
         return [b for b in self.bindings if b.is_midi and b.layer == "preset"]
 
-    def set_desk(self, rows: Iterable[Binding | dict]) -> list[str]:
+    def set_desk(self, rows: Iterable[Binding | dict], *, load: bool = True) -> list[str]:
         """Replace every preset-layer row with `rows` (layer forced to
         "preset"), dropping with a note each row that is not a MIDI control
         and each on an invariant control (D6); drop to the preset layer
         (D4) and ask the adapter to redraw the desk and clear the faders'
         catch (`desk_serial`). Returns the notes; the file is not written —
-        the desk is the loaded preset's."""
+        the desk is the loaded preset's.
+
+        ``load=False`` is an undo's restore (undo.py, plan 15): the same
+        replacement and the same dropping rules, but only a redraw is
+        asked for (`redraw_serial`) — the layer that is up stays up and no
+        fader's catch is cleared, because nothing was loaded."""
         keep = [b for b in self.bindings if not (b.is_midi and b.layer == "preset")]
         inv = [b for b in keep if b.is_midi and b.layer is None and b.enabled]
         notes: list[str] = []
@@ -1355,8 +1365,11 @@ class Bindings:
             else:
                 new.append(b)
         self.bindings = keep + new
-        self.desk_serial += 1
-        self.drop_layer()
+        if load:
+            self.desk_serial += 1
+            self.drop_layer()
+        else:
+            self.redraw_serial = getattr(self, "redraw_serial", 0) + 1
         return notes
 
     # ---- the macros' subscribers (plan 13 §2.4) ----
@@ -1644,6 +1657,16 @@ class Router:
     def _note_macro_bases(self) -> None:
         for p in self.reg.group("macro"):
             self._macro_bases[p.id] = float(p.base)
+
+    def sync_macros(self) -> None:
+        """Mark the macros as they stand — every macro's base and the
+        table's `macros_serial` — as acted on, so the next `follow_macros`
+        lands nothing. An undo's restore calls it (undo.py, plan 15): it
+        has just put the macros' bases and their subscribers' bases back
+        itself, and a re-landing would write the subscribers over the
+        values restored."""
+        self._macros_seen = self.table.macros_serial
+        self._note_macro_bases()
 
     def follow_macros(self, force: bool = False) -> list[str]:
         """The macros' base subscribers, a scene-setter step (plan 13 §2.4,

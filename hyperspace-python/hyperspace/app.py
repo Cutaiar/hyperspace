@@ -20,6 +20,7 @@ fullscreen, overlay) through the output.* params.
      (only with [output] overlay = true in config.toml — decision 21)
   F1–F8  load a preset of the bank               ⇧F1–F8  save the live state as it
   B  tap tempo      ⇧B  LFO trigger: the downbeat is now, synced LFOs restart
+  Cmd+Z / Ctrl+Z  undo the last gesture or load     with ⇧  redo (undo.py)
 
 Every input path — keys, the Xbox-layout gamepad, a MIDI controller, the
 analyzer's lanes — is one binding table over the parameter registry
@@ -68,13 +69,13 @@ import moderngl
 from imgui_bundle import imgui
 from imgui_bundle.python_backends.glfw_backend import GlfwRenderer
 
-from . import config, gamepad, lfo, tempo
+from . import config, gamepad, lfo, tempo, undo
 from .audio import AudioEngine
 from .control import Control
 from .gamepad import Pad
 from .hotreload import HotReloader
 from .learn import Learn
-from .library import Library
+from .library import Library, Marks
 from .overlay import GlfwBackend, Output
 from .params import Registry, build_registry
 from .preset import Presets, migrate_home
@@ -456,6 +457,7 @@ class Host:
     dream_io: object | None = None
     learn: object | None = None       # learn.Learn: what MIDI and the hands complete
     render_watch: RenderWatch | None = None   # the render window's health (watchdog.py)
+    undo: object | None = None        # undo.Undo: ticked once a frame (plan 15 WP1)
 
     @property
     def adapters(self) -> tuple:
@@ -466,7 +468,8 @@ class Host:
 def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     """One frame, in the order ARCHITECTURE §2 states: the scene-setters
     (keys, loop keys, pad, MIDI, the macros' base subscribers) write
-    bases; the sources feed the table
+    bases, and the undo watcher compares them (`undo.tick`, plan 15);
+    the sources feed the table
     (hands, output, mouse, audio, bridge, LFOs); the pass lands offsets
     (`router.modulate`, `reg.apply`, `integrate`); then the two windows
     draw. Returns False when a guarded block raised — the error is on
@@ -535,6 +538,17 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
         router.follow_macros()
     except Exception as e:  # noqa: BLE001
         ok, reloader.runtime_error = False, _err("macros", e)
+
+    # ---- undo: every scene-setter of this frame has written its base
+    # (the panel's edits are last frame's tail), so compare the bases and
+    # the preset's table against last frame's — a change opens a step, a
+    # settle time closes it. No performer has run yet, and none writes a
+    # base (undo.py, plan 15 WP1) ----
+    if h.undo is not None:
+        try:
+            h.undo.tick(now)
+        except Exception as e:  # noqa: BLE001
+            ok, reloader.runtime_error = False, _err("undo", e)
 
     # ---- Ultraleap hands: hand lanes into the table, MIDI out to a DAW ----
     if h.hands_io is not None:
@@ -717,6 +731,17 @@ def main() -> None:
     # the project's startup preset (D11), once, now that everything it lands
     # on exists; a missing one is said on the panel and the app runs on
     library.project.load_startup()
+    # undo (undo.py, plan 15 WP1), built after the startup preset so a
+    # launch starts with an empty stack: bases through the registry, table
+    # parts through the table, what is loaded through the library's marks;
+    # the bands' names in strip order say which layout a strip's values
+    # belong to, and a restore tells the router its macros are acted on
+    marks = Marks(library)
+    undo_obj = undo.Undo(reg, router.table, marks=marks,
+                         tag=lambda: tuple(s.name for s in audio.chain.spec),
+                         on_restore=router.sync_macros)
+    undo.install(undo_obj)             # what undo.push and the edit.* triggers reach
+    panel.undo = undo_obj              # the footer's message slot
     # panel state and chain must stay one object even after source changes
     # the live objects that get re-classed on a hot reload; re-evaluated
     # each swap so recreated ones (the chain after a source attach) count
@@ -743,6 +768,8 @@ def main() -> None:
         (output.backend, "overlay", "GlfwBackend"),
         (library, "library", "Library"),
         (library.project, "library", "Project"),
+        (marks, "library", "Marks"),
+        (undo_obj, "undo", "Undo"),
         (router, "routing", "Router"),
         (presets, "preset", "Presets"),
         (learn, "learn", "Learn"),
@@ -817,7 +844,8 @@ def main() -> None:
                 restart=lambda: _restart(audio, (watchdog, *host.adapters), impl, ctrl_win),
                 quit=lambda: glfw.set_window_should_close(render_win, True),
                 pad=pad, midi_io=midi_io, hands_io=hands_io, bridge_io=bridge_io,
-                dream_io=dream_io, learn=learn, render_watch=render_watch)
+                dream_io=dream_io, learn=learn, render_watch=render_watch,
+                undo=undo_obj)
 
     # smoke-test escape hatch: HYPERSPACE_FRAMES=n closes after n frames
     frames_left = int(os.environ.get("HYPERSPACE_FRAMES", "0")) or None

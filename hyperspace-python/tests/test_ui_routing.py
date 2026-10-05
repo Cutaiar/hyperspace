@@ -564,3 +564,101 @@ def test_the_routing_heads_name_field_draws(rig):
     frame(panel)
     assert lib.current("presets") == "Mine" and not lib.is_dirty("presets")
     assert (rig.lib.home / "presets" / "mine.json").exists()
+
+
+# ------------------------------------------------------ plan 15 WP1: undo
+
+def test_a_route_delete_and_a_replace_are_undo_steps(rig, tmp_path, monkeypatch):
+    """The page's replacing actions each push one undo step before they
+    change the table: a route's × (its depth subscribers go with it, and
+    come back with it), a desk row's ×, a macro subscriber's ×, and
+    Replace in the Replace / Keep prompt — once, also when it lands a held
+    learn. Keep is no step."""
+    from hyperspace import ui, undo
+    from hyperspace.learn import Learn
+
+    panel, reg = rig.panel, rig.reg
+    router = _with_router(rig, tmp_path)
+    table = router.table
+    victim = table.routes()[0]
+    table.set_macros({"macro.1": {"label": "amt", "subs": [
+        {"depth": {"source": victim.source, "target": victim.target}, "from": 0.0, "to": 1.0},
+        {"base": "view.bright", "from": 0.2, "to": 0.8}]}}, reg)
+    router.follow_macros()
+    u = undo.Undo(reg, table, on_restore=router.sync_macros)
+    undo.install(u)
+    clock = [0.0]
+
+    def quiet():                                        # a tick, then a second of nothing
+        for _ in range(2):
+            clock[0] += 1.0
+            u.tick(clock[0])
+
+    def state():
+        return ([b.to_json() for b in table.routes()], [b.to_json() for b in table.desk()],
+                table.macros_doc())
+
+    def click(what):
+        """One frame of the page with the first × of `what` pressed."""
+        go = [what]
+        row, sub, cell, chip = (ui_routing._row, ui_routing._sub, ui_routing._control_cell,
+                                ui.chip)
+        in_desk = []
+        with monkeypatch.context() as m:
+            m.setattr(ui_routing, "_row", lambda *a: bool(
+                row(*a) or (go == ["route"] and a[2] is victim and not go.clear())))
+            m.setattr(ui_routing, "_sub", lambda *a: bool(
+                sub(*a) or (go == ["sub"] and not go.clear())))
+            m.setattr(ui_routing, "_control_cell",
+                      lambda *a, **k: (in_desk.append(1), cell(*a, **k))[1])
+            m.setattr(ui, "chip", lambda label, *a, **k: bool(
+                chip(label, *a, **k) or (label == "×" and in_desk and go == ["desk"]
+                                         and not go.clear())))
+            for _ in range(4):
+                if go:
+                    frame(panel, "routing")
+        assert not go, f"the page never drew a {what} ×"
+        quiet()
+
+    quiet()
+    u.clear()
+    was = state()
+    click("route")
+    assert victim not in table.routes() and state()[2] != was[2]    # its subscriber went too
+    assert [s.label for s in u.stack] == [f"delete route {victim.source} → {victim.target}"]
+    assert u.undo() and state() == was
+    quiet()
+    first = table.desk()[0]
+    click("desk")
+    assert len(table.desk()) == len(was[1]) - 1
+    assert [s.label for s in u.stack] == [f"unmap {ui_routing.control_glyph(table, first)}"]
+    assert u.undo() and state() == was
+    quiet()
+    click("sub")
+    assert len(table.macros["macro.1"].subs) == 1
+    assert [s.label for s in u.stack] == ["delete subscriber of amt"]
+    assert u.undo() and state() == was
+    quiet()
+    # Replace: one step; the owner comes back with an undo. Keep: none.
+    owner = table.routes()[1]
+    assert ui_routing.add_route(panel, owner.target, source="lfo:0", depth=0.5) is None
+    ui_routing.answer(panel, False)
+    quiet()
+    assert u.stack == [] and state() == was
+    assert ui_routing.add_route(panel, owner.target, source="lfo:0", depth=0.5) is None
+    ui_routing.answer(panel, True)
+    quiet()
+    assert [s.label for s in u.stack] == [f"replace {owner.target}"]
+    assert table.owner(owner.target).source == "lfo:0"
+    assert u.undo() and state() == was
+    quiet()
+    # a held hand learn answered by the prompt: Replace's step, not two
+    lrn = panel.learn = Learn(reg, table)
+    lrn.arm(owner.target)
+    lrn.learn_source("hand:1")
+    assert lrn.pending is not None
+    ui_routing.answer(panel, True)
+    quiet()
+    assert [s.label for s in u.stack] == [f"replace {owner.target}"]
+    assert table.owner(owner.target).source == "hand:1"
+    assert u.undo() and state() == was

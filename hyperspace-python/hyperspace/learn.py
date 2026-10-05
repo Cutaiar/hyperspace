@@ -46,6 +46,7 @@ table are all it needs.
 
 from __future__ import annotations
 
+from . import undo
 from .params import Param, Registry
 from .routing import Binding, Bindings, Owned
 
@@ -135,6 +136,7 @@ class Learn:
         b = Binding(source, p.id, "position", 1.0, when=when)
         cur = self.table.owner(p.id)
         if cur is not None and self.same_source(cur.source, source) and cur.op == "position":
+            undo.push(f"learn {p.id}")               # one undo step (undo.py, plan 15)
             cur.when = when                          # the same axis again: no move
             self.said(f"learned {p.id} ← {cur.describe()} (into the preset)")
             return
@@ -165,7 +167,9 @@ class Learn:
         onto a target, which reads the owner *now* (a free target takes the
         row; the prompt's Replace removes whoever holds it at this moment,
         not whoever did when the question was asked). A route of the
-        loaded preset's: no file is written (plan 13 §3.3)."""
+        loaded preset's: no file is written (plan 13 §3.3). One undo step
+        (undo.py): the rows it took out come back with a Ctrl+Z."""
+        undo.push(f"learn {b.target}")
         table = self.table
         for x in [x for x in table.of(b.scheme)
                   if self.same_source(x.source, b.source) and x.op == "position"]:
