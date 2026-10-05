@@ -2102,6 +2102,8 @@ class Library:
             dst.unlink(missing_ok=True)
             raise LibraryError(f"{dst.name}: not restored ({e})") from e
         self._sync(dst)
+        if item.group == PRESETS and self.warning.startswith(f"{name} is in the trash"):
+            self.warning = ""                              # what × said is no longer so
         now = str(doc["name"]) if renamed else name
         what = f"show {now}" if show else now
         if renamed:

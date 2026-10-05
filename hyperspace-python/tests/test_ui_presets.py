@@ -844,6 +844,7 @@ def test_a_slot_whose_preset_is_gone_says_so(rig, monkeypatch):  # noqa: F811
     # restored: whole again
     (item,) = lib.trash()
     lib.restore_trash(item)
+    assert lib.warning == "" and lib.status == "restored A MINE"   # × said is no longer so
     ui_presets.invalidate(panel, "presets")
     frame(panel)
     assert st["dangling"] == []
