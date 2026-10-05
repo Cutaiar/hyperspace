@@ -381,7 +381,7 @@ class Panel:
         self.pin_out = [0.0] * N_MAX
         self.open = True
         self.cheatsheet = False     # off at every launch; / brings it up (plan 16 WP1)
-        self.desk = True            # the APC40, bottom-left; above the sheet when it shows
+        self.desk = True            # the APC40, left of the panel; the whole window without it
         self.page = 1               # index into PAGES; the view page opens first
         self.ghosts = 0             # ghost markers drawn this frame (tests read it)
         self._file_dialog = None
@@ -425,9 +425,10 @@ class Panel:
                  lambda: self.desk,
                  lambda on: setattr(self, "desk", bool(on)), group="ui",
                  persist=False, modulatable=False,
-                 tip="The APC40 drawn bottom-left of this window (above the cheat sheet "
-                     "when that shows): the controls the layer that is up maps lit, "
-                     "each with the glyph the ROUTING rows print.")
+                 tip="The APC40 drawn left of the panel: the controls the layer that is "
+                     "up maps lit, each with the glyph the ROUTING rows print. Hide the "
+                     "panel (H, or the desk's big chip) and it fills the window, every lit "
+                     "control named.")
         r.enum("ui.page", "Page", lambda: self.page,
                lambda i: setattr(self, "page", int(i)), [lb for _, lb, _ in PAGES],
                group="ui", persist=False, modulatable=False,
@@ -1026,11 +1027,13 @@ class Panel:
         imgui.begin("##cheatsheet", None, flags)
         col = max(_readout_width(key) for key, _ in CHEATSHEET)
         x0 = imgui.get_cursor_pos_x()
+        right = 0.0
         for key, action in CHEATSHEET:
             imgui.set_cursor_pos_x(x0 + col - _readout_width(key))
             _readout(key, RED)
             imgui.same_line(x0 + col + 14)
             imgui.text_colored(DIM, action)
+            right = max(right, imgui.get_item_rect_max().x)
         # the desk sits above it (ui_desk). The height is taken from the
         # rows just laid out, not `get_window_height()`: on the sheet's
         # first frame the window has no size yet, and the desk would be
@@ -1038,6 +1041,9 @@ class Panel:
         style = imgui.get_style()
         self._sheet_h = (imgui.get_cursor_pos_y() - style.item_spacing.y
                          + style.window_padding.y)
+        # …and its width the same way: with the panel hidden the desk
+        # sits beside the sheet (ui_desk.room, plan 17 WP4)
+        self._sheet_w = right - imgui.get_window_pos().x + style.window_padding.x
         imgui.end()
         imgui.pop_style_var()
 
@@ -1150,6 +1156,9 @@ class Panel:
         imgui.set_next_window_size(imgui.ImVec2(PANEL_W, io.display_size.y - 24),
                                    imgui.Cond_.once)
         opened, self.open = imgui.begin("CONTROLS", self.open)
+        # where the panel is: the desk takes the room left of it (ui_desk.room;
+        # drawn before the panel, it reads this next frame)
+        self._panel_x = imgui.get_window_pos().x
         if not opened:
             imgui.end()
             return
