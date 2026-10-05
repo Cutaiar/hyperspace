@@ -48,13 +48,15 @@ changes brightness or volume instead).
 
 > **Known risks while testing**
 >
-> 1. **Leave the APC40 plugged in, or switch MIDI off.** When the APC40
->    is not plugged in, the app looks for it every two seconds. In rare
->    cases macOS can kill the app while it looks (this was seen once
->    during automated testing, never yet in the app). A fix that makes it
->    look less often is being built. Until then, a long session without
->    the desk carries a small risk; putting `enabled = false` under `[midi]`
->    in the config file avoids it (put it back before testing the desk).
+> 1. **For a long session with no APC40, switch MIDI off.** When the
+>    APC40 is not plugged in, the app keeps looking for it: every two
+>    seconds for the first ten seconds, then every ten seconds (it was
+>    every two seconds all night until a fix on 2026-10-05). In rare
+>    cases macOS can kill the app while it looks (seen once during
+>    automated testing, never yet in the app). The risk is now smaller,
+>    not gone; putting `enabled = false` under `[midi]` in the config
+>    file removes it (put it back before testing the desk). A desk
+>    plugged in while the app runs is found within ten seconds.
 > 2. **Plug every screen in before launching.** A screen plugged in after
 >    the app starts is not used until you restart it (⌘R or quit and
 >    launch again).
