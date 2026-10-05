@@ -181,7 +181,9 @@ class FxState:
         self.dir = Path(directory)
         self.on = True           # fx.on — the chain's bypass
         self.mix = 1.0           # fx.mix — scales every effect's mix
-        self.sel = 0             # fx.select — the effect whose strip is open
+        # the open strip's effect, by name (None: whatever is first). A name,
+        # not an index into names(): a reorder or a preset load never moves it
+        self.sel_name: str | None = None
         self.specs: dict[str, EffectSpec] = {}
         self.values: dict[str, dict[str, Any]] = {}
         self.phase: dict[str, float] = {}
@@ -276,9 +278,23 @@ class FxState:
         return [n for n in self.names()
                 if self.values[n]["on"] and self.values[n]["mix"] > 0.0]
 
+    def select(self, name: str | None) -> None:
+        """Open `name`'s strip. A name with no spec is ignored; None means
+        'whatever is first'. Writes nothing but sel_name."""
+        if name is None or name in self.specs:
+            self.sel_name = name
+
     def selected(self) -> str | None:
+        """sel_name while it has a spec; else the first of names(); None
+        with no effects. Never writes — a file that goes away and comes
+        back is open again."""
+        # getattr: a hot reload re-classes the live FxState without running
+        # __init__ (hotreload.py), so an instance from before has no sel_name
+        name = getattr(self, "sel_name", None)
+        if name in self.specs:
+            return name
         names = self.names()
-        return names[max(0, min(self.sel, len(names) - 1))] if names else None
+        return names[0] if names else None
 
     def advance(self, dt: float) -> None:
         """Every effect's clock by dt at its speed — on or not, so an effect
@@ -300,7 +316,10 @@ def declare(r, fx: FxState, names: set[str] | None = None) -> None:
         r.continuous("fx.mix", "FX mix", *_attr(fx, "mix"), lo=0.0, hi=1.0,
                      fmt=lambda v: f"mix {v:.2f}", group=g,
                      tip="Scales every effect's mix — one fader to fade the whole stack in.")
-        r.enum("fx.select", "Edit", *_attr(fx, "sel"),
+        # a view onto FxState.sel_name: it reads the open effect's place in
+        # the stack, and a write opens the effect at that place. The name is
+        # what is kept, so the index follows the effect when the order moves
+        r.enum("fx.select", "Edit", lambda: _sel_index(fx), lambda i: _sel_set(fx, i),
                lambda: [fx.specs[n].label for n in fx.names()], group=g,
                persist=False, modulatable=False,
                tip="Which effect's faders are open on the page.")
@@ -331,6 +350,19 @@ def declare(r, fx: FxState, names: set[str] | None = None) -> None:
             r.continuous(f"{pre}.{p.key}", f"{lb} {p.label.lower()}", *_key(v, p.key),
                          lo=p.lo, hi=p.hi, log=p.log, wrap=p.wrap, integer=p.integer,
                          fmt=_fmt(p), group=g, tip=p.tip)
+
+
+def _sel_index(fx: FxState) -> int:
+    """fx.select's value: where the open effect sits in names(); 0 with none."""
+    name = fx.selected()
+    return fx.names().index(name) if name is not None else 0
+
+
+def _sel_set(fx: FxState, i) -> None:
+    """A write to fx.select: open the effect at `i` in names(), clamped."""
+    names = fx.names()
+    if names:
+        fx.select(names[max(0, min(int(i), len(names) - 1))])
 
 
 def _attr(obj, name):
