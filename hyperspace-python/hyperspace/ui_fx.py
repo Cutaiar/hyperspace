@@ -41,15 +41,16 @@ LED_GAP = 2.0       # px between a chip's LED and its name
 LED_ON_TIP = "on — click to switch off"
 LED_OFF_TIP = "off — click to switch on"
 IDLE_ALPHA = 0.45   # how much of an idle strip's rows shows through the veil
-# why_idle's reason → the strip's line, the chip beside it, the param it sets
+# why_idle's reason → the strip's line, then the chip beside it, the param
+# the chip sets and the chip's hover (None: a fader mends it, not a click)
 IDLE = {
-    "off": ("off — nothing below shows until it is on", "turn on", "fx.{name}.on"),
-    "bypassed": ("the whole stack is bypassed", "effects on", "fx.on"),
-    "fx mix 0": ("FX mix is at 0", None, ""),         # its fader is at the top of the page
-    "mix 0": ("its mix is at 0", None, ""),           # its fader is the next row
+    "off": ("off — nothing below shows until it is on", "turn on", "fx.{name}.on",
+            "Switch this effect on."),
+    "bypassed": ("the whole stack is bypassed", "effects on", "fx.on",
+                 "Switch the effect stack on (the Effects check at the top)."),
+    "fx mix 0": ("FX mix is at 0", None, None, None),     # its fader is at the top of the page
+    "mix 0": ("its mix is at 0", None, None, None),       # its fader is the next row
 }
-IDLE_TIPS = {"off": "Switch this effect on.",
-             "bypassed": "Switch the effect stack on (the Effects check at the top)."}
 RESET_NOTE = "a preset load resets the effect stack; save it as a preset to keep it"
 
 
@@ -121,18 +122,27 @@ def page(panel, dt: float) -> None:
         _dim(imgui.get_item_rect_min(), imgui.get_item_rect_max())
     top = imgui.get_cursor_screen_pos()
     right = top.x + imgui.get_content_region_avail().x
+    rects = {f"{pre}.mix": (imgui.get_item_rect_min(), imgui.get_item_rect_max())}
+
+    def drawn(pid: str) -> None:        # the control just drawn, for _relearn_frame
+        rects[pid] = (imgui.get_item_rect_min(), imgui.get_item_rect_max())
     panel._row(f"{pre}.speed", label="speed")
+    drawn(f"{pre}.speed")
     panel._label_cell("blend")
     panel._tip(r[f"{pre}.blend"])
     panel._combo(f"{pre}.blend", -(ORDER_W + imgui.get_style().item_spacing.x))
+    drawn(f"{pre}.blend")
     imgui.same_line()
     panel._slider(f"{pre}.order", ORDER_W)
+    drawn(f"{pre}.order")
     imgui.spacing()
     for p in spec.params:
         if f"{pre}.{p.key}" in r:
             panel._row(f"{pre}.{p.key}", label=p.label.lower())
+            drawn(f"{pre}.{p.key}")
     if idle is not None:
         _dim(top, imgui.ImVec2(right, imgui.get_cursor_screen_pos().y))
+        _relearn_frame(panel, rects)
 
 
 def why_idle(fx, name: str) -> str | None:
@@ -154,20 +164,33 @@ def _idle_line(panel, name: str, reason: str) -> None:
     """The open strip's one line saying why its effect is not running, and
     for the two reasons a click mends, the chip that mends it. The chip
     writes a base through Param.set, as the checks do."""
-    text, chip, pid = IDLE[reason]
-    pid = pid.format(name=name)
+    text, chip, pid, tip = IDLE[reason]
     if chip is None:
         imgui.text_colored(ui.WARN, text)
         return
+    p = panel.reg[pid.format(name=name)]
     # the text on the chip's baseline: a chip is a frame with CHIP_PAD
     imgui.push_style_var(imgui.StyleVar_.frame_padding, ui.CHIP_PAD)
     imgui.align_text_to_frame_padding()
     imgui.pop_style_var()
     imgui.text_colored(ui.WARN, text)
     imgui.same_line()
-    if ui.chip(f"{chip}##idle.{pid}"):
-        panel.reg[pid].set(True)
-    panel._tip(panel.reg[pid], IDLE_TIPS[reason])
+    if ui.chip(f"{chip}##idle.{p.id}"):
+        p.set(True)
+    # the line reads what runs (the effective value), the chip writes the
+    # base: while a source holds the switch off the hover names it
+    panel._tip(p, lambda: f"{tip}\n{panel._mod_line(p)}" if p.modulated else tip)
+
+
+def _relearn_frame(panel, rects: dict) -> None:
+    """The learn frame of an armed row, drawn again over the veil: the cue
+    that a row is waiting for a control must not be dimmed with it."""
+    pid = panel.learn.learning if panel.learn is not None else None
+    if pid in rects:
+        r0, r1 = rects[pid]
+        imgui.get_window_draw_list().add_rect(
+            imgui.ImVec2(r0.x - 2, r0.y - 2), imgui.ImVec2(r1.x + 2, r1.y + 2),
+            ui.u32(ui.RED), ui.ROUND + 2, 2.0)
 
 
 def _dim(lo: imgui.ImVec2, hi: imgui.ImVec2) -> None:

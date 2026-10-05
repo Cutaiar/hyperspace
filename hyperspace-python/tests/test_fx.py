@@ -912,7 +912,7 @@ def test_an_off_effects_strip_says_so_and_turn_on_switches_it_on(fxpage):
     assert st.selected() == "warp" and st.chain() == ["warp"]
     fxpage.frame()                                   # running: no line, no chip, no veil
     assert line not in fxpage.texts and "idle.fx.warp.on" not in fxpage.rects
-    assert not fxpage.veils and not set(fxpage.texts) & {t for t, _, _ in IDLE.values()}
+    assert not fxpage.veils and not set(fxpage.texts) & {v[0] for v in IDLE.values()}
 
 
 def test_a_bypassed_stack_says_so_on_the_strip(fxpage):
@@ -938,7 +938,7 @@ def test_a_bypassed_stack_says_so_on_the_strip(fxpage):
     fxpage.frame()
     assert "its mix is at 0" in fxpage.texts
     assert not [k for k in fxpage.rects if k.startswith("idle.")]
-    assert {t for t, _, _ in IDLE.values()} & set(fxpage.texts) == {"its mix is at 0"}
+    assert {v[0] for v in IDLE.values()} & set(fxpage.texts) == {"its mix is at 0"}
     # the fader that line names is the one row left undimmed
     assert len(fxpage.veils) == 1
     assert fxpage.veils[0][1] >= fxpage.rects["fx.warp.mix"][3]
@@ -972,6 +972,31 @@ def test_the_idle_strips_controls_stay_live(fxpage):
     assert reg["fx.warp.mix"].base == pytest.approx(0.5, abs=0.1)
     assert reg["fx.warp.on"].base is False           # and none of that switched it on
     assert st.values["warp"]["amount"] == pytest.approx(amount.base)
+
+
+def test_an_armed_rows_learn_frame_is_drawn_over_the_veil(fxpage, monkeypatch):
+    """The veil is painted after the rows, so it would dim the red frame of
+    a row armed to learn; the frame is drawn again on top, on that row."""
+    from hyperspace import ui_fx
+    st, panel = fxpage.st, fxpage.panel
+    st.select("warp")
+    seen = []
+    real = ui_fx._relearn_frame
+    monkeypatch.setattr(ui_fx, "_relearn_frame",
+                        lambda p, rects: (seen.append(dict(rects)), real(p, rects))[1])
+    panel.learn = SimpleNamespace(learning="fx.warp.speed", arm=lambda pid: None)
+    fxpage.frame()
+    assert len(seen) == 1 and fxpage.veils          # idle: after the veil, once
+    rows = {"fx.warp.mix", "fx.warp.speed", "fx.warp.blend", "fx.warp.order",
+            *(f"fx.warp.{p.key}" for p in st.specs["warp"].params)}
+    assert set(seen[0]) == rows
+    r0, r1 = seen[0]["fx.warp.speed"]
+    assert (r0.x, r0.y, r1.x, r1.y) == pytest.approx(fxpage.rects["fx.warp.speed"])
+    fxpage.reg["fx.warp.on"].set(True)               # running: no veil, nothing to redraw
+    fxpage.reg["fx.on"].set(True)
+    seen.clear()
+    fxpage.frame()
+    assert not seen and not fxpage.veils
 
 
 def test_the_page_fits_with_the_tightest_strip_idle(fxpage, monkeypatch):
