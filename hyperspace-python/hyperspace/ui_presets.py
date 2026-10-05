@@ -399,7 +399,7 @@ def set_starts_on(panel, name: str | None) -> None:
         lib.warning = ""
     if _guard(panel, proj.write) is not None:
         lib.remember(proj.stem)
-        lib.status = f"show: {proj.name} starts on {name or 'nothing'}"
+        lib.say(f"show: {proj.name} starts on {name or 'nothing'}")
     invalidate(panel, PROJECT)
 
 

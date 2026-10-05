@@ -652,10 +652,10 @@ class Project:
         lib, name, key = self.lib, self.bank[k], f"F{k + 1}"
         presets = self._loader()
         if name is None:
-            lib.warning = f"{key}: an empty slot — ⇧{key} saves the live state into it"
+            lib.say(warning=f"{key}: an empty slot — ⇧{key} saves the live state into it")
             return
         if presets is None or lib.path_of(PRESETS, name) is None:
-            lib.warning = f"{key}: no preset {name!r}"
+            lib.say(warning=f"{key}: no preset {name!r}")
             return
         try:
             presets.load(name)
@@ -813,7 +813,7 @@ class Project:
         if presets is None or not name:
             return
         if lib.path_of(PRESETS, name) is None:
-            lib.warning = f"startup: no preset {name!r}"
+            lib.say(warning=f"startup: no preset {name!r}")
             return
         try:
             presets.load(name)
@@ -830,7 +830,7 @@ class Project:
         file, in `load_startup`'s words (neither opens a step)."""
         lib, name = self.lib, self.startup
         if not name:
-            lib.warning = HOME_UNSET
+            lib.say(warning=HOME_UNSET)
             return
         if lib.warning == HOME_UNSET:                 # it names one now
             lib.warning = ""
@@ -898,7 +898,7 @@ class Project:
                    factory=path.parent == lib.factory / PROJECTS)
         missing = self._apply()
         lib.report(missing, path.name)
-        lib.status = f"show: {self.name}"
+        lib.say(f"show: {self.name}")
         lib.remember(self.stem)
         if startup:
             self.load_startup()
@@ -915,7 +915,7 @@ class Project:
         lib._fresh_layouts()                          # the layout the app started with…
         lib.restore(lib._fresh_all())                 # …and every group's fresh values
         self._apply()
-        lib.status = f"show: new {name}"
+        lib.say(f"show: new {name}")
         self.load_startup()
 
     def save(self, name: str | None = None) -> Path:
@@ -939,7 +939,7 @@ class Project:
                 self.modules[group] = {k: v for k, v in doc.items()
                                        if k not in ("schema", "group")}
         self.write()
-        lib.status = f"show: saved {self.name}"
+        lib.say(f"show: saved {self.name}")
         lib.remember(self.stem)
         return self.path
 
@@ -1081,7 +1081,8 @@ class Library:
         self.error = ""
         self.warning = ""
         # how many times `say` set each of `status` and `warning`: a line
-        # said again in the same words shows again (the footer, ui.py)
+        # said again in the same words shows again (the footer, ui.py).
+        # Every line is set through `say`; only a clear ("") is assigned
         self.said: dict[str, int] = {}
         self._fresh: dict[str, Any] = {}
         self._current: dict[str, str | None] = {}     # group → loaded preset name
@@ -1106,7 +1107,11 @@ class Library:
         """Set `status` or `warning` and count it in `said`, so the footer
         shows the line again even when its words are the ones it showed
         last (plan 15 WP4: two presets put into slots one after the other,
-        a slot cleared twice)."""
+        a slot cleared twice). Every line that reports something that just
+        happened goes through here (plan 16 WP7: an empty F-key pressed
+        twice, home with no "starts on" pressed twice); a plain assignment
+        is for clearing a line, and is not counted — so nothing that
+        assigned the same words every frame could hold the footer open."""
         said = self.__dict__.setdefault("said", {})   # (a Library from before a hot reload)
         if status is not None:
             self.status = status
@@ -1122,7 +1127,7 @@ class Library:
         for n in notes:
             print(f"library: {n}", file=sys.stderr)
         if notes:
-            self.warning = notes[-1]
+            self.say(warning=notes[-1])
         return notes
 
     def attach(self, reg: Registry) -> list[str]:
@@ -1411,7 +1416,7 @@ class Library:
     def report(self, missing: list[str], where: str) -> None:
         if missing:
             shown = ", ".join(missing[:4]) + ("…" if len(missing) > 4 else "")
-            self.warning = f"{where}: {len(missing)} unknown id(s): {shown}"
+            self.say(warning=f"{where}: {len(missing)} unknown id(s): {shown}")
             print(f"library: {self.warning}", file=sys.stderr)
 
     # ---- presets: the surface the strip draws ----
@@ -1456,7 +1461,7 @@ class Library:
             self._landed(group, doc.get("name") or name, resolved)
         self.report(missing, f"{group}/{name}")
         if not quiet:
-            self.status = f"{group}: {self._current[group]}"
+            self.say(f"{group}: {self._current[group]}")
         hook = self._load_hooks.get(group)
         if hook is not None:
             hook(self._current[group])
@@ -1471,7 +1476,7 @@ class Library:
         file changes on disk, in place of a whole load."""
         loaded = self.reg.snapshot(group) if self.reg is not None else None
         self._landed(group, name, loaded, reapply)
-        self.status = f"{group}: {name}"
+        self.say(f"{group}: {name}")
 
     def _step(self, group: str, n: int) -> str | None:
         names = self.list(group)
@@ -1505,13 +1510,13 @@ class Library:
             except (OSError, ValueError):
                 old = None                               # unreadable as text: keep it anyway
             if old != text and to_trash(path, self.home) is None:
-                self.warning = (f"{group}/{path.name}: overwritten — the old file could "
-                                "not be kept in the trash")
+                self.say(warning=f"{group}/{path.name}: overwritten — the old file could "
+                                 "not be kept in the trash")
         _write_text(path, text)
         self._sync(path)
         self._landed(group, name, kind.signature() if kind is not None
                      else self.resolved(group, doc["values"]))
-        self.status = f"{group}: saved {name}"
+        self.say(f"{group}: saved {name}")
         hook = self._load_hooks.get(group)
         if kind is not None and hook is not None:   # a kind's current moved: say so
             hook(name)                               # (the bank's light, preset.py)
@@ -1650,5 +1655,5 @@ class Library:
             self.error = f"library: {e}"
             return False
         if hit:
-            self.status = f"library: {', '.join(hit)} · {time.strftime('%H:%M:%S')}"
+            self.say(f"library: {', '.join(hit)} · {time.strftime('%H:%M:%S')}")
         return True

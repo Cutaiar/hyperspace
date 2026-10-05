@@ -301,3 +301,62 @@ def test_the_footer_says_a_library_line_again(rig, monkeypatch):  # noqa: F811
     assert lib.warning and panel._message() == ("", False)
     lib.say("show: after the reload")
     assert panel._message() == ("show: after the reload", False)
+
+
+def test_a_line_said_twice_shows_twice(rig, monkeypatch):  # noqa: F811
+    """Plan 16 WP7: every line that reports something that just happened
+    goes through `Library.say`, so the same press giving the same words
+    shows them again — an empty F-key, home on a show that names no
+    "starts on", a slot naming no file, a show saved twice."""
+    from hyperspace import ui
+
+    panel, lib, reg = rig.panel, rig.lib, rig.reg
+    proj = lib.project
+    clock = [1000.0]
+    monkeypatch.setattr(ui.time, "monotonic", lambda: clock[0])
+    frame(panel, "view")                                      # the first look only remembers
+    assert panel._message() == ("", False)
+    proj.bank[2] = None
+    empty = "F3: an empty slot — ⇧F3 saves the live state into it"
+    proj.startup = None
+    for trigger, line in (("preset.load.2", empty), ("preset.home", HOME_UNSET)):
+        for _ in range(2):                                    # the second press too
+            clock[0] += ui.MESSAGE_S + 1
+            assert panel._message() == ("", False)
+            reg[trigger].fire()
+            assert lib.warning == line and panel._message() == (line, True), trigger
+    proj.bank[3] = "GONE"                                     # a slot naming no file
+    for _ in range(2):
+        clock[0] += ui.MESSAGE_S + 1
+        assert panel._message() == ("", False)
+        reg["preset.load.3"].fire()
+        assert panel._message() == ("F4: no preset 'GONE'", True)
+    for _ in range(2):                                        # a status as well
+        clock[0] += ui.MESSAGE_S + 1
+        assert panel._message() == ("", False)
+        proj.save("MINE")
+        assert panel._message() == ("show: saved MINE", False)
+
+
+def test_a_line_assigned_every_frame_does_not_pin_the_footer(rig, monkeypatch):  # noqa: F811
+    """…and nothing holds the slot open: a line assigned in the same words
+    every frame is not said again (only `say` counts), and a panel left
+    alone, drawing every page in turn, says nothing at all."""
+    from hyperspace import ui
+
+    panel, lib = rig.panel, rig.lib
+    clock = [1000.0]
+    monkeypatch.setattr(ui.time, "monotonic", lambda: clock[0])
+    frame(panel, "view")
+    lib.say(warning=HOME_UNSET)
+    said = dict(lib.said)
+    shown = []
+    for k in range(60):                                       # six seconds at 10 fps
+        clock[0] += 0.1
+        lib.warning = HOME_UNSET                              # the same words, every frame
+        lib.status = "show: party"
+        frame(panel, PAGES[k % len(PAGES)][0])                # every page's own code runs
+        shown.append(panel._message()[0])
+    assert shown[0] == HOME_UNSET and shown[-1] == "" and lib.said == said
+    assert "" in shown and all(s == "" for s in shown[shown.index(""):])
+    assert abs(shown.index("") * 0.1 - ui.MESSAGE_S) < 0.25   # gone on time
