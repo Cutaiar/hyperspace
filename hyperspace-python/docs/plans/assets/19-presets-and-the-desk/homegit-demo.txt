@@ -1,0 +1,85 @@
+plan 19 WP6 — the home in git: a commit on each save, opt-in
+git: git version 2.50.1 (Apple Git-155)
+home: a copy shaped like the owner's (conftest.build_owner_home) at <tmp>/home
+
+1. [library] git absent (the default)
+   cfg['library'] = {'git': False}   committer = None
+   saved NIGHT FOUR → .git: False  .gitignore: False  homegit threads: 0
+
+2. [library] git = true, and the first save
+   cfg['library'] = {'git': True}   committer built; .git yet: False (nothing runs until a save)
+   saved NIGHT FIVE → git log --oneline:
+      50b4e72 Hyperspace: the home as it was when git was switched on
+   body of the first commit: 'save preset NIGHT FIVE'
+   .gitignore (written, there was none):
+      | # Written by Hyperspace when [library] git was switched on. Yours to edit.
+      | weights/
+      | trash/
+      | *.log
+      | last_show
+      | windows.json
+      | *.bak-*
+      | .DS_Store
+   tracked (11): .gitignore, bindings.json, config.toml, presets/night-five.json, presets/night-four.json, presets/night-one.json, presets/night-three.json, presets/night-two.json, projects/RENAMED.txt, projects/mine.hyp.json, projects/party.hyp.json
+   ignored: bindings.json.bak-v3, last_show, stall.log, trash/, weights/, windows.json
+   git status --porcelain: ''
+
+3. two more saves, a ×, a bank change — the log after each
+   save NIGHT FIVE again, changed:
+      4d27825 save preset NIGHT FIVE
+      50b4e72 Hyperspace: the home as it was when git was switched on
+   save fx acid (a module preset):
+      8e9348c save fx acid
+      4d27825 save preset NIGHT FIVE
+      50b4e72 Hyperspace: the home as it was when git was switched on
+   × on NIGHT FOUR:
+      ee31f53 trash preset NIGHT FOUR
+      8e9348c save fx acid
+      4d27825 save preset NIGHT FIVE
+      50b4e72 Hyperspace: the home as it was when git was switched on
+   put NIGHT FIVE on slot 12:
+      d7429b3 show mine: bank
+      ee31f53 trash preset NIGHT FOUR
+      8e9348c save fx acid
+      4d27825 save preset NIGHT FIVE
+      50b4e72 Hyperspace: the home as it was when git was switched on
+   git status --porcelain: ''  (trash/ holds 3 files, none tracked)
+
+4. git missing from the PATH
+   save NO GIT 1: returned in 1.2 ms, file on disk: True
+   warning line: 'git: not committed (git is not on the PATH); saves are not affected'
+   save NO GIT 2: said again? False
+   git back on the PATH, save GIT BACK — the catch-up:
+      5a9b1c8 save preset GIT BACK
+      d7429b3 show mine: bank
+      ee31f53 trash preset NIGHT FOUR
+      8e9348c save fx acid
+      4d27825 save preset NIGHT FIVE
+      50b4e72 Hyperspace: the home as it was when git was switched on
+   files in that commit: presets/git-back.json, presets/no-git-1.json, presets/no-git-2.json
+
+5. the index locked (another git holding .git/index.lock)
+   save LOCKED: returned in 1.4 ms, file on disk: True
+   warning line: "git: not committed (git add exited 128: fatal: Unable to create '<tmp>/home/.git/index.lock': File exists.); saves are not affected"
+   save LOCKED 2: said again? False
+   lock gone, save UNLOCKED — the catch-up:
+      40bb099 save preset UNLOCKED
+      5a9b1c8 save preset GIT BACK
+      d7429b3 show mine: bank
+      ee31f53 trash preset NIGHT FOUR
+      8e9348c save fx acid
+      4d27825 save preset NIGHT FIVE
+      50b4e72 Hyperspace: the home as it was when git was switched on
+   files in that commit: presets/locked-2.json, presets/locked.json, presets/unlocked.json
+   git status --porcelain: ''
+
+6. a home inside another repository (a dotfiles repository above it)
+   save INSIDE 1 → warning line: 'git: <tmp>/dotfiles/Hyperspace is inside another repository (<tmp>/dotfiles): not committing'
+   save INSIDE 2 → said again? False; refused: True
+   <home>/.git: False  <home>/.gitignore: False  commits in the outer repository: 0
+
+7. timing: request() on the frame thread, and the commit it asks for
+   request() returned in 10 µs median (max 76 µs) over 10
+   the commit landed in 71 ms median (max 151 ms) over 10 — add -A, diff --cached, commit on the worker
+   a whole Presets.save_as with git on: 1.7 ms (the file written; the commit follows on the worker)
+   commits in the home now: 18
