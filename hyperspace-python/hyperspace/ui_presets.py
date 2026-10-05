@@ -7,12 +7,17 @@ knows (library.groups()) carries a strip under its title:
 
 prev / next step through ``library.list(group)``; the name opens the
 list (factory presets dim, user ones deletable); the dot is
-``is_dirty(group)``; save writes over the current preset and is disabled
-only when none is loaded — on a **factory** preset it writes your own
-copy of it (``Library.overwrite`` shadows the factory file, never
-touches it); as… turns the strip into a name field until Enter (or Esc);
-reset lands the group on its default preset — the "meaningful default" —
-or its fresh values when it has none.
+``is_dirty(group)``, a 12 px red disc (``ui.dirty_dot``, plan 19 WP5),
+and while it shows the save chip is lit solid red; save writes over the
+current preset and is disabled only when none is loaded — on a
+**factory** preset it writes your own copy of it (``Library.overwrite``
+shadows the factory file, never touches it), and on the preset strip it
+says so: "save copy"; as… turns the strip into a name field until Enter
+(or Esc); reset (module strips only: on the presets it did nothing) lands
+the group on its default preset — the "meaningful default" — or its
+fresh values when it has none. The preset strip reads
+
+  ◀  name ●  ▶            save copy   as…
 
 The PRESETS page speaks plan 14 §3's words — **show** (what the code
 calls a ``Project``: a bank of twenty-four presets and what it starts on),
@@ -74,6 +79,7 @@ BANK_COLS = 2        # preset buttons a row: F1 F2 over F3 F4 …, wide enough f
 FAR_COLS = 4         # slots 9–24 a row: a desk row of eight pads is two page rows
 FAR_GAP = 3          # px between the far slots' rows, so twenty-four fit with "more" open
 PUT_ROWS = 12        # rows of "put preset here…" before its list scrolls
+SLOT_DOT_R = 4.0     # the white disc on the loaded slot while its preset is edited (WP5)
 # the module overview: every performance group but the macros (a macro's
 # meaning is its subscribers, which live in the preset), and the band
 # strip's scene, the one session module a project names
@@ -90,6 +96,7 @@ def _state(panel) -> dict:
     # key, and the preset buttons' labels — for the layout tests
     st.setdefault("rects", {})
     st.setdefault("bank_labels", [])
+    st.setdefault("save", {})          # group → (the save chip's words, lit), last drawn
     return st
 
 
@@ -185,8 +192,51 @@ def _begin_naming(panel, key: str, seed: str) -> None:
 
 # ---- the strip ----
 
+def save_label(lib, group: str) -> str:
+    """The save chip's words (plan 19 WP5): "save copy" while the loaded
+    preset is a factory one — the save writes your own copy, which takes
+    its place in the list (`Library.overwrite`) — else "save"."""
+    cur = lib.current(group)
+    return "save copy" if cur is not None and lib.is_factory(group, cur) else "save"
+
+
+def save_tip(lib, group: str) -> str:
+    """The save chip's hover, in the label's terms."""
+    cur = lib.current(group)
+    if cur is None:
+        return "No preset loaded: as… saves the settings as a new one"
+    if lib.is_factory(group, cur):
+        return (f"Save your own copy of {cur}: the factory one is kept and yours takes "
+                "its place in the list")
+    return f"Write the settings over {cur} (the old file goes to the trash)"
+
+
+def save_chip(panel, group: str, label: str, lit: bool, *, key: str | None = None) -> bool:
+    """The save chip: solid red while there is something to save (the
+    panel's lit key, readable from the floor), the quiet chip when clean.
+    Disabled while nothing is loaded. Returns whether it was clicked; its
+    rect (``<key>.save``) and its words and whether it was lit
+    (``save[<key>]``) are kept in `_state` for the tests — `key` is
+    ``strip.<group>`` for a strip, ``head`` for ROUTING's head."""
+    lib = panel.library
+    cur = lib.current(group)
+    key = key or f"strip.{group}"
+    imgui.begin_disabled(cur is None)
+    hit = ui.lit_chip(f"{label}##save", True) if lit and cur is not None \
+        else ui.chip(f"{label}##save")
+    imgui.end_disabled()
+    _rect(panel, f"{key}.save")
+    _state(panel)["save"][key] = (label, bool(lit and cur is not None))
+    if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
+        imgui.set_tooltip(save_tip(lib, group))
+    return hit
+
+
 def strip(panel, group: str) -> None:
-    """◀ name ● ▶ · save · as… · reset — for one registry group."""
+    """◀ name ● ▶ · save · as… · reset — for one registry group. On a
+    document kind's strip (the presets) the save chip says "save copy" on
+    a factory preset and there is no reset: `Library.reset` on a kind
+    loads a preset called "default", and none ships (plan 19 WP5)."""
     lib = panel.library
     if lib is None or lib.reg is None:
         return
@@ -194,10 +244,12 @@ def strip(panel, group: str) -> None:
     if _name_field(panel, group, lambda n: _save_as(panel, group, n)):
         imgui.pop_id()
         return
+    st = _state(panel)
     cur = lib.current(group)
     listing = names(panel, group)
     factory = cur is not None and lib.is_factory(group, cur)
     is_dirty = dirty(panel, group)
+    kind = group in lib.kinds
 
     # ◀ name ▶ — the arrows step by name order; the name opens the list
     imgui.begin_disabled(not listing)
@@ -211,43 +263,44 @@ def strip(panel, group: str) -> None:
     if imgui.button(f"{label}##name", imgui.ImVec2(name_w(), 0)):
         imgui.open_popup("list")
     imgui.pop_style_color(2)
+    _rect(panel, f"strip.{group}.name")
     if imgui.is_item_hovered():
         imgui.set_tooltip(f"{cur}  ·  {'factory' if factory else 'user'} preset — "
                           "click for the list" if cur else "no preset loaded")
+    st["rects"].pop(f"strip.{group}.dot", None)
     if is_dirty:
-        imgui.same_line(0, 0)
-        imgui.text_colored(ui.RED, "●")
-        if imgui.is_item_hovered():
-            imgui.set_tooltip("edited since the preset loaded")
+        imgui.same_line(0, 2)
+        st["rects"][f"strip.{group}.dot"] = ui.dirty_dot("edited since the preset loaded — "
+                                                   "save writes it")
     imgui.same_line(0, 2)
     if imgui.arrow_button("next", imgui.Dir.right):
         _guard(panel, lib.next, group)
+    _rect(panel, f"strip.{group}.next")
     imgui.end_disabled()
     _list_popup(panel, group, listing, cur)
 
-    # save · as… · reset, flush right
-    imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w("save", "as…", "reset"))
-    imgui.begin_disabled(cur is None)
-    if ui.chip("save"):
+    # save · as… (· reset on a module strip), flush right
+    word = save_label(lib, group) if kind else "save"
+    chips = (word, "as…") if kind else (word, "as…", "reset")
+    imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w(*chips))
+    if save_chip(panel, group, word, is_dirty):
         _guard(panel, lib.overwrite, group)
         invalidate(panel, group)
-    imgui.end_disabled()
-    if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
-        imgui.set_tooltip("Write the settings over the current preset"
-                          + (" — a factory one: saved as your own copy of it"
-                             if factory else ""))
     imgui.same_line()
     if ui.chip("as…"):
         _begin_naming(panel, group, cur or "")
+    _rect(panel, f"strip.{group}.as")
     if imgui.is_item_hovered():
         imgui.set_tooltip("Save the group's settings as a new user preset")
-    imgui.same_line()
-    if ui.chip("reset"):
-        _guard(panel, lib.reset, group)
-    if imgui.is_item_hovered():
-        d = lib.default_name(group)
-        imgui.set_tooltip(f"Back to the default preset — {d}" if d
-                          else "Back to the values the module started with")
+    if not kind:
+        imgui.same_line()
+        if ui.chip("reset"):
+            _guard(panel, lib.reset, group)
+        _rect(panel, f"strip.{group}.reset")
+        if imgui.is_item_hovered():
+            d = lib.default_name(group)
+            imgui.set_tooltip(f"Back to the default preset — {d}" if d
+                              else "Back to the values the module started with")
     imgui.pop_id()
 
 
@@ -455,6 +508,10 @@ def preset_bank(panel) -> None:
     pad = ui.CHIP_PAD.x
     labels: list[str] = []
     white = imgui.ImVec4(1, 1, 1, 1)
+    # the loaded slot carries a white disc at its right end while the
+    # loaded preset has unsaved edits (plan 19 WP5)
+    edited = pr.active >= 0 and dirty(panel, PRESETS)
+    st["rects"].pop("preset.dot", None)
     for k, name in enumerate(pr.bank):
         far = k >= F_KEYS
         if (k - F_KEYS) % FAR_COLS if far else k % BANK_COLS:
@@ -468,6 +525,8 @@ def preset_bank(panel) -> None:
         gap = " " if far else "  "
         w = w_far if far else w_key
         room = w - 2 * pad - imgui.calc_text_size(key + gap).x
+        if lit and edited:
+            room -= 2 * SLOT_DOT_R + 4                # the disc's own room at the right end
         shown = _fit(name, room) if name is not None else "—"
         labels.append(f"{key}{gap}{shown}")
         if ui.lit_chip(f"##preset{k}", lit, None, imgui.ImVec2(w, 0)):
@@ -485,6 +544,11 @@ def preset_bank(panel) -> None:
         dl.add_text(imgui.ImVec2(a.x + pad, y), ui.u32(white if lit else ui.FAINT), key)
         dl.add_text(imgui.ImVec2(a.x + pad + imgui.calc_text_size(key + gap).x, y),
                     ui.u32(white if lit else ui.FAINT if name is None else ui.TEXT), shown)
+        if lit and edited:
+            c = imgui.ImVec2(b.x - pad - SLOT_DOT_R, (a.y + b.y) / 2)
+            dl.add_circle_filled(c, SLOT_DOT_R, ui.u32(white))
+            st["rects"]["preset.dot"] = (c.x - SLOT_DOT_R, c.y - SLOT_DOT_R,
+                                         c.x + SLOT_DOT_R, c.y + SLOT_DOT_R)
         if hov:
             imgui.set_tooltip(slot_tip(k, name))
         if far:
