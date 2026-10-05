@@ -1279,10 +1279,10 @@ history only; sharing is `shared/` and `tools/shared_presets.py`).
 ## P. Effects on the faces, reordering, the LOOKBACK page, instance layouts
 
 **91. An effect aimed at the faces.**
-Headless: `tests/test_render.py::{test_a_face_effect_changes_the_faces_and_nothing_else,test_per_face_turns_with_the_shape_and_screen_stays_still,test_screen_mapping_is_a_cover_fit_window_onto_the_picture} tests/test_fx.py::{test_the_status_reads_per_target,test_the_strips_target_combo_moves_an_effect_between_chains,test_a_chip_aimed_at_the_faces_is_marked,test_why_idle_names_faces_off}`.
+Headless: `tests/test_render.py::{test_a_face_effect_changes_the_faces_and_nothing_else,test_per_face_turns_with_the_shape_and_screen_stays_still,test_screen_mapping_is_a_cover_fit_window_onto_the_picture} tests/test_fx.py::{test_the_status_reads_per_target,test_the_strips_onto_chips_move_an_effect_between_chains,test_a_chip_aimed_at_the_faces_is_marked,test_why_idle_names_faces_off}`.
 F2 (FACES); BITMAP: load a picture. FX: status under "Effects" one
-line. Kaleidoscope on; blend row **target** (between blend and order)
-`frame` → `faces`. *Pass:* wireframe unfolded, face pictures folded;
+line. Kaleidoscope on; on its strip's title line, **ONTO** **frame** →
+**faces**. *Pass:* wireframe unfolded, face pictures folded;
 status two rows, `frame  …` and `faces
 Kaleidoscope`, the second with chips **per face** (lit), **screen**;
 chip shows filled diamond (outlined off), hover "on the faces".
@@ -1291,7 +1291,8 @@ turning across it; **per face**: turns with the shape. Unload bitmap,
 pattern FLAT, Plasma on faces: faces glow, gaps black. VIEW Faces off:
 row `faces (Faces is off)` in warning colour, strip "aimed at the
 faces, and Faces is off", **faces on** chip. Instances 0: `faces  (no
-copies to show them)`. ⌘Z after target change, after map chip: one
+copies to show them)`. Running on the faces, the strip reads "faint on
+the translucent faces — Brightness lifts them". ⌘Z after **faces**, after map chip: one
 step each. From a step back: diamond distinct from dot? Subtle per-face
 effects (Double vision, Deconverge, Trip colour, Wobble) visible?
 Strong ones (Hue cycle, Kaleidoscope) should be. All faces same
@@ -1413,13 +1414,14 @@ Headless: `tests/test_hands_tape.py::test_a_bad_tape_path_is_a_note_the_pages_sh
 note starting `hands: ` ("hands: [Errno 2] No such file or directory:
 …"); HANDS shows it, warning colour, in place of "tracker off". Remove
 key. (b) Camera, `[hands] mode = "screentop"`, launch, Ghost hands on.
-*Pass:* ghost line 2, after Style: "ghost axes for screentop are
-unmeasured: left/right and up may be wrong" (desktop: nothing); no
-scroll with all ghost controls. Restore `mode`. Rest of headless line
-(raising hands pass, failed label build, one reload round): tests only.
-*Fail:* "tracker off", no reason → `app._open_hands`' note; no
-unmeasured line → `hands/panel.py`; scrolls →
-`hands.panel.GHOST_STYLE_W`.
+*Pass:* the ghost's chip reads **! more ▸** in warning colour; open it:
+"ghost axes for screentop are unmeasured: left/right and up may be
+wrong — Mirror flips left for right" (desktop: **more ▸**, nothing); no
+scroll with all ghost controls, nothing drawn over the **Ghost hands**
+label. Restore `mode`. Rest of headless line (raising hands pass, failed
+label build, one reload round): tests only. *Fail:* "tracker off", no
+reason → `app._open_hands`' note; no unmeasured line →
+`hands.panel.ghost_notes`; scrolls or overlaps → `hands.panel._ghost`.
 
 **101. Two outputs open where the config says.**
 Headless: `tests/test_config.py::{test_no_screens_list_is_one_output_as_today,test_a_screens_list_wins_over_the_scalar_keys_with_a_note,test_a_config_dim_cannot_launch_an_output_black} tests/test_app_boundary.py::{test_one_window_per_listed_output,test_the_exits_save_one_rect_per_output,test_the_switches_are_registered_from_the_configs_launch_values} tests/test_overlay.py::test_the_output_switches_are_rig_settings`.
@@ -1477,8 +1479,8 @@ Headless: `tests/test_outputs.py::{test_through_bends_the_hands_with_the_shape,t
 Glass through on, projector off. F5 (TRIP), then F4 (WAKE). *Pass:*
 glass hands bend and recolour with the shape, projector's clean; no
 hand echoes or dream feed on either; same echoes on both. All effects
-off: alike, glass block "through: no effect on". HANDS: Ghost guide
-BESIDE, then ON HAND, Ghost tethers on: gauges, labels sharp, same on
+off: alike, glass block "through: no effect on". HANDS: Guide
+BESIDE, then ON HAND, Tethers (**more ▸**) on: gauges, labels sharp, same on
 both, never warped. *Fail:* hand echoes → `Renderer._pipeline` (hands
 enter after look-back composite, before first effect); warped labels →
 `Ghost.layer(…, readout=True)` / `Ghost.composite_readout`; echoes
@@ -1538,7 +1540,7 @@ swapped** — raise left only: near-white hand, picture left, moves;
 light red is right. (b) **fingers** — spread, fist, thumb to each
 finger, point: all follow, thumb correct side, no backward bends. (c)
 **directions** — performer's view: right is right, up is up, toward
-screen goes away, palm down shows back; then **Ghost mirror** on, view
+screen goes away, palm down shows back; then **Mirror** (in **more ▸**) on, view
 as audience: save the rig's choice in the show. (d) **no lag** —
 shake: ghost stays on, no smoothing trail; still: no shimmer. (e) **the
 box fills the frame** — each calibrated corner: hand in frame, near
@@ -1551,7 +1553,7 @@ rises, green's goes out, blue's turns to palm facing, none leave their
 arc; pinch each finger: bead lights; fist: grab ring shrinks round a
 full ball. Route some left axes, none right: left routed axes keep
 colour, right grey, smaller, moving. ON HAND: gauge rides palm.
-**Ghost tethers**: each routed left axis, a line in its colour to a
+**Tethers** (in **more ▸**): each routed left axis, a line in its colour to a
 left-edge label naming its param; lines still while balls move; off:
 gauges stay. Rig on `screentop`: redo (c) there (unmeasured, check
 100). Effects on hands: check 103. Then record the reference tape:
@@ -1579,9 +1581,9 @@ guide → `Ghost.layer`'s guide-over pass.
 
 **110. A hand cannot learn a ghost setting.** (camera, APC40)
 Headless: `tests/test_learn.py::test_a_hand_learn_onto_a_setting_is_refused_in_words tests/test_presets.py::test_a_saved_route_onto_a_setting_is_dropped_with_a_note tests/test_ghost.py::test_the_params_are_session_off_by_default_and_learnable`.
-HANDS: right-click Ghost mirror, Guide, Ghost tethers, Style. *Pass:*
+HANDS: right-click Guide, Style, and in **more ▸** Mirror, Tethers. *Pass:*
 **Learn desk**, no **Learn hand ▸**; Ghost hands, Opacity keep Learn
-hand. Learn desk Ghost mirror, press a pad: pad flips mirror. OUTPUT
+hand. Learn desk Mirror, press a pad: pad flips mirror. OUTPUT
 ticks: Learn desk, no Learn hand. A hand Learn armed another way on
 these four: no row, footer "Ghost mirror can't follow a hand (not
 modulatable) — not learned; Learn desk puts it on a button". Your

@@ -191,16 +191,23 @@ present; after a hot reload it rebuilds in its own context.
 
 ### The ghost hands: guards, settings, styles
 
-- **At the machine.** On the HANDS page, while the ghost is on, a
+- **At the machine.** On the HANDS page, under the box, the **Ghost
+  hands** tick; while it is on, **OPACITY** and a **more ▸** chip on its
+  line, then **STYLE** and **GUIDE** on the next — two lines, each group
+  wrapped to the next line rather than drawn over its neighbour when the
+  panel is narrower. **more ▸** opens Mirror, Tethers (greyed until a
+  guide is on) and the ghost's notes; while it holds a note the chip
+  reads **! more ▸** in the warning colour and its hover says it. The
   **STYLE** combo: HANDS (the capsule hands, the default), JOINTS (a bead
   per joint), PALMS (an orb that grows as the hand opens, a ring, a spoke
   where the fingers point), CAGE (a wire octahedron that turns with the
   palm and grows with openness), MARIONETTE (fingertips on strings from a
   bar). Every style behaves like HANDS over and through effects; in the
   four new styles the guide is drawn on top. A hands pass that fails
-  leaves the frame without hands, says why on the HANDS page, and the dim
-  still runs. With the ghost on in screentop or HMD mode the HANDS page
-  says those axes are unmeasured. A bad `[hands] tape` path is a note.
+  leaves the frame without hands, says why on the HANDS page (in **!
+  more ▸**, or under the tick with the ghost off), and the dim still
+  runs. With the ghost on in screentop or HMD mode **! more ▸** says
+  those axes are unmeasured. A bad `[hands] tape` path is a note.
 - **Code.** `ghost.STYLES`, `ghost.PARTS`, `ghost.style_parts`,
   `ghost.Geometry.draw` (`CapsuleHands` is the HANDS `Geometry`);
   `Ghost.layer`, `Ghost.composite`, `Ghost.composite_readout`,
@@ -222,11 +229,18 @@ present; after a hot reload it rebuilds in its own context.
   `test_render.py::test_a_raising_hands_pass_still_dims`;
   `test_learn.py::test_a_hand_learn_onto_a_setting_is_refused_in_words`;
   `test_presets.py::test_a_saved_route_onto_a_setting_is_dropped_with_a_note`;
-  `test_ui_shell.py::test_the_ghost_style_is_on_the_hands_page_while_the_ghost_is_on`;
+  `test_ui_shell.py::test_the_ghost_style_is_on_the_hands_page_while_the_ghost_is_on`,
+  `::test_the_ghost_controls_never_overlap_or_run_off_the_page`,
+  `::test_the_ghost_more_popup_has_mirror_and_tethers`,
+  `::test_the_hands_page_fits_with_every_ghost_line`;
   `test_hands_tape.py::test_a_bad_tape_path_is_a_note_the_pages_show`.
-- **Demo.** `tools/hands_tape.py styles` (offscreen, synthetic hands).
+- **Demo.** `tools/hands_tape.py styles` (offscreen, synthetic hands);
+  `tools/ghost_row_shots.py` (the HANDS page from a hidden window, every
+  ghost line showing, then **! more ▸** open).
 
 ![The five styles, both hands open, then one a fist](assets/21-outputs-and-the-hands/ghost-styles.png)
+
+![The ghost's two lines on the HANDS page](assets/21-outputs-and-the-hands/ghost-row-after-crop.png)
 
 ## Not verified by a person
 

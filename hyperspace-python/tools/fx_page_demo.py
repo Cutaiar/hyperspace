@@ -13,6 +13,7 @@ window, no MIDI port, no audio device.
   uv run python tools/fx_page_demo.py --faces    # plan 20 WP2's three PNGs, the same way
   uv run python tools/fx_page_demo.py --reorder  # plan 20 WP3's transcript → fx-reorder.txt
   uv run python tools/fx_page_demo.py --drag     # plan 20 WP3: a drag in flight → fx-drag.png
+  uv run python tools/fx_page_demo.py --onto [tag]   # the strip's ONTO chips → fx-onto-<tag>-*.png
 
 The first two land in docs/plans/assets/16-paper-cuts/. The transcript opens an
 effect by name, moves it and another through the stack, and loads
@@ -23,7 +24,7 @@ The shots are the FX page with two effects on and another open but off
 
 --faces lands in docs/plans/assets/20-fx-dream-looks/: the page with two
 effects aimed at the faces and one on the frame, both status rows, the
-per face / screen chips and the open strip's target combo
+per face / screen chips and the open strip's ONTO chips
 (fx-page-faces.png), the same with Faces off (fx-page-faces-off.png), and
 the page with nothing aimed at the faces (fx-page-frame-only.png).
 --reorder and --drag land there too: the transcript drops chips through
@@ -256,6 +257,28 @@ def faces() -> None:
     h.close()
 
 
+def onto() -> None:
+    """Where an effect goes, as a newcomer meets the page: one effect on and
+    its strip open, on the frame (fx-onto-<tag>-frame.png); the same aimed
+    at the faces with Faces on (fx-onto-<tag>-faces.png). <tag> is the
+    argument after --onto (default "after"), so a run on an older page
+    can shoot the "before" pair."""
+    from hyperspace.fx import FACES
+    tag = (sys.argv[sys.argv.index("--onto") + 1:] or ["after"])[0]
+    h = harness()
+    fx, reg, draw = h.r.fx, h.r.reg, h.draw
+    reg["fx.kaleido.on"].set(True)
+    fx.select("kaleido")
+    draw()
+    h.shoot(OUT20, f"fx-onto-{tag}-frame.png", f"kaleido on, open, on the frame; "
+            f"view.faces {reg['view.faces'].value}")
+    reg["view.faces"].set(True)
+    reg["fx.kaleido.target"].set(FACES)
+    draw()
+    h.shoot(OUT20, f"fx-onto-{tag}-faces.png", "kaleido aimed at the faces, Faces on")
+    h.close()
+
+
 def reorder() -> None:
     """Plan 20 WP3: drops through the page's drop handler, with the app's undo."""
     from hyperspace import ui_fx
@@ -380,7 +403,7 @@ def drag() -> None:
 if __name__ == "__main__":
     args = sys.argv[1:]
     for flag, run in (("--shots", shots), ("--faces", faces), ("--reorder", reorder),
-                      ("--drag", drag)):
+                      ("--drag", drag), ("--onto", onto)):
         if flag in args:
             sys.exit(run())
     sys.exit(transcript())

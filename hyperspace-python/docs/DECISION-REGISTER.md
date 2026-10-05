@@ -597,11 +597,11 @@ here; overturn → the change, then the same.
 - **Rough edge.** No real mouse or trackpad has dragged a chip.
 - **Judge it.** Check 94.
 
-### 68. An effect is re-aimed by the open strip's target combo
+### 68. An effect is re-aimed by the open strip's ONTO chips
 
-- **Built.** The open strip has a frame / faces combo between blend and
-  order. A drag only reorders; it never changes a target or a switch. A
-  target change is one undo step.
+- **Built.** The open strip's title line ends in **ONTO** and two chips,
+  frame and faces, the lit one where it runs. A drag only reorders; it
+  never changes a target or a switch. A target change is one undo step.
 - **Other option.** Drop a chip on a status line to re-aim it.
 - **To reverse.** A dozen lines in `ui_fx._faces_row` and the frame line.
 - **Judge it.** Checks 91 and 94.

@@ -67,6 +67,7 @@ PANEL_W = 540   # leaves the cheat sheet its column in the control window (app.C
 RAIL_W = 112
 LABEL_W = 104    # the label column in a _row
 HALF_LABEL_W = 78    # the label column in a half-width table cell (Panel.half)
+LABEL_GAP = 12   # px between a label cell's text room and its control (Panel._label_cell)
 ROUND = 8.0      # corner radius of frames; chips and grabs go rounder
 # the dirty dot (plan 19 WP5): a filled red disc 12 px across beside a
 # preset's name — where the "●" glyph left about 7 px of ink — and the
@@ -917,7 +918,8 @@ class Panel:
         imgui.push_style_var(imgui.StyleVar_.frame_padding, imgui.ImVec2(10, 8))
         imgui.push_font(_FONTS["num"], FONT_NUM)
         changed, pos2 = self._track(
-            lambda: imgui.slider_int("##s", pos, 0, p.steps, text if inside else ""),
+            lambda: imgui.slider_int("##s", pos, 0, p.steps,
+                                     text.replace("%", "%%") if inside else ""),
             p.norm, self._origin(p), p.steps, knob=not inside,
         )
         imgui.pop_font()
@@ -948,7 +950,8 @@ class Panel:
         p = self._real(a)
         imgui.set_next_item_width(width)
         v = p.base
-        text = self._mod_text(p) if p.modulated else p.text()
+        # the readout is imgui's printf format: a "%" in it ("60%") is doubled
+        text = (self._mod_text(p) if p.modulated else p.text()).replace("%", "%%")
         imgui.push_font(_FONTS["num"], FONT_NUM)
         if p.integer:
             steps = int(p.hi) - int(p.lo)
@@ -979,8 +982,10 @@ class Panel:
         Drawn, not laid out: a dummy one control tall is the item (tooltips
         attach to it), so the row's height and baseline stay the control's
         and anything after it on the line lines up with the first control.
-        `width` is the label column; a half-width table cell passes less
-        (the offset is from the cell's own start)."""
+        `width` is the label column, measured from where the label starts:
+        at a line's start (or a table cell's) that is the column every row
+        shares, and after `same_line()` mid-line it is the label's own room
+        — the control beside it never lands back over the line's start."""
         pos = imgui.get_cursor_screen_pos()
         fh = FONT_NUM + 2 * imgui.get_style().frame_padding.y
         imgui.push_font(_FONTS["micro"], FONT_MICRO)
@@ -988,8 +993,8 @@ class Panel:
             imgui.ImVec2(pos.x, pos.y + (fh - FONT_MICRO) / 2 - 1),
             u32(DIM if color is None else color), text.upper())
         imgui.pop_font()
-        imgui.dummy(imgui.ImVec2(width - 12, fh))
-        imgui.same_line(width)
+        imgui.dummy(imgui.ImVec2(width - LABEL_GAP, fh))
+        imgui.same_line(0, LABEL_GAP)
 
     def _row(self, pid: str, width: float = -1, label: str | None = None,
              label_w: float = LABEL_W) -> bool:
