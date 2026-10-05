@@ -1641,13 +1641,18 @@ def migrate_home(lib, router, hands_cfg: dict | None = None) -> list[str]:
         except (OSError, ValueError, LibraryError) as e:
             notes.append(f"bindings.json's routes NOT moved ({e}); the file is left as it is")
     if carried is not None and table.path is not None and (held or carried.empty):
-        if table.notes:
-            table.announce(table.path)
         # no file yet (an old midi_map.json's rows, carried): nothing to keep
         fresh = not table.path.exists()
         bak = None if fresh else routing.backup(table.path, table.read_at)
         kept = "" if fresh else f"; the old file kept as {bak.name}" if bak else ""
+        if table.notes:          # after the backup: what it says is what happened
+            table.announce(table.path, written=fresh or bak is not None, kept=bak)
         if bak is None and not fresh:
+            # no backup, no rewrite (plan 19 fork 12) — and no later write
+            # either until the copy is made (`Bindings.write` retries it)
+            table.unbacked, table.error = table.read_at, routing.NOT_REWRITTEN
+            table.said = table.said or (f"{table.path.name} NOT rewritten: no backup could "
+                                        "be made")
             notes.append("bindings.json NOT rewritten: no backup could be made")
         else:
             table.write()

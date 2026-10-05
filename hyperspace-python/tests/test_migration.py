@@ -349,6 +349,45 @@ def test_a_rewrite_whose_backup_cannot_be_made_is_not_done(home, monkeypatch, ca
     assert again.router.table.carried is None
 
 
+def test_bindings_json_whose_backup_fails_after_its_part_moved_is_never_rewritten(
+        home, monkeypatch, capsys):
+    """Plan 19 fork 12 on the migration's own road (review of PR #110):
+    the preset part of bindings.json is moved into presets, then the copy
+    of bindings.json cannot be made. The file is left as it was; stderr and
+    the SYSTEM page's line (`said`) say it was **not** rewritten; and a
+    later write of the table in the same session (a session row learned)
+    tries the copy again first and writes nothing without it. Once the
+    copy can be made, that write makes it first."""
+    path = bindings_path(home)
+    real = routing._write_new
+
+    def refuse(p, data):
+        if p.name.startswith("bindings.json"):
+            raise OSError("read-only")
+        return real(p, data)
+
+    old = path.read_bytes()
+    with monkeypatch.context() as m:
+        m.setattr(routing, "_write_new", refuse)
+        capsys.readouterr()
+        r = boot(home)
+        err = capsys.readouterr().err
+        t = r.router.table
+        assert path.read_bytes() == old and not list(home.glob("bindings.json.bak-v*"))
+        assert any("bindings.json NOT rewritten: no backup could be made" in n for n in r.notes)
+        assert t.error == routing.NOT_REWRITTEN and t.unbacked == t.read_at
+        assert t.said.startswith("bindings.json NOT rewritten")
+        assert "updated" not in t.said and "migrated" not in t.said
+        assert f"bindings: {path} not rewritten — no backup could be made" in err
+        t.bind(Binding("cc:0:99", "view.zoom", "abs"))           # a session row: a write
+        assert path.read_bytes() == old and t.error == routing.NOT_REWRITTEN
+    t.write()                                                    # the copy can be made now
+    assert t.error == "" and t.unbacked is None
+    (bak,) = home.glob("bindings.json.bak-v*")
+    assert bak.read_bytes() == old
+    assert {"source": "cc:0:99", "target": "view.zoom", "op": "abs"} in read(path)["bindings"]
+
+
 # ---------------------------------------------------------------- routes-only files
 
 def test_routes_only_files_become_full_presets(home):
