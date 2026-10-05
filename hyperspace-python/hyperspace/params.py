@@ -1095,6 +1095,13 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                       lambda k=k: bank.save_slot(k), group=g, modulatable=False)
         r.trigger("preset.next", "Next preset", lambda: bank.cycle(1), group=g)
         r.trigger("preset.prev", "Previous preset", lambda: bank.cycle(-1), group=g)
+        # home (plan 15 WP2, decision 27): the preset the show starts on.
+        # Lit while the show names one — the light the desk's OVERDUB shows
+        r.trigger("preset.home", "Home", bank.home, group=g,
+                  lit=lambda: bool(bank.startup),
+                  tip="Home: load the preset this show starts on — the Home key "
+                      "(fn ← on a laptop) and OVERDUB (B11) on the desk. "
+                      "Undo brings back what was up.")
 
     # ---- audio transport (only what the engine exposes headlessly) ----
     g = "audio"

@@ -21,7 +21,9 @@ to bottom (plan 14 WP4):
 
   SHOW        the show's name on a line of its own, never covered; then
               show ▾ (every show, factory ones dim) · save · save as · new
-  starts on ▾ the preset the show opens with — written the moment it is
+  starts on / home ▾
+              the preset the show opens with, and the one Home (the Home
+              key, the desk's OVERDUB) loads — written the moment it is
               picked (``Project.write``), a factory show's making your copy
   F1–F8       eight preset buttons, each with its preset's name and its
               F-key, the live one lit: click or F-key loads, ⇧click or
@@ -352,14 +354,15 @@ def project_row(panel) -> None:
 # ---- starts on ▾ ----
 
 def starts_on(panel) -> None:
-    """starts on ▾ — the preset the show opens with (D11), labelled, and
+    """starts on / home ▾ — the preset the show opens with (D11) and the
+    one Home goes back to (plan 15 WP2: `Project.home`), labelled, and
     written into the show the moment it is picked."""
     lib = panel.library
     if lib is None or lib.reg is None:
         return
     proj = lib.project
     imgui.push_id("starts_on")
-    ui._micro("starts on")
+    ui._micro("starts on / home")
     _rect(panel, "starts_on.label")
     imgui.same_line()
     imgui.set_next_item_width(-1)
@@ -378,7 +381,8 @@ def starts_on(panel) -> None:
     _rect(panel, "starts_on")
     if imgui.is_item_hovered():
         imgui.set_tooltip(f"starts on: {proj.startup or 'none'} — the preset a launch and "
-                          "opening the show bring up; saved as soon as you pick it")
+                          "opening the show bring up; saved as soon as you pick it. "
+                          "Home (fn ←) or OVERDUB, B11 on the desk, loads it")
     imgui.pop_id()
 
 

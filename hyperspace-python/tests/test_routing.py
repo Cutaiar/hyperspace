@@ -436,7 +436,14 @@ def test_old_midi_map_migrates_into_bindings_json(tmp_path, capsys):
     assert {"source": "cc:0:87", "target": "view.inst_amp", "op": "abs"} in kept["desk"]
     assert len(kept["routes"]) == 12                     # the lane rows it played
     legacy.unlink()
-    assert Bindings.load(path, legacy_midi=legacy).to_json() == t.to_json()
+    # the old map had no OVERDUB row and the note is free: the next load
+    # adds home there, as it does to any older file (plan 15 WP2), and
+    # nothing else moves
+    again = Bindings.load(path, legacy_midi=legacy)
+    assert again.notes == [f"added note:0:{apc40.N_OVERDUB} → preset.home (the APC40 map of plan 15)"]
+    assert [b for b in again.to_json()["bindings"] if b["source"] != f"note:0:{apc40.N_OVERDUB}"] \
+        == t.to_json()["bindings"]
+    assert Bindings.load(path, legacy_midi=legacy).to_json() == again.to_json()
     # without either file: the factory table, nothing written
     t0 = Bindings.load(tmp_path / "none.json", legacy_midi=tmp_path / "nope.json")
     assert t0.to_json() == Bindings.factory().to_json() and not (tmp_path / "none.json").exists()
@@ -454,10 +461,12 @@ def test_factory_table_binds_only_real_params(tmp_path):
             assert r.reg[b.target].modulatable, b
     keys = [(b.key, b.layer) for b in t.bindings if b.scheme != "lane"]
     assert len(keys) == len(set(keys))                  # one row per control per layer
-    # + R, F1–F8, ⇧F1–F8 (plan 11), + undo and redo on ⌘ and Ctrl (plan 15 WP1)
-    assert len(t.of("key")) == 25 + 17 + 4
+    # + R, F1–F8, ⇧F1–F8 (plan 11), + undo and redo on ⌘ and Ctrl (plan 15 WP1),
+    # + Home (plan 15 WP2)
+    assert len(t.of("key")) == 25 + 17 + 4 + 1
     assert len(t.of("pad")) == 10 and len(t.of("hat")) == 4
-    assert len(t.midi()) == 113 + 6 and t.mods() == []   # + SHIFT, the global track knobs;
+    assert len(t.midi()) == 113 + 6 + 1 and t.mods() == []   # + SHIFT, the global track knobs,
+    # OVERDUB (plan 15 WP2);
     # no performer rows: the house presets carry the lane rows (plan 13 WP5)
     assert routing.referee(t.bindings)[1] == []           # one owner per target
     assert routing.remap_factory(t.bindings)[1] == []     # the factory table is current
@@ -886,12 +895,12 @@ def test_midi_view_shares_the_table(tmp_path):
 
     t = Bindings.factory(path=bindings_path(tmp_path))
     m = MidiIO(rig(tmp_path=tmp_path, full=True).reg, t, inp=Quiet(), out=Quiet())
-    assert len(m.bindings) == 113 + 6 and all(b.is_midi for b in m.bindings)
+    assert len(m.bindings) == 113 + 6 + 1 and all(b.is_midi for b in m.bindings)
     m.table.bind(Binding("cc:0:99", "view.zoom", "abs"))
     assert m.table.for_param("view.zoom").number == 99
     again = Bindings.load(bindings_path(tmp_path))
     assert again.for_param("view.zoom").source == "cc:0:99"
-    assert len(again.of("key")) == 25 + 17 + 4 and again.mods() == []
+    assert len(again.of("key")) == 25 + 17 + 4 + 1 and again.mods() == []
     # a session row (no layer: invariant) is edited in bindings.json, not
     # unbound from the panel (plan 13 WP5; tests/test_midi.py has the rest)
     m.unbind("view.zoom")
@@ -1283,8 +1292,10 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     assert "added key:F1 → preset.load.0" in err and "added key:SHIFT+F8 → preset.save.7" in err
     assert "added key:SUPER+Z → edit.undo" in err and "added key:CONTROL+SHIFT+Z → edit.redo" in err
     # 7 + the 17 keys of plan 11 + the desk's sort and its 25 global rows and SHIFT (plan 13)
-    # + the 4 undo and redo keys of plan 15
-    assert f"migrated {path} to {SCHEMA} (2 rows dropped, 54 rows changed)" in err
+    # + the 4 undo and redo keys of plan 15, + OVERDUB and the Home key (plan 15 WP2)
+    assert f"added note:0:{apc40.N_OVERDUB} → preset.home (the APC40 map of plan 15)" in err
+    assert "added key:HOME → preset.home" in err
+    assert f"migrated {path} to {SCHEMA} (2 rows dropped, 56 rows changed)" in err
     rows = {(b.source, b.target): b for b in t.bindings}
     assert rows[("key:RIGHT", "view.shape")].op == "step"
     assert rows[("cc:0:48", "view.bright")].op == "abs"                       # MIDI keeps abs
@@ -1298,8 +1309,9 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     assert "pickup" not in z.to_json()                         # dropped with the abs op
     assert ("lane:1", "rot.rate.XY") not in rows and ("hand:2", "view.depth4") not in rows
     assert [b.source for b, _ in t.dropped] == ["hand:2"]
-    # + the moved keys of plan 11, the desk's sort, the undo keys of plan 15
-    assert len(t.notes) == 9 + 17 + 26 + 4
+    # + the moved keys of plan 11, the desk's sort, the undo keys of plan 15,
+    # OVERDUB and the Home key (plan 15 WP2)
+    assert len(t.notes) == 9 + 17 + 26 + 4 + 2
     # the APC40 rows: the old factory rows swapped for the new, the LED kept
     tap = rows[("note:0:99", "tempo.tap")]
     assert (tap.op, tap.feedback) == ("toggle", "led") and ("note:0:99", "theme.next") not in rows
@@ -1442,7 +1454,7 @@ def test_r_and_the_f_keys_are_table_rows_that_fire_their_params(tmp_path):
 
 def test_an_older_file_gets_the_moved_keys_only_where_they_are_free(tmp_path):
     """remap_factory adds the loop's rows (seventeen from plan 11, the four
-    undo and redo rows from plan 15) to a user table that predates
+    undo and redo rows and the Home row from plan 15) to a user table that predates
     them; a key the user already bound keeps its row; a second pass adds
     nothing; the file is backed up before the one rewrite."""
     moved = {f"key:{k}" for k, _, _ in routing.LOOP_KEY_ROWS}
@@ -1455,7 +1467,7 @@ def test_an_older_file_gets_the_moved_keys_only_where_they_are_free(tmp_path):
     assert rows["key:F3"].target == "view.faces"                        # kept
     assert rows["key:F4"].target == "preset.load.3" and rows["key:R"].target == "camera.reset"
     assert rows["key:SHIFT+F3"].target == "preset.save.2"                # a different source
-    assert moved <= set(rows) and len(moved) == 17 + 4
+    assert moved <= set(rows) and len(moved) == 17 + 4 + 1
     assert list(tmp_path.glob("bindings.json.bak-*"))                   # kept before the rewrite
     _, notes = routing.remap_factory(t.bindings)
     assert notes == []
@@ -1538,6 +1550,59 @@ def test_an_older_file_gets_the_undo_keys_where_they_are_free(tmp_path):
     held = [b.target for b in out if b.scheme == "key" and b.key_name == "Z"
             and b.modifiers == {"SHIFT", "SUPER"}]
     assert held == ["view.lines"]
+
+
+def test_an_older_file_gets_home_where_it_is_free(tmp_path, capsys):
+    """Plan 15 WP2: a `bindings.json` written before home gains the Home
+    key row and the OVERDUB row on its next load, the old file kept whole
+    beside it, and the next load is quiet. A source the owner already
+    uses keeps its row and gets no home beside it."""
+    over, key = f"note:0:{apc40.N_OVERDUB}", "key:HOME"
+    assert (over, "preset.home", "toggle", 1.0, False) in routing.APC_NEW_ROWS
+    assert (key, "preset.home", "fire", 1.0) in routing.KEY_NEW_ROWS
+
+    def write(home, *mine):
+        rows = [b for b in session_rows() if b.source not in (over, key)]
+        path = bindings_path(home)
+        home.mkdir()
+        Bindings([*rows, *mine], path=path).write()
+        return path
+
+    path = write(tmp_path / "a")
+    before = path.read_text()
+    assert "preset.home" not in before
+    t = Bindings.load(path, legacy_midi=None)
+    assert t.notes == [f"added {over} → preset.home (the APC40 map of plan 15)",
+                       f"added {key} → preset.home (the keys of plans 09, 11 and 15)"]
+    err = capsys.readouterr().err
+    assert f"updated {path} (2 rows changed)" in err
+    (row,) = [b for b in t.midi() if b.source == over]
+    assert (row.target, row.op, row.layer, row.feedback, row.on) \
+        == ("preset.home", "toggle", None, "led", 1)
+    assert t.is_invariant(Binding(over, "view.points", "toggle", layer="preset"))
+    (krow,) = [b for b in t.of("key") if b.source == key]
+    assert (krow.target, krow.op) == ("preset.home", "fire")
+    (bak,) = (tmp_path / "a").glob("bindings.json.bak-*")
+    assert bak.name == "bindings.json.bak-v3" and bak.read_text() == before
+    after = path.read_text()
+    assert json.loads(after)["bindings"].count(row.to_json()) == 1
+    # the file is the factory's again, row for row
+    assert sorted(json.dumps(b, sort_keys=True) for b in json.loads(after)["bindings"]) \
+        == sorted(json.dumps(b.to_json(), sort_keys=True) for b in session_rows())
+    again = Bindings.load(path, legacy_midi=None)
+    assert again.notes == [] and path.read_text() == after
+    assert len(list((tmp_path / "a").glob("bindings.json.bak-*"))) == 1
+    assert capsys.readouterr().err == ""
+    # the owner's own rows on OVERDUB and on Home stay, and nothing is added or written
+    path = write(tmp_path / "b",
+                 Binding(over, "view.lines", "toggle", feedback="led"),
+                 Binding(key, "camera.reset", "fire"))
+    before = path.read_text()
+    t = Bindings.load(path, legacy_midi=None)
+    assert t.notes == [] and path.read_text() == before
+    assert not list((tmp_path / "b").glob("bindings.json.bak-*"))
+    assert not [b for b in t.bindings if b.target == "preset.home"]
+    assert t.for_param("view.lines").source == over
 
 
 def test_an_old_crossfader_row_moves_to_the_dim_with_a_backup(tmp_path, capsys):
@@ -1642,8 +1707,10 @@ def test_a_user_row_on_a_moved_apc_note_is_kept():
     assert ("key:B", "view.points") in by and ("key:SHIFT+B", "lfo.trigger") in by
     assert not any(b.target == "tempo.tap" for b in out)
     assert not any(b.source == f"note:0:{apc40.N_QUANT}" for b in out)   # no QUANT row added
-    # + R and the F-keys (plan 11), + undo and redo (plan 15)
-    assert [n.split(" ")[0] for n in notes] == ["remapped", "added"] + ["added"] * (17 + 4)
+    # the free OVERDUB gets home (plan 15 WP2); + R and the F-keys (plan 11),
+    # + undo and redo and the Home key (plan 15)
+    assert (f"note:0:{apc40.N_OVERDUB}", "preset.home") in by
+    assert [n.split(" ")[0] for n in notes] == ["remapped", "added"] + ["added"] * (17 + 4 + 2)
     # and a second pass has nothing to do
     again, notes2 = routing.remap_factory(out)
     assert notes2 == [] and [b.source for b in again] == [b.source for b in out]

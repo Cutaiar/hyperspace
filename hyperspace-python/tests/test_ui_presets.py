@@ -105,7 +105,7 @@ def test_starts_on_is_labelled_and_saved_when_set(rig, tmp_path, monkeypatch):  
     texts, previews = _drawn(monkeypatch)
     frame(panel, "presets")
     frame(panel)
-    assert "STARTS ON" in texts and "TUMBLE" in previews
+    assert "STARTS ON / HOME" in texts and "TUMBLE" in previews
     ui_presets.set_starts_on(panel, "WAKE")
     path = tmp_path / "projects" / "party.hyp.json"          # the factory show: your copy
     doc = json.loads(path.read_text())
@@ -114,6 +114,31 @@ def test_starts_on_is_labelled_and_saved_when_set(rig, tmp_path, monkeypatch):  
     assert (tmp_path / "last_show").read_text() == "party\n"
     again = Library(tmp_path, period=0.0)
     assert again.project.name == "party" and again.project.startup == "WAKE"
+
+
+def test_starts_on_reads_starts_on_home(rig, monkeypatch):  # noqa: F811
+    """Plan 15 WP2 (decision 27): home is what the show starts on, so the
+    label says both and its tooltip names the two controls that go there.
+    No widget was added: the row is still one label and one combo, the
+    combo has room for a preset's name, and the page does not scroll."""
+    panel, lib = rig.panel, rig.lib
+    texts, previews = _drawn(monkeypatch)
+    tips: list[str] = []
+    monkeypatch.setattr(imgui, "is_item_hovered", lambda *a: True)
+    monkeypatch.setattr(imgui, "set_tooltip", tips.append)
+    frame(panel, "presets")
+    frame(panel)
+    assert "STARTS ON / HOME" in texts and "STARTS ON" not in texts
+    assert lib.project.startup == "TUMBLE" and "TUMBLE" in previews
+    (tip,) = {t for t in tips if t.startswith("starts on")}
+    assert tip.startswith("starts on: TUMBLE") and "Home (fn ←)" in tip
+    assert "OVERDUB, B11 on the desk, loads it" in tip
+    rects = _rects(panel)
+    label, combo = rects["starts_on.label"], rects["starts_on"]
+    assert not _overlap(label, combo) and label[1] < combo[3] and combo[1] < label[3]   # one row
+    longest = max(ui_presets.names(panel, "presets"), key=len)
+    assert combo[2] - combo[0] > imgui.calc_text_size(longest).x
+    assert [k for k in rects if k.startswith("starts_on")] == ["starts_on.label", "starts_on"]
 
 
 def test_the_page_speaks_one_word_per_thing(rig, monkeypatch):  # noqa: F811

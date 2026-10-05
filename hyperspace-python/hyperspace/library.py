@@ -140,6 +140,8 @@ LAST_SHOW = "last_show"             # <home>/last_show: the show opened last
 # this home, so a show you later save as "default" stays "default"
 RENAMED_NOTE = "RENAMED.txt"
 UNTITLED = "untitled"
+# what `Project.home` says when the show names no "starts on" (plan 15 WP2)
+HOME_UNSET = "home: this show names no 'starts on' preset — pick one on the PRESETS page"
 
 # the preset a group resets to; any other group uses one named "default"
 # if it has one, else the values its objects were built with
@@ -697,6 +699,24 @@ class Project:
             presets.load(name)
         except LibraryError as e:
             lib.error = f"library: {e}"
+
+    def home(self) -> None:
+        """Home (plan 15 WP2, decision 27): load the preset the show
+        starts on — the `preset.home` trigger, on the Home key and the
+        desk's OVERDUB. It is a load like any other (D2), and one undo
+        step under its own label: the push inside `Presets.load_doc` is
+        the same frame's and is ignored (undo.py). A show that names no
+        "starts on" says so and loads nothing; so does a name with no
+        file, in `load_startup`'s words (neither opens a step)."""
+        lib, name = self.lib, self.startup
+        if not name:
+            lib.warning = HOME_UNSET
+            return
+        if lib.warning == HOME_UNSET:                 # it names one now
+            lib.warning = ""
+        if self._loader() is not None and lib.path_of(PRESETS, name) is not None:
+            undo.push(f"home → {name}", load=True)
+        self.load_startup()
 
     # ---- API ----
 
