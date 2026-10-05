@@ -197,6 +197,81 @@ def _label(panel, pid: str | None) -> str:
     return p.label if p is not None else ""
 
 
+# ---- the picked desk control: its line is framed, and scrolled to ----
+
+def goto(panel, source: str) -> None:
+    """Scroll the rows' child to the line of the control `source` names
+    and mark it. Clears the filter (WP5), so the line is never hidden.
+
+    It does not change the page (plan 17 fork 2): with ROUTING open the
+    rows scroll on this frame's draw; if not, when ROUTING is next opened
+    while that control is still picked (`Learn.control`). The line is the
+    control's row on the layer that is up — a preset row in the desk
+    section, its "unmapped — dark" line for a dark preset control, an
+    invariant or global row in the session section. A control dark on the
+    global layer has no line: nothing scrolls."""
+    st = _state(panel)
+    st["goto"] = source
+    st["find"] = ""
+    st["unfind"] = True         # …over the field's own edit buffer too (`_find_field`)
+
+
+def _pick_row(panel) -> Binding | None:
+    """The picked desk control (`Learn.control`) as a row to compare lines
+    with (`Binding.overlaps`), or None; a `goto` for a control no longer
+    picked is dropped."""
+    st = _state(panel)
+    source = getattr(getattr(panel, "learn", None), "control", None)
+    if st.get("goto") is not None and st["goto"] != source:
+        st["goto"] = None
+    st["marked"] = 0            # lines framed this draw (the tests read it)
+    if source is None:
+        st["mark"] = None
+    elif getattr(st.get("mark"), "source", None) != source:
+        st["mark"] = Binding(source, "", "abs")
+    return st.get("mark")
+
+
+def is_line_of(table, b: Binding, mark: Binding | None, section: str) -> bool:
+    """Is the line of row `b`, in `section` ("desk": a preset row or a dark
+    line; "session": an invariant or global row), the picked control's
+    line? Its control must be the picked one, on the layer that is up: a
+    desk line while the preset layer is up and the control is not
+    invariant; an invariant row always; a global row while SHIFT is on."""
+    if mark is None or not b.overlaps(mark):
+        return False
+    if section == "session":
+        return b.layer is None or b.layer == table.layer
+    return table.layer == "preset" and not table.is_invariant(mark)
+
+
+def _mark_line(panel, table, b: Binding, section: str, y0: float) -> None:
+    """After a desk or session line is drawn (`y0`: where it began): the
+    picked control's line gets the red frame for as long as it is picked,
+    and a pending `goto` scrolls the rows' child to it, once. The scroll
+    is the child's (`##routes`): the page itself never scrolls."""
+    st = _state(panel)
+    if not is_line_of(table, b, st.get("mark"), section):
+        return
+    start = imgui.get_cursor_screen_pos()       # the next line's start: this line's left edge
+    y1 = start.y - imgui.get_style().item_spacing.y
+    x1 = start.x + imgui.get_content_region_avail().x - 1
+    # the frame stands a little left of the line's first letter: the
+    # child's clip is widened that much for it (and only across: a line
+    # scrolled half out of the child is still cut at the child's edge)
+    pos, dl = imgui.get_window_pos(), imgui.get_window_draw_list()
+    imgui.push_clip_rect(imgui.ImVec2(pos.x - 6, pos.y),
+                         imgui.ImVec2(pos.x + imgui.get_window_width(),
+                                      pos.y + imgui.get_window_height()), False)
+    dl.add_rect(imgui.ImVec2(start.x - 5, y0 - 1), imgui.ImVec2(x1, y1 + 1),
+                ui.u32(ui.RED), 4.0, 1.5)
+    imgui.pop_clip_rect()
+    st["marked"] = st.get("marked", 0) + 1
+    if st.get("goto") is not None:
+        imgui.set_scroll_here_y(0.3)
+        st["goto"] = None
+
+
 def route_hay(panel, router: Router, b: Binding) -> tuple[str, ...]:
     """What a route says: its sentence in its adapter's words, its source,
     its target and the target's label."""
@@ -897,8 +972,15 @@ def unmapped(table) -> list[Binding]:
     return [f for f in preset_controls(table) if not any(b.overlaps(f) for b in rows)]
 
 
+def desk_target(p: Param) -> bool:
+    """Can a desk control be put on this param? Not on a file path (a knob
+    cannot set one) and not on SHIFT's own param. One rule for the desk
+    rows' target combo and for the menu's "Learn desk" (`Panel._desk_target`)."""
+    return p.kind is not Kind.TEXT and p.id != SHIFT_PARAM
+
+
 def _desk_targets(panel) -> list[Param]:
-    return [p for p in panel.reg if p.kind is not Kind.TEXT and p.id != SHIFT_PARAM]
+    return [p for p in panel.reg if desk_target(p)]
 
 
 def _desk_edited(table, b: Binding | None = None) -> None:
@@ -920,9 +1002,19 @@ def desk(panel, router: Router) -> None:
         imgui.set_tooltip("The loaded preset's own controls on the APC40 (SHIFT off). "
                           "A control the preset leaves unmapped is dark and does nothing.")
     imgui.same_line()
-    # (the click is the on-screen desk's, once it has one: plan 17 WP4's `ui_desk.click`)
-    imgui.text_colored(ui.FAINT, "new rows: right-click a param → Learn desk"
-                       + (", or click a control" if hasattr(ui.ui_desk, "click") else ""))
+    # (the click is the on-screen desk's, once it has one: plan 17 WP4's
+    # `ui_desk.click`.) The longest wording that fits beside the title; the
+    # whole of it on hover
+    full = ("new rows: right-click a param → Learn desk"
+            + (", or click a control" if hasattr(ui.ui_desk, "click") else ""))
+    room = imgui.get_content_region_avail().x
+    short = full.replace("right-click a param → ", "")
+    said = next((t for t in (full, short, short.replace("new rows:", "new:"))
+                 if imgui.calc_text_size(t).x <= room),
+                ui.fit_text(short.replace("new rows:", "new:"), room))
+    imgui.text_colored(ui.FAINT, said)
+    if said != full and imgui.is_item_hovered():
+        imgui.set_tooltip(full)
     sp = imgui.get_style().item_spacing.x
     op_w = imgui.calc_text_size("step +10").x
     dark = unmapped(table)
@@ -933,6 +1025,7 @@ def desk(panel, router: Router) -> None:
         if not _shown(panel, router, ("desk", id(b)), control_hay, b):
             continue
         drawn += 1
+        y0 = imgui.get_cursor_screen_pos().y
         imgui.push_id(f"desk{k}")
         _control_cell(table, b)
         imgui.same_line(col)
@@ -953,6 +1046,7 @@ def desk(panel, router: Router) -> None:
         if imgui.is_item_hovered():
             imgui.set_tooltip("Take this control out of the preset — it goes dark")
         imgui.pop_id()
+        _mark_line(panel, table, b, "desk", y0)
     if dead is not None:
         undo.push(f"unmap {control_glyph(table, dead)}")     # one undo step (undo.py)
         table.remove(dead)
@@ -961,9 +1055,11 @@ def desk(panel, router: Router) -> None:
         if not _shown(panel, router, ("dark", f.source), control_hay, f, False):
             continue
         drawn += 1
+        y0 = imgui.get_cursor_screen_pos().y
         _control_cell(table, f, ui.FAINT)
         imgui.same_line(col)
         imgui.text_colored(ui.FAINT, "unmapped — dark")
+        _mark_line(panel, table, f, "desk", y0)
     if not drawn and (rows or dark):
         imgui.text_disabled(NO_MATCH)
     elif not rows:
@@ -1158,10 +1254,12 @@ def session(panel, router: Router) -> None:
             continue
         imgui.text_colored(ui.DIM, title)
         for b in rows:
+            y0 = imgui.get_cursor_screen_pos().y
             _control_cell(table, b, ui.FAINT)
             imgui.same_line(col)
             op = _op_text(b)
             imgui.text_colored(ui.FAINT, b.target + ("" if op in ("abs", "toggle") else f"  {op}"))
+            _mark_line(panel, table, b, "session", y0)
 
 
 # ---- the page ----
@@ -1183,6 +1281,12 @@ def _find_field(panel) -> None:
     imgui.same_line(imgui.get_content_region_avail().x - _find_w(on))
     imgui.set_next_item_width(FIND_W)
     _, st["find"] = imgui.input_text_with_hint("##rows", "filter", st["find"])
+    if st.get("unfind"):
+        # a desk click cleared the filter (`goto`); a field that had the
+        # keyboard at that moment writes its edit buffer back on the frame
+        # it lets go of it — the clear holds until it has
+        st["find"] = ""
+        st["unfind"] = imgui.is_item_active()
     # a widget in use other than this field holds the lines it is on (`_shown`)
     st["hold"] = not imgui.is_item_active() and (
         imgui.is_any_item_active() or imgui.is_popup_open("", imgui.PopupFlags_.any_popup))
@@ -1211,6 +1315,7 @@ def page(panel, dt: float) -> None:
     head(panel, router)
     imgui.separator()
     rows = router.table.routes()
+    _pick_row(panel)            # the picked desk control: `_mark_line` frames and scrolls to it
     chain = panel.audio.chain
     live = "live" if getattr(panel.audio, "on", False) else "no source — lanes idle"
     st = _state(panel)
@@ -1264,4 +1369,7 @@ def page(panel, dt: float) -> None:
         macros(panel, router)
         imgui.separator()
         session(panel, router)
+        # every line is drawn: a control with no line (dark on the global
+        # layer) has nothing to scroll to
+        st["goto"] = None
     imgui.end_child()

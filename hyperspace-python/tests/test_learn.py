@@ -894,3 +894,125 @@ def test_unbind_is_one_undo_step_and_none_when_nothing_goes(tmp_path):
     assert u.stack == []
     settle(r)
     assert u.stack == [] and len(u.redos) == 1               # and the redo is not spent
+
+
+# ------------------------------------------------ plan 17 WP4: click a control, then a param
+
+def test_pick_then_param_maps_through_the_learn(tmp_path):
+    """`pick("cc:*:18")`, `map_picked("view.speed", apc40)`: the row
+    `learn_control` makes — one mapping path — the param's old knob row
+    gone and named in the message, one Ctrl+Z restoring both, no file
+    written. A pick is no undo step and changes no table; arming a param
+    lets the pick go, picking a control cancels an armed learn."""
+    from test_undo import boot, labels, settle
+
+    from hyperspace import apc40
+
+    r = boot(tmp_path / "home")
+    table, lrn, u = r.table, r.learn, r.undo
+
+    def desk():
+        return [b.to_json() for b in table.desk()]
+    settle(r)
+    u.clear()
+    on_disk = table.path.read_bytes() if table.path.exists() else None
+    assert [b.source for b in table.desk() if b.target == "view.speed" and b.kind == "cc"] \
+        == ["cc:0:49"]                                       # K2 has Speed in the startup preset
+    before, serial = desk(), table.redraw_serial
+    assert lrn.control is None and not lrn.map_picked("view.speed", apc40)   # nothing picked
+    lrn.pick("cc:*:18")                                      # D3
+    assert lrn.control == "cc:*:18" and lrn.learning is None
+    settle(r)
+    assert desk() == before and labels(r) == [] and table.redraw_serial == serial
+    assert lrn.map_picked("view.speed", apc40)
+    assert lrn.control is None and lrn.learning is None and not lrn.refused
+    (row,) = [b for b in table.desk() if b.target == "view.speed" and b.kind == "cc"]
+    assert (row.source, row.op, row.layer, row.feedback, row.ring) \
+        == ("cc:*:18", "abs", "preset", "ring", apc40.RING_VOLUME)
+    assert lrn.last == "learned view.speed ← D3 (device knob 3) (into the preset); K2 let go"
+    assert table.redraw_serial > serial                      # an adapter would redraw the desk
+    assert (table.path.read_bytes() if table.path.exists() else None) == on_disk
+    assert r.lib.is_dirty("presets")                         # the loaded preset's edit: its dot
+    mapped = desk()
+    settle(r)
+    assert labels(r) == ["learn view.speed"]                 # one step…
+    assert u.undo() and desk() == before                     # …and both rows are back
+    # the same row the knob learn's road makes
+    lrn.arm("view.speed", "desk")
+    assert lrn.learn_control("cc:*:18", apc40) and desk() == mapped
+    # a pick and an armed learn never stand together
+    lrn.pick("cc:*:19")
+    lrn.arm("view.bright", "desk")
+    assert lrn.control is None and lrn.learning == "view.bright"
+    lrn.pick("cc:*:19")
+    assert lrn.control == "cc:*:19" and lrn.learning is None and lrn.want is None
+    lrn.pick(None)
+    assert lrn.control is None
+    # a param the registry lacks: nothing lands, nothing is left armed, and
+    # it says so — the control still picked
+    lrn.pick("cc:*:19")
+    assert not lrn.map_picked("no.such.param", apc40) and lrn.learning is None
+    assert lrn.control == "cc:*:19" and lrn.refused
+    assert lrn.last == "no.such.param: no such param — nothing mapped"
+
+
+def test_a_pick_on_an_invariant_control_or_the_global_layer_maps_nothing(tmp_path):
+    """D5, D6: `ui_desk.mappable` gives the reason before the click, and
+    `map_picked` refuses in the knob learn's words — the table untouched,
+    no undo step, no learn left armed, the control still picked."""
+    from test_undo import boot, labels, settle
+
+    from hyperspace import apc40, learn, ui_desk
+
+    r = boot(tmp_path / "home")
+    table, lrn, u = r.table, r.learn, r.undo
+
+    def rows():
+        return [(b.to_json(), b.layer) for b in table.bindings]
+
+    def control(glyph):
+        return next(c for c in apc40.LAYOUT if c.glyph == glyph)
+    settle(r)
+    u.clear()
+    before = rows()
+    s3 = control("S3")
+    # one rule, asked before the click and refused by after it (`learn.blocked`)
+    assert learn.blocked(table, s3.source) == "invariant"
+    assert learn.blocked(table, "cc:0:48") is None
+    assert ui_desk.mappable(table, s3) == "S3 (track fader 3) is invariant (the session's)"
+    lrn.pick(s3.source)
+    assert not lrn.map_picked("view.speed", apc40)
+    assert lrn.refused and lrn.last == "S3 (track fader 3) is invariant (the session's) — not learned"
+    assert lrn.control == s3.source and lrn.learning is None and rows() == before
+    # every invariant control of D6: the faders, the bank row, SHIFT, TAP,
+    # METRONOME, NUDGE, the transport, the crossfader, OVERDUB, the clip-stop row
+    for glyph in ("S1", "SM", "G1·1", "G1·8", "⇧", "B20", "B12", "B21", "B22", "B13", "B14",
+                  "X", "B11", "G6·1", "G6·8"):
+        c = control(glyph)
+        assert "is invariant (the session's)" in (ui_desk.mappable(table, c) or ""), glyph
+        lrn.pick(c.source)
+        assert not lrn.map_picked("view.speed", apc40) and lrn.refused, glyph
+    assert rows() == before
+    # the global layer: nothing is mapped while it is up, a free knob included
+    k1, k6 = control("K1"), control("K6")
+    assert ui_desk.mappable(table, k1) is None and ui_desk.mappable(table, k6) is None
+    table.set_layer("global")
+    assert learn.blocked(table, k1.source) == "global"
+    assert learn.blocked(table, s3.source) == "invariant"       # invariant on both layers
+    assert ui_desk.mappable(table, k1) == (
+        "K1 (track knob 1) is on the global layer (the session's) — latch SHIFT off to map "
+        "into the preset")
+    assert ui_desk.mappable(table, k6) is not None
+    lrn.pick(k1.source)
+    assert not lrn.map_picked("view.depth4", apc40)
+    assert lrn.refused and lrn.last == (
+        "K1 (track knob 1) is on the global layer (the session's) — latch SHIFT off to learn "
+        "into the preset")
+    assert lrn.control == k1.source and lrn.learning is None and rows() == before
+    settle(r)
+    assert labels(r) == []
+    # SHIFT off: the same pick lands
+    table.set_layer("preset")
+    assert lrn.map_picked("view.depth4", apc40) and lrn.control is None
+    assert [b.source for b in table.desk() if b.target == "view.depth4" and b.kind == "cc"] \
+        == [k1.source]
