@@ -43,6 +43,14 @@ def test_route():
             if not (through and fx_on):
                 assert r(True, True, True) == (SCENE, True)      # hands over the effects
                 assert r(False, True, True) == (None, True)      # hands alone on the ground
+    # hands through effects (WP2): only with an effect on and a hand shown
+    thru = Switches(through=True)
+    assert route(thru, True, True) == (SCENE_HANDS, False)
+    assert route(Switches(scene=False, through=True), True, True) == (HANDS, False)   # F2
+    assert route(thru, False, True) == (SCENE, True)              # no effect: hands over
+    assert route(thru, True, False) == (SCENE, False)             # no hand: nothing extra
+    assert route(Switches(hands=False, through=True), True, True) == (SCENE, False)
+    assert route(Switches(scene=False, hands=False, through=True), True, True) == (None, False)
     # the dim never routes
     assert route(Switches(dim=0.0), True, True) == route(Switches(), True, True)
     assert {SCENE, SCENE_HANDS, HANDS} == {0, 1, 2} and O.PIPELINES == (0, 1, 2)
@@ -355,10 +363,15 @@ def test_two_outputs_with_the_same_switches_run_the_chain_once(ctx):
     (O.Switches(), O.Switches(scene=False), 1),                  # … / hands alone, over
     (O.Switches(scene=False, hands=False), O.Switches(scene=False, hands=False), 0),
     (O.Switches(scene=False), O.Switches(scene=False), 0),
+    (O.Switches(), O.Switches(through=True), 2),                 # hands over / hands through
+    (O.Switches(through=True), O.Switches(scene=False, through=True), 2),   # / hands alone, through
+    (O.Switches(through=True), O.Switches(through=True), 1),     # the same state: one
+    (O.Switches(scene=False, through=True), O.Switches(scene=False), 1),
 ])
 def test_outputs_that_differ_run_one_chain_per_distinct_input(ctx, glass, projector, runs):
-    """The plan's table of two-output combinations (the WP1 rows; the
-    through rows are WP2's): `Renderer.stats` counts the chain runs."""
+    """The plan's table of two-output combinations: `Renderer.stats`
+    counts the chain runs — at most two for two outputs, one when they
+    agree."""
     r = rig(ctx)
     run(ctx, r, views(ctx, glass, projector), frames=2)
     assert r.stats["chain_runs"] == runs
@@ -398,7 +411,9 @@ def test_capture_runs_once_a_frame_whatever_the_switches(ctx, monkeypatch):
     with monkeypatch.context() as m:
         m.setattr(Lookback, "capture", lambda self, *a: calls.append(1) or real(self, *a))
         for combo in ((S(),), (S(), S(hands=False), S(scene=False)),
-                      (S(scene=False), S(scene=False, hands=False)), (S(), S())):
+                      (S(scene=False), S(scene=False, hands=False)), (S(), S()),
+                      (S(), S(through=True), S(scene=False, through=True)),
+                      (S(scene=False, through=True),)):
             for effects in ((), ("warp",)):
                 calls.clear()
                 run(ctx, rig(ctx, effects=effects, echoes=True), views(ctx, *combo), frames=3)
@@ -434,7 +449,9 @@ def test_the_history_never_holds_the_hands_in_any_state(ctx):
     bare = rig(ctx, echoes=True, hands=False)
     run(ctx, bare, views(ctx, S()), frames=6)
     want = np.frombuffer(bare.lookback.atlas.read(), dtype=np.uint8)
-    for combo in ((S(),), (S(), S(scene=False)), (S(scene=False),), (S(hands=False), S())):
+    for combo in ((S(),), (S(), S(scene=False)), (S(scene=False),), (S(hands=False), S()),
+                  (S(through=True),), (S(through=True), S(scene=False, through=True)),
+                  (S(scene=False, through=True),)):
         r = rig(ctx, echoes=True)
         run(ctx, r, views(ctx, *combo), frames=6)
         assert r.stats["layer"]
@@ -490,28 +507,40 @@ def test_an_output_of_another_aspect_is_letterboxed_and_the_hands_stay_registere
 
 def test_an_opaque_grounds_alpha_is_untouched_in_every_state(ctx):
     S = O.Switches
-    combos = [S(scene=a, hands=b) for a in (True, False) for b in (True, False)]
-    for effects in ((), ("warp",)):
+    combos = [S(scene=a, hands=b, through=c) for a in (True, False) for b in (True, False)
+              for c in (False, True)]
+    for effects in ((), ("warp",), ("warp", "kaleido")):
         r = rig(ctx, effects=effects, alpha=0.6, dim=0.7)
         for img in run(ctx, r, views(ctx, *combos, S(dim=0.2), sizes={4: (300, 300)})):
             assert img[..., 3].min() == 255
 
 
-def test_overlay_adds_the_hands_coverage_after(ctx):
+def test_overlay_adds_the_hands_coverage_before_or_after(ctx):
     """Overlay's see-through ground (the first output only, in the rig):
-    the hands laid over the effects add their coverage to the alpha; the
-    ground with no hands stays see-through; the dim fades both."""
+    the hands add their coverage to the alpha whether they are laid over
+    the effects or put through them; the ground with no hands stays
+    see-through; the dim fades both."""
+    import numpy as np
     from test_ghost import hand_mask
 
     S = O.Switches
     mask = hand_mask(ctx, _src(), solid=True)
     r = rig(ctx, bg=0.0)
-    with_scene, alone = run(ctx, r, views(ctx, S(), S(scene=False), bg=0.0))
+    with_scene, alone, scene_thru, alone_thru = run(ctx, r, views(
+        ctx, S(), S(scene=False), S(through=True), S(scene=False, through=True), bg=0.0))
     for img in (with_scene, alone):
         assert img[..., 3][mask].min() == 255
     outside = ~hand_mask(ctx, _src())
     assert alone[..., 3][outside].max() == 0
     assert with_scene[..., 3].min() < 255
+    # through the warp the hands move a little, but their coverage comes with them
+    assert alone_thru[..., 3].sum() > 0.7 * alone[..., 3].sum()
+    assert scene_thru[..., 3].sum() > with_scene[..., 3].sum() - 0.3 * alone[..., 3].sum()
+    for img in (scene_thru, alone_thru):                        # premultiplied: a ≥ colour
+        assert (img[..., 3] + 2 >= img[..., :3].max(axis=2)).all()
+    dark = alone_thru[..., :3].max(axis=2) == 0                # the ground stays see-through
+    assert dark.sum() > 0.5 * dark.size and alone_thru[..., 3][dark].max() <= 2
+    assert not np.array_equal(alone_thru, alone)
     faded = run(ctx, rig(ctx, bg=0.0, dim=0.5), views(ctx, S(scene=False), bg=0.0))[0]
     assert abs(faded[..., 3][mask].mean() - 127.5) <= 1
 
@@ -659,3 +688,181 @@ def test_a_renderer_from_before_the_outputs_still_draws_and_reloads(ctx):
     assert r._frames == {} and r._show_prog is None
     run(ctx, r, views(ctx, S(), S()), frames=1)
     assert r._frames and r.stats["pipelines"] == [SCENE]
+
+
+# ---------------------------------------------------------------- WP2: hands through effects
+
+EIGHT = [O.Switches(scene=a, hands=b, through=c)
+         for a in (True, False) for b in (True, False) for c in (False, True)]
+
+
+def test_each_of_the_eight_states_shows_its_picture(ctx):
+    """The plan's table, warp + kaleido on, all eight on one frame:
+    3 = 4 and 7 = 8 byte for byte (six pictures); 1 is today's frame and
+    holds the hands undistorted; 2 and 6 differ from 1 and 5 where the
+    hands are (the effects bend them); 5 is the hands alone on the
+    ground; 6 is the hands alone through the chain, with no scene; 7 is
+    black. Three pipelines, three chain runs, one capture."""
+    import numpy as np
+    from test_ghost import hand_mask
+
+    fx = ("warp", "kaleido")
+    r = rig(ctx, effects=fx)
+    p = run(ctx, r, views(ctx, *EIGHT))
+    assert r.stats["pipelines"] == [SCENE, SCENE_HANDS, HANDS]
+    assert r.stats["chain_runs"] == 3 and r.stats["captures"] == 1
+    s1, s2, s3, s4, s5, s6, s7, s8 = p
+    assert np.array_equal(s3, s4) and np.array_equal(s7, s8)
+    assert len({a.tobytes() for a in p}) == 6
+    assert np.array_equal(s1, today(ctx, rig(ctx, effects=fx)))          # the default
+    solid, cover = hand_mask(ctx, _src(), solid=True), hand_mask(ctx, _src())
+    assert np.array_equal(s1[solid], s5[solid])                         # unbent, over the scene
+    assert s5[~cover][..., :3].max() == 0                               # the hands alone
+    for through, over in ((s2, s1), (s6, s5)):
+        assert np.abs(through[cover] - over[cover])[..., :3].sum() > 50_000
+    assert s6[..., :3].max() > 100 and s6[..., 3].min() == 255          # hands, bent, on black
+    assert s7[..., :3].max() == 0
+    # the scene through the effects is the same in 1, 2 and 3 away from the hands
+    # (2: up to rounding where a bent hand's faint edge lands)
+    far = ~cover & ~(s6[..., :3].max(axis=2) > 0)
+    assert np.array_equal(s1[far], s3[far])
+    assert np.abs(s2[far] - s3[far]).mean() < 0.5
+
+
+def test_through_bends_the_hands_with_the_shape(ctx):
+    """Under the warp alone, the hands through the effects are not where
+    the hands over them are: the pixels moved — while over the effects
+    they are exactly where the hands' own pass puts them."""
+    import numpy as np
+    from test_ghost import hand_mask
+
+    S = O.Switches
+    over, through = run(ctx, rig(ctx), views(ctx, S(scene=False), S(scene=False, through=True)))
+    lit_o = over[..., :3].max(axis=2) > 40
+    lit_t = through[..., :3].max(axis=2) > 40
+    assert np.array_equal(lit_o, hand_mask(ctx, _src()) & lit_o)
+    moved = (lit_o ^ lit_t).sum()
+    assert moved > 0.2 * lit_o.sum(), (moved, lit_o.sum())
+
+
+def test_through_with_no_effect_on_is_hands_over(ctx):
+    import numpy as np
+
+    S = O.Switches
+    r = rig(ctx, effects=())
+    a, b, c, d = run(ctx, r, views(ctx, S(), S(through=True), S(scene=False),
+                                   S(scene=False, through=True)))
+    assert np.array_equal(a, b) and np.array_equal(c, d)
+    assert r.stats["pipelines"] == [SCENE] and r.stats["chain_runs"] == 0
+    assert r.stats["readout"] is False
+
+
+def test_through_with_no_hand_showing_runs_nothing_extra(ctx):
+    import numpy as np
+
+    S = O.Switches
+    for src in ("off", "no hand", "hands switch off"):
+        r = rig(ctx)
+        sw = [S(), S(through=True)]
+        if src == "off":
+            r.ghost.state.on = False
+        elif src == "no hand":
+            r.ghost.source.skeleton = {}
+        else:
+            sw = [S(hands=False), S(hands=False, through=True)]
+        a, b = run(ctx, r, views(ctx, *sw))
+        assert np.array_equal(a, b), src
+        assert r.stats["pipelines"] == [SCENE] and r.stats["chain_runs"] == 1, src
+        assert r.ghost.readout is None and r._frames.keys() == {SCENE}, src
+
+
+def test_four_outputs_need_at_most_three_chain_runs(ctx):
+    S = O.Switches
+    r = rig(ctx)
+    run(ctx, r, views(ctx, S(), S(through=True), S(scene=False, through=True), S(hands=False)),
+        frames=2)
+    assert r.stats["chain_runs"] == 3 and r.stats["pipelines"] == [SCENE, SCENE_HANDS, HANDS]
+
+
+def _readout_alpha(r):
+    import numpy as np
+
+    tex = r.ghost.readout
+    w, h = tex.size
+    return np.frombuffer(tex.read(), dtype=np.uint8).reshape(h, w, 4)[::-1, :, 3]
+
+
+@pytest.mark.parametrize("guide", [1, 2], ids=["beside", "on hand"])
+def test_the_guide_is_never_distorted(ctx, guide):
+    """Fork F3: with a pipeline putting the hands through the effects and
+    the guide on, the guide is a layer of its own (`Ghost.readout`) laid
+    over after everything on every output that shows the hands: where it
+    is solid, the output with the hands through the effects shows the
+    same pixels as the one with them over — and as today's single-layer
+    frame. Not needed (no through, or no guide), it is not drawn and the
+    frame is today's, byte for byte."""
+    import numpy as np
+
+    S = O.Switches
+    fx = ("warp", "kaleido")
+    r = rig(ctx, effects=fx, guide=guide)
+    over, through, alone = run(ctx, r, views(ctx, S(), S(through=True),
+                                             S(scene=False, through=True)))
+    assert r.stats["readout"] is True and r.ghost.readout is not None
+    solid = _readout_alpha(r) == 255
+    assert solid.sum() > 150
+    for img in (through, alone):
+        assert np.array_equal(img[solid], over[solid])
+    single = today(ctx, rig(ctx, effects=fx, guide=guide))         # the guide in the hands' layer
+    assert np.array_equal(over[solid], single[solid])
+    # not needed: no through pipeline — today's frame, no readout drawn
+    r2 = rig(ctx, effects=fx, guide=guide)
+    a, b = run(ctx, r2, views(ctx, S(), S(scene=False)))
+    assert r2.ghost.readout is None and r2.stats["readout"] is False
+    assert np.array_equal(a, single)
+    # …or no guide
+    r3 = rig(ctx, effects=fx)
+    run(ctx, r3, views(ctx, S(), S(through=True)))
+    assert r3.ghost.readout is None and r3.stats["readout"] is False
+    # …or no effect on: through is over, and the readout is not split
+    r4 = rig(ctx, effects=(), guide=guide)
+    a, b = run(ctx, r4, views(ctx, S(), S(through=True)))
+    assert r4.ghost.readout is None and np.array_equal(a, b)
+
+
+def test_a_raising_hands_composite_into_the_chain_still_runs_it(ctx, monkeypatch):
+    """The hands raising as they go onto the chain's input: that output
+    shows the scene through the effects with no hands, dimmed; the other
+    outputs are drawn; `Ghost.error` says why."""
+    import numpy as np
+
+    from hyperspace import ghost as G
+
+    S = O.Switches
+    want = run(ctx, rig(ctx, hands=False, dim=0.5), views(ctx, S()))[0]
+    r = rig(ctx, dim=0.5)
+    real = G.Ghost._lay
+    with monkeypatch.context() as m:
+        def boom(self, tex, target, vp, opaque):
+            if tuple(vp[:2]) == (0, 0) and target is r.fx._fbo[0]:
+                raise RuntimeError("into the chain")
+            return real(self, tex, target, vp, opaque)
+        m.setattr(G.Ghost, "_lay", boom)
+        through, over = run(ctx, r, views(ctx, S(through=True), S()))
+    assert r.ghost.error == "ghost hands: RuntimeError: into the chain"
+    assert np.array_equal(through, want)
+    assert not np.array_equal(over, want)                          # the hands, over
+    assert through[..., 3].min() == 255
+
+
+def test_the_presenter_handoff_carries_the_readout(ctx):
+    S = O.Switches
+    r = rig(ctx, guide=1)
+    first = views(ctx, S(through=True))[0]
+    pv = O.View(S(), (W, H), presenter=object())
+    pv_off = O.View(S(hands=False), (W, H), presenter=object())
+    run(ctx, r, [first, pv, pv_off])
+    assert pv.handoff.readout is r.ghost.readout is not None
+    assert pv.handoff.hands is r.ghost.tex
+    assert pv_off.handoff.readout is None and pv_off.handoff.hands is None
+    assert r.stats["chain_runs"] == 2 and r.stats["direct"] is False

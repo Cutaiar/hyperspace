@@ -49,16 +49,22 @@ def route(sw: Switches, fx_active: bool, hands_visible: bool) -> tuple[int | Non
     frame" (`Ghost.layer` drew); the hands are *shown* on this output when
     its own hands switch is on too (fork F7).
 
-    | scene | hands shown | through and an effect on | pipeline | hands after |
-    |  on   |    no       |          —               | SCENE    | no          |
-    |  on   |    yes      |          no              | SCENE    | yes         |
-    |  off  |    no       |          —               | None     | no          |
-    |  off  |    yes      |          no              | None     | yes         |
+    | scene | hands shown | through and an effect on | pipeline    | hands after |
+    |  on   |    no       |          —               | SCENE       | no          |
+    |  on   |    yes      |          no              | SCENE       | yes         |
+    |  on   |    yes      |          yes             | SCENE_HANDS | no          |
+    |  off  |    no       |          —               | None        | no          |
+    |  off  |    yes      |          no              | None        | yes         |
+    |  off  |    yes      |          yes             | HANDS       | no          |
 
-    Hands through effects (WP2) adds the SCENE_HANDS and HANDS rows; until
-    then the switch is read as off."""
+    So with no effect on, or no hand shown, the through switch changes
+    nothing: every output is SCENE or the ground (WP2; fork F2 makes
+    "scene off, hands through" the hands alone through the chain)."""
     shown = bool(sw.hands) and bool(hands_visible)
-    return (SCENE if sw.scene else None), shown
+    through = shown and bool(sw.through) and bool(fx_active)
+    if sw.scene:
+        return (SCENE_HANDS, False) if through else (SCENE, shown)
+    return (HANDS, False) if through else (None, shown)
 
 
 def fit(src: tuple[int, int], dst: tuple[int, int]) -> tuple[int, int, int, int]:
@@ -93,7 +99,8 @@ class Handoff:
        ZERO / ONE on an opaque ground (`bg_alpha` 1) — `Ghost.composite`'s
        blend. None: no hands after the effects on this output;
     4. lays `readout` (the guide and the tethers' labels when they are a
-       layer of their own, WP2) the same way. None: nothing;
+       layer of their own, WP2 — on every output that shows the hands,
+       over or through) into `rect` the same way. None: nothing;
     5. multiplies the whole framebuffer by `factor` when it is under 1
        (`Renderer.dim_pass`'s blend: colour only on an opaque ground,
        colour and alpha otherwise).

@@ -65,7 +65,7 @@ from .geometry import face_triangles, face_uvs, geom, project_h
 from .ghost import Ghost, GhostState
 from .glsl import QUAD_VS, common, common_mtime, gl_error
 from .lookback import DreamState, Lookback
-from .outputs import NAMES, PIPELINES, Handoff, Switches, View, fit, route
+from .outputs import HANDS, NAMES, PIPELINES, SCENE, Handoff, Switches, View, fit, route
 from .tapers import clamp
 from .view import N_MOD, RED, ViewState  # re-exported for callers that had them from here
 
@@ -835,13 +835,19 @@ class Renderer:
         # goes on without the hands, `Ghost.error` says why (the first
         # reason, kept), the target is bound again and the dim still runs —
         # a rig at black must never flash full because of the hands
+        # With an effect on and some view's hands going through it, the
+        # guide and the tethers' labels are drawn into a layer of their own
+        # (`Ghost.readout`, fork F3) and laid over after everything, so the
+        # effects never bend them; otherwise they are in the hands' layer
         hands = False
         if any(v.switches.hands for v in views):
+            through = fx_on and any(v.switches.hands and v.switches.through for v in views)
             try:
-                hands = bool(self.ghost.layer(size, t))
+                hands = bool(self.ghost.layer(size, t, readout=through))
             except Exception as e:  # noqa: BLE001 — the hands must not take the frame down
                 self._hands_failed(e, target, vp)
-        stats["layer"] = hands
+        readout = self.ghost.readout if hands else None
+        stats["layer"], stats["readout"] = hands, readout is not None
         routes = [route(v.switches, fx_on, hands) for v in views]
         # each distinct pipeline once, in key order. The history is
         # captured after the first composite of the scene, from the scene
@@ -866,7 +872,7 @@ class Renderer:
                 else:
                     tex, dst = self._frame_target(key, size)
                     stats["direct"] = False
-                self._pipeline(key, dst, cover, t, fx_on, stats)
+                self._pipeline(key, dst, cover, t, fx_on, stats, (target, vp))
                 frames[key] = tex
             except Exception as e:  # noqa: BLE001 — one pipeline must not take the others down
                 failed.add(key)
@@ -882,26 +888,48 @@ class Renderer:
             fx.state.advance_to(t)       # …and so do the effects' clocks
         for i, v in enumerate(views):
             key, after = routes[i]
+            # the readout goes on every output that shows the hands, over
+            # or through: in its own layer the guide is in neither
+            ro = readout if v.switches.hands else None
             try:
-                self._compose(v, key, after, frames, failed, size)
+                self._compose(v, key, after, frames, failed, size, ro)
             except Exception as e:  # noqa: BLE001 — one view must not take the others down
                 self._view_failed(v, "output", e)
                 self._rebind(target, vp)
 
     def _pipeline(self, key: int, dst: moderngl.Framebuffer, cover, t: float, fx_on: bool,
-                  stats: dict) -> None:
-        """One pipeline into `dst` (its viewport): SCENE is the look-back
-        composite and, with an effect on, the chain after it."""
-        lb, fx = self.lookback, self.fx
+                  stats: dict, restore: tuple) -> None:
+        """One pipeline into `dst` (its viewport). SCENE: the look-back
+        composite and, with an effect on, the chain after it. SCENE_HANDS
+        (WP2): the composite, the hands over it, then the chain — the
+        effects bend the hands with the shape. HANDS: the ground, the hands,
+        the chain; no look-back (the echoes are the scene's, and the scene
+        is off). Both only ever with an effect on (`outputs.route`)."""
+        lb, fx, ctx = self.lookback, self.fx, self.ctx
         if not fx_on:
             lb.composite(self.scene.tex, dst, cover)
             self._capture_once(dst, stats)
             return
         # the post pass into the chain's first texture; the chain ends on
-        # `dst`. The history captures the scene, not the effects
-        buf = fx.begin(self.scene.size)
-        lb.composite(self.scene.tex, buf, cover)
-        self._capture_once(buf, stats)
+        # `dst`. The history captures the scene, never the hands or the
+        # effects: it is taken from the scene texture, before the hands
+        size = self.scene.size
+        buf = fx.begin(size)
+        if key == HANDS:
+            buf.use()
+            ctx.viewport = (0, 0, *size)
+            ctx.clear(0.0, 0.0, 0.0, getattr(self, "bg_alpha", 1.0))
+        else:
+            lb.composite(self.scene.tex, buf, cover)
+            self._capture_once(buf, stats)
+        if key != SCENE:
+            # the hands onto the chain's input (fork F1: after the look-back
+            # composite, before the first effect). Failing, the chain still
+            # runs on the scene alone and `Ghost.error` says why
+            try:
+                self.ghost.composite(buf, (0, 0, *size), opaque=fx.opaque)
+            except Exception as e:  # noqa: BLE001 — the hands must not take the frame down
+                self._hands_failed(e, *restore)
         fx.run(dst, t)
         stats["chain_runs"] += 1
 
@@ -915,9 +943,10 @@ class Renderer:
 
     def _compose(self, v: View, key: int | None, after: bool,
                  frames: dict[int, moderngl.Texture | None], failed: set[int],
-                 size: tuple[int, int]) -> None:
+                 size: tuple[int, int], readout: moderngl.Texture | None = None) -> None:
         """One view's picture: the pipeline's frame (already there when it
-        was drawn direct), the hands over it in the same rect, its dim."""
+        was drawn direct), the hands over it in the same rect, the readout
+        layer over that when there is one, its dim."""
         ctx, gh = self.ctx, self.ghost
         factor = clamp(getattr(self, "dim", 1.0) * float(v.switches.dim), 0.0, 1.0)
         frame = None if key is None or key in failed else frames.get(key)
@@ -927,7 +956,7 @@ class Renderer:
             rx, ry, rw, rh = v.rect
             ix, iy, iw, ih = fit(size, (rw, rh))
             v.handoff = Handoff(frame, size, (rx + ix, ry + iy, iw, ih),
-                                hands=gh.tex if after else None,
+                                hands=gh.tex if after else None, readout=readout,
                                 alpha=float(gh.state.alpha), factor=factor,
                                 bg_alpha=float(v.bg_alpha))
             return
@@ -943,9 +972,12 @@ class Renderer:
             self._show(tgt, rect, inner, frame, size, opaque, float(v.bg_alpha))
         # the hands last, onto the target: no effect, echo or dream touches
         # them and the history (captured from the scene) never holds them
-        if after:
+        if after or readout is not None:
             try:
-                gh.composite(tgt, inner, opaque=opaque)
+                if after:
+                    gh.composite(tgt, inner, opaque=opaque)
+                if readout is not None:      # the guide and its labels, never bent
+                    gh.composite_readout(tgt, inner, opaque=opaque)
             except Exception as e:  # noqa: BLE001 — the hands must not take the frame down
                 self._hands_failed(e, tgt, rect)
         # the dim, after everything: the scene, the look-back, every effect
