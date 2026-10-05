@@ -16,6 +16,7 @@ from conftest import (
     OWNER_ROW,
     OWNER_SHOWS,
     boot_home,
+    far_pads,
     old_shape_pads,
     opened_last,
     tree,
@@ -983,6 +984,9 @@ def test_the_owner_home_is_shaped_like_the_owners(owner_home):
     source, target = OWNER_ROW
     assert [b["target"] for b in table["bindings"] if b["source"] == source] == [target]
     assert not any(b.get("layer") == "preset" for b in table["bindings"])
+    # as written before plan 19 WP2: nothing on clip rows 4 and 5, the first eight pads only
+    assert not {b["source"] for b in table["bindings"]} & set(far_pads())
+    assert len([b for b in table["bindings"] if b["target"] == "preset.select"]) == 8
     assert json.loads((home / "windows.json").read_text())["schema"] == "hyperspace.windows/1"
     assert (home / "stall.log").is_file() and (home / "weights" / "model.safetensors").is_file()
     assert len(list((home / "trash" / "presets").glob("night-one.*.json"))) == 1
@@ -994,9 +998,12 @@ def test_an_eight_slot_show_loads_and_is_not_rewritten(owner_home):
     bank opens, padded to twenty-four in memory, clean — and is not
     rewritten: after a launch, preset loads, home, opening the other show
     and a quit, every file in the home but `last_show` and `windows.json`
-    (written as they always were) has the bytes and the mtime it had."""
+    (written as they always were) has the bytes and the mtime it had —
+    and but `bindings.json`, which the first launch of plan 19 WP2 rewrites
+    once, backed up first (test_routing.py's tests on this home)."""
     home = owner_home
-    before = tree(home, but=("last_show", "windows.json"))
+    quiet = ("last_show", "windows.json", "bindings.json")
+    before = tree(home, but=quiet)
     r = boot_home(home)                                   # the launch: `mine`, opened last
     lib, pr = r.lib, r.lib.project
     assert pr.name == "mine" and pr.path == home / "projects" / "mine.hyp.json"
@@ -1012,19 +1019,20 @@ def test_an_eight_slot_show_loads_and_is_not_rewritten(owner_home):
     pr.load_slot(12)                                       # an empty far slot: said, nothing else
     assert lib.warning == "slot 13: an empty slot"
     lib.poll()
-    assert tree(home, but=("last_show", "windows.json")) == before
+    assert tree(home, but=quiet) == before
     pr.load("party")                                       # the user copy of the party show
     assert pr.path == home / "projects" / "party.hyp.json" and not pr.is_dirty()
     assert len(pr.bank) == 24 and pr.bank[8:] == [None] * 16      # no TRACER: the file is yours
     r.reg["preset.load.7"].fire()
     lib.poll()
     quit_(home)
-    assert tree(home, but=("last_show", "windows.json")) == before
-    assert not list(home.rglob("*.bak-*"))
-    # and a second launch finds the same
+    assert tree(home, but=quiet) == before
+    assert [p.name for p in home.rglob("*.bak-*")] == ["bindings.json.bak-v3"]
+    # and a second launch finds the same, bindings.json and its backup too
+    after = tree(home, but=quiet[:2])
     again = boot_home(home)
     assert again.lib.project.name == "party" and not again.lib.project.is_dirty()
-    assert tree(home, but=("last_show", "windows.json")) == before
+    assert tree(home, but=quiet[:2]) == after
 
 
 def test_loading_never_rewrites_a_preset_file(owner_home):
@@ -1071,7 +1079,9 @@ def test_a_show_that_uses_only_the_first_eight_is_written_with_eight(owner_home)
     assert len(doc["bank"]) == 8 and doc["bank"][3] == "NIGHT THREE" and doc["bank"][6] is None
     r.reg["preset.save.6"].fire()                          # ⇧F7 into the hole
     assert len(json.loads(show.read_text())["bank"]) == 8 and pr.bank[6] == "PRESET 7"
-    assert not list(home.rglob("*.bak-*")) and not pr.is_dirty() and pr.bank_error == ""
+    # (the one backup in the home is bindings.json's, from the launch: plan 19 WP2)
+    assert [p.name for p in home.rglob("*.bak-*")] == ["bindings.json.bak-v3"]
+    assert not pr.is_dirty() and pr.bank_error == ""
     assert lib.warning == ""
     # a far slot filled and cleared again: the file is back to eight entries
     pr.put_slot(15, "WAKE")

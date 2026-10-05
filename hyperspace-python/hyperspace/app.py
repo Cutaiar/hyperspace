@@ -865,6 +865,8 @@ def main() -> None:
     panel.reloader = reloader
     panel.config_error = cfg.get("error", "")   # a config.toml that would not parse
     panel.config_notes = cfg.get("notes", [])   # …or that wants a section renamed
+    if router.table.said:                       # what the launch did to bindings.json
+        panel.config_notes = [*panel.config_notes, router.table.said]
     keys = Keys(render_win, ctrl_win)
     mouse = Mouse(render_win, reg, s)
 

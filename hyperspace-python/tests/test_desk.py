@@ -409,7 +409,7 @@ def _layer_by_plan(source: str) -> str | None:
     ch = int(ch)
     if num == a.N_CLIP[1] or (num == a.N_CLIP[2] and ch < 3):
         return "global"                                    # the band scenes
-    if (num in (a.N_ACTIVATOR, a.N_CLIP[3], a.N_CLIP[4], *a.N_SCENE, a.N_UP, a.N_DOWN)
+    if (num in (a.N_ACTIVATOR, *a.N_SCENE, a.N_UP, a.N_DOWN)
             or (num == a.N_CLIP[2] and ch >= 4)):
         return "preset"
     return None                                            # the invariant buttons
@@ -420,7 +420,15 @@ def test_the_default_map_is_sorted_as_plan_13_says():
     have = {(b.source, b.target): b.layer for b in rows}
     old = _old_map()
     assert len(old) == 113
-    for pair in old:                                       # every old row, sorted
+    # plan 19 WP2: the sixteen shape pads of clip rows 4 and 5 are gone —
+    # those pads are the bank's slots 9–24, invariant (the cue knob keeps
+    # shape selection); the other 97 old rows are sorted as plan 13 says
+    far = [f"note:{ch}:{n}" for n, ch in apc40.BANK_PADS[8:]]
+    gone = [(s, "view.shape") for s in far]
+    assert len(gone) == 16 and set(gone) < set(old) and not set(gone) & set(have)
+    for pair in old:                                       # every old row left, sorted
+        if pair in gone:
+            continue
         assert pair in have, pair
         assert have[pair] == _layer_by_plan(pair[0]), pair
     new = [b for b in rows if (b.source, b.target) not in set(old)]
@@ -431,6 +439,8 @@ def test_the_default_map_is_sorted_as_plan_13_says():
         ("cc:0:50", "hands.catch", "global"), ("cc:0:51", "hands.sel.return", "global"),
         ("cc:0:52", "tempo.bpm", "global"),
         (routing.SHIFT_SOURCE, routing.SHIFT_PARAM, None),
+        # clip rows 4 and 5: the bank's slots 9–24, invariant (plan 19 WP2)
+        *[(s, "preset.select", None) for s in far],
         # the clip-stop row: one SAVE AS bar (plan 15 WP4)
         *[(f"note:{k}:{apc40.N_CLIPSTOP}", "preset.save_new", None) for k in range(8)],
         (f"note:0:{apc40.N_OVERDUB}", "preset.home", None)]   # home (plan 15 WP2)
@@ -441,6 +451,8 @@ def test_the_default_map_is_sorted_as_plan_13_says():
     # QUANT is invariant (plan 13 §3.2's note), and so is the preset row
     assert have[(f"note:0:{apc40.N_QUANT}", "preset.next")] is None
     assert {have[(f"note:{k}:{apc40.N_CLIP[0]}", "preset.select")] for k in range(8)} == {None}
+    assert [(b.source, b.value) for b in rows if b.target == "preset.select"] == [
+        (f"note:{ch}:{n}", float(k)) for k, (n, ch) in enumerate(apc40.BANK_PADS)]
     # the factory file carries the layers
     doc = json.loads(routing.FACTORY_FILE.read_text())
     assert {"source": "cc:0:52", "target": "tempo.bpm", "op": "abs", "feedback": "ring",
@@ -776,3 +788,110 @@ def test_a_preset_load_stops_a_glide_on_a_performance_param_and_not_on_the_dim(t
     frames(r, 20)
     assert not slews and p.base == here
     assert abs(p.norm - round(p.norm)) > 0.05       # it never went on to the knob's end
+
+
+# ------------------------------------------- plan 19 WP2: rows 4–5 are the bank
+
+def _far(k: int) -> tuple[int, int]:
+    """(note, channel) of slot k's pad."""
+    return apc40.BANK_PADS[k]
+
+
+def test_rows_four_and_five_load_slots_nine_to_twenty_four_on_both_layers(rig):
+    """Clip rows 4 and 5 are the bank's slots 9–24 (the owner, 2026-10-04):
+    each of the sixteen pads loads its slot with SHIFT off and with SHIFT
+    on — one meaning on both layers — and the load drops the desk to the
+    preset layer (D4), as a pad of row 1 does. The desk's count is
+    `apc40.BANK_PADS`, as long as the bank. An empty slot's pad loads
+    nothing and says the slot is empty (D8), as row 1 does."""
+    from hyperspace import library
+
+    t, pr, lib = rig.midi.table, rig.presets, rig.presets.lib
+    assert len(apc40.BANK_PADS) == library.SLOTS == len(pr.bank) == 24
+    assert apc40.BANK_PADS[:8] == [(apc40.N_CLIP[0], k) for k in range(8)]
+    assert apc40.BANK_PADS[8:16] == [(apc40.N_CLIP[3], k) for k in range(8)]
+    assert apc40.BANK_PADS[16:] == [(apc40.N_CLIP[4], k) for k in range(8)]
+    names = [n for n in lib.list("presets")][:16]
+    assert len(set(names)) == 16
+    for k, name in zip(range(8, 24), names):
+        pr.put_slot(k, name)
+    for under_shift in (False, True):
+        for k, name in zip(range(8, 24), names):
+            n, ch = _far(k)
+            if under_shift:
+                shift(rig)
+                assert t.layer == "global"
+            (b,) = t.dispatch("note", ch, n)                   # one row, whichever layer is up
+            assert (b.target, b.op, b.value, b.layer) == ("preset.select", "set", float(k), None)
+            push(rig, note(n, channel=ch), note(n, 0, channel=ch))
+            assert (pr.active, lib.current("presets")) == (k, name), (k, under_shift)
+            assert t.layer == "preset"                         # a load drops the layer (D4)
+            assert apc40.glyph(b.source) == f"G{4 + (k - 8) // 8}·{(k - 8) % 8 + 1}"
+    # an empty slot: dark, and a press says so and loads nothing
+    pr.clear_slot(11)
+    was = lib.current("presets")
+    for under_shift in (False, True):
+        if under_shift:
+            shift(rig)
+        n, ch = _far(11)
+        push(rig, note(n, channel=ch), note(n, 0, channel=ch))
+        assert lib.warning == "slot 12: an empty slot" and lib.current("presets") == was
+        assert sent_notes(rig, n, ch)[-1] == 0
+        lib.warning = ""
+    # shape selection left these rows for the cue knob (relative, every shape)
+    assert not [b for b in t.midi() if b.target == "view.shape" and b.kind == "note"]
+    (cue,) = [b for b in t.midi() if b.target == "view.shape"]
+    assert (cue.source, cue.op, cue.layer) == (f"cc:0:{apc40.CC_CUE}", "rel", "preset")
+
+
+def test_the_bank_pads_are_invariant(rig):
+    """D6, extended by the owner to clip rows 4 and 5: every bank pad is a
+    row with no layer — active on both layers, never Learn's, never a
+    preset's. A Learn on one is refused in the existing words (through a
+    press, which does its own job, and through `learn_control`, a click's
+    road); a preset's row on one is dropped with the existing note."""
+    t, pr, m = rig.midi.table, rig.presets, rig.midi
+    lib = pr.lib
+    for k, (n, ch) in enumerate(apc40.BANK_PADS):
+        (b,) = t.route("note", ch, n)
+        assert (b.target, b.op, b.value, b.layer, b.feedback, b.on, b.off) \
+            == ("preset.select", "set", float(k), None, "led", apc40.GREEN, 0)
+        assert t.is_invariant(Binding(b.source, "view.points", "toggle", layer="preset"))
+        assert b in t.active()
+    shift(rig)
+    assert all(b in t.active() for b in t.midi() if b.target == "preset.select")
+    shift(rig)
+    # no Learn takes one: a press while a learn is armed loads its slot and
+    # the learn stays armed; `learn_control` refuses, nothing bound
+    n, ch = _far(8)                                           # slot 9: TRACER in the party show
+    rows = [(b.to_json(), b.layer) for b in t.midi() if b.layer != "preset"]
+    m.learner.arm("view.depth4", "desk")
+    push(rig, note(n, channel=ch), note(n, 0, channel=ch))
+    assert lib.current("presets") == pr.bank[8] == "TRACER"
+    assert m.learner.learning == "view.depth4" and not m.learner.refused
+    for k, said in ((8, "G4·1 (clip 4·1)"), (15, "G4·8 (clip 4·8)"), (16, "G5·1 (clip 5·1)"),
+                    (23, "G5·8 (clip 5·8)")):
+        n, ch = _far(k)
+        assert not m.learner.learn_control(f"note:{ch}:{n}", apc40)
+        assert m.learner.refused and m.learner.learning == "view.depth4"
+        assert m.learner.last == f"{said} is invariant (the session's) — not learned"
+    m.learner.arm(None)
+    # a pick-to-map on one is refused in the same words
+    n, ch = _far(20)
+    m.learner.pick(f"note:{ch}:{n}")
+    assert not m.learner.map_picked("view.speed", apc40)
+    assert m.learner.last == "G5·5 (clip 5·5) is invariant (the session's) — not learned"
+    m.learner.pick(None)
+    # no preset may map one: a desk row on any of them is dropped with the note
+    # (a row that is not one of the sixteen old factory shape rows)
+    want = [(k, _far(k)) for k in (8, 23)]
+    notes = t.set_desk([{"source": f"note:{ch}:{n}", "target": "view.points", "op": "toggle",
+                         "feedback": "led"} for _k, (n, ch) in want])
+    assert notes == [f"dropped note:{ch}:{n} → view.points: that control is invariant, the "
+                     "session's (plan 13 D6)" for _k, (n, ch) in want]
+    assert [(b.to_json(), b.layer) for b in t.midi() if b.layer != "preset"] == rows
+    # no factory preset's desk names a pad of rows 4 or 5
+    for name in lib.list("presets"):
+        desk = lib.read("presets", name).get("desk") or []
+        assert not [d for d in desk if d["source"].startswith("note:")
+                    and int(d["source"].rsplit(":", 1)[1]) in apc40.N_CLIP[3:]], name
