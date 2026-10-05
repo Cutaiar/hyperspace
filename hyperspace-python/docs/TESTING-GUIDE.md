@@ -235,8 +235,9 @@ Run L1–L3 in a terminal where `HYPERSPACE_HOME` points at the copy
   Home (`added note:0:64 → preset.home`), eight `added note:…:52 →
   preset.save_new` lines (the clip-stop buttons), `added key:…` lines for
   ⌘Z, ⌘⇧Z, Ctrl+Z, Ctrl+⇧Z and Home, and sixteen `added note:…:56` /
-  `…:57 → preset.select` lines (pad rows 4 and 5), then "updated … (N
-  rows changed)". Lines for changes an earlier launch already made do not
+  `…:57 → preset.select` lines (pad rows 4 and 5; "remapped …
+  view.shape → preset.select" where your file still had the old shape
+  pads), then "updated … (N rows changed)". Lines for changes an earlier launch already made do not
   appear.
 - The SYSTEM page shows the same as one line: "bindings.json updated (N
   rows changed), the old file kept as bindings.json.bak-v3 — each change
@@ -328,18 +329,21 @@ as `.bak-v2-bank8`.
 **Right if:** step 1 exits cleanly with nothing in the terminal but
 one-line notes. In step 2 the *party show* opens (PRESETS page: SHOW
 `party`) on its first *preset*, TUMBLE; R resets the view; F1 loads
-TUMBLE; ⇧F1 saves the current look as your own preset 1; T does nothing
+TUMBLE; ⇧F1 saves the current look as your own TUMBLE; T does nothing
 (the see-through *overlay* mode is off unless the config has `[output]`
 `overlay = true`); ⌘R restarts the app without resetting the view first;
-`/` shows the key legend (the *cheat sheet*) with twenty-two rows,
-including R, F1–F8, ⇧F1–F8, a "Cmd+Z" row reading "undo · ⇧ redo (or
-Ctrl+Z)" and a "Home" row reading "home preset (fn ←)".
+`/` shows the key legend (the *cheat sheet*), its rows including R
+("reset view + camera"), F1–F8 ("load preset · ⇧ saves"), a "Cmd+Z" row
+reading "undo · ⇧ redo (or Ctrl+Z)" and a "Home" row reading "home
+preset (fn ←)".
 
 **Wrong if:** an error printed, the app not quitting, or a missing row.
 
-**Changes:** ⇧F1 writes your own copy of TUMBLE into `<home>/presets/`,
-which then takes the factory one's place; remove it with × in the preset
-list (it goes to the trash) if you do not want it.
+**Changes:** ⇧F1 writes your own copy of TUMBLE,
+`<home>/presets/tumble.json`, which then takes the factory one's place,
+and rewrites the show file, `<home>/projects/party.hyp.json`; remove the
+preset with × in the preset list (it goes to the trash) if you do not
+want it.
 
 *(check 1)*
 
@@ -350,14 +354,15 @@ list (it goes to the trash) if you do not want it.
 
 **Do:**
 1. Launch, SYSTEM page.
-2. Quit; add a line `output = 3` to the config file; launch; SYSTEM page.
+2. Quit; add a line `output = 3` as the very first line of the config
+   file (above every `[section]` line); launch; SYSTEM page.
 3. Remove that line. Move the keys under `[overlay]` to `[output]` and
    delete `[overlay]`; launch.
 
-**Right if:** (1) one note asks for `[overlay]` to be renamed `[output]`,
-and the OUTPUT page still shows its values (Click-through on, Ground 0,
-alpha 1). (2) the SYSTEM page shows the error in the warning colour and
-the app runs on its defaults. (3) the note is gone.
+**Right if:** (1) one note asks for `[overlay]` to be renamed `[output]`.
+(2) the SYSTEM page shows the error in the warning colour ("config:
+[output] must be a table, not 3") and the app runs. (3) the note is
+gone.
 
 **Wrong if:** no note, or the app crashes on the bad line.
 
@@ -379,9 +384,10 @@ intended one.
    the list.
 
 **Right if:** the list shows the MacBook microphone (and BlackHole, if
-installed, already chosen and labelled "System ·"); macOS asks for
-microphone permission once; the white INPUT meters jump on a clap and
-settle; the six red OUTPUT meters follow; on BIG BLUE WAVE the spin
+installed, already chosen, shown as "● BlackHole…"); macOS asks for
+microphone permission once; on the ANALYZER page the six bars' white
+input columns jump on a clap and settle, and their red output columns
+follow; on BIG BLUE WAVE the spin
 changes with the clap; after rescan the new input is listed and your
 choice is kept.
 
@@ -505,7 +511,7 @@ after Esc. If a window ever opens out of reach, delete `windows.json`.
 1. FX page: from its preset strip load `acid`, then `noita-tripping`,
    then `noita-heavily-tripping`. Untick and tick **Effects** at the top.
    Pull **FX mix** to 0.
-2. While the app runs, edit any file in `hyperspace-python/shaders/fx/`
+2. While the app runs, edit any file in `hyperspace-python/hyperspace/shaders/fx/`
    (change a number) and save; then add a deliberate typo and save; then
    undo your edit (`git checkout` the file).
 3. Party show: press F6 (ACID), F7 (MANDALA), F8 (NOITA). Then switch on
@@ -727,8 +733,8 @@ switched on?).
 **Needs:** laptop.
 
 **Do:** with the app running, edit `hyperspace-python/hyperspace/lfo.py`:
-make the sine wave twice as fast (for example change it to
-`math.sin(4 * math.pi * x)`), save. Then undo the edit. Then save
+make the sine wave twice as fast (in `wave()`, change
+`return math.sin(2 * math.pi * x)` to `4 * math.pi * x`), save. Then undo the edit. Then save
 `hyperspace/params.py` without changing it (`touch` it), and press
 **F**, **P**, **L**.
 
@@ -837,8 +843,9 @@ route and open its target list. Change the layer with a chip.
 **Right if:** the menu says "not modulatable" where other controls offer
 "Route a lane here…"; "Dream layer" is not in the target list; the
 chips, a preset and a learned knob still change it. If a preset of yours
-had a route onto the layer: load it — the row is listed on ROUTING but
-does nothing, and hovering its target says it is dormant.
+had a route onto the layer: load it — the route is dropped and the footer
+says "preset <NAME>: dropped <source> → dream.layer: not modulatable";
+the file is not rewritten.
 
 **Wrong if:** a route onto the layer is offered.
 
@@ -936,7 +943,7 @@ look-back on (24 echoes, fade 0.60 s) with the dream, no extra step.
 **Needs:** laptop.
 
 **Do:**
-1. Launch. PRESETS page: **starts on / home ▾** → WAKE (no save needed).
+1. Launch. PRESETS page: the **STARTS ON / HOME** list → WAKE (no save needed).
 2. Quit, launch.
 3. **show ▾** → `house`; quit; launch.
 4. Open `party` again and set its "starts on" back to TUMBLE.
@@ -1002,14 +1009,14 @@ presses for one load; routes not back.
 
 **Needs:** laptop. The APC40 part is A12.
 
-**Do:** party show; PRESETS page reads "starts on / home ▾ TUMBLE". F3,
+**Do:** party show; the PRESETS page's STARTS ON / HOME list reads TUMBLE. F3,
 then **fn+←** (Home). ⌘Z. Then set "starts on" to — (none) and press
 fn+← twice. Set it back to TUMBLE.
 
 **Right if:** fn+← loads TUMBLE; ⌘Z brings back the earlier look ("undid
-home → TUMBLE"); with no "starts on", nothing loads and the footer says
-once "home: this show names no 'starts on' preset — pick one on the
-PRESETS page"; that line goes when you set it back.
+home → TUMBLE"); with no "starts on", nothing loads and each press puts "home: this
+show names no 'starts on' preset — pick one on the PRESETS page" in the
+footer; that line goes when you set it back.
 
 **Wrong if:** fn+← does nothing (say so: the laptop may not send Home
 for fn+←, and the key can be changed).
@@ -1104,7 +1111,7 @@ panel back.
 lit control carries a name, its short code small in the corner, and dark
 controls only the code; the top pad row reads TUMBLE … NOITA with TRIP
 green; the track knobs read Brightness, Speed, Instances, Pattern mix,
-Grid amp, Grid rate, Bitmap alpha, Zoom; the device knobs FX mix, Plasma
+Field amp, Field rate, Bitmap alpha, Zoom; the device knobs FX mix, Plasma
 level, Kaleidoscope segments, Kaleidoscope zoom, Zoom burst amount, Zoom
 burst glow, Hue cycle paint, Hue cycle spread; the clip-stop row reads
 "Save as a new preset" once; names the desk keeps on every preset are
@@ -1116,8 +1123,7 @@ layer", the device's own name, and what a click would do. With `/` the
 desk moves beside the legend.
 
 **Expect:** at the standard size most names are 13 px, about a dozen 11
-px, five cut with "…", and three buttons show an internal name (they
-have no other). Labels beside the open panel need a window about 1200
+px, and a few cut with "…". Labels beside the open panel need a window about 1200
 px wide (drag the panel to the right edge after widening).
 
 **Judge:** which names you can read from two paces.
@@ -1503,10 +1509,11 @@ press a filled pad in rows 4–5; turn the cue knob; press STOP ALL.
 
 **Right if:** as L20 (BPM right, a tap never jumps the swell); the
 METRONOME light blinks on the beat; NUDGE moves the tempo nudge by 0.01
-and the swell with it; QUANT steps to the next preset; row 1 picks
+and the swell with it; QUANT steps to the next filled slot (empty ones are skipped); row 1 picks
 presets 1–8; rows 2–3 with SHIFT pick a sound-band scene; rows 4–5 load
 presets 9–24 (on both layers); the cue knob changes the shape; STOP ALL
-resets the scene.
+resets every band to the selected scene, and a second press within 8 s
+undoes that reset (the ANALYZER page's button says so meanwhile).
 
 **Wrong if:** METRONOME's light steady; a button doing an older job (your
 `bindings.json` kept an old line: it shows on the ROUTING page's session
@@ -1550,11 +1557,12 @@ ROUTING page's DESK section on TUMBLE.
 D4 the face pattern (one pattern a step), each ring following; D5–D8
 dark and dead, listed on ROUTING as "D5 unmapped — dark" … "D8", drawn
 dark on screen; latching SHIFT lights them for the band settings and the
-ROUTING header reads LAYER GLOBAL. A house mood has the same four; TRIP,
+ROUTING header reads DESK LAYER: GLOBAL. A house mood has the same four; TRIP,
 WAKE and ACID their eight; `hands-fx`: D1 FX mix, D2–D6 the Acid effect
 (bend, twist, reach, breathe, speed), D7 4D depth, D8 yaw;
 `hands-pinch`: D1 FX mix, D2–D3 hue cycle paint and spread, then depth,
-yaw, pitch, pattern; `lfo-breathe`: D1 still "Breathe". If TUMBLE is
+yaw, pitch, pattern, D8 dark; `lfo-breathe`: D1 still "Breathe", then FX
+mix, Plasma level, LFO 1 depth, depth, yaw, pitch, D8 dark. If TUMBLE is
 white in the list (your own, saved earlier) its knobs stay as you saved
 them — dark — and that is right. D4 changes nothing visible with faces
 off.
@@ -1757,7 +1765,7 @@ what you see.
 
 **Right if:** (1) D6 framed red; ROUTING's row list (not the page)
 scrolls to D6's line, framed red; ROUTING not dimmed; the footer counts
-down "D6 picked (20 s): click a setting on any other page". (2) VIEW is
+down "D6 picked (20 s): click a param on any other page". (2) VIEW is
 dimmed and takes no input except the click — page list and footer still
 work; Speed is framed red with "click: put D6 on Speed"; the click says
 "learned view.speed ← D6 (device knob 6) (into the preset); K2 let go",
@@ -1978,8 +1986,9 @@ and repeat, then put it back.
 
 **Right if:** while armed, the footer reads "learning view.bright — move
 the left hand…" on every page and only the left hand can complete it; a
-prompt "Brightness is already performed by R height positions — Replace
-/ Keep" appears whichever page you are on; moving hands while it is up
+prompt appears whichever page you are on — "ONE PERFORMER PER
+PARAMETER", "Brightness is already performed by R height positions.",
+"L height positions asks for it.", **Replace** / **Keep**; moving hands while it is up
 learns nothing more; Keep changes nothing on ROUTING; Replace makes the
 row read "L height positions", the line ends "moved from view.speed"
 (the preset's own left-height row on Speed is gone), the unsaved dot
@@ -2159,8 +2168,13 @@ orbits about a quarter turn each way; fingers up looks down onto the
 shape; left hand pans and raising it zooms to about 2.2×; with both out
 the camera is back where the mouse left it.
 
+R with a hand in snaps the view to its reset at once. **Know:** the
+reset is made under the hand's push, so when the hand then leaves the
+camera lands past the reset view by what the hand was adding — say
+whether that matters.
+
 **Judge:** the directions, the zoom depth, and whether this is the
-"orbit" you meant. Say whether R resets the camera with a hand in.
+"orbit" you meant.
 
 *(check 80)*
 
@@ -2219,11 +2233,14 @@ fills (69 copies); the ghost hands still draw at 0.
 **Needs:** hand camera; FL Studio; the IAC bus (see Part 1, FL Studio).
 
 **Do:** hands on, launch. In FL Studio look for a "Hyperspace Hands"
-input; raise the right hand. Take the IAC bus offline in Audio MIDI
-Setup while running, then bring it back.
+input; raise the right hand. Then set `[hands] out = "IAC"` (the app's
+own virtual port never goes away, so only a named bus tests the
+rejoin), launch, take the IAC bus offline in Audio MIDI Setup while
+running, then bring it back. Put `out` back afterwards.
 
 **Right if:** FL sees "Hyperspace Hands"; right-hand height shows on CC
-109, channel 16; within 2 s of the bus returning the port is rejoined.
+109, channel 16; the port is rejoined within 2 s if the bus was back
+within about ten seconds, otherwise within 10 s.
 
 **Wrong if:** no rejoin.
 
@@ -2288,7 +2305,8 @@ says GLOBAL LAYER; K2 shows for four seconds in the warning colour "K2
 (track knob 2) is on the global layer (the session's) — latch SHIFT off
 to learn into the preset", then the red line returns — still armed —
 and K2 did not move Response. (4) "learned view.depth4 ← D5 (device
-knob 5) (into the preset)", D5's ring lights, the frame and red line go.
+knob 5) (into the preset); D1 let go" (D1 had 4D depth), D5's ring
+lights, the frame and red line go.
 (5) the preset loads and the Learn stays armed.
 
 **Judge:** whether swallowing every control under SHIFT during a desk
@@ -2756,7 +2774,7 @@ Turn the device knobs on each.
   spring back when you let go reads as "let go", not a slip;
 - thumb up is up, fingers out is out, reaching in is away, on every row
   (the cards' words);
-- FIELD at the right hand's top (many copies, faces on) holds its frame
+- FIELD at the right hand's top (69 copies, faces on) holds its frame
   rate and the swing looks deliberate, not messy;
 - WAKE with the dream: right roll turns the dream's colour round the
   wheel, fingers up brings the dream in; the wake reaches past the faces;
@@ -2764,11 +2782,18 @@ Turn the device knobs on each.
   the right hand's top is light, not glare;
 - ACID, MANDALA, NOITA and TRACER keep a black ground with no hand in the
   box (MANDALA's plasma comes in only with right fingers up);
-- WAKE's device knobs 1–8: echo mix, fade, darken, contrast, shape hides,
-  dream mix, dream saturation, dream speed; TRIP's: FX mix, plasma level,
-  kaleidoscope segments, kaleidoscope zoom, burst amount, burst glow, hue
-  paint, hue spread; ACID, MANDALA, NOITA and TRACER each set their
-  card's eight; each ring shows its value; on TUMBLE, FACES and FIELD
+- the device knobs D1–D8, each ring showing its value — WAKE: echo
+  brightness, echo fade time, darken, contrast, shape hides, dream
+  brightness, dream saturation, dream speed; TRIP: FX mix, plasma level,
+  kaleidoscope segments, kaleidoscope zoom, zoom burst amount, zoom burst
+  glow, hue cycle paint, hue cycle spread; ACID: FX mix, acid bend, twist,
+  reach, breathe, wobble amount, deconverge amount, hue cycle spread;
+  MANDALA: FX mix, plasma level, kaleidoscope segments, kaleidoscope zoom,
+  fractals amount, fractals ground, glimmer amount, glimmer ground; NOITA:
+  FX mix, trip warp amount, trip warp scale, trip colour amount, fractals
+  amount, fractals size, double vision amount, double vision ghost;
+  TRACER: echo brightness, echo fade time, echo count, echo time apart,
+  darken, contrast, shape hides, 4D depth; on TUMBLE, FACES and FIELD
   D1–D4 are 4D depth, yaw, pitch and pattern and D5–D8 dark; TUMBLE's
   left height still pushes the sound drive, marked "session" on ROUTING.
 
@@ -2863,38 +2888,11 @@ page shift (L3; 81); the filter's hidden new route (L38; 71).
 Places where the check text did not say exactly what to do; the entries
 above follow the most likely reading, flagged here.
 
-- **The order of the first launch.** The source says to run the
-  mapping-file check (57) first on the real home folder, but also that
-  the preset-bank checks (81, 84) read the first launch's output on a
-  copy. If the real home is launched first, the copy made afterwards has
-  nothing left to show. This guide makes both copies before any launch
-  and does the first launch on the copy (L1), then reads the same lines
-  again at the real home's first launch.
-- **L5 (check 2):** where in the config to add `output = 3` is not said;
-  any place should make the file invalid.
-- **L21 (check 8):** "change LIT's neighbour, say the sine" — the exact
-  line in `lfo.py` is not named.
-- **L19, C1 (checks 6, 26):** these used to say the crossfader darkens
-  the see-through ground; the crossfader is now the master dimmer, and
-  the source does not say what (if anything) now controls that ground —
-  the OUTPUT page's **Ground** setting is the likely one.
 - **L10 (check 33):** written for the first launch of a build from late
   September; whether your home folder still needs that conversion is not
   known.
-- **L6 (check 3):** "plug in or enable a device" — which second sound
-  input is not said.
-- **B9 (check 20):** says "scroll the mouse wheel"; whether a two-finger
-  trackpad scroll counts the same is not said.
-- **A6 (check 12):** "STOP ALL resets the scene with the 8 s undo" — what
-  the 8-second undo is, now that ⌘Z exists, is not explained; the entry
-  says only that it resets the scene.
-- **L22 (check 9):** "load `default`, then `tracer-only`" on the
-  LOOKBACK page — taken to be that page's preset strip.
-- **D11 (checks 41, 32):** check 41 says FIELD's top is 68 copies,
-  check 62 (newer) says 69; the entry avoids the number.
-- **D11 (check 41):** the eight device knobs of ACID, MANDALA, NOITA and
-  TRACER are only "its card's eight"; the cards list them.
-- **L4 (check 1):** the file name ⇧F1 writes is not given.
+- **L6 (check 3):** "plug in or switch on another sound input" — which second sound input
+  is not said; any will do.
 
 ## Glossary
 
