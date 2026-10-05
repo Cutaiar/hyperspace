@@ -837,3 +837,964 @@ def test_one_instance_is_the_frame_it_was(ctx):
     assert len(seen) == 3 and all(o.shape == (1, 2) and not o.any() for o in seen)
     v = np.arange(12, dtype=np.float32).reshape(4, 3)
     assert real(v, seen[0]) is v
+
+
+# ---- plan 20 WP1: the faces as an effect target ----
+#
+# Effects aimed at the faces run before the scene pass over a picture of
+# what a face shows (Renderer._face_picture); the face shader draws that
+# picture on every face, per face or in screen space. With nothing aimed
+# at the faces none of it runs and the frame is the frame it was.
+
+FW, FH = 480, 320
+
+# the face fragment shader as it was before plan 20, frozen: what "the old
+# frame" means below
+OLD_FACE_FS_HEAD = """
+#version 330
+in vec2 v_uv;
+in float v_alpha;
+in float v_fid;
+out vec4 f_color;
+uniform float u_time;
+uniform float u_mod[%d];  // pattern.mod.* — the routed pattern inputs
+uniform int u_mode;
+uniform float u_mix;
+uniform sampler2D u_bitmap;
+uniform int u_bmp_on;
+uniform float u_bmp_alpha;
+uniform vec2 u_bmp_pos;      // path offset about the face centre, UV units
+uniform vec2 u_bmp_scale;    // (w, h) in face-UV units, aspect preserved
+"""
+
+OLD_FACE_FS_TAIL = """
+void main() {
+    vec3 rgb = vec3(1.0);
+    float shade = 1.0;
+    if (u_mode != 0) {
+        vec4 v = pattern(u_mode, v_uv, v_fid);
+        v = clamp(v, 0.0, 1.0);
+        shade = mix(1.0, 2.8 * v.a, u_mix);
+        rgb = mix(vec3(1.0), v.rgb, u_mix);
+    }
+    if (u_bmp_on != 0) {
+        vec2 q = (v_uv - 0.5 - u_bmp_pos) / u_bmp_scale + 0.5;
+        if (q.x >= 0.0 && q.x <= 1.0 && q.y >= 0.0 && q.y <= 1.0) {
+            vec4 b = texture(u_bitmap, vec2(q.x, 1.0 - q.y));
+            float ba = b.a * u_bmp_alpha;
+            rgb = mix(rgb, b.rgb, ba);
+            shade = mix(shade, 2.8, ba);
+        }
+    }
+    float a = v_alpha * shade;
+    if (a <= 0.0) discard;
+    f_color = vec4(rgb, a);
+}
+"""
+
+
+class _FrozenProgram:
+    """The pre-plan-20 face program behind the renderer's `_face_prog`: a
+    uniform it never had (u_pic_on …) is swallowed."""
+
+    def __init__(self, prog):
+        self.prog = prog
+
+    def __getitem__(self, name):
+        from types import SimpleNamespace
+
+        return self.prog[name] if name in self.prog else SimpleNamespace(value=None)
+
+
+def _freeze_faces(ctx, r):
+    """Swap `r`'s face program for one built from the frozen source."""
+    from hyperspace import glsl
+    from hyperspace.render import FACE_VS, PATTERNS_GLSL
+    from hyperspace.view import N_MOD
+
+    prog = ctx.program(
+        vertex_shader=FACE_VS,
+        fragment_shader=(OLD_FACE_FS_HEAD % N_MOD + "#line 1 1\n" + glsl.common()
+                         + "\n#line 1 2\n" + PATTERNS_GLSL.read_text() + OLD_FACE_FS_TAIL))
+    r._face_prog = _FrozenProgram(prog)
+    r._fvao = ctx.vertex_array(
+        prog, [(r._fbuf, "2f 1f 2f 1f 1f", "in_pos", "in_wc", "in_uv", "in_alpha", "in_fid")])
+    r._seed_prog = r._seed_vao = None
+    return r
+
+
+def _card(tmp_path, kind="quarters"):
+    """A bitmap to recognise: four pure quarters (red, green over blue,
+    yellow) or four horizontal bands (red, green, blue, yellow from the top)."""
+    from PIL import Image
+
+    n = 64
+    img = np.zeros((n, n, 4), dtype=np.uint8)
+    img[..., 3] = 255
+    red, green, blue, yellow = (255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0)
+    if kind == "quarters":
+        img[: n // 2, : n // 2, :3], img[: n // 2, n // 2 :, :3] = red, green
+        img[n // 2 :, : n // 2, :3], img[n // 2 :, n // 2 :, :3] = blue, yellow
+    else:
+        for k, c in enumerate((red, green, blue, yellow)):
+            img[k * n // 4 : (k + 1) * n // 4, :, :3] = c
+    f = tmp_path / f"{kind}.png"
+    Image.fromarray(img).save(f)
+    return str(f)
+
+
+def _hue(px):
+    """Each pixel of an (…, 3+) int array as 'r', 'g', 'b', 'y', or '' for
+    too dark or mixed to call."""
+    r, g, b = px[..., 0], px[..., 1], px[..., 2]
+    out = np.full(px.shape[:-1], "", dtype="<U1")
+    lit = np.maximum(np.maximum(r, g), b) >= 16
+    out[lit & (r > 3 * g) & (r > 3 * b)] = "r"
+    out[lit & (g > 3 * r) & (g > 3 * b)] = "g"
+    out[lit & (b > 3 * r) & (b > 3 * g)] = "b"
+    out[lit & (r > 3 * b) & (g > 3 * b) & (np.abs(r - g) * 4 <= r)] = "y"
+    return out
+
+
+def _face_view(bitmap="", **kw) -> ViewState:
+    """A tesseract's faces alone, big in the window: no lines, no points."""
+    s = ViewState(shape=3, ang=list(VIEW["ang"]), yaw=VIEW["yaw"], pitch=VIEW["pitch"],
+                  faces=True, lines=False, points=False, bright=2.0, zoom=1.6,
+                  bmp_file=bitmap, bmp_scale=1.0)
+    for k, v in kw.items():
+        setattr(s, k, v)
+    return s
+
+
+def _aimed(*names, face_map=0, **values):
+    """An FxState with `names` on and aimed at the faces."""
+    from hyperspace.fx import FACES, FxState
+
+    fx = FxState()
+    fx.face_map = face_map
+    for n in names:
+        fx.values[n].update(on=True, target=FACES, **values)
+    return fx
+
+
+def _shown(face_map=0):
+    """The picture as seeded, on the faces: a pass that changes nothing
+    (Hue cycle at a mix of one in a million, its clock stopped)."""
+    return _aimed("huecycle", face_map=face_map, mix=1e-6, speed=0.0)
+
+
+def _fdraw(ctx, r, s, w=FW, h=FH, t=2.0, frames=1, spin=0.0, samples=0):
+    """`frames` frames on a stand-in window; the last as (h, w, 4) ints,
+    top row first. Every frame has to end on the window."""
+    win = ctx.framebuffer(color_attachments=[ctx.renderbuffer((w, h), 4, samples=samples)])
+    for k in range(frames):
+        s.ang = [a + spin for a in s.ang]
+        win.use()
+        ctx.viewport = (0, 0, w, h)
+        r.draw(s, w, h, t_now=t + k / 30)
+        assert ctx.fbo is win and ctx.viewport == (0, 0, w, h)
+    out = _rgba(ctx, win, w, h, samples)[::-1].astype(int)
+    win.release()
+    assert ctx.error == "GL_NO_ERROR"
+    return out
+
+
+def _cover(ctx, r, w=FW, h=FH):
+    """Where the last scene pass drew a face: (h, w) bools, top row first."""
+    tex = r._draw_cover(w, h)
+    return np.frombuffer(tex.read(), dtype=np.uint8).reshape(h, w)[::-1] > 0
+
+
+def _unused(r) -> bool:
+    """Nothing of the face target is allocated."""
+    return (r.face_pic.tex is None and r.face_pic.fbo is None and r.face_fx._tex == []
+            and r.face_fx._fbo == [] and r.face_fx.size == (0, 0) and r._pic is None)
+
+
+def test_nothing_aimed_at_the_faces_is_the_old_frame_exactly(ctx, tmp_path):
+    """Off is bit-identical: with a pattern and with a bitmap, plain and
+    multisampled, opaque and see-through, one copy and four, a frame is the
+    frame a face program built from the frozen pre-plan source draws. And
+    it is that frame again with an effect aimed at the faces but off, with
+    the stack bypassed, with fx.mix at 0 and with the faces off."""
+    from hyperspace.fx import FACES, FxState
+    from hyperspace.render import Renderer
+
+    card = _card(tmp_path)
+    views = ({"pattern": 2}, {"pattern": 5, "shape": 10},
+             {"bitmap": card, "bmp_scale": 0.9}, {"bitmap": card, "pattern": 2, "bmp_mode": 1},
+             {"pattern": 2, "instances": 4, "zoom": 0.6, "inst_motion": 1},
+             {"pattern": 3, "lines": True, "points": True, "cut_through": False})
+    for bg_alpha, samples in ((1.0, 0), (0.0, 0), (1.0, 4)):
+        if samples and ctx.info["GL_MAX_SAMPLES"] < samples:
+            continue
+        old, new = _freeze_faces(ctx, Renderer(ctx)), Renderer(ctx)
+        old.bg_alpha = new.bg_alpha = bg_alpha
+        for kw in views:
+            want = _fdraw(ctx, old, _face_view(**kw), samples=samples, t=1.7)
+            got = _fdraw(ctx, new, _face_view(**kw), samples=samples, t=1.7)
+            assert want[..., :3].max() > 20, kw
+            assert np.array_equal(got, want), (kw, bg_alpha, samples)
+        assert _unused(new)
+
+    old = _freeze_faces(ctx, Renderer(ctx))
+    want = _fdraw(ctx, old, _face_view(card, pattern=2))
+    off = _aimed("plasma", "kaleido")
+    off.values["plasma"]["on"] = off.values["kaleido"]["on"] = False
+    bypassed = _aimed("plasma")
+    bypassed.on = False
+    dry = _aimed("plasma")
+    dry.mix = 0.0
+    dry_one = _aimed("plasma", mix=0.0)
+    for what, fx in (("off", off), ("bypassed", bypassed), ("fx.mix 0", dry),
+                     ("its mix 0", dry_one), ("none", FxState())):
+        r = Renderer(ctx, fx=fx)
+        assert np.array_equal(_fdraw(ctx, r, _face_view(card, pattern=2)), want), what
+        assert _unused(r) and r.face_error == "", what
+    # faces off, and no copies: an effect aimed at the faces and on runs nothing
+    for kw in ({"faces": False, "lines": True}, {"instances": 0, "lines": True}):
+        want = _fdraw(ctx, old, _face_view(card, **kw))
+        r = Renderer(ctx, fx=_aimed("plasma"))
+        assert np.array_equal(_fdraw(ctx, r, _face_view(card, **kw)), want), kw
+        assert _unused(r), kw
+    assert FACES == 1
+
+
+def test_the_old_frame_holds_under_frame_effects_the_hands_and_the_dim(ctx):
+    """The same with the rest of the frame running: an effect on the frame,
+    the ghost hands and the master dim, over echoes."""
+    for bg_alpha in (1.0, 0.0):
+        old = _freeze_faces(ctx, _dim_renderer(ctx, bg_alpha=bg_alpha, echoes=True))
+        new = _dim_renderer(ctx, bg_alpha=bg_alpha, echoes=True)
+        want = _dim_frames(ctx, old, 0.6, frames=5, spin=0.05)
+        got = _dim_frames(ctx, new, 0.6, frames=5, spin=0.05)
+        assert new.fx.active() and want[..., :3].max() > 60
+        assert np.array_equal(got, want), bg_alpha
+        assert _unused(new)
+
+
+def test_the_face_target_costs_nothing_while_unused(ctx):
+    """No texture and no ping-pong pair until an effect is aimed at the
+    faces — and the first such frame makes exactly the picture and the pair."""
+    from hyperspace.render import FACE_PIC, Renderer
+
+    fx = _aimed("plasma")
+    fx.values["plasma"]["on"] = False
+    fx.values["warp"]["on"] = True                 # the frame chain runs meanwhile
+    r = Renderer(ctx, fx=fx)
+    calls = []
+    real = r.face_fx.run
+    r.face_fx.run = lambda *a, **k: calls.append(a) or real(*a, **k)
+    _fdraw(ctx, r, _face_view(pattern=2), frames=3)
+    assert _unused(r) and calls == [] and r.fx.size == (FW, FH)
+    fx.values["plasma"]["on"] = True
+    _fdraw(ctx, r, _face_view(pattern=2), frames=2)
+    assert len(calls) == 2
+    assert r.face_pic.tex.size == (FACE_PIC, FACE_PIC) and r.face_pic.tex.components == 4
+    assert r.face_fx.size == (FACE_PIC, FACE_PIC) and len(r.face_fx._tex) == 2
+    assert FACE_PIC == 1024
+    pic = r.face_pic.tex
+    _fdraw(ctx, r, _face_view(pattern=2), w=200, h=120)      # never resized with the window
+    assert r.face_pic.tex is pic and pic.size == (FACE_PIC, FACE_PIC)
+
+
+def test_a_face_effect_changes_the_faces_and_nothing_else(ctx):
+    """Plasma aimed at the faces: every pixel no face covers is the frame
+    without it; inside the faces the frame differs."""
+    from hyperspace.render import Renderer
+
+    plain = Renderer(ctx)
+    base = _fdraw(ctx, plain, _face_view())
+    inside = _cover(ctx, plain)
+    assert 0.1 < inside.mean() < 0.9
+    r = Renderer(ctx, fx=_aimed("plasma"))
+    got = _fdraw(ctx, r, _face_view())
+    assert r.face_error == "" and not r.fx.active() and r.face_fx.active()
+    assert np.array_equal(_cover(ctx, r), inside)
+    assert np.array_equal(got[~inside], base[~inside])
+    assert not got[~inside][:, :3].any()                     # the ground, untouched
+    changed = np.abs(got[inside] - base[inside])[:, :3].sum(axis=1) > 0
+    assert changed.mean() > 0.6, "plasma on the faces must show across them"
+    # and it is plasma: the grey FLAT faces took on colour
+    sat = got[inside][:, :3].max(axis=1) - got[inside][:, :3].min(axis=1)
+    assert sat.mean() > 4 and (base[inside][:, :3].max(axis=1)
+                               == base[inside][:, :3].min(axis=1)).all()
+
+
+def test_per_face_puts_the_picture_at_the_faces_own_uv(ctx, tmp_path):
+    """Per face, the picture sits on a face as the pattern and the bitmap
+    always have: a bitmap seen through the face target (a pass that changes
+    nothing) is the bitmap drawn directly, to within the resampling."""
+    from hyperspace.render import Renderer
+
+    card = _card(tmp_path)
+    for kw in ({}, {"instances": 4, "zoom": 0.7}):
+        direct = _fdraw(ctx, Renderer(ctx), _face_view(card, **kw))
+        r = Renderer(ctx, fx=_shown())
+        via = _fdraw(ctx, r, _face_view(card, **kw))
+        assert r.face_pic.tex is not None and r.face_error == ""
+        diff = np.abs(via - direct)[..., :3]
+        assert direct[..., :3].max() > 100
+        assert diff.mean() < 0.5 and np.percentile(diff, 99) <= 6, (diff.mean(), diff.max())
+        # each quarter's colour is where it was
+        a, b = _hue(direct), _hue(via)
+        both = (a != "") & (b != "")
+        assert both.sum() > 3000 and (a[both] == b[both]).mean() > 0.995
+        assert {"r", "g", "b", "y"} <= set(np.unique(b))
+
+
+def test_screen_mapping_is_a_cover_fit_window_onto_the_picture(ctx, tmp_path):
+    """Screen mapping: the square picture, centred, covers the window's
+    longer side and is cropped on the shorter (fork F3), upright. Every
+    face pixel shows the picture's colour at its own place in the window,
+    whichever face it belongs to."""
+    from hyperspace.fx import SCREEN
+    from hyperspace.render import Renderer
+
+    # quarters on a 3:2 window: the picture's centre is the window's centre
+    r = Renderer(ctx, fx=_shown(SCREEN))
+    got = _hue(_fdraw(ctx, r, _face_view(_card(tmp_path))))
+    inside = _cover(ctx, r)
+    yy, xx = np.mgrid[0:FH, 0:FW]
+    clear = inside & (np.abs(xx - FW / 2) > 6) & (np.abs(yy - FH / 2) > 6)
+    for name, where in (("r", (xx < FW / 2) & (yy < FH / 2)), ("g", (xx > FW / 2) & (yy < FH / 2)),
+                        ("b", (xx < FW / 2) & (yy > FH / 2)), ("y", (xx > FW / 2) & (yy > FH / 2))):
+        cell = clear & where
+        assert cell.sum() > 500, name
+        assert (got[cell] == name).all(), (name, np.unique(got[cell], return_counts=True))
+
+    # bands on a 4:1 window: only the picture's middle quarter of rows shows —
+    # the second band over the third; a stretch would show all four
+    w, h = 640, 160
+    r = Renderer(ctx, fx=_shown(SCREEN))
+    got = _hue(_fdraw(ctx, r, _face_view(_card(tmp_path, "bands"), zoom=1.0), w=w, h=h))
+    inside = _cover(ctx, r, w, h)
+    yy = np.mgrid[0:h, 0:w][0]
+    top, bottom = inside & (yy < h / 2 - 4), inside & (yy > h / 2 + 4)
+    assert top.sum() > 500 and bottom.sum() > 500
+    assert (got[top] == "g").all() and (got[bottom] == "b").all()
+
+
+def test_per_face_turns_with_the_shape_and_screen_stays_still(ctx, tmp_path):
+    """Two rotations of the shape, the effect's clock stopped. In screen
+    mapping a pixel both frames cover shows the same colour: the faces are
+    windows onto a picture that does not move. Per face it does not: the
+    picture turns with the shape."""
+    from hyperspace.fx import PER_FACE, SCREEN
+    from hyperspace.render import Renderer
+
+    card = _card(tmp_path)
+
+    def pair(face_map):
+        out = []
+        for turn in (0.0, 0.9):
+            r = Renderer(ctx, fx=_shown(face_map))
+            s = _face_view(card)
+            s.ang = [a + turn for a in s.ang]
+            img = _fdraw(ctx, r, s)
+            out.append((_hue(img), _cover(ctx, r)))
+        (h0, c0), (h1, c1) = out
+        both = c0 & c1 & (h0 != "") & (h1 != "")
+        assert (c0 != c1).mean() > 0.02, "the shape must have turned"
+        assert both.sum() > 3000
+        return (h0[both] == h1[both]).mean()
+
+    assert pair(SCREEN) > 0.995
+    assert pair(PER_FACE) < 0.9
+
+
+def test_the_face_target_keeps_an_opaque_grounds_alpha(ctx):
+    """A generator and a multiply aimed at the faces: on an opaque ground
+    the window is alpha 1 everywhere, `view.cut_through` on or off — the
+    picture's alpha reaches the frame only as a face's intensity. On a
+    see-through ground (overlay) cut-through still does what it did: on, a
+    fill lowers the ground's alpha; off, never below it."""
+    from hyperspace.fx import BLENDS
+    from hyperspace.render import Renderer
+
+    def renderer(bg_alpha, face_map):
+        fx = _aimed("plasma", "tripcolour", face_map=face_map)
+        fx.values["tripcolour"]["blend"] = BLENDS.index("multiply")
+        r = Renderer(ctx, fx=fx)
+        r.bg_alpha = bg_alpha
+        return r
+
+    for face_map in (0, 1):
+        for cut in (True, False):
+            r = renderer(1.0, face_map)
+            got = _fdraw(ctx, r, _face_view(pattern=2, cut_through=cut, lines=True))
+            assert r.face_pic.tex is not None and r.face_error == ""
+            assert got[..., :3].max() > 40
+            assert (got[..., 3] == 255).all(), (face_map, cut)
+        ground = round(0.6 * 255)
+        r = renderer(0.6, face_map)
+        on = _fdraw(ctx, r, _face_view(pattern=2, cut_through=True))
+        inside = _cover(ctx, r)
+        r = renderer(0.6, face_map)
+        off = _fdraw(ctx, r, _face_view(pattern=2, cut_through=False))
+        assert (on[~inside][:, 3] == ground).all() and (off[~inside][:, 3] == ground).all()
+        assert on[inside][:, 3].min() < ground - 4            # the desktop shows through a fill
+        assert off[..., 3].min() >= ground                    # never below the ground
+    # and with no face effect cut-through gives the same kind of frame
+    plain = Renderer(ctx)
+    plain.bg_alpha = 0.6
+    assert _fdraw(ctx, plain, _face_view(pattern=2, cut_through=True))[..., 3].min() < ground - 4
+
+
+class _Raises:
+    def __init__(self, what):
+        self.what = what
+
+    def render(self, *a, **k):
+        raise RuntimeError(self.what)
+
+
+def test_a_face_pass_that_raises_leaves_the_frame_and_the_window_bound(ctx, tmp_path):
+    """A seed or a chain that raises is caught in the face pass: the frame
+    is the frame with no face effect, `face_error` says why, the window is
+    bound. A raise from the scene pass itself still ends on the window (the
+    draw's own finally) and the picture is not left handed over."""
+    from hyperspace.render import Renderer
+
+    card = _card(tmp_path)
+    want = _fdraw(ctx, Renderer(ctx), _face_view(card, pattern=2), frames=2)
+
+    r = Renderer(ctx, fx=_aimed("plasma"))
+    vao = r._seed_vao
+    r._seed_vao = _Raises("the seed broke")
+    got = _fdraw(ctx, r, _face_view(card, pattern=2), frames=2)   # never raises; ends on the window
+    assert np.array_equal(got, want)
+    assert r.face_error.startswith("faces: RuntimeError: the seed broke") and r._pic is None
+    r._seed_vao = vao                                # mended: the picture is back, the error gone
+    assert not np.array_equal(_fdraw(ctx, r, _face_view(card, pattern=2), frames=2), want)
+    assert r.face_error == ""
+    r._seed_vao = _Raises("again")                   # and an error does not outlive its pass:
+    _fdraw(ctx, r, _face_view(card, pattern=2))
+    assert r.face_error
+    r.fx.state.values["plasma"]["on"] = False        # nothing aimed at the faces any more
+    _fdraw(ctx, r, _face_view(card, pattern=2))
+    assert r.face_error == ""
+    r.fx.state.values["plasma"]["on"] = True
+    r._seed_vao = vao
+
+    r = Renderer(ctx, fx=_aimed("plasma"))
+
+    def broken(*a, **k):
+        r.face_pic.fbo.use()                         # mid-chain: its own framebuffer bound,
+        ctx.disable(moderngl.BLEND)                  # blending off
+        raise RuntimeError("the chain broke")
+
+    r.face_fx.run = broken
+    got = _fdraw(ctx, r, _face_view(card, pattern=2), frames=2)
+    assert np.array_equal(got, want) and r.face_error.startswith("faces: RuntimeError: the chain")
+    del r.face_fx.run
+
+    # a raise let through the frame (the scene pass, a face effect running)
+    win = _window(ctx)
+    s = _face_view(card, pattern=2)
+    r.draw(s, 160, 100, t_now=0.0)
+    before = _pixels(win)
+    real = r.draw_scene
+
+    def once(*a, **k):
+        r.draw_scene = real
+        assert r._pic is r.face_pic.tex              # the picture was handed over…
+        raise RuntimeError("one bad frame")
+
+    r.draw_scene = once
+    with pytest.raises(RuntimeError, match="one bad frame"):
+        r.draw(s, 160, 100, t_now=1.0)
+    assert ctx.fbo is win and ctx.viewport == (0, 0, 160, 100) and r._pic is None   # …and taken back
+    s.ang = [a + 0.4 for a in s.ang]
+    r.draw(s, 160, 100, t_now=2.0)
+    assert ctx.fbo is win and np.abs(_pixels(win) - before).mean() > 0.2
+    win.release()
+
+
+def test_the_echoes_carry_the_faces_effects(ctx):
+    """The history captures the scene, and the faces' effects are in the
+    scene (they are drawn by the scene pass): the echoes hold them — where
+    they have never held the frame's."""
+    from hyperspace.fx import FxState
+    from hyperspace.render import Renderer
+
+    def run(fx):
+        r = Renderer(ctx, fx=fx)
+        st = r.lookback.state
+        st.on, st.echoes, st.gap, st.tint_from = True, 8, 0.0, 0
+        r.lookback.source = None
+        _fdraw(ctx, r, _face_view(), frames=6, spin=0.05)
+        assert r.lookback.atlas is not None and r.lookback.layers()
+        return (np.frombuffer(r.lookback.atlas.read(), dtype=np.uint8).astype(int),
+                np.frombuffer(r.scene.tex.read(), dtype=np.uint8).astype(int))
+
+    atlas, scene = run(FxState())
+    on_frame = FxState()
+    on_frame.values["plasma"]["on"] = True
+    atlas_f, scene_f = run(on_frame)
+    assert np.array_equal(atlas_f, atlas) and np.array_equal(scene_f, scene)   # as ever
+    atlas_p, scene_p = run(_aimed("plasma"))
+    assert np.abs(scene_p - scene).sum() > 10000
+    assert np.abs(atlas_p - atlas).sum() > 10000
+
+
+def test_a_frame_effect_runs_over_a_face_effect(ctx):
+    """One of each: both chains run, each over its own effects, and the
+    frame is neither alone."""
+    from hyperspace.fx import FRAME, FxState
+    from hyperspace.render import Renderer
+
+    def run(faces: bool, frame: bool):
+        fx = _aimed("plasma") if faces else FxState()
+        fx.values["kaleido"]["on"] = frame
+        r = Renderer(ctx, fx=fx)
+        ran = {}
+        for key, chain in (("frame", r.fx), ("faces", r.face_fx)):
+            real = chain.run
+            chain.run = lambda *a, _real=real, _key=key, **k: ran.setdefault(_key, _real(*a, **k))
+        return _fdraw(ctx, r, _face_view()), ran, fx
+
+    both, ran, fx = run(True, True)
+    assert ran == {"faces": ["plasma"], "frame": ["kaleido"]}
+    assert fx.chain() == ["plasma", "kaleido"] and fx.chain(FRAME) == ["kaleido"]
+    only_faces, ran_a, _ = run(True, False)
+    only_frame, ran_b, _ = run(False, True)
+    assert ran_a == {"faces": ["plasma"]} and ran_b == {"frame": ["kaleido"]}
+    assert np.abs(both - only_faces).sum() > 10000 and np.abs(both - only_frame).sum() > 10000
+
+
+def test_both_chains_in_a_frame_run_the_clocks_once(ctx):
+    """Through the renderer: with an effect on each target every clock has
+    moved by the frames' time, once — what a renderer with everything on
+    the frame gives."""
+    from hyperspace.fx import FxState
+    from hyperspace.render import Renderer
+
+    def phases(split: bool):
+        fx = _aimed("plasma", speed=1.5) if split else FxState()
+        fx.values["plasma"].update(on=True, speed=1.5)
+        fx.values["warp"].update(on=True, speed=-2.0)
+        r = Renderer(ctx, fx=fx)
+        _fdraw(ctx, r, _face_view(), frames=7, t=3.0)
+        assert r.face_fx.active() is split
+        return dict(fx.phase)
+
+    one, two = phases(False), phases(True)
+    assert one["plasma"] == pytest.approx(1.5 * 6 / 30) and one["warp"] == pytest.approx(-0.4)
+    assert two == pytest.approx(one)
+
+
+def test_draw_scene_alone_shows_no_face_picture(ctx, tmp_path):
+    """`draw_scene` is the scene pass alone: no frame effect and no face
+    picture — also right after a frame that showed one (the program keeps
+    its uniforms; `u_pic_on` is set on every pass that draws faces)."""
+    from hyperspace.render import Renderer
+
+    card = _card(tmp_path)
+    s = _face_view(card, pattern=2)
+    fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((FW, FH))])
+    plain = Renderer(ctx)
+    _direct(ctx, plain, s, fbo, FW, FH, 2.0)
+    want = _rgba(ctx, fbo, FW, FH)
+    r = Renderer(ctx, fx=_aimed("plasma", "kaleido"))
+    shown = _fdraw(ctx, r, _face_view(card, pattern=2))
+    assert r.face_pic.tex is not None and r._pic is None
+    _direct(ctx, r, s, fbo, FW, FH, 2.0)
+    got = _rgba(ctx, fbo, FW, FH)
+    assert np.array_equal(got, want)
+    assert not np.array_equal(shown[::-1], want)
+    fbo.release()
+
+
+def test_the_face_picture_follows_instances_and_zero(ctx, tmp_path):
+    """Nine copies: per face every copy's faces carry the picture; in screen
+    mapping there is one picture behind the whole field. No copies: no
+    face pass runs at all."""
+    from hyperspace.fx import SCREEN
+    from hyperspace.render import Renderer
+
+    card = _card(tmp_path)
+    field = {"instances": 9, "zoom": 0.42}
+    base_r = Renderer(ctx)
+    base = _fdraw(ctx, base_r, _face_view(**field))
+    inside = _cover(ctx, base_r)
+    r = Renderer(ctx, fx=_aimed("plasma"))
+    got = _fdraw(ctx, r, _face_view(**field))
+    assert np.array_equal(got[~inside], base[~inside])
+    cell = min(FW, FH) * 0.72 * 0.42
+    yy, xx = np.mgrid[0:FH, 0:FW]
+    for k in range(9):                               # every copy's own patch of the window
+        cx, cy = FW / 2 + (k % 3 - 1) * cell, FH / 2 + (k // 3 - 1) * cell
+        patch = inside & (np.abs(xx - cx) < cell / 2) & (np.abs(yy - cy) < cell / 2)
+        assert patch.sum() > 300, k
+        changed = np.abs(got[patch] - base[patch])[:, :3].sum(axis=1) > 0
+        assert changed.mean() > 0.5, f"copy {k} does not show the picture"
+
+    r = Renderer(ctx, fx=_shown(SCREEN))
+    hue = _hue(_fdraw(ctx, r, _face_view(card, **field)))
+    clear = _cover(ctx, r) & (np.abs(xx - FW / 2) > 6) & (np.abs(yy - FH / 2) > 6)
+    for name, where in (("r", (xx < FW / 2) & (yy < FH / 2)), ("g", (xx > FW / 2) & (yy < FH / 2)),
+                        ("b", (xx < FW / 2) & (yy > FH / 2)), ("y", (xx > FW / 2) & (yy > FH / 2))):
+        assert (clear & where).sum() > 300 and (hue[clear & where] == name).all(), name
+
+    r = Renderer(ctx, fx=_aimed("plasma"))
+    calls = []
+    real = r.face_fx.run
+    r.face_fx.run = lambda *a, **k: calls.append(a) or real(*a, **k)
+    zero = _fdraw(ctx, r, _face_view(instances=0), frames=2)
+    assert calls == [] and _unused(r) and not zero[..., :3].any()
+    one = _fdraw(ctx, r, _face_view(instances=1))
+    assert len(calls) == 1 and one[..., :3].any()
+
+
+def test_on_reload_rebuilds_the_seed_with_the_face_program(ctx, monkeypatch):
+    """The face program and the seed are one build: replaced together on a
+    reload, kept together on a bad edit. A reload also makes the faces'
+    chain and picture again (app.py's reloader does not re-class them), and
+    a renderer from before the face target — no `face_fx`, no seed — draws
+    without raising, and gets them on its next reload."""
+    import hyperspace.render as R
+
+    r = R.Renderer(ctx, fx=_aimed("plasma"))
+    want = _fdraw(ctx, r, _face_view(pattern=2))
+    face, seed, chain, pic = r._face_prog, r._seed_prog, r.face_fx, r.face_pic
+    assert seed is not None and pic.tex is not None
+    r.on_reload()
+    assert r._face_prog is not face and r._seed_prog is not seed
+    assert r.face_fx is not chain and r.face_pic is not pic and pic.tex is None
+    assert r.face_fx.programs is r.fx and r.face_fx.state is r.fx.state
+    assert np.array_equal(_fdraw(ctx, r, _face_view(pattern=2)), want)
+
+    # a bad edit to the seed's source: both last good programs stay
+    face, seed = r._face_prog, r._seed_prog
+    with monkeypatch.context() as m:
+        m.setattr(R, "SEED_FS_TAIL", R.FACE_PX + "void main() { nope; }")
+        r._build_face_program()
+    assert r.pattern_error and r._face_prog is face and r._seed_prog is seed
+    assert np.array_equal(_fdraw(ctx, r, _face_view(pattern=2)), want)
+    r._build_face_program()
+    assert r.pattern_error == "" and r._seed_prog is not seed
+
+    # a renderer made before the face target existed
+    plain = _fdraw(ctx, R.Renderer(ctx), _face_view(pattern=2))
+    old = R.Renderer(ctx, fx=_aimed("plasma"))
+    for name in ("face_fx", "face_pic", "face_error", "_pic", "_seed_prog", "_seed_vao"):
+        delattr(old, name)
+    del old.fx.target, old.fx.programs, old.fx.state.face_map, old.fx.state._t_last
+    got = _fdraw(ctx, old, _face_view(pattern=2), frames=2)
+    assert np.array_equal(got, _fdraw(ctx, R.Renderer(ctx), _face_view(pattern=2), frames=2))
+    assert not hasattr(old, "face_fx") and plain.any()
+    old.on_reload()                                  # the reload brings the face target
+    assert np.array_equal(_fdraw(ctx, old, _face_view(pattern=2)), want)
+    assert old.face_error == ""
+
+
+def test_a_face_program_that_did_not_build_runs_no_face_pass(ctx, monkeypatch):
+    import hyperspace.render as R
+
+    with monkeypatch.context() as m:
+        m.setattr(R, "FACE_PX", "void face_px(vec2 uv, float fid, out vec3 rgb, out float shade) "
+                                "{ nope; }")
+        m.setattr(R, "FACE_FS_TAIL", R.FACE_PX + "void main() { nope; }")
+        r = R.Renderer(ctx, fx=_aimed("plasma"))
+    assert r.pattern_error and r._face_prog is None and r._seed_prog is None
+    got = _fdraw(ctx, r, _face_view(pattern=2, lines=True), frames=2)
+    assert _unused(r) and r.face_error == ""
+    assert np.array_equal(got, _fdraw(ctx, R.Renderer(ctx), _face_view(faces=False, lines=True),
+                                      frames=2))
+
+
+def test_a_pattern_file_that_reads_the_faces_inputs_builds_the_seed_too(ctx, tmp_path,
+                                                                        monkeypatch):
+    """patterns.glsl is the owner's to edit, and the face fragment's inputs
+    (v_fid, v_alpha) are in scope there: a file that reads them by name
+    must not lose the faces because the seed could not compile."""
+    import hyperspace.render as R
+
+    f = tmp_path / "patterns.glsl"
+    f.write_text("vec4 pattern(int mode, vec2 uv, float fid) "
+                 "{ return vec4(uv, v_fid * 0.1 + u_mod[0] + u_mod[1] + 0.001 * u_time, 0.5 * v_alpha + 0.3); }\n")
+    monkeypatch.setattr(R, "PATTERNS_GLSL", f)
+    r = R.Renderer(ctx, fx=_aimed("plasma"))
+    assert r.pattern_error == "" and r._face_prog is not None and r._seed_prog is not None
+    got = _fdraw(ctx, r, _face_view(pattern=1))
+    assert r.face_error == "" and r.face_pic.tex is not None and got[..., :3].max() > 20
+
+
+def test_the_render_stack_imports_no_registry():
+    """ARCHITECTURE §3: the render stack only reads. render.py and fx.py
+    import nothing from params, routing or library — the face target reads
+    `values[name]["target"]`, `face_map` and the ViewState like every other
+    value — and neither names the registry's write calls."""
+    import ast
+
+    import hyperspace.fx as F
+    import hyperspace.render as R
+
+    banned = {"params", "routing", "library", "preset", "undo", "control"}
+    for mod in (R, F):
+        tree = ast.parse(Path(mod.__file__).read_text())
+        for node in ast.walk(tree):
+            names = []
+            if isinstance(node, ast.ImportFrom):
+                names = [(node.module or "").split(".")[-1]] + [a.name for a in node.names]
+            elif isinstance(node, ast.Import):
+                names = [a.name.split(".")[-1] for a in node.names]
+            assert not banned & set(names), (mod.__name__, names)
+    # the renderer's half never touches a Param: no set, set_value, modulate or apply
+    src = ast.parse(Path(R.__file__).read_text())
+    called = {n.func.attr for n in ast.walk(src)
+              if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)}
+    assert not called & {"set_value", "modulate", "apply", "snapshot"}
+
+
+# ---- plan 20 WP6: instance layouts — grid, hex, ring ----
+#
+# `render.inst_positions(n, layout)` says where each copy sits, in cells;
+# `draw_scene` scales it by `cell` and runs the motions over it as before.
+
+def _frozen_grid(n: int, layout: int = 0):
+    """The four lines `draw_scene` had before plan 20 WP6, frozen: what
+    "the frame it was" means below. The layout is ignored."""
+    import math
+
+    cols = math.ceil(math.sqrt(n))
+    rows = math.ceil(n / cols)
+    k = np.arange(n, dtype=np.float32)
+    gx = k % cols - (cols - 1) / 2      # grid position about the centre
+    gy = k // cols - (rows - 1) / 2
+    return gx, gy
+
+
+LW, LH = 160, 120
+
+
+def _layout_view(n, layout=0, motion=0, **kw) -> ViewState:
+    s = ViewState(shape=3, ang=list(VIEW["ang"]), yaw=VIEW["yaw"], pitch=VIEW["pitch"],
+                  faces=True, pattern=2, points=True, lines=True, zoom=0.3,
+                  instances=n, inst_layout=layout, inst_motion=motion, inst_amp=0.4)
+    for k, v in kw.items():
+        setattr(s, k, v)
+    return s
+
+
+def _scene(ctx, r, s, t=2.0):
+    """One `draw_scene` into a small framebuffer: (pixels as RGBA ints, the
+    instance offsets every `_tile` call was handed)."""
+    from hyperspace.render import Renderer
+
+    seen = []
+    real = Renderer._tile
+    r._tile = lambda verts, offs: (seen.append(offs.copy()), real(verts, offs))[1]
+    fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((LW, LH), 4)])
+    fbo.use()
+    ctx.viewport = (0, 0, LW, LH)
+    try:
+        r.draw_scene(s, LW, LH, t_now=t)
+        out = np.frombuffer(fbo.read(components=4), dtype=np.uint8).reshape(LH, LW, 4)
+    finally:
+        del r._tile
+        fbo.release()
+    assert ctx.error == "GL_NO_ERROR"
+    return out.astype(int), seen
+
+
+def test_grid_layout_is_the_frame_it_was(ctx, monkeypatch):
+    """GRID is today's four lines moved into a function: the same float32
+    positions at every count, and the same frame, still and in each motion,
+    as a renderer whose positions come from the frozen lines."""
+    import hyperspace.render as R
+
+    for n in range(2, 101):
+        gx, gy = R.inst_positions(n, R.LAYOUT_GRID)
+        fx, fy = _frozen_grid(n)
+        assert gx.dtype == np.float32 and gy.dtype == np.float32, n
+        assert np.array_equal(gx, fx) and np.array_equal(gy, fy), n
+    r = R.Renderer(ctx)
+    asked = []
+    for n in (2, 3, 9, 16, 100):
+        for motion in (0, 1, 2, 3):
+            s = _layout_view(n, R.LAYOUT_GRID, motion)
+            got, offs = _scene(ctx, r, s)
+            with monkeypatch.context() as m:
+                m.setattr(R, "inst_positions", lambda k, layout: (asked.append(k),
+                                                                 _frozen_grid(k))[1])
+                want, want_offs = _scene(ctx, r, s)
+            assert asked[-1] == n                           # the frozen lines drew `want`
+            assert want[..., :3].max() > 20, (n, motion)
+            assert np.array_equal(got, want), (n, motion)
+            assert len(offs) == 3 and all(np.array_equal(a, b) for a, b in zip(offs, want_offs))
+            assert offs[0].shape == (n, 2)
+
+
+def test_hex_neighbours_are_one_cell_apart(ctx):
+    """A honeycomb spiral: every copy's nearest neighbour one cell away;
+    whole hexagons at 7, 19 and 37 centred on the middle; and a copy never
+    moves as the count grows."""
+    from hyperspace.render import LAYOUT_HEX, inst_positions
+
+    def pts(n):
+        gx, gy = inst_positions(n, LAYOUT_HEX)
+        assert gx.dtype == np.float32 and gy.dtype == np.float32 and len(gx) == n
+        return np.stack([gx, gy], axis=1).astype(np.float64)
+
+    for n in (7, 19, 37):
+        p = pts(n)
+        d = np.hypot(*(p[:, None, :] - p[None, :, :]).transpose(2, 0, 1))
+        np.fill_diagonal(d, np.inf)
+        assert np.allclose(d.min(axis=1), 1.0, atol=1e-5), n
+        assert d.min() > 1 - 1e-5                         # no two copies closer than a cell
+        assert np.allclose(p.mean(axis=0), 0.0, atol=1e-5), n
+        assert np.array_equal(p[0], [0.0, 0.0])
+        # a whole hexagon: the outer ring all at one hex distance
+        ring = (n == 7 and 1) or (n == 19 and 2) or 3
+        assert (np.hypot(p[:, 0], p[:, 1]) <= ring + 1e-5).all()
+    big = pts(100)
+    for n in range(1, 100):
+        assert np.array_equal(pts(n), big[:n]), n
+    # each count's rings: 1 + 6 + 12 + 18 — the 7th copy closes ring 1, the 19th ring 2
+    r = np.hypot(big[:, 0], big[:, 1])
+    assert (r[1:7] > 0.99).all() and (r[1:7] < 1.01).all()
+    assert (r[7:19] > 1.7).all() and (r[7:19] < 2.01).all()
+
+
+def test_ring_is_one_circle_with_neighbours_one_cell_apart(ctx):
+    """RING: every copy at one radius about the centre, neighbours one cell
+    apart, copy 0 at the top and the next clockwise on screen (y is down)."""
+    import math
+
+    from hyperspace.render import LAYOUT_RING, inst_positions
+
+    for n in (2, 3, 12, 100):
+        gx, gy = inst_positions(n, LAYOUT_RING)
+        assert gx.dtype == np.float32 and len(gx) == n
+        p = np.stack([gx, gy], axis=1).astype(np.float64)
+        radius = 1.0 / (2.0 * math.sin(math.pi / n))
+        assert np.allclose(np.hypot(p[:, 0], p[:, 1]), radius, atol=1e-4), n
+        step = np.hypot(*(np.roll(p, -1, axis=0) - p).T)
+        assert np.allclose(step, 1.0, atol=1e-4), n
+        assert np.allclose(p.mean(axis=0), 0.0, atol=1e-4), n
+        assert abs(p[0, 0]) < 1e-6 and p[0, 1] < 0          # copy 0 at the top
+    gx, gy = inst_positions(2, LAYOUT_RING)                   # half a cell above and below
+    assert np.allclose(gx, 0, atol=1e-6) and np.allclose(gy, [-0.5, 0.5], atol=1e-6)
+    gx, gy = inst_positions(3, LAYOUT_RING)
+    assert gx[1] > 0 and gy[1] > 0                            # clockwise: then lower right
+    gx, gy = inst_positions(12, LAYOUT_RING)
+    assert gx[3] > 0 and abs(gy[3]) < 1e-5                    # a quarter turn: at three o'clock
+
+
+def test_positions_for_any_count_and_layout(ctx):
+    """No copies is two empty arrays and one copy the centre, in every layout;
+    a layout `inst_positions` does not know is GRID; nothing is NaN."""
+    from hyperspace.render import LAYOUT_GRID, inst_positions
+
+    for layout in (0, 1, 2, 3, -1, 99):
+        for n in (-3, 0):
+            gx, gy = inst_positions(n, layout)
+            assert gx.shape == (0,) and gy.shape == (0,) and gx.dtype == np.float32
+        gx, gy = inst_positions(1, layout)
+        assert np.array_equal(gx, [0.0]) and np.array_equal(gy, [0.0])
+        for n in range(1, 101):
+            gx, gy = inst_positions(n, layout)
+            assert len(gx) == len(gy) == n and np.isfinite(gx).all() and np.isfinite(gy).all()
+        if layout not in (1, 2):
+            for n in (2, 9, 50):
+                assert all(np.array_equal(a, b) for a, b in
+                           zip(inst_positions(n, layout), inst_positions(n, LAYOUT_GRID)))
+
+
+def test_zero_and_one_are_the_same_in_every_layout(ctx):
+    """`draw_scene` enters a layout only above one copy: 0 draws only the
+    ground and 1 one copy at the centre, the same bits in GRID, HEX and RING,
+    with or without a motion."""
+    from hyperspace.render import Renderer
+
+    r = Renderer(ctx)
+    for n in (0, 1):
+        want, _ = _scene(ctx, r, _layout_view(n, 0, 0))
+        for layout in (0, 1, 2):
+            for motion in (0, 1, 3):
+                got, offs = _scene(ctx, r, _layout_view(n, layout, motion))
+                assert np.array_equal(got, want), (n, layout, motion)
+                if n == 1:
+                    assert len(offs) == 3 and all(o.shape == (1, 2) and not o.any() for o in offs)
+                else:
+                    assert offs == [] and not got[..., :3].any()
+        if n == 1:
+            assert want[..., :3].max() > 20
+
+
+def test_every_motion_moves_every_layout(ctx):
+    """Each motion displaces the copies in each layout, by no more than its
+    amplitude in cells, and the frames differ from the still field."""
+    from hyperspace.render import Renderer
+
+    r = Renderer(ctx)
+    cell = min(LW, LH) * 0.72 * 0.3
+    for layout in (0, 1, 2):
+        for n in (7, 12):
+            still, (o_still, *_) = _scene(ctx, r, _layout_view(n, layout, 0))
+            for motion in (1, 2, 3):
+                moved = []
+                for t in (2.0, 2.7):
+                    img, (o, *_) = _scene(ctx, r, _layout_view(n, layout, motion), t=t)
+                    d = np.hypot(*(o - o_still).T)
+                    assert d.max() > 0.05 * cell, (layout, n, motion, t)
+                    assert d.max() <= 0.4 * cell * 1.07 + 1e-3, (layout, n, motion, t)
+                    moved.append(o)
+                assert not np.array_equal(img, still), (layout, n, motion)
+                assert not np.array_equal(*moved), (layout, n, motion)     # and it moves in time
+    # RIPPLE on a ring: every copy at one distance, so it breathes as one
+    _, (o_still, *_) = _scene(ctx, r, _layout_view(12, 2, 0))
+    _, (o, *_) = _scene(ctx, r, _layout_view(12, 2, 3))
+    radial = np.hypot(*o.T) - np.hypot(*o_still.T)
+    assert np.allclose(radial, radial[0], atol=1e-2) and abs(radial[0]) > 0.5
+
+
+def test_every_layout_and_motion_draws_any_count(ctx):
+    """0 to 100 copies in every layout and motion, at the amp's top: no
+    raise, no GL error, every offset finite."""
+    from hyperspace.render import Renderer
+
+    r = Renderer(ctx)
+    s = _layout_view(0, inst_amp=1.0, inst_rate=6.0, faces=False, pattern=0)
+    for layout in (0, 1, 2):
+        for motion in (0, 1, 2, 3):
+            s.inst_layout, s.inst_motion = layout, motion
+            for n in range(101):
+                s.instances = n
+                _, offs = _scene(ctx, r, s, t=1.3 + n / 30)
+                assert all(np.isfinite(o).all() and len(o) == max(n, 1) for o in offs), (
+                    layout, motion, n)
+
+
+def test_the_face_picture_follows_a_honeycomb(ctx, tmp_path):
+    """HEX with seven copies: per face every copy's faces carry the
+    picture; in screen mapping there is one picture behind the field."""
+    from hyperspace.fx import SCREEN
+    from hyperspace.render import LAYOUT_HEX, Renderer, inst_positions
+
+    card = _card(tmp_path)
+    field = {"instances": 7, "zoom": 0.42, "inst_layout": LAYOUT_HEX}
+    base_r = Renderer(ctx)
+    base = _fdraw(ctx, base_r, _face_view(**field))
+    inside = _cover(ctx, base_r)
+    r = Renderer(ctx, fx=_aimed("plasma"))
+    got = _fdraw(ctx, r, _face_view(**field))
+    assert np.array_equal(got[~inside], base[~inside])
+    cell = min(FW, FH) * 0.72 * 0.42
+    yy, xx = np.mgrid[0:FH, 0:FW]
+    gx, gy = inst_positions(7, LAYOUT_HEX)
+    for k in range(7):                               # every copy's own disc of the window
+        cx, cy = FW / 2 + gx[k] * cell, FH / 2 + gy[k] * cell
+        patch = inside & (np.hypot(xx - cx, yy - cy) < 0.45 * cell)
+        assert patch.sum() > 300, k
+        changed = np.abs(got[patch] - base[patch])[:, :3].sum(axis=1) > 0
+        assert changed.mean() > 0.5, f"copy {k} does not show the picture"
+
+    r = Renderer(ctx, fx=_shown(SCREEN))
+    hue = _hue(_fdraw(ctx, r, _face_view(card, **field)))
+    clear = _cover(ctx, r) & (np.abs(xx - FW / 2) > 6) & (np.abs(yy - FH / 2) > 6)
+    for name, where in (("r", (xx < FW / 2) & (yy < FH / 2)), ("g", (xx > FW / 2) & (yy < FH / 2)),
+                        ("b", (xx < FW / 2) & (yy > FH / 2)), ("y", (xx > FW / 2) & (yy > FH / 2))):
+        assert (clear & where).sum() > 300 and (hue[clear & where] == name).all(), name

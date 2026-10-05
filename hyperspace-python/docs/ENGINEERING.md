@@ -17,7 +17,8 @@ the oracle the golden traces were recorded from. Revised for plan 13
 (presets, the session, the two-layer desk) on `plan-13-integration`.
 
 **Run it:** `uv sync`, `uv run pytest` (1178 tests with plan 16; 1276
-on `plan-18-integration`, which holds plans 17 and 18; about a minute
+on `plan-18-integration`, which holds plans 17 and 18; 1355 and 1
+skipped on `plan-20-integration`, plans 15–18 and 20; about a minute
 and a half), `uv run hyperspace`. `?` in the app shows the controls cheat
 sheet, which is off at launch since plan 16.
 
@@ -108,15 +109,25 @@ GPU rasterises. Geometry is exact to 1e-12 against the traces
 (`tests/test_core.py:33-53`). `ViewState`, the dataclass the renderer
 draws, lives in `view.py` so nothing needs moderngl to hold a view.
 
-`Renderer.draw` (`render.py`, `_draw_frame`) is seven stages, and with
+`Renderer.draw` (`render.py`, `_draw_frame`) is eight stages, and with
 look-back, FX and the ghost hands off and the master dim at 1 the output
 is bit-identical to the scene pass alone (`tests/test_render.py:306`,
 `tests/test_ghost.py`, `tests/test_render.py::test_dim_at_one_is_the_old_frame_exactly`):
 
+0. **The face picture** (plan 20 WP1; `Renderer._face_picture`) — only
+   while an effect aimed at the faces is running, the faces are on,
+   there is a copy to draw and the face program built: a seed pass, the
+   faces' effect chain over it, a 1024² picture with mipmaps (§2.4,
+   "Effects on the faces"). Finished before the scene pass and handed to
+   it alone (`Renderer._pic`). Otherwise nothing runs and nothing is
+   allocated, and the frame is the one it was to the bit
+   (`tests/test_render.py::test_nothing_aimed_at_the_faces_is_the_old_frame_exactly`,
+   `::test_the_face_target_costs_nothing_while_unused`).
 1. **Scene pass** into an MSAA RGBA target (`draw_scene`, `render.py:498`):
-   zoom and pan about the cursor; the instance grid with motion; face
-   fills through `patterns.glsl` and the optional bitmap layer; edges;
-   points. Painter order on w-depth. With `view.instances` at **0**
+   zoom and pan about the cursor; the copies laid out by
+   `view.inst_layout` with their motion (below); face fills through
+   `patterns.glsl` and the optional bitmap layer — or, with a face
+   picture handed over, that picture; edges; points. Painter order on w-depth. With `view.instances` at **0**
    (plan 16 WP5; the range is 0–100, the readout "0 · nothing drawn") the
    pass clears to the ground and draws nothing — no faces, lines or
    points, no vertex buffer written — and every stage below still runs:
@@ -132,9 +143,12 @@ is bit-identical to the scene pass alone (`tests/test_render.py:306`,
    glowing over them (`render.py:293-318, 467`).
 3. **Look-back** — `lookback.pull()` takes a finished dream result;
    composite, then capture the scene into the history (§2.3).
-4. **FX chain** — the enabled effect passes, ping-pong, after the
-   composite (§2.4). The history never sees effected pixels
-   (`render.py:475-478`).
+4. **FX chain** — the enabled effect passes aimed at the frame
+   (`FxState.chain(FRAME)`), ping-pong, after the composite (§2.4). The
+   history never sees the frame's effects (`render.py:475-478`); since
+   plan 20 the faces' effects are in the scene it captures (stage 0), so
+   the echoes and the dream carry them
+   (`tests/test_render.py::test_the_echoes_carry_the_faces_effects`).
 5. To the window. All post passes run with GL blending off and write
    premultiplied colour.
 6. **Ghost hands** — when `ghost.on` and a hand is in view, both hands
@@ -158,6 +172,33 @@ is bit-identical to the scene pass alone (`tests/test_render.py:306`,
    the dim's row on the OUTPUT page (`tests/test_render.py`, the seven
    `dim` tests). Seen offscreen and in a scripted launch on a laptop
    window; not on the projector or the glass (hand check 55).
+
+**Instance layouts** (plan 20 WP6, decision register row 71). Above one
+copy, `draw_scene` asks `render.inst_positions(n, view.inst_layout)` for
+each copy's place in cells, `(gx, gy)`, and scales it by `cell = min(w,
+h) × 0.72 × zoom`. **GRID** is rows of ⌈√n⌉, centred — the old four
+lines moved, the same to the bit; **HEX** a honeycomb spiral from the
+centre (axial coordinates, ring *m* walked from (−m, m)), whole
+hexagons at 7, 19, 37, 61 and 91, a copy never moving as the count
+grows; **RING** one circle of radius `1 / (2 sin(π/n))`, so neighbours
+are one cell apart, copy 0 at the top and clockwise on screen. A layout
+it does not know is GRID; 0 copies draw nothing and 1 is the centre in
+every layout. The three motions (`view.inst_motion`: ORBIT, WAVE,
+RIPPLE, "Field motion"; `inst_amp`, "Field amp", as a fraction of a
+cell; `inst_rate`, "Field rate") read only `(gx, gy)` and are unchanged,
+so ORBIT's phase, `ph + (gx + gy) × 0.9`, does not step evenly on a
+honeycomb and neighbours orbit out of step (at amp 0.35 they overlap;
+unjudged, hand check 97). On the VIEW page the field is one row under
+the count while it is above 1 — layout (84 px), motion (96 px) and,
+while moving, amp (84 px) and rate — and the six plane rates are three
+rows of two, each labelled with its plane alone in a 32 px column so a
+driven `base → effective` readout fits; 88 px to spare with the row
+showing (`tests/test_render.py::test_grid_layout_is_the_frame_it_was`,
+`::test_hex_neighbours_are_one_cell_apart`,
+`::test_ring_is_one_circle_with_neighbours_one_cell_apart`,
+`::test_zero_and_one_are_the_same_in_every_layout`,
+`tests/test_ui_shell.py::test_the_view_page_fits_with_a_field_in_motion`,
+`::test_the_field_row_and_the_rate_cells_keep_their_menus`).
 
 **The target is bound explicitly** (plan 14 WP1). `Renderer.draw` draws
 into whatever framebuffer is bound when it is called; it captures that
@@ -247,6 +288,11 @@ cellular modes were tuned. Eleven patterned modes ship (plus flat, mode 0); thei
 `params.PATTERNS`, and a new mode needs both the GLSL case and the name.
 The bitmap layer (`view.bmp_*`) textures faces from a file; a bad file
 never raises and leaves the plain faces (`tests/test_render.py:147`).
+The pattern and the bitmap are one GLSL function since plan 20,
+`face_px(uv, fid, rgb, shade)` (`render.FACE_PX`), called by the face
+fragment and by the seed of the face picture; while an effect aimed at
+the faces runs, the face fragment shows that picture instead (§2.4,
+"Effects on the faces").
 
 ### 2.3 Look-back and the dream
 
@@ -256,7 +302,14 @@ age-weighted, premultiplied (`lookback.py:326-600`). With no dream worker
 it is a plain age-faded tracer. `dream.*` params: `on mix echo_mix fade
 darken contrast occlude hue sat tint tint_from tint_hue tint_sat res
 echoes gap steps step k layer octaves mask_decay jitter` — all
-presettable, all modulatable but `gap` and `res`.
+presettable, all modulatable but `gap`, `res` and (since plan 16)
+`layer`. Since plan 20 their labels say what each does, on the LOOKBACK
+page and in the registry (below; decision register row 69): `echo_mix`
+"Echo brightness", `fade` "Echo fade time", `echoes` "Echo count", `gap`
+"Echo time apart", `mix` "Dream brightness", `k` "Dream speed", `step`
+"Dream strength", `steps` "Dream passes", `mask_decay` "Dream linger",
+`occlude` "Shape hides wake", `res` "Look-back detail", the rest "Dream
+…"; the ids are unchanged.
 
 - **Echo time is seconds** (plan 14 WP6). The ring keeps its own clock,
   advanced once a frame by the renderer's time (`Lookback.tick`); an echo's
@@ -271,14 +324,21 @@ presettable, all modulatable but `gap` and `res`.
   converted, the launch rewrites a user preset or look-back module preset
   once (`preset.migrate_echo_home`, each kept as `<file>.bak-v2-frames`),
   and a preset file still naming them loads in seconds with a note. The
-  dream worker's own `k` and `mask_decay` are still per submitted frame.
+  dream worker's own `k` and `mask_decay` are still per submitted frame:
+  `k` is the "speed" the page shows (plan 20 WP5), read as the frames in
+  which a frame's share of the dream halves (`params.dream_speed_text`:
+  "≈23 frames" at the slow end, "≈14 frames" at the default, one decimal
+  under ten frames, "1.9 frames" at the fast end), so it follows the
+  worker's rate, and faster is also shallower (`step × steps / k` is
+  still clamped; decision register row 70).
 
 - **Chroma.** The net paints in its own primaries whatever the scene's
   palette, so `D` is re-coloured on its way in: `hue` / `sat` on the net's
   own colours, then `tint` cross-fades to luminance × one colour, with
   `tint_from = scene` taking the hue of the newest echo's mean. Echoes pass
   untouched (`tests/test_lookback.py:405`).
-- **Occlude.** The render covers the wake where it drew: coverage is
+- **Shape hides wake** (`dream.occlude`; "Occlude" until plan 20, "shape
+  hides" on the page). The render covers the wake where it drew: coverage is
   `max(brightness × 4, the faces' mask)`. Face fills draw at 1–6 % alpha,
   so brightness alone barely covered — hence the mask pass
   (`tests/test_lookback.py:353`).
@@ -303,11 +363,44 @@ presettable, all modulatable but `gap` and `res`.
   to fit (`lookback.fit_atlas`), and if the textures cannot be made
   nothing is captured and `ring_error` says why on the LOOKBACK page.
 
+**The LOOKBACK page** (`ui_lookback.py`; plan 20 WP4 and WP5). Under the
+page's title and its switch (`dream.on`, with "n echo(es) · dream" at
+the right), three sections named for what a knob acts on, laid out from
+`ui_lookback.SECTIONS`, two cells to a row with a 94 px label column
+(`LABEL_W`). **ECHOES**: brightness (`echo_mix`), fade time (`fade`,
+reading `0.23 s`), count (`echoes`), time apart (`gap`, reading `33
+ms`), then the thumbnails; its note says how far back the trail reaches
+("8 × 33 ms · the trail reaches 0.27 s", upper-cased by the section
+header; "no echoes: the dream alone" at 0). **DREAM**: the worker's
+status (device, copy path, ms per submit, frames behind, drops, the
+stability clamp — or why there is none; at most `STATUS_LINES` = 3
+lines, the whole on its hover), the layer as six chips (`LAYER_CHIPS`:
+grain, swirl, blot, 3b, 4c, 4e for `lookback.LAYERS`, the lit one the
+base, a click `Param.set`, each with the param's menu, which says "not
+modulatable"), then brightness (`mix`), speed (`k`), strength
+(`step`), passes (`steps`), linger (`mask_decay`), jitter, scales
+(`octaves`), hue, saturation, tint, tint from, tint hue, tint sat, and
+**the tint** — the swatch of the colour the dream is tinted towards, in
+a cell of its own, its hover saying whether that is the chosen colour or
+the scene's mean hue. **BOTH**: darken, contrast,
+shape hides (`occlude`), detail (`res`, the echo size on its hover). The
+page's labels are `SHORT`; ROUTING, a Learn's line and the desk say the
+registry's ("Echo time apart", "Dream speed"). No id, range, default or
+flag changed in the relabel, and no saved file
+(`tests/test_lookback.py::test_no_dream_id_range_default_or_flag_changed`,
+`::test_the_page_has_three_sections_and_every_dream_param_once`,
+`::test_the_layer_is_a_row_of_chips`,
+`::test_the_relabel_changes_no_factory_file`). The page fits at the
+control size with the thumbnails drawn over a real renderer: 26 px to
+spare at worst (`tests/test_ui_shell.py::test_the_look_back_page_fits_with_thumbnails`).
+Hidden-window pictures with a stand-in for the worker only (hand checks
+95, 96).
+
 ### 2.4 FX
 
 One GLSL file per effect under `shaders/fx/`. Every `// @param` uniform
 becomes a registry param `fx.<file>.<key>`, plus `on mix speed blend
-order` per file; `fx.on` and `fx.mix` govern the chain (`fx.py:114-164, 284-327`). Every effect is compiled behind `_common.glsl` and `fx/_lib.glsl`, and
+order target` per file (`target` since plan 20); `fx.on` and `fx.mix` govern the chain (`fx.py:114-164, 284-327`). Every effect is compiled behind `_common.glsl` and `fx/_lib.glsl`, and
 runs on the renderer's one clock (`Renderer.now`). Effects hot-reload by polling the folder every 30 frames (the shared helper files count); a
 parse error keeps the last spec, a compile error skips the pass, all
 broken is a copy. Off is bit-identical (`tests/test_fx.py:268`). The
@@ -315,6 +408,72 @@ blend modes are arithmetic in the shader, not GL blend state, and a pass
 never leaves alpha below its brightest channel. Twelve effects ship,
 Noita's `post_final.frag` maths among them; the factory presets are
 `library/fx/*.json`. **New effects are new `.glsl` files, not Python.**
+
+**Effects on the faces** (plan 20 WP1; decision register rows 65–66).
+Each effect is aimed at the **frame** or the **faces**
+(`fx.<name>.target`, over `fx.TARGETS`, default `frame`; persisted, not
+modulatable, like `order`). The effects aimed at the faces run as a
+second `FxChain` over the same `FxState` (`Renderer.face_fx`, made with
+`target=FACES, programs=renderer.fx`: it runs the frame chain's
+programs, shares its `errors` dict, and never forces alpha), in `order`,
+before the scene pass, over a picture of what a face shows:
+
+- **The seed.** One full-screen pass (`glsl.QUAD_VS` with
+  `SEED_FS_HEAD` / `SEED_FS_TAIL`) computes, for every texel, exactly
+  what face 0 computes — `face_px(uv, 0.0, rgb, shade)`, the pattern
+  then the bitmap over it, the one GLSL function the face fragment
+  calls too — and writes it premultiplied with alpha as the face's
+  intensity, `s = clamp(shade / 2.8, 0, 1)`, `vec4(rgb · s, s)` (2.8 is
+  the face shader's full intensity). The plain FLAT face is a mid-grey
+  field (`s` ≈ 0.36) that a generator can light and a multiply darken.
+  The seed declares `v_alpha` and `v_fid` as constants, so a
+  `patterns.glsl` that reads them compiles in both programs, which are
+  built together or not at all (`_build_face_program`).
+- **The picture.** The chain ends in `FaceTarget`: RGBA8, `FACE_PIC` =
+  1024 square, clamp to edge, `LINEAR_MIPMAP_LINEAR`, its mipmaps built
+  after every run. The chain's own ping-pong pair is RGBA16F. About
+  21 MiB in all, allocated the first frame an effect aimed at the faces
+  runs. `fx.mix` scales the face effects' mix as it does the frame's,
+  and `fx.on` bypasses both chains.
+- **The mapping** (`fx.face_map`, "Faces show", over `FACE_MAPS`,
+  modulatable). The face fragment samples the picture on texture unit 1
+  where it computed the pattern and bitmap (`u_pic_on`: 0 none, 1 per
+  face, 2 screen): **per face** at the face's own UV (centre on centre,
+  turning with the shape, every face of every copy alike); **screen**
+  at the fragment's place in the scene's framebuffer, the square centred
+  and scaled to cover the longer side and cropped on the shorter
+  (`(gl_FragCoord.xy − ½ fb) / max(fb) + ½`), upright, so the faces are
+  windows onto one still picture. A face's alpha is still `v_alpha ×
+  shade`, so the picture reaches the window only as a face's intensity
+  and an opaque ground stays at alpha 1.
+- **The clocks advance once** a frame whichever chain runs first
+  (`FxState.advance_to(t)`), so an effect runs at the same speed on
+  either target.
+- **What it costs, and what it changes.** With an effect on the faces,
+  every face shows face 0's pattern phase (the per-face `fid` is gone
+  from the pattern). The faces' effects are in the scene texture, so
+  the echoes and the dream carry them and the frame's effects run over
+  them. Three effects have a param in pixels (`deconverge.amount`,
+  `glimmer.size` / `halo`, `fractals.halo`); on the faces a pixel is a
+  texel of the 1024² picture. Per face, the faces' few percent of alpha
+  make an effect faint: in the build's renders a strong re-colour reads
+  and a subtle one barely does (hand checks 91, 98). On the build
+  laptop four effects on the faces cost about 0.1–0.15 ms a frame
+  (`docs/plans/assets/20-fx-dream-looks/face-target-timing.txt`).
+- **Failure and reload.** A seed or chain that raises leaves
+  `Renderer.face_error` (the FX page's faces row shows it) and the frame
+  as with no face effect; `face_error` clears when no face pass is asked
+  for. A broken effect is skipped as on the frame; with every face
+  effect broken the seed is copied through. `Renderer.on_reload` makes
+  the faces' chain and picture again
+  (`tests/test_render.py::test_a_face_effect_changes_the_faces_and_nothing_else`,
+  `::test_per_face_turns_with_the_shape_and_screen_stays_still`,
+  `::test_screen_mapping_is_a_cover_fit_window_onto_the_picture`,
+  `::test_the_face_target_keeps_an_opaque_grounds_alpha`,
+  `::test_a_face_pass_that_raises_leaves_the_frame_and_the_window_bound`,
+  `::test_on_reload_rebuilds_the_seed_with_the_face_program`;
+  `tests/test_fx.py::test_every_effect_runs_on_the_face_target`,
+  `::test_two_chains_advance_the_clocks_once`).
 
 **The FX page** (`ui_fx.py`; plan 16 WP2 and WP3). The chain's bypass
 and mix, then one chip per effect in stack order, **three to a row**
@@ -348,6 +507,49 @@ own mix fader when that is the reason. The two chips write the base
 `::test_the_idle_strips_controls_stay_live`,
 `::test_the_page_fits_with_the_tightest_strip_idle`). The clicks in those
 tests are simulated mouse events on the real page.
+
+Since plan 20 (WP2, WP3; decision register rows 67, 68) **the chip grid
+is the chain view**. With nothing aimed at the faces the status under
+the bypass is the one line it was; while any effect — on or off — is
+aimed at the faces it is two rows, `frame  Plasma → Hue cycle`
+(`fx.chain(FRAME)`) and the faces' row, `faces  Kaleidoscope`
+(`fx.chain(FACES)`), each "nothing on" or "bypassed" from the effective
+`fx.on` (`ui_fx._status`). The faces' row is one chip tall and never
+wraps (`ui.fit_text`, the whole text on hover); it ends in the **per
+face** / **screen** chips of `fx.face_map` (`Param.set`, each with the
+param's hover, menu, learn frame and modulation dot; the hover names a
+source while one rides it), and reads "(Faces is off)" in the warning
+colour, "(no copies to show them)" at 0 copies, or
+`Renderer.face_error`. A chip aimed at the faces has a **diamond** LED,
+filled while on and outlined while off, and "on the faces" in its
+hovers. The open strip's blend row is blend, **target** (a combo on
+`fx.<name>.target`, 84 px), order: re-aiming is the combo, never a
+drag. `why_idle(fx, name, faces_on=True)` has one more reason, "faces
+off", after "off" and before "bypassed", with a **faces on** chip.
+`RESET_NOTE` is one line. **A chip is dragged by its name** (an imgui
+drag source; payload type `ui_fx.DRAG`) and dropped on either part of
+another chip to go before it — a 2 px bar on that chip's left edge
+while held — or on the right half of the last chip's name to go to the
+end. `ui_fx._drop` moves the name the drag began on (`panel._fx_drag`,
+not the payload's index, a frame old on the drop), asks
+`fx.reordered(seq, orders, moved)` for the fewest orders to rewrite (the
+middle of the gap when there is one, else the shortest run with room;
+never a tie), writes them all or none, under one `undo.push("reorder
+effects")`, and opens the dragged effect's strip. A click without a
+drag still only opens; a press that slips past the threshold and is let
+go on its own name opens too; the order slider stays. The page has
+45 px to spare at worst, 16 px with the faces' row showing
+(`tests/test_fx.py::test_the_status_reads_per_target`,
+`::test_the_map_chips_set_fx_face_map`,
+`::test_the_strips_target_combo_moves_an_effect_between_chains`,
+`::test_a_chip_aimed_at_the_faces_is_marked`,
+`::test_why_idle_names_faces_off`,
+`::test_a_drop_reorders_selects_and_is_one_undo_step`,
+`::test_a_drop_moves_the_effect_the_drag_began_on`,
+`::test_reordered_always_sorts_to_the_sequence_asked_for`,
+`::test_the_page_fits_with_the_faces_row_showing`). The drag is imgui
+events in tests and one hidden-window picture; no real mouse (hand check
+94).
 
 ### 2.5 Two windows
 
@@ -1489,7 +1691,8 @@ the keys: hand checks 48–52.
 `uv run pytest` — 1121 tests and 1 skipped (the hands tape, until one is
 recorded) on `plan-15-integration` with plan 15 whole, about 70 s; 1276
 and the same 1 skipped on `plan-18-integration` (plans 16, 17 and 18),
-about 85 s. `ruff`
+about 85 s; 1355 and the same 1 skipped on `plan-20-integration` (plans
+15–18 and 20), about 95 s. `ruff`
 is the linter. Every test runs with `HYPERSPACE_HOME` pointed at its own
 `tmp_path` (`tests/conftest.py`), so no test can touch `~/Hyperspace`.
 What holds what:

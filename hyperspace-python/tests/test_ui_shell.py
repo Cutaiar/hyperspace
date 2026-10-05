@@ -7,6 +7,7 @@ make and checks that every state the strip can be in draws.
 """
 
 import re
+from contextlib import contextmanager
 from types import SimpleNamespace
 
 import pytest
@@ -19,7 +20,7 @@ from hyperspace.app import CONTROL_SIZE, LOOP_KEYS
 from hyperspace.control import Control
 from hyperspace.library import Library
 from hyperspace.overlay import Output
-from hyperspace.params import Kind, build_registry
+from hyperspace.params import PLANES, Kind, build_registry
 from hyperspace.preset import Presets
 from hyperspace.routing import Binding, Bindings, Owned, Router, keymap, padmap
 from hyperspace.ui import CHEATSHEET, PAGE_KEYS, PAGES, Panel, apply_style, load_fonts
@@ -40,8 +41,11 @@ class FakeLeap:
         pass
 
 
-@pytest.fixture()
-def rig(tmp_path):
+@contextmanager
+def build_rig(tmp_path, renderer=None):
+    """The panel with everything app.py gives it, on a headless imgui
+    context. With a `renderer` the registry's `dream.*` and `fx.*` are its
+    own states and the panel draws over it, as in the app."""
     ctx = imgui.create_context()
     pctx = implot.create_context()      # the band editor plots (ui_bands.py)
     io = imgui.get_io()
@@ -54,7 +58,9 @@ def rig(tmp_path):
     audio = SimpleNamespace(chain=chain, on=False, mode="", error="", label="", sr=48000.0)
     view = ViewState()
     lib = Library(tmp_path, period=0.0)
-    reg = build_registry(view, control, audio, lib.project)
+    live = {} if renderer is None else {"dream": renderer.lookback.state,
+                                        "fx": renderer.fx.state}
+    reg = build_registry(view, control, audio, lib.project, **live)
     lib.on_layout("band", control.apply_layout)
     # the rig has everything app.py gives the panel, so every page is
     # measured full: a hands setup over a tracker that sees no hands, an
@@ -72,7 +78,8 @@ def rig(tmp_path):
     table = Bindings.factory(path=tmp_path / "bindings.json")
     routing.register_desk(reg, table)
     lib.attach(reg)
-    panel = Panel(control, audio, view, bank=lib.project, registry=reg, library=lib)
+    panel = Panel(control, audio, view, renderer=renderer, bank=lib.project, registry=reg,
+                  library=lib)
     panel.clock, panel.lfos = clock, lfos
     panel.hands, panel.hand_settings = hands_io, settings
     panel.output = output
@@ -86,6 +93,12 @@ def rig(tmp_path):
     finally:
         implot.destroy_context(pctx)
         imgui.destroy_context(ctx)
+
+
+@pytest.fixture()
+def rig(tmp_path):
+    with build_rig(tmp_path) as r:
+        yield r
 
 
 def frame(panel, page=None):
@@ -283,6 +296,245 @@ def test_every_page_fits_the_control_window(rig, monkeypatch):
     over = _page_scroll(rig, monkeypatch)
     assert set(over) == set(PAGE_KEYS)
     assert {k: v for k, v in over.items() if v > 0} == {}
+
+
+class StandInWorker:
+    """In the dream worker's place on the look-back page: it answers each
+    submit with the frame it was given, one submit late (so a dream frame
+    shows and its thumbnail is drawn), and says `line` as its status."""
+
+    def __init__(self, line: str):
+        self.line = line
+        self.pending = self.done = None
+
+    def submit(self, frame, frame_index):
+        self.done, self.pending = self.pending, (frame.copy(), frame_index)
+
+    def latest(self):
+        return self.done
+
+    def status(self) -> str:
+        return self.line
+
+
+# the worker's status at its shortest, and with everything it can say at
+# once (dream.DreamWorker.status: drops, NaN resets, the clamp, and an
+# error cut at 120 characters); and app.dream_error's line with no worker
+WORKER_SHORT = "mps · alias · conv3_3 fp32 · 11.3 ms · 1 behind"
+WORKER_LONG = ("cuda · staging · inception4e fp16 · 1234.5 ms · 12 behind · 3456 dropped · "
+               "12 nan reset(s) · step clamped · " + ("RuntimeError: " + "out of memory " * 9)[:120])
+NO_TORCH = ("dream worker off: torch is not installed — run `uv sync`, "
+            "then launch with `uv run hyperspace`")
+
+
+def lookback_page_room(tmp_path, monkeypatch) -> dict[str, tuple[float, float]]:
+    """The look-back page drawn as the app draws it — over a real offscreen
+    `Renderer` whose look-back has captured eight echoes, so the thumbnail
+    row is its 48 px row of images and not the one line of text a page gets
+    with no renderer — in every state that changes its height. Returns
+    state → (scroll range, room left under the last row), in pixels at the
+    control size."""
+    moderngl = pytest.importorskip("moderngl")
+    from hyperspace.render import Renderer
+
+    try:
+        gl = moderngl.create_context(standalone=True)
+    except Exception as e:  # noqa: BLE001 — any GL failure means skip
+        pytest.skip(f"no standalone GL context available: {e}")
+    w, h = 1280, 820
+    tex = gl.texture((w, h), 4)
+    fbo = gl.framebuffer(color_attachments=[tex])
+    renderer = Renderer(gl)
+    lb, t = renderer.lookback, [0.0]
+    room: dict[str, tuple[float, float]] = {}
+    try:
+        with build_rig(tmp_path, renderer) as rig:
+            imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+            panel, reg, view = rig.panel, rig.reg, rig.view
+            view.shape = 3
+            got: list[tuple[float, float]] = []
+            draw = Panel._page_lookback
+
+            def measured(self, dt):
+                draw(self, dt)
+                got.append((imgui.get_scroll_max_y(),
+                            imgui.get_content_region_avail().y + imgui.get_style().item_spacing.y))
+            monkeypatch.setattr(Panel, "_page_lookback", measured)
+
+            def render(n: int) -> None:
+                for _ in range(n):
+                    t[0] += 1 / 60
+                    view.ang[3] += 0.03
+                    fbo.use()
+                    gl.viewport = (0, 0, w, h)
+                    renderer.draw(view, w, h, t_now=t[0])
+
+            def measure(state: str) -> None:
+                render(4)
+                for _ in range(3):          # the window settles its size, then its content
+                    frame(panel, "lookback")
+                room[state] = got[-1]
+
+            reg["dream.on"].set(True)
+            assert reg["dream.echoes"].value == 8 and lb.state.on
+            lb.source = StandInWorker(WORKER_SHORT)
+            render(40)
+            assert len(lb.thumbnails()) == 8 and lb.dream_frame >= 0 and lb.atlas is not None
+            measure("on, worker")
+            lb.source.line = WORKER_LONG
+            measure("on, worker saying everything")
+            lb.error = "_common.glsl:1: syntax error"     # the post pass on its fallback
+            measure("on, worker saying everything, GLSL error")
+            lb.error = ""
+            reg["dream.tint_from"].set(1)                 # the tint from the scene
+            measure("on, tint from the scene")
+            reg["dream.tint_from"].set(0)
+            lb.source = None
+            panel.dream_error = NO_TORCH
+            measure("on, no worker: torch missing")
+            panel.dream_error = ""
+            measure("on, no worker")
+            reg["dream.on"].set(False)
+            measure("off, no worker")
+            lb.source = StandInWorker(WORKER_LONG)
+            measure("off, worker saying everything")
+    finally:
+        fbo.release()
+        tex.release()
+        gl.release()
+    return room
+
+
+def test_the_look_back_page_fits_with_thumbnails(tmp_path, monkeypatch):
+    """Plan 20 WP4: the look-back page does not scroll in the app. The page
+    test above draws it with no renderer, where the thumbnail row is a line
+    of text; with a renderer and echoes it is a 48 px row of images, and the
+    page as it was overflowed by 23 px there. Measured here with a real
+    `Renderer` that has captured eight echoes, a source with a status line
+    and a dream frame shown, the dream on and off, and the worker's status
+    at its longest."""
+    room = lookback_page_room(tmp_path, monkeypatch)
+    assert len(room) == 8
+    assert {k: v for k, v in room.items() if v[0] > 0 or v[1] < 0} == {}
+
+
+# the VIEW page's field row (plan 20 WP6): the controls it rearranged
+FIELD_ROW = ("view.inst_layout", "view.inst_motion", "view.inst_amp", "view.inst_rate")
+ROT_RATES = tuple(f"rot.rate.{name}" for name in PLANES)
+
+
+def view_page_room(rig, monkeypatch) -> dict[tuple[int, int, int], tuple[float, float]]:
+    """The VIEW page at the control size with the field row showing: every
+    (count, layout, motion) that changes the row. Returns state → (scroll
+    range, room left under the last row), in pixels."""
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    got: list[tuple[float, float]] = []
+    draw = Panel._page_view
+
+    def measured(self, dt):
+        draw(self, dt)
+        got.append((imgui.get_scroll_max_y(),
+                    imgui.get_content_region_avail().y + imgui.get_style().item_spacing.y))
+    monkeypatch.setattr(Panel, "_page_view", measured)
+    room = {}
+    for n in (1, 7, 9, 100):
+        for layout in (0, 1, 2):
+            for motion in (0, 1):
+                rig.reg["view.instances"].set(n)
+                rig.reg["view.inst_layout"].set(layout)
+                rig.reg["view.inst_motion"].set(motion)
+                for _ in range(3):          # the window settles its size, then its content
+                    frame(rig.panel, "view")
+                room[(n, layout, motion)] = got[-1]
+    return room
+
+
+def test_the_view_page_fits_with_a_field_in_motion(rig, monkeypatch):
+    """Plan 20 WP6: the VIEW page does not scroll with more than one copy.
+    The page test above draws it at one copy, where the field row is
+    hidden; above one the row shows (and the page as it was scrolled by
+    19 px there). Measured with 7, 9 and 100 copies in every layout, still
+    and in motion, and at one copy."""
+    room = view_page_room(rig, monkeypatch)
+    assert len(room) == 24
+    assert {k: v for k, v in room.items() if v[0] > 0 or v[1] < 0} == {}
+
+
+def test_the_field_row_and_the_rate_cells_keep_their_menus(rig, monkeypatch):
+    """The controls WP6 moved — the layout, motion, amp and rate in one row,
+    the six plane rates two to a row — each open their own binding menu on
+    a right-click, and the row's controls sit side by side on one line
+    inside the page."""
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    rects: dict[str, tuple[float, float, float, float]] = {}
+    opened: list[str] = []
+
+    def item(fn):
+        real = getattr(imgui, fn)
+
+        def rec(label, *a, **k):
+            out = real(label, *a, **k)
+            lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+            rects[label.split("##", 1)[-1]] = (lo.x, lo.y, hi.x, hi.y)
+            return out
+        monkeypatch.setattr(imgui, fn, rec)
+    for fn in ("combo", "slider_float", "slider_int"):
+        item(fn)
+    real_popup = imgui.begin_popup_context_item
+
+    def popup(str_id, *a, **k):
+        out = real_popup(str_id, *a, **k)
+        if out:
+            opened.append(str_id)
+        return out
+    monkeypatch.setattr(imgui, "begin_popup_context_item", popup)
+
+    rig.reg["view.instances"].set(7)
+    rig.reg["view.inst_layout"].set(1)
+    rig.reg["view.inst_motion"].set(1)
+    for _ in range(3):
+        frame(rig.panel, "view")
+    row = [rects[pid] for pid in FIELD_ROW]
+    assert len({round(r[1]) for r in row}) == 1                    # one line
+    assert all(row[k][2] < row[k + 1][0] for k in range(3))        # none overlaps the next
+    cells = [rects[pid] for pid in ROT_RATES]
+    assert len({round(r[1]) for r in cells}) == 3                  # three rows of two
+    assert all(cells[k][2] < cells[k + 1][0] for k in (0, 2, 4))
+    assert max(r[2] for r in row + cells) <= CONTROL_SIZE[0]
+    # a lane on a plane rate (the party presets route them) reads
+    # `base → effective` in the cell: the widest such readout fits it
+    from hyperspace import ui
+    p = rig.reg["rot.rate.XY"]
+    widest = f"{p.fmt(p.lo)} → {p.fmt(p.lo)}"
+    imgui.new_frame()
+    imgui.push_font(ui._FONTS["num"], ui.FONT_NUM)
+    need = imgui.calc_text_size(widest).x + 2 * imgui.get_style().frame_padding.x
+    imgui.pop_font()
+    imgui.end_frame()
+    assert all(r[2] - r[0] >= need for r in cells), (widest, need, cells[0])
+
+    io = imgui.get_io()
+    io.config_flags |= imgui.ConfigFlags_.nav_enable_keyboard      # Escape closes a menu
+    for pid in FIELD_ROW + ROT_RATES:
+        x0, y0, x1, y1 = rects[pid]
+        opened.clear()
+        io.add_mouse_pos_event((x0 + x1) / 2, (y0 + y1) / 2)
+        frame(rig.panel)
+        io.add_mouse_button_event(1, True)
+        frame(rig.panel)
+        io.add_mouse_button_event(1, False)
+        frame(rig.panel)
+        frame(rig.panel)
+        assert f"##ctx.{pid}" in opened, (pid, opened)
+        assert set(opened) == {f"##ctx.{pid}"}, (pid, opened)
+        io.add_mouse_pos_event(-1.0, -1.0)
+        io.add_key_event(imgui.Key.escape, True)
+        frame(rig.panel)
+        io.add_key_event(imgui.Key.escape, False)
+        frame(rig.panel)
+        frame(rig.panel)
+    # a right-click sets nothing
+    assert rig.view.instances == 7 and rig.view.inst_layout == 1 and rig.view.inst_motion == 1
 
 
 def test_the_dim_is_first_on_output_and_the_footer_says_so_while_dimmed(rig, monkeypatch):

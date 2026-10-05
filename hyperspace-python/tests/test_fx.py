@@ -453,6 +453,19 @@ def test_the_page_draws_and_fits(tmp_path, monkeypatch):
             panel.draw(1 / 60, 60.0)
             imgui.end_frame()
         assert over and over[-1] == 0, "the fx page scrolls"
+        # plan 20 WP2: and with the faces' status row showing (an effect
+        # aimed at the faces), the open strip the longest one still
+        from hyperspace import ui_fx
+        rows = []
+        real_row = ui_fx._faces_row
+        monkeypatch.setattr(ui_fx, "_faces_row",
+                            lambda *a: (rows.append(1), real_row(*a))[1])
+        reg["fx.fractals.target"].set(1)
+        for _ in range(3):
+            imgui.new_frame()
+            panel.draw(1 / 60, 60.0)
+            imgui.end_frame()
+        assert rows and over[-1] == 0, "the fx page scrolls with the faces row"
     finally:
         implot.destroy_context(pctx)
         imgui.destroy_context(ictx)
@@ -502,18 +515,29 @@ def test_the_page_has_no_conflicting_ids(tmp_path, monkeypatch):
                 return _real(label, *a, **k)
             monkeypatch.setattr(imgui, fn, rec)
         for k, name in enumerate(st.names()):     # every effect's strip open in turn
-            reg["fx.select"].set(k)
-            ids.clear()
-            imgui.new_frame()
-            imgui.begin("page")
-            ui_fx.page(panel, 1 / 60)
-            imgui.end()
-            imgui.end_frame()
-            dup = {i for i in ids if ids.count(i) > 1}
-            assert not dup, f"{name}: conflicting ids {sorted(dup)}"
-            # plan 16 WP2: every chip is two items, the LED and the name
-            for n in st.names():
-                assert f"led.fx.{n}.on" in ids and f"chip.fx.{n}.on" in ids, n
+            for aimed in (False, True):           # …on the frame, then aimed at the faces
+                reg["fx.select"].set(k)
+                reg[f"fx.{name}.target"].set(int(aimed))
+                reg[f"fx.{name}.on"].set(aimed)   # on and Faces off: the "faces on" chip too
+                ids.clear()
+                imgui.new_frame()
+                imgui.begin("page")
+                ui_fx.page(panel, 1 / 60)
+                imgui.end()
+                imgui.end_frame()
+                dup = {i for i in ids if ids.count(i) > 1}
+                assert not dup, f"{name}: conflicting ids {sorted(dup)}"
+                # plan 16 WP2: every chip is two items, the LED and the name
+                for n in st.names():
+                    assert f"led.fx.{n}.on" in ids and f"chip.fx.{n}.on" in ids, n
+                # plan 20 WP2: the strip's target combo and its menu, always;
+                # the two map chips, a menu each, and "faces on" while aimed
+                assert f"fx.{name}.target" in ids and f"ctx.fx.{name}.target" in ids
+                faces_ids = {"map.fx.face_map.0", "map.fx.face_map.1", "ctx.fx.face_map.map0",
+                             "ctx.fx.face_map.map1", "idle.view.faces"}
+                assert (faces_ids <= set(ids)) if aimed else not (faces_ids & set(ids)), name
+            reg[f"fx.{name}.target"].set(0)
+            reg[f"fx.{name}.on"].set(False)
     finally:
         implot.destroy_context(pctx)
         imgui.destroy_context(ictx)
@@ -675,6 +699,8 @@ class PageRig:
                                                                  error=lambda n: ""))
         self.rects: dict[str, tuple[float, float, float, float]] = {}
         self.texts: list[str] = []       # every text_colored line of the last frame
+        self.colors: dict[str, tuple] = {}   # …and the colour each was drawn in
+        self.wrapped: list[str] = []     # every text_wrapped line of the last frame
         self.disabled: dict[str, int] = {}   # item id → begin_disabled depth it was drawn at
         self.veils: list[tuple[float, float, float, float]] = []   # ui_fx._dim's rects
         depth = [0]
@@ -697,7 +723,15 @@ class PageRig:
 
         def text_colored(col, text):
             self.texts.append(text)
+            self.colors[text] = (col.x, col.y, col.z, col.w)
             return real_text(col, text)
+
+        real_wrapped = imgui.text_wrapped
+
+        def text_wrapped(text):
+            self.wrapped.append(text)
+            return real_wrapped(text)
+        monkeypatch.setattr(imgui, "text_wrapped", text_wrapped)
 
         def begin_disabled(*a, **k):
             self._stack.append(bool(a[0] if a else k.get("disabled", True)))
@@ -724,6 +758,8 @@ class PageRig:
         imgui = self.imgui
         self.rects.clear()
         self.texts.clear()
+        self.colors.clear()
+        self.wrapped.clear()
         self.disabled.clear()
         self.veils.clear()
         imgui.new_frame()
@@ -741,6 +777,55 @@ class PageRig:
         self.frame()
         x0, y0, x1, y1 = self.rects[item]
         io.add_mouse_pos_event(x0 + (x1 - x0) * at, (y0 + y1) / 2)
+        self.frame()
+        io.add_mouse_button_event(0, True)
+        self.frame()
+        io.add_mouse_button_event(0, False)
+        self.frame()
+        io.add_mouse_pos_event(-1.0, -1.0)
+        self.frame()
+
+    def drag(self, src: str, dst: str, dst_at: float = 0.5, release: bool = True) -> None:
+        """Press on the item `src`, drag it — past imgui's drag threshold,
+        a few frames of travel — to `dst_at` of the way along the item
+        `dst`, and (with `release`) let go there."""
+        io = self.imgui.get_io()
+        self.frame()
+        x0, y0, x1, y1 = self.rects[src]
+        x, y = (x0 + x1) / 2, (y0 + y1) / 2
+        io.add_mouse_pos_event(x, y)
+        self.frame()
+        io.add_mouse_button_event(0, True)
+        self.frame()
+        for k in range(1, 6):
+            io.add_mouse_pos_event(x + 4 * k, y - 2 * k)
+            self.frame()
+        x0, y0, x1, y1 = self.rects[dst]
+        io.add_mouse_pos_event(x0 + (x1 - x0) * dst_at, (y0 + y1) / 2)
+        self.frame()
+        self.frame()
+        if release:
+            self.release()
+
+    def release(self) -> None:
+        """Let go of the mouse button where it is, and take the mouse away."""
+        io = self.imgui.get_io()
+        io.add_mouse_button_event(0, False)
+        self.frame()
+        self.frame()
+        io.add_mouse_pos_event(-1.0, -1.0)
+        self.frame()
+
+    def pick(self, item: str, index: int) -> None:
+        """Choose entry `index` of the combo whose id is `item`, with the
+        mouse: a click opens its list (under it, with the popup's padding),
+        a second click lands on the entry."""
+        imgui = self.imgui
+        io, style = imgui.get_io(), imgui.get_style()
+        self.click(item)
+        x0, _, x1, y1 = self.rects[item]
+        line = imgui.get_text_line_height_with_spacing()
+        io.add_mouse_pos_event((x0 + x1) / 2, y1 + style.window_padding.y + (index + 0.5) * line)
         self.frame()
         io.add_mouse_button_event(0, True)
         self.frame()
@@ -949,7 +1034,7 @@ def test_the_idle_strips_controls_stay_live(fxpage):
     st.select("warp")
     fxpage.frame()
     assert reg["fx.warp.on"].base is False and fxpage.veils
-    rows = ["fx.warp.mix", "fx.warp.speed", "fx.warp.blend", "fx.warp.order",
+    rows = ["fx.warp.mix", "fx.warp.speed", "fx.warp.blend", "fx.warp.target", "fx.warp.order",
             *(f"fx.warp.{p.key}" for p in st.specs["warp"].params)]
     for pid in ("fx.warp.on", *rows):                # no begin_disabled wraps a row
         assert fxpage.disabled[pid] == 0, pid
@@ -987,7 +1072,7 @@ def test_an_armed_rows_learn_frame_is_drawn_over_the_veil(fxpage, monkeypatch):
     panel.learn = SimpleNamespace(learning="fx.warp.speed", arm=lambda pid: None)
     fxpage.frame()
     assert len(seen) == 1 and fxpage.veils          # idle: after the veil, once
-    rows = {"fx.warp.mix", "fx.warp.speed", "fx.warp.blend", "fx.warp.order",
+    rows = {"fx.warp.mix", "fx.warp.speed", "fx.warp.blend", "fx.warp.target", "fx.warp.order",
             *(f"fx.warp.{p.key}" for p in st.specs["warp"].params)}
     assert set(seen[0]) == rows
     r0, r1 = seen[0]["fx.warp.speed"]
@@ -1015,17 +1100,23 @@ def test_the_page_fits_with_the_tightest_strip_idle(fxpage, monkeypatch):
     reg["ui.page"].set(PAGE_KEYS.index("fx"))
     for name in st.names():
         st.select(name)
-        for reason in ("off", "bypassed"):           # the two lines that carry a chip
+        # the three lines that carry a chip; the third (plan 20 WP2) with the
+        # effect aimed at the faces, so the faces' status row is drawn as well
+        for reason in ("off", "bypassed", "faces off"):
             reg[f"fx.{name}.on"].set(reason != "off")
             reg["fx.on"].set(reason != "bypassed")
-            assert why_idle(st, name) == reason
+            reg[f"fx.{name}.target"].set(int(reason == "faces off"))
+            assert why_idle(st, name, panel.view.faces) == reason
             for _ in range(3):
                 fxpage.texts.clear()
                 imgui.new_frame()
                 panel.draw(1 / 60, 60.0)
                 imgui.end_frame()
-            assert any(t.startswith(("off —", "the whole stack")) for t in fxpage.texts)
+            assert any(t.startswith(("off —", "the whole stack", "aimed at the faces"))
+                       for t in fxpage.texts)
+            assert ("faces  (Faces is off)" in fxpage.texts) == (reason == "faces off")
             assert over[-1] == 0, f"the fx page scrolls with {name} open and {reason}"
+        reg[f"fx.{name}.target"].set(0)
 
 
 def test_turn_on_is_one_undo_step(tmp_path, monkeypatch):
@@ -1062,3 +1153,1121 @@ def test_turn_on_is_one_undo_step(tmp_path, monkeypatch):
         assert labels(r) == start
     finally:
         rig.close()
+
+
+# ---------------------------------------------------------------- the face target (plan 20 WP1)
+
+def test_target_is_declared_per_effect_and_is_not_modulatable():
+    """One generated enum per effect, declared by the loop that declares
+    `order`, and one mapping switch for the whole target (fork F4: the
+    target is structure, the mapping is a move)."""
+    from hyperspace import undo
+    from hyperspace.fx import FACE_MAPS, FACES, FRAME, PER_FACE, SCREEN, TARGETS
+    from hyperspace.params import Kind
+    assert TARGETS == ["frame", "faces"] and (FRAME, FACES) == (0, 1)
+    assert FACE_MAPS == ["per face", "screen"] and (PER_FACE, SCREEN) == (0, 1)
+    st = FxState()
+    r = Registry()
+    declare(r, st)
+    assert len(st.specs) >= 12
+    for name in st.specs:
+        p = r[f"fx.{name}.target"]
+        assert p.kind is Kind.ENUM and p.names == TARGETS and p.group == "fx"
+        assert p.value == FRAME and st.values[name]["target"] == FRAME
+        assert p.persist and not p.modulatable and undo.watched(p)
+    m = r["fx.face_map"]
+    assert m.kind is Kind.ENUM and m.names == FACE_MAPS and m.value == PER_FACE
+    assert m.persist and m.modulatable and m.group == "fx" and undo.watched(m)
+    # nothing else came with them: one id per effect and one for the stack
+    new = [p.id for p in r if p.id.endswith(".target") or p.id == "fx.face_map"]
+    assert len(new) == len(st.specs) + 1
+    # the params write the state the renderer reads, and back
+    r["fx.warp.target"].set(FACES)
+    r["fx.face_map"].set(SCREEN)
+    assert st.values["warp"]["target"] == FACES and st.face_map == SCREEN
+    # a re-declare of one effect (its file changed shape) keeps its target
+    declare(r, st, {"warp"})
+    assert r["fx.warp.target"].value == FACES
+
+
+def test_a_retargeted_effect_survives_a_reshape_of_its_file(fxdir):
+    write(fxdir, "test", EFFECT)
+    st = FxState(fxdir)
+    st.values["test"]["target"] = 1
+    write(fxdir, "test", EFFECT + "uniform float u_extra; // @param 0 1 0.5 \"Extra\"\n")
+    assert st.poll() == {"test"}
+    assert st.values["test"]["target"] == 1 and "extra" in st.values["test"]
+
+
+def test_a_preset_without_targets_loads_all_frame(tmp_path):
+    """D2: a load lands every fx.* value, and a file that names neither new
+    id — every file saved before this plan, the whole factory layer — gets
+    the group's defaults. No migration."""
+    from test_undo import boot
+
+    from hyperspace.fx import FACES, FRAME, PER_FACE, SCREEN
+    from hyperspace.library import FACTORY
+    st = FxState()
+    r = boot(tmp_path / "home", fx=st)
+
+    def aim():
+        r.reg["fx.warp.target"].set(FACES)
+        r.reg["fx.plasma.target"].set(FACES)
+        r.reg["fx.face_map"].set(SCREEN)
+        assert st.values["warp"]["target"] == FACES and st.face_map == SCREEN
+
+    def all_frame(what):
+        assert [st.values[n]["target"] for n in st.specs] == [FRAME] * len(st.specs), what
+        assert st.face_map == PER_FACE, what
+
+    names = r.lib.list("fx")
+    assert len(names) >= 5
+    for name in names:
+        aim()
+        assert r.lib.load("fx", name) == [], name
+        all_frame(name)
+    aim()
+    assert r.presets.load("TRIP") == []
+    all_frame("TRIP")
+    # and no factory file names either id: the files are sparse, none was regenerated
+    for f in FACTORY.rglob("*.json"):
+        text = f.read_text()
+        assert ".target" not in text and "fx.face_map" not in text, f.name
+
+
+def test_chain_splits_by_target_and_keeps_order():
+    from hyperspace.fx import FACES, FRAME
+    st = FxState()
+    on = ("warp", "acid", "huecycle", "plasma", "kaleido")
+    for n in on:
+        st.values[n]["on"] = True
+    whole = st.chain()
+    assert st.chain(None) == whole and st.chain(FRAME) == whole and st.chain(FACES) == []
+    st.values["acid"]["target"] = FACES
+    st.values["huecycle"]["target"] = FACES
+    frame, faces = st.chain(FRAME), st.chain(FACES)
+    assert st.chain() == whole                               # chain(None) is unchanged
+    assert faces == [n for n in whole if n in ("acid", "huecycle")]
+    assert frame == [n for n in whole if n not in ("acid", "huecycle")]
+    st.values["acid"]["order"] = 99                          # each in order, still
+    assert st.chain(FACES) == ["huecycle", "acid"]
+    st.values["huecycle"]["mix"] = 0.0
+    assert st.chain(FACES) == ["acid"]
+    st.on = False                                            # the bypass is both chains'
+    assert st.chain(FACES) == [] and st.chain(FRAME) == []
+    st.on, st.mix = True, 0.0
+    assert st.chain(FACES) == [] and st.chain(FRAME) == []
+    # a values dict from before a hot reload has no target: the frame's
+    st.mix = 1.0
+    del st.values["warp"]["target"]
+    assert "warp" in st.chain(FRAME) and "warp" not in st.chain(FACES)
+
+
+def test_advance_to_moves_the_clocks_once_per_frame_time():
+    st = FxState()
+    st.values["warp"]["speed"] = 2.0
+    assert st.advance_to(5.0) == 0.0                         # the first call: no dt yet
+    assert st.advance_to(5.1) == pytest.approx(0.1)
+    assert st.advance_to(5.1) == 0.0                         # the second chain, same frame
+    assert st.phase["warp"] == pytest.approx(0.2)
+    assert st.advance_to(9.0) == 0.25                        # a stall is clamped
+    assert st.advance_to(8.0) == 0.0                         # and time never runs back
+    assert st.phase["warp"] == pytest.approx(0.7)
+    old = FxState()                                          # one from before a hot reload
+    del old._t_last, old.face_map
+    assert old.advance_to(1.0) == 0.0 and old.advance_to(1.5) == 0.25
+
+
+def test_u_target_is_a_reserved_uniform_name():
+    from hyperspace.fx import RESERVED
+    assert RESERVED == {"on", "mix", "speed", "blend", "order", "target"}
+    with pytest.raises(SpecError, match="'target' is taken"):
+        parse("x", 'uniform float u_target; // @param 0 1 0 "Target"\n'
+                   "vec4 effect(vec2 uv) { return src(uv); }")
+    for f in FX_DIR.glob("*.glsl"):                          # and no factory file wants it
+        assert "u_target" not in f.read_text(), f.name
+
+
+def _two_chains(ctx, st):
+    from hyperspace.fx import FACES
+    frame = FxChain(ctx, st)
+    return frame, FxChain(ctx, st, target=FACES, programs=frame)
+
+
+def test_two_chains_advance_the_clocks_once(ctx):
+    """A frame chain and a face chain over one state, both run at the same
+    `t`: every phase is what one chain alone gives — not double speed."""
+    from hyperspace.fx import FACES
+
+    def run(split: bool) -> dict:
+        st = FxState()
+        for n, speed in (("warp", 2.0), ("plasma", -1.0), ("acid", 0.5)):
+            st.values[n].update(on=True, speed=speed)
+        if split:
+            st.values["plasma"]["target"] = FACES
+        frame, faces = _two_chains(ctx, st)
+        out = ctx.framebuffer(color_attachments=[ctx.texture((16, 16), 4)])
+        for k in range(5):
+            t = 3.0 + k * 0.1
+            if split:                                        # the faces' chain runs first
+                faces.begin((32, 32))
+                assert faces.run(out, t) == ["plasma"]
+            frame.begin((16, 16))
+            assert frame.run(out, t) == st.chain(0)
+        return dict(st.phase)
+
+    one, two = run(False), run(True)
+    assert one["warp"] == pytest.approx(0.8) and one["plasma"] == pytest.approx(-0.4)
+    assert two == pytest.approx(one)
+
+
+def test_the_face_chain_borrows_the_frame_chains_programs(ctx, fxdir):
+    """One program per effect across both chains, and one error line: the
+    frame chain's `error(name)` speaks for an effect aimed at the faces."""
+    from hyperspace.fx import FACES
+    write(fxdir, "good", EFFECT.replace("@blend add", "@blend mix"))
+    write(fxdir, "bad", EFFECT.replace("src(uv) * u_amount", "src(uv) * nope"))
+    st = FxState(fxdir)
+    for n in ("good", "bad"):
+        st.values[n].update(on=True, target=FACES)
+    frame, faces = _two_chains(ctx, st)
+    assert faces.active() and not frame.active()
+    out = ctx.framebuffer(color_attachments=[ctx.texture((8, 8), 4)])
+    faces.begin((8, 8)).use()
+    ctx.clear(0.5, 0.5, 0.5, 0.5)
+    assert faces.run(out, 0.0) == ["good"]                   # the broken one is passed over
+    assert faces._progs == {} and set(frame._progs) == {"good"}
+    assert faces._program("good")[0] is frame._program("good")[0]
+    assert "line" in frame.error("bad") and faces.error("bad") == frame.error("bad")
+    assert faces.errors is frame.errors and faces.compile_all() == frame.compile_all()
+    prog = frame._program("good")[0]
+    faces.on_reload()                                        # a borrower releases no program
+    assert frame._program("good")[0] is prog and prog.glo
+    st.values["good"]["target"] = 0                          # and aimed back, the same program
+    frame.begin((8, 8))
+    assert frame.run(out, 0.1) == ["good"] and frame._program("good")[0] is prog
+    # only the broken one aimed at the faces: the seed is copied through
+    st.values["good"]["on"] = False
+    faces.begin((8, 8)).use()
+    ctx.clear(0.5, 0.25, 0.75, 1.0)
+    assert faces.run(out, 0.2) == []
+    px = np.frombuffer(out.read(components=4), dtype=np.uint8).reshape(8, 8, 4)
+    assert np.allclose(px[4, 4], [128, 64, 191, 255], atol=1)
+
+
+def test_the_face_chain_never_forces_alpha(ctx, fxdir):
+    """In the faces' picture alpha is a face's intensity: the chain aimed at
+    the faces writes u_opaque 0 whatever its `opaque` says."""
+    from hyperspace.fx import FACES
+    write(fxdir, "flat", CONST.format(blend="mix"))
+    st = FxState(fxdir)
+    st.values["flat"].update(on=True, target=FACES, level=0.1)
+    frame, faces = _two_chains(ctx, st)
+    faces.opaque = True
+    out = ctx.framebuffer(color_attachments=[ctx.texture((8, 8), 4)])
+    faces.begin((8, 8)).use()
+    ctx.clear(0.0, 0.0, 0.0, 0.0)
+    assert faces.run(out, 0.0) == ["flat"]
+    px = np.frombuffer(out.read(components=4), dtype=np.uint8).reshape(8, 8, 4)
+    assert px[4, 4, 3] == 102                    # covers its own colour (0.4), never lifted to 1
+    st.values["flat"]["target"] = 0              # the same pass on an opaque frame: alpha 1
+    frame.opaque = True
+    frame.begin((8, 8)).use()
+    ctx.clear(0.0, 0.0, 0.0, 0.0)
+    assert frame.run(out, 0.0) == ["flat"]
+    px = np.frombuffer(out.read(components=4), dtype=np.uint8).reshape(8, 8, 4)
+    assert px[4, 4, 3] == 255
+
+
+def face_frame(ctx, fx: FxState, frames: int = 3, pattern: int = 2):
+    """`render` with the renderer handed back: the frame, the renderer."""
+    from hyperspace.render import Renderer
+    from hyperspace.view import ViewState
+    fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((W, H))])
+    r = Renderer(ctx, fx=fx)
+    s = ViewState(shape=10, faces=True, pattern=pattern, bright=1.3)
+    s.ang = [0.3, 0.7, 1.1, 0.5, 0.9, 1.3]
+    for k in range(frames):
+        fbo.use()
+        ctx.viewport = (0, 0, W, H)
+        r.draw(s, W, H, t_now=4.0 + k / 30)
+    out = np.frombuffer(fbo.read(components=4), dtype=np.uint8).reshape(H, W, 4).copy()
+    fbo.release()
+    return out, r
+
+
+@pytest.mark.parametrize("name", sorted(FxState().specs))
+def test_every_effect_runs_on_the_face_target(ctx, name):
+    """Aimed at the faces alone, every factory effect compiles, the frame
+    draws with no GL error, the picture is not the seed, and the frame is
+    not the frame without it. No effect is adapted and none is refused."""
+    from hyperspace.fx import FACES
+    from hyperspace.render import FACE_PIC
+    base, r0 = face_frame(ctx, FxState())
+    assert r0.face_pic.tex is None
+    st = FxState()
+    st.values[name].update(on=True, target=FACES)
+    if name == "glimmer":
+        st.values[name]["density"] = 1.0
+    img, r = face_frame(ctx, st)
+    assert ctx.error == "GL_NO_ERROR"
+    assert r.face_error == "" and r.fx.errors == {} and not r.fx.active()
+    assert r.face_fx.size == (FACE_PIC, FACE_PIC) and r.face_pic.tex.size == (FACE_PIC, FACE_PIC)
+    # the chain's first texture still holds the seed (one pass: read, never written)
+    seed = np.frombuffer(r.face_fx._tex[0].read(), dtype=np.float16).astype(np.float32)
+    seed = np.clip(seed * 255.0, 0, 255).reshape(FACE_PIC, FACE_PIC, 4)
+    pic = np.frombuffer(r.face_pic.tex.read(), dtype=np.uint8).reshape(FACE_PIC, FACE_PIC, 4)
+    assert seed[..., 3].max() > 100                          # the pattern is in the seed
+    change = np.abs(pic.astype(np.float32) - seed).mean()
+    print(f"{name}: picture differs from the seed by {change:.2f} / 255 (mean)")
+    assert change > 0.25, f"{name} left the picture as the seed was"
+    assert np.abs(img.astype(int) - base).sum() > 200, f"{name} does not show on the faces"
+
+
+# ---------------------------------------------------------------- the face target on the page (plan 20 WP2)
+
+def test_the_status_reads_per_target(fxpage):
+    """One line with nothing aimed at the faces — the page as it was — and
+    two rows when something is: the running chain per target, the faces'
+    row one chip tall with the two map chips at its right end."""
+    from hyperspace import ui
+    from hyperspace.fx import FACES
+    from hyperspace.ui_fx import FACES_OFF, RESET_NOTE
+    imgui, st, reg, panel = fxpage.imgui, fxpage.st, fxpage.reg, fxpage.panel
+    panel.view.faces = True
+    faint = (ui.FAINT.x, ui.FAINT.y, ui.FAINT.z, ui.FAINT.w)
+    warn = (ui.WARN.x, ui.WARN.y, ui.WARN.z, ui.WARN.w)
+
+    def label(names):
+        return " → ".join(st.specs[n].label for n in names)
+
+    def faces_rows():
+        return [t for t in fxpage.texts if t.startswith("faces")]
+    for name in ("plasma", "warp", "huecycle"):
+        reg[f"fx.{name}.on"].set(True)
+    fxpage.frame()
+    # nothing aimed at the faces: the one line it always was, no second row
+    assert fxpage.wrapped[:2] == [label(st.chain()), RESET_NOTE]
+    assert not faces_rows() and not [k for k in fxpage.rects if k.startswith("map.")]
+    # the note is one line now: it fits the page's width with room over
+    assert RESET_NOTE == "a preset load resets this stack: save a preset to keep it"
+    width = fxpage.rects["fx.mix"][2] - fxpage.rects["fx.on"][0]
+    imgui.new_frame()
+    assert imgui.calc_text_size(RESET_NOTE).x < width
+    imgui.end_frame()
+
+    # an effect aimed at the faces, even switched off: the second row
+    reg["fx.glimmer.target"].set(FACES)
+    assert not st.values["glimmer"]["on"]
+    fxpage.frame()
+    assert fxpage.wrapped[:2] == ["frame  " + label(st.chain()), RESET_NOTE]
+    assert faces_rows() == ["faces  nothing on"] and fxpage.colors[faces_rows()[0]] == faint
+    a, b = fxpage.rects["map.fx.face_map.0"], fxpage.rects["map.fx.face_map.1"]
+    led = fxpage.rects["led.fx.warp.on"]
+    assert a[1] == b[1] and a[3] - a[1] == pytest.approx(led[3] - led[1])   # one chip tall
+    assert a[2] <= b[0] and b[2] == pytest.approx(fxpage.rects["fx.mix"][2], abs=1.5)  # the right end
+    assert b[3] <= fxpage.rects["led.fx.warp.on"][1]                        # over the chip grid
+
+    # one on the faces, the rest on the frame: each row its own chain, in order
+    reg["fx.warp.target"].set(FACES)
+    reg["fx.glimmer.on"].set(True)
+    fxpage.frame()
+    assert st.chain(FACES) == ["warp", "glimmer"]
+    assert fxpage.wrapped[0] == "frame  " + label(["plasma", "huecycle"])
+    assert faces_rows() == ["faces  " + label(["warp", "glimmer"])]
+    # everything that is on aimed at the faces: the frame's row says so
+    reg["fx.plasma.target"].set(FACES)
+    reg["fx.huecycle.target"].set(FACES)
+    fxpage.frame()
+    assert fxpage.wrapped[0] == "frame  nothing on"
+
+    # bypassed: both rows
+    reg["fx.on"].set(False)
+    fxpage.frame()
+    assert fxpage.wrapped[0] == "frame  bypassed" and faces_rows() == ["faces  bypassed"]
+    reg["fx.on"].set(True)
+    # …and they read what runs, as why_idle does: a source holding the
+    # bypass off over a base that is on (review of PR #106)
+    reg["fx.on"].modulate(-1.0)
+    reg.apply()
+    assert reg["fx.on"].base is True and st.on is False and st.chain() == []
+    fxpage.frame()
+    assert fxpage.wrapped[0] == "frame  bypassed" and faces_rows() == ["faces  bypassed"]
+    reg.apply()                                      # the source lets go
+    assert st.on is True
+
+    # Faces off: the row says so, in the warning colour, and keeps its chips
+    panel.view.faces = False
+    fxpage.frame()
+    assert faces_rows() == [f"faces  {FACES_OFF}"] == ["faces  (Faces is off)"]
+    assert fxpage.colors[faces_rows()[0]] == warn and "map.fx.face_map.1" in fxpage.rects
+    panel.view.faces = True
+    # no copies: the face pass does not run either, and the row says so
+    panel.view.instances = 0
+    fxpage.frame()
+    assert faces_rows() == ["faces  (no copies to show them)"]
+    assert fxpage.colors[faces_rows()[0]] == warn
+    panel.view.instances = 1
+
+    # the renderer's face_error is the row, cut to the room beside the chips
+    panel.renderer.face_error = "faces: RuntimeError: seed pass failed"
+    fxpage.frame()
+    assert faces_rows() == ["faces: RuntimeError: seed pass failed"]
+    assert fxpage.colors[faces_rows()[0]] == warn
+    panel.renderer.face_error = "faces: RuntimeError: " + "long " * 30
+    fxpage.frame()
+    row, = faces_rows()
+    assert row.endswith("…") and row.startswith("faces: RuntimeError: long")
+    assert fxpage.rects["map.fx.face_map.0"][1] == a[1]                     # still one row
+    # a GL message of several lines is still one row (review of PR #106)
+    panel.renderer.face_error = "faces: Error: GLSL\n\n  0:12: bad\n"
+    fxpage.frame()
+    assert faces_rows() == ["faces: Error: GLSL 0:12: bad"]
+    assert fxpage.rects["map.fx.face_map.0"] == pytest.approx(a)
+    panel.renderer.face_error = ""
+
+    # the last effect aimed back at the frame: one line again
+    for name in ("plasma", "warp", "huecycle", "glimmer"):
+        reg[f"fx.{name}.target"].set(0)
+    fxpage.frame()
+    assert fxpage.wrapped[0] == label(st.chain()) and not faces_rows()
+    assert not [k for k in fxpage.rects if k.startswith("map.")]
+
+
+def test_the_map_chips_set_fx_face_map(fxpage, monkeypatch):
+    """per face / screen: a click on each is Param.set on fx.face_map; the
+    param is an ordinary modulatable enum and each chip opens its menu."""
+    from hyperspace.fx import FACE_MAPS, FACES, PER_FACE, SCREEN
+    imgui, st, reg = fxpage.imgui, fxpage.st, fxpage.reg
+    p = reg["fx.face_map"]
+    assert p.names == FACE_MAPS == ["per face", "screen"] and p.modulatable and p.persist
+    reg["fx.kaleido.target"].set(FACES)
+    sets = []
+    real_set = type(p).set
+    monkeypatch.setattr(type(p), "set", lambda self, v: (sets.append((self.id, v)),
+                                                         real_set(self, v))[1])
+    popups = []
+    real_popup = imgui.begin_popup_context_item
+    monkeypatch.setattr(imgui, "begin_popup_context_item",
+                        lambda label, *a, **k: (popups.append(label), real_popup(label, *a, **k))[1])
+    targets = {n: st.values[n]["target"] for n in st.names()}
+    for want in (SCREEN, PER_FACE, SCREEN):
+        sets.clear()
+        fxpage.click(f"map.fx.face_map.{want}")
+        assert sets == [("fx.face_map", want)]
+        assert p.base == want and st.face_map == want
+    assert {n: st.values[n]["target"] for n in st.names()} == targets
+    assert {"##ctx.fx.face_map.map0", "##ctx.fx.face_map.map1"} <= set(popups)
+    # the lit chip is what the faces show (the effective value): a source
+    # holding the switch at "per face" over a base of "screen"
+    lit = []
+    from hyperspace import ui
+    real_lit = ui.lit_chip
+    monkeypatch.setattr(ui, "lit_chip", lambda label, on, *a, **k: (
+        lit.append((label.split("##", 1)[-1], bool(on))), real_lit(label, on, *a, **k))[1])
+    fxpage.frame()
+    assert ("map.fx.face_map.1", True) in lit and ("map.fx.face_map.0", False) in lit
+    p.modulate(-1.0)
+    reg.apply()
+    assert p.base == SCREEN and st.face_map == PER_FACE
+    lit.clear()
+    fxpage.frame()
+    assert ("map.fx.face_map.0", True) in lit and ("map.fx.face_map.1", False) in lit
+    # …and then either chip's hover names the source, as the LED's does: a
+    # click on the unlit one writes a base that is already there
+    tips = []
+    monkeypatch.setattr(imgui, "set_tooltip", lambda t: tips.append(t))
+    x0, y0, x1, y1 = fxpage.rects["map.fx.face_map.1"]
+    imgui.get_io().add_mouse_pos_event((x0 + x1) / 2, (y0 + y1) / 2)
+    for _ in range(3):
+        tips.clear()
+        reg.apply()
+        p.modulate(-1.0)
+        reg.apply()
+        fxpage.frame()
+    assert tips and tips[-1].startswith(p.tip + "\n") and "per face" in tips[-1]
+
+
+def test_the_strips_target_combo_moves_an_effect_between_chains(fxpage, monkeypatch):
+    """The open strip's blend row is blend, target, order; the target combo
+    is Param.set on fx.<name>.target, which is structure (not modulatable)."""
+    from hyperspace.fx import FACES, FRAME, TARGETS
+    imgui, st, reg, panel = fxpage.imgui, fxpage.st, fxpage.reg, fxpage.panel
+    panel.view.faces = True
+    reg["fx.warp.on"].set(True)
+    reg["fx.plasma.on"].set(True)
+    st.select("warp")
+    p = reg["fx.warp.target"]
+    assert p.names == TARGETS and not p.modulatable and p.persist
+    popups = []
+    real_popup = imgui.begin_popup_context_item
+    monkeypatch.setattr(imgui, "begin_popup_context_item",
+                        lambda label, *a, **k: (popups.append(label), real_popup(label, *a, **k))[1])
+    fxpage.frame()
+    blend, target, order = (fxpage.rects[f"fx.warp.{k}"] for k in ("blend", "target", "order"))
+    assert blend[1] == target[1] == order[1]                       # one row, no new one
+    assert blend[2] <= target[0] and target[2] <= order[0]          # blend, target, order
+    assert order[2] == pytest.approx(fxpage.rects["fx.warp.mix"][2], abs=1.5)
+    assert blend[2] - blend[0] >= 80                                # room for "multiply"
+    assert "##ctx.fx.warp.target" in popups                         # its menu ("not modulatable")
+    order_was = st.names()
+    assert st.chain(FRAME) == st.chain() and st.chain(FACES) == []
+    fxpage.pick("fx.warp.target", FACES)                            # the mouse: open, choose "faces"
+    assert p.base == FACES and st.values["warp"]["target"] == FACES
+    assert st.chain(FACES) == ["warp"] and st.chain(FRAME) == ["plasma"]
+    fxpage.frame()
+    assert "faces  Trip warp" in fxpage.texts and fxpage.wrapped[0] == "frame  Plasma"
+    # nothing else moved: the stack order, the open strip, every other target
+    assert st.names() == order_was and st.selected() == "warp"
+    assert [n for n in st.names() if st.values[n]["target"] == FACES] == ["warp"]
+    fxpage.pick("fx.warp.target", FRAME)                            # …and back
+    assert p.base == FRAME and st.chain(FACES) == [] and st.chain(FRAME) == st.chain()
+    fxpage.frame()
+    assert not [t for t in fxpage.texts if t.startswith("faces")]
+
+
+def test_a_chip_aimed_at_the_faces_is_marked(fxpage, monkeypatch):
+    """A diamond for the LED of a chip aimed at the faces — filled while on,
+    outlined while off — where a chip on the frame has a dot or a ring; and
+    both of its hovers say "on the faces"."""
+    from hyperspace.fx import FACES
+    from hyperspace.ui_fx import FACES_TIP, LED_OFF_TIP, LED_ON_TIP, _led_tip
+    imgui, st, reg, panel = fxpage.imgui, fxpage.st, fxpage.reg, fxpage.panel
+    marks: list[tuple[str, float, float]] = []
+    dl_type = imgui.ImDrawList
+    for fn in ("add_quad_filled", "add_quad", "add_circle_filled", "add_circle"):
+        real = getattr(dl_type, fn)
+
+        def rec(self, *a, _fn=fn, _real=real, **k):
+            pts = a[:4] if _fn.startswith("add_quad") else a[:1]
+            marks.append((_fn, sum(q.x for q in pts) / len(pts), sum(q.y for q in pts) / len(pts)))
+            return _real(self, *a, **k)
+        monkeypatch.setattr(dl_type, fn, rec)
+
+    def mark(name):
+        """What is drawn at the centre of `name`'s LED."""
+        x0, y0, x1, y1 = fxpage.rects[f"led.fx.{name}.on"]
+        cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+        return [fn for fn, x, y in marks if abs(x - cx) < 0.5 and abs(y - cy) < 0.5]
+    reg["fx.warp.on"].set(True)
+    reg["fx.plasma.on"].set(True)
+    reg["fx.plasma.target"].set(FACES)
+    reg["fx.glimmer.target"].set(FACES)
+    st.select("acid")
+    fxpage.frame()
+    assert mark("warp") == ["add_circle_filled"]         # on the frame: the dot…
+    assert mark("acid") == ["add_circle"]                # …and the ring
+    assert mark("plasma") == ["add_quad_filled"]         # on the faces: the diamond, filled…
+    assert mark("glimmer") == ["add_quad"]               # …and outlined while off
+    # nothing else on the chip changes: the same two items, the same rects
+    faces_rects = {k: fxpage.rects[k] for k in ("led.fx.plasma.on", "chip.fx.plasma.on")}
+    reg["fx.plasma.target"].set(0)
+    reg["fx.glimmer.target"].set(0)
+    marks.clear()
+    fxpage.frame()
+    assert mark("plasma") == ["add_circle_filled"] and mark("glimmer") == ["add_circle"]
+    reg["fx.plasma.target"].set(FACES)
+    marks.clear()
+    fxpage.frame()
+    assert {k: fxpage.rects[k] for k in faces_rects} == faces_rects
+    # the hovers: the LED's says what a click does, then where the effect is aimed
+    p = reg["fx.plasma.on"]
+    assert FACES_TIP == "on the faces"
+    assert _led_tip(panel, p, True) == f"{LED_ON_TIP}\n{FACES_TIP}"
+    assert _led_tip(panel, reg["fx.glimmer.on"], True) == f"{LED_OFF_TIP}\n{FACES_TIP}"
+    assert _led_tip(panel, p) == LED_ON_TIP
+    tips = []
+    monkeypatch.setattr(imgui, "set_tooltip", lambda t: tips.append(t))
+    io = imgui.get_io()
+    for item, want in (("led.fx.plasma.on", f"{LED_ON_TIP}\n{FACES_TIP}"),
+                       ("chip.fx.plasma.on", f"{p.tip}\n{FACES_TIP}"),
+                       ("chip.fx.warp.on", reg["fx.warp.on"].tip)):
+        x0, y0, x1, y1 = fxpage.rects[item]
+        io.add_mouse_pos_event((x0 + x1) / 2, (y0 + y1) / 2)
+        for _ in range(3):
+            tips.clear()
+            fxpage.frame()
+        assert tips == [want], item
+
+
+def test_why_idle_names_faces_off():
+    """ "faces off" after "off" and before "bypassed"; and with the default
+    argument why_idle still agrees with FxState.chain() for an effect aimed
+    at the faces (chain() lists it whatever view.faces is)."""
+    from itertools import product
+
+    from hyperspace.fx import FACES, FRAME
+    from hyperspace.ui_fx import why_idle
+    st = FxState()
+    v = st.values["warp"]
+    v.update(on=True, target=FACES)
+    assert why_idle(st, "warp") is None and why_idle(st, "warp", True) is None
+    assert why_idle(st, "warp", False) == "faces off"
+    # its place in the order: every later reason holding as well
+    v["mix"] = 0.0
+    st.mix = 0.0
+    st.on = False
+    assert why_idle(st, "warp", False) == "faces off"
+    assert why_idle(st, "warp", True) == "bypassed"
+    v["on"] = False
+    assert why_idle(st, "warp", False) == "off"
+    # an effect on the frame never reads "faces off"
+    v.update(on=True, target=FRAME)
+    assert why_idle(st, "warp", False) == "bypassed"
+    v.pop("target")                                   # a values dict from before a hot reload
+    assert why_idle(st, "warp", False) == "bypassed"
+    # every effect in every state, half of them aimed at the faces
+    seen = set()
+    for on, bypass, fxmix, mix, faces_on in product(
+            (True, False), (True, False), (1.0, 0.0), (1.0, 0.0), (True, False)):
+        st.on, st.mix = bypass, fxmix
+        for k, n in enumerate(st.names()):
+            st.values[n].update(on=on, mix=mix, target=k % 2)
+        running = st.chain()
+        assert running == sorted(st.chain(FRAME) + st.chain(FACES), key=st.names().index)
+        for n in st.names():
+            assert (why_idle(st, n) is None) == (n in running), (n, on, bypass, fxmix, mix)
+            why = why_idle(st, n, faces_on)
+            seen.add(why)
+            aimed = st.values[n]["target"] == FACES
+            assert (why == "faces off") == (on and aimed and not faces_on)
+            if why != "faces off":
+                assert why == why_idle(st, n)
+    assert seen == {None, "off", "faces off", "bypassed", "fx mix 0", "mix 0"}
+
+
+def test_faces_on_switches_the_faces_on(fxpage):
+    """An open effect that is on and aimed at the faces while Faces is off
+    says so, with the chip that mends it: Param.set on view.faces."""
+    from hyperspace.fx import FACES
+    from hyperspace.ui_fx import IDLE
+    st, reg, view = fxpage.st, fxpage.reg, fxpage.panel.view
+    line, chip, pid, _tip = IDLE["faces off"]
+    assert (line, chip, pid) == ("aimed at the faces, and Faces is off", "faces on", "view.faces")
+    assert list(IDLE)[:3] == ["off", "faces off", "bypassed"]
+    assert view.faces is False
+    st.select("warp")
+    reg["fx.warp.target"].set(FACES)
+    fxpage.frame()                                   # off: "off" comes first
+    assert IDLE["off"][0] in fxpage.texts and line not in fxpage.texts
+    reg["fx.warp.on"].set(True)
+    fxpage.frame()
+    assert line in fxpage.texts and "idle.view.faces" in fxpage.rects
+    assert "idle.fx.warp.on" not in fxpage.rects and len(fxpage.veils) == 2
+    # the line and its chip are one row inside the page's width
+    assert fxpage.rects["idle.view.faces"][2] <= fxpage.rects["fx.mix"][2] + 1.5
+    assert fxpage.rects["idle.view.faces"][3] <= fxpage.rects["fx.warp.on"][1]
+    assert "faces  (Faces is off)" in fxpage.texts
+    switches = {n: reg[f"fx.{n}.on"].base for n in st.names()}
+    fxpage.click("idle.view.faces")
+    assert reg["view.faces"].base is True and view.faces is True
+    assert {n: reg[f"fx.{n}.on"].base for n in st.names()} == switches
+    assert reg["fx.warp.target"].base == FACES and st.selected() == "warp"
+    fxpage.frame()                                   # running: no line, no chip, no veil
+    assert line not in fxpage.texts and "idle.view.faces" not in fxpage.rects
+    assert not fxpage.veils and "faces  Trip warp" in fxpage.texts
+    # an effect on the frame is not idle because Faces is off
+    reg["view.faces"].set(False)
+    reg["fx.warp.target"].set(0)
+    fxpage.frame()
+    assert line not in fxpage.texts and not fxpage.veils
+
+
+def test_the_page_fits_with_the_faces_row_showing(fxpage, monkeypatch):
+    """No page scrolls at the control size: every effect's strip in turn,
+    aimed at the faces so the second status row shows, an error line on the
+    strip — off, running, idle because Faces is off (the line with its
+    chip), and with the renderer's face_error for the row."""
+    from hyperspace.app import CONTROL_SIZE
+    from hyperspace.fx import FACES
+    from hyperspace.ui import PAGE_KEYS, Panel
+    imgui, st, reg, panel = fxpage.imgui, fxpage.st, fxpage.reg, fxpage.panel
+    assert tuple(imgui.get_io().display_size) == tuple(CONTROL_SIZE)
+    panel.renderer.fx.error = lambda n: "line 3: made up"
+    over, spare = [], []
+    draw = Panel._page_fx
+
+    def measured(self, dt):
+        draw(self, dt)
+        over.append(imgui.get_scroll_max_y())
+        spare.append(imgui.get_content_region_avail().y)
+    monkeypatch.setattr(Panel, "_page_fx", measured)
+    reg["ui.page"].set(PAGE_KEYS.index("fx"))
+    worst = (1e9, "")
+    for name in st.names():
+        st.select(name)
+        reg[f"fx.{name}.target"].set(FACES)
+        for state, on, faces_on, err in (
+                ("off", False, True, ""),
+                ("running", True, True, ""),
+                ("faces off", True, False, ""),
+                ("face error", False, True, "faces: RuntimeError: made up")):
+            reg[f"fx.{name}.on"].set(on)
+            reg["view.faces"].set(faces_on)
+            panel.renderer.face_error = err
+            for _ in range(3):
+                fxpage.texts.clear()
+                imgui.new_frame()
+                panel.draw(1 / 60, 60.0)
+                imgui.end_frame()
+            assert any(t.startswith("faces") for t in fxpage.texts), (name, state)
+            assert "line 3: made up" in fxpage.texts
+            assert ("aimed at the faces, and Faces is off" in fxpage.texts) == (state == "faces off")
+            assert over[-1] == 0, f"the fx page scrolls with {name} open, aimed at the faces, {state}"
+            worst = min(worst, (spare[-1], f"{name}, {state}"))
+        reg[f"fx.{name}.target"].set(0)
+        reg[f"fx.{name}.on"].set(False)
+    print(f"fx page with the faces row: {worst[0]:.0f} px to spare at worst ({worst[1]})")
+    assert worst[0] >= 0
+
+
+def test_the_target_and_the_map_are_one_undo_step_each(tmp_path, monkeypatch):
+    """The target combo and the map chips write a base through Param.set and
+    push nothing: undo's watcher makes each change one step ("Scene-setters
+    write the base")."""
+    from test_undo import boot, frames, labels, settle
+
+    from hyperspace import undo
+    from hyperspace.fx import FACES, FRAME, PER_FACE, SCREEN
+    st = FxState()
+    r = boot(tmp_path / "home", fx=st)
+    r.fx = st
+    pushes = []
+    real_push = undo.push
+    monkeypatch.setattr(undo, "push", lambda *a, **k: (pushes.append(a), real_push(*a, **k))[1])
+    rig = PageRig(tmp_path, monkeypatch, r)
+    try:
+        st.select("warp")
+        r.reg["fx.warp.target"].set(FRAME)
+        r.reg["fx.face_map"].set(PER_FACE)
+        settle(r)
+        start = labels(r)
+        rig.pick("fx.warp.target", FACES)
+        settle(r)
+        assert r.reg["fx.warp.target"].base == FACES
+        assert len(labels(r)) == len(start) + 1 and not pushes
+        rig.click(f"map.fx.face_map.{SCREEN}")
+        settle(r)
+        assert r.reg["fx.face_map"].base == SCREEN
+        assert len(labels(r)) == len(start) + 2 and not pushes
+        undo.undo()
+        frames(r, 3)
+        assert r.reg["fx.face_map"].base == PER_FACE and r.reg["fx.warp.target"].base == FACES
+        undo.undo()
+        frames(r, 3)
+        assert r.reg["fx.warp.target"].base == FRAME and labels(r) == start
+    finally:
+        rig.close()
+
+
+# ---------------------------------------------------------------- drag a chip to reorder (plan 20 WP3)
+
+FACTORY_ORDERS = {"plasma": 5, "acid": 10, "kaleido": 15, "zoomblur": 17, "warp": 20,
+                  "wobble": 25, "doublevision": 30, "deconverge": 40, "fractals": 60,
+                  "glimmer": 70, "tripcolour": 80, "huecycle": 85}
+
+
+def _moved_to(names: list[str], moved: str, place: int) -> list[str]:
+    """`names` with `moved` taken out and put back at `place`."""
+    seq = [n for n in names if n != moved]
+    seq.insert(place, moved)
+    return seq
+
+
+def _sorted_by(orders: dict[str, int]) -> list[str]:
+    return sorted(orders, key=lambda n: (orders[n], n))      # FxState.names()'s rule
+
+
+def _fewest(seq: list[str], orders: dict[str, int]) -> int:
+    """The fewest orders any rewrite must change for `seq` to sort that
+    way, by trying every set of effects to leave alone (small lists only)."""
+    from itertools import combinations
+
+    from hyperspace.fx import MAX_ORDER
+    for k in range(len(seq) + 1):
+        for changed in combinations(seq, k):
+            prev, prev_name, ok = -1, None, True     # prev_name: None after a rewritten one
+            for n in seq:
+                if n in changed:
+                    prev, prev_name = prev + 1, None  # the smallest integer still free
+                else:
+                    o = orders[n]
+                    if not (o > prev or (o == prev and prev_name is not None and prev_name < n)):
+                        ok = False
+                        break
+                    prev, prev_name = o, n
+                if prev > MAX_ORDER:
+                    ok = False
+                    break
+            if ok:
+                return k
+    raise AssertionError("no rewrite at all")
+
+
+def test_reordered_moves_one_effect_when_there_is_room():
+    from hyperspace.fx import reordered
+    st = FxState()
+    orders = {n: st.values[n]["order"] for n in st.names()}
+    assert orders == FACTORY_ORDERS
+    names = st.names()
+    for moved in names:
+        for place in range(len(names)):
+            seq = _moved_to(names, moved, place)
+            new = reordered(seq, orders, moved)
+            if seq == names:
+                assert new == {}, (moved, place)             # dropped where it was
+                continue
+            # every single move changes exactly one order: the moved effect's
+            assert list(new) == [moved], (moved, place, new)
+            a = orders[seq[place - 1]] if place else -1
+            b = orders[seq[place + 1]] if place + 1 < len(seq) else 100
+            assert new[moved] == (a + b) // 2 and a < new[moved] < b
+            assert _sorted_by({**orders, **new}) == seq
+    # the one gap of one integer: between 15 and 17, twice running
+    seq = _moved_to(names, "huecycle", names.index("zoomblur"))
+    once = {**orders, **reordered(seq, orders, "huecycle")}
+    assert once["huecycle"] == 16
+    again = _moved_to(_sorted_by(once), "plasma", 3)         # between 15 and 16: no room
+    new = reordered(again, once, "plasma")
+    assert len(new) == 2 and "plasma" in new and _sorted_by({**once, **new}) == again
+    # the inputs are read, never written
+    assert orders == FACTORY_ORDERS
+
+
+def test_reordered_renumbers_the_smallest_window():
+    from itertools import permutations
+
+    from hyperspace.fx import reordered
+    orders = {"a": 10, "b": 11, "c": 12, "d": 40, "e": 41}
+    names = _sorted_by(orders)
+    # d between a and b: no integer between 10 and 11. One neighbour moves
+    # with it (a: 10 → lower), not the whole packed run
+    seq = ["a", "d", "b", "c", "e"]
+    new = reordered(seq, orders, "d")
+    assert set(new) == {"a", "d"} and _sorted_by({**orders, **new}) == seq
+    assert new["a"] < new["d"] < 11 and orders["b"] == 11
+    # a to the end: 41 < a < 100, alone
+    assert reordered(["b", "c", "d", "e", "a"], orders, "a") == {"a": 70}
+    # e to the front: alone again
+    assert reordered(["e", "a", "b", "c", "d"], orders, "e") == {"e": 4}
+    # stable: the same drop gives the same orders, whatever the dict's order
+    for perm in permutations(orders.items()):
+        assert reordered(seq, dict(perm), "d") == new
+    # every move over lists packed tight in different places: the result
+    # sorts to what was asked, and no rewrite of fewer orders would
+    for packed in ({"a": 10, "b": 11, "c": 12, "d": 13, "e": 14},
+                   {"a": 0, "b": 1, "c": 2, "d": 3, "e": 50},
+                   {"a": 50, "b": 96, "c": 97, "d": 98, "e": 99},
+                   {"a": 0, "b": 1, "c": 2, "d": 98, "e": 99},
+                   orders):
+        names = _sorted_by(packed)
+        for moved in names:
+            for place in range(len(names)):
+                seq = _moved_to(names, moved, place)
+                new = reordered(seq, packed, moved)
+                after = {**packed, **new}
+                assert _sorted_by(after) == seq, (packed, moved, place, new)
+                assert len(set(after.values())) == len(after)            # no tie made
+                assert all(o != packed[n] for n, o in new.items())       # only real changes
+                assert len(new) == _fewest(seq, packed), (packed, moved, place, new)
+    # ties that are already there (two effects at one order, told apart by
+    # name) are left alone unless the move lands between them
+    tied = {"a": 10, "b": 10, "c": 10, "d": 30}
+    assert reordered(["a", "b", "c", "d"], tied, "b") == {}
+    new = reordered(["d", "a", "b", "c"], tied, "d")
+    assert list(new) == ["d"] and new["d"] < 10
+    seq = ["a", "d", "b", "c"]                                           # between two of the tie
+    new = reordered(seq, tied, "d")
+    assert _sorted_by({**tied, **new}) == seq and "c" not in new
+    seq = ["b", "a", "c", "d"]                                           # the tie itself reordered
+    new = reordered(seq, tied, "b")
+    assert _sorted_by({**tied, **new}) == seq and "d" not in new
+
+
+def test_reordered_always_sorts_to_the_sequence_asked_for():
+    from hyperspace.fx import MAX_ORDER, reordered
+    hundred = {f"e{k:03d}": k for k in range(MAX_ORDER + 1)}     # every order taken
+    for orders in (FACTORY_ORDERS, hundred):
+        names = _sorted_by(orders)
+        for moved in names:
+            for place in range(len(names)):
+                seq = _moved_to(names, moved, place)
+                new = reordered(seq, orders, moved)
+                after = {**orders, **new}
+                assert _sorted_by(after) == seq, (moved, place)
+                assert all(isinstance(o, int) and 0 <= o <= MAX_ORDER for o in new.values())
+                assert len(set(after.values())) == len(after)    # never a tie to break by name
+    # and a run of drops, each from the state the last one left
+    import random
+    rnd = random.Random(20)
+    orders = dict(FACTORY_ORDERS)
+    for _ in range(400):
+        names = _sorted_by(orders)
+        moved = rnd.choice(names)
+        seq = _moved_to(names, moved, rnd.randrange(len(names)))
+        orders.update(reordered(seq, orders, moved))
+        assert _sorted_by(orders) == seq and all(0 <= o <= MAX_ORDER for o in orders.values())
+
+
+def _bars(fxpage, monkeypatch) -> list[tuple[float, float, float, float]]:
+    """Every DRAG_BAR-wide filled rect drawn from here on: the drop bars."""
+    from hyperspace.ui_fx import DRAG_BAR
+    bars: list[tuple[float, float, float, float]] = []
+    dl_type = fxpage.imgui.ImDrawList
+    real = dl_type.add_rect_filled
+
+    def rec(self, lo, hi, *a, **k):
+        if hi.x - lo.x == pytest.approx(DRAG_BAR):
+            bars.append((lo.x, lo.y, hi.x, hi.y))
+        return real(self, lo, hi, *a, **k)
+    monkeypatch.setattr(dl_type, "add_rect_filled", rec)
+    return bars
+
+
+def test_a_drop_reorders_selects_and_is_one_undo_step(tmp_path, monkeypatch):
+    """A simulated mouse drags one chip by its name onto another, over the
+    real Panel with a real Undo: the dragged effect goes before the one it
+    was dropped on, its strip opens, and the whole reorder — one order
+    rewritten or several — is one step, "reorder effects"."""
+    from test_undo import boot, frames, labels, settle
+
+    from hyperspace import undo
+    from hyperspace.ui_fx import REORDER
+    st = FxState()
+    r = boot(tmp_path / "home", fx=st)
+    r.fx = st
+    pushes = []
+    real_push = undo.push
+    monkeypatch.setattr(undo, "push", lambda *a, **k: (pushes.append(a), real_push(*a, **k))[1])
+    rig = PageRig(tmp_path, monkeypatch, r)
+    bars = _bars(rig, monkeypatch)
+    try:
+        for n, o in FACTORY_ORDERS.items():          # whatever the startup preset left
+            r.reg[f"fx.{n}.order"].set_value(o)
+        st.select("acid")
+        settle(r)
+        start, names = labels(r), st.names()
+        assert names[0] == "plasma" and names[-1] == "huecycle"
+
+        def orders():
+            return {n: r.reg[f"fx.{n}.order"].base for n in st.names()}
+        before = orders()
+        # in flight over Plasma: a bar at the left edge of the chip under the mouse
+        rig.drag("chip.fx.huecycle.on", "chip.fx.plasma.on", release=False)
+        assert rig.imgui.get_drag_drop_payload_py_id().data_id == names.index("huecycle")
+        led = rig.rects["led.fx.plasma.on"]
+        assert bars and bars[-1][0] + 1 == pytest.approx(led[0])     # on the chip's own edge
+        assert bars[-1][1] <= led[1] and bars[-1][3] >= led[3]
+        assert orders() == before and not pushes and st.selected() == "acid"   # nothing yet
+        rig.release()
+        settle(r)
+        assert st.names() == ["huecycle", *names[:-1]]
+        assert st.selected() == "huecycle" and st.sel_name == "huecycle"   # the strip opens on it
+        after = orders()
+        assert {n for n in after if after[n] != before[n]} == {"huecycle"} and after["huecycle"] == 2
+        assert pushes == [(REORDER,)] and labels(r) == [*start, "reorder effects"]
+        undo.undo()                                  # what edit.undo (⌘Z / Ctrl+Z) fires
+        frames(r, 3)
+        assert orders() == before and st.names() == names and labels(r) == start
+        assert st.selected() == "huecycle"           # the open strip is no undo step
+        undo.redo()
+        frames(r, 3)
+        assert orders() == after
+
+        # a drop that has to rewrite several orders is still one push, one step
+        undo.undo()
+        frames(r, 3)
+        for k, n in enumerate(names):                # packed: no gap anywhere near the front
+            r.reg[f"fx.{n}.order"].set_value(k)
+        settle(r)
+        start, before = labels(r), orders()
+        pushes.clear()
+        rig.drag("chip.fx.huecycle.on", "led.fx.acid.on")      # the LED takes a drop too
+        settle(r)
+        assert st.names() == ["plasma", "huecycle", *names[1:-1]]
+        after = orders()
+        assert len({n for n in after if after[n] != before[n]}) > 1
+        assert pushes == [(REORDER,)] and labels(r) == [*start, "reorder effects"]
+        undo.undo()
+        frames(r, 3)
+        assert orders() == before and labels(r) == start
+
+        # a drop that changes nothing — onto the chip already after it — is no step
+        pushes.clear()
+        rig.drag("chip.fx.plasma.on", "chip.fx.acid.on")
+        settle(r)
+        assert orders() == before and not pushes and labels(r) == start
+        assert st.selected() == "plasma"
+    finally:
+        rig.close()
+
+
+def test_a_click_without_a_drag_still_only_opens(fxpage, monkeypatch):
+    """imgui starts a drag only past its drag threshold: a press and a
+    release on a name — the mouse still, or shaking a pixel or two — opens
+    the strip and moves nothing; the LED still only switches."""
+    from hyperspace import undo
+    imgui, st, reg = fxpage.imgui, fxpage.st, fxpage.reg
+    pushes = []
+    monkeypatch.setattr(undo, "push", lambda *a, **k: pushes.append(a))
+    io = imgui.get_io()
+    names = st.names()
+    orders = {n: reg[f"fx.{n}.order"].base for n in names}
+    switches = {n: reg[f"fx.{n}.on"].base for n in names}
+    fxpage.frame()
+    assert st.selected() == "plasma"
+    fxpage.click("chip.fx.warp.on")
+    assert st.selected() == "warp"
+    # a shaky click: under the threshold, and released on the same chip
+    x0, y0, x1, y1 = fxpage.rects["chip.fx.fractals.on"]
+    x, y = (x0 + x1) / 2, (y0 + y1) / 2
+    assert io.mouse_drag_threshold >= 4
+    io.add_mouse_pos_event(x, y)
+    fxpage.frame()
+    io.add_mouse_button_event(0, True)
+    fxpage.frame()
+    for dx, dy in ((1, 0), (2, 1), (1, -1), (0, 0)):
+        io.add_mouse_pos_event(x + dx, y + dy)
+        fxpage.frame()
+        assert imgui.get_drag_drop_payload_py_id() is None
+    io.add_mouse_button_event(0, False)
+    fxpage.frame()
+    io.add_mouse_pos_event(-1.0, -1.0)
+    fxpage.frame()
+    assert st.selected() == "fractals"
+    fxpage.click("led.fx.fractals.on")               # the LED: switches, never opens or drags
+    switches["fractals"] = True
+    fxpage.click("chip.fx.warp.on")
+    # a press on an LED dragged away is not a drag: the LED is no source
+    fxpage.drag("led.fx.acid.on", "chip.fx.plasma.on")
+    assert st.names() == names and st.selected() == "warp"
+    assert {n: reg[f"fx.{n}.order"].base for n in names} == orders and not pushes
+    assert {n: reg[f"fx.{n}.on"].base for n in names} == switches
+
+
+def test_a_drag_never_changes_a_target_or_a_switch(fxpage, monkeypatch):
+    """A drag changes order and nothing else (fork F6: an effect is re-aimed
+    by the strip's target combo): every drop — onto a name, an LED, the
+    last chip's far half, its own chip — leaves every switch, target and
+    mix, and the map, as they were."""
+    from hyperspace.fx import FACES, SCREEN
+    st, reg = fxpage.st, fxpage.reg
+    bars = _bars(fxpage, monkeypatch)
+    reg["fx.warp.on"].set(True)
+    reg["fx.plasma.on"].set(True)
+    reg["fx.plasma.target"].set(FACES)
+    reg["fx.glimmer.target"].set(FACES)
+    reg["fx.face_map"].set(SCREEN)
+    fxpage.panel.view.faces = True
+
+    def rest():
+        return {n: {k: v for k, v in st.values[n].items() if k != "order"} for n in st.specs}
+    was, names = rest(), st.names()
+    # a face-aimed chip dragged among frame ones, and a frame one among face ones
+    fxpage.drag("chip.fx.plasma.on", "chip.fx.warp.on")
+    assert st.names().index("plasma") == st.names().index("warp") - 1 and st.selected() == "plasma"
+    fxpage.drag("chip.fx.warp.on", "led.fx.glimmer.on")
+    assert st.names().index("warp") == st.names().index("glimmer") - 1 and st.selected() == "warp"
+    assert st.chain(FACES) == ["plasma"] and st.chain() == ["plasma", "warp"]
+    # the last chip's right half is "to the end": the bar is at its right edge
+    last = st.names()[-1]
+    assert last == "huecycle"
+    fxpage.drag("chip.fx.acid.on", f"chip.fx.{last}.on", dst_at=0.9, release=False)
+    assert bars[-1][0] + 1 == pytest.approx(fxpage.rects[f"chip.fx.{last}.on"][2])
+    fxpage.release()
+    assert st.names()[-1] == "acid" and reg["fx.acid.order"].base > reg["fx.huecycle.order"].base
+    # …and its left half is "before it", like any other chip
+    fxpage.drag("chip.fx.kaleido.on", "chip.fx.acid.on", dst_at=0.1)
+    assert st.names()[-2:] == ["kaleido", "acid"]
+    # onto its own LED: where it is
+    now = st.names()
+    fxpage.drag("chip.fx.wobble.on", "led.fx.wobble.on")
+    assert st.names() == now and st.selected() == "wobble"
+    assert rest() == was and st.face_map == SCREEN and sorted(now) == sorted(names)
+    assert reg["fx.plasma.target"].base == FACES and reg["fx.warp.target"].base == 0
+    # no bar once nothing is in the hand
+    bars.clear()
+    fxpage.frame()
+    assert not bars
+
+
+def test_the_order_slider_still_reorders(fxpage):
+    """Fork F7's fallback: the strip's order slider is still there and still
+    moves its effect through the stack, the strip staying open on it."""
+    st, reg = fxpage.st, fxpage.reg
+    st.select("plasma")
+    fxpage.frame()
+    assert "fx.plasma.order" in fxpage.rects and st.names()[0] == "plasma"
+    fxpage.click("fx.plasma.order", 0.95)
+    assert reg["fx.plasma.order"].base > 85 and st.names()[-1] == "plasma"
+    assert st.selected() == "plasma"
+    fxpage.click("fx.plasma.order", 0.05)
+    assert reg["fx.plasma.order"].base < 10 and st.names()[0] == "plasma"
+    # and after a drag the slider reads what the drop wrote
+    fxpage.drag("chip.fx.plasma.on", "chip.fx.warp.on")
+    assert st.values["plasma"]["order"] == reg["fx.plasma.order"].base == 18
+
+
+def test_a_drop_moves_the_effect_the_drag_began_on(fxpage, monkeypatch):
+    """Review of PR #108. What a drop moves is a name, not the payload's
+    index: the stack reordered under the hand (a preset on a desk button,
+    an undo) still moves the chip that was picked up. A press that slips
+    past the drag threshold and is let go on the same name opens it. An
+    order the registry does not hold, or a result that would not sort as
+    asked, makes the drop do nothing."""
+    from hyperspace import fx as fx_mod
+    from hyperspace import ui_fx, undo
+    imgui, st, reg, panel = fxpage.imgui, fxpage.st, fxpage.reg, fxpage.panel
+    pushes = []
+    monkeypatch.setattr(undo, "push", lambda *a, **k: pushes.append(a))
+    io = imgui.get_io()
+    fxpage.drag("chip.fx.huecycle.on", "chip.fx.warp.on", release=False)
+    assert panel._fx_drag == "huecycle"
+    assert imgui.get_drag_drop_payload_py_id().data_id == 11       # huecycle's place
+    # the stack moves under the hand just before the release frame (the
+    # source re-sets the payload only while the button is down, so on the
+    # drop it is the last held frame's index): index 11 is now tripcolour,
+    # and warp's chip, under the mouse, stays put
+    held = st.names()
+    reg["fx.tripcolour.order"].set_value(99)
+    assert st.names() == [*held[:10], "huecycle", "tripcolour"] and held[11] == "huecycle"
+    fxpage.release()
+    names = st.names()
+    assert names.index("huecycle") == names.index("warp") - 1 and st.selected() == "huecycle"
+    assert reg["fx.tripcolour.order"].base == 99 and pushes == [("reorder effects",)]
+    fxpage.frame()
+    assert panel._fx_drag is None                    # nothing in the hand: nothing noted
+
+    # a slipped click: past the threshold, let go on the name it began on
+    pushes.clear()
+    fxpage.frame()
+    x0, y0, _, y1 = fxpage.rects["chip.fx.fractals.on"]
+    x, y = x0 + 12, (y0 + y1) / 2
+    io.add_mouse_pos_event(x, y)
+    fxpage.frame()
+    io.add_mouse_button_event(0, True)
+    fxpage.frame()
+    for k in range(1, 5):
+        io.add_mouse_pos_event(x + 4 * k, y)
+        fxpage.frame()
+    assert ui_fx._in_flight() and st.selected() == "huecycle"
+    fxpage.release()
+    assert st.selected() == "fractals" and st.names() == names and not pushes
+
+    # an order the registry does not hold: nothing is written, nothing pushed
+    orders = {n: st.values[n]["order"] for n in names}
+    real_get = type(reg).get
+    monkeypatch.setattr(type(reg), "get", lambda self, pid: None if pid == "fx.acid.order"
+                        else real_get(self, pid))
+    ui_fx._drop(panel, st, "acid", None)
+    assert {n: st.values[n]["order"] for n in names} == orders and not pushes
+    monkeypatch.setattr(type(reg), "get", real_get)
+    # a rewrite that would not sort as asked (what a hundred-odd effects give)
+    monkeypatch.setattr(ui_fx, "reordered", lambda seq, o, moved: {moved: o[seq[-1]]})
+    ui_fx._drop(panel, st, "acid", "kaleido")
+    assert {n: st.values[n]["order"] for n in names} == orders and not pushes
+    monkeypatch.setattr(ui_fx, "reordered", fx_mod.reordered)
+    ui_fx._drop(panel, st, "acid", None)
+    assert st.names()[-1] == "acid" and pushes == [("reorder effects",)]
+    # an effect whose file went away mid-drag: no raise
+    ui_fx._drop(panel, st, "no_such_effect", "acid")

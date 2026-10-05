@@ -195,6 +195,14 @@ built either way; the hand checks start with calibration.
 
 ### Plan 20 — FX, dream and looks
 
+*As built:* [`20-fx-dream-looks.md`](20-fx-dream-looks.md) §7 (PRs #101,
+#106, #108, #105, #107 and #111 on `plan-20-integration`; decision
+register rows 65–71; hand checks 91–98); where it differs from the lines
+below, that section is the code — the picture starts from what a face
+shows (pattern and bitmap), the chain view is the FX page's chip grid,
+**`dream.layer` has six layers, so it is a row of six chips, not four**,
+and "speed" is `dream.k`.
+
 - **The faces as their own effect target** (the owner's ask, 2026-10-04:
   "shaders that run against the screen space … that render target should
   just be the bitmaps in the faces on the geometry"). Each effect gets a

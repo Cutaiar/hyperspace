@@ -88,6 +88,7 @@ PATTERNS = [
     "FLAT", "RINGS", "PLAID", "MOIRE", "BLOOM", "CAUSTIC",
     "HEX", "SPIRAL", "CELLS", "PLASMA", "WEAVE", "EMBER",
 ]
+INST_LAYOUT = ["GRID", "HEX", "RING"]   # render.inst_positions' layouts, in its order
 INST_MOTION = ["STILL", "ORBIT", "WAVE", "RIPPLE"]
 BMP_PATHS = ["STILL", "ORBIT", "FIG-8", "SWAY"]
 PLANES = PLANE_NAMES   # the rotation planes' names, in geometry.PLANES's order
@@ -730,6 +731,32 @@ def _item(get_list, i):
     return (lambda: get_list()[i]), (lambda v: get_list().__setitem__(i, v))
 
 
+def dream_half_life(k: float) -> int:
+    """`dream.k` as its readout: the processed frames in which a frame's
+    share of the dream buffer halves, ``log ½ / log(1 − k)``, rounded (the
+    buffer is ``D ← D·(1 − k) + frame·k``, dream.py). 23 at the slow end
+    of the knob, 14 at the default, 2 at the fast end; never under 1, and 1
+    for a value that is not a number (a readout must not raise mid-frame)."""
+    k = float(k)
+    if not math.isfinite(k):
+        return 1
+    k = min(max(k, 1e-6), 1.0 - 1e-9)
+    return max(1, round(math.log(0.5) / math.log(1.0 - k)))
+
+
+def dream_speed_text(k: float) -> str:
+    """`dream.k`'s readout. Whole frames from ten up ("≈14 frames"); under
+    ten, one decimal ("1.9 frames"), because whole frames read "≈2 frames"
+    over nearly half the knob's travel at its fast end and an undo label
+    said "≈2 frames → ≈2 frames". The same width either way."""
+    k = float(k)
+    if not math.isfinite(k):
+        return "≈1 frames"
+    k = min(max(k, 1e-6), 1.0 - 1e-9)
+    h = max(1.0, math.log(0.5) / math.log(1.0 - k))
+    return f"{h:.1f} frames" if h < 9.95 else f"≈{round(h)} frames"
+
+
 def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                    restart=None, ghost=None) -> Registry:
     """Declare every parameter the surface owns.
@@ -782,15 +809,19 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                  lo=0, hi=100, integer=True,
                  fmt=lambda v: f"{int(v)} instance(s)" if int(v) > 0 else "0 · nothing drawn",
                  group=g,
-                 tip="Synchronized copies in a grid — scroll to zoom out over the field, "
-                     "right-drag to pan. 0 draws nothing: the ground, the echoes and the "
-                     "effects carry on.")
-    r.enum("view.inst_motion", "Grid motion", *_attr(view, "inst_motion"), INST_MOTION,
-           group=g, tip="Trigonometric motion over the instance grid — each copy's phase "
-                        "comes from its grid position, so the field moves as one figure.")
-    r.continuous("view.inst_amp", "Grid amp", *_attr(view, "inst_amp"), lo=0.0, hi=1.0,
+                 tip="Synchronized copies, laid out as Layout says — scroll to zoom out "
+                     "over the field, right-drag to pan. 0 draws nothing: the ground, the "
+                     "echoes and the effects carry on.")
+    r.enum("view.inst_layout", "Layout", *_attr(view, "inst_layout"), INST_LAYOUT,
+           group=g, tip="How the copies are laid out: a square grid, a honeycomb growing "
+                        "from the centre, or one ring.")
+    r.enum("view.inst_motion", "Field motion", *_attr(view, "inst_motion"), INST_MOTION,
+           group=g, tip="Trigonometric motion over the field of copies — each copy's phase "
+                        "comes from its place in the layout, so the field moves as one "
+                        "figure.")
+    r.continuous("view.inst_amp", "Field amp", *_attr(view, "inst_amp"), lo=0.0, hi=1.0,
                  fmt=lambda v: f"amp {v:.2f}", group=g)
-    r.continuous("view.inst_rate", "Grid rate", *_attr(view, "inst_rate"), lo=0.0, hi=6.0,
+    r.continuous("view.inst_rate", "Field rate", *_attr(view, "inst_rate"), lo=0.0, hi=6.0,
                  fmt=lambda v: f"rate {v:.1f}", group=g)
     r.enum("view.pattern", "Pattern", *_attr(view, "pattern"), PATTERNS, group=g,
            tip="Face pattern — edit hyperspace/shaders/patterns.glsl while the app runs; "
@@ -865,97 +896,115 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     # the second half. Cadence and size rebuild the ring, so no lane drives
     # them; everything else is a live fader.
     g = "dream"
+    # the labels are the LOOKBACK page's sections (ui_lookback.py): "Echo …"
+    # acts on the echoes, "Dream …" on the dream buffer, and the rest on both
+    # (plan 20 WP4). Each tip opens with what the knob does.
     r.toggle("dream.on", "Look-back", *_attr(dream, "on"), group=g,
-             tip="Composite the frame history over the scene: raw echoes now, the "
-                 "dreamed wake once a worker is attached.")
-    r.continuous("dream.mix", "Dream mix", *_attr(dream, "mix"), lo=0.0, hi=1.0,
-                 fmt=lambda v: f"dream {v:.2f}", group=g,
-                 tip="The dream buffer's opacity under the scene.")
-    r.continuous("dream.echo_mix", "Echo mix", *_attr(dream, "echo_mix"), lo=0.0, hi=1.0,
-                 fmt=lambda v: f"echo {v:.2f}", group=g,
-                 tip="An echo is a copy of an earlier frame, drawn faintly under this "
-                     "one — together they are the trail a moving shape leaves. Echo mix "
-                     "is how bright the newest echo is; older ones fade by the Fade.")
-    r.continuous("dream.fade", "Fade", *_attr(dream, "fade"), lo=FADE_LO, hi=FADE_HI,
-                 log=True, fmt=lambda v: f"halves in {v:.2f} s", group=g,
-                 tip="How long the trail lasts: an echo's brightness halves every this "
+             tip="Echoes and the dream, on or off: the frame history composited "
+                 "under the picture — raw echoes, and the dreamed wake once a "
+                 "worker is attached.")
+    r.continuous("dream.mix", "Dream brightness", *_attr(dream, "mix"), lo=0.0, hi=1.0,
+                 fmt=lambda v: f"{v:.2f}", group=g,
+                 tip="How bright the dream is under the picture: the dream buffer's "
+                     "weight in the composite.")
+    r.continuous("dream.echo_mix", "Echo brightness", *_attr(dream, "echo_mix"), lo=0.0, hi=1.0,
+                 fmt=lambda v: f"{v:.2f}", group=g,
+                 tip="How bright the newest echo is; older ones fade from it by the "
+                     "fade time. An echo is a copy of an earlier frame, drawn faintly "
+                     "under this one — together they are the trail a moving shape leaves.")
+    r.continuous("dream.fade", "Echo fade time", *_attr(dream, "fade"), lo=FADE_LO, hi=FADE_HI,
+                 log=True, fmt=lambda v: f"{v:.2f} s", group=g,
+                 tip="How long the trail lasts: an echo halves in brightness every this "
                      "many seconds of its age, whatever the screen's frame rate "
                      "(0.23 s is the old 0.95 a frame at 60 Hz; 0.76 s is 0.985).")
     r.continuous("dream.darken", "Darken", *_attr(dream, "darken"), lo=0.0, hi=1.0,
                  fmt=lambda v: f"×{1.0 - v:.2f}", group=g,
-                 tip="How much darker the wake is than the frames it came from.")
+                 tip="Darkens echoes and dream alike: how much darker the wake is than "
+                     "the frames it came from.")
     r.continuous("dream.contrast", "Contrast", *_attr(dream, "contrast"), lo=0.5, hi=3.0,
                  fmt=lambda v: f"^{v:.2f}", group=g,
-                 tip="A power curve on every layer: above 1 only the bright, "
-                     "high-contrast regions of the history read.")
-    r.continuous("dream.occlude", "Occlude", *_attr(dream, "occlude"), lo=0.0, hi=1.0,
-                 fmt=lambda v: f"occlude {v:.2f}", group=g,
-                 tip="The render over the wake: at 1 wherever this frame drew, the "
-                     "shape covers the dream and echoes beneath it, so the tracers "
-                     "only fill the space between; at 0 the wake glows over the shapes.")
+                 tip="Above 1 only the bright parts of the echoes and the dream show: a "
+                     "power curve on every layer of the wake.")
+    r.continuous("dream.occlude", "Shape hides wake", *_attr(dream, "occlude"), lo=0.0, hi=1.0,
+                 fmt=lambda v: f"{v:.2f}", group=g,
+                 tip="At 1 the shape covers the echoes and the dream behind it, so the "
+                     "tracers only fill the space between; at 0 they glow through it.")
     # the dream buffer's chroma — the net paints in its own primaries; these
     # re-colour D on its way into the composite (lookback.py, chroma())
-    r.continuous("dream.hue", "Hue shift", *_attr(dream, "hue"), lo=-180.0, hi=180.0,
+    r.continuous("dream.hue", "Dream hue", *_attr(dream, "hue"), lo=-180.0, hi=180.0,
                  wrap=True, fmt=lambda v: f"{v:+.0f}°", group=g,
-                 tip="Rotate the dream's own colours about the grey axis; luminance "
-                     "is kept.")
-    r.continuous("dream.sat", "Saturation", *_attr(dream, "sat"), lo=0.0, hi=2.0,
+                 tip="Turns the dream's own colours about the grey axis; luminance is "
+                     "kept. The echoes are not re-coloured.")
+    r.continuous("dream.sat", "Dream saturation", *_attr(dream, "sat"), lo=0.0, hi=2.0,
                  fmt=lambda v: f"sat {v:.2f}", group=g,
-                 tip="The dream's own colours' saturation: 0 greyscale, 1 as the net "
-                     "painted them, above that pushed.")
-    r.continuous("dream.tint", "Tint", *_attr(dream, "tint"), lo=0.0, hi=1.0,
+                 tip="0 a grey dream, 1 as the net painted it, above that pushed.")
+    r.continuous("dream.tint", "Dream tint", *_attr(dream, "tint"), lo=0.0, hi=1.0,
                  fmt=lambda v: f"tint {v:.2f}", group=g,
-                 tip="Cross-fade from the dream's colours to its luminance in one "
-                     "colour — the tint colour below, or the scene's own hue.")
-    r.enum("dream.tint_from", "Tint from", *_attr(dream, "tint_from"), TINT_FROM, group=g,
-           tip="Where the tint's hue comes from: the tint hue fader, or the hue of "
+                 tip="Crosses the dream's colours into one colour: at 1, its luminance "
+                     "in the tint colour — the one chosen, or the scene's own hue.")
+    r.enum("dream.tint_from", "Dream tint from", *_attr(dream, "tint_from"), TINT_FROM, group=g,
+           tip="The tint's colour: the one chosen (tint hue, tint sat), or the hue of "
                "the scene's mean colour this frame.")
-    r.continuous("dream.tint_hue", "Tint hue", *_attr(dream, "tint_hue"), lo=0.0, hi=360.0,
+    r.continuous("dream.tint_hue", "Dream tint hue", *_attr(dream, "tint_hue"), lo=0.0, hi=360.0,
                  wrap=True, fmt=lambda v: f"{v:.0f}°", group=g,
-                 tip="The tint colour's hue; unused while the tint is from the scene.")
-    r.continuous("dream.tint_sat", "Tint sat", *_attr(dream, "tint_sat"), lo=0.0, hi=1.0,
+                 tip="The chosen tint colour's hue; unused while the tint is from the scene.")
+    r.continuous("dream.tint_sat", "Dream tint sat", *_attr(dream, "tint_sat"), lo=0.0, hi=1.0,
                  fmt=lambda v: f"sat {v:.2f}", group=g,
-                 tip="The tint colour's saturation: 0 tints grey — a greyscale dream.")
-    r.continuous("dream.echoes", "Echoes", *_attr(dream, "echoes"), lo=0, hi=MAX_ECHOES,
-                 integer=True, fmt=lambda v: f"{int(v)} echo(es)", group=g,
-                 tip="How many echoes the trail holds; 0 composites the dream buffer "
-                     "alone. With Spacing it sets the trail's reach: echoes × spacing "
-                     "seconds back.")
-    r.continuous("dream.gap", "Spacing", *_attr(dream, "gap"), lo=GAP_LO, hi=GAP_HI,
-                 fmt=lambda v: f"every {v * 1000:.0f} ms", group=g, modulatable=False,
-                 tip="Time between echoes, in milliseconds, whatever the frame rate: "
-                     "short is a smooth smear, long a row of separate copies (33 ms is "
-                     "every 2nd frame at 60 Hz, 67 ms every 4th; 0 is every frame).")
-    r.enum("dream.res", "Resolution", *_attr(dream, "res"), [str(v) for v in RES], group=g,
+                 tip="The chosen tint colour's saturation: 0 tints grey — a greyscale dream.")
+    r.continuous("dream.echoes", "Echo count", *_attr(dream, "echoes"), lo=0, hi=MAX_ECHOES,
+                 integer=True, fmt=lambda v: f"{int(v)}", group=g,
+                 tip="How many echoes are drawn; at 0 only the dream is. With time "
+                     "apart it sets how far back the trail reaches: count × time apart "
+                     "seconds.")
+    r.continuous("dream.gap", "Echo time apart", *_attr(dream, "gap"), lo=GAP_LO, hi=GAP_HI,
+                 fmt=lambda v: f"{v * 1000:.0f} ms", group=g, modulatable=False,
+                 tip="The time between one echo and the next, in milliseconds, whatever "
+                     "the frame rate: short is a smear, long a row of separate copies "
+                     "(33 ms is every 2nd frame at 60 Hz, 67 ms every 4th; 0 is every "
+                     "frame).")
+    r.enum("dream.res", "Look-back detail", *_attr(dream, "res"), [str(v) for v in RES], group=g,
            modulatable=False,
-           tip="The history's short side in pixels; the render's aspect is kept.")
+           tip="The size, in pixels, the echoes and the dream are kept at (the short "
+               "side; the picture's aspect is kept); a change starts the trail again.")
     # the worker's (WP6b) — presets carry them from day one
-    r.continuous("dream.steps", "Steps", *_attr(dream, "steps"), lo=1, hi=3, integer=True,
-                 fmt=lambda v: f"{int(v)} step(s)", group=g,
-                 tip="Gradient-ascent steps per frame on the dream buffer; 1 flickers.")
-    r.continuous("dream.step", "Step size", *_attr(dream, "step"), lo=0.005, hi=0.06,
+    r.continuous("dream.steps", "Dream passes", *_attr(dream, "steps"), lo=1, hi=3, integer=True,
+                 fmt=lambda v: f"{int(v)}", group=g,
+                 tip="Passes through the net per frame: more is a deeper dream and a "
+                     "slower worker; 1 flickers.")
+    r.continuous("dream.step", "Dream strength", *_attr(dream, "step"), lo=0.005, hi=0.06,
                  fmt=lambda v: f"{v:.3f}", group=g,
-                 tip="How far each step pushes; step × steps should stay under ~0.6 k.")
-    r.continuous("dream.k", "Blend k", *_attr(dream, "k"), lo=0.03, hi=0.3,
-                 fmt=lambda v: f"k {v:.3f}", group=g,
-                 tip="How much of the new frame enters the dream buffer each frame — "
-                     "its memory, 33 frames down to 3.")
-    r.enum("dream.layer", "Layer", *_attr(dream, "layer"), LAYERS, group=g,
+                 tip="How hard the dream is pushed each pass; too hard for the speed and "
+                     "it is held back (the status line says 'step clamped'): strength × "
+                     "passes is kept at or under 1.5 × k (the speed's value).")
+    # the dream's "speed" is its one time constant (plan 20 WP5, fork F8): the
+    # share of the newest frame blended into the buffer each processed frame
+    r.continuous("dream.k", "Dream speed", *_attr(dream, "k"), lo=0.03, hi=0.3,
+                 fmt=dream_speed_text, group=g,
+                 tip="How fast the dream follows the picture: fast, it keeps up and lets "
+                     "go of what has left; slow, it lags, lingers and grows deeper. In "
+                     "dream frames, so it also follows the worker's rate. Slower than "
+                     "about 17 frames at the default strength, the strength is held back "
+                     "(the status line says 'step clamped'). The readout is the frames in "
+                     "which a frame's share of the dream halves; the value is k, the share "
+                     "of each new frame blended in.")
+    r.enum("dream.layer", "Dream layer", *_attr(dream, "layer"), LAYERS, group=g,
            modulatable=False,      # a change makes the worker load another trunk
-           tip="The net layer the dream maximises: conv2_2 fine grain, conv3_3 the "
-               "classic swirl, conv4_3 blotchier, inception the eyes-and-dogs curls.")
-    r.enum("dream.octaves", "Octaves", *_attr(dream, "octaves"), OCTAVES, group=g,
-           tip="Scales the dream runs at, one per frame in rotation — larger forms "
-               "for the same cost.")
-    r.continuous("dream.mask_decay", "Mask decay", *_attr(dream, "mask_decay"),
+           tip="Which layer of the net the dream brings out; a change loads it, which "
+               "takes a moment. conv2_2 fine grain, conv3_3 the classic swirl, conv4_3 "
+               "blotchier, inception the eyes-and-dogs curls.")
+    r.enum("dream.octaves", "Dream scales", *_attr(dream, "octaves"), OCTAVES, group=g,
+           tip="The sizes the dream is worked at, in turn, one a frame: more gives "
+               "larger forms for the same cost.")
+    r.continuous("dream.mask_decay", "Dream linger", *_attr(dream, "mask_decay"),
                  lo=0.9, hi=0.995, fmt=lambda v: f"{v:.3f}", group=g,
-                 tip="How long the dream stays where content was, after it leaves: "
+                 tip="How long the dream stays where the shape was after it has left: "
                      "the content mask's per-frame decay, 10 to 200 frames. The mask "
-                     "decides where the dream may exist; what covers it is Occlude.")
-    r.continuous("dream.jitter", "Jitter", *_attr(dream, "jitter"), lo=0, hi=16,
+                     "decides where the dream may exist; what covers it is Shape hides "
+                     "wake.")
+    r.continuous("dream.jitter", "Dream jitter", *_attr(dream, "jitter"), lo=0, hi=16,
                  integer=True, fmt=lambda v: f"{int(v)} px", group=g,
-                 tip="Random pixel offset per step, the classic trick that turns pixel "
-                     "noise into coherent texture.")
+                 tip="A random shift each pass, in pixels, that turns pixel noise into "
+                     "texture.")
 
     # ---- effects: one param per annotated uniform in shaders/fx/*.glsl ----
     # (fx.py). A file edited into a new shape re-declares its own ids.
