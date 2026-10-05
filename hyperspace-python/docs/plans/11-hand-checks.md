@@ -3,7 +3,7 @@
 Everything only the owner can verify, in the order that costs the least
 time at the machine: laptop alone first, then the APC40, then the camera
 and the box (APC40 still plugged in for check 24), then the projector,
-then IAC + FL Studio, then one back on the laptop, then plans 12 and 13's two, then plan 13's group H (plan 13 is built on `plan-13-integration`), then plan 14's group I and the ghost hands' group J, then plan 15's group K (undo, home, the master dim, save-as on the desk; built on `finish-line`), then plan 16's group L (the cheat sheet off at launch, the FX chips, an idle effect's strip, where the windows open, instances to zero, the dream's layer; checks 58–63, the projector for 61), then plan 17's group M (one Unbind, Learn desk / Learn hand ▸ left / right, the menu on a label and on every meter, the desk big and clickable, the ROUTING filter; checks 64–71, the APC40 for 65, 67 and 70, the camera for 65–67 — run it **after check 72**, which sets the box its hand checks sit in), then plan 18's group N (the interaction box, what a hand Learn lands with, knob smoothing, `hands-orbit`; checks 72–80, the camera for all of it, **calibration first**: check 72 sets the box every later hand check now sits in), then plan 19's group O (checks 81–90, written by plan 19's docs package), then plan 20's group P (effects aimed at the faces, per face or in screen space; dragging an effect's chip to reorder; the look-back page as ECHOES, DREAM and BOTH; dream speed; instance layouts; checks 91–98, the projector and the glass for 98). Each check: the commands, the config, the preset,
+then IAC + FL Studio, then one back on the laptop, then plans 12 and 13's two, then plan 13's group H (plan 13 is built on `plan-13-integration`), then plan 14's group I and the ghost hands' group J, then plan 15's group K (undo, home, the master dim, save-as on the desk; built on `finish-line`), then plan 16's group L (the cheat sheet off at launch, the FX chips, an idle effect's strip, where the windows open, instances to zero, the dream's layer; checks 58–63, the projector for 61), then plan 17's group M (one Unbind, Learn desk / Learn hand ▸ left / right, the menu on a label and on every meter, the desk big and clickable, the ROUTING filter; checks 64–71, the APC40 for 65, 67 and 70, the camera for 65–67 — run it **after check 72**, which sets the box its hand checks sit in), then plan 18's group N (the interaction box, what a hand Learn lands with, knob smoothing, `hands-orbit`; checks 72–80, the camera for all of it, **calibration first**: check 72 sets the box every later hand check now sits in), then plan 19's group O (twenty-four presets, rows 4–5 of the desk as the bank and their lights, the device knobs re-cut, hide / rename / the trash, the dirty dot and "save copy", the home in git; checks 81–90, **on a copy of `~/Hyperspace`**, the APC40 for 82, 83 and 85), then plan 20's group P (effects aimed at the faces, per face or in screen space; dragging an effect's chip to reorder; the look-back page as ECHOES, DREAM and BOTH; dream speed; instance layouts; checks 91–98, the projector and the glass for 98). Each check: the commands, the config, the preset,
 what to do, what a pass and a fail look like, and which audit item or
 code path a fail points at. Where a check can be simulated headless, the
 pytest node or `tools/` command that shows the expected behaviour is
@@ -244,6 +244,9 @@ with it; QUANT (B10) cycles the preset bank (`preset.next`), the clip
 grid's top row (G1·1–G1·8) picks a preset, rows 2–3 a scene (with SHIFT
 latched — the band scenes are the global layer's, group H), rows 4–5 a
 shape, STOP ALL (G6·9) resets the scene with the 8 s undo.
+**Superseded in part by plan 19** (check 82; register row 73): rows
+4–5 are the bank's slots 9–24, on both layers; the shape is the cue
+knob's alone.
 *Fail:* METRONOME LED steady → `lfo.trigger`'s `lit` (tempo.py
 `on_beat`); a button doing what it did before plan 09 → your
 `bindings.json` kept an old row (`remap_factory` only moves rows where
@@ -566,7 +569,9 @@ the device knobs now move the open band strip (ANALYZER page); track knobs
 return (HANDS page) and the BPM; track knobs 6–8 are dark and do nothing.
 Press SHIFT again: LED off, the preset's meanings back. Then hold a shape
 button (clip row 4), press and release SHIFT while holding it, let go of
-the button: one shape change, nothing else. *Fail:* the LED dark while
+the button: one shape change, nothing else. (**Since plan 19** clip
+row 4 is the bank's slots 9–16: hold a filled one instead — one preset
+load, nothing else.) *Fail:* the LED dark while
 latched, or lit only while held → the latch in `MidiIO._handle`; a knob
 keeping its preset meaning under SHIFT → the row's `layer`
 (`apc40.DEFAULT_MAP`, your `bindings.json`); a second action on release →
@@ -592,7 +597,11 @@ ROUTING page's DESK · PRESET LAYER section lists them, dimmed, under the
 desk rows as "D1  unmapped — dark" (through "D8"; hover one for "device
 knob 1"), and the on-screen desk (bottom-left) draws D1–D8 dark;
 with SHIFT latched they light (on the device and on screen, where ⇧ turns
-red) and move the band strip, and the ROUTING head reads LAYER GLOBAL. *Fail:* a lit ring on an unmapped knob → the dark
+red) and move the band strip, and the ROUTING head reads LAYER GLOBAL.
+**Superseded in part by plan 19** (check 85; register row 75): a
+factory TUMBLE now has 4D depth, yaw, pitch and pattern on D1–D4, so
+only D5–D8 are dark (a TUMBLE of yours saved before plan 19 keeps all
+eight dark). *Fail:* a lit ring on an unmapped knob → the dark
 rule in `MidiIO.redraw`; a device knob moving the band strip without SHIFT
 → a fall-through to the global layer, which D8 forbids (`MidiIO._handle`);
 a knob that does nothing but is not listed → `ui_routing.unmapped`.
@@ -623,7 +632,9 @@ not learned" is now met only by clicking S1 on the on-screen desk while
 a desk learn is armed). SHIFT latches through an armed learn, so "Learn
 again" is not needed: the K6 refusal shows in the footer as well, the
 learn is still armed after it, and after unlatching SHIFT the same learn
-lands on device knob 3. The message ends "; K1 let go". *Fail:* a learn on a
+lands on device knob 3. The message ends "; K1 let go". **Since plan
+19** D3 on a factory preset with no knobs of its own is the camera's
+pitch (register row 75): the learn takes D3 from it. *Fail:* a learn on a
 fader or under SHIFT → `Learn.learn_control` (`learn.blocked`) and the
 learning branch of `MidiIO._handle`; `bindings.json`
 rewritten → a learn still writing the session file; no dot → the desk in
@@ -694,7 +705,8 @@ occlude · dream mix · dream sat · dream k, and TRIP's set fx mix · plasma
 level · kaleido segments · kaleido zoom · burst amount · burst glow · hue
 paint · hue spread (plan 12 §6) — device knobs 1–8 are `cc:*:16`–`23`, absolute —
 each ring showing its value; on TUMBLE, FACES and FIELD the device
-knobs are dark (SHIFT brings the band strip). TUMBLE's left height
+knobs are dark (SHIFT brings the band strip) — **since plan 19** D1–D4
+are 4D depth, yaw, pitch and pattern there and D5–D8 dark (check 85). TUMBLE's left height
 still pushes the drive (row 19 (a)), its ROUTING row marked "session".
 *Fail:* a look → the values in `library/presets/party-*.json` (data)
 or a route in `preset.party_*_routes` (generated: change the generator,
@@ -788,6 +800,12 @@ the header's `big` chip) it fills the control window and every lit
 control carries its param's name, the glyph small in the corner. The
 walk above is easier at that size. A click on a control now picks it
 (check 70): click it again, or the ground between controls, to let go.
+**Superseded in part by plan 19** (checks 82 and 85; register rows 73,
+75): clip rows 4–5 are the bank's slots 9–24 on both layers — a filled
+slot's pad amber at half strength with its preset's name, an empty
+one dark with its glyph only, the loaded one green — and on a preset
+with no knobs of its own D1–D4 are lit (4D depth, yaw, pitch, pattern).
+The device's amber is velocity 5.
 *Fail:* a control drawn in the wrong place →
 `apc40._layout` (its x, y); lit on screen but dark on the device, or the
 reverse → the screen reads `Bindings.active` and the device
@@ -956,7 +974,11 @@ look before the save and the second the look that was deleted; copying
 one back into `~/Hyperspace/presets/` as `check-53.json` brings the
 preset back into the list within a couple of seconds. Press save twice
 with no change in between: no new file in the trash. The PRESETS page's
-"more" lists no module called "trash". *Fail:* nothing in the trash →
+"more" lists no module called "trash". **Superseded in part by plan
+19** (check 88; register row 76): the trash has a view — the preset
+list's "trash (n) ▸", with restore (never over a file) and a two-click
+"empty trash…" — so copying a file back by hand is no longer needed,
+though it still works. *Fail:* nothing in the trash →
 `library.to_trash` in `Library.save_as` / `Library.delete`; a "trash"
 strip under "more" → `Library.groups`.
 
@@ -1052,7 +1074,12 @@ refusal is said, and the learn stays armed
 (`tests/test_desk.py::test_the_clip_stop_row_is_invariant`). Two
 things this build does **not** do, so they are not fails: the on-screen
 desk lights the bar while it is held but does not blink, and the cheat
-sheet does not name the bar. *Fail:* a tap saving →
+sheet does not name the bar. **Superseded in part by plan 19** (check
+83; register row 72): the bank is twenty-four, so **the next empty slot
+may be a far one** — after F8 the save goes to slot 9 (slot 10 on the
+factory party show, where TRACER holds 9), the new slot's pad on clip
+row 4 or 5 blinks, and the footer says "→ slot 10"; (d)'s "the bank is
+full" comes only once all twenty-four are filled. *Fail:* a tap saving →
 the hold time (`midi.HOLD_S`, `MidiIO._handle`); a save into a taken slot
 or over a file → `Project.next_empty`, `library.next_name`; no blink →
 `apc40.blink_of` and the blink in `MidiIO.feedback` (if the clip-stop
@@ -1096,7 +1123,17 @@ each preset you saved on the night: if one had learned a control onto
 OVERDUB or a clip-stop button, that row is dropped at the load, the
 ROUTING head says "desk: dropped … that control is invariant", and the
 row is gone from the preset when you next save it (the old file goes to
-the trash, check 53). *Fail:* no backup → `routing.backup` in
+the trash, check 53). **Superseded in part by plan 19** (check 84;
+register rows 73, 74): the first launch of a build with plan 19 adds
+**sixteen more rows** — `added note:0:56 → preset.select (the APC40
+map of plan 19)` through `note:7:57`, the bank's pads on clip rows 4–5
+— in the same rewrite with the same backup, wherever no MIDI row of
+yours is on the pad; the summary is also one line on the SYSTEM page
+("bindings.json updated (N rows changed), the old file kept as
+bindings.json.bak-v3 — each change is on stderr"); and if the backup
+cannot be made the file is **not** rewritten at all (the line then
+says so, and the next launch tries again). The shape pads in your
+presets drop at load **without** a note (check 83). *Fail:* no backup → `routing.backup` in
 `Bindings.load`; a row of yours replaced → `routing.remap_factory` (it
 may only swap the exact factory row — one caveat: a crossfader row of
 yours that was *identical* to the old factory row cannot be told from it
@@ -1369,7 +1406,10 @@ APC40 and camera, F5 (TRIP), hands out of the box. VIEW page,
 right-click Speed → **Learn hand ▸ right**. Turn D1 and press a clip pad
 of row 4. *Pass:* FX mix moves with D1 and the shape changes; the footer
 still reads "learning view.speed — move the right hand…"; ROUTING's desk
-has no new line and K2 still has Speed. Click a control on the on-screen
+has no new line and K2 still has Speed. (**Since plan 19** a pad of
+row 4 is a bank slot: a filled one loads its preset — the learn still
+armed, now in that preset — and an empty one says "slot N: an empty
+slot"; turn the cue knob for the shape instead.) Click a control on the on-screen
 desk: nothing happens (a hand learn is armed). Click the footer's red
 line: the learn is cancelled and the frame goes. *Fail:* D1 now drives
 Speed → `MidiIO._handle` did not ask `Learn.accepts`; the desk click
@@ -1429,7 +1469,11 @@ at launch, so after widening the window drag the panel to the right edge
 (or quit and relaunch: the size is remembered, check 61) — the desk left
 of it then carries its names. Press `/` with the panel hidden: the desk
 moves over to sit beside the cheat sheet. Hold the APC40 beside the
-screen: each control is where the drawing says (check 45's walk). *Fail:*
+screen: each control is where the drawing says (check 45's walk).
+**Since plan 19** (register row 73) clip rows 4–5 are bank pads too: a
+filled one amber at half strength with its preset's name in the bright
+ink (on the factory party show G4·1 reads TRACER), an empty one dark with
+no label — the same on both layers. *Fail:*
 names cut to nothing → `ui_desk.wrap` / `ui_desk.label_px`; the desk
 under the panel → `Panel._panel_x` not recorded (`Panel._draw`) or
 `ui_desk.room`; the desk and the cheat sheet overlapping →
@@ -1707,7 +1751,251 @@ axis and was not built (register row 56). Press R with a hand in the
 box and say whether the camera resets (a review suspected it does not;
 headless it did). If the preset is not wanted, hide it (plan 19).
 
-## O. Plan 19 — written by plan 19's docs package
+## O. Plan 19 — twenty-four presets, the knobs, the list, the trash, git — added 2026-10-04
+
+**Copy `~/Hyperspace` first, and run every check on the copy.** This is
+the plan that renames, hides and trashes files in that folder, and the
+presets saved on the night may have no other backup.
+
+```
+cp -R ~/Hyperspace ~/Hyperspace-before-19          # the one to keep
+cp -R ~/Hyperspace ~/Hyperspace-try-19             # the one to play on
+export HYPERSPACE_HOME=~/Hyperspace-try-19
+```
+
+Run on `finish-line` once plan 19 is merged into it (PRs #104 the bank
+of twenty-four, #110 rows 4–5 of the desk, #115 the device knobs, #114
+the dirty dot, #117 hide / rename / the trash, #119 the home in git).
+Every check below runs in a terminal with that variable set; the app
+then reads and writes only the copy (its `config.toml` included). Only
+when 81–90 pass, open a new terminal without it and launch on the real
+home; keep `~/Hyperspace-before-19` until a party has been played.
+**81 and 84 are the first launch** — keep its stderr (`uv run hyperspace
+2>&1 | tee ~/first-launch-19.txt`) — then 82, 83 and 85 with the APC40,
+then 86–89 on the laptop, and 90 last (it turns git on in the copy).
+About 40 minutes. Run the headless tests named first. None of this has
+been tried by a person or been on the APC40: it was shown by tests (the
+panel driven by imgui events a test feeds it, the desk through fake
+MIDI ports), hidden-window renders and scripted launches on a laptop
+(`19-presets-and-the-desk.md` §7). **Amber at velocity 5, the pads of
+rows 4–5, the knobs' new choices and every popup are unseen.** Decision
+register rows 72–78 are the calls these checks let you confirm or
+overturn.
+
+**81. An eight-slot show opens untouched, and the page holds twenty-four (plan 19 WP1; register row 72).**
+Headless: `uv run pytest -q tests/test_library.py::test_an_eight_slot_show_loads_and_is_not_rewritten tests/test_library.py::test_the_first_write_past_slot_eight_keeps_the_eight_slot_file tests/test_ui_presets.py::test_twenty_four_slots_fit_the_page_with_more_open tests/test_ui_presets.py::test_a_far_slot_reads_its_number_and_name_and_has_the_slot_menu`.
+Before the first launch: `ls -l $HYPERSPACE_HOME/projects/`. Launch
+(keeping stderr, above), open your show (PRESETS → show ▾), press F1–F8,
+quit. `ls -l` again. *Pass:* every show file has the same size and time
+as before; your eight presets are on F1–F8; under them are sixteen
+smaller buttons four a row, "9" to "24", each "—" where empty (on the
+factory party show 9 reads TRACER); the page has no scrollbar, with
+"more" open as well. Right-click 12 → **put preset here…** → one of
+yours. *Pass:* the button reads "12" and the name; the footer says
+"slot 12: <name>"; in `projects/` there is now
+`<show>.hyp.json.bak-v2-bank8`, the file as it was (a factory show
+opened as shipped has no file to keep: its first write makes your
+copy). Put another preset on slot 20: no second backup. One thing to
+know, not a fail: with "more" open, **a warning line on top of the
+status line scrolls the page by 11 px** (measured; pressing an empty
+far slot makes one — "slot 13: an empty slot"); say if that is a
+nuisance (register row 72: the fallback is the far slots eight a row).
+*Fail:* a show file changed by opening it → `Project._take` / `write`;
+a scrollbar with no warning showing → `ui_presets.preset_bank`
+(`FAR_COLS`, `FAR_GAP`); no backup → `Project.write`, `library._kept`.
+
+**82. Rows 4 and 5 are presets, on both layers (plan 19 WP2; register row 73).**
+Headless: `uv run pytest -q tests/test_desk.py::test_rows_four_and_five_load_slots_nine_to_twenty_four_on_both_layers tests/test_desk.py::test_the_bank_pads_are_invariant tests/test_midi.py::test_a_bank_pad_is_green_loaded_amber_filled_and_dark_empty tests/test_ui_desk.py::test_a_filled_pad_is_amber_and_an_empty_one_has_no_label`.
+APC40 in. With a preset on slot 12 (81): look at the grid. *Pass:* row 1
+has one green pad (the loaded preset) and **amber** on the other filled
+slots; row 4's fourth pad is amber; empty slots are dark (the
+velocities sent are 1 green, 5 amber, 0 dark). On the on-screen desk
+(H for the big one) the same pads are amber at half strength with
+their presets' names, and an empty bank pad shows only its glyph. Press
+row 4's fourth pad: it turns green, the old one amber, the picture
+changes, and slot 12's button on the PRESETS page is lit. Press an
+empty far pad: nothing loads, the footer says "slot 16: an empty slot".
+Latch SHIFT: the same pads, the same lights; press another filled far
+pad: it loads, and SHIFT drops (a load drops to the preset layer). Turn
+the cue knob: the shape changes, through all 25 — **the lit pad no
+longer shows which shape is up** (the VIEW page's shape combo does).
+Right-click a param → Learn desk, press a far pad: the pad loads its
+preset and the learn stays armed (invariant). *Fail:* amber that cannot
+be told from green, or no amber → `apc40.filled_of` (the velocity) —
+say what you see; the fallback is green-or-dark, `filled_of` returning
+`None`; a pad that changes the shape → an old row in `bindings.json`
+(84); nothing under SHIFT → the rows have a layer.
+
+**83. A preset you saved before loads without a fuss, and save-as goes past F8 (plan 19 WP1, WP2; register rows 72, 73).**
+Headless: `uv run pytest -q tests/test_presets.py::test_an_old_preset_loads_without_its_shape_pads_and_its_file_is_untouched tests/test_presets.py::test_the_next_save_of_an_old_preset_writes_the_desk_without_the_pads tests/test_midi.py::test_save_as_blinks_the_new_pad_on_row_four tests/test_library.py::test_save_as_lands_on_slot_nine_once_the_f_keys_are_full`.
+`ls -l $HYPERSPACE_HOME/presets/`. Load three presets saved on the night
+from the list. *Pass:* no warning about dropped rows, no dirty dot, and
+`ls -l` shows no preset file's time moved: the sixteen old shape pads
+each file carries are dropped from the live desk quietly, and stay in
+the file until you save that preset — then the old file goes to
+`trash/presets/` (check 53) and the new one has no shape pads. (If you
+had learned something onto a pad of rows 4–5, there **is** a warning
+naming it — "dropped note:3:56 → …: that control is invariant, the
+session's (plan 13 D6)": that mapping is gone from the live desk and
+still in the file until you save.) The orchestrator loaded the
+seventeen presets in `shared/dan-2026-10-04/` this way on a temp home:
+none said anything. Now the save-as: open the factory **party** show,
+right-click F8 → clear slot, change the look, and hold the clip-stop
+row. *Pass:* at about 0.6 s the bar and F8's pad blink; "saved … → F8".
+Change the look and hold again: the bar and **row 4's second pad**
+blink for a second and a half and the footer says "saved … → slot 10"
+(TRACER holds slot 9). On a show of yours from before this build the
+first far save lands "→ slot 9" and that show gets its
+`.bak-v2-bank8` (81). *Fail:* a warning on every load →
+`routing.RETIRED_DESK_ROWS`; a preset file's time moving on a load →
+`Presets.load_doc`; the blink on row 1 only → `apc40.blink_of`; "the
+bank is full" after F8 → the show's bank is not 24 long (`Project._take`).
+
+**84. The session's file was brought along, with a backup (plan 19 WP2; register rows 73, 74).**
+Headless: `uv run pytest -q tests/test_routing.py::test_an_older_file_gets_the_bank_pads_with_a_backup tests/test_routing.py::test_a_second_launch_writes_nothing_and_says_nothing tests/test_routing.py::test_a_row_the_owner_put_on_a_bank_pad_is_left_alone tests/test_routing.py::test_a_remap_whose_backup_fails_writes_nothing`.
+Read the first launch's stderr (81). *Pass:* one line "backup:
+bindings.json kept as bindings.json.bak-v3 before the rewrite" (a
+dated `.bak-v3-<stamp>` name if one was there already), then **sixteen
+lines** "bindings: …/bindings.json: added note:0:56 → preset.select
+(the APC40 map of plan 19)" through `note:7:56` and `note:0:57` through
+`note:7:57`, then "bindings: updated …/bindings.json (16 rows
+changed)". If this copy's file had never been opened by a build with
+plan 15 (check 57), the same launch also prints check 57's lines, and
+the count is the sum. The SYSTEM page shows the same as **one line**:
+"bindings.json updated (16 rows changed), the old file kept as
+bindings.json.bak-v3 — each change is on stderr". `grep -c
+preset.select $HYPERSPACE_HOME/bindings.json` says 24. A row of yours
+on a pad of rows 4–5 (a hand edit of the file) is still there, that pad
+does what your row says, and no bank row was added for it (its slot is
+reached from the PRESETS page). Launch again: stderr says nothing about
+bindings, the SYSTEM page has no such line, and `bindings.json`'s time
+does not move. *Fail:* no backup and a changed file → `Bindings.load`
+(no backup, no rewrite); "NOT rewritten … no backup could be made" on
+SYSTEM → the folder refused the copy: the file is as it was and the
+next launch tries again; the sixteen lines on every launch →
+`remap_factory` is not finding its own rows.
+
+**85. The knobs that were dark (plan 19 WP3; register row 75).**
+Headless: `uv run pytest -q tests/test_plan12_presets.py::test_no_factory_knob_is_dead tests/test_midi.py::test_a_knob_on_the_pattern_steps_through_every_pattern tests/test_presets.py::test_a_users_desk_is_untouched_by_the_recut`.
+F1 (TUMBLE): turn D1–D4. *Pass:* D1 4D depth, D2 the camera's yaw, D3
+its pitch, D4 the face pattern — one pattern a step, every ring
+following; D5–D8 dark and dead. **If TUMBLE is white in the list (your
+own, saved before this build), its knobs stay as you saved them — dark —
+and that is right**: load a house mood from the list instead (dim, the
+factory's), which has the same four. A house mood: the same four. TRIP,
+WAKE, ACID: their eight, as before. `hands-fx` from the list: D1 FX
+mix, D2–D6 the Acid shader (bend, twist, reach, breathe, speed), D7 4D
+depth, D8 yaw. `hands-pinch`: D1 FX mix, D2–D3 the hue cycle's paint
+and spread, then depth, yaw, pitch, pattern. `lfo-breathe`: D1 still
+Breathe. D4 changes nothing you can see on a preset with faces off (the
+pattern is drawn on the faces). Then say which knobs you reached for and
+found dark or useless: K7 (Bitmap alpha) does nothing on a factory
+preset, and the scene presets have no echo or effect knob (register
+row 75, fork 7). *Fail:* a lit knob that moves nothing → that preset's
+row in `preset.py`; one knob doing two things → `knob_desk`; D4 skipping
+patterns → `MidiIO._apply`'s `set_norm` on an enum.
+
+**86. Cull the list (plan 19 WP4; register row 76).**
+Headless: `uv run pytest -q tests/test_library.py::test_hiding_a_factory_preset_takes_it_off_the_list_and_nothing_else tests/test_library.py::test_a_deleted_preset_says_which_slots_still_name_it tests/test_ui_presets.py::test_the_list_has_a_cross_on_every_preset_and_rename_on_yours tests/test_ui_presets.py::test_a_slot_whose_preset_is_gone_says_so`.
+PRESETS → click the preset strip's name → the list (twelve rows, then
+it scrolls). Every row has ×; yours (white) also have **rename**. × on
+`legacy6`, on the `hands-*` you do not want, on a house mood. *Pass:*
+each goes; the footer says "hidden legacy6 — show hidden in the list
+brings it back" (or "… — F3 still loads it" for one on a slot); the foot
+of the list reads "show hidden (n)"; `cat $HYPERSPACE_HOME/hidden.json`
+lists their file stems. Click "show hidden": they are back, struck
+through and dimmer, each with **unhide**. An F-key or a pad that named a
+hidden preset still loads it. × on one of **your** presets that is on a
+slot: *Pass:* it goes; the footer says, in the warning colour, "<name>
+is in the trash — F6 still names it; restore it from the trash, or
+clear the slot"; that slot's button is in the warning colour and its
+hover says where to look; its pad stays amber, and pressing it says
+"F6: no preset '<name>'". *Fail:* a hidden preset that will not load
+from its slot → `Library.list(hidden=)` leaked into `path_of`; a
+module strip's list (under "more") with × on a factory preset → it
+should have none (`_list_row`).
+
+**87. Give "TRIP 3" a real name (plan 19 WP4; register row 76).**
+Headless: `uv run pytest -q tests/test_library.py::test_rename_updates_every_show_and_keeps_each_old_file tests/test_library.py::test_rename_refuses_a_taken_name_and_a_factory_preset tests/test_library.py::test_renaming_the_loaded_preset_keeps_its_unsaved_edit tests/test_presets.py::test_rename_and_trash_are_no_undo_step`.
+Put a preset of yours on a slot in two different shows of yours. In the
+list: **rename** → the row becomes a name field → type a name → Enter.
+*Pass:* the footer says "renamed TRIP 3 → SUNRISE (2 shows updated)";
+the list, the slot and "starts on" (if it was that one) show the new
+name at once; open the other show: its slot has the new name too.
+`ls $HYPERSPACE_HOME/trash/presets $HYPERSPACE_HOME/trash/projects`: the
+old preset file and each show as it was. Rename it to a name another
+preset has: refused ("library: …: that name is taken — pick another"),
+nothing changes. A factory preset has no rename (save copy, then rename
+the copy). Rename the loaded preset while it has an unsaved change: the
+dot stays lit. ⌘Z does not undo a rename (no undo step): rename it back.
+*Fail:* a slot that says "no preset" after a rename → step 5 of
+`Library.rename` (`_repoint`).
+
+**88. The trash (plan 19 WP4; register row 76).**
+Headless: `uv run pytest -q tests/test_library.py::test_restore_never_overwrites tests/test_library.py::test_empty_trash_removes_only_the_trash tests/test_library.py::test_the_trash_lists_only_what_it_kept tests/test_ui_presets.py::test_empty_asks_once_and_disarms`.
+The list → **trash (n) ▸**. *Pass:* a second popup, "trash · n files",
+every file the trash holds — older versions saves replaced (check 53),
+what 86 and 87 put there, the shows from 87 — newest first, each with
+its folder, name and time ("Oct 4 01:12") and **restore**; past twelve
+rows it scrolls. Restore the preset from 86: the footer says "restored
+<name>", it is in the list, its slot loads again and the warning colour
+is gone. Save over a preset twice, then restore the older copy: *Pass:*
+"restored as TRIP 4 — TRIP 3 is taken" (the next free name), and the
+newer one is untouched. Click **empty trash…** once and wait: *Pass:*
+it reads "delete n files for good? — click again" in the warning colour,
+then after 4 s goes back to rest, and nothing was deleted. Click it,
+then click anything else: disarmed. Click, then click again: "trash: n
+files deleted for good"; the "trash ▸" line is gone from the list;
+`ls $HYPERSPACE_HOME/trash` is empty. **Empty trash is the one action in
+the app that deletes with no copy kept** (register row 76). *Fail:* a
+restore that replaced a preset → `restore_trash` (tell us at once:
+`~/Hyperspace-before-19` has it); one click emptying → `_trash_popup`.
+
+**89. The dot from a step back (plan 19 WP5; register row 77).**
+Headless: `uv run pytest -q tests/test_ui_presets.py::test_the_dot_is_a_twelve_pixel_disc_and_save_is_lit_while_dirty tests/test_ui_presets.py::test_save_reads_save_copy_on_a_factory_preset tests/test_ui_presets.py::test_the_preset_strip_has_no_reset_and_does_not_overlap tests/test_ui_routing.py::test_the_head_has_the_same_dot_and_label`.
+Load a factory preset you have no copy of (dim in the list) that is on a
+slot, stand at arm's length, move a fader. *Pass:* you can see it is
+unsaved without leaning in: the save chip is solid red, a red disc sits
+by the name, the slot's button has a small white disc. The chip reads
+**save copy** and the strip has no reset; press it: it reads "save",
+the dot goes, the list shows the preset once, white (yours). ROUTING's
+head shows the same disc and label. A preset of yours reads "save".
+Under "more", a module strip's save chip overlaps the right end of its
+name: known and not this plan's (audit U10). *Fail:* cannot be read from
+there → `ui.DOT_R`, or say what would read.
+
+**90. The home in git, if you want it (plan 19 WP6; register row 78).**
+Headless: `uv run pytest -q tests/test_homegit.py tests/test_library.py::test_hide_rename_and_restore_each_ask_for_a_commit tests/test_config.py::test_library_git_is_off_by_default_and_a_switch`.
+First `git -C $HYPERSPACE_HOME rev-parse --show-toplevel`: it should say
+"not a git repository" (if it names a folder above the copy, your home
+folder is itself a repository and git will refuse, by design — one note
+on the warning line, nothing written). In `$HYPERSPACE_HOME/config.toml`
+add `[library]` and under it `git = true`. Launch. *Pass:* SYSTEM's
+library line reads "library: … · git"; `ls -a $HYPERSPACE_HOME` shows no
+`.git` yet. Save a preset (as…). *Pass:* `git -C $HYPERSPACE_HOME log
+--oneline` shows one commit, "Hyperspace: the home as it was when git
+was switched on", whose body (`git -C $HYPERSPACE_HOME log -1
+--format=%b`) names your save; `.gitignore` is there. Save it again
+after a change, rename it, × it, × a factory preset, put a preset on a
+slot: a commit each, in the library's words — "save preset …",
+"rename preset … → …" (when the open show named it, its "show …: bank"
+is in that commit's body, or is the very next commit if the worker had
+already started), "trash preset …", "hide preset …", "show …: bank". `git -C $HYPERSPACE_HOME
+status --short` is empty; `git -C $HYPERSPACE_HOME ls-files | grep -c -e
+weights -e trash -e last_show -e windows.json -e .bak-` says 0; `git -C
+$HYPERSPACE_HOME remote` prints nothing. Now `touch
+$HYPERSPACE_HOME/.git/index.lock` and save: *Pass:* the save is instant,
+the preset is on disk, the warning line says "git: not committed (git
+add exited 128: …); saves are not affected"; save again: nothing more is
+said. `rm $HYPERSPACE_HOME/.git/index.lock` and save once more: one
+commit in that save's words, holding all three files (`git -C
+$HYPERSPACE_HOME show --stat HEAD`); the words of the two saves made
+while it failed are not in the log. Emptying the trash makes no commit
+(the trash is ignored). *Fail:* a save that waits → `homegit.Committer.request`;
+a `.git` before the first save → `app._open_homegit`. Leave the key off
+on the real home unless you want it: it is one home's local history,
+not a way to share presets — that is `shared/` and
+`tools/shared_presets.py`.
 
 ## P. Plan 20 — the faces as an effect target, the chain view, the look-back page, layouts — added 2026-10-04
 
