@@ -491,8 +491,10 @@ def test_the_page_has_no_conflicting_ids(tmp_path, monkeypatch):
         panel = Panel(Control(chain), audio, view, bank=lib.project, registry=reg, library=lib)
         panel.renderer = SimpleNamespace(fx=SimpleNamespace(state=st, error=lambda n: ""))
         ids: list[str] = []
+        # …and its own popup: a param's menu hangs off its chip's LED, its
+        # chip's name and its strip's check (plan 16 WP2: a key apiece)
         for fn in ("button", "checkbox", "slider_float", "slider_int", "combo",
-                   "invisible_button"):
+                   "invisible_button", "begin_popup_context_item"):
             real = getattr(imgui, fn)
 
             def rec(label, *a, _real=real, **k):
@@ -654,15 +656,16 @@ class PageRig:
         load_fonts()
         if r is None:                    # a bare rig; `r` is test_undo.boot's, with an Undo
             chain = Analyzer(Analyser())
+            control = Control(chain)
             audio = SimpleNamespace(chain=chain, on=False, mode="", error="", label="",
                                     sr=48000.0)
             self.st = FxState()
             lib = Library(tmp_path, period=0.0)
             view = ViewState()
-            self.reg = build_registry(view, Control(chain), audio, lib.project, fx=self.st)
+            self.reg = build_registry(view, control, audio, lib.project, fx=self.st)
             lib.attach(self.reg)
-            self.panel = Panel(Control(chain), audio, view, bank=lib.project,
-                               registry=self.reg, library=lib)
+            self.panel = Panel(control, audio, view, bank=lib.project, registry=self.reg,
+                               library=lib)
         else:
             self.st, self.reg = r.fx, r.reg
             r.audio.__dict__.update(mode="", error="", label="", sr=48000.0)
@@ -674,7 +677,6 @@ class PageRig:
         self.texts: list[str] = []       # every text_colored line of the last frame
         self.disabled: dict[str, int] = {}   # item id → begin_disabled depth it was drawn at
         self.veils: list[tuple[float, float, float, float]] = []   # ui_fx._dim's rects
-        self.scroll = 0.0
         depth = [0]
 
         def item(fn):
@@ -729,7 +731,6 @@ class PageRig:
         imgui.set_next_window_size(imgui.ImVec2(*self.size))
         imgui.begin("page", None, imgui.WindowFlags_.no_title_bar | imgui.WindowFlags_.no_move)
         self.ui_fx.page(self.panel, 1 / 60)
-        self.scroll = imgui.get_scroll_max_y()
         imgui.end()
         imgui.end_frame()
 
@@ -776,6 +777,41 @@ def test_a_chip_click_selects_and_never_toggles(fxpage):
             assert st.selected() == name, (name, at)
             assert switches() == before, (name, at)
     assert reg["fx.select"].value == st.names().index("fractals")
+
+
+def test_the_first_effect_is_held_by_name_once_it_is_shown(fxpage):
+    """Nothing chosen (every launch) means the first effect is open; once
+    the page has drawn it, it is held by name, so dragging its own order
+    slider — or a preset load — does not hand the strip to the new first."""
+    st, reg = fxpage.st, fxpage.reg
+    first = st.names()[0]
+    assert st.sel_name is None
+    fxpage.frame()
+    assert st.sel_name == first
+    for k in range(100):                             # its own order, end to end
+        reg[f"fx.{first}.order"].set_value(k)
+        fxpage.frame()
+        assert st.selected() == first, k
+    assert st.names()[-1] == first
+
+
+def test_the_leds_hover_says_what_a_click_does(fxpage):
+    """The LED shows what runs (the effective value); a click writes the
+    base. Its hover reads the base, and names the source riding it."""
+    from hyperspace.ui_fx import LED_OFF_TIP, LED_ON_TIP, _led_tip
+    st, reg, panel = fxpage.st, fxpage.reg, fxpage.panel
+    p = reg["fx.warp.on"]
+    assert _led_tip(panel, p) == LED_OFF_TIP == "off — click to switch on"
+    p.set(True)
+    assert _led_tip(panel, p) == LED_ON_TIP == "on — click to switch off"
+    p.set(False)
+    p.modulate(1.0)                                  # a source holds it on over an off base
+    reg.apply()
+    assert st.values["warp"]["on"] and not p.base
+    tip = _led_tip(panel, p)
+    assert tip.startswith(LED_OFF_TIP + "\n") and "→ on" in tip
+    fxpage.click("led.fx.warp.on")                   # the click does what the hover said
+    assert p.base is True
 
 
 def test_the_chips_led_toggles_and_never_selects(fxpage):
@@ -903,6 +939,9 @@ def test_a_bypassed_stack_says_so_on_the_strip(fxpage):
     assert "its mix is at 0" in fxpage.texts
     assert not [k for k in fxpage.rects if k.startswith("idle.")]
     assert {t for t, _, _ in IDLE.values()} & set(fxpage.texts) == {"its mix is at 0"}
+    # the fader that line names is the one row left undimmed
+    assert len(fxpage.veils) == 1
+    assert fxpage.veils[0][1] >= fxpage.rects["fx.warp.mix"][3]
 
 
 def test_the_idle_strips_controls_stay_live(fxpage):
