@@ -106,9 +106,10 @@ GPU rasterises. Geometry is exact to 1e-12 against the traces
 (`tests/test_core.py:33-53`). `ViewState`, the dataclass the renderer
 draws, lives in `view.py` so nothing needs moderngl to hold a view.
 
-`Renderer.draw` (`render.py:446-481`) is six stages, and with look-back,
-FX and the ghost hands off the output is bit-identical to the scene pass
-alone (`tests/test_render.py:306`, `tests/test_ghost.py`):
+`Renderer.draw` (`render.py`, `_draw_frame`) is seven stages, and with
+look-back, FX and the ghost hands off and the master dim at 1 the output
+is bit-identical to the scene pass alone (`tests/test_render.py:306`,
+`tests/test_ghost.py`, `tests/test_render.py::test_dim_at_one_is_the_old_frame_exactly`):
 
 1. **Scene pass** into an MSAA RGBA target (`draw_scene`, `render.py:498`):
    zoom and pan about the cursor; the instance grid with motion; face
@@ -127,6 +128,24 @@ alone (`tests/test_render.py:306`, `tests/test_ghost.py`):
 6. **Ghost hands** — when `ghost.on` and a hand is in view, both hands
    over the finished target in their own pass and camera (§2.7). Nothing
    before it sees them.
+7. **Master dim** (plan 15 WP3, decision 28) — when `Renderer.dim` is
+   under 1, one full-screen triangle that multiplies what is on the
+   target by the factor (`Renderer.dim_pass`). It reads no texture and
+   draws nothing: the fragment is `vec4(0, 0, 0, factor)` and the blend
+   function does the multiply. Window and fullscreen (an opaque ground):
+   colour × factor, alpha left exactly as it was, so the ground stays
+   opaque black at any dim. Overlay (a see-through ground): colour and
+   alpha both scale, so the render fades off the desktop. The scene, the
+   look-back, every effect and the ghost hands dim alike; the look-back's
+   history and the dream worker are fed before it and never hold a dim.
+   The multiply is linear in the framebuffer's values (0.5 is half the
+   8-bit value, not half the perceived brightness); a curve would go on
+   `factor` inside `dim_pass`. At 1 the pass does not run. A driver that
+   refuses its program leaves the frame undimmed, is not asked again
+   until a reload, and the reason is on `Renderer.dim_error` and under
+   the dim's row on the OUTPUT page (`tests/test_render.py`, the seven
+   `dim` tests). Seen offscreen and in a scripted launch on a laptop
+   window; not on the projector or the glass (hand check 55).
 
 **The target is bound explicitly** (plan 14 WP1). `Renderer.draw` draws
 into whatever framebuffer is bound when it is called; it captures that
@@ -151,7 +170,8 @@ default, the render window is created without `TRANSPARENT_FRAMEBUFFER`
 (`Output._set_overlay`: the `T` key and MASTER select `note:0:80` bind the
 `overlay.on` alias, the panel draws the toggle disabled with the reason,
 a preset cannot carry it), and `Output.mode` never reads overlay, so the
-crossfader's `overlay.bg` and `output.alpha` do nothing; `on_start` is
+ground (`output.bg`, alias `overlay.bg`; the crossfader's until plan 15
+WP3, now set from the OUTPUT page only) and `output.alpha` do nothing; `on_start` is
 ignored with a note on stderr (`tests/test_overlay.py::test_overlay_refuses_every_road_while_the_config_shuts_it`,
 `::test_the_ground_and_opacity_do_nothing_while_shut`,
 `tests/test_app_boundary.py::test_the_render_window_is_transparent_only_when_the_config_asks`).
@@ -301,7 +321,15 @@ window (window · fullscreen · overlay with passthrough and opacity) from
 the `output.*` params, applied once a frame through an injectable backend
 (`tests/test_overlay.py`); `overlay.*` are aliases the factory table
 binds, and `Output.allowed` (the config's `overlay`) is the gate every one
-of them passes. `output.monitor` offers *follow window* — the screen the window is
+of them passes. `output.dim` (the **master dim**, plan 15 WP3) is the one
+`output.*` param that is not a window-system setting: 0 is black, 1 is
+full, the renderer multiplies the finished frame by it (§2, stage 7), and
+`app.frame` hands it over each frame beside the ground. It is a rig
+setting — not persisted, not modulatable, no `[output]` key, no alias —
+so a launch always starts at full and no preset or show can move it. It
+is the OUTPUT page's first row, reading "black" at 0, "100%" only at
+full and 1–99 % between; the APC40's crossfader drives it (§5).
+`output.monitor` offers *follow window* — the screen the window is
 on, config `monitor = -1` — and then each screen by name. Quitting, Cmd+R
 and the panel's restart button all run `app.close_all`: every open
 adapter (MIDI, the bridge, the hands tracker, the dream worker) then the
@@ -309,8 +337,8 @@ audio stream, best-effort, so a broken port never blocks an exit. The
 SYSTEM page shows each adapter's state — MIDI, the bridge (port,
 encoding, messages sent, or why it is off) — beside the hot-reload and
 config notices. The optional adapters and the gamepad are config gates
-(`[midi]` and `[gamepad]` on by default, `[bridge]`, `[dream]`, `[hands]`
-off; `[dream]` also needs the `dream` extra, §2.3); `hyperspace/config.py` documents every key. The rig's placement comes from `[output]` in `config.toml`
+(`[midi]`, `[gamepad]` and `[dream]` on by default — torch is an ordinary
+dependency since decision 23, §2.3 — `[bridge]` and `[hands]` off); `hyperspace/config.py` documents every key. The rig's placement comes from `[output]` in `config.toml`
 (`config.py`); a `[overlay]` section is the same thing under its pre-split
 name, still read and merged under `[output]`, with a note on stderr asking
 for the rename. A `config.toml` that will not parse keeps the defaults and
@@ -747,6 +775,38 @@ unreadable at a party.
   one), QUANT and pad B step to the next filled slot (`preset.next`). The
   PRESETS page's preset strip lists, loads, saves and deletes them;
   module presets keep their own strips and replace only their group.
+  **Home** (plan 15 WP2, decision 27) is the `startup` preset again: the
+  Home key (fn ← on a laptop) and the APC40's OVERDUB fire `preset.home`
+  → `Project.home`, a load like any other and one undo step ("home →
+  TUMBLE"); a show that names no "starts on" loads nothing and says
+  "home: this show names no 'starts on' preset — pick one on the PRESETS
+  page". **Save-as on the desk** (plan 15 WP4, PR #87, decision 29): a
+  hold of 0.6 s (`midi.HOLD_S`) anywhere on the APC40's clip-stop row
+  fires `preset.save_new` → `Project.save_new`, which saves the live
+  state as a **new** user preset named from the loaded one with the next
+  free number (TRIP → TRIP 2 → TRIP 3; a name ending in a number counts
+  on from it; with nothing loaded, PRESET 1; `library.next_name`). The
+  name is counted against the file stems in both preset folders (as
+  slugs, so a file in another case counts), the listed names and the
+  bank, so it never overwrites a file and never hides a factory preset.
+  The new preset becomes the loaded one with a clean dot and goes into
+  the next empty bank slot, the show written at once: "saved TRIP 2 →
+  F6". A full bank still saves, to the preset list, and warns "saved
+  TRIP 3 — the bank is full: it is in the preset list" (no slot is lit;
+  the warning goes when the bank next changes). If the preset saves but
+  the show's file cannot be written, the slot is put back and the
+  warning is "saved TRIP 2 — the show could not be written: it is in the
+  preset list". If the preset itself cannot be saved nothing changes and
+  the reason is on the PRESETS page. A tap does nothing. The desk never
+  overwrites: plain **save** on the panel and ⇧F1–F8 still do, and what
+  they replace goes to the trash first (below). On the PRESETS page a
+  slot's right-click menu has **put preset here…** (a list of every
+  preset, twelve rows tall before it scrolls; "F6: TRIP 3") and **clear
+  slot** (greyed on an empty slot; "F6: cleared — ACID is still in the
+  preset list") — `Project.put_slot` / `clear_slot`: they write the show
+  at once (a factory show's first write makes your copy), delete no
+  file, and put the slot back if the show cannot be written. None of the
+  three is an undo step: the bank is the show file's.
 - **The party show opens** (decision 22, plan 14 WP3). The panel calls a
   project a **show** (plan 14 §3; the code keeps `Project`). The factory
   shows are `party` (`library.DEFAULT_PROJECT`: TUMBLE, FACES, FIELD,
@@ -770,14 +830,18 @@ unreadable at a party.
 - **The PRESETS page** (plan 14 WP4), top to bottom: **SHOW** — the
   show's name on its own line, never covered, a dim "factory" beside a
   factory show, then show ▾ (factory shows dim) · save · save as · new;
-  **starts on ▾** — labelled, and written into the show the moment it is
+  **starts on / home ▾** (the label since plan 15 WP2: the preset the
+  show opens with is also the one Home and OVERDUB load, and the tooltip
+  says so) — labelled, and written into the show the moment it is
   picked (`ui_presets.set_starts_on` → `Project.write`; a factory show's
   write makes your copy); the eight **preset buttons**, two a row, each
   its F-key and its preset's name (elided to the button), the live one
   lit, click loads, ⇧click saves; the **preset strip** (the loaded
   preset, its dot, save / as… / reset — save on a factory preset writes
   your copy); and **more**, folded, a module-preset strip per group; the
-  library's warning, error and status lines under all of it. One word per
+  library's warning, error and status lines under all of it (the status
+  and the warning also show in the footer's message slot, on every page:
+  below). One word per
   thing: show, preset, starts on, module preset, factory. The rail's
   dirty dots and the footer's mark compare against the loaded preset or
   show: a preset that names no module preset for a group leaves the group
@@ -789,14 +853,41 @@ unreadable at a party.
 - **The desk** (plan 13 §3). The APC40 has two layers under a latched
   SHIFT, whose LED is lit while the global layer is up. The faders, the
   preset row, SHIFT, the clock corner, the transport and the track buttons
-  are **invariant**: one meaning on both layers. The **global** layer is
+  are **invariant**: one meaning on both layers. Plan 15 adds three to
+  the invariant list (the owner, 2026-10-04): the **crossfader is the
+  master dim** (`output.dim`: left black, right full, soft pickup — a
+  launch is at full, so a crossfader parked at the left does nothing
+  until it is brought up to the value; that CC 0 is the left end is not
+  hand-checked), **OVERDUB is home** (lit while the show names a "starts
+  on"), and the **clip-stop row is one save-as bar** (WP4, PR #87: dark
+  at rest; the whole bar lit while any of it is held; at 0.6 s, if a
+  preset was saved, the bar and the new slot's pad blink for 1.5 s and
+  then the bar is dark and the pad green — on a full bank only the bar
+  blinks, and if nothing was saved nothing blinks; a tap does nothing;
+  two fingers save once, and a button still down saves nothing more).
+  The blink velocities are Akai's table as `apc40.blink_of` reads it,
+  never seen on the device. The on-screen desk shows the bar lit while
+  held but does not blink, and the cheat sheet does not name the bar. A Learn on any of them is refused, and a preset's desk
+  row on one is dropped at load with a note. The **global** layer is
   the session's (the band strip on the device knobs, hand feel and BPM on
   track knobs 1–5, the band scenes on clip rows 2–3); the **preset** layer
   is the loaded preset's (the factory default: the view faders on the
   track knobs, the shape grid, the render toggles). A control the up layer
   does not map is dark and does nothing. Knobs continue from their ring
   after a switch; faders soft-pick-up (hand check 31 is the hardware
-  assumption). A macro is a knob with subscribers: each sets a param's
+  assumption). **A fader keeps its catch through a preset load unless
+  the load moved its param** (plan 15 WP3; `MidiIO.redraw(load=True)`):
+  the catch is cleared when the param is gone, when the adapter has no
+  last write for it or the fader no last reading, or when the param is
+  more than `PICKUP_TOL` from the adapter's last write or from where
+  that fader last was. Before, every load cleared every fader's catch,
+  and a fader was then dead until it came back within `PICKUP_TOL` of
+  the value or crossed it. So the crossfader, S1–S8 and SM (session
+  params, which a preset never moves) carry on from where they are after
+  a load, and a fader whose base the load did move picks up as before.
+  Not covered (audit R13): a fader moved while its row is disabled stays
+  caught and jumps on its next applied message (an armed Learn takes one
+  message the same way, so that jump is one message's worth). A macro is a knob with subscribers: each sets a param's
   base or scales a route's depth over its own `from → to`; a hand on a
   macro moves only the depths.
 - **The desk's glyphs and diagram** (plan 14 WP7, decision 25). Every
@@ -840,17 +931,172 @@ unreadable at a party.
   `bindings.json` gives its preset part to them (a `MIGRATED` preset
   when no project takes it), every rewritten file is kept first as
   `<file>.bak-v<n>` (a dated copy when the name is taken, never over a
-  `.bak-*` already there), and stderr names each backup.
+  `.bak-*` already there), and stderr names each backup. The first
+  launch of plan 15's build rewrites `bindings.json` once more, the same
+  way (`remap_factory`, ARCHITECTURE §3.8): the crossfader's old factory
+  row becomes the master dim's, and rows are added for OVERDUB, the
+  clip-stop row, Home and the four undo keys wherever the control
+  or chord is free; a row you changed is left as you had it. A row of
+  these that you delete from the file comes back on the next launch; to
+  switch one off, keep it with `"enabled": false`.
+- **The trash** (plan 15 WP1; `library.to_trash`). The home's layout
+  gains `trash/<group>/<slug>.<YYYYMMDD-HHMMSS>.json`: a **user** preset
+  file as it was, copied there before a save overwrites it or a delete
+  removes it — the preset strip's save and as…, ⇧F1–F8, a module
+  strip's save, the list's × (`Library.save_as`, `Library.delete`). A
+  second copy in the same second gets `-2`, `-3`; the copy is created
+  exclusively, so nothing in the trash is ever overwritten. A save
+  trashes only when the text on disk differs from what is about to be
+  written, so saving twice with no change adds nothing; if the copy
+  fails the save goes on and the warning line says the old file was not
+  kept. A delete whose copy fails is **refused** (the file stays). To
+  get a preset back, copy the file into `<home>/<group>/` under its
+  plain name; the file watch lists it within a couple of seconds.
+  `trash` is no module group and is never watched; factory files are
+  never written, so never trashed; show files and `bindings.json` keep
+  their own `.bak-*` backups instead. Nothing empties the trash and no
+  page shows it yet (plan 19).
 - **The cheat sheet** (`ui.CHEATSHEET`) is the canonical human list of the
   keys; `test_the_cheat_sheet_matches_the_tables_and_the_loop_keys` parses
   its key column against `routing.keymap()`, `padmap()` and the keys the
   loop still handles itself (`app.LOOP_KEYS`).
+- **The keys plan 15 added**, all table rows (`routing.LOOP_KEY_ROWS`),
+  so they rebind in `bindings.json` like any other: **⌘Z** and
+  **Ctrl+Z** undo, **⌘⇧Z** and **Ctrl+⇧Z** redo (§5b), **Home** (fn ←
+  on a laptop) loads the show's "starts on" preset. `CONTROL` is a third
+  modifier a key row may name, beside `SHIFT` and `SUPER`. **A press
+  fires only its own chord**: a row fires when its modifiers are exactly
+  the held ones that some row on that key names, so ⌘⇧Z redoes and does
+  not also undo, and a modifier no row on the key names is ignored.
+  (Until plan 15 a modified row fired whenever its modifiers were among
+  those held. A hand-made bare `key:Z` row therefore no longer fires
+  with ⇧, ⌘ or Ctrl held.) From the control window, a key pressed while
+  imgui is typing is the text field's own.
+- **The footer** (`Panel._footer`), on every page: the frame rate; one
+  **message slot**; `dim 40%` (or `dim black`) in the warning colour
+  while the master dim is under full, so a dark picture is never a
+  mystery; the show's name and dirty mark, flush right. The message
+  slot (plan 15 WP1; `Panel._message`) shows the newest of three lines
+  for 4 s after it changes (`ui.MESSAGE_S`): the undo's status ("undid
+  Brightness 2.00× → 2.96×", "redid load FACES", "nothing to undo"),
+  the library's status ("show: party starts on TUMBLE", "saved TRIP 2 →
+  F6", "F6: cleared — ACID is still in the preset list") and the
+  library's warning (in the warning colour: an empty F-key's note, home
+  with no "starts on", "saved TRIP 3 — the bank is full: it is in the
+  preset list") — so none of them needs the PRESETS page open. It is cut
+  with an ellipsis to the room left of the show's name, the whole line
+  on hover; while it shows, the hot reloader's status gives way to it.
+  The undo's line shows on every press. A library line shows when its
+  text changes, **or** when it was set through `Library.say`, which
+  counts each call (`Library.said`): the bank's lines — save-as, put
+  preset here, clear slot — show again even in the same words. Every
+  older line is a plain assignment and shows once: an empty F-key
+  pressed twice, or home with no "starts on" pressed twice, says its
+  line the first time only (it stays on the PRESETS page). A launch
+  says nothing
+  (`tests/test_ui_shell.py::test_the_footer_says_what_was_undone`,
+  `::test_the_dim_is_first_on_output_and_the_footer_says_so_while_dimmed`,
+  `tests/test_ui_presets.py::test_the_footer_says_a_library_line_again`).
 - The large cell-count readout at the top of the view page is still the
   signature element. Keep new UI consistent with this.
 
+## 5b. Undo
+
+Plan 15 WP1, decision 26 (`undo.py`; where it sits in the frame and the
+control model is ARCHITECTURE §2 and §3.2). ⌘Z or Ctrl+Z takes back the
+last step; with ⇧, redoes it. The footer says what it did.
+
+**What a step is.** One *gesture* — a slider drag, a knob turn on the
+desk, a typed value, a toggle, a key or pad press that sets something, a
+mouse orbit, a field edited on the ROUTING page — or one *replacing
+action*: a preset load by any road (F-key, the clip row, QUANT, the
+pad's B, the strip, the file watch), a show load or a new show, home, a
+module preset load or reset, a Learn landing, an Unbind, a route's or
+desk row's or macro subscriber's ×, Replace in the Replace / Keep
+prompt. Nothing tells undo that a parameter was written: once a frame
+`Undo.tick` compares a fingerprint of what the user sets with last
+frame's. A change opens a step holding the state as it was; the step
+stays open while changes keep coming and closes after **0.4 s of quiet**
+(`SETTLE_S`), named from what differs ("Brightness 2.00× → 2.96×", "3
+view settings", "routes", "5 changes"). A replacing action calls
+`undo.push(label)` before it changes anything, so its step is named by
+the caller ("load TRIP", "learn view.bright", "home → TUMBLE") and what
+the action then changes over the next frames joins that one step. The
+stack keeps 100 steps (`LIMIT`); a launch starts with none.
+
+The settle time is the only boundary. A slider moved within 0.4 s of a
+load joins the load's step. A drag held still for more than 0.4 s with
+the mouse down and then moved again is two steps (decision register row
+43). Plan 18's knob slew must stay under it.
+
+**What is watched.** The **base** of every param that is persisted, not
+an alias, not a trigger and not in the `tempo` group (455 of the 532
+params on the party show), and the loaded preset's part of the table:
+the performer rows, the desk's preset layer and the macros. So the
+performance params, and the session ones too — the hands' feel, the band
+strips, the master faders, `scene.select`, the ghost hands, the
+overlay's ground and opacity — and the camera (an orbit or R is a step).
+
+**What is left out.** A performer: a hand, a band or an LFO writes an
+offset, never the base, so it makes no step however long it plays; the
+frame it takes or leaves a param the base can move in its last bits, and
+floats within 1e-9 relative are the same value. The rotation phases
+(`rot.phase.*`, integrated every frame). The clock: `tempo.bpm` and
+`tempo.nudge`, so a tap or a typed BPM is not undone, and undoing a show
+load leaves the tempo where it is. Every trigger. Selections and the
+panel's own state (`band.select`, `fx.select`, `preset.select`,
+`desk.shift`, `ui.*`), transport (`audio.mic` / `device` / `play`), and
+the rig's output settings — monitor, fullscreen, overlay, passthrough
+and the **master dim**. The session's rows of the table (keys, pad,
+invariant and global-layer MIDI rows), which are `bindings.json`'s. A
+band added, removed or moved: it is not a step, and it re-declares every
+`band.*` param, so a strip's values are put back only onto the band
+layout they were taken on — with another layout up the rest of the step
+lands and the footer adds "(the bands have changed: their strips were
+left)". The 8-second "Reset all" undo on the band strips is unchanged
+beside all this.
+
+**What a restore does and does not touch.** It puts back only what
+differs between the step and now: each differing base through
+`Registry.restore` (which ends in `Param.set`), and the routes, the
+preset layer or the macros through the table's own calls, each only if
+it differs. Undoing one slider sets one param: no load runs, the desk
+layer that is up stays up, the faders keep their catch, the LFOs keep
+their phase. A desk row an undo brings back picks up afresh; one that
+never left keeps its catch. A step pushed as a load also puts back what
+the library calls loaded — every group's name and clean reference, the
+band layout (first, so the strips' params exist before their values
+land), the loaded preset's notes — so after undoing a load the PRESETS
+page names the earlier preset and **save** writes that one, not the
+later file. Undoing a show load puts the show's own fields back.
+Otherwise the bank and "starts on" are left alone: they are written to
+the show's file the moment they change. A restore writes **no file**,
+and the dirty dots follow honestly, since they compare the live state
+with the loaded reference. A save or a delete is not a step: its net is
+the trash (§5). Redo is the mirror; a new gesture clears it at once, an
+action when it has actually changed something (a refused unbind or a
+failed load does not cost the redo). An edit made in the two frames
+after a restore is absorbed into it.
+
+**The cost.** `Undo.tick` runs every frame, after the scene-setters and
+before the hands. Measured headless by `tools/undo_demo.py` on the party
+show (532 params, 20 routes, 42 desk rows), on a laptop: **about 80 µs
+median per frame** (idle: median 81 µs, 99th percentile 136 µs, max
+305 µs over 1200 frames; during a drag: median 79 µs), against a 16.7 ms
+frame at 60 Hz. A raise inside undo never fails a load or a frame: it is
+printed and shown on the status line.
+
+Shown by `tests/test_undo.py` (twenty-seven tests, one of them the real
+`app.frame` over a real host for some 2,500 frames with hands, audio and the
+renderer running: the stack ends as the eight loads it made and nothing
+else), by `tools/undo_demo.py` (`docs/plans/assets/15-safety-net/undo-demo.txt`)
+and by a scripted launch of the app on a laptop. Not yet by a person at
+the keys: hand checks 48–52.
+
 ## 6. Testing
 
-`uv run pytest` — 886 tests, 11 skipped without torch, about 35 s. `ruff`
+`uv run pytest` — 1121 tests and 1 skipped (the hands tape, until one is
+recorded) on `plan-15-integration` with plan 15 whole, about 70 s. `ruff`
 is the linter. Every test runs with `HYPERSPACE_HOME` pointed at its own
 `tmp_path` (`tests/conftest.py`), so no test can touch `~/Hyperspace`.
 What holds what:
@@ -887,10 +1133,35 @@ What holds what:
   over the loaded preset (`tests/test_ui_routing.py`); plan 12's five
   party presets loading by F-key and keeping their rules, WAKE's and
   TRIP's device knobs (`tests/test_plan12_presets.py`).
+- **The safety net** (plan 15): undo — one step per gesture and per
+  action, a performer making none, a restore setting only what differs,
+  the marks, the band-layout tag, an idle app making no step
+  (`tests/test_undo.py`), its push sites (`test_learn.py`,
+  `test_midi.py`, `test_ui_routing.py`, `test_desk.py`), the chord rule
+  and the keys added to an older file (`test_routing.py`), the footer's
+  line (`test_ui_shell.py`); the trash (`tests/test_library.py`, the five
+  `trash` tests); home (`test_presets.py` `test_home_*`,
+  `test_desk.py::test_overdub_is_home_on_both_layers_and_is_lit`); the
+  master dim — the pass (`test_render.py`, the `dim` tests), the param
+  (`test_overlay.py::test_dim_is_a_rig_setting_that_starts_bright`),
+  the crossfader's pickup and its hold through a load (`test_midi.py`,
+  `test_desk.py`); save-as on the desk — the hold on a fake clock, a tap,
+  the bar as one control, the velocities sent and when (`test_midi.py`,
+  the four `hold` / `tap` / `bar` tests), the row invariant
+  (`test_desk.py::test_the_clip_stop_row_is_invariant`), the name and
+  the bank (`test_library.py::test_next_name_counts_on_from_a_trailing_number`,
+  `test_presets.py` `test_save_new_*`, `::test_put_and_clear_slot_write_the_show_and_delete_no_file`),
+  the slot menu through real imgui mouse events
+  (`test_ui_presets.py::test_a_slots_menu_offers_put_and_clear`). Every test also runs with no `Undo` left installed
+  by the one before it (`tests/conftest.py`), and `HYPERSPACE_HOME` is
+  set in `os.environ` itself, so a test that calls `monkeypatch.undo()`
+  cannot fall back to the real home.
 - **Boundaries**: the core never imports `midi` / `bridge` / `dream`
   (`tests/test_params.py:286`, `tests/test_bridge.py:381`,
   `tests/test_dream.py:55`); `hands/core.py`, `hands/signal.py`, `lfo.py`,
-  `tempo.py` import nothing from the package, and `routing.py` nothing
+  `tempo.py` and `undo.py`
+  (`tests/test_undo.py::test_undo_imports_nothing_from_the_package`)
+  import nothing from the package, and `routing.py` nothing
   above it — no panel, host or adapter (`tests/test_*_boundary.py`);
   `config.py` reads the hands rig defaults from `hands/core.py` (the one table),
   never the reverse.
@@ -952,6 +1223,12 @@ same PR; when it changes behaviour, the line here does.
   [`plans/11-hand-checks.md`](plans/11-hand-checks.md). Audit B1 (a hand
   leaving the box did not release its rows) was fixed by plan 11 WP1
   before these are run.
+- **Plan 15 at the machine**: undo, the trash, home, the master dim and
+  save-as on the desk have been shown by tests, offscreen renders and
+  scripted launches on a laptop, and by nobody at the rig. Group K of
+  the hand checks (48–57), 57 first: it is the launch that rewrites
+  `bindings.json`. The decisions the unattended run took on its own
+  recommendation wait in `DECISION-REGISTER.md` rows 34–44.
 - **The trim** (plan 06): decided 2026-09-28 — the per-band AUTO / MANUAL
   switch, built in plan 11 WP15; the oracle was not re-frozen.
 - **First real capture on this machine.** Every live path is code-complete;

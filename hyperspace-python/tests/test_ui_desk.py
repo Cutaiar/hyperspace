@@ -152,8 +152,14 @@ def test_the_hover_names_glyph_param_layer_and_akais_name(rig):
     c = next(c for c in apc40.LAYOUT if c.glyph == "K1")
     b = ui_desk.lit(table)["K1"]
     assert ui_desk.label(table, c, b) == f"K1 · {b.target} · preset layer\ntrack knob 1"
-    dark = next(c for c in apc40.LAYOUT if c.glyph == "G6·1")
+    dark = next(c for c in apc40.LAYOUT if c.glyph == "B7")        # device ◀: no row
+    assert "B7" not in ui_desk.lit(table)
     assert "unmapped — dark" in ui_desk.label(table, dark, None)
+    # the clip-stop row is the SAVE AS bar (plan 15 WP4): eight invariant rows
+    for k in range(1, 9):
+        c = next(c for c in apc40.LAYOUT if c.glyph == f"G6·{k}")
+        b = ui_desk.lit(table)[c.glyph]
+        assert ui_desk.label(table, c, b) == f"G6·{k} · preset.save_new · invariant\nclip stop {k}"
     s = next(c for c in apc40.LAYOUT if c.glyph == "⇧")
     assert ui_desk.label(table, s, ui_desk.lit(table)["⇧"]).startswith("⇧ · desk.shift · invariant")
 

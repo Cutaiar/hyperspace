@@ -79,6 +79,9 @@ the file set a work package may edit; the plan document tightens it.
 
 ### Plan 15 — Safety net and the bank
 
+*As built:* [`15-safety-net.md`](15-safety-net.md) §8 (PRs #81–#83 and
+after); where it differs from the rows below, that section is the code.
+
 | WP | What | Scope | Owns | Size |
 |---|---|---|---|---|
 | 1 | **Undo** | One bounded in-memory stack; **a step is one gesture**: a slider drag, a knob turn on the desk, a typed value, a toggle, a ROUTING field edit, or one replacing action (a preset or show load from any road, a Learn landing, an Unbind, a route or macro delete, Replace in the Replace / Keep prompt, a module-preset load or reset, an FX reorder). It needs no write hook: once a frame the undo compares a cheap fingerprint of every param's **base** and of the routes, desk layer and macros. A performer writes an offset, never the base, so a hand, a band or an LFO moving makes no step. When the fingerprint changes, the last settled state is pushed; changes that keep arriving within about 0.4 s are the same step. Params that are integrated state (rotation angles, clocks, anything `ViewState.integrate` writes) are left out of the fingerprint; the plan lists them from the code. Ctrl+Z puts back only what differs between the step and now (bases through `Param.set`, changed rows through the table's own calls), so undoing one slider does not re-run a load: the desk layer, fader pickup and LFO phases stay put. Ctrl+Shift+Z redoes; a new edit clears the redo side. Session params are registry params and are covered; band add / remove / move keeps the existing 8-second undo unless folding it in is cheap. One status line names what was undone. A restore writes no file and leaves the dirty dot honest. Files get their own net: a preset file about to be overwritten or deleted goes to `<home>/trash/` first. (Decision 26.) | new `undo.py`; one call in the frame loop (`app.py`); explicit pushes in `preset.py`, `library.py`, `learn.py`, `midi.py`, `ui_routing.py`, `hands/panel.py`; key rows in `routing.LOOP_KEY_ROWS`; the cheat sheet | M–L |
@@ -90,7 +93,7 @@ Contracts: WP1 publishes `undo.push(label)` and the trash helper; WP2 and
 WP4 call them. WP3 touches nothing the others do.
 
 Exit: named tests for each row above; hand checks added to
-`11-hand-checks.md` as group I (undo of one slider drag, of one knob turn,
+`11-hand-checks.md` as group K (checks 48–57: undo of one slider drag, of one knob turn,
 after an F-key load, after a Learn, after an Unbind; a hand moving makes
 no step; home from any preset on either layer; the crossfader dims to
 black and back, survives a preset load, starts bright; a hold saves a new

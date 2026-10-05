@@ -179,3 +179,125 @@ def test_more_opened_holds_a_strip_per_module_and_still_fits(rig, monkeypatch): 
     assert {"view", "camera", "fx", "band"} <= set(groups)
     assert all(f"{g:<8s}" in texts for g in groups)
     assert _page_scroll(rig, monkeypatch)["presets"] == 0
+
+
+# ------------------------------------------- plan 15 WP4: a slot's own menu
+
+def _mouse(panel, x, y, button=None, down=False):
+    """One frame with the mouse at (x, y), a button going down or up."""
+    io = imgui.get_io()
+    io.add_mouse_pos_event(x, y)
+    if button is not None:
+        io.add_mouse_button_event(button, down)
+    frame(panel)
+
+
+def _click(panel, rect, button=0):
+    x, y = (rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2
+    _mouse(panel, x, y)
+    _mouse(panel, x, y, button, True)
+    _mouse(panel, x, y, button, False)
+    frame(panel)
+
+
+def test_a_slots_menu_offers_put_and_clear(rig, tmp_path):  # noqa: F811
+    """Plan 15 WP4: a right-click on a bank slot adds two items to its
+    menu, under the param's own: "put preset here…", a list of every
+    preset no taller than twelve rows, and "clear slot", disabled on an
+    empty slot. Each writes the show at once and deletes no file."""
+    panel, lib = rig.panel, rig.lib
+    proj = lib.project
+    show = tmp_path / "projects" / "party.hyp.json"
+    frame(panel, "presets")
+    frame(panel)
+    st = ui_presets._state(panel)
+    assert "slot_menu" not in st                              # no menu until it is opened
+    files = sorted(p.name for p in (tmp_path / "presets").glob("*.json")) \
+        if (tmp_path / "presets").is_dir() else []
+    # slot 6 (F6, ACID): open its menu
+    _click(panel, st["rects"]["preset.5"], button=1)
+    menu = st["slot_menu"]
+    assert menu["slot"] == 5
+    assert menu["items"] == [("put preset here…", True), ("clear slot", True)]
+    # clear slot: the bank and the show's file, and ACID is still a preset
+    _click(panel, menu["rects"]["clear"])
+    assert proj.bank[5] is None and json.loads(show.read_text())["bank"][5] is None
+    assert "ACID" in lib.list("presets") and lib.status.startswith("F6: cleared")
+    assert ui_presets._state(panel)["bank_labels"][5] == "F6  —"
+    # on the empty slot "clear slot" is disabled, and clicking it does nothing
+    st.pop("slot_menu")
+    _click(panel, st["rects"]["preset.5"], button=1)
+    menu = st["slot_menu"]
+    assert menu["items"] == [("put preset here…", True), ("clear slot", False)]
+    before = show.read_text()
+    _click(panel, menu["rects"]["clear"])
+    assert show.read_text() == before and proj.bank[5] is None
+    # put preset here…: the list is every preset, in a child at most twelve rows tall
+    st.pop("slot_menu", None)
+    _click(panel, st["rects"]["preset.5"], button=1)
+    _click(panel, st["slot_menu"]["rects"]["put"])
+    menu = st["slot_menu"]
+    listing = lib.list("presets")
+    assert menu["names"] == listing and len(listing) > ui_presets.PUT_ROWS
+    box = menu["rects"]["list"]
+    row = imgui.get_text_line_height_with_spacing()
+    assert box[3] - box[1] <= ui_presets.PUT_ROWS * row + 1
+    assert box[2] - box[0] > max(imgui.calc_text_size(n).x for n in listing)
+    pick = listing[2]
+    _click(panel, menu["rects"][f"name.{pick}"])
+    assert proj.bank[5] == pick and json.loads(show.read_text())["bank"][5] == pick
+    assert lib.status == f"F6: {pick}"
+    # the menu closed on the pick, and nothing in the preset folder moved
+    st.pop("slot_menu")
+    frame(panel)
+    frame(panel)
+    assert "slot_menu" not in st
+    now = sorted(p.name for p in (tmp_path / "presets").glob("*.json")) \
+        if (tmp_path / "presets").is_dir() else []
+    assert now == files and not (tmp_path / "trash").exists()
+
+
+def test_the_footer_says_a_library_line_again(rig, monkeypatch):  # noqa: F811
+    """Plan 15 WP4: the footer's slot shows a library line when its words
+    change — and, for a line set through `Library.say`, when it is said
+    again in the same words: a save-as that meets a full bank twice, a
+    slot cleared, refilled and cleared again."""
+    from hyperspace import ui
+
+    panel, lib = rig.panel, rig.lib
+    proj = lib.project
+    clock = [1000.0]
+    monkeypatch.setattr(ui.time, "monotonic", lambda: clock[0])
+    frame(panel, "view")                                      # the first look only remembers
+    assert panel._message() == ("", False)
+    proj.clear_slot(5)
+    said = lib.status
+    assert said == "F6: cleared — ACID is still in the preset list"
+    assert panel._message() == (said, False)
+    clock[0] += ui.MESSAGE_S + 1
+    assert panel._message() == ("", False)                    # …and it goes
+    proj.bank[5] = "ACID"                                     # (not through the menu: no line)
+    proj.clear_slot(5)
+    assert lib.status == said and panel._message() == (said, False)   # the same words, shown again
+    # a warning said again shows again, and an old warning is not dragged
+    # back by a later status
+    clock[0] += ui.MESSAGE_S + 1
+    lib.say(warning="saved TRIP 9 — the bank is full: it is in the preset list")
+    assert panel._message() == (lib.warning, True)
+    clock[0] += ui.MESSAGE_S + 1
+    lib.say(warning=lib.warning)
+    assert panel._message() == (lib.warning, True)
+    clock[0] += ui.MESSAGE_S + 1
+    lib.say("show: something else")
+    assert panel._message() == ("show: something else", False)
+    # a plain assignment of the same words stays quiet, as before
+    clock[0] += ui.MESSAGE_S + 1
+    lib.status = "show: something else"
+    assert panel._message() == ("", False)
+    # a panel kept across a hot reload remembers the lines as plain strings:
+    # they are not news (review of PR #87)
+    panel._msg["seen"] = {"status": lib.status, "warning": lib.warning,
+                          "undo": panel._msg["seen"]["undo"]}
+    assert lib.warning and panel._message() == ("", False)
+    lib.say("show: after the reload")
+    assert panel._message() == ("show: after the reload", False)

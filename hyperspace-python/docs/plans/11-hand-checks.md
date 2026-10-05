@@ -3,7 +3,7 @@
 Everything only the owner can verify, in the order that costs the least
 time at the machine: laptop alone first, then the APC40, then the camera
 and the box (APC40 still plugged in for check 24), then the projector,
-then IAC + FL Studio, then one back on the laptop, then plans 12 and 13's two, then plan 13's group H (plan 13 is built on `plan-13-integration`). Each check: the commands, the config, the preset,
+then IAC + FL Studio, then one back on the laptop, then plans 12 and 13's two, then plan 13's group H (plan 13 is built on `plan-13-integration`), then plan 14's group I and the ghost hands' group J, then plan 15's group K (undo, home, the master dim, save-as on the desk; built on `finish-line`). Each check: the commands, the config, the preset,
 what to do, what a pass and a fail look like, and which audit item or
 code path a fail points at. Where a check can be simulated headless, the
 pytest node or `tools/` command that shows the expected behaviour is
@@ -34,9 +34,13 @@ page: SHOW `party`, starts on TUMBLE — plan 14 WP3), R resets the camera,
 F1 loads preset 1 (TUMBLE), ⇧F1 saves the live state as it (a user file
 shadowing the factory one), `T` does nothing (overlay is off unless
 `[output] overlay = true`, decision 21), ⌘R restarts without resetting the camera first, and the
-cheat sheet (`/`) names all seventeen rows — R, F1–F8, ⇧F1–F8 (WP7; the
-rows are the session's, in `bindings.json`; headless:
-`tests/test_routing.py::test_r_and_the_f_keys_are_table_rows_that_fire_their_params`).
+cheat sheet (`/`) names all twenty-two rows — R, F1–F8, ⇧F1–F8 (WP7),
+and since plan 15 ⌘Z / ⌘⇧Z / Ctrl+Z / Ctrl+⇧Z on its "Cmd+Z" line
+("undo · ⇧ redo (or Ctrl+Z)") and Home on its "Home" line ("home preset
+(fn ←)") (the rows are the session's, in `bindings.json`; headless:
+`tests/test_routing.py::test_r_and_the_f_keys_are_table_rows_that_fire_their_params`,
+`tests/test_ui_shell.py::test_the_cheat_sheet_matches_the_tables_and_the_loop_keys`).
+What ⌘Z and Home do is group K's (checks 48 and 54).
 A fail → `routing.LOOP_KEY_ROWS` / the ⌘R edge claim in `app.frame`.
 
 **2. The config rename note and a bad TOML (L4).**
@@ -791,6 +795,235 @@ hands warped or trailing → the pass order in `Renderer._draw_frame`.
 Then record a tape for everyone else: `uv run python tools/hands_tape.py
 record tests/fixtures/hands/rig.json --seconds 6` — both hands, open,
 fist, pinches, in and out of the box — and commit it.
+
+## K. Plan 15 — undo, home, the dim, save-as on the desk — added 2026-10-04
+
+Run on `finish-line` once plan 15 is merged into it (PRs #81 the dim,
+#82 undo and the trash, #83 home, #87 save-as). 48, 50 and 53
+run on the laptop alone; 49, 51 and 54–57 need the APC40; 52 needs the
+camera and the box. About 35 minutes. The headless tests named are the
+ones each package adds; run them first. None of this has been tried by a
+person: it was shown by tests, offscreen renders and scripted launches on
+a laptop (`15-safety-net.md` §8). Before the first launch:
+`cp -R ~/Hyperspace ~/Hyperspace-2026-10-04`, and do 57 first.
+
+**48. Undo takes back one slider drag (plan 15 WP1, decision 26).**
+Headless: `uv run pytest -q tests/test_undo.py::test_a_slider_drag_is_one_step_and_undo_sets_only_that_param tests/test_undo.py::test_a_pause_longer_than_the_settle_time_makes_a_second_step tests/test_routing.py::test_a_chord_fires_only_its_own_row tests/test_ui_shell.py::test_the_footer_says_what_was_undone`.
+Launch, VIEW page. Note Brightness. Drag it somewhere else in one move
+and let go. Wait a second. Press ⌘Z (Ctrl+Z does the same). *Pass:*
+Brightness is back where it was, nothing else moved, and the footer says
+"undid Brightness … → …" for about four seconds. ⌘⇧Z: it goes forward
+again ("redid …"). Now drag Brightness, wait a second, drag Speed, wait,
+press ⌘Z twice: Speed comes back first, then Brightness. Change a
+route's depth on the ROUTING page and ⌘Z: it comes back. Click in a text
+field (a macro's label) and press ⌘Z there: only the text changes. With
+nothing left the footer says "nothing to undo", again on every press.
+Drag a slider, hold the mouse still for a full second with the button
+down, then drag on: that is **two** steps (decision register row 43);
+say if it should be one. *Fail:* nothing comes back → the tick is not
+running (`app.frame`, `Host.undo`) or the key rows are missing
+(`routing.LOOP_KEY_ROWS`; they are in your `bindings.json` after check
+57); two presses needed for one drag → the settle time
+(`undo.SETTLE_S`); ⌘⇧Z undoes instead of redoing → the chord rule in
+`Router.keys`; no footer line → `Panel._message` / `Panel._footer`.
+
+**49. Undo takes back one knob turn on the desk (plan 15 WP1).**
+Headless: `uv run pytest -q tests/test_undo.py::test_a_knob_turn_on_the_desk_is_one_step tests/test_undo.py::test_undo_of_a_slider_does_not_rerun_a_load`.
+APC40 in, F5 (TRIP). Turn D1 (the effect mix) from where it is to the
+other end in one sweep. Wait a second. ⌘Z. *Pass:* the mix and D1's ring
+are back; the next turn of D1 carries on from the ring, no jump. Latch
+SHIFT, move S1 (SUB's drive) a little, wait, ⌘Z: the drive is back,
+SHIFT is still lit, and S1 does nothing until it passes the value again
+(pickup). *Fail:* SHIFT dropped or every fader lost its hold → the
+restore ran a desk replacement (`Undo._restore`, `Bindings.set_desk`'s
+`load`); the ring not following → `MidiIO.feedback`.
+
+**50. Undo after an F-key load (plan 15 WP1).**
+Headless: `uv run pytest -q tests/test_undo.py::test_a_preset_load_is_one_step_by_every_road tests/test_undo.py::test_undo_of_a_load_puts_back_the_values_the_routes_the_desk_the_macros_and_the_name tests/test_undo.py::test_save_after_undoing_a_load_writes_the_earlier_preset`.
+F1 (TUMBLE). Change three things (brightness, the shape, switch faces
+on) so the preset's dot is lit. F5 (TRIP). ⌘Z, once. *Pass:* the look is
+TUMBLE with your three changes, the PRESETS page says TUMBLE with its dot
+lit, F1's button is lit, the ROUTING page shows TUMBLE's routes and
+desk, and the footer says "undid load TRIP". ⌘⇧Z: TRIP again, clean. ⌘Z
+again, then press F5 by hand: redo is gone (a new action clears it).
+Repeat the load from the PRESETS list, and with QUANT (next preset): one
+⌘Z each. *Fail:* the look back but the name still TRIP → the marks
+(`library.Marks`, `push(load=True)` in `Presets.load_doc`); two presses
+for one load → a second push in the same action; routes not back →
+`Bindings.set_routes` in the restore.
+
+**51. Undo after a Learn, and after an Unbind (plan 15 WP1).**
+Headless: `uv run pytest -q tests/test_learn.py::test_a_learn_is_one_undo_step tests/test_midi.py::test_an_unbind_is_one_undo_step tests/test_ui_routing.py::test_a_route_delete_and_a_replace_are_undo_steps tests/test_undo.py::test_a_row_that_undo_brings_back_picks_up_afresh`.
+F5 (TRIP), ROUTING page. Right-click Brightness → Learn, turn D3. The
+DESK section shows "D3 view.bright" and D3's old param is gone from it.
+⌘Z. *Pass:* D3 drives what it drove before, the row is back, the
+footer says "undid learn view.bright", the preset's dot is as it was.
+Right-click a param a desk knob drives → Unbind; its ring goes dark; ⌘Z:
+the row and the ring are back. Delete a route with its ×; ⌘Z: it is back
+with its depth and its gate. `ls -l ~/Hyperspace/presets` before and
+after: no file's time moved. *Fail:* a row not back → the push before
+the edit (`MidiIO._learned`, `MidiIO.unbind`, `ui_routing.page`); the
+ring staying dark → `redraw_serial` in `set_desk(load=False)`.
+
+**52. A hand moving makes no undo step (plan 15 WP1).**
+Headless: `uv run pytest -q tests/test_undo.py::test_a_performer_moving_makes_no_step tests/test_undo.py::test_an_idle_app_makes_no_step`.
+Camera and box on, F1 (TUMBLE). On the VIEW page drag Brightness and
+wait a second. Now play: both hands in the box for half a minute, in and
+out several times, the music on. Press ⌘Z once. *Pass:* Brightness goes
+back: the one thing you did by hand. Nothing a hand, a band or an LFO
+moved made a step. *Fail:* the footer says "undid Speed …" (or any param
+a hand route drives) with values that differ only in the last digits →
+the tolerance in the fingerprint (`undo.REL_TOL`); it names a
+`rot.phase` or the BPM → `undo.watched`.
+
+**53. A saved-over or deleted preset is in the trash (plan 15 WP1).**
+Headless: `uv run pytest -q tests/test_library.py -k trash`.
+PRESETS page. Load a preset of yours (make one with "as…" if you have
+none: `CHECK 53`). Change the brightness; press **save**. Then open the
+preset list and press × beside it. *Pass:* `ls ~/Hyperspace/trash/presets/`
+shows two files, `check-53.<date>-<time>.json`, the first holding the
+look before the save and the second the look that was deleted; copying
+one back into `~/Hyperspace/presets/` as `check-53.json` brings the
+preset back into the list within a couple of seconds. Press save twice
+with no change in between: no new file in the trash. The PRESETS page's
+"more" lists no module called "trash". *Fail:* nothing in the trash →
+`library.to_trash` in `Library.save_as` / `Library.delete`; a "trash"
+strip under "more" → `Library.groups`.
+
+**54. Home, from any preset, on either layer (plan 15 WP2, decision 27).**
+Headless: `uv run pytest -q tests/test_presets.py::test_home_loads_what_the_show_starts_on tests/test_presets.py::test_home_with_no_starts_on_says_so_and_loads_nothing tests/test_presets.py::test_home_is_one_undo_step tests/test_desk.py::test_overdub_is_home_on_both_layers_and_is_lit`.
+The party show; the PRESETS page reads "starts on / home ▾ TUMBLE".
+OVERDUB (B11, beside METRONOME) is lit. F5 (TRIP), change a few things.
+Press OVERDUB. *Pass:* TUMBLE is up, its desk lit. ⌘Z: TRIP with your
+changes is back (the footer: "undid home → TUMBLE"). F7, latch SHIFT,
+press OVERDUB: TUMBLE again, and SHIFT has dropped (a load drops to the
+preset layer). F3, then fn+← on the laptop: TUMBLE. Set "starts on" to —
+none: OVERDUB goes dark, and pressing it loads nothing; the footer says
+"home: this show names no 'starts on' preset — pick one on the PRESETS
+page" once (a second press shows nothing new in the footer: the line is
+still on the PRESETS page). Set it back to TUMBLE: that line goes.
+Right-click any control → Learn, press OVERDUB: refused ("B11 (OVERDUB)
+is invariant (the session's) — not learned"), and nobody is sent home.
+*Fail:* OVERDUB dark or dead → its row (`apc40.DEFAULT_MAP`; in your
+`bindings.json` after check 57); doing something else under SHIFT → the
+row has a layer; fn+← nothing → `key:HOME` in `routing.LOOP_KEY_ROWS`,
+or the laptop not sending Home for fn+← (say so: the row rebinds).
+
+**55. The crossfader is the master dim (plan 15 WP3, decision 28).**
+Headless: `uv run pytest -q tests/test_render.py -k dim`, then `uv run pytest -q tests/test_midi.py::test_the_crossfader_dims_with_soft_pickup tests/test_desk.py::test_the_crossfader_keeps_its_hold_across_a_preset_load tests/test_ui_shell.py::test_the_dim_is_first_on_output_and_the_footer_says_so_while_dimmed` (two commands: a `-k` filters every file on its line).
+Quit. Push the crossfader hard left. Launch. *Pass (a), starts bright:*
+the picture is at full brightness, and the OUTPUT page's Master dim, its
+first row, reads 100%. *(b), cannot dim by accident:* nudge the
+crossfader a little from the left: nothing happens. *(c), takes hold at
+the value:* slide it all the way right, then back left: from the right
+end it has the picture, which dims smoothly to **black** at the left,
+the footer reading "dim …%" in the warning colour and "dim black" at the
+end; back right, full, and the readout goes. *(d), everything dims:*
+with F5 (TRIP), the look-back on (F4) and the ghost hands on, at half
+way the shape, the effects, the trail and the hands are all half as
+bright; on the glass the ground stays black, never grey, and nothing
+behind shows through. *(e), survives a load:* leave it at half; press
+F1, F5, OVERDUB: the picture stays at half through each; the next move
+of the crossfader carries on from half with no jump. *(f), both layers:*
+latch SHIFT: the crossfader still dims. *(g):* quit at half, relaunch:
+full again. *Fail:* dark at launch → `output.dim` is being saved or
+seeded (`Output.register`, `persist`); right is black → the fader's
+direction (the row is `abs`; say so, it is one line — that CC 0 is the
+left end was read from a comment, never from the device); a jump when
+first touched → pickup on the row (`MidiIO._apply`); dead after a load
+until brought back across the value → the catch rule in
+`MidiIO.redraw(load=True)`; the hands or an effect not dimming → the
+pass is not last (`Renderer._draw_frame`); the desktop showing through
+on the glass → the opaque blend in `Renderer.dim_pass`; the fader moving
+and the picture not, with a line under Master dim on the OUTPUT page →
+the driver refused the dim's program (`Renderer.dim_error`); a preset
+moving it → a preset or show landing a rig param.
+
+**56. A hold on the clip-stop row saves a new preset; a tap does not (plan 15 WP4, decision 29).**
+Headless: `uv run pytest -q tests/test_midi.py::test_a_hold_fires_once_at_the_hold_time_while_held tests/test_midi.py::test_a_tap_fires_nothing tests/test_midi.py::test_the_bar_is_one_control tests/test_midi.py::test_the_bar_lights_while_held_and_the_new_slots_pad_blinks tests/test_presets.py::test_save_new_never_overwrites tests/test_presets.py::test_save_new_fills_the_next_empty_slot_and_becomes_the_loaded_preset tests/test_presets.py::test_save_new_on_a_full_bank_saves_to_the_list_and_says_so tests/test_presets.py::test_the_new_slot_loads_from_the_preset_row tests/test_library.py::test_next_name_counts_on_from_a_trailing_number`.
+Then `uv run pytest -q tests/test_presets.py::test_put_and_clear_slot_write_the_show_and_delete_no_file tests/test_ui_presets.py::test_a_slots_menu_offers_put_and_clear tests/test_desk.py::test_the_clip_stop_row_is_invariant`; what the desk should send, and when, is `docs/plans/assets/15-safety-net/save-as-demo.txt`.
+Make room first: PRESETS page, right-click F8's button → **clear slot**
+(F8 reads "—"; the footer says "F8: cleared — NOITA is still in the
+preset list", and it is). F5 (TRIP); change the
+look. Tap any clip-stop button, quickly. *Pass (a):* the row lights
+while your finger is down and nothing else happens: no new preset in the
+list, no file in `~/Hyperspace/presets`. *(b):* hold any clip-stop
+button. After a little over half a second the whole row and pad 8 of
+clip row 1 blink for about a second and a half, and pad 5 (TRIP's) goes
+out; let go. The row is dark again and pad 8 stays green. F8's button
+reads **TRIP 2** and is lit, the
+PRESETS strip says TRIP 2 with no dot, the footer says "saved TRIP 2 →
+F8", and `~/Hyperspace/presets/trip-2.json` exists. *(c), the new slot
+loads from the desk:* press pad 1 (TUMBLE), then pad 8: your look is
+back. *(d), it never overwrites:* change the look, hold the row again
+(a different button of it): the footer says, in the warning colour,
+"saved TRIP 3 — the bank is full: it is in the preset list"; the row
+blinks, no pad does, and pad 8 goes out (TRIP 3 is loaded and no slot
+names it); TRIP 2 is unchanged (load it). Hold once more: TRIP 4, and
+the footer says the same line again. *(e), one bar:* lay two fingers on
+the row and hold: one new preset, not two; keep holding for five
+seconds: still one.
+*(f):* latch SHIFT and hold the row: it saves the same way. *(g):*
+right-click F8 → **put preset here…** (a list of every preset, twelve
+rows tall at most, scrolling past that) → NOITA: F8 is NOITA again, the
+footer says "F8: NOITA", the "bank is full" line has gone from the
+PRESETS page, and TRIP 2, TRIP 3 and TRIP 4 are still in the list.
+**clear slot** is greyed on an empty slot. Plain **save** on the panel
+still writes over the loaded preset (check 53). *(h):* right-click any
+control → Learn, then hold a clip-stop button: refused ("G6·5 (clip stop
+5) is invariant (the session's) — not learned"), nothing saved. Two
+things this build does **not** do, so they are not fails: the on-screen
+desk lights the bar while it is held but does not blink, and the cheat
+sheet does not name the bar. *Fail:* a tap saving →
+the hold time (`midi.HOLD_S`, `MidiIO._handle`); a save into a taken slot
+or over a file → `Project.next_empty`, `library.next_name`; no blink →
+`apc40.blink_of` and the blink in `MidiIO.feedback` (if the clip-stop
+LEDs never light or never blink on this device, note what they do
+instead: the velocities are from Akai's table, never seen on the mk1;
+the save does not depend on them, and the footer's line is the sign);
+the row going dark at 0.6 s with no blink and no new preset → the save
+itself failed, by design shown that way (`Project.save_new` returned
+False; the reason is on the PRESETS page, `bank_error`); two presets
+from one hold → the bar rule in `MidiIO._fire_holds`; the row doing
+nothing → its rows (`apc40.DEFAULT_MAP`; your `bindings.json` after
+check 57).
+
+**57. The first launch brings your `bindings.json` up to date, with a backup (plan 15 WP1–WP4).**
+Headless: `uv run pytest -q tests/test_routing.py -k "older_file or old_crossfader"`.
+Before the first launch of this build, `ls -la ~/Hyperspace`. Launch and
+read stderr. *Pass:* one `backup:` line naming `bindings.json.bak-v3`
+(or a dated name if you already had one), and one line per change:
+`remapped cc:0:15: overlay.bg → output.dim (the APC40 map of plan 15)`;
+`added note:0:64 → preset.home (the APC40 map of plan 15)`; eight lines
+`added note:0:52 → preset.save_new (the APC40 map of plan 15)` …
+`note:7:52` for the clip-stop buttons; and `added key:… (the keys of
+plans 09, 11 and 15)` for ⌘Z, ⌘⇧Z, Ctrl+Z, Ctrl+⇧Z and Home. The ROUTING
+page's session section lists X → `output.dim`, B11 → `preset.home`, and
+G6·1–G6·8 → `preset.save_new  hold` under "invariant · both layers". A
+crossfader, OVERDUB or clip-stop row you had changed by hand is left as
+you had it (and that control then does what you set, not this plan's
+job); a key you had already put on one of those chords keeps yours.
+Launch again: stderr says nothing and no file's time moves. One thing to
+know: a row is added wherever **nothing uses the control**, so if you
+later *delete* the OVERDUB row or a clip-stop row from `bindings.json`
+it comes back on the next launch (as METRONOME's does); to switch a
+button off, keep its row and add `"enabled": false`. **If your
+`bindings.json` was itself made on this launch from a pre-plan-09
+`midi_map.json`**, the first launch only converts the old file, and the
+OVERDUB row and the eight clip-stop rows are added on the *second* launch,
+which says so on stderr
+(`tests/test_routing.py::test_old_midi_map_migrates_into_bindings_json`;
+METRONOME's row always arrived this way). Then load
+each preset you saved on the night: if one had learned a control onto
+OVERDUB or a clip-stop button, that row is dropped at the load, the
+ROUTING head says "desk: dropped … that control is invariant", and the
+row is gone from the preset when you next save it (the old file goes to
+the trash, check 53). *Fail:* no backup → `routing.backup` in
+`Bindings.load`; a row of yours replaced → `routing.remap_factory` (it
+may only swap the exact factory row — one caveat: a crossfader row of
+yours that was *identical* to the old factory row cannot be told from it
+and is swapped; the backup has it); the notes every launch → the remap
+is not finding its own rows.
 
 ## What this list does not ground
 

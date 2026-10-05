@@ -1,0 +1,39 @@
+The FX page: which strip is open is a name, not a place in the stack
+=====================================================================
+
+at launch — nothing chosen, so the first effect is open
+    [○ plasma]  ○ acid   ○ kaleido   ○ zoomblur   ○ warp   ○ wobble   ○ doublevision   ○ deconverge   ○ fractals   ○ glimmer   ○ tripcolour   ○ huecycle 
+    open: plasma   (fx.select reads 0, sel_name None)
+
+fx.select("kaleido") — what a click on the kaleidoscope's name does
+     ○ plasma   ○ acid  [○ kaleido]  ○ zoomblur   ○ warp   ○ wobble   ○ doublevision   ○ deconverge   ○ fractals   ○ glimmer   ○ tripcolour   ○ huecycle 
+    open: kaleido   (fx.select reads 2, sel_name 'kaleido')
+    effects switched by that: 0 (a click on the name never toggles)
+
+fx.kaleido.order 15 → 99 — its order slider dragged to the far end
+     ○ plasma   ○ acid   ○ zoomblur   ○ warp   ○ wobble   ○ doublevision   ○ deconverge   ○ fractals   ○ glimmer   ○ tripcolour   ○ huecycle  [○ kaleido]
+    open: kaleido   (fx.select reads 11, sel_name 'kaleido')
+
+fx.huecycle.order 85 → 0 — another effect moved past it
+     ○ huecycle   ○ plasma   ○ acid   ○ zoomblur   ○ warp   ○ wobble   ○ doublevision   ○ deconverge   ○ fractals   ○ glimmer   ○ tripcolour  [○ kaleido]
+    open: kaleido   (fx.select reads 11, sel_name 'kaleido')
+
+preset load: fx "mandala" — lands every fx.*.order
+     ● plasma  [● kaleido]  ○ acid   ○ zoomblur   ○ warp   ○ wobble   ○ doublevision   ○ deconverge   ● fractals   ● glimmer   ○ tripcolour   ○ huecycle 
+    open: kaleido   (fx.select reads 1, sel_name 'kaleido')
+
+preset load: fx "acid" — lands every fx.*.order
+     ○ plasma   ● acid  [○ kaleido]  ○ zoomblur   ○ warp   ● wobble   ○ doublevision   ● deconverge   ○ fractals   ○ glimmer   ○ tripcolour   ● huecycle 
+    open: kaleido   (fx.select reads 2, sel_name 'kaleido')
+
+preset load: fx "noita tripping balls" — lands every fx.*.order
+     ○ plasma   ○ acid  [○ kaleido]  ○ zoomblur   ● warp   ○ wobble   ○ doublevision   ○ deconverge   ● fractals   ○ glimmer   ● tripcolour   ○ huecycle 
+    open: kaleido   (fx.select reads 2, sel_name 'kaleido')
+
+fx.select ← 0 — a desk row or a test that writes an index still works
+    [○ plasma]  ○ acid   ○ kaleido   ○ zoomblur   ● warp   ○ wobble   ○ doublevision   ○ deconverge   ● fractals   ○ glimmer   ● tripcolour   ○ huecycle 
+    open: plasma   (fx.select reads 0, sel_name 'plasma')
+
+fx.glimmer.on toggled — what a click on glimmer's LED does; the open strip stays
+    [○ plasma]  ○ acid   ○ kaleido   ○ zoomblur   ● warp   ○ wobble   ○ doublevision   ○ deconverge   ● fractals   ● glimmer   ● tripcolour   ○ huecycle 
+    open: plasma   (fx.select reads 0, sel_name 'plasma')
