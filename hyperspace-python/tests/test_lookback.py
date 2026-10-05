@@ -997,6 +997,401 @@ def test_lookback_page_draws_headless(tmp_path):
         imgui.destroy_context(ictx)
 
 
+# ---------------------------------------------------------------- plan 20 WP4: ECHOES, DREAM, BOTH
+
+# every dream.* param as it was before plan 20 relabelled the page: id, kind,
+# lo, hi, default, persist, modulatable, integer, log, wrap, choices. WP4 and
+# WP5 change labels, readouts and tips only; a row that moves here is a
+# migration nobody planned.
+DREAM_FROZEN = [
+    ("dream.on", "TOGGLE", 0.0, 1.0, False, True, True, False, False, False, None),
+    ("dream.mix", "CONTINUOUS", 0.0, 1.0, 0.7, True, True, False, False, False, None),
+    ("dream.echo_mix", "CONTINUOUS", 0.0, 1.0, 0.4, True, True, False, False, False, None),
+    ("dream.fade", "CONTINUOUS", 0.02, 10.0, 0.2252, True, True, False, True, False, None),
+    ("dream.darken", "CONTINUOUS", 0.0, 1.0, 0.1, True, True, False, False, False, None),
+    ("dream.contrast", "CONTINUOUS", 0.5, 3.0, 1.0, True, True, False, False, False, None),
+    ("dream.occlude", "CONTINUOUS", 0.0, 1.0, 1.0, True, True, False, False, False, None),
+    ("dream.hue", "CONTINUOUS", -180.0, 180.0, 0.0, True, True, False, False, True, None),
+    ("dream.sat", "CONTINUOUS", 0.0, 2.0, 1.0, True, True, False, False, False, None),
+    ("dream.tint", "CONTINUOUS", 0.0, 1.0, 0.0, True, True, False, False, False, None),
+    ("dream.tint_from", "ENUM", 0.0, 1.0, 0, True, True, False, False, False,
+     ("colour", "scene")),
+    ("dream.tint_hue", "CONTINUOUS", 0.0, 360.0, 200.0, True, True, False, False, True, None),
+    ("dream.tint_sat", "CONTINUOUS", 0.0, 1.0, 1.0, True, True, False, False, False, None),
+    ("dream.echoes", "CONTINUOUS", 0, 32, 8, True, True, True, False, False, None),
+    ("dream.gap", "CONTINUOUS", 0.0, 0.25, 0.033333, True, False, False, False, False, None),
+    ("dream.res", "ENUM", 0.0, 1.0, 2, True, False, False, False, False,
+     ("128", "192", "256", "384")),
+    ("dream.steps", "CONTINUOUS", 1, 3, 2, True, True, True, False, False, None),
+    ("dream.step", "CONTINUOUS", 0.005, 0.06, 0.03, True, True, False, False, False, None),
+    ("dream.k", "CONTINUOUS", 0.03, 0.3, 0.05, True, True, False, False, False, None),
+    ("dream.layer", "ENUM", 0.0, 1.0, 1, True, False, False, False, False,
+     ("conv2_2", "conv3_3", "conv4_3", "inception3b", "inception4c", "inception4e")),
+    ("dream.octaves", "ENUM", 0.0, 1.0, 0, True, True, False, False, False,
+     ("1", "2 alt", "3 alt")),
+    ("dream.mask_decay", "CONTINUOUS", 0.9, 0.995, 0.99, True, True, False, False, False, None),
+    ("dream.jitter", "CONTINUOUS", 0, 16, 8, True, True, True, False, False, None),
+]
+
+
+def test_no_dream_id_range_default_or_flag_changed():
+    """The relabel is strings only: every `dream.*` param's id, kind,
+    bounds, default, `persist`, `modulatable`, taper flags and choices are
+    what they were, in the order they were declared — so no saved look, no
+    route and no desk row means anything else than it did."""
+    from hyperspace.params import Kind
+
+    reg = registry()
+    now = [(p.id, p.kind.name, p.lo, p.hi, p.base, p.persist, p.modulatable, bool(p.integer),
+            bool(p.log), bool(p.wrap), tuple(p.names) if p.kind is Kind.ENUM else None)
+           for p in reg.group("dream")]
+    assert now == DREAM_FROZEN
+    assert [type(row[4]) for row in now] == [type(row[4]) for row in DREAM_FROZEN]
+    assert [row[0] for row in now] == DREAM_IDS
+    assert not any(p.alias or p.taper is not None for p in reg.group("dream"))
+    assert not [p.id for p in reg if p.id.startswith("dream.") and p.group != "dream"]
+
+
+class LookbackPage:
+    """The LOOKBACK page on a headless imgui context, with what it draws
+    recorded in order: section titles, cell labels, widgets (by imgui id,
+    with their rectangle and whether a chip was lit) and popup ids."""
+
+    def __init__(self, tmp_path, monkeypatch):
+        from imgui_bundle import imgui
+
+        from hyperspace import ui, ui_lookback
+        from hyperspace.analysis import Analyser
+        from hyperspace.analyzer import Analyzer
+        from hyperspace.app import CONTROL_SIZE
+        from hyperspace.control import Control
+        from hyperspace.library import Library
+        from hyperspace.params import build_registry
+
+        self.imgui, self.ui_lookback = imgui, ui_lookback
+        self.ictx = imgui.create_context()
+        io = imgui.get_io()
+        io.display_size = imgui.ImVec2(*CONTROL_SIZE)
+        io.backend_flags |= imgui.BackendFlags_.renderer_has_textures
+        ui.apply_style()
+        ui.load_fonts()
+        chain = Analyzer(Analyser())
+        control = Control(chain)
+        audio = SimpleNamespace(chain=chain, on=False, mode="", error="", label="", sr=48000.0)
+        view = ViewState()
+        lib = Library(tmp_path, period=0.0)
+        self.dream = DreamState()
+        self.reg = build_registry(view, control, audio, lib.project, dream=self.dream)
+        lib.attach(self.reg)
+        self.panel = ui.Panel(control, audio, view, bank=lib.project, registry=self.reg,
+                              library=lib)
+        self.events: list[tuple[str, str]] = []     # ("title" | "label" | "widget" | "popup", text)
+        self.rects: dict[str, tuple[float, float, float, float]] = {}
+        self.lit: dict[str, bool] = {}
+        red = tuple(ui.RED)
+
+        def item(fn):
+            real = getattr(imgui, fn)
+
+            def rec(label, *a, **k):
+                key = label.split("##", 1)[-1]
+                self.lit[key] = tuple(imgui.get_style_color_vec4(imgui.Col_.button)) == red
+                out = real(label, *a, **k)
+                lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+                self.rects[key] = (lo.x, lo.y, hi.x, hi.y)
+                self.events.append(("widget", key))
+                return out
+            monkeypatch.setattr(imgui, fn, rec)
+        for fn in ("button", "checkbox", "slider_float", "slider_int", "combo",
+                   "invisible_button", "color_button"):
+            item(fn)
+        real_popup = imgui.begin_popup_context_item
+
+        def popup(str_id, *a, **k):
+            self.events.append(("popup", str_id))
+            return real_popup(str_id, *a, **k)
+        monkeypatch.setattr(imgui, "begin_popup_context_item", popup)
+        real_micro = ui._micro
+
+        def micro(text, color=None):
+            if color is ui.TEXT:                    # a section's title, not its note
+                self.events.append(("title", text))
+            return real_micro(text, color)
+        monkeypatch.setattr(ui, "_micro", micro)
+        real_label = ui.Panel._label_cell
+
+        def label_cell(text, *a, **k):
+            self.events.append(("label", text))
+            return real_label(text, *a, **k)
+        monkeypatch.setattr(ui.Panel, "_label_cell", staticmethod(label_cell))
+
+    def frame(self) -> None:
+        imgui = self.imgui
+        self.events.clear()
+        self.rects.clear()
+        self.lit.clear()
+        imgui.new_frame()
+        imgui.set_next_window_pos(imgui.ImVec2(0, 0))
+        imgui.set_next_window_size(imgui.ImVec2(420, 860))
+        imgui.begin("page", None, imgui.WindowFlags_.no_title_bar | imgui.WindowFlags_.no_move)
+        self.ui_lookback.page(self.panel, 1 / 60)
+        imgui.end()
+        imgui.end_frame()
+
+    def click(self, item: str, button: int = 0) -> None:
+        """A click on the widget whose id is `item`: the mouse moves there,
+        presses, releases, and leaves."""
+        io = self.imgui.get_io()
+        self.frame()
+        x0, y0, x1, y1 = self.rects[item]
+        io.add_mouse_pos_event((x0 + x1) / 2, (y0 + y1) / 2)
+        self.frame()
+        io.add_mouse_button_event(button, True)
+        self.frame()
+        io.add_mouse_button_event(button, False)
+        self.frame()
+        io.add_mouse_pos_event(-1.0, -1.0)
+        self.frame()
+
+    def widgets(self) -> list[str]:
+        return [text for kind, text in self.events if kind == "widget"]
+
+    def by_section(self) -> dict[str, list[str]]:
+        """Section title → the dream.* params drawn under it, in order (a
+        chip's id is ``chip.<param>.<k>``; a widget's is the param's)."""
+        out: dict[str, list[str]] = {}
+        title = ""
+        for kind, text in self.events:
+            if kind == "title":
+                title = text
+                out[title] = []
+            elif kind == "widget" and "dream." in text:
+                pid = text[text.index("dream."):]
+                pid = pid.rsplit(".", 1)[0] if text.startswith("chip.") else pid
+                if pid not in out[title]:
+                    out[title].append(pid)
+        return out
+
+    def close(self) -> None:
+        self.imgui.destroy_context(self.ictx)
+
+
+@pytest.fixture()
+def lbpage(tmp_path, monkeypatch):
+    page = LookbackPage(tmp_path, monkeypatch)
+    yield page
+    page.close()
+
+
+def test_the_page_has_three_sections_and_every_dream_param_once(lbpage):
+    """ECHOES, DREAM, BOTH, in that order under the page's own title, and
+    every persisted `dream.*` param drawn exactly once, under the section
+    that says what it acts on (plan 20 §1, "The look-back page's knobs
+    today")."""
+    from hyperspace import ui_lookback
+
+    lbpage.frame()
+    got = lbpage.by_section()
+    assert list(got) == ["look-back", "echoes", "dream", "both"]
+    assert got["look-back"] == ["dream.on"]
+    assert got["echoes"] == ["dream.echo_mix", "dream.fade", "dream.echoes", "dream.gap"]
+    assert set(got["dream"]) == {
+        "dream.layer", "dream.mix", "dream.k", "dream.step", "dream.steps", "dream.mask_decay",
+        "dream.jitter", "dream.octaves", "dream.hue", "dream.sat", "dream.tint",
+        "dream.tint_from", "dream.tint_hue", "dream.tint_sat"}
+    assert got["both"] == ["dream.darken", "dream.contrast", "dream.occlude", "dream.res"]
+    # the layout table is what was drawn, and it is the whole group, once
+    assert {k: tuple(v) for k, v in got.items() if k != "look-back"} == ui_lookback.SECTIONS
+    drawn = [pid for ids in got.values() for pid in ids]
+    assert sorted(drawn) == sorted(DREAM_IDS)
+    # one widget per param (the layer: one chip per choice), on or off
+    for on in (False, True):
+        lbpage.dream.on = on
+        lbpage.frame()
+        ids = [w for w in lbpage.widgets() if "dream." in w]
+        chips = [w for w in ids if w.startswith("chip.dream.layer.")]
+        assert len(chips) == 6 and len(ids) - len(chips) == len(DREAM_IDS) - 1
+        assert sorted(set(ids) - set(chips)) == sorted(set(DREAM_IDS) - {"dream.layer"})
+    # every cell has a label, and every label is in the page's table
+    labels = [text for kind, text in lbpage.events if kind == "label"]
+    cells = [pid for title in ("echoes", "dream", "both") for pid in ui_lookback.SECTIONS[title]
+             if pid != "dream.layer"]
+    assert [lb for lb in labels if lb != "the tint"] == [ui_lookback.SHORT[pid] for pid in cells]
+
+
+def test_the_layer_is_a_row_of_chips(lbpage):
+    """`dream.layer` is six chips, one per `lookback.LAYERS` entry in order,
+    the lit one the layer's base; a click sets it (a scene-setter's write:
+    the param is not modulatable); there is no combo for it; and each chip
+    opens the param's own menu on a right-click, one popup apiece."""
+    from hyperspace import ui_lookback
+    from hyperspace.lookback import LAYERS
+
+    reg, d = lbpage.reg, lbpage.dream
+    layer = reg["dream.layer"]
+    assert len(LAYERS) == 6 and list(ui_lookback.LAYER_CHIPS) == LAYERS
+    assert len(set(ui_lookback.LAYER_CHIPS.values())) == 6
+    lbpage.frame()
+    chips = [f"chip.dream.layer.{k}" for k in range(6)]
+    assert [w for w in lbpage.widgets() if w.startswith("chip.dream.layer")] == chips
+    assert "dream.layer" not in lbpage.widgets()                 # no combo
+    assert [lbpage.lit[c] for c in chips] == [k == 1 for k in range(6)]    # conv3_3, the default
+    # one row, tiling it: equal widths, left to right, the same line
+    rects = [lbpage.rects[c] for c in chips]
+    assert len({round(r[1]) for r in rects}) == 1
+    assert [r[0] for r in rects] == sorted(r[0] for r in rects)
+    widths = [r[2] - r[0] for r in rects]
+    assert max(widths) - min(widths) < 1.0
+    assert all(rects[k][2] <= rects[k + 1][0] for k in range(5))  # none overlaps the next
+    # a click on each selects it, and it alone is lit
+    for k in (4, 0, 5, 2):
+        lbpage.click(chips[k])
+        assert layer.base == k and d.layer == k
+        assert [lbpage.lit[c] for c in chips] == [j == k for j in range(6)]
+    assert not layer.modulatable and not layer.modulated
+    # a click on the lit one keeps it (a chip is a choice, not a toggle)
+    lbpage.click(chips[2])
+    assert d.layer == 2
+    # the param's menu hangs off every chip, a popup apiece
+    popups = [text for kind, text in lbpage.events if kind == "popup"]
+    assert [p for p in popups if "dream.layer" in p] == [f"##ctx.dream.layer.{k}" for k in range(6)]
+    lbpage.click(chips[3], button=1)                # a right-click opens the menu, sets nothing
+    assert d.layer == 2
+    assert lbpage.imgui.is_popup_open("", lbpage.imgui.PopupFlags_.any_popup_id)
+
+
+def test_spacing_is_called_time_apart(lbpage):
+    """The owner's "Spacing does not say what it is": the page's cell says
+    TIME APART, the registry (so ROUTING, Learn and the desk diagram) says
+    "Echo time apart", the readout is a time, and the tip opens with what
+    it is. Echo time is seconds: the fade is a time too."""
+    from hyperspace import ui_lookback
+
+    reg = lbpage.reg
+    gap, fade = reg["dream.gap"], reg["dream.fade"]
+    assert ui_lookback.SHORT["dream.gap"] == "time apart"
+    assert gap.label == "Echo time apart"
+    assert gap.tip.startswith("The time between one echo and the next")
+    assert gap.text() == "33 ms" and not gap.modulatable
+    assert fade.label == "Echo fade time" and ui_lookback.SHORT["dream.fade"] == "fade time"
+    assert fade.text() == "0.23 s" and "halves in brightness every" in fade.tip
+    lbpage.frame()
+    events = lbpage.events
+    k = events.index(("label", "time apart"))
+    assert events[k + 1] == ("widget", "dream.gap")           # the label is that slider's
+    assert not [text for kind, text in events if kind == "label" and "spacing" in text.lower()]
+    # no label on the page or in the group says the old word
+    assert not [p.id for p in reg.group("dream") if "spacing" in (p.label + p.tip).lower()]
+    # the section's note says the trail in the same units
+    assert ui_lookback._trail_note(reg) == "8 × 33 ms · the trail reaches 0.27 s"
+    gap.set_value(0.0)
+    assert ui_lookback._trail_note(reg) == "8, one a frame"
+
+
+def test_every_dream_label_says_whose_knob_it_is():
+    """Fork F9: the registry's labels change with the page's. An echo knob
+    says Echo, a dream knob says Dream, the three that grade both and the
+    switch say neither; every tip opens with a sentence."""
+    from hyperspace import ui_lookback
+
+    reg = registry()
+    for pid in ui_lookback.SECTIONS["echoes"]:
+        assert reg[pid].label.startswith("Echo "), pid
+    for pid in ui_lookback.SECTIONS["dream"]:
+        if pid != "dream.k":                        # the speed: plan 20 WP5
+            assert reg[pid].label.startswith("Dream "), pid
+    assert [reg[pid].label for pid in ui_lookback.SECTIONS["both"]] == [
+        "Darken", "Contrast", "Shape hides wake", "Look-back detail"]
+    assert reg["dream.on"].label == "Look-back"
+    labels = [p.label for p in reg.group("dream")]
+    assert len(set(labels)) == len(labels)          # ROUTING's list tells every one apart
+    for p in reg.group("dream"):
+        assert p.tip and (p.tip[0].isupper() or p.tip[0].isdigit()), p.id
+    # a readout fits its half-width cell: nothing longer than the slider is wide
+    for p in reg.group("dream"):
+        if p.id != "dream.k" and p.fmt is not None and p.kind.name == "CONTINUOUS":
+            for v in (p.lo, p.hi, p.base):
+                assert len(p.fmt(v)) <= 10, (p.id, p.fmt(v))
+
+
+def test_the_routing_page_lists_the_new_labels():
+    """ROUTING's target list is the registry's labels: it says "Echo
+    brightness" and "Dream brightness" where it said "Echo mix" and "Dream
+    mix", and a search for the page's word finds the param."""
+    from hyperspace import ui_routing
+
+    reg = registry()
+    targets = {p.id: p.label for p in ui_routing._targets(SimpleNamespace(reg=reg))
+               if p.id.startswith("dream.")}
+    assert targets["dream.echo_mix"] == "Echo brightness"
+    assert targets["dream.mix"] == "Dream brightness"
+    assert targets["dream.fade"] == "Echo fade time"
+    assert targets["dream.echoes"] == "Echo count"
+    assert targets["dream.occlude"] == "Shape hides wake"
+    assert targets["dream.step"] == "Dream strength"
+    assert targets["dream.mask_decay"] == "Dream linger"
+    old = {"Echo mix", "Dream mix", "Fade", "Echoes", "Spacing", "Occlude", "Hue shift",
+           "Saturation", "Tint", "Step size", "Steps", "Mask decay", "Jitter", "Octaves",
+           "Layer", "Resolution"}
+    assert not old & set(targets.values())
+    # the three that rebuild things are still not a performer's
+    assert not set(targets) & {"dream.gap", "dream.res", "dream.layer"}
+
+
+def test_the_look_back_page_has_no_conflicting_ids(lbpage):
+    """Every widget on the page has its own imgui id and its own popup:
+    six chips stand for one param, and two cells are both called
+    BRIGHTNESS."""
+    for on in (False, True):
+        lbpage.dream.on = on
+        lbpage.frame()
+        ids = lbpage.widgets()
+        assert not {i for i in ids if ids.count(i) > 1}
+        popups = [text for kind, text in lbpage.events if kind == "popup"]
+        assert not {i for i in popups if popups.count(i) > 1}
+        # every dream.* widget offers its param's menu
+        assert {p[len("##ctx."):] for p in popups} >= set(DREAM_IDS) - {"dream.layer"}
+
+
+def test_the_worker_status_is_never_taller_than_its_room(lbpage):
+    """The worker's line is cut to STATUS_LINES with an ellipsis, so what
+    it has to say cannot push the page into scrolling; a short one is
+    drawn whole."""
+    from hyperspace import ui_lookback
+
+    imgui = lbpage.imgui
+    imgui.new_frame()
+    short = "mps · alias · conv3_3 fp32 · 11.3 ms · 1 behind"
+    long = " · ".join([short, "3456 dropped", "12 nan reset(s)", "step clamped"] + ["x" * 30] * 8)
+    h = imgui.get_text_line_height()
+    assert ui_lookback.fit_lines(short, 380.0, 3) == short
+    cut = ui_lookback.fit_lines(long, 380.0, 3)
+    assert cut.endswith("…") and long.startswith(cut[:-1].rstrip()) and len(cut) > 100
+    assert imgui.calc_text_size(cut, wrap_width=380.0).y <= 3 * h + 0.5
+    assert imgui.calc_text_size(long, wrap_width=380.0).y > 3 * h + 0.5
+    imgui.end_frame()
+
+
+def test_the_relabel_changes_no_factory_file(tmp_path):
+    """Labels are not in preset files: the factory presets regenerate to
+    the bytes they have, and the dream module presets name ids only."""
+    import shutil
+
+    from hyperspace import preset
+    from hyperspace.library import Library
+
+    for path in preset.FACTORY_DIR.glob("*.json"):
+        shutil.copy(path, tmp_path / path.name)
+    preset.write_factory(tmp_path)
+    for path in preset.FACTORY_DIR.glob("*.json"):
+        assert (tmp_path / path.name).read_bytes() == path.read_bytes(), path.name
+    reg = registry()
+    lib = Library(tmp_path / "home", period=0.0)
+    lib.attach(reg)
+    for name in lib.list("dream"):
+        assert set(lib.read("dream", name)["values"]) <= set(DREAM_IDS), name
+
+
 # ---------------------------------------------------------------- plan 14 WP1: the freeze
 
 def test_capture_off_the_cadence_with_no_source_puts_the_target_back(ctx):
