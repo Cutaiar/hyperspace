@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The look-back page as a PNG and its label table (plan 20 WP4).
+"""The look-back page as PNGs and its label table (plan 20 WP4, WP5).
 
 Not the app: a **hidden** GLFW window at the control size with the panel
 drawn over a real `Renderer` on the same GL context, so the thumbnail row
@@ -15,9 +15,13 @@ on import): no MIDI port, no audio device, no tracker.
 
   uv run python tools/lookback_page_shots.py                  # → lookback-page.png
   uv run python tools/lookback_page_shots.py --name NAME.png  # the same page, another file
+  uv run python tools/lookback_page_shots.py --speed          # → lookback-speed.png
   uv run python tools/lookback_page_shots.py --labels         # → lookback-labels.txt
 
-All land in docs/plans/assets/20-fx-dream-looks/. `--labels` writes the
+All land in docs/plans/assets/20-fx-dream-looks/. `--speed` is the top of
+the DREAM section (the status, the layer chips, the speed cell and its
+readout) three times: `dream.k` at the slow end, the default and the fast
+end, each under a caption this tool draws. `--labels` writes the
 table old label → new label → what the knob does: the new labels and the
 sentences are read from the registry and the page, the old ones are the
 frozen table below (what the page and the registry said before plan 20).
@@ -146,14 +150,17 @@ def labels() -> None:
     print(f"wrote {OUT / 'lookback-labels.txt'}")
 
 
-def shots(name: str) -> None:
+SPEED_ROWS_H = 150      # the DREAM title, status, chips and two rows of cells, in points
+
+
+def shots(name: str, speed: bool = False) -> None:
     import glfw
     import moderngl
     import numpy as np
     from imgui_bundle import imgui, implot
     from imgui_bundle.python_backends.glfw_backend import GlfwRenderer
     from OpenGL import GL
-    from PIL import Image
+    from PIL import Image, ImageDraw, ImageFont
 
     from hyperspace.app import CONTROL_SIZE
     from hyperspace.render import Renderer
@@ -192,6 +199,16 @@ def shots(name: str) -> None:
                   registry=reg, library=r.lib)
     reg["ui.page"].set(PAGE_KEYS.index("lookback"))
     clock = [0.0]
+    # where the DREAM section is drawn, in window points: (x0, y0, x1) at its title
+    dream_at: list[tuple[float, float, float]] = []
+    real_section = Panel._section
+
+    def section(self, title, *a, **k):
+        if title == "dream":
+            pos = imgui.get_cursor_screen_pos()
+            dream_at[:] = [(pos.x, pos.y, pos.x + imgui.get_content_region_avail().x)]
+        return real_section(self, title, *a, **k)
+    Panel._section = section
 
     def draw(n: int = 8) -> None:
         for _ in range(n):
@@ -213,23 +230,63 @@ def shots(name: str) -> None:
             impl.render(imgui.get_draw_data())
             GL.glFinish()
 
-    def shoot(file: str, what: str) -> None:
+    def grab() -> Image.Image:
         w, h = glfw.get_framebuffer_size(win)
         raw = GL.glReadPixels(0, 0, w, h, GL.GL_RGB, GL.GL_UNSIGNED_BYTE)
         px = np.frombuffer(raw, dtype=np.uint8).reshape(h, w, 3)[::-1]
         if not px.any():
             raise SystemExit("the hidden window read back black: no picture on this machine")
+        return Image.fromarray(px)
+
+    def shoot(file: str, what: str) -> None:
         OUT.mkdir(parents=True, exist_ok=True)
-        Image.fromarray(px).save(OUT / file, optimize=True)
+        grab().save(OUT / file, optimize=True)
         print(f"wrote {OUT / file}  — {what}")
+
+    def speed_sheet() -> None:
+        """The top of the DREAM section at three speeds, one under another."""
+        k = reg["dream.k"]
+        was = k.base
+        if not dream_at:
+            raise SystemExit("the page drew no DREAM section: nothing to crop")
+        scale = glfw.get_framebuffer_size(win)[0] / CONTROL_SIZE[0]
+        font = ImageFont.load_default(size=int(15 * scale))
+        tiles, said = [], []
+        for v, where in ((k.lo, "the slow end"), (0.05, "the default"), (k.hi, "the fast end")):
+            k.set_value(v)
+            draw()
+            x0, y0, x1 = dream_at[0]
+            box = [int(c * scale) for c in (x0 - 8, y0 - 6, x1 + 8, y0 + SPEED_ROWS_H)]
+            tile = grab().crop(tuple(box))
+            cap = Image.new("RGB", (tile.width, int(30 * scale)), (0, 0, 0))
+            text = f"dream.k = {v:g}, {where}"      # (the caption face has no ≈)
+            ImageDraw.Draw(cap).text((int(8 * scale), int(7 * scale)), text,
+                                     fill=(235, 235, 235), font=font)
+            tiles += [cap, tile]
+            said.append(f"{v:g} → {k.text()}")
+        k.set_value(was)
+        sheet = Image.new("RGB", (tiles[0].width, sum(t.height for t in tiles)))
+        y = 0
+        for t in tiles:
+            sheet.paste(t, (0, y))
+            y += t.height
+        OUT.mkdir(parents=True, exist_ok=True)
+        sheet.save(OUT / "lookback-speed.png", optimize=True)
+        print(f"wrote {OUT / 'lookback-speed.png'}  — {'; '.join(said)}")
 
     draw(40)
     lb = renderer.lookback
     what = (f"{len(lb.thumbnails())} echoes at {lb.echo[0]}×{lb.echo[1]}, the stand-in's "
             f"frame {lb.dream_frame} as the dream")
-    shoot(name, what)
-    impl.shutdown()
-    glfw.terminate()
+    try:
+        if speed:
+            speed_sheet()
+        else:
+            shoot(name, what)
+    finally:
+        Panel._section = real_section
+        impl.shutdown()
+        glfw.terminate()
 
 
 if __name__ == "__main__":
@@ -237,4 +294,4 @@ if __name__ == "__main__":
     if "--labels" in args:
         sys.exit(labels())
     name = args[args.index("--name") + 1] if "--name" in args else "lookback-page.png"
-    sys.exit(shots(name))
+    sys.exit(shots(name, speed="--speed" in args))

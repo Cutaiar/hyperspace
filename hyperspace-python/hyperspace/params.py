@@ -717,6 +717,19 @@ def _item(get_list, i):
     return (lambda: get_list()[i]), (lambda v: get_list().__setitem__(i, v))
 
 
+def dream_half_life(k: float) -> int:
+    """`dream.k` as its readout: the processed frames in which a frame's
+    share of the dream buffer halves, ``log ½ / log(1 − k)``, rounded (the
+    buffer is ``D ← D·(1 − k) + frame·k``, dream.py). 23 at the slow end
+    of the knob, 14 at the default, 2 at the fast end; never under 1, and 1
+    for a value that is not a number (a readout must not raise mid-frame)."""
+    k = float(k)
+    if not math.isfinite(k):
+        return 1
+    k = min(max(k, 1e-6), 1.0 - 1e-9)
+    return max(1, round(math.log(0.5) / math.log(1.0 - k)))
+
+
 def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                    restart=None, ghost=None) -> Registry:
     """Declare every parameter the surface owns.
@@ -931,11 +944,18 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                  fmt=lambda v: f"{v:.3f}", group=g,
                  tip="How hard the dream is pushed each pass; too hard for the speed and "
                      "it is held back (the status line says 'step clamped'): strength × "
-                     "passes is kept at or under 1.5 × the speed's k.")
-    r.continuous("dream.k", "Blend k", *_attr(dream, "k"), lo=0.03, hi=0.3,
-                 fmt=lambda v: f"k {v:.3f}", group=g,
-                 tip="How much of the new frame enters the dream buffer each frame — "
-                     "its memory, 33 frames down to 3.")
+                     "passes is kept at or under 1.5 × k (the speed's value).")
+    # the dream's "speed" is its one time constant (plan 20 WP5, fork F8): the
+    # share of the newest frame blended into the buffer each processed frame
+    r.continuous("dream.k", "Dream speed", *_attr(dream, "k"), lo=0.03, hi=0.3,
+                 fmt=lambda v: f"≈{dream_half_life(v)} frames", group=g,
+                 tip="How fast the dream follows the picture: fast, it keeps up and lets "
+                     "go of what has left; slow, it lags, lingers and grows deeper. In "
+                     "dream frames, so it also follows the worker's rate. Slower than "
+                     "about 17 frames at the default strength, the strength is held back "
+                     "(the status line says 'step clamped'). The readout is the frames in "
+                     "which a frame's share of the dream halves; the value is k, the share "
+                     "of each new frame blended in.")
     r.enum("dream.layer", "Dream layer", *_attr(dream, "layer"), LAYERS, group=g,
            modulatable=False,      # a change makes the worker load another trunk
            tip="Which layer of the net the dream brings out; a change loads it, which "
