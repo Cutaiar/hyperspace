@@ -236,11 +236,14 @@ def test_a_hand_learn_writes_a_route_into_the_loaded_preset(tmp_path):
 
 
 def test_learn_refuses_the_global_layer_and_invariant_controls(tmp_path):
-    """D5, D6: with the global layer up, and on an invariant control — a
-    fader, SHIFT's own note, OVERDUB (home, plan 15 WP2) — a learn is
-    refused: nothing changes (the
-    table, the layer, the param, the file, the preset's dot) and the
-    reason is in `learner.last`."""
+    """D5, D6, and plan 17 fork 6. With the global layer up a desk learn
+    is refused in the same words as ever — nothing changes (the table, the
+    layer, the param, the file, the preset's dot) — and now **stays
+    armed**: SHIFT, pressed while it is armed, latches (an invariant
+    control is no candidate; it does its own job), and the same knob then
+    lands. An invariant control — a fader, SHIFT's own note, OVERDUB —
+    can never be learned: a message from one is not offered to the learn,
+    and the road a click takes (`learn_control`) refuses it, still armed."""
     from test_midi import cc, note, push, shift
 
     from hyperspace import apc40
@@ -253,35 +256,140 @@ def test_learn_refuses_the_global_layer_and_invariant_controls(tmp_path):
     shift(r)
     assert table.layer == "global"
     before, depth4 = rows(), reg["view.depth4"].value
-    lrn.arm("view.depth4")
-    push(r, cc(0x30, 90))                                    # track knob 1, SHIFT on
-    assert lrn.learning is None and lrn.refused
-    assert lrn.last == ("K1 (track knob 1) is on the global layer (the session's) — "
-                        "latch SHIFT off to learn into the preset")
+    lrn.arm("view.depth4", "desk")
+    refusal = ("K1 (track knob 1) is on the global layer (the session's) — "
+               "latch SHIFT off to learn into the preset")
+    for _ in range(2):                                       # refused, and again: still armed
+        push(r, cc(0x30, 90))                                # track knob 1, SHIFT on
+        assert lrn.learning == "view.depth4" and lrn.want == "desk" and lrn.refused
+        assert lrn.last == refusal
     assert rows() == before and table.layer == "global" and reg["view.depth4"].value == depth4
-    shift(r)
-    assert table.layer == "preset"
-    lrn.arm("view.depth4")
-    push(r, cc(apc40.CC_FADER, 64, channel=2))               # track fader 3
-    assert lrn.refused and lrn.last == "S3 (track fader 3) is invariant (the session's) — not learned"
-    lrn.arm("view.depth4")
-    push(r, note(apc40.N_SHIFT))                             # SHIFT itself
-    assert lrn.refused and lrn.last == "⇧ (SHIFT) is invariant (the session's) — not learned"
-    assert table.layer == "preset"                           # the press did not latch
-    push(r, note(apc40.N_SHIFT, 0))
-    r.reg["preset.load.2"].fire()                            # away from what the show starts on
-    before, depth4, loaded = rows(), reg["view.depth4"].value, lib.current("presets")
-    assert loaded != lib.project.startup
-    lrn.arm("view.depth4")
-    push(r, note(apc40.N_OVERDUB))                           # OVERDUB: home, invariant
-    assert lrn.refused and lrn.last == "B11 (OVERDUB) is invariant (the session's) — not learned"
-    push(r, note(apc40.N_OVERDUB, 0))
-    assert lib.current("presets") == loaded                  # and the press sent nobody home
-    assert rows() == before and reg["view.depth4"].value == depth4
     assert not lib.is_dirty("presets") and untouched(r)
-    lrn.arm("view.depth4")                                   # and a good learn clears the flag
-    push(r, cc(0x10, 64))
-    assert not lrn.refused and "learned view.depth4" in lrn.last
+    # the invariant controls, through `learn_control` (a click's road): each
+    # refused in its own words, the learn still armed, nothing bound
+    for source, why in (
+            (f"cc:2:{apc40.CC_FADER}", "S3 (track fader 3) is invariant (the session's) — not learned"),
+            (f"note:0:{apc40.N_SHIFT}", "⇧ (SHIFT) is invariant (the session's) — not learned"),
+            (f"note:0:{apc40.N_OVERDUB}", "B11 (OVERDUB) is invariant (the session's) — not learned")):
+        assert not lrn.learn_control(source, apc40)
+        assert lrn.refused and lrn.last == why and lrn.learning == "view.depth4"
+    assert rows() == before
+    # SHIFT works through the armed learn: it latches off, and is not learned
+    shift(r)
+    assert table.layer == "preset" and lrn.learning == "view.depth4" and rows() == before
+    # OVERDUB too: it sends the show home, as it always does
+    r.reg["preset.load.2"].fire()
+    loaded = lib.current("presets")
+    assert loaded != lib.project.startup
+    lrn.arm("view.depth4", "desk")
+    before = rows()
+    push(r, note(apc40.N_OVERDUB), note(apc40.N_OVERDUB, 0))
+    assert lib.current("presets") == lib.project.startup and lrn.learning == "view.depth4"
+    assert not any(b.target == "view.depth4" and b.is_midi for b in table.desk())
+    assert not lib.is_dirty("presets") and untouched(r)
+    # …and after SHIFT the same knob lands, and a good learn clears the flag
+    push(r, cc(0x30, 64))
+    assert lrn.learning is None and lrn.want is None and not lrn.refused
+    assert lrn.last.startswith("learned view.depth4 ← K1 (track knob 1) (into the preset)")
+    assert [b.source for b in table.desk() if b.target == "view.depth4"] == ["cc:0:48"]
+    assert lib.is_dirty("presets") and untouched(r)
+    push(r, cc(0x30, 70))                                    # nothing armed: nothing more
+    assert lrn.learning is None and not lrn.refused
+
+
+def test_accepts_by_want():
+    """Plan 17 WP2: a learn says what may complete it. `desk` accepts a
+    cc / note / pitch source and no hand; `hand:left` accepts that hand's
+    axes and switches by name, and not the other hand's, a number or the
+    desk; None accepts anything; nothing armed accepts nothing. `arm(None)`
+    and `take` clear the want."""
+    from hyperspace.learn import WANTS
+
+    lrn = Learn(NS(get=lambda pid: None), Bindings())
+    desk = ("cc:0:48", "cc:*:16", "note:3:53", "pitch:0:0")
+    left = ("hand:left.roll", "hand:left.pinch.index", "hand:left.present")
+    other = ("hand:right.y", "hand:7", "lane:0", "lfo:1", "ext:2", "key:B")
+    assert WANTS == ("desk", "hand:left", "hand:right")
+    assert not any(lrn.accepts(s) for s in (*desk, *left, *other))      # nothing armed
+    lrn.arm("view.bright")
+    assert lrn.want is None and all(lrn.accepts(s) for s in (*desk, *left, *other))
+    lrn.arm("view.bright", "desk")
+    assert all(lrn.accepts(s) for s in desk)
+    assert not any(lrn.accepts(s) for s in (*left, *other))
+    lrn.arm("view.bright", "hand:left")
+    assert all(lrn.accepts(s) for s in left)
+    assert not any(lrn.accepts(s) for s in (*desk, *other, "hand:leftover.x"))
+    lrn.arm("view.bright", "hand:right")
+    assert lrn.accepts("hand:right.y") and not lrn.accepts("hand:left.roll")
+    lrn.learn_source("hand:left.roll")                       # the wrong hand: not taken
+    assert lrn.learning == "view.bright" and lrn.want == "hand:right"
+    assert lrn.take() == "view.bright" and lrn.want is None
+    lrn.arm("view.bright", "desk")
+    lrn.arm(None)
+    assert lrn.learning is None and lrn.want is None and not lrn.accepts("cc:0:48")
+    del lrn.want                                             # a Learn from before a hot reload
+    lrn.learning = "view.bright"
+    assert lrn.accepts("hand:7") and lrn.accepts("cc:0:48")
+
+
+def test_learn_control_needs_no_adapter(tmp_path):
+    """Fork 7: the desk learn is the learn object's. A bare `Learn` over a
+    table — no MidiIO anywhere — and `learn_control("cc:*:18", apc40)`: a
+    preset-layer ring row, the table's `redraw_serial` bumped (an adapter,
+    if there is one, redraws), one undo step, no file. The op comes from
+    the profile and the param; with no profile, a plain `abs` row in the
+    row's own words. The param's old knob lets go, and is named."""
+    from test_undo import boot, labels, settle
+
+    from hyperspace import apc40
+
+    r = boot(tmp_path / "home")
+    table = r.table
+    lrn = Learn(r.reg, table)                                # not the adapter's
+    r.undo.clear()
+    assert not lrn.learn_control("cc:*:18", apc40)           # nothing armed: nothing
+    on_disk = table.path.read_bytes() if table.path.exists() else None
+    serial, desk_serial = table.redraw_serial, table.desk_serial
+    lrn.arm("view.depth4", "desk")
+    assert lrn.learn_control("cc:*:18", apc40)
+    (row,) = [b for b in table.desk() if b.target == "view.depth4"]
+    assert (row.source, row.op, row.layer, row.feedback, row.ring) \
+        == ("cc:*:18", "abs", "preset", "ring", apc40.RING_VOLUME)
+    assert table.redraw_serial > serial and table.desk_serial == desk_serial
+    assert lrn.learning is None and not lrn.refused
+    assert lrn.last == "learned view.depth4 ← D3 (device knob 3) (into the preset)"
+    assert (table.path.read_bytes() if table.path.exists() else None) == on_disk
+    settle(r)
+    assert labels(r) == ["learn view.depth4"]
+    assert r.undo.undo() and not [b for b in table.desk() if b.target == "view.depth4"]
+    # the param's knob moves to another control: the old one lets go, by glyph
+    assert [b.source for b in table.desk() if b.target == "view.bright" and b.kind == "cc"] \
+        == ["cc:0:48"]
+    lrn.arm("view.bright", "desk")
+    assert lrn.learn_control("cc:0:19", apc40)
+    assert lrn.last == "learned view.bright ← D4 (device knob 4) (into the preset); K1 let go"
+    assert [b.source for b in table.desk() if b.target == "view.bright" and b.kind == "cc"] \
+        == ["cc:0:19"]
+    # the op: a note is a toggle with an LED, the cue knob is relative, a
+    # knob on a trigger is a toggle; no profile is a plain row
+    lrn.arm("view.lines", "desk")
+    pad = f"note:3:{apc40.N_CLIP[2]}"                        # clip row 3, track 4
+    assert lrn.learn_control(pad, apc40)
+    row = next(b for b in table.desk() if b.target == "view.lines" and b.source == pad)
+    assert (row.op, row.feedback, row.on) == ("toggle", "led", apc40.GREEN)
+    lrn.arm("view.instances", "desk")
+    assert lrn.learn_control(f"cc:0:{apc40.CC_CUE}", apc40)
+    assert next(b for b in table.desk() if b.target == "view.instances"
+                and b.number == apc40.CC_CUE).op == "rel"
+    lrn.arm("view.speed", "desk")
+    assert lrn.learn_control("cc:0:20")
+    row = next(b for b in table.desk() if b.source == "cc:0:20")
+    assert (row.target, row.op, row.feedback) == ("view.speed", "abs", None)
+    assert lrn.last.startswith("learned view.speed ← MIDI CC 20 ch1 (into the preset)")
+    # a learn armed for a hand is not the desk's to complete… by the adapter
+    # (`MidiIO._handle` asks `accepts`); an id the registry lacks never lands
+    lrn.arm("no.such.param", "desk")
+    assert not lrn.learn_control("cc:0:21", apc40) and lrn.learning is None
 
 
 # ------------------------------------------------------ plan 15 WP1: undo

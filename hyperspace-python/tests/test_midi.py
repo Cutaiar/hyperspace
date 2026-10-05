@@ -451,6 +451,68 @@ def test_a_hand_learn_reaches_the_shared_learn_object(rig):
     assert "learned view.inst_amp" in m.learner.last
 
 
+# ------------------------------------- plan 17 WP2: a learn listens to one source
+
+def test_a_knob_bump_during_a_hand_learn_does_its_own_job(rig):
+    """Armed for a hand ("Learn hand ▸ left"), the desk is not listening
+    for the learn: K1 turns and Brightness moves, a pad toggles its param,
+    the learn is still armed and no row was added or replaced (plan 17 §1
+    row 2: it used to take the param, or kill the learn)."""
+    m, lrn, bright = rig.midi, rig.midi.learner, rig.reg["view.bright"]
+    for x in m.bindings:
+        x.pickup = False
+    rows = [(b.to_json(), b.layer) for b in m.table.bindings]
+    lrn.arm("view.depth4", "hand:left")
+    push(rig, cc(0x30, 20))
+    low = bright.norm
+    push(rig, cc(0x30, 110))
+    assert bright.norm > low and bright.norm == pytest.approx(110 / 127, abs=0.02)
+    lines = rig.view.lines
+    pad = next(b for b in m.table.desk() if b.target == "view.lines" and b.kind == "note")
+    push(rig, note(pad.number, channel=pad.channel or 0), note(pad.number, 0, channel=pad.channel or 0))
+    assert rig.view.lines != lines
+    assert lrn.learning == "view.depth4" and lrn.want == "hand:left" and not lrn.refused
+    assert [(b.to_json(), b.layer) for b in m.table.bindings] == rows
+    # the hand then completes it; the knob had no part in it
+    lrn.learn_source("hand:left.roll")
+    assert lrn.learning is None and m.table.owner("view.depth4").source == "hand:left.roll"
+    assert not any(b.target == "view.depth4" and b.is_midi for b in m.table.desk())
+
+
+def test_an_invariant_control_works_through_a_desk_learn(rig):
+    """Fork 6: armed for the desk, an invariant control is not a candidate
+    — it does its one job. A fader moves its param, SHIFT latches (and
+    latches back), TAP taps, and the learn is still armed, unrefused, the
+    table untouched; a release is never a candidate; then a knob the
+    preset may map lands it, and that message is not dispatched."""
+    m, lrn, reg = rig.midi, rig.midi.learner, rig.reg
+    for x in m.bindings:
+        x.pickup = False
+    rows = [(b.to_json(), b.layer) for b in m.table.bindings]
+    lrn.arm("view.depth4", "desk")
+    post = reg["band.2.post"]
+    push(rig, cc(apc40.CC_FADER, 0, channel=2))              # S3: a fader's jitter
+    low = post.norm
+    push(rig, cc(apc40.CC_FADER, 127, channel=2))
+    assert post.norm > low
+    assert lrn.learning == "view.depth4" and not lrn.refused and lrn.last == ""
+    shift(rig)                                               # SHIFT latches through it
+    assert m.table.layer == "global" and lrn.learning == "view.depth4"
+    shift(rig)
+    assert m.table.layer == "preset" and lrn.learning == "view.depth4"
+    taps = len(rig.clock.taps)
+    tap = next(b for b in m.table.midi() if b.target == "tempo.tap" and b.layer is None)
+    push(rig, note(tap.number, channel=tap.channel or 0), note(tap.number, 0, channel=tap.channel or 0))
+    assert lrn.learning == "view.depth4" and len(rig.clock.taps) == taps + 1
+    assert [(b.to_json(), b.layer) for b in m.table.bindings] == rows
+    depth4, bright = reg["view.depth4"].norm, reg["view.bright"].norm
+    push(rig, cc(0x30, 100))                                 # K1: the preset's to map
+    assert lrn.learning is None and "learned view.depth4 ← K1 (track knob 1)" in lrn.last
+    assert "B16" not in lrn.last                             # Brightness keeps its buttons
+    assert reg["view.depth4"].norm == depth4 and reg["view.bright"].norm == bright
+    assert [b.source for b in m.table.desk() if b.target == "view.depth4"] == ["cc:0:48"]
+
+
 # ---------------------------------------------------------------- map file
 
 def test_map_round_trips_json(tmp_path):

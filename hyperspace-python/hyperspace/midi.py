@@ -83,7 +83,7 @@ from pathlib import Path
 
 import mido
 
-from . import apc40, undo
+from . import apc40
 from .learn import Learn
 from .params import Kind, Param, Registry
 from .routing import PICKUP_TOL, Binding, Bindings, act, bindings_path, led_lit, register_desk
@@ -320,48 +320,12 @@ class MidiIO:
         return (name(b.source) if name is not None else None) or b.describe()
 
     def _learned(self, kind: str, channel: int, number: int, value: int) -> None:
-        """A message while armed: a preset-layer row into the loaded preset
-        (plan 13 §3.3). It binds the param as armed — a ``band.sel.*``
-        alias included, on purpose: a knob on "the selected band's
-        threshold" should follow the selection.
-
-        Refused, with the reason in `learner.last` and nothing changed, on
-        an invariant control — SHIFT among them (D6) — and while the global
-        layer is up (D5): both are the session's, edited in bindings.json.
-        Otherwise the row replaces every preset-layer row on the control
-        (an any-channel row on it included, `Binding.overlaps`) and the
-        param's previous preset-layer row in the same role (`Bindings.bind`)
-        and the file is **not** written: the row is the preset's, and the
-        preset's dirty dot shows it until a save (⇧F, the strip)."""
-        lrn = self.learner
-        pid = lrn.take()
-        p = self.reg.get(pid) if pid is not None else None
-        if p is None:
-            return
-        b = Binding(Binding.midi_source(kind, channel, number), pid, "abs", layer="preset")
-        if self.table.is_invariant(b):
-            lrn.refuse(f"{self.control_name(b)} is invariant (the session's) — not learned")
-            return
-        if self.table.layer == "global":
-            lrn.refuse(f"{self.control_name(b)} is on the global layer (the session's) "
-                       "— latch SHIFT off to learn into the preset")
-            return
-        if kind == "cc":
-            if self.profile.is_relative(number):
-                b.op = "rel"
-            elif p.kind is Kind.TRIGGER:
-                b.op = "toggle"
-        elif kind == "note":
-            b.op = "toggle"
-        fb = self.profile.feedback_for(kind, channel, number)
-        if fb:
-            b.feedback, b.ring = fb["feedback"], fb.get("ring", b.ring)
-            b.on, b.off = fb.get("on", b.on), fb.get("off", b.off)
-        undo.push(f"learn {pid}")                      # one undo step (undo.py, plan 15)
-        for x in self.table.bind(b, write=False):     # the preset rows it replaced
-            if x.feedback:
-                self._dark(x)                          # the new row redraws its own control
-        lrn.said(f"learned {pid} ← {self.control_name(b)} (into the preset)")
+        """A desk message completes the armed learn: `Learn.learn_control`
+        with this device's profile (plan 17 WP2, fork 7 — the row-making
+        lives there, so a click on the on-screen desk makes the same row
+        with no adapter). Landed or refused (the global layer, D5), the
+        table's `redraw_serial` tells this adapter to redraw."""
+        self.learner.learn_control(Binding.midi_source(kind, channel, number), self.profile)
 
     # ---- per frame ----
 
@@ -421,10 +385,18 @@ class MidiIO:
         self.last = f"{kind} {number} ch{ch + 1} = {value}"
         if kind == "note" and value == 0 and self._hold_state()[0].pop((ch, number), None):
             self._light_bars()      # let go before HOLD_S: a tap, nothing fires
-        if self.learner.learning is not None:
-            if kind != "note" or value > 0:
+        # an armed learn (plan 17 WP2): a CC or a press is a candidate only
+        # when the learn waits for the desk (`Learn.accepts`: not during a
+        # hand learn) and the control is not invariant (fork 6: SHIFT, a
+        # fader, TAP do their own job while a learn is armed). A candidate
+        # is not dispatched, landed or refused; everything else is, as if
+        # no learn were armed — a note-off included (never a candidate)
+        lrn = self.learner
+        if lrn.learning is not None and (kind != "note" or value > 0):
+            source = Binding.midi_source(kind, ch, number)
+            if lrn.accepts(source) and not self.table.is_invariant(Binding(source, lrn.learning)):
                 self._learned(kind, ch, number, value)
-            return
+                return
         # the layer is read at the press (D12): a note-off goes to the rows
         # its note-on went to, whatever is up by now
         if kind == "note" and value > 0:
