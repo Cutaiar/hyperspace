@@ -1,4 +1,4 @@
-"""The face patterns' eight inputs and twelve modes, as data — the one
+"""The face patterns' eight inputs and their modes, as data — the one
 place their names and meanings live.
 
 `shaders/patterns.glsl` paints the faces, reading eight inputs, `u_mod[8]`

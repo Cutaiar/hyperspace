@@ -1294,7 +1294,7 @@ class Renderer:
         """While a page wants them, one mode's swatch a frame, round robin:
         what face 0 shows of that mode on this view's inputs (its mix and
         bitmap aside), on the patterns' live clock — so a strip of them
-        moves with the faces at a twelfth of the frame rate, for one small
+        moves with the faces at 1/N_PATTERNS of the frame rate, for one small
         quad a frame. A failure says so in `swatch_error` and never costs
         the frame. True when it drew (another framebuffer is bound)."""
         self._swatch_frame += 1
