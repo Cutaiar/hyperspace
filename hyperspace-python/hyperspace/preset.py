@@ -493,9 +493,10 @@ def party_faces_routes() -> list[Binding]:
     """The faces. Left hand grips; left height pushes brightness (the
     faces glow, up to the 4× stop). Right height pushes the pattern mix
     in, reaching in zooms the camera onto the faces, right roll pushes
-    pattern input 2 — the hex cells' scale, the one spatial input the
-    scene's pattern reads, which lane 2 then leaves alone — and fingers
-    up tip the camera to look down onto the faces."""
+    pattern input 2 — WARP since plan 22 B1 (it was the hex cells' scale):
+    rolled one way it bends the hex cells, rolled the other it leaves them
+    straight, as HEX stays straight from 0 to 1; lane 2 leaves it alone —
+    and fingers up tip the camera to look down onto the faces."""
     return [*_lane_rows(skip_mods=(2,)), *_grip_rows(),
             _push("L", "y", "view.bright", 0.14),
             _push("R", "y", "view.pattern_mix", 0.6),
