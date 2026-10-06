@@ -21,7 +21,6 @@ import pytest
 from hyperspace import geometry as G
 
 DIGESTS = Path(__file__).parent / "golden" / "shape_digests.json"
-SURFACES = [i for i, s in enumerate(G.SHAPES) if s.cells == 0 and i != 17]
 
 
 def digest(i: int) -> dict:
@@ -55,9 +54,10 @@ HEART = next(i for i, s in enumerate(G.SHAPES) if s.name == "Heart")   # masked 
 @pytest.mark.parametrize("i", range(len(G.SHAPES)), ids=[s.name for s in G.SHAPES])
 def test_every_shape_draws_what_it_drew_before_the_lift_existed(i):
     # recorded on plan-22-integration @ 2d4ea11, before any builder took a
-    # lift. A shape that is given a lift (plan 22, A2) changes on purpose:
-    # re-record its row (python tests/test_shapes4d.py --record) and say so
-    # in the commit; a polytope's row must never move
+    # lift; the six lifted shapes' rows re-recorded by plan 22 A2, the
+    # Klein bottle's added by A3. A shape that is given a lift changes on
+    # purpose: re-record its row (python tests/test_shapes4d.py --record)
+    # and say so in the commit; a polytope's row must never move
     assert digest(i) == json.loads(DIGESTS.read_text())[str(i)]
 
 
@@ -180,13 +180,33 @@ def test_the_renderer_draws_a_masked_shape_through_view_angles(monkeypatch):
     assert np.array_equal(frame(HEART, "YW"), frame(HEART, "YZ"))
     assert np.array_equal(frame(HEART, "ZW"), frame(HEART, "XY"))
     masked_rest = frame(HEART)
-    torus = SURFACES[3]                                   # lifted: its W planes are its own
+    torus = next(i for i, s in enumerate(G.SHAPES) if s.name == "Torus")   # lifted
+    assert G.SHAPES[torus].w == "lift"                    # its W planes are its own
     assert not np.array_equal(frame(torus, "XW"), frame(torus, "XZ"))
     # w is 0 at every angle, so the depth cue reads z instead: at rest the
     # same heart left flat draws at the cue's dimmest, masked it does not
     _as(monkeypatch, HEART, "flat")
     assert not np.array_equal(frame(HEART, "XW"), frame(HEART, "XZ"))
     assert masked_rest.mean() > 1.5 * frame(HEART).mean()
+
+
+def test_a_masked_shape_cues_depth_toward_the_camera_however_the_camera_turns():
+    # the cue is the depth the 3D divide reads, camera included: a camera
+    # yawed half round draws what the shape turned half round in XZ draws.
+    # Cued on the shape's own z, the far side would come out bright and on
+    # top (every pixel's difference averaged 8.7 of 255 that way)
+    from hyperspace.render import render_offscreen
+    from hyperspace.view import ViewState
+
+    def frame(ang, yaw=0.0):
+        s = ViewState(shape=HEART, playing=False)
+        s.ang, s.yaw = list(ang), yaw
+        return render_offscreen(s, 96, 96).astype(int)
+
+    turned = frame([0.0, math.pi, 0.0, 0.0, 0.0, 0.0])
+    assert np.abs(turned - frame([0.0] * 6, yaw=math.pi)).mean() < 0.1
+    V = G.geom(HEART)["V"]
+    assert np.array_equal(G.view_depth(V, [0.0] * 6, 0.0, 0.0), V[:, 2])   # at rest: z
 
 
 # ------------------------------------------------------- the volume ratio
@@ -251,10 +271,14 @@ def test_masking_a_flat_surface_lifts_it_over_the_floor(monkeypatch):
 GATED = [i for i, s in enumerate(G.SHAPES) if s.w in ("lift", "mask")]
 
 
-@pytest.mark.parametrize(
-    "i", GATED or [pytest.param(None, marks=pytest.mark.skip(
-        reason="no shape is lifted or masked yet: plan 22 A2 flips them in"))],
-    ids=lambda i: "none" if i is None else G.SHAPES[i].name)
+def test_every_shape_past_the_polytopes_is_lifted_or_masked():
+    # what keeps the two gates below from passing on an empty list: every
+    # surface after the Clifford torus is gated, none ships flat
+    assert GATED == list(range(18, len(G.SHAPES)))
+    assert not any(s.w == "flat" for s in G.SHAPES)
+
+
+@pytest.mark.parametrize("i", GATED, ids=lambda i: G.SHAPES[i].name)
 def test_a_lifted_or_masked_shape_keeps_its_volume_through_each_w_plane(i):
     # Stream A's acceptance: no turn of XW, YW or ZW alone — from rest or
     # from a generic pose — reduces the shape to a plane or a line
@@ -268,9 +292,11 @@ def test_a_lifted_or_masked_shape_keeps_its_volume_through_each_w_plane(i):
 
 @pytest.mark.parametrize("i", GATED, ids=lambda i: G.SHAPES[i].name)
 def test_a_lifted_or_masked_shape_never_turns_much_of_itself_edge_on(i):
-    # the second look: a cloud can keep its volume while its faces turn
-    # edge-on and the surface reads as a sheet. 0.15 is the 4D shapes'
-    # own worst (the cubic pyramid); a masked shape never turns any
+    # the second gate: a cloud can keep its volume while its faces turn
+    # edge-on and the surface reads as a sheet. 0.15 sits just under the
+    # 4D shapes' own worst — the cubic pyramid turns 0.155 of its face
+    # area edge-on, the 3,3-duoprism 0.167 — and over every gated shape's
+    # (the star's 0.139 is the closest); a masked shape never turns any
     for pose in (None, G.GENERIC_POSE):
         for plane in ("XW", "YW", "ZW"):
             assert G.sweep_edge_on(i, plane, pose=pose).max() <= 0.15, plane

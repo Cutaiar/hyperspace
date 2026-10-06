@@ -117,7 +117,7 @@ replaces a row, rewrite that row instead of adding a new one.
 | **Per shape, a 3D surface either gets real 4D extent or stays 3D with its W planes masked**, never all down one path; no shape is removed for reading badly. | `geometry.SHAPES` | owner |
 | The Heart is masked. The Star, Torus, Trefoil knot and Starfruit are lifted, and every lifted shape's alias reads "4D lift · …". | `geometry.SHAPES` | row 89 |
 | `Shape.w` is one of four words — `native`, `flat`, `lift`, `mask` — not a 3D/4D flag (a cell count of 0 marks a surface, not a 3D shape). A masked shape's W planes are folded where it is drawn — XW onto XZ, YW onto YZ, ZW onto XY — never in the integrator or a param. | `geometry.Shape.w`, `W_KINDS`, `view_angles`, `W_REMAP`, `Renderer.draw_scene` | row 90 |
-| A masked shape's depth cue (line fade, width, draw order) reads its rotated z, as a 4D shape's reads w. | `Renderer.draw_scene` | row 91 |
+| A masked shape's depth cue (line fade, width, draw order) reads its depth toward the 3D camera (z after the camera's yaw and pitch), as a 4D shape's reads w. | `Renderer.draw_scene`, `geometry.view_depth` | row 91 |
 | **Every lifted or masked shape keeps `VOLUME_FLOOR` (0.15) through a full turn of each W plane**, from rest and from a generic pose, and turns at most 0.15 of its face area edge-on. The floor is half the 4D shapes' worst (the cubic pyramid, 0.30). | `geometry.VOLUME_FLOOR`, `tests/test_shapes4d.py` | row 92 |
 | A lift is a function of the builder's own parameters, with no linear part of x, y or z, odd under each single-axis mirror, z-dependent on an extruded outline, and agreeing wherever the surface welds. A shape's digest hashes floats rounded to 1e-9. | `geometry.param_surface`, `spherical_surface`, `ring_prism`, `tube` | row 93 |
 | The Möbius strip is lifted, and 0.55 wide (was 0.45). | `geometry._build_mobius` | row 94 |
@@ -249,7 +249,7 @@ The D-numbers are cited from code comments.
 | Decision | Who |
 |---|---|
 | Each code PR gets a `/code-review` before merge. Agents work on their own branches, and the owner merges. | owner |
-| Agent work lands on `finish-line`, never on `main`; the owner merges `finish-line` into `main`. | owner |
+| Agent work lands on an integration branch, never on `main` (`finish-line` through plan 21, `plan-22-integration` for plan 22); the owner merges it into `main`. | owner |
 
 ## Decided not to build
 
