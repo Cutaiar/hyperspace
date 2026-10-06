@@ -25,7 +25,8 @@ explained in the [glossary](#glossary) at the end.
    second copy to experiment on: `cp -R ~/Hyperspace ~/Hyperspace-try`.
 2. **Launch the app:** on branch `main` (`git checkout main`, `git pull`),
    run `cd hyperspace-python && uv sync && uv run hyperspace`. The shape
-   entries (L48–L54, A19, D14) need plan 22: until it is merged, use
+   entries (L48–L54, A19, D14) and the pattern entries (L55–L68, A20–A23,
+   D15) need plan 22: until it is merged, use
    branch `plan-22-integration` instead.
    Two windows open: the picture (the *render window*) and the *control
    window*. **Esc** quits.
@@ -69,11 +70,12 @@ changes brightness or volume instead).
 2. **On the copy**, the first launch of this build: L1, then L2 and L3.
    Do not launch on the real home folder before this: the first launch
    rewrites a file there (with a backup).
-3. The rest of Part 1, in any order: L39–L42 and L53 on the copy, the
-   others on the real home folder. Leave L43 (git, on the copy) until after step 4:
+3. The rest of Part 1, in any order — but L55 and L56 first: L39–L42,
+   L53, L55 and L59 on the copy, the others on the real home folder. Leave L43 (git, on the copy) until after step 4:
    it is the last test done on the copy.
 4. Part 2 (a), the APC40. Its entries marked "on the copy" run with
-   `HYPERSPACE_HOME` set to the copy. A1 before A4.
+   `HYPERSPACE_HOME` set to the copy. A1 before A4. A20–A23 are the
+   listening session for the macro candidates: do them together.
 5. Back on the copy: L43.
 6. Part 2 (b), the hand camera: **B1 (calibration) first**, with nobody
    else in the camera's view. Leave the APC40 plugged in for the entries
@@ -141,6 +143,20 @@ changes brightness or volume instead).
 | L52 | Stepping to the Klein bottle (keys) | 1 | laptop, the copy | 117 |
 | L53 | Presets that show a changed shape | 1 | laptop, the copy, music | 118 |
 | L54 | The turntable pictures | 1 | laptop, no app | 119 |
+| L55 | The FACES page fits on the Mac | 1 | laptop, the copy | 120 |
+| L56 | Every pattern draws on the Mac | 1 | laptop | 121 |
+| L57 | Find a look, as a first-time user | 1 | laptop, music, a newcomer | 125 |
+| L58 | The little pictures on the pattern buttons | 1 | laptop, music | 126 |
+| L59 | "+ SUB": route a band from the page | 1 | laptop, the copy | 127 |
+| L60 | "all neutral" in one step | 1 | laptop | 128 |
+| L61 | One set of routes on every pattern | 1 | laptop, music | 122 |
+| L62 | No jumps over a long set | 1 | laptop, music | 123 |
+| L63 | Colour turning, faces apart, on the 120-cell | 1 | laptop | 124 |
+| L64 | MARBLE's frame rate | 1 | laptop | 130 |
+| L65 | KALEIDO and TRUCHET as art | 1 | laptop, music | 131 |
+| L66 | The factory presets with music | 1 | laptop, music | 132 |
+| L67 | `legacy6` in silence | 1 | laptop, music | 137 |
+| L68 | WARP at full on HEX | 1 | laptop | 138 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -160,6 +176,10 @@ changes brightness or volume instead).
 | A17 | Knob smoothing | 2a | APC40 | 78 |
 | A18 | The instances knob at the bottom | 2a | APC40 | 62 |
 | A19 | The cue knob reaches the Klein bottle | 2a | APC40 | 117 |
+| A20 | Macro candidates: MACRO PERFORMANCE | 2a | APC40, music, the copy | 133 |
+| A21 | Macro candidates: MACRO STREAMS | 2a | APC40, music, the copy | 134 |
+| A22 | Macro candidates: MACRO INTENSITY | 2a | APC40, music, the copy | 135 |
+| A23 | Macro candidates: MACRO BREAKDOWN DROP | 2a | APC40, music, the copy | 136 |
 | B1 | Calibrate, and the box it draws | 2b | hand camera | 72, 15 |
 | B2 | The probe sees both hands | 2b | hand camera | 13 |
 | B3 | The HANDS page and which way is up | 2b | hand camera | 14, 4 |
@@ -207,6 +227,7 @@ changes brightness or volume instead).
 | D12 | A screen not plugged in at launch | 2d | glass, projector | 111 |
 | D13 | Unplug the projector mid-run | 2d | glass, projector | 112 |
 | D14 | The shapes in 4D from the audience | 2d | glass | 113, 115 |
+| D15 | METER and PULSE from the audience | 2d | glass, music | 129 |
 | E1 | Drag an effect with a mouse | 2e | mouse | 94 |
 
 Covered by other entries: check 32 is part of D11; check 37 is replaced
@@ -1550,6 +1571,253 @@ look like the shapes you know.
 
 *(check 119)*
 
+## The face patterns
+
+The *faces* of a shape can be filled with a moving *pattern*. There are
+seventeen, and each reads eight *inputs* — SCALE, GLOW, WARP, SPEED,
+COLOUR, SHARP, HUE, SPREAD — that mean the same on every pattern: 1 is
+the pattern as designed, 0 and 2.6 the two extremes. The music moves
+the first six (the low bands the first ones); HUE and SPREAD are left
+for a slow oscillator (an *LFO*) or a knob. The **FACES** page shows
+every pattern as a small moving picture and says, for each input, what
+it does on the pattern on show and what is moving it. Run L55 and L56
+first: they are the two things the automated tests cannot check on your
+Mac.
+
+#### L55. The FACES page fits on the Mac
+
+**Needs:** laptop, the copy.
+
+**Do:** open FACES. Click KALEIDO, then FLAT, then EMBER. Then the worst
+case: on each of the eight inputs click its **+ …** offer (+ SUB … + LFO
+2) so every input is driven; on ROUTING, give a macro a long name such
+as "a long macro name" and set it to scale one of those routes; untick
+**Faces**.
+
+**Right if:** the page never needs scrolling; all seventeen pattern
+buttons fit, with their names inside them; every input's two lines are
+on screen, long text cut short with "…" rather than running off the
+edge.
+
+**Know:** the automated test for this ran on another computer whose
+letters are a different size, so it proves nothing here. The small red
+dot on the preset row's ▶ button overlaps it; that is known.
+
+**Wrong if:** a scroll bar; an input's row off the bottom; a name
+sticking out of its button. Say how much is missing.
+
+**Changes:** ⌘Z (or reload the preset) takes the routes back.
+
+*(check 120)*
+
+#### L56. Every pattern draws on the Mac
+
+**Needs:** laptop.
+
+**Do:** faces on, FACES page: click each of the seventeen pattern
+buttons in turn. Then press F5 (TRIP).
+
+**Right if:** every pattern draws; no line starting "GLSL:" appears on
+FACES or on the SYSTEM page; every button's little picture shows
+something.
+
+**Know:** the patterns were only ever compiled by Linux graphics
+software, never by the Mac's own.
+
+**Wrong if:** a "GLSL:" line — copy it exactly (it says which line of
+`patterns.glsl` the Mac refused).
+
+*(check 121)*
+
+#### L57. Find a look, as a first-time user
+
+**Needs:** laptop, music, and someone who has never seen the app.
+
+**Do:** ask them to open FACES and find a look they like, then to say
+what each of the eight inputs does on that pattern and what moves it.
+Don't help. Note where they get stuck.
+
+**Right if:** they get there without opening a code file, and can
+explain the inputs and what drives them.
+
+**Judge:** which words on the page confused them.
+
+*(check 125)*
+
+#### L58. The little pictures on the pattern buttons
+
+**Needs:** laptop, music.
+
+**Do:** shape 600-cell, faces on. Note the frame rate in the footer with
+FACES open, then on VIEW. Back on FACES, drag SCALE and COLOUR.
+
+**Right if:** each button shows a small moving picture of its pattern,
+and the pictures change as you drag the inputs; the frame rate is about
+the same on both pages.
+
+**Judge:** whether the pictures are big enough to tell apart.
+
+**Wrong if:** blank buttons; the frame rate drops only while FACES is
+open.
+
+*(check 126)*
+
+#### L59. "+ SUB": route a band from the page
+
+**Needs:** laptop, the copy.
+
+**Do:** load a house preset (PRESETS, show `house`). On FACES, the HUE
+input says **+ LFO 1** at its right: click it. Then ⌘Z. Then click the
+words "SUB pushes +0.35" on the SCALE input.
+
+**Right if:** **+ LFO 1** turns into "LFO 1 pushes +0.35" and you stay on
+FACES; ⌘Z takes it back; clicking the SUB words opens ROUTING showing
+just that input's routes.
+
+**Wrong if:** the page jumps to ROUTING when you click "+ LFO 1"; ⌘Z
+does nothing.
+
+*(check 127)*
+
+#### L60. "all neutral" in one step
+
+**Needs:** laptop.
+
+**Do:** drag four inputs away from 1, pausing a second between each.
+Click **all neutral**, then ⌘Z once. Then click the **1** beside one
+input.
+
+**Right if:** all neutral puts every input at 1.00 at once; one ⌘Z
+brings all four back; **1** resets only its own input.
+
+**Wrong if:** ⌘Z brings back one input at a time.
+
+*(check 128)*
+
+#### L61. One set of routes on every pattern
+
+**Needs:** laptop, music with a clear kick, snare and hi-hats.
+
+**Do:** load a house preset. On FACES click › to step through every
+pattern, a few bars on each.
+
+**Right if:** on every pattern the deep bass makes it bigger, the kick
+makes it flash, the low mids bend it, the mids keep it moving, the snare
+brings colour and the hi-hats sharpen it; quiet passages still move
+it and loud ones never turn it solid white or black.
+
+**Judge:** which pattern answers the music worst.
+
+**Wrong if:** an input does something different on one pattern.
+
+*(check 122)*
+
+#### L62. No jumps over a long set
+
+**Needs:** laptop, music, ten minutes or more.
+
+**Do:** house preset, RINGS, then PLASMA; let it run and watch when the
+music changes.
+
+**Right if:** the pattern speeds up and slows down with the music, but
+never snaps to a different place.
+
+**Wrong if:** a sudden snap.
+
+*(check 123)*
+
+#### L63. Colour turning, faces apart, on the 120-cell
+
+**Needs:** laptop.
+
+**Do:** shape 120-cell, faces on, CELLS. On the LFO page give LFO 1 a
+slow rate and some depth; on FACES click **+ LFO 1** on HUE. Drag SPREAD
+from 0 to 2.6.
+
+**Right if:** the colours turn slowly round the colour wheel while the
+pattern's shapes stay the same; SPREAD at 0 makes every face play the
+same, at 2.6 each face its own way.
+
+**Wrong if:** the shapes change as the colour turns; faces differ at
+SPREAD 0.
+
+*(check 124)*
+
+#### L64. MARBLE's frame rate
+
+**Needs:** laptop.
+
+**Do:** shape 600-cell, faces on. Note the footer's frame rate on FLAT,
+CELLS and MARBLE; then MARBLE with Instances at 7.
+
+**Right if:** MARBLE keeps the screen's frame rate (or say by how much it
+drops, against CELLS).
+
+**Know:** MARBLE is the most expensive pattern — about four times FLAT on
+the build's computer, a third more than CELLS.
+
+*(check 130)*
+
+#### L65. KALEIDO and TRUCHET as art
+
+**Needs:** laptop, music.
+
+**Do:** KALEIDO and TRUCHET on the tesseract, the 24-cell and the
+Clifford torus, faces' mix full.
+
+**Judge:** keep, change or drop each — KALEIDO's flat bright colours in
+six mirrored wedges, TRUCHET's maze with a current along it. KALEIDO is
+always six-sided, whatever shape a face is.
+
+*(check 131)*
+
+#### L66. The factory presets with music
+
+**Needs:** laptop, music with quiet and loud passages.
+
+**Do:** house presets hex-engine, ember-orbit and spiral-silk; the party
+show's FACES (F2) and TRIP (F5); then one of your own presets with faces
+on.
+
+**Right if:** quiet music visibly moves the faces; loud music stays
+readable, nothing stuck all white or all black (EMBER not black, SPIRAL
+not washed out).
+
+**Judge:** whether to re-save your own presets: sixteen of yours still
+push the patterns three times harder, as all presets used to.
+
+*(check 132)*
+
+#### L67. `legacy6` in silence
+
+**Needs:** laptop, music.
+
+**Do:** PRESETS: load `legacy6`; faces on, pick RINGS. Listen to
+nothing, then play music.
+
+**Right if:** in silence the shape stands still and the pattern looks
+as designed; with music the shape turns and the pattern moves.
+
+**Judge:** whether a still shape in silence is right for this preset (it
+copies the original web app's behaviour).
+
+**Wrong if:** a small, dim, grey, frozen pattern in silence.
+
+*(check 137)*
+
+#### L68. WARP at full on HEX
+
+**Needs:** laptop.
+
+**Do:** HEX, then PLAID and KALEIDO: drag WARP from 0 to 2.6.
+
+**Right if:** from 0 to 1 the lines stay straight; above 1 they bend;
+at 2.6 HEX is still a honeycomb.
+
+**Judge:** whether 2.6 is too strong.
+
+*(check 138)*
+
 ---
 
 # Part 2 — tests that need hardware
@@ -2010,6 +2278,64 @@ click more, then left.
 and never jumps back to the 5-cell.
 
 *(check 117)*
+
+#### A20. Macro candidates: MACRO PERFORMANCE (on the copy)
+
+**Needs:** APC40, music with a clear kick and hi-hats, the copy, and
+[`plans/22-macro-candidates.md`](plans/22-macro-candidates.md) open.
+
+**Do:** `uv run python tools/shared_presets.py install
+shared/plan-22-macro-candidates`. PRESETS: load MACRO PERFORMANCE. The
+macros are the device knobs D1–D8 (without the desk: the macro sliders
+on ROUTING). Turn each end to end, with music and with none, then back
+to rest (noon; D7 and D8 to zero). Then a breakdown: D7 up over 8–16
+bars, then at the drop D7 down and D8 up together.
+
+**Judge:** for each knob, does it do what its line in the sheet says?
+INTENSITY (D1) and DROP (D8) together are about four times the music's
+push: too much? Which to keep, and as what.
+
+*(check 133)*
+
+#### A21. Macro candidates: MACRO STREAMS (on the copy)
+
+**Needs:** as A20.
+
+**Do:** load MACRO STREAMS. With music, take D1–D6 to zero and back,
+one at a time; then D7 and D8.
+
+**Right if:** each of D1–D6 at zero stills only its band's turning and
+its pattern input, and at full doubles them; D7 swings the colours, D8
+takes the faces from together to scattered.
+
+**Judge:** which to keep.
+
+*(check 134)*
+
+#### A22. Macro candidates: MACRO INTENSITY (on the copy)
+
+**Needs:** as A20.
+
+**Do:** load MACRO INTENSITY. D1, D2 and D3 one at a time, each back to
+noon, with music and in silence.
+
+**Judge:** which "intensity" is right: D1 (both), D2 (only how hard the
+music pushes; nothing in silence) or D3 (only the resting look)? D1 and
+D3 share two settings, so the last one turned wins.
+
+*(check 135)*
+
+#### A23. Macro candidates: MACRO BREAKDOWN DROP (on the copy)
+
+**Needs:** as A20.
+
+**Do:** load MACRO BREAKDOWN DROP. D1 alone through a breakdown and a
+drop; then D2 and D3 as a pair (not with D1).
+
+**Judge:** one knob or two? Is D1's top too bright? Do the breakdown and
+the drop still feel like their names?
+
+*(check 136)*
 
 ## (b) The hand camera
 
@@ -3040,6 +3366,27 @@ shapes turning through themselves.
 
 *(checks 113, 115)*
 
+#### D15. METER and PULSE from the audience
+
+**Needs:** glass (or projector), music through the microphone or the
+Mac's own sound.
+
+**Do:** faces on, METER; then PULSE; then stop the music.
+
+**Right if:** METER shows a wedge of lights per band, the deepest band's
+at twelve o'clock and the rest clockwise, each lit outward as loud as
+its band; the kick lights the first wedges, the hi-hats the last. PULSE:
+the kick swells a magenta disc and throws a ring, the snare shoots
+yellow rays, the hi-hats sparkle. In silence METER shows dim tracks and
+PULSE a slow heartbeat.
+
+**Judge:** whether each reads from where the audience stands.
+
+**Wrong if:** nothing moves with music (is the sound on? AUDIO page);
+the wrong wedge lights.
+
+*(check 129)*
+
 ## (e) A mouse
 
 #### E1. Drag an effect with a mouse
@@ -3074,6 +3421,12 @@ what you want changed.
 - **The shapes in 4D** — whether each lifted shape reads as a solid
   turning, whether the Heart reads as moved by the bass, and the Klein
   bottle's look. (L48–L51, D14; checks 113–116)
+- **The face patterns** — whether one set of routes reads on every
+  pattern, the new patterns as art, METER and PULSE from the audience,
+  and whether the factory presets answer quiet and loud music. (L61,
+  L65, L66, D15; checks 122, 131, 132, 129)
+- **The macro candidates** — which to keep, and as what. (A20–A23;
+  checks 133–136)
 
 Smaller calls along the way: the Ghost mirror setting for the glass (D8;
 108); `hands-orbit`'s directions and zoom (B18; 80); whether faces'

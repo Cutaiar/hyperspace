@@ -29,17 +29,20 @@ number and what you saw.
 1. (copy) First launch: keep its output
    (`uv run hyperspace 2>&1 | tee ~/first-launch.txt`) for 57 and 84;
    then 81, 83.
-2. Laptop alone: 1–9, 30, 33, 38, 40, 44, 46, 48, 50, 58–64, 68, 69, 71,
-   91–97, and 99 and 100 before any `[[output.screens]]` edit; 113–116,
-   117's keys, 119; (copy) 86–89, 118; FL Studio over IAC: 27, 28.
+2. Laptop alone: 120 and 121 first (the Mac's fonts and compiler); then
+   1–9, 30, 33, 38, 40, 44, 46, 48, 50, 58–64, 68, 69, 71, 91–97, and 99
+   and 100 before any `[[output.screens]]` edit; 113–116, 117's keys,
+   119, 122–126, 128, 130–132, 137, 138; (copy) 86–89, 118, 127; FL
+   Studio over IAC: 27, 28.
 3. APC40: 31 first, then 10–12, 34–36, 39, 45, 49, 51, 54–56, 62, 69, 70,
-   78, 82, 85, 117's cue knob (36, 56, 82, 85 on the copy).
+   78, 82, 85, 117's cue knob; (copy) 133–136, the macro listening
+   session (36, 56, 82, 85 on the copy).
 4. (copy) 90, last on the copy.
 5. Hand camera: 72 first, nobody else in view; then 13–21, 23–25, 29,
    42, 52, 66, 73, 75–77, 80, 100; APC40 in: 22, 65, 67, 74, 79, 110.
 6. One projector: 26, 43, 61, 96.
 7. Glass + projector as two outputs: 101 first, then 41, 98, 102–109,
-   113 from the audience; 111, 112 last.
+   113 from the audience, 129; 111, 112 last.
 
 ## A. Laptop alone
 
@@ -1622,9 +1625,10 @@ glass freezes → presenter left context or framebuffer bound
 (`Presenter.present`, `finally` in `app._draw_render`); projector
 window over laptop controls → note it.
 
-## R. The shapes in four dimensions (plan 22, Stream A)
+## R. Plan 22: the shapes in four dimensions, the face patterns
 
-All on the laptop; 117's desk part on the APC40; 113 again on the glass
+**Stream A (113–119), the shapes.** All on the laptop; 117's desk part
+on the APC40; 113 again on the glass
 when it is up. A shape is picked in VIEW's **Shape** list (or ← / →).
 To watch one W plane alone: VIEW plane keys, all off but that one; F1
 (TUMBLE)'s rate bases keep a plane turning with no music. 119 needs no
@@ -1724,6 +1728,211 @@ shapes you know. Say which sheet looks worst. *Fail:* a red after tile
 or numbers that differ → a geometry change since the sheets
 (`git log hyperspace/geometry.py`); re-run the tool.
 
+**Stream B (120–138), the face patterns.** 120 and 121 first, on the
+Mac: they are what this container cannot check. Then on the laptop with
+music: 122–128, 130–132, 137, 138; METER and PULSE on the rig (129); the
+macro candidates with the APC40 (133–136, the listening session). FACES
+is a page on the control window's rail. A house preset is one of the
+house show's (PRESETS: SHOW `house`).
+
+**120. The FACES page fits the control window on the Mac.**
+Headless: `tests/test_ui_patterns.py::test_the_page_fits_with_every_row_driven_and_flat_or_the_longest_mode tests/test_ui_shell.py::test_every_page_fits_the_control_window`.
+**These tests do not settle it.** They measure in the machine's own font
+metrics, and in the cloud container those are not the Mac's: test_fx's
+own two fit tests fail there by 18 px. The 31 px the FACES test leaves
+spare there is not evidence. (copy) Launch, FACES. Pick KALEIDO, then
+FLAT, then EMBER. Then the worst case: on ROUTING put a route on every
+input (FACES' **+ SUB** … **+ LFO 2**), name a macro "a long macro name"
+with a depth subscriber on one of them, untick Faces, and break
+`patterns.glsl` (an undeclared name; save; put it back after). *Pass:*
+no scroll bar at the control size on any pattern; all seventeen chips
+inside the page, their names inside the chips; every row's two lines on
+screen, the driver's text cut short with "…" rather than over the edge;
+nothing drawn over anything except the known dirty dot on the preset
+strip's ▶. *Fail:* a scroll bar or a row off the page → `ui_patterns`'
+`CELL_H`, `GRID_GAP`, `ROWS_GAP` (say how many px are missing); a name
+out of its chip → `_mode_chip`.
+
+**121. `patterns.glsl` compiles on Apple GL with every pattern.**
+Headless: `tests/test_patterns.py::{test_the_face_shaders_pass_the_reference_compiler,test_the_shader_has_a_case_for_every_mode_in_the_table,test_every_input_moves_every_mode_from_1_to_2_6}`;
+`uv run python tools/check_glsl.py`. Mesa (the tests' driver) and the
+Khronos `glslangValidator` accept every mode; **neither is Apple's
+compiler**. Launch on the Mac, faces on, FACES: click each of the
+seventeen chips in turn, then **all neutral**, then F5 (TRIP), which
+aims effects at the faces (the seed program). *Pass:* every pattern
+draws; no "GLSL:" line on FACES and none on SYSTEM; every chip's swatch
+shows a picture. *Fail:* a "GLSL:" line → Apple's compiler refuses
+something Mesa allowed: note the line and column, then
+`shaders/patterns.glsl` near it (an int where a float is wanted, a
+dynamic array index — `band(i)` must stay an if-chain).
+
+**122. One routing set on every pattern, with music.**
+Headless: `tests/test_patterns.py::{test_the_factory_routes_put_lane_i_on_input_i,test_every_input_moves_every_mode_from_1_to_2_6,test_the_factory_depth_reads_on_loud_music_and_never_pins_an_input}`.
+A house preset (its inputs at 1 and the six factory routes), a track
+with a clear kick, snare and hats. On FACES step through every pattern
+with › and leave each for a few bars. *Pass:* on every pattern the
+same: the sub swells it (SCALE), the kick flashes it (GLOW), the low mids
+bend it (WARP; on straight patterns only when loud), the mids keep it
+moving (SPEED), the snare flares the colour (COLOUR), the hats sharpen
+it (SHARP); quiet passages still move it, loud ones never pin it white
+or black. Say which pattern reads worst. *Fail:* an input that does
+something else on one pattern → that mode's case in `patterns.glsl`
+(it must read inputs through the accessors only); everything pinned →
+the route depths (`routing.PATTERN_DEPTH`).
+
+**123. SPEED never jumps over a long set.**
+Headless: `tests/test_patterns.py::{test_moving_speed_changes_the_rate_and_never_jumps_the_clock,test_speed_at_0_is_frozen}`.
+A house preset, music, RINGS, then PLASMA, ten minutes or more (the
+jump grew with time on the old clock). Watch for a pattern snapping to
+another place when the music changes. *Pass:* it speeds up and slows
+down with the mids and never snaps. *Fail:* a snap →
+`Renderer._pattern_clock` (it must integrate, not multiply).
+
+**124. HUE on an LFO and SPREAD on a knob, on the 120-cell.**
+Headless: `tests/test_patterns.py::{test_hue_turns_the_palette_and_keeps_the_shape,test_spread_at_0_plays_every_face_in_unison}`.
+Shape 120-cell, faces on, CELLS. FACES: **+ LFO 1** on HUE (give LFO 1 a
+slow rate and some depth on the LFO page); right-click SPREAD → Learn
+desk onto a knob (or drag its slider). *Pass:* the palette turns slowly
+round the wheel, the pattern's shapes unchanged; SPREAD at 0 every face
+plays the same, at 1 as designed, at 2.6 each face its own phase and
+colour. *Fail:* the shapes change with HUE → that mode's colour path
+(HUE belongs in `finish()`); faces apart at 0 → the mode's face offset
+(`face_rad` / `face_turn`).
+
+**125. A first-time user on FACES.**
+Headless: `tests/test_ui_patterns.py::{test_every_mode_has_a_chip_and_its_line,test_the_eight_rows_are_named_and_say_what_each_does_in_this_mode,test_a_rows_slider_hover_says_what_the_input_means,test_flat_says_it_reads_no_input}`.
+Someone who has not seen the app, the patterns or the code; music on.
+Ask them to open FACES and find a look they like, then say what each of
+the eight inputs does on that pattern and what is moving it. Do not help;
+note where they stall. *Pass:* they find a look without opening a
+`.glsl` file, can say what the inputs do and what drives them, and find
+"all neutral". *Fail:* note the words that confused them → the phrases
+in `patterns.py` or the page's lines (`ui_patterns`).
+
+**126. The swatches.**
+Headless: `tests/test_ui_patterns.py::test_the_page_asks_the_renderer_for_swatches_and_draws_them tests/test_ui_patterns.py::test_swatches_draw_only_while_the_page_asks_and_leave_the_frame_as_it_was`.
+FACES open, music, a busy shape (the 600-cell). Note the footer's FPS;
+switch to VIEW, note it again. Move SCALE and COLOUR. *Pass:* each chip
+shows a recognisable small picture of its pattern, moving; the swatches
+follow the inputs; the FPS with FACES open is within a frame or two of
+VIEW's. Say whether the swatches are legible at the size they are.
+*Fail:* blank chips → `Renderer.swatch_error`; a frame-rate drop only
+with FACES open → `Renderer._swatch_step` (one 64² swatch a frame).
+
+**127. "+ SUB", the driver link, and undo.**
+Headless: `tests/test_ui_patterns.py::{test_an_undriven_input_offers_the_conventions_source_and_stays_here,test_a_routed_input_shows_its_source_and_a_click_opens_routing,test_the_driver_line_names_the_macro_desk_and_base_subscribers}`.
+(copy) A house preset. FACES: on HUE, which no factory route drives,
+click **+ LFO 1**; ⌘Z. On SCALE, click "SUB pushes +0.35". *Pass:* "+ LFO
+1" becomes "LFO 1 pushes +0.35", the page stays on FACES and the preset's
+dirty dot lights; ⌘Z takes the route back ("+ LFO 1" again); the SUB link
+opens ROUTING showing only `pattern.mod.0`'s rows. *Fail:* the page jumps
+to ROUTING → `ui_patterns`' offer; no undo → the route did not go
+through the table (`ui_routing.add_route`).
+
+**128. "all neutral" is one undo step.**
+Headless: `tests/test_ui_patterns.py::test_neutral_puts_one_input_back_and_all_neutral_every_one`.
+Drag four inputs off 1, wait a second between each. **all neutral**, then
+⌘Z once. Then click a single input's **1**. *Pass:* all neutral puts
+every slider at 1.00 in one go; one ⌘Z brings all four back ("undid
+neutral pattern inputs"); **1** resets only its input. With every input
+already at 1, all neutral does nothing and makes no step. *Fail:* ⌘Z
+takes back one input at a time → `ui_patterns.neutral_all` (it must push
+its own step first).
+
+**129. METER and PULSE with real music on the rig.**
+Headless: `tests/test_patterns.py::test_only_meter_and_pulse_read_the_bands_and_they_show_them`.
+Glass (or projector), music through the real analyzer, the default
+six-band layout. METER, then PULSE; then stop the music. *Pass:* METER:
+one wedge per band, SUB's at twelve o'clock and the rest clockwise,
+each lit outward as its band reads; the kick lights SUB and BASS, the
+hats AIR. PULSE: the kick swells the magenta disc and throws a ring, the
+snare shoots yellow rays, the hats sparkle. In silence METER shows dim
+tracks and PULSE an idle heartbeat. Say whether each reads from the
+audience. *Fail:* nothing moves → `app._bands` (the analyzer off?) or
+`band(i)`; the wrong wedge lit → the band order in `meter()`.
+
+**130. MARBLE's cost on the Mac.**
+Headless: none (`uv run python tools/pattern_cost.py` times every mode
+against FLAT; in software GL MARBLE is 4.19× FLAT on the 600-cell, CELLS
+3.13×). Launch, the 600-cell, faces on, footer FPS: FLAT, CELLS, MARBLE;
+then MARBLE with instances at 7. *Pass:* MARBLE holds the screen's
+frame rate, or note by how much it drops against CELLS. *Fail:* a
+visible drop → MARBLE's `fbm3` octaves in `patterns.glsl` (say the FPS).
+
+**131. KALEIDO and TRUCHET as art.**
+Headless: `tests/test_patterns.py::{test_new_modes_are_appended_so_preset_indices_keep_their_patterns,test_every_input_moves_every_mode_from_1_to_2_6}`.
+KALEIDO and TRUCHET on a few shapes (tesseract, 24-cell, Clifford torus),
+with music, faces' mix full. *Pass:* a judgement: KALEIDO's flat pop
+colour and six mirrored wedges, TRUCHET's maze with its current. Keep,
+change, or drop? Also: KALEIDO is six-fold on every face, whatever its
+sides. *Fail:* not a code fault — say what to change.
+
+**132. The house and party presets at depth 0.35.**
+Headless: `tests/test_patterns.py::test_the_factory_depth_reads_on_loud_music_and_never_pins_an_input tests/test_routing.py::{test_factory_files_match_the_code,test_every_factory_preset_names_real_params_with_one_owner}`.
+Music with quiet and loud passages. Two or three house presets
+(hex-engine, ember-orbit, spiral-silk), then the party show's FACES and
+TRIP. Then one of your own from `shared/dan-2026-10-04` with faces on.
+*Pass:* quiet music visibly moves the faces; loud music is legible, no
+input stuck at an end (EMBER not black, SPIRAL not blown out); yours
+(still at depth 1) shows the difference. Say whether to re-save your
+sixteen depth-1 presets at 0.35. *Fail:* too still → raise
+`routing.PATTERN_DEPTH` and regenerate (`uv run python -m
+hyperspace.preset`); pinned → lower it.
+
+**133. The macro candidates: MACRO PERFORMANCE.** (APC40, listening)
+Headless: `tests/test_macro_candidates.py::{test_each_candidate_loads_with_no_note_and_keeps_every_row,test_turning_a_macro_moves_its_bases_and_scales_its_routes}`.
+(copy) `uv run python tools/shared_presets.py install
+shared/plan-22-macro-candidates`. PRESETS: load MACRO PERFORMANCE. A
+track with a clear kick and hats; the macros are D1–D8 (or ROUTING's
+macro sliders). Follow
+[`22-macro-candidates.md`](22-macro-candidates.md): each knob end to
+end and back to rest (noon; 7 and 8 at zero), with music and in
+silence. Then a breakdown on 7 over 8–16 bars and the drop on 7 down, 8
+up. *Pass:* a judgement per macro: does it do its line? INTENSITY ×
+DROP together reaches about ×4 on the lane routes: too much? *Fail:* a
+knob that does nothing → the file's subscribers (ROUTING's macros
+section); a load note → `Presets.load_doc`.
+
+**134. The macro candidates: MACRO STREAMS.** (APC40, listening)
+Headless: as 133. Load MACRO STREAMS. With a track playing, take each of
+D1–D6 to zero and back; then D7 and D8. *Pass:* a band's knob at zero
+stills only that band's plane and its pattern input; at full it doubles
+them; D7 swings the palette, D8 the faces from unison to scattered. Say
+which to keep. *Fail:* another band changes → the depth subscribers'
+routes in the file.
+
+**135. The macro candidates: MACRO INTENSITY.** (APC40, listening)
+Headless: as 133. Load MACRO INTENSITY. D1, D2 and D3 one at a time, each
+back to noon, with music and in silence. *Pass:* a judgement: which
+INTENSITY is right — both (1), only the music's grip (2, nothing in
+silence), only the resting look (3)? 1 and 3 share two bases: the last
+turned wins.
+
+**136. The macro candidates: MACRO BREAKDOWN DROP.** (APC40, listening)
+Headless: as 133. Load MACRO BREAKDOWN DROP. D1 alone through a
+breakdown and drop; then D2 and D3 as a pair (not with D1: they share
+bases). *Pass:* a judgement: one knob or a pair? Is D1's top (brightness
+4.0) too hot? Do INTENSITY and DROP still feel like their names at the
+new depth (their routes sit at 0.35 now, the multipliers unchanged)?
+
+**137. `legacy6` in silence.**
+Headless: `tests/test_routing.py::{test_legacy6_reproduces_planedrive_and_u_bands,test_the_legacy6_preset_replaces_routes_and_lands_bases}`.
+PRESETS: load `legacy6`; faces on, pick RINGS; no music, then music.
+*Pass:* in silence the shape stands still (its rates sit at 0 — the
+reference's parity) and the pattern shows as designed (inputs at 1); with
+music the planes turn and the pattern moves as on any factory preset.
+Say whether a still shape in silence is acceptable for the parity
+anchor. *Fail:* a small, dim, grey, frozen pattern in silence → its
+pattern bases are not 1 (`preset.legacy6_values`).
+
+**138. WARP at 2.6 on HEX.**
+Headless: `tests/test_patterns.py::test_every_input_moves_every_mode_from_1_to_2_6`.
+HEX, then PLAID and KALEIDO; WARP from 0 to 2.6 by hand. *Pass:* 0 to
+1 stays straight; above 1 it bends; at 2.6 still a honeycomb. Say
+whether 2.6 is too strong. *Fail:* bends below 1 → that mode's `warp(p,
+own)` (`own` 0 for a straight design); too strong → the `0.07` in
+`warp()`.
+
 ## What no test covers
 
 Only a person can settle these:
@@ -1734,5 +1943,8 @@ Only a person can settle these:
 - what macOS does to a window whose screen is unplugged mid-run (112);
 - whether a lifted shape reads as a solid and the masked Heart as moved
   by the bass (113, 114): the tests pin the volume ratio and the
-  edge-on share, not what a person sees.
+  edge-on share, not what a person sees;
+- the FACES page's fit and `patterns.glsl` on the Mac (120, 121): the
+  tests run with another machine's fonts and Mesa's compiler;
+- the macro candidates (133–136): a listening session, by design.
 
