@@ -1,0 +1,927 @@
+<title>Hyperspace Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Spectral:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+  /* ── Light palette: the complete token set on bare :root ───────────── */
+  :root {
+    --ground:    #ebeeed;
+    --surface:   #f7f9f8;
+    --sunk:      #e1e6e5;
+    --ink:       #171f23;
+    --ink-soft:  #3a474c;
+    --muted:     #5d6b6f;
+    --faint:     #80908f;
+    --line:      #c9d2d1;
+    --hair:      #d8dfde;
+
+    /* the two semantic signal hues — they encode the central rule:
+       amber writes a parameter's BASE, teal writes an OFFSET */
+    --base:      #91530f;
+    --base-dim:  #bd8238;
+    --base-wash: #f0e4d2;
+    --offset:    #0d646e;
+    --offset-dim:#3b8b93;
+    --offset-wash:#d8e9ea;
+
+    --shadow: 0 1px 2px rgba(23,31,35,.06), 0 8px 24px -12px rgba(23,31,35,.14);
+
+    --measure: 68ch;
+    --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+    --body: "Spectral", Georgia, "Times New Roman", serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  /* ── Dark: redefine ONLY tokens. Guarded so an explicit light choice
+        beats a dark OS setting. ──────────────────────────────────────── */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:    #0c1215;
+      --surface:   #141d21;
+      --sunk:      #091013;
+      --ink:       #e2e9e8;
+      --ink-soft:  #bcc8c8;
+      --muted:     #93a6a8;
+      --faint:     #718285;
+      --line:      #2a383d;
+      --hair:      #1f2b2f;
+
+      --base:      #eaa54a;
+      --base-dim:  #ba8138;
+      --base-wash: #2a2015;
+      --offset:    #5ccbd3;
+      --offset-dim:#40959d;
+      --offset-wash:#0f2427;
+
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.6);
+    }
+  }
+  /* explicit dark choice wins in the other direction too */
+  :root[data-theme="dark"] {
+    --ground:    #0c1215;
+    --surface:   #141d21;
+    --sunk:      #091013;
+    --ink:       #e2e9e8;
+    --ink-soft:  #bcc8c8;
+    --muted:     #93a6a8;
+    --faint:     #718285;
+    --line:      #2a383d;
+    --hair:      #1f2b2f;
+
+    --base:      #eaa54a;
+    --base-dim:  #ba8138;
+    --base-wash: #2a2015;
+    --offset:    #5ccbd3;
+    --offset-dim:#40959d;
+    --offset-wash:#0f2427;
+
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.6);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 17px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* ── Page frame ───────────────────────────────────────────────────── */
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 0 28px 120px; }
+  .col  { max-width: var(--measure); }
+
+  /* ── Masthead ─────────────────────────────────────────────────────── */
+  header.mast { padding: 72px 0 30px; border-bottom: 1px solid var(--line); }
+  .eyebrow {
+    font-family: var(--mono); font-size: 11px; font-weight: 500;
+    letter-spacing: .16em; text-transform: uppercase;
+    color: var(--muted); margin: 0 0 20px;
+  }
+  h1 {
+    font-family: var(--display); font-weight: 700;
+    font-size: clamp(2.9rem, 7vw, 4.6rem); line-height: .96;
+    letter-spacing: -.028em; margin: 0 0 22px; text-wrap: balance;
+  }
+  .standfirst {
+    font-size: 1.22rem; line-height: 1.5; color: var(--ink-soft);
+    max-width: 56ch; margin: 0 0 34px; text-wrap: pretty;
+  }
+  .standfirst em { color: var(--ink); font-style: italic; }
+
+  .prov {
+    display: flex; flex-wrap: wrap; margin: 0;
+    border: 1px solid var(--line); border-radius: 2px;
+    background: var(--surface); overflow: hidden;
+  }
+  .prov div { flex: 1 1 124px; padding: 11px 15px; border-right: 1px solid var(--hair); }
+  .prov div:last-child { border-right: 0; }
+  .prov dt {
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--faint); margin: 0 0 4px;
+  }
+  .prov dd {
+    margin: 0; font-family: var(--mono); font-size: 14px; font-weight: 500;
+    color: var(--ink); font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Sections ─────────────────────────────────────────────────────── */
+  section { padding: 56px 0 0; }
+  .shead { display: flex; align-items: baseline; gap: 14px; margin: 0 0 8px; }
+  .shead .num {
+    font-family: var(--mono); font-size: 12px; font-weight: 600;
+    color: var(--base); letter-spacing: .06em; flex: none; padding-top: 2px;
+  }
+  h2 {
+    font-family: var(--display); font-weight: 600;
+    font-size: clamp(1.6rem, 3.2vw, 2.1rem); line-height: 1.12;
+    letter-spacing: -.018em; margin: 0; text-wrap: balance;
+  }
+  h3 {
+    font-family: var(--display); font-weight: 600; font-size: 1.06rem;
+    letter-spacing: -.004em; margin: 34px 0 8px;
+  }
+  .dek { color: var(--muted); font-size: 1rem; margin: 0 0 26px; max-width: 58ch; }
+  p { margin: 0 0 18px; max-width: var(--measure); text-wrap: pretty; }
+
+  code {
+    font-family: var(--mono); font-size: .855em;
+    background: var(--sunk); border: 1px solid var(--hair);
+    border-radius: 2px; padding: .08em .34em;
+    color: var(--ink-soft); white-space: nowrap;
+  }
+  a { color: var(--offset); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:focus-visible { outline: 2px solid var(--offset); outline-offset: 3px; }
+
+  /* ── Figures ──────────────────────────────────────────────────────── */
+  figure { margin: 32px 0 34px; padding: 0; }
+  .figbox {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 3px; padding: 26px 22px 20px;
+    overflow-x: auto; box-shadow: var(--shadow);
+  }
+  figure svg { display: block; max-width: 100%; height: auto; margin: 0 auto; min-width: 560px; }
+  figcaption {
+    font-size: .9rem; color: var(--muted); margin-top: 14px;
+    max-width: 62ch; line-height: 1.55;
+  }
+  figcaption b { color: var(--ink-soft); font-weight: 500; }
+
+  /* ── Diagram theming: CSS classes, because var() does not resolve
+        inside SVG presentation attributes ────────────────────────────── */
+  svg.dg text { font-family: var(--mono); }
+  svg.dg .hd   { font-size: 10.5px; letter-spacing: 1.6px; fill: var(--faint); }
+  svg.dg .ink  { fill: var(--ink); }
+  svg.dg .soft { fill: var(--ink-soft); }
+  svg.dg .mut  { fill: var(--muted); }
+  svg.dg .fnt  { fill: var(--faint); }
+  svg.dg .amb  { fill: var(--base); }
+  svg.dg .cyn  { fill: var(--offset); }
+  svg.dg .ttl  { font-family: var(--display); font-weight: 600; fill: var(--ink); }
+
+  svg.dg .box  { fill: var(--surface);      stroke: var(--line);       stroke-width: 1; }
+  svg.dg .boxk { fill: var(--sunk);         stroke: var(--line);       stroke-width: 1; }
+  svg.dg .boxa { fill: var(--base-wash);    stroke: var(--base-dim);   stroke-width: 1; }
+  svg.dg .boxc { fill: var(--offset-wash);  stroke: var(--offset-dim); stroke-width: 1; }
+  svg.dg .boxr { fill: var(--surface);      stroke: var(--ink-soft);   stroke-width: 1.5; }
+
+  svg.dg .ln { stroke: var(--line); stroke-width: 1; }
+  svg.dg .hr { stroke: var(--hair); stroke-width: 1; }
+
+  svg.dg .fla { fill: none; stroke: var(--base-dim);   stroke-width: 1.5; }
+  svg.dg .flc { fill: none; stroke: var(--offset-dim); stroke-width: 1.5; }
+  svg.dg .fli { fill: none; stroke: var(--ink-soft);   stroke-width: 1.5; }
+  svg.dg .flr { fill: none; stroke: var(--faint);      stroke-width: 1.5; }
+  svg.dg .dsh { fill: none; stroke: var(--faint); stroke-width: 1.2; stroke-dasharray: 4 3; }
+
+  svg.dg .mk-a { fill: var(--base-dim); }
+  svg.dg .mk-c { fill: var(--offset-dim); }
+  svg.dg .mk-i { fill: var(--ink-soft); }
+  svg.dg .mk-r { fill: var(--faint); }
+
+  /* legend */
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 7px 20px; margin: 0 0 16px;
+    padding: 0; list-style: none; font-family: var(--mono);
+    font-size: 11.5px; letter-spacing: .02em;
+  }
+  .legend li { display: flex; align-items: center; gap: 7px; color: var(--muted); }
+  .swatch { width: 15px; height: 3px; border-radius: 2px; flex: none; }
+  .sw-base { background: var(--base); }
+  .sw-offset { background: var(--offset); }
+  .sw-read { background: var(--faint); }
+
+  /* ── Writer classes ───────────────────────────────────────────────── */
+  .writers {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(228px, 1fr));
+    gap: 1px; background: var(--line); border: 1px solid var(--line);
+    border-radius: 3px; overflow: hidden; margin: 26px 0 8px;
+  }
+  .writer { background: var(--surface); padding: 20px 19px 22px; }
+  .writer .tag {
+    font-family: var(--mono); font-size: 10px; font-weight: 600;
+    letter-spacing: .13em; text-transform: uppercase; margin: 0 0 12px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .writer .tag::before {
+    content: ""; width: 18px; height: 3px; border-radius: 2px;
+    background: currentColor; flex: none;
+  }
+  .w-base   .tag { color: var(--base); }
+  .w-offset .tag { color: var(--offset); }
+  .w-direct .tag { color: var(--faint); }
+  .writer h4 {
+    font-family: var(--display); font-weight: 600; font-size: 1.02rem;
+    margin: 0 0 7px; color: var(--ink);
+  }
+  .writer p {
+    margin: 0 0 10px; font-size: .93rem; line-height: 1.55;
+    color: var(--ink-soft); max-width: none;
+  }
+  .writer p:last-child { margin-bottom: 0; }
+  .writer .who { font-family: var(--mono); font-size: 11.5px; color: var(--muted); line-height: 1.6; }
+
+  /* ── Component roster ─────────────────────────────────────────────── */
+  .roster { border-top: 1px solid var(--line); margin: 26px 0 0; }
+  .rrow {
+    display: grid; grid-template-columns: 8.6rem 1fr 6.2rem;
+    gap: 6px 20px; padding: 15px 2px;
+    border-bottom: 1px solid var(--hair); align-items: start;
+  }
+  .rrow .name {
+    font-family: var(--display); font-weight: 600; font-size: .98rem;
+    color: var(--ink); line-height: 1.35;
+  }
+  .rrow .mods {
+    font-family: var(--mono); font-size: 11px; color: var(--faint);
+    line-height: 1.55; margin-top: 3px;
+  }
+  .rrow .what { font-size: .95rem; color: var(--ink-soft); line-height: 1.55; }
+  .rrow .what span { color: var(--muted); }
+  .chip {
+    font-family: var(--mono); font-size: 10px; font-weight: 600;
+    letter-spacing: .08em; text-transform: uppercase;
+    padding: 3px 7px; border-radius: 2px; border: 1px solid;
+    white-space: nowrap; justify-self: start; line-height: 1.4;
+  }
+  .c-base   { color: var(--base);   border-color: var(--base-dim);   background: var(--base-wash); }
+  .c-offset { color: var(--offset); border-color: var(--offset-dim); background: var(--offset-wash); }
+  .c-read   { color: var(--muted);  border-color: var(--line);       background: var(--sunk); }
+
+  /* ── Frame steps ──────────────────────────────────────────────────── */
+  .frame { margin: 26px 0 0; border-top: 1px solid var(--line); }
+  .step {
+    display: grid; grid-template-columns: 2.3rem 1fr 5.4rem;
+    gap: 16px; padding: 10px 2px;
+    border-bottom: 1px solid var(--hair); align-items: baseline;
+  }
+  .step .n {
+    font-family: var(--mono); font-size: 12px; font-weight: 600;
+    color: var(--faint); font-variant-numeric: tabular-nums; text-align: right;
+  }
+  .step .d { font-size: .95rem; line-height: 1.5; color: var(--ink-soft); }
+  .step .d b { color: var(--ink); font-weight: 500; font-family: var(--mono); font-size: .86rem; }
+  .step.mark { background: var(--sunk); }
+  .step.mark .n { color: var(--base); }
+
+  /* ── Subsystem cards ──────────────────────────────────────────────── */
+  .subs {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(258px, 1fr));
+    gap: 18px; margin: 26px 0 0;
+  }
+  .sub {
+    border: 1px solid var(--line); border-radius: 3px;
+    background: var(--surface); padding: 18px 18px 19px;
+  }
+  .sub h4 {
+    font-family: var(--display); font-weight: 600; font-size: .99rem;
+    margin: 0 0 8px; color: var(--ink);
+  }
+  .sub p { margin: 0; font-size: .92rem; line-height: 1.58; color: var(--ink-soft); max-width: none; }
+  .sub .path {
+    font-family: var(--mono); font-size: 10.5px; color: var(--faint);
+    letter-spacing: .02em; margin: 9px 0 0; display: block;
+  }
+
+  /* ── Pull rule ────────────────────────────────────────────────────── */
+  .rule { border-left: 3px solid var(--base); padding: 4px 0 4px 20px; margin: 30px 0; max-width: 60ch; }
+  .rule p { font-size: 1.14rem; line-height: 1.5; font-style: italic; color: var(--ink); margin: 0; }
+
+  /* ── Stats ────────────────────────────────────────────────────────── */
+  .stats {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+    gap: 1px; background: var(--line); border: 1px solid var(--line);
+    border-radius: 3px; overflow: hidden; margin: 28px 0 0;
+  }
+  .stat { background: var(--surface); padding: 16px 15px 17px; }
+  .stat .v {
+    font-family: var(--display); font-weight: 700; font-size: 1.62rem;
+    letter-spacing: -.02em; color: var(--ink);
+    font-variant-numeric: tabular-nums; line-height: 1;
+  }
+  .stat .k {
+    font-family: var(--mono); font-size: 10px; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--muted); margin-top: 7px; line-height: 1.45;
+  }
+  .note { margin-top: 14px; color: var(--muted); font-size: .92rem; }
+
+  footer {
+    margin-top: 64px; padding-top: 22px; border-top: 1px solid var(--line);
+    font-family: var(--mono); font-size: 11.5px; color: var(--faint);
+    line-height: 1.7; letter-spacing: .02em;
+  }
+  footer strong { color: var(--muted); font-weight: 500; }
+
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+  @media (max-width: 620px) {
+    body { font-size: 16px; }
+    .rrow { grid-template-columns: 1fr; }
+    .rrow .chip { margin-top: 4px; }
+    .step { grid-template-columns: 1.9rem 1fr; }
+    .step .chip { grid-column: 2; justify-self: start; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="mast">
+    <p class="eyebrow">System architecture · hyperspace-python</p>
+    <h1>Hyperspace</h1>
+    <p class="standfirst">
+      One Python process that turns a room's sound into the rotation of
+      four-dimensional solids — with a parameter registry at the centre, and
+      <em>everything</em> pointing at it.
+    </p>
+    <dl class="prov">
+      <div><dt>Modules</dt><dd>49</dd></div>
+      <div><dt>Python</dt><dd>31,528</dd></div>
+      <div><dt>Tests</dt><dd>36,685</dd></div>
+      <div><dt>Shapes</dt><dd>25</dd></div>
+      <div><dt>Patterns</dt><dd>12</dd></div>
+    </dl>
+  </header>
+
+  <!-- ══ 01 ═════════════════════════════════════════════════════════ -->
+  <section>
+    <div class="shead"><span class="num">01</span><h2>The idea it is built around</h2></div>
+    <p class="dek">Why six bands, and why four dimensions.</p>
+
+    <div class="col">
+      <p>
+        A four-dimensional rotation does not happen about an axis, the way it
+        does in three dimensions. It happens in a <em>plane</em> — and 4D space
+        has exactly six of them: <code>XY</code>, <code>XZ</code>,
+        <code>YZ</code>, <code>XW</code>, <code>YW</code>, <code>ZW</code>.
+      </p>
+      <p>
+        A six-band spectrum analyser also produces exactly six numbers. That
+        correspondence is the whole program: each band of the audio spectrum
+        drives one independent plane of rotation, so the shape does not merely
+        pulse in time with the music — it <em>turns differently in six
+        directions at once</em>, and you can see which part of the sound is
+        responsible for each.
+      </p>
+    </div>
+
+    <figure>
+      <div class="figbox">
+        <svg class="dg" viewBox="0 0 700 276" role="img"
+             aria-label="Six audio bands, from sub-bass to air, each mapped to one of the six independent rotation planes of four-dimensional space, with a direction of plus or minus one.">
+          <defs>
+            <marker id="m-a" viewBox="0 0 10 8" refX="9" refY="4"
+                    markerWidth="7" markerHeight="6" orient="auto">
+              <polygon class="mk-a" points="0,0 10,4 0,8"/>
+            </marker>
+            <marker id="m-c" viewBox="0 0 10 8" refX="9" refY="4"
+                    markerWidth="7" markerHeight="6" orient="auto">
+              <polygon class="mk-c" points="0,0 10,4 0,8"/>
+            </marker>
+          </defs>
+
+          <g class="hd">
+            <text x="6" y="14">BAND</text>
+            <text x="132" y="14">FREQUENCY</text>
+            <text x="312" y="14">PLANE</text>
+            <text x="392" y="14">DIR</text>
+            <text x="470" y="14">THE MOTION IT DRIVES</text>
+          </g>
+          <line class="ln" x1="0" y1="24" x2="700" y2="24"/>
+
+          <g font-size="12">
+            <text class="ink" x="6"   y="50" font-weight="600">SUB</text>
+            <text class="mut" x="132" y="50">20 – 60 Hz</text>
+            <text class="amb" x="312" y="50" font-weight="600">ZW</text>
+            <text class="mut" x="392" y="50">+1</text>
+            <line class="fla" x1="348" y1="46" x2="462" y2="46" marker-end="url(#m-a)"/>
+            <text class="soft" x="470" y="50">depth against the 4th axis</text>
+          </g>
+          <line class="hr" x1="0" y1="62" x2="700" y2="62"/>
+
+          <g font-size="12">
+            <text class="ink" x="6"   y="88" font-weight="600">BASS</text>
+            <text class="mut" x="132" y="88">60 – 160 Hz</text>
+            <text class="amb" x="312" y="88" font-weight="600">XW</text>
+            <text class="mut" x="392" y="88">+1</text>
+            <line class="fla" x1="348" y1="84" x2="462" y2="84" marker-end="url(#m-a)"/>
+            <text class="soft" x="470" y="88">width against the 4th axis</text>
+          </g>
+          <line class="hr" x1="0" y1="100" x2="700" y2="100"/>
+
+          <g font-size="12">
+            <text class="ink" x="6"   y="126" font-weight="600">MIDB</text>
+            <text class="mut" x="132" y="126">160 – 400 Hz</text>
+            <text class="amb" x="312" y="126" font-weight="600">YW</text>
+            <text class="mut" x="392" y="126">−1</text>
+            <line class="fla" x1="348" y1="122" x2="462" y2="122" marker-end="url(#m-a)"/>
+            <text class="soft" x="470" y="126">height against the 4th axis</text>
+          </g>
+          <line class="hr" x1="0" y1="138" x2="700" y2="138"/>
+
+          <g font-size="12">
+            <text class="ink" x="6"   y="164" font-weight="600">MID</text>
+            <text class="mut" x="132" y="164">400 – 1200 Hz</text>
+            <text class="cyn" x="312" y="164" font-weight="600">XY</text>
+            <text class="mut" x="392" y="164">−1</text>
+            <line class="flc" x1="348" y1="160" x2="462" y2="160" marker-end="url(#m-c)"/>
+            <text class="soft" x="470" y="164">roll — the familiar spin</text>
+          </g>
+          <line class="hr" x1="0" y1="176" x2="700" y2="176"/>
+
+          <g font-size="12">
+            <text class="ink" x="6"   y="202" font-weight="600">UPR</text>
+            <text class="mut" x="132" y="202">1.2 – 4 kHz</text>
+            <text class="cyn" x="312" y="202" font-weight="600">XZ</text>
+            <text class="mut" x="392" y="202">+1</text>
+            <line class="flc" x1="348" y1="198" x2="462" y2="198" marker-end="url(#m-c)"/>
+            <text class="soft" x="470" y="202">yaw</text>
+          </g>
+          <line class="hr" x1="0" y1="214" x2="700" y2="214"/>
+
+          <g font-size="12">
+            <text class="ink" x="6"   y="240" font-weight="600">AIR</text>
+            <text class="mut" x="132" y="240">4 – 14 kHz</text>
+            <text class="cyn" x="312" y="240" font-weight="600">YZ</text>
+            <text class="mut" x="392" y="240">−1</text>
+            <line class="flc" x1="348" y1="236" x2="462" y2="236" marker-end="url(#m-c)"/>
+            <text class="soft" x="470" y="240">pitch</text>
+          </g>
+          <line class="ln" x1="0" y1="252" x2="700" y2="252"/>
+
+          <text class="fnt" x="6" y="270" font-size="10" letter-spacing=".8">
+            amber: the three planes involving W, the fourth axis · teal: the three ordinary 3D planes
+          </text>
+        </svg>
+      </div>
+      <figcaption>
+        <b>The band-to-plane map</b> (<code>bands.BANDS</code>). The three low
+        bands are deliberately given the planes that involve <code>W</code> — the
+        fourth axis — so bass energy produces the motion that has no
+        three-dimensional analogue and reads as the shape turning through itself.
+        The <code>dir</code> column flips a band's sense so adjacent bands do not
+        visually cancel.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ══ 02 ═════════════════════════════════════════════════════════ -->
+  <section>
+    <div class="shead"><span class="num">02</span><h2>One registry in the middle</h2></div>
+    <p class="dek">The shape of the whole system, in one picture.</p>
+
+    <div class="col">
+      <p>
+        Every knob, key, band, hand and oscillator reaches the renderer through a
+        single parameter registry. Nothing takes a shortcut. The registry
+        resolves everything exactly once per frame, in
+        <code>Registry.apply()</code>, and the render stack only ever reads what
+        it wrote.
+      </p>
+    </div>
+
+    <figure>
+      <div class="figbox">
+        <ul class="legend">
+          <li><span class="swatch sw-base"></span>writes the base — a scene setting</li>
+          <li><span class="swatch sw-offset"></span>writes an offset — a live performance</li>
+          <li><span class="swatch sw-read"></span>reads only</li>
+        </ul>
+        <svg class="dg" viewBox="0 0 700 338" role="img"
+             aria-label="Control dataflow: scene setters write a parameter's base and performers feed the router, which writes an offset; the registry combines base plus offsets once a frame onto live objects, which the render stack reads but never writes.">
+          <defs>
+            <marker id="n-a" viewBox="0 0 10 8" refX="9" refY="4"
+                    markerWidth="7" markerHeight="6" orient="auto">
+              <polygon class="mk-a" points="0,0 10,4 0,8"/>
+            </marker>
+            <marker id="n-c" viewBox="0 0 10 8" refX="9" refY="4"
+                    markerWidth="7" markerHeight="6" orient="auto">
+              <polygon class="mk-c" points="0,0 10,4 0,8"/>
+            </marker>
+            <marker id="n-i" viewBox="0 0 10 8" refX="9" refY="4"
+                    markerWidth="7" markerHeight="6" orient="auto">
+              <polygon class="mk-i" points="0,0 10,4 0,8"/>
+            </marker>
+            <marker id="n-r" viewBox="0 0 10 8" refX="9" refY="4"
+                    markerWidth="7" markerHeight="6" orient="auto">
+              <polygon class="mk-r" points="0,0 10,4 0,8"/>
+            </marker>
+          </defs>
+
+          <!-- scene setters -->
+          <text class="amb hd" x="4" y="14">SCENE SETTERS</text>
+          <rect class="boxa" x="4" y="22" width="152" height="88" rx="2"/>
+          <g font-size="11" class="soft">
+            <text x="16" y="42">keys · mouse · pad</text>
+            <text x="16" y="59">MIDI desk (APC40)</text>
+            <text x="16" y="76">panel widgets</text>
+            <text x="16" y="93">presets · undo</text>
+          </g>
+          <text class="fnt" x="16" y="106" font-size="9.5">macro subscribers</text>
+
+          <!-- performers -->
+          <text class="cyn hd" x="4" y="158">PERFORMERS</text>
+          <rect class="boxc" x="4" y="166" width="152" height="88" rx="2"/>
+          <g font-size="11" class="soft">
+            <text x="16" y="186">audio band lanes</text>
+            <text x="16" y="203">hands (Ultraleap)</text>
+            <text x="16" y="220">LFOs · clock</text>
+            <text x="16" y="237">DAW in (bridge)</text>
+          </g>
+
+          <!-- router -->
+          <rect class="boxc" x="198" y="166" width="104" height="88" rx="2"/>
+          <text class="ttl" x="250" y="196" text-anchor="middle" font-size="12.5">Router</text>
+          <text class="mut" x="250" y="213" text-anchor="middle" font-size="10">modulate()</text>
+          <text class="fnt" x="250" y="231" text-anchor="middle" font-size="9.5">gate · depth · op</text>
+          <text class="fnt" x="250" y="246" text-anchor="middle" font-size="9.5">one row per param</text>
+
+          <line class="flc" x1="158" y1="210" x2="194" y2="210" marker-end="url(#n-c)"/>
+          <text class="cyn" x="176" y="204" text-anchor="middle" font-size="9">feed</text>
+
+          <!-- registry -->
+          <rect class="boxr" x="346" y="78" width="138" height="176" rx="2"/>
+          <text class="ttl" x="415" y="104" text-anchor="middle" font-size="14" font-weight="700">Registry</text>
+          <line class="hr" x1="362" y1="116" x2="468" y2="116"/>
+          <text class="amb" x="415" y="141" text-anchor="middle" font-size="11.5">base</text>
+          <text class="mut" x="415" y="159" text-anchor="middle" font-size="13">+</text>
+          <text class="cyn" x="415" y="177" text-anchor="middle" font-size="11.5">offsets</text>
+          <line class="hr" x1="362" y1="191" x2="468" y2="191"/>
+          <text class="ink" x="415" y="211" text-anchor="middle" font-size="10.5" font-weight="600">apply()</text>
+          <text class="fnt" x="415" y="227" text-anchor="middle" font-size="9.5">once a frame</text>
+          <text class="fnt" x="415" y="243" text-anchor="middle" font-size="9.5">taper · wrap · clamp</text>
+
+          <!-- base path -->
+          <path class="fla" d="M 160 66 L 252 66 L 252 122 L 342 122" marker-end="url(#n-a)"/>
+          <text class="amb" x="254" y="60" font-size="9">set() → base</text>
+
+          <!-- offset path -->
+          <path class="flc" d="M 304 198 L 324 198 L 324 173 L 342 173" marker-end="url(#n-c)"/>
+          <text class="cyn" x="306" y="190" font-size="9">offset</text>
+
+          <!-- live objects -->
+          <rect class="boxk" x="530" y="78" width="166" height="82" rx="2"/>
+          <text class="ttl" x="613" y="100" text-anchor="middle" font-size="12.5">Live objects</text>
+          <g class="mut" font-size="10">
+            <text x="613" y="119" text-anchor="middle">ViewState · FxState</text>
+            <text x="613" y="134" text-anchor="middle">Analyzer · Lookback</text>
+            <text x="613" y="149" text-anchor="middle">Ghost · Outputs</text>
+          </g>
+          <line class="fli" x1="488" y1="119" x2="526" y2="119" marker-end="url(#n-i)"/>
+
+          <!-- render stack -->
+          <rect class="box" x="530" y="192" width="166" height="82" rx="2"/>
+          <text class="ttl" x="613" y="214" text-anchor="middle" font-size="12.5">Render stack</text>
+          <g class="mut" font-size="10">
+            <text x="613" y="233" text-anchor="middle">geometry · view · GL</text>
+            <text x="613" y="248" text-anchor="middle">fx · lookback · dream</text>
+            <text x="613" y="263" text-anchor="middle">outputs · overlay</text>
+          </g>
+          <line class="flr" x1="613" y1="164" x2="613" y2="188" marker-end="url(#n-r)"/>
+          <text class="fnt" x="621" y="180" font-size="9">reads only</text>
+
+          <!-- the one exception -->
+          <path class="dsh" d="M 530 262 L 504 262 L 504 304 L 415 304 L 415 258" marker-end="url(#n-r)"/>
+          <text class="fnt" x="470" y="320" text-anchor="middle" font-size="9">the one exception: ViewState.integrate writes the angle directly,</text>
+          <text class="fnt" x="470" y="332" text-anchor="middle" font-size="9">and the registry adopts that delta into the base next frame</text>
+        </svg>
+      </div>
+      <figcaption>
+        <b>Every control path in the program.</b> The split that matters is
+        vertical, not horizontal: a scene setter writes a parameter's stored
+        <em>base</em>, a performer writes a transient <em>offset</em> on top of
+        it. Because they write different fields, a knob and a hand can own the
+        same parameter without fighting — turn the knob under a live hand and you
+        are setting the value the parameter will return to when the hand lets go.
+      </figcaption>
+    </figure>
+
+    <div class="rule">
+      <p>Everything points at the registry; the registry points at nothing above it.</p>
+    </div>
+  </section>
+
+  <!-- ══ 03 ═════════════════════════════════════════════════════════ -->
+  <section>
+    <div class="shead"><span class="num">03</span><h2>Who may write a parameter</h2></div>
+    <p class="dek">Three classes of writer, and no fourth.</p>
+
+    <div class="writers">
+      <div class="writer w-base">
+        <p class="tag">Scene setter</p>
+        <h4>Writes the base</h4>
+        <p>The stored value — what a preset saves and undo restores. Every setter
+        funnels into <code>Param.set</code>.</p>
+        <p class="who">panel widgets · key, pad and hat rows · MIDI rows and knob
+        glides · macro subscribers · preset and show loads · mouse orbit and
+        zoom · undo and redo</p>
+      </div>
+      <div class="writer w-offset">
+        <p class="tag">Performer</p>
+        <h4>Writes an offset</h4>
+        <p>A transient departure from the base, rebuilt every frame and gone the
+        moment the source stops feeding.</p>
+        <p class="who">only <code>Router.modulate</code> → <code>Param.modulate</code>
+        — one call site in the entire package, held by an AST-walking test.
+        Adapters may only <code>feed</code>.</p>
+      </div>
+      <div class="writer w-direct">
+        <p class="tag">Object writer</p>
+        <h4>Writes the object</h4>
+        <p>Bypasses <code>Param</code> entirely; the delta is folded back into the
+        base on the next frame.</p>
+        <p class="who"><code>ViewState.integrate</code> (the accumulated angle) ·
+        camera and control resets · hand mirroring</p>
+      </div>
+    </div>
+
+    <h3>Why that split is the load-bearing one</h3>
+    <p>
+      It dissolves the question every modulation system eventually trips over —
+      <em>what happens when two things grab the same control?</em> A knob and a
+      performer are never in competition, because they write different fields of
+      the same parameter. What still needs a referee is performer against
+      performer: one performer per parameter, enforced in the binding table's
+      edit doors rather than in the per-frame pass, so the hot path never has to
+      check ownership at all.
+    </p>
+  </section>
+
+  <!-- ══ 04 ═════════════════════════════════════════════════════════ -->
+  <section>
+    <div class="shead"><span class="num">04</span><h2>The components</h2></div>
+    <p class="dek">Eleven parts, each with one job and a test that holds its edges.</p>
+
+    <div class="roster">
+      <div class="rrow">
+        <div><div class="name">Registry</div><div class="mods">params · tapers</div></div>
+        <div class="what">Every <code>Param</code> — kind, taper, flags, base, this frame's offsets — resolved onto the live objects. <span>Never imports an adapter.</span></div>
+        <div class="chip c-base">Base</div>
+      </div>
+      <div class="rrow">
+        <div><div class="name">Routing table</div><div class="mods">routing</div></div>
+        <div class="what">The binding rows, the referee, the desk's two layers, the macros, and the one per-frame modulation pass. <span>Imports nothing above it.</span></div>
+        <div class="chip c-offset">Offset</div>
+      </div>
+      <div class="rrow">
+        <div><div class="name">Learn</div><div class="mods">learn</div></div>
+        <div class="what">What is armed and what it waits for, the held Replace-or-Keep question, Unbind. Writes rows only through the table's edit doors.</div>
+        <div class="chip c-base">Rows</div>
+      </div>
+      <div class="rrow">
+        <div><div class="name">Input adapters</div><div class="mods">midi · apc40 · hands/ · gamepad · bridge · Keys · Mouse</div></div>
+        <div class="what">A device and its pickup state. Keys, pad, mouse and MIDI write bases; hands and the DAW bridge may only <code>feed</code>.</div>
+        <div class="chip c-base">Mixed</div>
+      </div>
+      <div class="rrow">
+        <div><div class="name">Audio source</div><div class="mods">audio · analysis · analyzer · bands</div></div>
+        <div class="what">Capture or file playback, the FFT, and the six band lanes that become the <code>lane:</code> source.</div>
+        <div class="chip c-offset">Lanes</div>
+      </div>
+      <div class="rrow">
+        <div><div class="name">LFOs &amp; clock</div><div class="mods">lfo · tempo</div></div>
+        <div class="what">Four oscillators and one tap-tempo clock. Leaves — the registry, router and clock all arrive as arguments.</div>
+        <div class="chip c-offset">Feed</div>
+      </div>
+      <div class="rrow">
+        <div><div class="name">Render stack</div><div class="mods">geometry · view · render · glsl · fx · lookback · dream · ghost · outputs · overlay</div></div>
+        <div class="what">GL resources, the frame history, the dream worker, the faces' picture, every output pipeline. <span>Imports no registry at all.</span></div>
+        <div class="chip c-read">Reads</div>
+      </div>
+      <div class="rrow">
+        <div><div class="name">Panel</div><div class="mods">ui · ui_* · hands/panel · control</div></div>
+        <div class="what">The imgui control window — pages, the routing editor, the band and FX editors, the Replace-or-Keep modal.</div>
+        <div class="chip c-base">Base</div>
+      </div>
+      <div class="rrow">
+        <div><div class="name">Library</div><div class="mods">library · preset · config</div></div>
+        <div class="what">The home folder, presets, shows, the bank of twenty-four, the trash. A preset load replaces the table's performer rows.</div>
+        <div class="chip c-base">Base</div>
+      </div>
+      <div class="rrow">
+        <div><div class="name">Undo</div><div class="mods">undo</div></div>
+        <div class="what">Two stacks and the last settled state. A pure leaf with no write hook — it <em>compares</em> bases, so a performer moving makes no step.</div>
+        <div class="chip c-base">Base</div>
+      </div>
+      <div class="rrow">
+        <div><div class="name">Host</div><div class="mods">app · hotreload · placement · homegit · watchdog</div></div>
+        <div class="what">Construction order, the one frame loop, the windows, the reload watch list. The only importer of any optional adapter, each behind a config gate.</div>
+        <div class="chip c-read">Builds</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ 05 ═════════════════════════════════════════════════════════ -->
+  <section>
+    <div class="shead"><span class="num">05</span><h2>The frame</h2></div>
+    <p class="dek">
+      Seventeen steps in a fixed order — the one place that order exists, pinned
+      by a test over stubs.
+    </p>
+
+    <div class="col">
+      <p>
+        The sequence is not arbitrary. Every scene setter runs <em>before</em> the
+        modulation pass, so a base write and the offsets on it land together in a
+        single <code>apply()</code>. The undo watcher sits between the two
+        groups, which is exactly why it sees every base written this frame and no
+        performer at all.
+      </p>
+    </div>
+
+    <div class="frame">
+      <div class="step"><div class="n">0</div><div class="d">Clock tick, hot-reload poll, quit and restart keys</div><div class="chip c-read">—</div></div>
+      <div class="step"><div class="n">1</div><div class="d">Key rows — <b>router.keys()</b>; the arrow keys ride the 4D depth</div><div class="chip c-base">base</div></div>
+      <div class="step"><div class="n">2</div><div class="d">Gamepad poll — sticks and triggers as relative writers</div><div class="chip c-base">base</div></div>
+      <div class="step"><div class="n">3</div><div class="d">MIDI desk — the active layer plus invariant rows, and knob glides</div><div class="chip c-base">base</div></div>
+      <div class="step"><div class="n">4</div><div class="d">Macros — <b>follow_macros()</b> lands the base subscribers</div><div class="chip c-base">base</div></div>
+      <div class="step mark"><div class="n">5</div><div class="d">Undo tick — compares watched bases against last frame</div><div class="chip c-read">watch</div></div>
+      <div class="step"><div class="n">6</div><div class="d">Hands — <b>hands_io.poll()</b> feeds twelve axes and eight pinches</div><div class="chip c-offset">feed</div></div>
+      <div class="step"><div class="n">7</div><div class="d">Output switches, background alpha and dim</div><div class="chip c-read">rig</div></div>
+      <div class="step"><div class="n">8</div><div class="d">Mouse — orbit, pan, zoom</div><div class="chip c-base">base</div></div>
+      <div class="step"><div class="n">9</div><div class="d">Audio step and publish — the six band lanes</div><div class="chip c-offset">feed</div></div>
+      <div class="step"><div class="n">10</div><div class="d">DAW bridge — feeds external lanes, sends lanes out</div><div class="chip c-offset">feed</div></div>
+      <div class="step"><div class="n">11</div><div class="d">LFOs step and publish</div><div class="chip c-offset">feed</div></div>
+      <div class="step mark"><div class="n">12</div><div class="d"><b>router.modulate()</b> — every live performer row, in table order</div><div class="chip c-offset">offset</div></div>
+      <div class="step mark"><div class="n">13</div><div class="d"><b>reg.apply()</b> — base plus offsets onto every live object</div><div class="chip c-read">objects</div></div>
+      <div class="step"><div class="n">14</div><div class="d"><b>view.integrate()</b> — the angle advances by rate × dt</div><div class="chip c-read">direct</div></div>
+      <div class="step"><div class="n">15</div><div class="d">Draw every render output</div><div class="chip c-read">screen</div></div>
+      <div class="step"><div class="n">16</div><div class="d">Draw the control panel</div><div class="chip c-base">base</div></div>
+    </div>
+
+    <h3>One frame of lag, deliberately</h3>
+    <p>
+      Anything that <em>reads</em> a parameter while sources are being gathered —
+      an LFO reading its own depth, a route scaled by a macro, the bridge sending
+      values out — sees what <code>apply()</code> wrote last frame. That is what
+      makes the pass non-recursive: nothing in it reads a value it is about to
+      write. Each block is also individually guarded, so hot-reloaded code that
+      raises records the error and the loop carries on drawing.
+    </p>
+  </section>
+
+  <!-- ══ 06 ═════════════════════════════════════════════════════════ -->
+  <section>
+    <div class="shead"><span class="num">06</span><h2>Subsystems</h2></div>
+    <p class="dek">Where a feature crosses several modules at once.</p>
+
+    <div class="subs">
+      <div class="sub">
+        <h4>Audio → bands → routes</h4>
+        <p>A ring buffer feeds the FFT, which feeds six band lanes with an
+        asymptotic ceiling instead of a hard clip. Each lane is a routable
+        source; the band editor owns the crossovers and the dynamics recovery
+        that keeps brickwalled masters moving.</p>
+        <span class="path">audio · analysis · analyzer · bands</span>
+      </div>
+      <div class="sub">
+        <h4>Hands</h4>
+        <p>Ultraleap tracking shaped into twelve axes, two presence lanes and
+        eight pinch switches. Each axis runs calibration, a One Euro filter, a
+        dead zone and curve, then attack–decay dynamics with a spring back to
+        rest when the hand leaves frame.</p>
+        <span class="path">hands/core · hands/signal · hands/tape · hands/panel</span>
+      </div>
+      <div class="sub">
+        <h4>The desk</h4>
+        <p>An APC40 driving two layers of one table — the loaded preset's and the
+        session's — plus invariant rows that mean the same on both. SHIFT latches
+        the layer; the knob rings show the base and never chase a performer, so a
+        knob can always catch.</p>
+        <span class="path">midi · apc40 · ui_desk</span>
+      </div>
+      <div class="sub">
+        <h4>Effects</h4>
+        <p>Each shader file in the effects folder <em>is</em> an effect: its
+        uniforms become parameters automatically. An effect aims either at the
+        whole frame or at the polytope's faces, which can show the picture per
+        face or in screen space.</p>
+        <span class="path">fx · glsl · shaders/fx/*.glsl · ui_fx</span>
+      </div>
+      <div class="sub">
+        <h4>Look-back &amp; dream</h4>
+        <p>A history of scene textures composites echoes over the live frame.
+        With dreaming enabled, a worker thread pulls frames from that history,
+        runs them through a network on the GPU and hands back dreamed ones —
+        without ever blocking the frame.</p>
+        <span class="path">lookback · dream</span>
+      </div>
+      <div class="sub">
+        <h4>Outputs</h4>
+        <p>Several render outputs: the first is the main window, each later one a
+        window in its share group with its own presenter and overlay. Per-output
+        switches decide scene, hands, pass-through and dim; window rectangles are
+        remembered per output.</p>
+        <span class="path">outputs · overlay · placement</span>
+      </div>
+      <div class="sub">
+        <h4>Presets &amp; shows</h4>
+        <p>A <em>preset</em> is the performance — values, routes, desk, macros. A
+        <em>show</em> is the session, holding a bank of twenty-four preset names
+        and which one it starts on. Overwrites go to a listed trash first;
+        factory presets are hidden, never deleted.</p>
+        <span class="path">library · preset · config · homegit</span>
+      </div>
+      <div class="sub">
+        <h4>Ghost hands</h4>
+        <p>The tracked hands drawn over the finished frame, with a per-hand gauge,
+        routed marks lit in colour against grey, a grab ring, and labelled tethers
+        from each routed mark to the parameter it drives. Reads the skeleton raw —
+        it is not a source.</p>
+        <span class="path">ghost</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ 07 ═════════════════════════════════════════════════════════ -->
+  <section>
+    <div class="shead"><span class="num">07</span><h2>The boundaries are tested, not intended</h2></div>
+    <p class="dek">What keeps a 31,500-line single process from turning into a knot.</p>
+
+    <div class="col">
+      <p>
+        The dependency rules above are not documentation that drifts — most of
+        them are assertions. Tests walk the import graph and the abstract syntax
+        tree to prove that the core never imports the MIDI adapter, the bridge or
+        the dream worker; that the routing table imports nothing above it; that
+        the render stack imports no registry; that <code>Param.modulate</code> has
+        exactly one call site; and that importing the host pulls in no gated
+        adapter, no <code>torch</code> and no tracking SDK.
+      </p>
+      <p>
+        <strong>Leaves</strong> — modules that import nothing from the package, so
+        anything may import them — are named explicitly:
+        <code>analysis</code>, <code>tapers</code>, <code>undo</code>,
+        <code>placement</code>, <code>homegit</code>, <code>geometry</code>,
+        <code>tempo</code>, <code>lfo</code>, <code>glsl</code>,
+        <code>gamepad</code>, <code>apc40</code>, <code>watchdog</code>, and the
+        hands package's signal and tape modules.
+      </p>
+
+      <h3>The hands package is built to be removed</h3>
+      <p>
+        It is the clearest case of the discipline. Its own docstring opens
+        <em>"a self-contained instrument, host optional … written to be lifted out
+        whole"</em>, and the rule that keeps it liftable is that its core and
+        signal modules import nothing from Hyperspace. Everything they need
+        arrives duck-typed as an argument: the registry as anything with the right
+        setters, the tracker as anything with a <code>latest()</code>, the MIDI
+        sink as anything with a <code>send()</code>. One module knows the host,
+        and extracting the package means replacing that one file.
+      </p>
+      <p>
+        A test walks the syntax tree and fails the build if either module ever
+        grows a Hyperspace import — because, as that test says, the boundary
+        erodes one convenient import at a time, and nobody notices until the day
+        someone tries to extract it.
+      </p>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="v">49</div><div class="k">Python modules</div></div>
+      <div class="stat"><div class="v">31,528</div><div class="k">lines of app</div></div>
+      <div class="stat"><div class="v">36,685</div><div class="k">lines of tests</div></div>
+      <div class="stat"><div class="v">53</div><div class="k">test files</div></div>
+      <div class="stat"><div class="v">25</div><div class="k">polytopes</div></div>
+      <div class="stat"><div class="v">13</div><div class="k">effects</div></div>
+    </div>
+    <p class="note">
+      There is more test code than application code — which, for a program whose
+      correctness is mostly about who may write what, and in which order, is the
+      ratio you would want.
+    </p>
+  </section>
+
+  <footer>
+    The visual companion to <strong>ARCHITECTURE.md</strong>, and maintained with
+    it: when a boundary, the frame order or the control model changes, change
+    both in the same PR.<br>
+    Drawn from the component map and the frame order; counts measured from the
+    tree. Band-to-plane map from hyperspace/bands.py; the liftable-package rule
+    from hyperspace/hands/__init__.py and tests/test_hands_boundary.py.
+  </footer>
+
+</div>

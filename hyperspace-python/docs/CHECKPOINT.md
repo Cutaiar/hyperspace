@@ -13,6 +13,8 @@ and a projector. It is one Python process in `hyperspace-python/`.
 - **The docs:**
   - [`ARCHITECTURE.md`](ARCHITECTURE.md): the parts, the frame, who may
     write a parameter.
+  - [`ARCHITECTURE.html`](ARCHITECTURE.html): the same map as a diagrammed
+    page, for reading in a browser. Maintained with the Markdown.
   - [`ENGINEERING.md`](ENGINEERING.md): how each part behaves.
   - [`DECISIONS.md`](DECISIONS.md): the decisions in force, and what was
     decided not to build.
