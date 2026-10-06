@@ -21,6 +21,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from conftest import OWNER_PAD, OWNER_ROW, boot_home, far_pads, old_shape_pads, tree
 from legacy_chain import LegacyChain  # tests/legacy_chain.py — the frozen reference
 from test_analyzer import fixture_wavs, frames  # noqa: F401 — the fixture, re-exported
 
@@ -436,7 +437,21 @@ def test_old_midi_map_migrates_into_bindings_json(tmp_path, capsys):
     assert {"source": "cc:0:87", "target": "view.inst_amp", "op": "abs"} in kept["desk"]
     assert len(kept["routes"]) == 12                     # the lane rows it played
     legacy.unlink()
-    assert Bindings.load(path, legacy_midi=legacy).to_json() == t.to_json()
+    # the old map had no OVERDUB row and no clip-stop rows and the notes
+    # are free: the next load adds home and the SAVE AS bar there, as it
+    # does to any older file (plan 15 WP2, WP4), and the bank's sixteen
+    # pads on clip rows 4 and 5 (plan 19 WP2), and nothing else moves
+    again = Bindings.load(path, legacy_midi=legacy)
+    bar = [f"note:{k}:{apc40.N_CLIPSTOP}" for k in range(8)]
+    far = [f"note:{ch}:{n}" for n, ch in apc40.BANK_PADS[routing.F_KEYS:]]
+    assert again.notes == [
+        f"added note:0:{apc40.N_OVERDUB} → preset.home (the APC40 map of plan 15)",
+        *[f"added {s} → preset.save_new (the APC40 map of plan 15)" for s in bar],
+        *[f"added {s} → preset.select (the APC40 map of plan 19)" for s in far]]
+    assert [b for b in again.to_json()["bindings"]
+            if b["source"] not in (f"note:0:{apc40.N_OVERDUB}", *bar, *far)] \
+        == t.to_json()["bindings"]
+    assert Bindings.load(path, legacy_midi=legacy).to_json() == again.to_json()
     # without either file: the factory table, nothing written
     t0 = Bindings.load(tmp_path / "none.json", legacy_midi=tmp_path / "nope.json")
     assert t0.to_json() == Bindings.factory().to_json() and not (tmp_path / "none.json").exists()
@@ -454,8 +469,14 @@ def test_factory_table_binds_only_real_params(tmp_path):
             assert r.reg[b.target].modulatable, b
     keys = [(b.key, b.layer) for b in t.bindings if b.scheme != "lane"]
     assert len(keys) == len(set(keys))                  # one row per control per layer
-    assert len(t.of("key")) == 25 + 17 and len(t.of("pad")) == 10 and len(t.of("hat")) == 4  # + R, F1–F8, ⇧F1–F8
-    assert len(t.midi()) == 113 + 6 and t.mods() == []   # + SHIFT, the global track knobs;
+    # + R, F1–F8, ⇧F1–F8 (plan 11), + undo and redo on ⌘ and Ctrl (plan 15 WP1),
+    # + Home (plan 15 WP2)
+    assert len(t.of("key")) == 25 + 17 + 4 + 1
+    assert len(t.of("pad")) == 10 and len(t.of("hat")) == 4
+    assert len(t.midi()) == 113 + 6 + 1 + 8 + 4 and t.mods() == []   # + SHIFT, the global track
+    # knobs, OVERDUB (plan 15 WP2), the clip-stop row's eight (plan 15 WP4),
+    # the preset layer's four SCENE device knobs (plan 19 WP3; the sixteen
+    # bank pads of plan 19 WP2 took the sixteen shape pads' place);
     # no performer rows: the house presets carry the lane rows (plan 13 WP5)
     assert routing.referee(t.bindings)[1] == []           # one owner per target
     assert routing.remap_factory(t.bindings)[1] == []     # the factory table is current
@@ -884,12 +905,12 @@ def test_midi_view_shares_the_table(tmp_path):
 
     t = Bindings.factory(path=bindings_path(tmp_path))
     m = MidiIO(rig(tmp_path=tmp_path, full=True).reg, t, inp=Quiet(), out=Quiet())
-    assert len(m.bindings) == 113 + 6 and all(b.is_midi for b in m.bindings)
+    assert len(m.bindings) == 113 + 6 + 1 + 8 + 4 and all(b.is_midi for b in m.bindings)
     m.table.bind(Binding("cc:0:99", "view.zoom", "abs"))
     assert m.table.for_param("view.zoom").number == 99
     again = Bindings.load(bindings_path(tmp_path))
     assert again.for_param("view.zoom").source == "cc:0:99"
-    assert len(again.of("key")) == 25 + 17 and again.mods() == []
+    assert len(again.of("key")) == 25 + 17 + 4 + 1 and again.mods() == []
     # a session row (no layer: invariant) is edited in bindings.json, not
     # unbound from the panel (plan 13 WP5; tests/test_midi.py has the rest)
     m.unbind("view.zoom")
@@ -1279,8 +1300,16 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     assert f"added note:0:{apc40.N_QUANT} → preset.next" in err
     assert "added key:B → tempo.tap" in err and "added key:SHIFT+B → lfo.trigger" in err
     assert "added key:F1 → preset.load.0" in err and "added key:SHIFT+F8 → preset.save.7" in err
+    assert "added key:SUPER+Z → edit.undo" in err and "added key:CONTROL+SHIFT+Z → edit.redo" in err
     # 7 + the 17 keys of plan 11 + the desk's sort and its 25 global rows and SHIFT (plan 13)
-    assert f"migrated {path} to {SCHEMA} (2 rows dropped, 50 rows changed)" in err
+    # + the 4 undo and redo keys of plan 15, + OVERDUB and the Home key (plan 15 WP2)
+    assert f"added note:0:{apc40.N_OVERDUB} → preset.home (the APC40 map of plan 15)" in err
+    assert "added key:HOME → preset.home" in err
+    # + the clip-stop row's eight (plan 15 WP4)
+    assert f"added note:7:{apc40.N_CLIPSTOP} → preset.save_new (the APC40 map of plan 15)" in err
+    # + the bank's sixteen pads on clip rows 4 and 5 (plan 19 WP2)
+    assert f"added note:7:{apc40.N_CLIP[4]} → preset.select (the APC40 map of plan 19)" in err
+    assert f"migrated {path} to {SCHEMA} (2 rows dropped, 80 rows changed)" in err
     rows = {(b.source, b.target): b for b in t.bindings}
     assert rows[("key:RIGHT", "view.shape")].op == "step"
     assert rows[("cc:0:48", "view.bright")].op == "abs"                       # MIDI keeps abs
@@ -1294,7 +1323,10 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     assert "pickup" not in z.to_json()                         # dropped with the abs op
     assert ("lane:1", "rot.rate.XY") not in rows and ("hand:2", "view.depth4") not in rows
     assert [b.source for b, _ in t.dropped] == ["hand:2"]
-    assert len(t.notes) == 9 + 17 + 26          # + the moved keys of plan 11, the desk's sort
+    # + the moved keys of plan 11, the desk's sort, the undo keys of plan 15,
+    # OVERDUB and the Home key (plan 15 WP2), the clip-stop row (plan 15
+    # WP4), the bank's sixteen pads on clip rows 4 and 5 (plan 19 WP2)
+    assert len(t.notes) == 9 + 17 + 26 + 4 + 2 + 8 + 16
     # the APC40 rows: the old factory rows swapped for the new, the LED kept
     tap = rows[("note:0:99", "tempo.tap")]
     assert (tap.op, tap.feedback) == ("toggle", "led") and ("note:0:99", "theme.next") not in rows
@@ -1338,7 +1370,9 @@ def test_a_backup_is_kept_before_every_rewrite_and_never_over_a_hand_made_one(tm
     name rather than touching the first (the oldest state is worth
     having, and so is the one about to go), and a copy the owner made by
     hand is a different name, untouched. A remap of a schema-2 file is a
-    `.bak-v2`; a copy that cannot be made never stops the load."""
+    `.bak-v2`; a copy that cannot be made never stops the load — and,
+    since plan 19 (fork 12), the file is then not rewritten:
+    `test_a_remap_whose_backup_fails_writes_nothing`."""
     path = bindings_path(tmp_path)
     hand = path.with_name("bindings.json.bak-plan09")
     hand.write_text("mine")
@@ -1367,8 +1401,9 @@ def test_a_backup_is_kept_before_every_rewrite_and_never_over_a_hand_made_one(tm
 
     monkeypatch.setattr(routing, "_write_new", refuse)
     t2 = Bindings.load(path, legacy_midi=None)
-    assert t2.error == "" and "no backup of" in capsys.readouterr().err
+    assert t2.error == routing.NOT_REWRITTEN and "no backup of" in capsys.readouterr().err
     assert any(n.startswith("added key:B") for n in t2.notes)
+    assert json.loads(path.read_text()) == v2           # no backup, no rewrite
 
 
 def test_an_unknown_schema_is_reported_not_migrated(tmp_path):
@@ -1415,8 +1450,11 @@ def test_r_and_the_f_keys_are_table_rows_that_fire_their_params(tmp_path):
     like every other key row."""
     import glfw
 
-    from hyperspace.library import SLOTS
-    assert routing.BANK_SLOTS == SLOTS              # routing may not import library
+    from hyperspace import library, params
+    # one number, declared where the triggers are (plan 19 WP1): the F-keys
+    # are the bank's first eight slots, and the bank is longer
+    assert routing.F_KEYS == library.F_KEYS == params.F_KEYS == 8 < library.SLOTS
+    SLOTS = routing.F_KEYS
     r = rig(tmp_path=tmp_path, full=True)
     fired: list[str] = []
     for pid in ["camera.reset", *[f"preset.{w}.{k}" for w in ("load", "save") for k in range(SLOTS)]]:
@@ -1436,7 +1474,8 @@ def test_r_and_the_f_keys_are_table_rows_that_fire_their_params(tmp_path):
 
 
 def test_an_older_file_gets_the_moved_keys_only_where_they_are_free(tmp_path):
-    """remap_factory adds the seventeen rows to a user table that predates
+    """remap_factory adds the loop's rows (seventeen from plan 11, the four
+    undo and redo rows and the Home row from plan 15) to a user table that predates
     them; a key the user already bound keeps its row; a second pass adds
     nothing; the file is backed up before the one rewrite."""
     moved = {f"key:{k}" for k, _, _ in routing.LOOP_KEY_ROWS}
@@ -1449,10 +1488,253 @@ def test_an_older_file_gets_the_moved_keys_only_where_they_are_free(tmp_path):
     assert rows["key:F3"].target == "view.faces"                        # kept
     assert rows["key:F4"].target == "preset.load.3" and rows["key:R"].target == "camera.reset"
     assert rows["key:SHIFT+F3"].target == "preset.save.2"                # a different source
-    assert moved <= set(rows) and len(moved) == 17
+    assert moved <= set(rows) and len(moved) == 17 + 4 + 1
     assert list(tmp_path.glob("bindings.json.bak-*"))                   # kept before the rewrite
     _, notes = routing.remap_factory(t.bindings)
     assert notes == []
+
+
+class _ChordKeys(_EdgeKeys):
+    """`_EdgeKeys` with a Control key (plan 15 WP1)."""
+
+    def __init__(self, pressed=(), shift=False, super_=False, control=False):
+        super().__init__(pressed, shift, super_)
+        self._control = control
+
+    def control(self):
+        return self._control
+
+
+def test_a_chord_fires_only_its_own_row(tmp_path):
+    """Plan 15 WP1 (fork 1): ⌘Z / Ctrl+Z undo, ⌘⇧Z / Ctrl+⇧Z redo, and a
+    two-modifier chord fires its own row alone — under the old subset rule
+    ⌘⇧Z fired undo and redo both. Z alone, ⇧Z and a chord no row spells
+    fire nothing; a keys object with no control() reads as "not held"."""
+    import glfw
+
+    r = rig(tmp_path=tmp_path, full=True)
+    fired: list[str] = []
+    for pid in ("edit.undo", "edit.redo"):
+        assert not r.reg[pid].modulatable and r.reg[pid].group == "ui"
+        r.reg[pid].fire = lambda pid=pid: fired.append(pid)
+    router = Router(r.reg, house())
+    z = {b.source: b.target for b in router.table.of("key") if b.key_name == "Z"}
+    assert z == {"key:SUPER+Z": "edit.undo", "key:SHIFT+SUPER+Z": "edit.redo",
+                 "key:CONTROL+Z": "edit.undo", "key:CONTROL+SHIFT+Z": "edit.redo"}
+
+    def press(**mods) -> list[str]:
+        fired.clear()
+        router.keys(_ChordKeys({glfw.KEY_Z}, **mods))
+        return list(fired)
+
+    assert press(super_=True) == ["edit.undo"]
+    assert press(super_=True, shift=True) == ["edit.redo"]           # redo alone
+    assert press(control=True) == ["edit.undo"]
+    assert press(control=True, shift=True) == ["edit.redo"]
+    assert press() == [] and press(shift=True) == []
+    assert press(super_=True, control=True) == []                    # no row spells it
+    assert press(super_=True, control=True, shift=True) == []
+    fired.clear()
+    router.keys(_EdgeKeys({glfw.KEY_Z}, super_=True))                # no control(): not held
+    assert fired == ["edit.undo"]
+
+
+def test_an_older_file_gets_the_undo_keys_where_they_are_free(tmp_path):
+    """Plan 15 WP1: a `bindings.json` written before the undo keys gains
+    the four rows on its next load — but not on a source the user already
+    uses — with the old file kept beside it, and a second load changes
+    nothing."""
+    undo_rows = {f"key:{k}": pid for k, pid, _ in routing.LOOP_KEY_ROWS
+                 if pid.startswith("edit.")}
+    assert undo_rows == {"key:SUPER+Z": "edit.undo", "key:SHIFT+SUPER+Z": "edit.redo",
+                         "key:CONTROL+Z": "edit.undo", "key:CONTROL+SHIFT+Z": "edit.redo"}
+    old = [b for b in Bindings.factory().bindings if b.source not in undo_rows]
+    old.append(Binding("key:CONTROL+Z", "view.faces", "toggle"))       # the user's Ctrl+Z
+    path = bindings_path(tmp_path)
+    Bindings(old, path=path).write()
+    before = path.read_text()
+    t = Bindings.load(path, legacy_midi=None)
+    rows = {b.source: b.target for b in t.of("key")}
+    assert rows["key:CONTROL+Z"] == "view.faces"                        # kept
+    assert rows["key:SUPER+Z"] == "edit.undo" and rows["key:SHIFT+SUPER+Z"] == "edit.redo"
+    assert rows["key:CONTROL+SHIFT+Z"] == "edit.redo"
+    (bak,) = tmp_path.glob("bindings.json.bak-*")
+    assert bak.read_text() == before                                    # the old file, whole
+    after = path.read_text()
+    assert "key:SUPER+Z" in after
+    Bindings.load(path, legacy_midi=None)
+    assert path.read_text() == after and len(list(tmp_path.glob("bindings.json.bak-*"))) == 1
+    # a chord the user spelled in another order holds it too (review of PR #82)
+    mine = [b for b in Bindings.factory().bindings if b.source not in undo_rows]
+    mine.append(Binding("key:SUPER+SHIFT+Z", "view.lines", "toggle"))
+    out, _ = routing.remap_factory(mine)
+    held = [b.target for b in out if b.scheme == "key" and b.key_name == "Z"
+            and b.modifiers == {"SHIFT", "SUPER"}]
+    assert held == ["view.lines"]
+
+
+def test_an_older_file_gets_home_where_it_is_free(tmp_path, capsys):
+    """Plan 15 WP2: a `bindings.json` written before home gains the Home
+    key row and the OVERDUB row on its next load, the old file kept whole
+    beside it, and the next load is quiet. A source the owner already
+    uses keeps its row and gets no home beside it."""
+    over, key = f"note:0:{apc40.N_OVERDUB}", "key:HOME"
+    assert (over, "preset.home", "toggle", 1.0, False) in routing.APC_NEW_ROWS
+    assert (key, "preset.home", "fire", 1.0) in routing.KEY_NEW_ROWS
+
+    def write(home, *mine):
+        rows = [b for b in session_rows() if b.source not in (over, key)]
+        path = bindings_path(home)
+        home.mkdir()
+        Bindings([*rows, *mine], path=path).write()
+        return path
+
+    path = write(tmp_path / "a")
+    before = path.read_text()
+    assert "preset.home" not in before
+    t = Bindings.load(path, legacy_midi=None)
+    assert t.notes == [f"added {over} → preset.home (the APC40 map of plan 15)",
+                       f"added {key} → preset.home (the keys of plans 09, 11 and 15)"]
+    err = capsys.readouterr().err
+    assert f"updated {path} (2 rows changed)" in err
+    (row,) = [b for b in t.midi() if b.source == over]
+    assert (row.target, row.op, row.layer, row.feedback, row.on) \
+        == ("preset.home", "toggle", None, "led", 1)
+    assert t.is_invariant(Binding(over, "view.points", "toggle", layer="preset"))
+    (krow,) = [b for b in t.of("key") if b.source == key]
+    assert (krow.target, krow.op) == ("preset.home", "fire")
+    (bak,) = (tmp_path / "a").glob("bindings.json.bak-*")
+    assert bak.name == "bindings.json.bak-v3" and bak.read_text() == before
+    after = path.read_text()
+    assert json.loads(after)["bindings"].count(row.to_json()) == 1
+    # the file is the factory's again, row for row
+    assert sorted(json.dumps(b, sort_keys=True) for b in json.loads(after)["bindings"]) \
+        == sorted(json.dumps(b.to_json(), sort_keys=True) for b in session_rows())
+    again = Bindings.load(path, legacy_midi=None)
+    assert again.notes == [] and path.read_text() == after
+    assert len(list((tmp_path / "a").glob("bindings.json.bak-*"))) == 1
+    assert capsys.readouterr().err == ""
+    # the owner's own rows on OVERDUB and on Home stay, and nothing is added or written
+    path = write(tmp_path / "b",
+                 Binding(over, "view.lines", "toggle", feedback="led"),
+                 Binding(key, "camera.reset", "fire"))
+    before = path.read_text()
+    t = Bindings.load(path, legacy_midi=None)
+    assert t.notes == [] and path.read_text() == before
+    assert not list((tmp_path / "b").glob("bindings.json.bak-*"))
+    assert not [b for b in t.bindings if b.target == "preset.home"]
+    assert t.for_param("view.lines").source == over
+
+
+def test_an_older_file_gets_the_save_bar_where_it_is_free(tmp_path, capsys):
+    """Plan 15 WP4: a `bindings.json` written before the SAVE AS bar gains
+    the eight clip-stop rows on its next load — `hold` rows on
+    `preset.save_new`, invariant, with their LEDs — the old file kept whole
+    beside it, and the next load is quiet. A clip-stop button the owner
+    already uses keeps its row and gets no save beside it; the other
+    seven still get theirs."""
+    stop = apc40.N_CLIPSTOP
+    bar = [f"note:{k}:{stop}" for k in range(8)]
+    for s in bar:
+        assert (s, "preset.save_new", "hold", 1.0, False) in routing.APC_NEW_ROWS
+        assert routing.APC_REMAP_PLAN[s] == "plan 15"
+
+    def write(home, *mine):
+        rows = [b for b in session_rows() if b.source not in bar]
+        path = bindings_path(home)
+        home.mkdir()
+        Bindings([*rows, *mine], path=path).write()
+        return path
+
+    path = write(tmp_path / "a")
+    before = path.read_text()
+    assert "preset.save_new" not in before
+    t = Bindings.load(path, legacy_midi=None)
+    assert t.notes == [f"added {s} → preset.save_new (the APC40 map of plan 15)" for s in bar]
+    err = capsys.readouterr().err
+    assert f"updated {path} (8 rows changed)" in err
+    rows = [b for b in t.midi() if b.source in bar]
+    assert [b.source for b in rows] == bar
+    for b in rows:
+        assert (b.target, b.op, b.layer, b.feedback, b.on, b.off) \
+            == ("preset.save_new", "hold", None, "led", 1, 0)
+        assert t.is_invariant(Binding(b.source, "view.points", "toggle", layer="preset"))
+    (bak,) = (tmp_path / "a").glob("bindings.json.bak-*")
+    assert bak.name == "bindings.json.bak-v3" and bak.read_text() == before
+    after = path.read_text()
+    # the file is the factory's again, row for row
+    assert sorted(json.dumps(b, sort_keys=True) for b in json.loads(after)["bindings"]) \
+        == sorted(json.dumps(b.to_json(), sort_keys=True) for b in session_rows())
+    again = Bindings.load(path, legacy_midi=None)
+    assert again.notes == [] and path.read_text() == after
+    assert len(list((tmp_path / "a").glob("bindings.json.bak-*"))) == 1
+    assert capsys.readouterr().err == ""
+    # the owner's own row on clip stop 3 stays; the other seven are added
+    path = write(tmp_path / "b", Binding(bar[2], "view.lines", "toggle", feedback="led"))
+    t = Bindings.load(path, legacy_midi=None)
+    assert t.notes == [f"added {s} → preset.save_new (the APC40 map of plan 15)"
+                       for s in bar if s != bar[2]]
+    assert [b.target for b in t.midi() if b.source == bar[2]] == ["view.lines"]
+    assert len([b for b in t.bindings if b.target == "preset.save_new"]) == 7
+    # every one of the eight in use: nothing is added and nothing written
+    path = write(tmp_path / "c", *[Binding(s, "view.lines", "toggle", feedback="led")
+                                   for s in bar])
+    before = path.read_text()
+    t = Bindings.load(path, legacy_midi=None)
+    assert t.notes == [] and path.read_text() == before
+    assert not list((tmp_path / "c").glob("bindings.json.bak-*"))
+    assert not [b for b in t.bindings if b.target == "preset.save_new"]
+
+
+def test_an_old_crossfader_row_moves_to_the_dim_with_a_backup(tmp_path, capsys):
+    """Plan 15 WP3: a bindings.json written before the master dim carries
+    the factory crossfader row on the overlay's ground. Exactly that row is
+    swapped for the dim, noted with its plan; the file as it was is kept
+    beside itself first; the next load is quiet. A crossfader row the owner
+    changed is left alone, and no dim row is added beside it."""
+    xf = f"cc:0:{apc40.CC_XFADE}"
+
+    def write(home, **change):
+        rows = []
+        for b in session_rows():
+            d = b.to_json()
+            if d["source"] == xf:
+                assert d == {"source": xf, "target": "output.dim", "op": "abs", "ring": 0}
+                d = {**d, "target": "overlay.bg", **change}
+            rows.append(d)
+        path = bindings_path(home)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        doc = {"schema": SCHEMA, "profile": "apc40", "bindings": rows}
+        path.write_text(json.dumps(doc))
+        return path, doc
+
+    path, doc = write(tmp_path / "old")
+    t = Bindings.load(path, legacy_midi=None)
+    err = capsys.readouterr().err
+    assert t.error == ""
+    assert t.notes == [f"remapped {xf}: overlay.bg → output.dim (the APC40 map of plan 15)"]
+    assert t.notes[0] in err and "kept as bindings.json.bak-v" in err
+    row, = [b for b in t.bindings if b.source == xf]
+    assert (row.target, row.op, row.layer, row.pickup, row.feedback) == (
+        "output.dim", "abs", None, True, None)
+    assert [b.to_json() for b in t.bindings] == [b.to_json() for b in session_rows()]
+    bak, = path.parent.glob("bindings.json.bak-*")
+    assert json.loads(bak.read_text()) == doc                 # the file as it was
+    assert json.loads(path.read_text()) == t.to_json()        # written back once
+    again = Bindings.load(path, legacy_midi=None)
+    assert again.notes == [] and not again.changed and capsys.readouterr().err == ""
+    assert len(list(path.parent.glob("bindings.json.bak-*"))) == 1
+    # the owner's own rows on the crossfader: another target, or the ground
+    # with a different op — neither is the factory row, neither is touched
+    for k, change in enumerate(({"target": "view.bright"}, {"op": "toggle"})):
+        path, doc = write(tmp_path / f"mine{k}", **change)
+        t = Bindings.load(path, legacy_midi=None)
+        row, = [b for b in t.bindings if b.source == xf]
+        assert (row.target, row.op) == (change.get("target", "overlay.bg"),
+                                        change.get("op", "abs"))
+        assert not any(b.target == "output.dim" for b in t.bindings)
+        assert t.notes == [] and json.loads(path.read_text()) == doc
+        assert not list(path.parent.glob("bindings.json.bak-*"))
 
 
 def test_a_theme_row_in_an_old_bindings_file_is_remapped_to_the_preset_bank(tmp_path, capsys):
@@ -1464,7 +1746,7 @@ def test_a_theme_row_in_an_old_bindings_file_is_remapped_to_the_preset_bank(tmp_
     path = bindings_path(tmp_path)
     old = {"preset.select": "theme.select", "preset.next": "theme.next",
            **{f"preset.{w}.{k}": f"theme.{w}.{k}" for w in ("load", "save")
-              for k in range(routing.BANK_SLOTS)}}
+              for k in range(routing.F_KEYS)}}
     rows = []
     for b in session_rows():
         d = b.to_json()
@@ -1483,7 +1765,9 @@ def test_a_theme_row_in_an_old_bindings_file_is_remapped_to_the_preset_bank(tmp_
     assert not any(b.target.startswith("theme.") for b in t.bindings)
     assert "remapped key:F3: theme.load.2 → preset.load.2 (the preset bank of plan 13)" in err
     n = len(t.notes)
-    assert n == 16 + 8 + 1 + 1 + 1                 # F-keys, clip row, QUANT, pad B, the user's
+    # F-keys, clip row, QUANT, pad B, the user's — and clip rows 4 and 5,
+    # which this table (today's session rows, theme-named) already holds
+    assert n == 16 + 24 + 1 + 1 + 1
     assert all(note.startswith("remapped") for note in t.notes)
     assert list(tmp_path.glob("bindings.json.bak-*"))
     assert [b.to_json() for b in Bindings.load(path, legacy_midi=None).bindings] == \
@@ -1506,7 +1790,13 @@ def test_a_user_row_on_a_moved_apc_note_is_kept():
     assert ("key:B", "view.points") in by and ("key:SHIFT+B", "lfo.trigger") in by
     assert not any(b.target == "tempo.tap" for b in out)
     assert not any(b.source == f"note:0:{apc40.N_QUANT}" for b in out)   # no QUANT row added
-    assert [n.split(" ")[0] for n in notes] == ["remapped", "added"] + ["added"] * 17  # + R, F-keys
+    # the free OVERDUB gets home (plan 15 WP2); + R and the F-keys (plan 11),
+    # + undo and redo and the Home key (plan 15)
+    assert (f"note:0:{apc40.N_OVERDUB}", "preset.home") in by
+    # + the clip-stop row's eight (plan 15 WP4), + the bank's sixteen pads
+    # on clip rows 4 and 5 (plan 19 WP2)
+    assert [n.split(" ")[0] for n in notes] == (["remapped", "added"]
+                                                + ["added"] * (17 + 4 + 2 + 8 + 16))
     # and a second pass has nothing to do
     again, notes2 = routing.remap_factory(out)
     assert notes2 == [] and [b.source for b in again] == [b.source for b in out]
@@ -1635,7 +1925,7 @@ def test_every_factory_preset_names_real_params_with_one_owner(tmp_path):
         if spec.values is not None:
             assert set(preset.generated(name)["values"]) <= ids, name
     assert set(preset.FACTORY_PRESETS) == {
-        "legacy6", "lfo-breathe", "hands-fx", "hands-pinch", "hands-play",
+        "legacy6", "lfo-breathe", "hands-fx", "hands-pinch", "hands-play", "hands-orbit",
         "party-tumble", "party-faces", "party-field", "party-wake", "party-trip",
         "party-acid", "party-mandala", "party-noita", "party-tracer"}
     assert (preset.FACTORY_DIR / "lfo-breathe.json").exists()
@@ -1787,3 +2077,288 @@ def test_router_describe_uses_the_adapters_names():
     assert router.describe(midi) == midi.describe() == "MIDI CC 48 ch1"
     key = Binding("key:SHIFT+B", "lfo.trigger", "fire")
     assert router.describe(key) == key.describe() == "key SHIFT+B"
+
+
+# ------------------------------- plan 19 WP2: an existing bindings.json, on a copy
+
+QUIET = ("bindings.json", "last_show", "windows.json")    # (the first also names its backups)
+
+
+def _bank_rows(table) -> dict[str, list]:
+    return {s: [b for b in table.bindings if b.source == s] for s in far_pads()}
+
+
+def _added(err: str, path, sources) -> bool:
+    """Did the launch say, on stderr and in order, that it added the bank
+    row on each of `sources` — and on no other pad? (`table.notes` holds
+    the rows only until the next edit, and the startup preset's load is
+    one: what stays for the session is stderr and `said`.)"""
+    lines = [ln for ln in err.splitlines() if "(the APC40 map of plan 19)" in ln]
+    return lines == [f"bindings: {path}: added {s} → preset.select (the APC40 map of plan 19)"
+                     for s in sources]
+
+
+def test_an_older_file_gets_the_bank_pads_with_a_backup(owner_home, capsys):
+    """The owner's files (on a copy): the first launch adds the bank's
+    sixteen pads of clip rows 4 and 5 to a `bindings.json` written before
+    them — exactly the factory rows, after the rows the file had, each of
+    which is as it was (the owner's own row too) — and the file as it was
+    is kept beside it first as `bindings.json.bak-v3`. Nothing else in the
+    home changes: no show, no preset."""
+    home = owner_home
+    path = bindings_path(home)
+    old = path.read_bytes()
+    doc = json.loads(old)
+    far = far_pads()
+    assert len(far) == 16 and not {row["source"] for row in doc["bindings"]} & set(far)
+    before = tree(home, but=QUIET)
+    capsys.readouterr()
+    r = boot_home(home)
+    t = r.router.table
+    err = capsys.readouterr().err
+    # the launch says what it did: each row on stderr, the sum on the SYSTEM page
+    assert _added(err, path, far)
+    assert t.error == "" and t.unbacked is None
+    assert f"bindings: updated {path} (16 rows changed)" in err
+    assert "backup: bindings.json kept as bindings.json.bak-v3 before the rewrite" in err
+    assert t.said == ("bindings.json updated (16 rows changed), the old file kept as "
+                      "bindings.json.bak-v3 — each change is on stderr")
+    assert [p.name for p in home.glob("bindings.json.bak-*")] == ["bindings.json.bak-v3"]
+    assert path.with_name("bindings.json.bak-v3").read_bytes() == old     # the file as it was
+    new = json.loads(path.read_text())
+    n = len(doc["bindings"])
+    assert new["bindings"][:n] == doc["bindings"]                 # every old row, in place
+    factory = {row["source"]: row for row in Bindings.factory().to_json()["bindings"]}
+    assert new["bindings"][n:] == [factory[s] for s in far]       # exactly the factory's sixteen
+    source, target = OWNER_ROW
+    assert [row["target"] for row in new["bindings"] if row["source"] == source] == [target]
+    assert {k: v for k, v in new.items() if k != "bindings"} \
+        == {k: v for k, v in doc.items() if k != "bindings"}
+    # in memory: each pad one invariant row that loads its slot
+    for k, s in enumerate(far, routing.F_KEYS):
+        (b,) = _bank_rows(t)[s]
+        assert (b.target, b.op, b.value, b.layer, b.feedback, b.on) \
+            == ("preset.select", "set", float(k), None, "led", apc40.GREEN)
+    # no show file, no preset, nothing else of the owner's was touched
+    assert tree(home, but=QUIET) == before
+
+
+def test_a_second_launch_writes_nothing_and_says_nothing(owner_home, capsys):
+    """Once: after the first launch every pad is taken, so a second finds
+    nothing to do — no note, no line on stderr, no second backup, and not
+    a byte or a tick of `bindings.json` or its backup changes."""
+    home = owner_home
+    boot_home(home)
+    after = tree(home, but=QUIET[1:])
+    assert "bindings.json" in after and "bindings.json.bak-v3" in after
+    capsys.readouterr()
+    r = boot_home(home)
+    err = capsys.readouterr().err
+    assert r.router.table.notes == [] and r.router.table.error == ""
+    assert r.router.table.said == ""
+    assert "bindings" not in err and "backup" not in err
+    assert tree(home, but=QUIET[1:]) == after
+    assert len(list(home.glob("bindings.json.bak-*"))) == 1
+
+
+def test_a_row_the_owner_put_on_a_bank_pad_is_left_alone(owner_home, capsys):
+    """A bank row is added only where nothing uses the pad. A session row
+    the owner wrote on one of the sixteen stays exactly as it is — that
+    pad does what the owner's row says, on both layers — no bank row joins
+    it, and the fifteen free pads get theirs. The slot behind that pad is
+    still reached from the PRESETS page (`load_slot`)."""
+    home = owner_home
+    path = bindings_path(home)
+    far = far_pads()
+    mine = {"source": far[3], "target": "view.faces", "op": "toggle", "feedback": "led"}
+    doc = json.loads(path.read_text())
+    doc["bindings"].append(mine)
+    path.write_text(routing.dumps_doc(doc))
+    old = path.read_bytes()
+    capsys.readouterr()
+    r = boot_home(home)
+    t, pr = r.router.table, r.lib.project
+    rest = [s for s in far if s != far[3]]
+    assert _added(capsys.readouterr().err, path, rest)
+    assert t.said.startswith("bindings.json updated (15 rows changed)")
+    rows = _bank_rows(t)
+    assert [(b.target, b.op, b.layer) for b in rows[far[3]]] == [("view.faces", "toggle", None)]
+    assert all([b.target for b in rows[s]] == ["preset.select"] for s in rest)
+    new = json.loads(path.read_text())
+    assert [row for row in new["bindings"] if row["source"] == far[3]] == [mine]
+    assert new["bindings"][:len(doc["bindings"])] == doc["bindings"]
+    assert path.with_name("bindings.json.bak-v3").read_bytes() == old
+    # the pad is the owner's on both layers; its slot loads from the page
+    n = apc40.BANK_PADS[routing.F_KEYS + 3][0]
+    for layer in ("preset", "global"):
+        t.set_layer(layer)
+        assert [b.target for b in t.dispatch("note", 3, n)] == ["view.faces"]
+    t.set_layer("preset")
+    pr.put_slot(routing.F_KEYS + 3, "WAKE")
+    pr.load_slot(routing.F_KEYS + 3)
+    assert r.lib.current("presets") == "WAKE" and pr.active == routing.F_KEYS + 3
+    # the owner's pad is invariant, so an old preset's shape row on it goes
+    # quietly like the other fifteen
+    pr.load_slot(0)
+    assert r.lib.current("presets") == "NIGHT ONE" and r.presets.desk_notes == []
+    # and a second launch leaves the owner's row and adds nothing
+    capsys.readouterr()
+    again = boot_home(home).router.table
+    assert again.notes == [] and "bindings" not in capsys.readouterr().err
+    assert [(b.target, b.layer) for b in _bank_rows(again)[far[3]]] == [("view.faces", None)]
+
+
+def test_a_remap_whose_backup_fails_writes_nothing(owner_home, capsys, monkeypatch):
+    """No backup, no rewrite (fork 12; every remap goes through this
+    branch): when the copy of `bindings.json` cannot be made the file is
+    left byte for byte as it was, the table in memory is the remapped one
+    (the pads work this session), and `error` and stderr say so. A later
+    write of the table (a Learn on a session row) tries the copy again
+    first and still writes nothing without it. The next launch tries the
+    lot again."""
+    home = owner_home
+    path = bindings_path(home)
+    old = (path.read_bytes(), path.stat().st_mtime_ns)
+    far = far_pads()
+
+    def as_it_was() -> bool:
+        return ((path.read_bytes(), path.stat().st_mtime_ns) == old
+                and not list(home.glob("bindings.json.bak-*")))
+
+    def refuse(p, data):
+        raise OSError("read-only")
+
+    capsys.readouterr()
+    with monkeypatch.context() as m:
+        m.setattr(routing, "_write_new", refuse)
+        r = boot_home(home)
+        t = r.router.table
+        err = capsys.readouterr().err
+        assert as_it_was()
+        assert t.error == routing.NOT_REWRITTEN == "bindings: not rewritten — no backup could be made"
+        assert t.unbacked == "3"
+        assert "backup: no backup of" in err and "updated" not in err
+        assert f"bindings: {path} not rewritten — no backup could be made" in err
+        assert t.said == ("bindings.json NOT rewritten (16 rows changed): no backup could be "
+                          "made — in memory only, the next launch tries again")
+        # in memory the table is the remapped one: the sixteen pads load their slots
+        assert _added(err, path, far)
+        assert all([b.target for b in rows] == ["preset.select"]
+                   for rows in _bank_rows(t).values())
+        # (a far slot of `mine` cannot be filled here: its first long write
+        # needs a backup of the show too, which this test makes impossible)
+        r.lib.project.bank[12] = "WAKE"
+        n, ch = apc40.BANK_PADS[12]
+        (b,) = t.dispatch("note", ch, n)
+        routing.act(r.reg, b)
+        assert r.lib.current("presets") == "WAKE"
+        r.lib.project.bank[12] = None
+        # a later write of the table: the copy is tried again, and nothing is written
+        t.write()
+        assert as_it_was() and t.error == routing.NOT_REWRITTEN
+        # the next launch, the copy still impossible: the same again
+        t2 = boot_home(home).router.table
+        assert as_it_was() and t2.error == routing.NOT_REWRITTEN and t2.unbacked == "3"
+        assert _added(capsys.readouterr().err, path, far)
+    # once the copy can be made, a write makes it first — the file as the owner had it
+    t.write()
+    assert t.error == "" and t.unbacked is None
+    assert t.said == "bindings.json updated, the old file kept as bindings.json.bak-v3"
+    assert path.with_name("bindings.json.bak-v3").read_bytes() == old[0]
+    assert len([row for row in json.loads(path.read_text())["bindings"]
+                if row["target"] == "preset.select"]) == 24
+    assert boot_home(home).router.table.notes == []
+
+
+def test_a_launch_whose_backup_fails_then_succeeds_rewrites_once(owner_home, monkeypatch,
+                                                                capsys):
+    """"The next launch tries again": a launch that could not back the
+    file up leaves it; the launch after it, able to, backs it up and
+    rewrites it as a first launch would."""
+    home = owner_home
+    path = bindings_path(home)
+    old = path.read_bytes()
+
+    def refuse(p, data):
+        raise OSError("disk full")
+
+    with monkeypatch.context() as m:
+        m.setattr(routing, "_write_new", refuse)
+        boot_home(home)
+    assert path.read_bytes() == old and not list(home.glob("bindings.json.bak-*"))
+    capsys.readouterr()
+    t = boot_home(home).router.table
+    assert _added(capsys.readouterr().err, path, far_pads()) and t.error == ""
+    assert path.with_name("bindings.json.bak-v3").read_bytes() == old
+    assert path.read_bytes() != old
+
+
+def test_the_old_shape_pads_are_swapped_and_a_changed_row_is_left_alone(tmp_path):
+    """A file from before plan 13's migration still holds the sixteen
+    shape pads of clip rows 4 and 5 as rows of its own. The exact old
+    factory rows become the bank's (`BANK_REMAP`: pad k of row 4 slot 9 +
+    k, of row 5 slot 17 + k), invariant, with the factory row's light; a
+    pad the owner re-aimed keeps its row and gets no bank row. Nothing of
+    rows 4–5 is carried into the migrated preset's desk. In a schema-3 file
+    from between plan 13's WP3 and WP5 the same rows say `"layer":
+    "preset"`: the swap clears it. An any-channel row the owner wrote on
+    one of the rows holds all eight of its pads."""
+    far = far_pads()
+    pads = old_shape_pads()
+    assert [p["source"] for p in pads] == far
+    assert set(routing.RETIRED_DESK_ROWS) == set(routing.BANK_REMAP) == {
+        (p["source"], "view.shape", "set", float(p.get("value", 1.0)))
+        for p in pads}
+    assert [routing.BANK_REMAP[(s, "view.shape", "set", float(k))]
+            for k, s in enumerate(far)] == [("preset.select", "set", float(8 + k))
+                                            for k in range(16)]
+    # the pre-plan-13 file: today's rows without layers, SHIFT or the global
+    # layer, and without the bank's far pads — the shape pads in their place
+    v2 = {"schema": routing.SCHEMA_V2, "profile": "apc40", "bindings": []}
+    for b in Bindings.factory().bindings:
+        if b.layer == "global" or b.target == routing.SHIFT_PARAM or b.source in far:
+            continue
+        row = b.to_json()
+        row.pop("layer", None)
+        v2["bindings"].append(row)
+    owner = dict(OWNER_PAD)
+    v2["bindings"] += [owner if p["source"] == owner["source"] else p for p in pads]
+    path = bindings_path(tmp_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(v2))
+    t = Bindings.load(path, legacy_midi=None)
+    swapped = [s for s in far if s != owner["source"]]
+    for k, s in enumerate(far, 8):
+        (b,) = [x for x in t.bindings if x.source == s]
+        if s == owner["source"]:                     # the owner's: kept, the pad's only row
+            assert (b.target, b.op, b.layer) == ("fx.acid.on", "toggle", None)
+        else:
+            assert (b.target, b.op, b.value, b.layer, b.feedback, b.on, b.off) \
+                == ("preset.select", "set", float(k), None, "led", apc40.GREEN, 0), s
+    assert [n for n in t.notes if "plan 19" in n] == [
+        f"remapped {s}: view.shape → preset.select (the APC40 map of plan 19)" for s in swapped]
+    # the file still holds a preset's part (the knobs' preset layer), so it is the
+    # migration's to write — and nothing of rows 4–5 is carried into that preset
+    assert t.carried is not None and json.loads(path.read_text()) == v2
+    assert not [d for d in t.carried.desk if d["source"] in far]
+    assert not [b for b in t.desk() if b.source in far]
+    # idempotent
+    again, notes = routing.remap_factory(t.bindings)
+    assert notes == [] and len(again) == len(t.bindings)
+    # a schema-3 file from between plan 13's WP3 and WP5: the rows are on the preset layer
+    mid = [Binding.from_json({**p, "layer": "preset"}) for p in pads]
+    out, notes = routing.remap_factory(mid)
+    assert len(notes) >= 16 and all(n.startswith("remapped") for n in notes[:16])
+    by = {b.source: b for b in out}
+    assert all((by[s].target, by[s].value, by[s].layer) == ("preset.select", float(k), None)
+               for k, s in enumerate(far, 8))
+    assert not any("plan 19" in n for n in notes[16:])           # none added on top
+    # a re-aimed pad on the preset layer in such a file: it keeps the pad
+    out, notes = routing.remap_factory([Binding.from_json({**owner, "layer": "preset"})])
+    assert [b.target for b in out if b.source == owner["source"]] == ["fx.acid.on"]
+    assert len([n for n in notes if "plan 19" in n]) == 15
+    # an any-channel row on clip row 5 holds every pad of it
+    wild = Binding(f"note:*:{apc40.N_CLIP[4]}", "view.faces", "toggle", feedback="led")
+    out, notes = routing.remap_factory([wild])
+    added = [b.source for b in out if b.target == "preset.select"]
+    assert added == far[:8] and wild in out

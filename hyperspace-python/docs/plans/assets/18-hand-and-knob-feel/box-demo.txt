@@ -1,0 +1,58 @@
+Hyperspace — the interaction box, headless (tools/box_demo.py; plan 18 WP1)
+SYNTHETIC HANDS (tests/fake_hands.py), not the camera: nothing here was seen by a tracker.
+home: <home>  (a temp folder made by this script)
+calibration file: <home>/hands.json  ([hands] calibration, as the app resolves it)
+
+1. An old hands.json (schema 1, no box) is loaded and left alone
+    schema in the file: hyperspace.hands/1   box loaded: None
+    right.y range from the file: 108.25 … 352.0 mm
+    a right palm at (600, 900, 500) mm, far past every range: status L● R●   (in, as before this plan)
+    after construction and 120 frames: sha256 400e0398b1d8dbc1 -> 400e0398b1d8dbc1, 214 -> 214 bytes, bytes equal: True, mtime unchanged: True
+    files: hands.json
+
+2. A 20 s sweep of both hands sets the box (the HANDS page's calibrate button)
+    note: calibrated 6 axes, 6 not reached · box 419 × 290 × 270 mm · the old file kept as hands.json.bak-v1
+    box.x:   -209.5 …   209.5 mm
+    box.y:     80.2 …   369.7 mm
+    box.z:   -134.8 …   134.8 mm
+    (the palms' 2nd–98th percentile plus 40 mm; x symmetric about the camera)
+    files: hands.json, hands.json.bak-v1
+    hands.json.bak-v1 equals the old file: True   hands.json now starts: "schema": "hyperspace.hands/2",
+    the box as saved: { "x": [ -209.494, 209.494 ], "y": [ 80.157, 369.703 ], "z": [ -134.848, 134.802 ] }
+
+3. The right hand walks out through the x face (209.5 mm) and back, 4 mm a frame
+    one row: hand:right.y positions view.inst_amp; its base is amp 0.25; the hand is held at 300 mm high; catch 150 ms
+    a hand that is in leaves 15 mm past the face (224.5); one that is out comes in at the face
+      frame   palm x    status   lane right.y   view.inst_amp   row
+          0    179.5    L○ R●       0.858       amp 0.86        holds it
+        …
+          9    215.5    L○ R●       0.858       amp 0.86        holds it
+         10    219.5    L○ R●       0.858       amp 0.86        holds it
+         11    223.5    L○ R●       0.858       amp 0.86        holds it
+         12    227.5    L○ R◌       NaN         amp 0.25        let go: the base
+         13    231.5    L○ R◌       NaN         amp 0.25        let go: the base
+         14    235.5    L○ R◌       NaN         amp 0.25        let go: the base
+         15    239.5    L○ R◌       NaN         amp 0.25        let go: the base
+         16    243.5    L○ R◌       NaN         amp 0.25        let go: the base
+         17    247.5    L○ R◌       NaN         amp 0.25        let go: the base
+        …
+         33    219.5    L○ R◌       NaN         amp 0.25        let go: the base
+         34    215.5    L○ R◌       NaN         amp 0.25        let go: the base
+         35    211.5    L○ R◌       NaN         amp 0.25        let go: the base
+         36    207.5    L○ R●       0.134       amp 0.13        holds it
+         37    203.5    L○ R●       0.336       amp 0.34        holds it
+         38    199.5    L○ R●       0.508       amp 0.51        holds it
+         39    195.5    L○ R●       0.633       amp 0.63        holds it
+         40    191.5    L○ R●       0.716       amp 0.72        holds it
+         41    187.5    L○ R●       0.770       amp 0.77        holds it
+        …
+         43    179.5    L○ R●       0.825       amp 0.83        holds it
+
+4. Another sweep, then reset ranges
+    note: calibrated 6 axes, 6 not reached · box 419 × 290 × 270 mm
+    files: hands.json, hands.json.bak-v1   (no second copy: the file was already schema 2)
+    hands.json.bak-v1 still equals the old file: True
+    reset ranges -> note: ranges back to the defaults, box open
+    box in memory: None   in the file: null
+    the far right palm again: status L● R●
+    files: hands.json, hands.json.bak-v1

@@ -10,18 +10,28 @@ as the bank of names.
 
 import itertools
 import json
+import math
 import re
 from types import SimpleNamespace
 
 import pytest
-from conftest import opened_last
+from conftest import (
+    OWNER_KNOB,
+    OWNER_PAD,
+    boot_home,
+    far_pads,
+    old_shape_pads,
+    opened_last,
+)
+from test_plan12_presets import DictSource, NullOut, feats, hold, offset
 
 from hyperspace import apc40, lfo, preset, routing, tempo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
 from hyperspace.fx import FxState
-from hyperspace.library import FACTORY, SLOTS, Library, LibraryError
+from hyperspace.hands import HandSettings, HandsIO
+from hyperspace.library import F_KEYS, FACTORY, SLOTS, Library, LibraryError, bank_doc
 from hyperspace.lookback import DreamState
 from hyperspace.params import PERFORMANCE_GROUPS, build_registry, part_of
 from hyperspace.preset import Presets
@@ -48,8 +58,12 @@ def boot(home, show: str | None = "house"):
     clock = tempo.Clock(now=lambda: 0.0)
     tempo.register(reg, clock)
     lfo.register(reg, lfo.LFOs(), clock)
+    # the table before attach, as app.main reads it: the desk's session
+    # param (`desk.slew`) is the table's and exists when the show lands
+    table = Bindings.load(bindings_path(home), legacy_midi=None)
+    routing.register_desk(reg, table)
     lib.attach(reg)
-    router = Router(reg, Bindings.load(bindings_path(home), legacy_midi=None))
+    router = Router(reg, table)
     presets = Presets(lib, reg, router)
     preset.migrate_home(lib, router)          # plan 13 §6: nothing to do on a fresh home
     lib.project.load_startup()
@@ -196,21 +210,46 @@ def test_the_home_is_rewritten_in_seconds_once_with_backups(tmp_path):
 
 def test_a_preset_load_never_touches_a_session_param(rig):
     """Plan 13 §10 exit 2: a tapped BPM survives TRIP, and so do the drive,
-    an analyzer strip and the band scene, even when the file names them."""
+    an analyzer strip and the band scene, even when the file names them —
+    and the master dim (plan 15 WP3), through a preset load and a show load.
+    Knob smoothing too (`desk.slew`, plan 18 WP2): no preset moves it, a
+    show that does not name it leaves it, and a show save and load
+    round-trips it."""
+    from hyperspace.overlay import Output
+
     reg, control = rig.reg, rig.control
+    out = Output(None, None)
+    out.register(reg)
+    reg["output.dim"].set(0.4)
+    assert part_of(reg["output.dim"]) == "session"
     reg["tempo.bpm"].set(100.0)
     reg["master.gain"].set(2.0)
     reg["band.0.atk"].set(0.3)
+    slew = reg["desk.slew"]
+    slew.set(0.12)
+    assert part_of(slew) == "session" and rig.router.table.slew == 0.12
     scene = control.scene
-    put(rig.home, "FAST", values={"view.shape": 5, "tempo.bpm": 140.0,
-                                  "scene.select": (scene + 1) % 3})
+    put(rig.home, "FAST", values={"view.shape": 5, "tempo.bpm": 140.0, "desk.slew": 0.2,
+                                  "scene.select": (scene + 1) % 3, "output.dim": 1.0})
     before = reg.snapshot(part="session")
+    assert before["desk.slew"] == 0.12
     rig.presets.load("FAST")
+    assert slew.value == 0.12 and "desk.slew is the session's, ignored" in rig.presets.notes
     assert rig.view.shape == 5
     assert rig.clock.bpm == 100.0 and rig.chain.gain == 2.0 and rig.chain.params[0].atk == 0.3
     assert control.scene == scene and reg.snapshot(part="session") == before
+    assert out.dim == 0.4 and "output.dim is the session's, ignored" in rig.presets.notes
     rig.presets.load("TRIP")                          # the factory party preset, too
     assert rig.clock.bpm == 100.0 and reg.snapshot(part="session") == before
+    assert out.dim == 0.4
+    rig.lib.project.load("party")                     # a show load, startup preset and all
+    assert rig.lib.current("presets") == "TUMBLE" and out.dim == 0.4
+    assert slew.value == 0.12                         # the factory show names no smoothing
+    rig.lib.project.save("mine")                      # a show keeps the number
+    assert rig.lib.project.session["desk.slew"] == 0.12
+    slew.set(0.03)
+    rig.lib.project.load("mine")
+    assert slew.value == 0.12 and not rig.lib.project.is_dirty()
 
 
 def test_session_ids_in_a_preset_are_noted_and_ignored(rig):
@@ -299,11 +338,43 @@ def test_a_preset_carries_the_macros(rig):
 
 # ---------------------------------------------------------------- the bank
 
+def test_a_step_or_cycle_on_the_bank_skips_empty_slots(rig):
+    """Audit R14: `preset.select` has twenty-four choices and most are
+    empty. A learned step or toggle row walks the filled slots only: a step
+    stops at the last filled one, a cycle wraps to the first; nothing ever
+    lands on an empty slot. Setting a slot outright is unchanged."""
+    pr, select = rig.lib.project, rig.reg["preset.select"]
+    pr.put_slot(12, pr.bank[2])                   # F1–F8 filled, and slot 13
+    filled = [k for k in range(SLOTS) if select.has(k)]
+    assert filled == [*range(F_KEYS), 12]
+    select.set(6)
+    select.step(1)
+    assert select.value == 7
+    select.step(1)
+    assert select.value == 12                     # over slots 9–12, not onto slot 9
+    select.step(1)
+    assert select.value == 12                     # the last filled: a step stays
+    select.cycle(1)
+    assert select.value == 0                      # a cycle wraps to the first filled
+    select.cycle(-1)
+    assert select.value == 12
+    select.step(-2)
+    assert select.value == 6
+    select.step(3)
+    assert select.value == 12
+    assert pr.active == 12 and rig.lib.current("presets") == pr.bank[12]
+
+
 def test_the_bank_names_the_house_presets(rig):
     pr = rig.lib.project
-    assert len(pr.bank) == SLOTS and pr.bank[0] == "BIG BLUE WAVE"
-    assert len(set(pr.bank)) == SLOTS and all(rig.lib.is_factory("presets", n) for n in pr.bank)
-    assert rig.reg["preset.select"].names == pr.bank
+    # plan 19 WP1: twenty-four slots; the house show fills the F-keys' eight
+    assert len(pr.bank) == SLOTS == 24 and pr.bank[0] == "BIG BLUE WAVE"
+    eight = pr.bank[:F_KEYS]
+    assert len(set(eight)) == F_KEYS and all(rig.lib.is_factory("presets", n) for n in eight)
+    assert pr.bank[F_KEYS:] == [None] * (SLOTS - F_KEYS)
+    select = rig.reg["preset.select"]
+    assert select.names == eight + [f"SLOT {k + 1}" for k in range(F_KEYS, SLOTS)]
+    assert [select.has(k) for k in range(SLOTS)] == [True] * F_KEYS + [False] * (SLOTS - F_KEYS)
 
 
 def test_a_slot_names_a_preset_file(rig):
@@ -331,13 +402,18 @@ def test_cycle_flips_through_the_filled_slots(rig):
     assert pr.active == 1
     pr.cycle()
     assert pr.active == 3                                  # the empty slot is skipped
-    for _ in range(SLOTS - 4):
+    for _ in range(F_KEYS - 4):                            # the house show fills eight
         pr.cycle()
-    assert pr.active == SLOTS - 1
+    assert pr.active == F_KEYS - 1
     pr.cycle()
-    assert pr.active == 0                                  # wraps
+    assert pr.active == 0                                  # wraps past the empty far slots
     pr.cycle(-1)
-    assert pr.active == SLOTS - 1                          # and backwards
+    assert pr.active == F_KEYS - 1                         # and backwards
+    pr.put_slot(19, "WAKE")                                # a far slot is in the round
+    pr.cycle()
+    assert pr.active == 19 and rig.lib.current("presets") == "WAKE"
+    pr.cycle()
+    assert pr.active == 0
 
 
 def test_shift_f_saves_the_live_state_as_the_slots_preset(rig):
@@ -358,7 +434,8 @@ def test_shift_f_saves_the_live_state_as_the_slots_preset(rig):
     assert "tempo.bpm" not in user["values"] and "master.gain" not in user["values"]
     assert pr.bank[2] == "STROBE CAGE" and pr.active == 2
     doc = json.loads((home / "projects" / "house.hyp.json").read_text())
-    assert doc["schema"] == "hyperspace.project/2" and doc["bank"] == pr.bank
+    assert doc["schema"] == "hyperspace.project/2"
+    assert doc["bank"] == pr.bank[:F_KEYS] == bank_doc(pr.bank)     # eight in the file
     # an empty slot: a new name, made unique against what is there
     put(home, "PRESET 8")
     pr.bank[6] = pr.bank[7] = None
@@ -366,7 +443,8 @@ def test_shift_f_saves_the_live_state_as_the_slots_preset(rig):
     reg["preset.save.7"].fire()
     assert pr.bank[6] == "PRESET 7" and pr.bank[7] == "PRESET 8 (2)"
     assert (home / "presets" / "preset-7.json").is_file()
-    assert json.loads((home / "projects" / "house.hyp.json").read_text())["bank"] == pr.bank
+    assert (json.loads((home / "projects" / "house.hyp.json").read_text())["bank"]
+            == bank_doc(pr.bank))
     assert not pr.is_dirty() and pr.bank_error == ""
 
 
@@ -395,6 +473,100 @@ def test_the_startup_preset_loads_on_launch(tmp_path):
     assert r2.lib.current("presets") is None and r2.lib.project.active == -1
     r2.reg["preset.load.2"].fire()                          # and the bank still works
     assert r2.lib.current("presets") == "STROBE CAGE"
+
+
+# ---------------------------------------------------------------- home (plan 15 WP2)
+
+def test_home_loads_what_the_show_starts_on(rig):
+    """Decision 27: `preset.home` loads the show's "starts on" preset —
+    from another preset, with unsaved edits, and it is a load like any
+    other (D2): the values, the routes, the desk, the bank's light, a
+    clean dot. A "starts on" picked later is where home goes next."""
+    reg, lib, proj = rig.reg, rig.lib, rig.lib.project
+    home = reg["preset.home"]
+    assert (home.group, home.label, home.modulatable, home.persist) \
+        == ("preset", "Home", True, False)
+    assert proj.startup == "BIG BLUE WAVE" and home.get() is True      # lit: there is one
+    launched = (reg.snapshot(part="performance"),
+                [b.to_json() for b in rig.router.table.routes()],
+                [b.to_json() for b in rig.router.table.desk()])
+    reg["preset.load.2"].fire()
+    reg["view.bright"].set_value(reg["view.bright"].value + 1.0)       # an unsaved edit
+    assert lib.current("presets") == "STROBE CAGE" and lib.is_dirty("presets")
+    assert proj.active == 2 and rig.view.shape != 17
+    home.fire()
+    assert lib.current("presets") == "BIG BLUE WAVE" and not lib.is_dirty("presets")
+    assert proj.active == 0 and rig.view.shape == 17 and not lib.warning
+    assert (reg.snapshot(part="performance"),
+            [b.to_json() for b in rig.router.table.routes()],
+            [b.to_json() for b in rig.router.table.desk()]) == launched
+    # home follows "starts on": no pointer of its own
+    proj.startup = "STROBE CAGE"
+    home.fire()
+    assert lib.current("presets") == "STROBE CAGE" and proj.active == 2
+    # a "starts on" whose file is gone says so, as a launch does, and loads nothing
+    proj.startup = "GONE"
+    home.fire()
+    assert lib.warning == "startup: no preset 'GONE'"
+    assert lib.current("presets") == "STROBE CAGE"
+
+
+def test_home_with_no_starts_on_says_so_and_loads_nothing(rig):
+    reg, lib, proj = rig.reg, rig.lib, rig.lib.project
+    reg["preset.load.2"].fire()
+    reg["view.bright"].set_value(reg["view.bright"].value + 1.0)
+    before = reg.snapshot(part="performance")
+    proj.startup = None
+    assert reg["preset.home"].get() is False                           # dark: nothing to go to
+    reg["preset.home"].fire()
+    assert lib.warning == ("home: this show names no 'starts on' preset — "
+                           "pick one on the PRESETS page")
+    assert lib.current("presets") == "STROBE CAGE" and lib.is_dirty("presets")
+    assert reg.snapshot(part="performance") == before and proj.active == 2
+    proj.startup = "BIG BLUE WAVE"                                     # picked: home goes there,
+    reg["preset.home"].fire()                                          # and the note is gone
+    assert lib.current("presets") == "BIG BLUE WAVE" and lib.warning == ""
+
+
+def test_home_is_one_undo_step(tmp_path):
+    """Home is one step under its own label — the push `Presets.load_doc`
+    makes inside it is the same frame's and adds none — and one undo
+    brings the look that was up back whole, its unsaved edit included;
+    redo goes home again. A home that loads nothing leaves no step."""
+    from test_undo import boot as undo_boot
+    from test_undo import frames, labels, look, same_look, settle
+
+    r = undo_boot(tmp_path / "home")                   # the party show: starts on TUMBLE
+    reg, lib, proj = r.reg, r.lib, r.lib.project
+    reg["preset.load.4"].fire()                        # TRIP
+    settle(r)
+    reg["view.bright"].step(7)                         # an unsaved edit of TRIP
+    settle(r)
+    trip = look(r)
+    assert lib.current("presets") == "TRIP" and lib.is_dirty("presets")
+    r.undo.clear()
+    reg["preset.home"].fire()
+    assert len(r.undo.stack) == 1                      # at once: the inner push opened none
+    settle(r)
+    assert labels(r) == ["home → TUMBLE"]
+    assert lib.current("presets") == "TUMBLE" and proj.active == 0
+    tumble = look(r)
+    assert not same_look(tumble, trip)
+    assert r.undo.undo() and r.undo.status == "undid home → TUMBLE"
+    assert same_look(look(r), trip)
+    assert lib.current("presets") == "TRIP" and lib.is_dirty("presets") and proj.active == 4
+    frames(r, 5)
+    assert same_look(look(r), trip) and r.undo.stack == []
+    assert r.undo.redo() and r.undo.status == "redid home → TUMBLE"
+    assert same_look(look(r), tumble) and lib.current("presets") == "TUMBLE"
+    settle(r)
+    # nothing to go home to, or a "starts on" with no file: no step
+    r.undo.clear()
+    for name in (None, "GONE"):
+        proj.startup = name
+        reg["preset.home"].fire()
+        settle(r)
+        assert r.undo.stack == [] and lib.current("presets") == "TUMBLE"
 
 
 # ---------------------------------------------------------------- module labels
@@ -623,6 +795,10 @@ def test_every_factory_presets_desk_is_the_generators():
     factory layer)."""
     desk = preset.desk_json(preset.fresh_desk())
     assert desk and all("layer" not in d for d in desk)
+    # plan 19 WP2: the sixteen shape pads left the fresh desk (42 rows → 26)
+    # and no factory file maps a pad of clip rows 4 or 5 — they are the bank's;
+    # plan 19 WP3: SCENE on device knobs 1–4 (26 → 30)
+    assert len(desk) == 30 and not _on_bank_rows(desk)
     from_map = []
     for d in apc40.DEFAULT_MAP:
         if d.get("layer") == "preset":
@@ -631,7 +807,8 @@ def test_every_factory_presets_desk_is_the_generators():
             from_map.append(row)
     assert desk == from_map
     paths = sorted(preset.FACTORY_DIR.glob("*.json"))
-    assert len(paths) == 22                  # 8 house, 9 party, 5 made from routing presets
+    # 8 house, 9 party, 5 made from routing presets, plan 18's hands-orbit
+    assert len(paths) == 23
     for path in paths:
         doc = json.loads(path.read_text())
         want = expected_desk(path.stem)
@@ -639,19 +816,47 @@ def test_every_factory_presets_desk_is_the_generators():
             assert "desk" not in doc, path.name
         else:
             assert doc["desk"] == want, path.name
+            assert not _on_bank_rows(doc["desk"]), path.name
     knobs = [f"cc:*:{0x10 + k}" for k in range(8)]
-    for slug, targets in (("party-wake", preset.WAKE_KNOBS), ("party-trip", preset.TRIP_KNOBS),
-                          ("party-acid", preset.ACID_KNOBS),
-                          ("party-mandala", preset.MANDALA_KNOBS),
-                          ("party-noita", preset.NOITA_KNOBS),
-                          ("party-tracer", preset.TRACER_KNOBS)):
-        rows = json.loads((preset.FACTORY_DIR / f"{slug}.json").read_text())["desk"]
-        assert rows[:len(desk)] == desk
-        assert [(d["source"], d["target"], d["op"], d["feedback"]) for d in rows[len(desk):]] \
-            == [(k, t, "abs", "ring") for k, t in zip(knobs, targets, strict=True)]
-    breathe = json.loads((preset.FACTORY_DIR / "lfo-breathe.json").read_text())["desk"]
-    assert breathe[-1] == {"source": "cc:*:16", "target": "macro.1", "op": "abs",
-                           "feedback": "ring"}
+    rest = [d for d in desk if d["source"] not in knobs]       # the fresh layer less its knobs
+    # plan 19 WP3: every factory preset's device knobs, D1–D8, as the plan's
+    # table has them (None: dark). A file with no `desk` key gets the fresh layer
+    scene = ("view.depth4", "camera.yaw", "camera.pitch", "view.pattern", None, None, None, None)
+    table = {
+        **{s: scene for s in ("big-blue-wave", "ember-orbit", "hex-engine", "inverse-halo",
+                              "plasma-heart", "spiral-silk", "strobe-cage", "woven-lattice",
+                              "party-tumble", "party-faces", "party-field",
+                              "legacy6", "hands-play", "hands-orbit")},
+        "hands-fx": ("fx.mix", "fx.acid.bend", "fx.acid.twist", "fx.acid.reach",
+                     "fx.acid.breathe", "fx.acid.speed", "view.depth4", "camera.yaw"),
+        "hands-pinch": ("fx.mix", "fx.huecycle.paint", "fx.huecycle.spread", "view.depth4",
+                        "camera.yaw", "camera.pitch", "view.pattern", None),
+        "lfo-breathe": ("macro.1", "fx.mix", "fx.plasma.level", "lfo.1.depth", "view.depth4",
+                        "camera.yaw", "camera.pitch", None),
+        "party-wake": preset.WAKE_KNOBS, "party-trip": preset.TRIP_KNOBS,
+        "party-acid": preset.ACID_KNOBS, "party-mandala": preset.MANDALA_KNOBS,
+        "party-noita": preset.NOITA_KNOBS, "party-tracer": preset.TRACER_KNOBS}
+    assert set(table) == {p.stem for p in paths}
+    # the six that already had eight are as plan 12 §6 and plan 14 left them
+    assert preset.WAKE_KNOBS[:2] == ("dream.echo_mix", "dream.fade")
+    assert preset.TRIP_KNOBS[0] == preset.ACID_KNOBS[0] == "fx.mix"
+    assert preset.TRACER_KNOBS[-1] == "view.depth4"
+    inv = routing.Bindings.factory()
+    for path in paths:
+        doc = json.loads(path.read_text())
+        rows = doc.get("desk") or desk
+        dial = dict.fromkeys(knobs)
+        for d in rows:
+            if d["source"] in knobs:
+                assert (d["op"], d["feedback"]) == ("abs", "ring"), path.name
+                dial[d["source"]] = d["target"]
+        assert tuple(dial.values()) == tuple(table[path.stem]), path.name
+        # the rest is the fresh layer's, in its order, the knobs after it
+        assert [d for d in rows if d["source"] not in knobs] == rest, path.name
+        # one row per control, and none on an invariant one
+        assert len({d["source"] for d in rows}) == len(rows), path.name
+        assert not [d for d in rows
+                    if inv.is_invariant(Binding.from_json({**d, "layer": "preset"}))], path.name
     for slug in ("party-tumble", "party-faces", "party-field"):
         assert json.loads((preset.FACTORY_DIR / f"{slug}.json").read_text())["desk"] == desk
 
@@ -706,7 +911,8 @@ def test_the_routing_presets_are_full_factory_presets(rig):
     (its values, else the defaults) and replaces every route; nothing is
     left under library/bindings/ and no `bindings` group is listed."""
     assert not (FACTORY / "bindings").exists() and "bindings" not in rig.lib.groups()
-    for name in ("legacy6", "lfo-breathe", "hands-fx", "hands-pinch", "hands-play"):
+    for name in ("legacy6", "lfo-breathe", "hands-fx", "hands-pinch", "hands-play",
+                 "hands-orbit"):                         # plan 18 WP4's, made the same way
         assert rig.lib.is_factory("presets", name), name
         doc = json.loads((preset.FACTORY_DIR / f"{name}.json").read_text())
         assert doc == preset.generated(name), name
@@ -787,3 +993,699 @@ def test_a_load_tells_the_listeners_its_name(rig):
     assert rig.lib.warning.startswith("preset listener: ZeroDivisionError")
     assert not rig.presets.note.startswith("preset listener")   # the preset's own note
 
+
+# ------------------------------------------- plan 18 WP4: two hands on the camera
+
+ORBIT = "hands-orbit"
+ORBIT_ROWS = [("hand:right.x", "camera.yaw", 0.5), ("hand:right.pitch", "camera.pitch", 0.5),
+              ("hand:left.x", "camera.pan.x", 0.1), ("hand:left.z", "camera.pan.y", 0.1),
+              ("hand:left.y", "camera.zoom", 0.12)]      # not the plan's 0.3: 7.4× blacked the frame
+# a camera the mouse moved before the hands came in: a scene-setter's bases
+MOUSE = {"camera.yaw": 0.5, "camera.pitch": -0.2, "camera.zoom": 1.6,
+         "camera.pan.x": 120.0, "camera.pan.y": -60.0}
+
+
+def orbit(rig, mouse: dict | None = None):
+    """`hands-orbit` loaded through the one loader, the camera then moved as
+    the mouse moves it (bases), and two fake hands on the real hand chain
+    (test_plan12_presets' harness: default feel, default ranges, no box)."""
+    assert rig.presets.load(ORBIT) == [] and rig.presets.notes == []
+    assert rig.router.table.dropped == []
+    for pid, v in (mouse or {}).items():
+        rig.reg[pid].set(v)
+    src = DictSource()
+    io = HandsIO(HandSettings.from_config(), {"enabled": True}, source=src, out=NullOut(),
+                 clock=lambda: src.t)
+    return src, io
+
+
+def camera(rig) -> dict[str, float]:
+    """The five camera params as the picture has them (effective)."""
+    return {pid: rig.reg[pid].value for pid in MOUSE}
+
+
+def test_hands_orbit_is_five_pushes_onto_the_camera(rig):
+    """Plan 18 WP4 (fork 17 (a)): `hands-orbit` is five rows and nothing
+    else — each a push, from a default hand axis named by axis, onto a
+    real `camera.*` param, one performer per target, no pinch gate, no
+    values, no desk key, no macro. It is a factory preset in the list, on
+    no show's F-key; its file is the generator's; loaded on the default
+    rig its five routes all stand."""
+    routes = preset.hands_orbit_routes()
+    assert [(b.source, b.target, b.value) for b in routes] == ORBIT_ROWS
+    axes = {preset.hand(s, a) for s in "LR" for a in preset.HAND_AXES}
+    for b in routes:
+        p = rig.reg[b.target]
+        assert b.target.startswith("camera.") and p.modulatable, b
+        assert b.op == "push" and b.source in axes and b.when is None and b.scale is None, b
+        assert b.is_performer and b.rest is None, b      # from the axis's own rest
+    assert len({b.target for b in routes}) == len({b.source for b in routes}) == 5
+    assert routing.referee(routes)[1] == []
+    spec = preset.FACTORY_PRESETS[ORBIT]
+    assert spec.routes is preset.hands_orbit_routes and spec.desk is None
+    doc = json.loads((preset.FACTORY_DIR / f"{ORBIT}.json").read_text())
+    assert doc == preset.generated(ORBIT)
+    assert doc["values"] == {} and doc["macros"] == {} and "desk" not in doc
+    assert rig.lib.is_factory("presets", ORBIT) and ORBIT in rig.lib.list("presets")
+    for show in (FACTORY / "projects").glob("*.hyp.json"):
+        proj = json.loads(show.read_text())
+        # a bank names presets by name, in whatever case the show wrote it
+        named = {preset.slug(n) for n in [*proj["bank"], proj.get("startup")] if n}
+        assert named and preset.slug(doc["name"]) == ORBIT and ORBIT not in named, show.name
+    orbit(rig)
+    assert [b.to_json() for b in rig.router.table.routes()] == doc["routes"]
+    assert [rig.router.table.owner(t).source for _, t, _ in ORBIT_ROWS] == \
+        [s for s, _, _ in ORBIT_ROWS]
+
+
+def test_an_absent_or_level_hand_leaves_the_orbit_camera_alone(rig):
+    """Plan 12's rule for a hand row: no hand, and both hands in at rest
+    (level, centred, at the bottom of the height range), add nothing — the
+    camera stays exactly where the mouse left it, and the bases are never
+    written."""
+    src, io = orbit(rig, MOUSE)
+    hold(rig, rig.router, src, io, {}, 10)
+    assert camera(rig) == pytest.approx(MOUSE, abs=1e-9)
+    assert not any(rig.reg[pid].modulated for pid in MOUSE)
+    hold(rig, rig.router, src, io, {"left": feats("left"), "right": feats("right")})
+    assert camera(rig) == pytest.approx(MOUSE, abs=1e-6)
+    for pid, left_at in MOUSE.items():
+        assert offset(rig.reg[pid]) == pytest.approx(0, abs=1e-6), pid
+        assert rig.reg[pid].base == pytest.approx(left_at), pid
+    # one hand alone at rest is the same
+    for side in ("left", "right"):
+        hold(rig, rig.router, src, io, {side: feats(side)})
+        assert camera(rig) == pytest.approx(MOUSE, abs=1e-6), side
+
+
+def test_each_orbit_axis_moves_its_camera_param_as_its_row_says(tmp_path):
+    """Each row's axis swept across its range from the default camera: at
+    rest the param is its base; the ends are what the depth says — the
+    yaw a quarter turn each way, the pitch ±44° (a quarter of its ±1.55
+    range), each pan ±400 px, the zoom up from 1× to 800^0.12 = 2.23× at the
+    top and never below the base; the move is monotonic; no other camera
+    param moves; the hand leaving brings the base back."""
+    ends = {"camera.yaw": (-math.pi / 2, math.pi / 2),
+            "camera.pitch": (-0.25 * 3.1, 0.25 * 3.1),
+            "camera.pan.x": (-400.0, 400.0), "camera.pan.y": (-400.0, 400.0),
+            "camera.zoom": (1.0, 2.23)}                  # 800 ** 0.12, as measured
+    assert math.degrees(ends["camera.pitch"][1]) == pytest.approx(44.4, abs=0.05)
+    for k, (source, target, depth) in enumerate(ORBIT_ROWS):
+        side, axis = source.split(":")[1].split(".")
+        seen = []
+        for u in (0.0, 0.25, 0.5, 0.75, 1.0):
+            r = boot(tmp_path / f"{k}-{u}")
+            src, io = orbit(r)
+            p = r.reg[target]
+            base = camera(r)
+            hold(r, r.router, src, io, {side: feats(side, **{axis: u})})
+            seen.append(p.value)
+            assert offset(p) == pytest.approx(depth * (u - (0.0 if axis == "y" else 0.5)),
+                                              abs=0.02), (source, u)
+            for other in MOUSE:
+                if other != target:
+                    assert r.reg[other].value == pytest.approx(base[other], abs=1e-6), \
+                        (source, u, other)
+                    assert offset(r.reg[other]) == pytest.approx(0, abs=1e-6), (source, other)
+        rest = 0 if axis == "y" else 2
+        assert seen[rest] == pytest.approx(base[target], abs=1e-6), (source, seen)
+        tol = 2e-3 * (p.hi - p.lo)
+        assert seen[0] == pytest.approx(ends[target][0], abs=tol), (source, seen)
+        assert seen[-1] == pytest.approx(ends[target][1], rel=0.02, abs=tol), (source, seen)
+        assert all(b > a - 1e-9 for a, b in itertools.pairwise(seen)), (source, seen)
+        assert seen[-1] > seen[0]
+        hold(r, r.router, src, io, {})                   # the hand at u = 1 leaves
+        assert p.value == pytest.approx(base[target], abs=tol) and not p.modulated, source
+        assert p.base == pytest.approx(base[target]), source
+
+
+def test_the_orbit_hands_leaving_return_the_camera_to_where_the_mouse_left_it(rig):
+    """Both hands at an end of every axis push all five params off a camera
+    the mouse had moved; both hands out, each is back on the mouse's value
+    and no row holds it. The mouse's bases were never written by a hand."""
+    src, io = orbit(rig, MOUSE)
+    hands = {"right": feats("right", x=1.0, pitch=1.0),
+             "left": feats("left", x=0.0, z=1.0, y=1.0)}
+    hold(rig, rig.router, src, io, hands)
+    played = camera(rig)
+    for pid, sign in (("camera.yaw", 1), ("camera.pitch", 1), ("camera.pan.x", -1),
+                      ("camera.pan.y", 1), ("camera.zoom", 1)):
+        assert sign * (played[pid] - MOUSE[pid]) > 0.1, (pid, played)
+        assert rig.reg[pid].modulated and rig.reg[pid].base == pytest.approx(MOUSE[pid]), pid
+    assert played["camera.yaw"] == pytest.approx(MOUSE["camera.yaw"] + math.pi / 2, abs=0.02)
+    hold(rig, rig.router, src, io, {})
+    assert camera(rig) == pytest.approx(MOUSE, abs=1e-3)
+    assert not any(rig.reg[pid].modulated for pid in MOUSE)
+
+
+
+# ------------------------------------------- plan 15 WP4: save-as from the desk
+
+def fill_far(pr, name: str = "WAKE") -> None:
+    """Every empty slot past the F-keys pointed at `name`: a bank with no
+    room there (the show is written, as any slot change writes it)."""
+    for k in range(F_KEYS, len(pr.bank)):
+        if pr.bank[k] is None:
+            pr.put_slot(k, name)
+
+
+def party(tmp_path, full: bool = True):
+    """The party show on a fresh home, slot 6 (ACID) emptied, TRIP loaded.
+    `full`: slots 10–24 filled too, so the F-keys' holes are the only room
+    (the tests written on the bank of eight)."""
+    r = boot(tmp_path, None)
+    pr = r.lib.project
+    assert pr.bank == ["TUMBLE", "FACES", "FIELD", "WAKE", "TRIP", "ACID", "MANDALA", "NOITA",
+                       "TRACER"] + [None] * 15
+    if full:
+        fill_far(pr)
+    pr.clear_slot(5)
+    r.reg["preset.load.4"].fire()
+    assert r.lib.current("presets") == "TRIP" and pr.active == 4
+    return r
+
+
+def user_presets(home):
+    return sorted(p.name for p in (home / "presets").glob("*.json"))
+
+
+def test_save_new_never_overwrites(tmp_path):
+    """Decision 29: the desk's save-as makes a new file every time. The
+    made name's slug is free among the file stems of both preset folders
+    (a user file with a factory file's stem would hide that preset), the
+    listed names and the bank's names — so nothing is written over and no
+    factory preset is shadowed, whatever the files are called inside."""
+    import shutil
+
+    r = party(tmp_path)
+    lib, reg, pr, home = r.lib, r.reg, r.lib.project, r.home
+    # a factory folder with one more file: its stem is trip-4, its name is not
+    factory = tmp_path.parent / f"{tmp_path.name}-factory"
+    shutil.copytree(FACTORY, factory)
+    (factory / "presets" / "trip-4.json").write_text(
+        (FACTORY / "presets" / "party-wake.json").read_text().replace('"WAKE"', '"FOUR"', 1))
+    lib.factory = factory
+    assert lib.is_factory("presets", "FOUR")
+    # the user's folder: trip-2.json under another name, a "TRIP 3" in a
+    # file of another stem; and the bank names a "TRIP 5" that has no file
+    two = put(home, "SOMETHING ELSE").rename(home / "presets" / "trip-2.json")
+    three = put(home, "TRIP 3").rename(home / "presets" / "mine.json")
+    kept = {p: p.read_bytes() for p in (two, three, factory / "presets" / "trip-4.json")}
+    pr.bank[5] = "TRIP 5"
+    pr.clear_slot(6)
+    before = user_presets(home)
+    reg["view.shape"].set(9)
+    reg["preset.save_new"].fire()
+    assert lib.current("presets") == "TRIP 6" and pr.bank[6] == "TRIP 6"
+    assert user_presets(home) == sorted([*before, "trip-6.json"])
+    assert all(p.read_bytes() == was for p, was in kept.items())
+    assert lib.is_factory("presets", "FOUR") and lib.is_factory("presets", "TRIP")
+    assert lib.read("presets", "TRIP")["values"]["view.shape"] != 9     # TRIP itself untouched
+    assert json.loads((home / "presets" / "trip-6.json").read_text())["values"]["view.shape"] == 9
+    assert not (home / "trash").exists()                    # nothing was replaced
+    # held again and again: a new file each time, never the same one twice
+    for n in (7, 8, 9):
+        reg["preset.save_new"].fire()
+        assert lib.current("presets") == f"TRIP {n}"
+    assert user_presets(home) == sorted([*before, *[f"trip-{n}.json" for n in (6, 7, 8, 9)]])
+    assert not (home / "trash").exists()
+    # a file stem in another case is the same file on a filesystem that
+    # folds case (this rig's): it counts too (review of PR #87)
+    ten = put(home, "SUNSET").rename(home / "presets" / "Trip-10.json")
+    was = ten.read_bytes()
+    assert reg["preset.save_new"].fire() is True
+    assert lib.current("presets") == "TRIP 11" and ten.read_bytes() == was
+    assert "SUNSET" in lib.list("presets") and not (home / "trash").exists()
+    # no preset loaded at all: PRESET 1, then PRESET 2
+    lib._landed("presets", None, None)
+    reg["preset.save_new"].fire()
+    assert lib.current("presets") == "PRESET 1"
+    reg["preset.save_new"].fire()
+    assert lib.current("presets") == "PRESET 2"
+
+
+def test_save_new_fills_the_next_empty_slot_and_becomes_the_loaded_preset(tmp_path):
+    """The bank, the show's file, what is loaded and its clean dot: the new
+    preset takes the first empty slot, the show is written at once (the
+    factory show's first write makes your copy), and — as the panel's
+    "as…" does — the new preset is the loaded one, so a second save counts
+    on and Save on the panel writes the new file, not TRIP."""
+    r = party(tmp_path)
+    lib, reg, pr, home = r.lib, r.reg, r.lib.project, r.home
+    show = home / "projects" / "party.hyp.json"
+    assert pr.next_empty() == 5
+    pr.clear_slot(1)                                         # two holes: the first is taken first
+    assert pr.next_empty() == 1
+    reg["view.bright"].set(reg["view.bright"].value + 0.5)
+    assert lib.is_dirty("presets")
+    reg["preset.save_new"].fire()
+    assert pr.bank[1] == "TRIP 2" and pr.active == 1 and pr.bank[4] == "TRIP"
+    assert lib.current("presets") == "TRIP 2" and not lib.is_dirty("presets")
+    assert lib.status == "saved TRIP 2 → F2" and pr.bank_error == ""
+    assert json.loads(show.read_text())["bank"] == bank_doc(pr.bank) and not pr.is_dirty()
+    assert reg["preset.select"].names[1] == "TRIP 2" and reg["preset.select"].value == 1
+    assert not lib.is_factory("presets", "TRIP 2") and lib.is_factory("presets", "TRIP")
+    doc = lib.read("presets", "TRIP 2")
+    assert doc["name"] == "TRIP 2" and doc["values"]["view.bright"] == reg["view.bright"].value
+    # the second counts on from the new one, into the next hole
+    reg["preset.save_new"].fire()
+    assert pr.bank[5] == "TRIP 3" and pr.active == 5 and lib.current("presets") == "TRIP 3"
+    assert lib.status == "saved TRIP 3 → F6"
+    assert json.loads(show.read_text())["bank"] == bank_doc(pr.bank)
+    assert pr.next_empty() is None
+    # the trigger is a session-side control: never saved, never performed
+    p = reg["preset.save_new"]
+    assert (p.group, p.persist, p.modulatable) == ("preset", False, False)
+    # a launch finds the bank as it was left
+    again = boot(home, None)
+    assert again.lib.project.bank == pr.bank
+
+
+def test_save_new_on_a_full_bank_saves_to_the_list_and_says_so(tmp_path):
+    """A full bank: the preset is still made and loaded, it is in the
+    list, the bank and the show's file are untouched, no pad is lit, and
+    the warning says where it went — every time it happens."""
+    r = boot(tmp_path, None)
+    lib, reg, pr, home = r.lib, r.reg, r.lib.project, r.home
+    fill_far(pr)                                 # (plan 19 WP1: the party show has 15 empty)
+    reg["preset.load.4"].fire()
+    bank = list(pr.bank)
+    assert pr.next_empty() is None
+    shows = sorted(p.name for p in (home / "projects").iterdir())
+    reg["preset.save_new"].fire()
+    assert lib.warning == "saved TRIP 2 — the bank is full: it is in the preset list"
+    assert pr.bank == bank and sorted(p.name for p in (home / "projects").iterdir()) == shows
+    assert "TRIP 2" in lib.list("presets") and lib.current("presets") == "TRIP 2"
+    assert pr.active == -1 and reg["preset.select"].value == -1
+    assert not lib.is_dirty("presets") and not pr.is_dirty()
+    said = dict(lib.said)
+    reg["preset.save_new"].fire()
+    assert lib.warning == "saved TRIP 3 — the bank is full: it is in the preset list"
+    assert lib.said["warning"] == said["warning"] + 1
+    # room made: the next save lands in it, and the old warning goes
+    pr.clear_slot(2)
+    assert lib.warning == ""
+    reg["preset.save_new"].fire()
+    assert pr.bank[2] == "TRIP 4" and lib.status == "saved TRIP 4 → F3" and lib.warning == ""
+    # a disk that will not take the file: said, and the show goes on
+    def full(*a, **k):
+        raise LibraryError("disk full")
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(lib, "save_as", full)
+        pr.clear_slot(3)
+        assert reg["preset.save_new"].fire() is False        # nothing saved: said so
+    assert "disk full" in pr.bank_error and pr.bank[3] is None
+    # the preset saves but the show's file will not take the bank: the
+    # slot stays as the file has it, no pad is lit, and it is said
+    # (review of PR #87)
+    show = home / "projects" / "party.hyp.json"
+    before, cur = show.read_text(), lib.current("presets")
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(pr, "write", full)
+        assert reg["preset.save_new"].fire() is True
+    name = lib.current("presets")
+    assert name != cur and name in lib.list("presets")
+    assert pr.bank[3] is None and pr.active == -1 and show.read_text() == before
+    assert "disk full" in pr.bank_error and not pr.is_dirty()
+    # the footer says why (plan 19 WP1: a show that cannot be backed up says so here)
+    assert lib.warning == (f"saved {name} — the show could not be written: it is in the "
+                           "preset list (disk full)")
+    reg["preset.save_new"].fire()                            # the disk is back: F4, and no error
+    assert pr.bank[3] == lib.current("presets") and pr.bank_error == ""
+
+
+def test_the_new_slot_loads_from_the_preset_row(tmp_path):
+    """The pad over the new slot is an ordinary preset pad: clip row 1's
+    button k loads what the save-as put there."""
+    from test_midi import FakeIn, FakeOut, note, push
+
+    from hyperspace.midi import MidiIO
+
+    r = party(tmp_path)
+    lib, reg, pr = r.lib, r.reg, r.lib.project
+    inp, out = FakeIn(), FakeOut()
+    desk = SimpleNamespace(midi=MidiIO(reg, r.router.table, inp=inp, out=out), inp=inp, out=out)
+    reg["view.shape"].set(11)
+    reg["preset.save_new"].fire()
+    assert pr.bank[5] == "TRIP 2" and pr.active == 5
+    push(desk, note(apc40.N_CLIP[0], channel=0), note(apc40.N_CLIP[0], 0, channel=0))
+    assert lib.current("presets") == "TUMBLE" and pr.active == 0
+    assert reg["view.shape"].value != 11
+    push(desk, note(apc40.N_CLIP[0], channel=5), note(apc40.N_CLIP[0], 0, channel=5))
+    assert lib.current("presets") == "TRIP 2" and pr.active == 5
+    assert reg["view.shape"].value == 11 and not lib.is_dirty("presets")
+    leds = [m.velocity for m in out.sent
+            if m.type == "note_on" and m.note == apc40.N_CLIP[0] and m.channel == 5]
+    assert leds[-1] == apc40.GREEN
+    reg["preset.load.5"].fire()                              # and F6 is the same slot
+    assert lib.current("presets") == "TRIP 2"
+
+
+def test_put_and_clear_slot_write_the_show_and_delete_no_file(tmp_path):
+    """The PRESETS page's two slot items: "put preset here…" points a slot
+    at any preset, "clear slot" empties it. Both write the show at once,
+    neither writes, moves or deletes a preset file, and the lit slot
+    follows the loaded preset."""
+    r = boot(tmp_path, None)
+    lib, reg, pr, home = r.lib, r.reg, r.lib.project, r.home
+    show = home / "projects" / "party.hyp.json"
+    assert pr.factory and not show.exists()
+    put(home, "MINE")
+    files = user_presets(home)
+    assert lib.current("presets") == "TUMBLE" and pr.active == 0
+    pr.clear_slot(5)
+    assert pr.bank[5] is None and json.loads(show.read_text())["bank"][5] is None
+    assert json.loads(show.read_text())["bank"] == bank_doc(pr.bank)
+    assert not pr.factory and not pr.is_dirty()             # your copy, written
+    assert lib.status == "F6: cleared — ACID is still in the preset list"
+    assert "ACID" in lib.list("presets") and lib.is_factory("presets", "ACID")
+    pr.put_slot(5, "MINE")
+    assert pr.bank[5] == "MINE" and json.loads(show.read_text())["bank"][5] == "MINE"
+    assert lib.status == "F6: MINE" and lib.current("presets") == "TUMBLE" and pr.active == 0
+    reg["preset.load.5"].fire()
+    assert lib.current("presets") == "MINE" and pr.active == 5
+    # the loaded preset's slot cleared: no pad lit; put back elsewhere: that one
+    pr.clear_slot(5)
+    assert pr.active == -1 and lib.current("presets") == "MINE"
+    pr.put_slot(2, "MINE")
+    assert pr.bank[2] == "MINE" and pr.active == 2
+    # the slot of the loaded preset pointed elsewhere: its light goes
+    pr.put_slot(2, "WAKE")
+    assert pr.active == -1
+    # a preset may sit in two slots; the light stays where it is
+    reg["preset.load.3"].fire()
+    pr.put_slot(7, "WAKE")
+    assert pr.bank[3] == pr.bank[7] == "WAKE" and pr.active == 3
+    # nothing loaded: no slot is lit — an empty slot least of all (review of PR #87)
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(lib, "current", lambda group: None)
+        pr.clear_slot(6)
+        assert pr.bank[6] is None and pr.active == -1
+        pr.put_slot(6, "MANDALA")
+        assert pr.active == -1
+    # a name with no file, a slot that is not there, an empty slot: nothing changes
+    before, bank = show.read_text(), list(pr.bank)
+    pr.put_slot(1, "NOPE")
+    assert lib.warning == "F2: no preset 'NOPE'" and pr.bank == bank
+    pr.put_slot(len(pr.bank), "WAKE")
+    pr.clear_slot(-1)
+    pr.clear_slot(5)
+    assert pr.bank == bank and show.read_text() == before
+    assert json.loads(show.read_text())["bank"] == bank_doc(pr.bank)
+    assert user_presets(home) == files and not (home / "trash").exists()
+
+
+def test_the_bank_calls_are_no_undo_step(tmp_path):
+    """A save-as from the desk, a slot filled, a slot cleared: nothing live
+    changes, so none of them is an undo step (plan 15 WP4)."""
+    from test_undo import boot as undo_boot
+    from test_undo import settle
+
+    r = undo_boot(tmp_path / "home")
+    reg, pr = r.reg, r.lib.project
+    reg["preset.load.4"].fire()
+    settle(r)
+    r.undo.clear()
+    pr.clear_slot(5)
+    settle(r)
+    reg["preset.save_new"].fire()
+    settle(r)
+    pr.put_slot(0, "WAKE")
+    settle(r)
+    assert pr.bank[5] == "TRIP 2" and pr.bank[0] == "WAKE"
+    assert r.undo.stack == [] and not r.undo.undo()
+
+
+def test_rename_and_trash_are_no_undo_step(tmp_path):
+    """Plan 19 WP4 (§1 row 10): hide, unhide, rename (of the loaded preset
+    too), × on yours, restore and empty write files and change nothing
+    live, so none is an undo step — undo cannot put a file back; the
+    trash is the net."""
+    from test_undo import boot as undo_boot
+    from test_undo import settle
+
+    r = undo_boot(tmp_path / "home")
+    reg, lib = r.reg, r.lib
+    reg["preset.load.4"].fire()
+    settle(r)
+    reg["preset.save_new"].fire()                     # TRIP 2, yours, loaded
+    settle(r)
+    r.undo.clear()
+    steps = []
+    for fn, *args in ((lib.hide, "presets", "WAKE"), (lib.unhide, "presets", "WAKE"),
+                      (lib.rename, "presets", "TRIP 2", "SUNRISE"),
+                      (lib.delete, "presets", "SUNRISE")):
+        fn(*args)
+        settle(r)
+        steps.append(len(r.undo.stack))
+    (item,) = [t for t in lib.trash() if t.name == "SUNRISE"]
+    lib.restore_trash(item)
+    settle(r)
+    lib.empty_trash()
+    settle(r)
+    steps.append(len(r.undo.stack))
+    assert steps == [0, 0, 0, 0, 0] and not r.undo.undo()
+    assert "SUNRISE" in lib.list("presets") and lib.trash() == []
+
+
+# ------------------------------------------- plan 19 WP1: a bank of twenty-four
+
+def test_save_new_lands_past_the_f_keys_and_a_full_bank_says_so(tmp_path):
+    """The desk's save-as on the party show: F1–F8 and slot 9 are filled,
+    so fifteen saves fill slots 10–24, each said by its slot; the sixteenth
+    finds the bank full and saves to the list. A factory show's first
+    write makes your copy: there is no eight-slot file of yours to keep,
+    so no backup."""
+    r = boot(tmp_path, None)
+    lib, reg, pr, home = r.lib, r.reg, r.lib.project, r.home
+    show = home / "projects" / "party.hyp.json"
+    reg["preset.load.4"].fire()
+    assert lib.current("presets") == "TRIP" and pr.next_empty() == 9 and not show.exists()
+    for n in range(15):
+        assert reg["preset.save_new"].fire() is True
+        assert pr.bank[9 + n] == f"TRIP {n + 2}" and pr.active == 9 + n
+        assert lib.status == f"saved TRIP {n + 2} → slot {10 + n}"
+        assert json.loads(show.read_text())["bank"] == bank_doc(pr.bank)
+    assert pr.next_empty() is None and len(json.loads(show.read_text())["bank"]) == SLOTS
+    assert reg["preset.select"].names[9:] == [f"TRIP {n}" for n in range(2, 17)]
+    assert all(reg["preset.select"].has(k) for k in range(SLOTS))
+    bank = list(pr.bank)
+    assert reg["preset.save_new"].fire() is True
+    assert lib.warning == "saved TRIP 17 — the bank is full: it is in the preset list"
+    assert pr.bank == bank and "TRIP 17" in lib.list("presets") and pr.active == -1
+    assert not list(home.rglob("*.bak-*")) and not pr.is_dirty()
+
+
+def test_active_follows_the_loaded_preset_from_one_place(tmp_path):
+    """`Project.follow` is the one spelling of "the lit slot follows the
+    loaded preset": kept where it is while that slot still names it, else
+    the first slot that names it, else none; none when nothing is loaded.
+    A preset on two slots lights the one that was pressed."""
+    import inspect
+
+    from hyperspace import library
+
+    r = boot(tmp_path, None)
+    lib, reg, pr = r.lib, r.reg, r.lib.project
+    pr.put_slot(13, "WAKE")                                # WAKE on F4 and on slot 14
+    pr.load_slot(13)
+    assert lib.current("presets") == "WAKE" and pr.active == 13       # the one pressed
+    reg["preset.load.3"].fire()
+    assert pr.active == 3
+    reg["preset.select"].set(13)
+    assert pr.active == 13 and reg["preset.select"].value == 13
+    pr.put_slot(20, "FACES")                               # another slot changes: it stays
+    assert pr.active == 13
+    pr.clear_slot(13)                                      # its slot cleared: the other one
+    assert pr.active == 3
+    pr.clear_slot(3)                                       # no slot names it: none
+    assert pr.active == -1 and lib.current("presets") == "WAKE"
+    pr.put_slot(22, "WAKE")                                # one names it again
+    assert pr.active == 22
+    lib.load("presets", "FACES")                           # the strip: the first slot that names it
+    assert pr.active == 1
+    lib.load("presets", "hands-play")                      # a preset in no slot
+    assert pr.active == -1
+    pr.active = 5
+    with pytest.MonkeyPatch.context() as mp:               # nothing loaded: none
+        mp.setattr(lib, "current", lambda group: None)
+        pr.follow()
+    assert pr.active == -1
+    # the four sites call it, and nothing else looks a preset up in the bank
+    for fn in (library.Project._set_slot, library.Project._apply, library.Marks.put,
+               preset.Presets._landed):
+        src = inspect.getsource(fn)
+        assert "follow()" in src and "bank.index" not in src, fn.__qualname__
+    assert inspect.getsource(library).count("bank.index(") == 1
+    assert "pr.bank.index(" not in inspect.getsource(preset)
+
+
+# ------------------------------ plan 19 WP2: a preset saved before the bank's rows
+
+def _files(home) -> dict:
+    return {p.name: (p.read_bytes(), p.stat().st_mtime_ns)
+            for p in sorted((home / "presets").glob("*.json"))}
+
+
+def _on_bank_rows(rows) -> list:
+    """The rows of a desk that sit on a pad of clip rows 4 or 5."""
+    far = set(far_pads())
+    return [r for r in rows if (r.source if isinstance(r, Binding) else r["source"]) in far]
+
+
+def test_an_old_preset_loads_without_its_shape_pads_and_its_file_is_untouched(owner_home):
+    """The owner's files (on a copy), fork 4. A preset saved before plan
+    19 holds the sixteen shape pads of clip rows 4–5 in its `desk`. At a
+    load those sixteen exact old factory rows are dropped **quietly** — no
+    note, no warning line — while a pad the owner re-aimed is dropped
+    **with** the existing "that control is invariant" note; a learned
+    device knob is kept; the preset's dot is clean; and **no preset file
+    changes by a byte or a tick** — the file keeps the rows until the
+    owner saves."""
+    home = owner_home
+    before = _files(home)
+    assert set(before) == {"night-one.json", "night-two.json", "night-three.json"}
+    for name in before:                                    # each file does hold the sixteen
+        desk = json.loads((home / "presets" / name).read_text())["desk"]
+        assert len(_on_bank_rows(desk)) == 16, name
+    r = boot_home(home)                                    # the launch lands NIGHT ONE
+    lib, table, pr, presets = r.lib, r.router.table, r.lib.project, r.presets
+    # saved before plan 19: the fresh layer had no device knob then (WP3's SCENE)
+    fresh = len([b for b in preset.fresh_desk() if not preset._is_device_knob(b)])
+    # NIGHT ONE: the sixteen exact rows — nothing said
+    assert lib.current("presets") == "NIGHT ONE"
+    assert presets.desk_notes == [] and presets.notes == [] and lib.warning == ""
+    assert _on_bank_rows(table.desk()) == [] and len(table.desk()) == fresh
+    assert not lib.is_dirty("presets")
+    # NIGHT TWO: fifteen quiet, the owner's re-aimed pad with its note, the knob kept
+    pr.load_slot(1)
+    said = (f"dropped {OWNER_PAD['source']} → {OWNER_PAD['target']}: that control is "
+            "invariant, the session's (plan 13 D6)")
+    assert lib.current("presets") == "NIGHT TWO"
+    assert presets.desk_notes == [said] and presets.notes == [said]
+    assert lib.warning == f"preset NIGHT TWO: {said}"       # one note: no "(+15 more)"
+    assert _on_bank_rows(table.desk()) == []
+    knob = preset.device_knob(*OWNER_KNOB)
+    assert [(b.source, b.target) for b in table.desk() if b.source == knob.source] \
+        == [(knob.source, knob.target)]
+    assert len(table.desk()) == fresh + 1 and not lib.is_dirty("presets")
+    # the pad the owner had re-aimed is the bank's now, on both layers
+    kind, ch, n = OWNER_PAD["source"].split(":")
+    assert [b.target for b in table.dispatch(kind, int(ch), int(n))] == ["preset.select"]
+    # NIGHT THREE (WAKE's eight device knobs): quiet, the eight kept
+    lib.warning = ""
+    lib.load("presets", "NIGHT THREE")
+    assert presets.desk_notes == [] and lib.warning == ""
+    assert [b.target for b in table.desk() if b.kind == "cc"
+            and b.number in apc40.DEVICE_KNOBS] == list(preset.WAKE_KNOBS)
+    assert not lib.is_dirty("presets")
+    # an undo's restore of a desk meets the same rule (`set_desk(load=False)`)
+    notes = table.set_desk([*old_shape_pads(), OWNER_PAD], load=False)
+    assert notes == [said]
+    lib.load("presets", "NIGHT ONE")
+    # every load, from the bank, the list and the file watch: no file moved
+    lib.poll()
+    assert _files(home) == before
+    assert len(list((home / "trash" / "presets").iterdir())) == 1      # nothing new in the trash
+    # emptying the list is fork 4's way back: every row on those pads is noted again
+    with pytest.MonkeyPatch.context() as m:
+        m.setattr(routing, "RETIRED_DESK_ROWS", frozenset())
+        lib.load("presets", "NIGHT ONE")
+        assert len(presets.desk_notes) == 16 and "(+15 more)" in lib.warning
+
+
+def test_the_next_save_of_an_old_preset_writes_the_desk_without_the_pads(owner_home):
+    """…and the next save writes the desk as it is live — without the
+    rows on clip rows 4–5 — the old file going to the trash first (plan
+    15's rule), byte for byte. The other presets' files are not touched."""
+    home = owner_home
+    before = _files(home)
+    r = boot_home(home)
+    lib = r.lib
+    r.lib.project.load_slot(1)                             # NIGHT TWO
+    path = home / "presets" / "night-two.json"
+    trash = home / "trash" / "presets"
+    assert not list(trash.glob("night-two.*.json"))
+    r.reg["view.bright"].set(r.reg["view.bright"].value * 0.9)
+    assert lib.is_dirty("presets")
+    assert lib.overwrite("presets") == path
+    doc = json.loads(path.read_text())
+    assert _on_bank_rows(doc["desk"]) == []
+    knob = preset.desk_json([preset.device_knob(*OWNER_KNOB)])[0]
+    # (the fresh layer less the device knobs it gained in plan 19 WP3, + the learned one)
+    fresh = [b for b in preset.fresh_desk() if not preset._is_device_knob(b)]
+    assert knob in doc["desk"] and len(doc["desk"]) == len(fresh) + 1
+    (kept,) = list(trash.glob("night-two.*.json"))
+    assert kept.read_bytes() == before["night-two.json"][0]        # the old file, whole
+    assert len(_on_bank_rows(json.loads(kept.read_text())["desk"])) == 16
+    after = _files(home)
+    assert {k: v for k, v in after.items() if k != "night-two.json"} \
+        == {k: v for k, v in before.items() if k != "night-two.json"}
+    # it loads clean and quiet from now on
+    lib.load("presets", "NIGHT ONE")
+    lib.load("presets", "NIGHT TWO")
+    assert r.presets.desk_notes == [] and not lib.is_dirty("presets")
+
+
+# ------------------------------- plan 19 WP3: a user's desk and the re-cut
+
+def test_a_users_desk_is_untouched_by_the_recut(owner_home):
+    """The owner's files (on a copy): a preset saved before plan 19 carries
+    its own `desk`, and the factory re-cut does not reach it. NIGHT ONE's
+    eight device knobs stay dark — D1 turned moves no 4D depth; NIGHT TWO
+    keeps the knob the owner learned (D3) and the seven dark ones; NIGHT
+    THREE keeps WAKE's eight as saved. No file changes. A user file with
+    **no** `desk` key gets the fresh layer by the standing rule, and so
+    the four SCENE knobs."""
+    from hyperspace import apc40
+
+    home = owner_home
+    before = _files(home)
+    r = boot_home(home)
+    lib, table = r.lib, r.router.table
+
+    def dials() -> dict[str, str]:
+        return {b.source: b.target for b in table.desk()
+                if b.kind == "cc" and b.number in apc40.DEVICE_KNOBS}
+    assert lib.current("presets") == "NIGHT ONE" and dials() == {}       # all eight dark
+    assert [b.target for b in table.dispatch("cc", 0, 0x10)] == []        # D1 does nothing
+    lib.load("presets", "NIGHT TWO")
+    knob = preset.device_knob(*OWNER_KNOB)
+    assert dials() == {knob.source: knob.target}                         # D3 alone, learned
+    lib.load("presets", "NIGHT THREE")
+    assert list(dials().values()) == list(preset.WAKE_KNOBS)
+    assert not lib.is_dirty("presets")
+    lib.poll()
+    assert _files(home) == before
+    # a user preset with no desk key: the fresh layer, SCENE on D1–D4
+    doc = json.loads((home / "presets" / "night-one.json").read_text())
+    doc.pop("desk")
+    doc["name"] = "NO DESK"
+    (home / "presets" / "no-desk.json").write_text(preset.dumps(doc))
+    lib.poll()
+    lib.load("presets", "NO DESK")
+    assert list(dials().values()) == list(apc40.SCENE)
+
+
+def test_a_saved_route_onto_a_setting_is_dropped_with_a_note(rig):
+    """Plan 21 R12: a preset saved while `ghost.mirror` (or `.guide`,
+    `.tethers`) was modulatable may carry a hand's route onto it. Loading
+    it drops that route with a note — no crash, the other routes land —
+    and the file on disk is not rewritten."""
+    path = put(rig.home, "MIRRORED", routes=[
+        {"source": "hand:right.x", "target": "ghost.mirror", "op": "position"},
+        {"source": "hand:left.roll", "target": "ghost.guide", "op": "position"},
+        {"source": "lfo:0", "target": "ghost.tethers", "op": "push", "value": 0.5},
+        {"source": "hand:right.y", "target": "view.inst_amp", "op": "position"}])
+    before = (path.read_bytes(), path.stat().st_mtime_ns)
+    rig.presets.load("MIRRORED")
+    table = rig.router.table
+    for pid in ("ghost.mirror", "ghost.guide", "ghost.tethers"):
+        assert not table.routes_to(pid), pid
+    assert table.owner("view.inst_amp").source == "hand:right.y"
+    notes = rig.presets.notes
+    assert "dropped hand:right.x → ghost.mirror: not modulatable" in notes
+    assert "dropped hand:left.roll → ghost.guide: not modulatable" in notes
+    assert "dropped lfo:0 → ghost.tethers: not modulatable" in notes
+    assert (path.read_bytes(), path.stat().st_mtime_ns) == before
+    assert rig.reg["ghost.mirror"].value is False

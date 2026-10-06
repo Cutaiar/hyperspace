@@ -1,186 +1,249 @@
 # Decisions
 
-The settled calls behind the Python app, with the date they were made and
-the reason, so nobody re-litigates them by accident. Gathered by plan 10
-(2026-09-27) from the *Decisions* and *As built* sections of plans 07, 08
-and 09, the earlier plans' governing notes, and the session memory where
-it holds a decision the plans do not. Each row's status was checked
-against the code at `main` ef299ef.
+The design decisions in force in the Python app, one row each, so nobody
+re-asks a settled question. Everything here is built; the code is the
+reference for detail. Structure is in [`ARCHITECTURE.md`](ARCHITECTURE.md),
+behaviour in [`ENGINEERING.md`](ENGINEERING.md).
 
-How to read it: **standing** means the code does this today; **superseded**
-means a later row replaced it, and the row stays so the history is
-legible. Grouped by theme, because a reader arrives with a question, not a
-plan number. The structure the decisions produced is in
-[`ARCHITECTURE.md`](ARCHITECTURE.md); the behaviour in
-[`ENGINEERING.md`](ENGINEERING.md).
+**Who** says who decided:
 
-To add one: a row here the day it is settled with the owner, with the
-why, and a link from the plan or PR that made it.
+- **owner**: settled with the owner.
+- **row N**: built on a recommendation during the unattended run of
+  2026-10-04. The owner has still to confirm or overturn it in
+  [`DECISION-REGISTER.md`](DECISION-REGISTER.md) under that row number.
+
+To add a decision, add one row to the theme it belongs to. When it
+replaces a row, rewrite that row instead of adding a new one.
 
 ## Platform
 
-| Date | Decision | Why | Source | Status |
-|---|---|---|---|---|
-| 2026-08-21 | Full Python re-platform. `hyperspace-web/hyperspace.html` never runs at runtime; it is only the oracle the golden traces were recorded from. | One process, one language, real audio devices and GL; the browser sandbox had cost more rounds than the port. | BLUEPRINT §5, plan 00 | standing |
-| 2026-08-21 | Single process: moderngl renderer, sounddevice capture, imgui panel, asyncio only where a device needs it. | No IPC to debug mid-set; every value is a Python float one frame from the screen. | BLUEPRINT §3 | standing |
-| 2026-08-21 | A DAW connects only through an optional bridge, off by default; nothing in the core depends on it. | FL Studio must stay reachable later without shaping the core around MIDI. | BLUEPRINT §3.6, plan 05 | standing (`bridge.py`, config-gated) |
-| 2026-08-21 | Parity bar: geometry exact (1e-12, vertex order kept), audio behavioural, visuals judged by eye. | Frame-exact tolerance gates on an adaptive audio chain cost effort without changing what matters live. | plan 01, memory | standing |
-| 2026-08-22 | Plans 03 and 04 swapped: UI before booth hardware. | Deck and IMU access did not exist; the DJ Link spike is the first thing to do when it does. | CHECKPOINT | standing (plan 04 still parked) |
-| 2026-09-08 | Generalise before hardware: every new input goes through registry ids and a binding table, never straight at `ViewState` or the chain. | The owner would rather pay for the abstraction up front than rewrite each device's wiring later. | memory (APC40 session) | standing (`params.py`, `routing.py`) |
-| 2026-09-18 | The analyzer runs in-process on the frame loop; MIDI in/out is an adapter, never the only path. | Latency and one clock; the analyzer is a source like any other. | plan 07 | standing |
+| Decision | Where | Who |
+|---|---|---|
+| One Python process: a moderngl renderer, sounddevice capture and an imgui control panel. The retired web app never runs; it is only the oracle the golden traces were recorded from. | `app.py` | owner |
+| A DAW connects only through an optional bridge, which is off by default. Nothing in the core depends on it. | `bridge.py`, `[bridge] enabled` | owner |
+| Parity bar: geometry is exact (1e-12, vertex order kept), audio is behavioural and visuals are judged by eye. | `tests/` | owner |
+| Generalise before hardware: every input goes through registry ids and the binding table, never straight at the view state or the chain. | `params.py`, `routing.py` | owner |
+| The analyzer runs in-process on the frame loop. MIDI is an adapter at the edges and never the internal bus: values flow as floats. | `analyzer.py`, `midi.py` | owner |
+| The dream is part of the app. torch is an ordinary dependency and the worker is on by default, but torch is imported only when the dream opens. | `[dream] enabled = true` | owner |
 
 ## The control model
 
-| Date | Decision | Why | Source | Status |
-|---|---|---|---|---|
-| 2026-09-08 | One parameter registry: every settable thing has a stable id and one normalised interface (continuous / enum / toggle / trigger; tapered params quantise to their throw for the user, float-map for modulation). | The panel, keys, pads and MIDI become binding tables over one address space instead of three code paths. | plan 05, memory | standing (`params.py`) |
-| 2026-09-18 | Base vs effective: `p.base` is the user's setting, `p.value` is the live object; `Registry.apply()` writes `base + Σ offsets` once per frame. A raw write to the object is adopted as a delta on the base. | Lets the rotation integrator and a modulation offset coexist on one param without either clobbering the other. | plan 07 WP0 | standing |
-| 2026-09-18 | Any registry param is a modulation target, subject to its `modulatable` flag; enums, toggles and triggers too, with hysteresis. Plane drives and shader band inputs become ordinary params (`rot.rate.*`, `pattern.mod.*`). | One modulation concept; audio stops being a special case. | plan 07 | standing |
-| 2026-09-18 | Keys, gamepad, MIDI and audio lanes are one binding table, persisted as a routing preset / the live `bindings.json`. | Three tables (`KEYMAP`, `PADMAP`, `midi_map.json`) were three places a binding could hide. | plan 07 WP4b | one table standing (`routing.py`; see F1–F8 exception below); its persistence **superseded** by plan 13 WP5, PR #66: `bindings.json` holds only the session's controls, the routes, preset layer and macros are the presets', and the routing presets are presets |
-| 2026-09-18 | `rot.phase.*` is a param but never persisted. | A theme changes the look, not where the spin currently is. | plan 07 | standing |
-| 2026-09-18 | Routes are additive with signed depth; a base of 0 plus depth reproduces "audio replaces the constant". Ops `abs / step / toggle / fire / mod`, later `replace` (units) and `span` (throw) for hands. | Reproduce the six-plane drive exactly through the new bus. | plan 07 WP4b, PR #30 | **superseded** 2026-09-26 by push / position |
-| 2026-09-25 | Learn on a hand writes an `abs` row that `Router.drive` applies to the base every frame. | First cut of hands-as-fader. | plan 08 (first form) | **superseded** 2026-09-26: Learn writes a `position` route |
-| 2026-09-26 | **One path.** Every continuous source (`lane`, `hand`, `ext`, `lfo`) reaches a param only through `Router.modulate`. `Router.drive`, `Param.glide` and lane-scheme `abs` removed. | The audit found two write paths with nothing deciding between them; every conflict class traced to that. | plan 09 d.1 | standing |
-| 2026-09-26 | **One performer per parameter.** A performer is an enabled route row from a continuous scheme; a target has at most one; a second one prompts *Replace / Keep*. Gates do not exempt a row. | Two things pulling one knob is never what the performer meant; asking is what FL Studio does. | plan 09 d.2 | standing (`Bindings.owner`, `Owned`) |
-| 2026-09-26 | **Scene-setters write the base and never prompt**: panel, keys, pad buttons, the APC40 (abs / rel / notes), presets, mouse and stick relative writers. A knob turned on a hand-owned param moves the value the hand returns to. | Setting the scene and performing on it are different jobs; the second must not block the first. | plan 09 d.3 | standing |
-| 2026-09-26 | Relative writers (mouse orbit, sticks, ↑/↓ depth) read the **base**, not the effective value. | Reading the effective value folded the whole modulation offset into the base every drag frame (audit sim 1). | plan 09 WP2 | standing (`Param.nudge` / `scale`) |
-| 2026-09-26 | Hands grab; they never yield. No `pickup` on a performer row. | The box is a continuous performance; pickup only makes sense for a knob you let go of. | plan 09 d.4 | standing |
-| 2026-09-26 | **Two ops.** `push`: offset = depth · scale · (u − rest). `position`: the source is the fader, along the param's taper; the base returns when it stops. `replace` deleted. | Five spellings of "the source drives the param" behaved five ways; `replace` capped a hand at the value 1. | plan 09 d.5 | standing (`MOD_OPS`) |
-| 2026-09-26 | Push is centred where the source rests; the rest is the source's own (published by its adapter in `Router.rests`) unless the row says otherwise. | Without it every LFO route sat permanently offset by half its depth. | plan 09 d.6, as built | standing (`Binding.rest = None` → `Router.rest_of`) |
-| 2026-09-26 | Chaining, not stacking: layers come from a performer owning another source's knob (LFO depth, a macro), never from two rows on one target. Eight macro knobs exist only to be owned and to be a route's `scale`. | Layering becomes a property of the graph, which the referee can police. | plan 09 d.7 | standing (`macro.1–8`); a macro scales a route as a depth subscriber, not a `scale`, since plan 13 WP3 (PR #63) |
-| 2026-09-26 | Macros are routing-layer state (`ROUTING_GROUPS`): saved in routing presets and the live table's `values`, outside the whole-surface snapshot. | A theme or project should not carry the routing layer's scratch knobs. | plan 09 as built | superseded 2026-09-28 by plan 13 §4 (WP1, PR #62): macros are performance state |
-| 2026-09-28 | LFO and tempo knobs stay **theme state**. A routing preset's `values` may set any base its rows assume (LFO knobs, an effect's speed, dream settings), provided each id is a persisted, non-alias param a theme would save too. | An LFO arrangement is part of a look a theme carries; a preset that assumes "LFO 1 at one bar" should say so rather than hide the dependency. Plan 13's preset, which carries every base and route in one file, supersedes the question when it lands. | owner, decision register row 3 (audit R1) | **superseded** by plan 13 WP5, PR #66: the routing presets are full presets, whose values set every performance base (D2); the rule lives on for the five made from them (`test_a_converted_presets_values_are_bases_a_preset_would_save`) |
-| 2026-09-26 | The factory `default` table keeps legacy6's push rows on `rot.rate` bases of 1; only the `legacy6` preset zeroes them. | Idle spin stays in the default; `legacy6` is the parity anchor, driven. | plan 09 as built | standing |
-| 2026-09-26 | Bindings file schema 2. A v1 file migrates on load (op renames; `replace` dropped with a note), the referee settles duplicate owners (first wins), `remap_factory` moves the plan-09 buttons where nothing uses the source; written back once. | Presets are disposable; a user file must not silently keep rows the new rules cannot express. | plan 09 d.10, as built | standing |
-| 2026-09-26 | Key modifiers are table rows (`key:SHIFT+B`); rows on one key settle together. F1–F8 / ⇧F1–F8, Cmd+R, ESC/Q stay in the loop. | ⇧B needed to be a binding, not loop code; the theme keys were out of scope. | plan 09 as built | standing; **superseded in part** 2026-09-28: R and F1–F8 / ⇧F1–F8 are table rows since PR #58; Cmd+R and Esc/Q stay in the loop |
-| 2026-09-28 | **R, F1–F8 and ⇧F1–F8 become binding-table rows** (`key:R → camera.reset`, `key:F1 → theme.load.0`, `key:SHIFT+F1 → theme.save.0`; slots 1–8 are ids 0–7; the targets are `preset.load.k` / `preset.save.k` since plan 13 WP2, PR #64); `app.act` goes; `remap_factory` adds them to older files only where the key is free. Cmd+R, Esc/Q and ↑/↓ stay in the loop. | The 2026-09-26 row kept them in the loop for scope, not design; as rows they rebind, show on ROUTING and are covered by the cheat-sheet test. | owner, decision register row 7 (audit R2 + L2) | standing (PR #58); supersedes the 2026-09-26 row's loop exception for these keys |
-| 2026-09-28 | Plan 11 lands as one merge of the integration branch (PR #55, carrying #39–#54, #56 and #57), then PR #47 as is. | The cross-branch conflicts were resolved once and the merged build is what was tested. | owner, decision register row 8 | standing |
-| 2026-09-28 | Plan 13's global layer: the track knobs carry four hand-feel settings (smoothing, response, catch, the selected axis's return) plus `tempo.bpm`; three knobs free. **A first cut**: the owner expects better global controls to turn up with use. | The hand feel is what changes with who is in the box, and it must not cost every preset a knob. | owner, decision register row 9 (plan 13 P13-a) | standing (plan 13 WP3, PR #63: the rows in `apc40.DEFAULT_MAP`, `hands.sel.return` the selected axis's alias; WP4, PR #65; `tests/test_desk.py::test_the_default_map_is_sorted_as_plan_13_says`) |
-| 2026-09-28 | A preset load has **no exception** to "replaces everything": the one-time migration turns today's routes-only routing presets into full presets; "partial" means only a module preset. | The rule was chosen for having no merge cases; one exception is where the next comes from. | owner, decision register row 10 (plan 13 P13-b) | standing (plan 13 WP2, PR #64: a load lands every performance base and replaces every route; WP5, PR #66: `legacy6`, `lfo-breathe` and the `hands-*` are full factory presets, a user's `bindings/*.json` made full presets by the first-launch migration, each with the effects its routes drive switched on; `test_presets.py::test_the_routing_presets_are_full_factory_presets`, `test_migration.py::test_routes_only_files_become_full_presets`) |
-| 2026-09-28 | A bank slot **names a preset file**: F1–F8 and the APC40's preset row load it, ⇧F1–F8 saves the live state as that preset into the user folder. | A preset is then the one unit that is saved, loaded, shared and versioned; a slot is a pointer. | owner, decision register row 11 (plan 13 P13-c) | standing (plan 13 WP2, PR #64; `test_presets.py::test_a_slot_names_a_preset_file`, `::test_shift_f_saves_the_live_state_as_the_slots_preset`) |
-| 2026-09-28 | **One macro concept.** A macro (`macro.1–8`) has subscribers; each either sets a param's base or scales a route's depth, over its own `from → to` range, so polarity is per subscriber. Replaces both today's depth-only macro and plan 13's separate multi-target desk row. Base subscribers are scene-setters. | The owner: macro and multi-target "need to become one coherent thing", able to set attenuation and base, and "not every param should be forced to move the same direction". | owner, decision register row 12 (plan 13 P13-d, D10, §2.4) | standing (plan 13 WP3, PR #63: `routing.Macro` / `Sub`, `Router.follow_macros`, depth in `Router.modulate`, `scale: macro.N` migrated; WP4, PR #65: the macros are the loaded preset's; `test_macros.py::test_base_subscribers_of_opposite_polarity_move_opposite_ways`, `::test_scale_on_a_macro_migrates_to_a_depth_subscriber`) |
-| 2026-09-28 | A performer on a macro moves only its **depth** subscribers; base subscribers follow the macro's base (desk, panel, preset). | Needs nothing new in the control model: performers write offsets, scene-setters write bases. A macro that performs its base subscribers as offsets is a later extension. | owner, decision register row 12b (plan 11 §2 row 19) | standing (plan 13 WP3, PR #63, and WP4, PR #65; `test_macros.py::test_a_performer_on_a_macro_moves_only_its_depth_subscribers`) |
-| 2026-09-28 | The ROUTING page, once it edits the loaded preset, is **one page**: the preset's routes, its desk rows and macros under them, the session's invariant and global rows read-only below. | One place to answer "why does this knob do nothing": unmapped, invariant, or on the other layer. | owner, decision register row 13 (plan 13 P13-e) | standing (plan 13 WP4, PR #65: `ui_routing.page` — head, routes, the desk with its dark controls, macros and subscribers, the session's rows read-only; `test_ui_routing.py::test_the_routing_page_is_one_page_over_the_loaded_preset`, `test_ui_shell.py::test_every_page_fits_the_control_window`) |
-| 2026-09-28 | The four calls plan 11 built on its own recommendation are **kept**: B1 (a hand leaving the box releases its rows; the return spring and `hold` shape only the DAW output), A1 (the band JSON files are the one scene store), L3 (a project carries no routing of its own), B6 (a late trigger is held to the next LFO step). | Confirmed by the owner after they were built. | owner, decision register rows 14–17 | standing |
-| 2026-09-26 | MIDI is not the internal bus. Values flow as floats; MIDI survives only at the edges (controller in, DAW out). | None of the conflict classes was about wire format; a 7-bit bus would add quantisation for nothing. | BLUEPRINT §1, plan 08, plan 09 | standing |
-| 2026-09-27 | A hand out of the box reads `NaN` on its axes, so every row on them lets go and the base returns that frame; the return spring and `hold` shape only the DAW output, and the return catch stays live. `rest = hold` no longer latches a routed param — latching is done by setting the base. | Plan 08 promised "every performer row springs back to the base when the hand leaves"; only the tracker going dark did. A NaN during the catch would make a one-frame dropout a 0.15 s hole. | plan 11 §2 row 8, PR #40 | standing (`Follower.live`, `HandsIO.lanes`) |
-| 2026-09-27 | A trigger or per-LFO reset that fires after this frame's LFO step is held and applied at the start of the next step, so the first frame the LFOs see it reads exactly phase 0 on every path; keys, which run before the step, land at once. | The docstring promised phase 0; the panel chip and a performer-fired trigger read `dt · bpm / 60 · ratio`. | plan 11 §2 row 11, PR #42 | standing (`LFOs.pending`) |
-| 2026-09-27 | Leaving a division for Hz carries the LFO's phase; switching into a division lands on the clock's beat. | A preset restore of `lfo.N.sync` cannot be told from a knob turn, and a bar-long LFO must land on the bar. | plan 11 WP4 review, PR #42 | standing |
+| Decision | Where | Who |
+|---|---|---|
+| **One parameter registry.** Everything settable has a stable id and one normalised interface (continuous, enum, toggle or trigger). | `params.py` | owner |
+| **Base and effective value.** `p.base` is the user's setting. Once a frame, `Registry.apply` writes base plus the sum of offsets. | `Registry.apply` | owner |
+| **Any param is a modulation target unless it is flagged `modulatable=False`.** That includes enums, toggles and triggers, which follow with hysteresis. | `Param.modulatable` | owner |
+| **One path.** Every continuous source (lane, hand, ext, lfo) reaches a param only through `Router.modulate`. | `Router.modulate` | owner |
+| **One performer per parameter.** A performer is an enabled route row from a continuous scheme. A second performer on the same target asks *Replace / Keep*, and gates do not exempt a row. The panel's tooltip names the param's owner. | `Bindings.owner`, `Router.describe` | owner |
+| **Scene-setters write the base and never prompt**: the panel, keys, pad buttons, the APC40, presets, the mouse and the sticks. Relative writers read the base, not the effective value. | `Param.nudge`, `Param.scale` | owner |
+| **Hands grab and never yield.** A performer row has no pickup. | `routing.py` | owner |
+| **Two ops.** `push` adds depth · scale · (u − rest). `position` makes the source the param's fader along its taper, and the base returns when the source stops. | `routing.MOD_OPS` | owner |
+| **Push is centred where the source rests.** The rest is the one the source's adapter publishes, unless the row sets its own. | `Router.rest_of` | owner |
+| **Chaining, not stacking.** Layers come from a performer owning another source's knob (an LFO's depth, a macro), never from two rows on one target. | `routing.py` | owner |
+| **One macro concept.** `macro.1–8` each have subscribers. A subscriber either sets a param's base or scales a route's depth, over its own from → to range, so polarity is per subscriber. A performer on a macro moves only its depth subscribers. Base subscribers follow the macro's base. | `routing.Macro`, `Router.follow_macros` | owner |
+| A route keeps `scale` only when the scale names a session param (the MASTER drive fader on the six band → rotation routes). On a performance param, `scale` is dropped at load with a note. | `routing.migrate_scales` | owner |
+| A preset's route may perform a session param. The preset never sets that param's value. The ROUTING page marks such a route "session". | `ui_routing.is_session_target` | owner |
+| **Hand routes are addressed by name** (`hand:right.roll`, `hand:left.pinch.index`). A name the rig lacks leaves the row dormant and never moves it onto another axis. | `Router.address` | owner |
+| A hand out of the box reads `NaN` on its axes, so every row on them lets go and the base returns that frame. The return spring and `hold` shape only the DAW output. | `Follower.live`, `HandsIO.lanes` | owner |
+| A gate whose source is not live holds its row **shut**. Only fed sources (hand, ext, lfo) can gate; analyzer lanes cannot. | `routing.py` | owner |
+| `rot.phase.*` is a param but is never saved. | `params.py` | owner |
+| Presets carry the six band → rotation push rows over rate bases of 1, so the shape idles while spinning. Only `legacy6`, the parity anchor, sets those bases to 0. | `preset.legacy6_values` | owner |
+| An older `bindings.json` migrates on load. Duplicate owners are settled first-wins, and the file is written back once. | `routing.SCHEMA_VERSIONS`, `remap_factory` | owner |
+| **No backup, no rewrite.** `bindings.json` is never rewritten unless `routing.backup` has made a copy first. Without the copy, writes are refused for the session. What a launch changed is one line on the SYSTEM page. | `Bindings.unbacked`, `Bindings.said` | row 74 |
+| Key modifiers are part of a row's source (`key:SHIFT+B`, `key:CONTROL+Z`; SHIFT, SUPER, CONTROL). A key press fires only the row whose modifiers match exactly what is held. | `routing.MODIFIERS`, `Router.keys` | row 34 |
+| R, F1–F8, ⇧F1–F8, undo/redo and Home are binding-table rows, so they can be rebound. An older file gets each one only where its key is free. Cmd+R, Esc/Q and ↑/↓ stay in the loop. | `routing.LOOP_KEY_ROWS` | owner |
+| `view.instances` goes down to 0, which shows "0 · nothing drawn": the ground, the echoes, the effects, the ghost hands and the dim still run. There is no separate "blank" param. | `params.py` `view.instances` | row 47 |
+| Not modulatable: `dream.layer`, `dream.gap` and `dream.res` (each change rebuilds something); `tempo.tap`; `output.dim` and every `output.N.*` switch; `ghost.mirror`, `ghost.guide`, `ghost.tethers` and `ghost.style`; and every `fx.<name>.target`. Still modulatable: `fx.face_map`, `ghost.on`, `ghost.alpha`, `lfo.trigger`, `lfo.N.reset` and `preset.home`. | each `register` | rows 40, 49, 66, 87, 88; tap: owner |
+| **A hand Learn onto a non-modulatable param is refused in words** and makes no row. A preset's saved route onto a known non-modulatable param is dropped at load with a note, and the file is not rewritten. | `Learn.learn_source`, `Presets.load_doc` | row 88 |
+
+## Learn, Unbind and mapping
+
+| Decision | Where | Who |
+|---|---|---|
+| **A Learn says what it waits for.** The menu offers "Learn desk" and "Learn hand ▸ left / right", and only that kind of source can complete it. Anything else does its own job. | `learn.WANTS`, `Learn.accepts` | row 60 |
+| **A new hand Learn lands by a table.** A centred axis, or any axis onto a range centred on zero, lands a `push` at `hands.learn_depth` (0.25). A one-sided axis on a one-sided param, or any axis on an enum, toggle, trigger or whole-number param, lands a `position` row. Existing rows are never rewritten. | `Learn._row`, `learn.PUSH_DEPTH` | row 52 |
+| **A learned axis drives one param.** A hand learn removes that axis's other push/position rows. Learning the same pair again only refreshes the gate. | `Learn._place` | row 53 |
+| Whose pinch gates a hand learn is left as it was: the learning hand's thumb first, then the other hand's. Within the wanted hand, the axis that travelled furthest wins. | `HandsIO.held_gate`, `LEARN_MOVE` | row 64 |
+| **The global layer is never a Learn target.** A Learn writes only into the loaded preset. A refused desk learn stays armed. | `learn.blocked` | owner (D5) |
+| **An invariant control is not a learn candidate: it keeps doing its job through an armed learn.** | `MidiIO._handle` | row 61 |
+| **One road onto the desk.** `Learn.learn_control` serves the MIDI adapter, a click on the on-screen desk and pick-then-click alike, so mapping works with no device. | `Learn.learn_control` | row 62 |
+| **Click a desk control, then a param's widget, to map it.** Every page but ROUTING dims while a control is picked. A pick lets go after 20 s, or when its footer line is clicked. | `ui_desk.click`, `ui_desk.PICK_S`, `Learn.map_picked` | row 58 |
+| **One Unbind.** It removes the loaded preset's desk rows and every route on the param as one undo step. It is offered only when it would remove something, and it never touches a session row. | `Learn.unbind`, `learn.bound` | row 59 |
 
 ## Inputs
 
-| Date | Decision | Why | Source | Status |
-|---|---|---|---|---|
-| 2026-08-30 | The Xbox pad is polled raw through GLFW with our own index map, not the gamepad-mapping database. | The bundled SDL database misses the BLE controller's GUID and `update_gamepad_mappings` did not take on macOS. | memory | standing (`gamepad.py`) |
-| 2026-09-08 | The APC40 is a device *profile* (`apc40.py`: port name, mode SysEx, LED rules, default map) over a generic MIDI adapter (`midi.py`). | The adapter must outlive the controller. | plan 05 | standing |
-| 2026-09-28 | APC40 feedback: **rings show the base**, **LEDs on toggles and enum `set` rows show the effective value**. | A ring is a pickup readback — showing a performer's value would mean the knob could never catch its own; an LED is a state light and should show what the show is doing. | owner, decision register row 4 (audit R6) | standing (`midi.py` feedback) |
-| 2026-09-25 | Hands are the primary performing surface; the APC40 keeps presets, scenes and master controls. | Two hands in a box is the show; the desk is the setup. | plan 08, memory | standing |
-| 2026-09-25 | Twelve axes (palm pose, six per hand) shaped as analog signals — range, One Euro, dead zone, curve, attack/decay, rest spring — and eight pinch switches. **No gesture vocabularies, no more DOFs.** | Performers have to be taught the system; predictability beats expressiveness. | plan 08 | standing |
-| 2026-09-25 | The hands package is liftable: `core.py` and `signal.py` import nothing from the host, everything arrives duck-typed; `panel.py` is the one adapter. A test fails the build otherwise. | Boundaries erode one convenient import at a time. | plan 08 | standing (`test_hands_boundary.py`) |
-| 2026-09-25 | Inside Hyperspace nothing goes through MIDI: a hand is a float source; MIDI encodings exist only for the DAW port. | 7-bit steps and fader detents on a hand would be felt. | plan 08 | standing |
-| 2026-09-25 | A gate whose source is not live holds the row **shut**. Only fed sources (hand, ext, lfo) can gate; analyzer lanes are not switches. | No param should start moving because a camera was unplugged. | plan 08 | standing |
-| 2026-09-25 | Rig settings (`[hands]` in config.toml), box ranges (`hands.json`) and performance settings (a `hands` preset) live in three places, each where it changes. | Calibration, hardware and feel change on different days. | plan 08 | standing |
-| 2026-09-25 | Pinch switches are a Schmitt trigger (close / open thresholds) plus a debounce. | One threshold chatters where the fingers hover. | plan 08 | standing |
-| 2026-09-25 | Oscillators deferred from plan 08. | Scope; hands first. | plan 08 | **superseded** 2026-09-26: plan 09 WP4's LFOs |
+| Decision | Where | Who |
+|---|---|---|
+| The Xbox pad is polled raw through GLFW with the app's own index map, not the gamepad-mapping database. | `gamepad.py` | owner |
+| The APC40 is a device *profile* over a generic MIDI adapter. | `apc40.py`, `midi.py` | owner |
+| APC40 feedback: **rings show the base** (while a knob glides, its target), and **LEDs show the effective value**. | `MidiIO._ring_norm`, `MidiIO.feedback` | owner |
+| Hands are the primary performing surface. The APC40 keeps presets, scenes and master controls. | — | owner |
+| **Twelve axes** (palm pose, six per hand), shaped as analog signals, plus eight pinch switches. **No gesture vocabularies and no more DOFs.** The skeleton is kept for display only. | `hands/core.py` | owner |
+| The hands package is liftable: `core.py` and `signal.py` import nothing from the host. | `tests/test_hands_boundary.py` | owner |
+| Pinch switches are a Schmitt trigger plus a debounce. | `hands/signal.py` | owner |
+| Hand settings live in three places, each where it changes: rig settings in `[hands]`, the room (ranges and box) in `hands.json`, and the feel (including `hands.learn_depth`) in the hands params. | `hands/core.py` | owner |
+| **The interaction box** bounds the palm in the Leap's mm. It is one box for both hands, with x symmetric. The calibration sweep sets it (2nd–98th percentile + `BOX_MARGIN`) and "reset ranges" opens it. No widget edits it. Its edge is a Schmitt edge (`BOX_EDGE`). | `load_box`, `inside`, `HandsIO._sweep_box` | row 50 |
+| **A hand outside the box is absent everywhere**: NaN axes, presence off, pinches dropped and its ghost faded. Only the HANDS page shows it, drawn hollow. | `HandsIO.poll`, `ghost.box_of` | row 51 |
+| Home on the keyboard is `key:HOME` only (fn ← on a laptop). | `routing.LOOP_KEY_ROWS` | row 38 |
 
 ## Tempo and LFOs
 
-| Date | Decision | Why | Source | Status |
-|---|---|---|---|---|
-| 2026-09-26 | One free-running clock, tapped into time. Tap sets BPM; the downbeat is the global trigger's. No DJ Link, no MIDI clock, no drift correction: re-tap. 4/4 assumed. | Sync sources do not exist on this rig yet; a tap is what a lighting operator already does. | plan 09 d.9 | standing with one deviation (`tempo.py`): there is no BPM → Hz conversion — a synced LFO reads `clock.beat · ratio` directly while a Hz LFO integrates its rate |
-| 2026-09-28 | **A tap never moves the downbeat**, before the first trigger or after it; only the global trigger (⇧B, METRONOME) places it. A fresh launch runs its synced LFOs unaligned until the first press. | One rule instead of two that depend on history; the trigger button keeps its one job, and tapping is always safe mid-set. The cost is one press at the start of a set. | owner, decision register rows 1–2 (B2 option a); PR #42 | standing (`Clock.tap`) |
-| 2026-09-28 | **`lfo.trigger` and `lfo.N.reset` are ownable by a performer; `tempo.tap` is not** (`modulatable=False`). | A pinch switch exists so a pinch can be a button, and the rising-edge trigger was built for dropping the LFOs on the one; a band routed to tap tempo would tap on every transient, a footgun with no use. | owner, decision register rows 1–2 (B5 option c); PR #42 | standing (`tempo.register`) |
-| 2026-09-26 | BPM is the mean of the burst's last 8 taps; a gap over 2 s starts a new burst. | A tempo change should register within a bar. | plan 09 as built | standing |
-| 2026-09-26 | The global LFO trigger sets the downbeat to now and restarts every synced LFO at phase 0 together; tapping alone never moves a running LFO. | A re-tap mid-set must not jolt the picture until the performer says so. | plan 09 WP4 | standing (`lfo.trigger`) |
-| 2026-09-26 | `Clock.trigger` folds the current nudge into `t0`; `Clock.tick(now)` once a frame so a key-fired trigger and the LFO step agree. | Without the tick a synced LFO read phase ≈ 0.999 on the trigger frame. | plan 09 as built | standing |
-| 2026-09-26 | Four LFOs. Each is a performer and every one of its knobs (shape, rate, sync, depth, phase) is an ordinary, ownable param. Output `u = 0.5 + 0.5 · depth · wave`, rest 0.5. | Ownable knobs are what makes them chainable. | plan 09 d.8 | standing (`lfo.py`) |
-| 2026-09-26 | The APC40's TAP TEMPO → `tempo.tap`, NUDGE ± → `tempo.nudge`, METRONOME → `lfo.trigger` with a beat-blink LED; `theme.next` moved to QUANT; the shape steps went. | The physical buttons should do what they say; the clip grid already sets shapes. | plan 09 WP4 | standing (`remap_factory`); QUANT's target is `preset.next` since plan 13 WP2 (PR #64), invariant on both desk layers |
+| Decision | Where | Who |
+|---|---|---|
+| **One free-running clock, tapped into time.** No DJ Link, no MIDI clock and no drift correction: re-tap. 4/4 is assumed. A synced LFO reads `clock.beat · ratio`. | `tempo.py` | owner |
+| BPM is the mean of the burst's last 8 taps. A gap over 2 s starts a new burst. | `tempo.TAPS`, `tempo.GAP` | owner |
+| **A tap never moves the downbeat.** Only the global trigger (⇧B, METRONOME) places it, and it restarts every synced LFO at phase 0. | `Clock.tap`, `Clock.trigger` | owner |
+| A trigger or reset that fires after this frame's LFO step is held and applied at the start of the next step. | `LFOs.pending` | owner |
+| Leaving a division for Hz carries the LFO's phase. Switching into a division lands on the beat. | `lfo.py` | owner |
+| **Four LFOs**, each a performer. Every knob of each LFO is an ownable param. Output is `u = 0.5 + 0.5 · depth · wave`, at rest 0.5. | `lfo.N`, `lfo.REST` | owner |
+| APC40: TAP TEMPO → `tempo.tap`, NUDGE ± → `tempo.nudge`, METRONOME → `lfo.trigger` (its LED blinks on the beat), QUANT → `preset.next`. | `apc40.DEFAULT_MAP` | owner |
 
 ## Audio
 
-| Date | Decision | Why | Source | Status |
-|---|---|---|---|---|
-| 2026-08-21 | The six-band chain ports faithfully, including its known bugs (the trim non-monotonicity), until plan 06. | A "fix" during a port makes parity failures undiagnosable. | plans README | standing on the AUTO path; MANUAL is the fix (2026-09-28) |
-| 2026-09-18 | The chain becomes an N-band (1–16) graphic-EQ analyzer: per band centre / width / weighting curve, then the existing envelope, transient and shaper chain. Band → plane mapping and `dir` leave the chain and become routes. | Audio as a source, not a special case. | plan 07 WP4a | standing (`analyzer.py`) |
-| 2026-09-18 | A factory `legacy6` preset reproduces the reference chain on the golden traces. | The regression net for the refactor. | plan 07 WP4a | standing |
-| 2026-09-18 | The band editor shows a live spectrogram heat map with the band curves drawn over it. | Bands are shaped against real signal, not numbers. | plan 07 | standing (`ui_bands.py`) |
-| 2026-09-28 | `master.dyn` keeps its 0.06×–4× range: up to 1× it blends toward the windowed normaliser and grows the expansion; past 1× only the expansion grows. | Capping at 1× would move every saved preset's detent; two knobs would re-freeze the oracle. Documented instead. | owner, decision register row 5 (audit A7) | standing (tooltip, ENGINEERING §4) |
-| 2026-09-28 | The trim fix is a per-band **AUTO / MANUAL** normalisation switch (`band.{i}.norm`, default AUTO): AUTO is the reference chain bit for bit; MANUAL bypasses the adaptive window and applies trim once, as a plain gain. | What a mix engineer expects; the reference path and its frozen oracle stay untouched; options 1 and 2 changed the reference for everyone. | owner, decision register row 6 (audit A10, plan 06 item 2) | standing (plan 11 WP15, `test_manual_normalisation_makes_trim_monotonic`) |
+| Decision | Where | Who |
+|---|---|---|
+| The analyzer is an N-band (1–16) graphic EQ followed by the reference envelope, transient and shaper chain. Band → plane mapping is done by routes. | `analyzer.py` | owner |
+| A factory `legacy6` preset reproduces the reference chain on the golden traces. | `library/presets/legacy6.json` | owner |
+| The band editor shows a live spectrogram with the band curves over it. | `ui_bands.py` | owner |
+| Per-band **AUTO / MANUAL** normalisation (`band.{i}.norm`, default AUTO). AUTO is the reference chain, bit for bit, known trim quirk included. MANUAL applies trim once as a plain gain. | `bands.NORMS` | owner |
+| `master.dyn` keeps its 0.06×–4× range. Up to 1× it blends toward the normaliser; past 1× only the expansion grows. | `tapers.T_DYN` | owner |
+| The eleven files under `library/band/` are the one scene store. | `control.SCENES`, `Analyzer.apply_scene` | owner |
 
-## Render
+## Render and outputs
 
-| Date | Decision | Why | Source | Status |
-|---|---|---|---|---|
-| 2026-08-22 | CPU transforms through the parity-proven `project()`, GPU rasterises; edges as screen-space quads at the reference width formula. | 1 px GL lines lost the near-edge hierarchy the reference has. | plan 02 | standing (`render.py`) |
-| 2026-09-18 | Two GLFW windows on one GL context; the render window has **no imgui at all**. Cheat sheet, toasts, everything: control window. | The render window is the projector; nothing of the desk belongs on it. | plan 07 | standing (`app.py`) |
-| 2026-09-19 | The dream is **temporal**: one running buffer blended with each frame, a few gradient steps per frame, back to the compositor. Not per-frame deep dream. | 60 steps per frame is neither affordable nor needed; persistence *is* the tracer. | plan 07 WP6 | standing (`dream.py`) |
-| 2026-09-19 | The dream worker is an optional extra, config-gated; missing torch degrades to the plain tracer with a note. | Nothing in the core may depend on it. | plan 07 WP6b | standing |
-| 2026-09-20 | The compositor re-colours the dream buffer (`dream.hue / sat / tint…`); echoes pass untouched. | The net paints in its own primaries whatever the scene's palette. | plan 07 WP6b follow-up | standing (`lookback.py`) |
-| 2026-09-25 | `dream.occlude`: the render covers the wake where it drew, via a face coverage mask pass. | Brightness-as-coverage barely covered; face fills draw at 1–6 % alpha. | PR #22 | standing |
-| 2026-09-26 | Post effects are one GLSL file each under `shaders/fx/`; `// @param` uniforms become registry params `fx.<file>.<uniform>`; the chain runs after the look-back composite; off is bit-identical. **New effects are new `.glsl` files, not Python.** | A general effect pipeline that speaks the modulation language. | PR #25 | standing (`fx.py`) |
-| 2026-09-26 | `view.cut_through` (default on) keeps the old blend; off uses separate alpha so faces do not expose the desktop in overlay mode. | The owner wants to choose between seeing the desktop through faces and seeing the lowest layer. | PR #26 | superseded in part, plan 14 WP1 (PR #73): cut-through applies only in overlay; window and fullscreen are opaque |
-| 2026-09-29 | **A render frame binds its target explicitly**: `app.draw_render` binds the window first, and `Renderer.draw` / `Lookback.capture` bind their target again on every exit, a raise included. | The frame binds half a dozen offscreen framebuffers; one left bound made every later frame draw into it while the window showed one picture — the owner's freeze (WAKE without a dream worker), with no error anywhere. | plan 14 WP1 (PR #73) | standing (`tests/test_render.py::test_a_look_back_frame_with_no_worker_leaves_the_window_bound`) |
+| Decision | Where | Who |
+|---|---|---|
+| The CPU transforms through the parity-proven `project()` and the GPU rasterises. Edges are screen-space quads at the reference width. | `render.py` | owner |
+| **No imgui on any render output.** Everything for the operator is in the control window. | `app.py` | owner |
+| **A render frame binds its target explicitly**, again on every exit, including a raise. | `app.draw_render`, `Lookback.capture` | owner |
+| **Overlay mode only when the config asks** (`[output] overlay = true`, default off). Window and fullscreen are always opaque, and `view.cut_through` applies only in overlay. | `Output.allowed` | owner |
+| **Up to four render outputs** (`[[output.screens]]`) show the same frame. Each output has `output.N.scene`, `output.N.hands`, `output.N.through` and, when there are two or more outputs, `output.N.dim`. With no list there is one output. | `outputs.py`, `outputs.MAX_OUTPUTS` | owner |
+| Each output's switches are rig settings: never saved, not modulatable, and untouched by presets, shows and undo. Every launch and ⌘R takes them from the config, and a config `dim` under 0.1 is raised to 0.1. | `overlay.register_switches` | row 81 |
+| Output 1's context renders every distinct picture. Each later output copies it in its own context; only output 1's swap waits for the screen. | `Renderer.draw_outputs`, `outputs.Presenter` | row 83 |
+| An output of another shape shows the whole frame, letterboxed. | `outputs.fit` | row 82 |
+| A later output whose screen is not connected at launch is not opened, and a note says so. Later outputs take their screen and fullscreen from the config only. | `app._later_output` | row 86 |
+| **The crossfader is the master dim** on both desk layers (left is black). It multiplies each output's finished picture, times that output's own dim, as the last pass. It is a rig setting: 1 at every launch, never saved, with soft pickup. There is no blackout button. | `output.dim`, `Renderer.dim_pass` | owner |
+| In overlay mode the dim fades colour and alpha together. On an opaque ground only the colour scales. | `Renderer.dim_pass` | row 41 |
+| **The ghost hands** are drawn once a frame into their own layer, in a fixed camera framing the box. They are composited per output after the effects and before the dim, and they are never in the look-back history. `ghost.*` are session params, off by default. A raising hands pass is caught. | `ghost.py`, `Ghost.layer`, `Ghost.composite` | owner |
+| `ghost.on` says whether the hands are drawn at all, and each output's hands tick says where they show. | `outputs.route` | row 84 |
+| **`ghost.style`** picks one of five drawn objects from the same tracking data: HANDS (the default), JOINTS, PALMS, CAGE and MARIONETTE. | `ghost.PARTS` | owner |
+| `ghost.style` is a session enum, saved with the show and learnable onto a desk control. | `ghost.register` | row 87 |
+| **Hands through effects** (`output.N.through`, off by default). When on, that output's hands go in after the look-back composite and before the first effect. With the scene off and through on, the output shows the hands alone through the effects. | `Renderer._pipeline` | owner (switch); row 79 (where they go in) |
+| The guide and the tethers' labels are never bent: when hands go through effects, they are drawn in a layer of their own laid on afterwards. | `Ghost.readout` | row 80 |
+| **Instances are laid out by `view.inst_layout`: GRID, HEX or RING.** | `render.inst_positions` | row 71 |
+
+## Effects and the look-back
+
+| Decision | Where | Who |
+|---|---|---|
+| **Post effects are one GLSL file each** under `shaders/fx/`. Their `// @param` uniforms become `fx.<file>.<uniform>` params. New effects are new `.glsl` files, not Python. With every effect off, the frame is bit-identical. | `fx.py` | owner |
+| **Each effect is aimed at the frame or the faces** (`fx.<name>.target`). The faces' effects run into a picture the faces show, per face or in screen space (`fx.face_map`). | `fx.TARGETS`, `fx.FACE_MAPS` | owner |
+| The face picture is the whole face as face 0 shows it, 1024² (`render.FACE_PIC`), cover-fit in screen mapping. It is made before the scene pass, so the echoes and dream carry it. With nothing aimed at the faces, nothing runs. | `Renderer._face_picture` | row 65 |
+| The two chains share one `FxState`, which advances the effects' clocks once a frame, and the faces' chain borrows the frame chain's programs. | `FxState.advance_to` | owner |
+| The FX page's open strip is chosen by name, not index. It is in no file and is not an undo step. | `FxState.sel_name` | owner |
+| On a chip, the name opens the effect and the dot at its left switches it (a diamond when the effect is aimed at the faces). Chips sit three to a row. | `ui_fx._chip`, `ui_fx.CHIPS_PER_ROW` | row 45 |
+| The chip grid is the chain view. Dragging a chip onto another reorders the chain as one undo step. The order slider stays. | `fx.reordered` | row 67 |
+| An effect is re-aimed by the ONTO frame / faces chips on the open strip's title line. A drag never changes a target. | `ui_fx._strip_header` | row 68 |
+| An open effect that is not running says why, and its controls are dimmed by a veil but stay live. | `ui_fx.why_idle` | row 46 |
+| **The dream is temporal**: one running buffer blended with each frame, a few gradient steps per frame. | `dream.py` | owner |
+| The compositor re-colours the dream buffer (`dream.hue / sat / tint`). Echoes pass untouched. | `lookback.py` | owner |
+| `dream.occlude` ("Shape hides wake"): the shape covers the wake where it drew. | `params.py` | owner |
+| Echo time is in seconds: `dream.fade` is a half-life and `dream.gap` is the time between echoes. | `params.py` | owner |
+| The LOOKBACK page has three sections: ECHOES, DREAM and BOTH. The dream layer is one menu of every layer of VGG16 and GoogLeNet (25), grouped by net, each with its name and a short description, a longer one on hover; the registry labels match the page. | `ui_lookback.SECTIONS`, `lookback.LAYER_INFO` | row 69 |
+| `dream.layer` is stored as an index into `lookback.LAYERS`, which is append-only: a new layer goes at the end, so a saved look keeps its layer. The menu's order is `LAYER_INFO`'s. | `lookback.LAYERS` | row 69 |
+| A net's weights are read once a run: every layer of that net is a cut of the same loaded stack. | `dream.build_trunk`, `DreamWorker.stacks` | row 69 |
+| The dream's "speed" is `dream.k`, read as the dream frames in which a frame's share halves. | `params.dream_speed_text` | row 70 |
 
 ## Library and persistence
 
-| Date | Decision | Why | Source | Status |
-|---|---|---|---|---|
-| 2026-09-18 | Library home is `~/Hyperspace` (overridable by `HYPERSPACE_HOME` / config); factory presets ship read-only in the repo; a user file shadows a factory file of the same name. | The Ableton model: a project saves everything, each module has its own browsable preset library. | plan 07 WP2 | standing (`library.py`) |
-| 2026-09-18 | One JSON per preset (`hyperspace.preset/1`, a registry group's snapshot); projects are `*.hyp.json`; a `schema` string plus a migration table; unknown ids on restore are reported, not fatal. | Human-editable, live-reloadable, versioned. | plan 07 WP2 | standing for the module presets (plan 13 D3); the whole-look preset is `hyperspace.preset/2` and the project `hyperspace.project/2` since plan 13 WP2 (PR #64), schema-1 projects migrated by `preset.migrate_home` at launch and `Project.load` later, not by a `library.MIGRATIONS` step (WP5, PR #66) |
-| 2026-09-18 | The library is watched like source: editing a preset file reflects in the running app. | The same contract `patterns.glsl` set. | plan 07 WP2 | standing (`hotreload.py`) |
-| 2026-09-26 | Routing presets are disposable: every factory file was rewritten for schema 2 rather than migrated. | Nothing is preserved that the new rules cannot express. | plan 09 d.10 | **superseded** by plan 13 WP5, PR #66: there are no routing presets; the factory ones are presets and a user's were migrated, not rewritten |
-| 2026-09-27 | The eleven JSON files under `library/band/` are the one scene store, each band named in the layout; `scene.select`, the APC grid, Reset and the strip all read them (the combo re-tunes the bands you have, the strip applies its layout). | Two copies of the scenes had already diverged on names. | plan 11 §2 row 9, PR #44 | standing (`control.SCENES`, `Analyzer.apply_scene`) |
-| 2026-09-27 | `Project.io` is deleted: the live binding table is `<home>/bindings.json` and a project never carries the routing layer. Routing presets are a document kind of the library (`Library.routing`), listed, shadowed and reloaded like every module preset. | One preset system over one folder tree; plan 07's "bindings with the project" never happened and the standing decision is one home file. | plan 11 §2 row 10, PR #52 | `Project.io` gone and one home file standing; the routing-preset document kind **superseded** by plan 13 WP5, PR #66 (removed: the presets are the one kind) |
+| Decision | Where | Who |
+|---|---|---|
+| The library home is `~/Hyperspace` (or `HYPERSPACE_HOME` / config). Factory files ship read-only in the repo, and a user file shadows a factory file of the same name. | `library.py` | owner |
+| A module preset is one group's values (`hyperspace.preset/1`), a preset is `hyperspace.preset/2` and a show is `*.hyp.json` (`hyperspace.project/2`). Unknown ids are reported, not fatal. | `library.py` | owner |
+| The library is watched like source: editing a file shows in the running app. The library's own renames and trash moves are never re-applied. | `hotreload.py`, `Library._sync` | owner |
+| `<home>/bindings.json` holds only the session's controls. A show carries no routing of its own. | `routing.FILE` | owner |
+| **A preset file about to be overwritten or deleted is copied to `<home>/trash/` first.** | `library.to_trash` | owner |
+| …only when the text differs. A failed copy warns and lets a save go on, but refuses a delete. | `library.to_trash` | row 37 |
+| The windows open where the config says, otherwise where they were (`<home>/windows.json`, one render rect per output). Fullscreen is never remembered. The file is written on quit and ⌘R only. | `placement.py` | row 48 |
+| **A dirty dot compares floats within undo's tolerance**, so a performer's round-off lights no dot. | `undo.alike` | owner |
+| **The home in git is opt-in** (`[library] git = true`): a local repository, one commit per save, never pushed. The trash is ignored, and git never blocks a save. | `homegit.py` | row 78 |
 
 ## Presets and the desk
 
-Settled with the owner on 2026-09-28 while plan 12 was composing the party
-presets; the design is [`plans/13-preset-and-session.md`](plans/13-preset-and-session.md)
-and each row's status says where it was built and which test holds it (WP1, PR #62; WP2, PR #64;
-WP3, PR #63; WP4, PR #65; WP5, PR #66 — all on `plan-13-integration`). Decision register rows
-18 and 19 were answered and built in WP5; row 20 is still the owner's (the last row).
+The D-numbers are cited from code comments.
 
-| Date | Decision | Why | Source | Status |
-|---|---|---|---|---|
-| 2026-09-28 | **Two nouns.** A *preset* is one file holding everything a performance moment is: every performance parameter's base, the performer rows, the APC40's preset layer, and a label per module. A *session* is the boilerplate that makes the rig ready and that a preset never touches. "Theme", "routing preset" and the UI word "scene" go. | Plan 12 found five nouns split by file lineage; one moment the performer calls TRIP was a theme, a routing preset and two module presets loaded in three steps. | plan 13 D1 | standing (plan 13 WP2, PR #64: `preset.py`, `hyperspace.preset/2`, the project as the session; WP4, PR #65: desk and macros; WP5, PR #66: the routing presets gone, the one-time migration; `test_presets.py::test_the_factory_presets_are_preset_2_performance_files`, `tests/test_migration.py`) |
-| 2026-09-28 | **A preset load replaces everything**: every performance parameter lands (the file's value or the app default), every performer row is replaced, the preset layer of the desk is replaced. No merging. | "Loading different things and having states merged together is very leaky and very hard to get right" — the owner. | plan 13 D2 | standing (plan 13 WP2, PR #64: values and routes; WP3, PR #63, and WP4, PR #65: the desk's preset layer and the macros; `test_presets.py::test_a_preset_load_lands_every_base_and_replaces_every_route`, `::test_a_preset_load_replaces_the_desk_and_the_macros`) |
-| 2026-09-28 | Module presets stay: one group's values, cycled from that group's strip, replacing that group. A preset records which module preset each group was showing as a **label only**; loading a preset never chain-loads one. | Cycling one module over a well-formed scene is useful; a pointer that loads on load is where merge cases come back. | plan 13 D3 | standing (plan 13 WP2, PR #64: `Library.label`; `test_presets.py::test_module_labels_are_recorded_and_never_chain_load`) |
-| 2026-09-28 | The APC40 has two layers under a **latched SHIFT** (note 0x62); its LED shows which layer is up; loading a preset drops to the preset layer. | Command-key logic: the globals are always one press away without costing every preset a knob. Held would need two hands at the desk. | plan 13 D4 | standing (plan 13 WP3, PR #63: `desk.shift`, `Bindings.toggle_layer` / `drop_layer`; WP4, PR #65; `test_desk.py::test_shift_latches_the_layer_and_lights_its_led`, `::test_a_preset_load_drops_to_the_preset_layer`) |
-| 2026-09-28 | The **global layer is fixed**: defined in the session's files, never the target of a Learn. A Learn writes only into the loaded preset. | "Global for a reason"; an accidental learn must not overwrite them mid-set. | plan 13 D5 | standing (plan 13 WP3, PR #63: the global layer in the session's file; WP4, PR #65: a learn writes into the loaded preset, one with the global layer up is refused; WP5, PR #66: `bindings.json` holds only the session's controls; `test_learn.py::test_learn_refuses_the_global_layer_and_invariant_controls`, `::test_a_knob_learn_writes_a_desk_row_into_the_loaded_preset`) |
-| 2026-09-28 | **Invariant controls** have one meaning on both layers and no preset may map them: the faders, the preset-select row, SHIFT, TAP TEMPO, METRONOME, NUDGE ±, the transport. | Switching presets and keeping time must never be behind a layer. | plan 13 D6 | standing (plan 13 WP3, PR #63; WP4, PR #65: a learn on an invariant control, SHIFT included, is refused; `test_desk.py::test_invariant_controls_mean_one_thing_on_both_layers`, `::test_a_desk_row_on_an_invariant_control_is_dropped_with_a_note`) |
-| 2026-09-28 | On a layer switch the knobs **jump** to the layer's values (endless encoders the host re-bases by the ring message); the faders **soft-pick-up**. | The knobs have no position of their own; the faders do. | plan 13 D7 | standing (plan 13 WP3, PR #63, and WP4, PR #65; `test_desk.py::test_a_layer_switch_rebases_the_knobs_and_leaves_the_faders_to_pick_up`, `::test_a_preset_load_clears_the_faders_catch`) — the re-basing is the one hardware assumption still to be seen (hand check 31; `apc40.RING_REBASES_KNOB`) |
-| 2026-09-28 | A control the preset does not map **does nothing** and shows dark. No fall-through to the global layer. | A knob that silently means something else is worse than a dead one. | plan 13 D8 | standing (plan 13 WP3, PR #63, and WP4, PR #65; `test_desk.py::test_an_unmapped_control_is_dark_and_does_nothing`) |
-| 2026-09-28 | The **analyzer is session**: bands, dynamics, scenes and the drive fader are never in a preset. | It is the room, and every hand preset assumes one shared lane layout. | plan 13 D9 | standing (plan 13 WP1, PR #62: the split, `params.SESSION_GROUPS`; WP2, PR #64: a load never touches a session param, and no factory preset's `values` names one (the house themes' `scene.select`, TUMBLE's `master.gain` dropped); `test_params.py::test_every_persisted_group_is_performance_or_session`, `test_presets.py::test_a_preset_load_never_touches_a_session_param`) |
-| 2026-09-28 | A session names its **startup preset**, loaded on launch. | Under "unmapped does nothing" a fresh start would otherwise have a dark desk. | plan 13 D11 | standing (plan 13 WP2, PR #64: `Project.startup`, `load_startup`; `test_presets.py::test_the_startup_preset_loads_on_launch`) |
-| 2026-09-28 | A modifier is read **at the press**; SHIFT's release never re-evaluates a button already down. | The two note-offs arrive in either order. | plan 13 D12 | standing (plan 13 WP3, PR #63, and WP4, PR #65; `test_desk.py::test_shift_release_never_reevaluates_a_held_button`) |
-| 2026-09-28 | A route keeps `scale` only when it names a **session** param — the MASTER drive fader, which is how the fader reaches the six band → rotation routes; every `scale` that named a macro becomes a depth subscriber, and a `scale` on a performance param is dropped at load with a note. | The drive fader keeps its one job in the room and the legacy6 parity anchor keeps its numbers; the macro decision (row 12) stays whole. | owner, decision register row 18 (P13-h), plan 13 §12 | standing (plan 13 WP5, PR #66: `routing.migrate_scales`; `test_macros.py::test_a_scale_on_a_session_param_is_left_alone`, `::test_a_scale_on_a_performance_param_is_refused_with_a_note`) |
-| 2026-09-28 | A preset's route may **perform** a session param (`party-tumble`'s left hand leans on the drive); D9 governs the values a preset lands, not a performer's offset. The ROUTING page marks such a route "session". | An offset springs back when the source leaves: it changes how the room feels while someone plays, never what the room is set to. | owner, decision register row 19 (P13-i), plan 13 §12 | standing (plan 13 WP5, PR #66: `ui_routing.is_session_target`; `test_ui_routing.py::test_a_route_on_a_session_param_is_marked_session`) |
-| 2026-09-28 | Plan 12's five `party-*` presets are composed six-DOF only, every hand row a push from the axis's rest (or a position on a param whose base is the rest), no pinch dependence, no rate-type param under a hand; a tilt adds ±45° because a quarter turn maps the cubic shapes onto themselves. | The party brief: intuitive in seconds, a still hand is calm, no preset depends on B1's fix. | plan 12 §3, PR #47 | standing; re-cut into plan 13's file shape (plan 13 WP5, PR #66: five full presets on the party project's F1–F5, WAKE and TRIP with plan 12 §6's device knobs; `tests/test_plan12_presets.py`) |
-| 2026-09-29 | **Hand routes are addressed by name** (`hand:right.roll`, `hand:left.y`, `hand:left.pinch.index`), resolved by the hands adapter's published layout; a name the rig lacks leaves the row dormant, never on another axis; `hand:<i>` still reads. | A reordered or trimmed `[hands] dofs` list must never silently re-aim every preset; every preset is being regenerated and migrated once now, the cheapest moment the format will have. | owner, decision register row 20 (P13-j; audit N7) | standing (plan 13 WP5b, PR #70; `test_hand_names.py::test_a_named_hand_route_follows_its_axis_whatever_the_dofs_order`) |
-| 2026-09-29 | **Overlay mode only when the config asks** (`[output] overlay = true`, default off): otherwise no transparent framebuffer, and MASTER select / `T` do nothing. Window and fullscreen are always opaque. | The render is for a Pepper's Ghost illusion; one press must never float it see-through over the desktop mid-show. | owner, decision register row 21 (P14-a) | built: plan 14 WP1 (opaque, PR #73) + WP2 (PR #75; the gate: `[output] overlay` in `config.DEFAULTS`, `app._windows(overlay)`, `Output.allowed` / `_set_overlay`; `tests/test_overlay.py::test_overlay_refuses_every_road_while_the_config_shuts_it`, `tests/test_app_boundary.py::test_the_render_window_is_transparent_only_when_the_config_asks`) |
-| 2026-09-29 | **The party show is what the rig opens**; the house moods become a `house` show; the last show opened is remembered; `MIGRATED` stays a preset in the list. | "We are making this thing to use it as a party device." | owner, decision register row 22 (P14-b) | built, plan 14 WP3 (+ WP4, the PRESETS page; PR #75): factory `party` (`library.DEFAULT_PROJECT`) and `house` shows, `<home>/last_show`, the owner's `default` renamed `mine` once with a backup (`library.unshadow_default`); `tests/test_party_show.py` |
-| 2026-09-29 | **The dream is part of the app**: torch and the dream stack are ordinary dependencies, installed by `uv sync`, and the worker is on by default. Supersedes the optional `dream` extra. | "It needs to be integrated into the program … you shouldn't have to do a separate thing to enable dreaming." | owner, decision register row 23 (P14-c) | built: plan 14 WP1 (the dependency, the worker on) and WP6 (echo time in seconds — `dream.fade` a half-life, `dream.gap` seconds between echoes, the old per-frame values read as 60 Hz frames; TRACER; WAKE re-tuned and shot with the worker on; `test_lookback.py::test_the_same_preset_gives_the_same_trail_at_60_and_120_hz`) |
-| 2026-09-29 | **ACID, MANDALA and NOITA on the party show's F6–F8**, each with hand routes and eight device knobs. | Every effect reachable from the show; the looks already exist as module presets. | owner, decision register row 24 (P14-d) | built: plan 14 WP5 (`party-acid`, `party-mandala`, `party-noita` on the party show's F6–F8; every effect on in a factory preset and no factory route on an effect that is off — `test_plan12_presets.py::test_every_effect_is_on_in_a_factory_preset`, `::test_no_factory_route_drives_an_effect_that_is_off`) |
-| 2026-09-29 | **The desk's glyphs** — K1–K8 track knobs, D1–D8 device knobs, S1–S8 faders, SM, X, C, G row·column, B1–B22, ⇧ — on every ROUTING row and Learn message, and an APC40 diagram above the cheat sheet showing the layer that is up. | Akai's names mean nothing for this show; one glance from a row to the desk. | owner, decision register row 25 (P14-e) | built, plan 14 WP7 (`apc40.LAYOUT`, `ui_desk.py`; `tests/test_ui_desk.py`; hand check 45) |
+| Decision | Where | Who |
+|---|---|---|
+| **D1 Two nouns.** A *preset* is one file holding a performance moment: every performance param's base, the performer rows, the APC40's preset layer and a label per module. A *session* is what makes the rig ready, and a preset never touches it. | `preset.py`, `params.PERFORMANCE_GROUPS` | owner |
+| **D2 A preset load replaces everything**: every performance base, every route, the desk's preset layer and the macros. There is no merging. | `preset.py` | owner |
+| **D3** Module presets stay: one group, cycled from that group's strip. A preset records each group's module preset as a label only and never chain-loads it. | `Library.label` | owner |
+| **D4** The APC40 has two layers under a **latched SHIFT**, and its LED shows which layer is up. Loading a preset drops to the preset layer. | `desk.shift`, `Bindings.toggle_layer` | owner |
+| **D5** The global layer is defined in the session's files. Its track knobs K1–K5 are the hand feel (smoothing, response, catch, the selected axis's return) and `tempo.bpm`. K6–K8 are free. | `apc40.DEFAULT_MAP` | owner |
+| **D6 Invariant controls** have one meaning on both layers, and no preset maps them: the faders, the crossfader (master dim), clip rows 1, 4 and 5 (the bank), the clip-stop row (save-as), SHIFT, TAP TEMPO, METRONOME, NUDGE ±, QUANT, OVERDUB (home) and the transport. A preset's row on one of them is dropped at load with a note. | `apc40.DEFAULT_MAP`, `apc40.BANK_PADS` | owner |
+| **D7** On a layer switch the knobs **jump** to the layer's values (the ring re-bases the encoder) and the faders **soft-pick-up**. | `apc40.RING_REBASES_KNOB` | owner |
+| **D8** A control the preset does not map **does nothing** and shows dark. It never falls through to the other layer. | `routing.py` | owner |
+| **D9 The analyzer is session**: bands, dynamics, scenes and the drive fader are never in a preset. | `params.SESSION_GROUPS` | owner |
+| **D11** A show names its **startup preset**, which loads at launch. | `Project.startup`, `load_startup` | owner |
+| **D12** A modifier is read **at the press**. SHIFT's release never re-evaluates a button already down. | `midi.py` | owner |
+| **The bank is twenty-four slots.** F1–F8, ⇧F1–F8 and clip row 1 are slots 1–8, and clip rows 4–5 are slots 9–24. A slot names a preset file. | `library.SLOTS`, `params.F_KEYS` | owner |
+| Slots 9–24 have no triggers of their own (they use `preset.select`). The show file stays `hyperspace.project/2` and holds the bank only up to its last filled slot. The factory party show has TRACER on slot 9. | `library.bank_doc` | row 72 |
+| A bank pad is green when its preset is loaded, amber when its slot is filled and dark when empty. The old factory shape rows on those pads drop quietly at load. | `routing.led_level`, `routing.RETIRED_DESK_ROWS` | row 73 |
+| **Home is the show's "starts on" preset**, on OVERDUB and the Home key. It is one undo step. | `Project.home`, `preset.home` | owner |
+| **The desk never overwrites a preset.** Holding any clip-stop button about 0.6 s saves the live state as a new preset ("TRIP 2") into the next empty slot. Panel Save and ⇧F1–F8 still overwrite. | `Project.save_new`, `midi.HOLD_S` | owner |
+| The save-as details: a `hold` op fires once while held; the eight buttons are one bar; the new pad blinks; names are counted against files, names and bank; and the new preset becomes the loaded one. | `routing.OPS`, `library.next_name` | row 42 |
+| A preset load clears a fader's catch only when the load moved its param. | `MidiIO.redraw` | row 44 |
+| **Knob smoothing**: absolute knob and fader values glide over `desk.slew`, 80 ms by default and at most 250 ms (`routing.SLEW_MAX_S`), always under undo's settle time. | `routing.SLEW_DEFAULT_S`, `MidiIO._glide` | row 54 |
+| `desk.slew` and `hands.learn_depth` are session params, and neither is on a global-layer knob. | `routing.register_desk` | row 55 |
+| A device knob only where it does something. A fresh preset layer's D1–D4 are 4D depth, yaw, pitch and the face pattern, and D5–D8 are dark. | `apc40.SCENE`, `preset.knob_desk` | row 75 |
+| The party show is what the rig opens and the last show opened is remembered. The house moods are a `house` show. | `library.DEFAULT_PROJECT`, `last_show` | owner |
+| The party show's F1–F8 are TUMBLE, FACES, FIELD, WAKE, TRIP, ACID, MANDALA and NOITA, so every effect is in some factory preset; TRACER is on slot 9. | `hyperspace/library/projects/party.hyp.json` | owner |
+| The party presets are composed with six DOF only: every hand row is a push from the axis's rest, with no pinch dependence. Rate-type params under a hand are allowed. | `tests/test_plan12_presets.py` | owner |
+| `hands-orbit` is a factory preset: five pushes onto camera params (zoom depth 0.12). | `preset.hands_orbit_routes` | row 56 |
+| **Unwanted presets are hidden or trashed from the list.** × hides a factory preset (`<home>/hidden.json`) and trashes one of yours. | `Library.hide` | owner |
+| Hide, rename and the trash live in the preset list. Rename is refused on a factory preset and repoints every user show. Emptying the trash is the one delete with no copy kept, and it asks twice. | `Library.rename`, `Library.empty_trash` | row 76 |
+
+## Undo
+
+| Decision | Where | Who |
+|---|---|---|
+| **Undo reaches single edits.** A step is one gesture or one replacing action (any load, home, a Learn, an Unbind, a delete). Once a frame `Undo.tick` fingerprints every watched base and the loaded preset's tables, and 0.4 s of quiet ends a step. A performer makes no step. Undo puts back only what differs and writes no file. The stack holds 100 steps. | `undo.py`, `undo.SETTLE_S`, `undo.LIMIT` | owner |
+| Undo is on ⌘Z and Ctrl+Z, and ⇧ redoes. | `routing.LOOP_KEY_ROWS` | row 34 |
+| A tap, a nudge or a typed BPM is not an undo step: the `tempo` group is not watched. | `undo.EXCLUDED_GROUPS` | row 36 |
+| Camera moves are undo steps. | `undo.watched` | row 39 |
+| A drag that pauses for longer than the settle time becomes two steps. | `undo.SETTLE_S` | row 43 |
 
 ## UI
 
-| Date | Decision | Why | Source | Status |
-|---|---|---|---|---|
-| 2026-08-23 | The panel is a square, hairline instrument panel with a monospace atlas and detent notches. | Match the reference's look. | plan 03 | **superseded** 2026-09-26 |
-| 2026-09-26 | Legibility at a distance comes first: rounded frames, pill chips, filled faders, SF Rounded / SF Mono, no page scrolls at the control size (a test holds it). Master faders live on the audio page. | The panel proved unreadable from a few feet back at a party. | PR #24, ENGINEERING §7 | standing |
-| 2026-09-26 | The Replace / Keep prompt is drawn first in `Panel.draw`, on every page, even with the panel collapsed. | A learn can be armed from any page and a held learn must never be silently parked. | plan 09 as built | standing (`ui_routing.py`) |
-| 2026-09-26 | The panel names a performed param's owner in its tooltip, in the adapter's words (`Router.describe`). | The performer should be able to read who has the knob. | plan 09 WP2 | standing |
+| Decision | Where | Who |
+|---|---|---|
+| Legibility at a distance comes first: rounded frames, pill chips, filled faders, no page scroll at the control size. The master faders are on the AUDIO page. | `ui.py` | owner |
+| The Replace / Keep prompt is drawn on every page, even with the panel collapsed. | `ui_routing.py` | owner |
+| The ROUTING page is one page over the loaded preset: its routes, its desk rows and macros, and the session's rows read-only below. | `ui_routing.page` | owner |
+| **The cheat sheet is off at every launch.** `/`, the pad's MENU and the APC40's DETAIL toggle it. The desk diagram stays on. | `ui.cheatsheet` | owner |
+| The desk's glyphs (K1–K8, D1–D8, S1–S8, SM, X, C, G, B1–B22, ⇧) appear on every ROUTING row and Learn message, with an APC40 diagram of the layer that is up. | `apc40.LAYOUT`, `ui_desk.py` | owner |
+| The on-screen desk takes the room it has, and there is no DESK page. Once a unit is 44 × 32 px, every lit control carries its label. | `ui_desk.room`, `ui_desk.LABEL_UNIT` | row 57 |
+| The ROUTING page has one filter field. Only the user clears it, or a click on a desk control. | `ui_routing.matches` | row 63 |
+| The param's menu also opens from a row's label and from every analyzer meter. | `Panel._ctx_label` | owner |
+| The VIEW page's field is one row, and the six plane rates are three rows of two. | `Panel._page_view` | owner |
+| The dirty dot is a 12 px red disc and the save chip is solid red while there is something to save. On a factory preset, save reads "save copy". Saving never prompts. | `ui.dirty_dot`, `ui_presets.save_label` | row 77 |
+| The OUTPUT page says in words what each output shows, and there is no picture of the render. The footer names a black output. | `ui.output_shows`, `Panel._output_blocks` | row 85 |
 
 ## Process
 
-| Date | Decision | Why | Source | Status |
-|---|---|---|---|---|
-| 2026-08-21 | ENGINEERING.md is ground truth for existing behaviour; where documents disagree about behaviour, it wins. Plans say what was intended. | Plans drift the moment code lands; one document must be the one that is checked. | plans README | standing (plan 10 adds ARCHITECTURE.md for structure) |
-| 2026-08-21 | Exit criteria are gates, checked on merged `main`, not on a branch. | An agent's measurements describe only its own branch. | plans README | standing |
-| 2026-08-23 | Work packages run as parallel agents in worktrees, one branch and one PR each; the owner merges. Every agent prompt starts from current `main` and checks that the features it needs exist. | Two rounds were lost to agents branching from stale HEADs. | ENGINEERING §10, plan 07 | standing |
-| 2026-09-26 | Each code PR gets a `/code-review` before merge. | The auto-mode classifier requires it, and it caught real faults in plan 09. | memory | standing |
-| 2026-09-26 | Plan 10 (this pass) documents the system as built; findings are filed, not fixed. | Fixing while documenting is how the documents stop matching the code before the PR merges. | plan 10 | standing |
-| 2026-09-27 | Plan 11 closes the audit register one work package per PR, each code-reviewed; the shared documents are updated in the same PR and audit rows are marked `done, PR #N`, never deleted. The branches integrate through one `plan-11-integration` branch because they conflict on the three shared documents' tables. | Seventeen branches editing the same tables conflict pairwise; one resolved merge is cheaper than sixteen. | plan 11 §3 | standing |
-| 2026-09-27 | **Pending — the owner's.** Seven forks plan 11 raised and did not decide: B2 (does a tap ever move the downbeat; recommended: never), B5 (are `tempo.tap` / `lfo.trigger` / `lfo.N.reset` modulatable; recommended: keep all three), R1 (LFO knobs theme state, routing presets may set assumed bases; recommended), R6 (LEDs keep showing the effective value; recommended), A7 (`master.dyn` keeps 4× and documents the split; recommended), A10 (the trim: per-band auto / manual switch; recommended), R2+L2 (`R` and F1–F8 into the table; recommended). Each becomes a row here the day it is answered. Plans 12 and 13 added six more on 2026-09-28 (plan 11 §2 rows 12–17: the global layer's knobs, partial presets, bank slots by name, what a macro is, the ROUTING page's shape, sequencing — the last settled); R1 dissolves once plan 13 lands. | Listed so nobody reads the recommendation as the decision. | plan 11 §2 rows 1–7, 12–17 | **answered** 2026-09-28: each is a dated row above (decision register rows 1–17); R1 dissolved in plan 13 WP5 (PR #66) |
-| 2026-09-29 | **The dream is part of the app**: torch and the dream stack are ordinary dependencies (`uv sync` installs them) and `[dream] enabled` defaults to on; the optional `dream` extra is gone. | The owner: "it needs to be integrated into the program … you shouldn't have to do a separate thing to enable dreaming." Cost: the environment grows from ~300 MB to ~1.1 GB and launch to first frame from ~1.35 s to ~2.15 s; torch is still imported only when the dream opens. | owner, decision register row 23 (a) (plan 14) | standing (plan 14 WP1) |
+| Decision | Who |
+|---|---|
+| Each code PR gets a `/code-review` before merge. Agents work on their own branches, and the owner merges. | owner |
+| Agent work lands on `finish-line`, never on `main`; the owner merges `finish-line` into `main`. | owner |
+
+## Decided not to build
+
+| Not built | Who |
+|---|---|
+| Auto BPM: deferred, so tempo stays tap-only. | owner |
+| Preset folders. Hide and trash instead. | owner |
+| Drag-to-map. Click a control, then a param, instead. | owner |
+| A band added, removed or moved is not an undo step. A `band.*` value is put back only onto the band layout it was taken on. | row 35 |
+| The two-hand "steering wheel" camera. `hands-orbit` instead. | row 56 |
+| A source-first hand learn (click an axis, then a param). | row 64 |
+| A thumbnail of each output in the control window. | row 85 |
+| DJ Link, MIDI clock in and drift correction. | owner |

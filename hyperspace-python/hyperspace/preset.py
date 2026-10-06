@@ -23,8 +23,9 @@ replaces rows, never an offset. In order (plan 13 §5):
 
 1. note what the file names that a preset may not: a session param
    ("`tempo.bpm` is the session's, ignored"), an id nobody has, a
-   ``routes`` row that is not a performer row, a second performer on one
-   target (the referee's, below);
+   ``routes`` row that is not a performer row or that aims at a param
+   that is not modulatable (dropped), a second performer on one target
+   (the referee's, below);
 2. land the values: **every** persisted param of every performance group
    gets the file's value or its group default (`Library.resolved`: the
    group's default module preset over the build values), in registry
@@ -67,8 +68,8 @@ The factory presets are generated (`python -m hyperspace.preset`,
 `write_factory`, pinned by tests/test_presets.py): the code below holds
 the generator's inputs — plan 12's five party presets' routes and their
 desk blocks, and whole the five that were routing presets (``legacy6``,
-``lfo-breathe``, ``hands-fx``, ``hands-pinch``, ``hands-play``,
-`FACTORY_PRESETS`); every factory preset's ``desk`` is the factory
+``lfo-breathe``, ``hands-fx``, ``hands-pinch``, ``hands-play``) and
+plan 18's ``hands-orbit`` (`FACTORY_PRESETS`); every factory preset's ``desk`` is the factory
 preset layer unless its entry says otherwise. The house presets' and the
 party presets' values are data in their files.
 
@@ -87,10 +88,11 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
-from . import apc40, routing
+from . import apc40, routing, undo
 from .bands import BANDS
 from .lfo import SHAPES, SYNCS
 from .library import (
+    F_KEYS,
     FACTORY,
     HOUSE_PROJECT,
     MINE_PROJECT,
@@ -103,6 +105,7 @@ from .library import (
     SLOTS,
     LibraryError,
     _write_text,
+    bank_doc,
     slug,
 )
 from .lookback import (
@@ -294,6 +297,14 @@ class Presets:
             if b.scheme not in LANE_SCHEMES or b.op not in MOD_OPS:
                 notes.append(f"dropped {b.source} → {b.target} ({b.op}): not a performer row")
                 continue
+            # a route on a param no performer may drive — one saved before
+            # it stopped being modulatable (ghost.mirror / .guide /
+            # .tethers, plan 21 R12) — is dropped with a note; the file is
+            # not rewritten. An id this build lacks is kept (dormant)
+            tp = reg.get(b.target)
+            if tp is not None and not tp.modulatable:
+                notes.append(f"dropped {b.source} → {b.target}: not modulatable")
+                continue
             routes.append(b)
         # no `desk` key: a fresh preset's, the factory preset layer; an
         # explicit [] is an empty one (every preset control dark, D8)
@@ -312,6 +323,10 @@ class Presets:
             if group not in PERFORMANCE_GROUPS or group == "macro":
                 notes.append(f"module {group}: not a performance group, ignored")
                 modules.pop(group)
+        # the file parsed, nothing landed yet: one undo step for the whole
+        # load, by whichever road it came (undo.py, plan 15 WP1) — with
+        # what is loaded now, so undoing it puts the earlier name back too
+        undo.push(f"load {doc.get('name') or (path.stem if path else 'preset')}", load=True)
         # 2. every performance param: the file's value, else its group default
         by_group: dict[str, dict[str, Any]] = {g: {} for g in PERFORMANCE_GROUPS}
         for pid, v in values.items():
@@ -383,21 +398,20 @@ class Presets:
     def _warn(self, name: str) -> None:
         if self.notes:
             more = f" (+{len(self.notes) - 1} more)" if len(self.notes) > 1 else ""
-            self.lib.warning = f"preset {name}: {self.notes[0]}{more}"
+            self.lib.say(warning=f"preset {name}: {self.notes[0]}{more}")
 
     def _landed(self, name: str | None) -> None:
         """The library's load hook: the bank lights the slot that names
         what just loaded, whichever road it came in by (the strip, an F-key,
         a file edited on disk); a preset the bank does not name lights none."""
-        pr = self.lib.project
-        pr.active = pr.bank.index(name) if name in pr.bank else -1
+        self.lib.project.follow()
         for fn in getattr(self, "listeners", ()):
             try:
                 fn(name)
             except Exception as e:  # noqa: BLE001 — a listener must not fail a load
                 # the library's warning line, never `note` (the preset's own,
                 # saved back into the file)
-                self.lib.warning = f"preset listener: {type(e).__name__}: {e}"[:160]
+                self.lib.say(warning=f"preset listener: {type(e).__name__}: {e}"[:160])
 
 
 # ---------------------------------------------------------------- factory inputs
@@ -578,12 +592,16 @@ def party_trip_routes() -> list[Binding]:
 # module preset (`fx_module`), and between them every effect in
 # shaders/fx on in a party preset: ACID acid · wobble · deconverge · hue
 # cycle; MANDALA plasma · kaleidoscope · fractals · glimmer; NOITA trip
-# warp · trip colour · fractals · double vision. Plan 12's rules hold
-# (tests/test_plan12_presets.py sweeps them): six DOF, no pinch, every row
-# a push from the axis's rest (the one `position` row, MANDALA's swirl,
-# on a base of 0 as TRIP's), a still or absent hand is the scene. The
-# right hand plays the family's main effect, the left grips the object
-# (as in tumble, faces and wake) and its height adds the second effect.
+# warp · trip colour · fractals · double vision. The plan-12 rules that
+# hold here, and that tests/test_plan12_presets.py sweeps: six DOF, no
+# pinch, every row a push from the axis's rest (the one `position` row,
+# MANDALA's swirl, on a base of 0 as TRIP's), a still or absent hand is
+# the scene. One plan-12 rule does not hold and no test sweeps it: NOITA
+# puts a hand on two rate-type params (`fx.tripcolour.pulse`,
+# `fx.warp.drift`), which plan 12 §2 kept hands off and the owner has
+# since allowed (2026-10-04). The right hand plays the family's main
+# effect, the left grips the object (as in tumble, faces and wake) and
+# its height adds the second effect.
 
 def fx_module(name: str) -> dict[str, Any]:
     """A `library/fx` module preset's values — what an effect preset
@@ -758,8 +776,9 @@ def lfo_breathe_values() -> dict[str, Any]:
 
 
 def lfo_breathe_desk() -> list[Binding]:
-    """The factory preset layer, and the Breathe macro on device knob 1."""
-    return [*fresh_desk(), device_knob(1, "macro.1")]
+    """The factory preset layer with its own device knobs (`BREATHE_KNOBS`):
+    the Breathe macro still on device knob 1 (hand check 39)."""
+    return knob_desk(BREATHE_KNOBS)()
 
 
 def hands_fx_routes() -> list[Binding]:
@@ -793,6 +812,25 @@ def hands_play_routes() -> list[Binding]:
     return [Binding(hand("R", "y"), "view.bright", "position"),
             Binding(hand("L", "y"), "view.speed", "position"),
             Binding(hand("R", "pitch"), "view.depth4", "position")]
+
+
+def hands_orbit_routes() -> list[Binding]:
+    """Plan 18 WP4: two hands on the camera, on the camera params and the
+    axes that exist. The right hand orbits: sideways turns the camera a
+    quarter turn each way, fingers up tip it to look down (±44°, as FACES).
+    The left hand pans (sideways and reaching in, as FIELD) and its height
+    zooms in. Every row is a push from its axis's own rest, so a level,
+    low or absent hand adds nothing and the camera the mouse set stays;
+    five targets, one performer each, no pinch. The hands relative to each
+    other (a steering wheel) would need a derived lane and is not built
+    (plan 18 fork 17). The depths are a first cut (hand check N9)."""
+    return [_push("R", "x", "camera.yaw", 0.5),        # sideways: orbit, ±90°
+            _push("R", "pitch", "camera.pitch", 0.5),  # fingers up: look down, ±44° (as FACES)
+            _push("L", "x", "camera.pan.x", 0.1),      # as FIELD: fly sideways
+            _push("L", "z", "camera.pan.y", 0.1),      # as FIELD: reach in
+            # raise: zoom in, to 2.2× at the top. The plan's 0.3 (7.4×) put the
+            # frame inside the default shape, near black (the WP4 strip)
+            _push("L", "y", "camera.zoom", 0.12)]
 
 
 def effects_on(routes, values: dict[str, Any],
@@ -849,10 +887,33 @@ TRACER_KNOBS = ("dream.echo_mix", "dream.fade", "dream.echoes", "dream.gap",
 NOITA_KNOBS = ("fx.mix", "fx.warp.amount", "fx.warp.scale", "fx.tripcolour.amount",
                "fx.fractals.amount", "fx.fractals.size", "fx.doublevision.amount",
                "fx.doublevision.ghost")
+# plan 19 WP3: the device knobs of the three presets whose eight were dark
+# (or one), each on what that preset has switched on — no knob on an effect
+# that is off (fork 7). None leaves that knob dark. Every other scene-only
+# preset has the fresh layer's four (apc40.SCENE)
+# hands-fx: the Acid shader is its one effect; three of these a hand
+# positions while it is in the box, and the knob is what they come back to
+HANDS_FX_KNOBS = ("fx.mix", "fx.acid.bend", "fx.acid.twist", "fx.acid.reach",
+                  "fx.acid.breathe", "fx.acid.speed", "view.depth4", "camera.yaw")
+# hands-pinch: the hue cycle is its one effect, at a mix of 0 until a pinch or D1 lifts it
+HANDS_PINCH_KNOBS = ("fx.mix", "fx.huecycle.paint", "fx.huecycle.spread", "view.depth4",
+                     "camera.yaw", "camera.pitch", "view.pattern", None)
+# lfo-breathe: Breathe stays on D1; the mix LFO 2 swells, the plasma it
+# swells, LFO 1's pulse, and the scene's depth and angles
+BREATHE_KNOBS = ("macro.1", "fx.mix", "fx.plasma.level", "lfo.1.depth", "view.depth4",
+                 "camera.yaw", "camera.pitch", None)
 
 
-def knob_desk(targets: tuple[str, ...]) -> Callable[[], list[Binding]]:
-    return lambda: [*fresh_desk(), *(device_knob(k + 1, t) for k, t in enumerate(targets))]
+def _is_device_knob(b: Binding) -> bool:
+    return b.kind == "cc" and b.number in apc40.DEVICE_KNOBS
+
+
+def knob_desk(targets: tuple[str | None, ...]) -> Callable[[], list[Binding]]:
+    """A preset layer with device knobs of its own: the fresh desk **less
+    its device knobs** (apc40.SCENE), plus device knob k + 1 on
+    `targets[k]` — so no knob is mapped twice. A None leaves that knob dark."""
+    return lambda: [*(b for b in fresh_desk() if not _is_device_knob(b)),
+                    *(device_knob(k + 1, t) for k, t in enumerate(targets) if t)]
 
 
 # ---------------------------------------------------------------- the generator
@@ -917,12 +978,18 @@ FACTORY_PRESETS: dict[str, Factory] = {
                            macros=lfo_breathe_macros, desk=lfo_breathe_desk),
     "hands-fx": Factory(hands_fx_routes, lambda: {"fx.acid.speed": 4.0}, "hands-fx",
                         "Plan 08: both hands play the Acid shader and the fx mix.",
-                        desk=None),
+                        desk=knob_desk(HANDS_FX_KNOBS)),
     "hands-pinch": Factory(hands_pinch_routes, hands_pinch_values, "hands-pinch",
                            "Plan 08: a pinch picks what a hand's height moves — the left "
-                           "index pinch fades the hue cycle in.", desk=None),
+                           "index pinch fades the hue cycle in.",
+                           desk=knob_desk(HANDS_PINCH_KNOBS)),
     "hands-play": Factory(hands_play_routes, dict, "hands-play",
                           "Plan 08: brightness, speed and 4D depth on the hands.", desk=None),
+    # plan 18 WP4: two hands on the camera (in the list, on no F-key)
+    "hands-orbit": Factory(hands_orbit_routes, dict, "hands-orbit",
+                           "Two hands on the camera: the right hand orbits (sideways turns, "
+                           "fingers up tips), the left pans (sideways, reaching in) and "
+                           "zooms (height).", desk=None),
 }
 # the party presets, by file slug: plan 12's five and plan 14's, in the
 # party show's bank order (F1–F8) and then those in no slot
@@ -1294,8 +1361,10 @@ def migrate_project(root: Path, path: Path, carried: routing.Carried, *,
     if not isinstance(doc, dict) or doc.get("schema") != PROJECT_V1:
         return [], False, False
     keep, labels = _labels(doc.get("modules") or {})
-    raw = list(doc.get("bank") or [])[:SLOTS]
-    raw += [None] * (SLOTS - len(raw))
+    # a schema-1 bank is the F-keys' eight: the file written holds eight
+    # entries (`bank_doc`), as it did before the bank grew (plan 19 WP1)
+    raw = list(doc.get("bank") or [])[:F_KEYS]
+    raw += [None] * (F_KEYS - len(raw))
     bank, first, notes = slot_presets(root, raw, carried, labels, factory)
     try:
         seeds = list(json.loads((factory / PROJECTS / f"{HOUSE_PROJECT}{PROJECT_SUFFIX}")
@@ -1345,7 +1414,7 @@ def migrate_project(root: Path, path: Path, carried: routing.Carried, *,
     if doc.get("note"):
         new["note"] = str(doc["note"])
     new.update(startup=startup or next((n for n in bank if n), None),
-               bank=bank, session=session, modules=keep)
+               bank=bank_doc(bank), session=session, modules=keep)
     bak = routing.backup(path, "1")
     if bak is None:
         return [*notes, f"{path.name} NOT migrated: no backup could be made"], False, False
@@ -1368,17 +1437,22 @@ def _into_default(root: Path, name: str, factory: Path = FACTORY) -> str:
     doc = json.loads(src.read_text())
     if not isinstance(doc, dict) or doc.get("schema") != PROJECT_SCHEMA:
         raise ValueError(f"{path.name} is not a {PROJECT_SCHEMA} project")
-    bank =[n for n in list(doc.get("bank") or [])[:SLOTS] if n != name]
+    # the bank moves one slot along over the length the file has (eight,
+    # or as far as its last far slot: plan 19 WP1), so a name leaves the
+    # F-keys' eight exactly as it did before the bank grew
+    had = bank_doc(list(doc.get("bank") or [])[:SLOTS])
+    bank = [n for n in had if n != name]
     bank.insert(0, name)
-    bank += [None] * (SLOTS - len(bank))
+    bank += [None] * (len(had) - len(bank))
     gone = ""
-    if len(bank) > SLOTS:
+    if len(bank) > len(had):
         spare = next((k for k in range(len(bank) - 1, 0, -1) if bank[k] is None), None)
         if spare is not None:
             bank.pop(spare)
-        else:
+        elif len(had) == F_KEYS or len(bank) > SLOTS:
             gone = f"; {bank.pop()!r} left the bank (its file stays)"
-    doc.update(bank=bank, startup=name)
+        # (a bank already past the F-keys, and full to its end, grows by one)
+    doc.update(bank=bank_doc(bank), startup=name)
     if fresh:
         doc["name"] = MINE_PROJECT
         doc.pop("note", None)
@@ -1601,13 +1675,18 @@ def migrate_home(lib, router, hands_cfg: dict | None = None) -> list[str]:
         except (OSError, ValueError, LibraryError) as e:
             notes.append(f"bindings.json's routes NOT moved ({e}); the file is left as it is")
     if carried is not None and table.path is not None and (held or carried.empty):
-        if table.notes:
-            table.announce(table.path)
         # no file yet (an old midi_map.json's rows, carried): nothing to keep
         fresh = not table.path.exists()
         bak = None if fresh else routing.backup(table.path, table.read_at)
         kept = "" if fresh else f"; the old file kept as {bak.name}" if bak else ""
+        if table.notes:          # after the backup: what it says is what happened
+            table.announce(table.path, written=fresh or bak is not None, kept=bak)
         if bak is None and not fresh:
+            # no backup, no rewrite (plan 19 fork 12) — and no later write
+            # either until the copy is made (`Bindings.write` retries it)
+            table.unbacked, table.error = table.read_at, routing.NOT_REWRITTEN
+            table.said = table.said or (f"{table.path.name} NOT rewritten: no backup could "
+                                        "be made")
             notes.append("bindings.json NOT rewritten: no backup could be made")
         else:
             table.write()
@@ -1631,8 +1710,8 @@ def migrate_home(lib, router, hands_cfg: dict | None = None) -> list[str]:
         print(f"migrate: {n}", file=sys.stderr)
     if notes:
         what = "plan 13 migration" if len(notes) > len(echo_notes) else "echo time in seconds"
-        lib.warning = (f"{what}: {len(written)} file(s) rewritten, backups beside "
-                       "them — the details are on stderr")
+        lib.say(warning=f"{what}: {len(written)} file(s) rewritten, backups beside "
+                        "them — the details are on stderr")
     return notes
 
 

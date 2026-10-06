@@ -29,13 +29,14 @@ Nothing to pinch. A hand out of the box changes nothing.
   METRONOME once on a downbeat, so the pump lands on the one. (A re-tap
   later changes the tempo, never the downbeat.)
 - Track knob 8: base zoom.
-- Device knobs 1–8: fx mix · plasma level · kaleido segments · kaleido
-  zoom · burst amount · burst glow · hue paint · hue spread — each ring
-  shows its base. (With SHIFT latched they are the band strip; press
-  SHIFT again to get them back. F5 puts every one back where it was.)
+- Device knobs 1–8: FX mix · Plasma level · Kaleidoscope segments ·
+  Kaleidoscope zoom · Zoom burst amount · Zoom burst glow · Hue cycle
+  paint · Hue cycle spread — each ring shows its base. (With SHIFT latched
+  they are the band strip; press SHIFT again to get them back. F5 puts
+  every one back where it was.)
 
 ## To load
 
-1. PRESETS page → project → load ▾ → **party** (once per night).
-2. Press **F5** — TRIP: the look, the hands and the desk
-   in one step.
+1. PRESETS page → show ▾ → **party**, if it is not the open show.
+2. Press **F5**, or clip row 1's fifth pad — TRIP: the look, the hands
+   and the desk in one step.

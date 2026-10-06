@@ -126,7 +126,83 @@ from .glsl import FALLBACK, QUAD_VS, common, gl_error
 
 MAX_ECHOES = 32
 RES = [128, 192, 256, 384]              # dream.res: the echo's short side, px
-LAYERS = ["conv2_2", "conv3_3", "conv4_3", "inception3b", "inception4c", "inception4e"]
+# dream.layer's choices in their stored order: a preset saves the index, so
+# a new layer is appended, never inserted. The menu's order is LAYER_INFO's.
+LAYERS = ["conv2_2", "conv3_3", "conv4_3", "inception3b", "inception4c", "inception4e",
+          "conv1_1", "conv1_2", "conv2_1", "conv3_1", "conv3_2", "conv4_1", "conv4_2",
+          "conv5_1", "conv5_2", "conv5_3",
+          "conv1", "conv2", "conv3", "inception3a", "inception4a", "inception4b",
+          "inception4d", "inception5a", "inception5b"]
+# name → (net, short, long), in the menu's order: by net, shallow → deep.
+# The layer menu, its hovers and the docs read these words. They are from
+# two contact sheets (docs/plans/assets/20-fx-dream-looks/dream-layers*.jpg,
+# tools/dream_layer_sheet.py: one to two seconds of dreaming at the
+# defaults, 256 px, on the owner's laptop over MPS) and from depth; "slower" is over 25 ms
+# a frame (two passes) there, where conv3_3 takes about 19.
+LAYER_INFO: dict[str, tuple[str, str, str]] = {
+    "conv1_1": ("VGG16", "flat colour, fine dots",
+        ("The first layer: colours pushed to a few flat, bold ones under a fine "
+         "mesh of dots. Almost no shapes of its own.")),
+    "conv1_2": ("VGG16", "colour split, fine dots",
+        ("Colours split into a fine red-and-blue dot mesh along every edge. Still "
+         "no shapes of its own.")),
+    "conv2_1": ("VGG16", "fine hatching",
+        "Fine hatching and moiré, muted colour: the picture looks engraved."),
+    "conv2_2": ("VGG16", "dense neon cells",
+        ("A dense mesh of small neon cells, green and magenta, that fills whatever "
+         "is lit. Strong and busy.")),
+    "conv3_1": ("VGG16", "woven stripes",
+        "Short stripes woven at angles, a fine textile texture."),
+    "conv3_2": ("VGG16", "fine maze",
+        "A fine maze of little loops and stripes; the start of the classic swirl."),
+    "conv3_3": ("VGG16", "small loops, the classic",
+        ("Small loops, rings and swirls woven together: the classic Deep Dream "
+         "texture, and the default.")),
+    "conv4_1": ("VGG16", "soft rings",
+        "Soft rings and dots, spaced out over a smoother ground."),
+    "conv4_2": ("VGG16", "eyelets and scales",
+        "Eye-like rings and scale-like cells, larger than conv3's."),
+    "conv4_3": ("VGG16", "blots and eyes, slower",
+        ("Bigger blots with eye-like rings where lines meet. Slower: about 27 ms a "
+         "frame at 256 px.")),
+    "conv5_1": ("VGG16", "large swirls, slower",
+        ("The deepest VGG layers: large soft swirls and blobs, detail gathered at "
+         "the corners. Slower: about 28 ms a frame.")),
+    "conv5_2": ("VGG16", "large swirls, slower",
+        ("Large soft swirls and blobs, like conv5_1, a little looser. Slower: "
+         "about 30 ms a frame.")),
+    "conv5_3": ("VGG16", "largest blobs, slower",
+        ("VGG's last layer: the largest blobs and swirls; by its depth, the most "
+         "object-like VGG gets. Slower: about 30 ms a frame.")),
+    "conv1": ("GoogLeNet", "coarse colour dots",
+        "GoogLeNet's first layer: a coarse grid of bold coloured dots."),
+    "conv2": ("GoogLeNet", "rainbow ripples",
+        "Fine wavy lines in rainbow fringes, like moiré."),
+    "conv3": ("GoogLeNet", "specks and dashes",
+        "Small specks and dashes along the edges, light on the ground."),
+    "inception3a": ("GoogLeNet", "ripples and scales",
+        "Ripples and scale-like waves, the first of the inception blocks."),
+    "inception3b": ("GoogLeNet", "rings and pits",
+        "Small rings with dark pits in them, eyelets over everything."),
+    "inception4a": ("GoogLeNet", "rings and curls",
+        "Concentric rings and curls, larger than 3b's."),
+    "inception4b": ("GoogLeNet", "curls and stars",
+        "Curls and small starbursts; the start of the creature-like forms."),
+    "inception4c": ("GoogLeNet", "shells and spirals",
+        ("Big shell- and fan-like spirals. Deep Dream's well-known eyes, dog faces "
+         "and pagodas come from around here (4c to 5a) given time and strength.")),
+    "inception4d": ("GoogLeNet", "creature textures",
+        ("Patchy, fur- and skin-like textures with the odd eye; object-like parts "
+         "given time.")),
+    "inception4e": ("GoogLeNet", "large soft forms",
+        "Larger, softer wavy forms; less fine texture than 4c and 4d."),
+    "inception5a": ("GoogLeNet", "faint relief, slower",
+        ("Deep and coarse: a faint relief at the default strength, larger forms "
+         "with more. Slower: about 28 ms a frame.")),
+    "inception5b": ("GoogLeNet", "faint relief, slower",
+        ("GoogLeNet's last block: the faintest at the default strength, the "
+         "largest forms. Slower: about 29 ms a frame.")),
+}
 OCTAVES = ["1", "2 alt", "3 alt"]       # one octave a frame, in rotation (spike D)
 TINT_FROM = ["colour", "scene"]         # dream.tint_from: the tint's hue source
 OCCLUDE_GAIN = 4.0                      # scene brightness × this = its coverage of the wake

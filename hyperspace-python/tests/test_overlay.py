@@ -95,6 +95,37 @@ def test_rig_settings_never_persist_or_modulate(rig):
     assert set(saved) == {"output.bg", "output.alpha"}
 
 
+def test_dim_is_a_rig_setting_that_starts_bright(rig):
+    """Plan 15 WP3 (decision 28): the master dim is the operator's — 1 on a
+    fresh Output whatever the config says (there is no key), never saved,
+    never modulated, the session's by group, no `overlay.*` alias — and it
+    is not a window-system setting: `apply` pushes nothing for it."""
+    from hyperspace.params import part_of
+
+    assert Output(None, None).dim == 1.0 and Output("win", FakeBackend(), allowed=True).dim == 1.0
+    r, out = rig.reg, rig.out
+    p = r["output.dim"]
+    assert p.kind is Kind.CONTINUOUS and (p.lo, p.hi) == (0.0, 1.0) and p.value == 1.0
+    assert not p.persist and not p.modulatable and not p.alias
+    assert p.group == "output" and part_of(p) == "session"
+    assert "overlay.dim" not in r
+    assert "output.dim" not in r.snapshot("output") and "output.dim" not in r.snapshot()
+    assert p.text() == "100%"
+    p.set_norm(0.4)
+    assert out.dim == pytest.approx(0.4) and p.text() == "40%"
+    p.set_norm(0.0)
+    assert out.dim == 0.0 and p.text() == "black"
+    assert (p.fmt(0.996), p.fmt(0.004), p.fmt(1.0)) == ("99%", "1%", "100%")
+    p.set(7.0)                                     # the setter holds the range
+    assert out.dim == 1.0
+    p.set(-3.0)
+    assert out.dim == 0.0
+    # the ground is its own thing: the dim never touches what the window clears to
+    assert out.bg_alpha == 1.0
+    out.apply()
+    assert not any("dim" in str(c) for c in rig.b.calls)
+
+
 def test_legacy_overlay_ids_are_views(rig):
     r = rig.reg
     for old, new in (("on", "overlay"), ("passthrough", "passthrough"), ("bg", "bg"),
@@ -276,6 +307,41 @@ def test_backend_error_is_reported_not_raised(rig):
     assert rig.out.error.startswith("output: no cocoa")
 
 
+def test_windowed_rect_is_the_saved_rect_while_fullscreen_or_overlay(rig):
+    """What the launch placement remembers (plan 16 WP4, fork F6): the
+    plain window's rect, never the cover of a screen — and reading it
+    moves nothing."""
+    home = (100, 100, 1280, 820)
+    assert rig.out.windowed_rect() == home
+    rig.b.rect = home = (240, 180, 1000, 700)            # dragged and resized
+    assert rig.out.windowed_rect() == home
+    for mode in ("fullscreen", "overlay"):
+        # the toggle flipped but not yet applied: the window is still a window
+        rig.reg[f"output.{mode}"].set(True)
+        assert rig.out.windowed_rect() == home
+        rig.out.apply()
+        assert rig.b.rect == (0, 0, 1728, 1117)          # it covers the screen…
+        assert rig.out.windowed_rect() == home           # …and is remembered by its window
+        rig.reg["output.monitor"].set(2)                 # another screen while on: the same
+        rig.out.apply()
+        assert rig.b.rect == (1728, 0, 2560, 1440) and rig.out.windowed_rect() == home
+        rig.reg["output.monitor"].set(0)
+        rig.reg[f"output.{mode}"].set(False)
+        rig.out.apply()
+        assert rig.b.rect == home and rig.out.windowed_rect() == home
+    # read-only: no window-system call, no state moved
+    rig.reg["output.fullscreen"].set(True)
+    rig.out.apply()
+    calls, applied, saved = list(rig.b.calls), dict(rig.out._applied), rig.out._saved_rect
+    rig.out.windowed_rect()
+    assert (rig.b.calls, rig.out._applied, rig.out._saved_rect) == (calls, applied, saved)
+    # no backend: nothing to say; a window system that raises: the same
+    assert Output(None, None).windowed_rect() is None and Output("win", None).windowed_rect() is None
+    out = Output("win", FakeBackend())
+    out.backend.window_rect = lambda win: 1 / 0
+    assert out.windowed_rect() is None
+
+
 def test_headless_output_has_no_window_to_push_to():
     reg = _registry()
     out = Output(None, None, allowed=True)
@@ -327,7 +393,7 @@ def test_overlay_refuses_every_road_while_the_config_shuts_it(gated):
 
 
 def test_the_ground_and_opacity_do_nothing_while_shut(gated):
-    """The crossfader's `overlay.bg` still lands a value, but the window
+    """`overlay.bg` still lands a value, but the window
     clears opaque and its opacity is never touched."""
     gated.reg["overlay.bg"].set_norm(0.0)
     gated.reg["output.alpha"].set_norm(0.2)
@@ -341,3 +407,77 @@ def test_fullscreen_still_works_while_overlay_is_shut(gated):
     gated.reg["output.fullscreen"].set(True)
     gated.out.apply()
     assert gated.out.mode == "fullscreen" and ("fullscreen", "Built-in") in gated.b.calls
+
+
+# ---- plan 21 WP4: the per-output switches ----
+
+def _slots(*names, missing=()):
+    from hyperspace.outputs import Slot, Switches
+
+    return [Slot(k + 1, name=n, switches=Switches(),
+                 win=None if k + 1 in missing else f"w{k + 1}") for k, n in enumerate(names)]
+
+
+def test_the_output_switches_are_rig_settings():
+    """Fork F4: output.N.scene / .hands / .through / .dim are rig settings —
+    group `output` (the session's), never persisted (no preset, show or
+    undo step holds them: `undo.watched` needs persist), not modulatable
+    (no lane rides them) — and they write the output's `Switches`, which
+    the renderer reads. Generated for the outputs that opened, numbered by
+    their place in the config's list; labels name the output when there
+    are several."""
+    from hyperspace import undo
+    from hyperspace.overlay import register_switches
+    from hyperspace.params import part_of
+
+    reg = _registry()
+    slots = _slots("glass", "projector", "wall", missing=(2,))
+    ids = register_switches(reg, slots)
+    assert ids == ["output.1.scene", "output.1.hands", "output.1.through", "output.1.dim",
+                   "output.3.scene", "output.3.hands", "output.3.through", "output.3.dim"]
+    assert not any(p.id.startswith("output.2.") for p in reg)       # not opened: none
+    for pid in ids:
+        p = reg[pid]
+        assert p.group == "output" and part_of(p) == "session"
+        assert not p.persist and not p.modulatable and not p.alias and not undo.watched(p)
+    assert not any(pid in reg.snapshot() for pid in ids)
+    assert not any(pid in reg.snapshot(part="session") for pid in ids)
+    assert reg["output.1.scene"].kind is Kind.TOGGLE and reg["output.1.dim"].kind is Kind.CONTINUOUS
+    assert reg["output.1.scene"].label == "Glass scene"
+    assert reg["output.3.through"].label == "Wall hands through effects"
+    # they write the Switches the app hands the renderer
+    sw = slots[2].switches
+    reg["output.3.scene"].set(False)
+    reg["output.3.through"].set(True)
+    reg["output.3.dim"].set(0.25)
+    assert (sw.scene, sw.hands, sw.through, sw.dim) == (False, True, True, 0.25)
+    reg["output.3.dim"].set(4.0)
+    assert sw.dim == 1.0 and reg["output.3.dim"].text() == "100%"
+    reg["output.3.dim"].set(0.0)
+    assert sw.dim == 0.0 and reg["output.3.dim"].text() == "black"
+    # the launch values are the slot's (the config's) as the params find them
+    from hyperspace.outputs import Slot, Switches
+
+    seeded = Slot(1, win="w", switches=Switches(scene=False, dim=0.4))
+    reg2 = _registry()
+    register_switches(reg2, [seeded, *_slots("x", "y")[1:]])
+    assert reg2["output.1.scene"].value is False and reg2["output.1.dim"].value == 0.4
+
+
+def test_one_output_has_no_dim_of_its_own():
+    """With one output the master dim is that output's dim (§3 budget):
+    three switches, plainly labelled, no output.1.dim."""
+    from hyperspace.overlay import register_switches
+
+    reg = _registry()
+    assert register_switches(reg, _slots("")) == [
+        "output.1.scene", "output.1.hands", "output.1.through"]
+    assert "output.1.dim" not in reg
+    assert [reg[f"output.1.{k}"].label for k in ("scene", "hands", "through")] == [
+        "Scene", "Hands", "Hands through effects"]
+    # …unless a one-entry list gave it a launch dim: then it has its fader
+    one = _slots("glass")
+    one[0].switches.dim = 0.5
+    reg = _registry()
+    assert register_switches(reg, one)[-1] == "output.1.dim"
+    assert reg["output.1.dim"].value == 0.5 and reg["output.1.dim"].label == "Dim"

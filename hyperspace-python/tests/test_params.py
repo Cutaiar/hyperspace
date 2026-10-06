@@ -89,9 +89,9 @@ def test_raw_ranges_clamp_int_and_log(rig):
     inst.set_norm(1.0)
     assert view.instances == 100 and isinstance(view.instances, int)
     inst.set_value(-5)
-    assert view.instances == 1
+    assert view.instances == 0          # the floor is zero (plan 16 WP5)
     inst.step(3)
-    assert view.instances == 4
+    assert view.instances == 3
     z = reg["camera.zoom"]
     z.set_norm(0.5)  # log: halfway is the geometric middle
     assert view.zoom == pytest.approx(math.sqrt(0.05 * 40.0))
@@ -100,6 +100,29 @@ def test_raw_ranges_clamp_int_and_log(rig):
     yaw = reg["camera.yaw"]
     yaw.set_value(math.pi + 0.5)  # wraps, never clamps
     assert view.yaw == pytest.approx(-math.pi + 0.5)
+
+
+def test_instances_read_nothing_drawn_at_zero(rig):
+    """Plan 16 WP5 (fork F3): a plain 0–100 range, zero at the very bottom
+    of the throw, and a readout that says what a black render is."""
+    reg, view, *_ = rig
+    inst = reg["view.instances"]
+    assert (inst.lo, inst.hi) == (0, 100) and inst.modulatable and inst.persist
+    assert view.instances == 1 and inst.text() == "1 instance(s)"     # the default stays 1
+    inst.set_norm(0.0)                  # the knob's bottom, the slider's left end
+    assert view.instances == 0 and isinstance(view.instances, int)
+    assert inst.norm == 0.0 and inst.text() == "0 · nothing drawn"
+    inst.step(1)
+    assert view.instances == 1 and inst.text() == "1 instance(s)"
+    inst.set_norm(0.5)                  # linear: no taper to bend the throw
+    assert view.instances == 50 and inst.text() == "50 instance(s)"
+    assert "0 draws nothing" in inst.tip
+    # zero is a value like any other to a snapshot
+    inst.set_value(0)
+    snap = reg.snapshot("view")
+    inst.set_value(7)
+    reg.restore(snap)
+    assert view.instances == 0
 
 
 def test_nudge_and_scale_move_the_base_without_a_detent(rig):
@@ -245,7 +268,8 @@ def test_params_survive_a_chain_swap(rig):
 
 def test_preset_bank_params(rig):
     """The bank's params (plan 13 WP2): select, load, save, next / prev
-    over the project's eight preset names, loading through `Presets`."""
+    over the project's preset names, loading through `Presets` (plan 19
+    WP1: twenty-four choices, the F-keys' eight with a trigger each)."""
     from hyperspace.preset import Presets
     from hyperspace.routing import Bindings, Router
 
@@ -253,7 +277,8 @@ def test_preset_bank_params(rig):
     Presets(bank.lib, reg, Router(reg, Bindings()))
     bank.load("house", startup=False)          # the house moods (a fresh home opens party)
     assert reg["preset.select"].names[:2] == ["BIG BLUE WAVE", "EMBER ORBIT"]
-    assert len(reg["preset.select"].names) == 8
+    assert len(reg["preset.select"].names) == 24
+    assert reg["preset.select"].names[8:] == [f"SLOT {k}" for k in range(9, 25)]
     reg["preset.load.1"].fire()
     assert bank.active == 1 and view.shape == 10
     reg["preset.select"].set_norm(0.0)
@@ -305,11 +330,13 @@ def test_macro_knobs_are_persisted_attenuators_with_no_object(rig):
 
 def _full_registry(tmp_path):
     """Every param the app registers: build_registry, the hands setup, the
-    clock, the LFOs and the render window's output (headless)."""
-    from hyperspace import hands, lfo, tempo
+    clock, the LFOs, the render window's output and the desk's own pair
+    over a table (headless)."""
+    from hyperspace import hands, lfo, routing, tempo
     from hyperspace.overlay import Output
 
     reg = make(tmp_path)[0]
+    routing.register_desk(reg, routing.Bindings())
     hands.register(reg, hands.HandSettings())
     clock = tempo.Clock()
     tempo.register(reg, clock)
@@ -325,8 +352,12 @@ def test_every_persisted_group_is_performance_or_session(tmp_path):
     reg = _full_registry(tmp_path)
     assert not set(PERFORMANCE_GROUPS) & set(SESSION_GROUPS)
     persisted = [p for p in reg if p.persist]
-    for must in ("hands", "tempo", "lfo", "output", "macro", "band"):
+    for must in ("hands", "tempo", "lfo", "output", "macro", "band", "desk"):
         assert any(p.group == must for p in persisted), must
+    # the desk (plan 18 WP2): knob smoothing is the session's and a show
+    # keeps it; the layer latch beside it is still never saved
+    assert part_of(reg["desk.slew"]) == "session" and reg["desk.slew"].persist
+    assert not reg["desk.shift"].persist and "desk" in SESSION_GROUPS
     for p in persisted:
         assert (p.group in PERFORMANCE_GROUPS) + (p.group in SESSION_GROUPS) == 1, p.id
         assert part_of(p) in ("performance", "session"), p.id
@@ -392,3 +423,82 @@ def test_a_non_finite_offset_never_poisons_a_base(rig):
     assert math.isfinite(speed._base) and shape.value == base_shape
     reg.apply()                                   # the sources left: the base comes back
     assert speed.value == pytest.approx(base_speed) and not speed.modulated
+
+
+def test_the_bank_adds_no_params(rig):
+    """Plan 19 WP1's budget: a bank of twenty-four adds no param. The
+    `preset` group is the 21 it was — select, a load and a save for each
+    F-key, save-as, next, prev, home; slots 9–24 are choices of
+    `preset.select`, which says which of them hold a preset (`Param.has`,
+    what a pad's "filled" light reads)."""
+    reg, _view, _control, _audio, bank = rig
+    ids = [p.id for p in reg if p.group == "preset"]
+    assert len(ids) == 21 and ids == [
+        "preset.select",
+        *[f"preset.{w}.{k}" for k in range(8) for w in ("load", "save")],
+        "preset.save_new", "preset.next", "preset.prev", "preset.home"]
+    select = reg["preset.select"]
+    assert len(select.names) == 24 == len(bank.bank)
+    assert callable(select.has)
+    assert [select.has(k) for k in range(24)] == [n is not None for n in bank.bank]
+    assert select.has(8) and not select.has(9)             # the party show: TRACER on slot 9
+    bank.bank[9], bank.bank[8] = "WAKE", None
+    assert select.has(9) and not select.has(8)             # read live, never cached
+    assert not select.has(-1) and not select.has(24)       # −1 is "nothing loaded"
+    assert "twenty-four" in select.tip
+    # only the bank's enum has the notion; `Registry.enum(has=)` stores it
+    assert [p.id for p in reg if p.has is not None] == ["preset.select"]
+    r = Registry()
+    p = r.enum("x.pick", "Pick", lambda: 0, lambda v: None, ["a", "b"], has=lambda k: k == 1)
+    assert p.has(1) and not p.has(0)
+    assert r.enum("x.other", "Other", lambda: 0, lambda v: None, ["a"]).has is None
+
+
+def test_inst_layout_is_declared(tmp_path):
+    """Plan 20 WP6: `view.inst_layout`, three choices, default GRID, in the
+    view group, persisted and modulatable like the motion beside it, and
+    declared just before it. A layout change is one undo step; a preset
+    that does not name the id — every file saved before this plan, the
+    whole factory layer — loads it as GRID."""
+    from test_undo import boot, frames, labels, settle
+
+    from hyperspace.library import FACTORY
+    from hyperspace.params import INST_LAYOUT
+
+    reg, view, *_ = make(tmp_path / "plain")
+    p = reg["view.inst_layout"]
+    assert INST_LAYOUT == ["GRID", "HEX", "RING"]
+    assert p.kind is Kind.ENUM and p.names == INST_LAYOUT and p.label == "Layout"
+    assert p.base == 0 and view.inst_layout == 0 and ViewState().inst_layout == 0
+    assert p.group == "view" and p.persist and p.modulatable
+    motion = reg["view.inst_motion"]
+    assert (p.persist, p.modulatable) == (motion.persist, motion.modulatable)
+    ids = reg.ids()
+    assert ids.index("view.inst_layout") + 1 == ids.index("view.inst_motion")
+    assert [reg[f"view.inst_{k}"].label for k in ("motion", "amp", "rate")] == [
+        "Field motion", "Field amp", "Field rate"]
+    p.set(2)
+    assert view.inst_layout == 2 and reg.snapshot()["view.inst_layout"] == 2
+
+    # a layout change is one undo step, with no code of its own
+    r = boot(tmp_path / "home")
+    settle(r)
+    assert labels(r) == []
+    lay = r.reg["view.inst_layout"]
+    lay.set(1)
+    settle(r)
+    assert r.view.inst_layout == 1 and len(labels(r)) == 1
+    r.reg["edit.undo"].fire()
+    frames(r, 5)
+    assert r.view.inst_layout == 0 and r.undo.stack == []
+
+    # a preset that does not name it loads it as GRID: every factory preset
+    names = r.lib.list("presets")
+    assert len(names) >= 5
+    for name in names:
+        lay.set(2)
+        assert r.view.inst_layout == 2
+        assert "view.inst_layout" not in r.presets.load(name), name
+        assert r.view.inst_layout == 0 and lay.base == 0, name
+    for f in FACTORY.rglob("*.json"):
+        assert "inst_layout" not in f.read_text(), f.name

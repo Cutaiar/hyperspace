@@ -1,789 +1,735 @@
 # Hyperspace — architecture
 
-What the parts are, where a value goes each frame, and who may write a
-parameter. This is the structure reference; behaviour is in
-[`ENGINEERING.md`](ENGINEERING.md), the reasons in
-[`DECISIONS.md`](DECISIONS.md), and what is currently wrong or drifting in
-[`AUDIT-2026-09.md`](AUDIT-2026-09.md).
+The map of the system: what the parts are, the order a frame runs in,
+who may write a parameter, and which test holds each boundary.
+How to run, tune and change things is in [`ENGINEERING.md`](ENGINEERING.md);
+the reasons behind the calls are in [`DECISIONS.md`](DECISIONS.md) and
+[`DECISION-REGISTER.md`](DECISION-REGISTER.md); what is known to be wrong
+is in [`AUDIT-2026-09.md`](AUDIT-2026-09.md).
 
-Written by plan 10 against `main` **ef299ef** (2026-09-27); revised for
-plan 13 on `plan-13-integration` (2026-09-28), where every reference was
-re-checked against the code. Plans 11 and 13 moved most of plan 10's
-`file:line` numbers, so a reference is now a symbol (`Router.modulate`,
-`Bindings.owner`) or a test's name; the few `file:line` numbers left are
-as of that revision. The symbol names will outlive the numbers.
-When a boundary, the frame order or the control model changes, change the
-line here in the same PR — this document exists so that a fix can be made
-in the right place, first time, by someone who has never seen the repo.
+Two questions this file answers on its own:
 
-Two questions it must answer from this file alone:
+1. **Where does a controller's value go each frame?** — §2 and §3.7.
+2. **Who may write a parameter?** — §3.2.
 
-1. **Where does a given controller's value go each frame?** — §2 and §3.7.
-2. **Who may write a given parameter?** — §3.2.
-
-Paths are relative to `hyperspace-python/hyperspace/` unless they start
-with `tests/` or `docs/`.
+When a boundary, the frame order or the control model changes, change
+this file in the same PR. Paths are relative to
+`hyperspace-python/hyperspace/` unless they start with `tests/` or `docs/`.
+A reference is a symbol or a test name, never a line number.
 
 ---
 
 ## 1. Component map
 
 Hyperspace is one Python process: a parameter **registry** in the middle,
-**sources** that feed a **routing table**, a **render stack** that reads the
-registry's live objects, a **panel** that edits the registry, and a
+**sources** that feed a **routing table**, a **render stack** that reads
+the registry's live objects, a **panel** that edits the registry, and a
 **library** that saves and loads it. `app.py` builds everything once and
 runs the one frame loop.
 
-![The component map: adapters and sources feed the routing table, the router writes offsets, the control window writes bases, the registry lands both on the live objects, the render stack reads](assets/10-architecture/component-map.svg)
+```text
+ keys · mouse · pad · MIDI desk ──rows──▶ Param.set* ──▶ BASE ─┐
+ panel widgets · presets · undo ─────────▶ Param.set* ──▶ BASE ─┤
+                                                                ├─▶ Registry.apply() ─▶ live objects ─▶ render stack
+ audio lanes · hands · LFOs · DAW in ──feed──▶ Router.modulate ─┤      (once a frame)    (ViewState,    (reads only)
+                                    (one performer row per param)▶ OFFSET                FxState, …)
+```
 
-*The table below is the picture's text twin.*
+| Component | Modules | Owns | Writes | Boundary (held by) |
+|---|---|---|---|---|
+| **Registry** | `params.py`, `tapers.py` | every `Param`: id, kind, taper, flags, base, this frame's offsets | the live objects, once a frame, in `Registry.apply()` | never imports `midi`, `bridge` or `dream` (`tests/test_params.py::test_core_does_not_import_the_midi_adapter`, `tests/test_bridge.py::test_core_does_not_import_the_bridge`, `tests/test_dream.py::test_core_does_not_import_the_worker`). It does import `fx`, `ghost`, `lookback`, `geometry`, `analyzer` and `bands` for their state classes and constants |
+| **Routing table** | `routing.py` | `Binding` rows, `<home>/bindings.json` (the session's controls), the referee, the desk's layers, the macros, the per-frame modulation pass | offsets, through `Router.modulate` → `Param.modulate` (the only call site in the package); bases for key / pad rows (`routing.act`) and macro base subscribers | imports nothing above it — no `ui`, `app`, `hands`, `midi`, `bridge`, `learn`, `dream`, `hotreload`, `library`; `glfw` and `gamepad` only lazily, to resolve key and pad names (`tests/test_routing_boundary.py::test_routing_imports_nothing_above_it`, `::test_importing_routing_pulls_in_no_adapter_or_panel`, `::test_only_router_modulate_calls_param_modulate`) |
+| **Learn** | `learn.py` | the armed param and what it waits for, the held Replace / Keep question, the picked desk control, Unbind | table rows, through the table's edit doors | imports only `undo`, `params`, `routing`; the device profile arrives as an argument (`tests/test_learn.py::test_learn_control_needs_no_adapter`) |
+| **Input adapters** | `midi.py` + `apc40.py`, `hands/`, `gamepad.py`, `bridge.py`, `app.Keys` / `app.Mouse` | a device and its pickup state | MIDI / keys / pad / mouse: the **base**; hands and bridge: only `Router.feed` | the core never imports `midi` or `bridge` (above); `hands/core.py`, `signal.py`, `tape.py` import nothing from the package and `hands/panel.py` is the only piece that knows the host (`tests/test_hands_boundary.py`) |
+| **Audio source** | `audio.py`, `analysis.py`, `analyzer.py`, `bands.py` (and the tests' `offline.py`) | capture or file playback, the FFT, the N band lanes | `Analyzer.lanes` (read by `Router.modulate`), the lanes' names (`AudioEngine.publish`) | imports only itself and `tapers` (`tests/test_audio_boundary.py`) |
+| **LFOs and clock** | `lfo.py`, `tempo.py` | four oscillators, one tap-tempo clock | `Router.feed("lfo", …)`, its labels and rests | import nothing from the package; registry, router and clock arrive as arguments (`tests/test_lfo_boundary.py`) |
+| **Render stack** | `geometry.py`, `view.py`, `render.py`, `glsl.py`, `fx.py`, `lookback.py`, `dream.py`, `ghost.py`, `outputs.py`, `overlay.py`, `shaders/` | GL resources, `ViewState`, the frame history, the dream worker, the faces' picture, the outputs' pipelines, the one wall clock (`Renderer.now`) | the screen; `ViewState.integrate` writes `ang` directly | reads parameters, never writes one: `render.py` and `fx.py` import no `params`, `routing`, `library`, `preset`, `undo`, `control` (`tests/test_render.py::test_the_render_stack_imports_no_registry`); `outputs.py` imports `moderngl` and `glsl` only (`tests/test_outputs.py::test_outputs_imports_nothing_from_app_ui_or_params`); `dream` is imported only by `app._open_dream` behind `[dream] enabled` and is the one module that imports `torch` (`tests/test_dream.py::test_core_does_not_import_the_worker`) |
+| **Panel** | `ui.py`, `ui_*.py`, `hands/panel.py`, `control.py` | imgui state, page selection, the Replace / Keep modal, the routing page's edits | param **bases** through `Param.set*`; table rows through the table's edit doors and `Learn` | only `app`, `hands/panel.py` and the `ui*` modules import `ui*`. By convention: no test holds it |
+| **Library** | `library.py`, `preset.py`, `config.py`, `library/` | the home folder, module presets, presets, shows (projects), the bank of twenty-four, the trash, `hidden.json`, `config.toml` | bases through `Registry.restore`; a preset load replaces the table's performer rows, desk layer and macros | `library` imports `params` and `undo` (and `routing`, `preset` lazily), never `homegit` or `config` (`tests/test_app_boundary.py::test_homegit_is_a_leaf_and_the_library_never_imports_it`) |
+| **Undo** | `undo.py` | the undo and redo stacks, the last settled state | bases (`Registry.restore`) and the table's preset parts, on ⌘Z / Ctrl+Z only | a leaf: imports nothing from the package and never touches `modulate` or `feed` (`tests/test_undo.py::test_undo_imports_nothing_from_the_package`) |
+| **Host** | `app.py`, `hotreload.py`, `placement.py`, `homegit.py`, `watchdog.py` | construction order, the frame loop, the windows and render outputs, the reload watch list, the stall log, the home in git | bases for the relative writers (↑ / ↓, pad sticks); no key of its own but `app.LOOP_KEYS` | the only importer of every optional adapter, each behind its config gate (`_open_midi`, `_open_bridge`, `_open_hands`, `_open_dream`, `_open_homegit`, `_open_pad`); importing `app` imports no gated adapter, no `torch`, no `leap` (`tests/test_app_boundary.py::test_importing_app_leaves_every_gated_adapter_unimported`); `placement` and `homegit` are leaves (`tests/test_placement.py::test_placement_imports_nothing_from_the_package`, `tests/test_app_boundary.py::test_homegit_is_a_leaf_and_the_library_never_imports_it`) |
 
-| Component | Modules | Owns | Reads | Writes | Boundary rule (held by) |
-|---|---|---|---|---|---|
-| **Registry** | `params.py`, `tapers.py` | every `Param`: id, kind, taper, flags, base, this frame's offsets | the live objects through each param's `get` | the live objects, once per frame in `Registry.apply()` | imports no adapter (`tests/test_params.py::test_core_does_not_import_the_midi_adapter`); it does import `fx`/`lookback` for their state classes, so it needs GL bindings importable (see audit) |
-| **Routing table** | `routing.py` | `Binding` rows, the file `bindings.json` (the session's controls only since plan 13 WP5), the referee, the per-frame modulation pass | `Router.feeds` (what adapters fed), the analyzer's lanes, param bases | offsets via `Param.modulate` (in `Router.modulate`, the only caller in the package) | never imports `ui*`, `app`, `hands`, `midi`, `bridge`, `learn`; `glfw`/`gamepad` only lazily to resolve names, never `library` (`tests/test_routing_boundary.py::test_routing_imports_nothing_above_it`, and by a fresh interpreter) |
-| **Input adapters** | `midi.py` + `apc40.py`, `hands/`, `gamepad.py`, `bridge.py`, `app.Keys` / `app.Mouse` | a device; its own pickup state (the armed learn is the host's `learn.Learn`, which either adapter completes) | the table (discrete rows), param bases (MIDI pickup, feedback) | MIDI/keys/pads: the **base**; hands/bridge: only `Router.feed` | the core never imports `midi` or `bridge` (`tests/test_params.py::test_core_does_not_import_the_midi_adapter`, `tests/test_bridge.py::test_core_does_not_import_the_bridge`); `hands/core.py` + `signal.py` import nothing from the package (`tests/test_hands_boundary.py`) |
-| **Audio source** | `audio.py`, `analysis.py`, `analyzer.py`, `bands.py` (and the tests' `offline.py`) | capture / playback, the FFT, N band lanes | the audio device | `analyzer.lanes` (read by `Router.modulate`); `labels["lane"]` once a frame (`AudioEngine.publish`, WP8); `band.*` params are views onto its objects | imports nothing above itself — no routing, registry, ui, render, library or host (`tests/test_audio_boundary.py`) |
-| **LFOs and clock** | `lfo.py`, `tempo.py` | four oscillators, one tap-tempo clock | their own dataclass fields (last frame's effective values) | `Router.feed("lfo", …)`, `labels`, `rests` | import **nothing** from `hyperspace` — registry, router, clock arrive as arguments (`tests/test_lfo_boundary.py`) |
-| **Render stack** | `geometry.py`, `view.py`, `render.py`, `glsl.py`, `fx.py`, `lookback.py`, `dream.py`, `shaders/`, `overlay.py` | GL resources, `ViewState` (`view.py`), the frame history, the dream worker, the window's placement, the one wall clock (`Renderer.now`) | `ViewState` and the `FxState` / `DreamState` objects the registry writes | the screen; `ViewState.integrate` writes `ang` directly (folded into the base next frame) | zero registry traffic; `dream` is imported lazily by `app._open_dream` under `[dream] enabled` (`tests/test_dream.py::test_core_does_not_import_the_worker`) |
-| **Panel** | `ui.py`, `ui_*.py`, `hands/panel.py`, `control.py` | imgui state, page selection, the Replace / Keep modal, the routing page's edits | everything, for display | param **bases** through `Param.set*`; table rows through `Bindings.add/enable/remove/replace_owner/move_route`, and the loaded preset's desk rows and macro subscribers in place (bumping `redraw_serial` / `macros_serial`); no file | a leaf: no engine module imports `ui*` (only `app` and `hands/panel.py`, besides the `ui*` modules themselves). Unenforced by a test |
-| **Library** | `library.py`, `preset.py`, `config.py`, `library/` | the home folder, module preset and project files (the band presets *are* the analyzer's band scenes); the **presets** (`presets/*.json`, `hyperspace.preset/2`: the whole performance — values, routes, desk, macros, module labels — a document kind `preset.Presets` loads and writes); the project — the panel's **show** (`hyperspace.project/2`: the session values, the session groups' module labels, and the F1–F8 **bank of eight preset names** with a `startup` preset, "starts on"; the factory `party` show opens unless another was opened last, `<home>/last_show`, decision 22); the one-time migration of an older home (`preset.migrate_home`, plan 13 §6: schema-1 projects, `bindings.json`'s preset part and the old routing presets become presets, every rewritten file backed up first); `config.toml` | `Registry.snapshot` (a preset's performance part, a project's session part), a group's `extra` hook (the analyzer's layout) on save, a document kind's `signature` for its dirty dot | `Registry.restore` (bases); a preset load replaces every performer row (`Bindings.set_routes`); tells a group's `on_load` hook the name it landed; hands a document kind's `load` hook the file | `library` depends only on `params` (and, lazily, `routing` for `backup` (the migrations and `unshadow_default`) and `Carried`, and `preset` for `migrate`'s and `Project.load`'s migrations); `preset` on `library`, `params`, `routing`, `apc40`, `bands` and `lfo`; `library`'s importers are `app`, `preset`, `config` (for `ensure_home`), `control` (`factory_doc`, the band scenes), `dream` (for `home()`), `ui_presets` (`LibraryError`, `PRESETS`) and `ui_routing` (`PRESETS`); `preset`'s only `app` (and `library`, lazily) — `routing` imports neither |
-| **Host** | `app.py`, `hotreload.py` | the two windows, construction order, the frame loop, the reload watch list (`hotreload.MODULES`: every module in the package but `app`, `hotreload`, `offline` and `watchdog`, in dependency order, leaves first — a module after everything it `from .x import`s; an optional adapter that was never imported is skipped; `tests/test_hotreload.py` holds the list, its order and every swap target against the source) | — | the relative writers' bases (`nudge`/`scale`); no key of its own but Cmd+R (restart), Esc / Q and ↑ / ↓ (R and F1–F8 / ⇧F1–F8 are table rows since plan 11 WP7, `app.LOOP_KEYS`) | the one cold module; the only importer of every optional adapter, each behind its config gate (`_open_*`; MIDI, the gamepad and the dream on by default, the bridge and hands off; torch is an ordinary dependency, imported only when the dream opens, and why it did not open is `panel.dream_error`), and the one that closes them all (`close_all`, on quit and on Cmd+R alike); `tests/test_app_boundary.py` holds the gates and that importing `app` imports no gated adapter, no `torch`, no `leap` |
+**Everything points at the registry; the registry points at nothing
+above it.** Adapters and sources feed the router; the router writes
+offsets; the panel, the desk and the library write bases; the render
+stack only reads.
 
-The direction to remember: **everything points at the registry; the
-registry points at nothing above it.** Adapters and sources feed the
-router; the router writes offsets; the panel and the library write bases;
-the render stack only reads.
+**Leaves** — modules that import nothing from the package, so anything
+may import them: `analysis`, `tapers`, `undo`, `placement`, `homegit`,
+`geometry`, `tempo`, `lfo`, `glsl`, `gamepad`, `apc40`, `watchdog`,
+`hands/signal.py`, `hands/tape.py`. Near-leaves: `outputs`, `fx` and
+`lookback` import only `glsl`; `view` only `geometry`.
 
 ---
 
 ## 2. The frame
 
-`app.main()` is the only entry point: it builds everything once into an
-`app.Host` and runs `app.frame(host, now, dt, fps)` in its loop — the one
-place the frame order exists. `main` keeps only what needs the window
-system (events, `imgui.new_frame()`, the frame's `now` and `dt`, the toast
-and the swaps); `frame` is the order below, and
+`app.main()` is the only entry point. It builds an `app.Host` once and
+runs `app.frame(host, now, dt, fps)` in its loop — the one place the
+frame order exists. `main` keeps what needs the window system (events,
+`imgui.new_frame()`, `now` and `dt`, the swaps).
 `tests/test_app_boundary.py::test_the_frame_runs_in_the_documented_order`
-pins it over stubs.
+pins this order over stubs:
 
-```mermaid
-%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 28, "rankSpacing": 44, "wrappingWidth": 420}}}%%
-flowchart TB
-    S0["main: poll events, imgui new frame, now and dt;<br/>frame: clock.tick(now), reloader.poll, Esc / Q"]
-    subgraph setters ["Scene-setters: every write lands on the BASE"]
-        direction TB
-        S1["Cmd+R claims R's edge first; router.keys(keys): key rows through act(),<br/>R and F1-F8 / shift F1-F8 among them"]
-        S2["up/down: the loop's own relative writer, _ride_depth"]
-        S3["pad.poll and router.pad(pad): pad and hat rows;<br/>sticks and triggers through nudge / scale"]
-        S4["midi_io.poll(): cc and note rows of the up layer (and the invariant ones)<br/>through set_norm / step / toggle; SHIFT latches the layer"]
-        S4b["router.follow_macros(): a macro whose base moved sets its<br/>base subscribers' bases (plan 13 §2.4)"]
-        S1 --> S2 --> S3 --> S4 --> S4b
-    end
-    subgraph feeds ["Sources feed the table"]
-        direction TB
-        S5["hands_io.poll(dt, learn, router): feed hand every frame, labels / gates / rests when they change;<br/>a moved axis may complete a Learn"]
-        S6["output.apply(): reads last frame's objects"]
-        S7["mouse.poll(shift): orbit, pan, zoom through nudge / scale, to the base"]
-        S8["audio.step(dt), audio.publish(router): new lanes and their names"]
-        S9["bridge_io.step: feed ext; sends eff_norm out"]
-        S10["lfos.step and lfos.publish: feed lfo, rests 0.5"]
-        S5 --> S6 --> S7 --> S8 --> S9 --> S10
-    end
-    subgraph pass ["The pass: offsets, then one commit"]
-        direction TB
-        S11["router.modulate(): every live performer row calls p.modulate(offset)"]
-        S12["reg.apply(): base + offsets to every live object"]
-        S13["view.integrate(dt): ang += rate * dt (an object write, folded next frame)"]
-        S11 --> S12 --> S13
-    end
-    subgraph draw ["Draw"]
-        direction TB
-        S14["draw_render: bind the window (ctx.screen), then renderer.draw(view),<br/>which binds its target again on every exit"]
-        S15["panel.draw(): widgets to the base; the Replace / Keep modal to the table"]
-        S14 --> S15
-    end
-    S0 --> S1
-    S4b --> S5
-    S10 --> S11
-    S13 --> S14
+| # | Step | Writes |
+|---|---|---|
+| 0 | `clock.tick(now)`, `reloader.poll()`; Esc / Q quit; ⌘R restarts (claims R's edge first) | — |
+| 1 | `router.keys(keys)` — key rows, R, F1–F8 / ⇧F1–F8, ⌘Z among them; ↑ / ↓ ride `view.depth4` (`_ride_depth`) | bases |
+| 2 | `pad.poll()`, `router.pad(pad)`; sticks and triggers through `nudge` / `scale` | bases |
+| 3 | `midi_io.poll()` — the rows of the layer that is up and the invariant rows; knob glides; an armed desk Learn takes its candidate message | bases |
+| 4 | `router.follow_macros()` — a macro whose base moved sets its base subscribers' bases | bases |
+| 5 | `undo.tick(now)` — compares the watched bases and the preset's table with last frame's | nothing |
+| 6 | `hands_io.poll(dt, learn, router)` — feeds `hand`; may complete a hand Learn | feed |
+| 7 | `output.apply()` for every output; `renderer.bg_alpha` and `renderer.dim` handed over | window state |
+| 8 | `mouse.poll(shift)` — orbit, pan, zoom through `nudge` / `scale` | bases |
+| 9 | `audio.step(dt)`, `audio.publish(router)` | lanes |
+| 10 | `bridge_io.step(…)` — feeds `ext`, sends lanes out | feed |
+| 11 | `lfos.step(dt, now, clock)`, `lfos.publish(router)` — feeds `lfo` | feed |
+| 12 | `router.modulate(chain)` — every live performer row calls `p.modulate(offset)` | offsets |
+| 13 | `reg.apply()` — base + offsets onto every live object | objects |
+| 14 | `view.integrate(dt)` — `ang += rate · dt` | an object, directly |
+| 15 | `draw_render` — every render output (below) | the screens |
+| 16 | `draw_panel` — the control window | bases, rows |
+
+Rules that follow from the order:
+
+- **One-frame lag.** Everything a performer moves lands once, in
+  `reg.apply()`. A source that reads a parameter — an LFO reading its own
+  `depth`, a route scaled by a macro's depth subscriber or by
+  `master.gain`, the bridge sending `eff_norm`, `output.apply` — reads what
+  `apply()` wrote **last** frame. There is no recursion, because nothing in
+  the pass reads a value it is about to write
+  (`tests/test_lfo.py::test_an_lfo_owning_another_lfos_depth_changes_its_output_next_frame`,
+  `tests/test_routing.py::test_a_macro_owned_by_a_hand_scales_a_lanes_push_one_frame_later`).
+- **Base before offset.** Every scene-setter runs before `router.modulate`
+  (the panel's edits are the previous frame's tail), so a base write and
+  the offsets on it combine in one `apply()`. The one writer after
+  `apply()` is `ViewState.integrate`; `Param.apply` adopts that write as a
+  delta on the base next frame
+  (`tests/test_modulation.py::test_a_direct_object_write_is_adopted_into_the_base`).
+- **The undo watcher sits between the scene-setters and the feeds**, so it
+  sees every base this frame's keys, pad, MIDI and macros wrote and no
+  performer has run. It writes nothing; `edit.undo` / `edit.redo` are
+  key-row triggers in step 1 (`tests/test_undo.py::test_an_idle_app_makes_no_step`).
+- **Guards.** The MIDI poll, the macro step, the undo tick, the hands
+  poll, steps 9–14 as one block, the render draw and the panel draw are
+  each wrapped: hot-reloaded code that raises sets
+  `reloader.runtime_error` (cleared by the next clean frame) and the loop
+  goes on (`tests/test_app_boundary.py::test_a_raising_step_is_recorded_and_the_windows_still_draw`).
+  The key block is not wrapped, so the module-level `undo.push` /
+  `undo.undo` / `undo.redo` catch their own exceptions (`undo._guarded`).
+  A raising render draw is also `watchdog.RenderWatch`'s: logged to
+  `<home>/stall.log` and named on the control window's banner until
+  dismissed.
+- **A hand outside the interaction box is absent before any lane is
+  fed.** `HandsIO.poll` decides presence first — confidence floor, then
+  the palm inside `hands.json`'s box (`hands.core.inside`, with a
+  Schmitt edge, `HandsIO._in_box`). An absent hand's axes read `NaN`, so
+  its rows let go and the base returns that frame; nothing downstream
+  knows there is a box
+  (`tests/test_hands.py::test_a_hand_outside_the_box_reads_absent_everywhere`).
+- **Session params are declared before the show lands.** `app.main` calls
+  `app._desk_table` (`routing.register_desk`, then
+  `slew = routing.SLEW_DEFAULT_S`) and `overlay.register_switches` before
+  `library.attach(reg)`, which takes the registry as it stands as "fresh"
+  and then lands the show's session values
+  (`tests/test_app_boundary.py::test_the_app_starts_with_knob_smoothing_at_80_ms_and_a_show_keeps_its_own`).
+
+### Drawing: one frame, a picture per output
+
+`app._draw_render` makes output 1 current, builds one `outputs.View` per
+opened output (output 1's with `target=ctx.screen`, a later output's with
+its `Presenter`) and calls `Renderer.draw_outputs(s, w, h, dpr, views)`.
+`Renderer.draw` is the same call with one default `View` on the bound
+framebuffer. In `Renderer._draw_frame`:
+
+```text
+ONCE A FRAME (output 1's context)
+  the face picture   _face_picture — only while an effect is aimed at the faces
+  the scene pass     into the scene target; then resolve and the cover mask
+  look-back          lookback.tick, pull; fx.tick
+  the hands' layer   Ghost.layer — only if some view shows hands
+  route every view   outputs.route(switches, fx_active, hands_visible)
+ONCE PER DISTINCT PIPELINE (SCENE, SCENE_HANDS, HANDS)
+  look-back composite [+ Ghost.composite] [+ the frame's effect chain]
+  → the view itself when it is the pipeline's only consumer at the frame size, else a frame texture
+  then lookback.capture(scene.tex) exactly once, after every pipeline
+ONCE PER VIEW
+  the picture (direct | 1:1 | letterboxed by outputs.fit) — or an outputs.Handoff for a presenter
+  hands over it (Ghost.composite), the readout layer (Ghost.composite_readout)
+  dim: Renderer.dim × the view's own dim, when under 1 (Renderer.dim_pass)
+EXIT  views[0].target bound again with its rect and blending, a raise included
+THEN in app._draw_render: glFlush (only with a later output); each later output
+  Presenter.present then swap; output 1 swapped last
 ```
 
-Two rules follow from the order.
+What the order guarantees, each held by tests in `tests/test_render.py`,
+`tests/test_outputs.py` and `tests/test_ghost.py`:
 
-**One-frame lag.** Everything that a performer moves is landed by
-`reg.apply()` once, in the pass. A source that reads a parameter — an LFO
-reading its own `depth`, a route reading a macro through its depth
-subscriber (or its session `scale`, `master.gain`), the bridge
-sending `eff_norm`, `output.apply` reading `output.alpha` — reads what
-`apply()` wrote **last** frame. So a hand that owns `lfo.1.depth` lands one
-frame before that LFO's output does; a lane that owns `macro.2` scales the
-routes its depth subscribers name next frame (and never moves its base
-subscribers, which follow the macro's base: decision register row 12b);
-and there is no recursion, because nothing in the modulation pass reads a
-value it is about to write
-(`tests/test_lfo.py::test_an_lfo_owning_another_lfos_depth_changes_its_output_next_frame`,
-`tests/test_routing.py::test_a_macro_owned_by_a_hand_scales_a_lanes_push_one_frame_later`).
-
-**Base before offset.** Every scene-setter runs before `router.modulate`
-(the scene-setter block, the feeds, and the panel — whose draw is the previous
-frame's tail),
-so a base write and the offsets on top of it are combined in one `apply()`.
-The one writer after `apply()` is the rotation integrator (`view.integrate`), which
-writes the object directly; `Param.apply` adopts that as a delta on the
-base the next frame (`Param.apply`,
-`tests/test_modulation.py::test_a_direct_object_write_is_adopted_into_the_base`).
-
-Guarding: the MIDI poll, the macro step, the hands poll, the step block (`audio.step` through
-`integrate`), `renderer.draw` and `panel.draw` are each wrapped so
-hot-reloaded code that raises records `reloader.runtime_error` — kept
-until a clean frame — and the loop continues (`app.frame`;
-`tests/test_app_boundary.py`).
-
-**The render frame binds its target explicitly** (plan 14 WP1).
-`app.draw_render` binds the window (`ctx.screen.use()`) before anything
-else, and `Renderer.draw` captures the framebuffer it was called with and
-binds it again — viewport and blending too — on every exit, a raise
-included; `Lookback.capture` does the same for its own target. The frame
-binds half a dozen offscreen framebuffers (the scene, the cover mask, the
-history atlas, the FX ping-pong); before this, one left bound made every
-later frame draw into it while the window swapped a stale picture — the
-owner's freeze, with no error anywhere (WAKE without a dream worker; any
-one exception inside the draw). A raising draw is also the render watch's
-(`watchdog.RenderWatch`): its traceback goes to `<home>/stall.log`, and
-the control window's red banner names it — and keeps it, after the render
-recovers, until dismissed — where `runtime_error` is cleared by the next
-clean frame. A frame that still starts on an offscreen framebuffer, a
-render window that presents nothing for 2 s, a 2 s stall of the whole
-loop and a non-finite param are logged the same way (ENGINEERING §2.6).
-
-**The render window is opaque unless it is the overlay, and there is
-no overlay unless the config asks** (decision 21 (a), plan 14 WP2). With
-`[output] overlay = false`, the default, the render window is created
-without a transparent framebuffer (`app._windows`) and `output.overlay`
-refuses to switch on — the `T` key, the APC40's MASTER select, the panel
-(which draws the toggle disabled with the reason) and a preset all land
-on that one param, so one gate covers every road — and the ground
-(`output.bg`, the crossfader) and opacity act only in overlay, so they do
-nothing. With `overlay = true` the framebuffer keeps alpha for overlay
-mode, and in window and fullscreen the final frame's alpha is still 1
-everywhere — `view.cut_through` applies only on overlay's see-through
-ground, and every FX pass writes alpha 1 on an opaque one — because the
-compositor would show the desktop through anything less: the Pepper's
-Ghost rig.
+- **The faces' effects are in the scene texture**, so the echoes and the
+  dream carry them; the frame's effects never reach the history. With
+  nothing aimed at the faces no face pass runs and the frame is
+  bit-identical (`test_nothing_aimed_at_the_faces_is_the_old_frame_exactly`,
+  `test_the_echoes_carry_the_faces_effects`).
+- **The history holds only the scene**: never the frame's effects, the
+  hands or the dim (`test_the_history_never_holds_the_hands_in_any_state`,
+  `test_the_history_never_holds_the_dim`).
+- **The effects' clocks advance once a frame** however many chains run
+  (`FxState.advance_to`; `test_both_chains_in_a_frame_run_the_clocks_once`).
+- **Two outputs with the same switches share one chain run**
+  (`test_two_outputs_with_the_same_switches_run_the_chain_once`); one
+  default output is byte for byte the single-window frame
+  (`test_one_default_output_is_todays_frame_byte_for_byte`).
+- **The dim is the last pass**: blending only, no texture; on an opaque
+  ground it leaves alpha as it was, on overlay's see-through ground it
+  scales alpha too. At 1 it does not run
+  (`test_dim_at_one_is_the_old_frame_exactly`,
+  `test_each_output_dims_by_master_times_its_own`).
+- **A failure costs only its own part.** A raising face pass leaves
+  `Renderer.face_error` and the frame as with no face effect; a raising
+  hands pass leaves `Ghost.error` and every output still gets its dim; a
+  raising pipeline leaves its views on their ground; a raising view
+  records `View.error`; a raising presenter does not stop the frame
+  (`test_a_raising_hands_pass_costs_no_output_its_frame_or_its_dim`,
+  `test_a_raising_pipeline_leaves_its_views_on_the_ground_and_the_rest_drawn`,
+  `tests/test_app_boundary.py::test_a_raising_presenter_does_not_stop_the_frame`).
+- **The render target is bound explicitly.** The frame uses half a dozen
+  offscreen framebuffers; one left bound would make every later frame draw
+  into it while the window swapped a stale picture. `draw_outputs` binds
+  `views[0].target` again on every exit, and `Lookback.capture` does the
+  same for its own target.
+- **The presenter** (`outputs.Presenter`, one per later output, on its
+  own window's context) wraps the renderer's textures by GL name
+  (`ctx.external_texture`) — a share group shares textures, never
+  framebuffers or vertex arrays — and draws the ground, the frame, the
+  hands, the readout and the dim. The `glFlush` before it is what makes
+  the second context see this frame's texture
+  (`tests/test_app_boundary.py::test_the_rendering_context_is_flushed_before_a_presenter`).
+- **Opaque unless overlay.** With `[output] overlay = false` (the default)
+  the render window has no transparent framebuffer and `output.overlay`
+  refuses to switch on, whatever road asks. Every later output is opaque.
+  Output 1's swap waits for the screen (interval 1), later outputs' do not;
+  whether that paces two screens without tearing is hand check 107.
 
 ---
 
 ## 3. The control model
 
-This is the canonical statement. Where another document disagrees with
-this section, this section is wrong only if the code is; check the cited
-line, then fix whichever is lying.
+This is the canonical statement. Where another document disagrees, this
+section is wrong only if the code is: check the cited symbol or test,
+then fix whichever is lying.
 
-![The control model: scene-setters write the base, one performer writes an offset, apply() lands both on the object](assets/10-architecture/control-model.svg)
-
-*The picture in one sentence:* scene-setters write the **base**; exactly
-one performer row per parameter writes an **offset** through
-`Router.modulate`; `Registry.apply()` lands `base + offset` on the live
-object once per frame; the render stack only reads. §3.2 is the text twin.
+Scene-setters write a param's **base**; exactly one performer row per
+param writes an **offset** through `Router.modulate`; `Registry.apply()`
+lands `base + offset` on the live object once a frame; the render stack
+only reads.
 
 ### 3.1 The registry
 
 Every settable thing is a `Param` with a stable id (`view.bright`,
 `rot.rate.XY`, `band.2.atk`, `fx.acid.speed`, `lfo.1.depth`, `macro.3`), a
-`Kind` — `CONTINUOUS`, `ENUM`, `TOGGLE`, `TRIGGER`, `TEXT` (`params.Kind`)
-— and a `get`/`put` pair that reads and writes the live object it is a
-view onto. Flags (fields of `params.Param`):
+`params.Kind` — `CONTINUOUS`, `ENUM`, `TOGGLE`, `TRIGGER`, `TEXT` — and a
+`get` / `put` pair onto the live object it is a view of.
+`params.build_registry` declares the whole surface. Flags:
 
-| Flag | Means | Default |
-|---|---|---|
-| `persist` | belongs in a snapshot (module preset, preset, project); its group puts it in the performance part (a preset's `values`) or the session part (a project's `session`, never a preset): `params.PERFORMANCE_GROUPS` / `SESSION_GROUPS`, `part_of`, `snapshot(part=)` | on; triggers never |
-| `modulatable` | a performer may drive it | on; off for rig settings (`output.monitor…`, every `hands.*`), UI state, aliases |
-| `alias` | a view onto another param (`band.sel.*` follows the selection) | off; an alias neither persists nor modulates |
+| Flag | Means |
+|---|---|
+| `persist` | belongs in a snapshot. Its group puts it in the **performance** part (a preset's `values`) or the **session** part (a show's `session`): `params.PERFORMANCE_GROUPS` / `SESSION_GROUPS`, `part_of`. On by default; never for triggers |
+| `modulatable` | a performer may drive it. Off for rig settings (`output.monitor`, `.fullscreen`, `.overlay`, `.passthrough`, `.dim`, every `hands.*`), UI state, aliases, `tempo.tap`, the dream params whose change rebuilds something (`dream.gap`, `dream.res`, `dream.layer`), an effect's structure (`fx.<name>.order`, `fx.<name>.target`), the per-output switches, and `ghost.style` / `.mirror` / `.guide` / `.tethers`. A route onto one is dormant; a hand Learn onto one is refused in words (`Learn.learn_source`), and a preset's route onto one is dropped at load with a note (`Presets.load_doc`) |
+| `alias` | a view onto another param (`band.sel.*` follows the selected band); never persists or modulates. `Registry.real` resolves it |
 
 A continuous param has a **taper** (`tapers.py`): an integer position ↔
-real value map with `unmap(map(p)) == p` on every detent
-(`tests/test_control.py::test_taper_round_trip`). The user's setters snap to detents; the
-modulation path maps floats through the taper without snapping, and a
-tapered value's position is continuous between detents
-(`Param._taper_pos`) so a sub-detent base survives under a performer.
+value map, exact on every detent
+(`tests/test_control.py::test_taper_round_trip`). User setters snap to
+detents; the modulation path does not, and a tapered position is
+continuous between detents (`Param._taper_pos`), so a sub-detent base
+survives under a performer.
 
-**Base vs effective.** A param has no storage of its own until something
-modulates it. `p.value` reads the object (the *effective* value);
-`p.base`, `p.norm`, `p.position()`, `p.text()` read the user's *setting*.
-They are the same thing until the first `modulate()` call adopts the
-object's current value as `_base` (`Param.modulate`); from then on
-every setter writes `_base` (`Param.set`) and `apply()` writes
-`base + Σ offsets` to the object. The frame no source calls, `apply()`
-writes the base back and forgets it (`Param.apply`,
-`tests/test_modulation.py::test_modulation_rides_on_the_base_and_lets_go_cleanly`).
+**Base vs effective.** `p.value` reads the object (the *effective*
+value); `p.base`, `p.norm`, `p.position()` read the setting. They are the
+same until the first `modulate()` adopts the object's value as the base;
+from then on every setter writes the base and `apply()` writes
+`base + Σ offsets`. The first frame no source calls, `apply()` writes the
+base back and forgets it
+(`tests/test_modulation.py::test_modulation_rides_on_the_base_and_lets_go_cleanly`).
 
-**`Registry.apply()`** runs once per frame over every
-modulated param, in registry insertion order. Per param
-(`Param.apply`): fold any direct object write since last frame into
-the base as a delta; `target = base + offsets`; clamp or wrap; continuous
-→ float through the taper; enum → nearest index with a dead-band
-(`params.MOD_DEADBAND`); toggle → hysteresis about `MOD_ON` /
-`MOD_OFF`; trigger → fire once on the rising edge, re-arm
-below `MOD_OFF` (`tests/test_modulation.py::test_discrete_targets_move_with_hysteresis`
-and the tests after it).
+**`Registry.apply()`** runs once a frame over every modulated param, in
+registry order. Per param (`Param.apply`): fold any direct object write
+since last frame into the base; `target = base + offsets`; clamp or wrap;
+continuous → through the taper; enum → nearest index with a dead-band
+(`params.MOD_DEADBAND`); toggle → hysteresis about `MOD_ON` / `MOD_OFF`;
+trigger → fire once on the rising edge
+(`tests/test_modulation.py::test_discrete_targets_move_with_hysteresis`).
+
+An enum with a `has` predicate (the bank's `preset.select`) is stepped by
+`Param._walk`: a step or cycle skips choices that hold nothing.
 
 ### 3.2 Who may write a parameter
 
-Three classes of writer, and the model is that they never fight:
-
-| Class | Writes | Who | Enforced by |
+| Class | Writes | Who | Held by |
 |---|---|---|---|
-| **Scene-setter** | the **base** | panel widgets (`ui.Panel`'s widget helpers: `_fader`, `_slider`, `_combo`, `_check`); key / pad / hat rows via `routing.act` (`Router.keys`, `Router.pad`); MIDI knobs, faders, buttons — the rows of the layer that is up and the invariant ones (`midi.py`, `Bindings.dispatch`); a macro's **base subscribers**, set by `Router.follow_macros` when the macro's base moves (never its offset); module presets and projects via `Registry.restore` (`Library.restore`); a preset via `Presets.load` (`preset.py`: every performance base in one restore, every performer row replaced — a load is a scene-setter, it writes no offset); the relative writers — mouse orbit / pan / zoom, sticks, triggers, ↑/↓ — via `Param.nudge` / `scale` (`app.Mouse.poll`, `app._ride_depth`, and the pad block of `app.frame`); `R`, F1–F8 and ⇧F1–F8 as ordinary key rows since plan 11 WP7 (`routing.LOOP_KEY_ROWS`) | every setter ends in `Param.set`, which writes `_base` while modulated (`Param.set`); `Param.nudge` / `Param.scale` read `self.base`; `tests/test_modulation.py::test_setting_a_modulated_param_moves_its_base`, `tests/test_app_relative.py`, `tests/test_midi.py::test_ring_shows_the_base_and_never_chases_a_performer` |
-| **Performer** | an **offset** | `Router.modulate` → `Param.modulate` — the only caller in the package | `tests/test_routing_boundary.py` (an AST walk: one call site, in `Router.modulate`); adapters only `feed` (`HandsIO.poll`, `LFOs.publish`, `Bridge.receive`) |
-| **Object writer** | the live object, bypassing `Param` | the rotation integrator (`ViewState.integrate`, `view.py`), `camera.reset` (`reset_view` in `build_registry`), `Control`'s reset undo, and its scene / band resets only with no library attached (`control.py`), `hands.core.mirror` on the non-modulatable `hands.*` | `Param.apply` folds the delta into the base next frame (`tests/test_modulation.py::test_a_direct_object_write_is_adopted_into_the_base`); non-modulatable params are never applied, so a direct write is simply the value |
+| **Scene-setter** | the **base** | panel widgets (`Param.set*`); key / pad / hat rows (`routing.act` via `Router.keys`, `Router.pad`); MIDI rows of the layer that is up and the invariant rows (`midi.py`, `Bindings.dispatch`), including the knob **glide** (`MidiIO._aim` / `_glide`: `Param.set` between detents, then the row's `set_norm`); a macro's base subscribers (`Router.follow_macros`); `Registry.restore` (module presets, shows); a preset load (`Presets.load`); the relative writers — mouse, sticks, triggers, ↑ / ↓ — via `Param.nudge` / `scale`, which read the base; home (`Project.home`); undo and redo (`Undo._restore`) | every setter ends in `Param.set`, which writes the base while modulated (`tests/test_modulation.py::test_setting_a_modulated_param_moves_its_base`, `tests/test_app_relative.py`) |
+| **Performer** | an **offset** | `Router.modulate` → `Param.modulate`, the only call site | `tests/test_routing_boundary.py::test_only_router_modulate_calls_param_modulate` (an AST walk). Adapters only `feed` |
+| **Object writer** | the live object, bypassing `Param` | `ViewState.integrate` (`ang`), `camera.reset`, `control.Control`'s resets and their undo, `hands.core.mirror` on the non-modulatable `hands.*` | `Param.apply` folds the delta into the base next frame |
 
-Consequences to hold onto:
+Consequences:
 
-- A knob turned on a hand-owned parameter moves the **return value**, which
-  shows when the hand's row lets go. It never prompts and is never blocked
-  (plan 09 decision 3, "scene-setters don't compete";
-  `tests/test_routing.py::test_audit_3_a_knob_moves_the_return_value_under_a_hand`).
-  A hand leaving the box makes its rows let go that frame — its axes read
-  `NaN` — and the base shows; the tracker going dark feeds `None` and does
-  the same (plan 11 WP1, audit B1;
-  `tests/test_hands.py::test_a_hand_leaving_the_box_releases_its_position_row`).
-- Of the clock's and the LFOs' triggers, `lfo.trigger` and every
-  `lfo.N.reset` are ownable: a performer fires them on its rising edge
-  (a pinch drops the LFOs on the one, a kick band re-triggers them).
-  `tempo.tap` is not (`modulatable=False`): a row on it is dormant,
-  because a band on tap tempo would tap on every transient (decision
-  register row 2, 2026-09-28;
-  `tests/test_tempo.py::test_a_performer_on_tap_tempo_is_dormant_but_one_on_the_lfo_trigger_fires`).
-- A relative writer reads the base, never the effective value. Reading the
-  effective value folded the whole offset into the base on every drag
-  frame — plan 09's audit simulation 1
+- **Scene-setters don't compete with performers.** A knob turned on a
+  hand-owned param moves the **return value**, which shows when the hand
+  lets go; it never prompts and is never blocked
+  (`tests/test_routing.py::test_audit_3_a_knob_moves_the_return_value_under_a_hand`).
+- **A relative writer reads the base**, never the effective value, or the
+  whole offset would fold into the base on every drag frame
   (`tests/test_app_relative.py::test_orbit_under_a_performer_moves_the_base_by_its_delta`).
-- A macro is a scene-setter through its base subscribers and a performer's
-  attenuator through its depth subscribers. A hand that owns a macro
-  moves only the depth subscribers (they read the macro's effective
-  value); the base subscribers follow the macro's base — the knob, the
-  panel, a restore (plan 13 §2.4; register row 12b;
-  `tests/test_macros.py::test_a_performer_on_a_macro_moves_only_its_depth_subscribers`).
-  Two macros setting one param: the later one in id order wins.
-- MIDI ring feedback shows the base (`MidiIO.feedback`) and never chases a
-  performer; LED feedback on a toggle, or on an enum `set` row, reads the
-  effective value (`MidiIO._lit`) and does. That is intended (owner, 2026-09-28,
-  audit R6): a ring is a pickup readback and must show the base or the
-  knob could never catch; an LED is a state light and shows what the
-  show is doing.
-- `Router.modulate` never checks ownership. The referee lives in the
-  table's edit doors (§3.5) and in every load (`referee`); a table mutated
-  directly could still stack two rows on one target (§3.10).
-- A preset's route may perform **any** modulatable param, a session one
-  included (decision register row 19 (a)): D9 governs the *values* a
-  preset lands — never a session base — not the offsets its routes add
-  while their sources are live. TUMBLE's left height pushes the drive
-  (`master.gain`); when the hand goes the drive fader's setting is back,
-  untouched. The ROUTING page marks such a row "session"
-  (`ui_routing.is_session_target`;
-  `tests/test_ui_routing.py::test_a_route_on_a_session_param_is_marked_session`).
+- **A glide is the MIDI adapter's own, and anyone else's write ends it.**
+  One glide per param (`MidiIO._slews`). Each poll the adapter reads the
+  param's norm back; further than `SLEW_TOL` from its own last write means
+  someone else set it, and the glide is dropped. A param that moves on its
+  own is written at once (`MidiIO._restless`). Only `abs` rows on a
+  continuous, non-integer param glide. `desk.slew` at 0, the port going
+  away or `MidiIO.close()` lands every glide. `routing.SLEW_MAX_S` is held
+  under `undo.SETTLE_S`, so one knob turn is one undo step
+  (`tests/test_midi.py::test_someone_elses_write_stops_a_glide`,
+  `tests/test_undo.py::test_the_slew_can_never_outlast_the_settle_time`).
+- **MIDI feedback.** A ring shows the base — while a glide runs, the
+  glide's target (`MidiIO._ring_norm`) — and never chases a performer, or
+  the knob could never catch. An LED on a toggle or an enum `set` row
+  reads the effective value (`MidiIO._lit`): it is a state light
+  (`tests/test_midi.py::test_ring_shows_the_base_and_never_chases_a_performer`).
+- **Triggers.** `lfo.trigger` and every `lfo.N.reset` are ownable (a
+  pinch can drop the LFOs on the one). `tempo.tap` is not: a band on tap
+  tempo would tap on every transient
+  (`tests/test_tempo.py::test_a_performer_on_tap_tempo_is_dormant_but_one_on_the_lfo_trigger_fires`).
+- **A preset's route may perform any modulatable param**, a session one
+  included; a preset never sets a session *base*. The ROUTING page marks
+  such a row "session" (`ui_routing.is_session_target`).
+- **The output switches add no writer.** `output.N.scene` / `.hands` /
+  `.through` / `.dim` (`overlay.register_switches`, one set per opened
+  output) are rig settings — not persisted, not modulatable — whose base
+  is the slot's `outputs.Switches`; the renderer only reads it
+  (`tests/test_overlay.py::test_the_output_switches_are_rig_settings`).
+- **Undo is a scene-setter that watches the other scene-setters.** It has
+  no write hook: `Param` and `Registry` do not know it exists. It compares
+  bases, so a performer moving makes no step; floats compare within
+  `undo.REL_TOL` / `ABS_TOL`, so a performer's round-off in the last bits
+  makes none either (`tests/test_undo.py::test_a_performer_moving_makes_no_step`).
+  A restore puts back **only what differs** — bases through
+  `Registry.restore`, the table's parts through `Bindings.set_routes`,
+  `set_desk(rows, load=False)`, `set_macros` — then `Router.sync_macros`,
+  so `follow_macros` does not re-land the subscribers over it. It writes
+  no offset, no object and no file
+  (`tests/test_undo.py::test_undo_of_a_slider_does_not_rerun_a_load`).
+- **`Router.modulate` never checks ownership.** The referee lives in the
+  table's edit doors and loaders (§3.5); a table mutated directly could
+  still stack two performers on one target.
 
 ### 3.3 Sources and rows
 
-A `Binding` (`routing.Binding`) is one row: `source` (`scheme:address`),
-`target` (a param id), `op`, `value`, `enabled`, and for performers
-`scale` (a **session** param only — the rig's attenuator, `master.gain`,
-the drive fader, on the legacy6 rate rows; decision register row 18 (a):
-a `scale` on a macro becomes its depth subscriber, one on any other
-performance param is dropped at load with a note, and a macro
-attenuates a route only through a depth subscriber, §3.6), `when`,
-`rest`; MIDI rows add `pickup`, `feedback`, `on`, `off`, `ring`, and
-`layer` — absent for an **invariant** control (the session's, one meaning
-on both layers), `"global"` (the SHIFT layer) or `"preset"` (the loaded
-preset's desk; plan 13 §3.1).
+A `routing.Binding` is one row: `source` (`scheme:address`), `target` (a
+param id), `op`, `value`, `enabled`, and for performers `scale` (a
+**session** param only, such as `master.gain`), `when` (a gate), `rest`;
+MIDI rows add `pickup`, `feedback`, `on`, `off`, `ring` and `layer` —
+absent for an **invariant** control (the session's, one meaning on both
+layers), `"global"` (the SHIFT layer) or `"preset"` (the loaded preset's
+desk).
 
 | Scheme | Address | Fed by | Reaches the param as |
 |---|---|---|---|
-| `key:` | a GLFW key name, optional `SHIFT+` / `SUPER+` | `Router.keys` | a **discrete op** on the base |
-| `pad:` / `hat:` | a `gamepad` button / hat name | `Router.pad` | discrete op on the base |
-| `cc:` / `note:` / `pitch:` | `channel:number` (`pitch:` is `channel` only) | `MidiIO._handle` → `Bindings.dispatch` (the invariant rows, else the up layer's) → `MidiIO._apply` | `abs` (with soft pickup), `rel`, `rel64`, `step`, `toggle`, `set`, `momentary` — all base |
-| `lane:` | analyzer band index | `analyzer.lanes / CEIL` inside `Router.modulate`; the names and rests by `AudioEngine.publish` each frame, so `Router.describe` says the band's name | **performer** |
-| `hand:` | a **name** (decision register row 20): an axis as `[hands] dofs` spells it, `left.x` … `left.yaw`, `right.x` … `right.yaw`; `left.present` / `right.present`; a pinch switch, `left.pinch.index` … `right.pinch.pinky`. A number, `hand:<i>`, still reads as the lane at index i (12 axes, 2 presence, 8 switches on the default layout); nothing writes one | `HandsIO.poll` → `Router.feed("hand")`; the name → lane map by `HandsIO._publish` (`router.names["hand"]`, from `hands.core.Layout`) | performer; a switch may also be a gate |
-| `ext:` | DAW lane 0–15 | `Bridge.step` → `Bridge.receive` → `Router.feed("ext")` | performer |
-| `lfo:` | 0–3 (`lfo:0` is "LFO 1"; param ids are 1-based) | `LFOs.publish` → `Router.feed("lfo")` | performer |
+| `key:` | a GLFW key name, with modifiers `SHIFT+` / `SUPER+` / `CONTROL+` (`routing.MODIFIERS`) | `Router.keys`, reading `app.Keys` | a discrete op on the base |
+| `pad:` / `hat:` | a `gamepad` button / hat name | `Router.pad` | a discrete op on the base |
+| `cc:` / `note:` / `pitch:` | `channel:number` (`pitch:` channel only; `*` any channel) | `MidiIO._handle` → `Bindings.dispatch` → `MidiIO._apply` | `abs` (soft pickup), `rel`, `rel64`, `step`, `toggle`, `set`, `momentary`, `fire`, `hold` — all base |
+| `lane:` | analyzer band index | `Analyzer.lanes / CEIL` inside `Router.modulate`; names and rests from `AudioEngine.publish` | **performer** |
+| `hand:` | a name: `left.x` … `right.yaw` as `[hands] dofs` spells them, `left.present`, `left.pinch.index` … `right.pinch.pinky`; a number still reads as that lane | `HandsIO.poll` → `Router.feed("hand")`; the name → lane map in `router.names["hand"]` (`hands.core.Layout`) | performer; a pinch may also gate |
+| `ext:` | DAW lane 0–15 | `Bridge.step` → `Router.feed("ext")` | performer |
+| `lfo:` | 0–3 (`lfo:0` is LFO 1) | `LFOs.publish` → `Router.feed("lfo")` | performer |
 
-`routing.LANE_SCHEMES = ("lane", "ext", "lfo", "hand")` are the continuous
-schemes. A row on one of them may carry **only** the two performer ops
-(`routing.MOD_OPS = ("push", "position")`; `Bindings._check` raises
-otherwise). The other ops in `routing.OPS` belong to keys, pads and MIDI.
+`routing.LANE_SCHEMES = ("lane", "ext", "lfo", "hand")` are the
+continuous schemes; a row on one carries only `routing.MOD_OPS =
+("push", "position")` (`Bindings._check` raises otherwise).
 
-A lane-scheme address is a number (`lane:3`, `lfo:0`) or, where the
-scheme's adapter publishes names, a **name** (`hand:right.roll`). The
-hands are the one such scheme: a hand row names its axis, so a rig that
-reorders or trims `[hands] dofs` keeps every preset on the axes it was
-written for, and a name the rig lacks leaves its row dormant — never on
-another lane (decision register row 20, audit N7;
-`tests/test_hand_names.py`). The factory generator (`preset.hand`,
-`preset.pinch`), Learn and the ROUTING page write names; the first-launch
-migration named the numbers it carried into presets (§3.8).
+**A key press fires only its own chord.** Rows on one key are settled
+together: a row fires when its modifiers equal the held modifiers that
+some row on that key names. So `key:B` taps and `key:SHIFT+B` triggers,
+and ⌘⇧Z fires only `key:SHIFT+SUPER+Z`
+(`tests/test_routing.py::test_a_chord_fires_only_its_own_row`). While
+imgui is typing, `Keys` ignores the control window's keys.
+
+**`hold`** is a MIDI note row's op: the target fires once the button has
+been down `midi.HOLD_S`, while still held; a tap fires nothing.
+`routing.act` ignores it; the timing is the adapter's (`MidiIO._fire_holds`).
+All enabled `hold` rows on one target are one control, and on the fire
+they and every LED the fire lit blink for `midi.BLINK_S`. The clip-stop
+row's `preset.save_new` is its one use
+(`tests/test_midi.py::test_the_bar_is_one_control`).
+
+A named hand address resolves only through the map the hands adapter
+published; a name the rig lacks is dormant, never another lane, so a rig
+that reorders `[hands] dofs` keeps every preset on its axes
+(`tests/test_hand_names.py`).
 
 ### 3.4 The one path
 
-Every continuous source reaches a parameter through exactly one pass,
-`Router.modulate`, once per frame, over the enabled performer rows
+Every continuous source reaches a parameter through one pass,
+`Router.modulate`, once a frame, over the enabled performer rows
 (`Bindings.mods`) in table order:
 
-1. Find the source's lane (`Router.lane`): a number is the index; a name
-   is looked up in the map the scheme's adapter published
-   (`router.names[scheme]`) — a name it lacks, or any name while no map
-   is published (no hands adapter), is index −1. Resolved once per
-   address and cached against the map's identity, so a republished
-   layout re-resolves and the pass parses no strings (about 30 µs a frame
-   for 28 rows, the same as the index-only pass it replaced). Then the
-   vector: the analyzer's lanes for `lane:`, otherwise `feeds[scheme]`.
-   No vector, an out-of-range index (−1 included) or a `NaN` reading
-   (a hand out of the box, or never seen) → the row does nothing this
-   frame.
-2. If the row has a gate (`when`), the gate's source — a number or a
-   name, resolved the same way — must be **fed** and read ≥ 0.5; a gate
-   whose source is not live, or that names no lane, holds the row **shut**
-   (`Router.gated`). `lane:` can never gate.
-3. `depth = value × scale × Π (from + m · (to − from))`: `scale` names a
-   session param (`master.gain`, row 18 (a)) whose **effective** value multiplies
-   the depth, and each **depth subscriber** of a macro naming this row's
-   (source, target) multiplies it by its range at `m`, the macro's
-   effective value — last frame's (`Bindings.depth_subs`). A range may
-   cross zero, flipping the route. A missing scale or macro param makes
-   the row dormant.
-4. The op:
-   - **push** — `offset = depth · (u − rest)`. The performer adds to the
-     base, centred where the source rests. `rest` is the row's own number
-     or, when `None`, the source's rest as its adapter published it this
-     frame (`Router.rest_of`; hands publish each axis's
-     configured rest, LFOs 0.5, the analyzer 0, the bridge nothing → 0).
-     Idle adds nothing
-     (`tests/test_routing.py::test_push_is_centred_where_the_source_rests`).
-   - **position** — `offset = clamp(depth · u, 0, 1) − base_norm`. The
-     source *is* the fader, along the param's taper; when it lets go the
-     base returns
+1. **Find the lane** (`Router.lane`): a number is the index; a name is
+   looked up in `router.names[scheme]`, cached against the map's
+   identity. The vector is the analyzer's lanes for `lane:`, else
+   `feeds[scheme]`. No vector, an index out of range, or a `NaN` reading
+   (a hand out of the box) → the row does nothing this frame.
+2. **Gate.** If the row has a `when`, the gate's source must be fed and
+   read ≥ 0.5; a gate whose source is not live holds the row shut
+   (`Router.gated`).
+3. **Depth** `= value × scale × Π (from + m · (to − from))`: `scale` is a
+   session param's effective value; each **depth subscriber** of a macro
+   naming this row multiplies by its range at `m`, the macro's effective
+   value (`Bindings.depth_subs`). A missing scale or macro makes the row
+   dormant.
+4. **The op.**
+   - **push** — `offset = depth · (u − rest)`: added to the base, centred
+     where the source rests (`rest`, or the source's published rest via
+     `Router.rest_of`: hands their axis rest, LFOs 0.5, the analyzer 0).
+     Idle adds nothing (`tests/test_routing.py::test_push_is_centred_where_the_source_rests`).
+   - **position** — `offset = clamp(depth · u, 0, 1) − base_norm`: the
+     source *is* the fader; when it lets go the base returns
      (`tests/test_routing.py::test_position_op_is_the_position_across_the_whole_throw`).
-5. `p.modulate(offset)`, the one call in the package. Range, wrap, hysteresis and
-   the return to base are all `Param.apply`'s job, run by `Registry.apply`
-   in the frame's pass (§2, §3.1). `modulate` records; `apply` lands.
+5. `p.modulate(offset)` — the one call in the package. Range, wrap,
+   hysteresis and the return to base are `Param.apply`'s.
 
-A row whose source stops being fed (`Router.feed(scheme, None)`: the
-tracker off, the DAW port gone) or whose gate opens simply stops calling
-`modulate`, and `apply()` writes the base back that frame.
+A row whose source stops being fed (`Router.feed(scheme, None)`) or
+whose gate shuts stops calling `modulate`, and `apply()` writes the base
+back that frame.
 
-**Adding a source** (a pedal over OSC, say) is an adapter that, once per
-frame before `router.modulate`, does exactly what the LFOs do
-(`lfo.py`, `LFOs.publish`): `router.feed("<scheme>", vector)` — a list
-of floats in `[0, 1]`, `NaN` for a lane that is out of view, `None` when
-the device is gone — and publishes, by plain assignment,
-`router.labels["<scheme>"] = [names]`, `router.rests["<scheme>"] =
-[rests]`, and, if some lanes are switches, `router.gates["<scheme>"] =
-[(lane_index, name), …]`; if its rows should name lanes rather than
-number them, `router.names["<scheme>"] = {address_name: lane_index}` — a
-new dict whenever its layout changes (the resolved addresses are cached
-against it; the hands do this, `HandsIO._publish`). The scheme must be in `LANE_SCHEMES`
-for its rows to count as performers; until it is, reuse
-`ext:`. The adapter imports nothing from the package (the registry and
-router arrive as arguments — the rule `tests/test_lfo_boundary.py`
-holds), never writes a `Param`, and is opened by `app.main` behind a
-config gate. The referee needs nothing from it: ownership is settled at
-the table's edit doors (§3.5) whatever the scheme.
+**What a new hand Learn writes** (`Learn._row`; rows already in a table
+or file are never rewritten):
+
+| The target | A centred axis | A one-sided axis (height) |
+|---|---|---|
+| continuous, range centred on zero (`learn.centred_target`) | `push`, depth D | `push`, depth D |
+| any other continuous param | `push`, depth D | `position`, depth 1 |
+| enum, toggle, trigger, whole-number | `position`, depth 1 | `position`, depth 1 |
+
+D is the session's `hands.learn_depth` (`learn.PUSH_DEPTH` when a caller
+names none); a learned push has `rest = None`.
+
+**Adding a source** is an adapter that, before `router.modulate`, does
+what `LFOs.publish` does: `router.feed("<scheme>", vector)` (floats in
+`[0, 1]`, `NaN` for a lane out of view, `None` when the device is gone)
+and publishes `router.labels`, `router.rests`, optionally `router.gates`
+and `router.names` (a new dict whenever its layout changes). The scheme
+must be in `LANE_SCHEMES` for its rows to perform. The adapter imports
+nothing from the package, never writes a `Param`, and is opened by
+`app.main` behind a config gate.
 
 ### 3.5 One performer per parameter
 
 A **performer** is an enabled row on a continuous scheme with a performer
-op (`Binding.is_performer`). Disabled rows own
-nothing; key, pad and MIDI rows never own. A target has at most one:
+op (`Binding.is_performer`). A target has at most one:
 
 - `Bindings.owner(pid)` answers who.
 - `Bindings.add` and `bind` raise `Owned(existing, new)` when the target
-  has a different performer (`Bindings._check`); the table is untouched.
-  Waking a disabled row (`Bindings.enable`) runs the same check.
-- `Bindings.replace_owner(new, *, target=None)` is the **one door** onto a
-  taken target: it removes whoever owns it *at commit* and adds or
-  retargets the new row, a retargeted route's depth subscribers with it.
-  Every *Replace* in the app is that call (`ui_routing.add_route`,
-  `_wake`, `_retarget`; `learn.Learn._place`).
-- Loading a file or a preset runs `routing.referee`: first performer per
-  target wins in file order, the rest go to `table.dropped` with a reason,
-  shown on the ROUTING page until the next edit (`Bindings.from_json`,
-  `Bindings.set_routes` — the road `Presets.load_doc` takes).
-- Gates do not exempt a row: two rows on one target with different pinches
-  are two performers (plan 09 decision 2, "one performer per parameter").
+  has a different performer; `Bindings.enable` runs the same check.
+- `Bindings.replace_owner(new, *, target=None)` is the **one door** onto
+  a taken target. Every *Replace* in the app is that call
+  (`ui_routing`, `Learn._place`).
+- Every load runs `routing.referee`: first performer per target wins,
+  the rest go to `table.dropped` with a reason (`Bindings.from_json`,
+  `Bindings.set_routes`).
+- Gates do not exempt a row: two rows on one target with different
+  pinches are two performers.
 
-Tests, in `tests/test_routing.py`: `test_a_target_has_one_performer`
-through `test_a_preset_load_lists_what_it_dropped` (the referee),
-`test_audit_1_…` to `test_audit_4_…` (the four audit simulations),
-`test_every_factory_preset_names_real_params_with_one_owner` (every
-factory preset's routes have one owner per target).
+Tests: `tests/test_routing.py` from `test_a_target_has_one_performer`
+through `test_a_preset_load_lists_what_it_dropped`, and
+`test_every_factory_preset_names_real_params_with_one_owner`.
 
-**The Replace / Keep prompt.** A conflicting learn or edit is *held*, not
-applied:
+**Learn.** The host owns one `learn.Learn`, built over the live table
+whatever the MIDI gate says. The right-click menu arms a param with what
+it waits for (`Learn.arm(pid, want)`, `learn.WANTS`: `"desk"`,
+`"hand:left"`, `"hand:right"`); `Learn.accepts(source)` is the one
+question every completer asks. Three completers:
 
-- Right-click → Learn arms a param id on the host's one `learn.Learn`
-  (`app.main` builds it over the live table whatever the MIDI gate says;
-  `panel.learn`). A hand completes it through `Learn.learn_source`
-  (`HandsIO._learn`), writing the axis that moved **by name**
-  (`hand:right.pitch`) and a pinch held while learning as a named gate
-  (`hand:right.pinch.index`; decision register row 20,
-  `tests/test_hands.py::test_a_hand_learn_writes_the_axis_by_name_on_any_dofs`);
-  a `band.sel.*` alias resolves to the band
-  it stands for (`Learn.target_for` → `Registry.real`, the one alias rule
-  `build_registry` installs and the panel's widgets read through);
-  if another performer owns the target the pair is parked in
-  `Learn.pending` and nothing is written. A learn onto a target the same
-  axis already positions only refreshes the gate. A knob completes it
-  through `MidiIO._learned`, which binds the param as armed — alias
-  included, on purpose — as a **preset-layer** row (`Bindings.bind(b,
-  write=False)`: it replaces every preset-layer row on that physical
-  control — an any-channel row on it included (`Binding.overlaps`:
-  learning `cc:0:16` where the preset has `cc:*:16` leaves one row;
-  `tests/test_learn.py::test_a_knob_learn_replaces_an_any_channel_row_on_the_same_knob`)
-  — and the param's previous preset-layer row in the same role, never an
-  invariant or global row); a knob learn with the global layer up, or on an
-  invariant control (SHIFT among them), is **refused** — nothing changes,
-  `Learn.last` says why, `Learn.refused` is set (plan 13 D5, D6).
-  Every learn goes into the **loaded preset**: the table changes, the
-  preset's dirty dot moves (`Presets.signature`), and no file is written
-  — `bindings.json` included — until a save (⇧F, the preset strip's or
-  the ROUTING head's save / as…) (`tests/test_learn.py`).
-- A ROUTING-page add, enable or retarget that raises `Owned` parks in the
-  page's own state (`ui_routing.ask`).
-- `ui_routing.modal` is drawn first thing in `Panel.draw`, on **every**
-  page, panel collapsed or not (`Panel.draw`), reading whichever question is
-  up (`ui_routing._question`). *Replace* → `replace_owner`, a change of
-  the loaded preset's routes (its dirty dot; **no file is written**, plan
-  13 §3.3); *Keep* → the table is untouched
-  (`tests/test_ui_routing.py`
-  `test_the_replace_prompt_swaps_the_owner_or_leaves_the_table`;
-  `tests/test_learn.py::test_the_prompts_answer_replaces_or_keeps`).
-- While a question is up `Learn.learning` is `None`, so moving the hands
-  learns nothing more (`HandsIO._learn`;
-  `tests/test_hands.py::test_a_held_learn_is_not_fired_again_by_the_hands`).
+- **A hand** — `HandsIO._learn` → `Learn.learn_source`: the axis that
+  moved, by name, with a pinch held as its gate. A non-modulatable target
+  is refused in words. If another performer owns the target the pair is
+  parked in `Learn.pending` for the Replace / Keep prompt and nothing is
+  written. A landed learn takes the axis's other rows first: one axis,
+  one param (`tests/test_learn.py::test_a_learned_axis_drives_one_param`).
+- **A desk control** — `Learn.learn_control(source, profile)`, the one
+  road onto the desk, called by `MidiIO._learned` with the message and by
+  `ui_desk.click` with the control clicked. It binds a **preset-layer**
+  row (`Bindings.bind(b, write=False)`), replacing whatever preset-layer
+  row was on that control, pushes one undo step and bumps
+  `redraw_serial`. On an invariant control or with the global layer up it
+  is refused (`learn.blocked`) and **stays armed**. In the adapter an
+  invariant control is never a candidate: its message is dispatched as
+  usual through an armed learn
+  (`tests/test_learn.py::test_learn_refuses_the_global_layer_and_invariant_controls`,
+  `tests/test_midi.py::test_an_invariant_control_works_through_a_desk_learn`).
+  A desk learn never prompts: a desk row is a scene-setter.
+- **Click a control, then a param.** With nothing armed, a click on the
+  on-screen desk is `Learn.pick(source)`; the next click on a param's
+  widget is `Learn.map_picked(pid, profile)` = `arm(pid, "desk")` +
+  `learn_control` — the same road
+  (`tests/test_learn.py::test_pick_then_param_maps_through_the_learn`).
+
+Every learn lands in the **loaded preset**: the table changes, the
+preset's dirty dot lights (`Presets.signature`), and no file is written
+until a save. **Unbind** is `Learn.unbind(ids, *, desk=True,
+routes=True)`: the loaded preset's desk rows and every route on the param
+and its real param, as one undo step; a session row is never removed.
+`learn.bound(table, ids)` is what both Unbind and the menu's lines ask
+(`tests/test_learn.py::test_unbind_removes_the_presets_desk_rows_and_every_route`).
+
+**The Replace / Keep prompt.** `ui_routing.modal` is drawn first in
+`Panel.draw`, on every page, reading whichever question is up (a held
+learn, or a ROUTING-page add / enable / retarget that raised `Owned`).
+*Replace* → `replace_owner`; *Keep* → the table is untouched. While a
+question is up, the hands learn nothing more
+(`tests/test_ui_routing.py::test_the_replace_prompt_swaps_the_owner_or_leaves_the_table`).
 
 ### 3.6 Chaining, not stacking
 
-Layers come from the graph, never from two rows on one knob. Every knob
-of an LFO (`lfo.N.shape/rate/sync/depth/phase`) and every macro
-(`macro.1–8`) is an ordinary, ownable, persistent param, so:
+Layers come from the graph, never from two rows on one param. Every LFO
+knob (`lfo.N.shape/rate/sync/depth/phase`) and every macro (`macro.1–8`)
+is an ordinary, ownable, persistent param:
 
-```
-hand:right.y ──position──▶ lfo.1.depth   lfo:0 ──push──▶ view.bright
-lane:0 ──push──▶ macro.2   hand:left.y ──position──▶ fx.mix  × macro.2's depth subscriber
+```text
+hand:right.y ──position──▶ lfo.1.depth     lfo:0 ──push──▶ view.bright
+lane:0 ──push──▶ macro.2     hand:left.y ──position──▶ fx.mix  × macro.2's depth subscriber
 ```
 
-The eight macros act only through their **subscribers** (plan 13 D10,
-§2.4; `routing.Macro`, `Sub`; `Bindings.macros`, `set_macros` /
-`macros_doc`): a *base* subscriber `{"base": id, "from": a, "to": b}`
-sets that param's base to `a + m · (b − a)` along its fader, without a
-detent, whenever the macro's base moves (`Router.follow_macros`, the
-frame's last scene-setter step, §2); a *depth* subscriber
-`{"depth": {"source", "target"}, "from", "to"}` multiplies that route's
-depth (§3.4 step 3). A base subscriber names a **performance** param —
-persisted, not an alias — never a session one (D9: a preset never moves
-a session base): `set_macros` drops any other with a note (the preset
-load's notes, the migration's; `routing.settle_bases`, `base_refusal`)
-and the ROUTING page's "+ base" picker offers performance params only
-(`ui_routing.base_targets`;
-`tests/test_macros.py::test_a_base_subscriber_on_a_session_param_is_dropped_with_a_note`).
-A depth subscriber may scale a route on a session param (row 19 (a)).
-Polarity is per subscriber, so one knob can raise
-one thing while lowering another. A performer may own a macro; it moves
-the depth subscribers only (§3.2). The subscribers live in the table
-(`Bindings.macros`) and are the loaded preset's since plan 13 WP4: a
-preset load replaces them (`set_macros`) and lands the base subscribers
-at once, a save writes them (`Presets.document`), an edit on the ROUTING
-page marks the preset dirty; `bindings.json` never carries them (plan
-13 WP5). The macros'
-*values* are **performance state** (the `macro`
-group is in `PERFORMANCE_GROUPS`, plan 13 WP1): in the whole snapshot and
-its performance part, so a preset carries them (plan 13 WP2) and a
-project does not; the module strips list no `macro` group. The live
-`bindings.json` holds no values since plan 13 WP5 — the startup preset
-lands the macros' bases
-(`tests/test_routing.py::test_the_live_table_writes_only_the_sessions_controls`). LFO params are
-performance state too; tempo is session (a preset never moves a tapped
-BPM, plan 13 §4, D9). The presets made from the old routing presets
-set the bases their rows assume — `lfo-breathe` four LFO knobs and its
-Breathe macro, `hands-fx` the acid speed and Acid switched on — each a
-persisted, non-alias performance param
-(`tests/test_routing.py::test_a_converted_presets_values_are_bases_a_preset_would_save`; audit
-R1, decided 2026-09-28).
+A macro acts only through its **subscribers** (`routing.Macro`, `Sub`;
+`Bindings.macros`, `set_macros`):
+
+- a **base** subscriber `{"base": id, "from": a, "to": b}` sets that
+  param's base to `a + m · (b − a)` whenever the macro's *base* moves
+  (`Router.follow_macros`, frame step 4). It names a persisted,
+  non-alias **performance** param; any other is dropped with a note
+  (`routing.base_refusal`;
+  `tests/test_macros.py::test_a_base_subscriber_on_a_session_param_is_dropped_with_a_note`).
+- a **depth** subscriber `{"depth": {"source", "target"}, "from", "to"}`
+  multiplies that route's depth (§3.4 step 3).
+
+So a performer that owns a macro moves only its depth subscribers; the
+base subscribers follow the knob, the panel or a restore
+(`tests/test_macros.py::test_a_performer_on_a_macro_moves_only_its_depth_subscribers`).
+Two macros on one param: the later id wins. The subscribers and the
+macros' values belong to the loaded preset; `bindings.json` never holds
+them.
 
 ### 3.7 Where a controller's value goes
 
-| You move… | It becomes… | Writes | Path |
-|---|---|---|---|
-| a panel fader, combo, checkbox | `Param.set_position` / `set` / `toggle` | base | `ui.Panel` widget helpers → `Param.set` |
-| `M`, or the APC40's REC | `key:M` / `note:` row → `audio.mic` (declared by `build_registry`, so the row resolves without a panel) | base (a toggle) | `routing.keymap`, `apc40.DEFAULT_MAP`, `params.build_registry` |
-| a key with a table row (`B`, `F`, `1–6`, …) | `routing.act` on the row | base (step / toggle / fire / set) | `app.frame` → `Router.keys` → `routing.act` |
-| `R`, F1–F8 / ⇧F1–F8 | table rows (`key:R`, `key:F1`…, `key:SHIFT+F1`…) → `routing.act` fires `camera.reset` / `preset.load.k` / `preset.save.k` — F<k+1> loads the preset the project's bank names in slot k (`Project.load_slot` → `Presets.load`; an empty slot or a missing file loads nothing and says so), ⇧F<k+1> saves the live state as it into the user folder (`save_slot`); the APC40's clip row 1 is `preset.select`, QUANT and pad B `preset.next`; with ⌘ held the loop claims R for restart first | base (a trigger) | `routing.LOOP_KEY_ROWS`; plan 11 WP7; plan 13 WP2 |
-| Cmd+R, Esc / Q | loop code: `_restart` (execv) / close the window | nothing in the registry | `app.frame` (`app.LOOP_KEYS`) |
-| ↑ / ↓ | `_ride_depth` on `view.depth4` | base, relative, in log space | `app.frame` → `app._ride_depth` |
-| mouse drag / shift-drag / wheel | `Mouse.poll` → `nudge` / `scale` on camera params | base, relative | `app.Mouse.poll` |
-| a pad button or hat | `routing.act` on the row | base | `app.frame` → `Router.pad` |
-| a stick or trigger | `nudge` / `scale` / `_ride_depth` | base, relative | `app.frame`'s pad block |
-| an APC40 knob or fader (`abs`) | the row of the layer that is up, or the invariant one; `Param.set_norm` — a knob is caught at the ring just sent (the encoder re-based, `apc40.RING_REBASES_KNOB`, hand check 31), a fader after soft pickup; ring feedback shows the base | base | `midi.py` `_handle`, `_apply`, `_rebase` |
-| an APC40 button (note) | `momentary` / `toggle` / `step` / `fire`, on the rows its press went to (D12: the release goes there too) | base | `midi.py` `_handle` |
-| SHIFT (note 0x62) | the invariant row `note:0:98 → desk.shift` (a toggle over `Bindings.layer`, never saved or performed): each press flips the layer, its LED lit while the global layer is up; every ring and LED is redrawn for the new layer, a control the layer does not map dark and dead (D8) | the table's layer | `routing.register_desk`, `MidiIO.redraw` |
-| a macro's knob (desk, panel, restore) | its base → `Router.follow_macros` → each base subscriber's base | base | `routing.py` `follow_macros` |
-| an APC40 knob on a **hand-owned** param | the same — it moves the return value | base | decision 3; `tests/test_routing.py::test_audit_3_a_knob_moves_the_return_value_under_a_hand` |
-| an analyzer band | `lane:<i>` → its performer row | offset | `Router.modulate` |
-| a hand axis | `hand:<name>` (`hand:right.roll`) → its performer row (push or position) | offset | `HandsIO.poll` → `Router.modulate` |
-| a pinch | `hand:left.pinch.index` … `hand:right.pinch.pinky` — a lane like any other, and a gate for rows whose `when` names it | offset, or opens / shuts a row | `hands.core.Layout` (the pinch lanes and gates), `Router.gated` |
-| a DAW lane in | `ext:<i>` → its performer row | offset | `Bridge.receive` |
-| an LFO | `lfo:<i>` → its performer row | offset | `LFOs.publish` |
-| right-click → Learn, then move a hand | `Learn.learn_source` → a `position` row on the real param, or the prompt — into the loaded preset (dirty), no file written | the table | `HandsIO._learn` → `Learn.learn_source` |
-| right-click → Learn, then turn a knob | `MidiIO._learned` (the armed id from the same `Learn`) → an `abs` / `rel` / `toggle` **preset-layer** row into the loaded preset (dirty), no file written; refused with the reason in `Learn.last` while the global layer is up or on an invariant control (D5, D6) | the table's preset layer | `MidiIO._learned` → `Bindings.bind(b, write=False)` |
-| a preset | `Presets.load`: every performance param's base (the file's or its group default) in one `Library.restore`, then `Bindings.set_routes`, `set_desk` (the file's `desk`, or the factory preset layer when it has no `desk` key) and `set_macros` (a base subscriber on a session param dropped with a note, D9), the base subscribers landed at once (`Router.follow_macros(force=True)`, over `values`); session params never; a value that will not land puts the performance part back and refuses the load whole | base, the performer rows, the preset layer, the macros | `Presets.load_doc`; `tests/test_presets.py` |
-| a module preset or project | `Registry.restore` (a project: its session part) | base | `Library.restore` |
-| right-click → Unbind | `MidiIO.unbind`: the loaded preset's desk rows on the param go (the preset dirty, no file written); a param only the session maps is refused with the reason in `Learn.last` | the table's preset layer | `midi.py`, `Bindings.unbind` |
-| a preset load's desk (step 4 of `Presets.load_doc`) | `Bindings.set_desk(rows)`: every preset-layer row replaced, a row on an invariant control dropped with a note (the load's notes, the ROUTING head), the layer dropped to preset, the faders' catch cleared at the next redraw, and every control that lost its last row sent dark there (D8: `MidiIO.redraw` darkens what it drew before, `_shown`; `tests/test_desk.py::test_a_control_that_loses_its_row_goes_dark`) | the table's preset layer | `routing.py` `set_desk`, `midi.py` `redraw` |
-| a ROUTING-page edit (a route, a desk row's target or ×, a macro's label or subscriber) | the table in place — the loaded preset, its dirty dot; a subscriber edit re-lands the base subscribers (`macros_serial`), a desk edit redraws the desk (`redraw_serial`: a redraw, not a load — the faders keep their catch; a control whose row the × took goes dark, D8) | the table | `ui_routing.py` |
+| You move… | It becomes… | Writes |
+|---|---|---|
+| a panel widget | `Param.set_position` / `set` / `toggle` | base |
+| a key with a row (`B`, `⇧B`, `F`, `M`, `1–6`, …) | `Router.keys` → `routing.act` | base |
+| `R`, F1–F8, ⇧F1–F8 | key rows (`routing.LOOP_KEY_ROWS`): `camera.reset`, `preset.load.k` → `Project.load_slot`, `preset.save.k` → `Project.save_slot`. Only the first `params.F_KEYS` = 8 slots have keys | base (a trigger) |
+| ⌘Z / Ctrl+Z, with ⇧ | key rows → `edit.undo` / `edit.redo` → `undo.undo()` / `undo.redo()` | the bases and table parts that differ |
+| Home, or the APC40's OVERDUB | `preset.home` → `Project.home`: the show's "starts on" preset loads | a preset load |
+| ⌘R, Esc / Q, ↑ / ↓ | loop code (`app.LOOP_KEYS`): restart, quit, `_ride_depth` on `view.depth4` | ↑ / ↓: base, relative |
+| mouse drag / wheel, a pad stick or trigger | `Mouse.poll`, the pad block of `app.frame` → `nudge` / `scale` | base, relative |
+| a pad button or hat | `Router.pad` → `routing.act` | base |
+| an APC40 knob or fader | the row of the layer that is up, or the invariant row → `Param.set_norm` (a fader after soft pickup; a knob caught at the ring just sent, `apc40.RING_REBASES_KNOB`, hand check 31); smoothed by `desk.slew` | base |
+| an APC40 button | the rows its press went to — the release goes there too | base |
+| SHIFT | the invariant row → `desk.shift`: flips the table's layer; every ring and LED redrawn, a control the layer does not map dark | the table's layer |
+| the crossfader | invariant row → `output.dim`, the master dim (CC 0 black — hand check 55); a rig setting, 1 at every launch | base of a rig setting |
+| a bank pad (clip rows 1, 4, 5) or a bank button | invariant `set` rows → `preset.select = k` → `Project.load_slot(k)` (`apc40.BANK_PADS`: 24 slots, `library.SLOTS`). Lights by `routing.led_level`: loaded, filled, empty | a preset load |
+| a hold on the clip-stop row | eight invariant `hold` rows → `preset.save_new` → `Project.save_new`: a new user preset named from the loaded one (`library.next_name`), into the next empty slot | files, not params; no undo step |
+| a macro's knob | its base → `Router.follow_macros` → each base subscriber's base | base |
+| an analyzer band, a hand axis, a pinch, a DAW lane, an LFO | `lane:` / `hand:` / `ext:` / `lfo:` → its performer row → `Router.modulate` | offset (a pinch may instead gate a row) |
+| right-click → Learn hand / Learn desk / click-then-map | `Learn` (§3.5) | the loaded preset's table |
+| right-click → Unbind | `Learn.unbind` | the loaded preset's table |
+| a ROUTING-page edit | the table in place: the loaded preset, its dirty dot | the table |
+| a preset | `Presets.load`: every performance base in one `Library.restore`, then `Bindings.set_routes`, `set_desk`, `set_macros`, the base subscribers landed (`Router.follow_macros(force=True)`); session params never | bases and the preset's table |
+| a module preset or show | `Library.restore` (a show: its session part) | base |
 
 ### 3.8 The binding file
 
-`<home>/bindings.json`, schema `hyperspace.bindings/3` (`routing.SCHEMA`):
-`{"schema", "profile", "bindings": [rows]}`. Rows carry only non-default
-fields; a MIDI row carries `layer` when it has one. Since plan 13 WP5 it
-holds the **session's controls** and nothing else (plan 13 §2.2): the
-keys, the pad, and the invariant and global-layer MIDI rows (SHIFT among
-them). A performer row, a preset-layer row, the macros and any `values`
-are the **loaded preset's** — the table holds them in memory, but
-`Bindings.to_json` / `write` never write them (`routing.is_session_row`;
+`<home>/bindings.json`, schema `routing.SCHEMA`
+(`hyperspace.bindings/3`), holds the **session's controls** only: the
+keys, the pad, and the invariant and global-layer MIDI rows. Performer
+rows, preset-layer rows, macros and values are the loaded preset's and
+are never written there (`routing.is_session_row`;
 `tests/test_routing.py::test_the_live_table_writes_only_the_sessions_controls`).
-A Learn, an Unbind, a Replace and every ROUTING-page edit change the
-table and write no file. Nothing in the app edits a session row: the
-keys, the pad and the session's MIDI rows are edited in the file by hand
-(the ROUTING page shows the MIDI ones read-only), and only the loader and
-the migration write it (`Bindings.bind` still writes when asked,
-`write=True`, but its one caller in the app, a knob Learn, passes
-`False`).
-The factory session table is exported to
-`hyperspace/bindings.default.json` (`python -m hyperspace.routing`),
-outside `library/` since it is no group's preset.
+Nothing in the app edits a session row; the file is edited by hand. The
+factory session table is exported to `hyperspace/bindings.default.json`
+(`python -m hyperspace.routing`;
+`tests/test_routing.py::test_factory_files_match_the_code`).
 
-On load (`Bindings.load`):
-
-- no file → the factory table (`keymap + padmap + apc40.DEFAULT_MAP`, the
-  preset layer in memory only; no performer rows since WP5 — the house
-  presets carry the legacy6 lane rows); an old `midi_map.json`'s rows
-  replace its MIDI part, sorted into layers — written once when its knobs
-  are the factory's, else carried (below) for the migration to write;
-- schema 1 or 2 → the MIDI rows are sorted into the desk's layers, once
-  (`sort_layers`, plan 13 §3.2): a row identical to a factory row in
-  (source, target, op, value) takes its layer, any other row on an
-  invariant factory control stays invariant, any other goes to the
-  preset layer; the factory's global rows and SHIFT are added where the
-  file has no row on that control for that layer;
-- on any schema a row's `scale` is settled (`migrate_scales`, decision
-  register row 18 (a)): `scale: "macro.N"` becomes a depth subscriber of
-  `macro.N` `from 0, to 1`, a `scale` on any other performance param is
-  dropped, each noted; a `scale` on a session param (`master.gain`) is
-  kept;
-- schema 1 → `migrate_v1` renames the ops (`mod → push`, `span →
-  position`, lane `abs → position`; `replace` is dropped with a note)
-  and `referee` settles duplicate owners;
-- every load **of a file** runs `remap_factory` (a fresh factory table
-  already has the rows): the plan-09 moves (TAP TEMPO, NUDGE ±, METRONOME,
-  QUANT for `preset.next`) and the keys of plans 09 and 11 (`B`, `⇧B`,
-  `R`, F1–F8, ⇧F1–F8) applied only where the user's table still has the
-  exact old factory row or nothing on the source, and any
-  row on a `theme.*` param moved to the `preset.*` param of the same slot
-  (plan 13 WP2, `THEME_TO_PRESET`); idempotent;
-- anything migrated or remapped is announced on stderr and written back
-  once, with the file as it was kept beside it as `bindings.json.bak-v<n>`,
-  `n` the schema the file was read at, a dated `.bak-v<n>-<stamp>` when
-  that name is taken — never over an existing `.bak-*` (`routing.backup`,
-  an exclusive create); an unknown schema is never rewritten — the factory
-  table stands in and `Bindings.error` says why
-  (`tests/test_routing.py::test_a_backup_is_kept_before_every_rewrite_and_never_over_a_hand_made_one`,
-  `::test_an_unknown_schema_is_reported_not_migrated`);
-- **except** a file that still holds a preset's part — performer rows,
-  preset-layer rows, `macros`, `values`: every file written before plan
-  13 WP5. `Bindings.load` keeps that part in memory and in
-  `Bindings.carried` and does not write the file; the first launch's
-  migration moves it into presets and only then backs the file up and
-  rewrites it (below);
-- a performer row never carries `pickup`: the field is a MIDI knob's
-  (soft pickup) and `to_json` drops it on every lane-scheme row
-  (`tests/test_routing.py::test_pickup_never_rides_on_a_performer_row`).
-
-**The first-launch migration** (`preset.migrate_home`, plan 13 §6),
-run by `app.main` once the library, the registry, the Router and
-`Presets` exist and before the startup preset loads; idempotent, a
-second launch finds nothing to do (`tests/test_migration.py`):
-
-1. every `projects/*.hyp.json` at `hyperspace.project/1` → each filled
-   bank slot becomes a user preset (its performance ids, the table's
-   macro bases filling the ids it lacks; the table's performer rows,
-   preset layer and macros; the project's performance groups' module
-   labels), an empty slot points at the factory house preset its F-key
-   loaded, and the file becomes `hyperspace.project/2` (`startup` the
-   project's own look — the slot its performance `values` equal, else a
-   preset `<PROJECT> SAVED` put in its first empty slot — `session`
-   its session part and the first slot's session ids, `modules` its
-   session groups' labels), kept first as
-   `<file>.bak-v1`. A schema-1 file opened later (`Project.load`) takes
-   the same road;
-2. every user routing preset (`bindings/*.json`) → a **full** user preset
-   (decision 10: its values less session ids, the effects its routes
-   drive switched on — `preset.effects_on` — its routes, its macros, no
-   `desk`); the files stay as they were, never read again, a
-   `bindings/NOT-READ.txt` beside them;
-3. `bindings.json`'s preset part → if no project took it, a user preset
-   `MIGRATED` (the table's routes, desk and macros, the live performance
-   values), made the startup and first slot of the user show `mine` (the
-   show made from the factory `house` show if there is none, kept as
-   `.bak-v2` if there is — until plan 14 WP3 this was the user's
-   `default`, which `library.unshadow_default` now renames `mine`, a
-   backup first; decision 22); then the file is backed up
-   (`.bak-v<n>`, or a dated copy) and rewritten with the session's rows.
-
-Every preset the migration writes names its hand lanes (decision register
-row 20): a `hand:<i>` source, gate or depth subscriber's route becomes
-`hand:<name>` by the layout the rig has at migration time — the rig's
-`[hands] dofs` when `[hands]` is enabled, else the default layout
-(`preset.hand_layout`, `name_hand_rows`) — with a note naming which
-(`tests/test_migration.py::test_the_migration_names_the_hand_rows`). A
-schema-1 project opened later names them by the layout the hands adapter
-published (`preset.live_hand_layout`). A user preset saved with numbers
-since is loaded as it is; the numbers still read.
-
-A preset is only ever written as a new file: an equal one already reached
-by that name (the user's, else the factory's) is pointed at; a factory
-one that differs is shadowed; a user file that differs is never touched
-(the new one takes `<name> 2`). A backup that cannot be made leaves its
-file as it was, and the next launch tries again. Every note goes to
-stderr, one line per file naming its backup, and the sum to
-`Library.warning`.
-
-The routing presets — this file format with only performer rows, a
-library document kind of their own (`Library.routing`,
-`Router.apply_doc` / `preset_doc`) — are gone since plan 13 WP5
-(decision 10): the factory ones are full factory presets
-(`library/presets/legacy6.json`, `lfo-breathe`, `hands-fx`,
-`hands-pinch`, `hands-play`; generated by `python -m hyperspace.preset`),
-and a project never carries the table: `<home>/bindings.json` is one
-file for the rig.
+On load (`Bindings.load`) an older file is migrated and new factory rows
+are added only where nothing on the table overlaps their control
+(`routing.remap_factory`, `Binding.overlaps`); anything changed is
+written back once, after a copy of the old file (`routing.backup`, never
+over an existing backup). **No backup, no rewrite**: if the copy fails,
+the file is left as it was and `Bindings.unbacked` stops every later
+write that session. An unknown schema is never rewritten. A file that
+still holds a preset's part is left for the first-launch migration
+(`preset.migrate_home`), which moves it into presets. The details are
+ENGINEERING's.
 
 ### 3.9 Tempo and the LFOs
 
-`tempo.Clock` is one free-running clock. `tick(now)` once
-a frame makes every call in that frame agree on the time (the first line
-of `app.frame`). `tap()`: taps more than 2 s apart start a new burst; BPM
-is the mean interval of the burst's last 8 taps, clamped 20–300
-(`Clock.tap`, `Clock.set_bpm`). `beat(t) = (t − t0) · bpm / 60 + nudge`;
-`bar` is beat mod 4. Params `tempo.bpm`, `tempo.tap`, `tempo.nudge`
-(`tempo.register`) — session params: a preset never moves them (plan 13
-§4).
+`tempo.Clock` is one free-running clock; `tick(now)` once a frame makes
+every call agree on the time. `tap()` sets the BPM and **never moves the
+downbeat**; `lfo.trigger` (`⇧B`, the APC40's METRONOME) sets the downbeat
+to now and restarts every LFO in a division mode at phase 0 together; Hz
+LFOs are untouched. Tempo is session state: a preset never moves it
+(`tests/test_lfo.py::test_a_tap_does_not_move_a_running_synced_lfo_but_the_trigger_does`).
 
-`B` taps and `⇧B` triggers, and both are ordinary table rows (`key:B →
-tempo.tap`, `key:SHIFT+B → lfo.trigger`, in `keymap()` and added to older
-files by `remap_factory`), as
-are the APC40's TAP TEMPO, NUDGE ± and METRONOME (`apc40.DEFAULT_MAP`).
+`lfo.LFOs` holds four: `shape`, `rate`, `sync` (Hz or a bar division),
+`depth`, `phase`, `reset`. Output `u = 0.5 + 0.5 · depth · wave`, rest
+0.5. An LFO reads its knobs from its own fields — last frame's effective
+values — which is the one-frame lag (§2). A trigger or reset that arrives
+after this frame's step lands at exactly phase 0 at the start of the next
+step.
 
-**The global LFO trigger** (`lfo.trigger`, registered by `lfo.register`; `⇧B`, the APC40's
-METRONOME) sets the downbeat to now — folding the current nudge in so beat
-0 lands on the press (`Clock.trigger`) — and restarts every LFO in a
-division mode at phase 0 together; Hz LFOs are untouched. **A tap never
-moves the downbeat**, before the first trigger or after it: a tap changes
-the BPM, sliding `t0` only as far as keeps `beat(t)` continuous, so a
-re-tap mid-set moves the readout, not the picture. A fresh clock's
-downbeat is its construction time until the first trigger (decision
-register row 1, 2026-09-28; `Clock.tap`;
-`tests/test_lfo.py::test_a_tap_does_not_move_a_running_synced_lfo_but_the_trigger_does`,
-`::test_the_trigger_realigns_every_synced_lfo_together`,
-`tests/test_tempo.py::test_a_tap_on_a_never_triggered_clock_leaves_the_downbeat_alone`).
+### 3.10 What the model does not promise
 
-`lfo.LFOs`: four. Per LFO `shape` (sine, tri, saw, square,
-random = sample-and-hold per cycle), `rate` (Hz, log 0.01–20), `sync` (Hz
-or a bar division), `depth`, `phase`, and a `reset` trigger. In Hz the
-phase integrates `rate · dt`; in a division it is `clock.beat · ratio +
-phase` (`LFO.step`). Leaving a division for Hz carries the phase, so
-the wave continues from where it is instead of a stale accumulator;
-choosing a division is not carried — it lands on the clock's beat whether
-a knob or a preset set it (plan 11 WP4;
-`test_switching_to_hz_carries_the_phase_and_a_division_lands_on_the_clock`).
-Output `u = 0.5 +
-0.5 · depth · wave`, rest 0.5, published every frame (`LFOs.publish`).
-An LFO is a performer and every one of its knobs is ownable; it reads its
-knobs from its own dataclass fields, i.e. last frame's effective values,
-which is the whole one-frame-lag / no-recursion mechanism (§2).
+Behaviour the code has today that the model does not guard:
 
-**Phase 0 on every trigger path.** A key row fires `lfo.trigger` before
-the frame's `lfos.step` (§2), so that step reads the new downbeat. The
-panel's chip and a performer-fired trigger run *after* the step; `LFOs`
-holds a trigger or a per-LFO `reset` that arrives at the time it last
-stepped and applies it at the start of the next step, at that step's own
-`t` — so the first frame the LFOs see it, every synced LFO reads exactly
-phase 0 (a Hz reset reads 0 too). One frame of latency on those paths,
-never a partial phase (plan 11 WP4;
-`test_a_trigger_after_this_frames_step_lands_phase_zero_on_the_next_step`).
-
-### 3.10 What this section does not promise
-
-Behaviour the code has today that the model above does not describe or
-guard, each filed where it says:
-
-- Nothing in `Router.modulate` checks ownership; the referee is the
-  table's edit doors and the loaders (`referee`), and
-  `tests/test_routing_boundary.py` holds that `Router.modulate` is the
-  only caller of `Param.modulate` — a table mutated directly could still
-  stack two performers on one target (audit B8, closed by that test, not
-  by a runtime check).
-- A `hand:<i>` row still reads by index (audit N7 is closed for every
-  preset the app writes — plan 13 WP5b); one in a user preset saved by an
-  older build and never re-saved still re-points on a rig that reorders
-  `dofs`. Learn compares hand sources by the lane they read (`Learn.same_source`
-  over `Router.lane`, review of PR #70), but the table itself compares
-  sources as strings: `hand:7` and `hand:right.y` are two keys to a depth
-  subscriber's (source, target) (`Bindings.depth_subs`), so a depth
-  subscriber written for one spelling does not scale a row carrying the
-  other.
-- A preset saved after a module-preset load moved a param a macro's base
-  subscriber sets does not round-trip that param: the reload lands the
-  subscriber's value, not the saved one — the macro is the scene-setter
-  of record (plan 13 §13, WP4's list).
+- `Router.modulate` checks no ownership at run time (§3.2).
+- A `hand:<i>` row still reads by index, so one saved by number re-points
+  on a rig that reorders `dofs`; and the table compares sources as
+  strings, so a depth subscriber written for `hand:7` does not scale a row
+  on `hand:right.y`.
+- A preset saved after a module-preset load moved a param that a macro's
+  base subscriber sets does not round-trip it: the reload lands the
+  subscriber's value.
+- Undo does not take back: a band added, removed or moved; a tap or a
+  typed BPM (the `tempo` group is `undo.EXCLUDED_GROUPS`); the bank and
+  "starts on"; a save or a delete (the trash is their net); an edit in
+  the `undo.ABSORB_FRAMES` frames after a restore.
+- Knob smoothing infers a glide's ownership by reading the norm back, not
+  from a write counter; a preset load drops a performance param's glide
+  without landing it; an uncaught fader's pickup can catch on a value a
+  glide is passing through.
+- A hand Learn reads "centred" from the axis's `bipolar` flag while a push
+  centres on its rest; the two can be set apart on the HANDS page. The
+  interaction box is off during a calibration sweep, and the confidence
+  floor has no hysteresis.
+- A desk learn armed with the global layer up swallows every
+  non-invariant control until SHIFT is unlatched or the learn cancelled.
+- An `abs` knob learned onto `preset.select` spreads over all twenty-four
+  slots and can rest on an empty one (audit R14).
 
 ---
 
 ## 4. Module shapes
 
-The point of this section: when you have to change something, it tells
-you which file to open, what that file is allowed to touch, and which test
-will catch you if you break its rule. One row per module or package, in
-the component map's order. Names are kept to the one or two you would
-grep for; the module's docstring has the rest.
+One row per module or package: what it is for, the names you would grep
+for, and the rule it keeps with the test that holds it. The module's
+docstring has the rest.
 
-| Module | What it is for | What it owns and hands out | The rule it keeps (and who enforces it) | Tests |
-|---|---|---|---|---|
-| `params.py` | The parameter registry: one id per settable thing, the base-versus-effective split, and the once-per-frame `apply()` that lands everything on the live objects. | Every `Param` and the `Registry`; `build_registry` declares the whole surface. | Never imports an adapter; every persisted param is in exactly one part, performance or session (`test_every_persisted_group_is_performance_or_session`); never snaps a modulated base to a detent. (`tests/test_params.py::test_core_does_not_import_the_midi_adapter` for the import rule.) | `test_params.py`, `test_modulation.py` |
-| `tapers.py` | Turns a fader's integer position into a real value and back, exactly, for every knob. | The taper objects and the per-band knob specs. | The round trip position → value → position is exact on every detent. (`tests/test_control.py::test_taper_round_trip`) | `test_control.py` |
-| `routing.py` | The binding table: one row type for keys, pads, MIDI and performers; the file on disk (the session's controls only); the referee; the desk's layers; the macros' subscribers; the per-frame modulation pass. | `Binding` (`layer`), `Bindings` (the table and its edit doors; `layer`, `toggle_layer` / `drop_layer`, `dispatch` / `active`, `set_desk` / `desk`, `macros`, `set_macros` / `macros_doc`), `Macro` / `Sub`, `Router` (the pass, `follow_macros`, `feed`, `names` / `lane` / `address`: a lane by name), `register_desk` (`desk.shift`), `Owned`, `is_session_row`, `Carried` (what an older file held that is a preset's), `migrate_scales`, `backup`. | A lane-scheme row carries only `push` or `position`; a message goes to the invariant rows or the up layer's, never falling through; a desk row on an invariant control is dropped with a note; a macro's base subscribers follow its base, never its offset, and its depth subscribers are the only macro term in the pass; a target never has two enabled performers through the edit doors; `modulate` never writes a base; an unknown-schema file is never rewritten; a user file is backed up before the loader rewrites it, and one still holding a preset's part is left for the migration; the file never gets a performer row, a preset-layer row, the macros or values; a `scale` names a session param or is dropped (row 18 (a)); a named source or gate is resolved only through the map its adapter published, and a name the map lacks — or any name with no map — is dormant, never another lane, while a number still reads (row 20); imports nothing above it (`tests/test_hand_names.py`; `tests/test_routing.py`: the referee tests from `test_a_target_has_one_performer`, `test_an_unknown_schema_is_reported_not_migrated`, `test_the_live_table_writes_only_the_sessions_controls`; `tests/test_routing_boundary.py`, `tests/test_desk.py`, `tests/test_macros.py`) | `test_routing.py`, `test_hand_names.py`, `test_routing_boundary.py`, `test_desk.py`, `test_macros.py` |
-| `midi.py` + `apc40.py` | The MIDI adapter (ports, the two layers' dispatch and feedback, soft pickup on the faders and ring re-basing on the knobs, the MIDI half of Learn; it reads its rows straight off the shared table — `MidiIO.bindings`) and the APC40's device profile (port name, mode SysEx, LED colours, the 119-row default map sorted into invariant / global / preset rows by plan 13 §3.2, `RING_REBASES_KNOB` — hand check 31 — plus the protocol constants the map does not use, kept as the reference; `LAYOUT`, every control's place, kind and glyph — K1–K8, D1–D8, S1–S8, SM, X, C, G row·column, B1–B22, ⇧ — decision 25, plan 14 WP7). | `MidiIO` (`redraw`), `Ports`; `apc40.DEFAULT_MAP` and the button constants the clock uses. | The core never imports it; every write it makes is a base write; a ring shows the base and never chases a performer; only the up layer's rows and the invariant ones act and draw, a control with neither is dark; a note-off goes where its note-on went (D12); a learned knob binds the param as armed, alias included, into the preset layer of the loaded preset, never writing a file, and a learn with the global layer up or on an invariant control is refused with the reason (`apc40.named` names the control: its glyph and Akai's name). Every MIDI row shipped has a glyph (`tests/test_ui_desk.py`). (`tests/test_params.py::test_core_does_not_import_the_midi_adapter`, `tests/test_midi.py::test_ring_shows_the_base_and_never_chases_a_performer`, `tests/test_desk.py`, `tests/test_learn.py`) | `test_midi.py`, `test_desk.py` |
-| `hands/` | The Ultraleap instrument: two hands as twelve shaped axes, two presence lanes and eight pinch switches, fed to the table; MIDI out to a DAW; box calibration; the HANDS page. | `HandsIO.poll(dt, learn, router)`, `HandSettings`, `register`; `panel.page`. | `core.py` and `signal.py` import nothing from the package — only `panel.py` knows the host; every lane has one address name (`Layout.addresses`: the axes as `dofs` spells them, `left.present`, `left.pinch.index` …) and the adapter publishes the name → lane map (`router.names["hand"]`) with its labels, once and on a change, so a hand row keeps its axis whatever `dofs` says; a learn writes names; the switches stay last so a `hand:<i>` still reads as it did; an axis whose hand is out of the box reads `NaN`, so its rows let go — the spring and `hold` shape only the DAW output; a gate never opens on a source that is not live; nothing learns while a question is up; the lane layout is written once (`Layout`) and published to the router only when it changes; the rig's defaults are one table (`DEFAULTS`, which `config.load` fills the `[hands]` section from at call time, so `config` imports no adapter); a DAW port that fails is looked for again every `RECONNECT_S` and the DAW resynced when it is back — `midi.Ports`' policy, spelled twice because `core.py` imports nothing from the package. (`tests/test_hands_boundary.py`; in `tests/test_hands.py`: `test_lanes_carry_outputs_then_presence_then_pinches`, `test_a_hand_leaving_the_box_releases_its_position_row`, `test_a_gate_whose_source_is_dark_holds_the_row_shut`, `test_a_held_learn_is_not_fired_again_by_the_hands`, `test_the_layout_is_one_object_published_once_and_rests_on_change`, `test_a_hand_learn_writes_the_axis_by_name_on_any_dofs`, `test_one_defaults_table_for_the_rig`, `test_a_lost_daw_port_is_looked_for_again_and_the_daw_resynced`; `LeapSource` and the port against a fake `leap` in `tests/test_hands_leap.py`) | `test_hands.py`, `test_hands_boundary.py`, `test_hands_leap.py` |
-| `lfo.py` + `tempo.py` | Four tempo-aware LFOs and the tap-tempo clock, as a source fed to the table like any other, with every knob an ordinary param. | `LFOs.step` / `publish`, `Clock` (`tap`, `trigger`, `beat`), the two `register` functions. | Import nothing from the package; read their own fields, never a `Param` (that is the one-frame lag); a tap never moves the downbeat, so never a running synced LFO; `tempo.tap` is not ownable, the LFO triggers are; the global trigger never touches a Hz LFO; a trigger or reset lands at exactly phase 0 on the first step that sees it, whichever side of the step it fired; leaving a division for Hz carries the phase. (`tests/test_lfo_boundary.py`; in `tests/test_lfo.py` `test_a_tap_does_not_move_a_running_synced_lfo_but_the_trigger_does` through `test_the_trigger_lands_phase_zero_whatever_the_nudge_and_nudge_then_moves_it`, and the plan 11 WP4 tests; `tests/test_tempo.py`) | `test_lfo.py`, `test_tempo.py`, `test_lfo_boundary.py` |
-| `geometry.py` | Builds the 25 shapes as unit-circumradius vertex, edge and face arrays, and holds the exact 4D → 2D transform. | `SHAPES`, `geom(i)`, `project_h` (the one transform; `project` is it without the divisor, the tests' oracle), `PLANES` — the six planes as `(name, i, j)`, the one table `params.PLANES` takes its names from — faces and UVs. | The first 18 shapes' vertex and edge order never changes — the golden traces key on it; `project` and `project_h` agree to the bit on every shape; a plane's name spells its axes. (`tests/test_core.py::test_construction_exact`, `::test_project_is_project_h_without_the_divisor`, `::test_the_plane_table_names_its_own_axes`, `tests/test_shapes3d.py::test_polytope_count_unchanged`) | `test_core.py`, `test_shapes3d.py`, `test_golden.py` |
-| `render.py` | `Renderer.draw`: scene pass, coverage mask, look-back, FX, to the window — reading a `ViewState` from `view.py`. | `Renderer` (and `now`, the frame's one wall clock, pinned by `t_now`), `render_offscreen`; `ViewState` and `RED` re-exported from `view.py`. | Imports no audio, input or registry code; with look-back and FX off the output is bit-identical to the scene pass; the history never captures the effected frame; the patterns, the instance motion and the effect chain read one `t`. (`tests/test_render.py::test_post_pass_off_is_pixel_identical`, `::test_one_clock_reaches_the_patterns_and_the_effects`) | `test_render.py` |
-| `fx.py` + `shaders/fx/` | Post effects as GLSL files whose `// @param` uniforms become registry params, run as a pass chain after the composite. | `FxState` (the params' object), `FxChain` (`run(target, t)` on the renderer's clock), `declare`. | An effect is never defined in Python; a broken edit never takes the frame down; off is bit-identical; every effect compiles behind `_common.glsl` then `_lib.glsl`. (`tests/test_fx.py::test_a_broken_edit_keeps_the_last_good_spec`, `::test_off_is_the_old_frame_exactly`, `::test_a_compile_error_is_reported_and_skipped`) | `test_fx.py` |
-| `lookback.py` + `dream.py` | The frame history and its age-weighted composite, and the torch worker that dreams on it (on by default). | `Lookback`, `DreamState` (the `dream.*` object), `LookbackSource` (the slot's contract), `DreamWorker`. | Nothing in the core imports `dream`; torch appears only in `dream.py`; `submit` never blocks the frame; echoes are never re-tinted. (`tests/test_dream.py::test_core_does_not_import_the_worker`, `::test_round_trip_is_masked_rgb_at_echo_size`, `tests/test_lookback.py::test_dream_chroma_tints_the_dream_only`) | `test_lookback.py`, `test_dream.py` |
-| `learn.py` | The armed param and the question the referee left: right-click → Learn arms an id here; a knob or a hand completes it into the **loaded preset** (plan 13 §3.3); a learn the referee held waits in `pending` for the Replace / Keep prompt; a knob learn the desk refuses (the global layer, an invariant control) is said in `last` with `refused` set. | `Learn` (`arm`, `take`, `learn_source`, `resolve_pending`, `target_for`, `said`, `refuse`, `last`, `refused`). | Imports nothing from the adapters or the panel; exists whatever the MIDI gate says; a `band.sel.*` alias learns onto the band it stands for; a held learn is never applied or dropped silently; no learn writes a file — the preset's dirty dot shows it until a save. (`tests/test_learn.py`, `tests/test_hands.py::test_a_hand_learn_needs_no_midi_adapter`) | `test_learn.py` |
-| `view.py` | `ViewState`, the live object the view, rotation and camera params write — a plain dataclass, apart from the GL. | `ViewState` (and `integrate`, the one direct writer of `ang`), `N_MOD`, `RED` (the points' colour and the panel's one accent). | Imports only `geometry`; nothing in it needs moderngl, so the registry, the library and every test can hold a view without a GL binding. | `test_render.py`, `test_modulation.py` |
-| `glsl.py` + `shaders/_common.glsl` | The GLSL every shader shares: the fullscreen-triangle vertex shader and the colour helpers (`TAU`, `LUMA`, `hsv`, `pal`, `hue_rotate`, …). | `QUAD_VS`, `common()`, `common_mtime()`, `gl_error()`, `FALLBACK` (the file as shipped). | A helper is defined once: `patterns.glsl`, `fx/_lib.glsl` and the post pass prepend `_common.glsl` and define none of its names; the two 2-D hash pairs stay separate on purpose; a broken edit never takes the show down — the patterns and effects show the error, the post pass falls back to `FALLBACK` and says so. (`tests/test_fx.py`, `test_the_shared_helpers_are_written_once`; `tests/test_lookback.py`, `test_a_broken_common_glsl_leaves_the_post_pass_on_the_shipped_helpers`) | `test_fx.py`, `test_lookback.py` |
-| `overlay.py` | Where the render window is and how it looks — window, fullscreen or overlay — as `output.*` params applied once a frame. | `Output` (`register`, `apply`, `bg_alpha`, `allowed`); the `overlay.*` aliases. | Touches the window system only inside `apply()`, through a backend that tests can fake; the rig settings never persist or modulate; overlay switches on only when `[output] overlay = true` (`allowed`, decision 21). (`tests/test_overlay.py::test_rig_settings_never_persist_or_modulate`, `::test_nothing_happens_until_apply`, `::test_overlay_refuses_every_road_while_the_config_shuts_it`; `tests/test_app_boundary.py::test_the_render_window_is_transparent_only_when_the_config_asks`) | `test_overlay.py` |
-| `ui.py` + `ui_*.py` + `hands/panel.py` | The control window: the rail of fourteen pages, the widgets (each a view onto one param), the right-click menu, the Replace / Keep modal, the cheat sheet; the ROUTING page is one page over the loaded preset (decision 13: its head — name, dirty dot, save / as…, the layer, the last learn or refusal, the load's desk notes — then routes, the desk's preset layer and its dark controls, the macros and their subscribers, the session's MIDI rows read-only — each desk and session row led by its control's glyph); the APC40 drawn above the cheat sheet (`ui_desk.py`, plan 14 WP7: the up layer's controls lit, from the table, not the port). | `Panel.draw`, the widget helpers, `PAGES`; each page's `page(panel)`; `ui_routing.modal`; the `ui.*` params (the window, the sheet, the page) — every other param the factory table names is `build_registry`'s. | A widget writes only the base, through `Param.set*`; nothing here calls `modulate`; the modal is drawn before the panel decides whether it is open; no page scrolls at the control size (every page measured full: hands setup, `Output`, routed table; ROUTING with a preset loaded and a full desk); no ROUTING-page edit writes a file; the cheat sheet names every key row and loop key and nothing else; every widget has its own imgui id. (`tests/test_ui_routing.py` `test_the_routing_page_has_no_conflicting_ids`, `tests/test_ui_shell.py` `test_every_page_fits_the_control_window` / `test_the_cheat_sheet_matches_the_tables_and_the_loop_keys`, `tests/test_ui_lfo.py::test_the_page_has_no_conflicting_ids`; the desk diagram lights exactly `Bindings.active`, `tests/test_ui_desk.py`) | `test_ui_shell.py`, `test_ui_bands.py`, `test_ui_routing.py`, `test_ui_lfo.py` |
-| `control.py` | The headless half of the analyzer page: band selection, the scene, reset with its 8 s undo, adding and removing bands. | `Control`, whose methods the `scene.*` and `band.*` params call; `SCENES`, the combo order of the eleven band presets that are the scenes. | Reset goes to the selected scene, never to hard-coded defaults, and never changes the layout; an undo never survives a scene change; a scene is read from the library (a user file shadows the factory's) and re-tunes the bands loaded, while a strip load applies the layout too and moves the combo. (`tests/test_control.py::test_reset_resolves_to_selected_scene` and the tests after it, `tests/test_analyzer.py` "one_file") | `test_control.py`, `test_analyzer.py` |
-| `app.py` + `hotreload.py` | The entry point: two windows, construction in a fixed order, the frame loop, and hot reload of every module but the cold core. | `main()`, `Host` and `frame()`, `Keys`, `Mouse`, `close_all()`; `HotReloader` and its `MODULES` list. | Optional adapters are imported lazily behind their config gate; the render window never runs imgui; a raising adapter or reload never stops the show; a relative writer reads the base, never the effective value; every module but `app` / `hotreload` / `offline` is watched, in dependency order (leaves first), and an Enum a reloaded module defines keeps its identity (`Kind`); the frame runs in §2's order and every adapter is closed on both exits. (`tests/test_app_relative.py`, `tests/test_hotreload.py`, `tests/test_app_boundary.py`) | `test_app_relative.py`, `test_hotreload.py`, `test_app_boundary.py` |
-| `library.py` + `config.py` | The home folder (`~/Hyperspace`), one JSON per module preset, the projects — the panel's **shows** (`hyperspace.project/2`: the session, the F1–F8 bank of preset names, the startup preset — "starts on"), the document kinds' files, and `config.toml`. | `Library` (`load`, `save_as`, `reset`, `is_dirty`, `poll`, `kind`, `label`, `presets`, `last_show` / `remember`, `unshadow`), `Project` (the open show and its bank: `load_slot`, `save_slot`, `cycle`, `load_startup`, `factory`), `unshadow_default`, `config.load`. | Never writes a factory file; a launch opens the show opened last (`<home>/last_show`), else the factory `party` (decision 22; `tests/test_party_show.py`); a user `default` show plan 13 made is renamed `mine` once, backed up first; a dirty dot compares against the loaded preset or show, never fresh defaults, and a factory show as shipped is clean (`tests/test_ui_presets.py::test_the_dots_are_clean_after_a_factory_load`); a project keeps the session part as `session` and only session groups' module labels, never a performance value, a rotation phase or the loaded preset; a bank slot is a name, and an empty or dangling one loads nothing and says so; a user schema-1 project is migrated (at launch by `preset.migrate_home`, later by `Project.load`) and kept as `.bak-v1` first; the home's old `bindings/` folder is no group; every restore is a base write; the analyzer's layout lands before its values — from a strip load and from a project alike — and a band preset saved from the strip carries the layout back out; a group registered after `attach` still has a default. (`tests/test_library.py` "carries_its_layout", "restores_a_modules_layout", "document_kind", "after_attach"; `tests/test_presets.py` "slot"; `tests/test_migration.py`) | `test_library.py`, `test_presets.py`, `test_migration.py` |
-| `preset.py` | The preset: one file (`hyperspace.preset/2`) holding everything a performance moment is — performance values, performer routes, the desk's preset layer, the macros, module labels — as a library document kind. | `Presets(lib, reg, router)` (`load`, `load_doc`, `document`, `save_as`, `signature`, `current`, `notes`, `desk_notes`); `desk_json`, `fresh_desk`; the factory generator (`FACTORY_PRESETS`, `generated`, `write_factory` — `python -m hyperspace.preset`: the party presets' routes and desk blocks, the five made from routing presets whole, every other factory preset's `desk`; `hand` / `pinch` write hand lanes by name); `effects_on`; the migration (`migrate_home`, `migrate_project`, `migrate_routing_presets`, `slot_presets`, `put_preset`, `hand_layout` / `name_hand_rows`). | A load lands **every** performance base (the file's or its group default) and replaces **every** performer row (D2), never touches a session param or a rotation phase, notes session ids, unknown ids, non-performer rows and second performers; a module label is recorded, never chain-loaded (D3); a load replaces the preset layer (no `desk` key: the factory preset layer) and drops to it (D4), replaces the macros and lands their base subscribers before the clean reference is taken; `document` and `signature` read the table, so a Learn, an Unbind or a page edit shows as the preset dirty; the migration rewrites a file only after its backup and writes a preset only as a new file, never over a user's, and runs once; no factory preset and no migrated one names a hand lane by number (row 20). (`tests/test_presets.py`, `tests/test_migration.py`) | `test_presets.py`, `test_plan12_presets.py`, `test_migration.py` |
-| `gamepad.py` + `bridge.py` | The Xbox pad polled raw through GLFW with our own index map; the DAW bridge — analyzer lanes out as 14-bit MIDI, the same forms in as `ext` lanes. | `Pad`; `Bridge.step`. | The pad never raises when absent; the bridge never writes a `Param` (its lanes reach one only as a route) and is off by default. (`tests/test_gamepad.py::test_disconnect_goes_inert_and_reconnects`, `tests/test_bridge.py::test_ext_route_modulates_a_param_end_to_end`, `::test_bridge_is_off_by_default`) | `test_gamepad.py`, `test_bridge.py` |
-| `audio.py` + `analysis.py` + `analyzer.py` + `bands.py` | The audio source (a capture device or a file, through a ring buffer), the FFT front end, and the one chain that runs: the N-band analyzer whose output is `lanes`. `bands.py` is its parts bin. | `AudioEngine` (`chain`, `step`, the transport, `devices` / `rescan`, `rate`), `Analyzer` (`lanes`, layout, `apply_scene`), `bands.default_params` and the reference constants. | The legacy six-band layout never diverges from the frozen oracle by a bit; a lane never reaches `CEIL`; the callbacks never do chain work; a source attaches once, at its own rate, and never loses the layout or the faders; the stack imports nothing above itself. (`tests/test_analyzer.py::test_legacy_layout_is_bit_exact`, `::test_audio_engine_carries_the_layout_across_sources`, `tests/test_core.py::test_soft_ceil_properties`, `::test_headroom_discipline`, `tests/test_audio.py`, `tests/test_audio_boundary.py`) | `test_analyzer.py`, `test_core.py`, `test_audio.py`, `test_audio_boundary.py` |
+| Module | For | Names | Rule (held by) |
+|---|---|---|---|
+| `params.py` | the registry: ids, base vs effective, the once-a-frame `apply()` | `Param`, `Registry`, `Kind`, `build_registry`, `PERFORMANCE_GROUPS` / `SESSION_GROUPS`, `F_KEYS` | never imports an adapter; every persisted group is performance or session (`tests/test_params.py::test_every_persisted_group_is_performance_or_session`); `Kind` keeps its identity across a reload (`tests/test_hotreload.py::test_reloading_params_keeps_kind_identity`) |
+| `tapers.py` | position ↔ value for every fader | `Taper` | exact round trip on every detent (`tests/test_control.py::test_taper_round_trip`) |
+| `routing.py` | the table, the file, the referee, the desk's layers, the macros, the modulation pass | `Binding`, `Bindings`, `Router`, `Macro` / `Sub`, `Owned`, `act`, `referee`, `register_desk`, `led_level`, `LOOP_KEY_ROWS`, `backup`, `remap_factory` | §3.3–§3.8; imports nothing above it (`tests/test_routing_boundary.py`); `tests/test_routing.py`, `tests/test_desk.py`, `tests/test_macros.py`, `tests/test_hand_names.py` |
+| `learn.py` | arming, completing and refusing a Learn; pick-then-map; Unbind | `Learn` (`arm`, `accepts`, `learn_control`, `learn_source`, `pick`, `map_picked`, `unbind`, `pending`, `last`), `WANTS`, `blocked`, `bound`, `centred_target`, `PUSH_DEPTH` | nothing completes a learn its `want` does not name; a refused desk learn stays armed; a non-modulatable target is refused for a hand; no learn writes a file (`tests/test_learn.py`) |
+| `midi.py` + `apc40.py` | the MIDI adapter (ports, two-layer dispatch, feedback, soft pickup, knob glides, holds) and the APC40 profile (the default map, `LAYOUT` of every control, LED colours) | `MidiIO`, `Ports`, `Slew`, `retry_after`, `HOLD_S`, `BLINK_S`; `apc40.DEFAULT_MAP`, `BANK_PADS`, `SCENE`, `LAYOUT`, `named` | every write is a base write; a note-off goes where its note-on went; a message a row did not apply (a disabled row, a learn candidate) makes that pickup row pick up again (`MidiIO._passed_over`); a lost port is looked for at `retry_after`'s pace (`tests/test_midi.py`, `tests/test_desk.py`). Every test runs with no real MIDI port (`tests/conftest.py::_no_real_midi`) |
+| `hands/` | the Ultraleap instrument: twelve shaped axes, presence, eight pinch switches, MIDI out to a DAW, calibration and the interaction box, hand tapes, the HANDS page | `HandsIO`, `HandSettings`, `Layout`, `LeapSource`, `Box`, `inside`, `DEFAULTS` (`core.py`); `signal.py` (shaping, MIDI encoding); `tape.py` (`TapeSource`, `record`); `panel.py` (`page`) | `core.py`, `signal.py`, `tape.py` import nothing from the host; `panel.py` alone knows it (`tests/test_hands_boundary.py`); a hand outside the box is absent for every consumer; the layout is published to the router only on a change (`tests/test_hands.py`) |
+| `lfo.py` + `tempo.py` | four LFOs and the tap-tempo clock | `LFOs`, `LFO`, `Clock`, `register` | import nothing from the package (`tests/test_lfo_boundary.py`); §3.9 (`tests/test_lfo.py`, `tests/test_tempo.py`) |
+| `audio.py` + `analysis.py` + `analyzer.py` + `bands.py` | capture or file playback, the FFT, the N-band analyzer whose output is `lanes`; `bands.py` is its parts bin | `AudioEngine`, `Analyser`, `Analyzer`, `CEIL` | imports only the stack and `tapers` (`tests/test_audio_boundary.py`); the legacy six-band layout matches the frozen oracle to the bit (`tests/test_analyzer.py::test_legacy_layout_is_bit_exact`) |
+| `geometry.py` | the shapes as vertex, edge and face arrays; the 4D → 2D transform | `SHAPES`, `geom`, `project_h`, `PLANES` | the first 18 shapes' order never changes — the golden traces key on it (`tests/test_core.py::test_construction_exact`, `tests/test_golden.py`) |
+| `view.py` | `ViewState`, the live object the view, rotation and camera params write | `ViewState` (`integrate`, `instances`, `inst_layout`), `RED` | imports only `geometry`; no GL, so the registry and tests can hold a view |
+| `render.py` | the frame (§2): face picture, scene, cover, look-back, pipelines, outputs, ghost hands, dim | `Renderer` (`draw`, `draw_outputs`, `dim_pass`, `face_fx`, `stats`, `now`), `FaceTarget`, `inst_positions`, `render_offscreen` | imports no registry (`tests/test_render.py::test_the_render_stack_imports_no_registry`); §2's draw guarantees (`tests/test_render.py`) |
+| `fx.py` + `shaders/fx/` | post effects as GLSL files whose `// @param` uniforms become params; a chain over the frame and one over the faces' picture | `FxState` (`chain(target)`, `select`, `advance_to`, `face_map`), `FxChain`, `FRAME` / `FACES`, `TARGETS`, `FACE_MAPS`, `declare`, `reordered` | an effect is never defined in Python; a broken edit keeps the last good spec; off is bit-identical; `fx.<name>.target` is not modulatable, `fx.face_map` is (`tests/test_fx.py`) |
+| `lookback.py` + `dream.py` | the frame history and its age-weighted composite; the torch worker that dreams on it | `Lookback`, `DreamState`, `DreamWorker` | torch only in `dream.py`; nothing in the core imports `dream`; `submit` never blocks the frame (`tests/test_dream.py`, `tests/test_lookback.py`) |
+| `ghost.py` | the ghost hands over the finished frame — a display, not a source | `Ghost` (`layer`, `composite`, `readout`, `composite_readout`, `error`), `GhostState`, `Geometry`, `HandPose`, `STYLES`, `PARTS`, `box_of` | writes no param; off or with no hand it touches no GL state; never in the history; `ghost.style` / `.mirror` / `.guide` / `.tethers` not modulatable (`tests/test_ghost.py`) |
+| `outputs.py` | the render outputs as the renderer sees them | `Switches`, `route`, `fit`, `View`, `Handoff`, `Slot`, `Presenter`, `PIPELINES`, `MAX_OUTPUTS` | imports `moderngl` and `glsl` only (`tests/test_outputs.py::test_outputs_imports_nothing_from_app_ui_or_params`); `route` and `fit` are pure |
+| `glsl.py` + `shaders/_common.glsl` | the GLSL every shader shares | `QUAD_VS`, `common`, `FALLBACK` | a helper is defined once; a broken edit falls back to `FALLBACK` (`tests/test_fx.py::test_the_shared_helpers_are_written_once`) |
+| `overlay.py` | where output 1 is and how it looks (window, fullscreen, overlay); the master dim; the per-output switches | `Output` (`register`, `apply`, `allowed`, `dim`), `register_switches` | touches the window system only in `apply()`; rig settings never persist or modulate; overlay only when the config allows (`tests/test_overlay.py`) |
+| `ui.py` + `ui_*.py` + `hands/panel.py` | the control window: fourteen pages (`ui.PAGES`), widgets as views onto params, the right-click menu, the modal, the on-screen desk (`ui_desk.py`) | `Panel`, `PAGES`; each page's `page(panel)`; `ui_routing.modal`; `ui_desk.click` | a widget writes only bases; nothing here calls `modulate`; no page scrolls at the control size (`tests/test_ui_shell.py::test_every_page_fits_the_control_window`); no conflicting imgui ids (`tests/test_ui_routing.py`, `tests/test_ui_lfo.py`) |
+| `control.py` | the headless half of the analyzer page: band selection, scenes, reset | `Control`, `SCENES` | reset goes to the selected scene and never changes the layout (`tests/test_control.py::test_reset_resolves_to_selected_scene`) |
+| `library.py` | the home folder, document kinds, module presets, shows, the bank, the trash, `hidden.json` | `Library`, `Project`, `Marks`, `SLOTS`, `to_trash`, `next_name`, `bank_doc` | never writes a factory file; a user file is copied to the trash before it is overwritten or deleted; a load never rewrites a show; imports neither `homegit` nor `config` (`tests/test_library.py`, `tests/test_presets.py`) |
+| `preset.py` | the preset document kind: values, routes, desk, macros, module labels; the factory generator; the first-launch migration | `Presets` (`load`, `load_doc`, `document`, `signature`), `FACTORY_PRESETS`, `write_factory`, `migrate_home` | a load lands every performance base and replaces every performer row, never a session param; a route onto a non-modulatable param is dropped with a note (`tests/test_presets.py`, `tests/test_migration.py`) |
+| `config.py` | `config.toml`: defaults, reading, `[[output.screens]]` | `DEFAULTS`, `load`, `screens`, `number` | a bad value is its default with a note, never a raise (`tests/test_config.py`) |
+| `undo.py` | undo and redo with no write hook | `Undo`, `watched`, `alike`, `install`, `push`, `SETTLE_S`, `LIMIT` | a leaf (`tests/test_undo.py::test_undo_imports_nothing_from_the_package`); §3.2 (`tests/test_undo.py`) |
+| `gamepad.py` + `bridge.py` | the Xbox pad polled raw through GLFW; the DAW bridge (lanes out as MIDI, `ext` lanes in) | `Pad`, `Bridge` | the pad never raises when absent; the bridge never writes a `Param` and is off by default (`tests/test_gamepad.py`, `tests/test_bridge.py`) |
+| `app.py` | the entry point: windows and outputs, construction order, the frame loop, the adapters' gates | `main`, `Host`, `frame`, `Keys`, `Mouse`, `close_all`, `_draw_render`, `_open_*` | §1 Host row, §2 (`tests/test_app_boundary.py`, `tests/test_app_relative.py`) |
+| `hotreload.py` | hot reload of every module but the cold core | `HotReloader`, `MODULES` | every module but `app`, `hotreload`, `offline`, `watchdog` is watched, in dependency order, leaves first (`tests/test_hotreload.py::test_every_package_module_but_the_cold_core_is_watched`, `::test_the_watch_list_is_in_dependency_order`) |
+| `placement.py` | where the windows open and `<home>/windows.json` | `place`, `screens`, `load` / `save`, `read` | a leaf; a remembered rect is used only when enough of it is on a connected screen (`tests/test_placement.py`) |
+| `homegit.py` | the home as a local git repository, a commit per save, opt-in (`[library] git`) | `Committer`, `IGNORE` | a leaf, imported only behind its gate; the library calls a hook (`Library._commit`); never a network verb (`tests/test_homegit.py`) |
+| `watchdog.py` | the stall log and the render watch | `Watchdog`, `RenderWatch` | never stops the show; cold, like `app` (`tests/test_watchdog.py`) |
+| `offline.py` | the tests' offline analysis driver | — | part of the audio stack's boundary (`tests/test_audio_boundary.py`) |
 
-Every rule in the rows above that plan 10 listed as unheld has a test
-now: the frame order and the host's import boundary
-(`tests/test_app_boundary.py`, P5), the audio stack's imports
-(`tests/test_audio_boundary.py`, A9), `routing.py`'s import boundary and
-"only `Router.modulate` calls `Param.modulate`"
-(`tests/test_routing_boundary.py`, R11 and B8). The panel being a leaf is
-still by convention.
+---
+
+## 5. Subsystems
+
+How the modules above work together where a feature crosses several.
+
+**Audio → bands → routes → params.** `AudioEngine.step` pulls frames
+from its ring buffer through `Analyser` into `Analyzer`, whose `lanes`
+(one per band, below `CEIL`) are the `lane:` source. `AudioEngine.publish`
+puts the bands' names and rests on the router. `band.*` params are views
+onto the analyzer's objects; `control.Control` holds the selection and the
+scenes. `Router.modulate` reads `lanes / CEIL` for each `lane:` row.
+
+**The desk (APC40).** Two layers in one table: the **preset** layer (the
+loaded preset's `desk`) and the **global** layer (the session's), plus
+**invariant** rows that mean the same on both (SHIFT, the faders, the
+crossfader, the bank pads, OVERDUB, the clip-stop bar). SHIFT latches the
+layer (`desk.shift`). `Bindings.dispatch` sends a message to the invariant
+rows or the up layer's, never both; `Bindings.active` is what the desk
+lights and what `ui_desk` draws. A preset load replaces the preset layer
+(`Bindings.set_desk`) and drops to it; at the next `MidiIO.redraw`, a
+fader's catch is cleared only if its param moved, and every control that
+lost its row goes dark. The bank of twenty-four (`library.SLOTS`) is
+F1–F8 plus clip row 1 for slots 1–8 (`params.F_KEYS`) and clip rows 4–5
+for slots 9–24 (`apc40.BANK_PADS`).
+
+**Hands.** `hands/core.py`'s `LeapSource` (or a `TapeSource`) gives
+features and skeletons; `HandsIO.poll` shapes twelve axes, two presence
+lanes and eight pinch switches (`Layout`), feeds them as `hand`, publishes
+the name map, may complete a Learn, and sends MIDI to a DAW. The ghost
+hands read `HandsIO.skeleton` raw through `renderer.ghost.source`; they
+are not a source.
+
+**Effects.** Each `shaders/fx/*.glsl` file is an effect; its uniforms
+become `fx.<name>.*` params (`fx.declare`). `fx.<name>.target` aims it at
+the frame or the faces; `fx.face_map` says whether the faces show the
+picture per face or in screen space. The frame's chain
+(`FxState.chain(FRAME)`) runs in each pipeline; the faces' chain
+(`Renderer.face_fx`, borrowing the frame chain's programs) runs before the
+scene pass.
+
+**Look-back and dream.** `Lookback` keeps a history of scene textures and
+composites echoes over the frame; `DreamWorker` (only with
+`[dream] enabled`) takes frames from the history on its own thread and
+returns dreamed ones without ever blocking the frame.
+
+**Outputs.** `config.toml`'s `[[output.screens]]` lists up to
+`outputs.MAX_OUTPUTS` render outputs (no list is one). `app._windows`
+makes one `outputs.Slot` per entry: output 1 is the render window, each
+later one a window in its share group with its own `Presenter` and its own
+`overlay.Output` (no params). Each opened output gets `output.N.*`
+switches (`overlay.register_switches`); `placement.py` remembers one rect
+per output.
+
+**Presets, shows, the library.** A **preset** (`hyperspace.preset/2`) is
+the performance: values, routes, desk, macros, module labels. A **show**
+(`library.Project`, `hyperspace.project/2`) is the session: session values,
+the bank of preset names and a "starts on" preset. The launch opens the
+show opened last (`<home>/last_show`). A user preset file is copied to
+`<home>/trash/<group>/` before a save overwrites it or a delete removes
+it; the trash is listed, restored and emptied from the preset list.
+Factory presets are hidden, not deleted (`<home>/hidden.json`). With
+`[library] git = true`, `app._open_homegit` attaches a
+`homegit.Committer` as `library.committer`, and `Library._commit` asks it
+for a commit after each save, delete, rename, hide, unhide, restore and
+show write.
+
+**Undo.** `Undo.tick` (frame step 5) compares a fingerprint of the watched
+bases (`undo.watched`: persisted, not an alias, not a trigger, not the
+`tempo` group), the table's performer and preset-layer rows, the macros
+and the band layout; a change opens a step and `SETTLE_S` of quiet closes
+it. A replacing action — a load, a Learn, a ROUTING ×, a reorder — calls
+`undo.push(label)` first. `library.Marks` lets an undo of a load put back
+what the library calls loaded.
+
+**Hot reload.** `hotreload.MODULES` lists every package module but the
+cold core, leaves first; a save re-executes the changed module and every
+one after it, then re-classes live instances in place. `app`,
+`hotreload`, `offline` and `watchdog` need a restart.

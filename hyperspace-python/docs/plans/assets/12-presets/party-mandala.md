@@ -1,15 +1,15 @@
 # MANDALA — the fold
 
-*The 24-cell on plasma faces, set off the centre and folded through an
-eight-wedge kaleidoscope into a ring; Noita's fractal lattice glows out of
-it and glints flare on its edges. The black stays black until you flood
-it. Your right hand plays the fold; your left turns the object inside it.*
+*The 24-cell on plasma faces, folded through an eight-wedge kaleidoscope
+into a ring; Noita's fractal lattice glows out of it and glints flare on
+its edges. The black stays black until you flood it. Your right hand plays
+the fold; your left turns the object inside it.*
 
 ![the poses](party-mandala-sheet.png)
 
 Effects on: **plasma** (at level 0 until you flood it), **kaleidoscope**,
 **fractals**, **glimmer** — the `mandala` FX module preset, with its
-full-frame grounds turned down for the glass.
+full-frame grounds at 0 for the glass.
 
 ## Your hands
 
@@ -31,15 +31,16 @@ Nothing to pinch. A hand out of the box changes nothing.
 
 ## The desk
 
-- Device knobs 1–8: fx mix · plasma level · kaleido segments · kaleido
-  zoom · fractals · fractals ground · glints · glints ground — each ring
-  shows its base. The two grounds light the black too (a full-screen
-  generator): leave them at 0 on the glass.
+- Device knobs 1–8: FX mix · Plasma level · Kaleidoscope segments ·
+  Kaleidoscope zoom · Fractals amount · Fractals ground · Glimmer amount ·
+  Glimmer ground — each ring shows its base. The two grounds light the
+  black too (a full-screen generator): leave them at 0 on the glass.
   (With SHIFT latched they are the band strip; press SHIFT again to get
   them back. F7 puts every one back where it was.)
 - Track knobs as on every preset: brightness, speed, … zoom on 8.
 
 ## To load
 
-1. PRESETS page → the **party** show (once per night).
-2. Press **F7** — MANDALA: the look, the hands and the desk in one step.
+1. PRESETS page → show ▾ → **party**, if it is not the open show.
+2. Press **F7**, or clip row 1's seventh pad — MANDALA: the look, the
+   hands and the desk in one step.

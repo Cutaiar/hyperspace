@@ -1,115 +1,77 @@
-# Checkpoint — 2026-09-28
+# Checkpoint
 
-Where the Python re-platform stands and what to pick up next. What the
-system *is* — the parts, the frame, who may write a parameter — is
-[`ARCHITECTURE.md`](ARCHITECTURE.md); how it behaves is
-[`ENGINEERING.md`](ENGINEERING.md); why it is that way, dated, is
-[`DECISIONS.md`](DECISIONS.md); what drifted and how each item was closed
-is [`AUDIT-2026-09.md`](AUDIT-2026-09.md); the stages it was built in are
-[`plans/`](plans/README.md). This file keeps only the pick-up list.
+Hyperspace is a live-visuals app: a 4D polytope driven by music, hands
+(an Ultraleap camera), an APC40 and LFOs, shown on a Pepper's Ghost glass
+and a projector. It is one Python process in `hyperspace-python/`.
 
-## How to pick this up
+## Where things are
 
-```bash
-git clone github.com/Cutaiar/hyperspace && cd hyperspace/hyperspace-python
-uv sync                 # whole environment, from the committed lockfile
-uv run pytest           # 872 tests, ~40 s (11 skipped without torch)
-uv run hyperspace       # the app: ? shows the controls cheat sheet
-```
+- **The app:** `hyperspace-python/` (package `hyperspace/`, tests in
+  `tests/`, tools in `tools/`, the owner's shared presets in `shared/`).
+- **Run it:** `uv sync`, then `uv run hyperspace`; machine setup is in
+  [`SETUP.md`](SETUP.md).
+- **The docs:**
+  - [`ARCHITECTURE.md`](ARCHITECTURE.md): the parts, the frame, who may
+    write a parameter.
+  - [`ENGINEERING.md`](ENGINEERING.md): how each part behaves.
+  - [`DECISIONS.md`](DECISIONS.md): the decisions in force, and what was
+    decided not to build.
+  - [`DECISION-REGISTER.md`](DECISION-REGISTER.md): rows 34–88, built on
+    a recommendation and waiting for the owner's keep or overturn.
+  - [`AUDIT-2026-09.md`](AUDIT-2026-09.md): the open defects.
+  - [`TESTING-GUIDE.md`](TESTING-GUIDE.md): everything a person still has
+    to test, in plain words, by hardware.
+  - [`plans/11-hand-checks.md`](plans/11-hand-checks.md): the same checks,
+    numbered 1–112, with the automated test behind each.
+  - [`plans/`](plans/README.md) `15-…` to `21-…`: what each of the last
+    seven plans built.
+  - [`plans/assets/12-presets/`](plans/assets/12-presets/): the performer
+    cards, one per party preset.
 
-Machine prerequisites: [`SETUP.md`](SETUP.md). Rig-specific values live in
-`~/Hyperspace/config.toml` (documented in `hyperspace/config.py`).
+## Where the code stands
 
-## Where it stands
+Branch `finish-line` holds everything built, through plan 21, plus the
+fixes of 2026-10-05 and this docs prune. `main` is behind it until the
+owner merges PR #80 (`finish-line` into `main`); PR #113 brings the shared
+presets. Both merges are the owner's. Check `git log` and the PRs for the
+current state.
 
-Plans 00–10 are done and described in the documents above, not here. Plan
-11 (2026-09-27/28, [`plans/11-remediation.md`](plans/11-remediation.md))
-closed the September audit register: a hand leaving the box releases its
-rows (B1), hot reload watches every module and keeps `Kind` identity
-(H1–H4), one scene store and layouts on saved band presets (A1, A2), one
-Learn object shared by MIDI and hands (B3, B4), one preset system with
-routing presets in the library (L1–L3, L5, L6, L8), exact trigger phase on
-every path (B6–B8), and one tidy-up sweep per component with the missing
-boundary and loop-order tests (R, N, V, A, L, U, P) — PRs #40–#54, one
-per work package, each code-reviewed, integrated on
-`plan-11-integration` (which is what the owner merges). Seven
-decisions are the owner's and pending (plan 11 §2, rows 1–7: B2, B5, R1,
-R6, A7, A10, R2+L2); the trim fix (A10) and the keys-into-the-table change
-(R2+L2) wait on them. (Those seven were answered on 2026-09-28 and built;
-plans 11 and 12 are merged, main 4bffa9d.)
+## What is left
 
-Plan 13 (2026-09-28, [`plans/13-preset-and-session.md`](plans/13-preset-and-session.md))
-is built on `plan-13-integration` (PRs #61–#66, the WP6 docs PR to
-come; 872 tests): the five nouns for saved state are two — a **preset**
-(`library/presets/*.json`, `hyperspace.preset/2`: every performance
-value, the routes, the APC40's preset layer, the macros) and the
-**session** (`config.toml`, `hands.json`, `bindings.json` — now only
-the session's controls — and the project, `hyperspace.project/2`: its
-session values, a startup preset and F1–F8 as a bank of preset names).
-Themes, routing presets and the routing strip are gone; the APC40 has
-two layers under a latched SHIFT (the band strip behind it); a macro
-acts through base and depth subscribers; Learn writes into the loaded
-preset and never a file; the ROUTING page is one page over the loaded
-preset; the first launch migrates an older home once, backing up every
-file it rewrites. Pending: hand checks group H and decision 20 (hand
-routes by name).
+- **The hand checks.** None has been run by a person. Start from
+  [`TESTING-GUIDE.md`](TESTING-GUIDE.md), on a copy of `~/Hyperspace`.
+- **The owner's keep or overturn** on register rows 34–88 (the answer sheet
+  at the top of [`DECISION-REGISTER.md`](DECISION-REGISTER.md)).
+- **The open audit findings:** R14, R15, U9, U10, P6, V8, and the small
+  defects listed under them.
+- **Things nobody has observed:** frame pacing with two screens; a screen
+  unplugged mid-run; anything on the APC40, the hand camera, the projector
+  or the glass. No real hand has been tracked: every hands picture comes
+  from a synthetic tape.
+- **Deliberately not built:** see "Decided not to build" in
+  [`DECISIONS.md`](DECISIONS.md).
 
-**Everything only the machine can verify** — plan 09's five hand checks,
-plan 08's unverified list, plan 07's WP6c dream tuning, the first real
-capture, the APC40, the second monitor, IAC + FL Studio, and the
-eyeballing owed for PRs #24, #25, #26, the LFO page and the re-laid-out
-HANDS page — is one numbered list with commands, presets, pass and fail:
-[`plans/11-hand-checks.md`](plans/11-hand-checks.md). Do it in that order;
-file what fails as new audit rows dated with plan 11.
+## Standing rules
 
-## Not done — in rough priority order
+- Tests and agents never read or write the owner's real `~/Hyperspace`.
+  Tests run against a temp home (`HYPERSPACE_HOME`, set by
+  `tests/conftest.py`).
+- Never push to `main`. The owner merges.
+- A change to a file format backs the old file up before the first
+  rewrite.
 
-1. **The hand checks** above. Nothing in them has been run by a person
-   since plan 09 landed; B1's fix and the HANDS page re-layout (plan 11
-   WP13 found it overflowing the panel by 216 px on any rig with hands
-   enabled) are the two things most likely to look different. Plan 13's
-   group H (checks 33–42, check 31 first) starts with the first launch
-   on the new code, which migrates `~/Hyperspace` — copy it first.
-2. **First real audio capture.** Every live path is code-complete and now
-   under test over a fake device, but no human has pressed `M` on real
-   hardware with the macOS microphone prompt. One click plus a clap
-   (hand check 3).
-3. **The owner's remaining decisions** (`docs/DECISION-REGISTER.md`).
-   Rows 1–6 are answered and built (the trim is the per-band AUTO /
-   MANUAL switch, plan 11 WP15); `R` / F1–F8 as table rows (row 7) and
-   plan 13's forks (rows 9–13, 12b, 18, 19) are answered and built. Row
-   20 (hand routes by name, audit N7) is open.
-4. **Plan 04 — booth hardware.** Blocked on access: the pure-Python
-   Pro DJ Link spike against the CDJ-3000/XDJ-AZ (BLT+OSC is the standing
-   fallback), ESP32+BNO055 IMU ingest (packet format specced in BLUEPRINT
-   §3.4), Δt delay compensation + metronome calibration. The tempo clock
-   deliberately syncs to nothing until then (DECISIONS).
-5. **Instanced GPU field.** For a *live* field: per-instance rotation
-   phases and true instancing (agent prototype measured 621–845 fps at
-   N=100; 1–2 days). The synchronized-grid mode is the v1.
-6. **Plan 05's rest** — MIDI clock from deck BPM and the FL-side fuser
-   script; the bridge itself is built, off by default, and now has a line
-   on the SYSTEM page.
-7. **Plan 06's non-trim items:** tempo-locked shapers once DJ Link exists,
-   real harmonic detection, a scrub bar. (Saveable scenes and per-band
-   LFO knobs are covered by the JSON scenes and the routable LFOs.)
-8. **Ideas parked:** per-cell (3-cell) grouping for cell-wise
-   colour/pattern assignment.
+## Ideas for later (not started)
 
-## Decisions that govern future work
-
-The full, dated list is [`DECISIONS.md`](DECISIONS.md). The ones a new
-session trips over first:
-
-- Full Python re-platform; the HTML is a frozen reference, never executed
-  at runtime (BLUEPRINT §5). FL Studio connects only via the optional
-  bridge (§3.6).
-- Parity bar: geometry exact; audio behavioural; visuals judged by the
-  owner's eye.
-- One performer per parameter; scene-setters write the base; every
-  continuous source reaches a param only through `Router.modulate`;
-  `hands/core.py`, `hands/signal.py`, `lfo.py` and `tempo.py` import
-  nothing from the package (ARCHITECTURE §3, held by tests).
-- Plans 03/04 swapped (hardware unavailable). The DJ Link spike is the
-  first thing to do when deck access exists — it is the only genuine
-  unknown in the stack.
+- An IMU prop feeding rotation phase offsets over UDP: packet
+  `struct {uint8 ver; uint8 id; float qw, qx, qy, qz}`, little-endian,
+  100 Hz; orientation deltas go to the XW / YW / ZW phase offsets, never
+  to a speed; a silent prop decays to no contribution.
+- DJ Link tempo: `{bpm, beat_phase, bar_phase, master_deck, on_air[]}`;
+  a pure-Python source first, Beat-Link-Trigger over OSC as the fallback.
+  MIDI clock in is the other tempo source. (DECISIONS currently says
+  neither is built: tempo is tap-only.)
+- Audio delay compensation: stream latency + analysis latency − about
+  1 ms, calibrated with a metronome.
+- FL Studio does not fuse 14-bit MSB/LSB pairs in "Link to controller":
+  the bridge needs a small FL MIDI script, or per-channel pitch bend.
+- An instanced GPU field (per-instance rotation phases, true instancing).

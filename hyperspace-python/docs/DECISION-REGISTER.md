@@ -1,761 +1,937 @@
-# Decision register — everything that is yours to decide
-
-As of 2026-09-29. **Every row is answered** (21–25, plan 14, on 2026-09-29) (the answer sheet at the end). This is the one list. Every decision that blocks
-implementing and settling the open work is here, whichever plan or session
-raised it. Each entry stands on its own: what the thing is, what the software
-does today, the options, a recommendation with its reasons, the trade-off you
-accept, and what changes once you answer. The answer sheet at the end takes
-one letter per row.
-
-Sources folded in: plan 11 §2 rows 1–11, the plan 13 ledger (PR #56, rows
-12–18), plan 12 §7, plan 13 §8, DECISIONS.md's pending row. Once you answer,
-DECISIONS.md gets a dated row per decision and this file records the answer.
-
-## Vocabulary, once
-
-- **Parameter**: any setting with an id (brightness, an LFO's depth, tap
-  tempo). Its **base** is what you set with a knob, key or panel. A
-  **performer** (a hand axis, an audio band, an LFO, a DAW lane) adds an
-  offset on top through one routing row per parameter.
-- **Trigger**: a parameter that fires once (tap tempo, LFO reset).
-- **Routing preset**: a saved set of performer rows, optionally with the
-  bases they assume. **Theme**: a saved snapshot of every base. (Both are
-  gone since plan 13, built on `plan-13-integration`: a preset holds both,
-  and the questions below that use the words are kept as they were asked.)
-- **Clock**: the tap-tempo clock the synced LFOs read. The **trigger
-  button** (⇧B, the APC40's METRONOME) says "the one is now".
-- Plan 13's two nouns, already decided by you on 2026-09-28: a **preset** is
-  one file holding everything a performance moment is (every base, the
-  performer rows, the APC40's preset layer, a label per module); a
-  **session** is the rig boilerplate (the analyzer, the desk's fixed global
-  layer, the startup preset). The APC40 gets two layers under a latched
-  SHIFT: the **preset layer** the loaded preset maps, and the **global
-  layer** the session fixes. **Invariant controls** (faders, preset-select
-  row, SHIFT, TAP TEMPO, METRONOME, NUDGE ±, transport) mean one thing on
-  both layers.
-
----
-
-## Part A — the thirteen open decisions
-
-### 1. B2 — does a tap ever move the downbeat?
-
-**Recommendation: (a), a tap never moves the downbeat.**
-
-**What it is.** You tap B or TAP TEMPO to set the tempo. You press the
-trigger button to say "the one is now", which restarts every synced LFO
-together. The question is whether a tap may also move the one.
-
-**Today.** Until the first trigger press of the session, every tap moves
-the downbeat to the burst's first tap. After the first trigger, a tap changes
-only the tempo. Two rules depending on history; the decision log states only
-the second.
-
-| Option | What a performer feels | Trade-off |
-|---|---|---|
-| (a) A tap never moves the downbeat | Tapping is always safe; the picture never jolts until you press the trigger. On a fresh launch the swells are unaligned until the first ⇧B. | One extra press at the start of a set. |
-| (b) Keep today's two rules, document them | No change on the desk. | The first burst after launch moves the picture; a later tap does not. Two behaviours for one button. |
-| (c) The first tap of every burst moves the downbeat | Re-tapping re-aligns without the trigger. | Every re-tap mid-set jolts running LFOs, which the trigger button exists to prevent. |
-
-**Why (a).** One rule, matching the decision already recorded; the trigger
-button keeps its one job. Plan 12's `party-trip` preset is the first that
-feels this: its quarter-note pump hiccups on every tap until the first
-METRONOME press under (b).
-
-**What changes.** A small edit in the clock, two tests flip, one sentence in
-three documents. Lands on PR #42. Reversible in an hour.
-
-### 2. B5 — which triggers may a performer fire?
-
-**Recommendation: (a), keep all three modulatable.**
-
-**What it is.** Any parameter can be owned by a performer unless flagged
-otherwise. A performer on a trigger fires it each time its signal rises past
-the on threshold. Three triggers are in question: tap tempo, the global LFO
-trigger, and each LFO's own reset.
-
-**Today.** All three are ownable. A pinch switch or an audio band can be
-routed to any of them. Nothing ships routed that way.
-
-| Option | What it allows | Trade-off |
-|---|---|---|
-| (a) Keep all three ownable | A pinch drops the LFOs on the one; a kick band re-triggers them; a pinch restarts one LFO. | A band routed to tap tempo would tap on every transient. Nobody has to route it. |
-| (b) None ownable | Only keys, the APC40 and the panel can fire them. | The pinch switches lose their most natural use; the per-LFO reset stops being the gesture hook its docstring promises. |
-| (c) LFO triggers ownable, tap tempo not | Everything in (a) except tapping from a hand or a band. | Tapping tempo with a pinch is gone. |
-
-**Why (a).** The pinch switches exist so a pinch can be a button, and the
-rising-edge trigger mechanism was built for exactly this. The one footgun in
-(a) needs a deliberate routing to arm.
-
-**What changes.** Nothing in code. One sentence moves from "not promised" to
-"intended" in ARCHITECTURE; one decision row.
-
-### 3. R1 — where are LFO knob settings saved?
-
-**Recommendation: (c), theme state, and a routing preset may set the bases
-it assumes.** Note: plan 13 dissolves this question, because a preset then
-carries every base and every route in one file. Answer it anyway; it governs
-the code until plan 13 lands.
-
-**What it is.** Each LFO has five knobs. A theme snapshots every base. A
-routing preset carries performer rows and may carry values, the bases its
-rows assume. Today only the eight macro knobs are routing-layer state.
-
-**Today.** LFO knobs are theme state. The factory routing preset that
-demonstrates chaining writes four LFO values so its demo works; the factory
-hands preset writes one effect value the same way; plan 12's `party-trip` and
-`party-wake` do the same with LFO and dream values. That leaves the LFO
-group's "unsaved changes" dot lit after loading the routing preset.
-
-| Option | What it means | Trade-off |
-|---|---|---|
-| (a) LFO and tempo become routing-layer state | LFO settings travel with routing presets, never with themes. | A theme stops carrying "breathe at one bar"; the LFO page's own save/load strip becomes meaningless. |
-| (b) Theme state; routing presets may only set macros | The routing file owns only its own layer. | The factory and party presets that assume LFO or effect settings silently depend on what you have set; their demos break. |
-| (c) Theme state; a routing preset may set any base its rows assume | Every preset stays honest about what it needs; the lit dot is truthful. | A routing preset load can change a look. A test pins that every such value is a real, saved parameter. |
-
-**Why (c).** An LFO arrangement is part of a look. A preset that assumes a
-setting should say so. It matches how the hands preset already works and is
-the shape plan 13 generalises.
-
-**What changes.** One test and two document sentences. (a) instead is a
-one-line code change plus moving the LFO strip, half a day.
-
-### 4. R6 — what does an APC40 LED show under a performer?
-
-**Recommendation: (a), keep it: rings show the base, LEDs show the state.**
-
-**What it is.** A knob's LED ring shows a position; a button's LED shows on
-or off. When a performer owns the parameter behind a control, the base (what
-you set) and the effective value (what the show does) differ.
-
-**Today.** Rings show the base, which is necessary: the knob uses soft pickup
-and a ring that chased the performer would mean the knob could never catch
-its own value. A button's LED on a toggle, or on an enum "set to X" row,
-shows the effective value.
-
-| Option | What the desk shows | Trade-off |
-|---|---|---|
-| (a) Keep the split, document it as intended | Ring = where the knob is. LED = what the show is doing. | Pressing a button on a performer-owned toggle changes the base and the LED may not change. Same as the panel, which shows base and effective side by side. |
-| (b) LEDs show the base too | One rule for all feedback. | A lit button while the show does the opposite. |
-
-**Why (a).** A ring is a pickup readback; an LED is a state light. The
-asymmetry follows from what each light is for.
-
-**What changes.** Prose only: one ARCHITECTURE sentence, the adapter's
-docstring, one decision row.
-
-### 5. A7 — the Dynamics fader's range past 1×
-
-**Recommendation: (b), keep the range and document the split.**
-
-**What it is.** The master Dynamics fader (0.06× to 4×, off at the bottom)
-controls how much of the range a limiter took is put back. Inside the audio
-chain it does two jobs: it blends between an absolute and a windowed
-normaliser, and it scales the expansion ratio.
-
-**Today.** The blend clamps the fader at 1, so from 1× to 4× only the
-expansion keeps growing. The parity oracle that guards the chain is frozen at
-0 and 1, where the two jobs agree.
-
-| Option | Effect | Trade-off |
-|---|---|---|
-| (a) Cap the fader at 1× | The knob means one thing. | Every saved preset's fader position moves (positions are integer detents); presets need a re-map; the extra expansion above 1× is lost. |
-| (b) Keep 4×, say what happens past 1× | Nothing moves; the tooltip says "past 1× only the expansion grows". | One knob still has two meanings, now written down. |
-| (c) Two knobs, blend and expansion | Full control. | A new parameter on the audio page, every preset gains a field, the oracle must be re-frozen. |
-
-**Why (b).** A tooltip and one sentence; nothing moves; the oracle stays
-frozen. (c) is the honest fix if the double meaning ever bothers you at the
-desk.
-
-**What changes.** A tooltip, one ENGINEERING sentence, one decision row.
-
-### 6. A10 — fixing the input trim
-
-**Recommendation: (3), a per-band auto/manual normalisation switch.**
-
-**What it is.** Each audio band has an input trim in dB, plus a master
-trim. The chain then normalises each band adaptively, tracking a moving floor
-and ceiling, so a static gain in front of it is mostly cancelled. To make
-trim do anything the reference design applied it twice: before the envelope
-and again after the trackers.
-
-**Today.** On real material, cutting the bass band by 6 to 12 dB makes it
-drive harder, and it only attenuates from about 20 dB down. Measured on the
-reference: 0 dB gives 0.87 out, −6 gives 1.03, −12 gives 1.01, −20 gives
-0.75. Fully off gives exactly 0. Ported on purpose for parity and frozen by a
-bit-exact test. Open since plan 06.
-
-| Option | How it works | Trade-off |
-|---|---|---|
-| (1) Bias the adaptive window in proportion to trim | The floor and ceiling shift with the trim so the gain is not cancelled. | Changes the reference path for everyone; the parity oracle must be re-recorded; no reference to check the new behaviour against. |
-| (2) Trim as a multiplier after the normaliser | Trim becomes a plain output gain per band. | Same re-freeze; and a post-normaliser gain no longer moves the band against the gate and confidence thresholds, half of what trim is for. |
-| (3) A per-band auto/manual switch | Auto keeps today's chain bit for bit. Manual bypasses the adaptive window for that band; trim becomes a plain gain, monotonic. | One new saved parameter per band and a chip on each strip. Manual bands lose the limiter-undoing dynamics recovery, which is the point of choosing manual. |
-
-**Why (3).** What a mix engineer expects; the auto path and its oracle stay
-untouched; the monotonicity test runs on the manual path. Plan 06 proposed it
-first.
-
-**What changes.** About two days (plan 11 WP15): the switch, the strip chip,
-a monotonicity test on real material, one scene-file field defaulting to auto
-so every saved scene loads unchanged, the ENGINEERING warning rewritten.
-
-### 7. R2 + L2 — the loop keys into the binding table
-
-**Recommendation: (a), make them table rows.**
-
-**What it is.** Almost every key, pad button and APC40 control is a row in
-one binding table, saved in your home folder, editable on the ROUTING page,
-shown on the cheat sheet. Three things are still hard-coded in the frame
-loop: R (camera reset), F1–F8 (load slot) and ⇧F1–F8 (save slot). Cmd+R and
-Esc/Q are also in the loop and would stay there.
-
-**Today.** The loop keys work but cannot be rebound, do not appear on the
-ROUTING page, and need a duplicate "act" code path the audit wants gone. A
-decision from 2026-09-26 kept them in the loop, with scope as the reason.
-
-| Option | Result | Trade-off |
-|---|---|---|
-| (a) Rows for R, F1–F8 and ⇧F1–F8; delete the duplicate path | Every performance key rebinds like any other; the cheat-sheet test covers them; only restart and quit stay outside the table. | Your binding file gains up to seventeen rows on next launch, added only where those keys are free. Supersedes the earlier decision. |
-| (b) Keep them in the loop; delete only the duplicate setter | No change to the file. | The duplicate path stays; F-keys and R remain the one thing the ROUTING page cannot show or change. |
-
-**Why (a).** The earlier decision was about scope, not design; the table was
-built for this; it closes two audit rows. Under plan 13 the F-key rows load
-*preset slots* rather than theme slots; the recommendation is unchanged, only
-the target ids differ.
-
-**What changes.** Half a day (plan 11 WP7): three factory rows, the migration
-that adds them to older files, the cheat sheet, tests, one superseded row.
-
-### 8. Merge one integration PR, or fifteen PRs
-
-**Recommendation: merge PR #55, then #47.**
-
-**What it is.** Plan 11 is fifteen pull requests (#39–#54), one per work
-package, each code-reviewed on its own. They were built in parallel and
-several edit the same document tables and the same few source lines, so they
-were stacked. PR #55 is all fifteen merged in stacking order with the seams
-fixed and tested as one build: 778 tests pass. PR #56 (the plan 13 ledger)
-targets #55's branch and rides with it. PR #47 (plan 12's five party
-presets) merges after #55 as is, which you settled on 2026-09-28.
-
-| Option | What you do | Trade-off |
-|---|---|---|
-| Merge #55 | One merge; GitHub marks the fifteen as merged. | Main receives one large merge; a later bisect lands on the integration commit rather than a work package. |
-| Merge the fifteen in order | Fifteen merges, in the order #55's description lists. | Each after the first few conflicts on the ARCHITECTURE, ENGINEERING and AUDIT tables, the hot-reload module list and the frame loop; the same resolutions as #55, redone by hand. |
-
-**Why #55.** The conflicts are already resolved and the merged result is
-what was tested. Each PR keeps its review and diff.
-
-### 9. P13-a — what the global layer's track knobs carry
-
-**Recommendation: (a) as a first cut.**
-
-**What it is.** Under plan 13 the APC40's eight track knobs have two
-meanings: the loaded preset's on the preset layer, and a fixed set on the
-global layer (reached by latched SHIFT). The global set is defined by the
-session and can never be Learned over. The question is what those eight
-global knobs should do.
-
-**Today.** No layer exists; the track knobs are the view faders on every
-preset.
-
-| Option | The global track knobs | Trade-off |
-|---|---|---|
-| (a) Four hand-feel settings (smoothing, response, catch time, the selected axis's return time) plus BPM; three knobs free | The desk person adjusts the hand feel while someone else is in the box. | Thin: five of eight used. If the box is calibrated once and left, these knobs are rarely touched. |
-| (b) Only the band strip on the device knobs; track knobs dark under SHIFT | Nothing to learn; the global layer is the analyzer only. | Hand feel is panel-only mid-set. |
-| (c) Your own list | Whatever you reach for. | You write it. |
-
-**Why (a).** The hand feel is the one thing that changes with who is in the
-box, and it must not cost every preset a knob. If the box is calibrated once
-and left alone, choose (b).
-
-**What changes.** A session file's global map, one factory table, the LED
-rule for the dark knobs. Part of plan 13 WP2.
-
-### 10. P13-b — partial presets under "a load replaces everything"
-
-**Recommendation: (a), no exception.**
-
-**What it is.** You decided that loading a preset replaces everything: every
-performance parameter lands (the file's value or the app default), every
-performer row is replaced, the desk's preset layer is replaced, no merging.
-Today's routing presets (`legacy6`, `lfo-breathe`, the `hands-*` files) are
-routes-only files with no values. Loaded as presets under that rule they
-would reset the whole picture.
-
-| Option | What a routes-only file does | Trade-off |
-|---|---|---|
-| (a) No exception: the one-time migration turns routes-only files into full presets; "partial" means only a module preset (one group's values from that group's strip) | Every preset load is total and predictable. | Routes-only files stop existing; anyone who liked "load the routes, keep my look" uses module presets and a full preset instead. |
-| (b) A preset may omit values and then leaves the picture alone | Today's routes-only files keep working as they are. | One exception to the no-merge rule, and the place the next exception comes from. Two kinds of load to explain. |
-
-**Why (a).** You chose the rule for having no merge cases. Plan 13 §8 calls
-(a) the clean answer.
-
-**What changes.** The migration writes full presets from the routes-only
-files, with today's theme values filled in. Part of plan 13 WP1.
-
-### 11. P13-c — bank slots by name or inline
-
-**Recommendation: (a), a slot names a preset file.**
-
-**What it is.** F1–F8 and the APC40's preset-select row pick one of eight
-slots. Today a slot (a theme slot) holds its values inline in the project
-file.
-
-| Option | What a slot is | Trade-off |
-|---|---|---|
-| (a) A slot names a preset file; F-key and the preset row load it; ⇧F-key saves the live state *as* that preset into the user folder | A preset is the one unit that is saved, loaded, shared and versioned; a slot is a pointer. | Deleting or renaming a preset file empties a slot; the slot then loads nothing and says so. |
-| (b) Slots keep inline copies, as themes do today | A project is self-contained. | The same performance moment exists twice, in the bank and as a file, and drifts. |
-
-**Why (a).** One unit, one place. Plan 13's design assumes it.
-
-**What changes.** The session's slot list, the save-slot path, the project
-migration. Part of plan 13 WP1.
-
-### 12. P13-d — what a macro is
-
-**Recommendation: (a). This one is waiting for your yes.**
-
-**What it is.** Today a macro is one of eight knobs that scales the *depth*
-of every performer row naming it; it never sets a value itself. Separately,
-no desk row today can set more than one target. You asked on 2026-09-28 what
-a macro is, describing "one knob, multiple bound controls that all change
-simultaneously".
-
-| Option | Meaning | Trade-off |
-|---|---|---|
-| (a) Keep macros as depth attenuators, saved in the preset with their routes, and add multi-target desk rows: one knob sets several bases, each with its own range | Two small jobs, each with one name. The thing you described is the second half. | Two concepts to explain: "macro" (attenuator) and "multi-target row" (fan-out setter). |
-| (b) Macros become the fan-out setter; the attenuator role goes | One word. | Chaining loses its attenuator: a hand can no longer scale how hard an LFO pushes without owning the LFO's depth directly. |
-| (c) Both jobs under one word | One knob can attenuate routes and set bases. | The row format grows two shapes; the ROUTING page has to show both. |
-
-**Why (a).** The two jobs do not compete and each is small.
-
-**What changes.** A `targets` list on a desk row with a range per target;
-the ROUTING page shows it. Part of plan 13 WP3.
-
-### 13. P13-e — the ROUTING page once it edits the loaded preset
-
-**Recommendation: (a), one page.**
-
-**What it is.** Under plan 13 a Learn or an edit on the ROUTING page writes
-into the loaded preset, not into a global file. The page has to show the
-preset's performer rows, the preset's desk rows (the APC40 preset layer), and
-the session's invariant and global rows.
-
-**Today.** The page lists performer rows and a routing-preset strip. MIDI
-rows are not shown at all.
-
-| Option | Layout | Trade-off |
-|---|---|---|
-| (a) One page: the preset's routes table, its desk rows under it, the session's invariant and global rows read-only below | One place to see why a knob does nothing: unmapped, invariant, or on the other layer. | A longer page; the rows scroll in a child (already the case). |
-| (b) Desk rows on their own page | Each page stays short. | Two pages to check when a knob is dead. |
-
-**Why (a).** The question a performer asks at the desk is "why does this
-knob do nothing", and one page answers it.
-
-**What changes.** The ROUTING page layout and its no-scroll test. Part of
-plan 13 WP3.
-
-### 12b. P13-g — when a hand owns a macro, do its base settings follow?
-
-**Recommendation: (a) for the first build.**
-
-**What it is.** Your answer to 12 made a macro one knob with subscribers:
-each either sets a parameter's base or scales a route's depth, with its own
-direction. A macro is an ordinary parameter, so a performer (a hand, an
-LFO) can own it. The question is what happens to the macro's *base*
-subscribers while a performer is moving it.
-
-**Why it is a question.** The control model has one hard rule: knobs,
-keys, the panel and presets set bases; performers only ever add offsets,
-through one path. A knob turned on the desk setting several bases is
-fine. A hand setting several bases every frame is a performer writing
-bases, which the model forbids.
-
-| Option | What a hand riding a macro does | Trade-off |
-|---|---|---|
-| (a) Base subscribers follow the macro's base only | Moves the macro's depth subscribers (route attenuation), as `scale` does today. The base subscribers move only when the knob, panel or a preset moves the macro. | A hand cannot sweep several bases at once through a macro; it can still own each of those params directly. |
-| (b) Yes, as offsets | The macro becomes the performer of every param it base-subscribes, counted by the referee as that param's one owner; the hand's movement lands as offsets. | A real extension of the model: a macro that is a performer, with referee rules for when a route and a macro both want one param. |
-| (c) Yes, as base writes | The hand rewrites the bases every frame. | Breaks the rule that stops a hand and a knob fighting over one value; the knob could never catch. |
-
-**Why (a).** It needs nothing new in the model and ships the concept.
-(b) can follow if a hand on a macro turns out to be what you reach for.
-
----
-
-## Part A2 — raised while building plan 13 (2026-09-28)
-
-Both came out of checking plan 13 against the code (plan 13 §9). Both are
-about the **MASTER fader**, which in this app is the audio *drive*: how
-hard the music pushes everything the bands drive (`master.gain`, 1× to 8×).
-
-```
- APC40 MASTER fader ──▶ master.gain (session: the room's drive)
-                              │ today: every band → rotation route is "× master.gain"
- band lanes ──push──▶ rot.rate.XY … ZW        (the six planes spin with the music)
- left hand (party-tumble) ──push──▶ master.gain   (a hand leans on the drive)
-```
-
-### 18. P13-h — how the drive fader reaches the rotation, once routes lose `scale`
-
-**Answered (a), 2026-09-28.** (Recommendation was (a), keep `scale` on a route, only for a session param.)
-
-**What it is.** A route's depth can be multiplied by another parameter's
-live value, its `scale`. You decided (row 12) that a macro's attenuation
-becomes a *depth subscriber* of the macro, and that routes lose the
-`scale` field. But the field has a second user that is not a macro: the
-six band → rotation routes are each "× `master.gain`". That multiplication
-is the only way the MASTER fader changes how hard the music spins the
-shape, and it is how the reference design worked (the parity test checks
-it).
-
-**Today.** Every factory and party preset carries those six rows with
-`scale: master.gain`. Move the MASTER fader and the music spins the shape
-harder or softer; the band pattern inputs are not scaled.
-
-| Option | What the MASTER fader does to the rotation | Trade-off |
-|---|---|---|
-| (a) Keep `scale` on a route, allowed only on a session param (the drive fader today); macros go to subscribers as decided | Exactly what it does now. | Two ways to scale a depth remain — a macro's subscriber (per preset) and a route's `scale` (the rig's) — each with one job; the ROUTING page shows both. |
-| (b) Let the drive fader have depth subscribers, like a macro, listed in the preset | The same, described as a subscriber. | A session control's wiring lives in every preset; a subscriber's `from → to` runs over the fader's 0–1 position, not its 1×–8× value, so the six rows' numbers change and the parity test is re-derived. |
-| (c) Drop it: routes lose `scale` everywhere | The MASTER fader no longer changes the rotation; only the pattern and whatever the analyzer's gain feeds. | The drive fader stops meaning "how hard the music drives the shape"; the legacy6 parity anchor is re-frozen without gain. |
-
-**Why (a).** It keeps the one job the drive fader has in the room, costs
-no numbers, and keeps your macro decision whole: every `scale` that named
-a macro still becomes a subscriber.
-
-**What changes.** (a): the migration converts only `scale: macro.N`; the
-loader refuses a `scale` on a performance param with a note; one sentence
-in ARCHITECTURE §3.4. Plan 13 WP3 builds it; until you answer, WP3 leaves
-those six rows exactly as they are.
-
-### 19. P13-i — may a preset's route *perform* a session param?
-
-**Answered (a), 2026-09-28.** (Recommendation was (a), yes.)
-
-**What it is.** You decided (plan 13 D9) that the analyzer is session: its
-bands, dynamics, scene and the drive fader are never in a preset, so a
-preset load never moves them. `party-tumble`'s left hand, though, *pushes*
-the drive (`master.gain`) — lifting the hand makes the music grip the
-shape harder; lowering it or leaving the box gives the fader's own value
-back.
-
-**Today.** The route works; nothing distinguishes a session target.
-
-| Option | What `party-tumble`'s left hand does | Trade-off |
-|---|---|---|
-| (a) A route may target any param a performer may drive, session ones included; D9 governs the *values* a preset lands | Leans on the drive while the hand is up; the fader's setting is never changed and shows again when the hand leaves. | A preset can change how the room *feels* while a hand is in, never what it is *set* to. The ROUTING page marks such a route "session". |
-| (b) A route onto a session param is dropped at load with a note | Nothing; `party-tumble`'s left height is re-cut onto a performance param (the spin speed, say). | The strict reading of D9; one party gesture changes. |
-
-**Why (a).** D9's reason was that the analyzer is the room and every
-preset assumes one lane layout; an offset that springs back touches
-neither. It keeps plan 12's gesture as you approved it.
-
-**What changes.** (a): nothing in the loader; the page's "session" mark;
-one sentence in ARCHITECTURE §3.2. (b): a check in the preset loader and a
-new left-height row in `party-tumble` (WP5).
-
-### 20. P13-j — hand routes by name or by lane number
-
-**Answered (a), 2026-09-29: by name, built in plan 13 WP5b (PR #70).** (Recommendation was (a).) Every factory preset now names its hand rows (`hand:right.roll`); the migration names yours by your rig's `[hands] dofs` (or the default list when `[hands]` is off) and says so in a note; a number still reads. Hand check 42 tries a reordered `dofs` at the machine.
-
-**What it is.** A preset's hand route says which hand axis drives it. Today
-it says so by a lane *number*: `hand:9` means "the 10th hand lane", which on
-the shipped setup is the right hand's roll. The numbers follow the order of
-the `[hands] dofs` list in your `config.toml`. If that list is ever
-reordered or trimmed (say, dropping yaw because it is noisy in your box),
-every hand row in every shipped and saved preset silently points at a
-different axis: a tilt would start zooming. Nothing warns.
-
-```
- [hands] dofs = x y z roll pitch yaw     hand:9  →  right roll     (as designed)
- [hands] dofs = x y z roll pitch         hand:9  →  right pitch?   (silently wrong)
- by name:                                hand:right.roll → right roll, whatever the list
-```
-
-**Today.** Every preset uses numbers; plan 12 noted the risk and the audit
-filed it (N7). Plan 13 has just regenerated every factory preset and is
-migrating your files once, so this is the cheapest moment the format will
-ever have.
-
-| Option | What a preset says | Trade-off |
-|---|---|---|
-| (a) Names now: `hand:right.roll`, `hand:left.y`, `hand:left.pinch.index`; the hands adapter publishes the name → lane map; a name the rig lacks makes the row dormant, never another axis. Factory presets regenerated with names; your migrated presets written with names; `hand:<i>` still read. | The axis it means, whatever `dofs` says. | About half a day more in plan 13 (a small follow-up PR before the integration merge). Learn writes names too. |
-| (b) Later, as its own small plan | Numbers for now. | Every preset written until then (factory, migrated, yours) carries numbers and needs a second conversion; the silent scramble stays possible meanwhile. |
-| (c) Never; a warning instead | Numbers; the app warns at start when your `dofs` differs from the shipped order. | Cheapest; you are told, but the presets are still wrong until re-authored. |
-
-**Why (a).** The format is being set now and your files are being migrated
-once; doing it now means no second migration, and a changed `dofs` can
-never quietly break a party preset mid-set.
-
-**What changes.** (a): a name map the hands adapter publishes, a resolver in
-the router (routes, gates, rests, the page's labels), Learn writing names,
-the generator and the migration writing names, tests; plan 13 builds it as
-WP5b before the integration merge. (b)/(c): audit N7 stays open.
-
----
-
-## Part A3 — raised by the first night at the machine (plan 14, 2026-09-29)
-
-The rig is for a party: a render on a black window behind a Pepper's Ghost
-glass, two hands in a box, an APC40. Plan 14 (`docs/plans/14-party-rig.md`)
-has the findings; these five are yours.
-
-### 21. P14-a — does overlay mode survive?
-
-**Answered (a), 2026-09-29.** **Recommendation: (a), keep it behind a config key, off by default.**
-
-**What it is.** Overlay mode floats the render window over the whole
-desktop, see-through and click-through (a feature from an early commit).
-The window is created with a transparent framebuffer for it in *every*
-mode, and the APC40's MASTER select and the `T` key switch into it with one
-press. For Pepper's Ghost the window must be opaque black, always.
-
-**Today.** Plan 14 WP1 makes window and fullscreen opaque (the picture no
-longer cuts the alpha); overlay still exists and one press still reaches it.
-
-| Option | What the rig does | Trade-off |
-|---|---|---|
-| (a) Behind `[output] overlay = true` (default off): no transparent framebuffer, and MASTER select / `T` do nothing, unless the config asks | Can never show the desktop at a party; overlay still there for a laptop demo. | One config line to turn it on. |
-| (b) Remove overlay mode | Simplest; nothing can go see-through. | Drops a feature and its code (pyobjc window raising, the crossfader's ground). |
-| (c) Keep as today (after WP1) | Opaque unless someone presses MASTER select or `T`. | One wrong press mid-show floats the window over the desktop. |
-
-**Why (a).** The show can never go see-through by accident, and nothing is
-thrown away.
-
-**What changes.** (a): the window hint and the two controls gated on the
-config key, the overlay tests, check 26. Plan 14 WP2.
-
-**Built** (plan 14 WP2): `[output] overlay` (default false) in
-`config.DEFAULTS`; `app._windows(overlay)` sets `TRANSPARENT_FRAMEBUFFER`
-only when it is true; `overlay.Output.allowed` gates `output.overlay`, the
-one param the `T` row, the MASTER select row, the panel and a preset land
-on, so each road is shut together; the OUTPUT page greys the toggle and
-says why.
-
-### 22. P14-b — how the rig becomes "the party device"
-
-**Answered the recommendation, 2026-09-29.** **Recommendation: the party show opens by default; the house moods become a
-`house` show; the last show opened is remembered.**
-
-**What it is.** A "show" (today's "project") is a bank of eight presets and
-the one it starts on. The rig always opens the show named `default` — the
-eight house moods, and on your machine the `MIGRATED` preset in front of
-them — and forgets `party` every launch.
-
-**Today.** You open `party` by hand from load ▾ after every launch.
-
-| Option | What a launch opens | Trade-off |
-|---|---|---|
-| (a) Party is the factory default show (the house moods move to a `house` show), the last show opened is remembered, your `MIGRATED` stays a preset in the list (not in the bank) | Party, on every launch; whatever you last opened thereafter. | Your current `default` file is renamed with a backup; its bank moves to `house`. |
-| (b) A config key names the show to open (`[library] show = "party"`) | Party, as long as the key says so. | Explicit, but one more thing in the config. |
-| (c) Only remember the last show | Party after you open it once. | The first launch is still the house moods. |
-
-**Why (a).** The rig is a party device; the first thing it shows should be
-the party.
-
-**What changes.** The factory `default.hyp.json`, a `house` show, a
-remembered last show, a one-off rename of your `default` (with backup).
-Plan 14 WP3.
-
-**Built** (plan 14 WP3): the factory `default.hyp.json` is removed rather
-than re-filled — `party.hyp.json` already was the party show, and a user
-file named `default` (yours, plan 13's) would have gone on shadowing a
-factory `default`; `library.DEFAULT_PROJECT` is `party`. The house moods
-are `house.hyp.json`. `<home>/last_show` holds the name of the show opened
-last (a plain one-line file beside `config.toml`, written by a show load,
-save as, or a "starts on" pick); a name that is gone falls back to the
-party. On the first launch your `projects/default.hyp.json` becomes
-`projects/mine.hyp.json` (named `mine`, bank and startup as they were),
-kept first as `default.hyp.json.bak-v2`, noted on stderr and on the
-PRESETS page; the second launch changes nothing.
-
-### 23. P14-c — "the dream on by default"
-
-**Answered (a): torch is part of the app, 2026-09-29.** **Recommendation: (b), keep torch optional, turn the worker on by default,
-and say loudly when torch is missing.**
-
-**What it is.** The dream worker (the neural "dream" over the look-back
-echoes) needs torch — about 1 GB — installed as an optional extra with
-`uv sync --extra dream`. Without it the look-back shows raw echoes and says
-"no worker"; a plain `uv sync` removes the extra.
-
-| Option | What you get | Trade-off |
-|---|---|---|
-| (a) torch always installed | The dream works on every install. | A ~1 GB install and a slower launch on every machine, dream or not. |
-| (b) Optional extra, worker on by default, the panel says what to run when torch is missing | The dream works once you run the one command; the panel tells you. | You must use `--extra dream` for sync and run. |
-| (c) As today | — | "No worker" with no explanation. |
-
-**Why (b).** The rig gets the dream once, on purpose; a laptop without it
-still starts fast and tells you why.
-
-**What changes.** `[dream] enabled` default, the SYSTEM / LOOKBACK message
-(WP1), the setup docs, the launch command in the hand checks. Plan 14 WP6.
-
-**As built (plan 14 WP1 + WP6).** WP1 made torch an ordinary dependency
-and the worker on by default. WP6 made the echoes it dreams over
-readable: echo time is seconds (`dream.fade`, a half-life; `dream.gap`,
-seconds between echoes — the old per-frame `dream.decay` / `dream.every`
-read as 60 Hz frames, so every saved look is the same at 60 Hz and a
-120 Hz screen no longer halves the trail); a TRACER preset with the
-investigation's legible set (a ninth party preset, in the list, on no
-F-key); WAKE re-tuned (24 echoes over 1.2 s, a 0.6 s half-life, occlude
-0.3) and shot with the worker running
-(`docs/plans/assets/12-presets/party-wake-dream-sheet.png`). No extra
-step: `uv sync` and launch; hand checks 9 and 41 look at it.
-
-### 24. P14-d — which effects go on the party show's F6–F8
-
-**Answered (a), 2026-09-29.** **Recommendation: ACID, MANDALA and NOITA.**
-
-**What it is.** The FX page has twelve effects; the party show uses four,
-all in TRIP. Seven (warp, wobble, doublevision, deconverge, fractals,
-glimmer, tripcolour) are in no preset at all. The party show has three
-empty slots.
-
-| Option | F6–F8 | Trade-off |
-|---|---|---|
-| (a) ACID, MANDALA, NOITA — built from the three module presets already tuned in `library/fx/`, each with hand routes and eight device knobs like TRIP | Three more looks, one effect family each; every effect reachable from the show. | Three presets to compose and judge by eye (check 41). |
-| (b) Your own three | — | You name them. |
-| (c) Leave F6–F8 empty; add the effects to the existing five | No new presets. | The five were composed to plan 12's brief; adding effects changes them. |
-
-**Why (a).** The looks already exist as module presets; this puts them on a
-key.
-
-**What changes.** Three generated presets, the party bank, the FX-coverage
-test. Plan 14 WP5.
-
-**As built (plan 14 WP5).** `party-acid` (acid, wobble, deconverge, hue
-cycle), `party-mandala` (plasma, kaleidoscope, fractals, glimmer) and
-`party-noita` (trip warp, trip colour, fractals, double vision) on F6–F8,
-each taking its effect values from its `library/fx` module preset, with
-plan 12's hand rows and eight device knobs. The seven effects no preset
-used are all on in one of the three. Two deviations from the module
-presets, both for the glass: MANDALA's plasma level and its fractals and
-glimmer grounds start at 0 (the module is a full-frame generator; on a
-Pepper's Ghost the black must stay black — the right hand's pitch floods
-the plasma in), and NOITA adds double vision, which no module preset has.
-The dead `fx.mix` rows: `hands-pinch` fades the hue cycle in, `lfo-breathe`
-breathes the plasma. Cards: `docs/plans/assets/12-presets/party-{acid,
-mandala,noita}.md`; hand checks 5 and 41.
-
-### 25. P14-e — the desk's glyphs and diagram
-
-**Answered (a), 2026-09-29.** **Recommendation: the scheme below, the diagram above the cheat sheet,
-showing the layer that is up.**
-
-**What it is.** Akai's names ("track knob", "device knob", "clip 4·2")
-mean nothing for this show. Each control gets a short glyph, printed on
-every ROUTING row and Learn message, and drawn on an on-screen picture of
-the APC40 with the mapped controls lit.
-
-```
- K1 K2 … K8   track knobs (top row)         D1 … D8   device knobs (right)
- G1·1 … G5·8  clip grid, row·column          G1·9 … G5·9  scene launch
- G6 … G10     clip stop, select, activator, solo, rec-arm rows
- S1 … S8      track faders    SM  master fader    X  crossfader    C  cue
- B1 … B22     the other buttons (transport, arrows, TAP, NUDGE, …)    ⇧  SHIFT
-```
-
-| Option | Trade-off |
-|---|---|
-| (a) As above (S for faders, so F stays the F-keys; the diagram shows the up layer) | Short, unique (checked against every control and row shipped). |
-| (b) Letters for the button rows instead of G6–G10 | Easier to say aloud, longer to learn. |
-| (c) The diagram shows both layers at once | Everything visible; twice as dense. |
-
-**Why (a).** One glance from a row to the desk, in four characters.
-
-**What changes.** A layout table, the glyph on the page and in Learn, the
-diagram window, hand check 45. Plan 14 WP7.
-
-**Built (plan 14 WP7).** `apc40.LAYOUT` holds all 137 controls with the
-glyphs above (B1–B4 PAN, SEND A–C; B5–B12 the eight device buttons,
-CLIP/TRACK … METRONOME; B13–B15 PLAY, STOP, REC; B16–B19 ▲ ▼ ▶ ◀; B20
-TAP TEMPO, B21 NUDGE −, B22 NUDGE +). The ROUTING desk and session rows
-print the glyph first, Akai's name in the tooltip; Learn says "D3
-(device knob 3)". The diagram (`ui_desk.py`, `ui.desk`) sits above the
-cheat sheet in the control window and reads the table, not the port.
-Where each control sits is hand check 45's to confirm on the device.
-
----
-
-## Part B — built on the recommendation without asking; confirm or overturn
-
-Four calls had a sensible default and waiting would have blocked the work.
-Each is built, reviewed and on PR #55. Overturning any is a small follow-up.
-
-| # | Call | What was built | The alternative | Cost to reverse |
-|---|---|---|---|---|
-| 14 | B1: a hand leaving the box | The moment a hand is out of the box its axes read "absent", so every row it drives lets go and the base returns, as a gate opening already did. The return spring and the "hold on exit" setting shape only the MIDI sent to a DAW. While a returning hand is being caught, the row stays live and glides onto it, so a one-frame tracker dropout does not snap the picture. | Keep "hold" latching a route: the hand leaves and the parameter stays. Latching is instead done by setting the base with a knob, which a performer never blocks. | Half a day; reopens the audit's first finding. |
-| 15 | A1: which scene store survives | The eleven JSON files under the band library are the one source of scenes, with band names in each layout; the scene combo, the APC40 grid, Reset and the strip all read them; a user file of the same name shadows a factory scene. | Delete the JSON files and keep scenes in code; user-authored scenes would not exist. | A day. |
-| 16 | L3: a project's own routing | A project never carries its own copy of the routing table; the live table stays one file in the home folder. The never-written field is gone. (Plan 13 replaces this: a preset carries its routes.) | Fill the field so a project restores its rows on load. | Moot once plan 13 lands. |
-| 17 | B6: a trigger fired after the LFOs stepped | A trigger or LFO reset from the panel or a performer, which arrives after this frame's LFO step, is held to the start of the next step so the LFOs read exactly phase 0 the first frame they see it. Keys still land at once. | Document that those two paths are one frame off. | An hour. |
-
----
-
-## Part C — already settled by you, listed so nothing is missing
-
-- **Plan 13 D1–D12** (2026-09-28, in DECISIONS.md "Presets and the desk"):
-  two nouns; a load replaces everything; module presets as labels; latched
-  SHIFT with an LED; fixed global layer; invariant controls; knobs jump and
-  faders pick up on a layer switch; an unmapped control does nothing and
-  shows dark; the analyzer is session; a session names its startup preset; a
-  modifier is read at the press. Built in plan 13 (WP1 #62, WP2 #64, WP3
-  #63, WP4 #65, WP5 #66) on `plan-13-integration`; DECISIONS.md's rows say
-  where and which test holds each.
-- **Sequencing** (2026-09-28): merge #55, then #47 as is, then plan 13 from
-  its WP1, re-cutting the five `party-*` presets in its WP5.
-- **Plan 12's per-preset desk block**: superseded by plan 13's preset desk
-  layer.
-
-## Part D — not decisions, but gating "settled"
-
-- `docs/plans/11-hand-checks.md`: 32 checks at the machine (41 since
-  plan 13's group H). Checks 7 and 11
-  read differently under each answer to decisions 1 and 4. Check 31 is the
-  one hardware assumption plan 13 rests on (the APC40's endless knobs
-  re-base from a host CC). Check 32 is plan 12's seven projector-and-box
-  judgements.
-- Two review notes from plan 12 that belong in the audit, not here: named
-  hand addresses (`hand:left.roll`) so a custom `[hands] dofs` list cannot
-  scramble shipped presets; an explicit groups-to-reset list on a theme or
-  preset. Filed 2026-09-28 as `AUDIT-2026-09.md` rows N7 and L9. L9 is moot
-  for presets since plan 13 (a load replaces every performance group, D2);
-  N7 is row 20 here, answered (a) 2026-09-29, built in plan 13 WP5b (PR #70).
-- Plan 13's machine checks: `docs/plans/11-hand-checks.md` group H
-  (checks 33–42).
-
----
+# Decision register — the open decisions
+
+Rows 34–88 were each decided during an unattended build on 2026-10-04:
+the build took its own recommendation and built it. Every one is in the
+app now and waits for the owner to say **keep** or **overturn**. Each row
+says what was built (what you will see or feel), the other option(s), what
+it costs to reverse, the known rough edge, and the hand check that lets you
+judge it. The checks are numbered in
+[`plans/11-hand-checks.md`](plans/11-hand-checks.md); the same checks in
+plain words, by hardware, are in [`TESTING-GUIDE.md`](TESTING-GUIDE.md)
+(each entry ends with its check numbers). None has been run by a person.
+
+Decisions already settled, and these rows once kept, are in
+[`DECISIONS.md`](DECISIONS.md); a row there marked "row N" points here.
+When you answer a row: keep → mark it "owner" in DECISIONS and delete it
+here; overturn → the change, then the same.
 
 ## Answer sheet
 
-Write the letter, or "rec" for the recommendation. Rows 14–17 take "keep"
-or "overturn".
+| # | Decision | Check | Keep / overturn |
+|---|---|---|---|
+| 34 | Undo on ⌘Z and Ctrl+Z; exact chords | 48 | |
+| 35 | Band add / remove / move not undoable | — | |
+| 36 | Taps and BPM are not undo steps | — | |
+| 37 | Trash only when the file changes | 53, 88 | |
+| 38 | Home is the Home key only | 54 | |
+| 39 | Camera moves are undo steps | — | |
+| 40 | Home may be fired by a performer; dim may not | 54, 55 | |
+| 41 | The dim in overlay fades alpha too | — | |
+| 42 | Save-as hold: how it fires and lights | 56 | |
+| 43 | A paused drag is two undo steps | 48 | |
+| 44 | A load releases only faders it moved | 55 | |
+| 45 | FX chip: dot switches, name opens; three a row | 59 | |
+| 46 | An idle effect's faders dimmed but live | 60 | |
+| 47 | Instances reach zero from slider and K3 | 62 | |
+| 48 | Where the windows open | 61 | |
+| 49 | The dream's layer cannot be performed | 63 | |
+| 50 | The interaction box: set by the sweep | 72–74 | |
+| 51 | A hand outside the box is absent everywhere | 73, 74 | |
+| 52 | A hand Learn lands as a gentle push | 75, 76 | |
+| 53 | A hand Learn moves the axis's other rows | 77 | |
+| 54 | Knob smoothing on at 80 ms | 78, 79 | |
+| 55 | Where knob smoothing and Learn depth live | 75, 78 | |
+| 56 | `hands-orbit`: two hands on the camera | 80 | |
+| 57 | The big on-screen desk and its names | 69 | |
+| 58 | Click a desk control, then a param | 70 | |
+| 59 | One Unbind removes desk rows and routes | 64 | |
+| 60 | "Learn desk" and "Learn hand ▸ left / right" | 66–68 | |
+| 61 | Session controls work through a desk learn | 65 | |
+| 62 | One road onto the desk, no APC40 needed | 70 | |
+| 63 | The ROUTING filter: only you clear it | 71 | |
+| 64 | Two hand-Learn details left alone | 66 | |
+| 65 | The faces' effect picture: what, size, fit | 91–93, 98 | |
+| 66 | Performers on effect target and face mapping | 91 | |
+| 67 | The chip grid is the chain; drag to reorder | 94 | |
+| 68 | Re-aim an effect by the strip's combo | 91, 94 | |
+| 69 | LOOKBACK as ECHOES / DREAM / BOTH; every layer in one menu | 95 | |
+| 70 | Dream "speed" is `dream.k`, in frames | 96 | |
+| 71 | Instance layouts: grid, honeycomb, ring | 97 | |
+| 72 | The bank of twenty-four | 81, 83 | |
+| 73 | Clip rows 4–5 are the bank; their lights | 82–84 | |
+| 74 | No backup, no rewrite of `bindings.json` | 84, 57 | |
+| 75 | Device knobs only where they do something | 85 | |
+| 76 | Hide, rename and the trash | 86–88 | |
+| 77 | The red dot and "save copy" | 89 | |
+| 78 | The home in git | 90 | |
+| 79 | Where "hands through effects" puts the hands | 102, 103 | |
+| 80 | The guide and labels are never bent | 103 | |
+| 81 | Output switches are rig settings | 101, 104 | |
+| 82 | Another shape is letterboxed | 106 | |
+| 83 | One window renders, others copy | 107 | |
+| 84 | Ghost hands and each output's hands tick | 102, 105 | |
+| 85 | The OUTPUT page says it in words | 102, 105 | |
+| 86 | A screen not connected at launch | 101, 111, 112 | |
+| 87 | `ghost.style`: five drawn objects | 109 | |
+| 88 | Ghost mirror / guide / tethers not performable | 110 | |
 
-| # | Decision | Recommended | Your answer | Note |
-|---|---|---|---|---|
-| 1 | B2 tap and the downbeat | (a) never moves it | **(a)**, 2026-09-28 | |
-| 2 | B5 performer-fired triggers | (a) keep all three | **(c)**, 2026-09-28 | LFO triggers ownable, tap tempo not |
-| 3 | R1 LFO knobs | (c) theme state; presets may set assumed bases | **(c)**, 2026-09-28 | dissolved by plan 13 WP5 (PR #66): a preset carries every performance base, LFO knobs included, and the routing presets are full presets |
-| 4 | R6 APC40 LEDs | (a) rings base, LEDs state | **(a)**, 2026-09-28 | |
-| 5 | A7 Dynamics past 1× | (b) keep 4×, document | **(b)**, 2026-09-28 | |
-| 6 | A10 input trim | (3) auto/manual switch | **(3)**, 2026-09-28 | built, WP15 |
-| 7 | R2 + L2 loop keys | (a) table rows | **(a)**, 2026-09-28 | built, PR #58 |
-| 8 | Merge path | PR #55, then #47 | **rec**, 2026-09-28 | #56 folded into #55 first |
-| 9 | P13-a global track knobs | (a) hand feel + BPM | **(a)**, 2026-09-28 | a first cut; expect better globals with use. Built in plan 13 WP3 (PR #63): five global rows in `apc40.DEFAULT_MAP` (hand feel and `tempo.bpm` on track knobs 1–5, `hands.sel.return` the selected axis's alias), knobs 6–8 dark; learns kept off the global layer in WP4 (PR #65) |
-| 10 | P13-b partial presets | (a) no exception | **(a)**, 2026-09-28 | built in plan 13 WP2 (PR #64): a load lands every performance base and replaces every route; and WP5 (PR #66): the routes-only files are full presets — `legacy6`, `lfo-breathe`, `hands-*` in `library/presets/`, a user's `bindings/*.json` by the first-launch migration (`preset.migrate_routing_presets`), each with the effects its routes drive switched on |
-| 11 | P13-c bank slots | (a) a slot names a file | **(a)**, 2026-09-28 | built in plan 13 WP2 (PR #64): `Project.bank` is eight preset names, `load_slot` / `save_slot` / `cycle`; schema-1 inline slots become preset files in WP5 (PR #66) |
-| 12 | P13-d what a macro is | (a) attenuator + multi-target rows | **one concept**, 2026-09-28 | subscribers set a base or a depth, each with its own polarity; see 12b. Built in plan 13 WP3 (PR #63): `routing.Macro` / `Sub`, `Router.follow_macros`, the depth term in `Router.modulate`, `scale: macro.N` migrated; the macros became the loaded preset's in WP4 (PR #65) and left `bindings.json` in WP5 (PR #66) |
-| 13 | P13-e ROUTING page | (a) one page | **(a)**, 2026-09-28 | built in plan 13 WP4 (PR #65): `ui_routing.page` over the loaded preset — the head (name, dirty dot, save / as…, the layer, the last learn or refusal), routes, the desk with its dark controls, the macros and their subscribers, the session's MIDI rows read-only; the routing-preset strip left it there |
-| 12b | P13-g a performer on a macro | (a) base subscribers follow the base only | **(a)**, 2026-09-28 | built in plan 13 WP3 (PR #63): base subscribers follow `p.base`, depth ones `p.value` (`test_a_performer_on_a_macro_moves_only_its_depth_subscribers`) |
-| 14 | B1 as built | keep | **keep**, 2026-09-28 | |
-| 15 | A1 as built | keep | **keep**, 2026-09-28 | |
-| 16 | L3 as built | keep | **keep**, 2026-09-28 | |
-| 17 | B6 as built | keep | **keep**, 2026-09-28 | |
-| 18 | P13-h the drive fader and `scale` | (a) keep `scale`, session params only | **(a)**, 2026-09-28 | built in plan 13 WP5 (PR #66): `routing.migrate_scales` — a `scale` kept only on a session param, one on a macro a depth subscriber, one on a performance param dropped with a note |
-| 19 | P13-i a route onto a session param | (a) yes; D9 is about values | **(a)**, 2026-09-28 | built in plan 13 WP5 (PR #66): the ROUTING page marks such a route "session" (`ui_routing.is_session_target`); the scale combo offers session params only |
-| 20 | P13-j hand routes by name | (a) names now, in plan 13 | **(a)**, 2026-09-29 | built, plan 13 WP5b, PR #70: `hand:right.roll`, `hand:left.present`, `hand:left.pinch.index`, resolved through the hands adapter's published map (`router.names`); a name the rig lacks is dormant; `hand:<i>` still reads; the factory presets regenerated, the migration names what it carries by the rig's layout |
-| 21 | P14-a overlay mode | (a) behind a config key, off | **(a)**, 2026-09-29 | built, plan 14 WP2 (PR #75): `[output] overlay = false` by default — the render window is created without a transparent framebuffer, `output.overlay` refuses to switch on (`T`, MASTER select, the panel's greyed toggle with the reason, a preset), the crossfader's ground does nothing; `true` is today's overlay |
-| 22 | P14-b the party device | party opens; house moods a `house` show; last show remembered | **rec**, 2026-09-29 | built, plan 14 WP3 + WP4 (PR #75): the factory `default` show is gone — `party` opens, `house` holds the eight house moods; `<home>/last_show` remembers the show opened last; your `default` (MIGRATED + seven house moods) is renamed `mine` once, backed up as `default.hyp.json.bak-v2`, MIGRATED still its first preset; the PRESETS page speaks "show" |
-| 23 | P14-c dream on by default | (b) optional torch, worker on, loud when missing | **(a)**, 2026-09-29 | torch is part of the app, not optional; built: plan 14 WP1 (the dependency, the worker on) and WP6 (echoes in seconds, TRACER, WAKE re-tuned and shot with the worker on) |
-| 24 | P14-d F6–F8 effects | (a) ACID, MANDALA, NOITA | **(a)**, 2026-09-29 | built: plan 14 WP5 — `party-acid` / `party-mandala` / `party-noita` on F6–F8, every effect on in a factory preset, no factory route on an effect that is off |
-| 25 | P14-e desk glyphs and diagram | (a) K/D/S/G/B glyphs, up layer, above the cheat sheet | **(a)**, 2026-09-29 | plan 14 WP7 — built (`apc40.LAYOUT`, `ui_desk.py`, hand check 45) |
+"—": no hand check shows it; tests only.
+
+---
+
+## Undo, home, the dim, save-as
+
+### 34. Undo on ⌘Z and Ctrl+Z; a key fires only its exact chord
+
+- **Built.** ⌘Z and Ctrl+Z undo; adding ⇧ redoes. A key press fires only
+  the row whose modifiers are exactly the ones held, so ⌘⇧Z redoes and
+  does not also undo.
+- **Other options.** ⌘Z only (Ctrl+Z does nothing); Ctrl+Z only (wrong for
+  Mac hands).
+- **To reverse.** Delete two rows in `routing.LOOP_KEY_ROWS`: minutes. The
+  exact-chord rule is needed by redo under any option.
+- **Rough edge.** A row you made by hand on a bare key (`key:Z`) no longer
+  fires while ⇧, ⌘ or Ctrl is held. No factory row is affected.
+- **Judge it.** Check 48.
+
+### 35. Adding, removing or moving a band is not an undo step
+
+- **Built.** ⌘Z after adding a band does not remove it. Each undo step
+  remembers the band layout it was made on; strip values go back only onto
+  that same layout. When a step's strip values are skipped, the footer
+  says "the bands have changed: their strips were left". A band preset
+  load, a show load and a scene pick undo whole. The 8-second "Reset all"
+  undo is unchanged.
+- **Other options.** Make add / remove / move undo steps (about a day,
+  builds on this); clear the whole history on a layout change.
+- **To reverse.** About a day for full undo of layout changes.
+- **Judge it.** No check; tests only.
+
+### 36. A tap, a nudge or a typed BPM is not an undo step
+
+- **Built.** The tempo group is not watched by undo, so tapping never fills
+  the history, and undoing a show load leaves the tempo where it is.
+- **Other option.** Watch the BPM: each tap of a burst becomes a step.
+- **To reverse.** One line (`undo.EXCLUDED_GROUPS`).
+- **Judge it.** No check; tests only.
+
+### 37. A preset goes to the trash only when the file would change
+
+- **Built.** Saving or deleting a preset first copies the old file to
+  `~/Hyperspace/trash/presets/<name>.<date>-<time>.json` (a module preset
+  to its own folder there), but only when the text would actually change.
+  If the copy fails (a full disk), a save warns and goes on; a delete is
+  refused.
+- **Other options.** Trash on every save (identical copies pile up); a
+  failed copy also refuses the save.
+- **To reverse.** One condition in `library.to_trash`'s callers.
+- **Judge it.** Checks 53 and 88.
+
+### 38. Home is the Home key only (fn ← on a MacBook)
+
+- **Built.** `key:HOME` fires home; the desk's OVERDUB is the other road.
+  The row is in `bindings.json` and can be moved to another key there.
+- **Other option.** A second key as well (say ⇧H).
+- **To reverse.** One row.
+- **Rough edge.** Whether fn+← reaches the app as Home has not been tried.
+- **Judge it.** Check 54.
+
+### 39. Camera moves are undo steps
+
+- **Built.** R (reset view), a mouse orbit, the sticks, the wheel and ↑ / ↓
+  each undo like any setting; one continuous orbit is one step. The
+  history holds 100 steps.
+- **Other option.** Leave the camera out, so ⌘Z always reaches a "real"
+  edit.
+- **To reverse.** Add `"camera"` to `undo.EXCLUDED_GROUPS`.
+- **Judge it.** No check of its own; any undo check after an orbit.
+
+### 40. A performer may fire home; nothing may drive the master dim
+
+- **Built.** A pinch, band or LFO routed onto `preset.home` fires it, like
+  "next preset". The master dim (`output.dim`) cannot be a route's target,
+  is never saved and is never moved by a preset or a show. No factory
+  preset routes onto home.
+- **Other options.** Home not performable; the dim performable (a band
+  could strobe the room, a hand leaving the box could black it out).
+- **To reverse.** One flag each.
+- **Judge it.** Checks 54 and 55.
+
+### 41. In overlay mode the dim fades colour and transparency together
+
+- **Built.** On the normal opaque window the dim scales the colour toward
+  black. In overlay mode (only when `config.toml` sets `[output] overlay =
+  true`) it also fades the alpha, so the render fades away over the
+  desktop.
+- **Other option.** Colour only: a dark veil stays over the desktop.
+- **To reverse.** One line in `Renderer.dim_pass`.
+- **Judge it.** No check: the rig runs with overlay off.
+
+### 42. The save-as hold on the clip-stop row
+
+- **Built.** Holding any of the eight clip-stop buttons for 0.6 s saves the
+  live look as a new preset ("TRIP" → "TRIP 2") into the next empty bank
+  slot, while you are still holding. The eight act as one bar: two fingers
+  save once. The bar is dark at rest, lit while held, and blinks for
+  1.5 s with the new slot's pad when it saves. A new name never matches a
+  file, a listed name or a bank entry. The new preset becomes the loaded
+  one, so panel Save then writes it. With the bank full the preset still
+  saves, to the list, and the footer says so. A save that fails blinks
+  nothing.
+- **Other options.** Fire on release; the bar lit at rest; stay on the old
+  preset after saving; a per-row hold time.
+- **To reverse.** Each is a line or a constant (`midi.HOLD_S`, the rows'
+  "off" velocity).
+- **Rough edge.** The on-screen desk lights the bar while held but does not
+  blink. The hold, lights and blink have never been on the APC40.
+- **Judge it.** Check 56.
+
+```
+ clip row 1     [ 1 ][ 2 ][ 3 ][ 4 ][ 5 ][ 6 ][ 7 ][ 8 ]   bank slots 1–8
+ clip rows 4–5  slots 9–16 and 17–24 (row 73)
+ clip stop      [========== SAVE AS: hold 0.6 s ==========]  [STOP ALL: reset all]
+                a NEW preset → the next empty slot, whose pad blinks; a tap: nothing
+```
+
+### 43. A slider drag that pauses is two undo steps
+
+- **Built.** An undo step ends after 0.4 s in which nothing you set has
+  changed. A drag held still longer than that, then moved again, is two
+  steps. One rule for the panel, the desk, keys and typed values.
+- **Other option.** Hold the step open while a panel widget is dragged
+  (the desk's knobs gain nothing).
+- **To reverse.** One flag the panel sets; the quiet time is one constant
+  (`undo.SETTLE_S`; knob smoothing must stay under it).
+- **Judge it.** Check 48 (does 0.4 s feel right).
+
+### 44. A preset load releases only the faders whose parameter it moved
+
+- **Built.** A fader "has" its parameter once moved onto its value (soft
+  pickup). A preset load makes a fader let go only if the load moved its
+  parameter, the parameter is gone, the fader has never been moved, or
+  another control moved the parameter since. So the crossfader's dim, the
+  band faders and the master fader carry straight on through a load. A
+  fader moved while its row is switched off, or while a Learn took its
+  message, picks up again from where it is.
+- **Other options.** Every fader lets go on every load (the crossfader
+  sometimes dead after a load); the crossfader with no pickup (one parked
+  at the left blacks the rig out).
+- **To reverse.** One condition in `MidiIO.redraw`.
+- **Judge it.** Check 55 (e).
+
+## Effects, windows, instances
+
+### 45. An effect chip: the dot switches, the name opens; three chips a row
+
+- **Built.** On the FX page each chip has a dot at its left end that
+  switches the effect on or off (● on, ○ off; a diamond when the effect is
+  aimed at the faces), and a name that opens its faders without switching
+  it. The open chip has a white outline. Chips sit three to a row so every
+  name fits. The open effect is remembered by name, so a reorder or a load
+  never opens a different one.
+- **Other options.** No switch on the chip, only the strip's "on" box;
+  click opens and ⇧click switches.
+- **To reverse.** Remove the dot (about a dozen lines in `ui_fx._chip`);
+  four a row is one constant (`ui_fx.CHIPS_PER_ROW`).
+- **Rough edge.** The dot is small; nobody has tried it with a trackpad.
+- **Judge it.** Check 59.
+
+### 46. An effect that is not running: its faders dimmed but live
+
+- **Built.** The open effect says why it is idle ("off" with a **turn on**
+  button, the stack bypassed with **effects on**, FX mix at 0, its own mix
+  at 0). Its faders sit under a veil but still move and still offer
+  right-click → Learn. The "on" box, and the mix fader when the mix is the
+  reason, are not dimmed.
+- **Other option.** Disabled: greyed and dead, no Learn on an off effect.
+- **To reverse.** A few lines in `ui_fx.page`; the strength is
+  `ui_fx.IDLE_ALPHA`.
+- **Judge it.** Check 60.
+
+### 47. The instance count reaches zero from the slider and K3
+
+- **Built.** `view.instances` runs 0–100. At 0 the readout says "0 ·
+  nothing drawn"; the ground, the echoes, the effects, the ghost hands and
+  the dim carry on. The slider's left end and the bottom of track knob K3
+  are zero. ⌘Z brings the count back. No factory preset, desk value or
+  hand route lands on zero.
+- **Other options.** Stop the slider and knob at 1 (zero only by preset or
+  typing); a separate "blank" switch.
+- **To reverse.** Two lines (the range's floor and the renderer's clamp);
+  a preset saved at 0 would then load as 1.
+- **Rough edge.** A route of yours that pushes both ways on the count (an
+  LFO) can now blank the scene for half its cycle.
+- **Judge it.** Check 62.
+
+### 48. Where the windows open
+
+- **Built.** The app remembers both windows' places in
+  `~/Hyperspace/windows.json`, written on quit and on ⌘R only. A screen
+  number in `config.toml` (`[output] monitor`, `control_monitor`) wins over
+  the file. Fullscreen is never remembered (`[output] fullscreen` says).
+  A first launch opens at full size: render top-left, controls flush
+  right. A remembered spot that is not on a connected screen falls back to
+  the default spot with a note. Delete `windows.json` to forget.
+- **Other options.** The file beats the config; write the file while
+  running (survives a crash); remember fullscreen; fit a first launch to a
+  small screen.
+- **To reverse.** Each is a branch or a line in `placement.place`,
+  `placement.default_rect` or the frame loop.
+- **Rough edge.** A configured screen number with no screen at launch is
+  ignored for the whole run (audit P6). Never run with a second screen.
+- **Judge it.** Check 61.
+
+### 49. The dream's layer cannot be performed
+
+- **Built.** `dream.layer` (which net layer the dream works on) is not a
+  route target, like "Echo time apart" and "Look-back detail": changing it
+  reloads part of the net. A preset, a key, the page's menu and a learned
+  knob or button still set it. A saved preset's route onto it is dropped
+  at load with a note.
+- **Other option.** Leave it performable: a band on it reloads the net on
+  every swing.
+- **To reverse.** One flag in `params.py`.
+- **Judge it.** Check 63.
+
+## The hands and the knobs
+
+### 50. The interaction box, set by the calibration sweep
+
+- **Built.** A hand counts only while its palm is inside one box, the same
+  for both hands, symmetric left and right of the camera. The 20-second
+  calibration sweep on the HANDS page sets it: where the palms went plus
+  40 mm all round (`BOX_MARGIN`). A direction gets a bound only if one hand
+  travelled over 12 cm along it. At the edge a hand that is in stays in
+  until it is 15 mm past a face (`BOX_EDGE`). There is no on/off switch:
+  "reset ranges" opens the box (and resets the ranges). The box is saved in
+  `hands.json` (format 2); an older file is read unchanged and backed up
+  as `hands.json.bak-v1` the first time it is rewritten.
+- **Other options.** Drag the box on the drawing, or six sliders; a box
+  per hand; a "use box" checkbox.
+- **To reverse.** Widgets over the same ranges (`HandsIO.box`); the three
+  sizes are constants in `hands/core.py`.
+- **Rough edge.** The box is off during the sweep, so anyone the camera
+  sees is counted into it: calibrate with nobody else in view. No camera
+  has seen any of this.
+- **Judge it.** Checks 72–74 (72 first).
+
+### 51. A hand outside the box is absent everywhere, its ghost included
+
+- **Built.** Outside the box a hand's rows let go and their params return
+  to their base that frame, its pinches drop, its "present" light goes
+  off, and its ghost fades out. The ghost hands' frame is the box. Only
+  the HANDS page still shows it, hollow and as `◌`. A hand coming back is
+  caught and glided onto, no jump.
+- **Other options.** Still draw it as a dimmed ghost; frame the ghost by
+  the axis ranges.
+- **To reverse.** One line in `HandsIO._skeletons`; one branch in
+  `ghost.box_of`.
+- **Judge it.** Checks 73 and 74.
+
+### 52. A hand Learn lands as a gentle push
+
+- **Built.** A new hand Learn now adds to where you set the control,
+  instead of the hand becoming the fader:
+
+  | Learned onto | A tilt, sideways or reach (rests in the middle) | Height (rests at the bottom) |
+  |---|---|---|
+  | a range centred on zero (a rotation rate, an angle, a pan, the hue) | push at the Learn depth | push at the Learn depth |
+  | any other fader (speed, brightness, a mix) | push at the Learn depth | the fader, as before |
+  | a switch, a list, a button or a whole-number count | the fader | the fader |
+
+  The Learn depth is 0.25 (a quarter of the travel over the hand's whole
+  range), on the HANDS page as "Learn depth". A level or low hand leaves
+  the preset's value showing. Existing rows and factory presets are not
+  changed.
+- **Other options.** Height a push everywhere, or the fader everywhere;
+  depth 0.5 or 0.1; the depth in `config.toml`.
+- **To reverse.** One condition each in `Learn._row`; the depth is
+  `learn.PUSH_DEPTH` and `HandSettings.learn_depth`.
+- **Rough edge.** Learning the same axis onto the same control again does
+  not tame an old row: it only refreshes the pinch gate. No real hand has
+  felt 0.25.
+- **Judge it.** Checks 75 and 76.
+
+### 53. A hand Learn takes the axis's other rows with it
+
+- **Built.** Learning a hand axis onto a control removes that axis's other
+  push and position rows in the loaded preset, switched off or on: a
+  learned axis drives one control. The footer names what moved
+  ("…; moved from rot.phase.XW"); one ⌘Z brings it back. The file is not
+  touched until you save.
+- **Other options.** Only position rows move (an axis can end up on three
+  controls); only rows of the new row's kind move.
+- **To reverse.** One condition in `Learn._place`.
+- **Rough edge.** On a factory preset this removes the preset's own row on
+  that axis.
+- **Judge it.** Check 77 (would you rather a Learn added?).
+
+### 54. Knob smoothing, on at 80 ms
+
+- **Built — against the plan's recommendation.** A value from a desk knob
+  or fader now arrives in a straight line over 80 ms and rests exactly on
+  the step it always did; the ring shows where the knob is sending it.
+  "Knob smoothing" on the SYSTEM page sets it, off to 250 ms; it is saved
+  with the show, and a show that saved a number (off included) keeps it.
+  Not smoothed: buttons, the cue knob, and a knob on a list, switch or
+  whole-number count. One knob turn is still one undo step.
+- **Other option.** The plan's recommendation: off until you turn it up.
+  Its worry: smoothing leans on the APC40 accepting a ring message
+  mid-turn (check 31, never seen on the device).
+- **To reverse.** One constant (`routing.SLEW_DEFAULT_S` to 0).
+- **Rough edge.** Never on an APC40. If knobs feel late or fight you, turn
+  it off on SYSTEM.
+- **Judge it.** Checks 78 and 79.
+
+### 55. Where knob smoothing and Learn depth live
+
+- **Built.** Knob smoothing (`desk.slew`) is on SYSTEM; Learn depth
+  (`hands.learn_depth`) is on HANDS with the hand feel. Both are saved with
+  the show, never by a preset. Neither is on a global-layer knob (K6–K8
+  stay free); either can be put on a control by Learn.
+- **Other options.** Learn depth or smoothing on K6.
+- **To reverse.** One factory row each (and a `bindings.json` rewrite,
+  with its backup).
+- **Rough edge.** "Knob smoothing" also shows in the ROUTING page's list
+  of things a route's depth can be scaled by; scaling by it is not useful.
+- **Judge it.** Checks 75 and 78.
+
+### 56. Two hands on the camera: the `hands-orbit` preset
+
+- **Built.** A factory preset in the list, on no F-key. Right hand:
+  sideways orbits up to a quarter turn each way; fingers up tip the camera
+  to look down (±44°). Left hand: sideways and reaching in pan; raising it
+  zooms in, to 2.2× at the top (depth 0.12). A level, low or absent hand
+  adds nothing. The two-hand "steering wheel" (the hands measured against
+  each other) is not built.
+- **Other options.** No preset; the steering wheel (two new axes, against
+  the rule of twelve).
+- **To reverse.** Hide it from the list, or delete its entry; the depths
+  are the five numbers in `preset.hands_orbit_routes`.
+- **Rough edge.** Nobody has played it; directions and depths are a first
+  cut.
+- **Judge it.** Check 80.
+
+## Learn, Unbind and the on-screen desk
+
+### 57. The big on-screen desk, and what a control says
+
+- **Built.** The APC40 drawing takes the room it has. With the panel hidden
+  (H, DEVICE ON/OFF, or the desk's `big` chip) it fills the control window
+  and every lit control carries a name once a layout unit is at least
+  44 × 32 px. A control says the panel's name for what it does (a bank pad
+  its preset's name, ▲ "Brightness +3"). White names are the loaded
+  preset's (or the global layer's under SHIFT); grey names are the
+  session's. A dark control shows only its glyph. There is no DESK page.
+- **Other options.** A DESK page (no room for names); a page that widens
+  the panel; a separate "big desk" switch.
+- **To reverse.** A page is one function calling `ui_desk._body`; ids
+  instead of names is `ui_desk.text`; the sizes are `ui_desk.LABEL_UNIT`,
+  `LABEL_UNIT_H`, `LABEL_PX`.
+- **Rough edge.** Names that do not fit drop to 11 px on two lines, and a
+  few are still cut with "…". Nobody has looked at it on the control
+  window.
+- **Judge it.** Check 69 (readable from two paces?).
+
+### 58. Click a desk control, then click the param it should drive
+
+- **Built.** A click on the on-screen desk picks a control (framed red;
+  ROUTING scrolls to its line). The next click on a param's control maps
+  it. While a control is picked every page but ROUTING is dimmed and takes
+  no other input. A pick lets go after 20 s with no click, when its footer
+  line is clicked, or when the control is clicked again. No click maps
+  until the mouse has moved 12 px from the picking click. If the param
+  already had a knob, that knob lets go; one ⌘Z undoes both. The session's
+  controls cannot be picked to map.
+- **Other options.** A click opens ROUTING at the control's line; map via
+  a "put D3 here" menu item instead of the dimmed page.
+- **To reverse.** One line in `ui_desk.click`; the 20 s and 12 px are
+  `ui_desk.PICK_S`, `PICK_MOVE`.
+- **Rough edge.** A stray click on the dimmed page maps (one ⌘Z). No real
+  mouse has clicked any of it.
+- **Judge it.** Check 70.
+
+### 59. One Unbind removes the preset's desk rows and every route
+
+- **Built.** The param's menu lists everything bound to it (a knob, a hand,
+  an LFO, a band). **Unbind** removes the loaded preset's desk rows on the
+  param and every route on it, whatever drives it; with both kinds bound
+  it becomes **Unbind ▸ desk / route / both**. It is offered only when it
+  would remove something, never touches a session control, works with no
+  APC40 or MIDI off, and is one ⌘Z.
+- **Other option.** Desk rows and hand rows only (an LFO or band route
+  could not be unbound from its control).
+- **To reverse.** A filter on the source's kind in `Learn.unbind`.
+- **Judge it.** Check 64.
+
+### 60. "Learn desk" and "Learn hand ▸ left / right"
+
+- **Built.** A Learn says what it waits for. **Learn desk** completes only
+  from a knob, button or a click on the on-screen desk; **Learn hand ▸
+  left** only from the left hand. Anything else does its own job meanwhile.
+  The footer shows what is armed on every page; click it to cancel. An
+  armed learn never times out. The menu also opens from a row's label and
+  from every meter.
+- **Other options.** Three flat items (desk, left hand, right hand); one
+  `Learn ▸` submenu.
+- **To reverse.** The item list in `Panel._ctx_learn`.
+- **Rough edge.** Within the chosen hand the axis that travelled furthest
+  still wins (row 64). No real hand has completed one.
+- **Judge it.** Checks 66–68.
+
+### 61. The session's controls work through an armed desk learn
+
+- **Built.** With "Learn desk" armed, a session control (below) is not a
+  candidate: it does its own job and the learn stays armed. A refusal
+  also leaves the learn armed.
+- **Other options.** As before (the first touch of anything ends the
+  learn); refuse and swallow the touch but stay armed.
+- **To reverse.** One branch in `MidiIO._handle`, one line in
+  `Learn.learn_control`.
+- **Rough edge.** A bank pad pressed mid-learn loads its preset, and the
+  learn then lands in that preset. With SHIFT latched every non-session
+  control is refused until SHIFT is off. Never on an APC40.
+- **Judge it.** Check 65.
+
+```
+ the session's controls: the same on both layers; never learned, mapped by a click, or unbound
+
+   S1–S8, SM     the faders                    G1·1–G1·8      bank slots 1–8 (clip row 1)
+   X             the crossfader (master dim)   G4·1–G5·8      bank slots 9–24 (clip rows 4–5)
+   ⇧             SHIFT                         G6·1–G6·8      the clip-stop row (hold: save as)
+   B20           TAP TEMPO                     G6·9           STOP ALL CLIPS (reset all)
+   B21, B22      NUDGE − / +                   G7·1–G7·6      track select (pick a band)
+   B19, B18      ◀ ▶ (band −1 / +1)            G7·9           MASTER select (overlay)
+   B10           QUANT (next preset)           G9·1–G9·6      the solo row (a band's transfer)
+   B11           OVERDUB (home)                G10·1–G10·6    the rec-arm row (a band's reset)
+   B12           METRONOME (LFO trigger)       B13–B15        PLAY, STOP, REC (the mic)
+   B5, B6, B9    CLIP/TRACK, DEVICE ON/OFF,    B1             PAN (click-through)
+                 DETAIL (cheat sheet)
+
+ the preset's to map: the 16 knobs, the cue knob, clip rows 2–3, the scene-launch
+ column, the activator row (G8), ▲ ▼, and the dark buttons
+```
+
+### 62. One road onto the desk, with or without the APC40
+
+- **Built.** Putting a param on a desk control lives in the Learn object,
+  not the MIDI adapter. A knob bump, a click on the on-screen desk with
+  Learn desk armed, and pick-then-click all make the same row, refuse in
+  the same words and cost one ⌘Z. With no APC40 plugged in you can still
+  lay out a preset's desk by clicking.
+- **Other option.** Keep it in the MIDI adapter (no adapter, no mapping).
+- **To reverse.** Move the body back.
+- **Rough edge.** The device's ring lighting for a row made by a click is
+  unseen.
+- **Judge it.** Check 70.
+
+### 63. The ROUTING filter: only you clear it
+
+- **Built.** One text field on ROUTING keeps only the lines that contain
+  every word typed (a glyph `d3`, a param, a source `r roll`). Only you
+  clear it (empty it or its ×), or a click on a desk control; it holds
+  across preset loads. The count turns red ("4 of 176 rows") while
+  something is hidden. It is never saved and is empty at every launch.
+- **Other option.** Also clear it on a preset load.
+- **To reverse.** One line where a load is called.
+- **Rough edge.** A route, Learn or undo added while it is set can be
+  hidden by it (the red count is the only sign). "lfo 1" also matches
+  LFO 2, whose address is `lfo:1`. Nobody has typed in it.
+- **Judge it.** Check 71.
+
+### 64. Two hand-Learn details left as they were
+
+- **Built (nothing changed).** If a finger is pinched when a hand learn
+  lands, that pinch becomes the row's gate: the learning hand's thumb
+  first, then the other hand's. Within the wanted hand, the axis that
+  travelled furthest wins; there is no "click an axis, then a param".
+- **Other options.** Only the learning hand's pinch may gate; build the
+  axis-first learn (about twenty lines on the desk pick).
+- **To reverse.** One line in `HandsIO.held_gate`; a click handler on the
+  HANDS page's axis rows.
+- **Judge it.** Check 66: if the wrong axis keeps winning, the axis-first
+  learn is the fix.
+
+## Effects on the faces, the look-back, layouts
+
+### 65. The faces' effect picture: what it holds, its size, its fit
+
+- **Built.** An effect aimed at the faces runs over one square picture of
+  the whole face as face 0 shows it (the pattern with the bitmap over it),
+  1024 × 1024 (`render.FACE_PIC`, not a setting). The faces show it per
+  face or in screen space; in screen space it is cover-fit (scaled to the
+  longer side, about a fifth cropped top and bottom at 16:9). It is made
+  before the scene pass, so the echoes and the dream carry it. With
+  nothing aimed at the faces nothing runs and the frame is unchanged.
+- **Other options.** The bitmap only (keeps the per-face pattern phase);
+  one picture per face; 512 or 2048; stretch or contain.
+- **To reverse.** About thirty lines (bitmap only); one number (size); one
+  line of GLSL (fit).
+- **Rough edge.** While any effect is on the faces, every face shows face
+  0's pattern phase. Per face, a subtle effect can read faint. Never seen
+  on a projector or the glass.
+- **Judge it.** Checks 91–93 and 98.
+
+### 66. Performers on an effect's target and on the face mapping
+
+- **Built.** An effect's target (`fx.<name>.target`, frame or faces)
+  cannot be driven by a hand, band or LFO, like its order; a knob, key,
+  the page or a preset sets it. The face mapping (`fx.face_map`, per face
+  or screen) can be driven by any performer.
+- **Other options.** The target performable (an effect flickering between
+  chains); the mapping not performable.
+- **To reverse.** One flag each (`fx.declare`).
+- **Judge it.** Check 91.
+
+### 67. The chip grid is the chain view; drag a chip to reorder
+
+- **Built.** The FX page's chips are in stack order. Dragging a chip by
+  its name onto another puts it before that one (the right half of the
+  last chip's name is "to the end"). A drop opens the dragged effect and
+  is one undo step. Two status lines read what runs on the frame and on
+  the faces, in order. The order slider stays.
+- **Other options.** Two lists of rows, one per target (the chip grid
+  would have to go); the grid split into frame and faces groups.
+- **To reverse.** The grouping is one loop in `ui_fx.page`; the drag is
+  two blocks in `ui_fx._chip`.
+- **Rough edge.** No real mouse or trackpad has dragged a chip.
+- **Judge it.** Check 94.
+
+### 68. An effect is re-aimed by the open strip's ONTO chips
+
+- **Built.** The open strip's title line ends in **ONTO** and two chips,
+  frame and faces, the lit one where it runs. A drag only reorders; it
+  never changes a target or a switch. A target change is one undo step.
+- **Other option.** Drop a chip on a status line to re-aim it.
+- **To reverse.** A dozen lines in `ui_fx._faces_row` and the frame line.
+- **Judge it.** Checks 91 and 94.
+
+### 69. The LOOKBACK page as ECHOES, DREAM and BOTH, and every dream layer in one menu
+
+- **Built.** The page has three sections named for what a knob acts on.
+  The dream's layer is one menu offering every layer of both nets — the
+  13 conv layers of VGG16 and GoogLeNet's conv1–conv3 and nine inception
+  blocks, 25 in all — under a heading per net, shallow to deep, each
+  with its own name and a few words on what it draws; a hover says more.
+  The deepest six say "slower" (over 25 ms a frame at 256 px). The new
+  labels are used everywhere: ROUTING, a Learn's line and the desk say
+  "Echo time apart" (was Spacing), "Shape hides wake" (was Occlude),
+  "Look-back detail" (was Resolution), "Dream speed", and so on. A saved
+  look keeps its layer: the stored index of the six older layers is
+  unchanged.
+- **Other option.** Offer only a few hand-picked layers, under nicknames.
+- **To reverse.** The words are one table, `lookback.LAYER_INFO`; a layer
+  left out is a line there and in `dream.TRUNKS` (append-only `LAYERS`
+  keeps saved indices).
+- **Rough edge.** The descriptions come from one to two seconds of
+  dreaming a still 24-cell and a colour field at the defaults
+  (`assets/20-fx-dream-looks/dream-layers*.jpg`), and from depth; nobody
+  has watched the new layers on the rig. A key or desk row that *steps*
+  the layer walks the stored order (the six older layers first), not the
+  menu's.
+- **Judge it.** Check 95: are the words right, and are 25 too many?
+
+### 70. The dream's "speed" is `dream.k`, read in frames
+
+- **Built.** `dream.k` (the share of each frame blended into the dream) is
+  labelled "speed" and reads as the dream frames it takes a frame's share
+  to halve: "≈23 frames" slow, "≈14 frames" at the default, one decimal
+  under ten ("1.9 frames" fastest).
+- **Other options.** A new `dream.speed` that also scales the strength;
+  make `k` per second (a migration).
+- **To reverse.** Three strings and `params.dream_speed_text`.
+- **Rough edge.** Faster is also shallower. It counts the worker's frames,
+  so a slower worker is a slower dream. Nobody has judged the dream at any
+  speed.
+- **Judge it.** Check 96.
+
+### 71. Instance layouts: grid, honeycomb, ring
+
+- **Built.** `view.inst_layout` (VIEW page, under the count) is GRID (the
+  old layout, bit for bit), HEX (a honeycomb spiral from the centre, whole
+  hexagons at 7, 19, 37, 61, 91; a copy never moves as the count grows) or
+  RING (one circle, copy 0 at the top). The three motions are unchanged.
+- **Other options.** HEX as offset rows; RING as concentric rings.
+- **To reverse.** One branch of `render.inst_positions`.
+- **Rough edge.** HEX with ORBIT at amp 0.35 overlaps neighbours visibly.
+- **Judge it.** Check 97.
+
+## Presets and the desk
+
+### 72. The bank of twenty-four
+
+- **Built.** A show's bank is 24 slots: 1–8 are F1–F8 and clip row 1;
+  9–24 are clip rows 4–5 and the PRESETS page's sixteen smaller buttons
+  (four a row). Slots 9–24 have no triggers of their own; they are
+  reached through `preset.select`. The show file stays
+  `hyperspace.project/2`, is never rewritten by a load, and holds the bank
+  only up to its last filled slot; the first write past slot 8 keeps the
+  old file as `<show>.hyp.json.bak-v2-bank8`. A fresh home's factory party
+  show has TRACER on slot 9.
+- **Other options.** Load/save triggers for every slot (32 more params);
+  a new `project/3` format (older builds refuse your show); far slots
+  eight a row.
+- **To reverse.** One line each (`params.build_registry`,
+  `library/projects/party.hyp.json`, `ui_presets.FAR_COLS`); a new format
+  needs a migration.
+- **Rough edge.** An absolute knob learned onto `preset.select` spreads
+  over all 24 and can rest on an empty slot (audit R14). With "more" open,
+  a warning line scrolls the PRESETS page a little.
+- **Judge it.** Checks 81 and 83.
+
+### 73. Clip rows 4–5 are the bank, and how the bank lights
+
+- **Built.** Rows 4–5 load slots 9–24 on both layers (invariant). A bank
+  pad is green when its preset is loaded, amber (Akai velocity 5) when its
+  slot is filled, dark when empty. The sixteen shape pads older presets
+  carry on those rows are dropped quietly at load; any other row of yours
+  on them is dropped with a note. Shapes are on the cue knob (all 25).
+- **Other options.** Only the loaded pad lit; a note per dropped row.
+- **To reverse.** `apc40.filled_of` returns None (lights); empty
+  `routing.RETIRED_DESK_ROWS` (quiet drop); rows 4–5 back to shapes needs
+  the map and a remap with a backup.
+- **Rough edge.** No pad shows which shape is up. Amber beside green is
+  unseen on the mk1.
+- **Judge it.** Checks 82–84.
+
+```
+ the desk's clip grid      preset layer                             under SHIFT (global layer)
+        1     2     3     4     5     6     7     8      9         1 … 8                  9
+ G1   [ 1]  [ 2]  [ 3]  [ 4]  [ 5]  [ 6]  [ 7]  [ 8]   Points      [ 1] … [ 8]            ·
+ G2     ·     ·     ·     ·     ·     ·     ·     ·    Lines       scene 1 … scene 8      ·
+ G3     ·     ·     ·     ·   STILL ORBIT WAVE RIPPLE  Faces       scene 9, 10, 11        ·
+ G4   [ 9]  [10]  [11]  [12]  [13]  [14]  [15]  [16]   Rotate      [ 9] … [16]            ·
+ G5   [17]  [18]  [19]  [20]  [21]  [22]  [23]  [24]   Reset view  [17] … [24]            ·
+ G6   [============ SAVE AS (hold) ============]      [Reset all]  [==== SAVE AS ====]   [Reset all]
+ C    cue knob: Shape (all 25)                                     ·
+
+ [ ] invariant (the same on both layers)   · dark   [n] bank slot n
+ a bank pad: green = loaded · amber = a preset is here · dark = empty
+```
+
+### 74. No backup, no rewrite of `bindings.json`
+
+- **Built.** When a launch brings `bindings.json` up to date it backs the
+  file up first; if the copy fails, the file is not rewritten for the rest
+  of the session (the table in memory is updated; the next launch tries
+  again). One line on the SYSTEM page says what the launch did, e.g.
+  "bindings.json updated (16 rows changed), the old file kept as
+  bindings.json.bak-v3"; each change is also on stderr.
+- **Other option.** Rewrite anyway, with nothing to go back to.
+- **To reverse.** The three `backup(…) is None` branches.
+- **Judge it.** Checks 84 and 57.
+
+### 75. The device knobs, only where they do something
+
+- **Built.** A fresh preset, and every factory preset with no knobs of its
+  own, gets D1–D4 = 4D depth, yaw, pitch, face pattern; D5–D8 dark.
+  `hands-fx`, `hands-pinch` and `lfo-breathe` have their own sets. WAKE,
+  TRACER, TRIP, ACID, MANDALA and NOITA keep their eight. A preset you
+  saved before keeps its own desk.
+- **Other option.** Make every scene preset "echo-ready" (look-back on,
+  echo mix and fade on D5–D6): every party preset pays for a dream nobody
+  sees.
+- **To reverse.** One tuple in `preset.py` or `apc40.SCENE`, then
+  `python -m hyperspace.preset`.
+- **Rough edge.** D4 (pattern) changes nothing visible on a preset with
+  faces off. Never turned on an APC40.
+- **Judge it.** Check 85.
+
+### 76. Hide, rename and the trash, in the preset list
+
+- **Built.** In the preset list: × on every preset (yours go to the
+  trash; a factory one is hidden via `<home>/hidden.json`), **rename** on
+  yours, and at the foot "show hidden (n)" and "trash (n) ▸" with
+  **restore** and **empty trash…**. Renaming a factory preset is refused
+  ("save copy, then rename the copy"). Rename repoints every show of yours
+  that names it, each copied to the trash first; it is not an undo step.
+  Restore never writes over a file (a taken name restores as the next
+  free one). Empty asks for a second click within 4 s.
+- **Other options.** Rename a factory preset by copying and hiding it;
+  put the trash under "more" on PRESETS, or a TRASH page.
+- **To reverse.** A branch in `Library.rename`; two lines moved out of
+  `ui_presets._list_popup`.
+- **Rough edge.** **Empty trash is the one delete with no copy kept.** ×
+  on yours leaves slots naming it in the warning colour until restored.
+  No person has clicked these popups.
+- **Judge it.** Checks 86–88.
+
+### 77. The red dot and "save copy"
+
+- **Built.** The dirty dot is a 12 px red disc on every strip and on
+  ROUTING's head, and the save chip is solid red while there is something
+  to save. On a factory preset the chip reads "save copy" (your copy takes
+  its place in the list). The preset strip has no reset. Nothing prompts.
+- **Other option.** "save copy" on every strip (a module strip would not
+  fit).
+- **To reverse.** `ui.DOT_R`; `ui_presets.save_label`; one condition in
+  `ui_presets.strip`.
+- **Rough edge.** On a module strip under "more" the save chip overlaps
+  the name button (audit U10).
+- **Judge it.** Check 89.
+
+### 78. The home in git
+
+- **Built.** With `[library] git = true` (off by default) the home folder
+  is a local git repository: no remote, nothing pushed. The first save
+  after launch makes it; every save, trash, rename, hide, unhide, restore
+  and show write is a commit. The trash, `weights/`, logs, `last_show`,
+  `windows.json` and the `*.bak-*` backups are ignored. A home inside
+  another repository is never touched. Git runs on its own thread and
+  never blocks or fails a save; a failed commit is said once and the next
+  one picks up its files.
+- **Other option.** Track the trash ("empty" recoverable; every overwrite
+  stored twice).
+- **To reverse.** One line of `homegit.IGNORE`; off is the config key.
+- **Rough edge.** Emptying the trash makes no commit, and the app never
+  restores from git (use git yourself).
+- **Judge it.** Check 90.
+
+## The outputs and the ghost hands
+
+### 79. Where "hands through effects" puts the hands
+
+- **Built.** With an output's "through effects" tick on, its hands go in
+  after the look-back composite and before the first effect, so the
+  effects bend them. The echoes and the dream are captured from the scene
+  alone and never hold the hands. With the scene off and through on, the
+  output shows the hands alone through the effects, on black.
+- **Other options.** Hands onto the scene before the look-back (they
+  trail and feed the dream, but then every output shows hand echoes); the
+  scene off + through the same as "hands over".
+- **To reverse.** A few lines in `Renderer._pipeline` (every output at
+  once); per output needs a second history and dream worker (days).
+- **Rough edge.** Two outputs that disagree run the effects twice a frame.
+- **Judge it.** Checks 102 and 103.
+
+```
+   scene  hands  through   what the output shows (an effect on, a hand in the box)
+    on     on     off      the scene with its effects, the hands clean on top   (default)
+    on     on     on       the scene and the hands, both bent by the effects
+    on     off    —        the scene with its effects
+    off    on     off      the hands alone, clean, on black
+    off    on     on       the hands alone, bent by the effects, on black
+    off    off    —        black
+   With no effect on, or no hand shown, "through" changes nothing.
+```
+
+### 80. The guide and the tethers' labels are never bent
+
+- **Built.** When hands go through effects, the guide (balls, rings,
+  pinch beads) and the tethers' text labels are drawn in a second layer
+  laid on after the effects, so they stay legible. The second layer exists
+  only while it is needed; otherwise the hands are one layer as before.
+- **Other option.** Let them bend with the hands.
+- **To reverse.** Delete the readout layer (`Ghost.readout`,
+  `Ghost.composite_readout`), a few hours.
+- **Judge it.** Check 103.
+
+### 81. Each output's switches are rig settings
+
+- **Built.** `output.N.scene`, `.hands`, `.through` and `.dim` are never
+  saved, not performable, and untouched by presets, shows and undo. Every
+  launch and ⌘R takes them from the `[[output.screens]]` entries in
+  `config.toml`; a config `dim` under 0.1 is raised to 0.1 so the config
+  cannot launch an output black (the fader still goes to 0). An output's
+  own dim fader exists when two or more outputs are listed, or when a lone
+  output's entry sets `dim` under 1. Each switch can be learned onto a
+  desk button.
+- **Other option.** Session params saved in the show (a show made on the
+  rig would carry `output.2.*` to a laptop).
+- **To reverse.** Flip `persist` in `overlay.register_switches`, an hour.
+- **Judge it.** Checks 101 and 104.
+
+### 82. An output of another shape is letterboxed
+
+- **Built.** The frame is drawn once, at output 1's size. An output of
+  another shape shows the whole frame, centred, with black bars; the hands
+  sit on the same part of the shape on every output. List the larger
+  screen first in the config.
+- **Other options.** Cover (crop); stretch; render per output size (days).
+- **To reverse.** `outputs.fit`, a few lines.
+- **Judge it.** Check 106.
+
+### 83. One window renders, the others copy; only output 1 waits
+
+- **Built.** Output 1's GL context renders every distinct picture once;
+  each later output copies it in its own context and adds its hands,
+  guide and dim. Only output 1's swap waits for its screen; the others
+  swap at once. The hands' layer has no size cap.
+- **Other options.** Every output waits (no tearing anywhere); a hidden
+  window renders and every output copies.
+- **To reverse.** One `glfw.swap_interval` call per output
+  (`app._open_presenters`); the hidden renderer is days.
+- **Rough edge.** **The reason is unconfirmed**: the plan measured two
+  waiting swaps halving the frame rate, but the build's launches ran
+  unpaced. Never run with two screens or mixed refresh rates.
+- **Judge it.** Check 107.
+
+### 84. Ghost hands and each output's hands tick
+
+- **Built.** Both stay. Ghost hands (`ghost.on`, HANDS page) says whether
+  hands are drawn at all; each output's tick says where they show. The
+  OUTPUT page names Ghost hands when it is the reason an output has none.
+- **Other option.** The ticks replace Ghost hands (breaks saved shows and
+  learned rows, no single off).
+- **To reverse.** A migration of shows and rows on `ghost.on`, a day or
+  two.
+- **Judge it.** Checks 102 and 105.
+
+### 85. The OUTPUT page says in words what each output shows
+
+- **Built.** Each output has a "shows: …" line ("scene + hands over the
+  effects", "black — dim 0", …), and the footer names a black output on
+  every page ("output 2 black"). There is no picture of the render in the
+  control window. With one output there is one block and no dim row of
+  its own (the master dim is its dim).
+- **Other option.** A small live picture per output (about 0.5 ms each).
+- **To reverse.** About a day for the pictures.
+- **Judge it.** Checks 102 and 105.
+
+### 86. A screen not connected at launch; later outputs' screens
+
+- **Built.** A later output whose screen is not connected at launch is not
+  opened, with a note ("screen 2 is not connected" on the OUTPUT page).
+  Output 1 always opens. Later outputs take their screen and fullscreen
+  from `config.toml` only; the OUTPUT page's screen and fullscreen
+  controls are output 1's.
+- **Other options.** Open it anyway, where it was last or on the first
+  screen (it would cover the controls); a screen and fullscreen control
+  per output.
+- **To reverse.** One branch in `app._later_rect`; per-output controls
+  half a day.
+- **Rough edge.** A screen plugged in after launch is not used until ⌘R or
+  a relaunch (audit P6). What macOS does when a cable is pulled mid-run is
+  unknown.
+- **Judge it.** Checks 101, 111 and 112.
+
+### 87. `ghost.style`: five drawn objects for the hands
+
+- **Built.** One choice on the HANDS page, saved with the show, never
+  performable (a desk button or knob can be learned onto it):
+
+  | Style | What is drawn |
+  |---|---|
+  | HANDS | the capsule hands (the default, unchanged) |
+  | JOINTS | a bead per joint, the fingertips largest |
+  | PALMS | an orb that swells as the hand opens, a ring in the palm's plane, a spoke where the fingers point |
+  | CAGE | a wire octahedron round each hand that turns with the palm, a small solid inside |
+  | MARIONETTE | a bead per fingertip on strings from a bar above the hand |
+
+  In the four new styles the guide is drawn on top.
+- **Other option.** Five separate on/off switches.
+- **To reverse.** One function in `ghost.PARTS` per style.
+- **Judge it.** Check 109 — and say which styles to keep.
+
+### 88. Ghost mirror, guide and tethers cannot follow a hand
+
+- **Built.** `ghost.mirror`, `ghost.guide` and `ghost.tethers` (with
+  `ghost.style`) are not performable. A hand Learn onto one is refused in
+  words ("… can't follow a hand (not modulatable) — not learned; Learn
+  desk puts it on a button"). A saved route onto one is dropped at load
+  with a note; the file is not rewritten. `ghost.on` and `ghost.alpha`
+  stay performable.
+- **Other options.** Leave them performable (a route could flip the hands
+  mid-set); not performable with no refusal (a Learn writes a dead row).
+- **To reverse.** Three flags.
+- **Judge it.** Check 110.

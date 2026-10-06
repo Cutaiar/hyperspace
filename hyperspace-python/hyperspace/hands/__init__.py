@@ -13,7 +13,7 @@ argument, duck-typed, never imported:
           source=…, out=…)    anything with .send(). Both default to the
                               real ones, so tests and a host substitute.
   HandsIO.poll(dt, learn,     `learn` needs .learning / .learn_source(src,
-                router)       when=) (the host's learn.Learn); `router` needs
+                router)       when=, centred=, depth=) (learn.Learn); `router` needs
                               .feed and defines the .labels / .gates / .rests
                               (and, to resolve ``hand:right.roll``, .names)
                               dicts that poll fills. Pass neither and the
@@ -52,6 +52,7 @@ from .core import (
     pinch_name,
     pinches,
     register,
+    skeleton,
 )
 
 # what the host, the panel, the tools and the tests reach for; everything
@@ -59,5 +60,5 @@ from .core import (
 __all__ = [
     "DEFAULTS", "FEATURES", "GROUP", "PALM_W", "PINCHES", "SIDES", "AxisSettings", "Gate",
     "HandSettings", "HandsIO", "Layout", "addresses", "conflicts", "default_addresses",
-    "features", "mirror", "pinch_name", "pinches", "register",
+    "features", "mirror", "pinch_name", "pinches", "register", "skeleton",
 ]

@@ -4,14 +4,23 @@ Top to bottom:
 
   hands  ◀ setup ▶ …       the library strip for the `hands` group: a
                            setup is every per-axis and global setting
-  status                   tracker, DAW port, the last MIDI sent
+  status                   tracker, each hand (● in the box, ◌ tracked
+                           but outside it, ○ not seen), DAW port, the
+                           last MIDI sent
   pinch                    the eight thumb-to-finger switches, each with
                            the live gap that closes it — the number to
                            watch when setting the threshold
   the box, from above      each palm as a dot (left white, right red),
                            its size the hand's height; the camera at the
-                           centre
-  the axes                 one row each: the output y as a white bar,
+                           centre. The interaction box (hands.json, set
+                           by the sweep) is the inner rectangle; a hand
+                           tracked but outside it is a hollow, dim ring —
+                           it reads absent. Beside it a height gauge: a
+                           tick per hand, a bracket for the box's y
+  ghost hands              the switch; while on, Opacity and "more ▸"
+                           (Mirror, Tethers, the ghost's notes), then
+                           Style and Guide (see _ghost)
+  the axes               one row each: the output y as a white bar,
                            where the hand is (the shaped target) as a
                            hairline, the rest value as a dim tick, the
                            MIDI out on the right. Click a row to edit it.
@@ -25,7 +34,9 @@ Top to bottom:
   feel                     steadiness, response, catch, MIDI rate,
                            hysteresis, and the pinch thresholds — the
                            whole instrument
-  calibrate                a timed sweep that writes the box's ranges
+  calibrate                a timed sweep that writes the axes' ranges
+                           and the interaction box; "reset ranges" puts
+                           the ranges back and opens the box
 
 Every control is a registry param (hands.register), so the widgets are
 the panel's own and right-click → Learn works on them too.
@@ -39,14 +50,24 @@ import math
 from imgui_bundle import imgui
 
 from .. import ui
-from .core import FEATURES, GROUP, PINCHES, SIDES, conflicts, mirror
+from ..ghost import MODES as GHOST_MODES
+from .core import BOX_AXES, BOX_MARGIN, FEATURES, GROUP, PINCHES, SIDES, conflicts, mirror
 from .signal import shape
 
 ROW_LABEL_W = 62.0
 OUT_W = 100.0
 BOX_H = 92.0
 BOX_W = 190.0       # the switches sit beside it
+GAUGE_W = 10.0      # the height gauge, inside the same BOX_W …
+GAUGE_GAP = 6.0     # … this far right of the view from above
+VIEW_X_MM = 260.0   # the view from above: x over ±this …
+VIEW_Z_MM = 160.0   # … and z over ±this, at a fixed scale
+GAUGE_MM = (80.0, 400.0)    # the gauge, bottom to top: the range a dot's size uses
+OUTSIDE_ALPHA = 0.4
+FACE_PAD = 12.0     # a box face is never drawn nearer the frame than this
 PLOT_W = 96.0
+GHOST_ALPHA_MIN = 100.0     # the opacity slider never narrower: "100%" and its grab
+GHOST_NOTE_W = 360.0        # the ghost's "more" popup wraps its notes at this width
 CAL_SECONDS = 20.0
 LEFT = imgui.ImVec4(0.92, 0.92, 0.92, 1.0)
 
@@ -73,21 +94,24 @@ def _select(panel, k: int) -> None:
 
 # ---- right-click menu: a param's hand bindings ----
 
-def ctx_rows(panel, p) -> None:
-    """The context menu's hand part: what hand axis drives this param."""
+def ctx_rows(panel, p, *, lines: bool = True, gate: bool = True) -> None:
+    """The context menu's hand part: what hand axis drives this param
+    (`lines`: a line per hand row, in the adapter's words) and the pinch
+    that gates it (`gate`: the "Gate: … ▸" submenu). The menu draws the
+    lines above its items and the gate among them, so it calls this twice.
+    Removing the rows is the menu's one Unbind (`Learn.unbind`, plan 17
+    WP1); a gate is not an unbind."""
     router = getattr(panel, "router", None)
     if router is None:
         return
     rows = [b for b in router.table.of("hand") if b.target == p.id]
-    for b in rows:                      # in the adapter's words: "R height positions …"
-        imgui.text(router.describe(b) + ("" if b.enabled else " (off)"))
+    if lines:
+        for b in rows:                  # in the adapter's words: "R height positions …"
+            imgui.text(router.describe(b) + ("" if b.enabled else " (off)"))
     # routes are the loaded preset's (plan 13 §3.3): an edit here changes
     # the table and the preset's dirty dot, and writes no file
-    if rows:
+    if gate and rows:
         _gate_menu(router, rows)
-    if rows and imgui.menu_item_simple("Unbind hand"):
-        for b in rows:                  # the hand's rows only: a lane's stay
-            router.table.remove(b)
 
 
 def _gate_menu(router, rows) -> bool:
@@ -126,34 +150,193 @@ def page(panel, dt: float) -> None:
     if settings is None:
         imgui.text_disabled("no hands setup — see [hands] in config.toml")
         return
-    _status(io)
+    _status(io, getattr(panel, "config_notes", None) or ())
     _box(io)
     if _has_pinches(io):        # the switches beside the box: the page has
         imgui.same_line()       # to fit the control window
         _pinches(io)
+    _ghost(panel)
     k = _axes(panel, io, settings)
     imgui.spacing()
     _editor(panel, io, settings, k)
     imgui.spacing()
     if imgui.collapsing_header("feel & calibration"):
-        for pid in ("smooth", "response", "catch", "rate", "steady",
+        for pid in ("smooth", "response", "catch", "learn_depth", "rate", "steady",
                     "pinch_close", "pinch_open", "pinch_hold"):
-            panel._row(f"{GROUP}.{pid}")
+            if f"{GROUP}.{pid}" in panel.reg:    # a setting newer than a hot-reloaded registry
+                panel._row(f"{GROUP}.{pid}")
         _calibrate(io, settings, k)
 
 
-def _status(io) -> None:
-    if io is None:
-        imgui.text_disabled("tracker off — [hands] enabled = true in config.toml; "
-                            "the setup still edits and saves")
+GHOST_MORE = "more ▸"          # the chip that opens the ghost's popup
+GHOST_MORE_WARN = "! more ▸"   # …while the popup holds a note to read
+GHOST_POPUP = "##ghost.more"
+
+
+def _ghost(panel) -> None:
+    """The ghost hands' display (hyperspace/ghost.py) — the host's params,
+    shown here because this is where the hands are looked at.
+
+    Two lines while the ghost is on — the page has no room for a third
+    (test_ui_shell): ``[x] Ghost hands  OPACITY [slider]  more ▸`` then
+    ``STYLE [combo]  GUIDE [combo]``. "more ▸" opens a popup with the
+    rig's settings (Mirror, and Tethers once a guide is on) and the
+    ghost's notes; while there is a note the chip reads "! more ▸" in the
+    warning colour and its hover says it. Each group goes on the line only
+    when it fits beside what is there, so a narrower panel wraps it rather
+    than drawing it over its neighbour. With the ghost off: the switch,
+    and the ghost's error under it if it has one."""
+    if "ghost.on" not in panel.reg:
         return
-    ins = " ".join(f"{s[0].upper()}{'●' if io.present[s] else '○'}" for s in SIDES)
+    reg = panel.reg
+    on = bool(reg["ghost.on"].value)
+    notes = ghost_notes(panel)
+    sp = imgui.get_style().item_spacing.x
+    right = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
+    panel._check("ghost.on")
+    if not on:
+        err = [t for t, warn in notes if warn]
+        if err:             # a refused build says so with the ghost off too
+            _note_line(err[0])
+        return
+    more = GHOST_MORE_WARN if notes else GHOST_MORE
+    more_w = ui.chip_w(more)
+    label_w = ui._micro_width("Opacity") + ui.LABEL_GAP
+    if _beside(right, label_w + GHOST_ALPHA_MIN):
+        imgui.same_line()
+    # the slider takes the line's room the chip leaves, or the whole line
+    # when the chip has to wrap under it
+    x = imgui.get_cursor_screen_pos().x + label_w
+    alpha_w = right - x - sp - more_w
+    if alpha_w < GHOST_ALPHA_MIN:
+        alpha_w = right - x
+    panel._label_cell("Opacity", width=label_w)
+    panel._slider("ghost.alpha", alpha_w)
+    if _beside(right, more_w):
+        imgui.same_line()
+    _more_chip(panel, more, notes)
+    for k, (pid, label) in enumerate((("ghost.style", "Style"), ("ghost.guide", "Guide"))):
+        if pid not in reg:
+            continue
+        lw = ui._micro_width(label) + ui.LABEL_GAP
+        cw = _combo_w(reg[pid].names)
+        if k and _beside(right, lw + cw):
+            imgui.same_line()
+        panel._label_cell(label, width=lw)
+        panel._combo(pid, cw)
+    _more_popup(panel, notes)
+
+
+def _beside(right: float, w: float) -> bool:
+    """Does an item `w` px wide still fit on the line, after the last item
+    and the spacing, before `right` (screen x)? Then `same_line()` it."""
+    return imgui.get_item_rect_max().x + imgui.get_style().item_spacing.x + w <= right + 0.5
+
+
+def _combo_w(names) -> float:
+    """A combo just wide enough for its longest entry, whole: the text, the
+    frame's padding either side and the arrow (one frame square)."""
+    s = imgui.get_style()
+    return (max(imgui.calc_text_size(n).x for n in names) + 2 * s.frame_padding.x
+            + imgui.get_frame_height())
+
+
+def _note_line(text: str) -> None:
+    """One line in the warning colour, cut to the page's width with the
+    whole text on hover: a line that ran on would be cut by the page."""
+    shown = ui.fit_text(text, imgui.get_content_region_avail().x)
+    imgui.text_colored(ui.WARN, shown)
+    if shown != text and imgui.is_item_hovered():
+        imgui.set_tooltip(text)
+
+
+def ghost_notes(panel) -> list[tuple[str, bool]]:
+    """What the page has to say about the ghost, as (text, warn): why it
+    could not build or draw (ghost.Ghost.error — a refused build stays
+    until a reload, anything else until the ghost goes off), then, with
+    the ghost on in screentop or HMD, that those modes' axes are reasoned,
+    not seen (ghost.MODES: only desktop's are the hands/core.py table;
+    hand check Q9). An unknown mode draws as desktop."""
+    out = []
+    err = getattr(getattr(getattr(panel, "renderer", None), "ghost", None), "error", "")
+    if err:
+        out.append((err, True))
+    mode = ghost_mode(getattr(panel, "hands", None))
+    if panel.reg["ghost.on"].value and mode in GHOST_MODES and mode != "desktop":
+        note = (f"ghost axes for {mode} are unmeasured: left/right and up may be wrong"
+                " — Mirror flips left for right")
+        out.append((note, False))
+    return out
+
+
+def _more_chip(panel, label: str, notes) -> None:
+    if ui.lit_chip(f"{label}##ghost.more", False, ui.WARN if notes else None):
+        imgui.open_popup(GHOST_POPUP)
+    if imgui.is_item_hovered():
+        tip = "Mirror" + (" and Tethers" if "ghost.tethers" in panel.reg else "")
+        imgui.set_tooltip("\n".join([f"{tip}, and the ghost's notes.", *(t for t, _ in notes)]))
+
+
+def _more_popup(panel, notes) -> None:
+    """The rig's ghost settings and the ghost's notes, off "more ▸"."""
+    if not imgui.begin_popup(GHOST_POPUP):
+        return
+    reg = panel.reg
+    if "ghost.mirror" in reg:
+        panel._check("ghost.mirror", "Mirror")
+    if "ghost.tethers" in reg:
+        guided = "ghost.guide" not in reg or bool(reg["ghost.guide"].value)
+        imgui.begin_disabled(not guided)
+        panel._check("ghost.tethers", "Tethers")
+        imgui.end_disabled()
+        if not guided:
+            imgui.same_line()
+            imgui.text_disabled("with a guide on")
+    if notes:
+        imgui.separator()
+        imgui.push_text_wrap_pos(imgui.get_cursor_pos_x() + GHOST_NOTE_W)
+        for text, warn in notes:
+            if warn:
+                imgui.text_colored(ui.WARN, text)
+            else:
+                imgui.text_disabled(text)
+        imgui.pop_text_wrap_pos()
+    imgui.end_popup()
+
+
+def ghost_mode(io) -> str:
+    """The tracking mode the ghost draws in (what `Ghost.poses` reads:
+    the source's ``cfg["mode"]``, desktop without one), lower case."""
+    return str((getattr(io, "cfg", None) or {}).get("mode", "desktop")).lower()
+
+
+def _status(io, notes=()) -> None:
+    if io is None:
+        # a tracker that would not open says why (app._open_hands' note)
+        why = next((n for n in notes if n.startswith("hands: ")), "")
+        if why:
+            imgui.text_colored(ui.WARN, why)
+        else:
+            imgui.text_disabled("tracker off — [hands] enabled = true in config.toml; "
+                                "the setup still edits and saves")
+        return
     port = io.out_name or "no DAW port"
-    imgui.text_disabled(f"{io.status or '—'}  ·  {ins}  ·  {port}")
+    imgui.text_disabled(f"{io.status or '—'}  ·  {_ins(io)}  ·  {port}")
+    if imgui.is_item_hovered():
+        imgui.set_tooltip("● in the box  ·  ◌ tracked, but outside the box: it reads "
+                          "absent  ·  ○ not seen")
     if io.error:
         imgui.text_colored(ui.WARN, io.error)
     elif io.last:
         imgui.text_disabled(f"last out  {io.last}")
+
+
+def _ins(io) -> str:
+    """Each hand's glyph for the status line: ● in the box, ◌ tracked
+    but outside it (so absent to everything), ○ not seen."""
+    out = getattr(io, "outside", None) or {}
+    return " ".join(f"{s[0].upper()}{'●' if io.present[s] else '◌' if out.get(s) else '○'}"
+                    for s in SIDES)
 
 
 def _pinches(io) -> None:
@@ -185,29 +368,110 @@ def _has_pinches(io) -> bool:
     return io is not None and bool(io.cfg.get("pinch_gates"))
 
 
+def _mm(v: float) -> str:
+    return f"{v:.0f}".replace("-", "−")
+
+
+def _box_text(box) -> str:
+    """The interaction box in words, for the tooltip and the calibrate
+    block: "x −262…262 · y 72…402 · z open mm", or "" for no box."""
+    if not box:
+        return ""
+    parts = [f"{c} open" if box.get(c) is None
+             else f"{c} {_mm(box[c][0])}…{_mm(box[c][1])}" for c in BOX_AXES]
+    return " · ".join(parts) + " mm"
+
+
 def _box(io) -> None:
-    """The box from above: x across, z down toward the performer."""
-    w = BOX_W
+    """The box from above — x across, z down toward the performer — and
+    a height gauge at its right, both inside the one BOX_W × BOX_H frame.
+
+    The interaction box (`io.box`) is the inner rectangle and the gauge's
+    bracket; an open coordinate draws no line. A hand in the box is its
+    filled dot; one tracked but outside (`io.outside`) a hollow ring, dim,
+    at its clamped position. No box: no rectangle and no bracket."""
+    w = BOX_W - GAUGE_GAP - GAUGE_W                 # the view from above
     pos = imgui.get_cursor_screen_pos()
     dl = imgui.get_window_draw_list()
     x0, y0, x1, y1 = pos.x, pos.y, pos.x + w, pos.y + BOX_H
     dl.add_rect(imgui.ImVec2(x0, y0), imgui.ImVec2(x1, y1), ui.u32(ui.LINE))
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
     dl.add_circle_filled(imgui.ImVec2(cx, cy), 2.5, ui.u32(ui.DIM))      # the camera
+    g0, g1 = pos.x + BOX_W - GAUGE_W, pos.x + BOX_W                       # the gauge
+    gx = (g0 + g1) / 2
+    dl.add_rect(imgui.ImVec2(g0, y0), imgui.ImVec2(g1, y1), ui.u32(ui.LINE))
+
+    def sx(mm: float, pad: float = 6.0) -> float:
+        return min(max(cx + mm / VIEW_X_MM * (w / 2 - 6), x0 + pad), x1 - pad)
+
+    def sz(mm: float, pad: float = 6.0) -> float:
+        return min(max(cy + mm / VIEW_Z_MM * (BOX_H / 2 - 6), y0 + pad), y1 - pad)
+
+    def high(mm: float) -> float:                   # a height over the gauge's range, 0–1
+        return min(max((mm - GAUGE_MM[0]) / (GAUGE_MM[1] - GAUGE_MM[0]), 0.0), 1.0)
+
+    def sy(mm: float) -> float:
+        return y1 - 2 - high(mm) * (BOX_H - 4)
+
+    box = getattr(io, "box", None) or {}
+    bx, by, bz = (box.get(c) for c in BOX_AXES)
+    dim = ui.u32(ui.DIM)
+    # the box's faces: a pair of lines per bounded coordinate, each as
+    # long as the other coordinate's bound (the whole view when it is open)
+    # A box wider than the view's fixed scale has its faces clamped FACE_PAD
+    # inside the frame, so there is still room to show a hand beyond them.
+    zs = (sz(bz[0], FACE_PAD), sz(bz[1], FACE_PAD)) if bz else (y0 + 1, y1 - 1)
+    xs = (sx(bx[0], FACE_PAD), sx(bx[1], FACE_PAD)) if bx else (x0 + 1, x1 - 1)
+
+    def place(v: float, at: float, b, faces, out: bool) -> float:
+        """A hand's clamped pixel, kept on its own side of a drawn face:
+        inside one never past it, outside one clear of it."""
+        if b is None:
+            return at
+        if not out:
+            return min(max(at, faces[0]), faces[1])
+        if v > b[1]:
+            return max(at, faces[1] + 6.0)
+        return min(at, faces[0] - 6.0) if v < b[0] else at
+    if bx:
+        for x in xs:
+            dl.add_line(imgui.ImVec2(x, zs[0]), imgui.ImVec2(x, zs[1]), dim)
+    if bz:
+        for z in zs:
+            dl.add_line(imgui.ImVec2(xs[0], z), imgui.ImVec2(xs[1], z), dim)
+    if by:                                          # the box's height: a bracket
+        lo, hi = sy(by[0]), sy(by[1])
+        dl.add_line(imgui.ImVec2(gx, lo), imgui.ImVec2(gx, hi), dim)
+        for y in (lo, hi):
+            dl.add_line(imgui.ImVec2(g0 + 2, y), imgui.ImVec2(g1 - 2, y), dim)
     if io is not None:
+        outside = getattr(io, "outside", None) or {}
         for side, col in (("left", LEFT), ("right", ui.RED)):
-            f = io.frame[side]
+            f, out = io.frame[side], False
+            if f is None:
+                f, out = outside.get(side), True
             if f is None:
                 continue
-            px = cx + f["x"] / 260.0 * (w / 2 - 6)
-            py = cy + f["z"] / 160.0 * (BOX_H / 2 - 6)
-            px, py = min(max(px, x0 + 6), x1 - 6), min(max(py, y0 + 6), y1 - 6)
-            r = 3.0 + 7.0 * min(max((f["y"] - 80.0) / 320.0, 0.0), 1.0)
-            dl.add_circle_filled(imgui.ImVec2(px, py), r, ui.u32(col))
-    imgui.dummy(imgui.ImVec2(w, BOX_H))
+            px = place(f["x"], sx(f["x"]), bx, xs, out)
+            py = place(f["z"], sz(f["z"]), bz, zs, out)
+            r = 3.0 + 7.0 * high(f["y"])
+            if out:                                 # tracked, outside the box: absent
+                col = imgui.ImVec4(col.x, col.y, col.z, OUTSIDE_ALPHA)
+                dl.add_circle(imgui.ImVec2(px, py), r, ui.u32(col), 0, 1.5)
+            else:
+                dl.add_circle_filled(imgui.ImVec2(px, py), r, ui.u32(col))
+            ty = sy(f["y"])                         # its height on the gauge
+            dl.add_line(imgui.ImVec2(g0 + 1, ty), imgui.ImVec2(g1 - 1, ty), ui.u32(col), 2.0)
+    imgui.dummy(imgui.ImVec2(BOX_W, BOX_H))
     if imgui.is_item_hovered():
+        said = _box_text(box)
         imgui.set_tooltip("The box from above: the camera at the centre, the "
-                          "performer at the bottom edge. A dot's size is the hand's height.")
+                          "performer at the bottom edge. A dot's size is the hand's "
+                          "height, and the gauge at the right shows it "
+                          f"({GAUGE_MM[0]:.0f}–{GAUGE_MM[1]:.0f} mm).\n"
+                          + (f"box {said} — a hand outside it reads absent "
+                             "(a hollow ring here)" if said
+                             else "no box — calibrate to set one"))
 
 
 def _axes(panel, io, settings) -> int:
@@ -382,11 +646,19 @@ def _calibrate(io, settings, k: int) -> None:
         if imgui.is_item_hovered():
             imgui.set_tooltip("For the next 20 s, move each hand through everything it "
                               "should reach. Each axis's range becomes what you covered "
-                              "(2nd–98th percentile), saved to hands.json for this box.")
+                              "(2nd–98th percentile), saved to hands.json for this box, "
+                              "and the box becomes what your palms covered plus "
+                              f"{BOX_MARGIN:.0f} mm; a hand outside it reads absent.")
         imgui.same_line()
         if imgui.small_button("reset ranges"):
             io.reset_ranges()
+        if imgui.is_item_hovered():
+            imgui.set_tooltip("Every axis's range back to its default, and the box "
+                              "opened: a hand counts wherever the tracker sees it. "
+                              "Another sweep sets both again.")
     st, a = io.state[k], settings.axes[k]
     imgui.text_disabled(f"{a.name}: {st.lo:.1f} … {st.hi:.1f} {FEATURES[a.feature][0]}")
+    said = _box_text(getattr(io, "box", None))
+    imgui.text_disabled(f"box {said}" if said else "box open")
     if io.cal_note:
         imgui.text_disabled(io.cal_note)

@@ -318,3 +318,85 @@ def test_a_stall_that_holds_the_gil_is_caught_by_the_c_backstop(tmp_path):
     assert "holds_the_gil" in text, text[-2000:]
     assert Watchdog(log).counts().get("raw dump", 0) >= 1
 
+
+# ---- plan 21 WP3: several render outputs ----
+
+def _out_state(**kw):
+    st = {"visible": True, "iconified": False, "focused": False, "monitor": "Projector",
+          "framebuffer": (1920, 1080), "occluded": False, "presentable": True}
+    st.update(kw)
+    return st
+
+
+def _run(rw, t, seconds):
+    for _ in range(int(seconds * 60)):
+        rw.drew(t)
+        rw.tick(t)
+        t += 1 / 60
+    return t
+
+
+def test_one_dark_output_of_two_is_a_warning_not_a_stall(fake):
+    """The glass presents and the projector is minimised: no render stall
+    (an output still shows the frame), but after 2 s a warning naming the
+    projector with why and its window state in the log — once per message.
+    It coming back clears nothing on the banner (a warning stays until
+    dismissed) and logs nothing more."""
+    wd, _ = fake
+    glass, proj = _out_state(monitor="DELL"), _out_state()
+    rw = RenderWatch(wd, poll=0.0, info=lambda: dict(glass),
+                     outputs=lambda: [("output 1 (glass)", dict(glass)),
+                                      ("output 2 (projector)", dict(proj))])
+    t = _run(rw, 0.0, 0.5)
+    proj.update(iconified=True, presentable=False)
+    t = _run(rw, t, 1.9)
+    assert rw.alerts() == []                              # under the limit
+    t = _run(rw, t, 2.0)
+    assert rw.stalls_logged == 0 and rw.stalled == ""
+    msg = "output 2 (projector): no picture for 2 s — the window is minimised"
+    assert rw.alerts() == [msg]
+    text = wd.path.read_text()
+    assert text.count("=== warning ") == 1 and msg in text
+    assert "output 2 (projector): visible=True, iconified=True" in text
+    t = _run(rw, t, 3.0)
+    assert wd.path.read_text().count("=== warning ") == 1   # once
+    # output 1 dark while 2 presents: the same rule, naming output 1
+    proj.update(iconified=False, presentable=True)
+    glass.update(occluded=True, presentable=False)
+    t = _run(rw, t, 2.5)
+    assert rw.stalls_logged == 0
+    assert any(a.startswith("output 1 (glass): no picture") for a in rw.alerts())
+    # a present that raised: a warning naming it, with its traceback
+    try:
+        raise RuntimeError("lost the context")
+    except RuntimeError as e:
+        rw.output_failed("output 2 (projector)", e)
+        rw.output_failed("output 2 (projector)", e)
+    text = wd.path.read_text()
+    assert text.count("output 2 (projector): its picture failed — RuntimeError: "
+                      "lost the context") == 1
+    assert "Traceback" in text
+
+
+def test_no_output_presenting_is_the_stall(fake):
+    """Both outputs dark: "no render frame presented" is the stall, as
+    with one window — one entry, and no per-output warning (no other
+    output presents). With one output (or `outputs` None) it is today's."""
+    wd, _ = fake
+    glass, proj = _out_state(monitor="DELL"), _out_state()
+    rw = RenderWatch(wd, poll=0.0, info=lambda: dict(glass),
+                     outputs=lambda: [("output 1 (glass)", dict(glass)),
+                                      ("output 2 (projector)", dict(proj))])
+    t = _run(rw, 0.0, 0.5)
+    glass.update(occluded=True, presentable=False)
+    proj.update(iconified=True, presentable=False)
+    t = _run(rw, t, 3.0)
+    assert rw.stalls_logged == 1 and "covered or on another Space" in rw.stalled
+    assert rw.warnings == []
+    assert wd.counts() == {"render stall": 1}
+    # one output listed: the first output's own answer, exactly as before
+    one = RenderWatch(wd, poll=0.0, info=lambda: dict(glass),
+                      outputs=lambda: [("output 1", dict(glass))])
+    _run(one, 0.0, 3.0)
+    assert one.stalls_logged == 1
+

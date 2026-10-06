@@ -1,60 +1,39 @@
-# Hyperspace — engineering
+# Hyperspace — the manual
 
-How the Python app behaves and why it is built that way. This is the
-working reference for anyone — human or agent — about to change it: what
-the chain does, what has already been tried, how to verify a change, and
-what is still open. Structure (the parts, the frame, who may write what) is
-in [`ARCHITECTURE.md`](ARCHITECTURE.md); the reasons behind the calls are
-in [`DECISIONS.md`](DECISIONS.md); what is currently drifting is in
-[`AUDIT-2026-09.md`](AUDIT-2026-09.md).
+How to run, configure, operate and change the Python app. Structure — the
+parts, the frame, the control model and who may write a parameter — is
+[`ARCHITECTURE.md`](ARCHITECTURE.md); the reasons behind the choices are
+[`DECISIONS.md`](DECISIONS.md) and [`DECISION-REGISTER.md`](DECISION-REGISTER.md);
+setting up a new Mac is [`SETUP.md`](SETUP.md); what a person still has to
+check by hand is [`TESTING-GUIDE.md`](TESTING-GUIDE.md) and
+[`plans/11-hand-checks.md`](plans/11-hand-checks.md).
 
-Refreshed by plan 10 against `main` ef299ef (2026-09-27; line numbers as of
-plan 10's docstring commit 488c445): every sentence
-below was read against its module. Where plan 09 changed behaviour the
-paragraph says so. The HTML-era sections (browser sandbox, deploy) are
-gone; `hyperspace-web/hyperspace.html` is frozen and matters here only as
-the oracle the golden traces were recorded from. Revised for plan 13
-(presets, the session, the two-layer desk) on `plan-13-integration`.
-
-**Run it:** `uv sync`, `uv run pytest` (886 tests, ~35 s), `uv run
-hyperspace`. `?` in the app shows the controls cheat sheet.
+Contents: 1 Geometry · 2 Rendering · 3 Running it · 4 The home folder ·
+5 `config.toml` · 6 The control window · 7 Keys and the gamepad · 8 The
+APC40 · 9 Learn, Unbind and routing · 10 Presets, shows and the bank ·
+11 Undo · 12 Hands · 13 Audio · 14 Outputs · 15 Hot reload and the
+watchdog · 16 Testing · 17 Known limits.
 
 ---
 
 ## 1. Geometry
 
-Shapes are built once, lazily, by `geometry.geom(i)` and cached
-(`geometry.py:511-527`): vertices as an `(n, 4)` float64 array, edges as an
-`(m, 2)` int32 array, normalised to unit circumradius, plus explicit face
-cycles for the curved 3D shapes. Three more caches hold faces, triangles
-and UVs.
-
-Vertices come from exact standard constructions. Edges are recovered by
-`edges_by_min_dist` (every pair at the minimum vertex distance) for the
-rectified 5-cell, 24-cell, truncated tesseract, 120-cell and 600-cell; the
-5-cell, cubic pyramid, tesseract, 16-cell, the duoprisms and the prisms
-build their edge lists explicitly (`geometry.py:160-245`). Helpers:
-`expand(base, mode)` applies all-or-even index permutations × all sign
-changes with dedup; `cyc3` does the 3D cyclic equivalent for the seed
-solids; `prism(V3)` extrudes a 3D solid along w; `duoprism(n, m)` spins
-two polygons in orthogonal planes.
-
-The first 18 shapes, ordered by cell count (cells are the 4D analogue of
-faces, which is how the original "number of faces" request was honoured).
-**The slider index is the identity the golden traces key on — this list
-is append-only and the vertex order of these 18 never changes**
-(`tests/test_core.py:33`, `tests/test_shapes3d.py:16`).
+**Shapes** (`geometry.py`). The slider index is the identity saved files
+and the golden traces use, so the list is append-only and the vertex
+order of the first eighteen never changes. `tests/test_golden.py` reads
+this table and checks every V and E against the code, so keep it in this
+form under this heading.
 
 | # | Shape | Cells | V | E |
 |---|---|---|---|---|
-| 1 | 5-cell (hypertetrahedron) | 5 | 5 | 10 |
+| 1 | 5-cell | 5 | 5 | 10 |
 | 2 | 3,3-duoprism | 6 | 9 | 18 |
 | 3 | Cubic pyramid | 7 | 9 | 20 |
-| 4 | Tesseract (hypercube · hyperhexahedron) | 8 | 16 | 32 |
+| 4 | Tesseract | 8 | 16 | 32 |
 | 5 | Rectified 5-cell | 10 | 10 | 30 |
 | 6 | 4,8-duoprism | 12 | 32 | 64 |
 | 7 | 6,6-duoprism | 12 | 36 | 72 |
-| 8 | 16-cell (hyperoctahedron) | 16 | 8 | 24 |
+| 8 | 16-cell | 16 | 8 | 24 |
 | 9 | 10,10-duoprism | 20 | 100 | 200 |
 | 10 | Icosahedral prism | 22 | 24 | 72 |
 | 11 | 24-cell | 24 | 24 | 96 |
@@ -62,811 +41,988 @@ is append-only and the vertex order of these 18 never changes**
 | 13 | 12,12-duoprism | 24 | 144 | 288 |
 | 14 | Dodecahedral prism | 32 | 40 | 80 |
 | 15 | 20,20-duoprism | 40 | 400 | 800 |
-| 16 | 120-cell (hyperdodecahedron) | 120 | 600 | 1200 |
-| 17 | 600-cell (hypericosahedron) | 600 | 120 | 720 |
+| 16 | 120-cell | 120 | 600 | 1200 |
+| 17 | 600-cell | 600 | 120 | 720 |
 | 18 | Clifford torus (32×16) | — | 512 | 1024 |
+| 19 | Heart | — | 128 | 192 |
+| 20 | Star | — | 20 | 30 |
+| 21 | Rose | — | 186 | 285 |
+| 22 | Torus | — | 512 | 1024 |
+| 23 | Trefoil knot | — | 576 | 1152 |
+| 24 | Starfruit | — | 522 | 1080 |
+| 25 | Möbius strip | — | 320 | 576 |
 
-Appended after the polytopes is a family of recognisable 3D shapes built
-from trig equations — polar curves r(θ), parametric curves (x(t), y(t)),
-spherical functions r(θ, φ), and (u, v) surface patches. They live in the
-w = 0 hyperplane of the same pipeline; the XW/YW/ZW rotation planes tumble
-them through the fourth dimension, which reads as a perspective breathing
-(toggle the W planes off for a plain 3D spin). Curved surfaces have no
-planar edge cycles for the polytope face extraction to find, so these
-builders return explicit face cycles, and nonconvex caps (heart, star) are
-ear-clipped at triangulation time. Helpers: `polar_prism`, `curve_prism`,
-`ring_prism` extrude a closed outline into a slab; `spherical_surface`
-samples r(θ, φ); `param_surface` samples any (u, v) patch; `tube` sweeps a
-ring along a closed 3D curve with parallel-transport frames.
-
-| # | Shape | Equation | V | E |
-|---|---|---|---|---|
-| 19 | Heart | x=16 sin³t, y=13 cos t − 5 cos 2t − 2 cos 3t − cos 4t, extruded | 128 | 192 |
-| 20 | Star | {5/2} pentagram outline in polar vertices, extruded | 20 | 30 |
-| 21 | Rose | r = cos 2θ, extruded (no caps — the outline self-intersects) | 186 | 285 |
-| 22 | Torus | (R + r cos v)·e^{iu}, R=1, r=0.45, 32×16 | 512 | 1024 |
-| 23 | Trefoil knot | tube around ((2+cos 3t)e^{2it}, 1.5 sin 3t), 72×8 | 576 | 1152 |
-| 24 | Starfruit | r(θ, φ) = 1 + ½ cos 5θ sin⁵φ, 40×15 | 522 | 1080 |
-| 25 | Möbius strip | half-twist band; the flipped seam column merges by `kkey` | 320 | 576 |
-
-Every row above was recomputed from `geom(i)` in the plan-10 audit; all 25
-match. Two naming notes settled with the owner: "hyper hexahedron" and
-"hypercube" are the same object (the tesseract); "hyper dodecagon" was
-read as the 120-cell, and a 12,12-duoprism was added so the literal
-dodecagon reading is covered too.
+Shapes 19–25 are 3D shapes from trig equations, in the w = 0 hyperplane;
+the XW / YW / ZW planes tumble them through the fourth dimension (turn
+those planes off for a plain 3D spin).
 
 ## 2. Rendering
 
-The transform is the reference's, exactly: rotate in 4D across six planes →
-perspective project 4D→3D (`D4 / (D4 − w)`) → apply drag orientation
-(yaw / pitch) → perspective project 3D→2D (`geometry.project_h`; the
-parity oracle `project` is that function without the homogeneous divisor,
-pinned equal to it on every shape — plan 11, V1). It runs on the CPU; the
-GPU rasterises. Geometry is exact to 1e-12 against the traces
-(`tests/test_core.py:33-53`). `ViewState`, the dataclass the renderer
-draws, lives in `view.py` so nothing needs moderngl to hold a view.
+**The transform**: rotate in 4D across six planes → project 4D→3D →
+apply the drag orientation → project to 2D, on the CPU; the GPU
+rasterises. Edges are screen-space quads whose width and alpha follow
+w-depth (the near half glows), with brightness compensated for edge
+count so the 120-cell does not clip to a blob. Points are red.
 
-`Renderer.draw` (`render.py:446-481`) is five stages, and with look-back
-and FX off the output is bit-identical to the scene pass alone
-(`tests/test_render.py:306`):
+**Faces** are the true 2-faces, translucent and painter-sorted, with
+face-local UVs. `shaders/patterns.glsl` paints them: `vec4 pattern(int
+mode, vec2 uv, float fid)`, reading `u_time` and `u_mod[8]` (the eight
+`pattern.mod.k` params). Twelve patterns (`params.PATTERNS`: FLAT and
+eleven more); a new mode needs both the GLSL case and the name. Shared
+colour helpers are `shaders/_common.glsl`. Both files hot-reload on
+save; a broken edit keeps the last good program and shows the GLSL error
+on the panel. The **bitmap** layer textures faces from a file; a bad file
+leaves the plain faces. **Cut-through** matters only in overlay mode.
 
-1. **Scene pass** into an MSAA RGBA target (`draw_scene`, `render.py:498`):
-   zoom and pan about the cursor; the instance grid with motion; face
-   fills through `patterns.glsl` and the optional bitmap layer; edges;
-   points. Painter order on w-depth.
-2. **Coverage mask** — the faces again, solid, when the look-back is on
-   and occluding, so the wake fills the space between shapes rather than
-   glowing over them (`render.py:293-318, 467`).
-3. **Look-back** — `lookback.pull()` takes a finished dream result;
-   composite, then capture the scene into the history (§2.3).
-4. **FX chain** — the enabled effect passes, ping-pong, after the
-   composite (§2.4). The history never sees effected pixels
-   (`render.py:475-478`).
-5. To the window. All post passes run with GL blending off and write
-   premultiplied colour.
+**Instances** (`view.instances`, 0–100): copies laid out by
+`view.inst_layout` — **GRID** (rows of ⌈√n⌉), **HEX** (a honeycomb
+spiral from the centre; a copy never moves as the count grows), **RING**
+(one circle, neighbours one cell apart) — and moved by
+`view.inst_motion` (STILL, ORBIT, WAVE, RIPPLE) with `inst_amp` and
+`inst_rate`. At 0 nothing is drawn but the ground, the echoes, the
+effects and the hands carry on.
 
-**The target is bound explicitly** (plan 14 WP1). `Renderer.draw` draws
-into whatever framebuffer is bound when it is called; it captures that
-target once and binds it again — with its viewport and blending — on
-every exit, a raise included, and `Lookback.capture` binds its own target
-on every return. `app.draw_render` binds the window (`ctx.screen.use()`)
-at the start of every render frame. Before this, a frame that ended on an
-offscreen framebuffer made every later frame draw into it while the
-window swapped a stale picture, with no error anywhere — the owner's
-freeze: WAKE (`dream.on`, `every = 2`) with no dream worker left the
-look-back's atlas bound on each frame off the cadence, and any one
-exception inside the draw stranded a framebuffer the same way
-(`tests/test_render.py::test_a_look_back_frame_with_no_worker_leaves_the_window_bound`,
-`::test_one_raising_frame_does_not_strand_the_next`). A frame that still
-starts on an offscreen framebuffer is logged (§2.6).
+**The frame** (`render.py`, `Renderer.draw_outputs`), once per frame:
+the face picture (only while an effect is aimed at the faces) → the
+scene → the coverage mask (when the look-back occludes) → the look-back
+composite → the frame's effects → the hands → the master dim; then each
+render output gets its picture (§14). With the look-back, effects and
+ghost off and the dim at full, the output is bit-identical to the scene
+pass alone. The renderer re-binds its target on every exit, a raise
+included, so a failing pass never strands a framebuffer.
 
-**The window is opaque unless it is the overlay** (plan 14 WP1, the
-Pepper's Ghost rig), **and there is no overlay unless the config asks**
-(decision 21 (a), plan 14 WP2). With `[output] overlay = false`, the
-default, the render window is created without `TRANSPARENT_FRAMEBUFFER`
-(`app._windows(overlay)`), `output.overlay` refuses to switch on
-(`Output._set_overlay`: the `T` key and MASTER select `note:0:80` bind the
-`overlay.on` alias, the panel draws the toggle disabled with the reason,
-a preset cannot carry it), and `Output.mode` never reads overlay, so the
-crossfader's `overlay.bg` and `output.alpha` do nothing; `on_start` is
-ignored with a note on stderr (`tests/test_overlay.py::test_overlay_refuses_every_road_while_the_config_shuts_it`,
-`::test_the_ground_and_opacity_do_nothing_while_shut`,
-`tests/test_app_boundary.py::test_the_render_window_is_transparent_only_when_the_config_asks`).
-With `overlay = true` the framebuffer keeps alpha for overlay mode, so the
-compositor shows the desktop wherever the final alpha is below 1. In
-window and fullscreen mode the
-ground clears to alpha 1, cut-through is off whatever `view.cut_through`
-says, and every FX pass writes alpha 1 (`FxChain.opaque`, set by the
-renderer each frame; a multiply-blend effect dropped it to 0); the
-look-back's composite keeps `scene.a ∪ wake.a`, which is 1 on an opaque
-ground. Every factory preset, and one with faces, cut-through, points,
-the look-back and every effect on, renders with every pixel at alpha 255
-(`tests/test_lookback.py::test_every_factory_preset_renders_opaque_in_window_mode`).
-Measured before the fix, offscreen, window mode: TUMBLE 23 % of pixels
-below 255 (lowest 94), HEX ENGINE 40 %, and every factory preset some.
+**The look-back** (`lookback.py`, LOOKBACK page) keeps an atlas of
+downsampled echoes of past frames and one dream buffer, and composites
+the scene over its own wake. **ECHOES**: brightness (`dream.echo_mix`),
+fade time (`fade`, seconds), count (`echoes`), time apart (`gap`,
+seconds), thumbnails, and how far back the trail reaches; echo time is
+in seconds, so a trail is the same at 60 and 120 Hz. **DREAM**: the
+worker's status, the layer as one menu (every conv layer of VGG16 and
+every block of GoogLeNet, 25, grouped by net shallow → deep, each with a
+short description and a longer one on hover — `lookback.LAYER_INFO`),
+brightness (`mix`), speed (`k`, shown as frames to halve), strength
+(`step`), passes (`steps`), linger (`mask_decay`), jitter, scales
+(`octaves`), hue, saturation, tint, tint from, tint hue, tint sat, and a
+swatch of the tint. **BOTH**: darken, contrast, shape hides (`occlude`),
+detail (`res`). The page uses short labels; ROUTING, learn lines and the
+desk use the registry's ("Echo time apart", "Dream speed"). All
+`dream.*` params are presettable and modulatable except `gap`, `res` and
+`layer`.
 
-### 2.1 Edges, points, brightness
+**The dream worker** (`dream.py`, torch, MPS when available) runs a few
+gradient-ascent steps per submitted echo on its own thread; `submit`
+never blocks and the latest result wins; `step × steps / k` is clamped so
+a preset cannot run away. The weights (one file per net, VGG16 528 MB or
+GoogLeNet 50 MB, whichever net the layer belongs to) are read from
+`weights_dir`, then torch's hub cache, and downloaded there on first use.
+A net is read once a run: every layer of it is a cut of the same loaded
+stack, so a change between layers of one net is instant (the first layer
+of a net takes about 1.5 s for VGG16). The deepest layers cost about half
+again what conv3_3 does per frame and say "slower" in the menu.
+If the worker cannot start, the reason is on the SYSTEM page, the
+LOOKBACK page and the red banner, and the look-back runs echoes only; a
+preset that asks for the dream with no worker is a warning, once.
 
-- Edges are screen-space quads, not GL lines: 1 px lines lost the
-  near-edge hierarchy the reference has. Width `(0.5 + 1.5·t)`, or
-  `(0.35 + 0.85·t)` for shapes over 500 edges, × a brightness scale × zoom;
-  sub-pixel width folds into alpha (`render.py:557-560, 637-662`).
-- Edge alpha is `(0.10 + 0.90·t²)·B`, clipped to `[0.015, 1]`, where `t` is
-  normalised w-depth: the near half glows, the far half recedes
-  (`render.py:546-553`).
-- `B = brightness · density compensation`, `dens = clamp(340 / edges,
-  0.42, 1)` (`render.py:550-551`). Without that term the 120-cell's 1200
-  edges clip to a solid blob at the slider position that leaves the 5-cell
-  invisible.
-- Points are red; radius and alpha are depth-cued, radius also × dpr ×
-  zoom with a smaller base for heavy shapes (`render.py:665-669`).
-- `view.cut_through` (default on) matters **only in overlay mode**: on a
-  see-through ground it keeps the old blend, so a faint fill lowers the
-  window's alpha and the desktop shows through it; off uses separate alpha
-  (ONE, ONE_MINUS_SRC_ALPHA), so a fill never drops alpha below the
-  ground's (PR #26). On an opaque ground — window and fullscreen — the
-  renderer never cuts, whatever the toggle (plan 14 WP1;
-  `tests/test_lookback.py::test_cut_through_never_cuts_an_opaque_ground`,
-  `::test_cut_through_still_cuts_in_overlay_mode`).
+**Effects** (`fx.py`, FX page). One GLSL file per effect in
+`shaders/fx/` — twelve ship: acid, deconverge, doublevision, fractals,
+glimmer, huecycle, kaleido, plasma, tripcolour, warp, wobble, zoomblur
+(`_lib.glsl` is shared). **A new effect is a new `.glsl` file, not
+Python**: every `// @param` uniform becomes `fx.<file>.<key>`, plus
+`on mix speed blend order target` per effect; `fx.on` bypasses the stack
+and `fx.mix` scales it. The folder is polled every 30 frames; a parse
+error keeps the last version, a compile error skips the pass. Factory
+effect presets are `library/fx/*.json`.
 
-### 2.2 Faces, patterns, bitmap
+- **The page.** Bypass and mix, the chain in words (`frame  Plasma → Hue
+  cycle`, and a `faces` row while anything is aimed at the faces), then
+  one chip per effect, three to a row, in stack order. A chip's **LED**
+  switches the effect; its **name** opens its strip. An open effect
+  that is not running says why first ("off", "faces off", "the whole
+  stack is bypassed", "FX mix is at 0", "its mix is at 0") with a chip
+  to fix it; its controls stay live under a veil. **Drag a chip by its
+  name** onto another to put it before that one (or onto the right half
+  of the last to move it to the end): one undo step.
+- **Aimed at the faces.** Each effect's `fx.<name>.target` is `frame`
+  (the default) or `faces`: the **ONTO frame · faces** chips at the
+  right end of the open strip's title line, the lit one where it runs
+  (not modulatable). The faces are translucent, so an effect on them
+  reads faint — the strip says so while it runs there; Brightness lifts
+  them. Effects aimed at the faces run first over a 1024²
+  picture of what a face shows, and the faces show that picture — per
+  face (at each face's own UV, turning with the shape) or screen (one
+  still picture seen through the faces), `fx.face_map`. A chip aimed at
+  the faces has a diamond LED. With an effect on the faces, every face
+  shows face 0's pattern phase; the echoes and the dream carry the
+  faces' effects, never the frame's.
 
-True 2-face extraction (cycle walk + support-plane filter) gives
-translucent painter-sorted fills; counts match the known values for all
-polytopes (`tests/test_geometry.py`; the 3D shapes' faces in
-`tests/test_shapes3d.py`). UVs are face-local and
-perspective-correct (`geometry.face_uvs`).
+## 3. Running it
 
-`shaders/patterns.glsl` is user-editable and hot-reloads on save by mtime
-(`render.py`, `_maybe_reload_patterns`); a bad edit keeps the last good
-program and shows the GLSL error on the panel, with the line numbered as
-in the file. Contract: `vec4 pattern(int mode, vec2 uv, float fid)`,
-reading `u_time` and `u_mod[8]` — the eight `pattern.mod.k` params, which
-any source may drive. The colour helpers (`TAU`, `LUMA`, `hsv`, `pal`,
-`hue_rotate`) come from `shaders/_common.glsl`, which `glsl.py` prepends
-to the patterns, every effect and the look-back's post pass alike, and
-which hot-reloads the same way (a broken edit there shows on the panel;
-the post pass, which every frame goes through, falls back to the copy as
-shipped); the pattern file keeps its own 2-D hashes, on which its
-cellular modes were tuned. Eleven patterned modes ship (plus flat, mode 0); their names live in
-`params.PATTERNS`, and a new mode needs both the GLSL case and the name.
-The bitmap layer (`view.bmp_*`) textures faces from a file; a bad file
-never raises and leaves the plain faces (`tests/test_render.py:147`).
+```bash
+cd hyperspace-python
+uv sync                 # every dependency, torch for the dream included
+uv run hyperspace       # the render window and the control window
+```
 
-### 2.3 Look-back and the dream
+Two windows open: the **render window** (pure output, for the projector
+or the glass; the mouse orbits, ⇧-drag or right-drag pans, scroll zooms
+about the cursor) and the **control window** (the panel, the desk
+diagram, the cheat sheet). Keys work from both, and from every extra
+render output; while a text field in the panel is being typed into, keys
+go to the field. More render outputs come from `[[output.screens]]` (§14).
 
-`lookback.Lookback` keeps an atlas of downsampled echoes of past frames
-plus one dream buffer `D`, and composites the scene over its own wake,
-age-weighted, premultiplied (`lookback.py:326-600`). With no dream worker
-it is a plain age-faded tracer. `dream.*` params: `on mix echo_mix fade
-darken contrast occlude hue sat tint tint_from tint_hue tint_sat res
-echoes gap steps step k layer octaves mask_decay jitter` — all
-presettable, all modulatable but `gap` and `res`.
+- **Quit:** Esc or Q, or close any window.
+- **Restart in place:** Cmd+R or the SYSTEM page's *Restart process*
+  (`os.execv`: same PID, same terminal). Every open adapter (MIDI, the
+  bridge, the hands, the dream worker, the git committer) and then the
+  audio stream are closed first, best effort, so a broken port never
+  blocks an exit.
+- **The cheat sheet** (`ui.CHEATSHEET`, the canonical list of keys) is
+  off at every launch: `/` (or `?`), the gamepad's MENU or the APC40's
+  DETAIL shows it.
 
-- **Echo time is seconds** (plan 14 WP6). The ring keeps its own clock,
-  advanced once a frame by the renderer's time (`Lookback.tick`); an echo's
-  weight is `echo_mix · ½^(age / fade)` with its age in seconds, and a
-  capture is committed every `gap` seconds (a frame within half a frame of
-  its due time is on time). So the trail is the same on a 60 Hz and a
-  120 Hz screen (`tests/test_lookback.py::test_the_same_preset_gives_the_same_trail_at_60_and_120_hz`).
-  A tick whose time did not move counts as one 60 Hz frame, so a test or
-  tool drawing at a fixed `t` sees the old frames. The old per-frame
-  `dream.decay` / `dream.every` are read as 60 Hz frames
-  (`lookback.migrate_values` / `migrate_row`): the factory files are
-  converted, the launch rewrites a user preset or look-back module preset
-  once (`preset.migrate_echo_home`, each kept as `<file>.bak-v2-frames`),
-  and a preset file still naming them loads in seconds with a note. The
-  dream worker's own `k` and `mask_decay` are still per submitted frame.
+Environment variables:
 
-- **Chroma.** The net paints in its own primaries whatever the scene's
-  palette, so `D` is re-coloured on its way in: `hue` / `sat` on the net's
-  own colours, then `tint` cross-fades to luminance × one colour, with
-  `tint_from = scene` taking the hue of the newest echo's mean. Echoes pass
-  untouched (`tests/test_lookback.py:405`).
-- **Occlude.** The render covers the wake where it drew: coverage is
-  `max(brightness × 4, the faces' mask)`. Face fills draw at 1–6 % alpha,
-  so brightness alone barely covered — hence the mask pass
-  (`tests/test_lookback.py:353`).
-- **The worker** (`dream.DreamWorker`, the optional `dream` extra, torch
-  on MPS) is temporal: one running buffer blended with each new echo, a few
-  gradient-ascent steps per submit, back to the compositor a frame or two
-  later. `submit` never blocks; the latest finished result wins; `step ×
-  steps / k` is clamped to `STABLE_RATIO` so a preset cannot run away
-  (`tests/test_dream.py`). It reads the `dream.*` params on the frame thread
-  inside `submit`, never from the worker thread. The performance spike
-  behind these numbers is `docs/plans/assets/06-lookback-perf.md`.
-- **Setup.** torch and the dream stack are ordinary dependencies
-  (decision register row 23 (a), 2026-09-29): `uv sync` installs them and
-  `[dream] enabled` defaults to on. If the worker cannot start (an unsynced
-  environment without torch, missing weights), `app._open_dream` keeps the
-  reason (`dream_error`) and the panel shows it: the
-  SYSTEM page, the LOOKBACK page's worker line, and the red banner. A
-  preset that asks for the dream (`dream.on`, `dream.mix` > 0) with no worker is a banner warning (until dismissed) and a
-  stall-log entry, once (the look-back then shows the echoes only).
-- **The ring fits the driver.** 32 slots stacked can pass
-  `GL_MAX_TEXTURE_SIZE` on a portrait window at `res` 384; the slot shrinks
-  to fit (`lookback.fit_atlas`), and if the textures cannot be made
-  nothing is captured and `ring_error` says why on the LOOKBACK page.
+| Variable | Effect |
+|---|---|
+| `HYPERSPACE_HOME` | The home folder (§4). Default `~/Hyperspace`. |
+| `HYPERSPACE_FRAMES` | Run that many frames, then exit (a windowed smoke test). |
+| `PYGLFW_LIBRARY` | Which GLFW dylib to load; `app.py` sets it to the bundled one when unset. |
+| `LEAPSDK_INSTALL_LOCATION` | Read by Ultraleap's `leap` package when the hand-tracking software is not at its default path (see SETUP). |
 
-### 2.4 FX
+## 4. The home folder
 
-One GLSL file per effect under `shaders/fx/`. Every `// @param` uniform
-becomes a registry param `fx.<file>.<key>`, plus `on mix speed blend
-order` per file; `fx.on` and `fx.mix` govern the chain (`fx.py:114-164, 284-327`). Every effect is compiled behind `_common.glsl` and `fx/_lib.glsl`, and
-runs on the renderer's one clock (`Renderer.now`). Effects hot-reload by polling the folder every 30 frames (the shared helper files count); a
-parse error keeps the last spec, a compile error skips the pass, all
-broken is a copy. Off is bit-identical (`tests/test_fx.py:268`). The
-blend modes are arithmetic in the shader, not GL blend state, and a pass
-never leaves alpha below its brightest channel. Eleven effects ship,
-Noita's `post_final.frag` maths among them; the factory presets are
-`library/fx/*.json`. **New effects are new `.glsl` files, not Python.**
+Everything the app writes lives in one folder, `$HYPERSPACE_HOME`
+(default `~/Hyperspace`), created on the first launch. Factory files ship
+read-only in `hyperspace/library/` in the same tree; a user file of the
+same name shadows the factory one. All formats are plain JSON with a
+`schema` string, and the library is watched: edit a file in an editor
+while the app runs and the loaded preset or show follows within a couple
+of seconds.
 
-### 2.5 Two windows
+| Path | What it is | Format |
+|---|---|---|
+| `config.toml` | The rig's settings (§5). Optional. | TOML |
+| `bindings.json` | The session's controls only: keys, gamepad, and the APC40's invariant and global-layer rows. Delete it to get `hyperspace/bindings.default.json` back. | `hyperspace.bindings/3` |
+| `presets/<slug>.json` | Your presets (§10). | `hyperspace.preset/2` |
+| `projects/<slug>.hyp.json` | Your shows (the code calls them projects). | `hyperspace.project/2` |
+| `<group>/<slug>.json` | Module presets, one registry group each (`band/`, `dream/`, `fx/`, `hands/`, `view/` …). | `hyperspace.preset/1` |
+| `hands.json` | The hands' calibrated ranges and the interaction box (§12). | `hyperspace.hands/2` |
+| `windows.json` | Where the control window and each render output were at the last quit (§14). Machine-specific; safe to delete. | `hyperspace.windows/1` |
+| `hidden.json` | Factory presets taken off the preset list. | `hyperspace.hidden/1` |
+| `last_show` | One line: the file name of the show opened last. | text |
+| `trash/<group>/<slug>.<YYYYMMDD-HHMMSS>.json` | Copies of your files taken before an overwrite, delete or rename. Never watched. | as the original |
+| `stall.log` | The watchdog's log (§15). | text |
+| `weights/` | The dream's pretrained network weights, downloaded on first use. | binary |
+| `.git/`, `.gitignore` | Only with `[library] git = true` (below). | git |
 
-`app.py` opens the render window (vsync, 4× MSAA, a framebuffer with alpha
-only when `[output] overlay = true` — decision 21; opaque in every mode
-but overlay, §2) — reading the config first, since the hint is a
-creation-time one —
-and the control window (opaque, no MSAA, vsync off so it paces off the
-render swap) in one GLFW share group, each with its own moderngl context;
-the only imgui context lives on the control window (`app.py:136-167, 396-419`). The render window has no imgui at all. Mouse orbit / pan / zoom
-are taken from the render window only; keys from both, with the control
-window deferring to imgui typing. `imgui.new_frame()` runs before input
-handling on purpose: with the 1.87+ event queue, `want_capture_keyboard`
-only holds this frame's value after it. `overlay.Output` places the render
-window (window · fullscreen · overlay with passthrough and opacity) from
-the `output.*` params, applied once a frame through an injectable backend
-(`tests/test_overlay.py`); `overlay.*` are aliases the factory table
-binds, and `Output.allowed` (the config's `overlay`) is the gate every one
-of them passes. `output.monitor` offers *follow window* — the screen the window is
-on, config `monitor = -1` — and then each screen by name. Quitting, Cmd+R
-and the panel's restart button all run `app.close_all`: every open
-adapter (MIDI, the bridge, the hands tracker, the dream worker) then the
-audio stream, best-effort, so a broken port never blocks an exit. The
-SYSTEM page shows each adapter's state — MIDI, the bridge (port,
-encoding, messages sent, or why it is off) — beside the hot-reload and
-config notices. The optional adapters and the gamepad are config gates
-(`[midi]` and `[gamepad]` on by default, `[bridge]`, `[dream]`, `[hands]`
-off; `[dream]` also needs the `dream` extra, §2.3); `hyperspace/config.py` documents every key. The rig's placement comes from `[output]` in `config.toml`
-(`config.py`); a `[overlay]` section is the same thing under its pre-split
-name, still read and merged under `[output]`, with a note on stderr asking
-for the rename. A `config.toml` that will not parse keeps the defaults and
-shows its error on the SYSTEM page.
+A `midi_map.json` or `config.toml` left in the working directory from an
+old build is copied in on the first run; a `midi_map.json` in the home is
+read once, only when `bindings.json` does not exist yet. A `bindings/`
+folder of old routing presets is no longer read.
 
-### 2.6 The stall log and the red banner
+### What the app may rewrite, move or delete
 
-`watchdog.py` (cold, like `app.py`: a reload never touches it) writes
-`<home>/stall.log`. Each entry is a `=== <kind>` header — the wall time,
-the loaded preset, what happened — then every thread's stack
-(`faulthandler.dump_traceback(all_threads=True)`):
+| File | When | Kept first |
+|---|---|---|
+| `presets/<name>.json`, `<group>/<name>.json` (yours) | A save over it, ⇧F1–F8, × in the preset list, a rename. Never a load. | A copy in `trash/<group>/`. A save goes on if the copy fails (and says so); a × or a rename is refused. A save that writes the same text adds nothing. |
+| `projects/<show>.hyp.json` | A bank change, "starts on", save; a rename of a preset it names. Never a load. | The first write that puts a preset past slot 8: `<show>.hyp.json.bak-v2-bank8` (no copy, no write). A rename: a copy in `trash/projects/`. |
+| `bindings.json` | At launch, when a newer build adds factory rows (the bank pads, OVERDUB, the clip-stop row, Home, the undo keys) where the control or key is free. A row you changed is left as you had it. | `bindings.json.bak-v<schema>` (`.bak-v3` for today's files; a dated name if that exists, never over any `.bak-*`). No copy, no rewrite: the table runs from memory for the session and the next launch tries again. |
+| `hands.json` | A calibration sweep or "reset ranges". A schema-1 file is read as it is and never rewritten at launch. | The first rewrite of a schema-1 file: `hands.json.bak-v1`. |
+| `hidden.json` | × on a factory preset; unhide. | An unreadable one is kept as `hidden.json.bak-v0` before it is replaced. |
+| Your presets and module presets naming the old per-frame echo keys (`dream.decay`, `dream.every`) | Once, at launch, converted to seconds. | `<file>.bak-v2-frames` |
+| A home from before presets existed (schema-1 projects, a `projects/default.hyp.json`) | Once, at launch: converted to presets and shows; `default` is renamed `mine`. | `.bak-v1` / `.bak-v2` beside each rewritten file; stderr names each backup. |
+| `<group>/…` | Restore from the trash. | Nothing to keep: a restore never writes over a file — a taken name restores as the next free name. |
+| `trash/**` | **Empty trash.** | **Nothing. Emptying the trash is the one action in the app that keeps no copy.** It deletes exactly the files its popup lists, after a second click. |
+| `windows.json`, `last_show` | Every quit and Cmd+R / every show load and save as. | Nothing (machine state). |
+| `.git/`, `.gitignore` | With `[library] git = true`, at the first save after launch. | Nothing of yours is rewritten. |
 
-- `stall` — no frame completed for 2 s. A daemon thread watches; the loop
-  pets it once a frame with a float write. Once per stall.
-- `render error` — `renderer.draw` raised (`app.frame` guards it, so the
-  panel lives on while the render window holds its last frame): the full
-  traceback, once per distinct error.
-- `render stall` — no render frame *presented* for 2 s while the loop
-  runs: the draw did not complete, or the window was hidden, minimised,
-  occluded (macOS occlusion, another Space) or had no framebuffer. The
-  entry lists the window's attributes (`GlfwBackend.window_state`).
-- `stranded target` — a render frame started on an offscreen framebuffer
-  (the freeze's signature, §2), with its `glo` and the last render error.
-- `non-finite` — a param dropped a NaN / inf (`Registry.nonfinite`; §5's
-  modulation rule drops them, and `tapers.clamp` lands NaN on its low end).
-- `warning` — a preset that asks for the dream (`dream.on`, `dream.mix` > 0) with no worker.
+Factory files are never written, so never trashed. Saving over a factory
+preset writes your copy into the home (the save chip says **save copy**).
 
-`kill -USR1 <pid>` dumps every thread into the same file on demand, and
-a stall that holds the GIL — the thread cannot run to see it — is caught
-by faulthandler's C timer, which the thread re-arms every look; both are
-"raw dumps", with no header. The
-SYSTEM page shows `stall log: <path> (N stalls, …)` once the file has
-entries. The control window's red banner, across its bottom and in front
-of every other window, names a live render error or render stall, a
-render error that recovered (its last message, time and count), the
-warnings and why the dream worker is off; what is not live stays until
-**dismiss**. Nothing in the watchdog may stop the show: a log that will
-not open, a platform without SIGUSR1, a write that fails — each is kept
-on `error` and the loop goes on (`tests/test_watchdog.py`).
+### The trash
 
-## 3. Audio sources
+`library.to_trash` copies a file exclusively (a second copy in the same
+second gets `-2`, `-3`), so nothing in the trash is ever overwritten.
+Restore from the preset list's **trash (n) ▸** popup, or copy a file back
+into `<home>/<group>/` under its plain name.
 
-Two, both through `AudioEngine._attach` (`audio.py:132-140`):
+### The home in git
 
-- **A capture device** (`start_mic(index)`): a `sounddevice.InputStream`,
-  mono, at the engine's capture rate (`sr`, 48 kHz), callback → ring
-  buffer. The device list is every input-capable device
-  (`input_devices`); a loopback driver (BlackHole, Soundflower, anything
-  named "loopback") is recognised by name, pre-selected by the one
-  heuristic `audio.preselect` (the first loopback, else the first
-  device), and labelled `System · …`. That is the one system-audio route:
-  with the Mac's output on a Multi-Output Device, everything arrives
-  through the plain input path. **Nothing captures at launch** — capture
-  starts when `audio.mic` is toggled (`M`). The device list is read once,
-  on first use (`AudioEngine.devices`, which `audio.device` chooses from);
-  the **rescan** button beside the combo (`audio.rescan`) reads it again
-  for an interface plugged in later, keeping the selection by name
-  (`tests/test_audio.py`).
-- **A file** (`start_file(path)`; wav / mp3 / flac / ogg through
-  `soundfile`): mono mean, played through an `OutputStream` at the
-  **track's** sample rate. The analyser is built **once**, at that rate
-  (`AudioEngine._attach(mode, label, rate)`), and the source line on the
-  audio page shows the analyser's rate (`AudioEngine.rate`), not the
-  capture rate.
+With `[library] git = true` (`homegit.py`) the home becomes a **local**
+git repository at the first save after launch, and every save is a
+commit worded as the library says it ("save preset TRIP 2", "trash preset
+TRIP 3", "rename preset TRIP 3 → SUNRISE", "show mine: bank", "hide
+preset legacy6"…). A commit is `git add -A` plus the waiting messages, so
+a hand edit of `config.toml` rides in the next save's commit; emptying the
+trash commits nothing. `.gitignore` (written only where there is none)
+leaves out `weights/`, `trash/`, `*.log`, `last_show`, `windows.json`,
+`*.bak-*` and `.DS_Store`. An existing repository at the home is used as
+it is; a home inside another repository is never committed. Git runs on
+its own thread with a 10 s timeout and no hooks, signing or prompts; it
+never blocks or fails a save — a missing git or a locked index is one
+warning line until a commit succeeds. There is no remote, push or fetch.
+The SYSTEM page's library line ends "· git" while it is on. Sharing
+presets between people is the repository's `shared/` folder and
+`tools/shared_presets.py` (`list`, `install` — never overwrites —
+`export`).
 
-The callbacks only copy samples into the ring; the FFT and the chain run
-on the frame loop in `audio.step(dt)` (`audio.py:235-242`). `audio.chain`
-is a fresh `Analyzer` on every attach, sharing the old per-band `Params`
-objects and copying the layout and master faders, so a source switch
-keeps the user's settings and restarts only the trackers and the warm-up
-(`tests/test_analyzer.py:412`).
+## 5. `config.toml`
 
-## 4. Audio chain
+Optional, in the home. Every key has a default; `hyperspace/config.py`
+(`DEFAULTS`, `SCREEN`) and `hyperspace/hands/core.py` (`DEFAULTS`) are the
+source. A file that does not parse keeps the defaults and shows its error
+on the SYSTEM page; a value of the wrong kind is its default with a note
+on stderr and the SYSTEM page — never a dead launch.
 
-One chain runs: `analyzer.Analyzer`, the six-band reference chain reshaped
-for N bands (1–16). `bands.py` is its parts bin — every constant under its
-reference name, `soft_ceil`, the shapers, the per-band `Params` and the
-one default table `default_params()` (the Balanced scene file is pinned to
-it by `test_balanced_is_the_default_table_and_the_reference_edges`).
-Two reference constants live where they are used rather than in the
-chain: `DRIVE` (fader → rotation rate) is `params.DRIVE`, the meters'
-nominal line is `ui.NOM`. The analyzer is constructed by its own name
-everywhere (the `bands.Chain` alias is gone). The reference chain
-survives as the frozen oracle `tests/legacy_chain.py`, and the "Legacy 6"
-layout reproduces it **bit for bit** on the golden fixtures at 60 and 120
-fps, dyn 0 and 1 (`tests/test_analyzer.py:63-83`). That test is the
-regression net for everything below; re-freeze the oracle only when the
-maths changes on purpose.
+```toml
+[midi]                  # the MIDI adapter (midi.py)
+enabled = true          # false: no MIDI at all (Learn's menus still work)
+# port = "APC40"        # substring of the port name; unset = the profile's ("APC40")
+profile = "apc40"       # device profile: hyperspace/apc40.py
+map = "midi_map.json"   # an old map, read once when bindings.json does not exist
 
-Per band, in order (`analyzer.py:478-577`):
+[output]                # output 1 and the control window
+overlay = false         # true allows overlay mode; false: always opaque, T does nothing
+monitor = -1            # screen index for the render window (and fullscreen); -1 = where it was last
+control_monitor = -1    # screen index for the control window; -1 = where it was last
+fullscreen = false
+on_start = false        # launch straight into overlay (needs overlay = true)
+passthrough = true      # overlay: clicks go to the window underneath
+bg = 0.0                # overlay: ground, 0 see-through … 1 black
+alpha = 1.0             # overlay: whole-window opacity
+
+[[output.screens]]      # optional; one table per render output, at most 4 (§14)
+name = "glass"
+monitor = 1
+fullscreen = true
+scene = true            # launch values of this output's switches
+hands = true
+through = false
+dim = 1.0               # under 0.1 is 0.1, with a note
+
+[gamepad]
+enabled = true          # an Xbox-layout pad over GLFW; inert when absent
+
+[bridge]                # the analyzer's lanes out / external lanes in (bridge.py)
+enabled = false
+out = "IAC"             # port substring for the lanes out ("" = none)
+in = ""                 # port substring for lanes in ("" = none); never the bus `out` uses
+encoding = "pitch"      # "pitch": lane i → pitch bend on channel+i; "cc14": CC pairs
+channel = 0             # 0-based
+cc = 16                 # cc14: first MSB controller (0–31)
+rate = 100              # messages a second per lane at most (0 = every frame)
+send = ["lane:*"]       # "lane:*", "lane:3", "param:<id>", in lane order
+in_lanes = 16
+
+[dream]                 # the look-back's dream worker (dream.py, torch)
+enabled = true          # false: torch is never imported
+device = "auto"         # "auto" (MPS when there, else CPU), "mps", "cpu"
+precision = "fp32"      # or "fp16"
+weights_dir = ""        # "" = <home>/weights
+
+[hands]                 # Ultraleap hands (hands/)
+enabled = false         # true opens the tracker; off, `leap` is never imported
+mode = "desktop"        # camera looks up; "screentop" looks down; "hmd"
+dofs = ["x", "y", "z", "roll", "pitch", "yaw"]   # per hand; also grab, pinch,
+                        # grab_angle, pinch_mm, pinch_index … pinch_pinky
+out = "Hyperspace Hands"   # MIDI out for a DAW: port substring, else a new virtual port ("" = none)
+channel = 16            # 1-based
+cc = 102                # left hand cc…cc+n−1, right cc+n…cc+2n−1
+presence = true         # a note on/off as each hand enters / leaves
+note = 120              # left hand's presence note; right is note+1
+min_confidence = 0.1
+calibration = "hands.json"   # relative to the home
+pinch_gates = true      # the eight thumb-to-finger switches
+pinch_notes = true      # each as a note on/off to the DAW
+pinch_note = 100        # left index…pinky = note…note+3, right note+4…note+7
+tape = ""               # a recorded hand tape to play instead of the camera
+
+[library]
+git = false             # true: the home is a local git repository (§4)
+```
+
+Rules worth knowing:
+
+- An `[overlay]` section is the old name of `[output]`: still read,
+  merged under `[output]` (which wins), with a note asking for the rename.
+- A `monitor` that is not a number, or an index no connected screen has,
+  is −1 with a note (but see §14 for later outputs).
+- With an `[[output.screens]]` list, output 1's entry supplies `monitor`
+  and `fullscreen`; the scalar ones are ignored with a note. `overlay`,
+  `on_start`, `passthrough`, `bg` and `alpha` stay scalar and belong to
+  output 1 alone. An unknown key in an entry is a note; entries past the
+  fourth are dropped.
+- `[library] git` anything but `true` / `false` is `false`, with a note.
+- `[hands] calibration` and `tape` are relative to the config's folder.
+
+## 6. The control window
+
+The panel is built to be read from a few feet back in a dark room. A
+rail of fourteen pages (`ui.PAGES`); the rail shows a red dirty dot
+beside a page whose group has moved off its loaded preset. No page
+scrolls at the control size (960 × 900, `app.CONTROL_SIZE`;
+`tests/test_ui_shell.py::test_every_page_fits_the_control_window`).
+
+| Page | What is on it |
+|---|---|
+| OUTPUT | The master dim; one block per render output (scene / hands / through ticks, its dim, what it shows in words); the screen and fullscreen of output 1; overlay and its click-through, ground and opacity (greyed, with the reason, unless `[output] overlay = true`). |
+| VIEW | The cell-count readout and shape name, the shape, the six rotation planes, points / lines / rotate / faces, brightness, speed, 4D depth, instances (0–100) and, above one copy, the field row: layout, motion, amp, rate; the six plane rates. |
+| FACES | Faces, cut-through, the pattern and its mix; the eight pattern inputs (`pattern.mod.k`). |
+| BITMAP | A bitmap textured onto the faces: file, opacity, scale, mode. |
+| CAMERA | Zoom, yaw, pitch, pan, reset. |
+| LOOKBACK | The look-back switch and three sections: ECHOES, DREAM, BOTH (§2). |
+| FX | The effect stack (§2). |
+| AUDIO | Listen to mic / Load track / Stop, the device and **rescan**, the transport, the master faders (gain, dynamics, trim). |
+| ANALYZER | The band scene and Reset all, the meters, the band editor (spectrogram with the bands over it, the selected band's strip). |
+| ROUTING | One page over the loaded preset: routes, desk rows, macros, the session's MIDI rows read-only, and a filter (§9). |
+| LFO | The tap-tempo clock and the four LFOs. |
+| HANDS | The tracker, the box, the axes and their setup, feel and calibration, the ghost hands (§12). |
+| PRESETS | The show, "starts on / home", the bank of twenty-four, the preset strip and preset list, module presets under **more** (§10). |
+| SYSTEM | Cheat sheet and desk-diagram switches, Restart process, hot reload status, the library path, config errors and notes, the dream worker's state, the stall log's line; **midi**: knob smoothing, the port's state, the learn line; **bridge**: port, encoding, messages sent or why it is off. |
+
+Every page that is a registry group carries a preset strip for its
+module presets.
+
+**Widgets.** A fader fills red from its origin to its value. A param a
+performer (a hand, a band, an LFO) is driving shows its *setting* as the
+handle and the effective value as a white ghost bar, and its hover names
+the performer. Right-click any param, a row's label or an analyzer meter
+for the menu (§9).
+
+**The footer**, on every page: the frame rate; one message slot; `dim
+40%` (or `dim black`) in the warning colour while the master dim is under
+full; "· output 2 black" while an output shows nothing for another
+reason; the show's name and its unsaved mark. The message slot shows the
+newest line for 4 s (`ui.MESSAGE_S`): an undo's status, the library's
+status and warnings ("saved TRIP 2 → F6", "F6: an empty slot"), what a
+learn or unbind did, and — while nothing newer is up — an armed learn's
+line or a picked desk control's line in red (a click on it cancels).
+
+**The red banner** across the bottom of the control window names a live
+render error or render stall, a render error that recovered, the
+watchdog's warnings and why the dream worker is off; what is not live
+stays until **dismiss**.
+
+**The desk diagram** (`ui_desk.py`) draws the APC40 in the control
+window's bottom-left, lit exactly as the device is, from the table — so
+it works with no device. With the panel hidden (H, the APC40's DEVICE
+ON/OFF, or the chip in the desk's header) it fills the control window.
+Once it is big enough every lit control carries what it does (the
+param's label, a bank pad's preset name, a step's amount); bright ink is
+the layer that is up, grey an invariant control.
+
+**Click a desk control, then a param.** A left click on a control in the
+diagram picks it: it is framed on the desk and on its ROUTING line, and
+every page but ROUTING is dimmed and takes no input except a click on a
+param, which puts the control on that param in the loaded preset (one
+undo step). A pick lets go by itself after 20 s with no click
+(`ui_desk.PICK_S`), or on a click on it, the desk's empty ground or the
+footer line. No click maps until the mouse has moved 12 px from the click
+that picked. An invariant control, or any control while SHIFT is
+latched, is picked only to show its line; the header says why. With
+"Learn desk" armed, a click on the diagram completes the learn as a
+knob would.
+
+## 7. Keys and the gamepad
+
+Every key and pad button is a row in `bindings.json` (factory rows in
+`hyperspace/bindings.default.json`), so each rebinds there; the five
+loop keys — Cmd+R, ↑, ↓, Esc, Q (`app.LOOP_KEYS`) — are the app's own.
+
+| Key | Does |
+|---|---|
+| ← → | previous / next shape |
+| Space | pause / resume rotation |
+| P / L / F | points / lines / faces |
+| 1–6 | toggle planes XY XZ YZ XW YW ZW |
+| ↑ ↓ | 4D depth (hold accelerates) |
+| [ ] · , . | brightness down / up · speed down / up |
+| M | microphone on / off |
+| K · 0 | play / pause the track · restart it |
+| R | reset the view and camera |
+| F1–F8 · ⇧F1–F8 | load bank slot 1–8 · save the live state as that slot's preset |
+| B · ⇧B | tap tempo · the global LFO trigger |
+| Cmd+Z or Ctrl+Z · with ⇧ | undo · redo |
+| Home (fn ← on a laptop) | home: load the show's "starts on" preset |
+| H · / or ? | hide / show the panel · the cheat sheet |
+| T · G | overlay on / off (only with `[output] overlay = true`) · overlay click-through |
+| Cmd+R · Esc / Q | restart · quit |
+
+**A press fires only its own chord**: a row fires when its modifiers are
+exactly the held ones that some row on that key names (`SHIFT`, `SUPER`,
+`CONTROL`), so ⌘⇧Z redoes and does not also undo; a modifier no row on
+the key names is ignored.
+
+**Gamepad** (Xbox layout, Bluetooth or USB; `gamepad.py` keeps its own
+button map): A pause rotation · B next preset · X points · Y faces ·
+LB / RB previous / next shape · d-pad brightness (↑↓) and speed (←→) ·
+left stick orbit, right stick zoom, a stick click resets · LT / RT 4D
+depth out / in · VIEW panel · MENU cheat sheet.
+
+## 8. The APC40
+
+Plug in an Akai APC40 (mk1) and it is found by name on launch and after
+an unplug. On open it is put in Alternate Ableton Live mode (every LED
+and knob ring is the host's); on close it is put back to generic mode.
+The protocol, the default map (`DEFAULT_MAP`) and the glyphs are
+`hyperspace/apc40.py`. `uv run python tools/midi_probe.py [port]`
+echoes what a controller sends and lights an APC40, without the app.
+
+**Glyphs** (`apc40.LAYOUT`), used on ROUTING rows, learn messages and the
+diagram: K1–K8 track knobs, D1–D8 device knobs, S1–S8 track faders, SM
+master fader, X crossfader, C cue knob, Gr·c the button field (rows 1–5
+clip launch, 6 clip stop, 7 track select, 8 activator, 9 solo, 10
+rec-arm; column 9 scene launch 1–5, STOP ALL, MASTER select), B1–B22 the
+other buttons, ⇧ SHIFT. Akai's name is in each hover.
+
+**Two layers under a latched SHIFT.** SHIFT's LED is lit while the
+**global** layer (the session's) is up; otherwise the **preset** layer
+(the loaded preset's own desk) is up. A control the up layer does not map
+is dark and does nothing. **Invariant** controls mean the same on both
+layers; none of them can be learned, mapped by a click or unbound, a
+preset's desk row on one is dropped at load with a note, and each keeps
+doing its job while a learn is armed.
+
+| Control | Layer | Does |
+|---|---|---|
+| S1–S6 | invariant | band 1–6 post-drive |
+| S7 · S8 · SM | invariant | master dynamics · master trim · master gain |
+| X (crossfader) | invariant | **master dim**: left black, right full |
+| Clip row 1 (G1·1–8) | invariant | bank slots 1–8 (as F1–F8) |
+| Clip rows 4–5 (G4·*, G5·*) | invariant | bank slots 9–16 and 17–24 |
+| Clip-stop row (G6·*) | invariant | **save as**: hold any pad 0.6 s |
+| OVERDUB | invariant | **home** (lit while the show names a "starts on") |
+| QUANT | invariant | next filled bank slot |
+| SHIFT | invariant | latch the global layer |
+| TAP TEMPO · NUDGE + / − · METRONOME | invariant | tap · shift the downbeat by a hundredth of a beat · the global LFO trigger (blinks on the beat) |
+| PLAY · STOP · REC · CLIP/TRACK | invariant | track play · stop · microphone · restart the track |
+| Track select · solo · rec-arm (G7, G9, G10; columns 1–6) | invariant | select that band · step its transfer function · reset it |
+| ◀ ▶ | invariant | previous / next band |
+| STOP ALL | invariant | Reset all bands |
+| DEVICE ON/OFF · DETAIL | invariant | panel · cheat sheet |
+| MASTER select · PAN | invariant | overlay · overlay click-through |
+| D1–D8 | global | the selected band's strip: trim, contrast, transient, pre, post, attack, decay, threshold |
+| K1–K5 | global | hand steadiness, response, catch, the selected axis's return, BPM (K6–K8 dark) |
+| Clip row 2 · row 3, columns 1–3 | global | band scenes 1–8 · 9–11 |
+| K1–K8 | preset (factory default) | brightness, speed, instances, pattern mix, field amp, field rate, bitmap opacity, zoom |
+| D1–D4 | preset (factory default) | 4D depth, camera yaw, camera pitch, pattern (D5–D8 dark) |
+| C (cue knob) | preset | step the shape, one click a shape |
+| Activator (G8), columns 1–6 | preset | toggle planes ZW, XW, YW, XY, XZ, YZ |
+| Row 3, columns 5–8 | preset | field motion STILL, ORBIT, WAVE, RIPPLE |
+| Scene launch 1–5 | preset | points, lines, faces, rotate, reset view |
+| ▲ ▼ | preset | brightness up / down |
+
+The preset rows above are what a fresh preset starts with
+(`apc40.SCENE` on D1–D4); a factory or user preset with knobs of its own
+replaces all eight device knobs, and a preset with an empty desk has
+every preset-layer control dark. D4 steps through the twelve patterns,
+which show only where faces are drawn.
+
+**Bank pad lights** (rows 1, 4, 5): green while its preset is the loaded
+one, amber while its slot holds another preset (velocity 5, Akai's
+"yellow"; `apc40.filled_of`), dark when empty. The diagram draws amber at
+half strength with the preset's name.
+
+**Save as on the desk.** Hold any pad of the clip-stop row for 0.6 s
+(`midi.HOLD_S`): the live state is saved as a **new** user preset named
+from the loaded one with the next free number (TRIP → TRIP 2; with
+nothing loaded, PRESET 1; it never overwrites a file and never hides a
+factory preset), it becomes the loaded preset and goes into the next
+empty bank slot, and the show is written at once ("saved TRIP 2 → F6",
+or "→ slot 10"). The bar is lit while held; on a save the bar and the new
+slot's pad blink for 1.5 s. A full bank still saves, to the preset list,
+and says so. A tap does nothing; two fingers save once.
+
+**Knobs and faders.** The track and device knobs are endless encoders:
+the app sets their position with the ring's CC, so a knob continues from
+its ring after a layer switch or a preset load. The faders are real pots
+with **soft pickup**: after a change they do nothing until moved through
+the param's value. A fader keeps its catch through a preset load unless
+the load moved its param, so the crossfader and the faders (all session
+params) carry on from where they are. A fader moved while its row is
+disabled, or while an armed learn takes its messages, picks up again
+from where it is (`MidiIO._passed_over`) rather than jumping.
+
+**Knob smoothing** (`desk.slew`, "Knob smoothing", SYSTEM page under
+**midi**; off to 250 ms; the running app starts at **80 ms**,
+`routing.SLEW_DEFAULT_S`, unless the show saved its own value). A knob
+or fader row with op `abs` on a continuous, non-integer param glides to
+each new value over that long instead of landing a detent at a time, and
+comes to rest on the same detent it would have. Not smoothed: the cue
+knob and every other relative row, buttons, and an `abs` row on an enum,
+toggle, trigger or whole-number param. A value set meanwhile by anything
+else stands and the glide stops; a preset load ends every glide but a
+session param's; off, an unplug or a quit lands every value at once. The
+setting is saved with the show, never with a preset, and is on no knob.
+
+**Reconnect.** With no desk connected the app looks for it every 2 s
+five times, then every 10 s (`midi.RECONNECT_S`, `RECONNECT_FAST`,
+`RECONNECT_SLOW_S`); a desk that vanishes is looked for at the fast pace
+again. `[midi] enabled = false` stops all of it.
+
+**Macros** (`macro.1`–`macro.8`) are knobs with subscribers: each
+subscriber sets a param's base or scales a route's depth over its own
+`from → to`. A hand on a macro moves only the depths.
+
+## 9. Learn, Unbind and routing
+
+The control model — the parameter registry, bases and effective values,
+routes (`push` / `position`), one performer per param, the referee — is
+[ARCHITECTURE.md](ARCHITECTURE.md) §3. What follows is
+how it is operated.
+
+**The right-click menu** opens on a param's widget, on a row's label and
+on every analyzer meter. It lists what is bound — the preset's desk rows
+("K2 (track knob 2)"), each route in words ("R height pushes +0.45"), the
+session's rows dim — then:
+
+- **Learn desk** — wherever a desk row can go, device plugged in or not.
+  Completed only by the desk: a knob, a button, a fader, or a click on
+  the diagram. The invariant controls keep working meanwhile (a fader
+  moves, a bank pad loads — the learn then lands in the preset just
+  loaded). With SHIFT latched any other control is refused in words
+  and the learn stays armed: unlatch and the same learn lands.
+- **Learn hand ▸ left / right** — only with a tracker, on a param a hand
+  can drive (not a setting such as `ghost.mirror`), for the sides the
+  rig's axes have. Completed only by an axis of that hand; the other
+  hand and the desk do their own jobs meanwhile.
+- **Cancel learn** while this param is armed.
+- **Unbind** — shown only when there is something to remove; a submenu
+  ("desk — K2", "route — R height, LFO 1", "both") when there are both.
+  Removes the preset's desk rows and every route on the param, as one
+  undo step; never a session row.
+- The hand rows' "Gate: … ▸" and "Route a lane here…".
+
+**A learn writes into the loaded preset** — never `bindings.json` — and
+lights its dirty dot until a save. A desk learn makes a preset-layer row;
+the line says what let go ("learned view.bright ← D3 (device knob 3)
+(into the preset); K1 let go"). A hand learn makes a route naming the
+axis by name (`hand:right.pitch`), so a rig that reorders `[hands] dofs`
+keeps its presets; a name the rig lacks is dormant. What it lands as:
+a tilt, or a sideways or in/out move on an axis whose "Centred" is on,
+**pushes** by `hands.learn_depth` (default 0.25, 0.05–1, HANDS page,
+saved with the show) — it adds to the setting and is nothing while the
+hand is level; height pushes onto a range centred on zero (a rate, an
+angle, a pan, hue) and is the fader (`position`) on anything else; a
+toggle, list, trigger or whole-number param always gets the fader. A
+learn takes that axis's other routes with it (the line says "moved
+from …"; one ⌘Z puts them back). An armed learn never times out.
+
+**The ROUTING page** is one page over the loaded preset: its head (the
+preset, its dirty dot, save / as…, which desk layer is up), the routes,
+the desk with its dark controls, the macros and their subscribers, and
+the session's MIDI rows read-only. **The filter** (left of `+ route`)
+keeps only the lines that contain every typed word, matched anywhere —
+a route's sentence, source, target and label; a desk line's glyph, Akai's
+name and target; a macro's id, label and subscribers. It is UI state:
+not saved, no undo step, empty at launch, left alone by a preset load;
+its × and a click on a desk control clear it. A route's `scale` can only
+be a session param; a route may perform a session param, marked
+"session" on its row.
+
+## 10. Presets, shows and the bank
+
+A **preset** (`presets/<slug>.json`) is one whole performance moment:
+the performance groups' values (`view rot camera pattern dream fx lfo
+macro`, `params.PERFORMANCE_GROUPS`), the performer routes, the desk's
+preset layer, the macros and the module labels. **A load replaces all of
+it** — every performance param lands from the file or its group default,
+every route and preset-layer row is replaced — and never touches a
+session param (`tempo hands ghost band master scene audio output overlay
+ui desk`): a tapped BPM, the hands' feel and the ghost hands survive any
+preset. Anything a file names that it may not (a session id, an unknown
+id, a route onto a param that is not modulatable, a desk row on an
+invariant control) is dropped with a note and the file is left as it is.
+
+A **show** (`projects/<slug>.hyp.json`; the code says *project*) is the
+session: its values, the module presets of the session groups (the band
+layout and scene), the preset it **starts on**, and the **bank**. The
+factory shows are **party** (F1–F8 TUMBLE, FACES, FIELD, WAKE, TRIP,
+ACID, MANDALA, NOITA; TRACER on slot 9; starts on TUMBLE) and **house**
+(eight house moods). A launch opens the show opened last (`last_show`),
+else the party, your copy of it if you have one.
+
+**The bank** is twenty-four preset names (`library.SLOTS`). F1–F8 and the
+APC40's clip row 1 load slots 1–8, clip rows 4–5 slots 9–24, and the
+PRESETS page all of them. ⇧F1–F8 (or ⇧click on a slot's button) save the
+live state as that slot's preset (`PRESET <n>` for an empty one). QUANT
+and the gamepad's B step to the next **filled** slot; a learned step or
+knob on `preset.select` also skips empty slots. An empty slot or a name
+with no file loads nothing and says so ("slot 13: an empty slot"). A
+show file holds the bank only as far as its last filled slot, never
+fewer than eight entries, and **a load never rewrites a show**. The bank
+and "starts on" are written to the show the moment they change (a
+factory show's first write makes your copy) and are not undo steps.
+
+**Home** — the Home key or the APC40's OVERDUB loads the show's "starts
+on" preset, as a load like any other (one undo step, "home → TUMBLE").
+A show that names none loads nothing and says so.
+
+**The PRESETS page**, top to bottom: **show** — its name, "factory"
+beside a factory show, show ▾ · save · save as · new; **starts on /
+home ▾**, written into the show when picked; **the bank** — F1–F8 as
+eight buttons two a row, slots 9–24 as sixteen smaller buttons four a
+row ("9 TRACER", "10 —"), the live one lit, click loads, ⇧click saves,
+right-click **put preset here…** / **clear slot** (clearing deletes no
+file); a slot whose preset has no file is drawn in the warning ink;
+**the preset strip** — the loaded preset, its dirty dot, save (**save
+copy** on a factory preset) and as…; **more**, folded: a module-preset
+strip per group (save / as… / reset).
+
+**The dirty dot** (`ui.dirty_dot`) is a red disc on every strip, on
+ROUTING's head and on the rail; while there is something to save the
+save chip is solid red, and the loaded slot's bank button carries a
+white disc. It compares the live state with the loaded preset or show
+within undo's float tolerance, so a performer's round-off lights nothing.
+Nothing asks before a save.
+
+**The preset list** (click the preset strip's name): every preset,
+factory ones dim, twelve rows before it scrolls. **×** on yours moves it
+to the trash (slots that name it keep the name, and the line says what
+still points at it); × on a factory preset **hides** it (`hidden.json`;
+only the list loses it). **rename** on yours renames the file, the name
+inside and every show of yours that names it (each copied to the trash
+first; a taken name is refused; a factory preset is refused — save a
+copy first). At the foot, while each applies: **show hidden (n)** with
+**unhide**, and **trash (n) ▸** — every file in the trash, newest first,
+each with **restore**, then **empty trash…**, which asks "delete N files
+for good? — click again" for 4 s. None of these is an undo step.
+
+**Module presets** (one group each, `hyperspace.preset/1`) replace only
+their group. The analyzer's band presets are also its **scenes** (§13).
+
+## 11. Undo
+
+Cmd+Z or Ctrl+Z undoes; with ⇧, redoes (`undo.py`). The footer says what
+it did ("undid Brightness 2.00× → 2.96×", "nothing to undo").
+
+**A step** is one gesture — a slider drag, a desk knob turn, a typed
+value, a toggle, a key or pad press that sets something, a mouse orbit,
+an edit on ROUTING — or one replacing action: a preset load by any road,
+a show load or new show, home, a module preset load or reset, a learn
+landing, an Unbind, a ×, Replace in the Replace / Keep prompt. Once a
+frame `Undo.tick` compares a fingerprint of what the user sets; a change
+opens a step that closes after **0.4 s of quiet** (`undo.SETTLE_S`), so a
+slider moved within 0.4 s of a load joins the load's step. The stack
+keeps 100 steps; a launch starts empty.
+
+**Watched:** the base of every persisted param that is not an alias, a
+trigger or in the `tempo` group — performance and session alike, the
+camera included — and the loaded preset's routes, preset layer and
+macros.
+
+**Not a step:** a performer (a hand, a band, an LFO writes an offset,
+never the base); the rotation phases; the tempo (a tap is never undone);
+triggers; selections and panel state (`band.select`, `fx.select`,
+`preset.select`, `desk.shift`, `ui.*`); the transport; the rig's output
+settings (screen, fullscreen, overlay, the master dim, every
+`output.N.*` switch); `bindings.json`'s session rows; a band added,
+removed or moved (a step's band strips land only on the layout they were
+taken on); a save, a delete, the bank and "starts on" (their net is the
+trash and the show file).
+
+**A restore** puts back only what differs, through `Param.set` and the
+table's own calls: undoing one slider sets one param — no load runs, the
+desk layer stays, faders keep their catch, LFOs keep their phase. Undoing
+a load also puts back what the library calls loaded, so the PRESETS page
+names the earlier preset and **save** writes that one. A restore writes
+no file. The band strips' 8-second "Reset all → Undo" is separate.
+
+## 12. Hands
+
+Ultraleap hands (`hyperspace/hands/`), off until `[hands] enabled =
+true`. Each hand gives its palm's pose — six axes by default, from the
+features in `hands/core.py` (`FEATURES`: x y z in mm, roll pitch yaw in
+degrees, grab, pinch, grab angle, pinch distance, four thumb-to-finger
+ratios) — plus eight pinch switches. Each axis is calibrated, smoothed,
+shaped (dead zone, curve), enveloped (attack, decay), sprung back to a
+rest value when the hand leaves and glided back onto it when it returns
+(Catch). Inside the app the axes are `hand:<side>.<name>` sources for
+routes; outside they go to a MIDI port for a DAW (`[hands] out`).
+`uv run python tools/hands_probe.py` shows every axis live without the
+app (`--calibrate 20` runs the sweep, `--solo right.pitch` sends one axis
+to the DAW).
+
+**The HANDS page** (`hands/panel.py`): the setup strip (a setup is every
+per-axis and global hand setting, a module preset of the `hands` group);
+the status (tracker, each hand — ● in the box, ◌ tracked but outside it,
+○ not seen — the DAW port, the last MIDI sent); the pinch switches with
+their live gaps; the box from above with a height gauge; one row per
+axis (click to edit); the selected axis's transfer plot and settings
+(invert, centred, dead zone, curve, attack, decay, on exit, rest,
+return, bounce, MIDI out, mirror, solo); **feel & calibration** —
+steadiness, response, catch, MIDI rate, hysteresis, pinch thresholds,
+**Learn depth**, **calibrate 20 s**, **reset ranges**; and, under the
+box, the ghost hands: the **Ghost hands** tick; while it is on,
+**Opacity** and a **more ▸** chip on its line and **Style** and
+**Guide** on the next. **more ▸** opens Mirror, Tethers (with a guide
+on) and the ghost's notes — an error, or the unmeasured-mode note; while
+there is one the chip reads **! more ▸** in the warning colour and its
+hover says it. A narrower panel wraps a group onto the next line.
+
+**The interaction box.** A hand counts only while its palm is inside a
+box in the camera's millimetres (x across, y up, z toward the
+performer), one box for both hands. A hand outside it is **absent to
+everything**: its routes let go and the settings return that frame, its
+switches drop, its presence note goes off, its ghost fades. A hand that
+is in stays in until its palm is 15 mm past a face. The **calibrate 20 s**
+sweep sets the box and every axis's range: the box is where the palms
+went (2nd–98th percentile) plus 40 mm; a direction swept less than 12 cm
+is left open and the note says so. The box is off during the sweep, so
+calibrate with nobody else in view. **reset ranges** opens the box and
+restores the default ranges. There is no other control; `hands.json`
+can be edited by hand: `"box": {"x": [lo, hi], "y": [lo, hi], "z":
+null}`, `null` meaning open; a pair that is not two finite numbers with
+lo < hi opens that coordinate with a note.
+
+**Ghost hands** (`ghost.py`): both tracked hands drawn over the render,
+following the skeleton raw (no smoothing), a display only.
+
+| Param | Default | Notes |
+|---|---|---|
+| `ghost.on` | off | modulatable |
+| `ghost.alpha` | 0.6 | modulatable |
+| `ghost.mirror` | off | flip left for right (a mirror or a Pepper's Ghost glass) |
+| `ghost.guide` | OFF | OFF · BESIDE · ON HAND: per hand, a ball per axis, an arc per rotation, the pinch beads and a grab ring; what a route reads is bright, the rest grey |
+| `ghost.tethers` | off | with a guide: a line from each routed mark to a label naming the params it drives |
+| `ghost.style` | HANDS | HANDS (capsules), JOINTS (beads), PALMS (an orb that swells as the hand opens, a ring, a spoke), CAGE (a wire octahedron), MARIONETTE (fingertips on strings from a bar) |
+
+All six are in the `ghost` group, a session group: saved with the show,
+never moved by a preset. `mirror`, `guide`, `tethers` and `style` are
+settings — a hand learn onto one is refused in words, and a preset's
+route onto one is dropped at load. The ghost has its own fixed camera
+framing the box (or, with no box, the calibrated ranges); a hand leaving
+fades out over 0.3 s and one coming back fades in over 0.1 s. Desktop is
+the only tracking mode whose axes have been measured; with `screentop`
+or `hmd` and the ghost on, the HANDS page says so (in **! more ▸**). Where the hands show
+on each output, and whether the effects bend them, is §14.
+
+**Without a camera.** `tools/hands_tape.py record <file>` keeps a few
+seconds of real frames as a tape; `[hands] tape = "<path>"` (with
+`enabled = true`) plays one in the app instead of the camera; `shots`,
+`synth`, `styles` and `info` render, make or describe tapes. A missing
+or malformed tape is a note on the SYSTEM and HANDS pages.
+
+## 13. Audio
+
+**Sources** (`audio.py`). Nothing captures at launch. **A capture
+device**: M or *Listen to mic*; mono, 48 kHz. The device combo lists
+every input; a loopback driver (BlackHole, Soundflower, anything named
+"loopback") is recognised by name, pre-selected, and labelled `System ·
+…` — that is how the Mac's own output is captured (SETUP). **rescan**
+reads the device list again. **A file** (*Load track*; wav, mp3, flac,
+ogg): played through an output stream at the track's rate, the analyser
+built at that rate. Pause keeps the stream running on silence, so the
+bands decay on their own time; K plays / pauses, 0 restarts. Stopping a
+capture lets every lane go at once.
+
+**The chain** (`analyzer.Analyzer`; `bands.py` holds the constants and
+shapers): N bands (1–16), each a centre frequency, a Q and a weighting
+curve (rect, triangular, gaussian, butterworth). Per band:
 
 ```
-FFT bins → weighted power mean under the band's curve → dB → u (0..2.5; 1.0 nominal, 56 dB window)
-  ├─ LEVEL:     asymmetric one-pole (per-band attack / decay)
-  │               → peak / valley window + confidence + gate
-  │               → upward expansion about the band's running mean
-  └─ TRANSIENT: fast env − slow env → relative flux, peak-normalised
-  → blend(level, transient) per band          ← the `trn` knob
-  → harmonic coupling → soft ceiling          ← this is the INPUT meter (white)
+FFT bins → weighted power under the band's curve → dB → u (1.0 nominal)
+  ├─ LEVEL: attack / decay envelope → peak / valley window + gate
+  │         → upward expansion about the band's running mean   (contrast)
+  └─ TRANSIENT: fast env − slow env, peak-normalised            (transient)
+  → blend → harmonic coupling → soft ceiling          ← the INPUT meter (white)
   → pre-drive → soft ceiling → transfer function → post-drive → soft ceiling
-                                              ← this is the OUTPUT meter (red)
-  → lanes[i] = out[i]  in [0, CEIL)
+                                                      ← the OUTPUT meter (red)
+  → lane i
 ```
 
-**What changed in plan 07 and 09.** The chain ends at `lanes`. There is no
-`PLANEDRIVE` and no band → plane table in the chain: a lane reaches a
-rotation plane, a pattern input or anything else as a **route**
-(ARCHITECTURE §3). The reference's `dir · out · 3.2 · gain` is the `legacy6`
-preset (a routing preset until plan 13 WP5 made it a full one) —
-`lane:i → rot.rate.<plane>` pushes with depth `dir · ROT_DEPTH` scaled by
-`master.gain` on rate bases of 0 — which the parity test drives through
-the code that generates it (`preset.generated`, `tests/test_routing.py`).
-The house presets carry the same rows on bases of **1**, so the idle spin
-stays and audio rides on top. `bands.BANDS` still holds the reference table for those two
-uses and the meter tooltip.
+The chain ends at the lanes; a lane reaches a rotation plane or anything
+else only as a route. Nothing hard-clamps: three soft ceilings bend from
+1.25 towards 2.6. The FFT is 4096 points, Blackman window, smoothing
+0.15 (the band envelopes do the smoothing). Harmonic coupling boosts a
+band by its coherence with the next band up — a proxy, not true
+harmonic detection. `master.dyn` scales the dynamics recovery (valley
+tracker, expansion, transient path), which brings back motion a limiter
+took from a brickwalled master; it runs to 4×. A meter column pinned
+near the ceiling for half a second lights a blinking annunciator.
 
-**Bands.** Each band is a centre frequency, a Q and a weighting curve
-(rect = the reference's bins, triangular, gaussian, butterworth), then the
-existing knobs (`analyzer.py:105-186`). Bands can be added, removed and
-reordered at runtime; strip order never changes the maths
-(`tests/test_analyzer.py:207`); retuning f / q / curve keeps the trackers.
-The `band.{i}.*` params are rebuilt on every layout change through the
-`Control.on_layout` hook that `build_registry` installs (`control.py:36-45`).
+**Input trim** (`band.{i}.trim`, `master.trim`; off, then −60 to +12 dB)
+is applied before the trackers and again after them, because the
+window normaliser removes any static gain in front of it. **AUTO /
+MANUAL** (`band.{i}.norm`, the chip on the strip): AUTO, the default, is
+the reference chain, where trim is not monotonic through the useful
+range; MANUAL bypasses the window, expansion and warm-up for that band,
+so its level is the envelope and the trim a plain gain — at the cost of
+the dynamics recovery. `uv run python tools/trim_sweep.py --manual`
+prints a sweep.
 
-**Headroom.** Nothing hard-clamps the fader path. Four landmarks: `NOM =
-1.0` (a band working normally — a meter landmark, `ui.NOM`), `KNEE = 1.25`
-(where the soft ceiling starts to bend), `HEAD = CEIL = 2.6` (the
-asymptote; one value, `HEAD` kept as the reference's name for it on the
-input and transfer stages). `soft_ceil(x, knee,
-ceil)` is the identity below the knee and `knee + r·t/√(1+t²)` above it —
-slope 1 at the knee, a t⁻³ tail, strictly increasing
-(`tests/test_core.py:58-64`). There are three of them, after coupling, after
-pre-drive and after post-drive, as in the reference. The point: a flat top
-is not "loud", it is zero dynamics, and the old `clamp(x, 0, HEAD)`
-flat-topped four bands at once.
+**Thirteen transfer functions**: LIN SQRT SQ CUBE CURV GATE INV HOLD STAC
+CHOP TREM S&H SLEW (CHOP, TREM and S&H run at fixed rates, not the
+tempo clock).
 
-The clipping the owner once reported was manufactured inside the chain:
-the expander's makeup had no gain-staging discipline (`DEV_AIM`,
-attenuate-only now) and harmonic coupling multiplied an already-clamped
-value and clamped again. Coupling now multiplies the *uncoupled* copy and
-is followed by the ceiling (`analyzer.py:550-568`). The Python bar for this
-is `tests/test_core.py:127-151`: nothing at or above the asymptote, settled
-spread within 0.08 of the golden trace.
+**Eleven scenes**: Balanced, Kick & Sizzle, Glacial Drift, Strobe Cage,
+Bass Engine, Air & Lace, Inverse World, Percussive, Tremolo Web,
+Harmonic Bloom, Slow Bass / Fast Air. A scene is a band preset
+(`library/band/*.json`). The scene combo, the APC40's scene pads and
+**Reset** re-tune the bands you have from the scene; the band preset
+strip loads a file whole, layout included. **Reset all** relabels to
+**Undo** for 8 s.
 
-`WARM_F` (60 frames) fades the expander in (`dev *= min(1, warm / WARM_F)`);
-the first three frames use a seed instead of a mean and frames before 60 a
-fast 0.25 s mean, because expanding against a stale mean threw every bar
-at the ceiling for the opening half second of every track
-(`analyzer.py:491-492, 553`). `warm` restarts on every
-source attach.
+**Faders** are integer positions on tapers that map exactly both ways
+(`tapers.py`): logarithmic for gains and time constants, linear where
+the quantity is already even; the tag is in each knob's tooltip.
 
-**Meters** read 0..`CEIL` with the nominal line at 38.5 % and the knee at
-48.1 %, two stacked tints so working / headroom / knee read as three
-shades (`ui.py:869-903`). The bar top is an asymptote, so a column that sits
-against `PIN_AT = 0.92·CEIL` for `PIN_HOLD = 0.5 s` is genuinely over-driven
-and lights a blinking annunciator — "full" and "wrong" look different.
+**The tempo clock** (LFO page; B or TAP TEMPO taps, NUDGE shifts the
+downbeat) drives the four LFOs. It syncs to nothing outside the app.
 
-**Dynamics recovery.** A brickwalled master carries almost no level
-variation, so a fixed-floor normaliser maps it to a flat 1.0 and the
-rotation becomes a constant rate. Three parts undo that: a **valley
-tracker** (the window has a moving floor as well as a moving ceiling),
-**upward expansion** about the band's running mean scaled by how squashed
-the band already is, and a **transient path** (fast minus slow envelope —
-a limiter flattens level but cannot flatten change). Global `master.dyn`
-scales the lot; per-band `Contrast` (`exp`) and `Transient` (`trn`) sit at
-the top of the strip. A band with genuinely no dynamics stays flat — this
-recovers what a limiter took, it does not invent motion
-(`tests/test_core.py:111-124`). `master.dyn`'s fader runs to 4× on
-purpose: up to 1× it blends from the absolute to the windowed normaliser
-and grows the expansion ratio; past 1× the blend is full and only the
-expansion keeps growing (owner, 2026-09-28, audit A7; the parity oracle
-is frozen at 0 and 1, where the two agree).
+**The bridge** (`[bridge]`, `bridge.py`) sends the lanes (or any param)
+out as 14-bit MIDI — pitch bend per channel, or CC pairs — rate-limited
+and only on change, and turns the same messages coming in on `in` into
+`ext:<i>` sources for routes. Use two buses: IAC echoes. The SYSTEM page
+shows its state.
 
-**Input trim** (`band.{i}.trim` and `master.trim`, dB) is the mixer-style
-input stage: off, then −60 dB to +12 dB at 1 dB/step with a detent at 0,
-tagged LIN because dB is already a logarithm. It is applied twice — added
-to `db` before `u` is formed (so it moves the band against the references
-that do *not* adapt: the gate `thr`, `CONF_LO`, `PK_MIN`) and again as `t_db
-/ U_SPAN` onto the fader signal after the trackers. The second application
-exists because the window normaliser is a two-point auto-calibration and
-by construction removes any static gain in front of it: pre-envelope trim
-alone is a placebo (`analyzer.py:504-508, 556`).
+## 14. Outputs
 
-**AUTO and MANUAL normalisation** (`band.{i}.norm`, the chip on the band
-strip; plan 11 WP15, audit A10). AUTO — every band's default, and every
-scene or preset that does not name the key — is the reference chain above,
-bit for bit, trim applied twice. It keeps the reference's known behaviour:
-on the real track from a settled state, BASS trim is non-monotonic through
-the range you would reach for (0 dB → out 0.87; −6 → **1.03**; −12 →
-**1.01**; −20 → 0.75; −60 → exactly 0), because the trim's calibration
-depends on harmonic coupling. MANUAL is the fix the owner chose
-(2026-09-28): for that band the window, the confidence gating of `dyn`, the
-expansion and the warm-up are bypassed; the level is the envelope itself in
-`u` (1.0 = nominal), which carries the trim once, as a plain gain; the
-transient knob blends toward the peak-normalised flux scaled by that level;
-the gate, coupling, drives, shaper and ceilings are unchanged. The trackers
-keep running, so switching back resumes where the window would have been.
-Measured on the brickwalled fixture, BASS settled, MANUAL: 0 dB → 1.63; −6
-→ 1.51; −12 → 1.34; −20 → 1.05, non-increasing on every band
-(`test_manual_normalisation_makes_trim_monotonic`; `uv run python
-tools/trim_sweep.py --manual` prints a sweep). A MANUAL band gives up the
-limiter-undoing dynamics recovery; that is the trade.
+**One output** by default: the render window, from `[output] monitor` /
+`fullscreen`. **Several** from `[[output.screens]]` (§5), up to four
+(`outputs.MAX_OUTPUTS`), numbered by their place in the list whether or
+not they opened. Output 1 is made as the single render window always is
+(4× MSAA; transparent only with `[output] overlay = true`), sets the
+frame's size and paces the loop (its swap waits for its screen; later
+outputs' swaps do not). Later outputs are opaque, never overlay, and
+their screen and fullscreen come only from the config (the OUTPUT page's
+Screen and Fullscreen rows move output 1). A later output whose
+`monitor` names no connected screen **is not opened**, with a note
+("output 2 (projector): monitor = 2, but 2 screens are connected (0–1) —
+not opened"); output 1 always opens. A later output of another shape
+shows the whole frame letterboxed, the hands registered on it. Each
+later output is drawn from the shared textures in its own context
+(`outputs.Presenter`); a failing present marks that output and the rest
+go on.
 
-**Analyser** (`analysis.py`): `FFT_SIZE = 4096`, Blackman window, 1/N
-normalisation, `SMOOTHING = 0.15` (the Web Audio smoothing constant) —
-deliberately low, the
-per-band envelopes do the smoothing and the analyser's own would fight the
-attack / decay knobs. It smooths once per `Analyzer.step`, so the spread is
-cadence-sensitive (60 vs 120 fps, `tests/test_core.py:114`). The same call
-feeds the 4 s log-frequency spectrum history the band editor draws.
+**Per-output switches** (`overlay.register_switches`): `output.N.scene`,
+`output.N.hands`, `output.N.through` ("Hands through effects") and, with
+two or more outputs or a lone entry whose `dim` is under 1,
+`output.N.dim` (multiplied by the master dim). They are **rig settings**:
+set from the config entry at every launch and Cmd+R (defaults scene on,
+hands on, through off, dim 1), never saved, never in a preset, show or
+undo step; a switch flipped mid-set lasts until the restart. They can be
+learned onto a desk button.
 
-**Harmonic coupling** boosts a band by the geometric-mean coherence with
-the *next band in frequency order* (the top band reads itself), so
-overtone-rich sources drive harder than pure tones (`analyzer.py:364-371, 561-568`). It is a proxy, not integer-multiple peak detection — stated
-plainly to the owner. It sits on the input side because it characterises
-the signal rather than shaping it.
+| Scene | Hands | Through | The output shows |
+|---|---|---|---|
+| on | on | off | the scene with its effects, the hands clean on top (default) |
+| on | on | on | the scene and the hands, both through the effects |
+| on | off | — | the scene with its effects |
+| off | on | off | the hands alone on the ground |
+| off | on | on | the hands alone, through the effects |
+| off | off | — | black |
 
-**13 transfer functions** (`SHAPERS`), each with per-band scratch state so
-envelopes and their built-in oscillators hold between frames: `LIN` `SQRT`
-`SQ` `CUBE` `CURV` (smoothstep) `GATE` `INV` `HOLD` (peak hold, 0.7 s fall)
-`STAC` (4 ms / 75 ms) `CHOP` (5 Hz square) `TREM` (6 Hz sine, 70 % depth)
-`S&H` (180 ms) `SLEW` (800 ms). Changing a band's function resets that
-band's scratch state. `CHOP`, `TREM` and `S&H` are fixed-rate and unaware of
-the tempo clock (plan 09's LFOs are the clock-aware oscillators; audit).
+"Hands shown" also needs `ghost.on` and a hand drawn this frame; with no
+effect on, "through" changes nothing. The echoes and the dream never
+hold the hands. With the guide on, its gauges and labels are drawn over
+the hands after the effects, so they are never bent. The OUTPUT page
+says in words what each output shows ("scene + hands through the
+effects · 64%", "black — the scene is off and no hand shows").
 
-**11 scenes** snapshot every band's function, drives, attack, decay,
-threshold, contrast, transient and trim (and, since plan 11, the AUTO /
-MANUAL switch, AUTO when a file does not name it): Balanced, Kick & Sizzle, Glacial
-Drift, Strobe Cage, Bass Engine, Air & Lace, Inverse World, Percussive,
-Tremolo Web, Harmonic Bloom, Slow Bass / Fast Air. A scene **is** a band
-preset — the one store is `library/band/*.json`, whose layout carries the
-band names; `control.SCENES` only fixes the combo order, because the
-APC40's clip grid and saved projects address scenes by index (plan 11,
-audit A1). Two ways in: the scene combo, the grid and Reset *re-tune the
-bands you have* from the scene's values (`Analyzer.apply_scene`; rows past
-the scene's take the default strip) and tell the strip which preset is
-current; the preset strip loads the file *whole*, layout included, and
-moves the combo when the file is a scene. A user file of the same name
-shadows the factory scene for both. A band preset saved from the strip
-carries the current layout, names included (`Library.extra`, audit A2).
+**The master dim** (`output.dim`, the crossfader, the OUTPUT page's first
+row) multiplies the finished frame — scene, look-back, effects and
+hands — on every output: 0 black, 1 full. It is a rig setting: not
+saved, not modulatable, not in any preset, show or undo step, so every
+launch starts at full. On an opaque ground the ground stays opaque black;
+in overlay the render fades off the desktop.
 
-**Per-band knobs** (`tapers.KNOBS`, registered as `band.{i}.*` and as the
-`band.sel.*` aliases that follow the selection): contrast 1:1–1:5,
-transient 0–100 %, pre-drive and post-drive off / 0.06–8×, attack 0.5 ms–
-2.05 s, decay 5 ms–20.5 s, threshold 0–0.6, trim; plus centre `f` (20 Hz–20
-kHz, log), `q` (0.1–20), `curve`, and `norm` (AUTO / MANUAL, a scene
-setting, never a performer's).
+**Overlay** is possible only with `[output] overlay = true`; without it
+the render window is always opaque and T, MASTER select and the panel's
+toggle do nothing (the OUTPUT page greys it and says why). With it, T
+puts output 1 over the desktop: no frame, above everything, clearing to
+see-through, clicks passing through (G or PAN takes them back);
+`output.bg` and `output.alpha` set the ground and opacity. The
+`overlay.*` ids are aliases of `output.*`.
 
-**Fader tapers.** Every fader is an integer position; a `Taper` owns both
-directions and `unmap(map(p)) == p` exactly over the whole throw
-(`tests/test_control.py:27`), which is what keeps a scene load from walking
-a fader sideways. `exp_zero(u, n)` is exponential with a hard zero at
-position 0 and unity at `u`; `exp_pure` has no zero; `exp_time(v0, n)` is a
-time constant; `lin_t(d, n)` is `p/d`; `lin_db` is the trim. LOG for every
-gain and time constant (equal travel, equal ratio); LIN only where the
-quantity is already perceptually even. The LOG / LIN tag is in each knob's
-tooltip. For modulation the same taper maps floats without snapping, and a
-sub-detent base survives under a performer (ARCHITECTURE §3.1).
+**Where windows open** (`placement.py`): a configured `monitor` /
+`control_monitor` index first, then `windows.json` (the last quit's
+rects — always the plain window's, never a fullscreen cover), else the
+render window top-left of the primary screen and the controls flush
+right; two later outputs with no memory open 40 px apart. A remembered
+rect is used only when enough of it is on a connected screen; otherwise
+the default spot, with a note. `windows.json` is written on quit and
+Cmd+R only.
 
-**Reset** resolves to the *currently selected scene* (`Control.scene`),
-never to hard-coded defaults; on Balanced the two coincide. It re-tunes
-the bands loaded and never changes the layout. Reset-all is
-guarded by an 8 s **undo** (the button relabels itself) rather than a
-confirm; the undo snapshot carries the layout too and is discarded on a
-scene change — a strip load included — or any structural change, because
-it belongs to the old scene (`control.py`, `tests/test_control.py:74-112`,
-`tests/test_analyzer.py` "reset_all_re_tunes").
+## 15. Hot reload and the watchdog
 
-## 4b. Transport
+**Hot reload** (`hotreload.py`). Save a module on `hotreload.MODULES`
+while the app runs and live objects pick up the new code in place; a
+broken save keeps the last good version and shows the error on the
+SYSTEM page. `app.py`, `hotreload.py`, `offline.py` and `watchdog.py`
+are cold: changing them needs Cmd+R. A changed `__init__` does not
+re-run on live objects. Shaders (`patterns.glsl`, `_common.glsl`,
+`shaders/fx/`) and the library's JSON files reload too.
 
-A file plays through one `OutputStream` that stays open for the life of
-the source. **Pause does not tear anything down**: the callback keeps
-running and emits silence, so the ring keeps filling and the bands decay
-on their own time constants — the shape coasts to rest rather than
-freezing. Position is `_offset + _played`, where `_played` counts the
-frames the callback has handed to PortAudio (so it leads the DAC by the
-buffer latency), folded by the track length for the loop (`audio.py:193-
-228`, `tests/test_audio.py` `test_transport_position_math`). Restart is return-to-zero preserving
-the play / pause state. Keys, as table rows: `K` play / pause (`audio.play`),
-`0` restart, `M` capture on / off. In capture mode `stop()` closes the
-stream and `audio.on` goes false, so the chain freezes and every lane row
-lets go at once — the bases return that frame.
+**The watchdog** (`watchdog.py`) appends to `<home>/stall.log` a `===
+<kind>` header — the time, the loaded preset, what happened — and every
+thread's stack, for:
 
-## 5. Control-surface conventions
+- `stall` — no frame completed for 2 s;
+- `render error` — the render draw raised (the panel lives on; the
+  render window holds its last frame), once per distinct error;
+- `render stall` — no render output presented for 2 s while the loop
+  runs (minimised, occluded, another Space…), with the window's state;
+- `warning` — one output not presenting while another does, an output's
+  present that raised, or a preset asking for the dream with no worker;
+- `stranded target` — a frame that began on an offscreen framebuffer;
+- `non-finite` — a param that dropped a NaN or inf.
 
-The panel is operated mid-set, from a few feet back, in a dark room:
-**legibility at a distance comes first.** The reference was a square,
-hairline instrument panel; the Python panel keeps its palette and its
-signature and softened the rest in September 2026 (PR #24) after it proved
-unreadable at a party.
+`kill -USR1 <pid>` dumps every thread on demand, and a stall that holds
+the GIL is caught by faulthandler's timer. The SYSTEM page shows the
+log's line once it has entries. Nothing in the watchdog can stop the
+show: a log that will not open is kept as an error and the loop goes on.
 
-- **Palette.** Black ground, red `#ff2b2b` as the only accent (it matches
-  the vertex colour), three greys of text: `TEXT` for values and names,
-  `DIM` for labels and idle state, `FAINT` for notes. Nothing a user needs
-  to read goes below `FAINT`.
-- **Type.** Weight carries it. SF Rounded Medium (16 px) for words, SF
-  Rounded Bold uppercase with light tracking (12.5 px) for field labels, SF
-  Mono Semibold (16 px) for every number, so a moving readout never
-  jitters. The SF faces are variable fonts; `ui.load_fonts` picks the named
-  weight through FreeType's face index and falls back off macOS.
-- **Shape.** Rounded frames (8 px), pill chips (`ui.chip`) in place of small
-  buttons, a solid red pill for anything lit: the open page on the rail, a
-  spinning plane, the active preset slot. A checked box is a red square with
-  a white tick.
-- **Faders.** Every slider fills red from its origin (zero on a signed
-  range) to its value, so position reads at a glance. A slider with its
-  readout inside has no knob, only a red edge under the text. A performed
-  param shows a **white** ghost bar at the effective value and names its
-  owner in the tooltip.
-- **Layout.** No page scrolls at `app.CONTROL_SIZE`
-  (`test_every_page_fits_the_control_window` in `tests/test_ui_shell.py`
-  measures every page with a hands setup, an `Output` and a routed table;
-  ROUTING's routes, desk, macros and session rows scroll in a child by
-  design, and `test_the_routing_rows_scroll_in_their_own_child` and
-  `test_the_routing_page_fits_over_a_loaded_preset_and_a_full_desk` hold
-  that). The
-  HANDS page puts its switches beside the box and its feel knobs two to a
-  row beside the transfer plot for that reason. Right-aligned groups are measured
-  with `ui.chip_w` / `ui.button_w`, never hard-coded offsets. Every widget
-  has its own imgui id (`tests/test_ui_lfo.py:86`). One grey (`ui.LINE`)
-  for every rule and frame, one `ui.u32`, one `Panel.half` for a slider
-  in a half-width cell.
-- **Presets and the bank** (plan 13 §2, §5). A **preset**
-  (`<home>/presets/<slug>.json`, `hyperspace.preset/2`, factory ones in
-  `hyperspace/library/presets/` shadowed by name) is the whole
-  performance: the performance groups' values (`view rot camera pattern
-  dream fx lfo macro`), the performer routes, the desk's preset layer,
-  the macros and the module labels. A load **replaces everything** (D2):
-  every performance param lands from the file or its group default,
-  every performer row, the preset layer and the macros are replaced, and
-  a session param (`tempo`, `hands`, the analyzer's `band` / `master` /
-  `scene` / `audio`, `output`, `overlay`, `ui`) is never touched — a
-  tapped BPM survives any preset. What a file names that it may not
-  (a session id, an unknown id, a non-performer route, a second
-  performer, a desk row on an invariant control) is noted on the panel
-  and ignored. A module label is recorded, never chain-loaded (D3). The
-  **project** (`hyperspace.project/2`) is the session's values, a
-  `startup` preset loaded on launch (D11), and a **bank** of eight preset
-  names: F1–F8 and the APC40's clip row 1 load slot k (an empty slot or
-  a dangling name loads nothing and says so), ⇧F1–F8 save the live state
-  as that slot's preset into the user folder (`PRESET <n>` for an empty
-  one), QUANT and pad B step to the next filled slot (`preset.next`). The
-  PRESETS page's preset strip lists, loads, saves and deletes them;
-  module presets keep their own strips and replace only their group.
-- **The party show opens** (decision 22, plan 14 WP3). The panel calls a
-  project a **show** (plan 14 §3; the code keeps `Project`). The factory
-  shows are `party` (`library.DEFAULT_PROJECT`: TUMBLE, FACES, FIELD,
-  WAKE, TRIP on F1–F5) and `house` (the eight house moods, the factory
-  default until plan 14); there is no factory `default`. A launch opens
-  the show opened last — its name in `<home>/last_show`, written by every
-  show load, save as and "starts on" pick (`Library.remember`) — else the
-  party, the user's copy of either if there is one (`Library._open_default`).
-  Once, for a home plan 13 migrated: a user `projects/default.hyp.json`
-  (MIGRATED and the house moods) is renamed `projects/mine.hyp.json`,
-  named `mine`, bank and startup as they were, backed up first as
-  `default.hyp.json.bak-v2` (a dated copy if that name is taken), said on
-  stderr and on the PRESETS page's warning line; a `mine` already there
-  leaves both files alone; once settled, `projects/RENAMED.txt` says so and it
-  never runs again, so a show you later save as "default" stays yours;
-  `last_show` holds the show's file name, not the name inside it
-  (`library.unshadow_default`, run by `Library()`
-  and after plan 13's migration converts a schema-1 `default`; plan 13's
-  MIGRATED now lands in `mine`, made from `house`)
-  (`tests/test_party_show.py`).
-- **The PRESETS page** (plan 14 WP4), top to bottom: **SHOW** — the
-  show's name on its own line, never covered, a dim "factory" beside a
-  factory show, then show ▾ (factory shows dim) · save · save as · new;
-  **starts on ▾** — labelled, and written into the show the moment it is
-  picked (`ui_presets.set_starts_on` → `Project.write`; a factory show's
-  write makes your copy); the eight **preset buttons**, two a row, each
-  its F-key and its preset's name (elided to the button), the live one
-  lit, click loads, ⇧click saves; the **preset strip** (the loaded
-  preset, its dot, save / as… / reset — save on a factory preset writes
-  your copy); and **more**, folded, a module-preset strip per group; the
-  library's warning, error and status lines under all of it. One word per
-  thing: show, preset, starts on, module preset, factory. The rail's
-  dirty dots and the footer's mark compare against the loaded preset or
-  show: a preset that names no module preset for a group leaves the group
-  clean as it landed (`Library.label(g, None)`), a show load keeps the
-  performance groups' references and marks the session groups it names
-  no module for clean as it left them (`Project._apply`), and a factory
-  show opened as shipped is not unsaved (`Project.factory`), so loading a
-  factory preset or show shows everything clean (`tests/test_ui_presets.py`).
-- **The desk** (plan 13 §3). The APC40 has two layers under a latched
-  SHIFT, whose LED is lit while the global layer is up. The faders, the
-  preset row, SHIFT, the clock corner, the transport and the track buttons
-  are **invariant**: one meaning on both layers. The **global** layer is
-  the session's (the band strip on the device knobs, hand feel and BPM on
-  track knobs 1–5, the band scenes on clip rows 2–3); the **preset** layer
-  is the loaded preset's (the factory default: the view faders on the
-  track knobs, the shape grid, the render toggles). A control the up layer
-  does not map is dark and does nothing. Knobs continue from their ring
-  after a switch; faders soft-pick-up (hand check 31 is the hardware
-  assumption). A macro is a knob with subscribers: each sets a param's
-  base or scales a route's depth over its own `from → to`; a hand on a
-  macro moves only the depths.
-- **The desk's glyphs and diagram** (plan 14 WP7, decision 25). Every
-  control has a short glyph (`apc40.LAYOUT`): K1–K8 the track knobs,
-  D1–D8 the device knobs, S1–S8 the faders, SM the master, X the
-  crossfader, C the cue knob, Gr·c the button field (rows 1–5 clip
-  launch, 6 clip stop, 7 track select, 8 activator, 9 solo, 10 rec-arm;
-  column 9 scene launch, STOP ALL, MASTER), B1–B22 the other buttons, ⇧
-  SHIFT. A ROUTING row, a Learn message and the cheat sheet use the
-  glyph; Akai's name stays in the tooltip. The control window draws the
-  desk above the cheat sheet (`ui_desk.py`, `ui.desk`): the layer that is
-  up lit exactly as the device is (`Bindings.active`, `routing.led_lit`),
-  the rest dark, ⇧ red on the global layer; it reads the table, so it
-  works with no device plugged in. A new control in the protocol gets a
-  `LAYOUT` entry, or `tests/test_ui_desk.py` fails.
-- **Learn and the ROUTING page write into the loaded preset** (plan 13
-  §3.3). Right-click → Learn, then a knob: a preset-layer row; then a
-  hand: a route naming the axis that moved, `hand:right.pitch` (decision
-  register row 20: hand routes are addressed by name, so a rig that
-  reorders `[hands] dofs` keeps every preset on its axes; a name the rig
-  lacks is dormant; the Replace / Keep prompt as ever). With SHIFT latched,
-  or on an invariant control, a knob learn is refused and the reason shows
-  on the SYSTEM page's learn line and the ROUTING head. The ROUTING page is
-  one page over the loaded preset — head (the preset, its dot, save /
-  as…, the layer, said "desk layer: preset" or "desk layer: global"), routes, the desk with its dark controls, the macros
-  and their subscribers, the session's MIDI rows read-only. Nothing there
-  writes `bindings.json`; the preset's dirty dot shows the edit until a
-  save (the head, the PRESETS strip, ⇧F). Right-click → Unbind removes
-  the loaded preset's desk rows on the param, and refuses a session row
-  the way Learn does. A route's `scale` is a session param only (the
-  drive fader; decision register row 18 (a)); a route may perform a
-  session param, marked "session" on its row (row 19 (a)).
-- **The home folder** (`~/Hyperspace`). `bindings.json` holds only the
-  session's controls — keys, pad, the invariant and global-layer MIDI
-  rows; the routes, the preset layer and the macros are the presets'
-  (plan 13 §2.2). The routing presets are gone (decision 10): the
-  factory ones are presets, and a user's `bindings/*.json` were made
-  presets once and are no longer read. The first launch of this build
-  migrates an older home once (`preset.migrate_home`, ARCHITECTURE
-  §3.8): schema-1 projects become presets and schema-2 projects,
-  `bindings.json` gives its preset part to them (a `MIGRATED` preset
-  when no project takes it), every rewritten file is kept first as
-  `<file>.bak-v<n>` (a dated copy when the name is taken, never over a
-  `.bak-*` already there), and stderr names each backup.
-- **The cheat sheet** (`ui.CHEATSHEET`) is the canonical human list of the
-  keys; `test_the_cheat_sheet_matches_the_tables_and_the_loop_keys` parses
-  its key column against `routing.keymap()`, `padmap()` and the keys the
-  loop still handles itself (`app.LOOP_KEYS`).
-- The large cell-count readout at the top of the view page is still the
-  signature element. Keep new UI consistent with this.
+## 16. Testing
 
-## 6. Testing
+```bash
+uv run pytest -q
+uv run ruff check .
+```
 
-`uv run pytest` — 886 tests, 11 skipped without torch, about 35 s. `ruff`
-is the linter. Every test runs with `HYPERSPACE_HOME` pointed at its own
-`tmp_path` (`tests/conftest.py`), so no test can touch `~/Hyperspace`.
-What holds what:
+- Every test runs against its own temporary home: `tests/conftest.py`
+  sets `HYPERSPACE_HOME` to the test's `tmp_path` in `os.environ`
+  itself, so no test can read or write `~/Hyperspace`.
+- No test reaches the machine's MIDI: the autouse fixture
+  `_no_real_midi` makes the port lists empty and every open raise,
+  unless a test patches `mido` itself.
+- One test is skipped:
+  `tests/test_hands_tape.py::test_every_recorded_tape_replays_through_the_ghost`,
+  because no real hand tape has been recorded into
+  `tests/fixtures/hands/` (`tools/hands_tape.py record` on the rig).
+  `tests/test_homegit.py` also skips its git cases where there is no
+  `git` on the PATH.
+- The parity net: `tests/golden/` traces recorded from the retired HTML
+  app (`tools/record_golden.py`, which needs Playwright's Chromium) hold
+  geometry exact and the audio chain's behaviour; `tests/legacy_chain.py`
+  is a frozen copy of the reference chain that the analyzer's "Legacy 6"
+  layout must match bit for bit. Re-freeze it only when the maths
+  changes on purpose.
+- GL and imgui run headless: every shape renders offscreen, every panel
+  page draws and fits, every factory effect compiles. Extra windows and
+  screens are fake GLFW window systems (`tests/test_app_boundary.py`).
+  `HYPERSPACE_FRAMES=n uv run hyperspace` is a windowed smoke run.
+- Import boundaries are tests: the core never imports `midi`, `bridge`
+  or `dream`; `hands/core.py`, `hands/signal.py`, `lfo.py`, `tempo.py`,
+  `undo.py` and `homegit.py` import nothing from the package.
 
-- **Golden traces** (`tests/golden/`, recorded once from the HTML by
-  `tools/record_golden.py`): geometry exact to 1e-12 with vertex order,
-  the audio chain's settled statistics at matched cadence
-  (`tests/test_core.py`, `tests/test_golden.py`). The relaxed parity bar
-  (DECISIONS): geometry exact, audio behavioural, visuals by eye.
-- **The frozen chain** (`tests/legacy_chain.py`) against the analyzer's
-  legacy layout, bit-exact (`tests/test_analyzer.py:63`).
-- **The control model**: the four plan-09 audit simulations
-  (`tests/test_routing.py:1029-1095`), the referee, migration,
-  relative writers under modulation (`tests/test_app_relative.py`), rings
-  never chasing a performer (`tests/test_midi.py:272`); the APC40's two
-  layers — the latch, no fall-through, the release read at the press, the
-  knobs re-based and the faders picking up, the sorted map and an older
-  file's one-time sort (`tests/test_desk.py`); the macros' base and depth
-  subscribers, a performer on a macro moving only its depths, the `scale`
-  migration and refusal (`tests/test_macros.py`); the one-time migration
-  of an owner-like home — presets, backups, nothing lost, a second
-  launch that changes nothing, every hand lane it carries named by the
-  rig's layout (`tests/test_migration.py`); hand routes by name — a
-  named row follows its axis whatever the dofs order, a name the rig
-  lacks is dormant, a number still reads, the gates and the ROUTING combos
-  by name (`tests/test_hand_names.py`).
-- **Presets and the session** (plan 13): every persisted param in exactly
-  one part (`tests/test_params.py`,
-  `test_every_persisted_group_is_performance_or_session`); a preset load
-  landing every performance base and replacing every route, never
-  touching a session param, the bank's slots, ⇧F, the startup preset and
-  module labels (`tests/test_presets.py`); Learn into the loaded preset
-  and its refusals (`tests/test_learn.py`); the ROUTING page as one page
-  over the loaded preset (`tests/test_ui_routing.py`); plan 12's five
-  party presets loading by F-key and keeping their rules, WAKE's and
-  TRIP's device knobs (`tests/test_plan12_presets.py`).
-- **Boundaries**: the core never imports `midi` / `bridge` / `dream`
-  (`tests/test_params.py:286`, `tests/test_bridge.py:381`,
-  `tests/test_dream.py:55`); `hands/core.py`, `hands/signal.py`, `lfo.py`,
-  `tempo.py` import nothing from the package, and `routing.py` nothing
-  above it — no panel, host or adapter (`tests/test_*_boundary.py`);
-  `config.py` reads the hands rig defaults from `hands/core.py` (the one table),
-  never the reverse.
-- **Hot reload**: every module but `app.py`, `hotreload.py` and `offline.py`
-  is on the watch list in dependency order (leaves first), an optional
-  adapter that was never imported is skipped, every swap target `app.py`
-  registers is defined in a watched module, and an Enum a reloaded module
-  defines keeps its identity, so live params still recognise their `Kind`
-  (`tests/test_hotreload.py`; plan 11 WP2).
-- **Headless GL and imgui**: every shape renders offscreen; post passes off
-  are bit-identical; every panel page draws headless and fits; every
-  factory effect compiles and changes the frame.
-- **Windowed smoke**: `HYPERSPACE_FRAMES=n uv run hyperspace` runs n frames
-  and exits.
-- **Screenshots** for the docs: `tools/control_shots.py` (every panel
-  page), `tools/fx_shots.py`, `tools/lookback_shots.py`, `tools/dream_shots.py`.
-  Probes: `tools/midi_probe.py` (echoes a controller, lights an APC40),
-  `tools/hands_probe.py` (every hand axis live; `--calibrate`).
-
-Untested today, and worth knowing before trusting a change there: the
-panel being a leaf (no engine module imports `ui*`, by convention). The
-frame order, `Keys`, `Mouse`, the `_open_*` gates and the host's
-import boundary are `tests/test_app_boundary.py` (the frame runs over
-stubs; the boundary in a subprocess); `audio.py`'s streams and
-`analysis.py` run headless over a fake `sounddevice`
-(`tests/test_audio.py`, the stack's boundary in `tests/test_audio_boundary.py`);
-`LeapSource` and the DAW port's open and retry run against a fake `leap`
-(`tests/test_hands_leap.py`); the loop-order and Learn paths in
-`tests/test_learn.py`. What only the machine can verify is
+What only a person at the machine can check is
+[`TESTING-GUIDE.md`](TESTING-GUIDE.md) and the numbered list in
 [`plans/11-hand-checks.md`](plans/11-hand-checks.md).
 
-## 7. Process
+## 17. Known limits
 
-Work packages run as parallel agents in worktrees under `.claude/worktrees/`,
-one branch and one PR each; the owner merges; each code PR gets a
-`/code-review` before merge. Two traps have already cost a round each:
-
-- **Worktree agents branch from the commit HEAD was at when the session
-  started**, not from current `main`. Open every agent prompt with `git
-  merge main --no-edit` plus a check that the features it needs exist, and
-  have the agent stop and report rather than edit if any are missing.
-- **An agent's measurements only describe its own branch.** Two agents
-  touching one subsystem can each be right and the merge still wrong —
-  that is how the trim's non-monotonicity got in. Re-measure the merged
-  build before reporting anything as working, and keep it clear which
-  numbers are first-hand.
-
-Documents: ARCHITECTURE for structure, this file for behaviour, DECISIONS
-for why, CHECKPOINT for the pick-up list. When a change moves a boundary,
-the frame order or the control model, the ARCHITECTURE line changes in the
-same PR; when it changes behaviour, the line here does.
-
-## 8. Open threads
-
-- **The hand checks at the machine** — plan 09's five, plan 08's
-  unverified list, plan 07's WP6c tuning, the first capture, the APC40,
-  the second monitor, IAC + FL Studio and the eyeballing owed for PRs #24–#26:
-  one numbered list with commands, presets, pass and fail in
-  [`plans/11-hand-checks.md`](plans/11-hand-checks.md). Audit B1 (a hand
-  leaving the box did not release its rows) was fixed by plan 11 WP1
-  before these are run.
-- **The trim** (plan 06): decided 2026-09-28 — the per-band AUTO / MANUAL
-  switch, built in plan 11 WP15; the oracle was not re-frozen.
-- **First real capture on this machine.** Every live path is code-complete;
-  no session has recorded a human pressing `M` on real hardware with the
-  macOS microphone prompt. One click plus a clap.
-- **Booth hardware** (plan 04): Pro DJ Link, IMU, delay compensation —
-  blocked on access. The tempo clock deliberately does not sync to
-  anything (DECISIONS).
-- **WP6c tuning**: dream layer / steps / grade by eye with real audio;
-  factory dream presets; the ~1-in-300 GL stall with the worker on a
-  vsynced projector.
-- The audit's plan 11 list, in cost order, is the end of
-  [`AUDIT-2026-09.md`](AUDIT-2026-09.md).
+- **A screen plugged in after launch is not used** until a relaunch
+  (Cmd+R): a later output that did not open stays closed, and output 1's
+  configured screen stays −1 for the run.
+- **Frame pacing with two screens has never been observed by a person.**
+  Output 1 waits for its screen and later outputs do not; whether that
+  paces the loop on two real screens, and whether a non-waiting
+  fullscreen output tears, is unknown.
+- **With no desk connected the app keeps looking** — every 2 s five
+  times, then every 10 s. Each look creates a CoreMIDI client; `[midi]
+  enabled = false` stops it.
+- The amber "filled" pad light and the save-as blink use Akai's
+  documented velocities and have not been confirmed on an APC40 mk1.
+- Open findings in [`AUDIT-2026-09.md`](AUDIT-2026-09.md): R13, R14,
+  R15, U9, U10, P6, V8.
