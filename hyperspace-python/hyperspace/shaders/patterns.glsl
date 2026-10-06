@@ -227,7 +227,10 @@ vec4 pulse(vec2 p, float t, float fid) {
     float ray = pow(abs(cos(th * 2.0)), 24.0 * k_sharp()) * step(r, 0.12 + 0.36 * snare) * snare;
     vec2 g = q * 14.0;
     vec2 id = floor(g);
-    float tw = hash21(id + floor(t * 6.0) + fract(face_rad(fid, 1.3)));
+    // the sparkle's step, wrapped: hash21 reads the fraction of its input
+    // × 435, so an unwrapped step (21600 an hour in) leaves float32 no
+    // fraction and every point lit or dark together
+    float tw = hash21(id + mod(floor(t * 6.0), 241.0) + fract(face_rad(fid, 1.3)));
     float dot_ = smoothstep(0.24, 0.24 - 0.10 * k_edge(), length(fract(g) - 0.5))
                * step(1.0 - hats * 0.7, tw);
     vec3 kc = vec3(1.0, 0.12, 0.38), sc = vec3(1.0, 0.85, 0.10), hc = vec3(0.55, 0.95, 1.0);
