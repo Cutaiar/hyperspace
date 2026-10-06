@@ -1002,7 +1002,9 @@ as built is [`plans/22-flat-shapes-and-face-patterns.md`](plans/22-flat-shapes-a
   XZ, YZ and XY; nothing on the page says the planes are folded. BASS
   onto XZ is a spin about the vertical: on the Heart it turns the heart
   side-on, but on a shape round about the vertical (the Torus, the
-  Starfruit), were one masked, it would barely show.
+  Starfruit), were one masked, it would barely show. 4D depth (↑ / ↓,
+  TUMBLE's D1) does nothing on the Heart: with w at 0 the 4D divide
+  leaves it as it is.
 - **Judge it.** Check 114 — and whether BASS's spin reads as BASS.
 
 ### 91. A masked shape cues depth on z

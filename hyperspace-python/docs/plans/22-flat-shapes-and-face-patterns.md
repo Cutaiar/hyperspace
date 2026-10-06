@@ -323,6 +323,9 @@ The order to see them in is group R; see also
   clearly; on a shape that is round about y (the Torus, the Starfruit),
   were one ever masked, it would barely show. The Hodge-dual remap
   (XW → YZ, YW → XZ, ZW → XY) was the other choice (row 90).
+- **4D depth does nothing on a masked shape.** Its w is 0 at every
+  angle, so the 4D divide leaves it as it is: ↑ / ↓ and TUMBLE's D1 move
+  nothing on the Heart.
 - **A lift cannot fatten a thin shape**, so the Rose (0.157) and the
   Möbius strip (0.163) clear the floor by little; both changed size to
   do it.
