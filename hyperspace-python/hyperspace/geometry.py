@@ -541,6 +541,47 @@ def _build_mobius() -> dict:
                          w=lambda u, v: 0.5 * math.sin(2 * u))
 
 
+def _klein_xyz(u: float, v: float) -> tuple[float, float, float]:
+    """The classic 'bottle' immersion of the Klein bottle in 3D, u ∈ [0, π]:
+    the body swells up from the base (fattest at u = π/4), the neck curls
+    over and comes back down through the body's side (thinnest at 3π/4)
+    to meet the base again. Where the neck passes through, the surface
+    crosses itself — unavoidable in 3D."""
+    cu, su, cv, sv = math.cos(u), math.sin(u), math.cos(v), math.sin(v)
+    x = -(2 / 15) * cu * (3 * cv - 30 * su + 90 * cu**4 * su - 60 * cu**6 * su
+                          + 5 * cu * cv * su)
+    y = -(1 / 15) * su * (3 * cv - 3 * cu**2 * cv - 48 * cu**4 * cv + 48 * cu**6 * cv
+                          - 60 * su + 5 * cu * cv * su - 5 * cu**3 * cv * su
+                          - 80 * cu**5 * cv * su + 80 * cu**7 * cv * su)
+    z = (2 / 15) * (3 + 5 * cu * su) * sv
+    return x, y, z
+
+
+def _build_klein() -> dict:
+    # Lifted into w, it no longer crosses itself: where the neck passes
+    # through the body (u ≈ 0.49 against u ≈ 2.56), sin 2u puts the two
+    # sheets at least 1.56 apart in w. The sin v · cos 2u term is odd in v,
+    # so the z-mirror cannot fold the surface at a quarter turn of ZW
+    # (the rules above the heart). The seam: u = π meets u = 0 with v
+    # flipped to π − v (nv even puts the flip on the grid), where both
+    # terms agree, so it welds by kkey like the Möbius strip's —
+    # 37 × 16 samples, 36 × 16 vertices. Centred on its bounding box.
+    nu, nv = 37, 16
+    pts = [_klein_xyz(math.pi * i / (nu - 1), 2 * math.pi * j / nv)
+           for i in range(nu) for j in range(nv)]
+    cx = (max(p[0] for p in pts) + min(p[0] for p in pts)) / 2
+    cy = (max(p[1] for p in pts) + min(p[1] for p in pts)) / 2
+
+    def fn(u: float, v: float):
+        x, y, z = _klein_xyz(u, v)
+        return (x - cx, y - cy, z)
+
+    return param_surface(
+        fn, nu, nv, u1=math.pi, wrap_u=False, wrap_v=True,
+        w=lambda u, v: math.sin(2 * u) + 0.5 * math.sin(v) * math.cos(2 * u),
+    )
+
+
 # How a shape fills the fourth dimension (Shape.w):
 #   native  a 4-polytope or a 4D surface, built with real w-extent
 #   flat    a 3D shape at w = 0: a W plane's quarter turn flattens it
@@ -593,6 +634,8 @@ SHAPES = [
           _build_starfruit, w="lift"),
     Shape("Möbius strip", "4D lift · one-sided band", 0, "half-twist band",
           _build_mobius, w="lift"),
+    Shape("Klein bottle", "4D · one-sided bottle, no self-crossing", 0, "χ=0 · one side",
+          _build_klein, w="lift"),
 ]
 
 _cache: dict[int, dict] = {}

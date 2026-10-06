@@ -119,3 +119,54 @@ def test_rose_pinches_at_origin():
     g = G.geom(rose)
     on_axis = np.sum((np.abs(g["V"][:, 0]) < 1e-9) & (np.abs(g["V"][:, 1]) < 1e-9))
     assert on_axis == 2
+
+
+KLEIN = next(i for i, s in enumerate(G.SHAPES) if s.name == "Klein bottle")
+
+
+def test_the_klein_bottle_is_appended_after_the_mobius_strip():
+    # index is identity: the 26th shape, every earlier index where it was
+    assert KLEIN == 25 == len(G.SHAPES) - 1
+    assert G.SHAPES[24].name == "Möbius strip"
+
+
+def test_the_klein_bottle_seam_welds_into_a_closed_grid():
+    # 37 × 16 samples; the u = π column lands on the u = 0 column flipped
+    # in v and merges by kkey, leaving a closed 36 × 16 grid of quads —
+    # no gap, no sliver, no doubled face — with the Klein bottle's χ = 0
+    g, F = G.geom(KLEIN), G.faces(KLEIN)
+    assert g["n"] == 36 * 16 and g["m"] == 2 * g["n"] and len(F) == g["n"]
+    assert all(len(c) == 4 for c in F)
+    assert len({frozenset(c) for c in F}) == len(F)
+    assert g["n"] - g["m"] + len(F) == 0
+    # every edge borders exactly two faces: closed, nothing open at the seam
+    count: dict = {}
+    for c in F:
+        for k in range(4):
+            e = frozenset((c[k], c[(k + 1) % 4]))
+            count[e] = count.get(e, 0) + 1
+    assert set(count.values()) == {2} and len(count) == g["m"]
+
+
+def test_the_klein_bottle_crosses_itself_in_3d_and_not_in_4d():
+    # sample the surface finely: in xyz the neck passes through the body
+    # (far-apart parameters, the same point); the lift holds those sheets
+    # well apart in w
+    u = np.linspace(0, np.pi, 120, endpoint=False)
+    v = np.linspace(0, 2 * np.pi, 60, endpoint=False)
+    uv = [(a, b) for a in u for b in v]
+    P = np.array([G._klein_xyz(a, b) for a, b in uv])
+    lift = lambda a, b: np.sin(2 * a) + 0.5 * np.sin(b) * np.cos(2 * a)
+    W = np.array([lift(a, b) for a, b in uv])
+    U = np.array([a for a, _ in uv])
+    crossings, gap = 0, np.inf
+    for k in range(0, len(P), 1200):
+        d = np.linalg.norm(P[k:k + 1200, None] - P[None], axis=2)
+        i, j = np.nonzero(d < 0.03)
+        i = i + k
+        far = (np.abs(U[i] - U[j]) > 0.5) & (np.abs(U[i] - U[j]) < np.pi - 0.5)
+        crossings += int(far.sum())
+        if far.any():
+            gap = min(gap, float(np.abs(W[i[far]] - W[j[far]]).min()))
+    assert crossings > 0, "the 3D immersion should cross itself"
+    assert gap > 1.0
