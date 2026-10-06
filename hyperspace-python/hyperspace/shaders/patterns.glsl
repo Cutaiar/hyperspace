@@ -400,11 +400,11 @@ vec4 design(int mode, vec2 uv, float fid) {
         vec2 hb = mod(q - rep * 0.5, rep) - rep * 0.5;
         vec2 gv = dot(ha, ha) < dot(hb, hb) ? ha : hb;
         vec2 id = q - gv;
-        float pulse = sharpen(0.5 + 0.5 * sin(t * 3.0 + hash21(id) * TAU + face_rad(fid, 1.0)));
+        float fire = sharpen(0.5 + 0.5 * sin(t * 3.0 + hash21(id) * TAU + face_rad(fid, 1.0)));
         float e = 0.05 * k_edge();
         float cell = smoothstep(0.45 + e, 0.45 - e, length(gv));
         vec3 col = hsv(fract(hash21(id + 7.31) * m_colour() + t * 0.03), 0.7, 1.0);
-        return vec4(col, cell * (0.25 + 0.75 * pulse));
+        return vec4(col, cell * (0.25 + 0.75 * fire));
     }
     if (mode == 7) {
         // SPIRAL — galaxy arms winding out of a hot core, colour running
