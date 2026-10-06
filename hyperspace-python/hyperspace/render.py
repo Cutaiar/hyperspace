@@ -652,6 +652,13 @@ class Renderer:
             if res is not None:
                 res.release()
         self._show_prog = self._show_vao = None
+        # the tiles' and swatches' program: its head and tail are this
+        # module's strings, so it is made again from them on next use
+        # (patterns.glsl's own saves rebuild it by mtime)
+        for res in (getattr(self, "_ptile", None) or ())[:2]:
+            if res is not None:
+                res.release()
+        self._ptile = None
 
     def _sync_bitmap(self, path: str) -> None:
         """(Re)load the overlay texture when the selected file changes."""
@@ -1201,16 +1208,24 @@ class Renderer:
     def _tile_program(self) -> tuple:
         """The program and vao a pattern tile or swatch is drawn with: the
         seed's fragment with the face index a uniform, from the patterns
-        file as it is now — rebuilt after a save. Raises when it does not
-        compile (the face program's own build says so on the panel)."""
-        if self._ptile is None or self._ptile[2] != self._patterns_mtime:
-            if self._ptile is not None:
-                for res in self._ptile[:2]:
-                    res.release()
-            self._ptile = None
+        file as it is now — rebuilt after a save. A save that does not
+        compile raises once and keeps the last good program, as the face
+        program does (its own build says why on the panel); it is tried
+        again after the next save, not once a frame. Raises while there
+        has never been a good one."""
+        old = self._ptile
+        if old is None or old[2] != self._patterns_mtime:
+            mtime = self._patterns_mtime
+            # this save is tried whatever happens; the last good one stays
+            self._ptile = (None, None, mtime) if old is None else (*old[:2], mtime)
             prog = self.ctx.program(vertex_shader=QUAD_VS, fragment_shader=_face_fragment(
                 TILE_FS_HEAD, PATTERNS_GLSL.read_text(), SEED_FS_TAIL))
-            self._ptile = (prog, self.ctx.vertex_array(prog, []), self._patterns_mtime)
+            self._ptile = (prog, self.ctx.vertex_array(prog, []), mtime)
+            if old is not None and old[0] is not None:
+                for res in old[:2]:
+                    res.release()
+        if self._ptile[0] is None:
+            raise RuntimeError("patterns.glsl does not compile (the panel says why)")
         return self._ptile[:2]
 
     def _tile_draw(self, fbo: moderngl.Framebuffer, size: int, s: ViewState, t: float,

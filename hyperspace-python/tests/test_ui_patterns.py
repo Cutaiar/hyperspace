@@ -325,3 +325,65 @@ def test_swatches_draw_only_while_the_page_asks_and_leave_the_frame_as_it_was():
         assert r._swatch_next == n
     finally:
         ctx.release()
+
+
+def test_a_broken_save_keeps_the_last_good_swatches_and_is_compiled_once(tmp_path, monkeypatch):
+    """A save of patterns.glsl that does not compile: the face program keeps
+    its last good version, and so do the swatches — the save is tried once,
+    not once a frame while the page is open (a failed compile costs the
+    frame). The next good save lands; a reload of render.py rebuilds the
+    swatches' program from its own strings."""
+    moderngl = pytest.importorskip("moderngl")
+    import os
+
+    from hyperspace import render as R
+    from hyperspace.view import ViewState
+    try:
+        ctx = moderngl.create_context(standalone=True)
+    except Exception as e:  # noqa: BLE001 — any GL failure means skip
+        pytest.skip(f"no standalone GL context available: {e}")
+    src = R.PATTERNS_GLSL.read_text()
+    path = tmp_path / "patterns.glsl"
+    path.write_text(src)
+    monkeypatch.setattr(R, "PATTERNS_GLSL", path)
+    built = []
+    real = R._face_fragment
+    monkeypatch.setattr(R, "_face_fragment", lambda head, *a: (
+        built.append(head is R.TILE_FS_HEAD), real(head, *a))[1])
+    try:
+        r = R.Renderer(ctx)
+        fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((64, 48))])
+        s = ViewState(shape=3, faces=True, pattern=1)
+        stamp = [path.stat().st_mtime]
+
+        def save(text):
+            stamp[0] += 10
+            path.write_text(text)
+            os.utime(path, (stamp[0], stamp[0]))
+            r._patterns_mtime = r._shader_mtime()     # what the every-30-frames check does
+            r._build_face_program()
+
+        def frames(n):
+            for k in range(n):
+                r.want_swatches()
+                fbo.use()
+                ctx.viewport = (0, 0, 64, 48)
+                r.draw(s, 64, 48, t_now=1.0 + k / 60)
+
+        frames(3)
+        good = r._ptile[0]
+        assert built.count(True) == 1 and r.swatch_error == ""
+        save(src + "\nnot glsl;\n")
+        assert r.pattern_error
+        frames(20)
+        assert built.count(True) == 2                       # tried once for the save
+        assert r._ptile[0] is good and r.swatch_error == ""  # the last good one draws on
+        save(src)
+        frames(2)
+        assert built.count(True) == 3 and r._ptile[0] is not good
+        r.on_reload()
+        assert r._ptile is None
+        frames(1)
+        assert r._ptile is not None and r.swatch_error == ""
+    finally:
+        ctx.release()
