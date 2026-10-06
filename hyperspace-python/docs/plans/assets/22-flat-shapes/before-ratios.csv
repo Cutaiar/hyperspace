@@ -1,0 +1,151 @@
+index,name,w,pass,plane,min_ratio,at_deg,max_edge_on_share,edge_on_at_deg
+0,5-cell,native,axis,XW,0.6447,95,0.100,15
+0,5-cell,native,axis,YW,0.6447,95,0.100,15
+0,5-cell,native,axis,ZW,0.6447,95,0.100,15
+0,5-cell,native,generic,XW,0.7276,330,0.000,0
+0,5-cell,native,generic,YW,0.7430,105,0.000,0
+0,5-cell,native,generic,ZW,0.6456,165,0.100,15
+1,"3,3-duoprism",native,axis,XW,0.8005,110,0.037,15
+1,"3,3-duoprism",native,axis,YW,0.8214,225,0.000,0
+1,"3,3-duoprism",native,axis,ZW,0.8225,90,0.000,0
+1,"3,3-duoprism",native,generic,XW,0.8634,190,0.037,245
+1,"3,3-duoprism",native,generic,YW,0.8219,200,0.000,0
+1,"3,3-duoprism",native,generic,ZW,0.7998,270,0.167,350
+2,Cubic pyramid,native,axis,XW,0.3036,95,0.155,75
+2,Cubic pyramid,native,axis,YW,0.3036,265,0.155,75
+2,Cubic pyramid,native,axis,ZW,0.3036,95,0.155,75
+2,Cubic pyramid,native,generic,XW,0.3028,125,0.083,220
+2,Cubic pyramid,native,generic,YW,0.3054,115,0.089,95
+2,Cubic pyramid,native,generic,ZW,0.3054,260,0.089,260
+3,Tesseract,native,axis,XW,0.9423,45,0.000,0
+3,Tesseract,native,axis,YW,0.9423,45,0.000,0
+3,Tesseract,native,axis,ZW,0.9423,45,0.000,0
+3,Tesseract,native,generic,XW,0.9508,90,0.042,0
+3,Tesseract,native,generic,YW,0.9546,280,0.042,5
+3,Tesseract,native,generic,ZW,0.9528,270,0.042,75
+4,Rectified 5-cell,native,axis,XW,0.8593,300,0.033,5
+4,Rectified 5-cell,native,axis,YW,0.8593,300,0.033,5
+4,Rectified 5-cell,native,axis,ZW,0.8593,60,0.033,5
+4,Rectified 5-cell,native,generic,XW,0.8826,320,0.033,120
+4,Rectified 5-cell,native,generic,YW,0.8979,80,0.033,0
+4,Rectified 5-cell,native,generic,ZW,0.8787,185,0.067,250
+5,"4,8-duoprism",native,axis,XW,0.5273,270,0.115,170
+5,"4,8-duoprism",native,axis,YW,0.5273,90,0.115,170
+5,"4,8-duoprism",native,axis,ZW,0.5665,340,0.024,285
+5,"4,8-duoprism",native,generic,XW,0.5355,270,0.017,255
+5,"4,8-duoprism",native,generic,YW,0.5358,100,0.051,5
+5,"4,8-duoprism",native,generic,ZW,0.5381,245,0.051,90
+6,"6,6-duoprism",native,axis,XW,0.9693,50,0.039,15
+6,"6,6-duoprism",native,axis,YW,0.9691,50,0.000,0
+6,"6,6-duoprism",native,axis,ZW,0.9706,90,0.000,0
+6,"6,6-duoprism",native,generic,XW,0.9711,90,0.068,270
+6,"6,6-duoprism",native,generic,YW,0.9719,80,0.032,20
+6,"6,6-duoprism",native,generic,ZW,0.9692,305,0.039,265
+7,16-cell,native,axis,XW,0.8936,225,0.125,25
+7,16-cell,native,axis,YW,0.8936,45,0.125,25
+7,16-cell,native,axis,ZW,0.8936,45,0.125,25
+7,16-cell,native,generic,XW,0.9068,90,0.031,65
+7,16-cell,native,generic,YW,0.9167,20,0.031,75
+7,16-cell,native,generic,ZW,0.9127,90,0.031,5
+8,"10,10-duoprism",native,axis,XW,0.9695,50,0.046,15
+8,"10,10-duoprism",native,axis,YW,0.9695,140,0.050,165
+8,"10,10-duoprism",native,axis,ZW,0.9715,270,0.000,0
+8,"10,10-duoprism",native,generic,XW,0.9719,90,0.030,0
+8,"10,10-duoprism",native,generic,YW,0.9722,230,0.051,30
+8,"10,10-duoprism",native,generic,ZW,0.9695,200,0.046,265
+9,Icosahedral prism,native,axis,XW,0.9174,120,0.021,15
+9,Icosahedral prism,native,axis,YW,0.9174,120,0.021,15
+9,Icosahedral prism,native,axis,ZW,0.9174,120,0.021,15
+9,Icosahedral prism,native,generic,XW,0.9310,345,0.018,10
+9,Icosahedral prism,native,generic,YW,0.9266,185,0.059,235
+9,Icosahedral prism,native,generic,ZW,0.9177,160,0.070,110
+10,24-cell,native,axis,XW,0.9998,115,0.042,20
+10,24-cell,native,axis,YW,0.9998,205,0.042,20
+10,24-cell,native,axis,ZW,0.9998,205,0.042,20
+10,24-cell,native,generic,XW,0.9964,310,0.010,185
+10,24-cell,native,generic,YW,0.9963,145,0.042,340
+10,24-cell,native,generic,ZW,0.9962,235,0.031,85
+11,Truncated tesseract,native,axis,XW,0.9539,225,0.000,0
+11,Truncated tesseract,native,axis,YW,0.9539,135,0.000,0
+11,Truncated tesseract,native,axis,ZW,0.9539,45,0.000,0
+11,Truncated tesseract,native,generic,XW,0.9607,90,0.035,5
+11,Truncated tesseract,native,generic,YW,0.9646,285,0.040,25
+11,Truncated tesseract,native,generic,ZW,0.9627,270,0.040,165
+12,"12,12-duoprism",native,axis,XW,0.9695,40,0.039,255
+12,"12,12-duoprism",native,axis,YW,0.9695,40,0.037,195
+12,"12,12-duoprism",native,axis,ZW,0.9715,0,0.000,0
+12,"12,12-duoprism",native,generic,XW,0.9719,90,0.048,10
+12,"12,12-duoprism",native,generic,YW,0.9722,230,0.045,40
+12,"12,12-duoprism",native,generic,ZW,0.9695,20,0.046,260
+13,Dodecahedral prism,native,axis,XW,0.6355,270,0.014,20
+13,Dodecahedral prism,native,axis,YW,0.6355,270,0.014,20
+13,Dodecahedral prism,native,axis,ZW,0.6355,90,0.014,20
+13,Dodecahedral prism,native,generic,XW,0.6355,270,0.000,0
+13,Dodecahedral prism,native,generic,YW,0.6359,90,0.048,295
+13,Dodecahedral prism,native,generic,ZW,0.6355,90,0.024,105
+14,"20,20-duoprism",native,axis,XW,0.9695,230,0.040,75
+14,"20,20-duoprism",native,axis,YW,0.9695,230,0.038,165
+14,"20,20-duoprism",native,axis,ZW,0.9715,180,0.000,0
+14,"20,20-duoprism",native,generic,XW,0.9719,90,0.044,185
+14,"20,20-duoprism",native,generic,YW,0.9722,230,0.041,125
+14,"20,20-duoprism",native,generic,ZW,0.9695,200,0.044,240
+15,120-cell,native,axis,XW,1.0000,120,0.017,45
+15,120-cell,native,axis,YW,1.0000,60,0.017,45
+15,120-cell,native,axis,ZW,1.0000,30,0.017,45
+15,120-cell,native,generic,XW,1.0000,90,0.007,75
+15,120-cell,native,generic,YW,1.0000,205,0.017,240
+15,120-cell,native,generic,ZW,1.0000,55,0.017,110
+16,600-cell,native,axis,XW,1.0000,240,0.025,0
+16,600-cell,native,axis,YW,1.0000,120,0.025,0
+16,600-cell,native,axis,ZW,1.0000,60,0.025,0
+16,600-cell,native,generic,XW,1.0000,200,0.005,15
+16,600-cell,native,generic,YW,1.0000,135,0.008,335
+16,600-cell,native,generic,ZW,1.0000,120,0.025,150
+17,Clifford torus,native,axis,XW,0.9695,50,0.053,15
+17,Clifford torus,native,axis,YW,0.9695,230,0.053,15
+17,Clifford torus,native,axis,ZW,0.9715,0,0.000,0
+17,Clifford torus,native,generic,XW,0.9719,90,0.030,170
+17,Clifford torus,native,generic,YW,0.9722,230,0.031,125
+17,Clifford torus,native,generic,ZW,0.9695,200,0.043,345
+18,Heart,flat,axis,XW,0.0000,90,0.337,270
+18,Heart,flat,axis,YW,0.0000,90,0.371,270
+18,Heart,flat,axis,ZW,0.0000,90,0.040,90
+18,Heart,flat,generic,XW,0.0000,90,0.297,80
+18,Heart,flat,generic,YW,0.0000,90,0.248,85
+18,Heart,flat,generic,ZW,0.0000,90,0.083,260
+19,Star,flat,axis,XW,0.0000,90,0.457,90
+19,Star,flat,axis,YW,0.0000,90,0.372,90
+19,Star,flat,axis,ZW,0.0000,90,0.000,0
+19,Star,flat,generic,XW,0.0000,90,0.267,75
+19,Star,flat,generic,YW,0.0000,270,0.170,80
+19,Star,flat,generic,ZW,0.0000,270,0.027,255
+20,Rose,flat,axis,XW,0.0000,90,0.066,270
+20,Rose,flat,axis,YW,0.0000,90,0.066,270
+20,Rose,flat,axis,ZW,0.0000,90,0.557,90
+20,Rose,flat,generic,XW,0.0000,90,0.064,265
+20,Rose,flat,generic,YW,0.0000,270,0.080,265
+20,Rose,flat,generic,ZW,0.0000,90,0.076,275
+21,Torus,flat,axis,XW,0.0000,90,0.143,90
+21,Torus,flat,axis,YW,0.0000,90,0.036,265
+21,Torus,flat,axis,ZW,0.0000,90,0.143,90
+21,Torus,flat,generic,XW,0.0000,90,0.065,85
+21,Torus,flat,generic,YW,0.0000,90,0.073,265
+21,Torus,flat,generic,ZW,0.0000,270,0.073,270
+22,Trefoil knot,flat,axis,XW,0.0000,90,0.076,270
+22,Trefoil knot,flat,axis,YW,0.0000,90,0.068,90
+22,Trefoil knot,flat,axis,ZW,0.0000,90,0.079,90
+22,Trefoil knot,flat,generic,XW,0.0000,90,0.112,85
+22,Trefoil knot,flat,generic,YW,0.0000,270,0.089,270
+22,Trefoil knot,flat,generic,ZW,0.0000,90,0.102,270
+23,Starfruit,flat,axis,XW,0.0000,90,0.132,270
+23,Starfruit,flat,axis,YW,0.0000,90,0.216,270
+23,Starfruit,flat,axis,ZW,0.0000,90,0.067,90
+23,Starfruit,flat,generic,XW,0.0000,90,0.116,265
+23,Starfruit,flat,generic,YW,0.0000,270,0.110,95
+23,Starfruit,flat,generic,ZW,0.0000,270,0.117,270
+24,Möbius strip,flat,axis,XW,0.0000,90,0.185,270
+24,Möbius strip,flat,axis,YW,0.0000,90,0.063,270
+24,Möbius strip,flat,axis,ZW,0.0000,90,0.158,90
+24,Möbius strip,flat,generic,XW,0.0000,90,0.057,265
+24,Möbius strip,flat,generic,YW,0.0000,90,0.049,80
+24,Möbius strip,flat,generic,ZW,0.0000,270,0.210,275
