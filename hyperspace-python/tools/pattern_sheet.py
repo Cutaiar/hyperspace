@@ -16,8 +16,16 @@ average of eight stills across half a second — 0 is sharp, a fast
 pattern smears), and SPREAD shows four faces (0–3) side by side, which
 drift apart above 0.
 
-Writes docs/plans/assets/22-face-patterns/mode-NN-<name>.png and
-input-K-<name>.png. Offscreen renders on this machine's GPU, not the app
+And a gallery (plan 22 B3): a row per mode, three columns — silence at
+neutral, a quiet passage and a loud one with a hard kick and bright hats
+— the bands as the analyzer would read them (`Renderer.bands`, which
+METER and PULSE draw) and the eight inputs as the factory routes would
+push them (lane i on input i, depth 1 on a base of 1: 1 + 2.6·u, held to
+the range; HUE and SPREAD unrouted) — and a fourth, the loud passage
+through the same routes at depth 0.3.
+
+Writes docs/plans/assets/22-face-patterns/mode-NN-<name>.png,
+input-K-<name>.png and b3-gallery.png. Offscreen renders on this machine's GPU, not the app
 on a screen.
 
     uv run python tools/pattern_sheet.py [--t 4.0] [--tile 128]
@@ -118,6 +126,49 @@ def input_sheet(r: Renderer, k: int, t: float, n: int) -> Image.Image:
     return img
 
 
+QUIET = (0.22, 0.18, 0.15, 0.20, 0.12, 0.10)
+LOUD = (0.85, 0.90, 0.30, 0.35, 0.45, 0.80)      # a hard kick and bright hats
+# (column title, the six bands SUB … AIR as out / CEIL, the routes' depth)
+PASSAGES = (("silence", (0.0,) * 6, 1.0),
+            ("quiet", QUIET, 1.0),
+            ("loud: kick + hats", LOUD, 1.0),
+            ("loud, depth 0.3", LOUD, 0.3))
+
+
+def factory_inputs(bands, depth: float = 1.0) -> list[float]:
+    """The eight inputs as the factory routes leave them: lane i pushes
+    input i at `depth` (the factory's is 1: a whole range per unit) on a
+    base of 1, held to the range."""
+    mods = [1.0] * N_INPUTS
+    for i, u in enumerate(bands):
+        mods[i] = min(max(1.0 + 2.6 * depth * u, 0.0), 2.6)
+    return mods
+
+
+def gallery(r: Renderer, t: float, n: int) -> Image.Image:
+    modes = range(1, len(MODES))
+    lw, gap, head = 300, 4, 64
+    img = Image.new("RGB", (lw + len(PASSAGES) * (n + gap), head + len(modes) * (n + gap)), BG)
+    d = ImageDraw.Draw(img)
+    big, font, small = (ImageFont.load_default(size=s) for s in (20, 15, 12))
+    d.text((10, 8), "every pattern, silent and driven", fill=INK, font=big)
+    d.text((10, 34), "bands as the analyzer reads them; inputs as the factory routes push them "
+                     "(depth 1 unless said)",
+           fill=DIM, font=small)
+    for c, (title, _, _) in enumerate(PASSAGES):
+        d.text((lw + c * (n + gap) + 4, head - 18), title, fill=DIM, font=small)
+    for row, mode in enumerate(modes):
+        y = head + row * (n + gap)
+        d.text((10, y + n // 2 - 18), f"{mode}  {MODES[mode].name}", fill=INK, font=font)
+        d.text((10, y + n // 2 + 2), MODES[mode].about[:44], fill=DIM, font=small)
+        for c, (_, bands, depth) in enumerate(PASSAGES):
+            r.bands = bands
+            s = ViewState(pattern=mode, pattern_mod=factory_inputs(bands, depth))
+            img.paste(Image.fromarray(r.pattern_tile(s, n, t, FID)), (lw + c * (n + gap), y))
+    r.bands = ()
+    return img
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--t", type=float, default=4.0, help="pattern time of the stills, seconds")
@@ -133,6 +184,7 @@ def main() -> None:
              OUT / f"mode-{mode:02d}-{MODES[mode].name.lower()}.png")
     for k in range(N_INPUTS):
         save(input_sheet(r, k, args.t, args.tile), OUT / f"input-{k}-{INPUTS[k].name.lower()}.png")
+    save(gallery(r, args.t, args.tile), OUT / "b3-gallery.png")
     ctx.release()
 
 

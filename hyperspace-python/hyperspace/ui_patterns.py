@@ -7,7 +7,8 @@ Top to bottom:
   While Faces is off a line says the pattern shows on nothing, with a
   chip that switches them on.
 - **patterns**: every mode as a chip with a small live swatch, the one
-  on show lit; ‹ and › step through them. A swatch is the renderer's
+  on show lit, four to a row; ‹ and › step through them, at the end of
+  the line under the chips that names the mode on show. A swatch is the renderer's
   (`Renderer.want_swatches`): what face 0 shows of that mode on the
   inputs as they are now, one mode redrawn a frame, so the strip is also
   a preview of the current inputs on every pattern. A chip's hover is its
@@ -47,7 +48,8 @@ from . import learn, patterns, ui, ui_presets, ui_routing, undo
 from .patterns import INPUTS, MODES, N_INPUTS
 
 COLS = 4                # mode chips to a row
-CELL_H = 26.0           # a mode chip's height, px; its swatch is a disc inset in it
+CELL_H = 24.0           # a mode chip's height, px; its swatch is a disc inset in it
+GRID_GAP = 4.0          # px between rows of mode chips (17 modes: five rows)
 SWATCH_INSET = 3.0
 NEUTRAL = 1.0
 NEUTRAL_CHIP = "1"
@@ -86,7 +88,7 @@ def page(panel, dt: float) -> None:
     panel._slider("view.pattern_mix")
 
     _browser(panel, p, mode)
-    _about(panel, mode)
+    _about(panel, p, mode)
     _inputs(panel, mode)
     _faint(HINT)
 
@@ -94,28 +96,34 @@ def page(panel, dt: float) -> None:
 # ---- the patterns ----
 
 def _browser(panel, p, mode: int) -> None:
-    """The header with ‹ ›, then a chip per mode, COLS to a row."""
+    """A chip per mode, COLS to a row, the rows close together."""
     sp = imgui.get_style().item_spacing.x
-    avail = imgui.get_content_region_avail().x
-    left = imgui.get_cursor_pos_x()
-    labels = (f"{PREV}##prev.{p.id}", f"{NEXT}##next.{p.id}")
-    _baseline()
-    ui._micro("patterns", ui.TEXT)
-    imgui.same_line(left + avail - ui.chip_w(*labels))
     n = len(MODES)
-    for step, label in zip((-1, 1), labels, strict=True):
+    imgui.spacing()
+    w = (imgui.get_content_region_avail().x - sp * (COLS - 1)) / COLS
+    imgui.push_style_var(imgui.StyleVar_.item_spacing, imgui.ImVec2(sp, GRID_GAP))
+    for k in range(n):
+        if k % COLS:
+            imgui.same_line()
+        if _mode_chip(panel, p, k, k == mode, w) and k != int(p.base):
+            p.set(k)
+    imgui.pop_style_var()
+
+
+def _steps(panel, p) -> None:
+    """‹ and ›: the previous and the next pattern, round the ends."""
+    n = len(MODES)
+    for step, label in zip((-1, 1), _step_labels(p), strict=True):
         if step > 0:
             imgui.same_line()
         if ui.chip(label):
             p.set((int(p.base) + step) % n)     # a scene-setter's write to the base
         panel._tip(p, "previous pattern" if step < 0 else "next pattern")
         panel._ctx(p, key=f".step{step}")
-    w = (imgui.get_content_region_avail().x - sp * (COLS - 1)) / COLS
-    for k in range(n):
-        if k % COLS:
-            imgui.same_line()
-        if _mode_chip(panel, p, k, k == mode, w) and k != int(p.base):
-            p.set(k)
+
+
+def _step_labels(p) -> tuple[str, str]:
+    return f"{PREV}##prev.{p.id}", f"{NEXT}##next.{p.id}"
 
 
 def _mode_chip(panel, p, k: int, lit: bool, w: float) -> bool:
@@ -140,7 +148,11 @@ def _mode_chip(panel, p, k: int, lit: bool, w: float) -> bool:
     else:
         dl.add_circle_filled(imgui.ImVec2(a.x + d / 2, a.y + d / 2), d / 2, ui.u32(ui.LINE))
     imgui.push_font(ui._FONTS["micro"], ui.FONT_MICRO)
-    dl.add_text(imgui.ImVec2(b.x + 6, pos.y + (CELL_H - ui.FONT_MICRO) / 2 - 1),
+    # the name after the swatch, nearer it when it is long, and never past
+    # the chip's rounded end (TRUCHET, at four to a row)
+    tw = imgui.calc_text_size(MODES[k].name).x
+    x = min(b.x + 6, end.x - CELL_H / 2 - tw + 4)
+    dl.add_text(imgui.ImVec2(max(x, b.x + 2), pos.y + (CELL_H - ui.FONT_MICRO) / 2 - 1),
                 ui.u32(imgui.ImVec4(1, 1, 1, 1) if lit else ui.TEXT if hov else ui.DIM),
                 MODES[k].name)
     imgui.pop_font()
@@ -160,21 +172,26 @@ def _swatch(panel, k: int):
     return get(k) if get is not None else None
 
 
-def _about(panel, mode: int) -> None:
-    """The mode on show: its name and its line. In the line's place, so the
-    page is no taller for them: the GLSL error while patterns.glsl does not
-    compile, else while Faces is off a line saying so and a chip that
-    switches them on."""
+def _about(panel, p, mode: int) -> None:
+    """The mode on show: its name and its line, wrapped short of ‹ ›,
+    which sit at the right end of its first line. In the line's place, so
+    the page is no taller for them: the GLSL error while patterns.glsl
+    does not compile, else while Faces is off a line saying so and a chip
+    that switches them on."""
     m = MODES[mode]
     err = " ".join((getattr(panel.renderer, "pattern_error", "") or "").split())
     off = not getattr(panel.view, "faces", True)
-    if off and not err:
-        _baseline()
+    sp = imgui.get_style().item_spacing.x
+    avail = imgui.get_content_region_avail().x
+    left, y0 = imgui.get_cursor_pos_x(), imgui.get_cursor_pos_y()
+    chips_w = ui.chip_w(*_step_labels(p))
+    stop = left + avail - chips_w - sp          # where the line's text must end
+    _baseline()
     ui._micro(m.name, ui.TEXT)
     imgui.same_line()
     if err:                 # one line: the whole of it on hover
         text = f"GLSL: {err}"
-        shown = ui.fit_text(text, imgui.get_content_region_avail().x)
+        shown = ui.fit_text(text, stop - imgui.get_cursor_pos_x())
         imgui.text_colored(ui.WARN, shown)
         if shown != text and imgui.is_item_hovered():
             imgui.set_tooltip(text)
@@ -186,7 +203,13 @@ def _about(panel, mode: int) -> None:
             f.set(True)
         panel._tip(f, "Switch the faces on.")
     else:
-        _faint(FLAT_NOTE if mode == 0 else m.about)
+        imgui.push_text_wrap_pos(stop)
+        imgui.text_colored(ui.FAINT, FLAT_NOTE if mode == 0 else m.about)
+        imgui.pop_text_wrap_pos()
+    y1 = imgui.get_cursor_pos_y()
+    imgui.set_cursor_pos(imgui.ImVec2(left + avail - chips_w, y0))
+    _steps(panel, p)
+    imgui.set_cursor_pos(imgui.ImVec2(left, max(y1, imgui.get_cursor_pos_y())))
 
 
 # ---- the inputs ----

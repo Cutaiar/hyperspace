@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The FACES page (plan 22 B2) as PNGs.
+"""The FACES page (plan 22 B2, B3) as PNGs.
 
 Not the app: a **hidden** GLFW window at the control size, with the panel
 drawn over a real `Renderer` on the same GL context, so the pattern chips'
@@ -17,10 +17,13 @@ slider shows base → effective).
 
 writes, into docs/plans/assets/22-face-patterns/:
 
-  b2-rings.png      RINGS, nothing driven: the offers
-  b2-hex.png        HEX with four inputs driven and one off neutral
-  b2-flat.png       FLAT: its note and the dimmed rows
-  b2-hover.png      CAUSTIC with a mode chip's hover up (its one line)
+  b3-faces-rings.png    RINGS, nothing driven: the offers
+  b3-faces-hex.png      HEX with four inputs driven and one off neutral
+  b3-faces-flat.png     FLAT: its note and the dimmed rows
+  b3-faces-hover.png    CAUSTIC with a mode chip's hover up (its one line)
+  b3-faces-meter.png    METER on a loud passage's bands (Renderer.bands)
+
+(B2's b2-*.png are the same page before B3's five modes.)
 """
 
 # undo_demo is imported before anything of hyperspace's, on purpose: it sets
@@ -159,7 +162,7 @@ def main() -> int:
     try:
         reg["view.pattern"].set(1)
         draw(40)
-        shoot("b2-rings.png", "RINGS, nothing driven: each row offers the convention's source")
+        shoot("b3-faces-rings.png", "RINGS, nothing driven: each row offers the convention's source")
 
         reg["view.pattern"].set(MODES.index(next(m for m in MODES if m.name == "HEX")))
         for b in (Binding("lane:0", "pattern.mod.0", "push", 0.5),
@@ -171,12 +174,12 @@ def main() -> int:
         reg["macro.2"].set_value(1.0) if "macro.2" in reg else None
         reg["pattern.mod.5"].set_value(1.8)
         draw(40)
-        shoot("b2-hex.png", "HEX: SCALE and GLOW on lanes, HUE on LFO 1 × macro, SPREAD's "
+        shoot("b3-faces-hex.png", "HEX: SCALE and GLOW on lanes, HUE on LFO 1 × macro, SPREAD's "
                             "base a macro's, SHARP off neutral")
 
         reg["view.pattern"].set(0)
         draw(30)
-        shoot("b2-flat.png", "FLAT: its note, the rows dimmed")
+        shoot("b3-faces-flat.png", "FLAT: its note, the rows dimmed")
 
         caustic = next(k for k, m in enumerate(MODES) if m.name == "CAUSTIC")
         reg["view.pattern"].set(caustic)
@@ -185,7 +188,13 @@ def main() -> int:
         x0, y0, x1, y1 = rects[f"mode.{MODES.index(next(m for m in MODES if m.name == 'EMBER'))}"]
         io.add_mouse_pos_event((x0 + x1) / 2, (y0 + y1) / 2)
         draw(20)
-        shoot("b2-hover.png", "CAUSTIC on show, EMBER's chip hovered: its one line")
+        shoot("b3-faces-hover.png", "CAUSTIC on show, EMBER's chip hovered: its one line")
+
+        io.add_mouse_pos_event(-1.0, -1.0)
+        renderer.bands = (0.85, 0.90, 0.30, 0.35, 0.45, 0.80)
+        reg["view.pattern"].set(MODES.index(next(m for m in MODES if m.name == "METER")))
+        draw(30)
+        shoot("b3-faces-meter.png", "METER on a loud passage's bands: the swatches too")
     finally:
         imgui.invisible_button = real_inv
         impl.shutdown()
