@@ -4,9 +4,9 @@
 For every shape and each of the three W planes (XW, YW, ZW) on its own,
 sweep the plane through a full turn and measure the projected 3D cloud's
 volume ratio — smallest singular value over largest
-(geometry.volume_ratio, the same function the tests gate on) — and, as a
-second look, the share of face area the projection turns edge-on
-(geometry.edge_on_share). A shape in
+(geometry.volume_ratio, the same function the tests gate on) — and the
+share of face area the projection turns edge-on
+(geometry.edge_on_share, the tests' second gate, at most 0.15). A shape in
 the w = 0 hyperplane falls to ~0 at 90° and 270°: the turn has carried a
 whole axis into w and the 4D→3D divide drops it. Two passes per plane:
 the other five planes at 0 ("axis"), and at a fixed generic pose
@@ -159,7 +159,8 @@ def main() -> None:
             "measure": "smallest / largest singular value of the centred 3D cloud "
                        "after rotate4 and the 4D→3D divide (geometry.volume_ratio)",
             "edge_on": "share of face area drawn at under a tenth of its 4D area "
-                       "(geometry.edge_on_share), a second look, not a gate"}
+                       "(geometry.edge_on_share); the tests gate a lifted or masked shape "
+                       "at 0.15"}
     (OUT / f"{a.prefix}-ratios.json").write_text(
         json.dumps({**meta, "shapes": rows}, indent=1, ensure_ascii=False) + "\n")
     with open(OUT / f"{a.prefix}-ratios.csv", "w", newline="") as f:

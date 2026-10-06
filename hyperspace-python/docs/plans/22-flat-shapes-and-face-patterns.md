@@ -325,14 +325,11 @@ The order to see them in is group R; see also
 - **The Starfruit's five ridges are softened at rest** by the lift's
   perspective; the Star becomes a box at XW 90° and 270°.
 - **The Klein bottle's neck is sparse at some angles** (36 × 16 grid).
-- **The edge-on share is described as "not a gate"** in
-  `geometry.edge_on_share`'s docstring and in the turntable's JSON
-  header, but `test_a_lifted_or_masked_shape_never_turns_much_of_itself_edge_on`
-  gates it at 0.15. That test's comment calls 0.15 the 4D shapes' own
-  worst (the cubic pyramid); measured, the cubic pyramid reaches 0.155
-  and the 3,3-duoprism 0.167, so 0.15 is a little under the 4D worst,
-  not equal to it. Stale comments only; the gate holds for every
-  gated shape.
+- **The edge-on gate is a little under the 4D shapes' own worst.**
+  `test_a_lifted_or_masked_shape_never_turns_much_of_itself_edge_on`
+  holds every lifted or masked shape to 0.15; the cubic pyramid reaches
+  0.155 and the 3,3-duoprism 0.167, so two polytopes would not pass it.
+  The Star, at 0.139, is the gated shape closest to it.
 - **`Shape.w == "flat"` is used by no shape.** It stays in `W_KINDS` so
   the tests can show the collapse and so a future 3D shape can be added
   honestly.

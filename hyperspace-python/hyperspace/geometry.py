@@ -1060,10 +1060,12 @@ def volume_ratio(P: np.ndarray) -> float:
 
 def edge_on_share(V: np.ndarray, P: np.ndarray, tris: np.ndarray) -> float:
     """The share of a shape's face area the 4D→3D projection turns
-    edge-on: faces drawn at under a tenth of their true (4D) area. Not a
-    gate — a second look for a cloud whose volume ratio passes while its
-    faces still read as a sheet. V the 4D vertices, P their 3D projection,
-    tris the face triangles' (T, 3) vertex indices."""
+    edge-on: faces drawn at under a tenth of their true (4D) area. The
+    second gate beside the volume ratio — it catches a cloud whose volume
+    passes while its faces still read as a sheet: tests/test_shapes4d.py
+    holds every lifted or masked shape to at most 0.15 through each W
+    plane. V the 4D vertices, P their 3D projection, tris the face
+    triangles' (T, 3) vertex indices."""
     def area(X):
         a, b = X[tris[:, 1]] - X[tris[:, 0]], X[tris[:, 2]] - X[tris[:, 0]]
         aa, bb, ab = (a * a).sum(1), (b * b).sum(1), (a * b).sum(1)

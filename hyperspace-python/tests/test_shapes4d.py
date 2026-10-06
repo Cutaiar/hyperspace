@@ -287,9 +287,11 @@ def test_a_lifted_or_masked_shape_keeps_its_volume_through_each_w_plane(i):
 
 @pytest.mark.parametrize("i", GATED, ids=lambda i: G.SHAPES[i].name)
 def test_a_lifted_or_masked_shape_never_turns_much_of_itself_edge_on(i):
-    # the second look: a cloud can keep its volume while its faces turn
-    # edge-on and the surface reads as a sheet. 0.15 is the 4D shapes'
-    # own worst (the cubic pyramid); a masked shape never turns any
+    # the second gate: a cloud can keep its volume while its faces turn
+    # edge-on and the surface reads as a sheet. 0.15 sits just under the
+    # 4D shapes' own worst — the cubic pyramid turns 0.155 of its face
+    # area edge-on, the 3,3-duoprism 0.167 — and over every gated shape's
+    # (the star's 0.139 is the closest); a masked shape never turns any
     for pose in (None, G.GENERIC_POSE):
         for plane in ("XW", "YW", "ZW"):
             assert G.sweep_edge_on(i, plane, pose=pose).max() <= 0.15, plane

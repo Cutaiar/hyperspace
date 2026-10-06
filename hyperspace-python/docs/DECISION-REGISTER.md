@@ -1040,9 +1040,9 @@ as built is [`plans/22-flat-shapes-and-face-patterns.md`](plans/22-flat-shapes-a
   all six at once. 500 random poses of all six planes (the docs pass,
   seed 0) left every lifted or masked shape over the floor, the Rose
   lowest at 0.156, but random poses are a sample, not a proof. The
-  edge-on share is called "not a gate" in `geometry.edge_on_share`'s
-  docstring and the turntable's JSON, and the test calls 0.15 the cubic
-  pyramid's own worst; it measures 0.155 (the 3,3-duoprism 0.167).
+  edge-on gate, 0.15, sits just under the 4D shapes' own worst (the
+  cubic pyramid 0.155, the 3,3-duoprism 0.167), so a polytope would not
+  pass it; the Star, at 0.139, is the gated shape closest to it.
 - **Judge it.** Checks 113 and 119.
 
 ### 93. How a shape is lifted: a function of its own parameters, by four rules
