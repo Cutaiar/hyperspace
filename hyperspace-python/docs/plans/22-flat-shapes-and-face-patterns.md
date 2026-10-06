@@ -136,6 +136,8 @@ tripwire that the 4D shapes were not touched.
   rest and from a generic pose),
   `::test_a_lifted_or_masked_shape_never_turns_much_of_itself_edge_on`
   (at most 0.15 of the face area edge-on),
+  `::test_every_shape_past_the_polytopes_is_lifted_or_masked` (so
+  neither gate can pass on an empty list),
   `::test_a_lifted_cap_is_triangulated_over_its_own_outline`;
   `tests/test_shapes3d.py::test_shape3d_valid` (a lifted shape has
   w-extent, a masked one w = 0),

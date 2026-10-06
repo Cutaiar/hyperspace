@@ -1631,7 +1631,7 @@ To watch one W plane alone: VIEW plane keys, all off but that one; F1
 app.
 
 **113. Each lifted shape tumbles without reading as a sheet.**
-Headless: `tests/test_shapes4d.py::{test_a_lifted_or_masked_shape_keeps_its_volume_through_each_w_plane,test_a_lifted_or_masked_shape_never_turns_much_of_itself_edge_on,test_every_4d_shape_clears_the_volume_floor} tests/test_shapes3d.py::test_shape3d_valid`.
+Headless: `tests/test_shapes4d.py::{test_every_shape_past_the_polytopes_is_lifted_or_masked,test_a_lifted_or_masked_shape_keeps_its_volume_through_each_w_plane,test_a_lifted_or_masked_shape_never_turns_much_of_itself_edge_on,test_every_4d_shape_clears_the_volume_floor} tests/test_shapes3d.py::test_shape3d_valid`.
 F1 (TUMBLE). For each of Star, Rose, Torus, Trefoil knot, Starfruit,
 Möbius strip, Klein bottle: XW alone a full turn, then YW, then ZW;
 then all six keys on, with music. Faces on, then off. Compare the
