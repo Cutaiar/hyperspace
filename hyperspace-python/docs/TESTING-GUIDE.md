@@ -23,8 +23,10 @@ explained in the [glossary](#glossary) at the end.
 1. **Back up the home folder before anything else:**
    `cp -R ~/Hyperspace ~/Hyperspace-backup-<today's date>`, then make a
    second copy to experiment on: `cp -R ~/Hyperspace ~/Hyperspace-try`.
-2. **Launch the app:** on branch `finish-line` (`git checkout finish-line`,
-   `git pull`), run `cd hyperspace-python && uv sync && uv run hyperspace`.
+2. **Launch the app:** on branch `main` (`git checkout main`, `git pull`),
+   run `cd hyperspace-python && uv sync && uv run hyperspace`. The shape
+   entries (L48–L54, A19, D14) need plan 22: until it is merged, use
+   branch `plan-22-integration` instead.
    Two windows open: the picture (the *render window*) and the *control
    window*. **Esc** quits.
 3. **Use the copy instead of the real home folder:** in the terminal,
@@ -67,8 +69,8 @@ changes brightness or volume instead).
 2. **On the copy**, the first launch of this build: L1, then L2 and L3.
    Do not launch on the real home folder before this: the first launch
    rewrites a file there (with a backup).
-3. The rest of Part 1, in any order: L39–L42 on the copy, the others on
-   the real home folder. Leave L43 (git, on the copy) until after step 4:
+3. The rest of Part 1, in any order: L39–L42 and L53 on the copy, the
+   others on the real home folder. Leave L43 (git, on the copy) until after step 4:
    it is the last test done on the copy.
 4. Part 2 (a), the APC40. Its entries marked "on the copy" run with
    `HYPERSPACE_HOME` set to the copy. A1 before A4.
@@ -78,7 +80,7 @@ changes brightness or volume instead).
    that need both.
 7. Part 2 (c), the projector.
 8. Part 2 (d), the glass and the projector: D1 first (it sets up two
-   outputs in the config file), D12 and D13 last.
+   outputs in the config file), D14 any time, D12 and D13 last.
 9. Part 2 (e), a mouse — any time.
 
 ## Summary
@@ -132,6 +134,13 @@ changes brightness or volume instead).
 | L45 | The HANDS page explains a bad setting | 1 | laptop | 100 |
 | L46 | Sending to FL Studio | 1 | laptop, FL Studio | 27 |
 | L47 | Receiving from FL Studio | 1 | laptop, FL Studio | 28 |
+| L48 | The shapes turn through 4D and never go flat | 1 | laptop | 113 |
+| L49 | The Heart turns with the bass, in 3D | 1 | laptop, music | 114 |
+| L50 | The Star, Starfruit, Rose and Möbius strip by eye | 1 | laptop | 115 |
+| L51 | The Klein bottle | 1 | laptop | 116 |
+| L52 | Stepping to the Klein bottle (keys) | 1 | laptop, the copy | 117 |
+| L53 | Presets that show a changed shape | 1 | laptop, the copy, music | 118 |
+| L54 | The turntable pictures | 1 | laptop, no app | 119 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -150,6 +159,7 @@ changes brightness or volume instead).
 | A16 | Click a control, then a setting | 2a | APC40 | 70 |
 | A17 | Knob smoothing | 2a | APC40 | 78 |
 | A18 | The instances knob at the bottom | 2a | APC40 | 62 |
+| A19 | The cue knob reaches the Klein bottle | 2a | APC40 | 117 |
 | B1 | Calibrate, and the box it draws | 2b | hand camera | 72, 15 |
 | B2 | The probe sees both hands | 2b | hand camera | 13 |
 | B3 | The HANDS page and which way is up | 2b | hand camera | 14, 4 |
@@ -196,6 +206,7 @@ changes brightness or volume instead).
 | D11 | The party presets on the rig | 2d | glass, projector, camera, APC40 | 41, 32 |
 | D12 | A screen not plugged in at launch | 2d | glass, projector | 111 |
 | D13 | Unplug the projector mid-run | 2d | glass, projector | 112 |
+| D14 | The shapes in 4D from the audience | 2d | glass | 113, 115 |
 | E1 | Drag an effect with a mouse | 2e | mouse | 94 |
 
 Covered by other entries: check 32 is part of D11; check 37 is replaced
@@ -1388,6 +1399,157 @@ row is switched on).
 
 *(check 28)*
 
+## The shapes in four dimensions
+
+Seven shapes — Heart, Star, Rose, Torus, Trefoil knot, Starfruit, Möbius
+strip — used to go flat, like a sheet of paper seen edge-on, whenever the
+bass turned them "through the fourth dimension". Now six of them have real
+4D depth, and the Heart stays an ordinary 3D shape that the bass turns in
+3D. There is a new 26th shape, the Klein bottle. Pick a shape in the
+VIEW page's **Shape** list (or with ← / →). The six round keys on the
+VIEW page (XY, XZ, YZ, XW, YW, ZW) switch each turning direction on and
+off; XW, YW and ZW are the "fourth dimension" ones, driven by the bass.
+
+#### L48. The shapes turn through 4D and never go flat
+
+**Needs:** laptop.
+
+**Do:** F1 (TUMBLE). On the VIEW page switch off every round key but
+**XW**. Step through Star, Rose, Torus, Trefoil knot, Starfruit, Möbius
+strip and Klein bottle, watching each turn a full circle. Do the same
+with only **YW** on, then only **ZW**, then all six with music. Look at
+the Clifford torus (shape 18) first, for comparison.
+
+**Right if:** no shape ever becomes a flat sheet, a line or a thin
+ribbon; each bends and swaps sides as it turns, the way the Clifford
+torus does; the red line under the name reads "4D lift · …".
+
+**Judge:** which shapes look best and worst turning.
+
+**Wrong if:** a shape goes flat at a quarter turn; a seam opens up.
+
+*(check 113)*
+
+#### L49. The Heart turns with the bass, in 3D
+
+**Needs:** laptop, music with deep bass.
+
+**Do:** pick the Heart. With only XW on, then only YW, then only ZW,
+watch it turn. Then all keys on, music playing. Switch to the Tesseract
+and back.
+
+**Right if:** XW turns the heart side-on (a spin about the up-down
+line), YW tips it forward and back, ZW rolls it like a wheel facing you;
+it never goes flat; with music it clearly moves with the bass; its
+lines are as bright, and its near edges as thick and bright, as the
+Tesseract's.
+
+**Know:** the XW, YW and ZW keys and readouts still say those planes are
+turning, although the Heart turns in ordinary 3D.
+
+**Judge:** whether the bass's spin reads as the bass.
+
+**Wrong if:** the heart goes flat; it looks dim and flat next to the
+Tesseract; another shape behaves differently after the Heart was shown.
+
+*(check 114)*
+
+#### L50. The Star, Starfruit, Rose and Möbius strip by eye
+
+**Needs:** laptop.
+
+**Do:** FACES on with a pattern. Star: XW only, stop it at a quarter turn
+(**Space** pauses). Starfruit, Rose, Möbius strip: all keys off, then
+turning.
+
+**Right if:** the Star becomes a box, like a lantern, at a quarter turn,
+and its two star-shaped ends show the pattern whole, with no hole or
+tear; the Starfruit's five ridges are still recognisable; the Rose is
+still a delicate flower (it is a little deeper than before); the Möbius
+strip is a little wider than before and not too wide; the Rose's centre
+and the Möbius strip's join stay closed.
+
+**Judge:** each of these four looks: keep, or say what to change.
+
+**Wrong if:** a torn or folded star end; a gap at the Rose's centre or
+the Möbius strip's join.
+
+*(check 115)*
+
+#### L51. The Klein bottle
+
+**Needs:** laptop.
+
+**Do:** pick the Klein bottle (shape 26, after the Möbius strip). All
+keys off, then XW, YW and ZW one at a time, slowly (Speed down). Faces
+on and off.
+
+**Right if:** at rest it looks like a bottle whose neck curls over and
+comes back into its body; as it turns, the neck passes beside the body
+and never through it; no gap where the surface joins itself; the neck
+has enough lines.
+
+**Judge:** whether it reads as a bottle — the build's own look said it
+reads more like a curled horn or a loop. Say what you see.
+
+**Wrong if:** the neck cuts through the body at some angle; a gap or a
+sliver at the join.
+
+*(check 116)*
+
+#### L52. Stepping to the Klein bottle (keys)
+
+**Needs:** laptop; the copy for the save. (The desk part is A19.)
+
+**Do:** VIEW page, Möbius strip (25). Press →, → again, then ←. If you have
+the gamepad, RB and LB do the same. On the copy: save a preset on the Klein bottle, load
+another, load it back.
+
+**Right if:** → reaches the Klein bottle and stays there; the page
+reads "KLEIN BOTTLE" and "576V 1152E · χ=0 · one side", with the χ drawn
+as a letter, not a box; the saved preset comes back on the Klein bottle.
+
+**Wrong if:** it stops at the Möbius strip; it jumps back to the 5-cell;
+a box instead of χ.
+
+*(check 117)*
+
+#### L53. Presets that show a changed shape
+
+**Needs:** laptop, the copy, music.
+
+**Do:** load the factory presets `plasma-heart` (the Heart),
+`spiral-silk` (the Trefoil knot) and `inverse-halo` (the Starfruit), then
+your own `hi-frek-variation-1` and `light-realm-variation-1` (the Möbius
+strip). If yours are not in the list: `uv run python
+tools/shared_presets.py install shared/dan-2026-10-04`.
+
+**Right if:** each still does what it was made for.
+
+**Judge:** any that now looks wrong: re-tune the preset, or change that
+shape back.
+
+*(check 118)*
+
+#### L54. The turntable pictures
+
+**Needs:** laptop; no app.
+
+**Do:** open the folder `hyperspace-python/docs/plans/assets/22-flat-shapes/`.
+Each picture is one shape turning a full circle in XW, YW and ZW (three
+rows of twelve), with a number under each frame: how much depth it
+keeps, red when too little. Look at `before-18-heart.png` to
+`before-24-mobius-strip.png`, then `after-18-heart.png` to
+`after-25-klein-bottle.png`.
+
+**Right if:** every "before" picture of those seven has red numbers at
+the quarter turns; no "after" picture has any red; the after pictures
+look like the shapes you know.
+
+**Judge:** which shape looks worst.
+
+*(check 119)*
+
 ---
 
 # Part 2 — tests that need hardware
@@ -1743,7 +1905,7 @@ the on-screen desk shows the same, amber at half strength with names.
 The pressed pad turns green, the old one amber, the picture changes and
 slot 12's button is lit. An empty pad: nothing loads, "slot 16: an empty
 slot". Under SHIFT: same lights, it loads, SHIFT drops. The cue knob
-steps through all 25 shapes (no pad shows the shape any more). During a
+steps through all 26 shapes (no pad shows the shape any more). During a
 Learn the pad loads and the Learn stays armed.
 
 **Judge:** whether amber can be told from green on the real desk — say
@@ -1836,6 +1998,18 @@ copy.
 **Judge:** whether that is too easy to land on.
 
 *(check 62)*
+
+#### A19. The cue knob reaches the Klein bottle
+
+**Needs:** APC40.
+
+**Do:** turn the cue knob right until the shape stops changing, one
+click more, then left.
+
+**Right if:** it stops on the Klein bottle (26), one shape per click,
+and never jumps back to the 5-cell.
+
+*(check 117)*
 
 ## (b) The hand camera
 
@@ -2852,6 +3026,20 @@ up over the laptop's controls.
 
 *(check 112)*
 
+#### D14. The shapes in 4D from the audience
+
+**Needs:** glass (the projector too, if you like).
+
+**Do:** repeat L48 and L50 on the glass, from where the audience stands,
+with music.
+
+**Right if:** as in L48 and L50: no shape goes flat; they read as solid
+shapes turning through themselves.
+
+**Judge:** which shapes to use in a show.
+
+*(checks 113, 115)*
+
 ## (e) A mouse
 
 #### E1. Drag an effect with a mouse
@@ -2883,13 +3071,18 @@ what you want changed.
   L24, C4; checks 9, 96)
 - **The default hand feel** — Steadiness, Response, Catch, Return;
   saved as `factory`. (B5; check 16)
+- **The shapes in 4D** — whether each lifted shape reads as a solid
+  turning, whether the Heart reads as moved by the bass, and the Klein
+  bottle's look. (L48–L51, D14; checks 113–116)
 
 Smaller calls along the way: the Ghost mirror setting for the glass (D8;
 108); `hands-orbit`'s directions and zoom (B18; 80); whether faces'
 effects read from the audience (D10; 98); whether amber pads can be told
 from green on the real desk (A15; 82); whether a Learn should add rather
 than move a row (B17; 77); whether a second pinch should glide (B11; 23);
-the click-a-control dimming and its 20 seconds (A16; 70); whether a
+the click-a-control dimming and its 20 seconds (A16; 70); the Star's
+lantern, the Starfruit's ridges, the Rose's depth and the Möbius strip's
+width (L50; 115); presets that show a changed shape (L53; 118); whether a
 pause mid-drag should be one undo step or two (L31; 48); HEX with ORBIT
 overlapping (L28; 97); the bottom of the instances knob being nothing
 (A18; 62); the dimmed sliders of an idle effect (L14; 60); readable desk
@@ -2981,7 +3174,7 @@ to the render window.
 the *master dimmer*.
 
 **Cue knob** — the single knob in the APC40's master column; here it
-steps through the 25 shapes.
+steps through the 26 shapes.
 
 **Cut-through** — a VIEW page switch; it only matters in *overlay* mode,
 where it lets the desktop show through overlapping faces.

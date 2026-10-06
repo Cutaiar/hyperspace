@@ -1,8 +1,10 @@
 # Decision register — the open decisions
 
-Rows 34–88 were each decided during an unattended build on 2026-10-04:
-the build took its own recommendation and built it. Every one is in the
-app now and waits for the owner to say **keep** or **overturn**. Each row
+Rows 34–88 were each decided during an unattended build on 2026-10-04,
+and rows 89–97 during plan 22's run on 2026-10-06: the build took its own
+recommendation and built it. Every one is in the app now (rows 89–97 on
+`plan-22-integration`, until the owner merges it) and waits for the owner
+to say **keep** or **overturn**. Each row
 says what was built (what you will see or feel), the other option(s), what
 it costs to reverse, the known rough edge, and the hand check that lets you
 judge it. The checks are numbered in
@@ -74,6 +76,15 @@ here; overturn → the change, then the same.
 | 86 | A screen not connected at launch | 101, 111, 112 | |
 | 87 | `ghost.style`: five drawn objects | 109 | |
 | 88 | Ghost mirror / guide / tethers not performable | 110 | |
+| 89 | The Heart masked; the other shapes lifted | 113, 114 | |
+| 90 | The W fold at draw time: XW → XZ, YW → YZ, ZW → XY | 114 | |
+| 91 | A masked shape cues depth on z | 114 | |
+| 92 | `VOLUME_FLOOR` 0.15, from all 18 4D shapes | 113, 119 | |
+| 93 | How a shape is lifted: the lift rules | 113, 115 | |
+| 94 | The Möbius strip widened and lifted | 115, 118 | |
+| 95 | The Rose deepened and lifted (the orchestrator's call) | 115 | |
+| 96 | The Klein bottle: the bottle, lifted, shape 26 | 116, 117 | |
+| 97 | A bent cap framed by its least-squares plane | 115 | |
 
 "—": no hand check shows it; tests only.
 
@@ -685,7 +696,7 @@ here; overturn → the change, then the same.
   pad is green when its preset is loaded, amber (Akai velocity 5) when its
   slot is filled, dark when empty. The sixteen shape pads older presets
   carry on those rows are dropped quietly at load; any other row of yours
-  on them is dropped with a note. Shapes are on the cue knob (all 25).
+  on them is dropped with a note. Shapes are on the cue knob (all 26).
 - **Other options.** Only the loaded pad lit; a note per dropped row.
 - **To reverse.** `apc40.filled_of` returns None (lights); empty
   `routing.RETIRED_DESK_ROWS` (quiet drop); rows 4–5 back to shapes needs
@@ -703,7 +714,7 @@ here; overturn → the change, then the same.
  G4   [ 9]  [10]  [11]  [12]  [13]  [14]  [15]  [16]   Rotate      [ 9] … [16]            ·
  G5   [17]  [18]  [19]  [20]  [21]  [22]  [23]  [24]   Reset view  [17] … [24]            ·
  G6   [============ SAVE AS (hold) ============]      [Reset all]  [==== SAVE AS ====]   [Reset all]
- C    cue knob: Shape (all 25)                                     ·
+ C    cue knob: Shape (all 26)                                     ·
 
  [ ] invariant (the same on both layers)   · dark   [n] bank slot n
  a bank pad: green = loaded · amber = a preset is here · dark = empty
@@ -935,3 +946,193 @@ here; overturn → the change, then the same.
   mid-set); not performable with no refusal (a Learn writes a dead row).
 - **To reverse.** Three flags.
 - **Judge it.** Check 110.
+
+## The shapes in four dimensions (plan 22)
+
+Seven shapes (Heart, Star, Rose, Torus, Trefoil knot, Starfruit, Möbius
+strip) used to sit at w = 0 and went flat whenever the bass bands turned a
+W plane. That each one either gets real 4D extent or stays 3D, chosen per
+shape, is the owner's; how each was chosen is below. The sheets are in
+[`plans/assets/22-flat-shapes/`](plans/assets/22-flat-shapes/); the plan
+as built is [`plans/22-flat-shapes-and-face-patterns.md`](plans/22-flat-shapes-and-face-patterns.md).
+
+### 89. The Heart is masked; the other shapes are lifted
+
+- **Built.** The Star, Rose, Torus, Trefoil knot, Starfruit and Möbius
+  strip are lifted into the fourth dimension: as XW, YW and ZW turn they
+  bend, saddle and swap sides like the Clifford torus, and none goes
+  flat. The Heart stays a 3D heart prism; the bass bands turn it in 3D
+  (row 90). On the VIEW page a lifted shape's alias reads "4D lift · …";
+  the Heart keeps "3D · …".
+- **Other options.** Lift the Heart too (the best lift tried,
+  z·(sin t + 2 sin 2t + 2 sin 3t), read as a twisted ribbon or bow-tie
+  at XW / YW 60–120° and 240–300°, with 0.18 of its face area edge-on);
+  mask all seven (the shapes stay 3D and never turn through W); mask any
+  of the others.
+- **To reverse.** One word per shape in `geometry.SHAPES` (`w="mask"` or
+  `"lift"`), plus removing the lift from its builder, which re-records
+  that shape's digest: minutes per shape.
+- **Rough edge.** The Star becomes a box, a lantern of its walls, at XW
+  90° and 270°; the Starfruit's five ridges are softened at rest by the
+  lift's perspective (row 93). Factory presets `plasma-heart`,
+  `spiral-silk` and `inverse-halo` show the Heart, the Trefoil knot and
+  the Starfruit, and now move differently.
+- **Judge it.** Checks 113 and 114.
+
+### 90. The W fold happens where the shape is drawn: XW → XZ, YW → YZ, ZW → XY
+
+- **Built.** A masked shape cannot turn through W, so each W plane's
+  angle is added onto a 3D plane as the frame is drawn
+  (`geometry.view_angles`, `Renderer.draw_scene`): SUB (ZW) rolls the
+  Heart in the screen plane, BASS (XW) spins it about the vertical, MIDB
+  (YW) tumbles it about the horizontal. No param changes, the integrator
+  is untouched, and a rate or a phase route on a W plane both reach the
+  Heart. `Shape.w` says how each shape fills W in one of four words
+  (`native`, `flat`, `lift`, `mask`).
+- **Other options.** Fold in the integrator (it would ignore a phase
+  route on a W plane, and a shape's pose would depend on which shapes
+  were shown before it); the Hodge-dual remap XW → YZ, YW → XZ, ZW → XY
+  (each W plane onto the 3D plane it leaves alone); a yes/no "3D" flag
+  instead of four words.
+- **To reverse.** `W_REMAP` is three numbers (minutes); folding
+  elsewhere is a day.
+- **Rough edge.** The VIEW page's XW / YW / ZW keys, `rot.phase.*` and
+  ROUTING go on showing the W planes turning while the Heart turns in
+  XZ, YZ and XY; nothing on the page says the planes are folded. BASS
+  onto XZ is a spin about the vertical: on the Heart it turns the heart
+  side-on, but on a shape round about the vertical (the Torus, the
+  Starfruit), were one masked, it would barely show.
+- **Judge it.** Check 114 — and whether BASS's spin reads as BASS.
+
+### 91. A masked shape cues depth on z
+
+- **Built.** Lines and faces fade, thin and sort by depth. A 4D shape
+  cues on w; a masked shape's w is 0 at every angle, so it cues on its
+  rotated z instead, and is as bright and as deep-looking as a polytope.
+- **Other option.** Leave it on w: the Heart would draw at the cue's
+  dimmest, flat and faint, at every angle.
+- **To reverse.** Three lines in `Renderer.draw_scene`.
+- **Judge it.** Check 114.
+
+### 92. `VOLUME_FLOOR` is 0.15, calibrated across all 18 4D shapes
+
+- **Built.** "Keeps its volume" is measured, not judged: the shape's 3D
+  cloud's smallest singular value over its largest (1 a ball, 0 a
+  plane). Each lifted or masked shape must stay at or over 0.15 through
+  a full turn of each W plane, from rest and from a generic pose, and
+  turn at most 0.15 of its face area edge-on. 0.15 is half the worst
+  any of the 18 4D shapes reaches (the cubic pyramid, 0.30; then the
+  4,8-duoprism 0.53, the dodecahedral prism 0.64, the 5-cell 0.65, the
+  tesseract 0.94, the Clifford torus 0.97, the 24-cell, 120-cell and
+  600-cell 1.00), so no surface is held rounder than a polytope already
+  is. You asked for it calibrated from what already works, not picked.
+  Every shape's geometry is also pinned by a digest, with floats rounded
+  to 1e-9 so a last-bit difference between machines is not a change.
+- **Other options.** Calibrate on the tesseract, 24-cell and Clifford
+  torus only (about 0.47: no masked Heart, Star, Torus or Möbius strip
+  could meet it, since a mask leaves a shape its own 3D proportions,
+  0.16–0.43); judge by eye alone; volume only, no edge-on gate.
+- **To reverse.** One constant; the tests re-gate every shape on it.
+- **Rough edge.** A sweep turns one W plane at a time; the music turns
+  all six at once. 500 random poses of all six planes (the docs pass,
+  seed 0) left every lifted or masked shape over the floor, the Rose
+  lowest at 0.156, but random poses are a sample, not a proof. The
+  edge-on share is called "not a gate" in `geometry.edge_on_share`'s
+  docstring and the turntable's JSON, and the test calls 0.15 the cubic
+  pyramid's own worst; it measures 0.155 (the 3,3-duoprism 0.167).
+- **Judge it.** Checks 113 and 119.
+
+### 93. How a shape is lifted: a function of its own parameters, by four rules
+
+- **Built.** Every builder takes a lift of its own parameters — w(u, v)
+  on a patch, w(θ, φ) on a sphere, w(t, z) on an extruded outline, w(t,
+  a) on a tube — and keeps its vertices, edges and faces. Each lift has
+  no linear part of x, y or z (that only tilts the shape into another
+  flat space), is odd under each single-axis mirror (an even one folds
+  the halves onto each other into a sheet: the torus read as a bowl, the
+  starfruit as a sombrero), depends on z on an extruded outline (else
+  every wall goes edge-on at once), and agrees wherever the surface
+  welds. The lifts: Star 0.6·(z/h)·sin t, Rose z·(3 sin 4θ + sin 8θ),
+  Torus 0.7·sin v·sin 2u, Trefoil 1.5·cos 3t, Starfruit 0.6·sin 2φ·sin 2θ,
+  Möbius 0.5·sin 2u.
+- **Other options.** A lift as a point function w(x, y, z) (it cannot
+  separate the sheets where a surface crosses itself, which the Klein
+  bottle needs); sweeping each surface into a 3-manifold (more faces);
+  other formulas per shape.
+- **To reverse.** One lambda per shape.
+- **Rough edge.** The shapes change look at rest as well as in a turn:
+  the perspective divide shows a lifted shape slightly bent even with
+  every plane at 0 (the Starfruit's ridges soften).
+- **Judge it.** Checks 113 and 115.
+
+### 94. The Möbius strip is widened (0.45 → 0.55) and lifted
+
+- **Built.** The band is a little wider and lifted by 0.5·sin 2u (0 at
+  the seam, which still welds). Through the W planes it keeps
+  0.163 / 0.179 / 0.179. A band that thin limits any lift (at 0.45 wide
+  the best gave 0.149), hence the width.
+- **Other option.** Mask it at its old width (0.158, no geometry change),
+  so it would stay 3D beside the Klein bottle.
+- **To reverse.** The width and the lift in `_build_mobius`, or `w="mask"`
+  with the old width: minutes, plus the digest.
+- **Rough edge.** It clears the floor by little. Your shared presets
+  `hi-frek-variation-1` and `light-realm-variation-1` show the Möbius
+  strip and now look different.
+- **Judge it.** Checks 115 and 118.
+
+### 95. The Rose is made a seventh shape, deepened (0.12 → 0.16) and lifted
+
+- **Built.** The brief named six flat shapes; the Rose was a seventh,
+  built at w = 0 like them. **The orchestrator added it to the plan — it
+  is the orchestrator's call, not yours.** Its own 3D proportions at
+  depth 0.12 (0.118) were under the floor, and no lift can fatten a shape
+  at rest, so it is 0.16 deep (the smallest change that clears: 0.157)
+  and lifted by z·(3 sin 4θ + sin 8θ), each petal's wall twisting
+  through w, front against back. The pinch still welds.
+- **Other options.** Leave the Rose flat (it goes flat at 90° of each W
+  plane, as before); mask it (it would still read 0.118, under the
+  floor, unless deepened anyway); deepen more.
+- **To reverse.** The depth and the lift in `_build_rose`: minutes, plus
+  the digest.
+- **Rough edge.** It clears the floor by 5%, and it may read less
+  delicate at 0.16.
+- **Judge it.** Check 115.
+
+### 96. The Klein bottle: the classic bottle, lifted, shape 26
+
+- **Built.** A new shape after the Möbius strip: the textbook "bottle"
+  immersion, which in 3D must pass through itself where the neck enters
+  the body, lifted by w = sin 2u + ½·sin v·cos 2u so that in 4D the neck
+  passes beside the body and never through it. 36 × 16 vertices (576 V,
+  1152 E, 576 faces), centred on its bounding box; `Shape.w` "lift";
+  the VIEW page reads "KLEIN BOTTLE", "4D · one-sided bottle, no
+  self-crossing", "χ=0 · one side". The cue knob, ← / → and the pad's
+  LB / RB reach it and stop there.
+- **Other options.** The torus-style ("figure-8") immersion (at rest it
+  reads as a pinched torus); `Shape.w` "native" (it is built with w from
+  the start, but its lift is of a 3D immersion, as the others'); a denser
+  grid; a "∞"-style glyph in the sym text (the font may lack it).
+- **To reverse.** It is the last shape, so it can be dropped with its V/E
+  row and digest (a preset saved on shape 26 would then point past the
+  end); the grid is two numbers.
+- **Rough edge.** To the orchestrator it reads at rest more like a
+  curled horn or a loop than the textbook bottle. The neck is sparse at
+  some angles (16 round).
+- **Judge it.** Checks 116 and 117.
+
+### 97. A bent cap is framed by its least-squares plane
+
+- **Built.** The Star's lift bends its two pentagram caps through w. A
+  face of more than four corners that is not planar is now framed (for
+  the pattern's UVs and the triangulation) by its least-squares plane,
+  where its outline stays simple and its triangles tile it exactly.
+  Every planar face, every polytope's included, keeps the basis it had,
+  so nothing else changed.
+- **Other option.** Split each bent cap into triangles or quads (more
+  faces, and the pattern would no longer span the cap as one face).
+- **To reverse.** Four lines in `geometry._face_xy` — but the Star's caps
+  would then fold over themselves.
+- **Rough edge.** Only the Star has such caps. The star polytopes on the
+  shortlist would bring pentagram faces of their own
+  ([`plans/22-polytope-shortlist.md`](plans/22-polytope-shortlist.md)).
+- **Judge it.** Check 115.

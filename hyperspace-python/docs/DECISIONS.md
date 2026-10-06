@@ -8,8 +8,9 @@ behaviour in [`ENGINEERING.md`](ENGINEERING.md).
 **Who** says who decided:
 
 - **owner**: settled with the owner.
-- **row N**: built on a recommendation during the unattended run of
-  2026-10-04. The owner has still to confirm or overturn it in
+- **row N**: built on a recommendation during an unattended run (rows
+  34–88 on 2026-10-04, rows from 89 in plan 22 on 2026-10-06). The owner
+  has still to confirm or overturn it in
   [`DECISION-REGISTER.md`](DECISION-REGISTER.md) under that row number.
 
 To add a decision, add one row to the theme it belongs to. When it
@@ -108,6 +109,21 @@ replaces a row, rewrite that row instead of adding a new one.
 | Per-band **AUTO / MANUAL** normalisation (`band.{i}.norm`, default AUTO). AUTO is the reference chain, bit for bit, known trim quirk included. MANUAL applies trim once as a plain gain. | `bands.NORMS` | owner |
 | `master.dyn` keeps its 0.06×–4× range. Up to 1× it blends toward the normaliser; past 1× only the expansion grows. | `tapers.T_DYN` | owner |
 | The eleven files under `library/band/` are the one scene store. | `control.SCENES`, `Analyzer.apply_scene` | owner |
+
+## Shapes
+
+| Decision | Where | Who |
+|---|---|---|
+| **Per shape, a 3D surface either gets real 4D extent or stays 3D with its W planes masked**, never all down one path; no shape is removed for reading badly. | `geometry.SHAPES` | owner |
+| The Heart is masked. The Star, Torus, Trefoil knot and Starfruit are lifted, and every lifted shape's alias reads "4D lift · …". | `geometry.SHAPES` | row 89 |
+| `Shape.w` is one of four words — `native`, `flat`, `lift`, `mask` — not a 3D/4D flag (a cell count of 0 marks a surface, not a 3D shape). A masked shape's W planes are folded where it is drawn — XW onto XZ, YW onto YZ, ZW onto XY — never in the integrator or a param. | `geometry.Shape.w`, `W_KINDS`, `view_angles`, `W_REMAP`, `Renderer.draw_scene` | row 90 |
+| A masked shape's depth cue (line fade, width, draw order) reads its rotated z, as a 4D shape's reads w. | `Renderer.draw_scene` | row 91 |
+| **Every lifted or masked shape keeps `VOLUME_FLOOR` (0.15) through a full turn of each W plane**, from rest and from a generic pose, and turns at most 0.15 of its face area edge-on. The floor is half the 4D shapes' worst (the cubic pyramid, 0.30). | `geometry.VOLUME_FLOOR`, `tests/test_shapes4d.py` | row 92 |
+| A lift is a function of the builder's own parameters, with no linear part of x, y or z, odd under each single-axis mirror, z-dependent on an extruded outline, and agreeing wherever the surface welds. A shape's digest hashes floats rounded to 1e-9. | `geometry.param_surface`, `spherical_surface`, `ring_prism`, `tube` | row 93 |
+| The Möbius strip is lifted, and 0.55 wide (was 0.45). | `geometry._build_mobius` | row 94 |
+| The Rose is lifted, and 0.16 deep (was 0.12). | `geometry._build_rose` | row 95 |
+| **The Klein bottle is shape 26**: the classic bottle immersion, lifted by w = sin 2u + ½·sin v·cos 2u so it never crosses itself, `Shape.w` "lift", 37 × 16 samples, centred. | `geometry._build_klein`, `_klein_xyz` | row 96 |
+| A face of more than four corners that is not planar (a lifted cap) is framed by its least-squares plane; every planar face keeps its basis. | `geometry._face_xy` | row 97 |
 
 ## Render and outputs
 
@@ -247,3 +263,4 @@ The D-numbers are cited from code comments.
 | A source-first hand learn (click an axis, then a param). | row 64 |
 | A thumbnail of each output in the control window. | row 85 |
 | DJ Link, MIDI clock in and drift correction. | owner |
+| New 4-polytope families in plan 22: ranked in [`plans/22-polytope-shortlist.md`](plans/22-polytope-shortlist.md); none is built until the owner picks. | owner |
