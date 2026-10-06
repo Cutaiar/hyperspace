@@ -18,13 +18,13 @@ and a projector. It is one Python process in `hyperspace-python/`.
   - [`ENGINEERING.md`](ENGINEERING.md): how each part behaves.
   - [`DECISIONS.md`](DECISIONS.md): the decisions in force, and what was
     decided not to build.
-  - [`DECISION-REGISTER.md`](DECISION-REGISTER.md): rows 34–97, built on
+  - [`DECISION-REGISTER.md`](DECISION-REGISTER.md): rows 34–108, built on
     a recommendation and waiting for the owner's keep or overturn.
   - [`AUDIT-2026-09.md`](AUDIT-2026-09.md): the open defects.
   - [`TESTING-GUIDE.md`](TESTING-GUIDE.md): everything a person still has
     to test, in plain words, by hardware.
   - [`plans/11-hand-checks.md`](plans/11-hand-checks.md): the same checks,
-    numbered 1–119, with the automated test behind each.
+    numbered 1–138, with the automated test behind each.
   - [`plans/`](plans/README.md) `15-…` to `22-…`: what each of the last
     eight plans built; plan 22 also has a ranked shortlist of new
     4-polytopes and macro candidates to audition.
@@ -37,14 +37,13 @@ and a projector. It is one Python process in `hyperspace-python/`.
 shared presets of PR #113), the architecture page and plan 22's prompt.
 Plan 22 — the flat shapes given real 4D extent, the Klein bottle, and the
 face patterns made usable — is on `plan-22-integration`; its PR to `main`
-waits for the owner. Stream B's patterns work is still being finished and
-written up. Check `git log` and the PRs for the current state.
+waits for the owner. Check `git log` and the PRs for the current state.
 
 ## What is left
 
 - **The hand checks.** None has been run by a person. Start from
   [`TESTING-GUIDE.md`](TESTING-GUIDE.md), on a copy of `~/Hyperspace`.
-- **The owner's keep or overturn** on register rows 34–97 (the answer sheet
+- **The owner's keep or overturn** on register rows 34–108 (the answer sheet
   at the top of [`DECISION-REGISTER.md`](DECISION-REGISTER.md)).
 - **The open audit findings:** R14, R15, U9, U10, P6, V8, and the small
   defects listed under them.
@@ -52,11 +51,15 @@ written up. Check `git log` and the PRs for the current state.
   unplugged mid-run; anything on the APC40, the hand camera, the projector
   or the glass. No real hand has been tracked: every hands picture comes
   from a synthetic tape. No person has watched the lifted shapes or the
-  Klein bottle turn: every shape picture is an offscreen render.
+  Klein bottle turn, or seen the FACES page or the seventeen patterns on
+  the Mac: its fit and Apple's shader compiler are unverified (hand
+  checks 120, 121).
 - **Plan 22's choices for the owner:** which new 4-polytopes to build
   ([`plans/22-polytope-shortlist.md`](plans/22-polytope-shortlist.md)),
-  and the macro candidates' listening session
-  ([`plans/22-macro-candidates.md`](plans/22-macro-candidates.md)).
+  the macro candidates' listening session
+  ([`plans/22-macro-candidates.md`](plans/22-macro-candidates.md)), and
+  whether to re-save the sixteen presets in `shared/dan-2026-10-04` that
+  still push the pattern inputs at depth 1 (the factory's is now 0.35).
 - **Deliberately not built:** see "Decided not to build" in
   [`DECISIONS.md`](DECISIONS.md).
 

@@ -5,14 +5,21 @@ used to sit flat at w = 0 a way to keep their volume through every W
 plane: six are lifted into the fourth dimension and the Heart stays 3D
 with its W planes folded onto 3D ones. It also added a 26th shape, the
 Klein bottle, built in 4D from the start. **Stream B** gave the eight
-pattern inputs one meaning across every pattern, gave the FACES page a
-module of its own, and prepared macro candidates to audition.
+face-pattern inputs one meaning each across every pattern — SCALE, GLOW,
+WARP, SPEED, COLOUR, SHARP, HUE, SPREAD — so one routing set reads the
+same on every pattern; gave the FACES page a module of its own, a
+browser of live swatches where each input says what it does and what
+drives it; added five patterns (seventeen in all), two of which draw the
+bands themselves; lowered the factory pattern routes to a depth that
+reads on loud music; and prepared four presets of macro candidates for
+the owner to audition.
 
 Hand checks: [`11-hand-checks.md`](11-hand-checks.md) group R, checks
-113–119 (Stream A). Open decisions:
-[`DECISION-REGISTER.md`](../DECISION-REGISTER.md) rows 89–97 (Stream A).
-Branch `plan-22-integration`; the work packages were PRs #139 (A1), #143
-(A2), #145 (A3), #142 (A5), and #140 (B1), #144 (B2), #141 (B5).
+113–119 (Stream A) and 120–138 (Stream B). Open decisions:
+[`DECISION-REGISTER.md`](../DECISION-REGISTER.md) rows 89–97 (Stream A)
+and 98–108 (Stream B). Branch `plan-22-integration`; the work packages
+were PRs #139 (A1), #143 (A2), #145 (A3), #142 (A5), and #140 (B1), #144
+(B2), #147 (B3), #141 (B5).
 
 ## Stream A — the flat shapes get real 4D extent
 
@@ -276,12 +283,285 @@ as the lifted Star's caps.
 
 ## Stream B — the face patterns made usable
 
-*To be written by the Stream B docs work package (B4): the mod
-convention per index (B1), the FACES page (B2), the patterns themselves
-(B3), and the macro candidates
-([`22-macro-candidates.md`](22-macro-candidates.md), B5). Its hand checks
-continue group R after check 119; its register rows continue after
-row 97.*
+### Why
+
+`shaders/patterns.glsl` exposes eight inputs, `u_mod[8]`, the registry's
+`pattern.mod.0`–`.7` (0–2.6, 1.0 the un-driven look), and the factory
+routes put analyzer lane *i* on input *i*. Before this plan each of the
+twelve modes used each index for something of its own: index 1 was a
+phase speed in one mode and a falloff in another, index 3 an arm count
+in one and a petal count in the next. No route meant the same thing on
+two patterns. The FACES page was a dropdown and eight sliders named
+"mod 0" to "mod 7", drawn inline in `ui.py`. The owner said no preset
+had meaningful custom mod routing, so the inputs could be redesigned
+with nothing to migrate.
+
+### One meaning per input (B1)
+
+- **At the machine.** Each input does the same kind of thing on every
+  pattern. On the FACES page they are named; in ROUTING, Learn lines and
+  the desk they read "Pattern scale", "Pattern glow" and so on. Routing
+  a band to SCALE swells whatever pattern is on show. At all 1.0 every
+  mode looks as it did (EMBER aside, below).
+- **The convention.** 1.0 is always the design; the range is 0–2.6 and
+  the ids are unchanged. The order is for the factory routes: lane *i*
+  → input *i*, SUB BASS MIDB MID UPR AIR, slow and heavy to fast and
+  bright.
+
+  | k | Input | 0 | 1 | 2.6 | Why at this index |
+  |---|---|---|---|---|---|
+  | 0 | SCALE | small and many (features 0.59×) | as designed | big and few (2.3×) | lane 0, SUB: the slowest, heaviest band swells the whole picture |
+  | 1 | GLOW | dim (alpha 0.3×) | as designed | bright and white-hot (alpha 2.4×, a third of the way to white) | lane 1, BASS: the kick flashes the faces |
+  | 2 | WARP | straight | as designed | heavily warped | lane 2, MIDB: the low mids' body bends the geometry |
+  | 3 | SPEED | frozen | as designed | 2.6 times as fast | lane 3, MID: the busiest band keeps the motion flowing with the music |
+  | 4 | COLOUR | grey | as designed | more hues, stronger colour | lane 4, UPR: the snare and the presence flare the colour |
+  | 5 | SHARP | soft and broad | as designed | thin and crisp | lane 5, AIR: bright sound, sharp image |
+  | 6 | HUE | half a turn back round the wheel | as designed | four fifths of a turn on (half a turn per unit) | free for an LFO: a hue that follows a band flickers |
+  | 7 | SPREAD | every face in unison | as designed | each face its own phase and colour | free for a macro or a knob: unison or scattered is a scene's choice |
+
+- **`hyperspace/patterns.py` is the source of truth.** It is pure data
+  and imports nothing: `INPUTS` (name, meaning, why), the index
+  constants `SCALE` … `SPREAD`, `MODES` (each mode's name, one line
+  about it, and what each input does in it — `""` where it reads none),
+  `NAMES`, and `effect(mode, k)`, `ignores(mode)`, `label(k)` ("Pattern
+  scale") and `tip(k)`. `params.PATTERNS` is `patterns.NAMES`; each
+  `pattern.mod.k`'s label and tip come from the table, and
+  `view.pattern`'s tip lists the names. The shader keeps its own copy of
+  the convention — a header comment and named accessors — and the tests
+  hold the two together.
+- **The shader.** A mode reads its inputs only through `m_scale()` …
+  `m_spread()` and the helpers built on them: `k_size()` (SCALE as a
+  size factor), `warp(p, own)`, `sharpen(v)` and `k_edge()` (SHARP),
+  `face_rad`, `face_turn`, `face_gold` and `face_k1` (SPREAD),
+  `spread_hue(col, x)` (COLOUR's extra hues). GLOW, HUE and COLOUR's
+  grey end are one `finish()` laid over every mode, and every term of it
+  is the identity at 1.0. The `pattern(int mode, vec2 uv, float fid)`
+  contract is unchanged; the mode bodies are in `design()`.
+- **SPEED is an integrated clock.** The renderer folds SPEED into the
+  patterns' clock, `u_ptime` (`Renderer._pattern_clock`): it advances by
+  the wall time since the last frame times SPEED. `t × SPEED` would jump
+  every pattern's phase by `t × ΔSPEED` whenever SPEED moved, minutes
+  into a set; integrated, a lane on SPEED changes how fast a pattern
+  goes, never where it is. `u_time` is still uploaded and no mode reads
+  it.
+- **Shaping choices.** A design that is straight at 1.0 (PLAID, MOIRE,
+  BLOOM's ring, HEX, and the new METER, PULSE, TRUCHET and KALEIDO)
+  stays straight from WARP 0 to 1 and bends only above 1; a design whose faces play in unison (PLAID, WEAVE) stays in step
+  from SPREAD 0 to 1 and parts only above. GLOW never goes below 30% of
+  the design's light, so a route on a base of 0 does not make the faces
+  vanish. BLOOM keeps seven petals and SPIRAL five arms: an audio-driven
+  count flickered. FLAT reads no input.
+- **Tools.** `tools/pattern_sheet.py` draws a sheet per mode
+  (`mode-NN-*`), a sheet per input across every mode (`input-K-*`) and
+  the twelve old modes as they were (`before-NN-*`), into
+  `assets/22-face-patterns/`. `tools/check_glsl.py` compiles the face,
+  seed and tile shaders with the Khronos reference compiler,
+  `glslangValidator`.
+- **Tests.** `tests/test_patterns.py::test_every_mode_says_what_each_of_the_eight_inputs_does`,
+  `::test_the_inputs_have_short_distinct_capital_names_and_say_what_they_mean`,
+  `::test_only_flat_ignores_an_input`,
+  `::test_the_registry_labels_and_tips_come_from_the_table`,
+  `::test_the_factory_routes_put_lane_i_on_input_i`,
+  `::test_the_shader_names_each_input_at_its_index`,
+  `::test_the_modes_read_the_inputs_only_by_name`,
+  `::test_the_shader_has_a_case_for_every_mode_in_the_table`,
+  `::test_the_face_shaders_pass_the_reference_compiler` (skipped without
+  `glslangValidator`), `::test_every_input_moves_every_mode_from_1_to_2_6`,
+  `::test_flat_reads_no_input`, `::test_glow_brightens_every_mode_steadily`,
+  `::test_colour_at_0_is_grey_on_every_mode`,
+  `::test_spread_at_0_plays_every_face_in_unison`,
+  `::test_speed_at_0_is_frozen`,
+  `::test_hue_turns_the_palette_and_keeps_the_shape`,
+  `::test_moving_speed_changes_the_rate_and_never_jumps_the_clock`.
+
+![Each input from 0 to 2.6 on every mode: SCALE](assets/22-face-patterns/input-0-scale.png)
+
+The other seven input sheets, a sheet per mode and the old modes as they
+were are in [`assets/22-face-patterns/`](assets/22-face-patterns/).
+
+### The FACES page (B2, tightened in B3)
+
+`hyperspace/ui_patterns.py`, alongside `ui_fx.py`, draws the page
+(`ui.PAGES`' "faces"; `ui.py` keeps only the call). Top to bottom:
+
+1. **FACES** — the Faces and Cut-through ticks and the pattern mix.
+2. **The patterns** — every mode as a chip with a small live swatch,
+   four to a row (seventeen: five rows); the one on show is solid red.
+   A chip's hover is the mode's one line; a click shows it (one undo
+   step); a right-click is `view.pattern`'s menu, so a knob can be
+   learned to step the patterns.
+3. **The mode on show** — its name and its line, with ‹ › at the right
+   end (they step round the ends). In the line's place, so the page
+   grows no taller: the GLSL error while `patterns.glsl` does not
+   compile (the last good version keeps drawing; the full text on
+   hover), or "Faces is off" with a **faces on** chip.
+4. **INPUTS · <MODE>** with **all neutral** at its right (every base
+   back to 1.0, one undo step, nothing when nothing moves), then the
+   pattern group's preset strip.
+5. **Eight inputs, two lines each.** The first: the input's name, what
+   it does *in this mode* (`patterns.effect`), and at the right what
+   drives it, in the router's words — "SUB pushes +0.35", "LFO 1 pushes
+   +0.5 × wash" (a macro, here "wash", scaling it), "K3 sets it", "macro.4 sets its
+   base", "(off)" — a link that opens ROUTING filtered to that input. An
+   input nothing drives offers **+ SUB** … **+ AIR** for inputs 0–5,
+   **+ LFO 1** for HUE and **+ LFO 2** for SPREAD: a click adds a push
+   route from that source at the factory depth (`routing.PATTERN_DEPTH`)
+   into the loaded preset and stays on FACES. The second line: the
+   slider (base → effective while a source rides it, a white bar at the
+   effective value) and a **1** chip that puts the base back to 1.0. On
+   FLAT every row says "FLAT reads no input", dimmed but live.
+6. A faint line: "right-click an input: learn a knob or a hand".
+
+- **The swatches** are the renderer's. While a page asks
+  (`Renderer.want_swatches`, and for `SWATCH_HOLD` = 30 frames after),
+  it draws one mode's 64² swatch a frame, round robin, on the patterns'
+  live clock and the current inputs, at the start of `draw_outputs`
+  inside its `try/finally`. A failure sets `swatch_error` and never costs
+  the frame; with no page asking nothing is drawn, and the frame's own
+  pixels are the same either way. The render stack still writes no
+  param.
+- **Fit: UNVERIFIED.** In this container's font metrics the worst case
+  (all eight inputs driven, a long macro name, a GLSL error, Faces off,
+  every mode) has no scroll and 31 px of height to spare. Those metrics
+  are not the Mac's: test_fx's own two fit tests fail here by 18 px. The
+  page has to be seen on the Mac (check 120).
+- **Tests.** `tests/test_ui_patterns.py`, 27 tests, among them
+  `::test_the_faces_page_is_in_pages_and_draws_this_module`,
+  `::test_every_mode_has_a_chip_and_its_line`,
+  `::test_prev_and_next_step_round_the_modes`,
+  `::test_the_eight_rows_are_named_and_say_what_each_does_in_this_mode`,
+  `::test_a_routed_input_shows_its_source_and_a_click_opens_routing`,
+  `::test_the_driver_line_names_the_macro_desk_and_base_subscribers`,
+  `::test_an_undriven_input_offers_the_conventions_source_and_stays_here`,
+  `::test_neutral_puts_one_input_back_and_all_neutral_every_one`,
+  `::test_the_page_fits_with_every_row_driven_and_flat_or_the_longest_mode`,
+  `::test_swatches_draw_only_while_the_page_asks_and_leave_the_frame_as_it_was`;
+  `tests/test_patterns.py::test_every_phrase_fits_a_faces_row`.
+- **Shots.** `tools/faces_page_shots.py` (a hidden real window).
+
+![The FACES page on RINGS, nothing driving the inputs](assets/22-face-patterns/b3-faces-rings.png)
+![HEX, with routes on the inputs](assets/22-face-patterns/b3-faces-hex.png)
+![METER](assets/22-face-patterns/b3-faces-meter.png)
+![FLAT: the rows dimmed](assets/22-face-patterns/b3-faces-flat.png)
+![A chip's hover](assets/22-face-patterns/b3-faces-hover.png)
+
+The B2 shots of the page before B3 tightened it (`b2-*.png`) are in the
+same folder.
+
+### Five new patterns (B3)
+
+Appended after EMBER, so indices 0–11 and every preset's pattern stay
+where they were; the twelve old modes' code and art are unchanged. Each
+new mode honours all eight inputs and has its line and eight phrases in
+`patterns.py`.
+
+| # | Mode | For | What it is | Cost × FLAT, 600-cell / 120-cell |
+|---|---|---|---|---|
+| 12 | METER | seeing the audio | A radial LED equaliser on black: a wedge per band, SUB at twelve o'clock and the rest clockwise, slowly turning; red to violet, lit out from the hub as far as the band reads, the top segment white-hot. In silence the empty tracks show dim. | 2.66 / 1.71 |
+| 13 | PULSE | seeing the kicks | The kick swells a hot magenta disc in a speaker cone of grooves and throws a ring; the snare shoots four yellow rays; the hats sparkle ice-cyan points. In silence an idle heartbeat at SPEED, gone as soon as any band moves. | 2.97 / 1.88 |
+| 14 | MARBLE | generative depth | Noise folded through itself twice: lapis ink, teal currents, gold veins. WARP is how far the noise folds (0: plain clouds). | **4.19** / 2.42 |
+| 15 | TRUCHET | generative depth | A maze of quarter arcs, tiles flipping now and then, a current along the paths; a neon gradient on a deep navy checker. | 2.73 / 1.75 |
+| 16 | KALEIDO | bold colour | Six mirrored wedges of flat pop colour (magenta, yellow, cyan, ink) in bands and dots, hard-edged, turning. Always six-fold: the shader does not know a face's sides. | 2.47 / 1.61 |
+
+The old twelve cost 2.0–3.1× FLAT on the 600-cell (CELLS the most,
+3.13×). The numbers are `tools/pattern_cost.py`'s, offscreen at
+1280×720 on llvmpipe (`assets/22-face-patterns/b3-cost.txt`): ratios
+only, not the Mac's milliseconds.
+
+- **METER and PULSE draw the bands themselves.** The app hands the
+  renderer the analyzer's lanes every frame (`app._bands`: out / CEIL,
+  as a route reads them; `()` with the analyzer off; it never raises),
+  the way it hands over the dim. The face shaders read them as
+  `u_levels[8]` and `u_nlevels` through `band(i)`. It is a read-only
+  render input, never a param. Only these two modes read it; every
+  other mode is moved by the music only through its routed inputs, and
+  draws the same with or without the bands. Their content ignores the
+  routes by design; the inputs style them as any mode.
+- **The browser** became seventeen chips in five rows, 24 px tall, 4 px
+  apart, with ‹ › moved to the line under the grid that names the mode.
+- **Tests.** `tests/test_patterns.py::test_only_meter_and_pulse_read_the_bands_and_they_show_them`,
+  `::test_new_modes_are_appended_so_preset_indices_keep_their_patterns`,
+  and the per-input, fit and row tests above, now over all seventeen.
+
+![Every pattern: silence, quiet, medium, loud, a kick at depth 0.35, and loud at the old depth 1](assets/22-face-patterns/b3-gallery.png)
+
+### The factory pattern routes at depth 0.35 (B3)
+
+At depth 1 a band reading 0.6 or more pinned its input at 2.6, so with
+loud music every input sat at its extreme on every pattern (EMBER went
+black; SPIRAL, CELLS and KALEIDO blew out). `routing.PATTERN_DEPTH =
+0.35`: a push moves an input by depth × u of its 0–2.6 range, with
+u = out / CEIL and CEIL = 2.6, so on the input's own scale it rises by
+0.35 × out. On the base of 1:
+
+| The band | out | The input |
+|---|---|---|
+| quiet | 0.3–0.4 | ≈ 1.1 |
+| at nominal | 1.0 | 1.35 |
+| a kick | ≈ 2.45 | ≈ 1.86 |
+
+At 0.3 quiet music barely differed from silence; at 0.4 EMBER and SPIRAL
+blew out on kicks. 0.35 leaves room for a macro: INTENSITY's × 1.8 is
+depth 0.63 and DROP's × 2.2 is 0.77, which reach 2.6 only on
+transients.
+
+- `routing.legacy6_routes` pushes the six pattern rows at
+  `PATTERN_DEPTH`; the six rate rows keep `ROT_DEPTH` and the reference's
+  parity. The FACES page's "+ source" offers use the same constant
+  (`ui_patterns.ROUTE_DEPTH`).
+- **The house presets are generated now.** The eight house moods
+  (`preset.HOUSE`: big-blue-wave, ember-orbit, hex-engine, inverse-halo,
+  plasma-heart, spiral-silk, strobe-cage, woven-lattice) are
+  `FACTORY_PRESETS` entries whose routes come from code, as the party
+  presets' do; their values and notes stay data. Before, their lane rows
+  were data pinned to the code by a test, and a change of depth would
+  not have reached them. Eighteen factory files were regenerated
+  (`uv run python -m hyperspace.preset`): only the six pattern rows'
+  depth, and `legacy6`'s pattern bases and note.
+- **`legacy6`** keeps its rate bases at 0 and stays the anchor of the
+  reference's rotation parity; its pattern inputs now sit at 1 with the
+  lanes at the factory depth, so it no longer reproduces the reference's
+  pattern drive (`out` raw on 0).
+- **The owner's own presets were not edited.** Sixteen of the seventeen
+  in `shared/dan-2026-10-04/presets/` carry six depth-1 pattern routes;
+  eleven of those have faces off, and three would visibly change with
+  faces on (one SPIRAL, two PLASMA).
+- **Tests.** `tests/test_patterns.py::test_the_factory_depth_reads_on_loud_music_and_never_pins_an_input`;
+  the legacy6 parity tests in `tests/test_routing.py` now expect
+  1 + `PATTERN_DEPTH` × out on the pattern inputs, with their rate
+  assertions untouched.
+
+### Macro candidates to audition (B5)
+
+Four presets of macro configurations, **prepared, not judged**: which
+macros feel right is a listening session with the owner.
+[`22-macro-candidates.md`](22-macro-candidates.md) is the audition
+sheet, with a line per macro on what it is meant to do and its
+subscribers.
+
+- **Where.** `shared/plan-22-macro-candidates/presets/`
+  (`macro-performance`, `macro-streams`, `macro-intensity`,
+  `macro-breakdown-drop`), not the factory folder, whose list of 23 the
+  generator and `tests/test_presets.py` pin. Install with
+  `uv run python tools/shared_presets.py install shared/plan-22-macro-candidates`:
+  it copies into the home and never writes over a file; the presets
+  then show on PRESETS, in no bank slot.
+- **What they share.** One scene (the 24-cell, CELLS, all six planes,
+  the legacy6 lane routes with the pattern rows at 0.35, LFO 1 on HUE,
+  LFO 2 on SPREAD, a light FX chain), so a difference comes from the
+  macros. The macros sit on the APC40's device knobs D1–D8 (or the
+  ROUTING page's macro sliders) and rest at noon, BREAKDOWN and DROP at
+  zero; resting lands the file's own values.
+- **Per-band gain** is depth subscribers on the lane routes: the
+  analyzer's band gains, attack and gate are session params (D9) and a
+  base subscriber on one is dropped at load.
+- **After B3** their six lane → pattern rows were set to 0.35; the
+  macros' multipliers were not changed, so their range sits lower than
+  when they were written.
+- **Tests.** `tests/test_macro_candidates.py` (each installs through the
+  real tool, loads with no note and every row kept, its subscribers
+  name real params or its own routes, and turning a macro moves its
+  bases and scales its routes).
 
 ## Not verified by a person
 
@@ -308,6 +588,30 @@ particular:
   `plasma-heart` (Heart), `spiral-silk` (Trefoil knot) and `inverse-halo`
   (Starfruit), and the owner's shared `hi-frek-variation-1` and
   `light-realm-variation-1` (Möbius strip).
+
+Nothing of Stream B has been seen on the Mac, the glass or the
+projector, or heard with real music through the real analyzer: the
+pictures are offscreen renders and a hidden window in this container, on
+Mesa's software GL. In particular:
+
+- **The FACES page's fit on the Mac** (check 120). In this container's
+  font metrics it has 31 px spare at the worst case; the same metrics put
+  test_fx's own two fit tests 18 px over, so neither number says
+  anything about the Mac.
+- **`patterns.glsl` on Apple's GL compiler** (check 121). Mesa and the
+  Khronos `glslangValidator` accept every mode; neither is Apple's.
+- **One routing set on every pattern with music** (check 122): the
+  convention was checked a pixel at a time, not by eye and ear.
+- **SPEED under audio for a long set** (check 123), HUE on an LFO and
+  SPREAD on a knob on a big shape (124).
+- **A first-time user on FACES** (125), the swatches' legibility and
+  cost on the Mac (126), "+ SUB" and its undo (127), "all neutral" (128).
+- **METER and PULSE with real music on the rig** (129), **MARBLE's cost
+  on the Mac's GPU** (130), **KALEIDO and TRUCHET as art** (131).
+- **The factory presets at depth 0.35 with music** (132): tuned on
+  synthetic band levels.
+- **The macro candidates.** None has been turned by a person; the
+  listening session is checks 133–136.
 
 The order to see them in is group R; see also
 [`../TESTING-GUIDE.md`](../TESTING-GUIDE.md).
@@ -340,3 +644,46 @@ The order to see them in is group R; see also
 - **`Shape.w == "flat"` is used by no shape.** It stays in `W_KINDS` so
   the tests can show the collapse and so a future 3D shape can be added
   honestly.
+- **The FACES page's fit is UNVERIFIED** on the Mac: 31 px spare in this
+  container's metrics, which also put test_fx's fit tests 18 px over
+  (check 120).
+- **Apple's GL compiler has not seen `patterns.glsl`**; Mesa and
+  `glslangValidator` are the only nets (check 121).
+- **MARBLE is the most expensive pattern**: 4.19× FLAT on the 600-cell
+  in software GL, against CELLS' 3.13×, the dearest before. Its cost on
+  the Mac is unknown (check 130).
+- **The owner's sixteen depth-1 presets.** Sixteen of the seventeen in
+  `shared/dan-2026-10-04/presets/` still push the pattern inputs at
+  depth 1, where a loud band pins them; with faces on, three would
+  change visibly (one SPIRAL, two PLASMA). They were not edited: re-save
+  them at 0.35 or not (check 132).
+- **The PRESETS page does not show a preset's note**, so the macro
+  candidates' one-line intents are only in their files and the audition
+  sheet.
+- **The pattern group's preset strip draws its dirty dot over its ▶
+  chip** at the FACES page's width (`ui_presets.strip`, not the page's
+  code).
+- **`legacy6` in silence stands still.** Its rate bases are 0, so the
+  planes do not turn until the music drives them; its pattern inputs now
+  sit at 1, as designed (before B3 they sat at 0: small, dim, straight,
+  frozen and grey), and it shows FLAT unless a pattern is picked
+  (check 137).
+- **`u_time` is still uploaded but no mode reads it**: the patterns
+  read `u_ptime`.
+- **WARP and SPREAD do nothing from 0 to 1 on straight and unison
+  designs**, so a route on a base of 0 moves nothing until it passes 1.
+  WARP 2.6 on HEX may be too strong (check 138).
+- **SHARP at 0 and GLOW at 2.6 both brighten**, in different ways.
+- **EMBER is not pixel-identical at all-1.0 on faces other than face
+  0**: its per-face noise offset is bounded now, so it is the same look,
+  not the same pixels.
+- **"+ LFO 1" can look inert**: an LFO at depth 0 drives nothing.
+- **Shared bases in two candidates**: MACRO INTENSITY's 1 and 3 and
+  MACRO BREAKDOWN DROP's 1 and 2/3 set the same bases; the last turned
+  wins.
+- **Stale text**: `patterns.py`'s docstring opens "the eight inputs and
+  twelve modes" (there are seventeen); `ui_patterns.py`'s docstring puts
+  the slider on an input's first line and the driver on its second (the
+  page draws them the other way round); `preset.party_faces_routes`'
+  docstring and `party-faces.json`'s note say the right hand's roll
+  rescales the hex cells — input 2 is WARP now, so it bends them.

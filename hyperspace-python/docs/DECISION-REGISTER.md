@@ -1,8 +1,8 @@
 # Decision register — the open decisions
 
 Rows 34–88 were each decided during an unattended build on 2026-10-04,
-and rows 89–97 during plan 22's run on 2026-10-06: the build took its own
-recommendation and built it. Every one is in the app now (rows 89–97 on
+and rows 89–108 during plan 22's run on 2026-10-06: the build took its own
+recommendation and built it. Every one is in the app now (rows 89–108 on
 `plan-22-integration`, until the owner merges it) and waits for the owner
 to say **keep** or **overturn**. Each row
 says what was built (what you will see or feel), the other option(s), what
@@ -85,6 +85,17 @@ here; overturn → the change, then the same.
 | 95 | The Rose deepened and lifted (the orchestrator's call) | 115 | |
 | 96 | The Klein bottle: the bottle, lifted, shape 26 | 116, 117 | |
 | 97 | A bent cap framed by its least-squares plane | 115 | |
+| 98 | The eight pattern inputs: their meanings and order | 122, 124, 125 | |
+| 99 | SPEED is an integrated clock | 123 | |
+| 100 | WARP / SPREAD inert from 0 to 1; GLOW's 30% floor | 122, 137, 138 | |
+| 101 | Fixed counts: seven petals, five arms, six wedges | 122, 131 | |
+| 102 | The FACES page as a browser of swatch chips | 120, 125, 126, 128 | |
+| 103 | "+ SUB": the convention's source offered on an idle input | 127 | |
+| 104 | METER and PULSE read the bands (`u_levels`) | 129 | |
+| 105 | Five new patterns; the old twelve's art unchanged | 129–131 | |
+| 106 | Pattern routes at depth 0.35; `legacy6` drops pattern parity (the orchestrator's call) | 132, 137 | |
+| 107 | The house presets' routes generated from code | 132 | |
+| 108 | Macro candidates in `shared/`; per-band gain as depth | 133–136 | |
 
 "—": no hand check shows it; tests only.
 
@@ -1142,3 +1153,207 @@ as built is [`plans/22-flat-shapes-and-face-patterns.md`](plans/22-flat-shapes-a
   shortlist would bring pentagram faces of their own
   ([`plans/22-polytope-shortlist.md`](plans/22-polytope-shortlist.md)).
 - **Judge it.** Check 115.
+
+## The face patterns (plan 22)
+
+That the eight pattern inputs could be redesigned with nothing to
+migrate, and that a page nobody can steer is not a win, were yours; what
+was built on them is below. The plan as built is
+[`plans/22-flat-shapes-and-face-patterns.md`](plans/22-flat-shapes-and-face-patterns.md),
+Stream B; the pictures are in
+[`plans/assets/22-face-patterns/`](plans/assets/22-face-patterns/).
+
+### 98. The eight pattern inputs: what each means, and in what order
+
+- **Built.** Every pattern reads its inputs the same way: 0 SCALE (small
+  and many → big and few), 1 GLOW (dim → white-hot), 2 WARP (straight →
+  heavily bent), 3 SPEED (frozen → 2.6×), 4 COLOUR (grey → more hues), 5
+  SHARP (soft → crisp), 6 HUE (turns the palette, half a turn per unit),
+  7 SPREAD (every face in unison → each its own). 1.0 is always the
+  pattern as designed. The order puts the factory's lanes where they
+  read best: SUB swells the scale, the kick flashes the glow, the low
+  mids bend, the mids drive the speed, the snare flares the colour, the
+  hats sharpen. HUE and SPREAD are left free for an LFO, a macro or a
+  knob. ROUTING, Learn and the desk call them "Pattern scale" and so on;
+  the FACES page "SCALE". `patterns.py` holds the table and the shader
+  is held to it by tests.
+- **Other options.** A COUNT or DENSITY input instead of SPREAD (on the
+  grid patterns it does what SCALE does); HUE or SPREAD on a band (a hue
+  that follows a band flickers); another order (any order changes what
+  each band does by default).
+- **To reverse.** A reorder is the accessors in `patterns.glsl` and the
+  table in `patterns.py`, an hour; a different meaning is that input's
+  helper in every mode, a day.
+- **Rough edge.** SHARP at 0 and GLOW at 2.6 both brighten, differently.
+- **Judge it.** Checks 122, 124 and 125.
+
+### 99. SPEED is an integrated clock
+
+- **Built.** The renderer folds SPEED into the patterns' clock: each
+  frame it moves on by the time since the last frame times SPEED
+  (`Renderer._pattern_clock`, `u_ptime`). A band on SPEED changes how
+  fast a pattern goes, never where it is.
+- **Other option.** Time × SPEED, as before (every change of SPEED jumps
+  the phase by time × the change — minutes into a set, a big jump).
+- **To reverse.** One function, minutes.
+- **Rough edge.** `u_time` is still uploaded and no pattern reads it.
+- **Judge it.** Check 123.
+
+### 100. WARP and SPREAD do nothing from 0 to 1 on straight and unison designs; GLOW keeps 30%
+
+- **Built.** A pattern that is straight as designed (PLAID, MOIRE,
+  BLOOM's ring, HEX, METER, PULSE, TRUCHET, KALEIDO) stays straight from
+  WARP 0 to 1 and bends only above 1; one whose faces play in unison
+  (PLAID, WEAVE) stays in step from SPREAD 0 to 1 and parts only above.
+  GLOW at 0 keeps 30% of the design's light, so a route on a base of 0
+  does not make the faces vanish. GLOW, HUE and COLOUR's grey end are one
+  pass over every pattern alike.
+- **Other options.** Make 0 "less than designed" on every pattern (a
+  straight design has nothing to take away); GLOW to black at 0.
+- **To reverse.** A constant in `warp()`, `face_k1()` and `finish()`,
+  minutes each.
+- **Rough edge.** A route on a base of 0 moves WARP or SPREAD on those
+  designs only once it passes 1. WARP at 2.6 on HEX may be too strong.
+- **Judge it.** Checks 122, 137 and 138.
+
+### 101. Fixed counts: seven petals, five arms, six wedges
+
+- **Built.** BLOOM always has seven petals, SPIRAL five arms and KALEIDO
+  six mirrored wedges. No input changes a count.
+- **Other option.** A count on an input (driven by audio, a count
+  flickers as it steps); KALEIDO by the face's sides (the shader does not
+  know them).
+- **To reverse.** A few lines per pattern.
+- **Judge it.** Checks 122 and 131.
+
+### 102. The FACES page as a browser of swatch chips
+
+- **Built.** FACES has a module of its own (`ui_patterns.py`), as FX
+  does. Every pattern is a chip with a small live swatch of it on the
+  inputs as they are now, four to a row, the one on show red, its one
+  line on hover; under them the mode's name and line with ‹ ›; then the
+  eight inputs by name, each saying what it does on this pattern and
+  what drives it, with a slider and a **1** chip back to neutral; **all
+  neutral** is one undo step. A GLSL error or "Faces is off" takes the
+  line's place. The renderer draws one swatch a frame only while the page
+  is open.
+- **Other options.** The old dropdown with named sliders; still
+  thumbnails (they would not show the current inputs); every swatch
+  every frame.
+- **To reverse.** The page is one module; the dropdown is an hour.
+- **Rough edge.** Its fit on the Mac is **unverified** (31 px spare in
+  the container's font metrics, which are not the Mac's). The pattern
+  group's preset strip draws its dirty dot over its ▶ chip at this
+  width.
+- **Judge it.** Checks 120, 125, 126 and 128.
+
+### 103. "+ SUB": an idle input offers the convention's source
+
+- **Built.** An input nothing drives offers, at the end of its line, the
+  source the convention puts on it: "+ SUB" … "+ AIR" for the first six,
+  "+ LFO 1" for HUE, "+ LFO 2" for SPREAD. A click adds a push route at
+  the factory depth (0.35) into the loaded preset and stays on FACES;
+  undo takes it back. A driven input names its driver instead ("SUB
+  pushes +0.35", "K3 sets it", "macro.4 sets its base"), a link that
+  opens ROUTING filtered to that input.
+- **Other option.** The existing menu item "Route a lane here…", which
+  uses the band selected on the analyzer and jumps to ROUTING.
+- **To reverse.** A few lines in `ui_patterns`.
+- **Rough edge.** "+ LFO 1" looks inert while LFO 1's depth is 0.
+- **Judge it.** Check 127.
+
+### 104. METER and PULSE read the bands directly
+
+- **Built.** Two patterns draw the music itself: METER a wedge of LEDs
+  per band, PULSE the kick, the snare and the hats as shapes. For them
+  the app hands the renderer the analyzer's lanes each frame, as it hands
+  over the dim (`app._bands`, `u_levels`): read only, never a param, and
+  no other pattern reads it. What they show ignores the routes by
+  design; the inputs style them as on any pattern.
+- **Other option.** Draw them through the routed inputs only (a band
+  could not have a wedge of its own); a param per band (more for
+  presets to save and undo to watch).
+- **To reverse.** Drop the two patterns and the uniform, an hour.
+- **Rough edge.** The hand-over happens just before the frame is drawn,
+  outside the guarded step, and no test pins its place in the frame.
+- **Judge it.** Check 129.
+
+### 105. Five new patterns; the old twelve's art unchanged
+
+- **Built.** METER and PULSE (the audio, seen), MARBLE and TRUCHET
+  (generative depth), KALEIDO (bold colour), appended after EMBER so
+  every preset's pattern stays where it was. The twelve old patterns
+  were moved onto the convention but their look at 1.0 is unchanged, so
+  no preset changes look from art.
+- **Other options.** More patterns; rework the old twelve's art too.
+- **To reverse.** A pattern can be dropped only from the end (presets
+  hold the index).
+- **Rough edge.** MARBLE is the dearest pattern: 4.19× FLAT on the
+  600-cell in software GL (CELLS, the dearest before, 3.13×). KALEIDO is
+  always six-fold.
+- **Judge it.** Checks 129, 130 and 131.
+
+### 106. The factory pattern routes at depth 0.35; `legacy6` drops the pattern parity
+
+- **Built.** **This is the orchestrator's call, not yours.** The six
+  factory lane → pattern routes push at 0.35 instead of 1, on a base of
+  1. A quiet band lifts its input to about 1.1, a band at nominal to
+  1.35, a kick to about 1.86, so the pattern answers quiet music and
+  stays legible loud. At depth 1 a band reading 0.6 or more pinned its
+  input at 2.6, and loud music held every input at its extreme on every
+  pattern (EMBER black; SPIRAL, CELLS and KALEIDO blown out). The rate
+  routes are unchanged. `legacy6` keeps the reference's rotation parity
+  but no longer reproduces its pattern drive: its pattern inputs sit at
+  1 and are pushed at 0.35.
+- **Other options.** 0.3 (quiet music barely differs from silence); 0.4
+  (EMBER and SPIRAL blow out on kicks); 1, as the reference.
+- **To reverse.** One constant (`routing.PATTERN_DEPTH`), then
+  `uv run python -m hyperspace.preset` to regenerate the factory files:
+  minutes.
+- **Rough edge.** Your own presets were not touched: sixteen of the
+  seventeen in `shared/dan-2026-10-04/presets/` still push at depth 1;
+  with faces on, three would change visibly if re-saved (one SPIRAL, two
+  PLASMA). Tuned on synthetic band levels.
+- **Judge it.** Checks 132 and 137 — and whether to re-save yours at
+  0.35.
+
+### 107. The house presets' routes are generated from code
+
+- **Built.** The eight house moods (big-blue-wave, ember-orbit,
+  hex-engine, inverse-halo, plasma-heart, spiral-silk, strobe-cage,
+  woven-lattice) get their routes from the generator, as the party
+  presets do; their values and notes are still data. Before, their lane
+  rows were data a test held equal to the code, so a change of depth
+  would not have reached them. **Presets were a subsystem the brief
+  called settled**; this changes how eight factory files are made, not
+  what a preset is or how one loads.
+- **Other option.** Leave them as data and edit the eight files' six
+  rows by hand.
+- **To reverse.** Take the eight out of `FACTORY_PRESETS`, an hour.
+- **Judge it.** Check 132.
+
+### 108. Macro candidates in `shared/`; per-band gain as depth subscribers
+
+- **Built.** Four presets of macros to audition — MACRO PERFORMANCE,
+  MACRO STREAMS, MACRO INTENSITY, MACRO BREAKDOWN DROP — in
+  `shared/plan-22-macro-candidates/`, installed with
+  `uv run python tools/shared_presets.py install shared/plan-22-macro-candidates`.
+  Each shares one scene, puts its macros on device knobs D1–D8, and rests
+  them at noon (BREAKDOWN and DROP at zero) on the file's own values. A
+  band's gain in a macro is a depth subscriber on that band's routes.
+  [`plans/22-macro-candidates.md`](plans/22-macro-candidates.md) says
+  what each macro is meant to do. None was judged by the build. After
+  B3 their pattern routes sit at 0.35 with the multipliers unchanged.
+- **Other options.** Factory presets (the factory list and its bank
+  are pinned at 23); base subscribers on the analyzer's band gains,
+  attack and gate (session params: dropped at load, D9 — so TIGHT cannot
+  reach attack or gate); a separate scene per file.
+- **To reverse.** Delete the folder; keep the ones you like by saving
+  them as your own.
+- **Rough edge.** The PRESETS page does not show a preset's note, so
+  the intents live in the files and the sheet. MACRO INTENSITY's 1 and
+  3, and MACRO BREAKDOWN DROP's 1 and 2/3, share bases: the last turned
+  wins. INTENSITY × DROP stacks to about ×4 on the lane routes. Ranges
+  that mirror round noon give odd ends (speed 0.12 → 0.75, 4D depth 6 →
+  1.51, zoom 0.7 → 2.41).
+- **Judge it.** Checks 133–136: say which macros to keep, and as what.

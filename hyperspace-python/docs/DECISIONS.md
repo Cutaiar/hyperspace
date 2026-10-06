@@ -170,6 +170,23 @@ replaces a row, rewrite that row instead of adding a new one.
 | A net's weights are read once a run: every layer of that net is a cut of the same loaded stack. | `dream.build_trunk`, `DreamWorker.stacks` | row 69 |
 | The dream's "speed" is `dream.k`, read as the dream frames in which a frame's share halves. | `params.dream_speed_text` | row 70 |
 
+## Face patterns
+
+| Decision | Where | Who |
+|---|---|---|
+| **Each pattern input means one kind of change on every pattern**, named, with 1.0 the design and 0–2.6 the range; the old per-mode meanings were dropped with nothing to migrate. | `patterns.py`, `shaders/patterns.glsl` | owner |
+| **The eight inputs, in order: SCALE, GLOW, WARP, SPEED, COLOUR, SHARP, HUE, SPREAD**, so the factory's lane *i* → input *i* reads SUB swells, BASS flashes, MIDB bends, MID drives the speed, UPR flares the colour, AIR sharpens; HUE and SPREAD are left for an LFO, a macro or a knob. `patterns.py` holds the names, meanings and per-mode phrases, and the registry and the panel read them from there. | `patterns.INPUTS`, `patterns.MODES`, `routing.legacy6_routes` | row 98 |
+| SPEED is folded into an integrated clock, `u_ptime`, so a moving SPEED changes how fast a pattern goes and never jumps where it is. | `Renderer._pattern_clock` | row 99 |
+| A straight or unison design stays straight from WARP 0 to 1 and in step from SPREAD 0 to 1, and parts only above 1. GLOW never goes below 30% of the design's light. GLOW, COLOUR's grey end and HUE are one `finish()` over every mode. | `patterns.glsl` `warp`, `face_k1`, `finish` | row 100 |
+| Counts are fixed: BLOOM seven petals, SPIRAL five arms, KALEIDO six-fold. | `patterns.glsl` | row 101 |
+| **The FACES page is a browser**: a chip per pattern with a live swatch, the mode's one line, and eight named inputs that each say what they do in this mode and what drives them. The renderer draws the swatches only while the page asks. | `ui_patterns.py`, `Renderer.want_swatches` | row 102 |
+| An input nothing drives offers its convention's source ("+ SUB" … "+ AIR", "+ LFO 1", "+ LFO 2") as a push at the factory depth, into the loaded preset, staying on FACES. What drives an input is a link to ROUTING filtered to it. | `ui_patterns.suggest`, `drivers` | row 103 |
+| **METER and PULSE draw the bands themselves**: the app hands the renderer the analyzer's lanes each frame as a read-only render input (`u_levels`), never a param; no other mode reads them. | `app._bands`, `Renderer.bands` | row 104 |
+| Patterns are appended, never inserted (a preset holds the mode as an index). Five were added — METER, PULSE, MARBLE, TRUCHET, KALEIDO — and the first twelve's art is unchanged. | `patterns.MODES` | row 105 |
+| **The factory pattern routes push at `PATTERN_DEPTH` = 0.35** on a base of 1; the rate routes keep the reference's depth. `legacy6` keeps the rotation parity and drops the pattern parity. | `routing.PATTERN_DEPTH`, `preset.legacy6_values` | row 106 |
+| The house presets' routes are generated from code, like the party presets'; their values and notes stay data. | `preset.HOUSE`, `FACTORY_PRESETS` | row 107 |
+| Macro candidates are prepared for audition, never judged by the build, and ship in `shared/`, not as factory presets. Per-band gain in a preset macro is a depth subscriber on the lane routes. | `shared/plan-22-macro-candidates/` | row 108 |
+
 ## Library and persistence
 
 | Decision | Where | Who |
