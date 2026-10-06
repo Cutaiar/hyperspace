@@ -105,7 +105,7 @@ MODES: tuple[Mode, ...] = (
           _SPEED.format("the petals turn"), "petals turn apart in hue",
           "petals and ring: soft to thin", _HUE,
           "each face its own tint")),
-    Mode("CAUSTIC", "Deep water: dark blue troughs, cyan-white filaments where swells cross.",
+    Mode("CAUSTIC", "Deep water: blue troughs, bright filaments where swells cross.",
          ("swell size", _GLOW, "bends the swells", _SPEED.format("the water moves"),
           "the swells take more hues", "filaments: broad to thin", _HUE,
           "each face its own swell")),

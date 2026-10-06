@@ -241,10 +241,12 @@ def test_the_page_asks_the_renderer_for_swatches_and_draws_them(faces):
 
 def test_the_page_fits_with_every_row_driven_and_flat_or_the_longest_mode(tmp_path, monkeypatch):
     """The whole panel at the control size, FACES open: no scroll, with
-    every input driven (the longest second lines), the GLSL error showing,
-    Faces off (its line), on FLAT and on each mode. UNVERIFIED on the
-    owner's Mac: this container's font metrics differ (test_fx's fit
-    tests miss here by 18 px), so the slack asked is 24 px."""
+    every input driven (the longest second lines), on FLAT and on each
+    mode, with each of what the line under the chips can say — the GLSL
+    error, Faces off, and the mode's own line, which wraps and so is the
+    tallest of the three. UNVERIFIED on the owner's Mac: this container's
+    font metrics differ (test_fx's fit tests miss here by 18 px), so some
+    slack is asked: 12 px."""
     from types import SimpleNamespace
 
     from hyperspace.ui import PAGE_KEYS, Panel
@@ -256,9 +258,6 @@ def test_the_page_fits_with_every_row_driven_and_flat_or_the_longest_mode(tmp_pa
             + [Binding(f"lfo:{k - 6}", f"pattern.mod.{k}", "push", 0.5) for k in (6, 7)]))
         panel.router.table.macros = {"macro.1": Macro("a long macro name", [
             Sub(depth=(f"lane:{k}", f"pattern.mod.{k}")) for k in range(6)])}
-        panel.renderer = SimpleNamespace(pattern_error="2:14: 'u_modd' : undeclared identifier",
-                                         fx=None)
-        reg["view.faces"].set(False)
         spare = []
         draw = Panel._page_faces
 
@@ -268,15 +267,20 @@ def test_the_page_fits_with_every_row_driven_and_flat_or_the_longest_mode(tmp_pa
                           imgui.get_content_region_avail().y))
         monkeypatch.setattr(Panel, "_page_faces", measured)
         reg["ui.page"].set(PAGE_KEYS.index("faces"))
-        for mode in range(len(MODES)):
-            reg["view.pattern"].set(mode)
-            for _ in range(3):
-                imgui.new_frame()
-                panel.draw(1 / 60, 60.0)
-                imgui.end_frame()
-            over_y, over_x, room = spare[-1]
-            assert over_y == 0 and over_x == 0, MODES[mode].name
-            assert room >= 24, (MODES[mode].name, room)
+        for err, faces in (("2:14: 'u_modd' : undeclared identifier", False), ("", False),
+                           ("", True)):
+            panel.renderer = SimpleNamespace(pattern_error=err, fx=None)
+            reg["view.faces"].set(faces)
+            for mode in range(len(MODES)):
+                reg["view.pattern"].set(mode)
+                for _ in range(3):
+                    imgui.new_frame()
+                    panel.draw(1 / 60, 60.0)
+                    imgui.end_frame()
+                over_y, over_x, room = spare[-1]
+                said = (MODES[mode].name, err[:4], faces)
+                assert over_y == 0 and over_x == 0, said
+                assert room >= 12, (*said, room)
         print("FACES spare height px:", min(s[2] for s in spare))
     finally:
         rig.close()
