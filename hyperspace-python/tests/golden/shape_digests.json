@@ -173,5 +173,12 @@
   "m": 576,
   "faces": 256,
   "sha256": "ea186fcefd2ecc09ea85e682aef4bf7cfbb5b8de98b847352e73b1702c3fb880"
+ },
+ "25": {
+  "name": "Klein bottle",
+  "n": 576,
+  "m": 1152,
+  "faces": 576,
+  "sha256": "f1d4d5ab75e2e33a5b9f92026cb115abb8f89231e25367305cde3abb3e2a2263"
  }
 }

@@ -149,3 +149,9 @@ index,name,w,pass,plane,min_ratio,at_deg,max_edge_on_share,edge_on_at_deg
 24,Möbius strip,lift,generic,XW,0.4747,180,0.051,250
 24,Möbius strip,lift,generic,YW,0.4388,215,0.052,150
 24,Möbius strip,lift,generic,ZW,0.1818,150,0.065,290
+25,Klein bottle,lift,axis,XW,0.1990,220,0.028,65
+25,Klein bottle,lift,axis,YW,0.2074,180,0.030,285
+25,Klein bottle,lift,axis,ZW,0.2074,180,0.022,325
+25,Klein bottle,lift,generic,XW,0.2680,220,0.044,55
+25,Klein bottle,lift,generic,YW,0.2684,125,0.058,10
+25,Klein bottle,lift,generic,ZW,0.2537,145,0.055,260

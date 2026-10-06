@@ -51,6 +51,7 @@ form under this heading.
 | 23 | Trefoil knot | — | 576 | 1152 |
 | 24 | Starfruit | — | 522 | 1080 |
 | 25 | Möbius strip | — | 320 | 576 |
+| 26 | Klein bottle | — | 576 | 1152 |
 
 Shapes 19–25 are 3D shapes from trig equations, in the w = 0 hyperplane;
 the XW / YW / ZW planes tumble them through the fourth dimension (turn
