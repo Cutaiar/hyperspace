@@ -966,7 +966,8 @@ as built is [`plans/22-flat-shapes-and-face-patterns.md`](plans/22-flat-shapes-a
   the Heart keeps "3D · …".
 - **Other options.** Lift the Heart too (the best lift tried,
   z·(sin t + 2 sin 2t + 2 sin 3t), read as a twisted ribbon or bow-tie
-  at XW / YW 60–120° and 240–300°, with 0.18 of its face area edge-on);
+  at XW / YW 60–120° and 240–300°, although it passed both gates: ratio
+  0.376, at most 0.11 of its face area edge-on);
   mask all seven (the shapes stay 3D and never turn through W); mask any
   of the others.
 - **To reverse.** One word per shape in `geometry.SHAPES` (`w="mask"` or
@@ -1073,7 +1074,7 @@ as built is [`plans/22-flat-shapes-and-face-patterns.md`](plans/22-flat-shapes-a
 - **Built.** The band is a little wider and lifted by 0.5·sin 2u (0 at
   the seam, which still welds). Through the W planes it keeps
   0.163 / 0.179 / 0.179. A band that thin limits any lift (at 0.45 wide
-  the best gave 0.149), hence the width.
+  the same lift keeps only 0.134), hence the width.
 - **Other option.** Mask it at its old width (0.158, no geometry change),
   so it would stay 3D beside the Klein bottle.
 - **To reverse.** The width and the lift in `_build_mobius`, or `w="mask"`

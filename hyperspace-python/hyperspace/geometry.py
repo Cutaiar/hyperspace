@@ -1045,7 +1045,8 @@ def project_h(
 # 0.000. The floor is half the 4D worst case: a shape held to it is never
 # asked to be rounder than a polytope already is, and the targets' own 3D
 # proportions — what a mask leaves them — mostly clear it (heart 0.40,
-# torus 0.43, star 0.33, Möbius band 0.158; the rose's 0.118 does not).
+# torus 0.43, star 0.33, Möbius band 0.158 at its old 0.45 width; the
+# rose's 0.118 at its old 0.12 depth did not — 0.192 and 0.157 now).
 VOLUME_FLOOR = 0.15
 # a pose with every plane turned, for sweeps that are not from rest
 GENERIC_POSE = (0.3, 0.7, 1.1, 0.5, 0.9, 1.3)

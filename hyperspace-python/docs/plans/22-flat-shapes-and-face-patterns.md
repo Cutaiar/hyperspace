@@ -186,9 +186,10 @@ Why each:
 
 - **Heart — masked.** Every lift tried read as a twisted ribbon or a
   bow-tie at XW / YW 60–120° and 240–300°; the best one,
-  z·(sin t + 2 sin 2t + 2 sin 3t), reached ratio 0.376 but turned 0.18 of
-  its face area edge-on. Masked, it keeps its own 3D proportions (0.401)
-  and turns as a solid heart prism.
+  z·(sin t + 2 sin 2t + 2 sin 3t), reached ratio 0.376 and turned at most
+  0.11 of its face area edge-on — inside both gates, so it was the look
+  that ruled it out, not a number. Masked, it keeps its own 3D
+  proportions (0.401) and turns as a solid heart prism.
 - **Star — lifted.** Its two caps tip opposite ways in w round the
   outline. At XW 90° and 270° it becomes a box, a lantern of its walls.
 - **Rose — lifted, and a little deeper.** It was a seventh flat shape the
@@ -199,7 +200,8 @@ Why each:
 - **Torus, Trefoil knot, Starfruit — lifted.** Clear the floor with room
   (0.43, 0.66, 0.46).
 - **Möbius strip — lifted, and a little wider.** The band's thin y
-  limits any lift (at width 0.45, lift 0.50 gave 0.149). The other way
+  limits any lift (at width 0.45, the same lift, 0.5·sin 2u, keeps only
+  0.134, XW from rest). The other way
   was to mask it at 0.45 (0.158, no geometry change); it was lifted so
   the strip is truly 4D beside the Klein bottle.
 

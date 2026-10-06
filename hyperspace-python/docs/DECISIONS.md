@@ -249,7 +249,7 @@ The D-numbers are cited from code comments.
 | Decision | Who |
 |---|---|
 | Each code PR gets a `/code-review` before merge. Agents work on their own branches, and the owner merges. | owner |
-| Agent work lands on `finish-line`, never on `main`; the owner merges `finish-line` into `main`. | owner |
+| Agent work lands on an integration branch, never on `main` (`finish-line` through plan 21, `plan-22-integration` for plan 22); the owner merges it into `main`. | owner |
 
 ## Decided not to build
 
