@@ -66,6 +66,7 @@ from .ghost import Ghost, GhostState
 from .glsl import QUAD_VS, common, common_mtime, gl_error
 from .lookback import DreamState, Lookback
 from .outputs import HANDS, NAMES, PIPELINES, SCENE, Handoff, Switches, View, fit, route
+from .patterns import SPEED
 from .tapers import clamp
 from .view import N_MOD, RED, ViewState  # re-exported for callers that had them from here
 
@@ -161,6 +162,7 @@ void main() {
 # pattern and the bitmap read
 FACE_UNIFORMS = f"""
 uniform float u_time;
+uniform float u_ptime;       // the patterns' clock: seconds × SPEED (Renderer._pattern_clock)
 uniform float u_mod[{N_MOD}];  // pattern.mod.* — the routed pattern inputs
 uniform int u_mode;
 uniform float u_mix;
@@ -554,6 +556,9 @@ class Renderer:
         self._patterns_mtime = (0.0, 0.0)   # (patterns.glsl, _common.glsl)
         self._reload_check = 0
         self._t0 = time.perf_counter()   # the one wall clock: patterns, instances, effects
+        self._ptime = 0.0                  # the patterns' clock (_pattern_clock) …
+        self._ptime_at: float | None = None   # … and the wall time it was last moved to
+        self._ptile: tuple | None = None   # pattern_tile's program, vao, fbo, size, mtime
         self._build_face_program()
         ctx.enable(moderngl.BLEND | moderngl.PROGRAM_POINT_SIZE)
         ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
@@ -1111,10 +1116,35 @@ class Renderer:
         self.face_error = ""
         return pic.tex
 
-    def _face_uniforms(self, p: moderngl.Program, s: ViewState, t: float) -> None:
+    def _pattern_clock(self, s: ViewState, t: float) -> float:
+        """The patterns' clock, u_ptime: wall seconds times the SPEED input,
+        integrated — so a SPEED that a lane moves changes how fast the
+        pattern goes and never where it is (t · SPEED would jump the phase
+        by t · ΔSPEED, minutes into a set). Moved once per new `t`: the
+        seed and the face pass of one frame read the same value. The first
+        call and a clock run backwards set it to t · SPEED, as if SPEED had
+        always been what it is now."""
+        speed = _speed(s)
+        if self._ptime_at is None or t < self._ptime_at:
+            self._ptime = t * speed
+        else:
+            self._ptime += (t - self._ptime_at) * speed
+        self._ptime_at = t
+        return self._ptime
+
+    def _face_uniforms(self, p: moderngl.Program, s: ViewState, t: float,
+                       ptime: float | None = None) -> None:
         """What the pattern and the bitmap read, on `p` — the face program
-        or the seed — with the bitmap's texture on unit 0."""
-        p["u_time"].value = t
+        or the seed — with the bitmap's texture on unit 0. The patterns'
+        clock is the live one unless a still pins it (`ptime`); the clocks
+        are set only if the patterns read them (an edit may not)."""
+        if ptime is None:
+            ptime = self._pattern_clock(s, t)
+        for name, v in (("u_time", t), ("u_ptime", ptime)):
+            try:
+                p[name].value = v
+            except KeyError:
+                pass
         p["u_mode"].value = int(s.pattern)
         p["u_mix"].value = float(s.pattern_mix)
         # the driver trims the array to the highest index a pattern
@@ -1142,6 +1172,43 @@ class Renderer:
             else:                    # still
                 ox = oy = 0.0
             p["u_bmp_pos"].value = (s.bmp_amp * ox, s.bmp_amp * oy)
+
+    def pattern_tile(self, s: ViewState, size: int = 128, t_now: float = 0.0,
+                     fid: float = 0.0) -> np.ndarray:
+        """What face `fid` shows of `s`'s pattern, alone: `size`² RGB, the
+        pattern premultiplied by its intensity over black — the seed pass's
+        picture (FLAT is mid-grey) at a pinned time, its clock at
+        `t_now` · SPEED (how far the pattern has gone by then; the live
+        clock is not touched). For tools and tests (tools/pattern_sheet.py);
+        raises when patterns.glsl does not compile. Leaves the viewport and
+        blending as it found them; its own framebuffer stays bound."""
+        ctx = self.ctx
+        if self._ptile is None or self._ptile[3] != size or self._ptile[4] != self._patterns_mtime:
+            if self._ptile is not None:
+                for res in self._ptile[:3]:
+                    res.release()
+            prog = ctx.program(vertex_shader=QUAD_VS, fragment_shader=_face_fragment(
+                TILE_FS_HEAD, PATTERNS_GLSL.read_text(), SEED_FS_TAIL))
+            fbo = ctx.framebuffer(color_attachments=[ctx.texture((size, size), 4)])
+            self._ptile = (prog, ctx.vertex_array(prog, []), fbo, size, self._patterns_mtime)
+        prog, vao, fbo = self._ptile[:3]
+        self._face_uniforms(prog, s, t_now, ptime=t_now * _speed(s))
+        try:
+            prog["v_fid"].value = float(fid)
+        except KeyError:                       # a pattern that ignores the face index
+            pass
+        fbo.use()
+        vp = ctx.viewport
+        ctx.viewport = (0, 0, size, size)
+        ctx.clear(0.0, 0.0, 0.0, 0.0)
+        ctx.disable(moderngl.BLEND)
+        try:
+            vao.render(moderngl.TRIANGLES, vertices=3)
+        finally:
+            ctx.enable(moderngl.BLEND)
+            ctx.viewport = vp
+        img = np.frombuffer(fbo.read(components=3), dtype=np.uint8).reshape(size, size, 3)
+        return img[::-1].copy()
 
     def dim_pass(self, target: moderngl.Framebuffer, vp: tuple[int, int, int, int],
                  factor: float, opaque: bool = True) -> bool:
@@ -1400,6 +1467,22 @@ class Renderer:
             out[k * per : (k + 1) * per, 0] += ox
             out[k * per : (k + 1) * per, 1] += oy
         return out
+
+
+def _speed(s: ViewState) -> float:
+    """The SPEED pattern input (patterns.SPEED), never below a standstill."""
+    return max(float(s.pattern_mod[SPEED]), 0.0) if len(s.pattern_mod) > SPEED else 1.0
+
+
+# a face's pattern on its own (Renderer.pattern_tile): the seed's fragment
+# with the face index a uniform, so a tile can be any face
+TILE_FS_HEAD = """
+#version 330
+in vec2 v_uv;
+out vec4 f_color;
+const float v_alpha = 1.0;
+uniform float v_fid;
+""" + FACE_UNIFORMS
 
 
 def render_offscreen(

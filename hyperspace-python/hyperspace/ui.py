@@ -1656,12 +1656,13 @@ class Panel:
         if self.renderer is not None and self.renderer.pattern_error:
             imgui.text_colored(WARN, f"GLSL: {self.renderer.pattern_error}")
         imgui.spacing()
-        # the pattern's modulation inputs — u_mod[8] to the shaders;
-        # base 1 is the un-driven look, a routed lane rides on it
+        # the pattern's eight inputs — u_mod[8] to the shaders, named by
+        # the convention (patterns.py); base 1 is the un-driven look, a
+        # routed lane rides on it
         self._section("pattern inputs", "pattern")
-        for k, p in enumerate(self.reg.group("pattern")):
+        for p in self.reg.group("pattern"):
             if p.kind is Kind.CONTINUOUS:
-                self._row(p.id, label=f"mod {k + 1}")
+                self._row(p.id, label=p.label.removeprefix("Pattern ").upper())
 
     def _page_bitmap(self, dt: float) -> None:
         """Bitmap layer, composited over the pattern in the face shader."""
