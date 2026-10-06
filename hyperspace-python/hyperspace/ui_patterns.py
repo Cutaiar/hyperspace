@@ -18,12 +18,12 @@ Top to bottom:
   mode on show, its line, and the GLSL error while patterns.glsl does not
   compile (the last good version keeps drawing).
 - **inputs**: the eight pattern inputs (`pattern.mod.0–7`), two lines
-  each. The first is the convention's name, the slider — `base →
-  effective` while a source rides it, the white bar at the effective
-  value — and a "1" chip that puts the base back to neutral, the pattern
-  as designed. The second is what the input does *in this mode*
-  (`patterns.effect`) and, at its right end, what drives it: the route
-  in its adapter's words with any macro scaling it, a desk control, a
+  each. The first is the convention's name, what the input does *in this
+  mode* (`patterns.effect`) and, at its right end, what drives it. The
+  second is the slider — `base → effective` while a source rides it, the
+  white bar at the effective value — and a "1" chip that puts the base
+  back to neutral, the pattern as designed. What drives it is the route
+  in its adapter's words with any macro scaling it, a desk or session control, a
   macro that sets its base (`drivers`) — a click opens ROUTING filtered
   to the input. An input nothing drives offers "+ <source>" there: a
   push route at the factory depth (routing.PATTERN_DEPTH) from the source
