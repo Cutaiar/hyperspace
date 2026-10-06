@@ -1443,7 +1443,8 @@ the Clifford torus (shape 18) first, for comparison.
 
 **Right if:** no shape ever becomes a flat sheet, a line or a thin
 ribbon; each bends and swaps sides as it turns, the way the Clifford
-torus does; the red line under the name reads "4D lift · …".
+torus does; the red line under the name reads "4D lift · …" (the Klein
+bottle's, "4D · one-sided bottle, no self-crossing").
 
 **Judge:** which shapes look best and worst turning.
 

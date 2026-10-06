@@ -977,7 +977,8 @@ as built is [`plans/22-flat-shapes-and-face-patterns.md`](plans/22-flat-shapes-a
   the Heart keeps "3D · …".
 - **Other options.** Lift the Heart too (the best lift tried,
   z·(sin t + 2 sin 2t + 2 sin 3t), read as a twisted ribbon or bow-tie
-  at XW / YW 60–120° and 240–300°, with 0.18 of its face area edge-on);
+  at XW / YW 60–120° and 240–300°, although it passed both gates: ratio
+  0.376, at most 0.11 of its face area edge-on);
   mask all seven (the shapes stay 3D and never turn through W); mask any
   of the others.
 - **To reverse.** One word per shape in `geometry.SHAPES` (`w="mask"` or
@@ -1012,14 +1013,19 @@ as built is [`plans/22-flat-shapes-and-face-patterns.md`](plans/22-flat-shapes-a
   XZ, YZ and XY; nothing on the page says the planes are folded. BASS
   onto XZ is a spin about the vertical: on the Heart it turns the heart
   side-on, but on a shape round about the vertical (the Torus, the
-  Starfruit), were one masked, it would barely show.
+  Starfruit), were one masked, it would barely show. 4D depth (↑ / ↓,
+  TUMBLE's D1) does nothing on the Heart: with w at 0 the 4D divide
+  leaves it as it is.
 - **Judge it.** Check 114 — and whether BASS's spin reads as BASS.
 
 ### 91. A masked shape cues depth on z
 
 - **Built.** Lines and faces fade, thin and sort by depth. A 4D shape
   cues on w; a masked shape's w is 0 at every angle, so it cues on its
-  rotated z instead, and is as bright and as deep-looking as a polytope.
+  depth toward the 3D camera instead (z after the camera's yaw and
+  pitch, `geometry.view_depth`), and is as bright and as deep-looking as
+  a polytope. The near side is the bright one, drawn on top, however
+  the camera is turned.
 - **Other option.** Leave it on w: the Heart would draw at the cue's
   dimmest, flat and faint, at every angle.
 - **To reverse.** Three lines in `Renderer.draw_scene`.
@@ -1048,9 +1054,9 @@ as built is [`plans/22-flat-shapes-and-face-patterns.md`](plans/22-flat-shapes-a
   all six at once. 500 random poses of all six planes (the docs pass,
   seed 0) left every lifted or masked shape over the floor, the Rose
   lowest at 0.156, but random poses are a sample, not a proof. The
-  edge-on share is called "not a gate" in `geometry.edge_on_share`'s
-  docstring and the turntable's JSON, and the test calls 0.15 the cubic
-  pyramid's own worst; it measures 0.155 (the 3,3-duoprism 0.167).
+  edge-on gate, 0.15, sits just under the 4D shapes' own worst (the
+  cubic pyramid 0.155, the 3,3-duoprism 0.167), so a polytope would not
+  pass it; the Star, at 0.139, is the gated shape closest to it.
 - **Judge it.** Checks 113 and 119.
 
 ### 93. How a shape is lifted: a function of its own parameters, by four rules
@@ -1081,7 +1087,7 @@ as built is [`plans/22-flat-shapes-and-face-patterns.md`](plans/22-flat-shapes-a
 - **Built.** The band is a little wider and lifted by 0.5·sin 2u (0 at
   the seam, which still welds). Through the W planes it keeps
   0.163 / 0.179 / 0.179. A band that thin limits any lift (at 0.45 wide
-  the best gave 0.149), hence the width.
+  the same lift keeps only 0.134), hence the width.
 - **Other option.** Mask it at its old width (0.158, no geometry change),
   so it would stay 3D beside the Klein bottle.
 - **To reverse.** The width and the lift in `_build_mobius`, or `w="mask"`

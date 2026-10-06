@@ -72,8 +72,9 @@ a native 4D surface; it never collapsed and was the reference to beat.
   on a W plane both land on the 3D plane. With the remap, SUB (ZW) rolls
   a masked shape in the screen plane, BASS (XW) spins it about y, and
   MIDB (YW) tumbles it about x. A masked shape's depth cue (the line
-  fade, width and draw order, `pd`) reads its rotated z instead of w,
-  which is 0 at every angle and would leave it at the cue's dimmest.
+  fade, width and draw order, `pd`) reads its depth toward the 3D camera
+  (`geometry.view_depth`: z after the camera's yaw and pitch) instead of
+  w, which is 0 at every angle and would leave it at the cue's dimmest.
 - **Measures.** `project3` (the rotated, divided 3D cloud the camera
   views), `volume_ratio` (the cloud's smallest singular value over its
   largest, centred: 1 a ball, 0 a plane or a line), `sweep_ratios(i,
@@ -142,6 +143,8 @@ tripwire that the 4D shapes were not touched.
   rest and from a generic pose),
   `::test_a_lifted_or_masked_shape_never_turns_much_of_itself_edge_on`
   (at most 0.15 of the face area edge-on),
+  `::test_every_shape_past_the_polytopes_is_lifted_or_masked` (so
+  neither gate can pass on an empty list),
   `::test_a_lifted_cap_is_triangulated_over_its_own_outline`;
   `tests/test_shapes3d.py::test_shape3d_valid` (a lifted shape has
   w-extent, a masked one w = 0),
@@ -190,9 +193,10 @@ Why each:
 
 - **Heart — masked.** Every lift tried read as a twisted ribbon or a
   bow-tie at XW / YW 60–120° and 240–300°; the best one,
-  z·(sin t + 2 sin 2t + 2 sin 3t), reached ratio 0.376 but turned 0.18 of
-  its face area edge-on. Masked, it keeps its own 3D proportions (0.401)
-  and turns as a solid heart prism.
+  z·(sin t + 2 sin 2t + 2 sin 3t), reached ratio 0.376 and turned at most
+  0.11 of its face area edge-on — inside both gates, so it was the look
+  that ruled it out, not a number. Masked, it keeps its own 3D
+  proportions (0.401) and turns as a solid heart prism.
 - **Star — lifted.** Its two caps tip opposite ways in w round the
   outline. At XW 90° and 270° it becomes a box, a lantern of its walls.
 - **Rose — lifted, and a little deeper.** It was a seventh flat shape the
@@ -203,7 +207,8 @@ Why each:
 - **Torus, Trefoil knot, Starfruit — lifted.** Clear the floor with room
   (0.43, 0.66, 0.46).
 - **Möbius strip — lifted, and a little wider.** The band's thin y
-  limits any lift (at width 0.45, lift 0.50 gave 0.149). The other way
+  limits any lift (at width 0.45, the same lift, 0.5·sin 2u, keeps only
+  0.134, XW from rest). The other way
   was to mask it at 0.45 (0.158, no geometry change); it was lifted so
   the strip is truly 4D beside the Klein bottle.
 
@@ -622,20 +627,20 @@ The order to see them in is group R; see also
   clearly; on a shape that is round about y (the Torus, the Starfruit),
   were one ever masked, it would barely show. The Hodge-dual remap
   (XW → YZ, YW → XZ, ZW → XY) was the other choice (row 90).
+- **4D depth does nothing on a masked shape.** Its w is 0 at every
+  angle, so the 4D divide leaves it as it is: ↑ / ↓ and TUMBLE's D1 move
+  nothing on the Heart.
 - **A lift cannot fatten a thin shape**, so the Rose (0.157) and the
   Möbius strip (0.163) clear the floor by little; both changed size to
   do it.
 - **The Starfruit's five ridges are softened at rest** by the lift's
   perspective; the Star becomes a box at XW 90° and 270°.
 - **The Klein bottle's neck is sparse at some angles** (36 × 16 grid).
-- **The edge-on share is described as "not a gate"** in
-  `geometry.edge_on_share`'s docstring and in the turntable's JSON
-  header, but `test_a_lifted_or_masked_shape_never_turns_much_of_itself_edge_on`
-  gates it at 0.15. That test's comment calls 0.15 the 4D shapes' own
-  worst (the cubic pyramid); measured, the cubic pyramid reaches 0.155
-  and the 3,3-duoprism 0.167, so 0.15 is a little under the 4D worst,
-  not equal to it. Stale comments only; the gate holds for every
-  gated shape.
+- **The edge-on gate is a little under the 4D shapes' own worst.**
+  `test_a_lifted_or_masked_shape_never_turns_much_of_itself_edge_on`
+  holds every lifted or masked shape to 0.15; the cubic pyramid reaches
+  0.155 and the 3,3-duoprism 0.167, so two polytopes would not pass it.
+  The Star, at 0.139, is the gated shape closest to it.
 - **`Shape.w == "flat"` is used by no shape.** It stays in `W_KINDS` so
   the tests can show the collapse and so a future 3D shape can be added
   honestly.

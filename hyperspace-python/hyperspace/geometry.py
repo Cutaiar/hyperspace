@@ -985,6 +985,27 @@ def project3(V: np.ndarray, ang, d4: float = 2.6) -> np.ndarray:
     return np.stack([x, y, z], axis=1)
 
 
+def _camera(x, y, z, yaw: float, pitch: float):
+    """The 3D camera's turn: yaw about y, then pitch. (x1, y1, z1); the
+    larger z1, the nearer the camera. project_h's middle step."""
+    cy, sy = math.cos(yaw), math.sin(yaw)
+    cp, sp = math.cos(pitch), math.sin(pitch)
+    x1 = x * cy + z * sy
+    z1 = -x * sy + z * cy
+    y1 = y * cp - z1 * sp
+    z1 = y * sp + z1 * cp
+    return x1, y1, z1
+
+
+def view_depth(V: np.ndarray, ang, yaw: float, pitch: float, d4: float = 2.6) -> np.ndarray:
+    """How near each vertex is to the 3D camera, nearer larger: z after the
+    4D divide and the camera's yaw and pitch, the depth the 3D divide
+    reads. What a masked shape's depth cue reads, as a 4D shape's reads
+    w (the depth the 4D divide reads)."""
+    x, y, z, _, _ = _to3(V, ang, d4)
+    return _camera(x, y, z, yaw, pitch)[2]
+
+
 def project_h(
     V: np.ndarray, ang, yaw: float, pitch: float,
     d4: float = 2.6, w: int = 1200, h: int = 800,
@@ -998,12 +1019,7 @@ def project_h(
     perspective-correct across that face.
     """
     x, y, z, v, div4 = _to3(V, ang, d4)
-    cy, sy = math.cos(yaw), math.sin(yaw)
-    cp, sp = math.cos(pitch), math.sin(pitch)
-    x1 = x * cy + z * sy
-    z1 = -x * sy + z * cy
-    y1 = y * cp - z1 * sp
-    z1 = y * sp + z1 * cp
+    x1, y1, z1 = _camera(x, y, z, yaw, pitch)
     div3 = CAM3 - z1 * 0.9
     k2 = CAM3 / div3
     scale = min(w, h) * 0.30
@@ -1029,7 +1045,8 @@ def project_h(
 # 0.000. The floor is half the 4D worst case: a shape held to it is never
 # asked to be rounder than a polytope already is, and the targets' own 3D
 # proportions — what a mask leaves them — mostly clear it (heart 0.40,
-# torus 0.43, star 0.33, Möbius band 0.158; the rose's 0.118 does not).
+# torus 0.43, star 0.33, Möbius band 0.158 at its old 0.45 width; the
+# rose's 0.118 at its old 0.12 depth did not — 0.192 and 0.157 now).
 VOLUME_FLOOR = 0.15
 # a pose with every plane turned, for sweeps that are not from rest
 GENERIC_POSE = (0.3, 0.7, 1.1, 0.5, 0.9, 1.3)
@@ -1044,10 +1061,12 @@ def volume_ratio(P: np.ndarray) -> float:
 
 def edge_on_share(V: np.ndarray, P: np.ndarray, tris: np.ndarray) -> float:
     """The share of a shape's face area the 4D→3D projection turns
-    edge-on: faces drawn at under a tenth of their true (4D) area. Not a
-    gate — a second look for a cloud whose volume ratio passes while its
-    faces still read as a sheet. V the 4D vertices, P their 3D projection,
-    tris the face triangles' (T, 3) vertex indices."""
+    edge-on: faces drawn at under a tenth of their true (4D) area. The
+    second gate beside the volume ratio — it catches a cloud whose volume
+    passes while its faces still read as a sheet: tests/test_shapes4d.py
+    holds every lifted or masked shape to at most 0.15 through each W
+    plane. V the 4D vertices, P their 3D projection, tris the face
+    triangles' (T, 3) vertex indices."""
     def area(X):
         a, b = X[tris[:, 1]] - X[tris[:, 0]], X[tris[:, 2]] - X[tris[:, 0]]
         aa, bb, ab = (a * a).sum(1), (b * b).sum(1), (a * b).sum(1)

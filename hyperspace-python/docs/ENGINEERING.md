@@ -124,7 +124,9 @@ and a rate or a phase route on a W plane lands on the 3D plane alike.
 With the factory band map (SUB → ZW, BASS → XW, MIDB → YW) SUB rolls a
 masked shape in the screen plane, BASS spins it about y and MIDB tumbles
 it about x. Its depth cue (`pd`: the line fade, width and draw order)
-reads the rotated z, since its w is 0 at every angle. The VIEW page and
+reads its depth toward the 3D camera — `geometry.view_depth`, z after
+the camera's yaw and pitch, the depth the 3D divide reads — since its w
+is 0 at every angle. The VIEW page and
 `rot.phase.*` still show the W planes turning.
 
 **The volume measures.** `project3(V, ang)` is the rotated, divided 3D

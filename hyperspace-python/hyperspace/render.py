@@ -62,7 +62,7 @@ import moderngl
 import numpy as np
 
 from .fx import FACES, SCREEN, FxChain, FxState
-from .geometry import face_triangles, face_uvs, geom, project_h, rotate4, view_angles, w_masked
+from .geometry import face_triangles, face_uvs, geom, project_h, view_angles, view_depth, w_masked
 from .ghost import Ghost, GhostState
 from .glsl import QUAD_VS, common, common_mtime, gl_error
 from .lookback import DreamState, Lookback
@@ -1386,9 +1386,11 @@ class Renderer:
         px, py, pd, wc = project_h(g["V"], ang, s.yaw, s.pitch, d4=s.depth4, w=w, h=h)
         if w_masked(s.shape):
             # its w is 0 at every angle, so the depth cue (pd: fade, width,
-            # draw order) would sit flat at its dimmest; it cues on z — the
-            # axis its W planes' turns now move — as a 4D shape cues on w
-            pd = rotate4(g["V"], ang)[:, 2]
+            # draw order) would sit flat at its dimmest; it cues on its
+            # depth toward the 3D camera (yaw and pitch included, so a
+            # camera turned round never puts the far side on top), as a 4D
+            # shape cues on its depth toward the 4D eye
+            pd = view_depth(g["V"], ang, s.yaw, s.pitch, d4=s.depth4)
 
         # camera: zoom about the view centre, then pan (both in logical px)
         zoom = max(s.zoom, 1e-3)
