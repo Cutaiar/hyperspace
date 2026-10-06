@@ -26,7 +26,8 @@ Top to bottom:
   in its adapter's words with any macro scaling it, a desk control, a
   macro that sets its base (`drivers`) — a click opens ROUTING filtered
   to the input. An input nothing drives offers "+ <source>" there: a
-  push route at depth 0.5 from the source the convention puts on it
+  push route at the factory depth (routing.PATTERN_DEPTH) from the source
+  the convention puts on it
   (`suggest`: lane k for SCALE … SHARP, the factory's layout; LFO 1 and
   LFO 2 for HUE and SPREAD), into the loaded preset, staying on this
   page. "all neutral" puts every base back at 1.0 as one undo step. On
@@ -46,6 +47,7 @@ from imgui_bundle import imgui
 
 from . import learn, patterns, ui, ui_presets, ui_routing, undo
 from .patterns import INPUTS, MODES, N_INPUTS
+from .routing import PATTERN_DEPTH
 
 COLS = 4                # mode chips to a row
 CELL_H = 24.0           # a mode chip's height, px; its swatch is a disc inset in it
@@ -62,7 +64,7 @@ FACES_OFF = "Faces is off"
 FLAT_NOTE = "a plain fill: no pattern runs, so the eight inputs do nothing — pick a pattern above"
 FLAT_ROW = "FLAT reads no input"
 HINT = "right-click an input: learn a knob or a hand"
-ROUTE_DEPTH = 0.5       # a "+ source" route's push depth
+ROUTE_DEPTH = PATTERN_DEPTH   # a "+ source" route's push depth: the factory's
 SUGGEST = {patterns.HUE: "lfo:0", patterns.SPREAD: "lfo:1"}   # the rest: lane k
 ROUTING_TIP = "Open ROUTING on this input."
 LINK_MAX = 0.62        # of the row's width, at most, for what drives it

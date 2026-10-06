@@ -66,8 +66,8 @@ save / as…) writes it.
 
 The factory presets are generated (`python -m hyperspace.preset`,
 `write_factory`, pinned by tests/test_presets.py): the code below holds
-the generator's inputs — plan 12's five party presets' routes and their
-desk blocks, and whole the five that were routing presets (``legacy6``,
+the generator's inputs — the house presets' routes (the lane rows),
+plan 12's five party presets' routes and their desk blocks, and whole the five that were routing presets (``legacy6``,
 ``lfo-breathe``, ``hands-fx``, ``hands-pinch``, ``hands-play``) and
 plan 18's ``hands-orbit`` (`FACTORY_PRESETS`); every factory preset's ``desk`` is the factory
 preset layer unless its entry says otherwise. The house presets' and the
@@ -727,10 +727,12 @@ def party_noita_values() -> dict[str, Any]:
 # ---- the routes-only files, full presets now (plan 13 decision 10) ----
 
 def legacy6_values() -> dict[str, float]:
-    """The bases the legacy6 routes assume: a push lands the reference's
-    number only from 0 (the parity anchor, tests/test_routing.py)."""
+    """The bases the legacy6 routes assume: the rates on 0, where a push
+    lands the reference's number (the parity anchor, tests/test_routing.py);
+    the pattern inputs on 1, the pattern as designed, which the lanes push
+    at the factory depth (plan 22 B3 — no longer the reference's raw out)."""
     return {**{f"rot.rate.{n}": 0.0 for n in PLANES},
-            **{f"pattern.mod.{i}": 0.0 for i in range(len(BANDS))}}
+            **{f"pattern.mod.{i}": 1.0 for i in range(len(BANDS))}}
 
 
 def lfo_breathe_routes() -> list[Binding]:
@@ -936,7 +938,15 @@ def _lanes() -> list[Binding]:
     return routing.legacy6_routes()
 
 
+# the house show's eight moods, whose routes are the lane rows alone
+HOUSE = ("big-blue-wave", "ember-orbit", "hex-engine", "inverse-halo", "plasma-heart",
+         "spiral-silk", "strobe-cage", "woven-lattice")
+
+
 FACTORY_PRESETS: dict[str, Factory] = {
+    # the house moods: the lane rows from code (plan 22 B3: so a change of
+    # the factory depth reaches them), values and note data
+    **{slug: Factory(_lanes) for slug in HOUSE},
     # plan 12's five, re-cut: routes from code, values data (WP2's)
     "party-tumble": Factory(party_tumble_routes),
     "party-faces": Factory(party_faces_routes),
@@ -969,7 +979,8 @@ FACTORY_PRESETS: dict[str, Factory] = {
     # the routing presets, full presets now (decision 10)
     "legacy6": Factory(_lanes, legacy6_values, "legacy6",
                        "The reference's band → plane table on bases of 0: the parity "
-                       "anchor (the planes stand still until the music drives them).",
+                       "anchor (the planes stand still until the music drives them). "
+                       "The bands push the pattern inputs on 1, at the factory depth.",
                        desk=None),
     "lfo-breathe": Factory(lfo_breathe_routes, lfo_breathe_values, "lfo-breathe",
                            "The macro demo: device knob 1 is Breathe — the picture "

@@ -43,7 +43,12 @@ from the macros:
 - every pattern input at 1.0 (as designed)
 - the **legacy6 routes** the house presets carry: lane *i* (SUB BASS
   MIDB MID UPR AIR) pushes its plane's rate (× the drive fader) and
-  pattern input *i*. These are the routes the depth subscribers scale.
+  pattern input *i*, the latter at the factory depth 0.35
+  (`routing.PATTERN_DEPTH`, plan 22 B3: a band at nominal level lifts its
+  input by 0.35, a hard transient by about 0.87). These are the routes
+  the depth subscribers scale, so a multiplier reads against 0.35: × 1.8
+  (INTENSITY's top) is depth 0.63, × 2.2 (DROP's) is 0.77 — only then do
+  loud transients reach the inputs' 2.6 end.
 - **LFO 1** (sine, 4 bars) pushes HUE (±0.2 of a turn). **LFO 2**
   (triangle, 2 bars) pushes SPREAD (±0.39). Inputs 6 and 7 are left free
   for exactly this.

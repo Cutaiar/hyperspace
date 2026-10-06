@@ -16,13 +16,13 @@ average of eight stills across half a second — 0 is sharp, a fast
 pattern smears), and SPREAD shows four faces (0–3) side by side, which
 drift apart above 0.
 
-And a gallery (plan 22 B3): a row per mode, three columns — silence at
-neutral, a quiet passage and a loud one with a hard kick and bright hats
-— the bands as the analyzer would read them (`Renderer.bands`, which
-METER and PULSE draw) and the eight inputs as the factory routes would
-push them (lane i on input i, depth 1 on a base of 1: 1 + 2.6·u, held to
-the range; HUE and SPREAD unrouted) — and a fourth, the loud passage
-through the same routes at depth 0.3.
+And a gallery (plan 22 B3): a row per mode, a column per passage —
+silence, quiet, medium (every band near nominal), loud, a kick transient
+with bright hats — with the bands as the analyzer would read them
+(`Renderer.bands`, which METER and PULSE draw) and the eight inputs as
+the factory routes push them (lane i on input i at routing.PATTERN_DEPTH
+on a base of 1; HUE and SPREAD unrouted); and a last column, the loud
+passage at the old factory depth of 1, which pinned the inputs.
 
 Writes docs/plans/assets/22-face-patterns/mode-NN-<name>.png,
 input-K-<name>.png and b3-gallery.png. Offscreen renders on this machine's GPU, not the app
@@ -45,8 +45,10 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from hyperspace.bands import CEIL
 from hyperspace.patterns import INPUTS, MODES, N_INPUTS, SPEED, SPREAD, effect
 from hyperspace.render import Renderer
+from hyperspace.routing import PATTERN_DEPTH
 from hyperspace.view import ViewState
 
 OUT = ROOT / "docs" / "plans" / "assets" / "22-face-patterns"
@@ -126,22 +128,27 @@ def input_sheet(r: Renderer, k: int, t: float, n: int) -> Image.Image:
     return img
 
 
-QUIET = (0.22, 0.18, 0.15, 0.20, 0.12, 0.10)
-LOUD = (0.85, 0.90, 0.30, 0.35, 0.45, 0.80)      # a hard kick and bright hats
-# (column title, the six bands SUB … AIR as out / CEIL, the routes' depth)
-PASSAGES = (("silence", (0.0,) * 6, 1.0),
-            ("quiet", QUIET, 1.0),
-            ("loud: kick + hats", LOUD, 1.0),
-            ("loud, depth 0.3", LOUD, 0.3))
+# the six bands SUB … AIR in fader units (out; nominal 1.0, CEIL the asymptote)
+QUIET = (0.40, 0.35, 0.30, 0.40, 0.25, 0.20)
+MEDIUM = (1.00, 1.00, 0.70, 0.90, 0.60, 0.60)       # every band near nominal
+LOUD = (1.60, 1.70, 1.00, 1.20, 1.10, 1.50)
+KICK = (2.45, 2.40, 1.00, 1.10, 0.90, 2.20)         # a kick transient with bright hats
+# (column title, the bands, the pattern routes' depth)
+PASSAGES = (("silence", (0.0,) * 6, PATTERN_DEPTH),
+            ("quiet", QUIET, PATTERN_DEPTH),
+            ("medium", MEDIUM, PATTERN_DEPTH),
+            ("loud", LOUD, PATTERN_DEPTH),
+            ("kick", KICK, PATTERN_DEPTH),
+            ("loud, old depth 1", LOUD, 1.0))
 
 
-def factory_inputs(bands, depth: float = 1.0) -> list[float]:
-    """The eight inputs as the factory routes leave them: lane i pushes
-    input i at `depth` (the factory's is 1: a whole range per unit) on a
-    base of 1, held to the range."""
+def factory_inputs(out, depth: float = PATTERN_DEPTH) -> list[float]:
+    """The eight inputs as the factory routes leave them for lanes `out`:
+    lane i pushes input i at `depth` on a base of 1 — u = out / CEIL of the
+    0–2.6 range — held to the range; HUE and SPREAD unrouted."""
     mods = [1.0] * N_INPUTS
-    for i, u in enumerate(bands):
-        mods[i] = min(max(1.0 + 2.6 * depth * u, 0.0), 2.6)
+    for i, o in enumerate(out):
+        mods[i] = min(max(1.0 + depth * o / CEIL * 2.6, 0.0), 2.6)
     return mods
 
 
@@ -152,8 +159,8 @@ def gallery(r: Renderer, t: float, n: int) -> Image.Image:
     d = ImageDraw.Draw(img)
     big, font, small = (ImageFont.load_default(size=s) for s in (20, 15, 12))
     d.text((10, 8), "every pattern, silent and driven", fill=INK, font=big)
-    d.text((10, 34), "bands as the analyzer reads them; inputs as the factory routes push them "
-                     "(depth 1 unless said)",
+    d.text((10, 34), f"bands as the analyzer reads them; inputs as the factory routes push "
+                     f"them, at depth {PATTERN_DEPTH} unless said",
            fill=DIM, font=small)
     for c, (title, _, _) in enumerate(PASSAGES):
         d.text((lw + c * (n + gap) + 4, head - 18), title, fill=DIM, font=small)
@@ -161,9 +168,9 @@ def gallery(r: Renderer, t: float, n: int) -> Image.Image:
         y = head + row * (n + gap)
         d.text((10, y + n // 2 - 18), f"{mode}  {MODES[mode].name}", fill=INK, font=font)
         d.text((10, y + n // 2 + 2), MODES[mode].about[:44], fill=DIM, font=small)
-        for c, (_, bands, depth) in enumerate(PASSAGES):
-            r.bands = bands
-            s = ViewState(pattern=mode, pattern_mod=factory_inputs(bands, depth))
+        for c, (_, out, depth) in enumerate(PASSAGES):
+            r.bands = tuple(o / CEIL for o in out)
+            s = ViewState(pattern=mode, pattern_mod=factory_inputs(out, depth))
             img.paste(Image.fromarray(r.pattern_tile(s, n, t, FID)), (lw + c * (n + gap), y))
     r.bands = ()
     return img
@@ -184,7 +191,7 @@ def main() -> None:
              OUT / f"mode-{mode:02d}-{MODES[mode].name.lower()}.png")
     for k in range(N_INPUTS):
         save(input_sheet(r, k, args.t, args.tile), OUT / f"input-{k}-{INPUTS[k].name.lower()}.png")
-    save(gallery(r, args.t, args.tile), OUT / "b3-gallery.png")
+    save(gallery(r, args.t, min(args.tile, 104)), OUT / "b3-gallery.png")   # six columns: kept small
     ctx.release()
 
 

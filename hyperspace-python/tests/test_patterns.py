@@ -80,6 +80,29 @@ def test_the_factory_routes_put_lane_i_on_input_i():
     assert len(BANDS) == 6 and patterns.HUE == 6 and patterns.SPREAD == 7
 
 
+def test_the_factory_depth_reads_on_loud_music_and_never_pins_an_input():
+    """Plan 22 B3: the pattern rows push at routing.PATTERN_DEPTH, and the
+    FACES page's "+ SUB" offer routes at the same one. On the base of 1 an
+    input rises by depth · out: a quiet band (out 0.4) still moves it, a
+    band at nominal (out 1) by a third of a unit, and a kick transient near
+    the asymptote stays well short of the 2.6 end — at depth 1 a nominal
+    band already reached 2.0 and anything loud pinned every input."""
+    from hyperspace import ui_patterns
+    from hyperspace.bands import CEIL
+    from hyperspace.routing import PATTERN_DEPTH, legacy6_routes
+
+    rows = [b for b in legacy6_routes() if b.target.startswith("pattern.")]
+    assert {b.value for b in rows} == {PATTERN_DEPTH} and {b.op for b in rows} == {"push"}
+    assert ui_patterns.ROUTE_DEPTH == PATTERN_DEPTH
+
+    def lifted(out):                             # what a push at the factory depth lands
+        return 1.0 + PATTERN_DEPTH * (out / CEIL) * 2.6
+    assert lifted(0.4) - 1.0 >= 0.1                              # quiet: alive
+    assert 0.3 <= lifted(1.0) - 1.0 <= 0.5                       # nominal: a third of a unit
+    assert lifted(0.96 * CEIL) <= 2.0                            # a transient: short of the end
+    assert lifted(0.96 * CEIL) + (2.2 - 1.0) * PATTERN_DEPTH * 0.96 * 2.6 > 2.6  # DROP's ×2.2 can
+
+
 # ---- the shader keeps the same convention ----
 
 def test_the_shader_names_each_input_at_its_index():

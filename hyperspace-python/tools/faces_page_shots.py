@@ -43,7 +43,7 @@ from hyperspace.control import Control
 from hyperspace.library import Library
 from hyperspace.params import build_registry
 from hyperspace.patterns import MODES
-from hyperspace.routing import Binding, Bindings, Macro, Router, Sub
+from hyperspace.routing import PATTERN_DEPTH, Binding, Bindings, Macro, Router, Sub
 from hyperspace.view import ViewState
 
 OUT = Path(__file__).resolve().parents[1] / "docs" / "plans" / "assets" / "22-face-patterns"
@@ -165,8 +165,8 @@ def main() -> int:
         shoot("b3-faces-rings.png", "RINGS, nothing driven: each row offers the convention's source")
 
         reg["view.pattern"].set(MODES.index(next(m for m in MODES if m.name == "HEX")))
-        for b in (Binding("lane:0", "pattern.mod.0", "push", 0.5),
-                  Binding("lane:1", "pattern.mod.1", "push", 0.5),
+        for b in (Binding("lane:0", "pattern.mod.0", "push", PATTERN_DEPTH),
+                  Binding("lane:1", "pattern.mod.1", "push", PATTERN_DEPTH),
                   Binding("lfo:0", "pattern.mod.6", "push", 0.8)):
             router.table.add(b)
         router.table.macros = {"macro.2": Macro("wash", [Sub(depth=("lfo:0", "pattern.mod.6"))]),
