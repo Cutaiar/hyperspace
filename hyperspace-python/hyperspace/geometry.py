@@ -249,7 +249,7 @@ def _build_600cell() -> dict:
 #
 # Recognizable 3D shapes built from polar curves r(θ), parametric curves
 # (x(t), y(t)), spherical functions r(θ, φ), and (u, v) surface patches.
-# Built as they are, they live in the w = 0 hyperplane of the same 4D
+# Built without a lift, they live in the w = 0 hyperplane of the same 4D
 # pipeline, and a quarter turn of a W plane (XW/YW/ZW) flattens them: the
 # turn carries a whole axis into w, which the 4D→3D divide drops. Two ways
 # out, chosen per shape by Shape.w (plan 22): every builder takes an
@@ -447,24 +447,52 @@ def _heart_xy(t: float) -> tuple[float, float]:
     )
 
 
+# The lifts (plan 22). Each w is chosen so the shape keeps its volume
+# through a full turn of every W plane (VOLUME_FLOOR, tests/test_shapes4d)
+# and reads as a solid, never a sheet. The rules that choose it:
+#   - w carries no linear part of x, y or z. A w that does (w = a·x, say)
+#     only tilts the shape into another flat 3-space, which some W turn
+#     still flattens.
+#   - w is odd under each mirror of the shape that flips one axis. At a
+#     quarter turn of a W plane, w takes that axis's place; if w were the
+#     same on both sides of the mirror, the two halves would land on each
+#     other and the surface would fold into a sheet.
+#   - an extruded outline's w depends on z. Otherwise the walls, whose
+#     extrusion runs along z alone, go edge-on together when ZW turns z
+#     away.
+#   - w agrees wherever the surface welds: poles, the rose's pinch, the
+#     Möbius seam (w(2π, 1 − v) == w(0, v)).
+# A lift cannot make a shape fatter than its own 3D proportions — at rest
+# the divide drops w — so the rose is a little deeper (0.12 → 0.16) and
+# the Möbius band a little wider (0.45 → 0.55) than they were at w = 0.
+# The heart stays 3D, its W planes masked: under a lift its long walls
+# read as a twisted ribbon (plan 22 A2, the turntable sheets).
+
 def _build_heart() -> dict:
     return curve_prism(_heart_xy, n=64, depth=8.0)
 
 
 def _build_star() -> dict:
     # {5/2} pentagram outline: 10 polar vertices alternating outer radius 1
-    # and the pentagram's inner-vertex radius cos(2π/5)/cos(π/5) ≈ 0.382
+    # and the pentagram's inner-vertex radius cos(2π/5)/cos(π/5) ≈ 0.382.
+    # Lift: the two caps tip opposite ways in w, by sin t round the outline
     ri = math.cos(2 * math.pi / 5) / math.cos(math.pi / 5)
     pts = []
     for k in range(10):
         th = math.pi / 2 + k * math.pi / 5
         r = 1.0 if k % 2 == 0 else ri
         pts.append((r * math.cos(th), r * math.sin(th)))
-    return ring_prism(pts, depth=0.35)
+    h = 0.35 / 2
+    return ring_prism(pts, depth=0.35, w=lambda t, z: 0.6 * (z / h) * math.sin(t))
 
 
 def _build_rose() -> dict:
-    return polar_prism(lambda th: math.cos(2 * th), n=96, depth=0.12, caps=False)
+    # each petal's wall twists through w, front against back; sin 4θ and
+    # sin 8θ vanish where the petals meet, so the pinch stays one point
+    return polar_prism(
+        lambda th: math.cos(2 * th), n=96, depth=0.16, caps=False,
+        w=lambda th, z: z * (3 * math.sin(4 * th) + math.sin(8 * th)),
+    )
 
 
 def _build_torus3() -> dict:
@@ -477,7 +505,9 @@ def _build_torus3() -> dict:
             (R + r * math.cos(v)) * math.sin(u),
         )
 
-    return param_surface(fn, 32, 16)
+    # the tube's upper and lower halves swing opposite ways in w, twice
+    # round the ring
+    return param_surface(fn, 32, 16, w=lambda u, v: 0.7 * math.sin(v) * math.sin(2 * u))
 
 
 def _build_trefoil() -> dict:
@@ -488,22 +518,27 @@ def _build_trefoil() -> dict:
             1.5 * math.sin(3 * t),
         )
 
-    return tube(c, n=72, m=8, radius=0.55)
+    # the knot's outer lobes go one way in w, its inner crossings the other
+    return tube(c, n=72, m=8, radius=0.55, w=lambda t, a: 1.5 * math.cos(3 * t))
 
 
 def _build_starfruit() -> dict:
+    # the four quarters between the poles alternate in w; 0 at the poles
     return spherical_surface(
-        lambda th, ph: 1.0 + 0.5 * math.cos(5 * th) * math.sin(ph) ** 5, 40, 15
+        lambda th, ph: 1.0 + 0.5 * math.cos(5 * th) * math.sin(ph) ** 5, 40, 15,
+        w=lambda th, ph: 0.6 * math.sin(2 * ph) * math.sin(2 * th),
     )
 
 
 def _build_mobius() -> dict:
     def fn(u: float, v: float):
         h = v - 0.5
-        rr = 1 + 0.45 * h * math.cos(u / 2)
-        return (rr * math.cos(u), 0.45 * h * math.sin(u / 2), rr * math.sin(u))
+        rr = 1 + 0.55 * h * math.cos(u / 2)
+        return (rr * math.cos(u), 0.55 * h * math.sin(u / 2), rr * math.sin(u))
 
-    return param_surface(fn, 65, 5, v1=1.0, wrap_u=False, wrap_v=False)
+    # the band saddles through w twice round; 0 at the seam, which welds
+    return param_surface(fn, 65, 5, v1=1.0, wrap_u=False, wrap_v=False,
+                         w=lambda u, v: 0.5 * math.sin(2 * u))
 
 
 # How a shape fills the fourth dimension (Shape.w):
@@ -548,13 +583,16 @@ SHAPES = [
     Shape("600-cell", "hypericosahedron", 600, "{3,3,5}", _build_600cell),
     Shape("Clifford torus", "flat torus on the 3-sphere", 0, "S¹ × S¹", lambda: duoprism(32, 16, True)),
     # -------- 3D shapes from trig equations (appended: index is identity)
-    Shape("Heart", "3D · classic heart curve, extruded", 0, "x=16 sin³t", _build_heart, w="flat"),
-    Shape("Star", "3D · pentagram prism", 0, "{5/2} polar", _build_star, w="flat"),
-    Shape("Rose", "3D · four-petal rose, extruded", 0, "r=cos 2θ", _build_rose, w="flat"),
-    Shape("Torus", "3D · the donut", 0, "(R+r cos v)e^iu", _build_torus3, w="flat"),
-    Shape("Trefoil knot", "3D · tube round a (2,3) torus knot", 0, "sin 3t · e^2it", _build_trefoil, w="flat"),
-    Shape("Starfruit", "3D · spherical star", 0, "r=1+½cos 5θ sin⁵φ", _build_starfruit, w="flat"),
-    Shape("Möbius strip", "3D · one-sided band", 0, "half-twist band", _build_mobius, w="flat"),
+    Shape("Heart", "3D · classic heart curve, extruded", 0, "x=16 sin³t", _build_heart, w="mask"),
+    Shape("Star", "4D lift · pentagram prism", 0, "{5/2} polar", _build_star, w="lift"),
+    Shape("Rose", "4D lift · four-petal rose, extruded", 0, "r=cos 2θ", _build_rose, w="lift"),
+    Shape("Torus", "4D lift · the donut", 0, "(R+r cos v)e^iu", _build_torus3, w="lift"),
+    Shape("Trefoil knot", "4D lift · tube round a (2,3) torus knot", 0, "sin 3t · e^2it",
+          _build_trefoil, w="lift"),
+    Shape("Starfruit", "4D lift · spherical star", 0, "r=1+½cos 5θ sin⁵φ",
+          _build_starfruit, w="lift"),
+    Shape("Möbius strip", "4D lift · one-sided band", 0, "half-twist band",
+          _build_mobius, w="lift"),
 ]
 
 _cache: dict[int, dict] = {}
@@ -755,14 +793,25 @@ def faces(i: int) -> list[list[int]]:
 
 def _face_xy(P: np.ndarray) -> np.ndarray:
     """Project a face cycle onto its own centred 2-plane basis, oriented
-    CCW. Best-effort for the slightly non-planar quads of curved grids."""
+    CCW. Best-effort for the slightly non-planar quads of curved grids.
+
+    A larger polygon that is not planar — a lifted shape's cap, whose
+    outline the lift has bent through w — is projected onto its
+    least-squares plane instead: the basis through its first two corners
+    can fold such an outline over itself, and the ear clip and the UVs
+    both need it simple. Every planar face keeps the basis it always had."""
     c = P.mean(axis=0)
     e1 = P[0] - c
     e1 = e1 / np.linalg.norm(e1)
     w = P[1] - c
     w = w - (w @ e1) * e1
     e2 = w / np.linalg.norm(w)
-    xy = np.stack([(P - c) @ e1, (P - c) @ e2], axis=1)
+    D = P - c
+    if len(P) > 4:
+        off = D - np.outer(D @ e1, e1) - np.outer(D @ e2, e2)
+        if np.abs(off).max() > 1e-6 * np.abs(D).max():
+            e1, e2 = np.linalg.svd(D, full_matrices=False)[2][:2]
+    xy = np.stack([D @ e1, D @ e2], axis=1)
     area = float(
         np.sum(xy[:, 0] * np.roll(xy[:, 1], -1) - np.roll(xy[:, 0], -1) * xy[:, 1])
     )

@@ -40,11 +40,14 @@ def digest(i: int) -> dict:
             "faces": len(G.faces(i)), "sha256": h.hexdigest()}
 
 
-def _masked(monkeypatch, i: int) -> None:
-    """Shape i, its W planes masked, for the length of one test."""
+def _as(monkeypatch, i: int, w: str) -> None:
+    """Shape i declared `w` ("flat", "mask"…), for the length of one test."""
     shapes = list(G.SHAPES)
-    shapes[i] = dataclasses.replace(shapes[i], w="mask")
+    shapes[i] = dataclasses.replace(shapes[i], w=w)
     monkeypatch.setattr(G, "SHAPES", shapes)
+
+
+HEART = next(i for i, s in enumerate(G.SHAPES) if s.name == "Heart")   # masked (plan 22 A2)
 
 
 # ------------------------------------------------- the lift changes nothing
@@ -147,19 +150,18 @@ def test_no_shape_but_a_masked_one_has_its_angles_touched():
     assert not any(s.w == "mask" for s in G.SHAPES[:18])
 
 
-def test_a_masked_shape_turns_in_3d_where_its_w_planes_would_have_turned_it(monkeypatch):
-    torus = SURFACES[3]
-    _masked(monkeypatch, torus)
+def test_a_masked_shape_turns_in_3d_where_its_w_planes_would_have_turned_it():
+    assert G.SHAPES[HEART].w == "mask"
     ang = [0.3, 0.1, 0.7, 0.2, 0.5, 0.9]
-    out = G.view_angles(torus, ang)
+    out = G.view_angles(HEART, ang)
     assert out[3:] == [0.0, 0.0, 0.0]
     for p, q in G.W_REMAP.items():
         assert out[q] == ang[q] + ang[p]
     assert ang == [0.3, 0.1, 0.7, 0.2, 0.5, 0.9], "the view's angles are never written"
     # the bass planes cannot move it into w: w stays 0 whatever the angles
-    V = G.geom(torus)["V"]
+    V = G.geom(HEART)["V"]
     for a in np.linspace(0, 2 * math.pi, 13):
-        v = G.rotate4(V, G.view_angles(torus, [a] * 6))
+        v = G.rotate4(V, G.view_angles(HEART, [a] * 6))
         assert np.abs(v[:, 3]).max() == 0.0
 
 
@@ -167,24 +169,24 @@ def test_the_renderer_draws_a_masked_shape_through_view_angles(monkeypatch):
     from hyperspace.render import render_offscreen
     from hyperspace.view import ViewState
 
-    heart = SURFACES[0]
-
-    def frame(plane=None):
-        s = ViewState(shape=heart, playing=False)
+    def frame(i, plane=None):
+        s = ViewState(shape=i, playing=False)
         s.ang = [0.0] * 6
         if plane:
             s.ang[G.PLANE_NAMES.index(plane)] = 1.1
         return render_offscreen(s, 96, 96)
 
-    assert not np.array_equal(frame("XW"), frame("XZ"))
-    flat_rest = frame()
-    _masked(monkeypatch, heart)
-    assert np.array_equal(frame("XW"), frame("XZ"))     # XW is remapped onto XZ
-    assert np.array_equal(frame("YW"), frame("YZ"))
-    assert np.array_equal(frame("ZW"), frame("XY"))
-    # w is 0 at every angle, so the depth cue reads z instead: at rest a
-    # flat shape draws at the cue's dimmest, a masked one does not
-    assert frame().mean() > 1.5 * flat_rest.mean()
+    assert np.array_equal(frame(HEART, "XW"), frame(HEART, "XZ"))  # XW is remapped onto XZ
+    assert np.array_equal(frame(HEART, "YW"), frame(HEART, "YZ"))
+    assert np.array_equal(frame(HEART, "ZW"), frame(HEART, "XY"))
+    masked_rest = frame(HEART)
+    torus = SURFACES[3]                                   # lifted: its W planes are its own
+    assert not np.array_equal(frame(torus, "XW"), frame(torus, "XZ"))
+    # w is 0 at every angle, so the depth cue reads z instead: at rest the
+    # same heart left flat draws at the cue's dimmest, masked it does not
+    _as(monkeypatch, HEART, "flat")
+    assert not np.array_equal(frame(HEART, "XW"), frame(HEART, "XZ"))
+    assert masked_rest.mean() > 1.5 * frame(HEART).mean()
 
 
 # ------------------------------------------------------- the volume ratio
@@ -218,13 +220,13 @@ def test_project3_is_the_first_half_of_project_h():
         assert np.array_equal(P, v[:, :3] * (3.1 / (3.1 - v[:, 3]))[:, None])
 
 
-@pytest.mark.parametrize("i", [i for i, s in enumerate(G.SHAPES) if s.w == "flat"],
-                         ids=lambda i: G.SHAPES[i].name)
-def test_a_flat_shape_collapses_at_a_quarter_turn_of_each_w_plane(i):
+def test_a_flat_shape_collapses_at_a_quarter_turn_of_each_w_plane(monkeypatch):
     # the bug, measured: w = 0, so a quarter turn carries a whole axis into
-    # w and the 4D→3D divide drops it
+    # w and the 4D→3D divide drops it. No shape ships flat since plan 22
+    # A2; the heart, built at w = 0, shows it with its mask taken off
+    _as(monkeypatch, HEART, "flat")
     for plane in ("XW", "YW", "ZW"):
-        r = G.sweep_ratios(i, plane, steps=72)
+        r = G.sweep_ratios(HEART, plane, steps=72)
         assert r[18] < 1e-9 and r[54] < 1e-9, plane     # 90° and 270°
 
 
@@ -240,11 +242,10 @@ def test_every_4d_shape_clears_the_volume_floor(i):
 
 
 def test_masking_a_flat_surface_lifts_it_over_the_floor(monkeypatch):
-    torus = SURFACES[3]
-    assert G.sweep_ratios(torus, "XW").min() < G.VOLUME_FLOOR
-    _masked(monkeypatch, torus)
     for plane in ("XW", "YW", "ZW"):
-        assert G.sweep_ratios(torus, plane).min() >= G.VOLUME_FLOOR
+        assert G.sweep_ratios(HEART, plane).min() >= G.VOLUME_FLOOR
+    _as(monkeypatch, HEART, "flat")
+    assert G.sweep_ratios(HEART, "XW").min() < G.VOLUME_FLOOR
 
 
 GATED = [i for i, s in enumerate(G.SHAPES) if s.w in ("lift", "mask")]
@@ -263,6 +264,38 @@ def test_a_lifted_or_masked_shape_keeps_its_volume_through_each_w_plane(i):
             assert r.min() >= G.VOLUME_FLOOR, (
                 f"{plane} from {'rest' if pose is None else 'a generic pose'}: "
                 f"{r.min():.3f} at {5 * int(r.argmin())}°")
+
+
+@pytest.mark.parametrize("i", GATED, ids=lambda i: G.SHAPES[i].name)
+def test_a_lifted_or_masked_shape_never_turns_much_of_itself_edge_on(i):
+    # the second look: a cloud can keep its volume while its faces turn
+    # edge-on and the surface reads as a sheet. 0.15 is the 4D shapes'
+    # own worst (the cubic pyramid); a masked shape never turns any
+    for pose in (None, G.GENERIC_POSE):
+        for plane in ("XW", "YW", "ZW"):
+            assert G.sweep_edge_on(i, plane, pose=pose).max() <= 0.15, plane
+
+
+def test_a_lifted_cap_is_triangulated_over_its_own_outline():
+    # the star's caps are bent through w by its lift: each is framed in its
+    # least-squares plane (geometry._face_xy), where its outline must stay
+    # simple and its triangles must tile it exactly — no gap, no overlap
+    star = next(i for i, s in enumerate(G.SHAPES) if s.name == "Star")
+    V, F, T = G.geom(star)["V"], G.faces(star), G.face_triangles(star)
+    caps = [fi for fi, c in enumerate(F) if len(c) > 4]
+    assert len(caps) == 2
+    for fi in caps:
+        cyc = F[fi]
+        P = V[np.asarray(cyc)]
+        assert np.linalg.svd(P - P.mean(0), compute_uv=False)[2] > 1e-3, "the cap is bent"
+        xy = G._face_xy(P)
+        pos = {v: k for k, v in enumerate(cyc)}
+        cross = lambda a, b, c: (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+        poly = 0.5 * sum(cross((0, 0), xy[k], xy[(k + 1) % len(xy)]) for k in range(len(xy)))
+        tris = [0.5 * cross(xy[pos[int(a)]], xy[pos[int(b)]], xy[pos[int(c)]])
+                for a, b, c, f in T if f == fi]
+        assert min(tris) > 0, "every triangle keeps the outline's winding"
+        assert sum(tris) == pytest.approx(poly, rel=1e-9)
 
 
 if __name__ == "__main__" and "--record" in sys.argv:

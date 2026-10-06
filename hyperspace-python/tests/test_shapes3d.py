@@ -1,8 +1,10 @@
 """The 3D trig-shape family: polar / spherical / parametric builders.
 
 These shapes are appended after the 18 polytopes (the slider index is the
-identity the golden traces key on), live in the w = 0 hyperplane, and carry
-explicit face cycles instead of relying on planar-cycle extraction.
+identity the golden traces key on) and carry explicit face cycles instead
+of relying on planar-cycle extraction. Built at w = 0, each is either
+lifted into w or kept 3D with its W planes masked (Shape.w, plan 22;
+tests/test_shapes4d.py).
 """
 
 import numpy as np
@@ -24,8 +26,11 @@ def test_polytope_count_unchanged():
 def test_shape3d_valid(i):
     g = G.geom(i)
     V, E, n, m = g["V"], g["E"], g["n"], g["m"]
-    # 3D: embedded flat in the w = 0 hyperplane
-    assert (V[:, 3] == 0).all()
+    # a masked shape stays in the w = 0 hyperplane; a lifted one leaves it
+    if G.SHAPES[i].w == "lift":
+        assert np.ptp(V[:, 3]) > 0.1
+    else:
+        assert (V[:, 3] == 0).all()
     # unit circumradius like every other shape
     assert abs(np.linalg.norm(V, axis=1).max() - 1.0) < 1e-9
     # within the renderer's design envelope (≤600 V / ≤1200 E per shape)
