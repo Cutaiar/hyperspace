@@ -65,8 +65,9 @@ a native 4D surface; it never collapsed and was the reference to beat.
   on a W plane both land on the 3D plane. With the remap, SUB (ZW) rolls
   a masked shape in the screen plane, BASS (XW) spins it about y, and
   MIDB (YW) tumbles it about x. A masked shape's depth cue (the line
-  fade, width and draw order, `pd`) reads its rotated z instead of w,
-  which is 0 at every angle and would leave it at the cue's dimmest.
+  fade, width and draw order, `pd`) reads its depth toward the 3D camera
+  (`geometry.view_depth`: z after the camera's yaw and pitch) instead of
+  w, which is 0 at every angle and would leave it at the cue's dimmest.
 - **Measures.** `project3` (the rotated, divided 3D cloud the camera
   views), `volume_ratio` (the cloud's smallest singular value over its
   largest, centred: 1 a ball, 0 a plane or a line), `sweep_ratios(i,

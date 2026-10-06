@@ -189,6 +189,25 @@ def test_the_renderer_draws_a_masked_shape_through_view_angles(monkeypatch):
     assert masked_rest.mean() > 1.5 * frame(HEART).mean()
 
 
+def test_a_masked_shape_cues_depth_toward_the_camera_however_the_camera_turns():
+    # the cue is the depth the 3D divide reads, camera included: a camera
+    # yawed half round draws what the shape turned half round in XZ draws.
+    # Cued on the shape's own z, the far side would come out bright and on
+    # top (every pixel's difference averaged 8.7 of 255 that way)
+    from hyperspace.render import render_offscreen
+    from hyperspace.view import ViewState
+
+    def frame(ang, yaw=0.0):
+        s = ViewState(shape=HEART, playing=False)
+        s.ang, s.yaw = list(ang), yaw
+        return render_offscreen(s, 96, 96).astype(int)
+
+    turned = frame([0.0, math.pi, 0.0, 0.0, 0.0, 0.0])
+    assert np.abs(turned - frame([0.0] * 6, yaw=math.pi)).mean() < 0.1
+    V = G.geom(HEART)["V"]
+    assert np.array_equal(G.view_depth(V, [0.0] * 6, 0.0, 0.0), V[:, 2])   # at rest: z
+
+
 # ------------------------------------------------------- the volume ratio
 
 def test_the_volume_ratio_reads_a_box_by_its_proportions():

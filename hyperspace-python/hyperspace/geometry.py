@@ -985,6 +985,27 @@ def project3(V: np.ndarray, ang, d4: float = 2.6) -> np.ndarray:
     return np.stack([x, y, z], axis=1)
 
 
+def _camera(x, y, z, yaw: float, pitch: float):
+    """The 3D camera's turn: yaw about y, then pitch. (x1, y1, z1); the
+    larger z1, the nearer the camera. project_h's middle step."""
+    cy, sy = math.cos(yaw), math.sin(yaw)
+    cp, sp = math.cos(pitch), math.sin(pitch)
+    x1 = x * cy + z * sy
+    z1 = -x * sy + z * cy
+    y1 = y * cp - z1 * sp
+    z1 = y * sp + z1 * cp
+    return x1, y1, z1
+
+
+def view_depth(V: np.ndarray, ang, yaw: float, pitch: float, d4: float = 2.6) -> np.ndarray:
+    """How near each vertex is to the 3D camera, nearer larger: z after the
+    4D divide and the camera's yaw and pitch, the depth the 3D divide
+    reads. What a masked shape's depth cue reads, as a 4D shape's reads
+    w (the depth the 4D divide reads)."""
+    x, y, z, _, _ = _to3(V, ang, d4)
+    return _camera(x, y, z, yaw, pitch)[2]
+
+
 def project_h(
     V: np.ndarray, ang, yaw: float, pitch: float,
     d4: float = 2.6, w: int = 1200, h: int = 800,
@@ -998,12 +1019,7 @@ def project_h(
     perspective-correct across that face.
     """
     x, y, z, v, div4 = _to3(V, ang, d4)
-    cy, sy = math.cos(yaw), math.sin(yaw)
-    cp, sp = math.cos(pitch), math.sin(pitch)
-    x1 = x * cy + z * sy
-    z1 = -x * sy + z * cy
-    y1 = y * cp - z1 * sp
-    z1 = y * sp + z1 * cp
+    x1, y1, z1 = _camera(x, y, z, yaw, pitch)
     div3 = CAM3 - z1 * 0.9
     k2 = CAM3 / div3
     scale = min(w, h) * 0.30

@@ -1647,7 +1647,7 @@ across the weld (`_mesh3` merge).
 
 **114. The masked Heart answers SUB, BASS and MIDB, as bright as a
 polytope.**
-Headless: `tests/test_shapes4d.py::{test_a_masked_shape_turns_in_3d_where_its_w_planes_would_have_turned_it,test_the_renderer_draws_a_masked_shape_through_view_angles,test_masking_a_flat_surface_lifts_it_over_the_floor,test_no_shape_but_a_masked_one_has_its_angles_touched}`.
+Headless: `tests/test_shapes4d.py::{test_a_masked_shape_turns_in_3d_where_its_w_planes_would_have_turned_it,test_the_renderer_draws_a_masked_shape_through_view_angles,test_a_masked_shape_cues_depth_toward_the_camera_however_the_camera_turns,test_masking_a_flat_surface_lifts_it_over_the_floor,test_no_shape_but_a_masked_one_has_its_angles_touched}`.
 Shape Heart (VIEW: "3D · classic heart curve, extruded"). XW alone,
 then YW, then ZW; then F1's routes with music that has sub and bass.
 Switch to the Tesseract and back. *Pass:* XW spins the heart about the

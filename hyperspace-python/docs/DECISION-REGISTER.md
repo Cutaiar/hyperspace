@@ -1008,7 +1008,10 @@ as built is [`plans/22-flat-shapes-and-face-patterns.md`](plans/22-flat-shapes-a
 
 - **Built.** Lines and faces fade, thin and sort by depth. A 4D shape
   cues on w; a masked shape's w is 0 at every angle, so it cues on its
-  rotated z instead, and is as bright and as deep-looking as a polytope.
+  depth toward the 3D camera instead (z after the camera's yaw and
+  pitch, `geometry.view_depth`), and is as bright and as deep-looking as
+  a polytope. The near side is the bright one, drawn on top, however
+  the camera is turned.
 - **Other option.** Leave it on w: the Heart would draw at the cue's
   dimmest, flat and faint, at every angle.
 - **To reverse.** Three lines in `Renderer.draw_scene`.
