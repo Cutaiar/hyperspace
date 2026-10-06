@@ -300,13 +300,15 @@ def drivers(panel, pid: str) -> str:
     """What drives `pid`, one line: each route in its adapter's words
     ("SUB pushes +0.5", "(off)" while disabled) with the macros scaling it
     ("× macro.2"), each desk control on it ("K3 sets it"), each macro that
-    sets its base ("macro.4 sets its base"). "" when nothing does, or with
+    sets its base ("macro.4 sets its base"). A desk control is the loaded
+    preset's or the session's (bindings.json's): either sets the base, so
+    a row it drives offers no "+ <source>". "" when nothing does, or with
     no table."""
     table = panel._table()
     if table is None:
         return ""
     router = ui_routing.router_of(panel)
-    desk, routes, _session = learn.bound(table, (pid,))
+    desk, routes, session = learn.bound(table, (pid,))
     macros = getattr(table, "macros", {}) or {}
     said = []
     for b in routes:
@@ -314,7 +316,7 @@ def drivers(panel, pid: str) -> str:
         for mid, _sub in table.depth_subs(b):
             line += f" × {macros[mid].label or mid}"
         said.append(line if b.enabled else f"{line} (off)")
-    said += [f"{ui_routing.control_glyph(table, b)} sets it" for b in desk]
+    said += [f"{ui_routing.control_glyph(table, b)} sets it" for b in desk + session]
     said += [f"{m.label or mid} sets its base" for mid, m in macros.items()
              if any(s.base == pid for s in m.subs)]
     return " · ".join(said)
