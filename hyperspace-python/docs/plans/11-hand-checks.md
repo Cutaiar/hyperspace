@@ -9,7 +9,8 @@ numbers.
 
 ## Before you start
 
-On `finish-line`: `git pull`, `uv sync`. Before any launch of this build:
+On `main` (`git pull`, `uv sync`); group R needs plan 22, on
+`plan-22-integration` until it is merged. Before any launch of this build:
 
 ```
 cp -R ~/Hyperspace ~/Hyperspace-backup-<date>     # the one to keep
@@ -29,16 +30,16 @@ number and what you saw.
    (`uv run hyperspace 2>&1 | tee ~/first-launch.txt`) for 57 and 84;
    then 81, 83.
 2. Laptop alone: 1–9, 30, 33, 38, 40, 44, 46, 48, 50, 58–64, 68, 69, 71,
-   91–97, and 99 and 100 before any `[[output.screens]]` edit; (copy)
-   86–89; FL Studio over IAC: 27, 28.
+   91–97, and 99 and 100 before any `[[output.screens]]` edit; 113–116,
+   117's keys, 119; (copy) 86–89, 118; FL Studio over IAC: 27, 28.
 3. APC40: 31 first, then 10–12, 34–36, 39, 45, 49, 51, 54–56, 62, 69, 70,
-   78, 82, 85 (36, 56, 82, 85 on the copy).
+   78, 82, 85, 117's cue knob (36, 56, 82, 85 on the copy).
 4. (copy) 90, last on the copy.
 5. Hand camera: 72 first, nobody else in view; then 13–21, 23–25, 29,
    42, 52, 66, 73, 75–77, 80, 100; APC40 in: 22, 65, 67, 74, 79, 110.
 6. One projector: 26, 43, 61, 96.
-7. Glass + projector as two outputs: 101 first, then 41, 98, 102–109;
-   111, 112 last.
+7. Glass + projector as two outputs: 101 first, then 41, 98, 102–109,
+   113 from the audience; 111, 112 last.
 
 ## A. Laptop alone
 
@@ -1134,7 +1135,7 @@ green, 5 amber, 0 dark). On-screen desk: same pads amber at half
 strength, named; empty bank pad: glyph only. Press row 4 pad 4: green,
 old one amber, picture changes, slot 12's PRESETS button lit. Empty far
 pad: no load, "slot 16: an empty slot". Latch SHIFT: same pads and
-lights; a filled far pad loads, SHIFT drops. Cue knob steps all 25
+lights; a filled far pad loads, SHIFT drops. Cue knob steps all 26
 shapes; no pad shows which (VIEW does). Param → **Learn desk**, press a
 far pad: preset loads, learn stays armed. *Fail:* amber unreadable from
 green, or none → `apc40.filled_of` (say what you see; fallback
@@ -1621,6 +1622,108 @@ glass freezes → presenter left context or framebuffer bound
 (`Presenter.present`, `finally` in `app._draw_render`); projector
 window over laptop controls → note it.
 
+## R. The shapes in four dimensions (plan 22, Stream A)
+
+All on the laptop; 117's desk part on the APC40; 113 again on the glass
+when it is up. A shape is picked in VIEW's **Shape** list (or ← / →).
+To watch one W plane alone: VIEW plane keys, all off but that one; F1
+(TUMBLE)'s rate bases keep a plane turning with no music. 119 needs no
+app.
+
+**113. Each lifted shape tumbles without reading as a sheet.**
+Headless: `tests/test_shapes4d.py::{test_a_lifted_or_masked_shape_keeps_its_volume_through_each_w_plane,test_a_lifted_or_masked_shape_never_turns_much_of_itself_edge_on,test_every_4d_shape_clears_the_volume_floor} tests/test_shapes3d.py::test_shape3d_valid`.
+F1 (TUMBLE). For each of Star, Rose, Torus, Trefoil knot, Starfruit,
+Möbius strip, Klein bottle: XW alone a full turn, then YW, then ZW;
+then all six keys on, with music. Faces on, then off. Compare the
+Clifford torus. *Pass:* no angle draws a flat sheet, a line or a
+ribbon; each bends and swaps sides through W as the Clifford torus
+does; VIEW alias "4D lift · …" (Klein bottle "4D · one-sided bottle, no
+self-crossing"). Say which read best and worst. On the glass: the same
+from the audience. *Fail:* flat at 90° / 270° → `Shape.w` not "lift" or
+the lift dropped (`geometry._build_*`); reads as a folded sheet though
+not flat → the lift is even under a mirror (the rules above
+`geometry._build_heart`); a seam or pole opens → the lift disagrees
+across the weld (`_mesh3` merge).
+
+**114. The masked Heart answers SUB, BASS and MIDB, as bright as a
+polytope.**
+Headless: `tests/test_shapes4d.py::{test_a_masked_shape_turns_in_3d_where_its_w_planes_would_have_turned_it,test_the_renderer_draws_a_masked_shape_through_view_angles,test_masking_a_flat_surface_lifts_it_over_the_floor,test_no_shape_but_a_masked_one_has_its_angles_touched}`.
+Shape Heart (VIEW: "3D · classic heart curve, extruded"). XW alone,
+then YW, then ZW; then F1's routes with music that has sub and bass.
+Switch to the Tesseract and back. *Pass:* XW spins the heart about the
+vertical (it turns side-on), YW tumbles it about the horizontal, ZW
+rolls it in the screen plane; never flat; with music it visibly
+answers the bass bands; lines as bright and as deep-looking (near
+edges brighter and thicker) as the Tesseract's. Known: the XW / YW / ZW
+keys and `rot.phase.*` keep counting the W planes. Say whether BASS's
+spin reads as BASS. *Fail:* flat at a quarter turn → `Shape.w` not
+"mask" or `Renderer.draw_scene` not drawing through `view_angles`;
+faint, flat lines → the depth cue reading w (`draw_scene`'s `pd`);
+another shape moves differently after the Heart → the fold wrote
+`ViewState.ang` (it must not).
+
+**115. The Star, Starfruit, Rose and Möbius strip by eye.**
+Headless: `tests/test_shapes4d.py::test_a_lifted_cap_is_triangulated_over_its_own_outline tests/test_shapes3d.py::{test_shape3d_faces,test_mobius_seam_merges,test_rose_pinches_at_origin}`.
+FACES on with a pattern. **Star**: XW to 90° and 270° (it becomes a
+box, a lantern of its walls); the two pentagram caps patterned.
+**Starfruit**: at rest, all planes off — five ridges. **Rose**: at rest
+and turning (depth 0.12 → 0.16). **Möbius strip**: at rest (width
+0.45 → 0.55). *Pass:* lantern acceptable; caps patterned whole, no hole,
+tear or overlapping triangle; Starfruit recognisable; Rose still a
+delicate flower; Möbius not too wide; Rose pinch and Möbius seam
+closed. Say what to change. *Fail:* torn or folded cap →
+`geometry._face_xy`'s least-squares branch; open seam or pinch → the
+lift disagrees there (`_build_mobius`, `_build_rose`); too fat or thin
+→ the depth / width in the builder (rows 94, 95).
+
+**116. The Klein bottle reads as a bottle; the neck never crosses.**
+Headless: `tests/test_shapes3d.py::{test_the_klein_bottle_is_appended_after_the_mobius_strip,test_the_klein_bottle_seam_welds_into_a_closed_grid,test_the_klein_bottle_crosses_itself_in_3d_and_not_in_4d}`.
+Shape Klein bottle (26). At rest, all planes off; then XW, YW, ZW each
+alone, slowly (Speed down); faces on and off. *Pass:* at rest a bottle
+— a body, a neck curling over and back in (the orchestrator saw more a
+curled horn or loop: say what you see); in every turn the neck passes
+beside the body, never through it; no gap or sliver at the seam; the
+neck's 16 lines dense enough. *Fail:* the neck through the body at some
+angle → the lift's sin 2u term (`_build_klein`); a gap at the seam →
+the v → π − v weld (`kkey`, nv even); too sparse → the 37 × 16 grid.
+
+**117. Stepping to shape 26 on the keys, the pad and the desk.**
+Headless: `tests/test_params.py::test_enum_norm_and_stepping tests/test_midi.py::test_relative_encoder_steps_shape tests/test_render.py::test_shape_renders tests/test_golden.py::test_the_engineering_table_matches_the_code`.
+VIEW. → from the Möbius strip (25), → again, ← back. Pad (if any): RB,
+LB. APC40:
+the cue knob right past the end, then left. (copy) Save a preset on
+the Klein bottle, load another, load it back. *Pass:* → reaches "KLEIN
+BOTTLE", "576V 1152E · χ=0 · one side" (the χ drawn, not a box), and
+stops there; RB and the cue knob the same, one step per click, no wrap;
+the preset comes back on the Klein bottle. *Fail:* stops at 25 →
+`view.shape`'s names (`params.py`, from `SHAPES`); wraps to the 5-cell
+→ `Param.step`; a box for χ → the sym text's glyph (`Shape.sym`).
+
+**118. The presets that show a changed shape.**
+Headless: `tests/test_shapes4d.py::test_every_shape_draws_what_it_drew_before_the_lift_existed`.
+Load factory `plasma-heart` (Heart), `spiral-silk` (Trefoil knot),
+`inverse-halo` (Starfruit); then your shared `hi-frek-variation-1` and
+`light-realm-variation-1` (Möbius strip; if they are not in your
+home, on the copy: `uv run python tools/shared_presets.py install
+shared/dan-2026-10-04`). Music on. *Pass:* each still does what it was made for; note any
+that now looks wrong. *Fail:* not a code fault: say which, and whether
+to re-tune the preset or overturn row 89 / 94 for that shape.
+
+**119. The turntable sheets.** (no app)
+Headless: `tests/test_shapes4d.py::test_a_flat_shape_collapses_at_a_quarter_turn_of_each_w_plane`.
+Open `docs/plans/assets/22-flat-shapes/`: `before-18-heart.png` …
+`before-24-mobius-strip.png`, then `after-18-heart.png` …
+`after-25-klein-bottle.png`, and a few 4D `before-*` (Tesseract,
+Clifford torus). Optionally re-measure: `uv run python
+tools/turntable.py --prefix check --no-png`, compare
+`check-ratios.csv` with `after-ratios.csv`, delete the `check-*` files.
+*Pass:* every before sheet of shapes 19–25 red at 90° and 270° in each
+row; no after tile red; the numbers match the table in
+`22-flat-shapes-and-face-patterns.md`; the after tiles look like the
+shapes you know. Say which sheet looks worst. *Fail:* a red after tile
+or numbers that differ → a geometry change since the sheets
+(`git log hyperspace/geometry.py`); re-run the tool.
+
 ## What no test covers
 
 Only a person can settle these:
@@ -1628,5 +1731,8 @@ Only a person can settle these:
 - the hand-to-picture delay (25): a target, not a measurement;
 - the frame rate and tearing with two real screens (107): the tests pin
   which swap waits, not what the screens do;
-- what macOS does to a window whose screen is unplugged mid-run (112).
+- what macOS does to a window whose screen is unplugged mid-run (112);
+- whether a lifted shape reads as a solid and the masked Heart as moved
+  by the bass (113, 114): the tests pin the volume ratio and the
+  edge-on share, not what a person sees.
 
