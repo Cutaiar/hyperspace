@@ -12,8 +12,12 @@ Two questions this file answers on its own:
 1. **Where does a controller's value go each frame?** — §2 and §3.7.
 2. **Who may write a parameter?** — §3.2.
 
+[`ARCHITECTURE.html`](ARCHITECTURE.html) is this file's visual companion —
+the same component map, frame order and writer classes as a diagrammed page,
+plus the band-to-plane map. Open it in a browser.
+
 When a boundary, the frame order or the control model changes, change
-this file in the same PR. Paths are relative to
+this file **and `ARCHITECTURE.html`** in the same PR. Paths are relative to
 `hyperspace-python/hyperspace/` unless they start with `tests/` or `docs/`.
 A reference is a symbol or a test name, never a line number.
 
