@@ -17,6 +17,11 @@ and 7, are left for an LFO, a macro or a knob: a hue that follows a band
 flickers, and how far the faces drift apart is a scene's choice. Each
 meaning stands on its own whatever drives it.
 
+A mode is its index (presets store `view.pattern` as one): new modes are
+appended after the last, never inserted. Two modes draw the music itself
+— METER and PULSE read the analyzer's bands (`u_levels`), whatever the
+routes — and the inputs style them as they do every other mode.
+
 `params` takes the mode list and each input's label and tip from here, and
 the panel what each input does in the mode on screen (`effect`). The
 shader keeps its own copy of the convention — named accessors
@@ -129,6 +134,27 @@ MODES: tuple[Mode, ...] = (
          ("coal size", _GLOW, "bends the coals", _SPEED.format("the heat rises"),
           "ash and flame part in hue", "broad glow to hot points", _HUE,
           "each face its own coals")),
+    # after EMBER: appended, never inserted — presets hold the mode as an index
+    Mode("METER", "The bands themselves: an LED wedge per band, lit as far as it reads.",
+         ("LED segment size", _GLOW, "bends the wheel (above 1)",
+          _SPEED.format("the wheel turns"), "hue spread across the bands",
+          "LED edges: soft to crisp", _HUE, "each face its own turn")),
+    Mode("PULSE", "The beat as shapes: a kick disc and ring, snare rays, hat sparkle.",
+         ("disc, ring and spark size", _GLOW, "bends the shapes (above 1)",
+          "the idle beat and the rays", "hues ripple out from centre",
+          "ring and ray edges", _HUE, "each face its own beat")),
+    Mode("MARBLE", "Noise folded through itself: lapis ink, teal currents, gold veins.",
+         ("swirl size", _GLOW, "how far the noise folds", _SPEED.format("it flows"),
+          "currents turn apart in hue", "gold veins: broad to fine", _HUE,
+          "each face its own stone")),
+    Mode("TRUCHET", "A maze of quarter arcs, a current running along its paths.",
+         ("tile size", _GLOW, "bends the maze (above 1)", "the current and the flips",
+          "hue range along the paths", "paths: wide to fine", _HUE,
+          "each face its own maze")),
+    Mode("KALEIDO", "Six mirrored wedges of flat pop colour, bands and dots, turning.",
+         ("band and dot size", _GLOW, "bends the mirror (above 1)",
+          _SPEED.format("it turns"), "hues ripple out from centre", "edges: blurred to hard",
+          _HUE, "each face its own turn")),
 )
 
 NAMES = [m.name for m in MODES]

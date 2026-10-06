@@ -1397,7 +1397,7 @@ def test_a_knob_on_the_pattern_steps_through_every_pattern(rig):
                                                              "preset")
     p = rig.reg["view.pattern"]
     n = len(PATTERNS)
-    assert p.kind is Kind.ENUM and p.steps == n - 1 == 11
+    assert p.kind is Kind.ENUM and p.steps == n - 1
     for x in m.bindings:
         x.pickup = False
     seen: list[int] = []

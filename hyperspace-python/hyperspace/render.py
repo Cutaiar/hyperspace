@@ -159,12 +159,18 @@ void main() {
 }
 """
 
+# the bands a pattern may read as u_levels: the analyzer's first N_BANDS
+# lanes (a layout has six; the band editor can make more or fewer)
+N_BANDS = 8
+
 # what the face program and the seed program both declare: everything the
 # pattern and the bitmap read
 FACE_UNIFORMS = f"""
 uniform float u_time;
 uniform float u_ptime;       // the patterns' clock: seconds × SPEED (Renderer._pattern_clock)
 uniform float u_mod[{N_MOD}];  // pattern.mod.* — the routed pattern inputs
+uniform float u_levels[{N_BANDS}];  // the analyzer's lanes, out / CEIL (Renderer.bands)
+uniform int u_nlevels;        // how many of them there are (0: no audio)
 uniform int u_mode;
 uniform float u_mix;
 uniform sampler2D u_bitmap;
@@ -557,6 +563,9 @@ class Renderer:
         self._patterns_mtime = (0.0, 0.0)   # (patterns.glsl, _common.glsl)
         self._reload_check = 0
         self._t0 = time.perf_counter()   # the one wall clock: patterns, instances, effects
+        # the analyzer's lanes, normalized, set by the app each frame (app._bands):
+        # render input for the patterns that draw the bands (u_levels)
+        self.bands: tuple[float, ...] = ()
         self._ptime = 0.0                  # the patterns' clock (_pattern_clock) …
         self._ptime_at: float | None = None   # … and the wall time it was last moved to
         self._ptile: tuple | None = None   # the tiles' program, vao, and the mtimes it read
@@ -1149,11 +1158,18 @@ class Renderer:
         are set only if the patterns read them (an edit may not)."""
         if ptime is None:
             ptime = self._pattern_clock(s, t)
-        for name, v in (("u_time", t), ("u_ptime", ptime)):
+        bands = tuple(float(v) for v in (getattr(self, "bands", ()) or ())[:N_BANDS])
+        for name, v in (("u_time", t), ("u_ptime", ptime), ("u_nlevels", len(bands))):
             try:
                 p[name].value = v
             except KeyError:
                 pass
+        try:                        # trimmed by the driver, like u_mod below
+            ub = p["u_levels"]
+            n = getattr(ub, "array_length", N_BANDS) or N_BANDS
+            ub.value = (bands + (0.0,) * N_BANDS)[:n]
+        except KeyError:
+            pass
         p["u_mode"].value = int(s.pattern)
         p["u_mix"].value = float(s.pattern_mix)
         # the driver trims the array to the highest index a pattern

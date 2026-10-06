@@ -80,6 +80,29 @@ def test_the_factory_routes_put_lane_i_on_input_i():
     assert len(BANDS) == 6 and patterns.HUE == 6 and patterns.SPREAD == 7
 
 
+def test_the_factory_depth_reads_on_loud_music_and_never_pins_an_input():
+    """Plan 22 B3: the pattern rows push at routing.PATTERN_DEPTH, and the
+    FACES page's "+ SUB" offer routes at the same one. On the base of 1 an
+    input rises by depth · out: a quiet band (out 0.4) still moves it, a
+    band at nominal (out 1) by a third of a unit, and a kick transient near
+    the asymptote stays well short of the 2.6 end — at depth 1 a nominal
+    band already reached 2.0 and anything loud pinned every input."""
+    from hyperspace import ui_patterns
+    from hyperspace.bands import CEIL
+    from hyperspace.routing import PATTERN_DEPTH, legacy6_routes
+
+    rows = [b for b in legacy6_routes() if b.target.startswith("pattern.")]
+    assert {b.value for b in rows} == {PATTERN_DEPTH} and {b.op for b in rows} == {"push"}
+    assert ui_patterns.ROUTE_DEPTH == PATTERN_DEPTH
+
+    def lifted(out):                             # what a push at the factory depth lands
+        return 1.0 + PATTERN_DEPTH * (out / CEIL) * 2.6
+    assert lifted(0.4) - 1.0 >= 0.1                              # quiet: alive
+    assert 0.3 <= lifted(1.0) - 1.0 <= 0.5                       # nominal: a third of a unit
+    assert lifted(0.96 * CEIL) <= 2.0                            # a transient: short of the end
+    assert lifted(0.96 * CEIL) + (2.2 - 1.0) * PATTERN_DEPTH * 0.96 * 2.6 > 2.6  # DROP's ×2.2 can
+
+
 # ---- the shader keeps the same convention ----
 
 def test_the_shader_names_each_input_at_its_index():
@@ -143,9 +166,13 @@ def tiles():
 
 @pytest.mark.parametrize("mode", range(1, len(MODES)), ids=[m.name for m in MODES[1:]])
 def test_every_input_moves_every_mode_from_1_to_2_6(tiles, mode):
+    """By 5 levels on average, or — a mode mostly dark at rest, PULSE —
+    by a quarter of the light it has (never less than 2.5 levels)."""
     for k, i in enumerate(INPUTS):
-        d = np.abs(tiles(mode, k, 2.6) - tiles(mode, k, 1.0)).mean()
-        assert d > 5.0, f"{MODES[mode].name}: {i.name} 1.0 → 2.6 barely moves the face ({d:.2f})"
+        base = tiles(mode, k, 1.0)
+        d = np.abs(tiles(mode, k, 2.6) - base).mean()
+        need = max(2.5, min(5.0, 0.25 * base.mean()))
+        assert d > need, f"{MODES[mode].name}: {i.name} 1.0 → 2.6 barely moves the face ({d:.2f})"
 
 
 def test_flat_reads_no_input(tiles):
@@ -209,3 +236,59 @@ def test_moving_speed_changes_the_rate_and_never_jumps_the_clock():
     s.pattern_mod[patterns.SPEED] = 0.0
     assert r._pattern_clock(s, 640.0) == pytest.approx(602.0)   # frozen where it was
     assert r._pattern_clock(s, 3.0) == 0.0                # a clock run back re-anchors
+
+
+# ---- plan 22 B3: the bands themselves (u_levels), for the modes that draw them ----
+
+def test_only_meter_and_pulse_read_the_bands_and_they_show_them():
+    """METER and PULSE draw the analyzer's bands whatever the routes; every
+    other mode is moved by the music only through the inputs."""
+    from hyperspace.render import Renderer
+    from hyperspace.view import ViewState
+
+    try:
+        ctx = moderngl.create_context(standalone=True)
+    except Exception as e:  # noqa: BLE001 — any GL failure means skip
+        pytest.skip(f"no standalone GL context available: {e}")
+    try:
+        r = Renderer(ctx)
+        loud = (0.85, 0.9, 0.3, 0.35, 0.45, 0.8)
+        reads = {patterns.NAMES.index("METER"), patterns.NAMES.index("PULSE")}
+        for mode in range(1, len(MODES)):
+            s = ViewState(pattern=mode)
+            r.bands = ()
+            quiet = r.pattern_tile(s, 64, T, FID).astype(float)
+            r.bands = loud
+            heard = r.pattern_tile(s, 64, T, FID).astype(float)
+            d = np.abs(heard - quiet).mean()
+            if mode in reads:
+                assert d > 8.0, (MODES[mode].name, d)
+                assert heard.mean() > quiet.mean(), MODES[mode].name     # the music lights it
+            else:
+                assert d == 0.0, MODES[mode].name
+        # METER: a band's wedge lights out from the hub as far as it reads
+        meter = ViewState(pattern=patterns.NAMES.index("METER"))
+        r.bands = (1.0, 0, 0, 0, 0, 0)
+        one = r.pattern_tile(meter, 96, 0.0, 0.0).astype(float)
+        r.bands = (0.0,) * 6
+        none = r.pattern_tile(meter, 96, 0.0, 0.0).astype(float)
+        top = (one - none)[: 96 // 2].sum()        # SUB's wedge is at twelve o'clock
+        bottom = (one - none)[96 // 2:].sum()
+        assert top > 4 * max(bottom, 1.0)
+    finally:
+        ctx.release()
+
+
+def test_new_modes_are_appended_so_preset_indices_keep_their_patterns():
+    """Presets hold `view.pattern` as an index: the first twelve stay put."""
+    assert patterns.NAMES[:12] == ["FLAT", "RINGS", "PLAID", "MOIRE", "BLOOM", "CAUSTIC",
+                                   "HEX", "SPIRAL", "CELLS", "PLASMA", "WEAVE", "EMBER"]
+    assert patterns.NAMES[12:] == ["METER", "PULSE", "MARBLE", "TRUCHET", "KALEIDO"]
+
+
+def test_every_phrase_fits_a_faces_row():
+    """The FACES rows print a mode's phrase on one line beside the name."""
+    for m in MODES:
+        assert len(m.about) <= 72, m.name
+        for d in m.does:
+            assert len(d) <= 29, (m.name, d)

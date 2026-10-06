@@ -102,7 +102,7 @@ def test_a_chip_click_shows_that_mode_and_its_about(faces):
         assert p.base == k
         faces.frame()
         line = ui_patterns.FLAT_NOTE if k == 0 else MODES[k].about
-        assert line in faces.wrapped, MODES[k].name
+        assert line in faces.texts, MODES[k].name
 
 
 def test_prev_and_next_step_round_the_modes(faces):

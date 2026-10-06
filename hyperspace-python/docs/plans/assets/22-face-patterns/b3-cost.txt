@@ -1,0 +1,21 @@
+Face pattern cost, offscreen 1280x720, median ms per frame and x FLAT
+(llvmpipe: relative numbers only; tools/pattern_cost.py)
+
+mode name              600-cell           120-cell
+0    FLAT        14.6 ms  1.00x     14.8 ms  1.00x
+1    RINGS       32.7 ms  2.24x     24.9 ms  1.69x
+2    PLAID       35.1 ms  2.40x     24.1 ms  1.63x
+3    MOIRE       35.4 ms  2.43x     24.2 ms  1.63x
+4    BLOOM       36.9 ms  2.53x     24.0 ms  1.62x
+5    CAUSTIC     33.4 ms  2.29x     23.1 ms  1.56x
+6    HEX         36.1 ms  2.47x     23.2 ms  1.57x
+7    SPIRAL      34.7 ms  2.38x     23.6 ms  1.59x
+8    CELLS       45.7 ms  3.13x     28.5 ms  1.92x
+9    PLASMA      35.0 ms  2.40x     22.9 ms  1.55x
+10   WEAVE       29.6 ms  2.03x     21.1 ms  1.43x
+11   EMBER       34.1 ms  2.33x     22.7 ms  1.54x
+12   METER       38.9 ms  2.66x     25.2 ms  1.71x
+13   PULSE       43.3 ms  2.97x     27.9 ms  1.88x
+14   MARBLE      61.1 ms  4.19x     35.8 ms  2.42x
+15   TRUCHET     39.9 ms  2.73x     25.8 ms  1.75x
+16   KALEIDO     36.1 ms  2.47x     23.8 ms  1.61x
