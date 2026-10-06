@@ -55,6 +55,7 @@ from __future__ import annotations
 
 import math
 import time
+from dataclasses import replace
 from pathlib import Path
 
 import moderngl
@@ -66,7 +67,7 @@ from .ghost import Ghost, GhostState
 from .glsl import QUAD_VS, common, common_mtime, gl_error
 from .lookback import DreamState, Lookback
 from .outputs import HANDS, NAMES, PIPELINES, SCENE, Handoff, Switches, View, fit, route
-from .patterns import SPEED
+from .patterns import MODES, SPEED
 from .tapers import clamp
 from .view import N_MOD, RED, ViewState  # re-exported for callers that had them from here
 
@@ -558,7 +559,12 @@ class Renderer:
         self._t0 = time.perf_counter()   # the one wall clock: patterns, instances, effects
         self._ptime = 0.0                  # the patterns' clock (_pattern_clock) …
         self._ptime_at: float | None = None   # … and the wall time it was last moved to
-        self._ptile: tuple | None = None   # pattern_tile's program, vao, fbo, size, mtime
+        self._ptile: tuple | None = None   # the tiles' program, vao, and the mtimes it read
+        self._tile_fbos: dict[int, moderngl.Framebuffer] = {}   # pattern_tile's, by size
+        # the FACES page's swatches (want_swatches): mode → (texture, framebuffer)
+        self._swatches: dict[int, tuple] = {}
+        self._swatch_frame = self._swatch_until = self._swatch_next = 0
+        self.swatch_error = ""
         self._build_face_program()
         ctx.enable(moderngl.BLEND | moderngl.PROGRAM_POINT_SIZE)
         ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
@@ -789,6 +795,9 @@ class Renderer:
         first = views[0]
         target, vp = first.target, first.rect
         try:
+            if self._swatch_step(s, t):          # it bound its own: the target again
+                target.use()
+                ctx.viewport = vp
             self._draw_frame(s, w, h, dpr, t, views)
         finally:
             target.use()
@@ -1173,6 +1182,53 @@ class Renderer:
                 ox = oy = 0.0
             p["u_bmp_pos"].value = (s.bmp_amp * ox, s.bmp_amp * oy)
 
+    def _tile_program(self) -> tuple:
+        """The program and vao a pattern tile or swatch is drawn with: the
+        seed's fragment with the face index a uniform, from the patterns
+        file as it is now — rebuilt after a save. Raises when it does not
+        compile (the face program's own build says so on the panel)."""
+        if self._ptile is None or self._ptile[2] != self._patterns_mtime:
+            if self._ptile is not None:
+                for res in self._ptile[:2]:
+                    res.release()
+            self._ptile = None
+            prog = self.ctx.program(vertex_shader=QUAD_VS, fragment_shader=_face_fragment(
+                TILE_FS_HEAD, PATTERNS_GLSL.read_text(), SEED_FS_TAIL))
+            self._ptile = (prog, self.ctx.vertex_array(prog, []), self._patterns_mtime)
+        return self._ptile[:2]
+
+    def _tile_draw(self, fbo: moderngl.Framebuffer, size: int, s: ViewState, t: float,
+                   ptime: float, fid: float, opaque: bool = False) -> None:
+        """Face `fid`'s pattern for `s`, alone, into `fbo` (`size`²): the
+        viewport and blending are put back, `fbo` is left bound. `opaque`
+        keeps the alpha at 1 (a swatch the panel draws as it is: the
+        premultiplied colour over black)."""
+        ctx = self.ctx
+        prog, vao = self._tile_program()
+        self._face_uniforms(prog, s, t, ptime=ptime)
+        try:
+            prog["v_fid"].value = float(fid)
+        except KeyError:                       # a pattern that ignores the face index
+            pass
+        fbo.color_mask = (True, True, True, True)
+        fbo.use()
+        vp = ctx.viewport
+        ctx.viewport = (0, 0, size, size)
+        ctx.clear(0.0, 0.0, 0.0, 1.0 if opaque else 0.0)
+        ctx.disable(moderngl.BLEND)
+        if opaque:
+            # the alpha stays the clear's 1: moderngl sets the mask on use()
+            fbo.color_mask = (True, True, True, False)
+            fbo.use()
+        try:
+            vao.render(moderngl.TRIANGLES, vertices=3)
+        finally:
+            if opaque:
+                fbo.color_mask = (True, True, True, True)
+                fbo.use()               # the mask back on, for whatever binds next
+            ctx.enable(moderngl.BLEND)
+            ctx.viewport = vp
+
     def pattern_tile(self, s: ViewState, size: int = 128, t_now: float = 0.0,
                      fid: float = 0.0) -> np.ndarray:
         """What face `fid` shows of `s`'s pattern, alone: `size`² RGB, the
@@ -1182,33 +1238,51 @@ class Renderer:
         clock is not touched). For tools and tests (tools/pattern_sheet.py);
         raises when patterns.glsl does not compile. Leaves the viewport and
         blending as it found them; its own framebuffer stays bound."""
-        ctx = self.ctx
-        if self._ptile is None or self._ptile[3] != size or self._ptile[4] != self._patterns_mtime:
-            if self._ptile is not None:
-                for res in self._ptile[:3]:
-                    res.release()
-            prog = ctx.program(vertex_shader=QUAD_VS, fragment_shader=_face_fragment(
-                TILE_FS_HEAD, PATTERNS_GLSL.read_text(), SEED_FS_TAIL))
-            fbo = ctx.framebuffer(color_attachments=[ctx.texture((size, size), 4)])
-            self._ptile = (prog, ctx.vertex_array(prog, []), fbo, size, self._patterns_mtime)
-        prog, vao, fbo = self._ptile[:3]
-        self._face_uniforms(prog, s, t_now, ptime=t_now * _speed(s))
-        try:
-            prog["v_fid"].value = float(fid)
-        except KeyError:                       # a pattern that ignores the face index
-            pass
-        fbo.use()
-        vp = ctx.viewport
-        ctx.viewport = (0, 0, size, size)
-        ctx.clear(0.0, 0.0, 0.0, 0.0)
-        ctx.disable(moderngl.BLEND)
-        try:
-            vao.render(moderngl.TRIANGLES, vertices=3)
-        finally:
-            ctx.enable(moderngl.BLEND)
-            ctx.viewport = vp
+        fbo = self._tile_fbos.get(size)
+        if fbo is None:
+            fbo = self._tile_fbos[size] = self.ctx.framebuffer(
+                color_attachments=[self.ctx.texture((size, size), 4)])
+        self._tile_draw(fbo, size, s, t_now, t_now * _speed(s), fid)
         img = np.frombuffer(fbo.read(components=3), dtype=np.uint8).reshape(size, size, 3)
         return img[::-1].copy()
+
+    # ---- the FACES page's swatches: every mode, small, on the live inputs ----
+
+    def want_swatches(self) -> None:
+        """The FACES page is on show: keep the swatches drawing for the next
+        SWATCH_HOLD frames. Nothing is drawn while no page asks."""
+        self._swatch_until = self._swatch_frame + SWATCH_HOLD
+
+    def swatch(self, mode: int) -> moderngl.Texture | None:
+        """Mode `mode`'s swatch — SWATCH² RGBA, premultiplied, GL's way up —
+        or None until one is drawn."""
+        got = self._swatches.get(mode)
+        return None if got is None else got[0]
+
+    def _swatch_step(self, s: ViewState, t: float) -> bool:
+        """While a page wants them, one mode's swatch a frame, round robin:
+        what face 0 shows of that mode on this view's inputs (its mix and
+        bitmap aside), on the patterns' live clock — so a strip of them
+        moves with the faces at a twelfth of the frame rate, for one small
+        quad a frame. A failure says so in `swatch_error` and never costs
+        the frame. True when it drew (another framebuffer is bound)."""
+        self._swatch_frame += 1
+        if self._swatch_frame > self._swatch_until:
+            return False
+        mode = self._swatch_next % N_PATTERNS
+        self._swatch_next = mode + 1
+        try:
+            got = self._swatches.get(mode)
+            if got is None:
+                tex = self.ctx.texture((SWATCH, SWATCH), 4)
+                tex.filter = (moderngl.LINEAR, moderngl.LINEAR)
+                got = self._swatches[mode] = (tex, self.ctx.framebuffer(color_attachments=[tex]))
+            one = replace(s, pattern=mode, pattern_mix=1.0, bmp_alpha=0.0)
+            self._tile_draw(got[1], SWATCH, one, t, self._ptime, 0.0, opaque=True)
+            self.swatch_error = ""
+        except Exception as e:  # noqa: BLE001 — a swatch must not take the frame down
+            self.swatch_error = f"swatch: {type(e).__name__}: {e}"[:160]
+        return True
 
     def dim_pass(self, target: moderngl.Framebuffer, vp: tuple[int, int, int, int],
                  factor: float, opaque: bool = True) -> bool:
@@ -1475,6 +1549,11 @@ class Renderer:
             out[k * per : (k + 1) * per, 0] += ox
             out[k * per : (k + 1) * per, 1] += oy
         return out
+
+
+N_PATTERNS = len(MODES)
+SWATCH = 64         # px: a mode's swatch (want_swatches), drawn smaller on the FACES page
+SWATCH_HOLD = 30    # frames the swatches keep drawing after the page last asked
 
 
 def _speed(s: ViewState) -> float:
