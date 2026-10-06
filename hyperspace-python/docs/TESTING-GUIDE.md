@@ -1593,7 +1593,8 @@ Mac.
 case: on each of the eight inputs click its **+ …** offer (+ SUB … + LFO
 2) so every input is driven; on ROUTING, give a macro a long name such
 as "a long macro name" and set it to scale one of those routes; untick
-**Faces**.
+**Faces**. Then tick Faces again and click FLAT and CAUSTIC: a
+pattern's own description running long is the tallest case.
 
 **Right if:** the page never needs scrolling; all seventeen pattern
 buttons fit, with their names inside them; every input's two lines are
@@ -1650,11 +1651,14 @@ explain the inputs and what drives them.
 **Needs:** laptop, music.
 
 **Do:** shape 600-cell, faces on. Note the frame rate in the footer with
-FACES open, then on VIEW. Back on FACES, drag SCALE and COLOUR.
+FACES open, then on VIEW. Back on FACES, drag SCALE and COLOUR. Then,
+with FACES still open, break `patterns.glsl` (type a made-up word into a
+line), save, wait, undo the change and save again.
 
 **Right if:** each button shows a small moving picture of its pattern,
 and the pictures change as you drag the inputs; the frame rate is about
-the same on both pages.
+the same on both pages; while the file is broken nothing stutters and
+the pictures keep their last good look, and the fix comes back.
 
 **Judge:** whether the pictures are big enough to tell apart.
 
@@ -1718,10 +1722,13 @@ it and loud ones never turn it solid white or black.
 **Needs:** laptop, music, ten minutes or more.
 
 **Do:** house preset, RINGS, then PLASMA; let it run and watch when the
-music changes.
+music changes. If the app has been running an hour or more, also look
+at PULSE and EMBER.
 
 **Right if:** the pattern speeds up and slows down with the music, but
-never snaps to a different place.
+never snaps to a different place; after an hour PULSE's small dots still
+twinkle and EMBER still drifts (EMBER is known to stop after about
+12 hours).
 
 **Wrong if:** a sudden snap.
 

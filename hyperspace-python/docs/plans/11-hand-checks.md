@@ -1739,12 +1739,14 @@ house show's (PRESETS: SHOW `house`).
 Headless: `tests/test_ui_patterns.py::test_the_page_fits_with_every_row_driven_and_flat_or_the_longest_mode tests/test_ui_shell.py::test_every_page_fits_the_control_window`.
 **These tests do not settle it.** They measure in the machine's own font
 metrics, and in the cloud container those are not the Mac's: test_fx's
-own two fit tests fail there by 18 px. The 31 px the FACES test leaves
+own two fit tests fail there by 18 px. The 18 px the FACES test leaves
 spare there is not evidence. (copy) Launch, FACES. Pick KALEIDO, then
 FLAT, then EMBER. Then the worst case: on ROUTING put a route on every
 input (FACES' **+ SUB** … **+ LFO 2**), name a macro "a long macro name"
 with a depth subscriber on one of them, untick Faces, and break
-`patterns.glsl` (an undeclared name; save; put it back after). *Pass:*
+`patterns.glsl` (an undeclared name; save; put it back after). Then,
+with Faces on and no error, FLAT and CAUSTIC: a pattern's own line
+wrapping is the tallest case. *Pass:*
 no scroll bar at the control size on any pattern; all seventeen chips
 inside the page, their names inside the chips; every row's two lines on
 screen, the driver's text cut short with "…" rather than over the edge;
@@ -1781,12 +1783,16 @@ something else on one pattern → that mode's case in `patterns.glsl`
 the route depths (`routing.PATTERN_DEPTH`).
 
 **123. SPEED never jumps over a long set.**
-Headless: `tests/test_patterns.py::{test_moving_speed_changes_the_rate_and_never_jumps_the_clock,test_speed_at_0_is_frozen}`.
+Headless: `tests/test_patterns.py::{test_moving_speed_changes_the_rate_and_never_jumps_the_clock,test_speed_at_0_is_frozen,test_pulses_hats_still_sparkle_hours_into_a_set}`.
 A house preset, music, RINGS, then PLASMA, ten minutes or more (the
 jump grew with time on the old clock). Watch for a pattern snapping to
-another place when the music changes. *Pass:* it speeds up and slows
-down with the mids and never snaps. *Fail:* a snap →
-`Renderer._pattern_clock` (it must integrate, not multiply).
+another place when the music changes. If the app has been up an hour
+or more, also look at PULSE and EMBER. *Pass:* it speeds up and slows
+down with the mids and never snaps; after an hour PULSE's hats still
+twinkle and EMBER still drifts (EMBER is known to stop after about
+12 h). *Fail:* a snap → `Renderer._pattern_clock` (it must integrate,
+not multiply); PULSE's hats gone → the wrapped step in `pulse()`;
+EMBER still within the hour → float32 precision of `u_ptime`.
 
 **124. HUE on an LFO and SPREAD on a knob, on the 120-cell.**
 Headless: `tests/test_patterns.py::{test_hue_turns_the_palette_and_keeps_the_shape,test_spread_at_0_plays_every_face_in_unison}`.
@@ -1810,9 +1816,12 @@ note where they stall. *Pass:* they find a look without opening a
 in `patterns.py` or the page's lines (`ui_patterns`).
 
 **126. The swatches.**
-Headless: `tests/test_ui_patterns.py::test_the_page_asks_the_renderer_for_swatches_and_draws_them tests/test_ui_patterns.py::test_swatches_draw_only_while_the_page_asks_and_leave_the_frame_as_it_was`.
+Headless: `tests/test_ui_patterns.py::test_the_page_asks_the_renderer_for_swatches_and_draws_them tests/test_ui_patterns.py::test_swatches_draw_only_while_the_page_asks_and_leave_the_frame_as_it_was tests/test_ui_patterns.py::test_a_broken_save_keeps_the_last_good_swatches_and_is_compiled_once`.
 FACES open, music, a busy shape (the 600-cell). Note the footer's FPS;
-switch to VIEW, note it again. Move SCALE and COLOUR. *Pass:* each chip
+switch to VIEW, note it again. Move SCALE and COLOUR. Then, FACES still
+open, break `patterns.glsl` (an undeclared name), save, wait ten
+seconds, put it back and save. *Pass:* no stutter while it is broken
+and the swatches keep their last good look; the fix lands; and each chip
 shows a recognisable small picture of its pattern, moving; the swatches
 follow the inputs; the FPS with FACES open is within a frame or two of
 VIEW's. Say whether the swatches are legible at the size they are.
@@ -1820,7 +1829,7 @@ VIEW's. Say whether the swatches are legible at the size they are.
 with FACES open → `Renderer._swatch_step` (one 64² swatch a frame).
 
 **127. "+ SUB", the driver link, and undo.**
-Headless: `tests/test_ui_patterns.py::{test_an_undriven_input_offers_the_conventions_source_and_stays_here,test_a_routed_input_shows_its_source_and_a_click_opens_routing,test_the_driver_line_names_the_macro_desk_and_base_subscribers}`.
+Headless: `tests/test_ui_patterns.py::{test_an_undriven_input_offers_the_conventions_source_and_stays_here,test_a_routed_input_shows_its_source_and_a_click_opens_routing,test_the_driver_line_names_the_macro_desk_and_base_subscribers,test_a_session_control_on_an_input_is_named_and_nothing_is_offered}`.
 (copy) A house preset. FACES: on HUE, which no factory route drives,
 click **+ LFO 1**; ⌘Z. On SCALE, click "SUB pushes +0.35". *Pass:* "+ LFO
 1" becomes "LFO 1 pushes +0.35", the page stays on FACES and the preset's

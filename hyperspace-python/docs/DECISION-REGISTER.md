@@ -1241,8 +1241,9 @@ Stream B; the pictures are in
   thumbnails (they would not show the current inputs); every swatch
   every frame.
 - **To reverse.** The page is one module; the dropdown is an hour.
-- **Rough edge.** Its fit on the Mac is **unverified** (31 px spare in
-  the container's font metrics, which are not the Mac's). The pattern
+- **Rough edge.** Its fit on the Mac is **unverified** (18 px spare in
+  the container's font metrics, which are not the Mac's; the tallest
+  case is a mode's own about line wrapping). The pattern
   group's preset strip draws its dirty dot over its ▶ chip at this
   width.
 - **Judge it.** Checks 120, 125, 126 and 128.

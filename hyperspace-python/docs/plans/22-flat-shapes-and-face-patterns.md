@@ -421,10 +421,15 @@ were are in [`assets/22-face-patterns/`](assets/22-face-patterns/).
   pixels are the same either way. The render stack still writes no
   param.
 - **Fit: UNVERIFIED.** In this container's font metrics the worst case
-  (all eight inputs driven, a long macro name, a GLSL error, Faces off,
-  every mode) has no scroll and 31 px of height to spare. Those metrics
-  are not the Mac's: test_fx's own two fit tests fail here by 18 px. The
-  page has to be seen on the Mac (check 120).
+  has no scroll and 18 px of height to spare. The tallest case is a
+  mode's own about line wrapping (Faces on, no error), not the GLSL
+  error or Faces off, which take that line's place: the review found the
+  first fit test measured only those, and the real worst case (FLAT and
+  CAUSTIC wrapping to three lines) left 2 px. FLAT's note and CAUSTIC's
+  about were shortened so every mode is two lines, and the test now
+  sweeps all three states on every mode. Those metrics are not the
+  Mac's: test_fx's own two fit tests fail here by 18 px. The page has to
+  be seen on the Mac (check 120).
 - **Tests.** `tests/test_ui_patterns.py`, 27 tests, among them
   `::test_the_faces_page_is_in_pages_and_draws_this_module`,
   `::test_every_mode_has_a_chip_and_its_line`,
@@ -595,7 +600,7 @@ pictures are offscreen renders and a hidden window in this container, on
 Mesa's software GL. In particular:
 
 - **The FACES page's fit on the Mac** (check 120). In this container's
-  font metrics it has 31 px spare at the worst case; the same metrics put
+  font metrics it has 18 px spare at the worst case; the same metrics put
   test_fx's own two fit tests 18 px over, so neither number says
   anything about the Mac.
 - **`patterns.glsl` on Apple's GL compiler** (check 121). Mesa and the
@@ -644,7 +649,7 @@ The order to see them in is group R; see also
 - **`Shape.w == "flat"` is used by no shape.** It stays in `W_KINDS` so
   the tests can show the collapse and so a future 3D shape can be added
   honestly.
-- **The FACES page's fit is UNVERIFIED** on the Mac: 31 px spare in this
+- **The FACES page's fit is UNVERIFIED** on the Mac: 18 px spare in this
   container's metrics, which also put test_fx's fit tests 18 px over
   (check 120).
 - **Apple's GL compiler has not seen `patterns.glsl`**; Mesa and
@@ -681,9 +686,25 @@ The order to see them in is group R; see also
 - **Shared bases in two candidates**: MACRO INTENSITY's 1 and 3 and
   MACRO BREAKDOWN DROP's 1 and 2/3 set the same bases; the last turned
   wins.
-- **Stale text**: `patterns.py`'s docstring opens "the eight inputs and
-  twelve modes" (there are seventeen); `ui_patterns.py`'s docstring puts
-  the slider on an input's first line and the driver on its second (the
-  page draws them the other way round); `preset.party_faces_routes`'
-  docstring and `party-faces.json`'s note say the right hand's roll
-  rescales the hex cells — input 2 is WARP now, so it bends them.
+- **The pattern clock loses float32 precision after many hours.**
+  `u_ptime` is integrated and never wraps (the modes' frequencies share
+  no period, so a wrap would jump). The hash-noise modes show it first:
+  EMBER's motion stops after about 12 h at SPEED 1 (sooner with SPEED
+  above 1, which the factory MID lane gives it), and MARBLE's texture
+  coarsens by about 12 h; the other modes measured fine to 36 h. EMBER
+  had the same limit on `u_time` before plan 22. Wrapping the noise
+  lattice would fix it but changes EMBER's look; the owner decides.
+- **party-faces' right-hand roll drives WARP.** Rolled one way it bends
+  the HEX cells; rolled the other it does nothing, because HEX is
+  straight from 0 to 1. Retarget it to SCALE or keep it: the owner's
+  call.
+- **A schema-1 project migrated from now on** carries the factory pattern
+  rows at 0.35, not the depth-1 rows shipped before plan 13 (only an
+  unmigrated old home meets this).
+- **An out-of-range `view.pattern`** (from an older or newer build's
+  preset) draws as FLAT and FACES shows FLAT lit; it never crashes. An
+  out-of-range `view.shape` is worse: `Registry.restore` sets an enum
+  without a clamp and `geom()` raises every frame. That predates plan
+  22; plan 22's shape 26 makes it reachable by loading a Klein-bottle
+  preset on an older build.
+- **`Renderer.swatch_error` is set but shown nowhere** on the page.
