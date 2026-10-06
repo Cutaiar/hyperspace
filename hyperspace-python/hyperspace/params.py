@@ -61,7 +61,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-from . import tapers, undo
+from . import patterns, tapers, undo
 from .analyzer import CURVES, F_HI, F_LO, Q_HI, Q_LO
 from .bands import CEIL, NORMS, SHAPERS
 from .fx import FxState
@@ -84,10 +84,7 @@ from .lookback import (
 from .tapers import Taper
 from .tapers import clamp as _clamp
 
-PATTERNS = [
-    "FLAT", "RINGS", "PLAID", "MOIRE", "BLOOM", "CAUSTIC",
-    "HEX", "SPIRAL", "CELLS", "PLASMA", "WEAVE", "EMBER",
-]
+PATTERNS = patterns.NAMES   # the face patterns, in patterns.glsl's mode order
 INST_LAYOUT = ["GRID", "HEX", "RING"]   # render.inst_positions' layouts, in its order
 INST_MOTION = ["STILL", "ORBIT", "WAVE", "RIPPLE"]
 BMP_PATHS = ["STILL", "ORBIT", "FIG-8", "SWAY"]
@@ -850,7 +847,8 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                  fmt=lambda v: f"rate {v:.1f}", group=g)
     r.enum("view.pattern", "Pattern", *_attr(view, "pattern"), PATTERNS, group=g,
            tip="Face pattern — edit hyperspace/shaders/patterns.glsl while the app runs; "
-               "it hot-reloads on save. Patterns read the pattern inputs as u_mod[8].")
+               "it hot-reloads on save. Every pattern reads the same eight inputs: "
+               + ", ".join(i.name for i in patterns.INPUTS) + ".")
     r.continuous("view.pattern_mix", "Pattern mix", *_attr(view, "pattern_mix"),
                  lo=0.0, hi=1.0, fmt=lambda v: f"mix {v:.2f}", group=g)
     r.continuous("view.bmp_alpha", "Bitmap alpha", *_attr(view, "bmp_alpha"),
@@ -866,14 +864,13 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                  fmt=lambda v: f"rate {v:.1f}", group=g)
     r.text("view.bmp_file", "Bitmap file", *_attr(view, "bmp_file"), group=g,
            tip="Image drawn over the face pattern; empty for none.")
-    # the face pattern's modulation inputs — what the shaders read as
-    # u_mod[8]. Base 1.0 is the un-driven look; a routed lane rides on it.
+    # the face pattern's eight inputs — what the shaders read as u_mod[8],
+    # named by the convention in patterns.py (SCALE GLOW WARP SPEED COLOUR
+    # SHARP HUE SPREAD). Base 1.0 is the un-driven look; a routed lane rides on it.
     for k in range(len(view.pattern_mod)):
-        r.continuous(f"pattern.mod.{k}", f"Pattern mod {k + 1}",
+        r.continuous(f"pattern.mod.{k}", patterns.label(k),
                      *_item(lambda: view.pattern_mod, k), lo=0.0, hi=2.6,
-                     fmt=lambda v: f"{v:.2f}", group="pattern",
-                     tip="A modulation input the face patterns read (patterns.glsl). "
-                         "Route an audio band here to drive the pattern.")
+                     fmt=lambda v: f"{v:.2f}", group="pattern", tip=patterns.tip(k))
 
     # ---- rotation: per-plane rate and phase ----
     # rate multiplies dt·speed·RATE[p]; signed so a lane can spin a plane
