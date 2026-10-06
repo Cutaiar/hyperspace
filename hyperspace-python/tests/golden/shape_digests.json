@@ -137,41 +137,41 @@
   "n": 20,
   "m": 30,
   "faces": 12,
-  "sha256": "82853d14d3fcbd137977cb09fabed128337317390b11151862828ef8a12ad85f"
+  "sha256": "1cb5efddf2e3e390f2b8181c64b13349d51ffb8ef2def3eb5299cc9b58d6382a"
  },
  "20": {
   "name": "Rose",
   "n": 186,
   "m": 285,
   "faces": 96,
-  "sha256": "80d918eb0c79fe5886ff5476a0af85f144d34575b6b4a743ebea0f38217722bf"
+  "sha256": "d390d26f4e880547ce929f85f0d07987c5ba129191268ade83c174c31a2724ac"
  },
  "21": {
   "name": "Torus",
   "n": 512,
   "m": 1024,
   "faces": 512,
-  "sha256": "23240a13cc4e670ffd0138a72e945dc6884b4a5cedd1c2258fcfcf22e64b1518"
+  "sha256": "b0fe7db05a614c28d8507312dedb7d4eef7a4f91d5f2e0e89de8491b0b9d906c"
  },
  "22": {
   "name": "Trefoil knot",
   "n": 576,
   "m": 1152,
   "faces": 576,
-  "sha256": "3936f273a0d9b1593ee34001994ec56a11d7d7368a235b7903f627735b0e3e29"
+  "sha256": "a8cee2c0ce75e2795b4739aad8c541399f805aaf06e2832263cac6fb41a4257a"
  },
  "23": {
   "name": "Starfruit",
   "n": 522,
   "m": 1080,
   "faces": 560,
-  "sha256": "756477c362b72a476150f751e24b17e31b4c2e62a3b0b48c62b0a0971fbceadc"
+  "sha256": "b99faf72520b10b474ba1ddc2caf4dd6897885bb7d27ff1cc47829ded3b69808"
  },
  "24": {
   "name": "Möbius strip",
   "n": 320,
   "m": 576,
   "faces": 256,
-  "sha256": "6e0b2cdab0855ff1df7025c86700f31ec10ae240aef08f9993cb5665b3590157"
+  "sha256": "ea186fcefd2ecc09ea85e682aef4bf7cfbb5b8de98b847352e73b1702c3fb880"
  }
 }
