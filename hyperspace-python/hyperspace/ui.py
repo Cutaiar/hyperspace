@@ -33,7 +33,18 @@ from collections.abc import Callable
 
 from imgui_bundle import imgui
 
-from . import apc40, learn, ui_bands, ui_desk, ui_fx, ui_lfo, ui_lookback, ui_presets, ui_routing
+from . import (
+    apc40,
+    learn,
+    ui_bands,
+    ui_desk,
+    ui_fx,
+    ui_lfo,
+    ui_lookback,
+    ui_patterns,
+    ui_presets,
+    ui_routing,
+)
 from .analyzer import N_MAX
 from .audio import AudioEngine
 from .bands import CEIL, KNEE
@@ -396,7 +407,8 @@ CHEATSHEET = [
 # holds the source and the master faders (the level into the analyser);
 # the analyzer page the scene and meters, then the band editor
 # (ui_bands.py); the routing page is the matrix (ui_routing.py); the fx
-# page the effect stack (ui_fx.py); the hands page is the Ultraleap live
+# page the effect stack (ui_fx.py); the faces page the pattern browser
+# and its eight inputs (ui_patterns.py); the hands page is the Ultraleap live
 # view and setup (hands/panel.py); the lfo page the clock and the four
 # LFOs (ui_lfo.py).
 PAGES = [
@@ -1645,24 +1657,7 @@ class Panel:
             imgui.end_table()
 
     def _page_faces(self, dt: float) -> None:
-        self._section("faces & pattern", note="saved with view")
-        self._check("view.faces")
-        imgui.same_line()
-        self._check("view.cut_through")
-        imgui.same_line()
-        self._combo("view.pattern", 140)
-        imgui.same_line()
-        self._slider("view.pattern_mix")
-        if self.renderer is not None and self.renderer.pattern_error:
-            imgui.text_colored(WARN, f"GLSL: {self.renderer.pattern_error}")
-        imgui.spacing()
-        # the pattern's eight inputs — u_mod[8] to the shaders, named by
-        # the convention (patterns.py); base 1 is the un-driven look, a
-        # routed lane rides on it
-        self._section("pattern inputs", "pattern")
-        for p in self.reg.group("pattern"):
-            if p.kind is Kind.CONTINUOUS:
-                self._row(p.id, label=p.label.removeprefix("Pattern ").upper())
+        ui_patterns.page(self, dt)     # the faces, the pattern browser, the eight inputs
 
     def _page_bitmap(self, dt: float) -> None:
         """Bitmap layer, composited over the pattern in the face shader."""
