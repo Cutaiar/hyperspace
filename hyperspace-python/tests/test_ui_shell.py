@@ -331,18 +331,66 @@ def _hands_page_text(rig, monkeypatch) -> tuple[list[str], float]:
     return drawn, room[-1]
 
 
+def _ghost_more(rig, monkeypatch) -> tuple[list[str], list[str], tuple]:
+    """Open the ghost's "more ▸" popup with a click on its chip: (the chip
+    labels the page drew, the lines the popup drew, the chip's rect)."""
+    import hyperspace.hands.panel as hp
+
+    chips: list[tuple[str, tuple]] = []
+    lines: list[str] = []
+    real_chip = hp.ui.lit_chip
+    real_begin = imgui.begin_popup
+    inside = [False]
+
+    def lit_chip(label, *a, **k):
+        hit = real_chip(label, *a, **k)
+        lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        chips.append((label, (lo.x, lo.y, hi.x, hi.y)))
+        return hit
+
+    def begin_popup(str_id, *a, **k):
+        inside[0] = real_begin(str_id, *a, **k) and str_id == hp.GHOST_POPUP
+        return inside[0]
+    with monkeypatch.context() as m:
+        m.setattr(hp.ui, "lit_chip", lit_chip)
+        m.setattr(hp.imgui, "begin_popup", begin_popup)
+        real_colored, real_disabled = imgui.text_colored, imgui.text_disabled
+        m.setattr(hp.imgui, "text_colored", lambda col, s: (
+            inside[0] and lines.append(s), real_colored(col, s))[1])
+        m.setattr(hp.imgui, "text_disabled", lambda s: (
+            inside[0] and lines.append(s), real_disabled(s))[1])
+        imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+        for _ in range(3):
+            chips.clear()
+            frame(rig.panel, "hands")
+        more = [(lb, r) for lb, r in chips if lb.endswith("##ghost.more")]
+        assert len(more) == 1, chips
+        label, rect = more[0]
+        _click(rig.panel, rect)
+        lines.clear()
+        frame(rig.panel, "hands")
+    return [label.split("##")[0]], list(lines), rect
+
+
 def test_the_hands_page_says_the_ghost_axes_are_unmeasured(rig, monkeypatch):
     """Plan 21 WP5 R6: screentop's and HMD's ghost bases are reasoned, not
-    seen; with the ghost on in such a mode the HANDS page says so. Desktop
-    (the measured table) and the ghost off say nothing."""
+    seen; with the ghost on in such a mode the HANDS page says so — the
+    "more ▸" chip turns to "! more ▸" and its popup carries the note.
+    Desktop (the measured table) and the ghost off say nothing."""
+    import hyperspace.hands.panel as hp
+
     rig.reg["ghost.on"].set(True)
     for mode, said in (("desktop", False), ("screentop", True), ("hmd", True),
                        ("sideways", False)):        # unknown: drawn as desktop
         rig.panel.hands.cfg["mode"] = mode
-        drawn, _ = _hands_page_text(rig, monkeypatch)
-        assert any("unmeasured" in s and mode in s for s in drawn) is said, mode
+        assert any("unmeasured" in t and mode in t for t, _ in hp.ghost_notes(rig.panel)) \
+            is said, mode
+        labels, lines, _ = _ghost_more(rig, monkeypatch)
+        assert labels == [hp.GHOST_MORE_WARN if said else hp.GHOST_MORE], mode
+        assert any("unmeasured" in s and mode in s for s in lines) is said, mode
     rig.reg["ghost.on"].set(False)
     rig.panel.hands.cfg["mode"] = "hmd"
+    assert hp.ghost_notes(rig.panel) == []
     assert not any("unmeasured" in s for s in _hands_page_text(rig, monkeypatch)[0])
 
 
@@ -365,18 +413,150 @@ def test_the_hands_page_says_why_the_ghost_or_the_tracker_is_off(rig, monkeypatc
     assert any(s.startswith("tracker off") for s in _hands_page_text(rig, monkeypatch)[0])
 
 
-def test_the_hands_page_fits_with_every_ghost_line(rig, monkeypatch):
-    """The HANDS page at its tallest for the ghost: on, a guide, tethers,
-    an unmeasured mode and an error line — and it still does not scroll."""
-    for pid, v in (("ghost.on", True), ("ghost.guide", 1), ("ghost.tethers", True)):
+LONG_GHOST_ERROR = ("ghost hands: ValueError: setting an array element with a sequence. The "
+                    "requested array has an inhomogeneous shape after 1 dimensions.")
+
+
+def _every_ghost_line(rig) -> None:
+    """The ghost at its fullest: on, a guide, tethers, MARIONETTE (the
+    longest style), an unmeasured mode and a long error."""
+    for pid, v in (("ghost.on", True), ("ghost.guide", 2), ("ghost.tethers", True),
+                   ("ghost.style", 4)):
         rig.reg[pid].set(v)
     rig.panel.hands.cfg["mode"] = "screentop"
-    rig.panel.renderer = SimpleNamespace(ghost=SimpleNamespace(
-        error="ghost hands: ValueError: setting an array element with a sequence. The "
-              "requested array has an inhomogeneous shape after 1 dimensions."))
-    drawn, over = _hands_page_text(rig, monkeypatch)
-    assert any("unmeasured" in s for s in drawn) and any(s.startswith("ghost hands") for s in drawn)
+    rig.panel.renderer = SimpleNamespace(ghost=SimpleNamespace(error=LONG_GHOST_ERROR))
+
+
+def test_the_hands_page_fits_with_every_ghost_line(rig, monkeypatch):
+    """The HANDS page at its tallest for the ghost: on, a guide, tethers,
+    an unmeasured mode and an error — and it still does not scroll. The
+    ghost is two lines; the notes are in its "more ▸" popup, whole."""
+    import hyperspace.hands.panel as hp
+
+    _every_ghost_line(rig)
+    _, over = _hands_page_text(rig, monkeypatch)
     assert over <= 0
+    labels, lines, _ = _ghost_more(rig, monkeypatch)
+    assert labels == [hp.GHOST_MORE_WARN]
+    assert LONG_GHOST_ERROR in lines and any("unmeasured" in s for s in lines)
+
+
+def _ghost_rects(rig, monkeypatch, display=CONTROL_SIZE, panel_w=None):
+    """Every item the ghost block draws — the checks, the label cells'
+    dummies (the label text is drawn in them), the slider, the combos and
+    the chip — as screen rects, and the page's right edge, after three
+    frames at `display` with the CONTROLS window `panel_w` wide."""
+    import hyperspace.hands.panel as hp
+    import hyperspace.ui as ui_mod
+
+    rects: list[tuple[str, tuple]] = []
+    right: list[float] = []
+    live = [False]
+
+    def item(name, real):
+        def rec(label, *a, **k):
+            out = real(label, *a, **k)
+            if live[0]:
+                lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+                key = label if isinstance(label, str) else name
+                rects.append((key, (lo.x, lo.y, hi.x, hi.y)))
+            return out
+        return rec
+    real_ghost = hp._ghost
+
+    def ghost(panel):
+        right.append(imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x)
+        live[0] = True
+        try:
+            real_ghost(panel)
+        finally:
+            live[0] = False
+    with monkeypatch.context() as m:
+        for fn in ("checkbox", "slider_float", "slider_int", "combo", "button", "dummy"):
+            m.setattr(ui_mod.imgui, fn, item(fn, getattr(imgui, fn)))
+        m.setattr(hp, "_ghost", ghost)
+        imgui.get_io().display_size = imgui.ImVec2(*display)
+        for _ in range(3):
+            rects.clear()
+            imgui.new_frame()
+            if panel_w is not None:
+                imgui.set_window_size("CONTROLS", imgui.ImVec2(panel_w, display[1] - 24))
+            rig.panel.reg["ui.page"].set(PAGE_KEYS.index("hands"))
+            rig.panel.draw(1 / 60, 60.0)
+            imgui.end_frame()
+    return rects, right[-1]
+
+
+@pytest.mark.parametrize("display, panel_w", [
+    (CONTROL_SIZE, None),                     # the app's control window, the panel as it opens
+    ((320, CONTROL_SIZE[1]), None),           # the narrowest window placement opens (MIN_SIZE)
+    (CONTROL_SIZE, 440),                      # the panel dragged narrower: the groups wrap
+])
+def test_the_ghost_controls_never_overlap_or_run_off_the_page(rig, monkeypatch, display, panel_w):
+    """The owner's report of 2026-10-05: with the ghost on, the opacity,
+    mirror and guide controls were drawn over the "Ghost hands" label —
+    `_label_cell` put the control at a fixed offset from the line's start
+    even mid-line. With every ghost control showing, no two of the ghost's
+    items overlap and none runs past the page's right edge."""
+    from hyperspace import placement
+
+    assert placement.MIN_SIZE[0] == 320
+    _every_ghost_line(rig)
+    rects, right = _ghost_rects(rig, monkeypatch, display, panel_w)
+    names = [k.split("##")[-1] for k, _ in rects]
+    for want in ("ghost.on", "ghost.alpha", "ghost.style", "ghost.guide", "ghost.more"):
+        assert want in names, (want, names)
+    for k, (a, ra) in enumerate(rects):
+        assert ra[2] <= right + 0.5, f"{a!r} runs past the page ({ra[2]:.1f} > {right:.1f})"
+        for b, rb in rects[k + 1:]:
+            apart = ra[2] <= rb[0] + 0.5 or rb[2] <= ra[0] + 0.5 \
+                or ra[3] <= rb[1] + 0.5 or rb[3] <= ra[1] + 0.5
+            assert apart, f"{a!r} {ra} overlaps {b!r} {rb}"
+    lines = sorted({round(r[1]) for _, r in rects})
+    if panel_w is None:
+        assert len(lines) == 2, lines             # two lines at the panel's own width
+    else:
+        assert len(lines) > 2, lines              # narrower: a group wraps rather than overlaps
+
+
+def test_a_percent_readout_reaches_imgui_doubled(rig, monkeypatch):
+    """A slider's readout is imgui's printf format: Ghost opacity's "60%"
+    goes in as "60%%", so the slider shows "60%" and not "60"."""
+    fmts: list[str] = []
+    real = imgui.slider_float
+    monkeypatch.setattr(imgui, "slider_float", lambda label, v, lo, hi, fmt="%.3f", *a: (
+        fmts.append((label, fmt)), real(label, v, lo, hi, fmt, *a))[1])
+    rig.reg["ghost.on"].set(True)
+    assert rig.reg["ghost.alpha"].text() == "60%"
+    frame(rig.panel, "hands")
+    assert ("##ghost.alpha", "60%%") in fmts
+
+
+def test_the_ghost_more_popup_has_mirror_and_tethers(rig, monkeypatch):
+    """Mirror and Tethers are in the "more ▸" popup; Tethers is greyed out
+    with "with a guide on" until a guide is chosen. A click on Mirror in
+    the popup sets ghost.mirror."""
+    labels: list[str] = []
+    real = imgui.checkbox
+    rects: dict[str, tuple] = {}
+
+    def checkbox(label, v):
+        out = real(label, v)
+        labels.append(label)
+        lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        rects[label] = (lo.x, lo.y, hi.x, hi.y)
+        return out
+    rig.reg["ghost.on"].set(True)
+    monkeypatch.setattr(imgui, "checkbox", checkbox)
+    _, lines, _ = _ghost_more(rig, monkeypatch)
+    assert "Mirror##ghost.mirror" in labels and "Tethers##ghost.tethers" in labels
+    assert "with a guide on" in lines
+    assert rig.reg["ghost.mirror"].value is False
+    _click(rig.panel, rects["Mirror##ghost.mirror"])
+    assert rig.reg["ghost.mirror"].value is True
+    rig.reg["ghost.guide"].set(1)
+    _, lines, _ = _ghost_more(rig, monkeypatch)
+    assert "with a guide on" not in lines
 
 
 class StandInWorker:
@@ -1844,10 +2024,9 @@ def test_the_click_wording_is_switched_on(rig, monkeypatch):
 
 
 def test_the_ghost_style_is_on_the_hands_page_while_the_ghost_is_on(rig, monkeypatch):
-    """Plan 21 WP6: the style combo leads the ghost's second line (the
-    first has no room) while the ghost is on, with the error and the
-    unmeasured-mode note after it; off, it is not drawn. The page still
-    fits with everything showing (test_the_hands_page_fits_with_every_ghost_line)."""
+    """Plan 21 WP6: the style combo leads the ghost's second line, the
+    guide beside it, while the ghost is on; off, it is not drawn. The page
+    still fits with everything showing (test_the_hands_page_fits_with_every_ghost_line)."""
     combos: list[str] = []
     real = Panel._combo
 

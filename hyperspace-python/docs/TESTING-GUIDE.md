@@ -586,16 +586,18 @@ back.
 
 **Do:**
 1. F2 (FACES). BITMAP page: load a picture.
-2. FX page: open Kaleidoscope, switch it on, and on its strip's blend row
-   change the middle list (**target**) from `frame` to `faces`.
+2. FX page: click Kaleidoscope's name to open its strip and switch it
+   on; at the right end of the strip's title line, after **ONTO**, click
+   **faces** (lit: **frame**).
 3. Click **screen**, then **per face**.
 4. Unload the picture, set the FACES page's pattern to FLAT, aim Plasma
    at the faces too.
 5. VIEW page: switch Faces off. Then set Instances to 0.
-6. ⌘Z after the target change and after a screen / per face click.
+6. ⌘Z after the **faces** click and after a screen / per face click.
 
-**Right if:** (2) the outline shape is no longer folded but the picture
-inside each face is; the status at the top of the FX page becomes two
+**Right if:** (2) **faces** lights; the outline shape is no longer folded
+but the picture inside each face is; the strip reads "faint on the
+translucent faces — Brightness lifts them"; the status at the top of the FX page becomes two
 rows, `frame …` and `faces Kaleidoscope`, the second ending in two chips
 **per face** (lit) and **screen**; Kaleidoscope's chip shows a filled
 diamond (an outlined one when off) and its hover says "on the faces".
@@ -2212,9 +2214,12 @@ lists.
 
 **Do:** set `[hands]` `mode = "screentop"`; launch; tick **Ghost hands**.
 
-**Right if:** under the ghost's line the HANDS page reads "ghost axes for
-screentop are unmeasured: left/right and up may be wrong" (in desktop
-mode nothing); the page does not scroll with every ghost control showing.
+**Right if:** the ghost's **more ▸** chip reads **! more ▸** in the
+warning colour, and clicking it shows "ghost axes for screentop are
+unmeasured: left/right and up may be wrong — Mirror flips left for
+right" (in desktop mode the chip reads **more ▸** and says nothing); the
+page does not scroll with every ghost control showing, and no control
+is drawn over another or over the **Ghost hands** label.
 
 **Changes:** put `mode = "desktop"` back.
 
@@ -2366,9 +2371,9 @@ it; the dim finishes arriving after F2.
 
 **Needs:** hand camera, APC40.
 
-**Do:** HANDS page: right-click **Ghost mirror**, Ghost guide, Ghost
-tethers and **Style**; then Ghost hands and Ghost opacity. Learn desk
-on Ghost mirror, then press a pad. OUTPUT page: right-click its ticks.
+**Do:** HANDS page, Ghost hands on: right-click **Guide** and **Style**,
+and in **more ▸** right-click **Mirror** and **Tethers**; then Ghost
+hands and Opacity. Learn desk on Mirror, then press a pad. OUTPUT page: right-click its ticks.
 
 **Right if:** the four have **Learn desk** but no **Learn hand ▸**; Ghost
 hands and Ghost opacity still have Learn hand; the pad flips the mirror;
@@ -2574,8 +2579,8 @@ alone through the effects" state.
 **Needs:** glass, projector, hand camera.
 
 **Do:** glass: through effects **on**; projector: **off**. F5 (TRIP),
-then F4 (WAKE). Switch every effect off. Then HANDS page: Ghost guide
-BESIDE, then ON HAND, Ghost tethers on.
+then F4 (WAKE). Switch every effect off. Then HANDS page: Guide
+BESIDE, then ON HAND, Tethers (in **more ▸**) on.
 
 **Right if:** on the glass the hands bend and recolour with the shape; on
 the projector they are clean; on neither do the hands leave echoes or
@@ -2684,7 +2689,8 @@ you perform, both hands in the box. Check:
   finger follows, thumb on the correct side, nothing bending backwards.
 - **Directions from the performer's side:** right is right, up is up,
   toward the screen goes away; palm down shows the back of the hand.
-  Then tick **Ghost mirror** and look in the glass as the audience will.
+  Then tick **Mirror** (in **more ▸**) and look in the glass as the
+  audience will.
 - **No lag:** shake a hand — the ghost stays on it; hold still — no
   shimmer.
 - **The box fills the frame:** reach each calibrated corner — the hand
@@ -2692,7 +2698,7 @@ you perform, both hands in the box. Check:
 - **Leaving:** pull a hand out — it fades where it was in about a third
   of a second and fades back in on return; nothing freezes or jumps.
 - **Off is off:** untick Ghost hands — the picture is as before.
-- **The guide:** Ghost guide BESIDE. Move the right hand straight right,
+- **The guide:** Guide BESIDE. Move the right hand straight right,
   then up, then toward the screen: each time one ball moves (red, green,
   blue) and the others stay. Tilt fingers up, turn them outward, roll
   thumb-up: the red arc's dot rises, the green's goes out, the blue's
@@ -2700,7 +2706,7 @@ you perform, both hands in the box. Check:
   the grab ring shrinks round a full ball. Route a few left-hand axes and
   none on the right (ROUTING): the routed left ones keep their colour,
   everything on the right is grey and smaller but still moves. ON HAND:
-  the gauge rides the palm. Tick **Ghost tethers**: each routed left axis
+  the gauge rides the palm. Tick **Tethers** (in **more ▸**): each routed left axis
   gets a line in its colour to a label at the left edge naming its
   setting; the lines hold still while the balls move; untick and the
   gauges stay.
@@ -3034,7 +3040,7 @@ with.
 switched on on the HANDS page.
 
 **Ghost mirror** — flips the ghost hands left to right, for viewing in
-the glass.
+the glass (HANDS page, **Mirror** in the ghost's **more ▸**).
 
 **Glass (the) / Pepper's Ghost** — the stage rig: a screen reflected in
 angled glass so the picture seems to float in the air. Any see-through

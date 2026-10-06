@@ -143,8 +143,11 @@ effect presets are `library/fx/*.json`.
   name** onto another to put it before that one (or onto the right half
   of the last to move it to the end): one undo step.
 - **Aimed at the faces.** Each effect's `fx.<name>.target` is `frame`
-  (the default) or `faces` (the strip's **target** combo; not
-  modulatable). Effects aimed at the faces run first over a 1024²
+  (the default) or `faces`: the **ONTO frame · faces** chips at the
+  right end of the open strip's title line, the lit one where it runs
+  (not modulatable). The faces are translucent, so an effect on them
+  reads faint — the strip says so while it runs there; Brightness lifts
+  them. Effects aimed at the faces run first over a 1024²
   picture of what a face shows, and the faces show that picture — per
   face (at each face's own UV, turning with the shape) or screen (one
   still picture seen through the faces), `fx.face_map`. A chip aimed at
@@ -749,8 +752,13 @@ axis (click to edit); the selected axis's transfer plot and settings
 (invert, centred, dead zone, curve, attack, decay, on exit, rest,
 return, bounce, MIDI out, mirror, solo); **feel & calibration** —
 steadiness, response, catch, MIDI rate, hysteresis, pinch thresholds,
-**Learn depth**, **calibrate 20 s**, **reset ranges**; and the ghost
-hands' line.
+**Learn depth**, **calibrate 20 s**, **reset ranges**; and, under the
+box, the ghost hands: the **Ghost hands** tick; while it is on,
+**Opacity** and a **more ▸** chip on its line and **Style** and
+**Guide** on the next. **more ▸** opens Mirror, Tethers (with a guide
+on) and the ghost's notes — an error, or the unmeasured-mode note; while
+there is one the chip reads **! more ▸** in the warning colour and its
+hover says it. A narrower panel wraps a group onto the next line.
 
 **The interaction box.** A hand counts only while its palm is inside a
 box in the camera's millimetres (x across, y up, z toward the
@@ -786,7 +794,7 @@ route onto one is dropped at load. The ghost has its own fixed camera
 framing the box (or, with no box, the calibrated ranges); a hand leaving
 fades out over 0.3 s and one coming back fades in over 0.1 s. Desktop is
 the only tracking mode whose axes have been measured; with `screentop`
-or `hmd` and the ghost on, the HANDS page says so. Where the hands show
+or `hmd` and the ghost on, the HANDS page says so (in **! more ▸**). Where the hands show
 on each output, and whether the effects bend them, is §14.
 
 **Without a camera.** `tools/hands_tape.py record <file>` keeps a few

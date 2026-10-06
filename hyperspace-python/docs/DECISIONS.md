@@ -143,7 +143,7 @@ replaces a row, rewrite that row instead of adding a new one.
 | The FX page's open strip is chosen by name, not index. It is in no file and is not an undo step. | `FxState.sel_name` | owner |
 | On a chip, the name opens the effect and the dot at its left switches it (a diamond when the effect is aimed at the faces). Chips sit three to a row. | `ui_fx._chip`, `ui_fx.CHIPS_PER_ROW` | row 45 |
 | The chip grid is the chain view. Dragging a chip onto another reorders the chain as one undo step. The order slider stays. | `fx.reordered` | row 67 |
-| An effect is re-aimed by the open strip's target combo. A drag never changes a target. | `ui_fx.TARGET_W` | row 68 |
+| An effect is re-aimed by the ONTO frame / faces chips on the open strip's title line. A drag never changes a target. | `ui_fx._strip_header` | row 68 |
 | An open effect that is not running says why, and its controls are dimmed by a veil but stay live. | `ui_fx.why_idle` | row 46 |
 | **The dream is temporal**: one running buffer blended with each frame, a few gradient steps per frame. | `dream.py` | owner |
 | The compositor re-colours the dream buffer (`dream.hue / sat / tint`). Echoes pass untouched. | `lookback.py` | owner |

@@ -17,7 +17,10 @@ Top to bottom:
                            tracked but outside it is a hollow, dim ring —
                            it reads absent. Beside it a height gauge: a
                            tick per hand, a bracket for the box's y
-  the axes                 one row each: the output y as a white bar,
+  ghost hands              the switch; while on, Opacity and "more ▸"
+                           (Mirror, Tethers, the ghost's notes), then
+                           Style and Guide (see _ghost)
+  the axes               one row each: the output y as a white bar,
                            where the hand is (the shaped target) as a
                            hairline, the rest value as a dim tick, the
                            MIDI out on the right. Click a row to edit it.
@@ -63,10 +66,8 @@ GAUGE_MM = (80.0, 400.0)    # the gauge, bottom to top: the range a dot's size u
 OUTSIDE_ALPHA = 0.4
 FACE_PAD = 12.0     # a box face is never drawn nearer the frame than this
 PLOT_W = 96.0
-GHOST_LABEL_W = 62.0    # the ghost line's "Opacity" and "Guide" labels
-GHOST_ALPHA_W = 130.0
-GHOST_GUIDE_W = 120.0
-GHOST_STYLE_W = 150.0   # its own line: "MARIONETTE" whole
+GHOST_ALPHA_MIN = 100.0     # the opacity slider never narrower: "100%" and its grab
+GHOST_NOTE_W = 360.0        # the ghost's "more" popup wraps its notes at this width
 CAL_SECONDS = 20.0
 LEFT = imgui.ImVec4(0.92, 0.92, 0.92, 1.0)
 
@@ -167,52 +168,140 @@ def page(panel, dt: float) -> None:
         _calibrate(io, settings, k)
 
 
+GHOST_MORE = "more ▸"          # the chip that opens the ghost's popup
+GHOST_MORE_WARN = "! more ▸"   # …while the popup holds a note to read
+GHOST_POPUP = "##ghost.more"
+
+
 def _ghost(panel) -> None:
     """The ghost hands' display (hyperspace/ghost.py) — the host's params,
-    shown here because this is where the hands are looked at."""
+    shown here because this is where the hands are looked at.
+
+    Two lines while the ghost is on — the page has no room for a third
+    (test_ui_shell): ``[x] Ghost hands  OPACITY [slider]  more ▸`` then
+    ``STYLE [combo]  GUIDE [combo]``. "more ▸" opens a popup with the
+    rig's settings (Mirror, and Tethers once a guide is on) and the
+    ghost's notes; while there is a note the chip reads "! more ▸" in the
+    warning colour and its hover says it. Each group goes on the line only
+    when it fits beside what is there, so a narrower panel wraps it rather
+    than drawing it over its neighbour. With the ghost off: the switch,
+    and the ghost's error under it if it has one."""
     if "ghost.on" not in panel.reg:
         return
-    # one line of controls, whatever is on: the page has to fit the
-    # control window with every ghost control showing (test_ui_shell)
+    reg = panel.reg
+    on = bool(reg["ghost.on"].value)
+    notes = ghost_notes(panel)
+    sp = imgui.get_style().item_spacing.x
+    right = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
     panel._check("ghost.on")
-    if panel.reg["ghost.on"].value:
+    if not on:
+        err = [t for t, warn in notes if warn]
+        if err:             # a refused build says so with the ghost off too
+            _note_line(err[0])
+        return
+    more = GHOST_MORE_WARN if notes else GHOST_MORE
+    more_w = ui.chip_w(more)
+    label_w = ui._micro_width("Opacity") + ui.LABEL_GAP
+    if _beside(right, label_w + GHOST_ALPHA_MIN):
         imgui.same_line()
-        panel._check("ghost.mirror")
+    # the slider takes the line's room the chip leaves, or the whole line
+    # when the chip has to wrap under it
+    x = imgui.get_cursor_screen_pos().x + label_w
+    alpha_w = right - x - sp - more_w
+    if alpha_w < GHOST_ALPHA_MIN:
+        alpha_w = right - x
+    panel._label_cell("Opacity", width=label_w)
+    panel._slider("ghost.alpha", alpha_w)
+    if _beside(right, more_w):
         imgui.same_line()
-        panel._label_cell("Opacity", width=GHOST_LABEL_W)
-        panel._slider("ghost.alpha", GHOST_ALPHA_W)
-        if "ghost.guide" in panel.reg:
+    _more_chip(panel, more, notes)
+    for k, (pid, label) in enumerate((("ghost.style", "Style"), ("ghost.guide", "Guide"))):
+        if pid not in reg:
+            continue
+        lw = ui._micro_width(label) + ui.LABEL_GAP
+        cw = _combo_w(reg[pid].names)
+        if k and _beside(right, lw + cw):
             imgui.same_line()
-            panel._label_cell("Guide", width=GHOST_LABEL_W)
-            panel._combo("ghost.guide", GHOST_GUIDE_W)
-            if panel.reg["ghost.guide"].value and "ghost.tethers" in panel.reg:
-                imgui.same_line()
-                panel._check("ghost.tethers")
-    # one more line at most, under it: the style (below), why the ghost could not build or draw
-    # (ghost.Ghost.error — a refused build stays until a reload, anything
-    # else until the ghost goes off), then, with the ghost on in screentop
-    # or HMD, that those modes' axes are reasoned, not seen (ghost.MODES:
-    # only desktop's are the hands/core.py table; hand check Q9)
+        panel._label_cell(label, width=lw)
+        panel._combo(pid, cw)
+    _more_popup(panel, notes)
+
+
+def _beside(right: float, w: float) -> bool:
+    """Does an item `w` px wide still fit on the line, after the last item
+    and the spacing, before `right` (screen x)? Then `same_line()` it."""
+    return imgui.get_item_rect_max().x + imgui.get_style().item_spacing.x + w <= right + 0.5
+
+
+def _combo_w(names) -> float:
+    """A combo just wide enough for its longest entry, whole: the text, the
+    frame's padding either side and the arrow (one frame square)."""
+    s = imgui.get_style()
+    return (max(imgui.calc_text_size(n).x for n in names) + 2 * s.frame_padding.x
+            + imgui.get_frame_height())
+
+
+def _note_line(text: str) -> None:
+    """One line in the warning colour, cut to the page's width with the
+    whole text on hover: a line that ran on would be cut by the page."""
+    shown = ui.fit_text(text, imgui.get_content_region_avail().x)
+    imgui.text_colored(ui.WARN, shown)
+    if shown != text and imgui.is_item_hovered():
+        imgui.set_tooltip(text)
+
+
+def ghost_notes(panel) -> list[tuple[str, bool]]:
+    """What the page has to say about the ghost, as (text, warn): why it
+    could not build or draw (ghost.Ghost.error — a refused build stays
+    until a reload, anything else until the ghost goes off), then, with
+    the ghost on in screentop or HMD, that those modes' axes are reasoned,
+    not seen (ghost.MODES: only desktop's are the hands/core.py table;
+    hand check Q9). An unknown mode draws as desktop."""
+    out = []
     err = getattr(getattr(getattr(panel, "renderer", None), "ghost", None), "error", "")
-    mode = ghost_mode(getattr(panel, "hands", None))
-    # an unknown mode draws as desktop
-    guess = (panel.reg["ghost.on"].value and mode in GHOST_MODES and mode != "desktop")
-    # the style leads that line while the ghost is on: the line above has
-    # no room for a combo wide enough to read "MARIONETTE" (plan 21 WP6),
-    # and a line of its own would push the page past the window
-    styled = panel.reg["ghost.on"].value and "ghost.style" in panel.reg
-    if styled:
-        panel._label_cell("Style", width=GHOST_LABEL_W)
-        panel._combo("ghost.style", GHOST_STYLE_W)
     if err:
-        if styled:
+        out.append((err, True))
+    mode = ghost_mode(getattr(panel, "hands", None))
+    if panel.reg["ghost.on"].value and mode in GHOST_MODES and mode != "desktop":
+        note = (f"ghost axes for {mode} are unmeasured: left/right and up may be wrong"
+                " — Mirror flips left for right")
+        out.append((note, False))
+    return out
+
+
+def _more_chip(panel, label: str, notes) -> None:
+    if ui.lit_chip(f"{label}##ghost.more", False, ui.WARN if notes else None):
+        imgui.open_popup(GHOST_POPUP)
+    if imgui.is_item_hovered():
+        tip = "Mirror" + (" and Tethers" if "ghost.tethers" in panel.reg else "")
+        imgui.set_tooltip("\n".join([f"{tip}, and the ghost's notes.", *(t for t, _ in notes)]))
+
+
+def _more_popup(panel, notes) -> None:
+    """The rig's ghost settings and the ghost's notes, off "more ▸"."""
+    if not imgui.begin_popup(GHOST_POPUP):
+        return
+    reg = panel.reg
+    if "ghost.mirror" in reg:
+        panel._check("ghost.mirror", "Mirror")
+    if "ghost.tethers" in reg:
+        guided = "ghost.guide" not in reg or bool(reg["ghost.guide"].value)
+        imgui.begin_disabled(not guided)
+        panel._check("ghost.tethers", "Tethers")
+        imgui.end_disabled()
+        if not guided:
             imgui.same_line()
-        imgui.text_colored(ui.WARN, err)
-    if guess:
-        if err or styled:
-            imgui.same_line()
-        imgui.text_disabled(f"ghost axes for {mode} are unmeasured: "
-                            "left/right and up may be wrong")
+            imgui.text_disabled("with a guide on")
+    if notes:
+        imgui.separator()
+        imgui.push_text_wrap_pos(imgui.get_cursor_pos_x() + GHOST_NOTE_W)
+        for text, warn in notes:
+            if warn:
+                imgui.text_colored(ui.WARN, text)
+            else:
+                imgui.text_disabled(text)
+        imgui.pop_text_wrap_pos()
+    imgui.end_popup()
 
 
 def ghost_mode(io) -> str:

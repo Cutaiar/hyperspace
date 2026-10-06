@@ -308,9 +308,12 @@ def test_the_scale_choices_leave_out_the_macros_and_a_macro_shows_its_owner(
     router.labels["hand"] = ["R height"]
     fmts: list[str] = []
     real = imgui.slider_float
+    # what the slider shows: imgui reads the readout as a printf format,
+    # so the panel hands it "%%" for each "%" it is to print
     monkeypatch.setattr(imgui, "slider_float",
                         lambda label, v, lo, hi, fmt="%.3f", *a: (
-                            fmts.append(fmt), real(label, v, lo, hi, fmt, *a))[1])
+                            fmts.append(fmt.replace("%%", "%")),
+                            real(label, v, lo, hi, fmt, *a))[1])
     frame(panel, "routing")
     assert panel.ghosts == 0 and "100 %" in fmts and "100 % → 60 %" not in fmts
     router.modulate()

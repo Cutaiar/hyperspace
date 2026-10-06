@@ -58,21 +58,32 @@ rows 65–71.
   **screen** chips. The faces row says `(Faces is off)` while
   `view.faces` is off, `(no copies to show them)` at 0 copies, and the
   face program's error when it did not build. A chip aimed at the faces
-  has a **diamond** LED instead of a dot. An effect aimed at the faces
-  while Faces is off says so on its strip, with a **faces on** chip.
-  With nothing aimed at the faces the page is the one status line it
-  always was.
-- **Code.** `ui_fx.page`, `_status`, `_faces_row`, `why_idle`,
-  `TARGET_W`, `DIAMOND`.
+  has a **diamond** LED instead of a dot. Where an effect goes is the
+  open strip's title line: at its right end **ONTO** and two chips,
+  **frame** and **faces**, the lit one where it runs; a click on the
+  other moves it (one undo step). While the open effect runs on the
+  faces the line under the title reads "faint on the translucent faces
+  — Brightness lifts them". An effect aimed at the faces while Faces is
+  off says so on its strip, with a **faces on** chip. With nothing aimed
+  at the faces the page is the one status line it always was.
+- **Code.** `ui_fx.page`, `_strip_header`, `_status`, `_faces_row`,
+  `why_idle`, `ONTO`, `FAINT_FACES`, `DIAMOND`.
 - **Tests.** `tests/test_fx.py::test_the_status_reads_per_target`,
   `::test_the_map_chips_set_fx_face_map`,
-  `::test_the_strips_target_combo_moves_an_effect_between_chains`,
+  `::test_the_strips_onto_chips_move_an_effect_between_chains`,
   `::test_a_chip_aimed_at_the_faces_is_marked`,
   `::test_why_idle_names_faces_off`,
   `::test_the_page_fits_with_the_faces_row_showing`.
-- **Demo.** `tools/fx_page_demo.py --faces` (hidden window).
+- **Demo.** `tools/fx_page_demo.py --faces` and `--onto` (hidden
+  window); `tools/fx_faces_scene_shots.py` (offscreen): the default view
+  and party-tumble's with Plasma on the frame, on the faces, and
+  Kaleidoscope on the faces — on the faces the change stays inside the
+  shape and reads faint at every Brightness, and Kaleidoscope on FLAT
+  faces changes nothing visible (a fold of a flat fill is the same fill).
 
-![The FX page with effects on the faces and on the frame](assets/20-fx-dream-looks/fx-page-faces.png)
+![The open strip's title line: ONTO frame · faces](assets/20-fx-dream-looks/fx-onto-after-faces.png)
+
+![Plasma on the frame and on the faces, offscreen](assets/20-fx-dream-looks/fx-faces-scene.png)
 
 ### Drag to reorder
 
