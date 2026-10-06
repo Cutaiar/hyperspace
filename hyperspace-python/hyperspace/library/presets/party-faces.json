@@ -1,7 +1,7 @@
 {
  "schema": "hyperspace.preset/2",
  "name": "FACES",
- "note": "party-faces: a tesseract, faces lit in hex cells, turning through itself in XW and YW; the right hand's roll rescales the cells",
+ "note": "party-faces: a tesseract, faces lit in hex cells, turning through itself in XW and YW; the right hand's roll bends the cells",
  "values": {
   "view.shape": 3,
   "view.speed": 0.2,

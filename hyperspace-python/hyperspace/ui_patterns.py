@@ -18,12 +18,12 @@ Top to bottom:
   mode on show, its line, and the GLSL error while patterns.glsl does not
   compile (the last good version keeps drawing).
 - **inputs**: the eight pattern inputs (`pattern.mod.0–7`), two lines
-  each. The first is the convention's name, the slider — `base →
-  effective` while a source rides it, the white bar at the effective
-  value — and a "1" chip that puts the base back to neutral, the pattern
-  as designed. The second is what the input does *in this mode*
-  (`patterns.effect`) and, at its right end, what drives it: the route
-  in its adapter's words with any macro scaling it, a desk control, a
+  each. The first is the convention's name, what the input does *in this
+  mode* (`patterns.effect`) and, at its right end, what drives it. The
+  second is the slider — `base → effective` while a source rides it, the
+  white bar at the effective value — and a "1" chip that puts the base
+  back to neutral, the pattern as designed. What drives it is the route
+  in its adapter's words with any macro scaling it, a desk or session control, a
   macro that sets its base (`drivers`) — a click opens ROUTING filtered
   to the input. An input nothing drives offers "+ <source>" there: a
   push route at the factory depth (routing.PATTERN_DEPTH) from the source
@@ -61,7 +61,7 @@ ALL_NEUTRAL_TIP = "Every input back to 1.0 — the pattern as designed. One undo
 NEUTRAL_STEP = "neutral pattern inputs"     # the undo step "all neutral" pushes
 PREV, NEXT = "‹", "›"
 FACES_OFF = "Faces is off"
-FLAT_NOTE = "a plain fill: no pattern runs, so the eight inputs do nothing — pick a pattern above"
+FLAT_NOTE = "a plain fill: no pattern runs, so the inputs do nothing"
 FLAT_ROW = "FLAT reads no input"
 HINT = "right-click an input: learn a knob or a hand"
 ROUTE_DEPTH = PATTERN_DEPTH   # a "+ source" route's push depth: the factory's
@@ -300,13 +300,15 @@ def drivers(panel, pid: str) -> str:
     """What drives `pid`, one line: each route in its adapter's words
     ("SUB pushes +0.5", "(off)" while disabled) with the macros scaling it
     ("× macro.2"), each desk control on it ("K3 sets it"), each macro that
-    sets its base ("macro.4 sets its base"). "" when nothing does, or with
+    sets its base ("macro.4 sets its base"). A desk control is the loaded
+    preset's or the session's (bindings.json's): either sets the base, so
+    a row it drives offers no "+ <source>". "" when nothing does, or with
     no table."""
     table = panel._table()
     if table is None:
         return ""
     router = ui_routing.router_of(panel)
-    desk, routes, _session = learn.bound(table, (pid,))
+    desk, routes, session = learn.bound(table, (pid,))
     macros = getattr(table, "macros", {}) or {}
     said = []
     for b in routes:
@@ -314,7 +316,7 @@ def drivers(panel, pid: str) -> str:
         for mid, _sub in table.depth_subs(b):
             line += f" × {macros[mid].label or mid}"
         said.append(line if b.enabled else f"{line} (off)")
-    said += [f"{ui_routing.control_glyph(table, b)} sets it" for b in desk]
+    said += [f"{ui_routing.control_glyph(table, b)} sets it" for b in desk + session]
     said += [f"{m.label or mid} sets its base" for mid, m in macros.items()
              if any(s.base == pid for s in m.subs)]
     return " · ".join(said)

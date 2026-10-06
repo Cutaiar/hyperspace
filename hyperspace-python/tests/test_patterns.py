@@ -127,6 +127,18 @@ def test_the_shader_has_a_case_for_every_mode_in_the_table():
     assert cases == set(range(len(MODES)))
 
 
+def test_no_variable_shadows_a_function_of_the_shaders():
+    """A local named like a function (HEX's `pulse` once PULSE's pulse()
+    existed) is legal GLSL that Mesa and glslang take, and a classic for a
+    stricter compiler to refuse; the face shaders keep the names apart."""
+    common = (ROOT / "hyperspace" / "shaders" / "_common.glsl").read_text()
+    src = common + SHADER.read_text()
+    types = r"(?:float|int|bool|[biu]?vec[234]|mat[234])"
+    funcs = set(re.findall(rf"^{types}\s+(\w+)\s*\(", src, re.MULTILINE))
+    names = set(re.findall(rf"\b{types}\s+(\w+)\s*[=;,)]", src))
+    assert funcs and not funcs & names, funcs & names
+
+
 @pytest.mark.skipif(shutil.which("glslangValidator") is None,
                     reason="glslangValidator (the Khronos reference compiler) not installed")
 def test_the_face_shaders_pass_the_reference_compiler():
@@ -292,3 +304,31 @@ def test_every_phrase_fits_a_faces_row():
         assert len(m.about) <= 72, m.name
         for d in m.does:
             assert len(d) <= 29, (m.name, d)
+
+
+def test_pulses_hats_still_sparkle_hours_into_a_set():
+    """PULSE picks its lit points by a hash of the sparkle's step. Unwrapped,
+    the step (t · 6) leaves the hash no float32 fraction an hour in, and
+    every point went dark together; wrapped, three hours in it scatters as
+    it did at the start."""
+    from hyperspace.render import Renderer
+    from hyperspace.view import ViewState
+
+    try:
+        ctx = moderngl.create_context(standalone=True)
+    except Exception as e:  # noqa: BLE001 — any GL failure means skip
+        pytest.skip(f"no standalone GL context available: {e}")
+    try:
+        r = Renderer(ctx)
+        r.bands = (0.0, 0.0, 0.0, 0.0, 0.0, 0.5)          # the hats alone
+        s = ViewState(pattern=patterns.NAMES.index("PULSE"))
+
+        def lit(t):                                       # the ice-cyan points' share
+            img = r.pattern_tile(s, 128, t, 0.0).astype(float)
+            return ((img[..., 2] > 120) & (img[..., 0] < 200)).mean()
+        start = lit(4.0)
+        assert start > 0.01
+        for t in (3604.0, 10804.0, 10804.5):
+            assert 0.5 * start < lit(t) < 2.0 * start, t
+    finally:
+        ctx.release()

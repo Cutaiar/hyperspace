@@ -227,7 +227,10 @@ vec4 pulse(vec2 p, float t, float fid) {
     float ray = pow(abs(cos(th * 2.0)), 24.0 * k_sharp()) * step(r, 0.12 + 0.36 * snare) * snare;
     vec2 g = q * 14.0;
     vec2 id = floor(g);
-    float tw = hash21(id + floor(t * 6.0) + fract(face_rad(fid, 1.3)));
+    // the sparkle's step, wrapped: hash21 reads the fraction of its input
+    // × 435, so an unwrapped step (21600 an hour in) leaves float32 no
+    // fraction and every point lit or dark together
+    float tw = hash21(id + mod(floor(t * 6.0), 241.0) + fract(face_rad(fid, 1.3)));
     float dot_ = smoothstep(0.24, 0.24 - 0.10 * k_edge(), length(fract(g) - 0.5))
                * step(1.0 - hats * 0.7, tw);
     vec3 kc = vec3(1.0, 0.12, 0.38), sc = vec3(1.0, 0.85, 0.10), hc = vec3(0.55, 0.95, 1.0);
@@ -397,11 +400,11 @@ vec4 design(int mode, vec2 uv, float fid) {
         vec2 hb = mod(q - rep * 0.5, rep) - rep * 0.5;
         vec2 gv = dot(ha, ha) < dot(hb, hb) ? ha : hb;
         vec2 id = q - gv;
-        float pulse = sharpen(0.5 + 0.5 * sin(t * 3.0 + hash21(id) * TAU + face_rad(fid, 1.0)));
+        float fire = sharpen(0.5 + 0.5 * sin(t * 3.0 + hash21(id) * TAU + face_rad(fid, 1.0)));
         float e = 0.05 * k_edge();
         float cell = smoothstep(0.45 + e, 0.45 - e, length(gv));
         vec3 col = hsv(fract(hash21(id + 7.31) * m_colour() + t * 0.03), 0.7, 1.0);
-        return vec4(col, cell * (0.25 + 0.75 * pulse));
+        return vec4(col, cell * (0.25 + 0.75 * fire));
     }
     if (mode == 7) {
         // SPIRAL — galaxy arms winding out of a hot core, colour running

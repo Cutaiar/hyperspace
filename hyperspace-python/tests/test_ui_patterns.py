@@ -165,6 +165,18 @@ def test_the_driver_line_names_the_macro_desk_and_base_subscribers(faces):
     assert ui_patterns.drivers(faces.panel, "pattern.mod.6").endswith("(off)")
 
 
+def test_a_session_control_on_an_input_is_named_and_nothing_is_offered(faces):
+    """A knob of the session's (bindings.json's global layer) sets the
+    input's base as a preset's desk row does: the row names it, and offers
+    no "+ <source>" over it."""
+    table = faces.panel.router.table
+    table.bindings.append(Binding("cc:0:48", "pattern.mod.3", "abs", layer="global"))
+    faces.reg["view.pattern"].set(4)
+    assert ui_patterns.drivers(faces.panel, "pattern.mod.3").endswith("sets it")
+    faces.frame()
+    assert "drv.pattern.mod.3" in faces.rects and "route.pattern.mod.3" not in faces.rects
+
+
 def test_an_undriven_input_offers_the_conventions_source_and_stays_here(faces):
     from hyperspace import ui
 
@@ -241,10 +253,12 @@ def test_the_page_asks_the_renderer_for_swatches_and_draws_them(faces):
 
 def test_the_page_fits_with_every_row_driven_and_flat_or_the_longest_mode(tmp_path, monkeypatch):
     """The whole panel at the control size, FACES open: no scroll, with
-    every input driven (the longest second lines), the GLSL error showing,
-    Faces off (its line), on FLAT and on each mode. UNVERIFIED on the
-    owner's Mac: this container's font metrics differ (test_fx's fit
-    tests miss here by 18 px), so the slack asked is 24 px."""
+    every input driven (the longest second lines), on FLAT and on each
+    mode, with each of what the line under the chips can say — the GLSL
+    error, Faces off, and the mode's own line, which wraps and so is the
+    tallest of the three. UNVERIFIED on the owner's Mac: this container's
+    font metrics differ (test_fx's fit tests miss here by 18 px), so some
+    slack is asked: 12 px."""
     from types import SimpleNamespace
 
     from hyperspace.ui import PAGE_KEYS, Panel
@@ -256,9 +270,6 @@ def test_the_page_fits_with_every_row_driven_and_flat_or_the_longest_mode(tmp_pa
             + [Binding(f"lfo:{k - 6}", f"pattern.mod.{k}", "push", 0.5) for k in (6, 7)]))
         panel.router.table.macros = {"macro.1": Macro("a long macro name", [
             Sub(depth=(f"lane:{k}", f"pattern.mod.{k}")) for k in range(6)])}
-        panel.renderer = SimpleNamespace(pattern_error="2:14: 'u_modd' : undeclared identifier",
-                                         fx=None)
-        reg["view.faces"].set(False)
         spare = []
         draw = Panel._page_faces
 
@@ -268,15 +279,20 @@ def test_the_page_fits_with_every_row_driven_and_flat_or_the_longest_mode(tmp_pa
                           imgui.get_content_region_avail().y))
         monkeypatch.setattr(Panel, "_page_faces", measured)
         reg["ui.page"].set(PAGE_KEYS.index("faces"))
-        for mode in range(len(MODES)):
-            reg["view.pattern"].set(mode)
-            for _ in range(3):
-                imgui.new_frame()
-                panel.draw(1 / 60, 60.0)
-                imgui.end_frame()
-            over_y, over_x, room = spare[-1]
-            assert over_y == 0 and over_x == 0, MODES[mode].name
-            assert room >= 24, (MODES[mode].name, room)
+        for err, faces in (("2:14: 'u_modd' : undeclared identifier", False), ("", False),
+                           ("", True)):
+            panel.renderer = SimpleNamespace(pattern_error=err, fx=None)
+            reg["view.faces"].set(faces)
+            for mode in range(len(MODES)):
+                reg["view.pattern"].set(mode)
+                for _ in range(3):
+                    imgui.new_frame()
+                    panel.draw(1 / 60, 60.0)
+                    imgui.end_frame()
+                over_y, over_x, room = spare[-1]
+                said = (MODES[mode].name, err[:4], faces)
+                assert over_y == 0 and over_x == 0, said
+                assert room >= 12, (*said, room)
         print("FACES spare height px:", min(s[2] for s in spare))
     finally:
         rig.close()
@@ -323,5 +339,67 @@ def test_swatches_draw_only_while_the_page_asks_and_leave_the_frame_as_it_was():
         n = r._swatch_next
         frame(3.0)
         assert r._swatch_next == n
+    finally:
+        ctx.release()
+
+
+def test_a_broken_save_keeps_the_last_good_swatches_and_is_compiled_once(tmp_path, monkeypatch):
+    """A save of patterns.glsl that does not compile: the face program keeps
+    its last good version, and so do the swatches — the save is tried once,
+    not once a frame while the page is open (a failed compile costs the
+    frame). The next good save lands; a reload of render.py rebuilds the
+    swatches' program from its own strings."""
+    moderngl = pytest.importorskip("moderngl")
+    import os
+
+    from hyperspace import render as R
+    from hyperspace.view import ViewState
+    try:
+        ctx = moderngl.create_context(standalone=True)
+    except Exception as e:  # noqa: BLE001 — any GL failure means skip
+        pytest.skip(f"no standalone GL context available: {e}")
+    src = R.PATTERNS_GLSL.read_text()
+    path = tmp_path / "patterns.glsl"
+    path.write_text(src)
+    monkeypatch.setattr(R, "PATTERNS_GLSL", path)
+    built = []
+    real = R._face_fragment
+    monkeypatch.setattr(R, "_face_fragment", lambda head, *a: (
+        built.append(head is R.TILE_FS_HEAD), real(head, *a))[1])
+    try:
+        r = R.Renderer(ctx)
+        fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((64, 48))])
+        s = ViewState(shape=3, faces=True, pattern=1)
+        stamp = [path.stat().st_mtime]
+
+        def save(text):
+            stamp[0] += 10
+            path.write_text(text)
+            os.utime(path, (stamp[0], stamp[0]))
+            r._patterns_mtime = r._shader_mtime()     # what the every-30-frames check does
+            r._build_face_program()
+
+        def frames(n):
+            for k in range(n):
+                r.want_swatches()
+                fbo.use()
+                ctx.viewport = (0, 0, 64, 48)
+                r.draw(s, 64, 48, t_now=1.0 + k / 60)
+
+        frames(3)
+        good = r._ptile[0]
+        assert built.count(True) == 1 and r.swatch_error == ""
+        save(src + "\nnot glsl;\n")
+        assert r.pattern_error
+        frames(20)
+        assert built.count(True) == 2                       # tried once for the save
+        assert r._ptile[0] is good and r.swatch_error == ""  # the last good one draws on
+        save(src)
+        frames(2)
+        assert built.count(True) == 3 and r._ptile[0] is not good
+        r.on_reload()
+        assert r._ptile is None
+        frames(1)
+        assert r._ptile is not None and r.swatch_error == ""
     finally:
         ctx.release()
