@@ -8,8 +8,9 @@ behaviour in [`ENGINEERING.md`](ENGINEERING.md).
 **Who** says who decided:
 
 - **owner**: settled with the owner.
-- **row N**: built on a recommendation during the unattended run of
-  2026-10-04. The owner has still to confirm or overturn it in
+- **row N**: built on a recommendation during an unattended run (rows
+  34–88 on 2026-10-04, rows from 89 in plan 22 on 2026-10-06). The owner
+  has still to confirm or overturn it in
   [`DECISION-REGISTER.md`](DECISION-REGISTER.md) under that row number.
 
 To add a decision, add one row to the theme it belongs to. When it
@@ -109,6 +110,21 @@ replaces a row, rewrite that row instead of adding a new one.
 | `master.dyn` keeps its 0.06×–4× range. Up to 1× it blends toward the normaliser; past 1× only the expansion grows. | `tapers.T_DYN` | owner |
 | The eleven files under `library/band/` are the one scene store. | `control.SCENES`, `Analyzer.apply_scene` | owner |
 
+## Shapes
+
+| Decision | Where | Who |
+|---|---|---|
+| **Per shape, a 3D surface either gets real 4D extent or stays 3D with its W planes masked**, never all down one path; no shape is removed for reading badly. | `geometry.SHAPES` | owner |
+| The Heart is masked. The Star, Torus, Trefoil knot and Starfruit are lifted, and every lifted shape's alias reads "4D lift · …". | `geometry.SHAPES` | row 89 |
+| `Shape.w` is one of four words — `native`, `flat`, `lift`, `mask` — not a 3D/4D flag (a cell count of 0 marks a surface, not a 3D shape). A masked shape's W planes are folded where it is drawn — XW onto XZ, YW onto YZ, ZW onto XY — never in the integrator or a param. | `geometry.Shape.w`, `W_KINDS`, `view_angles`, `W_REMAP`, `Renderer.draw_scene` | row 90 |
+| A masked shape's depth cue (line fade, width, draw order) reads its depth toward the 3D camera (z after the camera's yaw and pitch), as a 4D shape's reads w. | `Renderer.draw_scene`, `geometry.view_depth` | row 91 |
+| **Every lifted or masked shape keeps `VOLUME_FLOOR` (0.15) through a full turn of each W plane**, from rest and from a generic pose, and turns at most 0.15 of its face area edge-on. The floor is half the 4D shapes' worst (the cubic pyramid, 0.30). | `geometry.VOLUME_FLOOR`, `tests/test_shapes4d.py` | row 92 |
+| A lift is a function of the builder's own parameters, with no linear part of x, y or z, odd under each single-axis mirror, z-dependent on an extruded outline, and agreeing wherever the surface welds. A shape's digest hashes floats rounded to 1e-9. | `geometry.param_surface`, `spherical_surface`, `ring_prism`, `tube` | row 93 |
+| The Möbius strip is lifted, and 0.55 wide (was 0.45). | `geometry._build_mobius` | row 94 |
+| The Rose is lifted, and 0.16 deep (was 0.12). | `geometry._build_rose` | row 95 |
+| **The Klein bottle is shape 26**: the classic bottle immersion, lifted by w = sin 2u + ½·sin v·cos 2u so it never crosses itself, `Shape.w` "lift", 37 × 16 samples, centred. | `geometry._build_klein`, `_klein_xyz` | row 96 |
+| A face of more than four corners that is not planar (a lifted cap) is framed by its least-squares plane; every planar face keeps its basis. | `geometry._face_xy` | row 97 |
+
 ## Render and outputs
 
 | Decision | Where | Who |
@@ -153,6 +169,23 @@ replaces a row, rewrite that row instead of adding a new one.
 | `dream.layer` is stored as an index into `lookback.LAYERS`, which is append-only: a new layer goes at the end, so a saved look keeps its layer. The menu's order is `LAYER_INFO`'s. | `lookback.LAYERS` | row 69 |
 | A net's weights are read once a run: every layer of that net is a cut of the same loaded stack. | `dream.build_trunk`, `DreamWorker.stacks` | row 69 |
 | The dream's "speed" is `dream.k`, read as the dream frames in which a frame's share halves. | `params.dream_speed_text` | row 70 |
+
+## Face patterns
+
+| Decision | Where | Who |
+|---|---|---|
+| **Each pattern input means one kind of change on every pattern**, named, with 1.0 the design and 0–2.6 the range; the old per-mode meanings were dropped with nothing to migrate. | `patterns.py`, `shaders/patterns.glsl` | owner |
+| **The eight inputs, in order: SCALE, GLOW, WARP, SPEED, COLOUR, SHARP, HUE, SPREAD**, so the factory's lane *i* → input *i* reads SUB swells, BASS flashes, MIDB bends, MID drives the speed, UPR flares the colour, AIR sharpens; HUE and SPREAD are left for an LFO, a macro or a knob. `patterns.py` holds the names, meanings and per-mode phrases, and the registry and the panel read them from there. | `patterns.INPUTS`, `patterns.MODES`, `routing.legacy6_routes` | row 98 |
+| SPEED is folded into an integrated clock, `u_ptime`, so a moving SPEED changes how fast a pattern goes and never jumps where it is. | `Renderer._pattern_clock` | row 99 |
+| A straight or unison design stays straight from WARP 0 to 1 and in step from SPREAD 0 to 1, and parts only above 1. GLOW never goes below 30% of the design's light. GLOW, COLOUR's grey end and HUE are one `finish()` over every mode. | `patterns.glsl` `warp`, `face_k1`, `finish` | row 100 |
+| Counts are fixed: BLOOM seven petals, SPIRAL five arms, KALEIDO six-fold. | `patterns.glsl` | row 101 |
+| **The FACES page is a browser**: a chip per pattern with a live swatch, the mode's one line, and eight named inputs that each say what they do in this mode and what drives them. The renderer draws the swatches only while the page asks. | `ui_patterns.py`, `Renderer.want_swatches` | row 102 |
+| An input nothing drives offers its convention's source ("+ SUB" … "+ AIR", "+ LFO 1", "+ LFO 2") as a push at the factory depth, into the loaded preset, staying on FACES. What drives an input is a link to ROUTING filtered to it. | `ui_patterns.suggest`, `drivers` | row 103 |
+| **METER and PULSE draw the bands themselves**: the app hands the renderer the analyzer's lanes each frame as a read-only render input (`u_levels`), never a param; no other mode reads them. | `app._bands`, `Renderer.bands` | row 104 |
+| Patterns are appended, never inserted (a preset holds the mode as an index). Five were added — METER, PULSE, MARBLE, TRUCHET, KALEIDO — and the first twelve's art is unchanged. | `patterns.MODES` | row 105 |
+| **The factory pattern routes push at `PATTERN_DEPTH` = 0.35** on a base of 1; the rate routes keep the reference's depth. `legacy6` keeps the rotation parity and drops the pattern parity. | `routing.PATTERN_DEPTH`, `preset.legacy6_values` | row 106 |
+| The house presets' routes are generated from code, like the party presets'; their values and notes stay data. | `preset.HOUSE`, `FACTORY_PRESETS` | row 107 |
+| Macro candidates are prepared for audition, never judged by the build, and ship in `shared/`, not as factory presets. Per-band gain in a preset macro is a depth subscriber on the lane routes. | `shared/plan-22-macro-candidates/` | row 108 |
 
 ## Library and persistence
 
@@ -233,7 +266,7 @@ The D-numbers are cited from code comments.
 | Decision | Who |
 |---|---|
 | Each code PR gets a `/code-review` before merge. Agents work on their own branches, and the owner merges. | owner |
-| Agent work lands on `finish-line`, never on `main`; the owner merges `finish-line` into `main`. | owner |
+| Agent work lands on an integration branch, never on `main` (`finish-line` through plan 21, `plan-22-integration` for plan 22); the owner merges it into `main`. | owner |
 
 ## Decided not to build
 
@@ -247,3 +280,4 @@ The D-numbers are cited from code comments.
 | A source-first hand learn (click an axis, then a param). | row 64 |
 | A thumbnail of each output in the control window. | row 85 |
 | DJ Link, MIDI clock in and drift correction. | owner |
+| New 4-polytope families in plan 22: ranked in [`plans/22-polytope-shortlist.md`](plans/22-polytope-shortlist.md); none is built until the owner picks. | owner |

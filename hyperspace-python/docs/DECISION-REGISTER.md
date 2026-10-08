@@ -1,8 +1,10 @@
 # Decision register — the open decisions
 
-Rows 34–88 were each decided during an unattended build on 2026-10-04:
-the build took its own recommendation and built it. Every one is in the
-app now and waits for the owner to say **keep** or **overturn**. Each row
+Rows 34–88 were each decided during an unattended build on 2026-10-04,
+and rows 89–108 during plan 22's run on 2026-10-06: the build took its own
+recommendation and built it. Every one is in the app now (rows 89–108 on
+`plan-22-integration`, until the owner merges it) and waits for the owner
+to say **keep** or **overturn**. Each row
 says what was built (what you will see or feel), the other option(s), what
 it costs to reverse, the known rough edge, and the hand check that lets you
 judge it. The checks are numbered in
@@ -74,6 +76,26 @@ here; overturn → the change, then the same.
 | 86 | A screen not connected at launch | 101, 111, 112 | |
 | 87 | `ghost.style`: five drawn objects | 109 | |
 | 88 | Ghost mirror / guide / tethers not performable | 110 | |
+| 89 | The Heart masked; the other shapes lifted | 113, 114 | |
+| 90 | The W fold at draw time: XW → XZ, YW → YZ, ZW → XY | 114 | |
+| 91 | A masked shape cues depth on z | 114 | |
+| 92 | `VOLUME_FLOOR` 0.15, from all 18 4D shapes | 113, 119 | |
+| 93 | How a shape is lifted: the lift rules | 113, 115 | |
+| 94 | The Möbius strip widened and lifted | 115, 118 | |
+| 95 | The Rose deepened and lifted (the orchestrator's call) | 115 | |
+| 96 | The Klein bottle: the bottle, lifted, shape 26 | 116, 117 | |
+| 97 | A bent cap framed by its least-squares plane | 115 | |
+| 98 | The eight pattern inputs: their meanings and order | 122, 124, 125 | |
+| 99 | SPEED is an integrated clock | 123 | |
+| 100 | WARP / SPREAD inert from 0 to 1; GLOW's 30% floor | 122, 137, 138 | |
+| 101 | Fixed counts: seven petals, five arms, six wedges | 122, 131 | |
+| 102 | The FACES page as a browser of swatch chips | 120, 125, 126, 128 | |
+| 103 | "+ SUB": the convention's source offered on an idle input | 127 | |
+| 104 | METER and PULSE read the bands (`u_levels`) | 129 | |
+| 105 | Five new patterns; the old twelve's art unchanged | 129–131 | |
+| 106 | Pattern routes at depth 0.35; `legacy6` drops pattern parity (the orchestrator's call) | 132, 137 | |
+| 107 | The house presets' routes generated from code | 132 | |
+| 108 | Macro candidates in `shared/`; per-band gain as depth | 133–136 | |
 
 "—": no hand check shows it; tests only.
 
@@ -685,7 +707,7 @@ here; overturn → the change, then the same.
   pad is green when its preset is loaded, amber (Akai velocity 5) when its
   slot is filled, dark when empty. The sixteen shape pads older presets
   carry on those rows are dropped quietly at load; any other row of yours
-  on them is dropped with a note. Shapes are on the cue knob (all 25).
+  on them is dropped with a note. Shapes are on the cue knob (all 26).
 - **Other options.** Only the loaded pad lit; a note per dropped row.
 - **To reverse.** `apc40.filled_of` returns None (lights); empty
   `routing.RETIRED_DESK_ROWS` (quiet drop); rows 4–5 back to shapes needs
@@ -703,7 +725,7 @@ here; overturn → the change, then the same.
  G4   [ 9]  [10]  [11]  [12]  [13]  [14]  [15]  [16]   Rotate      [ 9] … [16]            ·
  G5   [17]  [18]  [19]  [20]  [21]  [22]  [23]  [24]   Reset view  [17] … [24]            ·
  G6   [============ SAVE AS (hold) ============]      [Reset all]  [==== SAVE AS ====]   [Reset all]
- C    cue knob: Shape (all 25)                                     ·
+ C    cue knob: Shape (all 26)                                     ·
 
  [ ] invariant (the same on both layers)   · dark   [n] bank slot n
  a bank pad: green = loaded · amber = a preset is here · dark = empty
@@ -935,3 +957,404 @@ here; overturn → the change, then the same.
   mid-set); not performable with no refusal (a Learn writes a dead row).
 - **To reverse.** Three flags.
 - **Judge it.** Check 110.
+
+## The shapes in four dimensions (plan 22)
+
+Seven shapes (Heart, Star, Rose, Torus, Trefoil knot, Starfruit, Möbius
+strip) used to sit at w = 0 and went flat whenever the bass bands turned a
+W plane. That each one either gets real 4D extent or stays 3D, chosen per
+shape, is the owner's; how each was chosen is below. The sheets are in
+[`plans/assets/22-flat-shapes/`](plans/assets/22-flat-shapes/); the plan
+as built is [`plans/22-flat-shapes-and-face-patterns.md`](plans/22-flat-shapes-and-face-patterns.md).
+
+### 89. The Heart is masked; the other shapes are lifted
+
+- **Built.** The Star, Rose, Torus, Trefoil knot, Starfruit and Möbius
+  strip are lifted into the fourth dimension: as XW, YW and ZW turn they
+  bend, saddle and swap sides like the Clifford torus, and none goes
+  flat. The Heart stays a 3D heart prism; the bass bands turn it in 3D
+  (row 90). On the VIEW page a lifted shape's alias reads "4D lift · …";
+  the Heart keeps "3D · …".
+- **Other options.** Lift the Heart too (the best lift tried,
+  z·(sin t + 2 sin 2t + 2 sin 3t), read as a twisted ribbon or bow-tie
+  at XW / YW 60–120° and 240–300°, although it passed both gates: ratio
+  0.376, at most 0.11 of its face area edge-on);
+  mask all seven (the shapes stay 3D and never turn through W); mask any
+  of the others.
+- **To reverse.** One word per shape in `geometry.SHAPES` (`w="mask"` or
+  `"lift"`), plus removing the lift from its builder, which re-records
+  that shape's digest: minutes per shape.
+- **Rough edge.** The Star becomes a box, a lantern of its walls, at XW
+  90° and 270°; the Starfruit's five ridges are softened at rest by the
+  lift's perspective (row 93). Factory presets `plasma-heart`,
+  `spiral-silk` and `inverse-halo` show the Heart, the Trefoil knot and
+  the Starfruit, and now move differently.
+- **Judge it.** Checks 113 and 114.
+
+### 90. The W fold happens where the shape is drawn: XW → XZ, YW → YZ, ZW → XY
+
+- **Built.** A masked shape cannot turn through W, so each W plane's
+  angle is added onto a 3D plane as the frame is drawn
+  (`geometry.view_angles`, `Renderer.draw_scene`): SUB (ZW) rolls the
+  Heart in the screen plane, BASS (XW) spins it about the vertical, MIDB
+  (YW) tumbles it about the horizontal. No param changes, the integrator
+  is untouched, and a rate or a phase route on a W plane both reach the
+  Heart. `Shape.w` says how each shape fills W in one of four words
+  (`native`, `flat`, `lift`, `mask`).
+- **Other options.** Fold in the integrator (it would ignore a phase
+  route on a W plane, and a shape's pose would depend on which shapes
+  were shown before it); the Hodge-dual remap XW → YZ, YW → XZ, ZW → XY
+  (each W plane onto the 3D plane it leaves alone); a yes/no "3D" flag
+  instead of four words.
+- **To reverse.** `W_REMAP` is three numbers (minutes); folding
+  elsewhere is a day.
+- **Rough edge.** The VIEW page's XW / YW / ZW keys, `rot.phase.*` and
+  ROUTING go on showing the W planes turning while the Heart turns in
+  XZ, YZ and XY; nothing on the page says the planes are folded. BASS
+  onto XZ is a spin about the vertical: on the Heart it turns the heart
+  side-on, but on a shape round about the vertical (the Torus, the
+  Starfruit), were one masked, it would barely show. 4D depth (↑ / ↓,
+  TUMBLE's D1) does nothing on the Heart: with w at 0 the 4D divide
+  leaves it as it is.
+- **Judge it.** Check 114 — and whether BASS's spin reads as BASS.
+
+### 91. A masked shape cues depth on z
+
+- **Built.** Lines and faces fade, thin and sort by depth. A 4D shape
+  cues on w; a masked shape's w is 0 at every angle, so it cues on its
+  depth toward the 3D camera instead (z after the camera's yaw and
+  pitch, `geometry.view_depth`), and is as bright and as deep-looking as
+  a polytope. The near side is the bright one, drawn on top, however
+  the camera is turned.
+- **Other option.** Leave it on w: the Heart would draw at the cue's
+  dimmest, flat and faint, at every angle.
+- **To reverse.** Three lines in `Renderer.draw_scene`.
+- **Judge it.** Check 114.
+
+### 92. `VOLUME_FLOOR` is 0.15, calibrated across all 18 4D shapes
+
+- **Built.** "Keeps its volume" is measured, not judged: the shape's 3D
+  cloud's smallest singular value over its largest (1 a ball, 0 a
+  plane). Each lifted or masked shape must stay at or over 0.15 through
+  a full turn of each W plane, from rest and from a generic pose, and
+  turn at most 0.15 of its face area edge-on. 0.15 is half the worst
+  any of the 18 4D shapes reaches (the cubic pyramid, 0.30; then the
+  4,8-duoprism 0.53, the dodecahedral prism 0.64, the 5-cell 0.65, the
+  tesseract 0.94, the Clifford torus 0.97, the 24-cell, 120-cell and
+  600-cell 1.00), so no surface is held rounder than a polytope already
+  is. You asked for it calibrated from what already works, not picked.
+  Every shape's geometry is also pinned by a digest, with floats rounded
+  to 1e-9 so a last-bit difference between machines is not a change.
+- **Other options.** Calibrate on the tesseract, 24-cell and Clifford
+  torus only (about 0.47: no masked Heart, Star, Torus or Möbius strip
+  could meet it, since a mask leaves a shape its own 3D proportions,
+  0.16–0.43); judge by eye alone; volume only, no edge-on gate.
+- **To reverse.** One constant; the tests re-gate every shape on it.
+- **Rough edge.** A sweep turns one W plane at a time; the music turns
+  all six at once. 500 random poses of all six planes (the docs pass,
+  seed 0) left every lifted or masked shape over the floor, the Rose
+  lowest at 0.156, but random poses are a sample, not a proof. The
+  edge-on gate, 0.15, sits just under the 4D shapes' own worst (the
+  cubic pyramid 0.155, the 3,3-duoprism 0.167), so a polytope would not
+  pass it; the Star, at 0.139, is the gated shape closest to it.
+- **Judge it.** Checks 113 and 119.
+
+### 93. How a shape is lifted: a function of its own parameters, by four rules
+
+- **Built.** Every builder takes a lift of its own parameters — w(u, v)
+  on a patch, w(θ, φ) on a sphere, w(t, z) on an extruded outline, w(t,
+  a) on a tube — and keeps its vertices, edges and faces. Each lift has
+  no linear part of x, y or z (that only tilts the shape into another
+  flat space), is odd under each single-axis mirror (an even one folds
+  the halves onto each other into a sheet: the torus read as a bowl, the
+  starfruit as a sombrero), depends on z on an extruded outline (else
+  every wall goes edge-on at once), and agrees wherever the surface
+  welds. The lifts: Star 0.6·(z/h)·sin t, Rose z·(3 sin 4θ + sin 8θ),
+  Torus 0.7·sin v·sin 2u, Trefoil 1.5·cos 3t, Starfruit 0.6·sin 2φ·sin 2θ,
+  Möbius 0.5·sin 2u.
+- **Other options.** A lift as a point function w(x, y, z) (it cannot
+  separate the sheets where a surface crosses itself, which the Klein
+  bottle needs); sweeping each surface into a 3-manifold (more faces);
+  other formulas per shape.
+- **To reverse.** One lambda per shape.
+- **Rough edge.** The shapes change look at rest as well as in a turn:
+  the perspective divide shows a lifted shape slightly bent even with
+  every plane at 0 (the Starfruit's ridges soften).
+- **Judge it.** Checks 113 and 115.
+
+### 94. The Möbius strip is widened (0.45 → 0.55) and lifted
+
+- **Built.** The band is a little wider and lifted by 0.5·sin 2u (0 at
+  the seam, which still welds). Through the W planes it keeps
+  0.163 / 0.179 / 0.179. A band that thin limits any lift (at 0.45 wide
+  the same lift keeps only 0.134), hence the width.
+- **Other option.** Mask it at its old width (0.158, no geometry change),
+  so it would stay 3D beside the Klein bottle.
+- **To reverse.** The width and the lift in `_build_mobius`, or `w="mask"`
+  with the old width: minutes, plus the digest.
+- **Rough edge.** It clears the floor by little. Your shared presets
+  `hi-frek-variation-1` and `light-realm-variation-1` show the Möbius
+  strip and now look different.
+- **Judge it.** Checks 115 and 118.
+
+### 95. The Rose is made a seventh shape, deepened (0.12 → 0.16) and lifted
+
+- **Built.** The brief named six flat shapes; the Rose was a seventh,
+  built at w = 0 like them. **The orchestrator added it to the plan — it
+  is the orchestrator's call, not yours.** Its own 3D proportions at
+  depth 0.12 (0.118) were under the floor, and no lift can fatten a shape
+  at rest, so it is 0.16 deep (the smallest change that clears: 0.157)
+  and lifted by z·(3 sin 4θ + sin 8θ), each petal's wall twisting
+  through w, front against back. The pinch still welds.
+- **Other options.** Leave the Rose flat (it goes flat at 90° of each W
+  plane, as before); mask it (it would still read 0.118, under the
+  floor, unless deepened anyway); deepen more.
+- **To reverse.** The depth and the lift in `_build_rose`: minutes, plus
+  the digest.
+- **Rough edge.** It clears the floor by 5%, and it may read less
+  delicate at 0.16.
+- **Judge it.** Check 115.
+
+### 96. The Klein bottle: the classic bottle, lifted, shape 26
+
+- **Built.** A new shape after the Möbius strip: the textbook "bottle"
+  immersion, which in 3D must pass through itself where the neck enters
+  the body, lifted by w = sin 2u + ½·sin v·cos 2u so that in 4D the neck
+  passes beside the body and never through it. 36 × 16 vertices (576 V,
+  1152 E, 576 faces), centred on its bounding box; `Shape.w` "lift";
+  the VIEW page reads "KLEIN BOTTLE", "4D · one-sided bottle, no
+  self-crossing", "χ=0 · one side". The cue knob, ← / → and the pad's
+  LB / RB reach it and stop there.
+- **Other options.** The torus-style ("figure-8") immersion (at rest it
+  reads as a pinched torus); `Shape.w` "native" (it is built with w from
+  the start, but its lift is of a 3D immersion, as the others'); a denser
+  grid; a "∞"-style glyph in the sym text (the font may lack it).
+- **To reverse.** It is the last shape, so it can be dropped with its V/E
+  row and digest (a preset saved on shape 26 would then point past the
+  end); the grid is two numbers.
+- **Rough edge.** To the orchestrator it reads at rest more like a
+  curled horn or a loop than the textbook bottle. The neck is sparse at
+  some angles (16 round).
+- **Judge it.** Checks 116 and 117.
+
+### 97. A bent cap is framed by its least-squares plane
+
+- **Built.** The Star's lift bends its two pentagram caps through w. A
+  face of more than four corners that is not planar is now framed (for
+  the pattern's UVs and the triangulation) by its least-squares plane,
+  where its outline stays simple and its triangles tile it exactly.
+  Every planar face, every polytope's included, keeps the basis it had,
+  so nothing else changed.
+- **Other option.** Split each bent cap into triangles or quads (more
+  faces, and the pattern would no longer span the cap as one face).
+- **To reverse.** Four lines in `geometry._face_xy` — but the Star's caps
+  would then fold over themselves.
+- **Rough edge.** Only the Star has such caps. The star polytopes on the
+  shortlist would bring pentagram faces of their own
+  ([`plans/22-polytope-shortlist.md`](plans/22-polytope-shortlist.md)).
+- **Judge it.** Check 115.
+
+## The face patterns (plan 22)
+
+That the eight pattern inputs could be redesigned with nothing to
+migrate, and that a page nobody can steer is not a win, were yours; what
+was built on them is below. The plan as built is
+[`plans/22-flat-shapes-and-face-patterns.md`](plans/22-flat-shapes-and-face-patterns.md),
+Stream B; the pictures are in
+[`plans/assets/22-face-patterns/`](plans/assets/22-face-patterns/).
+
+### 98. The eight pattern inputs: what each means, and in what order
+
+- **Built.** Every pattern reads its inputs the same way: 0 SCALE (small
+  and many → big and few), 1 GLOW (dim → white-hot), 2 WARP (straight →
+  heavily bent), 3 SPEED (frozen → 2.6×), 4 COLOUR (grey → more hues), 5
+  SHARP (soft → crisp), 6 HUE (turns the palette, half a turn per unit),
+  7 SPREAD (every face in unison → each its own). 1.0 is always the
+  pattern as designed. The order puts the factory's lanes where they
+  read best: SUB swells the scale, the kick flashes the glow, the low
+  mids bend, the mids drive the speed, the snare flares the colour, the
+  hats sharpen. HUE and SPREAD are left free for an LFO, a macro or a
+  knob. ROUTING, Learn and the desk call them "Pattern scale" and so on;
+  the FACES page "SCALE". `patterns.py` holds the table and the shader
+  is held to it by tests.
+- **Other options.** A COUNT or DENSITY input instead of SPREAD (on the
+  grid patterns it does what SCALE does); HUE or SPREAD on a band (a hue
+  that follows a band flickers); another order (any order changes what
+  each band does by default).
+- **To reverse.** A reorder is the accessors in `patterns.glsl` and the
+  table in `patterns.py`, an hour; a different meaning is that input's
+  helper in every mode, a day.
+- **Rough edge.** SHARP at 0 and GLOW at 2.6 both brighten, differently.
+- **Judge it.** Checks 122, 124 and 125.
+
+### 99. SPEED is an integrated clock
+
+- **Built.** The renderer folds SPEED into the patterns' clock: each
+  frame it moves on by the time since the last frame times SPEED
+  (`Renderer._pattern_clock`, `u_ptime`). A band on SPEED changes how
+  fast a pattern goes, never where it is.
+- **Other option.** Time × SPEED, as before (every change of SPEED jumps
+  the phase by time × the change — minutes into a set, a big jump).
+- **To reverse.** One function, minutes.
+- **Rough edge.** `u_time` is still uploaded and no pattern reads it.
+- **Judge it.** Check 123.
+
+### 100. WARP and SPREAD do nothing from 0 to 1 on straight and unison designs; GLOW keeps 30%
+
+- **Built.** A pattern that is straight as designed (PLAID, MOIRE,
+  BLOOM's ring, HEX, METER, PULSE, TRUCHET, KALEIDO) stays straight from
+  WARP 0 to 1 and bends only above 1; one whose faces play in unison
+  (PLAID, WEAVE) stays in step from SPREAD 0 to 1 and parts only above.
+  GLOW at 0 keeps 30% of the design's light, so a route on a base of 0
+  does not make the faces vanish. GLOW, HUE and COLOUR's grey end are one
+  pass over every pattern alike.
+- **Other options.** Make 0 "less than designed" on every pattern (a
+  straight design has nothing to take away); GLOW to black at 0.
+- **To reverse.** A constant in `warp()`, `face_k1()` and `finish()`,
+  minutes each.
+- **Rough edge.** A route on a base of 0 moves WARP or SPREAD on those
+  designs only once it passes 1. WARP at 2.6 on HEX may be too strong.
+- **Judge it.** Checks 122, 137 and 138.
+
+### 101. Fixed counts: seven petals, five arms, six wedges
+
+- **Built.** BLOOM always has seven petals, SPIRAL five arms and KALEIDO
+  six mirrored wedges. No input changes a count.
+- **Other option.** A count on an input (driven by audio, a count
+  flickers as it steps); KALEIDO by the face's sides (the shader does not
+  know them).
+- **To reverse.** A few lines per pattern.
+- **Judge it.** Checks 122 and 131.
+
+### 102. The FACES page as a browser of swatch chips
+
+- **Built.** FACES has a module of its own (`ui_patterns.py`), as FX
+  does. Every pattern is a chip with a small live swatch of it on the
+  inputs as they are now, four to a row, the one on show red, its one
+  line on hover; under them the mode's name and line with ‹ ›; then the
+  eight inputs by name, each saying what it does on this pattern and
+  what drives it, with a slider and a **1** chip back to neutral; **all
+  neutral** is one undo step. A GLSL error or "Faces is off" takes the
+  line's place. The renderer draws one swatch a frame only while the page
+  is open.
+- **Other options.** The old dropdown with named sliders; still
+  thumbnails (they would not show the current inputs); every swatch
+  every frame.
+- **To reverse.** The page is one module; the dropdown is an hour.
+- **Rough edge.** Its fit on the Mac is **unverified** (18 px spare in
+  the container's font metrics, which are not the Mac's; the tallest
+  case is a mode's own about line wrapping). The pattern
+  group's preset strip draws its dirty dot over its ▶ chip at this
+  width.
+- **Judge it.** Checks 120, 125, 126 and 128.
+
+### 103. "+ SUB": an idle input offers the convention's source
+
+- **Built.** An input nothing drives offers, at the end of its line, the
+  source the convention puts on it: "+ SUB" … "+ AIR" for the first six,
+  "+ LFO 1" for HUE, "+ LFO 2" for SPREAD. A click adds a push route at
+  the factory depth (0.35) into the loaded preset and stays on FACES;
+  undo takes it back. A driven input names its driver instead ("SUB
+  pushes +0.35", "K3 sets it", "macro.4 sets its base"), a link that
+  opens ROUTING filtered to that input.
+- **Other option.** The existing menu item "Route a lane here…", which
+  uses the band selected on the analyzer and jumps to ROUTING.
+- **To reverse.** A few lines in `ui_patterns`.
+- **Rough edge.** "+ LFO 1" looks inert while LFO 1's depth is 0.
+- **Judge it.** Check 127.
+
+### 104. METER and PULSE read the bands directly
+
+- **Built.** Two patterns draw the music itself: METER a wedge of LEDs
+  per band, PULSE the kick, the snare and the hats as shapes. For them
+  the app hands the renderer the analyzer's lanes each frame, as it hands
+  over the dim (`app._bands`, `u_levels`): read only, never a param, and
+  no other pattern reads it. What they show ignores the routes by
+  design; the inputs style them as on any pattern.
+- **Other option.** Draw them through the routed inputs only (a band
+  could not have a wedge of its own); a param per band (more for
+  presets to save and undo to watch).
+- **To reverse.** Drop the two patterns and the uniform, an hour.
+- **Rough edge.** The hand-over happens just before the frame is drawn,
+  outside the guarded step, and no test pins its place in the frame.
+- **Judge it.** Check 129.
+
+### 105. Five new patterns; the old twelve's art unchanged
+
+- **Built.** METER and PULSE (the audio, seen), MARBLE and TRUCHET
+  (generative depth), KALEIDO (bold colour), appended after EMBER so
+  every preset's pattern stays where it was. The twelve old patterns
+  were moved onto the convention but their look at 1.0 is unchanged, so
+  no preset changes look from art.
+- **Other options.** More patterns; rework the old twelve's art too.
+- **To reverse.** A pattern can be dropped only from the end (presets
+  hold the index).
+- **Rough edge.** MARBLE is the dearest pattern: 4.19× FLAT on the
+  600-cell in software GL (CELLS, the dearest before, 3.13×). KALEIDO is
+  always six-fold.
+- **Judge it.** Checks 129, 130 and 131.
+
+### 106. The factory pattern routes at depth 0.35; `legacy6` drops the pattern parity
+
+- **Built.** **This is the orchestrator's call, not yours.** The six
+  factory lane → pattern routes push at 0.35 instead of 1, on a base of
+  1. A quiet band lifts its input to about 1.1, a band at nominal to
+  1.35, a kick to about 1.86, so the pattern answers quiet music and
+  stays legible loud. At depth 1 a band reading 0.6 or more pinned its
+  input at 2.6, and loud music held every input at its extreme on every
+  pattern (EMBER black; SPIRAL, CELLS and KALEIDO blown out). The rate
+  routes are unchanged. `legacy6` keeps the reference's rotation parity
+  but no longer reproduces its pattern drive: its pattern inputs sit at
+  1 and are pushed at 0.35.
+- **Other options.** 0.3 (quiet music barely differs from silence); 0.4
+  (EMBER and SPIRAL blow out on kicks); 1, as the reference.
+- **To reverse.** One constant (`routing.PATTERN_DEPTH`), then
+  `uv run python -m hyperspace.preset` to regenerate the factory files:
+  minutes.
+- **Rough edge.** Your own presets were not touched: sixteen of the
+  seventeen in `shared/dan-2026-10-04/presets/` still push at depth 1;
+  with faces on, three would change visibly if re-saved (one SPIRAL, two
+  PLASMA). Tuned on synthetic band levels.
+- **Judge it.** Checks 132 and 137 — and whether to re-save yours at
+  0.35.
+
+### 107. The house presets' routes are generated from code
+
+- **Built.** The eight house moods (big-blue-wave, ember-orbit,
+  hex-engine, inverse-halo, plasma-heart, spiral-silk, strobe-cage,
+  woven-lattice) get their routes from the generator, as the party
+  presets do; their values and notes are still data. Before, their lane
+  rows were data a test held equal to the code, so a change of depth
+  would not have reached them. **Presets were a subsystem the brief
+  called settled**; this changes how eight factory files are made, not
+  what a preset is or how one loads.
+- **Other option.** Leave them as data and edit the eight files' six
+  rows by hand.
+- **To reverse.** Take the eight out of `FACTORY_PRESETS`, an hour.
+- **Judge it.** Check 132.
+
+### 108. Macro candidates in `shared/`; per-band gain as depth subscribers
+
+- **Built.** Four presets of macros to audition — MACRO PERFORMANCE,
+  MACRO STREAMS, MACRO INTENSITY, MACRO BREAKDOWN DROP — in
+  `shared/plan-22-macro-candidates/`, installed with
+  `uv run python tools/shared_presets.py install shared/plan-22-macro-candidates`.
+  Each shares one scene, puts its macros on device knobs D1–D8, and rests
+  them at noon (BREAKDOWN and DROP at zero) on the file's own values. A
+  band's gain in a macro is a depth subscriber on that band's routes.
+  [`plans/22-macro-candidates.md`](plans/22-macro-candidates.md) says
+  what each macro is meant to do. None was judged by the build. After
+  B3 their pattern routes sit at 0.35 with the multipliers unchanged.
+- **Other options.** Factory presets (the factory list and its bank
+  are pinned at 23); base subscribers on the analyzer's band gains,
+  attack and gate (session params: dropped at load, D9 — so TIGHT cannot
+  reach attack or gate); a separate scene per file.
+- **To reverse.** Delete the folder; keep the ones you like by saving
+  them as your own.
+- **Rough edge.** The PRESETS page does not show a preset's note, so
+  the intents live in the files and the sheet. MACRO INTENSITY's 1 and
+  3, and MACRO BREAKDOWN DROP's 1 and 2/3, share bases: the last turned
+  wins. INTENSITY × DROP stacks to about ×4 on the lane routes. Ranges
+  that mirror round noon give odd ends (speed 0.12 → 0.75, 4D depth 6 →
+  1.51, zoom 0.7 → 2.41).
+- **Judge it.** Checks 133–136: say which macros to keep, and as what.

@@ -491,7 +491,7 @@ def test_the_old_routing_presets_step_load_save_as_presets(rig, tmp_path):
     assert rig.reg["lfo.1.sync"].value == 3         # lfo-breathe lands its bases: 1 bar
     assert lib.next("presets") == listing[listing.index("lfo-breathe") + 1]
     lib.load("presets", "legacy6")
-    assert rig.view.pattern_mod[0] == 0.0           # legacy6 lands its bases
+    assert rig.view.pattern_mod[0] == 1.0           # legacy6 lands its bases (1: plan 22 B3)
     assert not lib.is_dirty("presets")
     frame(panel)
     # an edit dirties; save as writes the whole preset to the user folder

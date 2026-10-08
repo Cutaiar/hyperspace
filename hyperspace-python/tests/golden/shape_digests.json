@@ -1,0 +1,184 @@
+{
+ "0": {
+  "name": "5-cell",
+  "n": 5,
+  "m": 10,
+  "faces": 10,
+  "sha256": "1b5e0755fe1848400860f390c8085c680f2f68cbf8471f31f4679027489480a3"
+ },
+ "1": {
+  "name": "3,3-duoprism",
+  "n": 9,
+  "m": 18,
+  "faces": 15,
+  "sha256": "ce4bccf32fb01220a3fff6590cfb3bfd803b788cc42682c45d9d1c3fb7e5ec0a"
+ },
+ "2": {
+  "name": "Cubic pyramid",
+  "n": 9,
+  "m": 20,
+  "faces": 18,
+  "sha256": "a0557d9259e0a27aba8a0f452199daa27b2b9bdbf3b50252f6daa9593aa1e313"
+ },
+ "3": {
+  "name": "Tesseract",
+  "n": 16,
+  "m": 32,
+  "faces": 24,
+  "sha256": "80ee18fe2a3ccce30b5e962e2ae45e903898cdec4f59f7acb222c4148bfe189d"
+ },
+ "4": {
+  "name": "Rectified 5-cell",
+  "n": 10,
+  "m": 30,
+  "faces": 30,
+  "sha256": "c1d141ec11a52841f220e270a0b90af053dccac4f08b0662cb406b902824fc6a"
+ },
+ "5": {
+  "name": "4,8-duoprism",
+  "n": 32,
+  "m": 64,
+  "faces": 44,
+  "sha256": "60db7885a6046ad16b649ce1697725381fa2b2f03bc629f34f3089147277a4e7"
+ },
+ "6": {
+  "name": "6,6-duoprism",
+  "n": 36,
+  "m": 72,
+  "faces": 48,
+  "sha256": "1ee3d5836dd2e2bce989946e78a4a3720740ca5c0a51204c93be80b9c00ccbec"
+ },
+ "7": {
+  "name": "16-cell",
+  "n": 8,
+  "m": 24,
+  "faces": 32,
+  "sha256": "cdb264081f3e49291adc7c0e52389e200fabb354376174f689f5b149c4b68eb6"
+ },
+ "8": {
+  "name": "10,10-duoprism",
+  "n": 100,
+  "m": 200,
+  "faces": 120,
+  "sha256": "1efffe14e39dd64a146a3b5b515d2421a53fb4723571c3f09427689b86eb2d3a"
+ },
+ "9": {
+  "name": "Icosahedral prism",
+  "n": 24,
+  "m": 72,
+  "faces": 70,
+  "sha256": "fd9da103a43e7616703eae205f7192855df7e5a7b24f40b8e5249976a76a759a"
+ },
+ "10": {
+  "name": "24-cell",
+  "n": 24,
+  "m": 96,
+  "faces": 96,
+  "sha256": "29fd96e20e0ccf126d932d9d5586cde227ec2de4e5af0277c0a81e13a6122a1e"
+ },
+ "11": {
+  "name": "Truncated tesseract",
+  "n": 64,
+  "m": 128,
+  "faces": 88,
+  "sha256": "831dc6c5e5c9ad910a0b54153500a4ab343e4b9194e631e84c98bd7fcbdc7992"
+ },
+ "12": {
+  "name": "12,12-duoprism",
+  "n": 144,
+  "m": 288,
+  "faces": 168,
+  "sha256": "d8fd0f1afd7b3252a489ffa023c311d5d72062c158854efbad412b4dbb2302ea"
+ },
+ "13": {
+  "name": "Dodecahedral prism",
+  "n": 40,
+  "m": 80,
+  "faces": 54,
+  "sha256": "e0952e346adeb27bf8921e34f5ef742e8b5c5e3dd9c6cf791da496cd9d025484"
+ },
+ "14": {
+  "name": "20,20-duoprism",
+  "n": 400,
+  "m": 800,
+  "faces": 440,
+  "sha256": "957da4bd941272c79e7b3a7f88251d5fc28628840c383f89f6c781ede6a371e8"
+ },
+ "15": {
+  "name": "120-cell",
+  "n": 600,
+  "m": 1200,
+  "faces": 720,
+  "sha256": "75d8eb323f4bbe9896b7a368e01926fbafe37f6c61fc1f1b7e510e73a4266b40"
+ },
+ "16": {
+  "name": "600-cell",
+  "n": 120,
+  "m": 720,
+  "faces": 1200,
+  "sha256": "ff40da20f200175b8acf50225be7b1ea58dfd47bba82f9b1bbcd6b1d354bca9a"
+ },
+ "17": {
+  "name": "Clifford torus",
+  "n": 512,
+  "m": 1024,
+  "faces": 560,
+  "sha256": "d74b9b566c2a1fa6aa7075f4f0541850b51593089cc168e9518dc18e4434d434"
+ },
+ "18": {
+  "name": "Heart",
+  "n": 128,
+  "m": 192,
+  "faces": 66,
+  "sha256": "1ba1403e2a52f89dd67c03e517725cd085a7da1fdc69dbb7609f21f86325c176"
+ },
+ "19": {
+  "name": "Star",
+  "n": 20,
+  "m": 30,
+  "faces": 12,
+  "sha256": "1cb5efddf2e3e390f2b8181c64b13349d51ffb8ef2def3eb5299cc9b58d6382a"
+ },
+ "20": {
+  "name": "Rose",
+  "n": 186,
+  "m": 285,
+  "faces": 96,
+  "sha256": "d390d26f4e880547ce929f85f0d07987c5ba129191268ade83c174c31a2724ac"
+ },
+ "21": {
+  "name": "Torus",
+  "n": 512,
+  "m": 1024,
+  "faces": 512,
+  "sha256": "b0fe7db05a614c28d8507312dedb7d4eef7a4f91d5f2e0e89de8491b0b9d906c"
+ },
+ "22": {
+  "name": "Trefoil knot",
+  "n": 576,
+  "m": 1152,
+  "faces": 576,
+  "sha256": "a8cee2c0ce75e2795b4739aad8c541399f805aaf06e2832263cac6fb41a4257a"
+ },
+ "23": {
+  "name": "Starfruit",
+  "n": 522,
+  "m": 1080,
+  "faces": 560,
+  "sha256": "b99faf72520b10b474ba1ddc2caf4dd6897885bb7d27ff1cc47829ded3b69808"
+ },
+ "24": {
+  "name": "Möbius strip",
+  "n": 320,
+  "m": 576,
+  "faces": 256,
+  "sha256": "ea186fcefd2ecc09ea85e682aef4bf7cfbb5b8de98b847352e73b1702c3fb880"
+ },
+ "25": {
+  "name": "Klein bottle",
+  "n": 576,
+  "m": 1152,
+  "faces": 576,
+  "sha256": "f1d4d5ab75e2e33a5b9f92026cb115abb8f89231e25367305cde3abb3e2a2263"
+ }
+}

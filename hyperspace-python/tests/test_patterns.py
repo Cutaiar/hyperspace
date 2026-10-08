@@ -1,0 +1,334 @@
+"""Plan 22 B1: the face patterns' eight inputs mean one thing each, in every
+mode — the convention in hyperspace/patterns.py, which the registry, the
+shader's header and its named accessors are held to here, and which the
+rendered faces are held to by pixels (Renderer.pattern_tile: one face's
+pattern alone, offscreen).
+
+The contact sheets a person judges are tools/pattern_sheet.py's, in
+docs/plans/assets/22-face-patterns/.
+"""
+
+import re
+import shutil
+import subprocess
+import sys
+from itertools import pairwise
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+from hyperspace import patterns
+from hyperspace.patterns import INPUTS, MODES, N_INPUTS
+
+ROOT = Path(__file__).resolve().parents[1]
+SHADER = ROOT / "hyperspace" / "shaders" / "patterns.glsl"
+T, FID = 4.0, 5.0          # a still's time, and a face other than 0 (SPREAD shows)
+
+
+# ---- the table ----
+
+def test_every_mode_says_what_each_of_the_eight_inputs_does():
+    from hyperspace.params import PATTERNS
+    from hyperspace.view import N_MOD
+
+    assert N_INPUTS == N_MOD == 8
+    assert PATTERNS == [m.name for m in MODES]
+    for m in MODES:
+        assert m.name.isupper() and m.about, m
+        assert len(m.does) == N_INPUTS, m.name
+        assert all(isinstance(d, str) for d in m.does), m.name
+
+
+def test_the_inputs_have_short_distinct_capital_names_and_say_what_they_mean():
+    names = [i.name for i in INPUTS]
+    assert names == ["SCALE", "GLOW", "WARP", "SPEED", "COLOUR", "SHARP", "HUE", "SPREAD"]
+    assert len(set(names)) == N_INPUTS
+    for k, i in enumerate(INPUTS):
+        assert i.name.isupper() and len(i.name) <= 8
+        assert "1 as designed" in i.meaning, i.name       # 1.0 is the un-driven look
+        assert i.why and patterns.INDEX[i.name] == k
+
+
+def test_only_flat_ignores_an_input():
+    """The holes are rare: FLAT runs no pattern at all; every other mode
+    reads every input."""
+    assert patterns.ignores(0) == list(range(N_INPUTS))
+    for mode in range(1, len(MODES)):
+        assert patterns.ignores(mode) == [], MODES[mode].name
+
+
+def test_the_registry_labels_and_tips_come_from_the_table(tmp_path):
+    from test_params import make
+
+    r = make(tmp_path)[0]
+    for k, i in enumerate(INPUTS):
+        p = r[f"pattern.mod.{k}"]
+        assert p.label == patterns.label(k) == f"Pattern {i.name.lower()}"
+        assert p.tip == patterns.tip(k) and i.meaning in p.tip
+        assert (p.lo, p.hi) == (0.0, 2.6)
+    assert all(i.name in r["view.pattern"].tip for i in INPUTS)
+
+
+def test_the_factory_routes_put_lane_i_on_input_i():
+    """The order is designed for this: SUB → SCALE … AIR → SHARP."""
+    from hyperspace.bands import BANDS
+    from hyperspace.routing import legacy6_routes
+
+    rows = {b.source: b.target for b in legacy6_routes() if b.target.startswith("pattern.")}
+    assert rows == {f"lane:{i}": f"pattern.mod.{i}" for i in range(len(BANDS))}
+    assert len(BANDS) == 6 and patterns.HUE == 6 and patterns.SPREAD == 7
+
+
+def test_the_factory_depth_reads_on_loud_music_and_never_pins_an_input():
+    """Plan 22 B3: the pattern rows push at routing.PATTERN_DEPTH, and the
+    FACES page's "+ SUB" offer routes at the same one. On the base of 1 an
+    input rises by depth · out: a quiet band (out 0.4) still moves it, a
+    band at nominal (out 1) by a third of a unit, and a kick transient near
+    the asymptote stays well short of the 2.6 end — at depth 1 a nominal
+    band already reached 2.0 and anything loud pinned every input."""
+    from hyperspace import ui_patterns
+    from hyperspace.bands import CEIL
+    from hyperspace.routing import PATTERN_DEPTH, legacy6_routes
+
+    rows = [b for b in legacy6_routes() if b.target.startswith("pattern.")]
+    assert {b.value for b in rows} == {PATTERN_DEPTH} and {b.op for b in rows} == {"push"}
+    assert ui_patterns.ROUTE_DEPTH == PATTERN_DEPTH
+
+    def lifted(out):                             # what a push at the factory depth lands
+        return 1.0 + PATTERN_DEPTH * (out / CEIL) * 2.6
+    assert lifted(0.4) - 1.0 >= 0.1                              # quiet: alive
+    assert 0.3 <= lifted(1.0) - 1.0 <= 0.5                       # nominal: a third of a unit
+    assert lifted(0.96 * CEIL) <= 2.0                            # a transient: short of the end
+    assert lifted(0.96 * CEIL) + (2.2 - 1.0) * PATTERN_DEPTH * 0.96 * 2.6 > 2.6  # DROP's ×2.2 can
+
+
+# ---- the shader keeps the same convention ----
+
+def test_the_shader_names_each_input_at_its_index():
+    src = SHADER.read_text()
+    for k, i in enumerate(INPUTS):
+        assert re.search(rf"^//\s+{k} {i.name}\b", src, re.MULTILINE), f"header: {k} {i.name}"
+        assert re.search(rf"float m_{i.name.lower()}\(\)\s*{{ return u_mod\[{k}\]; }}", src), (
+            f"no m_{i.name.lower()}() reading u_mod[{k}]")
+
+
+def test_the_modes_read_the_inputs_only_by_name():
+    """u_mod[k] appears only in the accessors; the modes call m_*() and
+    the helpers built on them."""
+    code = "\n".join(ln for ln in SHADER.read_text().splitlines()
+                     if not ln.lstrip().startswith("//"))
+    raw = [ln for ln in code.splitlines() if "u_mod[" in ln]
+    assert len(raw) == N_INPUTS and all(ln.startswith("float m_") for ln in raw), raw
+
+
+def test_the_shader_has_a_case_for_every_mode_in_the_table():
+    cases = {int(n) for n in re.findall(r"mode == (\d+)", SHADER.read_text())}
+    assert cases == set(range(len(MODES)))
+
+
+def test_no_variable_shadows_a_function_of_the_shaders():
+    """A local named like a function (HEX's `pulse` once PULSE's pulse()
+    existed) is legal GLSL that Mesa and glslang take, and a classic for a
+    stricter compiler to refuse; the face shaders keep the names apart."""
+    common = (ROOT / "hyperspace" / "shaders" / "_common.glsl").read_text()
+    src = common + SHADER.read_text()
+    types = r"(?:float|int|bool|[biu]?vec[234]|mat[234])"
+    funcs = set(re.findall(rf"^{types}\s+(\w+)\s*\(", src, re.MULTILINE))
+    names = set(re.findall(rf"\b{types}\s+(\w+)\s*[=;,)]", src))
+    assert funcs and not funcs & names, funcs & names
+
+
+@pytest.mark.skipif(shutil.which("glslangValidator") is None,
+                    reason="glslangValidator (the Khronos reference compiler) not installed")
+def test_the_face_shaders_pass_the_reference_compiler():
+    """Mesa is lenient where Apple's GL 4.1 compiler is not; glslang holds
+    #version 330 to the letter (tools/check_glsl.py)."""
+    out = subprocess.run([sys.executable, str(ROOT / "tools" / "check_glsl.py")],
+                         capture_output=True, text=True, check=False)
+    assert out.returncode == 0, out.stdout + out.stderr
+
+
+# ---- the pixels ----
+
+moderngl = pytest.importorskip("moderngl")
+
+
+@pytest.fixture(scope="module")
+def tiles():
+    try:
+        ctx = moderngl.create_context(standalone=True)
+    except Exception as e:  # noqa: BLE001 — any GL failure means skip
+        pytest.skip(f"no standalone GL context available: {e}")
+    from hyperspace.render import Renderer
+    from hyperspace.view import ViewState
+
+    r = Renderer(ctx)
+    assert r.pattern_error == ""
+
+    def tile(mode, k=0, v=1.0, fid=FID, t=T):
+        mods = [1.0] * N_INPUTS
+        mods[k] = v
+        s = ViewState(pattern=mode, pattern_mod=mods)
+        return r.pattern_tile(s, 64, t, fid).astype(float)
+
+    yield tile
+    ctx.release()
+
+
+@pytest.mark.parametrize("mode", range(1, len(MODES)), ids=[m.name for m in MODES[1:]])
+def test_every_input_moves_every_mode_from_1_to_2_6(tiles, mode):
+    """By 5 levels on average, or — a mode mostly dark at rest, PULSE —
+    by a quarter of the light it has (never less than 2.5 levels)."""
+    for k, i in enumerate(INPUTS):
+        base = tiles(mode, k, 1.0)
+        d = np.abs(tiles(mode, k, 2.6) - base).mean()
+        need = max(2.5, min(5.0, 0.25 * base.mean()))
+        assert d > need, f"{MODES[mode].name}: {i.name} 1.0 → 2.6 barely moves the face ({d:.2f})"
+
+
+def test_flat_reads_no_input(tiles):
+    base = tiles(0)
+    for k in range(N_INPUTS):
+        assert np.array_equal(tiles(0, k, 2.6), base)
+
+
+@pytest.mark.parametrize("mode", range(1, len(MODES)), ids=[m.name for m in MODES[1:]])
+def test_glow_brightens_every_mode_steadily(tiles, mode):
+    means = [tiles(mode, patterns.GLOW, v).mean() for v in (0.0, 0.5, 1.0, 1.8, 2.6)]
+    assert all(a < b for a, b in pairwise(means)), means
+
+
+@pytest.mark.parametrize("mode", range(1, len(MODES)), ids=[m.name for m in MODES[1:]])
+def test_colour_at_0_is_grey_on_every_mode(tiles, mode):
+    img = tiles(mode, patterns.COLOUR, 0.0)
+    assert (img.max(axis=2) - img.min(axis=2)).max() <= 2
+    assert img.max() > 20                           # grey, not gone
+
+
+@pytest.mark.parametrize("mode", range(1, len(MODES)), ids=[m.name for m in MODES[1:]])
+def test_spread_at_0_plays_every_face_in_unison(tiles, mode):
+    for fid in (1.0, 5.0, 719.0):                   # 719: the 120-cell's last face
+        assert np.array_equal(tiles(mode, patterns.SPREAD, 0.0, fid=fid),
+                              tiles(mode, patterns.SPREAD, 0.0, fid=0.0)), fid
+
+
+@pytest.mark.parametrize("mode", range(1, len(MODES)), ids=[m.name for m in MODES[1:]])
+def test_speed_at_0_is_frozen(tiles, mode):
+    assert np.array_equal(tiles(mode, patterns.SPEED, 0.0, t=1.0),
+                          tiles(mode, patterns.SPEED, 0.0, t=9.0))
+
+
+@pytest.mark.parametrize("mode", range(1, len(MODES)), ids=[m.name for m in MODES[1:]])
+def test_hue_turns_the_palette_and_keeps_the_shape(tiles, mode):
+    """HUE moves colour, not structure: the light (the max channel's
+    spread aside) stays put while the channels change."""
+    a, b = tiles(mode, patterns.HUE, 1.0), tiles(mode, patterns.HUE, 1.5)
+    assert np.abs(a - b).mean() > 3.0
+    la, lb = a @ [0.299, 0.587, 0.114], b @ [0.299, 0.587, 0.114]
+    assert np.corrcoef(la.ravel(), lb.ravel())[0, 1] > 0.8
+
+
+# ---- SPEED is a rate: the patterns' clock is integrated ----
+
+def test_moving_speed_changes_the_rate_and_never_jumps_the_clock():
+    """t · SPEED would jump a pattern by t · ΔSPEED — minutes into a set,
+    a band on SPEED would strobe. The renderer integrates instead."""
+    from hyperspace.render import Renderer
+    from hyperspace.view import ViewState
+
+    r = Renderer.__new__(Renderer)          # the clock needs no GL
+    r._ptime, r._ptime_at = 0.0, None
+    s = ViewState()
+    assert r._pattern_clock(s, 600.0) == 600.0            # the first frame anchors
+    assert r._pattern_clock(s, 600.0) == 600.0            # a second pass, same frame
+    s.pattern_mod[patterns.SPEED] = 2.0
+    assert r._pattern_clock(s, 600.0) == 600.0            # no jump where it changed
+    assert r._pattern_clock(s, 601.0) == pytest.approx(602.0)
+    s.pattern_mod[patterns.SPEED] = 0.0
+    assert r._pattern_clock(s, 640.0) == pytest.approx(602.0)   # frozen where it was
+    assert r._pattern_clock(s, 3.0) == 0.0                # a clock run back re-anchors
+
+
+# ---- plan 22 B3: the bands themselves (u_levels), for the modes that draw them ----
+
+def test_only_meter_and_pulse_read_the_bands_and_they_show_them():
+    """METER and PULSE draw the analyzer's bands whatever the routes; every
+    other mode is moved by the music only through the inputs."""
+    from hyperspace.render import Renderer
+    from hyperspace.view import ViewState
+
+    try:
+        ctx = moderngl.create_context(standalone=True)
+    except Exception as e:  # noqa: BLE001 — any GL failure means skip
+        pytest.skip(f"no standalone GL context available: {e}")
+    try:
+        r = Renderer(ctx)
+        loud = (0.85, 0.9, 0.3, 0.35, 0.45, 0.8)
+        reads = {patterns.NAMES.index("METER"), patterns.NAMES.index("PULSE")}
+        for mode in range(1, len(MODES)):
+            s = ViewState(pattern=mode)
+            r.bands = ()
+            quiet = r.pattern_tile(s, 64, T, FID).astype(float)
+            r.bands = loud
+            heard = r.pattern_tile(s, 64, T, FID).astype(float)
+            d = np.abs(heard - quiet).mean()
+            if mode in reads:
+                assert d > 8.0, (MODES[mode].name, d)
+                assert heard.mean() > quiet.mean(), MODES[mode].name     # the music lights it
+            else:
+                assert d == 0.0, MODES[mode].name
+        # METER: a band's wedge lights out from the hub as far as it reads
+        meter = ViewState(pattern=patterns.NAMES.index("METER"))
+        r.bands = (1.0, 0, 0, 0, 0, 0)
+        one = r.pattern_tile(meter, 96, 0.0, 0.0).astype(float)
+        r.bands = (0.0,) * 6
+        none = r.pattern_tile(meter, 96, 0.0, 0.0).astype(float)
+        top = (one - none)[: 96 // 2].sum()        # SUB's wedge is at twelve o'clock
+        bottom = (one - none)[96 // 2:].sum()
+        assert top > 4 * max(bottom, 1.0)
+    finally:
+        ctx.release()
+
+
+def test_new_modes_are_appended_so_preset_indices_keep_their_patterns():
+    """Presets hold `view.pattern` as an index: the first twelve stay put."""
+    assert patterns.NAMES[:12] == ["FLAT", "RINGS", "PLAID", "MOIRE", "BLOOM", "CAUSTIC",
+                                   "HEX", "SPIRAL", "CELLS", "PLASMA", "WEAVE", "EMBER"]
+    assert patterns.NAMES[12:] == ["METER", "PULSE", "MARBLE", "TRUCHET", "KALEIDO"]
+
+
+def test_every_phrase_fits_a_faces_row():
+    """The FACES rows print a mode's phrase on one line beside the name."""
+    for m in MODES:
+        assert len(m.about) <= 72, m.name
+        for d in m.does:
+            assert len(d) <= 29, (m.name, d)
+
+
+def test_pulses_hats_still_sparkle_hours_into_a_set():
+    """PULSE picks its lit points by a hash of the sparkle's step. Unwrapped,
+    the step (t · 6) leaves the hash no float32 fraction an hour in, and
+    every point went dark together; wrapped, three hours in it scatters as
+    it did at the start."""
+    from hyperspace.render import Renderer
+    from hyperspace.view import ViewState
+
+    try:
+        ctx = moderngl.create_context(standalone=True)
+    except Exception as e:  # noqa: BLE001 — any GL failure means skip
+        pytest.skip(f"no standalone GL context available: {e}")
+    try:
+        r = Renderer(ctx)
+        r.bands = (0.0, 0.0, 0.0, 0.0, 0.0, 0.5)          # the hats alone
+        s = ViewState(pattern=patterns.NAMES.index("PULSE"))
+
+        def lit(t):                                       # the ice-cyan points' share
+            img = r.pattern_tile(s, 128, t, 0.0).astype(float)
+            return ((img[..., 2] > 120) & (img[..., 0] < 200)).mean()
+        start = lit(4.0)
+        assert start > 0.01
+        for t in (3604.0, 10804.0, 10804.5):
+            assert 0.5 * start < lit(t) < 2.0 * start, t
+    finally:
+        ctx.release()

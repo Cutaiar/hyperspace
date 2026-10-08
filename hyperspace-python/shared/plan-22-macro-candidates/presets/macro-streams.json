@@ -1,0 +1,276 @@
+{
+ "schema": "hyperspace.preset/2",
+ "name": "MACRO STREAMS",
+ "note": "One knob per stream, a mixer for what drives the picture (D1-D8 = macro 1-8). 1-6 SUB BASS MIDB MID UPR AIR: that band's push on its plane and its pattern input, off at zero, as designed at noon, double at full. 7 HUE LFO how far LFO 1 swings the palette (still, to 0.4 of a turn each way). 8 SPREAD LFO how far LFO 2 breathes SPREAD, and the faces from unison to scattered. All rest at noon.",
+ "values": {
+  "view.shape": 10,
+  "view.pattern": 8,
+  "view.pattern_mix": 0.85,
+  "view.faces": true,
+  "view.lines": true,
+  "view.points": false,
+  "view.bright": 2.0,
+  "view.speed": 0.3,
+  "view.depth4": 2.6,
+  "view.plane.XY": true,
+  "view.plane.XZ": true,
+  "view.plane.YZ": true,
+  "view.plane.XW": true,
+  "view.plane.YW": true,
+  "view.plane.ZW": true,
+  "rot.rate.XY": 1.0,
+  "rot.rate.XZ": 1.0,
+  "rot.rate.YZ": 1.0,
+  "rot.rate.XW": 1.0,
+  "rot.rate.YW": 1.0,
+  "rot.rate.ZW": 1.0,
+  "pattern.mod.0": 1.0,
+  "pattern.mod.1": 1.0,
+  "pattern.mod.2": 1.0,
+  "pattern.mod.3": 1.0,
+  "pattern.mod.4": 1.0,
+  "pattern.mod.5": 1.0,
+  "pattern.mod.6": 1.0,
+  "pattern.mod.7": 1.0,
+  "camera.zoom": 1.3,
+  "lfo.1.shape": 0,
+  "lfo.1.sync": 1,
+  "lfo.1.depth": 1.0,
+  "lfo.2.shape": 1,
+  "lfo.2.sync": 2,
+  "lfo.2.depth": 1.0,
+  "fx.on": true,
+  "fx.mix": 0.4,
+  "fx.zoomblur.on": true,
+  "fx.zoomblur.amount": 0.2,
+  "fx.zoomblur.glow": 0.6,
+  "fx.deconverge.on": true,
+  "fx.deconverge.amount": 2.0,
+  "fx.warp.on": true,
+  "fx.warp.amount": 0.5,
+  "fx.warp.speed": 1.0,
+  "fx.huecycle.on": true,
+  "fx.huecycle.paint": 0.3,
+  "fx.huecycle.speed": 0.25,
+  "macro.1": 0.5,
+  "macro.2": 0.5,
+  "macro.3": 0.5,
+  "macro.4": 0.5,
+  "macro.5": 0.5,
+  "macro.6": 0.5,
+  "macro.7": 0.5,
+  "macro.8": 0.5
+ },
+ "routes": [
+  {"source": "lane:0", "target": "rot.rate.ZW", "op": "push", "value": 0.0625, "scale": "master.gain"},
+  {"source": "lane:1", "target": "rot.rate.XW", "op": "push", "value": 0.0625, "scale": "master.gain"},
+  {"source": "lane:2", "target": "rot.rate.YW", "op": "push", "value": -0.0625, "scale": "master.gain"},
+  {"source": "lane:3", "target": "rot.rate.XY", "op": "push", "value": -0.0625, "scale": "master.gain"},
+  {"source": "lane:4", "target": "rot.rate.XZ", "op": "push", "value": 0.0625, "scale": "master.gain"},
+  {"source": "lane:5", "target": "rot.rate.YZ", "op": "push", "value": -0.0625, "scale": "master.gain"},
+  {"source": "lane:0", "target": "pattern.mod.0", "op": "push", "value": 0.35},
+  {"source": "lane:1", "target": "pattern.mod.1", "op": "push", "value": 0.35},
+  {"source": "lane:2", "target": "pattern.mod.2", "op": "push", "value": 0.35},
+  {"source": "lane:3", "target": "pattern.mod.3", "op": "push", "value": 0.35},
+  {"source": "lane:4", "target": "pattern.mod.4", "op": "push", "value": 0.35},
+  {"source": "lane:5", "target": "pattern.mod.5", "op": "push", "value": 0.35},
+  {"source": "lfo:0", "target": "pattern.mod.6", "op": "push", "value": 0.3},
+  {"source": "lfo:1", "target": "pattern.mod.7", "op": "push", "value": 0.3}
+ ],
+ "desk": [
+  {"source": "cc:0:48", "target": "view.bright", "op": "abs", "feedback": "ring"},
+  {"source": "cc:0:49", "target": "view.speed", "op": "abs", "feedback": "ring"},
+  {"source": "cc:0:50", "target": "view.instances", "op": "abs", "feedback": "ring"},
+  {"source": "cc:0:51", "target": "view.pattern_mix", "op": "abs", "feedback": "ring"},
+  {"source": "cc:0:52", "target": "view.inst_amp", "op": "abs", "feedback": "ring"},
+  {"source": "cc:0:53", "target": "view.inst_rate", "op": "abs", "feedback": "ring"},
+  {"source": "cc:0:54", "target": "view.bmp_alpha", "op": "abs", "feedback": "ring"},
+  {"source": "cc:0:55", "target": "camera.zoom", "op": "abs", "feedback": "ring"},
+  {"source": "cc:0:47", "target": "view.shape", "op": "rel", "ring": 0},
+  {"source": "note:0:50", "target": "view.plane.ZW", "op": "toggle", "feedback": "led"},
+  {"source": "note:1:50", "target": "view.plane.XW", "op": "toggle", "feedback": "led"},
+  {"source": "note:2:50", "target": "view.plane.YW", "op": "toggle", "feedback": "led"},
+  {"source": "note:3:50", "target": "view.plane.XY", "op": "toggle", "feedback": "led"},
+  {"source": "note:4:50", "target": "view.plane.XZ", "op": "toggle", "feedback": "led"},
+  {"source": "note:5:50", "target": "view.plane.YZ", "op": "toggle", "feedback": "led"},
+  {"source": "note:4:55", "target": "view.inst_motion", "op": "set", "value": 0, "feedback": "led", "on": 3},
+  {"source": "note:5:55", "target": "view.inst_motion", "op": "set", "feedback": "led", "on": 3},
+  {"source": "note:6:55", "target": "view.inst_motion", "op": "set", "value": 2, "feedback": "led", "on": 3},
+  {"source": "note:7:55", "target": "view.inst_motion", "op": "set", "value": 3, "feedback": "led", "on": 3},
+  {"source": "note:0:82", "target": "view.points", "op": "toggle", "feedback": "led"},
+  {"source": "note:0:83", "target": "view.lines", "op": "toggle", "feedback": "led"},
+  {"source": "note:0:84", "target": "view.faces", "op": "toggle", "feedback": "led"},
+  {"source": "note:0:85", "target": "view.rotate", "op": "toggle", "feedback": "led"},
+  {"source": "note:0:86", "target": "camera.reset", "op": "toggle", "feedback": "led"},
+  {"source": "note:0:94", "target": "view.bright", "op": "step", "value": 3, "feedback": "led"},
+  {"source": "note:0:95", "target": "view.bright", "op": "step", "value": -3, "feedback": "led"},
+  {"source": "cc:*:16", "target": "macro.1", "op": "abs", "feedback": "ring"},
+  {"source": "cc:*:17", "target": "macro.2", "op": "abs", "feedback": "ring"},
+  {"source": "cc:*:18", "target": "macro.3", "op": "abs", "feedback": "ring"},
+  {"source": "cc:*:19", "target": "macro.4", "op": "abs", "feedback": "ring"},
+  {"source": "cc:*:20", "target": "macro.5", "op": "abs", "feedback": "ring"},
+  {"source": "cc:*:21", "target": "macro.6", "op": "abs", "feedback": "ring"},
+  {"source": "cc:*:22", "target": "macro.7", "op": "abs", "feedback": "ring"},
+  {"source": "cc:*:23", "target": "macro.8", "op": "abs", "feedback": "ring"}
+ ],
+ "macros": {
+  "macro.1": {
+   "label": "SUB",
+   "subs": [
+    {
+     "depth": {
+      "source": "lane:0",
+      "target": "rot.rate.ZW"
+     },
+     "from": 0.0,
+     "to": 2.0
+    },
+    {
+     "depth": {
+      "source": "lane:0",
+      "target": "pattern.mod.0"
+     },
+     "from": 0.0,
+     "to": 2.0
+    }
+   ]
+  },
+  "macro.2": {
+   "label": "BASS",
+   "subs": [
+    {
+     "depth": {
+      "source": "lane:1",
+      "target": "rot.rate.XW"
+     },
+     "from": 0.0,
+     "to": 2.0
+    },
+    {
+     "depth": {
+      "source": "lane:1",
+      "target": "pattern.mod.1"
+     },
+     "from": 0.0,
+     "to": 2.0
+    }
+   ]
+  },
+  "macro.3": {
+   "label": "MIDB",
+   "subs": [
+    {
+     "depth": {
+      "source": "lane:2",
+      "target": "rot.rate.YW"
+     },
+     "from": 0.0,
+     "to": 2.0
+    },
+    {
+     "depth": {
+      "source": "lane:2",
+      "target": "pattern.mod.2"
+     },
+     "from": 0.0,
+     "to": 2.0
+    }
+   ]
+  },
+  "macro.4": {
+   "label": "MID",
+   "subs": [
+    {
+     "depth": {
+      "source": "lane:3",
+      "target": "rot.rate.XY"
+     },
+     "from": 0.0,
+     "to": 2.0
+    },
+    {
+     "depth": {
+      "source": "lane:3",
+      "target": "pattern.mod.3"
+     },
+     "from": 0.0,
+     "to": 2.0
+    }
+   ]
+  },
+  "macro.5": {
+   "label": "UPR",
+   "subs": [
+    {
+     "depth": {
+      "source": "lane:4",
+      "target": "rot.rate.XZ"
+     },
+     "from": 0.0,
+     "to": 2.0
+    },
+    {
+     "depth": {
+      "source": "lane:4",
+      "target": "pattern.mod.4"
+     },
+     "from": 0.0,
+     "to": 2.0
+    }
+   ]
+  },
+  "macro.6": {
+   "label": "AIR",
+   "subs": [
+    {
+     "depth": {
+      "source": "lane:5",
+      "target": "rot.rate.YZ"
+     },
+     "from": 0.0,
+     "to": 2.0
+    },
+    {
+     "depth": {
+      "source": "lane:5",
+      "target": "pattern.mod.5"
+     },
+     "from": 0.0,
+     "to": 2.0
+    }
+   ]
+  },
+  "macro.7": {
+   "label": "HUE LFO",
+   "subs": [
+    {
+     "depth": {
+      "source": "lfo:0",
+      "target": "pattern.mod.6"
+     },
+     "from": 0.0,
+     "to": 2.0
+    }
+   ]
+  },
+  "macro.8": {
+   "label": "SPREAD LFO",
+   "subs": [
+    {
+     "depth": {
+      "source": "lfo:1",
+      "target": "pattern.mod.7"
+     },
+     "from": 0.0,
+     "to": 2.0
+    },
+    {
+     "base": "pattern.mod.7",
+     "from": 0.07692,
+     "to": 0.69231
+    }
+   ]
+  }
+ },
+ "modules": {}
+}

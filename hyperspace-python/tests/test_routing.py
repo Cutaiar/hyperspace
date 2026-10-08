@@ -37,6 +37,7 @@ from hyperspace.overlay import Output
 from hyperspace.params import DRIVE, PLANES, ROT_RATE_MAX, build_registry, part_of
 from hyperspace.routing import (
     MOD_OPS,
+    PATTERN_DEPTH,
     ROT_DEPTH,
     SCHEMA,
     Binding,
@@ -122,6 +123,14 @@ def session_rows() -> list[Binding]:
     return [b for b in Bindings.factory().bindings if routing.is_session_row(b)]
 
 
+def factory_pattern(out) -> np.ndarray:
+    """The pattern inputs the legacy6 / factory rows land for lanes `out`
+    (plan 22 B3): a push at PATTERN_DEPTH on the base of 1, u = out / CEIL,
+    the input's 0–2.6 range — 1 + PATTERN_DEPTH · out, held to the range.
+    The reference fed out raw (u_bands = out); the rates keep that parity."""
+    return np.clip(1.0 + PATTERN_DEPTH * (np.asarray(out) / CEIL) * 2.6, 0.0, 2.6)
+
+
 def house(**kw) -> Bindings:
     """The factory table with the house presets' performer rows — the
     legacy6 lane rows on the bases of 1 — which `Bindings.factory` shipped
@@ -154,8 +163,10 @@ def test_legacy6_reproduces_planedrive_and_u_bands(
     u_bands = out, against the analyzer → routes → reg.apply → integrate
     and pattern.mod, through the reference's three states — no source, a
     source, the source gone again. The legacy6 preset is the oracle: with
-    the source live, rates and angles agree to round-off every frame, the
-    shader inputs to an ulp, and all are the same float32 the GPU sees; a
+    the source live, rates and angles agree to round-off every frame and
+    are the same float32 the GPU sees; the shader inputs are no longer the
+    reference's raw out but 1 + PATTERN_DEPTH · out (plan 22 B3, the
+    factory depth on the base of 1: `factory_pattern`); a
     gated band's plane sits at exactly 0.0; the drive fader keeps meaning
     (it scales the rotation routes, so a change lands the same frame it
     did before, and leaves the pattern inputs raw as the reference did).
@@ -176,7 +187,7 @@ def test_legacy6_reproduces_planedrive_and_u_bands(
     assert view.rate == [1.0] * 6                          # WP0's un-driven base
     if table == "legacy6":
         assert legacy6(router) == []
-        assert view.pattern_mod[:6] == [0.0] * 6 and view.rate == [0.0] * 6
+        assert view.pattern_mod[:6] == [1.0] * 6 and view.rate == [0.0] * 6
     base = [0.0] * 6 if table == "legacy6" else [1.0] * 6
     ticks = list(frames(samples, sr, fps))
     idle = np.ones(6)
@@ -218,8 +229,8 @@ def test_legacy6_reproduces_planedrive_and_u_bands(
         for i in range(6):                                       # gated → stopped, exactly
             if old.out[i] == 0.0:
                 assert view.rate[BANDS[i].plane] == 0.0
-        np.testing.assert_allclose(view.pattern_mod[:6], old.out, rtol=RTOL, atol=1e-15)
-        assert np.array_equal(np.float32(view.pattern_mod[:6]), np.float32(old.out))
+        np.testing.assert_allclose(view.pattern_mod[:6], factory_pattern(old.out),
+                                   rtol=RTOL, atol=1e-12)
         np.testing.assert_allclose(view.ang, old_view.ang, rtol=RTOL, atol=ATOL_ANG)
         assert np.array_equal(np.float32(view.ang), np.float32(old_view.ang))
         n += 1
@@ -237,7 +248,7 @@ def test_legacy6_reproduces_planedrive_and_u_bands(
         view.integrate(dt)
         assert view.rate == base and not r.reg["rot.rate.XY"].modulated
     if table == "legacy6":
-        assert view.ang == ang and view.pattern_mod[:6] == [0.0] * 6
+        assert view.ang == ang and view.pattern_mod[:6] == [1.0] * 6
     else:
         assert view.ang != ang
 
@@ -257,8 +268,8 @@ def test_legacy6_matches_the_golden_traces():
             router.modulate(r.chain)
             r.reg.apply()
             np.testing.assert_allclose(r.view.rate, drive[k], atol=DRIVE * 1e-6 + 1e-9)
-            np.testing.assert_allclose(r.view.pattern_mod[:6], out[k], rtol=RTOL, atol=1e-15)
-            assert np.array_equal(np.float32(r.view.pattern_mod[:6]), np.float32(out[k]))
+            np.testing.assert_allclose(r.view.pattern_mod[:6], factory_pattern(out[k]),
+                                       rtol=RTOL, atol=1e-12)
 
 
 def test_legacy_planedrive_is_the_reference_formula():
@@ -286,7 +297,8 @@ def test_rot_rate_range_holds_the_reference_drive():
     r.reg.apply()
     assert r.view.rate[BANDS[0].plane] == pytest.approx(ROT_RATE_MAX, rel=1e-12)
     assert r.view.rate[BANDS[2].plane] == pytest.approx(-ROT_RATE_MAX, rel=1e-12)
-    assert r.view.pattern_mod[:6] == [CEIL] * 6                 # base 0 + 1·u
+    # the pattern rows: base 1 + PATTERN_DEPTH · u of the 2.6 range (plan 22 B3)
+    assert r.view.pattern_mod[:6] == pytest.approx([1.0 + PATTERN_DEPTH * 2.6] * 6, rel=1e-12)
     r.chain.out[:] = 0.0                                        # silence: held at the base
     router.modulate(r.chain)
     r.reg.apply()
@@ -880,7 +892,7 @@ def test_the_legacy6_preset_replaces_routes_and_lands_bases(tmp_path):
     assert presets.load("legacy6") == [] and presets.notes == []
     assert len(router.table.mods()) == 12 and not router.table.routes_to("view.bright")
     assert len(router.table.of(*inputs)) == n_inputs
-    assert r.view.pattern_mod == [0.0] * 6 + [1.0] * (N_MOD - 6)
+    assert r.view.pattern_mod == [1.0] * N_MOD           # plan 22 B3: the inputs on 1
     assert r.view.rate == [0.0] * 6                      # a push lands the drive only on 0
     for name in PLANES:
         assert router.table.routes_to(f"rot.rate.{name}")[0].op == "push"
@@ -1924,7 +1936,7 @@ def test_every_factory_preset_names_real_params_with_one_owner(tmp_path):
         assert routing.referee(routes)[1] == [], name
         if spec.values is not None:
             assert set(preset.generated(name)["values"]) <= ids, name
-    assert set(preset.FACTORY_PRESETS) == {
+    assert set(preset.FACTORY_PRESETS) == {*preset.HOUSE,
         "legacy6", "lfo-breathe", "hands-fx", "hands-pinch", "hands-play", "hands-orbit",
         "party-tumble", "party-faces", "party-field", "party-wake", "party-trip",
         "party-acid", "party-mandala", "party-noita", "party-tracer"}

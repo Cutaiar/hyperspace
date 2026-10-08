@@ -37,6 +37,7 @@ backups, the trash and the dream weights.
 | Folder | From | What |
 |---|---|---|
 | `dan-2026-10-04/` | Dan's rig, copied 2026-10-04 | The sixteen presets saved at the Oct 3–4 session (`3x3`, `civilization`, `crystal-drill`, `dyson-ring`, `flashlights`, `hand-game`, `hi-frek` and `hi-frek-variation-1`, `light-realm` and its variations `-1`, `-2`, `-3` and `-steady`, `lightning-mandala`, `manifold-burst`, `percussive-central-burst`) and `MIGRATED`; the shows `after-hamdi`, `mine` and `party` as they were (none of their banks names the new presets: load them from the list); the module presets `fx/wobbly-pinch` and `dream/loud`. Saved on main fa9b3a1. |
+| `plan-22-macro-candidates/` | Plan 22 B5, generated | Four presets of macro configurations to audition, unjudged: `macro-performance` (eight knobs for a set), `macro-streams` (one knob per band and LFO), `macro-intensity` (one idea three ways), `macro-breakdown-drop` (one knob against a pair). What each macro is meant to do: `docs/plans/22-macro-candidates.md`. |
 
 A preset here is a plain `hyperspace.preset/2` file: values, hand and
 audio routes, the desk's preset layer and macros. The hand routes assume

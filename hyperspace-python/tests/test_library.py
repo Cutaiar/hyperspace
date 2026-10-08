@@ -442,7 +442,7 @@ def test_presets_are_the_librarys_one_document_kind(rig, tmp_path):
     assert not lib.is_dirty("presets")                    # nothing loaded: never dirty
     rig.view.pattern_mod[0] = 0.4
     lib.load("presets", "legacy6")
-    assert rig.view.pattern_mod[0] == 0.0                 # its bases land
+    assert rig.view.pattern_mod[0] == 1.0                 # its bases land (plan 22 B3: 1)
     assert lib.current("presets") == "legacy6" and not lib.is_dirty("presets")
     assert len(router.table.routes()) == 12
     router.table.add(Binding("lane:2", "view.bright", "push", 0.3))

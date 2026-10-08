@@ -51,10 +51,155 @@ form under this heading.
 | 23 | Trefoil knot | — | 576 | 1152 |
 | 24 | Starfruit | — | 522 | 1080 |
 | 25 | Möbius strip | — | 320 | 576 |
+| 26 | Klein bottle | — | 576 | 1152 |
 
-Shapes 19–25 are 3D shapes from trig equations, in the w = 0 hyperplane;
-the XW / YW / ZW planes tumble them through the fourth dimension (turn
-those planes off for a plain 3D spin).
+Cells "—" (`Shape.cells == 0`) marks a surface, not a polytope. It does
+not mean 3D: the Clifford torus (18) is a surface native to 4D. Shapes
+19–26 are surfaces from trig equations, each built with its own face
+cycles.
+
+**How a shape fills the fourth dimension** (`Shape.w`, one of
+`geometry.W_KINDS`; any other value raises):
+
+| `Shape.w` | Means | Shapes |
+|---|---|---|
+| `native` | built with real w-extent: a 4-polytope or a 4D surface | 1–18 |
+| `lift` | a 3D surface given w-extent by a lift of its own parameters | Star, Rose, Torus, Trefoil knot, Starfruit, Möbius strip, Klein bottle |
+| `mask` | a 3D shape kept at w = 0, its W planes folded onto 3D planes where it is drawn | Heart |
+| `flat` | a 3D shape at w = 0 with nothing done: a quarter turn of XW, YW or ZW carries a whole axis into w, the 4D→3D divide drops it, and the shape draws as a plane | none (the tests use it to show the collapse) |
+
+A surface built without a lift sits at w = 0; that is what shapes 19–25
+were before plan 22, and why they went flat whenever the bass bands
+turned a W plane.
+
+**A lift** is a function of the builder's own parameters, passed as
+`w=`; each builder hands it to `_mesh3`, which takes 3- or 4-tuples and
+merges coincident points on every coordinate given. Without a lift every
+shape is what it was, vertex for vertex
+(`tests/golden/shape_digests.json`).
+
+| Builder | The lift it takes |
+|---|---|
+| `param_surface` | `w(u, v)`; or `fn` returns (x, y, z, w) itself |
+| `spherical_surface` | `w(θ, φ)`, φ from the +y pole |
+| `ring_prism`, `curve_prism`, `polar_prism` | `w(t, z)` or `w(θ, z)`: t the outline's parameter, z = ±depth/2 the cap |
+| `tube` | `w(t, a)`: t along the curve, a = 2π·j/m round the tube |
+
+The rules a lift follows (the comment above `geometry._build_heart`):
+
+- **No linear part of x, y or z.** w = a·x only tilts the shape into
+  another flat 3-space, which some W turn still flattens.
+- **Odd under each mirror of the shape that flips one axis.** At a
+  quarter turn of a W plane, w takes that axis's place; a lift that is
+  the same on both sides folds the halves onto each other into a sheet,
+  which neither measure below sees.
+- **An extruded outline's lift depends on z**, or every wall goes
+  edge-on at once when ZW turns z away.
+- **It agrees wherever the surface welds**: poles (w independent of θ
+  there), the Rose's pinch, the Möbius seam (w(2π, 1 − v) = w(0, v)). A
+  lift that disagrees leaves the seam open.
+- A lift cannot make a shape fatter than its own 3D proportions, since at
+  rest the divide drops w; a shape too thin for the floor must change
+  size (the Rose went 0.12 → 0.16 deep, the Möbius band 0.45 → 0.55
+  wide).
+
+| Shape | `Shape.w` | Lift |
+|---|---|---|
+| Heart | mask | — |
+| Star | lift | 0.6·(z/h)·sin t, h = 0.175: the caps tip opposite ways |
+| Rose | lift | z·(3 sin 4θ + sin 8θ): 0 where the petals meet |
+| Torus | lift | 0.7·sin v·sin 2u |
+| Trefoil knot | lift | 1.5·cos 3t |
+| Starfruit | lift | 0.6·sin 2φ·sin 2θ: 0 at the poles |
+| Möbius strip | lift | 0.5·sin 2u: 0 at the seam |
+| Klein bottle | lift | sin 2u + ½·sin v·cos 2u |
+
+**A mask** keeps the shape 3D. `geometry.view_angles(i, ang)` returns
+`ang` itself for every shape that is not masked; for a masked one, a new
+list with each W angle added onto a 3D plane (`W_REMAP`: XW → XZ,
+YW → YZ, ZW → XY) and the W planes at 0. `Renderer.draw_scene` draws
+through it and is its one call site; nothing writes the result back, so
+`ViewState.ang`, the integrator and every `rot.*` param are untouched
+and a rate or a phase route on a W plane lands on the 3D plane alike.
+With the factory band map (SUB → ZW, BASS → XW, MIDB → YW) SUB rolls a
+masked shape in the screen plane, BASS spins it about y and MIDB tumbles
+it about x. Its depth cue (`pd`: the line fade, width and draw order)
+reads its depth toward the 3D camera — `geometry.view_depth`, z after
+the camera's yaw and pitch, the depth the 3D divide reads — since its w
+is 0 at every angle. The VIEW page and
+`rot.phase.*` still show the W planes turning.
+
+**The volume measures.** `project3(V, ang)` is the rotated, divided 3D
+cloud the camera views. `volume_ratio(P)` is its smallest singular value
+over its largest, centred: 1 a ball, 0 a plane or a line.
+`sweep_ratios(i, plane, steps=72, pose=None)` measures it round one full
+turn of one plane, the others at `pose`, through `view_angles` as the
+renderer draws. `edge_on_share` is the share of face area drawn at under
+a tenth of its 4D area, and `sweep_edge_on` its sweep: a cloud can keep
+its volume while its faces still read as a sheet.
+
+**`VOLUME_FLOOR = 0.15`.** Every lifted or masked shape keeps at least
+this ratio through a full turn of each W plane, from rest and from
+`GENERIC_POSE`, and turns at most 0.15 of its face area edge-on
+(`tests/test_shapes4d.py::test_a_lifted_or_masked_shape_keeps_its_volume_through_each_w_plane`,
+`::test_a_lifted_or_masked_shape_never_turns_much_of_itself_edge_on`).
+It is calibrated on the 18 native shapes, which already draw as volumes:
+their worst ratios through the W planes are cubic pyramid 0.30,
+4,8-duoprism 0.53, dodecahedral prism 0.64, 5-cell 0.65, tesseract 0.94,
+Clifford torus 0.97, 24-cell, 120-cell and 600-cell 1.00 (single-plane
+sweeps reach the same worst case as 2000 random poses of all six
+planes). The floor is half the cubic pyramid's, so no surface is asked
+to be rounder than a polytope is; every native shape clears it
+(`::test_every_4d_shape_clears_the_volume_floor`). A flat shape reads
+0.000 at 90° and 270°.
+
+**The turntable** (`tools/turntable.py`) is the same sweep with
+pictures:
+
+```bash
+uv run python tools/turntable.py --prefix after              # every shape, numbers and sheets
+uv run python tools/turntable.py --prefix check --shapes 18-25 --no-png
+```
+
+It writes `<prefix>-ratios.json` / `.csv` (per shape, plane and pass:
+the minimum ratio and its angle, the maximum edge-on share and its
+angle) and one sheet per shape — rows XW, YW, ZW, `--frames` tiles
+(12) across a turn, drawn offscreen by the real renderer, each tile
+labelled with its angle and ratio, red under the floor — into
+`docs/plans/assets/22-flat-shapes/`. A run overwrites files of the same
+prefix there. `--shapes` takes indices (`18-24`, `17,21`); `--steps`
+the sweep's resolution (72 = 5°).
+
+**Faces on a lifted shape.** The grids' quads stay quads; a lift bends
+them slightly out of plane, which `_face_xy` already framed
+best-effort. A cap — the Star's two pentagram faces, which its lift
+bends through w — is a polygon of more than four corners that is not
+planar, and `_face_xy` frames it by its least-squares plane, where the
+outline stays simple and the ear clip tiles it exactly; every planar
+face keeps the basis it had
+(`tests/test_shapes4d.py::test_a_lifted_cap_is_triangulated_over_its_own_outline`).
+
+**The Klein bottle** (26). `_klein_xyz(u, v)` is the classic "bottle"
+immersion, u ∈ [0, π], v ∈ [0, 2π): the body swells up from the base,
+the neck curls over and comes back down through the body's side, where
+in 3D the surface must cross itself. The lift sin 2u + ½·sin v·cos 2u
+holds the two crossing sheets (the body at u ≈ 0.49, the neck at
+u ≈ 2.56) at least 1.56 apart in w, so in 4D it never crosses; the
+½·sin v·cos 2u term is odd in v, so the z-mirror cannot fold it at a
+quarter turn of ZW. The seam u = π meets u = 0 with v flipped to π − v,
+where the lift agrees, and welds by `kkey` like the Möbius strip's: 37 ×
+16 samples, 36 × 16 vertices, 576 quads, every edge on two faces,
+V − E + F = 0. It is centred on its bounding box
+(`tests/test_shapes3d.py::test_the_klein_bottle_seam_welds_into_a_closed_grid`,
+`::test_the_klein_bottle_crosses_itself_in_3d_and_not_in_4d`). Its own
+3D ratio is 0.23; through the W planes it keeps 0.20.
+
+**A new shape** goes at the end of `SHAPES` (the index is its identity),
+says how it fills w, and gets a row in the V/E table above. A 3D shape is
+`lift` or `mask`, never `flat`: the acceptance tests take it in through
+`Shape.w`. Record its digest with `uv run python tests/test_shapes4d.py
+--record`, and say so in the commit; a polytope's digest must never
+move.
 
 ## 2. Rendering
 
@@ -66,13 +211,90 @@ count so the 120-cell does not clip to a blob. Points are red.
 
 **Faces** are the true 2-faces, translucent and painter-sorted, with
 face-local UVs. `shaders/patterns.glsl` paints them: `vec4 pattern(int
-mode, vec2 uv, float fid)`, reading `u_time` and `u_mod[8]` (the eight
-`pattern.mod.k` params). Twelve patterns (`params.PATTERNS`: FLAT and
-eleven more); a new mode needs both the GLSL case and the name. Shared
-colour helpers are `shaders/_common.glsl`. Both files hot-reload on
+mode, vec2 uv, float fid)` (`.rgb` the colour, `.a` the intensity; `uv`
+face-local, (0.5, 0.5) the centre, circumradius 0.5; `fid` the face's
+index). Seventeen patterns (`view.pattern`, `params.PATTERNS` =
+`patterns.NAMES`): FLAT, RINGS, PLAID, MOIRE, BLOOM, CAUSTIC, HEX,
+SPIRAL, CELLS, PLASMA, WEAVE, EMBER, METER, PULSE, MARBLE, TRUCHET,
+KALEIDO. Shared colour helpers (`hsv`, `pal`, `hue_rotate`, `luma`, `TAU`,
+`PI`) are `shaders/_common.glsl`, prepended. Both files hot-reload on
 save; a broken edit keeps the last good program and shows the GLSL error
-on the panel. The **bitmap** layer textures faces from a file; a bad file
-leaves the plain faces. **Cut-through** matters only in overlay mode.
+on the FACES page. The **bitmap** layer textures faces from a file; a bad
+file leaves the plain faces. **Cut-through** matters only in overlay
+mode.
+
+**The eight pattern inputs** are `pattern.mod.0`–`.7`, the shader's
+`u_mod[8]`: range 0–2.6, **1.0 the pattern as designed**. Each means one
+kind of change on every pattern, so a route that feels right on one
+reads the same on the next:
+
+| k | Input | Registry label | 0 | 1 | 2.6 | Shader | Factory source |
+|---|---|---|---|---|---|---|---|
+| 0 | SCALE | Pattern scale | small and many (0.59×) | as designed | big and few (2.3×) | `k_size()` | SUB |
+| 1 | GLOW | Pattern glow | dim (0.3× light) | as designed | white-hot (2.4×) | `finish()` | BASS |
+| 2 | WARP | Pattern warp | straight | as designed | heavily warped | `warp(p, own)` | MIDB |
+| 3 | SPEED | Pattern speed | frozen | as designed | 2.6× as fast | `u_ptime` (the renderer's) | MID |
+| 4 | COLOUR | Pattern colour | grey | as designed | more hues, stronger | `finish()`, `spread_hue()` | UPR |
+| 5 | SHARP | Pattern sharp | soft and broad | as designed | thin and crisp | `sharpen()`, `k_edge()` | AIR |
+| 6 | HUE | Pattern hue | half a turn back | as designed | four fifths of a turn on | `finish()` | — (an LFO) |
+| 7 | SPREAD | Pattern spread | every face in unison | as designed | each face its own phase and colour | `face_rad`, `face_turn`, `face_gold`, `face_k1` | — (a macro or knob) |
+
+The order is for the factory routes, lane *i* → input *i*: the sub
+swells, the kick flashes, the low mids bend, the mids set the pace, the
+upper mids flare the colour, the air sharpens. A straight design stays
+straight from WARP 0 to 1 and bends above 1; a design whose faces play
+in unison stays in step from SPREAD 0 to 1 and parts above. GLOW keeps
+30% of the light at 0. BLOOM has seven petals, SPIRAL five arms and
+KALEIDO six wedges, whatever the inputs. FLAT reads none.
+
+- **`hyperspace/patterns.py`** is where the convention lives, as data,
+  importing nothing: `INPUTS` (`name`, `meaning`, `why`), the index
+  constants `SCALE` … `SPREAD`, `MODES` (`name`, `about`, and `does`: what
+  each input does in that mode in a few words, `""` where it reads none),
+  `NAMES`, `effect(mode, k)`, `ignores(mode)`, `label(k)` and `tip(k)`.
+  `params` takes the mode names and each input's label and tip from it;
+  the FACES page takes the per-mode phrases (29 characters at most, so
+  each fits a row).
+- **In the shader** a mode reads its inputs only through the accessors
+  `m_scale()` … `m_spread()` and the helpers on them; GLOW, HUE and
+  COLOUR's grey end are one `finish()` over every mode, each term the
+  identity at 1.0. Mode bodies are in `design()` or a function of their
+  own (`meter`, `pulse`, …); `pattern()` is `finish(design(...))`.
+- **`u_ptime`** is the patterns' clock: the renderer integrates wall
+  seconds × SPEED (`Renderer._pattern_clock`), once per frame, so a
+  moving SPEED changes the rate and never jumps the phase. `u_time`
+  (seconds since launch) is still uploaded; no mode reads it.
+- **`u_levels[8]`, `u_nlevels`** are the analyzer's lanes, out / CEIL
+  (0–1, low band first), and how many there are (0 with no audio): the
+  app sets `Renderer.bands` each frame (`app._bands`). Read them through
+  `band(i)`, an if-chain, never `u_levels[i]` (a constant index on every
+  compiler). Only METER and PULSE do; every other mode is moved by the
+  music only through its routed inputs.
+- **A new mode** is a case in `design()` (or a function of its own) that
+  reads the inputs only through the accessors and helpers, **plus** a
+  `Mode` entry at the end of `patterns.MODES` — appended, never inserted,
+  since a preset holds the mode as an index — with its one line and
+  eight phrases. The tests hold the shader's cases, accessors and header
+  to the table.
+- **Checking the shader.** `uv run python tools/check_glsl.py` compiles
+  the face, seed and tile shaders exactly as `render.py` assembles them
+  with the Khronos reference compiler, `glslangValidator` (on the PATH;
+  `glslang-tools` on Debian), which holds `#version 330` to the letter.
+  It is an extra net: Mesa (the tests' driver) and glslang are both more
+  lenient than Apple's GL in places, so only a launch on the Mac proves
+  a mode compiles there.
+- **The factory depth.** The factory lane → pattern routes push at
+  `routing.PATTERN_DEPTH` = 0.35 on a base of 1, so an input rises by
+  0.35 × the band's out: about 1.1 for a quiet band, 1.35 at nominal,
+  about 1.86 on a kick; at depth 1 a loud band pinned its input at 2.6.
+- **Pictures.** `tools/pattern_sheet.py` draws a sheet per mode
+  (`mode-NN-*`), a sheet per input across every mode (`input-K-*`) and the
+  old modes (`before-NN-*`) into `docs/plans/assets/22-face-patterns/`;
+  `tools/pattern_cost.py` times every mode offscreen against FLAT
+  (`b3-cost.txt`; software GL: ratios only — MARBLE is the dearest,
+  4.19× FLAT on the 600-cell); `tools/faces_page_shots.py` shoots the
+  FACES page from a hidden real window. `Renderer.pattern_tile(s, size,
+  t_now, fid)` renders one face's pattern alone, for tools and tests.
 
 **Instances** (`view.instances`, 0–100): copies laid out by
 `view.inst_layout` — **GRID** (rows of ⌈√n⌉), **HEX** (a honeycomb
@@ -264,7 +486,11 @@ warning line until a commit succeeds. There is no remote, push or fetch.
 The SYSTEM page's library line ends "· git" while it is on. Sharing
 presets between people is the repository's `shared/` folder and
 `tools/shared_presets.py` (`list`, `install` — never overwrites —
-`export`).
+`export`). The macro candidates to audition are one such folder:
+`uv run python tools/shared_presets.py install shared/plan-22-macro-candidates`
+puts four presets on the PRESETS list (no bank slot);
+[`plans/22-macro-candidates.md`](plans/22-macro-candidates.md) says what
+each macro is meant to do.
 
 ## 5. `config.toml`
 
@@ -367,7 +593,7 @@ scrolls at the control size (960 × 900, `app.CONTROL_SIZE`;
 |---|---|
 | OUTPUT | The master dim; one block per render output (scene / hands / through ticks, its dim, what it shows in words); the screen and fullscreen of output 1; overlay and its click-through, ground and opacity (greyed, with the reason, unless `[output] overlay = true`). |
 | VIEW | The cell-count readout and shape name, the shape, the six rotation planes, points / lines / rotate / faces, brightness, speed, 4D depth, instances (0–100) and, above one copy, the field row: layout, motion, amp, rate; the six plane rates. |
-| FACES | Faces, cut-through, the pattern and its mix; the eight pattern inputs (`pattern.mod.k`). |
+| FACES | Faces, cut-through and the pattern mix; every pattern as a chip with a live swatch; the pattern on show and its line, ‹ ›; the eight pattern inputs by name, each with what it does on this pattern and what drives it (below). |
 | BITMAP | A bitmap textured onto the faces: file, opacity, scale, mode. |
 | CAMERA | Zoom, yaw, pitch, pan, reset. |
 | LOOKBACK | The look-back switch and three sections: ECHOES, DREAM, BOTH (§2). |
@@ -379,6 +605,37 @@ scrolls at the control size (960 × 900, `app.CONTROL_SIZE`;
 | HANDS | The tracker, the box, the axes and their setup, feel and calibration, the ghost hands (§12). |
 | PRESETS | The show, "starts on / home", the bank of twenty-four, the preset strip and preset list, module presets under **more** (§10). |
 | SYSTEM | Cheat sheet and desk-diagram switches, Restart process, hot reload status, the library path, config errors and notes, the dream worker's state, the stall log's line; **midi**: knob smoothing, the port's state, the learn line; **bridge**: port, encoding, messages sent or why it is off. |
+
+**The FACES page** (`ui_patterns.py`), top to bottom:
+
+- **Faces**, **Cut-through** and the pattern **mix**.
+- **The patterns**: a chip per pattern, four to a row, each with a small
+  live swatch of that pattern on the inputs as they are now; the one on
+  show is solid red. Hover: the pattern's one line. Click: show it (one
+  undo step). Right-click: `view.pattern`'s menu, to learn a knob that
+  steps the patterns. The renderer draws the swatches, one a frame, only
+  while the page is open (`Renderer.want_swatches`).
+- **The pattern on show**: its name and its line, ‹ › at the right (round
+  the ends). While `patterns.glsl` does not compile the line is the GLSL
+  error (in full on hover; the last good version keeps drawing); while
+  Faces is off it is "Faces is off" and a **faces on** chip.
+- **INPUTS · <PATTERN>** with **all neutral** (every input back to 1.0, one
+  undo step), and the pattern group's preset strip.
+- **Eight inputs, two lines each.** First: the name, what it does on this
+  pattern, and at the right what drives it — "SUB pushes +0.35", "K3 sets
+  it", "macro.4 sets its base", "(off)" — a link to ROUTING filtered to
+  that input. An input nothing drives offers **+ SUB** … **+ AIR**
+  (inputs 0–5), **+ LFO 1** (HUE) or **+ LFO 2** (SPREAD): a click adds a
+  push route at the factory depth into the loaded preset and stays on
+  FACES; ⌘Z takes it back. Second: the slider (`base → effective` while
+  driven, a white bar at the effective value) and a **1** chip back to
+  neutral. On FLAT every row reads "FLAT reads no input", dimmed but
+  live.
+- A faint last line: "right-click an input: learn a knob or a hand".
+
+Its fit at the control size is held by
+`tests/test_ui_patterns.py::test_the_page_fits_with_every_row_driven_and_flat_or_the_longest_mode`,
+but in font metrics that are not the Mac's (hand check 120).
 
 Every page that is a registry group carries a preset strip for its
 module presets.
@@ -515,8 +772,8 @@ doing its job while a learn is armed.
 The preset rows above are what a fresh preset starts with
 (`apc40.SCENE` on D1–D4); a factory or user preset with knobs of its own
 replaces all eight device knobs, and a preset with an empty desk has
-every preset-layer control dark. D4 steps through the twelve patterns,
-which show only where faces are drawn.
+every preset-layer control dark. D4 steps through the seventeen
+patterns, which show only where faces are drawn.
 
 **Bank pad lights** (rows 1, 4, 5): green while its preset is the loaded
 one, amber while its slot holds another preset (velocity 5, Akai's
@@ -633,6 +890,18 @@ ui desk`): a tapped BPM, the hands' feel and the ghost hands survive any
 preset. Anything a file names that it may not (a session id, an unknown
 id, a route onto a param that is not modulatable, a desk row on an
 invariant control) is dropped with a note and the file is left as it is.
+
+**The factory presets are generated**: `uv run python -m hyperspace.preset`
+(`preset.write_factory`) writes `hyperspace/library/presets/` from
+`preset.FACTORY_PRESETS`, and `tests/test_presets.py` pins the result.
+The routes of the eight house moods (`preset.HOUSE`), the nine party
+presets and the routing presets come from code; the house and party
+presets' values and notes are data in their files. The house moods'
+routes are `routing.legacy6_routes`: lane *i* pushes its plane's rate
+(the reference's depth, × the drive fader) and pattern input *i* at
+`routing.PATTERN_DEPTH` (0.35). Change the depth there and regenerate,
+and every factory preset follows. `legacy6`, the parity anchor, puts the
+rates on bases of 0 and the pattern inputs on 1.
 
 A **show** (`projects/<slug>.hyp.json`; the code says *project*) is the
 session: its values, the module presets of the session groups (the band
@@ -1002,6 +1271,17 @@ uv run ruff check .
   page draws and fits, every factory effect compiles. Extra windows and
   screens are fake GLFW window systems (`tests/test_app_boundary.py`).
   `HYPERSPACE_FRAMES=n uv run hyperspace` is a windowed smoke run.
+- The patterns: `tests/test_patterns.py` holds the shader to
+  `patterns.py`'s table and checks every input moves every mode;
+  `test_the_face_shaders_pass_the_reference_compiler` runs
+  `glslangValidator` and skips where it is missing. Fit tests measure in
+  this machine's font metrics: in the cloud container test_fx's own two
+  fit tests miss by 18 px, so a pass or a fail there says nothing about
+  the Mac.
+- The shapes: `tests/test_shapes4d.py` holds every shape to its
+  recorded digest (`tests/golden/shape_digests.json`, floats rounded to
+  1e-9) and every lifted or masked shape to `VOLUME_FLOOR` through each
+  W plane; `tools/turntable.py` draws the same sweeps (§1).
 - Import boundaries are tests: the core never imports `midi`, `bridge`
   or `dream`; `hands/core.py`, `hands/signal.py`, `lfo.py`, `tempo.py`,
   `undo.py` and `homegit.py` import nothing from the package.
@@ -1022,6 +1302,13 @@ What only a person at the machine can check is
 - **With no desk connected the app keeps looking** — every 2 s five
   times, then every 10 s. Each look creates a CoreMIDI client; `[midi]
   enabled = false` stops it.
+- **On the masked Heart, the W planes' readouts keep counting**: the
+  VIEW page's XW / YW / ZW keys, `rot.phase.*` and ROUTING show the W
+  planes turning while the picture turns in XZ, YZ and XY. Nothing says
+  the planes are folded.
+- **The FACES page's fit and `patterns.glsl` on Apple's GL are
+  unverified**: both were checked only in a container with Mesa and
+  other font metrics (hand checks 120, 121).
 - The amber "filled" pad light and the save-as blink use Akai's
   documented velocities and have not been confirmed on an APC40 mk1.
 - Open findings in [`AUDIT-2026-09.md`](AUDIT-2026-09.md): R13, R14,

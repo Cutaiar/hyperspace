@@ -150,16 +150,18 @@ i → ``rot.rate.<plane>`` *push* with depth ``dir · ROT_DEPTH`` scaled by
 ``master.gain`` on a base of 0 (u = out / CEIL and ROT_DEPTH is the depth
 that puts CEIL · DRIVE · 8 on the plane at the drive fader's 8×, so the
 offset is ``dir · out · DRIVE · gain`` in rate units: a gated band stops
-its plane at exactly 0.0); and lane i → ``pattern.mod.i`` *push* with
-depth 1 on a base of 0. ``rot.rate`` spans ±ROT_RATE_MAX = ±(CEIL ·
+its plane at exactly 0.0); and lane i → ``pattern.mod.i`` *push* at
+PATTERN_DEPTH on a base of 1 — no longer the reference's ``out`` raw on
+0 (plan 22 B3: the inputs mean one thing each now, and at depth 1 a loud
+band pinned them all). ``rot.rate`` spans ±ROT_RATE_MAX = ±(CEIL ·
 DRIVE · 8) — the largest drive the reference could produce — so nothing
 clamps at any gain, and the effective rate is the reference's number to
 round-off *while the source is live* (a value passes through the
 registry's normalized space and back: within an ulp of the range, the
 same float32 the GPU sees; params.py says why the range is that wide).
 `preset.legacy6_values` gives the preset ``legacy6`` its bases (zeros
-for the rates and the pattern inputs — a push reproduces "audio replaces
-the constant" only on 0). Where the reference spun at 1× the moment the
+for the rates — a push reproduces "audio replaces the constant" only on
+0 — and the pattern inputs' 1, as designed). Where the reference spun at 1× the moment the
 source stopped, the planes now stop: the base is 0 and the parity anchor
 is the driven value, not the idle one (plan 09, inside the relaxed bar).
 The house presets carry the same routes on WP0's bases of 1, so a plane
@@ -399,6 +401,16 @@ KEY_NEW_ROWS = (
 # stop when depth · (CEIL · 8 / CEIL) · 2 · ROT_RATE_MAX = CEIL · DRIVE · 8
 # →  depth = DRIVE · CEIL / (2 · ROT_RATE_MAX) = 1/16
 ROT_DEPTH = DRIVE * CEIL / (2 * ROT_RATE_MAX)
+# the factory's depth on lane i → pattern.mod.i (plan 22 B3). A push moves
+# the input by depth · u of its 0–2.6 range, and u = out / CEIL with CEIL
+# also 2.6, so on the input's own scale the offset is depth · out: a band at
+# nominal (out 1) lifts its input by 0.35, a hard transient near the
+# asymptote (out ≈ 2.5) by ≈ 0.87 — to ≈ 1.9 on the base of 1, short of the
+# 2.6 end with room for a macro to double it. At depth 1 (the reference's
+# u_bands = out) a nominal band already put an input at 2.0 and anything
+# loud pinned every input at 2.6 on every pattern. The FACES page's
+# "+ SUB" offer routes at this depth too (ui_patterns)
+PATTERN_DEPTH = 0.35
 
 
 class Owned(Exception):
@@ -684,11 +696,13 @@ def legacy6_routes() -> list[Binding]:
 
     The rate rows push dir · ROT_DEPTH · gain · u with u = out / CEIL, which
     on a base of 0 is dir · out · DRIVE · gain on the plane in rate units.
-    The pattern rows push u on their base, 1 : 1 with out on a base of 0.
+    The pattern rows push PATTERN_DEPTH · u on their base of 1: the input
+    rises by PATTERN_DEPTH · out (plan 22 B3 — the reference fed out raw).
     """
     rows = [Binding(f"lane:{i}", f"rot.rate.{b.pl}", "push", b.dir * ROT_DEPTH,
                     scale="master.gain") for i, b in enumerate(BANDS)]
-    rows += [Binding(f"lane:{i}", f"pattern.mod.{i}", "push", 1.0) for i in range(len(BANDS))]
+    rows += [Binding(f"lane:{i}", f"pattern.mod.{i}", "push", PATTERN_DEPTH)
+             for i in range(len(BANDS))]
     return rows
 
 

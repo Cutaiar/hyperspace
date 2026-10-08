@@ -74,6 +74,7 @@ from imgui_bundle.python_backends.glfw_backend import GlfwRenderer
 
 from . import config, gamepad, lfo, placement, tempo, undo
 from .audio import AudioEngine
+from .bands import CEIL
 from .control import Control
 from .gamepad import Pad
 from .hotreload import HotReloader
@@ -417,6 +418,18 @@ def _gl_flush() -> None:
     from OpenGL import GL
 
     GL.glFlush()
+
+
+def _bands(audio) -> tuple[float, ...]:
+    """The analyzer's lanes normalized, or () while the analyzer is off or
+    has none (a stub). Never raises: it feeds a picture, not a control."""
+    try:
+        if not getattr(audio, "on", False):
+            return ()
+        lanes = getattr(getattr(audio, "chain", None), "lanes", None)
+        return () if lanes is None else tuple(float(v) / CEIL for v in lanes)
+    except Exception:  # noqa: BLE001 — a missing band is a dark bar, not a crash
+        return ()
 
 
 def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None) -> None:
@@ -911,6 +924,10 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
         h.view.integrate(dt)
     except Exception as e:  # noqa: BLE001
         ok, reloader.runtime_error = False, _err("step", e)
+    # the analyzer's lanes as a route reads them (out / CEIL), for the
+    # patterns that draw the bands themselves (u_levels, plan 22 B3): render
+    # input, read-only, like the dim — never a param
+    h.renderer.bands = _bands(h.audio)
     watch = h.render_watch
     if watch is not None:     # a NaN / inf a param dropped: named once in the stall log
         watch.nonfinite(getattr(reg, "nonfinite", ()))

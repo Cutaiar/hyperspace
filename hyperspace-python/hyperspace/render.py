@@ -55,17 +55,19 @@ from __future__ import annotations
 
 import math
 import time
+from dataclasses import replace
 from pathlib import Path
 
 import moderngl
 import numpy as np
 
 from .fx import FACES, SCREEN, FxChain, FxState
-from .geometry import face_triangles, face_uvs, geom, project_h
+from .geometry import face_triangles, face_uvs, geom, project_h, view_angles, view_depth, w_masked
 from .ghost import Ghost, GhostState
 from .glsl import QUAD_VS, common, common_mtime, gl_error
 from .lookback import DreamState, Lookback
 from .outputs import HANDS, NAMES, PIPELINES, SCENE, Handoff, Switches, View, fit, route
+from .patterns import MODES, SPEED
 from .tapers import clamp
 from .view import N_MOD, RED, ViewState  # re-exported for callers that had them from here
 
@@ -157,11 +159,18 @@ void main() {
 }
 """
 
+# the bands a pattern may read as u_levels: the analyzer's first N_BANDS
+# lanes (a layout has six; the band editor can make more or fewer)
+N_BANDS = 8
+
 # what the face program and the seed program both declare: everything the
 # pattern and the bitmap read
 FACE_UNIFORMS = f"""
 uniform float u_time;
+uniform float u_ptime;       // the patterns' clock: seconds × SPEED (Renderer._pattern_clock)
 uniform float u_mod[{N_MOD}];  // pattern.mod.* — the routed pattern inputs
+uniform float u_levels[{N_BANDS}];  // the analyzer's lanes, out / CEIL (Renderer.bands)
+uniform int u_nlevels;        // how many of them there are (0: no audio)
 uniform int u_mode;
 uniform float u_mix;
 uniform sampler2D u_bitmap;
@@ -554,6 +563,17 @@ class Renderer:
         self._patterns_mtime = (0.0, 0.0)   # (patterns.glsl, _common.glsl)
         self._reload_check = 0
         self._t0 = time.perf_counter()   # the one wall clock: patterns, instances, effects
+        # the analyzer's lanes, normalized, set by the app each frame (app._bands):
+        # render input for the patterns that draw the bands (u_levels)
+        self.bands: tuple[float, ...] = ()
+        self._ptime = 0.0                  # the patterns' clock (_pattern_clock) …
+        self._ptime_at: float | None = None   # … and the wall time it was last moved to
+        self._ptile: tuple | None = None   # the tiles' program, vao, and the mtimes it read
+        self._tile_fbos: dict[int, moderngl.Framebuffer] = {}   # pattern_tile's, by size
+        # the FACES page's swatches (want_swatches): mode → (texture, framebuffer)
+        self._swatches: dict[int, tuple] = {}
+        self._swatch_frame = self._swatch_until = self._swatch_next = 0
+        self.swatch_error = ""
         self._build_face_program()
         ctx.enable(moderngl.BLEND | moderngl.PROGRAM_POINT_SIZE)
         ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
@@ -632,6 +652,13 @@ class Renderer:
             if res is not None:
                 res.release()
         self._show_prog = self._show_vao = None
+        # the tiles' and swatches' program: its head and tail are this
+        # module's strings, so it is made again from them on next use
+        # (patterns.glsl's own saves rebuild it by mtime)
+        for res in (getattr(self, "_ptile", None) or ())[:2]:
+            if res is not None:
+                res.release()
+        self._ptile = None
 
     def _sync_bitmap(self, path: str) -> None:
         """(Re)load the overlay texture when the selected file changes."""
@@ -784,6 +811,9 @@ class Renderer:
         first = views[0]
         target, vp = first.target, first.rect
         try:
+            if self._swatch_step(s, t):          # it bound its own: the target again
+                target.use()
+                ctx.viewport = vp
             self._draw_frame(s, w, h, dpr, t, views)
         finally:
             target.use()
@@ -1111,10 +1141,42 @@ class Renderer:
         self.face_error = ""
         return pic.tex
 
-    def _face_uniforms(self, p: moderngl.Program, s: ViewState, t: float) -> None:
+    def _pattern_clock(self, s: ViewState, t: float) -> float:
+        """The patterns' clock, u_ptime: wall seconds times the SPEED input,
+        integrated — so a SPEED that a lane moves changes how fast the
+        pattern goes and never where it is (t · SPEED would jump the phase
+        by t · ΔSPEED, minutes into a set). Moved once per new `t`: the
+        seed and the face pass of one frame read the same value. The first
+        call and a clock run backwards set it to t · SPEED, as if SPEED had
+        always been what it is now."""
+        speed = _speed(s)
+        if self._ptime_at is None or t < self._ptime_at:
+            self._ptime = t * speed
+        else:
+            self._ptime += (t - self._ptime_at) * speed
+        self._ptime_at = t
+        return self._ptime
+
+    def _face_uniforms(self, p: moderngl.Program, s: ViewState, t: float,
+                       ptime: float | None = None) -> None:
         """What the pattern and the bitmap read, on `p` — the face program
-        or the seed — with the bitmap's texture on unit 0."""
-        p["u_time"].value = t
+        or the seed — with the bitmap's texture on unit 0. The patterns'
+        clock is the live one unless a still pins it (`ptime`); the clocks
+        are set only if the patterns read them (an edit may not)."""
+        if ptime is None:
+            ptime = self._pattern_clock(s, t)
+        bands = tuple(float(v) for v in (getattr(self, "bands", ()) or ())[:N_BANDS])
+        for name, v in (("u_time", t), ("u_ptime", ptime), ("u_nlevels", len(bands))):
+            try:
+                p[name].value = v
+            except KeyError:
+                pass
+        try:                        # trimmed by the driver, like u_mod below
+            ub = p["u_levels"]
+            n = getattr(ub, "array_length", N_BANDS) or N_BANDS
+            ub.value = (bands + (0.0,) * N_BANDS)[:n]
+        except KeyError:
+            pass
         p["u_mode"].value = int(s.pattern)
         p["u_mix"].value = float(s.pattern_mix)
         # the driver trims the array to the highest index a pattern
@@ -1142,6 +1204,116 @@ class Renderer:
             else:                    # still
                 ox = oy = 0.0
             p["u_bmp_pos"].value = (s.bmp_amp * ox, s.bmp_amp * oy)
+
+    def _tile_program(self) -> tuple:
+        """The program and vao a pattern tile or swatch is drawn with: the
+        seed's fragment with the face index a uniform, from the patterns
+        file as it is now — rebuilt after a save. A save that does not
+        compile raises once and keeps the last good program, as the face
+        program does (its own build says why on the panel); it is tried
+        again after the next save, not once a frame. Raises while there
+        has never been a good one."""
+        old = self._ptile
+        if old is None or old[2] != self._patterns_mtime:
+            mtime = self._patterns_mtime
+            # this save is tried whatever happens; the last good one stays
+            self._ptile = (None, None, mtime) if old is None else (*old[:2], mtime)
+            prog = self.ctx.program(vertex_shader=QUAD_VS, fragment_shader=_face_fragment(
+                TILE_FS_HEAD, PATTERNS_GLSL.read_text(), SEED_FS_TAIL))
+            self._ptile = (prog, self.ctx.vertex_array(prog, []), mtime)
+            if old is not None and old[0] is not None:
+                for res in old[:2]:
+                    res.release()
+        if self._ptile[0] is None:
+            raise RuntimeError("patterns.glsl does not compile (the panel says why)")
+        return self._ptile[:2]
+
+    def _tile_draw(self, fbo: moderngl.Framebuffer, size: int, s: ViewState, t: float,
+                   ptime: float, fid: float, opaque: bool = False) -> None:
+        """Face `fid`'s pattern for `s`, alone, into `fbo` (`size`²): the
+        viewport and blending are put back, `fbo` is left bound. `opaque`
+        keeps the alpha at 1 (a swatch the panel draws as it is: the
+        premultiplied colour over black)."""
+        ctx = self.ctx
+        prog, vao = self._tile_program()
+        self._face_uniforms(prog, s, t, ptime=ptime)
+        try:
+            prog["v_fid"].value = float(fid)
+        except KeyError:                       # a pattern that ignores the face index
+            pass
+        fbo.color_mask = (True, True, True, True)
+        fbo.use()
+        vp = ctx.viewport
+        ctx.viewport = (0, 0, size, size)
+        ctx.clear(0.0, 0.0, 0.0, 1.0 if opaque else 0.0)
+        ctx.disable(moderngl.BLEND)
+        if opaque:
+            # the alpha stays the clear's 1: moderngl sets the mask on use()
+            fbo.color_mask = (True, True, True, False)
+            fbo.use()
+        try:
+            vao.render(moderngl.TRIANGLES, vertices=3)
+        finally:
+            if opaque:
+                fbo.color_mask = (True, True, True, True)
+                fbo.use()               # the mask back on, for whatever binds next
+            ctx.enable(moderngl.BLEND)
+            ctx.viewport = vp
+
+    def pattern_tile(self, s: ViewState, size: int = 128, t_now: float = 0.0,
+                     fid: float = 0.0) -> np.ndarray:
+        """What face `fid` shows of `s`'s pattern, alone: `size`² RGB, the
+        pattern premultiplied by its intensity over black — the seed pass's
+        picture (FLAT is mid-grey) at a pinned time, its clock at
+        `t_now` · SPEED (how far the pattern has gone by then; the live
+        clock is not touched). For tools and tests (tools/pattern_sheet.py);
+        raises when patterns.glsl does not compile. Leaves the viewport and
+        blending as it found them; its own framebuffer stays bound."""
+        fbo = self._tile_fbos.get(size)
+        if fbo is None:
+            fbo = self._tile_fbos[size] = self.ctx.framebuffer(
+                color_attachments=[self.ctx.texture((size, size), 4)])
+        self._tile_draw(fbo, size, s, t_now, t_now * _speed(s), fid)
+        img = np.frombuffer(fbo.read(components=3), dtype=np.uint8).reshape(size, size, 3)
+        return img[::-1].copy()
+
+    # ---- the FACES page's swatches: every mode, small, on the live inputs ----
+
+    def want_swatches(self) -> None:
+        """The FACES page is on show: keep the swatches drawing for the next
+        SWATCH_HOLD frames. Nothing is drawn while no page asks."""
+        self._swatch_until = self._swatch_frame + SWATCH_HOLD
+
+    def swatch(self, mode: int) -> moderngl.Texture | None:
+        """Mode `mode`'s swatch — SWATCH² RGBA, premultiplied, GL's way up —
+        or None until one is drawn."""
+        got = self._swatches.get(mode)
+        return None if got is None else got[0]
+
+    def _swatch_step(self, s: ViewState, t: float) -> bool:
+        """While a page wants them, one mode's swatch a frame, round robin:
+        what face 0 shows of that mode on this view's inputs (its mix and
+        bitmap aside), on the patterns' live clock — so a strip of them
+        moves with the faces at 1/N_PATTERNS of the frame rate, for one small
+        quad a frame. A failure says so in `swatch_error` and never costs
+        the frame. True when it drew (another framebuffer is bound)."""
+        self._swatch_frame += 1
+        if self._swatch_frame > self._swatch_until:
+            return False
+        mode = self._swatch_next % N_PATTERNS
+        self._swatch_next = mode + 1
+        try:
+            got = self._swatches.get(mode)
+            if got is None:
+                tex = self.ctx.texture((SWATCH, SWATCH), 4)
+                tex.filter = (moderngl.LINEAR, moderngl.LINEAR)
+                got = self._swatches[mode] = (tex, self.ctx.framebuffer(color_attachments=[tex]))
+            one = replace(s, pattern=mode, pattern_mix=1.0, bmp_alpha=0.0)
+            self._tile_draw(got[1], SWATCH, one, t, self._ptime, 0.0, opaque=True)
+            self.swatch_error = ""
+        except Exception as e:  # noqa: BLE001 — a swatch must not take the frame down
+            self.swatch_error = f"swatch: {type(e).__name__}: {e}"[:160]
+        return True
 
     def dim_pass(self, target: moderngl.Framebuffer, vp: tuple[int, int, int, int],
                  factor: float, opaque: bool = True) -> bool:
@@ -1223,7 +1395,17 @@ class Renderer:
         faces' effects are `draw`'s (`_draw_frame` hands the picture over
         for the one scene pass it wraps)."""
         g = geom(s.shape)
-        px, py, pd, wc = project_h(g["V"], s.ang, s.yaw, s.pitch, d4=s.depth4, w=w, h=h)
+        # a shape whose W planes are masked is drawn at its own angles
+        # (geometry.view_angles); every other shape at the view's
+        ang = view_angles(s.shape, s.ang)
+        px, py, pd, wc = project_h(g["V"], ang, s.yaw, s.pitch, d4=s.depth4, w=w, h=h)
+        if w_masked(s.shape):
+            # its w is 0 at every angle, so the depth cue (pd: fade, width,
+            # draw order) would sit flat at its dimmest; it cues on its
+            # depth toward the 3D camera (yaw and pitch included, so a
+            # camera turned round never puts the far side on top), as a 4D
+            # shape cues on its depth toward the 4D eye
+            pd = view_depth(g["V"], ang, s.yaw, s.pitch, d4=s.depth4)
 
         # camera: zoom about the view centre, then pan (both in logical px)
         zoom = max(s.zoom, 1e-3)
@@ -1400,6 +1582,27 @@ class Renderer:
             out[k * per : (k + 1) * per, 0] += ox
             out[k * per : (k + 1) * per, 1] += oy
         return out
+
+
+N_PATTERNS = len(MODES)
+SWATCH = 64         # px: a mode's swatch (want_swatches), drawn smaller on the FACES page
+SWATCH_HOLD = 30    # frames the swatches keep drawing after the page last asked
+
+
+def _speed(s: ViewState) -> float:
+    """The SPEED pattern input (patterns.SPEED), never below a standstill."""
+    return max(float(s.pattern_mod[SPEED]), 0.0) if len(s.pattern_mod) > SPEED else 1.0
+
+
+# a face's pattern on its own (Renderer.pattern_tile): the seed's fragment
+# with the face index a uniform, so a tile can be any face
+TILE_FS_HEAD = """
+#version 330
+in vec2 v_uv;
+out vec4 f_color;
+const float v_alpha = 1.0;
+uniform float v_fid;
+""" + FACE_UNIFORMS
 
 
 def render_offscreen(

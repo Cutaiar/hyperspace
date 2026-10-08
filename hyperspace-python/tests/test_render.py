@@ -897,7 +897,9 @@ def test_one_instance_is_the_frame_it_was(ctx):
 FW, FH = 480, 320
 
 # the face fragment shader as it was before plan 20, frozen: what "the old
-# frame" means below
+# frame" means below. Its additions are the uniforms patterns.glsl now
+# reads, which the head must declare to compile it: u_ptime (plan 22 B1),
+# u_levels and u_nlevels (B3)
 OLD_FACE_FS_HEAD = """
 #version 330
 in vec2 v_uv;
@@ -905,6 +907,9 @@ in float v_alpha;
 in float v_fid;
 out vec4 f_color;
 uniform float u_time;
+uniform float u_ptime;
+uniform float u_levels[8];
+uniform int u_nlevels;
 uniform float u_mod[%d];  // pattern.mod.* — the routed pattern inputs
 uniform int u_mode;
 uniform float u_mix;
