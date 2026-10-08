@@ -37,6 +37,9 @@ dream.py, too, is imported only when its gate is open.
                             # An index with no such screen is treated as -1, with
                             # a note
     fullscreen = false      # launch fullscreen on that screen
+    keep_awake = true       # while the app runs, the Mac does not idle into the
+                            # screensaver, display sleep or system sleep (macOS
+                            # `caffeinate -d -i`, app.Awake); false lets it
     on_start = false        # launch straight into overlay mode (needs overlay = true)
     passthrough = true      # clicks go to the window underneath (G / pan toggles)
     bg = 0.0                # ground darkness in overlay: 0 see-through, 1 black
@@ -150,7 +153,8 @@ DEFAULTS: dict = {
     # (decision 21 (a), plan 14 WP2). monitor / control_monitor: the screen
     # each window opens on, −1 = where it was last time (placement.py)
     "output": {"overlay": False, "monitor": -1, "control_monitor": -1, "fullscreen": False,
-               "on_start": False, "passthrough": True, "bg": 0.0, "alpha": 1.0},
+               "on_start": False, "passthrough": True, "bg": 0.0, "alpha": 1.0,
+               "keep_awake": True},
     # gamepad.py: the Xbox pad — on by default, inert when absent
     "gamepad": {"enabled": True},
     # bridge.py: the analyzer's lanes out to a DAW, external lanes in — off by default
@@ -338,6 +342,13 @@ def load(path: Path | None = None) -> dict:
         if note:
             cfg.setdefault("notes", []).append(note)
             print(note, file=sys.stderr)
+    # [output] keep_awake is a switch: `keep_awake = "no"` keeps the Mac awake
+    # (the show is safer awake), and the SYSTEM page says so
+    awake = cfg["output"].get("keep_awake", True)
+    if not isinstance(awake, bool):
+        cfg["output"]["keep_awake"] = True
+        _note(cfg, f"config: [output] keep_awake = {awake!r} is not true or false — "
+                   "the Mac is kept awake")
     # [library] git is a switch: `git = "yes"` is off, and the SYSTEM page says so
     git = cfg["library"].get("git", False)
     if not isinstance(git, bool):

@@ -52,6 +52,8 @@ from __future__ import annotations
 import importlib.util
 import math
 import os
+import shutil
+import subprocess
 import sys
 import time
 from collections.abc import Callable
@@ -624,6 +626,51 @@ def _open_pad(cfg: dict):
     return Pad()
 
 
+class Awake:
+    """The Mac kept out of the screensaver, display sleep and idle system
+    sleep while the app runs: macOS's own `caffeinate -d -i`, tied to this
+    process with ``-w`` so it ends with us even after a crash or a kill -9.
+    `close` ends it at a quit and before ⌘R's execv (same PID: the new
+    image starts its own). Not macOS, or no caffeinate: nothing, with a
+    note — never a dead launch."""
+
+    CMD = "caffeinate"
+
+    def __init__(self, pid: int | None = None, popen=subprocess.Popen,
+                 which=shutil.which, platform: str = sys.platform) -> None:
+        self.proc = None
+        self.note = ""
+        if platform != "darwin":
+            self.note = "keep awake: not macOS — the OS's own sleep settings apply"
+            return
+        exe = which(self.CMD)
+        if exe is None:
+            self.note = "keep awake: no caffeinate on PATH — the screensaver can come on"
+            return
+        try:
+            self.proc = popen([exe, "-d", "-i", "-w", str(os.getpid() if pid is None else pid)],
+                              stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                              stderr=subprocess.DEVNULL)
+        except OSError as e:
+            self.note = f"keep awake: caffeinate did not start ({e}) — the screensaver can come on"
+
+    def close(self) -> None:
+        if self.proc is not None:
+            proc, self.proc = self.proc, None
+            proc.terminate()
+            proc.wait(timeout=1.0)     # reaped, so no zombie rides through ⌘R's execv
+
+
+def _open_awake(cfg: dict):
+    """`Awake`, unless [output] keep_awake = false (on by default)."""
+    if cfg.get("output", {}).get("keep_awake", True) is False:
+        return None
+    awake = Awake()
+    if awake.note:
+        print(awake.note, file=sys.stderr)
+    return awake
+
+
 class Keys:
     """Edge detection and hold timing over polled key state, across both windows.
 
@@ -1091,6 +1138,7 @@ def main() -> None:
         renderer.lookback.source = dream_io
     panel.bridge = bridge_io               # the SYSTEM page's bridge line
     pad = _open_pad(cfg)
+    awake = _open_awake(cfg)               # no screensaver over the show
     # the project's startup preset (D11), once, now that everything it lands
     # on exists; a missing one is said on the panel and the app runs on
     library.project.load_startup()
@@ -1209,7 +1257,7 @@ def main() -> None:
                 clock=clock, lfos=lfos, keys=keys, mouse=mouse, output=output,
                 renderer=renderer, panel=panel, reloader=reloader,
                 draw_render=draw_render, draw_panel=draw_panel,
-                restart=lambda: _restart(audio, (watchdog, *host.adapters), impl, ctrl_win,
+                restart=lambda: _restart(audio, (watchdog, awake, *host.adapters), impl, ctrl_win,
                                          save=save_windows),
                 quit=lambda: glfw.set_window_should_close(render_win, True),
                 pad=pad, midi_io=midi_io, hands_io=hands_io, bridge_io=bridge_io,
@@ -1258,7 +1306,7 @@ def main() -> None:
         watchdog.pet(now)          # a frame completed: one float write
 
     _quiet(save_windows)      # where the windows are, for the next launch (placement.py)
-    close_all(audio, watchdog, *host.adapters)   # the watchdog first: teardown is no stall
+    close_all(audio, watchdog, awake, *host.adapters)   # the watchdog first: teardown is no stall
     impl.shutdown()
     glfw.terminate()
 
