@@ -6,7 +6,10 @@ window-system state is three settings and the params that drive them:
 
   output.monitor      enum     which screen fullscreen / overlay covers —
                                "follow window" (the one it is on) or a screen
-  output.fullscreen   toggle   GLFW fullscreen on that screen, opaque
+  output.fullscreen   toggle   a borderless cover of that screen at its current
+                               mode, opaque — never the OS's own fullscreen,
+                               which re-syncs a projector's HDMI into its
+                               default mode
   output.overlay      toggle   a borderless cover of that screen, see-through
                                and floating above everything — on macOS
                                including another app's fullscreen Space,
@@ -107,15 +110,6 @@ class GlfwBackend:
     def set_rect(self, win, x, y, w, h) -> None:
         self.glfw.set_window_pos(win, x, y)
         self.glfw.set_window_size(win, w, h)
-
-    def set_fullscreen(self, win, m) -> None:
-        # the monitor's current mode: GLFW then skips the mode switch
-        mode = self.glfw.get_video_mode(m)
-        self.glfw.set_window_monitor(win, m, 0, 0, mode.size.width, mode.size.height,
-                                     mode.refresh_rate)
-
-    def set_windowed(self, win, x, y, w, h) -> None:
-        self.glfw.set_window_monitor(win, None, x, y, w, h, 0)
 
     def set_attrib(self, win, name: str, on: bool) -> None:
         attr = getattr(self.glfw, name, None)
@@ -336,6 +330,8 @@ class Output:
                 self._enter(mode)
             elif mode != "window" and self._changed("monitor", self.monitor):
                 self._enter(mode)  # same mode, another screen
+            elif mode != "window":
+                self._refit()      # same screen: follow a resolution change
             on = mode == "overlay"
             want_pt = on and self.passthrough
             if self._changed("passthrough", want_pt):
@@ -353,29 +349,38 @@ class Output:
         self._applied["monitor"] = self.monitor
         if mode == "window" or m is None:
             return
-        if mode == "fullscreen":
-            # GLFW's own fullscreen: above the menu bar, no mode switch
-            b.set_fullscreen(win, m)
-        else:
-            # a borderless cover, floated above every Space; the
-            # transparent framebuffer does the see-through. Level first:
-            # Cocoa keeps a normal-level window below the menu bar
-            b.set_attrib(win, "DECORATED", False)
-            b.set_attrib(win, "FLOATING", True)
-            b.raise_over_spaces(win, True)
-            b.set_rect(win, *b.monitor_rect(m))
+        # fullscreen and overlay are both a borderless cover of the screen
+        # at its current size, floated above every Space; only the overlay
+        # is see-through (its transparent framebuffer, bg_alpha). Never
+        # GLFW's own fullscreen (set_window_monitor): that hands the screen
+        # to macOS, and a projector re-syncs its HDMI and falls back to its
+        # default mode. Level first: Cocoa keeps a normal-level window
+        # below the menu bar
+        b.set_attrib(win, "DECORATED", False)
+        b.set_attrib(win, "FLOATING", True)
+        b.raise_over_spaces(win, True)
+        self._applied["cover"] = rect = tuple(b.monitor_rect(m))
+        b.set_rect(win, *rect)
+
+    def _refit(self) -> None:
+        """The cover re-sized to its screen when the screen's mode changes
+        under it (the projector set to 1080p in System Settings while
+        covered): one read a frame, a move only on a change."""
+        m = self._target_monitor()
+        if m is None:
+            return
+        rect = tuple(self.backend.monitor_rect(m))
+        if self._changed("cover", rect):
+            self.backend.set_rect(self.win, *rect)
 
     def _leave(self, mode: str) -> None:
         b, win = self.backend, self.win
         if mode == "window" or self._saved_rect is None:
             return
-        if mode == "fullscreen":
-            b.set_windowed(win, *self._saved_rect)
-        else:
-            b.raise_over_spaces(win, False)
-            b.set_attrib(win, "FLOATING", False)
-            b.set_attrib(win, "DECORATED", True)
-            b.set_rect(win, *self._saved_rect)
+        b.raise_over_spaces(win, False)
+        b.set_attrib(win, "FLOATING", False)
+        b.set_attrib(win, "DECORATED", True)
+        b.set_rect(win, *self._saved_rect)
 
     def _changed(self, key: str, value) -> bool:
         if self._applied.get(key, object()) == value:
