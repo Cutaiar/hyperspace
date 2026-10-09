@@ -71,6 +71,20 @@ def route(sw: Switches, fx_active: bool, hands_visible: bool) -> tuple[int | Non
     return (HANDS, False) if through else (None, shown)
 
 
+def capped(size: tuple[int, int], cap: tuple[int, int] | None) -> tuple[int, int]:
+    """The frame's size: output 1's framebuffer `size`, shrunk with its
+    aspect kept until it fits inside `cap` (w, h), whichever side binds;
+    never grown; None is no cap. A 2× HiDPI screen that looks 1920×1080
+    is a 3840×2160 framebuffer — under a 1080p cap the scene, the
+    look-back, the dream and every effect run at 1920×1080 and each output
+    shows the frame scaled (`fit`, linear)."""
+    w, h = max(int(size[0]), 1), max(int(size[1]), 1)
+    if cap is None:
+        return w, h
+    k = min(cap[0] / w, cap[1] / h, 1.0)
+    return max(1, round(w * k)), max(1, round(h * k))
+
+
 def fit(src: tuple[int, int], dst: tuple[int, int]) -> tuple[int, int, int, int]:
     """The rect (x, y, w, h) in `dst` that shows `src` whole, centred, its
     aspect kept (fork F5: letterbox). Equal sizes give (0, 0, w, h); a

@@ -1476,6 +1476,12 @@ class Panel:
         self._output_blocks()
         if len(self.reg["output.monitor"].names) > 1:
             self._combo("output.monitor")
+        if "output.render" in self.reg:     # the render cap, on the toggles' row
+            size = getattr(getattr(self.renderer, "scene", None), "size", None)
+            tip = self.reg["output.render"].tip
+            self._combo("output.render", width=96,
+                        tip=f"{tip}\nDrawing {size[0]}×{size[1]} now." if size else None)
+            imgui.same_line()
         self._check("output.fullscreen")
         imgui.same_line()
         # decision 21 (a): overlay only when the config asks — shut, the

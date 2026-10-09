@@ -81,6 +81,20 @@ _STATIONARY = 1 << 4
 _FULLSCREEN_AUX = 1 << 8
 _OVERLAY_LEVEL = 1000        # NSScreenSaverWindowLevel
 
+# the render cap (output.render): the box the frame must fit inside, its
+# aspect kept (outputs.capped); "full" is output 1's framebuffer, uncapped.
+# 1080p by default: a 2× HiDPI screen that looks 1920×1080 is 3840×2160,
+# four times the pixels for every pass, and a projector shows 1080p at most
+RENDER_CAPS: tuple[tuple[str, tuple[int, int] | None], ...] = (
+    ("full", None), ("1440p", (2560, 1440)), ("1080p", (1920, 1080)), ("720p", (1280, 720)))
+RENDER_NAMES = [n for n, _ in RENDER_CAPS]
+RENDER_DEFAULT = "1080p"
+
+
+def render_index(name) -> int:
+    """A cap's place in `RENDER_CAPS`; anything else is the default's."""
+    return RENDER_NAMES.index(name) if name in RENDER_NAMES else RENDER_NAMES.index(RENDER_DEFAULT)
+
 
 class GlfwBackend:
     """The real window system; the thin layer overlay.py talks to."""
@@ -197,6 +211,7 @@ class Output:
         self.bg = 0.0
         self.alpha = 1.0
         self.dim = 1.0           # master dim: 1 full … 0 black; never saved, never loaded
+        self.render = render_index(RENDER_DEFAULT)   # index into RENDER_CAPS
         self.monitor = -1        # index into backend.monitors(); −1 = the window's own
                                  # ("follow window", the enum's first choice)
         self._applied: dict = {"mode": "window"}  # the window starts as a plain window
@@ -218,6 +233,13 @@ class Output:
                    lambda v: setattr(self, "fullscreen", bool(v)), group=g,
                    tip="Borderless, covering the chosen screen — for the projector. "
                        "No video-mode switch.", **rig)
+        reg.enum("output.render", "Render size", lambda: self.render,
+                 lambda i: setattr(self, "render", min(max(int(i), 0), len(RENDER_CAPS) - 1)),
+                 RENDER_NAMES, group=g,
+                 tip="The most pixels a frame is drawn at; every output shows it scaled. "
+                     "1080p (the default) keeps a HiDPI screen from rendering at 4K. "
+                     "full: output 1's whole framebuffer. Launch value: [output] render.",
+                 **rig)
         reg.toggle("output.overlay", "Overlay", lambda: self.overlay,
                    self._set_overlay, group=g,
                    tip="Float the render, frameless and see-through, over the whole "
@@ -290,6 +312,11 @@ class Output:
         """window · fullscreen · overlay — the overlay wins when both are on."""
         on = self.overlay and self.allowed
         return "overlay" if on else "fullscreen" if self.fullscreen else "window"
+
+    @property
+    def max_frame(self) -> tuple[int, int] | None:
+        """The render cap's box for the renderer (None: full)."""
+        return RENDER_CAPS[min(max(int(self.render), 0), len(RENDER_CAPS) - 1)][1]
 
     @property
     def bg_alpha(self) -> float:

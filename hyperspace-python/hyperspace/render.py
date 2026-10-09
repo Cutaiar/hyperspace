@@ -66,7 +66,7 @@ from .geometry import face_triangles, face_uvs, geom, project_h, view_angles, vi
 from .ghost import Ghost, GhostState
 from .glsl import QUAD_VS, common, common_mtime, gl_error
 from .lookback import DreamState, Lookback
-from .outputs import HANDS, NAMES, PIPELINES, SCENE, Handoff, Switches, View, fit, route
+from .outputs import HANDS, NAMES, PIPELINES, SCENE, Handoff, Switches, View, capped, fit, route
 from .patterns import MODES, SPEED
 from .tapers import clamp
 from .view import N_MOD, RED, ViewState  # re-exported for callers that had them from here
@@ -516,6 +516,10 @@ class Renderer:
         # built on first use (dim_pass); dim_error says why it could not be
         self.dim = 1.0
         self.dim_error = ""
+        # the render cap (overlay.Output.max_frame, output.render, handed
+        # over each frame by app.frame): the frame fits inside it; None, no
+        # cap — the frame is output 1's framebuffer, as before
+        self.max_frame: tuple[int, int] | None = None
         self._dim_prog: moderngl.Program | None = None
         self._dim_vao: moderngl.VertexArray | None = None
         # the scene texture and the look-back post pass over it; the blank
@@ -830,7 +834,14 @@ class Renderer:
         first = views[0]
         target = first.target
         vp = first.rect
-        size = (max(vp[2], 1), max(vp[3], 1))
+        # the frame's size: output 1's framebuffer under the render cap
+        # (`max_frame`, output.render; getattr: a renderer from before the
+        # cap has none). Capped, output 1 is no longer drawn direct — it is
+        # shown scaled like any output of another size — and the scene's
+        # strokes keep their on-screen width through a dpr scaled alike
+        full = (max(vp[2], 1), max(vp[3], 1))
+        size = capped(full, getattr(self, "max_frame", None))
+        dpr *= size[0] / full[0]
         self.scene.ensure(size, _samples_of(ctx, target))
         for unit in range(4):
             self._blank.use(location=unit)

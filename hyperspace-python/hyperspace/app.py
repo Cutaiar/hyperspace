@@ -84,7 +84,7 @@ from .learn import Learn
 from .library import Library, Marks
 from .library import home as library_home
 from .outputs import Presenter, Slot, Switches, View
-from .overlay import GlfwBackend, Output, register_switches
+from .overlay import RENDER_DEFAULT, GlfwBackend, Output, register_switches, render_index
 from .params import Registry, build_registry
 from .preset import Presets, migrate_home
 from .render import Renderer
@@ -357,6 +357,7 @@ def _make_output(win, reg: Registry, cfg: dict) -> Output:
     # neither road must not stop the launch here either (plan 16 WP7)
     out.monitor = placement.index(oc.get("monitor", -1))
     out.fullscreen = bool(oc.get("fullscreen", False))
+    out.render = render_index(oc.get("render", RENDER_DEFAULT))
     if oc.get("on_start", False) and not out.allowed:
         print("output: on_start asks for overlay, but [output] overlay is false — "
               "the window stays opaque", file=sys.stderr)
@@ -947,6 +948,8 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     # the master dim (plan 15 WP3), the frame's last pass; getattr: an
     # Output made before a hot reload brought the attribute has none
     h.renderer.dim = getattr(h.output, "dim", 1.0)
+    # the render cap (output.render): the frame's size, whatever the screens
+    h.renderer.max_frame = getattr(h.output, "max_frame", None)
 
     # ---- mouse: orbit / pan / zoom, render window only ----
     h.mouse.poll(shift)

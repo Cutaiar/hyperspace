@@ -37,6 +37,11 @@ dream.py, too, is imported only when its gate is open.
                             # An index with no such screen is treated as -1, with
                             # a note
     fullscreen = false      # launch fullscreen on that screen
+    render = "1080p"        # the render cap: the most pixels a frame is drawn at,
+                            # every output showing it scaled — "full" (output 1's
+                            # whole framebuffer), "1440p", "1080p", "720p". A 2×
+                            # HiDPI screen that looks 1920×1080 is 3840×2160
+                            # under "full". output.render on the OUTPUT page
     keep_awake = true       # while the app runs, the Mac does not idle into the
                             # screensaver, display sleep or system sleep (macOS
                             # `caffeinate -d -i`, app.Awake); false lets it
@@ -155,7 +160,7 @@ DEFAULTS: dict = {
     # each window opens on, −1 = where it was last time (placement.py)
     "output": {"overlay": False, "monitor": -1, "control_monitor": -1, "fullscreen": False,
                "on_start": False, "passthrough": True, "bg": 0.0, "alpha": 1.0,
-               "keep_awake": True},
+               "keep_awake": True, "render": "1080p"},
     # gamepad.py: the Xbox pad — on by default, inert when absent
     "gamepad": {"enabled": True},
     # bridge.py: the analyzer's lanes out to a DAW, external lanes in — off by default
@@ -343,6 +348,14 @@ def load(path: Path | None = None) -> dict:
         if note:
             cfg.setdefault("notes", []).append(note)
             print(note, file=sys.stderr)
+    # [output] render is one of the caps' names: anything else is 1080p, said
+    from .overlay import RENDER_DEFAULT, RENDER_NAMES  # params only, no window system
+
+    rc = cfg["output"].get("render", RENDER_DEFAULT)
+    if rc not in RENDER_NAMES:
+        cfg["output"]["render"] = RENDER_DEFAULT
+        _note(cfg, f"config: [output] render = {rc!r} is not one of {', '.join(RENDER_NAMES)} "
+                   f"— {RENDER_DEFAULT}")
     # [output] keep_awake is a switch: `keep_awake = "no"` keeps the Mac awake
     # (the show is safer awake), and the SYSTEM page says so
     awake = cfg["output"].get("keep_awake", True)
