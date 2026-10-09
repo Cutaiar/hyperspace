@@ -154,6 +154,37 @@ def test_losing_the_service_or_the_camera_and_errors_show_in_the_status(leap):
     assert src.status == "error: ValueError: bad frame"
 
 
+@pytest.mark.parametrize("event, arg", [("on_error", ValueError("bad frame")),
+                                        ("on_connection_lost_event", NS()),
+                                        ("on_device_lost_event", NS())])
+def test_a_tracking_frame_after_a_bad_status_puts_the_hands_back_on_the_router(leap, event, arg):
+    """2026-10-08 at the rig: one SDK error mid-show left the status bad
+    while frames kept coming — the ghost hands drew, but `on` was false,
+    so HandsIO fed the router None and no hand route moved until a relaunch."""
+    clock = Clock()
+    src, conn = source(leap, clock=clock)
+    conn.fire("on_device_event", NS())
+    conn.fire(event, arg)
+    assert not src.on
+    clock.t = 1.0
+    conn.fire("on_tracking_event", NS(hands=[hand("right")]))
+    assert src.status == "tracking" and src.on
+
+    class Router:
+        def __init__(self):
+            self.labels, self.names, self.gates, self.rests, self.fed = {}, {}, {}, {}, {}
+
+        def feed(self, scheme, values):
+            self.fed[scheme] = values
+
+    settings = HandSettings.from_config({})
+    io = HandsIO(settings, {"out": ""}, source=src, out=NS(send=lambda m: None),
+                 clock=clock)
+    router = Router()
+    io.poll(1 / 60, None, router)
+    assert router.fed["hand"] is not None
+
+
 # ---------------------------------------------------------------- the skeleton
 
 def _floats(x):
