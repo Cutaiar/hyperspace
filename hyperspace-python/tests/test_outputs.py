@@ -57,6 +57,15 @@ def test_route():
     assert O.MAX_OUTPUTS == 4
 
 
+def test_capped_shrinks_to_the_box_keeping_the_aspect_and_never_grows():
+    assert O.capped((3840, 2160), (1920, 1080)) == (1920, 1080)        # 2× HiDPI 1080p
+    assert O.capped((3840, 2400), (1920, 1080)) == (1728, 1080)        # 16:10: height binds
+    assert O.capped((3456, 1956), (1920, 1080)) == (1908, 1080)
+    assert O.capped((1280, 800), (1920, 1080)) == (1280, 800)          # inside: unchanged
+    assert O.capped((3840, 2160), None) == (3840, 2160)                # full: no cap
+    assert O.capped((0, 0), (1920, 1080)) == (1, 1)
+
+
 def test_fit():
     assert fit((640, 400), (640, 400)) == (0, 0, 640, 400)
     assert fit((1920, 1080), (1280, 720)) == (0, 0, 1280, 720)          # same aspect: scaled
@@ -982,3 +991,33 @@ def test_the_presenter_rebuilds_after_a_reload_in_its_own_context(ctx):
     assert pres._prog is not old and np.array_equal(px(ctx, a), px(ctx, b))
     pres.release()
     assert pres._prog is None and pres._ext == {}
+
+
+def test_a_capped_frame_is_drawn_smaller_and_shown_whole_on_output_one(ctx):
+    """The render cap (output.render): output 1 a 2× HiDPI framebuffer
+    (2W×2H at dpr 2) under a W×H cap draws the scene at W×H — the strokes
+    at their on-screen width, dpr scaled alike — and shows it scaled over
+    the whole framebuffer: box-filtered back down it is the uncapped W×H
+    frame at dpr 1."""
+    import numpy as np
+
+    S = O.Switches
+    ref = run(ctx, rig(ctx), views(ctx, S()))[0]
+    r = rig(ctx)
+    r.max_frame = (W, H)
+    vs = views(ctx, S(), sizes={0: (2 * W, 2 * H)})
+    s = scene_view()
+    for k in range(4):
+        s.ang = [a + 0.05 for a in s.ang]
+        r.draw_outputs(s, W, H, 2.0, vs, t_now=2.0 + k / 30)
+    assert ctx.error == "GL_NO_ERROR"
+    assert r.scene.size == (W, H) and r.stats["direct"] is False
+    big = px(ctx, vs[0].target)
+    assert big.shape == (2 * H, 2 * W, 4)
+    down = big.reshape(H, 2, W, 2, 4).mean(axis=(1, 3))
+    err = np.abs(down - ref)[..., :3].mean()
+    assert err < 3.0, err
+    # uncapped, the same framebuffer draws at its own size, direct
+    r.max_frame = None
+    r.draw_outputs(s, W, H, 2.0, vs, t_now=3.0)
+    assert r.scene.size == (2 * W, 2 * H) and r.stats["direct"] is True

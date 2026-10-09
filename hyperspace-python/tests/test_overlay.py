@@ -494,3 +494,28 @@ def test_one_output_has_no_dim_of_its_own():
     reg = _registry()
     assert register_switches(reg, one)[-1] == "output.1.dim"
     assert reg["output.1.dim"].value == 0.5 and reg["output.1.dim"].label == "Dim"
+
+
+def test_the_render_cap_is_an_output_param_1080p_by_default(rig):
+    from hyperspace.overlay import RENDER_NAMES, render_index
+
+    p = rig.reg["output.render"]
+    assert p.kind is Kind.ENUM and p.choices == RENDER_NAMES and not p.persist
+    assert RENDER_NAMES[p.value] == "1080p" and rig.out.max_frame == (1920, 1080)
+    p.set(RENDER_NAMES.index("full"))
+    assert rig.out.max_frame is None
+    p.set(RENDER_NAMES.index("720p"))
+    assert rig.out.max_frame == (1280, 720)
+    assert render_index("4k") == render_index("1080p")         # not a cap: the default
+
+
+def test_the_config_reads_the_render_cap_and_says_a_bad_one(tmp_path):
+    from hyperspace import config
+
+    p = tmp_path / "config.toml"
+    assert config.load(p)["output"]["render"] == "1080p"
+    p.write_text('[output]\nrender = "full"\n')
+    assert config.load(p)["output"]["render"] == "full"
+    p.write_text('[output]\nrender = "4k"\n')
+    cfg = config.load(p)
+    assert cfg["output"]["render"] == "1080p" and any("render" in n for n in cfg["notes"])
