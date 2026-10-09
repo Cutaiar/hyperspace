@@ -439,8 +439,9 @@ def _cap(s: str) -> str:
 def register_switches(reg: Registry, slots) -> list[str]:
     """The per-output switches (plan 21 WP4): for each opened render output
     N (an `outputs.Slot`, numbered by its place in the config's list),
-    ``output.N.scene``, ``output.N.hands``, ``output.N.through`` and — only
-    when the config lists two or more outputs — ``output.N.dim``. They
+    ``output.N.scene``, ``output.N.hands``, ``output.N.through``,
+    ``output.N.flip_x`` / ``.flip_y`` (plan 23 WP1: the output's mirror) and
+    — only when the config lists two or more outputs — ``output.N.dim``. They
     write the slot's `outputs.Switches`, which `app._draw_render` hands the
     renderer each frame in that output's `View`; the renderer only reads
     them (ARCHITECTURE §3).
@@ -481,7 +482,20 @@ def register_switches(reg: Registry, slots) -> list[str]:
                    tip=f"Off: the hands are laid over the finished picture{whose}, "
                        "untouched by the effects. On: the effects bend them with the "
                        "shape. With no effect on it changes nothing.", **rig)
-        ids += [f"{pre}.scene", f"{pre}.hands", f"{pre}.through"]
+        # plan 23 WP1: this output's mirror, its last step — the scene, the
+        # hands and the readout together, to undo a Pepper's Ghost glass
+        mirror = ("Ghost mirror (HANDS page) flips the hands only: with this on, "
+                  "leave it off or the hands flip twice. Launch value: the "
+                  "config's flip_x / flip_y.")
+        reg.toggle(f"{pre}.flip_x", label("flip X"), *flag("flip_x"), group="output",
+                   tip=f"Mirror the whole picture left-right{whose} — the scene, the "
+                       "ghost hands and the guide's text together — for a glass that "
+                       f"reflects it. {mirror}", **rig)
+        reg.toggle(f"{pre}.flip_y", label("flip Y"), *flag("flip_y"), group="output",
+                   tip=f"Mirror the whole picture top-bottom{whose} — for a screen lying "
+                       f"flat under a 45° glass. {mirror}", **rig)
+        ids += [f"{pre}.scene", f"{pre}.hands", f"{pre}.through", f"{pre}.flip_x",
+                f"{pre}.flip_y"]
         # one output: the master dim is its dim — unless the config gave it a
         # launch dim of its own, which must then have a fader (review of #124)
         if several or float(sw.dim) < 1.0:

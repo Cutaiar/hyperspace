@@ -180,7 +180,8 @@ def _slots(cfg: dict | None) -> list[Slot]:
     out = []
     for k, e in enumerate(config.screens(cfg or {})):
         sw = Switches(scene=bool(e["scene"]), hands=bool(e["hands"]),
-                      through=bool(e["through"]), dim=float(e["dim"]))
+                      through=bool(e["through"]), dim=float(e["dim"]),
+                      flip_x=bool(e.get("flip_x", False)), flip_y=bool(e.get("flip_y", False)))
         out.append(Slot(k + 1, name=str(e["name"] or ""), switches=sw,
                         monitor=placement.index(e["monitor"]),
                         fullscreen=bool(e["fullscreen"])))
@@ -735,8 +736,11 @@ class Mouse:
     drained once per frame.
     """
 
-    def __init__(self, win, reg: Registry, view: ViewState):
+    def __init__(self, win, reg: Registry, view: ViewState, switches=None):
         self.win, self.view = win, view
+        # output 1's switches (plan 23 WP1): on a flipped output the cursor
+        # is mirrored before use, so a drag and the wheel follow the picture
+        self.switches = switches
         self.yaw, self.pitch, self.zoom = reg["camera.yaw"], reg["camera.pitch"], reg["camera.zoom"]
         self.pan_x, self.pan_y = reg["camera.pan.x"], reg["camera.pan.y"]
         self.drag = {"btn": None, "x": 0.0, "y": 0.0}
@@ -749,6 +753,8 @@ class Mouse:
     def poll(self, shift: bool) -> None:
         win, s, drag = self.win, self.view, self.drag
         x, y = glfw.get_cursor_pos(win)
+        w, h = glfw.get_window_size(win)
+        x, y = flipped(self.switches, x, y, w, h)
         left = glfw.get_mouse_button(win, glfw.MOUSE_BUTTON_LEFT) == glfw.PRESS
         right = glfw.get_mouse_button(win, glfw.MOUSE_BUTTON_RIGHT) == glfw.PRESS
         # shift+drag pans too — a trackpad has no right button to hold
@@ -765,8 +771,18 @@ class Mouse:
             drag.update(x=x, y=y)
         wheel, self._wheel = self._wheel, 0.0
         if wheel:
-            w, h = glfw.get_window_size(win)
             _zoom_about(self.zoom, self.pan_x, self.pan_y, s, wheel, x, y, w, h)
+
+
+def flipped(switches, x: float, y: float, w: float, h: float) -> tuple[float, float]:
+    """A cursor position in output 1's window, mirrored as its picture is
+    (plan 23 WP1: `Switches.flip_x` / `flip_y`); output 1's frame fills its
+    window, so the window is the space to mirror in. No switches: as is."""
+    if switches is not None and getattr(switches, "flip_x", False):
+        x = w - x
+    if switches is not None and getattr(switches, "flip_y", False):
+        y = h - y
+    return x, y
 
 
 # ---- relative writers: the mouse, the sticks and ↑/↓ move a param by a
@@ -1213,7 +1229,7 @@ def main() -> None:
     if router.table.said:                       # what the launch did to bindings.json
         panel.config_notes = [*panel.config_notes, router.table.said]
     keys = Keys(render_win, ctrl_win, [sl.win for sl in later])   # keys from every window
-    mouse = Mouse(render_win, reg, s)                              # the mouse: output 1 only
+    mouse = Mouse(render_win, reg, s, slots[0].switches)          # the mouse: output 1 only
 
     def draw_render(dt: float) -> None:
         # every render output: output 1 drawn, the others presented, the

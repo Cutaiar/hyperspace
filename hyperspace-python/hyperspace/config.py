@@ -42,6 +42,11 @@ dream.py, too, is imported only when its gate is open.
                             # whole framebuffer), "1440p", "1080p", "720p". A 2×
                             # HiDPI screen that looks 1920×1080 is 3840×2160
                             # under "full". output.render on the OUTPUT page
+    flip_x = false          # mirror the picture left-right / top-bottom as its
+    flip_y = false          # last step, for a Pepper's Ghost glass (plan 23 WP1);
+                            # one output. With [[output.screens]], each entry's
+                            # own flip_x / flip_y. output.N.flip_x / .flip_y on
+                            # the OUTPUT page; never saved in a preset or show
     keep_awake = true       # while the app runs, the Mac does not idle into the
                             # screensaver, display sleep or system sleep (macOS
                             # `caffeinate -d -i`, app.Awake); false lets it
@@ -79,6 +84,8 @@ dream.py, too, is imported only when its gate is open.
     through = false         #   "hands through effects" (plan 21 WP2)
     dim = 1.0               #   its own dim, times the master's; under 0.1 is 0.1,
                             #   with a note — the config cannot launch an output black
+    flip_x = false          #   mirror this output left-right / top-bottom, its last
+    flip_y = false          #   step — for a Pepper's Ghost glass (plan 23 WP1)
                             # Outputs are numbered by their place in the list,
                             # opened or not. Output 1 sets the frame's size and
                             # paces the loop (its swap waits for its screen, the
@@ -160,7 +167,8 @@ DEFAULTS: dict = {
     # each window opens on, −1 = where it was last time (placement.py)
     "output": {"overlay": False, "monitor": -1, "control_monitor": -1, "fullscreen": False,
                "on_start": False, "passthrough": True, "bg": 0.0, "alpha": 1.0,
-               "keep_awake": True, "render": "1080p"},
+               "keep_awake": True, "render": "1080p",
+               "flip_x": False, "flip_y": False},
     # gamepad.py: the Xbox pad — on by default, inert when absent
     "gamepad": {"enabled": True},
     # bridge.py: the analyzer's lanes out to a DAW, external lanes in — off by default
@@ -182,7 +190,8 @@ DEFAULTS: dict = {
 # one [[output.screens]] entry's keys and their defaults (plan 21 WP3); the
 # switches are outputs.Switches' launch values
 SCREEN: dict = {"name": "", "monitor": -1, "fullscreen": False,
-                "scene": True, "hands": True, "through": False, "dim": 1.0}
+                "scene": True, "hands": True, "through": False, "dim": 1.0,
+                "flip_x": False, "flip_y": False}
 DIM_FLOOR = 0.1          # the config cannot launch an output black (plan 21 fork F4)
 
 
@@ -217,7 +226,7 @@ def _screen(n: int, e: dict, cfg: dict) -> dict:
         if bad:
             _note(cfg, f"{where} monitor = {e['monitor']!r} is not a screen index — "
                        "using the last position")
-    for key in ("fullscreen", "scene", "hands", "through"):
+    for key in ("fullscreen", "scene", "hands", "through", "flip_x", "flip_y"):
         if key in e:
             if isinstance(e[key], bool):
                 out[key] = e[key]
@@ -290,7 +299,9 @@ def screens(cfg: dict) -> list[dict]:
         if got:
             return got
     return [{**SCREEN, "monitor": oc.get("monitor", -1),
-             "fullscreen": bool(oc.get("fullscreen", False))}]
+             "fullscreen": bool(oc.get("fullscreen", False)),
+             "flip_x": oc.get("flip_x", False) is True,
+             "flip_y": oc.get("flip_y", False) is True}]
 
 
 def load(path: Path | None = None) -> dict:
@@ -356,6 +367,13 @@ def load(path: Path | None = None) -> dict:
         cfg["output"]["render"] = RENDER_DEFAULT
         _note(cfg, f"config: [output] render = {rc!r} is not one of {', '.join(RENDER_NAMES)} "
                    f"— {RENDER_DEFAULT}")
+    # [output] flip_x / flip_y (plan 23 WP1, the one-output form) are
+    # switches: anything else is off, said
+    for key in ("flip_x", "flip_y"):
+        v = cfg["output"].get(key, False)
+        if not isinstance(v, bool):
+            cfg["output"][key] = False
+            _note(cfg, f"config: [output] {key} = {v!r} is not true or false — false")
     # [output] keep_awake is a switch: `keep_awake = "no"` keeps the Mac awake
     # (the show is safer awake), and the SYSTEM page says so
     awake = cfg["output"].get("keep_awake", True)

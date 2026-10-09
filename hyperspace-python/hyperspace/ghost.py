@@ -119,8 +119,11 @@ def register(reg, state: GhostState) -> None:
                    tip="How solid the ghost hands are over the picture.")
     reg.toggle(f"{GROUP}.mirror", "Ghost mirror", lambda: state.mirror,
                lambda v: setattr(state, "mirror", bool(v)), group=GROUP, modulatable=False,
-               tip="Flip the ghost hands left for right — for a rig that shows the "
-                   "render in a mirror or on a Pepper's Ghost glass.")
+               tip="Flip the ghost hands left for right, the hands only — for a real "
+                   "mirror in front of the performer's hands. For a Pepper's Ghost "
+                   "glass use Flip X / Flip Y on the OUTPUT page, which mirror the whole "
+                   "picture; with an output flip on, leave this off or the hands flip "
+                   "twice.")
     reg.enum(f"{GROUP}.guide", "Ghost guide", lambda: state.guide,
              lambda i: setattr(state, "guide", int(i)), GUIDES, group=GROUP,
              modulatable=False,
@@ -819,8 +822,14 @@ COMPOSITE_FS = """
 in vec2 v_uv;
 uniform sampler2D u_hands;
 uniform float u_alpha;
+uniform ivec2 u_flip;        // plan 23 WP1: the output's mirror (0 0: as drawn)
 out vec4 f_color;
-void main() { f_color = texture(u_hands, v_uv) * u_alpha; }
+void main() {
+    vec2 uv = v_uv;
+    if (u_flip.x != 0) uv.x = 1.0 - uv.x;
+    if (u_flip.y != 0) uv.y = 1.0 - uv.y;
+    f_color = texture(u_hands, uv) * u_alpha;
+}
 """
 
 
@@ -1383,21 +1392,26 @@ class Ghost:
         return True
 
     def composite(self, target: moderngl.Framebuffer, vp: tuple[int, int, int, int],
-                  opaque: bool = True) -> bool:
+                  opaque: bool = True, flip: tuple[bool, bool] = (False, False)) -> bool:
         """Lay the layer `layer` drew over `target`'s rect `vp` at
         `ghost.alpha`, premultiplied, scaled to the rect (1:1 when it is
         the layer's size). On an opaque ground the target's alpha is left
         exactly as it is (plan 14 WP1); on overlay's see-through ground the
         hands add their coverage to it. Leaves `target` bound with `vp`
-        and blending on, a raise included. False when there is no layer."""
-        return self._lay(self.tex, target, vp, opaque)
+        and blending on, a raise included. False when there is no layer.
+        `flip` (x, y) mirrors it inside `vp` — an output's mirror (plan 23
+        WP1), passed only at the output stage, never into the effects'
+        input (hands-through: the frame is flipped whole when shown)."""
+        return self._lay(self.tex, target, vp, opaque, flip)
 
     def composite_readout(self, target: moderngl.Framebuffer,
-                          vp: tuple[int, int, int, int], opaque: bool = True) -> bool:
+                          vp: tuple[int, int, int, int], opaque: bool = True,
+                          flip: tuple[bool, bool] = (False, False)) -> bool:
         """`composite` for the readout layer, when there is one."""
-        return self._lay(self.readout, target, vp, opaque)
+        return self._lay(self.readout, target, vp, opaque, flip)
 
-    def _lay(self, tex, target, vp, opaque: bool) -> bool:
+    def _lay(self, tex, target, vp, opaque: bool,
+             flip: tuple[bool, bool] = (False, False)) -> bool:
         if tex is None or self._comp is None:
             return False
         ctx = self.ctx
@@ -1412,6 +1426,7 @@ class Ghost:
             tex.use(location=0)
             self._comp["u_hands"].value = 0
             self._comp["u_alpha"].value = float(self.state.alpha)
+            self._comp["u_flip"].value = (int(bool(flip[0])), int(bool(flip[1])))
             self._comp_vao.render(moderngl.TRIANGLES, vertices=3)
         finally:
             ctx.enable(moderngl.BLEND)

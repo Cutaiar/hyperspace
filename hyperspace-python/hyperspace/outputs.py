@@ -44,6 +44,12 @@ class Switches:
     hands: bool = True
     through: bool = False      # hands through effects (WP2)
     dim: float = 1.0           # this output's own dim, times the master's
+    # plan 23 WP1: this output's picture mirrored as its last step, inside
+    # the fit rect — the frame, the hands laid after and the readout alike,
+    # so a Pepper's Ghost glass's own mirror is undone (the dim covers the
+    # whole rect and needs none). Off, the output is bit-identical
+    flip_x: bool = False       # left-right
+    flip_y: bool = False       # top-bottom
 
 
 def route(sw: Switches, fx_active: bool, hands_visible: bool) -> tuple[int | None, bool]:
@@ -135,6 +141,7 @@ class Handoff:
     alpha: float = 1.0
     factor: float = 1.0
     bg_alpha: float = 1.0
+    flip: tuple[bool, bool] = (False, False)   # plan 23 WP1: steps 2–4 mirrored in `rect`
 
     @staticmethod
     def name(tex: moderngl.Texture | None) -> int | None:
@@ -225,10 +232,22 @@ uniform int u_scaled;
 uniform ivec2 u_origin;      // the rect's origin (gl_FragCoord is window-relative)
 uniform float u_k;
 uniform int u_opaque;
+uniform ivec2 u_flip;        // plan 23 WP1: mirror x / y inside the rect (0 0: as drawn)
 out vec4 f_color;
 void main() {
-    vec4 c = u_scaled != 0 ? texture(u_src, v_uv)
-                           : texelFetch(u_src, ivec2(gl_FragCoord.xy) - u_origin, 0);
+    vec4 c;
+    if (u_scaled != 0) {
+        vec2 uv = v_uv;
+        if (u_flip.x != 0) uv.x = 1.0 - uv.x;
+        if (u_flip.y != 0) uv.y = 1.0 - uv.y;
+        c = texture(u_src, uv);
+    } else {
+        ivec2 q = ivec2(gl_FragCoord.xy) - u_origin;
+        ivec2 n = textureSize(u_src, 0);
+        if (u_flip.x != 0) q.x = n.x - 1 - q.x;
+        if (u_flip.y != 0) q.y = n.y - 1 - q.y;
+        c = texelFetch(u_src, q, 0);
+    }
     c *= u_k;
     if (u_opaque != 0) c.a = 1.0;
     f_color = c;
@@ -312,6 +331,8 @@ class Presenter:
             opaque = ho.bg_alpha >= 1.0
             prog, vao = self._prog, self._vao
             prog["u_src"].value = 0
+            fl = tuple(int(bool(v)) for v in getattr(ho, "flip", (False, False)))
+            prog["u_flip"].value = fl                    # steps 2–4 alike; 5 covers it all
             rect = tuple(int(v) for v in ho.rect)
             if ho.frame is not None and rect[2] > 0 and rect[3] > 0:            # 2
                 ctx.viewport = rect
