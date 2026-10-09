@@ -446,8 +446,10 @@ def test_the_output_switches_are_rig_settings():
     reg = _registry()
     slots = _slots("glass", "projector", "wall", missing=(2,))
     ids = register_switches(reg, slots)
-    assert ids == ["output.1.scene", "output.1.hands", "output.1.through", "output.1.dim",
-                   "output.3.scene", "output.3.hands", "output.3.through", "output.3.dim"]
+    assert ids == ["output.1.scene", "output.1.hands", "output.1.through", "output.1.flip_x",
+                   "output.1.flip_y", "output.1.dim",
+                   "output.3.scene", "output.3.hands", "output.3.through", "output.3.flip_x",
+                   "output.3.flip_y", "output.3.dim"]
     assert not any(p.id.startswith("output.2.") for p in reg)       # not opened: none
     for pid in ids:
         p = reg[pid]
@@ -484,7 +486,8 @@ def test_one_output_has_no_dim_of_its_own():
 
     reg = _registry()
     assert register_switches(reg, _slots("")) == [
-        "output.1.scene", "output.1.hands", "output.1.through"]
+        "output.1.scene", "output.1.hands", "output.1.through", "output.1.flip_x",
+        "output.1.flip_y"]
     assert "output.1.dim" not in reg
     assert [reg[f"output.1.{k}"].label for k in ("scene", "hands", "through")] == [
         "Scene", "Hands", "Hands through effects"]

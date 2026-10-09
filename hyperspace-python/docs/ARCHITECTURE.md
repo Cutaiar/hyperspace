@@ -798,7 +798,12 @@ makes one `outputs.Slot` per entry: output 1 is the render window, each
 later one a window in its share group with its own `Presenter` and its own
 `overlay.Output` (no params). Each opened output gets `output.N.*`
 switches (`overlay.register_switches`); `placement.py` remembers one rect
-per output.
+per output. `output.N.flip_x` / `.flip_y` (plan 23 WP1) mirror an output's
+picture as its last step, inside its fit rect: `SHOW_FS` and the ghost's
+`COMPOSITE_FS` on output 1, `PRESENT_FS` (through `Handoff.flip`) on a
+later one, never the hands-through pass into the effects. A flipped output
+is never drawn direct, and the render window's mouse is mirrored by
+output 1's flags (`app.flipped`).
 
 **Presets, shows, the library.** A **preset** (`hyperspace.preset/2`) is
 the performance: values, routes, desk, macros, module labels. A **show**

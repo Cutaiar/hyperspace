@@ -129,10 +129,22 @@ uniform sampler2D u_src;
 uniform int u_scaled;
 uniform ivec2 u_origin;      // the rect's origin (gl_FragCoord is window-relative)
 uniform int u_opaque;
+uniform ivec2 u_flip;        // plan 23 WP1: mirror x / y inside the rect (0 0: as drawn)
 out vec4 f_color;
 void main() {
-    vec4 c = u_scaled != 0 ? texture(u_src, v_uv)
-                           : texelFetch(u_src, ivec2(gl_FragCoord.xy) - u_origin, 0);
+    vec4 c;
+    if (u_scaled != 0) {
+        vec2 uv = v_uv;
+        if (u_flip.x != 0) uv.x = 1.0 - uv.x;
+        if (u_flip.y != 0) uv.y = 1.0 - uv.y;
+        c = texture(u_src, uv);
+    } else {
+        ivec2 q = ivec2(gl_FragCoord.xy) - u_origin;
+        ivec2 n = textureSize(u_src, 0);
+        if (u_flip.x != 0) q.x = n.x - 1 - q.x;
+        if (u_flip.y != 0) q.y = n.y - 1 - q.y;
+        c = texelFetch(u_src, q, 0);
+    }
     if (u_opaque != 0) c.a = 1.0;
     f_color = c;
 }
@@ -903,8 +915,12 @@ class Renderer:
             if key not in users:
                 continue
             only = views[users[key][0]]
+            # a flipped output (plan 23 WP1) takes the frame through a
+            # texture: the mirror is `_show`'s, at the output stage
             direct = (len(users[key]) == 1 and only.target is not None
-                      and tuple(only.rect[2:]) == size)
+                      and tuple(only.rect[2:]) == size
+                      and not getattr(only.switches, "flip_x", False)
+                      and not getattr(only.switches, "flip_y", False))
             stats["pipelines"].append(key)
             try:
                 if direct:
@@ -983,6 +999,11 @@ class Renderer:
         layer over that when there is one, its dim."""
         ctx, gh = self.ctx, self.ghost
         factor = clamp(getattr(self, "dim", 1.0) * float(v.switches.dim), 0.0, 1.0)
+        # plan 23 WP1: this output's mirror, its last step — the frame, the
+        # hands laid after and the readout, never the hands-through pass
+        # (`_pipeline`'s composite, inside the frame this flips whole)
+        flip = (bool(getattr(v.switches, "flip_x", False)),
+                bool(getattr(v.switches, "flip_y", False)))
         frame = None if key is None or key in failed else frames.get(key)
         if v.target is None:
             if v.presenter is None:
@@ -992,7 +1013,7 @@ class Renderer:
             v.handoff = Handoff(frame, size, (rx + ix, ry + iy, iw, ih),
                                 hands=gh.tex if after else None, readout=readout,
                                 alpha=float(gh.state.alpha), factor=factor,
-                                bg_alpha=float(v.bg_alpha))
+                                bg_alpha=float(v.bg_alpha), flip=flip)
             return
         tgt, rect = v.target, v.rect
         opaque = v.bg_alpha >= 1.0
@@ -1003,15 +1024,15 @@ class Renderer:
             ctx.viewport = rect
             ctx.clear(0.0, 0.0, 0.0, float(v.bg_alpha), viewport=rect)
         elif frame is not None:
-            self._show(tgt, rect, inner, frame, size, opaque, float(v.bg_alpha))
+            self._show(tgt, rect, inner, frame, size, opaque, float(v.bg_alpha), flip)
         # the hands last, onto the target: no effect, echo or dream touches
         # them and the history (captured from the scene) never holds them
         if after or readout is not None:
             try:
                 if after:
-                    gh.composite(tgt, inner, opaque=opaque)
+                    gh.composite(tgt, inner, opaque=opaque, flip=flip)
                 if readout is not None:      # the guide and its labels, never bent
-                    gh.composite_readout(tgt, inner, opaque=opaque)
+                    gh.composite_readout(tgt, inner, opaque=opaque, flip=flip)
             except Exception as e:  # noqa: BLE001 — the hands must not take the frame down
                 self._hands_failed(e, tgt, rect)
         # the dim, after everything: the scene, the look-back, every effect
@@ -1024,9 +1045,10 @@ class Renderer:
 
     def _show(self, tgt: moderngl.Framebuffer, rect: tuple, inner: tuple,
               tex: moderngl.Texture, size: tuple[int, int], opaque: bool,
-              bg_alpha: float) -> None:
+              bg_alpha: float, flip: tuple[bool, bool] = (False, False)) -> None:
         """A frame texture onto `tgt`: 1:1 when `inner` is the frame's size,
-        else scaled into `inner` with the rest of `rect` the ground."""
+        else scaled into `inner` with the rest of `rect` the ground;
+        mirrored inside `inner` by `flip` (x, y; plan 23 WP1)."""
         prog, vao = self._show_program()
         ctx = self.ctx
         tgt.use()
@@ -1040,6 +1062,7 @@ class Renderer:
             prog["u_scaled"].value = int(tuple(inner[2:]) != tuple(size))
             prog["u_origin"].value = (int(inner[0]), int(inner[1]))
             prog["u_opaque"].value = int(opaque)
+            prog["u_flip"].value = (int(bool(flip[0])), int(bool(flip[1])))
             vao.render(moderngl.TRIANGLES, vertices=3)
         finally:
             ctx.enable(moderngl.BLEND)

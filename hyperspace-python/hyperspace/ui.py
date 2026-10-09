@@ -1567,8 +1567,19 @@ class Panel:
             self._check(f"{pre}.hands", "hands")
             imgui.same_line()
             self._check(f"{pre}.through", "through effects")
+            # the mirror (plan 23 WP1): two ticks at the right of the dim row,
+            # or of the "shows:" line when the output has no dim of its own
+            flips = [(pid, t) for pid, t in ((f"{pre}.flip_x", "flip X"),
+                                             (f"{pre}.flip_y", "flip Y")) if pid in self.reg]
+            st = imgui.get_style()
+            fw = sum(imgui.calc_text_size(t).x + imgui.get_frame_height()
+                     + st.item_inner_spacing.x + st.item_spacing.x for _, t in flips)
             if f"{pre}.dim" in self.reg:
-                self._row(f"{pre}.dim", label="dim")
+                self._row(f"{pre}.dim", width=-(fw + 8) if flips else -1, label="dim")
+                for pid, t in flips:
+                    imgui.same_line()
+                    self._check(pid, t)
+                flips = []
             sw = sl.switches
             why = []
             if sw.hands and ghost is not None and not ghost.value:
@@ -1588,7 +1599,18 @@ class Panel:
                 if imgui.is_item_hovered():
                     imgui.set_tooltip(line)
             words, black = output_shows(sw, fx_on, visible, master)
-            imgui.text_colored(WARN if black else FAINT, f"shows: {words}")
+            if not flips:
+                imgui.text_colored(WARN if black else FAINT, f"shows: {words}")
+                continue
+            # no dim row: the ticks at the right of the "shows:" line, the
+            # words cut to the room left of them
+            avail = imgui.get_content_region_avail().x
+            imgui.align_text_to_frame_padding()
+            imgui.text_colored(WARN if black else FAINT,
+                               fit_text(f"shows: {words}", max(avail - fw - 8, 40)))
+            for k, (pid, t) in enumerate(flips):
+                imgui.same_line(imgui.get_cursor_start_pos().x + avail - fw if k == 0 else 0.0)
+                self._check(pid, t)
         if several:
             w, h = slots[0].size
             size = f" · frame {w}×{h}" if w and h else ""

@@ -873,10 +873,10 @@ def test_a_raising_hands_composite_into_the_chain_still_runs_it(ctx, monkeypatch
     r = rig(ctx, dim=0.5)
     real = G.Ghost._lay
     with monkeypatch.context() as m:
-        def boom(self, tex, target, vp, opaque):
+        def boom(self, tex, target, vp, opaque, flip=(False, False)):
             if tuple(vp[:2]) == (0, 0) and target is r.fx._fbo[0]:
                 raise RuntimeError("into the chain")
-            return real(self, tex, target, vp, opaque)
+            return real(self, tex, target, vp, opaque, flip)
         m.setattr(G.Ghost, "_lay", boom)
         through, over = run(ctx, r, views(ctx, S(through=True), S()))
     assert r.ghost.error == "ghost hands: RuntimeError: into the chain"
@@ -1021,3 +1021,107 @@ def test_a_capped_frame_is_drawn_smaller_and_shown_whole_on_output_one(ctx):
     r.max_frame = None
     r.draw_outputs(s, W, H, 2.0, vs, t_now=3.0)
     assert r.scene.size == (2 * W, 2 * H) and r.stats["direct"] is True
+
+
+# ---------------------------------------------------------------- plan 23 WP1: the flip
+
+def _mirror(pic, fx, fy):
+    """`pic` (top row first) mirrored as an output flip would."""
+    import numpy as np
+
+    if fx:
+        pic = pic[:, ::-1]
+    if fy:
+        pic = pic[::-1]
+    return np.ascontiguousarray(pic)
+
+
+@pytest.mark.parametrize("fx, fy", [(True, False), (False, True), (True, True)])
+def test_a_flipped_output_is_its_picture_mirrored_frame_hands_and_readout(ctx, fx, fy):
+    """Each flag mirrors that output's whole picture — the frame, the hands
+    laid after and the guide's readout — and nothing on another output."""
+    import numpy as np
+
+    S = O.Switches
+    # output 2 sends the hands through the effect, so the guide's readout
+    # is a layer of its own and output 1 lays frame, hands and readout
+    plain, other = run(ctx, rig(ctx, guide=1), views(ctx, S(), S(through=True)))
+    r = rig(ctx, guide=1)
+    flipped, still = run(ctx, r, views(ctx, S(flip_x=fx, flip_y=fy), S(through=True)))
+    assert r.ghost.readout is not None and r.stats["layer"] and r.stats["readout"]
+    assert np.array_equal(flipped, _mirror(plain, fx, fy))
+    assert np.array_equal(still, other)                       # output 2 untouched
+    assert not np.array_equal(flipped, plain)
+
+
+def test_a_flipped_letterboxed_output_mirrors_inside_the_bars(ctx):
+    """The flip is inside the fit rect: the bars stay where they are."""
+    import numpy as np
+
+    S = O.Switches
+    _, plain = run(ctx, rig(ctx), views(ctx, S(), S(), sizes={1: (240, 240)}))
+    _, flipped = run(ctx, rig(ctx), views(ctx, S(), S(flip_y=True), sizes={1: (240, 240)}))
+    x, y, w, h = fit((W, H), (240, 240))
+    assert np.array_equal(flipped[:y], plain[:y]) and np.array_equal(flipped[y + h:], plain[y + h:])
+    assert np.array_equal(flipped[y:y + h, x:x + w], _mirror(plain[y:y + h, x:x + w], False, True))
+
+
+@pytest.mark.parametrize("effects", [(), ("warp", "kaleido")])
+def test_a_presenter_output_flips_like_a_target_view(ctx, effects):
+    """Output 2+ (the Presenter's own shader, the Handoff carrying the
+    flags): the same picture a flipped target view gets, at the frame's
+    size and letterboxed, and the unflipped picture mirrored."""
+    import numpy as np
+
+    S = O.Switches
+    r = rig(ctx, effects=effects, guide=1, dim=0.8, alpha=0.7)
+    got = _presented(ctx, r, [(S(flip_x=True), (W, H)), (S(flip_y=True, dim=0.5), (300, 300)),
+                              (S(), (W, H))])
+    for target, presented in got:
+        assert np.array_equal(target, presented)
+    (fx_t, _), _, (plain, _) = got
+    assert np.array_equal(fx_t, _mirror(plain, True, False))
+
+
+def test_hands_through_an_effect_on_a_flipped_output_flip_once(ctx):
+    """With through on and an effect running the hands go into the effects'
+    input, inside the frame the flip mirrors whole: flipped once, never
+    twice — the flipped output is the unflipped one mirrored."""
+    import numpy as np
+
+    S = O.Switches
+    plain = run(ctx, rig(ctx, effects=("warp",)), views(ctx, S(through=True)))[0]
+    r = rig(ctx, effects=("warp",))
+    flipped = run(ctx, r, views(ctx, S(through=True, flip_x=True)))[0]
+    assert r.stats["chain_runs"] == 1
+    assert np.array_equal(flipped, _mirror(plain, True, False))
+
+
+def test_the_flips_come_from_the_config_never_a_preset(tmp_path):
+    from hyperspace import config
+    from hyperspace.app import _slots
+
+    p = tmp_path / "config.toml"
+    p.write_text('[[output.screens]]\nflip_y = true\n[[output.screens]]\nflip_x = "yes"\n')
+    cfg = config.load(p)
+    a, b = _slots(cfg)
+    assert (a.switches.flip_x, a.switches.flip_y) == (False, True)
+    assert (b.switches.flip_x, b.switches.flip_y) == (False, False)      # not a switch: off
+    assert any("flip_x" in n for n in cfg["notes"])
+    p.write_text("[output]\nflip_x = true\n")                            # the one-output form
+    (one,) = _slots(config.load(p))
+    assert (one.switches.flip_x, one.switches.flip_y) == (True, False)
+    p.write_text('[output]\nflip_y = 1\n')
+    cfg = config.load(p)
+    assert _slots(cfg)[0].switches.flip_y is False and any("flip_y" in n for n in cfg["notes"])
+
+
+def test_the_mouse_is_mirrored_on_a_flipped_output_one():
+    from hyperspace.app import flipped
+
+    S = O.Switches
+    assert flipped(None, 10, 20, 100, 50) == (10, 20)
+    assert flipped(S(), 10, 20, 100, 50) == (10, 20)
+    assert flipped(S(flip_x=True), 10, 20, 100, 50) == (90, 20)
+    assert flipped(S(flip_y=True), 10, 20, 100, 50) == (10, 30)
+    assert flipped(S(flip_x=True, flip_y=True), 10, 20, 100, 50) == (90, 30)
