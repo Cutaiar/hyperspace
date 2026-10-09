@@ -842,6 +842,13 @@ class LeapSource:
         with self._lock:
             self._hands, self._skel = out, skel
             self._seq, self._t = self._seq + 1, self.clock()
+        # a tracking frame is proof the tracker is live: an error, a lost
+        # service or a lost camera the SDK reported before it (a USB or
+        # HDMI re-sync, one callback that raised) is over. Without this the
+        # status stayed bad while frames kept coming, `on` stayed false and
+        # HandsIO fed the router nothing: the ghost hands drew, but no
+        # route moved, in any preset, until the next launch
+        self.status = "tracking"
 
     def latest(self) -> tuple[int, float, dict[str, tuple[dict, float]]]:
         """(frame seq, receipt time, side → (features, confidence))."""
