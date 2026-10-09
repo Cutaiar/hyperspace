@@ -747,7 +747,7 @@ doing its job while a learn is armed.
 | X (crossfader) | invariant | **master dim**: left black, right full |
 | Clip row 1 (G1·1–8) | invariant | bank slots 1–8 (as F1–F8) |
 | Clip rows 4–5 (G4·*, G5·*) | invariant | bank slots 9–16 and 17–24 |
-| Clip-stop row (G6·*) | invariant | **save as**: hold any pad 0.6 s |
+| Clip-stop row (G6·1–8) | free | nothing by default (dark); Learn it for toggles |
 | OVERDUB | invariant | **home** (lit while the show names a "starts on") |
 | QUANT | invariant | next filled bank slot |
 | SHIFT | invariant | latch the global layer |
@@ -780,15 +780,18 @@ one, amber while its slot holds another preset (velocity 5, Akai's
 "yellow"; `apc40.filled_of`), dark when empty. The diagram draws amber at
 half strength with the preset's name.
 
-**Save as on the desk.** Hold any pad of the clip-stop row for 0.6 s
-(`midi.HOLD_S`): the live state is saved as a **new** user preset named
-from the loaded one with the next free number (TRIP → TRIP 2; with
-nothing loaded, PRESET 1; it never overwrites a file and never hides a
-factory preset), it becomes the loaded preset and goes into the next
-empty bank slot, and the show is written at once ("saved TRIP 2 → F6",
-or "→ slot 10"). The bar is lit while held; on a save the bar and the new
-slot's pad blink for 1.5 s. A full bank still saves, to the preset list,
-and says so. A tap does nothing; two fingers save once.
+**Save on the desk.** Hold an **empty** bank pad (clip rows 1, 4 and 5)
+for 0.6 s (`midi.HOLD_S`): the live state is saved as a **new** user
+preset named from the loaded one with the next free number (TRIP → TRIP
+2; with nothing loaded, PRESET 1; it never overwrites a file and never
+hides a factory preset), it becomes the loaded preset and goes into
+*that* pad's slot, and the show is written at once ("saved TRIP 2 →
+F6", or "→ slot 10"); the pad blinks for 1.5 s. Holding a filled pad
+just loads it — nothing is written. To make room, free a pad on the
+PRESETS page: right-click its slot → **free this pad (keeps the
+preset)**; the preset stays in the list. (Until 2026-10-09 the
+clip-stop row was a SAVE AS bar into the next empty slot; that row is
+free now.)
 
 **Knobs and faders.** The track and device knobs are endless encoders:
 the app sets their position with the ring's CC, so a knob continues from

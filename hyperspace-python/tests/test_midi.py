@@ -655,11 +655,17 @@ STOP = apc40.N_CLIPSTOP
 
 
 def bar_rig(rig):
-    """The rig with a clock the test moves and a counter on the bar's
+    """The rig with a clock the test moves, the clip-stop row learned as a
+    SAVE AS bar (the factory map's until 2026-10-09; the op is the table's
+    for any buttons an owner puts on it), and a counter on the bar's
     target: `fires` grows by one each time `preset.save_new` fires (the
     save itself still runs)."""
     from hyperspace import midi
 
+    assert not [b for b in rig.midi.bindings if b.op == "hold"]   # none in the factory map
+    for k in range(8):
+        rig.midi.table.bindings.append(
+            Binding(f"note:{k}:{STOP}", "preset.save_new", "hold", feedback="led"))
     t = [0.0]
     rig.midi.clock = lambda: t[0]
     p = rig.reg["preset.save_new"]
@@ -1414,3 +1420,67 @@ def test_a_knob_on_the_pattern_steps_through_every_pattern(rig):
     assert up == list(range(n))                                   # every pattern, in order
     assert seen[n - 1:] == list(range(n - 1, -1, -1))             # and back down
     assert rig.view.pattern == 0
+
+
+# ------------------------------- 2026-10-09: hold an empty bank pad to save into it
+
+def test_holding_an_empty_bank_pad_saves_into_that_slot(rig):
+    """The bank pads carry the save: `preset.select` declares `held`, so
+    its `set` row is a press and a hold at once — the press loads (an
+    empty slot only says so), held HOLD_S on an empty slot the live state
+    is a new preset in that slot and its pad blinks; a filled slot is never
+    written over. One row per pad; the clip-stop row is free."""
+    from hyperspace import midi
+
+    t = [0.0]
+    rig.midi.clock = lambda: t[0]
+
+    def at(seconds, *msgs):
+        t[0] = seconds
+        push(rig, *msgs)
+
+    lib, pr = rig.presets.lib, rig.presets
+    pad = apc40.N_CLIP[0]
+    assert not [b for b in rig.midi.bindings if b.kind == "note" and b.number == STOP]  # free
+    assert [b.target for b in rig.midi.table.route("note", 5, pad)] == ["preset.select"]
+    push(rig, note(pad, channel=4), note(pad, 0, channel=4))                # TRIP
+    pr.clear_slot(5)
+    assert lib.current("presets") == "TRIP" and pr.bank[5] is None
+    # a tap on the empty pad: says so, saves nothing
+    at(0.0, note(pad, channel=5))
+    at(0.3, note(pad, 0, channel=5))
+    at(1.0)
+    assert pr.bank[5] is None and lib.current("presets") == "TRIP"
+    # held: at HOLD_S, while still down, the save lands in slot 6 (index 5)
+    mark = len(rig.out.sent)
+    at(2.0, note(pad, channel=5))
+    at(2.0 + midi.HOLD_S - 0.01)
+    assert pr.bank[5] is None
+    at(2.0 + midi.HOLD_S)
+    assert pr.bank[5] == "TRIP 2" and lib.current("presets") == "TRIP 2" and pr.active == 5
+    assert apc40.GREEN_BLINK in leds(rig, pad, 5, mark)                     # the new pad blinks
+    at(4.0)                                                                 # still down: once
+    at(4.5, note(pad, 0, channel=5))
+    assert [n for n in pr.bank if n == "TRIP 2"] == ["TRIP 2"]
+    # a filled pad held: the press loads it, the hold writes nothing
+    files = sorted(x.name for x in (lib.home / "presets").glob("*.json"))
+    at(6.0, note(pad, channel=4))
+    at(7.0)
+    at(7.1, note(pad, 0, channel=4))
+    assert lib.current("presets") == "TRIP" and pr.bank[4] == "TRIP"
+    assert sorted(x.name for x in (lib.home / "presets").glob("*.json")) == files
+
+
+def test_two_empty_pads_held_together_each_save_into_their_own_slot(rig):
+    from hyperspace import midi
+
+    t = [0.0]
+    rig.midi.clock = lambda: t[0]
+    pr, pad = rig.presets, apc40.N_CLIP[0]
+    pr.clear_slot(6)
+    pr.clear_slot(7)
+    t[0] = 0.0
+    push(rig, note(pad, channel=6), note(pad, channel=7))
+    t[0] = midi.HOLD_S
+    push(rig)
+    assert pr.bank[6] is not None and pr.bank[7] is not None and pr.bank[6] != pr.bank[7]

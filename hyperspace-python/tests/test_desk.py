@@ -444,8 +444,6 @@ def test_the_default_map_is_sorted_as_plan_13_says():
         (routing.SHIFT_SOURCE, routing.SHIFT_PARAM, None),
         # clip rows 4 and 5: the bank's slots 9–24, invariant (plan 19 WP2)
         *[(s, "preset.select", None) for s in far],
-        # the clip-stop row: one SAVE AS bar (plan 15 WP4)
-        *[(f"note:{k}:{apc40.N_CLIPSTOP}", "preset.save_new", None) for k in range(8)],
         (f"note:0:{apc40.N_OVERDUB}", "preset.home", None)]   # home (plan 15 WP2)
     assert not [b for b in rows if b.layer == "global" and b.number in (0x35, 0x36, 0x37)
                 and b.kind == "cc"]
@@ -634,73 +632,24 @@ def test_overdub_is_home_on_both_layers_and_is_lit(rig):
 
 # ------------------------------------------- plan 15 WP4: the SAVE AS bar
 
-def test_the_clip_stop_row_is_invariant(rig):
-    """Decision 29, D6 as the owner extended it: the eight clip-stop
-    buttons are one SAVE AS bar — eight invariant `hold` rows on
-    `preset.save_new`, the same on both layers, which no Learn takes and
-    no preset's desk may map."""
-    t, pr, m = rig.midi.table, rig.presets, rig.midi
-    lib, n = pr.lib, apc40.N_CLIPSTOP
-    now = [0.0]
-    m.clock = lambda: now[0]
-
-    def hold(channel):
-        push(rig, note(n, channel=channel))
-        now[0] += 0.7
-        rig.midi.poll()                                      # held 0.7 s: it saves here
-        push(rig, note(n, 0, channel=channel))
-        now[0] += 5.0
-        rig.midi.poll()
-
-    for k in range(8):
-        (b,) = t.route("note", k, n)
-        assert (b.target, b.op, b.layer, b.feedback, b.on, b.off) \
-            == ("preset.save_new", "hold", None, "led", 1, 0)
-        assert t.is_invariant(Binding(b.source, "view.points", "toggle", layer="preset"))
-        assert apc40.glyph(b.source) == f"G6·{k + 1}"
-        assert b in t.active()
-    assert "hold" in routing.OPS and "hold" not in routing.MOD_OPS
-    # the preset layer, then the global one: the same hold, the same save
-    push(rig, note(apc40.N_CLIP[0], channel=4), note(apc40.N_CLIP[0], 0, channel=4))
-    assert lib.current("presets") == "TRIP" and t.layer == "preset"
-    hold(0)
-    assert lib.current("presets") == "TRIP 2"
-    shift(rig)
-    assert t.layer == "global" and len(t.dispatch("note", 3, n)) == 1
-    assert all(b in t.active() for b in t.midi() if b.op == "hold")
-    hold(3)
-    assert lib.current("presets") == "TRIP 3"
-    assert t.layer == "global"                               # a save is no load: the layer stays
-    shift(rig)
-    # no Learn takes it. Plan 17 fork 6: an invariant control is not a
-    # candidate at all — a press while a learn is armed does its own job
-    # (the hold saves) and the learn stays armed; and the road a click
-    # takes (`Learn.learn_control`) refuses it, still armed, nothing bound
-    rows = [(b.to_json(), b.layer) for b in t.bindings]
-    m.learner.arm("view.depth4", "desk")
-    hold(5)
-    assert m.learner.learning == "view.depth4" and not m.learner.refused
-    assert lib.current("presets") == "TRIP 4"
-    assert [(b.to_json(), b.layer) for b in t.bindings] == rows
-    assert not m.learner.learn_control(f"note:5:{n}", apc40)
-    assert m.learner.learning == "view.depth4" and m.learner.refused
-    assert m.learner.last == "G6·6 (clip stop 6) is invariant (the session's) — not learned"
-    assert [(b.to_json(), b.layer) for b in t.bindings] == rows
-    m.learner.arm(None)
-    # no preset may map it: a desk row on any of the eight is dropped with a note
-    notes = t.set_desk([{"source": f"note:{k}:{n}", "target": "view.points", "op": "toggle",
-                         "feedback": "led"} for k in (0, 7)])
-    assert notes == [f"dropped note:{k}:{n} → view.points: that control is invariant, the "
-                     "session's (plan 13 D6)" for k in (0, 7)]
-    assert all([x.target for x in t.route("note", k, n)] == ["preset.save_new"] for k in range(8))
-    # no factory preset's desk names the row
-    for name in lib.list("presets"):
-        desk = lib.read("presets", name).get("desk") or []
-        assert not [d for d in desk if d["source"].endswith(f":{n}")
-                    and d["source"].startswith("note:")], name
-
-
-# ------------------------------------------- plan 18 WP2: knob smoothing
+def test_the_clip_stop_row_is_free(rig):
+    """2026-10-09: the clip-stop SAVE AS bar is retired — an empty bank pad
+    held saves into its own slot — so the eight clip-stop buttons have no
+    row on either layer: dark, doing nothing, and open to Learn (not
+    invariant) for toggles and the like."""
+    t, n = rig.midi.table, apc40.N_CLIPSTOP
+    for under_shift in (False, True):
+        if under_shift:
+            shift(rig)
+        for k in range(8):
+            assert t.route("note", k, n) == [] and t.dispatch("note", k, n) == []
+            assert not t.is_invariant(Binding(f"note:{k}:{n}", "view.points", "toggle",
+                                              layer="preset"))
+            assert apc40.glyph(f"note:{k}:{n}") == f"G6·{k + 1}"
+    assert "preset.save_new" in rig.reg               # still a param, learnable anywhere
+    # a preset's desk may map the row now: nothing is dropped
+    assert t.set_desk([{"source": f"note:0:{n}", "target": "view.points", "op": "toggle",
+                        "feedback": "led"}]) == []
 
 def test_a_layer_switch_leaves_a_glide_to_finish(rig):
     """A glide belongs to the param, not to the control: SHIFT latched
@@ -840,7 +789,8 @@ def test_rows_four_and_five_load_slots_nine_to_twenty_four_on_both_layers(rig):
             shift(rig)
         n, ch = _far(11)
         push(rig, note(n, channel=ch), note(n, 0, channel=ch))
-        assert lib.warning == "slot 12: an empty slot" and lib.current("presets") == was
+        assert lib.warning == "slot 12: an empty slot — hold its pad to save the live state into it"
+        assert lib.current("presets") == was
         assert sent_notes(rig, n, ch)[-1] == 0
         lib.warning = ""
     # shape selection left these rows for the cue knob (relative, every shape)

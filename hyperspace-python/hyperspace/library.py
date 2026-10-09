@@ -737,8 +737,8 @@ class Project:
         lib, name, key = self.lib, self.bank[k], slot_key(k)
         presets = self._loader()
         if name is None:
-            lib.say(warning=f"{key}: an empty slot" + (
-                f" — ⇧{key} saves the live state into it" if k < F_KEYS else ""))
+            lib.say(warning=f"{key}: an empty slot — hold its pad" + (
+                f" (or ⇧{key})" if k < F_KEYS else "") + " to save the live state into it")
             return
         if presets is None or lib.path_of(PRESETS, name) is None:
             lib.say(warning=f"{key}: no preset {name!r}")
@@ -798,10 +798,23 @@ class Project:
         is the one place its size is read (plan 15 §1 row 13)."""
         return next((k for k in range(len(self.bank)) if self.bank[k] is None), None)
 
+    def save_into(self, k: int) -> bool:
+        """The desk's save (2026-10-09, replacing the clip-stop SAVE AS bar):
+        hold an empty bank pad and the live state is a **new** preset in
+        that pad's slot — `save_new`'s preset, its name and its show write,
+        in slot k rather than the next empty one. A filled slot is never
+        written over: nothing happens and False is returned, so a long
+        press that loaded a preset blinks nothing and says nothing (the
+        `preset.save_empty.k` triggers, one per pad)."""
+        if not 0 <= k < len(self.bank) or self.bank[k] is not None:
+            return False
+        return self._save_new(k)
+
     def save_new(self) -> bool:
-        """The desk's save-as (plan 15 WP4, decision 29; the `preset.save_new`
-        trigger on the clip-stop row): the live state as a **new** preset,
-        named from the loaded one (`next_name`), into the next empty slot.
+        """The live state as a **new** preset, named from the loaded one
+        (`next_name`), into the next empty slot (`preset.save_new`, plan 15
+        WP4: learnable onto any button; the desk itself saves by holding an
+        empty pad, `save_into`).
         It never overwrites and never shadows: the name's slug is free
         among the file stems of both preset folders, every listed name
         (hidden ones included, plan 19 WP4: `_taken`) and the bank's names. The new preset becomes the loaded one with a
@@ -810,6 +823,10 @@ class Project:
         once; no undo step — nothing live changes. True when a preset was
         saved; False when none was (the reason is in `bank_error`), which
         the desk reads as "nothing to confirm" (midi.py blinks no light)."""
+        return self._save_new(None)
+
+    def _save_new(self, at: int | None) -> bool:
+        """`save_new` into slot `at`, or the next empty one when None."""
         lib, presets = self.lib, self._loader()
         if lib.reg is None:
             return False
@@ -826,7 +843,7 @@ class Project:
             self.bank_error = f"presets: {e}"
             return False
         self.bank_error = ""
-        k = self.next_empty()
+        k = self.next_empty() if at is None else at
         if k is None:
             lib.say(warning=f"saved {name} — {BANK_FULL}")
             return True

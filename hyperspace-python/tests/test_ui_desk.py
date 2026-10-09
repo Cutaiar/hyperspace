@@ -158,11 +158,11 @@ def test_the_hover_names_glyph_param_layer_and_akais_name(rig):
     dark = next(c for c in apc40.LAYOUT if c.glyph == "B7")        # device ◀: no row
     assert "B7" not in ui_desk.lit(table)
     assert "unmapped — dark" in ui_desk.label(table, dark, None)
-    # the clip-stop row is the SAVE AS bar (plan 15 WP4): eight invariant rows
+    # the clip-stop row is free since 2026-10-09 (an empty bank pad held saves)
     for k in range(1, 9):
         c = next(c for c in apc40.LAYOUT if c.glyph == f"G6·{k}")
-        b = ui_desk.lit(table)[c.glyph]
-        assert ui_desk.label(table, c, b) == f"G6·{k} · preset.save_new · invariant\nclip stop {k}"
+        assert c.glyph not in ui_desk.lit(table)
+        assert "unmapped — dark" in ui_desk.label(table, c, None)
     s = next(c for c in apc40.LAYOUT if c.glyph == "⇧")
     assert ui_desk.label(table, s, ui_desk.lit(table)["⇧"]).startswith("⇧ · desk.shift · invariant")
 
@@ -356,11 +356,10 @@ def test_the_big_desk_labels_every_lit_control_and_never_scrolls(rig, monkeypatc
         assert empty and all(g.split("·")[0] in ("G4", "G5") for g in empty)
         assert all(says.pop(g) == "" for g in empty)
         assert len(lit) > 80 and all(says.values())
-        # a label for every lit control: the eight clip-stop pads share one
+        # a label for every lit control (the clip-stop row is free: dark)
         assert set(st["labels"]) == set(says.values()), layer
-        stop = [says[f"G6·{k}"] for k in range(1, 9)]
-        assert len(set(stop)) == 1 and st["labels"].count(stop[0]) == 1
-        assert len(st["labels"]) == len(says) - 7, layer
+        assert not [g for g in says if g in {f"G6·{k}" for k in range(1, 9)}]
+        assert len(st["labels"]) == len(says), layer
         # what reached the draw list: every glyph (dark ones too), and
         # the labels' lines — nothing else, so a dark control has no label
         drawn = got["texts"]
