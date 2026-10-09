@@ -170,7 +170,7 @@ changes brightness or volume instead).
 | A11 | Undo a Learn and an Unbind | 2a | APC40 | 51 |
 | A12 | OVERDUB is Home | 2a | APC40 | 54 |
 | A13 | The crossfader is the master dimmer | 2a | APC40 | 55 |
-| A14 | Hold the clip-stop row to save a new preset | 2a | APC40, the copy | 56, 83 |
+| A14 | Hold an empty pad to save a new preset into it | 2a | APC40, the copy | 56, 83 |
 | A15 | Pad rows 4 and 5 are presets | 2a | APC40, the copy | 82 |
 | A16 | Click a control, then a setting | 2a | APC40 | 70 |
 | A17 | Knob smoothing | 2a | APC40 | 78 |
@@ -2127,43 +2127,39 @@ under Master dim on the OUTPUT page (the graphics driver refused it).
 
 *(check 55)*
 
-#### A14. Hold the clip-stop row to save a new preset (on the copy)
+#### A14. Hold an empty pad to save a new preset into it (on the copy)
 
 **Needs:** APC40; the copy.
 
 **Do:**
-1. Party show. PRESETS page: right-click F8 → **clear slot**.
-2. F5 (TRIP); change the look. Tap a clip-stop button quickly.
-3. Hold a clip-stop button; let go after the blinking.
+1. Party show. PRESETS page: right-click F8 → **free this pad (keeps the
+   preset)**.
+2. F5 (TRIP); change the look. Tap pad 8 of clip row 1 quickly.
+3. Hold pad 8 of row 1; let go after the blinking.
 4. Press pad 1, then pad 8.
-5. Change the look, hold the row again (another button). Hold once more.
-6. Lay two fingers on the row and hold for five seconds.
-7. Latch SHIFT and hold the row.
+5. Hold a filled pad (pad 2) for two seconds.
+6. Free slot 10 the same way; change the look; hold row 4's second pad.
+7. Latch SHIFT, free another slot and hold its pad.
 8. Right-click F8 → **put preset here…** → NOITA.
-9. Right-click a setting → **Learn desk**, then hold the row.
+9. Press a clip-stop button (the row under the grid).
 
 **Right if:** (1) F8 reads "—" and the footer says "F8: cleared — NOITA
-is still in the preset list". (2) the row lights while your finger is
-down and nothing is saved. (3) after a little over half a second the row
-and pad 8 of row 1 blink for about 1.5 s and TRIP's pad goes out; F8
-reads **TRIP 2**, lit, the PRESETS strip says TRIP 2 with no dot, the
-footer "saved TRIP 2 → F8", and `<home>/presets/trip-2.json` exists. (4)
-your look is back. (5) the next empty slot is now a far one: on the
-factory party show slot 10 (row 4's second pad blinks, "→ slot 10"); on
-a show of your own slot 9 (row 4's first pad, "→ slot 9"); TRIP 2 is
-unchanged. "The bank is full" appears only once all 24 slots are filled.
-(6) one new preset, not two. (7) it saves the same way. (8) F8 is NOITA
-again and TRIP 2 etc. stay in the list; **clear slot** is greyed on an
-empty slot. (9) it saves, nothing is said, and the Learn stays armed.
+is still in the preset list". (2) the footer says F8 is an empty slot and
+to hold its pad; nothing is saved. (3) after a little over half a second
+pad 8 blinks for about 1.5 s and stays green; F8 reads **TRIP 2**, lit,
+the PRESETS strip says TRIP 2 with no dot, the footer "saved TRIP 2 → F8",
+and `<home>/presets/trip-2.json` exists. (4) your look is back. (5) pad
+2's preset loads and nothing else happens: no new file, no blink. (6)
+slot 10 gets the new preset ("→ slot 10"). (7) it saves the same way on
+the SHIFT layer. (8) F8 is NOITA again and TRIP 2 etc. stay in the list;
+**free this pad** is greyed on an empty slot. (9) nothing happens: the
+row is dark and free for Learn.
 
-**Not fails:** the on-screen desk lights the row while held but does not
-blink; the key legend does not mention it. If the desk's lights never
-light or blink, note what they do (the colours come from the maker's
-table and were never seen on this model); the footer line is the real
-sign.
+**Not fails:** the on-screen desk does not blink the pad. If the desk's
+lights never blink, note what they do; the footer line is the real sign.
 
-**Wrong if:** a tap saving; a save over a taken slot or file; two
-presets from one hold.
+**Wrong if:** a tap saving; a save over a filled slot or a file; a
+clip-stop button saving.
 
 *(check 56, 83)*
 

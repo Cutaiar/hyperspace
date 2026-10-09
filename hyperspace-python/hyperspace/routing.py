@@ -356,12 +356,16 @@ APC_NEW_ROWS = (
     (f"note:0:{apc40.N_METRO}", "lfo.trigger", "toggle", 1.0, False),
     (f"note:0:{apc40.N_QUANT}", "preset.next", "toggle", 1.0, True),
     (f"note:0:{apc40.N_OVERDUB}", "preset.home", "toggle", 1.0, False),   # plan 15 WP2
-    # plan 15 WP4: the clip-stop row is one SAVE AS bar, held
-    *[(f"note:{k}:{apc40.N_CLIPSTOP}", "preset.save_new", "hold", 1.0, False)
-      for k in range(8)],
     # plan 19 WP2: clip rows 4 and 5 load the bank's slots 9–24
     *[(source, "preset.select", "set", float(k), False) for k, source in _FAR_PADS],
 )
+# plan 15 WP4's clip-stop SAVE AS bar, retired 2026-10-09: an empty bank
+# pad held saves into its own slot (`Param.held` on `preset.select`), and
+# the row is free.
+# `remap_factory` drops these exact rows from a table, with a note; a row
+# the owner put on a clip-stop button is kept
+RETIRED_ROWS: frozenset[tuple[str, str, str, float]] = frozenset(
+    (f"note:{k}:{apc40.N_CLIPSTOP}", "preset.save_new", "hold", 1.0) for k in range(8))
 # the keys WP4 added, likewise only where the key is free
 # the keys plan 11 moved out of app.py's loop into the table (audit R2;
 # decision register row 7): R resets the camera, F1–F8 load the preset
@@ -795,7 +799,9 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
     QUANT / OVERDUB notes, the clip-stop row's eight (plan 15 WP4: save-as,
     held), the bank's sixteen pads on clip rows 4 and 5 (plan 19 WP2) and
     the B / ⇧B and loop keys (Home among them)
-    added where nothing uses the source (APC_NEW_ROWS, KEY_NEW_ROWS); and,
+    added where nothing uses the source (APC_NEW_ROWS, KEY_NEW_ROWS); the
+    clip-stop SAVE AS bar dropped (RETIRED_ROWS, 2026-10-09: a held empty
+    bank pad saves now); and,
     since plan 13 WP2, any row on a ``theme.*`` param moved to the
     ``preset.*`` param of the same slot (THEME_TO_PRESET). Idempotent: a second pass finds every old row gone
     and every source taken. Returns (rows, a note per change).
@@ -810,6 +816,10 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
     notes: list[str] = []
     moved_theme = False
     for b in rows:
+        if (b.source, b.target, b.op, float(b.value)) in RETIRED_ROWS:
+            notes.append(f"removed {b.source} → {b.target} (the clip-stop SAVE AS bar is "
+                         "retired: hold an empty bank pad to save into it; the row is free)")
+            continue
         hit = APC_REMAP.get((b.source, b.target, b.op, float(b.value)))
         if hit is not None:
             target, op, value = hit

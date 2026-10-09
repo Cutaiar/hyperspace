@@ -23,8 +23,12 @@ that class — with a MIDI source (``cc:<ch>:<n>``, ``note:<ch>:<n>``,
        step     note-on → step(value)
        hold     the target fires once the button has been down HOLD_S,
                 while it is still held; a shorter press does nothing.
-                Rows with one target are one control (the APC40's
-                clip-stop row is a SAVE AS bar): any of them held lights
+                A `set` row on an enum that declares `held` (Param.held:
+                the preset bank) is a press *and* a hold: the press sets
+                at once, and held HOLD_S it calls held(choice) — a bank pad
+                on an empty slot saves the live state there; the new pad
+                blinks.
+                Rows with one target are one control (a bar): any of them held lights
                 them all, a hand across several fires once, and a button
                 still down afterwards fires nothing more. On the fire the
                 bar, and every LED the fire turned on, blink for BLINK_S
@@ -126,6 +130,13 @@ RECONNECT_SLOW_S = 10.0   # this often. Every look makes a CoreMIDI client; one
 #                           past any `except` (audit R15), so a desk that is not
 #                           there is not asked after thirty times a minute all night
 HOLD_S = 0.6        # a `hold` row fires once its button has been down this long
+
+
+def _hold_key(b) -> object:
+    """What one hold fires once for: a `hold` row's target (its bar is one
+    control, however many buttons are down), a held `set` row's target and
+    choice (each bank pad its own slot)."""
+    return b.target if b.op == "hold" else (b.target, float(b.value))
 BLINK_S = 1.5       # how long the LEDs blink after a hold fires
 SLEW_TOL = 1e-6     # norm: further than this from our last write, someone else set it
 SLEW_BACK_S = 0.05  # a new glide starts at the previous poll, no further back than this
@@ -498,6 +509,8 @@ class MidiIO:
                 timed.append(b)
             else:
                 self._apply(b, p, value)
+                if b.op == "set" and getattr(p, "held", None) is not None:
+                    timed.append(b)     # a press that is a hold as well (a bank pad)
         if timed and kind == "note" and value > 0:
             self._hold_state()[0][(ch, number)] = (self._now(), timed)
             self._light_bars()
@@ -554,17 +567,20 @@ class MidiIO:
         if not holds:
             return
         now = self._now()
-        fired: set[str] = set()
+        fired: set = set()
         for t0, rows in list(holds.values()):
             if now - t0 < HOLD_S:
                 continue
             for b in rows:
                 p = self.reg.get(b.target)
-                if p is None or not b.enabled or b.target in fired:
+                if p is None or not b.enabled or _hold_key(b) in fired:
                     continue
-                fired.add(b.target)
+                fired.add(_hold_key(b))
                 before = self._leds_on()
-                if p.fire() is False:
+                # a `hold` row fires its trigger; a `set` row held (a bank
+                # pad) hands its choice to the param's `held` (Param.held)
+                done = p.fire() if b.op == "hold" else p.held(int(b.value))
+                if done is False:
                     continue
                 bar = {x.control for x in self.table.active()
                        if x.op == "hold" and x.target == b.target and x.feedback == "led"}
@@ -572,7 +588,7 @@ class MidiIO:
                     blinks[c] = now + BLINK_S
         if fired:
             for key in [k for k, (_t, rows) in holds.items()
-                        if any(b.target in fired for b in rows)]:
+                        if any(_hold_key(b) in fired for b in rows)]:
                 del holds[key]
             self._light_bars()
 

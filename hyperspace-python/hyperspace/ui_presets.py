@@ -34,7 +34,7 @@ to bottom (plan 14 WP4):
               and its F-key, the live one lit: click or F-key loads,
               ⇧click or ⇧F-key saves the live state as it; a right-click
               adds "put preset here…" (any preset into the slot) and
-              "clear slot" — the show is written at once, no file is
+              "free this pad (keeps the preset)" — the show is written at once, no file is
               deleted
   9–24        sixteen smaller buttons four a row (plan 19 WP1, layout B):
               the bank's far slots, the desk's clip rows 4 and 5, each its
@@ -844,22 +844,20 @@ def slot_tip(k: int, name: str | None, *, gone: bool = False) -> str:
     key = slot_key(k)
     if gone and name is not None:
         return (f"{key}: {name} — no such preset. It may be in the trash (preset list → "
-                "trash). Right-click → clear slot")
-    if k < F_KEYS:
-        return (f"{key}: {name} — click loads, ⇧click saves the live state as it"
-                if name is not None else f"{key}: empty — ⇧{key} saves the live state here")
-    row, col = divmod(k - F_KEYS, 8)
+                "trash). Right-click → free this pad (keeps the preset)")
+    row, col = (0, k) if k < F_KEYS else divmod(k - F_KEYS, 8)
+    pad = f"the desk's row {1 if k < F_KEYS else 4 + row}, pad {col + 1}"
     if name is not None:
-        return (f"{key}: {name} — the desk's row {4 + row}, pad {col + 1}. Click loads, "
-                "⇧click saves the live state as it")
-    return (f"{key}: empty — right-click to put a preset here; a hold on the clip-stop "
-            "row fills the next empty slot")
+        return (f"{key}: {name} — {pad}. Click loads, ⇧click saves the live state as "
+                "it. Right-click → free this pad (keeps the preset) to make room")
+    return (f"{key}: empty — {pad}. Hold the pad (or ⇧click) to save the live state "
+            "here, or right-click to put a preset here")
 
 
 def _slot_menu(panel, k: int) -> None:
     """A bank slot's own items in its right-click menu (plan 15 WP4):
     **put preset here…**, a submenu of every preset in a child at most
-    PUT_ROWS rows tall, and **clear slot**, disabled on an empty slot.
+    PUT_ROWS rows tall, and **free this pad (keeps the preset)**, disabled on an empty slot.
     Each writes the show at once (`Project.put_slot` / `clear_slot`) and
     deletes no file. What was drawn is recorded in `_state`'s `slot_menu`
     for the tests: the slot, each item's label and whether it is enabled,
@@ -871,7 +869,7 @@ def _slot_menu(panel, k: int) -> None:
     rects: dict[str, tuple] = {}
     drawn = st["slot_menu"] = {"slot": k, "names": [], "rects": rects,
                                "items": [("put preset here…", True),
-                                         ("clear slot", name is not None)]}
+                                         ("free this pad (keeps the preset)", name is not None)]}
 
     def rect(key: str) -> None:
         a, b = imgui.get_item_rect_min(), imgui.get_item_rect_max()
@@ -901,7 +899,7 @@ def _slot_menu(panel, k: int) -> None:
         imgui.end_child()
         rect("list")
         imgui.end_menu()
-    if imgui.menu_item("clear slot", "", False, name is not None)[0]:
+    if imgui.menu_item("free this pad (keeps the preset)", "", False, name is not None)[0]:
         _guard(panel, pr.clear_slot, k)
         invalidate(panel, PROJECT)
     rect("clear")

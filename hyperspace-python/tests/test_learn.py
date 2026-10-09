@@ -989,10 +989,11 @@ def test_a_pick_on_an_invariant_control_or_the_global_layer_maps_nothing(tmp_pat
     assert lrn.refused and lrn.last == "S3 (track fader 3) is invariant (the session's) — not learned"
     assert lrn.control == s3.source and lrn.learning is None and rows() == before
     # every invariant control of D6: the faders, the bank row, SHIFT, TAP,
-    # METRONOME, NUDGE, the transport, the crossfader, OVERDUB, the clip-stop row;
+    # METRONOME, NUDGE, the transport, the crossfader, OVERDUB (the clip-stop
+    # row is free since 2026-10-09);
     # and since plan 19 WP2 clip rows 4 and 5, the bank's slots 9–24
     for glyph in ("S1", "SM", "G1·1", "G1·8", "⇧", "B20", "B12", "B21", "B22", "B13", "B14",
-                  "X", "B11", "G6·1", "G6·8", "G4·1", "G5·8"):
+                  "X", "B11", "G4·1", "G5·8"):
         c = control(glyph)
         assert "is invariant (the session's)" in (ui_desk.mappable(table, c) or ""), glyph
         lrn.pick(c.source)

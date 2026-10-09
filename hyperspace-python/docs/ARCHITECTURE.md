@@ -399,9 +399,13 @@ imgui is typing, `Keys` ignores the control window's keys.
 been down `midi.HOLD_S`, while still held; a tap fires nothing.
 `routing.act` ignores it; the timing is the adapter's (`MidiIO._fire_holds`).
 All enabled `hold` rows on one target are one control, and on the fire
-they and every LED the fire lit blink for `midi.BLINK_S`. The clip-stop
-row's `preset.save_new` is its one use
-(`tests/test_midi.py::test_the_bar_is_one_control`).
+they and every LED the fire lit blink for `midi.BLINK_S`
+(`tests/test_midi.py::test_the_bar_is_one_control`); the factory map has
+no `hold` row since 2026-10-09, but any buttons can be given one. A `set`
+row on an enum that declares `held` (`Param.held`) is a press and a hold
+at once: the bank pads' `preset.select` rows load on the press and, held
+`midi.HOLD_S` on an empty slot, save into it (`Project.save_into`; one row
+per pad, the new pad blinks).
 
 A named hand address resolves only through the map the hands adapter
 published; a name the rig lacks is dormant, never another lane, so a rig
@@ -576,7 +580,7 @@ them.
 | SHIFT | the invariant row → `desk.shift`: flips the table's layer; every ring and LED redrawn, a control the layer does not map dark | the table's layer |
 | the crossfader | invariant row → `output.dim`, the master dim (CC 0 black — hand check 55); a rig setting, 1 at every launch | base of a rig setting |
 | a bank pad (clip rows 1, 4, 5) or a bank button | invariant `set` rows → `preset.select = k` → `Project.load_slot(k)` (`apc40.BANK_PADS`: 24 slots, `library.SLOTS`). Lights by `routing.led_level`: loaded, filled, empty | a preset load |
-| a hold on the clip-stop row | eight invariant `hold` rows → `preset.save_new` → `Project.save_new`: a new user preset named from the loaded one (`library.next_name`), into the next empty slot | files, not params; no undo step |
+| a hold on an empty bank pad | its invariant `preset.select` row, held → `Param.held` → `Project.save_into(k)`: a new user preset named from the loaded one (`library.next_name`), into that slot; a filled slot is never written | files, not params; no undo step |
 | a macro's knob | its base → `Router.follow_macros` → each base subscriber's base | base |
 | an analyzer band, a hand axis, a pinch, a DAW lane, an LFO | `lane:` / `hand:` / `ext:` / `lfo:` → its performer row → `Router.modulate` | offset (a pinch may instead gate a row) |
 | right-click → Learn hand / Learn desk / click-then-map | `Learn` (§3.5) | the loaded preset's table |
@@ -745,7 +749,7 @@ Drawing).
 **The desk (APC40).** Two layers in one table: the **preset** layer (the
 loaded preset's `desk`) and the **global** layer (the session's), plus
 **invariant** rows that mean the same on both (SHIFT, the faders, the
-crossfader, the bank pads, OVERDUB, the clip-stop bar). SHIFT latches the
+crossfader, the bank pads, OVERDUB). SHIFT latches the
 layer (`desk.shift`). `Bindings.dispatch` sends a message to the invariant
 rows or the up layer's, never both; `Bindings.active` is what the desk
 lights and what `ui_desk` draws. A preset load replaces the preset layer

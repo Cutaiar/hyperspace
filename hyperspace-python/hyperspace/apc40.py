@@ -46,8 +46,8 @@ Two layers under a latched SHIFT (plan 13 §3). Every MIDI row carries a
 ``layer``: none is **invariant** (the session defines the control; one
 meaning on both layers — the faders, the crossfader as the master dim,
 the bank's twenty-four pads — clip row 1 and, since plan 19, clip rows 4
-and 5 (`BANK_PADS`) — the clip-stop row as one SAVE AS bar, SHIFT, the
-clock and transport corner, OVERDUB as home, the track buttons), ``"global"`` is the
+and 5 (`BANK_PADS`), each a tap to load and, on an empty slot, a hold to
+save into it — SHIFT, the clock and transport corner, OVERDUB as home, the track buttons), ``"global"`` is the
 SHIFT layer
 (the band strip on the device knobs, the hand feel and BPM on track knobs
 1–5, the band scenes on clip rows 2–3), ``"preset"`` is the loaded
@@ -454,12 +454,11 @@ DEFAULT_MAP: list[dict] = [
     # which reaches every shape
     *[_note("preset.select", n, ch, op="set", value=k, on=GREEN)
       for k, (n, ch) in enumerate(BANK_PADS)],
-    # clip stop: one SAVE AS bar (plan 15 WP4, decision 29). Any of the
-    # eight held midi.HOLD_S saves the live state as a new preset into the
-    # next empty slot — never over one; a tap does nothing. No layer, so
-    # invariant. Dark at rest, lit while held, blinking with the new
-    # slot's pad on a save (fork 15)
-    *[_note("preset.save_new", N_CLIPSTOP, k, op="hold") for k in range(8)],
+    # …and each bank pad held midi.HOLD_S on an empty slot saves the live
+    # state there as a new preset — the same row: `preset.select` carries
+    # the hold (`Param.held`, midi.py). A filled slot is never written
+    # over: the press loads it. This replaced plan 15's clip-stop SAVE AS
+    # bar (2026-10-09), and the clip-stop row is free: dark, for Learn
     *[_note("scene.select", N_CLIP[1], k, op="set", value=k, on=YELLOW, layer=G)
       for k in range(8)],
     *[_note("scene.select", N_CLIP[2], k, op="set", value=8 + k, on=YELLOW, layer=G)

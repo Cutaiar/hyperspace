@@ -449,19 +449,17 @@ def test_old_midi_map_migrates_into_bindings_json(tmp_path, capsys):
     assert {"source": "cc:0:87", "target": "view.inst_amp", "op": "abs"} in kept["desk"]
     assert len(kept["routes"]) == 12                     # the lane rows it played
     legacy.unlink()
-    # the old map had no OVERDUB row and no clip-stop rows and the notes
-    # are free: the next load adds home and the SAVE AS bar there, as it
-    # does to any older file (plan 15 WP2, WP4), and the bank's sixteen
-    # pads on clip rows 4 and 5 (plan 19 WP2), and nothing else moves
+    # the old map had no OVERDUB row and the note is free: the next load
+    # adds home there, as it does to any older file (plan 15 WP2), and the
+    # bank's sixteen pads on clip rows 4 and 5 (plan 19 WP2), and nothing
+    # else moves (the clip-stop SAVE AS bar, retired 2026-10-09, is not added)
     again = Bindings.load(path, legacy_midi=legacy)
-    bar = [f"note:{k}:{apc40.N_CLIPSTOP}" for k in range(8)]
     far = [f"note:{ch}:{n}" for n, ch in apc40.BANK_PADS[routing.F_KEYS:]]
     assert again.notes == [
         f"added note:0:{apc40.N_OVERDUB} → preset.home (the APC40 map of plan 15)",
-        *[f"added {s} → preset.save_new (the APC40 map of plan 15)" for s in bar],
         *[f"added {s} → preset.select (the APC40 map of plan 19)" for s in far]]
     assert [b for b in again.to_json()["bindings"]
-            if b["source"] not in (f"note:0:{apc40.N_OVERDUB}", *bar, *far)] \
+            if b["source"] not in (f"note:0:{apc40.N_OVERDUB}", *far)] \
         == t.to_json()["bindings"]
     assert Bindings.load(path, legacy_midi=legacy).to_json() == again.to_json()
     # without either file: the factory table, nothing written
@@ -485,8 +483,9 @@ def test_factory_table_binds_only_real_params(tmp_path):
     # + Home (plan 15 WP2)
     assert len(t.of("key")) == 25 + 17 + 4 + 1
     assert len(t.of("pad")) == 10 and len(t.of("hat")) == 4
-    assert len(t.midi()) == 113 + 6 + 1 + 8 + 4 and t.mods() == []   # + SHIFT, the global track
-    # knobs, OVERDUB (plan 15 WP2), the clip-stop row's eight (plan 15 WP4),
+    assert len(t.midi()) == 113 + 6 + 1 + 4 and t.mods() == []   # + SHIFT, the global track
+    # knobs, OVERDUB (plan 15 WP2) (the clip-stop row's eight, plan 15 WP4,
+    # retired 2026-10-09),
     # the preset layer's four SCENE device knobs (plan 19 WP3; the sixteen
     # bank pads of plan 19 WP2 took the sixteen shape pads' place);
     # no performer rows: the house presets carry the lane rows (plan 13 WP5)
@@ -917,7 +916,7 @@ def test_midi_view_shares_the_table(tmp_path):
 
     t = Bindings.factory(path=bindings_path(tmp_path))
     m = MidiIO(rig(tmp_path=tmp_path, full=True).reg, t, inp=Quiet(), out=Quiet())
-    assert len(m.bindings) == 113 + 6 + 1 + 8 + 4 and all(b.is_midi for b in m.bindings)
+    assert len(m.bindings) == 113 + 6 + 1 + 4 and all(b.is_midi for b in m.bindings)
     m.table.bind(Binding("cc:0:99", "view.zoom", "abs"))
     assert m.table.for_param("view.zoom").number == 99
     again = Bindings.load(bindings_path(tmp_path))
@@ -1317,11 +1316,11 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     # + the 4 undo and redo keys of plan 15, + OVERDUB and the Home key (plan 15 WP2)
     assert f"added note:0:{apc40.N_OVERDUB} → preset.home (the APC40 map of plan 15)" in err
     assert "added key:HOME → preset.home" in err
-    # + the clip-stop row's eight (plan 15 WP4)
-    assert f"added note:7:{apc40.N_CLIPSTOP} → preset.save_new (the APC40 map of plan 15)" in err
+    # (the clip-stop row's eight of plan 15 WP4 are retired: never added)
+    assert "preset.save_new" not in err
     # + the bank's sixteen pads on clip rows 4 and 5 (plan 19 WP2)
     assert f"added note:7:{apc40.N_CLIP[4]} → preset.select (the APC40 map of plan 19)" in err
-    assert f"migrated {path} to {SCHEMA} (2 rows dropped, 80 rows changed)" in err
+    assert f"migrated {path} to {SCHEMA} (2 rows dropped, 72 rows changed)" in err
     rows = {(b.source, b.target): b for b in t.bindings}
     assert rows[("key:RIGHT", "view.shape")].op == "step"
     assert rows[("cc:0:48", "view.bright")].op == "abs"                       # MIDI keeps abs
@@ -1336,9 +1335,9 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     assert ("lane:1", "rot.rate.XY") not in rows and ("hand:2", "view.depth4") not in rows
     assert [b.source for b, _ in t.dropped] == ["hand:2"]
     # + the moved keys of plan 11, the desk's sort, the undo keys of plan 15,
-    # OVERDUB and the Home key (plan 15 WP2), the clip-stop row (plan 15
-    # WP4), the bank's sixteen pads on clip rows 4 and 5 (plan 19 WP2)
-    assert len(t.notes) == 9 + 17 + 26 + 4 + 2 + 8 + 16
+    # OVERDUB and the Home key (plan 15 WP2) (the clip-stop row of plan 15
+    # WP4 is retired), the bank's sixteen pads on clip rows 4 and 5 (plan 19 WP2)
+    assert len(t.notes) == 9 + 17 + 26 + 4 + 2 + 16
     # the APC40 rows: the old factory rows swapped for the new, the LED kept
     tap = rows[("note:0:99", "tempo.tap")]
     assert (tap.op, tap.feedback) == ("toggle", "led") and ("note:0:99", "theme.next") not in rows
@@ -1638,64 +1637,54 @@ def test_an_older_file_gets_home_where_it_is_free(tmp_path, capsys):
     assert t.for_param("view.lines").source == over
 
 
-def test_an_older_file_gets_the_save_bar_where_it_is_free(tmp_path, capsys):
-    """Plan 15 WP4: a `bindings.json` written before the SAVE AS bar gains
-    the eight clip-stop rows on its next load — `hold` rows on
-    `preset.save_new`, invariant, with their LEDs — the old file kept whole
-    beside it, and the next load is quiet. A clip-stop button the owner
-    already uses keeps its row and gets no save beside it; the other
-    seven still get theirs."""
+def test_the_clip_stop_save_bar_is_retired_and_the_row_freed(tmp_path, capsys):
+    """2026-10-09: an empty bank pad held saves into its own slot, so plan 15
+    WP4's clip-stop SAVE AS bar is gone. A `bindings.json` that has the
+    eight factory rows loses exactly those on its next load — each said,
+    the old file kept whole beside it — and the next load is quiet; the
+    row is then free (dark, for Learn). A row the owner put on a clip-stop
+    button is kept; a file without the bar gains nothing there."""
     stop = apc40.N_CLIPSTOP
     bar = [f"note:{k}:{stop}" for k in range(8)]
     for s in bar:
-        assert (s, "preset.save_new", "hold", 1.0, False) in routing.APC_NEW_ROWS
-        assert routing.APC_REMAP_PLAN[s] == "plan 15"
+        assert (s, "preset.save_new", "hold", 1.0) in routing.RETIRED_ROWS
+        assert not [r for r in routing.APC_NEW_ROWS if r[0] == s]
+    assert not [b for b in session_rows() if b.source in bar]
 
     def write(home, *mine):
-        rows = [b for b in session_rows() if b.source not in bar]
         path = bindings_path(home)
         home.mkdir()
-        Bindings([*rows, *mine], path=path).write()
+        Bindings([*session_rows(), *mine], path=path).write()
         return path
 
-    path = write(tmp_path / "a")
+    old = [Binding(s, "preset.save_new", "hold", feedback="led") for s in bar]
+    path = write(tmp_path / "a", *old)
     before = path.read_text()
-    assert "preset.save_new" not in before
     t = Bindings.load(path, legacy_midi=None)
-    assert t.notes == [f"added {s} → preset.save_new (the APC40 map of plan 15)" for s in bar]
-    err = capsys.readouterr().err
-    assert f"updated {path} (8 rows changed)" in err
-    rows = [b for b in t.midi() if b.source in bar]
-    assert [b.source for b in rows] == bar
-    for b in rows:
-        assert (b.target, b.op, b.layer, b.feedback, b.on, b.off) \
-            == ("preset.save_new", "hold", None, "led", 1, 0)
-        assert t.is_invariant(Binding(b.source, "view.points", "toggle", layer="preset"))
+    assert t.notes == [f"removed {s} → preset.save_new (the clip-stop SAVE AS bar is retired: "
+                       "hold an empty bank pad to save into it; the row is free)" for s in bar]
+    assert f"updated {path} (8 rows changed)" in capsys.readouterr().err
+    assert not [b for b in t.bindings if b.source in bar]
     (bak,) = (tmp_path / "a").glob("bindings.json.bak-*")
     assert bak.name == "bindings.json.bak-v3" and bak.read_text() == before
     after = path.read_text()
-    # the file is the factory's again, row for row
     assert sorted(json.dumps(b, sort_keys=True) for b in json.loads(after)["bindings"]) \
         == sorted(json.dumps(b.to_json(), sort_keys=True) for b in session_rows())
     again = Bindings.load(path, legacy_midi=None)
     assert again.notes == [] and path.read_text() == after
-    assert len(list((tmp_path / "a").glob("bindings.json.bak-*"))) == 1
     assert capsys.readouterr().err == ""
-    # the owner's own row on clip stop 3 stays; the other seven are added
-    path = write(tmp_path / "b", Binding(bar[2], "view.lines", "toggle", feedback="led"))
+    # the owner's own row on clip stop 3 stays, the other seven go
+    mine = Binding(bar[2], "view.lines", "toggle", feedback="led")
+    path = write(tmp_path / "b", *[b for b in old if b.source != bar[2]], mine)
     t = Bindings.load(path, legacy_midi=None)
-    assert t.notes == [f"added {s} → preset.save_new (the APC40 map of plan 15)"
-                       for s in bar if s != bar[2]]
+    assert len(t.notes) == 7 and not [b for b in t.bindings if b.target == "preset.save_new"]
     assert [b.target for b in t.midi() if b.source == bar[2]] == ["view.lines"]
-    assert len([b for b in t.bindings if b.target == "preset.save_new"]) == 7
-    # every one of the eight in use: nothing is added and nothing written
-    path = write(tmp_path / "c", *[Binding(s, "view.lines", "toggle", feedback="led")
-                                   for s in bar])
+    # a file without the bar: nothing added there, nothing written
+    path = write(tmp_path / "c")
     before = path.read_text()
     t = Bindings.load(path, legacy_midi=None)
     assert t.notes == [] and path.read_text() == before
-    assert not list((tmp_path / "c").glob("bindings.json.bak-*"))
-    assert not [b for b in t.bindings if b.target == "preset.save_new"]
+    assert not [b for b in t.bindings if b.source in bar]
 
 
 def test_an_old_crossfader_row_moves_to_the_dim_with_a_backup(tmp_path, capsys):
@@ -1808,7 +1797,7 @@ def test_a_user_row_on_a_moved_apc_note_is_kept():
     # + the clip-stop row's eight (plan 15 WP4), + the bank's sixteen pads
     # on clip rows 4 and 5 (plan 19 WP2)
     assert [n.split(" ")[0] for n in notes] == (["remapped", "added"]
-                                                + ["added"] * (17 + 4 + 2 + 8 + 16))
+                                                + ["added"] * (17 + 4 + 2 + 16))
     # and a second pass has nothing to do
     again, notes2 = routing.remap_factory(out)
     assert notes2 == [] and [b.source for b in again] == [b.source for b in out]

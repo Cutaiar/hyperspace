@@ -1020,7 +1020,7 @@ def test_an_eight_slot_show_loads_and_is_not_rewritten(owner_home):
     r.reg["preset.home"].fire()
     assert lib.current("presets") == "NIGHT ONE" and not pr.is_dirty()
     pr.load_slot(12)                                       # an empty far slot: said, nothing else
-    assert lib.warning == "slot 13: an empty slot"
+    assert lib.warning == "slot 13: an empty slot — hold its pad to save the live state into it"
     lib.poll()
     assert tree(home, but=quiet) == before
     pr.load("party")                                       # the user copy of the party show

@@ -224,7 +224,7 @@ def test_a_slots_menu_offers_put_and_clear(rig, tmp_path):  # noqa: F811
     _click(panel, st["rects"]["preset.5"], button=1)
     menu = st["slot_menu"]
     assert menu["slot"] == 5
-    assert menu["items"] == [("put preset here…", True), ("clear slot", True)]
+    assert menu["items"] == [("put preset here…", True), ("free this pad (keeps the preset)", True)]
     # clear slot: the bank and the show's file, and ACID is still a preset
     _click(panel, menu["rects"]["clear"])
     assert proj.bank[5] is None and json.loads(show.read_text())["bank"][5] is None
@@ -234,7 +234,7 @@ def test_a_slots_menu_offers_put_and_clear(rig, tmp_path):  # noqa: F811
     st.pop("slot_menu")
     _click(panel, st["rects"]["preset.5"], button=1)
     menu = st["slot_menu"]
-    assert menu["items"] == [("put preset here…", True), ("clear slot", False)]
+    assert menu["items"] == [("put preset here…", True), ("free this pad (keeps the preset)", False)]
     before = show.read_text()
     _click(panel, menu["rects"]["clear"])
     assert show.read_text() == before and proj.bank[5] is None
@@ -323,7 +323,7 @@ def test_a_line_said_twice_shows_twice(rig, monkeypatch):  # noqa: F811
     frame(panel, "view")                                      # the first look only remembers
     assert panel._message() == ("", False)
     proj.bank[2] = None
-    empty = "F3: an empty slot — ⇧F3 saves the live state into it"
+    empty = "F3: an empty slot — hold its pad (or ⇧F3) to save the live state into it"
     proj.startup = None
     for trigger, line in (("preset.load.2", empty), ("preset.home", HOME_UNSET)):
         for _ in range(2):                                    # the second press too
@@ -459,12 +459,13 @@ def test_a_far_slot_reads_its_number_and_name_and_has_the_slot_menu(rig, tmp_pat
     assert reg["preset.select"].value == 8 and not show.exists()
     # an empty far slot: said, nothing loaded
     _click(panel, st["rects"]["preset.10"])
-    assert lib.warning == "slot 11: an empty slot" and lib.current("presets") == "TRACER"
+    assert lib.warning == "slot 11: an empty slot — hold its pad to save the live state into it"
+    assert lib.current("presets") == "TRACER"
     # its menu: the slot's two items, "clear slot" disabled while it is empty
     _click(panel, st["rects"]["preset.10"], button=1)
     menu = st["slot_menu"]
     assert menu["slot"] == 10
-    assert menu["items"] == [("put preset here…", True), ("clear slot", False)]
+    assert menu["items"] == [("put preset here…", True), ("free this pad (keeps the preset)", False)]
     _click(panel, menu["rects"]["put"])
     menu = st["slot_menu"]
     pick = menu["names"][2]
@@ -479,7 +480,7 @@ def test_a_far_slot_reads_its_number_and_name_and_has_the_slot_menu(rig, tmp_pat
     st.pop("slot_menu")
     _click(panel, st["rects"]["preset.8"], button=1)
     menu = st["slot_menu"]
-    assert menu["slot"] == 8 and menu["items"][1] == ("clear slot", True)
+    assert menu["slot"] == 8 and menu["items"][1] == ("free this pad (keeps the preset)", True)
     _click(panel, menu["rects"]["clear"])
     assert proj.bank[8] is None and lib.status.startswith("slot 9: cleared — TRACER")
     assert "TRACER" in lib.list("presets")
@@ -497,13 +498,19 @@ def test_a_far_slot_reads_its_number_and_name_and_has_the_slot_menu(rig, tmp_pat
     # the hovers say where a slot is
     tip = ui_presets.slot_tip
     assert tip(11, "TRIP 3") == ("slot 12: TRIP 3 — the desk's row 4, pad 4. Click loads, "
-                                 "⇧click saves the live state as it")
+                                 "⇧click saves the live state as it. Right-click → free "
+                                 "this pad (keeps the preset) to make room")
+    assert tip(2, "TRIP").startswith("F3: TRIP — the desk's row 1, pad 3.")
+    assert tip(11, None) == ("slot 12: empty — the desk's row 4, pad 4. Hold the pad (or "
+                             "⇧click) to save the live state here, or right-click to put "
+                             "a preset here")
     assert tip(16, "A").startswith("slot 17: A — the desk's row 5, pad 1.")
     assert tip(23, "A").startswith("slot 24: A — the desk's row 5, pad 8.")
-    assert tip(11, None) == ("slot 12: empty — right-click to put a preset here; a hold on "
-                             "the clip-stop row fills the next empty slot")
-    assert tip(2, "FIELD") == "F3: FIELD — click loads, ⇧click saves the live state as it"
-    assert tip(2, None) == "F3: empty — ⇧F3 saves the live state here"
+    assert tip(2, "FIELD") == ("F3: FIELD — the desk's row 1, pad 3. Click loads, ⇧click "
+                               "saves the live state as it. Right-click → free this pad "
+                               "(keeps the preset) to make room")
+    assert tip(2, None) == ("F3: empty — the desk's row 1, pad 3. Hold the pad (or ⇧click) "
+                            "to save the live state here, or right-click to put a preset here")
 
 
 # ------------------------------------------- plan 19 WP5: the dot and the save label
@@ -840,7 +847,7 @@ def test_a_slot_whose_preset_is_gone_says_so(rig, monkeypatch):  # noqa: F811
     assert st["dangling"] == [9] and pr.bank[9] == "A MINE"
     assert st["bank_labels"][9] == "10 A MINE"
     assert ("slot 10: A MINE — no such preset. It may be in the trash (preset list → trash). "
-            "Right-click → clear slot") in tips
+            "Right-click → free this pad (keeps the preset)") in tips
     # restored: whole again
     (item,) = lib.trash()
     lib.restore_trash(item)
