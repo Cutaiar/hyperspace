@@ -36,14 +36,6 @@ class FakeBackend:
         self.rect = (x, y, w, h)
         self.calls.append(("rect", (x, y, w, h)))
 
-    def set_fullscreen(self, win, m):
-        self.rect = self.monitor_rect(m)
-        self.calls.append(("fullscreen", m))
-
-    def set_windowed(self, win, x, y, w, h):
-        self.rect = (x, y, w, h)
-        self.calls.append(("windowed", (x, y, w, h)))
-
     def set_attrib(self, win, name, on):
         self.calls.append((name, on))
 
@@ -149,21 +141,41 @@ def test_nothing_happens_until_apply(rig):
     assert rig.b.calls == [("MOUSE_PASSTHROUGH", False), ("opacity", 1.0)]  # off: clickable
 
 
-def test_fullscreen_is_glfws_own_on_the_windows_monitor(rig):
+def test_fullscreen_is_a_borderless_cover_never_a_mode_switch(rig):
+    # GLFW's own fullscreen hands the screen to macOS, and a projector
+    # re-syncs its HDMI into its default mode: the fake has no
+    # set_fullscreen / set_window_monitor, so a call to one would raise
     rig.reg["output.fullscreen"].set(True)
     rig.out.apply()
     c = rig.b.calls
-    assert ("fullscreen", "Built-in") in c
+    assert ("DECORATED", False) in c and ("FLOATING", True) in c and ("spaces", True) in c
     assert rig.b.rect == (0, 0, 1728, 1117)
-    # opaque and ordinary: no float, no see-through, clicks stay with us
-    assert ("FLOATING", True) not in c and ("spaces", True) not in c
+    # opaque: no see-through, clicks stay with us
     assert ("MOUSE_PASSTHROUGH", True) not in c
     assert rig.out.mode == "fullscreen" and rig.out.bg_alpha == 1.0
+    assert rig.out.error == ""
     rig.b.calls.clear()
     rig.reg["output.fullscreen"].set(False)
     rig.out.apply()
-    assert ("windowed", (100, 100, 1280, 820)) in rig.b.calls
+    c = rig.b.calls
+    assert ("spaces", False) in c and ("FLOATING", False) in c and ("DECORATED", True) in c
     assert rig.b.rect == (100, 100, 1280, 820)
+
+
+def test_the_cover_follows_its_screen_to_a_new_resolution(rig):
+    rig.reg["output.monitor"].set(2)
+    rig.reg["output.fullscreen"].set(True)
+    rig.out.apply()
+    assert rig.b.rect == (1728, 0, 2560, 1440)
+    rig.b.calls.clear()
+    rig.out.apply()
+    assert rig.b.calls == []                      # a quiet frame moves nothing
+    rig.b.mons[1] = ("Studio", (1728, 0, 1920, 1080))   # set to 1080p under the cover
+    rig.out.apply()
+    assert rig.b.calls == [("rect", (1728, 0, 1920, 1080))]
+    rig.b.calls.clear()
+    rig.out.apply()
+    assert rig.b.calls == []
 
 
 def test_overlay_covers_floats_and_clears(rig):
@@ -171,7 +183,6 @@ def test_overlay_covers_floats_and_clears(rig):
     rig.out.apply()
     c = rig.b.calls
     assert ("DECORATED", False) in c and ("FLOATING", True) in c and ("spaces", True) in c
-    assert not any(k == "fullscreen" for k, _ in c)
     assert rig.b.rect == (0, 0, 1728, 1117)
     assert rig.out.mode == "overlay" and rig.out.bg_alpha == 0.0
 
@@ -196,16 +207,17 @@ def test_overlay_wins_and_mode_changes_go_through_the_plain_window(rig):
     rig.out.apply()
     c = rig.b.calls
     # fullscreen left first (back to the saved rect), then the cover entered
-    assert c.index(("windowed", (100, 100, 1280, 820))) < c.index(("DECORATED", False))
+    assert c.index(("rect", (100, 100, 1280, 820))) < c.index(("DECORATED", False))
     assert ("FLOATING", True) in c and ("spaces", True) in c
-    assert rig.b.rect == (0, 0, 1728, 1117)
+    assert rig.b.rect == (0, 0, 1728, 1117) and rig.out.bg_alpha == 0.0
     rig.b.calls.clear()
-    # overlay off but fullscreen still on: the cover goes, GLFW fullscreen returns
+    # overlay off but fullscreen still on: the see-through cover goes, the opaque one returns
     rig.reg["output.overlay"].set(False)
     rig.out.apply()
     c = rig.b.calls
-    assert c.index(("DECORATED", True)) < c.index(("fullscreen", "Built-in"))
+    assert c.index(("DECORATED", True)) < c.index(("DECORATED", False))
     assert rig.out.mode == "fullscreen" and rig.b.rect == (0, 0, 1728, 1117)
+    assert rig.out.bg_alpha == 1.0
     rig.b.calls.clear()
     rig.reg["output.fullscreen"].set(False)
     rig.out.apply()
@@ -246,7 +258,7 @@ def test_monitor_switch_while_on(rig):
     rig.out.apply()
     rig.reg["output.monitor"].set(2)
     rig.out.apply()
-    assert ("fullscreen", "Studio") in rig.b.calls
+    assert ("rect", (1728, 0, 2560, 1440)) in rig.b.calls
     assert rig.b.rect == (1728, 0, 2560, 1440)
     rig.b.calls.clear()
     # leaving puts the window back where it was, whichever screen it covered
@@ -406,7 +418,8 @@ def test_the_ground_and_opacity_do_nothing_while_shut(gated):
 def test_fullscreen_still_works_while_overlay_is_shut(gated):
     gated.reg["output.fullscreen"].set(True)
     gated.out.apply()
-    assert gated.out.mode == "fullscreen" and ("fullscreen", "Built-in") in gated.b.calls
+    assert gated.out.mode == "fullscreen" and gated.b.rect == (0, 0, 1728, 1117)
+    assert gated.out.bg_alpha == 1.0
 
 
 # ---- plan 21 WP4: the per-output switches ----

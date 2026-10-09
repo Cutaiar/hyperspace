@@ -65,7 +65,8 @@ dream.py, too, is imported only when its gate is open.
                             # screen has is NOT opened, with a note (fork F9); a
                             # screen plugged in after the launch is not picked up
                             # until the next launch
-    fullscreen = true       # GLFW fullscreen on that screen (fork F10: the config
+    fullscreen = true       # a borderless cover of that screen at its current
+                            # mode, never a mode switch (fork F10: the config
                             # says; output.monitor / output.fullscreen on the
                             # OUTPUT page are output 1's only)
     scene = true            # optional launch values of this output's switches:
