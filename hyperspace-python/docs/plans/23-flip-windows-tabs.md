@@ -1,6 +1,8 @@
 # Plan 23 — the glass flip, windows that come back, the panel across the top
 
-**Not yet built.** Scoped 2026-10-07 against `plan-22-integration` at
+**Partly built.** WP1 (Flip X / Flip Y) was built on its own, straight onto
+main, in PR #157 (2026-10-08); the glass needs Flip Y. WP2, WP3, the review
+pass and the docs WP are not built. Scoped 2026-10-07 against `plan-22-integration` at
 `1d7a293`. Three small work packages before the event, then a review
 pass and a docs WP that rewrites this file as built. The launch prompt
 for the session that runs it is
