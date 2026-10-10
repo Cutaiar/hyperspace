@@ -14,4 +14,6 @@ What is left in `plans/`:
 - [`22-orchestrator-prompt.md`](22-orchestrator-prompt.md) — the launch prompt plan 22 was run from. Two streams — the flat shapes given real 4D extent, and the face patterns made usable.
 - [`22-polytope-shortlist.md`](22-polytope-shortlist.md) — the second-tier 4-polytopes ranked by what each would cost to add. An assessment only; none is built, the owner picks.
 - [`22-macro-candidates.md`](22-macro-candidates.md) — four presets of macro configurations to audition, each macro with a line on what it is meant to do. None has been judged.
+- [`23-flip-windows-tabs.md`](23-flip-windows-tabs.md) — plan 23, **partly built** (WP1, Flip X / Flip Y per output for the glass, in #157; the rest not built): windows that come back on their named screens (fullscreen included), the control window as the MacBook's screen with the page tabs across the top.
+- [`23-session-prompt.md`](23-session-prompt.md) — the launch prompt for the session that runs plan 23.
 - [`assets/12-presets/`](assets/12-presets/) — the performer cards, one per party preset (`party-*.md`); `tools/preset_shots.py` redraws their pose sheets.
