@@ -41,10 +41,20 @@ Why depth is the hard part, from the code (see the shared doc's F2 section):
   - The hands use their own matrix in Leap mm (`ghost.camera`).
   - Fix: 4D→3D as now, then 3D→screen in the vertex shader with one shared
     4×4 matrix. Point clouds need this anyway.
-- **Camera controls.** `camera.yaw/pitch/zoom` become the shape's rotation
-  and scale, and the shared camera stays framed on the Leap box, so hands
-  stay where the performer's hands are. A calibration maps Leap mm into
-  shape units.
+- **Units.** A calibration maps Leap mm into shape units.
+- **The shape's transform (owner, 2026-10-12)**: local motion, world pose,
+  scale and position, plus a new fixed camera.
+  - **Local motion is `rot.*`**, the 4D tumble (`rotate4`,
+    `geometry.py:672`), unchanged.
+  - **World pose is `camera.yaw/pitch`.** They already rotate the vertices
+    after the tumble, as a turntable about fixed axes (`_camera`, `:988`),
+    so they compose with `rot.*` rather than duplicate it. Ids unchanged.
+  - **Scale and position are `camera.zoom/pan`.** They become the shape's
+    scale and position in the world, no longer a 2D pixel zoom of the
+    finished picture (`render.py:1444`). The hands stay aligned with the
+    performer. A whole-frame 2D zoom can return as an image node.
+  - **The real camera is new and fixed** on the Leap box, with new ids
+    (`eye.*`). `hands-orbit` then turns only the shape.
 - **See-through looks.**
   - The shape is see-through, alpha-over in painter order
     (`render.py:11`). Solid geometry is drawn first, then the sorted
