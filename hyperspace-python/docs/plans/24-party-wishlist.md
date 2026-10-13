@@ -16,6 +16,56 @@ points to it.
   (plan 26), then the devices on it (plan 28).
 - The party fixes (plan 24) run alongside as a small plan.
 
+## Render graph design decisions (owner, 2026-10-12)
+
+**Hands, and any geometry, are drawn either inside the scene or as a
+separate buffer composited anywhere in the pipeline**, and the same hands
+can do both at once (in the scene on the projector, a clean layer on the
+glass).
+
+- **Geometry nodes** (shape, hands, point cloud) produce draw calls in one
+  shared camera and have no framebuffer of their own.
+- **A scene node** draws several geometries into one colour + depth target:
+  solid geometry first, then the sorted see-through shape.
+- **A layer node** draws one geometry into its own colour + depth target. It
+  can go before the FX (today's "through"), after them, into history, or to
+  a single output.
+- **A composite node** merges layers with over, add, or depth-aware
+  blending, so a separate hands layer can still be hidden by the shape.
+
+Why depth is the hard part, from the code (see the shared doc's F2 section):
+
+- **2D pixels only.** The shape reaches the GPU only as 2D pixels
+  (`project_h`, `geometry.py:1009`; buffers are `"2f 1f"`,
+  `render.py:609`), through a hand-written camera.
+  - The hands use their own matrix in Leap mm (`ghost.camera`).
+  - Fix: 4D→3D as now, then 3D→screen in the vertex shader with one shared
+    4×4 matrix. Point clouds need this anyway.
+- **Camera controls.** `camera.yaw/pitch/zoom` become the shape's rotation
+  and scale, and the shared camera stays framed on the Leap box, so hands
+  stay where the performer's hands are. A calibration maps Leap mm into
+  shape units.
+- **See-through looks.**
+  - The shape is see-through, alpha-over in painter order
+    (`render.py:11`). Solid geometry is drawn first, then the sorted
+    see-through shape.
+  - Order-independent transparency is deferred. Until then, hands inside
+    the scene have `ghost.alpha` at 1 or are sorted as one object.
+- **Lines and points** are screen-space and become vertex-expanded quads
+  with a real depth.
+- **History becomes wiring.** Look-back and the dream capture from a chosen
+  node, with or without hands.
+- **Today's three pipelines** (`outputs.py:34`) become default graphs that
+  F2 step 1 must reproduce pixel for pixel.
+
+**Step 0, before F2 step 1:**
+
+- golden-frame fixtures for every factory and party preset
+- GPU timing for each pass
+- the param-naming rule: the first instance of a node keeps today's ids
+  (`fx.acid.mix`), and only extra instances get a prefix, so no preset or
+  binding needs migrating
+
 ## The wishlist as the owner meant it
 
 - **Fix the APC40.** Keep the map's shape but make it better:
