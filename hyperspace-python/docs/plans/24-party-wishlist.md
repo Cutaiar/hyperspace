@@ -166,6 +166,10 @@ appends to F1 (a Device *is* the node class) and N1–N3, with no reordering.
   - We own GE Cync and Feit bulbs, plus two-prong-to-E26 socket adapters;
     Govee was mentioned.
   - The owner will do whatever it takes for low latency, Wi-Fi or Bluetooth.
+  - Feit bulbs at 1–2 Hz are fine for now, as an ambient wash (owner,
+    2026-10-12).
+  - Cync stays a maybe, ambient only: `cync-lan` needs DNS redirection,
+    which our own travel router allows. Its rate is untested.
 - **Kinect.**
   - We own two Xbox 360 Kinects.
   - The stretch goal is crowd surface reconstruction: GPU space carving and
