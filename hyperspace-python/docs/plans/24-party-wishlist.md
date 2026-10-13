@@ -96,14 +96,21 @@ appends to F1 (a Device *is* the node class) and N1–N3, with no reordering.
   by the device profile.
 - **Collapsible port groups** for the APC40 (about 100 controls) and the
   hands (about 40 sources).
-- **APC40 layers.**
-  - SHIFT-layer cables live in the session graph and preset-layer cables in
-    the preset graph; the device node appears in both.
-  - This is today's D1 and D4–D6 (`docs/DECISIONS.md`), redrawn.
-  - The editor gets a layer view; session cables are read-only while
-    editing a preset.
+- **The APC40 is two nodes (owner, 2026-10-12): *APC40* and *APC40
+  (SHIFT)*.** No layer view.
+  - **Ports and presses.** Each node's ports send only while its layer is
+    up. A press belongs to the node up when it went down, and so does its
+    release (D12).
+  - **Ownership.** *APC40*'s cables live in the preset; *APC40 (SHIFT)*'s
+    live in the session. D1 and D4–D6 (`docs/DECISIONS.md`) hold with no
+    per-cable layer flag.
+  - **Invariant controls** (SHIFT, crossfader, bank pads, transport, tap)
+    are ports on *APC40* only and work on both layers.
+  - **Feedback and pickup.** Rings and LEDs follow the node that is up.
+    Soft pickup re-engages per port when the latch flips.
   - Freeing the track faders (the desk section) amends D6.
   - Desk templates become subgraphs.
+  - Any device with a mode switch can appear as one node per mode.
 - **Feedback.** Ring and LED feedback stays implicit, following the cable.
   Lights and bulbs are explicit sink nodes.
 - **Evaluation order.** The graph is evaluated in dependency order each
