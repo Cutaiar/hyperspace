@@ -83,8 +83,14 @@ appends to F1 (a Device *is* the node class) and N1–N3, with no reordering.
   macro survives as a bus node: a labelled pass-through with its own knob.
 - **Roles, not serials.** A preset names a role; the session maps roles to
   devices. A missing device's cables wait, as dormant routes do today.
-- **One cable per input port.** That keeps the one-performer-per-param
-  referee; combining sources takes an explicit combine node.
+- **Two input ports per param**, which is today's model
+  (`routing.py:85–105`).
+  - `base` takes any number of scene-setter cables (knobs, faders, buttons,
+    panel, presets); the last touch wins.
+  - `mod` takes one performer (lane, hand, LFO, ext; push or position): the
+    `Owned` / `referee` rule.
+  - Combining two performers needs an explicit combine node. That is new;
+    today it is refused.
 - **Value ports and trigger ports**, crossed by envelope and threshold
   nodes. Encoder or fader behaviour, soft pickup included, is set per port
   by the device profile.
@@ -93,6 +99,10 @@ appends to F1 (a Device *is* the node class) and N1–N3, with no reordering.
 - **APC40 layers.**
   - SHIFT-layer cables live in the session graph and preset-layer cables in
     the preset graph; the device node appears in both.
+  - This is today's D1 and D4–D6 (`docs/DECISIONS.md`), redrawn.
+  - The editor gets a layer view; session cables are read-only while
+    editing a preset.
+  - Freeing the track faders (the desk section) amends D6.
   - Desk templates become subgraphs.
 - **Feedback.** Ring and LED feedback stays implicit, following the cable.
   Lights and bulbs are explicit sink nodes.
