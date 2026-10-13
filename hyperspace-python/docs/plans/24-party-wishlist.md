@@ -68,6 +68,38 @@ Why depth is the hard part, from the code (see the shared doc's F2 section):
 - **Today's three pipelines** (`outputs.py:34`) become default graphs that
   F2 step 1 must reproduce pixel for pixel.
 
+## Controllers as nodes (owner, 2026-10-12)
+
+Each controller instance is a node in the same editor as the render graph:
+*Wand 1*, *Drums*, *Leap*, *APC40*. Each degree of freedom is an output
+port, and a cable carries that one DoF to any downstream port. This
+appends to F1 (a Device *is* the node class) and N1–N3, with no reordering.
+
+- **Routes are already cables.** A `Binding` row (source → param, op,
+  depth) converts one-to-one into a cable with op and depth as properties.
+- **Macros become visible.** Macros (`routing.py:874–915`, subscribers
+  that set a param's base or a route's depth) become fan-out cables. A
+  depth subscriber becomes a cable into a modifier's depth port. A named
+  macro survives as a bus node: a labelled pass-through with its own knob.
+- **Roles, not serials.** A preset names a role; the session maps roles to
+  devices. A missing device's cables wait, as dormant routes do today.
+- **One cable per input port.** That keeps the one-performer-per-param
+  referee; combining sources takes an explicit combine node.
+- **Value ports and trigger ports**, crossed by envelope and threshold
+  nodes. Encoder or fader behaviour, soft pickup included, is set per port
+  by the device profile.
+- **Collapsible port groups** for the APC40 (about 100 controls) and the
+  hands (about 40 sources).
+- **APC40 layers.**
+  - SHIFT-layer cables live in the session graph and preset-layer cables in
+    the preset graph; the device node appears in both.
+  - Desk templates become subgraphs.
+- **Feedback.** Ring and LED feedback stays implicit, following the cable.
+  Lights and bulbs are explicit sink nodes.
+- **Evaluation order.** The graph is evaluated in dependency order each
+  frame, which removes today's one-frame lag per modulation link. Loops
+  only through a one-frame delay node.
+
 **Step 0, before F2 step 1:**
 
 - golden-frame fixtures for every factory and party preset
