@@ -387,13 +387,14 @@ CHEATSHEET = [
     ("G", "overlay: clicks through / back"),
     ("Esc / Q", "quit"),
     # Xbox-layout gamepad, Bluetooth or USB (gamepad.py holds the map)
-    ("pad A B", "pause · next preset"),
-    ("pad X Y", "points · faces"),
+    ("pad X / B", "previous / next preset"),
+    ("pad A Y", "faces · lines"),
     ("LB / RB", "previous / next shape"),
     ("d-pad", "brightness ↑↓ · speed ←→"),
     ("sticks", "orbit · zoom — click resets"),
     ("LT / RT", "4D depth out / in"),
-    ("view/menu", "panel / this sheet"),
+    ("view", "panel"),
+    ("start (hold)", "save as a new preset"),
     # any control ↔ any MIDI message, through the registry (midi.py)
     ("right-click", "a control: learn desk / hand / pad · unbind"),
     # the APC40's glyphs, as the desk above and the ROUTING rows print them
