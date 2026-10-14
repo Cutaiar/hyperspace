@@ -58,21 +58,19 @@ priority paragraph has been corrected to say so.
 
 ## The base
 
-Plan 25 (the shared library) is on `plan-25-shared-library-build`, PR #168,
-based on #167's branch `worktree-plan-25-shared-library`. It may not be
-merged yet. Plan 27 touches `config.py`, `app.py` (`main`, the close order)
-and the SYSTEM page, which plan 25 also changed; plan 25 also took register
-row 109, hand checks 139–143 (group S) and the README entry.
+Base on `main` at `8f80b94` or later, and the final PR targets `main`.
+Plan 25 (the shared library, PRs #167/#168) is merged there: `[library]
+path` points the library at a cloud folder, `homegit` and `shared/` are
+gone, and plan 25 took register row 109, hand checks 139–143 (group S)
+and its README entry. Plan 27 touches `config.py`, `app.py` (`main`, the
+close order) and the SYSTEM page, which plan 25 changed: read them as they
+are on `main`, not as the surveys in this prompt describe them where the
+two differ (the line numbers below are from `648cf83`, before plan 25).
 
-- **If #168 is merged:** base on `main`, and the final PR targets `main`.
-- **If it is not:** base on `plan-25-shared-library-build` (at `2c6d48b` or
-  later) and the final PR targets that branch, so its diff is plans 26 and
-  27 alone. Say so in the PR body.
-
-Either way: register rows start at **110**; hand checks start at **148**,
+Register rows start at **110**; hand checks start at **148**,
 groups **U** (plan 24), **V** (plan 26) and **W** (plan 27), because group
 **T**, 144–147, goes to the pad's checks that PR #161 left without numbers
-(see "What landed since the wishlist was written"). Check which base applies
+(see "What landed since the wishlist was written"). Verify the base
 before anything else, and re-check it immediately before each worktree is
 cut.
 
@@ -1190,8 +1188,13 @@ a `graph` section with the hands in the scene (stream A); a `[[devices]]`
 list with the OSC device and a cloud device enabled and the APC40 absent
 (stream B); the fixture preset with fader rows loaded from a scratch
 library, SHIFT latched and released, the palette fold's mix up (stream C,
-with the fake MIDI ports the tests inject). Point the home at a scratch folder the way the tests do.
-**Never touch the owner's real `~/Hyperspace`.**
+with the fake MIDI ports the tests inject). Point the home at a scratch
+folder the way the tests do (`HYPERSPACE_HOME`), whose `config.toml` has
+no `[library]` section, so the library is that scratch home too.
+**Never touch the owner's real `~/Hyperspace`, and never the shared
+library it points at (`~/My Drive/Hyperspace`, a Google Drive folder that
+syncs to another Mac): never run the app or a tool against the real
+home, and never write a preset, template, palette or fixture there.**
 
 These must keep passing **untouched**:
 
