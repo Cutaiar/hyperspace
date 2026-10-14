@@ -124,7 +124,7 @@ def _backend():
         be = libusb_package.get_libusb1_backend()
         if be is not None:
             return be
-    except Exception:  # noqa: BLE001 — optional wheel; fall through
+    except Exception:  # noqa: BLE001, S110 — optional wheel; fall through
         pass
     try:
         import usb.backend.libusb1 as lb
