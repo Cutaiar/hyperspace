@@ -391,7 +391,7 @@ def load(path: Path | None = None) -> dict:
                    "the Mac is kept awake")
     # [library] path (plan 25): "" is the home; anything else is resolved
     # here — `~` expanded, relative to this file's folder — so app.main gets
-    # an absolute path. A leftover `git` key (homegit, removed) is said once
+    # an absolute path. A leftover `git` key (the old git switch, removed) is said once
     if "git" in cfg["library"]:
         cfg["library"].pop("git")
         note = ("config: [library] git is gone (plan 25) — presets are shared "

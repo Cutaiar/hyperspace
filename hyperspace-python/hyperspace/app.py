@@ -608,21 +608,6 @@ def _open_dream(reg: Registry, cfg: dict) -> tuple[object | None, str]:
         return None, dream_error(e)
 
 
-def _open_homegit(cfg: dict, home: Path):
-    """The home's committer (homegit.py, plan 19 WP6), only when
-    ``[library] git = true`` — exactly true (config.load has made anything
-    else false). Off, homegit is never imported. Building one runs nothing:
-    git is first called at the first save."""
-    if cfg.get("library", {}).get("git", False) is not True:
-        return None
-    try:
-        from . import homegit
-        return homegit.Committer(home)
-    except Exception as e:  # noqa: BLE001 — git must not stop the show
-        print(f"homegit: {e}", file=sys.stderr)
-        return None
-
-
 def _open_pad(cfg: dict):
     """The Xbox pad (gamepad.py), unless [gamepad] enabled = false. On by
     default: the pad never raises when absent, so there is nothing to lose
@@ -854,16 +839,14 @@ class Host:
     learn: object | None = None       # learn.Learn: what MIDI and the hands complete
     render_watch: RenderWatch | None = None   # the render window's health (watchdog.py)
     undo: object | None = None        # undo.Undo: ticked once a frame (plan 15 WP1)
-    committer: object | None = None   # homegit.Committer when [library] git is on
     # every opened render output's window settings, output 1's (`output`)
     # first; each applied once a frame (plan 21 WP3)
     outputs: list = field(default_factory=list)
 
     @property
     def adapters(self) -> tuple:
-        """What `close_all` closes, in shutdown order — the committer last:
-        its `close` gives a commit still running up to 2 s (homegit.py)."""
-        return (self.midi_io, self.bridge_io, self.hands_io, self.dream_io, self.committer)
+        """What `close_all` closes, in shutdown order."""
+        return (self.midi_io, self.bridge_io, self.hands_io, self.dream_io)
 
 
 def frame(h: Host, now: float, dt: float, fps: float) -> bool:
@@ -1198,11 +1181,6 @@ def main() -> None:
     # the project's startup preset (D11), once, now that everything it lands
     # on exists; a missing one is said on the panel and the app runs on
     library.project.load_startup()
-    # the home in git (plan 19 WP6), attached only now: the launch's own
-    # writes (a migration, the startup preset) ask for no commit — they ride
-    # in the first save's. Off by default; nothing runs until a save
-    committer = _open_homegit(cfg, library.home)
-    library.committer = committer
     # undo (undo.py, plan 15 WP1), built after the startup preset so a
     # launch starts with an empty stack: bases through the registry, table
     # parts through the table, what is loaded through the library's marks;
@@ -1318,7 +1296,7 @@ def main() -> None:
                 quit=lambda: glfw.set_window_should_close(render_win, True),
                 pad=pad, midi_io=midi_io, hands_io=hands_io, bridge_io=bridge_io,
                 dream_io=dream_io, learn=learn, render_watch=render_watch,
-                undo=undo_obj, committer=committer,
+                undo=undo_obj,
                 outputs=[sl.output for sl in slots if sl.output is not None])
 
     # smoke-test escape hatch: HYPERSPACE_FRAMES=n closes after n frames
