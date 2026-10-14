@@ -71,12 +71,13 @@ changes brightness or volume instead).
    Do not launch on the real home folder before this: the first launch
    rewrites a file there (with a backup).
 3. The rest of Part 1, in any order — but L55 and L56 first: L39–L42,
-   L53, L55 and L59 on the copy, the others on the real home folder. Leave L43 (git, on the copy) until after step 4:
-   it is the last test done on the copy.
+   L53, L55 and L59 on the copy, the others on the real home folder. L43
+   (the shared library folder) needs a second Mac and a cloud folder;
+   do it whenever both are to hand.
 4. Part 2 (a), the APC40. Its entries marked "on the copy" run with
    `HYPERSPACE_HOME` set to the copy. A1 before A4. A20–A23 are the
    listening session for the macro candidates: do them together.
-5. Back on the copy: L43.
+5. (L43, if not done yet: two Macs and a shared cloud folder.)
 6. Part 2 (b), the hand camera: **B1 (calibration) first**, with nobody
    else in the camera's view. Leave the APC40 plugged in for the entries
    that need both.
@@ -131,7 +132,7 @@ changes brightness or volume instead).
 | L40 | Rename a preset | 1 | laptop, the copy | 87 |
 | L41 | The trash | 1 | laptop, the copy | 53, 88 |
 | L42 | The unsaved dot from a step back | 1 | laptop, the copy | 89 |
-| L43 | The home folder in git | 1 | laptop, the copy, last | 90 |
+| L43 | The shared library folder | 1 | laptop, a second Mac, a shared cloud folder | 139–143 |
 | L44 | One output is as it was | 1 | laptop (recorded hands) | 99 |
 | L45 | The HANDS page explains a bad setting | 1 | laptop | 100 |
 | L46 | Sending to FL Studio | 1 | laptop, FL Studio | 27 |
@@ -1305,40 +1306,41 @@ the end of its name.
 
 *(check 89)*
 
-#### L43. The home folder in git (run last on the copy)
+#### L43. The shared library folder (two Macs)
 
-**Needs:** the copy; run after A8, A14 and A15. Optional feature.
+**Needs:** this Mac and a second one, both running this build, and a
+folder in a cloud drive shared between you (set up as in
+[`SETUP.md`](SETUP.md), "Share presets with someone"). Try the missing
+folder (step 4) on a copy: `HYPERSPACE_HOME` pointed at a scratch
+folder.
 
 **Do:**
-1. `git -C $HYPERSPACE_HOME rev-parse --show-toplevel` — it should say
-   "not a git repository".
-2. In the copy's config add `[library]` and under it `git = true`.
-   Launch.
-3. Save a preset (**as…**). Then save it after a change, rename it, × it,
-   × a factory preset, put a preset on a slot.
-4. `touch $HYPERSPACE_HOME/.git/index.lock`, save twice;
-   `rm $HYPERSPACE_HOME/.git/index.lock`, save once more.
+1. Both Macs pointed at the same folder (`[library] path`). On Mac A,
+   save a new preset (**as…**). Watch Mac B's PRESETS list.
+2. On Mac B, load that preset. On Mac A, change it and save it again.
+3. Check `config.toml`, `bindings.json` and `windows.json` in each home:
+   their dates do not change on a save, and none of them is in the
+   shared folder.
+4. On the scratch home, set `path` to a folder that does not exist and
+   launch. Look at the footer and the SYSTEM page, then try a save.
+5. Take Mac B offline. Save the same preset on both Macs. Bring B back
+   online and wait for the sync.
 
-**Right if:** (2) SYSTEM's library line ends "· git"; no `.git` folder
-yet. (3) after the first save, `git -C $HYPERSPACE_HOME log --oneline`
-shows one commit "Hyperspace: the home as it was when git was switched
-on" whose body names your save; `.gitignore` exists; then one commit per
-action in plain words ("save preset …", "rename preset … → …", "trash
-preset …", "hide preset …", "show …: bank"); `git status --short` is
-empty; no weights, trash, `last_show`, `windows.json` or backup files
-are tracked; no remote. (4) saves stay instant, the warning line says
-"git: not committed (…); saves are not affected" once; after removing
-the lock one commit holds all three saves. Emptying the trash makes no
-commit.
+**Right if:** (1) the preset appears on B within a couple of seconds of
+the sync, no restart. (2) B re-applies it, as a hand edit of the file
+does. (3) untouched and not shared. (4) a warning says the shared library
+was not found; the SYSTEM page's library line is red and says "NOT
+FOUND, saves are off"; the save says "not saved"; no folder is created.
+(5) both entries show in the list (one under a name like
+"hi-frek (… conflicted copy …)"); load both, keep one, delete the other.
 
-**Wrong if:** a save that waits; a `.git` before the first save. If step
-1 names a folder above the copy, git refuses by design (one note, nothing
-written).
+**Wrong if:** a preset that never arrives (check the cloud client:
+iCloud "Keep Downloaded", Dropbox "Available offline"); a machine file in
+the shared folder; a folder created at step 4; only one entry at step 5.
 
-**Changes:** the copy only. Leave it off on the real home unless you want
-it.
+**Changes:** the shared folder gets your test presets; delete them after.
 
-*(check 90)*
+*(checks 139–143)*
 
 ## Outputs and hands without the camera
 
@@ -1547,8 +1549,7 @@ a box instead of χ.
 **Do:** load the factory presets `plasma-heart` (the Heart),
 `spiral-silk` (the Trefoil knot) and `inverse-halo` (the Starfruit), then
 your own `hi-frek-variation-1` and `light-realm-variation-1` (the Möbius
-strip). If yours are not in the list: `uv run python
-tools/shared_presets.py install shared/dan-2026-10-04`.
+strip), from your library.
 
 **Right if:** each still does what it was made for.
 
@@ -2292,8 +2293,7 @@ and never jumps back to the 5-cell.
 **Needs:** APC40, music with a clear kick and hi-hats, the copy, and
 [`plans/22-macro-candidates.md`](plans/22-macro-candidates.md) open.
 
-**Do:** `uv run python tools/shared_presets.py install
-shared/plan-22-macro-candidates`. PRESETS: load MACRO PERFORMANCE. The
+**Do:** PRESETS: load MACRO PERFORMANCE from your library. The
 macros are the device knobs D1–D8 (without the desk: the macro sliders
 on ROUTING). Turn each end to end, with music and with none, then back
 to rest (noon; D7 and D8 to zero). Then a breakdown: D7 up over 8–16

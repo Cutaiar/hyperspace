@@ -1587,7 +1587,7 @@ def test_every_layer_has_its_words():
 
 def test_saved_layers_keep_their_meaning():
     """`dream.layer` is stored as an index, so the six layers there were
-    keep their indices and the rest are appended: every factory and shared
+    keep their indices and the rest are appended: every factory and fixture
     file that names a layer gets the same layer by name as before."""
     import json
     from pathlib import Path
@@ -1610,12 +1610,14 @@ def test_saved_layers_keep_their_meaning():
 
     seen = 0
     for f in sorted([*(root / "hyperspace" / "library").rglob("*.json"),
-                     *(root / "shared").rglob("*.json")]):
+                     *(root / "tests" / "fixtures").rglob("*.json")]):
         for v in found(json.loads(f.read_text())):
             assert isinstance(v, int) and 0 <= v < len(LAYERS_BEFORE), f
             reg.restore({"dream.layer": v})
             assert layer.names[layer.base] == LAYERS_BEFORE[v], f
             seen += 1
-    assert seen >= 20          # the factory looks and the owner's shared presets
+    # the factory looks; the owner's shared/ snapshot went in plan 25, and
+    # the names[:6] check above covers every index a saved file can hold
+    assert seen >= 4
 
 

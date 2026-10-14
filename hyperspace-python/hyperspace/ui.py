@@ -1855,6 +1855,37 @@ class Panel:
         imgui.separator()
         ui_presets.overview(self)
 
+    def library_lines(self) -> list[tuple[str, bool]]:
+        """The SYSTEM page's library lines (plan 25), each with whether it
+        is an error: the library root and, when it is elsewhere, the
+        machine home; a shared library that was not there at launch says
+        so, red, for as long as the app runs."""
+        lib = self.library
+        root = lib.home
+        machine = getattr(lib, "machine", root)
+        missing = getattr(lib, "missing", None)
+        if missing is not None:
+            lines = [((f"library: {missing} — NOT FOUND, saves are off "
+                      "(restart once it is there)"), True)]
+        else:
+            lines = [(f"library: {root}", False)]
+        if machine != root:
+            lines.append((f"machine: {machine}", False))
+        return lines
+
+    def _library_lines(self) -> None:
+        for text, bad in self.library_lines():
+            if bad:
+                imgui.text_colored(WARN, text)
+            else:
+                imgui.text_disabled(text)
+            if imgui.is_item_hovered():
+                imgui.set_tooltip(
+                    "this machine's own files: config.toml, bindings.json, windows.json, "
+                    "hands.json, last_show, logs" if text.startswith("machine:") else
+                    "presets and shows as JSON ([library] path, else $HYPERSPACE_HOME); "
+                    "edit a file and the app follows")
+
     def _page_system(self, dt: float) -> None:
         self._section("system")
         self._check("ui.cheatsheet")
@@ -1870,15 +1901,7 @@ class Panel:
             if self.reloader.restart:
                 imgui.text_colored(WARN, self.reloader.restart)
         if self.library is not None:
-            # " · git" while a committer is attached and has not refused (plan 19 WP6)
-            git = getattr(self.library, "committer", None)
-            git = git is not None and not getattr(git, "refused", False)
-            imgui.text_disabled(f"library: {self.library.home}" + (" · git" if git else ""))
-            if imgui.is_item_hovered():
-                imgui.set_tooltip("$HYPERSPACE_HOME — presets and shows as JSON; "
-                                  "edit a file and the app follows"
-                                  + ("; every save is a git commit there ([library] git)"
-                                     if git else ""))
+            self._library_lines()
         if self.config_error:
             imgui.text_colored(WARN, self.config_error)
         for note in self.config_notes:
