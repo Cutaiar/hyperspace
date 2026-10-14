@@ -45,9 +45,8 @@
     transition: color .15s, border-color .15s;
   }
   a:hover, a:focus-visible { border-color: var(--red); color: var(--red); outline: none; }
-  figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 12px; }
-  figure img { width: 200px; height: 200px; border-radius: 6px; image-rendering: pixelated; }
-  figcaption { font-size: 12px; color: var(--dim); }
+  img { width: 200px; height: 200px; border-radius: 6px; image-rendering: pixelated; }
+  footer { display: flex; flex-direction: column; align-items: center; gap: 8px; }
   a.plain { padding: 0; border: 0; border-radius: 0; font-size: 12px; color: var(--dim); }
   a.plain:hover, a.plain:focus-visible { color: var(--red); }
 </style>
@@ -60,11 +59,11 @@
     <li><a href="https://www.instagram.com/dilloncutaiar/">@dilloncutaiar</a></li>
   </ul>
 
-  <figure>
-    <img src="qr.svg" alt="QR code linking to hyperspace-contact.cutaiar.io">
-    <figcaption>hyperspace-contact.cutaiar.io</figcaption>
-  </figure>
+  <img src="qr.svg" alt="QR code linking to hyperspace-contact.cutaiar.io">
 
-  <a class="plain" href="https://github.com/Cutaiar/hyperspace">github.com/Cutaiar/hyperspace</a>
+  <footer>
+    <a class="plain" href="https://hyperspace-contact.cutaiar.io">hyperspace-contact.cutaiar.io</a>
+    <a class="plain" href="https://github.com/Cutaiar/hyperspace">github.com/Cutaiar/hyperspace</a>
+  </footer>
 </body>
 </html>
