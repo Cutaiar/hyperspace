@@ -16,4 +16,5 @@ What is left in `plans/`:
 - [`22-macro-candidates.md`](22-macro-candidates.md) — four presets of macro configurations to audition, each macro with a line on what it is meant to do. None has been judged.
 - [`23-flip-windows-tabs.md`](23-flip-windows-tabs.md) — plan 23, **partly built** (WP1, Flip X / Flip Y per output for the glass, in #157; the rest not built): windows that come back on their named screens (fullscreen included), the control window as the MacBook's screen with the page tabs across the top.
 - [`23-session-prompt.md`](23-session-prompt.md) — the launch prompt for the session that runs plan 23.
+- [`24-party-wishlist.md`](24-party-wishlist.md) — the post-party wishlist (2026-10-12) as the owner meant it, and its priority: the render graph first, the device registry beside it. **Not built**; the working plan is a shared Claude Doc linked from the file.
 - [`assets/12-presets/`](assets/12-presets/) — the performer cards, one per party preset (`party-*.md`); `tools/preset_shots.py` redraws their pose sheets.
