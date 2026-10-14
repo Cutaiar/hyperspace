@@ -939,11 +939,10 @@ The wishlist and its working plan are dated 2026-10-12. These merged on
   `router.claimed("axis")`) (PR #161). Stream B's B2 makes `Pad` a device
   on top of this, not instead of it: `learn_from`, `claimed`, the
   `PAD_REMAP` migration table (`routing.py:423`) and the pad's factory rows
-  all stay. **Unresolved from 2026-10-14:** holding START on the Afterglow
-  hid the panel and saved nothing; the suspect is `decode()` mapping the
-  START bit to `VIEW` (`gamepad.py:82`). B2 probes it (print `gp.BUTTONS`
-  names on press over `Pad(usb=True)`) and fixes the decode if that is it.
-  The owner said peripheral control was "due a broader refactor soon":
+  all stay. (The 2026-10-14 report that holding START hid the panel was
+  the select button being pressed, not a decode fault: `decode()` is
+  right, nothing to probe.) The owner said peripheral control was "due a
+  broader refactor soon":
   that refactor is B2, so do not polish pad mappings elsewhere.
 - **Route motion** (PR #162): `motion.py` is the one kernel (the analyzer's
   followers and a closed-form spring; a leaf); `Binding.motion` holds a
