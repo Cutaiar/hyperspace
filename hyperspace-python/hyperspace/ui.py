@@ -395,7 +395,7 @@ CHEATSHEET = [
     ("LT / RT", "4D depth out / in"),
     ("view/menu", "panel / this sheet"),
     # any control ↔ any MIDI message, through the registry (midi.py)
-    ("right-click", "a control: learn desk / hand · unbind"),
+    ("right-click", "a control: learn desk / hand / pad · unbind"),
     # the APC40's glyphs, as the desk above and the ROUTING rows print them
     ("APC40", "K D knobs · S faders · G row·col · B ⇧"),
 ]
@@ -464,6 +464,7 @@ class Panel:
         self.watchdog = None   # set by app.py (watchdog.Watchdog): the stall log line
         self.render_watch = None   # set by app.py (watchdog.RenderWatch): the red banner
         self.midi = None      # set by app.py when an adapter is up (midi.MidiIO)
+        self.pad = None       # set by app.py unless [gamepad] enabled = false (gamepad.Pad)
         self.learn = None     # set by app.py: the armed param and the held question (learn.Learn)
         self.undo = None      # set by app.py (undo.Undo): its status shows in the footer
         self.bridge = None    # set by app.py when [bridge] is enabled (bridge.Bridge)
@@ -678,7 +679,10 @@ class Panel:
         SHIFT's own param (what `ui_routing._desk_targets` leaves out) —
         with or without a MIDI adapter. **Learn hand ▸ left / right**: only
         with a tracker, on a param a hand can drive (the real one is
-        modulatable), for the sides the rig's axes have."""
+        modulatable), for the sides the rig's axes have. **Learn pad**:
+        while a gamepad is connected, wherever Learn desk is offered — a
+        button, the D-pad, a stick or a trigger completes it
+        (`gamepad.learn_from`)."""
         lrn = self.learn
         if self._desk_target(a) and imgui.menu_item_simple("Learn desk"):
             lrn.arm(a.id, "desk")
@@ -688,6 +692,10 @@ class Panel:
                 if imgui.menu_item_simple(side):
                     lrn.arm(a.id, f"hand:{side}")
             imgui.end_menu()
+        pad = getattr(self, "pad", None)
+        if (pad is not None and pad.on and self._desk_target(a)
+                and imgui.menu_item_simple("Learn pad")):
+            lrn.arm(a.id, "pad")
 
     def _hand_sides(self) -> list[str]:
         """The hands this rig's axes belong to, left first; none without a
@@ -713,6 +721,8 @@ class Panel:
             return "nothing to learn from (no MIDI)"
         if want in ("hand:left", "hand:right"):
             return f"move the {want.partition(':')[2]} hand…"
+        if want == "pad":
+            return "press a pad button or the D-pad, or push a stick or a trigger…"
         knob, hand = self.midi is not None, self.hands is not None
         if knob and hand:
             return "move a control or a hand…"

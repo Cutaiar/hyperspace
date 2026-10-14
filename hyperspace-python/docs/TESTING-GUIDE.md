@@ -229,6 +229,10 @@ changes brightness or volume instead).
 | D14 | The shapes in 4D from the audience | 2d | glass | 113, 115 |
 | D15 | METER and PULSE from the audience | 2d | glass, music | 129 |
 | E1 | Drag an effect with a mouse | 2e | mouse | 94 |
+| F1 | A wired Xbox 360 pad is found | 2f | gamepad | 139 |
+| F2 | Learn pad — a button | 2f | gamepad | 140 |
+| F3 | Learn pad — a stick and a trigger | 2f | gamepad | 141 |
+| F4 | Momentary and hold on a pad button | 2f | gamepad | 142 |
 
 Covered by other entries: check 32 is part of D11; check 37 is replaced
 by B25; check 47 is finished by D8 (with D3, D9 and B28).
@@ -3402,6 +3406,79 @@ the wrong wedge lights.
 **Right if:** the same as L18.
 
 *(check 94)*
+
+## (f) A gamepad
+
+#### F1. A wired Xbox 360 pad is found
+
+**Needs:** a wired Xbox 360 pad (the Afterglow AX.1) on USB, no other
+pad connected.
+
+**Do:** launch from a terminal.
+
+**Right if:** the terminal says `gamepad: Afterglow Gamepad for Xbox 360
+over USB`; the pad's ring lights one quarter (player 1) instead of
+blinking; A toggles rotation, LB / RB step the shape, the D-pad steps
+brightness (up / down) and speed (left / right), the left stick orbits
+(up tilts the camera up), the right stick's up / down zooms, RT pushes
+the 4D depth in and LT out.
+
+**Wrong if:** no line; a button does another one's job; a stick runs
+backwards.
+
+*(check 139)*
+
+#### F2. Learn pad — a button
+
+**Needs:** a pad.
+
+**Do:** VIEW page: right-click Faces → **Learn pad**. Press Y on the
+pad. Then right-click Brightness → **Learn pad** and press the D-pad's
+down.
+
+**Right if:** the footer says `learned view.faces ← …(into
+bindings.json)`; Y now flips faces; the D-pad's down still dims (one
+detent a press); `bindings.json` holds `pad:Y` → `view.faces`. Pressing
+Y during the learn did not also do Y's old job.
+
+**Wrong if:** the press does nothing; Y does two things; a desk knob
+turned during the learn completes it.
+
+*(check 140)*
+
+#### F3. Learn pad — a stick and a trigger
+
+**Needs:** a pad.
+
+**Do:** CAMERA page: right-click Pan X (or any centred setting) →
+**Learn pad**, push the right stick left. Then right-click
+Field amp (VIEW page) → **Learn pad**, squeeze RT.
+
+**Right if:** the ROUTING page shows `right stick X pushes` on the first
+and `right trigger positions` on the second; the first swings about its
+value and comes back when the stick is let go; the second follows the
+trigger and RT no longer rides the 4D depth, while LT still does. Save
+the preset, reload it: both routes are still there.
+
+**Wrong if:** the stick still orbits after its route is made; letting
+go leaves the setting moved.
+
+*(check 141)*
+
+#### F4. Momentary and hold on a pad button
+
+**Needs:** a pad; `bindings.json` open in an editor.
+
+**Do:** change the `pad:Y` row's op to `"momentary"` and, for a button
+with a trigger on it (`pad:B` → `preset.next`), to `"hold"`. ⌘R.
+
+**Right if:** faces show only while Y is held; B steps the preset only
+after about 0.6 s held, once per press; a tap does nothing.
+
+**Wrong if:** faces stay on after Y is let go; B fires on a tap or
+repeats while held.
+
+*(check 142)*
 
 ---
 

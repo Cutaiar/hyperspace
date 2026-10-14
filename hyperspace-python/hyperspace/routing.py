@@ -22,10 +22,14 @@ Sources are one string, ``scheme:address``:
                    and ⇧F1–F8 are rows since plan 11, undo and redo since
                    plan 15 (LOOP_KEY_ROWS). Still app.py's own, outside the
                    table: Cmd+R, Esc / Q, and the relative writers — ↑/↓,
-                   the mouse and the sticks, which nudge camera params
-                   directly
+                   the mouse, and the pad's sticks and triggers while no
+                   route names them (they nudge camera params directly)
   pad:<NAME>       a gamepad button by gamepad.py's name ("A", "LB", "LSTICK")
   hat:<DIR>        the d-pad: UP DOWN LEFT RIGHT
+  axis:<NAME>      a gamepad axis as a continuous lane in [0, 1]: LX LY RX
+                   RY (sticks, resting 0.5, up and right high) and LT RT
+                   (triggers, resting 0). A route on one takes it off its
+                   default camera job (app.py)
   cc:<ch>:<n>      MIDI control change n on 0-based channel ch, or * for any
   note:<ch>:<n>    MIDI note n
   pitch:<ch>       MIDI pitch bend
@@ -61,7 +65,8 @@ and returns to. The last two are the *performer* ops:
              with soft pickup); a trigger fires on the rising half. MIDI
              only: a continuous source never sets the base
   rel/rel64  a relative encoder's delta → step
-  momentary  note-on sets a toggle on, note-off sets it off
+  momentary  note-on (a pad button's press) sets a toggle on, note-off
+             (its release) sets it off
   push       the performer adds to the base: every frame the source is
              live the row calls ``param.modulate(depth · scale · (u −
              rest))`` — `value` the signed depth in norm units, u the
@@ -260,12 +265,13 @@ LEGACY_MIDI_FILE = Path("midi_map.json")
 FACTORY_FILE = Path(__file__).with_name("bindings.default.json")
 
 MIDI_SCHEMES = ("cc", "note", "pitch")
-LANE_SCHEMES = ("lane", "ext", "lfo", "hand")          # continuous, read by the Router
+LANE_SCHEMES = ("lane", "ext", "lfo", "hand", "axis")  # continuous, read by the Router
 MOD_OPS = ("push", "position")                 # the performer ops: the Router's rows
-# `hold` is a MIDI note row's op (plan 15 WP4, fork 13): the target fires
-# once the button has been down midi.HOLD_S, and a shorter press does
-# nothing — the adapter times it; `act` ignores it, so a key or pad row
-# with it does nothing
+# `hold` is a button row's op (plan 15 WP4, fork 13): the target fires
+# once the button has been down HOLD_S, and a shorter press does nothing —
+# the adapter times it (midi.py a note, `Router.pad` a pad button or the
+# D-pad); `act` ignores it, so a key row with it does nothing
+HOLD_S = 0.6       # midi.HOLD_S is the note's; tests hold the two equal
 OPS = ("fire", "toggle", "step", "set", "abs", "rel", "rel64", "momentary", "hold", *MOD_OPS)
 # the APC40's two layers (plan 13 §3): a MIDI row's `layer` is None — the
 # control is invariant, the session's, one meaning on both layers — or one
@@ -1942,14 +1948,69 @@ class Router:
                 if b.modifiers == chord:
                     act(self.reg, b)
 
-    def pad(self, pad) -> None:
-        """One frame of pad / hat rows; `pad` is a gamepad.Pad."""
+    def pad(self, pad, now: float | None = None, *, buttons: bool = True) -> None:
+        """One frame of the gamepad (`pad` a gamepad.Pad): its axes fed as
+        the `axis` lanes (None while no pad is on, so their routes let go),
+        then its pad / hat rows — unless `buttons` is False (the frame's
+        press completed a learn). A press acts as a note-on does
+        (`act`); a `momentary` row lets its toggle go on the release; a
+        `hold` row fires once its button has been down HOLD_S (`now`, a
+        monotonic clock; a shorter press does nothing)."""
+        self._publish_axes()
+        self.feed("axis", pad.lanes() if pad.on else None)
+        holds = self.__dict__.setdefault("_pad_holds", {})   # source → press time; None once fired
+        if not pad.on:
+            holds.clear()
+            return
+        now = time.monotonic() if now is None else now
         for b in self.table.of("pad", "hat"):
             code = self._code(b)
-            if code is None:
+            if code is None or not b.enabled:
                 continue
-            if (pad.hat_pressed(code) if b.scheme == "hat" else pad.pressed(code)):
+            hat = b.scheme == "hat"
+            down = bool(pad.hat & code) if hat else pad.down(code)
+            pressed = pad.hat_pressed(code) if hat else pad.pressed(code)
+            released = pad.hat_released(code) if hat else pad.released(code)
+            if b.op == "hold":
+                key = (b.source, b.target)
+                if pressed and buttons:
+                    holds[key] = now
+                elif not down:
+                    holds.pop(key, None)
+                elif holds.get(key) is not None and now - holds[key] >= HOLD_S:
+                    holds[key] = None            # once per press
+                    p = self.reg.get(b.target)
+                    if p is not None:
+                        p.fire()
+                continue
+            if b.op == "momentary":
+                p = self.reg.get(b.target)
+                if p is None:
+                    continue
+                if pressed and buttons:
+                    p.set(True) if p.kind is Kind.TOGGLE else p.toggle()
+                elif released and p.kind is Kind.TOGGLE:
+                    p.set(False)
+                continue
+            if pressed and buttons:
                 act(self.reg, b)
+
+    def _publish_axes(self) -> None:
+        """The pad axes' names, labels and rests (gamepad.AXES …), once."""
+        if "axis" in self.names:
+            return
+        from . import gamepad
+        self.labels["axis"] = list(gamepad.AXIS_LABELS)
+        self.rests["axis"] = list(gamepad.AXIS_RESTS)
+        self.names["axis"] = {n: i for i, n in enumerate(gamepad.AXES)}
+
+    def claimed(self, scheme: str) -> set[int]:
+        """The lanes of `scheme` an enabled route reads — a pad axis with
+        one is off its default camera job (app.py)."""
+        if scheme == "axis":
+            self._publish_axes()
+        return {i for b in self.table.mods() for s, i in [self.lane(b.source)]
+                if s == scheme and i >= 0}
 
     def _code(self, b: Binding) -> int | None:
         """The key / button / hat constant a source names; None if there is none."""
