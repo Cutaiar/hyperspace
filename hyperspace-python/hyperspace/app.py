@@ -1115,7 +1115,11 @@ def main() -> None:
     audio = AudioEngine()
     audio.rescan()                         # the one PortAudio scan, here at startup — never mid-set on a first read
     control = Control(audio.chain)
-    library = Library()                    # presets, projects, the preset bank (its project's)
+    # presets, projects, the preset bank (its project's): in the home, or in
+    # the folder [library] path names (plan 25) — the machine files
+    # (config, bindings, windows, logs, last_show) stay in the home either way
+    lp = cfg.get("library", {}).get("path", "")
+    library = Library(Path(lp), machine=home) if lp else Library()
     # dream.* drives the renderer's look-back (lookback.py); the post pass
     # runs inside renderer.draw
     panels: list = []                  # app.restart raises the panel's flag; frame() polls it
@@ -1152,7 +1156,7 @@ def main() -> None:
     # until the show says otherwise
     mc = cfg.get("midi", {})
     table = _desk_table(reg, Bindings.load(
-        bindings_path(library.home), mc.get("profile", "apc40"),
+        bindings_path(home), mc.get("profile", "apc40"),
         Path(mc.get("map", "midi_map.json")),
     ))
     library.attach(reg)
@@ -1279,7 +1283,7 @@ def main() -> None:
     # the stall log (watchdog.py), <home>/stall.log: a 2 s whole-loop stall,
     # a raising render draw, or 2 s with no render frame presented while the
     # panel runs, each with every thread's stack; kill -USR1 dumps on demand
-    watchdog = Watchdog(library.home / LOG_NAME,
+    watchdog = Watchdog(home / LOG_NAME,
                         preset=lambda: library.current("presets"))
     # with two or more outputs the stall is "no output presented", and one
     # output dark while another presents is a warning naming it (WP3)

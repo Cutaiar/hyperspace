@@ -220,3 +220,68 @@ def test_a_user_file_still_shadows_the_factorys_of_its_name(tmp_path):
     user.write_text((FACTORY / "band" / "balanced.json").read_text())
     assert rig.lib.list("band").count("Balanced") == 1
     assert rig.lib.path_of("band", "Balanced") == user
+
+
+# ---------------------------------------------------------------- migrations
+
+def _boot_split(machine, root):
+    """test_migration.boot's order, the library apart from the machine home."""
+    from hyperspace import lfo, preset, tempo
+    from hyperspace.fx import FxState
+    from hyperspace.lookback import DreamState
+    from hyperspace.routing import bindings_path
+
+    chain = Analyzer(Analyser())
+    control = Control(chain)
+    lib = Library(root, machine=machine, period=0.0)
+    reg = build_registry(ViewState(), control, SimpleNamespace(chain=chain), lib.project,
+                         dream=DreamState(), fx=FxState())
+    lib.on_layout("band", control.apply_layout)
+    control.library = lib
+    clock = tempo.Clock(now=lambda: 0.0)
+    tempo.register(reg, clock)
+    lfo.register(reg, lfo.LFOs(), clock)
+    lib.attach(reg)
+    router = Router(reg, Bindings.load(bindings_path(machine), legacy_midi=None))
+    Presets(lib, reg, router)
+    return lib, preset.migrate_home(lib, router)
+
+
+def test_the_migration_reads_machine_files_and_writes_documents_to_the_library(tmp_path):
+    """A legacy bindings/ folder and a schema-2 bindings.json in the machine
+    home, the library elsewhere: the presets land in the library; in the
+    machine home only bindings.json is rewritten (beside its backup, and
+    the legacy folder's NOT-READ note) — no preset or show is written there."""
+    from test_migration import owners_home
+
+    machine, root = tmp_path / "A", tmp_path / "L"
+    machine.mkdir()
+    root.mkdir()
+    owners_home(machine, project=False)
+    (machine / "projects").rmdir()
+    before = {p: p.read_bytes() for p in machine.rglob("*") if p.is_file()}
+    lib, notes = _boot_split(machine, root)
+    assert any("bindings/show-a.json → preset" in n for n in notes)
+    assert (root / PRESETS / "show-a.json").is_file()
+    assert (root / PRESETS / "migrated.json").is_file()
+    after = {p: p.read_bytes() for p in machine.rglob("*") if p.is_file()}
+    changed = {str(p.relative_to(machine)) for p in after if before.get(p) != after[p]}
+    assert "bindings.json" in changed
+    assert all(c == "bindings.json" or c.startswith("bindings.json.bak-")
+               or c == "bindings/NOT-READ.txt" for c in changed), changed
+    assert not (machine / PRESETS).exists() and not (machine / "projects").exists()
+    assert {p for p in before if p not in after} == set()
+
+
+def test_the_migration_does_nothing_when_the_library_is_missing(tmp_path):
+    from test_migration import owners_home
+
+    machine = tmp_path / "A"
+    machine.mkdir()
+    owners_home(machine, project=False)
+    before = {p: p.read_bytes() for p in machine.rglob("*") if p.is_file()}
+    lib, notes = _boot_split(machine, tmp_path / "gone")
+    library._missing.discard(tmp_path / "gone")
+    assert notes == []
+    assert {p: p.read_bytes() for p in machine.rglob("*") if p.is_file()} == before
+    assert not (tmp_path / "gone").exists()
