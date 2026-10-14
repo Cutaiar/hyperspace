@@ -154,8 +154,8 @@ def test_library_path_not_text_stays_in_the_home(tmp_path, capsys):
         p.write_text(f"[library]\npath = {text}\n")
         cfg = config.load(p)
         assert cfg["library"]["path"] == ""
-        assert cfg["notes"] == [f"config: [library] path = {value!r} is not text "
-                                "— the library stays in the home"]
+        assert cfg["notes"] == [(f"config: [library] path = {value!r} is not text "
+                                "— the library stays in the home")]
     assert "[library] path" in capsys.readouterr().err
 
 
@@ -164,8 +164,8 @@ def test_library_git_leftover_is_ignored_with_a_note(tmp_path, capsys):
     p.write_text("[library]\ngit = true\n")
     cfg = config.load(p)
     assert cfg["library"] == {"path": ""}
-    assert cfg["notes"] == ["config: [library] git is gone (plan 25) — presets are shared "
-                            "through [library] path; remove the line"]
+    assert cfg["notes"] == [("config: [library] git is gone (plan 25) — presets are shared "
+                            "through [library] path; remove the line")]
     assert "[library] git is gone" in capsys.readouterr().err
 
 

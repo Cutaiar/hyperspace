@@ -1865,8 +1865,8 @@ class Panel:
         machine = getattr(lib, "machine", root)
         missing = getattr(lib, "missing", None)
         if missing is not None:
-            lines = [(f"library: {missing} — NOT FOUND, saves are off "
-                      "(restart once it is there)", True)]
+            lines = [((f"library: {missing} — NOT FOUND, saves are off "
+                      "(restart once it is there)"), True)]
         else:
             lines = [(f"library: {root}", False)]
         if machine != root:

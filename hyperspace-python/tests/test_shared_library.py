@@ -276,7 +276,7 @@ def test_the_migration_reads_machine_files_and_writes_documents_to_the_library(t
     owners_home(machine, project=False)
     (machine / "projects").rmdir()
     before = {p: p.read_bytes() for p in machine.rglob("*") if p.is_file()}
-    lib, notes = _boot_split(machine, root)
+    _, notes = _boot_split(machine, root)
     assert any("bindings/show-a.json → preset" in n for n in notes)
     assert (root / PRESETS / "show-a.json").is_file()
     assert (root / PRESETS / "migrated.json").is_file()
@@ -296,7 +296,7 @@ def test_the_migration_does_nothing_when_the_library_is_missing(tmp_path):
     machine.mkdir()
     owners_home(machine, project=False)
     before = {p: p.read_bytes() for p in machine.rglob("*") if p.is_file()}
-    lib, notes = _boot_split(machine, tmp_path / "gone")
+    _, notes = _boot_split(machine, tmp_path / "gone")
     library._missing.discard(tmp_path / "gone")
     assert notes == []
     assert {p: p.read_bytes() for p in machine.rglob("*") if p.is_file()} == before
