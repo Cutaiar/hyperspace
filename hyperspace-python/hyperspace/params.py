@@ -905,8 +905,10 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                  fmt=lambda v: f"{v:.2f}×", group=g)
     r.continuous("camera.yaw", "Yaw", *_attr(view, "yaw"), lo=-math.pi, hi=math.pi,
                  wrap=True, fmt=lambda v: f"{math.degrees(v):.0f}°", group=g)
-    r.continuous("camera.pitch", "Pitch", *_attr(view, "pitch"), lo=-1.55, hi=1.55,
-                 fmt=lambda v: f"{math.degrees(v):.0f}°", group=g)
+    # pitch wraps like yaw (2026-10-14): the camera is a turn of the points,
+    # with no up vector to flip, so tumbling over the top is just more turn
+    r.continuous("camera.pitch", "Pitch", *_attr(view, "pitch"), lo=-math.pi, hi=math.pi,
+                 wrap=True, fmt=lambda v: f"{math.degrees(v):.0f}°", group=g)
     for i, axis in enumerate("xy"):
         r.continuous(f"camera.pan.{axis}", f"Pan {axis.upper()}", *_item(lambda: view.pan, i),
                      lo=-4000.0, hi=4000.0, fmt=lambda v: f"{v:+.0f} px", group=g)

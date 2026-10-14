@@ -457,6 +457,12 @@ def _push(side: str, axis: str, target: str, depth: float, **kw) -> Binding:
     return Binding(hand(side, axis), target, "push", depth, **kw)
 
 
+# a hand's pitch on camera.pitch: ±45° at the hand's ends. Half the 0.5 it
+# was while the pitch stopped at ±1.55 — the range is a whole turn since
+# 2026-10-14 (it wraps, as yaw does), and a push's depth is in norm units
+PITCH_DEPTH = 0.25
+
+
 def _grip_rows() -> list[Binding]:
     """The left hand holds the object: roll, pitch and yaw of the palm add
     a rigid turn (±45° at the ends of the throw — a quarter turn maps the
@@ -502,7 +508,7 @@ def party_faces_routes() -> list[Binding]:
             _push("R", "y", "view.pattern_mix", 0.6),
             _push("R", "z", "camera.zoom", -0.3),
             _push("R", "roll", "pattern.mod.2", 0.7),
-            _push("R", "pitch", "camera.pitch", 0.5)]
+            _push("R", "pitch", "camera.pitch", PITCH_DEPTH)]
 
 
 def party_field_routes() -> list[Binding]:
@@ -828,7 +834,7 @@ def hands_orbit_routes() -> list[Binding]:
     other (a steering wheel) would need a derived lane and is not built
     (plan 18 fork 17). The depths are a first cut (hand check N9)."""
     return [_push("R", "x", "camera.yaw", 0.5),        # sideways: orbit, ±90°
-            _push("R", "pitch", "camera.pitch", 0.5),  # fingers up: look down, ±44° (as FACES)
+            _push("R", "pitch", "camera.pitch", PITCH_DEPTH),  # fingers up: look down, ±45° (as FACES)
             _push("L", "x", "camera.pan.x", 0.1),      # as FIELD: fly sideways
             _push("L", "z", "camera.pan.y", 0.1),      # as FIELD: reach in
             # raise: zoom in, to 2.2× at the top. The plan's 0.3 (7.4×) put the

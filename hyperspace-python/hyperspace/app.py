@@ -105,6 +105,10 @@ D4_RATE0 = 0.45   # octaves/s at the instant of the press
 D4_RATE1 = 3.6    # octaves/s once the ramp completes
 D4_RAMP = 1.8     # seconds of hold to reach full rate
 
+# the pad's right stick, sideways: the W planes' rate multipliers (rot.rate.*W)
+W_PLANES = ("XW", "YW", "ZW")
+W_RATE_PER_S = 2.0    # rate units a second at full throw (a plane's default is 1×)
+
 # the key / pad / MIDI / lane binding tables live in routing.py (bindings.json);
 # these are the keys the loop still handles itself (the cheat-sheet test reads
 # it). R and F1–F8 / ⇧F1–F8 are table rows since plan 11 (routing.LOOP_KEY_ROWS).
@@ -907,7 +911,8 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
         router.pad(pad, buttons=not learned)     # the axis lanes, then the button rows
         if pad.on:
             # analog, each axis while no route names it (`axis:LX` …): left
-            # stick orbits, right-stick Y zooms about centre, triggers ride
+            # stick orbits, right-stick Y zooms about centre and its X rides
+            # the W planes' rates, triggers ride
             # depth4 in its own log space (LT out, RT in). The pad's feel
             # (`desk.pad.feel`, motion.py) runs on the axis lanes first:
             # off, they are read as they are
@@ -934,6 +939,12 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
             zoom_v = free(gamepad.AX_RY, axis(gamepad.AX_RY))
             if zoom_v:
                 reg["camera.zoom"].scale(2.0 ** (-zoom_v * 1.2 * dt))
+            # right-stick X rides the three W planes' rates together (the 4D
+            # spin): right speeds them up, left slows them through 0 into reverse
+            w_v = free(gamepad.AX_RX, axis(gamepad.AX_RX))
+            if w_v:
+                for plane in W_PLANES:
+                    reg[f"rot.rate.{plane}"].nudge(w_v * W_RATE_PER_S * dt)
             d4 = (free(gamepad.AX_RT, trigger(gamepad.AX_RT))
                   - free(gamepad.AX_LT, trigger(gamepad.AX_LT)))
             if d4:

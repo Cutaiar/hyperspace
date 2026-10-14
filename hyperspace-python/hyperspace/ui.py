@@ -391,7 +391,7 @@ CHEATSHEET = [
     ("pad A Y", "faces · lines"),
     ("LB / RB", "previous / next shape"),
     ("d-pad", "brightness ↑↓ · speed ←→"),
-    ("sticks", "orbit · zoom — click resets"),
+    ("sticks", "orbit · zoom ↕ 4D spin ↔ — click resets"),
     ("LT / RT", "4D depth out / in"),
     ("view", "panel"),
     ("start (hold)", "save as a new preset"),

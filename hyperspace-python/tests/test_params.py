@@ -102,6 +102,21 @@ def test_raw_ranges_clamp_int_and_log(rig):
     assert view.yaw == pytest.approx(-math.pi + 0.5)
 
 
+def test_pitch_wraps_over_the_top_as_yaw_does(rig):
+    """2026-10-14: the pitch is a whole turn that wraps (it stopped at
+    ±1.55 before), so a stick or a drag held tumbles the shape round and
+    round on both axes."""
+    reg, view, *_ = rig
+    pitch = reg["camera.pitch"]
+    assert (pitch.lo, pitch.hi, pitch.wrap) == (-math.pi, math.pi, True)
+    view.pitch = 0.0
+    for _ in range(40):                   # a little over two whole turns, in steps
+        pitch.nudge(0.35)
+    assert view.pitch == pytest.approx(math.remainder(40 * 0.35, 2 * math.pi))
+    pitch.set_value(-math.pi - 0.25)
+    assert view.pitch == pytest.approx(math.pi - 0.25)
+
+
 def test_instances_read_nothing_drawn_at_zero(rig):
     """Plan 16 WP5 (fork F3): a plain 0–100 range, zero at the very bottom
     of the throw, and a readout that says what a black render is."""

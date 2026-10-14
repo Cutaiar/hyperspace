@@ -3422,8 +3422,10 @@ blinking; B / X step to the next / previous preset, A flips faces and Y
 lines, LB / RB step the shape, the D-pad steps brightness (up / down)
 and speed (left / right), START held about 0.6 s saves the live state
 as a new preset (a tap does nothing), the left stick orbits (up tilts
-the camera up), the right stick's up / down zooms, RT pushes the 4D
-depth in and LT out.
+the camera up; held, it tumbles over the top and keeps going round, as
+the sideways orbit does), the right stick's up / down zooms and its
+right / left speeds up / slows (through zero into reverse) the spin in
+the XW, YW and ZW planes, RT pushes the 4D depth in and LT out.
 
 **Wrong if:** no line; a button does another one's job; a stick runs
 backwards.
