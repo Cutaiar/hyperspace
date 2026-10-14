@@ -26,6 +26,9 @@ then drop the `width`/`height` attributes so it scales, and add a white
 ## Deployment
 
 Hosted on Vercel as the project `hyperspace-contact` under `cutaiar`, with Root
-Directory set to `hyperspace-contact/`, so pushing to `main` deploys. The
-domain `hyperspace.cutaiar.io` is attached to the project, via a CNAME
-on `cutaiar.io`'s DNS.
+Directory set to `hyperspace-contact/`, so pushing to `main` deploys. To ship
+manually, run `vercel deploy --prod` from the repository root, not this
+directory: with a Root Directory set, the CLI looks for `hyperspace-contact/`
+inside wherever it runs. The domain `hyperspace.cutaiar.io` (moved here from
+the `hyperspace` project) is attached to this project; also served at
+`hyperspace-contact.vercel.app`.

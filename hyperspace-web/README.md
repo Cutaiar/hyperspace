@@ -80,6 +80,9 @@ no microphone or screen capture, so the request fails before any prompt. Use the
 
 Hosted on Vercel as the project `hyperspace` under `cutaiar`. The Vercel
 project's Root Directory is set to `hyperspace-web/`, so pushing to `main`
-deploys; `vercel deploy --prod` from this directory ships manually.
-`vercel.json` rewrites `/` → `/hyperspace.html` and sends the
+deploys. To ship manually, run `vercel deploy --prod` from the repository root,
+not this directory: with a Root Directory set, the CLI looks for
+`hyperspace-web/` inside wherever it runs. It is also served at
+`hyperspacedemo.cutaiar.io` (`hyperspace.cutaiar.io` now belongs to
+[`../hyperspace-contact/`](../hyperspace-contact/)). `vercel.json` rewrites `/` → `/hyperspace.html` and sends the
 `Permissions-Policy` header that lets the deployed origin use the microphone.
