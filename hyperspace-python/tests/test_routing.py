@@ -552,6 +552,10 @@ class FakeKeys:
 
 
 class FakePad:
+    """Every hit is a fresh press this frame; nothing is ever let go."""
+
+    on = True
+
     def __init__(self):
         self.hits: set[int] = set()
         self.hat = 0
@@ -559,8 +563,19 @@ class FakePad:
     def pressed(self, b: int) -> bool:
         return b in self.hits
 
+    down = pressed
+
+    def released(self, b: int) -> bool:
+        return False
+
     def hat_pressed(self, bit: int) -> bool:
         return bool(self.hat & bit)
+
+    def hat_released(self, bit: int) -> bool:
+        return False
+
+    def lanes(self) -> list[float]:
+        return [0.5, 0.5, 0.5, 0.5, 0.0, 0.0]
 
 
 def test_key_adapter_routes_the_old_keymap(tmp_path):

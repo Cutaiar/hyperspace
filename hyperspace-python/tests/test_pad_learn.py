@@ -1,0 +1,223 @@
+"""The gamepad as a mappable controller: Learn pad (a button, the D-pad, a
+stick or a trigger completes it), momentary / hold rows on pad buttons,
+and the axes as the `axis` lanes a route can read."""
+
+import json
+from types import SimpleNamespace as NS
+
+import pytest
+
+import hyperspace.gamepad as gp
+from hyperspace import midi, routing
+from hyperspace.analysis import Analyser
+from hyperspace.analyzer import Analyzer
+from hyperspace.control import Control
+from hyperspace.learn import PUSH_DEPTH, Learn
+from hyperspace.library import Library
+from hyperspace.params import build_registry
+from hyperspace.render import ViewState
+from hyperspace.routing import Binding, Bindings, Router
+
+
+class ScriptedPad(gp.Pad):
+    """A real Pad whose frames are scripted: `frame` sets what is held now."""
+
+    def __init__(self):
+        super().__init__()
+        self.source = "usb"
+
+    def frame(self, held=(), hat=0, axes=None) -> None:
+        self.prev_buttons, self.prev_hat = self.buttons, self.hat
+        self.buttons = [1 if i in held else 0 for i in range(gp.N_BUTTONS)]
+        self.hat = hat
+        self.axes = list(axes) if axes is not None else [0.0, 0.0, 0.0, 0.0, -1.0, -1.0]
+
+
+@pytest.fixture()
+def rig(tmp_path):
+    chain = Analyzer(Analyser())
+    control = Control(chain)
+    lib = Library(tmp_path)
+    reg = build_registry(ViewState(), control, NS(chain=chain), lib.project)
+    table = Bindings.load(tmp_path / "bindings.json", legacy_midi=None)
+    router = Router(reg, table)
+    return NS(reg=reg, table=table, router=router, path=tmp_path / "bindings.json",
+              learn=Learn(reg, table, lane=router.lane))
+
+
+def on_file(path) -> list[dict]:
+    return json.loads(path.read_text())["bindings"]
+
+
+# ---- the pad itself ----
+
+def test_lanes_rest_and_travel():
+    pad = ScriptedPad()
+    pad.frame()
+    assert pad.lanes() == [0.5, 0.5, 0.5, 0.5, 0.0, 0.0]
+    assert pad.lanes() == list(gp.AXIS_RESTS)
+    pad.frame(axes=[1.0, -1.0, -1.0, 1.0, 1.0, -1.0])   # left stick right and up
+    assert pad.lanes() == [1.0, 1.0, 0.0, 0.0, 1.0, 0.0]
+
+
+def test_release_edges():
+    pad = ScriptedPad()
+    pad.frame(held={gp.A}, hat=gp.HAT_UP)
+    pad.frame()
+    assert pad.released(gp.A) and pad.hat_released(gp.HAT_UP)
+    pad.frame()
+    assert not pad.released(gp.A) and not pad.hat_released(gp.HAT_UP)
+
+
+# ---- Learn pad ----
+
+def test_a_button_learns_a_session_row_by_the_params_kind(rig):
+    pad, lrn = ScriptedPad(), rig.learn
+    for pid, src, held, hat, op, value in (
+            ("view.faces", "pad:Y", {gp.Y}, 0, "toggle", 0.0),
+            ("camera.reset", "pad:LB", {gp.LB}, 0, "fire", 0.0),
+            ("view.shape", "pad:RB", {gp.RB}, 0, "toggle", 0.0),
+            ("view.bright", "hat:DOWN", (), gp.HAT_DOWN, "step", -1.0),
+            ("view.inst_amp", "pad:GUIDE", {gp.GUIDE}, 0, "step", 1.0)):
+        pad.frame()
+        lrn.arm(pid, "pad")
+        pad.frame(held=held, hat=hat)
+        assert gp.learn_from(pad, lrn) is True
+        rows = [b for b in rig.table.bindings if b.source == src]
+        assert [(b.target, b.op, b.value) for b in rows] == [(pid, op, value)], pid
+        assert lrn.learning is None and f"learned {pid}" in lrn.last and not lrn.refused
+    written = {(d["source"], d["target"]) for d in on_file(rig.path)}
+    assert ("pad:Y", "view.faces") in written and ("hat:DOWN", "view.bright") in written
+
+
+def test_a_button_learn_replaces_the_buttons_row_and_keeps_the_params_others(rig):
+    pad, lrn, t = ScriptedPad(), rig.learn, rig.table
+    assert any(b.source == "pad:A" and b.target == "view.rotate" for b in t.bindings)
+    assert any(b.source == "pad:X" for b in t.bindings)
+    lrn.arm("view.faces", "pad")
+    pad.frame()
+    pad.frame(held={gp.A})
+    gp.learn_from(pad, lrn)
+    on_a = [b for b in t.bindings if b.source == "pad:A"]
+    assert [(b.target, b.op) for b in on_a] == [("view.faces", "toggle")]
+    assert "view.rotate let go" in lrn.last
+    assert any(b.source == "pad:Y" and b.target == "view.faces" for b in t.bindings)
+
+
+def test_the_learning_press_does_not_fire_the_old_row(rig):
+    pad, lrn = ScriptedPad(), rig.learn
+    rotate = rig.reg["view.rotate"].value
+    lrn.arm("view.faces", "pad")
+    pad.frame()
+    pad.frame(held={gp.A})              # pad:A is view.rotate's in the factory table
+    learned = gp.learn_from(pad, lrn)
+    rig.router.pad(pad, buttons=not learned)
+    assert rig.reg["view.rotate"].value == rotate
+
+
+def test_a_stick_learns_a_push_route_into_the_preset(rig):
+    pad, lrn, t = ScriptedPad(), rig.learn, rig.table
+    lrn.arm("camera.yaw", "pad")
+    pad.frame(axes=[0.3, 0, 0, 0, -1, -1])          # inside LEARN_TRAVEL: nothing yet
+    assert gp.learn_from(pad, lrn) is False and lrn.learning == "camera.yaw"
+    pad.frame(axes=[1.0, 0, 0, 0, -1, -1])
+    gp.learn_from(pad, lrn)
+    b = t.owner("camera.yaw")
+    assert (b.source, b.op, b.value) == ("axis:LX", "push", PUSH_DEPTH)
+    assert not any(d.get("source") == "axis:LX" for d in on_file(rig.path)) \
+        if rig.path.exists() else True             # a route is the preset's, not the session's
+
+
+def test_a_trigger_on_a_one_sided_fader_is_its_position(rig):
+    pad, lrn = ScriptedPad(), rig.learn
+    lrn.arm("view.inst_amp", "pad")
+    pad.frame(axes=[0, 0, 0, 0, -1, 1.0])
+    gp.learn_from(pad, lrn)
+    b = rig.table.owner("view.inst_amp")
+    assert (b.source, b.op, b.value) == ("axis:RT", "position", 1.0)
+
+
+def test_a_desk_learn_ignores_the_pad(rig):
+    pad, lrn = ScriptedPad(), rig.learn
+    lrn.arm("view.faces", "desk")
+    pad.frame()
+    pad.frame(held={gp.A}, axes=[1.0, 0, 0, 0, -1, -1])
+    assert gp.learn_from(pad, lrn) is False
+    assert lrn.learning == "view.faces"
+
+
+# ---- the router: the axis lanes, momentary and hold ----
+
+def test_a_routed_axis_drives_its_param_and_is_claimed(rig):
+    pad, r = ScriptedPad(), rig.router
+    rig.table.add(Binding("axis:RT", "view.inst_amp", "position", 1.0))
+    assert r.claimed("axis") == {gp.AX_RT}
+    pad.frame(axes=[0, 0, 0, 0, -1, 1.0])
+    r.pad(pad)
+    assert list(r.feeds["axis"]) == [0.5, 0.5, 0.5, 0.5, 0.0, 1.0]
+    assert r.describe(rig.table.owner("view.inst_amp")).startswith("right trigger")
+    r.modulate()
+    rig.reg.apply()
+    amp = rig.reg["view.inst_amp"]
+    assert amp.value == pytest.approx(amp.hi)
+    pad.source = None                   # unplugged: the lanes go dark
+    r.pad(pad)
+    assert r.feeds["axis"] is None
+
+
+def test_momentary_holds_a_toggle_while_the_button_is_down(rig):
+    pad, r = ScriptedPad(), rig.router
+    rig.table.add(Binding("pad:GUIDE", "view.faces", "momentary"))
+    faces = rig.reg["view.faces"]
+    faces.set(False)
+    pad.frame(held={gp.GUIDE})
+    r.pad(pad)
+    assert faces.value
+    pad.frame(held={gp.GUIDE})
+    r.pad(pad)
+    assert faces.value
+    pad.frame()
+    r.pad(pad)
+    assert not faces.value
+
+
+def test_hold_fires_once_after_hold_s(rig):
+    pad, r = ScriptedPad(), rig.router
+    fired = []
+    rig.reg["camera.reset"].fire = lambda: fired.append(1)
+    rig.table.add(Binding("hat:RIGHT", "camera.reset", "hold"))
+    pad.frame(hat=gp.HAT_RIGHT)
+    r.pad(pad, now=10.0)
+    pad.frame(hat=gp.HAT_RIGHT)
+    r.pad(pad, now=10.0 + routing.HOLD_S / 2)
+    assert not fired
+    pad.frame(hat=gp.HAT_RIGHT)
+    r.pad(pad, now=10.0 + routing.HOLD_S)
+    pad.frame(hat=gp.HAT_RIGHT)
+    r.pad(pad, now=11.0 + routing.HOLD_S)
+    assert fired == [1]                 # once per press
+    pad.frame()
+    r.pad(pad, now=12.0)
+    pad.frame(hat=gp.HAT_RIGHT)         # a short tap: nothing
+    r.pad(pad, now=13.0)
+    pad.frame()
+    r.pad(pad, now=13.1)
+    assert fired == [1]
+
+
+def test_the_hold_times_agree():
+    assert routing.HOLD_S == midi.HOLD_S
+
+
+def test_a_stick_never_ends_a_learn_on_a_setting_it_cannot_drive(rig):
+    """Not modulatable (a rig or show setting): a nudged stick is not
+    asked, the learn stays armed, and a button still takes it."""
+    pad, lrn = ScriptedPad(), rig.learn
+    p = next(p for p in rig.reg if not p.modulatable and p.kind.name in ("TOGGLE", "TRIGGER"))
+    lrn.arm(p.id, "pad")
+    pad.frame(axes=[1.0, 0, 0, 0, -1, -1])
+    assert gp.learn_from(pad, lrn) is False
+    assert lrn.learning == p.id and not lrn.refused and rig.table.owner(p.id) is None
+    pad.frame(held={gp.GUIDE})
+    assert gp.learn_from(pad, lrn) is True
+    assert any(b.source == "pad:GUIDE" and b.target == p.id for b in rig.table.bindings)

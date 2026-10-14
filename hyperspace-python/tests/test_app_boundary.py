@@ -297,7 +297,8 @@ def _host(log: list[str], *, pad_on=True, pressed=(), held=(), super_=False, sti
 ORDER = [
     "clock.tick", "reloader.poll",
     "router.keys",                                   # key rows (and the loop keys)
-    "pad.poll", "router.pad",                        # pad and hat rows, sticks
+    "pad.poll", "router.pad",                        # axis lanes, pad and hat rows
+    "router.claimed",                                # sticks no route names, to the base
     "midi.poll",                                     # cc and note rows
     "router.follow_macros",                          # the macros' base subscribers
     "undo.tick",                                     # the bases, compared (plan 15 WP1)
@@ -329,11 +330,13 @@ def test_an_absent_pad_or_adapter_is_simply_skipped():
     h.pad, h.midi_io, h.hands_io, h.bridge_io = None, None, None, None
     app.frame(h, now=1.0, dt=1 / 60, fps=60.0)
     assert log == [s for s in ORDER
-                   if not s.startswith(("pad.", "router.pad", "midi.", "hands.", "bridge."))]
+                   if not s.startswith(("pad.", "router.pad", "router.claimed", "midi.",
+                                        "hands.", "bridge."))]
     log.clear()
-    h = _host(log, pad_on=False)                     # a pad polled for but not there
-    app.frame(h, now=1.0, dt=1 / 60, fps=60.0)
-    assert "pad.poll" in log and "router.pad" not in log
+    h = _host(log, pad_on=False)                     # a pad polled for but not there:
+    app.frame(h, now=1.0, dt=1 / 60, fps=60.0)       # its axis lanes go dark (router.pad),
+    assert "pad.poll" in log and "router.pad" in log     # no stick writes anything
+    assert "router.claimed" not in log
 
 
 def test_a_raising_step_is_recorded_and_the_windows_still_draw():

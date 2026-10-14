@@ -475,7 +475,7 @@ def ctx_item(panel, p: Param) -> None:
 
 # ---- the rows ----
 
-SOURCE_ORDER = ("hand", "lfo", "ext")   # the fed schemes, after the analyzer's lanes
+SOURCE_ORDER = ("hand", "axis", "lfo", "ext")   # the fed schemes, after the analyzer's lanes
 
 
 def _sources(panel, router: Router) -> list[tuple[str, str]]:

@@ -77,8 +77,10 @@ from .params import Kind, Param, Registry
 from .routing import MIDI_SCHEMES, MOD_OPS, Binding, Bindings, Owned
 
 # what an armed learn may wait for (`Learn.want`): the desk — a knob, a
-# button, a click on the on-screen desk — or one hand, by name
-WANTS = ("desk", "hand:left", "hand:right")
+# button, a click on the on-screen desk — one hand, by name, or the
+# gamepad — a button, the D-pad, a stick or a trigger
+WANTS = ("desk", "hand:left", "hand:right", "pad")
+PAD_SCHEMES = ("pad", "hat", "axis")    # what can complete a "pad" learn
 
 # a push learn's depth when the adapter names none (plan 18 WP3). The hands
 # adapter passes its own `hands.learn_depth`, whose default is this number
@@ -181,7 +183,8 @@ class Learn:
         """May this source complete the armed learn? False when nothing
         is armed. want None: any source. "desk": a cc / note / pitch
         source. "hand:left": a source that starts "hand:left." (an axis
-        or a switch of that hand, by name)."""
+        or a switch of that hand, by name). "pad": a gamepad button, the
+        D-pad or an axis (PAD_SCHEMES)."""
         if getattr(self, "learning", None) is None:
             return False
         want = getattr(self, "want", None)       # a Learn from before a hot reload: None
@@ -189,6 +192,8 @@ class Learn:
             return True
         if want == "desk":
             return source.partition(":")[0] in MIDI_SCHEMES
+        if want == "pad":
+            return source.partition(":")[0] in PAD_SCHEMES
         return source.startswith(f"{want}.")
 
     # ---- a desk control completes it ----
@@ -291,6 +296,47 @@ class Learn:
                 self.refuse(f"{pid}: no such param — nothing mapped")
         return landed
 
+    # ---- a gamepad button completes it ----
+
+    def learn_pad_button(self, source: str) -> bool:
+        """A gamepad button or D-pad direction (``pad:A``, ``hat:UP``)
+        completes the armed learn: a button row like a desk note's — a
+        trigger fires, a toggle or an enum toggles (the enum steps to its
+        next choice), and a fader steps one detent: down for the D-pad's
+        DOWN and LEFT, up for anything else (the factory's D-pad rows on
+        brightness and speed, one detent at a time; their size is edited
+        in the file). True when it landed.
+
+        Pad rows are the session's, as the factory's are (`padmap`): the
+        row goes into `bindings.json`, which is written now, and is no undo
+        step — nor in any preset. It replaces every row on that button; the
+        param's other controls stay."""
+        if not self.accepts(source):
+            return False
+        pid = self.learning
+        p = self.reg.get(pid) if pid is not None else None
+        if p is None:
+            self.take()
+            return False
+        if p.kind is Kind.TRIGGER:
+            op, value = "fire", 0.0
+        elif p.kind is Kind.CONTINUOUS:
+            op, value = "step", (-1.0 if source in ("hat:DOWN", "hat:LEFT") else 1.0)
+        else:
+            op, value = "toggle", 0.0
+        self.take()
+        table = self.table
+        b = Binding(source, pid, op, value)
+        gone = [x for x in table.bindings if x.source == source]
+        for x in gone:
+            table.remove(x)
+        table.add(b)
+        table.write()
+        let_go = ", ".join(dict.fromkeys(x.target for x in gone if x.target != pid))
+        self.said(f"learned {pid} ← {b.describe()} (into {getattr(table.path, 'name', 'the session')})"
+                  + (f"; {let_go} let go" if let_go else ""))
+        return True
+
     # ---- a source completes it ----
 
     def target_for(self, pid: str) -> Param | None:
@@ -342,6 +388,10 @@ class Learn:
             # a setting no performer may drive (ghost.mirror, a rig switch):
             # a route on it would sit dormant, so none is made. The learn
             # is over — no hand can ever complete it — and nothing changed
+            if source.startswith("axis:"):
+                self.refuse(f"{p.label} can't follow a stick (not modulatable) "
+                            "— not learned; Learn pad with a button puts it on one")
+                return
             self.refuse(f"{p.label} can't follow a hand (not modulatable) "
                         "— not learned; Learn desk puts it on a button")
             return

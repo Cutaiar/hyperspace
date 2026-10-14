@@ -594,7 +594,7 @@ def test_accepts_by_want():
     desk = ("cc:0:48", "cc:*:16", "note:3:53", "pitch:0:0")
     left = ("hand:left.roll", "hand:left.pinch.index", "hand:left.present")
     other = ("hand:right.y", "hand:7", "lane:0", "lfo:1", "ext:2", "key:B")
-    assert WANTS == ("desk", "hand:left", "hand:right")
+    assert WANTS == ("desk", "hand:left", "hand:right", "pad")
     assert not any(lrn.accepts(s) for s in (*desk, *left, *other))      # nothing armed
     lrn.arm("view.bright")
     assert lrn.want is None and all(lrn.accepts(s) for s in (*desk, *left, *other))
@@ -606,6 +606,13 @@ def test_accepts_by_want():
     assert not any(lrn.accepts(s) for s in (*desk, *other, "hand:leftover.x"))
     lrn.arm("view.bright", "hand:right")
     assert lrn.accepts("hand:right.y") and not lrn.accepts("hand:left.roll")
+    lrn.arm("view.bright", "pad")
+    pad = ("pad:A", "hat:UP", "axis:LX", "axis:RT")
+    assert all(lrn.accepts(s) for s in pad)
+    assert not any(lrn.accepts(s) for s in (*desk, *left, *other))
+    lrn.arm("view.bright", "desk")
+    assert not any(lrn.accepts(s) for s in pad)
+    lrn.arm("view.bright", "hand:right")
     lrn.learn_source("hand:left.roll")                       # the wrong hand: not taken
     assert not lrn.learn_control("cc:0:48")                  # nor the desk (review of PR #96)
     assert lrn.learning == "view.bright" and lrn.want == "hand:right"

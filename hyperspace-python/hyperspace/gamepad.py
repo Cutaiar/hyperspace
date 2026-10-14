@@ -37,14 +37,31 @@ VIEW, MENU = 10, 11
 GUIDE = 12
 LSTICK, RSTICK = 13, 14
 
-# axes: sticks in ±1, triggers resting at −1.0. The right stick's X is
-# axis 2 — captured, unused: only its Y (zoom) is read (app.py).
-AX_LX, AX_LY, AX_RY, AX_LT, AX_RT = 0, 1, 3, 4, 5
+# axes: sticks in ±1, triggers resting at −1.0. Unrouted, the left stick
+# orbits, the right stick's Y zooms and the triggers ride depth4 (app.py);
+# the right stick's X does nothing until a route names it
+AX_LX, AX_LY, AX_RX, AX_RY, AX_LT, AX_RT = 0, 1, 2, 3, 4, 5
 
 # the D-pad is the hat, a GLFW bitmask
 HAT_UP, HAT_RIGHT, HAT_DOWN, HAT_LEFT = 1, 2, 4, 8
 
 DEADZONE = 0.18
+
+# the names a row's source spells: pad:<BUTTON>, hat:<DIR>, axis:<AXIS>
+BUTTONS = {"A": A, "B": B, "X": X, "Y": Y, "LB": LB, "RB": RB, "VIEW": VIEW,
+           "MENU": MENU, "GUIDE": GUIDE, "LSTICK": LSTICK, "RSTICK": RSTICK}
+HATS = {"UP": HAT_UP, "RIGHT": HAT_RIGHT, "DOWN": HAT_DOWN, "LEFT": HAT_LEFT}
+
+# the axes as continuous lanes (routing's `axis` scheme), each in [0, 1]:
+# a stick rests at 0.5 with up and right high, a trigger rests at 0
+AXES = ("LX", "LY", "RX", "RY", "LT", "RT")
+AXIS_LABELS = ("left stick X", "left stick Y", "right stick X", "right stick Y",
+               "left trigger", "right trigger")
+AXIS_RESTS = (0.5, 0.5, 0.5, 0.5, 0.0, 0.0)
+STICKS = frozenset(AXES[:4])      # centred: a learn on one lands a push
+
+# how far from rest an axis must travel to complete a learn
+LEARN_TRAVEL = 0.4
 
 
 def _unwrap(ret) -> list:
@@ -284,8 +301,23 @@ class Pad:
         was = b < len(self.prev_buttons) and bool(self.prev_buttons[b])
         return self.down(b) and not was
 
+    def released(self, b: int) -> bool:
+        was = b < len(self.prev_buttons) and bool(self.prev_buttons[b])
+        return was and not self.down(b)
+
     def hat_pressed(self, bit: int) -> bool:
         return bool(self.hat & bit) and not (self.prev_hat & bit)
+
+    def hat_released(self, bit: int) -> bool:
+        return bool(self.prev_hat & bit) and not (self.hat & bit)
+
+    def lanes(self) -> list[float]:
+        """The six axes as routing lanes in AXES order, each in [0, 1]:
+        sticks about 0.5 (deadzone cut out, up and right high), triggers
+        from 0."""
+        sticks = [0.5 + 0.5 * self.axis(AX_LX), 0.5 - 0.5 * self.axis(AX_LY),
+                  0.5 + 0.5 * self.axis(AX_RX), 0.5 - 0.5 * self.axis(AX_RY)]
+        return sticks + [self.trigger(AX_LT), self.trigger(AX_RT)]
 
     def axis(self, i: int) -> float:
         """Stick axis with the deadzone cut out and the rest rescaled to ±1."""
@@ -299,3 +331,32 @@ class Pad:
         """Trigger travel in [0, 1] (raw axis rests at −1)."""
         v = (self.axes[i] + 1.0) / 2.0 if i < len(self.axes) else 0.0
         return v if v > 0.02 else 0.0
+
+
+def learn_from(pad: Pad, learn) -> bool:
+    """The pad completes an armed learn (learn.Learn, duck-typed — this
+    module imports nothing from the package): the first button or D-pad
+    press this frame lands a button row (`Learn.learn_pad_button`), else
+    the first axis LEARN_TRAVEL from rest a route (`Learn.learn_source`;
+    a stick is centred, so a push). On a setting no performer may drive
+    (not modulatable) only a button can: the axes are not asked, so a
+    nudged stick never ends the learn. True when the press was the
+    learn's, so the router lets that frame's button rows be."""
+    if learn is None or getattr(learn, "learning", None) is None or not pad.on:
+        return False
+    target = learn.target_for(learn.learning)
+    for name, i in BUTTONS.items():
+        if pad.pressed(i) and learn.accepts(f"pad:{name}"):
+            learn.learn_pad_button(f"pad:{name}")
+            return True
+    for name, bit in HATS.items():
+        if pad.hat_pressed(bit) and learn.accepts(f"hat:{name}"):
+            learn.learn_pad_button(f"hat:{name}")
+            return True
+    if target is None or not target.modulatable:
+        return False
+    for name, u, rest in zip(AXES, pad.lanes(), AXIS_RESTS):
+        if abs(u - rest) >= LEARN_TRAVEL and learn.accepts(f"axis:{name}"):
+            learn.learn_source(f"axis:{name}", centred=name in STICKS)
+            return False        # an axis has no button row to hold back
+    return False

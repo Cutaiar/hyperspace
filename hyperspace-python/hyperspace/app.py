@@ -902,19 +902,28 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     pad = h.pad
     if pad is not None:
         pad.poll()
+        # a press that completes an armed learn does not also fire its old row
+        learned = gamepad.learn_from(pad, h.learn)
+        router.pad(pad, buttons=not learned)     # the axis lanes, then the button rows
         if pad.on:
-            router.pad(pad)
-            # analog: left stick orbits, right-stick Y zooms about centre,
-            # triggers ride depth4 in its own log space (LT out, RT in)
-            lx, ly = pad.axis(gamepad.AX_LX), pad.axis(gamepad.AX_LY)
+            # analog, each axis while no route names it (`axis:LX` …): left
+            # stick orbits, right-stick Y zooms about centre, triggers ride
+            # depth4 in its own log space (LT out, RT in)
+            routed = router.claimed("axis") or ()
+
+            def free(ax: int, v: float) -> float:
+                return 0.0 if ax in routed else v
+            lx = free(gamepad.AX_LX, pad.axis(gamepad.AX_LX))
+            ly = free(gamepad.AX_LY, pad.axis(gamepad.AX_LY))
             if lx:
                 reg["camera.yaw"].nudge(lx * 2.2 * dt)
             if ly:
                 reg["camera.pitch"].nudge(ly * 2.2 * dt)
-            zoom_v = pad.axis(gamepad.AX_RY)
+            zoom_v = free(gamepad.AX_RY, pad.axis(gamepad.AX_RY))
             if zoom_v:
                 reg["camera.zoom"].scale(2.0 ** (-zoom_v * 1.2 * dt))
-            d4 = pad.trigger(gamepad.AX_RT) - pad.trigger(gamepad.AX_LT)
+            d4 = (free(gamepad.AX_RT, pad.trigger(gamepad.AX_RT))
+                  - free(gamepad.AX_LT, pad.trigger(gamepad.AX_LT)))
             if d4:
                 _ride_depth(reg["view.depth4"], d4 * 2.4 * dt)
 
@@ -1157,6 +1166,7 @@ def main() -> None:
         renderer.lookback.source = dream_io
     panel.bridge = bridge_io               # the SYSTEM page's bridge line
     pad = _open_pad(cfg)
+    panel.pad = pad                        # the menu's "Learn pad"
     awake = _open_awake(cfg)               # no screensaver over the show
     # the project's startup preset (D11), once, now that everything it lands
     # on exists; a missing one is said on the panel and the app runs on
