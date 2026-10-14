@@ -11,10 +11,15 @@ points to it.
 ## Priority (owner, 2026-10-12)
 
 - **The node-based render pipeline is high priority.** F2, the render graph,
-  starts now (plan 25), and the node editor follows it directly (plan 27).
+  starts now (**plan 26**), and the node editor follows it directly (plan 28).
 - **The device registry is a high-leverage idea.** F1 runs in parallel
-  (plan 26), then the devices on it (plan 28).
+  (**plan 27**), then the devices on it (plan 29).
 - The party fixes (plan 24) run alongside as a small plan.
+
+(Renumbered 2026-10-14: plan 25 became the shared library, PRs #167/#168.
+Plans 24, 26 and 27 are run together from
+[`24-26-27-orchestrator-prompt.md`](24-26-27-orchestrator-prompt.md); the
+party fixes are its stream C.)
 
 ## Render graph design decisions (owner, 2026-10-12)
 
