@@ -1,0 +1,161 @@
+"""Motion — the envelope followers the analyzer is made of, for any signal.
+
+The analyzer's expressiveness is a handful of one-pole followers: the level
+path's asymmetric attack / decay per band, the transient path's fast
+tracker, the STAC and SLEW shapers. They are `pole` and `follow` here, and
+the chain calls them (analyzer.py, bands.py) — the same arithmetic, to the
+bit, so the parity oracle still holds. Beside them, `spring`: a damped
+spring, solved exactly per step, so it is frame-rate independent and stable
+at any dt.
+
+A `Motion` is a feel: how a reading travels to where the source is. A route
+row carries one (`routing.Binding.motion`) and the Router runs it on the
+row's reading before push / position, so a stick that snaps back to centre
+arrives at the param as a glide or a bounce. A row with none takes its
+source's own feel (`Router.feel_of`): the pad's, a session setting, for
+the `axis` lanes — the same knobs drive the sticks' default camera job.
+
+  follow   asymmetric one-pole, the analyzer's level path: `atk` seconds
+           moving away from rest, `rel` seconds moving back toward it.
+           About rest, not up / down, so a centred stick is fast out and
+           slow home in either direction; at rest 0 it is the analyzer's
+           ``u > env`` exactly.
+  spring   a mass on a spring toward the reading: `hz` its natural
+           frequency, `damp` the damping ratio (1 critical — the fastest
+           arrival with no overshoot; below 1 it overshoots and rings,
+           above 1 it creeps).
+
+Times are seconds, τ the one-pole's time constant (63 % of the way in τ).
+"""
+
+from __future__ import annotations
+
+import math
+from dataclasses import asdict, dataclass, fields
+
+MODES = ("off", "follow", "spring")
+
+ATK_MAX = 2.0        # s — the panel's throws; a file may hold more
+REL_MAX = 4.0
+HZ_MIN, HZ_MAX = 0.1, 12.0
+DAMP_MAX = 3.0
+SETTLE = 1e-4       # a Follower this close to its target, and this slow, lands
+_CRIT = 1e-6         # |damp − 1| under this is critical damping
+
+
+# ------------------------------------------------------------- kernels
+
+def pole(x: float, target: float, dt: float, tau: float) -> float:
+    """One step of a one-pole toward `target` with time constant `tau`
+    (≤ 0: arrive at once). The analyzer's every smoother is this line."""
+    if tau <= 0:
+        return target
+    return x + (target - x) * (1 - math.exp(-dt / tau))
+
+
+def follow(x: float, target: float, dt: float, atk: float, rel: float,
+           rest: float = 0.0) -> float:
+    """The asymmetric one-pole: `atk` while the target is farther from
+    `rest` than the follower is, `rel` otherwise. With rest 0 and readings
+    ≥ 0 this is the analyzer's ``atk if u > env else dec``."""
+    tau = atk if abs(target - rest) > abs(x - rest) else rel
+    return pole(x, target, dt, tau)
+
+
+def spring(x: float, v: float, target: float, dt: float, hz: float,
+           damp: float) -> tuple[float, float]:
+    """One exact step of a damped spring pulling (x, v) toward a target
+    held for the step: ÿ = −ω²y − 2ζωẏ about the target, ω = 2π·hz,
+    ζ = damp. Closed form for each regime, so no dt is too long."""
+    if hz <= 0:
+        return target, 0.0
+    w = 2 * math.pi * hz
+    z = max(damp, 0.0)
+    y0, v0 = x - target, v
+    if abs(z - 1) < _CRIT:                       # critical
+        e = math.exp(-w * dt)
+        c = v0 + w * y0
+        return target + (y0 + c * dt) * e, (v0 - w * c * dt) * e
+    if z < 1:                                    # under-damped: rings
+        wd = w * math.sqrt(1 - z * z)
+        e = math.exp(-z * w * dt)
+        cs, sn = math.cos(wd * dt), math.sin(wd * dt)
+        y = e * (y0 * cs + (v0 + z * w * y0) / wd * sn)
+        vy = e * (v0 * cs - (w * w * y0 + z * w * v0) / wd * sn)
+        return target + y, vy
+    s = math.sqrt(z * z - 1)                     # over-damped: creeps
+    r1, r2 = -w * (z - s), -w * (z + s)
+    c2 = (v0 - r1 * y0) / (r2 - r1)
+    c1 = y0 - c2
+    e1, e2 = math.exp(r1 * dt), math.exp(r2 * dt)
+    return target + c1 * e1 + c2 * e2, r1 * c1 * e1 + r2 * c2 * e2
+
+
+# ---------------------------------------------------------------- feel
+
+@dataclass(frozen=True)
+class Motion:
+    """A feel, as a route row or the pad's session setting holds it."""
+
+    mode: str = "follow"
+    atk: float = 0.02     # follow: s, away from rest
+    rel: float = 0.35     # follow: s, back toward rest
+    hz: float = 1.5       # spring: natural frequency
+    damp: float = 0.6     # spring: damping ratio, 1 critical
+
+    @property
+    def on(self) -> bool:
+        return self.mode in ("follow", "spring")
+
+    def to_json(self) -> dict:
+        """The mode and the knobs it reads — the other mode's stay out of the file."""
+        d = asdict(self)
+        keep = {"follow": ("atk", "rel"), "spring": ("hz", "damp")}.get(self.mode, ())
+        return {k: v for k, v in d.items() if k == "mode" or k in keep}
+
+    @classmethod
+    def from_json(cls, d) -> Motion | None:
+        """A file's motion: a dict, or None. An unknown mode reads as off,
+        unknown keys are ignored, a missing knob takes its default."""
+        if d is None:
+            return None
+        if isinstance(d, Motion):
+            return d
+        names = {f.name for f in fields(cls)}
+        kw = {k: (str(v) if k == "mode" else float(v)) for k, v in d.items() if k in names}
+        if kw.get("mode") not in MODES:
+            kw["mode"] = "off"
+        return cls(**kw)
+
+    def describe(self) -> str:
+        if self.mode == "follow":
+            return f"follow {self.atk * 1000:.0f}/{self.rel * 1000:.0f} ms"
+        if self.mode == "spring":
+            return f"spring {self.hz:.2g} Hz ζ{self.damp:.2g}"
+        return "no motion"
+
+
+OFF = Motion("off")
+
+
+class Follower:
+    """One signal's motion state: where it is and how fast it moves."""
+
+    __slots__ = ("v", "x")
+
+    def __init__(self, x: float = 0.0):
+        self.x, self.v = float(x), 0.0
+
+    def step(self, target: float, dt: float, m: Motion, rest: float = 0.0) -> float:
+        target = float(target)
+        if m.mode == "follow":
+            self.x, self.v = follow(self.x, target, dt, m.atk, m.rel, rest), 0.0
+        elif m.mode == "spring":
+            self.x, self.v = spring(self.x, self.v, target, dt, m.hz, m.damp)
+        else:
+            self.x, self.v = target, 0.0
+        # settled: land exactly, so a tail that would decay forever stops
+        # writing (a relative writer's nudge would never let undo settle)
+        if abs(self.x - target) < SETTLE and abs(self.v) < SETTLE * 10:
+            self.x, self.v = target, 0.0
+        return self.x

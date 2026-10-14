@@ -1209,3 +1209,51 @@ def test_the_head_has_the_same_dot_and_label(rig, tmp_path):
     assert (tmp_path / "presets" / "trip.json").is_file() and not lib.is_dirty("presets")
     frame(panel)
     assert "head.dot" not in st["rects"] and st["save"]["head"] == ("save", False)
+
+
+def test_a_routes_own_feel_draws_its_line_with_its_own_ids(rig, tmp_path, monkeypatch):
+    """A row with a feel of its own (motion.py) draws a third line — attack
+    and release, or Hz and damping — and every widget keeps its own id."""
+    from hyperspace.motion import Motion
+    panel = rig.panel
+    router = _with_router(rig, tmp_path)
+    rows = router.table.routes()
+    rows[0].motion = Motion("follow", 0.02, 0.4)
+    rows[1].motion = Motion("spring", hz=2.0, damp=0.5)
+    rows[2].motion = Motion("off")
+    seen: list[str] = []
+    ids: list[int] = []
+    real = imgui.slider_float
+
+    def rec(label, *a, **k):
+        seen.append(label)
+        ids.append(imgui.get_id(label))
+        return real(label, *a, **k)
+    monkeypatch.setattr(imgui, "slider_float", rec)
+    frame(panel, "routing")
+    seen.clear()
+    ids.clear()
+    frame(panel)
+    assert {"##atk", "##rel", "##hz", "##damp"} <= set(seen)
+    assert seen.count("##atk") == 1 and seen.count("##hz") == 1   # only the rows with their own
+    assert len(ids) == len(set(ids))
+
+
+def test_the_system_page_shows_the_sticks_feel(rig, tmp_path, monkeypatch):
+    """The gamepad section: the feel, then only the two knobs its mode reads."""
+    panel = rig.panel
+    _with_router(rig, tmp_path)                    # a table: the desk's params, the pad's feel
+    drawn: list[str] = []
+    real = panel._row
+
+    def rec(pid, *a, **k):
+        drawn.append(pid)
+        return real(pid, *a, **k)
+    monkeypatch.setattr(panel, "_row", rec)
+    frame(panel, "system")
+    assert "desk.pad.feel" in drawn and "desk.pad.attack" not in drawn   # off: no knobs
+    panel.reg["desk.pad.feel"].set(2)                                      # spring
+    drawn.clear()
+    frame(panel)
+    assert "desk.pad.hz" in drawn and "desk.pad.damp" in drawn
+    assert "desk.pad.release" not in drawn

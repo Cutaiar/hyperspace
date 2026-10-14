@@ -23,8 +23,14 @@ a control, then move a knob or button — midi.py's `_learned`).
 The routes. Rows are the router's `push` / `position` routes from
 `lane:i` (and `ext:i` / `hand:<name>` when the bridge / hands feed them), two lines each:
 
-  [on] source        target ▾            op ▾           ×
+  [on] source        target ▾        feel   op ▾        ×
        depth ──────── rest  × scale ▾   ▮▮▮▯▯│ live
+       atk ───── rel ─────          (a feel of the row's own only)
+
+The feel chip (motion.py) cycles auto → follow → spring → still: auto is
+the source's own feel (the pad's, for a stick), still is none at all, and
+follow / spring are the row's own, with their two knobs on a third line —
+attack and release about rest, or a spring's Hz and damping ratio.
 
 The target is a searchable combo over every modulatable param, grouped
 by registry group; depth is signed — ±1 in norm units for `push` (1 puts
@@ -110,9 +116,10 @@ from dataclasses import replace
 
 from imgui_bundle import imgui
 
-from . import apc40, ui, ui_presets, undo
+from . import apc40, motion, ui, ui_presets, undo
 from .bands import CEIL
 from .library import PRESETS
+from .motion import Motion
 from .params import Kind, Param, part_of
 from .routing import SHIFT_PARAM, Binding, Macro, Owned, Router, Sub, base_refusal, factory_desk
 
@@ -138,6 +145,11 @@ INDENT = 18.0            # a subscriber line under its macro
 PROMPT = "replace##routing"   # the Replace / Keep modal's popup id
 PROMPT_W = 360.0
 FIND_W = 120.0           # the filter field on the counts line
+# the feel chip (motion.py) cycles auto → follow → spring → still → auto:
+# auto is the source's own feel (Router.feel_of), still turns even that off
+FEEL_CYCLE = (None, "follow", "spring", "off")
+FEEL_CHIP = {None: "auto", "follow": "follow", "spring": "spring", "off": "still"}
+FEEL_W = 112.0           # each of the feel line's two knobs
 NO_MATCH = "no row matches"
 
 
@@ -669,10 +681,11 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
     imgui.same_line()
     sp = imgui.get_style().item_spacing.x
     op_w = ui.chip_w("push")
+    feel_w = ui.chip_w("spring")
     session = is_session_target(panel, b)
     mark_w = imgui.calc_text_size(SESSION_MARK).x + sp if session else 0.0
     picked = _param_combo(panel, "##target", b.target,
-                          -(op_w + ui.chip_w("×") + 2 * sp + mark_w),
+                          -(feel_w + op_w + ui.chip_w("×") + 3 * sp + mark_w),
                           lambda: _targets(panel))
     if picked:
         cur = router.table.owner(picked)
@@ -691,6 +704,8 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
         imgui.text_colored(ui.DIM, SESSION_MARK)
         if imgui.is_item_hovered():
             imgui.set_tooltip(SESSION_TIP)
+    imgui.same_line()
+    _feel_chip(router, b, feel_w)
     imgui.same_line()
     label = OP_CHIP.get(b.op, "push")
     if ui.lit_chip(f"{label}##op", b.op != "push", ui.DIM, imgui.ImVec2(op_w, 0)):
@@ -773,8 +788,71 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
         _gate_combo(router, b, gates, gate_w)
     imgui.same_line()
     _live_bar(panel, router, b, p)
+    if b.motion is not None and b.motion.on:      # line 3: the row's own feel
+        _feel_line(b)
     imgui.pop_id()
     return kill
+
+
+def next_feel(m: Motion | None) -> Motion | None:
+    """The feel chip's next step along FEEL_CYCLE, keeping the knobs."""
+    mode = None if m is None else m.mode
+    i = FEEL_CYCLE.index(mode) if mode in FEEL_CYCLE else -1
+    nxt = FEEL_CYCLE[(i + 1) % len(FEEL_CYCLE)]
+    if nxt is None:
+        return None
+    return Motion(nxt) if m is None else replace(m, mode=nxt)
+
+
+def _feel_chip(router: Router, b: Binding, width: float) -> None:
+    """The row's feel, as a chip that cycles FEEL_CYCLE: lit while the row
+    has a feel of its own, dim on auto (the source's) and still."""
+    mode = None if b.motion is None else b.motion.mode
+    if ui.lit_chip(f"{FEEL_CHIP.get(mode, 'auto')}##feel", mode in ("follow", "spring"),
+                   ui.DIM, imgui.ImVec2(width, 0)):
+        b.motion = next_feel(b.motion)
+    if imgui.is_item_hovered():
+        src = router.source_feel(b.scheme)
+        auto = ("the source's own: " + (src.describe() if src.on else "none")
+                + (" (the pad's, on the settings page)" if b.scheme == "axis" else ""))
+        now = (auto if b.motion is None else
+               "still: the reading as it comes" if not b.motion.on else b.motion.describe())
+        imgui.set_tooltip("Feel: how the reading travels before it acts\n"
+                          "follow  the analyzer's envelope: attack away from rest,\n"
+                          "        release back toward it, so a stick let go glides home\n"
+                          "spring  a damped spring toward the reading, rings below 1\n"
+                          f"now: {now}\n"
+                          "click to cycle auto, follow, spring, still")
+
+
+def _feel_line(b: Binding) -> None:
+    """Two knobs for the row's own feel: attack / release, or Hz / damping."""
+    m = b.motion
+    imgui.dummy(imgui.ImVec2(18, 0))
+    imgui.same_line()
+    if m.mode == "follow":
+        knobs = (("atk", 0.0, motion.ATK_MAX, "atk %.3f s", False,
+                  "Attack: seconds to go 63 % of the way away from rest"),
+                 ("rel", 0.0, motion.REL_MAX, "rel %.3f s", False,
+                  "Release: seconds to go 63 % of the way back toward rest"))
+    else:
+        knobs = (("hz", motion.HZ_MIN, motion.HZ_MAX, "%.2f Hz", True,
+                  "Spring frequency: low is lazy, high is tight"),
+                 ("damp", 0.0, motion.DAMP_MAX, "damp %.2f", False,
+                  ("Damping ratio: 1 arrives fastest with no overshoot,\n"
+                   "below 1 overshoots and rings, above 1 creeps")))
+    imgui.push_font(ui._FONTS["num"], ui.FONT_NUM)
+    for j, (k, lo, hi, fmt, log, tip) in enumerate(knobs):
+        if j:
+            imgui.same_line()
+        imgui.set_next_item_width(FEEL_W)
+        flags = imgui.SliderFlags_.logarithmic if log else 0
+        changed, v = imgui.slider_float(f"##{k}", float(getattr(m, k)), lo, hi, fmt, flags)
+        if changed:
+            b.motion = m = replace(m, **{k: min(max(v, lo), hi)})
+        if imgui.is_item_hovered():
+            imgui.set_tooltip(tip + "\nctrl-click to type")
+    imgui.pop_font()
 
 
 def _live_bar(panel, router: Router, b: Binding, p: Param | None) -> None:

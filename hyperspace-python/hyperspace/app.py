@@ -908,22 +908,34 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
         if pad.on:
             # analog, each axis while no route names it (`axis:LX` …): left
             # stick orbits, right-stick Y zooms about centre, triggers ride
-            # depth4 in its own log space (LT out, RT in)
+            # depth4 in its own log space (LT out, RT in). The pad's feel
+            # (`desk.pad.feel`, motion.py) runs on the axis lanes first:
+            # off, they are read as they are
             routed = router.claimed("axis") or ()
+            felt = router.felt("axis", pad.lanes(), dt)
+            if felt is None:
+                axis, trigger = pad.axis, pad.trigger
+            else:
+                def axis(ax: int) -> float:   # a lane back to the stick's ±1, up negative
+                    u = felt[ax] - 0.5
+                    return 2 * u if ax in (gamepad.AX_LX, gamepad.AX_RX) else -2 * u
+
+                def trigger(ax: int) -> float:
+                    return felt[ax]
 
             def free(ax: int, v: float) -> float:
                 return 0.0 if ax in routed else v
-            lx = free(gamepad.AX_LX, pad.axis(gamepad.AX_LX))
-            ly = free(gamepad.AX_LY, pad.axis(gamepad.AX_LY))
+            lx = free(gamepad.AX_LX, axis(gamepad.AX_LX))
+            ly = free(gamepad.AX_LY, axis(gamepad.AX_LY))
             if lx:
                 reg["camera.yaw"].nudge(lx * 2.2 * dt)
             if ly:
                 reg["camera.pitch"].nudge(ly * 2.2 * dt)
-            zoom_v = free(gamepad.AX_RY, pad.axis(gamepad.AX_RY))
+            zoom_v = free(gamepad.AX_RY, axis(gamepad.AX_RY))
             if zoom_v:
                 reg["camera.zoom"].scale(2.0 ** (-zoom_v * 1.2 * dt))
-            d4 = (free(gamepad.AX_RT, pad.trigger(gamepad.AX_RT))
-                  - free(gamepad.AX_LT, pad.trigger(gamepad.AX_LT)))
+            d4 = (free(gamepad.AX_RT, trigger(gamepad.AX_RT))
+                  - free(gamepad.AX_LT, trigger(gamepad.AX_LT)))
             if d4:
                 _ride_depth(reg["view.depth4"], d4 * 2.4 * dt)
 
@@ -994,7 +1006,7 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
         # the lanes are a modulation source like any other (routing.py);
         # once every source has spoken for this frame, land base +
         # offsets on the objects before the integrator reads them
-        router.modulate(audio.chain if audio.on else None)
+        router.modulate(audio.chain if audio.on else None, dt)   # dt: the rows' motion
         reg.apply()
         h.view.integrate(dt)
     except Exception as e:  # noqa: BLE001
