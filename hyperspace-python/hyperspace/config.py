@@ -98,6 +98,7 @@ like the rename above. The SYSTEM page shows both.
 
     [gamepad]               # the Xbox pad polled through GLFW (gamepad.py)
     enabled = true          # false never polls for one
+    usb = true              # no pad in GLFW: look for a wired Xbox 360 pad over libusb
 
     [bridge]                # lanes out / external lanes in over MIDI (bridge.py)
     enabled = false         # true opens the bridge; off, it is never imported
@@ -170,7 +171,7 @@ DEFAULTS: dict = {
                "keep_awake": True, "render": "1080p",
                "flip_x": False, "flip_y": False},
     # gamepad.py: the Xbox pad — on by default, inert when absent
-    "gamepad": {"enabled": True},
+    "gamepad": {"enabled": True, "usb": True},
     # bridge.py: the analyzer's lanes out to a DAW, external lanes in — off by default
     "bridge": {"enabled": False, "out": "IAC", "in": "", "encoding": "pitch", "channel": 0,
                "cc": 16, "rate": 100, "send": ["lane:*"], "in_lanes": 16},

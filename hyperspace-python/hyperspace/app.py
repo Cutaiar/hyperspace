@@ -625,7 +625,7 @@ def _open_pad(cfg: dict):
     by polling for one (audit P2)."""
     if not cfg.get("gamepad", {}).get("enabled", True):
         return None
-    return Pad()
+    return Pad(usb=bool(cfg.get("gamepad", {}).get("usb", True)))
 
 
 class Awake:
