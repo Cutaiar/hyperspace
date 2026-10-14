@@ -915,8 +915,8 @@ _SYMBOLS = {"←": "LEFT", "→": "RIGHT", "↑": "UP", "↓": "DOWN", "space": 
             "[": "LEFT_BRACKET", "]": "RIGHT_BRACKET", ",": "COMMA", ".": "PERIOD",
             "?": "SLASH", "Esc": "ESCAPE", "Cmd+R": "SUPER+R", "Cmd+Z": "SUPER+Z",
             "Home": "HOME"}
-_PADS = {"pad A B": ["A", "B"], "pad X Y": ["X", "Y"], "LB / RB": ["LB", "RB"],
-         "view/menu": ["VIEW", "MENU"], "sticks": ["LSTICK", "RSTICK"]}
+_PADS = {"pad X / B": ["X", "B"], "pad A Y": ["A", "Y"], "LB / RB": ["LB", "RB"],
+         "view": ["VIEW"], "start (hold)": ["MENU"], "sticks": ["LSTICK", "RSTICK"]}
 _MOUSE = {"drag", "⇧drag", "scroll", "right-click", "d-pad", "LT / RT",
           "APC40"}                                   # the desk's glyph legend, not a key
 

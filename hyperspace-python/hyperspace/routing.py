@@ -400,6 +400,16 @@ THEME_TO_PRESET = {
     "theme.prev": "preset.prev",
     **{f"theme.{w}.{k}": f"preset.{w}.{k}" for w in ("load", "save") for k in range(F_KEYS)},
 }
+# the pad's factory rows as they were before 2026-10-14 → the owner's
+# layout (`padmap`): A faces, X previous preset, Y lines, START held saves
+# a new preset. Exact rows only — a row the owner learned onto a button
+# is kept (`remap_factory`)
+PAD_REMAP: dict[tuple[str, str, str, float], tuple[str, str, float]] = {
+    ("pad:A", "view.rotate", "toggle", 1.0): ("view.faces", "toggle", 1.0),
+    ("pad:X", "view.points", "toggle", 1.0): ("preset.prev", "fire", 1.0),
+    ("pad:Y", "view.faces", "toggle", 1.0): ("view.lines", "toggle", 1.0),
+    ("pad:MENU", "ui.cheatsheet", "toggle", 1.0): ("preset.save_new", "hold", 1.0),
+}
 KEY_NEW_ROWS = (
     ("key:B", "tempo.tap", "fire", 1.0),
     ("key:SHIFT+B", "lfo.trigger", "fire", 1.0),
@@ -688,12 +698,15 @@ def keymap() -> list[Binding]:
 
 
 def padmap() -> list[Binding]:
-    """Xbox-layout gamepad buttons and the d-pad."""
+    """Xbox-layout gamepad buttons and the d-pad. B / X walk the preset
+    bank, A / Y the faces and lines; START (``pad:MENU``) held saves the
+    live state as a new preset, as a held empty bank pad does on the desk
+    (2026-10-14, the owner's layout — PAD_REMAP moves an older file's)."""
     rows = [
-        ("pad:A", "view.rotate", "toggle"), ("pad:B", "preset.next", "fire"),
-        ("pad:X", "view.points", "toggle"), ("pad:Y", "view.faces", "toggle"),
+        ("pad:A", "view.faces", "toggle"), ("pad:B", "preset.next", "fire"),
+        ("pad:X", "preset.prev", "fire"), ("pad:Y", "view.lines", "toggle"),
         ("pad:LB", "view.shape", "step", -1), ("pad:RB", "view.shape", "step", 1),
-        ("pad:VIEW", "ui.panel", "toggle"), ("pad:MENU", "ui.cheatsheet", "toggle"),
+        ("pad:VIEW", "ui.panel", "toggle"), ("pad:MENU", "preset.save_new", "hold"),
         ("pad:LSTICK", "camera.reset", "fire"), ("pad:RSTICK", "camera.reset", "fire"),
         ("hat:UP", "view.bright", "step", 3), ("hat:DOWN", "view.bright", "step", -3),
         ("hat:LEFT", "view.speed", "step", -4), ("hat:RIGHT", "view.speed", "step", 4),
@@ -809,7 +822,9 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
     clip-stop SAVE AS bar dropped (RETIRED_ROWS, 2026-10-09: a held empty
     bank pad saves now); and,
     since plan 13 WP2, any row on a ``theme.*`` param moved to the
-    ``preset.*`` param of the same slot (THEME_TO_PRESET). Idempotent: a second pass finds every old row gone
+    ``preset.*`` param of the same slot (THEME_TO_PRESET); the pad's four
+    old factory rows moved to the layout of 2026-10-14 (PAD_REMAP).
+    Idempotent: a second pass finds every old row gone
     and every source taken. Returns (rows, a note per change).
 
     Plan 19's swap (the sixteen old shape pads, BANK_REMAP) also clears
@@ -836,6 +851,11 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
             b = replace(b, target=target, op=op, value=value)
             if plan == "plan 19":
                 b = replace(b, layer=None, feedback="led", on=apc40.GREEN, off=0)
+        elif (b.source, b.target, b.op, float(b.value)) in PAD_REMAP:
+            target, op, value = PAD_REMAP[(b.source, b.target, b.op, float(b.value))]
+            notes.append(f"remapped {b.source}: {b.target} → {target} (the pad layout "
+                         "of 2026-10-14)")
+            b = replace(b, target=target, op=op, value=value)
         elif b.target in THEME_TO_PRESET:
             target = THEME_TO_PRESET[b.target]
             notes.append(f"remapped {b.source}: {b.target} → {target} (the preset bank "

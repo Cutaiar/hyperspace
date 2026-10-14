@@ -92,27 +92,27 @@ def test_a_button_learns_a_session_row_by_the_params_kind(rig):
 
 def test_a_button_learn_replaces_the_buttons_row_and_keeps_the_params_others(rig):
     pad, lrn, t = ScriptedPad(), rig.learn, rig.table
-    assert any(b.source == "pad:A" and b.target == "view.rotate" for b in t.bindings)
-    assert any(b.source == "pad:X" for b in t.bindings)
-    lrn.arm("view.faces", "pad")
+    assert any(b.source == "pad:A" and b.target == "view.faces" for b in t.bindings)
+    assert any(b.source == "pad:Y" and b.target == "view.lines" for b in t.bindings)
+    lrn.arm("view.lines", "pad")
     pad.frame()
     pad.frame(held={gp.A})
     gp.learn_from(pad, lrn)
     on_a = [b for b in t.bindings if b.source == "pad:A"]
-    assert [(b.target, b.op) for b in on_a] == [("view.faces", "toggle")]
-    assert "view.rotate let go" in lrn.last
-    assert any(b.source == "pad:Y" and b.target == "view.faces" for b in t.bindings)
+    assert [(b.target, b.op) for b in on_a] == [("view.lines", "toggle")]
+    assert "view.faces let go" in lrn.last
+    assert any(b.source == "pad:Y" and b.target == "view.lines" for b in t.bindings)
 
 
 def test_the_learning_press_does_not_fire_the_old_row(rig):
     pad, lrn = ScriptedPad(), rig.learn
-    rotate = rig.reg["view.rotate"].value
-    lrn.arm("view.faces", "pad")
+    faces = rig.reg["view.faces"].value
+    lrn.arm("view.points", "pad")
     pad.frame()
-    pad.frame(held={gp.A})              # pad:A is view.rotate's in the factory table
+    pad.frame(held={gp.A})              # pad:A is view.faces's in the factory table
     learned = gp.learn_from(pad, lrn)
     rig.router.pad(pad, buttons=not learned)
-    assert rig.reg["view.rotate"].value == rotate
+    assert rig.reg["view.faces"].value == faces
 
 
 def test_a_stick_learns_a_push_route_into_the_preset(rig):
@@ -221,3 +221,38 @@ def test_a_stick_never_ends_a_learn_on_a_setting_it_cannot_drive(rig):
     pad.frame(held={gp.GUIDE})
     assert gp.learn_from(pad, lrn) is True
     assert any(b.source == "pad:GUIDE" and b.target == p.id for b in rig.table.bindings)
+
+
+# ---- the factory layout (2026-10-14) ----
+
+def test_an_older_files_pad_rows_move_to_the_new_layout_and_the_owners_stay(tmp_path):
+    """The four old factory pad rows (A rotate, X points, Y faces, START
+    the sheet) move to the layout of 2026-10-14; a row the owner learned
+    onto a button stays; a second load changes nothing."""
+    old = [Binding("pad:A", "view.rotate", "toggle"), Binding("pad:X", "view.points", "toggle"),
+           Binding("pad:Y", "view.faces", "toggle"), Binding("pad:MENU", "ui.cheatsheet", "toggle"),
+           Binding("hat:UP", "fx.wobble.freq", "step")]          # the owner's own
+    path = tmp_path / "bindings.json"
+    Bindings(old, path=path).write()
+    t = Bindings.load(path, legacy_midi=None)
+    rows = {b.source: (b.target, b.op) for b in t.of("pad", "hat")}
+    assert rows["pad:A"] == ("view.faces", "toggle")
+    assert rows["pad:X"] == ("preset.prev", "fire")
+    assert rows["pad:Y"] == ("view.lines", "toggle")
+    assert rows["pad:MENU"] == ("preset.save_new", "hold")
+    assert rows["hat:UP"] == ("fx.wobble.freq", "step")
+    assert sum("the pad layout of 2026-10-14" in n for n in t.notes) == 4
+    after = path.read_text()
+    again = Bindings.load(path, legacy_midi=None)
+    assert not again.notes and path.read_text() == after
+
+
+def test_start_held_saves_a_new_preset(rig):
+    pad, r = ScriptedPad(), rig.router
+    saved = []
+    rig.reg["preset.save_new"].fire = lambda: saved.append(1)
+    pad.frame(held={gp.MENU})
+    r.pad(pad, now=1.0)
+    pad.frame(held={gp.MENU})
+    r.pad(pad, now=1.0 + routing.HOLD_S)
+    assert saved == [1]

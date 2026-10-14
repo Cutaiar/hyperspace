@@ -654,11 +654,12 @@ def test_pad_adapter_routes_buttons_and_hat(tmp_path):
     router = Router(r.reg, house())
     pad = FakePad()
     r.view.shape = 5
-    pad.hits = {gamepad.RB, gamepad.X}
+    pad.hits = {gamepad.RB, gamepad.Y}
     pad.hat = gamepad.HAT_UP | gamepad.HAT_LEFT
     p0, s0 = r.reg["view.bright"].position(), r.reg["view.speed"].position()
+    lines = r.view.lines
     router.pad(pad)
-    assert r.view.shape == 6 and not r.view.points
+    assert r.view.shape == 6 and r.view.lines is not lines
     assert r.reg["view.bright"].position() == p0 + 3
     assert r.reg["view.speed"].position() == s0 - 4
     r.view.yaw = 1.0
@@ -1692,7 +1693,7 @@ def test_the_clip_stop_save_bar_is_retired_and_the_row_freed(tmp_path, capsys):
     mine = Binding(bar[2], "view.lines", "toggle", feedback="led")
     path = write(tmp_path / "b", *[b for b in old if b.source != bar[2]], mine)
     t = Bindings.load(path, legacy_midi=None)
-    assert len(t.notes) == 7 and not [b for b in t.bindings if b.target == "preset.save_new"]
+    assert len(t.notes) == 7 and not [b for b in t.midi() if b.target == "preset.save_new"]
     assert [b.target for b in t.midi() if b.source == bar[2]] == ["view.lines"]
     # a file without the bar: nothing added there, nothing written
     path = write(tmp_path / "c")

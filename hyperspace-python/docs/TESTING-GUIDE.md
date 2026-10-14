@@ -3418,10 +3418,12 @@ pad connected.
 
 **Right if:** the terminal says `gamepad: Afterglow Gamepad for Xbox 360
 over USB`; the pad's ring lights one quarter (player 1) instead of
-blinking; A toggles rotation, LB / RB step the shape, the D-pad steps
-brightness (up / down) and speed (left / right), the left stick orbits
-(up tilts the camera up), the right stick's up / down zooms, RT pushes
-the 4D depth in and LT out.
+blinking; B / X step to the next / previous preset, A flips faces and Y
+lines, LB / RB step the shape, the D-pad steps brightness (up / down)
+and speed (left / right), START held about 0.6 s saves the live state
+as a new preset (a tap does nothing), the left stick orbits (up tilts
+the camera up), the right stick's up / down zooms, RT pushes the 4D
+depth in and LT out.
 
 **Wrong if:** no line; a button does another one's job; a stick runs
 backwards.
@@ -3432,14 +3434,14 @@ backwards.
 
 **Needs:** a pad.
 
-**Do:** VIEW page: right-click Faces → **Learn pad**. Press Y on the
+**Do:** VIEW page: right-click Points → **Learn pad**. Press Y on the
 pad. Then right-click Brightness → **Learn pad** and press the D-pad's
-down.
+down. Afterwards put Y back: right-click Lines → **Learn pad**, press Y.
 
-**Right if:** the footer says `learned view.faces ← …(into
-bindings.json)`; Y now flips faces; the D-pad's down still dims (one
-detent a press); `bindings.json` holds `pad:Y` → `view.faces`. Pressing
-Y during the learn did not also do Y's old job.
+**Right if:** the footer says `learned view.points ← …(into
+bindings.json); view.lines let go`; Y now flips points; the D-pad's
+down still dims (one detent a press); `bindings.json` holds `pad:Y` →
+`view.points`. Pressing Y during the learn did not also flip the lines.
 
 **Wrong if:** the press does nothing; Y does two things; a desk knob
 turned during the learn completes it.
@@ -3472,10 +3474,10 @@ go leaves the setting moved.
 **Do:** change the `pad:Y` row's op to `"momentary"` and, for a button
 with a trigger on it (`pad:B` → `preset.next`), to `"hold"`. ⌘R.
 
-**Right if:** faces show only while Y is held; B steps the preset only
+**Right if:** lines show only while Y is held; B steps the preset only
 after about 0.6 s held, once per press; a tap does nothing.
 
-**Wrong if:** faces stay on after Y is let go; B fires on a tap or
+**Wrong if:** lines stay on after Y is let go; B fires on a tap or
 repeats while held.
 
 *(check 142)*
