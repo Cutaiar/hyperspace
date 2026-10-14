@@ -1257,28 +1257,9 @@ and label. Your presets read "save". Known: under "more" a module
 strip's save chip overlaps its name. *Fail:* unreadable → `ui.DOT_R`,
 or say what would read.
 
-**90. The home in git.** (last on the copy)
-Headless: `tests/test_homegit.py tests/test_library.py::test_hide_rename_and_restore_each_ask_for_a_commit tests/test_config.py::test_library_git_is_off_by_default_and_a_switch`.
-`git -C $HYPERSPACE_HOME rev-parse --show-toplevel`: "not a git
-repository" (a folder above the copy: git refused by design, one note,
-nothing written). Copy's `config.toml`: `[library]` `git = true`;
-launch. *Pass:* SYSTEM library line ends "· git"; no `.git` yet. Save
-(**as…**). *Pass:* `git -C $HYPERSPACE_HOME log --oneline`: one commit
-"Hyperspace: the home as it was when git was switched on", body (`log
--1 --format=%b`) names your save; `.gitignore` present. Save changed,
-rename, ×, × a factory preset, fill a slot: a commit each — "save
-preset …", "rename preset … → …" ("show …: bank" in body or next
-commit), "trash preset …", "hide preset …", "show …: bank". `git -C
-$HYPERSPACE_HOME status --short` empty; `git -C $HYPERSPACE_HOME
-ls-files | grep -c -e weights -e trash -e last_show -e windows.json -e
-.bak-` prints 0; `git -C $HYPERSPACE_HOME remote` prints nothing.
-`touch $HYPERSPACE_HOME/.git/index.lock`, save: instant, on disk,
-"git: not committed (git add exited 128: …); saves are not affected";
-save again: silent. `rm` lock, save: one commit, all three saves (`show
---stat HEAD`). Emptying trash: no commit. *Fail:* save waits →
-`homegit.Committer.request`; `.git` before first save →
-`app._open_homegit`. Keep off on the real home unless wanted (local
-history only; sharing is `shared/` and `tools/shared_presets.py`).
+**90. The home in git.** Retired by plan 25 (2026-10-14): the home-as-git
+switch was removed; presets are shared through a cloud-synced
+folder instead — checks 139–143.
 
 ## P. Effects on the faces, reordering, the LOOKBACK page, instance layouts
 
@@ -1707,9 +1688,7 @@ the preset comes back on the Klein bottle. *Fail:* stops at 25 →
 Headless: `tests/test_shapes4d.py::test_every_shape_draws_what_it_drew_before_the_lift_existed`.
 Load factory `plasma-heart` (Heart), `spiral-silk` (Trefoil knot),
 `inverse-halo` (Starfruit); then your shared `hi-frek-variation-1` and
-`light-realm-variation-1` (Möbius strip; if they are not in your
-home, on the copy: `uv run python tools/shared_presets.py install
-shared/dan-2026-10-04`). Music on. *Pass:* each still does what it was made for; note any
+`light-realm-variation-1` (Möbius strip, from your library). Music on. *Pass:* each still does what it was made for; note any
 that now looks wrong. *Fail:* not a code fault: say which, and whether
 to re-tune the preset or overturn row 89 / 94 for that shape.
 
@@ -1880,7 +1859,7 @@ sides. *Fail:* not a code fault — say what to change.
 Headless: `tests/test_patterns.py::test_the_factory_depth_reads_on_loud_music_and_never_pins_an_input tests/test_routing.py::{test_factory_files_match_the_code,test_every_factory_preset_names_real_params_with_one_owner}`.
 Music with quiet and loud passages. Two or three house presets
 (hex-engine, ember-orbit, spiral-silk), then the party show's FACES and
-TRIP. Then one of your own from `shared/dan-2026-10-04` with faces on.
+TRIP. Then one of your own (from Dan's snapshot, in his library) with faces on.
 *Pass:* quiet music visibly moves the faces; loud music is legible, no
 input stuck at an end (EMBER not black, SPIRAL not blown out); yours
 (still at depth 1) shows the difference. Say whether to re-save your
@@ -1890,8 +1869,7 @@ hyperspace.preset`); pinned → lower it.
 
 **133. The macro candidates: MACRO PERFORMANCE.** (APC40, listening)
 Headless: `tests/test_macro_candidates.py::{test_each_candidate_loads_with_no_note_and_keeps_every_row,test_turning_a_macro_moves_its_bases_and_scales_its_routes}`.
-(copy) `uv run python tools/shared_presets.py install
-shared/plan-22-macro-candidates`. PRESETS: load MACRO PERFORMANCE. A
+PRESETS: load MACRO PERFORMANCE from your library. A
 track with a clear kick and hats; the macros are D1–D8 (or ROUTING's
 macro sliders). Follow
 [`22-macro-candidates.md`](22-macro-candidates.md): each knob end to
@@ -1942,6 +1920,49 @@ whether 2.6 is too strong. *Fail:* bends below 1 → that mode's `warp(p,
 own)` (`own` 0 for a straight design); too strong → the `0.07` in
 `warp()`.
 
+## S. Plan 25: the shared library
+
+Two Macs, both on this build, both with `[library] path` pointing at the
+same cloud-synced folder ([`../SETUP.md`](../SETUP.md), "Share presets
+with someone"). 141 runs on a scratch home (`HYPERSPACE_HOME` set to a
+temp folder), never the real one.
+
+**139. A save on one Mac appears on the other.**
+Headless: `tests/test_shared_library.py::test_a_save_lands_in_the_library_and_last_show_in_the_machine_home tests/test_library.py`.
+On A, save a new preset (**as…**). *Pass:* on B it appears in the
+PRESETS list without a restart, within a couple of seconds of the sync
+(the library watcher). *Fail:* never arrives → the cloud client first
+(iCloud "Keep Downloaded", Dropbox "Available offline"), then
+`Library.poll` / `_scan`.
+
+**140. A re-save on one Mac re-applies on the other.**
+Headless: `tests/test_library.py` (the watcher's re-apply tests).
+On B, load a preset; on A, change it and save it again. *Pass:* B
+re-applies it, as a hand edit of the file does. *Fail:* B keeps the old
+look → `Library.poll`.
+
+**141. A missing folder: said, saves off, nothing created.**
+Headless: `tests/test_shared_library.py::{test_a_missing_library_is_said_and_never_created,test_every_write_into_a_missing_library_is_refused}`.
+Scratch home: `[library]` `path = "/tmp/nowhere-hyperspace"` (a folder
+that does not exist); launch. *Pass:* a warning on the footer ("shared
+library not found at …"); the SYSTEM page's library line is red, "NOT
+FOUND, saves are off (restart once it is there)"; a save says "not
+saved"; `ls /tmp/nowhere-hyperspace` fails. *Fail:* the folder exists →
+`Library.__init__` / `_write_text`.
+
+**142. Machine files stay home.**
+Headless: `tests/test_shared_library.py::test_the_migration_reads_machine_files_and_writes_documents_to_the_library`.
+Note the dates of `config.toml`, `bindings.json` and `windows.json` in
+the home; save a preset. *Pass:* none changed; none is in the shared
+folder. *Fail:* → `app.main`'s `bindings_path(home)` and placement.
+
+**143. A cloud conflict shows both entries.**
+Headless: `tests/test_shared_library.py::test_a_cloud_conflict_copy_is_listed_beside_its_file`.
+Take B offline; save the same preset on both Macs; reconnect and wait
+for the sync. *Pass:* both entries show in the list (one under the
+conflict copy's file name); each loads; delete one. *Fail:* one hides
+the other → `Library._index`.
+
 ## What no test covers
 
 Only a person can settle these:
@@ -1955,5 +1976,7 @@ Only a person can settle these:
   edge-on share, not what a person sees;
 - the FACES page's fit and `patterns.glsl` on the Mac (120, 121): the
   tests run with another machine's fonts and Mesa's compiler;
-- the macro candidates (133–136): a listening session, by design.
+- the macro candidates (133–136): a listening session, by design;
+- a real cloud client between two Macs (139, 140, 143): the tests write
+  the folder directly.
 

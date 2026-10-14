@@ -185,7 +185,7 @@ replaces a row, rewrite that row instead of adding a new one.
 | Patterns are appended, never inserted (a preset holds the mode as an index). Five were added — METER, PULSE, MARBLE, TRUCHET, KALEIDO — and the first twelve's art is unchanged. | `patterns.MODES` | row 105 |
 | **The factory pattern routes push at `PATTERN_DEPTH` = 0.35** on a base of 1; the rate routes keep the reference's depth. `legacy6` keeps the rotation parity and drops the pattern parity. | `routing.PATTERN_DEPTH`, `preset.legacy6_values` | row 106 |
 | The house presets' routes are generated from code, like the party presets'; their values and notes stay data. | `preset.HOUSE`, `FACTORY_PRESETS` | row 107 |
-| Macro candidates are prepared for audition, never judged by the build, and ship in `shared/`, not as factory presets. Per-band gain in a preset macro is a depth subscriber on the lane routes. | `shared/plan-22-macro-candidates/` | row 108 |
+| Macro candidates are prepared for audition, never judged by the build, and are not factory presets: they live in the owner's library (they shipped in the repo's snapshot folder until plan 25 retired it; the test fixtures keep a copy). Per-band gain in a preset macro is a depth subscriber on the lane routes. | `tests/fixtures/macro-candidates/` | row 108 |
 
 ## Library and persistence
 
@@ -199,7 +199,9 @@ replaces a row, rewrite that row instead of adding a new one.
 | …only when the text differs. A failed copy warns and lets a save go on, but refuses a delete. | `library.to_trash` | row 37 |
 | The windows open where the config says, otherwise where they were (`<home>/windows.json`, one render rect per output). Fullscreen is never remembered. The file is written on quit and ⌘R only. | `placement.py` | row 48 |
 | **A dirty dot compares floats within undo's tolerance**, so a performer's round-off lights no dot. | `undo.alike` | owner |
-| **The home in git is opt-in** (`[library] git = true`): a local repository, one commit per save, never pushed. The trash is ignored, and git never blocks a save. | `homegit.py` | row 78 |
+| **Presets are shared through a cloud-synced folder, not git** (D1): `[library] path` points the library — `presets/`, `projects/`, every module group folder, `hidden.json`, `trash/` — at that folder (D2). Machine files stay in the home: `config.toml`, `bindings.json` and its backups, `hands.json`, `windows.json`, `last_show`, logs, `weights/` (D3). Unset or `""` is the home, as before (D4). | `config.py`, `library.py`, `app.main` | owner, row 109 |
+| **A missing shared folder is never created and never silently replaced** (D5): a loud warning, every write refused, only the factory listed; fix the folder and restart. | `Library.missing`, `Library.writable` | owner, row 109 |
+| **The old sharing mechanisms are removed** (D6): the home-as-git switch (a `.git` in a cloud folder risks corruption, and the cloud keeps versions) and the repo's snapshot folder with its install tool. Factory presets and `hidden.json` are out of scope (D7). `tools/move_library.py` copies an existing library into the shared folder once, never overwriting (D8). | `tools/move_library.py` | owner, row 109 |
 
 ## Presets and the desk
 

@@ -49,9 +49,9 @@ runs the one frame loop.
 | **LFOs and clock** | `lfo.py`, `tempo.py` | four oscillators, one tap-tempo clock | `Router.feed("lfo", …)`, its labels and rests | import nothing from the package; registry, router and clock arrive as arguments (`tests/test_lfo_boundary.py`) |
 | **Render stack** | `geometry.py`, `view.py`, `render.py`, `glsl.py`, `fx.py`, `lookback.py`, `dream.py`, `ghost.py`, `outputs.py`, `overlay.py`, `shaders/` | GL resources, `ViewState`, the frame history, the dream worker, the faces' picture, the outputs' pipelines, the one wall clock (`Renderer.now`) | the screen; `ViewState.integrate` writes `ang` directly | reads parameters, never writes one: `render.py` and `fx.py` import no `params`, `routing`, `library`, `preset`, `undo`, `control` (`tests/test_render.py::test_the_render_stack_imports_no_registry`); `outputs.py` imports `moderngl` and `glsl` only (`tests/test_outputs.py::test_outputs_imports_nothing_from_app_ui_or_params`); `dream` is imported only by `app._open_dream` behind `[dream] enabled` and is the one module that imports `torch` (`tests/test_dream.py::test_core_does_not_import_the_worker`) |
 | **Panel** | `ui.py`, `ui_*.py`, `hands/panel.py`, `control.py` | imgui state, page selection, the Replace / Keep modal, the routing page's edits | param **bases** through `Param.set*`; table rows through the table's edit doors and `Learn` | only `app`, `hands/panel.py` and the `ui*` modules import `ui*`. By convention: no test holds it |
-| **Library** | `library.py`, `preset.py`, `config.py`, `library/` | the home folder, module presets, presets, shows (projects), the bank of twenty-four, the trash, `hidden.json`, `config.toml` | bases through `Registry.restore`; a preset load replaces the table's performer rows, desk layer and macros | `library` imports `params` and `undo` (and `routing`, `preset` lazily), never `homegit` or `config` (`tests/test_app_boundary.py::test_homegit_is_a_leaf_and_the_library_never_imports_it`) |
+| **Library** | `library.py`, `preset.py`, `config.py`, `library/` | the library root (`Library.home`: module presets, presets, shows (projects), the trash, `hidden.json` — the home, or the folder `[library] path` names), the machine home (`Library.machine`: `last_show`), the bank of twenty-four, `config.toml` | bases through `Registry.restore`; a preset load replaces the table's performer rows, desk layer and macros | `library` imports `params` and `undo` (and `routing`, `preset` lazily), never `config` (`tests/test_app_boundary.py::test_the_library_never_imports_config`) |
 | **Undo** | `undo.py` | the undo and redo stacks, the last settled state | bases (`Registry.restore`) and the table's preset parts, on ⌘Z / Ctrl+Z only | a leaf: imports nothing from the package and never touches `modulate` or `feed` (`tests/test_undo.py::test_undo_imports_nothing_from_the_package`) |
-| **Host** | `app.py`, `hotreload.py`, `placement.py`, `homegit.py`, `watchdog.py` | construction order, the frame loop, the windows and render outputs, the reload watch list, the stall log, the home in git | bases for the relative writers (↑ / ↓, pad sticks); no key of its own but `app.LOOP_KEYS` | the only importer of every optional adapter, each behind its config gate (`_open_midi`, `_open_bridge`, `_open_hands`, `_open_dream`, `_open_homegit`, `_open_pad`); importing `app` imports no gated adapter, no `torch`, no `leap` (`tests/test_app_boundary.py::test_importing_app_leaves_every_gated_adapter_unimported`); `placement` and `homegit` are leaves (`tests/test_placement.py::test_placement_imports_nothing_from_the_package`, `tests/test_app_boundary.py::test_homegit_is_a_leaf_and_the_library_never_imports_it`) |
+| **Host** | `app.py`, `hotreload.py`, `placement.py`, `watchdog.py` | construction order, the frame loop, the windows and render outputs, the reload watch list, the stall log, where the library is (`[library] path` → `Library(path, machine=home)`) | bases for the relative writers (↑ / ↓, pad sticks); no key of its own but `app.LOOP_KEYS` | the only importer of every optional adapter, each behind its config gate (`_open_midi`, `_open_bridge`, `_open_hands`, `_open_dream`, `_open_pad`); importing `app` imports no gated adapter, no `torch`, no `leap` (`tests/test_app_boundary.py::test_importing_app_leaves_every_gated_adapter_unimported`); `placement` is a leaf (`tests/test_placement.py::test_placement_imports_nothing_from_the_package`) |
 
 **Everything points at the registry; the registry points at nothing
 above it.** Adapters and sources feed the router; the router writes
@@ -59,7 +59,7 @@ offsets; the panel, the desk and the library write bases; the render
 stack only reads.
 
 **Leaves** — modules that import nothing from the package, so anything
-may import them: `analysis`, `tapers`, `motion`, `undo`, `placement`, `homegit`,
+may import them: `analysis`, `tapers`, `motion`, `undo`, `placement`,
 `geometry`, `patterns`, `tempo`, `lfo`, `glsl`, `gamepad`, `apc40`,
 `watchdog`, `hands/signal.py`, `hands/tape.py`. Near-leaves: `outputs`, `fx` and
 `lookback` import only `glsl`; `view` only `geometry`.
@@ -692,7 +692,7 @@ docstring has the rest.
 | `overlay.py` | where output 1 is and how it looks (window, fullscreen, overlay); the master dim; the per-output switches | `Output` (`register`, `apply`, `allowed`, `dim`), `register_switches` | touches the window system only in `apply()`; rig settings never persist or modulate; overlay only when the config allows (`tests/test_overlay.py`) |
 | `ui.py` + `ui_*.py` + `hands/panel.py` | the control window: fourteen pages (`ui.PAGES`), widgets as views onto params, the right-click menu, the modal, the on-screen desk (`ui_desk.py`); the FACES page is `ui_patterns.py` (`page`, `drivers`, `suggest`, `neutral_all`) | `Panel`, `PAGES`; each page's `page(panel)`; `ui_routing.modal`; `ui_desk.click` | a widget writes only bases; nothing here calls `modulate`; no page scrolls at the control size (`tests/test_ui_shell.py::test_every_page_fits_the_control_window`); no conflicting imgui ids (`tests/test_ui_routing.py`, `tests/test_ui_lfo.py`) |
 | `control.py` | the headless half of the analyzer page: band selection, scenes, reset | `Control`, `SCENES` | reset goes to the selected scene and never changes the layout (`tests/test_control.py::test_reset_resolves_to_selected_scene`) |
-| `library.py` | the home folder, document kinds, module presets, shows, the bank, the trash, `hidden.json` | `Library`, `Project`, `Marks`, `SLOTS`, `to_trash`, `next_name`, `bank_doc` | never writes a factory file; a user file is copied to the trash before it is overwritten or deleted; a load never rewrites a show; imports neither `homegit` nor `config` (`tests/test_library.py`, `tests/test_presets.py`) |
+| `library.py` | the library root (`Library.home`) and the machine home (`Library.machine`), document kinds, module presets, shows, the bank, the trash, `hidden.json` | `Library`, `Project`, `Marks`, `SLOTS`, `to_trash`, `next_name`, `bank_doc` | never writes a factory file; a user file is copied to the trash before it is overwritten or deleted; a load never rewrites a show; every write is atomic; a shared library missing at launch is never created and refuses every write; never imports `config` (`tests/test_library.py`, `tests/test_presets.py`, `tests/test_shared_library.py`) |
 | `preset.py` | the preset document kind: values, routes, desk, macros, module labels; the factory generator; the first-launch migration | `Presets` (`load`, `load_doc`, `document`, `signature`), `FACTORY_PRESETS`, `write_factory`, `migrate_home` | a load lands every performance base and replaces every performer row, never a session param; a route onto a non-modulatable param is dropped with a note (`tests/test_presets.py`, `tests/test_migration.py`) |
 | `config.py` | `config.toml`: defaults, reading, `[[output.screens]]` | `DEFAULTS`, `load`, `screens`, `number` | a bad value is its default with a note, never a raise (`tests/test_config.py`) |
 | `undo.py` | undo and redo with no write hook | `Undo`, `watched`, `alike`, `install`, `push`, `SETTLE_S`, `LIMIT` | a leaf (`tests/test_undo.py::test_undo_imports_nothing_from_the_package`); §3.2 (`tests/test_undo.py`) |
@@ -700,7 +700,6 @@ docstring has the rest.
 | `app.py` | the entry point: windows and outputs, construction order, the frame loop, the adapters' gates | `main`, `Host`, `frame`, `Keys`, `Mouse`, `close_all`, `_draw_render`, `_open_*` | §1 Host row, §2 (`tests/test_app_boundary.py`, `tests/test_app_relative.py`) |
 | `hotreload.py` | hot reload of every module but the cold core | `HotReloader`, `MODULES` | every module but `app`, `hotreload`, `offline`, `watchdog` is watched, in dependency order, leaves first (`tests/test_hotreload.py::test_every_package_module_but_the_cold_core_is_watched`, `::test_the_watch_list_is_in_dependency_order`) |
 | `placement.py` | where the windows open and `<home>/windows.json` | `place`, `screens`, `load` / `save`, `read` | a leaf; a remembered rect is used only when enough of it is on a connected screen (`tests/test_placement.py`) |
-| `homegit.py` | the home as a local git repository, a commit per save, opt-in (`[library] git`) | `Committer`, `IGNORE` | a leaf, imported only behind its gate; the library calls a hook (`Library._commit`); never a network verb (`tests/test_homegit.py`) |
 | `watchdog.py` | the stall log and the render watch | `Watchdog`, `RenderWatch` | never stops the show; cold, like `app` (`tests/test_watchdog.py`) |
 | `offline.py` | the tests' offline analysis driver | — | part of the audio stack's boundary (`tests/test_audio_boundary.py`) |
 
@@ -816,15 +815,20 @@ output 1's flags (`app.flipped`).
 **Presets, shows, the library.** A **preset** (`hyperspace.preset/2`) is
 the performance: values, routes, desk, macros, module labels. A **show**
 (`library.Project`, `hyperspace.project/2`) is the session: session values,
-the bank of preset names and a "starts on" preset. The launch opens the
-show opened last (`<home>/last_show`). A user preset file is copied to
-`<home>/trash/<group>/` before a save overwrites it or a delete removes
+the bank of preset names and a "starts on" preset. `Library.home` is the
+**library root** — the home, or the folder `[library] path` names (plan
+25: a cloud-synced folder two machines share) — and `Library.machine` the
+home for this machine's files; app.main builds `Library(path,
+machine=home)` and reads `bindings.json`, `windows.json` and the stall log
+from the home. The launch opens the show opened last on this machine
+(`<machine>/last_show`). A user preset file is copied to
+`<library>/trash/<group>/` before a save overwrites it or a delete removes
 it; the trash is listed, restored and emptied from the preset list.
-Factory presets are hidden, not deleted (`<home>/hidden.json`). With
-`[library] git = true`, `app._open_homegit` attaches a
-`homegit.Committer` as `library.committer`, and `Library._commit` asks it
-for a commit after each save, delete, rename, hide, unhide, restore and
-show write.
+Factory presets are hidden, not deleted (`<library>/hidden.json`). Writes
+are atomic (a dot-named temp file, then `os.replace`), and a cloud
+client's conflict copy is listed under its own file stem. A library
+folder named but missing at launch (`Library.missing`) is never created:
+only the factory lists and every write raises `LibraryError`.
 
 **Undo.** `Undo.tick` (frame step 5) compares a fingerprint of the watched
 bases (`undo.watched`: persisted, not an alias, not a trigger, not the

@@ -395,7 +395,7 @@ go to the field. More render outputs come from `[[output.screens]]` (§14).
 - **Quit:** Esc or Q, or close any window.
 - **Restart in place:** Cmd+R or the SYSTEM page's *Restart process*
   (`os.execv`: same PID, same terminal). Every open adapter (MIDI, the
-  bridge, the hands, the dream worker, the git committer) and then the
+  bridge, the hands, the dream worker) and then the
   audio stream are closed first, best effort, so a broken port never
   blocks an exit.
 - **The cheat sheet** (`ui.CHEATSHEET`, the canonical list of keys) is
@@ -413,29 +413,41 @@ Environment variables:
 
 ## 4. The home folder
 
-Everything the app writes lives in one folder, `$HYPERSPACE_HOME`
-(default `~/Hyperspace`), created on the first launch. Factory files ship
-read-only in `hyperspace/library/` in the same tree; a user file of the
-same name shadows the factory one. All formats are plain JSON with a
-`schema` string, and the library is watched: edit a file in an editor
-while the app runs and the loaded preset or show follows within a couple
-of seconds.
+Everything the app writes lives in two places that are one folder unless
+you say otherwise: the **home**, `$HYPERSPACE_HOME` (default
+`~/Hyperspace`), created on the first launch, holds this machine's own
+files; the **library** holds the presets and shows. The library is the
+home too, unless `[library] path` in `config.toml` points it at another
+folder — typically a cloud-synced one shared with someone (see "The
+shared library" below). Factory files ship read-only in
+`hyperspace/library/` in the same tree; a user file of the same name
+shadows the factory one. All formats are plain JSON with a `schema`
+string, and the library is watched: edit a file in an editor (or let a
+cloud client sync one in) while the app runs and the loaded preset or show
+follows within a couple of seconds. In code, `Library.home` is the library
+root and `Library.machine` the home.
+
+**The library** (`Library.home`):
+
+| Path | What it is | Format |
+|---|---|---|
+| `presets/<slug>.json` | Your presets (§10). | `hyperspace.preset/2` |
+| `projects/<slug>.hyp.json` | Your shows (the code calls them projects). | `hyperspace.project/2` |
+| `<group>/<slug>.json` | Module presets, one registry group each (`band/`, `dream/`, `fx/`, `hands/`, `view/` …). | `hyperspace.preset/1` |
+| `hidden.json` | Factory presets taken off the preset list. | `hyperspace.hidden/1` |
+| `trash/<group>/<slug>.<YYYYMMDD-HHMMSS>.json` | Copies of your files taken before an overwrite, delete or rename. Never watched. | as the original |
+
+**The home** (`Library.machine`; never in a shared folder):
 
 | Path | What it is | Format |
 |---|---|---|
 | `config.toml` | The rig's settings (§5). Optional. | TOML |
 | `bindings.json` | The session's controls only: keys, gamepad, and the APC40's invariant and global-layer rows. Delete it to get `hyperspace/bindings.default.json` back. | `hyperspace.bindings/3` |
-| `presets/<slug>.json` | Your presets (§10). | `hyperspace.preset/2` |
-| `projects/<slug>.hyp.json` | Your shows (the code calls them projects). | `hyperspace.project/2` |
-| `<group>/<slug>.json` | Module presets, one registry group each (`band/`, `dream/`, `fx/`, `hands/`, `view/` …). | `hyperspace.preset/1` |
 | `hands.json` | The hands' calibrated ranges and the interaction box (§12). | `hyperspace.hands/2` |
 | `windows.json` | Where the control window and each render output were at the last quit (§14). Machine-specific; safe to delete. | `hyperspace.windows/1` |
-| `hidden.json` | Factory presets taken off the preset list. | `hyperspace.hidden/1` |
-| `last_show` | One line: the file name of the show opened last. | text |
-| `trash/<group>/<slug>.<YYYYMMDD-HHMMSS>.json` | Copies of your files taken before an overwrite, delete or rename. Never watched. | as the original |
+| `last_show` | One line: the file name of the show opened last on this machine. | text |
 | `stall.log` | The watchdog's log (§15). | text |
 | `weights/` | The dream's pretrained network weights, downloaded on first use. | binary |
-| `.git/`, `.gitignore` | Only with `[library] git = true` (below). | git |
 
 A `midi_map.json` or `config.toml` left in the working directory from an
 old build is copied in on the first run; a `midi_map.json` in the home is
@@ -456,7 +468,10 @@ folder of old routing presets is no longer read.
 | `<group>/…` | Restore from the trash. | Nothing to keep: a restore never writes over a file — a taken name restores as the next free name. |
 | `trash/**` | **Empty trash.** | **Nothing. Emptying the trash is the one action in the app that keeps no copy.** It deletes exactly the files its popup lists, after a second click. |
 | `windows.json`, `last_show` | Every quit and Cmd+R / every show load and save as. | Nothing (machine state). |
-| `.git/`, `.gitignore` | With `[library] git = true`, at the first save after launch. | Nothing of yours is rewritten. |
+
+Every library write is atomic: the text goes to a dot-named temp file
+beside the target (never `*.json`) and replaces it in one step, so a cloud
+client never syncs a half-written preset.
 
 Factory files are never written, so never trashed. Saving over a factory
 preset writes your copy into the home (the save chip says **save copy**).
@@ -468,27 +483,36 @@ second gets `-2`, `-3`), so nothing in the trash is ever overwritten.
 Restore from the preset list's **trash (n) ▸** popup, or copy a file back
 into `<home>/<group>/` under its plain name.
 
-### The home in git
+### The shared library
 
-With `[library] git = true` (`homegit.py`) the home becomes a **local**
-git repository at the first save after launch, and every save is a
-commit worded as the library says it ("save preset TRIP 2", "trash preset
-TRIP 3", "rename preset TRIP 3 → SUNRISE", "show mine: bank", "hide
-preset legacy6"…). A commit is `git add -A` plus the waiting messages, so
-a hand edit of `config.toml` rides in the next save's commit; emptying the
-trash commits nothing. `.gitignore` (written only where there is none)
-leaves out `weights/`, `trash/`, `*.log`, `last_show`, `windows.json`,
-`*.bak-*` and `.DS_Store`. An existing repository at the home is used as
-it is; a home inside another repository is never committed. Git runs on
-its own thread with a 10 s timeout and no hooks, signing or prompts; it
-never blocks or fails a save — a missing git or a locked index is one
-warning line until a commit succeeds. There is no remote, push or fetch.
-The SYSTEM page's library line ends "· git" while it is on. Sharing
-presets between people is the repository's `shared/` folder and
-`tools/shared_presets.py` (`list`, `install` — never overwrites —
-`export`). The macro candidates to audition are one such folder:
-`uv run python tools/shared_presets.py install shared/plan-22-macro-candidates`
-puts four presets on the PRESETS list (no bank slot);
+`[library] path` (plan 25) points the library at a folder of its own —
+typically one in a cloud drive (Dropbox, iCloud Drive, Google Drive,
+Syncthing; the app does not care which) that two people share, so a
+preset either of them saves shows up on the other's machine. The machine
+files above stay in the home. Unset or `""` is the home, as always.
+`tools/move_library.py DEST` copies an existing library into the folder
+once (never over a file; `hidden.json` as the union of both lists) and
+prints the two lines to add; [SETUP.md](SETUP.md) has the steps.
+
+- **Missing folder.** If the folder is not there at launch (a drive not
+  mounted, a typo), the app never creates it and never falls back: a
+  warning says so, the SYSTEM page's library line reads "NOT FOUND, saves
+  are off" in red, only the factory presets list, and every save, delete,
+  rename, hide or restore is refused with "shared library not found at …
+  — not saved". Fix the folder or the path and restart.
+- **Conflict copies.** When both machines save the same preset while one
+  is offline, the cloud client keeps both, e.g.
+  `hi-frek (Dan's conflicted copy 2026-10-14).json` with the same name
+  inside. The file whose stem is the name's slug keeps the name; the other
+  is listed under its file stem. Load both, keep one, delete the other.
+- **History.** The cloud service keeps file versions; there is no git in
+  the library (the old home-as-git switch and the repo's snapshot
+  folder were removed in plan 25 — a `.git` inside a cloud folder is a
+  known corruption risk).
+- **iCloud / Dropbox.** Mark the folder "Keep Downloaded" / "Available
+  offline": an evicted file is invisible to the app.
+
+The macro candidates to audition (plan 22) are in the owner's library;
 [`plans/22-macro-candidates.md`](plans/22-macro-candidates.md) says what
 each macro is meant to do.
 
@@ -564,7 +588,7 @@ pinch_note = 100        # left index…pinky = note…note+3, right note+4…not
 tape = ""               # a recorded hand tape to play instead of the camera
 
 [library]
-git = false             # true: the home is a local git repository (§4)
+path = ""               # "" = the home; else the shared library folder (§4)
 ```
 
 Rules worth knowing:
@@ -578,7 +602,9 @@ Rules worth knowing:
   `on_start`, `passthrough`, `bg` and `alpha` stay scalar and belong to
   output 1 alone. An unknown key in an entry is a note; entries past the
   fourth are dropped.
-- `[library] git` anything but `true` / `false` is `false`, with a note.
+- `[library] path` is expanded (`~`) and a relative path is relative to
+  the config's folder; anything but text is `""` with a note. A leftover
+  `git` key in `[library]` is ignored with a note asking you to remove it.
 - `[hands] calibration` and `tape` are relative to the config's folder.
 
 ## 6. The control window
@@ -1262,8 +1288,6 @@ uv run ruff check .
   `tests/test_hands_tape.py::test_every_recorded_tape_replays_through_the_ghost`,
   because no real hand tape has been recorded into
   `tests/fixtures/hands/` (`tools/hands_tape.py record` on the rig).
-  `tests/test_homegit.py` also skips its git cases where there is no
-  `git` on the PATH.
 - The parity net: `tests/golden/` traces recorded from the retired HTML
   app (`tools/record_golden.py`, which needs Playwright's Chromium) hold
   geometry exact and the audio chain's behaviour; `tests/legacy_chain.py`
@@ -1287,7 +1311,8 @@ uv run ruff check .
   W plane; `tools/turntable.py` draws the same sweeps (§1).
 - Import boundaries are tests: the core never imports `midi`, `bridge`
   or `dream`; `hands/core.py`, `hands/signal.py`, `lfo.py`, `tempo.py`,
-  `undo.py` and `homegit.py` import nothing from the package.
+  and `undo.py` import nothing from the package; `library.py` never
+  imports `config`.
 
 What only a person at the machine can check is
 [`TESTING-GUIDE.md`](TESTING-GUIDE.md) and the numbered list in

@@ -145,6 +145,29 @@ not used until a relaunch (Cmd+R). The OUTPUT page lists each output and
 what it shows. Details and the per-output switches are
 [`ENGINEERING.md`](ENGINEERING.md) §14.
 
+## Share presets with someone
+
+Two people (or two Macs) can have the same presets: whatever either saves
+shows up on the other. The presets live in a cloud-synced folder; each
+Mac's own settings stay in its home (`~/Hyperspace`).
+
+1. Make a folder in your cloud drive, shared with each other (for
+   example `Dropbox/Hyperspace`). On iCloud, mark it "Keep Downloaded";
+   on Dropbox, "Available offline". Evicted files are invisible to the
+   app.
+2. Quit Hyperspace. Run
+   `uv run python tools/move_library.py ~/Dropbox/Hyperspace` (whoever
+   goes second keeps their own copy of any same-named preset, and the
+   tool says which).
+3. Add the printed `[library]` lines to `~/Hyperspace/config.toml`, then
+   start Hyperspace.
+4. If a "conflicted copy" preset shows up, load both, keep one, and
+   delete the other.
+
+If the folder is ever missing at launch (the drive not mounted), the app
+says so, turns saves off and creates nothing: fix it and restart. Details
+are in [`ENGINEERING.md`](ENGINEERING.md) §4, "The shared library".
+
 ## Re-recording the golden traces (rare)
 
 Only to re-record the parity traces from the retired HTML app:
