@@ -226,11 +226,15 @@ def test_a_stick_never_ends_a_learn_on_a_setting_it_cannot_drive(rig):
 # ---- the factory layout (2026-10-14) ----
 
 def test_an_older_files_pad_rows_move_to_the_new_layout_and_the_owners_stay(tmp_path):
-    """The four old factory pad rows (A rotate, X points, Y faces, START
-    the sheet) move to the layout of 2026-10-14; a row the owner learned
+    """The old factory pad rows (A rotate, X points, Y faces, START the
+    sheet, BACK the panel, the right-stick click the camera) move to the
+    layout of 2026-10-14 — START and BACK free; a row the owner learned
     onto a button stays; a second load changes nothing."""
     old = [Binding("pad:A", "view.rotate", "toggle"), Binding("pad:X", "view.points", "toggle"),
            Binding("pad:Y", "view.faces", "toggle"), Binding("pad:MENU", "ui.cheatsheet", "toggle"),
+           Binding("pad:VIEW", "ui.panel", "toggle"),
+           Binding("pad:LSTICK", "camera.reset", "fire"),
+           Binding("pad:RSTICK", "camera.reset", "fire"),
            Binding("hat:UP", "fx.wobble.freq", "step")]          # the owner's own
     path = tmp_path / "bindings.json"
     Bindings(old, path=path).write()
@@ -239,9 +243,11 @@ def test_an_older_files_pad_rows_move_to_the_new_layout_and_the_owners_stay(tmp_
     assert rows["pad:A"] == ("view.faces", "toggle")
     assert rows["pad:X"] == ("preset.list.prev", "fire")      # straight to the newest
     assert rows["pad:Y"] == ("view.lines", "toggle")
-    assert rows["pad:MENU"] == ("preset.save_new", "hold")
+    assert "pad:MENU" not in rows and "pad:VIEW" not in rows
+    assert rows["pad:LSTICK"] == ("camera.reset", "fire")
+    assert rows["pad:RSTICK"] == ("rot.reset_w", "fire")
     assert rows["hat:UP"] == ("fx.wobble.freq", "step")
-    assert sum("the pad layout of 2026-10-14" in n for n in t.notes) == 4
+    assert sum("the pad layout of 2026-10-14" in n for n in t.notes) == 6
     after = path.read_text()
     again = Bindings.load(path, legacy_midi=None)
     assert not again.notes and path.read_text() == after
@@ -283,12 +289,38 @@ def test_the_factory_pad_walks_the_list_and_the_desk_the_bank():
                for b in factory_desk())
 
 
-def test_start_held_saves_a_new_preset(rig):
+def test_start_and_back_are_free_and_a_learned_start_hold_saves(rig):
+    """The factory leaves START and BACK unbound (2026-10-14); a save-as
+    the owner puts on START as a hold fires once it is held HOLD_S."""
+    assert not [b for b in routing.padmap() if b.source in ("pad:MENU", "pad:VIEW")]
     pad, r = ScriptedPad(), rig.router
     saved = []
     rig.reg["preset.save_new"].fire = lambda: saved.append(1)
+    rig.table.add(Binding("pad:MENU", "preset.save_new", "hold"))
     pad.frame(held={gp.MENU})
     r.pad(pad, now=1.0)
     pad.frame(held={gp.MENU})
     r.pad(pad, now=1.0 + routing.HOLD_S)
     assert saved == [1]
+
+
+def test_the_right_stick_click_resets_the_4d_spin(rig):
+    """`rot.reset_w` (the right-stick click): the W planes' rates and
+    angles to 0; the other three planes keep theirs."""
+    import math
+
+    reg = rig.reg
+    view = reg["camera.reset"]                 # (present: the left click's twin)
+    assert view is not None
+    for name in ("XY", "XZ", "YZ", "XW", "YW", "ZW"):
+        reg[f"rot.rate.{name}"].set(3.0)
+        reg[f"rot.phase.{name}"].set(1.0)
+    pad, r = ScriptedPad(), rig.router
+    pad.frame(held={gp.RSTICK})
+    r.pad(pad)
+    for name in ("XW", "YW", "ZW"):
+        assert reg[f"rot.rate.{name}"].value == 0.0
+        assert reg[f"rot.phase.{name}"].value == 0.0
+    for name in ("XY", "XZ", "YZ"):
+        assert reg[f"rot.rate.{name}"].value == 3.0
+        assert math.isclose(reg[f"rot.phase.{name}"].value, 1.0)

@@ -482,7 +482,7 @@ def test_factory_table_binds_only_real_params(tmp_path):
     # + R, F1–F8, ⇧F1–F8 (plan 11), + undo and redo on ⌘ and Ctrl (plan 15 WP1),
     # + Home (plan 15 WP2)
     assert len(t.of("key")) == 25 + 17 + 4 + 1
-    assert len(t.of("pad")) == 10 and len(t.of("hat")) == 4
+    assert len(t.of("pad")) == 8 and len(t.of("hat")) == 4     # START and BACK free
     assert len(t.midi()) == 113 + 6 + 1 + 4 and t.mods() == []   # + SHIFT, the global track
     # knobs, OVERDUB (plan 15 WP2) (the clip-stop row's eight, plan 15 WP4,
     # retired 2026-10-09),
