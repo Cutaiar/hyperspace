@@ -20,4 +20,4 @@ This repository holds two iterations:
 
 - **[`hyperspace-contact/`](hyperspace-contact/)** — a one-page link tree to
   share the project: our Instagram handles and a QR code back to the page. Live
-  at <https://hyperspace-contact.cutaiar.io>.
+  at <https://hyperspace.cutaiar.io>.
