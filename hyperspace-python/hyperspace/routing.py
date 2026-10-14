@@ -88,6 +88,15 @@ scale · u) − base_norm``, so range, wrap and dormancy are push's. Rows to
 unknown or unmodulatable params, or with an unknown scale param, are
 dormant no-ops.
 
+Either op's reading first travels with the row's *feel* (`motion`,
+motion.py): ``follow`` — the analyzer's own asymmetric envelope, attack
+away from the source's rest and release back toward it — or ``spring``,
+a damped spring (Hz, damping ratio). A row with no feel of its own takes
+its source's (`Router.feel_of`): for the pad's `axis` lanes the session's
+`desk.pad.*`, which the sticks' default camera job reads too
+(`Router.felt`); none for every other source. A row's follower starts
+where it moves nothing and is dropped the frame the row stops acting.
+
 One performer per parameter — the model (plan 09)::
 
                        scene-setters (write the BASE, never prompt)
@@ -239,8 +248,9 @@ from pathlib import Path
 
 import numpy as np
 
-from . import apc40
+from . import apc40, motion
 from .bands import BANDS, CEIL
+from .motion import OFF, Follower, Motion
 from .params import (
     DRIVE,
     F_KEYS,
@@ -460,6 +470,11 @@ class Binding:
     # None is the source's own rest, resolved every frame from what its
     # adapter publishes (Router.rests / rest_of); a number overrides it
     rest: float | None = None
+    # push / position: the feel the reading travels with before it acts
+    # (motion.py) — follow (attack / release about rest) or spring. None is
+    # the source's own feel (`Router.feel_of`: the pad's for `axis` lanes,
+    # none elsewhere); Motion("off") turns that off for this row
+    motion: Motion | None = None
     # MIDI controls only (midi.py); other sources ignore them
     pickup: bool = True
     feedback: str | None = None  # "ring" | "led" | None
@@ -477,6 +492,10 @@ class Binding:
     lit: bool = field(default=False, repr=False, compare=False)
 
     _RUNTIME = ("caught", "last_hw", "last_out", "lit")
+
+    def __post_init__(self):
+        if self.motion is not None and not isinstance(self.motion, Motion):
+            self.motion = Motion.from_json(self.motion)   # a file's dict
 
     # ---- the source, taken apart ----
 
@@ -577,10 +596,12 @@ class Binding:
         for k in self._RUNTIME:
             d.pop(k)
         # only what differs from the defaults keeps the file readable
-        for k in ("value", "enabled", "scale", "when", "rest", "pickup", "feedback",
-                  "on", "off", "ring", "layer"):
+        for k in ("value", "enabled", "scale", "when", "rest", "motion", "pickup",
+                  "feedback", "on", "off", "ring", "layer"):
             if d[k] == self.__dataclass_fields__[k].default:
                 d.pop(k)
+        if self.motion is not None:
+            d["motion"] = self.motion.to_json()
         # a performer never picks up (plan 09 d.4: hands grab, they never
         # yield) — the field rides on the dataclass but never on the file
         if self.scheme in LANE_SCHEMES:
@@ -1141,6 +1162,60 @@ def register_desk(reg: Registry, table: Bindings) -> None:
                        tip="How long a value from a desk knob or fader takes to arrive. "
                            "Off: it jumps a detent at a time, as before. One setting for "
                            "every knob and fader; buttons and the cue knob are not smoothed.")
+    _register_pad_feel(reg, table)
+
+
+PAD_FEEL = "desk.pad"     # the pad's feel: PAD_FEEL + ".feel" / ".attack" / …
+
+
+def _register_pad_feel(reg: Registry, table: Bindings) -> None:
+    """The pad's feel as five session params over `table.pad_feel`: the
+    motion an `axis` lane travels with when its row names none, and the
+    sticks' default camera job's (motion.py). Off, a stick is as it reads."""
+    if f"{PAD_FEEL}.feel" in reg:
+        return
+
+    def get(k):
+        return lambda: getattr(getattr(table, "pad_feel", OFF), k)
+
+    def put(k, lo, hi):
+        def set_(v):
+            v = min(max(float(v), lo), hi)
+            table.pad_feel = replace(getattr(table, "pad_feel", OFF), **{k: v})
+        return set_
+
+    reg.enum(f"{PAD_FEEL}.feel", "Stick feel",
+             lambda: motion.MODES.index(getattr(table, "pad_feel", OFF).mode),
+             lambda i: setattr(table, "pad_feel",
+                               replace(getattr(table, "pad_feel", OFF),
+                                       mode=motion.MODES[int(i) % len(motion.MODES)])),
+             list(motion.MODES), group="desk", modulatable=False,
+             tip="How the gamepad's sticks and triggers travel once read — their "
+                 "routes (a row with no feel of its own) and their camera job. "
+                 "off: as the hardware reads. follow: the analyzer's envelope — "
+                 "attack away from rest, release back toward it, so a stick let go "
+                 "glides home. spring: a damped spring toward the stick.")
+    def ms(v):
+        return f"{v * 1000:.0f} ms"
+    reg.continuous(f"{PAD_FEEL}.attack", "Stick attack", get("atk"),
+                   put("atk", 0.0, motion.ATK_MAX), lo=0.0, hi=motion.ATK_MAX,
+                   group="desk", modulatable=False, fmt=ms,
+                   tip="follow: how long a stick takes moving away from rest (63 %).")
+    reg.continuous(f"{PAD_FEEL}.release", "Stick release", get("rel"),
+                   put("rel", 0.0, motion.REL_MAX), lo=0.0, hi=motion.REL_MAX,
+                   group="desk", modulatable=False, fmt=ms,
+                   tip="follow: how long a stick takes going back toward rest (63 %) — "
+                       "long, and the spring's snap becomes a glide.")
+    reg.continuous(f"{PAD_FEEL}.hz", "Stick spring", get("hz"),
+                   put("hz", motion.HZ_MIN, motion.HZ_MAX), lo=motion.HZ_MIN,
+                   hi=motion.HZ_MAX, log=True, group="desk", modulatable=False,
+                   fmt=lambda v: f"{v:.2f} Hz",
+                   tip="spring: its natural frequency — low is lazy, high is tight.")
+    reg.continuous(f"{PAD_FEEL}.damp", "Stick damping", get("damp"),
+                   put("damp", 0.0, motion.DAMP_MAX), lo=0.0, hi=motion.DAMP_MAX,
+                   group="desk", modulatable=False, fmt=lambda v: f"ζ {v:.2f}",
+                   tip="spring: the damping ratio. 1 arrives fastest without "
+                       "overshoot; below 1 it overshoots and rings; above, it creeps.")
 
 
 def legacy_planedrive(lanes, gain: float = 1.0) -> np.ndarray:
@@ -1198,6 +1273,10 @@ class Bindings:
     # it): the session's — a show keeps it, bindings.json never does. On
     # the class, so a table from before a hot reload has it too
     slew: float = 0.0
+    # the pad's feel (`pad.feel` …, register_desk): the motion an `axis`
+    # lane travels with when its row names none, and the sticks' default
+    # camera job's (app.py). The session's, on the class like `slew`
+    pad_feel: Motion = OFF
     # no backup, no rewrite (plan 19 fork 12): the schema number the file
     # was read at while a load changed the table in memory (a migration, a
     # factory remap) and the copy of the file as it was could not be made.
@@ -1981,6 +2060,7 @@ class Router:
         holds = self.__dict__.setdefault("_pad_holds", {})   # source → press time; None once fired
         if not pad.on:
             holds.clear()
+            self.felt("axis", None, 0.0)     # the camera job's followers start afresh
             return
         now = time.monotonic() if now is None else now
         for b in self.table.of("pad", "hat"):
@@ -2077,11 +2157,63 @@ class Router:
         rests = self.rests.get(scheme) or []
         return float(rests[i]) if 0 <= i < len(rests) else 0.0
 
-    def modulate(self, analyzer=None) -> None:
+    # ---- motion (motion.py): the feel a reading travels with ----
+
+    def source_feel(self, scheme: str) -> Motion:
+        """A scheme's own feel: the pad's (`table.pad_feel`) for `axis`,
+        none for every other source — the analyzer's lanes have theirs in
+        the chain already, a hand has its own smoothing."""
+        return getattr(self.table, "pad_feel", OFF) if scheme == "axis" else OFF
+
+    def feel_of(self, b: Binding) -> Motion:
+        """The motion row `b` runs on its reading: its own, or its source's."""
+        return b.motion if b.motion is not None else self.source_feel(b.scheme)
+
+    def felt(self, scheme: str, values, dt: float) -> list[float] | None:
+        """`values` — an adapter's lanes for `scheme` — through the scheme's
+        own feel, one follower per lane: what the pad's default camera job
+        reads (app.py). None while that feel is off or `values` is None,
+        and the followers are dropped, so the next one starts where the
+        source is."""
+        m = self.source_feel(scheme)
+        felt = self.__dict__.setdefault("_felt", {})
+        if values is None or not m.on:
+            felt.pop(scheme, None)
+            return None
+        rests = self.rests.get(scheme) or []
+        fs = felt.get(scheme)
+        if fs is None or len(fs) != len(values):
+            fs = felt[scheme] = [Follower(v) for v in values]
+        return [f.step(v, dt, m, rests[i] if i < len(rests) else 0.0)
+                for i, (f, v) in enumerate(zip(fs, values))]
+
+    def _move(self, b: Binding, m: Motion, u: float, p: Param, depth: float,
+              dt: float, movers: dict) -> float:
+        """Row `b`'s reading `u` after its motion. A row's follower starts
+        where it moves nothing — a push row at its rest, a position row at
+        the base — so a source going live glides in from the base."""
+        rest = b.rest if b.rest is not None else self.rest_of(b.source)
+        key = (b.source, b.target)
+        f = movers.get(key)
+        if f is None:
+            if b.op == "push":
+                seed = rest
+            else:
+                seed = min(1.0, max(0.0, p.norm / depth)) if depth > 0 else u
+            f = movers[key] = Follower(seed)
+        return f.step(u, dt, m, rest)
+
+    def modulate(self, analyzer=None, dt: float | None = None) -> None:
         """The frame's modulation pass — the one path a continuous source
         has to a param: every enabled performer row whose source is live
         calls modulate on its target. `analyzer` is the live one, or None
-        while no audio source runs (its lanes are then not a source)."""
+        while no audio source runs (its lanes are then not a source). `dt`
+        is the frame's, for the rows' motion (`feel_of`); None, a 60 Hz
+        frame. A row that does not act this frame — its source not live,
+        its gate shut — loses its follower, and starts afresh."""
+        dt = 1 / 60 if dt is None else dt
+        movers = self.__dict__.setdefault("_movers", {})
+        moved: set = set()
         lanes = None if analyzer is None else analyzer.lanes / CEIL
         # each row's lane — a number, or a name through `names` — from the
         # cache `lane` keeps; a miss or a republished map resolves again
@@ -2121,6 +2253,10 @@ class Router:
                 depth *= s.at(float(mp.value))
             if dormant:
                 continue
+            m = self.feel_of(b)
+            if m.on:
+                u = self._move(b, m, u, p, depth, dt, movers)
+                moved.add((b.source, b.target))
             if b.op == "push":
                 # centred where the source rests — the row's own number, or
                 # the source's as published this frame: idle adds nothing
@@ -2133,6 +2269,8 @@ class Router:
                     continue
                 x = min(1.0, max(0.0, depth * u)) - p.norm
             p.modulate(x)
+        for key in [k for k in movers if k not in moved]:
+            del movers[key]
 
 
 def _resolve(scheme: str, name: str) -> int | None:

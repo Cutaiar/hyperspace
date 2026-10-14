@@ -22,6 +22,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
+from .motion import follow, pole, spring
+
 # the package's one clamp (tapers.py, audit R10), re-exported under the
 # reference's name: the chain and the frozen oracle (tests/legacy_chain.py)
 # read it from here like every other reference constant
@@ -118,10 +120,7 @@ def _sh_hold(s, x, dt):
 
 
 def _sh_stac(s, x, dt):
-    e = s.get("e", 0.0)
-    tau = 0.004 if x > e else 0.075
-    e += (x - e) * (1 - math.exp(-dt / tau))
-    s["e"] = e
+    e = s["e"] = follow(s.get("e", 0.0), x, dt, 0.004, 0.075)
     return e if e > 0.12 else 0.0
 
 
@@ -144,10 +143,15 @@ def _sh_snh(s, x, dt):
 
 
 def _sh_slew(s, x, dt):
-    e = s.get("e", 0.0)
-    e += (x - e) * (1 - math.exp(-dt / 0.8))
-    s["e"] = e
-    return e
+    s["e"] = pole(s.get("e", 0.0), x, dt, 0.8)
+    return s["e"]
+
+
+def _sh_sprg(s, x, dt):
+    # motion.spring, the one a route row runs: 3 Hz, ζ 0.35 — kicks
+    # overshoot and ring out; floored at 0 so a fader never runs backwards
+    s["x"], s["v"] = spring(s.get("x", 0.0), s.get("v", 0.0), x, dt, 3.0, 0.35)
+    return s["x"] if s["x"] > 0 else 0.0
 
 
 @dataclass(frozen=True)
@@ -171,6 +175,7 @@ SHAPERS = [
     Shaper("TREM", "Tremolo — 6 Hz sine, 70% depth", _sh_trem),
     Shaper("S&H", "Sample & hold — re-samples every 180 ms", _sh_snh),
     Shaper("SLEW", "Slew — 800 ms smoothing, glacial drift", _sh_slew),
+    Shaper("SPRG", "Spring — 3 Hz, ζ 0.35: overshoots and rings", _sh_sprg),
 ]
 
 # ----------------------------------------------------- per-band parameters

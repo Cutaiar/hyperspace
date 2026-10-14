@@ -299,6 +299,7 @@ ORDER = [
     "router.keys",                                   # key rows (and the loop keys)
     "pad.poll", "router.pad",                        # axis lanes, pad and hat rows
     "router.claimed",                                # sticks no route names, to the base
+    "pad.lanes", "router.felt",                      # through the pad's feel (motion.py)
     "midi.poll",                                     # cc and note rows
     "router.follow_macros",                          # the macros' base subscribers
     "undo.tick",                                     # the bases, compared (plan 15 WP1)
@@ -330,13 +331,13 @@ def test_an_absent_pad_or_adapter_is_simply_skipped():
     h.pad, h.midi_io, h.hands_io, h.bridge_io = None, None, None, None
     app.frame(h, now=1.0, dt=1 / 60, fps=60.0)
     assert log == [s for s in ORDER
-                   if not s.startswith(("pad.", "router.pad", "router.claimed", "midi.",
+                   if not s.startswith(("pad.", "router.pad", "router.claimed", "router.felt", "midi.",
                                         "hands.", "bridge."))]
     log.clear()
     h = _host(log, pad_on=False)                     # a pad polled for but not there:
     app.frame(h, now=1.0, dt=1 / 60, fps=60.0)       # its axis lanes go dark (router.pad),
     assert "pad.poll" in log and "router.pad" in log     # no stick writes anything
-    assert "router.claimed" not in log
+    assert "router.claimed" not in log and "router.felt" not in log
 
 
 def test_a_raising_step_is_recorded_and_the_windows_still_draw():
@@ -381,6 +382,22 @@ def test_the_relative_writers_run_with_the_setters_and_move_the_base():
     assert i("router.pad") < i("camera.yaw.nudge") < i("camera.pitch.nudge")
     assert i("camera.pitch.nudge") < i("camera.zoom.scale") < i("midi.poll")
     assert log.count("view.depth4.nudge") == 1     # the triggers rest, so no second ride
+
+
+def test_the_sticks_camera_job_reads_through_the_pads_feel():
+    """With the pad's feel on (`router.felt` returns lanes), the camera job
+    reads those, not the stick: a stick let go (0) still gliding home on
+    the left X lane keeps orbiting; the right stick's Y, at rest, zooms nothing."""
+    log: list[str] = []
+    h = _host(log, stick=0.0)
+    h.router.felt__returns = [0.9, 0.5, 0.5, 0.5, 0.0, 0.0]
+    app.frame(h, now=1.0, dt=1 / 60, fps=60.0)
+    assert "camera.yaw.nudge" in log
+    assert "camera.pitch.nudge" not in log and "camera.zoom.scale" not in log
+    log.clear()
+    h.router.felt__returns = None                  # off: the stick as read
+    app.frame(h, now=1.0, dt=1 / 60, fps=60.0)
+    assert "camera.yaw.nudge" not in log
 
 
 def test_the_loop_keys_outside_the_table():

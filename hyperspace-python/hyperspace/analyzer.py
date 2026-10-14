@@ -79,6 +79,7 @@ from .bands import (
     default_params,
     soft_ceil,
 )
+from .motion import follow
 
 N_MAX = 16
 F_LO, F_HI = 20.0, 20000.0     # centre frequency range, Hz
@@ -531,12 +532,11 @@ class Analyzer:
             u = clamp((db + t_db - U_LO) / U_SPAN, 0, 2.5)
 
             # LEVEL path — asymmetric one-pole
-            tau = P.atk if u > self.env[i] else P.dec
-            self.env[i] += (u - self.env[i]) * (1 - math.exp(-dt / tau))
+            # (motion.follow at rest 0 — the same follower a route row runs)
+            self.env[i] = follow(self.env[i], u, dt, P.atk, P.dec)
 
             # TRANSIENT path — fast minus slow, relative flux, peak-normalised
-            ft = FAST_A if u > self.fast[i] else FAST_R
-            self.fast[i] += (u - self.fast[i]) * (1 - math.exp(-dt / ft))
+            self.fast[i] = follow(self.fast[i], u, dt, FAST_A, FAST_R)
             self.slow[i] += (u - self.slow[i]) * k_slow
             flux = clamp((self.fast[i] - self.slow[i]) / (self.slow[i] + FLUX_K) * FLUX_G, 0, 1.5)
             self.fpk[i] = max(flux, self.fpk[i] * fpk_dec, FLUX_MIN)

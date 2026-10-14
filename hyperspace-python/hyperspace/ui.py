@@ -1894,6 +1894,13 @@ class Panel:
             self._row("desk.slew")
         self._midi_status()
         self._learn_status()
+        if "desk.pad.feel" in self.reg:    # the sticks' feel (routing._register_pad_feel)
+            imgui.spacing()
+            self._section("gamepad")
+            self._row("desk.pad.feel")
+            mode = self.reg["desk.pad.feel"].text()
+            for k in {"follow": ("attack", "release"), "spring": ("hz", "damp")}.get(mode, ()):
+                self._row(f"desk.pad.{k}")
         imgui.spacing()
         self._section("bridge")
         self._bridge_status()

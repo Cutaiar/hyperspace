@@ -12,8 +12,8 @@ import pytest
 
 PKG = Path(__file__).resolve().parents[1] / "hyperspace"
 STACK = ("audio.py", "analysis.py", "analyzer.py", "bands.py", "offline.py")
-# the stack may reach only itself and the taper maths
-ALLOWED = {"audio", "analysis", "analyzer", "bands", "tapers"}
+# the stack may reach only itself, the taper maths and the followers (motion.py)
+ALLOWED = {"audio", "analysis", "analyzer", "bands", "tapers", "motion"}
 
 
 def _imports(path: Path):
