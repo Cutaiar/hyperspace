@@ -5,7 +5,7 @@
  "values": {},
  "routes": [
   {"source": "hand:right.x", "target": "camera.yaw", "op": "push", "value": 0.5},
-  {"source": "hand:right.pitch", "target": "camera.pitch", "op": "push", "value": 0.5},
+  {"source": "hand:right.pitch", "target": "camera.pitch", "op": "push", "value": 0.25},
   {"source": "hand:left.x", "target": "camera.pan.x", "op": "push", "value": 0.1},
   {"source": "hand:left.z", "target": "camera.pan.y", "op": "push", "value": 0.1},
   {"source": "hand:left.y", "target": "camera.zoom", "op": "push", "value": 0.12}

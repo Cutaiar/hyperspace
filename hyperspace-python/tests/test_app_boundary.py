@@ -382,6 +382,20 @@ def test_the_relative_writers_run_with_the_setters_and_move_the_base():
     assert i("router.pad") < i("camera.yaw.nudge") < i("camera.pitch.nudge")
     assert i("camera.pitch.nudge") < i("camera.zoom.scale") < i("midi.poll")
     assert log.count("view.depth4.nudge") == 1     # the triggers rest, so no second ride
+    # the right stick's X rides the three W planes' rates, after the zoom
+    w = [f"rot.rate.{p}.nudge" for p in app.W_PLANES]
+    assert app.W_PLANES == ("XW", "YW", "ZW")
+    assert i("camera.zoom.scale") < i(w[0]) < i(w[1]) < i(w[2]) < i("midi.poll")
+
+
+def test_a_routed_right_stick_leaves_the_w_rates_alone():
+    """A route on `axis:RX` takes the stick off its default job."""
+    log: list[str] = []
+    h = _host(log, stick=0.5)
+    h.router.claimed__returns = {app.gamepad.AX_RX}
+    app.frame(h, now=1.0, dt=1 / 60, fps=60.0)
+    assert not any(s.startswith("rot.rate.") for s in log)
+    assert "camera.yaw.nudge" in log
 
 
 def test_the_sticks_camera_job_reads_through_the_pads_feel():

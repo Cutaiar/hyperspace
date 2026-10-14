@@ -38,8 +38,8 @@ GUIDE = 12
 LSTICK, RSTICK = 13, 14
 
 # axes: sticks in ±1, triggers resting at −1.0. Unrouted, the left stick
-# orbits, the right stick's Y zooms and the triggers ride depth4 (app.py);
-# the right stick's X does nothing until a route names it
+# orbits, the right stick's Y zooms, its X rides the W planes' rates (the
+# 4D spin) and the triggers ride depth4 (app.py)
 AX_LX, AX_LY, AX_RX, AX_RY, AX_LT, AX_RT = 0, 1, 2, 3, 4, 5
 
 # the D-pad is the hat, a GLFW bitmask

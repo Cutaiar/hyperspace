@@ -997,7 +997,7 @@ def test_a_load_tells_the_listeners_its_name(rig):
 # ------------------------------------------- plan 18 WP4: two hands on the camera
 
 ORBIT = "hands-orbit"
-ORBIT_ROWS = [("hand:right.x", "camera.yaw", 0.5), ("hand:right.pitch", "camera.pitch", 0.5),
+ORBIT_ROWS = [("hand:right.x", "camera.yaw", 0.5), ("hand:right.pitch", "camera.pitch", 0.25),
               ("hand:left.x", "camera.pan.x", 0.1), ("hand:left.z", "camera.pan.y", 0.1),
               ("hand:left.y", "camera.zoom", 0.12)]      # not the plan's 0.3: 7.4× blacked the frame
 # a camera the mouse moved before the hands came in: a scene-setter's bases
@@ -1081,15 +1081,16 @@ def test_an_absent_or_level_hand_leaves_the_orbit_camera_alone(rig):
 def test_each_orbit_axis_moves_its_camera_param_as_its_row_says(tmp_path):
     """Each row's axis swept across its range from the default camera: at
     rest the param is its base; the ends are what the depth says — the
-    yaw a quarter turn each way, the pitch ±44° (a quarter of its ±1.55
-    range), each pan ±400 px, the zoom up from 1× to 800^0.12 = 2.23× at the
-    top and never below the base; the move is monotonic; no other camera
-    param moves; the hand leaving brings the base back."""
+    yaw a quarter turn each way, the pitch ±45° (an eighth of the whole
+    turn it wraps over since 2026-10-14; ±44° of its old ±1.55), each pan
+    ±400 px, the zoom up from 1× to 800^0.12 = 2.23× at the top and never
+    below the base; the move is monotonic; no other camera param moves;
+    the hand leaving brings the base back."""
     ends = {"camera.yaw": (-math.pi / 2, math.pi / 2),
-            "camera.pitch": (-0.25 * 3.1, 0.25 * 3.1),
+            "camera.pitch": (-math.pi / 4, math.pi / 4),
             "camera.pan.x": (-400.0, 400.0), "camera.pan.y": (-400.0, 400.0),
             "camera.zoom": (1.0, 2.23)}                  # 800 ** 0.12, as measured
-    assert math.degrees(ends["camera.pitch"][1]) == pytest.approx(44.4, abs=0.05)
+    assert math.degrees(ends["camera.pitch"][1]) == pytest.approx(45.0)
     for k, (source, target, depth) in enumerate(ORBIT_ROWS):
         side, axis = source.split(":")[1].split(".")
         seen = []
