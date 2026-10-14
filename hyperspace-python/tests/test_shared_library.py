@@ -144,6 +144,22 @@ def test_a_library_given_alone_is_created_as_today(tmp_path):
     assert lib.missing is None and (tmp_path / "new" / "projects").is_dir()
 
 
+def test_the_system_page_says_where_the_library_is(tmp_path, gone):
+    from hyperspace.ui import Panel
+
+    def lines(lib):
+        return Panel.library_lines(SimpleNamespace(library=lib))
+
+    assert lines(Library(tmp_path / "home", period=0.0)) == [
+        (f"library: {tmp_path / 'home'}", False)]
+    (tmp_path / "L").mkdir()
+    assert lines(Library(tmp_path / "L", machine=gone.machine, period=0.0)) == [
+        (f"library: {tmp_path / 'L'}", False), (f"machine: {gone.machine}", False)]
+    assert lines(gone.lib) == [
+        (f"library: {gone.root} — NOT FOUND, saves are off (restart once it is there)", True),
+        (f"machine: {gone.machine}", False)]
+
+
 # ---------------------------------------------------------------- atomic writes
 
 def test_a_write_is_atomic_and_leaves_no_temp_file(tmp_path, monkeypatch):
