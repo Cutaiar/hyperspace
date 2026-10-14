@@ -1496,8 +1496,10 @@ def _settled_macros(macros: dict, reg, where: str) -> tuple[dict, list[str]]:
 
 def migrate_routing_presets(root: Path, has: Callable[[str], bool] | None = None,
                             factory: Path = FACTORY, reg=None,
-                            hands: tuple[list[str], str] | None = None) -> list[str]:
-    """Every user routing preset (``<home>/bindings/*.json``) as a full
+                            hands: tuple[list[str], str] | None = None, *,
+                            machine: Path | None = None) -> list[str]:
+    """Every user routing preset (``<machine>/bindings/*.json`` — a machine
+    folder, beside bindings.json; `machine` defaults to `root`) as a full
     preset (decision 10): its values (less session ids, with the effects
     its routes drive switched on, `effects_on`), its performer rows (a
     ``scale: macro.N`` a depth subscriber; a ``hand:<i>`` named by `hands`
@@ -1505,8 +1507,9 @@ def migrate_routing_presets(root: Path, has: Callable[[str], bool] | None = None
     None — row 20), its macros (a base subscriber on a session param
     dropped with a note, D9), no ``desk`` key. The files stay where they
     are, untouched; a note beside them (NOT_READ) says they are no longer
-    read, and is what makes this run once."""
-    folder = root / LEGACY_ROUTING
+    read, and is what makes this run once. The presets land in `root`, the
+    library (plan 25)."""
+    folder = (root if machine is None else machine) / LEGACY_ROUTING
     files = sorted(folder.glob("*.json")) if folder.is_dir() else []
     if not files or (folder / NOT_READ).exists():
         return []
@@ -1621,8 +1624,16 @@ def migrate_home(lib, router, hands_cfg: dict | None = None) -> list[str]:
     show becomes ``mine`` (library.unshadow_default), and ``MIGRATED``
     goes on its slot 1. Re-opens the launch's show (the last opened, else
     the party) when a show changed. Every note goes to stderr and the sum to
-    `lib.warning`; returns the notes. Nothing to do: nothing written."""
+    `lib.warning`; returns the notes. Nothing to do: nothing written.
+
+    Documents (shows, presets) are read and written in the library root
+    (`lib.home`); bindings.json (the router's table) and the legacy
+    ``bindings/`` folder are machine files, read from `lib.machine` (plan
+    25). A shared library that is missing (D5): nothing at all."""
+    if getattr(lib, "missing", None) is not None:
+        return []
     root, table = lib.home, router.table
+    machine = getattr(lib, "machine", root)
     reg = lib.reg
     factory = lib.factory
     carried = table.carried
@@ -1662,7 +1673,7 @@ def migrate_home(lib, router, hands_cfg: dict | None = None) -> list[str]:
         notes += renamed
         written += [root / PROJECTS / f"{MINE_PROJECT}{PROJECT_SUFFIX}"] if renamed else []
     notes += migrate_routing_presets(root, (lambda pid: pid in reg) if reg is not None
-                                     else None, factory, reg, hands)
+                                     else None, factory, reg, hands, machine=machine)
     # a user preset already holding the table's part (a launch that
     # converted the projects but could not rewrite bindings.json, or a
     # MIGRATED preset made before) takes it: no second MIGRATED, and the

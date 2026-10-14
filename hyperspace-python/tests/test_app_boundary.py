@@ -24,8 +24,7 @@ from hyperspace.render import ViewState
 IMPORT_SCRIPT = """
 import sys
 import hyperspace.app
-gated = ("hyperspace.midi", "hyperspace.bridge", "hyperspace.dream", "hyperspace.homegit",
-         "leap", "torch")
+gated = ("hyperspace.midi", "hyperspace.bridge", "hyperspace.dream", "leap", "torch")
 print(sorted(m for m in gated if m in sys.modules), "hyperspace.hands" in sys.modules)
 """
 
@@ -446,9 +445,7 @@ def test_the_loop_keys_outside_the_table():
 def test_the_host_close_list_is_every_adapter_in_shutdown_order():
     log: list[str] = []
     h = _host(log)
-    assert h.adapters == (h.midi_io, h.bridge_io, h.hands_io, None, None)
-    h.committer = "c"                   # homegit's, last: its close waits up to 2 s
-    assert h.adapters[-1] == "c"
+    assert h.adapters == (h.midi_io, h.bridge_io, h.hands_io, None)
 
 
 def _imports(path: Path) -> set[str]:
@@ -465,24 +462,12 @@ def _imports(path: Path) -> set[str]:
     return out
 
 
-def test_homegit_is_a_leaf_and_the_library_never_imports_it():
-    """Plan 19 WP6: homegit imports nothing from the package (a leaf, like
-    placement.py); the library imports neither homegit nor config — app.main
-    builds the committer and sets `library.committer`."""
+def test_the_library_never_imports_config():
+    """The library never imports config: app.main reads [library] path and
+    hands the library its root and the machine home (plan 25)."""
     pkg = Path(app.__file__).parent
-    leaf = _imports(pkg / "homegit.py")
-    assert not any(m.startswith((".", "hyperspace")) for m in leaf), leaf
     lib = _imports(pkg / "library.py")
-    assert not any(m.endswith(("homegit", "config")) for m in lib), lib
-
-
-def test_the_homegit_gate(tmp_path):
-    assert app._open_homegit({}, tmp_path) is None
-    assert app._open_homegit({"library": {"git": False}}, tmp_path) is None
-    assert app._open_homegit({"library": {"git": "yes"}}, tmp_path) is None   # exactly true
-    c = app._open_homegit({"library": {"git": True}}, tmp_path)
-    assert c is not None and c.home == tmp_path and c.commits == 0
-    assert not (tmp_path / ".git").exists()                 # built, nothing run
+    assert not any(m.endswith("config") for m in lib), lib
 
 
 # ---- decision 21 (a): the transparent framebuffer only when the config asks ----

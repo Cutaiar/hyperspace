@@ -108,6 +108,7 @@ string on every file plus MIGRATIONS below is how the formats grow.
 from __future__ import annotations
 
 import copy
+import itertools
 import json
 import os
 import re
@@ -186,6 +187,24 @@ LEGACY_BANK = "presets.json"
 
 class LibraryError(Exception):
     pass
+
+
+# library roots that were named but not there at launch (plan 25 D5): no
+# write may land under one — `_write_text` and `to_trash` refuse it, so a
+# writer that forgot to ask `Library.writable` still creates nothing
+_missing: set[Path] = set()
+
+
+def missing_text(path: Path) -> str:
+    """What a write into a missing shared library says (plan 25 D5)."""
+    return (f"shared library not found at {path} — not saved; fix [library] path or the "
+            "folder, then restart")
+
+
+def _refuse_missing(path: Path) -> None:
+    for root in _missing:
+        if path == root or root in path.parents:
+            raise LibraryError(missing_text(root))
 
 
 # ---------------------------------------------------------------- home
@@ -373,11 +392,26 @@ def _write_json(path: Path, doc: dict) -> None:
     _write_text(path, _json_text(doc))
 
 
+_tmp_ids = itertools.count(1)
+
+
 def _write_text(path: Path, text: str) -> None:
+    """Write `path` atomically (plan 25): the text goes to a dot-named temp
+    file beside it — never ``*.json``, so neither the library's globs nor a
+    cloud client take it for a preset — then `os.replace`s the file, so a
+    synced folder never carries a half-written preset."""
+    _refuse_missing(path)
+    tmp = path.parent / f".{path.name}.{os.getpid()}-{next(_tmp_ids)}.tmp"
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text)
+        with open(tmp, "x", encoding="utf-8") as f:
+            f.write(text)
+        os.replace(tmp, path)
     except OSError as e:
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
         raise LibraryError(f"{path.name}: {e}") from e
 
 
@@ -392,6 +426,11 @@ def to_trash(path: Path, root: Path) -> Path | None:
     warns, a delete is refused."""
     folder = root / TRASH / path.parent.name
     stamp = time.strftime("%Y%m%d-%H%M%S")
+    try:
+        _refuse_missing(folder)
+    except LibraryError as e:
+        print(f"library: {path.name} not copied to the trash ({e})", file=sys.stderr)
+        return None
     try:
         data = path.read_bytes()
         folder.mkdir(parents=True, exist_ok=True)
@@ -1106,6 +1145,7 @@ class Project:
         cutting it to eight, and drops the far slots' names from the file
         the next time it writes that show; the backup is the file from
         before any far slot existed."""
+        self.lib.writable()
         path = self.path_for(self.name) if self.path is None else self.path
         try:
             old = json.loads(path.read_text()) if path.is_file() else None
@@ -1123,18 +1163,8 @@ class Project:
         self.path = path
         _write_json(self.path, doc)
         self.lib._sync(self.path)
-        # the commit's words (plan 19 WP6): what moved since the show was
-        # opened or last written — "starts on", the bank, else a save
-        bank, startup = self._saved
-        if startup != self.startup:
-            said = f"show {self.name}: starts on {self.startup or 'nothing'}"
-        elif bank != list(self.bank):
-            said = f"show {self.name}: bank"
-        else:
-            said = f"save show {self.name}"
         self._saved = (list(self.bank), self.startup)
         self.factory = False                          # your copy now
-        self.lib._commit(said)
         return self.path
 
     def is_dirty(self) -> bool:
@@ -1268,10 +1298,25 @@ class Library:
     (None until app.py builds it after the router).
     """
 
-    def __init__(self, home_dir: Path | None = None, *, factory: Path = FACTORY,
-                 period: float = 0.5):
+    def __init__(self, home_dir: Path | None = None, *, machine: Path | None = None,
+                 factory: Path = FACTORY, period: float = 0.5):
+        # `home` is the library root — presets, shows, module groups,
+        # hidden.json, the trash; `machine` the home for this machine's own
+        # files (last_show here; config, bindings, windows, logs in app.py).
+        # The same folder unless [library] path points elsewhere (plan 25)
         self.home = ensure_home(home_dir) if home_dir is None else Path(home_dir)
-        (self.home / PROJECTS).mkdir(parents=True, exist_ok=True)
+        self.machine = self.home if machine is None else Path(machine)
+        # a named shared library that is not there (D5): never created,
+        # nothing written into it, only the factory listed — said once here
+        # and in red on the SYSTEM page for as long as it runs
+        self.missing: Path | None = None
+        if (home_dir is not None and self.machine != self.home
+                and not self.home.is_dir()):
+            self.missing = self.home
+            _missing.add(self.home)
+        else:
+            _missing.discard(self.home)
+            (self.home / PROJECTS).mkdir(parents=True, exist_ok=True)
         self.factory = factory
         self.period = period
         self.reg: Registry | None = None
@@ -1296,10 +1341,6 @@ class Library:
         self._mtimes: dict[Path, float] = {}
         self._next = 0.0
         self.presets = None        # preset.Presets, set by its constructor
-        # homegit.Committer when [library] git is on (app.main sets it; plan 19
-        # WP6): asked for a commit after each save (`_commit`), its notes
-        # drained in `poll`. The library never imports homegit or config
-        self.committer = None
         # the hidden factory presets (`hidden.json`, plan 19 WP4), and whether
         # the file there would not parse — kept beside itself before the
         # first rewrite (`_write_hidden`)
@@ -1307,9 +1348,21 @@ class Library:
         self._hidden_bad = False
         self._read_hidden()
         self.project = Project(self)
-        self.unshadow()
+        if self.missing is None:
+            self.unshadow()
+        else:
+            text = missing_text(self.missing)
+            print(f"library: {text}", file=sys.stderr)
+            self.say(warning=text)
         self._open_default()
         self._mtimes = self._scan()
+
+    def writable(self) -> None:
+        """Raise LibraryError when the shared library is missing (plan 25
+        D5): every write into the library asks first."""
+        missing = self.__dict__.get("missing")      # (a Library from before a hot reload)
+        if missing is not None:
+            raise LibraryError(missing_text(missing))
 
     def say(self, status: str | None = None, *, warning: str | None = None) -> None:
         """Set `status` or `warning` and count it in `said`, so the footer
@@ -1410,9 +1463,10 @@ class Library:
         self._load_hooks[group] = hook
 
     def last_show(self) -> str | None:
-        """The show opened last (`<home>/last_show`), or None."""
+        """The show opened last (`<machine>/last_show`), or None — a machine
+        file: two machines sharing a library each open their own last show."""
         try:
-            name = (self.home / LAST_SHOW).read_text().strip()
+            name = (self._machine() / LAST_SHOW).read_text().strip()
         except OSError:
             return None
         return name or None
@@ -1424,9 +1478,12 @@ class Library:
         if name == self.last_show():
             return
         try:
-            (self.home / LAST_SHOW).write_text(f"{name}\n")
+            (self._machine() / LAST_SHOW).write_text(f"{name}\n")
         except OSError as e:
             print(f"library: {LAST_SHOW} not written ({e})", file=sys.stderr)
+
+    def _machine(self) -> Path:
+        return self.__dict__.get("machine") or self.home   # (one from before a hot reload)
 
     def _open_default(self) -> None:
         """The show a launch opens (decision 22): the one opened last
@@ -1467,7 +1524,8 @@ class Library:
 
     def _roots(self):
         yield self.factory
-        yield self.home
+        if self.__dict__.get("missing") is None:          # D5: the factory alone
+            yield self.home
 
     def groups(self) -> list[str]:
         """Every group with a preset folder, a persisted param or a document
@@ -1510,8 +1568,28 @@ class Library:
             return path.name[:-5]
 
     def _index(self, group: str) -> dict[str, Path]:
-        """display name → path; a name is also reachable by its slug."""
-        return {self._name_of(p): p for p in self._files(group).values()}
+        """display name → path; a name is also reachable by its slug.
+
+        Two files of one folder with the same name inside — a cloud
+        client's conflict copy, ``hi-frek (Dan's conflicted copy …).json``
+        beside ``hi-frek.json`` (plan 25) — are both listed: the file whose
+        stem is the name's slug keeps the name (else the lower stem), and
+        the other is listed under its file stem, to be loaded, renamed or
+        deleted. Across the roots a user file still shadows the factory's."""
+        out: dict[str, Path] = {}
+        for p in self._files(group).values():
+            name = self._name_of(p)
+            prev = out.get(name)
+            if prev is not None and prev.parent == p.parent:
+                want = slug(name)
+                keep, other = ((prev, p) if prev.name[:-5] == want
+                               else (p, prev) if p.name[:-5] == want
+                               else tuple(sorted((prev, p), key=lambda q: q.name)))
+                out[name] = keep
+                out.setdefault(other.name[:-5], other)
+                continue
+            out[name] = p
+        return out
 
     def path_of(self, group: str, name: str) -> Path | None:
         idx = self._index(group)
@@ -1573,6 +1651,7 @@ class Library:
         """Write `hidden.json`. A file there that did not parse is kept first
         (`routing.backup(path, "0")`, ``hidden.json.bak-v0``): no backup, no
         rewrite (LibraryError)."""
+        self.writable()
         path = self.home / HIDDEN
         if getattr(self, "_hidden_bad", False) and path.exists():
             from .routing import backup
@@ -1598,7 +1677,6 @@ class Library:
         self.say(f"hidden {name} — " + (f"{_and(still)} still load{'s' if len(still) == 1 else ''}"
                                          " it" if still else "show hidden in the list brings it "
                                          "back"))
-        self._commit(f"hide preset {name}")
         return True
 
     def unhide(self, group: str, name: str) -> bool:
@@ -1611,7 +1689,6 @@ class Library:
             return False
         self._write_hidden(self.hidden(group) - {stem})
         self.say(f"{name} is back in the list")
-        self._commit(f"unhide preset {name}")
         return True
 
     def still_named(self, name: str, path: Path | None = None) -> list[str]:
@@ -1818,6 +1895,7 @@ class Library:
         first (`to_trash`); a save that changes nothing trashes nothing,
         and a copy that fails does not stop the save — `warning` says the
         old file was not kept (plan 15 fork 6)."""
+        self.writable()
         doc = self.document(group, name, extra=extra)
         path = self.home / group / f"{slug(name)}.json"
         kind = self._kinds.get(group)
@@ -1839,7 +1917,6 @@ class Library:
         hook = self._load_hooks.get(group)
         if kind is not None and hook is not None:   # a kind's current moved: say so
             hook(name)                               # (the bank's light, preset.py)
-        self._commit(f"save {'preset' if group == PRESETS else group} {name}")
         return path
 
     def document(self, group: str, name: str, *, extra: dict | None = None) -> dict:
@@ -1870,6 +1947,7 @@ class Library:
         The file is copied to the trash first (`to_trash`), and a copy that
         fails **refuses the delete** (`LibraryError`): a full disk cannot
         make a delete unrecoverable (plan 15 fork 6)."""
+        self.writable()
         path = self.path_of(group, name)
         if path is None or not self._is_user(path):
             return False
@@ -1901,7 +1979,6 @@ class Library:
                                  "the trash, or clear the slot")
             else:
                 self.say(f"{name} is in the trash — the preset list's trash can restore it")
-        self._commit(f"trash {'preset' if group == PRESETS else group} {name}")
         return True
 
     def rename(self, group: str, old: str, new: str) -> Path:
@@ -1941,6 +2018,7 @@ class Library:
            written. *Stopped mid-way: the shows done name the new name and
            their old files are in the trash; the rest name the old one*;
         6. `Project.follow()`; the status says how many shows changed."""
+        self.writable()
         if group != PRESETS:
             raise LibraryError(f"{group}: only a preset can be renamed")
         path = self.path_of(group, old)
@@ -1999,9 +2077,6 @@ class Library:
             hook = self._load_hooks.get(group)
             if hook is not None:
                 hook(new)
-        # asked for before the shows are rewritten, so the rename is the
-        # commit's subject and each show's own request its body (plan 19 WP6)
-        self._commit(f"rename preset {old} → {new}")
         done, left = self._repoint(old, new, mine)         # 5.
         self.project.follow()                              # 6.
         self.say(f"renamed {old} → {new} ({done} show{'' if done == 1 else 's'} updated)")
@@ -2121,6 +2196,7 @@ class Library:
         so. Only after the write succeeds is the trash copy removed. A
         restored show is listed, not opened; a restore loads nothing.
         Returns the name it now has."""
+        self.writable()
         path = item.path
         if not path.is_file() or not self._in_trash(path):
             raise LibraryError(f"{path.name}: not in the trash ({self.home / TRASH})")
@@ -2184,7 +2260,6 @@ class Library:
             path.unlink()                                  # only after the write
         except OSError as e:
             self.say(warning=f"restored {now}; its copy stays in the trash ({e})")
-        self._commit(f"restore {item.group} {now}")
         return now
 
     def empty_trash(self) -> int:
@@ -2193,6 +2268,7 @@ class Library:
         panel asks twice). A path that does not resolve under
         ``<home>/trash/`` (a symlink out, a ``..``) is refused and left,
         and said. Returns how many files went."""
+        self.writable()
         gone, refused = 0, []
         for item in self.trash():
             path = item.path
@@ -2219,18 +2295,6 @@ class Library:
         else:
             self.say(f"trash: {gone} file{'' if gone == 1 else 's'} deleted for good")
         return gone
-
-    def _commit(self, message: str) -> None:
-        """Ask the committer (homegit.py), if there is one, for a commit of
-        the home as it now is — after the file is on disk. Returns at once
-        and never raises: git can neither block nor fail a save."""
-        committer = self.__dict__.get("committer")   # (a Library from before a hot reload)
-        if committer is None:
-            return
-        try:
-            committer.request(message)
-        except Exception:  # noqa: BLE001, S110 — a save stands whatever git does
-            pass
 
     def is_dirty(self, group: str) -> bool:
         """Have the group's bases moved off the loaded (or default) preset?
@@ -2290,18 +2354,7 @@ class Library:
         self._defaults.clear()
 
     def poll(self, now: float | None = None) -> bool:
-        """Re-apply whatever is loaded from a file that changed on disk.
-        First, every frame: what the committer's worker has to say (git
-        failing, the home inside another repository) onto the warning line —
-        the one road from that thread to the library (plan 19 WP6)."""
-        committer = self.__dict__.get("committer")
-        if committer is not None:
-            try:
-                for note in committer.notes():
-                    print(f"library: {note}", file=sys.stderr)
-                    self.say(warning=note)
-            except Exception:  # noqa: BLE001, S110 — git's notes never stop the watcher
-                pass
+        """Re-apply whatever is loaded from a file that changed on disk."""
         now = time.monotonic() if now is None else now
         if now < self._next:
             return False

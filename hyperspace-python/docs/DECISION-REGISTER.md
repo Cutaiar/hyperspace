@@ -65,7 +65,7 @@ here; overturn → the change, then the same.
 | 75 | Device knobs only where they do something | 85 | |
 | 76 | Hide, rename and the trash | 86–88 | |
 | 77 | The red dot and "save copy" | 89 | |
-| 78 | The home in git | 90 | |
+| 78 | The home in git — **superseded by row 109** (removed in plan 25) | 90 | superseded |
 | 79 | Where "hands through effects" puts the hands | 102, 103 | |
 | 80 | The guide and labels are never bent | 103 | |
 | 81 | Output switches are rig settings | 101, 104 | |
@@ -95,7 +95,8 @@ here; overturn → the change, then the same.
 | 105 | Five new patterns; the old twelve's art unchanged | 129–131 | |
 | 106 | Pattern routes at depth 0.35; `legacy6` drops pattern parity (the orchestrator's call) | 132, 137 | |
 | 107 | The house presets' routes generated from code | 132 | |
-| 108 | Macro candidates in `shared/`; per-band gain as depth | 133–136 | |
+| 108 | Macro candidates in `shared/` (folder **superseded by row 109**); per-band gain as depth | 133–136 | |
+| 109 | Plan 25: presets shared through a cloud-synced folder (`[library] path`), D1–D8 | 139–143 | **owner, 2026-10-14** |
 
 "—": no hand check shows it; tests only.
 
@@ -794,6 +795,9 @@ here; overturn → the change, then the same.
 
 ### 78. The home in git
 
+- **Superseded by row 109** (plan 25, 2026-10-14): the home-as-git module and
+  its config switch were removed; presets are shared through a cloud-synced
+  folder, which keeps its own file versions. Kept here as history.
 - **Built.** With `[library] git = true` (off by default) the home folder
   is a local git repository: no remote, nothing pushed. The first save
   after launch makes it; every save, trash, rename, hide, unhide, restore
@@ -1312,7 +1316,8 @@ Stream B; the pictures are in
   `uv run python -m hyperspace.preset` to regenerate the factory files:
   minutes.
 - **Rough edge.** Your own presets were not touched: sixteen of the
-  seventeen in `shared/dan-2026-10-04/presets/` still push at depth 1;
+  seventeen in Dan's snapshot (then `shared/dan-2026-10-04/presets/`,
+  now in his library) still push at depth 1;
   with faces on, three would change visibly if re-saved (one SPIRAL, two
   PLASMA). Tuned on synthetic band levels.
 - **Judge it.** Checks 132 and 137 — and whether to re-save yours at
@@ -1335,6 +1340,10 @@ Stream B; the pictures are in
 
 ### 108. Macro candidates in `shared/`; per-band gain as depth subscribers
 
+- **Superseded in part by row 109** (plan 25): the repo's `shared/`
+  folder and its install tool are gone. The four candidates are in the
+  owner's library, and `tests/fixtures/macro-candidates/` keeps a copy
+  for the tests; the macros themselves still wait for checks 133–136.
 - **Built.** Four presets of macros to audition — MACRO PERFORMANCE,
   MACRO STREAMS, MACRO INTENSITY, MACRO BREAKDOWN DROP — in
   `shared/plan-22-macro-candidates/`, installed with
@@ -1358,3 +1367,31 @@ Stream B; the pictures are in
   that mirror round noon give odd ends (speed 0.12 → 0.75, 4D depth 6 →
   1.51, zoom 0.7 → 2.41).
 - **Judge it.** Checks 133–136: say which macros to keep, and as what.
+
+## The shared library (plan 25)
+
+### 109. Presets shared through a cloud-synced folder (D1–D8)
+
+- **Decided by the owner on 2026-10-14** (plan 25's kickoff,
+  [`plans/25-shared-library.md`](plans/25-shared-library.md)), and built:
+  - D1: presets are shared through a cloud-synced folder (Dropbox, iCloud
+    Drive, Google Drive, Syncthing — the code does not care which), not
+    git.
+  - D2: `[library] path` points the library — `presets/`, `projects/`,
+    every module-preset group folder, `hidden.json`, `trash/` — at it.
+  - D3: machine files stay in the home: `config.toml`, `bindings.json`
+    and its `.bak-*`, `hands.json`, `windows.json`, `imgui.ini`,
+    `last_show`, logs, `weights/`.
+  - D4: `path` unset or `""` is exactly the old behaviour.
+  - D5: a folder named but missing at launch is never created and never
+    silently replaced: a loud warning, every write refused, only the
+    factory listed; fix it and restart.
+  - D6: the home-as-git module and its config switch, and the repo's `shared/` folder
+    with its install tool are removed (row 78 and row 108's folder are
+    superseded). Both stay in git history at `6473fda`.
+  - D7: factory presets and `hidden.json` behave as before.
+  - D8: `tools/move_library.py` copies an existing library into the
+    shared folder once and never overwrites.
+- **Also built.** Library writes are atomic (temp file, then replace),
+  and a cloud client's conflict copy is listed under its own file stem.
+- **Judge it.** Checks 139–143.

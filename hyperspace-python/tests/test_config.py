@@ -117,22 +117,56 @@ def test_every_test_runs_with_its_own_home(tmp_path, monkeypatch):
     assert (tmp_path / "home").is_dir()
 
 
-# ---- plan 19 WP6: [library] git, off by default ----
+# ---- plan 25: [library] path, the shared library folder ----
 
-def test_library_git_is_off_by_default_and_a_switch(tmp_path, capsys):
-    assert config.DEFAULTS["library"] == {"git": False}
+def test_library_path_is_empty_by_default(tmp_path, capsys):
+    assert config.DEFAULTS["library"] == {"path": ""}
     p = tmp_path / "config.toml"
-    assert config.load(p)["library"]["git"] is False             # no file
+    cfg = config.load(p)                                         # no file
+    assert cfg["library"] == {"path": ""} and "notes" not in cfg
+    p.write_text('[library]\npath = ""\n')
+    cfg = config.load(p)
+    assert cfg["library"]["path"] == "" and "notes" not in cfg
+    assert capsys.readouterr().err == ""
+
+
+def test_library_path_expands_the_user(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path / "me"))
+    p = tmp_path / "config.toml"
+    p.write_text('[library]\npath = "~/Dropbox/Hyperspace"\n')
+    cfg = config.load(p)
+    assert cfg["library"]["path"] == str((tmp_path / "me" / "Dropbox" / "Hyperspace").resolve())
+    assert "notes" not in cfg
+
+
+def test_library_path_relative_to_the_config_folder(tmp_path):
+    p = tmp_path / "home" / "config.toml"
+    p.parent.mkdir()
+    p.write_text('[library]\npath = "../shared"\n')
+    assert config.load(p)["library"]["path"] == str((tmp_path / "shared").resolve())
+    p.write_text(f'[library]\npath = "{tmp_path / "abs"}"\n')
+    assert config.load(p)["library"]["path"] == str((tmp_path / "abs").resolve())
+
+
+def test_library_path_not_text_stays_in_the_home(tmp_path, capsys):
+    p = tmp_path / "config.toml"
+    for text, value in (("true", True), ("1", 1), ('["a"]', ["a"])):
+        p.write_text(f"[library]\npath = {text}\n")
+        cfg = config.load(p)
+        assert cfg["library"]["path"] == ""
+        assert cfg["notes"] == [(f"config: [library] path = {value!r} is not text "
+                                "— the library stays in the home")]
+    assert "[library] path" in capsys.readouterr().err
+
+
+def test_library_git_leftover_is_ignored_with_a_note(tmp_path, capsys):
+    p = tmp_path / "config.toml"
     p.write_text("[library]\ngit = true\n")
     cfg = config.load(p)
-    assert cfg["library"]["git"] is True and "notes" not in cfg
-    for text, value in (('"true"', "true"), ("1", 1), ("[true]", [True])):
-        p.write_text(f"[library]\ngit = {text}\n")
-        cfg = config.load(p)
-        assert cfg["library"]["git"] is False
-        assert cfg["notes"] == [(f"config: [library] git = {value!r} is not true or false "
-                                 "— git stays off")]
-    assert "[library] git" in capsys.readouterr().err
+    assert cfg["library"] == {"path": ""}
+    assert cfg["notes"] == [("config: [library] git is gone (plan 25) — presets are shared "
+                            "through [library] path; remove the line")]
+    assert "[library] git is gone" in capsys.readouterr().err
 
 
 # ---- plan 21 WP3: [[output.screens]], the list of render outputs ----

@@ -739,7 +739,7 @@
       </div>
       <div class="rrow">
         <div><div class="name">Library</div><div class="mods">library · preset · config</div></div>
-        <div class="what">The home folder, presets, shows, the bank of twenty-four, the trash. A preset load replaces the table's performer rows.</div>
+        <div class="what">The library root (the home, or a shared folder), presets, shows, the bank of twenty-four, the trash; the machine home's own files stay apart. A preset load replaces the table's performer rows.</div>
         <div class="chip c-base">Base</div>
       </div>
       <div class="rrow">
@@ -748,7 +748,7 @@
         <div class="chip c-base">Base</div>
       </div>
       <div class="rrow">
-        <div><div class="name">Host</div><div class="mods">app · hotreload · placement · homegit · watchdog</div></div>
+        <div><div class="name">Host</div><div class="mods">app · hotreload · placement · watchdog</div></div>
         <div class="what">Construction order, the one frame loop, the windows, the reload watch list. The only importer of any optional adapter, each behind a config gate.</div>
         <div class="chip c-read">Builds</div>
       </div>
@@ -863,8 +863,11 @@
         <p>A <em>preset</em> is the performance — values, routes, desk, macros. A
         <em>show</em> is the session, holding a bank of twenty-four preset names
         and which one it starts on. Overwrites go to a listed trash first;
-        factory presets are hidden, never deleted.</p>
-        <span class="path">library · preset · config · homegit</span>
+        factory presets are hidden, never deleted. <code>Library.home</code> is
+        the library root (the home, or a shared folder named by
+        <code>[library] path</code>); <code>Library.machine</code> is the home
+        for this machine's own files.</p>
+        <span class="path">library · preset · config</span>
       </div>
       <div class="sub">
         <h4>Ghost hands</h4>
@@ -914,7 +917,7 @@
         <strong>Leaves</strong> — modules that import nothing from the package, so
         anything may import them — are named explicitly:
         <code>analysis</code>, <code>tapers</code>, <code>undo</code>,
-        <code>placement</code>, <code>homegit</code>, <code>geometry</code>,
+        <code>placement</code>, <code>geometry</code>,
         <code>tempo</code>, <code>lfo</code>, <code>glsl</code>,
         <code>gamepad</code>, <code>apc40</code>, <code>watchdog</code>, and the
         hands package's signal and tape modules.

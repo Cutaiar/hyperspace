@@ -7,7 +7,8 @@ and a projector. It is one Python process in `hyperspace-python/`.
 ## Where things are
 
 - **The app:** `hyperspace-python/` (package `hyperspace/`, tests in
-  `tests/`, tools in `tools/`, the owner's shared presets in `shared/`).
+  `tests/`, tools in `tools/`). Presets are shared through a cloud-synced
+  folder named by `[library] path` (plan 25; [`SETUP.md`](SETUP.md)).
 - **Run it:** `uv sync`, then `uv run hyperspace`; machine setup is in
   [`SETUP.md`](SETUP.md).
 - **The docs:**
@@ -19,12 +20,13 @@ and a projector. It is one Python process in `hyperspace-python/`.
   - [`DECISIONS.md`](DECISIONS.md): the decisions in force, and what was
     decided not to build.
   - [`DECISION-REGISTER.md`](DECISION-REGISTER.md): rows 34–108, built on
-    a recommendation and waiting for the owner's keep or overturn.
+    a recommendation and waiting for the owner's keep or overturn; row 109
+    records the owner's plan 25 answers.
   - [`AUDIT-2026-09.md`](AUDIT-2026-09.md): the open defects.
   - [`TESTING-GUIDE.md`](TESTING-GUIDE.md): everything a person still has
     to test, in plain words, by hardware.
   - [`plans/11-hand-checks.md`](plans/11-hand-checks.md): the same checks,
-    numbered 1–138, with the automated test behind each.
+    numbered 1–143, with the automated test behind each.
   - [`plans/`](plans/README.md) `15-…` to `22-…`: what each of the last
     eight plans built; plan 22 also has a ranked shortlist of new
     4-polytopes and macro candidates to audition.
@@ -58,8 +60,9 @@ waits for the owner. Check `git log` and the PRs for the current state.
   ([`plans/22-polytope-shortlist.md`](plans/22-polytope-shortlist.md)),
   the macro candidates' listening session
   ([`plans/22-macro-candidates.md`](plans/22-macro-candidates.md)), and
-  whether to re-save the sixteen presets in `shared/dan-2026-10-04` that
-  still push the pattern inputs at depth 1 (the factory's is now 0.35).
+  whether to re-save the sixteen presets from Dan's snapshot (now in his
+  library) that still push the pattern inputs at depth 1 (the factory's
+  is now 0.35).
 - **Deliberately not built:** see "Decided not to build" in
   [`DECISIONS.md`](DECISIONS.md).
 

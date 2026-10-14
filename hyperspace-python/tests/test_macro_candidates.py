@@ -1,12 +1,13 @@
-"""Plan 22 B5: the macro candidates in shared/plan-22-macro-candidates/
-load cleanly through the real road — `tools/shared_presets.py install`
-into a home, then `Presets.load` — with no note, no dropped row, every
-subscriber on a real param or a route the file carries, and the factory
-list and bank untouched. Whether the macros are any good is the owner's
-listening session (docs/plans/22-macro-candidates.md), not a test's."""
+"""Plan 22 B5: the macro candidates (kept as test fixtures in
+tests/fixtures/macro-candidates/ since plan 25 retired shared/; the owner
+has them in his library) load cleanly through the real road — copied into
+a library's presets/, then `Presets.load` — with no note, no dropped row,
+every subscriber on a real param or a route the file carries, and the
+factory list and bank untouched. Whether the macros are any good is the
+owner's listening session (docs/plans/22-macro-candidates.md), not a test's."""
 
-import importlib.util
 import json
+import shutil
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -19,24 +20,19 @@ from hyperspace.bands import CEIL
 from hyperspace.library import FACTORY
 from hyperspace.params import Kind
 
-ROOT = Path(__file__).resolve().parent.parent
-CANDIDATES = ROOT / "shared" / "plan-22-macro-candidates"
-FILES = sorted((CANDIDATES / "presets").glob("*.json"))
+CANDIDATES = Path(__file__).resolve().parent / "fixtures" / "macro-candidates"
+FILES = sorted(CANDIDATES.glob("*.json"))
 # the sets meant to be played all at once: no param has two macros' bases
 # (macro-intensity and macro-breakdown-drop compare versions of one idea,
 # so their macros share bases on purpose — the last one turned wins)
 WHOLE_SETS = ("macro-performance", "macro-streams")
 
-spec = importlib.util.spec_from_file_location("shared_presets", ROOT / "tools" / "shared_presets.py")
-sp = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(sp)
-
-
 @pytest.fixture()
 def rig(tmp_path):
     home = tmp_path / "home"
-    done = sp.install(CANDIDATES, home)
-    assert {what for _, what in done} == {"copy"}
+    (home / "presets").mkdir(parents=True)
+    for f in FILES:
+        shutil.copyfile(f, home / "presets" / f.name)
     return boot_home(home)
 
 

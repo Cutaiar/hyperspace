@@ -136,14 +136,21 @@ like the rename above. The SYSTEM page shows both.
     tape = ""               # a hand tape (tools/hands_tape.py record) to play instead
                             # of the camera, relative to this file; "" = the camera
 
-    [library]               # the library home itself (homegit.py, plan 19 WP6)
-    git = false             # true: <home> is a git repository and every save is a commit.
-                            # Local only: no other repository is added, nothing leaves
-                            # this machine. Needs git on the PATH; without it saves go
-                            # on and a note says so. A home inside another repository
-                            # is never committed. Anything but true or false is false,
-                            # with a note. To share presets with someone, use the
-                            # repo's shared/ folder (tools/shared_presets.py), not this
+    [library]               # where the presets live (plan 25)
+    path = ""               # "" = the home above, as always. Otherwise a folder —
+                            # typically a cloud-synced one (Dropbox, iCloud Drive,
+                            # Syncthing…) shared with whoever you trade presets with.
+                            # It holds the library: presets/, projects/, the module
+                            # groups (fx/, dream/, band/…), hidden.json and trash/.
+                            # Machine files stay in the home: this config.toml,
+                            # bindings.json, hands.json, windows.json, last_show,
+                            # logs and weights/. `~` is expanded; a relative path is
+                            # relative to this file's folder. If the folder is
+                            # missing at launch it is never created: a warning says
+                            # so, the SYSTEM page shows it in red, every save is
+                            # refused and only factory presets list — fix the folder
+                            # (or the path) and restart. tools/move_library.py copies
+                            # an existing library into it.
 """
 
 from __future__ import annotations
@@ -182,9 +189,9 @@ DEFAULTS: dict = {
     # Its section is not here: load() fills it from hands/core.py's DEFAULTS,
     # the one table (every key documented there), read at call time so this
     # module imports no adapter
-    # homegit.py: the home as a git repository, a commit on each save — off by
-    # default; app.main builds the committer only when this is exactly true
-    "library": {"git": False},
+    # library.py: [library] path, the library root (plan 25); "" = the home.
+    # load() resolves it to an absolute path
+    "library": {"path": ""},
 }
 
 
@@ -382,13 +389,28 @@ def load(path: Path | None = None) -> dict:
         cfg["output"]["keep_awake"] = True
         _note(cfg, f"config: [output] keep_awake = {awake!r} is not true or false — "
                    "the Mac is kept awake")
-    # [library] git is a switch: `git = "yes"` is off, and the SYSTEM page says so
-    git = cfg["library"].get("git", False)
-    if not isinstance(git, bool):
-        cfg["library"]["git"] = False
-        note = f"config: [library] git = {git!r} is not true or false — git stays off"
-        cfg.setdefault("notes", []).append(note)
+    # [library] path (plan 25): "" is the home; anything else is resolved
+    # here — `~` expanded, relative to this file's folder — so app.main gets
+    # an absolute path. A leftover `git` key (the old git switch, removed) is said once
+    if "git" in cfg["library"]:
+        cfg["library"].pop("git")
+        note = ("config: [library] git is gone (plan 25) — presets are shared "
+                "through [library] path; remove the line")
+        _note(cfg, note)
         print(note, file=sys.stderr)
+    lp = cfg["library"].get("path", "")
+    if not isinstance(lp, str):
+        cfg["library"]["path"] = ""
+        note = f"config: [library] path = {lp!r} is not text — the library stays in the home"
+        _note(cfg, note)
+        print(note, file=sys.stderr)
+    elif lp.strip():
+        q = Path(lp.strip()).expanduser()
+        if not q.is_absolute():
+            q = path.parent / q
+        cfg["library"]["path"] = str(q.resolve())
+    else:
+        cfg["library"]["path"] = ""
     # the MIDI map lives next to the config unless it says otherwise
     m = cfg["midi"].get("map")
     if m and not Path(m).is_absolute():
