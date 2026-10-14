@@ -15,7 +15,10 @@ post-party wishlist in `Cutaiar/hyperspace` (the Python app under
 - **Plan 24 — the party fixes.** The desk you can trust (the two-handed
   save, loads that relight everything, toggles on both layers), the track
   faders freed for presets, a coverage report and desk templates, the
-  hands' dance sources and grab, and the palette fold.
+  hands' dance sources and a grab switch, and the palette fold — the
+  mechanisms only. **No preset is edited or added in this run** (owner,
+  2026-10-14): the creative pass that uses all of this is the owner's,
+  after the infrastructure lands.
 
 Work the way plans 21, 22 and 23 were worked: numbered work packages, one
 branch and PR each, an integration branch, a review pass, and a docs work
@@ -367,11 +370,13 @@ cases (hands in the scene, a depth-aware composite) get new goldens.
   are both in.
 - The OUTPUT and LOOKBACK pages show the wiring they set in words
   (`hands: in the scene · through FX · over`), no editor yet (plan 28).
-- **The proof preset.** Add one factory preset, `hands-lines` (a fifth
-  `hands-*`, in no show's bank), whose `graph` section puts the hands in
+- **The proof preset is a fixture, not a factory preset.**
+  `tests/fixtures/presets/hands-lines.json`, loaded through a scratch
+  library in the test, carries a `graph` section that puts the hands in
   the scene as lines through the acid effect with the look-back wired to
-  capture them. It gets its own golden. Every existing factory preset file
-  stays byte-identical, so no existing golden moves because of A4.
+  capture them; it gets its own golden, recorded from the fixture. Every
+  factory preset file stays byte-identical, so no existing golden moves
+  because of A4.
 
 **Acceptance for stream A:** a preset can say "hands as lines, through the
 acid FX, with tracers" in data, not code; every factory preset renders
@@ -748,10 +753,10 @@ a hand, an LFO or a band on any of its params, and named saved palettes.
 | WP | What | Mostly touches |
 | --- | --- | --- |
 | **C1** | The desk you can trust: the two-handed save, every load relights the whole desk, the render toggles on both layers, a desk event log | `midi.py` (`_handle`, `_fire_holds`, `redraw`), `apc40.py` (`DEFAULT_MAP`), `routing.py` (`remap_factory`), `library.py` (`save_into` on a filled slot: a new preset into the slot, the old one kept), `params.py`, `ui.py` (the log) |
-| **C2** | The faders freed: S1–S8 preset-layer targets, band post/dyn/trim on the SHIFT faders, a mix param wherever a layer lacks one, hand-authored fader sets for the nine party presets | `apc40.py`, `preset.py` (`knob_desk`, the party desks), `params.py`, `render.py` (two alpha lines in `draw_scene`), `library/presets/party-*.json` |
+| **C2** | The faders freed: S1–S8 preset-layer targets, band post/dyn/trim on the SHIFT faders, a mix param wherever a layer lacks one | `apc40.py`, `preset.py` (`knob_desk`, `fresh_desk`), `params.py`, `render.py` (two alpha lines in `draw_scene`) |
 | **C3** | Making every preset's desk interesting: `tools/desk_coverage.py` and its committed report, desk templates as a `desk` module-preset group, click-to-map ranked by the params the preset uses | `tools/desk_coverage.py` (new), `tests/test_desk_coverage.py` (new), `library.py` (the group), `preset.py`, `ui_desk.py`, `learn.py` |
-| **C4** | Inputs that reward dancing (H2): `hand:*.curl.<finger>`, `hand:*.spread`, `hand:*.energy`, `hands:gap`, `hands:twist`, `hand:*.flick`; the `hands-dance` preset | `hands/core.py`, `hands/signal.py`, `hands/panel.py`, `library/presets/hands-dance.json` (new), `preset.py` |
-| **C5** | Cause and effect (H1): grab, one or two strong hand mappings per party preset, hands on the projector in the rig config | `hands/signal.py` (the grab switch), `preset.py` (the party routes), `library/presets/party-*.json`, `config.toml.rig` |
+| **C4** | Inputs that reward dancing (H2): `hand:*.curl.<finger>`, `hand:*.spread`, `hand:*.energy`, `hands:gap`, `hands:twist`, `hand:*.flick` as routable sources | `hands/core.py`, `hands/signal.py`, `hands/panel.py` |
+| **C5** | Cause and effect (H1): the `grab` switch as a source; hands on the projector in the rig config | `hands/signal.py`, `hands/core.py` (the grab switch), `config.toml.rig` |
 | **C6** | The palette fold as an effect: `shaders/fx/palette.glsl`, its params, a gradient-map mode, saved palettes | `shaders/fx/palette.glsl` (new), `library/fx/` (two named palettes), `fx.py` only if a `@param` form is missing |
 | **C7** | Touch shows (H1): fingertips near the shape light it up — **after A3**, cut from integration | `graph.py` (the shape geometry node's uniforms), the face/line shaders |
 | **C8** | Docs | as under "What the docs WPs must produce" |
@@ -818,9 +823,11 @@ Owner's decisions (working plan, "Faders"):
   A's A2 rewrites that function, so keep your diff small and expect the
   overlap at integration); the pattern, the hands, the dream and each FX
   have theirs already.
-- The **nine party presets each get a hand-authored fader set** in
-  `preset.py` (register which params you chose per preset; the owner will
-  re-author at the rig).
+- **No preset gets fader rows in this run.** The faders stay dark on
+  every factory preset until the owner authors the sets after the
+  infrastructure lands. A test proves the mechanism: a fixture preset
+  with fader rows, loaded through a scratch library, lights S1–S8 and the
+  rows round-trip through save and load.
 
 ### C3 — every preset's desk interesting
 
@@ -830,15 +837,20 @@ Owner's decisions (working plan, "Faders"):
   its output is committed at `docs/plans/assets/24-party-fixes/desk-coverage.md`,
   so a diff shows coverage going up or down; the test regenerates it
   deterministically and fails when the committed file is stale.
-  **Goal (owner): at most 4 dark or dead controls on the preset layer** of
-  every factory and party preset. Report the numbers before and after.
-- **Desk templates**: named binding sets (`shape`, `fx`, `dream`, `hands`)
-  stored as their own JSON — a `desk` module-preset group
-  (`hyperspace/library/desk/` for the factory ones, the library folder for
-  the owner's, so plan 25 shares them). A preset's desk is a template plus
-  its own overrides, so one fix lands in every preset that uses it. The
-  preset file records the template's name and the overrides; a preset
-  with a plain desk section loads as today.
+  The owner's bar — **at most 4 dark or dead controls on the preset
+  layer** of every factory and party preset — is for the authoring pass
+  that follows this run. Here the report is built and its numbers
+  reported; **no preset is remapped to meet it**.
+- **Desk templates**: named binding sets stored as their own JSON — a
+  `desk` module-preset group (`hyperspace/library/desk/` for factory ones,
+  the library folder for the owner's, so plan 25 shares them). A preset's
+  desk is a template plus its own overrides, so one fix lands in every
+  preset that uses it. The preset file records the template's name and
+  the overrides; a preset with a plain desk section loads as today. **The
+  mechanism only**: the factory `desk/` folder ships empty, the proof is a
+  fixture template under `tests/fixtures/`, and no preset's desk section
+  changes. The owner names the templates (`shape`, `fx`, `dream`, `hands`
+  were the plan's examples) in the authoring pass.
 - **Faster mapping at the screen**: a click on a control on the on-screen
   desk offers the params this preset uses first, ranked, then the rest —
   not the whole registry in one list (`ui_desk.click`, `Learn.pick`).
@@ -861,25 +873,27 @@ stays liftable), with `signal.py` shaping them:
 `hands:` is a new two-hand scheme with its own rests. The lane count
 changes, so `tests/test_hands_boundary.py:48`'s `22` becomes the new
 count (the only change in that test). Publish labels, rests and gates as
-today. **One new preset, `hands-dance`**, is built on these alone (a
-`hands-*` preset: the six-DOF rule for `party-*` does not bind it).
+today. **No preset is built on them in this run** (the working plan's
+`hands-dance` is the owner's to compose afterwards). A test routes each
+new source onto a param through a scratch library and shows it moving.
 
 ### C5 — cause and effect (H1)
 
-- **Grab.** Close a hand near the shape and the shape follows that hand's
-  rotation 1:1; open it to let go. A `grab` switch (a closed fist from
-  C4's curls, Schmitt + debounce like the pinches, `hand:*.grab`) gates
-  `position` rows from the hand's roll/pitch/yaw onto `camera.yaw` /
-  `camera.pitch` and a `rot.*` plane. It is the physical-object behaviour
-  guests expected, with the existing op.
+- **The grab switch.** A `hand:*.grab` switch (a closed fist from C4's
+  curls, Schmitt + debounce like the pinches), published as a gate like
+  the pinches, shown on the HANDS page. What it is for: "close a hand
+  near the shape and the shape follows that hand's rotation 1:1; open it
+  to let go" — `position` rows from the hand's roll/pitch/yaw onto
+  `camera.yaw` / `camera.pitch` and a `rot.*` plane, gated by the grab.
+  That mapping is the owner's to author afterwards; a test proves it
+  works through a scratch library, and nothing in `preset.py` or
+  `library/presets/` changes.
 - **Hands on the main projection by default** in the party presets: the
   output switch already defaults on; set it in `config.toml.rig` for the
   projector output and say so in SETUP.md. Nothing in a preset.
-- **One or two strong hand mappings per party preset**, easy to read;
-  move the subtle ones to the desk (C2's fader sets). Keep the six-DOF,
-  no-pinch rule for `party-*` or change it consciously with a register
-  row. **These route changes move the hands-on goldens** of stream A:
-  re-record with the reason "plan 24 C5: <preset>'s hand routes".
+- The working plan's "one or two strong hand mappings per party preset"
+  is authoring, not infrastructure: **not in this run**. No stream edits
+  `library/presets/`, so no golden moves for preset content.
 
 ### C6 — the palette fold
 
@@ -900,10 +914,11 @@ every hue onto a slice of the HSV cylinder that is chosen and moved live.
   reach it through the FX mechanism unchanged, it sits after the other
   effects and the dream and before the outputs as the plan asks, and with
   stream A it becomes a node for free. "Whether the hands are folded too"
-  is today's `through` switch, not a new param. Two **saved palettes** in
-  `library/fx/` (for example `match-the-room` and `one-hue`) are the proof
-  that a palette is a named library entry. Off by default, so no golden
-  moves.
+  is today's `through` switch, not a new param. A saved palette is an
+  `fx` module preset, which the library already does: prove it with one
+  fixture under `tests/fixtures/` loaded through a scratch library, and
+  ship no palette in `library/fx/` (the owner's "match the room" sets are
+  made at the venue). Off by default, so no golden moves.
 
 ### C7 — touch shows (after A3)
 
@@ -914,12 +929,15 @@ cheap. This needs the hands and the shape in one space, so it is cut from
 integration after A3, as `plan-26-a4b-points` is. Radius, strength and
 colour are params (`view.touch.*`), off by default.
 
-**Acceptance for stream C** (owner's "done when"): the two-handed save
-works ten times in a row on the real APC40 (a hand check: say so); the
-toggles behave the same with SHIFT up or down; the coverage report shows
-the goal met; `hands-dance` and the grab are in; the palette fold is a
-fader away on at least one party preset. The five-guest test ("each can
-say within 30 seconds what their hands are doing") is a hand check too.
+**Acceptance for stream C:** the two-handed save works ten times in a
+row on the real APC40 (a hand check: say so); the toggles behave the same
+with SHIFT up or down; the coverage report is committed with the numbers
+per preset; a fixture preset's fader rows light the faders; the six H2
+sources and the grab switch are routable; the palette fold is an effect
+a fader can be learned onto; **`git diff --stat -- hyperspace/library/`
+is empty**. The owner's "done when" lines that need authored presets
+(the coverage goal met, the five-guest test) belong to the pass after
+this run.
 
 ---
 ## What landed since the wishlist was written — rectify against it
@@ -1028,20 +1046,22 @@ All the owner's, 2026-10-12, from the wishlist and its working plan:
     drive and the crossfader the master dim; **the track faders S1–S8
     become preset-layer targets** with no inherited defaults and no
     auto-fill; band post/dyn/trim move to the SHIFT layer; every layer
-    and effect gets a mix where it lacks one; the nine party presets get
-    hand-authored fader sets.
+    and effect gets a mix where it lacks one. The fader sets themselves
+    are the owner's, after this run.
 18. **The render toggles are the same on both layers** and their LEDs show
     the live state; **every load relights the whole desk**; the save is
     two-handed (SAVE held, a pad tapped), into any slot — a filled slot
     takes a new preset and the old one keeps its file; **nothing is
     overwritten or trashed from the desk** (owner, 2026-10-14).
 19. **A coverage report** committed in the repo, **desk templates** as
-    their own JSON, click-to-map ranked by the preset's own params; the
-    goal is at most four dark or dead controls per preset layer.
+    their own JSON, click-to-map ranked by the preset's own params. The
+    goal of at most four dark or dead controls per preset layer is the
+    bar for the owner's authoring pass, reported here, not met here.
 20. **The twelve axes stay**; the H2 sources (curl, spread, energy, gap,
-    twist, flick) are added beside them; one `hands-dance` preset on them
-    alone; **grab** through the existing `position` op; one or two strong
-    hand mappings per party preset; hands on the projector by default.
+    twist, flick) and a **grab** switch are added beside them as sources;
+    hands on the projector by default. The `hands-dance` preset, the grab
+    mapping and the strong per-preset hand mappings are the owner's,
+    after this run.
 21. **The palette fold**: hue folded by a triangle wave onto a movable
     slice, saturation and value rescaled, a gradient-map mode, the param
     list under C6, after the effects and the dream and before the
@@ -1049,6 +1069,12 @@ All the owner's, 2026-10-12, from the wishlist and its working plan:
     is plan 29.
 22. **Touch shows** (fingertips light the shape where they are) is built
     once the hands and the shape share a space (after A3).
+23. **No preset is edited or added in this run** (owner, 2026-10-14).
+    Every file under `hyperspace/library/` stays byte-identical; every
+    proof uses a fixture under `tests/fixtures/` loaded through a scratch
+    library. Fader sets, hand mappings, dance presets, palettes and the
+    graph wiring of the factory presets are the creative pass, done by
+    the owners after the infrastructure lands.
 
 When the docs WPs record these, they go into `DECISIONS.md` with **Who** =
 `owner`.
@@ -1118,10 +1144,9 @@ yourself, except the sixteen above.
   overlaps: `midi.py` and `apc40.py` (C1/C2 change the map and the save;
   B2 makes `MidiIO` a device — C1 lands first and B2 carries it);
   `draw_scene` (C2's two alpha lines; A2's rewrite); `hands/core.py`
-  (C4 adds sources; B2 wraps `HandsIO` and must not pin the lane count);
-  `library/presets/party-*.json` (C2's fader rows, C5's hand routes;
-  A0's goldens — C5 re-records the hands-on frames it moves, C2 moves
-  none). Anything else colliding means a WP is mis-scoped: stop and
+  (C4 adds sources; B2 wraps `HandsIO` and must not pin the lane count).
+  No stream touches `hyperspace/library/`, so no golden moves for preset
+  content. Anything else colliding means a WP is mis-scoped: stop and
   re-cut it.
 - Merge each WP into `plan-24-26-27-integration` as it lands. The
   cross-stream items (the point-cloud node `plan-26-a4b-points` after B4
@@ -1169,9 +1194,9 @@ HYPERSPACE_FRAMES=120 uv run hyperspace     # windowed smoke run
 the smoke run once per stream with the new paths on: a preset that carries
 a `graph` section with the hands in the scene (stream A); a `[[devices]]`
 list with the OSC device and a cloud device enabled and the APC40 absent
-(stream B); a party preset with its fader set loaded, SHIFT latched and
-released, the palette fold's mix up (stream C, with the fake MIDI ports the
-tests inject). Point the home at a scratch folder the way the tests do.
+(stream B); the fixture preset with fader rows loaded from a scratch
+library, SHIFT latched and released, the palette fold's mix up (stream C,
+with the fake MIDI ports the tests inject). Point the home at a scratch folder the way the tests do.
 **Never touch the owner's real `~/Hyperspace`.**
 
 These must keep passing **untouched**:
@@ -1202,8 +1227,6 @@ PR body:
   (`test_the_default_map_is_sorted_as_plan_13_says`,
   `test_invariant_controls_mean_one_thing_on_both_layers`); each changed
   assertion is named in the PR body with its decision number.
-- `tests/test_plan12_presets.py`: only if C5 consciously changes the
-  six-DOF rule, with a register row.
 - `tests/test_app_boundary.py`: `gated` gains `hyperspace.osc` and
   `pythonosc`; `ORDER` and `test_the_host_close_list_…` are rewritten for
   the registry (B1); `test_a_shut_gate_opens_nothing` and
@@ -1273,14 +1296,12 @@ they do not collide.
   - the two-handed save ten times in a row on the real APC40, into empty
     and filled slots, with SHIFT up and down;
   - the toggles from both layers and their LEDs after a load;
-  - every party preset's fader set felt at the desk, and the band faders
+  - a fader learned onto a param from the desk, felt, and the band faders
     under SHIFT;
   - the coverage report's numbers against what the owner sees as dark;
-  - `hands-dance` with a real hand: each of the six new sources moving
-    one thing;
-  - grab: close a fist near the shape, turn it, open to let go;
-  - the five-guest test;
-  - the palette fold on one party preset, swept by a fader and by a band;
+  - each of the six new hand sources and the grab switch, with a real
+    hand, learned onto a param and seen moving it;
+  - the palette fold's mix learned onto a fader and swept, on any preset;
   - every factory preset against its golden contact sheet, by eye, on the
     Mac (Apple's shader compiler is unverified for the new vertex path);
   - the hands in the scene on the projector and as a clean layer on the
@@ -1322,10 +1343,8 @@ When the final PR is open, report:
   owner.
 - The new hand check numbers and their groups (T for the pad's four, U
   for plan 24, V for 26, W for 27).
-- **Stream C.** The coverage numbers per preset before and after; which
-  presets' hand routes changed and which goldens moved for it; the fader
-  set you authored per party preset (the owner will re-author at the
-  rig).
+- **Stream C.** The coverage numbers per preset, and confirmation that
+  `hyperspace/library/` is byte-identical to the base.
 - What stream B translated from the old config tables, and the exact
   `[[devices]]` block the owner should paste to get today's rig.
 - Anything you deliberately left undone, anything that contradicts this
