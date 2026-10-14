@@ -694,8 +694,7 @@ The owner's wishlist items that need no foundation, from the wishlist file
 ("The wishlist as the owner meant it") and the working plan's sections
 "The desk: APC40 and faders", "Hands: into the scene" (H1, H2) and "Palette
 fold". Three independent lines inside the stream: the desk (C1 → C2 → C3),
-the hands (C4 → C5), the palette (C6); then the touch glow (C7) once
-stream A's hands node exists, and docs (C8).
+the hands (C4 → C5), the palette (C6), then docs (C7).
 
 ### Where it is today
 
@@ -758,17 +757,15 @@ a hand, an LFO or a band on any of its params, and named saved palettes.
 | **C4** | Inputs that reward dancing (H2): `hand:*.curl.<finger>`, `hand:*.spread`, `hand:*.energy`, `hands:gap`, `hands:twist`, `hand:*.flick` as routable sources | `hands/core.py`, `hands/signal.py`, `hands/panel.py` |
 | **C5** | Cause and effect (H1): the `grab` switch as a source; hands on the projector in the rig config | `hands/signal.py`, `hands/core.py` (the grab switch), `config.toml.rig` |
 | **C6** | The palette fold as an effect: `shaders/fx/palette.glsl`, its params, a gradient-map mode, saved palettes | `shaders/fx/palette.glsl` (new), `library/fx/` (two named palettes), `fx.py` only if a `@param` form is missing |
-| **C7** | Touch shows (H1): fingertips near the shape light it up — **after A3**, cut from integration | `graph.py` (the shape geometry node's uniforms), the face/line shaders |
-| **C8** | Docs | as under "What the docs WPs must produce" |
+| **C7** | Docs | as under "What the docs WPs must produce" |
 
 Branches `plan-24-c1-desk-trust`, `plan-24-c2-faders`, `plan-24-c3-coverage`,
 `plan-24-c4-dance-sources`, `plan-24-c5-grab`, `plan-24-c6-palette`,
-`plan-24-c7-touch`, `plan-24-c8-docs`.
+`plan-24-c7-docs`.
 
 **Sequencing.** C1 → C2 → C3 in sequence (one desk map). C4 → C5 in
 sequence (C5's grab needs C4's curl). C6 alone, any time. C1, C4 and C6
-may all start on day one. C7 is cut from integration after A3 is in. C8
-last. **C1 lands before B2 cuts its worktree**: B2 turns `MidiIO` into a
+may all start on day one. C7 last. **C1 lands before B2 cuts its worktree**: B2 turns `MidiIO` into a
 device and must carry C1's save and relight with it, not re-do them.
 
 ### C1 — the desk you can trust
@@ -920,15 +917,6 @@ every hue onto a slice of the HSV cylinder that is chosen and moved live.
   ship no palette in `library/fx/` (the owner's "match the room" sets are
   made at the venue). Off by default, so no golden moves.
 
-### C7 — touch shows (after A3)
-
-Fingertips near the shape light it up: a glow or a ripple where they are.
-The ten fingertip positions (C4's `tip()`, in the shared camera's units
-from A2's calibration) go to the shape's shaders as uniforms, which is
-cheap. This needs the hands and the shape in one space, so it is cut from
-integration after A3, as `plan-26-a4b-points` is. Radius, strength and
-colour are params (`view.touch.*`), off by default.
-
 **Acceptance for stream C:** the two-handed save works ten times in a
 row on the real APC40 (a hand check: say so); the toggles behave the same
 with SHIFT up or down; the coverage report is committed with the numbers
@@ -1067,14 +1055,21 @@ All the owner's, 2026-10-12, from the wishlist and its working plan:
     list under C6, after the effects and the dream and before the
     outputs, saved palettes as named library entries. Lights following it
     is plan 29.
-22. **Touch shows** (fingertips light the shape where they are) is built
-    once the hands and the shape share a space (after A3).
+22. **Touch shows** (fingertips light the shape where they are) is a
+    look, so it is the creative pass after this run; A2 and A3 give it
+    its foundation (the hands and the shape in one space, the fingertips
+    in that space).
 23. **No preset is edited or added in this run** (owner, 2026-10-14).
     Every file under `hyperspace/library/` stays byte-identical; every
     proof uses a fixture under `tests/fixtures/` loaded through a scratch
     library. Fader sets, hand mappings, dance presets, palettes and the
     graph wiring of the factory presets are the creative pass, done by
     the owners after the infrastructure lands.
+24. **Every new param defaults to today's picture.** A new mix or
+    opacity defaults to what the frame does now, the palette fold to
+    `mix = 0` with a neutral grey ramp as its gradient anchors, a new
+    switch to off, a new source to its rest. Nothing in this run authors
+    a look.
 
 When the docs WPs record these, they go into `DECISIONS.md` with **Who** =
 `owner`.
@@ -1114,8 +1109,9 @@ yourself, except the sixteen above.
 - Order-independent transparency; the hands' FX, textures and tracers as
   *params of the hand look* (H3, "hands as geometry": styles, FX,
   textures and tracers as params — this run's A3 makes them possible,
-  their params come later); hand–shape contact (H4: fingertips denting
-  the shape's vertices).
+  their params come later); touch shows (H1's glow where a fingertip
+  meets the shape) and hand–shape contact (H4: fingertips denting the
+  shape's vertices).
 - The web remote, the touch panel, Dante, multi-channel audio capture.
 
 ---
@@ -1132,8 +1128,8 @@ yourself, except the sixteen above.
   (streams A and C) or the boundary assertions it consciously changed
   (streams B and C), each with its one reason.
 - Stream A is serial (A0 → A1 → A2 → A3 → A4 → A5). Stream B: B1 → B2 →
-  (B3 ‖ B4) → B5. Stream C: (C1 → C2 → C3) ‖ (C4 → C5) ‖ C6, then C7 after
-  A3, then C8. Run all three beside each other. A and B share `app.py`
+  (B3 ‖ B4) → B5. Stream C: (C1 → C2 → C3) ‖ (C4 → C5) ‖ C6, then C7.
+  Run all three beside each other. A and B share `app.py`
   (A touches `_draw_render` / `draw_render`; B touches `main`, `Host`,
   `frame`, the close order) and `ghost.py` (A rewrites it; B only hands
   `HandsIO` over). Expect those overlaps and resolve them at integration,
@@ -1149,9 +1145,8 @@ yourself, except the sixteen above.
   content. Anything else colliding means a WP is mis-scoped: stop and
   re-cut it.
 - Merge each WP into `plan-24-26-27-integration` as it lands. The
-  cross-stream items (the point-cloud node `plan-26-a4b-points` after B4
-  and A3; the touch glow `plan-24-c7-touch` after A3) are cut from
-  integration.
+  cross-stream item (the point-cloud node `plan-26-a4b-points` after B4
+  and A3) is cut from integration.
 - A review pass over the integration branch before the final PR, with
   fixes committed as `Review: <what was fixed>`. Look hard at:
   - **A golden that moved without a reason.** Diff every frame in
@@ -1248,7 +1243,7 @@ before.
 
 ## What the docs WPs must produce
 
-A5 writes plan 26's, B5 writes plan 27's, C8 writes plan 24's; the shared
+A5 writes plan 26's, B5 writes plan 27's, C7 writes plan 24's; the shared
 files are edited by whichever lands later, on the integration branch, so
 they do not collide.
 
