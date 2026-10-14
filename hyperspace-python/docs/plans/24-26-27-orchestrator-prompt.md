@@ -1,8 +1,8 @@
-# Plans 26 and 27 — the render graph and the device registry (orchestrator prompt)
+# Plans 24, 26 and 27 — the party fixes, the render graph and the device registry (orchestrator prompt)
 
 You are the top-level orchestrator for the first group of work from the
 post-party wishlist in `Cutaiar/hyperspace` (the Python app under
-`hyperspace-python/`). Two independent streams, each its own plan:
+`hyperspace-python/`). Three independent streams, each its own plan:
 
 - **Plan 26 — the render graph (F2).** Today's fixed order of render passes
   becomes a graph of nodes in code; the hands become a geometry node in one
@@ -12,6 +12,10 @@ post-party wishlist in `Cutaiar/hyperspace` (the Python app under
   the registry instead of fixed tuples, sinks treated the same way, a
   point-cloud source type, and an OSC device added with no edit to
   `app.py`.
+- **Plan 24 — the party fixes.** The desk you can trust (the two-handed
+  save, loads that relight everything, toggles on both layers), the track
+  faders freed for presets, a coverage report and desk templates, the
+  hands' dance sources and grab, and the palette fold.
 
 Work the way plans 21, 22 and 23 were worked: numbered work packages, one
 branch and PR each, an integration branch, a review pass, and a docs work
@@ -31,15 +35,16 @@ Code sites below are `file:line` as of `main` at `648cf83`
 (`hyperspace-python/` there is identical to `6473fda`). Re-find them by
 symbol if they have moved.
 
-## Why these two first
+## Why these three first
 
 Most of the wishlist items hang off these two refactors. The owner's
 priority (2026-10-12): **the node-based render pipeline is high priority;
 the device registry is a high-leverage idea.** Both start now, in parallel. The
 node editor (plan 28) follows the render graph directly; the new devices
 (wands, drums, lights, Kinect: plan 29) follow the registry. The party fixes
-(plan 24: the desk, the hands' cause-and-effect and dance inputs, the
-palette fold) are a separate small plan and are **not** in this run.
+(plan 24) need no foundation and "run alongside as a small plan": they are
+stream C here, so the next event gets them whatever the two refactors'
+pace.
 
 Plan numbers: the wishlist file said F2 = plan 25 and F1 = plan 26, but
 plan 25 became the shared library (PRs #167/#168). So: **F2 is plan 26, F1
@@ -61,8 +66,10 @@ row 109, hand checks 139–143 (group S) and the README entry.
   later) and the final PR targets that branch, so its diff is plans 26 and
   27 alone. Say so in the PR body.
 
-Either way: register rows start at **110**, hand checks at **144**, in a
-new group **T** (plan 26) and **U** (plan 27). Check which base applies
+Either way: register rows start at **110**; hand checks start at **148**,
+groups **U** (plan 24), **V** (plan 26) and **W** (plan 27), because group
+**T**, 144–147, goes to the pad's checks that PR #161 left without numbers
+(see "What landed since the wishlist was written"). Check which base applies
 before anything else, and re-check it immediately before each worktree is
 cut.
 
@@ -676,6 +683,288 @@ others.
 
 ---
 
+## Stream C — plan 24, the party fixes
+
+The owner's wishlist items that need no foundation, from the wishlist file
+("The wishlist as the owner meant it") and the working plan's sections
+"The desk: APC40 and faders", "Hands: into the scene" (H1, H2) and "Palette
+fold". Three independent lines inside the stream: the desk (C1 → C2 → C3),
+the hands (C4 → C5), the palette (C6); then the touch glow (C7) once
+stream A's hands node exists, and docs (C8).
+
+### Where it is today
+
+**The desk.** `apc40.DEFAULT_MAP` (`apc40.py:416`): the device knobs
+D1–D8 are the preset layer's `SCENE` (`:420`) and the SHIFT layer's
+`band.sel.*` (`:418`); the track faders are **invariant** (`:432–435`:
+`band.{i}.post` on faders 1–6, `master.dyn` and `master.trim` on 7–8,
+`master.gain` on the MASTER fader); the crossfader is the master dim. The
+render toggles (points, lines, faces, rotate) are preset-layer rows, so
+they go dark under SHIFT and every preset load rewrites them (the wishlist
+file cites `apc40.py:469`). Invariance is a table property (`layer=None`,
+`routing.invariant_rows :1568`), not a profile one. Saving from the desk:
+`Param.held` (`params.py:166`) is what a held `set` button does;
+`Project.save_into` (`library.py:801`) saves the live state into an
+**empty** slot and `save_new` (`:813`) into the next free one; `midi.HOLD_S`
+(`midi.py:132`) and `_fire_holds` (`:557`) time the hold; the clip-stop row
+has been free since PR #158 (`routing.py:384` drops its old rows). The
+standing decision (owner, 2026-10-09, `DECISIONS.md` "Presets and the
+desk"): **the desk never overwrites a preset**; a held filled pad only
+loads. Desk Learn: `ui_desk.click` (`ui_desk.py:293`), `Learn.pick` /
+`map_picked` (`learn.py:270/:278`), `Panel._ctx_pick` (`ui.py:549`); the
+pick offers the whole registry. Module-preset groups (`band`, `dream`,
+`fx`; `Library.kind` `library.py:1383`) are the mechanism a `desk` group of
+templates can reuse, and with plan 25 a user's templates live in the shared
+library folder. The factory party presets' desk sections come from code
+(`preset.knob_desk`, register row 107: "the house presets' routes are
+generated from code").
+
+**Mix params that exist:** `view.pattern_mix` (`params.py:858`),
+`dream.mix` (`:950`), `ghost.alpha` (`ghost.py:116`), `fx.<name>.mix`
+(`fx.py:426`), `view.bright` (`:816`). **Missing:** a lines opacity and a
+points opacity (`draw_scene` derives the edge alpha from `bright · dens`
+at `render.py:1484` and the point alpha at `:1591–1606`).
+
+**The hands.** Twelve axes (`hands/core.py:162` `DEFAULT_DOFS` × two
+sides), presence and eight pinch switches, 22 lanes (`addresses()` `:917`,
+`Layout` `:931`, pinned at 22 by `tests/test_hands_boundary.py:48`). The
+fingertip is `tip()` (`:203`). `position` is one of the two performer ops
+(`routing.MOD_OPS :279`); a pinch switch gates a row (`when`, `:478`). The
+party presets are composed with six DOF only and no pinch dependence
+(`tests/test_plan12_presets.py`, owner's row). Each output's `hands`
+switch already defaults on (`config.py:194`), so "hands on the main
+projection by default" is a line in the rig's `config.toml`, not code.
+
+**The palette.** There is no colour pass after the effects. The FX
+mechanism (`fx.py`: a `shaders/fx/*.glsl` file with `// @label|order|…`
+and `uniform float|int u_x; // @param …` lines becomes `fx.<file>.*`
+params, modulatable, saved in presets, hot-reloaded; `@order` places it in
+the chain; module presets in `library/fx/` are saved settings) already
+gives a single shader pass everything the fold needs: a knob on the desk,
+a hand, an LFO or a band on any of its params, and named saved palettes.
+
+### The work packages
+
+| WP | What | Mostly touches |
+| --- | --- | --- |
+| **C1** | The desk you can trust: the two-handed save, every load relights the whole desk, the render toggles on both layers, a desk event log | `midi.py` (`_handle`, `_fire_holds`, `redraw`), `apc40.py` (`DEFAULT_MAP`), `routing.py` (`remap_factory`), `library.py` (`save_into` over a filled slot → trash), `params.py`, `ui.py` (the log) |
+| **C2** | The faders freed: S1–S8 preset-layer targets, band post/dyn/trim on the SHIFT faders, a mix param wherever a layer lacks one, hand-authored fader sets for the nine party presets | `apc40.py`, `preset.py` (`knob_desk`, the party desks), `params.py`, `render.py` (two alpha lines in `draw_scene`), `library/presets/party-*.json` |
+| **C3** | Making every preset's desk interesting: `tools/desk_coverage.py` and its committed report, desk templates as a `desk` module-preset group, click-to-map ranked by the params the preset uses | `tools/desk_coverage.py` (new), `tests/test_desk_coverage.py` (new), `library.py` (the group), `preset.py`, `ui_desk.py`, `learn.py` |
+| **C4** | Inputs that reward dancing (H2): `hand:*.curl.<finger>`, `hand:*.spread`, `hand:*.energy`, `hands:gap`, `hands:twist`, `hand:*.flick`; the `hands-dance` preset | `hands/core.py`, `hands/signal.py`, `hands/panel.py`, `library/presets/hands-dance.json` (new), `preset.py` |
+| **C5** | Cause and effect (H1): grab, one or two strong hand mappings per party preset, hands on the projector in the rig config | `hands/signal.py` (the grab switch), `preset.py` (the party routes), `library/presets/party-*.json`, `config.toml.rig` |
+| **C6** | The palette fold as an effect: `shaders/fx/palette.glsl`, its params, a gradient-map mode, saved palettes | `shaders/fx/palette.glsl` (new), `library/fx/` (two named palettes), `fx.py` only if a `@param` form is missing |
+| **C7** | Touch shows (H1): fingertips near the shape light it up — **after A3**, cut from integration | `graph.py` (the shape geometry node's uniforms), the face/line shaders |
+| **C8** | Docs | as under "What the docs WPs must produce" |
+
+Branches `plan-24-c1-desk-trust`, `plan-24-c2-faders`, `plan-24-c3-coverage`,
+`plan-24-c4-dance-sources`, `plan-24-c5-grab`, `plan-24-c6-palette`,
+`plan-24-c7-touch`, `plan-24-c8-docs`.
+
+**Sequencing.** C1 → C2 → C3 in sequence (one desk map). C4 → C5 in
+sequence (C5's grab needs C4's curl). C6 alone, any time. C1, C4 and C6
+may all start on day one. C7 is cut from integration after A3 is in. C8
+last. **C1 lands before B2 cuts its worktree**: B2 turns `MidiIO` into a
+device and must carry C1's save and relight with it, not re-do them.
+
+### C1 — the desk you can trust
+
+What went wrong at the party, and the fix (working plan, "What went wrong,
+and why"):
+
+- **Hold-to-save was unreliable.** The pad's press loads first; the hold
+  timer starts after it; a filled slot can never be saved over; a short
+  hold does nothing. Fix: **a two-handed save** — hold a dedicated SAVE
+  button, tap a pad; it saves into any slot, filled ones included; the
+  overwritten preset goes to the trash so it can be undone; the pad blinks
+  to confirm. The SAVE button is **track 8's clip-stop** (the working
+  plan's open question; the row is free since #158; register it). Keep
+  #158's hold-on-an-empty-pad save beside it (the pad's `START` was
+  unbound on 2026-10-14, so the desk is the only place with a hold-save).
+  This **overturns** the 2026-10-09 row "the desk never overwrites a
+  preset": rewrite it to "the desk never overwrites a preset without a
+  trash copy, and only through the two-handed save", Who `row N`, and say
+  so in the report; the owner confirms on the register.
+- **Load felt inconsistent.** Tied to the save confusion, plus loads that
+  release only the faders whose param they moved (`MidiIO.redraw`, register
+  row 44). Fix: **every load relights the whole desk** from the new
+  preset, and a **desk event log** on the SYSTEM page (the last twenty
+  desk events: press, what it did, which layer) so the owner can see what
+  a press did.
+- **The render toggles acted inconsistently.** Points, lines, faces and
+  rotate live on the preset layer only, so they go dark under SHIFT and a
+  load rewrites them. Fix: **invariant rows** (same on both layers, D6's
+  list grows by four) whose **LEDs always show the live state**.
+
+### C2 — the faders freed
+
+Owner's decisions (working plan, "Faders"):
+
+- The **master fader stays audio drive**; the **crossfader stays the
+  master dim**.
+- **Track faders S1–S8 become preset-layer targets**, bound by each
+  preset's desk like the knobs. **No global defaults are inherited**; a
+  preset with no fader rows leaves them dark. **No auto-suggested fill.**
+- The band post-drive, dyn and trim **move to the SHIFT-layer faders**, so
+  the audio is one latch away (the working plan's open question "is that
+  acceptable, or the knobs?": build it on the faders, register it). Soft
+  pickup (D7) already handles the jump between layers. This amends D6.
+- To give the faders something worth moving, **every layer and effect
+  gets a mix or opacity param where it lacks one**: a lines opacity and a
+  points opacity (two lines in `draw_scene`, the fewest you can: stream
+  A's A2 rewrites that function, so keep your diff small and expect the
+  overlap at integration); the pattern, the hands, the dream and each FX
+  have theirs already.
+- The **nine party presets each get a hand-authored fader set** in
+  `preset.py` (register which params you chose per preset; the owner will
+  re-author at the rig).
+
+### C3 — every preset's desk interesting
+
+- **Coverage report** `tools/desk_coverage.py`: a table of preset × control,
+  each cell `mapped`, `dark` or `dead` (mapped to a param the preset cannot
+  show, such as a pattern knob with faces off). It runs in the tests and
+  its output is committed at `docs/plans/assets/24-party-fixes/desk-coverage.md`,
+  so a diff shows coverage going up or down; the test regenerates it
+  deterministically and fails when the committed file is stale.
+  **Goal (owner): at most 4 dark or dead controls on the preset layer** of
+  every factory and party preset. Report the numbers before and after.
+- **Desk templates**: named binding sets (`shape`, `fx`, `dream`, `hands`)
+  stored as their own JSON — a `desk` module-preset group
+  (`hyperspace/library/desk/` for the factory ones, the library folder for
+  the owner's, so plan 25 shares them). A preset's desk is a template plus
+  its own overrides, so one fix lands in every preset that uses it. The
+  preset file records the template's name and the overrides; a preset
+  with a plain desk section loads as today.
+- **Faster mapping at the screen**: a click on a control on the on-screen
+  desk offers the params this preset uses first, ranked, then the rest —
+  not the whole registry in one list (`ui_desk.click`, `Learn.pick`).
+
+### C4 — inputs that reward dancing (H2)
+
+Owner (2026-10-12): **the twelve axes stay**; these are added beside
+them, each routable like any other hand source, in `hands/core.py` (which
+stays liftable), with `signal.py` shaping them:
+
+| Source | What it measures |
+| --- | --- |
+| `hand:*.curl.<finger>` | how bent each finger is (10 values) |
+| `hand:*.spread` | how far the fingers fan out |
+| `hand:*.energy` | smoothed speed of the whole hand and fingers |
+| `hands:gap` | distance between the two palms |
+| `hands:twist` | relative rotation of one hand to the other |
+| `hand:*.flick` | a hit event on a sharp flick, with strength (a trigger: stream B's B1 names the two signal kinds; until B2 lands, a flick is a lane that spikes and decays) |
+
+`hands:` is a new two-hand scheme with its own rests. The lane count
+changes, so `tests/test_hands_boundary.py:48`'s `22` becomes the new
+count (the only change in that test). Publish labels, rests and gates as
+today. **One new preset, `hands-dance`**, is built on these alone (a
+`hands-*` preset: the six-DOF rule for `party-*` does not bind it).
+
+### C5 — cause and effect (H1)
+
+- **Grab.** Close a hand near the shape and the shape follows that hand's
+  rotation 1:1; open it to let go. A `grab` switch (a closed fist from
+  C4's curls, Schmitt + debounce like the pinches, `hand:*.grab`) gates
+  `position` rows from the hand's roll/pitch/yaw onto `camera.yaw` /
+  `camera.pitch` and a `rot.*` plane. It is the physical-object behaviour
+  guests expected, with the existing op.
+- **Hands on the main projection by default** in the party presets: the
+  output switch already defaults on; set it in `config.toml.rig` for the
+  projector output and say so in SETUP.md. Nothing in a preset.
+- **One or two strong hand mappings per party preset**, easy to read;
+  move the subtle ones to the desk (C2's fader sets). Keep the six-DOF,
+  no-pinch rule for `party-*` or change it consciously with a register
+  row. **These route changes move the hands-on goldens** of stream A:
+  re-record with the reason "plan 24 C5: <preset>'s hand routes".
+
+### C6 — the palette fold
+
+Owner's design (working plan, "Palette fold"): one final colour pass folds
+every hue onto a slice of the HSV cylinder that is chosen and moved live.
+
+- **Hue is folded, not clamped**: a triangle wave maps the 0–360° circle
+  onto `centre ± width/2`, so neighbouring hues stay neighbours and there
+  is no seam. **Saturation and value are rescaled** into a chosen low–high
+  range. A second mode, **gradient map**, maps brightness onto a ramp
+  through 2–4 anchor colours.
+- Params, all routable: `mix` (0–1; 0 is today's picture), `centre`
+  (0–360°), `width` (0–360°), `sat_lo`/`sat_hi`, `val_lo`/`val_hi`,
+  `mode` (fold / gradient map), the anchor colours.
+- **Build it as an effect file**, `shaders/fx/palette.glsl` with the last
+  `@order`, so the ids are `fx.palette.*` (the working plan wrote
+  `palette.*`; register the difference), the desk, hands, LFOs and bands
+  reach it through the FX mechanism unchanged, it sits after the other
+  effects and the dream and before the outputs as the plan asks, and with
+  stream A it becomes a node for free. "Whether the hands are folded too"
+  is today's `through` switch, not a new param. Two **saved palettes** in
+  `library/fx/` (for example `match-the-room` and `one-hue`) are the proof
+  that a palette is a named library entry. Off by default, so no golden
+  moves.
+
+### C7 — touch shows (after A3)
+
+Fingertips near the shape light it up: a glow or a ripple where they are.
+The ten fingertip positions (C4's `tip()`, in the shared camera's units
+from A2's calibration) go to the shape's shaders as uniforms, which is
+cheap. This needs the hands and the shape in one space, so it is cut from
+integration after A3, as `plan-26-a4b-points` is. Radius, strength and
+colour are params (`view.touch.*`), off by default.
+
+**Acceptance for stream C** (owner's "done when"): the two-handed save
+works ten times in a row on the real APC40 (a hand check: say so); the
+toggles behave the same with SHIFT up or down; the coverage report shows
+the goal met; `hands-dance` and the grab are in; the palette fold is a
+fader away on at least one party preset. The five-guest test ("each can
+say within 30 seconds what their hands are doing") is a hand check too.
+
+---
+## What landed since the wishlist was written — rectify against it
+
+The wishlist and its working plan are dated 2026-10-12. These merged on
+2026-10-13/14 and every stream must build on them, not around them:
+
+- **The wired Xbox 360 pad over libusb** (PR #160, `gamepad.UsbPad`), and
+  **Learn pad** with momentary / hold on pad rows and **routable sticks**
+  (`axis:LX…RT` routes; a routed axis leaves its default camera job,
+  `router.claimed("axis")`) (PR #161). Stream B's B2 makes `Pad` a device
+  on top of this, not instead of it: `learn_from`, `claimed`, the
+  `PAD_REMAP` migration table (`routing.py:423`) and the pad's factory rows
+  all stay. **Unresolved from 2026-10-14:** holding START on the Afterglow
+  hid the panel and saved nothing; the suspect is `decode()` mapping the
+  START bit to `VIEW` (`gamepad.py:82`). B2 probes it (print `gp.BUTTONS`
+  names on press over `Pad(usb=True)`) and fixes the decode if that is it.
+  The owner said peripheral control was "due a broader refactor soon":
+  that refactor is B2, so do not polish pad mappings elsewhere.
+- **Route motion** (PR #162): `motion.py` is the one kernel (the analyzer's
+  followers and a closed-form spring; a leaf); `Binding.motion` holds a
+  route's feel (`routing.py:489`); `Router.felt` / `source_feel`
+  (`:2192/:2182`) run it; the pad's feel is the `desk.pad.*` session params
+  (`register_desk`, `PAD_FEEL :1188`), which the camera job also reads. B2's
+  pad device publishes its feel through the registry and `felt` stays in
+  the router; nothing in C or A touches it.
+- **The pad layout** (PRs #163–#166): B / X walk the preset list
+  (`preset.list.next/prev`, `params.py:1232`), not the bank; A faces, Y
+  lines; the right-stick click resets the 4D spin (`rot.reset_w`
+  `:912`); pitch wraps like yaw; the right stick's X rides the W planes'
+  spin; **START and BACK are unbound**. C1's two-handed save is on the
+  desk only; it does not re-bind START.
+- **Plan 25, the shared library** (PRs #167/#168, may be unmerged): the
+  library root may be a cloud folder, machine files stay in the home,
+  `homegit` and `shared/` are gone, `Library(home_dir, machine=…)`. C3's
+  desk templates are a library group, so they share through it. Every
+  stream's tests point the home at a scratch folder as before.
+- **The hand-check numbers clashed.** PR #161 wrote the pad's four checks
+  into `TESTING-GUIDE.md` §(f) as checks 139–142 but never added them to
+  `docs/plans/11-hand-checks.md` (which ends at 138 on `main`); plan 25's
+  build then used 139–143 for group S. **The first docs WP to land** writes
+  the pad's four checks as **group T, 144–147** (from §(f)'s own text) and
+  corrects §(f)'s numbers; plans 24, 26 and 27 are groups **U, V, W** from
+  **148**. `docs/plans/README.md`'s "numbered 1–N" line follows.
+- **Golden geometry traces** and the plan-02 `project` oracle are untouched
+  by all of this; A2's half-pixel bound is against `project_h` as it is on
+  `main` today.
+
+---
 ## Decisions already made — do not relitigate
 
 All the owner's, 2026-10-12, from the wishlist and its working plan:
@@ -731,12 +1020,41 @@ All the owner's, 2026-10-12, from the wishlist and its working plan:
     stays liftable; the core never imports `midi`, `bridge`, `dream`,
     `osc`, `torch`, `leap`.
 
+17. **The desk keeps its map's shape**; the master fader stays audio
+    drive and the crossfader the master dim; **the track faders S1–S8
+    become preset-layer targets** with no inherited defaults and no
+    auto-fill; band post/dyn/trim move to the SHIFT layer; every layer
+    and effect gets a mix where it lacks one; the nine party presets get
+    hand-authored fader sets.
+18. **The render toggles are the same on both layers** and their LEDs show
+    the live state; **every load relights the whole desk**; the save is
+    two-handed (SAVE held, a pad tapped), into any slot, the overwritten
+    preset to the trash.
+19. **A coverage report** committed in the repo, **desk templates** as
+    their own JSON, click-to-map ranked by the preset's own params; the
+    goal is at most four dark or dead controls per preset layer.
+20. **The twelve axes stay**; the H2 sources (curl, spread, energy, gap,
+    twist, flick) are added beside them; one `hands-dance` preset on them
+    alone; **grab** through the existing `position` op; one or two strong
+    hand mappings per party preset; hands on the projector by default.
+21. **The palette fold**: hue folded by a triangle wave onto a movable
+    slice, saturation and value rescaled, a gradient-map mode, the param
+    list under C6, after the effects and the dream and before the
+    outputs, saved palettes as named library entries. Lights following it
+    is plan 29.
+22. **Touch shows** (fingertips light the shape where they are) is built
+    once the hands and the shape share a space (after A3).
+
 When the docs WPs record these, they go into `DECISIONS.md` with **Who** =
 `owner`.
 
 ## Decisions you may make yourself
 
-Anything the two streams leave open: the node and port class design, the
+Anything the three streams leave open: the SAVE button's control, the
+desk event log's shape, the template file format, the ranking in
+click-to-map, the H2 sources' shaping constants, the grab switch's
+thresholds, the fold's anchor-colour params, the palette effect's ids
+(`fx.palette.*` against the plan's `palette.*`), the node and port class design, the
 graph JSON's shape, the prefix form for extra instances, the hands-in-scene
 alpha rule (alpha 1 vs sorted as one object), the depth-aware composite's
 threshold, the `eye.*` ids and defaults, how `camera.pan` migrates, the
@@ -751,11 +1069,8 @@ yourself, except the sixteen above.
 
 ## Out of scope for this run
 
-- **Plan 24** (the desk fixes, the free faders, the palette fold, the
-  coverage report, desk templates, and the hands' H1 "cause and effect":
-  grab, touch glows, hands on the projector by default; and H2 "inputs
-  that reward dancing": curl, spread, energy, gap, twist, flick sources). If a WP needs one of them,
-  stop and say why in the report.
+- **Plan 24's hardware and rig items**: the touchscreen, the Dante
+  adapter, the multi-channel capture, the pocket projector, the mic mount.
 - **Plan 28**, the node editor (N1 modifier nodes between a source and a
   param; N2 a read-only graph view; N3 editing the modulation graph with
   cables; N4 the same editor on the render graph). With it goes
@@ -780,24 +1095,33 @@ yourself, except the sixteen above.
   base. Verify the base, don't assume it: the failure that silently ruins
   this workflow is an agent on a stale base whose diff quietly reverts a
   sibling's work. Re-check right before each worktree is cut.
-- Branch names as listed; one PR per WP, into `plan-26-27-integration`,
+- Branch names as listed; one PR per WP, into `plan-24-26-27-integration`,
   titled `Plan 26 A1: the graph in code, today's three pipelines pixel for
   pixel` and the like. Each WP's PR body lists the goldens it re-recorded
-  (stream A) or the boundary assertions it consciously changed (stream B),
-  each with its one reason.
+  (streams A and C) or the boundary assertions it consciously changed
+  (streams B and C), each with its one reason.
 - Stream A is serial (A0 → A1 → A2 → A3 → A4 → A5). Stream B: B1 → B2 →
-  (B3 ‖ B4) → B5. Run A and B beside each other. They share `app.py`
+  (B3 ‖ B4) → B5. Stream C: (C1 → C2 → C3) ‖ (C4 → C5) ‖ C6, then C7 after
+  A3, then C8. Run all three beside each other. A and B share `app.py`
   (A touches `_draw_render` / `draw_render`; B touches `main`, `Host`,
   `frame`, the close order) and `ghost.py` (A rewrites it; B only hands
   `HandsIO` over). Expect those overlaps and resolve them at integration,
   never by one WP reverting the other's lines. Two more expected
   overlaps: the SYSTEM page in `ui.py` (A0's timing lines, B1's device
   lines) and `hotreload.MODULES` with `tests/test_hotreload.py` (A1 adds
-  `graph`; B1 and B4 add `devices` and `osc`). Anything else colliding
-  means a WP is mis-scoped: stop and re-cut it.
-- Merge each WP into `plan-26-27-integration` as it lands. The cross-stream
-  item (the point-cloud node, `plan-26-a4b-points`) is cut from
-  integration after B4 and A3 are both in.
+  `graph`; B1 and B4 add `devices` and `osc`). Stream C's expected
+  overlaps: `midi.py` and `apc40.py` (C1/C2 change the map and the save;
+  B2 makes `MidiIO` a device — C1 lands first and B2 carries it);
+  `draw_scene` (C2's two alpha lines; A2's rewrite); `hands/core.py`
+  (C4 adds sources; B2 wraps `HandsIO` and must not pin the lane count);
+  `library/presets/party-*.json` (C2's fader rows, C5's hand routes;
+  A0's goldens — C5 re-records the hands-on frames it moves, C2 moves
+  none). Anything else colliding means a WP is mis-scoped: stop and
+  re-cut it.
+- Merge each WP into `plan-24-26-27-integration` as it lands. The
+  cross-stream items (the point-cloud node `plan-26-a4b-points` after B4
+  and A3; the touch glow `plan-24-c7-touch` after A3) are cut from
+  integration.
 - A review pass over the integration branch before the final PR, with
   fixes committed as `Review: <what was fixed>`. Look hard at:
   - **A golden that moved without a reason.** Diff every frame in
@@ -814,12 +1138,18 @@ yourself, except the sixteen above.
     note and no dirt.
   - **A missing device at launch** (`lost`): its rows wait, the desk shows
     dark, and plugging it in later brings it up with its feedback.
+  - **The two-handed save on a filled slot**: the old preset is in the
+    trash and restorable, the new one is loaded, the pad blinks, and a
+    SAVE press with no pad does nothing. Under SHIFT the same.
+  - **The toggles under SHIFT**: points, lines, faces, rotate from both
+    layers, their LEDs right after a load on either layer.
+  - **The coverage report** regenerates byte-identical on a second run.
 - **Re-measure everything on the merged branch.** A sub-agent's green run
   inside its own worktree does not survive integration. Re-run the gates
-  on `plan-26-27-integration` itself before claiming anything.
-- One final PR from `plan-26-27-integration` to the base decided above,
-  titled `Plans 26 and 27: the render graph and the device registry`. The
-  owner merges.
+  on `plan-24-26-27-integration` itself before claiming anything.
+- One final PR from `plan-24-26-27-integration` to the base decided above,
+  titled `Plans 24, 26 and 27: the party fixes, the render graph and the
+  device registry`. The owner merges.
 
 ## Gates — all green before any PR
 
@@ -833,7 +1163,9 @@ HYPERSPACE_FRAMES=120 uv run hyperspace     # windowed smoke run
 the smoke run once per stream with the new paths on: a preset that carries
 a `graph` section with the hands in the scene (stream A); a `[[devices]]`
 list with the OSC device and a cloud device enabled and the APC40 absent
-(stream B). Point the home at a scratch folder the way the tests do.
+(stream B); a party preset with its fader set loaded, SHIFT latched and
+released, the palette fold's mix up (stream C, with the fake MIDI ports the
+tests inject). Point the home at a scratch folder the way the tests do.
 **Never touch the owner's real `~/Hyperspace`.**
 
 These must keep passing **untouched**:
@@ -843,7 +1175,7 @@ These must keep passing **untouched**:
 - `tests/test_outputs.py::test_outputs_imports_nothing_from_app_ui_or_params`
   (`outputs.py` imports `glsl` and nothing else from the package).
 - `tests/test_hands_boundary.py`'s three-standalone-files test and its
-  no-host test.
+  no-host test (C4 changes only that test's lane count).
 - `tests/test_routing_boundary.py` (`ABOVE` and `LAZY` as they are).
 - `tests/test_bridge.py::test_core_does_not_import_the_bridge`.
 - `tests/test_hotreload.py::test_every_package_module_but_the_cold_core_is_watched`
@@ -856,7 +1188,16 @@ These may change **only as this prompt says**, each change named in the
 PR body:
 
 - `tests/test_hands_boundary.py::test_the_panel_is_the_only_piece_that_knows_the_host`:
-  the list becomes `["device.py", "panel.py"]` (B2).
+  the list becomes `["device.py", "panel.py"]` (B2); `::test_the_instrument_runs_with_no_host_at_all`:
+  `22` becomes the new lane count (C4).
+- `tests/test_desk.py` and `tests/test_midi.py`: the rows C1 and C2 move
+  (the toggles invariant, the faders to the preset layer, the band rows to
+  SHIFT, the SAVE button) change the assertions that pin the map's shape
+  (`test_the_default_map_is_sorted_as_plan_13_says`,
+  `test_invariant_controls_mean_one_thing_on_both_layers`); each changed
+  assertion is named in the PR body with its decision number.
+- `tests/test_plan12_presets.py`: only if C5 consciously changes the
+  six-DOF rule, with a register row.
 - `tests/test_app_boundary.py`: `gated` gains `hyperspace.osc` and
   `pythonosc`; `ORDER` and `test_the_host_close_list_…` are rewritten for
   the registry (B1); `test_a_shut_gate_opens_nothing` and
@@ -878,20 +1219,23 @@ before.
 
 ## What the docs WPs must produce
 
-A5 writes plan 26's, B5 writes plan 27's; the shared files are edited by
-whichever lands second, on the integration branch, so they do not collide.
+A5 writes plan 26's, B5 writes plan 27's, C8 writes plan 24's; the shared
+files are edited by whichever lands later, on the integration branch, so
+they do not collide.
 
-- `docs/plans/26-render-graph.md` and `docs/plans/27-device-registry.md`:
-  each **as built**, in the shape of `21-outputs-and-the-hands.md` — what
-  was built (by WP), what no person has verified, known rough edges — with
-  the hand-check group and register rows named in the intro. Keep this
-  prompt file; A5 and B5 together update `docs/plans/README.md` (this
-  prompt's entry becomes "the launch prompt plans 26 and 27 were run from";
-  the two new entries; `24-party-wishlist.md`'s entry says which streams
-  are now plans).
+- `docs/plans/24-party-fixes.md`, `docs/plans/26-render-graph.md` and
+  `docs/plans/27-device-registry.md`: each **as built**, in the shape of
+  `21-outputs-and-the-hands.md` — what was built (by WP), what no person
+  has verified, known rough edges — with the hand-check group and register
+  rows named in the intro. Keep this prompt file; the docs WPs together
+  update `docs/plans/README.md` (this prompt's entry becomes "the launch
+  prompt plans 24, 26 and 27 were run from"; the three new entries;
+  `24-party-wishlist.md`'s entry says which streams are now plans).
 - `docs/plans/24-party-wishlist.md`: the priority paragraph points at the
-  two as-built files. Nothing else in it changes; it is the owner's
+  three as-built files. Nothing else in it changes; it is the owner's
   record.
+- `docs/SETUP.md`: the projector output's hands switch in the rig config
+  (C5), and the two-handed save in the APC40 quick reference.
 - `docs/ARCHITECTURE.md` **and `docs/ARCHITECTURE.html`** together: §1's
   component map (a **Graph** row in the render stack; **Devices** replacing
   the input-adapters row and the host's gate list), §2's frame table
@@ -915,10 +1259,22 @@ whichever lands second, on the integration branch, so they do not collide.
   section and on the answer sheet; rows that are now superseded (for
   example 79, "where the hands go in", and the `placement`/`ghost` rows
   whose text no longer matches) marked the way plan 25 marked 78 and 108.
-- `docs/plans/11-hand-checks.md`: group **T** (plan 26) and **U** (plan
-  27), numbered from **144**, in the existing format (bold number and
-  title; the headless tests behind it; the setup; *Pass:* and *Fail:*
+- `docs/plans/11-hand-checks.md`: group **T** (the pad's four from
+  `TESTING-GUIDE.md` §(f), 144–147), then **U** (plan 24), **V** (plan 26)
+  and **W** (plan 27) from **148**, in the existing format (bold number
+  and title; the headless tests behind it; the setup; *Pass:* and *Fail:*
   with the likely cause). At least:
+  - the two-handed save ten times in a row on the real APC40, into empty
+    and filled slots, with SHIFT up and down;
+  - the toggles from both layers and their LEDs after a load;
+  - every party preset's fader set felt at the desk, and the band faders
+    under SHIFT;
+  - the coverage report's numbers against what the owner sees as dark;
+  - `hands-dance` with a real hand: each of the six new sources moving
+    one thing;
+  - grab: close a fist near the shape, turn it, open to let go;
+  - the five-guest test;
+  - the palette fold on one party preset, swept by a fader and by a band;
   - every factory preset against its golden contact sheet, by eye, on the
     Mac (Apple's shader compiler is unverified for the new vertex path);
   - the hands in the scene on the projector and as a clean layer on the
@@ -958,7 +1314,13 @@ When the final PR is open, report:
   anything in this run touched it.
 - The register rows you opened (110–N), each with what it needs from the
   owner.
-- The new hand check numbers and their groups (T, U).
+- The new hand check numbers and their groups (T for the pad's four, U
+  for plan 24, V for 26, W for 27).
+- **Stream C.** The coverage numbers per preset before and after; which
+  presets' hand routes changed and which goldens moved for it; the
+  two-handed save's overturn of the 2026-10-09 row, as its register row;
+  the fader set you authored per party preset (the owner will re-author
+  at the rig).
 - What stream B translated from the old config tables, and the exact
   `[[devices]]` block the owner should paste to get today's rig.
 - Anything you deliberately left undone, anything that contradicts this
