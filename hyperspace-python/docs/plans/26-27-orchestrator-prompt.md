@@ -1,0 +1,864 @@
+# Plans 26 and 27 — the render graph and the device registry (orchestrator prompt)
+
+You are the top-level orchestrator for the first group of work from the
+post-party wishlist in `Cutaiar/hyperspace` (the Python app under
+`hyperspace-python/`). Two independent streams, each its own plan:
+
+- **Plan 26 — the render graph (F2).** Today's fixed order of render passes
+  becomes a graph of nodes in code; the hands become a geometry node in one
+  shared camera; the graph is stored in the preset as JSON.
+- **Plan 27 — the device registry (F1).** A `Device` interface, devices
+  listed in `config.toml`, several MIDI ports at once, source schemes from
+  the registry instead of fixed tuples, sinks treated the same way, a
+  point-cloud source type, and an OSC device added with no edit to
+  `app.py`.
+
+Work the way plans 21, 22 and 23 were worked: numbered work packages, one
+branch and PR each, an integration branch, a review pass, and a docs work
+package per plan that records what was built. Sub-agents, one per WP, each
+in its own git worktree off a verified base.
+
+**Read first, in full:** `docs/plans/24-party-wishlist.md` (the owner's
+intent and the F2 design decisions), then `docs/CHECKPOINT.md`,
+`ARCHITECTURE.md` (§1, §2 and §3 are the contract you are changing),
+`DECISIONS.md`, `DECISION-REGISTER.md`, `docs/plans/README.md`, and
+`docs/plans/21-outputs-and-the-hands.md` as the model for the as-built docs.
+The shared Claude Doc the wishlist file links to is the owner's working
+plan; this prompt carries everything from it that these two plans need, so
+you do not need to open it.
+
+Code sites below are `file:line` as of `main` at `648cf83`
+(`hyperspace-python/` there is identical to `6473fda`). Re-find them by
+symbol if they have moved.
+
+## Why these two first
+
+Ten of the fifteen wishlist items hang off these two refactors. The owner's
+priority (2026-10-12): **the render graph is the top priority; the device
+registry is the highest-leverage piece.** Both start now, in parallel. The
+node editor (plan 28) follows the render graph directly; the new devices
+(wands, drums, lights, Kinect: plan 29) follow the registry. The party fixes
+(plan 24: the desk, hands H1/H2, the palette fold) are a separate small plan
+and are **not** in this run.
+
+Plan numbers: the wishlist file said F2 = plan 25 and F1 = plan 26, but
+plan 25 became the shared library (PRs #167/#168). So: **F2 is plan 26, F1
+is plan 27**, the node editor is 28, the devices are 29. The wishlist file's
+priority paragraph has been corrected to say so.
+
+---
+
+## The base
+
+Plan 25 (the shared library) is on `plan-25-shared-library-build`, PR #168,
+based on #167's branch `worktree-plan-25-shared-library`. It may not be
+merged yet. Plan 27 touches `config.py`, `app.py` (`main`, the close order)
+and the SYSTEM page, which plan 25 also changed; plan 25 also took register
+row 109, hand checks 139–143 (group S) and the README entry.
+
+- **If #168 is merged:** base on `main`, and the final PR targets `main`.
+- **If it is not:** base on `plan-25-shared-library-build` (at `2c6d48b` or
+  later) and the final PR targets that branch, so its diff is plans 26 and
+  27 alone. Say so in the PR body.
+
+Either way: register rows start at **110**, hand checks at **144**, in a
+new group **T** (plan 26) and **U** (plan 27). Check which base applies
+before anything else, and re-check it immediately before each worktree is
+cut.
+
+---
+
+## Stream A — plan 26, the render graph
+
+### Where the frame is today
+
+One frame runs in `Renderer._draw_frame` (`render.py:839`) in a fixed
+order: the face picture (`:864`, face-aimed FX into a 1024² texture) → the
+scene pass `draw_scene` (`:1419`: faces `:1514–1561`, then edges as six-vertex
+quads `:1563–1589`, then point sprites `:1591–1606`, each painter-sorted
+`:1480/:1527/:1593`) into `SceneTarget` (`:416`, **colour only, no depth**)
+→ MSAA resolve → the cover mask → `lb.tick/pull` (`:875`) → the hands' own
+pass `ghost.layer` (`:896–901`) → per distinct pipeline `_pipeline` (`:960`:
+look-back composite `:970`, hands-through `:988`, FX chain `:991`) →
+`lb.capture` from the **raw scene texture** (`:946`) → per output `_compose`
+(`:994`: `fit` `:1020`, `_show` `:1046`, hands over `:1033`, readout `:1035`,
+`dim_pass` `:1352`). `outputs.route` (`outputs.py:55`) picks one of three
+pipelines, `SCENE / SCENE_HANDS / HANDS` (`:34`), per output's `Switches`
+(`:40`). An output in another GL context gets a `Handoff` (`:109`) whose
+five-step contract (`:116–131`) `Presenter.present` (`:320`) replays.
+
+The shape reaches the GPU as 2D logical pixels: `geometry.project_h`
+(`geometry.py:1009`) does `rotate4` (`:672`) → the 4D divide (`_to3` `:972`)
+→ the yaw/pitch turntable (`_camera` `:988`) → an ad-hoc 3D divide
+`CAM3 - 0.9*z1` (`:1023`) and `min(w,h)*0.30` (`:1025`). There is no 4×4
+matrix and no z on the GPU: `FACE_VS` writes `z = 0` (`render.py:153`), the
+line VAO is `"2f 1f"` (`:609`), the point VAO `"2f 1f 1f"` (`:617`).
+`camera.zoom` / `camera.pan` are a 2D zoom of the finished picture
+(`:1444–1447`) and zoom also scales the instance cell (`:1454`), the line
+width (`:1491`) and the point radius (`:1594`). `camera.pan.x/y` are in
+pixels, ±4000 (`params.py:927`), and presets store them.
+
+The hands are a separate subsystem: `Ghost` (`ghost.py:1154`) builds a real
+perspective camera in Leap mm, refitted every frame to the calibrated palm
+box (`camera(box, m, aspect)` `:219`, `_perspective` `:201`, `_look` `:189`,
+`stage_box` `:211`); draws spheres, tubes and a mesh (`Geometry` `:1050`,
+`PARTS` `:1026`, `style_parts` `:1029`) opaque with depth and its own 4×
+MSAA (`_make` `:1496`); and composites premultiplied at `ghost.alpha`
+(`_lay` `:1413`, `COMPOSITE_FS` `:820`). `ghost.mirror` flips x in the Leap
+basis (`basis` `:151`). The readout (guide, tether labels) is a second
+texture that effects never bend (`:1361–1384`). There is no `ghost.camera`
+param; the wishlist's phrase means this module function.
+
+The FX chain: `FxState._scan` (`fx.py:217`) finds `shaders/fx/*.glsl`,
+`declare` (`:391`) makes `fx.<file>.<key>` params (`fx.acid.mix` is
+`{pre}.mix` at `:426`), `names()` (`:287`) orders by `@order`, `FxChain.run`
+(`:620`) ping-pongs two textures. **Effects have no instances today**: one
+spec per file, ids without an index. (The "instances" of plans 16/20 are
+shape copies: `view.instances`, `render.inst_positions`.)
+
+History: `Lookback.capture` (`lookback.py:726`) takes the scene texture;
+`composite` (`:684`) lays echoes and the dream over the scene in the post
+pass; `dream.layer` is a VGG/GoogLeNet layer index, not a render source.
+The history never holds hands, FX or dim, and a test asserts it.
+
+Headless rendering exists: `render_offscreen` (`render.py:1642`),
+module-scoped `moderngl.create_context(standalone=True)` fixtures in
+`tests/test_render.py:23`, `test_outputs.py`, `test_fx.py`, `test_ghost.py`,
+`test_lookback.py`, and `tools/preset_shots.py`'s `Stage` (`:175–240`),
+which loads every `party-*` preset through the real `Presets` over a
+`Router`, drives fake hands through the real `HandsIO`, and renders at
+960×600 with `t_now` pinned. **There are no pixel goldens and no GPU timer
+queries** (`Renderer.stats` `:561` counts passes; the panel footer shows an
+fps EMA). `tests/golden/` holds the plan-00 geometry traces only.
+
+Presets are `hyperspace.preset/2` (`preset.py:122`, `library.py:156`) with
+sections `schema, name, note, values, routes, desk, macros, modules`
+(`preset.py:4–9`); `load_doc` (`:265`) ignores unknown top-level keys;
+`document` (`:371`) and `signature` (`:386`) write and compare them.
+
+### The work packages
+
+| WP | What | Mostly touches |
+| --- | --- | --- |
+| **A0** | Step 0: golden frames, GPU timing per pass, the naming rule | `tests/test_golden_frames.py` (new), `tests/golden/frames/`, `tools/golden_frames.py` (new), `render.py` (`stats`), `ui.py` (SYSTEM page) |
+| **A1** | The graph in code: today's three pipelines as default graphs, pixel for pixel | `render.py`, a new `graph.py` (nodes, evaluation), `outputs.py` (`route`), `lookback.py`, `fx.py`, `ghost.py` (composite only) |
+| **A2** | One camera: a shared 4×4, depth, `eye.*`, zoom/pan as the shape's world transform, the Leap calibration | `geometry.py`, `render.py` (shaders, VAOs, `draw_scene`), `view.py`, `params.py` (`camera.*`, `eye.*`), `ghost.py` (`camera`), `preset.py` (pan migration), `hands/` calibration (`hands.json`) |
+| **A3** | The hands as a geometry node: in the scene or as a layer, composited anywhere; history as wiring | `ghost.py` → a geometry node, `graph.py`, `render.py`, `lookback.py` (capture from a node), `outputs.py` (`Switches.through` → graph wiring) |
+| **A4** | The graph in the preset as JSON; node instances and the naming rule; the point-cloud geometry node | `preset.py`, `graph.py`, `params.py`, `library/presets/*.json`, `ui_*.py` (the OUTPUT / LOOKBACK pages that pick what is wired) |
+| **A5** | Docs | as under "What the docs WPs must produce" |
+
+Branches `plan-26-a0-golden`, `plan-26-a1-graph`, `plan-26-a2-camera`,
+`plan-26-a3-hands-node`, `plan-26-a4-graph-json`, `plan-26-a5-docs`.
+
+**Sequencing.** A0 first and alone; nothing in stream A merges before A0's
+goldens are on the integration branch, because every later WP is judged
+against them. A1 after A0. A2 and A3 both change `ghost.py` and the scene
+pass: A2 then A3, in sequence. A4 after A3. A5 last. Stream A is therefore
+serial; stream B runs beside it.
+
+### A0 — step 0
+
+The owner asked for three things before F2 step 1 (wishlist file
+`:120–126`):
+
+- **Golden frames.** For every factory preset (`preset.FACTORY_PRESETS`,
+  23 files in `hyperspace/library/presets/`: the eight house moods, the
+  nine `party-*`, `legacy6`, `lfo-breathe`, the four `hands-*`), each of
+  the three pipelines (`outputs.PIPELINES`), and a hands-on and hands-off
+  case through `tests/fake_hands.py` the way `tools/preset_shots.py` does
+  it: render at a fixed size (960×600 at dpr 1, and once at the 1080p cap
+  for one preset) with `t_now` pinned and the LFOs and analyzer at rest,
+  then store a frame hash plus a down-sampled PNG under
+  `tests/golden/frames/`. Pin the dream off (the worker is not
+  deterministic) and the look-back on with its echoes. The test compares
+  the full-resolution frame **exactly** (every byte), the PNG is for a
+  person. A tool, `tools/golden_frames.py [--record] [--only …]`, records
+  and diffs, and writes a contact sheet of the differences under
+  `docs/plans/assets/26-render-graph/`. Re-record only what a WP changed,
+  say so in the commit, and list each changed frame in that WP's PR body
+  with the one reason it changed. **A golden that moves in A1 means A1 is
+  wrong**; in A2–A4 a moved golden needs its reason.
+- **GPU timing per pass.** `moderngl` query objects (`ctx.query(time=True)`)
+  around each pass of `_draw_frame`, kept in `Renderer.stats` as a rolling
+  median in ms per pass, shown on the SYSTEM page as one line per pass
+  (`scene 1.2 · cover 0.1 · hands 0.4 · lookback 0.3 · fx 2.1 · compose 0.2`).
+  Off when the context has no timer queries (a standalone context on CI).
+  After A1 the lines are one per node.
+- **The naming rule.** Written into `docs/ENGINEERING.md` and pinned by a
+  test: the first instance of a node keeps today's ids (`fx.acid.mix`,
+  `ghost.alpha`, `dream.mix`); only extra instances get a prefix
+  (`fx.acid.2.mix` or the like: choose one form and register it). No preset
+  or binding ever needs migrating for a single-instance graph.
+
+### A1 — the graph in code
+
+`graph.py` (new, in the render stack: imports `moderngl`, `glsl` and its
+sibling render modules only, never `params`, `routing`, `library`,
+`preset`, `undo`, `control`): node classes with typed ports, and an
+evaluator that runs them in dependency order each frame. The node kinds the
+owner decided (wishlist file, "Render graph design decisions"):
+
+| Node | Takes | Makes |
+| --- | --- | --- |
+| **Geometry** (shape, hands, point cloud) | its params | draw calls in the shared camera; **no framebuffer of its own** |
+| **Scene** | any number of geometries | one colour + depth target: solid geometry first, then the sorted see-through shape |
+| **Layer** | one geometry | its own colour + depth target, usable before the FX, after them, in history, or on one output |
+| **Composite** | two images | over, add, or depth-aware |
+| **FX** | an image | the chain (`FxChain`) — one node per chain, the effects' order inside it as today |
+| **History** | an image | the look-back capture, echoes and the dream (`Lookback`) |
+| **Output** | an image | `fit`, flip, hands-over, readout, dim, as `_compose` does now |
+
+In A1 the hands stay as they are (`Ghost.layer` is wrapped as a Layer node
+with its own camera; A3 makes it a Geometry). Today's three pipelines
+become three default graphs, built in code from an output's `Switches`, and
+`Renderer._draw_frame` becomes "build or reuse the graph for this frame's
+views, evaluate it". **A0's goldens pass unchanged**: every pixel of every
+preset on every pipeline, with and without hands. Keep `Handoff` and
+`Presenter` as they are: an Output node produces the same five-step
+hand-off. Keep `Renderer.draw` / `draw_outputs` signatures so
+`app._draw_render` and the tests' stubs do not change.
+
+Evaluation order is dependency order, computed once when the graph changes,
+not per frame. A node is evaluated once per frame even when two outputs
+share it (today's "each distinct pipeline once", `:914–938`). The
+per-node GPU timing from A0 attaches here.
+
+**Name the node method `run` or `evaluate`, never `apply`.**
+`tests/test_render.py::test_the_render_stack_imports_no_registry` bans any
+call named `apply`, `modulate`, `snapshot` or `set_value` in `render.py`
+(`:1598–1601`).
+
+### A2 — one camera
+
+The owner's decisions (wishlist file, "The shape's transform"):
+
+- **Local motion is `rot.*`**, the six-plane 4D tumble (`rotate4`),
+  unchanged.
+- **World pose is `camera.yaw` / `camera.pitch`.** They already rotate the
+  vertices after the tumble as a turntable about fixed axes (`_camera`), so
+  they compose with `rot.*`. Ids unchanged; only their meaning is written
+  down.
+- **Scale and position are `camera.zoom` / `camera.pan`.** They become the
+  shape's scale and position **in the world**, no longer a 2D zoom of the
+  finished picture. The hands stay aligned with the performer; only the
+  shape grows. A whole-frame 2D zoom can return later as an image node.
+- **The real camera is new and fixed**, framed on the Leap box, with new
+  ids `eye.*` (session group, not in a preset). `hands-orbit` then turns
+  only the shape.
+- **Lines and points** become quads expanded in the vertex shader with a
+  real depth, so a hand can pass between edges. The shape layer's depth is
+  the depth of its nearest visible surface (fragments above an alpha
+  threshold).
+- **Units.** A calibration maps Leap mm into shape units; it lives with the
+  room settings in `hands.json` (`hands/core.py:124–125`, schema bump with a
+  backup of the old file).
+
+Build it as: keep 4D → 3D on the CPU (`_to3`), then 3D → clip in the vertex
+shader with one shared 4×4 (`u_vp`, the same matrix `ghost.Geometry` already
+takes at `ghost.py:1116`). `SceneTarget` gains a depth attachment. Express
+today's divide (`CAM3 - 0.9*z1`, the 0.30 scale, y down) as the **default
+`eye.*`** so that, with the default eye and `camera.zoom = 1`, `pan = 0`,
+every vertex lands within half a logical pixel of where `project_h` put it.
+Pin that with a test over every shape at the three golden view
+configurations (`tests/golden/geometry/`), and keep `project` (`:715`) as
+the parity oracle it is.
+
+The goldens **will** move in A2 (sub-pixel positions, depth-tested overlap
+instead of painter order where geometry crosses, line width no longer
+scaling with zoom). Re-record them with the contact sheet in the PR, and
+list what moved and why. The painter sort stays for the see-through shape
+(solid-then-sorted, below); it is not replaced by the depth test.
+
+`camera.pan` changes unit from pixels to world units. Migrate stored
+values at load (`preset.py` step 0, beside `echo_seconds` `:164`): a
+`preset/2` pan in px becomes world units through the default eye, so a
+saved preset looks the same. Bump the preset schema only if you need to;
+`load_doc` ignores unknown keys, so a new `camera.pan` unit can also be
+marked by a key. Say which you chose in the register.
+
+`ghost.mirror` keeps its meaning (the hands mirrored in the Leap basis); the
+output flips (`Switches.flip_x/y`, plan 23 WP1) are untouched.
+
+### A3 — the hands as a geometry node
+
+Decision (owner, 2026-10-12): **any geometry, the hands included, can be
+drawn either inside the scene or as its own buffer that the pipeline
+composites anywhere, and the same hands can do both at once** (in the
+scene on the projector, a clean layer on the glass).
+
+- `Ghost`'s parts (`hands_parts`, `joints_parts`, `palms_parts`,
+  `cage_parts`, `marionette_parts`) become a **Hands geometry node** drawing
+  in the shared camera from A2. `ghost.style`, `ghost.alpha`, `ghost.guide`,
+  `ghost.tethers`, `ghost.on`, `ghost.mirror` keep their ids and meanings
+  (the naming rule: the first hands node keeps today's ids).
+- **In the scene:** solid geometry is drawn first, then the sorted
+  see-through shape (alpha-over in painter order, `render.py:11`). A hand in
+  front of or behind the shape reads correctly. Order-independent
+  transparency is **deferred**: until then, hands inside the scene have
+  `ghost.alpha` at 1, or are sorted as one see-through object. Pick one,
+  register it.
+- **As a layer:** a Layer node with its own colour + depth target, and a
+  **Composite** node that merges it with over, add, or **depth-aware**
+  blending, so a separate hands layer can still be hidden by the shape.
+  Today's "through" (`Switches.through`, `Renderer._pipeline` `:988`) is the
+  layer composited before the FX; "over" is the layer composited at the
+  output. Both stay reachable from the OUTPUT page's existing switches,
+  which now set the default graph's wiring.
+- **The readout** (guide, tether labels) stays its own texture laid on at
+  the output, never through effects (register row 80 holds).
+- **History becomes wiring.** The History node captures from a chosen
+  image: the scene with or without the hands layer. The test "the history
+  never holds hands, FX or dim" becomes "the history holds what it is
+  wired to, and the default graph wires it as today".
+- Each output's `Switches` (`scene`, `hands`, `through`) keep their
+  meaning as the three knobs on the default graph. Register rows 81–84
+  hold.
+
+Goldens: the default graphs must still match A2's recordings exactly. New
+cases (hands in the scene, a depth-aware composite) get new goldens.
+
+### A4 — the graph in the preset
+
+- A `graph` section in the preset document (`preset.py` `document`,
+  `load_doc`, `signature`): plain JSON, git-diffable, listing nodes by kind
+  and instance, their wiring, and nothing that is already a param. Absent
+  → the default graph, so every existing preset loads unchanged and
+  `signature` sees no dirt. A preset that carries a graph loads it; an
+  unknown node kind is a note and the default graph, never a crash.
+- **Node instances and the naming rule** (A0): a second instance of a node
+  gets prefixed ids and its own registry params; the first keeps today's.
+  Two acid effects in one chain, or two hands layers (one in the scene, one
+  over the glass), are the proof.
+- **The point-cloud geometry node:** draws a point-cloud source (stream B's
+  B4 contract: a GPU buffer of 3D points plus a timestamp) as points, in
+  the shared camera, from a recorded cloud file so no sensor is needed.
+  This is the one cross-stream item: build it on the integration branch
+  after B4 is in, as the last commit of A4, or as its own small WP
+  `plan-26-a4b-points` if B4 is late.
+- The OUTPUT and LOOKBACK pages show the wiring they set in words
+  (`hands: in the scene · through FX · over`), no editor yet (plan 28).
+
+**Acceptance for stream A:** a preset can say "hands as lines, through the
+acid FX, with tracers" in data, not code; every factory preset renders
+pixel-identical to the goldens recorded on its WP; the SYSTEM page shows a
+time per node; `tests/test_render.py` and `test_outputs.py`'s boundary tests
+pass untouched.
+
+---
+
+## Stream B — plan 27, the device registry
+
+### Where the devices are today
+
+`app.main` (`app.py:1078`) opens each adapter by hand behind its own config
+gate: `_open_midi` `:519` (`[midi] enabled`, one `MidiIO`, one port, one
+profile), `_open_bridge` `:537`, `_open_hands` `:563`, `_open_dream` `:597`,
+`_open_pad` `:626` (no try/except; `Pad` never raises). `Host` (`:824`)
+has one field per adapter (`pad :849`, `midi_io :850`, `hands_io :851`,
+`bridge_io :852`, `dream_io :853`) and `adapters` (`:862`) lists them in
+shutdown order — **the pad is not in it and `Pad` has no `close()`**; its
+libusb reader is a daemon thread stopped only by `atexit`
+(`gamepad.py:153–193`). `frame` (`:869`) polls them in a fixed order that
+`tests/test_app_boundary.py::test_the_frame_runs_in_the_documented_order`
+(`:317`, `ORDER :297`) pins by stub name. Hot-reload targets are listed per
+adapter at `:1252–1257`.
+
+Sources are fixed tuples: `routing.LANE_SCHEMES = ("lane", "ext", "lfo",
+"hand", "axis")` (`routing.py:278`, enforced in `Binding.is_performer :575`,
+`to_json :619`, `describe :656`, `migrate_v1 :796`, `Bindings._check :1748`,
+`replace_owner :1834`, `preset.py:297`, `learn.py:194`);
+`ui_routing.SOURCE_ORDER = ("hand", "axis", "lfo", "ext")` (`:490`, a scheme
+not in it is never offered); `learn.WANTS = ("desk", "hand:left",
+"hand:right", "pad")` (`learn.py:82`) with the matching menu in
+`ui.py:675–697`. `Router.feed` (`routing.py:2144`) stores any scheme
+unchecked; the Router's source registry is plain dicts the adapters fill:
+`feeds :1893`, `labels :1894`, `gates :1898`, `rests :1903`, `names :1917`,
+`lane(source) :1932` (−1 = dormant), `address :1958`, `rest_of :2172`.
+
+Publishers today: `LFOs.publish` (`lfo.py:244`: feed, labels, rests);
+`HandsIO._publish` (`hands/core.py:1099`: labels, gates, names, rests) and
+`poll` (`:1124`, feeds `hand` or `None`); the pad's axes are published by
+the Router itself (`_publish_axes :2118`, a lazy `gamepad` import) and its
+buttons are rows (`Router.pad :2070`); the bridge feeds `ext` with **no
+labels or rests**, so the UI hard-codes `N_EXT = 16` (`ui_routing.py:133`);
+the `lane` scheme is never fed — `modulate` reads `analyzer.lanes / CEIL`
+directly (`:2237`). **MIDI is never a feed source**: every message is a
+discrete scene-setter applied straight to a base (`midi._apply :595`).
+
+The APC40 is a duck-typed profile module (`apc40.py`: `PORT_MATCH :70`,
+`enter/leave :103/:107`, `is_relative :126`, `ring_setup :130`,
+`feedback_for :137`, `control_name :183`, `LAYOUT :310`, `DEFAULT_MAP
+:416`), chosen by `midi.PROFILES = {"apc40": apc40}` (`midi.py:125`) —
+and the `"profile"` field in `bindings.json` wins over `[midi] profile`
+(`:281`). MIDI sources carry **no device or port identity** (`cc:<ch>:<n>`,
+`note:<ch>:<n>`, `pitch:<ch>`; `Binding.midi_source :578`); `dispatch`,
+`overlaps` and `control` key on (kind, channel, number). The **SHIFT latch
+lives in routing, not midi or apc40**: `SHIFT_SOURCE :290`, `desk.shift` in
+`register_desk :1162`, one `Bindings.layer` for the whole table
+(`:1345–1350`, `dispatch :1609`, `set_layer :1629`). Two desks would share
+one layer. APC40 is also hard-wired in `routing.factory_desk :1075`, the
+remap tables `:343–435`, `preset.fresh_desk :139` / `device_knob :872`,
+`ui.py:569/:611`, `ui_routing.control_name :995`, and all of `ui_desk.py`.
+
+`HandsIO` is a source and a sink at once (DAW MIDI out inside `poll`,
+`_open :1308` / `_send :1352`), and a second consumer reads it: the ghost
+renderer (`app.py:1184`). `hands/core.py`, `signal.py`, `tape.py` import
+nothing from the package and `tests/test_hands_boundary.py` holds that
+(`:30`, `:40`, and `:48`: `HandsIO` runs with no host and gives 22 lanes).
+Its status is a string on `LeapSource.status` (`hands/core.py:771–877`),
+shown on the HANDS page (`hands/panel.py:313`), not SYSTEM. The bridge
+(`bridge.py:144`) is today's one sink: `transmit :248` sends lanes and
+`param:<id>` norms; `receive :218` feeds `ext`; it uses `midi.Ports`
+(`:167`, so it imports midi, apc40 and mido).
+
+`config.load` (`config.py:324–332`) accepts only dict top-level sections:
+**a top-level `[[devices]]` parses to a list and lands in `cfg["error"]`**.
+The existing list-of-tables, `[[output.screens]]`, is nested under
+`[output]` and checked per entry by `_screen :215` / `_screens :249`. The
+SYSTEM page (`ui.py:1858`) has `_midi_status :1989`, `_bridge_status
+:1973`, no pad status and no hands line. `hotreload.MODULES` (`:56–62`) is
+in import order and two tests pin it (`tests/test_hotreload.py:218, :272`).
+`tests/test_app_boundary.py:27` lists the gated modules (`midi`, `bridge`,
+`dream`, `homegit`, `leap`, `torch`); `test_bridge.py:425` asserts the core
+never imports `bridge`. **There is no OSC support and no `python-osc`
+dependency.**
+
+### The work packages
+
+| WP | What | Mostly touches |
+| --- | --- | --- |
+| **B1** | The `Device` interface and the registry; `[[devices]]`; one status line per device; `Host.devices` | `devices.py` (new), `config.py`, `app.py` (`main`, `Host`, `frame`, close order, hot reload), `ui.py` (SYSTEM) |
+| **B2** | The existing inputs on the registry: several MIDI ports with their own profiles, the pad, the hands; schemes from the registry | `midi.py`, `apc40.py`, `gamepad.py`, `hands/panel.py` (+ a wrapper outside `hands/core.py`), `routing.py`, `learn.py`, `ui_routing.py`, `ui.py` |
+| **B3** | Sinks: the bridge and the hands' DAW out as sinks; a param routed to a sink through the table and Learn | `devices.py`, `bridge.py`, `hands/`, `routing.py`, `learn.py`, `ui_routing.py` |
+| **B4** | An OSC device with no edit to `app.py`; the point-cloud source type and a recorded-cloud device | `osc.py` (new, gated), `devices.py`, `pyproject.toml` (`python-osc`), `tests/fixtures/clouds/` |
+| **B5** | Docs | as under "What the docs WPs must produce" |
+
+Branches `plan-27-b1-registry`, `plan-27-b2-inputs`, `plan-27-b3-sinks`,
+`plan-27-b4-osc-clouds`, `plan-27-b5-docs`.
+
+**Sequencing.** B1 first. B2 after B1. B3 and B4 may run in parallel after
+B2 (B3 touches `routing.py`/`learn.py`; B4 touches neither). B5 last. B4's
+point-cloud contract is what stream A's A4 consumes: land B4's contract
+(`devices.PointCloud`, the file format, the recorded-cloud device) early in
+B4 and say so on the integration branch.
+
+### B1 — the interface and the registry
+
+- `devices.py`: a `Device` protocol — `open()`, `poll(dt, now)`, `close()`,
+  `status` (`connected`, `lost`, `error: …`, `off`), `name` (the role, below),
+  `sources` (continuous axes: name, label, rest, bipolar; hits: name, label,
+  with velocity), `feed(router)` (publishes its vectors, labels, rests,
+  gates, names under its own scheme), and `learn(learn)` (offers its moved
+  axis or pressed button to an armed Learn, as `gamepad.learn_from` and
+  `HandsIO._learn` do now). Discrete controls (buttons, pads, MIDI) stay
+  scene-setters: a device delivers them as rows through the table, as
+  `Router.keys` / `Router.pad` / `MidiIO._handle` do today. Keep the two
+  signal kinds distinct — **values** (axes, faders) and **triggers** (hits,
+  buttons) — because the node editor (plan 28) crosses them only through
+  envelope and threshold nodes.
+- `DeviceRegistry`: owns the list, opens each behind its own config entry,
+  polls them in order each frame, retries a lost device on the `Ports`
+  schedule (`midi.py:164`, fast then slow), and never lets one device's
+  exception stop the frame (a note, as `_open_hands` does, and `status`).
+  It is the one importer of every adapter module, each imported lazily
+  under its entry, so `tests/test_app_boundary.py::test_importing_app_leaves_every_gated_adapter_unimported`
+  keeps passing with `osc` and `pythonosc` added to its `gated` list.
+- **Roles, not serials** (owner, 2026-10-12): a device entry has a `role`
+  (`apc40`, `pad`, `leap`, `wand:1`, `osc:phone`) and the role is what
+  source strings and rows name. The session maps roles to physical devices
+  (`port`, `usb`, `host:port`). A missing device shows as `lost` and its
+  rows wait, as dormant routes do today (`Router.lane` → −1).
+- `[[devices]]` in `config.toml`: `role`, `kind` (`midi`, `gamepad`,
+  `hands`, `bridge`, `osc`, `cloud`), `enabled`, and the kind's own keys
+  (the keys the `[midi]`, `[gamepad]`, `[hands]` and `[bridge]` tables hold
+  today, docstring `config.py:14–137`). `config.load` gets a branch for a
+  top-level list-of-tables, checked per entry like `_screen`. **The old
+  tables keep working**: a config with `[midi]`/`[gamepad]`/`[hands]`/
+  `[bridge]` and no `[[devices]]` is translated to the equivalent entries
+  at load with one note per table, so no rig config breaks. Devices come
+  and go without a relaunch: a changed `[[devices]]` list on hot reload
+  (`config` is in `hotreload.MODULES`) closes what left and opens what
+  arrived.
+- `Host.devices` replaces the per-adapter fields; `Host.adapters` becomes
+  the registry's close list (now including the pad, which gets a real
+  `close()` that stops its reader thread). `frame` polls devices where the
+  adapters are polled now: scene-setting devices in the step-2/3 slot,
+  feeders in the step-6 slot, sinks after `reg.apply`. **Rewrite `ORDER` in
+  `tests/test_app_boundary.py` consciously** to "devices poll in the
+  scene-setter slot, sources feed in the feed slot, sinks run after apply",
+  and update ARCHITECTURE §2's table to match in B5. The hot-reload swap
+  targets (`app.py:1252–1257`) come from the registry.
+- SYSTEM page: one line per device — `role · kind · status · n sources ·
+  last` — replacing `_midi_status` and `_bridge_status`, plus the hands
+  line it never had. The HANDS page keeps its own status.
+
+### B2 — the existing inputs on the registry
+
+- **Several MIDI ports, each with its own profile.** `MidiIO` becomes a
+  device whose profile is per entry (`profile = "apc40" | "generic"`), and
+  a `generic` profile (plain CC/note/pitch, no feedback) ships so a second
+  controller works with no profile code. Source strings gain the role when
+  there is more than one MIDI device: `cc:<ch>:<n>` stays valid for the
+  one named `apc40` (today's `bindings.json` and every preset keep
+  working), and a second device's rows are `cc@<role>:<ch>:<n>` (or a form
+  you choose; register it). `Binding.midi_source`, `dispatch`, `overlaps`
+  and `control` learn the qualifier. `bindings.json`'s top-level
+  `"profile"` becomes the `apc40` role's profile and stops overriding the
+  config (`midi.py:281`).
+- **The SHIFT latch per device.** `Bindings.layer` becomes per role; the
+  `desk.shift` param is the `apc40` role's latch (ids unchanged). A second
+  desk has its own, or none. The wishlist's "APC40 is two nodes" (plan 28)
+  needs exactly this: a device with a mode switch presents as one node per
+  mode, so model it as **a device may expose layers**, and the table knows
+  which role's layer a row belongs to. D1 and D4–D6 hold.
+- **The pad** is a device: `Pad` gets `open`/`close`/`status`; the axes'
+  labels and rests come from the device (`_publish_axes` leaves the
+  Router); the camera job that `app.frame` inlines at `:912–951` moves to
+  the pad device's `poll` (it needs `router.claimed("axis")` and the
+  registry's `nudge`/`scale`, so it takes the router and registry as
+  arguments, as `HandsIO.poll` takes the router).
+- **The hands.** `hands/core.py` stays liftable: do not import `devices`
+  there. The device is a thin wrapper that owns a `HandsIO` and satisfies
+  the protocol, placed in `hands/panel.py`'s layer or a new
+  `hands/device.py` that `tests/test_hands_boundary.py` lists as
+  host-reaching. The ghost renderer (A3's hands node) keeps reading
+  `HandsIO` through `renderer.ghost.source`; the registry hands it over.
+- **Schemes from the registry.** `LANE_SCHEMES`, `SOURCE_ORDER` and
+  `learn.WANTS` stop being tuples: the Router asks the registry which
+  schemes are continuous and in what order to offer them; Learn asks it
+  what can be armed (`desk` for every MIDI role, `hand:left/right`, `pad`,
+  and each new device's role). `lane` (the analyzer) and `lfo` stay
+  built-in schemes the registry lists first. Routing still imports nothing
+  above it: the registry object arrives as an argument, and
+  `tests/test_routing_boundary.py`'s `ABOVE` / `LAZY` sets stay as they
+  are (add `devices` to neither; if routing must import a protocol, put
+  the protocol in a leaf module and name it in the test).
+- `ui_desk.py` stays APC40-only in this plan: it draws the `apc40` role's
+  layout. Note it as the thing plan 29's generic desk replaces.
+
+### B3 — sinks
+
+- A sink is a device that reads **effective** param values (or lanes) after
+  `reg.apply` and sends them out: `sinks` on the protocol, `send(reg,
+  analyzer)` in the slot after apply. The bridge's `transmit` is the first
+  sink; its `receive` stays a source (`ext`), so the bridge is one device
+  with both halves. The hands' DAW out (`HandsIO._send`) becomes a sink
+  entry (`kind = "midi-out"`, role `hands-daw`), so `hands/core.py` no
+  longer opens a MIDI port — but keep the `out` setting working by
+  translating it to that entry at load, as B1 does for the old tables.
+- **A param routed to a sink uses the same table and Learn flow as a hand
+  routed to a param.** Add a sink row: a `Binding` whose source is a param
+  (`param:<id>`) or a lane (`lane:<n>`) and whose target is a sink port
+  (`<role>:<channel>`), saved in the **session** (sinks are rig, D1/D9). The
+  bridge's `send` list (`config.py:176`) becomes those rows at load. Learn
+  can arm a sink port: pick a port on the ROUTING page, then a param; the
+  row appears as the others do, with the referee rules unchanged (a sink
+  row is not a performer and never asks Replace / Keep). Publish the
+  bridge's `ext` labels and rests so `N_EXT` leaves `ui_routing.py`.
+
+### B4 — OSC and point clouds
+
+- **OSC device** (`osc.py`, gated, `python-osc` added to `pyproject.toml`):
+  a UDP server on `host:port` from its entry; `axes = ["/x", "/y", …]`
+  become continuous sources (`osc:<role>.<name>`, rest from the entry), and
+  `hits = ["/hit"]` become triggers with velocity (the message's first
+  float). It feeds under its scheme, publishes labels and rests, reports
+  `lost` when nothing has arrived for a timeout. **The acceptance for the
+  whole plan is adding this device with no edit to `app.py`**: the only
+  code that names it is `osc.py` itself and the registry's kind table.
+  Test it with `pythonosc`'s client in-process, no network assumptions
+  beyond localhost.
+- **Point-cloud source type** (`devices.PointCloud`): a GPU-ready buffer
+  of N×3 float32 points plus a timestamp and a frame id, a `bounds`, and
+  an optional N×3 colour; a device publishes it on the registry under its
+  role (`cloud:<role>`), not through the Router (it is not a scalar lane).
+  A `cloud` device kind reads a recorded file (`tests/fixtures/clouds/`,
+  a small `.npz` sequence you generate deterministically) at its own
+  rate, so the type is exercised with no sensor. Stream A's point-cloud
+  geometry node (A4) draws it. The Kinect and the live sensors are plan 29.
+
+**Acceptance for stream B:** the APC40, the pad and the hands run on the
+registry with `bindings.json` and every preset unchanged; a second MIDI
+controller with the `generic` profile maps on the desk's Learn with no
+code; the bridge's `send` list is sink rows; the OSC device is added by a
+`[[devices]]` entry alone; a cloud device publishes frames the A4 node
+draws; the boundary tests pass with the conscious changes above and no
+others.
+
+---
+
+## Decisions already made — do not relitigate
+
+All the owner's, 2026-10-12, from the wishlist and its working plan:
+
+1. **Both streams start now, in parallel.** The render graph is the top
+   priority; the registry is the highest-leverage piece.
+2. **The four node kinds** (Geometry, Scene, Layer, Composite) and their
+   contracts as tabled under A1; FX, History and Output nodes wrap what
+   exists.
+3. **Hands in the scene or as a layer, or both at once.** Solid first,
+   then the sorted see-through shape. **Order-independent transparency is
+   deferred.**
+4. **The shape's transform:** `rot.*` local, `camera.yaw/pitch` world pose
+   (ids unchanged), `camera.zoom/pan` the shape's world scale and position,
+   and a new fixed `eye.*` camera on the Leap box. The whole-frame 2D zoom
+   is gone until an image node brings it back.
+5. **Lines and points get a real depth** as vertex-expanded quads.
+6. **History becomes wiring**: capture from a chosen node, with or without
+   hands.
+7. **Today's three pipelines become default graphs that A1 must
+   reproduce pixel for pixel.**
+8. **Step 0 before step 1:** golden frames for every factory and party
+   preset, GPU timing per pass, and the naming rule (first instance keeps
+   today's ids; only extra instances are prefixed; nothing migrates).
+9. **Twelve hand axes stay.** No gesture vocabularies in this plan (H2's
+   new sources are plan 24).
+10. **The registry's shape:** a `Device` with open/poll/close publishing
+    axes and hits with velocity, names, rests and status; `[[devices]]`;
+    hot-plug; several MIDI ports with their own profiles; schemes from the
+    registry; sinks the same way; a point-cloud source type. **Done when
+    the APC40, the pad and the hands run on it and an OSC device is added
+    with no edit to `app.py`.**
+11. **Roles, not serials.** A preset names a role; the session maps roles
+    to devices; a missing device's rows wait.
+12. **Two input ports per param is today's model** (base: many
+    scene-setters, last touch wins; mod: one performer, the referee). The
+    registry changes nothing about `Owned` / `referee` / `Router.modulate`.
+    Combining two performers needs an explicit combine node, which is
+    plan 28, not this run.
+13. **Values and triggers are two signal kinds.** Encoder vs fader
+    behaviour, soft pickup included, is a property of the port set by the
+    device profile.
+14. **A device with a mode switch can appear as one node per mode** (the
+    APC40 as *APC40* and *APC40 (SHIFT)* in plan 28). The registry must
+    model a device's layers so that plan 28 can do this without
+    re-plumbing; D1, D4–D6 and D12 hold.
+15. **Rejected:** writing GLSL inside the graph, or a general
+    TouchDesigner. Nodes are a curated set of built-ins; shaders stay as
+    files with hot reload.
+16. **The processes in force:** `DECISIONS.md` "Process" (a `/code-review`
+    per code PR; agents on branches; the owner merges); nothing in the
+    render stack writes a param; adapters only `feed`; the hands package
+    stays liftable; the core never imports `midi`, `bridge`, `dream`,
+    `osc`, `torch`, `leap`.
+
+When the docs WPs record these, they go into `DECISIONS.md` with **Who** =
+`owner`.
+
+## Decisions you may make yourself
+
+Anything the two streams leave open: the node and port class design, the
+graph JSON's shape, the prefix form for extra instances, the hands-in-scene
+alpha rule (alpha 1 vs sorted as one object), the depth-aware composite's
+threshold, the `eye.*` ids and defaults, how `camera.pan` migrates, the
+`[[devices]]` keys, the MIDI role qualifier's form, the sink row's form,
+the OSC address mapping, the cloud file format. When you take your own
+recommendation and build it, append a row to `docs/DECISION-REGISTER.md`
+starting at **row 110** in that file's format (what was built and what the
+owner will see or feel; the other option(s); the cost to reverse; the known
+rough edge; the hand check that lets the owner judge it), and mark the
+matching `DECISIONS.md` row's **Who** as `row N`. Never mark a row `owner`
+yourself, except the sixteen above.
+
+## Out of scope for this run
+
+- **Plan 24** (the desk fixes, the free faders, hands H1/H2, the palette
+  fold, the coverage report, desk templates). If a WP needs one of them,
+  stop and say why in the report.
+- **Plan 28**, the node editor (N1 modifier nodes, N2 graph view, N3/N4
+  editing). A4 shows wiring in words; nothing draws cables.
+- **Plan 29**, the devices: wands, drums, Kinect, DMX/sACN, bulbs, a
+  generic on-screen desk. B4's OSC device and cloud file are the proofs
+  the registry works, not products.
+- Order-independent transparency; the hands' FX, textures and tracers as
+  *params of the hand look* (H3: the node makes them possible; their
+  params come later); hand–shape contact (H4).
+- The web remote, the touch panel, Dante, multi-channel audio capture.
+
+---
+
+## How to orchestrate
+
+- One sub-agent per WP, each in its own git worktree off the verified
+  base. Verify the base, don't assume it: the failure that silently ruins
+  this workflow is an agent on a stale base whose diff quietly reverts a
+  sibling's work. Re-check right before each worktree is cut.
+- Branch names as listed; one PR per WP, into `plan-26-27-integration`,
+  titled `Plan 26 A1: the graph in code, today's three pipelines pixel for
+  pixel` and the like. Each WP's PR body lists the goldens it re-recorded
+  (stream A) or the boundary assertions it consciously changed (stream B),
+  each with its one reason.
+- Stream A is serial (A0 → A1 → A2 → A3 → A4 → A5). Stream B: B1 → B2 →
+  (B3 ‖ B4) → B5. Run A and B beside each other. They share `app.py`
+  (A touches `_draw_render` / `draw_render`; B touches `main`, `Host`,
+  `frame`, the close order) and `ghost.py` (A rewrites it; B only hands
+  `HandsIO` over). Expect those overlaps and resolve them at integration,
+  never by one WP reverting the other's lines. Anything else colliding
+  means a WP is mis-scoped: stop and re-cut it.
+- Merge each WP into `plan-26-27-integration` as it lands. The cross-stream
+  item (the point-cloud node) is built on integration after B4 and A3.
+- A review pass over the integration branch before the final PR, with
+  fixes committed as `Review: <what was fixed>`. Look hard at:
+  - **A golden that moved without a reason.** Diff every frame in
+    `tests/golden/frames/` against A0's recording and account for each.
+  - **The hands flipped, mirrored or scaled twice**: `ghost.mirror`, the
+    output flips, the shared camera and the Leap calibration all touch
+    the same pixels.
+  - **A second output in another context** (`Presenter`): after A3 the
+    hand-off must still carry hands-over, readout and dim.
+  - **A device that raises on `open` or `poll`**: the frame goes on, the
+    SYSTEM line says `error`, the retry schedule runs, nothing else
+    changes.
+  - **A preset or `bindings.json` from before this run** loads with no
+    note and no dirt.
+  - **A missing device at launch** (`lost`): its rows wait, the desk shows
+    dark, and plugging it in later brings it up with its feedback.
+- **Re-measure everything on the merged branch.** A sub-agent's green run
+  inside its own worktree does not survive integration. Re-run the gates
+  on `plan-26-27-integration` itself before claiming anything.
+- One final PR from `plan-26-27-integration` to the base decided above,
+  titled `Plans 26 and 27: the render graph and the device registry`. The
+  owner merges.
+
+## Gates — all green before any PR
+
+```
+uv run pytest -q
+uv run ruff check .
+HYPERSPACE_FRAMES=120 uv run hyperspace     # windowed smoke run
+```
+
+`main` is at 1890 passed, 2 skipped (the plan 25 branch at 1885 + 2). Run
+the smoke run once per stream with the new paths on: a preset that carries
+a `graph` section with the hands in the scene (stream A); a `[[devices]]`
+list with the OSC device and a cloud device enabled and the APC40 absent
+(stream B). Point the home at a scratch folder the way the tests do.
+**Never touch the owner's real `~/Hyperspace`.**
+
+These must keep passing **untouched**:
+
+- `tests/test_render.py::test_the_render_stack_imports_no_registry`
+  (so: no node method named `apply`).
+- `tests/test_outputs.py::test_outputs_imports_nothing_from_app_ui_or_params`
+  (`outputs.py` imports `glsl` and nothing else from the package).
+- `tests/test_hands_boundary.py` (the three standalone files, the one
+  host-reaching file list — add the new wrapper to that list, nothing
+  else changes).
+- `tests/test_routing_boundary.py` (`ABOVE` and `LAZY` as they are).
+- `tests/test_bridge.py::test_core_does_not_import_the_bridge`.
+- `tests/test_hotreload.py::test_every_package_module_but_the_cold_core_is_watched`
+  and `::test_the_watch_list_is_in_dependency_order` — add `graph`,
+  `devices` and `osc` to `hotreload.MODULES` in import order.
+- `tests/test_golden.py`, `tests/test_core.py`, `tests/test_shapes4d.py`:
+  the geometry traces and digests never move.
+
+These may change **only as this prompt says**, each change named in the
+PR body:
+
+- `tests/test_app_boundary.py`: `gated` gains `hyperspace.osc` and
+  `pythonosc`; `ORDER` and `test_the_host_close_list_…` are rewritten for
+  the registry (B1); `test_a_shut_gate_opens_nothing` and
+  `test_the_pad_gate_is_open_by_default` become registry tests with the
+  same meaning.
+- `tests/test_lookback.py`'s "the history never holds hands" becomes "the
+  default graph's history holds what today's does" (A3).
+- `tests/test_golden_frames.py`: re-recorded only with a reason (A2–A4).
+
+Invariants that hold throughout: the render stack reads parameters and
+never writes one; modulation is non-destructive (`Router.modulate` is the
+only caller of `Param.modulate`); no new module imports `torch` outside
+`dream.py`; with no `graph` section and no `[[devices]]` list, every
+output is byte-identical to A0's goldens and every device comes up as
+before.
+
+---
+
+## What the docs WPs must produce
+
+A5 writes plan 26's, B5 writes plan 27's; the shared files are edited by
+whichever lands second, on the integration branch, so they do not collide.
+
+- `docs/plans/26-render-graph.md` and `docs/plans/27-device-registry.md`:
+  each **as built**, in the shape of `21-outputs-and-the-hands.md` — what
+  was built (by WP), what no person has verified, known rough edges — with
+  the hand-check group and register rows named in the intro. Keep this
+  prompt file; A5 and B5 together update `docs/plans/README.md` (this
+  prompt's entry becomes "the launch prompt plans 26 and 27 were run from";
+  the two new entries; `24-party-wishlist.md`'s entry says which streams
+  are now plans).
+- `docs/plans/24-party-wishlist.md`: the priority paragraph points at the
+  two as-built files. Nothing else in it changes; it is the owner's
+  record.
+- `docs/ARCHITECTURE.md` **and `docs/ARCHITECTURE.html`** together: §1's
+  component map (a **Graph** row in the render stack; **Devices** replacing
+  the input-adapters row and the host's gate list), §2's frame table
+  (devices poll, sources feed, sinks send; the drawing subsection becomes
+  the graph's evaluation), §3.3's scheme table (schemes from the registry;
+  the stale `LANE_SCHEMES` text at `:388` and the three-item WANTS at
+  `:494` are already wrong on `main` — fix them), §3.4 "Adding a source"
+  rewritten as "Adding a device", §5's subsystems. Update the counts in
+  the HTML's masthead and closing stat row (measure them; they are
+  already stale on `main`). Keep SVG colours in CSS classes, never `var()`
+  in presentation attributes, and keep the three token blocks (light, dark
+  media, dark attribute) in step.
+- `docs/ENGINEERING.md`: §2 Rendering (the graph, the nodes, the camera,
+  the naming rule, the goldens and how to re-record them, the per-node
+  timing), §5 `config.toml` (`[[devices]]`, the old tables' translation),
+  §7–§9 and §12–§14 where the devices and sinks changed them, §16 Testing
+  (the golden-frame tool).
+- `docs/DECISIONS.md` and `docs/DECISION-REGISTER.md`: the sixteen owner
+  decisions as rows with Who `owner`; your own from row 110, each under a
+  `## The render graph (plan 26)` or `## The device registry (plan 27)`
+  section and on the answer sheet; rows that are now superseded (for
+  example 79, "where the hands go in", and the `placement`/`ghost` rows
+  whose text no longer matches) marked the way plan 25 marked 78 and 108.
+- `docs/plans/11-hand-checks.md`: group **T** (plan 26) and **U** (plan
+  27), numbered from **144**, in the existing format (bold number and
+  title; the headless tests behind it; the setup; *Pass:* and *Fail:*
+  with the likely cause). At least:
+  - every factory preset against its golden contact sheet, by eye, on the
+    Mac (Apple's shader compiler is unverified for the new vertex path);
+  - the hands in the scene on the projector and as a clean layer on the
+    glass at once;
+  - a hand passing between the shape's edges;
+  - `hands-orbit` turning only the shape with the hands staying put;
+  - a saved pre-run preset with a non-zero `camera.pan` looking the same;
+  - the per-node times on SYSTEM while an effect is toggled;
+  - the APC40 on the registry: launch with it unplugged, plug it in, the
+    desk lights up;
+  - a second MIDI controller on the `generic` profile learned onto a
+    knob;
+  - the OSC device from a phone app on the same Wi-Fi driving a param;
+  - the bridge's `send` list as sink rows, seen in the DAW.
+- `docs/TESTING-GUIDE.md`: the same checks in plain words, by hardware,
+  each ending with its check numbers; the render ones go in Part 1 and
+  the device ones under Part 2's APC40 and a new "(g) a second
+  controller / OSC" entry.
+- `docs/CHECKPOINT.md`: **it is stale on `main`** (it says `2d4ea11` and
+  plan 22 unmerged). Rewrite "Where the code stands" and "What is left" to
+  be true at the end of this run, and keep it short.
+
+## Report back
+
+When the final PR is open, report:
+
+- What landed per WP, with the PR links, and the test count on the
+  integration branch.
+- **The goldens.** How many frames, which WPs moved which, and the contact
+  sheets' paths. If any frame moved in A1, say so first: that is a bug.
+- **The default eye.** The maximum vertex error against `project_h` at the
+  default eye, and what the default view looks like by eye in the smoke
+  run.
+- **The one-frame lag.** Whether evaluating the graph in dependency order
+  changed any pixel of any golden beyond A2's accounted moves; the
+  modulation lag (ARCHITECTURE §2) is untouched by this run and must stay
+  so.
+- The register rows you opened (110–N), each with what it needs from the
+  owner.
+- The new hand check numbers and their groups (T, U).
+- What stream B translated from the old config tables, and the exact
+  `[[devices]]` block the owner should paste to get today's rig.
+- Anything you deliberately left undone, anything that contradicts this
+  prompt or the wishlist file, and anything a document says that the code
+  does not do. If a document says something the code does not do, say so
+  rather than quietly matching it.
