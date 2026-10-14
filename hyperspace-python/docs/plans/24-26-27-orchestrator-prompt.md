@@ -747,7 +747,7 @@ a hand, an LFO or a band on any of its params, and named saved palettes.
 
 | WP | What | Mostly touches |
 | --- | --- | --- |
-| **C1** | The desk you can trust: the two-handed save, every load relights the whole desk, the render toggles on both layers, a desk event log | `midi.py` (`_handle`, `_fire_holds`, `redraw`), `apc40.py` (`DEFAULT_MAP`), `routing.py` (`remap_factory`), `library.py` (`save_into` over a filled slot → trash), `params.py`, `ui.py` (the log) |
+| **C1** | The desk you can trust: the two-handed save, every load relights the whole desk, the render toggles on both layers, a desk event log | `midi.py` (`_handle`, `_fire_holds`, `redraw`), `apc40.py` (`DEFAULT_MAP`), `routing.py` (`remap_factory`), `library.py` (`save_into` on a filled slot: a new preset into the slot, the old one kept), `params.py`, `ui.py` (the log) |
 | **C2** | The faders freed: S1–S8 preset-layer targets, band post/dyn/trim on the SHIFT faders, a mix param wherever a layer lacks one, hand-authored fader sets for the nine party presets | `apc40.py`, `preset.py` (`knob_desk`, the party desks), `params.py`, `render.py` (two alpha lines in `draw_scene`), `library/presets/party-*.json` |
 | **C3** | Making every preset's desk interesting: `tools/desk_coverage.py` and its committed report, desk templates as a `desk` module-preset group, click-to-map ranked by the params the preset uses | `tools/desk_coverage.py` (new), `tests/test_desk_coverage.py` (new), `library.py` (the group), `preset.py`, `ui_desk.py`, `learn.py` |
 | **C4** | Inputs that reward dancing (H2): `hand:*.curl.<finger>`, `hand:*.spread`, `hand:*.energy`, `hands:gap`, `hands:twist`, `hand:*.flick`; the `hands-dance` preset | `hands/core.py`, `hands/signal.py`, `hands/panel.py`, `library/presets/hands-dance.json` (new), `preset.py` |
@@ -775,15 +775,19 @@ and why"):
   timer starts after it; a filled slot can never be saved over; a short
   hold does nothing. Fix: **a two-handed save** — hold a dedicated SAVE
   button, tap a pad; it saves into any slot, filled ones included; the
-  overwritten preset goes to the trash so it can be undone; the pad blinks
-  to confirm. The SAVE button is **track 8's clip-stop** (the working
-  plan's open question; the row is free since #158; register it). Keep
-  #158's hold-on-an-empty-pad save beside it (the pad's `START` was
+  pad blinks to confirm. **No preset is ever overwritten or trashed from
+  the desk** (owner, 2026-10-09 and again 2026-10-14: "overwritten presets
+  should not go in the trash"). On a filled pad the save lands as a **new
+  preset** (`TRIP 2`, named as `save_new` names them) and the slot points
+  at it; the old preset keeps its file and stays in the list, unpadded,
+  exactly as "free this pad (keeps the preset)" leaves it. On an empty
+  pad it is #158's save. `Project.save_into` grows that one case; the
+  trash is untouched. The SAVE button is **track 8's clip-stop** (the
+  working plan's open question; the row is free since #158; register it).
+  Keep #158's hold-on-an-empty-pad save beside it (the pad's `START` was
   unbound on 2026-10-14, so the desk is the only place with a hold-save).
-  This **overturns** the 2026-10-09 row "the desk never overwrites a
-  preset": rewrite it to "the desk never overwrites a preset without a
-  trash copy, and only through the two-handed save", Who `row N`, and say
-  so in the report; the owner confirms on the register.
+  The 2026-10-09 row "the desk never overwrites a preset" **stands**; its
+  text gains the two-handed save.
 - **Load felt inconsistent.** Tied to the save confusion, plus loads that
   release only the faders whose param they moved (`MidiIO.redraw`, register
   row 44). Fix: **every load relights the whole desk** from the new
@@ -1028,8 +1032,9 @@ All the owner's, 2026-10-12, from the wishlist and its working plan:
     hand-authored fader sets.
 18. **The render toggles are the same on both layers** and their LEDs show
     the live state; **every load relights the whole desk**; the save is
-    two-handed (SAVE held, a pad tapped), into any slot, the overwritten
-    preset to the trash.
+    two-handed (SAVE held, a pad tapped), into any slot — a filled slot
+    takes a new preset and the old one keeps its file; **nothing is
+    overwritten or trashed from the desk** (owner, 2026-10-14).
 19. **A coverage report** committed in the repo, **desk templates** as
     their own JSON, click-to-map ranked by the preset's own params; the
     goal is at most four dark or dead controls per preset layer.
@@ -1138,9 +1143,10 @@ yourself, except the sixteen above.
     note and no dirt.
   - **A missing device at launch** (`lost`): its rows wait, the desk shows
     dark, and plugging it in later brings it up with its feedback.
-  - **The two-handed save on a filled slot**: the old preset is in the
-    trash and restorable, the new one is loaded, the pad blinks, and a
-    SAVE press with no pad does nothing. Under SHIFT the same.
+  - **The two-handed save on a filled slot**: the old preset's file is
+    untouched and still in the list, the slot holds the new preset, the
+    new one is loaded, the pad blinks, the trash is unchanged, and a SAVE
+    press with no pad does nothing. Under SHIFT the same.
   - **The toggles under SHIFT**: points, lines, faces, rotate from both
     layers, their LEDs right after a load on either layer.
   - **The coverage report** regenerates byte-identical on a second run.
@@ -1317,10 +1323,9 @@ When the final PR is open, report:
 - The new hand check numbers and their groups (T for the pad's four, U
   for plan 24, V for 26, W for 27).
 - **Stream C.** The coverage numbers per preset before and after; which
-  presets' hand routes changed and which goldens moved for it; the
-  two-handed save's overturn of the 2026-10-09 row, as its register row;
-  the fader set you authored per party preset (the owner will re-author
-  at the rig).
+  presets' hand routes changed and which goldens moved for it; the fader
+  set you authored per party preset (the owner will re-author at the
+  rig).
 - What stream B translated from the old config tables, and the exact
   `[[devices]]` block the owner should paste to get today's rig.
 - Anything you deliberately left undone, anything that contradicts this
