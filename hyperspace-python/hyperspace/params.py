@@ -899,6 +899,20 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                      fmt=lambda v: f"{math.degrees(v):.0f}°", group=g, persist=False,
                      tip=f"Where the {name} plane is in its turn right now.")
 
+    # the 4D spin back to its origin (2026-10-14, the pad's right-stick click):
+    # the W planes' rates to 0 through their params (a modulated rate's base
+    # too) and their angles to 0, as camera.reset zeroes them all
+    w_planes = [(p, name) for p, name in enumerate(PLANES) if name.endswith("W")]
+
+    def reset_w():
+        for p, name in w_planes:
+            r[f"rot.rate.{name}"].set(0.0)
+            view.ang[p] = 0.0
+
+    r.trigger("rot.reset_w", "Reset 4D spin", reset_w, group=g,
+              tip="Stop the XW, YW and ZW planes (rate 0) and turn them back to 0°: "
+                  "the shape's 4D pose at its origin. The other planes keep turning.")
+
     # ---- camera ----
     g = "camera"
     r.continuous("camera.zoom", "Zoom", *_attr(view, "zoom"), lo=0.05, hi=40.0, log=True,

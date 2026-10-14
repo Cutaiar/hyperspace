@@ -391,10 +391,8 @@ CHEATSHEET = [
     ("pad A Y", "faces · lines"),
     ("LB / RB", "previous / next shape"),
     ("d-pad", "brightness ↑↓ · speed ←→"),
-    ("sticks", "orbit · zoom ↕ 4D spin ↔ — click resets"),
+    ("sticks", "orbit · zoom ↕ 4D spin ↔ — click resets each"),
     ("LT / RT", "4D depth out / in"),
-    ("view", "panel"),
-    ("start (hold)", "save as a new preset"),
     # any control ↔ any MIDI message, through the registry (midi.py)
     ("right-click", "a control: learn desk / hand / pad · unbind"),
     # the APC40's glyphs, as the desk above and the ROUTING rows print them

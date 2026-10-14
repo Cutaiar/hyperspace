@@ -416,15 +416,21 @@ THEME_TO_PRESET = {
 # `preset.list.*`). Exact rows only — a row the owner learned onto a
 # button is kept (`remap_factory`). One pass applies one key, so every
 # older form maps straight to the newest: X's points and bank rows, B's
-# bank row and its theme row from before plan 13 (ahead of THEME_TO_PRESET)
-PAD_REMAP: dict[tuple[str, str, str, float], tuple[str, str, float]] = {
+# bank row and its theme row from before plan 13 (ahead of THEME_TO_PRESET).
+# Later the same day: the right-stick click resets the 4D spin
+# (`rot.reset_w`), and START and BACK are let go — BACK hid the panel, and
+# START's save-as is learnable onto any button: None drops the row
+PAD_REMAP: dict[tuple[str, str, str, float], tuple[str, str, float] | None] = {
+    ("pad:RSTICK", "camera.reset", "fire", 1.0): ("rot.reset_w", "fire", 1.0),
+    ("pad:VIEW", "ui.panel", "toggle", 1.0): None,
+    ("pad:MENU", "preset.save_new", "hold", 1.0): None,
     ("pad:A", "view.rotate", "toggle", 1.0): ("view.faces", "toggle", 1.0),
     ("pad:X", "view.points", "toggle", 1.0): ("preset.list.prev", "fire", 1.0),
     ("pad:X", "preset.prev", "fire", 1.0): ("preset.list.prev", "fire", 1.0),
     ("pad:B", "preset.next", "fire", 1.0): ("preset.list.next", "fire", 1.0),
     ("pad:B", "theme.next", "fire", 1.0): ("preset.list.next", "fire", 1.0),
     ("pad:Y", "view.faces", "toggle", 1.0): ("view.lines", "toggle", 1.0),
-    ("pad:MENU", "ui.cheatsheet", "toggle", 1.0): ("preset.save_new", "hold", 1.0),
+    ("pad:MENU", "ui.cheatsheet", "toggle", 1.0): None,
 }
 KEY_NEW_ROWS = (
     ("key:B", "tempo.tap", "fire", 1.0),
@@ -728,15 +734,15 @@ def padmap() -> list[Binding]:
     """Xbox-layout gamepad buttons and the d-pad. B / X step the preset
     list — the PRESETS page's drop-down, by name, a new save included
     (`Project.walk`), not the bank the desk walks — A / Y the faces and
-    lines; START (``pad:MENU``) held saves the live state as a new preset,
-    as a held empty bank pad does on the desk (2026-10-14, the owner's
-    layout — PAD_REMAP moves an older file's)."""
+    lines; the left-stick click resets the camera, the right-stick click
+    the 4D spin; START and BACK (``pad:MENU`` / ``pad:VIEW``) are free —
+    Learn pad puts anything on them (2026-10-14, the owner's layout —
+    PAD_REMAP moves an older file's)."""
     rows = [
         ("pad:A", "view.faces", "toggle"), ("pad:B", "preset.list.next", "fire"),
         ("pad:X", "preset.list.prev", "fire"), ("pad:Y", "view.lines", "toggle"),
         ("pad:LB", "view.shape", "step", -1), ("pad:RB", "view.shape", "step", 1),
-        ("pad:VIEW", "ui.panel", "toggle"), ("pad:MENU", "preset.save_new", "hold"),
-        ("pad:LSTICK", "camera.reset", "fire"), ("pad:RSTICK", "camera.reset", "fire"),
+        ("pad:LSTICK", "camera.reset", "fire"), ("pad:RSTICK", "rot.reset_w", "fire"),
         ("hat:UP", "view.bright", "step", 3), ("hat:DOWN", "view.bright", "step", -3),
         ("hat:LEFT", "view.speed", "step", -4), ("hat:RIGHT", "view.speed", "step", 4),
     ]
@@ -882,7 +888,12 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
             if plan == "plan 19":
                 b = replace(b, layer=None, feedback="led", on=apc40.GREEN, off=0)
         elif (b.source, b.target, b.op, float(b.value)) in PAD_REMAP:
-            target, op, value = PAD_REMAP[(b.source, b.target, b.op, float(b.value))]
+            hit = PAD_REMAP[(b.source, b.target, b.op, float(b.value))]
+            if hit is None:
+                notes.append(f"removed {b.source} → {b.target} (the pad layout of "
+                             "2026-10-14: the button is free)")
+                continue
+            target, op, value = hit
             notes.append(f"remapped {b.source}: {b.target} → {target} (the pad layout "
                          "of 2026-10-14)")
             b = replace(b, target=target, op=op, value=value)
