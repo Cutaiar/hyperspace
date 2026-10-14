@@ -23,6 +23,9 @@ qrcode.make("https://hyperspace.cutaiar.io",
 then drop the `width`/`height` attributes so it scales, and add a white
 `<rect>` behind the path so it scans on the dark page.
 
+The [Home Screen widget](../hyperspace-widget/) encodes the same URL; update it
+too.
+
 ## Deployment
 
 Hosted on Vercel as the project `hyperspace-contact` under `cutaiar`, with Root

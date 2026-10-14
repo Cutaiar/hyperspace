@@ -5,7 +5,7 @@ Clifford torus, and eight surfaces from the Heart to a Klein bottle), rotating
 through six planes, with each plane driven by a frequency band of whatever
 audio is playing.
 
-This repository holds two iterations:
+This repository holds two iterations, plus a couple of companions for sharing it:
 
 - **[`hyperspace-python/`](hyperspace-python/)** — the Python re-platform. Where
   active development happens. See
@@ -21,3 +21,6 @@ This repository holds two iterations:
 - **[`hyperspace-contact/`](hyperspace-contact/)** — a one-page link tree to
   share the project: our Instagram handles and a QR code back to the page. Live
   at <https://hyperspace.cutaiar.io>.
+
+- **[`hyperspace-widget/`](hyperspace-widget/)** — an iOS Home Screen widget
+  (a [Scriptable](https://scriptable.app) script) showing the same QR code.
