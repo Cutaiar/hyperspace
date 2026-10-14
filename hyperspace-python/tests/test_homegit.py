@@ -73,11 +73,10 @@ def test_off_by_default_and_nothing_is_written(tmp_path, monkeypatch):
     `.git` or `.gitignore`."""
     home = tmp_path / "home"
     home.mkdir()
-    assert config.DEFAULTS["library"] == {"git": False}
     cfg = config.load(home / "config.toml")              # no file: the defaults
-    assert cfg["library"]["git"] is False
+    assert "git" not in cfg["library"]
     (home / "config.toml").write_text("[library]\ngit = false\n")
-    assert config.load(home / "config.toml")["library"]["git"] is False
+    assert "git" not in config.load(home / "config.toml")["library"]
     before = len(_homegit_threads())
     r = _boot(home)
     assert r.lib.committer is None
