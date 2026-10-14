@@ -22,5 +22,6 @@ This repository holds two iterations, plus a couple of companions for sharing it
   share the project: our Instagram handles and a QR code back to the page. Live
   at <https://hyperspace.cutaiar.io>.
 
-- **[`hyperspace-widget/`](hyperspace-widget/)** — an iOS Home Screen widget
-  (a [Scriptable](https://scriptable.app) script) showing the same QR code.
+- **[`hyperspace-ios-widget/`](hyperspace-ios-widget/)** — an iOS Home Screen
+  widget (a [Scriptable](https://scriptable.app) script) showing the same QR
+  code.

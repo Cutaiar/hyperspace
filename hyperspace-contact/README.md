@@ -23,7 +23,7 @@ qrcode.make("https://hyperspace.cutaiar.io",
 then drop the `width`/`height` attributes so it scales, and add a white
 `<rect>` behind the path so it scans on the dark page.
 
-The [Home Screen widget](../hyperspace-widget/) encodes the same URL; update it
+The [Home Screen widget](../hyperspace-ios-widget/) encodes the same URL; update it
 too.
 
 ## Deployment

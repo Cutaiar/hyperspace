@@ -1,4 +1,4 @@
-# Hyperspace (widget)
+# Hyperspace (iOS widget)
 
 An iOS Home Screen widget, built with [Scriptable](https://scriptable.app), that
 shows the same QR code as the [contact page](../hyperspace-contact/) on a black
