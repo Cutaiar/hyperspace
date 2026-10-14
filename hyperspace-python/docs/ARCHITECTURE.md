@@ -582,6 +582,7 @@ them.
 | the crossfader | invariant row → `output.dim`, the master dim (CC 0 black — hand check 55); a rig setting, 1 at every launch | base of a rig setting |
 | a bank pad (clip rows 1, 4, 5) or a bank button | invariant `set` rows → `preset.select = k` → `Project.load_slot(k)` (`apc40.BANK_PADS`: 24 slots, `library.SLOTS`). Lights by `routing.led_level`: loaded, filled, empty | a preset load |
 | a hold on an empty bank pad | its invariant `preset.select` row, held → `Param.held` → `Project.save_into(k)`: a new user preset named from the loaded one (`library.next_name`), into that slot; a filled slot is never written | files, not params; no undo step |
+| the pad's B / X | `pad:B` / `pad:X` rows → `preset.list.next` / `prev` → `Project.walk` → `Library.next` / `prev` on the presets: the PRESETS page's drop-down list (`Library.list`: by name, a × hid factory one left out, re-read each step so a new save is in it), wrapping. The APC40's QUANT (`preset.next`) walks the bank's filled slots instead (`Project.cycle`) | a preset load |
 | a macro's knob | its base → `Router.follow_macros` → each base subscriber's base | base |
 | an analyzer band, a hand axis, a pinch, a DAW lane, an LFO | `lane:` / `hand:` / `ext:` / `lfo:` → its performer row → `Router.modulate` | offset (a pinch may instead gate a row) |
 | right-click → Learn hand / Learn desk / click-then-map | `Learn` (§3.5) | the loaded preset's table |

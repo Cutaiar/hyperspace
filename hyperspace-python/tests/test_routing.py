@@ -1762,6 +1762,7 @@ def test_a_theme_row_in_an_old_bindings_file_is_remapped_to_the_preset_bank(tmp_
     next load is quiet."""
     path = bindings_path(tmp_path)
     old = {"preset.select": "theme.select", "preset.next": "theme.next",
+           "preset.list.next": "theme.next",             # the pad's B, as it was then
            **{f"preset.{w}.{k}": f"theme.{w}.{k}" for w in ("load", "save")
               for k in range(routing.F_KEYS)}}
     rows = []
@@ -1775,14 +1776,15 @@ def test_a_theme_row_in_an_old_bindings_file_is_remapped_to_the_preset_bank(tmp_
     err = capsys.readouterr().err
     by = {b.source: b.target for b in t.bindings}
     assert by["key:F1"] == "preset.load.0" and by["key:SHIFT+F8"] == "preset.save.7"
-    assert by[f"note:0:{apc40.N_QUANT}"] == "preset.next" and by["pad:B"] == "preset.next"
+    assert by[f"note:0:{apc40.N_QUANT}"] == "preset.next" and by["pad:B"] == "preset.list.next"
     assert by["note:0:87"] == "preset.prev"
     assert [b.target for b in t.bindings if b.source == f"note:2:{apc40.N_CLIP[0]}"] \
         == ["preset.select"]
     assert not any(b.target.startswith("theme.") for b in t.bindings)
     assert "remapped key:F3: theme.load.2 → preset.load.2 (the preset bank of plan 13)" in err
     n = len(t.notes)
-    # F-keys, clip row, QUANT, pad B, the user's — and clip rows 4 and 5,
+    # F-keys, clip row, QUANT, pad B (straight onto the preset list,
+    # PAD_REMAP), the user's — and clip rows 4 and 5,
     # which this table (today's session rows, theme-named) already holds
     assert n == 16 + 24 + 1 + 1 + 1
     assert all(note.startswith("remapped") for note in t.notes)

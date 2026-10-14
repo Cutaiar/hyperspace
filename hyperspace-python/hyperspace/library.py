@@ -913,7 +913,8 @@ class Project:
             self.lib.warning = ""
 
     def cycle(self, step: int = 1) -> None:
-        """Flip to the next filled slot — the pad's B and the APC's QUANT."""
+        """Flip to the next filled slot — the APC's QUANT (`preset.next` /
+        `preset.prev`). The pad's B / X walk the list instead (`walk`)."""
         filled = [k for k, s in enumerate(self.bank) if s is not None]
         if not filled:
             return
@@ -922,6 +923,27 @@ class Project:
         else:
             k = filled[0] if step > 0 else filled[-1]
         self.load_slot(k)
+
+    def walk(self, step: int = 1) -> str | None:
+        """Load the next (step 1) or previous (−1) preset of the preset
+        list — the list the PRESETS page's drop-down shows and its ◀ ▶
+        step (`Library.list`: by name, case folded, a × hid factory one
+        left out), wrapping at both ends; from a preset not in it (none
+        loaded, a hidden one) the first or the last (`Library.next` /
+        `prev`). The list is read from disk each step, so a preset saved
+        a moment ago (`save_new`, the strip's "as…") is in it. The pad's
+        B / X (`preset.list.next` / `prev`, 2026-10-14) — not the bank,
+        which the desk walks (`cycle`). A load is the drop-down's pick:
+        one undo step; a bad file shows on the library's error line and
+        the show runs on. Returns the name loaded, or None."""
+        lib = self.lib
+        if self._loader() is None:
+            return None
+        try:
+            return lib.next(PRESETS) if step > 0 else lib.prev(PRESETS)
+        except (LibraryError, OSError) as e:
+            lib.error = f"library: {e}"
+            return None
 
     def load_startup(self) -> None:
         """The project's startup preset (D11), if it names one: a launch

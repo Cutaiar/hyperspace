@@ -1211,6 +1211,17 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                       "to choose the slot.")
         r.trigger("preset.next", "Next preset", lambda: bank.cycle(1), group=g)
         r.trigger("preset.prev", "Previous preset", lambda: bank.cycle(-1), group=g)
+        # the preset list, not the bank (2026-10-14): the pad's B / X step
+        # what the PRESETS page's drop-down lists, saved ones included
+        r.trigger("preset.list.next", "Next preset in the list", lambda: bank.walk(1),
+                  group=g,
+                  tip="Load the next preset of the PRESETS page's list — every saved "
+                      "preset by name, a new one included — wrapping at the end. "
+                      "The pad's B. The desk's QUANT walks the bank instead.")
+        r.trigger("preset.list.prev", "Previous preset in the list", lambda: bank.walk(-1),
+                  group=g,
+                  tip="Load the previous preset of the PRESETS page's list, wrapping "
+                      "at the start. The pad's X.")
         # home (plan 15 WP2, decision 27): the preset the show starts on.
         # Lit while the show names one — the light the desk's OVERDUB shows
         r.trigger("preset.home", "Home", bank.home, group=g,

@@ -294,6 +294,69 @@ def test_preset_bank_params(rig):
     assert not reg["preset.save.5"].modulatable and not reg["preset.select"].persist
 
 
+def test_the_list_triggers_walk_the_drop_downs_list_not_the_bank(rig):
+    """`preset.list.next` / `prev` (the pad's B / X, 2026-10-14) step the
+    PRESETS page's list — `Library.list`, by name — wrapping at both ends,
+    and pass over the bank: a preset in no slot is reached, and one saved
+    as new a moment ago is in the walk. QUANT's `preset.next` still walks
+    only the bank's filled slots."""
+    from hyperspace.library import PRESETS
+    from hyperspace.preset import Presets
+    from hyperspace.routing import Bindings, Router
+
+    reg, _view, _control, _audio, bank = rig
+    Presets(bank.lib, reg, Router(reg, Bindings()))
+    bank.load("house", startup=False)
+    lib = bank.lib
+    listing = lib.list(PRESETS)
+    assert len(listing) > 2 and set(listing) - set(bank.bank)   # some in no slot
+    lib.load(PRESETS, listing[0])
+    reg["preset.list.next"].fire()
+    assert lib.current(PRESETS) == listing[1]
+    reg["preset.list.prev"].fire()
+    reg["preset.list.prev"].fire()                     # wraps to the end
+    assert lib.current(PRESETS) == listing[-1]
+    reg["preset.list.next"].fire()                     # …and back to the start
+    assert lib.current(PRESETS) == listing[0]
+    # a new save lands in the list at its name's place, and the walk finds it
+    reg["preset.save_new"].fire()
+    new = lib.current(PRESETS)
+    assert new not in listing and new in lib.list(PRESETS)
+    after = lib.list(PRESETS)
+    reg["preset.list.next"].fire()
+    assert lib.current(PRESETS) == after[(after.index(new) + 1) % len(after)]
+    reg["preset.list.prev"].fire()
+    assert lib.current(PRESETS) == new
+    # the bank's walk is the desk's, unchanged: only filled slots
+    reg["preset.select"].set_norm(0.0)
+    reg["preset.next"].fire()
+    assert lib.current(PRESETS) == bank.bank[bank.active] and bank.active >= 0
+
+
+def test_the_list_walk_from_nothing_loaded_and_a_bad_file(rig):
+    """With no preset loaded the walk starts at the list's first (next) or
+    last (prev); a preset file that will not parse shows on the library's
+    error line and the walk raises nothing."""
+    from hyperspace.library import PRESETS
+    from hyperspace.preset import Presets
+    from hyperspace.routing import Bindings, Router
+
+    reg, _view, _control, _audio, bank = rig
+    Presets(bank.lib, reg, Router(reg, Bindings()))
+    lib = bank.lib
+    listing = lib.list(PRESETS)
+    lib._current.pop(PRESETS, None)
+    assert bank.walk(-1) == listing[-1]
+    lib._current.pop(PRESETS, None)
+    assert bank.walk(1) == listing[0]
+    bad = lib.home / PRESETS / "aaa-broken.json"
+    bad.parent.mkdir(parents=True, exist_ok=True)
+    bad.write_text("{ not json")
+    lib._current.pop(PRESETS, None)
+    lib.error = ""
+    assert bank.walk(1) is None and lib.error.startswith("library:")
+
+
 def test_scene_names_match_presets(rig):
     assert rig[0]["scene.select"].names == list(SCENES)
 
@@ -428,15 +491,17 @@ def test_a_non_finite_offset_never_poisons_a_base(rig):
 def test_the_bank_adds_no_params(rig):
     """Plan 19 WP1's budget: a bank of twenty-four adds no param. The
     `preset` group is the 21 it was — select, a load and a save for each
-    F-key, save-as, next, prev, home; slots 9–24 are choices of
+    F-key, save-as, next, prev, home — and the list's next / prev
+    (2026-10-14, the pad's B / X); slots 9–24 are choices of
     `preset.select`, which says which of them hold a preset (`Param.has`,
     what a pad's "filled" light reads)."""
     reg, _view, _control, _audio, bank = rig
     ids = [p.id for p in reg if p.group == "preset"]
-    assert len(ids) == 21 and ids == [
+    assert len(ids) == 23 and ids == [
         "preset.select",
         *[f"preset.{w}.{k}" for k in range(8) for w in ("load", "save")],
-        "preset.save_new", "preset.next", "preset.prev", "preset.home"]
+        "preset.save_new", "preset.next", "preset.prev",
+        "preset.list.next", "preset.list.prev", "preset.home"]
     select = reg["preset.select"]
     assert len(select.names) == 24 == len(bank.bank)
     assert callable(select.has)

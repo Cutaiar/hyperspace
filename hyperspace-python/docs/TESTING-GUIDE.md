@@ -3418,8 +3418,9 @@ pad connected.
 
 **Right if:** the terminal says `gamepad: Afterglow Gamepad for Xbox 360
 over USB`; the pad's ring lights one quarter (player 1) instead of
-blinking; B / X step to the next / previous preset, A flips faces and Y
-lines, LB / RB step the shape, the D-pad steps brightness (up / down)
+blinking; B / X step to the next / previous preset of the PRESETS page's
+list (its drop-down, by name, wrapping; a preset saved a moment ago is
+in it — not the desk's bank), A flips faces and Y lines, LB / RB step the shape, the D-pad steps brightness (up / down)
 and speed (left / right), START held about 0.6 s saves the live state
 as a new preset (a tap does nothing), the left stick orbits (up tilts
 the camera up), the right stick's up / down zooms, RT pushes the 4D
@@ -3472,7 +3473,7 @@ go leaves the setting moved.
 **Needs:** a pad; `bindings.json` open in an editor.
 
 **Do:** change the `pad:Y` row's op to `"momentary"` and, for a button
-with a trigger on it (`pad:B` → `preset.next`), to `"hold"`. ⌘R.
+with a trigger on it (`pad:B` → `preset.list.next`), to `"hold"`. ⌘R.
 
 **Right if:** lines show only while Y is held; B steps the preset only
 after about 0.6 s held, once per press; a tap does nothing.
