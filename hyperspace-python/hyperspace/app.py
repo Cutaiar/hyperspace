@@ -74,7 +74,7 @@ import moderngl
 from imgui_bundle import imgui
 from imgui_bundle.python_backends.glfw_backend import GlfwRenderer
 
-from . import config, gamepad, lfo, placement, tempo, undo
+from . import config, gamepad, geometry, lfo, placement, tempo, undo
 from .audio import AudioEngine
 from .bands import CEIL
 from .control import Control
@@ -1092,6 +1092,9 @@ def main() -> None:
     ctx = moderngl.create_context()
     renderer = Renderer(ctx)
     s = ViewState()
+    # every shape's faces built now, off the frame, so the first switch to
+    # a big one (600-cell, 120-cell, Clifford torus) does not stutter
+    geometry.warm_all(first=s.shape)
     # each later output: a presenter on its own context, never waiting
     _open_presenters(slots, notes=cfg.setdefault("notes", []))
     later = [sl for sl in slots[1:] if sl.opened]

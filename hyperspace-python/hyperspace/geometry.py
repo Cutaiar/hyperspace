@@ -8,6 +8,7 @@ did (JS Map insertion order == Python dict insertion order).
 from __future__ import annotations
 
 import math
+import threading
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -71,18 +72,16 @@ def d2(a, b) -> float:
 
 
 def edges_by_min_dist(V, tol: float = 1e-4) -> list[list[int]]:
-    mn = math.inf
-    for i in range(len(V)):
-        for j in range(i + 1, len(V)):
-            d = d2(V[i], V[j])
-            mn = min(mn, d)
-    lim = mn * (1 + tol) + 1e-9
-    return [
-        [i, j]
-        for i in range(len(V))
-        for j in range(i + 1, len(V))
-        if d2(V[i], V[j]) <= lim
-    ]
+    """Every vertex pair at the minimum pairwise distance (within tol), as
+    [i, j] with i < j in row-major order."""
+    A = np.asarray(V, dtype=np.float64)
+    n = len(A)
+    D = ((A[:, None, :] - A[None, :, :]) ** 2).sum(axis=2)
+    iu, ju = np.triu_indices(n, k=1)
+    d = D[iu, ju]
+    lim = float(d.min()) * (1 + tol) + 1e-9
+    keep = d <= lim
+    return [[int(i), int(j)] for i, j in zip(iu[keep], ju[keep])]
 
 
 def auto(V) -> dict:
@@ -735,19 +734,27 @@ _face_cache: dict[int, list[list[int]]] = {}
 
 def _planar_cycles(g: dict, plane_tol: float = 1e-5, max_len: int = 64) -> list[list[int]]:
     """Every closed cycle of edges lying in one 2-plane (walk from each edge
-    path a→b→c, stepping to the unique in-plane neighbour until closure)."""
+    path a→b→c, stepping to the unique in-plane neighbour until closure).
+
+    A walk is fixed by its plane, so every corner (x, y, z) of a cycle
+    already found, in either direction, would only walk that cycle again:
+    those starts are skipped. Each step tests all of the current vertex's
+    neighbours against the plane in one numpy call. Both only save time —
+    the cycles, their order and their starting corners are unchanged."""
     V, E, n = g["V"], g["E"], g["n"]
     adj: list[list[int]] = [[] for _ in range(n)]
     for a, b in E:
         adj[int(a)].append(int(b))
         adj[int(b)].append(int(a))
+    nbr = [V[np.asarray(ns, dtype=np.intp)] for ns in adj]
 
     found: set[frozenset] = set()
+    walked: set[tuple[int, int, int]] = set()
     faces: list[list[int]] = []
     for a in range(n):
         for b in adj[a]:
             for c in adj[b]:
-                if c == a:
+                if c == a or (a, b, c) in walked:
                     continue
                 e1 = V[b] - V[a]
                 e1 = e1 / np.linalg.norm(e1)
@@ -757,19 +764,18 @@ def _planar_cycles(g: dict, plane_tol: float = 1e-5, max_len: int = 64) -> list[
                 if nw < plane_tol:
                     continue  # collinear
                 e2 = w2 / nw
-
-                def inplane(p, origin=V[a], e1=e1, e2=e2):
-                    d = p - origin
-                    r = d - (d @ e1) * e1 - (d @ e2) * e2
-                    return np.linalg.norm(r) < plane_tol
+                origin = V[a]
 
                 cyc = [a, b, c]
                 ok = True
                 while True:
                     prev, cur = cyc[-2], cyc[-1]
+                    D = nbr[cur] - origin
+                    R = D - np.outer(D @ e1, e1) - np.outer(D @ e2, e2)
+                    inplane = np.sqrt((R * R).sum(axis=1)) < plane_tol
                     nxt = None
-                    for cand in adj[cur]:
-                        if cand != prev and inplane(V[cand]):
+                    for k, cand in enumerate(adj[cur]):
+                        if cand != prev and inplane[k]:
                             nxt = cand
                             break
                     if nxt is None or len(cyc) > max_len:
@@ -786,7 +792,17 @@ def _planar_cycles(g: dict, plane_tol: float = 1e-5, max_len: int = 64) -> list[
                     if key not in found:
                         found.add(key)
                         faces.append(cyc)
+                    m = len(cyc)
+                    for k in range(m):
+                        x, y, z = cyc[k], cyc[(k + 1) % m], cyc[(k + 2) % m]
+                        walked.add((x, y, z))
+                        walked.add((z, y, x))
     return faces
+
+
+# the fixed random pair _is_boundary_face completes a face's plane with: the
+# same draw on every call, so drawn once
+_COMPLEMENT_SEED = np.random.default_rng(1).standard_normal((4, 2))
 
 
 def _is_boundary_face(V: np.ndarray, cyc: list[int], tol: float = 1e-7) -> bool:
@@ -805,7 +821,7 @@ def _is_boundary_face(V: np.ndarray, cyc: list[int], tol: float = 1e-7) -> bool:
     e2 = w / np.linalg.norm(w)
     A = np.stack([e1, e2]).T
     q_basis, _ = np.linalg.qr(
-        np.hstack([A, np.random.default_rng(1).standard_normal((4, 2))])
+        np.hstack([A, _COMPLEMENT_SEED])
     )
     o1, o2 = q_basis[:, 2], q_basis[:, 3]
     mask = np.ones(len(V), bool)
@@ -967,6 +983,34 @@ def face_uvs(i: int) -> np.ndarray:
         uv[t_i * 3 + 2] = fuv[pos[int(c)]]
     _uv_cache[i] = uv
     return uv
+
+
+def warm(i: int) -> None:
+    """Fill every per-shape cache the renderer reads for shape i: geom,
+    faces, face_triangles, face_uvs."""
+    face_uvs(i)   # builds geom, faces and face_triangles on the way
+
+
+def warm_all(first: int | None = None) -> threading.Thread:
+    """Warm every shape's caches on a background thread, `first` first.
+
+    The first draw of a big shape otherwise builds its faces mid-frame —
+    the 600-cell, 120-cell and Clifford torus each cost a visible stutter
+    on the switch to them. The caches hold deterministic values, so a frame
+    that reaches a shape before the warmer does just builds it itself; at
+    worst the work is done twice. A daemon, so it never holds up quit."""
+    order = list(range(len(SHAPES)))
+    if first is not None and 0 <= first < len(SHAPES):
+        order.remove(first)
+        order.insert(0, first)
+
+    def run() -> None:
+        for i in order:
+            warm(i)
+
+    t = threading.Thread(target=run, name="geometry-warm", daemon=True)
+    t.start()
+    return t
 
 
 def _to3(V: np.ndarray, ang, d4: float):
