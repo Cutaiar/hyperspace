@@ -17,3 +17,7 @@ This repository holds two iterations:
   version. No longer under active development, kept for reference and as the
   test oracle for the Python renderer. Live at
   <https://hyperspace-lake.vercel.app>.
+
+- **[`hyperspace-contact/`](hyperspace-contact/)** — a one-page link tree to
+  share the project: our Instagram handles and a QR code back to the page. Live
+  at <https://hyperspace-contact.cutaiar.io>.
