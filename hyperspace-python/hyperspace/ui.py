@@ -387,7 +387,7 @@ CHEATSHEET = [
     ("G", "overlay: clicks through / back"),
     ("Esc / Q", "quit"),
     # Xbox-layout gamepad, Bluetooth or USB (gamepad.py holds the map)
-    ("pad X / B", "previous / next preset"),
+    ("pad X / B", "previous / next in the preset list"),
     ("pad A Y", "faces · lines"),
     ("LB / RB", "previous / next shape"),
     ("d-pad", "brightness ↑↓ · speed ←→"),

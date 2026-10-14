@@ -237,7 +237,7 @@ def test_an_older_files_pad_rows_move_to_the_new_layout_and_the_owners_stay(tmp_
     t = Bindings.load(path, legacy_midi=None)
     rows = {b.source: (b.target, b.op) for b in t.of("pad", "hat")}
     assert rows["pad:A"] == ("view.faces", "toggle")
-    assert rows["pad:X"] == ("preset.prev", "fire")
+    assert rows["pad:X"] == ("preset.list.prev", "fire")      # straight to the newest
     assert rows["pad:Y"] == ("view.lines", "toggle")
     assert rows["pad:MENU"] == ("preset.save_new", "hold")
     assert rows["hat:UP"] == ("fx.wobble.freq", "step")
@@ -245,6 +245,42 @@ def test_an_older_files_pad_rows_move_to_the_new_layout_and_the_owners_stay(tmp_
     after = path.read_text()
     again = Bindings.load(path, legacy_midi=None)
     assert not again.notes and path.read_text() == after
+
+
+def test_the_pads_bank_rows_move_onto_the_preset_list(tmp_path):
+    """B / X's factory rows on the bank (`preset.next` / `prev`, and B's
+    `theme.next` from before plan 13) move to the list's triggers, noted;
+    the same targets on another button or op — the owner's — stay, and the
+    APC40's QUANT keeps the bank; a second load changes nothing."""
+    for b_row in (Binding("pad:B", "preset.next", "fire"),
+                  Binding("pad:B", "theme.next", "fire")):
+        old = [b_row, Binding("pad:X", "preset.prev", "fire"),
+               Binding("pad:LB", "preset.next", "fire"),            # the owner's
+               Binding("pad:RB", "preset.prev", "hold")]            # the owner's
+        path = tmp_path / "bindings.json"
+        Bindings(old, path=path).write()
+        t = Bindings.load(path, legacy_midi=None)
+        rows = {b.source: (b.target, b.op) for b in t.of("pad", "hat")}
+        assert rows["pad:B"] == ("preset.list.next", "fire")
+        assert rows["pad:X"] == ("preset.list.prev", "fire")
+        assert rows["pad:LB"] == ("preset.next", "fire")
+        assert rows["pad:RB"] == ("preset.prev", "hold")
+        assert sum("the pad layout of 2026-10-14" in n for n in t.notes) == 2
+        after = path.read_text()
+        again = Bindings.load(path, legacy_midi=None)
+        assert not again.notes and path.read_text() == after
+
+
+def test_the_factory_pad_walks_the_list_and_the_desk_the_bank():
+    """The factory rows: the pad's B / X on the list's triggers, the
+    APC40's QUANT still on the bank's `preset.next`."""
+    from hyperspace import apc40
+    from hyperspace.routing import factory_desk, padmap
+
+    pad = {b.source: b.target for b in padmap()}
+    assert pad["pad:B"] == "preset.list.next" and pad["pad:X"] == "preset.list.prev"
+    assert any(b.source == f"note:0:{apc40.N_QUANT}" and b.target == "preset.next"
+               for b in factory_desk())
 
 
 def test_start_held_saves_a_new_preset(rig):

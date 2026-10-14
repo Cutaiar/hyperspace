@@ -372,7 +372,7 @@ def test_a_preset_load_is_one_step_by_every_road(rig):
     reg["preset.load.1"].fire()                        # F2
     settle(rig)
     assert labels(rig) == ["load FACES"]
-    reg["preset.next"].fire()                          # QUANT, the pad's B
+    reg["preset.next"].fire()                          # QUANT
     settle(rig)
     assert labels(rig) == ["load FACES", "load FIELD"]
     lib.load(PRESETS, "WAKE")                          # the strip's list
