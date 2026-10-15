@@ -883,7 +883,8 @@ def test_one_instance_is_the_frame_it_was(ctx):
     r = Renderer(ctx)
     seen = []
     real = Renderer._tile
-    r._tile = lambda verts, offs: (seen.append(offs.copy()), real(verts, offs))[1]
+    r._tile = lambda verts, offs, **kw: (seen.append(offs.copy()),
+                                     real(verts, offs, **kw))[1]
     _inst_frames(ctx, r, [1])
     assert len(seen) == 3 and all(o.shape == (1, 2) and not o.any() for o in seen)
     v = np.arange(12, dtype=np.float32).reshape(4, 3)
@@ -1641,7 +1642,8 @@ def _scene(ctx, r, s, t=2.0):
 
     seen = []
     real = Renderer._tile
-    r._tile = lambda verts, offs: (seen.append(offs.copy()), real(verts, offs))[1]
+    r._tile = lambda verts, offs, **kw: (seen.append(offs.copy()),
+                                     real(verts, offs, **kw))[1]
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((LW, LH), 4)])
     fbo.use()
     ctx.viewport = (0, 0, LW, LH)

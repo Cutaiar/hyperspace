@@ -55,6 +55,7 @@ fires on a rising edge.
 
 from __future__ import annotations
 
+import copy
 import math
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
@@ -66,7 +67,7 @@ from .analyzer import CURVES, F_HI, F_LO, Q_HI, Q_LO
 from .bands import CEIL, NORMS, SHAPERS
 from .fx import FxState
 from .fx import declare as declare_fx
-from .geometry import EYE_DISTANCE, EYE_FOV, PLANE_NAMES, SHAPES
+from .geometry import EYE_DISTANCE, EYE_FOV, PLANE_NAMES, SHAPES, pan_px_to_world
 from .ghost import GhostState
 from .ghost import register as declare_ghost
 from .lookback import (
@@ -802,6 +803,47 @@ class Registry:
 
 
 # ---------------------------------------------------------------- builder
+
+# plan 26 A2: camera.pan is in world units (the shape's unit circumradius),
+# no longer logical px. A document saved since says so with this key (the
+# schema stays preset/2: `load_doc` ignores keys it does not know, so an
+# older build still loads the file — reading its pan as px); one without
+# it is a preset/2 file from before, its pan read in px and converted
+UNITS_KEY = "units"
+UNITS = {"camera.pan": "world"}
+PAN_IDS = ("camera.pan.x", "camera.pan.y")
+
+
+def pan_world(doc: dict) -> tuple[dict, bool]:
+    """A preset document — a whole preset (`preset.load_doc`) or a camera
+    module preset (`Library._apply_doc`, `Library.defaults`) — with its
+    camera.pan in world units (plan 26 A2):
+    a file without the `units` key stored logical px, which become world
+    units through the default eye on the 1080p screen
+    (`geometry.pan_px_to_world`), so the shape sits where it did there.
+    Only its values are converted: a route's or a desk row's depth and a
+    macro base subscriber's from / to are fractions of the param's range
+    (`Sub.at` lands a norm), and `params.PAN_RANGE` was chosen so that
+    range reaches as far on that screen as the old ±4000 px did (±12 units,
+    ±3888 px). Returns (a copy, whether anything changed); the document
+    itself when it is already in world units or names no pan value."""
+    units = doc.get(UNITS_KEY)
+    # a hand-edited non-object `units` is no marker: the pan is read in px
+    if isinstance(units, dict) and units.get("camera.pan") == "world":
+        return doc, False
+    values = doc.get("values")
+    if not isinstance(values, dict) or not any(k in values for k in PAN_IDS):
+        return doc, False
+    out = copy.deepcopy(doc)
+    changed = False
+    for pid in PAN_IDS:
+        v = out["values"].get(pid)
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            new = pan_px_to_world(v)
+            changed |= new != v
+            out["values"][pid] = new
+    return out, changed
+
 
 def _attr(obj, name):
     return (lambda: getattr(obj, name)), (lambda v: setattr(obj, name, v))

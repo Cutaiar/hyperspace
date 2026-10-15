@@ -218,9 +218,9 @@ def test_strokes_keep_their_weight_whatever_the_zoom(ctx, monkeypatch):
     widths = {}
     real = Renderer._tile
 
-    def spy(verts, offs):
+    def spy(verts, offs, **kw):
         widths.setdefault(verts.shape[1], []).append(verts.copy())
-        return real(verts, offs)
+        return real(verts, offs, **kw)
 
     monkeypatch.setattr(Renderer, "_tile", staticmethod(spy))
     for zoom in (1.0, 2.5):
@@ -439,3 +439,81 @@ def test_ghost_mirror_flips_the_hands_in_the_shared_camera_too():
     a = _ndc(plain, p @ ghost.basis("desktop").T)[0]
     b = _ndc(mirror, p @ ghost.basis("desktop", True).T)[0]
     assert a[0] == pytest.approx(-b[0]) and a[1] == pytest.approx(b[1])
+
+
+# ------------------------------------------- camera module presets (review fix 1)
+
+def _old_module(lib, name="off-right"):
+    (lib.home / "camera").mkdir(parents=True, exist_ok=True)
+    shutil.copy(FIXTURES / "old-camera-module.json", lib.home / "camera" / f"{name}.json")
+
+
+def test_an_old_camera_module_loads_at_its_converted_pan(tmp_path):
+    """A camera module preset saved before A2 (the CAMERA page's strip;
+    fixture `old-camera-module.json`, pan 190, −81 px, no marker) lands at
+    the converted pan through a scratch library — not at 190 radii clamped
+    to 12 — and is clean."""
+    rig = boot(tmp_path)
+    _old_module(rig.lib)
+    rig.lib.load("camera", "Off Right")
+    assert rig.view.pan == pytest.approx([190.0 / 324.0, -0.25])
+    assert rig.view.zoom == pytest.approx(0.8)
+    assert not rig.lib.is_dirty("camera")
+
+
+def test_an_old_camera_default_fills_a_preset_at_its_converted_pan(tmp_path):
+    """The same file as the group's default (`camera/default.json`): what
+    `defaults` and `resolved` fill a preset with — a preset that names no
+    pan lands at the converted pan, not 190 radii."""
+    rig = boot(tmp_path)
+    _old_module(rig.lib, "default")
+    rig.lib._defaults.clear()
+    assert rig.lib.defaults("camera")["camera.pan.x"] == pytest.approx(190.0 / 324.0)
+    doc = json.loads((FIXTURES / "pan-px.json").read_text())
+    for pid in ("camera.pan.x", "camera.pan.y"):
+        del doc["values"][pid]
+    doc["name"] = "NO PAN"
+    (rig.lib.home / "presets").mkdir(parents=True, exist_ok=True)
+    (rig.lib.home / "presets" / "no-pan.json").write_text(json.dumps(doc))
+    rig.lib.presets.load("NO PAN")
+    assert rig.view.pan == pytest.approx([190.0 / 324.0, -0.25])
+
+
+def test_a_camera_module_saved_now_says_its_pan_is_in_world_units(tmp_path):
+    rig = boot(tmp_path)
+    rig.reg["camera.pan.x"].set(3.0)
+    path = rig.lib.save_as("camera", "World")
+    doc = json.loads(path.read_text())
+    assert doc[preset.UNITS_KEY] == {"camera.pan": "world"}
+    rig.reg["camera.pan.x"].set(0.0)
+    rig.lib.load("camera", "World")
+    assert rig.view.pan[0] == pytest.approx(3.0) and not rig.lib.is_dirty("camera")
+    # another group's module carries no marker
+    assert preset.UNITS_KEY not in rig.lib.document("view", "V")
+
+
+def test_a_presets_json_theme_is_still_converted():
+    """`library.legacy_slot` (the old presets.json themes) writes no
+    marker, so its px pan is converted when the slot's preset loads."""
+    from hyperspace.library import legacy_slot
+
+    slot = legacy_slot({"name": "OLD", "view": {"pan": [190.0, -81.0], "zoom": 0.7}})
+    assert preset.UNITS_KEY not in slot and slot["values"]["camera.pan.x"] == 190.0
+    doc, changed = preset.pan_world(slot)
+    assert changed and doc["values"]["camera.pan.x"] == pytest.approx(190.0 / 324.0)
+
+
+def test_a_hand_edited_units_that_is_no_object_is_no_marker(tmp_path):
+    """`"units": "world"` (a string) neither raises nor counts as the
+    marker: the preset loads and its pan is read in px."""
+    out, _ = preset.pan_world({"units": "world", "values": {"camera.pan.x": 324.0}})
+    assert out["values"]["camera.pan.x"] == pytest.approx(1.0)
+    odd = {"units": None, "values": None}
+    assert preset.pan_world(odd) == (odd, False)
+    rig = boot(tmp_path)
+    doc = json.loads((FIXTURES / "pan-px.json").read_text())
+    doc.update(name="ODD UNITS", units="world")
+    (rig.lib.home / "presets").mkdir(parents=True, exist_ok=True)
+    (rig.lib.home / "presets" / "odd-units.json").write_text(json.dumps(doc))
+    rig.lib.presets.load("ODD UNITS")
+    assert rig.view.pan == pytest.approx([0.5, -0.25])

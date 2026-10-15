@@ -429,7 +429,6 @@ void main() {
 FACE_FORMAT = "3f 1f 2f 1f 1f"
 LINE_FORMAT = "3f 3f 2f 1f 1f"
 POINT_FORMAT = "3f 2f 1f 1f"
-_LINE_ROW = 10        # floats in an edge vertex (two 3D points); a face's is 8, a point's 7
 
 # a point's quad: two triangles over its four corners
 _POINT_CORNERS = np.array([(-1, -1), (1, -1), (-1, 1), (1, -1), (1, 1), (-1, 1)],
@@ -1800,7 +1799,11 @@ class Renderer:
                         p["u_pic_fb"].value = tuple(float(x) for x in self.scene.size)
                     self._fvao.render(moderngl.TRIANGLES, vertices=len(fverts))
                     self._face_verts = len(fverts)
-                    # a fill is at most 2.8× its vertex alpha (the face shader's shade)
+                    # a fill is at most 2.8× its vertex alpha: the face shader's
+                    # shade is mix(1, 2.8·v.a, mix) with v clamped to [0, 1] in
+                    # FACE_PX, mix(shade, 2.8, ba) under a bitmap, and 2.8·t.a
+                    # from an RGBA8 picture — the depth pass's skip bound rests
+                    # on that clamp (patterns.glsl cannot exceed it)
                     draws.append((self._fvao, len(fverts), p, float(fa.max()) * 2.8))
 
             if s.lines:
@@ -1813,7 +1816,7 @@ class Renderer:
                     verts[k::6, 6:8] = _EDGE_CORNERS[k]
                     verts[k::6, 8] = draw_w
                     verts[k::6, 9] = alpha
-                verts = self._tile(verts, offs)
+                verts = self._tile(verts, offs, cols=(0, 3))   # both ends
                 self._lbuf.orphan(verts.nbytes)
                 self._lbuf.write(verts.tobytes())
                 self._camera_uniforms(self._lines, mats, -1.0)
@@ -1892,17 +1895,15 @@ class Renderer:
         prog["u_depth_alpha"].value = depth_alpha
 
     @staticmethod
-    def _tile(verts: np.ndarray, offs: np.ndarray) -> np.ndarray:
+    def _tile(verts: np.ndarray, offs: np.ndarray, cols: tuple[int, ...] = (0,)) -> np.ndarray:
         """Replicate a per-instance vertex array across the instance field:
-        each copy's (x, y) world offset added to every 3D point in the row
-        — one at column 0, and an edge's second end at column 3 (the
-        layouts, FACE_FORMAT / LINE_FORMAT / POINT_FORMAT, tell them apart
-        by width)."""
+        each copy's (x, y) world offset added to every 3D point in the row,
+        the points starting at the columns `cols` names — (0,) for a face
+        or a point, (0, 3) for an edge's two ends (`LINE_FORMAT`)."""
         if len(offs) == 1 and not offs.any():
             return verts
         out = np.tile(verts, (len(offs), 1))
         per = len(verts)
-        cols = (0, 3) if verts.shape[1] == _LINE_ROW else (0,)
         for k, (ox, oy) in enumerate(offs):
             for c in cols:
                 out[k * per : (k + 1) * per, c] += ox

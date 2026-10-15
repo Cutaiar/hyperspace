@@ -56,7 +56,7 @@ SAY = {("right", "x"): "left … right", ("right", "pitch"): "fingers down … u
        ("left", "y"): "low … high"}
 # a camera the mouse moved before the hands came in (the last table)
 MOUSE = {"camera.yaw": math.radians(30), "camera.pitch": math.radians(-10),
-         "camera.zoom": 1.6, "camera.pan.x": 120.0, "camera.pan.y": -60.0}
+         "camera.zoom": 1.6, "camera.pan.x": 0.4, "camera.pan.y": -0.2}   # world units (plan 26 A2)
 # the strip: the right hand across its range, the left hand low / half / high
 COLS = (("R left", 0.0), ("R centre", 0.5), ("R right", 1.0))
 ROWS = (("L low", 0.0), ("L half up", 0.5), ("L high", 1.0))
