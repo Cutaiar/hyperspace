@@ -9,7 +9,8 @@ behaviour in [`ENGINEERING.md`](ENGINEERING.md).
 
 - **owner**: settled with the owner.
 - **row N**: built on a recommendation during an unattended run (rows
-  34–88 on 2026-10-04, rows from 89 in plan 22 on 2026-10-06). The owner
+  34–88 on 2026-10-04, rows 89–108 in plan 22 on 2026-10-06, rows
+  110–139 in plan 24 on 2026-10-14). The owner
   has still to confirm or overturn it in
   [`DECISION-REGISTER.md`](DECISION-REGISTER.md) under that row number.
 
@@ -79,9 +80,15 @@ replaces a row, rewrite that row instead of adding a new one.
 | The APC40 is a device *profile* over a generic MIDI adapter. | `apc40.py`, `midi.py` | owner |
 | APC40 feedback: **rings show the base** (while a knob glides, its target), and **LEDs show the effective value**. | `MidiIO._ring_norm`, `MidiIO.feedback` | owner |
 | Hands are the primary performing surface. The APC40 keeps presets, scenes and master controls. | — | owner |
-| **Twelve axes** (palm pose, six per hand), shaped as analog signals, plus eight pinch switches. **No gesture vocabularies and no more DOFs.** The skeleton is kept for display only. | `hands/core.py` | owner |
+| **Twelve axes** (palm pose, six per hand), shaped as analog signals, plus eight pinch switches. **No gesture vocabularies and no more DOFs.** The twelve axes stay as they are; the dance sources and the grab below are added beside them as sources (2026-10-12). | `hands/core.py` | owner |
+| **The dance sources** (plan 24): per hand `hand:<side>.curl.<finger>` (five), `.spread`, `.energy` and `.flick`; for both hands `hands:gap` and `hands:twist`. Each is routable like any hand source and idles at its rest. Curls and spread read the skeleton. A flick spikes and decays until a trigger kind exists. No preset is built on them yet: that is the owner's authoring pass. | `hands/core.py` `DANCE`, `PAIR`, `Dance` | owner |
+| The dance lanes go after the pinch switches and `hands:` is a scheme of its own, so no older lane moves. | `hands.addresses`, `Layout` | row 124 |
+| Curl is the summed bend of a finger's joints; spread is the index–pinky fan in the palm's plane; energy is the mean speed of palm and tips; a flick is the fastest tip passing 1500 mm/s; gap is the palms' distance and twist the right roll less the left. | `hands/core.py` (the `DANCE` constants) | rows 125–128 |
+| **The grab switch** (plan 24): `hand:<side>.grab` closes on a fist and is a gate like the pinches. What it is for — the shape following a closed hand — is a mapping the owner authors; nothing in a preset uses it yet. | `hands.fist`, `step_grab`, `HandsIO.grab` | owner |
+| The grab is the four fingers' mean curl through the pinches' `Gate` (closes past 0.65, opens under 0.45, 0.05 s debounce). Its two lanes go after the dance lanes, its gates after the pinches. | `GRAB_CLOSE`, `GRAB_OPEN`, `Layout.gates` | rows 131, 132 |
+| The dance sources and the grab have no settings of their own, send nothing to the DAW, and are not offered by a hand Learn: pick them on ROUTING. The HANDS page shows them in a column beside the axes. | `hands/panel.py` `_dance`, `_grab` | rows 129, 130 |
 | The hands package is liftable: `core.py` and `signal.py` import nothing from the host. | `tests/test_hands_boundary.py` | owner |
-| Pinch switches are a Schmitt trigger plus a debounce. | `hands/signal.py` | owner |
+| Pinch switches are a Schmitt trigger plus a debounce. | `hands/core.py` `Gate` | owner |
 | Hand settings live in three places, each where it changes: rig settings in `[hands]`, the room (ranges and box) in `hands.json`, and the feel (including `hands.learn_depth`) in the hands params. | `hands/core.py` | owner |
 | **The interaction box** bounds the palm in the Leap's mm. It is one box for both hands, with x symmetric. The calibration sweep sets it (2nd–98th percentile + `BOX_MARGIN`) and "reset ranges" opens it. No widget edits it. Its edge is a Schmitt edge (`BOX_EDGE`). | `load_box`, `inside`, `HandsIO._sweep_box` | row 50 |
 | **A hand outside the box is absent everywhere**: NaN axes, presence off, pinches dropped and its ghost faded. Only the HANDS page shows it, drawn hollow. | `HandsIO.poll`, `ghost.box_of` | row 51 |
@@ -140,6 +147,8 @@ replaces a row, rewrite that row instead of adding a new one.
 | A later output whose screen is not connected at launch is not opened, and a note says so. Later outputs take their screen and fullscreen from the config only. | `app._later_output` | row 86 |
 | **The crossfader is the master dim** on both desk layers (left is black). It multiplies each output's finished picture, times that output's own dim, as the last pass. It is a rig setting: 1 at every launch, never saved, with soft pickup. There is no blackout button. | `output.dim`, `Renderer.dim_pass` | owner |
 | In overlay mode the dim fades colour and alpha together. On an opaque ground only the colour scales. | `Renderer.dim_pass` | row 41 |
+| **The hands show on the main projection by default**: each output's `hands` switch defaults on, and the rig's projector entry says `hands = true`. Nothing in a preset. | `config.SCREEN`, `docs/SETUP.md` | owner; row 133 (the line is in SETUP.md, not the home) |
+| **Lines and points have an opacity each** (`view.lines_alpha`, `view.points_alpha`), 1 by default, so the picture is as it was until one is moved. | `params.py`, `Renderer.draw_scene` | owner (a mix wherever a layer lacks one); row 117 (the ids) |
 | **The ghost hands** are drawn once a frame into their own layer, in a fixed camera framing the box. They are composited per output after the effects and before the dim, and they are never in the look-back history. `ghost.*` are session params, off by default. A raising hands pass is caught. | `ghost.py`, `Ghost.layer`, `Ghost.composite` | owner |
 | `ghost.on` says whether the hands are drawn at all, and each output's hands tick says where they show. | `outputs.route` | row 84 |
 | **`ghost.style`** picks one of five drawn objects from the same tracking data: HANDS (the default), JOINTS, PALMS, CAGE and MARIONETTE. | `ghost.PARTS` | owner |
@@ -161,6 +170,10 @@ replaces a row, rewrite that row instead of adding a new one.
 | The chip grid is the chain view. Dragging a chip onto another reorders the chain as one undo step. The order slider stays. | `fx.reordered` | row 67 |
 | An effect is re-aimed by the ONTO frame / faces chips on the open strip's title line. A drag never changes a target. | `ui_fx._strip_header` | row 68 |
 | An open effect that is not running says why, and its controls are dimmed by a veil but stay live. | `ui_fx.why_idle` | row 46 |
+| **The palette fold** is one final colour pass after the other effects and the dream, before the outputs: hue folded by a triangle wave onto a slice (`centre` ± `width`/2) so there is no seam, saturation and value rescaled into a chosen range, and a gradient-map mode that maps brightness through two to four anchor colours. A saved palette is a named `fx` module preset. Off and at mix 0 by default (a grey ramp as its anchors), so the picture is as it was. Lights following it is plan 29. | `shaders/fx/palette.glsl` | owner |
+| The palette is an effect file, so its ids are `fx.palette.*`; it is `@order 95`; `mode` is 0 / 1 and the anchors are `anchors` plus `a1`–`a4` hue, sat and val; the fold is over the absolute hue wheel. | `palette.glsl` | rows 134, 136–138 |
+| An effect file may set its default wet/dry with `// @mix` (1 when absent). | `fx.EffectSpec.mix` | row 135 |
+| The FX page packs a strip's `_lo`/`_hi` and `_hue`/`_sat`/`_val` params onto one row, and the palette shows only its open mode's rows. | `ui_fx.strip_rows`, `HIDDEN_BY_MODE` | row 139 |
 | **The dream is temporal**: one running buffer blended with each frame, a few gradient steps per frame. | `dream.py` | owner |
 | The compositor re-colours the dream buffer (`dream.hue / sat / tint`). Echoes pass untouched. | `lookback.py` | owner |
 | `dream.occlude` ("Shape hides wake"): the shape covers the wake where it drew. | `params.py` | owner |
@@ -213,9 +226,10 @@ The D-numbers are cited from code comments.
 | **D2 A preset load replaces everything**: every performance base, every route, the desk's preset layer and the macros. There is no merging. | `preset.py` | owner |
 | **D3** Module presets stay: one group, cycled from that group's strip. A preset records each group's module preset as a label only and never chain-loads it. | `Library.label` | owner |
 | **D4** The APC40 has two layers under a **latched SHIFT**, and its LED shows which layer is up. Loading a preset drops to the preset layer. | `desk.shift`, `Bindings.toggle_layer` | owner |
-| **D5** The global layer is defined in the session's files. Its track knobs K1–K5 are the hand feel (smoothing, response, catch, the selected axis's return) and `tempo.bpm`. K6–K8 are free. | `apc40.DEFAULT_MAP` | owner |
-| **D6 Invariant controls** have one meaning on both layers, and no preset maps them: the faders, the crossfader (master dim), clip rows 1, 4 and 5 (the bank: a tap loads, a hold on an empty slot saves), SHIFT, TAP TEMPO, METRONOME, NUDGE ±, QUANT, OVERDUB (home) and the transport. A preset's row on one of them is dropped at load with a note. | `apc40.DEFAULT_MAP`, `apc40.BANK_PADS` | owner |
-| **D7** On a layer switch the knobs **jump** to the layer's values (the ring re-bases the encoder) and the faders **soft-pick-up**. | `apc40.RING_REBASES_KNOB` | owner |
+| **D5** The global layer is defined in the session's files. Its track knobs K1–K5 are the hand feel (smoothing, response, catch, the selected axis's return) and `tempo.bpm`. K6–K8 are free. Its track faders S1–S6 are the bands' post-drive, S7 the master dynamics and S8 the master trim: the audio one latch away (plan 24, amending D6). | `apc40.DEFAULT_MAP`, `apc40.SHIFT_FADERS` | owner; row 115 (faders, not knobs) |
+| **D6 Invariant controls** have one meaning on both layers, and no preset maps them: the MASTER fader (audio drive), the crossfader (master dim), clip rows 1, 4 and 5 (the bank: a tap loads, a hold on an empty slot saves), SAVE (track 8's clip stop), scene launch 1–4 (points, lines, faces, rotate: their LEDs always show the live state), SHIFT, TAP TEMPO, METRONOME, NUDGE ±, QUANT, OVERDUB (home) and the transport. A preset's row on one of them is dropped at load with a note. (Until plan 24 the track faders were on this list and the four toggles were the preset's.) | `apc40.DEFAULT_MAP`, `apc40.BANK_PADS`, `apc40.TOGGLES`, `apc40.SAVE` | owner |
+| **The track faders S1–S8 are the preset's**, bound by its desk like the knobs. No global defaults are inherited and nothing fills them: a preset with no fader rows leaves them dark, and today every factory preset does, until the owner authors fader sets. | `apc40.TRACK_FADERS`, `preset.track_fader`, `knob_desk(faders=)` | owner; row 118 (the helpers) |
+| **D7** On a layer switch the knobs **jump** to the layer's values (the ring re-bases the encoder) and the faders **soft-pick-up**: each layered fader starts from where it physically is and catches its own param, so a fader moved on one layer never jumps the other's. | `apc40.RING_REBASES_KNOB`, `MidiIO.redraw` | owner; row 116 (from where it is) |
 | **D8** A control the preset does not map **does nothing** and shows dark. It never falls through to the other layer. | `routing.py` | owner |
 | **D9 The analyzer is session**: bands, dynamics, scenes and the drive fader are never in a preset. | `params.SESSION_GROUPS` | owner |
 | **D11** A show names its **startup preset**, which loads at launch. | `Project.startup`, `load_startup` | owner |
@@ -224,9 +238,18 @@ The D-numbers are cited from code comments.
 | Slots 9–24 have no triggers of their own (they use `preset.select`). The show file stays `hyperspace.project/2` and holds the bank only up to its last filled slot. The factory party show has TRACER on slot 9. | `library.bank_doc` | row 72 |
 | A bank pad is green when its preset is loaded, amber when its slot is filled and dark when empty. The old factory shape rows on those pads drop quietly at load. | `routing.led_level`, `routing.RETIRED_DESK_ROWS` | row 73 |
 | **Home is the show's "starts on" preset**, on OVERDUB and the Home key. It is one undo step. | `Project.home`, `preset.home` | owner |
-| **The desk never overwrites a preset.** Holding an **empty** bank pad about 0.6 s saves the live state as a new preset ("TRIP 2") into that pad's slot; holding a filled pad just loads it. (Until 2026-10-09 a hold on the clip-stop row saved into the next empty slot; that row is now free for Learn.) Panel Save and ⇧F1–F8 still overwrite. A pad is freed, the preset kept, with the slot's right-click → *free this pad (keeps the preset)*. | `Project.save_into`, `Param.held`, `midi.HOLD_S` | owner |
-| The save-as details: a `hold` op fires once while held; the eight buttons are one bar; the new pad blinks; names are counted against files, names and bank; and the new preset becomes the loaded one. | `routing.OPS`, `library.next_name` | row 42 |
-| A preset load clears a fader's catch only when the load moved its param. | `MidiIO.redraw` | row 44 |
+| **The desk never overwrites a preset, and never trashes one.** The **two-handed save**: hold SAVE (track 8's clip stop) and tap any bank pad, on either layer. An empty slot gets the live state as a new preset ("TRIP 2"); a filled slot gets a new preset too, the slot points at it, and the old preset keeps its file and stays in the list, unpadded. The pad blinks. Holding an **empty** bank pad about 0.6 s still saves into it; holding a filled pad just loads it. (Until 2026-10-09 a hold on the clip-stop row saved into the next empty slot.) Panel Save and ⇧F1–F8 still overwrite. A pad is freed, the preset kept, with the slot's right-click → *free this pad (keeps the preset)*. | `Project.save_into`, `Project.save_empty`, `MidiIO._save_tap`, `midi.HOLD_S` | owner (2026-10-09, two-handed save 2026-10-14) |
+| SAVE is a held `momentary` row on the session param `desk.save`: never latched, never learned, released on a reconnect; where the owner's own row holds clip stop 8, SAVE is not added and every launch says so. | `apc40.SAVE`, `routing.save_refusal`, `save_missing` | row 110 |
+| The two-handed save names the new preset from the loaded one (`next_name`), says which preset is still in the list, and blinks the pad only when the slot took it. | `library.Project._save_new` | row 111 |
+| The save-as details: a `hold` op fires once while held; the buttons of a learned bar light together; the new pad blinks; names are counted against files, names and bank; and the new preset becomes the loaded one. | `routing.OPS`, `library.next_name` | row 42 |
+| **Every load relights the whole desk** from the new preset: every control no row draws goes dark, and every fader the new preset binds lets go and picks up from it. The session's faders (crossfader, MASTER, the band strip under SHIFT) keep their catch through a load when the load did not move their param. | `MidiIO.redraw`, `MidiIO._dark_desk` | owner (relight); row 112 (the faders; row 44 for the session's) |
+| The factory files still carry the four toggle rows (no library file changes in plan 24); a load drops those exact rows without a note. | `routing.TOGGLE_DESK_ROWS`, `preset.file_desk` | row 113 |
+| **A desk event log**: the last twenty presses, what each did and the layer it was read on, on the SYSTEM page. | `midi.DeskLog`, `Panel._desk_log` | owner; row 114 (its shape) |
+| An older `bindings.json` moves its eight invariant fader rows to the SHIFT layer once, with a backup. | `routing.FADER_SHIFT_ROWS` | row 119 |
+| **A coverage report** says, for every factory preset, which of its preset-layer controls are mapped, dark or dead; it is committed and a test keeps it fresh. The owner's bar — at most four dark or dead per preset layer — is for the authoring pass; no preset was remapped to meet it. | `tools/desk_coverage.py`, `docs/plans/assets/24-party-fixes/desk-coverage.md` | owner |
+| A control is dead when the preset's bases cannot show its param (`cannot_show`); the preset layer counted is 38 controls. | `learn.cannot_show`, `layer_controls` | rows 120, 121 |
+| **Desk templates** are named binding sets in their own JSON: a preset may name one and keep only its overrides, so one fix reaches every preset that uses it. The factory `desk/` folder ships empty. | `Library.desk_template`, `preset.expand_desk`, `compact_desk` | owner; row 122 (the format) |
+| **Click-to-map offers the preset's own params first**, ranked (routed, moved, switched on, already on the desk), then the rest by group. | `learn.ranked`, `ui_desk._offer` | owner; row 123 (the tiers and where the list sits) |
 | **Knob smoothing**: absolute knob and fader values glide over `desk.slew`, 80 ms by default and at most 250 ms (`routing.SLEW_MAX_S`), always under undo's settle time. | `routing.SLEW_DEFAULT_S`, `MidiIO._glide` | row 54 |
 | `desk.slew` and `hands.learn_depth` are session params, and neither is on a global-layer knob. | `routing.register_desk` | row 55 |
 | A device knob only where it does something. A fresh preset layer's D1–D4 are 4D depth, yaw, pitch and the face pattern, and D5–D8 are dark. | `apc40.SCENE`, `preset.knob_desk` | row 75 |
@@ -268,7 +291,9 @@ The D-numbers are cited from code comments.
 | Decision | Who |
 |---|---|
 | Each code PR gets a `/code-review` before merge. Agents work on their own branches, and the owner merges. | owner |
-| Agent work lands on an integration branch, never on `main` (`finish-line` through plan 21, `plan-22-integration` for plan 22); the owner merges it into `main`. | owner |
+| Agent work lands on an integration branch, never on `main` (`finish-line` through plan 21, `plan-22-integration` for plan 22, `plan-24-26-27-integration` for plans 24, 26 and 27); the owner merges it into `main`. | owner |
+| **A run that builds mechanisms edits and adds no preset** (plans 24, 26 and 27, 2026-10-14): every file under `hyperspace/library/` stays byte-identical, and every proof is a fixture under `tests/fixtures/` (force-added: the folder is gitignored) loaded through a scratch library. Fader sets, hand mappings, dance presets, palettes and templates are the owners' creative pass. | owner |
+| **Every new param defaults to today's picture**: a new mix or opacity at what the frame does now, a new switch off, a new source at its rest. | owner |
 
 ## Decided not to build
 
