@@ -482,7 +482,7 @@ def test_factory_table_binds_only_real_params(tmp_path):
     # + R, F1–F8, ⇧F1–F8 (plan 11), + undo and redo on ⌘ and Ctrl (plan 15 WP1),
     # + Home (plan 15 WP2)
     assert len(t.of("key")) == 25 + 17 + 4 + 1
-    assert len(t.of("pad")) == 8 and len(t.of("hat")) == 4     # START and BACK free
+    assert len(t.of("pad")) == 9 and len(t.of("hat")) == 4     # BACK free, START saves
     assert len(t.midi()) == 113 + 6 + 1 + 4 and t.mods() == []   # + SHIFT, the global track
     # knobs, OVERDUB (plan 15 WP2) (the clip-stop row's eight, plan 15 WP4,
     # retired 2026-10-09),
@@ -1332,11 +1332,13 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     # + the 4 undo and redo keys of plan 15, + OVERDUB and the Home key (plan 15 WP2)
     assert f"added note:0:{apc40.N_OVERDUB} → preset.home (the APC40 map of plan 15)" in err
     assert "added key:HOME → preset.home" in err
-    # (the clip-stop row's eight of plan 15 WP4 are retired: never added)
-    assert "preset.save_new" not in err
+    # (the clip-stop row's eight of plan 15 WP4 are retired: never added —
+    # the one save-as row added is START's, on the pad)
+    assert f"note:0:{apc40.N_CLIPSTOP}" not in err
+    assert "added pad:MENU → preset.save_new (the pad layout of 2026-10-14)" in err
     # + the bank's sixteen pads on clip rows 4 and 5 (plan 19 WP2)
     assert f"added note:7:{apc40.N_CLIP[4]} → preset.select (the APC40 map of plan 19)" in err
-    assert f"migrated {path} to {SCHEMA} (2 rows dropped, 72 rows changed)" in err
+    assert f"migrated {path} to {SCHEMA} (2 rows dropped, 73 rows changed)" in err
     rows = {(b.source, b.target): b for b in t.bindings}
     assert rows[("key:RIGHT", "view.shape")].op == "step"
     assert rows[("cc:0:48", "view.bright")].op == "abs"                       # MIDI keeps abs
@@ -1352,8 +1354,9 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     assert [b.source for b, _ in t.dropped] == ["hand:2"]
     # + the moved keys of plan 11, the desk's sort, the undo keys of plan 15,
     # OVERDUB and the Home key (plan 15 WP2) (the clip-stop row of plan 15
-    # WP4 is retired), the bank's sixteen pads on clip rows 4 and 5 (plan 19 WP2)
-    assert len(t.notes) == 9 + 17 + 26 + 4 + 2 + 16
+    # WP4 is retired), the bank's sixteen pads on clip rows 4 and 5 (plan 19
+    # WP2), START's hold-to-save (the pad layout of 2026-10-14)
+    assert len(t.notes) == 9 + 17 + 26 + 4 + 2 + 16 + 1
     # the APC40 rows: the old factory rows swapped for the new, the LED kept
     tap = rows[("note:0:99", "tempo.tap")]
     assert (tap.op, tap.feedback) == ("toggle", "led") and ("note:0:99", "theme.next") not in rows
@@ -1813,9 +1816,11 @@ def test_a_user_row_on_a_moved_apc_note_is_kept():
     # + undo and redo and the Home key (plan 15)
     assert (f"note:0:{apc40.N_OVERDUB}", "preset.home") in by
     # + the clip-stop row's eight (plan 15 WP4), + the bank's sixteen pads
-    # on clip rows 4 and 5 (plan 19 WP2)
+    # on clip rows 4 and 5 (plan 19 WP2), + START's hold-to-save (the pad
+    # layout of 2026-10-14)
+    assert ("pad:MENU", "preset.save_new") in by
     assert [n.split(" ")[0] for n in notes] == (["remapped", "added"]
-                                                + ["added"] * (17 + 4 + 2 + 16))
+                                                + ["added"] * (17 + 4 + 2 + 16 + 1))
     # and a second pass has nothing to do
     again, notes2 = routing.remap_factory(out)
     assert notes2 == [] and [b.source for b in again] == [b.source for b in out]
