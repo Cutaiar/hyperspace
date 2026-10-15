@@ -24,6 +24,10 @@ Top to bottom:
                            where the hand is (the shaped target) as a
                            hairline, the rest value as a dim tick, the
                            MIDI out on the right. Click a row to edit it.
+  the dance sources        a line per hand: five curls, spread, energy,
+                           flick; a line for both: gap, twist — small
+                           bars, hollow while they read nothing; hover
+                           one for its address (plan 24 C4)
   the selected axis        its transfer (dead zone and curve over the
                            calibrated range) with the live point on it,
                            then invert · centred · dead zone · curve ·
@@ -51,7 +55,17 @@ from imgui_bundle import imgui
 
 from .. import ui
 from ..ghost import MODES as GHOST_MODES
-from .core import BOX_AXES, BOX_MARGIN, FEATURES, GROUP, PINCHES, SIDES, conflicts, mirror
+from .core import (
+    BOX_AXES,
+    BOX_MARGIN,
+    DIGITS,
+    FEATURES,
+    GROUP,
+    PINCHES,
+    SIDES,
+    conflicts,
+    mirror,
+)
 from .signal import shape
 
 ROW_LABEL_W = 62.0
@@ -479,20 +493,32 @@ def _axes(panel, io, settings) -> int:
     k = _sel(panel, len(settings.axes))
     bad = conflicts(settings)
     h = imgui.get_text_line_height() + 2
+    # the dance sources (plan 24 C4) take a column on the right of the
+    # rows, so the page grows no taller: it has to fit the control window
+    dance = io is not None and getattr(io, "dance", None) is not None
+    right = DANCE_W if dance else 0.0
+    top, avail = imgui.get_cursor_screen_pos(), imgui.get_content_region_avail().x
     # twelve rows have to share the page with the editor: tight spacing
     imgui.push_style_var(imgui.StyleVar_.item_spacing,
                          imgui.ImVec2(imgui.get_style().item_spacing.x, 2.0))
     for i, a in enumerate(settings.axes):
-        if _axis_row(panel, io, i, a, i == k, h, a.name in bad):
+        if _axis_row(panel, io, i, a, i == k, h, a.name in bad, right):
             _select(panel, i)
             k = i
+    if dance:
+        end = imgui.get_cursor_screen_pos()
+        imgui.set_cursor_screen_pos(imgui.ImVec2(top.x + avail - DANCE_W + DANCE_GAP, top.y))
+        _dance(io, h)
+        imgui.set_cursor_screen_pos(end)
     imgui.pop_style_var()
     return k
 
 
-def _axis_row(panel, io, i: int, a, selected: bool, h: float, conflict: bool) -> bool:
+def _axis_row(panel, io, i: int, a, selected: bool, h: float, conflict: bool,
+              right: float = 0.0) -> bool:
     """One axis: its name, the output bar with the hand's live point and the
-    rest tick, and what goes to the DAW. True when it was clicked."""
+    rest tick, and what goes to the DAW, `right` px short of the edge. True
+    when it was clicked."""
     st = io.state[i] if io is not None else None
     here = io is not None and io.present[a.side]
     imgui.push_style_color(imgui.Col_.text, ui.RED if conflict else
@@ -500,7 +526,7 @@ def _axis_row(panel, io, i: int, a, selected: bool, h: float, conflict: bool) ->
     hit = imgui.selectable(f"{a.label}##hax{i}", selected, 0, imgui.ImVec2(ROW_LABEL_W, h))[0]
     imgui.pop_style_color()
     imgui.same_line()
-    bar_w = imgui.get_content_region_avail().x - OUT_W
+    bar_w = imgui.get_content_region_avail().x - OUT_W - right
     pos = imgui.get_cursor_screen_pos()
     dl = imgui.get_window_draw_list()
     bx0, by0, bx1, by1 = pos.x, pos.y + 3, pos.x + bar_w, pos.y + h - 3
@@ -531,6 +557,63 @@ def _axis_row(panel, io, i: int, a, selected: bool, h: float, conflict: bool) ->
     q = "" if st is None or st.q is None else f" {st.q}"
     imgui.text_disabled(_out_text(a) + q if a.out != "off" else "off")
     return hit
+
+
+DANCE_BAR_W = 16.0     # one dance source's bar
+DANCE_W = 220.0        # the dance column, right of the axis rows …
+DANCE_GAP = 14.0       # … this much of it a gap
+
+
+def _dance(io, h: float) -> None:
+    """The dance sources (plan 24 C4), live, in a column beside the axes:
+    per hand a row of the five curls (thumb … pinky) and a row of spread,
+    energy and flick; then a row for the two hands together — gap, twist.
+    Each a small bar like an axis's output, hollow while it reads nothing
+    (the hand away, no skeleton). Hover a bar for its address and value:
+    what a ROUTING row names."""
+    lay = io._layout()
+    lanes, pair = io.lanes(), io.pair_lanes()
+    imgui.begin_group()
+    for s in SIDES:
+        col = LEFT if io.present[s] else ui.DIM
+        side = s[0].upper()
+        rows = [(f"{side} curl", [(None, f"curl.{d}") for d in DIGITS]),
+                (f"{side} spr", [(None, "spread"), ("en", "energy"), ("flk", "flick")])]
+        for label, bars in rows:
+            imgui.text_colored(col, label)
+            for tag, kind in bars:
+                if tag:
+                    imgui.same_line(0.0, 6.0)
+                    imgui.text_disabled(tag)
+                imgui.same_line(0.0, 3.0)
+                _dance_bar(f"hand:{s}.{kind}", lanes[lay.dance[(s, kind)]], h)
+    for k, name in enumerate(lay.pair_names):
+        if k:
+            imgui.same_line(0.0, 6.0)
+        imgui.text_colored(ui.DIM, name)
+        imgui.same_line(0.0, 3.0)
+        _dance_bar(f"hands:{lay.pair_addresses[k]}", pair[k], h, centred=name == "twist")
+    imgui.end_group()
+
+
+def _dance_bar(address: str, v: float, h: float, *, centred: bool = False) -> None:
+    """One source's value as a small bar; a centred one (the twist) with a
+    tick at the middle. Hover: the address and the value."""
+    pos = imgui.get_cursor_screen_pos()
+    dl = imgui.get_window_draw_list()
+    x0, y0, x1, y1 = pos.x, pos.y + 3, pos.x + DANCE_BAR_W, pos.y + h - 3
+    dl.add_rect(imgui.ImVec2(x0, y0), imgui.ImVec2(x1, y1), ui.u32(ui.LINE))
+    live = not math.isnan(v)
+    if live:
+        dl.add_rect_filled(imgui.ImVec2(x0 + 1, y0 + 1),
+                           imgui.ImVec2(x0 + 1 + (DANCE_BAR_W - 2) * v, y1 - 1),
+                           ui.u32(imgui.ImVec4(0.92, 0.92, 0.92, 0.85)))
+    if centred:
+        mx = x0 + DANCE_BAR_W / 2
+        dl.add_line(imgui.ImVec2(mx, y1), imgui.ImVec2(mx, y1 + 2), ui.u32(ui.DIM))
+    imgui.dummy(imgui.ImVec2(DANCE_BAR_W, h))
+    if imgui.is_item_hovered():
+        imgui.set_tooltip(f"{address}: {v:.3f}" if live else f"{address}: —")
 
 
 def _out_text(a) -> str:
