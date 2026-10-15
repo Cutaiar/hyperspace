@@ -49,6 +49,13 @@ Sources are one string, ``scheme:address``:
   hand:<i>         the hand lane at index i on the rig's layout (axes,
                    then presence, then switches) — still read, so an
                    older saved preset plays; nothing writes it any more
+  param:<id>       a param's effective value, as a *sink row*'s source
+                   (plan 27 B3): ``{"source": "param:view.bright",
+                   "target": "bridge:3", "op": "send"}`` sends it out on a
+                   sink port (``<role>:<channel>``); ``lane:<i>`` and
+                   ``lane:*`` are a sink row's other sources. The
+                   session's rows (bindings.json), never performers
+                   (`SINK_OP`, `sink_values`)
 
 Numeric addresses are 0-based (``lfo:0`` is "LFO 1", ``hand:0`` the first
 axis); param ids are 1-based (``lfo.1.depth``, ``macro.1``).
@@ -314,7 +321,18 @@ MOD_OPS = ("push", "position")                 # the performer ops: the Router's
 # the adapter times it (midi.py a note, `Router.pad` a pad button or the
 # D-pad); `act` ignores it, so a key row with it does nothing
 HOLD_S = 0.6       # midi.HOLD_S is the note's; tests hold the two equal
-OPS = ("fire", "toggle", "step", "set", "abs", "rel", "rel64", "momentary", "hold", *MOD_OPS)
+# a *sink row* (plan 27 B3): a value going *out* of the app — a param's
+# effective norm (``param:<id>``) or an analyzer lane (``lane:<i>``, or
+# ``lane:*`` for every lane from the row's channel on) sent to a sink port,
+# ``<role>:<channel>`` (a device's `sinks`: the bridge's lane k, a
+# `midi-out`'s lane k). Its op is `SINK_OP`; it is the session's (sinks are
+# rig, D1 / D9: bindings.json keeps it), never a performer, never asks
+# Replace / Keep, and nothing in the modulation pass reads it — the sink
+# device does, after `reg.apply()` (`sink_values`)
+SINK_OP = "send"
+SINK_SCHEMES = ("param", "lane")
+OPS = ("fire", "toggle", "step", "set", "abs", "rel", "rel64", "momentary", "hold", *MOD_OPS,
+       SINK_OP)
 # the APC40's two layers (plan 13 §3): a MIDI row's `layer` is None — the
 # control is invariant, the session's, one meaning on both layers — or one
 # of these. The table's `layer` says which is up; SHIFT latches it.
@@ -651,6 +669,19 @@ class Binding:
             return -1
 
     @property
+    def is_sink(self) -> bool:
+        """A sink row (plan 27 B3): a param or a lane sent out to a sink
+        port — `target` is ``<role>:<channel>``, not a param id."""
+        return self.op == SINK_OP
+
+    @property
+    def sink(self) -> tuple[str, int]:
+        """A sink row's port as (role, channel); ("", -1) when the target
+        names none."""
+        got = parse_sink(self.target) if self.is_sink else None
+        return got if got is not None else ("", -1)
+
+    @property
     def is_performer(self) -> bool:
         """An enabled push / position row from a continuous source — what
         owns a target. A disabled row keeps its settings and owns nothing."""
@@ -729,6 +760,10 @@ class Binding:
         `when` address when the caller knows the adapter's labels —
         `Router.describe` does; here the row knows only its strings."""
         s = self.scheme
+        if self.is_sink:
+            addr = ":".join(self.parts)
+            what = "every lane" if self.source == "lane:*" else (name or f"{s} {addr}")
+            return f"{what} → {self.target}"
         if self.is_midi:
             ch = "any ch" if self.channel is None else f"ch{self.channel + 1}"
             on = f" on {self.device}" if self.device else ""
@@ -792,6 +827,105 @@ def land(p: Param, value: float) -> None:
 
 
 # --------------------------------------------------------------- the table
+
+# ---- sink rows (plan 27 B3) ----
+
+def sink_target(role: str, channel: int) -> str:
+    """A sink port's address, what a sink row's `target` holds:
+    ``bridge:3``."""
+    return f"{role}:{int(channel)}"
+
+
+def parse_sink(target: str) -> tuple[str, int] | None:
+    """``<role>:<channel>`` → (role, channel), or None when `target` is not
+    one (a role is a name without ``:``, the channel a whole number ≥ 0)."""
+    role, colon, ch = str(target).partition(":")
+    if not colon or not role or ":" in ch or not ch.isdigit():
+        return None
+    return role, int(ch)
+
+
+def sink_refusal(b: Binding) -> str | None:
+    """Why a sink row cannot stand, or None: its source must be a param
+    (``param:<id>``) or a lane (``lane:<i>``, ``lane:*``), its target a
+    sink port (``<role>:<channel>``)."""
+    scheme, _, addr = b.source.partition(":")
+    if scheme not in SINK_SCHEMES or not addr:
+        return (f"a sink row sends a param or a lane (param:<id>, lane:<i>), "
+                f"not {b.source!r}")
+    if scheme == "lane" and addr != "*" and not addr.isdigit():
+        return f"{b.source!r} is not a lane (lane:<i> or lane:*)"
+    if parse_sink(b.target) is None:
+        return f"{b.target!r} is not a sink port (<role>:<channel>)"
+    return None
+
+
+def sink_rows_from_send(role: str, send: Iterable, lanes: int | None = None
+                        ) -> tuple[list[Binding], list[str]]:
+    """The bridge's old ``[bridge] send`` list as sink rows on `role`
+    (plan 27 B3), translated once: (rows, what could not be). Slot k of the
+    list — "lane:*", "lane:3", "param:view.bright" in lane order, the stars
+    expanded — becomes the row on ``<role>:<k>``. A star is one row,
+    ``lane:*`` on its first channel, and takes `lanes` channels (the
+    default band layout's count when None) before the next entry, as the
+    old list did on a rig with that many bands (`sink_values`: a row on a
+    channel a star also fills wins it)."""
+    n = len(BANDS) if lanes is None else int(lanes)
+    rows: list[Binding] = []
+    bad: list[str] = []
+    k = 0
+    for spec in send if isinstance(send, list | tuple) else [send]:
+        spec = str(spec)
+        b = Binding(spec, sink_target(role, k), SINK_OP)
+        why = sink_refusal(b)
+        if why is not None:
+            bad.append(f"{spec!r}: {why}")
+            continue
+        rows.append(b)
+        k += n if spec == "lane:*" else 1
+    return rows, bad
+
+
+def sink_values(rows: Iterable[Binding], reg: Registry, analyzer=None,
+                lanes: int = 0) -> dict[int, float]:
+    """This frame's readings for one sink, channel → u in [0, 1] (the
+    device clamps and quantises): what its enabled rows send, read after
+    `reg.apply()`. ``param:<id>`` is the param's **effective** norm
+    (`eff_norm`: base + this frame's modulation; 0 for a trigger or an id
+    the registry lacks, as the bridge always sent); ``lane:<i>`` the
+    analyzer's lane as a route reads it, ``lane / CEIL`` (0 with no
+    analyzer running); ``lane:*`` every lane from its channel on — the
+    analyzer's count, or `lanes` (the count last seen) while none runs, so
+    the lanes fall to 0 once. A row on a channel a star also fills wins
+    it."""
+    out: dict[int, float] = {}
+    rows = [b for b in rows if b.enabled and b.is_sink]
+    n_live = analyzer.n if analyzer is not None else int(lanes)
+
+    def lane(i: int) -> float:
+        if analyzer is None or not 0 <= i < analyzer.n:
+            return 0.0
+        return float(analyzer.lanes[i]) / CEIL
+
+    for b in rows:                       # the stars first: an explicit row wins its channel
+        if b.source == "lane:*":
+            k = b.sink[1]
+            for i in range(n_live):
+                out[k + i] = lane(i)
+    for b in rows:
+        if b.source == "lane:*":
+            continue
+        k = b.sink[1]
+        if k < 0:
+            continue
+        scheme, _, addr = b.source.partition(":")
+        if scheme == "lane":
+            out[k] = lane(int(addr)) if addr.isdigit() else 0.0
+        elif scheme == "param":
+            p = reg.get(addr)
+            out[k] = 0.0 if p is None or p.kind is Kind.TRIGGER else float(p.eff_norm)
+    return out
+
 
 def bindings_path(home: Path | str | None = None) -> Path:
     """Where the table lives: <home>/bindings.json, home = the working
@@ -1408,7 +1542,8 @@ def dumps_doc(d: dict) -> str:
 def is_session_row(b: Binding) -> bool:
     """A row `bindings.json` keeps (plan 13 §2.2): anything but a performer
     row (push / position, disabled ones too) and a preset-layer MIDI row —
-    those are the loaded preset's."""
+    those are the loaded preset's. A sink row (plan 27 B3, `SINK_OP`) is
+    the session's: sinks are rig (D1 / D9)."""
     return b.op not in MOD_OPS and not (b.is_midi and b.layer == "preset")
 
 
@@ -1721,6 +1856,14 @@ class Bindings:
         and a preset saves."""
         return [b for b in self.bindings if b.op in MOD_OPS]
 
+    def sinks(self, role: str | None = None, *, enabled: bool = True) -> list[Binding]:
+        """The sink rows (plan 27 B3), in table order: those on `role`'s
+        ports (None: every sink), only the enabled ones unless `enabled`
+        is False."""
+        return [b for b in self.bindings
+                if b.is_sink and (role is None or b.sink[0] == role)
+                and (b.enabled or not enabled)]
+
     def owner(self, pid: str) -> Binding | None:
         """The one performer on `pid`, or None — the referee's question."""
         return next((b for b in self.bindings if b.is_performer and b.target == pid), None)
@@ -1992,6 +2135,11 @@ class Bindings:
         no other op — `abs` is MIDI's, the one path is Router.modulate. (A
         scheme a device delivers as rows — `row_schemes`, which the device
         registry extends through `Router.use` — is not continuous here.)"""
+        if b.is_sink:                # a value going out: no referee (plan 27 B3)
+            why = sink_refusal(b)
+            if why is not None:
+                raise ValueError(why)
+            return
         if self._lane_only(b) and b.op not in MOD_OPS:
             raise ValueError(f"{b.op!r} is not an op for a {b.scheme} source; "
                              f"one of {', '.join(MOD_OPS)}")

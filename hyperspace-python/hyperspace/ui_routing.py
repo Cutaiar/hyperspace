@@ -140,7 +140,6 @@ OP_CHIP = {"push": "push", "position": "pos"}
 NEXT_OP = {"push": "position", "position": "push"}
 DEPTH_TIP = {"push": " — 1 is the full throw at a lane's asymptote",
              "position": " — a fraction of the target's throw; 1 is all of it"}
-N_EXT = 16                # ext lanes offered once any ext source is around
 BAR_W = 56.0
 SRC_W = 84.0             # the source combo: a lane's number and name
 DEPTH_W = 112.0
@@ -341,6 +340,7 @@ def found(panel, router: Router) -> tuple[int, int]:
     hays += [macro_hay(panel, router, p) for p in panel.reg.group("macro")]
     inv, glob = _session_rows(table)
     hays += [control_hay(panel, router, b) for b in (*inv, *glob)]
+    hays += [sink_hay(panel, router, b) for b in table.sinks(enabled=False)]
     return sum(matches(panel, router, text, *h) for h in hays), len(hays)
 
 
@@ -519,8 +519,9 @@ def _sources(panel, router: Router) -> list[tuple[str, str]]:
     entry per lane, labelled as the adapter says ("lfo LFO 1") or by
     index, and addressed by name where the adapter publishes names
     (`Router.address`: ``hand:right.roll``, decision register row 20).
-    Nothing here knows what a scheme is; the ext lanes are the one case
-    with a fixed count (N_EXT) since the bridge publishes no labels."""
+    Nothing here knows what a scheme is: the bridge publishes its ext
+    lanes' labels like any device (plan 27 B3), and a scheme no device
+    publishes offers the lanes its rows name."""
     labels = getattr(router, "labels", {})
     # the lanes as the engine published them (AudioEngine.publish, each
     # frame); until it has — a panel with no frame loop behind it — the
@@ -533,7 +534,8 @@ def _sources(panel, router: Router) -> list[tuple[str, str]]:
         used = any(b.scheme == scheme for b in router.table.bindings)
         if not (names or vec is not None or used):
             continue
-        n = len(names) or (len(vec) if vec is not None else 0) or (N_EXT if scheme == "ext" else 0)
+        named = [b.index + 1 for b in router.table.bindings if b.scheme == scheme]
+        n = len(names) or (len(vec) if vec is not None else 0) or max(named, default=0)
         out += [(router.address(scheme, i), f"{scheme} {names[i] if i < len(names) else i}")
                 for i in range(n)]
     return out
@@ -1364,6 +1366,53 @@ def session(panel, router: Router) -> None:
             _mark_line(panel, table, b, "session", y0)
 
 
+# ---- the sinks (plan 27 B3) ----
+
+def sink_hay(panel, router: Router, b: Binding) -> tuple[str, ...]:
+    """What the filter searches on a sink row: its source, the param's
+    label, its port and the row's words."""
+    pid = b.source.partition(":")[2] if b.scheme == "param" else None
+    return (b.source, b.target, _label(panel, pid) if pid else "", router.describe(b))
+
+
+def sinks(panel, router: Router) -> None:
+    """The sink rows: what goes *out* — a param's effective value or a
+    lane to a sink port (``param:view.bright → bridge:3``), the session's
+    (bindings.json; sinks are rig). A row's checkbox and its × write the
+    file now; a new one comes from a param's right-click → Learn sink ▸."""
+    table = router.table
+    rows = table.sinks(enabled=False)
+    ui._micro("sinks")
+    imgui.same_line()
+    imgui.text_disabled("the session's — out to a sink · right-click a param: Learn sink")
+    if not rows:
+        imgui.text_disabled("nothing goes out")
+        return
+    shown = [b for b in rows if _shown(panel, router, ("sink", id(b)), sink_hay, b)]
+    if not shown:
+        imgui.text_disabled(NO_MATCH)
+    dead = None
+    for k, b in enumerate(rows):
+        if not any(b is x for x in shown):
+            continue
+        imgui.push_id(f"sink{k}")
+        changed, on = imgui.checkbox("##on", b.enabled)
+        if changed:
+            b.enabled = on
+            table.write()
+        imgui.same_line()
+        (imgui.text if b.enabled else imgui.text_disabled)(router.describe(b))
+        imgui.same_line()
+        if ui.chip("×"):
+            dead = b
+        if imgui.is_item_hovered():
+            imgui.set_tooltip("Stop sending this — bindings.json is written now")
+        imgui.pop_id()
+    if dead is not None:
+        table.remove(dead)
+        table.write()
+
+
 # ---- the page ----
 
 def _find_w(on: bool) -> float:
@@ -1471,6 +1520,8 @@ def page(panel, dt: float) -> None:
         macros(panel, router)
         imgui.separator()
         session(panel, router)
+        imgui.separator()
+        sinks(panel, router)
         # every line is drawn: a control with no line (dark on the global
         # layer) has nothing to scroll to
         st["goto"] = None

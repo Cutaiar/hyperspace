@@ -128,9 +128,12 @@ def test_the_lfos_are_offered_as_routing_sources(rig):
     assert [(s, lb) for s, lb in srcs if s.startswith("lfo:")] == [
         (f"lfo:{i}", f"lfo LFO {i + 1}") for i in range(4)]
     assert ("hand:1", "hand R x") in srcs and ("ext:2", "ext 2") in srcs
-    # a row naming a scheme nobody feeds still shows it (fixed count for ext)
+    # a row naming a scheme nobody feeds still shows it — up to the lane its
+    # rows name (plan 27 B3: no fixed count for ext; the bridge publishes
+    # its labels when it is on)
     r2 = Router(rig.reg, Bindings([Binding("ext:5", "view.bright", "push", 0.1)]))
-    assert ("ext:15", "ext 15") in ui_routing._sources(rig.panel, r2)
+    offered = ui_routing._sources(rig.panel, r2)
+    assert ("ext:5", "ext 5") in offered and not any(s == "ext:6" for s, _ in offered)
     frame(rig.panel)
 
 
