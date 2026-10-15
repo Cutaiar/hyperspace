@@ -48,6 +48,16 @@ line lets go, and so does `PICK_S` seconds without a click (`tick`) —
 a dimmed page is never left standing. While "Learn desk" is armed a
 click completes it instead, as a knob bump would.
 
+**The offer** (plan 24 C3): while a mappable control is picked, the
+empty ground of the right-hand section (`OFFER`, under the transport row)
+lists the params this preset uses, ranked (`offer`, `learn.ranked`: what
+its routes and macros move, what it set off the group default, the
+effects and layers it has on, then what is already on the desk), and its
+chip "all params ▾" opens every param, this preset's first and then a
+menu per group — not the whole registry in one list. A click on one puts
+the picked control there (`take`): `Learn.map_picked`, the same road the
+page's click takes, which still works beside it.
+
 A function over the Panel, like ui_lfo: the cache lives on the panel, a
 save of this file lands live (hotreload.MODULES). `ui.desk` (the SYSTEM
 page, beside the cheat sheet's switch) hides it at any size. The window
@@ -66,7 +76,7 @@ from imgui_bundle import imgui
 
 from . import apc40, learn, ui, ui_routing
 from .apc40 import GREEN, GREEN_BLINK, RED, RED_BLINK, YELLOW, YELLOW_BLINK
-from .params import Kind
+from .params import PERFORMANCE_GROUPS, Kind
 from .routing import Binding, led_level
 
 MIN_W = 300.0              # the window is never narrower, px
@@ -85,6 +95,12 @@ PICK_S = 20.0              # a picked control lets go by itself after this long 
 PICK_MOVE = 12.0           # px the mouse must leave a pick's click by before a click can map
 SAYS_S = 0.5               # how long the labels' texts are kept (a renamed preset shows by then)
 LET_GO_TIP = "click to let go"     # the footer's picked line: on it where it fits, and on hover
+# The offer (plan 24 C3): where the picked control's list of this preset's
+# params is drawn, in layout units (x, y, w, h) — the right-hand section's
+# empty ground between the transport row and the crossfader, so it covers
+# no control and the desk's own layout never moves while a pick stands
+OFFER = (apc40.RIGHT, 10.45, 4.0, 2.95)
+OFFER_ALL = "all params ▾"          # its chip: every param, this preset's first, then by group
 
 # LED colours by the grid velocity (apc40's table); any other lit button red
 _LED = {GREEN: (0.30, 0.85, 0.40), GREEN_BLINK: (0.30, 0.85, 0.40),
@@ -288,6 +304,114 @@ def footer_line(panel, now: float | None = None) -> tuple[str, bool] | None:
     if ui.PAGE_KEYS[panel.page] == "routing":
         return f"{c.glyph} picked ({secs} s): click a param on any other page", True
     return f"{c.glyph} picked ({secs} s): click a param to put it here", True
+
+
+def offer(panel, table) -> tuple[list[tuple[str, str]], list[tuple[str, list[str]]]]:
+    """What a picked control is offered (plan 24 C3): `learn.ranked` over
+    every param a desk control may take (`ui_routing.desk_target`) — this
+    preset's own first, ranked, then the rest by group. Built from the
+    registry, the table and the library's group defaults, and kept while
+    the pick, the table and the loaded preset stand."""
+    st = _state(panel)
+    lib = getattr(panel, "library", None)
+    key = (getattr(getattr(panel, "learn", None), "control", None), _key(table),
+           getattr(table, "macros_serial", 0),
+           lib.current("presets") if lib is not None else None)
+    hit = st.get("offer")
+    if hit is not None and hit[0] == key:
+        return hit[1]
+    reg = panel.reg
+    params = [(p.id, p.group) for p in reg if ui_routing.desk_target(p)]
+    values = reg.snapshot()
+    defaults: dict = {}
+    if lib is not None and lib.reg is not None:
+        for g in PERFORMANCE_GROUPS:
+            defaults.update(lib.defaults(g))
+    routed = {b.target for b in table.routes() if b.enabled}
+    routed |= {s.base for m in table.macros.values() for s in m.subs if s.base}
+    on_desk = {b.target for b in table.desk() if b.enabled}
+    out = learn.ranked(params, values, defaults, routed, on_desk)
+    st["offer"] = (key, out)
+    return out
+
+
+def take(panel, pid: str) -> bool:
+    """The offer's item `pid` clicked: the picked control goes on it —
+    `Learn.map_picked`, the one road a click on a param's widget takes."""
+    lrn = getattr(panel, "learn", None)
+    if lrn is None or getattr(lrn, "control", None) is None:
+        return False
+    return lrn.map_picked(pid, apc40)
+
+
+def _offer_item(panel, pid: str, why: str, width: float) -> None:
+    p = panel.reg.get(pid)
+    name = (p.label if p is not None and p.label else pid)
+    if imgui.selectable(f"{ui.fit_text(name, max(0.0, width))}##offer.{pid}", False)[0]:
+        take(panel, pid)
+    lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+    _state(panel).setdefault("offer_rects", {})[pid] = (lo.x, lo.y, hi.x, hi.y)
+    if imgui.is_item_hovered():
+        imgui.set_tooltip(f"put {getattr(picked(panel), 'glyph', '')} on {name}\n{pid} · {why}")
+
+
+def _offer_all(panel, used, rest) -> None:
+    """The chip's popup: this preset's params, then every other param a
+    menu per group."""
+    if not imgui.begin_popup("##offer_all"):
+        return
+    ui._micro("this preset", ui.DIM)
+    if not used:
+        imgui.text_disabled("nothing it moves, routes or switches on")
+    for pid, why in used:
+        p = panel.reg.get(pid)
+        if imgui.menu_item_simple(f"{p.label if p is not None else pid}   ({why})##all.{pid}"):
+            take(panel, pid)
+    imgui.separator()
+    for group, ids in rest:
+        if imgui.begin_menu(f"{group}##all.{group}"):
+            for pid in ids:
+                p = panel.reg.get(pid)
+                if imgui.menu_item_simple(f"{p.label if p is not None else pid}##all.{pid}"):
+                    take(panel, pid)
+            imgui.end_menu()
+    imgui.end_popup()
+
+
+def _offer(panel, table, origin, unit) -> None:
+    """The picked control's offer, in the `OFFER` ground: a chip that
+    opens every param, then this preset's params, ranked (`offer`); a
+    click on one maps the pick there. Drawn only while a click on a param
+    would map it (`picking`)."""
+    st = _state(panel)
+    st.pop("offer_rects", None)
+    c = picking(panel)
+    if c is None:
+        return
+    used, rest = offer(panel, table)
+    (ox, oy), (sx, sy) = origin, unit
+    x, y, w, h = OFFER
+    imgui.set_cursor_screen_pos(_v(ox + x * sx, oy + y * sy))
+    size = _v(w * sx, h * sy)
+    st["offer_drawn"] = [pid for pid, _why in used]
+    if not imgui.begin_child("##offer", size, imgui.ChildFlags_.borders):
+        imgui.end_child()
+        return
+    try:
+        ui._micro(f"{c.glyph} on", ui.RED)
+        imgui.same_line()
+        if ui.chip(f"{OFFER_ALL}##offer"):
+            imgui.open_popup("##offer_all")
+        if imgui.is_item_hovered():
+            imgui.set_tooltip("Every param: this preset's first, then the rest by group")
+        _offer_all(panel, used, rest)
+        room_ = imgui.get_content_region_avail().x
+        if not used:
+            imgui.text_disabled(ui.fit_text("nothing of this preset's", room_))
+        for pid, why in used:
+            _offer_item(panel, pid, why, room_)
+    finally:
+        imgui.end_child()
 
 
 def click(panel, table, c: apc40.Control, b: Binding | None) -> None:
@@ -911,6 +1035,10 @@ def _body(panel, table) -> None:
         x0, y0, x1, y1 = frame
         dl.add_rect(_v(x0 - 2, y0 - 2), _v(x1 + 2, y1 + 2), ui.u32(ui.RED), 4.0, 2.5)
     imgui.dummy(avail)
+    # the picked control's offer, over the empty ground it owns (`OFFER`):
+    # a child window of this one, so the desk's own hover and clicks are
+    # not this window's while the mouse is on it
+    _offer(panel, table, (origin.x, origin.y), (sx, sy))
     if tip is not None:
         imgui.set_tooltip(tip)
     # the window is hit-tested: a left click on a control is `click`; on
