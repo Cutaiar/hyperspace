@@ -248,7 +248,7 @@ The D-numbers are cited from code comments.
 | An older `bindings.json` moves its eight invariant fader rows to the SHIFT layer once, with a backup. | `routing.FADER_SHIFT_ROWS` | row 119 |
 | **A coverage report** says, for every factory preset, which of its preset-layer controls are mapped, dark or dead; it is committed and a test keeps it fresh. The owner's bar — at most four dark or dead per preset layer — is for the authoring pass; no preset was remapped to meet it. | `tools/desk_coverage.py`, `docs/plans/assets/24-party-fixes/desk-coverage.md` | owner |
 | A control is dead when the preset's bases cannot show its param (`cannot_show`); the preset layer counted is 38 controls. | `learn.cannot_show`, `layer_controls` | rows 120, 121 |
-| **Desk templates** are named binding sets in their own JSON: a preset may name one and keep only its overrides, so one fix reaches every preset that uses it. The factory `desk/` folder ships empty. | `Library.desk_template`, `preset.expand_desk`, `compact_desk` | owner; row 122 (the format) |
+| **Desk templates** are named binding sets in their own JSON: a preset may name one and keep only its overrides, so one fix reaches every preset that uses it. The factory has no templates (its `desk/` folder need not exist). | `Library.desk_template`, `preset.expand_desk`, `compact_desk` | owner; row 122 (the format) |
 | **Click-to-map offers the preset's own params first**, ranked (routed, moved, switched on, already on the desk), then the rest by group. | `learn.ranked`, `ui_desk._offer` | owner; row 123 (the tiers and where the list sits) |
 | **Knob smoothing**: absolute knob and fader values glide over `desk.slew`, 80 ms by default and at most 250 ms (`routing.SLEW_MAX_S`), always under undo's settle time. | `routing.SLEW_DEFAULT_S`, `MidiIO._glide` | row 54 |
 | `desk.slew` and `hands.learn_depth` are session params, and neither is on a global-layer knob. | `routing.register_desk` | row 55 |
@@ -277,7 +277,7 @@ The D-numbers are cited from code comments.
 | Legibility at a distance comes first: rounded frames, pill chips, filled faders, no page scroll at the control size. The master faders are on the AUDIO page. | `ui.py` | owner |
 | The Replace / Keep prompt is drawn on every page, even with the panel collapsed. | `ui_routing.py` | owner |
 | The ROUTING page is one page over the loaded preset: its routes, its desk rows and macros, and the session's rows read-only below. | `ui_routing.page` | owner |
-| **The cheat sheet is off at every launch.** `/` and the APC40's DETAIL toggle it (the pad's MENU did until 2026-10-14; held, it now saves a new preset). The desk diagram stays on. | `ui.cheatsheet` | owner |
+| **The cheat sheet is off at every launch.** `/` and the APC40's DETAIL toggle it (the pad's MENU did until 2026-10-14; START and BACK are now unbound). The desk diagram stays on. | `ui.cheatsheet` | owner |
 | The desk's glyphs (K1–K8, D1–D8, S1–S8, SM, X, C, G, B1–B22, ⇧) appear on every ROUTING row and Learn message, with an APC40 diagram of the layer that is up. | `apc40.LAYOUT`, `ui_desk.py` | owner |
 | The on-screen desk takes the room it has, and there is no DESK page. Once a unit is 44 × 32 px, every lit control carries its label. | `ui_desk.room`, `ui_desk.LABEL_UNIT` | row 57 |
 | The ROUTING page has one filter field. Only the user clears it, or a click on a desk control. | `ui_routing.matches` | row 63 |

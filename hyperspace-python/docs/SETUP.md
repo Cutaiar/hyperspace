@@ -83,7 +83,9 @@ and looks for a port whose name contains "APC40". The desk map is
 - **Points, lines, faces, rotate** are scene launch 1–4, the same with
   or without SHIFT. The **MASTER** fader is the audio drive and the
   **crossfader** the master dim, on both layers.
-- What each press did: the SYSTEM page's **desk log**. To check the device without the
+- What each press did: the SYSTEM page's **desk log**.
+
+To check the device without the
 app: `uv run python tools/midi_probe.py`. Another port name or no MIDI at
 all:
 

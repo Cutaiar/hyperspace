@@ -292,8 +292,7 @@ Run L1–L3 in a terminal where `HYPERSPACE_HOME` points at the copy
   as bindings.json.bak-v3" (or a name with a date if that name was
   taken), and one line per change: the crossfader moved to the master
   dimmer (`remapped cc:0:15: overlay.bg → output.dim`), OVERDUB added as
-  Home (`added note:0:64 → preset.home`), eight `added note:…:52 →
-  preset.save_new` lines (the clip-stop buttons), `added key:…` lines for
+  Home (`added note:0:64 → preset.home`), `added key:…` lines for
   ⌘Z, ⌘⇧Z, Ctrl+Z, Ctrl+⇧Z and Home, and sixteen `added note:…:56` /
   `…:57 → preset.select` lines (pad rows 4 and 5; "remapped …
   view.shape → preset.select" where your file still had the old shape
@@ -310,13 +309,16 @@ Run L1–L3 in a terminal where `HYPERSPACE_HOME` points at the copy
   is on stderr".
 - `grep -c preset.select $HYPERSPACE_HOME/bindings.json` prints 24.
 - The ROUTING page's session section lists X → `output.dim`, B11 →
-  `preset.home` and G6·1–G6·8 → `preset.save_new hold`, under
-  "invariant · both layers".
+  `preset.home`, G6·8 → `desk.save` and scene launch 1–4 → points,
+  lines, faces and rotate, under "invariant · both layers". The
+  clip-stop SAVE AS bar of plan 15 is gone (since 2026-10-09): an old
+  file's eight `preset.save_new` hold rows are dropped with a note.
 - Your show files have the same size and time as before.
 - A crossfader, OVERDUB, clip-stop or pad mapping you had changed by hand
   is left as you had it.
-- The second launch prints nothing about the mapping file, the SYSTEM
-  page has no such line, and no file's time moves.
+- The second launch prints nothing about the mapping file (except
+  "SAVE not added …" when track 8's clip stop was already yours), the
+  SYSTEM page has no other such line, and no file's time moves.
 
 **Wrong if:** the file changed with no backup; one of your own mappings
 was replaced; the same lines appear on every launch.
@@ -328,8 +330,8 @@ was replaced; the same lines appear on every launch.
 **Later:** the first time you launch on the real home folder, the same
 lines and its own backup appear there: read them the same way. If your
 mapping file was itself just made from a very old `midi_map.json`, the
-OVERDUB and clip-stop lines arrive on the second launch instead, and it
-says so. If you later delete the OVERDUB or a clip-stop line from
+OVERDUB and SAVE lines arrive on the second launch instead, and it
+says so. If you later delete the OVERDUB or the SAVE line from
 `bindings.json`, it comes back on the next launch; to switch a button
 off, keep its line and add `"enabled": false`.
 
@@ -2641,7 +2643,7 @@ marked ✕.
 **Right if:** (1) D1 4D depth, D2 dream mix, D3 pitch, D4 pattern, K1
 brightness, K2 dark, K3 pattern mix, S1 lines opacity. (2) the file
 says `"desk_template": "fixture shape"` and holds three desk rows, not
-eight. (3) D5 lights. (4) TEMPLATED 3 holds the same three rows as
+the seven the desk shows. (3) D5 lights. (4) TEMPLATED 3 holds the same three rows as
 TEMPLATED (none for D3); loaded, D3 is camera zoom. (5) the footer says
 "desk template 'fixture shape' not loaded …" and only D2 and K3 are lit.
 

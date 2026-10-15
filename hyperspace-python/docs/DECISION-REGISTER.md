@@ -1680,8 +1680,8 @@ added: every proof is a fixture under `tests/fixtures/`.
 
 - **Built.** A template is `<library>/desk/<slug>.json`:
   `{"schema": "hyperspace.desk/1", "name", "note"?, "desk": [rows]}`.
-  The factory's folder (`hyperspace/library/desk/`) ships empty and
-  needs no file to exist; the owner's live in the library, so a shared
+  The factory has no templates (the folder `hyperspace/library/desk/`
+  need not exist: the group lists none without it); the owner's live in the library, so a shared
   `[library] path` shares them. A preset names one with `"desk_template":
   "<name>"`, and its `"desk"` then holds only overrides: an override row
   replaces every template row on the same control, and a dark row

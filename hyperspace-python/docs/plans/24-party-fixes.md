@@ -21,8 +21,8 @@ unnumbered). Open decisions: [`DECISION-REGISTER.md`](../DECISION-REGISTER.md)
 rows 110–139. The owner's decisions for this plan are in
 [`DECISIONS.md`](../DECISIONS.md) with Who "owner".
 
-Branch `plan-24-26-27-integration`: C1 (PR #175), C4 (#176), C6 (#173),
-C5 (#178), C2 (#180), C3 (#182).
+Branch `plan-24-26-27-integration`, in merge order: C6 (PR #173), C4
+(#176), C1 (#175), C5 (#178), C2 (#180), C3 (#182).
 
 ## What was built
 
@@ -187,7 +187,8 @@ remapped to meet it**):
 0 of 23 meet the bar. S1–S8 are dark on every preset (eight each, since
 C2 gave the faders to the presets and no preset binds them yet). K7
 (bitmap opacity) is dead on all 23 (no bitmap file, or the faces off);
-K4 and D4 (pattern mix, pattern) are dead where the faces are off.
+K4 (pattern mix) and the pattern knob (D4; D7 on hands-pinch) are dead
+where the faces are off.
 
 ### C4 — the dance sources (H2)
 

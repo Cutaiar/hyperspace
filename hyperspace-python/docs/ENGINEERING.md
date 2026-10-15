@@ -355,8 +355,8 @@ effect's default wet/dry (1 when absent); `fx.on` bypasses the stack
 and `fx.mix` scales it.
 
 **The palette fold** (plan 24, `shaders/fx/palette.glsl`, `@order 95`,
-so last in the chain, after the look-back and before the hands and the
-dim). Off and at `@mix 0` by default, so switching it on changes
+so last in the chain, after the look-back and before the dim — and
+before the hands unless an output sends them through the effects). Off and at `@mix 0` by default, so switching it on changes
 nothing until its mix is raised. Mode 0 (**fold**) maps every hue by a
 triangle wave over the wheel onto a slice `centre` ± `width`/2 (degrees;
 neighbouring hues stay neighbours, no seam) and rescales saturation and
@@ -856,7 +856,8 @@ row on an invariant control with the usual note.
 **Desk templates** (plan 24). A template is a named binding set,
 `<library>/desk/<slug>.json` (`{"schema": "hyperspace.desk/1", "name",
 "note"?, "desk": [rows]}`), read by `Library.desk_template`; the
-factory's `hyperspace/library/desk/` ships empty, and the owner's sit in
+factory has no templates (`hyperspace/library/desk/` need not exist),
+and the owner's sit in
 the library, so a shared `[library] path` shares them. A preset that
 says `"desk_template": "<name>"` keeps only its overrides in `"desk"`: a
 row replaces every template row on the same control, and `{"source": …,

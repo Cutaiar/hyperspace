@@ -712,19 +712,23 @@ step 1). *Pass:* "backup: bindings.json kept as bindings.json.bak-v3
 before the rewrite" (or dated `.bak-v3-<stamp>`), then per change
 "bindings: <path>: …":
 `remapped cc:0:15: overlay.bg → output.dim (the APC40 map of plan 15)`;
-`added note:0:64 → preset.home (…)`; eight
-`added note:<k>:52 → preset.save_new (…)` (clip-stop);
+`added note:0:64 → preset.home (…)`; with plan 24,
+`added note:7:52 → desk.save (…)` (SAVE) and the four scene-launch
+toggles, and check 153's eight "moved cc:k:7 … to the SHIFT layer";
 `added key:… → edit.undo` / `edit.redo` / `preset.home` (plans 09, 11,
 15 keys) per missing loop key; check 84's sixteen bank-pad lines; then
 "bindings: updated <path> (N rows changed)". Earlier launches' changes
 not repeated. SYSTEM: same, one line. ROUTING session, under "invariant
-· both layers": X → `output.dim`, B11 → `preset.home`, G6·1–G6·8 →
-`preset.save_new  hold`. Hand-edited crossfader, OVERDUB, clip-stop, pad
-rows and keys on those chords kept. Relaunch: silent, no file times
-move. Note: rows are added where **nothing uses the control**, so
-deleted OVERDUB/clip-stop rows return; disable via `"enabled": false`.
-A `bindings.json` freshly converted from an old `midi_map.json` gets
-OVERDUB/clip-stop rows on second launch (which says so). *Fail:* no
+· both layers": X → `output.dim`, B11 → `preset.home`, G6·8 →
+`desk.save`, scene launch 1–4 → the four toggles (an old file's
+clip-stop `preset.save_new` hold rows, retired 2026-10-09, are dropped
+with a note). Hand-edited crossfader, OVERDUB, clip-stop, pad
+rows and keys on those chords kept. Relaunch: silent (but "SAVE not
+added …" when clip stop 8 is yours), no file times move. Note: rows are
+added where **nothing uses the control**, so deleted OVERDUB/SAVE rows
+return; disable via `"enabled": false`. A `bindings.json` freshly
+converted from an old `midi_map.json` gets OVERDUB/SAVE rows on second
+launch (which says so). *Fail:* no
 backup → `routing.backup` in `Bindings.load`; your row replaced →
 `routing.remap_factory` (swaps only exact factory rows, including an
 identical crossfader row of yours; backup has it); lines every launch →
@@ -2149,7 +2153,7 @@ without reloading, save as TEMPLATED 3, open its file, then load it.
 (5) Move the template file out and load TEMPLATED. *Pass:* (1) D1 4D
 depth, D2 dream mix, D3 pitch, D4 pattern, K1 brightness, K2 dark, K3
 pattern mix, S1 lines opacity. (2) the file says `"desk_template":
-"fixture shape"` and holds three desk rows, not eight. (3) D5 lights.
+"fixture shape"` and holds three desk rows, not the seven of the expanded desk. (3) D5 lights.
 (4) TEMPLATED 3 holds the same three override rows as TEMPLATED, with
 no D3 row; loaded, D3 is camera zoom. (5) the footer says "desk template
 'fixture shape' not loaded …" and only D2 and K3 are lit. *Fail:* the
