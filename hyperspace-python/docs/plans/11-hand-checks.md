@@ -10,8 +10,9 @@ numbers.
 ## Before you start
 
 On `main` (`git pull`, `uv sync`); group R needs plan 22, on
-`plan-22-integration` until it is merged, and groups U (plan 24) and W
-(plan 27), on `plan-24-26-27-integration` until it is merged. Before
+`plan-22-integration` until it is merged, and groups U (plan 24), W
+(plan 27) and V (plan 26), on `plan-24-26-27-integration` until it is
+merged. (V follows W in this file: plan 27's docs landed first.) Before
 any launch of this build:
 
 ```
@@ -53,6 +54,13 @@ number and what you saw.
    Studio over IAC; 186–189 with a phone on the same Wi-Fi.
 8. Glass + projector as two outputs: 101 first, then 41, 98, 102–109,
    113 from the audience, 129; 111, 112 last.
+9. The render graph (group V): 191 and 192 on the gate Mac first (the
+   goldens, then every factory preset by eye), then 193–198 on the
+   laptop; (copy) 211, 212, 215 on the laptop; 199–201 on the 1080p
+   projector, 201 and 202 on the copy; with the hand camera (or the
+   synthetic tape) 200, 203–205, 207, 209, 210, 214; 206 and 213 with the
+   glass and the projector as two outputs (after 101); 216–218 (copy) with
+   the recorded cloud (after 190).
 
 ## A. Laptop alone
 
@@ -1478,7 +1486,7 @@ per output (`Renderer._draw_frame`); echoes with hands alone through
 effects → `Renderer._pipeline`.
 
 **103. Hands over or through the effects; the guide never bent.**
-Headless: `tests/test_outputs.py::{test_through_bends_the_hands_with_the_shape,test_through_with_no_effect_on_is_hands_over,test_the_guide_is_never_distorted,test_the_history_never_holds_the_hands_in_any_state,test_two_pipelines_show_the_same_echoes} tests/test_ghost.py::test_the_readout_layer_is_the_guide_apart_from_the_hands`.
+Headless: `tests/test_outputs.py::{test_through_bends_the_hands_with_the_shape,test_through_with_no_effect_on_is_hands_over,test_the_guide_is_never_distorted,test_the_history_holds_what_it_is_wired_to_and_the_default_graph_wires_it_as_today,test_two_pipelines_show_the_same_echoes} tests/test_ghost.py::test_the_readout_layer_is_the_guide_apart_from_the_hands`.
 Glass through on, projector off. F5 (TRIP), then F4 (WAKE). *Pass:*
 glass hands bend and recolour with the shape, projector's clean; no
 hand echoes or dream feed on either; same echoes on both. All effects
@@ -2608,11 +2616,392 @@ Then rename the file and add `loop = false` to the entry (an edit, so it
 reopens); rename the file back. *Pass:* `scan · cloud · connected · 1
 source · knot.npz · frame n/16 · … points · 12 fps`, the frame counting
 through 16 at 12 frames a second (one loop about every 1⅓ s) and
-starting again; nothing else on screen changes (nothing on screen draws
-it yet; plan 26's point-cloud node, A4b, does). Renamed: `error: FileNotFoundError …`; back: `connected`
+starting again; the scene shows the knot as dots in the shape's world
+(plan 26's `cloud` node draws it; its own checks are 216–218). Renamed:
+`error: FileNotFoundError …`; back: `connected`
 within about 10 s, and with `loop = false` the frame stops at 16/16.
 *Fail:* the frame number follows the app's frame rate →
 `CloudDevice.poll`.
+
+## V. Plan 26: the render graph
+
+Plan 26 as built is [`26-render-graph.md`](26-render-graph.md). No
+factory preset carries a `graph` section, so the checks that need one
+copy the fixture `hyperspace-python/tests/fixtures/presets/hands-lines.json`
+(the hands in the scene as lines, through the acid, the history holding
+them) into the copy's library, or a variant of it made by editing the
+copy's own file (**(copy)**). **The copy's library must be the copy**:
+if `~/Hyperspace-try/config.toml` has a `[library] path` line, delete
+that line on the copy first, so the library is `<home>` — never copy a
+fixture into the shared Drive folder. A preset file in `<home>/presets/`
+appears in the PRESETS list by its file name. The variants, each a copy
+of `hands-lines.json` saved under a new name in `<home>/presets/` with
+its `"graph"` replaced:
+
+- **hands-solid.json** — `{"nodes": [{"kind": "hands", "into": "scene"},
+  {"kind": "history", "holds": "scene+hands"}]}` (the hands in the scene,
+  solid);
+- **hands-depth.json** — `{"nodes": [{"kind": "hands", "laid": "depth"}]}`
+  (the hands' layer, depth-aware);
+- **two-acids.json** — `{"nodes": [{"kind": "effect", "file": "acid",
+  "instance": 2}]}`, and in `"values"` add `"fx.acid.2.on": true,
+  "fx.acid.2.twist": 0.3` (the first acid keeps the file's 0.9);
+- **two-hands.json** — `{"nodes": [{"kind": "hands", "into": "scene"},
+  {"kind": "hands", "instance": 2}]}`.
+
+The hands checks need the hand camera, or the synthetic tape
+(`uv run python tools/hands_tape.py synth /tmp/hands.json`, then `enabled
+= true` and `tape = "/tmp/hands.json"` on the hands entry, as in
+TESTING-GUIDE L44), with **Ghost hands** ticked on the HANDS page.
+191–196 and 211, 212, 215 run on the laptop alone; 199–201 want the 1080p
+projector; 206 and 213 the glass and the projector as two outputs (101).
+
+**191. The golden frames match on the gate Mac.**
+Headless: `tests/test_golden_frames.py::{test_every_golden_frame_is_drawn_byte_for_byte,test_every_factory_preset_has_every_state_recorded_and_nothing_else}`.
+On the Mac the gates run on (`GL_RENDERER` "Apple M3 Max"), from
+`hyperspace-python/`: `uv run python tools/golden_frames.py` (it uses a
+throwaway home, never `~/Hyperspace`). Open a few PNGs under
+`tests/golden/frames/png/` that `frames.json` names (party-trip, hands
+present, `scene+hands+through`). *Pass:* "all 556 frames match their
+goldens (Apple M3 Max, 4.1 Metal - 90.5)" (on a newer GL_VERSION, a note
+naming both); the PNGs show the preset with the two synthetic hands (the
+left open, the right a fist) over it, or bent through the effects in the
+through states. *Fail:* a `MOVED …` list and a contact sheet
+`docs/plans/assets/26-render-graph/golden-diff-all.png` (delete it after
+looking; do not commit it). Likely causes: a render change that moved
+pixels; a macOS or driver update (re-record with the reason, plan file
+"How to re-record"); something in the frame reading the wall clock.
+
+**192. Every factory preset against its golden, by eye, on the Mac.**
+Headless: `tests/test_golden_frames.py::test_every_golden_frame_is_drawn_byte_for_byte`.
+The goldens prove the pixels on the gate Mac's GL, not that they look
+right; the new vertex path (edges and points as quads with depth, the
+eye's matrix) has met Apple's shader compiler only headlessly. List each
+preset's golden (output 1 alone, no hands) from `hyperspace-python/`:
+`uv run python -c "import json; [print(g['preset'], 'tests/golden/frames/' + g['png']) for g in json.load(open('tests/golden/frames/frames.json'))['goldens'] if g['hands'] == 'absent' and g['state'] == 'solo']"`.
+Launch with no sound playing, and load each of the 23 presets in turn
+from the PRESETS list, its PNG open beside the render window. *Pass:*
+each looks like its golden — the shape's size and place, its line
+weight and dots, its faces and colours, its effects (the pose differs:
+the golden is 8 frames in, with the LFOs at rest; the live shape keeps
+turning). *Fail:* a preset blank, black or wrong where its golden is not
+→ the scene's shaders on Apple's compiler (`LINE_VS`, `POINT_VS`,
+`FACE_VS` in `render.py`; SYSTEM shows a render error and `stall.log` a
+`render error`); strokes heavier or lighter than the golden → **Screen
+strokes** ticked (198).
+
+**193. The naming rule.**
+Headless: `tests/test_params.py::{test_the_first_instance_keeps_todays_id_and_extras_carry_a_marker,test_every_node_param_today_reads_as_its_first_instance}`.
+Read ENGINEERING §2, "Node instances: the naming rule"; then, with 212's
+preset loaded, look at ROUTING's param list. *Pass:* the rule reads
+clearly, and `fx.acid.2.mix` ("Acid 2 mix") reads right as the second
+acid's mix. *Fail:* the owner prefers another marker — say so before a
+preset of yours uses one (register row 169: after that it is a
+migration).
+
+**194. The per-node times on SYSTEM while an effect is toggled.**
+Headless: `tests/test_golden_frames.py::{test_each_node_has_a_rolling_median_in_ms,test_no_timer_queries_means_a_note_and_the_same_pixels,test_the_gpu_lines_on_the_system_page}`, `tests/test_graph.py::{test_the_default_graph_for_one_default_view_is_todays_frame_in_order,test_the_timer_lists_the_graphs_nodes_and_drops_a_node_that_left}`.
+Launch, load TRIP (F5), open SYSTEM. On the FX page untick **Effects**,
+wait two seconds, tick it again. On LOOKBACK switch **Look-back** on and
+off. On OUTPUT tick output 1's **through effects**, then untick it.
+*Pass:* under the stall status "gpu per node, ms (median of the last
+frames):" and one line each for `scene`, `cover`, `hands`, `history`,
+`fx`, `capture`, `output.1`, a few ms or less and steady; `fx` falls
+near 0 with the effects off and comes back within about a second (a
+median of 60 frames); `history` moves with the look-back; `hands` rises
+while the ghost hands show; with through on, `composite(scene+hands)` and
+`fx(scene+hands)` join the list (0.00 until a hand shows with an effect
+on) and leave it within a few frames of unticking. *Fail:* no lines (no
+frame was timed); "gpu: no GPU timer queries on this context …" on the
+Mac (the driver refused `GL_TIME_ELAPSED`); a line that stays after its
+switch went → the graph not rebuilt (`Renderer._graph_for`) or the timer
+not handed the graph's names.
+
+**195. Every picture is what it was before the graph.**
+Headless: `tests/test_golden_frames.py::test_every_golden_frame_is_drawn_byte_for_byte`, `tests/test_outputs.py` (whole), `tests/test_graph.py::test_a_pipeline_no_view_routes_to_this_frame_does_not_run`.
+The party rig: the glass with hands over, the projector with hands
+through, an effect on, the look-back on, the crossfader half down.
+*Pass:* the hands over the effects on the glass, bent through them on
+the projector, echoes behind the shape, both outputs dimmed alike; a
+hand entering the box changes the projector's picture (through) and not
+the glass's; closing the projector leaves the glass as it was. *Fail:* a
+visible change from the last build on either output (a painted node
+drawn through a texture; a pipeline run for the wrong output); an output
+on its ground (`View.error` on the OUTPUT page names the pipeline).
+
+**196. The shape sits where it always did; the eye on CAMERA.**
+Headless: `tests/test_camera.py::{test_the_default_eye_lands_every_vertex_within_half_a_pixel_of_project_h,test_each_point_is_drawn_where_project_h_puts_it,test_the_eye_params_are_the_rooms_and_default_to_the_old_view}`.
+Fresh launch; load LEGACY 6 then PLASMA HEART on the laptop and on the
+projector; open CAMERA. *Pass:* LEGACY 6 looks exactly as before (same
+size, same place, same dots); CAMERA has an **eye** section ("the
+room's camera, not the preset's") with Eye field of view 47.6° and Eye
+distance 3.78; a preset load never moves them. *Fail:* the shape offset
+or another size at zoom 1 (the eye's defaults, the matrix order); dots a
+pixel bigger (the point rounding).
+
+**197. Zoom grows the shape in the world; the hands stay.**
+Headless: `tests/test_camera.py::{test_zoom_scales_the_shape_about_the_world_origin_and_pan_moves_it,test_a_shape_through_the_eye_draws_without_error}`, `tests/test_stroke_space.py::test_world_space_scales_the_width_and_radius_by_the_zoom`.
+Ghost hands on, a hand in the box, **Screen strokes** (VIEW) unticked as
+it rests. Wheel the zoom from 0.3× to 5×; then load EMBER ORBIT and HEX
+ENGINE. *Pass:* only the shape grows — the hands neither move nor
+scale; a big zoom shows a deeper perspective (the near side grows
+faster), and past about 4× the eye passes inside the shape with no
+streak across the screen; the edges and dots grow and shrink with the
+shape (world space); the zoomed-out fields' copies are spaced as before,
+small dots and fine edges as on earlier builds. *Fail:* the hands scaling
+with the zoom (a matrix reached the ghost); a stroke sweeping the screen
+with the eye inside (the near-clip in `LINE_VS`); strokes not changing
+with the zoom (198).
+
+**198. Screen strokes: world space by default, the switch holds the weight.**
+Headless: `tests/test_stroke_space.py::{test_the_default_is_world_space_a_preset_performance_switch,test_at_zoom_1_both_modes_draw_the_same_frame,test_the_switch_is_in_a_saved_preset_and_loads_back,test_world_space_scales_the_width_and_radius_by_the_zoom}`, `tests/test_camera.py::test_strokes_keep_their_weight_whatever_the_zoom`, `tests/test_desk_coverage.py::test_cannot_show_is_the_rule_by_group`.
+Load PARTY FIELD, then HEX ENGINE (both zoomed out); compare with the
+middle column of `docs/plans/assets/26-render-graph/a2b-moved.png`.
+**Screen strokes** (VIEW, under the opacities) rests unticked. Wheel the
+zoom (or the pad's right stick) from about 0.3× to 3×; tick **Screen
+strokes** and wheel again; load LEGACY 6 (zoom 1) and flip the switch.
+*Pass:* PARTY FIELD's edges and HEX ENGINE's red dots have their weight
+from before plan 26 (small dots, fine edges); unticked, zooming in
+fattens edges and dots and zooming out thins them, with the shape;
+ticked, they keep one pixel size whatever the zoom; on LEGACY 6 the
+switch changes nothing at all; the ghost hands never change weight with
+it. *Fail:* strokes fixed while unticked (the `sz` line in `draw_scene`,
+or a preset storing it on); dots changing size at zoom 1 (CAMERA's zoom
+not exactly 1, or the zoom applied after the rounding); the switch
+missing from a saved preset (its group is not `view`).
+
+**199. A hand across the box pans as far as it did (`hands-orbit`).**
+Headless: `tests/test_presets.py::test_each_orbit_axis_moves_its_camera_param_as_its_row_says`, `tests/test_camera.py::test_the_pan_range_keeps_a_routed_pan_as_far_as_it_was`.
+The projector at 1920×1080; load HANDS ORBIT, left hand in the box; move
+it from the box's left edge to its right, then from near to far. Then the
+same with PARTY FIELD (it carries the same `hand:left.x/z →
+camera.pan.x/y` push of 0.1). *Pass:* the shape's centre (PARTY FIELD's
+whole field) travels about ±390 px — about a fifth of the projector's
+width each way, as far as before plan 26 (±400 px) — sideways for x, up
+and down for reach; level and centred, the shape is where the mouse left
+it. *Fail:* the shape barely moves or flies off (`params.PAN_RANGE`);
+moves the wrong way up and down (pan.y's sign).
+
+**200. `hands-orbit` turns only the shape; the hands stay put.**
+Headless: `tests/test_presets.py::test_each_orbit_axis_moves_its_camera_param_as_its_row_says`, `tests/test_camera.py::test_zoom_scales_the_shape_about_the_world_origin_and_pan_moves_it`, `tests/test_hands_node.py::test_the_ghost_settles_its_hands_once_through_the_shared_camera`.
+Ghost hands on; load HANDS ORBIT; with both hands in the box, orbit
+(right hand sideways), tip (fingers up), pan and zoom (left hand
+sideways, reaching, raised). *Pass:* the shape orbits, tips, pans and
+grows; the ghost hands stay exactly over where your hands are — they do
+not turn, move or scale with the shape. *Fail:* the hands swinging with
+the yaw or pitch, or moving with the pan or zoom (a camera param reached
+`ghost.shared_camera`).
+
+**201. A preset saved before plan 26 with a pan looks the same on the projector.** (copy)
+Headless: `tests/test_camera.py::{test_a_preset_2_pan_in_px_is_read_in_world_units,test_a_saved_preset_says_its_pan_is_in_world_units_and_loads_as_saved,test_every_factory_pan_lands_inside_the_new_range,test_an_old_camera_module_loads_at_its_converted_pan}`.
+The projector at 1080p; load PARTY MANDALA (its file stores pan.x = 190
+px); open CAMERA. Then save it as your own preset, load another, and load
+it back. Then any preset of yours saved before this build with the shape
+off-centre. *Pass:* the mandala sits where it did on the projector (190
+px right of centre); CAMERA shows Pan X `+0.59`; the saved file carries
+`"units": {"camera.pan": "world"}` and loads to the same place with no
+dirty dot; your older preset sits where it did on the projector (on the
+laptop it sits nearer the centre: expected). *Fail:* the mandala off by
+a factor (the reference screen, `geometry.PAN_REF_PX`); a re-loaded save
+drifting (the key not written or not read).
+
+**202. `hands.json` gains the calibration and keeps the old file.** (copy)
+Headless: `tests/test_camera.py::{test_units_round_trip_through_hands_json,test_an_older_or_bad_units_entry_is_from_the_box,test_a_2_file_is_kept_beside_itself_before_the_first_save}`, `tests/test_hands.py::test_the_first_rewrite_of_an_old_file_keeps_a_backup`.
+A copy whose `hands.json` was written by an earlier build (schema
+`hyperspace.hands/2`); launch; HANDS page → **calibrate 20 s** and sweep.
+*Pass:* `hands.json.bak-v2` appears beside it, identical to the old
+file; the new file says `hyperspace.hands/3` with `"units": {"mm": null,
+"origin": null, "tilt": 32.0}`; the ranges and the box are as swept; the
+ghost hands are about where and as big as before (203). *Fail:* no
+backup (the schema compare in `hands/core.py` `_keep`); the hands far
+from where they were (203's causes).
+
+**203. The hands are where the performer is (the calibration).**
+Headless: `tests/test_hands_node.py::test_the_default_calibration_puts_the_hands_where_the_ghost_camera_did`, `tests/test_camera.py::test_the_shared_camera_frames_the_padded_box_like_the_ghost_camera`.
+The laptop and the 1080p projector, real hands, ghost on; compare with
+`docs/plans/assets/26-render-graph/a3-hands-moved.png` (before | after);
+reach to each corner of the box. *Pass:* the ghost hands are the size
+and in the place they were before plan 26, with a slightly stronger
+perspective (fingers nearer the eye a touch bigger); reaching to the
+box's edges reaches the picture's edges on the projector. *Fail:* hands
+smaller by a third (the square fit came back); a hand leaving the frame
+on a landscape screen (`ghost.CAL_ASPECT`); on a portrait or square
+output leaving at the sides is expected (register row 187).
+
+**204. Hands inside the scene are solid.** (copy)
+Headless: `tests/test_hands_node.py::{test_hands_in_the_scene_are_solid_and_in_front_of_or_behind_the_shape,test_the_scene_holds_the_hands_so_the_effects_bend_them_and_the_history_keeps_them,test_the_guide_never_rides_the_scene}`.
+HANDS-SOLID (above: its look-back is on and holds the hands), ghost on,
+guide BESIDE; push a hand into the shape and through it, then hold it
+still; drag Ghost opacity to 0.3, then to 0.
+*Pass:* the hand is solid at any opacity above 0, and gone at exactly 0;
+it moves with the acid's bend like the shape; it leaves echoes, and a
+held hand saturates towards white as its echoes stack (expected); the
+guide stays crisp and unbent beside it. *Fail:* the hand see-through at
+the opacity (the alpha rule, register row 191); the guide bent by the
+effect (the readout not split); doubled hand rims in the echoes with a
+glass output also open (`composite(history)` built under in-scene
+hands).
+
+**205. A hand passes between the shape's edges.** (copy)
+Headless: `tests/test_camera.py::{test_the_shapes_depth_is_its_nearest_visible_surface,test_the_scene_target_carries_a_depth_attachment}`, `tests/test_hands_node.py::test_hands_in_the_scene_are_solid_and_in_front_of_or_behind_the_shape`.
+HANDS-SOLID (a wireframe at brightness 2), Effects unticked so nothing
+bends; push one hand slowly into the shape from the front until it is
+through. *Pass:* near edges draw over the hand, far ones are hidden by
+it, and the line between them moves through the hand as it goes in;
+faint far edges never cut a hole in it. *Fail:* the hand always on top
+(the scene's depth not used: the hands drawn as a layer — the graph did
+not land, check the strip's warning); faint edges cutting it
+(`render.DEPTH_ALPHA` too low).
+
+**206. The hands in the scene on the projector and a clean layer on the glass, at once.** (copy, glass and projector)
+Headless: `tests/test_graph.py::test_the_hands_in_the_scene_are_its_first_geometry_and_a_glass_still_gets_the_layer`, `tests/test_hands_node.py::test_a_glass_without_the_scene_still_gets_the_hands_layer`.
+Two outputs: the projector with **scene** and **hands** on, the glass
+with **scene** off and **hands** on (OUTPUT page). Load HANDS-SOLID, an
+effect on; move both hands through the shape. *Pass:* the projector shows
+the hands inside the shape (in front of and behind its edges, bent with
+it); the glass shows the same hands alone, clean, unbent, on black; the
+OUTPUT page says "scene + hands: in the scene" for the projector.
+*Fail:* the glass blank (the layer not drawn for an output without the
+scene: `default_graph`'s `layered`); the hands twice on the projector (a
+layer laid over a scene that holds them).
+
+**207. A separate hands layer goes behind the shape (depth-aware).** (copy)
+Headless: `tests/test_hands_node.py::{test_a_depth_aware_layer_goes_behind_the_shape,test_the_scenes_depth_resolves_out_of_the_multisampled_target}`, `tests/test_graph.py::test_depth_aware_wiring_hands_each_composite_and_output_the_scenes_depth`.
+HANDS-DEPTH (above); one output with scene and hands on; move a hand
+through the shape. *Pass:* the hand, drawn at its Ghost opacity, vanishes
+behind near edges and bright faces and reappears in front of them, with
+no flicker at the edges beyond a pixel; the OUTPUT page says "·
+depth-aware". *Fail:* the hand cut where nothing is in front
+(`render.LAYER_DEPTH_BIAS` too small, or the far-plane rim); never
+hidden (the scene's depth not resolved).
+
+**208. The OUTPUT switches still mean what they meant.**
+Headless: `tests/test_outputs.py` (whole), `tests/test_graph.py::test_the_default_graph_has_a_pipeline_per_reachable_route_and_hands_only_when_shown`.
+The party rig: the glass with hands over, the projector with hands
+through, an effect on; switch the effect off, then take your hands out
+of the box; then step through the eight states on one output (D2).
+*Pass:* exactly as before the graph: through with no effect is hands
+over, no hand shows nothing extra, each state as TESTING-GUIDE D2 lists.
+*Fail:* hands drawn twice, or missing on one output (`Output.settle`,
+`Fx.fallback`).
+
+**209. The history can hold the hands.** (copy)
+Headless: `tests/test_outputs.py::test_the_history_holds_what_it_is_wired_to_and_the_default_graph_wires_it_as_today`, `tests/test_render.py::test_the_default_graphs_history_holds_what_todays_does_never_the_dim`, `tests/test_graph.py::test_the_history_is_wired_to_the_scene_or_the_scene_with_the_hands`.
+Load PARTY WAKE and wave a hand; then HANDS-LINES and wave again; pull the
+crossfader half down. *Pass:* PARTY WAKE: no hand echoes (the default);
+HANDS-LINES: the hand trails echoes; the LOOKBACK page says "history:
+the scene" then "history: the scene · with the hands"; the crossfader
+dims the picture evenly, echoes included, and back at full the echoes
+are at once as bright as before (the dim is never captured). *Fail:*
+hand echoes on PARTY WAKE (the default wiring changed); echoes that stay
+dark after the crossfader comes back (the dim in the history).
+
+**210. The hands' own line on SYSTEM.** (copy)
+Headless: `tests/test_hands_node.py::test_the_hands_have_their_own_line_when_the_scene_draws_them`, `tests/test_graph_json.py::test_one_hands_node_feeding_a_scene_and_a_layer_is_timed_by_its_scene`.
+SYSTEM page; load TRIP, then HANDS-LINES, a hand in the box. *Pass:*
+TRIP: the lines as in 194 (`hands` is the layer; no `ghost` line);
+HANDS-LINES: `ghost` then `scene`, and `readout` (the guide alone) in
+place of `hands`. *Fail:* a dead `ghost 0.00` line on TRIP.
+
+**211. A preset says its graph in data.** (copy)
+Headless: `tests/test_graph_json.py::{test_the_proof_preset_loads_its_graph_from_a_scratch_library,test_an_unknown_node_kind_is_a_note_and_the_default_graph,test_no_factory_preset_carries_a_graph_and_each_loads_as_before,test_undoing_a_load_puts_the_graph_back_before_the_values}`, goldens `hands-lines|present|*`.
+Copy `hands-lines.json` into `<home>/presets/`; ghost on; load
+HANDS-LINES; then a party preset; then ⌘Z. Then edit the copy's
+`hands-lines.json` so its first node reads `"kind": "teapot"`, load it,
+save it, and open the file. *Pass:* HANDS-LINES shows the hands inside
+the shape as wire hands, bent with the acid, leaving tracers, with a
+clean strip and no warning; the party preset is its usual picture; ⌘Z
+brings HANDS-LINES and its graph back. The teapot: the strip's warning
+line says "graph: unknown node kind 'teapot' (this build knows effect,
+hands, history); the default graph", the preset still loads (hands as a
+layer), and after the save the teapot is still in the file. *Fail:* the
+hands drawn as a layer over the shape on HANDS-LINES (the graph did not
+land); a crash or a refused load on the teapot; the teapot gone after
+the save.
+
+**212. Two acids in one chain.** (copy)
+Headless: `tests/test_graph_json.py::{test_a_second_acid_is_its_own_params_clock_and_place_in_the_chain,test_a_preset_says_two_acids_in_data_and_carries_the_seconds_values,test_two_acids_run_in_one_chain_on_one_program}`.
+TWO-ACIDS (above); open the FX page and ROUTING; then load TRIP. *Pass:*
+two chips, "Acid" and "Acid 2", each with its own strip and twist
+(0.9 and 0.3); dragging one's slider moves only it; ROUTING lists
+`fx.acid.2.*` as "Acid 2 …"; TRIP has one acid chip and no `fx.acid.2.*`.
+*Fail:* one chip, both moving together, or the second acid's values on
+the first.
+
+**213. Two hands nodes: one in the scene, one over the glass.** (copy, glass and projector)
+Headless: `tests/test_graph_json.py::{test_two_hands_nodes_one_in_the_scene_one_over_the_glass,test_a_second_hands_node_gets_its_own_session_params_and_state,test_a_second_hands_node_is_its_own_ghost_on_the_glass,test_a_second_hands_nodes_settings_survive_reopening_the_show}`.
+The rig of 206; TWO-HANDS (above); SYSTEM open. On ROUTING (or by Learn
+desk) switch **Ghost 2 hands** (`ghost.2.on`) on — off by default, like
+every new switch — and set `ghost.2.mirror` on and `ghost.2.style` to
+CAGE. Load TRIP, then TWO-HANDS again; save the show, quit, relaunch and
+load TWO-HANDS.
+*Pass:* the projector shows solid hands inside the shape; the glass shows
+mirrored cage hands alone; SYSTEM lists `ghost`, `scene`, `hands.2`,
+`readout` with times; TRIP takes the glass back to the first node's
+layer and `hands.2` leaves SYSTEM; TWO-HANDS brings the mirror and the
+cage back; after the relaunch they are still there and the show is
+clean. *Fail:* the same hands on both outputs; the glass mirrored on the
+projector too; a stale `hands.2` line; the cage lost after the relaunch
+(the show's held-back `ghost.2.*`).
+
+**214. Hands as lines.** (copy)
+Headless: `tests/test_graph_json.py::test_hands_as_lines_draw_their_edges`, goldens `hands-lines|present|*`.
+HANDS-LINES on the laptop and on the 1080p projector, each ghost style in
+turn; one output with the scene off and hands on. *Pass:* wire hands in
+the shape and as a wire layer on the scene-less output; the guide stays
+solid; the shape's own lines unchanged. **Judge:** whether the hatching
+of the capsules' triangles reads as "lines", or bone lines are wanted
+(register row 201). *Fail:* the shape drawn in wireframe too (the
+wireframe left on); hands invisible on a 2× screen (one-pixel lines:
+registered).
+
+**215. The wiring in words.** (copy)
+Headless: `tests/test_graph_json.py::{test_the_wiring_in_words,test_the_output_pages_shows_line_says_the_wiring,test_the_lookback_page_says_what_the_history_holds}`, `tests/test_ui_shell.py::test_every_page_fits_the_control_window`.
+OUTPUT and LOOKBACK with TRIP, then HANDS-LINES, then TWO-HANDS on the
+rig of 206; hover each "shows:" line. *Pass:* TRIP: "shows:" as before,
+LOOKBACK "history: the scene"; HANDS-LINES: "scene + hands: in the scene
+as lines", LOOKBACK "history: the scene · with the hands"; TWO-HANDS: the
+glass's line names "(2)"; the hover names the graph ("graph: …"). No page
+scrolls. *Fail:* words that disagree with the picture.
+
+**216. The recorded cloud in the scene, in the shape's world.** (copy)
+Headless: `tests/test_cloud_node.py::{test_the_node_draws_the_fixtures_points_where_the_shared_camera_puts_them,test_a_point_in_front_of_the_shape_hides_it_and_one_behind_is_hidden,test_a_listed_cloud_is_the_scenes_first_geometry_and_none_listed_changes_nothing}`, goldens `cloud/scene`, `cloud/scene+hands`.
+Copy `hyperspace-python/tests/fixtures/clouds/knot.npz` into
+`<home>/clouds/` and add the recorded-cloud block
+([`27-device-registry.md`](27-device-registry.md), "The block to
+paste") to the copy's device list; load LEGACY 6. Wheel the mouse's zoom
+and drag a pan; then CAMERA → eye, move Eye field of view; put it back.
+*Pass:* a knot of dots (blue low, warm high) turning slowly about the
+vertical, about the shape's size, threaded through the tesseract; where a
+dot is nearer than an edge it hides the edge, where it is behind, the
+edge draws over it; the knot neither tumbles with the shape nor moves
+with the zoom or pan; the eye's field of view changes both together.
+*Fail:* dots always on top (no depth); dots tumbling with the shape (the
+shape's model matrix); nothing at all with SYSTEM's `scan` line
+`connected` (the registry not handed to the renderer:
+`renderer.cloud_source` in `app.main`).
+
+**217. The cloud's look.** (copy)
+Headless: `tests/test_cloud_node.py::{test_the_cloud_params_are_session_and_default_to_a_cloud_at_the_shapes_size,test_the_node_draws_the_fixtures_points_where_the_shared_camera_puts_them}`.
+216's rig. Learn desk a knob each onto Cloud point size, Cloud scale and
+Cloud brightness (from ROUTING's param list — there is no panel row),
+and a button onto Cloud colours; then load another preset. *Pass:* size
+grows the dots in whole pixels; scale grows the knot about the centre
+(past about 3× it reaches the eye and the near dots vanish); brightness 0
+turns the dots black (they still hide the shape behind them); colours
+off: white dots; a preset load leaves all four as set. *Fail:* a load
+resets them (not session); shimmering fractional sizes.
+
+**218. No cloud, no change; the cloud's cost on SYSTEM.** (copy)
+Headless: `tests/test_cloud_node.py::{test_a_missing_cloud_draws_nothing_and_raises_nothing,test_the_buffer_is_uploaded_only_when_the_frame_id_moves,test_the_per_node_timer_names_the_cloud,test_a_hot_reload_rebuilds_the_clouds_program_and_the_picture_is_the_same}`, `tests/test_golden_frames.py::test_every_golden_frame_is_drawn_byte_for_byte`.
+216's entry with the file not yet copied in (or renamed away); launch;
+SYSTEM open; copy the file in. Then remove the entry. *Pass:* before the
+copy the picture is exactly as with no entry, the `scan` line says
+`error: …` and the GPU lines show `cloud 0.00` above `scene`; within
+about 10 s of the copy the knot appears with no relaunch and the `cloud`
+line shows a small time; with the entry gone, no `cloud` line. *Fail:*
+an error toast or a stall while the file is missing; a `cloud` line with
+no entry.
 
 ## What no test covers
 
@@ -2647,5 +3036,16 @@ Only a person can settle these:
   at once (176, 177), a DAW receiving a sink row or the hands through
   `hands-daw` (181–185), a phone app on Wi-Fi or the macOS firewall
   prompt (186–189), or a real editor's save while the config is watched
-  (173).
+  (173);
+- every factory preset by eye on the Mac (192): the goldens pin the
+  bytes on the gate Mac's GL, not whether the picture looks right, and
+  the new vertex path has met Apple's shader compiler only headlessly;
+- real hands through the shared camera (200, 203–207, 213, 214): every
+  hands picture the tests and goldens draw is one synthetic pose or a
+  synthetic tape — the calibration's fit, a hand between the edges, the
+  depth-aware boundary and the wire hands have never been seen with a
+  real hand;
+- the zoom's feel in world and in screen space (197, 198), an old
+  preset's pan on the real 1080p projector (201), and the point cloud on
+  a real screen (216–218).
 

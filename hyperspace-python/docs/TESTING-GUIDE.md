@@ -29,8 +29,9 @@ explained in the [glossary](#glossary) at the end.
    D15) need plan 22: until it is merged, use
    branch `plan-22-integration` instead. The party-fix entries (L69–L71,
    A24–A32, B30–B36, C5) need plan 24, and the device entries (L72–L81,
-   A33, B37, B38, F5, G1–G6) plan 27: until they are merged, use branch
-   `plan-24-26-27-integration`.
+   A33, B37, B38, F5, G1–G6) plan 27, and the render-graph entries
+   (L82–L94, B39, B40, C6, C7, D16–D18) plan 26: until they are merged,
+   use branch `plan-24-26-27-integration`.
    Two windows open: the picture (the *render window*) and the *control
    window*. **Esc** quits.
 3. **Use the copy instead of the real home folder:** in the terminal,
@@ -96,6 +97,11 @@ changes brightness or volume instead).
     (L77–L81) with L46; A33 with the APC40; B37, B38 with the hand
     camera; F5 with the pad; (g) when a second controller or a phone is
     to hand.
+11. Plan 26's render-graph entries: L82 and L83 first, on the Mac the
+    automated tests run on; then L85–L88; on the copy L89–L91, then
+    L92–L94 with the hand camera or recorded hands, and L84 after L76;
+    B39 and B40 with the hand camera; C6 and C7 on the projector; D16
+    after D2, then D17 and D18.
 
 ## Summary
 
@@ -182,6 +188,19 @@ changes brightness or volume instead).
 | L79 | Sending a setting never asks a question | 1 | laptop, FL Studio, the copy | 183 |
 | L80 | The hands' own port, now a device | 1 | FL Studio, hand camera or a tape, the copy | 184 |
 | L81 | The hands' port in the device list | 1 | laptop, the copy | 185 |
+| L82 | The golden pictures match (the gate Mac) | 1 | the gate Mac | 191 |
+| L83 | Every preset beside its golden picture | 1 | the gate Mac | 192 |
+| L84 | A recorded point cloud in the picture | 1 | laptop, the copy | 216, 217, 218 |
+| L85 | The time each part of the picture takes | 1 | laptop | 194, 210 |
+| L86 | The shape where it always was; the eye | 1 | laptop | 196 |
+| L87 | Zoom grows the shape; Screen strokes | 1 | laptop (recorded hands) | 197, 198 |
+| L88 | The naming rule | 1 | reading, L90 | 193 |
+| L89 | A preset that says how its picture is wired | 1 | laptop, the copy, recorded hands | 211, 209 |
+| L90 | Two acids | 1 | laptop, the copy | 212 |
+| L91 | The wiring in words | 1 | laptop, the copy | 215 |
+| L92 | Hands inside the shape | 1 | laptop, the copy, recorded hands (hand camera for the last part) | 204, 205 |
+| L93 | A hands layer that goes behind the shape | 1 | laptop, the copy, recorded hands | 207 |
+| L94 | Hands as lines | 1 | laptop, the copy, recorded hands | 214 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -253,11 +272,15 @@ changes brightness or volume instead).
 | B36 | Grab to steer the shape | 2b | hand camera, the copy | 164 |
 | B37 | The hands in the device list | 2b | hand camera, the copy | 169, 180 |
 | B38 | A tracker that would not start comes up later | 2b | hand camera, a tape, the copy | 172 |
+| B39 | The hands where you are, through the shape's camera | 2b | hand camera, the copy (projector helps) | 202, 203 |
+| B40 | `hands-orbit` turns only the shape | 2b | hand camera | 200 |
 | C1 | Choosing the screen; the see-through mode locked | 2c | projector | 26 |
 | C2 | A black ground, never see-through | 2c | projector | 43 |
 | C3 | Windows reopen on the right screen | 2c | projector | 61 |
 | C4 | Dream speed on the rig | 2c | projector | 96 |
 | C5 | The hands on the projector | 2c | projector, hand camera | 165 |
+| C6 | A hand across the box pans as far as it did | 2c | projector, hand camera | 199 |
+| C7 | A preset saved before this build keeps its place | 2c | projector, the copy | 201 |
 | D1 | Two outputs open where the config says | 2d | glass, projector | 101 |
 | D2 | The eight output states | 2d | glass, projector, camera | 102 |
 | D3 | Hands over or through the effects | 2d | glass, projector, camera | 103, 47 |
@@ -273,6 +296,9 @@ changes brightness or volume instead).
 | D13 | Unplug the projector mid-run | 2d | glass, projector | 112 |
 | D14 | The shapes in 4D from the audience | 2d | glass | 113, 115 |
 | D15 | METER and PULSE from the audience | 2d | glass, music | 129 |
+| D16 | Every picture as on earlier builds, on the rig | 2d | glass, projector, camera, APC40 | 195, 208 |
+| D17 | The hands in the shape on the projector, clean on the glass | 2d | glass, projector, camera, the copy | 206 |
+| D18 | Two hands, one in the shape, one on the glass | 2d | glass, projector, camera, the copy | 213 |
 | E1 | Drag an effect with a mouse | 2e | mouse | 94 |
 | F1 | A wired Xbox 360 pad is found | 2f | gamepad | 144 |
 | F2 | Learn pad — a button | 2f | gamepad | 145 |
@@ -1627,7 +1653,9 @@ to the entry and save; rename the file back.
 
 **Right if:** `scan · cloud · connected · 1 source · knot.npz · frame
 n/16 · … points · 12 fps`, the frame counting through 16 at 12 frames a
-second (one loop about every 1⅓ seconds) and starting over; nothing else on screen changes.
+second (one loop about every 1⅓ seconds) and starting over; the picture
+shows the knot as dots threaded through the shape (L84 is the drawing's
+own entry).
 Renamed: `error: FileNotFoundError …`; back: `connected` within about
 10 seconds, the frame stopping at 16/16.
 
@@ -2194,6 +2222,318 @@ at 2.6 HEX is still a honeycomb.
 *(check 138)*
 
 ---
+
+## The render graph (on the copy)
+
+Plan 26 (the render graph). The picture is now built from parts — the
+shape, the hands, a point cloud, the effects, the trail — wired
+together, and the shape and the ghost hands share one camera, so the
+hands can be drawn inside the shape. A preset can say how its picture
+is wired, in its file. **No factory preset uses any of it**: these
+entries copy a test preset into the copy's library. Before any of them,
+open `~/Hyperspace-try/config.toml` and, if it has a `[library] path`
+line, delete that line (on the copy only), so the presets you copy in
+go to the copy's own `presets` folder and never to the shared Drive
+folder. A preset file in `<home>/presets/` shows in the PRESETS list by
+its file name.
+
+The test preset is `hyperspace-python/tests/fixtures/presets/hands-lines.json`.
+Some entries use a variant: copy that file into `<home>/presets/` under
+the new name, open the copy in a text editor and replace the part that
+starts `"graph": {"nodes": [` and ends `]},` with the line given:
+
+- `hands-solid.json`: `"graph": {"nodes": [{"kind": "hands", "into":
+  "scene"}, {"kind": "history", "holds": "scene+hands"}]},`
+- `hands-depth.json`: `"graph": {"nodes": [{"kind": "hands", "laid":
+  "depth"}]},`
+- `two-acids.json`: `"graph": {"nodes": [{"kind": "effect", "file":
+  "acid", "instance": 2}]},` — and after `"fx.acid.on": true,` add
+  `"fx.acid.2.on": true, "fx.acid.2.twist": 0.3,`
+- `two-hands.json`: `"graph": {"nodes": [{"kind": "hands", "into":
+  "scene"}, {"kind": "hands", "instance": 2}]},`
+
+Entries marked "(tape)" need hands: the hand camera, or recorded fake
+hands as in L44 (`uv run python tools/hands_tape.py synth
+/tmp/hands.json`, then `enabled = true` and `tape = "/tmp/hands.json"`
+on the hands entry), with **Ghost hands** ticked on the HANDS page.
+
+#### L82. The golden pictures match (the gate Mac)
+
+**Needs:** the Mac the automated tests run on (its graphics chip is
+"Apple M3 Max"); a terminal.
+
+**Do:** in `hyperspace-python/`, run `uv run python tools/golden_frames.py`
+(it takes a minute; it uses a throwaway home folder, never yours). Then
+open a few pictures in `tests/golden/frames/png/`.
+
+**Right if:** it ends "all 556 frames match their goldens (Apple M3 Max,
+4.1 Metal - 90.5)" (after a macOS update it may add a note naming two
+versions); the pictures show the presets, some with two made-up hands
+(the left open, the right a fist).
+
+**Wrong if:** a list of `MOVED …` lines and a picture sheet under
+`docs/plans/assets/26-render-graph/`: write down the names, then delete
+the sheet.
+
+*(check 191)*
+
+#### L83. Every preset beside its golden picture
+
+**Needs:** the gate Mac; no music playing.
+
+**Do:** in `hyperspace-python/`, list each preset's golden picture:
+`uv run python -c "import json; [print(g['preset'], 'tests/golden/frames/' + g['png']) for g in json.load(open('tests/golden/frames/frames.json'))['goldens'] if g['hands'] == 'absent' and g['state'] == 'solo']"`.
+Launch the app. Load each of the 23 presets in the PRESETS list in turn,
+its picture open beside the render window.
+
+**Right if:** each looks like its picture — the shape's size and place,
+how thick its lines are, its dots, its faces and colours, its effects.
+(The shape keeps turning, so its angle differs; the picture is taken in
+silence.)
+
+**Wrong if:** a preset blank, black or plainly different from its
+picture (note which; the SYSTEM page or `<home>/stall.log` may name a
+drawing error); lines thicker or thinner than the picture (check **Screen
+strokes** on the VIEW page is unticked).
+
+*(check 192)*
+
+#### L84. A recorded point cloud in the picture (on the copy)
+
+**Needs:** laptop; the copy, with the device list from L72.
+
+**Do:**
+1. Add the recorded-cloud block to the device list (as L76), but do not
+   copy the file in yet; save. Watch SYSTEM's last lines.
+2. Copy `hyperspace-python/tests/fixtures/clouds/knot.npz` into
+   `<home>/clouds/`. Load LEGACY 6.
+3. Roll the mouse wheel and drag to pan; CAMERA page → **eye** → move
+   Eye field of view, then put it back.
+4. ROUTING page: find Cloud point size, Cloud scale, Cloud brightness
+   and Cloud colours (they have no page of their own); right-click each →
+   **Learn desk** (APC40) or drag its slider on ROUTING; then load another
+   preset.
+5. Remove the entry; save.
+
+**Right if:** (1) the picture is unchanged, the `scan` line says
+`error: …`, and the GPU lines include `cloud 0.00` above `scene`.
+(2) within about 10 seconds, with no restart, a knot of dots (blue low,
+warm high) turning slowly, about the shape's size, threaded through it:
+where a dot is in front of an edge it hides the edge, where it is
+behind, the edge is drawn over it; the `cloud` line shows a small time.
+(3) the knot does not grow or move with the zoom and pan, and does not
+tumble with the shape; the field of view changes both together. (4) size
+grows the dots in whole pixels; scale grows the knot (very large, the
+near dots vanish); brightness 0 makes the dots black; colours off makes
+them white; a preset load leaves all four as you set them. (5) no
+`cloud` line.
+
+**Wrong if:** dots always on top of the shape; dots tumbling with the
+shape; nothing drawn while the `scan` line says `connected`; an error
+message or a freeze while the file is missing.
+
+**Changes:** remove the entry and the file.
+
+*(checks 216, 217, 218)*
+
+#### L85. The time each part of the picture takes
+
+**Needs:** laptop.
+
+**Do:** load TRIP (F5); SYSTEM page. On the FX page untick **Effects**,
+wait two seconds, tick it again. On LOOKBACK switch **Look-back** on
+and off. On OUTPUT tick **through effects**, then untick it.
+
+**Right if:** under the stall status, "gpu per node, ms (median of the
+last frames):" and one line each for `scene`, `cover`, `hands`,
+`history`, `fx`, `capture`, `output.1`, a few milliseconds or less and
+steady; `fx` drops near 0 with the effects off and comes back within a
+second; `history` changes with the look-back; ticking **through effects**
+adds `composite(scene+hands)` and `fx(scene+hands)`, which go again a
+moment after unticking. No `ghost` line.
+
+**Wrong if:** no lines; "gpu: no GPU timer queries …"; a line that stays
+after its switch is off.
+
+*(checks 194, 210)*
+
+#### L86. The shape where it always was; the eye
+
+**Needs:** laptop.
+
+**Do:** load LEGACY 6, then PLASMA HEART; CAMERA page.
+
+**Right if:** both look exactly as on earlier builds (size, place,
+dots); CAMERA has an **eye** section ("the room's camera, not the
+preset's") showing Eye field of view 47.6° and Eye distance 3.78, which
+loading a preset never changes.
+
+**Wrong if:** the shape off-centre or another size; dots bigger.
+
+*(check 196)*
+
+#### L87. Zoom grows the shape; Screen strokes
+
+**Needs:** laptop (the hands part: tape).
+
+**Do:**
+1. Load PARTY FIELD, then HEX ENGINE, and look at the middle column of
+   `hyperspace-python/docs/plans/assets/26-render-graph/a2b-moved.png`.
+   VIEW page: **Screen strokes** is unticked.
+2. Roll the zoom from small (about 0.3×) to big (about 5×).
+3. Tick **Screen strokes** and roll again.
+4. Load LEGACY 6 and flip **Screen strokes** on and off.
+
+**Right if:** (1) fine edges and small red dots, as on earlier builds.
+(2) the shape grows with its own perspective (the near side grows
+faster), past about 4× the view passes inside it with no streak across
+the screen, and the edges and dots grow and shrink with the shape; the
+ghost hands never move or change size. (3) the edges and dots keep one
+size whatever the zoom. (4) nothing changes at all.
+
+**Wrong if:** the hands growing with the zoom; a streak across the
+screen; lines that do not change with the zoom while the box is
+unticked; anything changing in step 4.
+
+*(checks 197, 198)*
+
+#### L88. The naming rule
+
+**Needs:** reading; then L90's preset.
+
+**Do:** read `hyperspace-python/docs/ENGINEERING.md` §2, "Node
+instances: the naming rule". With TWO-ACIDS loaded (L90), look at the
+ROUTING page's setting names.
+
+**Right if:** the rule is clear, and "Acid 2 mix" (`fx.acid.2.mix`)
+reads right as the second acid's mix.
+
+**Judge:** whether you would rather another form — say so before you
+save a preset that uses one.
+
+*(check 193)*
+
+#### L89. A preset that says how its picture is wired (on the copy, tape)
+
+**Needs:** laptop; the copy; hands (tape).
+
+**Do:**
+1. Copy `hands-lines.json` into `<home>/presets/`. Load PARTY WAKE and
+   watch the hands for a few seconds. Load HANDS-LINES. Then load TRIP,
+   then press ⌘Z.
+2. LOOKBACK page with PARTY WAKE, then with HANDS-LINES.
+3. Edit the copy's `hands-lines.json`: change the first `"hands"` (after
+   `"kind":`) to `"teapot"`. Load it, save it (the preset strip's save),
+   and open the file again.
+
+**Right if:** (1) on PARTY WAKE the hands leave no trail; HANDS-LINES
+shows the hands *inside* the shape as wire hands, bent with it by the
+acid, trailing echoes, with no warning on the preset strip; TRIP is as
+always; ⌘Z brings HANDS-LINES back as it was. (2) "history: the scene",
+then "history: the scene · with the hands". (3) the strip's warning
+reads "graph: unknown node kind 'teapot' (this build knows effect,
+hands, history); the default graph", the preset still loads (the hands
+drawn over the shape, not in it), and after the save the file still says
+`teapot`.
+
+**Wrong if:** the hands drawn over the shape on HANDS-LINES; a crash or a
+refused load on the teapot; the teapot gone after saving.
+
+**Changes:** delete the preset files you copied in.
+
+*(checks 211, 209)*
+
+#### L90. Two acids (on the copy)
+
+**Needs:** laptop; the copy.
+
+**Do:** make `two-acids.json` (above); load TWO-ACIDS; FX page, then
+ROUTING. Then load TRIP.
+
+**Right if:** two chips, "Acid" and "Acid 2", each with its own controls
+(twist 0.9 and 0.3); moving one moves only it; ROUTING lists "Acid 2 …"
+settings; on TRIP there is one acid and no "Acid 2".
+
+**Wrong if:** one chip; both moving together; the second acid's settings
+landing on the first.
+
+*(check 212)*
+
+#### L91. The wiring in words (on the copy)
+
+**Needs:** laptop; the copy; L89's preset.
+
+**Do:** OUTPUT and LOOKBACK pages with TRIP, then HANDS-LINES; hold the
+pointer over the "shows:" line.
+
+**Right if:** TRIP: the "shows:" line as before and "history: the
+scene"; HANDS-LINES: "scene + hands: in the scene as lines" and
+"history: the scene · with the hands"; the pop-up names the graph
+("graph: hands 1 in the scene as lines · history with the hands"). No
+page scrolls.
+
+**Wrong if:** words that disagree with the picture.
+
+*(check 215)*
+
+#### L92. Hands inside the shape (on the copy, tape)
+
+**Needs:** laptop; the copy; hands; the hand camera for the last part.
+
+**Do:** make `hands-solid.json` (above); load HANDS-SOLID; HANDS page
+→ ghost guide BESIDE. FX page: untick **Effects**. Watch the hands pass
+through the shape (with the camera: push one hand slowly into the shape
+from the front). Then drag **Ghost opacity** to 0.3, then to 0. Tick
+**Effects** again.
+
+**Right if:** the hands are solid inside the shape: near edges are drawn
+over a hand, far edges are hidden behind it, and faint far edges never
+cut a hole in it; at opacity 0.3 they are still solid, at 0 gone; with
+**Effects** on the hands bend with the shape and leave a trail (a hand
+held still turns whitish: expected); the guide stays sharp and unbent.
+
+**Wrong if:** the hands always on top of the shape; holes in a hand where
+faint edges are; the guide bent by the effect.
+
+*(checks 204, 205)*
+
+#### L93. A hands layer that goes behind the shape (on the copy, tape)
+
+**Needs:** laptop; the copy; hands.
+
+**Do:** make `hands-depth.json` (above); load HANDS-DEPTH; watch a hand
+pass through the shape.
+
+**Right if:** the hand, see-through at its Ghost opacity, disappears
+behind near edges and bright faces and reappears in front of them; the
+edges of the hiding flicker by a pixel at most; the OUTPUT page's line
+ends "· depth-aware".
+
+**Wrong if:** the hand cut where nothing is in front of it; never hidden.
+
+*(check 207)*
+
+#### L94. Hands as lines (on the copy, tape)
+
+**Needs:** laptop (the 1080p projector too, if to hand); the copy;
+hands.
+
+**Do:** load HANDS-LINES; HANDS page → step **Ghost style** through all
+five; then on OUTPUT untick **scene**.
+
+**Right if:** the hands are drawn as wires, in every style; with the
+scene off, wire hands alone on black; the guide stays solid; the shape's
+own lines are unchanged.
+
+**Judge:** whether the dense mesh of wires reads as "hands as lines", or
+whether you want a skeleton of bone lines instead.
+
+**Wrong if:** the shape drawn as wires too; hands invisible on a sharp
+(Retina) screen.
+
+**Changes:** tick **scene** again.
+
+*(check 214)*
 
 # Part 2 — tests that need hardware
 
@@ -3708,6 +4048,48 @@ two seconds; the hands never come back after the replug.
 
 *(check 172)*
 
+#### B39. The hands where you are, through the shape's camera (on the copy)
+
+**Needs:** hand camera; the copy, whose `hands.json` was written by an
+earlier build; the 1080p projector helps.
+
+**Do:** launch; HANDS page → **calibrate 20 s** and sweep. Then, ghost
+hands on, reach to each corner of the box, on the laptop and on the
+projector; compare with
+`hyperspace-python/docs/plans/assets/26-render-graph/a3-hands-moved.png`
+(before | after).
+
+**Right if:** `<home>/hands.json.bak-v2` appears, the same as the old
+file, and the new `hands.json` says `hyperspace.hands/3` with a
+`"units"` line; the ghost hands are the size and in the place they were
+on earlier builds, the perspective a little stronger (fingers nearer
+the camera a touch bigger); reaching to the box's edges reaches the
+picture's edges on the projector.
+
+**Wrong if:** no backup; hands a third smaller than before; a hand
+leaving a landscape picture. (On a portrait or square screen leaving at
+the sides is expected.)
+
+**Changes:** none to put back (the old file is the `.bak-v2`).
+
+*(checks 202, 203)*
+
+#### B40. `hands-orbit` turns only the shape
+
+**Needs:** hand camera; the ghost hands on.
+
+**Do:** load HANDS ORBIT. With both hands in the box: move the right
+hand sideways (orbit), raise its fingers (tip), move the left hand
+sideways, reach in, and raise it (pan and zoom).
+
+**Right if:** the shape orbits, tips, pans and grows; the ghost hands
+stay exactly over where your hands are — they never turn, move or grow
+with the shape.
+
+**Wrong if:** the ghost hands swing, move or grow with the shape.
+
+*(check 200)*
+
 ## (c) One projector, or any second screen
 
 Plug it in before launching. For C1–C4 the config has no
@@ -3822,6 +4204,47 @@ think (screen numbers can move after the HDMI reconnects).
 **Changes:** remove the entry afterwards if this is not the rig.
 
 *(check 165)*
+
+#### C6. A hand across the box pans as far as it did
+
+**Needs:** the projector at 1920×1080; the hand camera.
+
+**Do:** load HANDS ORBIT; left hand in the box; move it from the box's
+left edge to its right, then from near to far. Then the same on PARTY
+FIELD.
+
+**Right if:** the shape's centre (on PARTY FIELD the whole field)
+travels about a fifth of the projector's width each way (about 390
+pixels), as far as on earlier builds — sideways for side to side, up
+and down for reach; with the hand level and centred the shape is where
+the mouse left it.
+
+**Wrong if:** the shape barely moves, flies off the screen, or moves the
+wrong way up and down.
+
+*(check 199)*
+
+#### C7. A preset saved before this build keeps its place (on the copy)
+
+**Needs:** the projector at 1080p; the copy.
+
+**Do:** load PARTY MANDALA; CAMERA page. Save it as your own preset,
+load another, and load it back. Then load any preset of yours saved
+before this build with the shape off-centre.
+
+**Right if:** the mandala sits where it did on the projector, a little
+right of centre; CAMERA shows Pan X `+0.59`; the saved file has a line
+`"units": {"camera.pan": "world"}` and loads to the same place with no
+red dot; your older preset sits where it did on the projector. (On the
+laptop's smaller window an off-centre shape sits nearer the centre than
+it used to: expected.)
+
+**Wrong if:** the shape far from its old place on the projector; a
+re-loaded save drifting.
+
+**Changes:** delete the preset you saved.
+
+*(check 201)*
 
 ## (d) The glass and the projector together
 
@@ -4215,6 +4638,69 @@ the wrong wedge lights.
 
 *(check 129)*
 
+#### D16. Every picture as on earlier builds, on the rig
+
+**Needs:** glass and projector (D1); the hand camera; the APC40 for the
+crossfader.
+
+**Do:** the glass with hands over, the projector with **through
+effects** ticked; load TRIP; LOOKBACK's **Look-back** on; crossfader
+half down. Move a hand in and out of the box; untick **Effects** (FX
+page) and tick it again; close the projector's output (untick its
+**scene** and **hands**) and back. Then step one output through the
+eight states as in D2.
+
+**Right if:** nothing looks different from the last build: the hands
+clean over the effects on the glass, bent through them on the
+projector, echoes behind the shape, both outputs dimmed alike; through
+with no effect on is hands over; each state as D2 lists.
+
+**Wrong if:** any change from before; the hands twice or missing on one
+output; an output on black with a note on the OUTPUT page.
+
+*(checks 195, 208)*
+
+#### D17. The hands in the shape on the projector, clean on the glass (on the copy)
+
+**Needs:** glass and projector; the hand camera; the copy with
+`hands-solid.json` (Part 1, "The render graph").
+
+**Do:** OUTPUT page: the projector with **scene** and **hands** ticked,
+the glass with **scene** unticked and **hands** ticked. Load
+HANDS-SOLID; move both hands through the shape.
+
+**Right if:** on the projector the hands are inside the shape — in front
+of some edges, behind others, bent with it by the acid; on the glass the
+same hands alone, clean and unbent, on black; the projector's "shows:"
+line reads "scene + hands: in the scene".
+
+**Wrong if:** the glass blank; the hands twice on the projector.
+
+*(check 206)*
+
+#### D18. Two hands, one in the shape, one on the glass (on the copy)
+
+**Needs:** glass and projector; the hand camera; the copy with
+`two-hands.json` (Part 1, "The render graph"); the SYSTEM page.
+
+**Do:** D17's switches. Load TWO-HANDS. On ROUTING find **Ghost 2
+hands** and switch it on (it starts off, like every new switch); set
+**Ghost 2 mirror** on and **Ghost 2 style** to CAGE. Load TRIP, then
+TWO-HANDS again. Save the show (PRESETS page), quit, launch again and
+load TWO-HANDS.
+
+**Right if:** the projector shows solid hands inside the shape; the
+glass shows mirrored cage hands alone; SYSTEM lists `ghost`, `scene`,
+`hands.2` and `readout`; on TRIP the glass shows the usual hands and
+`hands.2` leaves SYSTEM; back on TWO-HANDS the mirror and the cage are
+back; after the restart, on TWO-HANDS, they are still there and the
+show has no red dot.
+
+**Wrong if:** the same hands on both screens; the projector's hands
+mirrored too; the cage lost after the restart.
+
+*(check 213)*
+
 ## (e) A mouse
 
 #### E1. Drag an effect with a mouse
@@ -4492,6 +4978,13 @@ what you want changed.
   read `lost`, and whether its faders should hold their place then;
   whether sending a setting out should land at once, as it does, or wait
   like the other learns. (G1–G5, L77–L79; checks 176–188)
+- **The render graph's looks** — every factory preset against its
+  golden picture; whether strokes should grow with the zoom (the
+  default) or keep their size (Screen strokes); the hands' size and
+  perspective through the shape's camera; solid hands inside the shape;
+  whether the wire hands read as "hands as lines"; the point cloud's
+  dots. (L83, L87, L92, L94, L84, B39; checks 192, 197, 198, 203, 204,
+  214, 216–218)
 
 Smaller calls along the way: the Ghost mirror setting for the glass (D8;
 108); `hands-orbit`'s directions and zoom (B18; 80); whether faces'
@@ -4569,7 +5062,8 @@ for each palm.
 
 **Cage, joints, marionette, palms** — ghost-hand *styles*; see D9.
 
-**CAMERA page** — the virtual camera's settings (zoom, yaw, pitch).
+**CAMERA page** — the shape's camera settings (zoom, yaw, pitch, pan),
+and under **eye** the fixed camera everything is seen through.
 
 **Catch** — how quickly a value glides onto a hand that has just come
 back into the box, instead of jumping.
@@ -4637,6 +5131,10 @@ moving shape.
 **Effect chain / stack** — the list of picture effects (kaleidoscope,
 plasma, hue cycle…) applied in order; managed on the FX page.
 
+**Eye** — the fixed camera the shape and the ghost hands are both seen
+through; its field of view and distance are on the CAMERA page, and no
+preset changes them.
+
 **FACES page** — the page for the faces' pattern and colours.
 
 **Factory** — shipped with the app, as opposed to saved by you (shown dim
@@ -4667,6 +5165,10 @@ or grey ground spoils the illusion, hence the many "solid black" checks.
 D1–D8 device knobs, S1–S8 track faders, X the crossfader, G row·column
 the pad grid (G6 is the clip-stop row), B-numbers the single buttons
 (B11 OVERDUB, B20 TAP TEMPO…).
+
+**Golden picture (golden frame)** — a picture of a factory preset the
+automated tests draw and compare to the last byte; 556 of them, kept in
+`hyperspace-python/tests/golden/frames/`.
 
 **Ground** — the empty background of the picture. The OUTPUT page's
 Ground setting is how see-through it is in overlay mode.
@@ -4775,6 +5277,9 @@ move it past the current value, so the picture never jumps.
 
 **Pinch switch** — a switch that closes when thumb and a finger touch.
 
+**Point cloud** — a cloud of 3D dots from a recording (later, a depth
+sensor), listed in the device list and drawn inside the shape's world.
+
 **Preset** — a saved look: every performance setting, its routes and
 what the desk's knobs do.
 
@@ -4784,6 +5289,11 @@ what the desk's knobs do.
 
 **Refresh rate** — how many times a second a screen redraws (60 or 120
 Hz); System Settings → Displays.
+
+**Render graph** — how the picture is built: parts (the shape, the
+hands, a point cloud, the effects, the trail, each output) wired
+together; a preset may say its own wiring in its file. The SYSTEM page
+times each part.
 
 **Render window** — the window that shows the picture.
 
@@ -4806,6 +5316,9 @@ the setup's own controls (SESSION).
 
 **Scene buttons** — the column of buttons right of the APC40's pad grid;
 here they switch points, lines, faces and rotation.
+
+**Screen strokes** — a VIEW page switch: off (the default), the shape's
+lines and dots grow and shrink with the zoom; on, they keep one size.
 
 **Session** — the setup's own controls and settings, kept in the
 bindings file and config rather than in a preset.
