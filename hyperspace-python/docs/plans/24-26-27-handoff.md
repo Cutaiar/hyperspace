@@ -1,6 +1,6 @@
 # Plans 24, 26 and 27 — handoff prompt for the next session
 
-> **The run finished on 2026-10-14**: every WP of plans 24, 26 and 27 is merged into `plan-24-26-27-integration` or on its PR, the last being A5, plan 26's docs (PR #193). Do not re-run it; what is left is the orchestrator's review pass and the integration branch's PR into `main` for the owner.
+> **The run finished on 2026-10-14**: every WP of plans 24, 26 and 27, the review pass's fix wave (PR #194) and the exit fix (PR #189) are merged into `plan-24-26-27-integration`, and its PR into `main` is **#195**, for the owner to merge. Do not re-run anything in this file; the ledger of the whole run is `assets/24-26-27-run/progress.md`.
 
 You are the top-level orchestrator continuing the run of plans 24, 26 and 27
 in `Cutaiar/hyperspace` (the Python app under `hyperspace-python/`). The
