@@ -108,6 +108,20 @@
    ]
   }
  },
+ "cloud_states": {
+  "cloud": {
+   "config": "[[devices]]\nrole = \"scan\"\nkind = \"cloud\"\nfile = \"clouds/knot.npz\"\n",
+   "fixture": "tests/fixtures/clouds/knot.npz",
+   "states": [
+    "scene",
+    "scene+hands"
+   ],
+   "presets": [
+    "legacy6",
+    "party-faces"
+   ]
+  }
+ },
  "cap": {
   "preset": "party-trip",
   "hands": "present",
@@ -3362,6 +3376,32 @@
   {
    "preset": "party-faces",
    "hands": "present",
+   "state": "cloud/scene",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "7a612340987230e35a47dc454b5d21a914e111fe2b8264eef82bae70b983c289",
+   "png": "png/7a612340987230e3.png"
+  },
+  {
+   "preset": "party-faces",
+   "hands": "present",
+   "state": "cloud/scene+hands",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "62cd67edaa8ce70284fcb636c13ebb432532427d9daf62e43b77bc6a306304e3",
+   "png": "png/62cd67edaa8ce702.png"
+  },
+  {
+   "preset": "party-faces",
+   "hands": "present",
    "state": "depth/scene+hands",
    "route": "SCENE",
    "hands_over": true,
@@ -5893,6 +5933,32 @@
    ],
    "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
    "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "legacy6",
+   "hands": "present",
+   "state": "cloud/scene",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b087bca2484320ac2edbd57100fa148aab16e969d011681c582a4a43fac4be62",
+   "png": "png/b087bca2484320ac.png"
+  },
+  {
+   "preset": "legacy6",
+   "hands": "present",
+   "state": "cloud/scene+hands",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "e8248add7ed104bc04c67d9461f9c4d9b88e40075d68fb432257486386ef634a",
+   "png": "png/e8248add7ed104bc.png"
   },
   {
    "preset": "legacy6",

@@ -24,7 +24,12 @@ the hands in it, beside a glass output that shows the hands' layer
 alone, over and through) and the hands' layer laid on depth-aware, for
 every preset; the history holding the hands' layer, for the presets
 with the look-back on — each a rig of its own (`Renderer.wiring`), its
-outputs named `<wiring>/<state>`.
+outputs named `<wiring>/<state>`. And (plan 26 A4b) a recorded point
+cloud (`CLOUDED`): a scratch `config.toml` in the rig's home listing one
+`cloud` device over the fixture recording (`tests/fixtures/clouds/`,
+copied in), opened by the real device registry, polled on the pinned
+clock and handed to the renderer, so the default scene gains its
+point-cloud node — named `cloud/<state>`.
 
 A golden is the SHA-256 of the full-resolution RGBA frame as GL returns
 it, plus a quarter-size PNG for a person (one file per distinct
@@ -107,6 +112,20 @@ WIRED: tuple[tuple[str, dict, tuple[str, ...], tuple[str, ...] | None], ...] = (
     ("history+hands", {"history": "scene+hands"}, ("scene+hands",), LOOKBACK_ON),
 )
 
+# plan 26 A4b: a recorded point cloud in the scene — (name, the scratch
+# config's device list, the output states, the presets), hands present.
+# The device plays the fixture at its 12 fps against the pinned clock, so
+# the frame drawn is the same on every run (frame 1 after FRAMES frames)
+CLOUD_FIXTURE = ROOT / "tests" / "fixtures" / "clouds" / "knot.npz"
+CLOUD_CONFIG = """[[devices]]
+role = "scan"
+kind = "cloud"
+file = "clouds/knot.npz"
+"""
+CLOUDED: tuple[tuple[str, str, tuple[str, ...], tuple[str, ...]], ...] = (
+    ("cloud", CLOUD_CONFIG, ("scene", "scene+hands"), ("legacy6", "party-faces")),
+)
+
 # the one frame at the 1080p cap: a 2× HiDPI 1080p screen (3840×2160
 # pixels, 1920×1080 logical) whose frame the cap keeps at 1920×1080
 CAP = {"preset": "party-trip", "hands": "present", "state": "scene+hands",
@@ -129,6 +148,8 @@ import fake_hands
 import moderngl
 import numpy as np
 
+from hyperspace import config as config_mod
+from hyperspace import devices as devices_mod
 from hyperspace import lfo, tempo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer, legacy_layout
@@ -248,6 +269,23 @@ class Rig:
         if errs:
             raise RuntimeError(f"fx shaders failed to build: {errs}")
         r.ghost.source, r.ghost.router = self.io, self.router
+        self.devices = None          # plan 26 A4b: a device registry, polled each frame
+
+    def list_devices(self, toml: str) -> None:
+        """A scratch `config.toml` in the rig's home listing `toml`'s
+        devices (the cloud fixture copied in beside it), opened by the real
+        registry on the pinned clock and handed to the renderer."""
+        import shutil
+
+        home = Path(self._home.name)
+        (home / "clouds").mkdir(exist_ok=True)
+        shutil.copy(CLOUD_FIXTURE, home / "clouds" / CLOUD_FIXTURE.name)
+        (home / "config.toml").write_text(toml)
+        cfg = config_mod.load(home / "config.toml")
+        self.devices = devices_mod.DeviceRegistry(
+            config_mod.devices(cfg), devices_mod.Context(home=home), clock=lambda: self.t)
+        self.devices.open_all()
+        self.renderer.cloud_source = self.devices
 
     def close(self) -> None:
         self._home.cleanup()
@@ -256,6 +294,8 @@ class Rig:
         """One frame in the app's order, LFOs and analyzer left out:
         hands → modulate → apply → integrate → draw."""
         self.t += DT
+        if self.devices is not None:
+            self.devices.poll(DT, self.t)
         self.io.poll(DT, None, self.router)
         self.clock.tick(self.t)
         self.router.modulate()
@@ -299,14 +339,17 @@ def context() -> moderngl.Context:
 
 
 def _shoot(slug: str, hands: str, states, size, logical, dpr,
-           wiring: dict | None = None) -> tuple[list[Shot], dict]:
+           wiring: dict | None = None, config: str | None = None) -> tuple[list[Shot], dict]:
     """Render one rig's states (under `wiring`, the default graph's when
-    None); its shots and what the load said. The framebuffers and the
-    renderer are new per rig, so nothing a rig drew reaches the next."""
+    None; with `config`'s devices listed, A4b); its shots and what the load
+    said. The framebuffers and the renderer are new per rig, so nothing a
+    rig drew reaches the next."""
     ctx = context()
     rig = Rig(slug, hands, ctx)
     if wiring is not None:
         rig.renderer.wiring = Wiring(**wiring)
+    if config is not None:
+        rig.list_devices(config)
     try:
         targets = [_target(ctx, size, SAMPLES if k == 0 else 0) for k in range(len(states))]
         views = [View(Switches(**sw), size, target=f) for f, (_, sw) in zip(targets, states)]
@@ -368,6 +411,15 @@ def render_all(only: set[str] | None = None, *, cap: bool = True) -> tuple[list[
                 gc.collect()
                 for sh in got:
                     sh.state = f"{wired}/{sh.state}"
+                shots += got
+            for name, toml, names, which in CLOUDED:
+                if slug not in which:
+                    continue
+                got, _ = _shoot(slug, hands, tuple((n, dict(STATES)[n]) for n in names),
+                                (W, H), (W, H), DPR, config=toml)
+                gc.collect()
+                for sh in got:
+                    sh.state = f"{name}/{sh.state}"
                 shots += got
     if cap and (not only or CAP["preset"] in only):
         state = dict(STATES)[CAP["state"]]
@@ -434,6 +486,9 @@ def record(shots: list[Shot], said: dict, renderer: str, only: set[str] | None,
         "wired_states": {name: {"wiring": wiring, "states": list(names),
                                 "presets": None if which is None else list(which)}
                          for name, wiring, names, which in WIRED},
+        "cloud_states": {name: {"config": toml, "fixture": "tests/fixtures/clouds/knot.npz",
+                                "states": list(names), "presets": list(which)}
+                         for name, toml, names, which in CLOUDED},
         "cap": {**CAP, "size": list(CAP["size"]), "logical": list(CAP["logical"])},
         "presets": {k: presets[k] for k in sorted(presets, key=order.__getitem__)},
         "goldens": entries,
