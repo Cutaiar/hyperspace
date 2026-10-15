@@ -346,12 +346,26 @@ LOOKBACK page and the red banner, and the look-back runs echoes only; a
 preset that asks for the dream with no worker is a warning, once.
 
 **Effects** (`fx.py`, FX page). One GLSL file per effect in
-`shaders/fx/` — twelve ship: acid, deconverge, doublevision, fractals,
-glimmer, huecycle, kaleido, plasma, tripcolour, warp, wobble, zoomblur
-(`_lib.glsl` is shared). **A new effect is a new `.glsl` file, not
+`shaders/fx/` — thirteen ship: acid, deconverge, doublevision, fractals,
+glimmer, huecycle, kaleido, palette, plasma, tripcolour, warp, wobble,
+zoomblur (`_lib.glsl` is shared). **A new effect is a new `.glsl` file, not
 Python**: every `// @param` uniform becomes `fx.<file>.<key>`, plus
-`on mix speed blend order target` per effect; `fx.on` bypasses the stack
-and `fx.mix` scales it. The folder is polled every 30 frames; a parse
+`on mix speed blend order target` per effect; `// @mix <value>` sets the
+effect's default wet/dry (1 when absent); `fx.on` bypasses the stack
+and `fx.mix` scales it.
+
+**The palette fold** (plan 24, `shaders/fx/palette.glsl`, `@order 95`,
+so last in the chain, after the look-back and before the dim — and
+before the hands unless an output sends them through the effects). Off and at `@mix 0` by default, so switching it on changes
+nothing until its mix is raised. Mode 0 (**fold**) maps every hue by a
+triangle wave over the wheel onto a slice `centre` ± `width`/2 (degrees;
+neighbouring hues stay neighbours, no seam) and rescales saturation and
+value linearly into `sat_lo`–`sat_hi` and `val_lo`–`val_hi`. Mode 1
+(**gradient map**) maps brightness through the first `anchors` (2–4) of
+four anchor colours, `a1`–`a4` hue / sat / val, a grey ramp by default.
+On a see-through ground the result is scaled by the pixel's alpha. A
+saved palette is an `fx` module preset; no palette ships in
+`library/fx/` (the owner's are made at the venue). The folder is polled every 30 frames; a parse
 error keeps the last version, a compile error skips the pass. Factory
 effect presets are `library/fx/*.json`.
 
@@ -363,7 +377,11 @@ effect presets are `library/fx/*.json`.
   stack is bypassed", "FX mix is at 0", "its mix is at 0") with a chip
   to fix it; its controls stay live under a veil. **Drag a chip by its
   name** onto another to put it before that one (or onto the right half
-  of the last to move it to the end): one undo step.
+  of the last to move it to the end): one undo step. The open strip
+  packs params that share a stem and end `_lo`/`_hi` or
+  `_hue`/`_sat`/`_val` onto one row (`ui_fx.strip_rows`), and the
+  palette shows only its open mode's rows (`ui_fx.HIDDEN_BY_MODE`; the
+  hidden ones stay routable), so the page fits without scrolling.
 - **Aimed at the faces.** Each effect's `fx.<name>.target` is `frame`
   (the default) or `faces`: the **ONTO frame · faces** chips at the
   right end of the open strip's title line, the lit one where it runs
@@ -719,7 +737,16 @@ footer line. No click maps until the mouse has moved 12 px from the click
 that picked. An invariant control, or any control while SHIFT is
 latched, is picked only to show its line; the header says why. With
 "Learn desk" armed, a click on the diagram completes the learn as a
-knob would.
+knob would. **While a mappable control is picked, the desk offers this
+preset's params** (plan 24) in a list on its empty ground under the
+transport row (`ui_desk.OFFER`, which covers no control), ranked by
+`learn.ranked` in four tiers — routed (a route or macro moves it), moved
+(its base is off the group default), on (it belongs to an effect, the
+look-back, the faces, the points or the lines, and that is on), on the
+desk — never offering one the preset cannot show (`learn.cannot_show`).
+A chip, "all params ▾" ("all ▾" on the small desk), opens the same list
+and a menu per group of the rest. A click on an item maps the control
+there through `Learn.map_picked`, the same road as a click on a page.
 
 ## 7. Keys and the gamepad
 
@@ -783,12 +810,13 @@ doing its job while a learn is armed.
 
 | Control | Layer | Does |
 |---|---|---|
-| S1–S6 | invariant | band 1–6 post-drive |
-| S7 · S8 · SM | invariant | master dynamics · master trim · master gain |
+| SM | invariant | master gain (the audio drive) |
 | X (crossfader) | invariant | **master dim**: left black, right full |
 | Clip row 1 (G1·1–8) | invariant | bank slots 1–8 (as F1–F8) |
 | Clip rows 4–5 (G4·*, G5·*) | invariant | bank slots 9–16 and 17–24 |
-| Clip-stop row (G6·1–8) | free | nothing by default (dark); Learn it for toggles |
+| Clip stop 8 (G6·8) | invariant | **SAVE**: held, a bank pad's tap saves into its slot (lit while held) |
+| Clip stops 1–7 (G6·1–7) | free | nothing by default (dark); Learn them for toggles |
+| Scene launch 1–4 (G1·9–G4·9) | invariant | points, lines, faces, rotate (each LED the live state) |
 | OVERDUB | invariant | **home** (lit while the show names a "starts on") |
 | QUANT | invariant | next filled bank slot |
 | SHIFT | invariant | latch the global layer |
@@ -801,48 +829,121 @@ doing its job while a learn is armed.
 | MASTER select · PAN | invariant | overlay · overlay click-through |
 | D1–D8 | global | the selected band's strip: trim, contrast, transient, pre, post, attack, decay, threshold |
 | K1–K5 | global | hand steadiness, response, catch, the selected axis's return, BPM (K6–K8 dark) |
+| S1–S6 · S7 · S8 | global | band 1–6 post-drive · master dynamics · master trim (`apc40.SHIFT_FADERS`) |
 | Clip row 2 · row 3, columns 1–3 | global | band scenes 1–8 · 9–11 |
 | K1–K8 | preset (factory default) | brightness, speed, instances, pattern mix, field amp, field rate, bitmap opacity, zoom |
 | D1–D4 | preset (factory default) | 4D depth, camera yaw, camera pitch, pattern (D5–D8 dark) |
+| S1–S8 | preset | the preset's own fader rows; **none by default**, so dark on every factory preset |
 | C (cue knob) | preset | step the shape, one click a shape |
 | Activator (G8), columns 1–6 | preset | toggle planes ZW, XW, YW, XY, XZ, YZ |
 | Row 3, columns 5–8 | preset | field motion STILL, ORBIT, WAVE, RIPPLE |
-| Scene launch 1–5 | preset | points, lines, faces, rotate, reset view |
+| Scene launch 5 (G5·9) | preset | reset view |
 | ▲ ▼ | preset | brightness up / down |
 
 The preset rows above are what a fresh preset starts with
 (`apc40.SCENE` on D1–D4); a factory or user preset with knobs of its own
 replaces all eight device knobs, and a preset with an empty desk has
 every preset-layer control dark. D4 steps through the seventeen
-patterns, which show only where faces are drawn.
+patterns, which show only where faces are drawn. **The track faders are
+the preset's** (plan 24): a preset binds them in its desk like the knobs
+(`preset.track_fader(k, target)`, `knob_desk(targets, faders=…)`),
+nothing is inherited, and a preset that binds none leaves them dark —
+today every factory preset. The factory preset files still carry four
+scene-launch toggle rows from before plan 24; a load drops exactly those
+four without a note (`routing.TOGGLE_DESK_ROWS`), and any other preset
+row on an invariant control with the usual note.
+
+**Desk templates** (plan 24). A template is a named binding set,
+`<library>/desk/<slug>.json` (`{"schema": "hyperspace.desk/1", "name",
+"note"?, "desk": [rows]}`), read by `Library.desk_template`; the
+factory has no templates (`hyperspace/library/desk/` need not exist),
+and the owner's sit in
+the library, so a shared `[library] path` shares them. A preset that
+says `"desk_template": "<name>"` keeps only its overrides in `"desk"`: a
+row replaces every template row on the same control, and `{"source": …,
+"dark": true}` leaves a template control unmapped. A load expands it
+(`preset.expand_desk`: the template's rows not overridden, then the
+overrides); a save writes the name and the rows that differ from the
+template as the load read it (`compact_desk`), so a template edited on
+disk reaches every preset that uses it at its next load and never turns
+into overrides. A missing template is a note and the overrides alone. A
+preset with no `desk_template` loads and saves as before. No UI writes a
+template yet; `preset.template_doc` and a text editor do.
+
+**The coverage report.** `uv run python tools/desk_coverage.py` loads
+every preset in a scratch home and marks each of the preset layer's 38
+controls (D1–D8, K1–K8, S1–S8 and the factory map's other preset-layer
+controls) **mapped**, **dark** or **dead** — a row whose param the
+preset cannot show (`learn.cannot_show`: a pattern knob with the faces
+off, a bitmap knob with no bitmap, an effect's knob with it off, …). It
+writes [`plans/assets/24-party-fixes/desk-coverage.md`](plans/assets/24-party-fixes/desk-coverage.md);
+`--check` says whether that file is stale, `--stdout` prints it, and
+`--library DIR` prints a report that adds that library's presets and
+templates (copied, never written; the committed file is untouched). The
+owner's bar for the authoring pass is at most four dark or dead per
+preset; today no preset meets it.
 
 **Bank pad lights** (rows 1, 4, 5): green while its preset is the loaded
 one, amber while its slot holds another preset (velocity 5, Akai's
 "yellow"; `apc40.filled_of`), dark when empty. The diagram draws amber at
 half strength with the preset's name.
 
-**Save on the desk.** Hold an **empty** bank pad (clip rows 1, 4 and 5)
-for 0.6 s (`midi.HOLD_S`): the live state is saved as a **new** user
+**Save on the desk: the two-handed save** (plan 24). Hold **SAVE**
+(track 8's clip stop, `apc40.SAVE`) and tap a bank pad (clip rows 1, 4
+and 5), on either layer: the live state is saved as a **new** user
 preset named from the loaded one with the next free number (TRIP → TRIP
 2; with nothing loaded, PRESET 1; it never overwrites a file and never
 hides a factory preset), it becomes the loaded preset and goes into
 *that* pad's slot, and the show is written at once ("saved TRIP 2 →
-F6", or "→ slot 10"); the pad blinks for 1.5 s. Holding a filled pad
-just loads it — nothing is written. To make room, free a pad on the
-PRESETS page: right-click its slot → **free this pad (keeps the
-preset)**; the preset stays in the list. (Until 2026-10-09 the
-clip-stop row was a SAVE AS bar into the next empty slot; that row is
-free now.)
+F6", or "→ slot 10"); the pad blinks for 1.5 s (`midi.BLINK_S`). **A
+filled pad takes the new preset too**: the slot points at it, and the
+preset it named keeps its file and stays in the list, unpadded ("… (TRIP
+2 is still in the preset list)"). Nothing is overwritten and nothing
+goes to the trash (`library.Project.save_into`). The tap never loads the
+pad; SAVE alone does nothing. SAVE is a `momentary` row on the session
+param `desk.save`, lit while held: it is never latched or learned, a
+reconnect lets go of it, and where the owner's `bindings.json` already
+holds clip stop 8 it is not added and every launch says so. **Holding an
+empty bank pad** for 0.6 s (`midi.HOLD_S`) still saves into it the same
+way (`Project.save_empty`); holding a filled pad just loads it. To free
+a pad, right-click its slot on the PRESETS page → **free this pad
+(keeps the preset)**. (Until 2026-10-09 the clip-stop row was a SAVE AS
+bar into the next empty slot.)
+
+**Every load relights the whole desk** (plan 24). On a preset load, and
+at power-up, every control of the layout that no active row draws is
+sent dark (`MidiIO._dark_desk`), not only those a row once named, so a
+light another program left on goes out.
+
+**The desk log** (SYSTEM page, under **midi**, the fold "desk log"):
+the last twenty presses (`midi.DESK_LOG_SIZE`), newest first, each with
+the time, the control ("G1·5 (clip 1·5)"), what it did ("Preset →
+TRIP", "nothing (no row on the preset layer)", "saved into slot 15: TRIP
+2", "held: nothing saved (a filled pad only loads)") and the layer it
+was read on ([preset], [global], or [both] for an invariant control).
+Button presses, holds that fired and two-handed saves are logged; knob
+and fader moves are not. It is in memory only.
 
 **Knobs and faders.** The track and device knobs are endless encoders:
 the app sets their position with the ring's CC, so a knob continues from
 its ring after a layer switch or a preset load. The faders are real pots
 with **soft pickup**: after a change they do nothing until moved through
-the param's value. A fader keeps its catch through a preset load unless
-the load moved its param, so the crossfader and the faders (all session
-params) carry on from where they are. A fader moved while its row is
-disabled, or while an armed learn takes its messages, picks up again
-from where it is (`MidiIO._passed_over`) rather than jumping.
+the param's value. **A load lets go of every fader the new preset
+binds**, so each picks up from the new preset; a fresh row starts from
+where its fader physically is (the last value it sent), so a fader
+already on the value catches on its first move. The session's faders —
+the crossfader, MASTER and the band strip under SHIFT — keep their catch
+through a load unless the load moved their param, so they carry on from
+where they are. **On a layer switch** each layered fader starts again
+from where it physically is and is caught only when its param already
+sits there, so a fader moved on one layer never jumps the other layer's
+param (the preset's on S1–S8, the band's under SHIFT). A fader not moved
+since launch or a reconnect has no position, and catches only on a move
+that lands on the value. A fader moved while its row is disabled, or
+while an armed learn takes its messages, picks up again from where it is
+(`MidiIO._passed_over`) rather than jumping. An older `bindings.json`
+moves its eight invariant track-fader rows to the SHIFT layer once,
+with a backup (`routing.FADER_SHIFT_ROWS`).
 
 **Knob smoothing** (`desk.slew`, "Knob smoothing", SYSTEM page under
 **midi**; off to 250 ms; the running app starts at **80 ms**,
@@ -1072,6 +1173,32 @@ box, the ghost hands: the **Ghost hands** tick; while it is on,
 on) and the ghost's notes — an error, or the unmeasured-mode note; while
 there is one the chip reads **! more ▸** in the warning colour and its
 hover says it. A narrower panel wraps a group onto the next line.
+Beside the axis rows, a column shows the dance sources and the grab
+(below) live, hollow while one reads nothing, its address and value on
+hover.
+
+**The dance sources and the grab** (plan 24, `hands/core.py`). Beside
+the twelve axes, each hand publishes `hand:<side>.curl.thumb` …
+`.curl.pinky` (how bent each finger is: the summed bend of its joints),
+`.spread` (the index–pinky fan in the palm's plane; a fist reads 0),
+`.energy` (the mean speed of the palm and the five tips, quick up and
+slow down) and `.flick` (a spike to the hit's strength when the fastest
+tip passes 1500 mm/s, decaying over about 0.15 s; a lane until a trigger
+kind exists), and `hand:<side>.grab`, 1 while the hand is a fist (the
+mean curl of the four fingers through a Schmitt gate: closes past 0.65,
+opens under 0.45, 0.05 s debounce). A second scheme, `hands:`, has
+`hands:gap` (the palms' distance) and `hands:twist` (the right roll less
+the left, 0.5 for mirror-image hands), live only with both hands in.
+Curl, spread and the grab need the skeleton; energy and flick fall back
+to the palm. Every range and time constant is a constant in the `DANCE`
+block of `hands/core.py`, tuned on synthetic hands. The `hand` vector is
+the axes, two presence lanes, the eight pinches, then the sixteen dance
+lanes, then the two grabs (40 with six axes a hand), so no older lane
+index moves; `Layout` holds every index and count. The published gates
+are the pinches then the two grabs. The new sources are picked on
+ROUTING (source or gate combo); a hand Learn still offers only the
+axes, none of them goes to the DAW port, and none has settings of its
+own.
 
 **The interaction box.** A hand counts only while its palm is inside a
 box in the camera's millimetres (x across, y up, z toward the
@@ -1324,6 +1451,18 @@ uv run ruff check .
   recorded digest (`tests/golden/shape_digests.json`, floats rounded to
   1e-9) and every lifted or masked shape to `VOLUME_FLOOR` through each
   W plane; `tools/turntable.py` draws the same sweeps (§1).
+- Fixtures: `tests/fixtures/` holds the test-only presets, templates
+  and palettes a test copies into a scratch library (plan 24's
+  `desk-trust/`, `desk-faders/`, `desk-templates/`, `dance-sources/`,
+  `grab-follow/` and `palettes/`, and `macro-candidates/`). The folder
+  is gitignored at the repo root, so a new fixture is added with
+  `git add -f`. No test proves a mechanism by editing a factory preset.
+- The desk coverage report: `tests/test_desk_coverage.py` regenerates
+  `docs/plans/assets/24-party-fixes/desk-coverage.md` with
+  `tools/desk_coverage.py` and fails when the committed file differs by
+  a byte; after a change to a desk, a preset or `learn.cannot_show`, run
+  `uv run python tools/desk_coverage.py` and commit the report
+  (`--check` tells you whether it is stale).
 - Import boundaries are tests: the core never imports `midi`, `bridge`
   or `dream`; `hands/core.py`, `hands/signal.py`, `lfo.py`, `tempo.py`,
   and `undo.py` import nothing from the package; `library.py` never

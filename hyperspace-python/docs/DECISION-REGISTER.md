@@ -1,10 +1,12 @@
 # Decision register — the open decisions
 
 Rows 34–88 were each decided during an unattended build on 2026-10-04,
-and rows 89–108 during plan 22's run on 2026-10-06: the build took its own
-recommendation and built it. Every one is in the app now (rows 89–108 on
-`plan-22-integration`, until the owner merges it) and waits for the owner
-to say **keep** or **overturn**. Each row
+rows 89–108 during plan 22's run on 2026-10-06, and rows 110–139 during
+plan 24's run on 2026-10-14: the build took its own recommendation and
+built it. Every one is in the app now (rows 110–139 on
+`plan-24-26-27-integration`, until the owner merges it) and waits for the
+owner to say **keep** or **overturn**. Row 109 is the owner's own (plan
+25). Each row
 says what was built (what you will see or feel), the other option(s), what
 it costs to reverse, the known rough edge, and the hand check that lets you
 judge it. The checks are numbered in
@@ -29,9 +31,9 @@ here; overturn → the change, then the same.
 | 39 | Camera moves are undo steps | — | |
 | 40 | Home may be fired by a performer; dim may not | 54, 55 | |
 | 41 | The dim in overlay fades alpha too | — | |
-| 42 | Save-as hold: how it fires and lights | 56 | |
+| 42 | Save-as hold: how it fires and lights — the clip-stop bar **superseded** (#158; clip stop 8 is SAVE, row 110) | 56 | superseded in part |
 | 43 | A paused drag is two undo steps | 48 | |
-| 44 | A load releases only faders it moved | 55 | |
+| 44 | A load releases only faders it moved — for the preset's faders **superseded by row 112** | 55 | superseded in part |
 | 45 | FX chip: dot switches, name opens; three a row | 59 | |
 | 46 | An idle effect's faders dimmed but live | 60 | |
 | 47 | Instances reach zero from slider and K3 | 62 | |
@@ -48,7 +50,7 @@ here; overturn → the change, then the same.
 | 58 | Click a desk control, then a param | 70 | |
 | 59 | One Unbind removes desk rows and routes | 64 | |
 | 60 | "Learn desk" and "Learn hand ▸ left / right" | 66–68 | |
-| 61 | Session controls work through a desk learn | 65 | |
+| 61 | Session controls work through a desk learn (its list changed in plan 24: S1–S8 left it; SAVE and the four toggles joined) | 65 | |
 | 62 | One road onto the desk, no APC40 needed | 70 | |
 | 63 | The ROUTING filter: only you clear it | 71 | |
 | 64 | Two hand-Learn details left alone | 66 | |
@@ -60,7 +62,7 @@ here; overturn → the change, then the same.
 | 70 | Dream "speed" is `dream.k`, in frames | 96 | |
 | 71 | Instance layouts: grid, honeycomb, ring | 97 | |
 | 72 | The bank of twenty-four | 81, 83 | |
-| 73 | Clip rows 4–5 are the bank; their lights | 82–84 | |
+| 73 | Clip rows 4–5 are the bank; their lights (its diagram's clip-stop row and toggle column are out of date: rows 110, 113) | 82–84 | |
 | 74 | No backup, no rewrite of `bindings.json` | 84, 57 | |
 | 75 | Device knobs only where they do something | 85 | |
 | 76 | Hide, rename and the trash | 86–88 | |
@@ -97,6 +99,36 @@ here; overturn → the change, then the same.
 | 107 | The house presets' routes generated from code | 132 | |
 | 108 | Macro candidates in `shared/` (folder **superseded by row 109**); per-band gain as depth | 133–136 | |
 | 109 | Plan 25: presets shared through a cloud-synced folder (`[library] path`), D1–D8 | 139–143 | **owner, 2026-10-14** |
+| 110 | SAVE is track 8's clip stop, held, on `desk.save` | 148 | |
+| 111 | The two-handed save names from the loaded preset; the pad blinks | 148 | |
+| 112 | A load lets go of every preset fader and darkens the whole desk (row 44 changed) | 150, 153 | |
+| 113 | Factory files keep the toggle rows; a load drops them quietly | 149 | |
+| 114 | The desk log: the last twenty presses on SYSTEM | 151 | |
+| 115 | The band audio strip on the SHIFT-layer faders (amends D6) | 153 | |
+| 116 | A layer switch re-arms every layered fader from where it is | 153 | |
+| 117 | `view.lines_alpha` and `view.points_alpha` | 154 | |
+| 118 | Fader rows in a preset's desk: `track_fader`, `knob_desk(faders=)` | 152 | |
+| 119 | An older `bindings.json` moves the fader rows to SHIFT once | 153 | |
+| 120 | What makes a desk control "dead" (`learn.cannot_show`) | 155 | |
+| 121 | The coverage counts 38 preset-layer controls | 155 | |
+| 122 | Desk templates: the file format, overrides and dark rows | 156 | |
+| 123 | Click a control: this preset's params first, in four tiers | 157 | |
+| 124 | The dance lanes after the switches; `hands:` its own scheme | 158, 162 | |
+| 125 | Curl and spread: what they measure | 159, 160 | |
+| 126 | Energy: mean speed, fast up, slow down | 159 | |
+| 127 | Flick: a spike past 1500 mm/s that decays | 161 | |
+| 128 | Gap and twist | 162 | |
+| 129 | The dance sources and the grab: no settings, no DAW, no hand Learn | 158, 164 | |
+| 130 | The dance column and the grab glyph on the HANDS page | 158, 163 | |
+| 131 | The grab: mean curl, closes past 0.65, opens under 0.45 | 163, 164 | |
+| 132 | The grab lanes after the dance lanes; gates after the pinches | 163 | |
+| 133 | Hands on the projector: the SETUP.md line, not the home's file | 165 | |
+| 134 | The palette's ids are `fx.palette.*` | 166 | |
+| 135 | The `@mix` directive; the palette starts at mix 0 | 166 | |
+| 136 | The palette's params: mode, anchors, twelve anchor values | 166, 167 | |
+| 137 | The palette at `@order 95` | — | |
+| 138 | The fold over the absolute hue wheel; linear sat and val | 166 | |
+| 139 | The FX page repacked; strip rows packed by name | 167 | |
 
 "—": no hand check shows it; tests only.
 
@@ -192,6 +224,11 @@ here; overturn → the change, then the same.
 
 ### 42. The save-as hold on the clip-stop row
 
+- **Superseded in part.** The clip-stop SAVE AS bar was retired on
+  2026-10-09 (#158: an empty bank pad held saves into it), and since plan
+  24 track 8's clip stop is the desk's SAVE (row 110). The `hold` op, its
+  bar of lit buttons and the blink stay for a row you learn. Kept here as
+  history.
 - **Built.** Holding any of the eight clip-stop buttons for 0.6 s saves the
   live look as a new preset ("TRIP" → "TRIP 2") into the next empty bank
   slot, while you are still holding. The eight act as one bar: two fingers
@@ -229,6 +266,9 @@ here; overturn → the change, then the same.
 
 ### 44. A preset load releases only the faders whose parameter it moved
 
+- **Superseded in part by row 112** (plan 24): a fader the new preset
+  binds now always lets go on a load. The session's faders — the
+  crossfader, MASTER, and the band strip under SHIFT — keep this rule.
 - **Built.** A fader "has" its parameter once moved onto its value (soft
   pickup). A preset load makes a fader let go only if the load moved its
   parameter, the parameter is gone, the fader has never been moved, or
@@ -504,6 +544,11 @@ here; overturn → the change, then the same.
 
 ### 61. The session's controls work through an armed desk learn
 
+- **Changed in plan 24.** The diagram below is from before it: S1–S8 are
+  now the preset's (learnable; under SHIFT the band strip, row 115), clip
+  stops 1–7 are free and clip stop 8 is SAVE (row 110), and scene launch
+  1–4 (points, lines, faces, rotate) are invariant (decision 18). The
+  rule itself stands.
 - **Built.** With "Learn desk" armed, a session control (below) is not a
   candidate: it does its own job and the learn stays armed. A refusal
   also leaves the learn armed.
@@ -704,6 +749,10 @@ here; overturn → the change, then the same.
 
 ### 73. Clip rows 4–5 are the bank, and how the bank lights
 
+- **Note (plan 24).** In the diagram below, column 9's Points, Lines,
+  Faces and Rotate are now invariant (the same under SHIFT), and the G6
+  row is no longer a SAVE AS bar: clip stops 1–7 are free and clip stop
+  8 is SAVE (rows 110, 113). The bank itself is unchanged.
 - **Built.** Rows 4–5 load slots 9–24 on both layers (invariant). A bank
   pad is green when its preset is loaded, amber (Akai velocity 5) when its
   slot is filled, dark when empty. The sixteen shape pads older presets
@@ -1395,3 +1444,521 @@ Stream B; the pictures are in
 - **Also built.** Library writes are atomic (temp file, then replace),
   and a cloud client's conflict copy is listed under its own file stem.
 - **Judge it.** Checks 139–143.
+
+## The party fixes (plan 24)
+
+Built in plan 24's run on 2026-10-14
+([`plans/24-party-fixes.md`](plans/24-party-fixes.md)), on
+`plan-24-26-27-integration` until the owner merges it. The owner's own
+decisions for this plan (17–21, 23 and 24 of the launch prompt) are in
+[`DECISIONS.md`](DECISIONS.md) with Who "owner"; these rows are what the
+build chose where those left a choice open. No preset was edited or
+added: every proof is a fixture under `tests/fixtures/`.
+
+### 110. SAVE is track 8's clip stop, a held button on `desk.save`
+
+- **Built.** Track 8's clip stop (G6·8) is the desk's **SAVE**: hold it
+  and tap a bank pad (clip rows 1, 4, 5) to save the live state into that
+  pad's slot. It is one invariant row (`apc40.SAVE`), the same on both
+  layers, lit while held: a `momentary` row on a session param,
+  `desk.save` ("Save", never saved, not modulatable). So the on-screen
+  desk draws it, and a device that takes the adapter over carries it as
+  a port. A reconnect lets go of it, so a note-off lost to a pulled cable
+  cannot turn the next pad press into a save. It can never be latched:
+  it is no desk target on ROUTING, "Learn desk" and "Learn pad" refuse it
+  in words, and any row on it that is not `momentary` is refused (a
+  hand-edited `bindings.json` loses such a row with a note and is written
+  back once). A `bindings.json` gains the row once, only where nothing
+  already uses clip stop 8; where the owner's row holds it, every launch
+  says "SAVE not added: note:7:52 is yours (…)" on stderr and the SYSTEM
+  page, and the file is not touched. Clip stops 1–7 stay free for Learn.
+- **Other options.** Another free button (the working plan's open
+  question): a clip stop is the nearest free button to the pads, and
+  track 8's is at the end of the row. SAVE as a modifier read inside the
+  adapter, with no param: the panel could not show it.
+- **To reverse.** One row in `apc40.DEFAULT_MAP` and one in
+  `routing.APC_NEW_ROWS` (move it to another note), or drop both.
+- **Rough edge.** An owner's row on clip stop 8 in a preset's desk is
+  dropped at load with D6's note. Never on the APC40.
+- **Judge it.** Check 148.
+
+### 111. The two-handed save names the new preset from the loaded one, and blinks the pad
+
+- **Built.** On a filled pad the new preset is named from the **loaded**
+  preset, as `save_new` names them (TRIP → TRIP 2, counted against every
+  file, listed name and bank name), not from the preset the slot held.
+  The footer says "saved TRIP 3 → slot 11 (TRIP 2 is still in the preset
+  list)". The tapped pad blinks for 1.5 s (`midi.BLINK_S`) and then
+  shows green as the loaded slot. A save the show file could not take
+  blinks nothing and the desk log says "did not land there"; the preset
+  is still saved and in the list. A tap under SAVE never loads the pad
+  and never starts its hold.
+- **Other options.** Name it from the slot's old preset (FIELD → FIELD 2
+  on F3): reads well when that preset was loaded, but differs from every
+  other save on the desk.
+- **To reverse.** One line in `library.Project._save_new` (the name
+  passed to `next_name`).
+- **Rough edge.** The blink velocity (`apc40.blink_of`) has never been
+  seen on the mk1.
+- **Judge it.** Check 148.
+
+### 112. Every load lets go of every fader the preset binds, and darkens the whole desk (row 44 changed)
+
+- **Built.** A load re-arms soft pickup on **every fader the new preset's
+  desk binds** (a preset-layer row), whether or not the load moved its
+  param, so each picks up from the new preset the same way every time. A
+  fresh row starts from where its fader physically is (the last value it
+  sent, `MidiIO._hw`), so a fader already on the value catches on its
+  first move. The session's faders (the crossfader's dim, MASTER, and the
+  audio strip under SHIFT) keep row 44's rule, since a preset never moves
+  their params (D9). On every load and at power-up, every control of the
+  APC40's layout that no active row draws is sent dark
+  (`MidiIO._dark_desk`), not only the controls a row once named.
+- **Other options.** Row 44 as it was. The dark pass on SHIFT as well
+  (about a hundred more messages per press).
+- **To reverse.** One condition (`b.layer == "preset"`) and one call
+  (`_dark_desk`) in `MidiIO.redraw`.
+- **Rough edge.** A fader nobody has moved since launch or a reconnect
+  has no position: its first move after a load must land within the
+  pickup tolerance, or wait to cross the value. Whether the mk1 keeps up
+  with the dark pass (about 100 messages a load) is unknown.
+- **Judge it.** Checks 150 and 153 (and 55 (e) for the session faders).
+
+### 113. The factory files keep the four toggle rows; a load drops them quietly
+
+- **Built.** No file under `hyperspace/library/` changed in this run
+  (decision 23), so the factory presets still carry the four render
+  toggle rows on scene launch 1–4. The generator keeps writing them
+  (`preset.file_desk` is the fresh desk plus those rows). A load drops
+  those four exact rows **without a note** (`routing.TOGGLE_DESK_ROWS`,
+  part of `RETIRED_DESK_ROWS`), as plan 19 did with the shape pads,
+  because the session's invariant rows do the job; an owner's other row
+  on scene launch 1–4 drops **with** D6's note. The preset is not dirty
+  after the load.
+- **Other options.** Regenerate the factory files without the rows
+  (forbidden this run). Drop them with a note (twenty-three factory
+  presets would each say so on every load).
+- **To reverse.** After the creative pass, point `Factory.desk` and
+  `write_factory` at `fresh_desk` and run `python -m hyperspace.preset`.
+- **Rough edge.** Until then the factory files and the loaded desk differ
+  by four rows.
+- **Judge it.** Check 149.
+
+### 114. The desk log: the last twenty presses on the SYSTEM page
+
+- **Built.** The SYSTEM page, under **midi**, has a fold "desk log — the
+  last N presses". Each line has the time, the control in the desk's
+  words ("G1·5 (clip 1·5)"), what the press did ("Preset → TRIP",
+  "saved into slot 15: TRIP 2", "nothing (no row on the preset layer)",
+  "held: nothing saved (a filled pad only loads)") and the layer it was
+  read on (preset, global, or both for an invariant control). Newest
+  first, twenty kept (`midi.DESK_LOG_SIZE`). Button presses, holds that
+  fired and two-handed saves are logged; knob and fader moves and
+  releases are not.
+- **Other options.** Log knob moves too, collapsed per control; show it
+  on ROUTING; write it to a file.
+- **To reverse.** `midi.DeskLog` and `Panel._desk_log`.
+- **Rough edge.** In memory only, lost at a restart. With no APC40 there
+  is no log.
+- **Judge it.** Check 151.
+
+### 115. The band audio strip is on the SHIFT-layer faders, not the knobs (amends D6)
+
+- **Built.** With SHIFT latched, track faders S1–S6 are the six bands'
+  post-drive, S7 `master.dyn` and S8 `master.trim` (`apc40.SHIFT_FADERS`,
+  global-layer rows). With SHIFT up, S1–S8 are the loaded preset's.
+  MASTER and the crossfader stay invariant.
+- **Other options.** The SHIFT-layer track knobs 6–8 and the device
+  knobs: endless, so no pickup, but eight audio params do not fit on the
+  free knobs.
+- **To reverse.** Drop `layer=G` from the eight rows, invert
+  `routing.FADER_SHIFT_ROWS`, regenerate `bindings.default.json`.
+- **Rough edge.** Under SHIFT a fader rarely sits where its band is, so
+  the first pull after a latch does nothing until it reaches the value.
+- **Judge it.** Check 153.
+
+### 116. A layer switch re-arms every layered fader from where it physically is
+
+- **Built.** One fader now serves two params. On every SHIFT latch or
+  unlatch, each layered fader row takes the fader's last physical
+  position and is caught only when its param already sits within the
+  pickup tolerance (1.5/127); otherwise it waits to cross the value. A
+  fader moved on one layer never jumps the other layer's param. On a
+  load, row 112's rule decides.
+- **Other options.** Keep each row's catch across the switch (the fader
+  then jumps the other layer's param on its first move); uncatch with no
+  position (a fader already on the value would need a crossing).
+- **To reverse.** The `switch` block in `MidiIO.redraw`.
+- **Rough edge.** A fader not moved since launch or a reconnect has no
+  position and catches only on a move that lands on the value; a stale
+  position is never taken for a crossing.
+- **Judge it.** Check 153.
+
+### 117. Lines and points opacity: `view.lines_alpha`, `view.points_alpha`
+
+- **Built.** Two 0–1 params in the `view` group (performance, saved in
+  presets, modulatable), both 1 by default. Each multiplies the alpha
+  `draw_scene` already gives an edge or a point, after the existing
+  floor, so 1 is the picture as it was and 0 takes the layer away. A pair
+  of sliders on the VIEW page ("Points opacity", "Lines opacity"). No
+  desk row and no preset value; a preset that lacks them loads them at 1.
+- **Other options.** Ids `view.lines.opacity`; an opacity uniform in the
+  shaders; the factor before the floor (0 would leave a faint layer).
+- **To reverse.** The two params, the two `ViewState` fields, the two
+  factors in `render.py`, the slider row.
+- **Rough edge.** The render graph's rewrite of `draw_scene` must keep
+  the two factors.
+- **Judge it.** Check 154.
+
+### 118. Fader rows in a preset's desk: `preset.track_fader` and `knob_desk(…, faders=)`
+
+- **Built.** `track_fader(k, target)` is track fader k on the preset
+  layer (absolute, soft pickup, no light). `knob_desk(targets,
+  faders=())` puts `faders[k]` on fader k + 1, None leaving it dark. The
+  default adds nothing, so every factory desk is as it was; `fresh_desk`
+  and `file_desk` bind no fader. Fader rows load, save and redraw like
+  knob rows: nothing new in the file format. A fader on the preset layer
+  is learnable like a knob.
+- **Other options.** A separate `fader_desk(...)` beside `knob_desk`.
+- **To reverse.** The helper and the parameter.
+- **Rough edge.** No factory preset uses it (decision 23): every one
+  leaves S1–S8 dark until the owner authors fader sets.
+- **Judge it.** Check 152.
+
+### 119. An older `bindings.json` moves its eight fader rows to SHIFT once, with a backup
+
+- **Built.** On load, `routing.remap_factory` gives each exact old
+  invariant fader row (`FADER_SHIFT_ROWS`) the global layer, with the
+  note "moved cc:k:7 → band.k.post to the SHIFT layer (…)". The file is
+  backed up (`bindings.json.bak-v3`) and written back once; the next
+  load is quiet. A fader row the owner changed stays invariant, so that
+  fader stays the owner's on both layers, and a preset row on it drops
+  with D6's note.
+- **Other options.** Drop the old rows and add new ones (two changes in
+  the note, and an owner's flags lost).
+- **To reverse.** `FADER_SHIFT_ROWS` and its branch in `remap_factory`.
+- **Rough edge.** The first remap that changes only a row's layer, so
+  its note says "moved", not "remapped".
+- **Judge it.** Check 153 (the first launch's SYSTEM line).
+
+### 120. What makes a desk control "dead": `learn.cannot_show`
+
+- **Built.** A control is **dead** when the loaded preset has a row on it
+  but cannot show that row's param, read from the preset's bases (not
+  the live frame): the pattern params and `view.pattern_mix` with the
+  faces off; `view.bmp_*` with the faces off or no bitmap file; points or
+  lines opacity with that layer off; `fx.mix` with the effects off; an
+  effect's param with the effects or that effect off; `dream.*` with the
+  look-back off; `rot.rate.*` and `view.plane.*` with rotation off; a
+  param the registry lacks. Today this makes K7 (`view.bmp_alpha`) dead
+  on every factory preset, and K4 / D4 dead where the faces are off.
+- **Other options.** Judge the live frame (could not be committed); more
+  groups (zero instances, a dream knob at mix 0, an unread LFO); no
+  bitmap rule (K7 would read as mapped).
+- **To reverse.** Edit `learn.cannot_show` and rerun
+  `tools/desk_coverage.py`.
+- **Rough edge.** The render toggles are invariant, so Faces is one
+  button away: a pattern knob on a faces-off preset is "dead" until it
+  is pressed.
+- **Judge it.** Check 155.
+
+### 121. The preset layer the coverage counts: 38 controls
+
+- **Built.** D1–D8, K1–K8 and S1–S8, plus every other control the
+  factory map gives a preset-layer row (grid motion G3·5–8, the planes
+  G8·1–6, the view reset G5·9, the cue knob, ▲ ▼), less any control the
+  session holds on both layers. A preset row on another control is
+  listed apart.
+- **Other options.** Every control the preset layer could take (about
+  70: the bar out of reach); only the three strips (24).
+- **To reverse.** `layer_controls` in `tools/desk_coverage.py`.
+- **Rough edge.** The set comes from the factory session, not the
+  owner's `bindings.json`.
+- **Judge it.** Check 155.
+
+### 122. Desk templates: `hyperspace.desk/1` files in the `desk` group; a preset names one and keeps its overrides
+
+- **Built.** A template is `<library>/desk/<slug>.json`:
+  `{"schema": "hyperspace.desk/1", "name", "note"?, "desk": [rows]}`.
+  The factory has no templates (the folder `hyperspace/library/desk/`
+  need not exist: the group lists none without it); the owner's live in the library, so a shared
+  `[library] path` shares them. A preset names one with `"desk_template":
+  "<name>"`, and its `"desk"` then holds only overrides: an override row
+  replaces every template row on the same control, and a dark row
+  (`{"source": …, "dark": true}`) leaves a template control unmapped. A
+  load expands it (template rows not overridden, then the overrides); a
+  save writes the name plus the live rows that differ from the template
+  **as the load read it**, so a template edited on disk never turns into
+  overrides that undo it. A missing template is a note and the overrides
+  alone. A preset with no `desk_template` takes exactly the old path.
+  Templates are never applied as module presets of the `desk` param
+  group.
+- **Other options.** A folder named apart (`desk-templates/`); a
+  `Library.kind`; overrides keyed by glyph; the whole expanded desk
+  saved (a template fix would then not reach its presets).
+- **To reverse.** The template branch in `Presets.load_doc` and
+  `_desk_part`, the helpers in `preset.py`, `Library.desk_template`. A
+  preset naming a template would need its desk expanded first.
+- **Rough edge.** No UI writes or edits a template. Editing one on disk
+  does not re-apply a loaded preset: reload it. Two spellings of one
+  knob (`cc:*:16`, `cc:0:16`) lose the any-channel one on a round trip.
+  An older build ignores `desk_template` and refuses a dark row.
+- **Judge it.** Check 156.
+
+### 123. Click a control: this preset's params first, ranked
+
+- **Built.** While a mappable control is picked, the desk lists this
+  preset's params on its empty ground under the transport row
+  (`ui_desk.OFFER`; a test proves it covers no control). `learn.ranked`
+  orders them in four tiers: **routed** (a route or macro moves it),
+  **moved** (its base is off the group default), **on** (its effect,
+  the look-back, the faces, the points or the lines are on), **on the
+  desk**. A dead param is never offered as one of the preset's own. A
+  chip, "all params ▾" ("all ▾" on the small desk), opens a popup with
+  the same list and a menu per group of the rest. A click maps the
+  control there through `Learn.map_picked`, as a click on the page does.
+- **Other options.** A popup that opens on the pick (it would block the
+  second click plan 17 relies on); a block on the page; other tier
+  orders.
+- **To reverse.** Drop `_offer` from `ui_desk._body`.
+- **Rough edge.** At the default window size the list is about
+  107 × 79 px, five items at a time. The "on" tier includes an effect's
+  `.blend`, `.order` and `.target`. The list is ranked at the moment of
+  the pick.
+- **Judge it.** Check 157.
+
+### 124. The dance lanes go after the switches; `hands:` is a scheme of its own
+
+- **Built.** Each hand gets eight `hand:` lanes — `curl.thumb` …
+  `curl.pinky`, `spread`, `energy`, `flick` — after the eight pinch
+  switches, so every older lane keeps its index (a saved `hand:9` still
+  reads the same roll). `hands:gap` and `hands:twist` are a second
+  scheme, `hands`, with its own vector, labels, rests (0, 0.5) and no
+  gates. Only the pinches and the grab (row 132) are gates; a flick
+  spikes and decays and is not one. The ROUTING page offers them by name
+  ("hand R curl ind", "hands gap").
+- **Other options.** The pair in the `hand` vector (`hand:both.gap`);
+  the new lanes before the switches (every numeric `hand:<i>` past the
+  axes would move).
+- **To reverse.** The lane order is `addresses` and `Layout`; presets
+  name lanes by name, so a reorder costs only numeric addresses.
+- **Rough edge.** The hand tests that pinned 22 lanes now read 40 (with
+  the grab).
+- **Judge it.** Checks 158 and 162.
+
+### 125. Curl is the summed bend of a finger's joints; spread is the index–pinky fan
+
+- **Built.** `curl.<digit>`: the angles between each bone and the next,
+  summed, 20° → 0 … 220° → 1 for a finger, 10° → 0 … 80° → 1 for the
+  thumb. `spread`: the angle between the index's and the pinky's first
+  bones in the palm's plane, 10° → 0 … 60° → 1; a finger bent down at the
+  knuckle makes it 0 (a fist does not fan). Both slewed 0.05 s; both
+  need the skeleton, and read nothing without one.
+- **Other options.** The SDK's one grab number per hand; fingertip to
+  palm distance (mixes curl with spread); tip-to-tip distance for spread.
+- **To reverse.** Constants in `hands/core.py` (`CURL_RANGE`,
+  `CURL_RANGE_FINGER`, `SPREAD_RANGE`, `SPREAD_MIN_FLAT`, `CURL_S`).
+- **Rough edge.** Tuned on synthetic hands: a relaxed real hand may idle
+  above 0 and a real fist may stop short of 1. A middle finger crossing
+  is invisible to spread.
+- **Judge it.** Checks 159 and 160.
+
+### 126. Energy is the mean speed of the palm and the five tips, fast up, slow down
+
+- **Built.** On each tracking frame the speed of the palm and each
+  fingertip, averaged: 60 mm/s → 0 (above a still hand's jitter) …
+  1000 mm/s → 1, then a slew with 0.06 s attack and 0.5 s decay, so a
+  burst of dancing lingers. With no skeleton, the palm alone. A frame
+  that measures no speed lets it fall.
+- **Other options.** The peak speed (one finger dominates); the palm
+  only; a longer window.
+- **To reverse.** `ENERGY_RANGE`, `ENERGY_ATTACK_S`, `ENERGY_DECAY_S`,
+  `SPEED_GAP_S`.
+- **Rough edge.** The floor is a guess at the camera's jitter.
+- **Judge it.** Check 159.
+
+### 127. A flick is the fastest tip passing 1500 mm/s; it spikes and decays
+
+- **Built.** Until a trigger kind exists, `hand:<side>.flick` is a lane:
+  0 at rest; when the fastest fingertip (the palm with no skeleton)
+  reaches 1500 mm/s it jumps to speed / 3000 mm/s (at most 1), holds the
+  peak while the move lasts, then decays with τ = 0.15 s. No new hit
+  until the speed falls under 700 mm/s; over 10000 mm/s is a tracking
+  jump and ignored; a hand entering the box never flicks on its first
+  frame.
+- **Other options.** Acceleration (noisier); fingertips relative to the
+  palm (a whole-hand snap would not count); a hold-then-drop shape.
+- **To reverse.** `FLICK_ON`, `FLICK_OFF`, `FLICK_FULL`, `FLICK_CEILING`,
+  `FLICK_DECAY_S`.
+- **Rough edge.** Any fast move is a flick, so energy and flick fire
+  together on big moves (closing a fist fast included).
+- **Judge it.** Check 161.
+
+### 128. Gap is the palms' distance; twist is the right hand's roll less the left's
+
+- **Built.** `hands:gap`: 60 mm → 0 … 600 mm → 1. `hands:twist`: right
+  roll − left roll, wrapped, ±90° → 0 … 1, so mirror-image hands (both
+  palms down, a clap) read 0.5 and turning a wheel clockwise reads up.
+  Both slewed 0.05 s; both read nothing unless both hands are in.
+- **Other options.** The full relative rotation (loses direction); the
+  roll difference in room terms (a clap would read ±180°).
+- **To reverse.** `GAP_RANGE`, `TWIST_FULL`, `PAIR_S`, `PAIR_RESTS`.
+- **Rough edge.** Twist reads roll only; past a quarter turn each way it
+  wraps.
+- **Judge it.** Check 162.
+
+### 129. The dance sources and the grab have no settings, no DAW output and no hand Learn
+
+- **Built.** None of the new hand sources is a registry param (no dead
+  zone, curve, attack or rest of its own), none sends to the DAW port,
+  and a hand Learn still lands only an axis: a dance source is picked on
+  the ROUTING page (source combo), the grab as a row's gate there or
+  from a param's "Gate: … ▸". A Learn made while holding a fist writes no
+  grab gate (`held_gate` offers only a held pinch).
+- **Other options.** Each as a full axis with settings, MIDI out and
+  Learn; grab thresholds as `hands.*` params; a held grab offered by
+  `held_gate`, so a fist and a turn would write a grab mapping in one
+  gesture.
+- **To reverse.** Additive each.
+- **Rough edge.** Their feel is fixed in code; a route's own motion
+  (route motion, PR #162) can still shape one per row. A grab mapping
+  takes three ROUTING-page edits per row.
+- **Judge it.** Checks 158 and 164.
+
+### 130. The HANDS page shows the dance sources in a column beside the axes, the grab on each curl row
+
+- **Built.** A 220 px column right of the axis rows (which are that much
+  shorter): per hand five curl bars ending in "grab ●" / "grab ○", then
+  spread, energy and flick; then gap and twist (with a middle tick).
+  Hollow while a source reads nothing; hover for the address and value,
+  and on the grab the live fist level against its two thresholds. Beside
+  the rows, not under them: the page is already the window's height.
+- **Other options.** A folded header (still one line too many); the grab
+  beside the pinch switches (hidden when they are off, and taller than
+  the box).
+- **To reverse.** `panel._dance`, `panel._grab`, two lines in `_axes`.
+- **Rough edge.** The bars are small (16 px).
+- **Judge it.** Checks 158 and 163.
+
+### 131. The grab: the four fingers' mean curl, closing past 0.65, letting go under 0.45
+
+- **Built.** `hand:<side>.grab` is 1 while the hand is a fist: the mean
+  of the index, middle, ring and pinky raw curls (the thumb left out, so
+  a fist with the thumb out or tucked both count), through the pinches'
+  `Gate`: it closes once the fist passes 0.65, opens only under 0.45,
+  and an edge must hold 0.05 s. A hand leaving the box drops it at once.
+  With no skeleton it never closes.
+- **Other options.** The SDK's grab number; the minimum of the four
+  curls (one badly tracked finger would stop a fist); the smoothed
+  curls (more lag).
+- **To reverse.** `GRAB_FINGERS`, `GRAB_CLOSE`, `GRAB_OPEN`,
+  `GRAB_HOLD_S`, `fist`.
+- **Rough edge.** Tuned on synthetic hands; 0.65 is low on purpose
+  because a real fist may not read 1. Closing fast also fires flick and
+  energy.
+- **Judge it.** Checks 163 and 164.
+
+### 132. The grab lanes go after the dance lanes; the grab gates after the pinches
+
+- **Built.** `hand:left.grab` and `hand:right.grab` ("L grab", "R grab")
+  come after the sixteen dance lanes, so the `hand` vector is 40 lanes
+  and no older lane moves. The published gates are the eight pinches,
+  then the two grabs, so the ROUTING gate combo and "Gate: … ▸" offer
+  them and a row reads "… positions while R grab". The grab lives in
+  `HandsIO.grab`, not the pinches' dict, so the ghost hands and the probe
+  read what they did.
+- **Other options.** The grab beside the pinches (moves every dance lane).
+- **To reverse.** `grab_name`, the `grab` map in `Layout`, `HandsIO.grab`.
+- **Rough edge.** None known.
+- **Judge it.** Check 163.
+
+### 133. "Hands on the main projection" is the SETUP.md example, not a file in the home
+
+- **Built.** Each output's `hands` switch already defaults on, so the
+  projector shows the hands with no edit. SETUP.md's projector entry
+  says `hands = true` outright, with a sentence. The rig's own
+  `~/Hyperspace/config.toml.rig` is the owner's file, outside the repo,
+  and this run never touches the home: the owner adds the line there.
+- **Other options.** A `config.toml.rig` example in the repo.
+- **To reverse.** Delete the line and the sentence.
+- **Rough edge.** It changes nothing until something says
+  `hands = false`.
+- **Judge it.** Check 165.
+
+### 134. The palette's ids are `fx.palette.*`, not `palette.*`
+
+- **Built.** The palette fold is an effect file,
+  `shaders/fx/palette.glsl`, so its params are `fx.palette.*`, it is a
+  chip on the FX page, and the desk, hands, LFOs and bands reach it as
+  any effect.
+- **Other options.** A core `palette.*` group (the working plan's ids).
+- **To reverse.** Rename the ids (cheap while no preset uses them).
+- **Rough edge.** The ids differ from the working plan's.
+- **Judge it.** Check 166.
+
+### 135. A new `// @mix` directive: the palette starts at mix 0
+
+- **Built.** `fx.py` reads `// @mix <value>` as an effect's default
+  wet/dry (1 when absent, so every other effect is as it was). The
+  palette says `@mix 0`: switching it on changes nothing until its mix is
+  raised.
+- **Other options.** Mix 1 and neutral fold defaults: the fold at width
+  360 is not the identity, so none exists.
+- **To reverse.** Delete the directive; "on" would then fold the picture.
+- **Rough edge.** "On" with no change can look broken; the tip says "Mix
+  0 leaves the picture alone".
+- **Judge it.** Check 166.
+
+### 136. The palette's params: `mode` 0 / 1, an `anchors` count, twelve anchor values
+
+- **Built.** `mode` is a whole number, 0 (fold) or 1 (gradient map),
+  because the `@param` form has no list. The ramp is up to four anchor
+  colours, each `a<n>_hue` (degrees, wraps), `_sat` and `_val`, and
+  `anchors` (2–4) says how many are used, dark to light, evenly spaced
+  on brightness. The default is a grey ramp (values 0, 0.333, 0.667, 1).
+- **Other options.** RGB triples; one saturation for all (8 params); a
+  list form added to `fx.py`.
+- **To reverse.** Rename the params (breaks saved palettes).
+- **Rough edge.** Twenty params of its own.
+- **Judge it.** Checks 166 and 167.
+
+### 137. The palette is `@order 95`, last but with room after it
+
+- **Built.** The palette sits after every other effect (the next highest
+  factory order is 85), and a chip dragged to the end needs only one
+  order rewritten.
+- **Other options.** 99.
+- **To reverse.** The header line.
+- **Judge it.** — (tests only).
+
+### 138. The fold is a triangle over the absolute hue wheel; saturation and value are linear
+
+- **Built.** Red folds to one end of the slice and cyan to the other,
+  centred on `centre`, `width` wide: neighbouring hues stay neighbours,
+  no seam. Saturation and value are rescaled linearly into `sat_lo`–
+  `sat_hi` and `val_lo`–`val_hi`, so a raised `val_lo` lifts black to
+  grey, and a grey pixel (hue 0) lands on the slice's edge once `sat_lo`
+  is above 0. On a see-through ground (overlay, faces) the result is
+  scaled by the pixel's alpha, so a raised floor never lights what was
+  clear.
+- **Other options.** A fold relative to the picture's mean hue; a gamma
+  on value.
+- **To reverse.** A few lines of `palette.glsl`.
+- **Rough edge.** Never seen on a projector.
+- **Judge it.** Check 166.
+
+### 139. The FX page is repacked to fit a thirteenth chip and the palette's strip
+
+- **Built.** Three chips a row as before (row 45); the gaps around the
+  chips and under the strip header are gone, which wins back the room a
+  fifth row of chips needs. The strip packs `_lo`/`_hi` and
+  `_hue`/`_sat`/`_val` params onto one row by name (`ui_fx.strip_rows`),
+  and the palette shows only the open mode's rows
+  (`ui_fx.HIDDEN_BY_MODE`); the hidden params stay declared and routable.
+- **Other options.** Four chips a row (names cut); an `@group` tag in
+  `fx.py`.
+- **To reverse.** Restore the spacing; delete `strip_rows`.
+- **Rough edge.** The page fits with 7 px to spare at worst; the chips
+  sit closer to the status lines; a route on a hidden row cannot be seen
+  on the strip until the mode flips.
+- **Judge it.** Check 167.

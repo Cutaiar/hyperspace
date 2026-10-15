@@ -17,9 +17,11 @@ points to it.
 - The party fixes (plan 24) run alongside as a small plan.
 
 (Renumbered 2026-10-14: plan 25 became the shared library, PRs #167/#168.
-Plans 24, 26 and 27 are run together from
-[`24-26-27-orchestrator-prompt.md`](24-26-27-orchestrator-prompt.md); the
-party fixes are its stream C.)
+Plans 24, 26 and 27 were run together from
+[`24-26-27-orchestrator-prompt.md`](24-26-27-orchestrator-prompt.md). As
+built: the party fixes are [`24-party-fixes.md`](24-party-fixes.md), the
+render graph [`26-render-graph.md`](26-render-graph.md) and the device
+registry [`27-device-registry.md`](27-device-registry.md).)
 
 ## Render graph design decisions (owner, 2026-10-12)
 

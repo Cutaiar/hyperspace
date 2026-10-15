@@ -66,7 +66,26 @@ the same device list (**rescan** if it was plugged in after launch).
 
 Plug it in (USB). Nothing to configure: the MIDI adapter is on by default
 and looks for a port whose name contains "APC40". The desk map is
-[`ENGINEERING.md`](ENGINEERING.md) §8. To check the device without the
+[`ENGINEERING.md`](ENGINEERING.md) §8. At the desk:
+
+- **Load a preset**: tap a pad in clip rows 1, 4 or 5 (the bank).
+- **Save** (the two-handed save): hold **SAVE** — track 8's clip-stop
+  button, the last of the row under the grid — and tap a pad. An empty
+  pad gets the live look as a new preset; a filled pad gets a new preset
+  too (TRIP → TRIP 2) and its old preset stays in the preset list. The
+  pad blinks. Nothing is ever overwritten or trashed from the desk.
+  Holding an empty pad alone also saves into it.
+- **SHIFT** latches the second layer: the band strip on the device
+  knobs, the hand feel and BPM on track knobs 1–5, the band scenes on
+  clip rows 2–3, and the sound on the track faders (S1–S6 the bands'
+  drive, S7 dynamics, S8 trim). Without SHIFT the knobs and track faders
+  are the loaded preset's.
+- **Points, lines, faces, rotate** are scene launch 1–4, the same with
+  or without SHIFT. The **MASTER** fader is the audio drive and the
+  **crossfader** the master dim, on both layers.
+- What each press did: the SYSTEM page's **desk log**.
+
+To check the device without the
 app: `uv run python tools/midi_probe.py`. Another port name or no MIDI at
 all:
 
