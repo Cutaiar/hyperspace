@@ -1869,6 +1869,8 @@ class HandsIO:
 def _close_port(port) -> None:
     """Best effort: a dropped or finished port is closed, so a virtual one
     is unregistered rather than left for the next open to find."""
+    # bridge._close_port's twin, kept for the caller's injected `out=`: this
+    # module may not import the host's bridge.py (tests/test_hands_boundary.py)
     if port is not None and hasattr(port, "close"):
         try:
             port.close()

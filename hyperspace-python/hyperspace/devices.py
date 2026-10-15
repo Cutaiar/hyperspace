@@ -621,7 +621,7 @@ class BridgeDevice(Base):
         from .routing import sink_values
         io.send_values(sink_values(table.sinks(self.role), reg, analyzer, self._n))
         if analyzer is not None:
-            self._n = analyzer.n
+            self._n = int(getattr(analyzer, "n", self._n))
 
     def targets(self) -> list[tuple]:
         return [(self.io, "bridge", "Bridge")] if self.io is not None else []
@@ -760,7 +760,7 @@ class MidiOutDevice(Base):
                     if not self._send(m):
                         break
         if analyzer is not None:
-            self._n = analyzer.n
+            self._n = int(getattr(analyzer, "n", self._n))
 
     def targets(self) -> list[tuple]:
         return [(self.io, "bridge", "OutPort")] if self.io is not None else []
@@ -976,25 +976,32 @@ class DeviceRegistry:
     def _seed_sinks(self, entries: list[dict]) -> None:
         """An enabled entry's old `send` list (`[bridge] send`, the bridge's
         default ``["lane:*"]`` included) becomes the session's sink rows on
-        its role — once: only while the table holds no sink row on that
-        role, enabled or not (so a row switched off on ROUTING is never
-        brought back), written to `bindings.json` with one note. From then
-        on the rows say and the key is not read."""
+        its role — **once per role**, marked done in `bindings.json` itself
+        (`Bindings.sinks_seeded`, never by consuming the owner's config
+        key): a role in that list is never seeded again, so deleting every
+        row of it on ROUTING, or saving config.toml mid-session, brings
+        nothing back. A file that already holds sink rows on a role counts
+        as seeded for it (the mark is added). Written with one note; from
+        then on the rows say and the key is not read."""
         table = getattr(self.ctx, "table", None)
         if table is None or not hasattr(table, "sinks"):
             return
         from . import routing
+        if not isinstance(getattr(table, "sinks_seeded", None), list):
+            table.sinks_seeded = []          # a table from before a hot reload
+        seeded = table.sinks_seeded
         added = False
         for e in entries:
             send = e.get("send")
             role = e.get("role", "")
-            if not e.get("enabled", True) or send is None or not role:
+            if not e.get("enabled", True) or send is None or not role or role in seeded:
                 continue
+            seeded.append(role)
+            added = True                     # the mark alone is worth the write
             if table.sinks(role, enabled=False):
-                continue
+                continue                     # rows from before the mark: seeded already
             rows, bad = routing.sink_rows_from_send(role, send)
             table.bindings += rows       # checked already; the load's notes stand
-            added = added or bool(rows)
             said = ", ".join(f"{b.source} → {b.target}" for b in rows) or "nothing"
             self._note(f"bindings: [{e.get('kind', role)}] send is now sink rows in "
                        f"bindings.json ({said}) — the rows say from here on; edit them on "

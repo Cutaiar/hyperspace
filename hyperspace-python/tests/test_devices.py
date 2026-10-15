@@ -72,7 +72,7 @@ def test_the_retry_schedule_is_the_ports_schedule():
     assert [devices.retry_after(n) for n in range(9)] == [midi.retry_after(n) for n in range(9)]
 
 
-def test_the_kinds_table_lists_todays_four_and_make_sorts_an_entry():
+def test_the_kinds_table_maps_each_kind_and_make_sorts_an_entry():
     """`[[devices]] kind` → the device class, here and nowhere else; an
     entry that is not enabled is `off`, a kind the table lacks an error
     line — never a crash, never an import."""

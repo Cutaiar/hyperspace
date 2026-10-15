@@ -93,6 +93,10 @@ def test_a_sink_row_is_a_session_row_never_a_performer_and_round_trips(tmp_path)
     assert all(b.is_sink and not b.is_performer and routing.is_session_row(b) for b in rows)
     assert r.table.routes() == [] and r.table.owner("view.bright") is None
     assert [b.sink for b in rows] == [("bridge", 3), ("bridge", 0), ("hands-daw", 1)]
+    # a lane reads as the ext / LFO rows do: scheme, index, then its name
+    r.router.labels["lane"] = ["SUB", "LOW", "MID", "HIGH"]
+    assert r.router.describe(Binding("lane:3", "bridge:3", SINK_OP)) == "lane 3 HIGH → bridge:3"
+    assert r.router.describe(rows[0]) == "param view.bright → bridge:3"
     r.table.write()
     doc = json.loads((tmp_path / "bindings.json").read_text())
     assert {"source": "param:view.bright", "target": "bridge:3", "op": "send"} in doc["bindings"]
@@ -183,6 +187,38 @@ def test_the_bridges_send_list_becomes_sink_rows_once_with_one_note(tmp_path, ca
     devices.DeviceRegistry(config.devices(config.load(tmp_path / "none.toml")),
                            devices.Context(table=t4, notes=[]))
     assert t4.sinks(enabled=False) == [] and not (tmp_path / "b4.json").exists()
+
+
+def test_rows_deleted_on_routing_never_come_back_the_translation_is_marked(tmp_path):
+    """The translation is marked done in bindings.json (`sinks_seeded`),
+    not by consuming the config key: × every bridge row, reload the table,
+    re-run the registry (a launch) and re-apply the list (a config.toml
+    save mid-session) — no row comes back. A file from before the mark
+    that already holds rows on the role counts as seeded (the mark added)."""
+    entries = [{"role": "bridge", "kind": "bridge", "enabled": True, "send": ["lane:*"]}]
+    path = tmp_path / "bindings.json"
+    t = Bindings.load(path, legacy_midi=None)
+    rig = devices.DeviceRegistry(entries, devices.Context(table=t, notes=[]))
+    assert len(t.sinks("bridge")) == 1 and t.sinks_seeded == ["bridge"]
+    assert '"sinks_seeded": ["bridge"]' in path.read_text()
+    for b in t.sinks(enabled=False):                 # ROUTING's ×, each writing the file
+        t.remove(b)
+        t.write()
+    rig.apply([dict(entries[0], rate=50)])           # config.toml saved mid-session
+    assert t.sinks(enabled=False) == []
+    again = Bindings.load(path, legacy_midi=None)
+    assert again.sinks_seeded == ["bridge"]
+    notes: list[str] = []
+    devices.DeviceRegistry(entries, devices.Context(table=again, notes=notes))
+    assert again.sinks(enabled=False) == [] and notes == []
+    # a home whose file holds rows on the role but no mark (written before it)
+    old = tmp_path / "old.json"
+    old.write_text(json.dumps({"schema": routing.SCHEMA, "profile": "apc40", "bindings": [
+        {"source": "lane:0", "target": "bridge:0", "op": "send"}]}))
+    t2 = Bindings.load(old, legacy_midi=None)
+    devices.DeviceRegistry(entries, devices.Context(table=t2, notes=(n2 := [])))
+    assert [b.source for b in t2.sinks()] == ["lane:0"] and n2 == []
+    assert t2.sinks_seeded == ["bridge"] and "sinks_seeded" in old.read_text()
 
 
 def test_a_param_routed_to_the_bridge_sends_its_effective_value_after_apply(tmp_path):

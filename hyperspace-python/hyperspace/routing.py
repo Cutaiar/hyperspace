@@ -762,7 +762,10 @@ class Binding:
         s = self.scheme
         if self.is_sink:
             addr = ":".join(self.parts)
-            what = "every lane" if self.source == "lane:*" else (name or f"{s} {addr}")
+            if self.source == "lane:*":
+                what = "every lane"
+            else:                        # "lane 3 HIGH", as the ext / LFO rows read
+                what = f"{s} {addr}" + (f" {name}" if name else "")
             return f"{what} → {self.target}"
         if self.is_midi:
             ch = "any ch" if self.channel is None else f"ch{self.channel + 1}"
@@ -900,6 +903,8 @@ def sink_values(rows: Iterable[Binding], reg: Registry, analyzer=None,
     it."""
     out: dict[int, float] = {}
     rows = [b for b in rows if b.enabled and b.is_sink]
+    if not rows:
+        return out
     n_live = analyzer.n if analyzer is not None else int(lanes)
 
     def lane(i: int) -> float:
@@ -1535,7 +1540,10 @@ def dumps_doc(d: dict) -> str:
     as a binding."""
     rows = ",\n".join("  " + json.dumps(b) for b in d["bindings"])
     text = f'{{\n "schema": {json.dumps(d["schema"])},\n'
-    text += f' "profile": {json.dumps(d["profile"])},\n "bindings": [\n{rows}\n ]'
+    text += f' "profile": {json.dumps(d["profile"])},\n'
+    if d.get("sinks_seeded"):            # plan 27 B3: the sinks' `send` lists translated
+        text += f' "sinks_seeded": {json.dumps(d["sinks_seeded"])},\n'
+    text += f' "bindings": [\n{rows}\n ]'
     return text + "\n}\n"
 
 
@@ -1631,6 +1639,10 @@ class Bindings:
         # the macros' subscribers (plan 13 §2.4), {"macro.N": Macro}
         self.macros: dict[str, Macro] = {}
         self.macros_serial = 0        # bumped by set_macros: Router.follow_macros re-lands
+        # the sink roles whose old `send` list has been translated into sink
+        # rows (plan 27 B3, devices.DeviceRegistry._seed_sinks): kept in the
+        # file, so deleting every row of a role never brings the list back
+        self.sinks_seeded: list[str] = []
         # the desk (plan 13 §3): which layer is up — runtime, never saved,
         # a fresh start is on the preset layer — and two counters the MIDI
         # adapter watches: a layer change or a desk replacement redraws
@@ -1801,6 +1813,8 @@ class Bindings:
         changed = changed or bool(latched)
         t = cls(rows, path=path, profile=profile)
         t.macros = macros
+        seeded = data.get("sinks_seeded")
+        t.sinks_seeded = [str(r) for r in seeded] if isinstance(seeded, list) else []
         t.bindings, t.dropped = referee(t.bindings)
         if migrated:
             notes += [f"dropped {b.source} → {b.target}: {why}" for b, why in t.dropped]
@@ -1812,8 +1826,12 @@ class Bindings:
         """The file's dict: the session's controls only (`is_session_row`)
         — never a performer row, a preset-layer row, the macros or any
         values; those are the loaded preset's (plan 13 §2.2)."""
-        return {"schema": SCHEMA, "profile": self.profile,
-                "bindings": [b.to_json() for b in self.bindings if is_session_row(b)]}
+        d = {"schema": SCHEMA, "profile": self.profile,
+             "bindings": [b.to_json() for b in self.bindings if is_session_row(b)]}
+        seeded = getattr(self, "sinks_seeded", None)      # a table from before a hot reload
+        if seeded:
+            d["sinks_seeded"] = list(seeded)
+        return d
 
     def dumps(self) -> str:
         """The file text: one row per line, so a diff reads as a binding."""
