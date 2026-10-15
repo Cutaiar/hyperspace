@@ -137,7 +137,13 @@ fullscreen = true
 name = "projector"
 monitor = 2
 fullscreen = true
+hands = true         # the ghost hands on the main projection (the default; say it on the rig)
 ```
+
+The hands show on every output by default (each entry's `hands`
+switch); on the party rig the projector is the main projection, so its
+entry says `hands = true` outright and the OUTPUT page's switch turns
+them off for a set that wants the shape alone.
 
 The screens must be connected **before launch**: a later output whose
 screen is missing is not opened, and a screen plugged in afterwards is
