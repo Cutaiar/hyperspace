@@ -1,0 +1,19 @@
+{
+ "schema": "hyperspace.preset/2",
+ "name": "PHONE ROUTES",
+ "note": "Test fixture (plan 27 B4), not a show: a phone's OSC faders on the camera — phone:x positions the yaw, phone:y pushes the pitch about its base. The device is a [[devices]] entry of kind osc with role phone.",
+ "values": {},
+ "routes": [
+  {
+   "source": "phone:x",
+   "target": "camera.yaw",
+   "op": "position"
+  },
+  {
+   "source": "phone:y",
+   "target": "camera.pitch",
+   "op": "push",
+   "value": 0.25
+  }
+ ]
+}

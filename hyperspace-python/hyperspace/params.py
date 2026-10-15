@@ -55,6 +55,7 @@ fires on a rising edge.
 
 from __future__ import annotations
 
+import copy
 import math
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
@@ -66,7 +67,7 @@ from .analyzer import CURVES, F_HI, F_LO, Q_HI, Q_LO
 from .bands import CEIL, NORMS, SHAPERS
 from .fx import FxState
 from .fx import declare as declare_fx
-from .geometry import PLANE_NAMES, SHAPES
+from .geometry import EYE_DISTANCE, EYE_FOV, PLANE_NAMES, SHAPES, pan_px_to_world
 from .ghost import GhostState
 from .ghost import register as declare_ghost
 from .lookback import (
@@ -107,7 +108,7 @@ F_KEYS = 8
 # (`preset`, the bank) has no persisted params, and `rot.phase.*` is `persist=False`.
 PERFORMANCE_GROUPS = ("view", "rot", "camera", "pattern", "dream", "fx", "lfo", "macro")
 SESSION_GROUPS = ("tempo", "hands", "ghost", "band", "master", "scene", "audio", "output",
-                  "overlay", "ui", "desk")
+                  "overlay", "ui", "desk", "eye")
 PARTS = {"performance": PERFORMANCE_GROUPS, "session": SESSION_GROUPS}
 
 # the reference's fader → rotation-rate factor (its PLANEDRIVE was
@@ -120,6 +121,17 @@ DRIVE = 3.2
 # legacy6 routes (routing.py) land today's rate without clamping. Wide for
 # a slider (RAW_STEPS detents of 1.33×); WP5a can give it a finer widget.
 ROT_RATE_MAX = CEIL * DRIVE * tapers.T_DRIVE.map(tapers.T_DRIVE.steps)
+
+# camera.pan's reach, world units (plan 26 A2). Chosen so a routed pan
+# travels as far as the old ±4000 px did on the 1080p screen
+# (geometry.PAN_REF_PX, 324 px a unit there: ±12.3): hands-orbit's push
+# of 0.1 moves the shape ±1.2 units (≈ ±390 px) for a hand across the box,
+# where it moved ±400 px
+PAN_RANGE = 12.0
+# the eye's ranges: a field of view from a long lens to a wide one, and a
+# distance from just outside a unit shape to far off
+EYE_FOV_RANGE = (10.0, 120.0)
+EYE_DISTANCE_RANGE = (1.5, 40.0)
 
 # modulation hysteresis: a toggle or trigger goes high above ON and low
 # below OFF; an enum or integer only moves once the target is this far
@@ -792,6 +804,47 @@ class Registry:
 
 # ---------------------------------------------------------------- builder
 
+# plan 26 A2: camera.pan is in world units (the shape's unit circumradius),
+# no longer logical px. A document saved since says so with this key (the
+# schema stays preset/2: `load_doc` ignores keys it does not know, so an
+# older build still loads the file — reading its pan as px); one without
+# it is a preset/2 file from before, its pan read in px and converted
+UNITS_KEY = "units"
+UNITS = {"camera.pan": "world"}
+PAN_IDS = ("camera.pan.x", "camera.pan.y")
+
+
+def pan_world(doc: dict) -> tuple[dict, bool]:
+    """A preset document — a whole preset (`preset.load_doc`) or a camera
+    module preset (`Library._apply_doc`, `Library.defaults`) — with its
+    camera.pan in world units (plan 26 A2):
+    a file without the `units` key stored logical px, which become world
+    units through the default eye on the 1080p screen
+    (`geometry.pan_px_to_world`), so the shape sits where it did there.
+    Only its values are converted: a route's or a desk row's depth and a
+    macro base subscriber's from / to are fractions of the param's range
+    (`Sub.at` lands a norm), and `params.PAN_RANGE` was chosen so that
+    range reaches as far on that screen as the old ±4000 px did (±12 units,
+    ±3888 px). Returns (a copy, whether anything changed); the document
+    itself when it is already in world units or names no pan value."""
+    units = doc.get(UNITS_KEY)
+    # a hand-edited non-object `units` is no marker: the pan is read in px
+    if isinstance(units, dict) and units.get("camera.pan") == "world":
+        return doc, False
+    values = doc.get("values")
+    if not isinstance(values, dict) or not any(k in values for k in PAN_IDS):
+        return doc, False
+    out = copy.deepcopy(doc)
+    changed = False
+    for pid in PAN_IDS:
+        v = out["values"].get(pid)
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            new = pan_px_to_world(v)
+            changed |= new != v
+            out["values"][pid] = new
+    return out, changed
+
+
 def _attr(obj, name):
     return (lambda: getattr(obj, name)), (lambda v: setattr(obj, name, v))
 
@@ -972,9 +1025,16 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     # with no up vector to flip, so tumbling over the top is just more turn
     r.continuous("camera.pitch", "Pitch", *_attr(view, "pitch"), lo=-math.pi, hi=math.pi,
                  wrap=True, fmt=lambda v: f"{math.degrees(v):.0f}°", group=g)
+    # plan 26 A2: zoom and pan are the shape's world scale and position
+    # (geometry.model_matrix) — the hands stay where the performer is and
+    # only the shape grows or moves. Pan is in world units, the shape's
+    # unit circumradius (y positive down, as it always was); a preset/2
+    # file's px are converted at load (preset.pan_world)
     for i, axis in enumerate("xy"):
         r.continuous(f"camera.pan.{axis}", f"Pan {axis.upper()}", *_item(lambda: view.pan, i),
-                     lo=-4000.0, hi=4000.0, fmt=lambda v: f"{v:+.0f} px", group=g)
+                     lo=-PAN_RANGE, hi=PAN_RANGE, fmt=lambda v: f"{v:+.2f}", group=g,
+                     tip="Where the shape sits in the world, in shape radii (the "
+                         "shape's own size): x right, y down. The hands do not move.")
 
     def reset_view():
         view.ang = [0.0] * 6
@@ -983,6 +1043,25 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
 
     r.trigger("camera.reset", "Reset view", reset_view, group=g,
               tip="Reset rotation phases, orbit, zoom and pan.")
+
+    # ---- the eye (plan 26 A2): the one fixed camera the shape (and, from
+    # A3, the hands) are seen through. Session, like the room it is framed
+    # on: a preset never moves it. The defaults are the old 3D divide, so
+    # the shape lands where it always did; not modulatable — the camera
+    # is the rig, the shape is what moves
+    g = "eye"
+    r.continuous("eye.fov", "Eye field of view", *_attr(view, "eye_fov"),
+                 lo=EYE_FOV_RANGE[0], hi=EYE_FOV_RANGE[1],
+                 fmt=lambda v: f"{v:.1f}°", group=g, modulatable=False,
+                 tip="How wide the eye sees, across the shorter side of the picture. "
+                     f"Wider shows more of the world, smaller; {EYE_FOV:.1f}° is the "
+                     "view the shape was always drawn in.")
+    r.continuous("eye.distance", "Eye distance", *_attr(view, "eye_distance"),
+                 lo=EYE_DISTANCE_RANGE[0], hi=EYE_DISTANCE_RANGE[1], log=True,
+                 fmt=lambda v: f"{v:.2f}", group=g, modulatable=False,
+                 tip="How far the eye stands from the centre of the world, in shape "
+                     "radii. Nearer: a stronger perspective and a bigger shape. "
+                     f"{EYE_DISTANCE:.2f} is the view the shape was always drawn in.")
 
     # ---- look-back: the frame history composited over the scene ----
     # lookback.py reads these every frame; the dream worker (WP6b) reads

@@ -104,8 +104,8 @@ like the rename above. The SYSTEM page shows both.
                             # With a list, the list says and those tables are
                             # ignored (one note each)
     role = "apc40"          # the name rows and the SYSTEM page use; unique; no ":"
-    kind = "midi"           # "midi", "gamepad", "hands", "bridge", "midi-out" (B4
-                            # adds "osc", "cloud"); an unknown kind is an
+    kind = "midi"           # "midi", "gamepad", "hands", "bridge", "midi-out",
+                            # "osc", "cloud"; an unknown kind is an
                             # error line on the SYSTEM page, never a dead launch
     enabled = true          # false lists it as `off`: nothing opened, nothing imported
                             # …then the kind's own keys: [midi]'s port / profile /

@@ -253,7 +253,10 @@ def test_mouse_orbits_pans_and_zooms_on_the_base(fake):
     mouse.poll(shift=True)                            # re-anchors as a pan
     fake.cursor = (150.0, 110.0)
     mouse.poll(shift=True)
-    assert (pan_x.base, pan_y.base) == (10.0, -10.0)
+    # plan 26 A2: the pan is in world units — the cursor's px over the px a
+    # unit spans at the origin through the eye
+    unit = app._px_per_unit(view, *g.get_window_size("render"))
+    assert (pan_x.base, pan_y.base) == pytest.approx((10.0 / unit, -10.0 / unit))
     # letting go ends it; the wheel zooms
     fake.buttons.clear()
     mouse.poll(shift=False)

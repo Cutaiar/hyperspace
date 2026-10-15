@@ -37,8 +37,8 @@ def test_new_params_exist_and_default_to_the_undriven_look(rig):
         assert reg[f"pattern.mod.{k}"].value == 1.0
     assert reg["camera.pan.x"].value == 0.0 and reg["camera.pan.y"].value == 0.0
     assert reg["view.bmp_file"].kind is Kind.TEXT
-    reg["camera.pan.x"].set_value(12.5)
-    assert view.pan[0] == 12.5
+    reg["camera.pan.x"].set_value(2.5)     # world units (plan 26 A2), ±12
+    assert view.pan[0] == 2.5
     reg["rot.rate.XY"].set_value(-2.0)   # signed: a plane can run backwards
     assert view.rate[0] == -2.0
 
@@ -95,7 +95,7 @@ def test_text_param_is_inert_on_every_numeric_surface(rig):
 def test_snapshot_and_restore_round_trip_through_the_registry(rig):
     reg, view, _control, _audio, _ = rig
     view.bright, view.shape, view.faces = 1.5, 7, True
-    reg["camera.pan.y"].set_value(-40.0)
+    reg["camera.pan.y"].set_value(-4.0)    # world units (plan 26 A2), ±12
     reg["band.2.atk"].set_norm(0.3)
     reg["view.bmp_file"].set("a.png")
     snap = reg.snapshot()
@@ -110,7 +110,7 @@ def test_snapshot_and_restore_round_trip_through_the_registry(rig):
     reg["band.2.atk"].set_norm(0.9)
     missing = reg.restore({**snap, "gone.param": 1})
     assert missing == ["gone.param"]
-    assert (view.bright, view.shape, view.faces, view.pan[1]) == (1.5, 7, True, -40.0)
+    assert (view.bright, view.shape, view.faces, view.pan[1]) == (1.5, 7, True, -4.0)
     assert view.bmp_file == "a.png"
     assert reg["band.2.atk"].norm == pytest.approx(0.3, abs=1.0 / reg["band.2.atk"].steps)
     assert reg.snapshot() == snap
