@@ -402,7 +402,7 @@ def test_the_routing_page_is_one_page_over_the_loaded_preset(rig, tmp_path, monk
               # (scene launch 5: 1–4 are the invariant render toggles, plan 24 C1)
               {"source": "note:0:86", "target": "view.points", "op": "toggle",
                "feedback": "led"},
-              {"source": "cc:0:7", "target": "view.bright", "op": "abs"}],   # a fader: dropped
+              {"source": "cc:0:14", "target": "view.bright", "op": "abs"}],  # MASTER: dropped
         macros={"macro.1": {"label": "Heat", "subs": [
                     {"base": "view.depth4", "from": 0.2, "to": 0.8},
                     {"depth": {"source": "hand:7", "target": "view.bright"},
@@ -417,7 +417,7 @@ def test_the_routing_page_is_one_page_over_the_loaded_preset(rig, tmp_path, monk
     # the head
     assert "SHOW" in texts and "DESK LAYER: PRESET" in texts and "●" not in texts
     assert "learn: track fader 3 is invariant (the session's) — not learned" in texts
-    assert any(t.startswith("desk: dropped cc:0:7 → view.bright") and "invariant" in t
+    assert any(t.startswith("desk: dropped cc:0:14 → view.bright") and "invariant" in t
                for t in texts)
     assert "bindings" not in lib.kinds                         # no routing-preset strip
     # the routes, with the macro's chip
@@ -429,7 +429,8 @@ def test_the_routing_page_is_one_page_over_the_loaded_preset(rig, tmp_path, monk
     assert {"view.speed", "view.points"} <= set(previews)
     assert "K1" in texts and "unmapped — dark" in texts
     dark = [f.source for f in ui_routing.unmapped(table)]
-    assert "cc:0:48" in dark and "cc:*:16" not in dark and "cc:0:7" not in dark
+    assert "cc:0:48" in dark and "cc:*:16" not in dark and "cc:0:14" not in dark
+    assert "cc:0:7" in dark          # S1: the preset's since plan 24 C2, and this one maps none
     # the macros: both subscribers, the shared param marked on both lines
     assert "view.depth4" in previews and any(p.endswith("→ view.bright") for p in previews)
     assert texts.count("shared") >= 2
@@ -1082,7 +1083,7 @@ def test_goto_scrolls_the_rows_child_to_the_controls_line(rig, monkeypatch):
     draw(3)
     assert got["child"][0] == at and st["marked"] == 1       # once: it does not keep pulling
     # an invariant control: its row in the session section, further down
-    s3 = control("S3")
+    s3 = control("SM")                     # MASTER (S1–S8 are layered since plan 24 C2)
     lrn.pick(s3.source)
     ui_routing.goto(panel, s3.source)
     draw(2)

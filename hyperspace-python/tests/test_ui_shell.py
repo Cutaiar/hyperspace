@@ -870,7 +870,9 @@ def test_the_routing_page_fits_over_a_loaded_preset_and_a_full_desk(rig, monkeyp
                                      feedback="ring", layer="preset") for k in range(8)],
             *[Binding(f"note:{k}:{0x36}", "view.shape", "set", float(k), feedback="led",
                       layer="preset") for k in range(8)],
-            Binding("cc:0:7", "view.bright", "abs")]          # a fader: dropped, noted
+            # the track faders: the preset's own since plan 24 C2 (decision 17)
+            *[Binding(f"cc:{k}:7", "view.bright", "abs", layer="preset") for k in range(8)],
+            Binding("cc:0:14", "view.bright", "abs")]         # MASTER: dropped, noted
     rig.lib.presets.desk_notes = table.set_desk(full)
     table.set_macros({f"macro.{k}": {"label": f"M{k}", "subs": [
         {"base": "view.depth4", "from": 0.0, "to": 1.0},
@@ -1757,7 +1759,7 @@ def test_a_picked_control_dims_every_page_but_routing(rig, monkeypatch):
     assert dimmed.pop("routing") == (0, False)
     assert dimmed == {k: (1, True) for k in PAGE_KEYS if k != "routing"}
     assert panel._picking is False                           # only while the page draws
-    lrn.pick(_control("S3").source)                          # invariant: picked for the look only
+    lrn.pick(_control("SM").source)                          # invariant: picked for the look only
     assert ui_desk.picked(panel) is not None and pages() == idle
     lrn.pick(_control("D3").source)
     table.set_layer("global")                                # the session's layer: nothing maps
@@ -1964,10 +1966,10 @@ def test_the_footer_says_what_is_picked_and_a_click_lets_go(rig, monkeypatch):
     clock[0] += 0.1
     assert footer()[0][0].startswith("·  D3 picked (20 s)")   # the pick is newer: it shows at once
     # an invariant control: why it cannot be mapped, dim
-    lrn.pick(_control("S3").source)
+    lrn.pick(_control("SM").source)                          # MASTER (S1–S8: layered, C2)
     clock[0] += 0.1
     (said,) = footer("view")
-    assert said[0].startswith("·  S3 (track fader 3) is invariant") and said[1] == rgb(ui.DIM)
+    assert said[0].startswith("·  SM (MASTER fader) is invariant") and said[1] == rgb(ui.DIM)
     # with the panel hidden the header alone carries it — the whole line
     panel.reg["ui.panel"].set(False)
     lrn.pick(_control("D3").source)

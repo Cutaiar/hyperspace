@@ -144,20 +144,20 @@ def test_a_layer_switch_rebases_the_knobs_and_leaves_the_faders_to_pick_up(rig):
 
 def test_a_preset_load_clears_the_faders_catch(rig):
     t, reg = rig.midi.table, rig.reg
-    post = reg["band.2.post"]
+    post = reg["master.gain"]
     post.set_norm(0.5)
     rig.midi.poll()
-    push(rig, cc(apc40.CC_FADER, 64, channel=2))
-    fader = row(rig, "band.2.post")
+    push(rig, cc(apc40.CC_MASTER, 64))
+    fader = row(rig, "master.gain")
     assert fader.caught
     post.set_norm(0.9)            # the load moves the base under the fader …
     t.set_desk(t.desk())          # … and replaces the desk
     rig.midi.poll()
     assert not fader.caught
     assert all(b.caught for b in t.active() if b.feedback == "ring")   # the knobs re-based
-    push(rig, cc(apc40.CC_FADER, 30, channel=2))  # far below the new base: nothing
+    push(rig, cc(apc40.CC_MASTER, 30))  # far below the new base: nothing
     assert post.norm == pytest.approx(0.9, abs=PICKUP_TOL)
-    push(rig, cc(apc40.CC_FADER, 127, channel=2))  # swept through it: caught
+    push(rig, cc(apc40.CC_MASTER, 127))  # swept through it: caught
     assert post.norm == pytest.approx(1.0)
 
 
@@ -224,10 +224,10 @@ def test_a_desk_edit_on_the_page_redraws_and_keeps_the_faders_catch(rig):
     from hyperspace import ui_routing
 
     t, reg = rig.midi.table, rig.reg
-    reg["band.2.post"].set_norm(0.5)
+    reg["master.gain"].set_norm(0.5)
     rig.midi.poll()
-    push(rig, cc(apc40.CC_FADER, 64, channel=2))
-    fader = row(rig, "band.2.post")
+    push(rig, cc(apc40.CC_MASTER, 64))
+    fader = row(rig, "master.gain")
     assert fader.caught
     knob = next(b for b in t.desk() if b.number == 0x30)
     rig.out.sent.clear()
@@ -236,8 +236,8 @@ def test_a_desk_edit_on_the_page_redraws_and_keeps_the_faders_catch(rig):
     rig.midi.poll()
     assert fader.caught                                          # still caught
     assert sent_cc(rig, 0x30) == [round(reg["view.speed"].norm * 127)]   # redrawn
-    push(rig, cc(apc40.CC_FADER, 30, channel=2))
-    assert reg["band.2.post"].norm == pytest.approx(30 / 127, abs=PICKUP_TOL)
+    push(rig, cc(apc40.CC_MASTER, 30))
+    assert reg["master.gain"].norm == pytest.approx(30 / 127, abs=PICKUP_TOL)
 
 
 def test_a_control_that_loses_its_row_goes_dark(rig):
@@ -318,15 +318,16 @@ def test_an_unmapped_control_is_dark_and_does_nothing(rig):
 
 def test_invariant_controls_mean_one_thing_on_both_layers(rig):
     t, reg, clock = rig.midi.table, rig.reg, rig.clock
-    t.bindings.append(Binding("cc:2:7", "view.speed", "abs", layer="global"))   # can't act
+    # MASTER (track faders S1–S8 are layered since plan 24 C2, decision 17)
+    t.bindings.append(Binding("cc:0:14", "view.speed", "abs", layer="global"))  # can't act
     speed = reg["view.speed"].norm
     for layer in ("preset", "global"):
         assert t.layer == layer
         for x in rig.midi.bindings:
             x.pickup = False
         v = 20 if layer == "preset" else 100
-        push(rig, cc(apc40.CC_FADER, v, channel=2))
-        assert reg["band.2.post"].norm == pytest.approx(v / 127, abs=PICKUP_TOL), layer
+        push(rig, cc(apc40.CC_MASTER, v))
+        assert reg["master.gain"].norm == pytest.approx(v / 127, abs=PICKUP_TOL), layer
         assert reg["view.speed"].norm == pytest.approx(speed), layer
         clock.tick(10.0 * (layer == "global") + 1.0)
         push(rig, note(apc40.N_METRO), note(apc40.N_METRO, 0))            # the LFO trigger
@@ -337,24 +338,25 @@ def test_invariant_controls_mean_one_thing_on_both_layers(rig):
         shift(rig)
     # the invariant set is the table's layer-None rows, and SHIFT
     assert t.is_invariant(Binding("note:0:98", "x", "toggle"))
-    assert t.is_invariant(Binding("cc:5:7", "x", "abs"))
+    assert t.is_invariant(Binding("cc:0:14", "x", "abs"))          # MASTER
+    assert not t.is_invariant(Binding("cc:5:7", "x", "abs"))      # S6: layered (decision 17)
     assert not t.is_invariant(Binding("cc:0:48", "x", "abs"))
 
 
 def test_a_desk_row_on_an_invariant_control_is_dropped_with_a_note(rig):
     t = rig.midi.table
     notes = t.set_desk([
-        {"source": "cc:0:7", "target": "view.speed", "op": "abs"},          # fader 1
+        {"source": "cc:0:14", "target": "view.speed", "op": "abs"},         # MASTER
         {"source": f"note:0:{SHIFT}", "target": "view.faces", "op": "toggle"},  # SHIFT
         {"source": "key:Z", "target": "view.faces", "op": "toggle"},        # not the desk's
         {"source": "cc:0:16", "target": "view.speed", "op": "abs", "layer": "global"},
     ])
     assert len(notes) == 3
-    assert "cc:0:7 → view.speed" in notes[0] and "invariant" in notes[0]
+    assert "cc:0:14 → view.speed" in notes[0] and "invariant" in notes[0]
     assert f"note:0:{SHIFT}" in notes[1] and "invariant" in notes[1]
     assert "key:Z" in notes[2] and "not a desk control" in notes[2]
     assert [(b.source, b.layer) for b in t.desk()] == [("cc:0:16", "preset")]  # layer forced
-    assert row(rig, "band.0.post").source == "cc:0:7"                          # untouched
+    assert row(rig, "master.gain").source == "cc:0:14"                         # untouched
 
 
 # ---------------------------------------------------------- the sorted map
@@ -410,7 +412,9 @@ def _layer_by_plan(source: str) -> str | None:
             return "global"
         if num in a.TRACK_KNOBS or num == a.CC_CUE:
             return "preset"
-        return None                                        # faders, MASTER, crossfader
+        if num == a.CC_FADER:
+            return "global"     # S1–S8: the audio strip under SHIFT (plan 24 C2, decision 17)
+        return None                                        # MASTER, crossfader
     ch = int(ch)
     if num in a.N_SCENE[:4]:
         return None             # the render toggles: invariant since plan 24 C1 (decision 18)
@@ -482,12 +486,12 @@ def test_an_old_bindings_file_gets_its_layers_once_with_a_backup(tmp_path, capsy
     v2["bindings"] = [{k: v for k, v in b.items() if k != "layer"} for b in v2["bindings"]
                       if b["target"] not in new]
     v2["bindings"] += [
-        {"source": "cc:0:7", "target": "view.speed", "op": "abs"},          # on fader 1
+        {"source": "cc:0:14", "target": "view.speed", "op": "abs"},         # on MASTER
         {"source": "cc:0:87", "target": "view.inst_amp", "op": "abs"},      # a knob of mine
         {"source": f"note:0:{SHIFT}", "target": "view.points", "op": "toggle"},  # on SHIFT
     ]
     v2["bindings"] = [b for b in v2["bindings"]
-                      if not (b["source"] == "cc:0:7" and b["target"] == "band.0.post")]
+                      if not (b["source"] == "cc:0:14" and b["target"] == "master.gain")]
     path.write_text(json.dumps(v2))
     t = Bindings.load(path, legacy_midi=None)
     # the sort is in memory; the file, holding preset-layer rows, is the
@@ -501,7 +505,7 @@ def test_an_old_bindings_file_gets_its_layers_once_with_a_backup(tmp_path, capsy
     assert layer[("cc:*:16", "band.sel.trim")] == "global"        # identical: the factory's
     assert layer[("cc:0:48", "view.bright")] == "preset"
     assert layer[(f"note:0:{apc40.N_TAP}", "tempo.tap")] is None
-    assert layer[("cc:0:7", "view.speed")] is None                # mine, on an invariant control
+    assert layer[("cc:0:14", "view.speed")] is None               # mine, on an invariant control
     assert layer[("cc:0:87", "view.inst_amp")] == "preset"        # mine, anywhere else
     for pid in new:                                               # the global rows and SHIFT added
         assert any(b.target == pid for b in t.midi()), pid
@@ -536,11 +540,11 @@ def test_undoing_a_desk_row_redraws_and_keeps_the_layer_and_the_faders_catch(tmp
 
     r = boot(tmp_path / "home")
     t, reg, u = r.table, r.reg, r.undo
-    reg["band.2.post"].set_norm(0.5)
+    reg["master.gain"].set_norm(0.5)
     frames(r)
-    r.inp.queue.append(cc(apc40.CC_FADER, 64, channel=2))
+    r.inp.queue.append(cc(apc40.CC_MASTER, 64))
     frames(r)
-    fader = next(b for b in t.midi() if b.target == "band.2.post")
+    fader = next(b for b in t.midi() if b.target == "master.gain")
     assert fader.caught and fader.layer is None
     settle(r)
     u.clear()
@@ -563,9 +567,9 @@ def test_undoing_a_desk_row_redraws_and_keeps_the_layer_and_the_faders_catch(tmp
     assert t.layer == "global" and fader.caught
     frames(r)                                          # the adapter follows: a redraw…
     assert r.out.sent and t.layer == "global" and fader.caught      # …and nothing dropped
-    r.inp.queue.append(cc(apc40.CC_FADER, 30, channel=2))
+    r.inp.queue.append(cc(apc40.CC_MASTER, 30))
     frames(r)
-    assert reg["band.2.post"].norm == pytest.approx(30 / 127, abs=PICKUP_TOL)   # still caught
+    assert reg["master.gain"].norm == pytest.approx(30 / 127, abs=PICKUP_TOL)   # still caught
     # back on the preset layer the restored knob is drawn again
     r.inp.queue += [note(SHIFT), note(SHIFT, 0)]
     r.out.sent.clear()
@@ -577,7 +581,7 @@ def test_undoing_a_desk_row_redraws_and_keeps_the_layer_and_the_faders_catch(tmp
     r.inp.queue += [note(SHIFT), note(SHIFT, 0)]
     frames(r)
     assert t.layer == "global"
-    reg["band.2.post"].set_norm(0.9)
+    reg["master.gain"].set_norm(0.9)
     t.set_desk(t.desk())
     frames(r)
     assert t.layer == "preset" and t.desk_serial == serials[0] + 1 and not fader.caught
