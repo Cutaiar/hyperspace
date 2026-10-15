@@ -94,6 +94,11 @@ from typing import Any
 
 from . import apc40, routing, undo
 from .bands import BANDS
+from .fx import declare as declare_fx
+from .ghost import GhostState
+from .ghost import prefix as ghost_prefix
+from .ghost import register as declare_ghost
+from .graph import GraphError, GraphSpec, Wiring, read_graph
 from .lfo import SHAPES, SYNCS
 from .library import (
     DESK_SCHEMA,
@@ -128,6 +133,7 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, preset
     SESSION_GROUPS,
     UNITS,
     UNITS_KEY,
+    is_instance_id,
     pan_world,
     part_of,
 )
@@ -177,6 +183,141 @@ def file_desk(profile: str = "apc40") -> list[Binding]:
     return [b if b.layer == "preset" else replace(b, layer="preset")
             for b in routing.factory_desk(profile)
             if b.layer == "preset" or (b.source, b.target, b.op, float(b.value)) in keep]
+
+
+# ---- the render graph (plan 26 A4) ----
+
+GRAPH_KEY = "graph"
+
+
+class GraphSection:
+    """The loaded preset's ``graph`` section, landed (plan 26 A4).
+
+    A preset may carry the render graph it wants as plain JSON
+    (`graph.GraphSpec`: node instances and their wiring — never a param).
+    No section is the default graph: every preset written before A4, and
+    every factory preset, loads exactly as it did. A section this build
+    cannot read (an unknown node kind, a bad value) is a note and the
+    default graph, never a crash — and the section is kept as the file
+    had it, so a save does not throw away what a newer build wrote.
+
+    Landing a graph (`land`) is a scene-setter over three objects:
+
+    - **the registry**: an extra effect instance's params, `fx.acid.2.*`
+      (`FxState.set_instances` + `fx.declare`: its own on, mix, order,
+      clock — performance params, so the preset's `values` carry them),
+      and an extra hands node's, `ghost.2.*` (`ghost.register`: the
+      session's, like `ghost.*`, on a `GhostState` of its own that is
+      kept while the app runs, so a preset that drops the node and one
+      that brings it back find its settings as they were);
+    - **the renderer** (when attached, `attach`): `Renderer.wiring` (what
+      the default graph is built from) and `Renderer.ghost_states` (the
+      extra hands nodes' states, each drawn by its own `Ghost`).
+
+    Owned by `Presets` (`Presets.graph`); the app and the tools attach the
+    renderer."""
+
+    def __init__(self, reg, fx=None, renderer=None, lib=None):
+        self.reg = reg
+        self.lib = lib                          # the open show's session seeds a new hands node
+        self.fx = fx if fx is not None else getattr(reg, "fx_state", None)
+        self.renderer = None
+        self.spec: GraphSpec | None = None      # None: the default graph
+        self.doc: dict | None = None            # the section a save writes (None: none)
+        self.states: dict[str, GhostState] = {}  # extra hands nodes' states, by node name
+        self.declared: set[str] = set()         # the extra hands nodes whose params exist
+        if renderer is not None:
+            self.attach(renderer)
+
+    def attach(self, renderer) -> None:
+        """Hand the renderer the wiring and the hands states landed."""
+        self.renderer = renderer
+        self._push()
+
+    @property
+    def wiring(self) -> Wiring:
+        return self.spec.wiring() if self.spec is not None else Wiring()
+
+    @staticmethod
+    def read(section) -> tuple[GraphSpec | None, dict | None, list[str]]:
+        """(spec, the section to keep, notes) for a file's ``graph`` value
+        (None: the file has none). Reads, lands nothing."""
+        if section is None:
+            return None, None, []
+        try:
+            spec = read_graph(section)
+        except GraphError as e:
+            return None, copy.deepcopy(section), [f"graph: {e}; the default graph"]
+        return spec, spec.to_json(), []
+
+    def land(self, spec: GraphSpec | None, doc: dict | None = None) -> None:
+        """Make `spec` the graph (None: the default): declare and drop the
+        instances' params, and hand the renderer its wiring. `doc` is the
+        section a save writes back.
+
+        An extra hands node declared for the first time this run starts
+        from what the open show holds for it (`ghost.2.*` in its session —
+        the show restored before the startup preset brought the node), so
+        its settings survive a reopen and the show stays clean; after
+        that its kept state is the live one."""
+        wiring = spec.wiring() if spec is not None else Wiring()
+        reg = self.reg
+        want = {ghost_prefix(h.n): h.n for h in wiring.extra}
+        for name in sorted(self.declared - set(want)):
+            reg.remove_prefix(name + ".")
+        for name, n in want.items():
+            was = name in self.declared
+            declare_ghost(reg, self.states.setdefault(name, GhostState()), n)
+            if not was:
+                self._seed(name)
+        self.declared = set(want)
+        if self.fx is not None:
+            changed = self.fx.set_instances(spec.effect_counts() if spec is not None else {})
+            if changed:
+                declare_fx(reg, self.fx, changed)
+        self.spec, self.doc = spec, copy.deepcopy(doc)
+        self._push()
+
+    def _seed(self, name: str) -> None:
+        """A newly declared hands node's params from the open show's
+        session, where it holds them (`library.Project.session`) — once
+        per show opened (`Project.opened`): after that the node's kept
+        state is the live one, so a setting changed in this show is not
+        put back when a later preset brings the node again."""
+        project = getattr(getattr(self, "lib", None), "project", None)
+        seeded = self.__dict__.setdefault("_seeded", {})
+        show = getattr(project, "opened", None)
+        if name in seeded and seeded[name] == show:
+            return
+        seeded[name] = show
+        session = getattr(project, "session", None) or {}
+        held = {pid: v for pid, v in session.items()
+                if pid.startswith(name + ".") and pid in self.reg}
+        if held:
+            self.reg.restore(held)
+        if project is not None and isinstance(getattr(project, "session", None), dict):
+            # an id the show lacks takes the state this landing left, as a
+            # show's `_apply` does for a param added since: the show stays clean
+            for pid, v in self.reg.snapshot(part="session").items():
+                if pid.startswith(name + "."):
+                    project.session.setdefault(pid, v)
+
+    def mark(self) -> tuple:
+        """What is landed, for an undo of a load (`library.Marks`)."""
+        return (self.spec, copy.deepcopy(self.doc))
+
+    def put(self, mark: tuple) -> None:
+        """Land what `mark` held again (an undo of a load), first."""
+        spec, doc = mark
+        if (spec, doc) != (self.spec, self.doc):
+            self.land(spec, doc)
+
+    def _push(self) -> None:
+        r = self.renderer
+        if r is None:
+            return
+        r.wiring = self.wiring
+        r.ghost_states = {name: self.states[name] for name in sorted(self.declared)}
 
 
 # ---- desk templates (plan 24 C3) ----
@@ -266,7 +407,12 @@ def dumps(doc: dict) -> str:
     reads as a binding; the values one per line."""
     parts = []
     for key, v in doc.items():
-        if key in ("routes", "desk") and isinstance(v, list):
+        if (key == GRAPH_KEY and isinstance(v, dict) and set(v) == {"nodes"}
+                and isinstance(v["nodes"], list)):
+            # the graph (plan 26 A4): one node per line, like a row
+            rows = ",\n".join("  " + json.dumps(n) for n in v["nodes"])
+            text = '{"nodes": [\n' + rows + '\n ]}' if v["nodes"] else '{"nodes": []}'
+        elif key in ("routes", "desk") and isinstance(v, list):
             if v:
                 rows = ",\n".join("  " + json.dumps(r) for r in v)
                 text = f"[\n{rows}\n ]"
@@ -352,6 +498,9 @@ class Presets:
         self.note = ""
         self.notes: list[str] = []       # step 1's notes from the last load
         self.desk_notes: list[str] = []  # the desk rows the last load dropped (set_desk)
+        # plan 26 A4: the loaded preset's graph section (its instances'
+        # params, the renderer's wiring once one is attached)
+        self.graph = GraphSection(reg, lib=lib)
         lib.kind(GROUP, SCHEMA.rpartition("/")[0],
                  load=lambda doc, path: self.load_doc(doc, path),
                  document=lambda name: self.document(name),
@@ -397,13 +546,25 @@ class Presets:
         #    before stored px. Silent — the shape lands where it was, and a
         #    factory file is read this way on every load
         doc, _ = pan_world(doc)
+        # 0. and its render graph (plan 26 A4): read, not yet landed — no
+        #    section is the default graph; one this build cannot read is a
+        #    note and the default graph
+        gs = self._graph_section()
+        spec, section, graph_notes = gs.read(doc.get(GRAPH_KEY))
+        notes += graph_notes
         # 1. what the file names that a preset may not carry — all parsed
-        #    before anything lands, so a bad row leaves the state alone
+        #    before anything lands, so a bad row leaves the state alone. An
+        #    id of a node instance (`fx.acid.2.mix`, `ghost.2.on`) is looked
+        #    at once this file's graph has landed — against the params that
+        #    graph holds, never the ones the last preset's graph left
         values: dict[str, Any] = {}
         unknown: list[str] = []
+        later: dict[str, Any] = {}
         for pid, v in dict(doc.get("values") or {}).items():
             p = reg.get(pid)
-            if p is None:
+            if is_instance_id(pid):
+                later[pid] = v
+            elif p is None:
                 unknown.append(pid)
             elif part_of(p) == "session":
                 notes.append(f"{pid} is the session's, ignored")
@@ -468,22 +629,50 @@ class Presets:
         # load, by whichever road it came (undo.py, plan 15 WP1) — with
         # what is loaded now, so undoing it puts the earlier name back too
         undo.push(f"load {doc.get('name') or (path.stem if path else 'preset')}", load=True)
-        # 2. every performance param: the file's value, else its group default
-        by_group: dict[str, dict[str, Any]] = {g: {} for g in PERFORMANCE_GROUPS}
-        for pid, v in values.items():
-            by_group[reg[pid].group][pid] = v
-        landed: dict[str, Any] = {}
-        for group in PERFORMANCE_GROUPS:
-            landed.update(lib.resolved(group, by_group[group]))
-        # a value that will not take (a hand-edited "fast" on a number) must
-        # not leave half the look on this preset and half on the last: the
-        # state as it was goes back and the load is refused whole
-        before = reg.snapshot(part="performance")
+        # 1½. the graph lands first (plan 26 A4): its instances' params
+        #     exist before their values do; the ids read for it are sorted now
+        held_graph, held_values = gs.mark(), reg.snapshot(part="performance")
+        # from here to the values landing, anything that raises puts the
+        # graph that was there back, with its instances' values: a load is
+        # refused whole, never half a graph
         try:
-            lib.restore(landed)
-        except (ValueError, TypeError) as e:
-            lib.restore(before)
-            raise ValueError(f"a value would not land ({e}); nothing loaded") from e
+            gs.land(spec, section)
+            late: list[str] = []
+            for pid, v in later.items():
+                p = reg.get(pid)
+                if p is None:
+                    late.append(pid)
+                elif part_of(p) == "session":
+                    notes.append(f"{pid} is the session's, ignored")
+                elif part_of(p) is None or not p.persist:
+                    notes.append(f"{pid} is not part of a preset, ignored")
+                else:
+                    values[pid] = v
+            if late:
+                unknown += late
+                notes.append(f"{len(late)} unknown id(s): " + ", ".join(late[:4])
+                             + ("…" if len(late) > 4 else ""))
+            # 2. every performance param: the file's value, else its group default
+            by_group: dict[str, dict[str, Any]] = {g: {} for g in PERFORMANCE_GROUPS}
+            for pid, v in values.items():
+                by_group[reg[pid].group][pid] = v
+            landed: dict[str, Any] = {}
+            for group in PERFORMANCE_GROUPS:
+                landed.update(lib.resolved(group, by_group[group]))
+            # a value that will not take (a hand-edited "fast" on a number)
+            # must not leave half the look on this preset and half on the
+            # last: the state as it was goes back and the load is refused whole
+            before = reg.snapshot(part="performance")
+            try:
+                lib.restore(landed)
+            except (ValueError, TypeError) as e:
+                lib.restore(before)
+                raise ValueError(f"a value would not land ({e}); nothing loaded") from e
+        except BaseException:
+            if gs.mark() != held_graph:          # the graph as it was, and its instances'
+                gs.put(held_graph)               # values as they were
+                lib.restore({k: v for k, v in held_values.items() if k in reg})
+            raise
         # 3. every performer row replaced; the referee keeps the first
         table.set_routes(routes)
         notes += [f"dropped {b.source} → {b.target}: {why}" for b, why in table.dropped]
@@ -518,11 +707,24 @@ class Presets:
         if self.note:
             doc["note"] = self.note
         table = self.router.table
+        # plan 26 A4: the graph the loaded preset carried, as read (a
+        # preset with none writes none: the default graph)
+        section = self._graph_section().doc
+        if section is not None:
+            doc[GRAPH_KEY] = copy.deepcopy(section)
         doc.update(values=self.reg.snapshot(part="performance"),
                    routes=[b.to_json() for b in table.routes()],
                    **self._desk_part(name), macros=table.macros_doc(),
                    modules=modules, **{UNITS_KEY: dict(UNITS)})
         return doc
+
+    def _graph_section(self) -> GraphSection:
+        """The graph section's lander; made here for a `Presets` from
+        before plan 26 A4 (a hot reload re-classes, never re-inits)."""
+        gs = self.__dict__.get("graph")
+        if gs is None:
+            gs = self.graph = GraphSection(self.reg, lib=self.lib)
+        return gs
 
     def template_of_loaded(self) -> str | None:
         """The desk template the loaded preset's file names (plan 24 C3),
@@ -577,12 +779,15 @@ class Presets:
     def signature(self) -> tuple:
         """What the strip's dirty dot compares: the performance bases, the
         performer rows, the desk's preset layer and the macros, each as it
-        would be written."""
+        would be written — and the graph section (plan 26 A4; None for a
+        preset with none, so a file from before it is never dirty)."""
         table = self.router.table
+        section = self._graph_section().doc
         return (self.reg.snapshot(part="performance"),
                 json.dumps([b.to_json() for b in table.routes()]),
                 json.dumps(desk_json(table.desk()), sort_keys=True),
-                json.dumps(table.macros_doc(), sort_keys=True))
+                json.dumps(table.macros_doc(), sort_keys=True),
+                None if section is None else json.dumps(section, sort_keys=True))
 
     # ---- internals ----
 

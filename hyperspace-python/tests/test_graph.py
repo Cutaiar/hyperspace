@@ -84,7 +84,7 @@ def test_the_default_graph_for_one_default_view_is_todays_frame_in_order():
     # SCENE pipeline on its image port and the hands' layer over it
     assert g.nodes["scene"].inputs == {"geometry": g.nodes["shape"]}
     assert g.nodes["hands"].inputs == {"geometry": g.nodes["ghost"]}
-    assert g.nodes["hands"].readout == "through" and not g.nodes["ghost"].in_scene
+    assert g.nodes["hands"].readout == "through" and "ghost" not in g.in_scene()
     assert g.nodes["history"].inputs == {"image": g.nodes["scene"], "cover": g.nodes["cover"]}
     assert g.nodes["fx"].inputs == {"image": g.nodes["history"]}
     assert g.nodes["fx"].key == SCENE and g.nodes["fx"].after == (g.nodes["hands"],)
@@ -194,7 +194,9 @@ def test_ports_are_typed_and_the_graph_checks_its_wiring():
     # a scene takes any number of geometries, one port each
     two = G.Scene("two", geometries=[G.Hands("h"), G.Shape("s")])
     assert list(two.inputs) == ["geometry", "geometry.2"]
-    assert two.inputs["geometry"].in_scene and two.inputs["geometry"].TIMED
+    # A4: a geometry's time is its scene's call (the consumer edge): the
+    # node itself is never told it is in a scene
+    assert not two.inputs["geometry"].TIMED and two.inputs["geometry"].SOLID
     assert G.Capture("capture", image=scene, after=(cover,)).deps() == [scene, cover]
     assert _names(g) == ["shape", "scene", "cover"]
 
@@ -241,7 +243,7 @@ def test_the_hands_in_the_scene_are_its_first_geometry_and_a_glass_still_gets_th
                          "output.3"]
     scene, ghost = g.nodes["scene"], g.nodes["ghost"]
     assert scene.inputs == {"geometry": ghost, "geometry.2": g.nodes["shape"]}
-    assert ghost.in_scene and g.timed[:2] == ["ghost", "scene"]
+    assert g.in_scene() == {"ghost"} and g.timed[:2] == ["ghost", "scene"]
     assert g.nodes["hands"].readout == "always"
     o1, o2, o3 = (g.nodes[f"output.{k}"] for k in (1, 2, 3))
     assert o1.inputs["image"] is g.nodes["fx"] and o1.inputs["hands"] is None

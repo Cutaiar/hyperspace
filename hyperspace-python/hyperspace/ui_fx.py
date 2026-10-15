@@ -230,7 +230,8 @@ HIDDEN_BY_MODE = {
 
 def strip_rows(name: str, keys: list[str], mode: int = 0) -> list[tuple[str, list[str]]]:
     """The open strip's param rows: (label, [param keys on the row])."""
-    hide = HIDDEN_BY_MODE.get(name, {}).get(1 if mode else 0, ())
+    # an instance (`palette.2`, plan 26 A4) hides as its file does
+    hide = HIDDEN_BY_MODE.get(name.partition(".")[0], {}).get(1 if mode else 0, ())
     keys = [k for k in keys if not k.startswith(hide)]
     rows: list[tuple[str, list[str]]] = []
     i = 0
@@ -256,7 +257,7 @@ def _strip_header(panel, fx, name: str) -> None:
     the order are the title's hover. A registry from before plan 20 has no
     target: the title is the plain section it was."""
     spec = fx.specs[name]
-    note = f"{name}.glsl · #{fx.values[name]['order']}"
+    note = f"{spec.name}.glsl · #{fx.values[name]['order']}"
     p = panel.reg.get(f"fx.{name}.target")
     if p is None:
         panel._section(spec.label.lower(), note=note)
