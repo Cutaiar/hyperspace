@@ -3,11 +3,8 @@
 // @blend mix
 // @speed 1
 // @mix 0
-// @tip The last colour pass: every hue is folded onto a slice of the colour wheel you
-// @tip choose and move (a triangle wave, so neighbouring hues stay neighbours and there is
-// @tip no seam), with saturation and brightness rescaled into a range. Or, in gradient
-// @tip mode, the frame's brightness is painted through a ramp of up to four colours.
-// @tip Mix 0 (the start) leaves the picture as it was.
+// @tip Folds every hue onto a slice of the wheel you move, or maps brightness through a
+// @tip ramp. Mix 0 leaves the picture alone.
 
 uniform int   u_mode;    // @param 0 1 0 "Mode" 0 folds the hues onto the slice; 1 maps brightness through the ramp below.
 uniform float u_centre;  // @param 0 360 0 wrap "Centre" Fold: the middle of the slice, degrees (0 red, 120 green, 240 blue).
@@ -53,5 +50,8 @@ vec4 effect(vec2 uv) {
         int i = min(int(floor(x)), n - 2);
         rgb = mix(anchor(i), anchor(i + 1), x - float(i));
     }
+    // a see-through pixel stays see-through: lifting val_lo (or a ramp colour
+    // above black) must not light the desktop or a face's empty ground
+    if (u_opaque == 0) rgb *= c.a;
     return vec4(rgb, c.a);
 }

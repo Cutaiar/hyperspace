@@ -188,3 +188,25 @@ def test_a_saved_palette_is_an_fx_module_preset(ctx, tmp_path):
     lib.save_as("fx", "mine")
     reg["fx.palette.a3_hue"].set(10.0)
     assert lib.load("fx", "mine") == [] and st.values["palette"]["a3_hue"] == 100.0
+
+
+def test_a_raised_floor_does_not_light_a_see_through_ground(ctx, tmp_path):
+    """On the overlay ground (u_opaque 0) a clear pixel stays clear when
+    val_lo / a ramp colour is above black; on an opaque ground it lifts."""
+    from hyperspace.render import Renderer
+    from hyperspace.view import ViewState
+
+    def alpha(opaque: bool, **vals) -> int:
+        st = state(tmp_path)
+        st.values["palette"].update(on=True, mix=1.0, **vals)
+        fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((W, H))])
+        r = Renderer(ctx, fx=st)
+        r.bg_alpha = 1.0 if opaque else 0.0
+        fbo.use()
+        ctx.viewport = (0, 0, W, H)
+        r.draw(ViewState(shape=10, faces=False, points=False, lines=False), W, H, t_now=4.0)
+        px = np.frombuffer(fbo.read(components=4), dtype=np.uint8).reshape(H, W, 4)
+        fbo.release()
+        return int(px[..., 3].max())
+    assert alpha(True, val_lo=0.5) == 255
+    assert alpha(False, val_lo=0.5) == 0

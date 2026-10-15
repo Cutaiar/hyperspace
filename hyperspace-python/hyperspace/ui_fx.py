@@ -123,7 +123,6 @@ def page(panel, dt: float) -> None:
     if not fx.specs:
         imgui.text_disabled("no effects — put a .glsl file in hyperspace/shaders/fx/")
         return
-    imgui.spacing()
 
     # the stack, in order: a chip per effect, lit while on
     names = fx.names()
@@ -142,7 +141,6 @@ def page(panel, dt: float) -> None:
         label = fx.specs[name].label + (" !" if _error(chain, fx, name) else "")
         drop = _chip(panel, fx, name, label, w, name == sel,
                      index=k, last=k == len(names) - 1) or drop
-    imgui.spacing()
     if drop is not None:
         # after the grid: this frame's chips were drawn in one order. What
         # is moved is the name the drag began on, not the payload's index:
@@ -197,14 +195,56 @@ def page(panel, dt: float) -> None:
     imgui.same_line()
     panel._slider(f"{pre}.order", ORDER_W)
     drawn(f"{pre}.order")
-    imgui.spacing()
-    for p in spec.params:
-        if f"{pre}.{p.key}" in r:
-            panel._row(f"{pre}.{p.key}", label=p.label.lower())
-            drawn(f"{pre}.{p.key}")
+    mode = fx.values[sel].get("mode", 0)
+    labels = {p.key: p.label.lower() for p in spec.params}
+    for label, keys in strip_rows(sel, [p.key for p in spec.params if f"{pre}.{p.key}" in r],
+                                  mode):
+        if len(keys) == 1:
+            panel._row(f"{pre}.{keys[0]}", label=labels[keys[0]])
+            drawn(f"{pre}.{keys[0]}")
+            continue
+        panel._label_cell(label)
+        w = (imgui.get_content_region_avail().x - sp * (len(keys) - 1)) / len(keys)
+        for i, k in enumerate(keys):
+            if i:
+                imgui.same_line()
+            panel._slider(f"{pre}.{k}", w)
+            drawn(f"{pre}.{k}")
     if idle is not None:
         _dim(top, imgui.ImVec2(right, imgui.get_cursor_screen_pos().y))
         _relearn_frame(panel, rects)
+
+
+# plan 24 C6: an effect with many params would scroll the page, so the rows
+# are packed by a convention in the uniform names: consecutive params that
+# share a stem and end _lo/_hi, or _hue/_sat/_val, share one row (sat_lo +
+# sat_hi -> "sat"; a1_hue + a1_sat + a1_val -> "a1"). Every param is still
+# declared and routable; this only decides what the strip draws
+ROW_SUFFIXES = (("_lo", "_hi"), ("_hue", "_sat", "_val"))
+# and the palette shows one mode's rows at a time: effect -> mode -> key prefixes hidden
+HIDDEN_BY_MODE = {
+    "palette": {0: ("anchors", "a1_", "a2_", "a3_", "a4_"),
+                1: ("centre", "width", "sat_", "val_")},
+}
+
+
+def strip_rows(name: str, keys: list[str], mode: int = 0) -> list[tuple[str, list[str]]]:
+    """The open strip's param rows: (label, [param keys on the row])."""
+    hide = HIDDEN_BY_MODE.get(name, {}).get(1 if mode else 0, ())
+    keys = [k for k in keys if not k.startswith(hide)]
+    rows: list[tuple[str, list[str]]] = []
+    i = 0
+    while i < len(keys):
+        for group in ROW_SUFFIXES:
+            stem = keys[i][: -len(group[0])] if keys[i].endswith(group[0]) else None
+            if stem is not None and keys[i:i + len(group)] == [stem + g for g in group]:
+                rows.append((stem.replace("_", " "), keys[i:i + len(group)]))
+                i += len(group)
+                break
+        else:
+            rows.append((keys[i].replace("_", " "), [keys[i]]))
+            i += 1
+    return rows
 
 
 def _strip_header(panel, fx, name: str) -> None:
@@ -241,7 +281,6 @@ def _strip_header(panel, fx, name: str) -> None:
         panel._ctx(p, key=f".onto{i}")          # a key each: one popup id per item
         panel._learn_frame(p)
     imgui.separator()
-    imgui.dummy(imgui.ImVec2(0, 1))
 
 
 def _faint(text: str) -> None:

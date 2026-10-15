@@ -844,12 +844,9 @@ class PageRig:
 
 
 def without_palette(st, reg) -> None:
-    """The twelve effects the page was sized for. The palette (plan 24 C6)
-    is the thirteenth chip, which wraps onto a fifth row, and a strip of
-    twenty-one faders: the page scrolls for it, which
-    test_the_page_scrolls_for_the_palette_and_still_draws pins. These
-    tests are about the stack's chips, drags and orders, so they run with
-    the file's effect taken out of the state and the registry."""
+    """The twelve effects whose orders the drag tests spell out (the
+    palette, plan 24 C6, is the thirteenth and sits last at 95). Only the
+    drag / reorder tests use it: the page-fit tests keep the palette."""
     st.specs.pop("palette", None)
     st.values.pop("palette", None)
     st.phase.pop("palette", None)
@@ -857,9 +854,16 @@ def without_palette(st, reg) -> None:
 
 
 @pytest.fixture()
-def fxpage(tmp_path, monkeypatch):
+def fxpage_twelve(tmp_path, monkeypatch):
     rig = PageRig(tmp_path, monkeypatch)
     without_palette(rig.st, rig.reg)
+    yield rig
+    rig.close()
+
+
+@pytest.fixture()
+def fxpage(tmp_path, monkeypatch):
+    rig = PageRig(tmp_path, monkeypatch)
     yield rig
     rig.close()
 
@@ -1142,23 +1146,39 @@ def test_the_page_fits_with_the_tightest_strip_idle(fxpage, monkeypatch):
         reg[f"fx.{name}.target"].set(0)
 
 
-def test_the_page_scrolls_for_the_palette_and_still_draws(fxpage):
-    """Plan 24 C6: the palette is the thirteenth chip and has twenty-one
-    faders, more than the page was sized for (the tests above run without
-    it). It scrolls; nothing is cut off, and it draws without error."""
-    from hyperspace.ui import PAGE_KEYS
-    st, reg, imgui, panel = fxpage.st, fxpage.reg, fxpage.imgui, fxpage.panel
-    spec = FxState().specs["palette"]
-    st.specs["palette"] = spec
-    st._adopt(spec)
-    declare(reg, st, {"palette"})
-    st.select("palette")
+def test_the_palette_strip_fits_in_both_modes(fxpage, monkeypatch):
+    """Plan 24 C6: the palette has 21 params; the strip packs lo/hi and
+    hue/sat/val onto one row and shows the open mode's rows only, so the
+    page fits in fold and in gradient mode, error line and all."""
+    from hyperspace.ui import PAGE_KEYS, Panel
+    imgui, st, reg, panel = fxpage.imgui, fxpage.st, fxpage.reg, fxpage.panel
+    panel.renderer.fx.error = lambda n: "line 3: made up"
+    over = []
+    draw = Panel._page_fx
+
+    def measured(self, dt):
+        draw(self, dt)
+        over.append(imgui.get_scroll_max_y())
+    monkeypatch.setattr(Panel, "_page_fx", measured)
+    drawn = []
+    real_slider = Panel._slider
+    monkeypatch.setattr(Panel, "_slider", lambda self, pid, *a, **k: (drawn.append(pid),
+                                                                       real_slider(self, pid, *a, **k))[1])
     reg["ui.page"].set(PAGE_KEYS.index("fx"))
-    for _ in range(3):
-        imgui.new_frame()
-        panel.draw(1 / 60, 60.0)
-        imgui.end_frame()
-    assert st.selected() == "palette"
+    st.select("palette")
+    for mode in (0, 1):
+        drawn.clear()
+        reg["fx.palette.mode"].set(mode)
+        reg["fx.palette.on"].set(True)
+        for _ in range(3):
+            imgui.new_frame()
+            panel.draw(1 / 60, 60.0)
+            imgui.end_frame()
+        assert over[-1] == 0, f"the fx page scrolls with the palette in mode {mode}"
+        shown = set(drawn)
+        assert ("fx.palette.a4_val" in shown) == (mode == 1)      # the last anchor's slider
+        assert ("fx.palette.val_hi" in shown) == (mode == 0)      # the last fold slider
+        assert "fx.palette.mode" in shown
 
 
 def test_turn_on_is_one_undo_step(tmp_path, monkeypatch):
@@ -2177,113 +2197,113 @@ def test_a_drop_reorders_selects_and_is_one_undo_step(tmp_path, monkeypatch):
         rig.close()
 
 
-def test_a_click_without_a_drag_still_only_opens(fxpage, monkeypatch):
+def test_a_click_without_a_drag_still_only_opens(fxpage_twelve, monkeypatch):
     """imgui starts a drag only past its drag threshold: a press and a
     release on a name — the mouse still, or shaking a pixel or two — opens
     the strip and moves nothing; the LED still only switches."""
     from hyperspace import undo
-    imgui, st, reg = fxpage.imgui, fxpage.st, fxpage.reg
+    imgui, st, reg = fxpage_twelve.imgui, fxpage_twelve.st, fxpage_twelve.reg
     pushes = []
     monkeypatch.setattr(undo, "push", lambda *a, **k: pushes.append(a))
     io = imgui.get_io()
     names = st.names()
     orders = {n: reg[f"fx.{n}.order"].base for n in names}
     switches = {n: reg[f"fx.{n}.on"].base for n in names}
-    fxpage.frame()
+    fxpage_twelve.frame()
     assert st.selected() == "plasma"
-    fxpage.click("chip.fx.warp.on")
+    fxpage_twelve.click("chip.fx.warp.on")
     assert st.selected() == "warp"
     # a shaky click: under the threshold, and released on the same chip
-    x0, y0, x1, y1 = fxpage.rects["chip.fx.fractals.on"]
+    x0, y0, x1, y1 = fxpage_twelve.rects["chip.fx.fractals.on"]
     x, y = (x0 + x1) / 2, (y0 + y1) / 2
     assert io.mouse_drag_threshold >= 4
     io.add_mouse_pos_event(x, y)
-    fxpage.frame()
+    fxpage_twelve.frame()
     io.add_mouse_button_event(0, True)
-    fxpage.frame()
+    fxpage_twelve.frame()
     for dx, dy in ((1, 0), (2, 1), (1, -1), (0, 0)):
         io.add_mouse_pos_event(x + dx, y + dy)
-        fxpage.frame()
+        fxpage_twelve.frame()
         assert imgui.get_drag_drop_payload_py_id() is None
     io.add_mouse_button_event(0, False)
-    fxpage.frame()
+    fxpage_twelve.frame()
     io.add_mouse_pos_event(-1.0, -1.0)
-    fxpage.frame()
+    fxpage_twelve.frame()
     assert st.selected() == "fractals"
-    fxpage.click("led.fx.fractals.on")               # the LED: switches, never opens or drags
+    fxpage_twelve.click("led.fx.fractals.on")               # the LED: switches, never opens or drags
     switches["fractals"] = True
-    fxpage.click("chip.fx.warp.on")
+    fxpage_twelve.click("chip.fx.warp.on")
     # a press on an LED dragged away is not a drag: the LED is no source
-    fxpage.drag("led.fx.acid.on", "chip.fx.plasma.on")
+    fxpage_twelve.drag("led.fx.acid.on", "chip.fx.plasma.on")
     assert st.names() == names and st.selected() == "warp"
     assert {n: reg[f"fx.{n}.order"].base for n in names} == orders and not pushes
     assert {n: reg[f"fx.{n}.on"].base for n in names} == switches
 
 
-def test_a_drag_never_changes_a_target_or_a_switch(fxpage, monkeypatch):
+def test_a_drag_never_changes_a_target_or_a_switch(fxpage_twelve, monkeypatch):
     """A drag changes order and nothing else (fork F6: an effect is re-aimed
     by its strip's ONTO chips): every drop — onto a name, an LED, the
     last chip's far half, its own chip — leaves every switch, target and
     mix, and the map, as they were."""
     from hyperspace.fx import FACES, SCREEN
-    st, reg = fxpage.st, fxpage.reg
-    bars = _bars(fxpage, monkeypatch)
+    st, reg = fxpage_twelve.st, fxpage_twelve.reg
+    bars = _bars(fxpage_twelve, monkeypatch)
     reg["fx.warp.on"].set(True)
     reg["fx.plasma.on"].set(True)
     reg["fx.plasma.target"].set(FACES)
     reg["fx.glimmer.target"].set(FACES)
     reg["fx.face_map"].set(SCREEN)
-    fxpage.panel.view.faces = True
+    fxpage_twelve.panel.view.faces = True
 
     def rest():
         return {n: {k: v for k, v in st.values[n].items() if k != "order"} for n in st.specs}
     was, names = rest(), st.names()
     # a face-aimed chip dragged among frame ones, and a frame one among face ones
-    fxpage.drag("chip.fx.plasma.on", "chip.fx.warp.on")
+    fxpage_twelve.drag("chip.fx.plasma.on", "chip.fx.warp.on")
     assert st.names().index("plasma") == st.names().index("warp") - 1 and st.selected() == "plasma"
-    fxpage.drag("chip.fx.warp.on", "led.fx.glimmer.on")
+    fxpage_twelve.drag("chip.fx.warp.on", "led.fx.glimmer.on")
     assert st.names().index("warp") == st.names().index("glimmer") - 1 and st.selected() == "warp"
     assert st.chain(FACES) == ["plasma"] and st.chain() == ["plasma", "warp"]
     # the last chip's right half is "to the end": the bar is at its right edge
     last = st.names()[-1]
     assert last == "huecycle"
-    fxpage.drag("chip.fx.acid.on", f"chip.fx.{last}.on", dst_at=0.9, release=False)
-    assert bars[-1][0] + 1 == pytest.approx(fxpage.rects[f"chip.fx.{last}.on"][2])
-    fxpage.release()
+    fxpage_twelve.drag("chip.fx.acid.on", f"chip.fx.{last}.on", dst_at=0.9, release=False)
+    assert bars[-1][0] + 1 == pytest.approx(fxpage_twelve.rects[f"chip.fx.{last}.on"][2])
+    fxpage_twelve.release()
     assert st.names()[-1] == "acid" and reg["fx.acid.order"].base > reg["fx.huecycle.order"].base
     # …and its left half is "before it", like any other chip
-    fxpage.drag("chip.fx.kaleido.on", "chip.fx.acid.on", dst_at=0.1)
+    fxpage_twelve.drag("chip.fx.kaleido.on", "chip.fx.acid.on", dst_at=0.1)
     assert st.names()[-2:] == ["kaleido", "acid"]
     # onto its own LED: where it is
     now = st.names()
-    fxpage.drag("chip.fx.wobble.on", "led.fx.wobble.on")
+    fxpage_twelve.drag("chip.fx.wobble.on", "led.fx.wobble.on")
     assert st.names() == now and st.selected() == "wobble"
     assert rest() == was and st.face_map == SCREEN and sorted(now) == sorted(names)
     assert reg["fx.plasma.target"].base == FACES and reg["fx.warp.target"].base == 0
     # no bar once nothing is in the hand
     bars.clear()
-    fxpage.frame()
+    fxpage_twelve.frame()
     assert not bars
 
 
-def test_the_order_slider_still_reorders(fxpage):
+def test_the_order_slider_still_reorders(fxpage_twelve):
     """Fork F7's fallback: the strip's order slider is still there and still
     moves its effect through the stack, the strip staying open on it."""
-    st, reg = fxpage.st, fxpage.reg
+    st, reg = fxpage_twelve.st, fxpage_twelve.reg
     st.select("plasma")
-    fxpage.frame()
-    assert "fx.plasma.order" in fxpage.rects and st.names()[0] == "plasma"
-    fxpage.click("fx.plasma.order", 0.95)
+    fxpage_twelve.frame()
+    assert "fx.plasma.order" in fxpage_twelve.rects and st.names()[0] == "plasma"
+    fxpage_twelve.click("fx.plasma.order", 0.95)
     assert reg["fx.plasma.order"].base > 85 and st.names()[-1] == "plasma"
     assert st.selected() == "plasma"
-    fxpage.click("fx.plasma.order", 0.05)
+    fxpage_twelve.click("fx.plasma.order", 0.05)
     assert reg["fx.plasma.order"].base < 10 and st.names()[0] == "plasma"
     # and after a drag the slider reads what the drop wrote
-    fxpage.drag("chip.fx.plasma.on", "chip.fx.warp.on")
+    fxpage_twelve.drag("chip.fx.plasma.on", "chip.fx.warp.on")
     assert st.values["plasma"]["order"] == reg["fx.plasma.order"].base == 18
 
 
-def test_a_drop_moves_the_effect_the_drag_began_on(fxpage, monkeypatch):
+def test_a_drop_moves_the_effect_the_drag_began_on(fxpage_twelve, monkeypatch):
     """Review of PR #108. What a drop moves is a name, not the payload's
     index: the stack reordered under the hand (a preset on a desk button,
     an undo) still moves the chip that was picked up. A press that slips
@@ -2292,11 +2312,11 @@ def test_a_drop_moves_the_effect_the_drag_began_on(fxpage, monkeypatch):
     asked, makes the drop do nothing."""
     from hyperspace import fx as fx_mod
     from hyperspace import ui_fx, undo
-    imgui, st, reg, panel = fxpage.imgui, fxpage.st, fxpage.reg, fxpage.panel
+    imgui, st, reg, panel = fxpage_twelve.imgui, fxpage_twelve.st, fxpage_twelve.reg, fxpage_twelve.panel
     pushes = []
     monkeypatch.setattr(undo, "push", lambda *a, **k: pushes.append(a))
     io = imgui.get_io()
-    fxpage.drag("chip.fx.huecycle.on", "chip.fx.warp.on", release=False)
+    fxpage_twelve.drag("chip.fx.huecycle.on", "chip.fx.warp.on", release=False)
     assert panel._fx_drag == "huecycle"
     assert imgui.get_drag_drop_payload_py_id().data_id == 11       # huecycle's place
     # the stack moves under the hand just before the release frame (the
@@ -2306,27 +2326,27 @@ def test_a_drop_moves_the_effect_the_drag_began_on(fxpage, monkeypatch):
     held = st.names()
     reg["fx.tripcolour.order"].set_value(99)
     assert st.names() == [*held[:10], "huecycle", "tripcolour"] and held[11] == "huecycle"
-    fxpage.release()
+    fxpage_twelve.release()
     names = st.names()
     assert names.index("huecycle") == names.index("warp") - 1 and st.selected() == "huecycle"
     assert reg["fx.tripcolour.order"].base == 99 and pushes == [("reorder effects",)]
-    fxpage.frame()
+    fxpage_twelve.frame()
     assert panel._fx_drag is None                    # nothing in the hand: nothing noted
 
     # a slipped click: past the threshold, let go on the name it began on
     pushes.clear()
-    fxpage.frame()
-    x0, y0, _, y1 = fxpage.rects["chip.fx.fractals.on"]
+    fxpage_twelve.frame()
+    x0, y0, _, y1 = fxpage_twelve.rects["chip.fx.fractals.on"]
     x, y = x0 + 12, (y0 + y1) / 2
     io.add_mouse_pos_event(x, y)
-    fxpage.frame()
+    fxpage_twelve.frame()
     io.add_mouse_button_event(0, True)
-    fxpage.frame()
+    fxpage_twelve.frame()
     for k in range(1, 5):
         io.add_mouse_pos_event(x + 4 * k, y)
-        fxpage.frame()
+        fxpage_twelve.frame()
     assert ui_fx._in_flight() and st.selected() == "huecycle"
-    fxpage.release()
+    fxpage_twelve.release()
     assert st.selected() == "fractals" and st.names() == names and not pushes
 
     # an order the registry does not hold: nothing is written, nothing pushed
