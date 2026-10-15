@@ -275,7 +275,7 @@ LEGACY_MIDI_FILE = Path("midi_map.json")
 FACTORY_FILE = Path(__file__).with_name("bindings.default.json")
 
 MIDI_SCHEMES = ("cc", "note", "pitch")
-LANE_SCHEMES = ("lane", "ext", "lfo", "hand", "axis")  # continuous, read by the Router
+LANE_SCHEMES = ("lane", "ext", "lfo", "hand", "hands", "axis")  # continuous, read by the Router
 MOD_OPS = ("push", "position")                 # the performer ops: the Router's rows
 # `hold` is a button row's op (plan 15 WP4, fork 13): the target fires
 # once the button has been down HOLD_S, and a shorter press does nothing —
