@@ -142,7 +142,7 @@ here; overturn → the change, then the same.
 | 148 | SHIFT is the first desk's; other desks have their own layer, no SHIFT | 177 | |
 | 149 | The `generic` MIDI profile | 176 | |
 | 150 | Continuous = not a row kind; schemes and their order from the registry | 178 | |
-| 151 | What a Learn waits for is each device's `wants` ("Learn bridge" never completes) | 178, 186 | |
+| 151 | What a Learn waits for is each device's `wants` | 178, 186 | |
 | 152 | The pad is a device; it runs the sticks' camera job | 179 | |
 | 153 | The hands' device in `hands/device.py` | 180 | |
 | 154 | One knob per param per desk | 176 | |
@@ -2352,12 +2352,10 @@ them. No preset was edited or added.
   have to say which desk before touching it); only open devices' wants.
 - **To reverse.** One property per class, `DeviceRegistry.wants`,
   `Learn.wants`.
-- **Rough edge.** **The bridge feeds `ext`, so it inherits the default,
-  and "Learn bridge" is offered on every modulatable param whenever a
-  bridge is listed — on or off, so on every un-renamed config — and no
-  move completes it** (the bridge has no `learn`; cancel it). One line
-  (`wants = ()` on `BridgeDevice`) would remove it. A new device's item
-  completes only through that device's own `learn`.
+- **Rough edge.** The bridge feeds `ext` but has `wants = ()` (it has no
+  `learn`), so no "Learn bridge" item is offered, on or off; fixed in the
+  review pass. A new device's item completes only through that device's
+  own `learn`.
 - **Judge it.** Checks 178 and 186.
 
 ### 152. The pad is a device: it publishes its axes and runs the sticks' camera job itself

@@ -125,7 +125,7 @@ Not started: **A5** (plan 26's docs), the **review pass**, the **final PR**.
 3. **The review pass** over the integration branch (one Opus reviewer,
    the prompt's checklist under "How to orchestrate"), fixes committed as
    `Review: <what>`. Known items to fold in:
-   - `wants = ()` on `BridgeDevice` ("Learn bridge" is offered on every
+   - **Done in the review pass:** `wants = ()` on `BridgeDevice` ("Learn bridge" is offered on every
      param menu for any rig with a bridge entry and never completes — B5
      documented it in row 151, checks 178 and L75; fix the code, then the
      three docs);

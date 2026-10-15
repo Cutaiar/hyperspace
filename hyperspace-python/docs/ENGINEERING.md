@@ -1447,8 +1447,7 @@ session's rows dim — then:
   that feeds (plan 27; an OSC phone: "Learn phone"): completed only by
   that device — an OSC fader moved a quarter of its travel lands a
   route, a button a session row. What the menu offers is "desk" plus the
-  devices' `wants` (`Learn.wants`). A bridge in the list (on or off)
-  offers **Learn bridge** too, which nothing completes: a known fault.
+  devices' `wants` (`Learn.wants`).
 - **Learn sink ▸** `<role>:<channel>` — on any param but a trigger, for
   every sink port the rig lists (`bridge:3 · pitch ch4`): sends the
   param's effective value out on that port (§13). It lands at once, as a
@@ -2035,10 +2034,6 @@ What only a person at the machine can check is
 - **With no desk connected the app keeps looking** — every 2 s five
   times, then every 10 s. Each look creates a CoreMIDI client; `enabled
   = false` on the desk's entry (or `[midi] enabled = false`) stops it.
-- **"Learn bridge" never completes.** A device that feeds is offered as a
-  Learn by its role; the bridge feeds `ext` but has no learn, so while a
-  bridge is listed (on or off) the param menu offers an item that waits
-  until cancelled (register row 151).
 - **The render graph's wiring is the default graph's choices, not
   cables.** A preset's `graph` section picks where the hands go, how
   their layer is laid on and what the history holds; it cannot say which

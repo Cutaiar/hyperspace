@@ -282,6 +282,15 @@ def test_continuous_schemes_are_the_builtins_then_each_devices_feeds_in_list_ord
     assert devices.DeviceRegistry([]).continuous_schemes() == ("lane", "lfo")
 
 
+def test_a_bridge_on_or_off_arms_no_learn():
+    """The bridge feeds `ext` but has no `learn`: a rig that lists one, on
+    or off, offers no Learn item for it (review pass, Important 1)."""
+    io = SimpleNamespace(on=False, error="", last="", name="", profile=None, bindings=[])
+    reg = devices.DeviceRegistry(devices=[
+        devices.BridgeDevice("bridge", io=io), devices.OffDevice("b2", "bridge")])
+    assert reg.wants() == ()
+
+
 # ---------------------------------------------------------------- config.toml, watched
 
 def _write(path: Path, text: str, bump: float) -> None:

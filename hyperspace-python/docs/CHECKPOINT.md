@@ -67,9 +67,7 @@ the current state (PR #189, the exit crash, is open beside it).
 - **Plan 29**, the devices: wands, drums, a Kinect or other depth sensor
   (the point-cloud node is ready for it), DMX / sACN lights, bulbs, a
   generic on-screen desk.
-- **Known faults**: "Learn bridge" is offered and never completes (a
-  one-line fix, register row 151); the open audit findings R14, R15, U9,
-  U10, P6, V8.
+- **Known faults**: the open audit findings R14, R15, U9, U10, P6, V8.
 - **Things nobody has observed:** frame pacing with two screens; a screen
   unplugged mid-run; anything on the APC40, the hand camera, the
   projector or the glass — the registry's devices, the hands through the

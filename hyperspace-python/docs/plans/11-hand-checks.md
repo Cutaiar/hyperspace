@@ -2462,10 +2462,7 @@ menu, with and without a bridge entry in the list. *Pass:* the combo
 lists the analyzer's lanes, then LFO 1–4, then the pad's axes, the
 hands, then `ext` (when the bridge is listed or a route names it), in
 the `[[devices]]` order; the menu offers Learn desk, Learn hand ▸ (a
-tracker on) and Learn pad (a pad connected), as before. **Known:** with
-a bridge listed (on or off, which includes every un-renamed config) the
-menu also offers **Learn bridge**, and no move completes it — cancel it
-(register row 151). *Fail:* a scheme missing → its device's `feeds`,
+tracker on) and Learn pad (a pad connected), as before. *Fail:* a scheme missing → its device's `feeds`,
 `DeviceRegistry.continuous_schemes`.
 
 **179. The sticks still steer; a routed stick does not.** (pad)
