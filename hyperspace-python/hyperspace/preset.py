@@ -231,7 +231,9 @@ def compact_desk(template: list[dict], live, keeps=None) -> list[dict]:
     `keeps(row)` says whether a load keeps a template row (not on an
     invariant control, say): one it would drop is no difference.
     `expand_desk(template, compact_desk(template, live))` is `live` again,
-    row for row, up to order."""
+    row for row, up to order — except a hand-edited desk holding two rows
+    on one knob by two spellings (the template's ``cc:*:16`` and a
+    ``cc:0:16``): the any-channel one is covered on the way back and lost."""
     tmpl = [b for b in (Binding.from_json(r) for r in template)
             if keeps is None or keeps(b)]
     by_t: dict[str, list[dict]] = {}
@@ -428,6 +430,12 @@ class Presets:
                              "desk rows only")
                 template = []
             desk = expand_desk(template, list(doc.get("desk") or []))
+            # the template's rows as this load expanded them: a save
+            # compacts against these, so a template fixed on disk after the
+            # load (the live desk is not re-expanded) cannot turn its fix
+            # into overrides that undo it (`_desk_part`)
+            key = str(doc.get("name") or (path.stem if path else ""))
+            self._at_load()[key] = (name, copy.deepcopy(template))
         elif "desk" in doc:
             desk = [Binding.from_json(row) for row in doc.get("desk") or []]
         else:
@@ -499,7 +507,7 @@ class Presets:
         table = self.router.table
         doc.update(values=self.reg.snapshot(part="performance"),
                    routes=[b.to_json() for b in table.routes()],
-                   **self._desk_part(), macros=table.macros_doc(),
+                   **self._desk_part(name), macros=table.macros_doc(),
                    modules=modules)
         return doc
 
@@ -516,20 +524,36 @@ class Presets:
             return None
         return str(ref) if ref else None
 
-    def _desk_part(self) -> dict:
+    def _at_load(self) -> dict[str, tuple[str, list[dict]]]:
+        """preset name → (its template's name, the template's rows as the
+        load that expanded the live desk read them). On the instance, made
+        on first use (a `Presets` from before a hot reload has none)."""
+        return self.__dict__.setdefault("_templates_at_load", {})
+
+    def _desk_part(self, name: str | None = None) -> dict:
         """What a save writes for the desk: ``{"desk": rows}``, the whole
         preset layer — or, when the loaded preset names a desk template,
         ``{"desk_template": name, "desk": overrides}`` (`compact_desk`),
-        the reference and not the expanded rows. A template the library
-        lacks counts as empty: every live row is an override."""
+        the reference and not the expanded rows. The overrides are taken
+        against the template **as the load read it**, so a template file
+        fixed since then changes no override (the fix lands at the next
+        load). A template the library lacks counts as empty: every live
+        row is an override. `name`: the preset this save writes, which
+        then holds the same template rows."""
         table = self.router.table
         ref = self.template_of_loaded()
         if ref is None:
             return {"desk": desk_json(table.desk())}
-        try:
-            template = self.lib.desk_template(ref)["desk"]
-        except LibraryError:
-            template = []
+        held = self._at_load().get(self.lib.current(GROUP) or "")
+        if held is not None and held[0] == ref:
+            template = held[1]                  # as the load expanded it
+        else:
+            try:
+                template = self.lib.desk_template(ref)["desk"]
+            except LibraryError:
+                template = []
+        if name is not None:                     # the file now written holds these too
+            self._at_load()[name] = (ref, copy.deepcopy(template))
         inv = table.invariant_rows()
 
         def keeps(b: Binding) -> bool:          # what `set_desk` keeps of a template row

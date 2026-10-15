@@ -85,6 +85,22 @@ def test_the_desk_group_ships_empty_and_lists_the_users_templates(rig):
         lib.desk_template("wrong")
 
 
+def test_a_template_named_default_is_no_group_default(rig):
+    """The `desk` folder holds templates, never the `desk` param group's
+    module presets: one named "default" is not read as that group's default
+    (review of PR #182)."""
+    lib = rig.lib
+    fresh = lib.defaults(DESK)
+    (lib.home / DESK).mkdir(parents=True, exist_ok=True)
+    doc = json.loads(TEMPLATE.read_text())
+    doc["name"] = "default"
+    (lib.home / DESK / "default.json").write_text(json.dumps(doc))
+    lib.poll(now=1e9)
+    assert lib.default_name(DESK) is None
+    assert lib.defaults(DESK) == fresh and lib.error == ""
+    assert lib.desk_template("default")["name"] == "default"
+
+
 def test_a_template_in_the_shared_library_is_found(tmp_path):
     """Plan 25: the templates live in the library root, so a shared folder
     (`[library] path`) carries them; the machine home holds none."""
@@ -209,3 +225,30 @@ def test_every_factory_preset_loads_and_saves_its_plain_desk_as_before(rig):
         assert doc["desk"] == desk_of(rig)
         assert [k for k in doc if k != "note"] == ["schema", "name", "values", "routes",
                                                    "desk", "macros", "modules"]
+
+
+def test_a_template_fixed_after_the_load_changes_no_override_on_save(rig):
+    """Review of PR #182: the live desk is not re-expanded when the template
+    file changes, so a save compacts against the template as the load read
+    it — the saved overrides are the fixture's, not the fix turned into
+    overrides that undo it. The fix lands at the next load."""
+    lib = rig.lib
+    put_fixtures(lib)
+    fixture = json.loads(PRESET.read_text())
+    lib.presets.load("TEMPLATED")
+    tdoc = json.loads(TEMPLATE.read_text())
+    tdoc["desk"][2] = knob("cc:*:18", "camera.zoom")            # D3 changed
+    tdoc["desk"].append(knob("cc:*:20", "view.inst_amp"))       # D5 added
+    (lib.home / DESK / TEMPLATE.name).write_text(json.dumps(tdoc))
+    lib.poll(now=1e9)                                           # the watch sees the edit
+    assert desk_of(rig) == EXPANDED                             # the live desk as loaded
+    lib.presets.save_as("TEMPLATED 2")
+    saved = json.loads((lib.home / "presets" / "templated-2.json").read_text())
+    assert saved["desk"] == fixture["desk"]
+    lib.overwrite("presets")                                    # saved again, over itself
+    saved = json.loads((lib.home / "presets" / "templated-2.json").read_text())
+    assert saved["desk"] == fixture["desk"]
+    lib.presets.load("TEMPLATED 2")                             # the fix, at the next load
+    assert knob("cc:*:18", "camera.zoom") in desk_of(rig)
+    assert knob("cc:*:20", "view.inst_amp") in desk_of(rig)
+    assert knob("cc:*:18", "camera.pitch") not in desk_of(rig)

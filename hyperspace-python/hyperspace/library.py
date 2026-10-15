@@ -1776,6 +1776,8 @@ class Library:
     # ---- defaults & values ----
 
     def default_name(self, group: str) -> str | None:
+        if group == DESK:          # its folder holds desk templates, never module presets:
+            return None            # a template named "default" is no group default
         name = DEFAULT_NAMES.get(group, "default")
         return name if self.path_of(group, name) is not None else None
 

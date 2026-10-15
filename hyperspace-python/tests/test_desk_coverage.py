@@ -55,10 +55,15 @@ def test_the_committed_report_is_fresh_and_regenerates_byte_identical(tool):
     `uv run python tools/desk_coverage.py` and commit the report."""
     first, second = tool.build(), tool.build()
     assert first == second
-    assert tool.REPORT.read_text() == first, \
+    assert tool.read_report() == first, \
         "desk-coverage.md is stale: run `uv run python tools/desk_coverage.py`"
     assert not re.search(r"\d{4}-\d{2}-\d{2}|\d{2}:\d{2}", first)   # no date, no time
     assert tool.main(["--check"]) == 0
+    # --check checks the factory report only: with --library it is refused
+    for extra in (["--library", str(FIXTURES)], ["--stdout"]):
+        with pytest.raises(SystemExit) as e:
+            tool.main(["--check", *extra])
+        assert e.value.code == 2
 
 
 def test_the_preset_layer_is_the_three_strips_and_the_maps_preset_controls(tool):
@@ -231,9 +236,18 @@ def test_a_picked_control_is_offered_this_presets_params_and_a_click_maps_it(rig
     assert "fx.kaleido.segments" in ids                  # an effect TRIP has on
     assert not [p for p in ids if p.startswith("dream.")]   # TRIP's look-back is off
     assert {g for g, _ in rest} >= {"view", "band"}
+    # at the default control size (the small desk, ~107 × 79 px of ground)
+    # the chip lies inside the offer and at least three items show whole
+    st = ui_desk._state(panel)
+    box, chip = st["offer_box"], st["offer_chip"]
+    inside = lambda r: (box[0] <= r[0] and r[2] <= box[2] + 0.5
+                        and box[1] <= r[1] and r[3] <= box[3] + 0.5)
+    assert ui_desk._state(panel)["unit"][0] < ui_desk.LABEL_UNIT
+    assert inside(chip), (chip, box)
+    rects = st["offer_rects"]
+    assert all(inside(rects[p]) for p in ids[:3]), ([rects[p] for p in ids[:3]], box)
     # the first item, clicked with the mouse
     first = used[0][0]
-    rects = ui_desk._state(panel)["offer_rects"]
     _click(panel, rects[first])
     assert calls == [first]
     (row,) = [b for b in table.desk() if b.source == d5.source]

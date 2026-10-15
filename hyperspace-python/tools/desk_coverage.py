@@ -281,6 +281,14 @@ def build(library: Path | None = None) -> str:
                                   "templates (copied in)")
 
 
+def read_report() -> str | None:
+    """The committed report's text (UTF-8, newlines as written), or None."""
+    if not REPORT.exists():
+        return None
+    with open(REPORT, encoding="utf-8", newline="") as f:
+        return f.read()
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
     ap.add_argument("--check", action="store_true", help="exit 1 if the committed report is stale")
@@ -288,18 +296,24 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--library", type=Path, default=None,
                     help="also report this library's presets (copied, never written)")
     args = ap.parse_args(argv)
+    if args.check and (args.library is not None or args.stdout):
+        ap.error("--check compares the factory report with the committed file: "
+                 "it takes neither --library nor --stdout")
     text = build(args.library)
     if args.stdout or args.library is not None:
         sys.stdout.write(text)
         return 0
     if args.check:
-        if not REPORT.exists() or REPORT.read_text() != text:
+        if read_report() != text:
             print(f"{REPORT.relative_to(ROOT)} is stale: run tools/desk_coverage.py",
                   file=sys.stderr)
             return 1
         return 0
     REPORT.parent.mkdir(parents=True, exist_ok=True)
-    REPORT.write_text(text)
+    # UTF-8 and "\n" whatever the platform: the text holds ● · ✕ — ×, and
+    # the test compares bytes
+    with open(REPORT, "w", encoding="utf-8", newline="\n") as f:
+        f.write(text)
     print(f"wrote {REPORT.relative_to(ROOT)}")
     return 0
 

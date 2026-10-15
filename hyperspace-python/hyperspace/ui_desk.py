@@ -101,6 +101,10 @@ LET_GO_TIP = "click to let go"     # the footer's picked line: on it where it fi
 # no control and the desk's own layout never moves while a pick stands
 OFFER = (apc40.RIGHT, 10.45, 4.0, 2.95)
 OFFER_ALL = "all params ▾"          # its chip: every param, this preset's first, then by group
+OFFER_SHORT = "all ▾"               # …where the long label does not fit beside the head
+OFFER_PAD = (4.0, 3.0)              # its inner padding, px
+OFFER_SPACING = (4.0, 1.0)          # …and its items' spacing: three items fit on the small desk
+OFFER_CHIP_PAD = (5.0, 0.0)         # the chip's padding: one text line tall
 
 # LED colours by the grid velocity (apc40's table); any other lit button red
 _LED = {GREEN: (0.30, 0.85, 0.40), GREEN_BLINK: (0.30, 0.85, 0.40),
@@ -384,7 +388,8 @@ def _offer(panel, table, origin, unit) -> None:
     click on one maps the pick there. Drawn only while a click on a param
     would map it (`picking`)."""
     st = _state(panel)
-    st.pop("offer_rects", None)
+    for k in ("offer_rects", "offer_box", "offer_chip"):
+        st.pop(k, None)
     c = picking(panel)
     if c is None:
         return
@@ -394,16 +399,21 @@ def _offer(panel, table, origin, unit) -> None:
     imgui.set_cursor_screen_pos(_v(ox + x * sx, oy + y * sy))
     size = _v(w * sx, h * sy)
     st["offer_drawn"] = [pid for pid, _why in used]
-    if not imgui.begin_child("##offer", size, imgui.ChildFlags_.borders):
+    # compact inside: the small desk gives it about 107 × 79 px at the
+    # default control size, which must hold the head and three items
+    imgui.push_style_var(imgui.StyleVar_.window_padding, _v(*OFFER_PAD))
+    shown = imgui.begin_child("##offer", size, imgui.ChildFlags_.borders)
+    imgui.pop_style_var()
+    if not shown:
         imgui.end_child()
         return
+    lo = imgui.get_window_pos()
+    st["offer_box"] = (lo.x, lo.y, lo.x + size.x, lo.y + size.y)
+    imgui.push_font(ui._FONTS["ui"], LABEL_PX[0] if sx < LABEL_UNIT else label_px(sx))
+    imgui.push_style_var(imgui.StyleVar_.item_spacing, _v(*OFFER_SPACING))
     try:
         ui._micro(f"{c.glyph} on", ui.RED)
-        imgui.same_line()
-        if ui.chip(f"{OFFER_ALL}##offer"):
-            imgui.open_popup("##offer_all")
-        if imgui.is_item_hovered():
-            imgui.set_tooltip("Every param: this preset's first, then the rest by group")
+        _offer_chip(panel)
         _offer_all(panel, used, rest)
         room_ = imgui.get_content_region_avail().x
         if not used:
@@ -411,7 +421,37 @@ def _offer(panel, table, origin, unit) -> None:
         for pid, why in used:
             _offer_item(panel, pid, why, room_)
     finally:
+        imgui.pop_style_var()
+        imgui.pop_font()
         imgui.end_child()
+
+
+def _chip_width(label: str) -> float:
+    return imgui.calc_text_size(label.split("##")[0]).x + 2 * OFFER_CHIP_PAD[0]
+
+
+def _offer_chip(panel) -> None:
+    """The head's chip, beside "D5 ON" when it fits there: the long label,
+    else the short one, else the short one on a line of its own — never
+    wider than the room it is drawn in."""
+    after = imgui.get_item_rect_max().x + imgui.get_style().item_spacing.x
+    right = imgui.get_window_pos().x + imgui.get_window_width() - OFFER_PAD[0]
+    label = next((lb for lb in (OFFER_ALL, OFFER_SHORT) if after + _chip_width(lb) <= right),
+                 None)
+    if label is not None:
+        imgui.same_line()
+    else:
+        label = OFFER_SHORT
+    imgui.push_style_var(imgui.StyleVar_.frame_padding, _v(*OFFER_CHIP_PAD))
+    imgui.push_style_var(imgui.StyleVar_.frame_rounding, 999.0)
+    hit = imgui.button(f"{label}##offer")
+    imgui.pop_style_var(2)
+    a, b = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+    _state(panel)["offer_chip"] = (a.x, a.y, b.x, b.y)
+    if hit:
+        imgui.open_popup("##offer_all")
+    if imgui.is_item_hovered():
+        imgui.set_tooltip("Every param: this preset's first, then the rest by group")
 
 
 def click(panel, table, c: apc40.Control, b: Binding | None) -> None:
