@@ -904,8 +904,8 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
         chain = audio.chain if audio.on else None
         if devs is not None:
             # the devices' feeds: the hands feed `hand` (and complete a
-            # hand Learn), the bridge feeds `ext` and sends lanes out —
-            # each guarded by the registry, the first error the toast's
+            # hand Learn), the bridge feeds `ext` (its out half is a sink,
+            # below) — each guarded by the registry, the first error the toast's
             devs.feed(router)
             if devs.error and ok:
                 ok, reloader.runtime_error = False, devs.error
@@ -918,8 +918,10 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
         # offsets on the objects before the integrator reads them
         router.modulate(chain, dt)   # dt: the rows' motion
         reg.apply()
-        if devs is not None:        # the sinks read effective values out (B3)
+        if devs is not None:        # the sinks read effective values out (plan 27 B3)
             devs.send(reg, chain)
+            if devs.error and ok:
+                ok, reloader.runtime_error = False, devs.error
         h.view.integrate(dt)
     except Exception as e:  # noqa: BLE001
         ok, reloader.runtime_error = False, _err("step", e)

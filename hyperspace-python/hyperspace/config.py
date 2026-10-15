@@ -104,8 +104,8 @@ like the rename above. The SYSTEM page shows both.
                             # With a list, the list says and those tables are
                             # ignored (one note each)
     role = "apc40"          # the name rows and the SYSTEM page use; unique; no ":"
-    kind = "midi"           # "midi", "gamepad", "hands", "bridge" (B2–B4 add
-                            # "midi-out", "osc", "cloud"); an unknown kind is an
+    kind = "midi"           # "midi", "gamepad", "hands", "bridge", "midi-out" (B4
+                            # adds "osc", "cloud"); an unknown kind is an
                             # error line on the SYSTEM page, never a dead launch
     enabled = true          # false lists it as `off`: nothing opened, nothing imported
                             # …then the kind's own keys: [midi]'s port / profile /
@@ -132,6 +132,26 @@ like the rename above. The SYSTEM page shows both.
                             # The app watches this file: an edit to the list lands
                             # without a relaunch (a bad edit is a note; the old list
                             # stands). [dream] is a worker, not a device: it stays a table
+                            # Sinks (plan 27 B3) send values out: the bridge's out
+                            # half, and a "midi-out" entry — a MIDI port of its
+                            # own, carrying a hands device's DAW messages and any
+                            # sink rows on its role:
+                            #   [[devices]]  role = "hands-daw"  kind = "midi-out"
+                            #                port = "Hyperspace Hands"  carries = "leap"
+                            #   (`port`: an existing port by substring, else a
+                            #   virtual one unless virtual = false; `carries`: the
+                            #   hands role whose DAW MIDI it sends; encoding /
+                            #   channel / cc / rate: its sink rows' wire, as the
+                            #   bridge's.) [hands] out — on the old table or on a
+                            #   hands entry — becomes this entry at load (one note
+                            #   when the file wrote it), unless the list has a
+                            #   midi-out carrying that role already. What a sink
+                            #   sends is the session's sink rows in bindings.json
+                            #   ("param:view.bright" or "lane:3" → "bridge:3"):
+                            #   ROUTING's sinks, or right-click → Learn sink ▸.
+                            #   [bridge] send becomes those rows the first launch
+                            #   the bridge is on with none (one note); then the
+                            #   rows say
 
     [gamepad]               # the Xbox pad polled through GLFW (gamepad.py)
     enabled = true          # false never polls for one
@@ -147,6 +167,7 @@ like the rename above. The SYSTEM page shows both.
     cc = 16                 # cc14: the first lane's MSB controller, 0–31 (32−cc lanes)
     rate = 100              # messages a second per lane at most (0 = every frame)
     send = ["lane:*"]       # what goes out, in lane order: "lane:*", "lane:3", "param:<id>"
+                            # — read once, into bindings.json's sink rows (plan 27 B3)
     in_lanes = 16           # size of the `ext` vector the inbound lanes fill
 
     [dream]                 # the look-back's Deep Dream worker (dream.py, torch)
@@ -246,6 +267,13 @@ DIM_FLOOR = 0.1          # the config cannot launch an output black (plan 21 for
 DEVICE_TABLES = (("gamepad", "gamepad", "pad"), ("midi", "midi", None),
                  ("hands", "hands", "leap"), ("bridge", "bridge", "bridge"))
 DEVICE_KEYS = ("role", "kind", "enabled")
+# a `midi-out` entry's own keys and their defaults (plan 27 B3): the port
+# (a substring of an existing one, else a virtual port of that name unless
+# `virtual` is false), the hands role whose DAW messages it carries, and
+# its sink rows' wire — the bridge's encoding / channel / cc / rate
+MIDI_OUT: dict = {"port": "", "virtual": True, "carries": "", "encoding": "pitch",
+                  "channel": 0, "cc": 16, "rate": 100}
+DAW_ROLE = "hands-daw"     # the entry `[hands] out` becomes
 
 
 def _note(cfg: dict, note: str) -> None:
@@ -361,7 +389,9 @@ def _kind_defaults(kind: str) -> dict:
     """The keys an entry of `kind` carries beyond role / kind / enabled,
     with their defaults: the old table's *defaults* (DEFAULTS, the hands'
     own table), less `enabled` — never the file's old table, which a
-    `[[devices]]` list says is ignored."""
+    `[[devices]]` list says is ignored. A `midi-out` entry's are `MIDI_OUT`."""
+    if kind == "midi-out":
+        return copy.deepcopy(MIDI_OUT)
     for section, k, _ in DEVICE_TABLES:
         if k != kind:
             continue
@@ -426,6 +456,35 @@ def _translate(cfg: dict, data: dict) -> list[dict]:
     return out
 
 
+def _daw(cfg: dict, entries: list[dict], wrote_out: set[str]) -> list[dict]:
+    """The hands' DAW out as a sink (plan 27 B3): the first enabled hands
+    entry whose `out` names a port gets a `midi-out` entry right after it
+    — role `DAW_ROLE`, that port, ``carries`` its role — unless the list
+    has a midi-out carrying that role already (or the role is taken). One
+    note when the file wrote `out` itself (`wrote_out`: the hands roles
+    whose table or entry did); the default port is today's behaviour and
+    is translated silently."""
+    hands = next((e for e in entries if e["kind"] == "hands" and e["enabled"]), None)
+    out = hands.get("out") if hands is not None else None
+    if hands is None or not isinstance(out, str) or not out.strip():
+        return entries
+    role = hands["role"]
+    if any(e["kind"] == "midi-out" and e.get("carries") == role for e in entries):
+        return entries
+    if any(e["role"] == DAW_ROLE for e in entries):
+        _note(cfg, f"config: [hands] out = {out!r} not sent: the role {DAW_ROLE!r} is taken — "
+                   f"add a midi-out entry with carries = {role!r}")
+        return entries
+    daw = {"role": DAW_ROLE, "kind": "midi-out", "enabled": True,
+           **copy.deepcopy(MIDI_OUT), "port": out.strip(), "carries": role}
+    k = entries.index(hands)
+    if role in wrote_out:
+        _note(cfg, f"config: [hands] out is now a [[devices]] entry (role = {DAW_ROLE!r}, "
+                   f"kind = 'midi-out', port = {out.strip()!r}, carries = {role!r}) — "
+                   "see config.py")
+    return [*entries[:k + 1], daw, *entries[k + 1:]]
+
+
 def _devices(cfg: dict, data: dict, path: Path, problems: list[str]) -> None:
     """The device list (plan 27 B1), read in place as ``cfg["devices"]``:
     the checked `[[devices]]` entries when the file lists them (the old
@@ -436,8 +495,11 @@ def _devices(cfg: dict, data: dict, path: Path, problems: list[str]) -> None:
     what the entry says; a relative `map`, `calibration` or `tape` is
     resolved against the file's folder in both."""
     raw = data.get("devices")
+    wrote_out: set[str] = set()
     if raw is None:
         entries = _translate(cfg, data)
+        if isinstance(data.get("hands"), dict) and "out" in data["hands"]:
+            wrote_out = {e["role"] for e in entries if e["kind"] == "hands"}
     else:
         if not isinstance(raw, list):
             problems.append(f"config: devices = {raw!r} is not a list of [[devices]] tables")
@@ -455,6 +517,9 @@ def _devices(cfg: dict, data: dict, path: Path, problems: list[str]) -> None:
             if isinstance(data.get(section), dict):
                 _note(cfg, f"config: [[devices]] is listed, so [{section}] is ignored — "
                            f"its {kind} entry says")
+        wrote_out = {str(e.get("role", "")).strip() for e in raw
+                     if isinstance(e, dict) and "out" in e}
+    entries = _daw(cfg, entries, wrote_out)
     for e in entries:
         for key in ("map", "calibration", "tape"):
             v = e.get(key)

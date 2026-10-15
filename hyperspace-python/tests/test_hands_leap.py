@@ -312,46 +312,59 @@ def test_hands_io_builds_the_real_source_by_default_and_closes_it(leap):
 
 
 # ---------------------------------------------------------------- the DAW port
+# (plan 27 B3: the port is the `hands-daw` sink's — bridge.OutPort /
+# bridge._open_out, moved out of hands/core.py — and HandsIO opens none)
 
 def test_open_out_prefers_an_existing_port_else_makes_a_virtual_one(monkeypatch):
+    from hyperspace import bridge
+
     calls = []
-    monkeypatch.setattr(hc.mido, "get_output_names", lambda: ["IAC Bus 1", "Hyperspace Hands"])
-    monkeypatch.setattr(hc.mido, "open_output",
+    monkeypatch.setattr(bridge.mido, "get_output_names",
+                        lambda: ["IAC Bus 1", "Hyperspace Hands"])
+    monkeypatch.setattr(bridge.mido, "open_output",
                         lambda name, virtual=False: calls.append((name, virtual)) or NS(name=name))
-    port, err, made = hc._open_out("hyperspace hands")
+    port, err, made = bridge._open_out("hyperspace hands")
     assert port.name == "Hyperspace Hands" and (err, made) == ("", False)
     assert calls == [("Hyperspace Hands", False)]
-    port, err, made = hc._open_out("Other")
+    port, err, made = bridge._open_out("Other")
     assert port.name == "Other" and (err, made) == ("", True) and calls[-1] == ("Other", True)
     # a retry after a loss joins an existing port only
-    assert hc._open_out("Other", virtual=False) == (None, "out 'Other': no such port", False)
+    assert bridge._open_out("Other", virtual=False) == (None, "out 'Other': no such port", False)
     assert len(calls) == 2
-    assert hc._open_out("") == (None, "", False)
+    assert bridge._open_out("") == (None, "", False)
 
 
 def test_open_out_reports_a_refusing_backend(monkeypatch):
+    from hyperspace import bridge
+
     def boom():
         raise RuntimeError("no MIDI backend")
 
-    monkeypatch.setattr(hc.mido, "get_output_names", boom)
-    assert hc._open_out("Hands") == (None, "out 'Hands': no MIDI backend", False)
+    monkeypatch.setattr(bridge.mido, "get_output_names", boom)
+    assert bridge._open_out("Hands") == (None, "out 'Hands': no MIDI backend", False)
 
 
 def test_a_failed_open_is_said_once_and_retried(monkeypatch, capsys):
-    monkeypatch.setattr(hc.mido, "get_output_names", list)
+    from hyperspace import bridge, midi
+
+    monkeypatch.setattr(bridge.mido, "get_output_names", list)
     attempts = []
 
     def open_output(name, virtual=False):
         attempts.append(name)
         raise RuntimeError("virtual ports unsupported")
 
-    monkeypatch.setattr(hc.mido, "open_output", open_output)
+    monkeypatch.setattr(bridge.mido, "open_output", open_output)
     clock = Clock()
-    io = HandsIO(HandSettings.from_config(), {"out": "Hands"}, source=NS(latest=lambda: (0, 0.0, {})),
-                 clock=clock)
-    assert io.out is None and io.error == "out 'Hands': virtual ports unsupported"
-    io.poll(1 / 60)
-    clock.t += hc.RECONNECT_S
-    io.poll(1 / 60)
+    # the instrument opens nothing, whatever its `out` says
+    io = HandsIO(HandSettings.from_config(), {"out": "Hands"},
+                 source=NS(latest=lambda: (0, 0.0, {})), clock=clock)
+    assert io.out is None and io.error == "" and attempts == []
+    port = bridge.OutPort("Hands", clock=clock, who="hands-daw")
+    port.open()
+    assert port.out is None and port.error == "out 'Hands': virtual ports unsupported"
+    port.retry()
+    clock.t += midi.RECONNECT_S
+    port.retry()
     assert len(attempts) == 2
     assert capsys.readouterr().err.count("virtual ports unsupported") == 1

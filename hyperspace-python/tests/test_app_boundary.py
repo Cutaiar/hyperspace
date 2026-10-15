@@ -352,9 +352,12 @@ def _host(log: list[str], *, pad_on=True, pressed=(), held=(), super_=False, sti
 # the draw. Plan 27 B1: the devices poll in the scene-setter slot (the
 # registry, in list order — the pad's rows, then MIDI's), the sources feed
 # in the feed slot (the hands feed `hand`, the bridge feeds `ext`), and the
-# sinks run after `reg.apply` (`devices.send` — none until B3). Plan 27
+# sinks run after `reg.apply` (`devices.send`). Plan 27
 # B2: the sticks' camera job is the pad device's own (`gamepad.steer`, in
-# its `act`), so it runs right after the pad's rows, before MIDI's
+# its `act`), so it runs right after the pad's rows, before MIDI's. Plan 27
+# B3: the bridge is two halves — its ports looked for again in its `poll`,
+# the ext lanes received and published in the feed slot, the out half a
+# sink after `reg.apply` (effective values, no longer a frame behind)
 ORDER = [
     "clock.tick", "reloader.poll",
     "router.keys",                                   # key rows (and the loop keys)
@@ -362,16 +365,17 @@ ORDER = [
     "router.claimed",                                #   …its sticks no route names, to the base
     "pad.lanes", "router.felt",                      #   …through the pad's feel (motion.py)
     "midi.poll",                                     #   …MIDI — cc and note rows
+    "bridge.reconnect",                              #   …the bridge's ports, looked for again
     "router.follow_macros",                          # the macros' base subscribers
     "undo.tick",                                     # the bases, compared (plan 15 WP1)
     "output.apply",                                  # reads last frame's objects
     "mouse.poll",                                    # relative writers, to the base
     "audio.step", "audio.publish",                   # new lanes, and their names (R8)
     "hands.poll",                                    # devices.feed: the hands feed hand
-    "bridge.step",                                   #   …the bridge feeds ext
+    "bridge.receive", "bridge.publish",              #   …the bridge feeds ext, its labels
     "lfos.step", "lfos.publish",                     # feeds lfo
     "router.modulate", "reg.apply",                  # the pass, then one commit
-    #                                                  (devices.send: the sinks, B3)
+    "bridge.transmit",                               # devices.send: the sinks (B3)
     "view.integrate",
     "render.draw", "panel.draw",                     # the two windows
 ]
@@ -440,7 +444,7 @@ def test_a_raising_adapter_is_a_note_that_survives_the_frame():
     hands.poll = _boom
     assert app.frame(h, now=1.0, dt=1 / 60, fps=60.0) is False
     assert h.reloader.runtime_error.startswith("hands: RuntimeError: boom")
-    assert "bridge.step" in log and "reg.apply" in log    # the next device still fed
+    assert "bridge.receive" in log and "reg.apply" in log    # the next device still fed
 
 
 def test_the_relative_writers_run_with_the_setters_and_move_the_base():

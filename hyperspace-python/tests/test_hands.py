@@ -1257,17 +1257,40 @@ class Backend:
 
 
 def daw_rig(monkeypatch, names):
-    from hyperspace.hands import core
+    """The hands' DAW out as it runs since plan 27 B3: a `HandsIO` that opens
+    no port, and the `hands-daw` sink — a `midi-out` device carrying its
+    messages through a `bridge.OutPort` found by name — over a fake backend.
+    `port` is the sink's port (what `io.out` was), `io` the instrument."""
+    from hyperspace import bridge, devices
 
     be = Backend(names)
-    monkeypatch.setattr(core.mido, "get_output_names", be.get_output_names)
-    monkeypatch.setattr(core.mido, "open_output", be.open_output)
+    monkeypatch.setattr(bridge.mido, "get_output_names", be.get_output_names)
+    monkeypatch.setattr(bridge.mido, "open_output", be.open_output)
     settings = HandSettings.from_config({"out": "fake daw"})
     settings.catch_s, settings.rate, settings.pinch_hold = 0.0, 0, 0.0
     clock = Clock()
     src = FakeSource(clock)
     io = HandsIO(settings, {"out": "fake daw"}, source=src, clock=clock)
-    return NS(io=io, src=src, clock=clock, s=settings, be=be)
+    leap = NS(role="leap", io=io)
+    ctx = devices.Context(devices=NS(get=lambda role: leap if role == "leap" else None))
+    port = bridge.OutPort("fake daw", clock=clock, who="hands-daw")
+    sink = devices.MidiOutDevice("hands-daw", {"port": "fake daw", "carries": "leap"}, ctx,
+                                 io=port, sender=bridge.Sender(clock=clock))
+    port.open()
+    return NS(io=io, src=src, clock=clock, s=settings, be=be, port=port, sink=sink)
+
+
+def drun(r, frames=1, *hs_):
+    """`frames` render frames through the registry's slots: the sink's
+    `poll` (its port looked for again), the hands' frame, the sink's `send`."""
+    out = []
+    for _ in range(frames):
+        r.clock.t += DT
+        r.src.put(*hs_)
+        r.sink.poll(DT, r.clock.t)
+        out += r.io.poll(DT)
+        r.sink.send(None, None)
+    return out
 
 
 def notes(msgs, kind="note_on"):
@@ -1275,97 +1298,112 @@ def notes(msgs, kind="note_on"):
 
 
 def test_a_lost_daw_port_is_looked_for_again_and_the_daw_resynced(monkeypatch, capsys):
-    from hyperspace.hands import core
+    from hyperspace import midi
 
     r = daw_rig(monkeypatch, ["Fake DAW 1"])
-    io, be, clock = r.io, r.be, r.clock
-    assert be.opened == [("Fake DAW 1", False)] and io.out_name == "Fake DAW" and io.error == ""
+    io, be, clock, port = r.io, r.be, r.clock, r.port
+    assert be.opened == [("Fake DAW 1", False)] and port.name == "Fake DAW" and port.error == ""
+    assert r.sink.status == "connected"
     pinched = hand(tips=(10.0, 80.0, 80.0, 80.0), palm_w=100.0)   # R index closed
-    run(r, 1, pinched)
-    port = io.out
-    assert 120 + 1 in notes(port.sent) and 100 + 4 in notes(port.sent)   # presence, R ind
-    assert io.last                                                       # something went out
+    drun(r, 1, pinched)
+    out = port.out
+    assert 120 + 1 in notes(out.sent) and 100 + 4 in notes(out.sent)     # presence, R ind
+    assert io.last and io.out_name == "Fake DAW"                         # something went out
     last = io.last
     # the DAW goes away: the port fails, is closed, and nothing is said to have been sent
-    port.broken = True
+    out.broken = True
     be.names = []
-    run(r, 1, hand(pos=(50.0, 300.0, 0.0), tips=(10.0, 80.0, 80.0, 80.0), palm_w=100.0))
-    assert io.out is None and io.error.startswith("send: port yanked")
-    assert port.closed and io.last == last
+    drun(r, 1, hand(pos=(50.0, 300.0, 0.0), tips=(10.0, 80.0, 80.0, 80.0), palm_w=100.0))
+    assert port.out is None and port.error.startswith("send: port yanked")
+    assert out.closed and io.last == last and r.sink.status == "lost"
     # a retry while the DAW is still gone makes no virtual port in its place
-    clock.t += core.RECONNECT_S
-    run(r, 1, hand(pos=(60.0, 310.0, 0.0), tips=(10.0, 80.0, 80.0, 80.0), palm_w=100.0))
-    assert io.out is None and io.error == "out 'fake daw': no such port" and len(be.opened) == 1
+    clock.t += midi.RECONNECT_S
+    drun(r, 1, hand(pos=(60.0, 310.0, 0.0), tips=(10.0, 80.0, 80.0, 80.0), palm_w=100.0))
+    assert port.out is None and port.error == "out 'fake daw': no such port"
+    assert len(be.opened) == 1 and io.daw_error == port.error
     # the DAW is back: the port reopens, the notes that are on go out again,
     # and every axis resends its value rather than waiting for a change
     be.names = ["Fake DAW 1"]
-    clock.t += core.RECONNECT_S
-    run(r, 1, hand(pos=(60.0, 310.0, 0.0), tips=(10.0, 80.0, 80.0, 80.0), palm_w=100.0))
-    assert io.out is not None and io.out is not port and be.opened[-1] == ("Fake DAW 1", False)
-    assert io.error == ""
-    assert notes(io.out.sent)[:2] == [121, 104]                          # presence, R index
-    ccs = [m for m in io.out.sent if m.type == "control_change"]
+    clock.t += midi.RECONNECT_S
+    drun(r, 1, hand(pos=(60.0, 310.0, 0.0), tips=(10.0, 80.0, 80.0, 80.0), palm_w=100.0))
+    assert port.out is not None and port.out is not out and be.opened[-1] == ("Fake DAW 1", False)
+    assert port.error == ""
+    assert notes(port.out.sent)[:2] == [121, 104]                        # presence, R index
+    ccs = [m for m in port.out.sent if m.type == "control_change"]
     assert {m.control for m in ccs} >= {a.number for a in r.s.axes if a.side == "right"}
     # the backend refusing: said once on stderr, retried every interval
     be.fail = True
-    io.out.broken = True
-    run(r, 1, hand(pos=(80.0, 330.0, 0.0)))
+    port.out.broken = True
+    drun(r, 1, hand(pos=(80.0, 330.0, 0.0)))
     for _ in range(3):
-        clock.t += core.RECONNECT_S
-        run(r, 1, hand(pos=(90.0, 330.0, 0.0)))
-    assert io.out is None and io.error == "out 'fake daw': no backend"
+        clock.t += midi.RECONNECT_S
+        drun(r, 1, hand(pos=(90.0, 330.0, 0.0)))
+    assert port.out is None and port.error == "out 'fake daw': no backend"
     assert capsys.readouterr().err.count("no backend") == 1
     be.fail = False
-    clock.t += core.RECONNECT_S
-    run(r, 1, hand(pos=(99.0, 330.0, 0.0)))
-    assert io.out is not None and io.error == ""
+    clock.t += midi.RECONNECT_S
+    drun(r, 1, hand(pos=(99.0, 330.0, 0.0)))
+    assert port.out is not None and port.error == ""
 
 
 def test_a_daw_port_that_stays_missing_is_looked_for_less_often(monkeypatch):
     """The hands' out port keeps midi.Ports' pace (audit R15): RECONNECT_S
     for RECONNECT_FAST looks, then RECONNECT_SLOW_S, and from the start
     again once it has opened."""
-    from hyperspace.hands import core
+    from hyperspace import bridge, midi
 
     r = daw_rig(monkeypatch, ["Fake DAW 1"])
-    io, be, clock = r.io, r.be, r.clock
+    be, clock, port = r.be, r.clock, r.port
     looks: list[float] = []
     real = be.get_output_names
-    monkeypatch.setattr(core.mido, "get_output_names", lambda: (looks.append(clock.t), real())[1])
-    run(r, 1, hand())
-    io.out.broken = True
+    monkeypatch.setattr(bridge.mido, "get_output_names",
+                        lambda: (looks.append(clock.t), real())[1])
+    drun(r, 1, hand())
+    port.out.broken = True
     be.names = []
-    run(r, 1, hand(pos=(50.0, 300.0, 0.0)))
-    assert io.out is None
+    drun(r, 1, hand(pos=(50.0, 300.0, 0.0)))
+    assert port.out is None
     for k in range(600):
         clock.t += 0.1
-        run(r, 1, hand(pos=(50.0 + k % 7, 300.0, 0.0)))
-    import itertools
-
+        drun(r, 1, hand(pos=(50.0 + k % 7, 300.0, 0.0)))
     gaps = [round(b - a, 1) for a, b in itertools.pairwise(looks)]
-    fast, slow = gaps[:core.RECONNECT_FAST - 1], gaps[core.RECONNECT_FAST:]  # (a 0.1 s poll)
-    assert all(core.RECONNECT_S <= g <= core.RECONNECT_S + 0.2 for g in fast), fast
-    assert slow and all(core.RECONNECT_SLOW_S <= g <= core.RECONNECT_SLOW_S + 0.2 for g in slow), slow
+    fast, slow = gaps[:midi.RECONNECT_FAST - 1], gaps[midi.RECONNECT_FAST:]  # (a 0.1 s poll)
+    assert all(midi.RECONNECT_S <= g <= midi.RECONNECT_S + 0.2 for g in fast), fast
+    assert slow and all(midi.RECONNECT_SLOW_S <= g <= midi.RECONNECT_SLOW_S + 0.2
+                        for g in slow), slow
     assert len(looks) <= 12
     be.names = ["Fake DAW 1"]
-    clock.t += core.RECONNECT_SLOW_S
-    run(r, 1, hand(pos=(60.0, 300.0, 0.0)))
-    assert io.out is not None and io._out_misses == 0
+    clock.t += midi.RECONNECT_SLOW_S
+    drun(r, 1, hand(pos=(60.0, 300.0, 0.0)))
+    assert port.out is not None and port.misses == 0
 
 
 def test_a_virtual_port_is_made_again_when_it_fails(monkeypatch):
-    from hyperspace.hands import core
+    from hyperspace import midi
 
     r = daw_rig(monkeypatch, [])                       # nothing to join: a virtual port
-    io, be, clock = r.io, r.be, r.clock
-    assert be.opened == [("fake daw", True)] and io.error == ""
-    run(r, 1, hand())
-    io.out.broken = True
-    run(r, 1, hand(pos=(50.0, 300.0, 0.0)))
-    assert io.out is None
-    clock.t += core.RECONNECT_S
-    run(r, 1, hand(pos=(60.0, 300.0, 0.0)))
-    assert io.out is not None and be.opened[-1] == ("fake daw", True) and io.error == ""
+    be, clock, port = r.be, r.clock, r.port
+    assert be.opened == [("fake daw", True)] and port.error == ""
+    drun(r, 1, hand())
+    port.out.broken = True
+    drun(r, 1, hand(pos=(50.0, 300.0, 0.0)))
+    assert port.out is None
+    clock.t += midi.RECONNECT_S
+    drun(r, 1, hand(pos=(60.0, 300.0, 0.0)))
+    assert port.out is not None and be.opened[-1] == ("fake daw", True) and port.error == ""
+
+
+def test_the_hands_daw_sink_sends_what_the_instrument_made_and_no_port_is_opened(monkeypatch):
+    """Plan 27 B3: `HandsIO` opens no port whatever `[hands] out` says; the
+    frame's DAW messages wait in `outbox` and the `hands-daw` sink sends
+    exactly them, in order — what `HandsIO._send` sent before."""
+    r = daw_rig(monkeypatch, ["Fake DAW 1"])
+    assert r.io.out is None and len(r.be.opened) == 1      # the sink's one port, not the hands'
+    made = []
+    for k in range(5):
+        made += drun(r, 1, hand(pos=(10.0 * k, 200.0 + 5 * k, 0.0),
+                               tips=(10.0, 80.0, 80.0, 80.0), palm_w=100.0))
+    assert made and r.port.out.sent == made and r.io.outbox == []
 
 
 def test_an_injected_port_is_the_callers_and_never_reopened():

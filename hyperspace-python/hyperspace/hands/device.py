@@ -3,8 +3,10 @@
 A thin wrapper that owns a `HandsIO` and satisfies the device protocol
 (devices.py): it opens the instrument behind its `[[devices]]` entry,
 makes the instrument's one call — ``HandsIO.poll(dt, learn, router)``,
-which reads the tracker, sends the DAW MIDI, feeds ``hand`` and ``hands``
-and completes a hand Learn at once — from the registry's feed slot, and
+which reads the tracker, makes the frame's DAW MIDI, feeds ``hand`` and
+``hands`` and completes a hand Learn at once — from the registry's feed
+slot (the DAW MIDI goes out through the `hands-daw` sink, a `midi-out`
+device that carries it after ``reg.apply``: plan 27 B3), and
 describes the instrument's lanes as ports for the SYSTEM page and the node
 editor (plan 28).
 

@@ -76,7 +76,7 @@ def test_the_kinds_table_lists_todays_four_and_make_sorts_an_entry():
     """`[[devices]] kind` → the device class, here and nowhere else; an
     entry that is not enabled is `off`, a kind the table lacks an error
     line — never a crash, never an import."""
-    assert set(devices.KINDS) == {"midi", "gamepad", "hands", "bridge"}
+    assert set(devices.KINDS) == {"midi", "gamepad", "hands", "bridge", "midi-out"}   # B3: a sink
     assert devices.MidiDevice.schemes == ("cc", "note", "pitch")
     assert devices.PadDevice.schemes == ("axis", "pad", "hat")
     assert devices.HandsDevice.schemes == ("hand", "hands")      # B2: C4's pair scheme too
@@ -474,18 +474,27 @@ def test_the_hands_shims_ports_are_the_layout():
     io.close()
 
 
-def test_the_bridge_shim_steps_with_the_live_analyzer_only_while_audio_runs():
+def test_the_bridge_is_one_device_with_a_source_half_and_a_sink_half():
+    """Plan 27 B3 (was B1's `step` shim): the ports are looked for again in
+    `poll`, the ext lanes received and published in the feed slot, and the
+    out half sent in the sink slot — from the analyzer the frame hands
+    `send` (None while audio is off), the bare shim's old `send` list."""
     calls: list = []
-    io = SimpleNamespace(step=lambda chain, router: calls.append((chain, router)), on=True,
-                         error="", name="IAC", encoding="pitch", room=16, sent=3,
-                         decoder=SimpleNamespace(n=4))
-    audio = SimpleNamespace(chain="CHAIN", on=True)
-    d = devices.BridgeDevice("bridge", io=io, audio=audio)
+    io = SimpleNamespace(reconnect=lambda: calls.append("reconnect"),
+                         receive=lambda router: calls.append(("receive", router)),
+                         publish=lambda router: calls.append(("publish", router)),
+                         transmit=lambda chain: calls.append(("transmit", chain)),
+                         on=True, error="", name="IAC", encoding="pitch", channel=0, cc=16,
+                         room=16, sent=3, decoder=SimpleNamespace(n=4))
+    d = devices.BridgeDevice("bridge", io=io)
+    d.poll(0.0, 0.0)
     d.feed("R")
-    audio.on = False
-    d.feed("R")
-    assert calls == [("CHAIN", "R"), (None, "R")]
+    d.send("REG", "CHAIN")
+    d.send("REG", None)
+    assert calls == ["reconnect", ("receive", "R"), ("publish", "R"), ("transmit", "CHAIN"),
+                     ("transmit", None)]
     assert d.status == "connected" and d.last == "IAC  ·  pitch, 16 lanes  ·  3 sent"
+    assert [p.address for p in d.sinks][:2] == ["bridge:0", "bridge:1"] and len(d.sinks) == 16
     assert [p.name for p in d.sources] == ["0", "1", "2", "3"]
     io.on = False
     assert d.status == "lost" and d.last == ""
