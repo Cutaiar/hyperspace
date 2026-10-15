@@ -24,7 +24,12 @@ the hands in it, beside a glass output that shows the hands' layer
 alone, over and through) and the hands' layer laid on depth-aware, for
 every preset; the history holding the hands' layer, for the presets
 with the look-back on — each a rig of its own (`Renderer.wiring`), its
-outputs named `<wiring>/<state>`.
+outputs named `<wiring>/<state>`. And (plan 26 A4) the proof presets,
+fixtures under `tests/fixtures/presets/` (`FIXTURE_PRESETS`, never a
+factory preset): each copied into the scratch library and loaded like a
+user's preset, its `graph` section landing through the real `Presets`
+onto the rig's renderer, hands present, in the eight states — the
+manifest's `fixture_states` and `fixtures`.
 
 A golden is the SHA-256 of the full-resolution RGBA frame as GL returns
 it, plus a quarter-size PNG for a person (one file per distinct
@@ -106,6 +111,14 @@ WIRED: tuple[tuple[str, dict, tuple[str, ...], tuple[str, ...] | None], ...] = (
     ("depth", {"blend": "depth"}, ("scene+hands", "scene+hands+through"), None),
     ("history+hands", {"history": "scene+hands"}, ("scene+hands",), LOOKBACK_ON),
 )
+
+# plan 26 A4: the proof presets — fixtures, never factory presets (no
+# file under hyperspace/library/ is edited or added) — each loaded
+# through the scratch library like a user's preset, its `graph` section
+# landing through the real `Presets` (`GraphSection`) onto the rig's
+# renderer, hands present, every output state as one rig's outputs
+FIXTURES = ROOT / "tests" / "fixtures" / "presets"
+FIXTURE_PRESETS: tuple[str, ...] = ("hands-lines",)
 
 # the one frame at the 1080p cap: a 2× HiDPI 1080p screen (3840×2160
 # pixels, 1920×1080 logical) whose frame the cap keeps at 1920×1080
@@ -220,6 +233,8 @@ class Rig:
     the hands chain, the renderer."""
 
     def __init__(self, slug: str, hands: str, ctx: moderngl.Context):
+        """A factory preset by its slug, or a fixture (`FIXTURE_PRESETS`):
+        copied into the scratch library first and loaded from there."""
         self.t = T0
         self.view, self.fx, self.dream, self.ghost = (ViewState(), FxState(), DreamState(),
                                                       GhostState())
@@ -230,6 +245,10 @@ class Rig:
         tempo.register(reg, self.clock)
         lfo.register(reg, lfo.LFOs(), self.clock)      # declared, never stepped: at rest
         self._home = tempfile.TemporaryDirectory(prefix="hyperspace-golden-lib-")
+        if slug in FIXTURE_PRESETS:          # a user's preset in the scratch library
+            own = Path(self._home.name) / "presets"
+            own.mkdir(parents=True, exist_ok=True)
+            (own / f"{slug}.json").write_text((FIXTURES / f"{slug}.json").read_text())
         lib = Library(Path(self._home.name))
         lib.attach(reg)
         self.router = Router(reg, Bindings())
@@ -243,6 +262,9 @@ class Rig:
         self.clock.trigger(self.t)
         self.ctx = ctx
         r = self.renderer = Renderer(ctx, dream=self.dream, fx=self.fx, ghost=self.ghost)
+        # plan 26 A4: the preset's graph (none for a factory preset: the
+        # default wiring) onto this renderer, as app.py attaches it
+        presets.graph.attach(r)
         r.max_frame = RENDER_CAP
         errs = r.fx.compile_all()
         if errs:
@@ -323,7 +345,7 @@ def _shoot(slug: str, hands: str, states, size, logical, dpr,
             # the pipeline the graph's output settled on (plan 26 A3: the
             # wiring); with the default wiring it is `outputs.route`'s
             key, over = rig.renderer.stats["routes"][k]
-            if wiring is None:
+            if wiring is None and rig.renderer.wiring == Wiring():    # (a fixture's graph: its own)
                 assert (key, over) == route(Switches(**sw), fx_on, visible), (slug, name)
             raw = _read(ctx, f, size)
             shots.append(Shot(slug, hands, name, NAMES[key] if key is not None else "none",
@@ -331,6 +353,9 @@ def _shoot(slug: str, hands: str, states, size, logical, dpr,
                               tuple(size), raw[::-1].copy()))
         said = {"missing": sorted(rig.missing), "notes": rig.notes,
                 "effects_on": bool(fx_on), "hands_shown": visible}
+        if slug in FIXTURE_PRESETS:     # what the graph landed, and the nodes timed
+            said["wiring"] = repr(rig.renderer.wiring)
+            said["nodes"] = list(rig.renderer._graph.timed)
         return shots, said
     finally:
         rig.close()
@@ -369,6 +394,13 @@ def render_all(only: set[str] | None = None, *, cap: bool = True) -> tuple[list[
                 for sh in got:
                     sh.state = f"{wired}/{sh.state}"
                 shots += got
+    for slug in FIXTURE_PRESETS:
+        if only and slug not in only:
+            continue
+        got, info = _shoot(slug, "present", STATES, (W, H), (W, H), DPR)
+        gc.collect()
+        shots += got
+        said.setdefault(slug, {})["present"] = info
     if cap and (not only or CAP["preset"] in only):
         state = dict(STATES)[CAP["state"]]
         got, _ = _shoot(CAP["preset"], CAP["hands"], ((CAP["state"], state),), CAP["size"],
@@ -409,12 +441,14 @@ def record(shots: list[Shot], said: dict, renderer: str, only: set[str] | None,
                          f"this is {renderer!r}: record them all")
     redone = {s.preset for s in shots}
     entries = [e for e in old["goldens"] if e["preset"] not in redone] + [s.entry() for s in shots]
-    order = {slug: k for k, slug in enumerate(FACTORY_PRESETS)}
+    order = {slug: k for k, slug in enumerate((*FACTORY_PRESETS, *FIXTURE_PRESETS))}
     st = {name: k for k, (name, _) in enumerate(STATES)}
     entries.sort(key=lambda e: (order[e["preset"]], HANDS.index(e["hands"]),
                                 st.get(e["state"], len(st)), e["state"]))
     presets = {k: v for k, v in old.get("presets", {}).items() if k not in redone}
-    presets.update(said)
+    presets.update({k: v for k, v in said.items() if k not in FIXTURE_PRESETS})
+    fixtures = {k: v for k, v in old.get("fixtures", {}).items() if k not in redone}
+    fixtures.update({k: v for k, v in said.items() if k in FIXTURE_PRESETS})
     doc = {
         "about": "plan 26 A0 golden frames: tools/golden_frames.py --record writes this; "
                  "tests/test_golden_frames.py compares every sha256 exactly. Far fewer "
@@ -435,7 +469,11 @@ def record(shots: list[Shot], said: dict, renderer: str, only: set[str] | None,
                                 "presets": None if which is None else list(which)}
                          for name, wiring, names, which in WIRED},
         "cap": {**CAP, "size": list(CAP["size"]), "logical": list(CAP["logical"])},
+        "fixture_states": {slug: {"file": f"tests/fixtures/presets/{slug}.json",
+                                  "hands": "present", "states": [n for n, _ in STATES]}
+                           for slug in FIXTURE_PRESETS},
         "presets": {k: presets[k] for k in sorted(presets, key=order.__getitem__)},
+        "fixtures": {k: fixtures[k] for k in sorted(fixtures, key=order.__getitem__)},
         "goldens": entries,
     }
     MANIFEST.write_text(json.dumps(doc, indent=1) + "\n")
@@ -507,7 +545,7 @@ def main() -> None:
     ap.add_argument("--only", default="", help="comma-separated preset slugs")
     a = ap.parse_args()
     only = {x.strip() for x in a.only.split(",") if x.strip()} or None
-    if only and (unknown := only - set(FACTORY_PRESETS)):
+    if only and (unknown := only - set(FACTORY_PRESETS) - set(FIXTURE_PRESETS)):
         ap.error(f"no such preset: {', '.join(sorted(unknown))}")
     renderer, version = renderer_name(context()), gl_version(context())
     shots, said = render_all(only)
