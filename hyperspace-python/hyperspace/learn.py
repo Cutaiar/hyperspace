@@ -44,7 +44,10 @@ desk's click), and `map_picked(pid)` is `arm(pid, "desk")` then
 `learn_control(control)` — so the op, the feedback, the refusals (D5, D6),
 the undo step and the message are the knob learn's. A pick and an armed
 learn never stand together: arming lets the pick go, picking cancels the
-learn.
+learn. Which params the on-screen desk offers a pick first is `ranked`
+(plan 24 C3), a pure function over the preset's values, its group
+defaults, its routes and macros, and `cannot_show` — the rule the desk
+coverage report (tools/desk_coverage.py) calls a control "dead" by.
 
 Two things the object owns:
 
@@ -73,7 +76,7 @@ table are all it needs.
 from __future__ import annotations
 
 from . import undo
-from .params import Kind, Param, Registry
+from .params import PERFORMANCE_GROUPS, Kind, Param, Registry
 from .routing import MOD_OPS, SAVE_PARAM, Binding, Bindings, Owned
 
 # plan 24 C1: the desk's SAVE is held, never latched — a learned toggle or
@@ -124,6 +127,139 @@ def blocked(table: Bindings, source: str) -> str | None:
     if layer == "global":
         return "global"
     return None
+
+
+# ---- what a preset can show, and what it uses (plan 24 C3) ----
+#
+# A desk control on a param the preset cannot show is "dead": it moves a
+# value nobody sees. `cannot_show` is the one rule, by group, read off the
+# preset's own bases (the values a load lands, not this frame's modulation):
+#
+#   pattern.*, view.pattern, view.pattern_mix   the faces are off (view.faces)
+#   view.bmp_*                                   the faces are off, or no bitmap file
+#   view.points_alpha / view.lines_alpha         points / lines off
+#   fx.mix                                       the effects are off (fx.on)
+#   fx.<effect>.<key> (not .on)                  fx.on off, or that effect off
+#   dream.* (not dream.on)                       the look-back is off (dream.on)
+#   rot.rate.*, view.plane.*                     rotation is off (view.rotate)
+#
+# Anything else can always show. tools/desk_coverage.py counts with it, and
+# click-to-map (`ranked`) never offers a dead param among a preset's own.
+
+_PATTERN = ("view.pattern", "view.pattern_mix")
+_BITMAP = ("view.bmp_alpha", "view.bmp_scale", "view.bmp_mode", "view.bmp_amp",
+           "view.bmp_rate")
+_ROTATE = ("rot.rate.", "view.plane.")
+
+
+def cannot_show(pid: str, values) -> str | None:
+    """Why the preset whose bases are `values` ({id: base}; `.get` is all
+    that is asked) cannot show `pid`, in a few words ("faces off",
+    "kaleido off"), or None when it can — the rule above. A switch the
+    values do not name counts as on."""
+    def off(sw: str) -> bool:
+        v = values.get(sw)
+        return v is not None and not bool(v)
+    if pid.startswith("pattern.") or pid in _PATTERN:
+        return "faces off" if off("view.faces") else None
+    if pid in _BITMAP:
+        if off("view.faces"):
+            return "faces off"
+        f = values.get("view.bmp_file")
+        return "no bitmap file" if f is not None and not str(f) else None
+    if pid == "view.points_alpha":
+        return "points off" if off("view.points") else None
+    if pid == "view.lines_alpha":
+        return "lines off" if off("view.lines") else None
+    if pid == "fx.mix":
+        return "effects off" if off("fx.on") else None
+    if pid.startswith("fx."):
+        parts = pid.split(".")
+        if len(parts) >= 3 and parts[-1] != "on":
+            if off("fx.on"):
+                return "effects off"
+            name = ".".join(parts[1:-1])
+            return f"{name} off" if off(f"fx.{name}.on") else None
+        return None
+    if pid.startswith("dream.") and pid != "dream.on":
+        return "look-back off" if off("dream.on") else None
+    if pid.startswith(_ROTATE):
+        return "rotation off" if off("view.rotate") else None
+    return None
+
+
+def _moved(v, d) -> bool:
+    """Is a base `v` off its group default `d`? Numbers within a hair are the same."""
+    if isinstance(v, bool) or isinstance(d, bool) or not isinstance(v, (int, float)) \
+            or not isinstance(d, (int, float)):
+        return v != d
+    return abs(float(v) - float(d)) > 1e-9 * max(1.0, abs(float(d)))
+
+
+# the "uses" tiers, best first: what `ranked` says of each of a preset's params
+ROUTED, MOVED, ON, DESKED = "routed", "moved", "on", "on the desk"
+
+
+def ranked(params: list[tuple[str, str]], values, defaults, routed, on_desk,
+           shows=None) -> tuple[list[tuple[str, str]], list[tuple[str, list[str]]]]:
+    """Click-to-map's offer (plan 24 C3): the params this preset uses,
+    ranked, then the rest by group. A pure function.
+
+    `params`: (id, group) of every param a desk control may take, in
+    registry order. `values`: {id: base} as loaded. `defaults`: {id: its
+    group default} for the preset's own params (the performance groups —
+    what a load fills an id the file does not name with). `routed`: the
+    ids a route or a macro subscriber drives. `on_desk`: the ids a
+    preset-layer row already holds. `shows(pid)`: why it cannot show, or
+    None (`cannot_show` over `values` when not given).
+
+    Returns (used, rest). `used` is [(id, why)], in tiers — ``routed`` (a
+    route or a macro moves it), ``moved`` (its base is off the group
+    default), ``on`` (an effect, the look-back, the faces, the points or
+    the lines it belongs to are on, by `cannot_show`'s groups), and last
+    ``on the desk`` (already on a control: a second one is seldom what is
+    meant) — each tier in registry order. A param the preset cannot show is
+    never used. `rest` is every other param as [(group, [id, …])], the
+    performance groups first, then the session's, each in registry order."""
+    why_not = shows if shows is not None else (lambda pid: cannot_show(pid, values))
+    tiers: dict[str, list[str]] = {ROUTED: [], MOVED: [], ON: [], DESKED: []}
+    rest: dict[str, list[str]] = {}
+    for pid, group in params:
+        tier = None
+        if why_not(pid) is None:
+            if pid in on_desk:
+                tier = DESKED
+            elif pid in routed:
+                tier = ROUTED
+            elif pid in defaults and _moved(values.get(pid), defaults[pid]):
+                tier = MOVED
+            elif _switched_on(pid, values):
+                tier = ON
+        if tier is None:
+            rest.setdefault(group, []).append(pid)
+        else:
+            tiers[tier].append(pid)
+    used = [(pid, why) for why, ids in tiers.items() for pid in ids]
+    order = {g: i for i, g in enumerate(PERFORMANCE_GROUPS)}
+    groups = sorted(rest, key=lambda g: (order.get(g, len(order)), list(rest).index(g)))
+    return used, [(g, rest[g]) for g in groups]
+
+
+def _switched_on(pid: str, values) -> bool:
+    """Is `pid` part of a module `cannot_show` knows that is on — its
+    switch named in `values` and set? (A param of no such module: False.)"""
+    if pid.startswith("pattern.") or pid in _PATTERN or pid in _BITMAP:
+        return bool(values.get("view.faces"))
+    if pid == "view.points_alpha":
+        return bool(values.get("view.points"))
+    if pid == "view.lines_alpha":
+        return bool(values.get("view.lines"))
+    if pid.startswith("fx.") and pid.count(".") >= 2 and not pid.endswith(".on"):
+        name = pid.split(".", 1)[1].rsplit(".", 1)[0]
+        return bool(values.get("fx.on")) and bool(values.get(f"fx.{name}.on"))
+    if pid.startswith("dream.") and pid != "dream.on":
+        return bool(values.get("dream.on"))
+    return False
 
 
 class Learn:

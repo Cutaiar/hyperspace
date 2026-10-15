@@ -133,6 +133,17 @@ SLOTS = 24                # the bank: F1–F8, then the desk's clip rows 4 and 5
 # (routing.backup's schema argument)
 BANK8_BACKUP = "2-bank8"
 PRESETS = "presets"       # the presets' group, a document kind (preset.py)
+# <root>/desk/<slug>.json (plan 24 C3): the desk templates — named sets of
+# preset-layer rows a preset's desk can start from (`desk_template`,
+# preset.py `expand_desk`). A module-preset group in the library's tree:
+# the factory's hyperspace/library/desk/ (empty in this build: no folder,
+# so the group lists nothing) and the user's in the library root, which
+# [library] path shares (plan 25). Its files are their own format,
+# DESK_SCHEMA, read only through `desk_template`: the `desk` *param* group
+# (desk.slew, desk.pad.*) has no module-preset strip, and a template is
+# never applied as its module preset
+DESK = "desk"
+DESK_SCHEMA = "hyperspace.desk/1"
 # folders in a library root that are no group: the routing presets' old
 # folder, kept as it was by plan 13's migration and never read again
 LEGACY_DIRS = ("bindings",)
@@ -1743,9 +1754,30 @@ class Library:
             raise LibraryError(f"{path.name} is a {doc['group']} preset, not {group}")
         return doc
 
+    def desk_template(self, name: str) -> dict:
+        """The desk template `name` (plan 24 C3): its file under
+        ``<root>/desk/``, the user's shadowing the factory's like any
+        group's, as ``{"schema": DESK_SCHEMA, "name", "note"?, "desk":
+        [row, …]}`` — the rows in a preset's ``desk`` form (no ``layer``).
+        A template that is not there, or not that format, raises
+        LibraryError; the caller says so and goes on without it."""
+        path = self.path_of(DESK, name)
+        if path is None:
+            raise LibraryError(f"no desk template {name!r}")
+        doc = copy.deepcopy(self._doc(path))
+        if doc.get("schema") != DESK_SCHEMA:
+            raise LibraryError(f"{path.name}: schema {doc.get('schema')!r} is not "
+                               f"{DESK_SCHEMA}")
+        rows = doc.get("desk")
+        if not isinstance(rows, list) or not all(isinstance(r, dict) for r in rows):
+            raise LibraryError(f"{path.name}: its desk is not a list of rows")
+        return doc
+
     # ---- defaults & values ----
 
     def default_name(self, group: str) -> str | None:
+        if group == DESK:          # its folder holds desk templates, never module presets:
+            return None            # a template named "default" is no group default
         name = DEFAULT_NAMES.get(group, "default")
         return name if self.path_of(group, name) is not None else None
 
