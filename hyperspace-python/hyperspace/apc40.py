@@ -44,7 +44,7 @@ and the row stays a plain trigger row that Learn can move like any other.
 
 Two layers under a latched SHIFT (plan 13 §3). Every MIDI row carries a
 ``layer``: none is **invariant** (the session defines the control; one
-meaning on both layers — the faders, the crossfader as the master dim,
+meaning on both layers — the MASTER fader, the crossfader as the master dim,
 the bank's twenty-four pads — clip row 1 and, since plan 19, clip rows 4
 and 5 (`BANK_PADS`), each a tap to load and, on an empty slot, a hold to
 save into it — SHIFT, the clock and transport corner, OVERDUB as home, the track buttons,
@@ -53,10 +53,12 @@ track 8's clip stop, which held turns a pad's tap into a save into its
 slot), ``"global"`` is the
 SHIFT layer
 (the band strip on the device knobs, the hand feel and BPM on track knobs
-1–5, the band scenes on clip rows 2–3), ``"preset"`` is the loaded
-preset's own (the factory default below is what a fresh preset starts
-with). A control with no row on the layer that is up is dark and does
-nothing; midi.py dispatches and draws by those rules.
+1–5, the band scenes on clip rows 2–3, and since plan 24 C2 the bands'
+post-drive, the master dynamics and trim on the track faders),
+``"preset"`` is the loaded preset's own (the factory default below is
+what a fresh preset starts with; since plan 24 C2 the track faders are a
+preset's too, and the default gives them nothing). A control with no row
+on the layer that is up is dark and does nothing; midi.py dispatches and draws by those rules.
 
 The device and track knobs are endless encoders whose position the host
 sets with the same CC that draws the ring (`RING_REBASES_KNOB`), so a
@@ -427,6 +429,15 @@ TOGGLES = ("view.points", "view.lines", "view.faces", "view.rotate")
 # (note, channel) of track 8's clip stop, free since PR #158
 SAVE: tuple[int, int] = (N_CLIPSTOP, 7)
 
+# The track faders S1–S8 (plan 24 C2, decision 17): the channel of track
+# fader k + 1 is k. On the preset layer they are each preset's own targets,
+# bound by its desk like the device knobs (`preset.track_fader`); no row in
+# this map, so no default is inherited and a preset with no fader rows
+# leaves them dark. Under SHIFT they are SHIFT_FADERS, the audio strip that
+# was invariant on them until then
+TRACK_FADERS = range(8)
+SHIFT_FADERS = (*(f"band.{i}.post" for i in range(6)), "master.dyn", "master.trim")
+
 DEFAULT_MAP: list[dict] = [
     # device knobs, global layer (SHIFT up): the open band strip, in panel order
     *[_cc(f"band.sel.{k}", cc, layer=G) for k, cc in zip(_KNOB_KEYS, DEVICE_KNOBS)],
@@ -443,9 +454,13 @@ DEFAULT_MAP: list[dict] = [
     _cc("hands.smooth", 0x30, 0, layer=G), _cc("hands.response", 0x31, 0, layer=G),
     _cc("hands.catch", 0x32, 0, layer=G), _cc("hands.sel.return", 0x33, 0, layer=G),
     _cc("tempo.bpm", 0x34, 0, layer=G),
-    # faders (invariant): per-band output drive on 1–6, master dynamics and trim on 7–8
-    *[_cc(f"band.{i}.post", CC_FADER, i, ring=0) for i in range(6)],
-    _cc("master.dyn", CC_FADER, 6, ring=0), _cc("master.trim", CC_FADER, 7, ring=0),
+    # track faders S1–S8, global layer (SHIFT up; plan 24 C2, decision 17,
+    # amending D6): per-band output drive on 1–6, master dynamics and trim
+    # on 7–8 — the audio one latch away. On the preset layer the faders are
+    # the loaded preset's (`TRACK_FADERS`): none here, so a fresh preset and
+    # every factory one leaves them dark. Soft pickup across the latch (D7)
+    *[_cc(t, CC_FADER, i, ring=0, layer=G) for i, t in enumerate(SHIFT_FADERS)],
+    # MASTER (invariant): the audio drive, the same on both layers
     _cc("master.gain", CC_MASTER, 0, ring=0),
     # crossfader: the master dim (plan 15 WP3, decision 28) — black (left,
     # CC 0) ↔ full (right); invariant, soft pickup like every fader, so one

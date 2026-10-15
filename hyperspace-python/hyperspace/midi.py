@@ -496,8 +496,9 @@ class MidiIO:
         seen = self._serials()
         if seen != self._seen:
             load = seen[1] != self._seen[1]
+            switch = seen[0] != self._seen[0]
             self._seen = seen
-            self.redraw(load=load)
+            self.redraw(load=load, switch=switch)
 
     def _serials(self) -> tuple[int, int, int]:
         t = self.table
@@ -947,7 +948,8 @@ class MidiIO:
         if p.kind is not Kind.TRIGGER:
             self._writes[p.id] = p.norm
 
-    def redraw(self, *, load: bool = False, whole: bool = False) -> None:
+    def redraw(self, *, load: bool = False, whole: bool = False,
+               switch: bool = False) -> None:
         """Every ring and LED for the layer that is up (plan 13 §3.1): each
         control some row names, or feedback drew since the last redraw
         (`_shown` — a row since removed lit it: a preset load's smaller
@@ -960,8 +962,8 @@ class MidiIO:
         (`_writes` is per param: another control on the same param may
         have made the last write): a fader whose base the load moved
         picks up, and one whose param the load left alone (the
-        crossfader's dim, S1–S8 and SM: a preset never moves a session
-        param, D9) keeps its hold (plan 15 WP3, fork 19). A load also ends
+        crossfader's dim, SM, and the audio strip on S1–S8 under SHIFT: a
+        preset never moves a session param, D9) keeps its hold (plan 15 WP3, fork 19). A load also ends
         every glide (knob smoothing) but a session param's, before anything
         else: the load's value stands, even where it equals the glide's
         last write; a session param the load never moves goes on arriving,
@@ -978,7 +980,15 @@ class MidiIO:
         starts from where its control physically is (`_hw`), so a fader
         already on the value catches on its first move. The session's
         faders (invariant or global: a preset never moves their params,
-        D9) keep the rule above."""
+        D9) keep the rule above.
+
+        **A layer switch re-arms every layered fader** (`switch`; plan 24
+        C2, D7): since the track faders carry the preset's targets on one
+        layer and the audio strip under SHIFT, one physical fader serves
+        two params. Each layered fader row starts from where the fader
+        physically is (`_hw`) and is caught only when its param is already
+        there, so a fader moved on the other layer picks up its own param
+        instead of jumping it. A load's rule above wins over this one."""
         if load:
             slews = self._slew_state()
             for pid in [pid for pid in slews if not is_session_id(pid)]:
@@ -990,6 +1000,13 @@ class MidiIO:
             b.last_out = None
             if b.kind in ("cc", "pitch") and b.op == "abs" and b.last_hw is None:
                 b.last_hw = hw.get(b.control)        # a fresh row: where its control is
+            if (switch and b.layer is not None and b.kind in ("cc", "pitch")
+                    and b.op == "abs" and b.feedback != "ring" and b.pickup):
+                p, pos = self.reg.get(b.target), hw.get(b.control)
+                if pos is not None:
+                    b.last_hw = pos                  # where the fader is, moved on any layer
+                b.caught = (p is not None and pos is not None
+                            and abs(self._ring_norm(p) - pos) <= PICKUP_TOL)
             if load and b.kind in ("cc", "pitch") and b.op == "abs" and b.feedback != "ring":
                 p, seen = self.reg.get(b.target), self._writes.get(b.target)
                 if (b.layer == "preset" or p is None or seen is None or b.last_hw is None
