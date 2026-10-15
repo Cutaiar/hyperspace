@@ -1822,8 +1822,13 @@ class Renderer:
             if s.points:
                 tp = (pd - near) / span
                 order_p = np.argsort(pd, kind="stable")
-                # radius in framebuffer px (× dpr). Plan 26 A2: no longer × the zoom
+                # radius in framebuffer px (× dpr). Plan 26 A2: no longer × the
+                # zoom; and the diameter is a whole number of pixels, as the
+                # point sprites the quads replace were rasterised (the driver
+                # rounded gl_PointSize — measured: with it the quads draw the
+                # sprites' frame byte for byte, without it every dot grows)
                 r = ((1.0 if heavy else 1.7) + 2.3 * tp * tp) * dpr
+                r = np.floor(2.0 * r + 0.5) / 2.0
                 # the points' alpha — the one place it is derived (a
                 # points-opacity param multiplies in here)
                 PB = s.bright * clamp(dens * 1.5, 0.55, 1)
