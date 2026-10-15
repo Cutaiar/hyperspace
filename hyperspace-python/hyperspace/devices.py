@@ -74,11 +74,14 @@ old list stands.
 
 from __future__ import annotations
 
+import math
 import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol, runtime_checkable
+
+import numpy as np
 
 # the open-retry schedule — midi.Ports' (RECONNECT_S, RECONNECT_FAST,
 # RECONNECT_SLOW_S), restated here because midi is imported only behind
@@ -105,7 +108,9 @@ class Port:
     (`hand`, `axis`, `cc`), `name` the address after it (``right.roll``,
     ``LX``, ``0:48``), and `address` the row's source string,
     ``scheme:name`` — a cable can be built from a port. `kind` is
-    ``value`` or ``trigger``; `rest` where a value idles; `bipolar` a
+    ``value`` or ``trigger`` — or ``cloud`` (plan 27 B4: a `PointCloud`
+    the device publishes on the registry, `DeviceRegistry.clouds`, never
+    through the Router; its scheme is ``cloud``); `rest` where a value idles; `bipolar` a
     value centred on its rest; `velocity` a trigger that carries one;
     `group` folds a long list (the APC40's hundred controls); `layer` the
     device layer the port belongs to ("" = every layer)."""
@@ -263,6 +268,25 @@ class Base:
         B2); today's devices name theirs as a class tuple."""
         return (self.role,) if self.feeds else ()
 
+    @property
+    def rows(self) -> tuple[str, ...]:
+        """The schemes this device delivers discrete rows under (the
+        referee's `row_schemes`): its `schemes` less its `feeds` — the
+        pad's `pad` / `hat`, MIDI's three. A device whose role is its
+        scheme and which has both lanes and hits under it (B4's OSC) says
+        so itself."""
+        return tuple(s for s in self.schemes if s not in self.feeds)
+
+    @classmethod
+    def publishes(cls, role: str, entry: dict | None = None
+                  ) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
+        """(schemes, feeds, rows) an entry of this kind under `role` would
+        publish, before any device is made: what `make` checks a second
+        feeder against and what an `off` entry still lists. Today's kinds
+        keep their class tuples; a kind whose role is its scheme (plan 27
+        B4: OSC) overrides this."""
+        return cls.schemes, cls.feeds, tuple(s for s in cls.schemes if s not in cls.feeds)
+
     def __repr__(self) -> str:
         return f"<{type(self).__name__} {self.role} {self.status}>"
 
@@ -280,16 +304,23 @@ class OffDevice(Base):
         self.kind = kind
         cls = kind_class(kind)      # its kind's schemes, so a row naming it stays dormant, not unknown
         self._wants: tuple[str, ...] = ()
+        self._rows: tuple[str, ...] = ()
         if cls is not None:
-            self.schemes, self.feeds = cls.schemes, cls.feeds
+            self.schemes, self.feeds, self._rows = cls.publishes(role, self.entry)
             w = cls.__dict__.get("wants")
-            self._wants = w if isinstance(w, tuple) else ((role,) if cls.feeds else ())
+            self._wants = w if isinstance(w, tuple) else ((role,) if self.feeds else ())
 
     @property
     def wants(self) -> tuple[str, ...]:
         """Its kind's: a rig that lists a device, off or not, can arm a
         learn for it (it completes once the device is on)."""
         return self._wants
+
+    @property
+    def rows(self) -> tuple[str, ...]:
+        """Its kind's, so a hit row in a preset is not refused while the
+        device is off."""
+        return self._rows
 
     @property
     def status(self) -> str:
@@ -569,18 +600,251 @@ class BridgeDevice(Base):
         return [(self.io, "bridge", "Bridge")] if self.io is not None else []
 
 
+# ---- point clouds (plan 27 B4): the source type, its file, a recorded-cloud device ----
+
+CLOUD_SCHEME = "cloud"          # a cloud is published as ``cloud:<role>`` (`DeviceRegistry.clouds`)
+CLOUD_FILE_VERSION = 1
+
+
+def _frozen(a, what: str, n: int | None = None) -> np.ndarray:
+    """`a` as a read-only, C-contiguous (N, 3) float32 array — the layout a
+    GPU vertex buffer takes as it is (``ctx.buffer(cloud.points)``). The
+    caller's own array is never frozen: a copy is, when it would be."""
+    out = np.ascontiguousarray(a, dtype=np.float32)
+    if out.ndim != 2 or out.shape[1] != 3:
+        raise ValueError(f"{what} must be N×3, not {out.shape}")
+    if n is not None and out.shape[0] != n:
+        raise ValueError(f"{what} has {out.shape[0]} rows for {n} points")
+    if out is a and out.flags.writeable:
+        out = out.copy()
+    out.flags.writeable = False
+    return out
+
+
+@dataclass(frozen=True, eq=False)
+class PointCloud:
+    """One frame of a point-cloud source (plan 27 B4) — not a scalar lane:
+    a device publishes it on the registry under ``cloud:<role>``
+    (`DeviceRegistry.clouds`), never through the Router, and the render
+    graph's point-cloud geometry node (plan 26 A4b) draws it.
+
+    `points` is N×3 float32, C-contiguous and read-only: a GPU-ready
+    buffer (``ctx.buffer(cloud.points)`` uploads it as it is), in the
+    publisher's own units — the recorded file's, or a sensor's metres.
+    `t` is when the frame was published, on the frame's monotonic clock
+    (the ``now`` the registry polls with); `frame` its id, counting up
+    from 0 for as long as the device is open, so a reader uploads only
+    when it moved (a skipped id: frames came faster than the app polled).
+    `colors`, when the source has them, is N×3 float32 RGB in 0–1,
+    read-only like `points`. `bounds` is the 2×3 float32 box
+    ``[[xmin, ymin, zmin], [xmax, ymax, zmax]]`` — all zeros for an empty
+    cloud — so a reader can frame the cloud without walking it."""
+
+    points: np.ndarray
+    t: float
+    frame: int
+    colors: np.ndarray | None = None
+    bounds: np.ndarray = field(init=False, repr=False)
+
+    def __post_init__(self):
+        pts = _frozen(self.points, "points")
+        object.__setattr__(self, "points", pts)
+        if self.colors is not None:
+            object.__setattr__(self, "colors", _frozen(self.colors, "colors", len(pts)))
+        b = (np.stack([pts.min(axis=0), pts.max(axis=0)]) if len(pts)
+             else np.zeros((2, 3))).astype(np.float32)
+        b.flags.writeable = False
+        object.__setattr__(self, "bounds", b)
+        object.__setattr__(self, "t", float(self.t))
+        object.__setattr__(self, "frame", int(self.frame))
+
+    @property
+    def n(self) -> int:
+        """How many points."""
+        return int(self.points.shape[0])
+
+    def __repr__(self) -> str:
+        return (f"PointCloud(n={self.n}, frame={self.frame}, t={self.t:.3f}"
+                f"{', colors' if self.colors is not None else ''})")
+
+
+@dataclass(frozen=True)
+class CloudFile:
+    """A recorded point-cloud sequence as `read_clouds` gives it: `rate`
+    frames per second, `offsets` (F + 1) into the concatenated `points`
+    (and `colors`, or None), so frames may differ in size."""
+
+    points: np.ndarray
+    offsets: np.ndarray
+    rate: float
+    colors: np.ndarray | None = None
+
+    def __len__(self) -> int:
+        return len(self.offsets) - 1
+
+    def frame(self, i: int) -> tuple[np.ndarray, np.ndarray | None]:
+        """Frame `i`'s points (and colours, or None) — read-only views."""
+        a, b = int(self.offsets[i]), int(self.offsets[i + 1])
+        return self.points[a:b], (None if self.colors is None else self.colors[a:b])
+
+
+def write_clouds(path: Path | str, frames, rate: float, colors=None) -> Path:
+    """A point-cloud sequence to `path` (.npz, version 1): `frames` a list
+    of N×3 arrays (N may differ per frame), `colors` None or one N×3 RGB
+    0–1 array per frame. The file holds ``version`` (1), ``rate`` (frames
+    per second), ``offsets`` (int64, F + 1: frame i is
+    ``points[offsets[i]:offsets[i + 1]]``), ``points`` (float32, M×3,
+    every frame concatenated) and, when given, ``colors`` (float32, M×3)
+    — plain numpy, so a recorder in any tool can write one."""
+    pts = [np.asarray(f, dtype=np.float32).reshape(-1, 3) for f in frames]
+    if not pts:
+        raise ValueError("a cloud file needs at least one frame")
+    if isinstance(rate, bool) or not isinstance(rate, int | float) or not rate > 0:
+        raise ValueError(f"rate = {rate!r} is not a positive number of frames per second")
+    offsets = np.zeros(len(pts) + 1, np.int64)
+    offsets[1:] = np.cumsum([len(f) for f in pts])
+    data = {"version": np.int64(CLOUD_FILE_VERSION), "rate": np.float64(rate),
+            "offsets": offsets, "points": np.concatenate(pts)}
+    if colors is not None:
+        cols = [np.asarray(c, dtype=np.float32).reshape(-1, 3) for c in colors]
+        if [len(c) for c in cols] != [len(f) for f in pts]:
+            raise ValueError("colors must be one N×3 array per frame, N as its points")
+        data["colors"] = np.concatenate(cols)
+    path = Path(path)
+    np.savez_compressed(path, **data)
+    return path
+
+
+def read_clouds(path: Path | str) -> CloudFile:
+    """A sequence `write_clouds` wrote, checked: a missing key, a wrong
+    shape, offsets that do not walk the points, or a version this build
+    does not read is a ValueError naming it (the device's line says it)."""
+    name = Path(path).name
+    with np.load(Path(path), allow_pickle=False) as z:
+        keys = set(z.files)
+        for k in ("version", "rate", "offsets", "points"):
+            if k not in keys:
+                raise ValueError(f"{name}: no {k!r} — not a cloud file")
+        version = int(z["version"])
+        if version != CLOUD_FILE_VERSION:
+            raise ValueError(f"{name}: cloud file version {version}; "
+                             f"this build reads {CLOUD_FILE_VERSION}")
+        rate = float(z["rate"])
+        offsets = np.array(z["offsets"], dtype=np.int64)
+        points = _frozen(z["points"], "points")
+        colors = _frozen(z["colors"], "colors", len(points)) if "colors" in keys else None
+    if not (np.isfinite(rate) and rate > 0):
+        raise ValueError(f"{name}: rate {rate} is not a positive number")
+    if (offsets.ndim != 1 or len(offsets) < 2 or offsets[0] != 0
+            or offsets[-1] != len(points) or np.any(np.diff(offsets) < 0)):
+        raise ValueError(f"{name}: offsets do not walk the {len(points)} points")
+    offsets.flags.writeable = False
+    return CloudFile(points, offsets, rate, colors)
+
+
+class CloudDevice(Base):
+    """A recorded point cloud played back as a source (plan 27 B4), so the
+    `PointCloud` type is exercised with no sensor — the Kinect and the
+    live sensors are plan 29. Its entry: `file` (a `write_clouds` .npz; a
+    relative path is the home's), `rate` (frames per second; default the
+    file's own), `loop` (default true: at the end it starts again; false
+    holds the last frame). It plays at its own rate against the frame's
+    clock, whatever the app's frame rate: polled at `now`, it shows
+    recorded frame ``floor((now − start) · rate)`` (mod the file's length
+    when looping) and that count is the cloud's `frame` id. Its one port
+    is ``cloud:<role>``; it feeds nothing to the Router and makes no rows:
+    the cloud is on the registry (`DeviceRegistry.clouds`). `connected`
+    while the file is loaded; a missing or bad file is ``error: …`` and
+    the registry tries again on its schedule, so a file copied in later
+    comes up with no relaunch."""
+
+    kind = "cloud"
+
+    def __init__(self, role: str, entry: dict | None = None, ctx: Context | None = None, *,
+                 io=None):
+        super().__init__(role, entry, ctx, io=io)
+        self.cloud: PointCloud | None = None     # the frame published last; None until polled
+        self._start: float | None = None
+
+    @property
+    def file(self) -> Path:
+        """The entry's recording; a relative path is the home's."""
+        name = self.entry.get("file")
+        if not isinstance(name, str) or not name:
+            raise ValueError('a cloud entry needs file = "<recording>.npz"')
+        p = Path(name).expanduser()
+        home = self.ctx.home
+        return p if p.is_absolute() or home is None else Path(home) / p
+
+    @property
+    def rate(self) -> float:
+        """The entry's `rate`, else the file's (frames per second); a bad
+        `rate` is refused on open (an error line)."""
+        r = self.entry.get("rate")
+        if r is not None:
+            return float(r)
+        return float(self.io.rate) if self.io is not None else 0.0
+
+    @property
+    def loop(self) -> bool:
+        return self.entry.get("loop", True) is not False
+
+    def open(self) -> None:
+        r = self.entry.get("rate")
+        if r is not None and (isinstance(r, bool) or not isinstance(r, int | float)
+                              or not (math.isfinite(r) and r > 0)):
+            raise ValueError(f"rate = {r!r} is not a positive number of frames per second")
+        self.io = read_clouds(self.file)
+        self.cloud, self._start = None, None
+
+    @property
+    def last(self) -> str:
+        io, c = self.io, self.cloud
+        if io is None or c is None:
+            return ""
+        i = c.frame % len(io) if self.loop else min(c.frame, len(io) - 1)
+        return (f"{self.file.name}  ·  frame {i + 1}/{len(io)}  ·  {c.n} points  ·  "
+                f"{self.rate:g} fps")
+
+    @property
+    def sources(self) -> tuple[Port, ...]:
+        return (Port(self.role, "point cloud", kind="cloud", scheme=CLOUD_SCHEME),)
+
+    def poll(self, dt: float, now: float) -> None:
+        io = self.io
+        if io is None:
+            return
+        if self._start is None:
+            self._start = now
+        k = max(0, math.floor((now - self._start) * self.rate + 1e-9))
+        if not self.loop:
+            k = min(k, len(io) - 1)
+        if self.cloud is not None and self.cloud.frame == k:
+            return
+        pts, cols = io.frame(k % len(io))
+        self.cloud = PointCloud(pts, now, k, cols)
+
+    def close(self) -> None:
+        self.cloud, self._start = None, None
+        super().close()
+
+
 def kinds() -> dict[str, type[Base]]:
     """The kinds the registry knows: `[[devices]] kind` → the device class.
-    B3 adds "midi-out", B4 adds "osc" and "cloud" — here and nowhere else.
+    B3 adds "midi-out", B4 adds "osc" and "cloud" — here and nowhere else
+    (a new kind is one line here and its own class: no edit to `app.py`).
     The hands' device lives in its own package (`hands/device.py`, plan 27
     B2), which imports this module, so it is looked up when asked for —
     `devices.KINDS` and `devices.HandsDevice` read through here too."""
     from .hands.device import HandsDevice
+    from .osc import OscDevice  # (osc.py imports pythonosc only when a server opens)
     return {
         "midi": MidiDevice,
         "gamepad": PadDevice,
         "hands": HandsDevice,
         "bridge": BridgeDevice,
+        "osc": OscDevice,
+        "cloud": CloudDevice,
     }
 
 
@@ -613,10 +877,11 @@ def make(entry: dict, ctx: Context | None = None, claimed: dict[str, str] | None
     if cls is None:
         return UnknownDevice(role, kind, entry, ctx)
     if claimed is not None:
-        for scheme in cls.feeds:
+        feeds = cls.publishes(role, entry)[1]       # an OSC role feeds its own name (B4)
+        for scheme in feeds:
             if scheme in claimed and claimed[scheme] != role:
                 return RefusedDevice(role, kind, scheme, claimed[scheme], entry, ctx)
-        for scheme in cls.feeds:
+        for scheme in feeds:
             claimed[scheme] = role
     return cls(role, entry, ctx)
 
@@ -708,15 +973,19 @@ class DeviceRegistry:
         return tuple(out)
 
     def row_schemes(self) -> tuple[str, ...]:
-        """The schemes the listed devices deliver as rows, never as lanes
-        (each device's `schemes` less its `feeds`: the pad's `pad` / `hat`,
-        MIDI's `cc` / `note` / `pitch`), in list order — the referee's
+        """The schemes the listed devices deliver as rows (each device's
+        `rows`: its `schemes` less its `feeds` — the pad's `pad` / `hat`,
+        MIDI's `cc` / `note` / `pitch` — or, for an OSC device with hits,
+        its role, which is fed as well), in list order — the referee's
         `Bindings.row_schemes` (`Router.use`)."""
         out: list[str] = []
         for d in self.devices:
-            fed = getattr(d, "feeds", ())
-            for s in getattr(d, "schemes", ()):
-                if s not in fed and s not in out:
+            rows = getattr(d, "rows", None)
+            if rows is None:
+                fed = getattr(d, "feeds", ())
+                rows = tuple(s for s in getattr(d, "schemes", ()) if s not in fed)
+            for s in rows:          # an OSC role's hits are rows under its fed scheme (B4)
+                if s not in out:
                     out.append(s)
         return tuple(out)
 
@@ -757,6 +1026,20 @@ class DeviceRegistry:
         table = getattr(self.ctx, "table", None)
         if table is not None:
             table.midi_roles = self.midi_roles()
+
+    @property
+    def clouds(self) -> dict[str, PointCloud]:
+        """The point clouds the open devices publish (plan 27 B4), as
+        ``cloud:<role>`` → that device's latest `PointCloud`, in list order
+        — what the render graph's point-cloud node reads (plan 26 A4b).
+        Not through the Router: a cloud is not a scalar lane. A device that
+        is closed, removed or not yet polled has no entry."""
+        out: dict[str, PointCloud] = {}
+        for d in self.devices:
+            c = getattr(d, "cloud", None)
+            if c is not None and d.role in self._opened:
+                out[f"{CLOUD_SCHEME}:{d.role}"] = c
+        return out
 
     def lines(self) -> list[tuple[str, str, str, int, str]]:
         """One (role, kind, status, n sources, last) per device — the
