@@ -1,4 +1,4 @@
-"""The render graph (plan 26 A1, A3): the frame as nodes, evaluated in
+"""The render graph (plan 26 A1, A3, A4): the frame as nodes, evaluated in
 dependency order.
 
 `Renderer._draw_frame` (render.py) used to be a fixed list of passes.
@@ -17,7 +17,8 @@ decisions"):
   eye, `eye.*`), no framebuffer of its own. The shape is the see-through
   4D shape; the hands (`ghost.py`'s parts and styles, plan 26 A3) are
   solid geometry, settled once a frame (`Hands.run`) and drawn by
-  whatever holds them — the scene, the hands' layer, or both. A4 adds a
+  whatever holds them — the scene, the hands' layer, or both; one node
+  per instance (`ghost`, `ghost.2`, A4), solid or as lines. A4b adds a
   point cloud.
 - **Scene** (`Scene`): any number of geometries into one colour + depth
   target (`render.SceneTarget`): the solid geometry first (the hands,
@@ -73,6 +74,21 @@ its pipeline's end; per frame a through pipeline whose layer is not bent
 laid onto, with the layer laid over at the output instead (`Fx.fallback`,
 `Output.settle`): `outputs.route`'s table, as wiring. A pipeline with no
 output this frame is skipped and its nodes read 0 ms.
+
+**The graph in the preset** (plan 26 A4). A preset may carry a `graph`
+section: plain JSON listing node instances by kind and their wiring,
+never a param (`GraphSpec`, `read_graph`; the kinds in `NODE_KINDS`).
+What it says becomes the `Wiring` the default graph is built from —
+where each hands node is drawn (in the scene or as the layer), solid or
+as lines, how the layer is laid on, what the history holds — and the
+effect instances the chain holds (`FxState.set_instances`). A second
+instance of a node is named by the naming rule (ENGINEERING §2):
+`ghost.2` (its own `Ghost`, `Renderer.ghost_of`, its own `ghost.2.*`
+params), `hands.2` its layer, `fx.acid.2.*` a second acid. No section
+is the default graph; one this build cannot read is a note and the
+default graph (preset.py, `GraphSection`). The words the OUTPUT and
+LOOKBACK pages say it in are here too (`hands_words`, `history_words`,
+`graph_words`): no editor until plan 28.
 
 Render stack (ARCHITECTURE §3): this module reads params through the
 objects it is handed and never writes one; it imports moderngl and its

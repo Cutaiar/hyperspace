@@ -1180,6 +1180,7 @@ def main() -> None:
         (undo_obj, "undo", "Undo"),
         (router, "routing", "Router"),
         (presets, "preset", "Presets"),
+        (presets.graph, "preset", "GraphSection"),      # plan 26 A4
         (learn, "learn", "Learn"),
         (clock, "tempo", "Clock"),
         (lfos, "lfo", "LFOs"),
