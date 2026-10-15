@@ -332,6 +332,16 @@ def learn_wants(lrn) -> list[str]:
     return [w for w in (wants() if callable(wants) else ()) if w not in _OWN_WANTS]
 
 
+def sink_items(lrn) -> list[tuple[str, str]]:
+    """The param menu's "Learn sink ▸" items (plan 27 B3): (port address,
+    item text) for every sink port the rig lists (`Learn.sinks`) —
+    ``bridge:3  ·  pitch ch4``; none without a registry or a sink."""
+    sinks = getattr(lrn, "sinks", None)
+    ports = sinks() if callable(sinks) else ()
+    return [(pt.address, f"{pt.address}  ·  {pt.label}" if pt.label else pt.address)
+            for pt in ports]
+
+
 def apply_style() -> None:
     s = imgui.get_style()
     s.window_rounding = 12.0
@@ -678,6 +688,8 @@ class Panel:
         for b in session:
             where = "global layer" if b.layer == "global" else "invariant"
             imgui.text_disabled(f"{self._row_name(b)} · {where}")
+        for b in learn.sinks_of(table, (a.id, p.id)):     # the session's, out (plan 27 B3)
+            imgui.text_disabled(f"→ {b.target} · sink" + ("" if b.enabled else " (off)"))
         return desk, routes
 
     def _ctx_unbind(self, a: Param, p: Param, desk: list, routes: list) -> None:
@@ -735,6 +747,15 @@ class Panel:
             for want in learn_wants(lrn):
                 if imgui.menu_item_simple(f"Learn {want}"):
                     lrn.arm(a.id, want)
+        # plan 27 B3: the param *out* to a sink port — the rig's ports
+        # (`Learn.sinks`), a pick lands at once as a session row
+        # (`Learn.learn_sink`): no prompt, no undo step, no preset dirt
+        ports = sink_items(lrn) if p.kind is not Kind.TRIGGER else []
+        if ports and imgui.begin_menu("Learn sink"):
+            for address, text in ports:
+                if imgui.menu_item_simple(text):
+                    lrn.learn_sink(a.id, address)
+            imgui.end_menu()
 
     def _hand_sides(self) -> list[str]:
         """The hands this rig's axes belong to, left first; none without a

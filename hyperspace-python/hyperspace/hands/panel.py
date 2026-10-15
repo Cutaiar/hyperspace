@@ -344,8 +344,11 @@ def _status(io, notes=()) -> None:
     if imgui.is_item_hovered():
         imgui.set_tooltip("● in the box  ·  ◌ tracked, but outside the box: it reads "
                           "absent  ·  ○ not seen")
-    if io.error:
-        imgui.text_colored(ui.WARN, io.error)
+    # the DAW port is the hands-daw sink's (plan 27 B3): why it has none
+    # comes through `HandsIO.carry`, beside the instrument's own error
+    err = io.error or getattr(io, "daw_error", "")
+    if err:
+        imgui.text_colored(ui.WARN, err)
     elif io.last:
         imgui.text_disabled(f"last out  {io.last}")
 

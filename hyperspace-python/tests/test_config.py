@@ -288,9 +288,13 @@ def test_no_devices_list_translates_the_old_tables_with_one_note_each(tmp_path, 
     p.write_text('[midi]\nport = "Launchpad"\n[hands]\nenabled = true\ntape = "t.json"\n'
                  '[gamepad]\nusb = false\n')
     cfg = config.load(p)
-    pad, midi, leap, bridge = config.devices(cfg)
+    # the hands on: their DAW out is a sink entry right after them (plan 27
+    # B3), the default port translated silently — the file never wrote `out`
+    pad, midi, leap, daw, bridge = config.devices(cfg)
     assert (pad["usb"], midi["port"], leap["enabled"], leap["tape"]) == (
         False, "Launchpad", True, str(tmp_path / "t.json"))
+    assert daw == {"role": "hands-daw", "kind": "midi-out", "enabled": True, **config.MIDI_OUT,
+                   "port": "Hyperspace Hands", "carries": "leap"}
     assert cfg["hands"]["tape"] == str(tmp_path / "t.json")
     assert cfg["notes"] == [
         "config: [gamepad] is now a [[devices]] entry (role = 'pad', kind = 'gamepad') — see config.py",
@@ -321,13 +325,16 @@ def test_a_devices_list_wins_and_is_checked_per_entry(tmp_path, capsys):
         '[midi]\nport = "ignored"\n')
     cfg = config.load(p)
     got = config.devices(cfg)
+    # (the enabled hands' default DAW out becomes a midi-out sink after them:
+    # plan 27 B3)
     assert [(e["role"], e["kind"], e["enabled"]) for e in got] == [
-        ("apc40", "midi", True), ("leap", "hands", True), ("phone", "osc", True)]
+        ("apc40", "midi", True), ("leap", "hands", True), ("hands-daw", "midi-out", True),
+        ("phone", "osc", True)]
     # the defaults fill the entry's missing keys — the *defaults*, never the
     # ignored [midi] table's `port = "ignored"`
     assert got[0]["port"] is None and got[0]["profile"] == "apc40"
     assert got[1]["dofs"] == ["x"] and got[1]["calibration"] == str(tmp_path / "c.json")
-    assert got[2] == {"role": "phone", "kind": "osc", "enabled": True, "host": "0.0.0.0"}
+    assert got[3] == {"role": "phone", "kind": "osc", "enabled": True, "host": "0.0.0.0"}
     assert cfg["midi"]["port"] is None and cfg["midi"]["enabled"] is True
     assert cfg["hands"]["dofs"] == ["x"] and cfg["hands"]["enabled"] is True
     assert cfg["hands"]["calibration"] == str(tmp_path / "c.json")

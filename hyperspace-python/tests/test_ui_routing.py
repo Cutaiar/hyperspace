@@ -1276,3 +1276,19 @@ def test_neither_shift_nor_save_is_a_desk_target(rig, tmp_path):
     targets = {p.id for p in ui_routing._desk_targets(rig.panel)}
     assert routing.SAVE_PARAM not in targets and routing.SHIFT_PARAM not in targets
     assert not rig.panel._desk_target(reg[routing.SAVE_PARAM])
+
+
+def test_the_routing_page_lists_the_sink_rows_with_the_others(rig, tmp_path, monkeypatch):
+    """Plan 27 B3: a sink row appears as the others do — a line in the
+    page's own `sinks` section (the session's), its words the router's,
+    found by the filter, an off row dimmed but listed."""
+    router = _with_router(rig, tmp_path)
+    router.table.add(Binding("param:view.bright", "bridge:2", routing.SINK_OP))
+    router.table.add(Binding("lane:*", "bridge:0", routing.SINK_OP, enabled=False))
+    texts, _ = _drawn(monkeypatch)
+    frame(rig.panel, "routing")
+    frame(rig.panel)
+    assert "param view.bright → bridge:2" in texts and "every lane → bridge:0" in texts
+    ui_routing._state(rig.panel)["find"] = "bridge:2"
+    n, m = ui_routing.found(rig.panel, router)
+    assert m >= 2 and n >= 1

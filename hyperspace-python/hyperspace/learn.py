@@ -38,6 +38,15 @@ exists. `bound` is the same question without the edit (the menu asks it
 to know what to list and whether to offer the item at all). A session row
 (invariant or global layer) is never removed (D5, D6).
 
+**Learn sink ▸ <role>:<channel>** (plan 27 B3) routes a param *out*: the
+menu lists the rig's sink ports (`sinks`, the device registry's
+`sink_ports`) and a pick lands at once (`learn_sink`) — there is nothing to
+wait for — as a sink row, ``param:<id> → <role>:<channel>`` (routing.py,
+`SINK_OP`), in the **session** (`bindings.json`, written now: sinks are
+rig, D1 / D9), like a pad learn: no undo step, no preset dirt. It replaces
+whatever that port sent before (one source per sink port) and never asks
+Replace / Keep: a sink row is not a performer.
+
 **Click a control, then a param** (plan 17 WP4) is the same road taken
 from the other end: `pick` holds a desk control (`control`, the on-screen
 desk's click), and `map_picked(pid)` is `arm(pid, "desk")` then
@@ -77,7 +86,7 @@ from __future__ import annotations
 
 from . import undo
 from .params import PERFORMANCE_GROUPS, Kind, Param, Registry
-from .routing import MOD_OPS, SAVE_PARAM, Binding, Bindings, Owned
+from .routing import MOD_OPS, SAVE_PARAM, SINK_OP, Binding, Bindings, Owned, parse_sink
 
 # plan 24 C1: the desk's SAVE is held, never latched — a learned toggle or
 # button row would leave it on, and every bank pad's tap would then save
@@ -513,6 +522,52 @@ class Learn:
                   + (f"; {let_go} let go" if let_go else ""))
         return True
 
+    # ---- a sink port takes it (plan 27 B3) ----
+
+    def sinks(self) -> tuple:
+        """The rig's sink ports (devices.Port: `address` ``<role>:<channel>``,
+        `label`), in list order — what "Learn sink ▸" offers; none without
+        a device registry."""
+        devs = getattr(self, "devices", None)
+        ports = getattr(devs, "sink_ports", None)
+        return tuple(ports()) if ports is not None else ()
+
+    def learn_sink(self, pid: str, port: str) -> Binding | None:
+        """Send `pid` out on the sink port `port` (``bridge:3``): a sink row
+        ``param:<pid> → <port>`` into the session's table, written to
+        `bindings.json` now — sinks are rig (D1 / D9), so no undo step and
+        no preset dirt, like a pad learn. The row takes the port from
+        whatever sent on it before (one source per port); the param may go
+        out on several ports. Never a Replace / Keep question: a sink row
+        is not a performer. Refused, with the reason in `last` and nothing
+        changed, for an id the registry lacks, a trigger (it has no value
+        to send) or a port that is not ``<role>:<channel>``. Returns the
+        row, or None. Arms nothing: an armed learn stays as it was."""
+        p = self.reg.get(pid)
+        if p is None:
+            self.refuse(f"{pid}: no such param — nothing sent")
+            return None
+        if p.kind is Kind.TRIGGER:
+            self.refuse(f"{p.label or pid} is a trigger — it has no value to send")
+            return None
+        if parse_sink(port) is None:
+            self.refuse(f"{port!r} is not a sink port (<role>:<channel>) — nothing sent")
+            return None
+        table = self.table
+        b = Binding(f"param:{pid}", port, SINK_OP)
+        gone = [x for x in table.bindings if x.is_sink and x.target == port]
+        if any(x.source == b.source and x.enabled for x in gone) and len(gone) == 1:
+            self.said(f"{pid} already goes out on {port}")
+            return gone[0]
+        for x in gone:
+            table.remove(x)
+        table.add(b)
+        table.write()
+        was = ", ".join(dict.fromkeys(x.source for x in gone if x.source != b.source))
+        self.said(f"sent {pid} → {port} (into {getattr(table.path, 'name', 'the session')})"
+                  + (f"; {was} let go" if was else ""))
+        return b
+
     # ---- a source completes it ----
 
     def target_for(self, pid: str) -> Param | None:
@@ -700,6 +755,14 @@ class Learn:
         told = names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
         self.said(f"unbound {real} from {told}")
         return gone
+
+
+def sinks_of(table: Bindings, ids) -> list[Binding]:
+    """The sink rows that send a param out (plan 27 B3), enabled or not:
+    the session's, listed by the param's menu, never removed by Unbind."""
+    ids = _ids(ids)
+    return [b for b in table.bindings
+            if b.is_sink and b.source.partition(":")[2] in ids and b.scheme == "param"]
 
 
 def _ids(ids) -> tuple[str, ...]:

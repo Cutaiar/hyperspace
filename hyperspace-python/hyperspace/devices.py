@@ -11,7 +11,9 @@ are devices since B2: `MidiDevice` — one per MIDI entry, each with its own
 MIDI role but the first) —, `PadDevice` (the gamepad: its rows, its axis
 lanes and the sticks' default camera job) and the hands'
 `hands.device.HandsDevice` (a thin wrapper over the liftable `HandsIO`);
-`BridgeDevice` is still B1's shim (B3 makes its out half a sink). Each owns
+the bridge is one device with both halves (`BridgeDevice`: its `ext` lanes
+a source, its out half a sink) and a `midi-out` entry is a sink alone
+(`MidiOutDevice`: the hands' DAW out is one, role `hands-daw`). Each owns
 its adapter object (`io`: `midi.MidiIO`, `gamepad.Pad`, `hands.HandsIO`,
 `bridge.Bridge`). This module is the one importer of every adapter
 module, each imported lazily inside its device's `open`, so importing
@@ -54,7 +56,7 @@ desk has two, the preset layer and SHIFT's global one.
 offered to an armed Learn, then delivers its rows. `feed` runs in the
 feed slot (after the analyzer's lanes, before the LFOs and the pass):
 each device publishes its vectors. `send` runs after `reg.apply`: the
-sinks (B3). One device's exception never stops the frame: it is recorded
+sinks. One device's exception never stops the frame: it is recorded
 on the device (`status = "error: …"`) and on the registry (`error`, the
 hot-reload toast), and the next device runs.
 
@@ -70,6 +72,21 @@ device must too; the registry never closes or reopens a `lost` device
 mtime every `WATCH_FRAMES` frames and re-reads only the device list,
 closing what left and opening what arrived; a bad edit is a note and the
 old list stands.
+
+**Sinks** (plan 27 B3). A sink takes values *out* of the app: a device's
+`sinks` are its sink ports (a `Port` whose `scheme` is the device's role and
+whose `name` is the channel, so its `address` is ``<role>:<channel>`` —
+``bridge:3``), and its `send(reg, analyzer)` runs in the slot after
+`reg.apply`, reading **effective** values. What a sink sends is the
+session's *sink rows* (routing.py, `SINK_OP`): a `Binding` from a param
+(``param:<id>``) or a lane (``lane:<i>``, ``lane:*``) to a sink port, in
+`bindings.json` (sinks are rig), made on the ROUTING page or by the param
+menu's "Learn sink ▸ <role>:<channel>" (learn.Learn.learn_sink) — the same
+table and Learn as a hand routed to a param, with no referee (a sink row is
+not a performer). An entry's old `send` list (`[bridge] send`) becomes its
+rows once, the first launch it is on with none (`DeviceRegistry`'s
+`_seed_sinks`, one note). The SYSTEM line of a sink says how many rows it
+sends (``n sinks``) before its last message.
 """
 
 from __future__ import annotations
@@ -113,7 +130,10 @@ class Port:
     through the Router; its scheme is ``cloud``); `rest` where a value idles; `bipolar` a
     value centred on its rest; `velocity` a trigger that carries one;
     `group` folds a long list (the APC40's hundred controls); `layer` the
-    device layer the port belongs to ("" = every layer)."""
+    device layer the port belongs to ("" = every layer). A *sink* port
+    (plan 27 B3, `Device.sinks`) has the device's role as its `scheme`
+    and a channel as its `name`, so its `address` is ``<role>:<channel>``
+    — what a sink row targets."""
 
     name: str
     label: str
@@ -147,8 +167,9 @@ class Device(Protocol):
     offers a moved axis or a pressed button to an armed Learn and says
     whether a press was the learn's; `act` delivers the rest of this
     frame's discrete controls as rows; `feed` publishes the continuous
-    vectors, labels, rests, gates and names; `send` is the sink half
-    (B3). `targets` are the live objects the hot reloader re-classes.
+    vectors, labels, rests, gates and names; `sinks` are the device's sink
+    ports (``<role>:<channel>``) and `send` the sink half, after
+    `reg.apply` (plan 27 B3). `targets` are the live objects the hot reloader re-classes.
     `wants` are what a Learn can be armed for and this device completes
     (plan 27 B2: ``desk`` for MIDI, ``pad``, ``hand:left`` /
     ``hand:right``; a new device's role by default)."""
@@ -168,6 +189,9 @@ class Device(Protocol):
 
     @property
     def sources(self) -> tuple[Port, ...]: ...
+
+    @property
+    def sinks(self) -> tuple[Port, ...]: ...
 
     def open(self) -> None: ...
 
@@ -201,6 +225,9 @@ class Context:
     hand_settings: object | None = None
     notes: list[str] = field(default_factory=list)
     home: Path | None = None
+    # the registry itself (set by `DeviceRegistry`): a sink that carries
+    # another device's output (the hands' DAW messages) finds it by role
+    devices: object | None = None
 
 
 class Base:
@@ -234,6 +261,10 @@ class Base:
 
     @property
     def sources(self) -> tuple[Port, ...]:
+        return ()
+
+    @property
+    def sinks(self) -> tuple[Port, ...]:
         return ()
 
     def open(self) -> None:
@@ -550,9 +581,15 @@ class PadDevice(Base):
 
 
 class BridgeDevice(Base):
-    """`bridge.Bridge` as a device: its one `step` — the inbound lanes fed
-    as ``ext``, the analyzer's lanes sent out — from the feed slot with
-    the live analyzer, as today. B3 makes the outbound half a sink."""
+    """`bridge.Bridge` as one device with two halves (plan 27 B3): its
+    ports looked for again in `poll`; the inbound lanes fed as ``ext``,
+    with their labels and rests, in the feed slot (`receive`, `publish`);
+    and the out half a **sink** — in the slot after `reg.apply`, the
+    session's sink rows on this role (``param:view.bright → bridge:3``,
+    routing.sink_values) read as effective values and sent through the
+    bridge's gate (`send_values`). With no binding table in the context (a
+    bare shim) the out half sends the entry's old `send` list, as a
+    `Bridge` on its own does."""
 
     kind = "bridge"
     schemes = ("ext",)
@@ -562,6 +599,7 @@ class BridgeDevice(Base):
                  io=None, audio=None):
         super().__init__(role, entry, ctx, io=io)
         self.audio = audio if audio is not None else self.ctx.audio
+        self._n = 0          # the analyzer's lane count, last seen: `lane:*` falls to 0 once
 
     def open(self) -> None:
         from . import bridge
@@ -589,15 +627,190 @@ class BridgeDevice(Base):
         n = int(io.decoder.n) if io is not None else int(self.entry.get("in_lanes", 0) or 0)
         return tuple(Port(str(i), f"ext {i}", group="ext", scheme="ext") for i in range(n))
 
+    @property
+    def sinks(self) -> tuple[Port, ...]:
+        """The out half's lanes as sink ports, ``<role>:<k>`` for each lane
+        the encoding has room for (pitch: from `channel` to 15; cc14: from
+        `cc` to 31), labelled with the wire they go out on."""
+        return _lane_sinks(self.role, self.io, self.entry)
+
+    def poll(self, dt: float, now: float) -> None:
+        if self.io is not None:
+            self.io.reconnect()
+
     def feed(self, router) -> None:
         if self.io is None:
             return
-        audio = self.audio
-        chain = audio.chain if audio is not None and getattr(audio, "on", False) else None
-        self.io.step(chain, router)
+        self.io.receive(router)
+        self.io.publish(router)
+
+    def send(self, reg, analyzer) -> None:
+        io = self.io
+        if io is None:
+            return
+        table = self.ctx.table
+        if table is None or not hasattr(table, "sinks"):
+            io.transmit(analyzer)                    # a bare shim: the old `send` list
+            return
+        from .routing import sink_values
+        io.send_values(sink_values(table.sinks(self.role), reg, analyzer, self._n))
+        if analyzer is not None:
+            self._n = int(getattr(analyzer, "n", self._n))
 
     def targets(self) -> list[tuple]:
         return [(self.io, "bridge", "Bridge")] if self.io is not None else []
+
+
+# ---- the sinks (plan 27 B3): a device that only sends ----
+
+def _lane_sinks(role: str, sender, entry: dict) -> tuple[Port, ...]:
+    """A bridge-encoded output's lanes as sink ports, from the open
+    adapter's encoding (`sender`: anything with encoding / channel / cc)
+    or, before it opens, the entry's (the `[bridge]` defaults otherwise)."""
+    enc = str(getattr(sender, "encoding", None) or entry.get("encoding") or "pitch")
+    ch = int(getattr(sender, "channel", entry.get("channel", 0)) or 0)
+    cc = int(getattr(sender, "cc", entry.get("cc", 16)) or 0)
+    if enc == "pitch":
+        wire = [f"pitch ch{ch + k + 1}" for k in range(max(0, 16 - ch))]
+    else:
+        wire = [f"cc {cc + k}/{cc + k + 32} ch{ch + 1}" for k in range(max(0, 32 - cc))]
+    return tuple(Port(str(k), w, group="sink", scheme=role)
+                 for k, w in enumerate(wire))
+
+
+class MidiOutDevice(Base):
+    """A MIDI output as a sink (`kind = "midi-out"`, plan 27 B3): a port
+    found by `port` (a substring of an existing one, else a virtual port
+    of that name unless ``virtual = false``; `bridge.OutPort`, looked for
+    again on midi.Ports' schedule when it goes), carrying
+
+      * the DAW messages of the hands device whose role `carries` names —
+        what `HandsIO._send` sent before plan 27 B3 (`HandsIO.carry`): the
+        `hands-daw` entry the `[hands] out` setting becomes at load
+        (config.py). When the port comes back after a gap the DAW is
+        brought up to date (`HandsIO.resync`) before the hands' frame runs;
+      * the session's sink rows on this role, encoded like the bridge's
+        lanes (`encoding`, `channel`, `cc`, `rate`; `bridge.Sender`).
+
+    A `lost` port is looked for again in `poll` (the device's own job,
+    B1). Nothing here feeds; it publishes no sources."""
+
+    kind = "midi-out"
+    schemes: tuple[str, ...] = ()
+    feeds: tuple[str, ...] = ()
+    wants: tuple[str, ...] = ()
+
+    def __init__(self, role: str, entry: dict | None = None, ctx: Context | None = None, *,
+                 io=None, sender=None):
+        super().__init__(role, entry, ctx, io=io)
+        self.sender = sender
+        self._resync: list = []      # the carried DAW's notes, to go first after a reconnect
+        self._n = 0
+        self._last = ""
+
+    @property
+    def carries(self) -> str:
+        return str(self.entry.get("carries") or "")
+
+    def open(self) -> None:
+        from . import bridge
+        if self.sender is None:
+            self.sender = bridge.Sender.of(self.entry, who=self.role)
+        if self.io is None:
+            port = str(self.entry.get("port") or "")
+            if not port:
+                raise ValueError("a midi-out entry needs a port (a name, or part of one)")
+            self.io = bridge.OutPort(port, virtual=self.entry.get("virtual", True) is not False,
+                                     who=self.role)
+            self.io.open()
+
+    @property
+    def status(self) -> str:
+        io = self.io
+        if self.error or io is None:
+            return super().status
+        return "connected" if io.on else "lost"
+
+    @property
+    def last(self) -> str:
+        io = self.io
+        if io is None:
+            return ""
+        parts = [io.name] if io.on else ([io.error] if io.error else [])
+        if self.carries:
+            parts.append(f"{self.carries}'s DAW out")
+        if self._last:
+            parts.append(self._last)
+        return "  ·  ".join(p for p in parts if p)
+
+    @property
+    def sinks(self) -> tuple[Port, ...]:
+        return _lane_sinks(self.role, self.sender, self.entry)
+
+    def _carried(self):
+        """The `HandsIO` (anything with `carry` and `resync`) of the
+        device `carries` names, while it is open; None otherwise."""
+        reg = self.ctx.devices
+        if not self.carries or reg is None:
+            return None
+        d = reg.get(self.carries) if hasattr(reg, "get") else None
+        io = getattr(d, "io", None)
+        return io if hasattr(io, "carry") else None
+
+    def poll(self, dt: float, now: float) -> None:
+        io = self.io
+        if io is None or not io.retry():
+            return
+        if self.sender is not None:
+            self.sender.reset()                 # the far end starts blank: every lane again
+        h = self._carried()
+        if h is not None:                       # before the hands' frame: its axes resend now
+            self._resync = h.resync()
+
+    def _send(self, m) -> bool:
+        io = self.io
+        if io is None or not io.send(m):
+            return False
+        self._last = _said(m)
+        return True
+
+    def send(self, reg, analyzer) -> None:
+        io = self.io
+        if io is None:
+            return
+        resync, self._resync = self._resync, []
+        for m in resync:
+            if not self._send(m):
+                break
+        h = self._carried()
+        if h is not None:
+            h.carry(self._send, io.name, "" if io.on else io.error)
+        table = self.ctx.table
+        if self.sender is not None and table is not None and hasattr(table, "sinks"):
+            rows = table.sinks(self.role)
+            if rows and io.on:
+                from .routing import sink_values
+                for m in self.sender.messages(sink_values(rows, reg, analyzer, self._n)):
+                    if not self._send(m):
+                        break
+        if analyzer is not None:
+            self._n = int(getattr(analyzer, "n", self._n))
+
+    def targets(self) -> list[tuple]:
+        return [(self.io, "bridge", "OutPort")] if self.io is not None else []
+
+
+def _said(m) -> str:
+    """A MIDI message in the SYSTEM line's words: "cc 102 = 64 ch16"."""
+    t = getattr(m, "type", "")
+    ch = f"ch{getattr(m, 'channel', 0) + 1}"
+    if t == "control_change":
+        return f"cc {m.control} = {m.value} {ch}"
+    if t in ("note_on", "note_off"):
+        return f"{t.replace('_', ' ')} {m.note} {ch}"
+    if t == "pitchwheel":
+        return f"pitch {m.pitch} {ch}"
+    return str(t)
 
 
 # ---- point clouds (plan 27 B4): the source type, its file, a recorded-cloud device ----
@@ -843,6 +1056,7 @@ def kinds() -> dict[str, type[Base]]:
         "gamepad": PadDevice,
         "hands": HandsDevice,
         "bridge": BridgeDevice,
+        "midi-out": MidiOutDevice,          # plan 27 B3: a sink alone
         "osc": OscDevice,
         "cloud": CloudDevice,
     }
@@ -916,9 +1130,12 @@ class DeviceRegistry:
         self.path = Path(path) if path is not None else None
         self.clock = clock
         self.entries: list[dict] = [dict(e) for e in (entries or [])]
+        if getattr(self.ctx, "devices", None) is None:
+            self.ctx.devices = self      # a sink finds the device it carries (`MidiOutDevice`)
         self.devices: list = list(devices) if devices is not None else make_all(
             self.entries, self.ctx)
         self._tell_table()           # which MIDI role an unqualified row means, before any opens
+        self._seed_sinks(self.entries)   # an old `send` list → the session's sink rows, once
         self.listeners: list = []
         self.error = ""              # this frame's first device error (the toast)
         # a device handed in with its adapter (tests, the frame-order stubs) is open
@@ -1020,6 +1237,55 @@ class DeviceRegistry:
                     out.append(w)
         return tuple(out)
 
+    def sink_ports(self) -> tuple[Port, ...]:
+        """Every listed device's sink ports, in list order (an `off` device
+        offers none): what the param menu's "Learn sink ▸" lists."""
+        out: list[Port] = []
+        for d in self.devices:
+            out += list(getattr(d, "sinks", ()) or ())
+        return tuple(out)
+
+    def _seed_sinks(self, entries: list[dict]) -> None:
+        """An enabled entry's old `send` list (`[bridge] send`, the bridge's
+        default ``["lane:*"]`` included) becomes the session's sink rows on
+        its role — **once per role**, marked done in `bindings.json` itself
+        (`Bindings.sinks_seeded`, never by consuming the owner's config
+        key): a role in that list is never seeded again, so deleting every
+        row of it on ROUTING, or saving config.toml mid-session, brings
+        nothing back. A file that already holds sink rows on a role counts
+        as seeded for it (the mark is added). Written with one note; from
+        then on the rows say and the key is not read."""
+        table = getattr(self.ctx, "table", None)
+        if table is None or not hasattr(table, "sinks"):
+            return
+        from . import routing
+        if not isinstance(getattr(table, "sinks_seeded", None), list):
+            table.sinks_seeded = []          # a table from before a hot reload
+        seeded = table.sinks_seeded
+        added = False
+        for e in entries:
+            send = e.get("send")
+            role = e.get("role", "")
+            if not e.get("enabled", True) or send is None or not role or role in seeded:
+                continue
+            seeded.append(role)
+            added = True                     # the mark alone is worth the write
+            if table.sinks(role, enabled=False):
+                continue                     # rows from before the mark: seeded already
+            rows, bad = routing.sink_rows_from_send(role, send)
+            table.bindings += rows       # checked already; the load's notes stand
+            said = ", ".join(f"{b.source} → {b.target}" for b in rows) or "nothing"
+            self._note(f"bindings: [{e.get('kind', role)}] send is now sink rows in "
+                       f"bindings.json ({said}) — the rows say from here on; edit them on "
+                       "ROUTING (sinks)")
+            for why in bad:
+                self._note(f"bindings: [{e.get('kind', role)}] send {why} — not translated")
+        # a file still holding a preset's part waits for the first-launch
+        # migration to rewrite it (routing.Bindings.load): the rows are in
+        # memory until then, and that rewrite keeps them
+        if added and hasattr(table, "write") and getattr(table, "carried", None) is None:
+            table.write()
+
     def _tell_table(self) -> None:
         """The shared binding table learns the MIDI roles in list order
         (plan 27 B2), so a desk opened next reads and writes its own rows."""
@@ -1043,11 +1309,18 @@ class DeviceRegistry:
 
     def lines(self) -> list[tuple[str, str, str, int, str]]:
         """One (role, kind, status, n sources, last) per device — the
-        SYSTEM page's lines."""
+        SYSTEM page's lines. A sink's `last` starts with what it sends:
+        ``n sinks``, its enabled sink rows (plan 27 B3)."""
         out = []
+        table = getattr(self.ctx, "table", None)
         for d in self.devices:
             try:
-                out.append((d.role, d.kind, d.status, len(d.sources), d.last))
+                last = d.last
+                if getattr(d, "sinks", ()) and hasattr(table, "sinks"):
+                    k = len(table.sinks(d.role))
+                    head = f"{k} sink{'' if k == 1 else 's'}"
+                    last = f"{head}  ·  {last}" if last else head
+                out.append((d.role, d.kind, d.status, len(d.sources), last))
             except Exception as e:  # noqa: BLE001 — a status line never takes the page down
                 out.append((d.role, d.kind, _err("status", e), 0, ""))
         return out
@@ -1173,7 +1446,8 @@ class DeviceRegistry:
                 self._guard(d, lambda d=d: d.feed(router))
 
     def send(self, reg, analyzer=None) -> None:
-        """After `reg.apply`: the sinks (B3) read effective values out."""
+        """After `reg.apply`: the sinks read effective values out, each
+        device in list order (plan 27 B3)."""
         for d in list(self.devices):
             if d.role in self._opened:
                 self._guard(d, lambda d=d: d.send(reg, analyzer))
@@ -1237,6 +1511,7 @@ class DeviceRegistry:
         changed = changed or [d.role for d in devices] != [d.role for d in self.devices]
         self.entries, self.devices = new, devices
         self._tell_table()
+        self._seed_sinks(new)
         if changed:
             for d in devices:
                 if d.role not in self._opened:

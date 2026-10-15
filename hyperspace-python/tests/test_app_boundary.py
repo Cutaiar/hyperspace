@@ -336,7 +336,13 @@ def _host(log: list[str], *, pad_on=True, pressed=(), held=(), super_=False, sti
         devices.MidiDevice("apc40", io=midi),
         devices.HandsDevice("leap", io=Stub("hands", log, status="tracking", last="",
                                             source=SimpleNamespace(on=True))),
-        devices.BridgeDevice("bridge", io=Stub("bridge", log, on=True, error=""), audio=audio)])
+        # the bridge's sink half reads the table's sink rows (plan 27 B3):
+        # `table.sinks` then `bridge.send_values`, the path a live rig runs
+        devices.BridgeDevice(
+            "bridge", None,
+            devices.Context(table=SimpleNamespace(
+                sinks=lambda role: log.append("table.sinks") or [])),
+            io=Stub("bridge", log, on=True, error=""), audio=audio)])
     h = app.Host(
         reg=reg, view=Stub("view", log), control=Stub("control", log), audio=audio,
         router=Stub("router", log), clock=Stub("clock", log), lfos=Stub("lfos", log),
@@ -355,9 +361,12 @@ def _host(log: list[str], *, pad_on=True, pressed=(), held=(), super_=False, sti
 # the draw. Plan 27 B1: the devices poll in the scene-setter slot (the
 # registry, in list order — the pad's rows, then MIDI's), the sources feed
 # in the feed slot (the hands feed `hand`, the bridge feeds `ext`), and the
-# sinks run after `reg.apply` (`devices.send` — none until B3). Plan 27
+# sinks run after `reg.apply` (`devices.send`). Plan 27
 # B2: the sticks' camera job is the pad device's own (`gamepad.steer`, in
-# its `act`), so it runs right after the pad's rows, before MIDI's
+# its `act`), so it runs right after the pad's rows, before MIDI's. Plan 27
+# B3: the bridge is two halves — its ports looked for again in its `poll`,
+# the ext lanes received and published in the feed slot, the out half a
+# sink after `reg.apply` (effective values, no longer a frame behind)
 ORDER = [
     "clock.tick", "reloader.poll",
     "router.keys",                                   # key rows (and the loop keys)
@@ -365,16 +374,17 @@ ORDER = [
     "router.claimed",                                #   …its sticks no route names, to the base
     "pad.lanes", "router.felt",                      #   …through the pad's feel (motion.py)
     "midi.poll",                                     #   …MIDI — cc and note rows
+    "bridge.reconnect",                              #   …the bridge's ports, looked for again
     "router.follow_macros",                          # the macros' base subscribers
     "undo.tick",                                     # the bases, compared (plan 15 WP1)
     "output.apply",                                  # reads last frame's objects
     "mouse.poll",                                    # relative writers, to the base
     "audio.step", "audio.publish",                   # new lanes, and their names (R8)
     "hands.poll",                                    # devices.feed: the hands feed hand
-    "bridge.step",                                   #   …the bridge feeds ext
+    "bridge.receive", "bridge.publish",              #   …the bridge feeds ext, its labels
     "lfos.step", "lfos.publish",                     # feeds lfo
     "router.modulate", "reg.apply",                  # the pass, then one commit
-    #                                                  (devices.send: the sinks, B3)
+    "table.sinks", "bridge.send_values",             # devices.send: the sinks' rows (B3)
     "view.integrate",
     "render.draw", "panel.draw",                     # the two windows
 ]
@@ -400,7 +410,7 @@ def test_an_absent_pad_or_adapter_is_simply_skipped():
     app.frame(h, now=1.0, dt=1 / 60, fps=60.0)
     without = [s for s in ORDER
                if not s.startswith(("pad.", "router.pad", "router.claimed", "router.felt", "midi.",
-                                    "hands.", "bridge."))]
+                                    "hands.", "bridge.", "table.sinks"))]
     assert log == without
     log.clear()
     h.devices = devices.DeviceRegistry([])
@@ -443,7 +453,17 @@ def test_a_raising_adapter_is_a_note_that_survives_the_frame():
     hands.poll = _boom
     assert app.frame(h, now=1.0, dt=1 / 60, fps=60.0) is False
     assert h.reloader.runtime_error.startswith("hands: RuntimeError: boom")
-    assert "bridge.step" in log and "reg.apply" in log    # the next device still fed
+    assert "bridge.receive" in log and "reg.apply" in log    # the next device still fed
+    hands.poll = lambda *a, **k: None
+    assert app.frame(h, now=1.0, dt=1 / 60, fps=60.0) is True
+    # a sink that raises after `reg.apply` (plan 27 B3): the toast, its
+    # line, and the frame still draws
+    h.devices.adapter("bridge").send_values = _boom
+    log.clear()
+    assert app.frame(h, now=1.0, dt=1 / 60, fps=60.0) is False
+    assert h.reloader.runtime_error.startswith("bridge: RuntimeError: boom")
+    assert h.devices.get("bridge").status == "error: RuntimeError: boom"
+    assert "view.integrate" in log and "render.draw" in log
 
 
 def test_the_relative_writers_run_with_the_setters_and_move_the_base():

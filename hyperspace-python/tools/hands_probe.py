@@ -12,6 +12,10 @@ default setup (the app's saved setups live in its library).
 --calibrate N runs the page's sweep: for N seconds move each hand through
 everything it should reach; each axis's range becomes what it covered
 (2nd–98th percentile) and is written to the calibration file.
+
+The DAW port is carried here as the app's `hands-daw` sink carries it (plan
+27 B3: `HandsIO` opens none): a `bridge.OutPort` on `[hands] out`, looked
+for again when it goes, the DAW brought up to date when it comes back.
 """
 
 from __future__ import annotations
@@ -21,7 +25,7 @@ import sys
 import time
 from pathlib import Path
 
-from hyperspace import config
+from hyperspace import bridge, config
 from hyperspace.hands import FEATURES, PINCHES, SIDES, HandSettings, HandsIO
 
 FPS = 60
@@ -50,10 +54,16 @@ def main() -> None:
         io.solo = io.axis(args.solo)
     if args.calibrate:
         io.start_calibration(args.calibrate)
+    port = bridge.OutPort(str(hc.get("out") or ""), who="hands")
+    port.open()
     t0 = time.monotonic()
     try:
         while True:
+            resync = io.resync() if port.retry() else []
             io.poll(1 / FPS)
+            for m in resync:
+                port.send(m)
+            io.carry(port.send, port.name, "" if port.on else port.error)
             t = time.monotonic() - t0
             _draw(io, t)
             if args.calibrate and not io.calibrating:
@@ -69,6 +79,7 @@ def main() -> None:
             print(f"  {a.name:14s} {st.lo:9.2f} … {st.hi:9.2f} {FEATURES[a.feature][0]}")
         print(f"wrote {cal}")
     io.close()
+    port.close()
 
 
 def _draw(io: HandsIO, t: float) -> None:
