@@ -64,8 +64,9 @@ the same device list (**rescan** if it was plugged in after launch).
 
 ## The APC40
 
-Plug it in (USB). Nothing to configure: the MIDI adapter is on by default
-and looks for a port whose name contains "APC40". The desk map is
+Plug it in (USB), before or after launching. Nothing to configure: the
+MIDI adapter is on by default and looks for a port whose name contains
+"APC40" (the device list below names it `apc40`). The desk map is
 [`ENGINEERING.md`](ENGINEERING.md) §8. At the desk:
 
 - **Load a preset**: tap a pad in clip rows 1, 4 or 5 (the bank).
@@ -95,6 +96,69 @@ port = "APC40"      # a substring of the port name
 enabled = false     # no MIDI adapter at all
 ```
 
+## The device list
+
+Since plan 27 every device — the desk, the pad, the hands, the bridge,
+a phone — is one `[[devices]]` table in `config.toml`, and one line on
+the SYSTEM page (`connected`, `lost`, `off` or `error: …`). The old
+`[midi]`, `[gamepad]`, `[hands]` and `[bridge]` tables still work: each
+becomes its entry at launch, with a note asking for the rename. Today's
+rig as a list — paste it in place of those four tables:
+
+```toml
+[[devices]]
+role = "pad"
+kind = "gamepad"
+
+[[devices]]
+role = "apc40"
+kind = "midi"
+port = "APC40"
+
+[[devices]]
+role = "leap"
+kind = "hands"
+enabled = false     # true for the hand camera; the [hands] lines below go here
+
+[[devices]]
+role = "bridge"
+kind = "bridge"
+enabled = false     # true for FL Studio; the [bridge] lines below go here
+```
+
+The app re-reads the list about half a second after you save the file,
+so a device can be added, switched on or off, or removed while it runs;
+a mistake is a note and the old list stands. Every kind's keys are
+[`ENGINEERING.md`](ENGINEERING.md) §5.
+
+**A second MIDI controller** (any knob box): add an entry after the
+APC40's, naming part of its port name. Then right-click a setting →
+**Learn desk** and turn one of its knobs. The APC40 keeps SHIFT and
+every row it had; the second desk's rows carry its name
+(`cc@launch:0:21`) and the app sends it nothing.
+
+```toml
+[[devices]]
+role = "launch"
+kind = "midi"
+profile = "generic"
+port = "Launch Control"
+```
+
+**A phone** (TouchOSC or any OSC app) on the same Wi-Fi: set the app to
+send to the Mac's address, port 9000, and list the addresses its faders
+and buttons send. Allow Python's incoming connections when macOS asks.
+Right-click a setting → **Learn phone**, move a fader.
+
+```toml
+[[devices]]
+role = "phone"
+kind = "osc"
+port = 9000
+axes = ["/1/fader1", "/1/fader2"]   # → phone:1/fader1, phone:1/fader2
+hits = ["/1/push1"]                 # → phone:1/push1, a button
+```
+
 ## The Ultraleap hands
 
 1. Install **Ultraleap Hand Tracking** for macOS and check its control
@@ -102,7 +166,8 @@ enabled = false     # no MIDI adapter at all
    `/Applications/Ultraleap Hand Tracking.app/Contents/LeapSDK`; if it is
    installed elsewhere, set `LEAPSDK_INSTALL_LOCATION` to that `LeapSDK`
    folder in the shell that launches the app.
-2. Switch the hands on:
+2. Switch the hands on (on a device list, these lines go on the `leap`
+   entry instead):
 
    ```toml
    [hands]
@@ -124,7 +189,8 @@ Only the desktop mode's axes have been measured; with `screentop` or
 1. Audio MIDI Setup → MIDI Studio → **IAC Driver** → tick "Device is
    online". For lanes both out and in, add a second bus: IAC echoes, so
    `in` must never be the bus `out` sends to.
-2. Switch the bridge on:
+2. Switch the bridge on (on a device list, these lines go on the
+   `bridge` entry instead):
 
    ```toml
    [bridge]
@@ -138,8 +204,15 @@ Only the desktop mode's axes have been measured; with `screentop` or
    instead). The SYSTEM page's bridge line shows the port and a rising
    count of messages sent.
 
+What goes out is rows in `bindings.json` (plan 27): the first launch
+with the bridge on writes its `send` list (every lane, by default) there
+once, with a note, and from then on the rows say. Send any setting out
+too: right-click it → **Learn sink ▸** → a port (`bridge:6 · pitch ch7`);
+the ROUTING page's **sinks** section lists, switches and removes them.
+
 The hands send to a DAW on their own port, a virtual one called
-"Hyperspace Hands" unless `[hands] out` names another.
+"Hyperspace Hands" unless `[hands] out` (or `out` on the hands entry)
+names another; on the SYSTEM page it is the `hands-daw` line.
 
 ## A second screen (or more)
 

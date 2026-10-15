@@ -60,7 +60,9 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
     A3: the graph's other wirings, hands present — the hands in the scene
     and the depth-aware layer for every preset, the history holding the
     hands for each preset with the look-back on — named
-    `<wiring>/<state>`, and nothing else."""
+    `<wiring>/<state>`. Plan 26 A4b: the recorded point cloud listed as a
+    `cloud` device, hands present, named `cloud/<state>`, and nothing
+    else."""
     from hyperspace.outputs import NAMES
     from hyperspace.preset import FACTORY_PRESETS
 
@@ -78,6 +80,11 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
                   "states": ["scene+hands", "scene+hands+through"], "presets": None},
         "history+hands": {"wiring": {"history": "scene+hands"}, "states": ["scene+hands"],
                           "presets": ["party-wake", "party-tracer"]}}
+    tool = _tool()
+    assert doc["cloud_states"] == {
+        "cloud": {"config": tool.CLOUD_CONFIG, "fixture": "tests/fixtures/clouds/knot.npz",
+                  "states": ["scene", "scene+hands"], "presets": ["legacy6", "party-faces"]}}
+    assert 'kind = "cloud"' in tool.CLOUD_CONFIG and tool.CLOUD_FIXTURE.is_file()
     assert doc["size"] == [960, 600] and doc["dpr"] == 1.0 and doc["frames"] == 8
     assert abs(doc["dt"] - 1 / 60) < 1e-12
     assert doc["gl_version"]
@@ -95,8 +102,14 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
     capped = {(e["preset"], e["hands"], e["state"]) for e in doc["goldens"]
               if e["state"] not in doc["states"] and e["state"] not in doc["solo_states"]
               and "/" not in e["state"]}
-    assert keys - capped - wired == want and wired <= keys
-    assert len(doc["goldens"]) == 23 * 2 * 9 + 6 * 2 + 1 + 23 * 5 + 2
+    clouded = {(p, "present", f"{name}/{s}") for name, c in doc["cloud_states"].items()
+               for p in c["presets"] for s in c["states"]}
+    # plan 26 A4: the proof presets, fixtures loaded through a scratch
+    # library (never factory presets), hands present, all eight states
+    fixture = {(p, f["hands"], s) for p, f in doc["fixture_states"].items() for s in f["states"]}
+    assert (keys - capped - wired - clouded - fixture == want and wired <= keys
+            and clouded <= keys and fixture <= keys)
+    assert len(doc["goldens"]) == 23 * 2 * 9 + 6 * 2 + 1 + 23 * 5 + 2 + 2 * 2 + 8
     # alone, the window's frame is drawn direct: the default state over a
     # shown hand is the scene with the hands over; through an effect, the
     # hands go into the chain
@@ -118,6 +131,20 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
         for hands in ("absent", "present"):
             assert said[hands]["missing"] == [], slug
             assert said[hands]["hands_shown"] is (hands == "present"), slug
+    # the fixtures: the tool's list, each a file under tests/fixtures/ and
+    # never a factory preset, loaded with nothing missing and no note, its
+    # graph landed (the wiring the manifest records is not the default)
+    tool = _tool()
+    assert list(doc["fixture_states"]) == list(doc["fixtures"]) == list(tool.FIXTURE_PRESETS)
+    for slug, f in doc["fixture_states"].items():
+        assert (ROOT / f["file"]).is_file() and slug not in FACTORY_PRESETS
+        assert f["states"] == list(doc["states"])
+        said = doc["fixtures"][slug]["present"]
+        assert said["missing"] == [] and said["notes"] == [] and said["hands_shown"]
+        # the graph landed as the file says it (the section, not a repr of
+        # the Wiring: a field added later moves no golden)
+        assert said["graph"] == json.loads((ROOT / f["file"]).read_text())["graph"]
+        assert said["graph"]["nodes"]
     # all three pipelines are reached somewhere, with the hands through an effect
     assert {e["route"] for e in doc["goldens"]} == routes
 
@@ -189,9 +216,10 @@ def test_every_golden_frame_is_drawn_byte_for_byte(ctx):
     assert not moved, (f"frames moved, recorded on {recorded}, drawn on {here!r} "
                        f"(GL_VERSION {version!r}) — run tools/golden_frames.py for a "
                        "contact sheet: " + ", ".join(s.key for s, _ in moved))
+    recorded_said = {**doc["presets"], **doc.get("fixtures", {})}
     for slug, info in said.items():
         for hands, got in info.items():
-            assert got == doc["presets"][slug][hands], (slug, hands)
+            assert got == recorded_said[slug][hands], (slug, hands)
 
 
 def _rig(ctx, timer_ctx=None):

@@ -108,7 +108,7 @@ F_KEYS = 8
 # (`preset`, the bank) has no persisted params, and `rot.phase.*` is `persist=False`.
 PERFORMANCE_GROUPS = ("view", "rot", "camera", "pattern", "dream", "fx", "lfo", "macro")
 SESSION_GROUPS = ("tempo", "hands", "ghost", "band", "master", "scene", "audio", "output",
-                  "overlay", "ui", "desk", "eye")
+                  "overlay", "ui", "desk", "eye", "cloud")
 PARTS = {"performance": PERFORMANCE_GROUPS, "session": SESSION_GROUPS}
 
 # the reference's fader → rotation-rate factor (its PLANEDRIVE was
@@ -623,6 +623,22 @@ def instance_of(pid: str, node: str) -> tuple[int, str] | None:
     return (1, rest) if rest else None
 
 
+def is_instance_id(pid: str) -> bool:
+    """Is `pid` a param of an extra node instance — `fx.<file>.<n>.<key>`
+    or `ghost.<n>.<key>`, n ≥ 2 — one that exists only while a preset's
+    graph holds that instance (plan 26 A4)? A preset load sorts such ids
+    against the graph it lands; a show holds back the `ghost.<n>.*` ones
+    the registry lacks until a graph declares them."""
+    parts = pid.split(".")
+    if parts[0] == "fx" and len(parts) >= 4:
+        mark = parts[2]
+    elif parts[0] == "ghost" and len(parts) >= 3:
+        mark = parts[1]
+    else:
+        return False
+    return mark.isdecimal() and str(int(mark)) == mark and int(mark) >= 2
+
+
 class Registry:
     """An ordered map of Param by id."""
 
@@ -1072,6 +1088,28 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                      "radii. Nearer: a stronger perspective and a bigger shape. "
                      f"{EYE_DISTANCE:.2f} is the view the shape was always drawn in.")
 
+    # ---- the point clouds (plan 26 A4b): how a cloud device's points are
+    # drawn in the shared camera (graph.PointCloud). Session, like the
+    # hands' look: a cloud is the room's sensor, and a preset load never
+    # changes how it is shown. Nothing reads them until a `cloud` device
+    # is listed, so they move no picture of today's
+    g = "cloud"
+    r.continuous("cloud.size", "Cloud point size", *_attr(view, "cloud_size"),
+                 lo=0.5, hi=12.0, fmt=lambda v: f"{v:.1f} px", group=g,
+                 tip="Each point's radius on screen, in pixels, whatever its depth.")
+    r.continuous("cloud.scale", "Cloud scale", *_attr(view, "cloud_scale"),
+                 lo=0.01, hi=10.0, log=True, fmt=lambda v: f"{v:.2f}×", group=g,
+                 tip="The cloud's own units in the world's (the shape's radius is 1), "
+                     "about the world's centre.")
+    r.continuous("cloud.bright", "Cloud brightness", *_attr(view, "cloud_bright"),
+                 lo=0.0, hi=2.0, fmt=lambda v: f"{v:.2f}", group=g,
+                 tip="The points' colour × this; 0 draws them black (they still hide "
+                     "what is behind them).")
+    r.toggle("cloud.colors", "Cloud colours", *_attr(view, "cloud_colors"), group=g,
+             modulatable=False,
+             tip="The cloud's own colours, when its source has them; off, every point "
+                 "is white.")
+
     # ---- look-back: the frame history composited over the scene ----
     # lookback.py reads these every frame; the dream worker (WP6b) reads
     # the second half. Cadence and size rebuild the ring, so no lane drives
@@ -1195,6 +1233,10 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     fx = fx if fx is not None else FxState()
     declare_fx(r, fx)
     fx.on_specs = lambda names: declare_fx(r, fx, names)
+    # the stack the fx.* params write, for whoever declares more of them:
+    # a preset's graph holding an effect twice (plan 26 A4,
+    # preset.GraphSection — `fx.acid.2.*`)
+    r.fx_state = fx
     # the ghost hands' display (ghost.py; the renderer's Ghost.state)
     declare_ghost(r, ghost if ghost is not None else GhostState())
 

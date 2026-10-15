@@ -26,6 +26,7 @@ from __future__ import annotations
 from imgui_bundle import imgui
 
 from . import ui
+from .graph import Wiring, history_words
 from .lookback import LAYER_INFO, LAYERS, RES, tint_colour
 from .params import Kind
 
@@ -79,7 +80,10 @@ def page(panel, dt: float) -> None:
     imgui.text_disabled(status)
     if getattr(lb, "error", ""):
         imgui.text_colored(ui.WARN, f"GLSL: {lb.error} — on the shipped helpers")
-    imgui.spacing()
+    # plan 26 A4: what the history is wired to capture, in words (the
+    # loaded preset's graph sets it; no editor until plan 28) — in the
+    # spacing the switch's row had under it, so the page is no taller
+    imgui.text_disabled(history_line(panel.renderer))
 
     panel._section("echoes", note=_trail_note(r))
     _cells(panel, lb, "##echoes", SECTIONS["echoes"])
@@ -94,6 +98,13 @@ def page(panel, dt: float) -> None:
 
     panel._section("both", note=NOTES["both"])
     _cells(panel, lb, "##both", SECTIONS["both"])
+
+
+def history_line(renderer) -> str:
+    """The LOOKBACK page's wiring line (plan 26 A4): `history: the scene`,
+    or `history: the scene · with the hands` — from the renderer's wiring
+    (`graph.history_words`); the default with no renderer."""
+    return history_words(getattr(renderer, "wiring", None) or Wiring())
 
 
 def _say(text: str) -> None:

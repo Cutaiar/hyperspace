@@ -1087,6 +1087,9 @@ def main() -> None:
     # the presets (preset.py): the library's `presets/` files, landed on the
     # registry and the table; the project's bank loads through it
     presets = Presets(library, reg, router)
+    # plan 26 A4: a preset's graph section sets the renderer's wiring and
+    # hands an extra hands node its own state (`Renderer.ghost_states`)
+    presets.graph.attach(renderer)
     # plan 13 §6, once: an older home's projects, routing presets and the
     # preset part of bindings.json become presets (backups beside every
     # rewritten file); a home already migrated finds nothing to do
@@ -1123,6 +1126,7 @@ def main() -> None:
     point_at_devices()
     panel.devices = rig                        # the SYSTEM page's device lines
     renderer.ghost.router = router           # the guide lights what the table routes
+    renderer.cloud_source = rig              # cloud:<role> → the scene's point clouds (A4b)
     panel.hand_settings = hand_settings
     dream_io, panel.dream_error = _open_dream(reg, cfg)
     if dream_io is not None:            # fills the look-back's dream slot
@@ -1177,6 +1181,7 @@ def main() -> None:
         (undo_obj, "undo", "Undo"),
         (router, "routing", "Router"),
         (presets, "preset", "Presets"),
+        (presets.graph, "preset", "GraphSection"),      # plan 26 A4
         (learn, "learn", "Learn"),
         (clock, "tempo", "Clock"),
         (lfos, "lfo", "LFOs"),
