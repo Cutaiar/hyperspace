@@ -32,6 +32,22 @@ damped spring, then follows again.
 pressure use 0–127; 14-bit CC (MSB on n, LSB on n + 32, so n ≤ 31) and
 pitch bend use 0–16383. Every encoding holds its last value until y is
 clearly past the next step (hysteresis), so a still hand sends nothing.
+
+The dance sources (plan 24 C4: curl, spread, energy, gap, twist, flick)
+are shaped here too, more simply than the axes — no calibration, no
+curve, no rest spring, since nothing but a route reads them:
+
+  `unit`    a reading in its native unit (degrees, mm, mm/s) onto 0–1
+            over a fixed range, clamped.
+  `Smooth`  the same one-pole `slew` as the axes, attack and decay, that
+            starts where its input first is and forgets on None (the hand
+            left: the lane reads NaN, the next sight starts afresh).
+  `Flick`   a hit: a Schmitt trigger on a speed (`on` to fire, back under
+            `off` to re-arm), whose output jumps to the hit's strength
+            (speed / `full`, at most 1), keeps the peak while the move
+            lasts, and decays as e^(−t/`decay_s`) every frame after —
+            a lane that spikes and decays until stream B gives triggers a
+            signal kind of their own.
 """
 
 from __future__ import annotations
@@ -142,6 +158,70 @@ class Follower:
                 self.mode, self.v = self.HOLD, 0.0
         if self.y is not None:
             self.y = min(1.0, max(0.0, self.y))
+        return self.y
+
+
+# ---------------------------------------------- the dance sources (plan 24 C4)
+
+def unit(v: float, lo: float, hi: float) -> float:
+    """v over [lo, hi] as 0–1, clamped; lo when the range is empty."""
+    return min(1.0, max(0.0, (v - lo) / (hi - lo))) if hi != lo else 0.0
+
+
+class Smooth:
+    """One reading through `slew`: attack rising, decay falling. Starts
+    where the first reading is (no glide in from nothing); a None reading
+    forgets, so a returning hand starts afresh."""
+
+    __slots__ = ("y",)
+
+    def __init__(self) -> None:
+        self.y: float | None = None
+
+    def step(self, dt: float, x: float | None, attack: float, decay: float) -> float | None:
+        if x is None:
+            self.y = None
+        elif self.y is None:
+            self.y = x
+        else:
+            self.y = slew(self.y, x, dt, attack, decay)
+        return self.y
+
+
+class Flick:
+    """A hit on a sharp move, as a lane that spikes and decays.
+
+    Every render frame `step` decays the output by e^(−dt/decay_s); a
+    frame with a measured `speed` (None: no new tracking frame, nothing
+    measured) can fire it. Schmitt: it fires when the speed reaches `on`
+    and cannot fire again until the speed has dropped under `off`, so one
+    flick is one hit however many frames it spans. While the move lasts
+    the output keeps its peak — the hit's strength, speed / `full` up to
+    1. A speed past `ceiling` is a tracking jump, not a hand: ignored.
+    """
+
+    __slots__ = ("hit", "y")
+
+    def __init__(self) -> None:
+        self.y = 0.0
+        self.hit = False        # fired, not yet re-armed
+
+    def reset(self) -> None:
+        """The hand left: no hit pending, nothing to decay."""
+        self.y, self.hit = 0.0, False
+
+    def step(self, dt: float, speed: float | None, *, on: float, off: float, full: float,
+             decay_s: float, ceiling: float) -> float:
+        if decay_s > 0.0 and dt > 0.0:
+            self.y *= math.exp(-dt / decay_s)
+        if speed is None or not math.isfinite(speed) or speed > ceiling:
+            return self.y
+        if not self.hit and speed >= on:
+            self.hit = True
+        elif self.hit and speed < off:
+            self.hit = False
+        if self.hit and speed >= on:
+            self.y = max(self.y, min(1.0, speed / full) if full > 0.0 else 1.0)
         return self.y
 
 

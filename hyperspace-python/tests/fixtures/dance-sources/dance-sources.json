@@ -1,0 +1,98 @@
+{
+ "schema": "hyperspace.preset/2",
+ "name": "DANCE SOURCES",
+ "note": "Test fixture (plan 24 C4), not a show: each dance source positions one param over its whole throw, so the param reads the source.",
+ "values": {},
+ "routes": [
+  {
+   "source": "hand:left.curl.thumb",
+   "target": "rot.rate.XY",
+   "op": "position"
+  },
+  {
+   "source": "hand:left.curl.index",
+   "target": "rot.rate.XZ",
+   "op": "position"
+  },
+  {
+   "source": "hand:left.curl.middle",
+   "target": "rot.rate.YZ",
+   "op": "position"
+  },
+  {
+   "source": "hand:left.curl.ring",
+   "target": "rot.rate.XW",
+   "op": "position"
+  },
+  {
+   "source": "hand:left.curl.pinky",
+   "target": "rot.rate.YW",
+   "op": "position"
+  },
+  {
+   "source": "hand:right.curl.thumb",
+   "target": "rot.rate.ZW",
+   "op": "position"
+  },
+  {
+   "source": "hand:right.curl.index",
+   "target": "pattern.mod.0",
+   "op": "position"
+  },
+  {
+   "source": "hand:right.curl.middle",
+   "target": "pattern.mod.1",
+   "op": "position"
+  },
+  {
+   "source": "hand:right.curl.ring",
+   "target": "pattern.mod.2",
+   "op": "position"
+  },
+  {
+   "source": "hand:right.curl.pinky",
+   "target": "pattern.mod.3",
+   "op": "position"
+  },
+  {
+   "source": "hand:left.spread",
+   "target": "pattern.mod.4",
+   "op": "position"
+  },
+  {
+   "source": "hand:right.spread",
+   "target": "pattern.mod.5",
+   "op": "position"
+  },
+  {
+   "source": "hand:left.energy",
+   "target": "view.inst_amp",
+   "op": "position"
+  },
+  {
+   "source": "hand:right.energy",
+   "target": "view.speed",
+   "op": "position"
+  },
+  {
+   "source": "hand:left.flick",
+   "target": "view.bright",
+   "op": "position"
+  },
+  {
+   "source": "hand:right.flick",
+   "target": "dream.mix",
+   "op": "position"
+  },
+  {
+   "source": "hands:gap",
+   "target": "camera.zoom",
+   "op": "position"
+  },
+  {
+   "source": "hands:twist",
+   "target": "camera.yaw",
+   "op": "position"
+  }
+ ]
+}

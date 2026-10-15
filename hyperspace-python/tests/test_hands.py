@@ -405,9 +405,9 @@ def test_lanes_carry_outputs_then_presence_then_pinches():
     run(r, 1, hand())
     lanes = r.io.lanes()
     # 12 axes, 2 presence, 8 pinch switches
-    assert len(lanes) == 22 and r.io.lane_names[12:14] == ["L in", "R in"]
+    assert len(lanes) == 38 and r.io.lane_names[12:14] == ["L in", "R in"]
     assert all(math.isnan(u) for u in lanes[:6]) and lanes[12:14] == [0.0, 1.0]
-    assert lanes[14:] == [0.0] * 8          # a palm-only hand pinches nothing
+    assert lanes[14:22] == [0.0] * 8        # a palm-only hand pinches nothing
     assert r.io.lane_names[14:16] == ["L ind", "L mid"]
 
 
@@ -937,7 +937,7 @@ def test_pinches_drive_lanes_and_notes():
     # thumb to index only
     pinched = lambda: hand(tips=(10.0, 60.0, 60.0, 60.0), palm_w=100.0)
     run(r, 2, open_hand())
-    assert r.io.lanes()[14:] == [0.0] * 8
+    assert r.io.lanes()[14:22] == [0.0] * 8
     msgs = run(r, 2, pinched())
     on = [m for m in msgs if m.type == "note_on"]
     assert len(on) == 1 and on[0].note == 104          # right index = 100 + 4
@@ -955,14 +955,14 @@ def test_a_hand_that_leaves_releases_its_pinches():
     assert on == [104, 105, 121]          # index, middle, and the presence note
     off = [m for m in run(r, 2) if m.type == "note_off"]   # no hands at all
     assert sorted(m.note for m in off) == [104, 105, 121]  # index, middle, presence
-    assert r.io.lanes()[14:] == [0.0] * 8
+    assert r.io.lanes()[14:22] == [0.0] * 8
 
 
 def test_pinch_gates_can_be_turned_off():
     r = rig(pinch_gates=False)
     msgs = run(r, 2, hand(tips=(10.0, 10.0, 10.0, 10.0), palm_w=100.0))
     assert not any(m.note >= 100 and m.note < 120 for m in msgs if m.type == "note_on")
-    assert r.io.lanes()[14:] == [0.0] * 8
+    assert r.io.lanes()[14:22] == [0.0] * 8
 
 
 def test_pinch_ratios_can_be_axes_too():
@@ -1117,7 +1117,7 @@ def test_the_adapter_publishes_its_switches_as_gates(app):
     assert len(rests) == len(lanes)
     assert rests[:len(r.s.axes)] == [a.rest_value for a in r.s.axes]
     assert rests[r.io.axis("left.x")] == 0.5 and rests[r.io.axis("left.y")] == 0.0
-    assert rests[len(r.s.axes):] == [0.0] * 10
+    assert rests[len(r.s.axes):] == [0.0] * 26
     r.s.axes[r.io.axis("left.y")].rest_value = 0.2                     # the setup says so
     run(r, 1, hand(), router=app.router)
     assert app.router.rests["hand"][r.io.axis("left.y")] == 0.2
@@ -1177,14 +1177,14 @@ def test_the_layout_is_one_object_published_once_and_rests_on_change():
     # every lane has one address name: the axes as dofs spells them, the
     # presence lanes, the switches
     assert lay.addresses == hands.addresses(r.s.axes) == hands.default_addresses()
-    assert lay.index == {n: i for i, n in enumerate(lay.addresses)} and len(lay.index) == 22
+    assert lay.index == {n: i for i, n in enumerate(lay.addresses)} and len(lay.index) == 38
     assert lay.index["right.roll"] == ax(r, "right.roll")
     assert lay.index["left.present"] == lay.presence["left"]
     assert lay.index["right.pinch.index"] == r.io.gate_lane("right", "index")
     assert [r.io.address(i) for i in (0, 11, 13, 21)] == [
         "hand:left.x", "hand:right.yaw", "hand:right.present", "hand:right.pinch.pinky"]
     rests = router.rests["hand"]
-    assert len(lay.names) == len(rests) == len(r.io.lanes()) == lay.n == 22
+    assert len(lay.names) == len(rests) == len(r.io.lanes()) == lay.n == 38
     # the index maps agree with the vector lanes() fills
     lanes = r.io.lanes()
     assert lanes[lay.presence["right"]] == 1.0 and lanes[lay.presence["left"]] == 0.0
@@ -1196,7 +1196,7 @@ def test_the_layout_is_one_object_published_once_and_rests_on_change():
     # nothing republished while nothing changed: the same objects
     assert router.labels["hand"] is lay.names and router.rests["hand"] is rests
     assert router.names["hand"] is lay.index
-    assert len(router.fed) == 4                       # feed is every frame
+    assert [s for s, _ in router.fed].count("hand") == 4  # feed is every frame
     r.s.axes[ax(r, "left.y")].rest_value = 0.3        # the setup moved a rest
     run(r, 1, hand(), router=router)
     assert router.rests["hand"] is not rests
