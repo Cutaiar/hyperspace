@@ -33,12 +33,14 @@ def _bone(a, b, w) -> NS:
 
 
 def hand(side: str = "right", grip: str = "open", at=(0.0, 200.0, 0.0), conf: float = 1.0,
-         spread: float = 1.0, roll: float = 0.0) -> NS:
+         spread: float = 1.0, roll: float = 0.0, close: float | None = None) -> NS:
     """A hand namespace. `grip` "open" or "fist"; `at` the palm in mm.
     `spread` past 1 fans the fingers apart (FAN), `roll` turns the whole
     hand about its fingers' axis, degrees, thumb up for + on either hand
-    (the anatomical roll `features` reads). The defaults are the hand the
-    tests have always had."""
+    (the anatomical roll `features` reads). `close`, 0 … 1, bends the four
+    fingers that far from open toward a fist whatever `grip` says (the
+    thumb follows `grip`): a half-closed hand. The defaults are the hand
+    the tests have always had."""
     palm = np.asarray(at, dtype=float)
     f = np.array([0.0, 0.0, -1.0])                          # fingers forward
     n0 = np.array([0.0, -1.0, 0.0])                         # palm down
@@ -47,6 +49,8 @@ def hand(side: str = "right", grip: str = "open", at=(0.0, 200.0, 0.0), conf: fl
     n = math.cos(r) * n0 + math.sin(r) * s0                 # the thumb side rises
     s = math.cos(r) * s0 - math.sin(r) * n0
     bends = FIST if grip == "fist" else OPEN
+    if close is not None:
+        bends = tuple(o + close * (c - o) for o, c in zip(OPEN, FIST))
     digits = {}
     for name, (lat, scale) in FINGERS.items():
         base = palm - f * 38.0 + s * lat * 0.45

@@ -404,8 +404,8 @@ def test_lanes_carry_outputs_then_presence_then_pinches():
     r = rig()
     run(r, 1, hand())
     lanes = r.io.lanes()
-    # 12 axes, 2 presence, 8 pinch switches
-    assert len(lanes) == 38 and r.io.lane_names[12:14] == ["L in", "R in"]
+    # 12 axes, 2 presence, 8 pinch switches, then 16 dance lanes and 2 grabs
+    assert len(lanes) == 40 and r.io.lane_names[12:14] == ["L in", "R in"]
     assert all(math.isnan(u) for u in lanes[:6]) and lanes[12:14] == [0.0, 1.0]
     assert lanes[14:22] == [0.0] * 8        # a palm-only hand pinches nothing
     assert r.io.lane_names[14:16] == ["L ind", "L mid"]
@@ -1104,9 +1104,10 @@ def test_the_adapter_publishes_its_switches_as_gates(app):
     r = rig()
     run(r, 1, hand(), router=app.router)
     gates = app.router.gates["hand"]
-    assert len(gates) == 8
+    assert len(gates) == 10
     assert gates[0] == (r.io.gate_lane("left", "index"), "L ind")
-    assert gates[-1] == (r.io.gate_lane("right", "pinky"), "R pin")
+    assert gates[7] == (r.io.gate_lane("right", "pinky"), "R pin")
+    assert gates[-1] == (r.io.layout.grab["right"], "R grab")
     # every published gate names a real lane
     lanes = r.io.lanes()
     assert all(0 <= i < len(lanes) for i, _ in gates)
@@ -1117,7 +1118,7 @@ def test_the_adapter_publishes_its_switches_as_gates(app):
     assert len(rests) == len(lanes)
     assert rests[:len(r.s.axes)] == [a.rest_value for a in r.s.axes]
     assert rests[r.io.axis("left.x")] == 0.5 and rests[r.io.axis("left.y")] == 0.0
-    assert rests[len(r.s.axes):] == [0.0] * 26
+    assert rests[len(r.s.axes):] == [0.0] * 28
     r.s.axes[r.io.axis("left.y")].rest_value = 0.2                     # the setup says so
     run(r, 1, hand(), router=app.router)
     assert app.router.rests["hand"][r.io.axis("left.y")] == 0.2
@@ -1175,23 +1176,24 @@ def test_the_layout_is_one_object_published_once_and_rests_on_change():
     assert router.names["hand"] is lay.index                 # name → lane (row 20)
     assert r.io.lane_names is lay.names
     # every lane has one address name: the axes as dofs spells them, the
-    # presence lanes, the switches
+    # presence lanes, the pinch switches, the dance sources, the grabs
     assert lay.addresses == hands.addresses(r.s.axes) == hands.default_addresses()
-    assert lay.index == {n: i for i, n in enumerate(lay.addresses)} and len(lay.index) == 38
+    assert lay.index == {n: i for i, n in enumerate(lay.addresses)} and len(lay.index) == 40
     assert lay.index["right.roll"] == ax(r, "right.roll")
     assert lay.index["left.present"] == lay.presence["left"]
     assert lay.index["right.pinch.index"] == r.io.gate_lane("right", "index")
     assert [r.io.address(i) for i in (0, 11, 13, 21)] == [
         "hand:left.x", "hand:right.yaw", "hand:right.present", "hand:right.pinch.pinky"]
     rests = router.rests["hand"]
-    assert len(lay.names) == len(rests) == len(r.io.lanes()) == lay.n == 38
+    assert len(lay.names) == len(rests) == len(r.io.lanes()) == lay.n == 40
     # the index maps agree with the vector lanes() fills
     lanes = r.io.lanes()
     assert lanes[lay.presence["right"]] == 1.0 and lanes[lay.presence["left"]] == 0.0
     assert all(lay.gate[(s, f)] == r.io.gate_lane(s, f) for s in hands.SIDES
                for f in hands.PINCHES)
     assert lay.gates == [(lay.gate[(s, f)], lay.names[lay.gate[(s, f)]])
-                         for s in hands.SIDES for f in hands.PINCHES]
+                         for s in hands.SIDES for f in hands.PINCHES] + [
+        (lay.grab[s], lay.names[lay.grab[s]]) for s in hands.SIDES]
     run(r, 3, hand(), router=router)
     # nothing republished while nothing changed: the same objects
     assert router.labels["hand"] is lay.names and router.rests["hand"] is rests
