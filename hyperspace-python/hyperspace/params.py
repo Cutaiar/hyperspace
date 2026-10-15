@@ -1186,6 +1186,10 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     fx = fx if fx is not None else FxState()
     declare_fx(r, fx)
     fx.on_specs = lambda names: declare_fx(r, fx, names)
+    # the stack the fx.* params write, for whoever declares more of them:
+    # a preset's graph holding an effect twice (plan 26 A4,
+    # preset.GraphSection — `fx.acid.2.*`)
+    r.fx_state = fx
     # the ghost hands' display (ghost.py; the renderer's Ghost.state)
     declare_ghost(r, ghost if ghost is not None else GhostState())
 
