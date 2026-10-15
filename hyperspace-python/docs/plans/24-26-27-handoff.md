@@ -54,10 +54,21 @@ Open, not merged (check `gh pr list --base plan-24-26-27-integration`):
   session ended: read the PR's last commit and its "Review round 1"
   section; if the fixes are in, do one scoped re-read and merge.
 - **#190 A4b** (`plan-26-a4b-points`): the point-cloud geometry node
-  (kind name `cloud`, `graph.CLOUD_KIND`; 4 new goldens, 548 total). A
-  review was dispatched and never read. Review it (spec + quality; its
-  overlap with A4 is `default_graph`'s `clouds` argument, `Graph.clouds`,
-  `_graph_for`'s key), then merge after A4.
+  (kind name `cloud`, `graph.CLOUD_KIND`; 4 new goldens, 548 total).
+  **Reviewed and approved**, minors only (size the colour buffer from the
+  float32-converted array in `_CloudGL.upload`; the depth test asserts only
+  `front > 0 and back > 0`; no GL test combines a cloud with hands in the
+  scene; `Renderer.__init__` never sets `_cloud_gl`). Merge it **after
+  A4**; whoever resolves must keep: `default_graph(views, wiring,
+  clouds=())` with the clouds as the scene's first geometries;
+  `Graph.clouds` set by A4's JSON loader too (else `_graph_for` rebuilds
+  every frame when a cloud is listed); `_graph_for`'s key gaining
+  `cloud_roles(...)`; the `.graph` import of `cloud_roles` in `render.py`;
+  the completeness count and manifest keys in `tests/test_golden_frames.py`
+  / `tools/golden_frames.py` (both WPs add states). Decide whether a JSON
+  graph that wires `{"kind": "cloud", "role": …}` also gets the automatic
+  clouds (two nodes for one role otherwise); a second cloud node still
+  shares `cloud.*` (A4's naming rule should give `cloud.2` its own).
 - **#189 fix-exit-crash**: the "Python closed unexpectedly" dialog at exit.
   Cause found with the crash reports: pyGLFW's `glfw.terminate()` frees
   every window's Python callbacks before the windows are destroyed, and on
