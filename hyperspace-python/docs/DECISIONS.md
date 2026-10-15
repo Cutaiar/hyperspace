@@ -10,7 +10,8 @@ behaviour in [`ENGINEERING.md`](ENGINEERING.md).
 - **owner**: settled with the owner.
 - **row N**: built on a recommendation during an unattended run (rows
   34–88 on 2026-10-04, rows 89–108 in plan 22 on 2026-10-06, rows
-  110–139 in plan 24 and rows 140–168 in plan 27 on 2026-10-14). The owner
+  110–139 in plan 24, rows 140–168 in plan 27 and rows 169–209 in plan
+  26 on 2026-10-14). The owner
   has still to confirm or overturn it in
   [`DECISION-REGISTER.md`](DECISION-REGISTER.md) under that row number.
 
@@ -67,7 +68,7 @@ replaces a row, rewrite that row instead of adding a new one.
 | Key modifiers are part of a row's source (`key:SHIFT+B`, `key:CONTROL+Z`; SHIFT, SUPER, CONTROL). A key press fires only the row whose modifiers match exactly what is held. | `routing.MODIFIERS`, `Router.keys` | row 34 |
 | R, F1–F8, ⇧F1–F8, undo/redo and Home are binding-table rows, so they can be rebound. An older file gets each one only where its key is free. Cmd+R, Esc/Q and ↑/↓ stay in the loop. | `routing.LOOP_KEY_ROWS` | owner |
 | `view.instances` goes down to 0, which shows "0 · nothing drawn": the ground, the echoes, the effects, the ghost hands and the dim still run. There is no separate "blank" param. | `params.py` `view.instances` | row 47 |
-| Not modulatable: `dream.layer`, `dream.gap` and `dream.res` (each change rebuilds something); `tempo.tap`; `output.dim` and every `output.N.*` switch; `ghost.mirror`, `ghost.guide`, `ghost.tethers` and `ghost.style`; and every `fx.<name>.target`. Still modulatable: `fx.face_map`, `ghost.on`, `ghost.alpha`, `lfo.trigger`, `lfo.N.reset` and `preset.home`. | each `register` | rows 40, 49, 66, 87, 88; tap: owner |
+| Not modulatable: `dream.layer`, `dream.gap` and `dream.res` (each change rebuilds something); `tempo.tap`; `output.dim` and every `output.N.*` switch; `ghost.mirror`, `ghost.guide`, `ghost.tethers` and `ghost.style` (and a second hands node's, `ghost.2.*`); every `fx.<name>.target`; `eye.fov` and `eye.distance` (the camera is the rig); `cloud.colors`. Still modulatable: `fx.face_map`, `ghost.on`, `ghost.alpha`, `lfo.trigger`, `lfo.N.reset`, `preset.home`, `view.screen_strokes` and `cloud.size` / `scale` / `bright`. | each `register` | rows 40, 49, 66, 87, 88, 182, 190, 206; tap: owner |
 | **A hand Learn onto a non-modulatable param is refused in words** and makes no row. A preset's saved route onto a known non-modulatable param is dropped at load with a note, and the file is not rewritten. | `Learn.learn_source`, `Presets.load_doc` | row 88 |
 
 ## Learn, Unbind and mapping
@@ -112,7 +113,8 @@ replaces a row, rewrite that row instead of adding a new one.
 | The dance sources and the grab have no settings of their own, send nothing to the DAW, and are not offered by a hand Learn: pick them on ROUTING. The HANDS page shows them in a column beside the axes. | `hands/panel.py` `_dance`, `_grab` | rows 129, 130 |
 | The hands package is liftable: `core.py`, `signal.py` and `tape.py` import nothing from the host; `device.py` and `panel.py` are the only files that know it. | `tests/test_hands_boundary.py` | owner |
 | Pinch switches are a Schmitt trigger plus a debounce. | `hands/core.py` `Gate` | owner |
-| Hand settings live in three places, each where it changes: rig settings in the hands device's entry (`[[devices]] kind = "hands"`, or the old `[hands]` table), the room (ranges and box) in `hands.json`, and the feel (including `hands.learn_depth`) in the hands params. | `hands/core.py` | owner |
+| Hand settings live in three places, each where it changes: rig settings in the hands device's entry (`[[devices]] kind = "hands"`, or the old `[hands]` table), the room (ranges, box and, since plan 26, the calibration into the shape's world, `units`) in `hands.json`, and the feel (including `hands.learn_depth`) in the hands params. | `hands/core.py` | owner |
+| **The Leap is calibrated into the shape's world** (plan 26, decision 4): `hands.json` is `hyperspace.hands/3` with `"units": {"mm", "origin", "tilt"}`, "from the box" by default — the padded box fitted into a 16:9 picture of the eye, tilted 32°; an older file is kept as `hands.json.bak-v2` before the first rewrite. | `hands.core.Units`, `ghost.calibration`, `CAL_ASPECT` | owner (the calibration in `hands.json`); row 187 (its form and fit) |
 | **The interaction box** bounds the palm in the Leap's mm. It is one box for both hands, with x symmetric. The calibration sweep sets it (2nd–98th percentile + `BOX_MARGIN`) and "reset ranges" opens it. No widget edits it. Its edge is a Schmitt edge (`BOX_EDGE`). | `load_box`, `inside`, `HandsIO._sweep_box` | row 50 |
 | **A hand outside the box is absent everywhere**: NaN axes, presence off, pinches dropped and its ghost faded. Only the HANDS page shows it, drawn hollow. | `HandsIO.poll`, `ghost.box_of` | row 51 |
 | Home on the keyboard is `key:HOME` only (fn ← on a laptop). | `routing.LOOP_KEY_ROWS` | row 38 |
@@ -159,7 +161,23 @@ replaces a row, rewrite that row instead of adding a new one.
 
 | Decision | Where | Who |
 |---|---|---|
-| The CPU transforms through the parity-proven `project()` and the GPU rasterises. Edges are screen-space quads at the reference width. | `render.py` | owner |
+| **The frame is a render graph** (plan 26): nodes of a curated set of built-in kinds — **Geometry** (draw calls in the shared camera, no framebuffer of its own: the shape, the hands, a point cloud), **Scene** (any number of geometries into one colour + depth target), **Layer** (one geometry into its own target), **Composite** (over, add or depth-aware) — plus the effect chain, the history and the outputs; evaluated once a frame in dependency order, settled when the graph is built. | `graph.py`, `Renderer._draw_frame` | owner (decisions 2, 7) |
+| The FX, History and Output wrappers: one FX node per pipeline over the one chain; the history as `history` (echoes and dream over its input) and `capture` (the ring, once a frame, after every pipeline); the Output node is `_compose`. Made images (scene, layers) are pulled by their consumers; painted images (history, composite, FX) draw into the consumer's framebuffer, so nothing is quantised between them. The cover mask is a layer node. | `graph.Fx`, `History`, `Capture`, `Output`, `Cover`, `Node` | rows 176–179, 181 |
+| **Today's three pipelines are the default graph**, built from each output's switches (and the renderer's `Wiring`, and the listed clouds), reused until one changes; evaluating them in dependency order changed no pixel. | `graph.default_graph`, `Renderer._graph_for` | owner (decision 7); row 180 (the key) |
+| **Step 0 came first**: golden frames of every factory preset in every output state (556 today, compared to the byte on "Apple M3 Max"), GPU time per node on the SYSTEM page, and the naming rule. | `tools/golden_frames.py`, `tests/test_golden_frames.py`, `render.PassTimer` | owner (decision 8); rows 170–175 (the rig, the timer) |
+| **The naming rule**: the first instance of a node keeps today's ids (`fx.acid.mix`, `ghost.alpha`); only an extra instance carries its number right after the prefix (`fx.acid.2.mix`, `ghost.2.alpha`, its layer `hands.2`); the group never changes, so nothing migrates. No effect file or `@param` key may be digits alone. | `params.instance_id`, `instance_of`, `fx.FxState.set_instances`, `ghost.prefix` | owner (the rule); rows 169, 198 (the marker's form, its use) |
+| **The render stack reads params and never writes one**; adapters only `feed`; no render node or graph method is named `apply`, `modulate`, `snapshot` or `set_value`; `graph.py` imports no `params`, `routing`, `library`, `preset`, `undo`, `control` or `devices`. | `tests/test_render.py::test_the_render_stack_imports_no_registry`, `tests/test_graph.py::test_graph_imports_only_the_render_stack_and_names_no_write` | owner (decision 16) |
+| **The shape's transform** (decision 4): `rot.*` is its local 4D tumble; `camera.yaw` / `camera.pitch` its world pose (ids unchanged); `camera.zoom` / `camera.pan` its world scale and position. The whole-frame 2D zoom is gone until an image node brings it back. The CPU takes the shape to 3D (`geometry.world_points`); the vertex shaders take it to the clip through one shared 4×4. `project()` stays the parity oracle. | `geometry.model_matrix`, `world_points`, `render.py` | owner |
+| **A fixed camera, the eye** (`eye.fov`, `eye.distance`), framed on the Leap box, is session (no preset moves it). Its defaults are the old 3D divide: every vertex within 1.1e-4 px of `project_h` in float32 (the bar is 0.5 px). | `geometry.eye_matrix`, `EYE_FOV`, `EYE_DISTANCE` | owner (the eye); row 182 (ids, defaults) |
+| `camera.pan` is in world units (±12 shape radii); a file without `"units": {"camera.pan": "world"}` stored px and is converted through the 1080p screen (324 px a unit) at load, presets and camera modules alike; every save writes the marker. Copies are in the world (`render.CELL`). | `params.pan_world`, `PAN_RANGE`, `geometry.PAN_REF_PX` | rows 183, 184 |
+| **Lines and points have a real depth**: quads expanded in the vertex shader from 3D ends, their width following depth and brightness. The see-through shape stays painter-sorted and is never depth-tested against itself; its visible surface (alpha over 0.25) is written to depth after its colour. A point's quad is a whole number of pixels; a stroke end behind the eye is slid in front of it. | `render.LINE_VS`, `POINT_VS`, `DEPTH_ALPHA`, `Renderer._depth_pass` | owner (decision 5); rows 185, 186, 188 |
+| **Strokes in world space or screen space** (`view.screen_strokes`, part of the look): edge width and dot radius either scale with `camera.zoom` — the pre-plan-26 feel — or keep their pixel weight whatever the zoom. Off (world space) by default. | `view.screen_strokes`, `Renderer.draw_scene` | owner (2026-10-14: the toggle); rows 189, 190 (the default, the form) |
+| **The hands in the scene or as a layer, or both at once** (decision 3): in the scene, solid geometry is drawn first, then the sorted see-through shape; as a layer, its own colour and depth target composited over, added or depth-aware. The same hands can be in the scene on the projector and a clean layer on the glass. | `graph.Hands`, `Scene`, `HandsLayer`, `Composite`, `graph.Wiring` | owner |
+| Hands inside the scene are solid (`ghost.alpha` sets only their layer; 0 still removes them). A depth-aware layer hides a texel where the scene's visible surface is nearer by more than 0.05 shape radii. | `Ghost.draw_solid`, `render.LAYER_DEPTH_BIAS` | rows 191, 192 |
+| The OUTPUT switches set the default graph's wiring; `Wiring` (hands in the layer or the scene, how the layer is laid on, what the history holds) is renderer-wide, its default today's frame, set only by a preset's graph. | `graph.default_graph`, `Wiring`, `Renderer.wiring` | rows 193, 194 |
+| **A preset may say its graph in data**: a `graph` section listing the nodes that differ from the default (`hands`, `effect`, `history`), never anything that is a param. No section is the default graph; a section this build cannot read is a note and the default graph, kept as written. A `cloud` kind is unknown in this run (clouds follow the device list). | `graph.read_graph`, `preset.GraphSection` | rows 196, 197 |
+| A second hands node is its own `Ghost` with its own `ghost.2.*` (session) settings; the in-scene nodes go in the scene, the layer node on the outputs without the hands in their scene; a hands node is timed by the scene that draws it; a hands node may be drawn as lines; the pages say the wiring in words; undo puts the graph back. | `Renderer.ghost_of`, `graph.default_graph`, `Graph.timed`, `ui.output_shows` | rows 195, 199–203 |
+| **A point cloud is a geometry**: a listed `cloud` device adds a solid point-cloud node to the default scene, drawn in the shared camera at its own scale (`cloud.*`, session). | `graph.PointCloud`, `Renderer.cloud_source` | owner (decision 2: the point cloud among the geometries); rows 204–209 |
 | **No imgui on any render output.** Everything for the operator is in the control window. | `app.py` | owner |
 | **A render frame binds its target explicitly**, again on every exit, including a raise. | `app.draw_render`, `Lookback.capture` | owner |
 | **Overlay mode only when the config asks** (`[output] overlay = true`, default off). Window and fullscreen are always opaque, and `view.cut_through` applies only in overlay. | `Output.allowed` | owner |
@@ -172,11 +190,11 @@ replaces a row, rewrite that row instead of adding a new one.
 | In overlay mode the dim fades colour and alpha together. On an opaque ground only the colour scales. | `Renderer.dim_pass` | row 41 |
 | **The hands show on the main projection by default**: each output's `hands` switch defaults on, and the rig's projector entry says `hands = true`. Nothing in a preset. | `config.SCREEN`, `docs/SETUP.md` | owner; row 133 (the line is in SETUP.md, not the home) |
 | **Lines and points have an opacity each** (`view.lines_alpha`, `view.points_alpha`), 1 by default, so the picture is as it was until one is moved. | `params.py`, `Renderer.draw_scene` | owner (a mix wherever a layer lacks one); row 117 (the ids) |
-| **The ghost hands** are drawn once a frame into their own layer, in a fixed camera framing the box. They are composited per output after the effects and before the dim, and they are never in the look-back history. `ghost.*` are session params, off by default. A raising hands pass is caught. | `ghost.py`, `Ghost.layer`, `Ghost.composite` | owner |
+| **The ghost hands** are a geometry in the shape's camera (plan 26), settled once a frame; by default drawn into their own layer and laid on per output after the effects and before the dim, and not in the look-back history (a preset's graph may put them in the scene or the history). `ghost.*` are session params, off by default. A raising hands pass is caught. | `ghost.py`, `graph.Hands`, `graph.HandsLayer` | owner |
 | `ghost.on` says whether the hands are drawn at all, and each output's hands tick says where they show. | `outputs.route` | row 84 |
 | **`ghost.style`** picks one of five drawn objects from the same tracking data: HANDS (the default), JOINTS, PALMS, CAGE and MARIONETTE. | `ghost.PARTS` | owner |
 | `ghost.style` is a session enum, saved with the show and learnable onto a desk control. | `ghost.register` | row 87 |
-| **Hands through effects** (`output.N.through`, off by default). When on, that output's hands go in after the look-back composite and before the first effect. With the scene off and through on, the output shows the hands alone through the effects. | `Renderer._pipeline` | owner (switch); row 79 (where they go in) |
+| **Hands through effects** (`output.N.through`, off by default). When on, that output's hands' layer is composited after the look-back composite and before the first effect. With the scene off and through on, the output shows the hands alone through the effects. | `graph.default_graph` (`composite(scene+hands)`, `fx(scene+hands)`) | owner (switch); rows 79, 193 (where they go in) |
 | The guide and the tethers' labels are never bent: when hands go through effects, they are drawn in a layer of their own laid on afterwards. | `Ghost.readout` | row 80 |
 | **Instances are laid out by `view.inst_layout`: GRID, HEX or RING.** | `render.inst_positions` | row 71 |
 
@@ -199,6 +217,7 @@ replaces a row, rewrite that row instead of adding a new one.
 | The FX page packs a strip's `_lo`/`_hi` and `_hue`/`_sat`/`_val` params onto one row, and the palette shows only its open mode's rows. | `ui_fx.strip_rows`, `HIDDEN_BY_MODE` | row 139 |
 | **The dream is temporal**: one running buffer blended with each frame, a few gradient steps per frame. | `dream.py` | owner |
 | The compositor re-colours the dream buffer (`dream.hue / sat / tint`). Echoes pass untouched. | `lookback.py` | owner |
+| **The history is wiring** (decision 6): the capture takes a chosen image — the scene (the default, as before) or the scene with the hands. It never holds the frame's effects or the dim. | `graph.Capture`, `Wiring.history` | owner |
 | `dream.occlude` ("Shape hides wake"): the shape covers the wake where it drew. | `params.py` | owner |
 | Echo time is in seconds: `dream.fade` is a half-life and `dream.gap` is the time between echoes. | `params.py` | owner |
 | The LOOKBACK page has three sections: ECHOES, DREAM and BOTH. The dream layer is one menu of every layer of VGG16 and GoogLeNet (25), grouped by net, each with its name and a short description, a longer one on hover; the registry labels match the page. | `ui_lookback.SECTIONS`, `lookback.LAYER_INFO` | row 69 |
@@ -228,7 +247,7 @@ replaces a row, rewrite that row instead of adding a new one.
 | Decision | Where | Who |
 |---|---|---|
 | The library home is `~/Hyperspace` (or `HYPERSPACE_HOME` / config). Factory files ship read-only in the repo, and a user file shadows a factory file of the same name. | `library.py` | owner |
-| A module preset is one group's values (`hyperspace.preset/1`), a preset is `hyperspace.preset/2` and a show is `*.hyp.json` (`hyperspace.project/2`). Unknown ids are reported, not fatal. | `library.py` | owner |
+| A module preset is one group's values (`hyperspace.preset/1`), a preset is `hyperspace.preset/2` and a show is `*.hyp.json` (`hyperspace.project/2`). Unknown ids are reported, not fatal. A preset may carry a `graph` section (plan 26) and a `units` marker for `camera.pan`; neither bumps the schema. | `library.py`, `preset.py` | owner; rows 183, 196 |
 | The library is watched like source: editing a file shows in the running app. The library's own renames and trash moves are never re-applied. | `hotreload.py`, `Library._sync` | owner |
 | `<home>/bindings.json` holds only the session's controls, the sink rows among them (sinks are rig). A show carries no routing of its own. | `routing.FILE` | owner |
 | **A preset file about to be overwritten or deleted is copied to `<home>/trash/` first.** | `library.to_trash` | owner |
@@ -315,8 +334,9 @@ The D-numbers are cited from code comments.
 |---|---|
 | Each code PR gets a `/code-review` before merge. Agents work on their own branches, and the owner merges. | owner |
 | Agent work lands on an integration branch, never on `main` (`finish-line` through plan 21, `plan-22-integration` for plan 22, `plan-24-26-27-integration` for plans 24, 26 and 27); the owner merges it into `main`. | owner |
-| **A run that builds mechanisms edits and adds no preset** (plans 24, 26 and 27, 2026-10-14): every file under `hyperspace/library/` stays byte-identical, and every proof is a fixture under `tests/fixtures/` (force-added: the folder is gitignored) loaded through a scratch library. Fader sets, hand mappings, dance presets, palettes and templates are the owners' creative pass. | owner |
+| **A run that builds mechanisms edits and adds no preset** (plans 24, 26 and 27, 2026-10-14): every file under `hyperspace/library/` stays byte-identical, and every proof is a fixture under `tests/fixtures/` (force-added: the folder is gitignored) loaded through a scratch library. Fader sets, hand mappings, dance presets, palettes, templates and the factory presets' graph wiring are the owners' creative pass. | owner |
 | **Every new param defaults to today's picture**: a new mix or opacity at what the frame does now, a new switch off, a new source at its rest. | owner |
+| **Plans 24, 26 and 27 ran in parallel** (2026-10-12): the render graph is the top priority, the device registry the highest-leverage piece. | owner |
 
 ## Decided not to build
 
@@ -330,4 +350,8 @@ The D-numbers are cited from code comments.
 | A source-first hand learn (click an axis, then a param). | row 64 |
 | A thumbnail of each output in the control window. | row 85 |
 | DJ Link, MIDI clock in and drift correction. | owner |
+| GLSL written inside the render graph, or a general TouchDesigner: nodes are a curated set of built-ins; shaders stay files with hot reload. | owner |
+| Order-independent transparency (deferred): hands inside the scene are solid, drawn before the sorted see-through shape. | owner |
+| Touch shows (fingertips lighting the shape where they meet it) and hand–shape contact: looks for the creative pass, after plan 26 put the hands and the shape in one space. | owner |
+| Evaluating the modulation graph in dependency order (removing the one-frame lag) and a node editor: plan 28. | owner |
 | New 4-polytope families in plan 22: ranked in [`plans/22-polytope-shortlist.md`](plans/22-polytope-shortlist.md); none is built until the owner picks. | owner |
