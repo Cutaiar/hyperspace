@@ -377,6 +377,21 @@ effect presets are `library/fx/*.json`.
   shows face 0's pattern phase; the echoes and the dream carry the
   faces' effects, never the frame's.
 
+**Node instances: the naming rule** (plan 26 A0; `params.instance_id`,
+`params.instance_of`, pinned by `tests/test_params.py`). A render node's
+params are `<node>.<key>`, where `<node>` is the node's prefix —
+`fx.<file>` for an effect, `ghost` for the hands, `dream` for the
+look-back. **The first instance of a node keeps today's ids**
+(`fx.acid.mix`, `ghost.alpha`, `dream.mix`). Only an extra instance is
+marked, and the marker is its number, 2 or more, as a segment **right
+after the prefix**: `fx.acid.2.mix`, `ghost.2.alpha`, `dream.3.mix`.
+The marker is never a new first segment: the first segment is the
+group, the group decides whether a param is in a preset (`part_of`),
+and an extra instance belongs where its first does. So a graph with one
+instance of everything — every preset and binding written before the
+graph — never migrates. No effect file and no param key may be purely
+decimal, or it would read as a marker.
+
 ## 3. Running it
 
 ```bash
