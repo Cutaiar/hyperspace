@@ -1773,6 +1773,8 @@ class Panel:
         self._slider("view.points_alpha", half)
         imgui.same_line()
         self._slider("view.lines_alpha", half)
+        # plan 26 A2b: strokes in world space (grow with the zoom) or screen space
+        self._check("view.screen_strokes")
         self._slider("view.instances")
         if v.instances > 1:
             # the field's one row: how the copies are laid out, how they

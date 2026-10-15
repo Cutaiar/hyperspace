@@ -33,6 +33,12 @@ class ViewState:
     # draw_scene already gives an edge or a point
     lines_alpha: float = 1.0
     points_alpha: float = 1.0
+    # plan 26 A2b (owner, 2026-10-14): where the strokes' weight lives.
+    # False (the default) — world space: the line width and the point
+    # radius are × camera.zoom, so a stroke grows and shrinks with the shape
+    # (the pre-A2 feel). True — screen space: they keep their pixel weight
+    # whatever the zoom (A2's behaviour)
+    screen_strokes: bool = False
     playing: bool = True
     planes: list[bool] = field(default_factory=lambda: [False, False, True, True, False, False])
     ang: list[float] = field(default_factory=lambda: [0.0] * 6)

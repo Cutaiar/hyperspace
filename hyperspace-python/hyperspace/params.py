@@ -942,6 +942,15 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     r.continuous("view.lines_alpha", "Lines opacity", *_attr(view, "lines_alpha"),
                  lo=0.0, hi=1.0, fmt=lambda v: f"lines {v:.2f}", group=g,
                  tip="The lines' opacity: 1 draws them as they always were, 0 not at all.")
+    # plan 26 A2b (owner, 2026-10-14): off — strokes in world space, × the
+    # zoom (main's picture, decision 24); on — screen space, A2's fixed
+    # pixel weight. A performance switch like view.lines: in the preset,
+    # routable and modulatable
+    r.toggle("view.screen_strokes", "Screen strokes", *_attr(view, "screen_strokes"),
+             group=g,
+             tip="Off: the edges and the dots are drawn in world space — they grow and "
+                 "shrink with the shape as you zoom. On: screen space — they keep the "
+                 "same pixel weight whatever the zoom.")
     r.toggle("view.faces", "Faces", *_attr(view, "faces"), group=g,
              tip="Translucent fills on the true 2-faces, under the wireframe. "
                  "First build per shape takes a moment (extraction is cached).")
