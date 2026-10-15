@@ -78,6 +78,7 @@ from . import config, devices, gamepad, lfo, placement, tempo, undo
 from .audio import AudioEngine
 from .bands import CEIL
 from .control import Control
+from .geometry import EYE_DISTANCE, EYE_FOV, px_per_unit
 from .hotreload import HotReloader
 from .learn import Learn
 from .library import Library, Marks
@@ -714,8 +715,11 @@ class Mouse:
             self.pitch.nudge((y - drag["y"]) * 0.005)
             drag.update(x=x, y=y)
         elif btn == "pan":
-            self.pan_x.nudge(x - drag["x"])
-            self.pan_y.nudge(y - drag["y"])
+            # the pan is in world units (plan 26 A2): the shape's centre
+            # follows the cursor
+            unit = _px_per_unit(s, w, h)
+            self.pan_x.nudge((x - drag["x"]) / unit)
+            self.pan_y.nudge((y - drag["y"]) / unit)
             drag.update(x=x, y=y)
         wheel, self._wheel = self._wheel, 0.0
         if wheel:
@@ -754,9 +758,20 @@ def _zoom_about(zoom, pan_x, pan_y, view, wheel: float, x: float, y: float,
     eff = min(max(view.zoom, zoom.lo), zoom.hi)     # apply()'s clamp, to the last bit
     ratio = zoom.scale(2.0 ** (wheel * 0.15))
     factor = min(max(eff * ratio, zoom.lo), zoom.hi) / eff
-    cx, cy = w / 2 + view.pan[0], h / 2 + view.pan[1]
-    pan_x.nudge((cx - x) * (factor - 1))
-    pan_y.nudge((cy - y) * (factor - 1))
+    # plan 26 A2: the zoom scales the shape about the world origin and the
+    # pan is in world units, so the point under the cursor is held in the
+    # world (on the plane through the origin, where a unit is `unit` px)
+    unit = _px_per_unit(view, w, h)
+    cx, cy = view.pan[0], view.pan[1]
+    pan_x.nudge((cx - (x - w / 2) / unit) * (factor - 1))
+    pan_y.nudge((cy - (y - h / 2) / unit) * (factor - 1))
+
+
+def _px_per_unit(view, w: float, h: float) -> float:
+    """Logical px a world unit spans at the origin through the view's eye
+    (geometry.px_per_unit): how far a pan moves the shape on screen."""
+    return px_per_unit(w, h, getattr(view, "eye_fov", EYE_FOV),
+                       getattr(view, "eye_distance", EYE_DISTANCE))
 
 
 def _ride_depth(p, octaves: float) -> None:

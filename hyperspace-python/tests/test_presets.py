@@ -1010,7 +1010,7 @@ ORBIT_ROWS = [("hand:right.x", "camera.yaw", 0.5), ("hand:right.pitch", "camera.
               ("hand:left.y", "camera.zoom", 0.12)]      # not the plan's 0.3: 7.4× blacked the frame
 # a camera the mouse moved before the hands came in: a scene-setter's bases
 MOUSE = {"camera.yaw": 0.5, "camera.pitch": -0.2, "camera.zoom": 1.6,
-         "camera.pan.x": 120.0, "camera.pan.y": -60.0}
+         "camera.pan.x": 0.4, "camera.pan.y": -0.2}     # world units since plan 26 A2
 
 
 def orbit(rig, mouse: dict | None = None):
@@ -1091,12 +1091,14 @@ def test_each_orbit_axis_moves_its_camera_param_as_its_row_says(tmp_path):
     rest the param is its base; the ends are what the depth says — the
     yaw a quarter turn each way, the pitch ±45° (an eighth of the whole
     turn it wraps over since 2026-10-14; ±44° of its old ±1.55), each pan
-    ±400 px, the zoom up from 1× to 800^0.12 = 2.23× at the top and never
+    ±1.2 shape radii (±400 px before plan 26 A2), the zoom up from 1× to
+    800^0.12 = 2.23× at the top and never
     below the base; the move is monotonic; no other camera param moves;
     the hand leaving brings the base back."""
     ends = {"camera.yaw": (-math.pi / 2, math.pi / 2),
             "camera.pitch": (-math.pi / 4, math.pi / 4),
-            "camera.pan.x": (-400.0, 400.0), "camera.pan.y": (-400.0, 400.0),
+            # plan 26 A2: world units, ±1.2 (≈ ±390 px on the 1080p screen; ±400 px before)
+            "camera.pan.x": (-1.2, 1.2), "camera.pan.y": (-1.2, 1.2),
             "camera.zoom": (1.0, 2.23)}                  # 800 ** 0.12, as measured
     assert math.degrees(ends["camera.pitch"][1]) == pytest.approx(45.0)
     for k, (source, target, depth) in enumerate(ORBIT_ROWS):

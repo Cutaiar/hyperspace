@@ -90,6 +90,7 @@ from typing import Any
 
 from . import apc40, routing, undo
 from .bands import BANDS
+from .geometry import pan_px_to_world
 from .lfo import SHAPES, SYNCS
 from .library import (
     F_KEYS,
@@ -236,6 +237,43 @@ def echo_seconds(doc: dict) -> tuple[dict, list[str]]:
     return out, notes
 
 
+# plan 26 A2: camera.pan is in world units (the shape's unit circumradius),
+# no longer logical px. A document saved since says so with this key (the
+# schema stays preset/2: `load_doc` ignores keys it does not know, so an
+# older build still loads the file — reading its pan as px); one without
+# it is a preset/2 file from before, its pan read in px and converted
+UNITS_KEY = "units"
+UNITS = {"camera.pan": "world"}
+PAN_IDS = ("camera.pan.x", "camera.pan.y")
+
+
+def pan_world(doc: dict) -> tuple[dict, bool]:
+    """A preset document with its camera.pan in world units (plan 26 A2):
+    a file without the `units` key stored logical px, which become world
+    units through the default eye on the 1080p screen
+    (`geometry.pan_px_to_world`), so the shape sits where it did there.
+    Only its values are converted: a route's or a desk row's depth and a
+    macro base subscriber's from / to are fractions of the param's range
+    (`Sub.at` lands a norm), and `params.PAN_RANGE` was chosen so that
+    range reaches as far on that screen as the old ±4000 px did (±12 units,
+    ±3888 px). Returns (a copy, whether anything changed); the document
+    itself when it is already in world units or names no pan value."""
+    if (doc.get(UNITS_KEY) or {}).get("camera.pan") == "world":
+        return doc, False
+    values = doc.get("values") or {}
+    if not any(k in values for k in PAN_IDS):
+        return doc, False
+    out = copy.deepcopy(doc)
+    changed = False
+    for pid in PAN_IDS:
+        v = out["values"].get(pid)
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            new = pan_px_to_world(v)
+            changed |= new != v
+            out["values"][pid] = new
+    return out, changed
+
+
 class Presets:
     """The loaded preset over one library, registry and router.
 
@@ -291,6 +329,10 @@ class Presets:
             notes.append(f"look-back read in seconds ({converted[0]}"
                          + (f", +{len(converted) - 1}" if len(converted) > 1 else "")
                          + "); save to keep it")
+        # 0. and its camera.pan in world units (plan 26 A2): a file from
+        #    before stored px. Silent — the shape lands where it was, and a
+        #    factory file is read this way on every load
+        doc, _ = pan_world(doc)
         # 1. what the file names that a preset may not carry — all parsed
         #    before anything lands, so a bad row leaves the state alone
         values: dict[str, Any] = {}
@@ -397,7 +439,7 @@ class Presets:
         doc.update(values=self.reg.snapshot(part="performance"),
                    routes=[b.to_json() for b in table.routes()],
                    desk=desk_json(table.desk()), macros=table.macros_doc(),
-                   modules=modules)
+                   modules=modules, **{UNITS_KEY: dict(UNITS)})
         return doc
 
     def signature(self) -> tuple:
