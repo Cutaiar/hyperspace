@@ -101,7 +101,9 @@ def test_the_fixture_is_what_the_committed_generator_writes(tmp_path):
     f = devices.read_clouds(FIXTURE)
     assert len(f) == gen.FRAMES == 16 and f.rate == gen.RATE == 12.0
     assert f.offsets.tolist() == again.offsets.tolist()
-    assert np.array_equal(f.points, again.points) and np.array_equal(f.colors, again.colors)
+    # trig can differ by an ulp across platforms and numpy builds: close, not equal
+    assert np.allclose(f.points, again.points, atol=1e-6)
+    assert np.allclose(f.colors, again.colors, atol=1e-6)
     sizes = np.diff(f.offsets)
     assert sizes[0] == 96 and len(set(sizes.tolist())) == 16       # every frame its own size
 
@@ -223,3 +225,14 @@ def test_an_off_cloud_entry_opens_nothing():
                                    "file": "nowhere.npz"}])
     rig.open_all()
     assert rig.get("scan").status == "off" and rig.clouds == {}
+
+
+@pytest.mark.parametrize("rate", [-1, 0, "12", True])
+def test_a_bad_rate_is_an_error_line(tmp_path, rate):
+    home, entries = _home(tmp_path, SCAN)
+    rig = devices.DeviceRegistry([{**entries[0], "rate": rate}], devices.Context(home=home),
+                                 notes=[])
+    rig.open_all()
+    assert rig.get("scan").status == (
+        f"error: ValueError: rate = {rate!r} is not a positive number of frames per second")
+    assert rig.clouds == {}

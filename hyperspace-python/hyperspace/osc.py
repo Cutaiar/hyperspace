@@ -16,7 +16,8 @@ module and the registry's kind table (`devices.kinds`).
 (``/1/fader3`` → ``phone:1/fader3``). The axes are one fed vector under
 the role, published with their names, labels and rests (`Router.names`,
 `labels`, `rests`), so a route names ``phone:x`` like ``hand:right.roll``.
-A value is the message's first number, mapped from the entry's `range`
+A value is the message's first number (only the first: an XY pad's second
+value is not read by this proof device), mapped from the entry's `range`
 (default ``[0, 1]``, what most phone apps send) onto 0–1 and clamped. An
 axis no message has reached reads NaN — its routes dormant, never at a
 made-up value — so nothing on screen moves until the phone does.
@@ -27,8 +28,8 @@ pad button's press — a row on ``phone:hit`` with op `fire`, `toggle`,
 `step` or `set` acts when the velocity is above 0 (`routing.act`), `abs`
 lands the velocity itself on the param (a trigger fires), `momentary`
 holds a toggle while the velocity is above 0 and lets go at 0. The
-velocity is the message's first number clamped to 0–1, 1 when the message
-carries none. Hit rows are the session's (`bindings.json`), as the pad's
+velocity is the message's first number clamped to 0–1 (`range` is the
+axes' only), 1 when the message carries none. Hit rows are the session's (`bindings.json`), as the pad's
 are; a Learn armed for the role (`Learn <role>` in a param's menu) takes
 the next hit as a button row or the next axis moved `LEARN_TRAVEL` from
 its rest as a route.
@@ -215,9 +216,8 @@ class OscDevice(Base):
 
     @property
     def timeout(self) -> float:
-        t = self.entry.get("timeout", TIMEOUT_S)
-        return float(t) if isinstance(t, int | float) and not isinstance(t, bool) and t > 0 \
-            else TIMEOUT_S
+        """The entry's `timeout` (checked on open: a bad one is an error line)."""
+        return float(self.entry.get("timeout", TIMEOUT_S))
 
     @property
     def hold(self) -> bool:
@@ -243,6 +243,9 @@ class OscDevice(Base):
             raise ValueError(f"host = {host!r} is not an address")
         if isinstance(port, bool) or not isinstance(port, int) or not 0 <= port <= 65535:
             raise ValueError(f"port = {port!r} is not a UDP port")
+        t = self.entry.get("timeout", TIMEOUT_S)
+        if isinstance(t, bool) or not isinstance(t, int | float) or not (math.isfinite(t) and t > 0):
+            raise ValueError(f"timeout = {t!r} is not a positive number of seconds")
         self.io = Server(host, port)
         self.layout = layout
         self.message = ""
@@ -256,8 +259,9 @@ class OscDevice(Base):
         router = self.__dict__.pop("_router", None)
         super().close()
         self._reset()
-        if router is not None:
-            router.feed(self.role, None)
+        if router is not None:          # gone from the router: no lanes, no names, no offer
+            for d in (router.feeds, router.labels, router.rests, router.names):
+                d.pop(self.role, None)
 
     # ---- the status line ----
 

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import ast
 import math
+import re
 import shutil
 import socket
 import subprocess
@@ -133,9 +134,13 @@ def test_an_osc_entry_alone_adds_the_device_and_a_fader_moves_a_routed_param(tmp
     assert reg["camera.pitch"].eff_norm == pytest.approx(min(1.0, pitch0 + 0.25), abs=1e-6)
     assert ui.device_lines(s.rig) == [
         f"phone  ·  osc  ·  connected  ·  4 sources  ·  UDP 127.0.0.1:{d.io.port}  ·  /y 1"]
-    s.rig.close()
+    s.rig.apply([])                                   # the entry removed from config.toml
     assert d.io is None and d.status == "lost"
-    assert s.app.router.feeds["phone"] is None          # a held value does not outlive it
+    router = s.app.router
+    # gone from the router: no held value, and no longer offered on ROUTING
+    for d in (router.feeds, router.labels, router.rests, router.names):
+        assert "phone" not in d
+    assert "phone" not in router.schemes()
 
 
 def test_a_hit_with_velocity_fires_its_rows(tmp_path):
@@ -262,6 +267,8 @@ def test_a_busy_port_is_an_error_line_and_comes_up_when_it_frees(tmp_path):
     ({"rest": "low"}, "rest for /x = 'low' is not a number"),
     ({"range": [1, 1]}, "range = [1, 1] is not [low, high]"),
     ({"port": 70000}, "port = 70000 is not a UDP port"),
+    ({"timeout": "5"}, "timeout = '5' is not a positive number of seconds"),
+    ({"timeout": 0}, "timeout = 0 is not a positive number of seconds"),
 ])
 def test_a_bad_entry_is_an_error_line_never_a_crash(entry, why):
     full = {"role": "phone", "kind": "osc", "enabled": True, "host": "127.0.0.1", "port": 0,
@@ -347,7 +354,7 @@ def test_only_osc_py_and_the_kind_table_name_the_osc_device():
     assert sorted(naming) == ["devices.py", "hotreload.py", "osc.py"]
     assert set(naming["devices.py"]) == {"kinds"}
     assert set(naming["hotreload.py"]) == {""}                   # MODULES
-    assert "osc" not in (PKG / "app.py").read_text().lower()
+    assert re.search(r"\bosc\b", (PKG / "app.py").read_text(), re.IGNORECASE) is None
 
 
 def test_the_osc_value_mapping():
@@ -356,3 +363,35 @@ def test_the_osc_value_mapping():
     assert [lay.norm(v) for v in (-10, 0, 10, 99)] == [0.0, 0.5, 1.0, 1.0]
     assert osc._number(["a", True, 3, 0.5]) == 3.0 and osc._number(["a"]) is None
     assert osc._number([float("nan"), 0.25]) == 0.25
+
+
+def test_a_session_hit_row_waits_while_its_device_is_not_listed(tmp_path):
+    """Decision 11 for a hit row: `bindings.json` keeps a ``phone:hit``
+    toggle row — loaded and written back unchanged — while no phone is
+    listed (`Bindings.load` runs only the referee). The one refusal tied
+    to the device's absence is interactive: re-enabling a disabled hit
+    row while no phone is listed is refused (`_check`), and accepted once
+    the registry lists the phone."""
+    from hyperspace import routing
+
+    path = tmp_path / "bindings.json"
+    table = routing.Bindings.load(path, legacy_midi=None)
+    on = Binding("phone:hit", "view.points", "toggle")
+    off = Binding("phone:pad", "view.lines", "fire", enabled=False)
+    table.bindings += [on, off]
+    table.write()
+    again = routing.Bindings.load(path, legacy_midi=None)
+    rows = {(b.source, b.target, b.op, b.enabled) for b in again.bindings
+            if b.source.startswith("phone:")}
+    assert rows == {("phone:hit", "view.points", "toggle", True),
+                    ("phone:pad", "view.lines", "fire", False)}
+    again.write()
+    assert "phone:hit" in path.read_text() and "phone:pad" in path.read_text()
+    (row,) = [b for b in again.bindings if b.source == "phone:pad"]
+    with pytest.raises(ValueError, match="'fire' is not an op for a phone source"):
+        again.enable(row)
+    rig = devices.DeviceRegistry([{"role": "phone", "kind": "osc", "enabled": False,
+                                   "hits": ["/hit", "/pad"]}])
+    again.row_schemes = (*routing.ROW_SCHEMES, *rig.row_schemes())    # Router.use does this
+    again.enable(row)
+    assert row.enabled

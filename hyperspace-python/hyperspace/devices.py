@@ -778,9 +778,10 @@ class CloudDevice(Base):
 
     @property
     def rate(self) -> float:
-        """The entry's `rate`, else the file's (frames per second)."""
+        """The entry's `rate`, else the file's (frames per second); a bad
+        `rate` is refused on open (an error line)."""
         r = self.entry.get("rate")
-        if isinstance(r, int | float) and not isinstance(r, bool) and r > 0:
+        if r is not None:
             return float(r)
         return float(self.io.rate) if self.io is not None else 0.0
 
@@ -789,6 +790,10 @@ class CloudDevice(Base):
         return self.entry.get("loop", True) is not False
 
     def open(self) -> None:
+        r = self.entry.get("rate")
+        if r is not None and (isinstance(r, bool) or not isinstance(r, int | float)
+                              or not (math.isfinite(r) and r > 0)):
+            raise ValueError(f"rate = {r!r} is not a positive number of frames per second")
         self.io = read_clouds(self.file)
         self.cloud, self._start = None, None
 
