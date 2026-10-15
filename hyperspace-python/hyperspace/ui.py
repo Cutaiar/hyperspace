@@ -1886,6 +1886,25 @@ class Panel:
                     "presets and shows as JSON ([library] path, else $HYPERSPACE_HOME); "
                     "edit a file and the app follows")
 
+    def gpu_lines(self) -> list[str]:
+        """The SYSTEM page's GPU timing (plan 26 A0): a heading, then one
+        line per pass of the last frames, its rolling median in ms
+        (`Renderer.stats["gpu_ms"]`, render.PassTimer); with no timer
+        queries on the context, the one line saying so. Nothing before a
+        frame has been timed, or with no renderer."""
+        stats = getattr(self.renderer, "stats", None) or {}
+        ms = stats.get("gpu_ms") or {}
+        note = stats.get("gpu_note") or ""
+        if not ms:
+            return [f"gpu: {note}"] if note else []
+        width = max(len(name) for name in ms)
+        return (["gpu per pass, ms (median of the last frames):"]
+                + [f"  {name:<{width}}  {v:6.2f}" for name, v in ms.items()])
+
+    def _gpu_timing(self) -> None:
+        for text in self.gpu_lines():
+            imgui.text_disabled(text)
+
     def _page_system(self, dt: float) -> None:
         self._section("system")
         self._check("ui.cheatsheet")
@@ -1909,6 +1928,7 @@ class Panel:
         if self.dream_error:
             imgui.text_colored(WARN, self.dream_error)
         self._stall_status()
+        self._gpu_timing()
         imgui.spacing()
         self._section("midi")
         if "desk.slew" in self.reg:     # knob smoothing (a registry with no table lacks it)
