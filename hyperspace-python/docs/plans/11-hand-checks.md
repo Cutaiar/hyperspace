@@ -1423,7 +1423,7 @@ wrong — Mirror flips left for right" (desktop: **more ▸**, nothing); no
 scroll with all ghost controls, nothing drawn over the **Ghost hands**
 label. Restore `mode`. Rest of headless line (raising hands pass, failed
 label build, one reload round): tests only. *Fail:* "tracker off", no
-reason → `app._open_hands`' note; no unmeasured line →
+reason → the registry's `hands:` note (`DeviceRegistry._open`); no unmeasured line →
 `hands.panel.ghost_notes`; scrolls or overlaps → `hands.panel._ghost`.
 
 **101. Two outputs open where the config says.**
@@ -2607,9 +2607,9 @@ Copy `hyperspace-python/tests/fixtures/clouds/knot.npz` into
 Then rename the file and add `loop = false` to the entry (an edit, so it
 reopens); rename the file back. *Pass:* `scan · cloud · connected · 1
 source · knot.npz · frame n/16 · … points · 12 fps`, the frame counting
-through 16 a little faster than once a second and starting again;
-nothing else on screen changes (the render graph's point-cloud node
-draws it). Renamed: `error: FileNotFoundError …`; back: `connected`
+through 16 at 12 frames a second (one loop about every 1⅓ s) and
+starting again; nothing else on screen changes (nothing on screen draws
+it yet; plan 26's point-cloud node, A4b, does). Renamed: `error: FileNotFoundError …`; back: `connected`
 within about 10 s, and with `loop = false` the frame stops at 16/16.
 *Fail:* the frame number follows the app's frame rate →
 `CloudDevice.poll`.

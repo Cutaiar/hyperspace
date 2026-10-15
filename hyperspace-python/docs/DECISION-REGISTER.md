@@ -2608,7 +2608,7 @@ them. No preset was edited or added.
 - **Built.** A device that publishes a cloud holds its latest frame;
   `DeviceRegistry.clouds` maps `cloud:<role>` to it for every **open**
   device that has one, in list order — what plan 26's point-cloud node
-  reads (`cloud:scan`). No `cloud` scheme reaches the Router, the referee
+  (A4b, not on this branch yet) will read (`cloud:scan`). No `cloud` scheme reaches the Router, the referee
   or a Learn. The cloud device's one `Port` has `kind = "cloud"`. A
   closed or removed device's cloud is gone from the map at once.
 - **Other options.** `Router.feed("cloud", …)` (the Router holds float

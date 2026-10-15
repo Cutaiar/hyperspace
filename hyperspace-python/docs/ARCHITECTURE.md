@@ -885,7 +885,8 @@ entry's old `send` list becomes its rows once
 registry, not the Router: `DeviceRegistry.clouds` maps `cloud:<role>` to
 each open device's latest frame. The `cloud` kind plays a version-1
 `.npz` (`write_clouds` / `read_clouds`) at its own rate against the frame
-clock; the render graph's point-cloud node is what reads it.
+clock; nothing on screen draws it yet (plan 26's point-cloud node, A4b,
+does).
 
 **Hands.** `hands/core.py`'s `LeapSource` (or a `TapeSource`) gives
 features and skeletons; `HandsIO.poll` shapes twelve axes, two presence

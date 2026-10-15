@@ -195,8 +195,12 @@ the config's folder.
   Boundary tests changed on purpose: `test_app_boundary.py`'s gated list
   gains `hyperspace.osc` and `pythonosc`; `ORDER` is rewritten (devices
   poll in the scene-setter slot, sources feed in the feed slot, sinks
-  run after `reg.apply`); the close list is `bridge, hands, midi, pad,
-  dream` (last listed first) where it was `midi, bridge, hands, dream`.
+  run after `reg.apply`); the close list is the registry, last listed
+  first — `tests/test_app_boundary.py::test_the_host_close_list_is_every_adapter_in_shutdown_order`
+  pins `bridge, hands, midi, pad`, then the audio (its stub has no dream
+  worker) — where it was `midi, bridge, hands, dream`; with the dream on,
+  its worker closes after the devices (`Host.adapters == (devices,
+  dream_io)`).
 
 ### B2 — the existing inputs on the registry
 

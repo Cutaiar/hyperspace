@@ -691,7 +691,10 @@ enabled = false
 Every entry has `role` (required, unique, no `:`), `kind` (required)
 and `enabled` (true unless false; anything else is true with a note), and
 then its kind's own keys, each defaulting as the old table does
-(`config._kind_defaults`):
+(`config._kind_defaults`) — except `osc` and `cloud`, which have no old
+table: their defaults live in `osc.py` (`DEFAULT_HOST`, `DEFAULT_PORT`,
+`TIMEOUT_S`, `Layout`) and `devices.CloudDevice`, and config passes their
+keys through unchecked:
 
 | Kind | Its keys (defaults) |
 |---|---|
@@ -740,7 +743,8 @@ rate against the frame clock (`loop = false` holds the last frame). It
 publishes a `devices.PointCloud` — read-only N×3 float32 points, `t`, a
 counting `frame`, `bounds`, optional colours — on the registry as
 `cloud:<role>` (`DeviceRegistry.clouds`), never through the router;
-the render graph's point-cloud node draws it. `tools/cloud_fixture.py`
+nothing on screen draws it yet (plan 26's point-cloud node, A4b, does).
+`tools/cloud_fixture.py`
 writes the test fixture `tests/fixtures/clouds/knot.npz`.
 
 ## 6. The control window

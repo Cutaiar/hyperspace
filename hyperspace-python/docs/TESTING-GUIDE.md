@@ -1626,8 +1626,8 @@ save. Watch the SYSTEM page. Then rename the file, add `loop = false`
 to the entry and save; rename the file back.
 
 **Right if:** `scan · cloud · connected · 1 source · knot.npz · frame
-n/16 · … points · 12 fps`, the frame counting through 16 a little faster
-than once a second and starting over; nothing else on screen changes.
+n/16 · … points · 12 fps`, the frame counting through 16 at 12 frames a
+second (one loop about every 1⅓ seconds) and starting over; nothing else on screen changes.
 Renamed: `error: FileNotFoundError …`; back: `connected` within about
 10 seconds, the frame stopping at 16/16.
 
@@ -3689,8 +3689,8 @@ setup`; the ghost hands gone.
 (`uv run python tools/hands_tape.py record <file>`).
 
 **Do:**
-1. On the `leap` entry set `tape = "missing.json"` (no such file) and
-   launch.
+1. On the `leap` entry set `enabled = true` and `tape = "missing.json"`
+   (no such file), and launch.
 2. After a few seconds copy your tape to `<home>/missing.json`.
 3. Remove the `tape` line and save; once the camera's hands show,
    unplug the camera; plug it back.
