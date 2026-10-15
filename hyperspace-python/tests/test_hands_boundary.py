@@ -68,5 +68,5 @@ def test_the_instrument_runs_with_no_host_at_all():
 
     io = HandsIO(HandSettings.from_config({}), {}, source=Source(), out=None)
     io.poll(1 / 60)                      # no midi, no router
-    assert len(io.lanes()) == 22
+    assert len(io.lanes()) == 38
     io.close()

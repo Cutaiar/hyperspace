@@ -1,4 +1,5 @@
-"""Ultraleap hands — two tracked hands as twelve axes and eight switches.
+"""Ultraleap hands — two tracked hands as twelve axes and eight switches,
+and the dance sources beside them.
 
 The hands are the performing surface; the APC40 stays on presets and
 master controls. Each hand gives the palm's rigid-body pose — six axes by
@@ -86,9 +87,33 @@ registry.
 
 Beside the features, each frame keeps each hand's skeleton (`skeleton`):
 the palm frame and every digit's four bones, copied into plain floats on
-the SDK thread. It is display data only — the ghost hands draw it
-(hyperspace/ghost.py) — and goes through none of the shaping: no axis,
-no lane, no MIDI reads it.
+the SDK thread. The ghost hands draw it (hyperspace/ghost.py) and it goes
+through none of the axes' shaping: no axis and no MIDI reads it. The
+dance sources do (below).
+
+The dance sources (plan 24 C4, H2) sit beside the twelve axes, routable
+like them and shaped more simply (signal.py: `Smooth`, `Flick`), with no
+setup params and no DAW output:
+
+  hand:<side>.curl.<digit>  how bent each digit is (thumb … pinky), 0
+                            straight … 1 a fist: the bone-to-bone angles
+                            summed (`curls`, `bend`)
+  hand:<side>.spread        how far the fingers fan: index to pinky in
+                            the palm's plane (`spread`)
+  hand:<side>.energy        smoothed speed of the palm and the fingertips
+  hand:<side>.flick         a hit on a sharp flick: spikes to its strength
+                            and decays (`Flick`)
+  hands:gap                 the distance between the two palms (`gap`)
+  hands:twist               one hand's roll against the other's, 0.5 when
+                            they mirror each other (`twist`)
+
+The per-hand ones are lanes of the ``hand`` vector, after the pinch
+switches so no older lane moves (`Layout`); the two-hand ones are a
+scheme of their own, ``hands``, with its own rests. Each reads NaN while
+its hand is away (the pair: either hand), so a row lets go like an
+axis's; the curls and the spread need the skeleton and read NaN without
+one. The constants (ranges, time constants, the flick's thresholds) are
+under `DANCE`.
 """
 
 from __future__ import annotations
@@ -110,11 +135,14 @@ from .signal import (
     HYST_14,
     OUTS,
     RESTS,
+    Flick,
     Follower,
+    Smooth,
     describe,
     encode,
     quantize,
     shape,
+    unit,
     valid,
 )
 from .tape import STALE_S, TapeSource  # STALE_S: no frame for this long, no hands
@@ -253,6 +281,50 @@ DIGITS = ("thumb", "index", "middle", "ring", "pinky")
 BONES = ("metacarpal", "proximal", "intermediate", "distal")
 _NO_ROT = (0.0, 0.0, 0.0, 1.0)
 
+# ---- the dance sources (plan 24 C4, H2): beside the twelve axes, never
+# instead of them. Per hand, after the pinch switches in the `hand` vector:
+# five curls (DIGITS order), spread, energy, flick; and the two-hand
+# `hands` scheme: gap, twist. Each 0–1, NaN while its hand (or, for the
+# pair, either hand) is away. The curls and the spread read the skeleton
+# (`skeleton`), so a source that gives none (a palm-only fake) reads NaN
+# there; energy and flick fall back to the palm; gap and twist read the
+# features. The numbers below are the shaping (decision register draft
+# rows, plan 24 C4): ranges in the native unit, then time constants.
+DANCE = tuple(f"curl.{f}" for f in DIGITS) + ("spread", "energy", "flick")
+PAIR = ("gap", "twist")
+PAIR_RESTS = (0.0, 0.5)        # gap rests closed, twist level (it is centred)
+# a digit's bend, summed over its joints, degrees: open → 0, a fist → 1.
+# The thumb has one joint fewer that bends much, so its own range
+CURL_RANGE = {"thumb": (10.0, 80.0)}
+CURL_RANGE_FINGER = (20.0, 220.0)
+CURL_S = 0.05                  # s, the curls' and the spread's smoothing (attack = decay)
+# the fan: the angle between the index's and the pinky's proximal bones in
+# the palm's plane, degrees. A finger bent more than ~70° at the knuckle
+# has no direction in that plane: the spread reads 0 (a fist does not fan)
+SPREAD_RANGE = (10.0, 60.0)
+SPREAD_MIN_FLAT = 0.35         # in-plane length / bone length under which a finger is "down"
+# energy: the mean speed of the palm and the five tips, mm/s, over a floor
+# that a still hand's tracking jitter stays under; fast up, slow down
+ENERGY_RANGE = (60.0, 1000.0)
+ENERGY_ATTACK_S = 0.06
+ENERGY_DECAY_S = 0.5
+# flick: the fastest tip (the palm, with no skeleton), mm/s. Fires at ON,
+# re-arms under OFF, strength speed / FULL; past CEILING it is a tracking
+# jump. The hit decays with time constant FLICK_DECAY_S
+FLICK_ON = 1500.0
+FLICK_OFF = 700.0
+FLICK_FULL = 3000.0
+FLICK_CEILING = 10000.0
+FLICK_DECAY_S = 0.15
+SPEED_GAP_S = 0.1              # frames further apart than this measure no speed
+# the pair: the palms' distance, mm; and the twist — the right hand's
+# anatomical roll less the left's, so mirror-image hands (both palms down,
+# a clap) read level and turning a wheel clockwise, as the performer sees
+# it, reads up — degrees each way from level to the ends
+GAP_RANGE = (60.0, 600.0)
+TWIST_FULL = 90.0
+PAIR_S = 0.05                  # s, the pair's smoothing
+
 
 def _v3(v) -> tuple[float, float, float]:
     return (float(v.x), float(v.y), float(v.z))
@@ -307,6 +379,168 @@ def skeleton(hand) -> dict:
         "digits": digits,
         "arm": _bone(arm) if arm is not None and hasattr(arm, "prev_joint") else None,
     }
+
+
+def _sub(a, b) -> tuple[float, float, float]:
+    return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
+
+
+def _dot(a, b) -> float:
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+
+
+def _len(a) -> float:
+    return math.sqrt(_dot(a, a))
+
+
+def _angle(a, b) -> float | None:
+    """Degrees between two vectors; None when either has no length."""
+    la, lb = _len(a), _len(b)
+    if la < 1e-6 or lb < 1e-6:
+        return None
+    return math.degrees(math.acos(min(1.0, max(-1.0, _dot(a, b) / (la * lb)))))
+
+
+def bend(bones: list) -> float:
+    """A digit's bend, degrees: the angles between each bone and the next,
+    summed, skipping a bone with no length (the thumb's metacarpal)."""
+    dirs = [d for d in (_sub(b["next"], b["prev"]) for b in bones) if _len(d) > 1e-6]
+    return sum(a for a in (_angle(u, v) for u, v in itertools.pairwise(dirs)) if a is not None)
+
+
+def curls(skel: dict | None) -> dict[str, float]:
+    """How bent each digit is, 0 (straight) … 1 (a fist), from a `skeleton`:
+    `bend` over CURL_RANGE. Empty when the skeleton has no digits. The
+    raw form the curl lanes smooth, and what a grab switch can read."""
+    digits = (skel or {}).get("digits") or []
+    if len(digits) != len(DIGITS):
+        return {}
+    return {f: unit(bend(d), *CURL_RANGE.get(f, CURL_RANGE_FINGER))
+            for f, d in zip(DIGITS, digits)}
+
+
+def spread(skel: dict | None) -> float | None:
+    """How far the fingers fan, 0 … 1: the angle between the index's and
+    the pinky's proximal bones, both laid into the palm's plane, over
+    SPREAD_RANGE. 0 when either finger points out of the plane (bent
+    down past SPREAD_MIN_FLAT); None with no digits or no palm normal."""
+    digits = (skel or {}).get("digits") or []
+    n = (skel or {}).get("normal")
+    if len(digits) != len(DIGITS) or n is None or _len(n) < 1e-6:
+        return None
+    nn = _len(n)
+    flat = []
+    for f in ("index", "pinky"):
+        b = digits[DIGITS.index(f)][1]                  # the proximal bone
+        d = _sub(b["next"], b["prev"])
+        k = _dot(d, n) / (nn * nn)
+        p = (d[0] - k * n[0], d[1] - k * n[1], d[2] - k * n[2])
+        if _len(d) < 1e-6 or _len(p) < SPREAD_MIN_FLAT * _len(d):
+            return 0.0
+        flat.append(p)
+    a = _angle(*flat)
+    return None if a is None else unit(a, *SPREAD_RANGE)
+
+
+def points(feats: dict, skel: dict | None) -> list[tuple[float, float, float]]:
+    """What energy and flick watch move: the palm, then the five
+    fingertips when the skeleton has them (mm). Empty for a frame without
+    a whole palm: nothing measured."""
+    palm = _palm(feats)
+    if palm is None:
+        return []
+    out = [palm]
+    digits = (skel or {}).get("digits") or []
+    if len(digits) == len(DIGITS):
+        out += [tuple(d[-1]["next"]) for d in digits]
+    return out
+
+
+def _palm(feats: dict) -> tuple[float, float, float] | None:
+    """The palm's (x, y, z) from `features`, None unless all three are finite."""
+    try:
+        p = tuple(float(feats[c]) for c in BOX_AXES)
+    except (KeyError, TypeError, ValueError):
+        return None
+    return p if all(math.isfinite(v) for v in p) else None
+
+
+def twist(left: dict, right: dict) -> float | None:
+    """The right hand's roll less the left's (`features`, anatomical:
+    mirror-image hands read 0), wrapped to ±180°, over ±TWIST_FULL about
+    0.5. None when either roll is missing."""
+    try:
+        d = float(right["roll"]) - float(left["roll"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if not math.isfinite(d):
+        return None
+    return unit((d + 180.0) % 360.0 - 180.0, -TWIST_FULL, TWIST_FULL)
+
+
+def gap(left: dict, right: dict) -> float | None:
+    """The distance between the palms (`features` x, y, z) over GAP_RANGE;
+    None without both whole palms."""
+    a, b = _palm(left), _palm(right)
+    return None if a is None or b is None else unit(math.dist(a, b), *GAP_RANGE)
+
+
+class Dance:
+    """One hand's dance sources at run time — never saved. `curl` is per
+    digit (DIGITS); `raw` the last unsmoothed readings (the curls by
+    digit, the spread, the energy's and the flick's speeds in mm/s), for
+    the page and for anything — a grab switch — that wants the curls
+    before smoothing."""
+
+    def __init__(self) -> None:
+        self.curl = {f: Smooth() for f in DIGITS}
+        self.spread = Smooth()
+        self.energy = Smooth()
+        self.flick = Flick()
+        self.raw: dict = {}
+        self._prev: tuple | None = None     # (t, points) of the last tracking frame
+        self._target = 0.0                  # the energy's last measured target
+
+    def reset(self) -> None:
+        """The hand left: every reading forgets."""
+        for sm in (*self.curl.values(), self.spread, self.energy):
+            sm.y = None
+        self.flick.reset()
+        self.raw, self._prev, self._target = {}, None, 0.0
+
+    def step(self, dt: float, t: float, fresh: bool, feats: dict | None,
+             skel: dict | None) -> None:
+        """One render frame; `feats` None while the hand is away. A fresh
+        tracking frame measures (curls, spread, speeds); every frame
+        smooths, and the flick decays."""
+        if feats is None:
+            self.reset()
+            return
+        top = None
+        if fresh or not self.raw:
+            speed = None
+            pts = points(feats, skel)
+            prev, self._prev = self._prev, (t, pts)
+            if (pts and prev is not None and len(prev[1]) == len(pts)
+                    and 0.0 < t - prev[0] <= SPEED_GAP_S):
+                v = [math.dist(a, b) / (t - prev[0]) for a, b in zip(pts, prev[1])]
+                speed, top = sum(v) / len(v), max(v[1:] or v)
+                self._target = unit(speed, *ENERGY_RANGE)
+            self.raw = {"curl": curls(skel), "spread": spread(skel), "energy": speed,
+                        "flick": top}
+        c = self.raw["curl"]
+        for f in DIGITS:
+            self.curl[f].step(dt, c.get(f), CURL_S, CURL_S)
+        self.spread.step(dt, self.raw["spread"], CURL_S, CURL_S)
+        self.energy.step(dt, self._target, ENERGY_ATTACK_S, ENERGY_DECAY_S)
+        self.flick.step(dt, top, on=FLICK_ON, off=FLICK_OFF, full=FLICK_FULL,
+                        decay_s=FLICK_DECAY_S, ceiling=FLICK_CEILING)
+
+    def values(self) -> list[float]:
+        """The hand's `DANCE` lanes, in order; NaN for a reading it has not got."""
+        nan = lambda y: math.nan if y is None else y
+        return ([nan(self.curl[f].y) for f in DIGITS]
+                + [nan(self.spread.y), nan(self.energy.y), self.flick.y])
 
 
 class OneEuro:
@@ -918,9 +1152,25 @@ def addresses(axes: list[AxisSettings]) -> list[str]:
     """Every hand lane's address name, in lane order: the axes as
     `[hands] dofs` spells them (`AxisSettings.name`, "left.roll"), then
     "left.present" / "right.present", then the pinch switches
-    ("left.pinch.index" … "right.pinch.pinky")."""
+    ("left.pinch.index" … "right.pinch.pinky"), then each hand's dance
+    sources ("left.curl.thumb" … "left.flick", then the right's: `DANCE`).
+    The two-hand sources are a scheme of their own: `pair_addresses`."""
     return ([a.name for a in axes] + [f"{s}.present" for s in SIDES]
-            + [pinch_name(s, f) for s in SIDES for f in PINCHES])
+            + [pinch_name(s, f) for s in SIDES for f in PINCHES]
+            + [f"{s}.{k}" for s in SIDES for k in DANCE])
+
+
+def _dance_label(kind: str) -> str:
+    """A dance lane's short label, after the side's letter: "curl ind",
+    "spread", "energy", "flick"."""
+    what, _, finger = kind.partition(".")
+    return f"{what} {finger[:3]}" if finger else what
+
+
+def pair_addresses() -> list[str]:
+    """The ``hands`` scheme's lanes — the two hands together — by name:
+    ``hands:gap``, ``hands:twist`` (`PAIR`)."""
+    return list(PAIR)
 
 
 def default_addresses() -> list[str]:
@@ -938,27 +1188,40 @@ class Layout:
     its lane and is what the adapter publishes as ``router.names["hand"]``,
     so a row keeps its axis whatever order or subset `dofs` lists, and a
     name this rig lacks is dormant. ``hand:<i>`` — the lane at index i —
-    still reads, which is why the switches stay last. The labels and the
-    gate list are published beside it (`labels["hand"]`, `gates["hand"]`);
-    `presence` and `gate` are the index maps `lanes()` and `rests()` fill
-    by.
+    still reads, which is why every lane added since goes after the
+    switches (the dance sources, plan 24 C4): no older lane moves. The
+    labels and the gate list are published beside it (`labels["hand"]`,
+    `gates["hand"]`); `presence`, `gate` and `dance` are the index maps
+    `lanes()` and `rests()` fill by.
+
+    The two-hand ``hands`` scheme is laid out here too — `pair_names`,
+    `pair_addresses`, `pair_index` (``hands:gap``, ``hands:twist``) — a
+    vector of its own, fed beside the ``hand`` one (`pair_lanes`).
     """
 
-    __slots__ = ("addresses", "gate", "gates", "index", "n", "n_axes", "names", "presence")
+    __slots__ = ("addresses", "dance", "gate", "gates", "index", "n", "n_axes", "names",
+                 "pair_addresses", "pair_index", "pair_names", "presence")
 
     def __init__(self, axes: list[AxisSettings]):
         self.n_axes = len(axes)
         self.presence = {s: self.n_axes + i for i, s in enumerate(SIDES)}
         self.gate = {(s, f): self.n_axes + len(SIDES) + i * len(PINCHES) + k
                      for i, s in enumerate(SIDES) for k, f in enumerate(PINCHES)}
-        self.n = self.n_axes + len(SIDES) + len(SIDES) * len(PINCHES)
+        base = self.n_axes + len(SIDES) + len(SIDES) * len(PINCHES)
+        self.dance = {(s, k): base + i * len(DANCE) + j
+                      for i, s in enumerate(SIDES) for j, k in enumerate(DANCE)}
+        self.n = base + len(SIDES) * len(DANCE)
         self.names = ([a.label for a in axes]
                       + [f"{s[0].upper()} in" for s in SIDES]
-                      + [f"{s[0].upper()} {f[:3]}" for s in SIDES for f in PINCHES])
+                      + [f"{s[0].upper()} {f[:3]}" for s in SIDES for f in PINCHES]
+                      + [f"{s[0].upper()} {_dance_label(k)}" for s in SIDES for k in DANCE])
         self.addresses = addresses(axes)
         self.index = {name: i for i, name in enumerate(self.addresses)}
         self.gates =[(self.gate[(s, f)], self.names[self.gate[(s, f)]])
                       for s in SIDES for f in PINCHES]
+        self.pair_names = list(PAIR)
+        self.pair_addresses = pair_addresses()
+        self.pair_index = {name: i for i, name in enumerate(self.pair_addresses)}
 
 
 class HandsIO:
@@ -1006,6 +1269,9 @@ class HandsIO:
         self.present = {s: False for s in SIDES}
         # the eight pinch switches, whether or not the ratios are axes
         self.gates = {s: {f: Gate() for f in PINCHES} for s in SIDES}
+        # the dance sources (plan 24 C4): each hand's, and the pair's
+        self.dance = {s: Dance() for s in SIDES}
+        self.pair = {k: Smooth() for k in PAIR}
         self.frame: dict[str, dict | None] = {s: None for s in SIDES}  # native features
         # side → the features of a hand the tracker sees but the box keeps
         # out: absent to everything, drawn hollow on the HANDS page
@@ -1078,33 +1344,69 @@ class HandsIO:
         so a routing row lets go and the base returns the frame the hand
         leaves; the spring and `hold` shape only the DAW output
         (`Follower.live`; the catch glide on a returning hand is live).
-        Then presence (1 in view, 0 not) and the pinch switches (1 closed)."""
-        lay = self.layout
+        Then presence (1 in view, 0 not), the pinch switches (1 closed),
+        and each hand's dance sources (`DANCE`: NaN while the hand is away,
+        or for a reading its source cannot give — no skeleton, no curls)."""
+        lay = self._layout()
         out = [math.nan] * lay.n
         out[:lay.n_axes] = [st.y if st.follow.live else math.nan for st in self.state]
         for s in SIDES:
             out[lay.presence[s]] = 1.0 if self.present[s] else 0.0
             for f in PINCHES:
                 out[lay.gate[(s, f)]] = 1.0 if self.gates[s][f].on else 0.0
+            if self.present[s]:
+                for k, v in zip(DANCE, self.dance[s].values()):
+                    out[lay.dance[(s, k)]] = v
         return out
 
     def rests(self) -> list[float]:
         """Where each lane idles — the axis's own configured rest, so a
         push row centred on it pushes nothing from an absent hand whatever
-        the setup says `rest` is; presence and pinches 0."""
-        out = [0.0] * self.layout.n
-        out[:self.layout.n_axes] = [float(a.rest_value) for a in self.axes]
+        the setup says `rest` is; presence, pinches and the dance sources 0
+        (an open, still hand)."""
+        lay = self._layout()
+        out = [0.0] * lay.n
+        out[:lay.n_axes] = [float(a.rest_value) for a in self.axes]
         return out
+
+    def pair_lanes(self) -> list[float]:
+        """This frame's ``hands`` vector (`PAIR`: gap, twist), NaN unless
+        both hands are present."""
+        both = all(self.present[s] for s in SIDES)
+        return [self.pair[k].y if both and self.pair[k].y is not None else math.nan
+                for k in PAIR]
+
+    def pair_rests(self) -> list[float]:
+        """Where the ``hands`` lanes idle: the gap closed, the twist level."""
+        return list(PAIR_RESTS)
+
+    def _dances(self, dt: float, t: float, fresh: bool) -> None:
+        """Step each hand's dance sources and the pair's from this frame's
+        features (`frame`, present hands only) and skeletons."""
+        if getattr(self, "dance", None) is None:      # a HandsIO from before a hot reload
+            self.dance = {s: Dance() for s in SIDES}
+            self.pair = {k: Smooth() for k in PAIR}
+        for s in SIDES:
+            self.dance[s].step(dt, t, fresh, self.frame[s], self.skeleton.get(s))
+        left, right = self.frame["left"], self.frame["right"]
+        both = left is not None and right is not None
+        for k, fn in (("gap", gap), ("twist", twist)):
+            self.pair[k].step(dt, fn(left, right) if both else None, PAIR_S, PAIR_S)
+
+    def _layout(self) -> Layout:
+        """The layout, rebuilt when it is one from before a hot reload
+        (no address map, no dance or pair lanes)."""
+        if getattr(self.layout, "pair_index", None) is None:
+            self.layout = Layout(self.axes)
+        return self.layout
 
     def _publish(self, router) -> None:
         """The layout to the router: the address map, names and switches
         once per router (they only change with the setup, which builds a
         new adapter), the rests only when a rest value moved. `feed` is
         every frame."""
-        lay = self.layout
-        if getattr(lay, "index", None) is None:      # a Layout from before a hot reload
-            self.layout = lay = Layout(self.axes)
-        names = getattr(router, "names", None)       # None: a router that knows no names
+        lay = self._layout()
+        names = getattr(router, "names", None)      # None: a router that knows no names
         if router.labels.get("hand") is not lay.names or (
                 names is not None and names.get("hand") is not lay.index):
             router.labels["hand"] = lay.names
@@ -1114,10 +1416,20 @@ class HandsIO:
             # name → lane: how the router finds `hand:right.roll` (row 20)
             if names is not None:
                 names["hand"] = lay.index
+        # the two hands together, `hands:gap` / `hands:twist`: a scheme of
+        # their own, published the same way — no switches among them
+        if router.labels.get("hands") is not lay.pair_names or (
+                names is not None and names.get("hands") is not lay.pair_index):
+            router.labels["hands"] = lay.pair_names
+            router.gates["hands"] = []
+            if names is not None:
+                names["hands"] = lay.pair_index
         rests = self.rests()
         if rests != self._rests or router.rests.get("hand") is not self._rests:
             self._rests = rests
             router.rests["hand"] = rests
+        if router.rests.get("hands") is None:
+            router.rests["hands"] = self.pair_rests()
 
     # ---- per frame ----
 
@@ -1178,6 +1490,7 @@ class HandsIO:
                         note=int(self.cfg["note"]) + s, velocity=127 if here else 0))
             msgs += self._pinches(side, s, here, t)
         self._skeletons(skel)
+        self._dances(dt, t, fresh)
         for i, (a, st) in enumerate(zip(self.axes, self.state)):
             h = hands.get(a.side) if self.present[a.side] else None
             if h is None:
@@ -1218,6 +1531,7 @@ class HandsIO:
         if router is not None:
             live = getattr(self.source, "on", True)
             router.feed("hand", self.lanes() if live else None)
+            router.feed("hands", self.pair_lanes() if live else None)
             self._publish(router)
         if learn is not None:
             self._learn(learn)
