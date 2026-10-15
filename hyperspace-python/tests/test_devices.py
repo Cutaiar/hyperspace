@@ -459,8 +459,10 @@ def test_the_hands_shims_ports_are_the_layout():
     assert [p.address for p in ports] == [f"hand:{a}" for a in io.layout.addresses]
     assert [p.group for p in ports].count("axes") == io.layout.n_axes
     assert [p.group for p in ports].count("presence") == 2
-    assert [p.group for p in ports].count("pinches") == 8
-    assert [p.group for p in ports].count("dance") == io.layout.n - io.layout.n_axes - 10
+    n_gates = len(io.layout.gates)        # the pinches, and plan 24 C5's grabs
+    assert n_gates >= 8
+    assert [p.group for p in ports].count("switches") == n_gates
+    assert [p.group for p in ports].count("dance") == io.layout.n - io.layout.n_axes - 2 - n_gates
     assert all(p.kind == "value" for p in ports)
     roll = next(p for p in ports if p.name == "right.roll")
     assert roll.bipolar is True and roll.rest == 0.5 and roll.label == "R roll"

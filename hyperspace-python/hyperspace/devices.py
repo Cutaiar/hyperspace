@@ -471,7 +471,7 @@ class HandsDevice(Base):
                 out.append(Port(addr, label, rest=rests[i], bipolar=bool(axes[i].bipolar),
                                 group="axes", scheme="hand"))
             elif i in gates:
-                out.append(Port(addr, label, group="pinches", scheme="hand"))
+                out.append(Port(addr, label, group="switches", scheme="hand"))   # pinches, grabs
             elif addr.endswith(".present"):
                 out.append(Port(addr, label, group="presence", scheme="hand"))
             else:   # plan 24 C4's dance sources (curl, spread, energy, flick)
