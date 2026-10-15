@@ -116,6 +116,74 @@ def test_a_reconnect_lets_go_of_a_save_whose_release_was_lost(rig):
     assert rig.presets.lib.current("presets") == "TUMBLE"
 
 
+def test_nothing_can_latch_save(rig, tmp_path):
+    """Review of PR #175: only a `momentary` row may drive `desk.save`. A
+    learn onto it is refused (the desk, the pad), the table refuses a
+    latching row at runtime, a preset's desk row that would latch it drops
+    with a note, and a hand-edited bindings.json loses such a row with a
+    note — never a crash, never SAVE stuck on."""
+    from hyperspace.learn import SAVE_REFUSAL
+
+    t, m = rig.midi.table, rig.midi
+    rows = [b.to_json() for b in t.bindings]
+    m.learner.arm(SAVE_PARAM, "desk")
+    assert not m.learner.learn_control(f"note:0:{apc40.N_SCENE[4]}", apc40)
+    assert m.learner.refused and m.learner.last == SAVE_REFUSAL
+    m.learner.arm(SAVE_PARAM, "pad")
+    assert not m.learner.learn_pad_button("pad:A")
+    assert m.learner.last == SAVE_REFUSAL
+    m.learner.arm(None)
+    assert [b.to_json() for b in t.bindings] == rows
+    for bad in (Binding("key:S", SAVE_PARAM, "toggle"),
+                Binding(f"note:0:{apc40.N_SCENE[4]}", SAVE_PARAM, "toggle", layer="preset")):
+        with pytest.raises(ValueError, match="momentary"):
+            t.bind(bad)
+        with pytest.raises(ValueError, match="momentary"):
+            t.add(bad)
+    assert [b.to_json() for b in t.bindings] == rows
+    notes = t.set_desk([*t.desk(), {"source": f"note:0:{apc40.N_SCENE[4]}",
+                                     "target": SAVE_PARAM, "op": "toggle"}])
+    assert notes == [(f"dropped note:0:{apc40.N_SCENE[4]} → desk.save (toggle): desk.save "
+                      "takes only a momentary row (held, never latched)")]
+    # a hand-edited bindings.json
+    path = bindings_path(tmp_path / "h")
+    (tmp_path / "h").mkdir()
+    session = [b for b in Bindings.factory().bindings if routing.is_session_row(b)]
+    Bindings([*session, Binding("key:S", SAVE_PARAM, "toggle")], path=path).write()
+    loaded = Bindings.load(path, legacy_midi=None)
+    assert "dropped key:S → desk.save (toggle): desk.save takes only a momentary row " \
+           "(held, never latched)" in loaded.notes
+    assert [b.op for b in loaded.bindings if b.target == SAVE_PARAM] == ["momentary"]
+    assert "\"key:S\"" not in path.read_text()                     # written back once
+
+
+def test_save_not_added_is_said(tmp_path):
+    """Review of PR #175: a bindings.json whose owner put a row on track 8's
+    clip stop keeps it, and SAVE is not added there (`APC_NEW_ROWS` only
+    takes a free control) — said on the SYSTEM page line (`said`) and on
+    stderr at every launch, never silent."""
+    session = [b for b in Bindings.factory().bindings
+               if routing.is_session_row(b) and b.target != SAVE_PARAM]
+    mine = Binding(f"note:{SAVE_CH}:{STOP}", "view.points", "toggle", feedback="led")
+    path = bindings_path(tmp_path / "a")
+    (tmp_path / "a").mkdir()
+    Bindings([*session, mine], path=path).write()
+    t = Bindings.load(path, legacy_midi=None)
+    assert [b.target for b in t.route("note", SAVE_CH, STOP)] == ["view.points"]
+    assert "SAVE not added: note:7:52 is yours (view.points)" in t.said
+    assert routing.save_missing(Bindings.factory().bindings) is None
+    assert routing.save_missing([]) is None
+
+
+def test_a_reconnect_forgets_where_the_faders_were(rig):
+    """Review of PR #175: a fader moved while the cable was out must not
+    seed a false pickup crossing — power-up forgets every position."""
+    push(rig, cc(apc40.CC_FADER, 40, channel=2))
+    assert rig.midi._hw
+    rig.midi._enter()
+    assert rig.midi._hw == {}
+
+
 # --------------------------------------------------------- the two-handed save
 
 def test_save_held_and_an_empty_pad_tapped_saves_into_that_slot(rig):
@@ -242,9 +310,18 @@ def test_a_failed_save_into_a_filled_slot_leaves_the_slot_and_blinks_nothing(rig
     def refuse():
         raise OSError("disk full")
     monkeypatch.setattr(pr, "write", refuse)
-    at(1.0, save_down(), *tap(2), save_up())
+    mark = len(rig.out.sent)
+    n, ch = pad(2)
+    at(1.0, save_down(), note(n, channel=ch))
     assert pr.bank[2] == "FIELD" and "TRIP 2" in lib.list("presets")
     assert "the show could not be written" in lib.warning
+    # (review of PR #175) the slot does not hold the new preset: no blink,
+    # and the log says it did not land, not "saved into slot 3"
+    assert apc40.GREEN_BLINK not in leds(rig, n, ch, mark)
+    assert not any(c == (n, ch) for c in [(k[2], k[1]) for k in rig.midi._hold_state()[1]])
+    assert rig.midi.desk_log.events[-1].what == "save into slot 3: did not land there"
+    at(1.1, note(n, 0, channel=ch), save_up())
+    assert pr.save_into(2) is False and pr.bank[2] == "FIELD"           # the model says so
     monkeypatch.undo()
 
     def fail(name):

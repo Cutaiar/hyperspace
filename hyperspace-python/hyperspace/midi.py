@@ -405,6 +405,9 @@ class MidiIO:
         save = self.reg.get(SAVE_PARAM)
         if save is not None and save.value:
             save.set(False)
+        # where the faders were is forgotten too: one moved while the cable
+        # was out would otherwise seed a false pickup crossing (`redraw`)
+        self.__dict__["_hw"] = {}
         for b in self.bindings:
             b.last_out = None
             b.caught = False
@@ -616,8 +619,8 @@ class MidiIO:
         blinks = self._hold_state()[1]
         for b, p in taps:
             k = int(b.value)
-            if p.save_into(k) is False:
-                self._log_press(source, f"save into slot {k + 1}: nothing saved", layer)
+            if p.save_into(k) is False:      # not in the slot: no blink (the footer says why)
+                self._log_press(source, f"save into slot {k + 1}: did not land there", layer)
                 continue
             blinks[b.control] = self._now() + BLINK_S
             self._log_press(source, f"saved into slot {k + 1}: {p.text()}", layer)

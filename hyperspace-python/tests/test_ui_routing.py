@@ -1258,3 +1258,20 @@ def test_the_system_page_shows_the_sticks_feel(rig, tmp_path, monkeypatch):
     frame(panel)
     assert "desk.pad.hz" in drawn and "desk.pad.damp" in drawn
     assert "desk.pad.release" not in drawn
+
+
+def test_neither_shift_nor_save_is_a_desk_target(rig, tmp_path):
+    """`desk_target`: the one rule for the desk rows' target combo, "Learn
+    desk" and "Learn pad". SHIFT's param is not one, and neither is the
+    desk's SAVE (plan 24 C1, review of PR #175): a learned toggle or key on
+    `desk.save` would latch it, and every bank pad's tap would then make a
+    new preset."""
+    router = _with_router(rig, tmp_path)
+    routing.register_desk(rig.reg, router.table)
+    reg = rig.reg
+    assert not ui_routing.desk_target(reg[routing.SHIFT_PARAM])
+    assert not ui_routing.desk_target(reg[routing.SAVE_PARAM])
+    assert ui_routing.desk_target(reg["view.points"])
+    targets = {p.id for p in ui_routing._desk_targets(rig.panel)}
+    assert routing.SAVE_PARAM not in targets and routing.SHIFT_PARAM not in targets
+    assert not rig.panel._desk_target(reg[routing.SAVE_PARAM])

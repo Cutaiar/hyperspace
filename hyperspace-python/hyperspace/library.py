@@ -847,8 +847,10 @@ class Project:
         it named keeps its file, untouched, and stays in the list, unpadded
         — exactly as "free this pad (keeps the preset)" leaves it. Nothing
         is overwritten and nothing goes to the trash (owner, 2026-10-09 and
-        2026-10-14). True when a preset was saved; False for a slot the
-        bank does not have, or a save that failed (`bank_error`)."""
+        2026-10-14). True when slot k now names the new preset; False for a
+        slot the bank does not have, a save that failed, or a show file
+        that could not take the slot (the preset is then saved and in the
+        list, slot k is as it was, and `bank_error` and the footer say why)."""
         if not 0 <= k < len(self.bank):
             return False
         return self._save_new(k)
@@ -913,7 +915,10 @@ class Project:
             self.bank_error = f"presets: {e}"
             lib.say(warning=f"saved {name} — the show could not be written: it is in "
                             f"the preset list ({e})")
-            return True
+            # `save_new` saved what it was asked to (the list has it); a
+            # save into slot `at` did not land there — False, so the desk
+            # blinks nothing over a slot that still names the old preset
+            return at is None
         self._room()
         kept = f" ({was} is still in the preset list)" if was is not None else ""
         lib.say(f"saved {name} → {slot_key(k)}{kept}")

@@ -783,6 +783,45 @@ def legacy6_routes() -> list[Binding]:
     return rows
 
 
+def save_refusal(b: Binding) -> str | None:
+    """Why `b` may not drive the desk's SAVE (plan 24 C1), or None: only a
+    `momentary` row may — anything that could leave `desk.save` on (a
+    toggle, a set, a key or pad row that fires) would turn every bank pad's
+    tap into a new preset until something turned it off."""
+    if b.target == SAVE_PARAM and b.op != "momentary":
+        return f"{SAVE_PARAM} takes only a momentary row (held, never latched)"
+    return None
+
+
+def _drop_save_latches(rows: list[Binding]) -> tuple[list[Binding], list[str]]:
+    """`rows` less any row `save_refusal` refuses, with a note for each."""
+    kept, notes = [], []
+    for b in rows:
+        why = save_refusal(b)
+        if why is None:
+            kept.append(b)
+        else:
+            notes.append(f"dropped {b.source} → {b.target} ({b.op}): {why}")
+    return kept, notes
+
+
+def save_missing(rows: Iterable[Binding]) -> str | None:
+    """Plan 24 C1: a table with no row on the desk's SAVE because the owner's
+    own row holds its control (track 8's clip stop: `remap_factory` adds
+    SAVE only where nothing uses the note) — the line that says so on the
+    SYSTEM page, so SAVE's absence is never silent. None when SAVE is there
+    or its control is free (a table with no APC40 rows)."""
+    rows = list(rows)
+    if any(b.target == SAVE_PARAM for b in rows):
+        return None
+    save = Binding(f"note:{apc40.SAVE[1]}:{apc40.SAVE[0]}", SAVE_PARAM, "momentary")
+    mine = next((b for b in rows if b.is_midi and b.overlaps(save)), None)
+    if mine is None:
+        return None
+    return (f"SAVE not added: {save.source} is yours ({mine.target}) — the two-handed "
+            "save needs track 8's clip stop free")
+
+
 def referee(rows: Iterable[Binding]) -> tuple[list[Binding], list[tuple[Binding, str]]]:
     """First performer per target wins: (kept, [(dropped row, why)]).
 
@@ -1438,6 +1477,10 @@ class Bindings:
                 else:
                     t.announce(path, kept=bak)
                     t.write()
+            missing = save_missing(t.bindings)
+            if missing is not None:          # said every launch, never written: the row is yours
+                print(f"bindings: {path}: {missing}", file=sys.stderr)
+                t.said = f"{t.said} · {missing}" if t.said else missing
             return t
         t = cls.factory(profile, path)
         if legacy_midi is not None and legacy_midi.exists():
@@ -1527,6 +1570,11 @@ class Bindings:
         moved = migrate_scales(rows, macros)
         notes += moved
         changed = changed or bool(moved)
+        # a hand-edited row that would latch SAVE on (plan 24 C1): dropped,
+        # said, and the file written back once without it
+        rows, latched = _drop_save_latches(rows)
+        notes += latched
+        changed = changed or bool(latched)
         t = cls(rows, path=path, profile=profile)
         t.macros = macros
         t.bindings, t.dropped = referee(t.bindings)
@@ -1705,6 +1753,8 @@ class Bindings:
             b.layer = "preset"
             if not b.is_midi:
                 notes.append(f"dropped {b.source} → {b.target}: not a desk control")
+            elif save_refusal(b) is not None:
+                notes.append(f"dropped {b.source} → {b.target} ({b.op}): {save_refusal(b)}")
             elif self.is_invariant(b, inv):
                 if (b.source, b.target, b.op, float(b.value)) in RETIRED_DESK_ROWS:
                     continue
@@ -1782,6 +1832,9 @@ class Bindings:
         if b.scheme in LANE_SCHEMES and b.op not in MOD_OPS:
             raise ValueError(f"{b.op!r} is not an op for a {b.scheme} source; "
                              f"one of {', '.join(MOD_OPS)}")
+        why = save_refusal(b)
+        if why is not None:
+            raise ValueError(why)
         if not b.is_performer:
             return
         cur = next((x for x in self.bindings
@@ -1805,6 +1858,9 @@ class Bindings:
         is written unless `write` is False (a knob Learn: the row is the
         loaded preset's, plan 13 §3.3). Returns the rows dropped.
         """
+        why = save_refusal(b)
+        if why is not None:
+            raise ValueError(why)
         if not b.is_midi:
             self.add(b)
             if write:

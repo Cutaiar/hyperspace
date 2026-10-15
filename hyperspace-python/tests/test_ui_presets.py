@@ -497,20 +497,25 @@ def test_a_far_slot_reads_its_number_and_name_and_has_the_slot_menu(rig, tmp_pat
     assert json.loads(show.read_text())["bank"][14] == "PRESET 15"
     # the hovers say where a slot is
     tip = ui_presets.slot_tip
+    # (plan 24 C1: SAVE held and the pad tapped, on a filled and an empty slot)
     assert tip(11, "TRIP 3") == ("slot 12: TRIP 3 — the desk's row 4, pad 4. Click loads, "
-                                 "⇧click saves the live state as it. Right-click → free "
-                                 "this pad (keeps the preset) to make room")
+                                 "⇧click saves the live state as it. On the desk, hold "
+                                 "SAVE and tap the pad: a new preset here, TRIP 3 kept in "
+                                 "the list. Right-click → free this pad (keeps the preset) "
+                                 "to make room")
     assert tip(2, "TRIP").startswith("F3: TRIP — the desk's row 1, pad 3.")
-    assert tip(11, None) == ("slot 12: empty — the desk's row 4, pad 4. Hold the pad (or "
-                             "⇧click) to save the live state here, or right-click to put "
-                             "a preset here")
+    assert tip(11, None) == ("slot 12: empty — the desk's row 4, pad 4. Hold SAVE and tap "
+                             "the pad, or hold the pad (or ⇧click), to save the live state "
+                             "here, or right-click to put a preset here")
     assert tip(16, "A").startswith("slot 17: A — the desk's row 5, pad 1.")
     assert tip(23, "A").startswith("slot 24: A — the desk's row 5, pad 8.")
     assert tip(2, "FIELD") == ("F3: FIELD — the desk's row 1, pad 3. Click loads, ⇧click "
-                               "saves the live state as it. Right-click → free this pad "
-                               "(keeps the preset) to make room")
-    assert tip(2, None) == ("F3: empty — the desk's row 1, pad 3. Hold the pad (or ⇧click) "
-                            "to save the live state here, or right-click to put a preset here")
+                               "saves the live state as it. On the desk, hold SAVE and tap "
+                               "the pad: a new preset here, FIELD kept in the list. "
+                               "Right-click → free this pad (keeps the preset) to make room")
+    assert tip(2, None) == ("F3: empty — the desk's row 1, pad 3. Hold SAVE and tap the pad, "
+                            "or hold the pad (or ⇧click), to save the live state here, or "
+                            "right-click to put a preset here")
 
 
 # ------------------------------------------- plan 19 WP5: the dot and the save label
