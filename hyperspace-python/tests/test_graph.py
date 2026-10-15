@@ -42,10 +42,15 @@ def test_graph_imports_only_the_render_stack_and_names_no_write():
     assert not called & {"set_value", "modulate", "apply", "snapshot"}
     defined = {n.name for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)}
     assert not defined & {"set_value", "modulate", "apply", "snapshot"}
-    # the dependency runs one way: outputs.py knows nothing of the graph
+    # the dependency runs one way: outputs.py imports nothing of the graph
     from hyperspace import outputs
 
-    assert "graph" not in Path(outputs.__file__).read_text()
+    for node in ast.walk(ast.parse(Path(outputs.__file__).read_text())):
+        if isinstance(node, ast.ImportFrom):
+            assert (node.module or "").split(".")[-1] != "graph", node.module
+            assert "graph" not in {a.name for a in node.names}
+        elif isinstance(node, ast.Import):
+            assert "graph" not in {a.name.split(".")[-1] for a in node.names}
 
 
 def _names(g: G.Graph) -> list[str]:
@@ -230,6 +235,32 @@ def test_the_graph_is_built_once_per_set_of_switches_and_reused(ctx):
     del r._graph                                            # from before A1
     run(ctx, r, vs, frames=1)
     assert isinstance(r._graph, G.Graph)
+    # a renderer carrying A0's timer through a live reload: `end_frame`
+    # took no names and the pending frames had another shape. The timer is
+    # not a reload target, so the renderer drops it for a fresh one — on
+    # `on_reload`, and again if one of another class turns up without it
+    from hyperspace.render import PassTimer
+
+    class OldTimer:
+        on, note, freed = True, "", False
+
+        def time(self, name):
+            raise AssertionError("an old timer must never be asked")
+
+        def end_frame(self):                          # A0's signature
+            raise AssertionError("an old timer must never end a frame")
+
+        def _off(self, e):
+            self.freed = True
+
+    old = r.timer = OldTimer()
+    r.on_reload()
+    assert r.timer is None and old.freed
+    run(ctx, r, vs, frames=2)
+    assert type(r.timer) is PassTimer
+    old = r.timer = OldTimer()                        # re-classed, no on_reload
+    run(ctx, r, vs, frames=2)
+    assert type(r.timer) is PassTimer and old.freed
 
 
 def test_a_pipeline_no_view_routes_to_this_frame_does_not_run(ctx):

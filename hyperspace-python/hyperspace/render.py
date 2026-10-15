@@ -813,8 +813,11 @@ class Renderer:
         # renderer from before the outputs existed has none of them
         self._release_frames()
         # plan 26 A1: the graph is built again from graph.py as it is now
-        # (its nodes are not re-classed; they hold no GL resources)
+        # (its nodes are not re-classed; they hold no GL resources), and so
+        # is the timer — the one from before the reload is this module's
+        # old `PassTimer`, with an `end_frame` of another shape
         self._graph = None
+        self._drop_timer()
         for res in (getattr(self, "_show_vao", None), getattr(self, "_show_prog", None)):
             if res is not None:
                 res.release()
@@ -988,12 +991,28 @@ class Renderer:
             ctx.enable(moderngl.BLEND)
 
     def _pass_timer(self) -> PassTimer:
-        """The GPU pass timer (getattr: a renderer from before a hot reload
-        has none, and gets one)."""
+        """The GPU node timer (getattr: a renderer from before a hot reload
+        has none, and gets one). A timer of another class — this module's
+        `PassTimer` as it was before a reload, whose `end_frame` and
+        pending frames have the old shape — is dropped for a fresh one:
+        the timer is not a reload target, only the renderer is."""
         timer = getattr(self, "timer", None)
-        if timer is None:
+        if timer is None or type(timer) is not PassTimer:
+            self._drop_timer()
             timer = self.timer = PassTimer(self.ctx)
         return timer
+
+    def _drop_timer(self) -> None:
+        """Free the timer's queries, whatever shape it has (its own `_off`
+        knows), and forget it; best-effort — a timer never costs a frame."""
+        timer = getattr(self, "timer", None)
+        self.timer = None
+        off = getattr(timer, "_off", None)
+        if off is not None:
+            try:
+                off(RuntimeError("replaced"))
+            except Exception:  # noqa: BLE001, S110 — a stand-in or a lost context: nothing to free
+                pass
 
     def _timed(self, name: str) -> _Timed:
         """``with self._timed("fx"):`` — the pass's GPU time (plan 26 A0)."""

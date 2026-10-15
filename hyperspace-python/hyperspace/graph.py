@@ -118,6 +118,9 @@ class Frame:
         once, the first time a node asks, which is after the hands' layer
         (A1: the route is per frame; A3 makes it wiring)."""
         if self._routes is None:
+            # right only once `hands` is settled: every caller runs after
+            # the hands' layer — `Fx` through `after=gate`, `Output` through
+            # its `layer` port (default_graph)
             self._routes = [route(v.switches, self.fx_on, self.hands) for v in self.views]
             users: dict[int, list[int]] = {}
             for i, (key, _) in enumerate(self._routes):
