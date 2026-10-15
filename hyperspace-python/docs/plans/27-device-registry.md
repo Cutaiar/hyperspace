@@ -336,8 +336,9 @@ the config's folder.
   `error: OSError: … Address already in use`, retried until it frees.
   The cloud block adds `scan · cloud · connected · 1 source · knot.npz ·
   frame 7/16 · 144 points · 12 fps`, the frame counting through the
-  recording at its own rate, whatever the app's frame rate; nothing on
-  screen draws it yet (plan 26's point-cloud node does).
+  recording at its own rate, whatever the app's frame rate. B4 drew
+  nothing on screen; plan 26's point-cloud node (A4b) now draws it in
+  the scene — see [`26-render-graph.md`](26-render-graph.md).
 - **Code.** `hyperspace/osc.py` (new; `pythonosc` is imported only when
   a server opens): `Server` (a non-blocking UDP socket read in `poll`,
   at most `MAX_DATAGRAMS` = 512 a frame, no thread), `Layout`,

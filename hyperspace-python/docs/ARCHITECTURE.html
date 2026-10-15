@@ -359,8 +359,8 @@
     </p>
     <dl class="prov">
       <div><dt>Modules</dt><dd>56</dd></div>
-      <div><dt>Python</dt><dd>39,835</dd></div>
-      <div><dt>Tests</dt><dd>45,290</dd></div>
+      <div><dt>Python</dt><dd>41,792</dd></div>
+      <div><dt>Tests</dt><dd>46,985</dd></div>
       <div><dt>Shapes</dt><dd>26</dd></div>
       <div><dt>Patterns</dt><dd>17</dd></div>
     </dl>
@@ -694,7 +694,7 @@
   <!-- ══ 04 ═════════════════════════════════════════════════════════ -->
   <section>
     <div class="shead"><span class="num">04</span><h2>The components</h2></div>
-    <p class="dek">Eleven parts, each with one job and a test that holds its edges.</p>
+    <p class="dek">Twelve parts, each with one job and a test that holds its edges.</p>
 
     <div class="roster">
       <div class="rrow">
@@ -728,8 +728,13 @@
         <div class="chip c-offset">Feed</div>
       </div>
       <div class="rrow">
-        <div><div class="name">Render stack</div><div class="mods">geometry · view · render · glsl · fx · lookback · dream · ghost · outputs · overlay</div></div>
-        <div class="what">GL resources, the frame history, the dream worker, the faces' picture, every output pipeline. <span>Imports no registry at all.</span></div>
+        <div><div class="name">Render stack</div><div class="mods">geometry · view · graph · render · glsl · fx · lookback · dream · ghost · outputs · overlay</div></div>
+        <div class="what">GL resources, the shared camera the shape and the hands are seen through, the frame history, the dream worker, the faces' picture. <span>Imports no registry at all.</span></div>
+        <div class="chip c-read">Reads</div>
+      </div>
+      <div class="rrow">
+        <div><div class="name">Graph</div><div class="mods">graph</div></div>
+        <div class="what">The frame as nodes — the shape, the hands and a point cloud as geometry, the scene, layers, composites, the effect chain, the history, the outputs — wired from the outputs' switches and a preset's graph, evaluated once a frame in dependency order. <span>Part of the render stack: reads, never writes.</span></div>
         <div class="chip c-read">Reads</div>
       </div>
       <div class="rrow">
@@ -788,7 +793,7 @@
       <div class="step mark"><div class="n">11</div><div class="d"><b>reg.apply()</b> — base plus offsets onto every live object</div><div class="chip c-read">objects</div></div>
       <div class="step"><div class="n">12</div><div class="d">Devices send — <b>devices.send()</b>: the sinks send this frame's effective values out (the bridge, the hands' DAW port)</div><div class="chip c-read">out</div></div>
       <div class="step"><div class="n">13</div><div class="d"><b>view.integrate()</b> — the angle advances by rate × dt</div><div class="chip c-read">direct</div></div>
-      <div class="step"><div class="n">14</div><div class="d">Hand the renderer the bands, read only; draw every render output — a masked shape's W planes fold here</div><div class="chip c-read">screen</div></div>
+      <div class="step"><div class="n">14</div><div class="d">Hand the renderer the bands, read only; evaluate the render graph, every render output — a masked shape's W planes fold here</div><div class="chip c-read">screen</div></div>
       <div class="step"><div class="n">15</div><div class="d">Draw the control panel</div><div class="chip c-base">base</div></div>
     </div>
 
@@ -846,7 +851,7 @@
         watched, so a device comes and goes without a relaunch; one that fails
         is an error line, never a stopped frame. A phone app over OSC is added
         by an entry alone, and a recorded point cloud plays on the registry,
-        off the router.</p>
+        off the router — and is drawn in the scene by the render graph.</p>
         <span class="path">devices · config · osc · bridge</span>
       </div>
       <div class="sub">
@@ -859,7 +864,8 @@
       </div>
       <div class="sub">
         <h4>Look-back &amp; dream</h4>
-        <p>A history of scene textures composites echoes over the live frame.
+        <p>A history of scene textures composites echoes over the live frame;
+        what it captures — the scene, or the scene with the hands — is wiring.
         With dreaming enabled, a worker thread pulls frames from that history,
         runs them through a network on the GPU and hands back dreamed ones —
         without ever blocking the frame.</p>
@@ -886,11 +892,23 @@
       </div>
       <div class="sub">
         <h4>Ghost hands</h4>
-        <p>The tracked hands drawn over the finished frame, with a per-hand gauge,
-        routed marks lit in colour against grey, a grab ring, and labelled tethers
-        from each routed mark to the parameter it drives. Reads the skeleton raw —
-        it is not a source.</p>
-        <span class="path">ghost</span>
+        <p>The tracked hands drawn in the shape's own camera — as their own
+        layer over or through the effects, or solid inside the scene, in front
+        of and behind its edges — with a per-hand gauge, routed marks lit in
+        colour against grey, a grab ring, and labelled tethers from each routed
+        mark to the parameter it drives. Reads the skeleton raw — it is not a
+        source.</p>
+        <span class="path">ghost · graph</span>
+      </div>
+      <div class="sub">
+        <h4>Render graph</h4>
+        <p>The frame as wired nodes: the shape, the hands and a point cloud
+        share one fixed camera with a depth buffer, so a hand can pass between
+        the shape's edges. Zoom and pan move only the shape, in the world. A
+        preset can say its wiring in its file — the hands in the scene or as a
+        layer, an effect twice — and 556 golden frames pin every factory
+        preset's picture to the byte.</p>
+        <span class="path">graph · render · geometry · tools/golden_frames</span>
       </div>
       <div class="sub">
         <h4>Shapes in four dimensions</h4>
@@ -916,7 +934,7 @@
   <!-- ══ 07 ═════════════════════════════════════════════════════════ -->
   <section>
     <div class="shead"><span class="num">07</span><h2>The boundaries are tested, not intended</h2></div>
-    <p class="dek">What keeps a 39,800-line single process from turning into a knot.</p>
+    <p class="dek">What keeps a 41,800-line single process from turning into a knot.</p>
 
     <div class="col">
       <p>
@@ -925,7 +943,7 @@
         tree to prove that the core never imports the MIDI adapter, the bridge,
         the OSC device or the dream worker; that the routing table imports
         nothing above it; that
-        the render stack imports no registry; that <code>Param.modulate</code> has
+        the render stack and its graph import no registry; that <code>Param.modulate</code> has
         exactly one call site; and that importing the host pulls in no gated
         adapter, no <code>torch</code> and no tracking SDK.
       </p>
@@ -962,9 +980,9 @@
 
     <div class="stats">
       <div class="stat"><div class="v">56</div><div class="k">Python modules</div></div>
-      <div class="stat"><div class="v">39,835</div><div class="k">lines of app</div></div>
-      <div class="stat"><div class="v">45,290</div><div class="k">lines of tests</div></div>
-      <div class="stat"><div class="v">76</div><div class="k">test files</div></div>
+      <div class="stat"><div class="v">41,792</div><div class="k">lines of app</div></div>
+      <div class="stat"><div class="v">46,985</div><div class="k">lines of tests</div></div>
+      <div class="stat"><div class="v">80</div><div class="k">test files</div></div>
       <div class="stat"><div class="v">26</div><div class="k">shapes</div></div>
       <div class="stat"><div class="v">13</div><div class="k">effects</div></div>
     </div>

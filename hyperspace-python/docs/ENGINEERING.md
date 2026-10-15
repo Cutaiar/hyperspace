@@ -203,11 +203,68 @@ move.
 
 ## 2. Rendering
 
-**The transform**: rotate in 4D across six planes → project 4D→3D →
-apply the drag orientation → project to 2D, on the CPU; the GPU
-rasterises. Edges are screen-space quads whose width and alpha follow
-w-depth (the near half glows), with brightness compensated for edge
-count so the 120-cell does not clip to a blob. Points are red.
+**The transform** (plan 26, one camera): the CPU rotates the shape in
+4D across six planes (`rot.*`), projects 4D→3D and applies the
+`camera.yaw` / `camera.pitch` turntable — the shape's world pose
+(`geometry.world_points`); the vertex shaders take it to the screen
+through one shared 4×4: the shape's world transform `u_model`
+(`geometry.model_matrix`: `camera.zoom` a scale about the world origin,
+then `camera.pan`) and the eye `u_vp` (`geometry.eye_matrix`). Edges are
+quads expanded in the vertex shader from their two 3D ends, whose width
+and alpha follow w-depth (the near half glows), with brightness
+compensated for edge count so the 120-cell does not clip to a blob;
+points are red quads, each a whole number of pixels across. Both carry a
+real depth. `geometry.project` / `project_h`, the old CPU path to 2D,
+stay the parity oracle.
+
+**The eye** is a fixed perspective camera on the world's +z axis looking
+at the origin: `eye.fov` (47.6°, `geometry.EYE_FOV`, across the
+picture's shorter side; 10–120°) and `eye.distance` (3.78 shape radii,
+`EYE_DISTANCE`; 1.5–40), on the CAMERA page under **eye**. They are
+session params (group `eye`: no preset moves them) and not modulatable
+(the camera is the rig; the shape is what moves). The defaults are
+`project_h`'s old 3D divide: at zoom 1 and pan 0 every vertex lands
+within 2.3e-13 px of `project_h` in float64 and 1.1e-4 px in float32,
+against a bar of half a pixel
+(`tests/test_camera.py::test_the_default_eye_lands_every_vertex_within_half_a_pixel_of_project_h`).
+Clip planes 0.05 / 1000 (`EYE_NEAR` / `EYE_FAR`): depth only. An edge end
+behind the eye is slid along the edge to just in front of it (`EYE_W`);
+a point behind it is dropped — reachable only past zoom ≈ 3.8, where the
+eye is inside the shape.
+
+**Zoom and pan are the shape's, in the world.** `camera.zoom` scales the
+shape about the world origin (the whole-frame 2D zoom is gone): a scaled
+shape has its own perspective, and copies (`view.instances`) are copies
+in the world, a cell `render.CELL` = 2.4 radii apart before the zoom.
+`camera.pan.x/y` are in world units — shape radii, ±12
+(`params.PAN_RANGE`), y positive down the screen as it always was. A
+preset, camera module or `camera/default.json` without `"units":
+{"camera.pan": "world"}` stored logical px: `params.pan_world` divides
+them by `geometry.PAN_REF_PX` = 324 (the default eye's px per unit at
+1080p, the render cap and the party projector) at load, so an old
+preset sits where it did on the 1080p projector (nearer the centre on a
+smaller window); every save writes the marker, and the schema stays
+`hyperspace.preset/2`. The mouse pans by cursor px / px-per-unit and the
+wheel zooms about the point under the cursor (`app._px_per_unit`). The
+ghost hands and a point cloud never follow `camera.*`: only the shape
+moves.
+
+**Strokes in world space or screen space** (`view.screen_strokes`,
+"Screen strokes" on the VIEW page, a performance switch, off by
+default; the owner's toggle of 2026-10-14). Off — world space — the
+edges' width and the dots' radius are × `camera.zoom`, the pre-plan-26
+feel: strokes grow and shrink with the shape, a sub-pixel width folding
+into alpha. On — screen space — they keep their pixel weight whatever
+the zoom. At zoom 1 both draw the same frame byte for byte. One line in
+`draw_scene` (`sz`); the hands' strokes never change with it.
+
+**Depth.** The scene's target (`render.SceneTarget`) has a depth
+attachment. The see-through shape is painter-sorted as always and never
+depth-tested against itself; it is depth-tested against the solid
+geometry already drawn (hands, a point cloud), and its visible surface —
+fragments with alpha over `render.DEPTH_ALPHA` = 0.25 — is written to
+depth after its colour (`Renderer._depth_pass`), so a hand can pass
+between its edges.
 
 **Faces** are the true 2-faces, translucent and painter-sorted, with
 face-local UVs. `shaders/patterns.glsl` paints them: `vec4 pattern(int
@@ -304,14 +361,172 @@ spiral from the centre; a copy never moves as the count grows), **RING**
 `inst_rate`. At 0 nothing is drawn but the ground, the echoes, the
 effects and the hands carry on.
 
-**The frame** (`render.py`, `Renderer.draw_outputs`), once per frame:
-the face picture (only while an effect is aimed at the faces) → the
-scene → the coverage mask (when the look-back occludes) → the look-back
-composite → the frame's effects → the hands → the master dim; then each
-render output gets its picture (§14). With the look-back, effects and
-ghost off and the dim at full, the output is bit-identical to the scene
-pass alone. The renderer re-binds its target on every exit, a raise
-included, so a failing pass never strands a framebuffer.
+**The frame is a render graph** (`graph.py`, plan 26). `Renderer.draw_outputs`
+settles the frame's size under the render cap, ticks the effect folder,
+then builds or reuses the graph for this frame's outputs and evaluates
+it; each render output gets its picture (§14). The node kinds:
+
+| Kind | Classes (node names) | Takes | Makes |
+|---|---|---|---|
+| **Geometry** | `Shape` (`shape`), `Hands` (`ghost`, `ghost.2` …), `PointCloud` (`cloud`, `cloud.2` …) | its params | draw calls in the shared camera; no framebuffer of its own |
+| **Scene** | `Scene` (`scene`) | any number of geometries (`geometry`, `geometry.2` … ports) | one colour + depth target: the solid geometries first (the hands, a cloud: depth written), then the see-through shape, painter-sorted and depth-tested against them |
+| **Layer** | `HandsLayer` (`hands`, `hands.2`), `Readout` (`readout`), `Cover` (`cover`) | one geometry (the cover: the scene) | its own target: the hands alone with their own colour and depth; the guide and tethers' labels; the faces' coverage mask (`mask`) |
+| **Composite** | `Composite` (`composite(scene+hands)`, `composite(hands)`, `composite(history)`) | `under`, `over` (and the scene's `depth`) | `over` laid on `under`: over, add or depth-aware |
+| **FX** | `Fx` (`fx`, `fx(scene+hands)`, `fx(hands)`) | an image | the effect chain (`fx.FxChain`), one node per pipeline; inactive, its input passes through |
+| **History** | `History` (`history`), `Capture` (`capture`) | an image (+ the cover) | the echoes and the dream laid over its input; the capture into the ring, once a frame after every pipeline |
+| **Output** | `Output` (`output.1` …) | `image`, `hands`, `readout`, `depth` | `Renderer._compose`: fit, flips, the hands over, the readout, the dim — or the five-step `outputs.Handoff` for a later output |
+
+Ports are typed (`image`, `mask`, `geometry`); the graph refuses a wrong
+type, an unknown port, a dependency outside the graph and a duplicate
+name when it is built. A Scene or Layer *makes* a texture
+(`image(frame)`, and `depth`); History, Composite and FX *paint*
+(`paint(frame, dst)`) into the framebuffer their consumer hands them, so
+the look-back composites straight into the chain's half-float input and
+the chain writes straight into the window — no texture quantises the
+picture between them. A pipeline's end (`Fx`) decides where the picture
+lands: straight into its one output when that output is at the frame's
+size, unflipped and on this context; otherwise once into a frame texture
+every output of it shows. Node methods are `run`, `paint`, `draw`,
+`image`, `depth`, never `apply`, `modulate`, `snapshot` or `set_value`,
+and `graph.py` imports `moderngl`, `numpy`, `geometry` and `outputs` only
+(`tests/test_graph.py::test_graph_imports_only_the_render_stack_and_names_no_write`).
+
+**Evaluation.** `Graph.order` is dependency order — a depth-first walk,
+dependencies first, ties in insertion order — computed when the graph is
+built, never per frame; `Graph.evaluate` runs every node once.
+`Renderer._graph_for` keeps the last graph and builds a new one
+(`graph.default_graph`) only when its key changes: each output's scene /
+hands / through switches (`graph_key`), the renderer's `Wiring` (below)
+and the roles of the listed `cloud` devices. What is per frame: whether
+an effect is on and whether a hand drew decide which pipeline end each
+output takes (`Output.settle`); a pipeline no output takes is skipped and
+its nodes read 0 ms. Evaluating the frame this way moved no pixel of A0's
+427 goldens. (The *modulation* graph is not evaluated this way: the
+one-frame lag of ARCHITECTURE §2 stands until plan 28.) For one default
+output the order is `shape → ghost → scene → cover → hands → history → fx
+→ capture → output.1`.
+
+**The default graph** is today's frame, wired from each output's
+switches: **scene** on, its `image` is the SCENE chain (`history → fx`);
+**hands** on, the hands' layer is laid over at the output, and its
+readout on top; **through** with scene and hands, the layer is
+composited onto the history before the effects (`composite(scene+hands)
+→ fx(scene+hands)`), or with the scene off, alone through them
+(`composite(hands) → fx(hands)`). With no effect on, or no hand drawn,
+a through pipeline stands down for its fallback with the layer over
+(`Fx.fallback`, `Output.settle`) — `outputs.route`'s table, as wiring.
+The capture takes the scene. The renderer's `Wiring` (`graph.Wiring`,
+`Renderer.wiring`, default today's) changes the rest, renderer-wide:
+
+- `hands`: `layer` (today) or `scene` — the hands drawn inside the scene,
+  solid; an output showing the scene shows them there (its hands switch
+  then wires only the readout), and an output with the scene off still
+  gets the layer. So the same hands can be in the scene on the projector
+  and a clean layer on the glass. Inside the scene the hands are at full
+  opacity (`ghost.alpha` sets only the layer; at 0 the hands are drawn
+  nowhere), and the guide and tethers stay the readout, laid on at the
+  outputs.
+- `blend`: `over`, `add` or `depth` — how the layer is laid on. Depth-aware
+  drops a layer texel where the scene's visible surface is nearer by more
+  than `render.LAYER_DEPTH_BIAS` = 0.05 shape radii (both depths
+  linearised; the scene's resolved out of its MSAA target on the first
+  ask, `SceneTarget.depth_texture`). A later output's presenter lays a
+  depth-aware layer plain over.
+- `history`: `scene` (today) or `scene+hands` — the capture takes the
+  layer laid on the scene (`composite(history)`); with the hands in the
+  scene, the scene already holds them.
+- `draw` and `extra`: the first hands node drawn `solid` or as `lines`,
+  and the hands nodes after it (below).
+
+Nothing in the app sets `Wiring` but a preset's `graph` section. The
+OUTPUT page's "shows:" line says it in words ("scene + hands: in the
+scene as lines", "· depth-aware"), its hover the loaded graph in one
+line, and the LOOKBACK page "history: the scene · with the hands"
+(`graph.hands_words`, `graph_words`, `history_words`).
+
+**The hands** (`graph.Hands`, the `ghost.*` params' node) are `ghost.py`'s
+five styles as geometry in the shared camera: `ghost.shared_camera`
+takes the Leap's millimetres into the world through the calibration in
+`hands.json` (§12) and the eye. A frame's poses are settled once
+(`Ghost.settle`) for every draw of them. A hands node is timed by its
+consumer: inside a scene its draw is its own SYSTEM line (`ghost`); its
+layer's draw is the layer's line (`hands`).
+
+**The graph in a preset** (`graph.read_graph`, `GraphSpec`,
+`preset.GraphSection`). A preset may carry a `graph` section, before
+`values`: the nodes that differ from the default graph, one JSON object
+each, one per line. `tests/fixtures/presets/hands-lines.json` (a test
+fixture, never a factory preset) puts the hands in the scene as lines
+and the history on the scene with the hands:
+
+```json
+"graph": {"nodes": [
+ {"kind": "hands", "into": "scene", "draw": "lines"},
+ {"kind": "history", "holds": "scene+hands"}
+]}
+```
+
+| Kind | Keys | Left out |
+|---|---|---|
+| `hands` | `instance` (1, 2 …), `into` (`layer` / `scene`), `draw` (`solid` / `lines`), `laid` (`over` / `add` / `depth`, only on the node that makes the layer) | hands 1, a solid layer laid over |
+| `effect` | `file`, `instance` (2 or more) | every effect file once |
+| `history` | `holds` (`scene` / `scene+hands`) | the scene |
+
+The kinds are `graph.NODE_KINDS` — the one place a kind is named. No
+section, or `{"nodes": []}`, is the default graph; nothing that is a
+param goes in it (an effect's on / mix / order, `ghost.*`, `dream.*` stay
+in `values` or the show); a save writes it back in a fixed order. A
+section this build cannot read — an unknown kind, a key a node does not
+take, a value out of its choices, two nodes of one instance, two layers
+— is a note on the preset strip and the default graph, and the section is
+kept as the file had it and written back on save. A point cloud is not a
+kind here: clouds follow the device list (below), and `{"kind":
+"cloud"}` is an unknown kind until plan 28. Undoing a load puts the
+loaded preset's graph back before its values (`library.Marks`).
+
+**Two of a node.** `{"kind": "effect", "file": "acid", "instance": 2}`
+adds a second acid: the effect `acid.2` in `FxState`
+(`set_instances`), its params `fx.acid.2.*` ("Acid 2 mix", performance
+params in the preset's `values`), its own clock and place in the chain,
+on the acid file's one compiled program. `{"kind": "hands", "instance":
+2}` adds a second hands node `ghost.2`: its own `Ghost`
+(`Renderer.ghost_of`) over its own state, its own session params
+`ghost.2.on/alpha/mirror/guide/tethers/style` (`ghost.2.on` starts off),
+its layer `hands.2` and its lone readout `readout.2`. Every `into:
+"scene"` node is in the scene; the `into: "layer"` node (else the first)
+makes the one layer, laid on the outputs without the hands in their
+scene. A show holds `ghost.<n>.*` back until a preset's graph declares
+the node, then seeds it. `draw: "lines"` draws a style's meshes as their
+triangles' edges, one pixel wide (`ctx.wireframe`); the guide stays
+solid.
+
+**The point cloud** (`graph.PointCloud`, plan 26 A4b). `app.main` hands
+the renderer the device registry (`Renderer.cloud_source`); each listed
+`cloud` device (§5) adds a node `cloud` (`cloud.2` …) as the default
+scene's first geometry. It draws the latest frame of `cloud:<role>` as
+one instanced quad per point through the eye — a hard round dot, alpha
+1, depth tested and written, a whole number of pixels across — before
+the see-through shape, so a dot in front of an edge hides it and an edge
+in front of a dot is drawn over it. Its world transform is one uniform
+scale about the world origin, `cloud.scale`; the shape's `camera.*` and
+`rot.*` do not move it. The look is the session group `cloud`:
+`cloud.size` (radius, logical px, 0.5–12, 2), `cloud.scale` (0.01–10,
+0.3: the fixture knot at about the shape's size), `cloud.bright` (0–2,
+1), `cloud.colors` (the source's colours, on; off or none, white) — no
+panel row: Learn and ROUTING reach them. The points are uploaded only
+when the cloud's (frame id, publish time) moves; a listed device whose
+file is missing keeps its node, which draws nothing. With no `cloud`
+entry the graph is node for node the one before.
+
+In the frame's terms: the face picture (only while an effect is aimed at
+the faces, made by the shape before the scene's target is bound) → the
+scene → the coverage mask (when the look-back occludes) → the hands'
+layer → the look-back composite → the frame's effects → the capture →
+each output's picture, the hands over it, the readout and the master
+dim. With the look-back, effects and ghost off and the dim at full, the
+output is bit-identical to the scene pass alone. The renderer re-binds
+its target on every exit, a raise included, so a failing node never
+strands a framebuffer.
 
 **The look-back** (`lookback.py`, LOOKBACK page) keeps an atlas of
 downsampled echoes of past frames and one dream buffer, and composites
@@ -409,6 +624,69 @@ and an extra instance belongs where its first does. So a graph with one
 instance of everything — every preset and binding written before the
 graph — never migrates. No effect file and no param key may be purely
 decimal, or it would read as a marker.
+
+The rule as built (plan 26 A4): `fx.<file>.<n>.*` for an effect (the
+effect named `acid.2` in `FxState`), `ghost.<n>.*` for a hands node,
+its layer `hands.<n>` and readout `readout.<n>` (node names, not param
+prefixes), and a point cloud's nodes `cloud.<n>` (which share `cloud.*`
+for now). No `dream` instance exists yet. A load sorts the instance ids
+in a preset's `values` (`params.is_instance_id`) against the graph it
+lands, so an id whose node is not in the graph is an unknown id with a
+note. `fx.parse` refuses a `@param` key of digits alone, and
+`FxState.load` an effect file whose stem has a dot or is digits alone
+(`acid.2.glsl` would read as an instance). The pipeline nodes
+`fx(scene+hands)` and `composite(hands)` are names only, never param
+prefixes.
+
+**GPU time per node** (`render.PassTimer`): one `GL_TIME_ELAPSED` query
+around each node a frame (a node that runs several times is summed; one
+that did not run counts 0; queries never nest), read 3 frames late
+(`LAG`) so the CPU never waits on the GPU, kept as a rolling median over
+60 frames (`WINDOW`) in `Renderer.stats["gpu_ms"]`, in the graph's
+order. The SYSTEM page shows "gpu per node, ms (median of the last
+frames):" and one line per node (`Graph.timed`: every node that times
+itself and every solid geometry a scene draws); a node that leaves the
+graph leaves the list. Without timer queries `stats["gpu_note"]` says
+why ("gpu: no GPU timer queries on this context …") and the pixels are
+the same. Apple's driver reads some tiny nodes as 0.00; the figures are
+GPU time, not the CPU's.
+
+**Golden frames** (`tools/golden_frames.py`, `tests/golden/frames/`).
+Every factory preset (`preset.FACTORY_PRESETS`) is loaded through the
+real `Presets` into a throwaway home, with two synthetic hands
+(`tests/fake_hands.py`: the left open, the right a fist) present or
+absent through the real `HandsIO`, the ghost on, the LFOs and the
+analyzer at rest (never stepped, never fed), the dream off, the preset's
+own look-back kept, and drawn for 8 frames at 1/60 s on a pinned clock at
+960×600, dpr 1: the eight `Switches` states as eight outputs of one
+frame (output 1 4× MSAA like the window); `solo` (output 1 alone, drawn
+direct) and, for the presets with an effect on,
+`solo-scene+hands+through`; party-trip once at 3840×2160 (2×, 1080p
+logical) under the 1080p cap; the other wirings (`in-scene/…`,
+`depth/…`, `history+hands/…`); the fixture presets
+(`FIXTURE_PRESETS`: `hands-lines`); and a recorded cloud listed in a
+scratch config (`cloud/…`). A golden is the SHA-256 of the
+full-resolution RGBA frame, with a quarter-size PNG per distinct picture
+and the route each state reached: **556 goldens, 130 distinct
+pictures**, recorded on `GL_RENDERER` "Apple M3 Max" (GL_VERSION "4.1
+Metal - 90.5"). `tests/test_golden_frames.py` compares every hash
+exactly there and skips with a note on any other renderer. The tool:
+
+```bash
+uv run python tools/golden_frames.py                          # diff; "all 556 frames match their goldens (…)"
+uv run python tools/golden_frames.py --only party-trip,legacy6 # those presets only
+uv run python tools/golden_frames.py --record                 # re-record every golden
+uv run python tools/golden_frames.py --only hands-lines --record   # re-record those, keep the rest
+```
+
+A diff that finds moved frames prints `MOVED …` per frame and writes a
+contact sheet (golden | now | difference ×4) to
+`docs/plans/assets/26-render-graph/golden-diff-<presets or all>.png`; it
+refuses to diff on another renderer. Re-record only what a change moved,
+on the gate Mac, and name each moved frame and its one reason in the
+commit and the PR; a moved frame for a change that should move nothing
+means the change is wrong. Which WPs moved which frames, and why, is in
+[`plans/26-render-graph.md`](plans/26-render-graph.md).
 
 ## 3. Running it
 
@@ -743,7 +1021,8 @@ rate against the frame clock (`loop = false` holds the last frame). It
 publishes a `devices.PointCloud` — read-only N×3 float32 points, `t`, a
 counting `frame`, `bounds`, optional colours — on the registry as
 `cloud:<role>` (`DeviceRegistry.clouds`), never through the router;
-nothing on screen draws it yet (plan 26's point-cloud node, A4b, does).
+the renderer's point-cloud node draws it in the scene (§2, "The point
+cloud").
 `tools/cloud_fixture.py`
 writes the test fixture `tests/fixtures/clouds/knot.npz`.
 
@@ -1444,9 +1723,15 @@ following the skeleton raw (no smoothing), a display only.
 All six are in the `ghost` group, a session group: saved with the show,
 never moved by a preset. `mirror`, `guide`, `tethers` and `style` are
 settings — a hand learn onto one is refused in words, and a preset's
-route onto one is dropped at load. The ghost has its own fixed camera
-framing the box (or, with no box, the calibrated ranges); a hand leaving
-fades out over 0.3 s and one coming back fades in over 0.1 s. Desktop is
+route onto one is dropped at load. The ghost hands are drawn in the
+shape's camera (plan 26, §2): the eye, and the calibration in
+`hands.json` — `"units": {"mm": null, "origin": null, "tilt": 32.0}`,
+"from the box" by default, which fits the padded box (or, with no box,
+the calibrated ranges) into a 16:9 picture of the eye, seen from 32°
+above; an `mm` or `origin` written there wins. `hands.json` is
+`hyperspace.hands/3`; an older file is kept as `hands.json.bak-v2` before
+the first rewrite. A hand leaving fades out over 0.3 s and one coming
+back fades in over 0.1 s. Desktop is
 the only tracking mode whose axes have been measured; with `screentop`
 or `hmd` and the ghost on, the HANDS page says so (in **! more ▸**). Where the hands show
 on each output, and whether the effects bend them, is §14.
@@ -1597,8 +1882,9 @@ learned onto a desk button.
 | off | off | — | black |
 
 "Hands shown" also needs `ghost.on` and a hand drawn this frame; with no
-effect on, "through" changes nothing. The echoes and the dream never
-hold the hands. With the guide on, its gauges and labels are drawn over
+effect on, "through" changes nothing. The echoes and the dream do not
+hold the hands unless a preset's graph wires the history to the scene
+with the hands (§2). With the guide on, its gauges and labels are drawn over
 the hands after the effects, so they are never bent. The OUTPUT page
 says in words what each output shows ("scene + hands through the
 effects · 64%", "black — the scene is off and no hand shows").
@@ -1690,6 +1976,17 @@ uv run ruff check .
   this machine's font metrics: in the cloud container test_fx's own two
   fit tests miss by 18 px, so a pass or a fail there says nothing about
   the Mac.
+- The golden frames: `tests/test_golden_frames.py` compares 556
+  full-resolution frames — every factory preset in every output state,
+  hands absent and present, the other wirings, the fixture presets and a
+  recorded cloud — to the byte, on `GL_RENDERER` "Apple M3 Max" only
+  (anywhere else it skips with a note). `tools/golden_frames.py` diffs
+  them and writes a contact sheet of what moved; `--record` re-records
+  (`--only` a few presets). How, when and why to re-record: §2, "Golden
+  frames". The render graph's own tests: `tests/test_graph.py`,
+  `tests/test_camera.py`, `tests/test_hands_node.py`,
+  `tests/test_graph_json.py`, `tests/test_cloud_node.py`,
+  `tests/test_stroke_space.py`.
 - The shapes: `tests/test_shapes4d.py` holds every shape to its
   recorded digest (`tests/golden/shape_digests.json`, floats rounded to
   1e-9) and every lifted or masked shape to `VOLUME_FLOOR` through each
@@ -1697,7 +1994,8 @@ uv run ruff check .
 - Fixtures: `tests/fixtures/` holds the test-only presets, templates
   and palettes a test copies into a scratch library (plan 24's
   `desk-trust/`, `desk-faders/`, `desk-templates/`, `dance-sources/`,
-  `grab-follow/` and `palettes/`, plan 27's `osc/` and `clouds/`, and
+  `grab-follow/` and `palettes/`, plan 27's `osc/` and `clouds/`, plan
+  26's `presets/hands-lines.json` and `camera/`, and
   `macro-candidates/`). The folder
   is gitignored at the repo root, so a new fixture is added with
   `git add -f`. No test proves a mechanism by editing a factory preset.
@@ -1741,6 +2039,13 @@ What only a person at the machine can check is
   Learn by its role; the bridge feeds `ext` but has no learn, so while a
   bridge is listed (on or off) the param menu offers an item that waits
   until cancelled (register row 151).
+- **The render graph's wiring is the default graph's choices, not
+  cables.** A preset's `graph` section picks where the hands go, how
+  their layer is laid on and what the history holds; it cannot say which
+  output gets which hands node (the outputs are the session's switches),
+  and at most one hands node makes the layer. A node editor is plan 28.
+- **The golden frames prove pixels only on "Apple M3 Max"**; on any
+  other Mac the test skips.
 - **On the masked Heart, the W planes' readouts keep counting**: the
   VIEW page's XW / YW / ZW keys, `rot.phase.*` and ROUTING show the W
   planes turning while the picture turns in XZ, YZ and XY. Nothing says
