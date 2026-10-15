@@ -17,6 +17,7 @@ helpers every effect can call)::
     // @blend  mix                  mix | add | screen | multiply — how its
                                     output lands on its input
     // @speed  1                    the default time rate
+    // @mix    1                    the default wet/dry (0: starts as a no-op)
     // @tip    …                    one line for the tooltip
     uniform float u_amount;  // @param 0 2 0.5 "Amount" tooltip text…
     uniform float u_scale;   // @param 0.5 12 3 log "Scale" …
@@ -81,7 +82,7 @@ SPEED_MAX = 8.0
 RELOAD_EVERY = 30               # frames between mtime checks of the folder
 
 _NAME = re.compile(r"^[a-z][a-z0-9_]*$")
-_DIRECTIVE = re.compile(r"^\s*//\s*@(label|order|blend|speed|tip)\s+(.*?)\s*$")
+_DIRECTIVE = re.compile(r"^\s*//\s*@(label|order|blend|speed|mix|tip)\s+(.*?)\s*$")
 _UNIFORM = re.compile(r"^\s*uniform\s+(float|int)\s+(u_\w+)\s*;\s*//\s*@param\s+(.*?)\s*$")
 _PARAM = re.compile(
     r"^(?P<nums>(?:[-+]?[\d.]+(?:[eE][-+]?\d+)?\s+){3})"
@@ -120,11 +121,12 @@ class EffectSpec:
     order: int = 50
     blend: int = 0
     speed: float = 1.0
+    mix: float = 1.0         # the default wet/dry (@mix); 0 for a pass that starts as a no-op
     tip: str = ""
 
     def signature(self) -> tuple:
         """What the registry declares from this spec — a change means re-declare."""
-        return (self.label, self.tip, self.order, self.blend, self.speed,
+        return (self.label, self.tip, self.order, self.blend, self.speed, self.mix,
                 tuple((p.key, p.label, p.lo, p.hi, p.default, p.integer, p.log, p.wrap, p.tip)
                       for p in self.params))
 
@@ -148,6 +150,8 @@ def parse(name: str, source: str) -> EffectSpec:
                     spec.order = max(0, min(int(val), MAX_ORDER))
                 elif key == "speed":
                     spec.speed = float(val)
+                elif key == "mix":
+                    spec.mix = max(0.0, min(float(val), 1.0))
                 elif key == "blend":
                     spec.blend = BLENDS.index(val.lower())
             except ValueError as e:
@@ -262,7 +266,7 @@ class FxState:
     def _adopt(self, spec: EffectSpec) -> None:
         """Values for a new or re-shaped spec: keep what still exists."""
         old = self.values.get(spec.name, {})
-        v = {"on": bool(old.get("on", False)), "mix": float(old.get("mix", 1.0)),
+        v = {"on": bool(old.get("on", False)), "mix": float(old.get("mix", spec.mix)),
              "speed": float(old.get("speed", spec.speed)),
              "blend": int(old.get("blend", spec.blend)),
              "order": int(old.get("order", spec.order)),
