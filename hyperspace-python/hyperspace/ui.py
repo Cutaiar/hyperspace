@@ -1794,6 +1794,12 @@ class Panel:
         self._button("camera.reset", "Reset view")
         imgui.same_line()
         imgui.text_disabled("R  ·  stick click")
+        # plan 26 A2: the one fixed camera the shape is seen through — the
+        # room's, not the preset's (eye.* is session); zoom and pan above
+        # move the shape in front of it
+        self._section("eye", note="the room's camera, not the preset's")
+        self._row("eye.fov")
+        self._row("eye.distance")
 
     def _page_lookback(self, dt: float) -> None:
         ui_lookback.page(self, dt)     # the frame history and its composite

@@ -224,7 +224,8 @@ def test_every_factory_preset_loads_and_saves_its_plain_desk_as_before(rig):
         assert TEMPLATE_KEY not in doc
         assert doc["desk"] == desk_of(rig)
         assert [k for k in doc if k != "note"] == ["schema", "name", "values", "routes",
-                                                   "desk", "macros", "modules"]
+                                                   "desk", "macros", "modules",
+                                                   "units"]      # plan 26 A2's pan marker
 
 
 def test_a_template_fixed_after_the_load_changes_no_override_on_save(rig):

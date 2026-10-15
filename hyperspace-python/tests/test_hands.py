@@ -1600,7 +1600,7 @@ def test_the_sweep_sets_the_box_with_its_margin_and_a_symmetric_x(tmp_path):
                                     f"{bx[1] - bx[0]:.0f} × {by[1] - by[0]:.0f} × "
                                     f"{bz[1] - bz[0]:.0f} mm")
     saved = json.loads((tmp_path / "hands.json").read_text())
-    assert saved["schema"] == "hyperspace.hands/2"
+    assert saved["schema"] == "hyperspace.hands/3"      # /3 since plan 26 A2 (units)
     assert saved["box"]["x"] == [round(-(xs[1] + m), 3), round(xs[1] + m, 3)]
     # the other hand, never swept, is inside on its own side
     run(r, 1, hand("left", pos=(-xs[1], 200.0, 0.0)), hand("right", pos=(xs[1], ys[1], zs[0])))
@@ -1694,9 +1694,9 @@ def test_the_first_rewrite_of_an_old_file_keeps_a_backup(tmp_path):
     r = rig(tmp_path)
     sweep(r, wide)                                    # the first save of this build
     assert bak.read_text() == OLD_FILE
-    assert json.loads(path.read_text())["schema"] == "hyperspace.hands/2"
+    assert json.loads(path.read_text())["schema"] == "hyperspace.hands/3"   # plan 26 A2
     assert "the old file kept as hands.json.bak-v1" in r.io.cal_note
-    sweep(r, wide)                                    # a /2 file now: no second copy
+    sweep(r, wide)                                    # a /3 file now: no second copy
     r.io.reset_ranges()
     assert sorted(p.name for p in tmp_path.iterdir()) == ["hands.json", "hands.json.bak-v1"]
     assert bak.read_text() == OLD_FILE and "kept" not in r.io.cal_note
@@ -1729,7 +1729,7 @@ def test_a_backup_that_cannot_be_made_never_stops_the_save(tmp_path, monkeypatch
     monkeypatch.setattr(hands.core, "_keep", refuse)
     sweep(r, wide)
     saved = json.loads(path.read_text())
-    assert saved["schema"] == "hyperspace.hands/2" and saved["box"] is not None
+    assert saved["schema"] == "hyperspace.hands/3" and saved["box"] is not None
     assert "no backup of the old file: read-only folder" in r.io.cal_note
     assert "calibrated" in r.io.cal_note
     assert [p.name for p in tmp_path.iterdir()] == ["hands.json"]

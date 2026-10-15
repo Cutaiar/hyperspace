@@ -121,7 +121,16 @@ from pathlib import Path
 from typing import Any
 
 from . import undo
-from .params import F_KEYS, PERFORMANCE_GROUPS, PLANES, SESSION_GROUPS, Registry
+from .params import (
+    F_KEYS,
+    PERFORMANCE_GROUPS,
+    PLANES,
+    SESSION_GROUPS,
+    UNITS,
+    UNITS_KEY,
+    Registry,
+    pan_world,
+)
 
 SLOTS = 24                # the bank: F1–F8, then the desk's clip rows 4 and 5
 # F_KEYS (8) is the slots a function key reaches, and a show file's bank is
@@ -569,6 +578,18 @@ _LEGACY_LISTS = {
 }
 
 
+def _module_values(group: str, doc: dict) -> dict[str, Any]:
+    """A module preset's values as they land: a camera module from before
+    plan 26 A2 (no `units` marker) stored its pan in logical px, read in
+    world units here (`params.pan_world`), as a whole preset's is in
+    `preset.load_doc` — every road a module's values take (a strip load,
+    a project's module list, a file re-applied, the group's default under
+    `defaults`/`resolved`)."""
+    if group == "camera":
+        doc, _ = pan_world(doc)
+    return dict(doc.get("values") or {})
+
+
 def legacy_slot(slot: dict) -> dict:
     """A presets.json theme as a bank slot: {name, values} keyed by param id."""
     values: dict[str, Any] = {}
@@ -745,7 +766,7 @@ class Project:
             self.session.setdefault(pid, v)
         for group, name, doc in docs:
             vals = (lib.reg.snapshot(group) if doc is None
-                    else lib.resolved(group, doc.get("values") or {}))
+                    else lib.resolved(group, _module_values(group, doc)))
             lib._landed(group, name, vals)
             hook = lib._load_hooks.get(group)
             if hook is not None:
@@ -1793,7 +1814,7 @@ class Library:
         name = self.default_name(group)
         if name is not None:
             try:
-                out.update(self.read(group, name).get("values") or {})
+                out.update(_module_values(group, self.read(group, name)))
             except LibraryError as e:
                 self.error = f"library: {e}"
                 return out                             # not cached: the file may be fixed
@@ -1896,7 +1917,7 @@ class Library:
             if hook is not None and doc.get("layout") is not None:
                 hook(doc["layout"])                    # rebuild params first
                 self._fresh_of(group)                  # …and their build values are "fresh"
-            values = doc.get("values") or {}
+            values = _module_values(group, doc)
             missing = [k for k in values if k not in self.reg]
             resolved = self.resolved(group, values)
             self.restore(resolved)
@@ -1984,6 +2005,8 @@ class Library:
         reg = self._need_reg()
         doc = {"schema": PRESET_SCHEMA, "group": group, "name": name,
                "values": reg.snapshot(group)}
+        if group == "camera":
+            doc[UNITS_KEY] = dict(UNITS)     # its pan is in world units (plan 26 A2)
         if extra is None and group in self._extra_hooks:
             extra = self._extra_hooks[group]()
         if extra:

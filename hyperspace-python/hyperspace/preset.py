@@ -121,7 +121,16 @@ from .lookback import (
     migrate_row,
     migrate_values,
 )
-from .params import PERFORMANCE_GROUPS, PLANES, SESSION_GROUPS, part_of
+from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, preset.* names
+    PAN_IDS,
+    PERFORMANCE_GROUPS,
+    PLANES,
+    SESSION_GROUPS,
+    UNITS,
+    UNITS_KEY,
+    pan_world,
+    part_of,
+)
 from .routing import MOD_OPS, Binding, Macro, Sub, is_continuous
 
 SCHEMA = PERFORMANCE_SCHEMA
@@ -384,6 +393,10 @@ class Presets:
             notes.append(f"look-back read in seconds ({converted[0]}"
                          + (f", +{len(converted) - 1}" if len(converted) > 1 else "")
                          + "); save to keep it")
+        # 0. and its camera.pan in world units (plan 26 A2): a file from
+        #    before stored px. Silent — the shape lands where it was, and a
+        #    factory file is read this way on every load
+        doc, _ = pan_world(doc)
         # 1. what the file names that a preset may not carry — all parsed
         #    before anything lands, so a bad row leaves the state alone
         values: dict[str, Any] = {}
@@ -508,7 +521,7 @@ class Presets:
         doc.update(values=self.reg.snapshot(part="performance"),
                    routes=[b.to_json() for b in table.routes()],
                    **self._desk_part(name), macros=table.macros_doc(),
-                   modules=modules)
+                   modules=modules, **{UNITS_KEY: dict(UNITS)})
         return doc
 
     def template_of_loaded(self) -> str | None:

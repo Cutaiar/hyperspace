@@ -50,6 +50,7 @@ from itertools import pairwise
 import moderngl
 import numpy as np
 
+from .geometry import EYE_DISTANCE, EYE_FOV, eye_matrix
 from .glsl import QUAD_VS
 
 GROUP = "ghost"
@@ -239,6 +240,79 @@ def camera(box, m: np.ndarray, aspect: float) -> tuple[np.ndarray, np.ndarray]:
     reach = float(np.linalg.norm(hi - lo))
     near, far = max(d - reach, 5.0), d + reach
     return _perspective(FOV_Y, aspect, near, far) @ _look(eye, centre), eye
+
+
+# ------------------------------------------------------- the one camera (A2)
+#
+# Plan 26 A2 puts the shape in a world with one fixed eye (`eye.*`,
+# geometry.eye_matrix) and a calibration that maps the Leap's mm into that
+# world (hands.core.Units, in hands.json). In A2 the hands still draw
+# through `camera` above; `shared_camera` is the same hands seen through
+# the shape's eye, so A3 moving them into the scene is the one call in
+# `Ghost.poses` swapped (and the eye handed in).
+
+def calibration(box, m: np.ndarray, units=None, *, fov: float | None = None,
+                distance: float | None = None) -> np.ndarray:
+    """Leap mm → world, 4×4 (column vectors): world = s·R_x(tilt)·(m·p − c).
+
+    `m` is the stage basis (`basis`: the tracking mode, `ghost.mirror`
+    included). `units` is `hands.core.Units` (None: all from the box):
+    its `origin` (Leap mm) is the point that lands on the world's centre,
+    else the padded box's centre (`stage_box`, what `camera` looks at);
+    its `mm` is millimetres per shape unit (s = 1 / mm), else the scale at
+    which every corner of the padded box is in the eye's frame on the
+    shorter side, as tightly as `camera` frames it — so the hands fill the
+    picture whatever the output's shape. `tilt` (degrees, 32 = ELEVATION)
+    turns the stage's up toward the eye: the eye looks along the world's
+    −z, and the ghost camera looked down onto the hands from that high."""
+    fov = EYE_FOV if fov is None else fov
+    distance = EYE_DISTANCE if distance is None else distance
+    tilt = math.radians(float(getattr(units, "tilt", ELEVATION)))
+    ct, st = math.cos(tilt), math.sin(tilt)
+    # R_x(tilt): the ghost camera's "back" (0, sin e, cos e) onto +z, the eye
+    rot = np.array([[1.0, 0.0, 0.0], [0.0, ct, -st], [0.0, st, ct]])
+    lo, hi = stage_box(box, m)
+    origin = getattr(units, "origin", None)
+    centre = (lo + hi) / 2.0 if origin is None else m @ np.asarray(origin, dtype=np.float64)
+    mm = getattr(units, "mm", None)
+    if mm:
+        s = 1.0 / float(mm)
+    else:
+        # each padded corner c (tilted, about the centre) is in frame when
+        # s·max(|cx|, |cy|) ≤ t·(D − s·cz), t the half-field's tangent
+        t = math.tan(math.radians(fov) / 2.0)
+        corners = np.array([(x, y, z) for x in (lo[0], hi[0]) for y in (lo[1], hi[1])
+                            for z in (lo[2], hi[2])]) - centre
+        c = corners @ rot.T
+        need = np.maximum(np.abs(c[:, 0]), np.abs(c[:, 1])) + t * c[:, 2]
+        s = t * float(distance) / max(float(np.max(need)), 1e-6)
+    out = np.eye(4)
+    out[:3, :3] = s * rot @ m
+    out[:3, 3] = -s * rot @ centre
+    return out
+
+
+def shared_camera(box, m: np.ndarray, aspect: float, units=None, *,
+                  fov: float | None = None, distance: float | None = None
+                  ) -> tuple[np.ndarray, np.ndarray]:
+    """(view_proj 4×4, eye) like `camera`, but through the shape's eye:
+    `geometry.eye_matrix` (the `eye.*` params; the defaults when None)
+    after `calibration`. `view_proj` takes Leap-basis stage points, as
+    `camera`'s does — the calibration's stage basis is undone first — and
+    `eye` is the eye's position in that stage space, for the shading. What
+    A3's hands node draws with; A2 draws the hands through `camera`."""
+    fov = EYE_FOV if fov is None else fov
+    distance = EYE_DISTANCE if distance is None else distance
+    cal = calibration(box, m, units, fov=fov, distance=distance)
+    # the ghost's poses are already in the stage (m · leap): the matrix
+    # takes stage points, so the basis inside the calibration is undone
+    undo = np.eye(4)
+    undo[:3, :3] = m.T            # m is orthonormal (a signed permutation)
+    stage_to_world = cal @ undo
+    vp = eye_matrix(max(aspect, 1e-3), 1.0, fov, distance) @ stage_to_world
+    eye_world = np.array([0.0, 0.0, float(distance), 1.0])
+    eye = np.linalg.solve(stage_to_world, eye_world)[:3]
+    return vp, eye
 
 
 # ------------------------------------------------------------------ poses
