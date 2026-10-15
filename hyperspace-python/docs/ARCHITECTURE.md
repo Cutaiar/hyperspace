@@ -48,7 +48,8 @@ runs the one frame loop.
 | **Devices** | `devices.py` (the `Device` protocol, `Port`, `DeviceRegistry`, the kind table, `PointCloud`), each kind's adapter: `midi.py` + `apc40.py` / `generic.py`, `gamepad.py`, `hands/` (`hands/device.py` the wrapper), `bridge.py`, `osc.py`; and the host's own `app.Keys` / `app.Mouse` | every input and output the rig lists in `config.toml`'s `[[devices]]`, each opened behind its entry with its pickup state and a status line; the device list's watch and retry; the point clouds (`DeviceRegistry.clouds`) | MIDI rows / pad buttons / OSC hits / keys / mouse: the **base** (scene-setter slot); hands, bridge `ext`, the pad's axes, OSC axes: only `Router.feed` (feed slot); sinks read effective values after `reg.apply` and send them out, writing nothing | `devices.py` is the one importer of every adapter module, each inside its device's `open`; the core never imports `midi`, `bridge`, `osc` (above, and `tests/test_app_boundary.py`); routing and learn are handed the registry as an argument (`Router.use`, `Learn.devices`); `hands/core.py`, `signal.py`, `tape.py` import nothing from the package and `hands/device.py` and `hands/panel.py` are the only pieces that know the host (`tests/test_hands_boundary.py`); only `osc.py` and `devices.kinds()` name the OSC device (`tests/test_osc.py::test_only_osc_py_and_the_kind_table_name_the_osc_device`) |
 | **Audio source** | `audio.py`, `analysis.py`, `analyzer.py`, `bands.py` (and the tests' `offline.py`) | capture or file playback, the FFT, the N band lanes | `Analyzer.lanes` (read by `Router.modulate`), the lanes' names (`AudioEngine.publish`) | imports only itself, `tapers` and `motion` (`tests/test_audio_boundary.py`) |
 | **LFOs and clock** | `lfo.py`, `tempo.py` | four oscillators, one tap-tempo clock | `Router.feed("lfo", …)`, its labels and rests | import nothing from the package; registry, router and clock arrive as arguments (`tests/test_lfo_boundary.py`) |
-| **Render stack** | `geometry.py`, `view.py`, `render.py`, `glsl.py`, `fx.py`, `lookback.py`, `dream.py`, `ghost.py`, `outputs.py`, `overlay.py`, `shaders/` | GL resources, `ViewState`, the frame history, the dream worker, the faces' picture, the outputs' pipelines, the one wall clock (`Renderer.now`) | the screen; `ViewState.integrate` writes `ang` directly | reads parameters, never writes one: `render.py` and `fx.py` import no `params`, `routing`, `library`, `preset`, `undo`, `control` (`tests/test_render.py::test_the_render_stack_imports_no_registry`); `outputs.py` imports `moderngl` and `glsl` only (`tests/test_outputs.py::test_outputs_imports_nothing_from_app_ui_or_params`); `dream` is imported only by `app._open_dream` behind `[dream] enabled` and is the one module that imports `torch` (`tests/test_dream.py::test_core_does_not_import_the_worker`) |
+| **Render stack** | `geometry.py`, `view.py`, `graph.py`, `render.py`, `glsl.py`, `fx.py`, `lookback.py`, `dream.py`, `ghost.py`, `outputs.py`, `overlay.py`, `shaders/` | GL resources, `ViewState`, the shared camera (the eye, `eye.*`), the render graph (below), the frame history, the dream worker, the faces' picture, the one wall clock (`Renderer.now`) | the screen; `ViewState.integrate` writes `ang` directly | reads parameters, never writes one: `render.py` and `fx.py` import no `params`, `routing`, `library`, `preset`, `undo`, `control` (`tests/test_render.py::test_the_render_stack_imports_no_registry`); `outputs.py` imports `moderngl` and `glsl` only (`tests/test_outputs.py::test_outputs_imports_nothing_from_app_ui_or_params`); `dream` is imported only by `app._open_dream` behind `[dream] enabled` and is the one module that imports `torch` (`tests/test_dream.py::test_core_does_not_import_the_worker`) |
+| **Graph** (in the render stack) | `graph.py` | the frame as nodes — geometries (the shape, the hands, a point cloud), the scene, layers, composites, the effect chain, the history, the outputs — wired by `default_graph` from the outputs' switches, the renderer's `Wiring` (a preset's `graph` section) and the listed clouds, evaluated once a frame in dependency order; node instances (`ghost.2`, `fx.acid.2`), the graph JSON's reader (`read_graph`, `NODE_KINDS`) | the screens, through the render stack's passes; nothing in the registry | imports `moderngl`, `numpy`, `geometry` and `outputs` only — no `params`, `routing`, `library`, `preset`, `undo`, `control`, `devices`; node methods are `run` / `paint` / `draw` / `image` / `depth`, never `apply`, `modulate`, `snapshot`, `set_value` (`tests/test_graph.py::test_graph_imports_only_the_render_stack_and_names_no_write`); the device registry reaches it duck-typed (`Renderer.cloud_source`) |
 | **Panel** | `ui.py`, `ui_*.py`, `hands/panel.py`, `control.py` | imgui state, page selection, the Replace / Keep modal, the routing page's edits | param **bases** through `Param.set*`; table rows through the table's edit doors and `Learn` | only `app`, `hands/panel.py` and the `ui*` modules import `ui*`. By convention: no test holds it |
 | **Library** | `library.py`, `preset.py`, `config.py`, `library/` | the library root (`Library.home`: module presets, presets, shows (projects), the trash, `hidden.json` — the home, or the folder `[library] path` names), the machine home (`Library.machine`: `last_show`), the bank of twenty-four, `config.toml` (its `[[devices]]` list checked per entry, the old device tables translated; `config.read_devices` for the registry's watch) | bases through `Registry.restore`; a preset load replaces the table's performer rows, desk layer and macros | `library` imports `params` and `undo` (and `routing`, `preset` lazily), never `config` (`tests/test_app_boundary.py::test_the_library_never_imports_config`) |
 | **Undo** | `undo.py` | the undo and redo stacks, the last settled state | bases (`Registry.restore`) and the table's preset parts, on ⌘Z / Ctrl+Z only | a leaf: imports nothing from the package and never touches `modulate` or `feed` (`tests/test_undo.py::test_undo_imports_nothing_from_the_package`) |
@@ -94,7 +95,7 @@ pins this order over stubs:
 | 11 | `reg.apply()` — base + offsets onto every live object | objects |
 | 12 | `devices.send(reg, chain)` — **the sink slot**: the bridge sends its sink rows (`routing.sink_values`: effective values, the lanes) through `Bridge.send_values`; `hands-daw` sends the hands' DAW messages and its own sink rows | nothing in the app (MIDI out) |
 | 13 | `view.integrate(dt)` — `ang += rate · dt` | an object, directly |
-| 14 | `renderer.bands = app._bands(audio)` — the analyzer's lanes, out / CEIL, handed to the renderer as a read-only input; then `draw_render` — every render output (below) | the screens |
+| 14 | `renderer.bands = app._bands(audio)` — the analyzer's lanes, out / CEIL, handed to the renderer as a read-only input; then `draw_render` — the render graph evaluated, every render output (below) | the screens |
 | 15 | `draw_panel` — the control window | bases, rows |
 
 Rules that follow from the order:
@@ -157,46 +158,78 @@ Rules that follow from the order:
   and then lands the show's session values
   (`tests/test_app_boundary.py::test_the_app_starts_with_knob_smoothing_at_80_ms_and_a_show_keeps_its_own`).
 
-### Drawing: one frame, a picture per output
+### Drawing: the render graph, a picture per output
 
 `app._draw_render` makes output 1 current, builds one `outputs.View` per
 opened output (output 1's with `target=ctx.screen`, a later output's with
 its `Presenter`) and calls `Renderer.draw_outputs(s, w, h, dpr, views)`.
 `Renderer.draw` is the same call with one default `View` on the bound
-framebuffer. In `Renderer._draw_frame`:
+framebuffer. `Renderer._draw_frame` settles the frame's size under the
+render cap and ticks the effect folder, then **evaluates the render
+graph** (`graph.py`): the graph for these views — built by
+`graph.default_graph` from each view's switches, the renderer's
+`Wiring` and the listed `cloud` devices, and reused until one of those
+changes (`Renderer._graph_for`) — runs its nodes once each, in
+dependency order settled when it was built (`Graph.order`,
+`Graph.evaluate`), each node timed on the GPU (`render.PassTimer`). For
+one default output:
 
 ```text
-ONCE A FRAME (output 1's context)
-  the swatches       _swatch_step — one pattern's 64² swatch, only while the FACES page asks
-  the face picture   _face_picture — only while an effect is aimed at the faces
-  the scene pass     into the scene target; then resolve and the cover mask
-  look-back          lookback.tick, pull; fx.tick
-  the hands' layer   Ghost.layer — only if some view shows hands
-  route every view   outputs.route(switches, fx_active, hands_visible)
-ONCE PER DISTINCT PIPELINE (SCENE, SCENE_HANDS, HANDS)
-  look-back composite [+ Ghost.composite] [+ the frame's effect chain]
-  → the view itself when it is the pipeline's only consumer at the frame size, else a frame texture
-  then lookback.capture(scene.tex) exactly once, after every pipeline
-ONCE PER VIEW
-  the picture (direct | 1:1 | letterboxed by outputs.fit) — or an outputs.Handoff for a presenter
-  hands over it (Ghost.composite), the readout layer (Ghost.composite_readout)
-  dim: Renderer.dim × the view's own dim, when under 1 (Renderer.dim_pass)
+GEOMETRY   [cloud …]  shape   ghost            draw calls in the shared camera (the eye)
+SCENE      scene      the solid geometries first (a cloud, in-scene hands: depth written),
+                      then the see-through shape, painter-sorted, depth-tested against them;
+                      the face picture first, only while an effect is aimed at the faces
+LAYER      cover      the faces' mask, only while the look-back occludes
+           hands      Ghost.layer: the hands alone, own colour + depth — only if a view lays them on
+HISTORY    history    the look-back composite over its input (the echoes' clock, the dream pulled)
+FX         fx         the effect chain → the view itself when it is the pipeline's only
+                      consumer at the frame size, else a frame texture
+                      [composite(scene+hands) → fx(scene+hands), composite(hands) → fx(hands):
+                       per reachable through pipeline; a through pipeline with no effect on or
+                       no hand drawn stands down for its fallback this frame]
+HISTORY    capture    the ring takes its input — the scene by default — exactly once, after
+                      every pipeline
+OUTPUT     output.N   the picture (direct | 1:1 | letterboxed by outputs.fit) — or an
+                      outputs.Handoff for a presenter; the hands over it, the readout,
+                      the flips; dim: Renderer.dim × the view's own (Renderer.dim_pass)
 EXIT  views[0].target bound again with its rect and blending, a raise included
 THEN in app._draw_render: glFlush (only with a later output); each later output
   Presenter.present then swap; output 1 swapped last
 ```
 
-What the order guarantees, each held by tests in `tests/test_render.py`,
-`tests/test_outputs.py` and `tests/test_ghost.py`:
+A Scene or Layer node *makes* a texture; the history, composite and FX
+nodes *paint* into the framebuffer their consumer hands them, so nothing
+is quantised between the look-back and the chain. The `Wiring` (a
+preset's `graph` section) can put the hands inside the scene, lay their
+layer added or depth-aware, and wire the capture to the scene with the
+hands' layer; a second hands node or effect instance is a node of its
+own. Evaluating the frame as a graph moved no pixel of the 427 golden
+frames recorded before it (`tests/test_golden_frames.py`). The
+*modulation* is not a graph: the one-frame lag above stands (plan 28).
 
+What the order guarantees, each held by tests in `tests/test_render.py`,
+`tests/test_outputs.py`, `tests/test_ghost.py`, `tests/test_graph.py` and
+`tests/test_golden_frames.py`:
+
+- **Every golden frame is drawn byte for byte**: 556 frames — every
+  factory preset in every output state, hands absent and present, the
+  other wirings, the fixture preset and a recorded cloud — on the gate
+  Mac's renderer ("Apple M3 Max"); elsewhere the test skips
+  (`tests/test_golden_frames.py::test_every_golden_frame_is_drawn_byte_for_byte`).
+- **The graph is built once per set of switches and reused**, its order
+  puts dependencies first, and a pipeline no view takes this frame does
+  not run (`tests/test_graph.py::test_the_graph_is_built_once_per_set_of_switches_and_reused`,
+  `::test_order_puts_dependencies_first_and_ties_in_insertion_order`,
+  `::test_a_pipeline_no_view_routes_to_this_frame_does_not_run`).
 - **The faces' effects are in the scene texture**, so the echoes and the
   dream carry them; the frame's effects never reach the history. With
   nothing aimed at the faces no face pass runs and the frame is
   bit-identical (`test_nothing_aimed_at_the_faces_is_the_old_frame_exactly`,
   `test_the_echoes_carry_the_faces_effects`).
-- **The history holds only the scene**: never the frame's effects, the
-  hands or the dim (`test_the_history_never_holds_the_hands_in_any_state`,
-  `test_the_history_never_holds_the_dim`).
+- **The history holds what it is wired to**: the scene by default —
+  never the frame's effects or the dim — or the scene with the hands
+  (`test_the_history_holds_what_it_is_wired_to_and_the_default_graph_wires_it_as_today`,
+  `test_the_default_graphs_history_holds_what_todays_does_never_the_dim`).
 - **The effects' clocks advance once a frame** however many chains run
   (`FxState.advance_to`; `test_both_chains_in_a_frame_run_the_clocks_once`).
 - **Two outputs with the same switches share one chain run**
@@ -212,9 +245,11 @@ What the order guarantees, each held by tests in `tests/test_render.py`,
   `Renderer.face_error` and the frame as with no face effect; a raising
   hands pass leaves `Ghost.error` and every output still gets its dim; a
   raising pipeline leaves its views on their ground; a raising view
-  records `View.error`; a raising presenter does not stop the frame
+  records `View.error`; a raising presenter does not stop the frame; a
+  hand or a cloud that raises inside the scene costs the scene nothing
   (`test_a_raising_hands_pass_costs_no_output_its_frame_or_its_dim`,
   `test_a_raising_pipeline_leaves_its_views_on_the_ground_and_the_rest_drawn`,
+  `tests/test_hands_node.py::test_a_raising_hand_in_the_scene_costs_the_scene_nothing`,
   `tests/test_app_boundary.py::test_a_raising_presenter_does_not_stop_the_frame`).
 - **The render target is bound explicitly.** The frame uses half a dozen
   offscreen framebuffers; one left bound would make every later frame draw
@@ -228,6 +263,10 @@ What the order guarantees, each held by tests in `tests/test_render.py`,
   hands, the readout and the dim. The `glFlush` before it is what makes
   the second context see this frame's texture
   (`tests/test_app_boundary.py::test_the_rendering_context_is_flushed_before_a_presenter`).
+- **The render stack reads, never writes.** No node or graph method is
+  named `apply`, `modulate`, `snapshot` or `set_value`, and `graph.py`
+  imports no registry, routing, library, preset, undo, control or device
+  module (`tests/test_graph.py::test_graph_imports_only_the_render_stack_and_names_no_write`).
 - **A masked shape is folded where it is drawn, and nowhere else.**
   `Renderer.draw_scene` draws the shape at `geometry.view_angles(shape,
   ang)`: the view's own angles for every shape but a masked one (§5,
@@ -761,13 +800,14 @@ docstring has the rest.
 | `hands/` | the Ultraleap instrument: twelve shaped axes, presence, eight pinch switches, the dance sources and the grab, the DAW messages (carried out by the `hands-daw` sink; the instrument opens no port), calibration and the interaction box, hand tapes, the HANDS page, the device wrapper | `HandsIO` (`poll`, `outbox`, `carry`, `resync`), `HandSettings`, `Layout`, `LeapSource`, `Box`, `inside`, `DEFAULTS` (`core.py`); `signal.py` (shaping, MIDI encoding); `tape.py` (`TapeSource`, `record`); `panel.py` (`page`); `device.py` (`HandsDevice`) | `core.py`, `signal.py`, `tape.py` import nothing from the host; `device.py` and `panel.py` alone know it (`tests/test_hands_boundary.py`); a hand outside the box is absent for every consumer; the layout is published to the router only on a change (`tests/test_hands.py`) |
 | `lfo.py` + `tempo.py` | four LFOs and the tap-tempo clock | `LFOs`, `LFO`, `Clock`, `register` | import nothing from the package (`tests/test_lfo_boundary.py`); §3.9 (`tests/test_lfo.py`, `tests/test_tempo.py`) |
 | `audio.py` + `analysis.py` + `analyzer.py` + `bands.py` | capture or file playback, the FFT, the N-band analyzer whose output is `lanes`; `bands.py` is its parts bin | `AudioEngine`, `Analyser`, `Analyzer`, `CEIL` | imports only the stack and `tapers` (`tests/test_audio_boundary.py`); the legacy six-band layout matches the frozen oracle to the bit (`tests/test_analyzer.py::test_legacy_layout_is_bit_exact`) |
-| `geometry.py` | the shapes as vertex, edge and face arrays; how each fills the fourth dimension; the 4D → 2D transform; the volume measures | `SHAPES`, `Shape` (`cells`, `w`), `W_KINDS`, `geom`, `faces`, `project_h`, `project3`, `PLANES`, `view_angles`, `w_masked`, `W_REMAP`, `view_depth`, `volume_ratio`, `sweep_ratios`, `edge_on_share`, `VOLUME_FLOOR` | the list is append-only and the first 18 shapes' order never changes — the golden traces key on it (`tests/test_core.py::test_construction_exact`, `tests/test_golden.py`); a shape draws what it drew unless its builder is given a lift (`tests/test_shapes4d.py::test_every_shape_draws_what_it_drew_before_the_lift_existed`); only a masked shape's angles are changed, and never in place (`::test_no_shape_but_a_masked_one_has_its_angles_touched`); every lifted or masked shape keeps `VOLUME_FLOOR` through each W plane (`::test_a_lifted_or_masked_shape_keeps_its_volume_through_each_w_plane`) |
+| `geometry.py` | the shapes as vertex, edge and face arrays; how each fills the fourth dimension; the 4D → 3D transform and the shared camera (the eye, the shape's world transform); the old 4D → 2D transform as the parity oracle; the volume measures | `SHAPES`, `Shape` (`cells`, `w`), `W_KINDS`, `geom`, `faces`, `world_points`, `model_matrix`, `eye_matrix`, `eye_project`, `EYE_FOV`, `EYE_DISTANCE`, `PAN_REF_PX`, `project_h`, `project3`, `PLANES`, `view_angles`, `w_masked`, `W_REMAP`, `view_depth`, `volume_ratio`, `sweep_ratios`, `edge_on_share`, `VOLUME_FLOOR` | the list is append-only and the first 18 shapes' order never changes — the golden traces key on it (`tests/test_core.py::test_construction_exact`, `tests/test_golden.py`); a shape draws what it drew unless its builder is given a lift (`tests/test_shapes4d.py::test_every_shape_draws_what_it_drew_before_the_lift_existed`); only a masked shape's angles are changed, and never in place (`::test_no_shape_but_a_masked_one_has_its_angles_touched`); every lifted or masked shape keeps `VOLUME_FLOOR` through each W plane (`::test_a_lifted_or_masked_shape_keeps_its_volume_through_each_w_plane`) |
 | `patterns.py` | the face patterns' eight inputs and seventeen modes as data: names, meanings, what each input does in each mode | `INPUTS`, `MODES`, `NAMES`, `SCALE` … `SPREAD`, `effect`, `ignores`, `label`, `tip` | imports nothing (by convention); `params`, `render` and `ui_patterns` read it; `shaders/patterns.glsl`'s accessors and header are held to it, and modes are appended, never inserted (`tests/test_patterns.py`) |
 | `view.py` | `ViewState`, the live object the view, rotation and camera params write | `ViewState` (`integrate`, `instances`, `inst_layout`), `RED` | imports only `geometry`; no GL, so the registry and tests can hold a view |
-| `render.py` | the frame (§2): face picture, scene, cover, look-back, pipelines, outputs, ghost hands, dim; the patterns' clock and the FACES page's swatches | `Renderer` (`draw`, `draw_outputs`, `dim_pass`, `face_fx`, `stats`, `now`, `bands`, `_pattern_clock`, `want_swatches`, `swatch`, `pattern_tile`), `FaceTarget`, `inst_positions`, `render_offscreen` | imports no registry (`tests/test_render.py::test_the_render_stack_imports_no_registry`); §2's draw guarantees (`tests/test_render.py`) |
+| `graph.py` | the render graph (§2): node kinds and ports, evaluation in dependency order, the default graph from the switches and the `Wiring`, the hands node, the point-cloud node, the preset's `graph` section, the wiring in words | `Node`, `Graph` (`order`, `evaluate`, `timed`), `Frame`, `Shape`, `Hands`, `PointCloud`, `Scene`, `Cover`, `HandsLayer`, `Readout`, `Composite`, `Fx`, `History`, `Capture`, `Output`, `Wiring`, `default_graph`, `graph_key`, `GraphSpec`, `read_graph`, `NODE_KINDS`, `cloud_roles` | imports the render stack only and names no write (`tests/test_graph.py`); a preset's graph it cannot read is a note and the default graph (`tests/test_graph_json.py`) |
+| `render.py` | the passes the graph's nodes call: face picture, scene (with depth), cover, the hands' lay, composite, outputs, dim; the GPU timer; the patterns' clock and the FACES page's swatches | `Renderer` (`draw`, `draw_outputs`, `_graph_for`, `wiring`, `ghost_of`, `cloud_source`, `lay`, `dim_pass`, `face_fx`, `stats`, `timer`, `now`, `bands`, `_pattern_clock`, `want_swatches`, `swatch`, `pattern_tile`), `PassTimer`, `SceneTarget`, `DEPTH_ALPHA`, `LAYER_DEPTH_BIAS`, `CELL`, `FaceTarget`, `inst_positions`, `render_offscreen` | imports no registry (`tests/test_render.py::test_the_render_stack_imports_no_registry`); §2's draw guarantees (`tests/test_render.py`, `tests/test_camera.py`, `tests/test_golden_frames.py`) |
 | `fx.py` + `shaders/fx/` | post effects as GLSL files whose `// @param` uniforms become params; a chain over the frame and one over the faces' picture | `FxState` (`chain(target)`, `select`, `advance_to`, `face_map`), `FxChain`, `FRAME` / `FACES`, `TARGETS`, `FACE_MAPS`, `declare`, `reordered` | an effect is never defined in Python; a broken edit keeps the last good spec; off is bit-identical; `fx.<name>.target` is not modulatable, `fx.face_map` is (`tests/test_fx.py`) |
 | `lookback.py` + `dream.py` | the frame history and its age-weighted composite; the torch worker that dreams on it | `Lookback`, `DreamState`, `DreamWorker` | torch only in `dream.py`; nothing in the core imports `dream`; `submit` never blocks the frame (`tests/test_dream.py`, `tests/test_lookback.py`) |
-| `ghost.py` | the ghost hands over the finished frame — a display, not a source | `Ghost` (`layer`, `composite`, `readout`, `composite_readout`, `error`), `GhostState`, `Geometry`, `HandPose`, `STYLES`, `PARTS`, `box_of` | writes no param; off or with no hand it touches no GL state; never in the history; `ghost.style` / `.mirror` / `.guide` / `.tethers` not modulatable (`tests/test_ghost.py`) |
+| `ghost.py` | the ghost hands — a display, not a source: drawn in the shared camera (the eye and the Leap calibration), as their own layer or solid in the scene | `Ghost` (`settle`, `layer`, `draw_solid`, `composite`, `readout`, `composite_readout`, `depth`, `error`), `GhostState`, `Geometry`, `HandPose`, `STYLES`, `PARTS`, `box_of`, `calibration`, `shared_camera`, `CAL_ASPECT`, `prefix`, `register` | writes no param; off or with no hand it touches no GL state; in the history only when the graph wires it there; `ghost.style` / `.mirror` / `.guide` / `.tethers` not modulatable (`tests/test_ghost.py`, `tests/test_hands_node.py`) |
 | `outputs.py` | the render outputs as the renderer sees them | `Switches`, `route`, `fit`, `View`, `Handoff`, `Slot`, `Presenter`, `PIPELINES`, `MAX_OUTPUTS` | imports `moderngl` and `glsl` only (`tests/test_outputs.py::test_outputs_imports_nothing_from_app_ui_or_params`); `route` and `fit` are pure |
 | `glsl.py` + `shaders/_common.glsl` | the GLSL every shader shares | `QUAD_VS`, `common`, `FALLBACK` | a helper is defined once; a broken edit falls back to `FALLBACK` (`tests/test_fx.py::test_the_shared_helpers_are_written_once`) |
 | `overlay.py` | where output 1 is and how it looks (window, fullscreen, overlay); the master dim; the per-output switches | `Output` (`register`, `apply`, `allowed`, `dim`), `register_switches` | touches the window system only in `apply()`; rig settings never persist or modulate; overlay only when the config allows (`tests/test_overlay.py`) |
@@ -885,8 +925,9 @@ entry's old `send` list becomes its rows once
 registry, not the Router: `DeviceRegistry.clouds` maps `cloud:<role>` to
 each open device's latest frame. The `cloud` kind plays a version-1
 `.npz` (`write_clouds` / `read_clouds`) at its own rate against the frame
-clock; nothing on screen draws it yet (plan 26's point-cloud node, A4b,
-does).
+clock. The renderer is handed the registry (`Renderer.cloud_source`):
+each listed `cloud` device adds a `graph.PointCloud` node to the default
+scene, drawn solid in the shared camera (Render graph, below).
 
 **Hands.** `hands/core.py`'s `LeapSource` (or a `TapeSource`) gives
 features and skeletons; `HandsIO.poll` shapes twelve axes, two presence
@@ -896,7 +937,8 @@ may complete a Learn, and makes the frame's DAW messages, which wait in
 `HandsIO.outbox` for the `hands-daw` sink to carry (the instrument opens
 no MIDI port). `hands/device.py`'s `HandsDevice` makes that one call from
 the registry's feed slot. The ghost hands read `HandsIO.skeleton` raw
-through `renderer.ghost.source`; they are not a source.
+through `renderer.ghost.source` and are drawn as a geometry of the render
+graph (below); they are not a source.
 
 **Face patterns.** `shaders/patterns.glsl` paints the faces, one of
 seventeen modes (`view.pattern`), reading eight inputs, `pattern.mod.0–7`
@@ -926,7 +968,32 @@ scene pass.
 **Look-back and dream.** `Lookback` keeps a history of scene textures and
 composites echoes over the frame; `DreamWorker` (only with
 `[dream] enabled`) takes frames from the history on its own thread and
-returns dreamed ones without ever blocking the frame.
+returns dreamed ones without ever blocking the frame. What the history
+captures is wiring (the graph's `capture` node): the scene by default, or
+the scene with the hands when a preset's graph says so.
+
+**Render graph.** `graph.default_graph` builds the frame as nodes from
+each output's `Switches` (scene, hands, through: which pipeline end
+feeds the output, whether the hands' layer is laid over it), the
+renderer's `Wiring` and the listed clouds; `Renderer._graph_for` keeps it
+until one of those changes, and `Graph.evaluate` runs it (§2). The shape
+and the hands share one camera: the CPU takes the shape to 3D
+(`geometry.world_points`: `rot.*`, the 4D divide, the yaw/pitch
+turntable), the vertex shaders through `u_model` (`camera.zoom`,
+`camera.pan` in world units) and `u_vp` (the eye, `eye.*`, session); the
+hands through `ghost.shared_camera` (the eye and the Leap calibration in
+`hands.json`). Edges and points are quads with a real depth; the scene
+has a depth attachment, the see-through shape writing its visible
+surface after its colour. A preset's `graph` section
+(`preset.GraphSection` → `graph.read_graph` → a `GraphSpec`) sets the
+renderer's `Wiring` — the hands in the scene or as a layer, solid or as
+lines; the layer over, added or depth-aware; the history with or without
+the hands — and the effect instances the chain holds
+(`FxState.set_instances`); a second hands node is its own `Ghost`
+(`Renderer.ghost_of`) over a `GhostState` the preset section keeps, so
+the render stack never declares a param. The golden frames
+(`tools/golden_frames.py`) pin every factory preset's picture in every
+state to the byte on the gate Mac.
 
 **Outputs.** `config.toml`'s `[[output.screens]]` lists up to
 `outputs.MAX_OUTPUTS` render outputs (no list is one). `app._windows`
